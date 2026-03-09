@@ -770,6 +770,21 @@ func parseMem(s string) (MemRef, bool) {
 
 	base, ok := parseReg(baseStr)
 	if !ok {
+		// Older stdlib macro expansion can produce displacement expressions like:
+		//   1*8+(0)(SP)
+		// where the first parenthesized group is still part of the offset rather
+		// than the base register.
+		if strings.HasPrefix(rest, "(") && strings.HasSuffix(rest, ")") {
+			base2 := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rest, "("), ")"))
+			if br, ok := parseReg(base2); ok {
+				expr := strings.TrimSpace(offPart + "(" + baseStr + ")")
+				if expr != "" {
+					if u, ok := parseImmExpr(expr); ok {
+						return MemRef{Base: br, Off: int64(u)}, true
+					}
+				}
+			}
+		}
 		// Newer/legacy Plan 9 forms may encode displacement expression in the
 		// first parens and then provide base/index groups, e.g.:
 		//   (0*8)(R8)(BX*8)
