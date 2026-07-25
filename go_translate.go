@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/types"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -530,6 +531,14 @@ func goExpandConsts(src []byte, pkgTypes *types.Package, imports map[string]*typ
 }
 
 func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
+	// *types.Alias was added after the oldest Go version supported by this
+	// module. Detect it by its stable reflect identity so the package still
+	// compiles with Go 1.21, while newer go/types implementations can lower an
+	// alias through its RHS just like a named type.
+	if rt := reflect.TypeOf(t); rt != nil && rt.Kind() == reflect.Ptr &&
+		rt.Elem().PkgPath() == "go/types" && rt.Elem().Name() == "Alias" {
+		return goLLVMTypeForType(t.Underlying(), goarch)
+	}
 	switch tt := t.(type) {
 	case *types.Basic:
 		switch tt.Kind() {
@@ -572,11 +581,6 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 	case *types.Interface:
 		return LLVMType("{ ptr, ptr }"), nil
 	case *types.Named:
-		return goLLVMTypeForType(tt.Underlying(), goarch)
-	case *types.Alias:
-		// Go 1.23+ materializes ordinary aliases (for example xxh3.u64 =
-		// uint64) as *types.Alias.  They have the same calling convention as
-		// their RHS and must be lowered just like defined named types.
 		return goLLVMTypeForType(tt.Underlying(), goarch)
 	default:
 		return "", fmt.Errorf("unsupported type %s", t.String())

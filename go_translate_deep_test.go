@@ -109,8 +109,10 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	word32 := types.Typ[types.Int]
 	namedObj := types.NewTypeName(token.NoPos, nil, "MyInt", nil)
 	named := types.NewNamed(namedObj, types.Typ[types.Int32], nil)
-	aliasObj := types.NewTypeName(token.NoPos, nil, "MyUint64", nil)
-	alias := types.NewAlias(aliasObj, types.Typ[types.Uint64])
+	aliasPkg := mustGoPackage(t, "aliaspkg", `package aliaspkg
+type MyUint64 = uint64
+`)
+	alias := aliasPkg.Types.Scope().Lookup("MyUint64").Type()
 	for _, tc := range []struct {
 		typ    types.Type
 		goarch string
