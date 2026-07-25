@@ -109,6 +109,8 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	word32 := types.Typ[types.Int]
 	namedObj := types.NewTypeName(token.NoPos, nil, "MyInt", nil)
 	named := types.NewNamed(namedObj, types.Typ[types.Int32], nil)
+	aliasObj := types.NewTypeName(token.NoPos, nil, "MyUint64", nil)
+	alias := types.NewAlias(aliasObj, types.Typ[types.Uint64])
 	for _, tc := range []struct {
 		typ    types.Type
 		goarch string
@@ -130,6 +132,7 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{types.NewSlice(types.Typ[types.Byte]), "arm64", LLVMType("{ ptr, i64, i64 }"), true},
 		{types.NewInterfaceType(nil, nil), "amd64", LLVMType("{ ptr, ptr }"), true},
 		{named, "amd64", I32, true},
+		{alias, "arm64", I64, true},
 		{types.Typ[types.Complex64], "amd64", "", false},
 		{types.NewStruct(nil, nil), "amd64", "", false},
 	} {
@@ -318,5 +321,26 @@ RET
 	expanded := string(goExpandConsts([]byte("MOVD other/pkg.Value+const_Limit(SB), R0\nMOVD $const_Answer, R1\n"), pkgTypes, imports))
 	if !strings.Contains(expanded, "other/pkg.Value+7(SB)") || !strings.Contains(expanded, "$42") {
 		t.Fatalf("goExpandConsts() = %q", expanded)
+	}
+}
+
+func TestTranslateGoModuleUndeclaredLocalTrampoline(t *testing.T) {
+	pkg := mustGoPackage(t, "test/pkg", `package testpkg
+func F() {}
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
+JMP external_symbol(SB)
+`), GoModuleOptions{
+		GOARCH:       "arm64",
+		TargetTriple: "aarch64-unknown-linux-gnu",
+		ResolveSym:   testResolveSym("test/pkg"),
+	})
+	if err != nil {
+		t.Fatalf("TranslateGoModule(undeclared local trampoline) error = %v", err)
+	}
+	defer tr.Module.Dispose()
+	sig, ok := tr.Signatures["test/pkg.local_trampoline"]
+	if !ok || sig.Ret != Void || len(sig.Args) != 0 {
+		t.Fatalf("local trampoline signature = %#v, want void()", sig)
 	}
 }
