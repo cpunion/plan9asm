@@ -531,14 +531,6 @@ func goExpandConsts(src []byte, pkgTypes *types.Package, imports map[string]*typ
 }
 
 func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
-	// *types.Alias was added after the oldest Go version supported by this
-	// module. Detect it by its stable reflect identity so the package still
-	// compiles with Go 1.21, while newer go/types implementations can lower an
-	// alias through its RHS just like a named type.
-	if rt := reflect.TypeOf(t); rt != nil && rt.Kind() == reflect.Ptr &&
-		rt.Elem().PkgPath() == "go/types" && rt.Elem().Name() == "Alias" {
-		return goLLVMTypeForType(t.Underlying(), goarch)
-	}
 	switch tt := t.(type) {
 	case *types.Basic:
 		switch tt.Kind() {
@@ -583,6 +575,14 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 	case *types.Named:
 		return goLLVMTypeForType(tt.Underlying(), goarch)
 	default:
+		// *types.Alias was added after the oldest Go version supported by this
+		// module. Detect it by its stable reflect identity so the package still
+		// compiles with Go 1.21, while newer go/types implementations can lower
+		// an alias through its RHS just like a named type. Keep this probe in the
+		// fallback path so common concrete types avoid reflection overhead.
+		if reflect.TypeOf(t).String() == "*types.Alias" {
+			return goLLVMTypeForType(t.Underlying(), goarch)
+		}
 		return "", fmt.Errorf("unsupported type %s", t.String())
 	}
 }

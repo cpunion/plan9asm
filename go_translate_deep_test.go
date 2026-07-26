@@ -109,10 +109,8 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	word32 := types.Typ[types.Int]
 	namedObj := types.NewTypeName(token.NoPos, nil, "MyInt", nil)
 	named := types.NewNamed(namedObj, types.Typ[types.Int32], nil)
-	aliasPkg := mustGoPackage(t, "aliaspkg", `package aliaspkg
-type MyUint64 = uint64
-`)
-	alias := aliasPkg.Types.Scope().Lookup("MyUint64").Type()
+	aliasObj := types.NewTypeName(token.NoPos, nil, "MyUint64", nil)
+	alias := newAliasTypeForTest(aliasObj, types.Typ[types.Uint64])
 	for _, tc := range []struct {
 		typ    types.Type
 		goarch string
@@ -208,8 +206,9 @@ func cmp(a, b int) int { return a }
 	file := &File{
 		Arch: ArchARM64,
 		Funcs: []Func{
-			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: OpRET}}},
+			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
 			{Sym: "localhelper<>", Instrs: []Instr{{Op: OpTEXT}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}}, {Op: OpRET}}},
+			{Sym: "localtarget<>"},
 		},
 	}
 	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", func(resolved string) (FuncSig, bool) {
@@ -221,7 +220,7 @@ func cmp(a, b int) int { return a }
 	if err != nil {
 		t.Fatalf("goSigsForAsmFile() error = %v", err)
 	}
-	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper"} {
+	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper", "test/pkg.localtarget"} {
 		if _, ok := sigs[want]; !ok {
 			t.Fatalf("missing signature %q", want)
 		}
@@ -263,6 +262,21 @@ var helper int
 	badFile := &File{Funcs: []Func{{Sym: "·helper"}}}
 	if err := badBuilder.addDeclaredFuncSigs(badFile); err == nil {
 		t.Fatalf("addDeclaredFuncSigs(non-func) unexpectedly succeeded")
+	}
+	if err := builder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "·missing"}}}); err == nil {
+		t.Fatalf("addDeclaredFuncSigs(missing) unexpectedly succeeded")
+	}
+	nilLocalBuilder := goSigBuilder{
+		sigs:      map[string]FuncSig{},
+		localSigs: nil,
+		scope:     scope,
+		sz:        types.SizesFor("gc", "arm64"),
+		pkgPath:   "test/pkg",
+		resolve:   testResolveSym("test/pkg"),
+		goarch:    "arm64",
+	}
+	if err := nilLocalBuilder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "missing_local<>"}}}); err != nil {
+		t.Fatalf("addDeclaredFuncSigs(local with nil map) error = %v", err)
 	}
 	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil); err == nil {
 		t.Fatalf("goSigsForAsmFile(madeup) unexpectedly succeeded")
