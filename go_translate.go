@@ -267,10 +267,14 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				b.sigs[targetResolved] = fs
 				continue
 			}
-			// cgo_import_dynamic and other C symbols may be referenced from
-			// assembly without a Go declaration. Their ABI is deliberately opaque
-			// to the Go type checker; keep a conservative declaration so the
-			// backend can still emit the trampoline. A ManualSig takes precedence.
+			if !tailJump {
+				// Keep ordinary unresolved calls untyped so the backend reports the
+				// missing declaration instead of silently dropping arguments/results.
+				continue
+			}
+			// An undeclared tail target can be an assembly trampoline reached
+			// through a raw function pointer. Its ABI is opaque to go/types; keep a
+			// conservative declaration so the trampoline can still be emitted.
 			b.sigs[targetResolved] = FuncSig{Name: targetResolved, Ret: Void}
 		}
 	}

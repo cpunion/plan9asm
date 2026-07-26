@@ -206,7 +206,7 @@ func cmp(a, b int) int { return a }
 	file := &File{
 		Arch: ArchARM64,
 		Funcs: []Func{
-			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
+			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
 			{Sym: "localhelper<>", Instrs: []Instr{{Op: OpTEXT}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}}, {Op: OpRET}}},
 			{Sym: "localtarget<>"},
 		},
@@ -224,6 +224,9 @@ func cmp(a, b int) int { return a }
 		if _, ok := sigs[want]; !ok {
 			t.Fatalf("missing signature %q", want)
 		}
+	}
+	if _, ok := sigs["test/pkg.undeclared_call"]; ok {
+		t.Fatalf("ordinary unresolved CALL unexpectedly received a synthesized signature")
 	}
 
 	builder := goSigBuilder{
