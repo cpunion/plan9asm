@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/constant"
 	"go/types"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -158,6 +159,7 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	}
 	b := goSigBuilder{
 		sigs:      make(map[string]FuncSig, len(file.Funcs)),
+		localSigs: make(map[string]bool),
 		scope:     pkg.Types.Scope(),
 		sz:        sz,
 		linknames: goLinknameRemoteToLocal(pkg.Syntax),
@@ -175,11 +177,24 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	if err := b.addReferencedFuncSigs(file); err != nil {
 		return nil, err
 	}
+	// File-local TEXT symbols (the Plan 9 `<>` form) are commonly used for
+	// assembly trampolines that are only reached through a raw function
+	// pointer. They intentionally have no Go declaration. Give any such
+	// symbols that could not be inferred from a tail jump a conservative
+	// zero-argument/void signature so they can still be emitted and referenced
+	// by DATA directives. A caller-provided ManualSig remains authoritative.
+	for resolved := range b.localSigs {
+		if _, ok := b.sigs[resolved]; ok {
+			continue
+		}
+		b.sigs[resolved] = FuncSig{Name: resolved, Ret: Void}
+	}
 	return b.sigs, nil
 }
 
 type goSigBuilder struct {
 	sigs      map[string]FuncSig
+	localSigs map[string]bool
 	scope     *types.Scope
 	sz        types.Sizes
 	linknames map[string]string
@@ -191,7 +206,8 @@ type goSigBuilder struct {
 
 func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 	for i := range file.Funcs {
-		sym := goStripABISuffix(file.Funcs[i].Sym)
+		textSym := file.Funcs[i].Sym
+		sym := goStripABISuffix(textSym)
 		resolved := b.resolve(sym)
 		if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
 			b.sigs[resolved] = ms
@@ -204,6 +220,13 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		}
 		obj := b.scope.Lookup(declName)
 		if obj == nil {
+			if strings.HasSuffix(textSym, "<>") {
+				if b.localSigs == nil {
+					b.localSigs = make(map[string]bool)
+				}
+				b.localSigs[resolved] = true
+				continue
+			}
 			return fmt.Errorf("missing Go declaration for asm symbol %q", sym)
 		}
 		fn, ok := obj.(*types.Func)
@@ -235,15 +258,24 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			if _, ok := b.sigs[targetResolved]; ok {
 				continue
 			}
-			if !tailJump || !hasCallerSig {
+			if tailJump && hasCallerSig {
+				// Best-effort fallback for helper<> tail-jumps where the callee is an
+				// internal asm label with no Go declaration. Callers can override this
+				// via ManualSig when the inferred signature is not identical.
+				fs := callerSig
+				fs.Name = targetResolved
+				b.sigs[targetResolved] = fs
 				continue
 			}
-			// Best-effort fallback for helper<> tail-jumps where the callee is an
-			// internal asm label with no Go declaration. Callers can override this
-			// via ManualSig when the inferred signature is not identical.
-			fs := callerSig
-			fs.Name = targetResolved
-			b.sigs[targetResolved] = fs
+			if !tailJump {
+				// Keep ordinary unresolved calls untyped so the backend reports the
+				// missing declaration instead of silently dropping arguments/results.
+				continue
+			}
+			// An undeclared tail target can be an assembly trampoline reached
+			// through a raw function pointer. Its ABI is opaque to go/types; keep a
+			// conservative declaration so the trampoline can still be emitted.
+			b.sigs[targetResolved] = FuncSig{Name: targetResolved, Ret: Void}
 		}
 	}
 	return nil
@@ -547,6 +579,14 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 	case *types.Named:
 		return goLLVMTypeForType(tt.Underlying(), goarch)
 	default:
+		// *types.Alias was added after the oldest Go version supported by this
+		// module. Detect it by its stable reflect identity so the package still
+		// compiles with Go 1.21, while newer go/types implementations can lower
+		// an alias through its RHS just like a named type. Keep this probe in the
+		// fallback path so common concrete types avoid reflection overhead.
+		if reflect.TypeOf(t).String() == "*types.Alias" {
+			return goLLVMTypeForType(t.Underlying(), goarch)
+		}
 		return "", fmt.Errorf("unsupported type %s", t.String())
 	}
 }

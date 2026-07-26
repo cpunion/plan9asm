@@ -109,6 +109,8 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	word32 := types.Typ[types.Int]
 	namedObj := types.NewTypeName(token.NoPos, nil, "MyInt", nil)
 	named := types.NewNamed(namedObj, types.Typ[types.Int32], nil)
+	aliasObj := types.NewTypeName(token.NoPos, nil, "MyUint64", nil)
+	alias := newAliasTypeForTest(aliasObj, types.Typ[types.Uint64])
 	for _, tc := range []struct {
 		typ    types.Type
 		goarch string
@@ -130,6 +132,7 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{types.NewSlice(types.Typ[types.Byte]), "arm64", LLVMType("{ ptr, i64, i64 }"), true},
 		{types.NewInterfaceType(nil, nil), "amd64", LLVMType("{ ptr, ptr }"), true},
 		{named, "amd64", I32, true},
+		{alias, "arm64", I64, true},
 		{types.Typ[types.Complex64], "amd64", "", false},
 		{types.NewStruct(nil, nil), "amd64", "", false},
 	} {
@@ -203,8 +206,9 @@ func cmp(a, b int) int { return a }
 	file := &File{
 		Arch: ArchARM64,
 		Funcs: []Func{
-			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: OpRET}}},
+			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
 			{Sym: "localhelper<>", Instrs: []Instr{{Op: OpTEXT}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}}, {Op: OpRET}}},
+			{Sym: "localtarget<>"},
 		},
 	}
 	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", func(resolved string) (FuncSig, bool) {
@@ -216,10 +220,13 @@ func cmp(a, b int) int { return a }
 	if err != nil {
 		t.Fatalf("goSigsForAsmFile() error = %v", err)
 	}
-	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper"} {
+	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper", "test/pkg.localtarget"} {
 		if _, ok := sigs[want]; !ok {
 			t.Fatalf("missing signature %q", want)
 		}
+	}
+	if _, ok := sigs["test/pkg.undeclared_call"]; ok {
+		t.Fatalf("ordinary unresolved CALL unexpectedly received a synthesized signature")
 	}
 
 	builder := goSigBuilder{
@@ -258,6 +265,21 @@ var helper int
 	badFile := &File{Funcs: []Func{{Sym: "·helper"}}}
 	if err := badBuilder.addDeclaredFuncSigs(badFile); err == nil {
 		t.Fatalf("addDeclaredFuncSigs(non-func) unexpectedly succeeded")
+	}
+	if err := builder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "·missing"}}}); err == nil {
+		t.Fatalf("addDeclaredFuncSigs(missing) unexpectedly succeeded")
+	}
+	nilLocalBuilder := goSigBuilder{
+		sigs:      map[string]FuncSig{},
+		localSigs: nil,
+		scope:     scope,
+		sz:        types.SizesFor("gc", "arm64"),
+		pkgPath:   "test/pkg",
+		resolve:   testResolveSym("test/pkg"),
+		goarch:    "arm64",
+	}
+	if err := nilLocalBuilder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "missing_local<>"}}}); err != nil {
+		t.Fatalf("addDeclaredFuncSigs(local with nil map) error = %v", err)
 	}
 	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil); err == nil {
 		t.Fatalf("goSigsForAsmFile(madeup) unexpectedly succeeded")
@@ -318,5 +340,26 @@ RET
 	expanded := string(goExpandConsts([]byte("MOVD other/pkg.Value+const_Limit(SB), R0\nMOVD $const_Answer, R1\n"), pkgTypes, imports))
 	if !strings.Contains(expanded, "other/pkg.Value+7(SB)") || !strings.Contains(expanded, "$42") {
 		t.Fatalf("goExpandConsts() = %q", expanded)
+	}
+}
+
+func TestTranslateGoModuleUndeclaredLocalTrampoline(t *testing.T) {
+	pkg := mustGoPackage(t, "test/pkg", `package testpkg
+func F() {}
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
+JMP external_symbol(SB)
+`), GoModuleOptions{
+		GOARCH:       "arm64",
+		TargetTriple: "aarch64-unknown-linux-gnu",
+		ResolveSym:   testResolveSym("test/pkg"),
+	})
+	if err != nil {
+		t.Fatalf("TranslateGoModule(undeclared local trampoline) error = %v", err)
+	}
+	defer tr.Module.Dispose()
+	sig, ok := tr.Signatures["test/pkg.local_trampoline"]
+	if !ok || sig.Ret != Void || len(sig.Args) != 0 {
+		t.Fatalf("local trampoline signature = %#v, want void()", sig)
 	}
 }
