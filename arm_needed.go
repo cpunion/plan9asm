@@ -15,7 +15,12 @@ func funcNeedsARMCFG(fn Func) bool {
 			op = op[:dot]
 		}
 		switch Op(op) {
-		case OpTEXT, OpRET, OpBYTE:
+		case OpTEXT, OpBYTE:
+			continue
+		case OpRET:
+			if len(ins.Args) != 0 {
+				return true
+			}
 			continue
 		case "MOVW", "MOVB", "MOVBU", "ADD", "SUB", "AND", "ORR", "EOR", "RSB":
 			// The linear ARM path cannot handle conditional execution or post-inc.

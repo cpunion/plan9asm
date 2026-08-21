@@ -23,7 +23,7 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 	if file == nil {
 		return llvm.Module{}, fmt.Errorf("nil file")
 	}
-	if len(file.Funcs) == 0 {
+	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return llvm.Module{}, fmt.Errorf("empty file")
 	}
 	if opt.AnnotateSource {
@@ -574,17 +574,16 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
-		if d.Width <= 0 {
-			return fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
+		end, err := dataStmtEnd(d)
+		if err != nil {
+			return err
 		}
-		payload := make([]byte, d.Width)
-		v := d.Value
-		for i := int64(0); i < d.Width; i++ {
-			payload[i] = byte(v & 0xff)
-			v >>= 8
+		payload, err := dataStmtPayload(d)
+		if err != nil {
+			return err
 		}
 		sd.bytes[d.Off] = payload
-		if end := d.Off + d.Width; end > sd.size {
+		if end > sd.size {
 			sd.size = end
 		}
 	}
@@ -599,10 +598,10 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		if sd.size <= 0 {
 			continue
 		}
-		if sd.size > (1 << 31) {
-			return directUnsupportedf("global %s too large for direct lowering: %d", name, sd.size)
+		buf, err := makeDataGlobal(name, sd.size)
+		if err != nil {
+			return err
 		}
-		buf := make([]byte, sd.size)
 		for off, p := range sd.bytes {
 			if off < 0 || off+int64(len(p)) > int64(len(buf)) {
 				return fmt.Errorf("DATA %s: out of bounds off=%d len=%d size=%d", name, off, len(p), len(buf))

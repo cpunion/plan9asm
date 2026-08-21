@@ -201,7 +201,19 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		// MOVQ src, dst
 		switch dst.Kind {
 		case OpReg:
-			v, err := c.evalI64(src)
+			var v string
+			var err error
+			if src.Kind == OpMem && src.Mem.Segment != "" {
+				p, ptrType, err2 := c.ptrFromMem(src.Mem)
+				if err2 != nil {
+					return true, false, err2
+				}
+				t := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = load i64, %s %s, align 1\n", t, ptrType, p)
+				v = "%" + t
+			} else {
+				v, err = c.evalI64(src)
+			}
 			if err != nil {
 				// Allow MOVQ mem, reg.
 				if src.Kind == OpMem {
@@ -239,12 +251,11 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			if err != nil {
 				return true, false, err
 			}
-			addr, err := c.addrFromMem(dst.Mem)
+			p, ptrType, err := c.ptrFromMem(dst.Mem)
 			if err != nil {
 				return true, false, err
 			}
-			p := c.ptrFromAddrI64(addr)
-			fmt.Fprintf(c.b, "  store i64 %s, ptr %s, align 1\n", v, p)
+			fmt.Fprintf(c.b, "  store i64 %s, %s %s, align 1\n", v, ptrType, p)
 			return true, false, nil
 		case OpSym:
 			if !strings.HasSuffix(strings.TrimSpace(dst.Sym), "(SB)") {

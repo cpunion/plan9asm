@@ -30,6 +30,8 @@ const (
 	SP Reg = "SP"
 	BP Reg = "BP"
 	PC Reg = "PC"
+	FS Reg = "FS"
+	GS Reg = "GS"
 
 	AL Reg = "AL"
 	AH Reg = "AH"
@@ -80,6 +82,10 @@ func parseReg(s string) (Reg, bool) {
 		return BP, true
 	case "PC":
 		return PC, true
+	case "FS":
+		return FS, true
+	case "GS":
+		return GS, true
 	case "AL":
 		return AL, true
 	case "AH":
@@ -225,10 +231,11 @@ type Operand struct {
 }
 
 type MemRef struct {
-	Base  Reg
-	Off   int64
-	Index Reg   // optional; empty if not present
-	Scale int64 // optional; defaults to 1 when Index is present
+	Base    Reg
+	Off     int64
+	Index   Reg   // optional; empty if not present
+	Scale   int64 // optional; defaults to 1 when Index is present
+	Segment Reg   // optional x86 segment override (FS or GS)
 }
 
 func (o Operand) String() string {
@@ -260,13 +267,20 @@ func (o Operand) String() string {
 		return o.Sym + ":"
 	case OpMem:
 		// Best-effort pretty print.
+		segment := ""
+		if o.Mem.Segment != "" {
+			segment = fmt.Sprintf("(%s)", o.Mem.Segment)
+		}
 		if o.Mem.Index != "" {
 			if o.Mem.Scale == 0 {
-				return fmt.Sprintf("%d(%s)(%s)", o.Mem.Off, o.Mem.Base, o.Mem.Index)
+				return fmt.Sprintf("%d(%s)(%s)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, segment)
 			}
-			return fmt.Sprintf("%d(%s)(%s*%d)", o.Mem.Off, o.Mem.Base, o.Mem.Index, o.Mem.Scale)
+			return fmt.Sprintf("%d(%s)(%s*%d)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, o.Mem.Scale, segment)
 		}
-		return fmt.Sprintf("%d(%s)", o.Mem.Off, o.Mem.Base)
+		if o.Mem.Base == "" && o.Mem.Segment != "" {
+			return fmt.Sprintf("%d%s", o.Mem.Off, segment)
+		}
+		return fmt.Sprintf("%d(%s)%s", o.Mem.Off, o.Mem.Base, segment)
 	case OpRegList:
 		parts := make([]string, 0, len(o.RegList))
 		for _, r := range o.RegList {
@@ -762,12 +776,15 @@ type Instr struct {
 //
 //	DATA sym+off(SB)/width, $value
 //
-// Width is in bytes. Value is encoded little-endian into the global.
+// Width is in bytes. Integer values are encoded little-endian into the
+// global. String payloads are copied byte-for-byte and zero-padded to Width,
+// matching cmd/asm's DATA string semantics.
 type DataStmt struct {
-	Sym   string
-	Off   int64
-	Width int64
-	Value uint64
+	Sym     string
+	Off     int64
+	Width   int64
+	Value   uint64
+	Payload []byte
 }
 
 // GloblStmt models a minimal Plan 9 GLOBL directive:
@@ -978,6 +995,10 @@ func parseMem(s string) (MemRef, bool) {
 	}
 
 	mem := MemRef{Base: base, Off: off}
+	if base == FS || base == GS {
+		mem.Base = ""
+		mem.Segment = base
+	}
 	if rest == "" {
 		return mem, true
 	}
@@ -987,6 +1008,13 @@ func parseMem(s string) (MemRef, bool) {
 		return MemRef{}, false
 	}
 	inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rest, "("), ")"))
+	if segment, ok := parseReg(inner); ok && (segment == FS || segment == GS) {
+		if mem.Segment != "" {
+			return MemRef{}, false
+		}
+		mem.Segment = segment
+		return mem, true
+	}
 	idx, scale, ok := parseIndexScale(inner)
 	if !ok {
 		return MemRef{}, false

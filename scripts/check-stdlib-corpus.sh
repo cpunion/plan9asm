@@ -8,8 +8,14 @@ if ! command -v llc >/dev/null 2>&1; then
   echo "llc not found in PATH" >&2
   exit 1
 fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found in PATH" >&2
+if [[ "${RUNNER_OS:-}" == "Windows" ]] && command -v python >/dev/null 2>&1; then
+  python_cmd=python
+elif command -v python3 >/dev/null 2>&1; then
+  python_cmd=python3
+elif command -v python >/dev/null 2>&1; then
+  python_cmd=python
+else
+  echo "Python 3 not found in PATH" >&2
   exit 1
 fi
 
@@ -23,6 +29,16 @@ targets=(
   "darwin arm64 arm64-apple-macosx"
 )
 
+# Include Windows by default. CI may disable these two extra targets for old
+# Go compatibility lanes; the latest toolchain and the Windows host lane still
+# scan and compile both COFF corpora.
+if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
+  targets+=(
+    "windows amd64 x86_64-pc-windows-msvc"
+    "windows arm64 aarch64-pc-windows-msvc"
+  )
+fi
+
 for target in "${targets[@]}"; do
   set -- $target
   goos=$1
@@ -32,7 +48,7 @@ for target in "${targets[@]}"; do
   echo "==> scan $goos/$goarch"
   json="$tmp_root/$goos-$goarch.json"
   go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
-  python3 - "$json" "$goos/$goarch" <<'PY'
+  "$python_cmd" - "$json" "$goos/$goarch" <<'PY'
 import json
 import sys
 

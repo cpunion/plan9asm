@@ -165,7 +165,8 @@ func Parse(arch Arch, src string) (*File, error) {
 					return nil, fmt.Errorf("line %d: RET outside TEXT: %q", lineno, stmt)
 				}
 				if strings.TrimSpace(rest) != "" {
-					// Some files use "RET" alone; accept "RET x" as generic for now.
+					// A symbol operand is a tail call; register operands retain the
+					// architecture-specific return behavior.
 					args, err := parseOperandsCSV(rest)
 					if err != nil {
 						return nil, fmt.Errorf("line %d: %v", lineno, err)
@@ -194,7 +195,7 @@ func Parse(arch Arch, src string) (*File, error) {
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	if len(f.Funcs) == 0 {
+	if len(f.Funcs) == 0 && len(f.Data) == 0 && len(f.Globl) == 0 {
 		return nil, fmt.Errorf("no TEXT directive found")
 	}
 	return f, nil
@@ -202,12 +203,12 @@ func Parse(arch Arch, src string) (*File, error) {
 
 func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	// DATA sym+off(SB)/width, $value
-	parts := strings.Split(rest, ",")
-	if len(parts) != 2 {
+	lhs, rhs, ok := strings.Cut(rest, ",")
+	if !ok {
 		return DataStmt{}, fmt.Errorf("invalid DATA: %q", "DATA "+rest)
 	}
-	lhs := strings.TrimSpace(parts[0])
-	rhs := strings.TrimSpace(parts[1])
+	lhs = strings.TrimSpace(lhs)
+	rhs = strings.TrimSpace(rhs)
 	if lhs == "" || rhs == "" {
 		return DataStmt{}, fmt.Errorf("invalid DATA: %q", "DATA "+rest)
 	}
@@ -235,12 +236,15 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	sym, off := splitSymPlusOff(symPart)
 
 	val, ok := parseImm(rhs)
+	var payload []byte
 	if !ok {
 		trimRHS := strings.TrimSpace(rhs)
-		// Accept string DATA payloads as zero placeholders for now.
 		if strings.HasPrefix(trimRHS, "$\"") {
-			val = 0
-			ok = true
+			str, err := strconv.Unquote(strings.TrimPrefix(trimRHS, "$"))
+			if err == nil && int64(len(str)) <= width {
+				payload = []byte(str)
+				ok = true
+			}
 		}
 	}
 	if !ok {
@@ -256,7 +260,7 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	if !ok {
 		return DataStmt{}, fmt.Errorf("DATA invalid immediate %q: %q", rhs, "DATA "+rest)
 	}
-	return DataStmt{Sym: sym, Off: off, Width: width, Value: uint64(val)}, nil
+	return DataStmt{Sym: sym, Off: off, Width: width, Value: uint64(val), Payload: payload}, nil
 }
 
 func parseWidth(arch Arch, s string) (int64, error) {

@@ -20,8 +20,16 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{Operand{Kind: OpLabel, Sym: "loop"}, "loop:"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: SI, Off: 8}}, "8(SI)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Off: -4, Index: CX, Scale: 2}}, "-4(BX)(CX*2)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Index: CX, Segment: GS}}, "0(BX)(CX)(GS)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Off: 0x30, Segment: GS}}, "48(GS)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Base: CX, Segment: GS}}, "0(CX)(GS)"},
 		{Operand{Kind: OpRegList, RegList: []Reg{"R0", "R1"}}, "(R0, R1)"},
 		{Operand{}, "<invalid>"},
+	}
+	for _, want := range []Reg{FS, GS} {
+		if got, ok := parseReg(string(want)); !ok || got != want {
+			t.Fatalf("parseReg(%q) = (%q, %v)", want, got, ok)
+		}
 	}
 	for _, tc := range cases {
 		if got := tc.op.String(); got != tc.want {
@@ -57,6 +65,9 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{"-1(AX*2)", true},
 		{"(0*8)(R8)(BX*8)", true},
 		{"(symSize)(R14)", true},
+		{"0x30(GS)", true},
+		{"0(CX)(GS)", true},
+		{"0(GS)(FS)", false},
 		{"not-mem", false},
 	} {
 		_, ok := parseMem(tc.in)

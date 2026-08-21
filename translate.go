@@ -96,7 +96,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
-	if len(file.Funcs) == 0 {
+	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return "", fmt.Errorf("empty file")
 	}
 
@@ -348,18 +348,16 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
-		if d.Width <= 0 {
-			return fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
+		end, err := dataStmtEnd(d)
+		if err != nil {
+			return err
 		}
-		payload := make([]byte, d.Width)
-		// Plan 9 asm DATA encodes immediates little-endian on amd64/arm64.
-		v := d.Value
-		for i := int64(0); i < d.Width; i++ {
-			payload[i] = byte(v & 0xff)
-			v >>= 8
+		payload, err := dataStmtPayload(d)
+		if err != nil {
+			return err
 		}
 		sd.bytes[d.Off] = payload
-		if end := d.Off + d.Width; end > sd.size {
+		if end > sd.size {
 			sd.size = end
 		}
 	}
@@ -380,7 +378,10 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		if sd.size <= 0 {
 			continue
 		}
-		buf := make([]byte, sd.size)
+		buf, err := makeDataGlobal(name, sd.size)
+		if err != nil {
+			return err
+		}
 		for off, p := range sd.bytes {
 			if off < 0 || off+int64(len(p)) > int64(len(buf)) {
 				return fmt.Errorf("DATA %s: out of bounds off=%d len=%d size=%d", name, off, len(p), len(buf))
@@ -391,6 +392,54 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		fmt.Fprintf(b, "%s = constant [%d x i8] %s, align %d\n", llvmGlobal(name), len(buf), llvmI8ArrayInit(buf), align)
 	}
 	return nil
+}
+
+// Data globals are currently materialized as byte slices and then as LLVM
+// constant arrays. Bound their size so malformed input cannot exhaust the
+// translator's memory before LLVM sees it. The Go standard library's largest
+// assembly global is only a few KiB.
+const maxDataGlobalSize int64 = 64 << 20
+
+func dataStmtEnd(d DataStmt) (int64, error) {
+	if d.Off < 0 {
+		return 0, fmt.Errorf("DATA %s: invalid offset %d", d.Sym, d.Off)
+	}
+	if d.Width <= 0 || d.Width > maxDataGlobalSize || d.Off > maxDataGlobalSize-d.Width {
+		return 0, fmt.Errorf("DATA %s: range off=%d width=%d exceeds %d-byte limit", d.Sym, d.Off, d.Width, maxDataGlobalSize)
+	}
+	return d.Off + d.Width, nil
+}
+
+func makeDataGlobal(name string, size int64) ([]byte, error) {
+	if size < 0 || size > maxDataGlobalSize {
+		return nil, fmt.Errorf("global %s: size %d exceeds %d-byte limit", name, size, maxDataGlobalSize)
+	}
+	return make([]byte, size), nil
+}
+
+func dataStmtPayload(d DataStmt) ([]byte, error) {
+	if d.Width <= 0 {
+		return nil, fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
+	}
+	if d.Width > maxDataGlobalSize {
+		return nil, fmt.Errorf("DATA %s: width %d exceeds %d-byte limit", d.Sym, d.Width, maxDataGlobalSize)
+	}
+	payload := make([]byte, d.Width)
+	if d.Payload != nil {
+		if int64(len(d.Payload)) > d.Width {
+			return nil, fmt.Errorf("DATA %s: string payload is %d bytes, exceeds width %d", d.Sym, len(d.Payload), d.Width)
+		}
+		copy(payload, d.Payload)
+		return payload, nil
+	}
+	// Plan 9 asm DATA encodes integer immediates little-endian on the
+	// architectures supported by this translator.
+	v := d.Value
+	for i := range payload {
+		payload[i] = byte(v & 0xff)
+		v >>= 8
+	}
+	return payload, nil
 }
 
 func bestAlign(size int64) int64 {

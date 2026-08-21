@@ -420,8 +420,8 @@ func TestARMBranchMovmAndSyscallCoverage(t *testing.T) {
 	if err := c2.tailCallAndRet(Operand{Kind: OpSym, Sym: "ret32"}); err == nil {
 		t.Fatalf("tailCallAndRet(no sb) unexpectedly succeeded")
 	}
-	if err := c2.tailCallAndRet(Operand{Kind: OpSym, Sym: "missing(SB)"}); err == nil {
-		t.Fatalf("tailCallAndRet(missing sig) unexpectedly succeeded")
+	if err := c2.tailCallAndRet(Operand{Kind: OpSym, Sym: "missing(SB)"}); err != nil {
+		t.Fatalf("tailCallAndRet(missing sig) error = %v", err)
 	}
 	if err := c2.tailCallAndRet(Operand{Kind: OpSym, Sym: "tail64(SB)"}); err == nil {
 		t.Fatalf("tailCallAndRet(mismatch) unexpectedly succeeded")

@@ -23,7 +23,7 @@ func funcNeedsAMD64CFG(fn Func) bool {
 		}
 		// Keep the linear path only for the tiny subset it currently lowers.
 		switch Op(op) {
-		case OpTEXT, OpRET, OpBYTE, OpMOVQ, OpMOVL, OpADDQ, OpSUBQ, OpXORQ, OpCPUID, OpXGETBV:
+		case OpTEXT, OpBYTE, OpMOVQ, OpMOVL, OpADDQ, OpSUBQ, OpXORQ, OpCPUID, OpXGETBV:
 			// For MOVQ/MOVL, linear lowering supports immediate/reg/FP value flow.
 			// Addressing forms (mem/sym) require CFG lowering.
 			if (op == "MOVQ" || op == "MOVL") && len(ins.Args) == 2 {
@@ -35,6 +35,10 @@ func funcNeedsAMD64CFG(fn Func) bool {
 						return true
 					}
 				}
+			}
+		case OpRET:
+			if len(ins.Args) != 0 {
+				return true
 			}
 		default:
 			return true

@@ -215,6 +215,16 @@ func TestTranslateIRTextCoverage(t *testing.T) {
 	}, resolve); err == nil {
 		t.Fatalf("emitDataGlobals(oob) unexpectedly succeeded")
 	}
+	if err := emitDataGlobals(&dataIR, &File{
+		Globl: []GloblStmt{{Sym: "huge", Size: maxDataGlobalSize + 1}},
+	}, resolve); err == nil {
+		t.Fatalf("emitDataGlobals(huge) unexpectedly succeeded")
+	}
+	if err := emitDataGlobals(&dataIR, &File{
+		Data: []DataStmt{{Sym: "dataOnly", Width: 1, Value: 1}},
+	}, resolve); err != nil {
+		t.Fatalf("emitDataGlobals(data-only) error = %v", err)
+	}
 
 	if got := bestAlign(32); got != 16 {
 		t.Fatalf("bestAlign(32) = %d", got)
@@ -825,11 +835,14 @@ func TestDirectModuleTypeHelperCoverage(t *testing.T) {
 
 	mod := ctx.NewModule("data-helper")
 	defer mod.Dispose()
-	if err := emitDataGlobalsModule(mod, &File{Globl: []GloblStmt{{Sym: "huge", Size: (1 << 31) + 1}}}, testResolveSym("example")); err == nil {
+	if err := emitDataGlobalsModule(mod, &File{Globl: []GloblStmt{{Sym: "huge", Size: maxDataGlobalSize + 1}}}, testResolveSym("example")); err == nil {
 		t.Fatalf("emitDataGlobalsModule(huge) unexpectedly succeeded")
 	}
 	if err := emitDataGlobalsModule(mod, &File{Data: []DataStmt{{Sym: "bad", Width: 0}}}, testResolveSym("example")); err == nil {
 		t.Fatalf("emitDataGlobalsModule(width=0) unexpectedly succeeded")
+	}
+	if err := emitDataGlobalsModule(mod, &File{Data: []DataStmt{{Sym: "dataOnly", Width: 1, Value: 1}}}, testResolveSym("example")); err != nil {
+		t.Fatalf("emitDataGlobalsModule(data-only) error = %v", err)
 	}
 	if err := emitDataGlobalsModule(mod, &File{
 		Globl: []GloblStmt{{Sym: "small", Size: 1}},

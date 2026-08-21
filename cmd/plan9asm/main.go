@@ -515,7 +515,10 @@ func resolvePath(path string) (string, error) {
 func goListPackages(query, goos, goarch string) ([]goListPackage, error) {
 	args := []string{"list", "-json", query}
 	cmd := exec.Command("go", args...)
-	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch)
+	// Package discovery only needs metadata. Disabling cgo prevents a host C
+	// toolchain from being used while listing a different target (for example,
+	// Windows-hosted tooling inspecting Linux standard-library assembly).
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+goos, "GOARCH="+goarch)
 
 	out, err := cmd.Output()
 	if err != nil {

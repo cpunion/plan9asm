@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.26.x'
           cache: true
 
       - name: Go fmt check
@@ -72,12 +72,14 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
+          - windows-latest
         go-version:
           - '1.21.x'
           - '1.22.x'
           - '1.23.x'
           - '1.24.x'
           - '1.25.x'
+          - '1.26.x'
 
     steps:
       - name: Checkout
@@ -98,6 +100,16 @@ jobs:
           brew install llvm@19
           echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> $GITHUB_ENV
 
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install LLVM 19 (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-windows-llvm19
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -105,16 +117,23 @@ jobs:
           cache: true
 
       - name: Stdlib asm corpus gate
+        shell: bash
         run: |
           chmod +x scripts/check-stdlib-corpus.sh
           scripts/check-stdlib-corpus.sh
 
   test:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ${{ matrix.os }}
     strategy:
       # Keep both matrix variants visible even if one fails.
       fail-fast: false
       matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
         go-version:
           - '1.21.x'
           - '1.22.x'
@@ -133,7 +152,14 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
 
-      - name: Install LLVM 19
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install LLVM 19 (Ubuntu)
+        if: runner.os == 'Linux'
         run: |
           echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
@@ -141,23 +167,61 @@ jobs:
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
 
+      - name: Install LLVM 19 (Windows)
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-windows-llvm19
+
       - name: LLVM tools info
+        shell: bash
         run: |
-          which llc
+          command -v llc
           llc --version
-          which clang
+          command -v clang
           clang --version
 
-      - name: Go test
+      - name: Go test (Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
 
-      - name: Go test (cmd/plan9asm)
+      - name: Go test (cmd/plan9asm, Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
         working-directory: cmd/plan9asm
 
-      - name: Go test (cmd/plan9asmll)
+      - name: Go test (cmd/plan9asmll, Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
         working-directory: cmd/plan9asmll
+
+      - name: Go test with coverage (Windows)
+        if: runner.os == 'Windows' && matrix.go-version == '1.26.x'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./... -coverprofile=coverage-windows-root.out
+          (cd cmd/plan9asm && go test ./... -coverprofile=../../coverage-windows-plan9asm.out)
+          (cd cmd/plan9asmll && go test ./... -coverprofile=../../coverage-windows-plan9asmll.out)
+
+      - name: Go test (Windows)
+        if: runner.os == 'Windows' && matrix.go-version != '1.26.x'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./...
+          (cd cmd/plan9asm && go test ./...)
+          (cd cmd/plan9asmll && go test ./...)
+
+      - name: Upload Windows coverage to Codecov
+        if: runner.os == 'Windows' && matrix.go-version == '1.26.x'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: ./coverage-windows-root.out,./coverage-windows-plan9asm.out,./coverage-windows-plan9asmll.out
+          disable_search: true
+          flags: windows
+          name: windows-go1.26
+          fail_ci_if_error: true
+          verbose: true
 
   arm-scan:
     runs-on: ubuntu-latest
@@ -192,7 +256,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.1'
+          go-version: '1.26.x'
           cache: true
 
       - name: ARM scan gate
@@ -229,7 +293,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.26.x'
           cache: true
 
       - name: Install LLVM 19
@@ -256,7 +320,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.26.x'
           cache: true
 
       - name: Install LLVM 19
@@ -289,7 +353,8 @@ jobs:
         with:
           use_oidc: true
           files: ./coverage-root.out
+          disable_search: true
           flags: unittests
-          name: ubuntu-go1.25
+          name: ubuntu-go1.26
           fail_ci_if_error: false
           verbose: true
