@@ -177,13 +177,15 @@ func TestListStdPackages(t *testing.T) {
 }
 
 func TestPackageSFilesAndAddOpStat(t *testing.T) {
+	dir := t.TempDir()
+	abs := filepath.Join(t.TempDir(), "abs", "c.s")
 	pkg := pkgJSON{
 		ImportPath: "example/p",
-		Dir:        "/tmp/pkg",
-		SFiles:     []string{"a.s", "b.S", filepath.Join("/abs", "c.s")},
+		Dir:        dir,
+		SFiles:     []string{"a.s", "b.S", abs},
 	}
 	got := packageSFiles(pkg)
-	want := []string{filepath.Join("/tmp/pkg", "a.s"), filepath.Join("/abs", "c.s")}
+	want := []string{filepath.Join(dir, "a.s"), abs}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("packageSFiles() = %#v, want %#v", got, want)
 	}

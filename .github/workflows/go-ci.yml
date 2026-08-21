@@ -106,23 +106,38 @@ jobs:
           cache: true
 
       - name: Stdlib asm corpus gate
+        env:
+          # This PR adds the Windows corpus to the latest-toolchain gate. Older
+          # toolchains retain their existing Linux/Darwin compatibility scan.
+          PLAN9ASM_CORPUS_INCLUDE_WINDOWS: ${{ matrix.go-version == '1.26.x' && '1' || '0' }}
         run: |
           chmod +x scripts/check-stdlib-corpus.sh
           scripts/check-stdlib-corpus.sh
 
   test:
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ${{ matrix.os }}
     strategy:
       # Keep both matrix variants visible even if one fails.
       fail-fast: false
       matrix:
-        go-version:
-          - '1.21.x'
-          - '1.22.x'
-          - '1.23.x'
-          - '1.24.x'
-          - '1.25.x'
-          - '1.26.x'
+        include:
+          - os: ubuntu-latest
+            go-version: '1.21.x'
+          - os: ubuntu-latest
+            go-version: '1.22.x'
+          - os: ubuntu-latest
+            go-version: '1.23.x'
+          - os: ubuntu-latest
+            go-version: '1.24.x'
+          - os: ubuntu-latest
+            go-version: '1.25.x'
+          - os: ubuntu-latest
+            go-version: '1.26.x'
+          - os: windows-latest
+            go-version: '1.26.x'
 
     steps:
       - name: Checkout
@@ -134,7 +149,14 @@ jobs:
           go-version: ${{ matrix.go-version }}
           cache: true
 
-      - name: Install LLVM 19
+      - name: Setup Python (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install LLVM 19 (Ubuntu)
+        if: runner.os == 'Linux'
         run: |
           echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
@@ -142,23 +164,125 @@ jobs:
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
 
-      - name: LLVM tools info
+      - name: Set up MSYS2 for LLVM 19 (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          path-type: inherit
+          update: true
+
+      - name: Install LLVM 19 (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        env:
+          LLVM_VERSION: '19.1.7'
+          LLVM_PACKAGE_VERSION: '19.1.7-1'
         run: |
-          which llc
+          set -euo pipefail
+          repo=https://repo.msys2.org/mingw/clang64
+          prefix=mingw-w64-clang-x86_64
+          # MSYS2 is rolling and no longer publishes LLVM 19 in its current
+          # repository metadata. Install one archived, version-consistent set
+          # so Windows exercises the same LLVM major as Linux and macOS.
+          packages=(
+            "clang-$LLVM_PACKAGE_VERSION"
+            "clang-libs-$LLVM_PACKAGE_VERSION"
+            "compiler-rt-$LLVM_PACKAGE_VERSION"
+            "llvm-$LLVM_PACKAGE_VERSION"
+            "llvm-libs-$LLVM_PACKAGE_VERSION"
+            "lld-$LLVM_PACKAGE_VERSION"
+            "libc++-$LLVM_PACKAGE_VERSION"
+            "libunwind-$LLVM_PACKAGE_VERSION"
+            "gettext-runtime-0.22.5-2"
+            "libffi-3.4.6-1"
+            "libiconv-1.17-4"
+            "libxml2-2.12.9-2"
+            "xz-5.6.3-3"
+            "zlib-1.3.1-1"
+            "zstd-1.5.6-2"
+          )
+          urls=()
+          for package in "${packages[@]}"; do
+            urls+=("$repo/$prefix-$package-any.pkg.tar.zst")
+          done
+
+          # These archived packages predate the gcc-libs -> cc-libs virtual
+          # dependency rename. libc++ 19 supplies the runtime; acknowledge only
+          # that metadata rename rather than disabling dependency checks.
+          pacman --noconfirm -U \
+            --assume-installed "$prefix-cc-libs=$LLVM_VERSION" \
+            "${urls[@]}"
+
+          if [[ "$(llvm-config --version)" != "$LLVM_VERSION" ]]; then
+            echo "expected LLVM $LLVM_VERSION, got $(llvm-config --version)" >&2
+            exit 1
+          fi
+
+          flatten() {
+            local value=$1
+            value="${value//$'\r'/}"
+            value="${value//$'\n'/ }"
+            printf '%s' "$value"
+          }
+          echo "CGO_CFLAGS=$(flatten "$(llvm-config --cflags)")" >> "$GITHUB_ENV"
+          echo "CGO_CXXFLAGS=$(flatten "$(llvm-config --cxxflags)")" >> "$GITHUB_ENV"
+          echo "CGO_LDFLAGS=$(flatten "$(llvm-config --ldflags --libs all --system-libs)")" >> "$GITHUB_ENV"
+          clang_bin="$(cygpath -w /clang64/bin)"
+          echo "CC=$clang_bin\\clang.exe" >> "$GITHUB_ENV"
+          echo "CXX=$clang_bin\\clang++.exe" >> "$GITHUB_ENV"
+          echo 'CGO_ENABLED=1' >> "$GITHUB_ENV"
+          echo 'GOFLAGS=-tags=byollvm' >> "$GITHUB_ENV"
+          echo "$clang_bin" >> "$GITHUB_PATH"
+
+      - name: LLVM tools info
+        shell: bash
+        run: |
+          command -v llc
           llc --version
-          which clang
+          command -v clang
           clang --version
 
-      - name: Go test
+      - name: Go test (Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
 
-      - name: Go test (cmd/plan9asm)
+      - name: Go test (cmd/plan9asm, Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
         working-directory: cmd/plan9asm
 
-      - name: Go test (cmd/plan9asmll)
+      - name: Go test (cmd/plan9asmll, Ubuntu)
+        if: runner.os != 'Windows'
         run: go test ./...
         working-directory: cmd/plan9asmll
+
+      - name: Go test with coverage (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./... -coverprofile=coverage-windows-root.out
+          (cd cmd/plan9asm && go test ./... -coverprofile=../../coverage-windows-plan9asm.out)
+          (cd cmd/plan9asmll && go test ./... -coverprofile=../../coverage-windows-plan9asmll.out)
+
+      - name: Windows host stdlib corpus gate
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          PLAN9ASM_CORPUS_INCLUDE_WINDOWS: '1'
+        run: scripts/check-stdlib-corpus.sh
+
+      - name: Upload Windows coverage to Codecov
+        if: runner.os == 'Windows'
+        uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: ./coverage-windows-root.out,./coverage-windows-plan9asm.out,./coverage-windows-plan9asmll.out
+          flags: windows
+          name: windows-go1.26
+          fail_ci_if_error: true
+          verbose: true
 
   arm-scan:
     runs-on: ubuntu-latest

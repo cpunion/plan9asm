@@ -7,19 +7,21 @@ import (
 )
 
 func TestPackageSFilesAbsFiltersNonPlan9Asm(t *testing.T) {
+	dir := t.TempDir()
+	abs := filepath.Join(t.TempDir(), "abs", "keep.s")
 	pkg := goListPackage{
-		Dir: "/tmp/pkg",
+		Dir: dir,
 		SFiles: []string{
 			"foo.s",
 			"bar.S",
 			"baz.Sx",
-			filepath.Join("/abs", "keep.s"),
+			abs,
 		},
 	}
 	got := packageSFilesAbs(pkg)
 	want := []string{
-		filepath.Join("/tmp/pkg", "foo.s"),
-		filepath.Join("/abs", "keep.s"),
+		filepath.Join(dir, "foo.s"),
+		abs,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("packageSFilesAbs() = %#v, want %#v", got, want)
