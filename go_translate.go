@@ -90,6 +90,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if bytes.Contains(src, []byte("const_")) {
 		src = goExpandConsts(src, pkg.Types, pkg.Imports)
 	}
+	src = goExpandAsmHeaderTypes(src, pkg.Types, opt.GOARCH)
 
 	file, err := Parse(arch, string(src))
 	if err != nil {
@@ -133,6 +134,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 var goABISuffixRe = regexp.MustCompile(`<ABI[^>]*>$`)
 var goConstRefRe = regexp.MustCompile(`\bconst_[A-Za-z0-9_]+\b`)
 var goConstPlusRefRe = regexp.MustCompile(`([\pL\pN_∕·./]+)\+const_([A-Za-z0-9_]+)`)
+var goAsmHeaderIdentRe = regexp.MustCompile(`\b[A-Za-z_][A-Za-z0-9_]*\b`)
 
 func goStripABISuffix(sym string) string {
 	sym = goABISuffixRe.ReplaceAllString(sym, "")
@@ -539,6 +541,57 @@ func goExpandConsts(src []byte, pkgTypes *types.Package, imports map[string]*typ
 			return []byte(val)
 		}
 		return m
+	})
+}
+
+// goExpandAsmHeaderTypes expands the struct size and field offset macros that
+// cmd/compile writes to go_asm.h for the package's named struct types. The
+// Plan 9 parser intentionally ignores #include, so the Go-aware translation
+// path resolves these macros directly from the same go/types information it
+// already uses for function signatures.
+func goExpandAsmHeaderTypes(src []byte, pkgTypes *types.Package, goarch string) []byte {
+	if pkgTypes == nil || pkgTypes.Scope() == nil {
+		return src
+	}
+	sizes := types.SizesFor("gc", goarch)
+	if sizes == nil {
+		return src
+	}
+	macros := make(map[string]string)
+	for _, name := range pkgTypes.Scope().Names() {
+		obj, ok := pkgTypes.Scope().Lookup(name).(*types.TypeName)
+		if !ok || obj == nil {
+			continue
+		}
+		st, ok := obj.Type().Underlying().(*types.Struct)
+		if !ok {
+			continue
+		}
+		size := sizes.Sizeof(obj.Type())
+		if size < 0 {
+			continue
+		}
+		macros[name+"__size"] = strconv.FormatInt(size, 10)
+		fields := make([]*types.Var, st.NumFields())
+		for i := range fields {
+			fields[i] = st.Field(i)
+		}
+		for i, offset := range sizes.Offsetsof(fields) {
+			field := fields[i]
+			if field == nil || field.Name() == "_" || offset < 0 {
+				continue
+			}
+			macros[name+"_"+field.Name()] = strconv.FormatInt(offset, 10)
+		}
+	}
+	if len(macros) == 0 {
+		return src
+	}
+	return goAsmHeaderIdentRe.ReplaceAllFunc(src, func(ident []byte) []byte {
+		if value, ok := macros[string(ident)]; ok {
+			return []byte(value)
+		}
+		return ident
 	})
 }
 

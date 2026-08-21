@@ -146,6 +146,15 @@ func TestGoAsmHeaderDataConstants(t *testing.T) {
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "stringVal", types.Typ[types.UntypedString], constant.MakeString("test")))
 	long := "this_is_a_string_constant_longer_than_seventy_characters_which_used_to_fail_see_issue_50253"
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "longStringVal", types.Typ[types.UntypedString], constant.MakeString(long)))
+	fields := []*types.Var{
+		types.NewField(token.NoPos, pkg, "a", types.Typ[types.Uint64], false),
+		types.NewField(token.NoPos, pkg, "b", types.NewArray(types.Typ[types.Uint8], 100), false),
+		types.NewField(token.NoPos, pkg, "c", types.Typ[types.Uint8], false),
+		types.NewField(token.NoPos, pkg, "_", types.Typ[types.Uint64], false),
+	}
+	typName := types.NewTypeName(token.NoPos, pkg, "typ", nil)
+	types.NewNamed(typName, types.NewStruct(fields, nil), nil)
+	pkg.Scope().Insert(typName)
 
 	src := goExpandConsts([]byte(`TEXT ·dummy(SB),NOSPLIT,$0-0
 RET
@@ -154,15 +163,30 @@ DATA ·big(SB)/8, $const_bigInt
 DATA ·text(SB)/4, $const_stringVal
 DATA ·long(SB)/91, $const_longStringVal
 `), pkg, nil)
+	src = goExpandAsmHeaderTypes(append(src, []byte(`DATA ·typSize(SB)/8, $typ__size
+DATA ·typA(SB)/8, $typ_a
+DATA ·typB(SB)/8, $typ_b
+DATA ·typC(SB)/8, $typ_c
+DATA ·blank(SB)/8, $typ__
+`)...), pkg, "arm64")
 	file, err := Parse(ArchARM64, string(src))
+	if err == nil {
+		t.Fatal("blank struct field macro unexpectedly expanded")
+	}
+	src = bytes.ReplaceAll(src, []byte("DATA ·blank(SB)/8, $typ__\n"), nil)
+	file, err = Parse(ArchARM64, string(src))
 	if err != nil {
 		t.Fatalf("Parse(expanded asmhdr) error = %v\n%s", err, src)
 	}
 	want := map[string][]byte{
-		"·small": {42, 0, 0, 0, 0, 0, 0, 0},
-		"·big":   {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
-		"·text":  []byte("test"),
-		"·long":  []byte(long),
+		"·small":   {42, 0, 0, 0, 0, 0, 0, 0},
+		"·big":     {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		"·text":    []byte("test"),
+		"·long":    []byte(long),
+		"·typSize": {120, 0, 0, 0, 0, 0, 0, 0},
+		"·typA":    {0, 0, 0, 0, 0, 0, 0, 0},
+		"·typB":    {8, 0, 0, 0, 0, 0, 0, 0},
+		"·typC":    {108, 0, 0, 0, 0, 0, 0, 0},
 	}
 	for _, data := range file.Data {
 		got, err := dataStmtPayload(data)
