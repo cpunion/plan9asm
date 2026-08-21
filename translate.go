@@ -348,15 +348,9 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
-		if d.Width <= 0 {
-			return fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
-		}
-		payload := make([]byte, d.Width)
-		// Plan 9 asm DATA encodes immediates little-endian on amd64/arm64.
-		v := d.Value
-		for i := int64(0); i < d.Width; i++ {
-			payload[i] = byte(v & 0xff)
-			v >>= 8
+		payload, err := dataStmtPayload(d)
+		if err != nil {
+			return err
 		}
 		sd.bytes[d.Off] = payload
 		if end := d.Off + d.Width; end > sd.size {
@@ -391,6 +385,28 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		fmt.Fprintf(b, "%s = constant [%d x i8] %s, align %d\n", llvmGlobal(name), len(buf), llvmI8ArrayInit(buf), align)
 	}
 	return nil
+}
+
+func dataStmtPayload(d DataStmt) ([]byte, error) {
+	if d.Width <= 0 {
+		return nil, fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
+	}
+	payload := make([]byte, d.Width)
+	if d.Payload != nil {
+		if int64(len(d.Payload)) > d.Width {
+			return nil, fmt.Errorf("DATA %s: string payload is %d bytes, exceeds width %d", d.Sym, len(d.Payload), d.Width)
+		}
+		copy(payload, d.Payload)
+		return payload, nil
+	}
+	// Plan 9 asm DATA encodes integer immediates little-endian on the
+	// architectures supported by this translator.
+	v := d.Value
+	for i := range payload {
+		payload[i] = byte(v & 0xff)
+		v >>= 8
+	}
+	return payload, nil
 }
 
 func bestAlign(size int64) int64 {

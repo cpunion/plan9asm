@@ -26,8 +26,12 @@ GLOBL ·symptr<>(SB), NOPTR, $(machTimebaseInfo__size)
 	if ds := file.Data[0]; ds.Sym != "·tab<>" || ds.Off != 8 || ds.Width != 8 || ds.Value != 1 {
 		t.Fatalf("unexpected first DATA: %#v", ds)
 	}
-	if ds := file.Data[1]; ds.Sym != "·str<>" || ds.Value != 0 {
-		t.Fatalf("unexpected string DATA placeholder: %#v", ds)
+	if ds := file.Data[1]; ds.Sym != "·str<>" || string(ds.Payload) != "hello" {
+		t.Fatalf("unexpected string DATA payload: %#v", ds)
+	}
+	payload, err := dataStmtPayload(file.Data[1])
+	if err != nil || string(payload[:5]) != "hello" || len(payload) != 8 || payload[5] != 0 {
+		t.Fatalf("padded string DATA payload = (%v, %v)", payload, err)
 	}
 	if ds := file.Data[2]; ds.Sym != "·symptr<>" || ds.Value != 0 {
 		t.Fatalf("unexpected symbol DATA placeholder: %#v", ds)
@@ -38,5 +42,13 @@ GLOBL ·symptr<>(SB), NOPTR, $(machTimebaseInfo__size)
 	}
 	if gs := file.Globl[1]; gs.Sym != "·symptr<>" || gs.Flags != "NOPTR" || gs.Size != 64 {
 		t.Fatalf("unexpected macro-sized GLOBL: %#v", gs)
+	}
+
+	comma, err := parseDATAStmt(ArchARM64, `·comma(SB)/12, $"hello, world"`)
+	if err != nil || string(comma.Payload) != "hello, world" {
+		t.Fatalf("parse comma string DATA = (%#v, %v)", comma, err)
+	}
+	if _, err := parseDATAStmt(ArchARM64, `·short(SB)/4, $"hello"`); err == nil {
+		t.Fatal("oversized string DATA unexpectedly parsed")
 	}
 }

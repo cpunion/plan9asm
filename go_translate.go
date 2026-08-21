@@ -488,8 +488,16 @@ func goExpandConsts(src []byte, pkgTypes *types.Package, imports map[string]*typ
 		if !ok || c == nil || c.Val() == nil {
 			return "", false
 		}
-		if i64, ok := constant.Int64Val(c.Val()); ok {
-			return fmt.Sprintf("%d", i64), true
+		switch c.Val().Kind() {
+		case constant.Int:
+			if i64, ok := constant.Int64Val(c.Val()); ok {
+				return strconv.FormatInt(i64, 10), true
+			}
+			if u64, ok := constant.Uint64Val(c.Val()); ok {
+				return strconv.FormatUint(u64, 10), true
+			}
+		case constant.String:
+			return strconv.Quote(constant.StringVal(c.Val())), true
 		}
 		return "", false
 	}

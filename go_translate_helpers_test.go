@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"go/ast"
 	"go/constant"
 	"go/parser"
@@ -99,6 +100,8 @@ func TestGoHelperArchTupleAndSymParsing(t *testing.T) {
 func TestGoExpandConsts(t *testing.T) {
 	pkg := types.NewPackage("test/pkg", "pkg")
 	addIntConst(pkg, "Local", 7)
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "Big", types.Typ[types.UntypedInt], constant.MakeUint64(^uint64(0))))
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "Text", types.Typ[types.UntypedString], constant.MakeString("test")))
 
 	runtimePkg := types.NewPackage("runtime", "runtime")
 	addIntConst(runtimePkg, "Const", 3)
@@ -108,6 +111,8 @@ MOVD foo+const_Local(SB), R1
 MOVD runtime.foo+const_Const(SB), R2
 MOVD runtime/foo+const_Const(SB), R3
 MOVD missing+const_Missing(SB), R4
+DATA big(SB)/8, $const_Big
+DATA text(SB)/4, $const_Text
 `)
 	got := string(goExpandConsts(src, pkg, map[string]*types.Package{
 		"runtime": runtimePkg,
@@ -119,10 +124,56 @@ MOVD missing+const_Missing(SB), R4
 		"MOVD runtime.foo+3(SB), R2",
 		"MOVD runtime/foo+3(SB), R3",
 		"MOVD missing+const_Missing(SB), R4",
+		"DATA big(SB)/8, $18446744073709551615",
+		`DATA text(SB)/4, $"test"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expanded consts missing %q in:\n%s", want, got)
 		}
+	}
+}
+
+func TestGoAsmHeaderDataConstants(t *testing.T) {
+	pkg := types.NewPackage("test/pkg", "pkg")
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "smallInt", types.Typ[types.UntypedInt], constant.MakeInt64(42)))
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "bigInt", types.Typ[types.UntypedInt], constant.MakeUint64(^uint64(0))))
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "stringVal", types.Typ[types.UntypedString], constant.MakeString("test")))
+	long := "this_is_a_string_constant_longer_than_seventy_characters_which_used_to_fail_see_issue_50253"
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "longStringVal", types.Typ[types.UntypedString], constant.MakeString(long)))
+
+	src := goExpandConsts([]byte(`TEXT ·dummy(SB),NOSPLIT,$0-0
+RET
+DATA ·small(SB)/8, $const_smallInt
+DATA ·big(SB)/8, $const_bigInt
+DATA ·text(SB)/4, $const_stringVal
+DATA ·long(SB)/91, $const_longStringVal
+`), pkg, nil)
+	file, err := Parse(ArchARM64, string(src))
+	if err != nil {
+		t.Fatalf("Parse(expanded asmhdr) error = %v\n%s", err, src)
+	}
+	want := map[string][]byte{
+		"·small": {42, 0, 0, 0, 0, 0, 0, 0},
+		"·big":   {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
+		"·text":  []byte("test"),
+		"·long":  []byte(long),
+	}
+	for _, data := range file.Data {
+		got, err := dataStmtPayload(data)
+		if err != nil {
+			t.Fatalf("dataStmtPayload(%s) error = %v", data.Sym, err)
+		}
+		expect, ok := want[data.Sym]
+		if !ok {
+			t.Fatalf("unexpected DATA symbol %q", data.Sym)
+		}
+		if !bytes.Equal(got, expect) {
+			t.Fatalf("DATA %s payload = %v, want %v", data.Sym, got, expect)
+		}
+		delete(want, data.Sym)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing DATA symbols: %v", want)
 	}
 }
 

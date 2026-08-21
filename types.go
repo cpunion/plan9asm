@@ -762,12 +762,15 @@ type Instr struct {
 //
 //	DATA sym+off(SB)/width, $value
 //
-// Width is in bytes. Value is encoded little-endian into the global.
+// Width is in bytes. Integer values are encoded little-endian into the
+// global. String payloads are copied byte-for-byte and zero-padded to Width,
+// matching cmd/asm's DATA string semantics.
 type DataStmt struct {
-	Sym   string
-	Off   int64
-	Width int64
-	Value uint64
+	Sym     string
+	Off     int64
+	Width   int64
+	Value   uint64
+	Payload []byte
 }
 
 // GloblStmt models a minimal Plan 9 GLOBL directive:

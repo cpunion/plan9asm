@@ -574,14 +574,9 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
-		if d.Width <= 0 {
-			return fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
-		}
-		payload := make([]byte, d.Width)
-		v := d.Value
-		for i := int64(0); i < d.Width; i++ {
-			payload[i] = byte(v & 0xff)
-			v >>= 8
+		payload, err := dataStmtPayload(d)
+		if err != nil {
+			return err
 		}
 		sd.bytes[d.Off] = payload
 		if end := d.Off + d.Width; end > sd.size {
