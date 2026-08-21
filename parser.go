@@ -165,7 +165,8 @@ func Parse(arch Arch, src string) (*File, error) {
 					return nil, fmt.Errorf("line %d: RET outside TEXT: %q", lineno, stmt)
 				}
 				if strings.TrimSpace(rest) != "" {
-					// Some files use "RET" alone; accept "RET x" as generic for now.
+					// A symbol operand is a tail call; register operands retain the
+					// architecture-specific return behavior.
 					args, err := parseOperandsCSV(rest)
 					if err != nil {
 						return nil, fmt.Errorf("line %d: %v", lineno, err)

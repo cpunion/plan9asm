@@ -125,7 +125,10 @@ func (c *armCtx) tailCallAndRet(symOp Operand) error {
 	callee := c.resolve(strings.TrimSuffix(s, "(SB)"))
 	csig, ok := c.sigs[callee]
 	if !ok {
-		return fmt.Errorf("arm tailcall missing signature for %q", callee)
+		// Cross-package trampoline (e.g. sync/atomic -> internal/runtime/atomic).
+		// If we don't have an explicit signature, fall back to caller signature.
+		csig = c.sig
+		csig.Name = callee
 	}
 	callee = funcSigSymbol(callee, csig)
 	args := make([]string, 0, len(csig.Args))

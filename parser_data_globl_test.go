@@ -92,4 +92,28 @@ func TestParseDataRejectsMalformedPayloads(t *testing.T) {
 			t.Errorf("parseDATAStmt(%q) unexpectedly succeeded", stmt)
 		}
 	}
+	if _, err := Parse(ArchARM64, "// no directives\n"); err == nil {
+		t.Fatal("directive-free file unexpectedly parsed")
+	}
+}
+
+func TestDataGlobalBounds(t *testing.T) {
+	for _, data := range []DataStmt{
+		{Sym: "·negative", Off: -1, Width: 1},
+		{Sym: "·wide", Width: maxDataGlobalSize + 1},
+		{Sym: "·overflow", Off: maxDataGlobalSize, Width: 1},
+	} {
+		if _, err := dataStmtEnd(data); err == nil {
+			t.Errorf("dataStmtEnd(%#v) unexpectedly succeeded", data)
+		}
+	}
+	if _, err := dataStmtPayload(DataStmt{Sym: "·wide", Width: maxDataGlobalSize + 1}); err == nil {
+		t.Fatal("oversized DATA payload unexpectedly accepted")
+	}
+	if _, err := makeDataGlobal("negative", -1); err == nil {
+		t.Fatal("negative global size unexpectedly accepted")
+	}
+	if _, err := makeDataGlobal("huge", maxDataGlobalSize+1); err == nil {
+		t.Fatal("oversized global unexpectedly accepted")
+	}
 }

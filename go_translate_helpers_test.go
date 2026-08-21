@@ -155,6 +155,22 @@ func TestGoAsmHeaderDataConstants(t *testing.T) {
 	typName := types.NewTypeName(token.NoPos, pkg, "typ", nil)
 	types.NewNamed(typName, types.NewStruct(fields, nil), nil)
 	pkg.Scope().Insert(typName)
+	intName := types.NewTypeName(token.NoPos, pkg, "word", nil)
+	types.NewNamed(intName, types.Typ[types.Int], nil)
+	pkg.Scope().Insert(intName)
+
+	unchanged := []byte("MOVD $typ__size, R0")
+	if got := goExpandAsmHeaderTypes(unchanged, nil, "arm64"); !bytes.Equal(got, unchanged) {
+		t.Fatalf("nil-package expansion changed source: %q", got)
+	}
+	if got := goExpandAsmHeaderTypes(unchanged, pkg, "unsupported"); !bytes.Equal(got, unchanged) {
+		t.Fatalf("unsupported-arch expansion changed source: %q", got)
+	}
+	nonStructPkg := types.NewPackage("test/nonstruct", "nonstruct")
+	nonStructPkg.Scope().Insert(types.NewVar(token.NoPos, nonStructPkg, "value", types.Typ[types.Int]))
+	if got := goExpandAsmHeaderTypes(unchanged, nonStructPkg, "arm64"); !bytes.Equal(got, unchanged) {
+		t.Fatalf("package without struct macros changed source: %q", got)
+	}
 
 	src := goExpandConsts([]byte(`TEXT ·dummy(SB),NOSPLIT,$0-0
 RET
@@ -204,6 +220,18 @@ DATA ·blank(SB)/8, $typ__
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing DATA symbols: %v", want)
+	}
+
+	translation, err := TranslateGoModule(GoPackage{Path: pkg.Path(), Types: pkg}, []byte(`#include "go_asm.h"
+DATA ·typSize(SB)/8, $typ__size
+GLOBL ·typSize(SB), RODATA, $8
+`), GoModuleOptions{GOARCH: "arm64"})
+	if err != nil {
+		t.Fatalf("TranslateGoModule(go_asm.h) error = %v", err)
+	}
+	defer translation.Module.Dispose()
+	if ir := translation.Module.String(); !strings.Contains(ir, `c"x\00\00\00\00\00\00\00"`) {
+		t.Fatalf("TranslateGoModule(go_asm.h) did not expand typ__size:\n%s", ir)
 	}
 }
 

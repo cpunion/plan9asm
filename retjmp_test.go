@@ -24,6 +24,29 @@ func TestTranslateRetjmp(t *testing.T) {
 	}
 }
 
+func TestTranslateRetjmpUsesCallerSignatureWhenCalleeIsExternal(t *testing.T) {
+	for _, tc := range retjmpArchitectures {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			file, err := Parse(tc.arch, "TEXT ·f(SB),NOSPLIT,$0-0\n\tRET ·external(SB)\n")
+			if err != nil {
+				t.Fatalf("Parse() error = %v", err)
+			}
+			opt := retjmpOptions(tc.goarch)
+			opt.Sigs = map[string]FuncSig{
+				"example.f": {Name: "example.f", Ret: Void},
+			}
+			ir, err := Translate(file, opt)
+			if err != nil {
+				t.Fatalf("Translate() error = %v", err)
+			}
+			if !strings.Contains(ir, "call void @example.external()") {
+				t.Fatalf("external RET target did not inherit the caller signature:\n%s", ir)
+			}
+		})
+	}
+}
+
 var retjmpArchitectures = []struct {
 	name   string
 	arch   Arch

@@ -574,12 +574,16 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
+		end, err := dataStmtEnd(d)
+		if err != nil {
+			return err
+		}
 		payload, err := dataStmtPayload(d)
 		if err != nil {
 			return err
 		}
 		sd.bytes[d.Off] = payload
-		if end := d.Off + d.Width; end > sd.size {
+		if end > sd.size {
 			sd.size = end
 		}
 	}
@@ -594,10 +598,10 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		if sd.size <= 0 {
 			continue
 		}
-		if sd.size > (1 << 31) {
-			return directUnsupportedf("global %s too large for direct lowering: %d", name, sd.size)
+		buf, err := makeDataGlobal(name, sd.size)
+		if err != nil {
+			return err
 		}
-		buf := make([]byte, sd.size)
 		for off, p := range sd.bytes {
 			if off < 0 || off+int64(len(p)) > int64(len(buf)) {
 				return fmt.Errorf("DATA %s: out of bounds off=%d len=%d size=%d", name, off, len(p), len(buf))

@@ -90,7 +90,11 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if bytes.Contains(src, []byte("const_")) {
 		src = goExpandConsts(src, pkg.Types, pkg.Imports)
 	}
-	src = goExpandAsmHeaderTypes(src, pkg.Types, opt.GOARCH)
+	// Struct layout macros only exist when the assembly includes go_asm.h.
+	// Keep the common path cheap: building them walks every package-scope type.
+	if bytes.Contains(src, []byte("go_asm.h")) {
+		src = goExpandAsmHeaderTypes(src, pkg.Types, opt.GOARCH)
+	}
 
 	file, err := Parse(arch, string(src))
 	if err != nil {
@@ -560,7 +564,7 @@ func goExpandAsmHeaderTypes(src []byte, pkgTypes *types.Package, goarch string) 
 	macros := make(map[string]string)
 	for _, name := range pkgTypes.Scope().Names() {
 		obj, ok := pkgTypes.Scope().Lookup(name).(*types.TypeName)
-		if !ok || obj == nil {
+		if !ok {
 			continue
 		}
 		st, ok := obj.Type().Underlying().(*types.Struct)
@@ -578,7 +582,7 @@ func goExpandAsmHeaderTypes(src []byte, pkgTypes *types.Package, goarch string) 
 		}
 		for i, offset := range sizes.Offsetsof(fields) {
 			field := fields[i]
-			if field == nil || field.Name() == "_" || offset < 0 {
+			if field.Name() == "_" || offset < 0 {
 				continue
 			}
 			macros[name+"_"+field.Name()] = strconv.FormatInt(offset, 10)
