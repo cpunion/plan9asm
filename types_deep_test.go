@@ -20,6 +20,7 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{Operand{Kind: OpLabel, Sym: "loop"}, "loop:"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: SI, Off: 8}}, "8(SI)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Off: -4, Index: CX, Scale: 2}}, "-4(BX)(CX*2)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Off: 0x30, Segment: GS}}, "48(GS)"},
 		{Operand{Kind: OpRegList, RegList: []Reg{"R0", "R1"}}, "(R0, R1)"},
 		{Operand{}, "<invalid>"},
 	}
@@ -57,6 +58,8 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{"-1(AX*2)", true},
 		{"(0*8)(R8)(BX*8)", true},
 		{"(symSize)(R14)", true},
+		{"0x30(GS)", true},
+		{"0(CX)(GS)", true},
 		{"not-mem", false},
 	} {
 		_, ok := parseMem(tc.in)

@@ -1160,6 +1160,13 @@ func parseSBRef(sym string) (base string, off int64, ok bool) {
 }
 
 func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
+	if mem.Segment != "" {
+		return "", fmt.Errorf("segment-relative memory requires a segment-aware pointer")
+	}
+	return c.addrFromPlainMem(mem)
+}
+
+func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
 	base, err := c.loadReg(mem.Base)
 	if err != nil {
 		return "", err
@@ -1185,6 +1192,31 @@ func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
 		cur = "%" + add
 	}
 	return cur, nil
+}
+
+func (c *amd64Ctx) ptrFromMem(mem MemRef) (ptr, ptrType string, err error) {
+	addr, err := c.addrFromPlainMem(mem)
+	if err != nil {
+		return "", "", err
+	}
+	if mem.Segment == "" {
+		return c.ptrFromAddrI64(addr), "ptr", nil
+	}
+	addressSpace := 0
+	switch mem.Segment {
+	case GS:
+		// LLVM's x86 target maps address space 256 to the GS segment.
+		addressSpace = 256
+	case FS:
+		// LLVM's x86 target maps address space 257 to the FS segment.
+		addressSpace = 257
+	default:
+		return "", "", fmt.Errorf("unsupported x86 segment register %s", mem.Segment)
+	}
+	t := c.newTmp()
+	ptrType = fmt.Sprintf("ptr addrspace(%d)", addressSpace)
+	fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to %s\n", t, addr, ptrType)
+	return "%" + t, ptrType, nil
 }
 
 func (c *amd64Ctx) ptrFromAddrI64(addrI64 string) string {
