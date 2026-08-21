@@ -118,6 +118,12 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	case OpTEXT, OpBYTE:
 		return false, nil
 	case OpRET:
+		if len(ins.Args) == 1 {
+			return true, c.tailCallAndRet(ins.Args[0])
+		}
+		if len(ins.Args) != 0 {
+			return true, fmt.Errorf("amd64 RET expects at most 1 operand: %q", ins.Raw)
+		}
 		return true, c.lowerRET()
 	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "NOP", "ADJSP", "CLD", "STD", "REP",
 		"PUSH_REGS_HOST_TO_ABI0()", "POP_REGS_HOST_TO_ABI0()":

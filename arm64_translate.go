@@ -121,6 +121,12 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case OpTEXT, OpBYTE:
 		return false, nil
 	case OpRET:
+		if len(ins.Args) == 1 {
+			return true, c.tailCallAndRet(ins.Args[0])
+		}
+		if len(ins.Args) != 0 {
+			return true, fmt.Errorf("arm64 RET expects at most 1 operand: %q", ins.Raw)
+		}
 		return true, c.lowerRET()
 	case "WORD":
 		return false, c.lowerRawWord(ins)

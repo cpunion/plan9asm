@@ -20,7 +20,12 @@ func funcNeedsARM64CFG(fn Func) bool {
 		}
 		switch Op(op) {
 		// Keep the linear path only for the tiny subset it can currently lower.
-		case OpTEXT, OpRET, OpBYTE, OpMRS:
+		case OpTEXT, OpBYTE, OpMRS:
+			continue
+		case OpRET:
+			if len(ins.Args) != 0 {
+				return true
+			}
 			continue
 		case OpMOVD:
 			// Linear arm64 lowering only supports immediate/reg/FP value moves.
