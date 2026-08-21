@@ -102,6 +102,7 @@ func TestGoExpandConsts(t *testing.T) {
 	addIntConst(pkg, "Local", 7)
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "Big", types.Typ[types.UntypedInt], constant.MakeUint64(^uint64(0))))
 	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "Text", types.Typ[types.UntypedString], constant.MakeString("test")))
+	pkg.Scope().Insert(types.NewConst(token.NoPos, pkg, "Bool", types.Typ[types.UntypedBool], constant.MakeBool(true)))
 
 	runtimePkg := types.NewPackage("runtime", "runtime")
 	addIntConst(runtimePkg, "Const", 3)
@@ -113,6 +114,7 @@ MOVD runtime/foo+const_Const(SB), R3
 MOVD missing+const_Missing(SB), R4
 DATA big(SB)/8, $const_Big
 DATA text(SB)/4, $const_Text
+MOVD $const_Bool, R5
 `)
 	got := string(goExpandConsts(src, pkg, map[string]*types.Package{
 		"runtime": runtimePkg,
@@ -126,10 +128,14 @@ DATA text(SB)/4, $const_Text
 		"MOVD missing+const_Missing(SB), R4",
 		"DATA big(SB)/8, $18446744073709551615",
 		`DATA text(SB)/4, $"test"`,
+		"MOVD $const_Bool, R5",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expanded consts missing %q in:\n%s", want, got)
 		}
+	}
+	if _, err := dataStmtPayload(DataStmt{Sym: "·wide", Width: 1, Payload: []byte("xx")}); err == nil {
+		t.Fatal("oversized DATA payload unexpectedly accepted")
 	}
 }
 

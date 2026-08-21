@@ -52,3 +52,16 @@ GLOBL ·symptr<>(SB), NOPTR, $(machTimebaseInfo__size)
 		t.Fatal("oversized string DATA unexpectedly parsed")
 	}
 }
+
+func TestParseDataRejectsMalformedPayloads(t *testing.T) {
+	for _, stmt := range []string{
+		`·missing(SB)/8 $1`,
+		`, $1`,
+		`·empty(SB)/8,`,
+		`·quote(SB)/8, $"unterminated`,
+	} {
+		if _, err := parseDATAStmt(ArchARM64, stmt); err == nil {
+			t.Errorf("parseDATAStmt(%q) unexpectedly succeeded", stmt)
+		}
+	}
+}

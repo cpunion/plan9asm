@@ -80,10 +80,10 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 	case string(OpTEXT), string(OpBYTE):
 		return false, nil
 	case string(OpRET):
-		if len(ins.Args) == 1 {
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, c.tailCallAndRet(ins.Args[0])
 		}
-		if len(ins.Args) != 0 {
+		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("arm RET expects at most 1 operand: %q", ins.Raw)
 		}
 		return true, c.lowerRET()

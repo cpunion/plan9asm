@@ -121,10 +121,10 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case OpTEXT, OpBYTE:
 		return false, nil
 	case OpRET:
-		if len(ins.Args) == 1 {
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, c.tailCallAndRet(ins.Args[0])
 		}
-		if len(ins.Args) != 0 {
+		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("arm64 RET expects at most 1 operand: %q", ins.Raw)
 		}
 		return true, c.lowerRET()
