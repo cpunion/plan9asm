@@ -217,6 +217,7 @@ jobs:
         with:
           use_oidc: true
           files: ./coverage-windows-root.out,./coverage-windows-plan9asm.out,./coverage-windows-plan9asmll.out
+          disable_search: true
           flags: windows
           name: windows-go1.26
           fail_ci_if_error: true
@@ -352,6 +353,7 @@ jobs:
         with:
           use_oidc: true
           files: ./coverage-root.out
+          disable_search: true
           flags: unittests
           name: ubuntu-go1.26
           fail_ci_if_error: false
