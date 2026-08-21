@@ -152,9 +152,12 @@ func listStdPackages(goos, goarch string) ([]pkgJSON, error) {
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 	)
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
+		var msg string
+		if ee, ok := err.(*exec.ExitError); ok {
+			msg = strings.TrimSpace(string(ee.Stderr))
+		}
 		if msg != "" {
 			return nil, fmt.Errorf("go list -json std: %w: %s", err, msg)
 		}

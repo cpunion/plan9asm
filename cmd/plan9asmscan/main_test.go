@@ -176,6 +176,34 @@ func TestListStdPackages(t *testing.T) {
 	}
 }
 
+func TestListStdPackagesIgnoresDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	name := "go"
+	script := "#!/bin/sh\nif [ \"$CGO_ENABLED\" != 0 ]; then echo cgo must be disabled >&2; exit 1; fi\necho warning from fake go >&2\nprintf '%s\\n' '{\"ImportPath\":\"runtime\"}'\n"
+	if runtime.GOOS == "windows" {
+		name = "go.cmd"
+		script = "@echo off\r\nif not \"%CGO_ENABLED%\"==\"0\" exit /b 1\r\necho warning from fake go 1>&2\r\necho {\"ImportPath\":\"runtime\"}\r\n"
+	}
+	path := filepath.Join(dir, name)
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if err := os.Chmod(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	pkgs, err := listStdPackages("linux", "amd64")
+	if err != nil {
+		t.Fatalf("listStdPackages() error = %v", err)
+	}
+	if len(pkgs) != 1 || pkgs[0].ImportPath != "runtime" {
+		t.Fatalf("listStdPackages() = %#v, want one runtime package", pkgs)
+	}
+}
+
 func TestPackageSFilesAndAddOpStat(t *testing.T) {
 	dir := t.TempDir()
 	abs := filepath.Join(t.TempDir(), "abs", "c.s")
