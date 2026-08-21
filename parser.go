@@ -194,7 +194,7 @@ func Parse(arch Arch, src string) (*File, error) {
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	if len(f.Funcs) == 0 {
+	if len(f.Funcs) == 0 && len(f.Data) == 0 && len(f.Globl) == 0 {
 		return nil, fmt.Errorf("no TEXT directive found")
 	}
 	return f, nil

@@ -2,6 +2,18 @@ package plan9asm
 
 import "testing"
 
+func TestParseDataOnlyFile(t *testing.T) {
+	file, err := Parse(ArchARM64, `DATA ·value(SB)/8, $42
+GLOBL ·value(SB),RODATA,$8
+`)
+	if err != nil {
+		t.Fatalf("Parse(data-only) error = %v", err)
+	}
+	if len(file.Funcs) != 0 || len(file.Data) != 1 || len(file.Globl) != 1 {
+		t.Fatalf("Parse(data-only) = funcs:%d data:%d globl:%d", len(file.Funcs), len(file.Data), len(file.Globl))
+	}
+}
+
 func TestParseDataAndGloblDirectives(t *testing.T) {
 	file, err := Parse(ArchARM64, `TEXT ·Fn(SB),NOSPLIT,$0-0
 	RET
