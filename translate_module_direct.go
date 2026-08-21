@@ -23,7 +23,7 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 	if file == nil {
 		return llvm.Module{}, fmt.Errorf("nil file")
 	}
-	if len(file.Funcs) == 0 {
+	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return llvm.Module{}, fmt.Errorf("empty file")
 	}
 	if opt.AnnotateSource {

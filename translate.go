@@ -96,7 +96,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
-	if len(file.Funcs) == 0 {
+	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return "", fmt.Errorf("empty file")
 	}
 

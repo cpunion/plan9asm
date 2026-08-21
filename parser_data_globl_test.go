@@ -1,6 +1,9 @@
 package plan9asm
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseDataOnlyFile(t *testing.T) {
 	file, err := Parse(ArchARM64, `DATA ·value(SB)/8, $42
@@ -11,6 +14,19 @@ GLOBL ·value(SB),RODATA,$8
 	}
 	if len(file.Funcs) != 0 || len(file.Data) != 1 || len(file.Globl) != 1 {
 		t.Fatalf("Parse(data-only) = funcs:%d data:%d globl:%d", len(file.Funcs), len(file.Data), len(file.Globl))
+	}
+	mod, err := TranslateModule(file, Options{
+		Goarch: "arm64",
+		ResolveSym: func(sym string) string {
+			return "test." + strings.TrimPrefix(sym, "·")
+		},
+	})
+	if err != nil {
+		t.Fatalf("TranslateModule(data-only) error = %v", err)
+	}
+	defer mod.Dispose()
+	if ir := mod.String(); !strings.Contains(ir, `@test.value = constant [8 x i8]`) || !strings.Contains(ir, `c"*\00`) {
+		t.Fatalf("TranslateModule(data-only) missing initialized global:\n%s", ir)
 	}
 }
 
