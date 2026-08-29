@@ -9,6 +9,70 @@ func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err 
 		// the following memory RMW instruction, so the prefix itself is a no-op.
 		return true, false, nil
 
+	case "CMPXCHG8B":
+		if len(ins.Args) != 1 || ins.Args[0].Kind != OpMem {
+			return true, false, fmt.Errorf("amd64 CMPXCHG8B expects mem: %q", ins.Raw)
+		}
+		word := func(r Reg) (string, error) {
+			return c.evalIntSized(Operand{Kind: OpReg, Reg: r}, I32)
+		}
+		ax, err := word(AX)
+		if err != nil {
+			return true, false, err
+		}
+		dx, err := word(DX)
+		if err != nil {
+			return true, false, err
+		}
+		bx, err := word(BX)
+		if err != nil {
+			return true, false, err
+		}
+		cx, err := word(CX)
+		if err != nil {
+			return true, false, err
+		}
+		pair := func(lo, hi string) string {
+			lo64 := c.newTmp()
+			hi64 := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", lo64, lo)
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", hi64, hi)
+			shifted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 32\n", shifted, hi64)
+			out := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", out, shifted, lo64)
+			return "%" + out
+		}
+		expected := pair(ax, dx)
+		desired := pair(bx, cx)
+		ptr, ptrType, err := c.ptrFromMem(ins.Args[0].Mem)
+		if err != nil {
+			return true, false, err
+		}
+		if ptrType != "ptr" {
+			return true, false, fmt.Errorf("amd64 CMPXCHG8B does not support segment-relative memory: %q", ins.Raw)
+		}
+		result := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = cmpxchg ptr %s, i64 %s, i64 %s seq_cst seq_cst, align 8\n", result, ptr, expected, desired)
+		old := c.newTmp()
+		success := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i1 } %%%s, 0\n", old, result)
+		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i1 } %%%s, 1\n", success, result)
+		oldLo := c.newTmp()
+		oldHiShift := c.newTmp()
+		oldHi := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", oldLo, old)
+		fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 32\n", oldHiShift, old)
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", oldHi, oldHiShift)
+		if err := c.storeRegSized(AX, I32, "%"+oldLo); err != nil {
+			return true, false, err
+		}
+		if err := c.storeRegSized(DX, I32, "%"+oldHi); err != nil {
+			return true, false, err
+		}
+		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", success, c.flagsZSlot)
+		return true, false, nil
+
 	case "CMPXCHGL", "CMPXCHGQ":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpMem {
 			return true, false, fmt.Errorf("amd64 %s expects src, mem: %q", op, ins.Raw)
@@ -209,11 +273,14 @@ func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err 
 }
 
 func (c *amd64Ctx) amd64AtomicPtrFromMem(mem MemRef) (string, error) {
-	addr, err := c.addrFromMem(mem)
+	ptr, ptrType, err := c.ptrFromMem(mem)
 	if err != nil {
 		return "", err
 	}
-	return c.ptrFromAddrI64(addr), nil
+	if ptrType != "ptr" {
+		return "", fmt.Errorf("amd64 atomic operation does not support segment-relative memory")
+	}
+	return ptr, nil
 }
 
 func (c *amd64Ctx) amd64AtomicTruncFromI64(v64 string, ty LLVMType) (string, error) {

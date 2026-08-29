@@ -79,7 +79,7 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm64 CFG lowering required for %s", name)
 		}
-		if file.Arch == ArchAMD64 && opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn) {
+		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn)) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("amd64 CFG lowering required for %s", name)
 		}
@@ -289,7 +289,7 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 	for _, ins := range fn.Instrs {
 		if terminated {
 			switch ins.Op {
-			case OpTEXT, OpBYTE:
+			case OpTEXT, OpBYTE, OpWORD:
 				continue
 			default:
 				return directUnsupportedf("instruction after RET: %s", ins.Op)
@@ -298,7 +298,7 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 		switch ins.Op {
 		case OpTEXT:
 			continue
-		case OpBYTE:
+		case OpBYTE, OpWORD:
 			continue
 		case OpMRS:
 			if len(ins.Args) != 2 {

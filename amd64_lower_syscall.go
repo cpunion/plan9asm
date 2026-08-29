@@ -1,12 +1,30 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (c *amd64Ctx) lowerSyscall(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	switch op {
 	case "INT":
+		if c.goarch == "386" && (len(ins.Args) != 1 || ins.Args[0].Kind != OpImm) {
+			return true, false, fmt.Errorf("386 INT expects an immediate vector: %q", ins.Raw)
+		}
+		if c.goarch == "386" && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].Imm == 0x80 {
+			if !strings.Contains(strings.ToLower(c.targetTriple), "linux") {
+				return true, false, fmt.Errorf("386 INT $0x80 requires a Linux target triple: %q", ins.Raw)
+			}
+			return true, false, c.lowerLinux386Syscall()
+		}
 		// Software interrupt/trap path (e.g. runtime.exitThread INT $3).
-		c.b.WriteString("  unreachable\n")
+		if c.goarch == "386" {
+			c.emitX86Trap()
+		} else {
+			// Preserve the established amd64 lowering. The 386 path needs an
+			// actual trap because Windows uses INT $3 as an executable stub.
+			c.b.WriteString("  unreachable\n")
+		}
 		return true, true, nil
 	case "SYSCALL":
 		if len(ins.Args) != 0 {
@@ -64,4 +82,36 @@ func (c *amd64Ctx) lowerSyscall(op Op, ins Instr) (ok bool, terminated bool, err
 		return true, false, nil
 	}
 	return false, false, nil
+}
+
+func (c *amd64Ctx) lowerLinux386Syscall() error {
+	regs := []Reg{AX, BX, CX, DX, SI, DI, BP}
+	args := make([]string, len(regs))
+	for i, reg := range regs {
+		value, err := c.evalIntSized(Operand{Kind: OpReg, Reg: reg}, I32)
+		if err != nil {
+			return err
+		}
+		args[i] = value
+	}
+	call := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call { i32, i32 } asm sideeffect %q, %q(i32 %s, i32 %s, i32 %s, i32 %s, i32 %s, i32 %s, i32 %s)\n",
+		call,
+		"int $$0x80",
+		"={ax},={dx},{ax},{bx},{cx},{dx},{si},{di},{bp},~{dirflag},~{fpsr},~{flags},~{memory}",
+		args[0], args[1], args[2], args[3], args[4], args[5], args[6],
+	)
+	for i, reg := range []Reg{AX, DX} {
+		value := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = extractvalue { i32, i32 } %%%s, %d\n", value, call, i)
+		if err := c.storeRegSized(reg, I32, "%"+value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *amd64Ctx) emitX86Trap() {
+	c.b.WriteString("  call void asm sideeffect \"int3\", \"~{memory}\"()\n")
+	c.b.WriteString("  unreachable\n")
 }

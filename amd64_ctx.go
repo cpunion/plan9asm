@@ -10,6 +10,10 @@ import (
 type amd64Ctx struct {
 	b   *strings.Builder
 	sig FuncSig
+	// goarch distinguishes the 32-bit x86 rules from amd64 while sharing the
+	// common x86 lowering implementation.
+	goarch       string
+	targetTriple string
 
 	resolve  func(string) string
 	sigs     map[string]FuncSig
@@ -35,16 +39,27 @@ type amd64Ctx struct {
 	usedZRegs map[int]bool
 	zRegSlot  map[int]string // zmm reg index -> alloca name (<64 x i8>)
 
-	usedKRegs map[int]bool
-	kRegSlot  map[int]string // avx512 mask reg index -> alloca name (i64)
+	usedKRegs      map[int]bool
+	kRegSlot       map[int]string // avx512 mask reg index -> alloca name (i64)
+	usedX87        bool
+	x87Slot        [8]string // x87 stack registers, represented as f64 values
+	x87ControlSlot string
+	x87StatusSlot  string
 
-	flagsZSlot   string
-	flagsSltSlot string // signed negative-style bit for J{L,LE,G,GE}-like checks
-	flagsCFSlot  string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
-	flagsOFSlot  string // overflow-style bit used by ADOX carry chain modeling
-	flagsWritten bool
-	vstackSlot   string // [64 x i64] virtual stack for PUSHQ/POPQ
-	vspSlot      string // i64 virtual stack pointer (next free slot)
+	flagsZSlot     string
+	flagsSltSlot   string // signed negative-style bit for J{L,LE,G,GE}-like checks
+	flagsCFSlot    string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
+	flagsOFSlot    string // overflow-style bit used by ADOX carry chain modeling
+	flagsIDSlot    string // CPUID availability bit preserved by PUSHFL/POPFL
+	flagsWritten   bool
+	directionSlot  string // x86 DF, used by MOVS/STOS/SCAS instructions
+	repeatPrefix   string // pending REP/REPN prefix for the following instruction
+	vstackSlot     string // [64 x i64] virtual stack for PUSHQ/POPQ
+	vspSlot        string // i64 virtual stack pointer (next free slot)
+	localStackSlot string // byte-addressable backing storage for x86 SP references
+	classicFrame   string // contiguous classic Go ABI frame used by 386 FP addressing
+	classicSize    int64
+	classicBias    int64
 
 	fpParams       map[int64]FrameSlot // off(FP) -> slot
 	fpResults      []FrameSlot
@@ -55,9 +70,15 @@ type amd64Ctx struct {
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {
+	return newX86Ctx(b, fn, sig, resolve, sigs, "amd64", "", annotate)
+}
+
+func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, annotate bool) *amd64Ctx {
 	c := &amd64Ctx{
 		b:              b,
 		sig:            sig,
+		goarch:         goarch,
+		targetTriple:   targetTriple,
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
@@ -160,6 +181,18 @@ func amd64ParseKReg(r Reg) (idx int, ok bool) {
 	return n, true
 }
 
+func amd64ParseX87Reg(r Reg) (idx int, ok bool) {
+	s := strings.ToUpper(strings.TrimSpace(string(r)))
+	if !strings.HasPrefix(s, "F") {
+		return 0, false
+	}
+	n, err := strconv.Atoi(strings.TrimPrefix(s, "F"))
+	if err != nil || n < 0 || n > 7 {
+		return 0, false
+	}
+	return n, true
+}
+
 func (c *amd64Ctx) scanUsedRegs() {
 	markReg := func(r Reg) {
 		if r == "" {
@@ -179,6 +212,10 @@ func (c *amd64Ctx) scanUsedRegs() {
 		}
 		if idx, ok := amd64ParseKReg(r); ok {
 			c.usedKRegs[idx] = true
+			return
+		}
+		if _, ok := amd64ParseX87Reg(r); ok && c.goarch == "386" {
+			c.usedX87 = true
 			return
 		}
 		c.usedRegs[r] = true
@@ -201,6 +238,16 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			op := strings.ToUpper(string(ins.Op))
+			if c.goarch == "386" && strings.HasPrefix(op, "F") {
+				c.usedX87 = true
+			}
+			if c.goarch == "386" {
+				switch op {
+				case "PUSHL", "POPL", "PUSHFL", "POPFL", "PUSHAL", "POPAL", "ADJSP":
+					markReg(SP)
+				}
+			}
 			for _, op := range ins.Args {
 				markOp(op)
 			}
@@ -252,6 +299,25 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", name)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
 	}
+	if spSlot, ok := c.regSlot[SP]; ok && c.goarch == "386" {
+		minOff, maxOff := c.stackOffsetRange()
+		movement := c.stackMovementBudget()
+		minOff -= movement
+		maxOff += movement
+		const guard = int64(64)
+		bias := guard - minOff
+		size := bias + maxOff + guard
+		if size < 256 {
+			size = 256
+		}
+		c.localStackSlot = "%local_stack"
+		fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
+		base := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
+		addr := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
+		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+	}
 
 	xIdx := make([]int, 0, len(c.usedXRegs))
 	for i := range c.usedXRegs {
@@ -300,11 +366,29 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", name)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
 	}
+	if c.usedX87 {
+		for i := range c.x87Slot {
+			name := fmt.Sprintf("%%x87_f%d", i)
+			c.x87Slot[i] = name
+			fmt.Fprintf(c.b, "  %s = alloca double\n", name)
+			fmt.Fprintf(c.b, "  store double 0.000000e+00, ptr %s\n", name)
+		}
+		c.x87ControlSlot = "%x87_control"
+		c.x87StatusSlot = "%x87_status"
+		fmt.Fprintf(c.b, "  %s = alloca i16\n", c.x87ControlSlot)
+		fmt.Fprintf(c.b, "  store i16 895, ptr %s\n", c.x87ControlSlot) // 0x037f
+		fmt.Fprintf(c.b, "  %s = alloca i16\n", c.x87StatusSlot)
+		fmt.Fprintf(c.b, "  store i16 0, ptr %s\n", c.x87StatusSlot)
+	}
 
 	c.flagsZSlot = "%flags_z"
 	c.flagsSltSlot = "%flags_slt"
 	c.flagsCFSlot = "%flags_cf"
 	c.flagsOFSlot = "%flags_of"
+	if c.goarch == "386" {
+		c.directionSlot = "%direction_backward"
+		c.flagsIDSlot = "%flags_id"
+	}
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsZSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsZSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsSltSlot)
@@ -313,6 +397,14 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsOFSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+	if c.flagsIDSlot != "" {
+		fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsIDSlot)
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsIDSlot)
+	}
+	if c.directionSlot != "" {
+		fmt.Fprintf(c.b, "  %s = alloca i1\n", c.directionSlot)
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.directionSlot)
+	}
 
 	// Virtual stack for stack-manipulation instructions used by some stdlib asm
 	// stubs (e.g. syscall rawVfork paths using POPQ/PUSHQ around SYSCALL).
@@ -327,12 +419,18 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	// subsequent PUSHQ can round-trip through the virtual stack.
 	fmt.Fprintf(c.b, "  store i64 1, ptr %s\n", c.vspSlot)
 
-	for _, r := range c.fpResults {
-		name := fmt.Sprintf("%%fp_ret_%d", r.Index)
-		c.fpResAllocaIdx[r.Index] = name
-		c.fpResAllocaOff[r.Offset] = name
-		fmt.Fprintf(c.b, "  %s = alloca %s\n", name, r.Type)
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", r.Type, llvmZeroValue(r.Type), name)
+	if c.goarch == "386" {
+		if err := c.emit386ClassicFrame(); err != nil {
+			return err
+		}
+	} else {
+		for _, r := range c.fpResults {
+			name := fmt.Sprintf("%%fp_ret_%d", r.Index)
+			c.fpResAllocaIdx[r.Index] = name
+			c.fpResAllocaOff[r.Offset] = name
+			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, r.Type)
+			fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", r.Type, llvmZeroValue(r.Type), name)
+		}
 	}
 
 	// Map LLVM args -> simulated registers for ABIInternal-ish entrypoints and
@@ -406,6 +504,131 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	return nil
 }
 
+func x86FrameTypeSize(ty LLVMType) int64 {
+	switch ty {
+	case I1, I8:
+		return 1
+	case I16:
+		return 2
+	case I32, Ptr, LLVMType("float"):
+		return 4
+	case I64, LLVMType("double"):
+		return 8
+	default:
+		// FrameLayout normally contains scalar parts. Keep enough room for an
+		// unexpected aggregate so address formation remains within the alloca.
+		return 16
+	}
+}
+
+func (c *amd64Ctx) classicFrameRange() (minOff, maxOff int64, used bool) {
+	add := func(off, size int64) {
+		if !used || off < minOff {
+			minOff = off
+		}
+		if end := off + size; !used || end > maxOff {
+			maxOff = end
+		}
+		used = true
+	}
+	for _, slot := range c.sig.Frame.Params {
+		add(slot.Offset, x86FrameTypeSize(slot.Type))
+	}
+	for _, slot := range c.fpResults {
+		add(slot.Offset, x86FrameTypeSize(slot.Type))
+	}
+	for _, block := range c.blocks {
+		for _, ins := range block.instrs {
+			for _, arg := range ins.Args {
+				if arg.Kind == OpFP || arg.Kind == OpFPAddr {
+					add(arg.FPOffset, 16)
+				}
+			}
+		}
+	}
+	return minOff, maxOff, used
+}
+
+func (c *amd64Ctx) classicFramePtr(off int64) string {
+	t := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", t, c.classicSize, c.classicFrame, c.classicBias+off)
+	return "%" + t
+}
+
+func (c *amd64Ctx) emit386ClassicFrame() error {
+	minOff, maxOff, used := c.classicFrameRange()
+	if !used {
+		return nil
+	}
+	c.classicBias = -minOff
+	c.classicSize = maxOff - minOff
+	c.classicFrame = "%classic_frame"
+	fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.classicFrame, c.classicSize)
+
+	for _, slot := range c.sig.Frame.Params {
+		if slot.Index < 0 || slot.Index >= len(c.sig.Args) {
+			return fmt.Errorf("FP frame slot: invalid arg index %d at +%d(FP)", slot.Index, slot.Offset)
+		}
+		value := fmt.Sprintf("%%arg%d", slot.Index)
+		if slot.Field >= 0 {
+			extracted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", extracted, c.sig.Args[slot.Index], value, slot.Field)
+			value = "%" + extracted
+		}
+		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", slot.Type, value, c.classicFramePtr(slot.Offset))
+	}
+	for _, slot := range c.fpResults {
+		ptr := c.classicFramePtr(slot.Offset)
+		c.fpResAllocaIdx[slot.Index] = ptr
+		c.fpResAllocaOff[slot.Offset] = ptr
+		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", slot.Type, llvmZeroValue(slot.Type), ptr)
+	}
+	return nil
+}
+
+func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
+	for _, block := range c.blocks {
+		for _, ins := range block.instrs {
+			for _, arg := range ins.Args {
+				if arg.Kind != OpMem || arg.Mem.Base != SP {
+					continue
+				}
+				if arg.Mem.Off < minOff {
+					minOff = arg.Mem.Off
+				}
+				// Reserve enough room for the largest scalar operation lowered here.
+				if end := arg.Mem.Off + 16; end > maxOff {
+					maxOff = end
+				}
+			}
+		}
+	}
+	return minOff, maxOff
+}
+
+func (c *amd64Ctx) stackMovementBudget() int64 {
+	var total int64
+	for _, block := range c.blocks {
+		for _, ins := range block.instrs {
+			switch strings.ToUpper(string(ins.Op)) {
+			case "PUSHL", "POPL", "PUSHFL", "POPFL":
+				total += 4
+			case "PUSHAL", "POPAL":
+				total += 32
+			case "ADJSP":
+				if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
+					adjustment := int64(ins.Args[0].Imm)
+					if adjustment < 0 {
+						adjustment = -adjustment
+					}
+					total += adjustment
+				}
+			}
+		}
+	}
+	return total
+}
+
 func (c *amd64Ctx) pushI64(v string) {
 	sp := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s\n", sp, c.vspSlot)
@@ -438,6 +661,37 @@ func (c *amd64Ctx) popI64() string {
 	val := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = load i64, ptr %%%s\n", val, ptr)
 	return "%" + val
+}
+
+func (c *amd64Ctx) pushI32(v string) error {
+	sp, err := c.loadReg(SP)
+	if err != nil {
+		return err
+	}
+	next := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = sub i64 %s, 4\n", next, sp)
+	if err := c.storeReg(SP, "%"+next); err != nil {
+		return err
+	}
+	p := c.ptrFromAddrI64("%" + next)
+	fmt.Fprintf(c.b, "  store i32 %s, ptr %s, align 1\n", v, p)
+	return nil
+}
+
+func (c *amd64Ctx) popI32() (string, error) {
+	sp, err := c.loadReg(SP)
+	if err != nil {
+		return "", err
+	}
+	p := c.ptrFromAddrI64(sp)
+	v := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", v, p)
+	next := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = add i64 %s, 4\n", next, sp)
+	if err := c.storeReg(SP, "%"+next); err != nil {
+		return "", err
+	}
+	return "%" + v, nil
 }
 
 func amd64ValueAsI64(c *amd64Ctx, ty LLVMType, v string) (out string, ok bool, err error) {
@@ -839,9 +1093,27 @@ func (c *amd64Ctx) markFPResultWritten(off int64) {
 func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 	slot, ok := c.fpParam(off)
 	if !ok {
+		if c.goarch == "386" {
+			for baseOff, candidate := range c.fpParams {
+				if off != baseOff+4 || candidate.Type != I64 && candidate.Type != LLVMType("double") {
+					continue
+				}
+				full, err := c.evalFPToI64(baseOff)
+				if err != nil {
+					return "", err
+				}
+				hi := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, 32\n", hi, full)
+				return "%" + hi, nil
+			}
+		}
 		if alloca, ty, rok := c.fpResultAlloca(off); rok && ty != "" {
 			ld := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s\n", ld, ty, alloca)
+			align := ""
+			if c.classicFrame != "" {
+				align = ", align 1"
+			}
+			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s%s\n", ld, ty, alloca, align)
 			v := "%" + ld
 			switch ty {
 			case I64:
@@ -868,6 +1140,20 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 				return "%" + p, nil
 			}
 		}
+		if c.goarch == "386" {
+			for _, candidate := range c.fpResults {
+				if off != candidate.Offset+4 || candidate.Type != I64 && candidate.Type != LLVMType("double") {
+					continue
+				}
+				full, err := c.evalFPToI64(candidate.Offset)
+				if err != nil {
+					return "", err
+				}
+				hi := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, 32\n", hi, full)
+				return "%" + hi, nil
+			}
+		}
 		// Keep translating when FP offsets can't be recovered from signature
 		// inference (common in low-level runtime assembly).
 		return "0", nil
@@ -881,7 +1167,11 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 	// If this FP slot refers to a field within an aggregate argument (string/slice),
 	// extract that field first.
 	ty := slot.Type
-	if slot.Field >= 0 {
+	if c.classicFrame != "" {
+		loaded := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", loaded, ty, c.classicFramePtr(off))
+		arg = "%" + loaded
+	} else if slot.Field >= 0 {
 		aggTy := c.sig.Args[idx]
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", t, aggTy, arg, slot.Field)
@@ -928,11 +1218,63 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 }
 
 func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
+	align := ""
+	if c.classicFrame != "" {
+		// The 386 ABI frame is a byte array, and FP offsets need not provide
+		// the natural alignment required by the value stored in a slot.
+		align = ", align 1"
+	}
+	if c.goarch == "386" && ty == I32 {
+		for _, slot := range c.fpResults {
+			if slot.Type != I64 && slot.Type != LLVMType("double") || off != slot.Offset && off != slot.Offset+4 {
+				continue
+			}
+			alloca := c.fpResAllocaIdx[slot.Index]
+			old := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s%s\n", old, slot.Type, alloca, align)
+			bits := "%" + old
+			if slot.Type == LLVMType("double") {
+				cast := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast double %%%s to i64\n", cast, old)
+				bits = "%" + cast
+			}
+			cleared := c.newTmp()
+			word := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", word, v)
+			inserted := "%" + word
+			if off == slot.Offset {
+				fmt.Fprintf(c.b, "  %%%s = and i64 %s, -4294967296\n", cleared, bits)
+			} else {
+				fmt.Fprintf(c.b, "  %%%s = and i64 %s, 4294967295\n", cleared, bits)
+				shifted := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 32\n", shifted, word)
+				inserted = "%" + shifted
+			}
+			merged := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %s\n", merged, cleared, inserted)
+			if slot.Type == LLVMType("double") {
+				cast := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast i64 %%%s to double\n", cast, merged)
+				fmt.Fprintf(c.b, "  store double %%%s, ptr %s%s\n", cast, alloca, align)
+			} else {
+				fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s%s\n", merged, alloca, align)
+			}
+			c.fpResWritten[slot.Index] = true
+			return nil
+		}
+	}
 	alloca, slotTy, ok := c.fpResultAlloca(off)
 	if !ok {
 		return fmt.Errorf("unsupported FP write slot: +%d(FP)", off)
 	}
 	if slotTy != "" && slotTy != ty {
+		if c.goarch == "386" && ty == I32 && slotTy == Ptr {
+			p := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %s to ptr\n", p, v)
+			fmt.Fprintf(c.b, "  store ptr %%%s, ptr %s%s\n", p, alloca, align)
+			c.markFPResultWritten(off)
+			return nil
+		}
 		intBits := func(t LLVMType) (int, bool) {
 			switch t {
 			case I1:
@@ -961,7 +1303,7 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 					fmt.Fprintf(c.b, "  %%%s = zext %s %s to %s\n", t, ty, v, slotTy)
 					cast = "%" + t
 				}
-				fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", slotTy, cast, alloca)
+				fmt.Fprintf(c.b, "  store %s %s, ptr %s%s\n", slotTy, cast, alloca, align)
 				c.markFPResultWritten(off)
 				return nil
 			}
@@ -971,31 +1313,31 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 		case ty == I64 && slotTy == I32:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", t, v)
-			fmt.Fprintf(c.b, "  store i32 %%%s, ptr %s\n", t, alloca)
+			fmt.Fprintf(c.b, "  store i32 %%%s, ptr %s%s\n", t, alloca, align)
 			c.markFPResultWritten(off)
 			return nil
 		case ty == I64 && slotTy == LLVMType("double"):
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to double\n", t, v)
-			fmt.Fprintf(c.b, "  store double %%%s, ptr %s\n", t, alloca)
+			fmt.Fprintf(c.b, "  store double %%%s, ptr %s%s\n", t, alloca, align)
 			c.markFPResultWritten(off)
 			return nil
 		case ty == LLVMType("double") && slotTy == I64:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", t, v)
-			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", t, alloca)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s%s\n", t, alloca, align)
 			c.markFPResultWritten(off)
 			return nil
 		case ty == I64 && slotTy == Ptr:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", t, v)
-			fmt.Fprintf(c.b, "  store ptr %%%s, ptr %s\n", t, alloca)
+			fmt.Fprintf(c.b, "  store ptr %%%s, ptr %s%s\n", t, alloca, align)
 			c.markFPResultWritten(off)
 			return nil
 		case ty == Ptr && slotTy == I64:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", t, v)
-			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", t, alloca)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s%s\n", t, alloca, align)
 			c.markFPResultWritten(off)
 			return nil
 		case ty == I64 && slotTy == I64:
@@ -1004,7 +1346,7 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 			return fmt.Errorf("FP write type mismatch: have %s want %s at +%d(FP)", ty, slotTy, off)
 		}
 	}
-	fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", ty, v, alloca)
+	fmt.Fprintf(c.b, "  store %s %s, ptr %s%s\n", ty, v, alloca, align)
 	c.markFPResultWritten(off)
 	return nil
 }
@@ -1015,7 +1357,11 @@ func (c *amd64Ctx) loadFPResult(slot FrameSlot) (string, error) {
 		return "", fmt.Errorf("missing fp result alloca for index %d", slot.Index)
 	}
 	t := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s\n", t, slot.Type, alloca)
+	align := ""
+	if c.classicFrame != "" {
+		align = ", align 1"
+	}
+	fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s%s\n", t, slot.Type, alloca, align)
 	return "%" + t, nil
 }
 

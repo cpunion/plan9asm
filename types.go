@@ -125,10 +125,15 @@ func parseReg(s string) (Reg, bool) {
 		}
 	}
 	// SIMD/FP registers:
-	// - x86: X0..X31, Y0..Y31, Z0..Z31, K0..K7
+	// - x86: M0..M7, X0..X31, Y0..Y31, Z0..Z31, K0..K7
 	// - arm64: V0..V31, with optional lane suffix (e.g. V0.B16, V8.D[0])
 	// - arm64 FP: F0..F31
 	if strings.HasPrefix(ss, "K") && len(ss) >= 2 {
+		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
+			return Reg(ss), true
+		}
+	}
+	if strings.HasPrefix(ss, "M") && len(ss) >= 2 {
 		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
 			return Reg(ss), true
 		}
@@ -762,6 +767,7 @@ const (
 	OpCPUID  Op = "CPUID"
 	OpXGETBV Op = "XGETBV"
 	OpBYTE   Op = "BYTE"
+	OpWORD   Op = "WORD"
 	OpRET    Op = "RET"
 	OpLABEL  Op = "LABEL"
 )
@@ -937,9 +943,10 @@ func parseMem(s string) (MemRef, bool) {
 		} else if u, ok := parseImmExpr(offPart); ok {
 			off = int64(u)
 		} else {
-			// Keep parsing permissive for macro-style symbolic offsets such as
-			// g_m(R14) when include-driven constants are not expanded.
-			off = 0
+			// Stack slots commonly use a descriptive name before their numeric
+			// displacement (for example control-4(SP)). Preserve the displacement;
+			// only an unresolved include-derived expression degrades to zero.
+			_, off = splitSymPlusOff(offPart)
 		}
 	}
 

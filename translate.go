@@ -112,7 +112,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	}
 	// Keep translate.go as the cross-platform pipeline entry.
 	// Architecture-specific declarations live in arch-specific files.
-	emitArchPrelude(&b, file.Arch, opt.Goarch)
+	emitArchPrelude(&b, file, opt.Goarch)
 
 	emitExternSBGlobals(&b, file, resolve, opt.Sigs)
 
@@ -146,7 +146,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 			return "", fmt.Errorf("%s: %v", name, err)
 		}
 		if sig.Attrs == "" {
-			sig.Attrs = attrRegistry.ref(inferFuncTargetFeatures(file.Arch, *fn))
+			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, *fn))
 		}
 		if file.Arch == ArchARM && funcNeedsARMCFG(*fn) {
 			if err := translateFuncARM(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
@@ -162,8 +162,8 @@ func translateIRText(file *File, opt Options) (string, error) {
 			b.WriteString("\n")
 			continue
 		}
-		if file.Arch == ArchAMD64 && opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn) {
-			if err := translateFuncAMD64(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
+		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn)) {
+			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %v", name, err)
 			}
 			b.WriteString("\n")

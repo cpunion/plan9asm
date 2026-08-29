@@ -147,7 +147,8 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 }
 
 func (c *amd64Ctx) setCmpFlagsSized(ty LLVMType, a, b string) {
-	// Store Z (eq), signed-lt, and CF (unsigned-lt) derived from CMP* a,b.
+	// Unlike most Plan 9 x86 instructions, CMP spells its operands in
+	// comparison order: CMP a,b sets flags for a-b.
 	zt := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = icmp eq %s %s, %s\n", zt, ty, a, b)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zt, c.flagsZSlot)
@@ -200,17 +201,31 @@ func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
 		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", t, v64, ty)
 		return "%" + t, nil
 	case OpMem:
-		addr, err := c.addrFromMem(op.Mem)
+		p, ptrType, err := c.ptrFromMem(op.Mem)
 		if err != nil {
 			return "", err
 		}
-		p := c.ptrFromAddrI64(addr)
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", t, ty, p)
+		fmt.Fprintf(c.b, "  %%%s = load %s, %s %s, align 1\n", t, ty, ptrType, p)
 		return "%" + t, nil
 	case OpSym:
 		s := strings.TrimSpace(op.Sym)
 		if strings.HasPrefix(s, "$") {
+			address := strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if strings.HasSuffix(address, "(SB)") {
+				p, err := c.ptrFromSB(address)
+				if err != nil {
+					return "", err
+				}
+				wide := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", wide, p)
+				if ty == I64 {
+					return "%" + wide, nil
+				}
+				value := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to %s\n", value, wide, ty)
+				return "%" + value, nil
+			}
 			// Macro-style symbolic immediates (e.g. $const_avxSupported) may
 			// survive preprocessing when include constants are unavailable.
 			// Keep translation progressing with a conservative zero value.
