@@ -52,6 +52,7 @@ type amd64Ctx struct {
 	flagsOFSlot    string // overflow-style bit used by ADOX carry chain modeling
 	flagsIDSlot    string // CPUID availability bit preserved by PUSHFL/POPFL
 	flagsWritten   bool
+	allowSPWrite   bool   // current instruction has an explicitly modeled 386 SP destination
 	directionSlot  string // x86 DF, used by MOVS/STOS/SCAS instructions
 	repeatPrefix   string // pending REP/REPN prefix for the following instruction
 	vstackSlot     string // [64 x i64] virtual stack for PUSHQ/POPQ
@@ -301,7 +302,10 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	}
 	if spSlot, ok := c.regSlot[SP]; ok && c.goarch == "386" {
 		minOff, maxOff := c.stackOffsetRange()
-		movement := c.stackMovementBudget()
+		movement, err := c.stackMovementBudget()
+		if err != nil {
+			return err
+		}
 		minOff -= movement
 		maxOff += movement
 		const guard = int64(64)
@@ -606,30 +610,103 @@ func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 	return minOff, maxOff
 }
 
-func (c *amd64Ctx) stackMovementBudget() int64 {
-	// The local stack models the bounded stack motion emitted by the trusted Go
-	// standard-library corpus. storeReg rejects direct writes to SP; adding
-	// support for one must also account for its movement here.
+const max386LocalStackMovement = int64(1 << 20)
+
+func (c *amd64Ctx) stackMovementBudget() (int64, error) {
+	// The local stack models bounded movement relative to its initial SP. Some
+	// runtime routines explicitly rebase SP from a saved context; those writes
+	// intentionally leave this local object and do not contribute to its size.
 	var total int64
+	add := func(delta int64, ins Instr) error {
+		if delta < 0 || delta > max386LocalStackMovement-total {
+			return fmt.Errorf("386 local stack movement exceeds %d bytes at %q", max386LocalStackMovement, ins.Raw)
+		}
+		total += delta
+		return nil
+	}
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
 			switch strings.ToUpper(string(ins.Op)) {
 			case "PUSHL", "POPL", "PUSHFL", "POPFL":
-				total += 4
+				if err := add(4, ins); err != nil {
+					return 0, err
+				}
 			case "PUSHAL", "POPAL":
-				total += 32
+				if err := add(32, ins); err != nil {
+					return 0, err
+				}
 			case "ADJSP":
 				if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
-					adjustment := int64(ins.Args[0].Imm)
-					if adjustment < 0 {
-						adjustment = -adjustment
+					if err := add(abs386StackAdjustment(int64(ins.Args[0].Imm)), ins); err != nil {
+						return 0, err
 					}
-					total += adjustment
+				}
+			case "ADDL", "SUBL":
+				if is386SPDestination(ins) && len(ins.Args) == 2 && ins.Args[0].Kind == OpImm {
+					if err := add(abs386StackAdjustment(int64(ins.Args[0].Imm)), ins); err != nil {
+						return 0, err
+					}
+				}
+			case "ANDL":
+				if movement, ok := bounded386SPAndMovement(ins); ok {
+					if err := add(movement, ins); err != nil {
+						return 0, err
+					}
+				}
+			case "LEAL":
+				if is386SPDestination(ins) && len(ins.Args) == 2 && ins.Args[0].Kind == OpMem &&
+					ins.Args[0].Mem.Base == SP && ins.Args[0].Mem.Index == "" {
+					if err := add(abs386StackAdjustment(ins.Args[0].Mem.Off), ins); err != nil {
+						return 0, err
+					}
 				}
 			}
 		}
 	}
-	return total
+	return total, nil
+}
+
+func abs386StackAdjustment(v int64) int64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func is386SPDestination(ins Instr) bool {
+	if len(ins.Args) == 0 {
+		return false
+	}
+	dst := ins.Args[len(ins.Args)-1]
+	return dst.Kind == OpReg && dst.Reg == SP
+}
+
+func bounded386SPAndMovement(ins Instr) (int64, bool) {
+	if !is386SPDestination(ins) || len(ins.Args) != 2 || ins.Args[0].Kind != OpImm {
+		return 0, false
+	}
+	// ANDL alignment masks used by the Go runtime only clear low address bits.
+	// The bitwise complement is the greatest possible downward adjustment.
+	movement := int64(^uint32(ins.Args[0].Imm))
+	return movement, movement <= max386LocalStackMovement
+}
+
+func models386SPWrite(ins Instr) bool {
+	if !is386SPDestination(ins) {
+		return false
+	}
+	switch strings.ToUpper(string(ins.Op)) {
+	case "MOVL", "ADDL", "SUBL", "LEAL", "POPL":
+		// These are the direct SP forms used by the official 386 corpus. MOVL
+		// and non-SP LEAL rebase to an explicitly supplied stack context;
+		// arithmetic and SP-relative LEAL retain the current stack model.
+		return true
+	case "ANDL":
+		_, ok := bounded386SPAndMovement(ins)
+		return ok
+	default:
+		return false
+	}
 }
 
 func (c *amd64Ctx) pushI64(v string) {
@@ -809,7 +886,7 @@ func (c *amd64Ctx) loadReg(r Reg) (string, error) {
 }
 
 func (c *amd64Ctx) storeReg(r Reg, v string) error {
-	if c.goarch == "386" && r == SP {
+	if c.goarch == "386" && r == SP && !c.allowSPWrite {
 		return fmt.Errorf("386 direct SP write is unsupported; use ADJSP or a modeled stack instruction")
 	}
 	return c.storeRegUnchecked(r, v)

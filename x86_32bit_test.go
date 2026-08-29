@@ -169,10 +169,7 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 		{name: "popfl operand", instruction: "POPFL AX", want: "POPFL takes no operands"},
 		{name: "pushal operand", instruction: "PUSHAL AX", want: "PUSHAL takes no operands"},
 		{name: "popal operand", instruction: "POPAL AX", want: "POPAL takes no operands"},
-		{name: "mov direct sp write", instruction: "MOVL AX, SP", want: "direct SP write is unsupported"},
-		{name: "sub direct sp write", instruction: "SUBL $256, SP", want: "direct SP write is unsupported"},
-		{name: "lea direct sp write", instruction: "LEAL 4(SP), SP", want: "direct SP write is unsupported"},
-		{name: "pop direct sp write", instruction: "POPL SP", want: "direct SP write is unsupported"},
+		{name: "unmodeled direct sp write", instruction: "XORL AX, SP", want: "direct SP write is unsupported"},
 		{name: "cmpxchg8b destination", instruction: "CMPXCHG8B AX", want: "CMPXCHG8B expects mem"},
 		{name: "cmpxchg8b segment", instruction: "CMPXCHG8B 0(FS)", want: "does not support segment-relative memory"},
 		{name: "fmovd count", instruction: "FMOVD F0", want: "FMOVD expects src, dst"},
@@ -232,6 +229,40 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 				t.Fatalf("Translate(%q) error = %v, want substring %q", tt.instruction, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestTranslate386ModelsOfficialDirectSPWrites(t *testing.T) {
+	file, err := Parse(ArchAMD64, `TEXT stack(SB),NOSPLIT,$0-0
+	MOVL AX, SP
+	SUBL $256, SP
+	ADDL AX, SP
+	ADDL $32, SP
+	ANDL $~15, SP
+	LEAL 4(SP), SP
+	POPL SP
+	RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{
+		TargetTriple: "i386-unknown-linux-gnu",
+		Goarch:       "386",
+		Sigs:         map[string]FuncSig{"stack": {Name: "stack", Ret: Void}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"%local_stack = alloca [770 x i8]",
+		"sub i32",
+		"add i32",
+		"and i32",
+	} {
+		if !strings.Contains(ir, want) {
+			t.Fatalf("386 direct SP lowering missing %q:\n%s", want, ir)
+		}
 	}
 }
 

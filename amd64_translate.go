@@ -211,7 +211,7 @@ func (c *amd64Ctx) lowerBlocks() error {
 			c.emitSourceComment(ins)
 			term, err := c.lowerInstr(bi, ii, ins, emitBr, emitCondBr)
 			if err != nil {
-				return err
+				return fmt.Errorf("%q: %w", ins.Raw, err)
 			}
 			if term {
 				terminated = true
@@ -237,6 +237,8 @@ func (c *amd64Ctx) lowerBlocks() error {
 }
 
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
+	c.allowSPWrite = models386SPWrite(ins)
+	defer func() { c.allowSPWrite = false }()
 	op := strings.ToUpper(string(ins.Op))
 	if c.repeatPrefix != "" && op != "MOVSB" && op != "MOVSL" && op != "STOSL" && op != "SCASB" {
 		prefix := c.repeatPrefix
