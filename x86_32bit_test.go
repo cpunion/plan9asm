@@ -20,6 +20,20 @@ func TestParse386NamedStackOffset(t *testing.T) {
 }
 
 func TestTranslate386SymbolIndexedMemory(t *testing.T) {
+	for _, invalid := range []string{
+		"masks<>(SB)(BX*8)junk",
+		"masks<>(SB)(BAD*8)",
+	} {
+		if _, ok := parseMem(invalid); ok {
+			t.Fatalf("parseMem(%q) unexpectedly succeeded", invalid)
+		}
+	}
+	var invalidIR strings.Builder
+	invalidCtx := newX86Ctx(&invalidIR, Func{}, FuncSig{Name: "example.invalid", Ret: Void}, testResolveSym("example"), nil, "386", "i386-pc-windows-gnu", false)
+	if _, err := invalidCtx.addrFromPlainMem(MemRef{Sym: "(SB)"}); err == nil {
+		t.Fatal("symbol-indexed address with an empty symbol unexpectedly succeeded")
+	}
+
 	file, err := Parse(ArchAMD64, `
 GLOBL masks<>(SB), RODATA, $256
 TEXT lookup(SB),NOSPLIT,$0-0
