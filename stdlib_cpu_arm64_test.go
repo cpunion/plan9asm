@@ -41,6 +41,11 @@ func TestStdlibInternalCPU_ARM64_Compile(t *testing.T) {
 			Ret:   I64,
 			Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0}}},
 		},
+		"internal/cpu.getisar1": {
+			Name:  "internal/cpu.getisar1",
+			Ret:   I64,
+			Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0}}},
+		},
 		"internal/cpu.getpfr0": {
 			Name:  "internal/cpu.getpfr0",
 			Ret:   I64,
