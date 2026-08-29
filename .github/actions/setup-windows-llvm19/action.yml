@@ -50,7 +50,13 @@ runs:
           archive="$archive_dir/$prefix-$package-any.pkg.tar.zst"
           curl --fail --location --retry 3 --output "$archive" "$repo/$(basename "$archive")"
           curl --fail --location --retry 3 --output "$archive.sig" "$repo/$(basename "$archive").sig"
-          pacman-key --verify "$archive.sig" "$archive"
+          # setup-msys2 runs later composite steps without an elevated MSYS
+          # identity, so pacman-key rejects even its read-only verify command.
+          # Invoke the same initialized package keyring through gpg directly;
+          # lock and trust-database updates are unnecessary for verification.
+          gpg --homedir /etc/pacman.d/gnupg \
+            --no-auto-check-trustdb --lock-never \
+            --verify "$archive.sig" "$archive"
           archives+=("$archive")
         done
 
