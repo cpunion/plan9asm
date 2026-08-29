@@ -193,13 +193,13 @@ func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		z := c.newTmp()
 		cf := c.newTmp()
-		slt := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = fcmp ueq double %s, %s\n", z, lhs, rhs)
 		fmt.Fprintf(c.b, "  %%%s = fcmp ult double %s, %s\n", cf, lhs, rhs)
-		fmt.Fprintf(c.b, "  %%%s = fcmp olt double %s, %s\n", slt, lhs, rhs)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", z, c.flagsZSlot)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", slt, c.flagsSltSlot)
+		// FUCOMI clears both SF and OF. flagsSltSlot models SF xor OF for
+		// signed conditions, so those conditions must observe false here.
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
 		return true, false, nil
 
 	case "FTST":

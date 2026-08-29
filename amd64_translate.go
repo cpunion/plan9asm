@@ -275,7 +275,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		}
 		next := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sub i64 %s, %d\n", next, sp, int64(ins.Args[0].Imm))
-		return false, c.storeReg(SP, "%"+next)
+		return false, c.storeRegUnchecked(SP, "%"+next)
 	case "CLD":
 		if c.goarch != "386" {
 			return false, nil

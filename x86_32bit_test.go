@@ -169,6 +169,10 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 		{name: "popfl operand", instruction: "POPFL AX", want: "POPFL takes no operands"},
 		{name: "pushal operand", instruction: "PUSHAL AX", want: "PUSHAL takes no operands"},
 		{name: "popal operand", instruction: "POPAL AX", want: "POPAL takes no operands"},
+		{name: "mov direct sp write", instruction: "MOVL AX, SP", want: "direct SP write is unsupported"},
+		{name: "sub direct sp write", instruction: "SUBL $256, SP", want: "direct SP write is unsupported"},
+		{name: "lea direct sp write", instruction: "LEAL 4(SP), SP", want: "direct SP write is unsupported"},
+		{name: "pop direct sp write", instruction: "POPL SP", want: "direct SP write is unsupported"},
 		{name: "cmpxchg8b destination", instruction: "CMPXCHG8B AX", want: "CMPXCHG8B expects mem"},
 		{name: "cmpxchg8b segment", instruction: "CMPXCHG8B 0(FS)", want: "does not support segment-relative memory"},
 		{name: "fmovd count", instruction: "FMOVD F0", want: "FMOVD expects src, dst"},
@@ -228,6 +232,32 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 				t.Fatalf("Translate(%q) error = %v, want substring %q", tt.instruction, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestTranslate386FUCOMIClearsSignedCondition(t *testing.T) {
+	fn := Func{Instrs: []Instr{{
+		Op:   "FUCOMI",
+		Args: []Operand{{Kind: OpReg, Reg: "F0"}, {Kind: OpReg, Reg: "F1"}},
+	}}}
+	var b strings.Builder
+	c := newX86Ctx(&b, fn, FuncSig{Name: "example.fucomi", Ret: Void}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	if err := c.emitEntryAllocas(); err != nil {
+		t.Fatal(err)
+	}
+	start := b.Len()
+	ok, terminated, err := c.lowerX87("FUCOMI", fn.Instrs[0])
+	if !ok || terminated || err != nil {
+		t.Fatalf("lowerX87(FUCOMI) = (%v, %v, %v)", ok, terminated, err)
+	}
+	got := b.String()[start:]
+	for _, want := range []string{"fcmp ueq double", "fcmp ult double", "store i1 false, ptr %flags_slt"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FUCOMI lowering missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "fcmp olt double") {
+		t.Fatalf("FUCOMI incorrectly synthesized a signed-less flag:\n%s", got)
 	}
 }
 

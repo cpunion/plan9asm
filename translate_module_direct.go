@@ -79,9 +79,9 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm64 CFG lowering required for %s", name)
 		}
-		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn)) {
+		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn))) {
 			mod.Dispose()
-			return llvm.Module{}, directUnsupportedf("amd64 CFG lowering required for %s", name)
+			return llvm.Module{}, directUnsupportedf("x86 CFG lowering required for %s", name)
 		}
 		if err := translateFuncLinearModule(mod, file.Arch, *fn, sig); err != nil {
 			mod.Dispose()

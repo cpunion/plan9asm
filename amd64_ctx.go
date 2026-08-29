@@ -608,8 +608,8 @@ func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 
 func (c *amd64Ctx) stackMovementBudget() int64 {
 	// The local stack models the bounded stack motion emitted by the trusted Go
-	// standard-library corpus. Direct writes to SP are intentionally outside
-	// this model; adding support for one must also account for its movement here.
+	// standard-library corpus. storeReg rejects direct writes to SP; adding
+	// support for one must also account for its movement here.
 	var total int64
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
@@ -673,7 +673,7 @@ func (c *amd64Ctx) pushI32(v string) error {
 	}
 	next := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = sub i64 %s, 4\n", next, sp)
-	if err := c.storeReg(SP, "%"+next); err != nil {
+	if err := c.storeRegUnchecked(SP, "%"+next); err != nil {
 		return err
 	}
 	p := c.ptrFromAddrI64("%" + next)
@@ -691,7 +691,7 @@ func (c *amd64Ctx) popI32() (string, error) {
 	fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", v, p)
 	next := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = add i64 %s, 4\n", next, sp)
-	if err := c.storeReg(SP, "%"+next); err != nil {
+	if err := c.storeRegUnchecked(SP, "%"+next); err != nil {
 		return "", err
 	}
 	return "%" + v, nil
@@ -809,6 +809,13 @@ func (c *amd64Ctx) loadReg(r Reg) (string, error) {
 }
 
 func (c *amd64Ctx) storeReg(r Reg, v string) error {
+	if c.goarch == "386" && r == SP {
+		return fmt.Errorf("386 direct SP write is unsupported; use ADJSP or a modeled stack instruction")
+	}
+	return c.storeRegUnchecked(r, v)
+}
+
+func (c *amd64Ctx) storeRegUnchecked(r Reg, v string) error {
 	// See loadReg for byte-alias handling.
 	if base, shift, ok := amd64ByteAlias(r); ok {
 		cur, err := c.loadReg(base)
@@ -1098,7 +1105,7 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 	if !ok {
 		if c.goarch == "386" {
 			for baseOff, candidate := range c.fpParams {
-				if off != baseOff+4 || candidate.Type != I64 && candidate.Type != LLVMType("double") {
+				if off != baseOff+4 || !isSplit64FrameType(candidate.Type) {
 					continue
 				}
 				full, err := c.evalFPToI64(baseOff)
@@ -1145,7 +1152,7 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 		}
 		if c.goarch == "386" {
 			for _, candidate := range c.fpResults {
-				if off != candidate.Offset+4 || candidate.Type != I64 && candidate.Type != LLVMType("double") {
+				if off != candidate.Offset+4 || !isSplit64FrameType(candidate.Type) {
 					continue
 				}
 				full, err := c.evalFPToI64(candidate.Offset)
@@ -1229,7 +1236,7 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 	}
 	if c.goarch == "386" && ty == I32 {
 		for _, slot := range c.fpResults {
-			if (slot.Type != I64 && slot.Type != LLVMType("double")) ||
+			if !isSplit64FrameType(slot.Type) ||
 				(off != slot.Offset && off != slot.Offset+4) {
 				continue
 			}
@@ -1353,6 +1360,10 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 	fmt.Fprintf(c.b, "  store %s %s, ptr %s%s\n", ty, v, alloca, align)
 	c.markFPResultWritten(off)
 	return nil
+}
+
+func isSplit64FrameType(typ LLVMType) bool {
+	return typ == I64 || typ == LLVMType("double")
 }
 
 func (c *amd64Ctx) loadFPResult(slot FrameSlot) (string, error) {
