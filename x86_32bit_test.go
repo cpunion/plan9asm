@@ -729,6 +729,22 @@ TEXT copyBackward(SB),NOSPLIT,$0-12
 	CLD
 	RET
 
+TEXT copyBackwardRestoredDF(SB),NOSPLIT,$0-12
+	MOVL dst+0(FP), DI
+	MOVL src+4(FP), SI
+	MOVL n+8(FP), CX
+	ADDL CX, DI
+	ADDL CX, SI
+	DECL DI
+	DECL SI
+	STD
+	PUSHFL
+	CLD
+	POPFL
+	REP; MOVSB
+	CLD
+	RET
+
 TEXT fillWords(SB),NOSPLIT,$0-12
 	MOVL dst+0(FP), DI
 	MOVL value+4(FP), AX
@@ -837,6 +853,8 @@ TEXT roundNearest(SB),NOSPLIT,$0-16
 				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
 			"copyBackward": frameSig("copyBackward", []LLVMType{Ptr, Ptr, I32}, Void,
 				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
+			"copyBackwardRestoredDF": frameSig("copyBackwardRestoredDF", []LLVMType{Ptr, Ptr, I32}, Void,
+				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: Ptr, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
 			"fillWords": frameSig("fillWords", []LLVMType{Ptr, I32, I32}, Void,
 				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}}, nil),
 			"findByte": frameSig("findByte", []LLVMType{Ptr, I32, I32}, I32,
@@ -897,6 +915,7 @@ extern int cpuidProbe(void);
 extern int frameAddress(int, int);
 extern void copyForward(unsigned char *, const unsigned char *, unsigned int);
 extern void copyBackward(unsigned char *, const unsigned char *, unsigned int);
+extern void copyBackwardRestoredDF(unsigned char *, const unsigned char *, unsigned int);
 extern void fillWords(unsigned int *, unsigned int, unsigned int);
 extern unsigned int findByte(const unsigned char *, unsigned int, unsigned int);
 extern double floorValue(double);
@@ -912,6 +931,7 @@ int main(void) {
     const unsigned char source[8] = {1, 2, 3, 4, 5, 6, 7, 8};
     unsigned char copied[8] = {0};
     unsigned char overlap[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+    unsigned char restoredOverlap[9] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
     unsigned char forwardOverlap[5] = {1, 2, 3, 4, 5};
     unsigned int words[4] = {0};
     __declspec(align(8)) unsigned long long word = 0x1122334455667788ULL;
@@ -923,6 +943,8 @@ int main(void) {
     for (i = 0; i < 8; i++) if (copied[i] != source[i]) return 14;
     copyBackward(overlap + 1, overlap, 8);
     for (i = 0; i < 8; i++) if (overlap[i + 1] != i) return 15;
+    copyBackwardRestoredDF(restoredOverlap + 1, restoredOverlap, 8);
+    for (i = 0; i < 8; i++) if (restoredOverlap[i + 1] != i) return 31;
     fillWords(words, 0x89abcdefU, 4);
     for (i = 0; i < 4; i++) if (words[i] != 0x89abcdefU) return 16;
     if (findByte(source, 8, 4) != 4) return 17;

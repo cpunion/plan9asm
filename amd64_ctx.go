@@ -44,7 +44,7 @@ type amd64Ctx struct {
 	usedX87        bool
 	x87Slot        [8]string // x87 stack registers, represented as f64 values
 	x87ControlSlot string
-	x87StatusSlot  string
+	x87StatusSlot  string // condition-code status populated by FTST for FSTSW
 
 	flagsZSlot     string
 	flagsSltSlot   string // signed negative-style bit for J{L,LE,G,GE}-like checks
@@ -1226,7 +1226,8 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 	}
 	if c.goarch == "386" && ty == I32 {
 		for _, slot := range c.fpResults {
-			if slot.Type != I64 && slot.Type != LLVMType("double") || off != slot.Offset && off != slot.Offset+4 {
+			if (slot.Type != I64 && slot.Type != LLVMType("double")) ||
+				(off != slot.Offset && off != slot.Offset+4) {
 				continue
 			}
 			alloca := c.fpResAllocaIdx[slot.Index]

@@ -29,24 +29,30 @@ func (c *amd64Ctx) loadIntDestination(dst Operand, ty LLVMType) (string, func(st
 	}
 }
 
-func (c *amd64Ctx) packX86Flags() string {
-	packed := "2" // architectural bit 1 is always set
-	flags := []struct {
-		slot string
-		bit  uint
-	}{
+type x86FlagSlot struct {
+	slot string
+	bit  uint
+}
+
+func (c *amd64Ctx) x86FlagSlots() []x86FlagSlot {
+	flags := []x86FlagSlot{
 		{c.flagsCFSlot, 0},
 		{c.flagsZSlot, 6},
 		{c.flagsSltSlot, 7},
-		{c.flagsOFSlot, 11},
 	}
+	if c.directionSlot != "" {
+		flags = append(flags, x86FlagSlot{c.directionSlot, 10})
+	}
+	flags = append(flags, x86FlagSlot{c.flagsOFSlot, 11})
 	if c.flagsIDSlot != "" {
-		flags = append(flags, struct {
-			slot string
-			bit  uint
-		}{c.flagsIDSlot, 21})
+		flags = append(flags, x86FlagSlot{c.flagsIDSlot, 21})
 	}
-	for _, flag := range flags {
+	return flags
+}
+
+func (c *amd64Ctx) packX86Flags() string {
+	packed := "2" // architectural bit 1 is always set
+	for _, flag := range c.x86FlagSlots() {
 		v := c.loadFlag(flag.slot)
 		ext := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i1 %s to i64\n", ext, v)
@@ -64,22 +70,7 @@ func (c *amd64Ctx) packX86Flags() string {
 }
 
 func (c *amd64Ctx) unpackX86Flags(packed string) {
-	flags := []struct {
-		slot string
-		bit  uint
-	}{
-		{c.flagsCFSlot, 0},
-		{c.flagsZSlot, 6},
-		{c.flagsSltSlot, 7},
-		{c.flagsOFSlot, 11},
-	}
-	if c.flagsIDSlot != "" {
-		flags = append(flags, struct {
-			slot string
-			bit  uint
-		}{c.flagsIDSlot, 21})
-	}
-	for _, flag := range flags {
+	for _, flag := range c.x86FlagSlots() {
 		shifted := packed
 		if flag.bit != 0 {
 			shift := c.newTmp()

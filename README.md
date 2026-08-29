@@ -17,7 +17,7 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 
 ## Current status
 
-- Library parser/lowering targets: `amd64`, `arm64`.
+- Library parser/lowering targets: `386`, `amd64`, `arm64`.
 - Tool targets (`cmd/plan9asmll -all-targets`):
   - `darwin/amd64`, `darwin/arm64`
   - `linux/amd64`, `linux/arm64`, `linux/386`
