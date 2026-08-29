@@ -321,6 +321,113 @@ func Test386LoweringEdgeCases(t *testing.T) {
 	}
 }
 
+func Test386LoweringErrorPaths(t *testing.T) {
+	fn := Func{Instrs: []Instr{
+		{Op: "FLD1"},
+		{Op: "MOVL", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpReg, Reg: AX}}},
+	}}
+	var b strings.Builder
+	c := newX86Ctx(&b, fn, FuncSig{Name: "example.errors", Ret: Void}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	if err := c.emitEntryAllocas(); err != nil {
+		t.Fatal(err)
+	}
+
+	badMem := Operand{Kind: OpMem, Mem: MemRef{Segment: Reg("BAD")}}
+	badSym := Operand{Kind: OpSym, Sym: "(SB)"}
+	wantLowerError := func(name string, lower func() (bool, bool, error)) {
+		t.Helper()
+		ok, terminated, err := lower()
+		if !ok || terminated || err == nil {
+			t.Fatalf("%s = (%v, %v, %v), want handled non-terminating error", name, ok, terminated, err)
+		}
+	}
+
+	if _, _, err := c.loadIntDestination(badMem, I32); err == nil {
+		t.Fatal("loadIntDestination with an invalid segment unexpectedly succeeded")
+	}
+	wantLowerError("PUSHL source", func() (bool, bool, error) {
+		return c.lowerArith("PUSHL", Instr{Raw: "PUSHL invalid", Args: []Operand{{Kind: OpIdent, Ident: "invalid"}}})
+	})
+	wantLowerError("POPL destination", func() (bool, bool, error) {
+		return c.lowerArith("POPL", Instr{Raw: "POPL 0(BAD)", Args: []Operand{badMem}})
+	})
+	wantLowerError("SETEQ destination", func() (bool, bool, error) {
+		return c.lowerArith("SETEQ", Instr{Raw: "SETEQ 0(BAD)", Args: []Operand{badMem}})
+	})
+	wantLowerError("CMPXCHG8B destination", func() (bool, bool, error) {
+		return c.lowerAtomic("CMPXCHG8B", Instr{Raw: "CMPXCHG8B 0(BAD)", Args: []Operand{badMem}})
+	})
+	wantLowerError("vector memory destination", func() (bool, bool, error) {
+		return c.lowerVec("MOVL", Instr{Raw: "MOVL X0, 0(BAD)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badMem}})
+	})
+	wantLowerError("vector symbol destination", func() (bool, bool, error) {
+		return c.lowerVec("MOVL", Instr{Raw: "MOVL X0, (SB)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badSym}})
+	})
+
+	for _, test := range []struct {
+		name  string
+		store func(Operand) error
+	}{
+		{name: "x87 double memory", store: func(dst Operand) error { return c.storeX87F64(dst, "0.0") }},
+		{name: "x87 word memory", store: func(dst Operand) error { return c.storeX87I16(dst, "0") }},
+		{name: "x87 integer memory", store: func(dst Operand) error { return c.storeX87I64(dst, "0") }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.store(badMem); err == nil {
+				t.Fatal("invalid segment unexpectedly succeeded")
+			}
+			if err := test.store(badSym); err == nil {
+				t.Fatal("invalid symbol unexpectedly succeeded")
+			}
+		})
+	}
+	if ok, terminated, err := c.lowerX87("NOP", Instr{Raw: "NOP"}); ok || terminated || err != nil {
+		t.Fatalf("lowerX87(NOP) = (%v, %v, %v), want unhandled", ok, terminated, err)
+	}
+	if _, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$(SB)"}, I32); err == nil {
+		t.Fatal("invalid symbolic address unexpectedly succeeded")
+	}
+
+	oldArch := c.goarch
+	c.goarch = "amd64"
+	wantLowerError("amd64 MOVL FP source", func() (bool, bool, error) {
+		return c.lowerMov("MOVL", Instr{Raw: "MOVL $1, ret+0(FP)", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpFP, FPOffset: 0}}})
+	})
+	c.goarch = oldArch
+
+	var fp strings.Builder
+	fpCtx := newX86Ctx(&fp, Func{}, FuncSig{Name: "example.fp", Ret: Void}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	fpCtx.fpParams[0] = FrameSlot{Offset: 0, Type: I64, Index: 9, Field: -1}
+	fpCtx.fpParams[8] = FrameSlot{Offset: 8, Type: I32, Index: 0, Field: -1}
+	if _, err := fpCtx.evalFPToI64(100); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fpCtx.evalFPToI64(4); err == nil {
+		t.Fatal("high-word read of an invalid frame parameter unexpectedly succeeded")
+	}
+
+	var result strings.Builder
+	resultCtx := newX86Ctx(&result, Func{}, FuncSig{Name: "example.result", Ret: Void}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	resultCtx.fpResults = []FrameSlot{
+		{Offset: 0, Type: I64, Index: 0, Field: -1},
+		{Offset: 8, Type: I32, Index: 1, Field: -1},
+	}
+	resultCtx.fpResAllocaOff[0] = "%result0"
+	resultCtx.fpResAllocaIdx[0] = "%result0"
+	resultCtx.classicFrame = "%classic_frame"
+	resultCtx.classicSize = 16
+	if _, err := resultCtx.evalFPToI64(100); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := resultCtx.evalFPToI64(4); err != nil || got == "" {
+		t.Fatalf("high-word result read = (%q, %v)", got, err)
+	}
+	ok, terminated, err := resultCtx.lowerArith("LEAL", Instr{Raw: "LEAL ret+0(FP), AX", Args: []Operand{{Kind: OpFPAddr, FPOffset: 0}, {Kind: OpReg, Reg: AX}}})
+	if !ok || terminated || err != nil {
+		t.Fatalf("LEAL classic result address = (%v, %v, %v)", ok, terminated, err)
+	}
+}
+
 func Test386FDirectiveDoesNotAllocateX87State(t *testing.T) {
 	fn := Func{Instrs: []Instr{{Op: "FUNCDATA"}}}
 	var b strings.Builder
