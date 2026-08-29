@@ -237,6 +237,7 @@ type Operand struct {
 
 type MemRef struct {
 	Base    Reg
+	Sym     string // optional symbol-based address, including the (SB) suffix
 	Off     int64
 	Index   Reg   // optional; empty if not present
 	Scale   int64 // optional; defaults to 1 when Index is present
@@ -275,6 +276,12 @@ func (o Operand) String() string {
 		segment := ""
 		if o.Mem.Segment != "" {
 			segment = fmt.Sprintf("(%s)", o.Mem.Segment)
+		}
+		if o.Mem.Sym != "" {
+			if o.Mem.Scale == 0 {
+				return fmt.Sprintf("%s(%s)%s", o.Mem.Sym, o.Mem.Index, segment)
+			}
+			return fmt.Sprintf("%s(%s*%d)%s", o.Mem.Sym, o.Mem.Index, o.Mem.Scale, segment)
 		}
 		if o.Mem.Index != "" {
 			if o.Mem.Scale == 0 {
@@ -935,6 +942,20 @@ func parseMem(s string) (MemRef, bool) {
 	}
 	baseStr := strings.TrimSpace(rest[1:j])
 	rest = strings.TrimSpace(rest[j+1:])
+	// Go's x86 assembler permits a static-base symbol followed by an index,
+	// for example masks<>(SB)(BX*8). Keep the symbol as the address base and
+	// let the architecture lowering add the scaled register index.
+	if strings.EqualFold(baseStr, "SB") && offPart != "" && rest != "" {
+		if !strings.HasPrefix(rest, "(") || !strings.HasSuffix(rest, ")") {
+			return MemRef{}, false
+		}
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rest, "("), ")"))
+		idx, scale, ok := parseIndexScale(inner)
+		if !ok {
+			return MemRef{}, false
+		}
+		return MemRef{Sym: offPart + "(SB)", Index: idx, Scale: scale}, true
+	}
 
 	var off int64
 	if offPart != "" {

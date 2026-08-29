@@ -19,6 +19,40 @@ func TestParse386NamedStackOffset(t *testing.T) {
 	}
 }
 
+func TestTranslate386SymbolIndexedMemory(t *testing.T) {
+	file, err := Parse(ArchAMD64, `
+GLOBL masks<>(SB), RODATA, $256
+TEXT lookup(SB),NOSPLIT,$0-0
+	PAND masks<>(SB)(BX*8), X1
+	RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := file.Funcs[0].Instrs[1].Args[0]
+	if src.Kind != OpMem || src.Mem.Sym != "masks<>(SB)" || src.Mem.Index != BX || src.Mem.Scale != 8 {
+		t.Fatalf("parse symbol-indexed memory = %#v", src)
+	}
+	if got := src.String(); got != "masks<>(SB)(BX*8)" {
+		t.Fatalf("symbol-indexed memory string = %q", got)
+	}
+	ir, err := Translate(file, Options{
+		TargetTriple: "i386-pc-windows-gnu",
+		Goarch:       "386",
+		Sigs: map[string]FuncSig{
+			"lookup": {Name: "lookup", Ret: Void},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ir, `masks<>(SB)(BX*8)`) ||
+		!strings.Contains(ir, "ptrtoint ptr @") ||
+		!strings.Contains(ir, "mul i64") {
+		t.Fatalf("symbol-indexed address was not lowered:\n%s", ir)
+	}
+}
+
 func TestParse386MMXRegister(t *testing.T) {
 	file, err := Parse(ArchAMD64, `TEXT ·load(SB),NOSPLIT,$0-0
 	MOVQ (AX), M0

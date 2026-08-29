@@ -21,6 +21,7 @@ func TestTypeHelperCoverage(t *testing.T) {
 		{Operand{Kind: OpMem, Mem: MemRef{Base: SI, Off: 8}}, "8(SI)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Off: -4, Index: CX, Scale: 2}}, "-4(BX)(CX*2)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: BX, Index: CX, Segment: GS}}, "0(BX)(CX)(GS)"},
+		{Operand{Kind: OpMem, Mem: MemRef{Sym: "table<>(SB)", Index: BX}}, "table<>(SB)(BX)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Off: 0x30, Segment: GS}}, "48(GS)"},
 		{Operand{Kind: OpMem, Mem: MemRef{Base: CX, Segment: GS}}, "0(CX)(GS)"},
 		{Operand{Kind: OpRegList, RegList: []Reg{"R0", "R1"}}, "(R0, R1)"},

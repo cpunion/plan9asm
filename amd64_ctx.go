@@ -1517,11 +1517,22 @@ func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
 }
 
 func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
-	base, err := c.loadReg(mem.Base)
-	if err != nil {
-		return "", err
+	var cur string
+	if mem.Sym != "" {
+		base, err := c.ptrFromSB(mem.Sym)
+		if err != nil {
+			return "", err
+		}
+		addr := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", addr, base)
+		cur = "%" + addr
+	} else {
+		base, err := c.loadReg(mem.Base)
+		if err != nil {
+			return "", err
+		}
+		cur = base
 	}
-	cur := base
 	if mem.Index != "" {
 		idx, err := c.loadReg(mem.Index)
 		if err != nil {
