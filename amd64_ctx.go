@@ -239,7 +239,7 @@ func (c *amd64Ctx) scanUsedRegs() {
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
 			op := strings.ToUpper(string(ins.Op))
-			if c.goarch == "386" && strings.HasPrefix(op, "F") {
+			if c.goarch == "386" && isX87Op(Op(op)) {
 				c.usedX87 = true
 			}
 			if c.goarch == "386" {
@@ -607,6 +607,9 @@ func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 }
 
 func (c *amd64Ctx) stackMovementBudget() int64 {
+	// The local stack models the bounded stack motion emitted by the trusted Go
+	// standard-library corpus. Direct writes to SP are intentionally outside
+	// this model; adding support for one must also account for its movement here.
 	var total int64
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {

@@ -183,6 +183,137 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 	}
 }
 
+func Test386LoweringEdgeCases(t *testing.T) {
+	fn := Func{Instrs: []Instr{
+		{Op: "FLD1"},
+		{Op: "MOVL", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}},
+	}}
+	sig := FuncSig{Name: "example.edges", Ret: Void}
+	var b strings.Builder
+	c := newX86Ctx(&b, fn, sig, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	if err := c.emitEntryAllocas(); err != nil {
+		t.Fatal(err)
+	}
+	expectError := func(name string, lower func() (bool, bool, error)) {
+		t.Helper()
+		ok, terminated, err := lower()
+		if !ok || terminated || err == nil {
+			t.Fatalf("%s = (%v, %v, %v), want handled non-terminating error", name, ok, terminated, err)
+		}
+	}
+	ident := Operand{Kind: OpIdent, Ident: "invalid"}
+	imm := Operand{Kind: OpImm, Imm: 1}
+	reg := Operand{Kind: OpReg, Reg: AX}
+
+	for _, test := range []struct {
+		name string
+		op   Op
+		args []Operand
+	}{
+		{name: "ADCL operand count", op: "ADCL"},
+		{name: "ADCL source", op: "ADCL", args: []Operand{ident, reg}},
+		{name: "ADCL destination", op: "ADCL", args: []Operand{imm, ident}},
+		{name: "ADDL source", op: "ADDL", args: []Operand{ident, reg}},
+		{name: "ADDL destination", op: "ADDL", args: []Operand{imm, ident}},
+		{name: "ADDB source", op: "ADDB", args: []Operand{ident, reg}},
+		{name: "ANDW operand count", op: "ANDW"},
+		{name: "ANDW source", op: "ANDW", args: []Operand{ident, reg}},
+		{name: "ANDW destination", op: "ANDW", args: []Operand{imm, ident}},
+		{name: "SETEQ destination", op: "SETEQ", args: []Operand{ident}},
+		{name: "IMULL source", op: "IMULL", args: []Operand{ident}},
+		{name: "IMULL destination", op: "IMULL", args: []Operand{imm, imm}},
+		{name: "IMULL two-operand source", op: "IMULL", args: []Operand{ident, reg}},
+		{name: "IMUL3L destination", op: "IMUL3L", args: []Operand{imm, reg, imm}},
+		{name: "IMUL3L immediate", op: "IMUL3L", args: []Operand{ident, reg, reg}},
+		{name: "IMUL3L source", op: "IMUL3L", args: []Operand{imm, ident, reg}},
+		{name: "IMULL operand count", op: "IMULL"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expectError(test.name, func() (bool, bool, error) {
+				return c.lowerArith(test.op, Instr{Raw: test.name, Args: test.args})
+			})
+		})
+	}
+
+	for _, test := range []struct {
+		name string
+		op   Op
+		args []Operand
+	}{
+		{name: "FMOVD source", op: "FMOVD", args: []Operand{ident, {Kind: OpReg, Reg: "F0"}}},
+		{name: "FMOVDP source", op: "FMOVDP", args: []Operand{ident, reg}},
+		{name: "FMOVV source", op: "FMOVV", args: []Operand{ident, {Kind: OpReg, Reg: "F0"}}},
+		{name: "FMOVVP source", op: "FMOVVP", args: []Operand{ident, reg}},
+		{name: "FDIVD source", op: "FDIVD", args: []Operand{ident, {Kind: OpReg, Reg: "F0"}}},
+		{name: "FDIVD destination", op: "FDIVD", args: []Operand{{Kind: OpReg, Reg: "F0"}, ident}},
+		{name: "FADDDP source", op: "FADDDP", args: []Operand{ident, {Kind: OpReg, Reg: "F0"}}},
+		{name: "FADDDP destination", op: "FADDDP", args: []Operand{{Kind: OpReg, Reg: "F0"}, ident}},
+		{name: "FLDCW source", op: "FLDCW", args: []Operand{ident}},
+		{name: "FUCOMI lhs", op: "FUCOMI", args: []Operand{ident, {Kind: OpReg, Reg: "F0"}}},
+		{name: "FUCOMI rhs", op: "FUCOMI", args: []Operand{{Kind: OpReg, Reg: "F0"}, ident}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expectError(test.name, func() (bool, bool, error) {
+				return c.lowerX87(test.op, Instr{Raw: test.name, Args: test.args})
+			})
+		})
+	}
+
+	if _, err := c.amd64AtomicPtrFromMem(MemRef{Segment: FS}); err == nil {
+		t.Fatal("segment-relative atomic destination unexpectedly succeeded")
+	}
+	if got := x86FrameTypeSize(I16); got != 2 {
+		t.Fatalf("x86FrameTypeSize(i16) = %d, want 2", got)
+	}
+	if got := x86FrameTypeSize(LLVMType("{ i32, i32 }")); got != 16 {
+		t.Fatalf("x86FrameTypeSize(aggregate) = %d, want 16", got)
+	}
+	if _, ok := amd64ParseX87Reg("F8"); ok {
+		t.Fatal("amd64ParseX87Reg(F8) unexpectedly succeeded")
+	}
+}
+
+func Test386FDirectiveDoesNotAllocateX87State(t *testing.T) {
+	fn := Func{Instrs: []Instr{{Op: "FUNCDATA"}}}
+	var b strings.Builder
+	c := newX86Ctx(&b, fn, FuncSig{Name: "example.directive", Ret: Void}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	if err := c.emitEntryAllocas(); err != nil {
+		t.Fatal(err)
+	}
+	if c.usedX87 || strings.Contains(b.String(), "%x87_") {
+		t.Fatalf("non-x87 F-prefixed directive allocated x87 state:\n%s", b.String())
+	}
+}
+
+func Test386RejectsInvalidClassicFrameIndex(t *testing.T) {
+	var b strings.Builder
+	c := newX86Ctx(&b, Func{}, FuncSig{
+		Name: "example.badframe",
+		Args: []LLVMType{I32},
+		Ret:  Void,
+		Frame: FrameLayout{Params: []FrameSlot{
+			{Offset: 0, Type: I32, Index: 1, Field: -1},
+		}},
+	}, testResolveSym("example"), nil, "386", "i386-unknown-linux-gnu", false)
+	if err := c.emitEntryAllocas(); err == nil || !strings.Contains(err.Error(), "invalid arg index 1") {
+		t.Fatalf("emitEntryAllocas() error = %v, want invalid frame index", err)
+	}
+}
+
+func TestAMD64Ignores386ControlInstructions(t *testing.T) {
+	c, _ := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.amd64", Ret: Void}, nil)
+	for _, op := range []Op{"ADJSP", "CLD", "STD", "REP"} {
+		args := []Operand(nil)
+		if op == "ADJSP" {
+			args = []Operand{{Kind: OpImm, Imm: 8}}
+		}
+		terminated, err := c.lowerInstr(0, 0, Instr{Op: op, Raw: string(op), Args: args}, nil, nil)
+		if err != nil || terminated {
+			t.Fatalf("lowerInstr(%s) = (%v, %v), want ignored instruction", op, terminated, err)
+		}
+	}
+}
+
 func TestTranslate386DestinationForms(t *testing.T) {
 	file, err := Parse(ArchAMD64, `
 TEXT vectorResult(SB),NOSPLIT,$0-4
@@ -765,6 +896,27 @@ TEXT findByte(SB),NOSPLIT,$0-16
 	MOVL CX, ret+12(FP)
 	RET
 
+TEXT zeroLengthScanPreservesZF(SB),NOSPLIT,$0-8
+	MOVL data+0(FP), DI
+	MOVL $0, CX
+	CMPL AX, AX
+	REPN; SCASB
+	JNE zfLost
+	MOVL $1, AX
+	MOVL AX, ret+4(FP)
+	RET
+zfLost:
+	MOVL $0, AX
+	MOVL AX, ret+4(FP)
+	RET
+
+TEXT negateHasCarry(SB),NOSPLIT,$0-8
+	MOVL value+0(FP), AX
+	NEGL AX
+	SETCS BX
+	MOVL BX, ret+4(FP)
+	RET
+
 TEXT floorValue(SB),NOSPLIT,$0-16
 	FMOVD value+0(FP), F0
 	FSTCW -2(SP)
@@ -863,6 +1015,12 @@ TEXT roundNearest(SB),NOSPLIT,$0-16
 			"findByte": frameSig("findByte", []LLVMType{Ptr, I32, I32}, I32,
 				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 4, Type: I32, Index: 1, Field: -1}, {Offset: 8, Type: I32, Index: 2, Field: -1}},
 				[]FrameSlot{{Offset: 12, Type: I32, Index: 0, Field: -1}}),
+			"zeroLengthScanPreservesZF": frameSig("zeroLengthScanPreservesZF", []LLVMType{Ptr}, I32,
+				[]FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
+				[]FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}}),
+			"negateHasCarry": frameSig("negateHasCarry", []LLVMType{I32}, I32,
+				[]FrameSlot{{Offset: 0, Type: I32, Index: 0, Field: -1}},
+				[]FrameSlot{{Offset: 4, Type: I32, Index: 0, Field: -1}}),
 			"floorValue": frameSig("floorValue", []LLVMType{LLVMType("double")}, LLVMType("double"),
 				[]FrameSlot{{Offset: 0, Type: LLVMType("double"), Index: 0, Field: -1}},
 				[]FrameSlot{{Offset: 8, Type: LLVMType("double"), Index: 0, Field: -1}}),
@@ -921,6 +1079,8 @@ extern void copyBackward(unsigned char *, const unsigned char *, unsigned int);
 extern void copyBackwardRestoredDF(unsigned char *, const unsigned char *, unsigned int);
 extern void fillWords(unsigned int *, unsigned int, unsigned int);
 extern unsigned int findByte(const unsigned char *, unsigned int, unsigned int);
+extern unsigned int zeroLengthScanPreservesZF(const unsigned char *);
+extern unsigned int negateHasCarry(unsigned int);
 extern double floorValue(double);
 extern double uint32ToFloat64(unsigned int);
 extern _Bool cas64(unsigned long long *, unsigned int, unsigned int, unsigned int, unsigned int);
@@ -952,6 +1112,8 @@ int main(void) {
     for (i = 0; i < 4; i++) if (words[i] != 0x89abcdefU) return 16;
     if (findByte(source, 8, 4) != 4) return 17;
     if (findByte(source, 8, 9) != 0) return 18;
+    if (zeroLengthScanPreservesZF(source) != 1) return 32;
+    if (negateHasCarry(0) != 0 || negateHasCarry(7) != 1) return 33;
     if (floorValue(3.75) != 3.0 || floorValue(-3.25) != -4.0) return 19;
     if (uint32ToFloat64(0xffffffffU) != 4294967295.0) return 20;
     if (!cas64(&word, 0x55667788U, 0x11223344U, 0xaabbccddU, 0x99aabbccU)) return 21;

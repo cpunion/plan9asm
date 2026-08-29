@@ -428,6 +428,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", t32, dv)
 			neg := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = sub i32 0, %%%s\n", neg, t32)
+			cf := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp ne i32 %%%s, 0\n", cf, t32)
+			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
 			z := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, neg)
 			if err := c.storeReg(ins.Args[0].Reg, "%"+z); err != nil {
@@ -445,6 +448,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", ld, p)
 			neg := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = sub i32 0, %%%s\n", neg, ld)
+			cf := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp ne i32 %%%s, 0\n", cf, ld)
+			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
 			fmt.Fprintf(c.b, "  store i32 %%%s, ptr %s, align 1\n", neg, p)
 			c.setZSFlagsFromI32("%" + neg)
 			return true, false, nil

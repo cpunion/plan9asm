@@ -99,7 +99,16 @@ func (c *amd64Ctx) lowerString(op Op, ins Instr) (ok bool, terminated bool, err 
 		if err := c.storeReg(DI, "%"+next); err != nil {
 			return true, false, err
 		}
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", equal, c.flagsZSlot)
+		zf := "%" + equal
+		if repeated {
+			oldZF := c.loadFlag(c.flagsZSlot)
+			executed := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %s, 0\n", executed, count)
+			preserved := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %%%s, i1 %s\n", preserved, executed, equal, oldZF)
+			zf = "%" + preserved
+		}
+		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", zf, c.flagsZSlot)
 		if repeated {
 			if err := c.storeRegSized(CX, I32, c.truncI64("%"+remaining, I32)); err != nil {
 				return true, false, err

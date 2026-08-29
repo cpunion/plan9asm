@@ -43,9 +43,15 @@ runs:
           "zlib-1.3.1-1"
           "zstd-1.5.6-2"
         )
-        urls=()
+        archives=()
+        archive_dir=$(mktemp -d)
+        trap 'rm -rf "$archive_dir"' EXIT
         for package in "${packages[@]}"; do
-          urls+=("$repo/$prefix-$package-any.pkg.tar.zst")
+          archive="$archive_dir/$prefix-$package-any.pkg.tar.zst"
+          curl --fail --location --retry 3 --output "$archive" "$repo/$(basename "$archive")"
+          curl --fail --location --retry 3 --output "$archive.sig" "$repo/$(basename "$archive").sig"
+          pacman-key --verify "$archive.sig" "$archive"
+          archives+=("$archive")
         done
 
         # These archived packages predate the gcc-libs -> cc-libs virtual
@@ -53,7 +59,7 @@ runs:
         # that metadata rename rather than disabling dependency checks.
         pacman --noconfirm -U \
           --assume-installed "$prefix-cc-libs=$LLVM_VERSION" \
-          "${urls[@]}"
+          "${archives[@]}"
 
         if [[ "$(llvm-config --version)" != "$LLVM_VERSION" ]]; then
           echo "expected LLVM $LLVM_VERSION, got $(llvm-config --version)" >&2

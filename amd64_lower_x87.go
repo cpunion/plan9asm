@@ -2,12 +2,19 @@ package plan9asm
 
 import "fmt"
 
-func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err error) {
+func isX87Op(op Op) bool {
 	switch op {
 	case "FMOVD", "FMOVDP", "FMOVV", "FMOVVP", "FXCHD", "FADDDP",
 		"FDIVD", "FMULD", "FMULDP", "FSTCW", "FLDCW", "FRNDINT",
 		"FABS", "FUCOMI", "FTST", "FSTSW", "FLD1", "FSQRT":
+		return true
 	default:
+		return false
+	}
+}
+
+func (c *amd64Ctx) lowerX87(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if !isX87Op(op) {
 		return false, false, nil
 	}
 	if c.goarch != "386" {
