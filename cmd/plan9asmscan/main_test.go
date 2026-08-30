@@ -15,6 +15,9 @@ import (
 )
 
 func TestToPlan9Arch(t *testing.T) {
+	if got, err := toPlan9Arch("386"); err != nil || got != plan9asm.ArchAMD64 {
+		t.Fatalf("toPlan9Arch(386) = (%q, %v)", got, err)
+	}
 	if got, err := toPlan9Arch("amd64"); err != nil || got != plan9asm.ArchAMD64 {
 		t.Fatalf("toPlan9Arch(amd64) = (%q, %v)", got, err)
 	}
@@ -55,6 +58,9 @@ func TestNormalizeOpAndDirectiveHelpers(t *testing.T) {
 }
 
 func TestClusterOfAndTopFiles(t *testing.T) {
+	if got := clusterOf("386", "CALL"); got != "x86-control" {
+		t.Fatalf("clusterOf 386 CALL = %q", got)
+	}
 	if got := clusterOf("amd64", "CALL"); got != "x86-control" {
 		t.Fatalf("clusterOf amd64 CALL = %q", got)
 	}
@@ -133,6 +139,15 @@ func lowerOp(op any) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("supported ops = %#v, want %#v", got, want)
+	}
+	supported386, err := extractSupportedOps(dir, "386")
+	if err != nil {
+		t.Fatalf("extractSupportedOps(386): %v", err)
+	}
+	for _, op := range want {
+		if _, ok := supported386[op]; !ok {
+			t.Fatalf("386 supported ops missing shared x86 %s: %v", op, supported386)
+		}
 	}
 }
 

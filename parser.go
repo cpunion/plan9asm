@@ -146,16 +146,16 @@ func Parse(arch Arch, src string) (*File, error) {
 				cur.Instrs = append(cur.Instrs, Instr{Op: op, Raw: stmt})
 				continue
 
-			case OpBYTE:
+			case OpBYTE, OpWORD:
 				if cur == nil {
-					return nil, fmt.Errorf("line %d: BYTE outside TEXT: %q", lineno, stmt)
+					return nil, fmt.Errorf("line %d: %s outside TEXT: %q", lineno, op, stmt)
 				}
 				args, err := parseOperandsCSV(rest)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
 				}
 				if len(args) != 1 || args[0].Kind != OpImm {
-					return nil, fmt.Errorf("line %d: BYTE expects single immediate operand: %q", lineno, stmt)
+					return nil, fmt.Errorf("line %d: %s expects single immediate operand: %q", lineno, op, stmt)
 				}
 				cur.Instrs = append(cur.Instrs, Instr{Op: op, Args: args, Raw: stmt})
 				continue

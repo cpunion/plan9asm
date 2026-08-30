@@ -58,13 +58,12 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", tr, v64, srcTy)
 			sv = "%" + tr
 		case OpMem:
-			addr, err := c.addrFromMem(src.Mem)
+			p, ptrType, err := c.ptrFromMem(src.Mem)
 			if err != nil {
 				return true, false, err
 			}
-			p := c.ptrFromAddrI64(addr)
 			ld := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", ld, srcTy, p)
+			fmt.Fprintf(c.b, "  %%%s = load %s, %s %s, align 1\n", ld, srcTy, ptrType, p)
 			sv = "%" + ld
 		case OpSym:
 			p, err := c.ptrFromSB(src.Sym)
@@ -146,13 +145,12 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", tr, v64, widthTy)
 			small = "%" + tr
 		case OpMem:
-			addr, err := c.addrFromMem(src.Mem)
+			p, ptrType, err := c.ptrFromMem(src.Mem)
 			if err != nil {
 				return true, false, err
 			}
-			p := c.ptrFromAddrI64(addr)
 			ld := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", ld, widthTy, p)
+			fmt.Fprintf(c.b, "  %%%s = load %s, %s %s, align 1\n", ld, widthTy, ptrType, p)
 			small = "%" + ld
 		case OpSym:
 			p, err := c.ptrFromSB(src.Sym)
@@ -176,12 +174,11 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 		case OpFP:
 			return true, false, c.storeFPResult(dst.FPOffset, widthTy, small)
 		case OpMem:
-			addr, err := c.addrFromMem(dst.Mem)
+			p, ptrType, err := c.ptrFromMem(dst.Mem)
 			if err != nil {
 				return true, false, err
 			}
-			p := c.ptrFromAddrI64(addr)
-			fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", widthTy, small, p)
+			fmt.Fprintf(c.b, "  store %s %s, %s %s, align 1\n", widthTy, small, ptrType, p)
 			return true, false, nil
 		case OpSym:
 			if !strings.HasSuffix(strings.TrimSpace(dst.Sym), "(SB)") {
@@ -277,47 +274,8 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 
 	case "MOVL":
 		// MOVL src, dst
-		switch dst.Kind {
-		case OpReg:
-			// Zero-extend to 64-bit.
-			var i32v string
-			switch src.Kind {
-			case OpImm:
-				i32v = fmt.Sprintf("%d", int32(src.Imm))
-			case OpReg, OpFP:
-				v64, err := c.evalI64(src)
-				if err != nil {
-					return true, false, err
-				}
-				tr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, v64)
-				i32v = "%" + tr
-			case OpMem:
-				addr, err := c.addrFromMem(src.Mem)
-				if err != nil {
-					return true, false, err
-				}
-				p := c.ptrFromAddrI64(addr)
-				ld := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", ld, p)
-				i32v = "%" + ld
-			case OpSym:
-				p, err := c.ptrFromSB(src.Sym)
-				if err != nil {
-					return true, false, err
-				}
-				ld := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", ld, p)
-				i32v = "%" + ld
-			default:
-				return true, false, fmt.Errorf("amd64 MOVL unsupported src: %q", ins.Raw)
-			}
-			z := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", z, i32v)
-			return true, false, c.storeReg(dst.Reg, "%"+z)
-
-		case OpFP:
-			// Store low 32 bits (common for ret slots).
+		if c.goarch != "386" && dst.Kind == OpFP {
+			// Preserve the established amd64 ABI result-slot lowering.
 			if src.Kind != OpReg {
 				return true, false, fmt.Errorf("amd64 MOVL expects reg, fp for stores: %q", ins.Raw)
 			}
@@ -326,37 +284,34 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 				return true, false, err
 			}
 			return true, false, c.storeFPResult(dst.FPOffset, I64, v64)
-		case OpMem:
-			var i32v string
-			switch src.Kind {
-			case OpImm:
-				i32v = fmt.Sprintf("%d", int32(src.Imm))
-			case OpReg, OpFP:
-				v64, err := c.evalI64(src)
-				if err != nil {
-					return true, false, err
-				}
-				tr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, v64)
-				i32v = "%" + tr
-			case OpMem:
-				addr, err := c.addrFromMem(src.Mem)
-				if err != nil {
-					return true, false, err
-				}
-				p := c.ptrFromAddrI64(addr)
-				ld := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", ld, p)
-				i32v = "%" + ld
-			default:
-				return true, false, fmt.Errorf("amd64 MOVL unsupported src: %q", ins.Raw)
+		}
+
+		i32v, err := c.evalIntSized(src, I32)
+		if err != nil {
+			// Preserve MOVL's existing treatment of unresolved constants from
+			// assembly include files. Explicit `$symbol(SB)` addresses are handled
+			// by evalIntSized above.
+			if src.Kind != OpSym || strings.Contains(src.Sym, "(SB)") {
+				return true, false, err
 			}
-			addr, err := c.addrFromMem(dst.Mem)
+			i32v = "0"
+		}
+		switch dst.Kind {
+		case OpReg:
+			// Zero-extend to 64-bit.
+			z := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", z, i32v)
+			return true, false, c.storeReg(dst.Reg, "%"+z)
+
+		case OpFP:
+			// Store low 32 bits (common for ret slots).
+			return true, false, c.storeFPResult(dst.FPOffset, I32, i32v)
+		case OpMem:
+			p, ptrType, err := c.ptrFromMem(dst.Mem)
 			if err != nil {
 				return true, false, err
 			}
-			p := c.ptrFromAddrI64(addr)
-			fmt.Fprintf(c.b, "  store i32 %s, ptr %s, align 1\n", i32v, p)
+			fmt.Fprintf(c.b, "  store i32 %s, %s %s, align 1\n", i32v, ptrType, p)
 			return true, false, nil
 		case OpImm:
 			// Some runtime stubs intentionally encode a crashing instruction as
@@ -366,30 +321,6 @@ func (c *amd64Ctx) lowerMov(op Op, ins Instr) (ok bool, terminated bool, err err
 			if !strings.HasSuffix(strings.TrimSpace(dst.Sym), "(SB)") {
 				// Crash marker form (e.g. MOVL $0xf1, 0xf1) in runtime stubs.
 				return true, false, nil
-			}
-			var i32v string
-			switch src.Kind {
-			case OpImm:
-				i32v = fmt.Sprintf("%d", int32(src.Imm))
-			case OpReg, OpFP, OpSym:
-				v64, err := c.evalI64(src)
-				if err != nil {
-					return true, false, err
-				}
-				tr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, v64)
-				i32v = "%" + tr
-			case OpMem:
-				addr, err := c.addrFromMem(src.Mem)
-				if err != nil {
-					return true, false, err
-				}
-				p := c.ptrFromAddrI64(addr)
-				ld := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", ld, p)
-				i32v = "%" + ld
-			default:
-				return true, false, fmt.Errorf("amd64 MOVL unsupported src: %q", ins.Raw)
 			}
 			p, err := c.ptrFromSB(dst.Sym)
 			if err != nil {

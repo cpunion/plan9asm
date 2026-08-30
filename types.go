@@ -125,10 +125,15 @@ func parseReg(s string) (Reg, bool) {
 		}
 	}
 	// SIMD/FP registers:
-	// - x86: X0..X31, Y0..Y31, Z0..Z31, K0..K7
+	// - x86: M0..M7, X0..X31, Y0..Y31, Z0..Z31, K0..K7
 	// - arm64: V0..V31, with optional lane suffix (e.g. V0.B16, V8.D[0])
 	// - arm64 FP: F0..F31
 	if strings.HasPrefix(ss, "K") && len(ss) >= 2 {
+		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
+			return Reg(ss), true
+		}
+	}
+	if strings.HasPrefix(ss, "M") && len(ss) >= 2 {
 		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
 			return Reg(ss), true
 		}
@@ -232,6 +237,7 @@ type Operand struct {
 
 type MemRef struct {
 	Base    Reg
+	Sym     string // optional symbol-based address, including the (SB) suffix
 	Off     int64
 	Index   Reg   // optional; empty if not present
 	Scale   int64 // optional; defaults to 1 when Index is present
@@ -270,6 +276,12 @@ func (o Operand) String() string {
 		segment := ""
 		if o.Mem.Segment != "" {
 			segment = fmt.Sprintf("(%s)", o.Mem.Segment)
+		}
+		if o.Mem.Sym != "" {
+			if o.Mem.Scale == 0 {
+				return fmt.Sprintf("%s(%s)%s", o.Mem.Sym, o.Mem.Index, segment)
+			}
+			return fmt.Sprintf("%s(%s*%d)%s", o.Mem.Sym, o.Mem.Index, o.Mem.Scale, segment)
 		}
 		if o.Mem.Index != "" {
 			if o.Mem.Scale == 0 {
@@ -762,6 +774,7 @@ const (
 	OpCPUID  Op = "CPUID"
 	OpXGETBV Op = "XGETBV"
 	OpBYTE   Op = "BYTE"
+	OpWORD   Op = "WORD"
 	OpRET    Op = "RET"
 	OpLABEL  Op = "LABEL"
 )
@@ -929,6 +942,20 @@ func parseMem(s string) (MemRef, bool) {
 	}
 	baseStr := strings.TrimSpace(rest[1:j])
 	rest = strings.TrimSpace(rest[j+1:])
+	// Go's x86 assembler permits a static-base symbol followed by an index,
+	// for example masks<>(SB)(BX*8). Keep the symbol as the address base and
+	// let the architecture lowering add the scaled register index.
+	if strings.EqualFold(baseStr, "SB") && offPart != "" && rest != "" {
+		if !strings.HasPrefix(rest, "(") || !strings.HasSuffix(rest, ")") {
+			return MemRef{}, false
+		}
+		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rest, "("), ")"))
+		idx, scale, ok := parseIndexScale(inner)
+		if !ok {
+			return MemRef{}, false
+		}
+		return MemRef{Sym: offPart + "(SB)", Index: idx, Scale: scale}, true
+	}
 
 	var off int64
 	if offPart != "" {
@@ -937,9 +964,10 @@ func parseMem(s string) (MemRef, bool) {
 		} else if u, ok := parseImmExpr(offPart); ok {
 			off = int64(u)
 		} else {
-			// Keep parsing permissive for macro-style symbolic offsets such as
-			// g_m(R14) when include-driven constants are not expanded.
-			off = 0
+			// Stack slots commonly use a descriptive name before their numeric
+			// displacement (for example control-4(SP)). Preserve the displacement;
+			// only an unresolved include-derived expression degrades to zero.
+			_, off = splitSymPlusOff(offPart)
 		}
 	}
 

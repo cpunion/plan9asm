@@ -56,6 +56,41 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, c.storeX(ins.Args[1].Reg, "%"+bc)
 		}
 	}
+	// MOVL Xn, dst stores the low 32 bits of the vector register.
+	if op == "MOVL" && len(ins.Args) == 2 && ins.Args[0].Kind == OpReg {
+		if _, ok := amd64ParseXReg(ins.Args[0].Reg); ok {
+			vec, err := c.loadX(ins.Args[0].Reg)
+			if err != nil {
+				return true, false, err
+			}
+			words := c.newTmp()
+			low := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", words, vec)
+			fmt.Fprintf(c.b, "  %%%s = extractelement <4 x i32> %%%s, i32 0\n", low, words)
+			switch ins.Args[1].Kind {
+			case OpReg:
+				return true, false, c.storeRegSized(ins.Args[1].Reg, I32, "%"+low)
+			case OpFP:
+				return true, false, c.storeFPResult(ins.Args[1].FPOffset, I32, "%"+low)
+			case OpMem:
+				p, ptrType, err := c.ptrFromMem(ins.Args[1].Mem)
+				if err != nil {
+					return true, false, err
+				}
+				fmt.Fprintf(c.b, "  store i32 %%%s, %s %s, align 1\n", low, ptrType, p)
+				return true, false, nil
+			case OpSym:
+				p, err := c.ptrFromSB(ins.Args[1].Sym)
+				if err != nil {
+					return true, false, err
+				}
+				fmt.Fprintf(c.b, "  store i32 %%%s, ptr %s, align 1\n", low, p)
+				return true, false, nil
+			default:
+				return true, false, fmt.Errorf("amd64 MOVL from X reg unsupported dst: %q", ins.Raw)
+			}
+		}
+	}
 
 	// MOVD reg, Xn (seed vector with low 32-bit value)
 	if op == "MOVD" && len(ins.Args) == 2 && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg {

@@ -529,6 +529,13 @@ func TestTranslateModuleDirectErrorCoverage(t *testing.T) {
 	}); err == nil {
 		t.Fatalf("translateModuleDirect(missing ret) unexpectedly succeeded")
 	}
+	if _, err := translateModuleDirect(baseFile, Options{
+		ResolveSym: resolve,
+		Goarch:     "386",
+		Sigs:       map[string]FuncSig{"example.f": {Name: "example.f", Ret: Void}},
+	}); err == nil || !strings.Contains(err.Error(), "x86 CFG lowering required") {
+		t.Fatalf("translateModuleDirect(386) error = %v", err)
+	}
 
 	for _, tc := range []struct {
 		name string

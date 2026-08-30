@@ -77,15 +77,15 @@ var (
 func main() {
 	var (
 		goos     = flag.String("goos", runtime.GOOS, "target GOOS")
-		goarch   = flag.String("goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm)")
+		goarch   = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm64/arm)")
 		out      = flag.String("out", "", "write report to file (default stdout)")
 		format   = flag.String("format", "md", "output format: md|json")
 		repoRoot = flag.String("repo-root", ".", "llgo repository root for extracting supported ops")
 	)
 	flag.Parse()
 
-	if *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" {
-		fatalf("unsupported -goarch %q (expect amd64/arm64/arm)", *goarch)
+	if *goarch != "386" && *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" {
+		fatalf("unsupported -goarch %q (expect 386/amd64/arm64/arm)", *goarch)
 	}
 	arch, err := toPlan9Arch(*goarch)
 	if err != nil {
@@ -134,7 +134,7 @@ func main() {
 
 func toPlan9Arch(goarch string) (plan9asm.Arch, error) {
 	switch goarch {
-	case "amd64":
+	case "amd64", "386":
 		return plan9asm.ArchAMD64, nil
 	case "arm":
 		return plan9asm.ArchARM, nil
@@ -314,8 +314,12 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 
 	seen := map[string]struct{}{}
 	var files []string
+	loweringArch := goarch
+	if loweringArch == "386" {
+		loweringArch = "amd64"
+	}
 	patterns := []string{
-		filepath.Join(repoRoot, goarch+"_*.go"),
+		filepath.Join(repoRoot, loweringArch+"_*.go"),
 		filepath.Join(repoRoot, "parser.go"),
 	}
 	for _, pattern := range patterns {
@@ -539,7 +543,7 @@ func clusterOf(goarch, op string) string {
 	}
 
 	switch goarch {
-	case "amd64":
+	case "386", "amd64":
 		switch {
 		case strings.HasPrefix(op, "J") || op == "RET" || op == "CALL" || op == "JMP" || strings.HasPrefix(op, "SET") || strings.HasPrefix(op, "CMOV"):
 			return "x86-control"
@@ -574,7 +578,7 @@ func clusterOf(goarch, op string) string {
 
 func familyOf(goarch, op string) string {
 	switch goarch {
-	case "amd64":
+	case "386", "amd64":
 		switch {
 		case strings.HasPrefix(op, "AES"):
 			return "aes"

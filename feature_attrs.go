@@ -41,6 +41,10 @@ func (r *featureAttrRegistry) emit(b *strings.Builder) {
 }
 
 func inferFuncTargetFeatures(arch Arch, fn Func) string {
+	return inferFuncTargetFeaturesForGOARCH(arch, "", fn)
+}
+
+func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string {
 	var featureSet []string
 	add := func(features ...string) {
 		for _, feature := range features {
@@ -65,6 +69,8 @@ func inferFuncTargetFeatures(arch Arch, fn Func) string {
 		switch arch {
 		case ArchAMD64:
 			switch {
+			case goarch == "386" && (op == "MOVOU" || op == "PCMPEQB" || op == "PCMPEQL" || op == "PMOVMSKB"):
+				add("+sse2")
 			case strings.HasPrefix(op, "CRC32"):
 				add("+crc32", "+sse4.2")
 			case op == "PCLMULQDQ":

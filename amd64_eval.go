@@ -14,13 +14,12 @@ func (c *amd64Ctx) evalI64(op Operand) (string, error) {
 	case OpFP:
 		return c.evalFPToI64(op.FPOffset)
 	case OpMem:
-		addr, err := c.addrFromMem(op.Mem)
+		p, ptrType, err := c.ptrFromMem(op.Mem)
 		if err != nil {
 			return "", err
 		}
-		p := c.ptrFromAddrI64(addr)
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", t, p)
+		fmt.Fprintf(c.b, "  %%%s = load i64, %s %s, align 1\n", t, ptrType, p)
 		return "%" + t, nil
 	case OpSym:
 		s := strings.TrimSpace(op.Sym)

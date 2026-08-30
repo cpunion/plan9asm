@@ -4,8 +4,14 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
-if ! command -v llc >/dev/null 2>&1; then
-  echo "llc not found in PATH" >&2
+if [[ -n "${LLVM_CONFIG:-}" ]]; then
+  llvm_bin_dir=$("$LLVM_CONFIG" --bindir)
+  llc_cmd="$llvm_bin_dir/llc"
+else
+  llc_cmd=$(command -v llc || command -v llc-23 || command -v llc-22 || command -v llc-21 || command -v llc-20 || command -v llc-19 || true)
+fi
+if [[ ! -x "$llc_cmd" ]]; then
+  echo "llc not found through LLVM_CONFIG or PATH" >&2
   exit 1
 fi
 if [[ "${RUNNER_OS:-}" == "Windows" ]] && command -v python >/dev/null 2>&1; then
@@ -23,6 +29,7 @@ tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
 targets=(
+  "linux 386 i386-unknown-linux-gnu"
   "linux amd64 x86_64-unknown-linux-gnu"
   "linux arm64 aarch64-unknown-linux-gnu"
   "darwin amd64 x86_64-apple-macosx"
@@ -34,6 +41,7 @@ targets=(
 # scan and compile both COFF corpora.
 if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
   targets+=(
+    "windows 386 i686-pc-windows-msvc"
     "windows amd64 x86_64-pc-windows-msvc"
     "windows arm64 aarch64-pc-windows-msvc"
   )
@@ -81,6 +89,6 @@ PY
 
   while IFS= read -r ll; do
     obj="${ll%.ll}.o"
-    llc -mtriple="$triple" -filetype=obj "$ll" -o "$obj"
+    "$llc_cmd" -mtriple="$triple" -filetype=obj "$ll" -o "$obj"
   done < <(find "$out_dir" -name '*.ll' | sort)
 done

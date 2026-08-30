@@ -494,13 +494,12 @@ func (c *amd64Ctx) evalF64(op Operand) (string, error) {
 	case OpFP:
 		return c.evalFPToF64(op.FPOffset)
 	case OpMem:
-		addr, err := c.addrFromMem(op.Mem)
+		p, ptrType, err := c.ptrFromMem(op.Mem)
 		if err != nil {
 			return "", err
 		}
-		p := c.ptrFromAddrI64(addr)
 		ld := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load double, ptr %s, align 1\n", ld, p)
+		fmt.Fprintf(c.b, "  %%%s = load double, %s %s, align 1\n", ld, ptrType, p)
 		return "%" + ld, nil
 	case OpSym:
 		p, err := c.ptrFromSB(op.Sym)
@@ -526,7 +525,11 @@ func (c *amd64Ctx) evalFPToF64(off int64) (string, error) {
 	}
 	arg := fmt.Sprintf("%%arg%d", idx)
 	ty := slot.Type
-	if slot.Field >= 0 {
+	if c.classicFrame != "" {
+		loaded := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", loaded, ty, c.classicFramePtr(off))
+		arg = "%" + loaded
+	} else if slot.Field >= 0 {
 		aggTy := c.sig.Args[idx]
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", t, aggTy, arg, slot.Field)

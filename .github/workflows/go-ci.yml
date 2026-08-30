@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: Go fmt check
@@ -50,7 +50,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: Go build
@@ -80,6 +80,7 @@ jobs:
           - '1.24.x'
           - '1.25.x'
           - '1.26.x'
+          - '1.27.x'
 
     steps:
       - name: Checkout
@@ -141,6 +142,7 @@ jobs:
           - '1.24.x'
           - '1.25.x'
           - '1.26.x'
+          - '1.27.x'
 
     steps:
       - name: Checkout
@@ -194,7 +196,7 @@ jobs:
         working-directory: cmd/plan9asmll
 
       - name: Go test with coverage (Windows)
-        if: runner.os == 'Windows' && matrix.go-version == '1.26.x'
+        if: runner.os == 'Windows' && matrix.go-version == '1.27.x'
         shell: bash
         run: |
           set -euo pipefail
@@ -203,7 +205,7 @@ jobs:
           (cd cmd/plan9asmll && go test ./... -coverprofile=../../coverage-windows-plan9asmll.out)
 
       - name: Go test (Windows)
-        if: runner.os == 'Windows' && matrix.go-version != '1.26.x'
+        if: runner.os == 'Windows' && matrix.go-version != '1.27.x'
         shell: bash
         run: |
           set -euo pipefail
@@ -212,14 +214,14 @@ jobs:
           (cd cmd/plan9asmll && go test ./...)
 
       - name: Upload Windows coverage to Codecov
-        if: runner.os == 'Windows' && matrix.go-version == '1.26.x'
+        if: runner.os == 'Windows' && matrix.go-version == '1.27.x'
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true
           files: ./coverage-windows-root.out,./coverage-windows-plan9asm.out,./coverage-windows-plan9asmll.out
           disable_search: true
           flags: windows
-          name: windows-go1.26
+          name: windows-go1.27
           fail_ci_if_error: true
           verbose: true
 
@@ -256,7 +258,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: ARM scan gate
@@ -293,7 +295,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: Install LLVM 19
@@ -320,7 +322,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.x'
+          go-version: '1.27.x'
           cache: true
 
       - name: Install LLVM 19
@@ -355,6 +357,6 @@ jobs:
           files: ./coverage-root.out
           disable_search: true
           flags: unittests
-          name: ubuntu-go1.26
+          name: ubuntu-go1.27
           fail_ci_if_error: false
           verbose: true

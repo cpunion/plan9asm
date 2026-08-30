@@ -116,6 +116,35 @@ func Call()
 	}
 }
 
+func TestTranslateGoModule_X87Mode(t *testing.T) {
+	pkg := mustGoPackage(t, "test/pkg", `package testpkg
+func Round(x float64) int64
+`)
+	asm := []byte(`TEXT ·Round(SB),NOSPLIT,$0-16
+	FMOVD x+0(FP), F0
+	FRNDINT
+	FMOVVP F0, ret+8(FP)
+	RET
+`)
+
+	tr, err := TranslateGoModule(pkg, asm, GoModuleOptions{
+		FileName:     "round_386.s",
+		GOARCH:       "386",
+		TargetTriple: "i386-unknown-linux-gnu",
+		X87Mode:      X87Software,
+		ResolveSym:   testResolveSym("test/pkg"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+
+	ir := tr.Module.String()
+	if !strings.Contains(ir, "@llvm.floor.f64") || strings.Contains(ir, "frndint") {
+		t.Fatalf("software x87 mode was not propagated:\n%s", ir)
+	}
+}
+
 func mustGoPackage(t *testing.T, pkgPath, src string) GoPackage {
 	t.Helper()
 	fset := token.NewFileSet()

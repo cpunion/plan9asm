@@ -128,7 +128,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			return true, fmt.Errorf("arm64 RET expects at most 1 operand: %q", ins.Raw)
 		}
 		return true, c.lowerRET()
-	case "WORD":
+	case OpWORD:
 		return false, c.lowerRawWord(ins)
 	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "DMB", "DSB", "ISB", "DC", "PRFM",
 		"BREAK", "BRK", "UNDEF", "#UNDEF", "YIELD", "NOP",
