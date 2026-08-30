@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// amd64Ctx is the shared x86 lowering context for GOARCH=amd64 and GOARCH=386.
 type amd64Ctx struct {
 	b   *strings.Builder
 	sig FuncSig
@@ -259,8 +260,8 @@ func (c *amd64Ctx) scanUsedRegs() {
 					markReg(SP)
 				}
 			}
-			for _, op := range ins.Args {
-				markOp(op)
+			for _, arg := range ins.Args {
+				markOp(arg)
 			}
 		}
 	}

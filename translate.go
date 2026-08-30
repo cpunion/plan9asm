@@ -61,10 +61,10 @@ type FrameSlot struct {
 }
 
 // X87Mode selects how explicit x87 instructions in 386 Plan 9 assembly are
-// lowered. The Go 386 baseline is Pentium MMX or newer and therefore includes
-// x87 even when GO386=softfloat, so the default follows the source assembly and
-// emits hardware instructions. Software mode is reserved for custom targets
-// that explicitly cannot execute x87 instructions.
+// lowered. Hand-written assembly may use x87 mnemonics regardless of GO386;
+// the Go-supported Pentium MMX-or-newer baseline has an x87 unit, so the
+// default emits hardware instructions. Software mode is reserved for custom
+// targets that explicitly cannot execute x87 instructions.
 type X87Mode uint8
 
 const (
@@ -187,7 +187,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 			b.WriteString("\n")
 			continue
 		}
-		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn)) {
+		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn))) {
 			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %v", name, err)
 			}
