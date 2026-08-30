@@ -983,7 +983,7 @@ func TestTranslate386X87Modes(t *testing.T) {
 	}
 }
 
-func TestTranslate386HardwareX87Codegen(t *testing.T) {
+func TestTranslate386X87Codegen(t *testing.T) {
 	llc := find386Tool("llc-19", "llc")
 	if llc == "" {
 		t.Skip("llc not found")
@@ -1043,6 +1043,38 @@ func TestTranslate386HardwareX87Codegen(t *testing.T) {
 				t.Fatalf("llc object emission failed: %v\n%s", err, output)
 			}
 		})
+	}
+
+	softwarePath := filepath.Join(dir, "software.ll")
+	if err := os.WriteFile(softwarePath, []byte(translate386RoundingIR(t, X87Software)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	softwareAsmPath := filepath.Join(dir, "software.s")
+	softwareArgs := []string{
+		"-O2",
+		"-mtriple=i386-unknown-linux-gnu",
+		"-mattr=+soft-float,-x87,-sse,-sse2",
+		"-filetype=asm",
+		softwarePath,
+		"-o", softwareAsmPath,
+	}
+	if output, err := exec.Command(llc, softwareArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("llc software x87 emission failed: %v\n%s", err, output)
+	}
+	output, err := os.ReadFile(softwareAsmPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	softwareAsm := strings.ToLower(string(output))
+	for _, unwanted := range []string{"fnstcw", "fldcw", "frndint", "fistp"} {
+		if strings.Contains(softwareAsm, unwanted) {
+			t.Fatalf("software x87 assembly unexpectedly contains %q:\n%s", unwanted, softwareAsm)
+		}
+	}
+	softwareObjArgs := append([]string(nil), softwareArgs[:3]...)
+	softwareObjArgs = append(softwareObjArgs, "-filetype=obj", softwarePath, "-o", filepath.Join(dir, "software.o"))
+	if output, err := exec.Command(llc, softwareObjArgs...).CombinedOutput(); err != nil {
+		t.Fatalf("llc software x87 object emission failed: %v\n%s", err, output)
 	}
 }
 
