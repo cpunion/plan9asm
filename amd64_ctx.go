@@ -42,9 +42,12 @@ type amd64Ctx struct {
 	usedKRegs      map[int]bool
 	kRegSlot       map[int]string // avx512 mask reg index -> alloca name (i64)
 	usedX87        bool
+	usesX87Convert bool
 	x87Slot        [8]string // x87 stack registers, represented as f64 values
 	x87ControlSlot string
 	x87StatusSlot  string // condition-code status populated by FTST for FSTSW
+	x87IntegerSlot string // hardware FISTP result for explicit 386 x87 lowering
+	x87Mode        X87Mode
 
 	flagsZSlot     string
 	flagsSltSlot   string // signed negative-style bit for J{L,LE,G,GE}-like checks
@@ -112,6 +115,10 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		base += len(blk.instrs)
 	}
 	return c
+}
+
+func (c *amd64Ctx) useHardwareX87() bool {
+	return c.goarch == "386" && c.x87Mode != X87Software
 }
 
 func (c *amd64Ctx) emitSourceComment(ins Instr) {
@@ -242,6 +249,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 			op := strings.ToUpper(string(ins.Op))
 			if c.goarch == "386" && isX87Op(Op(op)) {
 				c.usedX87 = true
+				if op == "FMOVVP" {
+					c.usesX87Convert = true
+				}
 			}
 			if c.goarch == "386" {
 				switch op {
@@ -383,6 +393,10 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		fmt.Fprintf(c.b, "  store i16 895, ptr %s\n", c.x87ControlSlot) // 0x037f
 		fmt.Fprintf(c.b, "  %s = alloca i16\n", c.x87StatusSlot)
 		fmt.Fprintf(c.b, "  store i16 0, ptr %s\n", c.x87StatusSlot)
+		if c.useHardwareX87() && c.usesX87Convert {
+			c.x87IntegerSlot = "%x87_hw_integer"
+			fmt.Fprintf(c.b, "  %s = alloca i64\n", c.x87IntegerSlot)
+		}
 	}
 
 	c.flagsZSlot = "%flags_z"

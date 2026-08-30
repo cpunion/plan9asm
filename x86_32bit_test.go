@@ -179,6 +179,7 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 		{name: "fmovv count", instruction: "FMOVV AX", want: "FMOVV expects src, dst"},
 		{name: "fmovv destination", instruction: "FMOVV AX, F1", want: "FMOVV expects F0 destination"},
 		{name: "fmovvp count", instruction: "FMOVVP F0", want: "FMOVVP expects src, dst"},
+		{name: "fmovvp source", instruction: "FMOVVP F1, 0(SP)", want: "FMOVVP expects F0 source"},
 		{name: "fmovvp destination", instruction: "FMOVVP F0, AX", want: "unsupported x87 integer destination"},
 		{name: "fxchd count", instruction: "FXCHD F0", want: "FXCHD expects Fsrc, Fdst"},
 		{name: "fxchd registers", instruction: "FXCHD AX, BX", want: "FXCHD expects x87 registers"},
@@ -902,7 +903,10 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		"@__plan9asm_repne_scasb",
 		"@__plan9asm_movsb",
 		"@__plan9asm_movsl",
-		"fcmp uge double",
+		`asm sideeffect "fnstcw $0"`,
+		`asm sideeffect "fldcw $0"`,
+		`asm sideeffect "fldl $1; frndint; fstpl $0"`,
+		`asm sideeffect "fldl $1; fistpll $0"`,
 		"@llvm.sqrt.f64",
 		"%x87_control = alloca i16",
 		"%local_stack = alloca",
@@ -925,6 +929,156 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		t.Fatalf("386 x87 lowering unexpectedly depends on external roundeven:\n%s", ir)
 	}
 	compile386IR(t, ir, "instruction_families")
+}
+
+func TestTranslate386X87Modes(t *testing.T) {
+	hardware := translate386RoundingIR(t, X87Auto)
+	for _, want := range []string{
+		`asm sideeffect "fnstcw $0"`,
+		`asm sideeffect "fldcw $0"`,
+		`asm sideeffect "fldl $1; frndint; fstpl $0"`,
+		`asm sideeffect "fldl $1; fistpll $0"`,
+	} {
+		if !strings.Contains(hardware, want) {
+			t.Fatalf("hardware x87 IR missing %q:\n%s", want, hardware)
+		}
+	}
+	for _, unwanted := range []string{
+		"call double @llvm.floor.f64",
+		"call double @llvm.ceil.f64",
+		"call double @llvm.trunc.f64",
+		"fcmp uge double",
+	} {
+		if strings.Contains(hardware, unwanted) {
+			t.Fatalf("hardware x87 IR unexpectedly contains %q:\n%s", unwanted, hardware)
+		}
+	}
+
+	software := translate386RoundingIR(t, X87Software)
+	for _, want := range []string{
+		"call double @llvm.floor.f64",
+		"call double @llvm.ceil.f64",
+		"call double @llvm.trunc.f64",
+		"fcmp uge double",
+	} {
+		if !strings.Contains(software, want) {
+			t.Fatalf("software x87 IR missing %q:\n%s", want, software)
+		}
+	}
+	if strings.Contains(software, "frndint") || strings.Contains(software, "fistpll") {
+		t.Fatalf("software x87 IR unexpectedly contains hardware rounding:\n%s", software)
+	}
+	compile386IR(t, software, "software_x87")
+
+	file, err := Parse(ArchAMD64, "TEXT invalid(SB),NOSPLIT,$0-0\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Translate(file, Options{
+		Goarch:  "386",
+		Sigs:    map[string]FuncSig{"invalid": {Name: "invalid", Ret: Void}},
+		X87Mode: X87Mode(255),
+	}); err == nil || !strings.Contains(err.Error(), "invalid x87 mode") {
+		t.Fatalf("invalid x87 mode error = %v", err)
+	}
+}
+
+func TestTranslate386HardwareX87Codegen(t *testing.T) {
+	llc := find386Tool("llc-19", "llc")
+	if llc == "" {
+		t.Skip("llc not found")
+	}
+	ir := translate386RoundingIR(t, X87Hardware)
+	dir := t.TempDir()
+	llPath := filepath.Join(dir, "round.ll")
+	if err := os.WriteFile(llPath, []byte(ir), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		triple string
+		mattr  string
+	}{
+		{name: "default", triple: "i386-unknown-linux-gnu"},
+		{name: "go386-softfloat", triple: "i386-unknown-linux-gnu", mattr: "+soft-float,-x87,-sse,-sse2"},
+		{name: "windows-msvc", triple: "i686-pc-windows-msvc"},
+		{name: "windows-mingw", triple: "i686-w64-windows-gnu"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			asmPath := filepath.Join(dir, test.name+".s")
+			args := []string{"-O2", "-mtriple=" + test.triple}
+			if test.mattr != "" {
+				args = append(args, "-mattr="+test.mattr)
+			}
+			args = append(args, "-filetype=asm", llPath, "-o", asmPath)
+			if output, err := exec.Command(llc, args...).CombinedOutput(); err != nil {
+				if unsupported386Target(string(output)) {
+					t.Skipf("llc lacks 386 target: %s", output)
+				}
+				t.Fatalf("llc failed: %v\n%s", err, output)
+			}
+			output, err := os.ReadFile(asmPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			asm := strings.ToLower(string(output))
+			for _, want := range []string{"fnstcw", "fldcw", "frndint", "fistpll"} {
+				if !strings.Contains(asm, want) {
+					t.Fatalf("hardware x87 assembly missing %q:\n%s", want, asm)
+				}
+			}
+			for _, unwanted := range []string{"calll\tfloor", "calll\tceil", "calll\ttrunc", "calll\troundeven"} {
+				if strings.Contains(asm, unwanted) {
+					t.Fatalf("hardware x87 assembly unexpectedly contains %q:\n%s", unwanted, asm)
+				}
+			}
+
+			objPath := filepath.Join(dir, test.name+".o")
+			objArgs := []string{"-O2", "-mtriple=" + test.triple}
+			if test.mattr != "" {
+				objArgs = append(objArgs, "-mattr="+test.mattr)
+			}
+			objArgs = append(objArgs, "-filetype=obj", llPath, "-o", objPath)
+			if output, err := exec.Command(llc, objArgs...).CombinedOutput(); err != nil {
+				t.Fatalf("llc object emission failed: %v\n%s", err, output)
+			}
+		})
+	}
+}
+
+func translate386RoundingIR(t *testing.T, mode X87Mode) string {
+	t.Helper()
+	file, err := Parse(ArchAMD64, `TEXT round(SB),NOSPLIT,$0-16
+	FMOVD value+0(FP), F0
+	FSTCW -2(SP)
+	FLDCW -2(SP)
+	FRNDINT
+	FMOVVP F0, ret+8(FP)
+	RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{
+		TargetTriple: "i386-unknown-linux-gnu",
+		Goarch:       "386",
+		X87Mode:      mode,
+		Sigs: map[string]FuncSig{
+			"round": {
+				Name: "round",
+				Args: []LLVMType{LLVMType("double")},
+				Ret:  I64,
+				Frame: FrameLayout{
+					Params:  []FrameSlot{{Offset: 0, Type: LLVMType("double"), Index: 0, Field: -1}},
+					Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ir
 }
 
 func TestTranslate386LocalHelperRegisterABI(t *testing.T) {
@@ -1276,17 +1430,6 @@ TEXT roundNearest(SB),NOSPLIT,$0-16
 	}
 	const cSource = `
 int _fltused;
-__declspec(noinline) double trunc(double x) {
-    return (double)(int)x;
-}
-__declspec(noinline) double floor(double x) {
-    double y = trunc(x);
-    return y > x ? y - 1.0 : y;
-}
-__declspec(noinline) double ceil(double x) {
-    double y = trunc(x);
-    return y < x ? y + 1.0 : y;
-}
 extern int addCarry(int, int);
 extern int cpuidProbe(void);
 extern int frameAddress(int, int);

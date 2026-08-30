@@ -32,6 +32,7 @@ type GoModuleOptions struct {
 	GOOS           string
 	GOARCH         string
 	TargetTriple   string
+	X87Mode        X87Mode
 	AnnotateSource bool
 
 	ResolveSym func(sym string) string
@@ -120,6 +121,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		ResolveSym:     resolve,
 		Sigs:           sigs,
 		Goarch:         opt.GOARCH,
+		X87Mode:        opt.X87Mode,
 		AnnotateSource: opt.AnnotateSource,
 	})
 	if err != nil {

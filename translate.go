@@ -60,6 +60,23 @@ type FrameSlot struct {
 	Field int
 }
 
+// X87Mode selects how explicit x87 instructions in 386 Plan 9 assembly are
+// lowered. The Go 386 baseline is Pentium MMX or newer and therefore includes
+// x87 even when GO386=softfloat, so the default follows the source assembly and
+// emits hardware instructions. Software mode is reserved for custom targets
+// that explicitly cannot execute x87 instructions.
+type X87Mode uint8
+
+const (
+	X87Auto X87Mode = iota
+	X87Hardware
+	X87Software
+)
+
+func (m X87Mode) valid() bool {
+	return m >= X87Auto && m <= X87Software
+}
+
 type Options struct {
 	TargetTriple string
 
@@ -72,6 +89,11 @@ type Options struct {
 
 	// Goarch is used for a few arch-specific translations (e.g. x86 CPUID).
 	Goarch string
+
+	// X87Mode controls explicit x87 instruction lowering for GOARCH=386. Auto
+	// uses hardware, matching the Go 386 target contract. Software retains the
+	// portable LLVM fallback for custom targets without x87 hardware.
+	X87Mode X87Mode
 
 	// AnnotateSource emits source asm lines as IR comments before lowering each
 	// instruction, for translation debugging.
@@ -95,6 +117,9 @@ func Translate(file *File, opt Options) (string, error) {
 func translateIRText(file *File, opt Options) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
+	}
+	if !opt.X87Mode.valid() {
+		return "", fmt.Errorf("invalid x87 mode %d", opt.X87Mode)
 	}
 	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return "", fmt.Errorf("empty file")
@@ -163,7 +188,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 			continue
 		}
 		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn)) {
-			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.AnnotateSource); err != nil {
+			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %v", name, err)
 			}
 			b.WriteString("\n")
