@@ -4,6 +4,7 @@
 [![GitHub release](https://img.shields.io/github/v/tag/xgo-dev/plan9asm.svg?label=release)](https://github.com/xgo-dev/plan9asm/releases)
 [![Coverage Status](https://codecov.io/gh/xgo-dev/plan9asm/branch/main/graph/badge.svg)](https://codecov.io/gh/xgo-dev/plan9asm)
 [![GoDoc](https://pkg.go.dev/badge/github.com/xgo-dev/plan9asm.svg)](https://pkg.go.dev/github.com/xgo-dev/plan9asm)
+[![XGo](https://img.shields.io/badge/project-XGo-blue.svg)](https://github.com/goplus/xgo)
 
 `github.com/xgo-dev/plan9asm`
 
