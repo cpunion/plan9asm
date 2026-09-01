@@ -35,7 +35,12 @@ type GoModuleOptions struct {
 	// TranslateGoModule uses the standard gc layout for GOARCH. Callers with a
 	// custom data model, such as Emscripten wasm32 versus Memory64, must pass
 	// the same Sizes instance used by go/types.
-	Sizes          types.Sizes
+	Sizes types.Sizes
+	// FrameSizes describes the stack-frame layout encoded in FP offsets. It
+	// defaults to Sizes. This is separate because LLGo's C-compatible wasm32
+	// mode uses 32-bit values while translating assembly emitted for Go's
+	// 64-bit GOARCH=wasm frame layout.
+	FrameSizes     types.Sizes
 	TargetTriple   string
 	WASMABI        WASMABI
 	X87Mode        X87Mode
@@ -118,7 +123,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		file.Funcs = keep
 	}
 
-	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.ManualSig)
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
@@ -172,18 +177,22 @@ func goArchFor(goarch string) (Arch, error) {
 	}
 }
 
-func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, sz types.Sizes, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
+func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, sz, frameSz types.Sizes, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
 	if sz == nil {
 		sz = types.SizesFor("gc", goarch)
 	}
 	if sz == nil {
 		return nil, fmt.Errorf("missing sizes for goarch %q", goarch)
 	}
+	if frameSz == nil {
+		frameSz = sz
+	}
 	b := goSigBuilder{
 		sigs:      make(map[string]FuncSig, len(file.Funcs)),
 		localSigs: make(map[string]bool),
 		scope:     pkg.Types.Scope(),
 		sz:        sz,
+		frameSz:   frameSz,
 		linknames: goLinknameRemoteToLocal(pkg.Syntax),
 		pkgPath:   pkg.Path,
 		resolve:   resolve,
@@ -255,6 +264,7 @@ type goSigBuilder struct {
 	localSigs map[string]bool
 	scope     *types.Scope
 	sz        types.Sizes
+	frameSz   types.Sizes
 	linknames map[string]string
 	pkgPath   string
 	resolve   func(sym string) string
@@ -297,7 +307,7 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		if !ok {
 			return fmt.Errorf("asm symbol %q maps to non-func %T", sym, obj)
 		}
-		fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, true)
+		fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, true)
 		if err != nil {
 			return err
 		}
@@ -436,7 +446,7 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	if !ok {
 		return nil
 	}
-	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, false)
+	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, false)
 	if err != nil {
 		return err
 	}
@@ -510,7 +520,7 @@ func goDeclNameForSymbol(sym string, linknames map[string]string) (string, error
 	return declName, nil
 }
 
-func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz types.Sizes, withFrame bool) (FuncSig, error) {
+func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, frameSz types.Sizes, withFrame bool) (FuncSig, error) {
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil {
 		return FuncSig{}, fmt.Errorf("methods in asm not supported: %s", fn.FullName())
@@ -519,22 +529,22 @@ func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz typ
 		return FuncSig{}, fmt.Errorf("variadic asm not supported: %s", fn.FullName())
 	}
 	if withFrame {
-		args, frameParams, nextOff, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)
+		args, frameParams, nextOff, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, frameSz, 0, false)
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
-		nextOff = goAlignOff(nextOff, int64(goWordSizeForSizes(goarch, sz)))
-		retTys, frameResults, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, nextOff, true)
+		nextOff = goAlignOff(nextOff, int64(goWordSizeForSizes(goarch, frameSz)))
+		retTys, frameResults, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, frameSz, nextOff, true)
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
 		return FuncSig{Name: name, Args: args, Ret: goTupleRetType(retTys), Frame: FrameLayout{Params: frameParams, Results: frameResults}}, nil
 	}
-	args, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)
+	args, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, frameSz, 0, false)
 	if err != nil {
 		return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
-	retTys, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, 0, false)
+	retTys, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, frameSz, 0, false)
 	if err != nil {
 		return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
@@ -784,7 +794,7 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 	}
 }
 
-func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Sizes, startOff int64, flattenAgg bool) (args []LLVMType, slots []FrameSlot, nextOff int64, err error) {
+func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameSz types.Sizes, startOff int64, flattenAgg bool) (args []LLVMType, slots []FrameSlot, nextOff int64, err error) {
 	if tup == nil || tup.Len() == 0 {
 		return nil, nil, startOff, nil
 	}
@@ -793,10 +803,10 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 	argIdx := 0
 	for i := 0; i < tup.Len(); i++ {
 		t := tup.At(i).Type()
-		a := int64(sz.Alignof(t))
+		a := int64(frameSz.Alignof(t))
 		off = goAlignOff(off, a)
 
-		parts, ok := goFramePartsForTypeWithSizes(t, goarch, sz)
+		parts, ok := goFramePartsForTypeWithSizes(t, goarch, sz, frameSz)
 		if ok {
 			if flattenAgg {
 				for _, part := range parts {
@@ -815,7 +825,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 				}
 				argIdx++
 			}
-			off += int64(sz.Sizeof(t))
+			off += int64(frameSz.Sizeof(t))
 			continue
 		}
 
@@ -826,7 +836,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 		args = append(args, ty)
 		slots = append(slots, FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1})
 		argIdx++
-		off += int64(sz.Sizeof(t))
+		off += int64(frameSz.Sizeof(t))
 	}
 	return args, slots, off, nil
 }
@@ -838,13 +848,14 @@ type goFramePart struct {
 }
 
 func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
-	return goFramePartsForTypeWithSizes(t, goarch, types.SizesFor("gc", goarch))
+	sz := types.SizesFor("gc", goarch)
+	return goFramePartsForTypeWithSizes(t, goarch, sz, sz)
 }
 
-func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) ([]goFramePart, bool) {
-	word := int64(goWordSizeForSizes(goarch, sz))
+func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types.Sizes) ([]goFramePart, bool) {
+	word := int64(goWordSizeForSizes(goarch, frameSz))
 	wordTy := I64
-	if word == 4 {
+	if goWordSizeForSizes(goarch, sz) == 4 {
 		wordTy = I32
 	}
 	switch u := t.Underlying().(type) {

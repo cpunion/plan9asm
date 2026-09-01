@@ -78,14 +78,17 @@ TEXT ·gogo(SB),NOSPLIT,$0-8
 
 func TestTranslateGoModule_UsesCallerWasmTypeSizes(t *testing.T) {
 	pkg := mustGoPackage(t, "example.com/wasm32", `package wasm32
-func Consume(value int, data []byte)
+func Consume(value int, data []byte) int
 `)
 	tr, err := TranslateGoModule(pkg, []byte(`TEXT ·Consume(SB),NOSPLIT,$0-16
+	I64Const $0
+	I64Store ret+32(FP)
 	RET
 `), GoModuleOptions{
 		FileName:     "consume_wasm.s",
 		GOARCH:       "wasm",
 		Sizes:        &types.StdSizes{WordSize: 4, MaxAlign: 4},
+		FrameSizes:   &types.StdSizes{WordSize: 8, MaxAlign: 8},
 		TargetTriple: "wasm32-unknown-unknown",
 		ResolveSym:   testResolveSym("example.com/wasm32"),
 	})
@@ -102,6 +105,12 @@ func Consume(value int, data []byte)
 		if sig.Args[i] != want[i] {
 			t.Fatalf("Consume arg %d = %s, want %s", i, sig.Args[i], want[i])
 		}
+	}
+	if got := sig.Frame.Params[3].Offset; got != 24 {
+		t.Fatalf("slice capacity FP offset = %d, want official Go wasm offset 24", got)
+	}
+	if got := sig.Frame.Results[0].Offset; got != 32 {
+		t.Fatalf("result FP offset = %d, want official Go wasm offset 32", got)
 	}
 }
 

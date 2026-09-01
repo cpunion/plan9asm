@@ -277,7 +277,7 @@ func TestGoLLVMHelpers(t *testing.T) {
 		types.NewVar(token.NoPos, nil, "v", iface),
 	)
 
-	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 0, false)
+	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 0, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestGoLLVMHelpers(t *testing.T) {
 		t.Fatalf("unexpected slot field mapping: %#v", slots[:3])
 	}
 
-	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 0, true)
+	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 0, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestGoFuncSigForDeclaredFuncRejectsUnsupportedForms(t *testing.T) {
 
 	methodSig := types.NewSignature(recv, types.NewTuple(), types.NewTuple(), false)
 	method := types.NewFunc(token.NoPos, nil, "Method", methodSig)
-	if _, err := goFuncSigForDeclaredFunc("pkg.Method", method, "arm64", sz, true); err == nil || !strings.Contains(err.Error(), "methods in asm not supported") {
+	if _, err := goFuncSigForDeclaredFunc("pkg.Method", method, "arm64", sz, sz, true); err == nil || !strings.Contains(err.Error(), "methods in asm not supported") {
 		t.Fatalf("expected method rejection, got %v", err)
 	}
 
@@ -327,7 +327,7 @@ func TestGoFuncSigForDeclaredFuncRejectsUnsupportedForms(t *testing.T) {
 		true,
 	)
 	variadic := types.NewFunc(token.NoPos, nil, "Variadic", variadicSig)
-	if _, err := goFuncSigForDeclaredFunc("pkg.Variadic", variadic, "arm64", sz, true); err == nil || !strings.Contains(err.Error(), "variadic asm not supported") {
+	if _, err := goFuncSigForDeclaredFunc("pkg.Variadic", variadic, "arm64", sz, sz, true); err == nil || !strings.Contains(err.Error(), "variadic asm not supported") {
 		t.Fatalf("expected variadic rejection, got %v", err)
 	}
 }
