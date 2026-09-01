@@ -28,9 +28,14 @@ type GoPackage struct {
 // GOARCH is required and currently accepts only "amd64", "386", and "arm64".
 // If ResolveSym is nil, the default resolver only strips ABI suffixes.
 type GoModuleOptions struct {
-	FileName       string
-	GOOS           string
-	GOARCH         string
+	FileName string
+	GOOS     string
+	GOARCH   string
+	// Sizes is the type layout used to type-check the package. When nil,
+	// TranslateGoModule uses the standard gc layout for GOARCH. Callers with a
+	// custom data model, such as Emscripten wasm32 versus Memory64, must pass
+	// the same Sizes instance used by go/types.
+	Sizes          types.Sizes
 	TargetTriple   string
 	WASMABI        WASMABI
 	X87Mode        X87Mode
@@ -113,7 +118,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		file.Funcs = keep
 	}
 
-	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.ManualSig)
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
@@ -167,8 +172,10 @@ func goArchFor(goarch string) (Arch, error) {
 	}
 }
 
-func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
-	sz := types.SizesFor("gc", goarch)
+func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, sz types.Sizes, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
+	if sz == nil {
+		sz = types.SizesFor("gc", goarch)
+	}
 	if sz == nil {
 		return nil, fmt.Errorf("missing sizes for goarch %q", goarch)
 	}
@@ -516,7 +523,7 @@ func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz typ
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
-		nextOff = goAlignOff(nextOff, int64(goWordSize(goarch)))
+		nextOff = goAlignOff(nextOff, int64(goWordSizeForSizes(goarch, sz)))
 		retTys, frameResults, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, nextOff, true)
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
@@ -706,6 +713,11 @@ func goExpandAsmHeaderTypes(src []byte, pkgTypes *types.Package, goarch string) 
 }
 
 func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
+	return goLLVMTypeForTypeWithSizes(t, goarch, types.SizesFor("gc", goarch))
+}
+
+func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LLVMType, error) {
+	wordSize := goWordSizeForSizes(goarch, sz)
 	switch tt := t.(type) {
 	case *types.Basic:
 		switch tt.Kind() {
@@ -722,7 +734,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		case types.Int64, types.Uint64:
 			return I64, nil
 		case types.Int, types.Uint, types.Uintptr:
-			if goWordSize(goarch) == 8 {
+			if wordSize == 8 {
 				return I64, nil
 			}
 			return I32, nil
@@ -731,7 +743,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		case types.Float64:
 			return LLVMType("double"), nil
 		case types.String:
-			if goWordSize(goarch) == 8 {
+			if wordSize == 8 {
 				return LLVMType("{ ptr, i64 }"), nil
 			}
 			return LLVMType("{ ptr, i32 }"), nil
@@ -746,7 +758,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		// by the compiler/runtime; Plan 9 assembly only transports the handle.
 		return Ptr, nil
 	case *types.Slice:
-		if goWordSize(goarch) == 8 {
+		if wordSize == 8 {
 			return LLVMType("{ ptr, i64, i64 }"), nil
 		}
 		return LLVMType("{ ptr, i32, i32 }"), nil
@@ -758,7 +770,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		}
 		return "", fmt.Errorf("unsupported struct type %s", tt.String())
 	case *types.Named:
-		return goLLVMTypeForType(tt.Underlying(), goarch)
+		return goLLVMTypeForTypeWithSizes(tt.Underlying(), goarch, sz)
 	default:
 		// *types.Alias was added after the oldest Go version supported by this
 		// module. Detect it by its stable reflect identity so the package still
@@ -766,7 +778,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		// an alias through its RHS just like a named type. Keep this probe in the
 		// fallback path so common concrete types avoid reflection overhead.
 		if reflect.TypeOf(t).String() == "*types.Alias" {
-			return goLLVMTypeForType(t.Underlying(), goarch)
+			return goLLVMTypeForTypeWithSizes(t.Underlying(), goarch, sz)
 		}
 		return "", fmt.Errorf("unsupported type %s", t.String())
 	}
@@ -784,7 +796,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 		a := int64(sz.Alignof(t))
 		off = goAlignOff(off, a)
 
-		parts, ok := goFramePartsForType(t, goarch)
+		parts, ok := goFramePartsForTypeWithSizes(t, goarch, sz)
 		if ok {
 			if flattenAgg {
 				for _, part := range parts {
@@ -793,7 +805,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 					argIdx++
 				}
 			} else {
-				ty, e := goLLVMTypeForType(t, goarch)
+				ty, e := goLLVMTypeForTypeWithSizes(t, goarch, sz)
 				if e != nil {
 					return nil, nil, 0, e
 				}
@@ -807,7 +819,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 			continue
 		}
 
-		ty, e := goLLVMTypeForType(t, goarch)
+		ty, e := goLLVMTypeForTypeWithSizes(t, goarch, sz)
 		if e != nil {
 			return nil, nil, 0, e
 		}
@@ -826,7 +838,11 @@ type goFramePart struct {
 }
 
 func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
-	word := int64(goWordSize(goarch))
+	return goFramePartsForTypeWithSizes(t, goarch, types.SizesFor("gc", goarch))
+}
+
+func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) ([]goFramePart, bool) {
+	word := int64(goWordSizeForSizes(goarch, sz))
 	wordTy := I64
 	if word == 4 {
 		wordTy = I32
@@ -851,6 +867,15 @@ func goWordSize(goarch string) int {
 	default:
 		return 4
 	}
+}
+
+func goWordSizeForSizes(goarch string, sz types.Sizes) int {
+	if sz != nil {
+		if size := sz.Sizeof(types.Typ[types.Uintptr]); size == 4 || size == 8 {
+			return int(size)
+		}
+	}
+	return goWordSize(goarch)
 }
 
 func goAlignOff(off, a int64) int64 {

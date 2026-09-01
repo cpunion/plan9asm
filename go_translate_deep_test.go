@@ -212,7 +212,7 @@ func cmp(a, b int) int { return a }
 			{Sym: "localtarget<>"},
 		},
 	}
-	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", func(resolved string) (FuncSig, bool) {
+	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, func(resolved string) (FuncSig, bool) {
 		if resolved == "test/pkg.localhelper" {
 			return FuncSig{Name: resolved, Args: []LLVMType{I64}, Ret: I64}, true
 		}
@@ -282,7 +282,7 @@ var helper int
 	if err := nilLocalBuilder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "missing_local<>"}}}); err != nil {
 		t.Fatalf("addDeclaredFuncSigs(local with nil map) error = %v", err)
 	}
-	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil); err == nil {
+	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil, nil); err == nil {
 		t.Fatalf("goSigsForAsmFile(madeup) unexpectedly succeeded")
 	}
 }

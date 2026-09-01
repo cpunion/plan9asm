@@ -76,6 +76,35 @@ TEXT ·gogo(SB),NOSPLIT,$0-8
 	}
 }
 
+func TestTranslateGoModule_UsesCallerWasmTypeSizes(t *testing.T) {
+	pkg := mustGoPackage(t, "example.com/wasm32", `package wasm32
+func Consume(value int, data []byte)
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`TEXT ·Consume(SB),NOSPLIT,$0-16
+	RET
+`), GoModuleOptions{
+		FileName:     "consume_wasm.s",
+		GOARCH:       "wasm",
+		Sizes:        &types.StdSizes{WordSize: 4, MaxAlign: 4},
+		TargetTriple: "wasm32-unknown-unknown",
+		ResolveSym:   testResolveSym("example.com/wasm32"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+	sig := tr.Signatures["example.com/wasm32.Consume"]
+	want := []LLVMType{I32, "{ ptr, i32, i32 }"}
+	if len(sig.Args) != len(want) {
+		t.Fatalf("Consume args = %v, want %v", sig.Args, want)
+	}
+	for i := range want {
+		if sig.Args[i] != want[i] {
+			t.Fatalf("Consume arg %d = %s, want %s", i, sig.Args[i], want[i])
+		}
+	}
+}
+
 func TestTranslateGoModule_UsesManualSigForPlainLocalHelper(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func IndexByte(b []byte, c byte) int
