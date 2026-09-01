@@ -79,6 +79,21 @@ RET
 	}
 }
 
+func TestLegacyX86ColonOperandIsArchitectureAndOpcodeScoped(t *testing.T) {
+	for _, tc := range []struct {
+		arch Arch
+		op   string
+	}{
+		{arch: ArchARM64, op: "SHLL"},
+		{arch: ArchAMD64, op: "MOVL"},
+	} {
+		src := "TEXT ·f(SB),NOSPLIT,$0\n" + tc.op + " R1:R2\nRET\n"
+		if _, err := Parse(tc.arch, src); err == nil {
+			t.Fatalf("Parse(%s, %s with colon operand) unexpectedly succeeded", tc.arch, tc.op)
+		}
+	}
+}
+
 func TestParseImmediateExpr(t *testing.T) {
 	src := `
 TEXT ·ImmExpr(SB),NOSPLIT,$0

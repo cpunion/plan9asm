@@ -150,7 +150,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				if cur == nil {
 					return nil, fmt.Errorf("line %d: %s outside TEXT: %q", lineno, op, stmt)
 				}
-				args, err := parseOperandsCSV(rest)
+				args, err := parseOperandsCSV(arch, op, rest)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
 				}
@@ -167,7 +167,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				if strings.TrimSpace(rest) != "" {
 					// A symbol operand is a tail call; register operands retain the
 					// architecture-specific return behavior.
-					args, err := parseOperandsCSV(rest)
+					args, err := parseOperandsCSV(arch, op, rest)
 					if err != nil {
 						return nil, fmt.Errorf("line %d: %v", lineno, err)
 					}
@@ -183,7 +183,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				}
 				// For now, parse unknown opcodes as generic instructions. The translator
 				// is responsible for rejecting unsupported ones.
-				args, err := parseOperandsCSV(rest)
+				args, err := parseOperandsCSV(arch, op, rest)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
 				}
@@ -336,7 +336,7 @@ func parseInt(s string) (int64, error) {
 	return strconv.ParseInt(s, 0, 64)
 }
 
-func parseOperandsCSV(s string) ([]Operand, error) {
+func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 	if s == "" {
 		return nil, nil
 	}
@@ -347,7 +347,10 @@ func parseOperandsCSV(s string) ([]Operand, error) {
 		if part == "" {
 			continue
 		}
-		legacy := splitLegacyColonOperand(part)
+		legacy := []string{part}
+		if arch == ArchAMD64 && op == "SHLL" {
+			legacy = splitLegacyColonOperand(part)
+		}
 		for _, item := range legacy {
 			op, err := parseOperand(item)
 			if err != nil {

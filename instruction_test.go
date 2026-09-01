@@ -30,6 +30,8 @@ func TestInstructionFamiliesAreArchitectureAware(t *testing.T) {
 	}{
 		{ArchAMD64, "PUSHQ", "stack"},
 		{ArchAMD64, "PUNPCKLQDQ", "sse-mmx"},
+		{ArchAMD64, "SHUFPS", "sse-mmx"},
+		{ArchAMD64, "ORPS", "sse-mmx"},
 		{ArchAMD64, "POPCNTQ", "bit-shift"},
 		{ArchAMD64, "PREFETCHT0", "cache-memory"},
 		{ArchAMD64, "VGF2P8AFFINEQB", "crypto-carryless"},
@@ -62,5 +64,10 @@ func TestProbeInstructionChecksFormsThroughLowerer(t *testing.T) {
 	fp := Instr{Op: "MOVQ", Raw: "MOVQ x+0(FP), AX", Args: []Operand{{Kind: OpFP, FPName: "x"}, {Kind: OpReg, Reg: AX}}}
 	if err := ProbeInstruction(ArchAMD64, "amd64", fp); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatalf("FP probe error = %v, want ErrProbeNeedsContext", err)
+	}
+
+	cond := Instr{Op: "CSET", Raw: "CSET EQ, R1", Args: []Operand{{Kind: OpIdent, Ident: "EQ"}, {Kind: OpReg, Reg: "R1"}}}
+	if err := ProbeInstruction(ArchARM64, "arm64", cond); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("conditional probe error = %v, want ErrProbeNeedsContext", err)
 	}
 }

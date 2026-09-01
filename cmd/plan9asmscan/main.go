@@ -40,6 +40,7 @@ type formStat struct {
 	ContextCount     int
 	UnsupportedCount int
 	Errors           map[string]int
+	ProbeKeys        map[string]struct{}
 }
 
 type parseErr struct {
@@ -63,7 +64,12 @@ type report struct {
 	UnsupportedForms     int    `json:"unsupported_forms"`
 	OfficialOpcodes      int    `json:"official_opcodes"`
 	RuntimeVerifiedForms int    `json:"runtime_verified_forms"`
+	CompileOnlyForms     int    `json:"compile_only_forms,omitempty"`
+	EncoderOpcodes       int    `json:"encoder_opcodes"`
+	EncoderForms         int    `json:"encoder_forms"`
+	EncoderOpsObserved   int    `json:"encoder_opcodes_observed_in_corpus"`
 	CoverageFingerprint  string `json:"coverage_fingerprint"`
+	EncoderFingerprint   string `json:"encoder_fingerprint"`
 
 	OpsByFreq         []opReport            `json:"ops_by_freq"`
 	ClusterStats      []clusterReport       `json:"cluster_stats"`
@@ -73,6 +79,7 @@ type report struct {
 	Unsupported       []opReport            `json:"unsupported"`
 	UnsupportedByForm []formReport          `json:"unsupported_by_form"`
 	OpcodeCatalog     []opcodeCatalogReport `json:"opcode_catalog,omitempty"`
+	EncoderCatalog    []encoderFormReport   `json:"encoder_form_catalog,omitempty"`
 	ParseErrs         []parseErr            `json:"parse_errs,omitempty"`
 }
 
@@ -104,6 +111,7 @@ type formReport struct {
 	Examples        []string `json:"examples,omitempty"`
 	Errors          []string `json:"errors,omitempty"`
 	RuntimeVerified bool     `json:"runtime_verified"`
+	CompileOnly     bool     `json:"compile_only,omitempty"`
 }
 
 type formFamilyReport struct {
@@ -123,12 +131,14 @@ type opcodeCatalogReport struct {
 	SupportedForms   int    `json:"supported_forms"`
 	ContextForms     int    `json:"context_forms"`
 	UnsupportedForms int    `json:"unsupported_forms"`
+	EncoderForms     int    `json:"encoder_forms"`
 }
 
 type conformanceManifest struct {
 	Cases []struct {
-		Goarch string   `json:"goarch"`
-		Forms  []string `json:"forms"`
+		Goarch     string   `json:"goarch"`
+		Forms      []string `json:"forms"`
+		Validation string   `json:"validation"`
 	} `json:"cases"`
 }
 
@@ -187,17 +197,23 @@ func main() {
 	}
 
 	var catalog []opcodeCatalogReport
+	var encoderCatalog []encoderFormReport
 	if *corpus == "go-asm" {
+		encoderCatalog, err = loadEncoderForms(*goroot, *goarch)
+		if err != nil {
+			fatalf("load official encoder forms: %v", err)
+		}
 		catalog, err = buildOpcodeCatalog(*goroot, arch, *goarch, ops, forms, supported)
 		if err != nil {
 			fatalf("build official opcode catalog: %v", err)
 		}
 	}
-	verified, err := loadConformanceForms(*repoRoot)
+	verified, compileOnly, err := loadConformanceForms(*repoRoot)
 	if err != nil {
 		fatalf("load executable conformance manifest: %v", err)
 	}
-	rep := buildReport(*corpus, goVersion(*goroot), *goos, *goarch, len(pkgs), pkgWithSFiles, asmFiles, ops, forms, supported, catalog, verified, parseErrs)
+	rep := buildReport(*corpus, goVersion(*goroot), *goos, *goarch, len(pkgs), pkgWithSFiles, asmFiles, ops, forms, supported, catalog, verified, compileOnly, parseErrs)
+	attachEncoderCatalog(&rep, ops, encoderCatalog)
 
 	var content []byte
 	switch strings.ToLower(strings.TrimSpace(*format)) {
@@ -347,6 +363,7 @@ func addFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, 
 			Descriptor: desc,
 			Files:      map[string]int{},
 			Errors:     map[string]int{},
+			ProbeKeys:  map[string]struct{}{},
 		}
 		forms[desc.Form] = st
 	}
@@ -355,6 +372,14 @@ func addFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, 
 	if len(st.Examples) < 3 && !containsString(st.Examples, strings.TrimSpace(ins.Raw)) {
 		st.Examples = append(st.Examples, strings.TrimSpace(ins.Raw))
 	}
+	// Descriptor forms intentionally collapse concrete register numbers and
+	// immediate values. Those values can still select different lowerer paths,
+	// so cache exact instructions and aggregate their outcomes into the form.
+	probeKey := fmt.Sprintf("%s %#v", ins.Op, ins.Args)
+	if _, ok := st.ProbeKeys[probeKey]; ok {
+		return
+	}
+	st.ProbeKeys[probeKey] = struct{}{}
 	err := plan9asm.ProbeInstruction(arch, goarch, ins)
 	switch {
 	case err == nil:
@@ -514,6 +539,10 @@ func buildOpcodeCatalog(
 	}
 	out := make([]opcodeCatalogReport, 0, len(names))
 	seen := map[string]struct{}{}
+	formsByOpcode := make(map[string][]*formStat, len(forms))
+	for _, st := range forms {
+		formsByOpcode[st.Descriptor.Opcode] = append(formsByOpcode[st.Descriptor.Opcode], st)
+	}
 	for _, match := range names {
 		op := string(match[1])
 		if op == "LAST" {
@@ -529,10 +558,7 @@ func buildOpcodeCatalog(
 			Observed: ops[op] != nil,
 		}
 		_, item.NameClaimed = claimed[op]
-		for _, st := range forms {
-			if st.Descriptor.Opcode != op {
-				continue
-			}
+		for _, st := range formsByOpcode[op] {
 			switch {
 			case st.UnsupportedCount > 0:
 				item.UnsupportedForms++
@@ -548,26 +574,41 @@ func buildOpcodeCatalog(
 	return out, nil
 }
 
-func loadConformanceForms(repoRoot string) (map[string]struct{}, error) {
+func loadConformanceForms(repoRoot string) (map[string]struct{}, map[string]struct{}, error) {
 	path := filepath.Join(repoRoot, "testdata", "conformance", "manifest.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return map[string]struct{}{}, nil
+			return map[string]struct{}{}, map[string]struct{}{}, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	var manifest conformanceManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	forms := map[string]struct{}{}
+	runtimeForms := map[string]struct{}{}
+	compileOnlyForms := map[string]struct{}{}
 	for _, tc := range manifest.Cases {
 		for _, form := range tc.Forms {
-			forms[tc.Goarch+"\x00"+form] = struct{}{}
+			key := tc.Goarch + "\x00" + form
+			switch tc.Validation {
+			case "execute":
+				if _, conflict := compileOnlyForms[key]; conflict {
+					return nil, nil, fmt.Errorf("conformance form %q is both executable and compile-only", form)
+				}
+				runtimeForms[key] = struct{}{}
+			case "compile-only":
+				if _, conflict := runtimeForms[key]; conflict {
+					return nil, nil, fmt.Errorf("conformance form %q is both executable and compile-only", form)
+				}
+				compileOnlyForms[key] = struct{}{}
+			default:
+				return nil, nil, fmt.Errorf("conformance case for %q has invalid validation %q", form, tc.Validation)
+			}
 		}
 	}
-	return forms, nil
+	return runtimeForms, compileOnlyForms, nil
 }
 
 func containsString(values []string, want string) bool {
@@ -699,6 +740,30 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 	return supported, nil
 }
 
+func attachEncoderCatalog(rep *report, ops map[string]*opStat, catalog []encoderFormReport) {
+	rep.EncoderCatalog = catalog
+	rep.EncoderForms = len(catalog)
+	opcodes := map[string]struct{}{}
+	observed := map[string]struct{}{}
+	byOpcode := map[string]int{}
+	fingerprintEntries := make([]string, 0, len(catalog))
+	for _, form := range catalog {
+		opcodes[form.Opcode] = struct{}{}
+		byOpcode[form.Opcode]++
+		if ops[form.Opcode] != nil {
+			observed[form.Opcode] = struct{}{}
+		}
+		fingerprintEntries = append(fingerprintEntries, form.Form)
+	}
+	rep.EncoderOpcodes = len(opcodes)
+	rep.EncoderOpsObserved = len(observed)
+	sort.Strings(fingerprintEntries)
+	rep.EncoderFingerprint = fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(fingerprintEntries, "\n"))))
+	for i := range rep.OpcodeCatalog {
+		rep.OpcodeCatalog[i].EncoderForms = byOpcode[rep.OpcodeCatalog[i].Opcode]
+	}
+}
+
 func buildReport(
 	corpus, goVersion, goos, goarch string,
 	stdPkgs, stdPkgsWithSFile, asmFiles int,
@@ -707,6 +772,7 @@ func buildReport(
 	supported map[string]struct{},
 	catalog []opcodeCatalogReport,
 	verified map[string]struct{},
+	compileOnly map[string]struct{},
 	parseErrs []parseErr,
 ) report {
 	rep := report{
@@ -815,6 +881,10 @@ func buildReport(
 		if item.RuntimeVerified {
 			rep.RuntimeVerifiedForms++
 		}
+		_, item.CompileOnly = compileOnly[goarch+"\x00"+st.Descriptor.Form]
+		if item.CompileOnly {
+			rep.CompileOnlyForms++
+		}
 		rep.Forms = append(rep.Forms, item)
 		if status == "unsupported" {
 			rep.UnsupportedByForm = append(rep.UnsupportedByForm, item)
@@ -907,6 +977,13 @@ func renderMarkdown(rep report) []byte {
 	fmt.Fprintf(&b, "- form lowering: `%d` supported, `%d` context-required, `%d` unsupported\n",
 		rep.SupportedForms, rep.ContextForms, rep.UnsupportedForms)
 	fmt.Fprintf(&b, "- executable conformance forms observed in this corpus: `%d`\n", rep.RuntimeVerifiedForms)
+	if rep.CompileOnlyForms > 0 {
+		fmt.Fprintf(&b, "- explicit compile-only forms observed in this corpus: `%d`\n", rep.CompileOnlyForms)
+	}
+	if rep.EncoderForms > 0 {
+		fmt.Fprintf(&b, "- official encoder-table forms: `%d` across `%d` opcodes (`%d` opcodes observed in positive testdata)\n",
+			rep.EncoderForms, rep.EncoderOpcodes, rep.EncoderOpsObserved)
+	}
 	if rep.OfficialOpcodes > 0 {
 		fmt.Fprintf(&b, "- official opcode names: `%d`\n", rep.OfficialOpcodes)
 	}
@@ -914,7 +991,7 @@ func renderMarkdown(rep report) []byte {
 
 	if len(rep.OpcodeCatalog) > 0 {
 		type catalogSummary struct {
-			total, observed, claimed, supportedForms, unsupportedForms int
+			total, observed, claimed, encoderForms, supportedForms, unsupportedForms int
 		}
 		byFamily := map[string]*catalogSummary{}
 		for _, op := range rep.OpcodeCatalog {
@@ -932,6 +1009,7 @@ func renderMarkdown(rep report) []byte {
 			}
 			sum.supportedForms += op.SupportedForms
 			sum.unsupportedForms += op.UnsupportedForms
+			sum.encoderForms += op.EncoderForms
 		}
 		families := make([]string, 0, len(byFamily))
 		for family := range byFamily {
@@ -939,12 +1017,12 @@ func renderMarkdown(rep report) []byte {
 		}
 		sort.Strings(families)
 		b.WriteString("## Official Opcode Catalog\n\n")
-		b.WriteString("| family | official names | observed names | lowerer name claims | supported forms | unsupported forms |\n")
-		b.WriteString("|---|---:|---:|---:|---:|---:|\n")
+		b.WriteString("| family | official names | encoder forms | observed names | lowerer name claims | supported forms | unsupported forms |\n")
+		b.WriteString("|---|---:|---:|---:|---:|---:|---:|\n")
 		for _, family := range families {
 			sum := byFamily[family]
-			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d |\n",
-				family, sum.total, sum.observed, sum.claimed, sum.supportedForms, sum.unsupportedForms)
+			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %d |\n",
+				family, sum.total, sum.encoderForms, sum.observed, sum.claimed, sum.supportedForms, sum.unsupportedForms)
 		}
 		b.WriteString("\nThe JSON report contains the complete opcode list. A name claim is not semantic verification; operand-form probes and executable conformance cases are tracked separately.\n\n")
 	}

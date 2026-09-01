@@ -45,7 +45,7 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -93,13 +93,13 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Install LLVM 19 (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install llvm@19
-          echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Python (Windows)
         if: runner.os == 'Windows'
@@ -129,6 +129,41 @@ jobs:
         run: |
           chmod +x scripts/check-go-asm-coverage.sh
           scripts/check-go-asm-coverage.sh
+
+  go120-compat:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install LLVM 19
+        run: |
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Setup Go 1.20
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.20.x'
+          cache: true
+
+      - name: LLVM tools info
+        run: |
+          command -v llc
+          llc --version
+          command -v clang
+          clang --version
+
+      - name: Go 1.20 compile, link, and executable conformance
+        run: go test ./... -count=1
+
+      - name: Official Go 1.20 assembler and encoder coverage
+        shell: bash
+        run: scripts/check-go-asm-coverage.sh
 
   test:
     permissions:
@@ -174,7 +209,7 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Install LLVM 19 (Windows)
         if: runner.os == 'Windows'
@@ -260,7 +295,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -311,7 +346,7 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Go test (race)
         run: go test -race ./...
@@ -338,7 +373,7 @@ jobs:
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> $GITHUB_ENV
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Go test with coverage
         run: |

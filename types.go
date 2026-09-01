@@ -775,6 +775,8 @@ const (
 	OpXGETBV Op = "XGETBV"
 	OpBYTE   Op = "BYTE"
 	OpWORD   Op = "WORD"
+	OpCALL   Op = "CALL"
+	OpJMP    Op = "JMP"
 	OpRET    Op = "RET"
 	OpLABEL  Op = "LABEL"
 )

@@ -5,6 +5,10 @@
       "id": "amd64-byte-memory-destinations",
       "goarch": "amd64",
       "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "references": [
+        "https://github.com/xgo-dev/llgo/issues/2464"
+      ],
       "forms": [
         "ADDB gpr64,memory.gpr64-base",
         "ANDB gpr64,memory.gpr64-base",
@@ -16,6 +20,10 @@
       "id": "amd64-punpcklqdq-sources",
       "goarch": "amd64",
       "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "references": [
+        "https://github.com/xgo-dev/llgo/issues/2464"
+      ],
       "forms": [
         "PUNPCKLQDQ memory.gpr64-base,xmm",
         "PUNPCKLQDQ xmm,xmm"
@@ -25,6 +33,7 @@
       "id": "amd64-legacy-three-operand-shift",
       "goarch": "amd64",
       "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
       "forms": [
         "SHLL gpr64,gpr64,gpr64"
       ]
@@ -33,6 +42,7 @@
       "id": "amd64-double-shift-family",
       "goarch": "amd64",
       "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
       "forms": [
         "SHLL gpr-byte,gpr64,gpr64",
         "SHLL gpr-byte,gpr64,memory.gpr64-base",

@@ -4,16 +4,20 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 type testConformanceManifest struct {
 	SchemaVersion int `json:"schema_version"`
 	Cases         []struct {
-		ID     string   `json:"id"`
-		Goarch string   `json:"goarch"`
-		Asm    string   `json:"asm"`
-		Forms  []string `json:"forms"`
+		ID         string   `json:"id"`
+		Goarch     string   `json:"goarch"`
+		Asm        string   `json:"asm"`
+		Forms      []string `json:"forms"`
+		References []string `json:"references"`
+		Validation string   `json:"validation"`
+		Reason     string   `json:"reason"`
 	} `json:"cases"`
 }
 
@@ -32,6 +36,18 @@ func TestConformanceManifestMatchesAssembly(t *testing.T) {
 	}
 	for _, tc := range manifest.Cases {
 		t.Run(tc.ID, func(t *testing.T) {
+			switch tc.Validation {
+			case "execute":
+				if tc.Reason != "" {
+					t.Error("executable case must not carry a compile-only reason")
+				}
+			case "compile-only":
+				if strings.TrimSpace(tc.Reason) == "" {
+					t.Error("compile-only case must explain why execution is unsafe")
+				}
+			default:
+				t.Errorf("validation = %q, want execute or compile-only", tc.Validation)
+			}
 			arch, err := conformanceArch(tc.Goarch)
 			if err != nil {
 				t.Fatal(err)
@@ -53,6 +69,11 @@ func TestConformanceManifestMatchesAssembly(t *testing.T) {
 			}
 			if len(tc.Forms) == 0 {
 				t.Fatal("case claims no forms")
+			}
+			for _, ref := range tc.References {
+				if !strings.HasPrefix(ref, "https://github.com/") {
+					t.Errorf("reference %q is not a GitHub issue or pull request URL", ref)
+				}
 			}
 			for _, form := range tc.Forms {
 				if _, ok := observed[form]; !ok {

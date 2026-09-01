@@ -302,7 +302,7 @@ GLOBL foo(SB), RODATA, $8
 		"MOVQ": {},
 	}, nil, map[string]struct{}{
 		"amd64\x00MOVQ immediate,gpr64": {},
-	}, parseErrs)
+	}, map[string]struct{}{}, parseErrs)
 	if rep.Goos != "linux" || rep.Goarch != "amd64" {
 		t.Fatalf("buildReport() wrong target: %#v", rep)
 	}
@@ -328,6 +328,31 @@ GLOBL foo(SB), RODATA, $8
 	} {
 		if !strings.Contains(md, want) {
 			t.Fatalf("renderMarkdown() missing %q in:\n%s", want, md)
+		}
+	}
+}
+
+func TestAddFormStatCachesConcreteInstructionsWithoutCollapsingValues(t *testing.T) {
+	forms := map[string]*formStat{}
+	for _, imm := range []int64{1, 7, 7} {
+		addFormStat(forms, plan9asm.ArchAMD64, "amd64", plan9asm.Instr{
+			Op:  "RCRQ",
+			Raw: "RCRQ immediate, AX",
+			Args: []plan9asm.Operand{
+				{Kind: plan9asm.OpImm, Imm: imm},
+				{Kind: plan9asm.OpReg, Reg: plan9asm.AX},
+			},
+		}, "fixture.s")
+	}
+	if len(forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(forms))
+	}
+	for _, stat := range forms {
+		if stat.SupportedCount != 1 || stat.UnsupportedCount != 1 {
+			t.Fatalf("probe classifications = supported %d, unsupported %d; want 1 and 1", stat.SupportedCount, stat.UnsupportedCount)
+		}
+		if len(stat.ProbeKeys) != 2 {
+			t.Fatalf("probe cache entries = %d, want 2", len(stat.ProbeKeys))
 		}
 	}
 }
@@ -379,7 +404,7 @@ func TestBuildReportAndJSONShape(t *testing.T) {
 		"VPXORQ": {Count: 5, Files: map[string]int{"b.s": 5}, Pkgs: map[string]int{"p": 5}},
 		"DATA":   {Count: 1, Files: map[string]int{"c.s": 1}, Pkgs: map[string]int{"p": 1}},
 	}
-	rep := buildReport("std", "go1.test", "linux", "amd64", 3, 1, 2, ops, map[string]*formStat{}, map[string]struct{}{"CALL": {}}, nil, map[string]struct{}{}, []parseErr{{File: "bad.s", Err: "boom"}})
+	rep := buildReport("std", "go1.test", "linux", "amd64", 3, 1, 2, ops, map[string]*formStat{}, map[string]struct{}{"CALL": {}}, nil, map[string]struct{}{}, map[string]struct{}{}, []parseErr{{File: "bad.s", Err: "boom"}})
 	if rep.UniqueOps != 3 {
 		t.Fatalf("UniqueOps = %d, want 3", rep.UniqueOps)
 	}

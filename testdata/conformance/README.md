@@ -12,11 +12,22 @@ Each case must:
    and check the same results; and
 4. list every form it claims to verify in manifest.json.
 
+Reduced regressions from user reports should also list the originating GitHub
+issue or pull request in the manifest's `references` field. The reduced source
+must still be accepted by the native Go assembler; issue provenance is a
+real-world regression layer, not a replacement for the official encoder
+tables or semantic oracle.
+
+Every manifest case must set `validation` to `execute` or `compile-only`.
+Compile-only is reserved for privileged, trapping, or environment-dependent
+forms and requires a non-empty `reason`. Runnable forms may not use
+compile-only merely because they are inconvenient to test.
+
 One assembly routine may exercise several related forms. Setup instructions
 used only to feed the instruction under test do not need to be claimed. Tests
 must avoid undefined flags, uninitialized registers, host-specific accidental
 state, and unsupported CPU features unless they feature-detect and skip.
 
-Privileged, trapping, or environment-dependent instructions are marked
-non-runnable in the coverage design instead of being executed. They still
-require parser, lowering, and LLVM compile checks where applicable.
+Privileged, trapping, or environment-dependent instructions use the explicit
+compile-only policy instead of being executed. They still require parser,
+lowering, and LLVM compile checks where applicable.

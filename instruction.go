@@ -96,9 +96,11 @@ func x86InstructionFamily(op string) string {
 		return "cache-memory"
 	case strings.HasPrefix(op, "V") || strings.HasPrefix(op, "K"):
 		return "avx"
+	case strings.HasPrefix(op, "SHUF") || op == "ANDPS" || op == "ANDPD" || op == "ORPS" || op == "ORPD" || op == "XORPS" || op == "XORPD":
+		return "sse-mmx"
 	case strings.HasPrefix(op, "SH") || strings.HasPrefix(op, "SA") || strings.HasPrefix(op, "RO") || strings.HasPrefix(op, "BT") || strings.HasPrefix(op, "BS") || strings.HasPrefix(op, "LZCNT") || strings.HasPrefix(op, "TZCNT") || strings.HasPrefix(op, "POPCNT"):
 		return "bit-shift"
-	case strings.HasPrefix(op, "P") || strings.HasPrefix(op, "MASKMOV") || strings.HasPrefix(op, "UNPCK") || strings.HasPrefix(op, "SHUF"):
+	case strings.HasPrefix(op, "P") || strings.HasPrefix(op, "MASKMOV") || strings.HasPrefix(op, "UNPCK"):
 		return "sse-mmx"
 	case strings.HasPrefix(op, "F"):
 		return "x87-floating"
@@ -379,7 +381,7 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		if arg.Kind == OpLabel {
 			labels[arg.Sym] = struct{}{}
 		}
-		if arg.Kind == OpSym && (ins.Op == "CALL" || ins.Op == "JMP") {
+		if arg.Kind == OpSym && (ins.Op == OpCALL || ins.Op == OpJMP) {
 			name := strings.TrimSuffix(arg.Sym, "(SB)")
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
@@ -401,10 +403,5 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		triple = "aarch64-unknown-linux-gnu"
 	}
 	_, err := translateIRText(file, Options{Goarch: goarch, TargetTriple: triple, Sigs: sigs})
-	if err != nil && (strings.Contains(err.Error(), "without any prior flags write") ||
-		strings.Contains(err.Error(), "requires preceding") ||
-		strings.Contains(err.Error(), "must follow")) {
-		return fmt.Errorf("%w: %v", ErrProbeNeedsContext, err)
-	}
 	return err
 }

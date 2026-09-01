@@ -98,7 +98,7 @@ func (c *armCtx) setFlagsLogic(cond, res string) error {
 
 func (c *armCtx) condValue(cond string) (string, error) {
 	if !c.flagsWritten {
-		return "", fmt.Errorf("arm: condition %s without any prior flags write", cond)
+		return "", fmt.Errorf("%w: arm condition %s has no prior flags write", ErrProbeNeedsContext, cond)
 	}
 	ldN := c.newTmp()
 	ldZ := c.newTmp()

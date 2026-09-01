@@ -45,6 +45,16 @@ import sys
 baseline_path = pathlib.Path(sys.argv[1])
 report_dir = pathlib.Path(sys.argv[2])
 baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+if baseline.get("schema_version") != 2:
+    raise SystemExit("coverage baseline schema must be 2")
+
+expected_versions = {f"go1.{minor}" for minor in range(20, 28)}
+actual_versions = set(baseline.get("versions", {}))
+if actual_versions != expected_versions:
+    raise SystemExit(
+        "coverage baseline versions differ: "
+        f"expected {sorted(expected_versions)}, got {sorted(actual_versions)}"
+    )
 
 fields = (
     "official_opcodes",
@@ -55,7 +65,12 @@ fields = (
     "unsupported_forms",
     "parse_err_count",
     "runtime_verified_forms",
+    "compile_only_forms",
+    "encoder_opcodes",
+    "encoder_forms",
+    "encoder_opcodes_observed_in_corpus",
     "coverage_fingerprint",
+    "encoder_fingerprint",
 )
 
 for report_path in sorted(report_dir.glob("*.json")):
@@ -82,6 +97,9 @@ for report_path in sorted(report_dir.glob("*.json")):
         f"context={report['context_forms']} "
         f"unsupported={report['unsupported_forms']} "
         f"runtime_verified={report['runtime_verified_forms']} "
+        f"compile_only={report.get('compile_only_forms', 0)} "
+        f"encoder_ops={report['encoder_opcodes']} "
+        f"encoder_forms={report['encoder_forms']} "
         f"parse_errors={report['parse_err_count']}"
     )
     if changed:

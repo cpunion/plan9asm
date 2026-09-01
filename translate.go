@@ -168,34 +168,34 @@ func translateIRText(file *File, opt Options) (string, error) {
 			return "", fmt.Errorf("missing return type for %q", name)
 		}
 		if err := validateResolvedImmediates(file.Arch, *fn); err != nil {
-			return "", fmt.Errorf("%s: %v", name, err)
+			return "", fmt.Errorf("%s: %w", name, err)
 		}
 		if sig.Attrs == "" {
 			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, *fn))
 		}
 		if file.Arch == ArchARM && funcNeedsARMCFG(*fn) {
 			if err := translateFuncARM(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
-				return "", fmt.Errorf("%s: %v", name, err)
+				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")
 			continue
 		}
 		if file.Arch == ArchARM64 && funcNeedsARM64CFG(*fn) {
 			if err := translateFuncARM64(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
-				return "", fmt.Errorf("%s: %v", name, err)
+				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")
 			continue
 		}
 		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn))) {
 			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource); err != nil {
-				return "", fmt.Errorf("%s: %v", name, err)
+				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")
 			continue
 		}
 		if err := translateFuncLinear(&b, file.Arch, *fn, sig, opt.AnnotateSource); err != nil {
-			return "", fmt.Errorf("%s: %v", name, err)
+			return "", fmt.Errorf("%s: %w", name, err)
 		}
 		b.WriteString("\n")
 	}
