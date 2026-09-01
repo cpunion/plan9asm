@@ -439,6 +439,8 @@ func targetTriple(goos, goarch string) string {
 			return "x86_64-unknown-linux-gnu"
 		case "arm64":
 			return "aarch64-unknown-linux-gnu"
+		case "arm":
+			return "armv7-unknown-linux-gnueabihf"
 		case "386":
 			return "i386-unknown-linux-gnu"
 		}
@@ -718,7 +720,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 	sigs := map[string]plan9asm.FuncSig{}
 	if pkg == nil || pkg.Types == nil || pkg.Types.Scope() == nil {
 		for _, fn := range file.Funcs {
-			fs := fallbackSigForAsmFunc(fn, resolve(stripABISuffix(fn.Sym)))
+			fs := fallbackSigForAsmFunc(fn, resolve(stripABISuffix(fn.Sym)), goarch)
 			sigs[fs.Name] = fs
 		}
 		return sigs, nil
@@ -734,6 +736,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 
 	scope := pkg.Types.Scope()
 	linknames := linknameRemoteToLocal(pkg.Syntax)
+	declaredSigs := map[string]bool{}
 
 	for _, fn := range file.Funcs {
 		sym := stripABISuffix(fn.Sym)
@@ -741,12 +744,14 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if resolved == "" {
 			continue
 		}
-		fs, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, ok, err := tryDeclSig(scope, asmDeclLookupSym(pkg, sym), resolved, linknames, goarch, sz)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			fs = fallbackSigForAsmFunc(fn, resolved)
+			fs = fallbackSigForAsmFunc(fn, resolved, goarch)
+		} else {
+			declaredSigs[resolved] = true
 		}
 		sigs[resolved] = fs
 	}
@@ -755,17 +760,38 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if sym == "" {
 			return
 		}
-		sym = stripABISuffix(strings.TrimSuffix(sym, "<>"))
+		sym = stripABISuffix(sym)
 		resolved := resolve(sym)
 		if resolved == "" {
 			return
 		}
-		if _, ok := sigs[resolved]; ok {
+		if existing, ok := sigs[resolved]; ok {
+			// A local assembly helper may have no Go declaration and no FP result
+			// slots even though every entry reaches it by tail call. Preserve its
+			// inferred register/frame inputs, but make its LLVM return and matching
+			// result slots agree with the declared caller. Local helpers share the
+			// caller's physical frame, so a byte result may otherwise remain an i32
+			// fallback slot underneath an i1 function signature.
+			if tail && caller.Name != "" && !declaredSigs[resolved] {
+				existing.Ret = caller.Ret
+				if len(existing.Frame.Results) == len(caller.Frame.Results) {
+					for i := range existing.Frame.Results {
+						for _, callerResult := range caller.Frame.Results {
+							if existing.Frame.Results[i].Offset == callerResult.Offset {
+								existing.Frame.Results[i].Type = callerResult.Type
+								break
+							}
+						}
+					}
+				}
+				sigs[resolved] = existing
+			}
 			return
 		}
-		fs, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, ok, err := tryDeclSig(scope, asmDeclLookupSym(pkg, sym), resolved, linknames, goarch, sz)
 		if err == nil && ok {
 			sigs[resolved] = fs
+			declaredSigs[resolved] = true
 			return
 		}
 		if tail && caller.Name != "" {
@@ -778,7 +804,8 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 	}
 
 	for _, fn := range file.Funcs {
-		caller := sigs[resolve(stripABISuffix(fn.Sym))]
+		callerName := resolve(stripABISuffix(fn.Sym))
+		caller := sigs[callerName]
 		for _, ins := range fn.Instrs {
 			op := strings.ToUpper(string(ins.Op))
 			tail := op == "JMP" || op == "B"
@@ -798,13 +825,38 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 				continue
 			}
 			addTargetSig(base, caller, tail)
+
+			// Entry stubs such as _rt0_386 have no Go declaration or FP
+			// result slot, so their fallback signature conservatively assumes a
+			// word return. A tail jump to a declared void function proves that
+			// the stub itself does not return a value. Reconcile the caller here
+			// instead of weakening the lowerer's return-type checks globally.
+			targetName := resolve(stripABISuffix(base))
+			target, targetOK := sigs[targetName]
+			if tail && caller.Name != "" && !declaredSigs[callerName] &&
+				len(caller.Frame.Results) == 0 && targetOK &&
+				declaredSigs[targetName] && target.Ret == plan9asm.Void {
+				caller.Ret = plan9asm.Void
+				sigs[callerName] = caller
+			}
 		}
 	}
 
 	return sigs, nil
 }
 
-func fallbackSigForAsmFunc(fn plan9asm.Func, resolved string) plan9asm.FuncSig {
+func asmDeclLookupSym(pkg *packages.Package, sym string) string {
+	if pkg == nil || pkg.Types == nil {
+		return sym
+	}
+	prefix := pkg.Types.Name() + "·"
+	if strings.HasPrefix(sym, prefix) {
+		return "·" + strings.TrimPrefix(sym, prefix)
+	}
+	return sym
+}
+
+func fallbackSigForAsmFunc(fn plan9asm.Func, resolved, goarch string) plan9asm.FuncSig {
 	paramOff := map[int64]struct{}{}
 	retOff := map[int64]struct{}{}
 
@@ -824,29 +876,33 @@ func fallbackSigForAsmFunc(fn plan9asm.Func, resolved string) plan9asm.FuncSig {
 
 	paramList := sortOffsets(paramOff)
 	retList := sortOffsets(retOff)
+	word := plan9asm.I64
+	if goarch == "386" || goarch == "arm" {
+		word = plan9asm.I32
+	}
 	params := make([]plan9asm.FrameSlot, 0, len(paramList))
 	for i, off := range paramList {
-		params = append(params, plan9asm.FrameSlot{Offset: off, Type: plan9asm.I64, Index: i, Field: -1})
+		params = append(params, plan9asm.FrameSlot{Offset: off, Type: word, Index: i, Field: -1})
 	}
 	results := make([]plan9asm.FrameSlot, 0, len(retList))
 	for i, off := range retList {
-		results = append(results, plan9asm.FrameSlot{Offset: off, Type: plan9asm.I64, Index: i, Field: -1})
+		results = append(results, plan9asm.FrameSlot{Offset: off, Type: word, Index: i, Field: -1})
 	}
 
 	args := make([]plan9asm.LLVMType, len(params))
 	for i := range args {
-		args[i] = plan9asm.I64
+		args[i] = word
 	}
 	ret := plan9asm.Void
 	switch len(results) {
 	case 0:
-		ret = plan9asm.I64
+		ret = word
 	case 1:
-		ret = plan9asm.I64
+		ret = word
 	default:
 		parts := make([]string, 0, len(results))
 		for range results {
-			parts = append(parts, string(plan9asm.I64))
+			parts = append(parts, string(word))
 		}
 		ret = plan9asm.LLVMType("{ " + strings.Join(parts, ", ") + " }")
 	}
@@ -1017,6 +1073,12 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 	for i := 0; i < tup.Len(); i++ {
 		t := tup.At(i).Type()
 		off = align(off, int64(sz.Alignof(t)))
+		if sz.Sizeof(t) == 0 {
+			// Zero-sized marker parameters (for example runtime.goexit's
+			// neverCallThisFunction) consume neither an LLVM argument nor a
+			// physical Plan 9 frame slot.
+			continue
+		}
 
 		switch u := types.Unalias(t).(type) {
 		case *types.Basic:
@@ -1069,6 +1131,28 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 			argIdx++
 			off += int64(sz.Sizeof(t))
 			continue
+		case *types.Interface:
+			// An interface value is its runtime type/itab pointer followed by
+			// its data pointer. Keep the two physical FP slots visible even
+			// when the LLVM function signature uses one aggregate argument.
+			if flattenAgg {
+				args = append(args, plan9asm.Ptr, plan9asm.Ptr)
+				slots = append(slots,
+					plan9asm.FrameSlot{Offset: off + 0*word, Type: plan9asm.Ptr, Index: argIdx + 0, Field: -1},
+					plan9asm.FrameSlot{Offset: off + 1*word, Type: plan9asm.Ptr, Index: argIdx + 1, Field: -1},
+				)
+				argIdx += 2
+				off += int64(sz.Sizeof(t))
+				continue
+			}
+			args = append(args, plan9asm.LLVMType("{ ptr, ptr }"))
+			slots = append(slots,
+				plan9asm.FrameSlot{Offset: off + 0*word, Type: plan9asm.Ptr, Index: argIdx, Field: 0},
+				plan9asm.FrameSlot{Offset: off + 1*word, Type: plan9asm.Ptr, Index: argIdx, Field: 1},
+			)
+			argIdx++
+			off += int64(sz.Sizeof(t))
+			continue
 		}
 
 		ty, e := llvmTypeForGo(t, goarch)
@@ -1084,7 +1168,7 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 }
 
 func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
-	switch tt := t.(type) {
+	switch tt := types.Unalias(t).(type) {
 	case *types.Basic:
 		switch tt.Kind() {
 		case types.Bool:
@@ -1118,6 +1202,13 @@ func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
 		}
 	case *types.Pointer:
 		return plan9asm.Ptr, nil
+	case *types.Signature, *types.Map, *types.Chan:
+		// Go function values, maps, and channels occupy one pointer-sized word
+		// in an assembly frame. The pointee/runtime descriptor is intentionally
+		// opaque to the instruction translator.
+		return plan9asm.Ptr, nil
+	case *types.Interface:
+		return plan9asm.LLVMType("{ ptr, ptr }"), nil
 	case *types.Slice:
 		if wordSize(goarch) == 8 {
 			return plan9asm.LLVMType("{ ptr, i64, i64 }"), nil

@@ -102,6 +102,15 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 					},
 				},
 			},
+			"clearTopBit": {
+				Name: "clearTopBit",
+				Args: []LLVMType{I64},
+				Ret:  I64,
+				Frame: FrameLayout{
+					Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
+					Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
+				},
+			},
 			"doubleShift32": {
 				Name: "doubleShift32",
 				Args: []LLVMType{Ptr, I32, I32, I32},
@@ -136,6 +145,7 @@ extern void byteFlags(uint8_t *p, uint8_t *flags);
 extern void unpackLowQWords(uint64_t *dst, uint64_t *src);
 extern void unpackDuplicateLowQWord(uint64_t *dst);
 extern uint32_t shiftLegacyThreeOperand(uint32_t src, uint32_t dst, uint32_t amount);
+extern uint64_t clearTopBit(uint64_t value);
 extern void doubleShift32(uint32_t *out, uint32_t src, uint32_t dst, uint32_t amount);
 extern void doubleShift64(uint64_t *out, uint64_t src, uint64_t dst, uint64_t amount);
 
@@ -183,6 +193,9 @@ int main(void) {
 		return 30;
 	if (shiftLegacyThreeOperand(0x12345678U, 0x89abcdefU, 5) != 0x3579bde2U)
 		return 31;
+	if (clearTopBit(UINT64_MAX) != 0x7fffffffffffffffULL ||
+		clearTopBit(0x0123456789abcdefULL) != 0x0123456789abcdefULL)
+		return 32;
 	const uint32_t pairs32[][2] = {
 		{0x12345678U, 0x89abcdefU}, {0, UINT32_MAX},
 		{UINT32_MAX, 0}, {0x80000001U, 0x7ffffffeU},

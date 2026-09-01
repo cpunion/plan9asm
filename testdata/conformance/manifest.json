@@ -39,6 +39,15 @@
       ]
     },
     {
+      "id": "amd64-btrq-register",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "forms": [
+        "BTRQ immediate,gpr64"
+      ]
+    },
+    {
       "id": "amd64-double-shift-family",
       "goarch": "amd64",
       "asm": "amd64/conformance_amd64.s",

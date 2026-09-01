@@ -155,6 +155,15 @@ func (c *armCtx) eval32(op Operand, postInc bool) (string, error) {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", t, p)
 		return "%" + t, nil
 	case OpIdent:
+		t := c.newTmp()
+		switch strings.ToUpper(op.Ident) {
+		case "CPSR":
+			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "mrs $0, cpsr", "=r,~{memory}")
+			return "%" + t, nil
+		case "FPCR", "FPSR":
+			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "vmrs $0, fpscr", "=r,~{memory}")
+			return "%" + t, nil
+		}
 		return "0", nil
 	default:
 		return "", fmt.Errorf("arm: unsupported operand for i32: %s", op.String())
@@ -194,13 +203,33 @@ func (c *armCtx) evalShift(op Operand) (string, error) {
 func (c *armCtx) evalFPValue32(op Operand) (string, error) {
 	slot, ok := c.fpParams[op.FPOffset]
 	if !ok {
+		for base, candidate := range c.fpParams {
+			if candidate.Type != I64 || op.FPOffset != base+4 {
+				continue
+			}
+			p := c.fpParamAlloca[base]
+			if p == "" {
+				return "", fmt.Errorf("arm: missing FP param alloca for +%d(FP)", base)
+			}
+			full := c.newTmp()
+			hi := c.newTmp()
+			word := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s\n", full, p)
+			fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 32\n", hi, full)
+			fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", word, hi)
+			return "%" + word, nil
+		}
 		return "", fmt.Errorf("arm: unsupported FP param slot: %s", op.String())
 	}
 	if slot.Index < 0 || slot.Index >= len(c.sig.Args) {
 		return "", fmt.Errorf("arm: FP slot %s invalid arg index %d", op.String(), slot.Index)
 	}
 	arg := fmt.Sprintf("%%arg%d", slot.Index)
-	if slot.Field >= 0 {
+	if p := c.fpParamAlloca[op.FPOffset]; p != "" {
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s\n", t, slot.Type, p)
+		arg = "%" + t
+	} else if slot.Field >= 0 {
 		aggTy := c.sig.Args[slot.Index]
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", t, aggTy, arg, slot.Field)
@@ -240,6 +269,14 @@ func (c *armCtx) evalFPAddr32(op Operand) (string, error) {
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", t, slot)
 		return "%" + t, nil
+	}
+	if op.FPName == "argframe" {
+		// Dynamic reflect/callback stubs use $argframe(FP) without a statically
+		// declared argument frame. An ordinary LLVM function signature cannot
+		// recover that caller-owned address. Keep corpus/object lowering permissive,
+		// as the ARM64 lowering does, while executable ABI tests remain responsible
+		// for using only addressable, modeled slots.
+		return "0", nil
 	}
 	return "", fmt.Errorf("arm: unsupported FP addr slot: %s", op.String())
 }

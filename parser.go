@@ -359,7 +359,28 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 			out = append(out, op)
 		}
 	}
+	// Direct branches treat a bare token as a label even when it also looks like
+	// an architecture register (for example amd64 JL V1 and ARM BEQ X7 in Go
+	// 1.23's math/big assembly). Indirect branch and call opcodes stay outside
+	// this rule because their bare register operands are meaningful.
+	if branchRegisterTokenIsLabel(arch, op) && len(out) == 1 && out[0].Kind == OpReg {
+		out[0] = Operand{Kind: OpIdent, Ident: strings.TrimSpace(s)}
+	}
 	return out, nil
+}
+
+func branchRegisterTokenIsLabel(arch Arch, op Op) bool {
+	name := normalizeInstructionOpcode(op)
+	switch arch {
+	case ArchAMD64:
+		return (strings.HasPrefix(name, "J") && name != "JMP") || strings.HasPrefix(name, "LOOP")
+	case ArchARM:
+		return isARMBranchOpcode(name) && name != "BL" && name != "BX" && name != "BLX" && name != "RET"
+	case ArchARM64:
+		return isARM64BranchOpcode(name) && name != "BL" && name != "BR" && name != "BLR" && name != "RET" && name != "ERET"
+	default:
+		return false
+	}
 }
 
 // Go's x86 assembler retains an old three-operand spelling where left:right

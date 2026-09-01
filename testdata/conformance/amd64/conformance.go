@@ -12,6 +12,8 @@ func unpackDuplicateLowQWord(dst *[2]uint64)
 
 func shiftLegacyThreeOperand(src, dst, amount uint32) uint32
 
+func clearTopBit(value uint64) uint64
+
 func doubleShift32(out *[8]uint32, src, dst, amount uint32)
 
 func doubleShift64(out *[8]uint64, src, dst, amount uint64)

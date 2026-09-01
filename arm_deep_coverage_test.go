@@ -59,6 +59,12 @@ func TestARMEvalCoverage(t *testing.T) {
 		{Kind: OpSym, Sym: "$runtime·main+4(SB)"},
 		{Kind: OpIdent, Ident: "CS"},
 	}
+	if got, err := c.evalFPAddr32(Operand{Kind: OpFPAddr, FPName: "argframe", FPOffset: 99}); err != nil || got != "0" {
+		t.Fatalf("evalFPAddr32(dynamic) = (%q, %v), want (0, nil)", got, err)
+	}
+	if got, err := c.evalFPValue32(Operand{Kind: OpFP, FPName: "f_hi", FPOffset: 24}); err != nil || got == "" {
+		t.Fatalf("evalFPValue32(split i64 high) = (%q, %v)", got, err)
+	}
 	for _, op := range ops {
 		if got, err := c.eval32(op, op.Kind == OpMem); err != nil || got == "" {
 			t.Fatalf("eval32(%s) = (%q, %v)", op.String(), got, err)
@@ -209,6 +215,49 @@ func TestARMFPAndRetCoverage(t *testing.T) {
 		c3, _ := newARMCtxForTest(t, FuncSig{Name: "example.bad", Ret: LLVMType("token")}, nil)
 		if err := c3.lowerRET(); err == nil {
 			t.Fatalf("lowerRET(unsupported) unexpectedly succeeded")
+		}
+
+		c4, b4 := newARMCtxForTest(t, FuncSig{
+			Name: "example.ret64split",
+			Ret:  I64,
+			Frame: FrameLayout{Results: []FrameSlot{
+				{Offset: 0, Type: I32, Index: 0},
+				{Offset: 4, Type: I32, Index: 1},
+			}},
+		}, nil)
+		if err := c4.storeFPResult32(0, "1"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c4.storeFPResult32(4, "2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c4.lowerRET(); err != nil {
+			t.Fatalf("lowerRET(split i64) error = %v", err)
+		}
+		for _, want := range []string{"zext i32", "shl i64", "or i64", "ret i64"} {
+			if !strings.Contains(b4.String(), want) {
+				t.Fatalf("lowerRET(split i64) missing %q in:\n%s", want, b4.String())
+			}
+		}
+
+		c5, b5 := newARMCtxForTest(t, FuncSig{
+			Name:  "example.ret64writes",
+			Ret:   I64,
+			Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I64, Index: 0}}},
+		}, nil)
+		if err := c5.storeFPResult32(0, "1"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c5.storeFPResult32(4, "2"); err != nil {
+			t.Fatal(err)
+		}
+		if err := c5.lowerRET(); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"and i64", "shl i64", "or i64", "ret i64"} {
+			if !strings.Contains(b5.String(), want) {
+				t.Fatalf("split i64 writes missing %q in:\n%s", want, b5.String())
+			}
 		}
 	})
 }
@@ -425,6 +474,26 @@ func TestARMBranchMovmAndSyscallCoverage(t *testing.T) {
 	}
 	if err := c2.tailCallAndRet(Operand{Kind: OpSym, Sym: "tail64(SB)"}); err == nil {
 		t.Fatalf("tailCallAndRet(mismatch) unexpectedly succeeded")
+	}
+
+	cTailPtr, bTailPtr := newARMCtxForTest(t, FuncSig{Name: "example.tailptr", Ret: Ptr}, map[string]FuncSig{
+		"example.tailword": {Name: "example.tailword", Ret: I32},
+	})
+	if err := cTailPtr.tailCallAndRet(Operand{Kind: OpSym, Sym: "tailword(SB)"}); err != nil {
+		t.Fatalf("tailCallAndRet(i32 -> ptr) error = %v", err)
+	}
+	if got := bTailPtr.String(); !strings.Contains(got, "inttoptr i32") || !strings.Contains(got, "ret ptr") {
+		t.Fatalf("tailCallAndRet(i32 -> ptr) output:\n%s", got)
+	}
+
+	cTailWord, bTailWord := newARMCtxForTest(t, FuncSig{Name: "example.tailword", Ret: I32}, map[string]FuncSig{
+		"example.tailptr": {Name: "example.tailptr", Ret: Ptr},
+	})
+	if err := cTailWord.tailCallAndRet(Operand{Kind: OpSym, Sym: "tailptr(SB)"}); err != nil {
+		t.Fatalf("tailCallAndRet(ptr -> i32) error = %v", err)
+	}
+	if got := bTailWord.String(); !strings.Contains(got, "ptrtoint ptr") || !strings.Contains(got, "ret i32") {
+		t.Fatalf("tailCallAndRet(ptr -> i32) output:\n%s", got)
 	}
 
 	out := b.String()

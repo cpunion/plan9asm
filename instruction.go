@@ -243,6 +243,12 @@ func operandClass(arch Arch, goarch string, op Operand) string {
 	case OpIdent:
 		return "identifier"
 	case OpSym:
+		s := strings.TrimSpace(op.Sym)
+		if strings.HasPrefix(s, "$") {
+			if mem, ok := parseMem(strings.TrimSpace(strings.TrimPrefix(s, "$"))); ok {
+				return "address." + memoryClass(arch, goarch, mem)
+			}
+		}
 		return "symbol"
 	case OpLabel:
 		return "label"

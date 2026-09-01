@@ -564,10 +564,23 @@ func parseOperand(s string) (Operand, error) {
 	if s == "" {
 		return Operand{}, fmt.Errorf("empty operand")
 	}
+	// A leading '$' on a register-relative memory expression means effective
+	// address, not an immediate load. Recognize this before parseImm so forms
+	// such as $(-64*1024+104)(R13) are not mistaken for symbolic constants.
+	if strings.HasPrefix(s, "$") {
+		if _, ok := parseMem(strings.TrimSpace(strings.TrimPrefix(s, "$"))); ok {
+			return Operand{Kind: OpSym, Sym: s}, nil
+		}
+	}
 	if imm, ok := parseImm(s); ok {
 		op := Operand{Kind: OpImm, Imm: imm}
 		if isSymbolicImmPlaceholder(s) {
-			op.ImmRaw = s
+			expr := strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if _, resolvedInt := parseImmExpr(expr); !resolvedInt {
+				if _, resolvedFloat := parseImmFloatExpr(expr); !resolvedFloat {
+					op.ImmRaw = s
+				}
+			}
 		}
 		return op, nil
 	}

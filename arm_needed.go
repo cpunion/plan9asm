@@ -27,6 +27,11 @@ func funcNeedsARMCFG(fn Func) bool {
 			if strings.Contains(rawOp, ".") {
 				return true
 			}
+			for _, arg := range ins.Args {
+				if arg.Kind == OpIdent {
+					return true
+				}
+			}
 			continue
 		default:
 			return true

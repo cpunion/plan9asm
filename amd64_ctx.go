@@ -1326,6 +1326,28 @@ func (c *amd64Ctx) storeFPResult(off int64, ty LLVMType, v string) error {
 		// the natural alignment required by the value stored in a slot.
 		align = ", align 1"
 	}
+	if slot, ok := c.fpParams[off]; ok && c.classicFrame != "" {
+		// 386 ABIInternal stubs write register arguments back into the
+		// caller-provided FP argument area before tail-calling an ABI0
+		// handler (for example runtime.panicIndex). The classic frame is
+		// deliberately mutable, unlike an LLVM SSA argument.
+		value := v
+		switch {
+		case ty == slot.Type:
+		case ty == I32 && slot.Type == Ptr:
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %s to ptr\n", t, v)
+			value = "%" + t
+		case ty == Ptr && slot.Type == I32:
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", t, v)
+			value = "%" + t
+		default:
+			return fmt.Errorf("FP parameter write type mismatch: have %s want %s at +%d(FP)", ty, slot.Type, off)
+		}
+		fmt.Fprintf(c.b, "  store %s %s, ptr %s%s\n", slot.Type, value, c.classicFramePtr(off), align)
+		return nil
+	}
 	if c.goarch == "386" && ty == I32 {
 		for _, slot := range c.fpResults {
 			if !isSplit64FrameType(slot.Type) ||

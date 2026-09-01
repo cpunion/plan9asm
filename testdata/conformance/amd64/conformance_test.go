@@ -52,6 +52,20 @@ func TestLegacyThreeOperandShift(t *testing.T) {
 	}
 }
 
+func TestBTRQClearTopBit(t *testing.T) {
+	for _, tc := range []struct {
+		in   uint64
+		want uint64
+	}{
+		{in: ^uint64(0), want: 0x7fffffffffffffff},
+		{in: 0x0123456789abcdef, want: 0x0123456789abcdef},
+	} {
+		if got := clearTopBit(tc.in); got != tc.want {
+			t.Fatalf("clearTopBit(%#x) = %#x, want %#x", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestDoubleShiftFamily(t *testing.T) {
 	pairs32 := [][2]uint32{
 		{0x12345678, 0x89abcdef},

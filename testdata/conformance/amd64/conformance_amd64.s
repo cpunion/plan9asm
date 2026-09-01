@@ -52,6 +52,12 @@ TEXT ·shiftLegacyThreeOperand(SB), NOSPLIT, $0-20
 	MOVL R11, ret+16(FP)
 	RET
 
+TEXT ·clearTopBit(SB), NOSPLIT, $0-16
+	MOVQ value+0(FP), AX
+	BTRQ $63, AX
+	MOVQ AX, ret+8(FP)
+	RET
+
 TEXT ·doubleShift32(SB), NOSPLIT, $0-20
 	MOVQ out+0(FP), DI
 	MOVL src+8(FP), AX

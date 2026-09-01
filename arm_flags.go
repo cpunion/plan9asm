@@ -9,6 +9,35 @@ func (c *armCtx) storeFlag(slot string, v string) {
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", v, slot)
 }
 
+// captureHardwareFlags records the APSR condition flags immediately after an
+// out-of-line call. ARM assembly is allowed to branch on flags produced by the
+// callee (the Linux kuser CAS helper does this), while an LLVM call has no flag
+// result in its type. Reading APSR keeps that machine-level contract explicit.
+func (c *armCtx) captureHardwareFlags() {
+	status := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", status, "mrs $0, apsr", "=r,~{memory}")
+	c.storeFlagsFromStatus("%" + status)
+}
+
+func (c *armCtx) storeFlagsFromStatus(status string) {
+	for _, item := range []struct {
+		shift int
+		slot  string
+	}{
+		{31, c.flagsNSlot},
+		{30, c.flagsZSlot},
+		{29, c.flagsCSlot},
+		{28, c.flagsVSlot},
+	} {
+		shifted := c.newTmp()
+		flag := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %d\n", shifted, status, item.shift)
+		fmt.Fprintf(c.b, "  %%%s = trunc i32 %%%s to i1\n", flag, shifted)
+		c.storeFlag(item.slot, "%"+flag)
+	}
+	c.flagsWritten = true
+}
+
 func (c *armCtx) storeFlagCond(cond, slot, v string) error {
 	if cond == "" || strings.EqualFold(cond, "AL") {
 		c.storeFlag(slot, v)

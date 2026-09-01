@@ -156,6 +156,30 @@ func (c *armCtx) lowerRET() error {
 		fmt.Fprintf(c.b, "  ret %s %s\n", c.sig.Ret, v)
 		return nil
 	}
+	if c.sig.Ret == I64 && len(c.fpResults) == 2 && c.fpResults[0].Type == I32 && c.fpResults[1].Type == I32 {
+		parts := make([]string, 2)
+		for i, slot := range c.fpResults {
+			var err error
+			if c.fpResWritten[slot.Index] || c.fpResAddrTaken[slot.Index] {
+				parts[i], err = c.loadFPResult(slot)
+			} else {
+				parts[i], err = c.loadRetSlotFallback(slot)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		lo := c.newTmp()
+		hi := c.newTmp()
+		shifted := c.newTmp()
+		joined := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", lo, parts[0])
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", hi, parts[1])
+		fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 32\n", shifted, hi)
+		fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", joined, lo, shifted)
+		fmt.Fprintf(c.b, "  ret i64 %%%s\n", joined)
+		return nil
+	}
 	cur := "undef"
 	last := ""
 	for _, slot := range c.fpResults {

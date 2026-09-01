@@ -330,7 +330,29 @@ func (c *amd64Ctx) callSym(symOp Operand) error {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", p, t)
 		return c.storeReg(AX, "%"+p)
 	default:
-		return fmt.Errorf("amd64 call %q unsupported return type %s", callee, csig.Ret)
+		fields, ok := parseLiteralStructFields(csig.Ret)
+		if !ok || !literalFieldsAllScalar(fields) {
+			return fmt.Errorf("amd64 call %q unsupported return type %s", callee, csig.Ret)
+		}
+		resultRegs := []Reg{AX, BX, CX, DI, SI, Reg("R8"), Reg("R9"), Reg("R10"), Reg("R11")}
+		if len(fields) > len(resultRegs) {
+			return fmt.Errorf("amd64 call %q has %d scalar return fields, maximum is %d", callee, len(fields), len(resultRegs))
+		}
+		for i, fieldTy := range fields {
+			extracted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, %d\n", extracted, csig.Ret, t, i)
+			value, scalar, err := amd64ValueAsI64(c, fieldTy, "%"+extracted)
+			if err != nil {
+				return err
+			}
+			if !scalar {
+				return fmt.Errorf("amd64 call %q unsupported return field type %s", callee, fieldTy)
+			}
+			if err := c.storeReg(resultRegs[i], value); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }
 

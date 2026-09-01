@@ -15,38 +15,43 @@ func (c *armCtx) lowerBranch(bi int, op, cond string, ins Instr, emitBr armEmitB
 	}
 	switch op {
 	case "BL", "CALL":
-		if cond != "" {
-			return true, false, fmt.Errorf("arm %s.%s unsupported: %q", op, cond, ins.Raw)
-		}
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm %s expects 1 operand: %q", op, ins.Raw)
 		}
-		switch ins.Args[0].Kind {
-		case OpReg:
-			addr, err := c.loadReg(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
+		emitCall := func() error {
+			switch ins.Args[0].Kind {
+			case OpReg:
+				addr, err := c.loadReg(ins.Args[0].Reg)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "blx $0", "r,~{cc},~{memory}", addr)
+				c.captureHardwareFlags()
+				return nil
+			case OpMem:
+				addr, _, _, err := c.addrI32(ins.Args[0].Mem, false)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "blx $0", "r,~{cc},~{memory}", addr)
+				c.captureHardwareFlags()
+				return nil
+			case OpSym:
+				return c.callSym(ins.Args[0])
+			default:
+				return fmt.Errorf("arm %s invalid target: %q", op, ins.Raw)
 			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "blx $0", "r,~{memory}", addr)
-			return true, false, nil
-		case OpMem:
-			addr, _, _, err := c.addrI32(ins.Args[0].Mem, false)
-			if err != nil {
-				return true, false, err
-			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "blx $0", "r,~{memory}", addr)
-			return true, false, nil
-		case OpSym:
-			return true, false, c.callSym(ins.Args[0])
-		default:
-			return true, false, fmt.Errorf("arm %s invalid target: %q", op, ins.Raw)
 		}
+		if cond != "" {
+			return true, false, c.emitConditionalEffect(cond, emitCall)
+		}
+		return true, false, emitCall()
 	case "B":
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm B expects 1 operand: %q", ins.Raw)
 		}
 		if cond != "" {
-			tgt, ok := armBranchTarget(ins.Args[0])
+			tgt, ok := c.resolveBranchTarget(bi, ins.Args[0])
 			if !ok {
 				return true, false, fmt.Errorf("arm B.%s invalid target: %q", cond, ins.Raw)
 			}
@@ -61,7 +66,16 @@ func (c *armCtx) lowerBranch(bi int, op, cond string, ins Instr, emitBr armEmitB
 		if ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, true, c.tailCallAndRet(ins.Args[0])
 		}
-		tgt, ok := armBranchTarget(ins.Args[0])
+		if ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Base != PC {
+			addr, _, _, err := c.addrI32(ins.Args[0].Mem, false)
+			if err != nil {
+				return true, false, err
+			}
+			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "bx $0", "r,~{memory}", addr)
+			c.lowerRetZero()
+			return true, true, nil
+		}
+		tgt, ok := c.resolveBranchTarget(bi, ins.Args[0])
 		if !ok {
 			return true, false, fmt.Errorf("arm B invalid target: %q", ins.Raw)
 		}
@@ -71,7 +85,7 @@ func (c *armCtx) lowerBranch(bi int, op, cond string, ins Instr, emitBr armEmitB
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm %s expects label: %q", op, ins.Raw)
 		}
-		tgt, ok := armBranchTarget(ins.Args[0])
+		tgt, ok := c.resolveBranchTarget(bi, ins.Args[0])
 		if !ok {
 			return true, false, fmt.Errorf("arm %s invalid target: %q", op, ins.Raw)
 		}
@@ -161,8 +175,26 @@ func (c *armCtx) tailCallAndRet(symOp Operand) error {
 	}
 	t := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s %s(%s)\n", t, csig.Ret, llvmGlobal(callee), strings.Join(args, ", "))
+	if c.sig.Ret == Void {
+		c.b.WriteString("  ret void\n")
+		return nil
+	}
 	if c.sig.Ret != csig.Ret {
-		return fmt.Errorf("arm tailcall return mismatch: caller %s callee %s", c.sig.Ret, csig.Ret)
+		conv := c.newTmp()
+		switch {
+		case csig.Ret == I32 && (c.sig.Ret == I1 || c.sig.Ret == I8 || c.sig.Ret == I16):
+			fmt.Fprintf(c.b, "  %%%s = trunc i32 %%%s to %s\n", conv, t, c.sig.Ret)
+		case (csig.Ret == I1 || csig.Ret == I8 || csig.Ret == I16) && c.sig.Ret == I32:
+			fmt.Fprintf(c.b, "  %%%s = zext %s %%%s to i32\n", conv, csig.Ret, t)
+		case csig.Ret == Ptr && c.sig.Ret == I32:
+			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i32\n", conv, t)
+		case csig.Ret == I32 && c.sig.Ret == Ptr:
+			fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %%%s to ptr\n", conv, t)
+		default:
+			return fmt.Errorf("arm tailcall return mismatch: caller %s callee %s", c.sig.Ret, csig.Ret)
+		}
+		fmt.Fprintf(c.b, "  ret %s %%%s\n", c.sig.Ret, conv)
+		return nil
 	}
 	fmt.Fprintf(c.b, "  ret %s %%%s\n", c.sig.Ret, t)
 	return nil
@@ -203,10 +235,12 @@ func (c *armCtx) callSym(symOp Operand) error {
 	}
 	if csig.Ret == Void {
 		fmt.Fprintf(c.b, "  call void %s(%s)\n", llvmGlobal(callee), strings.Join(args, ", "))
+		c.captureHardwareFlags()
 		return nil
 	}
 	t := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s %s(%s)\n", t, csig.Ret, llvmGlobal(callee), strings.Join(args, ", "))
+	c.captureHardwareFlags()
 	switch csig.Ret {
 	case I32:
 		return c.storeReg(Reg("R0"), "%"+t)

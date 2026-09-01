@@ -34,6 +34,7 @@ type armCtx struct {
 	exclusiveValueSlot string
 
 	fpParams       map[int64]FrameSlot
+	fpParamAlloca  map[int64]string
 	fpResults      []FrameSlot
 	fpResAllocaOff map[int64]string
 	fpResAllocaIdx map[int]string
@@ -54,6 +55,7 @@ func newARMCtx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		usedFRegs:      map[Reg]bool{},
 		fRegSlot:       map[Reg]string{},
 		fpParams:       map[int64]FrameSlot{},
+		fpParamAlloca:  map[int64]string{},
 		fpResAllocaOff: map[int64]string{},
 		fpResAllocaIdx: map[int]string{},
 		fpResWritten:   map[int]bool{},
@@ -186,6 +188,22 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	fmt.Fprintf(c.b, "  store i8 0, ptr %s\n", c.exclusiveSizeSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i64\n", c.exclusiveValueSlot)
 	fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", c.exclusiveValueSlot)
+
+	for _, p := range c.sig.Frame.Params {
+		if p.Index < 0 || p.Index >= len(c.sig.Args) {
+			return fmt.Errorf("arm: FP param slot +%d(FP) invalid arg index %d", p.Offset, p.Index)
+		}
+		value := fmt.Sprintf("%%arg%d", p.Index)
+		if p.Field >= 0 {
+			extracted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", extracted, c.sig.Args[p.Index], value, p.Field)
+			value = "%" + extracted
+		}
+		name := fmt.Sprintf("%%fp_arg_%d", p.Offset)
+		c.fpParamAlloca[p.Offset] = name
+		fmt.Fprintf(c.b, "  %s = alloca %s\n", name, p.Type)
+		fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", p.Type, value, name)
+	}
 
 	for _, r := range c.fpResults {
 		name := fmt.Sprintf("%%fp_ret_%d", r.Index)
