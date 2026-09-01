@@ -123,6 +123,13 @@ jobs:
           chmod +x scripts/check-stdlib-corpus.sh
           scripts/check-stdlib-corpus.sh
 
+      - name: Official Go assembler coverage regression
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          chmod +x scripts/check-go-asm-coverage.sh
+          scripts/check-go-asm-coverage.sh
+
   test:
     permissions:
       contents: read

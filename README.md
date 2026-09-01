@@ -18,13 +18,16 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 
 ## Current status
 
-- Library parser/lowering targets: `386`, `amd64`, `arm64`.
+- Library parser/lowering targets: `386`, `amd64`, `arm`, `arm64`.
 - Tool targets (`cmd/plan9asmll -all-targets`):
   - `darwin/amd64`, `darwin/arm64`
   - `linux/amd64`, `linux/arm64`, `linux/386`
   - `windows/amd64`, `windows/arm64`, `windows/386`
 - `386` currently reuses the x86 lowering path from `amd64` backend logic.
 - `arm64` does not include `arm` (32-bit). They are separate architectures.
+- Instruction coverage is tracked by architecture, family, opcode, and operand
+  form against Go's official assembler testdata. See
+  [Plan 9 assembly instruction coverage](doc/plan9asm-corpus.md).
 
 ## LLVM backend
 
@@ -41,6 +44,14 @@ go test ./...
 ```
 
 Some tests require local LLVM/Clang tools (`llc`, `clang`) and skip when unavailable.
+
+The executable cases under `testdata/conformance` use the native Go
+assembler as an oracle, then compile and run the same assembly through
+plan9asm/LLVM. Run the cross-version instruction coverage regression with:
+
+```bash
+scripts/check-go-asm-coverage.sh
+```
 
 ## `cmd/plan9asmll` usage
 

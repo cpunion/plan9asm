@@ -58,6 +58,27 @@ RET
 	}
 }
 
+func TestParseLegacyX86ColonOperand(t *testing.T) {
+	src := `
+TEXT ·shift(SB),NOSPLIT,$0
+SHLL CX, R11:AX
+SHLL $4, foo+4(SB):AX
+RET
+`
+	file, err := Parse(ArchAMD64, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := file.Funcs[0].Instrs[1]
+	if len(first.Args) != 3 || first.Args[1].Kind != OpReg || first.Args[1].Reg != AX || first.Args[2].Reg != Reg("R11") {
+		t.Fatalf("SHLL register pair args = %#v", first.Args)
+	}
+	second := file.Funcs[0].Instrs[2]
+	if len(second.Args) != 3 || second.Args[1].Kind != OpReg || second.Args[1].Reg != AX || second.Args[2].Kind != OpSym {
+		t.Fatalf("SHLL symbol pair args = %#v", second.Args)
+	}
+}
+
 func TestParseImmediateExpr(t *testing.T) {
 	src := `
 TEXT ·ImmExpr(SB),NOSPLIT,$0

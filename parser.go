@@ -347,13 +347,50 @@ func parseOperandsCSV(s string) ([]Operand, error) {
 		if part == "" {
 			continue
 		}
-		op, err := parseOperand(part)
-		if err != nil {
-			return nil, err
+		legacy := splitLegacyColonOperand(part)
+		for _, item := range legacy {
+			op, err := parseOperand(item)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, op)
 		}
-		out = append(out, op)
 	}
 	return out, nil
+}
+
+// Go's x86 assembler retains an old three-operand spelling where left:right
+// means right, left. For example R11:AX in SHLL CX, R11:AX is equivalent to
+// SHLL CX, AX, R11. Keep this in the parser so official assembler testdata can
+// describe the canonical three-operand form.
+func splitLegacyColonOperand(s string) []string {
+	par := 0
+	brk := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			par++
+		case ')':
+			if par > 0 {
+				par--
+			}
+		case '[':
+			brk++
+		case ']':
+			if brk > 0 {
+				brk--
+			}
+		case ':':
+			if par == 0 && brk == 0 {
+				left := strings.TrimSpace(s[:i])
+				right := strings.TrimSpace(s[i+1:])
+				if left != "" && right != "" {
+					return []string{right, left}
+				}
+			}
+		}
+	}
+	return []string{s}
 }
 
 func splitOpcode(stmt string) (op, rest string) {

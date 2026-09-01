@@ -1,0 +1,121 @@
+#include "textflag.h"
+
+TEXT ·byteMemory(SB), NOSPLIT, $0-9
+	MOVQ p+0(FP), AX
+	MOVBLZX value+8(FP), SI
+	ADDB SI, (AX)
+	ADDQ $1, AX
+	XORB SI, (AX)
+	ADDQ $1, AX
+	ANDB SI, (AX)
+	ADDQ $1, AX
+	ORB SI, (AX)
+	RET
+
+TEXT ·byteFlags(SB), NOSPLIT, $0-16
+	MOVQ p+0(FP), AX
+	MOVQ flags+8(FP), BX
+	ADDB $1, (AX)
+	SETCS 0(BX)
+	SETEQ 1(BX)
+	XORB $0xff, 1(AX)
+	SETCS 2(BX)
+	SETEQ 3(BX)
+	ANDB $0, 2(AX)
+	SETCS 4(BX)
+	SETEQ 5(BX)
+	ORB $0x80, 3(AX)
+	SETCS 6(BX)
+	SETLT 7(BX)
+	RET
+
+TEXT ·unpackLowQWords(SB), NOSPLIT, $0-16
+	MOVQ dst+0(FP), AX
+	MOVQ src+8(FP), BX
+	MOVOU (AX), X0
+	PUNPCKLQDQ (BX), X0
+	MOVOU X0, (AX)
+	RET
+
+TEXT ·unpackDuplicateLowQWord(SB), NOSPLIT, $0-8
+	MOVQ dst+0(FP), AX
+	MOVOU (AX), X0
+	PUNPCKLQDQ X0, X0
+	MOVOU X0, (AX)
+	RET
+
+TEXT ·shiftLegacyThreeOperand(SB), NOSPLIT, $0-20
+	MOVL src+0(FP), AX
+	MOVL dst+4(FP), R11
+	MOVL amount+8(FP), CX
+	SHLL CX, R11:AX
+	MOVL R11, ret+16(FP)
+	RET
+
+TEXT ·doubleShift32(SB), NOSPLIT, $0-20
+	MOVQ out+0(FP), DI
+	MOVL src+8(FP), AX
+	MOVL dst+12(FP), R11
+	MOVL amount+16(FP), CX
+	SHLL CL, AX, R11
+	MOVL R11, 0(DI)
+	MOVL dst+12(FP), R11
+	SHLL $7, AX, R11
+	MOVL R11, 4(DI)
+	LEAQ 8(DI), BX
+	MOVL dst+12(FP), R11
+	MOVL R11, (BX)
+	SHLL CL, AX, (BX)
+	LEAQ 12(DI), BX
+	MOVL dst+12(FP), R11
+	MOVL R11, (BX)
+	SHLL $7, AX, (BX)
+	MOVL dst+12(FP), R11
+	SHRL CL, AX, R11
+	MOVL R11, 16(DI)
+	MOVL dst+12(FP), R11
+	SHRL $7, AX, R11
+	MOVL R11, 20(DI)
+	LEAQ 24(DI), BX
+	MOVL dst+12(FP), R11
+	MOVL R11, (BX)
+	SHRL CL, AX, (BX)
+	LEAQ 28(DI), BX
+	MOVL dst+12(FP), R11
+	MOVL R11, (BX)
+	SHRL $7, AX, (BX)
+	RET
+
+TEXT ·doubleShift64(SB), NOSPLIT, $0-32
+	MOVQ out+0(FP), DI
+	MOVQ src+8(FP), AX
+	MOVQ dst+16(FP), R11
+	MOVQ amount+24(FP), CX
+	SHLQ CL, AX, R11
+	MOVQ R11, 0(DI)
+	MOVQ dst+16(FP), R11
+	SHLQ $7, AX, R11
+	MOVQ R11, 8(DI)
+	LEAQ 16(DI), BX
+	MOVQ dst+16(FP), R11
+	MOVQ R11, (BX)
+	SHLQ CL, AX, (BX)
+	LEAQ 24(DI), BX
+	MOVQ dst+16(FP), R11
+	MOVQ R11, (BX)
+	SHLQ $7, AX, (BX)
+	MOVQ dst+16(FP), R11
+	SHRQ CL, AX, R11
+	MOVQ R11, 32(DI)
+	MOVQ dst+16(FP), R11
+	SHRQ $7, AX, R11
+	MOVQ R11, 40(DI)
+	LEAQ 48(DI), BX
+	MOVQ dst+16(FP), R11
+	MOVQ R11, (BX)
+	SHRQ CL, AX, (BX)
+	LEAQ 56(DI), BX
+	MOVQ dst+16(FP), R11
+	MOVQ R11, (BX)
+	SHRQ $7, AX, (BX)
+	RET

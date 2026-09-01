@@ -508,6 +508,8 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 		"atomicrmw add ptr",
 		"atomicrmw xchg ptr",
 		"atomicrmw and ptr",
+		"icmp eq i8",
+		"icmp slt i8",
 		"call i64",
 		"call ptr @\"example.helper\"",
 		"call i64 @\"example.cast\"",

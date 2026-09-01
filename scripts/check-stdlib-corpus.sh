@@ -48,10 +48,7 @@ if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
 fi
 
 for target in "${targets[@]}"; do
-  set -- $target
-  goos=$1
-  goarch=$2
-  triple=$3
+  read -r goos goarch triple <<< "$target"
 
   echo "==> scan $goos/$goarch"
   json="$tmp_root/$goos-$goarch.json"
@@ -65,11 +62,18 @@ with open(path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 unsupported = data.get("unsupported", [])
+unsupported_forms = data.get("unsupported_by_form", [])
 parse_errs = data.get("parse_errs") or []
-print(f"scan {target}: packages={data['std_pkgs_with_sfile']} files={data['asm_files']} unsupported={len(unsupported)} parse_errs={len(parse_errs)}")
+print(f"scan {target}: packages={data['std_pkgs_with_sfile']} files={data['asm_files']} unsupported={len(unsupported)} unsupported_forms={len(unsupported_forms)} parse_errs={len(parse_errs)}")
 if unsupported:
     top = ", ".join(f"{item['op']}({item['count']})" for item in unsupported[:12])
     raise SystemExit(f"{target}: unsupported ops remain: {top}")
+if unsupported_forms:
+    top = ", ".join(
+        f"{item['form']} ({item['examples'][0] if item.get('examples') else 'no example'})"
+        for item in unsupported_forms[:12]
+    )
+    raise SystemExit(f"{target}: unsupported operand forms remain: {top}")
 if parse_errs:
     top = ", ".join(f"{item['File']}: {item['Err']}" for item in parse_errs[:8])
     raise SystemExit(f"{target}: parse errors remain: {top}")
