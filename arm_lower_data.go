@@ -39,7 +39,7 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, fmt.Errorf("arm MOVW expects 2 operands: %q", ins.Raw)
 		}
 		src, dst := ins.Args[0], ins.Args[1]
-		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP || dst.Kind == OpIdent) {
+		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP || dst.Kind == OpSym || dst.Kind == OpIdent) {
 			err := c.emitConditionalEffect(cond, func() error {
 				_, _, err := c.lowerData(op, "", postInc, ins)
 				return err
@@ -61,7 +61,7 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)
 		}
 		src, dst := ins.Args[0], ins.Args[1]
-		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP) {
+		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP || dst.Kind == OpSym) {
 			err := c.emitConditionalEffect(cond, func() error {
 				_, _, err := c.lowerData(op, "", postInc, ins)
 				return err
@@ -136,6 +136,23 @@ func (c *armCtx) storeARMValue(dst Operand, v string, bits int, cond string, pos
 		}
 		return c.storeFP32(dst.FPOffset, v)
 	case OpSym:
+		if cond != "" {
+			return fmt.Errorf("arm conditional store to symbol unsupported: %q", raw)
+		}
+		p, err := c.ptrFromSB(dst.Sym)
+		if err != nil {
+			return err
+		}
+		switch bits {
+		case 32:
+			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, p)
+		case 8:
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i8\n", t, v)
+			fmt.Fprintf(c.b, "  store i8 %%%s, ptr %s\n", t, p)
+		default:
+			return fmt.Errorf("arm: unsupported symbol store bits %d", bits)
+		}
 		return nil
 	case OpIdent:
 		switch strings.ToUpper(dst.Ident) {

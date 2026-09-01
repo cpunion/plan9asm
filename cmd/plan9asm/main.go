@@ -1004,7 +1004,7 @@ func fallbackSigForAsmFunc(fn plan9asm.Func, resolved, goarch string) plan9asm.F
 
 func isLikelyResultSlot(op string, argIndex int, argCount int, fpName string) bool {
 	name := strings.ToLower(fpName)
-	if strings.HasPrefix(name, "ret") || strings.HasPrefix(name, "r") && strings.Contains(name, "ret") {
+	if strings.HasPrefix(name, "ret") {
 		return true
 	}
 	if argCount > 0 && argIndex == argCount-1 {

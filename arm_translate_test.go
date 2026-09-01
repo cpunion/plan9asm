@@ -56,6 +56,7 @@ func TestTranslateARMConditionalEffectsAndIndirectBranch(t *testing.T) {
 	MOVW p+0(FP), R7
 	CMP $0, R0
 	MOVW.EQ R0, (R7)
+	MOVW.EQ R0, ·global(SB)
 	BL.NE ·callee(SB)
 	RET
 
@@ -97,6 +98,8 @@ TEXT ·spin(SB),NOSPLIT,$0-0
 	for _, want := range []string{
 		"br i1",
 		"store i32",
+		`store i32 %`,
+		`ptr @example.global`,
 		`call void @example.callee()`,
 		`mrs $0, apsr`,
 		`call void asm sideeffect "bx $0"`,

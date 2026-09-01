@@ -62,6 +62,17 @@ func TestFallbackSigUsesTargetWordSize(t *testing.T) {
 	}
 }
 
+func TestLikelyResultSlotUsesExplicitResultPrefix(t *testing.T) {
+	if !isLikelyResultSlot("MOVW", 0, 2, "ret0") {
+		t.Fatal("ret-prefixed FP slot was not classified as a result")
+	}
+	for _, name := range []string{"roundTripRet", "r_ret", "request"} {
+		if isLikelyResultSlot("MOVW", 0, 2, name) {
+			t.Errorf("parameter FP slot %q was classified as a result", name)
+		}
+	}
+}
+
 func TestWasmTargetConfiguration(t *testing.T) {
 	if got, err := toPlan9Arch("wasm"); err != nil || got != plan9asm.ArchWASM {
 		t.Fatalf("toPlan9Arch(wasm) = (%q, %v)", got, err)
