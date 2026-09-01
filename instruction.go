@@ -296,12 +296,12 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 			return "mask-register"
 		case strings.HasPrefix(r, "M"):
 			return "mmx"
+		case r == "FS" || r == "GS":
+			return "segment-register"
 		case strings.HasPrefix(r, "F"):
 			return "x87"
 		case r == "AL" || r == "AH" || r == "BL" || r == "BH" || r == "CL" || r == "CH" || r == "DL" || r == "DH":
 			return "gpr-byte"
-		case r == "FS" || r == "GS":
-			return "segment-register"
 		case r == "SP":
 			return "stack-pointer"
 		default:
