@@ -63,8 +63,29 @@ func InstructionFamily(arch Arch, opcode string) string {
 		return arm64InstructionFamily(op)
 	case ArchARM:
 		return armInstructionFamily(op)
+	case ArchWASM:
+		return wasmInstructionFamily(op)
 	default:
 		return "unknown"
+	}
+}
+
+func wasmInstructionFamily(op string) string {
+	switch {
+	case op == "GET" || op == "SET" || op == "TEE" || op == "DROP" || op == "SELECT":
+		return "stack-local"
+	case op == "BLOCK" || op == "LOOP" || op == "IF" || op == "ELSE" || op == "END" || op == "BR" || op == "BRIF" || op == "RETURN" || op == "CALL" || op == "CALLINDIRECT" || op == "RET" || op == "JMP":
+		return "control-flow"
+	case strings.Contains(op, "LOAD") || strings.Contains(op, "STORE") || strings.HasPrefix(op, "MEMORY") || op == "CURRENTMEMORY" || op == "GROWMEMORY":
+		return "memory"
+	case strings.HasPrefix(op, "F32") || strings.HasPrefix(op, "F64"):
+		return "floating"
+	case strings.HasPrefix(op, "I32") || strings.HasPrefix(op, "I64") || op == "NOT":
+		return "integer"
+	case op == "UNDEF" || op == "UNREACHABLE" || op == "NOP":
+		return "system"
+	default:
+		return "misc"
 	}
 }
 

@@ -150,7 +150,7 @@ var (
 func main() {
 	var (
 		goos     = flag.String("goos", runtime.GOOS, "target GOOS")
-		goarch   = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm64/arm)")
+		goarch   = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm64/arm/wasm)")
 		out      = flag.String("out", "", "write report to file (default stdout)")
 		format   = flag.String("format", "md", "output format: md|json")
 		repoRoot = flag.String("repo-root", ".", "plan9asm repository root for lowerers and conformance data")
@@ -159,8 +159,8 @@ func main() {
 	)
 	flag.Parse()
 
-	if *goarch != "386" && *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" {
-		fatalf("unsupported -goarch %q (expect 386/amd64/arm64/arm)", *goarch)
+	if *goarch != "386" && *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" && *goarch != "wasm" {
+		fatalf("unsupported -goarch %q (expect 386/amd64/arm64/arm/wasm)", *goarch)
 	}
 	arch, err := toPlan9Arch(*goarch)
 	if err != nil {
@@ -246,6 +246,8 @@ func toPlan9Arch(goarch string) (plan9asm.Arch, error) {
 		return plan9asm.ArchARM, nil
 	case "arm64":
 		return plan9asm.ArchARM64, nil
+	case "wasm":
+		return plan9asm.ArchWASM, nil
 	default:
 		return "", fmt.Errorf("unsupported arch: %s", goarch)
 	}

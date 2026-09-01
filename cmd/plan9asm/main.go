@@ -82,7 +82,7 @@ func runList(args []string) error {
 		goarch string
 	)
 	fs.StringVar(&goos, "goos", runtime.GOOS, "target GOOS")
-	fs.StringVar(&goarch, "goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm/386)")
+	fs.StringVar(&goarch, "goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm/386/wasm)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func runTranspile(args []string) error {
 	fs.BoolVar(&annotate, "annotate", true, "emit source asm lines as IR comments")
 	fs.StringVar(&inFile, "i", "", "Plan9 asm .s file path")
 	fs.StringVar(&outFile, "o", "", "output .ll file path")
-	fs.StringVar(&goarch, "goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm/386)")
+	fs.StringVar(&goarch, "goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm/386/wasm)")
 	fs.StringVar(&goos, "goos", runtime.GOOS, "target GOOS")
 	fs.StringVar(&metaFile, "meta", "", "optional output metadata json path")
 	fs.StringVar(&patterns, "patterns", "", "deprecated comma-separated package patterns")
@@ -417,8 +417,10 @@ func toPlan9Arch(goarch string) (plan9asm.Arch, error) {
 		return plan9asm.ArchARM, nil
 	case "arm64":
 		return plan9asm.ArchARM64, nil
+	case "wasm":
+		return plan9asm.ArchWASM, nil
 	default:
-		return "", fmt.Errorf("unsupported -goarch %q (expect amd64/arm64/arm/386)", goarch)
+		return "", fmt.Errorf("unsupported -goarch %q (expect amd64/arm64/arm/386/wasm)", goarch)
 	}
 }
 
@@ -440,7 +442,14 @@ func targetTriple(goos, goarch string) string {
 		case "arm64":
 			return "aarch64-unknown-linux-gnu"
 		case "arm":
-			return "armv7-unknown-linux-gnueabihf"
+			switch strings.SplitN(os.Getenv("GOARM"), ",", 2)[0] {
+			case "5":
+				return "armv5te-unknown-linux-gnueabi"
+			case "6":
+				return "armv6-unknown-linux-gnueabihf"
+			default:
+				return "armv7-unknown-linux-gnueabihf"
+			}
 		case "386":
 			return "i386-unknown-linux-gnu"
 		}
@@ -452,6 +461,14 @@ func targetTriple(goos, goarch string) string {
 			return "aarch64-pc-windows-msvc"
 		case "386":
 			return "i686-pc-windows-msvc"
+		}
+	case "js":
+		if goarch == "wasm" {
+			return "wasm32-unknown-unknown"
+		}
+	case "wasip1":
+		if goarch == "wasm" {
+			return "wasm32-unknown-wasi"
 		}
 	}
 	return ""
@@ -1223,7 +1240,7 @@ func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
 
 func wordSize(goarch string) int {
 	switch goarch {
-	case "amd64", "arm64", "loong64", "mips64", "mips64le", "ppc64", "ppc64le", "riscv64", "s390x":
+	case "amd64", "arm64", "loong64", "mips64", "mips64le", "ppc64", "ppc64le", "riscv64", "s390x", "wasm":
 		return 8
 	default:
 		return 4

@@ -84,6 +84,28 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if strings.HasPrefix(op, "CRC32") {
 				add("+crc")
 			}
+		case ArchARM:
+			// Go's ARM runtime keeps VFP save/restore instructions in the
+			// GOARM=5 image and guards their execution with goarmsoftfp. LLVM
+			// still needs VFP enabled while assembling that otherwise-dead path.
+			// Attach the feature only to functions which name VFP state or
+			// floating-point registers; this does not raise the target-wide CPU
+			// baseline.
+			for _, arg := range ins.Args {
+				var reg string
+				switch arg.Kind {
+				case OpReg:
+					reg = strings.ToUpper(string(arg.Reg))
+				case OpIdent:
+					reg = strings.ToUpper(arg.Ident)
+				default:
+					continue
+				}
+				if reg == "FPCR" || reg == "FPSR" || strings.HasPrefix(reg, "F") {
+					add("+vfp2")
+					break
+				}
+			}
 		}
 	}
 

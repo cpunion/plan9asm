@@ -51,11 +51,46 @@ func TestFallbackSigUsesTargetWordSize(t *testing.T) {
 		{goarch: "386", want: plan9asm.I32},
 		{goarch: "arm64", want: plan9asm.I64},
 		{goarch: "amd64", want: plan9asm.I64},
+		{goarch: "wasm", want: plan9asm.I64},
 	} {
 		t.Run(tc.goarch, func(t *testing.T) {
 			got := fallbackSigForAsmFunc(fn, "example.f", tc.goarch)
 			if len(got.Args) != 1 || got.Args[0] != tc.want || got.Ret != tc.want {
 				t.Fatalf("fallback signature = %#v, want arg and return %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWasmTargetConfiguration(t *testing.T) {
+	if got, err := toPlan9Arch("wasm"); err != nil || got != plan9asm.ArchWASM {
+		t.Fatalf("toPlan9Arch(wasm) = (%q, %v)", got, err)
+	}
+	if got := targetTriple("js", "wasm"); got != "wasm32-unknown-unknown" {
+		t.Fatalf("targetTriple(js, wasm) = %q", got)
+	}
+	if got := targetTriple("wasip1", "wasm"); got != "wasm32-unknown-wasi" {
+		t.Fatalf("targetTriple(wasip1, wasm) = %q", got)
+	}
+	if got := wordSize("wasm"); got != 8 {
+		t.Fatalf("wordSize(wasm) = %d, want official Go wasm word size 8", got)
+	}
+}
+
+func TestARMBaselineTargetTriples(t *testing.T) {
+	for _, tc := range []struct {
+		goarm string
+		want  string
+	}{
+		{goarm: "5", want: "armv5te-unknown-linux-gnueabi"},
+		{goarm: "6", want: "armv6-unknown-linux-gnueabihf"},
+		{goarm: "7", want: "armv7-unknown-linux-gnueabihf"},
+		{goarm: "7,softfloat", want: "armv7-unknown-linux-gnueabihf"},
+	} {
+		t.Run(tc.goarm, func(t *testing.T) {
+			t.Setenv("GOARM", tc.goarm)
+			if got := targetTriple("linux", "arm"); got != tc.want {
+				t.Fatalf("targetTriple(linux, arm) with GOARM=%s = %q, want %q", tc.goarm, got, tc.want)
 			}
 		})
 	}

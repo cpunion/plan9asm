@@ -268,7 +268,7 @@ func parseWidth(arch Arch, s string) (int64, error) {
 	switch strings.ToUpper(s) {
 	case "PTRSIZE":
 		switch arch {
-		case ArchAMD64, ArchARM64:
+		case ArchAMD64, ArchARM64, ArchWASM:
 			return 8, nil
 		default:
 			return 4, nil

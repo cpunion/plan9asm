@@ -49,7 +49,9 @@ fi
 all_targets=(
   "linux 386 i386-unknown-linux-gnu"
   "linux amd64 x86_64-unknown-linux-gnu"
-  "linux arm armv7-unknown-linux-gnueabihf"
+  "linux arm armv5te-unknown-linux-gnueabi 5"
+  "linux arm armv6-unknown-linux-gnueabihf 6"
+  "linux arm armv7-unknown-linux-gnueabihf 7"
   "linux arm64 aarch64-unknown-linux-gnu"
   "darwin amd64 x86_64-apple-macosx"
   "darwin arm64 arm64-apple-macosx"
@@ -74,8 +76,12 @@ else
     requested=${requested//[[:space:]]/}
     matched=0
     for target in "${all_targets[@]}"; do
-      read -r goos goarch _ <<< "$target"
-      if [[ "$requested" == "$goos/$goarch" ]]; then
+      read -r goos goarch _ goarm <<< "$target"
+      target_name="$goos/$goarch"
+      if [[ -n "$goarm" ]]; then
+        target_name+="/v$goarm"
+      fi
+      if [[ "$requested" == "$goos/$goarch" || "$requested" == "$target_name" ]]; then
         targets+=("$target")
         matched=1
         break
@@ -89,12 +95,20 @@ else
 fi
 
 for target in "${targets[@]}"; do
-  read -r goos goarch triple <<< "$target"
+  read -r goos goarch triple goarm <<< "$target"
+  target_name="$goos-$goarch"
+  target_label="$goos/$goarch"
+  target_env=()
+  if [[ -n "$goarm" ]]; then
+    target_name+="-v$goarm"
+    target_label+="/v$goarm"
+    target_env+=("GOARM=$goarm")
+  fi
 
-  echo "==> scan $goos/$goarch"
-  json="$tmp_root/$goos-$goarch.json"
-  go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
-  "$python_cmd" - "$json" "$goos/$goarch" <<'PY'
+  echo "==> scan $target_label"
+  json="$tmp_root/$target_name.json"
+  env "${target_env[@]}" go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
+  "$python_cmd" - "$json" "$target_label" <<'PY'
 import json
 import sys
 
@@ -120,17 +134,17 @@ if parse_errs:
     raise SystemExit(f"{target}: parse errors remain: {top}")
 PY
 
-  echo "==> transpile+compile $goos/$goarch"
-  out_dir="$tmp_root/$goos-$goarch-ll"
-  meta="$tmp_root/$goos-$goarch-meta.json"
-  GOTOOLCHAIN=local "$plan9asm_cmd" transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
+  echo "==> transpile+compile $target_label"
+  out_dir="$tmp_root/$target_name-ll"
+  meta="$tmp_root/$target_name-meta.json"
+  env "${target_env[@]}" GOTOOLCHAIN=local "$plan9asm_cmd" transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
 
   ll_count=$(find "$out_dir" -name '*.ll' | wc -l | tr -d ' ')
   if [ "$ll_count" -eq 0 ]; then
     echo "$goos/$goarch: no .ll files generated" >&2
     exit 1
   fi
-  echo "compiled corpus $goos/$goarch: ll_files=$ll_count"
+  echo "compiled corpus $target_label: ll_files=$ll_count"
 
   while IFS= read -r ll; do
     obj="${ll%.ll}.o"

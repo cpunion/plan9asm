@@ -16,6 +16,7 @@ const (
 	ArchAMD64 Arch = "amd64"
 	ArchARM   Arch = "arm"
 	ArchARM64 Arch = "arm64"
+	ArchWASM  Arch = "wasm"
 )
 
 type Reg string

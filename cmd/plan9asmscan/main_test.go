@@ -27,8 +27,8 @@ func TestToPlan9Arch(t *testing.T) {
 	if got, err := toPlan9Arch("arm64"); err != nil || got != plan9asm.ArchARM64 {
 		t.Fatalf("toPlan9Arch(arm64) = (%q, %v)", got, err)
 	}
-	if _, err := toPlan9Arch("wasm"); err == nil {
-		t.Fatalf("expected unsupported arch error")
+	if got, err := toPlan9Arch("wasm"); err != nil || got != plan9asm.ArchWASM {
+		t.Fatalf("toPlan9Arch(wasm) = (%q, %v)", got, err)
 	}
 }
 
