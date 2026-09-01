@@ -328,7 +328,18 @@ func compileAndRunRuntimeTest(t *testing.T, llc, clang, name, ll, mainC string) 
 }
 
 func compileAndRunRuntimeTestForTarget(t *testing.T, llc, clang, name, triple, ll, mainC string, runPrefix []string) {
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, name, triple, ll, mainC, runPrefix)
+}
+
+func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []string, name, triple, ll, mainC string, runPrefix []string) {
 	t.Helper()
+	if len(compiler) == 0 {
+		t.Fatal("empty compiler command")
+	}
 	tmp := t.TempDir()
 	llPath := filepath.Join(tmp, name+".ll")
 	objPath := filepath.Join(tmp, name+".o")
@@ -351,13 +362,11 @@ func compileAndRunRuntimeTestForTarget(t *testing.T, llc, clang, name, triple, l
 		t.Fatalf("llc failed: %v\n%s", err, s)
 	}
 
-	clangArgs := []string{objPath, mainPath, "-O2", "-o", exePath}
-	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
-		clangArgs = append([]string{"-target", triple}, clangArgs...)
-	}
-	clangCmd := exec.Command(clang, clangArgs...)
-	if out, err := clangCmd.CombinedOutput(); err != nil {
-		t.Fatalf("clang link failed: %v\n%s", err, string(out))
+	compilerArgs := append([]string(nil), compiler[1:]...)
+	compilerArgs = append(compilerArgs, objPath, mainPath, "-O2", "-o", exePath)
+	compilerCmd := exec.Command(compiler[0], compilerArgs...)
+	if out, err := compilerCmd.CombinedOutput(); err != nil {
+		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
 	}
 
 	runArgs := append(append([]string(nil), runPrefix...), exePath)

@@ -21,7 +21,7 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 - Library parser/lowering targets: `386`, `amd64`, `arm`, `arm64`.
 - Tool targets (`cmd/plan9asmll -all-targets`):
   - `darwin/amd64`, `darwin/arm64`
-  - `linux/amd64`, `linux/arm64`, `linux/386`
+  - `linux/amd64`, `linux/arm64`, `linux/arm`, `linux/386`
   - `windows/amd64`, `windows/arm64`, `windows/386`
 - `386` currently reuses the x86 lowering path from `amd64` backend logic.
 - `arm64` does not include `arm` (32-bit). They are separate architectures.
@@ -52,6 +52,13 @@ plan9asm/LLVM. Run the cross-version instruction coverage regression with:
 
 ```bash
 scripts/check-go-asm-coverage.sh
+```
+
+On a Linux/amd64 host with the Debian cross GCC toolchains and QEMU user-mode
+emulators installed, run the cross-architecture link and execution smoke test:
+
+```bash
+PLAN9ASM_CROSS_EXEC=1 go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
 ```
 
 ## `cmd/plan9asmll` usage

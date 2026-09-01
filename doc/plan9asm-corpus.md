@@ -115,9 +115,32 @@ whole-file translation, and LLVM object compilation:
 
     scripts/check-stdlib-corpus.sh
 
+Select an explicit cross-target subset with `PLAN9ASM_CORPUS_TARGETS`, for
+example:
+
+    PLAN9ASM_CORPUS_TARGETS=linux/386,linux/amd64,linux/arm,linux/arm64 \
+      scripts/check-stdlib-corpus.sh
+
 Run the executable semantic cases:
 
     go test . -run 'Test.*Conformance' -count=1
+
+On Linux/amd64, the opt-in cross-execution smoke translates for all four
+supported architectures, emits target objects with LLVM, links them with the
+matching Linux cross compiler, and executes 386/ARM/ARM64 through QEMU:
+
+    PLAN9ASM_CROSS_EXEC=1 \
+      go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
+
+CI treats Linux as the authoritative coverage host. Go 1.20 through Go 1.27
+each scan, translate, and object-compile the complete Linux, Darwin, and
+Windows target matrix from Linux. Every supported Go version runs the root
+compile/link/run conformance suite and its official assembler/encoder
+inventory. The latest Go additionally runs the four-architecture Linux
+link/execution smoke. macOS and Windows jobs on the latest Go release are
+auxiliary host-integration checks, not the only source of target coverage.
+Cross object compilation and cross execution are reported separately:
+successful `.o` generation alone is not an executable conformance claim.
 
 ## Go 1.20 through Go 1.27 differences
 
@@ -126,13 +149,13 @@ architecture. It detects any form changing among supported, context-required,
 unsupported, or parser-failed states.
 
 This version range describes the union of official namespaces, encoder tables,
-and assembler source corpora, not the minimum compiler version of every command
-submodule. The executable conformance cases are shared when Go versions accept
-the same form; they are not duplicated once per Go release. Linux/amd64 CI
-compiles, links, and runs the root conformance suite with every Go version from
-1.20 through 1.27. `cmd/plan9asm` and `cmd/plan9asmll` retain their own Go 1.24
-module requirement, so Go 1.20 validation intentionally does not enter those
-nested modules.
+and assembler source corpora. The executable conformance cases are shared when
+Go versions accept the same form; they are not duplicated once per Go release.
+Linux/amd64 CI compiles, links, and runs the root conformance suite with every
+Go version from 1.20 through 1.27. `cmd/plan9asm` and `cmd/plan9asmll` retain
+their own Go 1.24 module requirement, so older validation lanes build the
+package-oriented tool once with the latest Go and then run it against the
+selected older GOROOT.
 
 The encoder-table union across Go 1.20 through Go 1.27 is:
 
@@ -153,9 +176,9 @@ The Go 1.27 snapshot currently reports:
 | GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 37 | 6 | 17 | 0 | 0 |
-| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6744 | 699 | 6 | 6039 | 23 | 0 |
-| arm | 181 | 528 | 135 | 499 | 295 | 34 | 170 | 0 | 0 |
-| arm64 | 1417 including SVE | 2964 | 1268 | 1908 | 379 | 36 | 1493 | 0 | 93 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6744 | 703 | 6 | 6035 | 24 | 0 |
+| arm | 181 | 528 | 135 | 500 | 296 | 34 | 170 | 0 | 0 |
+| arm64 | 1417 including SVE | 2964 | 1268 | 1901 | 384 | 21 | 1496 | 0 | 93 |
 
 These numbers describe current implementation progress, not completion.
 Encoder forms use Go's internal operand classes and are a complete machine-

@@ -65,22 +65,24 @@ jobs:
         working-directory: cmd/plan9asmll
 
   stdlib-corpus:
+    name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-        go-version:
-          - '1.21.x'
-          - '1.22.x'
-          - '1.23.x'
-          - '1.24.x'
-          - '1.25.x'
-          - '1.26.x'
-          - '1.27.x'
+        include:
+          # Linux is the authoritative cross-target corpus gate.
+          - {os: ubuntu-latest, go-version: '1.20.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.21.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.22.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.23.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.24.x', targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.25.x', targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.26.x', targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          - {os: ubuntu-latest, go-version: '1.27.x', targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64'}
+          # Native hosts are auxiliary integration checks on the latest Go.
+          - {os: macos-latest, go-version: '1.27.x', targets: 'darwin/amd64,darwin/arm64'}
+          - {os: windows-latest, go-version: '1.27.x', targets: 'windows/386,windows/amd64,windows/arm64'}
 
     steps:
       - name: Checkout
@@ -111,6 +113,21 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-windows-llvm19
 
+      - name: Setup Go for corpus tool build
+        if: matrix.prebuild_tool
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: false
+
+      - name: Build corpus tool for older Go lane
+        if: matrix.prebuild_tool
+        shell: bash
+        run: |
+          tool="$RUNNER_TEMP/plan9asm"
+          go build -C cmd/plan9asm -o "$tool" .
+          echo "PLAN9ASM_CMD=$tool" >> "$GITHUB_ENV"
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -119,6 +136,8 @@ jobs:
 
       - name: Stdlib asm corpus gate
         shell: bash
+        env:
+          PLAN9ASM_CORPUS_TARGETS: ${{ matrix.targets }}
         run: |
           chmod +x scripts/check-stdlib-corpus.sh
           scripts/check-stdlib-corpus.sh
@@ -130,40 +149,35 @@ jobs:
           chmod +x scripts/check-go-asm-coverage.sh
           scripts/check-go-asm-coverage.sh
 
-  go120-compat:
+  cross-runtime:
+    name: cross compile, link, and run (Linux)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM 19
+      - name: Install LLVM, cross compilers, and QEMU
         run: |
           echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
+          sudo apt-get install -y \
+            llvm-19-dev clang-19 lld-19 \
+            gcc-i686-linux-gnu gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
+            qemu-user
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
-      - name: Setup Go 1.20
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.20.x'
+          go-version: '1.27.x'
           cache: true
 
-      - name: LLVM tools info
-        run: |
-          command -v llc
-          llc --version
-          command -v clang
-          clang --version
-
-      - name: Go 1.20 compile, link, and executable conformance
-        run: go test ./... -count=1
-
-      - name: Official Go 1.20 assembler and encoder coverage
-        shell: bash
-        run: scripts/check-go-asm-coverage.sh
+      - name: Cross transpile, compile, link, and run
+        env:
+          PLAN9ASM_CROSS_EXEC: '1'
+        run: go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
 
   test:
     permissions:
@@ -174,17 +188,16 @@ jobs:
       # Keep both matrix variants visible even if one fails.
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-        go-version:
-          - '1.21.x'
-          - '1.22.x'
-          - '1.23.x'
-          - '1.24.x'
-          - '1.25.x'
-          - '1.26.x'
-          - '1.27.x'
+        include:
+          - {os: ubuntu-latest, go-version: '1.20.x', nested_modules: false}
+          - {os: ubuntu-latest, go-version: '1.21.x', nested_modules: false}
+          - {os: ubuntu-latest, go-version: '1.22.x', nested_modules: false}
+          - {os: ubuntu-latest, go-version: '1.23.x', nested_modules: false}
+          - {os: ubuntu-latest, go-version: '1.24.x', nested_modules: true}
+          - {os: ubuntu-latest, go-version: '1.25.x', nested_modules: true}
+          - {os: ubuntu-latest, go-version: '1.26.x', nested_modules: true}
+          - {os: ubuntu-latest, go-version: '1.27.x', nested_modules: true}
+          - {os: windows-latest, go-version: '1.27.x', nested_modules: true}
 
     steps:
       - name: Checkout
@@ -228,12 +241,12 @@ jobs:
         run: go test ./...
 
       - name: Go test (cmd/plan9asm, Ubuntu)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.nested_modules
         run: go test ./...
         working-directory: cmd/plan9asm
 
       - name: Go test (cmd/plan9asmll, Ubuntu)
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && matrix.nested_modules
         run: go test ./...
         working-directory: cmd/plan9asmll
 

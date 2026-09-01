@@ -28,23 +28,64 @@ fi
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-targets=(
+# Build the package tool once, then run it from the repository root. Invoking
+# it through `go run -C cmd/plan9asm` would make old Go lanes auto-select the
+# nested module's newer toolchain, and the corpus would silently come from the
+# wrong GOROOT.
+if [[ -n "${PLAN9ASM_CMD:-}" ]]; then
+  plan9asm_cmd=$PLAN9ASM_CMD
+  if [[ ! -x "$plan9asm_cmd" ]]; then
+    echo "PLAN9ASM_CMD is not executable: $plan9asm_cmd" >&2
+    exit 1
+  fi
+else
+  plan9asm_cmd="$tmp_root/plan9asm"
+  if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+    plan9asm_cmd+=".exe"
+  fi
+  go build -C cmd/plan9asm -o "$plan9asm_cmd" .
+fi
+
+all_targets=(
   "linux 386 i386-unknown-linux-gnu"
   "linux amd64 x86_64-unknown-linux-gnu"
+  "linux arm armv7-unknown-linux-gnueabihf"
   "linux arm64 aarch64-unknown-linux-gnu"
   "darwin amd64 x86_64-apple-macosx"
   "darwin arm64 arm64-apple-macosx"
 )
 
-# Include Windows by default. CI may disable these two extra targets for old
-# Go compatibility lanes; the latest toolchain and the Windows host lane still
-# scan and compile both COFF corpora.
+# Include Windows by default. Linux CI cross-compiles the COFF corpora, while
+# the latest Windows host lane remains an auxiliary native-host integration.
 if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
-  targets+=(
+  all_targets+=(
     "windows 386 i686-pc-windows-msvc"
     "windows amd64 x86_64-pc-windows-msvc"
     "windows arm64 aarch64-pc-windows-msvc"
   )
+fi
+
+targets=()
+if [[ -z "${PLAN9ASM_CORPUS_TARGETS:-}" ]]; then
+  targets=("${all_targets[@]}")
+else
+  IFS=',' read -r -a requested_targets <<< "$PLAN9ASM_CORPUS_TARGETS"
+  for requested in "${requested_targets[@]}"; do
+    requested=${requested//[[:space:]]/}
+    matched=0
+    for target in "${all_targets[@]}"; do
+      read -r goos goarch _ <<< "$target"
+      if [[ "$requested" == "$goos/$goarch" ]]; then
+        targets+=("$target")
+        matched=1
+        break
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      echo "unsupported PLAN9ASM_CORPUS_TARGETS entry: $requested" >&2
+      exit 1
+    fi
+  done
 fi
 
 for target in "${targets[@]}"; do
@@ -82,7 +123,7 @@ PY
   echo "==> transpile+compile $goos/$goarch"
   out_dir="$tmp_root/$goos-$goarch-ll"
   meta="$tmp_root/$goos-$goarch-meta.json"
-  go run -C cmd/plan9asm . transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
+  GOTOOLCHAIN=local "$plan9asm_cmd" transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
 
   ll_count=$(find "$out_dir" -name '*.ll' | wc -l | tr -d ' ')
   if [ "$ll_count" -eq 0 ]; then
