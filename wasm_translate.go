@@ -23,17 +23,35 @@ type wasmControlFrame struct {
 	inElse     bool
 }
 
-// translateFuncWASM lowers Go's WebAssembly Plan 9 stack instructions into
-// ordinary LLVM SSA. FP operands are mapped through FuncSig.Frame, so the
-// translated function keeps the signature selected by its caller instead of
-// recreating the official compiler's linear-memory Go stack ABI.
-func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
-	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
+// translateFuncWASM lowers WebAssembly Plan 9 stack instructions into ordinary
+// LLVM SSA. The direct ABI maps FP operands through FuncSig.Frame. The Go ABI
+// instead recreates the official compiler's linear-memory stack, register
+// globals, resumable calls, and unwind return protocol.
+func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI, annotateSource bool) error {
+	useGoStack := wasmABI == WASMABIGo
+	goABI := useGoStack && !sig.WASMNative
+	physicalRet := sig.Ret
+	if goABI {
+		physicalRet = I32
+	}
+	fmt.Fprintf(b, "define %s %s(", physicalRet, llvmGlobal(sig.Name))
+	argIndex := 0
+	if goABI {
+		b.WriteString("i32 %pc_b")
+		argIndex++
+	} else if sig.WASMContext != "" {
+		fmt.Fprintf(b, "%s %%wasm_context", sig.WASMContext)
+		argIndex++
+	}
 	for i, typ := range sig.Args {
-		if i != 0 {
+		if goABI {
+			break
+		}
+		if argIndex > 0 {
 			b.WriteString(", ")
 		}
 		fmt.Fprintf(b, "%s %%arg%d", typ, i)
+		argIndex++
 	}
 	b.WriteString(")")
 	if sig.Attrs != "" {
@@ -102,7 +120,11 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return wasmValue{typ: to, val: "%" + name}, nil
 	}
 	wasmRType := I64
+	argRegTypes := make(map[Reg]LLVMType, len(sig.ArgRegs))
 	for i, reg := range sig.ArgRegs {
+		if i < len(sig.Args) {
+			argRegTypes[reg] = sig.Args[i]
+		}
 		if i >= len(sig.Args) || !strings.HasPrefix(strings.ToUpper(string(reg)), "R") {
 			continue
 		}
@@ -114,6 +136,16 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 	registerType := func(reg Reg) (LLVMType, error) {
 		name := strings.ToUpper(string(reg))
 		switch {
+		case argRegTypes[reg] != "":
+			return argRegTypes[reg], nil
+		case useGoStack && name == "SP":
+			return I32, nil
+		case useGoStack && (name == "CTXT" || name == "G" || strings.HasPrefix(name, "RET")):
+			return I64, nil
+		case useGoStack && name == "PAUSE":
+			return I32, nil
+		case name == "CTXT" && sig.WASMContext != "":
+			return sig.WASMContext, nil
 		case strings.HasPrefix(name, "R"), name == "CTXT", name == "G",
 			strings.HasPrefix(name, "RET"), name == "PAUSE":
 			return wasmRType, nil
@@ -145,7 +177,7 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			default:
 				continue
 			}
-			if reg == "" || reg == SP {
+			if reg == "" || reg == SP || useGoStack && wasmGoGlobalRegister(reg) {
 				continue
 			}
 			if _, ok := regSlots[reg]; ok {
@@ -162,6 +194,9 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		}
 	}
 	for i, reg := range sig.ArgRegs {
+		if goABI {
+			break
+		}
 		if i >= len(sig.Args) || reg == SP {
 			continue
 		}
@@ -180,7 +215,28 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		fmt.Fprintf(b, "  store %s %s, ptr %%%s\n", typ, v.val, slot)
 		regInitialized[reg] = true
 	}
+	if goABI {
+		if slot, ok := regSlots[Reg("PC_B")]; ok {
+			fmt.Fprintf(b, "  store i32 %%pc_b, ptr %%%s\n", slot)
+			regInitialized[Reg("PC_B")] = true
+		}
+	}
+	if !useGoStack && sig.WASMContext != "" {
+		if slot, ok := regSlots[Reg("CTXT")]; ok {
+			fmt.Fprintf(b, "  store %s %%wasm_context, ptr %%%s\n", sig.WASMContext, slot)
+			regInitialized[Reg("CTXT")] = true
+		}
+	}
 	loadRegister := func(reg Reg) (wasmValue, error) {
+		if useGoStack && wasmGoGlobalRegister(reg) {
+			typ, err := registerType(reg)
+			if err != nil {
+				return wasmValue{}, err
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = load %s, ptr addrspace(1) %s\n", name, typ, llvmGlobal(wasmGoGlobalName(reg)))
+			return wasmValue{typ: typ, val: "%" + name}, nil
+		}
 		slot, ok := regSlots[reg]
 		if !ok {
 			return wasmValue{}, fmt.Errorf("register %s is not available", reg)
@@ -197,6 +253,18 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return wasmValue{typ: typ, val: "%" + name}, nil
 	}
 	storeRegister := func(reg Reg, value wasmValue) (wasmValue, error) {
+		if useGoStack && wasmGoGlobalRegister(reg) {
+			typ, err := registerType(reg)
+			if err != nil {
+				return wasmValue{}, err
+			}
+			value, err = cast(value, typ, false)
+			if err != nil {
+				return wasmValue{}, err
+			}
+			fmt.Fprintf(b, "  store %s %s, ptr addrspace(1) %s\n", typ, value.val, llvmGlobal(wasmGoGlobalName(reg)))
+			return value, nil
+		}
 		slot, ok := regSlots[reg]
 		if !ok {
 			return wasmValue{}, fmt.Errorf("register %s is not available", reg)
@@ -213,10 +281,27 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		regInitialized[reg] = true
 		return value, nil
 	}
-	frameParam := func(arg Operand) (wasmValue, error) {
+	var addressPtr func(wasmValue, int64) (wasmValue, error)
+	goFrameAddress := func(offset int64) (wasmValue, error) {
+		sp, err := loadRegister(SP)
+		if err != nil {
+			return wasmValue{}, err
+		}
+		return addressPtr(sp, fn.FrameSize+8+offset)
+	}
+	frameParam := func(arg Operand, width LLVMType) (wasmValue, error) {
 		for _, slot := range sig.Frame.Params {
 			if slot.Offset != arg.FPOffset {
 				continue
+			}
+			if useGoStack {
+				address, err := goFrameAddress(arg.FPOffset)
+				if err != nil {
+					return wasmValue{}, err
+				}
+				name := newTmp()
+				fmt.Fprintf(b, "  %%%s = load %s, ptr %s, align 1\n", name, width, address.val)
+				return wasmValue{typ: width, val: "%" + name}, nil
 			}
 			if slot.Index < 0 || slot.Index >= len(sig.Args) {
 				return wasmValue{}, fmt.Errorf("FP parameter %s has invalid argument index %d", arg, slot.Index)
@@ -236,6 +321,14 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if slot.Offset != arg.FPOffset {
 				continue
 			}
+			if useGoStack {
+				address, err := goFrameAddress(arg.FPOffset)
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(b, "  store %s %s, ptr %s, align 1\n", value.typ, value.val, address.val)
+				return nil
+			}
 			if value.typ != slot.Type {
 				fromType := value.typ
 				var err error
@@ -250,19 +343,61 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		}
 		return fmt.Errorf("unknown FP result %s", arg)
 	}
-	var addressPtr func(wasmValue, int64) (wasmValue, error)
 	loadOperand := func(arg Operand, width LLVMType) (wasmValue, error) {
 		var v wasmValue
 		var err error
 		switch arg.Kind {
 		case OpFP:
-			v, err = frameParam(arg)
+			v, err = frameParam(arg, width)
+		case OpFPAddr:
+			if !useGoStack {
+				return wasmValue{}, fmt.Errorf("linear-memory FP addresses require the Go WebAssembly ABI")
+			}
+			v, err = goFrameAddress(arg.FPOffset)
 		case OpReg:
 			v, err = loadRegister(arg.Reg)
 		case OpImm:
 			v = wasmValue{typ: width, val: fmt.Sprintf("%d", arg.Imm)}
+		case OpSym:
+			isAddress := strings.HasPrefix(strings.TrimSpace(arg.Sym), "$")
+			if isAddress {
+				if mem, matched, memErr := parseWASMMem(strings.TrimSpace(strings.TrimPrefix(arg.Sym, "$"))); matched {
+					if memErr != nil {
+						return wasmValue{}, memErr
+					}
+					base, loadErr := loadRegister(mem.Base)
+					if loadErr != nil {
+						return wasmValue{}, loadErr
+					}
+					v, err = addressPtr(base, mem.Off)
+					if err != nil {
+						return wasmValue{}, err
+					}
+					break
+				}
+			}
+			base, offset, ok := parseSBRef(arg.Sym)
+			if !ok {
+				return wasmValue{}, fmt.Errorf("unsupported wasm symbol address %s", arg)
+			}
+			base = strings.TrimPrefix(base, "$")
+			if !strings.ContainsAny(base, "·/.") {
+				base = "·" + base
+			}
+			v = wasmValue{typ: Ptr, val: llvmGlobal(resolve(base))}
+			if offset != 0 {
+				v, err = addressPtr(v, offset)
+				if err != nil {
+					return wasmValue{}, err
+				}
+			}
+			if !isAddress {
+				name := newTmp()
+				fmt.Fprintf(b, "  %%%s = load %s, ptr %s, align 1\n", name, width, v.val)
+				v = wasmValue{typ: width, val: "%" + name}
+			}
 		case OpMem:
-			if arg.Mem.Base == SP {
+			if arg.Mem.Base == SP && !useGoStack {
 				return wasmValue{}, fmt.Errorf("linear-memory SP operands are not available in the direct Go ABI")
 			}
 			base, loadErr := loadRegister(arg.Mem.Base)
@@ -295,7 +430,7 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		case OpFP:
 			return storeResult(arg, value)
 		case OpMem:
-			if arg.Mem.Base == SP {
+			if arg.Mem.Base == SP && !useGoStack {
 				return fmt.Errorf("linear-memory SP operands are not available in the direct Go ABI")
 			}
 			base, err := loadRegister(arg.Mem.Base)
@@ -308,11 +443,44 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			}
 			fmt.Fprintf(b, "  store %s %s, ptr %s, align 1\n", value.typ, value.val, address.val)
 			return nil
+		case OpSym:
+			base, offset, ok := parseSBRef(arg.Sym)
+			if !ok {
+				return fmt.Errorf("unsupported wasm symbol destination %s", arg)
+			}
+			base = strings.TrimPrefix(base, "$")
+			if !strings.ContainsAny(base, "·/.") {
+				base = "·" + base
+			}
+			address := wasmValue{typ: Ptr, val: llvmGlobal(resolve(base))}
+			if offset != 0 {
+				var err error
+				address, err = addressPtr(address, offset)
+				if err != nil {
+					return err
+				}
+			}
+			fmt.Fprintf(b, "  store %s %s, ptr %s, align 1\n", value.typ, value.val, address.val)
+			return nil
 		default:
 			return fmt.Errorf("unsupported wasm destination operand %s", arg)
 		}
 	}
 	emitReturn := func() error {
+		if goABI {
+			sp, err := loadRegister(SP)
+			if err != nil {
+				return err
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = add i32 %s, %d\n", name, sp.val, fn.FrameSize+8)
+			if _, err := storeRegister(SP, wasmValue{typ: I32, val: "%" + name}); err != nil {
+				return err
+			}
+			b.WriteString("  ret i32 0\n")
+			blockTerminated = true
+			return nil
+		}
 		if sig.Ret == Void {
 			b.WriteString("  ret void\n")
 			blockTerminated = true
@@ -336,7 +504,67 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		}
 		return fmt.Errorf("missing %s return value", sig.Ret)
 	}
+	emitRawReturn := func() error {
+		if physicalRet == Void {
+			b.WriteString("  ret void\n")
+			blockTerminated = true
+			return nil
+		}
+		v, err := pop("Return")
+		if err != nil {
+			return err
+		}
+		v, err = cast(v, physicalRet, false)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(b, "  ret %s %s\n", physicalRet, v.val)
+		blockTerminated = true
+		return nil
+	}
+	emitUnwindReturn := func() error {
+		if !goABI {
+			return fmt.Errorf("RETUNWIND requires the Go WebAssembly ABI")
+		}
+		sp, err := loadRegister(SP)
+		if err != nil {
+			return err
+		}
+		name := newTmp()
+		fmt.Fprintf(b, "  %%%s = add i32 %s, %d\n", name, sp.val, fn.FrameSize+8)
+		if _, err := storeRegister(SP, wasmValue{typ: I32, val: "%" + name}); err != nil {
+			return err
+		}
+		b.WriteString("  ret i32 1\n")
+		blockTerminated = true
+		return nil
+	}
 	emitTailCall := func(arg Operand) error {
+		if goABI && arg.Kind == OpInvalid {
+			target, err := pop("JMP")
+			if err != nil {
+				return err
+			}
+			target, err = cast(target, I64, false)
+			if err != nil {
+				return err
+			}
+			pcFunc := newTmp()
+			fmt.Fprintf(b, "  %%%s = lshr i64 %s, 16\n", pcFunc, target.val)
+			target32, err := cast(wasmValue{typ: I64, val: "%" + pcFunc}, I32, false)
+			if err != nil {
+				return err
+			}
+			targetPtr, err := cast(target32, Ptr, false)
+			if err != nil {
+				return err
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = tail call i32 %s(i32 0)\n", name, targetPtr.val)
+			fmt.Fprintf(b, "  ret i32 %%%s\n", name)
+			blockTerminated = true
+			return nil
+		}
 		if arg.Kind != OpSym || !strings.HasSuffix(arg.Sym, "(SB)") {
 			return fmt.Errorf("JMP expects a direct (SB) symbol")
 		}
@@ -344,6 +572,16 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		calleeSig, ok := sigs[callee]
 		if !ok {
 			return fmt.Errorf("missing signature for tail target %q", callee)
+		}
+		if goABI {
+			if calleeSig.WASMNative {
+				return fmt.Errorf("Go ABI tail target %q uses a native WebAssembly signature", callee)
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = tail call i32 %s(i32 0)\n", name, llvmGlobal(funcSigSymbol(callee, calleeSig)))
+			fmt.Fprintf(b, "  ret i32 %%%s\n", name)
+			blockTerminated = true
+			return nil
 		}
 		if len(calleeSig.Args) != len(sig.Args) {
 			return fmt.Errorf("tail target %q needs %d arguments, caller has %d", callee, len(calleeSig.Args), len(sig.Args))
@@ -357,8 +595,19 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			return fmt.Errorf("tail target %q returns %s, caller returns %s", callee, calleeSig.Ret, sig.Ret)
 		}
 		var args strings.Builder
+		if calleeSig.WASMContext != "" {
+			context, err := loadRegister(Reg("CTXT"))
+			if err != nil {
+				return fmt.Errorf("tail target %q context: %w", callee, err)
+			}
+			context, err = cast(context, calleeSig.WASMContext, false)
+			if err != nil {
+				return fmt.Errorf("tail target %q context: %w", callee, err)
+			}
+			fmt.Fprintf(&args, "%s %s", context.typ, context.val)
+		}
 		for i, typ := range calleeSig.Args {
-			if i != 0 {
+			if args.Len() != 0 {
 				args.WriteString(", ")
 			}
 			fmt.Fprintf(&args, "%s %%arg%d", typ, i)
@@ -374,7 +623,10 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return nil
 	}
 	emitLocalCall := func(arg Operand) error {
-		if arg.Kind != OpSym || !strings.HasSuffix(arg.Sym, "<>(SB)") {
+		if arg.Kind != OpSym || !strings.HasSuffix(arg.Sym, "(SB)") {
+			return fmt.Errorf("Call expects a direct (SB) symbol")
+		}
+		if !useGoStack && !strings.HasSuffix(arg.Sym, "<>(SB)") {
 			return fmt.Errorf("Call currently supports file-local wasm helpers only")
 		}
 		callee := resolve(strings.TrimSuffix(arg.Sym, "(SB)"))
@@ -382,33 +634,138 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		if !ok {
 			return fmt.Errorf("missing signature for local call target %q", callee)
 		}
-		if len(stack) < len(calleeSig.Args) {
-			return fmt.Errorf("local call %q needs %d stack arguments, have %d", callee, len(calleeSig.Args), len(stack))
+		argTypes := calleeSig.Args
+		retType := calleeSig.Ret
+		if useGoStack && !calleeSig.WASMNative {
+			argTypes = []LLVMType{I32}
+			retType = I32
 		}
-		args := make([]wasmValue, len(calleeSig.Args))
+		if len(stack) < len(argTypes) {
+			return fmt.Errorf("local call %q needs %d stack arguments, have %d", callee, len(argTypes), len(stack))
+		}
+		args := make([]wasmValue, len(argTypes))
 		for i := len(args) - 1; i >= 0; i-- {
 			v, _ := pop("Call") // len(stack) was checked above.
 			var err error
-			v, err = cast(v, calleeSig.Args[i], false)
+			v, err = cast(v, argTypes[i], false)
 			if err != nil {
 				return fmt.Errorf("local call %q argument %d: %w", callee, i, err)
 			}
 			args[i] = v
 		}
 		var argText strings.Builder
-		for i, v := range args {
-			if i != 0 {
+		if !useGoStack && calleeSig.WASMContext != "" {
+			context, err := loadRegister(Reg("CTXT"))
+			if err != nil {
+				return fmt.Errorf("local call %q context: %w", callee, err)
+			}
+			context, err = cast(context, calleeSig.WASMContext, false)
+			if err != nil {
+				return fmt.Errorf("local call %q context: %w", callee, err)
+			}
+			fmt.Fprintf(&argText, "%s %s", context.typ, context.val)
+		}
+		for _, v := range args {
+			if argText.Len() != 0 {
 				argText.WriteString(", ")
 			}
 			fmt.Fprintf(&argText, "%s %s", v.typ, v.val)
 		}
-		if calleeSig.Ret == Void {
+		if retType == Void {
 			fmt.Fprintf(b, "  call void %s(%s)\n", llvmGlobal(funcSigSymbol(callee, calleeSig)), argText.String())
 			return nil
 		}
 		name := newTmp()
-		fmt.Fprintf(b, "  %%%s = call %s %s(%s)\n", name, calleeSig.Ret, llvmGlobal(funcSigSymbol(callee, calleeSig)), argText.String())
-		push(wasmValue{typ: calleeSig.Ret, val: "%" + name})
+		fmt.Fprintf(b, "  %%%s = call %s %s(%s)\n", name, retType, llvmGlobal(funcSigSymbol(callee, calleeSig)), argText.String())
+		push(wasmValue{typ: retType, val: "%" + name})
+		return nil
+	}
+	emitGoCall := func(arg Operand, pcID int, resumeLabel string, canResume bool) error {
+		if !useGoStack {
+			return fmt.Errorf("Go ABI CALL requires the Go WebAssembly ABI")
+		}
+		callee := ""
+		calleeSig := FuncSig{}
+		callTarget := ""
+		if arg.Kind == OpInvalid {
+			target, err := pop("CALL")
+			if err != nil {
+				return err
+			}
+			target, err = cast(target, I64, false)
+			if err != nil {
+				return err
+			}
+			pcFunc := newTmp()
+			fmt.Fprintf(b, "  %%%s = lshr i64 %s, 16\n", pcFunc, target.val)
+			target32, err := cast(wasmValue{typ: I64, val: "%" + pcFunc}, I32, false)
+			if err != nil {
+				return err
+			}
+			targetPtr, err := cast(target32, Ptr, false)
+			if err != nil {
+				return err
+			}
+			callTarget = targetPtr.val
+		} else {
+			if arg.Kind != OpSym || !strings.HasSuffix(arg.Sym, "(SB)") {
+				return fmt.Errorf("Go ABI CALL expects a direct (SB) symbol or an operand-stack target")
+			}
+			callee = resolve(strings.TrimSuffix(arg.Sym, "(SB)"))
+			var ok bool
+			calleeSig, ok = sigs[callee]
+			if !ok {
+				return fmt.Errorf("missing signature for Go ABI call target %q", callee)
+			}
+			if calleeSig.WASMNative {
+				return fmt.Errorf("Go ABI CALL target %q uses a native WebAssembly signature", callee)
+			}
+			callTarget = llvmGlobal(funcSigSymbol(callee, calleeSig))
+		}
+		if len(stack) != 0 {
+			return fmt.Errorf("Go ABI CALL requires an otherwise empty WebAssembly operand stack")
+		}
+
+		sp, err := loadRegister(SP)
+		if err != nil {
+			return err
+		}
+		callerSP := newTmp()
+		fmt.Fprintf(b, "  %%%s = sub i32 %s, 8\n", callerSP, sp.val)
+		if _, err := storeRegister(SP, wasmValue{typ: I32, val: "%" + callerSP}); err != nil {
+			return err
+		}
+		callerAddr, err := cast(wasmValue{typ: I32, val: "%" + callerSP}, Ptr, false)
+		if err != nil {
+			return err
+		}
+		pcFunc := newTmp()
+		fmt.Fprintf(b, "  %%%s = ptrtoint ptr %s to i64\n", pcFunc, llvmGlobal(sig.Name))
+		pcBase := newTmp()
+		fmt.Fprintf(b, "  %%%s = shl i64 %%%s, 16\n", pcBase, pcFunc)
+		pc := "%" + pcBase
+		if pcID != 0 {
+			pcValue := newTmp()
+			fmt.Fprintf(b, "  %%%s = or i64 %%%s, %d\n", pcValue, pcBase, pcID)
+			pc = "%" + pcValue
+		}
+		fmt.Fprintf(b, "  store i64 %s, ptr %s, align 1\n", pc, callerAddr.val)
+		unwind := newTmp()
+		fmt.Fprintf(b, "  %%%s = call i32 %s(i32 0)\n", unwind, callTarget)
+		isUnwind := newTmp()
+		fmt.Fprintf(b, "  %%%s = icmp ne i32 %%%s, 0\n", isUnwind, unwind)
+		unwindLabel := "wasm_call_unwind_" + newTmp()
+		if canResume {
+			fmt.Fprintf(b, "  br i1 %%%s, label %%%s, label %%%s\n", isUnwind, unwindLabel, resumeLabel)
+		} else {
+			continueLabel := "wasm_call_continue_" + newTmp()
+			fmt.Fprintf(b, "  br i1 %%%s, label %%%s, label %%%s\n", isUnwind, unwindLabel, continueLabel)
+			fmt.Fprintf(b, "%s:\n  unreachable\n%s:\n", unwindLabel, continueLabel)
+			blockTerminated = false
+			return nil
+		}
+		fmt.Fprintf(b, "%s:\n  ret i32 1\n%s:\n", unwindLabel, resumeLabel)
+		blockTerminated = false
 		return nil
 	}
 	emitIntBinary := func(op string, typ LLVMType, llvmOp string) error {
@@ -516,8 +873,8 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return nil
 	}
 	root := &wasmControlFrame{kind: "function", endLabel: "wasm_function_return"}
-	if sig.Ret != Void {
-		root.resultType = sig.Ret
+	if physicalRet != Void {
+		root.resultType = physicalRet
 		root.resultSlot = "wasm_function_result"
 		fmt.Fprintf(b, "  %%%s = alloca %s\n", root.resultSlot, root.resultType)
 	}
@@ -638,7 +995,43 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return nil
 	}
 
-	for _, ins := range fn.Instrs {
+	resumeLabels := make(map[int]string)
+	callPCs := make(map[int]int)
+	if useGoStack {
+		pcID := 0
+		for i, ins := range fn.Instrs {
+			switch normalizeInstructionOpcode(ins.Op) {
+			case "CALL", "CALLNORESUME":
+				pcID++
+				callPCs[i] = pcID
+				if goABI && normalizeInstructionOpcode(ins.Op) == "CALL" {
+					resumeLabels[i] = fmt.Sprintf("wasm_resume_%d", pcID)
+				}
+			}
+		}
+	}
+	if goABI {
+		b.WriteString("  switch i32 %pc_b, label %wasm_entry_body [")
+		for i := range fn.Instrs {
+			if label := resumeLabels[i]; label != "" {
+				fmt.Fprintf(b, " i32 %d, label %%%s", callPCs[i], label)
+			}
+		}
+		b.WriteString(" ]\nwasm_entry_body:\n")
+		if fn.FrameSize != 0 {
+			sp, err := loadRegister(SP)
+			if err != nil {
+				return err
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = sub i32 %s, %d\n", name, sp.val, fn.FrameSize)
+			if _, err := storeRegister(SP, wasmValue{typ: I32, val: "%" + name}); err != nil {
+				return err
+			}
+		}
+	}
+
+	for insIndex, ins := range fn.Instrs {
 		op := normalizeInstructionOpcode(ins.Op)
 		if op == "TEXT" {
 			continue
@@ -665,10 +1058,16 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if len(ins.Args) != 1 {
 				return fmt.Errorf("%s expects one operand", ins.Op)
 			}
-			if ins.Args[0].Kind == OpFP && (op == "I32LOAD" || op == "I64LOAD") {
-				v, err := loadOperand(ins.Args[0], spec.resultType)
+			if ins.Args[0].Kind == OpFP {
+				v, err := loadOperand(ins.Args[0], spec.loadType)
 				if err != nil {
 					return err
+				}
+				if spec.loadType != spec.resultType {
+					v, err = cast(v, spec.resultType, spec.signed)
+					if err != nil {
+						return err
+					}
 				}
 				push(v)
 				continue
@@ -708,19 +1107,12 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				}
 				continue
 			}
-			if len(stack) < 2 {
-				return fmt.Errorf("%s requires a preceding Get SP", ins.Op)
-			}
 			v, err := pop(op)
 			if err != nil {
 				return err
 			}
-			addr, err := pop(op)
-			if err != nil {
-				return err
-			}
-			if !addr.stackAddr {
-				return fmt.Errorf("%s requires a preceding Get SP", ins.Op)
+			if len(stack) != 0 && stack[len(stack)-1].stackAddr {
+				stack = stack[:len(stack)-1]
 			}
 			v, err = cast(v, spec.storeType, false)
 			if err != nil {
@@ -833,7 +1225,15 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				return fmt.Errorf("Get expects one register")
 			}
 			if ins.Args[0].Reg == SP {
-				push(wasmValue{typ: I32, val: "0", stackAddr: true})
+				if useGoStack {
+					v, err := loadRegister(SP)
+					if err != nil {
+						return err
+					}
+					push(v)
+				} else {
+					push(wasmValue{typ: I32, val: "0", stackAddr: true})
+				}
 				continue
 			}
 			v, err := loadRegister(ins.Args[0].Reg)
@@ -869,14 +1269,60 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				return err
 			}
 		case "I32CONST", "I64CONST":
-			if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm {
+			if len(ins.Args) != 1 {
 				return fmt.Errorf("%s expects one integer immediate", ins.Op)
 			}
 			typ := I32
 			if op == "I64CONST" {
 				typ = I64
 			}
-			push(wasmValue{typ: typ, val: fmt.Sprintf("%d", ins.Args[0].Imm)})
+			if ins.Args[0].Kind == OpImm {
+				push(wasmValue{typ: typ, val: fmt.Sprintf("%d", ins.Args[0].Imm)})
+				continue
+			}
+			v, err := loadOperand(ins.Args[0], typ)
+			if err != nil {
+				return fmt.Errorf("%s expects one integer immediate or symbol address: %w", ins.Op, err)
+			}
+			push(v)
+		case "F64CONST":
+			if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm {
+				return fmt.Errorf("F64Const expects one floating immediate")
+			}
+			push(wasmValue{typ: LLVMType("double"), val: fmt.Sprintf("0x%016X", uint64(ins.Args[0].Imm))})
+		case "F64NE", "F64GT", "F64LT":
+			rhs, err := pop(op)
+			if err != nil {
+				return err
+			}
+			lhs, err := pop(op)
+			if err != nil {
+				return err
+			}
+			if lhs.typ != LLVMType("double") || rhs.typ != LLVMType("double") {
+				return fmt.Errorf("%s expects two f64 values", ins.Op)
+			}
+			pred := map[string]string{"F64NE": "une", "F64GT": "ogt", "F64LT": "olt"}[op]
+			cmp := newTmp()
+			fmt.Fprintf(b, "  %%%s = fcmp %s double %s, %s\n", cmp, pred, lhs.val, rhs.val)
+			out := newTmp()
+			fmt.Fprintf(b, "  %%%s = zext i1 %%%s to i32\n", out, cmp)
+			push(wasmValue{typ: I32, val: "%" + out})
+		case "I64TRUNCF64S", "I64TRUNCF64U":
+			v, err := pop(op)
+			if err != nil {
+				return err
+			}
+			if v.typ != LLVMType("double") {
+				return fmt.Errorf("%s expects an f64 value", ins.Op)
+			}
+			llvmOp := "fptosi"
+			if op == "I64TRUNCF64U" {
+				llvmOp = "fptoui"
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = %s double %s to i64\n", name, llvmOp, v.val)
+			push(wasmValue{typ: I64, val: "%" + name})
 		case "F64LOAD":
 			if len(ins.Args) != 1 || ins.Args[0].Kind != OpFP {
 				return fmt.Errorf("F64Load expects an FP slot")
@@ -959,19 +1405,12 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if len(ins.Args) != 1 || ins.Args[0].Kind != OpFP {
 				return fmt.Errorf("F64Store expects an FP slot")
 			}
-			if len(stack) < 2 {
-				return fmt.Errorf("F64Store requires a preceding Get SP")
-			}
 			v, err := pop(op)
 			if err != nil {
 				return err
 			}
-			addr, err := pop(op)
-			if err != nil {
-				return err
-			}
-			if !addr.stackAddr {
-				return fmt.Errorf("F64Store requires a preceding Get SP")
+			if len(stack) != 0 && stack[len(stack)-1].stackAddr {
+				stack = stack[:len(stack)-1]
 			}
 			if err := storeResult(ins.Args[0], v); err != nil {
 				return err
@@ -1044,18 +1483,90 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				return err
 			}
 			fmt.Fprintf(b, "  call void @llvm.memset.p0.i32(ptr %s, i8 %s, i32 %s, i1 false)\n", dst.val, fill.val, length.val)
-		case "RET", "RETURN":
-			if err := emitReturn(); err != nil {
+		case "RET":
+			if len(ins.Args) == 1 {
+				if err := emitTailCall(ins.Args[0]); err != nil {
+					return err
+				}
+			} else if len(ins.Args) != 0 {
+				return fmt.Errorf("RET expects at most one target")
+			} else if err := emitReturn(); err != nil {
+				return err
+			}
+		case "RETUNWIND":
+			if err := emitUnwindReturn(); err != nil {
+				return err
+			}
+		case "WASMRETURN":
+			if useGoStack {
+				if err := emitRawReturn(); err != nil {
+					return err
+				}
+			} else if err := emitReturn(); err != nil {
 				return err
 			}
 		case "JMP":
-			if len(ins.Args) != 1 {
+			if len(ins.Args) > 1 || len(ins.Args) == 0 && !goABI {
 				return fmt.Errorf("JMP expects one target")
 			}
-			if err := emitTailCall(ins.Args[0]); err != nil {
+			target := Operand{}
+			if len(ins.Args) == 1 {
+				target = ins.Args[0]
+			}
+			if err := emitTailCall(target); err != nil {
 				return err
 			}
-		case "CALL":
+		case "CALL", "CALLNORESUME":
+			if len(ins.Args) > 1 {
+				return fmt.Errorf("%s expects at most one target", ins.Op)
+			}
+			target := Operand{}
+			if len(ins.Args) == 1 {
+				target = ins.Args[0]
+			}
+			if err := emitGoCall(target, callPCs[insIndex], resumeLabels[insIndex], op == "CALL"); err != nil {
+				return err
+			}
+		case "CALLINDIRECT":
+			if !useGoStack {
+				return fmt.Errorf("CallIndirect requires the Go WebAssembly ABI")
+			}
+			if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].Imm != 0 {
+				return fmt.Errorf("CallIndirect expects the Go function-table type $0")
+			}
+			target, err := pop(op)
+			if err != nil {
+				return err
+			}
+			pcB, err := pop(op)
+			if err != nil {
+				return err
+			}
+			target, err = cast(target, I32, false)
+			if err != nil {
+				return err
+			}
+			pcB, err = cast(pcB, I32, false)
+			if err != nil {
+				return err
+			}
+			targetPtr, err := cast(target, Ptr, false)
+			if err != nil {
+				return err
+			}
+			name := newTmp()
+			fmt.Fprintf(b, "  %%%s = call i32 %s(i32 %s)\n", name, targetPtr.val, pcB.val)
+			push(wasmValue{typ: I32, val: "%" + name})
+		case "CALLIMPORT":
+			if !useGoStack {
+				return fmt.Errorf("CallImport requires the Go WebAssembly ABI")
+			}
+			sp, err := loadRegister(SP)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(b, "  call void %s(i32 %s)\n", llvmGlobal(resolve(fn.Sym)+"$wasmimport"), sp.val)
+		case "WASMCALL":
 			if len(ins.Args) != 1 {
 				return fmt.Errorf("Call expects one target")
 			}
@@ -1073,7 +1584,13 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		return fmt.Errorf("%d unterminated wasm control blocks", len(controls)-1)
 	}
 	if !blockTerminated {
-		if err := emitReturn(); err != nil {
+		if useGoStack && sig.WASMNative && physicalRet != Void {
+			// Native helpers such as gcWriteBarrier end in an infinite Loop.
+			// Structured lowering still materializes the unreachable loop-exit
+			// label; terminate that synthetic path without inventing a value.
+			b.WriteString("  unreachable\n")
+			blockTerminated = true
+		} else if err := emitReturn(); err != nil {
 			return err
 		}
 	}
@@ -1089,4 +1606,43 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 	}
 	b.WriteString("}\n")
 	return nil
+}
+
+// wasmNeedsIncomingContext reports whether fn reads CTXT before establishing a
+// new value itself. LLGo transports this compiler-owned closure environment as
+// an explicit physical parameter on WebAssembly; it is intentionally separate
+// from the Go signature represented by FuncSig.Args.
+func wasmNeedsIncomingContext(fn Func) bool {
+	initialized := false
+	for _, ins := range fn.Instrs {
+		op := strings.ToUpper(string(ins.Op))
+		for i, arg := range ins.Args {
+			writes := (op == "SET" || op == "TEE") && i == 0 && arg.Kind == OpReg ||
+				(op == "MOVB" || op == "MOVW" || op == "MOVD") && i == 1 && arg.Kind == OpReg
+			if writes && arg.Reg == Reg("CTXT") {
+				initialized = true
+				continue
+			}
+			if (arg.Kind == OpReg && arg.Reg == Reg("CTXT")) ||
+				(arg.Kind == OpMem && arg.Mem.Base == Reg("CTXT")) {
+				if !initialized {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func wasmGoGlobalRegister(reg Reg) bool {
+	name := strings.ToUpper(string(reg))
+	return name == "SP" || name == "CTXT" || name == "G" || name == "PAUSE" ||
+		strings.HasPrefix(name, "RET")
+}
+
+func wasmGoGlobalName(reg Reg) string {
+	if strings.EqualFold(string(reg), "g") {
+		return "g"
+	}
+	return strings.ToUpper(string(reg))
 }

@@ -240,9 +240,10 @@ type MemRef struct {
 	Base    Reg
 	Sym     string // optional symbol-based address, including the (SB) suffix
 	Off     int64
-	Index   Reg   // optional; empty if not present
-	Scale   int64 // optional; defaults to 1 when Index is present
-	Segment Reg   // optional x86 segment override (FS or GS)
+	OffRaw  string // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
+	Index   Reg    // optional; empty if not present
+	Scale   int64  // optional; defaults to 1 when Index is present
+	Segment Reg    // optional x86 segment override (FS or GS)
 }
 
 func (o Operand) String() string {
@@ -284,16 +285,20 @@ func (o Operand) String() string {
 			}
 			return fmt.Sprintf("%s(%s*%d)%s", o.Mem.Sym, o.Mem.Index, o.Mem.Scale, segment)
 		}
+		offset := fmt.Sprintf("%d", o.Mem.Off)
+		if o.Mem.OffRaw != "" {
+			offset = o.Mem.OffRaw
+		}
 		if o.Mem.Index != "" {
 			if o.Mem.Scale == 0 {
-				return fmt.Sprintf("%d(%s)(%s)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, segment)
+				return fmt.Sprintf("%s(%s)(%s)%s", offset, o.Mem.Base, o.Mem.Index, segment)
 			}
-			return fmt.Sprintf("%d(%s)(%s*%d)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, o.Mem.Scale, segment)
+			return fmt.Sprintf("%s(%s)(%s*%d)%s", offset, o.Mem.Base, o.Mem.Index, o.Mem.Scale, segment)
 		}
 		if o.Mem.Base == "" && o.Mem.Segment != "" {
-			return fmt.Sprintf("%d%s", o.Mem.Off, segment)
+			return fmt.Sprintf("%s%s", offset, segment)
 		}
-		return fmt.Sprintf("%d(%s)%s", o.Mem.Off, o.Mem.Base, segment)
+		return fmt.Sprintf("%s(%s)%s", offset, o.Mem.Base, segment)
 	case OpRegList:
 		parts := make([]string, 0, len(o.RegList))
 		for _, r := range o.RegList {

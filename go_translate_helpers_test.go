@@ -266,8 +266,8 @@ func TestGoLLVMHelpers(t *testing.T) {
 		}
 	}
 
-	if _, err := goLLVMTypeForType(types.NewMap(types.Typ[types.String], types.Typ[types.Int]), "arm64"); err == nil {
-		t.Fatalf("expected unsupported type error")
+	if got, err := goLLVMTypeForType(types.NewMap(types.Typ[types.String], types.Typ[types.Int]), "arm64"); err != nil || got != Ptr {
+		t.Fatalf("map handle type = (%q, %v), want ptr", got, err)
 	}
 
 	sz := types.SizesFor("gc", "arm64")

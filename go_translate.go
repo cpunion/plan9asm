@@ -32,6 +32,7 @@ type GoModuleOptions struct {
 	GOOS           string
 	GOARCH         string
 	TargetTriple   string
+	WASMABI        WASMABI
 	X87Mode        X87Mode
 	AnnotateSource bool
 
@@ -104,7 +105,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if opt.KeepFunc != nil {
 		keep := make([]Func, 0, len(file.Funcs))
 		for _, fn := range file.Funcs {
-			resolved := resolve(goStripABISuffix(fn.Sym))
+			resolved := resolve(goTextSymbolForResolution(fn.Sym))
 			if opt.KeepFunc(fn.Sym, resolved) {
 				keep = append(keep, fn)
 			}
@@ -121,6 +122,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		ResolveSym:     resolve,
 		Sigs:           sigs,
 		Goarch:         opt.GOARCH,
+		WASMABI:        opt.WASMABI,
 		X87Mode:        opt.X87Mode,
 		AnnotateSource: opt.AnnotateSource,
 	})
@@ -130,8 +132,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 
 	funcs := make([]GoFunction, 0, len(file.Funcs))
 	for _, fn := range file.Funcs {
-		sym := goStripABISuffix(fn.Sym)
-		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: resolve(sym)})
+		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: resolve(goTextSymbolForResolution(fn.Sym))})
 	}
 
 	return &GoModuleTranslation{Module: mod, Signatures: sigs, Functions: funcs}, nil
@@ -145,6 +146,10 @@ var goAsmHeaderIdentRe = regexp.MustCompile(`\b[A-Za-z_][A-Za-z0-9_]*\b`)
 func goStripABISuffix(sym string) string {
 	sym = goABISuffixRe.ReplaceAllString(sym, "")
 	return strings.TrimSuffix(sym, "<>")
+}
+
+func goTextSymbolForResolution(sym string) string {
+	return goABISuffixRe.ReplaceAllString(sym, "")
 }
 
 func goArchFor(goarch string) (Arch, error) {
@@ -189,13 +194,27 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	}
 	if goarch == "wasm" {
 		for _, fn := range file.Funcs {
-			if !strings.HasSuffix(fn.Sym, "<>") {
-				continue
+			resolved := resolve(goTextSymbolForResolution(fn.Sym))
+			fs := b.sigs[resolved]
+			if b.localSigs[resolved] {
+				if native, ok := wasmGoNativeFuncSig(resolved); ok {
+					fs = native
+				} else if wasmUsesNativeReturn(fn) {
+					var err error
+					fs, err = InferWASMAssemblyFuncSig(fn, resolved)
+					if err != nil {
+						return nil, err
+					}
+					fs.WASMNative = true
+				} else {
+					fs = FuncSig{Name: resolved, Ret: Void}
+				}
 			}
-			resolved := resolve(goStripABISuffix(fn.Sym))
-			fs, err := InferWASMAssemblyFuncSig(fn, resolved)
-			if err != nil {
-				return nil, err
+			if native, ok := wasmGoNativeFuncSig(resolved); ok {
+				fs = native
+			}
+			if wasmNeedsIncomingContext(fn) {
+				fs.WASMContext = Ptr
 			}
 			b.sigs[resolved] = fs
 		}
@@ -215,6 +234,15 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	return b.sigs, nil
 }
 
+func wasmUsesNativeReturn(fn Func) bool {
+	for _, ins := range fn.Instrs {
+		if normalizeInstructionOpcode(ins.Op) == "WASMRETURN" {
+			return true
+		}
+	}
+	return false
+}
+
 type goSigBuilder struct {
 	sigs      map[string]FuncSig
 	localSigs map[string]bool
@@ -231,19 +259,25 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 	for i := range file.Funcs {
 		textSym := file.Funcs[i].Sym
 		sym := goStripABISuffix(textSym)
-		resolved := b.resolve(sym)
+		resolved := b.resolve(goTextSymbolForResolution(textSym))
 		if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
 			b.sigs[resolved] = ms
 			continue
 		}
 
-		declName, err := goDeclNameForSymbol(sym, b.linknames)
-		if err != nil {
-			return err
+		declName := ""
+		if strings.HasPrefix(resolved, b.pkgPath+".") {
+			declName = strings.TrimPrefix(resolved, b.pkgPath+".")
+		} else {
+			var err error
+			declName, err = goDeclNameForSymbol(sym, b.linknames)
+			if err != nil {
+				return err
+			}
 		}
 		obj := b.scope.Lookup(declName)
 		if obj == nil {
-			if strings.HasSuffix(textSym, "<>") {
+			if strings.HasSuffix(textSym, "<>") || b.goarch == "wasm" {
 				if b.localSigs == nil {
 					b.localSigs = make(map[string]bool)
 				}
@@ -265,9 +299,58 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 	return nil
 }
 
+func wasmGoNativeFuncSig(name string) (FuncSig, bool) {
+	local := strings.HasSuffix(name, "$local")
+	base := strings.TrimSuffix(name, "$local")
+	if i := strings.LastIndexByte(base, '.'); i >= 0 {
+		base = base[i+1:]
+	}
+	native := func(args []LLVMType, ret LLVMType) FuncSig {
+		regs := make([]Reg, len(args))
+		for i := range regs {
+			regs[i] = Reg(fmt.Sprintf("R%d", i))
+		}
+		return FuncSig{Name: name, Args: args, Ret: ret, ArgRegs: regs, WASMNative: true}
+	}
+	switch base {
+	case "_rt0_wasm_js", "_rt0_wasm_wasip1", "_rt0_wasm_wasip1_lib",
+		"wasm_export_resume", "wasm_pc_f_loop", "wasm_export_lib", "notInitialized":
+		return native(nil, Void), true
+	case "wasm_export_run":
+		return native([]LLVMType{I32, I32}, Void), true
+	case "wasm_export_getsp":
+		return native(nil, I32), true
+	case "wasm_pc_f_loop_export":
+		return native([]LLVMType{I32}, Void), true
+	case "wasmDiv":
+		return native([]LLVMType{I64, I64}, I64), true
+	case "wasmTruncS", "wasmTruncU":
+		return native([]LLVMType{LLVMType("double")}, I64), true
+	case "gcWriteBarrier":
+		if local {
+			// Go 1.21 and newer use a file-local helper that receives the
+			// requested buffer size and returns its address on the wasm stack.
+			return native([]LLVMType{I64}, I64), true
+		}
+		// Go 1.20 exposes runtime.gcWriteBarrier as a two-argument native
+		// helper. It writes the slot itself and has no wasm result.
+		return native([]LLVMType{I64, I64}, Void), true
+	case "gcWriteBarrier1", "gcWriteBarrier2", "gcWriteBarrier3", "gcWriteBarrier4",
+		"gcWriteBarrier5", "gcWriteBarrier6", "gcWriteBarrier7", "gcWriteBarrier8":
+		return native(nil, I64), true
+	case "cmpbody":
+		return native([]LLVMType{I64, I64, I64, I64}, I64), true
+	case "memeqbody":
+		return native([]LLVMType{I64, I64, I64}, I64), true
+	case "memcmp", "memchr":
+		return native([]LLVMType{I32, I32, I32}, I32), true
+	}
+	return FuncSig{}, false
+}
+
 func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 	for _, fn := range file.Funcs {
-		callerResolved := b.resolve(goStripABISuffix(fn.Sym))
+		callerResolved := b.resolve(goTextSymbolForResolution(fn.Sym))
 		callerSig, hasCallerSig := b.sigs[callerResolved]
 		for _, ins := range fn.Instrs {
 			base, tailJump, ok := goReferencedFunc(ins)
@@ -280,6 +363,12 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			targetResolved := b.resolve(base)
 			if _, ok := b.sigs[targetResolved]; ok {
 				continue
+			}
+			if b.goarch == "wasm" {
+				if native, ok := wasmGoNativeFuncSig(targetResolved); ok {
+					b.sigs[targetResolved] = native
+					continue
+				}
 			}
 			if tailJump && hasCallerSig {
 				// Best-effort fallback for helper<> tail-jumps where the callee is an
@@ -352,7 +441,7 @@ func goReferencedFunc(ins Instr) (base string, tailJump bool, ok bool) {
 	switch string(ins.Op) {
 	case "JMP", "B":
 		tailJump = true
-	case "CALL", "BL":
+	case "CALL", "CALLNORESUME", "WASMCALL", "BL":
 	default:
 		return "", false, false
 	}
@@ -651,6 +740,11 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		}
 	case *types.Pointer:
 		return Ptr, nil
+	case *types.Signature, *types.Map, *types.Chan:
+		// Go represents function, map, and channel values as pointer-sized
+		// handles at an assembly boundary. Their internal layouts remain owned
+		// by the compiler/runtime; Plan 9 assembly only transports the handle.
+		return Ptr, nil
 	case *types.Slice:
 		if goWordSize(goarch) == 8 {
 			return LLVMType("{ ptr, i64, i64 }"), nil
@@ -658,6 +752,11 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		return LLVMType("{ ptr, i32, i32 }"), nil
 	case *types.Interface:
 		return LLVMType("{ ptr, ptr }"), nil
+	case *types.Struct:
+		if tt.NumFields() == 0 {
+			return LLVMType("[0 x i8]"), nil
+		}
+		return "", fmt.Errorf("unsupported struct type %s", tt.String())
 	case *types.Named:
 		return goLLVMTypeForType(tt.Underlying(), goarch)
 	default:

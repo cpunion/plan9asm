@@ -27,6 +27,13 @@ type Func struct {
 	// It may contain the Plan 9 middle dot (·).
 	Sym string
 
+	// FrameSize and ArgSize retain the numeric $frame-args values from TEXT.
+	// WebAssembly's Go ABI uses FrameSize to address FP operands through the
+	// linear-memory stack and to restore SP on return. A missing -args suffix
+	// leaves ArgSize at zero.
+	FrameSize int64
+	ArgSize   int64
+
 	Instrs []Instr
 }
 
@@ -96,6 +103,17 @@ func Parse(arch Arch, src string) (*File, error) {
 
 			opStr, rest := splitOpcode(stmt)
 			op := Op(strings.ToUpper(opStr))
+			if arch == ArchWASM {
+				// Go's wasm assembler distinguishes low-level WebAssembly Call
+				// and Return from the high-level Go ABI CALL and RET pseudos by
+				// spelling. Preserve that distinction after normalization.
+				switch opStr {
+				case "Call":
+					op = "WASMCALL"
+				case "Return":
+					op = "WASMRETURN"
+				}
+			}
 			switch op {
 			case OpTEXT:
 				// TEXT name(SB), flags, $frame-args
@@ -111,7 +129,11 @@ func Parse(arch Arch, src string) (*File, error) {
 				if sym == "" {
 					return nil, fmt.Errorf("line %d: empty TEXT symbol: %q", lineno, stmt)
 				}
-				f.Funcs = append(f.Funcs, Func{Sym: sym})
+				frameSize, argSize, err := parseTEXTFrame(parts)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: %v", lineno, err)
+				}
+				f.Funcs = append(f.Funcs, Func{Sym: sym, FrameSize: frameSize, ArgSize: argSize})
 				cur = &f.Funcs[len(f.Funcs)-1]
 				cur.Instrs = append(cur.Instrs, Instr{Op: OpTEXT, Raw: stmt})
 				continue
@@ -199,6 +221,33 @@ func Parse(arch Arch, src string) (*File, error) {
 		return nil, fmt.Errorf("no TEXT directive found")
 	}
 	return f, nil
+}
+
+func parseTEXTFrame(parts []string) (frameSize, argSize int64, err error) {
+	if len(parts) < 2 {
+		return 0, 0, nil
+	}
+	spec := strings.TrimSpace(parts[len(parts)-1])
+	if !strings.HasPrefix(spec, "$") {
+		return 0, 0, nil
+	}
+	spec = strings.TrimSpace(strings.TrimPrefix(spec, "$"))
+	frameText, argText := spec, ""
+	if i := strings.LastIndex(spec, "-"); i > 0 {
+		frameText, argText = strings.TrimSpace(spec[:i]), strings.TrimSpace(spec[i+1:])
+	}
+	frame, ok := parseImmExpr(frameText)
+	if !ok {
+		return 0, 0, fmt.Errorf("unresolved TEXT frame size %q", frameText)
+	}
+	if argText == "" {
+		return int64(frame), 0, nil
+	}
+	args, ok := parseImmExpr(argText)
+	if !ok {
+		return 0, 0, fmt.Errorf("unresolved TEXT argument size %q", argText)
+	}
+	return int64(frame), int64(args), nil
 }
 
 func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
@@ -406,7 +455,7 @@ func parseWASMMem(s string) (mem MemRef, matched bool, err error) {
 	if n, ok := parseImmExpr(offset); ok {
 		return MemRef{Base: base, Off: int64(n)}, true, nil
 	}
-	return MemRef{}, true, fmt.Errorf("unresolved wasm memory offset %q", offset)
+	return MemRef{Base: base, OffRaw: offset}, true, nil
 }
 
 func parseWASMReg(s string) (Reg, bool) {

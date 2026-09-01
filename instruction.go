@@ -74,7 +74,7 @@ func wasmInstructionFamily(op string) string {
 	switch {
 	case op == "GET" || op == "SET" || op == "TEE" || op == "DROP" || op == "SELECT":
 		return "stack-local"
-	case op == "BLOCK" || op == "LOOP" || op == "IF" || op == "ELSE" || op == "END" || op == "BR" || op == "BRIF" || op == "RETURN" || op == "CALL" || op == "CALLINDIRECT" || op == "RET" || op == "JMP":
+	case op == "BLOCK" || op == "LOOP" || op == "IF" || op == "ELSE" || op == "END" || op == "BR" || op == "BRIF" || op == "WASMRETURN" || op == "WASMCALL" || op == "CALL" || op == "CALLNORESUME" || op == "CALLINDIRECT" || op == "RET" || op == "RETUNWIND" || op == "JMP":
 		return "control-flow"
 	case strings.Contains(op, "LOAD") || strings.Contains(op, "STORE") || strings.HasPrefix(op, "MEMORY") || op == "CURRENTMEMORY" || op == "GROWMEMORY":
 		return "memory"
@@ -377,6 +377,14 @@ var ErrProbeNeedsContext = errors.New("instruction probe needs function context"
 // It is intended for coverage tooling; executable conformance tests are still
 // required before a form is considered semantically verified.
 func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
+	if arch == ArchWASM {
+		// WebAssembly instructions share a typed operand stack, structured
+		// control stack, physical function signature, and (for Go code) the
+		// linear-memory SP/PC_B state. An isolated instruction cannot prove a
+		// form valid or invalid. The corpus gate therefore compiles every full
+		// wasm assembly file after treating per-instruction probes as contextual.
+		return fmt.Errorf("%w: wasm instructions require their full function", ErrProbeNeedsContext)
+	}
 	if strings.HasPrefix(normalizeInstructionOpcode(ins.Op), "REP") {
 		return fmt.Errorf("%w: REP prefix must be probed with its following instruction", ErrProbeNeedsContext)
 	}
@@ -408,7 +416,7 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		if arg.Kind == OpLabel {
 			labels[arg.Sym] = struct{}{}
 		}
-		if arg.Kind == OpSym && (ins.Op == OpCALL || ins.Op == OpJMP) {
+		if arg.Kind == OpSym && (ins.Op == OpCALL || ins.Op == OpJMP || normalizeInstructionOpcode(ins.Op) == "CALLNORESUME") {
 			name := strings.TrimSuffix(arg.Sym, "(SB)")
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
@@ -429,6 +437,10 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 	case "arm64":
 		triple = "aarch64-unknown-linux-gnu"
 	}
-	_, err := translateIRText(file, Options{Goarch: goarch, TargetTriple: triple, Sigs: sigs})
+	wasmABI := WASMABIDirect
+	if arch == ArchWASM {
+		wasmABI = WASMABIGo
+	}
+	_, err := translateIRText(file, Options{Goarch: goarch, TargetTriple: triple, Sigs: sigs, WASMABI: wasmABI})
 	return err
 }

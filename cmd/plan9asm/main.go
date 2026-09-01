@@ -363,6 +363,53 @@ func translateAsmForPackage(pkg *packages.Package, asmPath, goos, goarch string,
 	}
 
 	resolve := resolveSymFunc(pkg.PkgPath)
+	if goarch == "wasm" {
+		wasmABI := plan9asm.WASMABIDirect
+		if goos == "js" || goos == "wasip1" {
+			wasmABI = plan9asm.WASMABIGo
+		}
+		imports := make(map[string]*types.Package, len(pkg.Imports))
+		for path, imported := range pkg.Imports {
+			if imported != nil && imported.Types != nil {
+				imports[path] = imported.Types
+			}
+		}
+		tr, err := plan9asm.TranslateGoModule(plan9asm.GoPackage{
+			Path:    pkg.PkgPath,
+			Types:   pkg.Types,
+			Imports: imports,
+			Syntax:  pkg.Syntax,
+		}, src, plan9asm.GoModuleOptions{
+			FileName:       asmPath,
+			GOOS:           goos,
+			GOARCH:         goarch,
+			TargetTriple:   targetTriple(goos, goarch),
+			WASMABI:        wasmABI,
+			AnnotateSource: annotate,
+			ResolveSym:     resolve,
+		})
+		if err != nil {
+			return translation{}, false, err
+		}
+		defer tr.Module.Dispose()
+		fns := make([]functionInfo, 0, len(tr.Functions))
+		for _, fn := range tr.Functions {
+			sig := tr.Signatures[fn.ResolvedSymbol]
+			args := make([]string, len(sig.Args))
+			for i, arg := range sig.Args {
+				args[i] = string(arg)
+			}
+			ret := string(sig.Ret)
+			if ret == "" {
+				ret = string(plan9asm.Void)
+			}
+			fns = append(fns, functionInfo{
+				Symbol: fn.TextSymbol, Resolved: fn.ResolvedSymbol,
+				Args: args, Ret: ret,
+			})
+		}
+		return translation{LLVMIR: tr.Module.String(), Functions: fns}, true, nil
+	}
 	sigs, err := sigsForAsmFile(pkg, file, resolve, goarch)
 	if err != nil {
 		return translation{}, false, err

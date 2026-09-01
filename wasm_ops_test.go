@@ -147,9 +147,19 @@ func TestParseWasmMemoryOperands(t *testing.T) {
 	if got.Kind != OpMem || got.Mem.Base != "R0" || got.Mem.Off != 8 {
 		t.Fatalf("8(R0) = %#v, want wasm R0 memory operand", got)
 	}
-	if _, err := Parse(ArchWASM, `TEXT op(SB), NOSPLIT, $0
+	file, err = Parse(ArchWASM, `TEXT op(SB), NOSPLIT, $0
 	MOVD R1, unresolved(R0)
-`); err == nil || !strings.Contains(err.Error(), "unresolved wasm memory offset") {
-		t.Fatalf("unresolved wasm memory offset error = %v", err)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = file.Funcs[0].Instrs[1].Args[1]
+	if got.Kind != OpMem || got.Mem.Base != "R0" || got.Mem.OffRaw != "unresolved" {
+		t.Fatalf("unresolved(R0) = %#v, want a deferred wasm memory offset", got)
+	}
+	if _, err := Translate(file, Options{Sigs: map[string]FuncSig{
+		"op": {Name: "op", Ret: Void},
+	}, Goarch: "wasm"}); err == nil || !strings.Contains(err.Error(), "unresolved wasm memory offset") {
+		t.Fatalf("Translate unresolved wasm memory offset error = %v", err)
 	}
 }

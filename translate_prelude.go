@@ -2,7 +2,7 @@ package plan9asm
 
 import "strings"
 
-func emitArchPrelude(b *strings.Builder, file *File, goarch string) {
+func emitArchPrelude(b *strings.Builder, file *File, resolve func(string) string, goarch string, wasmABI WASMABI) {
 	switch file.Arch {
 	case ArchARM:
 		emitARMPrelude(b)
@@ -15,11 +15,33 @@ func emitArchPrelude(b *strings.Builder, file *File, goarch string) {
 			emitAMD64Prelude(b, goarch, file)
 		}
 	case ArchWASM:
-		emitWASMPrelude(b, file)
+		emitWASMPrelude(b, file, resolve, wasmABI)
 	}
 }
 
-func emitWASMPrelude(b *strings.Builder, file *File) {
+func emitWASMPrelude(b *strings.Builder, file *File, resolve func(string) string, wasmABI WASMABI) {
+	if wasmABI == WASMABIGo {
+		// Address space 1 is LLVM's WebAssembly mutable-global address space.
+		// These names and types match cmd/link/internal/wasm's register globals.
+		b.WriteString("@SP = external addrspace(1) global i32\n")
+		for _, name := range []string{"CTXT", "g", "RET0", "RET1", "RET2", "RET3"} {
+			b.WriteString("@" + name + " = external addrspace(1) global i64\n")
+		}
+		b.WriteString("@PAUSE = external addrspace(1) global i32\n\n")
+		for _, fn := range file.Funcs {
+			for _, ins := range fn.Instrs {
+				if normalizeInstructionOpcode(ins.Op) == "CALLIMPORT" {
+					// Go 1.20 and older use CallImport wrappers that pass the
+					// linear-memory SP to a host function associated with the
+					// current Go symbol. LLGo's wasm linker resolves this suffix
+					// to the corresponding host import.
+					b.WriteString("declare void " + llvmGlobal(resolve(fn.Sym)+"$wasmimport") + "(i32)\n")
+					break
+				}
+			}
+		}
+		b.WriteString("\n")
+	}
 	want := make(map[string]bool)
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {

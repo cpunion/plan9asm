@@ -250,13 +250,13 @@ func InferWASMAssemblyFuncSig(fn Func, name string) (FuncSig, error) {
 			stack = nil
 		case "DROP":
 			_ = pop(op)
-		case "CALL":
+		case "CALL", "CALLNORESUME", "WASMCALL":
 			// The callee signature is not encoded in the instruction. Values
 			// pushed for it have already constrained the input registers; reset
 			// the stack and leave an unknown result for its consumer to type.
 			stack = nil
 			push(wasmInferValue{})
-		case "RETURN", "RET":
+		case "WASMRETURN", "RET", "RETUNWIND":
 			if len(stack) != 0 {
 				v := pop(op)
 				if v.typ != "" {

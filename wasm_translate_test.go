@@ -166,7 +166,7 @@ TEXT runtime·memclrNoHeapPointers(SB), NOSPLIT, $0-16
 	}
 }
 
-func TestWasmStoreRequiresStackAddress(t *testing.T) {
+func TestWasmStoreAcceptsImplicitFrameAddress(t *testing.T) {
 	file, err := Parse(ArchWASM, `TEXT ·floor(SB),NOSPLIT,$0
 	F64Load x+0(FP)
 	F64Floor
@@ -176,7 +176,7 @@ func TestWasmStoreRequiresStackAddress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Translate(file, Options{ResolveSym: func(sym string) string {
+	ir, err := Translate(file, Options{ResolveSym: func(sym string) string {
 		return strings.TrimPrefix(sym, "·")
 	}, Sigs: map[string]FuncSig{
 		"floor": {
@@ -187,8 +187,11 @@ func TestWasmStoreRequiresStackAddress(t *testing.T) {
 			},
 		},
 	}, Goarch: "wasm"})
-	if err == nil || !strings.Contains(err.Error(), "preceding Get SP") {
-		t.Fatalf("Translate error = %v, want missing stack-address diagnostic", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, "call double @llvm.floor.f64") || !strings.Contains(ir, "ret double") {
+		t.Fatalf("implicit frame-address store IR is incomplete:\n%s", ir)
 	}
 }
 

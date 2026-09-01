@@ -55,6 +55,8 @@ all_targets=(
   "linux arm64 aarch64-unknown-linux-gnu v8.0"
   "darwin amd64 x86_64-apple-macosx"
   "darwin arm64 arm64-apple-macosx v8.0"
+  "js wasm wasm32-unknown-unknown"
+  "wasip1 wasm wasm32-unknown-wasi"
 )
 
 # Include Windows by default. Linux CI cross-compiles the COFF corpora, while

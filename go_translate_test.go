@@ -44,6 +44,38 @@ func cmp(a, b int) int
 	}
 }
 
+func TestTranslateGoModule_ExpandsGeneratedWasmOffsets(t *testing.T) {
+	pkg := mustGoPackage(t, "runtime", `package runtime
+type gobuf struct {
+	sp   uintptr
+	pc   uintptr
+	g    uintptr
+	ctxt uintptr
+}
+func gogo(buf *gobuf)
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`#include "go_asm.h"
+TEXT ·gogo(SB),NOSPLIT,$0-8
+	MOVD buf+0(FP), R0
+	MOVD gobuf_g(R0), R1
+	RET
+`), GoModuleOptions{
+		FileName:     "asm_wasm.s",
+		GOARCH:       "wasm",
+		TargetTriple: "wasm32-unknown-unknown",
+		ResolveSym:   testResolveSym("runtime"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+	ir := tr.Module.String()
+	if !strings.Contains(ir, "getelementptr i8") || !strings.Contains(ir, "i32 16") ||
+		!strings.Contains(ir, "load i64") {
+		t.Fatalf("generated gobuf_g offset was not resolved through go_asm.h:\n%s", ir)
+	}
+}
+
 func TestTranslateGoModule_UsesManualSigForPlainLocalHelper(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func IndexByte(b []byte, c byte) int

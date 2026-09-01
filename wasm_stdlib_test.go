@@ -142,7 +142,7 @@ func TestOfficialWasmMemorySizeAndGrowTranslationAndExecution(t *testing.T) {
 		`const grow=i.exports["runtime.growMemory"];console.log(grow(1));`, "2")
 }
 
-func TestOfficialWasmClosureContextIsNotSilentlyLowered(t *testing.T) {
+func TestOfficialWasmClosureContextTranslationAndExecution(t *testing.T) {
 	file := parseOfficialWasmAssembly(t, "internal/bytealg", "equal_wasm.s")
 	resolve := officialWasmResolver("internal/bytealg")
 	sigs := inferOfficialWasmLocalSigs(t, file, resolve)
@@ -161,15 +161,22 @@ func TestOfficialWasmClosureContextIsNotSilentlyLowered(t *testing.T) {
 			{Offset: 8, Type: Ptr, Index: 1, Field: -1},
 		}, Results: []FrameSlot{{Offset: 16, Type: I1, Index: 0, Field: -1}}},
 	}
-	_, err := Translate(file, Options{
+	ir, err := Translate(file, Options{
 		TargetTriple: "wasm32-unknown-unknown",
 		ResolveSym:   resolve,
 		Sigs:         sigs,
 		Goarch:       "wasm",
 	})
-	if err == nil || !strings.Contains(err.Error(), "8(CTXT)") || !strings.Contains(err.Error(), "explicit closure-environment ABI input") {
-		t.Fatalf("Translate error = %v, want an explicit CTXT ABI diagnostic", err)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if !strings.Contains(ir, `define i1 @runtime.memequal_varlen(ptr %wasm_context, ptr %arg0, ptr %arg1)`) ||
+		!strings.Contains(ir, "getelementptr i8, ptr %wasm_context, i32 8") {
+		t.Fatalf("translated closure entry does not preserve its physical context:\n%s", ir)
+	}
+	executeOfficialWasm(t, ir, []string{"runtime.memequal_varlen"},
+		`const m=new Uint8Array(i.exports.memory.buffer),v=new DataView(m.buffer);m.set([1,2,3],1024);m.set([1,2,3],2048);m.set([1,2,4],3072);v.setBigUint64(4104,3n,true);const f=i.exports["runtime.memequal_varlen"];console.log(f(4096,1024,2048)+","+f(4096,1024,3072));`,
+		"1,0")
 }
 
 func parseOfficialWasmAssembly(t *testing.T, pkg, name string) *File {
