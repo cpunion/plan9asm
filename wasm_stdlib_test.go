@@ -134,12 +134,12 @@ func TestOfficialWasmMemorySizeAndGrowTranslationAndExecution(t *testing.T) {
 	}
 	if hasCurrentMemory {
 		executeOfficialWasm(t, ir, []string{"runtime.currentMemory", "runtime.growMemory"},
-			`const size=i.exports["runtime.currentMemory"],grow=i.exports["runtime.growMemory"];const before=size(),old=grow(1),after=size();console.log(before+","+old+","+after);`,
-			"1,1,2")
+			`const size=i.exports["runtime.currentMemory"],grow=i.exports["runtime.growMemory"];const before=size(),old=grow(1),after=size();console.log(old===before&&after===before+1);`,
+			"true")
 		return
 	}
 	executeOfficialWasm(t, ir, []string{"runtime.growMemory"},
-		`const grow=i.exports["runtime.growMemory"];console.log(grow(1));`, "1")
+		`const grow=i.exports["runtime.growMemory"];console.log(grow(1));`, "2")
 }
 
 func TestOfficialWasmClosureContextIsNotSilentlyLowered(t *testing.T) {
@@ -298,7 +298,10 @@ func executeOfficialWasm(t *testing.T, ir string, exports []string, body, want s
 	if out, err := exec.Command(llc, "-filetype=obj", llFile, "-o", objFile).CombinedOutput(); err != nil {
 		t.Fatalf("llc: %v\n%s", err, out)
 	}
-	linkArgs := []string{"--no-entry", "--export-memory", "--initial-memory=65536"}
+	// Keep one page for the stack and one for test data. Newer wasm-ld releases
+	// place the stack immediately above the first page and reject a one-page
+	// initial memory before any test code can run.
+	linkArgs := []string{"--no-entry", "--export-memory", "--initial-memory=131072"}
 	for _, name := range exports {
 		linkArgs = append(linkArgs, "--export="+name)
 	}
