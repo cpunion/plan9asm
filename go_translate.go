@@ -521,6 +521,15 @@ func goDeclNameForSymbol(sym string, linknames map[string]string) (string, error
 }
 
 func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, frameSz types.Sizes, withFrame bool) (FuncSig, error) {
+	if sz == nil {
+		sz = types.SizesFor("gc", goarch)
+	}
+	if sz == nil {
+		return FuncSig{}, fmt.Errorf("missing sizes for goarch %q", goarch)
+	}
+	if frameSz == nil {
+		frameSz = sz
+	}
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil {
 		return FuncSig{}, fmt.Errorf("methods in asm not supported: %s", fn.FullName())
