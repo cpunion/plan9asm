@@ -738,6 +738,13 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 	if pkg == nil || pkg.Types == nil || pkg.Types.Scope() == nil {
 		for _, fn := range file.Funcs {
 			fs := fallbackSigForAsmFunc(fn, resolve(stripABISuffix(fn.Sym)), goarch)
+			if goarch == "wasm" && strings.HasSuffix(fn.Sym, "<>") {
+				var err error
+				fs, err = plan9asm.InferWASMAssemblyFuncSig(fn, fs.Name)
+				if err != nil {
+					return nil, err
+				}
+			}
 			sigs[fs.Name] = fs
 		}
 		return sigs, nil
@@ -771,6 +778,19 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 			declaredSigs[resolved] = true
 		}
 		sigs[resolved] = fs
+	}
+	if goarch == "wasm" {
+		for _, fn := range file.Funcs {
+			if !strings.HasSuffix(fn.Sym, "<>") {
+				continue
+			}
+			resolved := resolve(stripABISuffix(fn.Sym))
+			fs, err := plan9asm.InferWASMAssemblyFuncSig(fn, resolved)
+			if err != nil {
+				return nil, err
+			}
+			sigs[resolved] = fs
+		}
 	}
 
 	addTargetSig := func(sym string, caller plan9asm.FuncSig, tail bool) {

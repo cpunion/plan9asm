@@ -14,7 +14,7 @@ import (
 func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 	mod, err := translateModuleDirect(file, opt)
 	if err == nil {
-		return mod, nil
+		return finishTranslatedModule(file, mod)
 	}
 	if err != nil && !errors.Is(err, errDirectModuleUnsupported) {
 		return llvm.Module{}, err
@@ -24,7 +24,31 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 	if err != nil {
 		return llvm.Module{}, err
 	}
-	return parseIRModule(ir)
+	mod, err = parseIRModule(ir)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	return finishTranslatedModule(file, mod)
+}
+
+func finishTranslatedModule(file *File, mod llvm.Module) (llvm.Module, error) {
+	if file.Arch != ArchWASM {
+		return mod, nil
+	}
+
+	// WebAssembly Plan 9 assembly names virtual registers explicitly. The
+	// textual lowering models those mutable locals with entry-block allocas so
+	// structured branches remain straightforward and verifiable. Promote them
+	// before returning the module: leaving the allocas for an unoptimized clang
+	// invocation spills every virtual register into linear memory and makes the
+	// generated wasm both larger and slower.
+	pbo := llvm.NewPassBuilderOptions()
+	defer pbo.Dispose()
+	if err := mod.RunPasses("mem2reg", llvm.TargetMachine{}, pbo); err != nil {
+		mod.Dispose()
+		return llvm.Module{}, fmt.Errorf("promote wasm virtual registers: %w", err)
+	}
+	return mod, nil
 }
 
 func parseIRModule(ir string) (llvm.Module, error) {

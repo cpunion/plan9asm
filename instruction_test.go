@@ -42,6 +42,13 @@ func TestInstructionFamiliesAreArchitectureAware(t *testing.T) {
 		{ArchARM64, "BEQ", "control-flow"},
 		{ArchARM, "MRC", "system"},
 		{ArchARM, "BIC", "logical"},
+		{ArchWASM, "Get", "stack-local"},
+		{ArchWASM, "CallIndirect", "control-flow"},
+		{ArchWASM, "I64Load32U", "memory"},
+		{ArchWASM, "F64Floor", "floating"},
+		{ArchWASM, "I32Add", "integer"},
+		{ArchWASM, "Unreachable", "system"},
+		{ArchWASM, "Dispatch", "misc"},
 	}
 	for _, tc := range cases {
 		if got := InstructionFamily(tc.arch, tc.op); got != tc.want {

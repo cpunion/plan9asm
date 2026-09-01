@@ -30,8 +30,28 @@ func emitWASMPrelude(b *strings.Builder, file *File) {
 				want["ceil"] = true
 			case "F64TRUNC":
 				want["trunc"] = true
+			case "MEMORYCOPY":
+				want["memmove"] = true
+			case "MEMORYFILL":
+				want["memset"] = true
+			case "CURRENTMEMORY":
+				want["memory.size"] = true
+			case "GROWMEMORY":
+				want["memory.grow"] = true
 			}
 		}
+	}
+	if want["memmove"] {
+		b.WriteString("declare void @llvm.memmove.p0.p0.i32(ptr, ptr, i32, i1 immarg)\n")
+	}
+	if want["memset"] {
+		b.WriteString("declare void @llvm.memset.p0.i32(ptr, i8, i32, i1 immarg)\n")
+	}
+	if want["memory.size"] {
+		b.WriteString("declare i32 @llvm.wasm.memory.size.i32(i32)\n")
+	}
+	if want["memory.grow"] {
+		b.WriteString("declare i32 @llvm.wasm.memory.grow.i32(i32, i32)\n")
 	}
 	for _, name := range []string{"floor", "ceil", "trunc"} {
 		if want[name] {

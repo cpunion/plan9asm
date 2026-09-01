@@ -155,6 +155,8 @@ func goArchFor(goarch string) (Arch, error) {
 		return ArchARM, nil
 	case "arm64":
 		return ArchARM64, nil
+	case "wasm":
+		return ArchWASM, nil
 	default:
 		return "", fmt.Errorf("Plan 9 asm unsupported arch %q", goarch)
 	}
@@ -184,6 +186,19 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	}
 	if err := b.addReferencedFuncSigs(file); err != nil {
 		return nil, err
+	}
+	if goarch == "wasm" {
+		for _, fn := range file.Funcs {
+			if !strings.HasSuffix(fn.Sym, "<>") {
+				continue
+			}
+			resolved := resolve(goStripABISuffix(fn.Sym))
+			fs, err := InferWASMAssemblyFuncSig(fn, resolved)
+			if err != nil {
+				return nil, err
+			}
+			b.sigs[resolved] = fs
+		}
 	}
 	// File-local TEXT symbols (the Plan 9 `<>` form) are commonly used for
 	// assembly trampolines that are only reached through a raw function
@@ -732,7 +747,7 @@ func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
 
 func goWordSize(goarch string) int {
 	switch goarch {
-	case "amd64", "arm64":
+	case "amd64", "arm64", "wasm":
 		return 8
 	default:
 		return 4

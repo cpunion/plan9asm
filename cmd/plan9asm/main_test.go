@@ -96,6 +96,22 @@ func TestARMBaselineTargetTriples(t *testing.T) {
 	}
 }
 
+func TestARM64V8BaselineTargetTriples(t *testing.T) {
+	t.Setenv("GOARM64", "v8.0")
+	for _, tc := range []struct {
+		goos string
+		want string
+	}{
+		{goos: "linux", want: "aarch64-unknown-linux-gnu"},
+		{goos: "darwin", want: "arm64-apple-macosx"},
+		{goos: "windows", want: "aarch64-pc-windows-msvc"},
+	} {
+		if got := targetTriple(tc.goos, "arm64"); got != tc.want {
+			t.Fatalf("targetTriple(%s, arm64) with GOARM64=v8.0 = %q, want %q", tc.goos, got, tc.want)
+		}
+	}
+}
+
 func TestTailLocalHelperKeepsLocalIdentityAndCallerReturn(t *testing.T) {
 	file, err := plan9asm.Parse(plan9asm.ArchARM, `TEXT ·caller(SB),NOSPLIT,$0-1
 	MOVB $1, ret+0(FP)

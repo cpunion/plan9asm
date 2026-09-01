@@ -52,9 +52,9 @@ all_targets=(
   "linux arm armv5te-unknown-linux-gnueabi 5"
   "linux arm armv6-unknown-linux-gnueabihf 6"
   "linux arm armv7-unknown-linux-gnueabihf 7"
-  "linux arm64 aarch64-unknown-linux-gnu"
+  "linux arm64 aarch64-unknown-linux-gnu v8.0"
   "darwin amd64 x86_64-apple-macosx"
-  "darwin arm64 arm64-apple-macosx"
+  "darwin arm64 arm64-apple-macosx v8.0"
 )
 
 # Include Windows by default. Linux CI cross-compiles the COFF corpora, while
@@ -63,7 +63,7 @@ if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
   all_targets+=(
     "windows 386 i686-pc-windows-msvc"
     "windows amd64 x86_64-pc-windows-msvc"
-    "windows arm64 aarch64-pc-windows-msvc"
+    "windows arm64 aarch64-pc-windows-msvc v8.0"
   )
 fi
 
@@ -76,10 +76,14 @@ else
     requested=${requested//[[:space:]]/}
     matched=0
     for target in "${all_targets[@]}"; do
-      read -r goos goarch _ goarm <<< "$target"
+      read -r goos goarch _ arch_version <<< "$target"
       target_name="$goos/$goarch"
-      if [[ -n "$goarm" ]]; then
-        target_name+="/v$goarm"
+      if [[ -n "$arch_version" ]]; then
+        if [[ "$goarch" == "arm" ]]; then
+          target_name+="/v$arch_version"
+        else
+          target_name+="/$arch_version"
+        fi
       fi
       if [[ "$requested" == "$goos/$goarch" || "$requested" == "$target_name" ]]; then
         targets+=("$target")
@@ -95,14 +99,20 @@ else
 fi
 
 for target in "${targets[@]}"; do
-  read -r goos goarch triple goarm <<< "$target"
+  read -r goos goarch triple arch_version <<< "$target"
   target_name="$goos-$goarch"
   target_label="$goos/$goarch"
   target_env=()
-  if [[ -n "$goarm" ]]; then
-    target_name+="-v$goarm"
-    target_label+="/v$goarm"
-    target_env+=("GOARM=$goarm")
+  if [[ -n "$arch_version" ]]; then
+    if [[ "$goarch" == "arm" ]]; then
+      target_name+="-v$arch_version"
+      target_label+="/v$arch_version"
+      target_env+=("GOARM=$arch_version")
+    else
+      target_name+="-$arch_version"
+      target_label+="/$arch_version"
+      target_env+=("GOARM64=$arch_version")
+    fi
   fi
 
   echo "==> scan $target_label"

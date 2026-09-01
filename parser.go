@@ -352,7 +352,7 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 			legacy = splitLegacyColonOperand(part)
 		}
 		for _, item := range legacy {
-			op, err := parseOperand(item)
+			op, err := parseOperandForArch(arch, item)
 			if err != nil {
 				return nil, err
 			}
@@ -367,6 +367,72 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 		out[0] = Operand{Kind: OpIdent, Ident: strings.TrimSpace(s)}
 	}
 	return out, nil
+}
+
+func parseOperandForArch(arch Arch, s string) (Operand, error) {
+	if arch == ArchWASM {
+		if reg, ok := parseWASMReg(s); ok {
+			return Operand{Kind: OpReg, Reg: reg}, nil
+		}
+		if !strings.HasPrefix(strings.TrimSpace(s), "$") {
+			if mem, matched, err := parseWASMMem(s); matched {
+				if err != nil {
+					return Operand{}, err
+				}
+				return Operand{Kind: OpMem, Mem: mem}, nil
+			}
+		}
+	}
+	return parseOperand(s)
+}
+
+func parseWASMMem(s string) (mem MemRef, matched bool, err error) {
+	s = strings.TrimSpace(s)
+	open := strings.LastIndexByte(s, '(')
+	if open < 0 || !strings.HasSuffix(s, ")") {
+		return MemRef{}, false, nil
+	}
+	base, ok := parseWASMReg(strings.TrimSpace(s[open+1 : len(s)-1]))
+	if !ok {
+		return MemRef{}, false, nil
+	}
+	offset := strings.TrimSpace(s[:open])
+	if offset == "" {
+		return MemRef{Base: base}, true, nil
+	}
+	if n, parseErr := strconv.ParseInt(offset, 0, 64); parseErr == nil {
+		return MemRef{Base: base, Off: n}, true, nil
+	}
+	if n, ok := parseImmExpr(offset); ok {
+		return MemRef{Base: base, Off: int64(n)}, true, nil
+	}
+	return MemRef{}, true, fmt.Errorf("unresolved wasm memory offset %q", offset)
+}
+
+func parseWASMReg(s string) (Reg, bool) {
+	name := strings.TrimSpace(s)
+	upper := strings.ToUpper(name)
+	switch upper {
+	case "SP", "CTXT", "G", "RET0", "RET1", "RET2", "RET3", "PAUSE", "PC_B":
+		return Reg(upper), true
+	}
+	for _, prefix := range []struct {
+		name string
+		max  int
+	}{
+		{name: "R", max: 15},
+		{name: "F", max: 31},
+		{name: "V", max: 15},
+	} {
+		if !strings.HasPrefix(upper, prefix.name) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimPrefix(upper, prefix.name))
+		if err == nil && 0 <= n && n <= prefix.max {
+			return Reg(upper), true
+		}
+	}
+	return "", false
 }
 
 func branchRegisterTokenIsLabel(arch Arch, op Op) bool {
