@@ -9,10 +9,10 @@ on:
   pull_request:
 
 concurrency:
-  # Keep one run per source branch. A newer PR synchronization cancels every
-  # queued or running job from the superseded commit.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  # Keep one run per event and source branch. A newer PR synchronization
+  # cancels the superseded run while main push validation always completes.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
