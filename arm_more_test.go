@@ -179,7 +179,7 @@ func TestARMHelperCoverage(t *testing.T) {
 		if err := c.storeARMValue(Operand{Kind: OpMem, Mem: MemRef{Base: "R3", Off: 4}}, "55", 8, "", false, "MOVB R0, 4(R3)"); err != nil {
 			t.Fatalf("storeARMValue(mem) error = %v", err)
 		}
-		if err := c.storeARMValue(Operand{Kind: OpSym, Sym: "ignore<>(SB)"}, "1", 32, "", false, "MOVW R0, ignore<>(SB)"); err != nil {
+		if err := c.storeARMValue(Operand{Kind: OpSym, Sym: "global<>(SB)"}, "1", 32, "", false, "MOVW R0, global<>(SB)"); err != nil {
 			t.Fatalf("storeARMValue(sym) error = %v", err)
 		}
 		if err := c.storeARMValue(Operand{Kind: OpMem, Mem: MemRef{Base: "R3"}}, "1", 32, "EQ", false, "MOVW.EQ R0, (R3)"); err == nil {
@@ -207,6 +207,7 @@ func TestARMHelperCoverage(t *testing.T) {
 			"select i1",
 			"trunc i32 42 to i16",
 			"store i8",
+			`store i32 1, ptr @"example.global"`,
 			`getelementptr i8, ptr @"runtime.main", i32 8`,
 			"inttoptr i32",
 			"zext i32",

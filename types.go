@@ -16,6 +16,7 @@ const (
 	ArchAMD64 Arch = "amd64"
 	ArchARM   Arch = "arm"
 	ArchARM64 Arch = "arm64"
+	ArchWASM  Arch = "wasm"
 )
 
 type Reg string
@@ -239,9 +240,10 @@ type MemRef struct {
 	Base    Reg
 	Sym     string // optional symbol-based address, including the (SB) suffix
 	Off     int64
-	Index   Reg   // optional; empty if not present
-	Scale   int64 // optional; defaults to 1 when Index is present
-	Segment Reg   // optional x86 segment override (FS or GS)
+	OffRaw  string // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
+	Index   Reg    // optional; empty if not present
+	Scale   int64  // optional; defaults to 1 when Index is present
+	Segment Reg    // optional x86 segment override (FS or GS)
 }
 
 func (o Operand) String() string {
@@ -283,16 +285,20 @@ func (o Operand) String() string {
 			}
 			return fmt.Sprintf("%s(%s*%d)%s", o.Mem.Sym, o.Mem.Index, o.Mem.Scale, segment)
 		}
+		offset := fmt.Sprintf("%d", o.Mem.Off)
+		if o.Mem.OffRaw != "" {
+			offset = o.Mem.OffRaw
+		}
 		if o.Mem.Index != "" {
 			if o.Mem.Scale == 0 {
-				return fmt.Sprintf("%d(%s)(%s)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, segment)
+				return fmt.Sprintf("%s(%s)(%s)%s", offset, o.Mem.Base, o.Mem.Index, segment)
 			}
-			return fmt.Sprintf("%d(%s)(%s*%d)%s", o.Mem.Off, o.Mem.Base, o.Mem.Index, o.Mem.Scale, segment)
+			return fmt.Sprintf("%s(%s)(%s*%d)%s", offset, o.Mem.Base, o.Mem.Index, o.Mem.Scale, segment)
 		}
 		if o.Mem.Base == "" && o.Mem.Segment != "" {
-			return fmt.Sprintf("%d%s", o.Mem.Off, segment)
+			return fmt.Sprintf("%s%s", offset, segment)
 		}
-		return fmt.Sprintf("%d(%s)%s", o.Mem.Off, o.Mem.Base, segment)
+		return fmt.Sprintf("%s(%s)%s", offset, o.Mem.Base, segment)
 	case OpRegList:
 		parts := make([]string, 0, len(o.RegList))
 		for _, r := range o.RegList {
@@ -564,10 +570,23 @@ func parseOperand(s string) (Operand, error) {
 	if s == "" {
 		return Operand{}, fmt.Errorf("empty operand")
 	}
+	// A leading '$' on a register-relative memory expression means effective
+	// address, not an immediate load. Recognize this before parseImm so forms
+	// such as $(-64*1024+104)(R13) are not mistaken for symbolic constants.
+	if strings.HasPrefix(s, "$") {
+		if _, ok := parseMem(strings.TrimSpace(strings.TrimPrefix(s, "$"))); ok {
+			return Operand{Kind: OpSym, Sym: s}, nil
+		}
+	}
 	if imm, ok := parseImm(s); ok {
 		op := Operand{Kind: OpImm, Imm: imm}
 		if isSymbolicImmPlaceholder(s) {
-			op.ImmRaw = s
+			expr := strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if _, resolvedInt := parseImmExpr(expr); !resolvedInt {
+				if _, resolvedFloat := parseImmFloatExpr(expr); !resolvedFloat {
+					op.ImmRaw = s
+				}
+			}
 		}
 		return op, nil
 	}
@@ -775,6 +794,8 @@ const (
 	OpXGETBV Op = "XGETBV"
 	OpBYTE   Op = "BYTE"
 	OpWORD   Op = "WORD"
+	OpCALL   Op = "CALL"
+	OpJMP    Op = "JMP"
 	OpRET    Op = "RET"
 	OpLABEL  Op = "LABEL"
 )

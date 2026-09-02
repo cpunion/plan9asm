@@ -4,6 +4,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -55,6 +56,118 @@ RET
 	}
 	if got != 2 {
 		t.Fatalf("BYTE count=%d, want 2", got)
+	}
+}
+
+func TestParseLegacyX86ColonOperand(t *testing.T) {
+	src := `
+TEXT ·shift(SB),NOSPLIT,$0
+SHLL CX, R11:AX
+SHLL $4, foo+4(SB):AX
+RET
+`
+	file, err := Parse(ArchAMD64, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := file.Funcs[0].Instrs[1]
+	if len(first.Args) != 3 || first.Args[1].Kind != OpReg || first.Args[1].Reg != AX || first.Args[2].Reg != Reg("R11") {
+		t.Fatalf("SHLL register pair args = %#v", first.Args)
+	}
+	second := file.Funcs[0].Instrs[2]
+	if len(second.Args) != 3 || second.Args[1].Kind != OpReg || second.Args[1].Reg != AX || second.Args[2].Kind != OpSym {
+		t.Fatalf("SHLL symbol pair args = %#v", second.Args)
+	}
+}
+
+func TestLegacyX86ColonOperandIsArchitectureAndOpcodeScoped(t *testing.T) {
+	for _, tc := range []struct {
+		arch Arch
+		op   string
+	}{
+		{arch: ArchARM64, op: "SHLL"},
+		{arch: ArchAMD64, op: "MOVL"},
+	} {
+		src := "TEXT ·f(SB),NOSPLIT,$0\n" + tc.op + " R1:R2\nRET\n"
+		if _, err := Parse(tc.arch, src); err == nil {
+			t.Fatalf("Parse(%s, %s with colon operand) unexpectedly succeeded", tc.arch, tc.op)
+		}
+	}
+}
+
+func TestParseX86ConditionalBranchRegisterNamedLabel(t *testing.T) {
+	src := `
+TEXT ·branch(SB),NOSPLIT,$0
+JL V1
+V1:
+JMP AX
+CALL AX
+RET
+`
+	file, err := Parse(ArchAMD64, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	instrs := file.Funcs[0].Instrs
+	if got := instrs[1].Args; len(got) != 1 || got[0].Kind != OpIdent || got[0].Ident != "V1" {
+		t.Fatalf("JL target = %#v, want identifier V1", got)
+	}
+	if err := ProbeInstruction(ArchAMD64, "amd64", instrs[1]); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("ProbeInstruction(JL V1) error = %v, want ErrProbeNeedsContext", err)
+	}
+	for _, i := range []int{3, 4} {
+		got := instrs[i].Args
+		if len(got) != 1 || got[0].Kind != OpReg || got[0].Reg != AX {
+			t.Fatalf("%s target = %#v, want register AX", instrs[i].Op, got)
+		}
+	}
+}
+
+func TestParseARMBranchRegisterNamedLabels(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		arch   Arch
+		branch string
+		label  string
+	}{
+		{name: "arm-conditional", arch: ArchARM, branch: "BEQ X7", label: "X7"},
+		{name: "arm-unconditional", arch: ArchARM, branch: "B M1", label: "M1"},
+		{name: "arm64-conditional", arch: ArchARM64, branch: "BEQ X7", label: "X7"},
+		{name: "arm64-unconditional", arch: ArchARM64, branch: "B R7", label: "R7"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			src := "TEXT ·branch(SB),NOSPLIT,$0\n" + tc.branch + "\n" + tc.label + ":\nRET\n"
+			file, err := Parse(tc.arch, src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := file.Funcs[0].Instrs[1].Args
+			if len(got) != 1 || got[0].Kind != OpIdent || got[0].Ident != tc.label {
+				t.Fatalf("%s target = %#v, want identifier %s", tc.branch, got, tc.label)
+			}
+			if err := ProbeInstruction(tc.arch, map[Arch]string{ArchARM: "arm", ArchARM64: "arm64"}[tc.arch], file.Funcs[0].Instrs[1]); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("ProbeInstruction(%s) error = %v, want ErrProbeNeedsContext", tc.branch, err)
+			}
+		})
+	}
+
+	file, err := Parse(ArchARM, "TEXT ·indirect(SB),NOSPLIT,$0\nB (R11)\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := file.Funcs[0].Instrs[1].Args; len(got) != 1 || got[0].Kind != OpMem || got[0].Mem.Base != Reg("R11") {
+		t.Fatalf("B (R11) target = %#v, want memory base R11", got)
+	}
+}
+
+func TestParseARM64BareRegisterCallRemainsIndirect(t *testing.T) {
+	file, err := Parse(ArchARM64, "TEXT ·call(SB),NOSPLIT,$0\nBL R3\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := file.Funcs[0].Instrs[1].Args
+	if len(got) != 1 || got[0].Kind != OpReg || got[0].Reg != "R3" {
+		t.Fatalf("BL R3 target = %#v, want register operand", got)
 	}
 }
 

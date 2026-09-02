@@ -134,7 +134,8 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{named, "amd64", I32, true},
 		{alias, "arm64", I64, true},
 		{types.Typ[types.Complex64], "amd64", "", false},
-		{types.NewStruct(nil, nil), "amd64", "", false},
+		{types.NewStruct(nil, nil), "amd64", LLVMType("[0 x i8]"), true},
+		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "", false},
 	} {
 		got, err := goLLVMTypeForType(tc.typ, tc.goarch)
 		if (err == nil) != tc.ok || got != tc.want {
@@ -161,11 +162,11 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		types.NewVar(token.NoPos, nil, "n", types.Typ[types.Int32]),
 	)
 	sz := types.SizesFor("gc", "arm64")
-	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 8, false)
+	args, slots, next, err := goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 8, false)
 	if err != nil || len(args) != 3 || len(slots) != 6 || next <= 8 {
 		t.Fatalf("goLLVMArgsAndFrameSlotsForTuple(flat=false) = (%v, %v, %d, %v)", args, slots, next, err)
 	}
-	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, 8, true)
+	args, slots, next, err = goLLVMArgsAndFrameSlotsForTuple(tup, "arm64", sz, sz, 8, true)
 	if err != nil || len(args) != 6 || len(slots) != 6 || next <= 8 {
 		t.Fatalf("goLLVMArgsAndFrameSlotsForTuple(flat=true) = (%v, %v, %d, %v)", args, slots, next, err)
 	}
@@ -190,16 +191,18 @@ func cmp(a, b int) int { return a }
 `)
 	scope := pkg.Types.Scope()
 	plain := scope.Lookup("Plain").(*types.Func)
-	sig, err := goFuncSigForDeclaredFunc("test/pkg.Plain", plain, "arm64", types.SizesFor("gc", "arm64"), true)
+	sz := types.SizesFor("gc", "arm64")
+	sig, err := goFuncSigForDeclaredFunc("test/pkg.Plain", plain, "arm64", sz, sz, true)
 	if err != nil || sig.Ret == Void || len(sig.Frame.Params) == 0 || len(sig.Frame.Results) == 0 {
 		t.Fatalf("goFuncSigForDeclaredFunc(Plain) = (%v, %v)", sig, err)
 	}
 	variadic := scope.Lookup("Variadic").(*types.Func)
-	if _, err := goFuncSigForDeclaredFunc("test/pkg.Variadic", variadic, "amd64", types.SizesFor("gc", "amd64"), false); err == nil {
+	sz = types.SizesFor("gc", "amd64")
+	if _, err := goFuncSigForDeclaredFunc("test/pkg.Variadic", variadic, "amd64", sz, sz, false); err == nil {
 		t.Fatalf("goFuncSigForDeclaredFunc(Variadic) unexpectedly succeeded")
 	}
 	named := scope.Lookup("S").Type().(*types.Named)
-	if _, err := goFuncSigForDeclaredFunc("test/pkg.Method", named.Method(0), "amd64", types.SizesFor("gc", "amd64"), false); err == nil {
+	if _, err := goFuncSigForDeclaredFunc("test/pkg.Method", named.Method(0), "amd64", sz, sz, false); err == nil {
 		t.Fatalf("goFuncSigForDeclaredFunc(Method) unexpectedly succeeded")
 	}
 
@@ -211,7 +214,7 @@ func cmp(a, b int) int { return a }
 			{Sym: "localtarget<>"},
 		},
 	}
-	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", func(resolved string) (FuncSig, bool) {
+	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, func(resolved string) (FuncSig, bool) {
 		if resolved == "test/pkg.localhelper" {
 			return FuncSig{Name: resolved, Args: []LLVMType{I64}, Ret: I64}, true
 		}
@@ -281,7 +284,7 @@ var helper int
 	if err := nilLocalBuilder.addDeclaredFuncSigs(&File{Funcs: []Func{{Sym: "missing_local<>"}}}); err != nil {
 		t.Fatalf("addDeclaredFuncSigs(local with nil map) error = %v", err)
 	}
-	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil); err == nil {
+	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "madeup", nil, nil, nil); err == nil {
 		t.Fatalf("goSigsForAsmFile(madeup) unexpectedly succeeded")
 	}
 }

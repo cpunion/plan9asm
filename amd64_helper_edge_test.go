@@ -338,6 +338,10 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 			Args: []LLVMType{I64},
 			Ret:  LLVMType("double"),
 		},
+		"example.aggregate": {
+			Name: "example.aggregate",
+			Ret:  LLVMType("{ ptr, i64 }"),
+		},
 	}
 	sig := FuncSig{
 		Name: "example.caller",
@@ -472,6 +476,9 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	if err := c.callSym(Operand{Kind: OpSym, Sym: "helper(SB)"}); err != nil {
 		t.Fatalf("callSym(helper) error = %v", err)
 	}
+	if err := c.callSym(Operand{Kind: OpSym, Sym: "aggregate(SB)"}); err != nil {
+		t.Fatalf("callSym(aggregate) error = %v", err)
+	}
 	if err := c.callSym(Operand{Kind: OpSym, Sym: "badarg(SB)"}); err == nil {
 		t.Fatalf("callSym(badarg) unexpectedly succeeded")
 	}
@@ -508,8 +515,11 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 		"atomicrmw add ptr",
 		"atomicrmw xchg ptr",
 		"atomicrmw and ptr",
+		"icmp eq i8",
+		"icmp slt i8",
 		"call i64",
 		"call ptr @\"example.helper\"",
+		"extractvalue { ptr, i64 }",
 		"call i64 @\"example.cast\"",
 		"ret i64",
 		"br i1",
@@ -1250,6 +1260,8 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	check("TESTQ", Instr{Raw: "TESTQ example.global(SB), DI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: DI}}})
 	check("BTQ", Instr{Raw: "BTQ $3, AX", Args: []Operand{{Kind: OpImm, Imm: 3}, {Kind: OpReg, Reg: AX}}})
 	check("BTSQ", Instr{Raw: "BTSQ DX, AX", Args: []Operand{{Kind: OpReg, Reg: DX}, {Kind: OpReg, Reg: AX}}})
+	check("BTRQ", Instr{Raw: "BTRQ $63, AX", Args: []Operand{{Kind: OpImm, Imm: 63}, {Kind: OpReg, Reg: AX}}})
+	check("BTRQ", Instr{Raw: "BTRQ DX, (BX)", Args: []Operand{{Kind: OpReg, Reg: DX}, {Kind: OpMem, Mem: MemRef{Base: BX}}}})
 
 	if ok, term, err := c.lowerCmpBt("BAD", Instr{}); ok || term || err != nil {
 		t.Fatalf("lowerCmpBt(BAD) = (%v, %v, %v)", ok, term, err)
@@ -1266,6 +1278,9 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	if _, _, err := c.lowerCmpBt("BTSQ", Instr{Raw: "BTSQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}); err == nil {
 		t.Fatalf("short BTSQ unexpectedly succeeded")
 	}
+	if _, _, err := c.lowerCmpBt("BTRQ", Instr{Raw: "BTRQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}); err == nil {
+		t.Fatalf("short BTRQ unexpectedly succeeded")
+	}
 	if got, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$const"}, I32); err != nil || got != "0" {
 		t.Fatalf("evalIntSized($const) = (%q, %v)", got, err)
 	}
@@ -1281,6 +1296,7 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 		"icmp eq i8",
 		"icmp slt i16",
 		"icmp ult i32",
+		"ashr i64",
 		"and i64",
 		"store i1 false, ptr %flags_cf",
 		"lshr i64",

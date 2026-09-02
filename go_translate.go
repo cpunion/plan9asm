@@ -28,10 +28,21 @@ type GoPackage struct {
 // GOARCH is required and currently accepts only "amd64", "386", and "arm64".
 // If ResolveSym is nil, the default resolver only strips ABI suffixes.
 type GoModuleOptions struct {
-	FileName       string
-	GOOS           string
-	GOARCH         string
+	FileName string
+	GOOS     string
+	GOARCH   string
+	// Sizes is the type layout used to type-check the package. When nil,
+	// TranslateGoModule uses the standard gc layout for GOARCH. Callers with a
+	// custom data model, such as Emscripten wasm32 versus Memory64, must pass
+	// the same Sizes instance used by go/types.
+	Sizes types.Sizes
+	// FrameSizes describes the stack-frame layout encoded in FP offsets. It
+	// defaults to Sizes. This is separate because LLGo's C-compatible wasm32
+	// mode uses 32-bit values while translating assembly emitted for Go's
+	// 64-bit GOARCH=wasm frame layout.
+	FrameSizes     types.Sizes
 	TargetTriple   string
+	WASMABI        WASMABI
 	X87Mode        X87Mode
 	AnnotateSource bool
 
@@ -104,7 +115,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if opt.KeepFunc != nil {
 		keep := make([]Func, 0, len(file.Funcs))
 		for _, fn := range file.Funcs {
-			resolved := resolve(goStripABISuffix(fn.Sym))
+			resolved := resolve(goTextSymbolForResolution(fn.Sym))
 			if opt.KeepFunc(fn.Sym, resolved) {
 				keep = append(keep, fn)
 			}
@@ -112,7 +123,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		file.Funcs = keep
 	}
 
-	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.ManualSig)
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
@@ -121,6 +132,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 		ResolveSym:     resolve,
 		Sigs:           sigs,
 		Goarch:         opt.GOARCH,
+		WASMABI:        opt.WASMABI,
 		X87Mode:        opt.X87Mode,
 		AnnotateSource: opt.AnnotateSource,
 	})
@@ -130,8 +142,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 
 	funcs := make([]GoFunction, 0, len(file.Funcs))
 	for _, fn := range file.Funcs {
-		sym := goStripABISuffix(fn.Sym)
-		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: resolve(sym)})
+		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: resolve(goTextSymbolForResolution(fn.Sym))})
 	}
 
 	return &GoModuleTranslation{Module: mod, Signatures: sigs, Functions: funcs}, nil
@@ -147,6 +158,10 @@ func goStripABISuffix(sym string) string {
 	return strings.TrimSuffix(sym, "<>")
 }
 
+func goTextSymbolForResolution(sym string) string {
+	return goABISuffixRe.ReplaceAllString(sym, "")
+}
+
 func goArchFor(goarch string) (Arch, error) {
 	switch goarch {
 	case "amd64", "386":
@@ -155,21 +170,29 @@ func goArchFor(goarch string) (Arch, error) {
 		return ArchARM, nil
 	case "arm64":
 		return ArchARM64, nil
+	case "wasm":
+		return ArchWASM, nil
 	default:
 		return "", fmt.Errorf("Plan 9 asm unsupported arch %q", goarch)
 	}
 }
 
-func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
-	sz := types.SizesFor("gc", goarch)
+func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string, goarch string, sz, frameSz types.Sizes, manualSig func(string) (FuncSig, bool)) (map[string]FuncSig, error) {
+	if sz == nil {
+		sz = types.SizesFor("gc", goarch)
+	}
 	if sz == nil {
 		return nil, fmt.Errorf("missing sizes for goarch %q", goarch)
+	}
+	if frameSz == nil {
+		frameSz = sz
 	}
 	b := goSigBuilder{
 		sigs:      make(map[string]FuncSig, len(file.Funcs)),
 		localSigs: make(map[string]bool),
 		scope:     pkg.Types.Scope(),
 		sz:        sz,
+		frameSz:   frameSz,
 		linknames: goLinknameRemoteToLocal(pkg.Syntax),
 		pkgPath:   pkg.Path,
 		resolve:   resolve,
@@ -184,6 +207,30 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	}
 	if err := b.addReferencedFuncSigs(file); err != nil {
 		return nil, err
+	}
+	if goarch == "wasm" {
+		for _, fn := range file.Funcs {
+			resolved := resolve(goTextSymbolForResolution(fn.Sym))
+			fs := b.sigs[resolved]
+			if native, ok := wasmGoNativeFuncSig(resolved); ok {
+				fs = native
+			} else if b.localSigs[resolved] {
+				if wasmUsesNativeReturn(fn) {
+					var err error
+					fs, err = InferWASMAssemblyFuncSig(fn, resolved)
+					if err != nil {
+						return nil, err
+					}
+					fs.WASMNative = true
+				} else {
+					fs = FuncSig{Name: resolved, Ret: Void}
+				}
+			}
+			if wasmNeedsIncomingContext(fn) {
+				fs.WASMContext = Ptr
+			}
+			b.sigs[resolved] = fs
+		}
 	}
 	// File-local TEXT symbols (the Plan 9 `<>` form) are commonly used for
 	// assembly trampolines that are only reached through a raw function
@@ -200,11 +247,21 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	return b.sigs, nil
 }
 
+func wasmUsesNativeReturn(fn Func) bool {
+	for _, ins := range fn.Instrs {
+		if normalizeInstructionOpcode(ins.Op) == "WASMRETURN" {
+			return true
+		}
+	}
+	return false
+}
+
 type goSigBuilder struct {
 	sigs      map[string]FuncSig
 	localSigs map[string]bool
 	scope     *types.Scope
 	sz        types.Sizes
+	frameSz   types.Sizes
 	linknames map[string]string
 	pkgPath   string
 	resolve   func(sym string) string
@@ -216,19 +273,25 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 	for i := range file.Funcs {
 		textSym := file.Funcs[i].Sym
 		sym := goStripABISuffix(textSym)
-		resolved := b.resolve(sym)
+		resolved := b.resolve(goTextSymbolForResolution(textSym))
 		if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
 			b.sigs[resolved] = ms
 			continue
 		}
 
-		declName, err := goDeclNameForSymbol(sym, b.linknames)
-		if err != nil {
-			return err
+		declName := ""
+		if strings.HasPrefix(resolved, b.pkgPath+".") {
+			declName = strings.TrimPrefix(resolved, b.pkgPath+".")
+		} else {
+			var err error
+			declName, err = goDeclNameForSymbol(sym, b.linknames)
+			if err != nil {
+				return err
+			}
 		}
 		obj := b.scope.Lookup(declName)
 		if obj == nil {
-			if strings.HasSuffix(textSym, "<>") {
+			if strings.HasSuffix(textSym, "<>") || b.goarch == "wasm" {
 				if b.localSigs == nil {
 					b.localSigs = make(map[string]bool)
 				}
@@ -241,7 +304,7 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		if !ok {
 			return fmt.Errorf("asm symbol %q maps to non-func %T", sym, obj)
 		}
-		fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, true)
+		fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, true)
 		if err != nil {
 			return err
 		}
@@ -250,9 +313,58 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 	return nil
 }
 
+func wasmGoNativeFuncSig(name string) (FuncSig, bool) {
+	local := strings.HasSuffix(name, "$local")
+	base := strings.TrimSuffix(name, "$local")
+	if i := strings.LastIndexByte(base, '.'); i >= 0 {
+		base = base[i+1:]
+	}
+	native := func(args []LLVMType, ret LLVMType) FuncSig {
+		regs := make([]Reg, len(args))
+		for i := range regs {
+			regs[i] = Reg(fmt.Sprintf("R%d", i))
+		}
+		return FuncSig{Name: name, Args: args, Ret: ret, ArgRegs: regs, WASMNative: true}
+	}
+	switch base {
+	case "_rt0_wasm_js", "_rt0_wasm_wasip1", "_rt0_wasm_wasip1_lib",
+		"wasm_export_resume", "wasm_pc_f_loop", "wasm_export_lib", "notInitialized":
+		return native(nil, Void), true
+	case "wasm_export_run":
+		return native([]LLVMType{I32, I32}, Void), true
+	case "wasm_export_getsp":
+		return native(nil, I32), true
+	case "wasm_pc_f_loop_export":
+		return native([]LLVMType{I32}, Void), true
+	case "wasmDiv":
+		return native([]LLVMType{I64, I64}, I64), true
+	case "wasmTruncS", "wasmTruncU":
+		return native([]LLVMType{LLVMType("double")}, I64), true
+	case "gcWriteBarrier":
+		if local {
+			// Go 1.21 and newer use a file-local helper that receives the
+			// requested buffer size and returns its address on the wasm stack.
+			return native([]LLVMType{I64}, I64), true
+		}
+		// Go 1.20 exposes runtime.gcWriteBarrier as a two-argument native
+		// helper. It writes the slot itself and has no wasm result.
+		return native([]LLVMType{I64, I64}, Void), true
+	case "gcWriteBarrier1", "gcWriteBarrier2", "gcWriteBarrier3", "gcWriteBarrier4",
+		"gcWriteBarrier5", "gcWriteBarrier6", "gcWriteBarrier7", "gcWriteBarrier8":
+		return native(nil, I64), true
+	case "cmpbody":
+		return native([]LLVMType{I64, I64, I64, I64}, I64), true
+	case "memeqbody":
+		return native([]LLVMType{I64, I64, I64}, I64), true
+	case "memcmp", "memchr":
+		return native([]LLVMType{I32, I32, I32}, I32), true
+	}
+	return FuncSig{}, false
+}
+
 func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 	for _, fn := range file.Funcs {
-		callerResolved := b.resolve(goStripABISuffix(fn.Sym))
+		callerResolved := b.resolve(goTextSymbolForResolution(fn.Sym))
 		callerSig, hasCallerSig := b.sigs[callerResolved]
 		for _, ins := range fn.Instrs {
 			base, tailJump, ok := goReferencedFunc(ins)
@@ -265,6 +377,12 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 			targetResolved := b.resolve(base)
 			if _, ok := b.sigs[targetResolved]; ok {
 				continue
+			}
+			if b.goarch == "wasm" {
+				if native, ok := wasmGoNativeFuncSig(targetResolved); ok {
+					b.sigs[targetResolved] = native
+					continue
+				}
 			}
 			if tailJump && hasCallerSig {
 				// Best-effort fallback for helper<> tail-jumps where the callee is an
@@ -325,7 +443,7 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	if !ok {
 		return nil
 	}
-	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, false)
+	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, false)
 	if err != nil {
 		return err
 	}
@@ -337,7 +455,7 @@ func goReferencedFunc(ins Instr) (base string, tailJump bool, ok bool) {
 	switch string(ins.Op) {
 	case "JMP", "B":
 		tailJump = true
-	case "CALL", "BL":
+	case "CALL", "CALLNORESUME", "WASMCALL", "BL":
 	default:
 		return "", false, false
 	}
@@ -399,7 +517,16 @@ func goDeclNameForSymbol(sym string, linknames map[string]string) (string, error
 	return declName, nil
 }
 
-func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz types.Sizes, withFrame bool) (FuncSig, error) {
+func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, frameSz types.Sizes, withFrame bool) (FuncSig, error) {
+	if sz == nil {
+		sz = types.SizesFor("gc", goarch)
+	}
+	if sz == nil {
+		return FuncSig{}, fmt.Errorf("missing sizes for goarch %q", goarch)
+	}
+	if frameSz == nil {
+		frameSz = sz
+	}
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil {
 		return FuncSig{}, fmt.Errorf("methods in asm not supported: %s", fn.FullName())
@@ -408,22 +535,22 @@ func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz typ
 		return FuncSig{}, fmt.Errorf("variadic asm not supported: %s", fn.FullName())
 	}
 	if withFrame {
-		args, frameParams, nextOff, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)
+		args, frameParams, nextOff, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, frameSz, 0, false)
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
-		nextOff = goAlignOff(nextOff, int64(goWordSize(goarch)))
-		retTys, frameResults, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, nextOff, true)
+		nextOff = goAlignOff(nextOff, int64(goWordSizeForSizes(goarch, frameSz)))
+		retTys, frameResults, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, frameSz, nextOff, true)
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
 		return FuncSig{Name: name, Args: args, Ret: goTupleRetType(retTys), Frame: FrameLayout{Params: frameParams, Results: frameResults}}, nil
 	}
-	args, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)
+	args, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, frameSz, 0, false)
 	if err != nil {
 		return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
-	retTys, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, 0, false)
+	retTys, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, frameSz, 0, false)
 	if err != nil {
 		return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
@@ -602,6 +729,11 @@ func goExpandAsmHeaderTypes(src []byte, pkgTypes *types.Package, goarch string) 
 }
 
 func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
+	return goLLVMTypeForTypeWithSizes(t, goarch, types.SizesFor("gc", goarch))
+}
+
+func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LLVMType, error) {
+	wordSize := goWordSizeForSizes(goarch, sz)
 	switch tt := t.(type) {
 	case *types.Basic:
 		switch tt.Kind() {
@@ -618,7 +750,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		case types.Int64, types.Uint64:
 			return I64, nil
 		case types.Int, types.Uint, types.Uintptr:
-			if goWordSize(goarch) == 8 {
+			if wordSize == 8 {
 				return I64, nil
 			}
 			return I32, nil
@@ -627,7 +759,7 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		case types.Float64:
 			return LLVMType("double"), nil
 		case types.String:
-			if goWordSize(goarch) == 8 {
+			if wordSize == 8 {
 				return LLVMType("{ ptr, i64 }"), nil
 			}
 			return LLVMType("{ ptr, i32 }"), nil
@@ -636,15 +768,25 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		}
 	case *types.Pointer:
 		return Ptr, nil
+	case *types.Signature, *types.Map, *types.Chan:
+		// Go represents function, map, and channel values as pointer-sized
+		// handles at an assembly boundary. Their internal layouts remain owned
+		// by the compiler/runtime; Plan 9 assembly only transports the handle.
+		return Ptr, nil
 	case *types.Slice:
-		if goWordSize(goarch) == 8 {
+		if wordSize == 8 {
 			return LLVMType("{ ptr, i64, i64 }"), nil
 		}
 		return LLVMType("{ ptr, i32, i32 }"), nil
 	case *types.Interface:
 		return LLVMType("{ ptr, ptr }"), nil
+	case *types.Struct:
+		if tt.NumFields() == 0 {
+			return LLVMType("[0 x i8]"), nil
+		}
+		return "", fmt.Errorf("unsupported struct type %s", tt.String())
 	case *types.Named:
-		return goLLVMTypeForType(tt.Underlying(), goarch)
+		return goLLVMTypeForTypeWithSizes(tt.Underlying(), goarch, sz)
 	default:
 		// *types.Alias was added after the oldest Go version supported by this
 		// module. Detect it by its stable reflect identity so the package still
@@ -652,13 +794,13 @@ func goLLVMTypeForType(t types.Type, goarch string) (LLVMType, error) {
 		// an alias through its RHS just like a named type. Keep this probe in the
 		// fallback path so common concrete types avoid reflection overhead.
 		if reflect.TypeOf(t).String() == "*types.Alias" {
-			return goLLVMTypeForType(t.Underlying(), goarch)
+			return goLLVMTypeForTypeWithSizes(t.Underlying(), goarch, sz)
 		}
 		return "", fmt.Errorf("unsupported type %s", t.String())
 	}
 }
 
-func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Sizes, startOff int64, flattenAgg bool) (args []LLVMType, slots []FrameSlot, nextOff int64, err error) {
+func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameSz types.Sizes, startOff int64, flattenAgg bool) (args []LLVMType, slots []FrameSlot, nextOff int64, err error) {
 	if tup == nil || tup.Len() == 0 {
 		return nil, nil, startOff, nil
 	}
@@ -667,10 +809,10 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 	argIdx := 0
 	for i := 0; i < tup.Len(); i++ {
 		t := tup.At(i).Type()
-		a := int64(sz.Alignof(t))
+		a := int64(frameSz.Alignof(t))
 		off = goAlignOff(off, a)
 
-		parts, ok := goFramePartsForType(t, goarch)
+		parts, ok := goFramePartsForTypeWithSizes(t, goarch, sz, frameSz)
 		if ok {
 			if flattenAgg {
 				for _, part := range parts {
@@ -679,7 +821,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 					argIdx++
 				}
 			} else {
-				ty, e := goLLVMTypeForType(t, goarch)
+				ty, e := goLLVMTypeForTypeWithSizes(t, goarch, sz)
 				if e != nil {
 					return nil, nil, 0, e
 				}
@@ -689,18 +831,18 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.S
 				}
 				argIdx++
 			}
-			off += int64(sz.Sizeof(t))
+			off += int64(frameSz.Sizeof(t))
 			continue
 		}
 
-		ty, e := goLLVMTypeForType(t, goarch)
+		ty, e := goLLVMTypeForTypeWithSizes(t, goarch, sz)
 		if e != nil {
 			return nil, nil, 0, e
 		}
 		args = append(args, ty)
 		slots = append(slots, FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1})
 		argIdx++
-		off += int64(sz.Sizeof(t))
+		off += int64(frameSz.Sizeof(t))
 	}
 	return args, slots, off, nil
 }
@@ -712,9 +854,14 @@ type goFramePart struct {
 }
 
 func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
-	word := int64(goWordSize(goarch))
+	sz := types.SizesFor("gc", goarch)
+	return goFramePartsForTypeWithSizes(t, goarch, sz, sz)
+}
+
+func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types.Sizes) ([]goFramePart, bool) {
+	word := int64(goWordSizeForSizes(goarch, frameSz))
 	wordTy := I64
-	if word == 4 {
+	if goWordSizeForSizes(goarch, sz) == 4 {
 		wordTy = I32
 	}
 	switch u := t.Underlying().(type) {
@@ -732,11 +879,20 @@ func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
 
 func goWordSize(goarch string) int {
 	switch goarch {
-	case "amd64", "arm64":
+	case "amd64", "arm64", "wasm":
 		return 8
 	default:
 		return 4
 	}
+}
+
+func goWordSizeForSizes(goarch string, sz types.Sizes) int {
+	if sz != nil {
+		if size := sz.Sizeof(types.Typ[types.Uintptr]); size == 4 || size == 8 {
+			return int(size)
+		}
+	}
+	return goWordSize(goarch)
 }
 
 func goAlignOff(off, a int64) int64 {

@@ -18,13 +18,21 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 
 ## Current status
 
-- Library parser/lowering targets: `386`, `amd64`, `arm64`.
+- Library parser/lowering targets: `386`, `amd64`, `arm`, `arm64`, `wasm`.
 - Tool targets (`cmd/plan9asmll -all-targets`):
   - `darwin/amd64`, `darwin/arm64`
   - `linux/amd64`, `linux/arm64`, `linux/386`
   - `windows/amd64`, `windows/arm64`, `windows/386`
+- The package-oriented `cmd/plan9asm` and coverage-oriented
+  `cmd/plan9asmscan` additionally support the official `js/wasm` and
+  `wasip1/wasm` standard-library corpora. `linux/arm` is covered by the same
+  corpus path; it is not part of `plan9asmll -all-targets`.
 - `386` currently reuses the x86 lowering path from `amd64` backend logic.
 - `arm64` does not include `arm` (32-bit). They are separate architectures.
+- Instruction coverage is tracked by architecture, family, opcode, and operand
+  form against Go's official encoder tables, positive assembler testdata, and
+  executable real-world regressions. See
+  [Plan 9 assembly instruction coverage](doc/plan9asm-corpus.md).
 
 ## LLVM backend
 
@@ -41,6 +49,28 @@ go test ./...
 ```
 
 Some tests require local LLVM/Clang tools (`llc`, `clang`) and skip when unavailable.
+
+The executable cases under `testdata/conformance` use the native Go
+assembler as an oracle, then compile and run the same assembly through
+plan9asm/LLVM. Run them with:
+
+```bash
+go test . -run 'Test.*Conformance'
+```
+
+The separate cross-version instruction coverage gate compares Go's assembler
+corpus and encoder forms against the checked-in baseline:
+
+```bash
+scripts/check-go-asm-coverage.sh
+```
+
+On a Linux/amd64 host with the Debian cross GCC toolchains and QEMU user-mode
+emulators installed, run the cross-architecture link and execution smoke test:
+
+```bash
+PLAN9ASM_CROSS_EXEC=1 go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
+```
 
 ## `cmd/plan9asmll` usage
 

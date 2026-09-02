@@ -28,35 +28,99 @@ fi
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-targets=(
+# Build the package tool once, then run it from the repository root. Invoking
+# it through `go run -C cmd/plan9asm` would make old Go lanes auto-select the
+# nested module's newer toolchain, and the corpus would silently come from the
+# wrong GOROOT.
+if [[ -n "${PLAN9ASM_CMD:-}" ]]; then
+  plan9asm_cmd=$PLAN9ASM_CMD
+  if [[ ! -x "$plan9asm_cmd" ]]; then
+    echo "PLAN9ASM_CMD is not executable: $plan9asm_cmd" >&2
+    exit 1
+  fi
+else
+  plan9asm_cmd="$tmp_root/plan9asm"
+  if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+    plan9asm_cmd+=".exe"
+  fi
+  go build -C cmd/plan9asm -o "$plan9asm_cmd" .
+fi
+
+all_targets=(
   "linux 386 i386-unknown-linux-gnu"
   "linux amd64 x86_64-unknown-linux-gnu"
-  "linux arm64 aarch64-unknown-linux-gnu"
+  "linux arm armv5te-unknown-linux-gnueabi 5"
+  "linux arm armv6-unknown-linux-gnueabihf 6"
+  "linux arm armv7-unknown-linux-gnueabihf 7"
+  "linux arm64 aarch64-unknown-linux-gnu v8.0"
   "darwin amd64 x86_64-apple-macosx"
-  "darwin arm64 arm64-apple-macosx"
+  "darwin arm64 arm64-apple-macosx v8.0"
+  "js wasm wasm32-unknown-unknown"
+  "wasip1 wasm wasm32-unknown-wasi"
 )
 
-# Include Windows by default. CI may disable these two extra targets for old
-# Go compatibility lanes; the latest toolchain and the Windows host lane still
-# scan and compile both COFF corpora.
+# Include Windows by default. Linux CI cross-compiles the COFF corpora, while
+# the latest Windows host lane remains an auxiliary native-host integration.
 if [[ "${PLAN9ASM_CORPUS_INCLUDE_WINDOWS:-1}" != "0" ]]; then
-  targets+=(
+  all_targets+=(
     "windows 386 i686-pc-windows-msvc"
     "windows amd64 x86_64-pc-windows-msvc"
-    "windows arm64 aarch64-pc-windows-msvc"
+    "windows arm64 aarch64-pc-windows-msvc v8.0"
   )
 fi
 
-for target in "${targets[@]}"; do
-  set -- $target
-  goos=$1
-  goarch=$2
-  triple=$3
+targets=()
+if [[ -z "${PLAN9ASM_CORPUS_TARGETS:-}" ]]; then
+  targets=("${all_targets[@]}")
+else
+  IFS=',' read -r -a requested_targets <<< "$PLAN9ASM_CORPUS_TARGETS"
+  for requested in "${requested_targets[@]}"; do
+    requested=${requested//[[:space:]]/}
+    matched=0
+    for target in "${all_targets[@]}"; do
+      read -r goos goarch _ arch_version <<< "$target"
+      target_name="$goos/$goarch"
+      if [[ -n "$arch_version" ]]; then
+        if [[ "$goarch" == "arm" ]]; then
+          target_name+="/v$arch_version"
+        else
+          target_name+="/$arch_version"
+        fi
+      fi
+      if [[ "$requested" == "$goos/$goarch" || "$requested" == "$target_name" ]]; then
+        targets+=("$target")
+        matched=1
+        break
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      echo "unsupported PLAN9ASM_CORPUS_TARGETS entry: $requested" >&2
+      exit 1
+    fi
+  done
+fi
 
-  echo "==> scan $goos/$goarch"
-  json="$tmp_root/$goos-$goarch.json"
-  go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
-  "$python_cmd" - "$json" "$goos/$goarch" <<'PY'
+for target in "${targets[@]}"; do
+  read -r goos goarch triple arch_version <<< "$target"
+  target_name="$goos-$goarch"
+  target_label="$goos/$goarch"
+  target_env=()
+  if [[ -n "$arch_version" ]]; then
+    if [[ "$goarch" == "arm" ]]; then
+      target_name+="-v$arch_version"
+      target_label+="/v$arch_version"
+      target_env+=("GOARM=$arch_version")
+    else
+      target_name+="-$arch_version"
+      target_label+="/$arch_version"
+      target_env+=("GOARM64=$arch_version")
+    fi
+  fi
+
+  echo "==> scan $target_label"
+  json="$tmp_root/$target_name.json"
+  env "${target_env[@]}" go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
+  "$python_cmd" - "$json" "$target_label" <<'PY'
 import json
 import sys
 
@@ -65,27 +129,34 @@ with open(path, "r", encoding="utf-8") as f:
     data = json.load(f)
 
 unsupported = data.get("unsupported", [])
+unsupported_forms = data.get("unsupported_by_form", [])
 parse_errs = data.get("parse_errs") or []
-print(f"scan {target}: packages={data['std_pkgs_with_sfile']} files={data['asm_files']} unsupported={len(unsupported)} parse_errs={len(parse_errs)}")
+print(f"scan {target}: packages={data['std_pkgs_with_sfile']} files={data['asm_files']} unsupported={len(unsupported)} unsupported_forms={len(unsupported_forms)} parse_errs={len(parse_errs)}")
 if unsupported:
     top = ", ".join(f"{item['op']}({item['count']})" for item in unsupported[:12])
     raise SystemExit(f"{target}: unsupported ops remain: {top}")
+if unsupported_forms:
+    top = ", ".join(
+        f"{item['form']} ({item['examples'][0] if item.get('examples') else 'no example'})"
+        for item in unsupported_forms[:12]
+    )
+    raise SystemExit(f"{target}: unsupported operand forms remain: {top}")
 if parse_errs:
     top = ", ".join(f"{item['File']}: {item['Err']}" for item in parse_errs[:8])
     raise SystemExit(f"{target}: parse errors remain: {top}")
 PY
 
-  echo "==> transpile+compile $goos/$goarch"
-  out_dir="$tmp_root/$goos-$goarch-ll"
-  meta="$tmp_root/$goos-$goarch-meta.json"
-  go run -C cmd/plan9asm . transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
+  echo "==> transpile+compile $target_label"
+  out_dir="$tmp_root/$target_name-ll"
+  meta="$tmp_root/$target_name-meta.json"
+  env "${target_env[@]}" GOTOOLCHAIN=local "$plan9asm_cmd" transpile -goos="$goos" -goarch="$goarch" -dir "$out_dir" -meta "$meta" std >/dev/null
 
   ll_count=$(find "$out_dir" -name '*.ll' | wc -l | tr -d ' ')
   if [ "$ll_count" -eq 0 ]; then
     echo "$goos/$goarch: no .ll files generated" >&2
     exit 1
   fi
-  echo "compiled corpus $goos/$goarch: ll_files=$ll_count"
+  echo "compiled corpus $target_label: ll_files=$ll_count"
 
   while IFS= read -r ll; do
     obj="${ll%.ll}.o"

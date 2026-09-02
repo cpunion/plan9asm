@@ -359,7 +359,28 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", p, t)
 		return c.storeReg(Reg("R0"), "%"+p)
 	default:
-		return fmt.Errorf("arm64 call %q unsupported return type %s", callee, csig.Ret)
+		fields, ok := parseLiteralStructFields(csig.Ret)
+		if !ok || !literalFieldsAllScalar(fields) {
+			return fmt.Errorf("arm64 call %q unsupported return type %s", callee, csig.Ret)
+		}
+		for i, fieldTy := range fields {
+			if i >= 8 {
+				return fmt.Errorf("arm64 call %q has %d scalar return fields, maximum is 8", callee, len(fields))
+			}
+			extracted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, %d\n", extracted, csig.Ret, t, i)
+			value, scalar, err := arm64ValueAsI64(c, fieldTy, "%"+extracted)
+			if err != nil {
+				return err
+			}
+			if !scalar {
+				return fmt.Errorf("arm64 call %q unsupported return field type %s", callee, fieldTy)
+			}
+			if err := c.storeReg(Reg(fmt.Sprintf("R%d", i)), value); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 }
 

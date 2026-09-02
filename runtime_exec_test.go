@@ -324,13 +324,27 @@ int main(void) {
 
 func compileAndRunRuntimeTest(t *testing.T, llc, clang, name, ll, mainC string) {
 	t.Helper()
+	compileAndRunRuntimeTestForTarget(t, llc, clang, name, testTargetTriple(runtime.GOOS, runtime.GOARCH), ll, mainC, nil)
+}
 
+func compileAndRunRuntimeTestForTarget(t *testing.T, llc, clang, name, triple, ll, mainC string, runPrefix []string) {
+	compiler := []string{clang}
+	if triple != testTargetTriple(runtime.GOOS, runtime.GOARCH) {
+		compiler = append(compiler, "-target", triple)
+	}
+	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, name, triple, ll, mainC, runPrefix)
+}
+
+func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []string, name, triple, ll, mainC string, runPrefix []string) {
+	t.Helper()
+	if len(compiler) == 0 {
+		t.Fatal("empty compiler command")
+	}
 	tmp := t.TempDir()
 	llPath := filepath.Join(tmp, name+".ll")
 	objPath := filepath.Join(tmp, name+".o")
 	mainPath := filepath.Join(tmp, "main.c")
 	exePath := filepath.Join(tmp, "a.out")
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 
 	if err := os.WriteFile(llPath, []byte(ll), 0644); err != nil {
 		t.Fatal(err)
@@ -348,12 +362,15 @@ func compileAndRunRuntimeTest(t *testing.T, llc, clang, name, ll, mainC string) 
 		t.Fatalf("llc failed: %v\n%s", err, s)
 	}
 
-	clangCmd := exec.Command(clang, objPath, mainPath, "-O2", "-o", exePath)
-	if out, err := clangCmd.CombinedOutput(); err != nil {
-		t.Fatalf("clang link failed: %v\n%s", err, string(out))
+	compilerArgs := append([]string(nil), compiler[1:]...)
+	compilerArgs = append(compilerArgs, objPath, mainPath, "-O2", "-o", exePath)
+	compilerCmd := exec.Command(compiler[0], compilerArgs...)
+	if out, err := compilerCmd.CombinedOutput(); err != nil {
+		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
 	}
 
-	runCmd := exec.Command(exePath)
+	runArgs := append(append([]string(nil), runPrefix...), exePath)
+	runCmd := exec.Command(runArgs[0], runArgs[1:]...)
 	if out, err := runCmd.CombinedOutput(); err != nil {
 		t.Fatalf("run failed: %v\n%s", err, string(out))
 	}

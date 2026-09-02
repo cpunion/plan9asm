@@ -26,6 +26,9 @@ func (c *amd64Ctx) evalI64(op Operand) (string, error) {
 		addrOnly := strings.HasPrefix(s, "$")
 		if addrOnly {
 			s = strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if mem, ok := parseMem(s); ok {
+				return c.addrFromMem(mem)
+			}
 		}
 		p, err := c.ptrFromSB(s)
 		if err != nil {

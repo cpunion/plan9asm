@@ -79,12 +79,14 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
 		return true, false, nil
 
-	case "BTSQ":
-		// BTSQ src, dstReg|dstMem: CF = old bit, dst bit set.
+	case "BTSQ", "BTRQ":
+		// BTSQ/BTRQ src, dstReg|dstMem: CF = old bit, then set or
+		// clear the selected destination bit.
 		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 BTSQ expects src, dst: %q", ins.Raw)
+			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
 		var amt string
+		var registerIndex string
 		switch ins.Args[0].Kind {
 		case OpImm:
 			amt = fmt.Sprintf("%d", ins.Args[0].Imm&63)
@@ -96,8 +98,9 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 			m := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = and i64 %s, 63\n", m, av)
 			amt = "%" + m
+			registerIndex = av
 		default:
-			return true, false, fmt.Errorf("amd64 BTSQ expects imm/reg bit index: %q", ins.Raw)
+			return true, false, fmt.Errorf("amd64 %s expects imm/reg bit index: %q", op, ins.Raw)
 		}
 
 		var dst string
@@ -115,6 +118,18 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 			if err != nil {
 				return true, false, err
 			}
+			// A register bit index on a memory operand selects a bit in an
+			// unbounded bit string, not merely within the first qword. Adjust
+			// the address by floor(index/64)*8 and retain index&63 within it.
+			if registerIndex != "" {
+				word := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = ashr i64 %s, 6\n", word, registerIndex)
+				byteOff := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 3\n", byteOff, word)
+				adjusted := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = add i64 %s, %%%s\n", adjusted, addr, byteOff)
+				addr = "%" + adjusted
+			}
 			p := c.ptrFromAddrI64(addr)
 			ld := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", ld, p)
@@ -124,7 +139,7 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 				return nil
 			}
 		default:
-			return true, false, fmt.Errorf("amd64 BTSQ expects reg/mem dst: %q", ins.Raw)
+			return true, false, fmt.Errorf("amd64 %s expects reg/mem dst: %q", op, ins.Raw)
 		}
 
 		sh := c.newTmp()
@@ -137,7 +152,13 @@ func (c *amd64Ctx) lowerCmpBt(op Op, ins Instr) (ok bool, terminated bool, err e
 		one := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = shl i64 1, %s\n", one, amt)
 		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or i64 %s, %%%s\n", out, dst, one)
+		if op == "BTSQ" {
+			fmt.Fprintf(c.b, "  %%%s = or i64 %s, %%%s\n", out, dst, one)
+		} else {
+			mask := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = xor i64 %%%s, -1\n", mask, one)
+			fmt.Fprintf(c.b, "  %%%s = and i64 %s, %%%s\n", out, dst, mask)
+		}
 		if err := storeDst("%" + out); err != nil {
 			return true, false, err
 		}

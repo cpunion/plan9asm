@@ -286,7 +286,7 @@ func TestTranslateHelpersCoverage(t *testing.T) {
 		"example.entry":  {Name: "example.entry", Ret: I64},
 		"example.helper": {Name: "example.helper", Ret: Void, Args: []LLVMType{I64}, Attrs: "#7"},
 		"example.zed":    {Name: "example.zed"},
-	})
+	}, WASMABIDirect)
 	declOut := decls.String()
 	if strings.Contains(declOut, "example.entry") || (!strings.Contains(declOut, `declare void @example.helper(i64) #7`) && !strings.Contains(declOut, `declare void @"example.helper"(i64) #7`)) {
 		t.Fatalf("emitExternFuncDecls() output = %q", declOut)

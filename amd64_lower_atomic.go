@@ -267,6 +267,18 @@ func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err 
 		}
 		tmp := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = atomicrmw %s ptr %s, %s %s seq_cst\n", tmp, rmw, ptr, ty, src)
+		// atomicrmw returns the old value, while x86 logical instructions set
+		// flags from the new value. LOCK does not alter that flag behavior.
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = %s %s %%%s, %s\n", out, rmw, ty, tmp, src)
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		zf := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp eq %s %%%s, 0\n", zf, ty, out)
+		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
+		sf := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp slt %s %%%s, 0\n", sf, ty, out)
+		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", sf, c.flagsSltSlot)
 		return true, false, nil
 	}
 	return false, false, nil

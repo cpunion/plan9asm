@@ -27,6 +27,13 @@ type Func struct {
 	// It may contain the Plan 9 middle dot (·).
 	Sym string
 
+	// FrameSize and ArgSize retain the numeric $frame-args values from TEXT.
+	// WebAssembly's Go ABI uses FrameSize to address FP operands through the
+	// linear-memory stack and to restore SP on return. A missing -args suffix
+	// leaves ArgSize at zero.
+	FrameSize int64
+	ArgSize   int64
+
 	Instrs []Instr
 }
 
@@ -96,6 +103,17 @@ func Parse(arch Arch, src string) (*File, error) {
 
 			opStr, rest := splitOpcode(stmt)
 			op := Op(strings.ToUpper(opStr))
+			if arch == ArchWASM {
+				// Go's wasm assembler distinguishes low-level WebAssembly Call
+				// and Return from the high-level Go ABI CALL and RET pseudos by
+				// spelling. Preserve that distinction after normalization.
+				switch opStr {
+				case "Call":
+					op = "WASMCALL"
+				case "Return":
+					op = "WASMRETURN"
+				}
+			}
 			switch op {
 			case OpTEXT:
 				// TEXT name(SB), flags, $frame-args
@@ -111,7 +129,11 @@ func Parse(arch Arch, src string) (*File, error) {
 				if sym == "" {
 					return nil, fmt.Errorf("line %d: empty TEXT symbol: %q", lineno, stmt)
 				}
-				f.Funcs = append(f.Funcs, Func{Sym: sym})
+				frameSize, argSize, err := parseTEXTFrame(parts)
+				if err != nil {
+					return nil, fmt.Errorf("line %d: %v", lineno, err)
+				}
+				f.Funcs = append(f.Funcs, Func{Sym: sym, FrameSize: frameSize, ArgSize: argSize})
 				cur = &f.Funcs[len(f.Funcs)-1]
 				cur.Instrs = append(cur.Instrs, Instr{Op: OpTEXT, Raw: stmt})
 				continue
@@ -150,7 +172,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				if cur == nil {
 					return nil, fmt.Errorf("line %d: %s outside TEXT: %q", lineno, op, stmt)
 				}
-				args, err := parseOperandsCSV(rest)
+				args, err := parseOperandsCSV(arch, op, rest)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
 				}
@@ -167,7 +189,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				if strings.TrimSpace(rest) != "" {
 					// A symbol operand is a tail call; register operands retain the
 					// architecture-specific return behavior.
-					args, err := parseOperandsCSV(rest)
+					args, err := parseOperandsCSV(arch, op, rest)
 					if err != nil {
 						return nil, fmt.Errorf("line %d: %v", lineno, err)
 					}
@@ -183,7 +205,7 @@ func Parse(arch Arch, src string) (*File, error) {
 				}
 				// For now, parse unknown opcodes as generic instructions. The translator
 				// is responsible for rejecting unsupported ones.
-				args, err := parseOperandsCSV(rest)
+				args, err := parseOperandsCSV(arch, op, rest)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
 				}
@@ -199,6 +221,33 @@ func Parse(arch Arch, src string) (*File, error) {
 		return nil, fmt.Errorf("no TEXT directive found")
 	}
 	return f, nil
+}
+
+func parseTEXTFrame(parts []string) (frameSize, argSize int64, err error) {
+	if len(parts) < 2 {
+		return 0, 0, nil
+	}
+	spec := strings.TrimSpace(parts[len(parts)-1])
+	if !strings.HasPrefix(spec, "$") {
+		return 0, 0, nil
+	}
+	spec = strings.TrimSpace(strings.TrimPrefix(spec, "$"))
+	frameText, argText := spec, ""
+	if i := strings.LastIndex(spec, "-"); i > 0 {
+		frameText, argText = strings.TrimSpace(spec[:i]), strings.TrimSpace(spec[i+1:])
+	}
+	frame, ok := parseImmExpr(frameText)
+	if !ok {
+		return 0, 0, fmt.Errorf("unresolved TEXT frame size %q", frameText)
+	}
+	if argText == "" {
+		return int64(frame), 0, nil
+	}
+	args, ok := parseImmExpr(argText)
+	if !ok {
+		return 0, 0, fmt.Errorf("unresolved TEXT argument size %q", argText)
+	}
+	return int64(frame), int64(args), nil
 }
 
 func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
@@ -268,7 +317,7 @@ func parseWidth(arch Arch, s string) (int64, error) {
 	switch strings.ToUpper(s) {
 	case "PTRSIZE":
 		switch arch {
-		case ArchAMD64, ArchARM64:
+		case ArchAMD64, ArchARM64, ArchWASM:
 			return 8, nil
 		default:
 			return 4, nil
@@ -336,7 +385,7 @@ func parseInt(s string) (int64, error) {
 	return strconv.ParseInt(s, 0, 64)
 }
 
-func parseOperandsCSV(s string) ([]Operand, error) {
+func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 	if s == "" {
 		return nil, nil
 	}
@@ -347,13 +396,142 @@ func parseOperandsCSV(s string) ([]Operand, error) {
 		if part == "" {
 			continue
 		}
-		op, err := parseOperand(part)
-		if err != nil {
-			return nil, err
+		legacy := []string{part}
+		if arch == ArchAMD64 && op == "SHLL" {
+			legacy = splitLegacyColonOperand(part)
 		}
-		out = append(out, op)
+		for _, item := range legacy {
+			op, err := parseOperandForArch(arch, item)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, op)
+		}
+	}
+	// Direct branches treat a bare token as a label even when it also looks like
+	// an architecture register (for example amd64 JL V1 and ARM BEQ X7 in Go
+	// 1.23's math/big assembly). Indirect branch and call opcodes stay outside
+	// this rule because their bare register operands are meaningful.
+	if branchRegisterTokenIsLabel(arch, op) && len(out) == 1 && out[0].Kind == OpReg {
+		out[0] = Operand{Kind: OpIdent, Ident: strings.TrimSpace(s)}
 	}
 	return out, nil
+}
+
+func parseOperandForArch(arch Arch, s string) (Operand, error) {
+	if arch == ArchWASM {
+		if reg, ok := parseWASMReg(s); ok {
+			return Operand{Kind: OpReg, Reg: reg}, nil
+		}
+		if !strings.HasPrefix(strings.TrimSpace(s), "$") {
+			if mem, matched, err := parseWASMMem(s); matched {
+				if err != nil {
+					return Operand{}, err
+				}
+				return Operand{Kind: OpMem, Mem: mem}, nil
+			}
+		}
+	}
+	return parseOperand(s)
+}
+
+func parseWASMMem(s string) (mem MemRef, matched bool, err error) {
+	s = strings.TrimSpace(s)
+	open := strings.LastIndexByte(s, '(')
+	if open < 0 || !strings.HasSuffix(s, ")") {
+		return MemRef{}, false, nil
+	}
+	base, ok := parseWASMReg(strings.TrimSpace(s[open+1 : len(s)-1]))
+	if !ok {
+		return MemRef{}, false, nil
+	}
+	offset := strings.TrimSpace(s[:open])
+	if offset == "" {
+		return MemRef{Base: base}, true, nil
+	}
+	if n, parseErr := strconv.ParseInt(offset, 0, 64); parseErr == nil {
+		return MemRef{Base: base, Off: n}, true, nil
+	}
+	if n, ok := parseImmExpr(offset); ok {
+		return MemRef{Base: base, Off: int64(n)}, true, nil
+	}
+	return MemRef{Base: base, OffRaw: offset}, true, nil
+}
+
+var wasmRegisterPrefixes = [...]struct {
+	name string
+	max  int
+}{
+	{name: "R", max: 15},
+	{name: "F", max: 31},
+	{name: "V", max: 15},
+}
+
+func parseWASMReg(s string) (Reg, bool) {
+	name := strings.TrimSpace(s)
+	upper := strings.ToUpper(name)
+	switch upper {
+	case "SP", "CTXT", "G", "RET0", "RET1", "RET2", "RET3", "PAUSE", "PC_B":
+		return Reg(upper), true
+	}
+	for _, prefix := range wasmRegisterPrefixes {
+		if !strings.HasPrefix(upper, prefix.name) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimPrefix(upper, prefix.name))
+		if err == nil && 0 <= n && n <= prefix.max {
+			return Reg(upper), true
+		}
+	}
+	return "", false
+}
+
+func branchRegisterTokenIsLabel(arch Arch, op Op) bool {
+	name := normalizeInstructionOpcode(op)
+	switch arch {
+	case ArchAMD64:
+		return (strings.HasPrefix(name, "J") && name != "JMP") || strings.HasPrefix(name, "LOOP")
+	case ArchARM:
+		return isARMBranchOpcode(name) && name != "BL" && name != "BX" && name != "BLX" && name != "RET"
+	case ArchARM64:
+		return isARM64BranchOpcode(name) && name != "BL" && name != "BR" && name != "BLR" && name != "RET" && name != "ERET"
+	default:
+		return false
+	}
+}
+
+// Go's x86 assembler retains an old three-operand spelling where left:right
+// means right, left. For example R11:AX in SHLL CX, R11:AX is equivalent to
+// SHLL CX, AX, R11. Keep this in the parser so official assembler testdata can
+// describe the canonical three-operand form.
+func splitLegacyColonOperand(s string) []string {
+	par := 0
+	brk := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(':
+			par++
+		case ')':
+			if par > 0 {
+				par--
+			}
+		case '[':
+			brk++
+		case ']':
+			if brk > 0 {
+				brk--
+			}
+		case ':':
+			if par == 0 && brk == 0 {
+				left := strings.TrimSpace(s[:i])
+				right := strings.TrimSpace(s[i+1:])
+				if left != "" && right != "" {
+					return []string{right, left}
+				}
+			}
+		}
+	}
+	return []string{s}
 }
 
 func splitOpcode(stmt string) (op, rest string) {

@@ -44,6 +44,76 @@ func cmp(a, b int) int
 	}
 }
 
+func TestTranslateGoModule_ExpandsGeneratedWasmOffsets(t *testing.T) {
+	pkg := mustGoPackage(t, "runtime", `package runtime
+type gobuf struct {
+	sp   uintptr
+	pc   uintptr
+	g    uintptr
+	ctxt uintptr
+}
+func gogo(buf *gobuf)
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`#include "go_asm.h"
+TEXT ·gogo(SB),NOSPLIT,$0-8
+	MOVD buf+0(FP), R0
+	MOVD gobuf_g(R0), R1
+	RET
+`), GoModuleOptions{
+		FileName:     "asm_wasm.s",
+		GOARCH:       "wasm",
+		TargetTriple: "wasm32-unknown-unknown",
+		ResolveSym:   testResolveSym("runtime"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+	ir := tr.Module.String()
+	if !strings.Contains(ir, "getelementptr i8") || !strings.Contains(ir, "i32 16") ||
+		!strings.Contains(ir, "load i64") {
+		t.Fatalf("generated gobuf_g offset was not resolved through go_asm.h:\n%s", ir)
+	}
+}
+
+func TestTranslateGoModule_UsesCallerWasmTypeSizes(t *testing.T) {
+	pkg := mustGoPackage(t, "example.com/wasm32", `package wasm32
+func Consume(value int, data []byte) int
+`)
+	tr, err := TranslateGoModule(pkg, []byte(`TEXT ·Consume(SB),NOSPLIT,$0-16
+	I64Const $0
+	I64Store ret+32(FP)
+	RET
+`), GoModuleOptions{
+		FileName:     "consume_wasm.s",
+		GOARCH:       "wasm",
+		Sizes:        &types.StdSizes{WordSize: 4, MaxAlign: 4},
+		FrameSizes:   &types.StdSizes{WordSize: 8, MaxAlign: 8},
+		TargetTriple: "wasm32-unknown-unknown",
+		ResolveSym:   testResolveSym("example.com/wasm32"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+	sig := tr.Signatures["example.com/wasm32.Consume"]
+	want := []LLVMType{I32, "{ ptr, i32, i32 }"}
+	if len(sig.Args) != len(want) {
+		t.Fatalf("Consume args = %v, want %v", sig.Args, want)
+	}
+	for i := range want {
+		if sig.Args[i] != want[i] {
+			t.Fatalf("Consume arg %d = %s, want %s", i, sig.Args[i], want[i])
+		}
+	}
+	if got := sig.Frame.Params[3].Offset; got != 24 {
+		t.Fatalf("slice capacity FP offset = %d, want official Go wasm offset 24", got)
+	}
+	if got := sig.Frame.Results[0].Offset; got != 32 {
+		t.Fatalf("result FP offset = %d, want official Go wasm offset 32", got)
+	}
+}
+
 func TestTranslateGoModule_UsesManualSigForPlainLocalHelper(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func IndexByte(b []byte, c byte) int

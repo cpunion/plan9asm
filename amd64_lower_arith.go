@@ -24,6 +24,17 @@ func (c *amd64Ctx) loadIntDestination(dst Operand, ty LLVMType) (string, func(st
 			fmt.Fprintf(c.b, "  store %s %s, %s %s, align 1\n", ty, out, ptrType, p)
 			return nil
 		}, nil
+	case OpSym:
+		p, err := c.ptrFromSB(dst.Sym)
+		if err != nil {
+			return "", nil, err
+		}
+		v := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", v, ty, p)
+		return "%" + v, func(out string) error {
+			fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", ty, out, p)
+			return nil
+		}, nil
 	default:
 		return "", nil, fmt.Errorf("expected register or memory destination, got %s", dst.String())
 	}
@@ -841,17 +852,15 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, nil
 
 	case "ADDB", "XORB", "ANDB", "ORB":
-		// 8-bit scalar ops: src, dstReg (stored in the selected byte lane).
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
+		// 8-bit scalar ops: src, dst. Go's x86 assembler permits both a
+		// register and a memory destination (for example XORB SI, (AX)).
+		if len(ins.Args) != 2 {
+			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
 		}
-		dst := ins.Args[1].Reg
-		dv64, err := c.loadReg(dst)
+		d8, storeDst, err := c.loadIntDestination(ins.Args[1], I8)
 		if err != nil {
 			return true, false, err
 		}
-		d8 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", d8, dv64)
 		s8, err := c.evalIntSized(ins.Args[0], I8)
 		if err != nil {
 			return true, false, err
@@ -859,20 +868,20 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		x := c.newTmp()
 		switch op {
 		case "ADDB":
-			fmt.Fprintf(c.b, "  %%%s = add i8 %%%s, %s\n", x, d8, s8)
+			fmt.Fprintf(c.b, "  %%%s = add i8 %s, %s\n", x, d8, s8)
 		case "XORB":
-			fmt.Fprintf(c.b, "  %%%s = xor i8 %%%s, %s\n", x, d8, s8)
+			fmt.Fprintf(c.b, "  %%%s = xor i8 %s, %s\n", x, d8, s8)
 		case "ANDB":
-			fmt.Fprintf(c.b, "  %%%s = and i8 %%%s, %s\n", x, d8, s8)
+			fmt.Fprintf(c.b, "  %%%s = and i8 %s, %s\n", x, d8, s8)
 		case "ORB":
-			fmt.Fprintf(c.b, "  %%%s = or i8 %%%s, %s\n", x, d8, s8)
+			fmt.Fprintf(c.b, "  %%%s = or i8 %s, %s\n", x, d8, s8)
 		}
-		if err := c.storeRegSized(dst, I8, "%"+x); err != nil {
+		if err := storeDst("%" + x); err != nil {
 			return true, false, err
 		}
 		if op == "ADDB" {
 			d16 := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i8 %%%s to i16\n", d16, d8)
+			fmt.Fprintf(c.b, "  %%%s = zext i8 %s to i16\n", d16, d8)
 			s16 := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = zext i8 %s to i16\n", s16, s8)
 			total := c.newTmp()
@@ -1458,22 +1467,23 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	case "SHRQ", "SHLQ", "SARQ", "SHLL", "SHRL", "SARL", "SALQ", "SALL":
 		// Shift ops:
 		// - 2-operand: amt, dst (in-place)
-		// - 3-operand: amt, src, dst
-		if len(ins.Args) != 2 && len(ins.Args) != 3 {
-			return true, false, fmt.Errorf("amd64 %s expects amt,dst or amt,src,dst: %q", op, ins.Raw)
+		// - 3-operand SHL/SHR: amt, src, dst (x86 SHLD/SHRD)
+		if len(ins.Args) == 3 {
+			switch op {
+			case "SHLL", "SHLQ", "SHRL", "SHRQ":
+				return true, false, c.lowerDoubleShift(op, ins)
+			default:
+				return true, false, fmt.Errorf("amd64 %s has no three-operand form: %q", op, ins.Raw)
+			}
 		}
-		if ins.Args[len(ins.Args)-1].Kind != OpReg {
+		if len(ins.Args) != 2 {
+			return true, false, fmt.Errorf("amd64 %s expects amt,dst: %q", op, ins.Raw)
+		}
+		if ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s destination must be reg: %q", op, ins.Raw)
 		}
-		dst := ins.Args[len(ins.Args)-1].Reg
-		srcReg := dst
-		if len(ins.Args) == 3 {
-			if ins.Args[1].Kind != OpReg {
-				return true, false, fmt.Errorf("amd64 %s src must be reg in 3-operand form: %q", op, ins.Raw)
-			}
-			srcReg = ins.Args[1].Reg
-		}
-		dv, err := c.loadReg(srcReg)
+		dst := ins.Args[1].Reg
+		dv, err := c.loadReg(dst)
 		if err != nil {
 			return true, false, err
 		}
@@ -2230,6 +2240,73 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, nil
 	}
 	return false, false, nil
+}
+
+func (c *amd64Ctx) lowerDoubleShift(op Op, ins Instr) error {
+	if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg {
+		return fmt.Errorf("amd64 %s expects amt, srcReg, dst: %q", op, ins.Raw)
+	}
+	ty := I64
+	mask := int64(63)
+	left := op == "SHLQ"
+	if op == "SHLL" || op == "SHRL" {
+		ty = I32
+		mask = 31
+		left = op == "SHLL"
+	}
+
+	src, err := c.evalIntSized(ins.Args[1], ty)
+	if err != nil {
+		return err
+	}
+	dst, storeDst, err := c.loadIntDestination(ins.Args[2], ty)
+	if err != nil {
+		return err
+	}
+
+	count64 := ""
+	switch ins.Args[0].Kind {
+	case OpImm:
+		count64 = fmt.Sprintf("%d", ins.Args[0].Imm&mask)
+	case OpReg:
+		value, err := c.loadReg(ins.Args[0].Reg)
+		if err != nil {
+			return err
+		}
+		masked := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", masked, value, mask)
+		count64 = "%" + masked
+	default:
+		return fmt.Errorf("amd64 %s unsupported shift amount: %q", op, ins.Raw)
+	}
+
+	count := count64
+	if ty == I32 {
+		truncated := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", truncated, count64)
+		count = "%" + truncated
+	}
+	inverseNeg := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = sub %s 0, %s\n", inverseNeg, ty, count)
+	inverse := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and %s %%%s, %d\n", inverse, ty, inverseNeg, mask)
+	zero := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq %s %s, 0\n", zero, ty, count)
+
+	dstPart := c.newTmp()
+	srcPart := c.newTmp()
+	if left {
+		fmt.Fprintf(c.b, "  %%%s = shl %s %s, %s\n", dstPart, ty, dst, count)
+		fmt.Fprintf(c.b, "  %%%s = lshr %s %s, %%%s\n", srcPart, ty, src, inverse)
+	} else {
+		fmt.Fprintf(c.b, "  %%%s = lshr %s %s, %s\n", dstPart, ty, dst, count)
+		fmt.Fprintf(c.b, "  %%%s = shl %s %s, %%%s\n", srcPart, ty, src, inverse)
+	}
+	merged := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = or %s %%%s, %%%s\n", merged, ty, dstPart, srcPart)
+	out := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s %s, %s %%%s\n", out, zero, ty, dst, ty, merged)
+	return storeDst("%" + out)
 }
 
 func (c *amd64Ctx) lower386Timestamp(serialized bool) error {

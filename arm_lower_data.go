@@ -39,6 +39,13 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, fmt.Errorf("arm MOVW expects 2 operands: %q", ins.Raw)
 		}
 		src, dst := ins.Args[0], ins.Args[1]
+		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP || dst.Kind == OpSym || dst.Kind == OpIdent) {
+			err := c.emitConditionalEffect(cond, func() error {
+				_, _, err := c.lowerData(op, "", postInc, ins)
+				return err
+			})
+			return true, false, err
+		}
 		v := ""
 		if src.Kind == OpMem {
 			v, err = c.loadMem(src.Mem, 32, postInc, false)
@@ -54,6 +61,13 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)
 		}
 		src, dst := ins.Args[0], ins.Args[1]
+		if cond != "" && (dst.Kind == OpMem || dst.Kind == OpFP || dst.Kind == OpSym) {
+			err := c.emitConditionalEffect(cond, func() error {
+				_, _, err := c.lowerData(op, "", postInc, ins)
+				return err
+			})
+			return true, false, err
+		}
 		v := ""
 		if src.Kind == OpMem {
 			v, err = c.loadMem(src.Mem, 8, postInc, op == "MOVB")
@@ -66,6 +80,27 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 		return true, false, c.storeARMValue(dst, v, 8, cond, postInc, ins.Raw)
 	}
 	return false, false, nil
+}
+
+func (c *armCtx) emitConditionalEffect(cond string, emit func() error) error {
+	if cond == "" || strings.EqualFold(cond, "AL") {
+		return emit()
+	}
+	cv, err := c.condValue(cond)
+	if err != nil {
+		return err
+	}
+	id := c.newTmp()
+	taken := armLLVMBlockName("cond_effect_taken_" + id)
+	done := armLLVMBlockName("cond_effect_done_" + id)
+	fmt.Fprintf(c.b, "  br i1 %s, label %%%s, label %%%s\n", cv, taken, done)
+	fmt.Fprintf(c.b, "\n%s:\n", taken)
+	if err := emit(); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.b, "  br label %%%s\n", done)
+	fmt.Fprintf(c.b, "\n%s:\n", done)
+	return nil
 }
 
 func (c *armCtx) selectRegWrite(dst Reg, cond string, newV string) error {
@@ -99,9 +134,38 @@ func (c *armCtx) storeARMValue(dst Operand, v string, bits int, cond string, pos
 		if cond != "" {
 			return fmt.Errorf("arm conditional store to FP slot unsupported: %q", raw)
 		}
-		return c.storeFPResult32(dst.FPOffset, v)
+		return c.storeFP32(dst.FPOffset, v)
 	case OpSym:
+		if cond != "" {
+			return fmt.Errorf("arm conditional store to symbol unsupported: %q", raw)
+		}
+		p, err := c.ptrFromSB(dst.Sym)
+		if err != nil {
+			return err
+		}
+		switch bits {
+		case 32:
+			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, p)
+		case 8:
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i8\n", t, v)
+			fmt.Fprintf(c.b, "  store i8 %%%s, ptr %s\n", t, p)
+		default:
+			return fmt.Errorf("arm: unsupported symbol store bits %d", bits)
+		}
 		return nil
+	case OpIdent:
+		switch strings.ToUpper(dst.Ident) {
+		case "CPSR":
+			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "msr cpsr_fsxc, $0", "r,~{cc},~{memory}", v)
+			c.storeFlagsFromStatus(v)
+			return nil
+		case "FPCR", "FPSR":
+			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "vmsr fpscr, $0", "r,~{memory}", v)
+			return nil
+		default:
+			return fmt.Errorf("arm unsupported system register %q: %q", dst.Ident, raw)
+		}
 	default:
 		return fmt.Errorf("arm unsupported dst operand: %q", raw)
 	}

@@ -83,6 +83,10 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("x86 CFG lowering required for %s", name)
 		}
+		if file.Arch == ArchWASM {
+			mod.Dispose()
+			return llvm.Module{}, directUnsupportedf("wasm stack lowering required for %s", name)
+		}
 		if err := translateFuncLinearModule(mod, file.Arch, *fn, sig); err != nil {
 			mod.Dispose()
 			if errors.Is(err, errDirectModuleUnsupported) {

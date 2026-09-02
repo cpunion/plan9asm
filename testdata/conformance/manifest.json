@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "amd64-byte-memory-destinations",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "references": [
+        "https://github.com/xgo-dev/llgo/issues/2464"
+      ],
+      "forms": [
+        "ADDB gpr64,memory.gpr64-base",
+        "ANDB gpr64,memory.gpr64-base",
+        "ORB gpr64,memory.gpr64-base",
+        "XORB gpr64,memory.gpr64-base"
+      ]
+    },
+    {
+      "id": "amd64-punpcklqdq-sources",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "references": [
+        "https://github.com/xgo-dev/llgo/issues/2464"
+      ],
+      "forms": [
+        "PUNPCKLQDQ memory.gpr64-base,xmm",
+        "PUNPCKLQDQ xmm,xmm"
+      ]
+    },
+    {
+      "id": "amd64-legacy-three-operand-shift",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "forms": [
+        "SHLL gpr64,gpr64,gpr64"
+      ]
+    },
+    {
+      "id": "amd64-btrq-register",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "forms": [
+        "BTRQ immediate,gpr64"
+      ]
+    },
+    {
+      "id": "amd64-double-shift-family",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "forms": [
+        "SHLL gpr-byte,gpr64,gpr64",
+        "SHLL gpr-byte,gpr64,memory.gpr64-base",
+        "SHLL immediate,gpr64,gpr64",
+        "SHLL immediate,gpr64,memory.gpr64-base",
+        "SHLQ gpr-byte,gpr64,gpr64",
+        "SHLQ gpr-byte,gpr64,memory.gpr64-base",
+        "SHLQ immediate,gpr64,gpr64",
+        "SHLQ immediate,gpr64,memory.gpr64-base",
+        "SHRL gpr-byte,gpr64,gpr64",
+        "SHRL gpr-byte,gpr64,memory.gpr64-base",
+        "SHRL immediate,gpr64,gpr64",
+        "SHRL immediate,gpr64,memory.gpr64-base",
+        "SHRQ gpr-byte,gpr64,gpr64",
+        "SHRQ gpr-byte,gpr64,memory.gpr64-base",
+        "SHRQ immediate,gpr64,gpr64",
+        "SHRQ immediate,gpr64,memory.gpr64-base"
+      ]
+    }
+  ]
+}

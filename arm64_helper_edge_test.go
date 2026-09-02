@@ -854,6 +854,7 @@ func TestARM64BranchAndReturnEdgeCoverage(t *testing.T) {
 		"example.structSink": {Name: "example.structSink", Args: []LLVMType{LLVMType("{ i32, i64 }")}, Ret: Void},
 		"example.badarg":     {Name: "example.badarg", Args: []LLVMType{LLVMType("double")}, Ret: Void},
 		"example.badret":     {Name: "example.badret", Args: []LLVMType{I64}, Ret: LLVMType("double")},
+		"example.aggregate":  {Name: "example.aggregate", Ret: LLVMType("{ ptr, i64 }")},
 		"example.voidsame":   {Name: "example.voidsame", Args: []LLVMType{I64}, Ret: Void},
 		"example.badtailret": {Name: "example.badtailret", Args: []LLVMType{I64}, Ret: LLVMType("double")},
 	}
@@ -876,6 +877,9 @@ func TestARM64BranchAndReturnEdgeCoverage(t *testing.T) {
 	}
 	if err := cCalls.callSym(arm64SymOp("structSink(SB)")); err != nil {
 		t.Fatalf("callSym(structSink) error = %v", err)
+	}
+	if err := cCalls.callSym(arm64SymOp("aggregate(SB)")); err != nil {
+		t.Fatalf("callSym(aggregate) error = %v", err)
 	}
 	if err := cCalls.callSym(arm64SymOp("badarg(SB)")); err == nil {
 		t.Fatalf("callSym(badarg) unexpectedly succeeded")

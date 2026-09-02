@@ -27,8 +27,25 @@ func TestToPlan9Arch(t *testing.T) {
 	if got, err := toPlan9Arch("arm64"); err != nil || got != plan9asm.ArchARM64 {
 		t.Fatalf("toPlan9Arch(arm64) = (%q, %v)", got, err)
 	}
-	if _, err := toPlan9Arch("wasm"); err == nil {
-		t.Fatalf("expected unsupported arch error")
+	if got, err := toPlan9Arch("wasm"); err != nil || got != plan9asm.ArchWASM {
+		t.Fatalf("toPlan9Arch(wasm) = (%q, %v)", got, err)
+	}
+}
+
+func TestValidateCorpusTarget(t *testing.T) {
+	for _, test := range []struct {
+		corpus string
+		goarch string
+	}{
+		{corpus: "std", goarch: "wasm"},
+		{corpus: "go-asm", goarch: "amd64"},
+	} {
+		if err := validateCorpusTarget(test.corpus, test.goarch); err != nil {
+			t.Fatalf("validateCorpusTarget(%q, %q) = %v", test.corpus, test.goarch, err)
+		}
+	}
+	if err := validateCorpusTarget("go-asm", "wasm"); err == nil || !strings.Contains(err.Error(), "use -corpus std") {
+		t.Fatalf("validateCorpusTarget(go-asm, wasm) = %v", err)
 	}
 }
 
@@ -278,7 +295,7 @@ GLOBL foo(SB), RODATA, $8
 		Dir:        dir,
 		SFiles:     []string{"good.s", "bad.s", "data.s"},
 	}}
-	ops, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64)
+	ops, forms, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64, "amd64")
 	if err != nil {
 		t.Fatalf("scanPackages() error = %v", err)
 	}
@@ -297,10 +314,12 @@ GLOBL foo(SB), RODATA, $8
 		}
 	}
 
-	rep := buildReport("linux", "amd64", 10, pkgsWithS, asmFiles, ops, map[string]struct{}{
+	rep := buildReport("std", "go1.test", "linux", "amd64", 10, pkgsWithS, asmFiles, ops, forms, map[string]struct{}{
 		"RET":  {},
 		"MOVQ": {},
-	}, parseErrs)
+	}, nil, map[string]struct{}{
+		"amd64\x00MOVQ immediate,gpr64": {},
+	}, map[string]struct{}{}, parseErrs)
 	if rep.Goos != "linux" || rep.Goarch != "amd64" {
 		t.Fatalf("buildReport() wrong target: %#v", rep)
 	}
@@ -312,6 +331,9 @@ GLOBL foo(SB), RODATA, $8
 	}
 	if len(rep.ClusterStats) == 0 || len(rep.FamilyStats) == 0 {
 		t.Fatalf("buildReport() expected cluster/family stats")
+	}
+	if rep.RuntimeVerifiedForms != 1 {
+		t.Fatalf("RuntimeVerifiedForms = %d, want 1", rep.RuntimeVerifiedForms)
 	}
 
 	md := string(renderMarkdown(rep))
@@ -327,13 +349,79 @@ GLOBL foo(SB), RODATA, $8
 	}
 }
 
+func TestAddFormStatCachesConcreteInstructionsWithoutCollapsingValues(t *testing.T) {
+	forms := map[string]*formStat{}
+	for _, imm := range []int64{1, 7, 7} {
+		addFormStat(forms, plan9asm.ArchAMD64, "amd64", plan9asm.Instr{
+			Op:  "RCRQ",
+			Raw: "RCRQ immediate, AX",
+			Args: []plan9asm.Operand{
+				{Kind: plan9asm.OpImm, Imm: imm},
+				{Kind: plan9asm.OpReg, Reg: plan9asm.AX},
+			},
+		}, "fixture.s")
+	}
+	if len(forms) != 1 {
+		t.Fatalf("forms = %d, want 1", len(forms))
+	}
+	for _, stat := range forms {
+		if stat.SupportedCount != 1 || stat.UnsupportedCount != 1 {
+			t.Fatalf("probe classifications = supported %d, unsupported %d; want 1 and 1", stat.SupportedCount, stat.UnsupportedCount)
+		}
+		if len(stat.ProbeKeys) != 2 {
+			t.Fatalf("probe cache entries = %d, want 2", len(stat.ProbeKeys))
+		}
+	}
+}
+
+func TestBuildOpcodeCatalogIncludesGeneratedTables(t *testing.T) {
+	goroot := t.TempDir()
+	dir := filepath.Join(goroot, "src", "cmd", "internal", "obj", "arm64")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("var Anames = []string{\n\"ADD\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames_gen.go"), []byte("var sveAnames = []string{\n\"ZADD\",\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ops := map[string]*opStat{"ADD": {Count: 1}}
+	catalog, err := buildOpcodeCatalog(goroot, plan9asm.ArchARM64, "arm64", ops, map[string]*formStat{}, map[string]struct{}{"ADD": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog) != 2 || catalog[0].Opcode != "ADD" || catalog[1].Opcode != "ZADD" {
+		t.Fatalf("catalog = %#v", catalog)
+	}
+	if !catalog[0].Observed || !catalog[0].NameClaimed {
+		t.Fatalf("ADD catalog flags = %#v", catalog[0])
+	}
+	if catalog[1].Family != "sve" {
+		t.Fatalf("ZADD family = %q, want sve", catalog[1].Family)
+	}
+}
+
+func TestGoAsmInstructionLine(t *testing.T) {
+	for _, line := range []string{"XORB SI, (AX)", "  PUNPCKLQDQ X0, X0 // encoding", "RET"} {
+		if !goAsmInstructionLine(line) {
+			t.Errorf("goAsmInstructionLine(%q) = false", line)
+		}
+	}
+	for _, line := range []string{"", "// comment", "#include \"textflag.h\"", "TEXT f(SB),$0", "label:"} {
+		if goAsmInstructionLine(line) {
+			t.Errorf("goAsmInstructionLine(%q) = true", line)
+		}
+	}
+}
+
 func TestBuildReportAndJSONShape(t *testing.T) {
 	ops := map[string]*opStat{
 		"CALL":   {Count: 3, Files: map[string]int{"a.s": 2}, Pkgs: map[string]int{"p": 3}},
 		"VPXORQ": {Count: 5, Files: map[string]int{"b.s": 5}, Pkgs: map[string]int{"p": 5}},
 		"DATA":   {Count: 1, Files: map[string]int{"c.s": 1}, Pkgs: map[string]int{"p": 1}},
 	}
-	rep := buildReport("linux", "amd64", 3, 1, 2, ops, map[string]struct{}{"CALL": {}}, []parseErr{{File: "bad.s", Err: "boom"}})
+	rep := buildReport("std", "go1.test", "linux", "amd64", 3, 1, 2, ops, map[string]*formStat{}, map[string]struct{}{"CALL": {}}, nil, map[string]struct{}{}, map[string]struct{}{}, []parseErr{{File: "bad.s", Err: "boom"}})
 	if rep.UniqueOps != 3 {
 		t.Fatalf("UniqueOps = %d, want 3", rep.UniqueOps)
 	}

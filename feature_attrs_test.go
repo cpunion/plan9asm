@@ -105,3 +105,13 @@ func TestFeatureAttrRegistry(t *testing.T) {
 		t.Fatalf("emit(empty) = %q", empty.String())
 	}
 }
+
+func TestInferARMVFPFeatureFromRuntimeSaveRestore(t *testing.T) {
+	fn := Func{Instrs: []Instr{
+		{Op: "MOVW", Args: []Operand{{Kind: OpIdent, Ident: "FPCR"}, {Kind: OpReg, Reg: Reg("R0")}}},
+		{Op: "MOVD", Args: []Operand{{Kind: OpReg, Reg: Reg("F0")}, {Kind: OpMem}}},
+	}}
+	if got := inferFuncTargetFeaturesForGOARCH(ArchARM, "arm", fn); got != "+vfp2" {
+		t.Fatalf("ARM runtime VFP feature = %q, want +vfp2", got)
+	}
+}
