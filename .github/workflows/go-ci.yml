@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
@@ -48,7 +48,7 @@ jobs:
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
@@ -115,7 +115,7 @@ jobs:
 
       - name: Setup Go for corpus tool build
         if: matrix.prebuild_tool
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: false
@@ -129,7 +129,7 @@ jobs:
           echo "PLAN9ASM_CMD=$tool" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -169,7 +169,7 @@ jobs:
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
@@ -204,7 +204,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -311,7 +311,7 @@ jobs:
           echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
@@ -348,7 +348,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
@@ -375,7 +375,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: '1.27.x'
           cache: true
