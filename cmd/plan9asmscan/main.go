@@ -162,6 +162,9 @@ func main() {
 	if *goarch != "386" && *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" && *goarch != "wasm" {
 		fatalf("unsupported -goarch %q (expect 386/amd64/arm64/arm/wasm)", *goarch)
 	}
+	if err := validateCorpusTarget(*corpus, *goarch); err != nil {
+		fatalf("%v", err)
+	}
 	arch, err := toPlan9Arch(*goarch)
 	if err != nil {
 		fatalf("%v", err)
@@ -236,6 +239,13 @@ func main() {
 	if err := os.WriteFile(*out, content, 0644); err != nil {
 		fatalf("write %s: %v", *out, err)
 	}
+}
+
+func validateCorpusTarget(corpus, goarch string) error {
+	if corpus == "go-asm" && goarch == "wasm" {
+		return errors.New("-corpus go-asm does not support -goarch wasm; use -corpus std for WebAssembly")
+	}
+	return nil
 }
 
 func toPlan9Arch(goarch string) (plan9asm.Arch, error) {

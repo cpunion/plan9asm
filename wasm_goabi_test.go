@@ -200,6 +200,13 @@ TEXT nativeLoop<>(SB), NOSPLIT, $0-0
 	Loop
 		Br $0
 	End
+
+TEXT nativeCaller<>(SB), NOSPLIT, $0-0
+	CALL callee(SB)
+	Return
+
+TEXT callee(SB), NOSPLIT, $0-0
+	RET
 `)
 	if err != nil {
 		t.Fatal(err)
@@ -207,9 +214,11 @@ TEXT nativeLoop<>(SB), NOSPLIT, $0-0
 	ir, err := Translate(file, Options{
 		TargetTriple: "wasm32-unknown-unknown",
 		Sigs: map[string]FuncSig{
-			"nativeValue$local": {Name: "nativeValue$local", Ret: I64, WASMNative: true},
-			"nativeVoid$local":  {Name: "nativeVoid$local", Ret: Void, WASMNative: true},
-			"nativeLoop$local":  {Name: "nativeLoop$local", Ret: I64, WASMNative: true},
+			"nativeValue$local":  {Name: "nativeValue$local", Ret: I64, WASMNative: true},
+			"nativeVoid$local":   {Name: "nativeVoid$local", Ret: Void, WASMNative: true},
+			"nativeLoop$local":   {Name: "nativeLoop$local", Ret: I64, WASMNative: true},
+			"nativeCaller$local": {Name: "nativeCaller$local", Ret: Void, WASMNative: true},
+			"callee":             {Name: "callee", Ret: Void},
 		},
 		ResolveSym: resolveWasmTestLocal,
 		Goarch:     "wasm",
@@ -226,10 +235,16 @@ TEXT nativeLoop<>(SB), NOSPLIT, $0-0
 		`define i64 @"nativeLoop$local"()`,
 		"br label %wasm_loop_",
 		"unreachable",
+		`define void @"nativeCaller$local"()`,
+		"call i32 @callee(i32 0)",
+		"wasm_call_continue_",
 	} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("native Go wasm helper IR is missing %q:\n%s", want, ir)
 		}
+	}
+	if strings.Contains(ir, "label %\n") {
+		t.Fatalf("native Go wasm helper emitted an empty branch label:\n%s", ir)
 	}
 }
 

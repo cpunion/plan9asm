@@ -458,6 +458,15 @@ func parseWASMMem(s string) (mem MemRef, matched bool, err error) {
 	return MemRef{Base: base, OffRaw: offset}, true, nil
 }
 
+var wasmRegisterPrefixes = [...]struct {
+	name string
+	max  int
+}{
+	{name: "R", max: 15},
+	{name: "F", max: 31},
+	{name: "V", max: 15},
+}
+
 func parseWASMReg(s string) (Reg, bool) {
 	name := strings.TrimSpace(s)
 	upper := strings.ToUpper(name)
@@ -465,14 +474,7 @@ func parseWASMReg(s string) (Reg, bool) {
 	case "SP", "CTXT", "G", "RET0", "RET1", "RET2", "RET3", "PAUSE", "PC_B":
 		return Reg(upper), true
 	}
-	for _, prefix := range []struct {
-		name string
-		max  int
-	}{
-		{name: "R", max: 15},
-		{name: "F", max: 31},
-		{name: "V", max: 15},
-	} {
+	for _, prefix := range wasmRegisterPrefixes {
 		if !strings.HasPrefix(upper, prefix.name) {
 			continue
 		}

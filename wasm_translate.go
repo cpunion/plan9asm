@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -481,6 +482,9 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			blockTerminated = true
 			return nil
 		}
+		if len(results) > 1 {
+			return errors.New("multiple FP result slots are unsupported by the direct WebAssembly ABI")
+		}
 		if sig.Ret == Void {
 			b.WriteString("  ret void\n")
 			blockTerminated = true
@@ -683,6 +687,9 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 	emitGoCall := func(arg Operand, pcID int, resumeLabel string, canResume bool) error {
 		if !useGoStack {
 			return fmt.Errorf("Go ABI CALL requires the Go WebAssembly ABI")
+		}
+		if canResume && resumeLabel == "" {
+			return errors.New("resumable Go ABI CALL is missing its resume label")
 		}
 		callee := ""
 		calleeSig := FuncSig{}
@@ -1058,21 +1065,7 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if len(ins.Args) != 1 {
 				return fmt.Errorf("%s expects one operand", ins.Op)
 			}
-			if ins.Args[0].Kind == OpFP {
-				v, err := loadOperand(ins.Args[0], spec.loadType)
-				if err != nil {
-					return err
-				}
-				if spec.loadType != spec.resultType {
-					v, err = cast(v, spec.resultType, spec.signed)
-					if err != nil {
-						return err
-					}
-				}
-				push(v)
-				continue
-			}
-			if ins.Args[0].Kind == OpMem {
+			if ins.Args[0].Kind == OpFP || ins.Args[0].Kind == OpMem {
 				v, err := loadOperand(ins.Args[0], spec.loadType)
 				if err != nil {
 					return err
@@ -1524,7 +1517,10 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if len(ins.Args) == 1 {
 				target = ins.Args[0]
 			}
-			if err := emitGoCall(target, callPCs[insIndex], resumeLabels[insIndex], op == "CALL"); err != nil {
+			// Only the Go ABI entry has a PC_B resume switch. Native helpers
+			// still use the linear Go stack for calls, but continue directly
+			// after a normally returning callee.
+			if err := emitGoCall(target, callPCs[insIndex], resumeLabels[insIndex], op == "CALL" && goABI); err != nil {
 				return err
 			}
 		case "CALLINDIRECT":

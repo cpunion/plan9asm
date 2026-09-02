@@ -32,6 +32,23 @@ func TestToPlan9Arch(t *testing.T) {
 	}
 }
 
+func TestValidateCorpusTarget(t *testing.T) {
+	for _, test := range []struct {
+		corpus string
+		goarch string
+	}{
+		{corpus: "std", goarch: "wasm"},
+		{corpus: "go-asm", goarch: "amd64"},
+	} {
+		if err := validateCorpusTarget(test.corpus, test.goarch); err != nil {
+			t.Fatalf("validateCorpusTarget(%q, %q) = %v", test.corpus, test.goarch, err)
+		}
+	}
+	if err := validateCorpusTarget("go-asm", "wasm"); err == nil || !strings.Contains(err.Error(), "use -corpus std") {
+		t.Fatalf("validateCorpusTarget(go-asm, wasm) = %v", err)
+	}
+}
+
 func TestNormalizeOpAndDirectiveHelpers(t *testing.T) {
 	cases := []struct {
 		in   string

@@ -212,10 +212,10 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 		for _, fn := range file.Funcs {
 			resolved := resolve(goTextSymbolForResolution(fn.Sym))
 			fs := b.sigs[resolved]
-			if b.localSigs[resolved] {
-				if native, ok := wasmGoNativeFuncSig(resolved); ok {
-					fs = native
-				} else if wasmUsesNativeReturn(fn) {
+			if native, ok := wasmGoNativeFuncSig(resolved); ok {
+				fs = native
+			} else if b.localSigs[resolved] {
+				if wasmUsesNativeReturn(fn) {
 					var err error
 					fs, err = InferWASMAssemblyFuncSig(fn, resolved)
 					if err != nil {
@@ -225,9 +225,6 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 				} else {
 					fs = FuncSig{Name: resolved, Ret: Void}
 				}
-			}
-			if native, ok := wasmGoNativeFuncSig(resolved); ok {
-				fs = native
 			}
 			if wasmNeedsIncomingContext(fn) {
 				fs.WASMContext = Ptr

@@ -39,6 +39,12 @@ func TestTranslateWasmDiagnostics(t *testing.T) {
 		}, want: "return type i64 does not match stored result i32"},
 		{name: "missing result", body: "RET", sig: resultI64, want: "missing i64 return value"},
 		{name: "implicit missing result", body: "NOP", sig: resultI64, want: "missing i64 return value"},
+		{name: "multiple frame results", body: "Get SP\nI64Const $1\nI64Store ret0+0(FP)\nGet SP\nI64Const $2\nI64Store ret1+8(FP)\nRET", sig: FuncSig{
+			Name: "op", Ret: I64, Frame: FrameLayout{Results: []FrameSlot{
+				{Offset: 0, Type: I64, Index: 0, Field: -1},
+				{Offset: 8, Type: I64, Index: 1, Field: -1},
+			}},
+		}, want: "multiple FP result slots are unsupported"},
 		{name: "argument register cast", body: "Get R0\nI64Const $1\nI64Add\nDrop\nRET", sig: FuncSig{
 			Name: "op", Args: []LLVMType{"double"}, Ret: Void, ArgRegs: []Reg{"R0"},
 		}, want: "unsupported wasm cast double to i64"},

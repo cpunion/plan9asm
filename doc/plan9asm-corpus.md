@@ -4,10 +4,14 @@ This document defines the path to complete support for the Go assembler's Plan
 9 syntax. Coverage is measured by architecture, instruction family, opcode,
 and operand form. An opcode name by itself is not a support claim.
 
-The target architectures are 386, amd64, arm, and arm64. The 386 and amd64
-lowerers share x86 implementation code, but their registers, address widths,
-valid opcodes, and runtime ABI differ. ARM and ARM64 are separate instruction
-sets. ARM64 also distinguishes scalar, NEON, and SVE families.
+The library targets 386, amd64, arm, arm64, and wasm. The cross-version encoder
+table inventory and native semantic-conformance matrix cover the first four;
+the official Go wasm pseudo-instruction ABI is instead covered through the
+selected `js/wasm` and `wasip1/wasm` standard-library corpora, LLVM object
+compilation, and focused execution tests. The 386 and amd64 lowerers share x86
+implementation code, but their registers, address widths, valid opcodes, and
+runtime ABI differ. ARM and ARM64 are separate instruction sets. ARM64 also
+distinguishes scalar, NEON, and SVE families.
 
 ## Sources of truth
 
@@ -125,8 +129,8 @@ Run the executable semantic cases:
 
     go test . -run 'Test.*Conformance' -count=1
 
-On Linux/amd64, the opt-in cross-execution smoke translates for all four
-supported architectures, emits target objects with LLVM, links them with the
+On Linux/amd64, the opt-in cross-execution smoke translates for all four native
+conformance architectures, emits target objects with LLVM, links them with the
 matching Linux cross compiler, and executes 386/ARM/ARM64 through QEMU:
 
     PLAN9ASM_CROSS_EXEC=1 \
@@ -203,7 +207,7 @@ updated.
 4. Add or extend a runnable conformance routine and manifest entry.
 5. Run the native Go and plan9asm/LLVM semantic checks.
 6. Run the standard-library corpus gate.
-7. Generate all four architecture reports and inspect changes.
+7. Generate all four native architecture reports and inspect changes.
 8. Update the cross-version fingerprint only after the change is understood.
 
 For third-party failures, first reduce the source to its official operand form,

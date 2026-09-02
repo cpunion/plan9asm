@@ -362,12 +362,14 @@ func encoderOpcodeName(value string) string {
 	return strings.TrimPrefix(value, "A")
 }
 
+var encoderFileSet = token.NewFileSet()
+
 func exprText(expr ast.Expr) string {
 	if expr == nil {
 		return ""
 	}
 	var b bytes.Buffer
-	if err := format.Node(&b, token.NewFileSet(), expr); err != nil {
+	if err := format.Node(&b, encoderFileSet, expr); err != nil {
 		return ""
 	}
 	return b.String()
