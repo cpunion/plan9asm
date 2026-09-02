@@ -1,10 +1,18 @@
 name: Go CI
 
 on:
+  # Pull requests own validation for contribution branches. Restrict push
+  # validation to the default branch so one commit does not run both events.
   push:
     branches:
       - main
   pull_request:
+
+concurrency:
+  # Keep one run per source branch. A newer PR synchronization cancels every
+  # queued or running job from the superseded commit.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
