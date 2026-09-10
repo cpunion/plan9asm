@@ -44,6 +44,55 @@ func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 // We model V0..V31 as <16 x i8>.
 func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
 	switch op {
+	case "FMOVQ":
+		if len(ins.Args) != 2 {
+			return true, false, fmt.Errorf("arm64 FMOVQ expects 2 operands: %q", ins.Raw)
+		}
+		src, dst := ins.Args[0], ins.Args[1]
+		preInc := strings.Contains(strings.ToUpper(string(ins.Op)), ".W")
+		switch {
+		case (src.Kind == OpMem || src.Kind == OpSym) && dst.Kind == OpReg:
+			if _, ok := arm64ParseFReg(dst.Reg); !ok {
+				return true, false, fmt.Errorf("arm64 FMOVQ expects an F register destination: %q", ins.Raw)
+			}
+			ptr, base, inc, update, err := c.arm64VectorMemoryPointer(src, preInc, postInc)
+			if err != nil {
+				return true, false, err
+			}
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = load <16 x i8>, ptr %s, align 1\n", value, ptr)
+			if err := c.storeVReg(dst.Reg, "%"+value); err != nil {
+				return true, false, err
+			}
+			if update {
+				if err := c.updatePostInc(base, inc); err != nil {
+					return true, false, err
+				}
+			}
+			return true, false, nil
+		case src.Kind == OpReg && (dst.Kind == OpMem || dst.Kind == OpSym):
+			if _, ok := arm64ParseFReg(src.Reg); !ok {
+				return true, false, fmt.Errorf("arm64 FMOVQ expects an F register source: %q", ins.Raw)
+			}
+			value, err := c.loadVReg(src.Reg)
+			if err != nil {
+				return true, false, err
+			}
+			ptr, base, inc, update, err := c.arm64VectorMemoryPointer(dst, preInc, postInc)
+			if err != nil {
+				return true, false, err
+			}
+			fmt.Fprintf(c.b, "  store <16 x i8> %s, ptr %s, align 1\n", value, ptr)
+			if update {
+				if err := c.updatePostInc(base, inc); err != nil {
+					return true, false, err
+				}
+			}
+			return true, false, nil
+		default:
+			return true, false, fmt.Errorf("arm64 FMOVQ expects memory and F register operands: %q", ins.Raw)
+		}
+
 	case "FLDPQ":
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpRegList || len(ins.Args[1].RegList) != 2 {
 			return true, false, fmt.Errorf("arm64 FLDPQ expects mem, (Freg,Freg): %q", ins.Raw)
@@ -677,6 +726,37 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 		return true, false, c.storeVReg(ins.Args[1].Reg, "%"+bc)
 	}
 	return false, false, nil
+}
+
+func (c *arm64Ctx) arm64VectorMemoryPointer(op Operand, preInc, postInc bool) (ptr string, base Reg, inc int64, update bool, err error) {
+	if preInc && postInc {
+		return "", "", 0, false, fmt.Errorf("arm64: memory operand cannot be both pre- and post-indexed")
+	}
+	if op.Kind == OpSym {
+		if preInc || postInc {
+			return "", "", 0, false, fmt.Errorf("arm64: symbol operand cannot be pre- or post-indexed")
+		}
+		ptr, err := c.ptrFromSB(op.Sym)
+		return ptr, "", 0, false, err
+	}
+	if op.Kind != OpMem {
+		return "", "", 0, false, fmt.Errorf("arm64: expected memory operand")
+	}
+	if err := validateARM64MemoryIndex(op.Mem, 128); err != nil {
+		return "", "", 0, false, err
+	}
+	addr, base, inc, err := c.addrI64(op.Mem, postInc)
+	if err != nil {
+		return "", "", 0, false, err
+	}
+	if preInc {
+		if err := c.storeReg(base, addr); err != nil {
+			return "", "", 0, false, err
+		}
+	}
+	pt := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", pt, addr)
+	return "%" + pt, base, inc, postInc, nil
 }
 
 func (c *arm64Ctx) broadcastI8ToV16(v8 string) (string, error) {

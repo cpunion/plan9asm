@@ -1584,8 +1584,11 @@ func TestARM64EvalCoverage(t *testing.T) {
 	if _, err := c.eval64(Operand{Kind: OpRegExtend, Reg: "R1", Ext: ExtendOp("BAD")}, false); err == nil {
 		t.Fatalf("eval64(bad extension) unexpectedly succeeded")
 	}
-	if _, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 1}, false); err == nil {
-		t.Fatalf("eval64(rotate) unexpectedly succeeded")
+	if got, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 1}, false); err != nil || got == "" {
+		t.Fatalf("eval64(rotate) = (%q, %v)", got, err)
+	}
+	if _, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 64}, false); err == nil {
+		t.Fatalf("eval64(out-of-range rotate) unexpectedly succeeded")
 	}
 	if _, err := c.eval64(Operand{Kind: OpLabel, Sym: "loop"}, false); err == nil {
 		t.Fatalf("eval64(label) unexpectedly succeeded")

@@ -422,6 +422,9 @@ func llvmZeroValue(ty LLVMType) string {
 }
 
 func (c *arm64Ctx) loadReg(r Reg) (string, error) {
+	if r == ZR {
+		return "0", nil
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return "", fmt.Errorf("arm64: unknown reg %s", r)
@@ -453,6 +456,9 @@ func (c *arm64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 }
 
 func (c *arm64Ctx) storeReg(r Reg, v string) error {
+	if r == ZR {
+		return nil
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return fmt.Errorf("arm64: unknown reg %s", r)
@@ -464,7 +470,10 @@ func (c *arm64Ctx) storeReg(r Reg, v string) error {
 func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
-		return "", fmt.Errorf("arm64: not a vreg %s", r)
+		idx, ok = arm64ParseFReg(r)
+	}
+	if !ok {
+		return "", fmt.Errorf("arm64: not a vector register %s", r)
 	}
 	slot, ok := c.vRegSlot[idx]
 	if !ok {
@@ -478,7 +487,10 @@ func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 func (c *arm64Ctx) storeVReg(r Reg, v string) error {
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
-		return fmt.Errorf("arm64: not a vreg %s", r)
+		idx, ok = arm64ParseFReg(r)
+	}
+	if !ok {
+		return fmt.Errorf("arm64: not a vector register %s", r)
 	}
 	slot, ok := c.vRegSlot[idx]
 	if !ok {

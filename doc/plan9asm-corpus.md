@@ -30,16 +30,25 @@ supported release, through these increasingly strong layers:
    - ARM and ARM64 `optab` rows and their alias mappings
    - generated ARM64 instruction encoders, including SVE
    - these tables are the authority for legal abstract operand classes
+   - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/internal/obj>
 3. Official positive assembler testdata
    - `cmd/asm/internal/asm/testdata`
    - this supplies concrete, architecture-valid operand forms
-4. Selected standard-library assembly
+   - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/asm/internal/asm/testdata>
+4. Go architecture decoder corpora
+   - `golang.org/x/arch/<arch>/<arch>asm/testdata`
+   - these contain a substantially larger encoding-to-Plan-9-printing corpus
+     than the compiler's positive assembler tests
+   - decoder output is supplemental rather than syntax authority, so every
+     candidate form must first pass the matching native `go tool asm`
+   - pinned reference: <https://github.com/golang/arch/tree/v0.31.0/arm64/arm64asm/testdata>
+5. Selected standard-library assembly
    - lower-case `.s` files selected by `go list -json std` for each
      GOOS/GOARCH
-5. Reduced real-world issue and pull-request regressions
+6. Reduced real-world issue and pull-request regressions
    - each case links back to its report in the conformance manifest
    - the reduced instruction must first be accepted by the native Go assembler
-6. Executable semantic conformance cases
+7. Executable semantic conformance cases
    - `testdata/conformance`
    - the same assembly is run once with the native Go assembler and once after
      plan9asm-to-LLVM translation
@@ -49,6 +58,13 @@ a common inventory, not proof that every listed form is legal in both modes.
 Native assembly of generated concrete cases supplies that mode check. Positive
 testdata is useful but not complete: for example, the Go 1.27 386 corpus
 observes only 21 opcodes from the shared 1,600-name x86 namespace.
+
+`x/arch` is deliberately not treated as a second assembler specification. Its
+Plan 9 case files originate from instruction decoding and formatting, and can
+therefore contain reserved encodings or printed operands that the Go assembler
+correctly rejects. The ARM64 supplemental gate scans the complete pinned
+decoder corpus, then separately filters the completed scalar families through
+Go's native assembler before requiring plan9asm lowering support.
 
 ## Coverage states
 
@@ -118,6 +134,17 @@ Run the selected standard-library corpus through parser, form-level lowering,
 whole-file translation, and LLVM object compilation:
 
     scripts/check-stdlib-corpus.sh
+
+Run the pinned, complete `x/arch` ARM64 Plan 9 decoder corpus and the
+native-Go-accepted family subset:
+
+    scripts/check-arm64-plan9-corpus.sh
+
+After the official-family gates pass, run the external regression consumer.
+This translates and LLVM-compiles every assembly file in
+`github.com/klauspost/compress v1.20.0` (8 amd64 and 6 arm64 files):
+
+    scripts/check-klauspost-compress.sh
 
 Select an explicit cross-target subset with `PLAN9ASM_CORPUS_TARGETS`, for
 example:
@@ -212,7 +239,9 @@ updated.
 
 For third-party failures, first reduce the source to its official operand form,
 record the issue URL in the conformance manifest, and verify that the native Go
-assembler accepts it. Fix the instruction family once and add a semantic
-conformance case rather than adding a project-specific workaround. The
-`xgo-dev/llgo#2464` regression for `XORB reg,mem` and `PUNPCKLQDQ` is the first
-case tracked this way.
+assembler accepts it. The Go encoder tables and official tests define the
+family and permitted forms; the third-party project is only a final regression
+consumer. Fix the instruction family once and add a semantic conformance case
+rather than adding a project-specific workaround. The `xgo-dev/llgo#2464`
+regression for `XORB reg,mem` and `PUNPCKLQDQ` is the first case tracked this
+way.

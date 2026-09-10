@@ -39,6 +39,7 @@ func TestValidateCorpusTarget(t *testing.T) {
 	}{
 		{corpus: "std", goarch: "wasm"},
 		{corpus: "go-asm", goarch: "amd64"},
+		{corpus: "arm64-plan9", goarch: "arm64"},
 	} {
 		if err := validateCorpusTarget(test.corpus, test.goarch); err != nil {
 			t.Fatalf("validateCorpusTarget(%q, %q) = %v", test.corpus, test.goarch, err)
@@ -46,6 +47,24 @@ func TestValidateCorpusTarget(t *testing.T) {
 	}
 	if err := validateCorpusTarget("go-asm", "wasm"); err == nil || !strings.Contains(err.Error(), "use -corpus std") {
 		t.Fatalf("validateCorpusTarget(go-asm, wasm) = %v", err)
+	}
+	if err := validateCorpusTarget("arm64-plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "requires -goarch arm64") {
+		t.Fatalf("validateCorpusTarget(arm64-plan9, amd64) = %v", err)
+	}
+}
+
+func TestScanARM64Plan9Cases(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan9cases.txt")
+	src := "00000000| BFI $8, R1, $16, R2\ninvalid line\n00000000| RET\n00000000| BFI [Z22.B-Z23.B]\n"
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ops, forms, parseErrs, files, err := scanARM64Plan9Cases(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files != 1 || ops["BFI"].Count != 1 || len(forms) != 1 || len(parseErrs) != 1 {
+		t.Fatalf("scanARM64Plan9Cases() = ops=%#v forms=%#v parseErrs=%#v files=%d", ops, forms, parseErrs, files)
 	}
 }
 

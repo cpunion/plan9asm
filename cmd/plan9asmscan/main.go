@@ -156,6 +156,7 @@ func main() {
 		repoRoot = flag.String("repo-root", ".", "plan9asm repository root for lowerers and conformance data")
 		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm")
 		goroot   = flag.String("goroot", runtime.GOROOT(), "Go root containing official assembler testdata")
+		input    = flag.String("input", "", "input file for corpora that require one")
 	)
 	flag.Parse()
 
@@ -187,8 +188,13 @@ func main() {
 		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch)
 	case "go-asm":
 		ops, forms, parseErrs, asmFiles, err = scanGoAssemblerTestdata(*goroot, arch, *goarch)
+	case "arm64-plan9":
+		if strings.TrimSpace(*input) == "" {
+			fatalf("-corpus arm64-plan9 requires -input")
+		}
+		ops, forms, parseErrs, asmFiles, err = scanARM64Plan9Cases(*input)
 	default:
-		fatalf("unsupported -corpus %q (expect std|go-asm)", *corpus)
+		fatalf("unsupported -corpus %q (expect std|go-asm|arm64-plan9)", *corpus)
 	}
 	if err != nil {
 		fatalf("scan %s corpus: %v", *corpus, err)
@@ -244,6 +250,9 @@ func main() {
 func validateCorpusTarget(corpus, goarch string) error {
 	if corpus == "go-asm" && goarch == "wasm" {
 		return errors.New("-corpus go-asm does not support -goarch wasm; use -corpus std for WebAssembly")
+	}
+	if corpus == "arm64-plan9" && goarch != "arm64" {
+		return errors.New("-corpus arm64-plan9 requires -goarch arm64")
 	}
 	return nil
 }
@@ -450,6 +459,42 @@ func scanGoAssemblerTestdata(goroot string, arch plan9asm.Arch, goarch string) (
 		}
 	}
 	return ops, forms, parseErrs, len(files), nil
+}
+
+func scanARM64Plan9Cases(path string) (map[string]*opStat, map[string]*formStat, []parseErr, int, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, nil, 0, fmt.Errorf("read ARM64 Plan 9 cases: %w", err)
+	}
+	ops := map[string]*opStat{}
+	forms := map[string]*formStat{}
+	var parseErrs []parseErr
+	for lineno, line := range strings.Split(string(src), "\n") {
+		_, asm, ok := strings.Cut(line, "|")
+		if !ok {
+			continue
+		}
+		asm = strings.TrimSpace(asm)
+		if !goAsmInstructionLine(asm) {
+			continue
+		}
+		probeSrc := "TEXT plan9asm_probe(SB),NOSPLIT,$0\n" + asm + "\nRET\n"
+		file, err := plan9asm.Parse(plan9asm.ArchARM64, probeSrc)
+		if err != nil {
+			parseErrs = append(parseErrs, parseErr{File: fmt.Sprintf("%s:%d", filepath.Base(path), lineno+1), Err: err.Error()})
+			continue
+		}
+		for _, fn := range file.Funcs {
+			for _, ins := range fn.Instrs {
+				if ins.Op == plan9asm.OpRET || ins.Op == plan9asm.OpLABEL || ins.Op == plan9asm.OpTEXT {
+					continue
+				}
+				addOpStat(ops, string(ins.Op), filepath.Base(path), "golang.org/x/arch/arm64asm", 1)
+				addFormStat(forms, plan9asm.ArchARM64, "arm64", ins, filepath.Base(path))
+			}
+		}
+	}
+	return ops, forms, parseErrs, 1, nil
 }
 
 func goAssemblerTestdataFiles(goroot, goarch string) ([]string, error) {

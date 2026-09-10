@@ -14,6 +14,7 @@ func emitARM64Prelude(b *strings.Builder) {
 	b.WriteString("declare i64 @llvm.bitreverse.i64(i64)\n")
 	b.WriteString("declare i64 @llvm.ctlz.i64(i64, i1)\n")
 	b.WriteString("declare i64 @llvm.bswap.i64(i64)\n")
+	b.WriteString("declare i32 @llvm.bswap.i32(i32)\n")
 	// AArch64 CRC32 and CRC32C intrinsics.
 	// Note: B/H forms take the data operand as i32 (low bits used).
 	b.WriteString("declare i32 @llvm.aarch64.crc32b(i32, i32)\n")

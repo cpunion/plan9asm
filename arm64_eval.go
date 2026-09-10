@@ -29,6 +29,12 @@ func (c *arm64Ctx) addrI64(mem MemRef, postInc bool) (addr string, base Reg, inc
 		if err != nil {
 			return "", "", 0, err
 		}
+		if mem.IndexExt != "" {
+			idxVal, err = c.extendReg64(idxVal, mem.IndexExt)
+			if err != nil {
+				return "", "", 0, err
+			}
+		}
 		if mem.Scale != 0 && mem.Scale != 1 {
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = mul i64 %s, %s\n", t, idxVal, c.imm64(mem.Scale))
@@ -60,6 +66,9 @@ func (c *arm64Ctx) updatePostInc(base Reg, inc int64) error {
 }
 
 func (c *arm64Ctx) loadMem(mem MemRef, bits int, postInc bool) (string, error) {
+	if err := validateARM64MemoryIndex(mem, bits); err != nil {
+		return "", err
+	}
 	addr, base, inc, err := c.addrI64(mem, postInc)
 	if err != nil {
 		return "", err
@@ -109,6 +118,9 @@ func (c *arm64Ctx) loadMem(mem MemRef, bits int, postInc bool) (string, error) {
 }
 
 func (c *arm64Ctx) storeMem(mem MemRef, bits int, postInc bool, v64 string) error {
+	if err := validateARM64MemoryIndex(mem, bits); err != nil {
+		return err
+	}
 	addr, base, inc, err := c.addrI64(mem, postInc)
 	if err != nil {
 		return err
@@ -131,6 +143,20 @@ func (c *arm64Ctx) storeMem(mem MemRef, bits int, postInc bool, v64 string) erro
 	return c.updatePostInc(base, inc)
 }
 
+func validateARM64MemoryIndex(mem MemRef, bits int) error {
+	if mem.Index == "" {
+		return nil
+	}
+	scale := mem.Scale
+	if scale == 0 {
+		scale = 1
+	}
+	if scale != 1 && scale != int64(bits/8) {
+		return fmt.Errorf("arm64: invalid %d-bit indexed-memory scale %d", bits, scale)
+	}
+	return nil
+}
+
 func (c *arm64Ctx) eval64(op Operand, postInc bool) (string, error) {
 	switch op.Kind {
 	case OpImm:
@@ -142,7 +168,16 @@ func (c *arm64Ctx) eval64(op Operand, postInc bool) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return c.extendReg64(v, op.Ext)
+		v, err = c.extendReg64(v, op.Ext)
+		if err != nil || op.ShiftOp == "" || op.ShiftAmount == 0 {
+			return v, err
+		}
+		if op.ShiftOp != ShiftLeft || op.ShiftAmount < 0 || op.ShiftAmount > 4 {
+			return "", fmt.Errorf("arm64: invalid extended-register shift: %s", op)
+		}
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = shl i64 %s, %d\n", t, v, op.ShiftAmount)
+		return "%" + t, nil
 	case OpRegShift:
 		v, err := c.loadReg(op.Reg)
 		if err != nil {
@@ -151,12 +186,19 @@ func (c *arm64Ctx) eval64(op Operand, postInc bool) (string, error) {
 		if op.ShiftReg != "" {
 			return "", fmt.Errorf("arm64: register-based shifts not supported: %s", op)
 		}
+		if op.ShiftAmount < 0 || op.ShiftAmount > 63 {
+			return "", fmt.Errorf("arm64: shift out of range: %s", op)
+		}
 		t := c.newTmp()
 		switch op.ShiftOp {
 		case ShiftRight:
 			fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, %d\n", t, v, op.ShiftAmount)
 		case ShiftLeft:
 			fmt.Fprintf(c.b, "  %%%s = shl i64 %s, %d\n", t, v, op.ShiftAmount)
+		case ShiftArith:
+			fmt.Fprintf(c.b, "  %%%s = ashr i64 %s, %d\n", t, v, op.ShiftAmount)
+		case ShiftRotate:
+			return c.rotateInt(v, "i64", 64, fmt.Sprintf("%d", op.ShiftAmount)), nil
 		default:
 			return "", fmt.Errorf("arm64: unsupported shift op %q", op.ShiftOp)
 		}
@@ -195,6 +237,102 @@ func (c *arm64Ctx) eval64(op Operand, postInc bool) (string, error) {
 	default:
 		return "", fmt.Errorf("arm64: unsupported operand for i64: %s", op.String())
 	}
+}
+
+func (c *arm64Ctx) eval32(op Operand) (string, error) {
+	truncate := func(value string) string {
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", t, value)
+		return "%" + t
+	}
+	switch op.Kind {
+	case OpImm:
+		return strconv.FormatUint(uint64(uint32(op.Imm)), 10), nil
+	case OpReg:
+		v, err := c.loadReg(op.Reg)
+		if err != nil {
+			return "", err
+		}
+		return truncate(v), nil
+	case OpRegExtend:
+		v, err := c.loadReg(op.Reg)
+		if err != nil {
+			return "", err
+		}
+		var fromType, extend string
+		switch op.Ext {
+		case ExtendUXTB:
+			fromType, extend = "i8", "zext"
+		case ExtendUXTH:
+			fromType, extend = "i16", "zext"
+		case ExtendUXTW, ExtendUXTX:
+			fromType = "i32"
+		case ExtendSXTB:
+			fromType, extend = "i8", "sext"
+		case ExtendSXTH:
+			fromType, extend = "i16", "sext"
+		case ExtendSXTW, ExtendSXTX:
+			fromType = "i32"
+		default:
+			return "", fmt.Errorf("arm64: unsupported register extension %q", op.Ext)
+		}
+		tr := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", tr, v, fromType)
+		value := "%" + tr
+		if extend != "" {
+			ex := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = %s %s %s to i32\n", ex, extend, fromType, value)
+			value = "%" + ex
+		}
+		if op.ShiftOp != "" && op.ShiftAmount != 0 {
+			if op.ShiftOp != ShiftLeft || op.ShiftAmount < 0 || op.ShiftAmount > 4 {
+				return "", fmt.Errorf("arm64: invalid extended-register shift: %s", op)
+			}
+			shifted := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shl i32 %s, %d\n", shifted, value, op.ShiftAmount)
+			value = "%" + shifted
+		}
+		return value, nil
+	case OpRegShift:
+		if op.ShiftReg != "" || op.ShiftAmount < 0 || op.ShiftAmount > 31 {
+			return "", fmt.Errorf("arm64: invalid 32-bit shift: %s", op)
+		}
+		v, err := c.loadReg(op.Reg)
+		if err != nil {
+			return "", err
+		}
+		v = truncate(v)
+		t := c.newTmp()
+		switch op.ShiftOp {
+		case ShiftLeft:
+			fmt.Fprintf(c.b, "  %%%s = shl i32 %s, %d\n", t, v, op.ShiftAmount)
+		case ShiftRight:
+			fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %d\n", t, v, op.ShiftAmount)
+		case ShiftArith:
+			fmt.Fprintf(c.b, "  %%%s = ashr i32 %s, %d\n", t, v, op.ShiftAmount)
+		case ShiftRotate:
+			return c.rotateInt(v, "i32", 32, fmt.Sprintf("%d", op.ShiftAmount)), nil
+		default:
+			return "", fmt.Errorf("arm64: unsupported 32-bit shift op %q", op.ShiftOp)
+		}
+		return "%" + t, nil
+	default:
+		return "", fmt.Errorf("arm64: unsupported operand for i32: %s", op.String())
+	}
+}
+
+func (c *arm64Ctx) rotateInt(value, typeName string, bits int, shift string) string {
+	inv := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = sub %s %d, %s\n", inv, typeName, bits, shift)
+	masked := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and %s %%%s, %d\n", masked, typeName, inv, bits-1)
+	right := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = lshr %s %s, %s\n", right, typeName, value, shift)
+	left := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = shl %s %s, %%%s\n", left, typeName, value, masked)
+	out := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = or %s %%%s, %%%s\n", out, typeName, right, left)
+	return "%" + out
 }
 
 func (c *arm64Ctx) extendReg64(v string, ext ExtendOp) (string, error) {

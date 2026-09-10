@@ -36,14 +36,15 @@ for goarch in 386 amd64 arm arm64; do
     -out="$tmp_root/$goarch.json"
 done
 
-"$python_cmd" - testdata/coverage/go-asm-baseline.json "$tmp_root" <<'PY'
+"$python_cmd" - testdata/coverage/go-asm-baseline.json testdata/coverage/arm64-go-assembler-families.txt "$tmp_root" <<'PY'
 import json
 import pathlib
 import re
 import sys
 
 baseline_path = pathlib.Path(sys.argv[1])
-report_dir = pathlib.Path(sys.argv[2])
+family_path = pathlib.Path(sys.argv[2])
+report_dir = pathlib.Path(sys.argv[3])
 baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 if baseline.get("schema_version") != 2:
     raise SystemExit("coverage baseline schema must be 2")
@@ -111,4 +112,21 @@ for report_path in sorted(report_dir.glob("*.json")):
             f"{version}/{arch}: instruction coverage changed ({details}); "
             "review the form-level report before updating the baseline"
         )
+
+    if arch == "arm64":
+        required = {
+            line.strip()
+            for line in family_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        catalog = {item["opcode"]: item for item in report["opcode_catalog"]}
+        missing_encoder = sorted(op for op in required if not catalog.get(op, {}).get("encoder_forms"))
+        missing_corpus = sorted(op for op in required if not catalog.get(op, {}).get("observed_in_corpus"))
+        unsupported = sorted(op for op in required if catalog.get(op, {}).get("unsupported_forms"))
+        if missing_encoder or missing_corpus or unsupported:
+            raise SystemExit(
+                f"{version}/arm64: incomplete required Go assembler families: "
+                f"missing_encoder={missing_encoder}, missing_corpus={missing_corpus}, unsupported={unsupported}"
+            )
+        print(f"{version}/arm64: all {len(required)} required opcodes are encoder-defined, observed, and lowerable")
 PY

@@ -343,7 +343,11 @@ func memoryClass(arch Arch, goarch string, mem MemRef) string {
 		parts = append(parts, registerClass(arch, goarch, mem.Base)+"-base")
 	}
 	if mem.Index != "" {
-		parts = append(parts, registerClass(arch, goarch, mem.Index)+"-index")
+		indexClass := registerClass(arch, goarch, mem.Index) + "-index"
+		if mem.IndexExt != "" {
+			indexClass += "-" + strings.ToLower(string(mem.IndexExt))
+		}
+		parts = append(parts, indexClass)
 	}
 	if mem.Segment != "" {
 		parts = append(parts, "segment")
