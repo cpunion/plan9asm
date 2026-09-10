@@ -28,10 +28,18 @@ fi
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-# Build the package tool once, then run it from the repository root. Invoking
-# it through `go run -C cmd/plan9asm` would make old Go lanes auto-select the
-# nested module's newer toolchain, and the corpus would silently come from the
-# wrong GOROOT.
+# Build host tools once before applying any target-specific architecture
+# setting. Besides avoiding repeated builds, this prevents GOAMD64=v4 (for
+# example) from producing a scanner binary that cannot run on the CI host.
+# Invoking the package tool through `go run -C cmd/plan9asm` would also make old
+# Go lanes auto-select the nested module's newer toolchain, and the corpus would
+# silently come from the wrong GOROOT.
+plan9asmscan_cmd="$tmp_root/plan9asmscan"
+if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
+  plan9asmscan_cmd+=".exe"
+fi
+go build -o "$plan9asmscan_cmd" ./cmd/plan9asmscan
+
 if [[ -n "${PLAN9ASM_CMD:-}" ]]; then
   plan9asm_cmd=$PLAN9ASM_CMD
   if [[ ! -x "$plan9asm_cmd" ]]; then
@@ -152,7 +160,7 @@ for target in "${targets[@]}"; do
 
   echo "==> scan $target_label"
   json="$tmp_root/$target_name.json"
-  env "${target_env[@]}" go run ./cmd/plan9asmscan -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
+  env "${target_env[@]}" "$plan9asmscan_cmd" -goos="$goos" -goarch="$goarch" -repo-root . -format json -out "$json"
   "$python_cmd" - "$json" "$target_label" <<'PY'
 import json
 import sys
