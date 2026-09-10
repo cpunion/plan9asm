@@ -154,7 +154,7 @@ func main() {
 		out      = flag.String("out", "", "write report to file (default stdout)")
 		format   = flag.String("format", "md", "output format: md|json")
 		repoRoot = flag.String("repo-root", ".", "plan9asm repository root for lowerers and conformance data")
-		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm")
+		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm|arm64-plan9")
 		goroot   = flag.String("goroot", runtime.GOROOT(), "Go root containing official assembler testdata")
 		input    = flag.String("input", "", "input file for corpora that require one")
 	)

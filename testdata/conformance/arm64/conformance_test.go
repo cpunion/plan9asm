@@ -72,6 +72,8 @@ func familyOracle(data [8]uint64) (out [72]uint64) {
 	out[61], out[62] = data[0], data[1]
 	out[63], out[64] = data[0], data[1]
 	out[65], out[66] = data[2], data[3]
+	out[67] = 0xffffffff89abcdef
+	out[68], out[69], out[70], out[71] = 1, 1, 1, 1
 	return out
 }
 

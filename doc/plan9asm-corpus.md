@@ -209,7 +209,7 @@ The Go 1.27 snapshot currently reports:
 | 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 37 | 6 | 17 | 0 | 0 |
 | amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 701 | 6 | 6035 | 24 | 0 |
 | arm | 181 | 528 | 135 | 500 | 296 | 34 | 170 | 0 | 0 |
-| arm64 | 1417 including SVE | 2964 | 1268 | 1901 | 384 | 21 | 1496 | 0 | 93 |
+| arm64 | 1417 including SVE | 2964 | 1268 | 1916 | 455 | 39 | 1422 | 59 | 93 |
 
 These numbers describe current implementation progress, not completion.
 Encoder forms use Go's internal operand classes and are a complete machine-

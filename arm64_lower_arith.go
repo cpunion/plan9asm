@@ -403,7 +403,7 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if err := c.storeReg(dst, "%"+z); err != nil {
 			return true, false, err
 		}
-		c.setFlagsLogic("%" + z)
+		c.setFlagsLogic32("%" + t)
 		return true, false, nil
 
 	case "SUBS":
@@ -667,6 +667,20 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm64 %s expects 2 operands: %q", op, ins.Raw)
 		}
+		if op == "CMPW" {
+			src, err := c.eval32(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			dst, err := c.eval32(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			res := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = sub i32 %s, %s\n", res, dst, src)
+			c.setFlagsSub32(dst, src, "%"+res)
+			return true, false, nil
+		}
 		src, err := c.eval64(ins.Args[0], false)
 		if err != nil {
 			return true, false, err
@@ -675,7 +689,6 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if err != nil {
 			return true, false, err
 		}
-		_ = op // CMPW is treated the same as CMP for now.
 		rt := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sub i64 %s, %s\n", rt, dst, src)
 		c.setFlagsSub(dst, src, "%"+rt)

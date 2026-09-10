@@ -32,30 +32,12 @@ func TestARM64ConformanceNativeGo(t *testing.T) {
 	}
 }
 
-func TestARM64ConformanceLLVMRuntime(t *testing.T) {
-	crossLinux := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && os.Getenv("PLAN9ASM_CROSS_EXEC") == "1"
-	if runtime.GOARCH != "arm64" && !crossLinux {
-		t.Skip("runtime execution test only runs on an arm64 host")
-	}
-	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
-	if llc == "" {
-		t.Fatal("llc not found")
-	}
-	compiler := []string{}
-	runPrefix := []string(nil)
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	if crossLinux {
-		compiler = []string{"aarch64-linux-gnu-gcc"}
-		runPrefix = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
-		triple = "aarch64-unknown-linux-gnu"
-	} else {
-		_, clang, ok := findLlcAndClang(t)
-		if !ok {
-			t.Skip("clang not found")
-		}
-		compiler = []string{clang}
-	}
+func TestARM64ConformanceTranslate(t *testing.T) {
+	translateARM64Conformance(t, "aarch64-unknown-linux-gnu")
+}
 
+func translateARM64Conformance(t *testing.T, triple string) string {
+	t.Helper()
 	src, err := os.ReadFile(filepath.Join("testdata", "conformance", "arm64", "conformance_arm64.s"))
 	if err != nil {
 		t.Fatal(err)
@@ -83,6 +65,34 @@ func TestARM64ConformanceLLVMRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return ll
+}
+
+func TestARM64ConformanceLLVMRuntime(t *testing.T) {
+	crossLinux := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && os.Getenv("PLAN9ASM_CROSS_EXEC") == "1"
+	if runtime.GOARCH != "arm64" && !crossLinux {
+		t.Skip("runtime execution test only runs on an arm64 host")
+	}
+	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
+	if llc == "" {
+		t.Fatal("llc not found")
+	}
+	compiler := []string{}
+	runPrefix := []string(nil)
+	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
+	if crossLinux {
+		compiler = []string{"aarch64-linux-gnu-gcc"}
+		runPrefix = []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"}
+		triple = "aarch64-unknown-linux-gnu"
+	} else {
+		_, clang, ok := findLlcAndClang(t)
+		if !ok {
+			t.Skip("clang not found")
+		}
+		compiler = []string{clang}
+	}
+
+	ll := translateARM64Conformance(t, triple)
 	mainC := `
 #include <stdint.h>
 extern void families(uint64_t *out, uint64_t *data);
@@ -103,7 +113,7 @@ int main(void) {
         0x0000000089abcdd7ULL, 0, 0, 0xffffffffffff89abULL, 0x00000000000089abULL, 0x0000000001234567ULL,
         0x0000000001234567ULL, 0xffffffffffffffefULL, 0x00000000000000efULL, 0x0123456789abcdefULL,
         0xfedcba9876543210ULL, 0x0123456789abcdefULL, 0xfedcba9876543210ULL, 0x1122334455667788ULL,
-        0x8877665544332211ULL, 0, 0, 0, 0, 0
+        0x8877665544332211ULL, 0xffffffff89abcdefULL, 1, 1, 1, 1
     };
     uint64_t got[72] = {0};
     families(got, data);
