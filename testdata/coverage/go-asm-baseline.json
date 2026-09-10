@@ -1,5 +1,5 @@
 {
-  "description": "Encoder-table and concrete-form lowering snapshots for Go 1.20 through Go 1.27. Review full scanner reports before updating.",
+  "description": "Official opcode/encoder inventories and concrete-form lowering snapshots for Go 1.20 through Go 1.27. Review full scanner reports before updating.",
   "schema_version": 2,
   "encoder_union": {
     "386": {
@@ -21,6 +21,11 @@
       "encoder_opcodes": 1255,
       "encoder_forms": 4396,
       "encoder_fingerprint": "da4278f42d67371d11cd69b03cb0a8d8ad994a5f2c02736f5b1933785c341f72"
+    },
+    "wasm": {
+      "encoder_opcodes": 464,
+      "encoder_forms": 464,
+      "encoder_fingerprint": "a8b66a2c993aa5aab5101d8d3011f749a1c31c1641048ebf5423ee9c9eb20bbc"
     }
   },
   "versions": {
@@ -84,6 +89,21 @@
         "encoder_forms": 1397,
         "encoder_opcodes_observed_in_corpus": 393,
         "encoder_fingerprint": "2b453ffe072becde3bf7da18f0839b985e975750355df58c64f055e20c73fd5c"
+      },
+      "wasm": {
+        "context_forms": 129,
+        "coverage_fingerprint": "c4319d55141b65fb57dcaf794f887ee7598f6f04c54f4f85b47f8049d81ab162",
+        "official_opcodes": 208,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 129,
+        "unique_ops": 78,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 208,
+        "encoder_forms": 208,
+        "encoder_opcodes_observed_in_corpus": 70,
+        "encoder_fingerprint": "4ef2c0798219e35b73ad2b93ceab8478fe69f08753fe6505674d2f10fe471875"
       }
     },
     "go1.21": {
@@ -146,6 +166,21 @@
         "encoder_forms": 1402,
         "encoder_opcodes_observed_in_corpus": 393,
         "encoder_fingerprint": "28adc02f07122efb10df8e883c3c397c4606e475a23f0ea3ad2e9e91286d6f12"
+      },
+      "wasm": {
+        "context_forms": 124,
+        "coverage_fingerprint": "291d33fa2e116d5960ca200f69e7459e27751ffd98f7a99dc0e823e2c7a5aa2f",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 124,
+        "unique_ops": 76,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 68,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.22": {
@@ -208,6 +243,21 @@
         "encoder_forms": 1444,
         "encoder_opcodes_observed_in_corpus": 394,
         "encoder_fingerprint": "3c499e508b24684f72847358aa7278675598d914db644072f57d6c68313f5bdd"
+      },
+      "wasm": {
+        "context_forms": 126,
+        "coverage_fingerprint": "76c70161154efa069fa712c94993a7b1158f65cbe7b75a5b65e435f434a18c05",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 126,
+        "unique_ops": 76,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 68,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.23": {
@@ -270,6 +320,21 @@
         "encoder_forms": 1445,
         "encoder_opcodes_observed_in_corpus": 394,
         "encoder_fingerprint": "1af2d4424b0480d4a08d0450dc0d0f5580a028a1df4ad5c937fe266bc2be723c"
+      },
+      "wasm": {
+        "context_forms": 126,
+        "coverage_fingerprint": "76c70161154efa069fa712c94993a7b1158f65cbe7b75a5b65e435f434a18c05",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 126,
+        "unique_ops": 76,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 68,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.24": {
@@ -332,6 +397,21 @@
         "encoder_forms": 1445,
         "encoder_opcodes_observed_in_corpus": 394,
         "encoder_fingerprint": "1af2d4424b0480d4a08d0450dc0d0f5580a028a1df4ad5c937fe266bc2be723c"
+      },
+      "wasm": {
+        "context_forms": 127,
+        "coverage_fingerprint": "9e11e8231fd1ad9b8b1240b44adfea53c8da35007d1d88b506721b39490d463e",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 127,
+        "unique_ops": 77,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 69,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.25": {
@@ -394,6 +474,21 @@
         "encoder_forms": 1447,
         "encoder_opcodes_observed_in_corpus": 395,
         "encoder_fingerprint": "fed3635d6f0d9c0806b055286ed0ed6a767390c445e0e92ddd7705addcd805dc"
+      },
+      "wasm": {
+        "context_forms": 127,
+        "coverage_fingerprint": "9e11e8231fd1ad9b8b1240b44adfea53c8da35007d1d88b506721b39490d463e",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 127,
+        "unique_ops": 77,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 69,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.26": {
@@ -456,6 +551,21 @@
         "encoder_forms": 1451,
         "encoder_opcodes_observed_in_corpus": 401,
         "encoder_fingerprint": "781616f08759827e37b6214ab42797c9d67ede21f440be768fcdbb59ff374d50"
+      },
+      "wasm": {
+        "context_forms": 121,
+        "coverage_fingerprint": "4fc7623556cd369953af572e32bd71a947297fce4b1756c151390faec84059f2",
+        "official_opcodes": 207,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 121,
+        "unique_ops": 71,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 207,
+        "encoder_forms": 207,
+        "encoder_opcodes_observed_in_corpus": 63,
+        "encoder_fingerprint": "d0db37769456478e72949394e138def7cf61bd451aedb5e46a6bc66ae69bd458"
       }
     },
     "go1.27": {
@@ -518,6 +628,21 @@
         "encoder_forms": 2964,
         "encoder_opcodes_observed_in_corpus": 1174,
         "encoder_fingerprint": "e7ee0302652810d238de58639890b5b04b8b678d4619be4909d6622f666f0026"
+      },
+      "wasm": {
+        "context_forms": 120,
+        "coverage_fingerprint": "4e31258d9b2a04e72dafc936139407050163282fb04b79e9a0b7c3afe0b6a22f",
+        "official_opcodes": 463,
+        "parse_err_count": 0,
+        "runtime_verified_forms": 0,
+        "supported_forms": 0,
+        "unique_forms": 120,
+        "unique_ops": 71,
+        "unsupported_forms": 0,
+        "encoder_opcodes": 463,
+        "encoder_forms": 463,
+        "encoder_opcodes_observed_in_corpus": 63,
+        "encoder_fingerprint": "135c33a1bf62a55770d5bdb928bc8b7087acb175e7f579c9169f5c98458896a8"
       }
     }
   }

@@ -24,12 +24,16 @@ fi
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-for goarch in 386 amd64 arm arm64; do
+for goarch in 386 amd64 arm arm64 wasm; do
   echo "==> official Go assembler coverage $goarch"
+  goos=linux
+  if [[ "$goarch" == "wasm" ]]; then
+    goos=js
+  fi
   go run ./cmd/plan9asmscan \
     -corpus=go-asm \
     -goroot="$go_root" \
-    -goos=linux \
+    -goos="$goos" \
     -goarch="$goarch" \
     -repo-root=. \
     -format=json \

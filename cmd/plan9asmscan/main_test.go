@@ -39,14 +39,12 @@ func TestValidateCorpusTarget(t *testing.T) {
 	}{
 		{corpus: "std", goarch: "wasm"},
 		{corpus: "go-asm", goarch: "amd64"},
+		{corpus: "go-asm", goarch: "wasm"},
 		{corpus: "arm64-plan9", goarch: "arm64"},
 	} {
 		if err := validateCorpusTarget(test.corpus, test.goarch); err != nil {
 			t.Fatalf("validateCorpusTarget(%q, %q) = %v", test.corpus, test.goarch, err)
 		}
-	}
-	if err := validateCorpusTarget("go-asm", "wasm"); err == nil || !strings.Contains(err.Error(), "use -corpus std") {
-		t.Fatalf("validateCorpusTarget(go-asm, wasm) = %v", err)
 	}
 	if err := validateCorpusTarget("arm64-plan9", "amd64"); err == nil || !strings.Contains(err.Error(), "requires -goarch arm64") {
 		t.Fatalf("validateCorpusTarget(arm64-plan9, amd64) = %v", err)
@@ -224,6 +222,19 @@ func TestListStdPackages(t *testing.T) {
 	}
 	if !foundRuntime {
 		t.Fatalf("listStdPackages() missing runtime package")
+	}
+}
+
+func TestListStdPackagesAtGOROOT(t *testing.T) {
+	pkgs, err := listStdPackagesAtGOROOT(runtime.GOOS, runtime.GOARCH, runtime.GOROOT())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pkgs) == 0 {
+		t.Fatal("listStdPackagesAtGOROOT returned no packages")
+	}
+	if _, err := listStdPackagesAtGOROOT("js", "wasm", t.TempDir()); err == nil || !strings.Contains(err.Error(), "Go command for GOROOT") {
+		t.Fatalf("missing Go command error = %v", err)
 	}
 }
 
@@ -421,6 +432,31 @@ func TestBuildOpcodeCatalogIncludesGeneratedTables(t *testing.T) {
 	}
 }
 
+func TestBuildWASMOpcodeCatalogNormalizesOfficialNames(t *testing.T) {
+	goroot := t.TempDir()
+	dir := filepath.Join(goroot, "src", "cmd", "internal", "obj", "wasm")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("var Anames = []string{\n\"I32Add\",\n\"ReservedFD01\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := buildOpcodeCatalog(goroot, plan9asm.ArchWASM, "wasm", map[string]*opStat{"I32ADD": {Count: 1}}, nil, map[string]struct{}{"I32ADD": {}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog) != 1 || catalog[0].Opcode != "I32ADD" || !catalog[0].Observed || !catalog[0].NameClaimed {
+		t.Fatalf("wasm catalog = %#v", catalog)
+	}
+}
+
+func TestRenderMarkdownWASMOpcodeInventory(t *testing.T) {
+	md := string(renderMarkdown(report{Goos: "js", Goarch: "wasm", EncoderForms: 3, EncoderOpcodes: 3, EncoderOpsObserved: 2}))
+	if !strings.Contains(md, "official wasm opcode entries: `3` (`2` observed in the official GOROOT corpus)") {
+		t.Fatalf("wasm report has the wrong inventory description:\n%s", md)
+	}
+}
+
 func TestGoAsmInstructionLine(t *testing.T) {
 	for _, line := range []string{"XORB SI, (AX)", "  PUNPCKLQDQ X0, X0 // encoding", "RET"} {
 		if !goAsmInstructionLine(line) {
@@ -560,6 +596,27 @@ func TestMainAndFatalfSubprocess(t *testing.T) {
 	main()
 	if data, err := os.ReadFile(outPath); err != nil || !strings.Contains(string(data), `"goarch": "amd64"`) {
 		t.Fatalf("main() output = (%q, %v)", string(data), err)
+	}
+
+	wasmOut := filepath.Join(t.TempDir(), "wasm-report.json")
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	os.Args = []string{
+		"plan9asmscan",
+		"-corpus=go-asm",
+		"-goos=js",
+		"-goarch=wasm",
+		"-format=json",
+		"-repo-root=../..",
+		"-out=" + wasmOut,
+	}
+	main()
+	data, err := os.ReadFile(wasmOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wasmReport report
+	if err := json.Unmarshal(data, &wasmReport); err != nil || wasmReport.Goarch != "wasm" || wasmReport.OfficialOpcodes < 100 {
+		t.Fatalf("wasm main() output = (%q, %v)", string(data), err)
 	}
 
 	cmd := exec.Command(testBin, "-test.run=TestMainAndFatalfSubprocess")

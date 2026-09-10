@@ -4,11 +4,12 @@ This document defines the path to complete support for the Go assembler's Plan
 9 syntax. Coverage is measured by architecture, instruction family, opcode,
 and operand form. An opcode name by itself is not a support claim.
 
-The library targets 386, amd64, arm, arm64, and wasm. The cross-version encoder
-table inventory and native semantic-conformance matrix cover the first four;
-the official Go wasm pseudo-instruction ABI is instead covered through the
-selected `js/wasm` and `wasip1/wasm` standard-library corpora, LLVM object
-compilation, and focused execution tests. The 386 and amd64 lowerers share x86
+The library targets 386, amd64, arm, arm64, and wasm, which is the complete set
+of independent Go architectures consumed by LLGo's Plan 9 assembly path. Named
+embedded targets may use other physical LLVM backends, but they borrow an arm
+or wasm GOARCH for source selection and are not additional Go Plan 9 assembly
+instruction sets. The cross-version official inventory and semantic gates
+cover all five architectures. The 386 and amd64 lowerers share x86
 implementation code, but their registers, address widths, valid opcodes, and
 runtime ABI differ. ARM and ARM64 are separate instruction sets. ARM64 also
 distinguishes scalar, NEON, and SVE families.
@@ -25,15 +26,20 @@ supported release, through these increasingly strong layers:
    - `cmd/internal/obj/x86/anames*.go`
    - `cmd/internal/obj/arm/anames*.go`
    - `cmd/internal/obj/arm64/anames*.go`
+   - `cmd/internal/obj/wasm/anames*.go`
 2. Official architecture encoder tables
    - x86 `optab`, `ytab`, `ymovtab`, and generated AVX/EVEX tables
    - ARM and ARM64 `optab` rows and their alias mappings
    - generated ARM64 instruction encoders, including SVE
    - these tables are the authority for legal abstract operand classes
+   - wasm is emitted directly by `wasmobj.go` and has no equivalent operand-
+     class table, so its inventory rows are explicitly opcode-only
    - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/internal/obj>
 3. Official positive assembler testdata
    - `cmd/asm/internal/asm/testdata`
    - this supplies concrete, architecture-valid operand forms
+   - Go has no wasm file in this directory, so the wasm positive corpus is the
+     official `.s` set selected from GOROOT for `js/wasm`
    - reference tree: <https://github.com/golang/go/tree/go1.27.1/src/cmd/asm/internal/asm/testdata>
 4. Go architecture decoder corpora
    - `golang.org/x/arch/<arch>/<arch>asm/testdata`
@@ -124,7 +130,7 @@ report:
       -out /tmp/go-asm-amd64.json
 
 Generate the human-readable family summary by changing `-format` to
-`md`. Repeat with `386`, `arm`, and `arm64`.
+`md`. Repeat with `386`, `arm`, `arm64`, and `wasm`; use `-goos js` for wasm.
 
 Run the cross-version regression gate:
 
@@ -152,6 +158,15 @@ example:
     PLAN9ASM_CORPUS_TARGETS=linux/386,linux/amd64,linux/arm,linux/arm64 \
       scripts/check-stdlib-corpus.sh
 
+An unversioned Linux architecture expands to every Go architecture setting
+supported by the selected toolchain. The authoritative level matrix covers
+`GO386={sse2,softfloat}`, `GOAMD64=v1..v4`, `GOARM=5/6/7` plus each available
+hardfloat/softfloat counterpart, `GOARM64=v8.0..v8.9` and `v9.0..v9.5` plus
+the `lse` and `crypto` extension boundaries, and all four combinations of
+`GOWASM={satconv,signext}` for both `js/wasm` and `wasip1/wasm`. Go 1.20 and
+Go 1.21 use their implicit ARM64 v8.0 baseline; GOARM64 became configurable in
+Go 1.23, while GOARM float suffixes became configurable in Go 1.22.
+
 Run the executable semantic cases:
 
     go test . -run 'Test.*Conformance' -count=1
@@ -164,12 +179,13 @@ matching Linux cross compiler, and executes 386/ARM/ARM64 through QEMU:
       go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
 
 CI treats Linux as the authoritative coverage host. Go 1.20 through Go 1.27
-each scan, translate, and object-compile the complete Linux, Darwin, and
-Windows target matrix from Linux. Every supported Go version runs the root
-compile/link/run conformance suite and its official assembler/encoder
-inventory. The latest Go additionally runs the four-architecture Linux
-link/execution smoke. macOS and Windows jobs on the latest Go release are
-auxiliary host-integration checks, not the only source of target coverage.
+each scan, translate, and object-compile the complete Linux architecture-level,
+Darwin, Windows, `js/wasm`, and `wasip1/wasm` target matrix from Linux. Every
+supported Go version runs the root compile/link/run conformance suite and its
+official architecture inventory. The latest Go additionally runs the four-
+architecture Linux link/execution smoke. macOS and Windows jobs on the latest
+Go release are auxiliary host-integration checks, not the only source of
+target coverage.
 Cross object compilation and cross execution are reported separately:
 successful `.o` generation alone is not an executable conformance claim.
 
@@ -196,6 +212,7 @@ The encoder-table union across Go 1.20 through Go 1.27 is:
 | amd64 | 1603 shared x86 opcodes | 4998 shared x86 forms |
 | arm | 144 | 528 |
 | arm64 | 1255 | 4396 |
+| wasm | 464 opcode names | 464 opcode-only inventory rows |
 
 These are abstract encoder forms, not runtime support claims. The larger ARM64
 union is intentional: operand-class names and generated SVE encoders evolve
@@ -210,15 +227,18 @@ The Go 1.27 snapshot currently reports:
 | amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 701 | 6 | 6035 | 24 | 0 |
 | arm | 181 | 528 | 135 | 500 | 296 | 34 | 170 | 0 | 0 |
 | arm64 | 1417 including SVE | 2964 | 1268 | 1916 | 455 | 39 | 1422 | 59 | 93 |
+| wasm | 463 | 463 opcode-only rows | 71 | 120 | 0 | 120 | 0 | 0 | 0 |
 
 These numbers describe current implementation progress, not completion.
 Encoder forms use Go's internal operand classes and are a complete machine-
-readable inventory of the encoder rows; observed forms use plan9asm's concrete
-shape classification and can outnumber encoder rows because generated testdata
-varies registers, address shapes, and concrete encodings. The large amd64 gap
-is mostly the exhaustive legacy/SIMD/AVX test matrix. Go 1.27 adds the ARM64 SVE
-corpus and encoder tables and exposes the currently unsupported SVE parser and
-lowering surface explicitly instead of hiding it.
+readable inventory of the encoder rows; the wasm count is deliberately an
+opcode-only inventory because its Go backend has no such table. Observed forms
+use plan9asm's concrete shape classification and can outnumber encoder rows
+because generated testdata varies registers, address shapes, and concrete
+encodings. The large amd64 gap is mostly the exhaustive legacy/SIMD/AVX test
+matrix. Go 1.27 adds the ARM64 SVE corpus and encoder tables and exposes the
+currently unsupported SVE parser and lowering surface explicitly instead of
+hiding it.
 
 The machine-readable cross-version snapshots are in
 `testdata/coverage/go-asm-baseline.json`. A CI mismatch is blocking and
@@ -234,7 +254,7 @@ updated.
 4. Add or extend a runnable conformance routine and manifest entry.
 5. Run the native Go and plan9asm/LLVM semantic checks.
 6. Run the standard-library corpus gate.
-7. Generate all four native architecture reports and inspect changes.
+7. Generate all five architecture reports and inspect changes.
 8. Update the cross-version fingerprint only after the change is understood.
 
 For third-party failures, first reduce the source to its official operand form,
