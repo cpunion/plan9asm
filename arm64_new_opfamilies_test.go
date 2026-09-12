@@ -126,6 +126,50 @@ TEXT pairload(SB),NOSPLIT,$0-0
 	}
 }
 
+func TestTranslateARM64NarrowImmediateAndFPVectorAlias(t *testing.T) {
+	src := `
+TEXT aliases(SB),NOSPLIT,$0-0
+	MOVW $0x89abcdef, R2
+	MOVD $0x89abcdef, R3
+	MOVW R3, R4
+	MOVD $4096, R1
+	FMOVQ (R1), F0
+	FMOVD F0, R2
+	FMOVD R2, F1
+	FMOVQ F1, (R1)
+	RET
+`
+	file, err := Parse(ArchARM64, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ll, err := Translate(file, Options{
+		TargetTriple: "aarch64-unknown-linux-gnu",
+		Sigs: map[string]FuncSig{
+			"aliases": {Name: "aliases", Ret: Void},
+		},
+		Goarch: "arm64",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"zext i32",
+		"sext i32",
+		"extractelement <2 x i64>",
+		"insertelement <2 x i64> zeroinitializer",
+	} {
+		if !strings.Contains(ll, want) {
+			t.Fatalf("missing %q in narrow/alias lowering:\n%s", want, ll)
+		}
+	}
+	for _, unwanted := range []string{"%reg_F0 = alloca i64", "%reg_F1 = alloca i64"} {
+		if strings.Contains(ll, unwanted) {
+			t.Fatalf("found split scalar FP state %q:\n%s", unwanted, ll)
+		}
+	}
+}
+
 func TestTranslateARM64SHA3Families(t *testing.T) {
 	src := `
 TEXT sha3ops(SB),NOSPLIT,$0-0

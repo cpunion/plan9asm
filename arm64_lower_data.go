@@ -242,7 +242,10 @@ func (c *arm64Ctx) lowerNarrowMove(op Op, ins Instr, bits int, signed, postInc b
 
 	switch dst.Kind {
 	case OpReg:
-		value = c.arm64ExtendNarrow(value, bits, signed)
+		// A MOVW immediate is materialized through the 32-bit register view,
+		// which clears the upper half even though register and memory sources
+		// for MOVW are sign-extended.
+		value = c.arm64ExtendNarrow(value, bits, signed && src.Kind != OpImm)
 		return c.storeReg(dst.Reg, value)
 	case OpMem:
 		return c.storeMem(dst.Mem, bits, postInc, value)

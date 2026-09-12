@@ -9,7 +9,7 @@ import (
 
 func TestFamilies(t *testing.T) {
 	data := [8]uint64{0x0123456789abcdef, 0xfedcba9876543210, 0x1122334455667788, 0x8877665544332211}
-	var got [72]uint64
+	var got [76]uint64
 	families(&got, &data)
 	want := familyOracle(data)
 	for i := range got {
@@ -19,7 +19,7 @@ func TestFamilies(t *testing.T) {
 	}
 }
 
-func familyOracle(data [8]uint64) (out [72]uint64) {
+func familyOracle(data [8]uint64) (out [76]uint64) {
 	src, dst := data[0], data[1]
 	out[0] = insert(dst, src, 8, 16, 0)
 	out[1] = uint64(uint32(insert(uint64(uint32(dst)), uint64(uint32(src)), 4, 8, 0)))
@@ -74,6 +74,9 @@ func familyOracle(data [8]uint64) (out [72]uint64) {
 	out[65], out[66] = data[2], data[3]
 	out[67] = 0xffffffff89abcdef
 	out[68], out[69], out[70], out[71] = 1, 1, 1, 1
+	out[72] = 0x0000000089abcdef
+	out[73] = data[0]
+	out[74], out[75] = 0x1234, 0
 	return out
 }
 

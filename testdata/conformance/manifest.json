@@ -144,6 +144,9 @@
         "MOVB gpr,gpr",
         "MOVBU gpr,gpr",
         "MOVW gpr,gpr",
+        "MOVW immediate,gpr",
+        "FMOVD floating-register,gpr",
+        "FMOVD gpr,floating-register",
         "FMOVQ memory.gpr-base,floating-register",
         "FMOVQ memory.gpr-base.offset,floating-register",
         "FMOVQ floating-register,memory.gpr-base.offset"

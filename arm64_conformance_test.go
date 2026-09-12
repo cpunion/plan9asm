@@ -98,7 +98,7 @@ func TestARM64ConformanceLLVMRuntime(t *testing.T) {
 extern void families(uint64_t *out, uint64_t *data);
 int main(void) {
     uint64_t data[8] = {0x0123456789abcdefULL, 0xfedcba9876543210ULL, 0x1122334455667788ULL, 0x8877665544332211ULL};
-    uint64_t want[72] = {
+    uint64_t want[76] = {
         0xfedcba9876cdef10ULL, 0x0000000076543ef0ULL, 0xfedcba9876589abcULL, 0x0000000076543abcULL,
         0xffffffffffcdef00ULL, 0x00000000ffffdef0ULL, 0xfffffffffff89abcULL, 0x00000000fffffabcULL,
         0x0000000000cdef00ULL, 0x000000000000def0ULL, 0x0000000000089abcULL, 0x0000000000000abcULL,
@@ -113,11 +113,12 @@ int main(void) {
         0x0000000089abcdd7ULL, 0, 0, 0xffffffffffff89abULL, 0x00000000000089abULL, 0x0000000001234567ULL,
         0x0000000001234567ULL, 0xffffffffffffffefULL, 0x00000000000000efULL, 0x0123456789abcdefULL,
         0xfedcba9876543210ULL, 0x0123456789abcdefULL, 0xfedcba9876543210ULL, 0x1122334455667788ULL,
-        0x8877665544332211ULL, 0xffffffff89abcdefULL, 1, 1, 1, 1
+        0x8877665544332211ULL, 0xffffffff89abcdefULL, 1, 1, 1, 1,
+        0x0000000089abcdefULL, 0x0123456789abcdefULL, 0x1234, 0
     };
-    uint64_t got[72] = {0};
+    uint64_t got[76] = {0};
     families(got, data);
-    for (int i = 0; i < 72; i++)
+    for (int i = 0; i < 76; i++)
         if (got[i] != want[i])
             return i + 1;
     return 0;
