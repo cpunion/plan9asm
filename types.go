@@ -128,7 +128,8 @@ func parseReg(s string) (Reg, bool) {
 	}
 	// SIMD/FP registers:
 	// - x86: M0..M7, X0..X31, Y0..Y31, Z0..Z31, K0..K7
-	// - arm64: V0..V31, with optional lane suffix (e.g. V0.B16, V8.D[0])
+	// - arm64: V0..V31 and SVE Z0..Z31/P0..P15, with optional lane suffix
+	//   (for example V0.B16, V8.D[0], Z22.B, or P10.H)
 	// - arm64 FP: F0..F31
 	if strings.HasPrefix(ss, "K") && len(ss) >= 2 {
 		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
@@ -140,7 +141,7 @@ func parseReg(s string) (Reg, bool) {
 			return Reg(ss), true
 		}
 	}
-	if (strings.HasPrefix(ss, "X") || strings.HasPrefix(ss, "Y") || strings.HasPrefix(ss, "Z") || strings.HasPrefix(ss, "V") || strings.HasPrefix(ss, "F")) && len(ss) >= 2 {
+	if (strings.HasPrefix(ss, "X") || strings.HasPrefix(ss, "Y") || strings.HasPrefix(ss, "Z") || strings.HasPrefix(ss, "V") || strings.HasPrefix(ss, "F") || strings.HasPrefix(ss, "P")) && len(ss) >= 2 {
 		i := 1
 		for i < len(ss) && ss[i] >= '0' && ss[i] <= '9' {
 			i++
@@ -769,12 +770,12 @@ func expandRegRange(part string) ([]Reg, bool) {
 	if !ok {
 		return nil, false
 	}
-	lp, li, ok := regRangeParts(lr)
+	lp, li, ls, ok := regRangeParts(lr)
 	if !ok {
 		return nil, false
 	}
-	rp, ri, ok := regRangeParts(rr)
-	if !ok || lp != rp {
+	rp, ri, rs, ok := regRangeParts(rr)
+	if !ok || lp != rp || ls != rs {
 		return nil, false
 	}
 	step := 1
@@ -783,7 +784,7 @@ func expandRegRange(part string) ([]Reg, bool) {
 	}
 	out := make([]Reg, 0, absInt(li-ri)+1)
 	for i := li; ; i += step {
-		out = append(out, Reg(fmt.Sprintf("%s%d", lp, i)))
+		out = append(out, Reg(fmt.Sprintf("%s%d%s", lp, i, ls)))
 		if i == ri {
 			break
 		}
@@ -791,20 +792,24 @@ func expandRegRange(part string) ([]Reg, bool) {
 	return out, true
 }
 
-func regRangeParts(r Reg) (prefix string, idx int, ok bool) {
+func regRangeParts(r Reg) (prefix string, idx int, suffix string, ok bool) {
 	s := string(r)
-	i := len(s)
-	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
-		i--
+	digitStart := 0
+	for digitStart < len(s) && (s[digitStart] < '0' || s[digitStart] > '9') {
+		digitStart++
 	}
-	if i == len(s) || i == 0 {
-		return "", 0, false
+	if digitStart == 0 || digitStart == len(s) {
+		return "", 0, "", false
 	}
-	n, err := strconv.Atoi(s[i:])
+	digitEnd := digitStart
+	for digitEnd < len(s) && s[digitEnd] >= '0' && s[digitEnd] <= '9' {
+		digitEnd++
+	}
+	n, err := strconv.Atoi(s[digitStart:digitEnd])
 	if err != nil {
-		return "", 0, false
+		return "", 0, "", false
 	}
-	return s[:i], n, true
+	return s[:digitStart], n, s[digitEnd:], true
 }
 
 func absInt(v int) int {

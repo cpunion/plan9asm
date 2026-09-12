@@ -61,7 +61,7 @@ func TestScanARM64Plan9Cases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if files != 1 || ops["BFI"].Count != 1 || len(forms) != 1 || len(parseErrs) != 1 {
+	if files != 1 || ops["BFI"].Count != 2 || len(forms) != 2 || len(parseErrs) != 0 {
 		t.Fatalf("scanARM64Plan9Cases() = ops=%#v forms=%#v parseErrs=%#v files=%d", ops, forms, parseErrs, files)
 	}
 }

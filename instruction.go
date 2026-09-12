@@ -311,6 +311,17 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 			return "gpr64"
 		}
 	}
+	if arch == ArchARM64 {
+		if r == "ZR" {
+			return "zero-register"
+		}
+		if strings.HasPrefix(r, "Z") {
+			return "scalable-vector"
+		}
+		if strings.HasPrefix(r, "P") {
+			return "predicate-register"
+		}
+	}
 	if strings.HasPrefix(r, "V") {
 		if strings.Contains(r, "[") {
 			return "vector-lane"
@@ -322,9 +333,6 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 	}
 	if r == "SP" {
 		return "stack-pointer"
-	}
-	if r == "ZR" {
-		return "zero-register"
 	}
 	if strings.HasPrefix(r, "R") {
 		if _, err := strconv.Atoi(strings.TrimPrefix(r, "R")); err == nil {

@@ -1171,6 +1171,35 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		c.setZSFlagsFromI64("%" + call)
 		return true, false, nil
 
+	case "BSFW", "BSRW":
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
+		}
+		src, err := c.evalIntSized(ins.Args[0], I16)
+		if err != nil {
+			return true, false, err
+		}
+		zf := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp eq i16 %s, 0\n", zf, src)
+		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
+		ext := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i16 %s to i32\n", ext, src)
+		var result string
+		if op == "BSFW" {
+			call := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.cttz.i32(i32 %%%s, i1 false)\n", call, ext)
+			result = "%" + call
+		} else {
+			clz := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctlz.i32(i32 %%%s, i1 false)\n", clz, ext)
+			sub := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = sub i32 31, %%%s\n", sub, clz)
+			result = "%" + sub
+		}
+		tr := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i16\n", tr, result)
+		return true, false, c.storeRegSized(ins.Args[1].Reg, I16, "%"+tr)
+
 	case "BSFQ", "BSRQ", "BSWAPQ", "BSFL", "BSRL":
 		// Bit scan/byte swap ops (reg, reg).
 		src := Reg("")
@@ -1538,6 +1567,53 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, sh)
 		return true, false, c.storeReg(dst, "%"+z)
+
+	case "SHLW", "SHRW", "SARW", "SALW":
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects amt, dstReg: %q", op, ins.Raw)
+		}
+		dst := ins.Args[1].Reg
+		dv, err := c.evalIntSized(ins.Args[1], I16)
+		if err != nil {
+			return true, false, err
+		}
+		var amt string
+		switch ins.Args[0].Kind {
+		case OpImm:
+			amt = fmt.Sprintf("%d", ins.Args[0].Imm&31)
+		case OpReg:
+			av, err := c.loadReg(ins.Args[0].Reg)
+			if err != nil {
+				return true, false, err
+			}
+			masked := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = and i64 %s, 31\n", masked, av)
+			amt = "%" + masked
+		default:
+			return true, false, fmt.Errorf("amd64 %s unsupported shift amt: %q", op, ins.Raw)
+		}
+		inRange := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp ult i64 %s, 16\n", inRange, amt)
+		safeAmt := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i64 %s, i64 15\n", safeAmt, inRange, amt)
+		amt16 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i16\n", amt16, safeAmt)
+		shifted := c.newTmp()
+		switch op {
+		case "SHLW", "SALW":
+			fmt.Fprintf(c.b, "  %%%s = shl i16 %s, %%%s\n", shifted, dv, amt16)
+		case "SARW":
+			fmt.Fprintf(c.b, "  %%%s = ashr i16 %s, %%%s\n", shifted, dv, amt16)
+		case "SHRW":
+			fmt.Fprintf(c.b, "  %%%s = lshr i16 %s, %%%s\n", shifted, dv, amt16)
+		}
+		result := "%" + shifted
+		if op != "SARW" {
+			out := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i16 %%%s, i16 0\n", out, inRange, shifted)
+			result = "%" + out
+		}
+		return true, false, c.storeRegSized(dst, I16, result)
 
 	case "SHLB":
 		// 8-bit logical left shift: amt, dstReg.

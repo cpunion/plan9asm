@@ -214,8 +214,17 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 	if _, ok := expandRegRange("R1-V3"); ok {
 		t.Fatalf("expandRegRange(mixed) unexpectedly succeeded")
 	}
-	if _, _, ok := regRangeParts("SP"); ok {
+	if _, _, _, ok := regRangeParts("SP"); ok {
 		t.Fatalf("regRangeParts(SP) unexpectedly succeeded")
+	}
+	if regs, ok := expandRegRange("Z22.B-Z23.B"); !ok || len(regs) != 2 || regs[0] != "Z22.B" || regs[1] != "Z23.B" {
+		t.Fatalf("expandRegRange(SVE vectors) = (%v, %v)", regs, ok)
+	}
+	if regs, ok := expandRegRange("P10.H"); !ok || len(regs) != 1 || regs[0] != "P10.H" {
+		t.Fatalf("expandRegRange(SVE predicate) = (%v, %v)", regs, ok)
+	}
+	if _, ok := expandRegRange("Z22.B-Z23.H"); ok {
+		t.Fatalf("expandRegRange(mixed SVE lane widths) unexpectedly succeeded")
 	}
 
 	for _, tc := range []struct {
@@ -223,6 +232,8 @@ func TestTypeParserEdgeCoverage(t *testing.T) {
 		want OperandKind
 	}{
 		{"[R0-R2, R5]", OpRegList},
+		{"[Z22.B-Z23.B]", OpRegList},
+		{"[P10.H, P11.H]", OpRegList},
 		{"(R0, R1)", OpRegList},
 		{"MIDR_EL1", OpIdent},
 		{"helper<>(SB)", OpSym},

@@ -224,9 +224,9 @@ The Go 1.27 snapshot currently reports:
 | GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 37 | 6 | 17 | 0 | 0 |
-| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 701 | 6 | 6035 | 24 | 0 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 740 | 6 | 5996 | 34 | 0 |
 | arm | 181 | 528 | 135 | 500 | 296 | 34 | 170 | 0 | 0 |
-| arm64 | 1417 including SVE | 2964 | 1268 | 1916 | 455 | 39 | 1422 | 62 | 93 |
+| arm64 | 1417 including SVE | 2964 | 1281 | 1980 | 455 | 39 | 1486 | 62 | 0 |
 | wasm | 463 | 463 opcode-only rows | 71 | 120 | 0 | 120 | 0 | 0 | 0 |
 
 These numbers describe current implementation progress, not completion.
@@ -236,9 +236,9 @@ opcode-only inventory because its Go backend has no such table. Observed forms
 use plan9asm's concrete shape classification and can outnumber encoder rows
 because generated testdata varies registers, address shapes, and concrete
 encodings. The large amd64 gap is mostly the exhaustive legacy/SIMD/AVX test
-matrix. Go 1.27 adds the ARM64 SVE corpus and encoder tables and exposes the
-currently unsupported SVE parser and lowering surface explicitly instead of
-hiding it.
+matrix. Go 1.27 adds the ARM64 SVE corpus and encoder tables; SVE register
+lists are parsed and every currently unsupported lowering form is reported
+explicitly instead of being hidden as a parse failure.
 
 The machine-readable cross-version snapshots are in
 `testdata/coverage/go-asm-baseline.json`. A CI mismatch is blocking and
