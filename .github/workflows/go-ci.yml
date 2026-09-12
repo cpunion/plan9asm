@@ -78,6 +78,9 @@ jobs:
       - name: klauspost/compress regression corpus
         run: scripts/check-klauspost-compress.sh
 
+      - name: go-hex multi-platform regression corpus
+        run: scripts/check-go-hex.sh
+
   stdlib-corpus:
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
@@ -159,7 +162,6 @@ jobs:
           scripts/check-stdlib-corpus.sh
 
       - name: Official Go assembler coverage regression
-        if: runner.os == 'Linux'
         shell: bash
         run: |
           chmod +x scripts/check-go-asm-coverage.sh

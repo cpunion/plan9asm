@@ -133,6 +133,28 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 					{Offset: 24, Type: I64, Index: 3, Field: -1},
 				}},
 			},
+			"goHexVectorOps": {
+				Name: "goHexVectorOps",
+				Args: []LLVMType{Ptr, Ptr, Ptr},
+				Ret:  Void,
+				Frame: FrameLayout{Params: []FrameSlot{
+					{Offset: 0, Type: Ptr, Index: 0, Field: -1},
+					{Offset: 8, Type: Ptr, Index: 1, Field: -1},
+					{Offset: 16, Type: Ptr, Index: 2, Field: -1},
+				}},
+			},
+			"goHexWordOps": {
+				Name: "goHexWordOps",
+				Args: []LLVMType{I64, I64},
+				Ret:  I64,
+				Frame: FrameLayout{
+					Params: []FrameSlot{
+						{Offset: 0, Type: I64, Index: 0, Field: -1},
+						{Offset: 8, Type: I64, Index: 1, Field: -1},
+					},
+					Results: []FrameSlot{{Offset: 16, Type: I64, Index: 0, Field: -1}},
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -148,6 +170,8 @@ extern uint32_t shiftLegacyThreeOperand(uint32_t src, uint32_t dst, uint32_t amo
 extern uint64_t clearTopBit(uint64_t value);
 extern void doubleShift32(uint32_t *out, uint32_t src, uint32_t dst, uint32_t amount);
 extern void doubleShift64(uint64_t *out, uint64_t src, uint64_t dst, uint64_t amount);
+extern void goHexVectorOps(uint8_t *out, uint8_t *a, uint8_t *b);
+extern uint64_t goHexWordOps(uint64_t value, uint64_t count);
 
 static uint32_t shld32(uint32_t src, uint32_t dst, uint32_t count) {
 	count &= 31;
@@ -233,6 +257,45 @@ int main(void) {
 				if (out[i] != want[i])
 					return 50 + i;
 		}
+	}
+	uint8_t a[16], b[16], vector_out[160] = {0};
+	const uint8_t or_mask[16] = {
+		0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40,
+		0xff, 0x00, 0x55, 0xaa, 0x0f, 0xf0, 0x33, 0xcc,
+	};
+	for (int i = 0; i < 16; i++) {
+		a[i] = (uint8_t)(i * 29 + 3);
+		b[i] = (uint8_t)(i * 17 + 0x70);
+	}
+	goHexVectorOps(vector_out, a, b);
+	for (int i = 0; i < 16; i++) {
+		if (vector_out[i] != (uint8_t)(a[i] | or_mask[i])) return 70;
+		if (vector_out[16+i] != (uint8_t)(a[i] | b[i])) return 71;
+		uint8_t gt = (int8_t)a[i] > (int8_t)b[i] ? 0xff : 0;
+		if (vector_out[32+i] != gt || vector_out[48+i] != gt) return 72;
+		if (vector_out[64+i] != (uint8_t)(a[i] - b[i])) return 73;
+		if (vector_out[144+i] != (uint8_t)(a[i] & b[i])) return 74;
+	}
+	for (int i = 0; i < 8; i++) {
+		uint16_t word = (uint16_t)a[2*i] | (uint16_t)a[2*i+1] << 8;
+		uint16_t left = (uint16_t)(word << 4), right = (uint16_t)(word >> 4);
+		if (vector_out[80+2*i] != (uint8_t)left || vector_out[80+2*i+1] != (uint8_t)(left >> 8)) return 75;
+		if (vector_out[96+2*i] != (uint8_t)right || vector_out[96+2*i+1] != (uint8_t)(right >> 8)) return 76;
+		if (vector_out[112+2*i] != a[8+i] || vector_out[112+2*i+1] != b[8+i]) return 77;
+		if (vector_out[128+2*i] != a[8+i] || vector_out[128+2*i+1] != b[8+i]) return 78;
+	}
+	const uint64_t word_values[][2] = {
+		{0x123456789abcdef0ULL, 0},
+		{0x123456789abcdef0ULL, 4},
+		{0xfedcba9876543210ULL, 12},
+	};
+	for (unsigned i = 0; i < sizeof(word_values) / sizeof(word_values[0]); i++) {
+		uint64_t value = word_values[i][0], count = word_values[i][1];
+		uint16_t shifted = (uint16_t)value >> (count & 31);
+		unsigned first = 0;
+		while (((shifted >> first) & 1) == 0) first++;
+		uint64_t want = (value & ~0xffffULL) | shifted | ((uint64_t)first << 16);
+		if (goHexWordOps(value, count) != want) return 79;
 	}
 	return 0;
 }
