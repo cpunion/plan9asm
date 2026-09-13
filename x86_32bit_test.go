@@ -984,7 +984,7 @@ func TestTranslate386X87Modes(t *testing.T) {
 }
 
 func TestTranslate386X87Codegen(t *testing.T) {
-	llc := find386Tool("llc-19", "llc")
+	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
 	if llc == "" {
 		t.Skip("llc not found")
 	}

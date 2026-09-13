@@ -12,6 +12,12 @@ func findLlcAndClang(t *testing.T) (llc, clang string, ok bool) {
 	t.Helper()
 	llc, _ = exec.LookPath("llc")
 	if llc == "" {
+		llc, _ = exec.LookPath("llc-23")
+	}
+	if llc == "" {
+		llc, _ = exec.LookPath("llc-22")
+	}
+	if llc == "" {
 		llc, _ = exec.LookPath("llc-21")
 	}
 	if llc == "" {

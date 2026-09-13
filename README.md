@@ -21,12 +21,11 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 - Library parser/lowering targets: `386`, `amd64`, `arm`, `arm64`, `wasm`.
 - Tool targets (`cmd/plan9asmll -all-targets`):
   - `darwin/amd64`, `darwin/arm64`
-  - `linux/amd64`, `linux/arm64`, `linux/386`
-  - `windows/amd64`, `windows/arm64`, `windows/386`
+  - `linux/386`, `linux/amd64`, `linux/arm`, `linux/arm64`
+  - `windows/386`, `windows/amd64`, `windows/arm64`
+  - `js/wasm`, `wasip1/wasm`
 - The package-oriented `cmd/plan9asm` and coverage-oriented
-  `cmd/plan9asmscan` additionally support the official `js/wasm` and
-  `wasip1/wasm` standard-library corpora. `linux/arm` is covered by the same
-  corpus path; it is not part of `plan9asmll -all-targets`.
+  `cmd/plan9asmscan` support the same five Plan 9 assembly architectures.
 - `386` currently reuses the x86 lowering path from `amd64` backend logic.
 - `arm64` does not include `arm` (32-bit). They are separate architectures.
 - Instruction coverage is tracked for all five LLGo Plan 9 assembly GOARCH

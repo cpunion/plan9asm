@@ -47,13 +47,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM 19
+      - name: Install LLVM 22
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -87,7 +87,14 @@ jobs:
 
       - name: Read reported-library manifest
         id: matrix
-        run: echo "libraries=$(jq -c '[.libraries[].id]' testdata/corpus/reported-libraries.json)" >> "$GITHUB_OUTPUT"
+        run: |
+          manifest=testdata/corpus/reported-libraries.json
+          if ! jq -e '.libraries | length > 0 and all(.[]; (.id | test("^[a-z0-9]+(-[a-z0-9]+)*$")))' "$manifest" >/dev/null; then
+            echo "reported-library ids must match ^[a-z0-9]+(-[a-z0-9]+)*$" >&2
+            exit 1
+          fi
+          libraries=$(jq -c '[.libraries[].id]' "$manifest")
+          printf '%s\n' "libraries=$libraries" >> "$GITHUB_OUTPUT"
 
   reported_library_corpus:
     name: reported-library-corpus (${{ matrix.library }})
@@ -102,13 +109,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM 19
+      - name: Install LLVM 22
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -117,7 +124,9 @@ jobs:
           cache: true
 
       - name: Scan latest module and compile complete asm corpus
-        run: scripts/check-reported-library-corpus.sh "${{ matrix.library }}"
+        env:
+          REPORTED_LIBRARY: ${{ matrix.library }}
+        run: scripts/check-reported-library-corpus.sh "$REPORTED_LIBRARY"
 
   stdlib-corpus:
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
@@ -145,20 +154,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM 19 (Ubuntu)
+      - name: Install LLVM 22 (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
-      - name: Install LLVM 19 (macOS)
+      - name: Install LLVM 22 (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install llvm@19
-          echo "PATH=$(brew --prefix llvm@19)/bin:$PATH" >> "$GITHUB_ENV"
+          brew install llvm@22
+          echo "PATH=$(brew --prefix llvm@22)/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Python (Windows)
         if: runner.os == 'Windows'
@@ -166,9 +175,9 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install LLVM 19 (Windows)
+      - name: Install LLVM 22 (Windows)
         if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-windows-llvm19
+        uses: ./.github/actions/setup-windows-llvm22
 
       - name: Setup Go for corpus tool build
         if: matrix.prebuild_tool
@@ -215,14 +224,14 @@ jobs:
 
       - name: Install LLVM, cross compilers, and QEMU
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
           sudo apt-get install -y \
-            llvm-19-dev clang-19 lld-19 \
+            llvm-22-dev clang-22 lld-22 \
             gcc-i686-linux-gnu gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu \
             qemu-user
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -271,18 +280,18 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install LLVM 19 (Ubuntu)
+      - name: Install LLVM 22 (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
-      - name: Install LLVM 19 (Windows)
+      - name: Install LLVM 22 (Windows)
         if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-windows-llvm19
+        uses: ./.github/actions/setup-windows-llvm22
 
       - name: LLVM tools info
         shell: bash
@@ -353,18 +362,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM 19
+      - name: Install LLVM 22
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           for attempt in 1 2 3; do
-            sudo apt-get update && sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev && break
+            sudo apt-get update && sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev && break
             if [ "$attempt" -eq 3 ]; then
               exit 1
             fi
             sleep 5
           done
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Setup Go
         uses: actions/setup-go@v7
@@ -409,13 +418,13 @@ jobs:
           go-version: '1.27.x'
           cache: true
 
-      - name: Install LLVM 19
+      - name: Install LLVM 22
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Go test (race)
         run: go test -race ./...
@@ -436,13 +445,13 @@ jobs:
           go-version: '1.27.x'
           cache: true
 
-      - name: Install LLVM 19
+      - name: Install LLVM 22
         run: |
-          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-22 main" | sudo tee /etc/apt/sources.list.d/llvm.list
           wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
           sudo apt-get update
-          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
-          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+          sudo apt-get install -y llvm-22-dev clang-22 libclang-22-dev lld-22 libunwind-22-dev libc++-22-dev
+          echo "PATH=/usr/lib/llvm-22/bin:$PATH" >> "$GITHUB_ENV"
 
       - name: Go test with coverage
         run: |

@@ -198,7 +198,7 @@ func resolveCompileConfig(compile bool, llcPath string, keepObj bool) (compileCo
 	if cfg.LLC != "" {
 		return cfg, nil
 	}
-	names := []string{"llc", "llc-21", "llc-20", "llc-19"}
+	names := []string{"llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19"}
 	for _, name := range names {
 		if p, err := exec.LookPath(name); err == nil && p != "" {
 			cfg.LLC = p
