@@ -91,6 +91,7 @@ func main() {
 		targets    = flag.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,windows/arm64)")
 		allTargets = flag.Bool("all-targets", false, "run the complete default Plan 9 target matrix")
 		patterns   = flag.String("patterns", "std", "comma-separated package patterns")
+		modulePath = flag.String("module-path", "", "only include packages owned by this module path")
 		outDir     = flag.String("out", "", "output dir for generated .ll files")
 		annotate   = flag.Bool("annotate", false, "emit source asm lines as IR comments")
 		limit      = flag.Int("limit", 0, "max number of asm files per target (0 means all)")
@@ -138,7 +139,7 @@ func main() {
 			runOutDir = filepath.Join(baseOut, targetID(spec))
 			fmt.Fprintf(os.Stderr, "\n== target %s ==\n", targetID(spec))
 		}
-		rep, tasks, err := runOneTarget(spec, pats, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *strictLoad, *repoRoot, ccfg)
+		rep, tasks, err := runOneTarget(spec, pats, *modulePath, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *strictLoad, *repoRoot, ccfg)
 		if err != nil {
 			fatalf("%s: %v", targetID(spec), err)
 		}
@@ -303,12 +304,12 @@ func targetID(t targetSpec) string {
 	return t.Goos + "-" + t.Goarch
 }
 
-func runOneTarget(spec targetSpec, pats []string, outDir string, annotate bool, limit int, keepGoing bool, listOnly, strictLoad bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
+func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, annotate bool, limit int, keepGoing bool, listOnly, strictLoad bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
 	arch, err := toPlan9Arch(spec.Goarch)
 	if err != nil {
 		return runReport{}, nil, err
 	}
-	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, strictLoad)
+	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, modulePath, strictLoad)
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
@@ -479,10 +480,11 @@ func llcExtraArgs(goarch string) []string {
 	}
 }
 
-func loadPkgs(goos, goarch string, patterns []string, strict bool) ([]*packages.Package, error) {
+func loadPkgs(goos, goarch string, patterns []string, modulePath string, strict bool) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
+			packages.NeedModule |
 			packages.NeedDeps |
 			packages.NeedImports |
 			packages.NeedTypes |
@@ -498,10 +500,24 @@ func loadPkgs(goos, goarch string, patterns []string, strict bool) ([]*packages.
 	if err != nil {
 		return nil, err
 	}
+	pkgs = filterPackagesByModule(pkgs, modulePath)
 	if count := packages.PrintErrors(pkgs); strict && count != 0 {
 		return nil, fmt.Errorf("%d package loading error(s)", count)
 	}
 	return pkgs, nil
+}
+
+func filterPackagesByModule(pkgs []*packages.Package, modulePath string) []*packages.Package {
+	if modulePath == "" {
+		return pkgs
+	}
+	filtered := make([]*packages.Package, 0, len(pkgs))
+	for _, pkg := range pkgs {
+		if pkg != nil && pkg.Module != nil && pkg.Module.Path == modulePath {
+			filtered = append(filtered, pkg)
+		}
+	}
+	return filtered
 }
 
 func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, []string) {
@@ -542,12 +558,44 @@ func asmFilesOfPkg(p *packages.Package) []string {
 	}
 	out := make([]string, 0)
 	for _, f := range p.OtherFiles {
-		if isAsmFile(f) {
+		if isAsmFile(f) && assemblyFileHasContent(f) {
 			out = append(out, f)
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+func assemblyFileHasContent(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Preserve unreadable files as tasks so compilation reports the error.
+		return true
+	}
+	return assemblySourceHasContent(data)
+}
+
+func assemblySourceHasContent(data []byte) bool {
+	for i := 0; i < len(data); {
+		switch {
+		case data[i] == ' ' || data[i] == '\t' || data[i] == '\r' || data[i] == '\n' || data[i] == '\f':
+			i++
+		case i+1 < len(data) && data[i] == '/' && data[i+1] == '/':
+			i += 2
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+		case i+1 < len(data) && data[i] == '/' && data[i+1] == '*':
+			end := strings.Index(string(data[i+2:]), "*/")
+			if end < 0 {
+				return true
+			}
+			i += end + 4
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 func isAsmFile(path string) bool {

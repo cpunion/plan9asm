@@ -26,11 +26,14 @@ import (
 const (
 	defaultIndexURL    = "https://index.golang.org/index"
 	defaultProxyURL    = "https://proxy.golang.org/cached-only"
+	discoverySchema    = 2
 	indexPageLimit     = 2000
 	defaultScanLimit   = 2000
 	defaultMaxZipSize  = 2 << 30
 	defaultHTTPTimeout = 60 * time.Second
 	zipDirectoryTail   = 8 << 20
+	maxAsmProbeSize    = 8 << 20
+	zipReadAhead       = 1 << 20
 	httpAttempts       = 3
 	httpRetryDelay     = 100 * time.Millisecond
 )
@@ -46,8 +49,8 @@ type latestInfo struct {
 }
 
 type moduleVersion struct {
-	Path    string
-	Version string
+	Path    string `json:"module"`
+	Version string `json:"version"`
 }
 
 type candidate struct {
@@ -58,19 +61,22 @@ type candidate struct {
 }
 
 type scanFailure struct {
-	Module string `json:"module"`
-	Error  string `json:"error"`
+	Module  string `json:"module"`
+	Version string `json:"version"`
+	Error   string `json:"error"`
 }
 
 type discoveryReport struct {
-	SchemaVersion int           `json:"schema_version"`
-	GeneratedAt   time.Time     `json:"generated_at"`
-	Since         string        `json:"since,omitempty"`
-	NextSince     string        `json:"next_since,omitempty"`
-	IndexEntries  int           `json:"index_entries"`
-	UniqueModules int           `json:"unique_modules"`
-	Matched       []candidate   `json:"matched"`
-	Failures      []scanFailure `json:"failures,omitempty"`
+	SchemaVersion int             `json:"schema_version"`
+	GeneratedAt   time.Time       `json:"generated_at"`
+	Since         string          `json:"since,omitempty"`
+	NextSince     string          `json:"next_since,omitempty"`
+	IndexEntries  int             `json:"index_entries"`
+	UniqueModules int             `json:"unique_modules"`
+	Skipped       int             `json:"skipped_previously_scanned,omitempty"`
+	Scanned       []moduleVersion `json:"scanned"`
+	Matched       []candidate     `json:"matched"`
+	Failures      []scanFailure   `json:"failures,omitempty"`
 }
 
 type config struct {
@@ -81,6 +87,19 @@ type config struct {
 	workers     int
 	maxZipSize  int64
 	httpTimeout time.Duration
+	seen        map[string]struct{}
+}
+
+type pathListFlag []string
+
+func (f *pathListFlag) String() string { return strings.Join(*f, ",") }
+
+func (f *pathListFlag) Set(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("seen report path must not be empty")
+	}
+	*f = append(*f, value)
+	return nil
 }
 
 func main() {
@@ -92,7 +111,13 @@ func main() {
 	maxZipSize := flag.Int64("max-zip-bytes", defaultMaxZipSize, "maximum remote module ZIP size considered")
 	httpTimeout := flag.Duration("http-timeout", defaultHTTPTimeout, "timeout for each index or proxy request")
 	out := flag.String("out", "", "write JSON to this file instead of stdout")
+	var seenReports pathListFlag
+	flag.Var(&seenReports, "seen-report", "prior discovery report to skip (repeatable)")
 	flag.Parse()
+	seen, err := loadSeenReports(seenReports)
+	if err != nil {
+		fatal(err)
+	}
 
 	cfg := config{
 		indexURL:    *indexURL,
@@ -102,6 +127,7 @@ func main() {
 		workers:     *workers,
 		maxZipSize:  *maxZipSize,
 		httpTimeout: *httpTimeout,
+		seen:        seen,
 	}
 	if err := validateConfig(cfg); err != nil {
 		fatal(err)
@@ -175,18 +201,70 @@ func discover(ctx context.Context, client *http.Client, cfg config) (discoveryRe
 		modules = append(modules, moduleVersion{Path: modulePath, Version: version})
 	}
 	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
+	uniqueModules := len(modules)
+	modules, skipped := filterPreviouslyScanned(modules, cfg.seen)
 
-	matched, failures := inspectModules(ctx, client, cfg.proxyURL, modules, cfg.workers, cfg.maxZipSize)
+	matched, failures, scanned := inspectModules(ctx, client, cfg.proxyURL, modules, cfg.workers, cfg.maxZipSize)
 	return discoveryReport{
-		SchemaVersion: 1,
+		SchemaVersion: discoverySchema,
 		GeneratedAt:   time.Now().UTC(),
 		Since:         cfg.since,
 		NextSince:     nextSince,
 		IndexEntries:  len(entries),
-		UniqueModules: len(modules),
+		UniqueModules: uniqueModules,
+		Skipped:       skipped,
+		Scanned:       scanned,
 		Matched:       matched,
 		Failures:      failures,
 	}, nil
+}
+
+func loadSeenReports(paths []string) (map[string]struct{}, error) {
+	seen := make(map[string]struct{})
+	for _, reportPath := range paths {
+		data, err := os.ReadFile(reportPath)
+		if err != nil {
+			return nil, fmt.Errorf("read seen report %q: %w", reportPath, err)
+		}
+		var report discoveryReport
+		if err := json.Unmarshal(data, &report); err != nil {
+			return nil, fmt.Errorf("decode seen report %q: %w", reportPath, err)
+		}
+		for _, item := range report.Scanned {
+			if item.Path == "" || item.Version == "" {
+				return nil, fmt.Errorf("seen report %q contains an incomplete scanned version", reportPath)
+			}
+			seen[scanKey(item)] = struct{}{}
+		}
+		// Older reports did not contain the complete scanned set, but their
+		// successful matches are still safe to reuse.
+		for _, item := range report.Matched {
+			if item.Module != "" && item.Version != "" {
+				seen[scanKey(moduleVersion{Path: item.Module, Version: item.Version})] = struct{}{}
+			}
+		}
+	}
+	return seen, nil
+}
+
+func filterPreviouslyScanned(modules []moduleVersion, seen map[string]struct{}) ([]moduleVersion, int) {
+	if len(seen) == 0 {
+		return modules, 0
+	}
+	pending := make([]moduleVersion, 0, len(modules))
+	skipped := 0
+	for _, module := range modules {
+		if _, ok := seen[scanKey(module)]; ok {
+			skipped++
+			continue
+		}
+		pending = append(pending, module)
+	}
+	return pending, skipped
+}
+
+func scanKey(module moduleVersion) string {
+	return module.Path + "\x00" + module.Version
 }
 
 func readIndex(ctx context.Context, client *http.Client, endpoint, since string, limit int) ([]indexEntry, string, error) {
@@ -276,19 +354,23 @@ func readIndex(ctx context.Context, client *http.Client, endpoint, since string,
 	return entries, cursor, nil
 }
 
-func inspectModules(ctx context.Context, client *http.Client, proxyURL string, modules []moduleVersion, workers int, maxZipSize int64) ([]candidate, []scanFailure) {
+func inspectModules(ctx context.Context, client *http.Client, proxyURL string, modules []moduleVersion, workers int, maxZipSize int64) ([]candidate, []scanFailure, []moduleVersion) {
 	tasks := make(chan moduleVersion)
 	results := make(chan candidate)
 	errorsOut := make(chan scanFailure)
+	completed := make(chan moduleVersion)
 	var wg sync.WaitGroup
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for module := range tasks {
-				item, err := inspectIndexedModule(ctx, client, proxyURL, module, maxZipSize)
+				item, scanned, err := inspectIndexedModule(ctx, client, proxyURL, module, maxZipSize)
+				for _, version := range scanned {
+					completed <- version
+				}
 				if err != nil {
-					errorsOut <- scanFailure{Module: module.Path, Error: err.Error()}
+					errorsOut <- scanFailure{Module: module.Path, Version: module.Version, Error: err.Error()}
 					continue
 				}
 				if len(item.AsmFiles) > 0 {
@@ -305,11 +387,13 @@ func inspectModules(ctx context.Context, client *http.Client, proxyURL string, m
 		wg.Wait()
 		close(results)
 		close(errorsOut)
+		close(completed)
 	}()
 
 	matched := make([]candidate, 0)
 	failures := make([]scanFailure, 0)
-	for results != nil || errorsOut != nil {
+	scannedSet := make(map[string]moduleVersion)
+	for results != nil || errorsOut != nil || completed != nil {
 		select {
 		case item, ok := <-results:
 			if !ok {
@@ -323,29 +407,51 @@ func inspectModules(ctx context.Context, client *http.Client, proxyURL string, m
 				continue
 			}
 			failures = append(failures, failure)
+		case item, ok := <-completed:
+			if !ok {
+				completed = nil
+				continue
+			}
+			scannedSet[scanKey(item)] = item
 		}
+	}
+	scanned := make([]moduleVersion, 0, len(scannedSet))
+	for _, item := range scannedSet {
+		scanned = append(scanned, item)
 	}
 	sort.Slice(matched, func(i, j int) bool { return matched[i].Module < matched[j].Module })
 	sort.Slice(failures, func(i, j int) bool { return failures[i].Module < failures[j].Module })
-	return matched, failures
+	sort.Slice(scanned, func(i, j int) bool {
+		if scanned[i].Path != scanned[j].Path {
+			return scanned[i].Path < scanned[j].Path
+		}
+		return scanned[i].Version < scanned[j].Version
+	})
+	return matched, failures, scanned
 }
 
-func inspectIndexedModule(ctx context.Context, client *http.Client, proxyURL string, module moduleVersion, maxZipSize int64) (candidate, error) {
+func inspectIndexedModule(ctx context.Context, client *http.Client, proxyURL string, module moduleVersion, maxZipSize int64) (candidate, []moduleVersion, error) {
 	indexed, err := inspectModuleVersion(ctx, client, proxyURL, module.Path, module.Version, maxZipSize)
 	if err != nil {
-		return candidate{}, fmt.Errorf("inspect indexed version %s: %w", module.Version, err)
+		return candidate{}, nil, fmt.Errorf("inspect indexed version %s: %w", module.Version, err)
 	}
+	scanned := []moduleVersion{module}
 	if len(indexed.AsmFiles) == 0 {
-		return indexed, nil
+		return indexed, scanned, nil
 	}
 	latestVersion, err := resolveLatest(ctx, client, proxyURL, module.Path)
 	if err != nil {
-		return candidate{}, err
+		return candidate{}, scanned, err
 	}
 	if latestVersion == module.Version {
-		return indexed, nil
+		return indexed, scanned, nil
 	}
-	return inspectModuleVersion(ctx, client, proxyURL, module.Path, latestVersion, maxZipSize)
+	latest, err := inspectModuleVersion(ctx, client, proxyURL, module.Path, latestVersion, maxZipSize)
+	if err != nil {
+		return candidate{}, scanned, err
+	}
+	scanned = append(scanned, moduleVersion{Path: module.Path, Version: latestVersion})
+	return latest, scanned, nil
 }
 
 func resolveLatest(ctx context.Context, client *http.Client, proxyURL, modulePath string) (string, error) {
@@ -417,7 +523,11 @@ func inspectModuleZipReader(reader io.ReaderAt, size int64) ([]string, []string,
 	if err != nil {
 		return nil, nil, err
 	}
-	asmFiles := make([]string, 0)
+	type asmEntry struct {
+		name string
+		file *zip.File
+	}
+	asmFiles := make([]asmEntry, 0)
 	goDirs := make(map[string]struct{})
 	for _, file := range zr.File {
 		name := file.Name
@@ -442,18 +552,25 @@ func inspectModuleZipReader(reader io.ReaderAt, size int64) ([]string, []string,
 			goDirs[path.Dir(rel)] = struct{}{}
 		case ".s":
 			if file.UncompressedSize64 > 0 {
-				asmFiles = append(asmFiles, rel)
+				asmFiles = append(asmFiles, asmEntry{name: rel, file: file})
 			}
 		}
 	}
 	files := make([]string, 0, len(asmFiles))
 	archSet := make(map[string]struct{})
-	for _, name := range asmFiles {
-		if _, ok := goDirs[path.Dir(name)]; !ok {
+	for _, asm := range asmFiles {
+		if _, ok := goDirs[path.Dir(asm.name)]; !ok {
 			continue
 		}
-		files = append(files, name)
-		archSet[inferAssemblyArchitecture(name)] = struct{}{}
+		hasContent, err := zipAssemblyFileHasContent(asm.file)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read %s: %w", asm.name, err)
+		}
+		if !hasContent {
+			continue
+		}
+		files = append(files, asm.name)
+		archSet[inferAssemblyArchitecture(asm.name)] = struct{}{}
 	}
 	arches := make([]string, 0, len(archSet))
 	for arch := range archSet {
@@ -464,11 +581,57 @@ func inspectModuleZipReader(reader io.ReaderAt, size int64) ([]string, []string,
 	return files, arches, nil
 }
 
+func zipAssemblyFileHasContent(file *zip.File) (bool, error) {
+	if file.UncompressedSize64 > maxAsmProbeSize {
+		// Keep unusually large files in the candidate set so the corpus stage can
+		// validate them; discovery must not silently discard code it did not read.
+		return true, nil
+	}
+	r, err := file.Open()
+	if err != nil {
+		return false, err
+	}
+	defer r.Close()
+	data, err := io.ReadAll(io.LimitReader(r, maxAsmProbeSize+1))
+	if err != nil {
+		return false, err
+	}
+	if len(data) > maxAsmProbeSize {
+		return true, nil
+	}
+	return assemblySourceHasContent(data), nil
+}
+
+func assemblySourceHasContent(data []byte) bool {
+	for i := 0; i < len(data); {
+		switch {
+		case data[i] == ' ' || data[i] == '\t' || data[i] == '\r' || data[i] == '\n' || data[i] == '\f':
+			i++
+		case i+1 < len(data) && data[i] == '/' && data[i+1] == '/':
+			i += 2
+			for i < len(data) && data[i] != '\n' {
+				i++
+			}
+		case i+1 < len(data) && data[i] == '/' && data[i+1] == '*':
+			end := bytes.Index(data[i+2:], []byte("*/"))
+			if end < 0 {
+				return true
+			}
+			i += end + 4
+		default:
+			return true
+		}
+	}
+	return false
+}
+
 type remoteZipReaderAt struct {
 	ctx        context.Context
 	client     *http.Client
 	endpoint   string
 	cachedTail []byte
+	cacheMu    sync.Mutex
+	cachedData map[int64][]byte
 	tailStart  int64
 	size       int64
 }
@@ -529,6 +692,7 @@ func newHTTPReaderAtWithTail(ctx context.Context, client *http.Client, endpoint 
 		client:     client,
 		endpoint:   endpoint,
 		cachedTail: data,
+		cachedData: make(map[int64][]byte),
 		tailStart:  start,
 		size:       size,
 	}, size, nil
@@ -541,26 +705,60 @@ func (r *remoteZipReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 	if offset < 0 || offset >= r.size || int64(len(p)) > r.size-offset {
 		return 0, io.EOF
 	}
-	if offset >= r.tailStart {
-		copy(p, r.cachedTail[offset-r.tailStart:])
-		return len(p), nil
+	written := 0
+	for written < len(p) {
+		current := offset + int64(written)
+		if current >= r.tailStart {
+			written += copy(p[written:], r.cachedTail[current-r.tailStart:])
+			continue
+		}
+		blockStart := current - current%zipReadAhead
+		r.cacheMu.Lock()
+		block, ok := r.cachedData[blockStart]
+		r.cacheMu.Unlock()
+		if !ok {
+			blockEnd := blockStart + zipReadAhead
+			if blockEnd > r.tailStart {
+				blockEnd = r.tailStart
+			}
+			var err error
+			block, err = r.readRange(blockStart, blockEnd)
+			if err != nil {
+				return written, err
+			}
+			r.cacheMu.Lock()
+			r.cachedData[blockStart] = block
+			r.cacheMu.Unlock()
+		}
+		n := copy(p[written:], block[current-blockStart:])
+		if n == 0 {
+			return written, io.ErrUnexpectedEOF
+		}
+		written += n
 	}
+	return written, nil
+}
 
+func (r *remoteZipReaderAt) readRange(start, end int64) ([]byte, error) {
 	headers := make(http.Header)
-	headers.Set("Range", fmt.Sprintf("bytes=%d-%d", offset, offset+int64(len(p))-1))
+	headers.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end-1))
 	resp, err := doHTTPRequest(r.ctx, r.client, http.MethodGet, r.endpoint, headers)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusPartialContent {
-		return 0, fmt.Errorf("ZIP range request returned %s", resp.Status)
+		return nil, fmt.Errorf("ZIP range request returned %s", resp.Status)
 	}
-	n, err := io.ReadFull(resp.Body, p)
+	want := end - start
+	data, err := io.ReadAll(io.LimitReader(resp.Body, want+1))
 	if err != nil {
-		return n, err
+		return nil, err
 	}
-	return n, nil
+	if int64(len(data)) != want {
+		return nil, fmt.Errorf("ZIP range returned %d bytes, want %d", len(data), want)
+	}
+	return data, nil
 }
 
 func doHTTPRequest(ctx context.Context, client *http.Client, method, endpoint string, headers http.Header) (*http.Response, error) {

@@ -165,11 +165,28 @@ Continue at the exact cursor returned by the previous batch:
       -limit 2000 \
       -out /tmp/plan9asm-discovery-next.json
 
+To resume or deliberately rescan an overlapping range without repeating
+completed work, load every earlier report as scan state:
+
+    go run ./cmd/plan9asmdiscover \
+      -since 2025-01-01T00:00:00Z \
+      -limit 2000 \
+      -seen-report /tmp/plan9asm-discovery.json \
+      -seen-report /tmp/plan9asm-discovery-next.json \
+      -out /tmp/plan9asm-discovery-resumed.json
+
+Each report's `scanned` array records every successfully inspected exact
+`module@version`, including modules with no assembly. `-seen-report` skips only
+those exact versions, so a newly published version is still inspected. Failed
+versions are listed with their version in `failures`, are not added to
+`scanned`, and are retried on a later run. Reports are incremental rather than
+cumulative, hence every earlier report must be passed when ranges overlap.
+
 Use `-limit 0` to continue until the current end of the feed. The discovery
 step reads ZIP directory metadata with ranged requests, retries transient
-index/proxy failures, ignores `testdata` and zero-byte assembly placeholders,
-and requires a `.go` file beside a `.s` file so vendored non-Go assembler trees
-are not reported as packages.
+index/proxy failures, ignores `testdata`, zero-byte, and comment-only assembly
+placeholders, and requires a `.go` file beside a `.s` file so vendored non-Go
+assembler trees are not reported as packages.
 Its architecture field is a filename-based triage hint; the corpus runner's
 `go list` result is the authoritative source-selection check.
 
@@ -187,6 +204,8 @@ The runner first verifies that the pinned version is still the module's
 It translates and LLVM-compiles every selected `.s` file. Missing target
 reports, newly added or removed assembly packages/files, package-load errors,
 translation errors, and object-compilation errors all fail the suite.
+Package ownership is matched by exact module path, so a v1 suite cannot
+silently include a nested `/v2` module that happens to share its import prefix.
 
 The currently tracked reports are:
 
@@ -197,15 +216,24 @@ The currently tracked reports are:
 The ecosystem scan also pins these latest modules:
 
 - `github.com/RoaringBitmap/roaring v1.9.4`
+- `github.com/anacrolix/mmsg v1.1.1`
 - `github.com/btcsuite/fastsha256 v0.0.0-20160815193821-637e65642941`
+- `github.com/cespare/xxhash v1.1.0`
 - `github.com/cespare/xxhash/v2 v2.3.0`
 - `github.com/dchest/siphash v1.2.3`
 - `github.com/dgryski/go-bits v0.0.0-20180113010104-bd8a69a71dc2`
 - `github.com/dgryski/go-marvin32 v0.0.0-20240117220238-0d39e8c5a8a9`
 - `github.com/golang/snappy v1.0.0`
+- `github.com/klauspost/cpuid v1.3.1`
 - `github.com/klauspost/cpuid/v2 v2.4.0`
+- `github.com/klauspost/reedsolomon v1.14.2`
+- `github.com/minio/highwayhash v1.0.4`
+- `github.com/modern-go/gls v0.0.0-20250215024828-78308f6bb19d`
 - `github.com/pierrec/lz4/v4 v4.1.29`
 - `github.com/stevvooe/resumable v0.0.0-20180830230917-22b14a53ba50`
+- `github.com/tmthrgd/go-bitwise v0.0.0-20190904053232-1430ee983fca`
+- `github.com/tmthrgd/go-popcount v0.0.0-20190904054823-afb1ace8b04f`
+- `github.com/zeebo/this v1.0.0`
 - `golang.org/x/net v0.59.0`
 - `golang.org/x/sys v0.48.0`
 

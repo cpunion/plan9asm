@@ -50,18 +50,27 @@ func TestRepositoryManifestTracksEcosystemDiscoveries(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]bool{
-		"btcsuite-fastsha256": true,
-		"cespare-xxhash-v2":   true,
-		"dchest-siphash":      true,
-		"dgryski-go-bits":     true,
-		"dgryski-go-marvin32": true,
-		"golang-snappy":       true,
-		"klauspost-cpuid-v2":  true,
-		"pierrec-lz4-v4":      true,
-		"roaring-bitmap":      true,
-		"stevvooe-resumable":  true,
-		"x-net":               true,
-		"x-sys":               true,
+		"anacrolix-mmsg":        true,
+		"btcsuite-fastsha256":   true,
+		"cespare-xxhash-v1":     true,
+		"cespare-xxhash-v2":     true,
+		"dchest-siphash":        true,
+		"dgryski-go-bits":       true,
+		"dgryski-go-marvin32":   true,
+		"golang-snappy":         true,
+		"klauspost-cpuid-v1":    true,
+		"klauspost-cpuid-v2":    true,
+		"klauspost-reedsolomon": true,
+		"modern-go-gls":         true,
+		"minio-highwayhash":     true,
+		"pierrec-lz4-v4":        true,
+		"roaring-bitmap":        true,
+		"stevvooe-resumable":    true,
+		"tmthrgd-go-bitwise":    true,
+		"tmthrgd-go-popcount":   true,
+		"x-net":                 true,
+		"x-sys":                 true,
+		"zeebo-this":            true,
 	}
 	got := make(map[string]bool, len(want))
 	for _, library := range manifest.Libraries {
@@ -72,6 +81,28 @@ func TestRepositoryManifestTracksEcosystemDiscoveries(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("ecosystem-discovered libraries = %#v, want %#v", got, want)
 	}
+}
+
+func TestTranslatorInvocationFiltersExactModule(t *testing.T) {
+	invocation := makeTranslatorInvocation("/corpus", "example.com/root", "/tmp/out", "/repo", "/bin/llc-22", "/tmp/report.json")
+	if invocation.Dir != "/corpus" {
+		t.Fatalf("translator directory = %q, want corpus module", invocation.Dir)
+	}
+	if !containsString(invocation.Args, "-patterns=example.com/root/...") {
+		t.Fatalf("translator args = %#v, want module package pattern", invocation.Args)
+	}
+	if !containsString(invocation.Args, "-module-path=example.com/root") {
+		t.Fatalf("translator args = %#v, want exact module ownership filter", invocation.Args)
+	}
+}
+
+func containsString(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestValidateReportRejectsSilentlySkippedTarget(t *testing.T) {

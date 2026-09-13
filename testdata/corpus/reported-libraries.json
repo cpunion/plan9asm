@@ -447,20 +447,6 @@
       "module": "golang.org/x/net",
       "version": "v0.59.0",
       "inventory": {
-        "darwin/amd64": {
-          "asm_files": 2,
-          "packages": [
-            "golang.org/x/net/internal/socket",
-            "golang.org/x/net/route"
-          ]
-        },
-        "darwin/arm64": {
-          "asm_files": 2,
-          "packages": [
-            "golang.org/x/net/internal/socket",
-            "golang.org/x/net/route"
-          ]
-        },
         "linux/386": {
           "asm_files": 1,
           "packages": ["golang.org/x/net/internal/socket"]
@@ -523,6 +509,278 @@
         "windows/arm64": {
           "asm_files": 1,
           "packages": ["golang.org/x/sys/cpu"]
+        }
+      }
+    },
+    {
+      "id": "anacrolix-mmsg",
+      "origin": "ecosystem-scan",
+      "module": "github.com/anacrolix/mmsg",
+      "version": "v1.1.1",
+      "inventory": {
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/anacrolix/mmsg/socket"]
+        }
+      }
+    },
+    {
+      "id": "klauspost-cpuid-v1",
+      "origin": "ecosystem-scan",
+      "module": "github.com/klauspost/cpuid",
+      "version": "v1.3.1",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "darwin/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "linux/386": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "linux/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "windows/386": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        },
+        "windows/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/klauspost/cpuid",
+            "github.com/klauspost/cpuid/private"
+          ]
+        }
+      }
+    },
+    {
+      "id": "modern-go-gls",
+      "origin": "ecosystem-scan",
+      "module": "github.com/modern-go/gls",
+      "version": "v0.0.0-20250215024828-78308f6bb19d",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "darwin/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "linux/arm": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "linux/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/modern-go/gls"]
+        }
+      }
+    },
+    {
+      "id": "zeebo-this",
+      "origin": "ecosystem-scan",
+      "module": "github.com/zeebo/this",
+      "version": "v1.0.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/zeebo/this"]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/zeebo/this"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/zeebo/this"]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["github.com/zeebo/this"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/zeebo/this"]
+        }
+      }
+    },
+    {
+      "id": "minio-highwayhash",
+      "origin": "ecosystem-scan",
+      "module": "github.com/minio/highwayhash",
+      "version": "v1.0.4",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        },
+        "darwin/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        },
+        "linux/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        },
+        "windows/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/minio/highwayhash"]
+        }
+      }
+    },
+    {
+      "id": "klauspost-reedsolomon",
+      "origin": "ecosystem-scan",
+      "module": "github.com/klauspost/reedsolomon",
+      "version": "v1.14.2",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        },
+        "darwin/arm64": {
+          "asm_files": 3,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        },
+        "linux/arm64": {
+          "asm_files": 3,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        },
+        "windows/arm64": {
+          "asm_files": 3,
+          "packages": ["github.com/klauspost/reedsolomon"]
+        }
+      }
+    },
+    {
+      "id": "cespare-xxhash-v1",
+      "origin": "ecosystem-scan",
+      "module": "github.com/cespare/xxhash",
+      "version": "v1.1.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash"]
+        }
+      }
+    },
+    {
+      "id": "tmthrgd-go-bitwise",
+      "origin": "ecosystem-scan",
+      "module": "github.com/tmthrgd/go-bitwise",
+      "version": "v0.0.0-20190904053232-1430ee983fca",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 8,
+          "packages": ["github.com/tmthrgd/go-bitwise"]
+        },
+        "linux/amd64": {
+          "asm_files": 8,
+          "packages": ["github.com/tmthrgd/go-bitwise"]
+        },
+        "windows/amd64": {
+          "asm_files": 8,
+          "packages": ["github.com/tmthrgd/go-bitwise"]
+        }
+      }
+    },
+    {
+      "id": "tmthrgd-go-popcount",
+      "origin": "ecosystem-scan",
+      "module": "github.com/tmthrgd/go-popcount",
+      "version": "v0.0.0-20190904054823-afb1ace8b04f",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-popcount"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-popcount"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-popcount"]
         }
       }
     }

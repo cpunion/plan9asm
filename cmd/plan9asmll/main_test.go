@@ -3,11 +3,48 @@ package main
 import (
 	"go/token"
 	"go/types"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm"
+	"golang.org/x/tools/go/packages"
 )
+
+func TestAsmFilesOfPkgSkipsCommentOnlyAssembly(t *testing.T) {
+	dir := t.TempDir()
+	comments := filepath.Join(dir, "comments.s")
+	code := filepath.Join(dir, "code.s")
+	include := filepath.Join(dir, "include.s")
+	for path, contents := range map[string]string{
+		comments: "//go:build amd64\n\n/* license only */\n",
+		code:     "// comment\nTEXT ·f(SB),0,$0-0\n",
+		include:  "#include \"textflag.h\"\n",
+	} {
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	missing := filepath.Join(dir, "missing.s")
+	pkg := &packages.Package{OtherFiles: []string{comments, code, include, missing}}
+	want := []string{code, include, missing}
+	if got := asmFilesOfPkg(pkg); !reflect.DeepEqual(got, want) {
+		t.Fatalf("asmFilesOfPkg() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFilterPackagesByModuleExcludesNestedModules(t *testing.T) {
+	pkgs := []*packages.Package{
+		{PkgPath: "example.com/root/pkg", Module: &packages.Module{Path: "example.com/root"}},
+		{PkgPath: "example.com/root/v2", Module: &packages.Module{Path: "example.com/root/v2"}},
+		{PkgPath: "example.com/root/vendorless", Module: nil},
+	}
+	want := []*packages.Package{pkgs[0]}
+	if got := filterPackagesByModule(pkgs, "example.com/root"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("filterPackagesByModule() = %#v, want %#v", got, want)
+	}
+}
 
 func TestDefaultMatrixTargetsCoversEveryPlan9Architecture(t *testing.T) {
 	want := []targetSpec{

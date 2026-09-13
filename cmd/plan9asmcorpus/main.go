@@ -40,6 +40,11 @@ type moduleInfo struct {
 	Version string `json:"Version"`
 }
 
+type commandInvocation struct {
+	Dir  string
+	Args []string
+}
+
 type matrixReport struct {
 	Targets      []targetReport `json:"targets"`
 	TotalTargets int            `json:"total_targets"`
@@ -278,24 +283,14 @@ func runLibrary(manifest corpusManifest, library libraryManifest, corpusDir, rep
 	if err := runCommand(corpusDir, "go", "mod", "download", library.Module+"@"+library.Version); err != nil {
 		return fmt.Errorf("%s: download module: %w", library.ID, err)
 	}
-
 	tmpDir, err := os.MkdirTemp("", "plan9asm-third-party-"+library.ID+"-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
 	reportPath := filepath.Join(tmpDir, "report.json")
-	args := []string{
-		"-all-targets",
-		"-patterns=" + library.Module + "/...",
-		"-out=" + filepath.Join(tmpDir, "out"),
-		"-compile",
-		"-llc=" + llc,
-		"-report=" + reportPath,
-		"-repo-root=" + repoRoot,
-		"-strict-load",
-	}
-	if err := runCommand(corpusDir, translator, args...); err != nil {
+	invocation := makeTranslatorInvocation(corpusDir, library.Module, filepath.Join(tmpDir, "out"), repoRoot, llc, reportPath)
+	if err := runCommand(invocation.Dir, translator, invocation.Args...); err != nil {
 		return fmt.Errorf("%s: translate and compile corpus: %w", library.ID, err)
 	}
 	report, err := loadReport(reportPath)
@@ -307,6 +302,20 @@ func runLibrary(manifest corpusManifest, library libraryManifest, corpusDir, rep
 	}
 	fmt.Printf("%s: all %d assembly translations passed across %d targets\n", library.ID, report.TotalAsm, report.TotalTargets)
 	return nil
+}
+
+func makeTranslatorInvocation(corpusDir, modulePath, outDir, repoRoot, llc, reportPath string) commandInvocation {
+	return commandInvocation{Dir: corpusDir, Args: []string{
+		"-all-targets",
+		"-patterns=" + modulePath + "/...",
+		"-module-path=" + modulePath,
+		"-out=" + outDir,
+		"-compile",
+		"-llc=" + llc,
+		"-report=" + reportPath,
+		"-repo-root=" + repoRoot,
+		"-strict-load",
+	}}
 }
 
 func queryModule(dir, query string) (moduleInfo, error) {
