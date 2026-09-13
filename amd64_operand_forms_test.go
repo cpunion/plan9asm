@@ -81,6 +81,7 @@ func TestAMD64VectorLoweringBranchCoverage(t *testing.T) {
 	imm := func(v int64) Operand { return Operand{Kind: OpImm, Imm: v} }
 	reg := func(r string) Operand { return Operand{Kind: OpReg, Reg: Reg(r)} }
 	ident := func(name string) Operand { return Operand{Kind: OpIdent, Ident: name} }
+	sym := func(name string) Operand { return Operand{Kind: OpSym, Sym: name} }
 	mem := func(base string) Operand {
 		return Operand{Kind: OpMem, Mem: MemRef{Base: Reg(base)}}
 	}
@@ -109,7 +110,25 @@ func TestAMD64VectorLoweringBranchCoverage(t *testing.T) {
 	check("broadcast-i128-source", "VBROADCASTI128", Instr{Args: []Operand{ident("bad"), reg("Y1")}}, true, true)
 	check("broadcast-scalar-args", "VBROADCASTSD", Instr{Args: []Operand{imm(1)}}, true, true)
 	check("broadcast-scalar-source", "VBROADCASTSD", Instr{Args: []Operand{ident("bad"), reg("Y1")}}, true, true)
-	check("broadcast-scalar-dst", "VBROADCASTSD", Instr{Args: []Operand{imm(1), reg("X1")}}, false, false)
+	check("broadcast-scalar-immediate", "VBROADCASTSD", Instr{Args: []Operand{imm(1), reg("Y1")}}, false, false)
+	check("broadcast-scalar-gpr", "VBROADCASTSD", Instr{Args: []Operand{reg("AX"), reg("Y1")}}, false, false)
+	check("broadcast-scalar-x-source", "VBROADCASTSD", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, true)
+	check("broadcast-scalar-x-dst", "VBROADCASTSD", Instr{Args: []Operand{reg("X0"), reg("X1")}}, false, false)
+	check("broadcast-scalar-dst", "VBROADCASTSD", Instr{Args: []Operand{mem("AX"), reg("AX")}}, false, false)
+	check("broadcast-q-x", "VPBROADCASTQ", Instr{Args: []Operand{reg("X0"), reg("X1")}}, false, true)
+	check("broadcast-q-gpr", "VPBROADCASTQ", Instr{Args: []Operand{reg("AX"), reg("X1")}}, false, true)
+	check("broadcast-q-immediate", "VPBROADCASTQ", Instr{Args: []Operand{imm(1), reg("X1")}}, false, false)
+	check("broadcast-q-address", "VPBROADCASTQ", Instr{Args: []Operand{sym("$value(SB)"), reg("X1")}}, false, false)
+	check("pmululq-args", "PMULULQ", Instr{Args: []Operand{reg("X0")}}, true, true)
+	check("pmululq-dst", "PMULULQ", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, false)
+	check("pmululq-src", "PMULULQ", Instr{Args: []Operand{reg("Y0"), reg("X1")}}, false, false)
+	check("pmululq-source-error", "PMULULQ", Instr{Args: []Operand{ident("bad"), reg("X1")}}, true, true)
+	check("pmululq-memory", "PMULULQ", Instr{Args: []Operand{mem("AX"), reg("X1")}}, false, true)
+	check("punpckllq-args", "PUNPCKLLQ", Instr{Args: []Operand{reg("X0")}}, true, true)
+	check("punpckhlq-dst", "PUNPCKHLQ", Instr{Args: []Operand{reg("X0"), reg("Y1")}}, false, false)
+	check("punpckllq-src", "PUNPCKLLQ", Instr{Args: []Operand{reg("Y0"), reg("X1")}}, false, false)
+	check("punpckhlq-source-error", "PUNPCKHLQ", Instr{Args: []Operand{ident("bad"), reg("X1")}}, true, true)
+	check("punpckllq-memory", "PUNPCKLLQ", Instr{Args: []Operand{mem("AX"), reg("X1")}}, false, true)
 
 	check("xorpd-args", "VXORPD", Instr{Args: []Operand{reg("X0")}}, true, true)
 	check("xorpd-z", "VXORPD", Instr{Args: []Operand{reg("Z0"), reg("Z1"), reg("Z2")}}, false, true)

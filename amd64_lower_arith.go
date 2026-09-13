@@ -1153,27 +1153,53 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 
 	case "POPCNTL", "POPCNTQ":
-		// POPCNT{L,Q} srcReg, dstReg (count bits; L is 32-bit, Q is 64-bit).
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects srcReg, dstReg: %q", op, ins.Raw)
+		// POPCNT{L,Q} src, dstReg accepts the same register-or-memory source
+		// family as the Go x86 assembler.
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
 		}
-		srcv, err := c.loadReg(ins.Args[0].Reg)
+		validFullReg := func(r Reg) bool {
+			if _, _, ok := amd64ByteAlias(r); ok || r == FS || r == GS {
+				return false
+			}
+			_, ok := amd64FullRegBase(r)
+			return ok
+		}
+		if !validFullReg(ins.Args[1].Reg) {
+			return false, false, nil
+		}
+		src := ins.Args[0]
+		switch src.Kind {
+		case OpReg:
+			if !validFullReg(src.Reg) {
+				return false, false, nil
+			}
+		case OpMem, OpFP:
+		case OpSym:
+			if strings.HasPrefix(strings.TrimSpace(src.Sym), "$") {
+				return false, false, nil
+			}
+		default:
+			return false, false, nil
+		}
+		if op == "POPCNTL" {
+			srcv, err := c.evalIntSized(src, I32)
+			if err != nil {
+				return true, false, err
+			}
+			call := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctpop.i32(i32 %s)\n", call, srcv)
+			z := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, call)
+			return true, false, c.storeReg(ins.Args[1].Reg, "%"+z)
+		}
+		srcv, err := c.evalIntSized(src, I64)
 		if err != nil {
 			return true, false, err
 		}
-		dst := ins.Args[1].Reg
-		if op == "POPCNTL" {
-			tr := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, srcv)
-			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctpop.i32(i32 %%%s)\n", call, tr)
-			z := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, call)
-			return true, false, c.storeReg(dst, "%"+z)
-		}
 		call := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.ctpop.i64(i64 %s)\n", call, srcv)
-		return true, false, c.storeReg(dst, "%"+call)
+		return true, false, c.storeReg(ins.Args[1].Reg, "%"+call)
 
 	case "TZCNTQ":
 		// TZCNTQ srcReg, dstReg.

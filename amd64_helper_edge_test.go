@@ -702,9 +702,22 @@ func TestAMD64EcosystemScalarValidationCoverage(t *testing.T) {
 		{"BSFQ", Instr{Raw: "BSFQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}},
 		{"BSWAPQ", Instr{Raw: "BSWAPQ AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}}},
 		{"BSRQ", Instr{Raw: "BSRQ AX, BX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: CX}}}},
+		{"POPCNTL", Instr{Raw: "POPCNTL AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}},
 	} {
 		if _, _, err := c.lowerArith(tc.op, tc.ins); err == nil {
 			t.Fatalf("%s %q unexpectedly succeeded", tc.op, tc.ins.Raw)
+		}
+	}
+	for _, op := range []Op{"POPCNTL", "POPCNTQ"} {
+		for _, ins := range []Instr{
+			{Raw: string(op) + " $1, AX", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: AX}}},
+			{Raw: string(op) + " bad, AX", Args: []Operand{{Kind: OpIdent, Ident: "bad"}, {Kind: OpReg, Reg: AX}}},
+			{Raw: string(op) + " X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}},
+			{Raw: string(op) + " AX, X0", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}}},
+		} {
+			if ok, term, err := c.lowerArith(op, ins); ok || term || err != nil {
+				t.Fatalf("lowerArith(%s) invalid form = (%v, %v, %v), want unsupported", op, ok, term, err)
+			}
 		}
 	}
 

@@ -110,6 +110,29 @@ TEXT bits(SB),NOSPLIT,$0-16
 	}
 }
 
+// These vector forms are taken from minio/highwayhash, minio/sha256-simd,
+// and klauspost/reedsolomon respectively. Keep the related unpack spellings
+// together so the source-level aliases cannot drift apart.
+func TestTranslateDiscoveredX86VectorForms(t *testing.T) {
+	ir := translateEcosystemScalarForms(t, ArchAMD64, "x86_64-unknown-linux-gnu", "amd64", `
+TEXT vectors(SB),NOSPLIT,$0-0
+	PMULULQ X2, X8
+	PUNPCKLLQ X1, X2
+	PUNPCKHLQ X1, X3
+	VPBROADCASTQ X0, X7
+	VPBROADCASTQ (AX), Y8
+	VPBROADCASTQ (AX), Z9
+	POPCNTQ -8(SI)(BX*1), R11
+	POPCNTL 4(AX), R10
+	RET
+`)
+	for _, want := range []string{"mul <2 x i64>", "shufflevector <4 x i32>", "shufflevector <8 x i8>", "@llvm.ctpop.i64", "@llvm.ctpop.i32"} {
+		if !strings.Contains(ir, want) {
+			t.Fatalf("discovered x86 vector forms are missing %q:\n%s", want, ir)
+		}
+	}
+}
+
 func translateEcosystemScalarForms(t *testing.T, arch Arch, triple, goarch, src string) string {
 	t.Helper()
 	file, err := Parse(arch, src)
@@ -130,6 +153,7 @@ func translateEcosystemScalarForms(t *testing.T, arch Arch, triple, goarch, src 
 					Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
 				},
 			},
+			"vectors":     {Name: "vectors", Ret: Void},
 			"emitLiteral": {Name: "emitLiteral", Args: []LLVMType{"{ ptr, i64, i64 }", "{ ptr, i64, i64 }"}, Ret: I64},
 		},
 		Goarch: goarch,

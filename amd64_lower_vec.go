@@ -14,15 +14,15 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	switch op {
 	case "MOVOU", "MOVOA", "MOVUPS", "MOVAPS", "MOVO", "MOVQ", "MOVL", "MOVD",
 		"VMOVDQU", "VMOVDQA", "VMOVNTDQ", "VMOVDQU64", "VMOVDQA64", "VMOVAPS", "VMOVAPD",
-		"VPCMPEQB", "VPCMPGTB", "VPMOVMSKB", "VZEROUPPER", "VZEROALL", "VPBROADCASTB", "VPAND", "VPXOR", "VPOR", "VPADDD", "VPADDQ", "VPTEST",
+		"VPCMPEQB", "VPCMPGTB", "VPMOVMSKB", "VZEROUPPER", "VZEROALL", "VPBROADCASTB", "VPBROADCASTQ", "VPAND", "VPXOR", "VPOR", "VPADDD", "VPADDQ", "VPTEST",
 		"VPANDQ", "VPXORQ", "VPORQ", "VPCLMULQDQ", "VPTERNLOGD", "VEXTRACTF32X4",
 		"VPERMB", "VGF2P8AFFINEQB", "VPERMI2B", "VPCOMPRESSQ", "VPOPCNTB", "VPCMPUQ",
 		"VBROADCASTI128", "VBROADCASTF32X2", "VBROADCASTSD", "VXORPD",
 		"VPSHUFB", "VPSHUFD", "VPSLLD", "VPSRLD", "VPSRLQ", "VPSLLQ", "VPSRLDQ", "VPSLLDQ", "VPUNPCKLBW", "VPUNPCKHBW",
 		"VPALIGNR", "VPERM2I128", "VPERM2F128", "VINSERTI128", "VPBLENDD",
-		"PXOR", "POR", "PAND", "PANDN", "PADDD", "PADDL", "PSUBB", "PSUBL", "PCLMULQDQ", "PCMPEQB", "PCMPEQL", "PCMPGTB", "PMOVMSKB",
+		"PXOR", "POR", "PAND", "PANDN", "PADDD", "PADDL", "PSUBB", "PSUBL", "PMULULQ", "PCLMULQDQ", "PCMPEQB", "PCMPEQL", "PCMPGTB", "PMOVMSKB",
 		"PSHUFB", "PSRLDQ", "PSLLDQ", "PSRLQ", "PSLLW", "PSRLW", "PSRLL", "PSLLL", "PSRAL", "PEXTRD", "PEXTRB", "PEXTRQ",
-		"PINSRQ", "PINSRD", "PINSRB", "PINSRW", "PALIGNR", "PUNPCKLBW", "PUNPCKHBW", "PUNPCKLQDQ", "PSHUFL", "PSHUFD", "PSHUFHW", "SHUFPS",
+		"PINSRQ", "PINSRD", "PINSRB", "PINSRW", "PALIGNR", "PUNPCKLBW", "PUNPCKHBW", "PUNPCKLLQ", "PUNPCKHLQ", "PUNPCKLQDQ", "PSHUFL", "PSHUFD", "PSHUFHW", "SHUFPS",
 		"PBLENDW", "PADDQ", "KMOVB", "KMOVW", "KMOVQ", "KXORQ",
 		"SHA1NEXTE", "SHA1MSG1", "SHA1MSG2", "SHA1RNDS4", "SHA256MSG1", "SHA256MSG2", "SHA256RNDS2",
 		"AESENC", "AESENCLAST", "AESDEC", "AESDECLAST", "AESIMC", "AESKEYGENASSIST", "PCMPESTRI":
@@ -584,29 +584,67 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %s, <16 x i8> %s, <32 x i32> %s\n", out, src, src, llvmRepeatI8Mask(16, 32))
 		return true, false, c.storeY(ins.Args[1].Reg, "%"+out)
 
-	case "VBROADCASTF32X2", "VBROADCASTSD":
-		// Both instructions broadcast one 64-bit memory/register value. The
-		// former names the value as two f32 lanes; the latter as one f64 lane.
+	case "VBROADCASTF32X2", "VBROADCASTSD", "VPBROADCASTQ":
+		// These instructions broadcast the low 64 source bits. Their lane
+		// interpretation differs, but the resulting byte pattern is identical.
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects scalar src, vector dst: %q", op, ins.Raw)
 		}
-		v64, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
+		dstIsX := false
+		if _, ok := amd64ParseXReg(ins.Args[1].Reg); ok {
+			dstIsX = true
+			if op != "VPBROADCASTQ" {
+				return false, false, nil
+			}
+		} else if _, ok := amd64ParseYReg(ins.Args[1].Reg); !ok {
+			if _, ok := amd64ParseZReg(ins.Args[1].Reg); !ok {
+				return false, false, nil
+			}
+		}
+		if ins.Args[0].Kind == OpImm {
+			return false, false, nil
+		}
+		if ins.Args[0].Kind == OpSym && strings.HasPrefix(strings.TrimSpace(ins.Args[0].Sym), "$") {
+			return false, false, nil
+		}
+		var v64 string
+		if ins.Args[0].Kind == OpReg {
+			if _, ok := amd64ParseXReg(ins.Args[0].Reg); ok {
+				xv, err := c.loadX(ins.Args[0].Reg)
+				if err != nil {
+					return true, false, err
+				}
+				words := c.newTmp()
+				low := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", words, xv)
+				fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i32 0\n", low, words)
+				v64 = "%" + low
+			} else if op != "VPBROADCASTQ" {
+				return false, false, nil
+			}
+		}
+		if v64 == "" {
+			var err error
+			v64, err = c.evalI64(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
 		}
 		chunk := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to <8 x i8>\n", chunk, v64)
+		if dstIsX {
+			out := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i8> %%%s, <8 x i8> %%%s, <16 x i32> %s\n", out, chunk, chunk, llvmRepeatI8Mask(8, 16))
+			return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
+		}
 		if _, ok := amd64ParseYReg(ins.Args[1].Reg); ok {
 			out := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i8> %%%s, <8 x i8> %%%s, <32 x i32> %s\n", out, chunk, chunk, llvmRepeatI8Mask(8, 32))
 			return true, false, c.storeY(ins.Args[1].Reg, "%"+out)
 		}
-		if _, ok := amd64ParseZReg(ins.Args[1].Reg); ok {
-			out := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i8> %%%s, <8 x i8> %%%s, <64 x i32> %s\n", out, chunk, chunk, llvmRepeatI8Mask(8, 64))
-			return true, false, c.storeZ(ins.Args[1].Reg, "%"+out)
-		}
-		return false, false, nil
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i8> %%%s, <8 x i8> %%%s, <64 x i32> %s\n", out, chunk, chunk, llvmRepeatI8Mask(8, 64))
+		return true, false, c.storeZ(ins.Args[1].Reg, "%"+out)
 
 	case "VXORPD":
 		// VXORPD src1, src2, dst; this is a bitwise operation despite the
@@ -1527,6 +1565,81 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		sh := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %s, <16 x i8> %s, %s\n", sh, dstv, src, mask)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+sh)
+
+	case "PMULULQ":
+		// PMULULQ Xsrc/m128, Xdst multiplies the unsigned even-numbered
+		// 32-bit lanes and writes the two 64-bit products.
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 PMULULQ expects Xsrc/m128, Xdst: %q", ins.Raw)
+		}
+		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
+			return false, false, nil
+		}
+		if ins.Args[0].Kind == OpReg {
+			if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
+				return false, false, nil
+			}
+		}
+		src, err := c.loadXVecOperand(ins.Args[0])
+		if err != nil {
+			return true, false, err
+		}
+		dstv, err := c.loadX(ins.Args[1].Reg)
+		if err != nil {
+			return true, false, err
+		}
+		dst32 := c.newTmp()
+		src32 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", dst32, dstv)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", src32, src)
+		dstEven := c.newTmp()
+		srcEven := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> zeroinitializer, <2 x i32> <i32 0, i32 2>\n", dstEven, dst32)
+		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> zeroinitializer, <2 x i32> <i32 0, i32 2>\n", srcEven, src32)
+		dst64 := c.newTmp()
+		src64 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext <2 x i32> %%%s to <2 x i64>\n", dst64, dstEven)
+		fmt.Fprintf(c.b, "  %%%s = zext <2 x i32> %%%s to <2 x i64>\n", src64, srcEven)
+		product := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = mul <2 x i64> %%%s, %%%s\n", product, dst64, src64)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", out, product)
+		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
+
+	case "PUNPCKLLQ", "PUNPCKHLQ":
+		// PUNPCKL/H LQ interleaves the low/high pair of 32-bit lanes.
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects Xsrc/m128, Xdst: %q", op, ins.Raw)
+		}
+		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
+			return false, false, nil
+		}
+		if ins.Args[0].Kind == OpReg {
+			if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
+				return false, false, nil
+			}
+		}
+		src, err := c.loadXVecOperand(ins.Args[0])
+		if err != nil {
+			return true, false, err
+		}
+		dstv, err := c.loadX(ins.Args[1].Reg)
+		if err != nil {
+			return true, false, err
+		}
+		dst32 := c.newTmp()
+		src32 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", dst32, dstv)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", src32, src)
+		mask := "<4 x i32> <i32 0, i32 4, i32 1, i32 5>"
+		if op == "PUNPCKHLQ" {
+			mask = "<4 x i32> <i32 2, i32 6, i32 3, i32 7>"
+		}
+		sh := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> %%%s, %s\n", sh, dst32, src32, mask)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, sh)
+		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
 
 	case "PUNPCKLQDQ":
 		// PUNPCKLQDQ Xsrc/m128, Xdst interleaves the low quadwords:
