@@ -680,6 +680,50 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	}
 }
 
+func TestAMD64EcosystemScalarValidationCoverage(t *testing.T) {
+	c, _ := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.scalar_validation", Ret: Void}, map[string]FuncSig{
+		"example.toowide": {
+			Name: "example.toowide",
+			Args: []LLVMType{"{ i64, i64, i64, i64, i64, i64, i64, i64, i64, i64 }"},
+			Ret:  Void,
+		},
+		"example.explicit": {
+			Name:    "example.explicit",
+			Args:    []LLVMType{I64, I64},
+			ArgRegs: []Reg{AX},
+			Ret:     Void,
+		},
+	})
+
+	for _, tc := range []struct {
+		op  Op
+		ins Instr
+	}{
+		{"BSFQ", Instr{Raw: "BSFQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}},
+		{"BSWAPQ", Instr{Raw: "BSWAPQ AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}}},
+		{"BSRQ", Instr{Raw: "BSRQ AX, BX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: CX}}}},
+	} {
+		if _, _, err := c.lowerArith(tc.op, tc.ins); err == nil {
+			t.Fatalf("%s %q unexpectedly succeeded", tc.op, tc.ins.Raw)
+		}
+	}
+
+	cursor := 0
+	if _, err := c.structArgFromSequentialRegs(LLVMType("v2i64"), []Reg{AX}, &cursor); err == nil {
+		t.Fatal("non-aggregate scalar argument unexpectedly succeeded")
+	}
+	cursor = 0
+	if _, err := c.structArgFromSequentialRegs(LLVMType("{ i64 }"), nil, &cursor); err == nil {
+		t.Fatal("aggregate exceeding the register list unexpectedly succeeded")
+	}
+	if err := c.callSym(Operand{Kind: OpSym, Sym: "toowide(SB)"}); err == nil {
+		t.Fatal("aggregate exceeding the Go ABI register list unexpectedly succeeded")
+	}
+	if err := c.callSym(Operand{Kind: OpSym, Sym: "explicit(SB)"}); err == nil {
+		t.Fatal("incomplete explicit argument-register list unexpectedly succeeded")
+	}
+}
+
 func TestAMD64SetCSUsesCarryFlag(t *testing.T) {
 	c, b := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.setcs", Ret: Void}, nil)
 	if err := c.storeReg(AX, "4660"); err != nil {

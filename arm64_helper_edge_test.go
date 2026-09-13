@@ -1059,11 +1059,24 @@ func TestARM64ArithmeticErrorCoverage(t *testing.T) {
 		{Op: "CMPW", Raw: "CMPW label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
 		{Op: "CMPW", Raw: "CMPW R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "CMN", Raw: "CMN R0", Args: []Operand{arm64RegOp("R0")}},
+		{Op: "CCMP", Raw: "CCMP", Args: nil},
+		{Op: "CCMPW", Raw: "CCMPW EQ, R0, R1, $16", Args: []Operand{arm64IdentOp("EQ"), arm64RegOp("R0"), arm64RegOp("R1"), arm64ImmOp(16)}},
+		{Op: "CCMN", Raw: "CCMN EQ, label, R1, $0", Args: []Operand{arm64IdentOp("EQ"), arm64IdentOp("label"), arm64RegOp("R1"), arm64ImmOp(0)}},
+		{Op: "CCMNW", Raw: "CCMNW BAD, R0, R1, $0", Args: []Operand{arm64IdentOp("BAD"), arm64RegOp("R0"), arm64RegOp("R1"), arm64ImmOp(0)}},
 		{Op: "NEG", Raw: "NEG R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "MULW", Raw: "MULW R0", Args: []Operand{arm64RegOp("R0")}},
+		{Op: "MULW", Raw: "MULW label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "MULW", Raw: "MULW R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "MULW", Raw: "MULW R0, R1, label", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64IdentOp("label")}},
+		{Op: "MULW", Raw: "MULW R0, label, R1", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label"), arm64RegOp("R1")}},
 		{Op: "MUL", Raw: "MUL $1", Args: []Operand{arm64ImmOp(1)}},
 		{Op: "MUL", Raw: "MUL $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "MUL", Raw: "MUL $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "UMULH", Raw: "UMULH R0, R1", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1")}},
+		{Op: "MADDW", Raw: "MADDW R0, R1, R2", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64RegOp("R2")}},
+		{Op: "MADDW", Raw: "MADDW label, R1, R2, R3", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R1"), arm64RegOp("R2"), arm64RegOp("R3")}},
+		{Op: "MADDW", Raw: "MADDW R0, label, R2, R3", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label"), arm64RegOp("R2"), arm64RegOp("R3")}},
+		{Op: "MSUBW", Raw: "MSUBW R0, R1, label, R3", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64IdentOp("label"), arm64RegOp("R3")}},
 		{Op: "MADD", Raw: "MADD R0, R1, R2", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64RegOp("R2")}},
 		{Op: "LSL", Raw: "LSL $64, R0", Args: []Operand{arm64ImmOp(64), arm64RegOp("R0")}},
 		{Op: "LSLW", Raw: "LSLW $32, R0", Args: []Operand{arm64ImmOp(32), arm64RegOp("R0")}},
@@ -1141,6 +1154,16 @@ func TestARM64NarrowMoveAndFMOVQErrorCoverage(t *testing.T) {
 		{Op: "FMOVQ", Args: []Operand{arm64RegOp("F0"), arm64MemOp("R1", 0)}},
 	}}
 	c, _ := newARM64CtxWithFuncForTest(t, fn, FuncSig{Name: "example.newdataerrors", Ret: Void}, nil)
+	for _, ins := range []Instr{
+		{Op: "MOVKW", Raw: "MOVKW"},
+		{Op: "MOVKW", Raw: "MOVKW $-1, R0", Args: []Operand{arm64ImmOp(-1), arm64RegOp("R0")}},
+		{Op: "MOVKW", Raw: "MOVKW $0x10001, R0", Args: []Operand{arm64ImmOp(0x10001), arm64RegOp("R0")}},
+		{Op: "MOVKW", Raw: "MOVKW $1, BAD", Args: []Operand{arm64ImmOp(1), arm64RegOp("BAD")}},
+	} {
+		if _, _, err := c.lowerData("MOVKW", false, ins); err == nil {
+			t.Fatalf("%q unexpectedly succeeded", ins.Raw)
+		}
+	}
 	badIndex := Operand{Kind: OpMem, Mem: MemRef{Base: "R1", Index: "R2", Scale: 2}}
 	for _, ins := range []Instr{
 		{Op: "FMOVQ", Raw: "FMOVQ"},
