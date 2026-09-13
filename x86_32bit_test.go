@@ -1207,7 +1207,7 @@ func TestRuntimeExec386Core(t *testing.T) {
 		t.Skip("32-bit executable smoke test runs on Windows")
 	}
 	llc := findLLVM22Tool("llc")
-	clang := find386Tool("clang", "clang-23", "clang-22", "clang-21", "clang-20", "clang-19")
+	clang := findLLVM22Tool("clang")
 	if llc == "" || clang == "" {
 		t.Skip("llc/clang not found")
 	}
