@@ -17,9 +17,11 @@ func TestRepositoryManifestTracksReportedAssemblyFailures(t *testing.T) {
 		"klauspost-compress": "https://github.com/xgo-dev/llgo/issues/2552",
 		"go-hex":             "https://github.com/xgo-dev/llgo/issues/2576",
 	}
-	got := make(map[string]string, len(manifest.Libraries))
+	got := make(map[string]string, len(want))
 	for _, library := range manifest.Libraries {
-		got[library.ID] = strings.Join(library.Issues, ",")
+		if library.Origin == originLLGoIssue {
+			got[library.ID] = strings.Join(library.Issues, ",")
+		}
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("reported library issues = %#v, want %#v", got, want)
@@ -39,6 +41,36 @@ func TestRepositoryManifestTracksReportedAssemblyFailures(t *testing.T) {
 	}
 	if !reflect.DeepEqual(manifest.Targets, wantTargets) {
 		t.Fatalf("reported library targets = %#v, want %#v", manifest.Targets, wantTargets)
+	}
+}
+
+func TestRepositoryManifestTracksEcosystemDiscoveries(t *testing.T) {
+	manifest, err := loadManifest(filepath.Join("..", "..", "testdata", "corpus", "reported-libraries.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"btcsuite-fastsha256": true,
+		"cespare-xxhash-v2":   true,
+		"dchest-siphash":      true,
+		"dgryski-go-bits":     true,
+		"dgryski-go-marvin32": true,
+		"golang-snappy":       true,
+		"klauspost-cpuid-v2":  true,
+		"pierrec-lz4-v4":      true,
+		"roaring-bitmap":      true,
+		"stevvooe-resumable":  true,
+		"x-net":               true,
+		"x-sys":               true,
+	}
+	got := make(map[string]bool, len(want))
+	for _, library := range manifest.Libraries {
+		if library.Origin == originEcosystemScan {
+			got[library.ID] = true
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ecosystem-discovered libraries = %#v, want %#v", got, want)
 	}
 }
 

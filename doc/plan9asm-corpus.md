@@ -54,7 +54,12 @@ supported release, through these increasingly strong layers:
 6. Reduced real-world issue and pull-request regressions
    - each case links back to its report in the conformance manifest
    - the reduced instruction must first be accepted by the native Go assembler
-7. Executable semantic conformance cases
+7. Public Go module ecosystem assembly
+   - `index.golang.org` supplies the chronological public module-version feed
+   - `proxy.golang.org/cached-only` supplies ZIP metadata without executing code
+   - discovered modules are resolved to `@latest`, then their complete package
+     and target matrix is checked before a version is pinned
+8. Executable semantic conformance cases
    - `testdata/conformance`
    - the same assembly is run once with the native Go assembler and once after
      plan9asm-to-LLVM translation
@@ -146,15 +151,37 @@ native-Go-accepted family subset:
 
     scripts/check-arm64-plan9-corpus.sh
 
-After the official-family gates pass, run every issue-reported external-library
-suite:
+Discover public modules containing Go assembly from the official index:
+
+    go run ./cmd/plan9asmdiscover \
+      -since 2025-01-01T00:00:00Z \
+      -limit 2000 \
+      -out /tmp/plan9asm-discovery.json
+
+Continue at the exact cursor returned by the previous batch:
+
+    go run ./cmd/plan9asmdiscover \
+      -since "$(jq -r .next_since /tmp/plan9asm-discovery.json)" \
+      -limit 2000 \
+      -out /tmp/plan9asm-discovery-next.json
+
+Use `-limit 0` to continue until the current end of the feed. The discovery
+step reads ZIP directory metadata with ranged requests, retries transient
+index/proxy failures, ignores `testdata` and zero-byte assembly placeholders,
+and requires a `.go` file beside a `.s` file so vendored non-Go assembler trees
+are not reported as packages.
+Its architecture field is a filename-based triage hint; the corpus runner's
+`go list` result is the authoritative source-selection check.
+
+After discovery, run every pinned third-party library suite:
 
     scripts/check-reported-library-corpus.sh
 
 The machine-readable manifest is
-`testdata/corpus/reported-libraries.json`. Each entry records the source llgo
-issue, the module version, and the exact assembly package/file inventory for
-every target in the complete 386, amd64, ARM, ARM64, and WebAssembly matrix.
+`testdata/corpus/reported-libraries.json`. Each entry records whether it came
+from an llgo issue or the ecosystem scan, the module version, and the exact
+assembly package/file inventory for every target in the complete 386, amd64,
+ARM, ARM64, and WebAssembly matrix.
 The runner first verifies that the pinned version is still the module's
 `@latest`, then uses `<module>/...` so every package in the module is examined.
 It translates and LLVM-compiles every selected `.s` file. Missing target
@@ -166,6 +193,21 @@ The currently tracked reports are:
 - `xgo-dev/llgo#2464`: `github.com/coder/websocket v1.8.15`
 - `xgo-dev/llgo#2552`: `github.com/klauspost/compress v1.20.0`
 - `xgo-dev/llgo#2576`: `github.com/tmthrgd/go-hex` at its latest pseudo-version
+
+The ecosystem scan also pins these latest modules:
+
+- `github.com/RoaringBitmap/roaring v1.9.4`
+- `github.com/btcsuite/fastsha256 v0.0.0-20160815193821-637e65642941`
+- `github.com/cespare/xxhash/v2 v2.3.0`
+- `github.com/dchest/siphash v1.2.3`
+- `github.com/dgryski/go-bits v0.0.0-20180113010104-bd8a69a71dc2`
+- `github.com/dgryski/go-marvin32 v0.0.0-20240117220238-0d39e8c5a8a9`
+- `github.com/golang/snappy v1.0.0`
+- `github.com/klauspost/cpuid/v2 v2.4.0`
+- `github.com/pierrec/lz4/v4 v4.1.29`
+- `github.com/stevvooe/resumable v0.0.0-20180830230917-22b14a53ba50`
+- `golang.org/x/net v0.59.0`
+- `golang.org/x/sys v0.48.0`
 
 Run one library independently by its manifest id:
 
@@ -184,8 +226,8 @@ online `@latest` comparison; the complete package and target scan still runs:
       scripts/check-reported-library-corpus.sh
 
 CI derives an independent, non-fail-fast matrix job for every manifest entry,
-so adding a reported library to the manifest automatically creates its own
-test suite.
+so adding an issue-reported or ecosystem-discovered library automatically
+creates its own test suite.
 
 Select an explicit cross-target subset with `PLAN9ASM_CORPUS_TARGETS`, for
 example:
@@ -258,10 +300,10 @@ The Go 1.27 snapshot currently reports:
 
 | GOARCH | official names | encoder forms | observed ops | observed forms | supported | context | unsupported | runtime verified | parse failures |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 37 | 6 | 17 | 0 | 0 |
-| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 740 | 6 | 5996 | 34 | 0 |
-| arm | 181 | 528 | 135 | 500 | 296 | 34 | 170 | 0 | 0 |
-| arm64 | 1417 including SVE | 2964 | 1281 | 1980 | 455 | 39 | 1486 | 62 | 0 |
+| 386 | 1600 shared x86 names | 4997 shared x86 forms | 21 | 60 | 41 | 6 | 13 | 0 | 0 |
+| amd64 | 1600 shared x86 names | 4997 shared x86 forms | 1456 | 6742 | 755 | 6 | 5981 | 35 | 0 |
+| arm | 181 | 528 | 135 | 500 | 312 | 34 | 154 | 0 | 0 |
+| arm64 | 1417 including SVE | 2964 | 1281 | 1980 | 457 | 47 | 1476 | 62 | 0 |
 | wasm | 463 | 463 opcode-only rows | 71 | 120 | 0 | 120 | 0 | 0 | 0 |
 
 These numbers describe current implementation progress, not completion.

@@ -16,6 +16,7 @@
   "libraries": [
     {
       "id": "coder-websocket",
+      "origin": "llgo-issue",
       "issues": [
         "https://github.com/xgo-dev/llgo/issues/2464"
       ],
@@ -50,6 +51,7 @@
     },
     {
       "id": "klauspost-compress",
+      "origin": "llgo-issue",
       "issues": [
         "https://github.com/xgo-dev/llgo/issues/2552"
       ],
@@ -117,6 +119,7 @@
     },
     {
       "id": "go-hex",
+      "origin": "llgo-issue",
       "issues": [
         "https://github.com/xgo-dev/llgo/issues/2576"
       ],
@@ -134,6 +137,392 @@
         "windows/amd64": {
           "asm_files": 2,
           "packages": ["github.com/tmthrgd/go-hex"]
+        }
+      }
+    },
+    {
+      "id": "roaring-bitmap",
+      "origin": "ecosystem-scan",
+      "module": "github.com/RoaringBitmap/roaring",
+      "version": "v1.9.4",
+      "inventory": {
+        "darwin/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/RoaringBitmap/roaring"]
+        },
+        "linux/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/RoaringBitmap/roaring"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/RoaringBitmap/roaring"]
+        }
+      }
+    },
+    {
+      "id": "btcsuite-fastsha256",
+      "origin": "ecosystem-scan",
+      "module": "github.com/btcsuite/fastsha256",
+      "version": "v0.0.0-20160815193821-637e65642941",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/btcsuite/fastsha256"]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/btcsuite/fastsha256"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/btcsuite/fastsha256"]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["github.com/btcsuite/fastsha256"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/btcsuite/fastsha256"]
+        }
+      }
+    },
+    {
+      "id": "dchest-siphash",
+      "origin": "ecosystem-scan",
+      "module": "github.com/dchest/siphash",
+      "version": "v1.2.3",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dchest/siphash"]
+        },
+        "linux/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dchest/siphash"]
+        },
+        "linux/arm": {
+          "asm_files": 1,
+          "packages": ["github.com/dchest/siphash"]
+        },
+        "windows/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dchest/siphash"]
+        }
+      }
+    },
+    {
+      "id": "dgryski-go-bits",
+      "origin": "ecosystem-scan",
+      "module": "github.com/dgryski/go-bits",
+      "version": "v0.0.0-20180113010104-bd8a69a71dc2",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dgryski/go-bits"]
+        },
+        "linux/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dgryski/go-bits"]
+        },
+        "windows/amd64": {
+          "asm_files": 3,
+          "packages": ["github.com/dgryski/go-bits"]
+        }
+      }
+    },
+    {
+      "id": "dgryski-go-marvin32",
+      "origin": "ecosystem-scan",
+      "module": "github.com/dgryski/go-marvin32",
+      "version": "v0.0.0-20240117220238-0d39e8c5a8a9",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/dgryski/go-marvin32"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/dgryski/go-marvin32"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/dgryski/go-marvin32"]
+        }
+      }
+    },
+    {
+      "id": "cespare-xxhash-v2",
+      "origin": "ecosystem-scan",
+      "module": "github.com/cespare/xxhash/v2",
+      "version": "v2.3.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        },
+        "darwin/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        },
+        "linux/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/cespare/xxhash/v2"]
+        }
+      }
+    },
+    {
+      "id": "klauspost-cpuid-v2",
+      "origin": "ecosystem-scan",
+      "module": "github.com/klauspost/cpuid/v2",
+      "version": "v2.4.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "darwin/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "linux/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/klauspost/cpuid/v2"]
+        }
+      }
+    },
+    {
+      "id": "golang-snappy",
+      "origin": "ecosystem-scan",
+      "module": "github.com/golang/snappy",
+      "version": "v1.0.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        },
+        "darwin/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        },
+        "linux/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        },
+        "windows/arm64": {
+          "asm_files": 2,
+          "packages": ["github.com/golang/snappy"]
+        }
+      }
+    },
+    {
+      "id": "pierrec-lz4-v4",
+      "origin": "ecosystem-scan",
+      "module": "github.com/pierrec/lz4/v4",
+      "version": "v4.1.29",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/pierrec/lz4/v4/internal/lz4block"]
+        },
+        "darwin/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/pierrec/lz4/v4/internal/lz4block",
+            "github.com/pierrec/lz4/v4/internal/xxh32"
+          ]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/pierrec/lz4/v4/internal/lz4block"]
+        },
+        "linux/arm": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/pierrec/lz4/v4/internal/lz4block",
+            "github.com/pierrec/lz4/v4/internal/xxh32"
+          ]
+        },
+        "linux/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/pierrec/lz4/v4/internal/lz4block",
+            "github.com/pierrec/lz4/v4/internal/xxh32"
+          ]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/pierrec/lz4/v4/internal/lz4block"]
+        },
+        "windows/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/pierrec/lz4/v4/internal/lz4block",
+            "github.com/pierrec/lz4/v4/internal/xxh32"
+          ]
+        }
+      }
+    },
+    {
+      "id": "stevvooe-resumable",
+      "origin": "ecosystem-scan",
+      "module": "github.com/stevvooe/resumable",
+      "version": "v0.0.0-20180830230917-22b14a53ba50",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/stevvooe/resumable/sha256",
+            "github.com/stevvooe/resumable/sha512"
+          ]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["github.com/stevvooe/resumable/sha256"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/stevvooe/resumable/sha256",
+            "github.com/stevvooe/resumable/sha512"
+          ]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["github.com/stevvooe/resumable/sha256"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "github.com/stevvooe/resumable/sha256",
+            "github.com/stevvooe/resumable/sha512"
+          ]
+        }
+      }
+    },
+    {
+      "id": "x-net",
+      "origin": "ecosystem-scan",
+      "module": "golang.org/x/net",
+      "version": "v0.59.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "golang.org/x/net/internal/socket",
+            "golang.org/x/net/route"
+          ]
+        },
+        "darwin/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "golang.org/x/net/internal/socket",
+            "golang.org/x/net/route"
+          ]
+        },
+        "linux/386": {
+          "asm_files": 1,
+          "packages": ["golang.org/x/net/internal/socket"]
+        }
+      }
+    },
+    {
+      "id": "x-sys",
+      "origin": "ecosystem-scan",
+      "module": "golang.org/x/sys",
+      "version": "v0.48.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 4,
+          "packages": [
+            "golang.org/x/sys/cpu",
+            "golang.org/x/sys/unix"
+          ]
+        },
+        "darwin/arm64": {
+          "asm_files": 4,
+          "packages": [
+            "golang.org/x/sys/cpu",
+            "golang.org/x/sys/unix"
+          ]
+        },
+        "linux/386": {
+          "asm_files": 2,
+          "packages": [
+            "golang.org/x/sys/cpu",
+            "golang.org/x/sys/unix"
+          ]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": [
+            "golang.org/x/sys/cpu",
+            "golang.org/x/sys/unix"
+          ]
+        },
+        "linux/arm": {
+          "asm_files": 1,
+          "packages": ["golang.org/x/sys/unix"]
+        },
+        "linux/arm64": {
+          "asm_files": 2,
+          "packages": [
+            "golang.org/x/sys/cpu",
+            "golang.org/x/sys/unix"
+          ]
+        },
+        "windows/386": {
+          "asm_files": 1,
+          "packages": ["golang.org/x/sys/cpu"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["golang.org/x/sys/cpu"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["golang.org/x/sys/cpu"]
         }
       }
     }

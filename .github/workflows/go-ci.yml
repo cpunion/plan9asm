@@ -76,7 +76,7 @@ jobs:
         run: scripts/check-arm64-plan9-corpus.sh
 
   reported_library_list:
-    name: Reported-library corpus matrix
+    name: Third-party corpus matrix
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     outputs:
       libraries: ${{ steps.matrix.outputs.libraries }}
@@ -85,19 +85,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Read reported-library manifest
+      - name: Read third-party library manifest
         id: matrix
         run: |
           manifest=testdata/corpus/reported-libraries.json
           if ! jq -e '.libraries | length > 0 and all(.[]; (.id | test("^[a-z0-9]+(-[a-z0-9]+)*$")))' "$manifest" >/dev/null; then
-            echo "reported-library ids must match ^[a-z0-9]+(-[a-z0-9]+)*$" >&2
+            echo "third-party library ids must match ^[a-z0-9]+(-[a-z0-9]+)*$" >&2
             exit 1
           fi
           libraries=$(jq -c '[.libraries[].id]' "$manifest")
           printf '%s\n' "libraries=$libraries" >> "$GITHUB_OUTPUT"
 
   reported_library_corpus:
-    name: reported-library-corpus (${{ matrix.library }})
+    name: third-party-corpus (${{ matrix.library }})
     needs: reported_library_list
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     strategy:

@@ -23,7 +23,8 @@ type corpusManifest struct {
 
 type libraryManifest struct {
 	ID        string                       `json:"id"`
-	Issues    []string                     `json:"issues"`
+	Origin    string                       `json:"origin"`
+	Issues    []string                     `json:"issues,omitempty"`
 	Module    string                       `json:"module"`
 	Version   string                       `json:"version"`
 	Inventory map[string]expectedInventory `json:"inventory"`
@@ -62,9 +63,14 @@ var (
 	idPattern       = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
+const (
+	originLLGoIssue     = "llgo-issue"
+	originEcosystemScan = "ecosystem-scan"
+)
+
 func main() {
-	manifestPath := flag.String("manifest", "testdata/corpus/reported-libraries.json", "reported-library manifest")
-	corpusDir := flag.String("corpus-dir", "testdata/corpus", "module used to resolve reported libraries")
+	manifestPath := flag.String("manifest", "testdata/corpus/reported-libraries.json", "third-party library manifest")
+	corpusDir := flag.String("corpus-dir", "testdata/corpus", "module used to resolve third-party libraries")
 	repoRoot := flag.String("repo-root", ".", "plan9asm repository root")
 	translator := flag.String("translator", "", "path to the plan9asmll binary")
 	llc := flag.String("llc", "", "path to llc")
@@ -172,8 +178,17 @@ func validateManifest(manifest corpusManifest) error {
 			return fmt.Errorf("duplicate library module %q", library.Module)
 		}
 		modules[library.Module] = true
-		if len(library.Issues) == 0 {
-			return fmt.Errorf("library %q has no source issue", library.ID)
+		switch library.Origin {
+		case originLLGoIssue:
+			if len(library.Issues) == 0 {
+				return fmt.Errorf("library %q has no source issue", library.ID)
+			}
+		case originEcosystemScan:
+			if len(library.Issues) != 0 {
+				return fmt.Errorf("ecosystem-scan library %q must not claim a source issue", library.ID)
+			}
+		default:
+			return fmt.Errorf("library %q has invalid origin %q", library.ID, library.Origin)
 		}
 		seenIssues := make(map[string]bool, len(library.Issues))
 		for _, issue := range library.Issues {
@@ -238,11 +253,11 @@ func selectLibraries(libraries []libraryManifest, suite string) ([]libraryManife
 			return []libraryManifest{library}, nil
 		}
 	}
-	return nil, fmt.Errorf("unknown reported-library suite %q", suite)
+	return nil, fmt.Errorf("unknown third-party library suite %q", suite)
 }
 
 func runLibrary(manifest corpusManifest, library libraryManifest, corpusDir, repoRoot, translator, llc string, checkLatest bool) error {
-	fmt.Printf("== reported library %s (%s@%s) ==\n", library.ID, library.Module, library.Version)
+	fmt.Printf("== third-party library %s (%s@%s; %s) ==\n", library.ID, library.Module, library.Version, library.Origin)
 	pinned, err := queryModule(corpusDir, library.Module)
 	if err != nil {
 		return fmt.Errorf("%s: resolve pinned module: %w", library.ID, err)
@@ -264,7 +279,7 @@ func runLibrary(manifest corpusManifest, library libraryManifest, corpusDir, rep
 		return fmt.Errorf("%s: download module: %w", library.ID, err)
 	}
 
-	tmpDir, err := os.MkdirTemp("", "plan9asm-reported-"+library.ID+"-")
+	tmpDir, err := os.MkdirTemp("", "plan9asm-third-party-"+library.ID+"-")
 	if err != nil {
 		return err
 	}
