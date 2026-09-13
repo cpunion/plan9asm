@@ -36,6 +36,8 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 
 ## LLVM backend
 
+- LLVM 22 is the only supported object-code toolchain; LLVM 23 and older
+  releases are intentionally rejected instead of used as fallbacks.
 - `TranslateModule` builds an in-memory `llvm.Module` (`github.com/xgo-dev/llvm`).
 - `Translate` keeps compatibility and returns textual IR from that module.
 - Root module dependency stays small (`goplus/llvm`).
@@ -48,7 +50,7 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
 go test ./...
 ```
 
-Some tests require local LLVM/Clang tools (`llc`, `clang`) and skip when unavailable.
+Some tests require local LLVM 22 tools (`llc`, `clang`) and skip when unavailable.
 
 The executable cases under `testdata/conformance` use the native Go
 assembler as an oracle, then compile and run the same assembly through
@@ -130,7 +132,8 @@ go run -C cmd/plan9asmll . \
 ## Notes
 
 - The stdlib asm corpus depends on your local Go toolchain version (`go tool dist list`, `GOROOT` content).
-- If `-compile` is enabled, `llc` must be discoverable in `PATH` or set via `-llc`.
+- If `-compile` is enabled, LLVM 22's `llc-22` (or a version-verified `llc`)
+  must be discoverable in `PATH` or set via `-llc`.
 - Design notes and migration details are in `doc/llvm-module-migration.md`.
 
 ## `cmd/plan9asm` usage
