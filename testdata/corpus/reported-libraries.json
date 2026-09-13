@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "targets": [
+    "darwin/amd64",
+    "darwin/arm64",
+    "linux/386",
+    "linux/amd64",
+    "linux/arm",
+    "linux/arm64",
+    "windows/386",
+    "windows/amd64",
+    "windows/arm64",
+    "js/wasm",
+    "wasip1/wasm"
+  ],
+  "libraries": [
+    {
+      "id": "coder-websocket",
+      "issues": [
+        "https://github.com/xgo-dev/llgo/issues/2464"
+      ],
+      "module": "github.com/coder/websocket",
+      "version": "v1.8.15",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        },
+        "darwin/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        },
+        "linux/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        },
+        "linux/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        },
+        "windows/amd64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        },
+        "windows/arm64": {
+          "asm_files": 1,
+          "packages": ["github.com/coder/websocket"]
+        }
+      }
+    },
+    {
+      "id": "klauspost-compress",
+      "issues": [
+        "https://github.com/xgo-dev/llgo/issues/2552"
+      ],
+      "module": "github.com/klauspost/compress",
+      "version": "v1.20.0",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 8,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/internal/cpuinfo",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        },
+        "darwin/arm64": {
+          "asm_files": 6,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        },
+        "linux/amd64": {
+          "asm_files": 8,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/internal/cpuinfo",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        },
+        "linux/arm64": {
+          "asm_files": 6,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        },
+        "windows/amd64": {
+          "asm_files": 8,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/internal/cpuinfo",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        },
+        "windows/arm64": {
+          "asm_files": 6,
+          "packages": [
+            "github.com/klauspost/compress/huff0",
+            "github.com/klauspost/compress/s2",
+            "github.com/klauspost/compress/zstd",
+            "github.com/klauspost/compress/zstd/internal/xxhash"
+          ]
+        }
+      }
+    },
+    {
+      "id": "go-hex",
+      "issues": [
+        "https://github.com/xgo-dev/llgo/issues/2576"
+      ],
+      "module": "github.com/tmthrgd/go-hex",
+      "version": "v0.0.0-20190904060850-447a3041c3bc",
+      "inventory": {
+        "darwin/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-hex"]
+        },
+        "linux/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-hex"]
+        },
+        "windows/amd64": {
+          "asm_files": 2,
+          "packages": ["github.com/tmthrgd/go-hex"]
+        }
+      }
+    }
+  ]
+}

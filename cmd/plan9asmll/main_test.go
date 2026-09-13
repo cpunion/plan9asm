@@ -9,6 +9,52 @@ import (
 	"github.com/xgo-dev/plan9asm"
 )
 
+func TestDefaultMatrixTargetsCoversEveryPlan9Architecture(t *testing.T) {
+	want := []targetSpec{
+		{Goos: "darwin", Goarch: "amd64"},
+		{Goos: "darwin", Goarch: "arm64"},
+		{Goos: "linux", Goarch: "386"},
+		{Goos: "linux", Goarch: "amd64"},
+		{Goos: "linux", Goarch: "arm"},
+		{Goos: "linux", Goarch: "arm64"},
+		{Goos: "windows", Goarch: "386"},
+		{Goos: "windows", Goarch: "amd64"},
+		{Goos: "windows", Goarch: "arm64"},
+		{Goos: "js", Goarch: "wasm"},
+		{Goos: "wasip1", Goarch: "wasm"},
+	}
+	if got := defaultMatrixTargets(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("defaultMatrixTargets() = %#v, want %#v", got, want)
+	}
+}
+
+func TestExternalCorpusTargetArchitectureAndTriple(t *testing.T) {
+	tests := []struct {
+		goos       string
+		goarch     string
+		wantArch   plan9asm.Arch
+		wantTriple string
+	}{
+		{goos: "linux", goarch: "arm", wantArch: plan9asm.ArchARM, wantTriple: "armv7-unknown-linux-gnueabihf"},
+		{goos: "js", goarch: "wasm", wantArch: plan9asm.ArchWASM, wantTriple: "wasm32-unknown-unknown"},
+		{goos: "wasip1", goarch: "wasm", wantArch: plan9asm.ArchWASM, wantTriple: "wasm32-wasi"},
+	}
+	for _, test := range tests {
+		t.Run(test.goos+"/"+test.goarch, func(t *testing.T) {
+			arch, err := toPlan9Arch(test.goarch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if arch != test.wantArch {
+				t.Fatalf("toPlan9Arch(%q) = %q, want %q", test.goarch, arch, test.wantArch)
+			}
+			if got := targetTriple(test.goos, test.goarch); got != test.wantTriple {
+				t.Fatalf("targetTriple(%q, %q) = %q, want %q", test.goos, test.goarch, got, test.wantTriple)
+			}
+		})
+	}
+}
+
 func TestLLVMArgsAndFrameSlotsForTupleSliceParam(t *testing.T) {
 	tup := types.NewTuple(types.NewVar(token.NoPos, nil, "b", types.NewSlice(types.Typ[types.Byte])))
 	sz := types.SizesFor("gc", "amd64")

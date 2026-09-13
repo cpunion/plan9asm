@@ -75,11 +75,49 @@ jobs:
       - name: ARM64 Plan 9 reference corpus
         run: scripts/check-arm64-plan9-corpus.sh
 
-      - name: klauspost/compress regression corpus
-        run: scripts/check-klauspost-compress.sh
+  reported_library_list:
+    name: Reported-library corpus matrix
+    runs-on: ubuntu-latest
+    outputs:
+      libraries: ${{ steps.matrix.outputs.libraries }}
 
-      - name: go-hex multi-platform regression corpus
-        run: scripts/check-go-hex.sh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read reported-library manifest
+        id: matrix
+        run: echo "libraries=$(jq -c '[.libraries[].id]' testdata/corpus/reported-libraries.json)" >> "$GITHUB_OUTPUT"
+
+  reported_library_corpus:
+    name: reported-library-corpus (${{ matrix.library }})
+    needs: reported_library_list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        library: ${{ fromJSON(needs.reported_library_list.outputs.libraries) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install LLVM 19
+        run: |
+          echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm-snapshot.asc >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y llvm-19-dev clang-19 libclang-19-dev lld-19 libunwind-19-dev libc++-19-dev
+          echo "PATH=/usr/lib/llvm-19/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.x'
+          cache: true
+
+      - name: Scan latest module and compile complete asm corpus
+        run: scripts/check-reported-library-corpus.sh "${{ matrix.library }}"
 
   stdlib-corpus:
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})

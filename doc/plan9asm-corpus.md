@@ -146,11 +146,46 @@ native-Go-accepted family subset:
 
     scripts/check-arm64-plan9-corpus.sh
 
-After the official-family gates pass, run the external regression consumer.
-This translates and LLVM-compiles every assembly file in
-`github.com/klauspost/compress v1.20.0` (8 amd64 and 6 arm64 files):
+After the official-family gates pass, run every issue-reported external-library
+suite:
 
+    scripts/check-reported-library-corpus.sh
+
+The machine-readable manifest is
+`testdata/corpus/reported-libraries.json`. Each entry records the source llgo
+issue, the module version, and the exact assembly package/file inventory for
+every target in the complete 386, amd64, ARM, ARM64, and WebAssembly matrix.
+The runner first verifies that the pinned version is still the module's
+`@latest`, then uses `<module>/...` so every package in the module is examined.
+It translates and LLVM-compiles every selected `.s` file. Missing target
+reports, newly added or removed assembly packages/files, package-load errors,
+translation errors, and object-compilation errors all fail the suite.
+
+The currently tracked reports are:
+
+- `xgo-dev/llgo#2464`: `github.com/coder/websocket v1.8.15`
+- `xgo-dev/llgo#2552`: `github.com/klauspost/compress v1.20.0`
+- `xgo-dev/llgo#2576`: `github.com/tmthrgd/go-hex` at its latest pseudo-version
+
+Run one library independently by its manifest id:
+
+    scripts/check-reported-library-corpus.sh coder-websocket
+
+The compatibility wrappers remain available:
+
+    scripts/check-coder-websocket.sh
     scripts/check-klauspost-compress.sh
+    scripts/check-go-hex.sh
+
+For an offline run against the reproducibly pinned versions, disable only the
+online `@latest` comparison; the complete package and target scan still runs:
+
+    PLAN9ASM_CORPUS_CHECK_LATEST=false \
+      scripts/check-reported-library-corpus.sh
+
+CI derives an independent, non-fail-fast matrix job for every manifest entry,
+so adding a reported library to the manifest automatically creates its own
+test suite.
 
 Select an explicit cross-target subset with `PLAN9ASM_CORPUS_TARGETS`, for
 example:

@@ -51,6 +51,7 @@ type runReport struct {
 	Goarch         string     `json:"goarch"`
 	Patterns       []string   `json:"patterns"`
 	TotalPkgs      int        `json:"total_pkgs"`
+	AsmPackages    []string   `json:"asm_packages,omitempty"`
 	TotalAsm       int        `json:"total_asm"`
 	Success        int        `json:"success"`
 	Failed         int        `json:"failed"`
@@ -86,9 +87,9 @@ type compileConfig struct {
 func main() {
 	var (
 		goos       = flag.String("goos", runtime.GOOS, "target GOOS")
-		goarch     = flag.String("goarch", runtime.GOARCH, "target GOARCH (amd64/arm64/arm/386)")
+		goarch     = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm/arm64/wasm)")
 		targets    = flag.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,windows/arm64)")
-		allTargets = flag.Bool("all-targets", false, "run matrix: darwin/{amd64,arm64} linux/{amd64,arm64,386} windows/{amd64,arm64,386}")
+		allTargets = flag.Bool("all-targets", false, "run the complete default Plan 9 target matrix")
 		patterns   = flag.String("patterns", "std", "comma-separated package patterns")
 		outDir     = flag.String("out", "", "output dir for generated .ll files")
 		annotate   = flag.Bool("annotate", false, "emit source asm lines as IR comments")
@@ -98,6 +99,7 @@ func main() {
 		compile    = flag.Bool("compile", false, "compile generated .ll to .o via llc")
 		llcPath    = flag.String("llc", "", "path to llc executable (auto-detect when empty)")
 		keepObj    = flag.Bool("keep-obj", false, "keep generated .o files when -compile is set")
+		strictLoad = flag.Bool("strict-load", false, "fail when go/packages reports any package loading error")
 		reportOut  = flag.String("report", "", "optional report json path")
 		repoRoot   = flag.String("repo-root", "../..", "repo root for extracting supported instruction set")
 	)
@@ -136,7 +138,7 @@ func main() {
 			runOutDir = filepath.Join(baseOut, targetID(spec))
 			fmt.Fprintf(os.Stderr, "\n== target %s ==\n", targetID(spec))
 		}
-		rep, tasks, err := runOneTarget(spec, pats, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *repoRoot, ccfg)
+		rep, tasks, err := runOneTarget(spec, pats, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *strictLoad, *repoRoot, ccfg)
 		if err != nil {
 			fatalf("%s: %v", targetID(spec), err)
 		}
@@ -263,12 +265,15 @@ func defaultMatrixTargets() []targetSpec {
 	return []targetSpec{
 		{Goos: "darwin", Goarch: "amd64"},
 		{Goos: "darwin", Goarch: "arm64"},
-		{Goos: "linux", Goarch: "amd64"},
-		{Goos: "linux", Goarch: "arm64"},
 		{Goos: "linux", Goarch: "386"},
+		{Goos: "linux", Goarch: "amd64"},
+		{Goos: "linux", Goarch: "arm"},
+		{Goos: "linux", Goarch: "arm64"},
+		{Goos: "windows", Goarch: "386"},
 		{Goos: "windows", Goarch: "amd64"},
 		{Goos: "windows", Goarch: "arm64"},
-		{Goos: "windows", Goarch: "386"},
+		{Goos: "js", Goarch: "wasm"},
+		{Goos: "wasip1", Goarch: "wasm"},
 	}
 }
 
@@ -276,12 +281,12 @@ func targetID(t targetSpec) string {
 	return t.Goos + "-" + t.Goarch
 }
 
-func runOneTarget(spec targetSpec, pats []string, outDir string, annotate bool, limit int, keepGoing bool, listOnly bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
+func runOneTarget(spec targetSpec, pats []string, outDir string, annotate bool, limit int, keepGoing bool, listOnly, strictLoad bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
 	arch, err := toPlan9Arch(spec.Goarch)
 	if err != nil {
 		return runReport{}, nil, err
 	}
-	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats)
+	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, strictLoad)
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
@@ -291,7 +296,7 @@ func runOneTarget(spec targetSpec, pats []string, outDir string, annotate bool, 
 			pkgByPath[p.PkgPath] = p
 		}
 	}
-	tasks, pkgCount := collectAsmTasks(pkgs, outDir)
+	tasks, asmPackages := collectAsmTasks(pkgs, outDir)
 	if limit > 0 && limit < len(tasks) {
 		tasks = tasks[:limit]
 	}
@@ -299,11 +304,12 @@ func runOneTarget(spec targetSpec, pats []string, outDir string, annotate bool, 
 		return runReport{}, tasks, nil
 	}
 	rep := runReport{
-		Goos:      spec.Goos,
-		Goarch:    spec.Goarch,
-		Patterns:  pats,
-		TotalPkgs: pkgCount,
-		TotalAsm:  len(tasks),
+		Goos:        spec.Goos,
+		Goarch:      spec.Goarch,
+		Patterns:    pats,
+		TotalPkgs:   len(asmPackages),
+		AsmPackages: asmPackages,
+		TotalAsm:    len(tasks),
 	}
 	if len(tasks) == 0 {
 		fmt.Fprintf(os.Stderr, "no asm files found for patterns=%v (%s/%s)\n", pats, spec.Goos, spec.Goarch)
@@ -451,7 +457,7 @@ func llcExtraArgs(goarch string) []string {
 	}
 }
 
-func loadPkgs(goos, goarch string, patterns []string) ([]*packages.Package, error) {
+func loadPkgs(goos, goarch string, patterns []string, strict bool) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -470,13 +476,15 @@ func loadPkgs(goos, goarch string, patterns []string) ([]*packages.Package, erro
 	if err != nil {
 		return nil, err
 	}
-	_ = packages.PrintErrors(pkgs)
+	if count := packages.PrintErrors(pkgs); strict && count != 0 {
+		return nil, fmt.Errorf("%d package loading error(s)", count)
+	}
 	return pkgs, nil
 }
 
-func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, int) {
+func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, []string) {
 	tasks := make([]asmTask, 0)
-	pkgHasAsm := 0
+	asmPackages := make([]string, 0)
 	seenPkg := map[string]bool{}
 	for _, p := range pkgs {
 		if p == nil || p.PkgPath == "" {
@@ -490,7 +498,7 @@ func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, int) {
 		if len(files) == 0 {
 			continue
 		}
-		pkgHasAsm++
+		asmPackages = append(asmPackages, p.PkgPath)
 		for _, f := range files {
 			out := filepath.Join(outDir, filepath.FromSlash(p.PkgPath), filepath.Base(f)+".ll")
 			tasks = append(tasks, asmTask{PkgPath: p.PkgPath, AsmFile: f, OutLL: out})
@@ -502,7 +510,8 @@ func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, int) {
 		}
 		return tasks[i].AsmFile < tasks[j].AsmFile
 	})
-	return tasks, pkgHasAsm
+	sort.Strings(asmPackages)
+	return tasks, asmPackages
 }
 
 func asmFilesOfPkg(p *packages.Package) []string {
@@ -531,6 +540,8 @@ func toPlan9Arch(goarch string) (plan9asm.Arch, error) {
 		return plan9asm.ArchARM, nil
 	case "arm64":
 		return plan9asm.ArchARM64, nil
+	case "wasm":
+		return plan9asm.ArchWASM, nil
 	default:
 		return "", fmt.Errorf("unsupported arch %q", goarch)
 	}
@@ -555,6 +566,8 @@ func targetTriple(goos, goarch string) string {
 			return "aarch64-unknown-linux-gnu"
 		case "386":
 			return "i386-unknown-linux-gnu"
+		case "arm":
+			return "armv7-unknown-linux-gnueabihf"
 		}
 	case "windows":
 		switch goarch {
@@ -564,6 +577,14 @@ func targetTriple(goos, goarch string) string {
 			return "aarch64-pc-windows-msvc"
 		case "386":
 			return "i686-pc-windows-msvc"
+		}
+	case "js":
+		if goarch == "wasm" {
+			return "wasm32-unknown-unknown"
+		}
+	case "wasip1":
+		if goarch == "wasm" {
+			return "wasm32-wasi"
 		}
 	}
 	return ""
