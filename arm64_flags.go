@@ -99,6 +99,58 @@ func (c *arm64Ctx) setFlagsAdd(dst, src, res string) {
 	c.storeFlag(c.flagsVSlot, "%"+ov)
 }
 
+func (c *arm64Ctx) setConditionalCompareFlags(cond, lhs, rhs string, nzcv int64, word, add bool) error {
+	predicate, err := c.condValue(cond)
+	if err != nil {
+		return err
+	}
+	typeName := "i64"
+	if word {
+		typeName = "i32"
+	}
+	result := c.newTmp()
+	if add {
+		fmt.Fprintf(c.b, "  %%%s = add %s %s, %s\n", result, typeName, lhs, rhs)
+	} else {
+		fmt.Fprintf(c.b, "  %%%s = sub %s %s, %s\n", result, typeName, lhs, rhs)
+	}
+	z := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq %s %%%s, 0\n", z, typeName, result)
+	n := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp slt %s %%%s, 0\n", n, typeName, result)
+	carry := c.newTmp()
+	if add {
+		fmt.Fprintf(c.b, "  %%%s = icmp ult %s %%%s, %s\n", carry, typeName, result, lhs)
+	} else {
+		fmt.Fprintf(c.b, "  %%%s = icmp uge %s %s, %s\n", carry, typeName, lhs, rhs)
+	}
+	x1 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = xor %s %s, %s\n", x1, typeName, lhs, rhs)
+	if add {
+		nx1 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = xor %s %%%s, -1\n", nx1, typeName, x1)
+		x1 = nx1
+	}
+	x2 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = xor %s %s, %%%s\n", x2, typeName, lhs, result)
+	x3 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and %s %%%s, %%%s\n", x3, typeName, x1, x2)
+	v := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp slt %s %%%s, 0\n", v, typeName, x3)
+
+	selectFlag := func(computed string, fallback bool) string {
+		selected := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i1 %s, i1 %t\n", selected, predicate, computed, fallback)
+		return "%" + selected
+	}
+	c.flagsWritten = true
+	c.storeFlag(c.flagsNSlot, selectFlag("%"+n, nzcv&8 != 0))
+	c.storeFlag(c.flagsZSlot, selectFlag("%"+z, nzcv&4 != 0))
+	c.storeFlag(c.flagsCSlot, selectFlag("%"+carry, nzcv&2 != 0))
+	c.storeFlag(c.flagsVSlot, selectFlag("%"+v, nzcv&1 != 0))
+	return nil
+}
+
 func (c *arm64Ctx) setFlagsLogic(res string) {
 	// ANDS-like: update N/Z; set C/V to 0 (good enough for current corpus).
 	c.flagsWritten = true

@@ -90,7 +90,7 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 		emitBr(tgt)
 		return true, true, nil
 
-	case "BEQ", "BNE", "BLO", "BLT", "BHI", "BHS", "BLS", "BGE", "BGT", "BLE", "BCC", "BCS", "BMI", "BPL":
+	case "BEQ", "BNE", "BLO", "BLT", "BHI", "BHS", "BLS", "BGE", "BGT", "BLE", "BCC", "BCS", "BMI", "BPL", "BVS", "BVC":
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm64 %s expects label: %q", op, ins.Raw)
 		}
@@ -144,6 +144,10 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			cond = "MI"
 		case "BPL":
 			cond = "PL"
+		case "BVS":
+			cond = "VS"
+		case "BVC":
+			cond = "VC"
 		}
 		if err := emitCondBr(cond, tgt, fall); err != nil {
 			return true, false, err

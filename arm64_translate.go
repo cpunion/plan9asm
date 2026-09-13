@@ -134,7 +134,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "DMB", "DSB", "ISB", "DC", "PRFM",
 		"BREAK", "BRK", "UNDEF", "#UNDEF", "YIELD", "NOP",
 		"FLDPD", "FSTPD", "FMOVS", "STY",
-		"P256ADDINLINE", "P256MULBY2INLINE", "MOV", "CCMP",
+		"P256ADDINLINE", "P256MULBY2INLINE", "MOV",
 		"#IFDEF", "#ELSE", "#ENDIF":
 		return false, nil
 	}

@@ -7,6 +7,37 @@ import (
 
 func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
 	switch op {
+	case "MOVKW":
+		if len(ins.Args) != 2 || ins.Args[0].Kind != OpImm || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("arm64 MOVKW expects $imm16[<<16], dstReg: %q", ins.Raw)
+		}
+		if ins.Args[0].Imm < 0 || uint64(ins.Args[0].Imm) > uint64(^uint32(0)) {
+			return true, false, fmt.Errorf("arm64 MOVKW immediate is outside 32 bits: %q", ins.Raw)
+		}
+		imm := uint32(ins.Args[0].Imm)
+		var keepMask uint32
+		switch {
+		case imm <= 0xffff:
+			keepMask = 0xffff0000
+		case imm&0xffff == 0:
+			keepMask = 0x0000ffff
+		default:
+			return true, false, fmt.Errorf("arm64 MOVKW immediate is not an imm16 or imm16<<16: %q", ins.Raw)
+		}
+		old, err := c.loadReg(ins.Args[1].Reg)
+		if err != nil {
+			return true, false, err
+		}
+		old32 := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", old32, old)
+		kept := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, %d\n", kept, old32, keepMask)
+		merged := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %d\n", merged, kept, imm)
+		wide := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, merged)
+		return true, false, c.storeReg(ins.Args[1].Reg, "%"+wide)
+
 	case "MOVD":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm64 MOVD expects 2 operands: %q", ins.Raw)

@@ -851,7 +851,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		c.setZSFlagsFromI32("%" + x)
 		return true, false, nil
 
-	case "ADDB", "XORB", "ANDB", "ORB":
+	case "ADDB", "SUBB", "XORB", "ANDB", "ORB":
 		// 8-bit scalar ops: src, dst. Go's x86 assembler permits both a
 		// register and a memory destination (for example XORB SI, (AX)).
 		if len(ins.Args) != 2 {
@@ -869,6 +869,8 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		switch op {
 		case "ADDB":
 			fmt.Fprintf(c.b, "  %%%s = add i8 %s, %s\n", x, d8, s8)
+		case "SUBB":
+			fmt.Fprintf(c.b, "  %%%s = sub i8 %s, %s\n", x, d8, s8)
 		case "XORB":
 			fmt.Fprintf(c.b, "  %%%s = xor i8 %s, %s\n", x, d8, s8)
 		case "ANDB":
@@ -879,7 +881,8 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if err := storeDst("%" + x); err != nil {
 			return true, false, err
 		}
-		if op == "ADDB" {
+		switch op {
+		case "ADDB":
 			d16 := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = zext i8 %s to i16\n", d16, d8)
 			s16 := c.newTmp()
@@ -889,10 +892,31 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			cf := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = icmp ugt i16 %%%s, 255\n", cf, total)
 			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
-		} else {
+		case "SUBB":
+			cf := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp ult i8 %s, %s\n", cf, d8, s8)
+			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", cf, c.flagsCFSlot)
+		default:
 			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
 		}
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		if op == "ADDB" || op == "SUBB" {
+			x1 := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = xor i8 %s, %s\n", x1, d8, s8)
+			if op == "ADDB" {
+				nx1 := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = xor i8 %%%s, -1\n", nx1, x1)
+				x1 = nx1
+			}
+			x2 := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = xor i8 %s, %%%s\n", x2, d8, x)
+			x3 := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = and i8 %%%s, %%%s\n", x3, x1, x2)
+			of := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp slt i8 %%%s, 0\n", of, x3)
+			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", of, c.flagsOFSlot)
+		} else {
+			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		}
 		zf := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i8 %%%s, 0\n", zf, x)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
@@ -1201,28 +1225,36 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, c.storeRegSized(ins.Args[1].Reg, I16, "%"+tr)
 
 	case "BSFQ", "BSRQ", "BSWAPQ", "BSFL", "BSRL":
-		// Bit scan/byte swap ops (reg, reg).
-		src := Reg("")
+		// Bit scans accept register or memory sources. BSWAPQ is register-only.
+		sv := ""
 		dst := Reg("")
 		switch len(ins.Args) {
 		case 1:
 			if op != "BSWAPQ" || ins.Args[0].Kind != OpReg {
 				return true, false, fmt.Errorf("amd64 %s expects reg or srcReg,dstReg: %q", op, ins.Raw)
 			}
-			src = ins.Args[0].Reg
 			dst = ins.Args[0].Reg
-		case 2:
-			if ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-				return true, false, fmt.Errorf("amd64 %s expects srcReg, dstReg: %q", op, ins.Raw)
+			var err error
+			sv, err = c.loadReg(ins.Args[0].Reg)
+			if err != nil {
+				return true, false, err
 			}
-			src = ins.Args[0].Reg
+		case 2:
+			if op == "BSWAPQ" || ins.Args[1].Kind != OpReg {
+				return true, false, fmt.Errorf("amd64 %s expects src, dstReg: %q", op, ins.Raw)
+			}
 			dst = ins.Args[1].Reg
+			srcType := I64
+			if op == "BSFL" || op == "BSRL" {
+				srcType = I32
+			}
+			var err error
+			sv, err = c.evalIntSized(ins.Args[0], srcType)
+			if err != nil {
+				return true, false, err
+			}
 		default:
 			return true, false, fmt.Errorf("amd64 %s expects 1 or 2 operands: %q", op, ins.Raw)
-		}
-		sv, err := c.loadReg(src)
-		if err != nil {
-			return true, false, err
 		}
 		switch op {
 		case "BSFQ":
@@ -1250,28 +1282,24 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.bswap.i64(i64 %s)\n", call, sv)
 			return true, false, c.storeReg(dst, "%"+call)
 		case "BSFL":
-			// ZF is set when low 32-bit src == 0.
-			tr := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, sv)
+			// ZF is set when the 32-bit source is zero.
 			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %%%s, 0\n", zf, tr)
+			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zf, sv)
 			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = zext(cttz(trunc32(src))). Use non-poison form for src==0.
+			// dst = zext(cttz(src)). Use non-poison form for src==0.
 			call := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.cttz.i32(i32 %%%s, i1 false)\n", call, tr)
+			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.cttz.i32(i32 %s, i1 false)\n", call, sv)
 			z := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, call)
 			return true, false, c.storeReg(dst, "%"+z)
 		case "BSRL":
-			// ZF is set when low 32-bit src == 0.
-			tr := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, sv)
+			// ZF is set when the 32-bit source is zero.
 			zf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %%%s, 0\n", zf, tr)
+			fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zf, sv)
 			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zf, c.flagsZSlot)
-			// dst = zext(31 - ctlz(trunc32(src))). Use non-poison form for src==0.
+			// dst = zext(31 - ctlz(src)). Use non-poison form for src==0.
 			clz := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctlz.i32(i32 %%%s, i1 false)\n", clz, tr)
+			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.ctlz.i32(i32 %s, i1 false)\n", clz, sv)
 			sub := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = sub i32 31, %%%s\n", sub, clz)
 			z := c.newTmp()

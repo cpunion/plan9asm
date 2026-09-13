@@ -81,7 +81,7 @@ func (c *armCtx) lowerBranch(bi int, op, cond string, ins Instr, emitBr armEmitB
 		}
 		emitBr(tgt)
 		return true, true, nil
-	case "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI":
+	case "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI", "BPL", "BVS", "BVC":
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm %s expects label: %q", op, ins.Raw)
 		}

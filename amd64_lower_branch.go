@@ -243,6 +243,49 @@ func (c *amd64Ctx) tailCallIndirectAddrAndRet(addr string) error {
 	return c.lowerRET()
 }
 
+func (c *amd64Ctx) castI64RegToArg(v string, to LLVMType) (string, error) {
+	switch to {
+	case I64:
+		return v, nil
+	case I1, I8, I16, I32:
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", t, v, to)
+		return "%" + t, nil
+	case Ptr:
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", t, v)
+		return "%" + t, nil
+	default:
+		return "", fmt.Errorf("unsupported arg type %s", to)
+	}
+}
+
+func (c *amd64Ctx) structArgFromSequentialRegs(aggTy LLVMType, regs []Reg, regCursor *int) (string, error) {
+	fields, ok := parseLiteralStructFields(aggTy)
+	if !ok || !literalFieldsAllScalar(fields) {
+		return "", fmt.Errorf("unsupported aggregate arg type %s", aggTy)
+	}
+	agg := "undef"
+	for fi, fieldTy := range fields {
+		if *regCursor >= len(regs) {
+			return "", fmt.Errorf("aggregate arg %s exceeds integer argument registers", aggTy)
+		}
+		value, err := c.loadReg(regs[*regCursor])
+		*regCursor = *regCursor + 1
+		if err != nil {
+			return "", err
+		}
+		field, err := c.castI64RegToArg(value, fieldTy)
+		if err != nil {
+			return "", err
+		}
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = insertvalue %s %s, %s %s, %d\n", t, aggTy, agg, fieldTy, field, fi)
+		agg = "%" + t
+	}
+	return agg, nil
+}
+
 func (c *amd64Ctx) callSym(symOp Operand) error {
 	if symOp.Kind != OpSym {
 		return fmt.Errorf("amd64 call expects sym operand, got %s", symOp.String())
@@ -268,47 +311,42 @@ func (c *amd64Ctx) callSym(symOp Operand) error {
 	callee = funcSigSymbol(callee, csig)
 
 	args := make([]string, 0, len(csig.Args))
-	for i := 0; i < len(csig.Args); i++ {
-		r := Reg("")
-		if i < len(csig.ArgRegs) {
-			r = csig.ArgRegs[i]
-		} else {
-			x86 := []Reg{DI, SI, DX, CX, Reg("R8"), Reg("R9")}
-			if i >= len(x86) {
+	goABI := []Reg{AX, BX, CX, DI, SI, Reg("R8"), Reg("R9"), Reg("R10"), Reg("R11")}
+	regCursor := 0
+	for i, argTy := range csig.Args {
+		if len(csig.ArgRegs) == 0 {
+			if fields, ok := parseLiteralStructFields(argTy); ok && literalFieldsAllScalar(fields) {
+				agg, err := c.structArgFromSequentialRegs(argTy, goABI, &regCursor)
+				if err != nil {
+					return fmt.Errorf("amd64 call %q: %w", callee, err)
+				}
+				args = append(args, fmt.Sprintf("%s %s", argTy, agg))
+				continue
+			}
+		}
+
+		var r Reg
+		if len(csig.ArgRegs) > 0 {
+			if i >= len(csig.ArgRegs) {
 				return fmt.Errorf("amd64 call: missing arg reg for %q arg %d", callee, i)
 			}
-			r = x86[i]
+			r = csig.ArgRegs[i]
+		} else {
+			if regCursor >= len(goABI) {
+				return fmt.Errorf("amd64 call: missing arg reg for %q arg %d", callee, i)
+			}
+			r = goABI[regCursor]
+			regCursor++
 		}
 		v, err := c.loadReg(r)
 		if err != nil {
 			return err
 		}
-		switch csig.Args[i] {
-		case I64:
-			args = append(args, "i64 "+v)
-		case I1:
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i1\n", t, v)
-			args = append(args, "i1 %"+t)
-		case I8:
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", t, v)
-			args = append(args, "i8 %"+t)
-		case I16:
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i16\n", t, v)
-			args = append(args, "i16 %"+t)
-		case I32:
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", t, v)
-			args = append(args, "i32 %"+t)
-		case Ptr:
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", t, v)
-			args = append(args, "ptr %"+t)
-		default:
-			return fmt.Errorf("amd64 call unsupported arg type %q", csig.Args[i])
+		value, err := c.castI64RegToArg(v, argTy)
+		if err != nil {
+			return fmt.Errorf("amd64 call unsupported arg type %q", argTy)
 		}
+		args = append(args, fmt.Sprintf("%s %s", argTy, value))
 	}
 
 	if csig.Ret == Void {

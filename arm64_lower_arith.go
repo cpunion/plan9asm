@@ -694,6 +694,33 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		c.setFlagsSub(dst, src, "%"+rt)
 		return true, false, nil
 
+	case "CCMP", "CCMPW", "CCMN", "CCMNW":
+		if len(ins.Args) != 4 || ins.Args[0].Kind != OpIdent || ins.Args[3].Kind != OpImm {
+			return true, false, fmt.Errorf("arm64 %s expects condition, lhs, rhs, $nzcv: %q", op, ins.Raw)
+		}
+		if ins.Args[3].Imm < 0 || ins.Args[3].Imm > 15 {
+			return true, false, fmt.Errorf("arm64 %s NZCV immediate is outside 0..15: %q", op, ins.Raw)
+		}
+		word := op == "CCMPW" || op == "CCMNW"
+		add := op == "CCMN" || op == "CCMNW"
+		var lhs, rhs string
+		var err error
+		if word {
+			lhs, err = c.eval32(ins.Args[1])
+			if err == nil {
+				rhs, err = c.eval32(ins.Args[2])
+			}
+		} else {
+			lhs, err = c.eval64(ins.Args[1], false)
+			if err == nil {
+				rhs, err = c.eval64(ins.Args[2], false)
+			}
+		}
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.setConditionalCompareFlags(ins.Args[0].Ident, lhs, rhs, ins.Args[3].Imm, word, add)
+
 	case "CMN":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm64 CMN expects 2 operands: %q", ins.Raw)
@@ -723,6 +750,38 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = sub i64 0, %s\n", t, src)
 		return true, false, c.storeReg(ins.Args[1].Reg, "%"+t)
+
+	case "MULW":
+		if len(ins.Args) != 2 && len(ins.Args) != 3 {
+			return true, false, fmt.Errorf("arm64 MULW expects 2 or 3 operands: %q", ins.Raw)
+		}
+		a, err := c.eval32(ins.Args[0])
+		if err != nil {
+			return true, false, err
+		}
+		var bval string
+		var dst Reg
+		if len(ins.Args) == 2 {
+			if ins.Args[1].Kind != OpReg {
+				return true, false, fmt.Errorf("arm64 MULW dst must be reg: %q", ins.Raw)
+			}
+			dst = ins.Args[1].Reg
+			bval, err = c.eval32(ins.Args[1])
+		} else {
+			if ins.Args[2].Kind != OpReg {
+				return true, false, fmt.Errorf("arm64 MULW dst must be reg: %q", ins.Raw)
+			}
+			dst = ins.Args[2].Reg
+			bval, err = c.eval32(ins.Args[1])
+		}
+		if err != nil {
+			return true, false, err
+		}
+		product := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = mul i32 %s, %s\n", product, bval, a)
+		wide := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, product)
+		return true, false, c.storeReg(dst, "%"+wide)
 
 	case "MUL":
 		// MUL a, dst or MUL a, b, dst
@@ -786,6 +845,34 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		hi := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = trunc i128 %%%s to i64\n", hi, sh)
 		return true, false, c.storeReg(ins.Args[2].Reg, "%"+hi)
+
+	case "MADDW", "MSUBW":
+		if len(ins.Args) != 4 || ins.Args[3].Kind != OpReg {
+			return true, false, fmt.Errorf("arm64 %s expects a, b, c, dstReg: %q", op, ins.Raw)
+		}
+		a, err := c.eval32(ins.Args[0])
+		if err != nil {
+			return true, false, err
+		}
+		bv, err := c.eval32(ins.Args[1])
+		if err != nil {
+			return true, false, err
+		}
+		cv, err := c.eval32(ins.Args[2])
+		if err != nil {
+			return true, false, err
+		}
+		product := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = mul i32 %s, %s\n", product, a, bv)
+		result := c.newTmp()
+		if op == "MADDW" {
+			fmt.Fprintf(c.b, "  %%%s = add i32 %%%s, %s\n", result, product, cv)
+		} else {
+			fmt.Fprintf(c.b, "  %%%s = sub i32 %s, %%%s\n", result, cv, product)
+		}
+		wide := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, result)
+		return true, false, c.storeReg(ins.Args[3].Reg, "%"+wide)
 
 	case "MADD", "MSUB":
 		if len(ins.Args) != 4 || ins.Args[3].Kind != OpReg {

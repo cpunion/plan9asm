@@ -49,7 +49,7 @@ func armSplitBlocks(fn Func) []armBlock {
 		switch baseOp {
 		case "B", "JMP":
 			return true
-		case "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI":
+		case "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI", "BPL", "BVS", "BVC":
 			return true
 		}
 		return baseOp == "B" && cond != ""
@@ -60,7 +60,7 @@ func armSplitBlocks(fn Func) []armBlock {
 			baseOp = "B"
 		}
 		switch baseOp {
-		case "B", "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI":
+		case "B", "BEQ", "BNE", "BLT", "BGE", "BGT", "BLE", "BHS", "BHI", "BLS", "BLO", "BCC", "BCS", "BMI", "BPL", "BVS", "BVC":
 		default:
 			return 0, false
 		}
