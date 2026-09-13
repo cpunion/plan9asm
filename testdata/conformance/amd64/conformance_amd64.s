@@ -1,5 +1,9 @@
 #include "textflag.h"
 
+DATA ·goHexORMask<>+0(SB)/8, $0x4020100804020180
+DATA ·goHexORMask<>+8(SB)/8, $0xcc33f00faa5500ff
+GLOBL ·goHexORMask<>(SB), RODATA|NOPTR, $16
+
 TEXT ·byteMemory(SB), NOSPLIT, $0-9
 	MOVQ p+0(FP), AX
 	MOVBLZX value+8(FP), SI
@@ -124,4 +128,83 @@ TEXT ·doubleShift64(SB), NOSPLIT, $0-32
 	MOVQ dst+16(FP), R11
 	MOVQ R11, (BX)
 	SHRQ $7, AX, (BX)
+	RET
+
+// goHexVectorOps covers the packed integer forms used by go-hex. Each result
+// occupies one 16-byte block in out, in the order documented by its Go test.
+TEXT ·goHexVectorOps(SB), NOSPLIT, $0-24
+	MOVQ out+0(FP), AX
+	MOVQ a+8(FP), BX
+	MOVQ b+16(FP), CX
+
+	MOVOU (BX), X0
+	POR ·goHexORMask<>(SB), X0
+	MOVOU X0, 0(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	POR X1, X0
+	MOVOU X0, 16(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	PCMPGTB X1, X0
+	MOVOU X0, 32(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	VPCMPGTB X1, X0, X2
+	MOVOU X2, 48(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	PSUBB X1, X0
+	MOVOU X0, 64(AX)
+
+	MOVOU (BX), X0
+	PSLLW $4, X0
+	MOVOU X0, 80(AX)
+
+	MOVOU (BX), X0
+	PSRLW $4, X0
+	MOVOU X0, 96(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	PUNPCKHBW X1, X0
+	MOVOU X0, 112(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	VPUNPCKHBW X1, X0, X2
+	MOVOU X2, 128(AX)
+
+	MOVOU (BX), X0
+	MOVOU (CX), X1
+	VPAND X1, X0, X2
+	MOVOU X2, 144(AX)
+	RET
+
+TEXT ·goHexWordOps(SB), NOSPLIT, $0-24
+	MOVQ value+0(FP), DX
+	MOVQ count+8(FP), CX
+	SHRW CX, DX
+	MOVQ $0, AX
+	BSFW DX, AX
+	SHLQ $16, AX
+	ORQ AX, DX
+	MOVQ DX, ret+16(FP)
+	RET
+
+// packedArithmeticShift32 covers PSRAL's saturating immediate-count rule.
+// Counts at or above the 32-bit lane width must fill each lane with its sign.
+TEXT ·packedArithmeticShift32(SB), NOSPLIT, $0-16
+	MOVQ out+0(FP), AX
+	MOVQ src+8(FP), BX
+	MOVOU (BX), X0
+	PSRAL $31, X0
+	MOVOU X0, 0(AX)
+	MOVOU (BX), X0
+	PSRAL $32, X0
+	MOVOU X0, 16(AX)
 	RET

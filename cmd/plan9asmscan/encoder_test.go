@@ -82,8 +82,42 @@ var insts = [][]instEncoder{{{goOp: AADDVL, fixedBits: 1, args: cimm__XnSP__XdSP
 	assertEncoderForm(t, arm64, "ADDVL args=cimm__XnSP__XdSP", "")
 }
 
+func TestLoadWASMOpcodeForms(t *testing.T) {
+	goroot := t.TempDir()
+	dir := filepath.Join(goroot, "src", "cmd", "internal", "obj", "wasm")
+	writeEncoderFixture(t, filepath.Join(dir, "a.out.go"), "package wasm\n")
+	writeEncoderFixture(t, filepath.Join(dir, "anames.go"), `package wasm
+var Anames = []string{
+	"I32Add",
+	"ReservedFD01",
+	"MOVD",
+	"LAST",
+}
+`)
+	forms, err := loadEncoderForms(goroot, "wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 2 {
+		t.Fatalf("wasm opcode forms = %#v, want I32ADD and MOVD", forms)
+	}
+	assertEncoderForm(t, forms, "I32ADD", "")
+	assertEncoderForm(t, forms, "MOVD", "")
+
+	if _, err := loadWASMOpcodeForms(t.TempDir()); err == nil {
+		t.Fatal("loadWASMOpcodeForms accepted a directory without anames tables")
+	}
+	unreadable := t.TempDir()
+	if err := os.Mkdir(filepath.Join(unreadable, "anames.go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadWASMOpcodeForms(unreadable); err == nil {
+		t.Fatal("loadWASMOpcodeForms accepted an unreadable anames path")
+	}
+}
+
 func TestLoadEncoderFormsFromCurrentGOROOT(t *testing.T) {
-	minimum := map[string]int{"386": 1000, "amd64": 1000, "arm": 100, "arm64": 400}
+	minimum := map[string]int{"386": 1000, "amd64": 1000, "arm": 100, "arm64": 400, "wasm": 100}
 	for goarch, want := range minimum {
 		t.Run(goarch, func(t *testing.T) {
 			forms, err := loadEncoderForms(runtime.GOROOT(), goarch)

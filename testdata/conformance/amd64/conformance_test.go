@@ -114,6 +114,74 @@ func TestDoubleShiftFamily(t *testing.T) {
 	}
 }
 
+func TestGoHexInstructionFamilies(t *testing.T) {
+	a := [16]byte{}
+	b := [16]byte{}
+	for i := range a {
+		a[i] = byte(i*29 + 3)
+		b[i] = byte(i*17 + 0x70)
+	}
+	var got [160]byte
+	goHexVectorOps(&got, &a, &b)
+	mask := [16]byte{0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0xff, 0x00, 0x55, 0xaa, 0x0f, 0xf0, 0x33, 0xcc}
+	var want [160]byte
+	for i := 0; i < 16; i++ {
+		want[i] = a[i] | mask[i]
+		want[16+i] = a[i] | b[i]
+		if int8(a[i]) > int8(b[i]) {
+			want[32+i] = 0xff
+			want[48+i] = 0xff
+		}
+		want[64+i] = a[i] - b[i]
+		want[144+i] = a[i] & b[i]
+	}
+	for i := 0; i < 8; i++ {
+		word := uint16(a[2*i]) | uint16(a[2*i+1])<<8
+		left := word << 4
+		right := word >> 4
+		want[80+2*i] = byte(left)
+		want[80+2*i+1] = byte(left >> 8)
+		want[96+2*i] = byte(right)
+		want[96+2*i+1] = byte(right >> 8)
+		want[112+2*i] = a[8+i]
+		want[112+2*i+1] = b[8+i]
+		want[128+2*i] = a[8+i]
+		want[128+2*i+1] = b[8+i]
+	}
+	if got != want {
+		t.Fatalf("goHexVectorOps() = %#v, want %#v", got, want)
+	}
+
+	for _, tc := range []struct {
+		value uint64
+		count uint64
+	}{
+		{0x123456789abcdef0, 0},
+		{0x123456789abcdef0, 4},
+		{0xfedcba9876543210, 12},
+	} {
+		shifted := uint16(tc.value) >> (tc.count & 31)
+		var first uint64
+		for ((shifted >> first) & 1) == 0 {
+			first++
+		}
+		want := tc.value&^0xffff | uint64(shifted) | first<<16
+		if got := goHexWordOps(tc.value, tc.count); got != want {
+			t.Fatalf("goHexWordOps(%#x, %d) = %#x, want %#x", tc.value, tc.count, got, want)
+		}
+	}
+}
+
+func TestPackedArithmeticShiftCountSaturation(t *testing.T) {
+	src := [4]int32{0, 1, -1, -1 << 31}
+	var got [8]int32
+	packedArithmeticShift32(&got, &src)
+	want := [8]int32{0, 0, -1, -1, 0, 0, -1, -1}
+	if got != want {
+		t.Fatalf("packedArithmeticShift32() = %#v, want %#v", got, want)
+	}
+}
+
 func shld32(src, dst, count uint32) uint32 {
 	count &= 31
 	if count == 0 {

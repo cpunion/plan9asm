@@ -1,107 +1,147 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (c *arm64Ctx) lowerCond(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	switch op {
-	case "CSEL":
-		// CSEL cond, a, b, dst
-		if len(ins.Args) != 4 || ins.Args[0].Kind != OpIdent || ins.Args[3].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 CSEL expects cond, a, b, dstReg: %q", ins.Raw)
+	case "CSEL", "CSELW", "CSINC", "CSINCW", "CSINV", "CSINVW", "CSNEG", "CSNEGW":
+		if len(ins.Args) != 4 || ins.Args[3].Kind != OpReg {
+			return true, false, fmt.Errorf("arm64 %s expects cond, a, b, dstReg: %q", op, ins.Raw)
 		}
-		a, err := c.eval64(ins.Args[1], false)
+		cond, ok := arm64ConditionOperand(ins.Args[0])
+		if !ok {
+			return true, false, fmt.Errorf("arm64 %s expects a condition operand: %q", op, ins.Raw)
+		}
+		word := strings.HasSuffix(string(op), "W")
+		a, err := c.loadCondOperand(ins.Args[1], word)
 		if err != nil {
 			return true, false, err
 		}
-		bv, err := c.eval64(ins.Args[2], false)
+		bv, err := c.loadCondOperand(ins.Args[2], word)
 		if err != nil {
 			return true, false, err
 		}
-		cv, err := c.condValue(ins.Args[0].Ident)
+		typeName := "i64"
+		if word {
+			typeName = "i32"
+		}
+		switch {
+		case strings.HasPrefix(string(op), "CSINC"):
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = add %s %s, 1\n", t, typeName, bv)
+			bv = "%" + t
+		case strings.HasPrefix(string(op), "CSINV"):
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = xor %s %s, -1\n", t, typeName, bv)
+			bv = "%" + t
+		case strings.HasPrefix(string(op), "CSNEG"):
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = sub %s 0, %s\n", t, typeName, bv)
+			bv = "%" + t
+		}
+		cv, err := c.condValue(cond)
 		if err != nil {
 			return true, false, err
 		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 %s, i64 %s\n", t, cv, a, bv)
-		return true, false, c.storeReg(ins.Args[3].Reg, "%"+t)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", out, cv, typeName, a, typeName, bv)
+		return true, false, c.storeCondResult(ins.Args[3].Reg, "%"+out, word)
 
-	case "CSELW":
-		// CSELW cond, a, b, dst (32-bit select, zero-extended to i64 register file).
-		if len(ins.Args) != 4 || ins.Args[0].Kind != OpIdent || ins.Args[3].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 CSELW expects cond, a, b, dstReg: %q", ins.Raw)
+	case "CSET", "CSETW", "CSETM", "CSETMW":
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("arm64 %s expects cond, dstReg: %q", op, ins.Raw)
 		}
-		a, err := c.eval64(ins.Args[1], false)
+		cond, ok := arm64ConditionOperand(ins.Args[0])
+		if !ok {
+			return true, false, fmt.Errorf("arm64 %s expects a condition operand: %q", op, ins.Raw)
+		}
+		cv, err := c.condValue(cond)
 		if err != nil {
 			return true, false, err
 		}
-		bv, err := c.eval64(ins.Args[2], false)
-		if err != nil {
-			return true, false, err
+		word := strings.HasSuffix(string(op), "W")
+		typeName := "i64"
+		if word {
+			typeName = "i32"
 		}
-		aw := c.newTmp()
-		bw := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", aw, a)
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", bw, bv)
-		cv, err := c.condValue(ins.Args[0].Ident)
-		if err != nil {
-			return true, false, err
+		trueValue := "1"
+		if strings.HasPrefix(string(op), "CSETM") {
+			trueValue = "-1"
 		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i32 %%%s, i32 %%%s\n", t, cv, aw, bw)
-		z := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, t)
-		return true, false, c.storeReg(ins.Args[3].Reg, "%"+z)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s 0\n", out, cv, typeName, trueValue, typeName)
+		return true, false, c.storeCondResult(ins.Args[1].Reg, "%"+out, word)
 
-	case "CSET":
-		// CSET cond, dst
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 CSET expects cond, dstReg: %q", ins.Raw)
+	case "CINC", "CINCW", "CINV", "CINVW", "CNEG", "CNEGW":
+		if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
+			return true, false, fmt.Errorf("arm64 %s expects cond, srcReg, dstReg: %q", op, ins.Raw)
 		}
-		cv, err := c.condValue(ins.Args[0].Ident)
+		cond, ok := arm64ConditionOperand(ins.Args[0])
+		if !ok {
+			return true, false, fmt.Errorf("arm64 %s expects a condition operand: %q", op, ins.Raw)
+		}
+		word := strings.HasSuffix(string(op), "W")
+		src, err := c.loadCondOperand(ins.Args[1], word)
 		if err != nil {
 			return true, false, err
 		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 1, i64 0\n", t, cv)
-		return true, false, c.storeReg(ins.Args[1].Reg, "%"+t)
-
-	case "CNEG":
-		// CNEG cond, src, dst => dst = cond ? -src : src
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 CNEG expects cond, srcReg, dstReg: %q", ins.Raw)
+		typeName := "i64"
+		if word {
+			typeName = "i32"
 		}
-		cv, err := c.condValue(ins.Args[0].Ident)
+		changed := c.newTmp()
+		switch {
+		case strings.HasPrefix(string(op), "CINC"):
+			fmt.Fprintf(c.b, "  %%%s = add %s %s, 1\n", changed, typeName, src)
+		case strings.HasPrefix(string(op), "CINV"):
+			fmt.Fprintf(c.b, "  %%%s = xor %s %s, -1\n", changed, typeName, src)
+		case strings.HasPrefix(string(op), "CNEG"):
+			fmt.Fprintf(c.b, "  %%%s = sub %s 0, %s\n", changed, typeName, src)
+		}
+		cv, err := c.condValue(cond)
 		if err != nil {
 			return true, false, err
 		}
-		src, err := c.loadReg(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		nt := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sub i64 0, %s\n", nt, src)
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 %%%s, i64 %s\n", t, cv, nt, src)
-		return true, false, c.storeReg(ins.Args[2].Reg, "%"+t)
-
-	case "CINC":
-		// CINC cond, src, dst => dst = cond ? src+1 : src
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 CINC expects cond, srcReg, dstReg: %q", ins.Raw)
-		}
-		cv, err := c.condValue(ins.Args[0].Ident)
-		if err != nil {
-			return true, false, err
-		}
-		src, err := c.loadReg(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		it := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = add i64 %s, 1\n", it, src)
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 %%%s, i64 %s\n", t, cv, it, src)
-		return true, false, c.storeReg(ins.Args[2].Reg, "%"+t)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %%%s, %s %s\n", out, cv, typeName, changed, typeName, src)
+		return true, false, c.storeCondResult(ins.Args[2].Reg, "%"+out, word)
 	}
 	return false, false, nil
+}
+
+func arm64ConditionOperand(op Operand) (string, bool) {
+	if op.Kind == OpIdent {
+		return op.Ident, true
+	}
+	// AL is also an x86 byte-register spelling in the architecture-neutral
+	// parser. Its position in an ARM64 conditional instruction is unambiguous.
+	if op.Kind == OpReg && strings.EqualFold(string(op.Reg), "AL") {
+		return "AL", true
+	}
+	return "", false
+}
+
+func (c *arm64Ctx) loadCondOperand(op Operand, word bool) (string, error) {
+	v, err := c.eval64(op, false)
+	if err != nil {
+		return "", err
+	}
+	if !word {
+		return v, nil
+	}
+	t := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", t, v)
+	return "%" + t, nil
+}
+
+func (c *arm64Ctx) storeCondResult(dst Reg, value string, word bool) error {
+	if word {
+		z := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", z, value)
+		value = "%" + z
+	}
+	return c.storeReg(dst, value)
 }

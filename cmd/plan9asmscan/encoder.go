@@ -7,6 +7,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -91,6 +92,8 @@ func loadEncoderForms(goroot, goarch string) ([]encoderFormReport, error) {
 		dir = "x86"
 	case "arm", "arm64":
 		dir = goarch
+	case "wasm":
+		dir = goarch
 	default:
 		return nil, fmt.Errorf("unsupported encoder architecture %q", goarch)
 	}
@@ -101,6 +104,9 @@ func loadEncoderForms(goroot, goarch string) ([]encoderFormReport, error) {
 	}
 	if len(paths) == 0 {
 		return nil, fmt.Errorf("no Go encoder sources under %s", base)
+	}
+	if goarch == "wasm" {
+		return loadWASMOpcodeForms(base)
 	}
 	sort.Strings(paths)
 	files := make([]parsedEncoderFile, 0, len(paths))
@@ -127,6 +133,37 @@ func loadEncoderForms(goroot, goarch string) ([]encoderFormReport, error) {
 		scanFixedEncoderTable(files, forms, "optab", []string{"from", "reg", "from3", "to", "to2"})
 		expandEncoderAliases(files, forms, "oprangeset")
 		scanARM64GeneratedEncoderTables(files, forms)
+	}
+	return forms.list(), nil
+}
+
+// loadWASMOpcodeForms returns the opcode inventory from Go's generated wasm
+// name table. Unlike x86 and ARM, cmd/internal/obj/wasm has no operand-class
+// encoder table: wasm instructions are emitted directly by wasmobj.go. These
+// opcode-only rows therefore complement, rather than pretend to replace, the
+// concrete operand forms scanned from GOROOT's selected wasm assembly.
+func loadWASMOpcodeForms(base string) ([]encoderFormReport, error) {
+	paths, err := filepath.Glob(filepath.Join(base, "anames*.go"))
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no Go wasm opcode tables under %s", base)
+	}
+	sort.Strings(paths)
+	forms := newEncoderFormSet()
+	for _, path := range paths {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		for _, match := range reOpcodeName.FindAllSubmatch(src, -1) {
+			op := normalizeOp(string(match[1]))
+			if op == "" || op == "LAST" || strings.HasPrefix(op, "RESERVED") {
+				continue
+			}
+			forms.add(op, nil, filepath.Base(path)+":opcode-namespace", "")
+		}
 	}
 	return forms.list(), nil
 }

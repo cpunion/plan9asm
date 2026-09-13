@@ -40,6 +40,32 @@ func (c *arm64Ctx) setFlagsSub(dst, src, res string) {
 	c.storeFlag(c.flagsVSlot, "%"+ov)
 }
 
+func (c *arm64Ctx) setFlagsSub32(dst, src, res string) {
+	// SUBSW computes NZCV from the low 32 bits, before the architectural
+	// zero-extension of the result into the 64-bit register file.
+	c.flagsWritten = true
+
+	z := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", z, res)
+	n := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp slt i32 %s, 0\n", n, res)
+	carry := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp uge i32 %s, %s\n", carry, dst, src)
+	x1 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = xor i32 %s, %s\n", x1, dst, src)
+	x2 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = xor i32 %s, %s\n", x2, dst, res)
+	x3 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, %%%s\n", x3, x1, x2)
+	ov := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp slt i32 %%%s, 0\n", ov, x3)
+
+	c.storeFlag(c.flagsZSlot, "%"+z)
+	c.storeFlag(c.flagsNSlot, "%"+n)
+	c.storeFlag(c.flagsCSlot, "%"+carry)
+	c.storeFlag(c.flagsVSlot, "%"+ov)
+}
+
 func (c *arm64Ctx) setFlagsAdd(dst, src, res string) {
 	// NZCV for addition:
 	// Z: res==0
@@ -81,6 +107,20 @@ func (c *arm64Ctx) setFlagsLogic(res string) {
 	fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 0\n", z, res)
 	n := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = icmp slt i64 %s, 0\n", n, res)
+
+	c.storeFlag(c.flagsZSlot, "%"+z)
+	c.storeFlag(c.flagsNSlot, "%"+n)
+	c.storeFlag(c.flagsCSlot, "false")
+	c.storeFlag(c.flagsVSlot, "false")
+}
+
+func (c *arm64Ctx) setFlagsLogic32(res string) {
+	c.flagsWritten = true
+
+	z := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", z, res)
+	n := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp slt i32 %s, 0\n", n, res)
 
 	c.storeFlag(c.flagsZSlot, "%"+z)
 	c.storeFlag(c.flagsNSlot, "%"+n)
@@ -161,6 +201,12 @@ func (c *arm64Ctx) condValue(cond string) (string, error) {
 		return n, nil
 	case "PL":
 		return not(n), nil
+	case "VS":
+		return v, nil
+	case "VC":
+		return not(v), nil
+	case "AL", "NV":
+		return "true", nil
 	default:
 		return "", fmt.Errorf("arm64: unsupported condition %q", cond)
 	}

@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "module": "golang.org/x/arch",
+  "version": "v0.31.0",
+  "source": "arm64/arm64asm/testdata/plan9cases.txt",
+  "asm_files": 1,
+  "unique_ops": 667,
+  "unique_forms": 1108,
+  "supported_forms": 376,
+  "context_forms": 44,
+  "unsupported_forms": 688,
+  "parse_err_count": 0,
+  "coverage_fingerprint": "c700a6c940c896d2794d88c56649b70c09eae13362960f19ed082c31549467a7"
+}

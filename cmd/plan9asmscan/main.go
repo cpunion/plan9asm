@@ -144,7 +144,7 @@ type conformanceManifest struct {
 
 var (
 	reCaseClause = regexp.MustCompile(`case\s+([^:]+):`)
-	reOpcodeName = regexp.MustCompile("(?m)^\\s*(?:obj\\.A_ARCHSPECIFIC:\\s*)?\"([A-Z][A-Z0-9.]*)\",\\s*$")
+	reOpcodeName = regexp.MustCompile("(?m)^\\s*(?:obj\\.A_ARCHSPECIFIC:\\s*)?\"([A-Z][A-Za-z0-9.]*)\",\\s*$")
 )
 
 func main() {
@@ -154,8 +154,9 @@ func main() {
 		out      = flag.String("out", "", "write report to file (default stdout)")
 		format   = flag.String("format", "md", "output format: md|json")
 		repoRoot = flag.String("repo-root", ".", "plan9asm repository root for lowerers and conformance data")
-		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm")
+		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm|arm64-plan9")
 		goroot   = flag.String("goroot", runtime.GOROOT(), "Go root containing official assembler testdata")
+		input    = flag.String("input", "", "input file for corpora that require one")
 	)
 	flag.Parse()
 
@@ -186,9 +187,25 @@ func main() {
 		}
 		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch)
 	case "go-asm":
-		ops, forms, parseErrs, asmFiles, err = scanGoAssemblerTestdata(*goroot, arch, *goarch)
+		if *goarch == "wasm" {
+			// Go has no cmd/asm end-to-end testdata or operand-class encoder
+			// table for wasm. Its official positive Plan 9 corpus is the wasm
+			// assembly selected from GOROOT itself; the opcode namespace still
+			// comes from cmd/internal/obj/wasm below.
+			pkgs, err = listStdPackagesAtGOROOT(*goos, *goarch, *goroot)
+			if err == nil {
+				ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch)
+			}
+		} else {
+			ops, forms, parseErrs, asmFiles, err = scanGoAssemblerTestdata(*goroot, arch, *goarch)
+		}
+	case "arm64-plan9":
+		if strings.TrimSpace(*input) == "" {
+			fatalf("-corpus arm64-plan9 requires -input")
+		}
+		ops, forms, parseErrs, asmFiles, err = scanARM64Plan9Cases(*input)
 	default:
-		fatalf("unsupported -corpus %q (expect std|go-asm)", *corpus)
+		fatalf("unsupported -corpus %q (expect std|go-asm|arm64-plan9)", *corpus)
 	}
 	if err != nil {
 		fatalf("scan %s corpus: %v", *corpus, err)
@@ -242,8 +259,8 @@ func main() {
 }
 
 func validateCorpusTarget(corpus, goarch string) error {
-	if corpus == "go-asm" && goarch == "wasm" {
-		return errors.New("-corpus go-asm does not support -goarch wasm; use -corpus std for WebAssembly")
+	if corpus == "arm64-plan9" && goarch != "arm64" {
+		return errors.New("-corpus arm64-plan9 requires -goarch arm64")
 	}
 	return nil
 }
@@ -264,12 +281,29 @@ func toPlan9Arch(goarch string) (plan9asm.Arch, error) {
 }
 
 func listStdPackages(goos, goarch string) ([]pkgJSON, error) {
-	cmd := exec.Command("go", "list", "-json", "std")
+	return listStdPackagesWithCommand("go", goos, goarch, nil)
+}
+
+func listStdPackagesAtGOROOT(goos, goarch, goroot string) ([]pkgJSON, error) {
+	goName := "go"
+	if runtime.GOOS == "windows" {
+		goName += ".exe"
+	}
+	goCommand := filepath.Join(goroot, "bin", goName)
+	if _, err := os.Stat(goCommand); err != nil {
+		return nil, fmt.Errorf("Go command for GOROOT %s: %w", goroot, err)
+	}
+	return listStdPackagesWithCommand(goCommand, goos, goarch, []string{"GOROOT=" + goroot})
+}
+
+func listStdPackagesWithCommand(goCommand, goos, goarch string, extraEnv []string) ([]pkgJSON, error) {
+	cmd := exec.Command(goCommand, "list", "-json", "std")
 	cmd.Env = append(os.Environ(),
 		"CGO_ENABLED=0",
 		"GOOS="+goos,
 		"GOARCH="+goarch,
 	)
+	cmd.Env = append(cmd.Env, extraEnv...)
 	out, err := cmd.Output()
 	if err != nil {
 		var msg string
@@ -452,6 +486,42 @@ func scanGoAssemblerTestdata(goroot string, arch plan9asm.Arch, goarch string) (
 	return ops, forms, parseErrs, len(files), nil
 }
 
+func scanARM64Plan9Cases(path string) (map[string]*opStat, map[string]*formStat, []parseErr, int, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, nil, 0, fmt.Errorf("read ARM64 Plan 9 cases: %w", err)
+	}
+	ops := map[string]*opStat{}
+	forms := map[string]*formStat{}
+	var parseErrs []parseErr
+	for lineno, line := range strings.Split(string(src), "\n") {
+		_, asm, ok := strings.Cut(line, "|")
+		if !ok {
+			continue
+		}
+		asm = strings.TrimSpace(asm)
+		if !goAsmInstructionLine(asm) {
+			continue
+		}
+		probeSrc := "TEXT plan9asm_probe(SB),NOSPLIT,$0\n" + asm + "\nRET\n"
+		file, err := plan9asm.Parse(plan9asm.ArchARM64, probeSrc)
+		if err != nil {
+			parseErrs = append(parseErrs, parseErr{File: fmt.Sprintf("%s:%d", filepath.Base(path), lineno+1), Err: err.Error()})
+			continue
+		}
+		for _, fn := range file.Funcs {
+			for _, ins := range fn.Instrs {
+				if ins.Op == plan9asm.OpRET || ins.Op == plan9asm.OpLABEL || ins.Op == plan9asm.OpTEXT {
+					continue
+				}
+				addOpStat(ops, string(ins.Op), filepath.Base(path), "golang.org/x/arch/arm64asm", 1)
+				addFormStat(forms, plan9asm.ArchARM64, "arm64", ins, filepath.Base(path))
+			}
+		}
+	}
+	return ops, forms, parseErrs, 1, nil
+}
+
 func goAssemblerTestdataFiles(goroot, goarch string) ([]string, error) {
 	root := filepath.Join(goroot, "src", "cmd", "asm", "internal", "asm", "testdata")
 	var names []string
@@ -556,8 +626,8 @@ func buildOpcodeCatalog(
 		formsByOpcode[st.Descriptor.Opcode] = append(formsByOpcode[st.Descriptor.Opcode], st)
 	}
 	for _, match := range names {
-		op := string(match[1])
-		if op == "LAST" {
+		op := normalizeOp(string(match[1]))
+		if op == "" || op == "LAST" || strings.HasPrefix(op, "RESERVED") {
 			continue
 		}
 		if _, ok := seen[op]; ok {
@@ -993,8 +1063,13 @@ func renderMarkdown(rep report) []byte {
 		fmt.Fprintf(&b, "- explicit compile-only forms observed in this corpus: `%d`\n", rep.CompileOnlyForms)
 	}
 	if rep.EncoderForms > 0 {
-		fmt.Fprintf(&b, "- official encoder-table forms: `%d` across `%d` opcodes (`%d` opcodes observed in positive testdata)\n",
-			rep.EncoderForms, rep.EncoderOpcodes, rep.EncoderOpsObserved)
+		if rep.Goarch == "wasm" {
+			fmt.Fprintf(&b, "- official wasm opcode entries: `%d` (`%d` observed in the official GOROOT corpus)\n",
+				rep.EncoderOpcodes, rep.EncoderOpsObserved)
+		} else {
+			fmt.Fprintf(&b, "- official encoder-table forms: `%d` across `%d` opcodes (`%d` opcodes observed in positive testdata)\n",
+				rep.EncoderForms, rep.EncoderOpcodes, rep.EncoderOpsObserved)
+		}
 	}
 	if rep.OfficialOpcodes > 0 {
 		fmt.Fprintf(&b, "- official opcode names: `%d`\n", rep.OfficialOpcodes)

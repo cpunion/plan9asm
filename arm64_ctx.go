@@ -126,11 +126,12 @@ func (c *arm64Ctx) scanUsedRegs() {
 			c.usedVRegs[idx] = true
 			return
 		}
-		// ARM64 F registers alias the corresponding 128-bit V registers. Keep
-		// the scalar slot for existing FP lowering and make the vector slot
-		// available to pair loads such as FLDPQ (F0, F1).
+		// ARM64 F registers alias the corresponding 128-bit V registers. Keep a
+		// single vector slot so scalar and vector operations observe each
+		// other's writes.
 		if idx, ok := arm64ParseFReg(r); ok {
 			c.usedVRegs[idx] = true
+			return
 		}
 		c.usedRegs[r] = true
 	}
@@ -264,10 +265,6 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		// Custom arg->reg assignment (used by helper<> bodies).
 		for i := 0; i < len(c.sig.Args) && i < len(c.sig.ArgRegs); i++ {
 			r := c.sig.ArgRegs[i]
-			slot, ok := c.regSlot[r]
-			if !ok {
-				continue
-			}
 			arg := fmt.Sprintf("%%arg%d", i)
 			argTy := c.sig.Args[i]
 			v, ok, err := arm64ValueAsI64(c, argTy, arg)
@@ -277,7 +274,9 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 			if !ok {
 				continue
 			}
-			fmt.Fprintf(c.b, "  store i64 %s, ptr %s\n", v, slot)
+			if err := c.storeReg(r, v); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -422,6 +421,20 @@ func llvmZeroValue(ty LLVMType) string {
 }
 
 func (c *arm64Ctx) loadReg(r Reg) (string, error) {
+	if r == ZR {
+		return "0", nil
+	}
+	if _, ok := arm64ParseFReg(r); ok {
+		v, err := c.loadVReg(r)
+		if err != nil {
+			return "", err
+		}
+		lanes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", lanes, v)
+		low := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i64 0\n", low, lanes)
+		return "%" + low, nil
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return "", fmt.Errorf("arm64: unknown reg %s", r)
@@ -453,6 +466,16 @@ func (c *arm64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 }
 
 func (c *arm64Ctx) storeReg(r Reg, v string) error {
+	if r == ZR {
+		return nil
+	}
+	if _, ok := arm64ParseFReg(r); ok {
+		lanes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> zeroinitializer, i64 %s, i64 0\n", lanes, v)
+		bytes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", bytes, lanes)
+		return c.storeVReg(r, "%"+bytes)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return fmt.Errorf("arm64: unknown reg %s", r)
@@ -464,7 +487,10 @@ func (c *arm64Ctx) storeReg(r Reg, v string) error {
 func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
-		return "", fmt.Errorf("arm64: not a vreg %s", r)
+		idx, ok = arm64ParseFReg(r)
+	}
+	if !ok {
+		return "", fmt.Errorf("arm64: not a vector register %s", r)
 	}
 	slot, ok := c.vRegSlot[idx]
 	if !ok {
@@ -478,7 +504,10 @@ func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 func (c *arm64Ctx) storeVReg(r Reg, v string) error {
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
-		return fmt.Errorf("arm64: not a vreg %s", r)
+		idx, ok = arm64ParseFReg(r)
+	}
+	if !ok {
+		return fmt.Errorf("arm64: not a vector register %s", r)
 	}
 	slot, ok := c.vRegSlot[idx]
 	if !ok {

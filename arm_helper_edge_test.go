@@ -38,10 +38,10 @@ func TestARMParserFlagAndHelperEdges(t *testing.T) {
 	if regs, ok := expandRegRange("R7-R4"); !ok || len(regs) != 4 || regs[0] != "R7" || regs[3] != "R4" {
 		t.Fatalf("expandRegRange(desc) = (%v, %v)", regs, ok)
 	}
-	if p, idx, ok := regRangeParts("F12"); !ok || p != "F" || idx != 12 {
+	if p, idx, suffix, ok := regRangeParts("F12"); !ok || p != "F" || idx != 12 || suffix != "" {
 		t.Fatalf("regRangeParts(F12) = (%q, %d, %v)", p, idx, ok)
 	}
-	if _, _, ok := regRangeParts("SP"); ok {
+	if _, _, _, ok := regRangeParts("SP"); ok {
 		t.Fatalf("regRangeParts(SP) unexpectedly succeeded")
 	}
 	if got := absInt(-9); got != 9 {

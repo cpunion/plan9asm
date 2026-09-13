@@ -24,29 +24,44 @@ fi
 tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 
-for goarch in 386 amd64 arm arm64; do
+required_arches=(386 amd64 arm arm64 wasm)
+for goarch in "${required_arches[@]}"; do
   echo "==> official Go assembler coverage $goarch"
+  goos=linux
+  if [[ "$goarch" == "wasm" ]]; then
+    goos=js
+  fi
   go run ./cmd/plan9asmscan \
     -corpus=go-asm \
     -goroot="$go_root" \
-    -goos=linux \
+    -goos="$goos" \
     -goarch="$goarch" \
     -repo-root=. \
     -format=json \
     -out="$tmp_root/$goarch.json"
 done
 
-"$python_cmd" - testdata/coverage/go-asm-baseline.json "$tmp_root" <<'PY'
+"$python_cmd" - testdata/coverage/go-asm-baseline.json testdata/coverage/arm64-go-assembler-families.txt "$tmp_root" <<'PY'
 import json
 import pathlib
 import re
 import sys
 
 baseline_path = pathlib.Path(sys.argv[1])
-report_dir = pathlib.Path(sys.argv[2])
+family_path = pathlib.Path(sys.argv[2])
+report_dir = pathlib.Path(sys.argv[3])
 baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
 if baseline.get("schema_version") != 2:
     raise SystemExit("coverage baseline schema must be 2")
+
+required_arches = {"386", "amd64", "arm", "arm64", "wasm"}
+report_paths = sorted(report_dir.glob("*.json"))
+reported_arches = {path.stem for path in report_paths}
+if reported_arches != required_arches:
+    raise SystemExit(
+        "official Go assembler coverage must run every supported architecture: "
+        f"expected {sorted(required_arches)}, got {sorted(reported_arches)}"
+    )
 
 expected_versions = {f"go1.{minor}" for minor in range(20, 28)}
 actual_versions = set(baseline.get("versions", {}))
@@ -73,13 +88,33 @@ fields = (
     "encoder_fingerprint",
 )
 
-for report_path in sorted(report_dir.glob("*.json")):
+for report_path in report_paths:
     report = json.loads(report_path.read_text(encoding="utf-8"))
     match = re.match(r"^(go\d+\.\d+)", report["go_version"])
     if not match:
         raise SystemExit(f"cannot normalize Go version {report['go_version']!r}")
     version = match.group(1)
     arch = report["goarch"]
+    if arch != report_path.stem:
+        raise SystemExit(
+            f"coverage report {report_path.name} identifies itself as {arch!r}"
+        )
+    classified_forms = (
+        report["supported_forms"]
+        + report["context_forms"]
+        + report["unsupported_forms"]
+    )
+    if classified_forms != report["unique_forms"]:
+        raise SystemExit(
+            f"{version}/{arch}: form classification skipped entries: "
+            f"supported+context+unsupported={classified_forms}, "
+            f"unique={report['unique_forms']}"
+        )
+    if report["parse_err_count"]:
+        raise SystemExit(
+            f"{version}/{arch}: official assembler corpus has "
+            f"{report['parse_err_count']} unclassified parse errors"
+        )
     expected = baseline.get("versions", {}).get(version, {}).get(arch)
     if expected is None:
         raise SystemExit(
@@ -111,4 +146,21 @@ for report_path in sorted(report_dir.glob("*.json")):
             f"{version}/{arch}: instruction coverage changed ({details}); "
             "review the form-level report before updating the baseline"
         )
+
+    if arch == "arm64":
+        required = {
+            line.strip()
+            for line in family_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        catalog = {item["opcode"]: item for item in report["opcode_catalog"]}
+        missing_encoder = sorted(op for op in required if not catalog.get(op, {}).get("encoder_forms"))
+        missing_corpus = sorted(op for op in required if not catalog.get(op, {}).get("observed_in_corpus"))
+        unsupported = sorted(op for op in required if catalog.get(op, {}).get("unsupported_forms"))
+        if missing_encoder or missing_corpus or unsupported:
+            raise SystemExit(
+                f"{version}/arm64: incomplete required Go assembler families: "
+                f"missing_encoder={missing_encoder}, missing_corpus={missing_corpus}, unsupported={unsupported}"
+            )
+        print(f"{version}/arm64: all {len(required)} required opcodes are encoder-defined, observed, and lowerable")
 PY

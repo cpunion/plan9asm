@@ -14,15 +14,15 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	switch op {
 	case "MOVOU", "MOVOA", "MOVUPS", "MOVAPS", "MOVO", "MOVQ", "MOVL", "MOVD",
 		"VMOVDQU", "VMOVDQA", "VMOVNTDQ", "VMOVDQU64", "VMOVDQA64", "VMOVAPS", "VMOVAPD",
-		"VPCMPEQB", "VPMOVMSKB", "VZEROUPPER", "VZEROALL", "VPBROADCASTB", "VPAND", "VPXOR", "VPOR", "VPADDD", "VPADDQ", "VPTEST",
+		"VPCMPEQB", "VPCMPGTB", "VPMOVMSKB", "VZEROUPPER", "VZEROALL", "VPBROADCASTB", "VPAND", "VPXOR", "VPOR", "VPADDD", "VPADDQ", "VPTEST",
 		"VPANDQ", "VPXORQ", "VPORQ", "VPCLMULQDQ", "VPTERNLOGD", "VEXTRACTF32X4",
 		"VPERMB", "VGF2P8AFFINEQB", "VPERMI2B", "VPCOMPRESSQ", "VPOPCNTB", "VPCMPUQ",
 		"VBROADCASTI128", "VBROADCASTF32X2", "VBROADCASTSD", "VXORPD",
-		"VPSHUFB", "VPSHUFD", "VPSLLD", "VPSRLD", "VPSRLQ", "VPSLLQ", "VPSRLDQ", "VPSLLDQ",
+		"VPSHUFB", "VPSHUFD", "VPSLLD", "VPSRLD", "VPSRLQ", "VPSLLQ", "VPSRLDQ", "VPSLLDQ", "VPUNPCKLBW", "VPUNPCKHBW",
 		"VPALIGNR", "VPERM2I128", "VPERM2F128", "VINSERTI128", "VPBLENDD",
-		"PXOR", "PAND", "PANDN", "PADDD", "PADDL", "PSUBL", "PCLMULQDQ", "PCMPEQB", "PCMPEQL", "PMOVMSKB",
-		"PSHUFB", "PSRLDQ", "PSLLDQ", "PSRLQ", "PSRLL", "PSLLL", "PSRAL", "PEXTRD", "PEXTRB", "PEXTRQ",
-		"PINSRQ", "PINSRD", "PINSRB", "PINSRW", "PALIGNR", "PUNPCKLBW", "PUNPCKLQDQ", "PSHUFL", "PSHUFD", "PSHUFHW", "SHUFPS",
+		"PXOR", "POR", "PAND", "PANDN", "PADDD", "PADDL", "PSUBB", "PSUBL", "PCLMULQDQ", "PCMPEQB", "PCMPEQL", "PCMPGTB", "PMOVMSKB",
+		"PSHUFB", "PSRLDQ", "PSLLDQ", "PSRLQ", "PSLLW", "PSRLW", "PSRLL", "PSLLL", "PSRAL", "PEXTRD", "PEXTRB", "PEXTRQ",
+		"PINSRQ", "PINSRD", "PINSRB", "PINSRW", "PALIGNR", "PUNPCKLBW", "PUNPCKHBW", "PUNPCKLQDQ", "PSHUFL", "PSHUFD", "PSHUFHW", "SHUFPS",
 		"PBLENDW", "PADDQ", "KMOVB", "KMOVW", "KMOVQ", "KXORQ",
 		"SHA1NEXTE", "SHA1MSG1", "SHA1MSG2", "SHA1RNDS4", "SHA256MSG1", "SHA256MSG2", "SHA256RNDS2",
 		"AESENC", "AESENCLAST", "AESDEC", "AESDECLAST", "AESIMC", "AESKEYGENASSIST", "PCMPESTRI":
@@ -1287,24 +1287,51 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		return true, false, c.storeReg(CX, "%"+z)
 
 	case "VPAND":
-		// VPAND Ysrc1, Ysrc2, Ydst
+		// VPAND src1, src2, dst supports both XMM and YMM widths.
 		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 VPAND expects Ysrc1, Ysrc2, Ydst: %q", ins.Raw)
+			return true, false, fmt.Errorf("amd64 VPAND expects src1, src2, dst: %q", ins.Raw)
 		}
-		if _, ok := amd64ParseYReg(ins.Args[2].Reg); !ok {
-			return false, false, nil
+		if _, ok := amd64ParseYReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseYReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadYVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadYVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = and <32 x i8> %s, %s\n", t, a, b)
+			return true, false, c.storeY(ins.Args[2].Reg, "%"+t)
 		}
-		a, err := c.loadYVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
+		if _, ok := amd64ParseXReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseXReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadXVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadXVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = and <16 x i8> %s, %s\n", t, a, b)
+			return true, false, c.storeX(ins.Args[2].Reg, "%"+t)
 		}
-		b, err := c.loadYVecOperand(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = and <32 x i8> %s, %s\n", t, a, b)
-		return true, false, c.storeY(ins.Args[2].Reg, "%"+t)
+		return false, false, nil
 
 	case "VPBLENDD":
 		// VPBLENDD $imm, Ysrc1, Ysrc2, Ydst
@@ -1403,19 +1430,84 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %%%s, <16 x i8> %%%s, <32 x i32> %s\n", out, lo2, hi2, llvmI32RangeMask(0, 32))
 		return true, false, c.storeY(ins.Args[2].Reg, "%"+out)
 
-	case "PUNPCKLBW":
-		// PUNPCKLBW Xsrc, Xdst
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 PUNPCKLBW expects Xsrc, Xdst: %q", ins.Raw)
+	case "VPUNPCKLBW", "VPUNPCKHBW":
+		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src1, src2, dst: %q", op, ins.Raw)
 		}
-		if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
-			return false, false, nil
+		if _, ok := amd64ParseXReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseXReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadXVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadXVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			start := 0
+			if op == "VPUNPCKHBW" {
+				start = 8
+			}
+			mask := make([]string, 0, 16)
+			for i := start; i < start+8; i++ {
+				mask = append(mask, fmt.Sprintf("i32 %d", i), fmt.Sprintf("i32 %d", 16+i))
+			}
+			sh := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %s, <16 x i8> %s, <16 x i32> <%s>\n", sh, b, a, strings.Join(mask, ", "))
+			return true, false, c.storeX(ins.Args[2].Reg, "%"+sh)
+		}
+		if _, ok := amd64ParseYReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseYReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadYVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadYVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			start := 0
+			if op == "VPUNPCKHBW" {
+				start = 8
+			}
+			mask := make([]string, 0, 32)
+			for lane := 0; lane < 2; lane++ {
+				for i := start; i < start+8; i++ {
+					idx := lane*16 + i
+					mask = append(mask, fmt.Sprintf("i32 %d", idx), fmt.Sprintf("i32 %d", 32+idx))
+				}
+			}
+			sh := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shufflevector <32 x i8> %s, <32 x i8> %s, <32 x i32> <%s>\n", sh, b, a, strings.Join(mask, ", "))
+			return true, false, c.storeY(ins.Args[2].Reg, "%"+sh)
+		}
+		return false, false, nil
+
+	case "PUNPCKLBW", "PUNPCKHBW":
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
 		}
 		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 			return false, false, nil
 		}
-		// Interleave low 8 bytes: dst = [dst0,src0,dst1,src1,...,dst7,src7].
-		src, err := c.loadX(ins.Args[0].Reg)
+		if ins.Args[0].Kind == OpReg {
+			if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
+				return false, false, nil
+			}
+		}
+		src, err := c.loadXVecOperand(ins.Args[0])
 		if err != nil {
 			return true, false, err
 		}
@@ -1423,7 +1515,15 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		if err != nil {
 			return true, false, err
 		}
-		mask := "<16 x i32> <i32 0, i32 16, i32 1, i32 17, i32 2, i32 18, i32 3, i32 19, i32 4, i32 20, i32 5, i32 21, i32 6, i32 22, i32 7, i32 23>"
+		start := 0
+		if op == "PUNPCKHBW" {
+			start = 8
+		}
+		maskParts := make([]string, 0, 16)
+		for i := start; i < start+8; i++ {
+			maskParts = append(maskParts, fmt.Sprintf("i32 %d", i), fmt.Sprintf("i32 %d", 16+i))
+		}
+		mask := "<16 x i32> <" + strings.Join(maskParts, ", ") + ">"
 		sh := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <16 x i8> %s, <16 x i8> %s, %s\n", sh, dstv, src, mask)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+sh)
@@ -1874,34 +1974,65 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return false, false, nil
 
-	case "VPCMPEQB":
-		// VPCMPEQB Ysrc1, Ysrc2, Ydst
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 VPCMPEQB expects Ysrc1, Ysrc2, Ydst: %q", ins.Raw)
+	case "VPCMPEQB", "VPCMPGTB":
+		// Three-operand packed-byte comparison. Go syntax lists the Intel
+		// r/m source first, so the result is src2 ==|> src1.
+		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src1, src2, dst: %q", op, ins.Raw)
 		}
-		if _, ok := amd64ParseYReg(ins.Args[0].Reg); !ok {
-			return false, false, nil
+		if _, ok := amd64ParseYReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseYReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadYVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadYVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			pred := "eq"
+			if op == "VPCMPGTB" {
+				pred = "sgt"
+			}
+			cmp := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp %s <32 x i8> %s, %s\n", cmp, pred, b, a)
+			sel := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = select <32 x i1> %%%s, <32 x i8> %s, <32 x i8> zeroinitializer\n", sel, cmp, llvmAllOnesI8Vec(32))
+			return true, false, c.storeY(ins.Args[2].Reg, "%"+sel)
 		}
-		if _, ok := amd64ParseYReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
+		if _, ok := amd64ParseXReg(ins.Args[2].Reg); ok {
+			for _, arg := range ins.Args[:2] {
+				if arg.Kind == OpReg {
+					if _, ok := amd64ParseXReg(arg.Reg); !ok {
+						return false, false, nil
+					}
+				}
+			}
+			a, err := c.loadXVecOperand(ins.Args[0])
+			if err != nil {
+				return true, false, err
+			}
+			b, err := c.loadXVecOperand(ins.Args[1])
+			if err != nil {
+				return true, false, err
+			}
+			pred := "eq"
+			if op == "VPCMPGTB" {
+				pred = "sgt"
+			}
+			cmp := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp %s <16 x i8> %s, %s\n", cmp, pred, b, a)
+			sel := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = select <16 x i1> %%%s, <16 x i8> %s, <16 x i8> zeroinitializer\n", sel, cmp, llvmAllOnesI8Vec(16))
+			return true, false, c.storeX(ins.Args[2].Reg, "%"+sel)
 		}
-		if _, ok := amd64ParseYReg(ins.Args[2].Reg); !ok {
-			return false, false, nil
-		}
-		a, err := c.loadY(ins.Args[0].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		b, err := c.loadY(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		allOnes := llvmAllOnesI8Vec(32)
-		cmp := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq <32 x i8> %s, %s\n", cmp, a, b)
-		sel := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select <32 x i1> %%%s, <32 x i8> %s, <32 x i8> zeroinitializer\n", sel, cmp, allOnes)
-		return true, false, c.storeY(ins.Args[2].Reg, "%"+sel)
+		return false, false, nil
 
 	case "VPMOVMSKB":
 		// VPMOVMSKB Ysrc, dstReg
@@ -2002,7 +2133,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, fmt.Errorf("amd64 %s unsupported dst: %q", op, ins.Raw)
 		}
 
-	case "PXOR", "PAND", "PANDN":
+	case "PXOR", "POR", "PAND", "PANDN":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects Xsrc, Xdst: %q", op, ins.Raw)
 		}
@@ -2020,6 +2151,8 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		t := c.newTmp()
 		if op == "PXOR" {
 			fmt.Fprintf(c.b, "  %%%s = xor <16 x i8> %s, %s\n", t, dstv, src)
+		} else if op == "POR" {
+			fmt.Fprintf(c.b, "  %%%s = or <16 x i8> %s, %s\n", t, dstv, src)
 		} else if op == "PANDN" {
 			notv := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = xor <16 x i8> %s, %s\n", notv, dstv, llvmAllOnesI8Vec(16))
@@ -2029,7 +2162,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+t)
 
-	case "PADDL", "PADDD", "PADDQ", "PSUBL":
+	case "PADDL", "PADDD", "PADDQ", "PSUBB", "PSUBL":
 		// Two-operand packed arithmetic: dst = dst (+|-) src.
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects Xsrc, Xdst: %q", op, ins.Raw)
@@ -2046,40 +2179,72 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, err
 		}
 		vecTy := "<4 x i32>"
-		if op == "PADDQ" {
+		if op == "PSUBB" {
+			vecTy = "<16 x i8>"
+		} else if op == "PADDQ" {
 			vecTy = "<2 x i64>"
 		}
-		as := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", as, src, vecTy)
-		bs := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", bs, dstv, vecTy)
+		as := src
+		bs := dstv
+		if vecTy != "<16 x i8>" {
+			at := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", at, src, vecTy)
+			as = "%" + at
+			bt := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", bt, dstv, vecTy)
+			bs = "%" + bt
+		}
 		x := c.newTmp()
 		if op == "PADDL" || op == "PADDD" || op == "PADDQ" {
-			fmt.Fprintf(c.b, "  %%%s = add %s %%%s, %%%s\n", x, vecTy, bs, as)
+			fmt.Fprintf(c.b, "  %%%s = add %s %s, %s\n", x, vecTy, bs, as)
 		} else {
-			fmt.Fprintf(c.b, "  %%%s = sub %s %%%s, %%%s\n", x, vecTy, bs, as)
+			fmt.Fprintf(c.b, "  %%%s = sub %s %s, %s\n", x, vecTy, bs, as)
+		}
+		if vecTy == "<16 x i8>" {
+			return true, false, c.storeX(ins.Args[1].Reg, "%"+x)
 		}
 		out := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", out, vecTy, x)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
 
-	case "PSLLL", "PSRLL", "PSRAL":
-		// Two-operand packed i32 shift immediate.
+	case "PSLLW", "PSRLW", "PSLLL", "PSRLL", "PSRAL":
+		// Two-operand packed integer shift immediate.
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpImm || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects $imm, Xdst: %q", op, ins.Raw)
 		}
 		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 			return false, false, nil
 		}
-		n := ins.Args[0].Imm & 31
+		laneBits := int64(32)
+		vecTy := "<4 x i32>"
+		if op == "PSLLW" || op == "PSRLW" {
+			laneBits = 16
+			vecTy = "<8 x i16>"
+		}
+		n := ins.Args[0].Imm
 		v, err := c.loadX(ins.Args[1].Reg)
 		if err != nil {
 			return true, false, err
 		}
 		bc := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", bc, v)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", bc, v, vecTy)
+		if n < 0 {
+			return true, false, fmt.Errorf("amd64 %s shift count must be non-negative: %q", op, ins.Raw)
+		}
+		if n >= laneBits {
+			if op != "PSRAL" {
+				return true, false, c.storeX(ins.Args[1].Reg, "zeroinitializer")
+			}
+			// Packed arithmetic right shifts saturate an oversized count to
+			// laneBits-1, producing an all-sign-bit lane instead of zero.
+			n = laneBits - 1
+		}
 		sh := c.newTmp()
 		switch op {
+		case "PSLLW":
+			fmt.Fprintf(c.b, "  %%%s = shl <8 x i16> %%%s, <i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d>\n", sh, bc, n, n, n, n, n, n, n, n)
+		case "PSRLW":
+			fmt.Fprintf(c.b, "  %%%s = lshr <8 x i16> %%%s, <i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d, i16 %d>\n", sh, bc, n, n, n, n, n, n, n, n)
 		case "PSLLL":
 			fmt.Fprintf(c.b, "  %%%s = shl <4 x i32> %%%s, <i32 %d, i32 %d, i32 %d, i32 %d>\n", sh, bc, n, n, n, n)
 		case "PSRLL":
@@ -2088,7 +2253,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			fmt.Fprintf(c.b, "  %%%s = ashr <4 x i32> %%%s, <i32 %d, i32 %d, i32 %d, i32 %d>\n", sh, bc, n, n, n, n)
 		}
 		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, sh)
+		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <16 x i8>\n", out, vecTy, sh)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
 
 	case "PCMPEQL":
@@ -2276,22 +2441,24 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", bc, call)
 		return true, false, c.storeX(ins.Args[2].Reg, "%"+bc)
 
-	case "PCMPEQB":
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 PCMPEQB expects Xsrc, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
-			return false, false, nil
+	case "PCMPEQB", "PCMPGTB":
+		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
+			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
 		}
 		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 			return false, false, nil
 		}
+		if ins.Args[0].Kind == OpReg {
+			if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
+				return false, false, nil
+			}
+		}
 		allOnes := llvmAllOnesI8Vec(16)
 		// Common idiom: PCMPEQB X3, X3 -> all ones.
-		if ins.Args[0].Reg == ins.Args[1].Reg {
+		if op == "PCMPEQB" && ins.Args[0].Kind == OpReg && ins.Args[0].Reg == ins.Args[1].Reg {
 			return true, false, c.storeX(ins.Args[1].Reg, allOnes)
 		}
-		srcv, err := c.loadX(ins.Args[0].Reg)
+		srcv, err := c.loadXVecOperand(ins.Args[0])
 		if err != nil {
 			return true, false, err
 		}
@@ -2300,7 +2467,11 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, err
 		}
 		cmp := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq <16 x i8> %s, %s\n", cmp, dstv, srcv)
+		pred := "eq"
+		if op == "PCMPGTB" {
+			pred = "sgt"
+		}
+		fmt.Fprintf(c.b, "  %%%s = icmp %s <16 x i8> %s, %s\n", cmp, pred, dstv, srcv)
 		sel := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = select <16 x i1> %%%s, <16 x i8> %s, <16 x i8> zeroinitializer\n", sel, cmp, allOnes)
 		return true, false, c.storeX(ins.Args[1].Reg, "%"+sel)

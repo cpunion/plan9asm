@@ -29,9 +29,10 @@ Plan 9 assembly parser and LLVM IR translator, extracted as an independent modul
   corpus path; it is not part of `plan9asmll -all-targets`.
 - `386` currently reuses the x86 lowering path from `amd64` backend logic.
 - `arm64` does not include `arm` (32-bit). They are separate architectures.
-- Instruction coverage is tracked by architecture, family, opcode, and operand
-  form against Go's official encoder tables, positive assembler testdata, and
-  executable real-world regressions. See
+- Instruction coverage is tracked for all five LLGo Plan 9 assembly GOARCH
+  targets by architecture, level, family, opcode, and operand form against Go's
+  official opcode/encoder sources, positive GOROOT assembly, and executable
+  real-world regressions. See
   [Plan 9 assembly instruction coverage](doc/plan9asm-corpus.md).
 
 ## LLVM backend

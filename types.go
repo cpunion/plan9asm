@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"math"
+	"math/bits"
 	"strconv"
 	"strings"
 )
@@ -127,7 +128,8 @@ func parseReg(s string) (Reg, bool) {
 	}
 	// SIMD/FP registers:
 	// - x86: M0..M7, X0..X31, Y0..Y31, Z0..Z31, K0..K7
-	// - arm64: V0..V31, with optional lane suffix (e.g. V0.B16, V8.D[0])
+	// - arm64: V0..V31 and SVE Z0..Z31/P0..P15, with optional lane suffix
+	//   (for example V0.B16, V8.D[0], Z22.B, or P10.H)
 	// - arm64 FP: F0..F31
 	if strings.HasPrefix(ss, "K") && len(ss) >= 2 {
 		if n, err := strconv.Atoi(ss[1:]); err == nil && 0 <= n && n <= 7 {
@@ -139,7 +141,7 @@ func parseReg(s string) (Reg, bool) {
 			return Reg(ss), true
 		}
 	}
-	if (strings.HasPrefix(ss, "X") || strings.HasPrefix(ss, "Y") || strings.HasPrefix(ss, "Z") || strings.HasPrefix(ss, "V") || strings.HasPrefix(ss, "F")) && len(ss) >= 2 {
+	if (strings.HasPrefix(ss, "X") || strings.HasPrefix(ss, "Y") || strings.HasPrefix(ss, "Z") || strings.HasPrefix(ss, "V") || strings.HasPrefix(ss, "F") || strings.HasPrefix(ss, "P")) && len(ss) >= 2 {
 		i := 1
 		for i < len(ss) && ss[i] >= '0' && ss[i] <= '9' {
 			i++
@@ -237,13 +239,14 @@ type Operand struct {
 }
 
 type MemRef struct {
-	Base    Reg
-	Sym     string // optional symbol-based address, including the (SB) suffix
-	Off     int64
-	OffRaw  string // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
-	Index   Reg    // optional; empty if not present
-	Scale   int64  // optional; defaults to 1 when Index is present
-	Segment Reg    // optional x86 segment override (FS or GS)
+	Base     Reg
+	Sym      string // optional symbol-based address, including the (SB) suffix
+	Off      int64
+	OffRaw   string   // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
+	Index    Reg      // optional; empty if not present
+	IndexExt ExtendOp // optional ARM64 index extension (UXTW, SXTW, UXTX, or SXTX)
+	Scale    int64    // optional; defaults to 1 when Index is present
+	Segment  Reg      // optional x86 segment override (FS or GS)
 }
 
 func (o Operand) String() string {
@@ -256,7 +259,11 @@ func (o Operand) String() string {
 	case OpReg:
 		return string(o.Reg)
 	case OpRegExtend:
-		return fmt.Sprintf("%s.%s", o.Reg, o.Ext)
+		suffix := ""
+		if o.ShiftOp != "" {
+			suffix = fmt.Sprintf("%s%d", o.ShiftOp, o.ShiftAmount)
+		}
+		return fmt.Sprintf("%s.%s%s", o.Reg, o.Ext, suffix)
 	case OpRegShift:
 		suffix := fmt.Sprintf("%d", o.ShiftAmount)
 		if o.ShiftReg != "" {
@@ -290,6 +297,13 @@ func (o Operand) String() string {
 			offset = o.Mem.OffRaw
 		}
 		if o.Mem.Index != "" {
+			if o.Mem.IndexExt != "" {
+				index := fmt.Sprintf("%s.%s", o.Mem.Index, o.Mem.IndexExt)
+				if o.Mem.Scale > 1 {
+					index += fmt.Sprintf("<<%d", bits.TrailingZeros64(uint64(o.Mem.Scale)))
+				}
+				return fmt.Sprintf("%s(%s)(%s)%s", offset, o.Mem.Base, index, segment)
+			}
 			if o.Mem.Scale == 0 {
 				return fmt.Sprintf("%s(%s)(%s)%s", offset, o.Mem.Base, o.Mem.Index, segment)
 			}
@@ -329,6 +343,12 @@ func parseImm(s string) (int64, bool) {
 	// parsing as uint64 and converting to int64 (two's complement).
 	u, uerr := strconv.ParseUint(v, 0, 64)
 	if uerr != nil {
+		// Preserve the integer meaning of constant expressions such as $64-31.
+		// evalFloatExpr also accepts integer literals, so trying it first would
+		// accidentally store the float64 bit pattern instead of the value 33.
+		if u, ok := parseImmExpr(v); ok {
+			return int64(u), true
+		}
 		// Floating immediates (e.g. $1.0, $6.02e23) are used by some amd64
 		// scalar FP instructions. Keep parser surface small by storing raw
 		// float64 bit-patterns in Imm.
@@ -338,18 +358,14 @@ func parseImm(s string) (int64, bool) {
 		if f, ok := parseImmFloatExpr(v); ok {
 			return int64(math.Float64bits(f)), true
 		}
-		u, ok := parseImmExpr(v)
-		if !ok {
-			// Be permissive with symbolic immediates such as:
-			//   $(16 + callbackArgs__size)
-			// Parser/scan should accept them, but lowering must reject them
-			// explicitly via Operand.ImmRaw instead of silently materializing 0.
-			if isSymbolicImmPlaceholder(s) {
-				return 0, true
-			}
-			return 0, false
+		// Be permissive with symbolic immediates such as:
+		//   $(16 + callbackArgs__size)
+		// Parser/scan should accept them, but lowering must reject them
+		// explicitly via Operand.ImmRaw instead of silently materializing 0.
+		if isSymbolicImmPlaceholder(s) {
+			return 0, true
 		}
-		return int64(u), true
+		return 0, false
 	}
 	return int64(u), true
 }
@@ -593,6 +609,9 @@ func parseOperand(s string) (Operand, error) {
 	if name, off, ok := parseFPAddr(s); ok {
 		return Operand{Kind: OpFPAddr, FPName: name, FPOffset: off}, nil
 	}
+	if r, ext, shift, ok := parseRegExtendShift(s); ok {
+		return Operand{Kind: OpRegExtend, Reg: r, Ext: ext, ShiftOp: ShiftLeft, ShiftAmount: shift}, nil
+	}
 	if r, ext, ok := parseRegExtend(s); ok {
 		return Operand{Kind: OpRegExtend, Reg: r, Ext: ext}, nil
 	}
@@ -681,6 +700,23 @@ func parseRegExtend(s string) (Reg, ExtendOp, bool) {
 	}
 }
 
+func parseRegExtendShift(s string) (Reg, ExtendOp, int64, bool) {
+	i := strings.Index(s, string(ShiftLeft))
+	if i < 0 {
+		return "", "", 0, false
+	}
+	r, ext, ok := parseRegExtend(strings.TrimSpace(s[:i]))
+	if !ok {
+		return "", "", 0, false
+	}
+	shiftText := strings.TrimSpace(s[i+len(ShiftLeft):])
+	shift, err := strconv.ParseInt(shiftText, 0, 64)
+	if err != nil || shift < 0 || shift > 4 {
+		return "", "", 0, false
+	}
+	return r, ext, shift, true
+}
+
 func parseRegShift(s string) (base Reg, sop ShiftOp, amt int64, shiftReg Reg, ok bool) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -734,12 +770,12 @@ func expandRegRange(part string) ([]Reg, bool) {
 	if !ok {
 		return nil, false
 	}
-	lp, li, ok := regRangeParts(lr)
+	lp, li, ls, ok := regRangeParts(lr)
 	if !ok {
 		return nil, false
 	}
-	rp, ri, ok := regRangeParts(rr)
-	if !ok || lp != rp {
+	rp, ri, rs, ok := regRangeParts(rr)
+	if !ok || lp != rp || ls != rs {
 		return nil, false
 	}
 	step := 1
@@ -748,7 +784,7 @@ func expandRegRange(part string) ([]Reg, bool) {
 	}
 	out := make([]Reg, 0, absInt(li-ri)+1)
 	for i := li; ; i += step {
-		out = append(out, Reg(fmt.Sprintf("%s%d", lp, i)))
+		out = append(out, Reg(fmt.Sprintf("%s%d%s", lp, i, ls)))
 		if i == ri {
 			break
 		}
@@ -756,20 +792,24 @@ func expandRegRange(part string) ([]Reg, bool) {
 	return out, true
 }
 
-func regRangeParts(r Reg) (prefix string, idx int, ok bool) {
+func regRangeParts(r Reg) (prefix string, idx int, suffix string, ok bool) {
 	s := string(r)
-	i := len(s)
-	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
-		i--
+	digitStart := 0
+	for digitStart < len(s) && (s[digitStart] < '0' || s[digitStart] > '9') {
+		digitStart++
 	}
-	if i == len(s) || i == 0 {
-		return "", 0, false
+	if digitStart == 0 || digitStart == len(s) {
+		return "", 0, "", false
 	}
-	n, err := strconv.Atoi(s[i:])
+	digitEnd := digitStart
+	for digitEnd < len(s) && s[digitEnd] >= '0' && s[digitEnd] <= '9' {
+		digitEnd++
+	}
+	n, err := strconv.Atoi(s[digitStart:digitEnd])
 	if err != nil {
-		return "", 0, false
+		return "", 0, "", false
 	}
-	return s[:i], n, true
+	return s[:digitStart], n, s[digitEnd:], true
 }
 
 func absInt(v int) int {
@@ -907,29 +947,52 @@ func parseMem(s string) (MemRef, bool) {
 		return MemRef{}, false
 	}
 
-	parseIndexScale := func(inner string) (idx Reg, scale int64, ok bool) {
+	parseIndexScale := func(inner string) (idx Reg, ext ExtendOp, scale int64, ok bool) {
 		inner = strings.TrimSpace(inner)
 		if inner == "" {
-			return "", 0, false
+			return "", "", 0, false
+		}
+		if shift := strings.Index(inner, "<<"); shift >= 0 {
+			idxStr := strings.TrimSpace(inner[:shift])
+			shiftStr := strings.TrimSpace(inner[shift+2:])
+			if r, e, extended := parseRegExtend(idxStr); extended {
+				idx, ext, ok = r, e, true
+			} else {
+				idx, ok = parseReg(idxStr)
+			}
+			if !ok || (ext != "" && ext != ExtendUXTW && ext != ExtendSXTW && ext != ExtendUXTX && ext != ExtendSXTX) {
+				return "", "", 0, false
+			}
+			n, err := strconv.ParseInt(shiftStr, 0, 64)
+			if err != nil || n < 0 || n > 4 {
+				return "", "", 0, false
+			}
+			return idx, ext, int64(1) << uint(n), true
 		}
 		if star := strings.IndexByte(inner, '*'); star >= 0 {
 			idxStr := strings.TrimSpace(inner[:star])
 			scaleStr := strings.TrimSpace(inner[star+1:])
 			idx, ok = parseReg(idxStr)
 			if !ok {
-				return "", 0, false
+				return "", "", 0, false
 			}
 			n, err := strconv.ParseInt(scaleStr, 0, 64)
 			if err != nil || n == 0 {
-				return "", 0, false
+				return "", "", 0, false
 			}
-			return idx, n, true
+			return idx, "", n, true
+		}
+		if r, e, extended := parseRegExtend(inner); extended {
+			if e != ExtendUXTW && e != ExtendSXTW && e != ExtendUXTX && e != ExtendSXTX {
+				return "", "", 0, false
+			}
+			return r, e, 1, true
 		}
 		idx, ok = parseReg(inner)
 		if !ok {
-			return "", 0, false
+			return "", "", 0, false
 		}
-		return idx, 1, true
+		return idx, "", 1, true
 	}
 
 	offPart := ""
@@ -971,11 +1034,11 @@ func parseMem(s string) (MemRef, bool) {
 			return MemRef{}, false
 		}
 		inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rest, "("), ")"))
-		idx, scale, ok := parseIndexScale(inner)
+		idx, ext, scale, ok := parseIndexScale(inner)
 		if !ok {
 			return MemRef{}, false
 		}
-		return MemRef{Sym: offPart + "(SB)", Index: idx, Scale: scale}, true
+		return MemRef{Sym: offPart + "(SB)", Index: idx, IndexExt: ext, Scale: scale}, true
 	}
 
 	var off int64
@@ -1012,9 +1075,10 @@ func parseMem(s string) (MemRef, bool) {
 					}
 					if strings.HasPrefix(rem, "(") && strings.HasSuffix(rem, ")") {
 						inner := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(rem, "("), ")"))
-						idx, scale, ok := parseIndexScale(inner)
+						idx, ext, scale, ok := parseIndexScale(inner)
 						if ok {
 							mem.Index = idx
+							mem.IndexExt = ext
 							mem.Scale = scale
 							return mem, true
 						}
@@ -1036,11 +1100,11 @@ func parseMem(s string) (MemRef, bool) {
 			}
 		}
 		// Accept off(index*scale) with no base, e.g. -1(AX*2).
-		idx, scale, ok := parseIndexScale(baseStr)
+		idx, ext, scale, ok := parseIndexScale(baseStr)
 		if !ok || rest != "" {
 			return MemRef{}, false
 		}
-		return MemRef{Base: "", Off: off, Index: idx, Scale: scale}, true
+		return MemRef{Base: "", Off: off, Index: idx, IndexExt: ext, Scale: scale}, true
 	}
 
 	mem := MemRef{Base: base, Off: off}
@@ -1064,11 +1128,12 @@ func parseMem(s string) (MemRef, bool) {
 		mem.Segment = segment
 		return mem, true
 	}
-	idx, scale, ok := parseIndexScale(inner)
+	idx, ext, scale, ok := parseIndexScale(inner)
 	if !ok {
 		return MemRef{}, false
 	}
 	mem.Index = idx
+	mem.IndexExt = ext
 	mem.Scale = scale
 	return mem, true
 }

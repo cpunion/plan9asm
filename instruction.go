@@ -311,6 +311,19 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 			return "gpr64"
 		}
 	}
+	if arch == ArchARM64 {
+		if r == "ZR" {
+			return "zero-register"
+		}
+		if prefix, index, _, ok := regRangeParts(Reg(r)); ok {
+			switch {
+			case prefix == "Z" && index <= 31:
+				return "scalable-vector"
+			case prefix == "P" && index <= 15:
+				return "predicate-register"
+			}
+		}
+	}
 	if strings.HasPrefix(r, "V") {
 		if strings.Contains(r, "[") {
 			return "vector-lane"
@@ -322,9 +335,6 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 	}
 	if r == "SP" {
 		return "stack-pointer"
-	}
-	if r == "ZR" {
-		return "zero-register"
 	}
 	if strings.HasPrefix(r, "R") {
 		if _, err := strconv.Atoi(strings.TrimPrefix(r, "R")); err == nil {
@@ -343,7 +353,11 @@ func memoryClass(arch Arch, goarch string, mem MemRef) string {
 		parts = append(parts, registerClass(arch, goarch, mem.Base)+"-base")
 	}
 	if mem.Index != "" {
-		parts = append(parts, registerClass(arch, goarch, mem.Index)+"-index")
+		indexClass := registerClass(arch, goarch, mem.Index) + "-index"
+		if mem.IndexExt != "" {
+			indexClass += "-" + strings.ToLower(string(mem.IndexExt))
+		}
+		parts = append(parts, indexClass)
 	}
 	if mem.Segment != "" {
 		parts = append(parts, "segment")

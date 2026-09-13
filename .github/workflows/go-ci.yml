@@ -72,6 +72,15 @@ jobs:
         run: go build ./...
         working-directory: cmd/plan9asmll
 
+      - name: ARM64 Plan 9 reference corpus
+        run: scripts/check-arm64-plan9-corpus.sh
+
+      - name: klauspost/compress regression corpus
+        run: scripts/check-klauspost-compress.sh
+
+      - name: go-hex multi-platform regression corpus
+        run: scripts/check-go-hex.sh
+
   stdlib-corpus:
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ matrix.os }}
@@ -79,7 +88,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Linux is the authoritative cross-target corpus gate.
+          # Linux is the authoritative cross-target corpus gate. Each
+          # unversioned Linux architecture and wasm target expands to every
+          # setting supported by that Go toolchain in check-stdlib-corpus.sh.
           - {os: ubuntu-latest, go-version: '1.20.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64,js/wasm'}
           - {os: ubuntu-latest, go-version: '1.21.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64,js/wasm,wasip1/wasm'}
           - {os: ubuntu-latest, go-version: '1.22.x', prebuild_tool: true, targets: 'linux/386,linux/amd64,linux/arm,linux/arm64,darwin/amd64,darwin/arm64,windows/386,windows/amd64,windows/arm64,js/wasm,wasip1/wasm'}
@@ -151,7 +162,6 @@ jobs:
           scripts/check-stdlib-corpus.sh
 
       - name: Official Go assembler coverage regression
-        if: runner.os == 'Linux'
         shell: bash
         run: |
           chmod +x scripts/check-go-asm-coverage.sh
@@ -185,7 +195,7 @@ jobs:
       - name: Cross transpile, compile, link, and run
         env:
           PLAN9ASM_CROSS_EXEC: '1'
-        run: go test . -run '^TestCrossLinuxRuntimeMatrix$' -count=1 -v
+        run: go test . -run '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance)' -count=1 -v
 
   test:
     permissions:

@@ -1036,12 +1036,18 @@ func TestARM64ArithmeticErrorCoverage(t *testing.T) {
 		{Op: "AND", Raw: "AND $1", Args: []Operand{arm64ImmOp(1)}},
 		{Op: "AND", Raw: "AND $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "AND", Raw: "AND $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "TSTW", Raw: "TSTW R0", Args: []Operand{arm64RegOp("R0")}},
 		{Op: "ANDSW", Raw: "ANDSW $1", Args: []Operand{arm64ImmOp(1)}},
 		{Op: "ANDSW", Raw: "ANDSW $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "ANDSW", Raw: "ANDSW $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "SUBS", Raw: "SUBS $1", Args: []Operand{arm64ImmOp(1)}},
 		{Op: "SUBS", Raw: "SUBS $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "SUBS", Raw: "SUBS $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "SUBSW", Raw: "SUBSW $1", Args: []Operand{arm64ImmOp(1)}},
+		{Op: "SUBSW", Raw: "SUBSW label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "SUBSW", Raw: "SUBSW $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
+		{Op: "SUBSW", Raw: "SUBSW $1, label, R0", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "SUBSW", Raw: "SUBSW $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "BIC", Raw: "BIC $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "BIC", Raw: "BIC $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "BICW", Raw: "BICW $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
@@ -1050,6 +1056,8 @@ func TestARM64ArithmeticErrorCoverage(t *testing.T) {
 		{Op: "MVNW", Raw: "MVNW $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
 		{Op: "CRC32B", Raw: "CRC32B $1, R0", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0")}},
 		{Op: "CMP", Raw: "CMP R0", Args: []Operand{arm64RegOp("R0")}},
+		{Op: "CMPW", Raw: "CMPW label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "CMPW", Raw: "CMPW R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "CMN", Raw: "CMN R0", Args: []Operand{arm64RegOp("R0")}},
 		{Op: "NEG", Raw: "NEG R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "MUL", Raw: "MUL $1", Args: []Operand{arm64ImmOp(1)}},
@@ -1057,10 +1065,125 @@ func TestARM64ArithmeticErrorCoverage(t *testing.T) {
 		{Op: "MUL", Raw: "MUL $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
 		{Op: "UMULH", Raw: "UMULH R0, R1", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1")}},
 		{Op: "MADD", Raw: "MADD R0, R1, R2", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64RegOp("R2")}},
+		{Op: "LSL", Raw: "LSL $64, R0", Args: []Operand{arm64ImmOp(64), arm64RegOp("R0")}},
+		{Op: "LSLW", Raw: "LSLW $32, R0", Args: []Operand{arm64ImmOp(32), arm64RegOp("R0")}},
+		{Op: "ASR", Raw: "ASR", Args: nil},
+		{Op: "ASR", Raw: "ASR $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
+		{Op: "ASR", Raw: "ASR $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "ASRW", Raw: "ASRW $32, R0", Args: []Operand{arm64ImmOp(32), arm64RegOp("R0")}},
+		{Op: "ASRW", Raw: "ASRW BAD, R0", Args: []Operand{arm64RegOp("BAD"), arm64RegOp("R0")}},
+		{Op: "ASR", Raw: "ASR $64, R0", Args: []Operand{arm64ImmOp(64), arm64RegOp("R0")}},
+		{Op: "ASR", Raw: "ASR label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "RORW", Raw: "RORW $32, R0", Args: []Operand{arm64ImmOp(32), arm64RegOp("R0")}},
+		{Op: "ROR", Raw: "ROR", Args: nil},
+		{Op: "ROR", Raw: "ROR $1, label", Args: []Operand{arm64ImmOp(1), arm64IdentOp("label")}},
+		{Op: "ROR", Raw: "ROR $1, R0, label", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64IdentOp("label")}},
+		{Op: "ROR", Raw: "ROR $1, BAD", Args: []Operand{arm64ImmOp(1), arm64RegOp("BAD")}},
+		{Op: "ROR", Raw: "ROR $64, R0", Args: []Operand{arm64ImmOp(64), arm64RegOp("R0")}},
+		{Op: "ROR", Raw: "ROR label, R0", Args: []Operand{arm64IdentOp("label"), arm64RegOp("R0")}},
+		{Op: "REVW", Raw: "REVW R0", Args: []Operand{arm64RegOp("R0")}},
+		{Op: "REV16", Raw: "REV16 R0", Args: []Operand{arm64RegOp("R0")}},
+		{Op: "REV32", Raw: "REV32 R0", Args: []Operand{arm64RegOp("R0")}},
 	} {
 		if _, _, err := c.lowerArith(tc.Op, tc); err == nil {
 			t.Fatalf("%s %q unexpectedly succeeded", tc.Op, tc.Raw)
 		}
+	}
+	validBitfield := Instr{Op: "BAD", Raw: "BAD $1, R0, $1, R1", Args: []Operand{arm64ImmOp(1), arm64RegOp("R0"), arm64ImmOp(1), arm64RegOp("R1")}}
+	if err := c.lowerBitfield("BAD", validBitfield); err == nil {
+		t.Fatal("unknown bitfield opcode unexpectedly succeeded")
+	}
+	if _, err := c.arm64InsertBits("i32", 32, "0", "0", 31, 2, 0); err == nil {
+		t.Fatal("invalid bit insertion unexpectedly succeeded")
+	}
+}
+
+func TestARM64Eval32Coverage(t *testing.T) {
+	c, _ := newARM64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.eval32", Ret: Void}, nil)
+	for _, op := range []Operand{
+		arm64ImmOp(-1),
+		arm64RegOp("R0"),
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendUXTB},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendUXTH},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendUXTW},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendSXTB},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendSXTH},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendSXTW},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendUXTB, ShiftOp: ShiftLeft, ShiftAmount: 2},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftLeft, ShiftAmount: 1},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftRight, ShiftAmount: 1},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftArith, ShiftAmount: 1},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftRotate, ShiftAmount: 1},
+	} {
+		if _, err := c.eval32(op); err != nil {
+			t.Fatalf("eval32(%s) error = %v", op, err)
+		}
+	}
+	for _, op := range []Operand{
+		{Kind: OpReg, Reg: "BAD"},
+		{Kind: OpRegExtend, Reg: "BAD", Ext: ExtendUXTB},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendOp("BAD")},
+		{Kind: OpRegExtend, Reg: "R0", Ext: ExtendUXTB, ShiftOp: ShiftRight, ShiftAmount: 1},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftLeft, ShiftReg: "R1"},
+		{Kind: OpRegShift, Reg: "BAD", ShiftOp: ShiftLeft, ShiftAmount: 1},
+		{Kind: OpRegShift, Reg: "R0", ShiftOp: ShiftOp("BAD"), ShiftAmount: 1},
+		arm64IdentOp("label"),
+	} {
+		if _, err := c.eval32(op); err == nil {
+			t.Fatalf("eval32(%s) unexpectedly succeeded", op)
+		}
+	}
+}
+
+func TestARM64NarrowMoveAndFMOVQErrorCoverage(t *testing.T) {
+	fn := Func{Instrs: []Instr{
+		{Op: "FMOVQ", Args: []Operand{arm64MemOp("R1", 0), arm64RegOp("F0")}},
+		{Op: "FMOVQ", Args: []Operand{arm64RegOp("F0"), arm64MemOp("R1", 0)}},
+	}}
+	c, _ := newARM64CtxWithFuncForTest(t, fn, FuncSig{Name: "example.newdataerrors", Ret: Void}, nil)
+	badIndex := Operand{Kind: OpMem, Mem: MemRef{Base: "R1", Index: "R2", Scale: 2}}
+	for _, ins := range []Instr{
+		{Op: "FMOVQ", Raw: "FMOVQ"},
+		{Op: "FMOVQ", Raw: "FMOVQ (R1), R0", Args: []Operand{arm64MemOp("R1", 0), arm64RegOp("R0")}},
+		{Op: "FMOVQ", Raw: "FMOVQ (R1)(R2<<1), F0", Args: []Operand{badIndex, arm64RegOp("F0")}},
+		{Op: "FMOVQ", Raw: "FMOVQ (R1), F31", Args: []Operand{arm64MemOp("R1", 0), arm64RegOp("F31")}},
+		{Op: "FMOVQ", Raw: "FMOVQ R0, (R1)", Args: []Operand{arm64RegOp("R0"), arm64MemOp("R1", 0)}},
+		{Op: "FMOVQ", Raw: "FMOVQ F31, (R1)", Args: []Operand{arm64RegOp("F31"), arm64MemOp("R1", 0)}},
+		{Op: "FMOVQ", Raw: "FMOVQ F0, (R1)(R2<<1)", Args: []Operand{arm64RegOp("F0"), badIndex}},
+		{Op: "FMOVQ", Raw: "FMOVQ R0, R1", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1")}},
+	} {
+		if _, _, err := c.lowerVec("FMOVQ", false, ins); err == nil {
+			t.Fatalf("%q unexpectedly succeeded", ins.Raw)
+		}
+	}
+	for _, tc := range []struct {
+		op      Operand
+		preInc  bool
+		postInc bool
+	}{
+		{arm64MemOp("R1", 0), true, true},
+		{arm64SymOp("example.global(SB)"), true, false},
+		{arm64IdentOp("label"), false, false},
+		{badIndex, false, false},
+		{arm64MemOp("BAD", 0), false, false},
+	} {
+		if _, _, _, _, err := c.arm64VectorMemoryPointer(tc.op, tc.preInc, tc.postInc); err == nil {
+			t.Fatalf("arm64VectorMemoryPointer(%s, %v, %v) unexpectedly succeeded", tc.op, tc.preInc, tc.postInc)
+		}
+	}
+	for _, ins := range []Instr{
+		{Op: "MOVW", Raw: "MOVW R0"},
+		{Op: "MOVW", Raw: "MOVW $example.global(SB), R0", Args: []Operand{arm64SymOp("$example.global(SB)"), arm64RegOp("R0")}},
+		{Op: "MOVW", Raw: "MOVW BAD, R0", Args: []Operand{arm64RegOp("BAD"), arm64RegOp("R0")}},
+		{Op: "MOVW", Raw: "MOVW R0, broken symbol", Args: []Operand{arm64RegOp("R0"), arm64SymOp("broken symbol")}},
+		{Op: "MOVW", Raw: "MOVW R0, label", Args: []Operand{arm64RegOp("R0"), arm64IdentOp("label")}},
+	} {
+		if err := c.lowerNarrowMove("MOVW", ins, 32, true, false); err == nil {
+			t.Fatalf("%q unexpectedly succeeded", ins.Raw)
+		}
+	}
+	if err := c.lowerNarrowMove("MOVW", Instr{Op: "MOVW", Raw: "MOVW R0, example.global(SB)", Args: []Operand{arm64RegOp("R0"), arm64SymOp("example.global(SB)")}}, 32, true, false); err != nil {
+		t.Fatalf("narrow symbol store error = %v", err)
 	}
 }
 
@@ -1584,8 +1707,11 @@ func TestARM64EvalCoverage(t *testing.T) {
 	if _, err := c.eval64(Operand{Kind: OpRegExtend, Reg: "R1", Ext: ExtendOp("BAD")}, false); err == nil {
 		t.Fatalf("eval64(bad extension) unexpectedly succeeded")
 	}
-	if _, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 1}, false); err == nil {
-		t.Fatalf("eval64(rotate) unexpectedly succeeded")
+	if got, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 1}, false); err != nil || got == "" {
+		t.Fatalf("eval64(rotate) = (%q, %v)", got, err)
+	}
+	if _, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftAmount: 64}, false); err == nil {
+		t.Fatalf("eval64(out-of-range rotate) unexpectedly succeeded")
 	}
 	if _, err := c.eval64(Operand{Kind: OpLabel, Sym: "loop"}, false); err == nil {
 		t.Fatalf("eval64(label) unexpectedly succeeded")
