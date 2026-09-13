@@ -73,7 +73,7 @@ func TestARM64ConformanceLLVMRuntime(t *testing.T) {
 	if runtime.GOARCH != "arm64" && !crossLinux {
 		t.Skip("runtime execution test only runs on an arm64 host")
 	}
-	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
+	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("llc not found")
 	}

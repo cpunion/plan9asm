@@ -196,16 +196,38 @@ func resolveCompileConfig(compile bool, llcPath string, keepObj bool) (compileCo
 		return cfg, nil
 	}
 	if cfg.LLC != "" {
+		if err := requireLLVM22LLC(cfg.LLC); err != nil {
+			return compileConfig{}, fmt.Errorf("-llc %q requires LLVM 22: %w", cfg.LLC, err)
+		}
 		return cfg, nil
 	}
-	names := []string{"llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19"}
+	names := []string{"llc-22", "llc"}
 	for _, name := range names {
 		if p, err := exec.LookPath(name); err == nil && p != "" {
-			cfg.LLC = p
-			return cfg, nil
+			if requireLLVM22LLC(p) == nil {
+				cfg.LLC = p
+				return cfg, nil
+			}
 		}
 	}
-	return compileConfig{}, fmt.Errorf("-compile is set but llc is not found in PATH; set -llc explicitly")
+	return compileConfig{}, fmt.Errorf("-compile is set but LLVM 22 llc is not found in PATH; install llc-22 or set -llc to an LLVM 22 binary")
+}
+
+var llvmLLCVersionRE = regexp.MustCompile(`(?m)\bLLVM version ([0-9]+)(?:\.|$)`)
+
+func requireLLVM22LLC(path string) error {
+	out, err := exec.Command(path, "--version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("run --version: %w", err)
+	}
+	match := llvmLLCVersionRE.FindSubmatch(out)
+	if len(match) != 2 {
+		return fmt.Errorf("cannot determine LLVM version from %q", strings.TrimSpace(string(out)))
+	}
+	if string(match[1]) != "22" {
+		return fmt.Errorf("found LLVM %s", match[1])
+	}
+	return nil
 }
 
 func writeReport(path string, payload any) {

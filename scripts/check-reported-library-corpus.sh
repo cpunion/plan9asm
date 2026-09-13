@@ -8,14 +8,10 @@ if [[ $# -gt 1 ]]; then
   exit 2
 fi
 
-if [[ -n "${LLVM_CONFIG:-}" ]]; then
-  llvm_bin_dir=$("$LLVM_CONFIG" --bindir)
-  llc_cmd="$llvm_bin_dir/llc"
-else
-  llc_cmd=$(command -v llc || command -v llc-23 || command -v llc-22 || command -v llc-21 || command -v llc-20 || command -v llc-19 || true)
-fi
-if [[ ! -x "$llc_cmd" ]]; then
-  echo "llc not found through LLVM_CONFIG or PATH" >&2
+# Resolved relative to the checked-out repository.
+# shellcheck disable=SC1091
+source "$repo_root/scripts/llvm22.sh"
+if ! llc_cmd=$(find_llvm22_llc); then
   exit 1
 fi
 
