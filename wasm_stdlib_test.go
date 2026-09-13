@@ -287,8 +287,8 @@ func assertWasmLocalsPromoted(t *testing.T, ir string) {
 
 func executeOfficialWasm(t *testing.T, ir string, exports []string, body, want string) {
 	t.Helper()
-	llc := findExecutable("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
-	wasmLD := findExecutable("wasm-ld", "wasm-ld-23", "wasm-ld-22", "wasm-ld-21", "wasm-ld-20", "wasm-ld-19")
+	llc := findLLVM22Tool("llc")
+	wasmLD := findLLVM22Tool("wasm-ld")
 	node := findExecutable("node")
 	if llc == "" || wasmLD == "" || node == "" {
 		t.Log("wasm execution tools unavailable; translation was still verified")

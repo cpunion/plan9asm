@@ -3,7 +3,7 @@ module github.com/xgo-dev/plan9asm/cmd/plan9asmll
 go 1.24.0
 
 require (
-	github.com/xgo-dev/llvm v0.9.0
+	github.com/xgo-dev/llvm v0.9.9
 	github.com/xgo-dev/plan9asm v0.0.0
 	golang.org/x/tools v0.42.0
 )

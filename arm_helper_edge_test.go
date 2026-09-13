@@ -141,6 +141,14 @@ func TestARMAtomicMovmAndInstrEdges(t *testing.T) {
 	if ok, _, err := c.lowerData("MOVD", "", false, Instr{Raw: "MOVD R0, R1", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpReg, Reg: "R1"}}}); !ok || err == nil {
 		t.Fatalf("lowerData(MOVD invalid) = (%v, %v), want error", ok, err)
 	}
+	for _, ins := range []Instr{
+		{Op: "MOVH", Raw: "MOVH R0, 2(R1)", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpMem, Mem: MemRef{Base: "R1", Off: 2}}}},
+		{Op: "MOVH", Raw: "MOVH R0, half<>(SB)", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpSym, Sym: "half<>(SB)"}}},
+	} {
+		if ok, term, err := c.lowerData("MOVH", "", false, ins); !ok || term || err != nil {
+			t.Fatalf("lowerData(%q) = (%v, %v, %v)", ins.Raw, ok, term, err)
+		}
+	}
 
 	emitBr := func(string) {}
 	emitCondBr := func(string, string, string) error { return nil }

@@ -56,7 +56,7 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, err
 		}
 		return true, false, c.storeARMValue(dst, v, 32, cond, postInc, ins.Raw)
-	case "MOVB", "MOVBU":
+	case "MOVB", "MOVBU", "MOVH", "MOVHU":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)
 		}
@@ -69,15 +69,19 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			return true, false, err
 		}
 		v := ""
+		bits := 8
+		if op == "MOVH" || op == "MOVHU" {
+			bits = 16
+		}
 		if src.Kind == OpMem {
-			v, err = c.loadMem(src.Mem, 8, postInc, op == "MOVB")
+			v, err = c.loadMem(src.Mem, bits, postInc, op == "MOVB" || op == "MOVH")
 		} else {
 			v, err = c.eval32(src, false)
 		}
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeARMValue(dst, v, 8, cond, postInc, ins.Raw)
+		return true, false, c.storeARMValue(dst, v, bits, cond, postInc, ins.Raw)
 	}
 	return false, false, nil
 }
@@ -146,6 +150,10 @@ func (c *armCtx) storeARMValue(dst Operand, v string, bits int, cond string, pos
 		switch bits {
 		case 32:
 			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, p)
+		case 16:
+			t := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i16\n", t, v)
+			fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", t, p)
 		case 8:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i8\n", t, v)

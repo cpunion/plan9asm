@@ -17,7 +17,7 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		t.Fatalf("cross-execution driver requires a linux/amd64 host, got %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 
-	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
+	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("llc not found")
 	}

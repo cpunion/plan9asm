@@ -984,7 +984,7 @@ func TestTranslate386X87Modes(t *testing.T) {
 }
 
 func TestTranslate386X87Codegen(t *testing.T) {
-	llc := find386Tool("llc-19", "llc")
+	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Skip("llc not found")
 	}
@@ -1183,7 +1183,7 @@ func TestParseWORDValidation(t *testing.T) {
 
 func compile386IR(t *testing.T, ir, name string) {
 	t.Helper()
-	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
+	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Skip("llc not found")
 	}
@@ -1206,8 +1206,8 @@ func TestRuntimeExec386Core(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("32-bit executable smoke test runs on Windows")
 	}
-	llc := find386Tool("llc", "llc-23", "llc-22", "llc-21", "llc-20", "llc-19")
-	clang := find386Tool("clang", "clang-23", "clang-22", "clang-21", "clang-20", "clang-19")
+	llc := findLLVM22Tool("llc")
+	clang := findLLVM22Tool("clang")
 	if llc == "" || clang == "" {
 		t.Skip("llc/clang not found")
 	}

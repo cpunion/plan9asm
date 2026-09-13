@@ -76,6 +76,16 @@ func (c *armCtx) loadMem(mem MemRef, bits int, postInc bool, signed bool) (strin
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s\n", t, ptr)
 		out = "%" + t
+	case 16:
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s\n", t, ptr)
+		e := c.newTmp()
+		if signed {
+			fmt.Fprintf(c.b, "  %%%s = sext i16 %%%s to i32\n", e, t)
+		} else {
+			fmt.Fprintf(c.b, "  %%%s = zext i16 %%%s to i32\n", e, t)
+		}
+		out = "%" + e
 	case 8:
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = load i8, ptr %s\n", t, ptr)
@@ -108,6 +118,10 @@ func (c *armCtx) storeMem(mem MemRef, bits int, postInc bool, v32 string) error 
 		fmt.Fprintf(c.b, "  store i64 %s, ptr %s\n", v32, ptr)
 	case 32:
 		fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v32, ptr)
+	case 16:
+		t := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i16\n", t, v32)
+		fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", t, ptr)
 	case 8:
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i8\n", t, v32)
