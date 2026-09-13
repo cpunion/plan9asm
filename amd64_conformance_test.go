@@ -155,6 +155,12 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 					Results: []FrameSlot{{Offset: 16, Type: I64, Index: 0, Field: -1}},
 				},
 			},
+			"packedArithmeticShift32": {
+				Name:  "packedArithmeticShift32",
+				Args:  []LLVMType{Ptr, Ptr},
+				Ret:   Void,
+				Frame: ptrParams,
+			},
 		},
 	})
 	if err != nil {
@@ -172,6 +178,7 @@ extern void doubleShift32(uint32_t *out, uint32_t src, uint32_t dst, uint32_t am
 extern void doubleShift64(uint64_t *out, uint64_t src, uint64_t dst, uint64_t amount);
 extern void goHexVectorOps(uint8_t *out, uint8_t *a, uint8_t *b);
 extern uint64_t goHexWordOps(uint64_t value, uint64_t count);
+extern void packedArithmeticShift32(int32_t *out, int32_t *src);
 
 static uint32_t shld32(uint32_t src, uint32_t dst, uint32_t count) {
 	count &= 31;
@@ -297,6 +304,12 @@ int main(void) {
 		uint64_t want = (value & ~0xffffULL) | shifted | ((uint64_t)first << 16);
 		if (goHexWordOps(value, count) != want) return 79;
 	}
+	int32_t packed_src[4] = {0, 1, -1, INT32_MIN};
+	int32_t packed_out[8] = {0};
+	const int32_t packed_want[8] = {0, 0, -1, -1, 0, 0, -1, -1};
+	packedArithmeticShift32(packed_out, packed_src);
+	for (int i = 0; i < 8; i++)
+		if (packed_out[i] != packed_want[i]) return 80 + i;
 	return 0;
 }
 `

@@ -21,3 +21,5 @@ func doubleShift64(out *[8]uint64, src, dst, amount uint64)
 func goHexVectorOps(out *[160]byte, a, b *[16]byte)
 
 func goHexWordOps(value, count uint64) uint64
+
+func packedArithmeticShift32(out *[8]int32, src *[4]int32)

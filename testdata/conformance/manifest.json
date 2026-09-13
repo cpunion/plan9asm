@@ -95,6 +95,15 @@
       ]
     },
     {
+      "id": "amd64-packed-arithmetic-shift-saturation",
+      "goarch": "amd64",
+      "asm": "amd64/conformance_amd64.s",
+      "validation": "execute",
+      "forms": [
+        "PSRAL immediate,xmm"
+      ]
+    },
+    {
       "id": "arm64-go-assembler-scalar-families",
       "goarch": "arm64",
       "asm": "arm64/conformance_arm64.s",

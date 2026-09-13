@@ -172,6 +172,16 @@ func TestGoHexInstructionFamilies(t *testing.T) {
 	}
 }
 
+func TestPackedArithmeticShiftCountSaturation(t *testing.T) {
+	src := [4]int32{0, 1, -1, -1 << 31}
+	var got [8]int32
+	packedArithmeticShift32(&got, &src)
+	want := [8]int32{0, 0, -1, -1, 0, 0, -1, -1}
+	if got != want {
+		t.Fatalf("packedArithmeticShift32() = %#v, want %#v", got, want)
+	}
+}
+
 func shld32(src, dst, count uint32) uint32 {
 	count &= 31
 	if count == 0 {

@@ -195,3 +195,16 @@ TEXT ·goHexWordOps(SB), NOSPLIT, $0-24
 	ORQ AX, DX
 	MOVQ DX, ret+16(FP)
 	RET
+
+// packedArithmeticShift32 covers PSRAL's saturating immediate-count rule.
+// Counts at or above the 32-bit lane width must fill each lane with its sign.
+TEXT ·packedArithmeticShift32(SB), NOSPLIT, $0-16
+	MOVQ out+0(FP), AX
+	MOVQ src+8(FP), BX
+	MOVOU (BX), X0
+	PSRAL $31, X0
+	MOVOU X0, 0(AX)
+	MOVOU (BX), X0
+	PSRAL $32, X0
+	MOVOU X0, 16(AX)
+	RET

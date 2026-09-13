@@ -2228,11 +2228,16 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		bc := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to %s\n", bc, v, vecTy)
-		if n >= laneBits {
-			return true, false, c.storeX(ins.Args[1].Reg, "zeroinitializer")
-		}
 		if n < 0 {
 			return true, false, fmt.Errorf("amd64 %s shift count must be non-negative: %q", op, ins.Raw)
+		}
+		if n >= laneBits {
+			if op != "PSRAL" {
+				return true, false, c.storeX(ins.Args[1].Reg, "zeroinitializer")
+			}
+			// Packed arithmetic right shifts saturate an oversized count to
+			// laneBits-1, producing an all-sign-bit lane instead of zero.
+			n = laneBits - 1
 		}
 		sh := c.newTmp()
 		switch op {
