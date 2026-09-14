@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "format": "plan9asmdiscover-jsonl-v1",
+  "generated_at": "2026-09-14T17:00:57.37091Z",
+  "since": "2019-04-10T00:00:00Z",
+  "next_since": "2026-06-15T14:33:17.568398Z",
+  "index_entries": 320400,
+  "unique_modules": 58807,
+  "skipped_previously_scanned": 22353,
+  "scanned_records": 117891,
+  "matched_records": 661,
+  "failure_records": 4180,
+  "shard_key": "sha256(module)[0]"
+}
