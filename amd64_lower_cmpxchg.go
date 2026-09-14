@@ -123,9 +123,10 @@ func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr
 		}
 	}
 	difference := c.newTmp()
-	// CMPXCHG defines arithmetic flags from destination - accumulator.
-	fmt.Fprintf(c.b, "  %%%s = sub %s %s, %s\n", difference, typ, old, expected)
-	c.setScalarAddSubFlags(typ, false, old, expected, "%"+difference)
+	// CMPXCHG compares the accumulator with the destination, so its arithmetic
+	// flags come from accumulator - destination (Intel's temporary result).
+	fmt.Fprintf(c.b, "  %%%s = sub %s %s, %s\n", difference, typ, expected, old)
+	c.setScalarAddSubFlags(typ, false, expected, old, "%"+difference)
 	// Keep the equality result authoritative even for unusual aliasing forms.
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", success, c.flagsZSlot)
 	return true, false, nil

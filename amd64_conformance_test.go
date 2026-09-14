@@ -15,9 +15,9 @@ func TestAMD64ConformanceNativeGo(t *testing.T) {
 	if runtime.GOARCH != "amd64" && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()) {
 		t.Skip("native Go assembler oracle requires an amd64 host")
 	}
-	cmd := exec.Command("go", "test", "./testdata/conformance/amd64")
+	cmd := exec.Command("go", "test", "-count=1", "./testdata/conformance/amd64")
 	if runtime.GOARCH != "amd64" {
-		cmd.Env = append(os.Environ(), "GOARCH=amd64")
+		cmd.Env = append(os.Environ(), "GOARCH=amd64", "PLAN9ASM_ROSETTA=1")
 	}
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("native Go conformance failed: %v\n%s", err, out)
@@ -832,7 +832,7 @@ int main(void) {
 			if (bits == 8 || bits == 16) want[output_index + 4] = (expected & ~mask) | (failure_initial & mask);
 			if (bits == 32) want[output_index + 4] = (uint32_t)failure_initial;
 			if (bits == 64) want[output_index + 4] = failure_initial;
-			reference_scalar_add_sub(0, bits, failure_initial, expected, 1, &want[output_index + 5]);
+			reference_scalar_add_sub(0, bits, expected, failure_initial, 1, &want[output_index + 5]);
 		}
 		for (int i = 0; i < 24; i++)
 			if (out[i] != want[i]) return 248 + i;

@@ -5,6 +5,7 @@ package amd64conformance
 import (
 	"encoding/binary"
 	"math"
+	"os"
 	"testing"
 	"unsafe"
 )
@@ -308,7 +309,19 @@ func TestCompareExchangeScalarSemantics(t *testing.T) {
 			case 64:
 				want[outputIndex+4] = failureInitial
 			}
-			_, want[outputIndex+5] = referenceScalarAddSub(false, bits, failureInitial, expected, true)
+			_, want[outputIndex+5] = referenceScalarAddSub(false, bits, expected, failureInitial, true)
+		}
+		if os.Getenv("PLAN9ASM_ROSETTA") == "1" {
+			// Rosetta 2 does not preserve CMPXCHG's architecturally defined CF
+			// and OF results. Keep the native oracle for every other result and
+			// flag; the LLVM runtime oracle still verifies CF/OF against x86.
+			const rosettaUnreliableFlags = uint64(1) | uint64(1)<<8
+			for widthIndex := 0; widthIndex < 4; widthIndex++ {
+				got[widthIndex*6+2] &^= rosettaUnreliableFlags
+				got[widthIndex*6+5] &^= rosettaUnreliableFlags
+				want[widthIndex*6+2] &^= rosettaUnreliableFlags
+				want[widthIndex*6+5] &^= rosettaUnreliableFlags
+			}
 		}
 		if got != want {
 			t.Fatalf("compareExchangeScalarSemantics(%#x, %#x) = %#x, want %#x", expected, desired, got, want)
