@@ -15,6 +15,32 @@ func emitARM64Prelude(b *strings.Builder) {
 	b.WriteString("declare i64 @llvm.ctlz.i64(i64, i1)\n")
 	b.WriteString("declare i64 @llvm.bswap.i64(i64)\n")
 	b.WriteString("declare i32 @llvm.bswap.i32(i32)\n")
+	b.WriteString("declare <8 x i8> @llvm.ctpop.v8i8(<8 x i8>)\n")
+	b.WriteString("declare <16 x i8> @llvm.ctpop.v16i8(<16 x i8>)\n")
+	b.WriteString("declare float @llvm.sqrt.f32(float)\n")
+	b.WriteString("declare double @llvm.sqrt.f64(double)\n")
+	b.WriteString("declare float @llvm.fma.f32(float, float, float)\n")
+	b.WriteString("declare double @llvm.fma.f64(double, double, double)\n")
+	b.WriteString("declare <2 x float> @llvm.fma.v2f32(<2 x float>, <2 x float>, <2 x float>)\n")
+	b.WriteString("declare <4 x float> @llvm.fma.v4f32(<4 x float>, <4 x float>, <4 x float>)\n")
+	b.WriteString("declare <2 x double> @llvm.fma.v2f64(<2 x double>, <2 x double>, <2 x double>)\n")
+	for _, intrinsic := range []string{"fabs", "sqrt", "roundeven", "ceil", "floor", "trunc"} {
+		b.WriteString("declare <2 x float> @llvm." + intrinsic + ".v2f32(<2 x float>)\n")
+		b.WriteString("declare <4 x float> @llvm." + intrinsic + ".v4f32(<4 x float>)\n")
+		b.WriteString("declare <2 x double> @llvm." + intrinsic + ".v2f64(<2 x double>)\n")
+	}
+	for _, intrinsic := range []string{"fptosi.sat", "fptoui.sat"} {
+		b.WriteString("declare <2 x i32> @llvm." + intrinsic + ".v2i32.v2f32(<2 x float>)\n")
+		b.WriteString("declare <4 x i32> @llvm." + intrinsic + ".v4i32.v4f32(<4 x float>)\n")
+		b.WriteString("declare <2 x i64> @llvm." + intrinsic + ".v2i64.v2f64(<2 x double>)\n")
+	}
+	for _, intrinsic := range []string{"maximum", "minimum", "maxnum", "minnum"} {
+		b.WriteString("declare float @llvm." + intrinsic + ".f32(float, float)\n")
+		b.WriteString("declare double @llvm." + intrinsic + ".f64(double, double)\n")
+		b.WriteString("declare <2 x float> @llvm." + intrinsic + ".v2f32(<2 x float>, <2 x float>)\n")
+		b.WriteString("declare <4 x float> @llvm." + intrinsic + ".v4f32(<4 x float>, <4 x float>)\n")
+		b.WriteString("declare <2 x double> @llvm." + intrinsic + ".v2f64(<2 x double>, <2 x double>)\n")
+	}
 	// AArch64 CRC32 and CRC32C intrinsics.
 	// Note: B/H forms take the data operand as i32 (low bits used).
 	b.WriteString("declare i32 @llvm.aarch64.crc32b(i32, i32)\n")
@@ -133,7 +159,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 		return false, c.lowerRawWord(ins)
 	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "DMB", "DSB", "ISB", "DC", "PRFM",
 		"BREAK", "BRK", "UNDEF", "#UNDEF", "YIELD", "NOP",
-		"FLDPD", "FSTPD", "FMOVS", "STY",
+		"FLDPD", "FSTPD", "STY",
 		"P256ADDINLINE", "P256MULBY2INLINE", "MOV",
 		"#IFDEF", "#ELSE", "#ENDIF":
 		return false, nil

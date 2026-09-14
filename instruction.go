@@ -144,10 +144,10 @@ func arm64InstructionFamily(op string) string {
 	switch {
 	case isARM64BranchOpcode(op):
 		return "control-flow"
+	case strings.HasPrefix(op, "CAS") || strings.HasPrefix(op, "SWP") || strings.Contains(op, "XR") || strings.Contains(op, "XP"):
+		return "atomic-memory"
 	case strings.HasPrefix(op, "LD") || strings.HasPrefix(op, "ST") || strings.HasPrefix(op, "MOV"):
 		return "load-store-move"
-	case strings.HasPrefix(op, "CAS") || strings.HasPrefix(op, "SWP") || strings.Contains(op, "XR"):
-		return "atomic-memory"
 	case strings.HasPrefix(op, "AES") || strings.HasPrefix(op, "SHA"):
 		return "crypto"
 	case strings.HasPrefix(op, "V"):
@@ -314,6 +314,9 @@ func registerClass(arch Arch, goarch string, reg Reg) string {
 	if arch == ArchARM64 {
 		if r == "ZR" {
 			return "zero-register"
+		}
+		if r == "RSP" {
+			return "stack-pointer"
 		}
 		if prefix, index, _, ok := regRangeParts(Reg(r)); ok {
 			switch {

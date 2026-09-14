@@ -14,6 +14,12 @@ func (c *arm64Ctx) imm64(n int64) string {
 // If postInc is true, mem.Off is treated as post-increment (address displacement is 0).
 func (c *arm64Ctx) addrI64(mem MemRef, postInc bool) (addr string, base Reg, inc int64, err error) {
 	base = mem.Base
+	// Register encoding 31 denotes SP in an address operand even when the Go
+	// source spells it ZR. RSP is the explicit hardware-stack-pointer spelling;
+	// both use the same modeled stack-pointer slot.
+	if base == ZR || base == Reg("RSP") {
+		base = SP
+	}
 	baseVal, err := c.loadReg(base)
 	if err != nil {
 		return "", "", 0, err
@@ -379,10 +385,10 @@ func (c *arm64Ctx) evalFPValue64(op Operand) (string, error) {
 	arg := fmt.Sprintf("%%arg%d", idx)
 
 	ty := slot.Type
-	if slot.Field >= 0 {
+	if fields := frameSlotFields(slot); len(fields) != 0 {
 		aggTy := c.sig.Args[idx]
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", t, aggTy, arg, slot.Field)
+		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s%s\n", t, aggTy, arg, frameSlotExtractSuffix(slot))
 		arg = "%" + t
 	}
 

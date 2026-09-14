@@ -308,9 +308,9 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				return wasmValue{}, fmt.Errorf("FP parameter %s has invalid argument index %d", arg, slot.Index)
 			}
 			value := fmt.Sprintf("%%arg%d", slot.Index)
-			if slot.Field >= 0 {
+			if fields := frameSlotFields(slot); len(fields) != 0 {
 				name := newTmp()
-				fmt.Fprintf(b, "  %%%s = extractvalue %s %s, %d\n", name, sig.Args[slot.Index], value, slot.Field)
+				fmt.Fprintf(b, "  %%%s = extractvalue %s %s%s\n", name, sig.Args[slot.Index], value, frameSlotExtractSuffix(slot))
 				value = "%" + name
 			}
 			return wasmValue{typ: slot.Type, val: value}, nil
@@ -1011,20 +1011,17 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			case "CALL", "CALLNORESUME":
 				pcID++
 				callPCs[i] = pcID
-				if goABI && normalizeInstructionOpcode(ins.Op) == "CALL" {
-					resumeLabels[i] = fmt.Sprintf("wasm_resume_%d", pcID)
-				}
 			}
 		}
 	}
+	var goABIOuter *strings.Builder
 	if goABI {
-		b.WriteString("  switch i32 %pc_b, label %wasm_entry_body [")
-		for i := range fn.Instrs {
-			if label := resumeLabels[i]; label != "" {
-				fmt.Fprintf(b, " i32 %d, label %%%s", callPCs[i], label)
-			}
-		}
-		b.WriteString(" ]\nwasm_entry_body:\n")
+		// Build the function body separately so the entry dispatch can contain
+		// only resume labels that were actually emitted. A terminating tail
+		// return can make a later lexical CALL unreachable.
+		goABIOuter = b
+		b = &strings.Builder{}
+		b.WriteString("wasm_entry_body:\n")
 		if fn.FrameSize != 0 {
 			sp, err := loadRegister(SP)
 			if err != nil {
@@ -1059,6 +1056,34 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if err := emitIntCompare(op, spec.typ, spec.op, false); err != nil {
 				return err
 			}
+			continue
+		}
+		if spec, ok := wasmFloatUnaryOps[op]; ok {
+			if len(ins.Args) != 0 {
+				return fmt.Errorf("%s is a zero-operand WebAssembly stack instruction", ins.Op)
+			}
+			value, err := pop(op)
+			if err != nil {
+				return err
+			}
+			if value.typ != spec.typ || value.stackAddr {
+				wantType := "f32"
+				if spec.typ == LLVMType("double") {
+					wantType = "f64"
+				}
+				return fmt.Errorf("%s expects %s, got %s", op, wantType, value.typ)
+			}
+			name := newTmp()
+			if spec.intrinsic == "" {
+				fmt.Fprintf(b, "  %%%s = fneg %s %s\n", name, spec.typ, value.val)
+			} else {
+				bits := "32"
+				if spec.typ == LLVMType("double") {
+					bits = "64"
+				}
+				fmt.Fprintf(b, "  %%%s = call %s @llvm.%s.f%s(%s %s)\n", name, spec.typ, spec.intrinsic, bits, spec.typ, value.val)
+			}
+			push(wasmValue{typ: spec.typ, val: "%" + name})
 			continue
 		}
 		if spec, ok := wasmMemoryLoadOps[op]; ok {
@@ -1117,7 +1142,7 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			continue
 		}
 		switch op {
-		case "NOP", "NO_LOCAL_POINTERS":
+		case "NOP", "NO_LOCAL_POINTERS", "FUNCDATA", "PCDATA":
 			continue
 		case "LABEL":
 			if len(ins.Args) != 1 {
@@ -1382,18 +1407,6 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if _, err := pop(op); err != nil {
 				return err
 			}
-		case "F64FLOOR", "F64CEIL", "F64TRUNC":
-			v, err := pop(op)
-			if err != nil {
-				return err
-			}
-			if v.typ != LLVMType("double") || v.stackAddr {
-				return fmt.Errorf("%s expects f64, got %s", op, v.typ)
-			}
-			intrinsic := strings.ToLower(strings.TrimPrefix(op, "F64"))
-			name := newTmp()
-			fmt.Fprintf(b, "  %%%s = call double @llvm.%s.f64(double %s)\n", name, intrinsic, v.val)
-			push(wasmValue{typ: LLVMType("double"), val: "%" + name})
 		case "F64STORE":
 			if len(ins.Args) != 1 || ins.Args[0].Kind != OpFP {
 				return fmt.Errorf("F64Store expects an FP slot")
@@ -1520,6 +1533,9 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			// Only the Go ABI entry has a PC_B resume switch. Native helpers
 			// still use the linear Go stack for calls, but continue directly
 			// after a normally returning callee.
+			if op == "CALL" && goABI {
+				resumeLabels[insIndex] = fmt.Sprintf("wasm_resume_%d", callPCs[insIndex])
+			}
 			if err := emitGoCall(target, callPCs[insIndex], resumeLabels[insIndex], op == "CALL" && goABI); err != nil {
 				return err
 			}
@@ -1601,6 +1617,18 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 		}
 	}
 	b.WriteString("}\n")
+	if goABI {
+		body := b.String()
+		b = goABIOuter
+		b.WriteString("  switch i32 %pc_b, label %wasm_entry_body [")
+		for i := range fn.Instrs {
+			if label := resumeLabels[i]; label != "" {
+				fmt.Fprintf(b, " i32 %d, label %%%s", callPCs[i], label)
+			}
+		}
+		b.WriteString(" ]\n")
+		b.WriteString(body)
+	}
 	return nil
 }
 

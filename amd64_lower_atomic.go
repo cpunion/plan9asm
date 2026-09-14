@@ -3,121 +3,13 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, _, recognized := amd64CompareExchangeProperties(normalizeInstructionOpcode(op)); recognized {
+		return c.lowerCompareExchange(op, ins)
+	}
 	switch op {
 	case "LOCK":
 		// LOCK is a prefix in Plan 9 syntax. Our lowering emits atomic IR for
 		// the following memory RMW instruction, so the prefix itself is a no-op.
-		return true, false, nil
-
-	case "CMPXCHG8B":
-		if len(ins.Args) != 1 || ins.Args[0].Kind != OpMem {
-			return true, false, fmt.Errorf("amd64 CMPXCHG8B expects mem: %q", ins.Raw)
-		}
-		word := func(r Reg) (string, error) {
-			return c.evalIntSized(Operand{Kind: OpReg, Reg: r}, I32)
-		}
-		ax, err := word(AX)
-		if err != nil {
-			return true, false, err
-		}
-		dx, err := word(DX)
-		if err != nil {
-			return true, false, err
-		}
-		bx, err := word(BX)
-		if err != nil {
-			return true, false, err
-		}
-		cx, err := word(CX)
-		if err != nil {
-			return true, false, err
-		}
-		pair := func(lo, hi string) string {
-			lo64 := c.newTmp()
-			hi64 := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", lo64, lo)
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", hi64, hi)
-			shifted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 32\n", shifted, hi64)
-			out := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", out, shifted, lo64)
-			return "%" + out
-		}
-		expected := pair(ax, dx)
-		desired := pair(bx, cx)
-		ptr, ptrType, err := c.ptrFromMem(ins.Args[0].Mem)
-		if err != nil {
-			return true, false, err
-		}
-		if ptrType != "ptr" {
-			return true, false, fmt.Errorf("amd64 CMPXCHG8B does not support segment-relative memory: %q", ins.Raw)
-		}
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = cmpxchg ptr %s, i64 %s, i64 %s seq_cst seq_cst, align 8\n", result, ptr, expected, desired)
-		old := c.newTmp()
-		success := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i1 } %%%s, 0\n", old, result)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i1 } %%%s, 1\n", success, result)
-		oldLo := c.newTmp()
-		oldHiShift := c.newTmp()
-		oldHi := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", oldLo, old)
-		fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, 32\n", oldHiShift, old)
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i32\n", oldHi, oldHiShift)
-		if err := c.storeRegSized(AX, I32, "%"+oldLo); err != nil {
-			return true, false, err
-		}
-		if err := c.storeRegSized(DX, I32, "%"+oldHi); err != nil {
-			return true, false, err
-		}
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", success, c.flagsZSlot)
-		return true, false, nil
-
-	case "CMPXCHGL", "CMPXCHGQ":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpMem {
-			return true, false, fmt.Errorf("amd64 %s expects src, mem: %q", op, ins.Raw)
-		}
-		ty := I32
-		align := 4
-		if op == "CMPXCHGQ" {
-			ty = I64
-			align = 8
-		}
-
-		expAX, err := c.loadReg(AX)
-		if err != nil {
-			return true, false, err
-		}
-		exp, err := c.amd64AtomicTruncFromI64(expAX, ty)
-		if err != nil {
-			return true, false, err
-		}
-		newv64, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		newv, err := c.amd64AtomicTruncFromI64(newv64, ty)
-		if err != nil {
-			return true, false, err
-		}
-		ptr, err := c.amd64AtomicPtrFromMem(ins.Args[1].Mem)
-		if err != nil {
-			return true, false, err
-		}
-		cx := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = cmpxchg ptr %s, %s %s, %s %s seq_cst seq_cst, align %d\n", cx, ptr, ty, exp, ty, newv, align)
-		old := c.newTmp()
-		okv := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue {%s, i1} %%%s, 0\n", old, ty, cx)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue {%s, i1} %%%s, 1\n", okv, ty, cx)
-		old64, err := c.amd64AtomicExtendToI64("%"+old, ty)
-		if err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(AX, old64); err != nil {
-			return true, false, err
-		}
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", okv, c.flagsZSlot)
 		return true, false, nil
 
 	case "XADDL", "XADDQ":

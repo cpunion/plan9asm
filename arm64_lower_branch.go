@@ -512,7 +512,23 @@ func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
 		return nil
 	}
 	if csig.Ret != c.sig.Ret {
-		return fmt.Errorf("arm64 tailcall return mismatch: caller %s callee %s", c.sig.Ret, csig.Ret)
+		conv := c.newTmp()
+		calleeBits, calleeInteger := armIntegerTypeWidth(csig.Ret)
+		callerBits, callerInteger := armIntegerTypeWidth(c.sig.Ret)
+		switch {
+		case calleeInteger && callerInteger && calleeBits > callerBits:
+			fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to %s\n", conv, csig.Ret, call, c.sig.Ret)
+		case calleeInteger && callerInteger && calleeBits < callerBits:
+			fmt.Fprintf(c.b, "  %%%s = zext %s %%%s to %s\n", conv, csig.Ret, call, c.sig.Ret)
+		case csig.Ret == Ptr && c.sig.Ret == I64:
+			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", conv, call)
+		case csig.Ret == I64 && c.sig.Ret == Ptr:
+			fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %%%s to ptr\n", conv, call)
+		default:
+			return fmt.Errorf("arm64 tailcall return mismatch: caller %s callee %s", c.sig.Ret, csig.Ret)
+		}
+		fmt.Fprintf(c.b, "  ret %s %%%s\n", c.sig.Ret, conv)
+		return nil
 	}
 	fmt.Fprintf(c.b, "  ret %s %%%s\n", c.sig.Ret, call)
 	return nil

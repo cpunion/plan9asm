@@ -114,6 +114,14 @@ func (c *armCtx) scanUsedRegs() {
 	}
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			if ins.Op == OpWORD && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
+				if compare, ok := decodeARMRawVFPCompare(uint32(ins.Args[0].Imm)); ok {
+					markReg(armRawVFPBackingReg(compare.lhs, compare.bits))
+					if !compare.zeroRHS {
+						markReg(armRawVFPBackingReg(compare.rhs, compare.bits))
+					}
+				}
+			}
 			for _, op := range ins.Args {
 				markOp(op)
 			}
@@ -194,9 +202,9 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 			return fmt.Errorf("arm: FP param slot +%d(FP) invalid arg index %d", p.Offset, p.Index)
 		}
 		value := fmt.Sprintf("%%arg%d", p.Index)
-		if p.Field >= 0 {
+		if fields := frameSlotFields(p); len(fields) != 0 {
 			extracted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s, %d\n", extracted, c.sig.Args[p.Index], value, p.Field)
+			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s%s\n", extracted, c.sig.Args[p.Index], value, frameSlotExtractSuffix(p))
 			value = "%" + extracted
 		}
 		name := fmt.Sprintf("%%fp_arg_%d", p.Offset)

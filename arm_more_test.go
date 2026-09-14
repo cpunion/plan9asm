@@ -348,11 +348,27 @@ TEXT ·tail(SB),NOSPLIT,$0-0
 		"lshr i32",
 		"ashr i32",
 		"call i32 @llvm.fshr.i32",
-		"ret i16 0",
+		"trunc i32",
+		"ret i16",
 	} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in output:\n%s", want, ll)
 		}
+	}
+}
+
+func TestTranslateARMTailCallAdaptsIntegerReturnWidths(t *testing.T) {
+	ll := translateARMForTest(t, `TEXT ·boolTail(SB),NOSPLIT,$0-0
+	B ·wide(SB)
+
+TEXT ·wide(SB),NOSPLIT,$0-0
+	RET
+`, map[string]FuncSig{
+		"example.boolTail": {Name: "example.boolTail", Ret: I1},
+		"example.wide":     {Name: "example.wide", Ret: I64},
+	})
+	if !strings.Contains(ll, "trunc i64 %") || !strings.Contains(ll, " to i1") {
+		t.Fatalf("ARM integer tailcall did not adapt i64 to i1:\n%s", ll)
 	}
 }
 

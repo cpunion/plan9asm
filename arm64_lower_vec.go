@@ -43,6 +43,45 @@ func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 // Vector/NEON lowering for a small subset used by stdlib asm.
 // We model V0..V31 as <16 x i8>.
 func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerARM64VectorCountBits(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64UnsignedWideningAdd(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorFloatWiden(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorLogical(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorIntegerCompare(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorSignedShiftRight(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorFloatUnary(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorFloatArithmetic(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64AddAcross(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorIntegerAddSub(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorFMA(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64VectorPermute(op, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerARM64WideningShift(op, ins); ok {
+		return ok, terminated, err
+	}
 	switch op {
 	case "FMOVQ":
 		if len(ins.Args) != 2 {
@@ -161,7 +200,7 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 		"SHA512H", "SHA512H2", "SHA512SU0", "SHA512SU1",
 		"VEOR3", "VBCAX", "VRAX1", "VXAR",
 		"VPMULL", "VPMULL2",
-		"VREV32", "VREV64", "VSHL", "VSRI", "VTBL", "VZIP1", "VZIP2", "VEXT", "VUSHR",
+		"VREV32", "VREV64", "VSHL", "VSRI", "VTBL", "VEXT", "VUSHR",
 		"VLD1R", "VLD4R", "VDUP":
 		// Keep translation permissive for crypto/NEON ops not yet modeled.
 		return true, false, nil

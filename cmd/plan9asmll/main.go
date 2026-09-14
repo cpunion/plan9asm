@@ -2,13 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"sort"
@@ -35,6 +39,29 @@ type failItem struct {
 	UnsupportedHits []unsupportedHit `json:"unsupported_hits,omitempty"`
 }
 
+const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"
+
+type notApplicableItem struct {
+	PkgPath         string `json:"pkg_path"`
+	AsmFile         string `json:"asm_file"`
+	Kind            string `json:"kind"`
+	Symbol          string `json:"symbol"`
+	DeclaredArgSize int64  `json:"declared_arg_size"`
+	ExpectedArgSize int64  `json:"expected_arg_size"`
+	Reason          string `json:"reason"`
+}
+
+type asmABINotApplicableError struct {
+	Symbol          string
+	Goarch          string
+	DeclaredArgSize int64
+	ExpectedArgSize int64
+}
+
+func (e *asmABINotApplicableError) Error() string {
+	return fmt.Sprintf("%s: TEXT argument size is incompatible with the Go declaration on %s: got %d, want %d", e.Symbol, e.Goarch, e.DeclaredArgSize, e.ExpectedArgSize)
+}
+
 type opCount struct {
 	Op    string `json:"op"`
 	Count int    `json:"count"`
@@ -47,17 +74,20 @@ type unsupportedHit struct {
 }
 
 type runReport struct {
-	Goos           string     `json:"goos"`
-	Goarch         string     `json:"goarch"`
-	Patterns       []string   `json:"patterns"`
-	TotalPkgs      int        `json:"total_pkgs"`
-	AsmPackages    []string   `json:"asm_packages,omitempty"`
-	TotalAsm       int        `json:"total_asm"`
-	Success        int        `json:"success"`
-	Failed         int        `json:"failed"`
-	Duration       string     `json:"duration"`
-	UnsupportedOps []opCount  `json:"unsupported_ops,omitempty"`
-	Fails          []failItem `json:"fails,omitempty"`
+	Goos               string              `json:"goos"`
+	Goarch             string              `json:"goarch"`
+	Patterns           []string            `json:"patterns"`
+	TotalPkgs          int                 `json:"total_pkgs"`
+	AsmPackages        []string            `json:"asm_packages,omitempty"`
+	AsmFiles           []string            `json:"asm_files,omitempty"`
+	TotalAsm           int                 `json:"total_asm"`
+	Success            int                 `json:"success"`
+	NotApplicable      int                 `json:"not_applicable"`
+	Failed             int                 `json:"failed"`
+	Duration           string              `json:"duration"`
+	UnsupportedOps     []opCount           `json:"unsupported_ops,omitempty"`
+	Fails              []failItem          `json:"fails,omitempty"`
+	NotApplicableItems []notApplicableItem `json:"not_applicable_items,omitempty"`
 }
 
 type targetSpec struct {
@@ -71,11 +101,12 @@ type targetTasks struct {
 }
 
 type matrixReport struct {
-	Targets      []runReport `json:"targets"`
-	TotalTargets int         `json:"total_targets"`
-	TotalAsm     int         `json:"total_asm"`
-	Success      int         `json:"success"`
-	Failed       int         `json:"failed"`
+	Targets       []runReport `json:"targets"`
+	TotalTargets  int         `json:"total_targets"`
+	TotalAsm      int         `json:"total_asm"`
+	Success       int         `json:"success"`
+	NotApplicable int         `json:"not_applicable"`
+	Failed        int         `json:"failed"`
 }
 
 type compileConfig struct {
@@ -91,6 +122,8 @@ func main() {
 		targets    = flag.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,windows/arm64)")
 		allTargets = flag.Bool("all-targets", false, "run the complete default Plan 9 target matrix")
 		patterns   = flag.String("patterns", "std", "comma-separated package patterns")
+		asmFiles   = flag.String("asm-files", "", "comma-separated module-relative assembly files to exercise exactly")
+		buildTags  = flag.String("tags", "", "comma-separated Go build tags used to expose tagged assembly implementations")
 		modulePath = flag.String("module-path", "", "only include packages owned by this module path")
 		outDir     = flag.String("out", "", "output dir for generated .ll files")
 		annotate   = flag.Bool("annotate", false, "emit source asm lines as IR comments")
@@ -109,6 +142,11 @@ func main() {
 	pats := splitCSV(*patterns)
 	if len(pats) == 0 {
 		fatalf("empty -patterns")
+	}
+	tags := splitCSV(*buildTags)
+	exactAsmFiles := splitCSV(*asmFiles)
+	if err := validateExactAsmFiles(exactAsmFiles); err != nil {
+		fatalf("%v", err)
 	}
 
 	specs, err := resolveTargets(*goos, *goarch, *targets, *allTargets)
@@ -139,7 +177,7 @@ func main() {
 			runOutDir = filepath.Join(baseOut, targetID(spec))
 			fmt.Fprintf(os.Stderr, "\n== target %s ==\n", targetID(spec))
 		}
-		rep, tasks, err := runOneTarget(spec, pats, *modulePath, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *strictLoad, *repoRoot, ccfg)
+		rep, tasks, err := runOneTarget(spec, pats, tags, exactAsmFiles, *modulePath, runOutDir, *annotate, *limit, *keepGoing, *listOnly, *strictLoad, *repoRoot, ccfg)
 		if err != nil {
 			fatalf("%s: %v", targetID(spec), err)
 		}
@@ -155,7 +193,7 @@ func main() {
 
 	if *listOnly {
 		var out any
-		if len(taskLists) == 1 {
+		if !useMatrixReport(*allTargets, *targets, len(taskLists)) {
 			out = taskLists[0].Tasks
 		} else {
 			out = taskLists
@@ -166,7 +204,7 @@ func main() {
 		return
 	}
 
-	if len(allReports) == 1 {
+	if !useMatrixReport(*allTargets, *targets, len(allReports)) {
 		writeReport(*reportOut, allReports[0])
 		if exitCode != 0 {
 			os.Exit(exitCode)
@@ -181,14 +219,19 @@ func main() {
 	for _, r := range allReports {
 		mr.TotalAsm += r.TotalAsm
 		mr.Success += r.Success
+		mr.NotApplicable += r.NotApplicable
 		mr.Failed += r.Failed
 	}
 	writeReport(*reportOut, mr)
 	if exitCode != 0 {
-		fmt.Fprintf(os.Stderr, "\nmatrix finished with failures: success=%d failed=%d total=%d\n", mr.Success, mr.Failed, mr.TotalAsm)
+		fmt.Fprintf(os.Stderr, "\nmatrix finished with failures: success=%d not_applicable=%d failed=%d total=%d\n", mr.Success, mr.NotApplicable, mr.Failed, mr.TotalAsm)
 		os.Exit(exitCode)
 	}
-	fmt.Fprintf(os.Stderr, "\nmatrix finished: success=%d total=%d\n", mr.Success, mr.TotalAsm)
+	fmt.Fprintf(os.Stderr, "\nmatrix finished: success=%d not_applicable=%d total=%d\n", mr.Success, mr.NotApplicable, mr.TotalAsm)
+}
+
+func useMatrixReport(allTargets bool, targets string, reportCount int) bool {
+	return allTargets || strings.TrimSpace(targets) != "" || reportCount != 1
 }
 
 func resolveCompileConfig(compile bool, llcPath string, keepObj bool) (compileConfig, error) {
@@ -304,12 +347,12 @@ func targetID(t targetSpec) string {
 	return t.Goos + "-" + t.Goarch
 }
 
-func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, annotate bool, limit int, keepGoing bool, listOnly, strictLoad bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
+func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modulePath, outDir string, annotate bool, limit int, keepGoing bool, listOnly, strictLoad bool, repoRoot string, ccfg compileConfig) (runReport, []asmTask, error) {
 	arch, err := toPlan9Arch(spec.Goarch)
 	if err != nil {
 		return runReport{}, nil, err
 	}
-	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, modulePath, strictLoad)
+	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad)
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
@@ -319,7 +362,7 @@ func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, ann
 			pkgByPath[p.PkgPath] = p
 		}
 	}
-	tasks, asmPackages := collectAsmTasks(pkgs, outDir)
+	tasks, asmPackages := collectAsmTasks(pkgs, outDir, exactAsmFiles)
 	if limit > 0 && limit < len(tasks) {
 		tasks = tasks[:limit]
 	}
@@ -333,6 +376,9 @@ func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, ann
 		TotalPkgs:   len(asmPackages),
 		AsmPackages: asmPackages,
 		TotalAsm:    len(tasks),
+	}
+	for _, task := range tasks {
+		rep.AsmFiles = append(rep.AsmFiles, task.AsmFile)
 	}
 	if len(tasks) == 0 {
 		fmt.Fprintf(os.Stderr, "no asm files found for patterns=%v (%s/%s)\n", pats, spec.Goos, spec.Goarch)
@@ -363,9 +409,25 @@ func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, ann
 		}
 		err := compileOne(pkg, arch, spec.Goarch, triple, t, annotate, ccfg)
 		if err != nil {
+			var abiMismatch *asmABINotApplicableError
+			if errors.As(err, &abiMismatch) {
+				fmt.Fprintf(os.Stderr, "[%d/%d] N/A  %s\n", idx, len(tasks), t.AsmFile)
+				printFailureReason(abiMismatch.Error())
+				rep.NotApplicable++
+				rep.NotApplicableItems = append(rep.NotApplicableItems, notApplicableItem{
+					PkgPath:         t.PkgPath,
+					AsmFile:         t.AsmFile,
+					Kind:            targetNotApplicableGoTextArgSize,
+					Symbol:          abiMismatch.Symbol,
+					DeclaredArgSize: abiMismatch.DeclaredArgSize,
+					ExpectedArgSize: abiMismatch.ExpectedArgSize,
+					Reason:          abiMismatch.Error(),
+				})
+				continue
+			}
 			fmt.Fprintf(os.Stderr, "[%d/%d] FAIL %s\n", idx, len(tasks), t.AsmFile)
 			printFailureReason(err.Error())
-			unsupported, hits := unsupportedInAsmFile(t.AsmFile, arch, supportedOps)
+			unsupported, hits := unsupportedInAsmFile(t.AsmFile, asmSourceRoot(pkg, t.AsmFile), arch, supportedOps)
 			if len(unsupported) > 0 {
 				fmt.Fprintf(os.Stderr, "  unsupported: %s\n", strings.Join(unsupported, ", "))
 				for _, op := range unsupported {
@@ -395,15 +457,15 @@ func runOneTarget(spec targetSpec, pats []string, modulePath, outDir string, ann
 	rep.Duration = time.Since(start).String()
 	rep.UnsupportedOps = flattenUnsupportedAgg(unsupportedAgg)
 	if rep.Failed != 0 {
-		fmt.Fprintf(os.Stderr, "finished with failures: success=%d failed=%d total=%d\n", rep.Success, rep.Failed, rep.TotalAsm)
+		fmt.Fprintf(os.Stderr, "finished with failures: success=%d not_applicable=%d failed=%d total=%d\n", rep.Success, rep.NotApplicable, rep.Failed, rep.TotalAsm)
 	} else {
-		fmt.Fprintf(os.Stderr, "finished: success=%d total=%d\n", rep.Success, rep.TotalAsm)
+		fmt.Fprintf(os.Stderr, "finished: success=%d not_applicable=%d total=%d\n", rep.Success, rep.NotApplicable, rep.TotalAsm)
 	}
 	return rep, nil, nil
 }
 
 func compileOne(pkg *packages.Package, arch plan9asm.Arch, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) error {
-	src, err := os.ReadFile(t.AsmFile)
+	src, err := readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
 	if err != nil {
 		return fmt.Errorf("read asm: %w", err)
 	}
@@ -419,15 +481,19 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goarch, triple string
 	}
 
 	resolve := resolveSymFunc(pkg.PkgPath)
-	sigs, err := sigsForAsmFile(pkg, file, resolve, goarch)
+	sigs, declaredArgSizes, err := sigsForAsmFile(pkg, file, resolve, goarch)
 	if err != nil {
 		return fmt.Errorf("infer signatures: %w", err)
+	}
+	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {
+		return fmt.Errorf("target applicability: %w", err)
 	}
 	mod, err := plan9asm.TranslateModule(file, plan9asm.Options{
 		TargetTriple:   triple,
 		ResolveSym:     resolve,
 		Sigs:           sigs,
 		Goarch:         goarch,
+		WASMABI:        wasmABIForGoPackageTarget(goarch),
 		AnnotateSource: annotate,
 	})
 	if err != nil {
@@ -464,6 +530,105 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goarch, triple string
 	return nil
 }
 
+// plan9asmll translates Go package assembly, rather than arbitrary native LLVM
+// entry points. Go's wasm assembler therefore always uses the resumable
+// linear-memory stack ABI; other architectures retain the direct convention.
+func wasmABIForGoPackageTarget(goarch string) plan9asm.WASMABI {
+	if goarch == "wasm" {
+		return plan9asm.WASMABIGo
+	}
+	return plan9asm.WASMABIDirect
+}
+
+var quotedAsmIncludeRE = regexp.MustCompile(`^#include[ \t]+"([^"\r\n]+)"[ \t]*(?://.*)?$`)
+
+func asmSourceRoot(pkg *packages.Package, asmFile string) string {
+	if pkg != nil && pkg.Module != nil && pkg.Module.Dir != "" {
+		return pkg.Module.Dir
+	}
+	return filepath.Dir(asmFile)
+}
+
+// readAsmSource expands quoted headers that live inside the package's module.
+// Go assembly commonly keeps large function-like macros in sibling .h files.
+// Toolchain headers such as textflag.h and funcdata.h are resolved from the
+// current GOROOT's pkg/include directory, matching the include path supplied
+// by the Go command. Generated package headers such as go_asm.h remain as
+// directives when they do not exist yet.
+func readAsmSource(asmFile, sourceRoot string) ([]byte, error) {
+	root, err := filepath.Abs(sourceRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve include root: %w", err)
+	}
+	file, err := filepath.Abs(asmFile)
+	if err != nil {
+		return nil, fmt.Errorf("resolve asm path: %w", err)
+	}
+	return expandAsmIncludes(file, root, make(map[string]bool), 0)
+}
+
+func expandAsmIncludes(file, sourceRoot string, active map[string]bool, depth int) ([]byte, error) {
+	if depth > 32 {
+		return nil, fmt.Errorf("local include depth exceeds 32 at %s", file)
+	}
+	if active[file] {
+		return nil, fmt.Errorf("local include cycle at %s", file)
+	}
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+	active[file] = true
+	defer delete(active, file)
+
+	var out strings.Builder
+	for _, line := range strings.SplitAfter(string(src), "\n") {
+		trimmed := strings.TrimSpace(strings.TrimSuffix(line, "\n"))
+		match := quotedAsmIncludeRE.FindStringSubmatch(trimmed)
+		if match == nil || filepath.IsAbs(match[1]) {
+			out.WriteString(line)
+			continue
+		}
+		includedPath := filepath.Clean(filepath.Join(filepath.Dir(file), filepath.FromSlash(match[1])))
+		localAllowed := pathWithinRoot(sourceRoot, includedPath)
+		var included []byte
+		var includeErr error
+		if localAllowed {
+			included, includeErr = expandAsmIncludes(includedPath, sourceRoot, active, depth+1)
+		}
+		if !localAllowed || os.IsNotExist(includeErr) {
+			goRoot := filepath.Clean(runtime.GOROOT())
+			goIncludeRoot := filepath.Join(runtime.GOROOT(), "pkg", "include")
+			goIncludedPath := filepath.Clean(filepath.Join(goIncludeRoot, filepath.FromSlash(match[1])))
+			if pathWithinRoot(goRoot, goIncludedPath) {
+				included, includeErr = expandAsmIncludes(goIncludedPath, goRoot, active, depth+1)
+			} else if !localAllowed {
+				return nil, fmt.Errorf("local include %q escapes source root %s and GOROOT %s", match[1], sourceRoot, goRoot)
+			}
+			if os.IsNotExist(includeErr) {
+				if !localAllowed {
+					return nil, fmt.Errorf("local include %q escapes source root %s", match[1], sourceRoot)
+				}
+				out.WriteString(line)
+				continue
+			}
+		}
+		if includeErr != nil {
+			return nil, fmt.Errorf("expand local include %q from %s: %w", match[1], file, includeErr)
+		}
+		out.Write(included)
+		if strings.HasSuffix(line, "\n") && len(included) != 0 && included[len(included)-1] != '\n' {
+			out.WriteByte('\n')
+		}
+	}
+	return []byte(out.String()), nil
+}
+
+func pathWithinRoot(root, candidate string) bool {
+	rel, err := filepath.Rel(root, candidate)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 func llcExtraArgs(goarch string) []string {
 	switch goarch {
 	case "amd64":
@@ -480,7 +645,7 @@ func llcExtraArgs(goarch string) []string {
 	}
 }
 
-func loadPkgs(goos, goarch string, patterns []string, modulePath string, strict bool) ([]*packages.Package, error) {
+func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath string, strict bool) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -495,6 +660,9 @@ func loadPkgs(goos, goarch string, patterns []string, modulePath string, strict 
 			"GOOS="+goos,
 			"GOARCH="+goarch,
 		),
+	}
+	if len(buildTags) != 0 {
+		cfg.BuildFlags = []string{"-tags=" + strings.Join(buildTags, ",")}
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
@@ -520,10 +688,14 @@ func filterPackagesByModule(pkgs []*packages.Package, modulePath string) []*pack
 	return filtered
 }
 
-func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, []string) {
+func collectAsmTasks(pkgs []*packages.Package, outDir string, exactAsmFiles []string) ([]asmTask, []string) {
 	tasks := make([]asmTask, 0)
 	asmPackages := make([]string, 0)
 	seenPkg := map[string]bool{}
+	allow := make(map[string]bool, len(exactAsmFiles))
+	for _, path := range exactAsmFiles {
+		allow[filepath.ToSlash(filepath.Clean(filepath.FromSlash(path)))] = true
+	}
 	for _, p := range pkgs {
 		if p == nil || p.PkgPath == "" {
 			continue
@@ -533,6 +705,15 @@ func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, []stri
 		}
 		seenPkg[p.PkgPath] = true
 		files := asmFilesOfPkg(p)
+		if len(allow) != 0 {
+			filtered := files[:0]
+			for _, file := range files {
+				if rel, ok := moduleRelativeAsmPath(p, file); ok && allow[rel] {
+					filtered = append(filtered, file)
+				}
+			}
+			files = filtered
+		}
 		if len(files) == 0 {
 			continue
 		}
@@ -550,6 +731,27 @@ func collectAsmTasks(pkgs []*packages.Package, outDir string) ([]asmTask, []stri
 	})
 	sort.Strings(asmPackages)
 	return tasks, asmPackages
+}
+
+func validateExactAsmFiles(files []string) error {
+	for _, path := range files {
+		clean := filepath.Clean(filepath.FromSlash(path))
+		if filepath.IsAbs(clean) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			return fmt.Errorf("invalid -asm-files entry %q: expect a module-relative path", path)
+		}
+	}
+	return nil
+}
+
+func moduleRelativeAsmPath(pkg *packages.Package, path string) (string, bool) {
+	if pkg == nil || pkg.Module == nil || pkg.Module.Dir == "" {
+		return "", false
+	}
+	rel, err := filepath.Rel(pkg.Module.Dir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(filepath.Clean(rel)), true
 }
 
 func asmFilesOfPkg(p *packages.Package) []string {
@@ -685,25 +887,22 @@ func resolveSymFunc(pkgPath string) func(sym string) string {
 }
 
 var abiSuffixRe = regexp.MustCompile(`<ABI[^>]*>$`)
-var (
-	reCaseString = regexp.MustCompile(`case\s+"([A-Za-z0-9_.$]+)"`)
-	reCaseOp     = regexp.MustCompile(`case\s+Op([A-Za-z0-9_]+)`)
-	reQuotedOp   = regexp.MustCompile(`"([A-Za-z0-9_.$]+)"`)
-	reOpToken    = regexp.MustCompile(`Op([A-Za-z0-9_]+)`)
-)
 
 func stripABISuffix(sym string) string {
 	return abiSuffixRe.ReplaceAllString(sym, "")
 }
 
-func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string) (map[string]plan9asm.FuncSig, error) {
+func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(string) string, goarch string) (map[string]plan9asm.FuncSig, map[string]int64, error) {
 	sigs := map[string]plan9asm.FuncSig{}
+	declaredArgSizes := map[string]int64{}
+	declaredSigs := map[string]bool{}
+	fallbackAsmSigs := map[string]bool{}
 	if pkg == nil || pkg.Types == nil || pkg.Types.Scope() == nil {
 		for _, fn := range file.Funcs {
 			fs := fallbackSigForAsmFunc(fn, resolve(stripABISuffix(fn.Sym)))
 			sigs[fs.Name] = fs
 		}
-		return sigs, nil
+		return sigs, declaredArgSizes, nil
 	}
 
 	sz := pkg.TypesSizes
@@ -711,7 +910,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		sz = types.SizesFor("gc", goarch)
 	}
 	if sz == nil {
-		return nil, fmt.Errorf("missing type sizes for %q", goarch)
+		return nil, nil, fmt.Errorf("missing type sizes for %q", goarch)
 	}
 
 	scope := pkg.Types.Scope()
@@ -723,12 +922,16 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if resolved == "" {
 			continue
 		}
-		fs, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !ok {
 			fs = fallbackSigForAsmFunc(fn, resolved)
+			fallbackAsmSigs[resolved] = true
+		} else {
+			declaredArgSizes[resolved] = argSize
+			declaredSigs[resolved] = true
 		}
 		sigs[resolved] = fs
 	}
@@ -745,9 +948,10 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if _, ok := sigs[resolved]; ok {
 			return
 		}
-		fs, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
 		if err == nil && ok {
 			sigs[resolved] = fs
+			declaredSigs[resolved] = true
 			return
 		}
 		if tail && caller.Name != "" {
@@ -763,7 +967,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		caller := sigs[resolve(stripABISuffix(fn.Sym))]
 		for _, ins := range fn.Instrs {
 			op := strings.ToUpper(string(ins.Op))
-			tail := op == "JMP" || op == "B"
+			tail := op == "JMP" || op == "B" || op == "RET" && len(ins.Args) == 1
 			if !(tail || op == "CALL" || op == "BL") {
 				continue
 			}
@@ -783,7 +987,88 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		}
 	}
 
-	return sigs, nil
+	// A declaration-free TEXT can be a C-ABI entry trampoline that consists of
+	// a direct tail transfer to a Go-declared function. FP-slot heuristics have
+	// no return information for such a function, while the tail target provides
+	// its complete ABI. Inherit that signature only when every external tail
+	// target is declared and agrees, leaving ordinary register-return assembly
+	// on the conservative fallback above.
+	for _, fn := range file.Funcs {
+		callerResolved := resolve(stripABISuffix(fn.Sym))
+		if !fallbackAsmSigs[callerResolved] {
+			continue
+		}
+		var inferred *plan9asm.FuncSig
+		valid := true
+		for _, ins := range fn.Instrs {
+			op := strings.ToUpper(string(ins.Op))
+			if !(op == "JMP" || op == "B" || op == "RET" && len(ins.Args) == 1) || len(ins.Args) != 1 || ins.Args[0].Kind != plan9asm.OpSym {
+				continue
+			}
+			s := strings.TrimSpace(ins.Args[0].Sym)
+			if !strings.HasSuffix(s, "(SB)") {
+				continue
+			}
+			base, off := splitSymPlusOff(strings.TrimSuffix(s, "(SB)"))
+			targetResolved := resolve(stripABISuffix(strings.TrimSuffix(base, "<>")))
+			target, ok := sigs[targetResolved]
+			if base == "" || off != 0 || !ok || !declaredSigs[targetResolved] {
+				valid = false
+				break
+			}
+			target.Name = callerResolved
+			if inferred == nil {
+				candidate := target
+				inferred = &candidate
+			} else if !reflect.DeepEqual(*inferred, target) {
+				valid = false
+				break
+			}
+		}
+		if valid && inferred != nil {
+			sigs[callerResolved] = *inferred
+		}
+	}
+
+	return sigs, declaredArgSizes, nil
+}
+
+func validateDeclaredTextArgSizes(file *plan9asm.File, resolve func(string) string, declaredArgSizes map[string]int64, goarch string) error {
+	for _, fn := range file.Funcs {
+		if !hasExplicitTextArgSize(fn) {
+			continue
+		}
+		resolved := resolve(stripABISuffix(fn.Sym))
+		expected, ok := declaredArgSizes[resolved]
+		if !ok || fn.ArgSize == expected {
+			continue
+		}
+		return &asmABINotApplicableError{
+			Symbol:          resolved,
+			Goarch:          goarch,
+			DeclaredArgSize: fn.ArgSize,
+			ExpectedArgSize: expected,
+		}
+	}
+	return nil
+}
+
+func hasExplicitTextArgSize(fn plan9asm.Func) bool {
+	for _, ins := range fn.Instrs {
+		if ins.Op != plan9asm.OpTEXT {
+			continue
+		}
+		parts := strings.Split(ins.Raw, ",")
+		if len(parts) < 2 {
+			return false
+		}
+		spec := strings.TrimSpace(parts[len(parts)-1])
+		if !strings.HasPrefix(spec, "$") {
+			return false
+		}
+		return strings.LastIndex(strings.TrimPrefix(spec, "$"), "-") > 0
+	}
+	return false
 }
 
 func fallbackSigForAsmFunc(fn plan9asm.Func, resolved string) plan9asm.FuncSig {
@@ -793,7 +1078,7 @@ func fallbackSigForAsmFunc(fn plan9asm.Func, resolved string) plan9asm.FuncSig {
 	for _, ins := range fn.Instrs {
 		op := strings.ToUpper(string(ins.Op))
 		for i, a := range ins.Args {
-			if a.Kind != plan9asm.OpFP {
+			if a.Kind != plan9asm.OpFP && a.Kind != plan9asm.OpFPAddr {
 				continue
 			}
 			if isLikelyResultSlot(op, i, len(ins.Args), a.FPName) {
@@ -866,7 +1151,7 @@ func sortOffsets(m map[int64]struct{}) []int64 {
 	return out
 }
 
-func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes) (plan9asm.FuncSig, bool, error) {
+func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes) (plan9asm.FuncSig, int64, bool, error) {
 	declName := strings.TrimPrefix(sym, "·")
 	if strings.ContainsRune(declName, '·') {
 		key := strings.ReplaceAll(sym, "∕", "/")
@@ -874,30 +1159,39 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 		if local, ok := linknames[key]; ok {
 			declName = local
 		} else {
-			return plan9asm.FuncSig{}, false, nil
+			dot := strings.LastIndexByte(key, '.')
+			if dot < 0 || dot == len(key)-1 {
+				return plan9asm.FuncSig{}, 0, false, nil
+			}
+			candidate := key[dot+1:]
+			obj := scope.Lookup(candidate)
+			if obj == nil || (key != resolved && (obj.Pkg() == nil || resolved != obj.Pkg().Path()+"."+candidate)) {
+				return plan9asm.FuncSig{}, 0, false, nil
+			}
+			declName = candidate
 		}
 	}
 	obj := scope.Lookup(declName)
 	if obj == nil {
-		return plan9asm.FuncSig{}, false, nil
+		return plan9asm.FuncSig{}, 0, false, nil
 	}
 	fn, ok := obj.(*types.Func)
 	if !ok {
-		return plan9asm.FuncSig{}, false, nil
+		return plan9asm.FuncSig{}, 0, false, nil
 	}
 	sig := fn.Type().(*types.Signature)
 	if sig.Recv() != nil || sig.Variadic() {
-		return plan9asm.FuncSig{}, false, nil
+		return plan9asm.FuncSig{}, 0, false, nil
 	}
 
 	args, frameParams, nextOff, err := llvmArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, 0, false)
 	if err != nil {
-		return plan9asm.FuncSig{}, false, fmt.Errorf("%s: %w", fn.FullName(), err)
+		return plan9asm.FuncSig{}, 0, false, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
 	nextOff = alignOff(nextOff, int64(wordSize(goarch)))
-	retTys, frameResults, _, err := llvmArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, nextOff, true)
+	retTys, frameResults, argSize, err := llvmArgsAndFrameSlotsForTuple(sig.Results(), goarch, sz, nextOff, true)
 	if err != nil {
-		return plan9asm.FuncSig{}, false, fmt.Errorf("%s: %w", fn.FullName(), err)
+		return plan9asm.FuncSig{}, 0, false, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
 	ret := tupleRetType(retTys)
 	return plan9asm.FuncSig{
@@ -908,7 +1202,7 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 			Params:  frameParams,
 			Results: frameResults,
 		},
-	}, true, nil
+	}, argSize, true, nil
 }
 
 func tupleRetType(ts []plan9asm.LLVMType) plan9asm.LLVMType {
@@ -992,15 +1286,25 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 	off := startOff
 	argIdx := 0
 	for i := 0; i < tup.Len(); i++ {
+		name := ""
+		if flattenAgg {
+			name = tup.At(i).Name()
+		}
 		t := tup.At(i).Type()
 		off = align(off, int64(sz.Alignof(t)))
+		if sz.Sizeof(t) == 0 {
+			continue
+		}
 
-		parts, ok := framePartsForType(t, goarch)
+		parts, ok, e := framePartsForType(t, goarch, sz)
+		if e != nil {
+			return nil, nil, 0, e
+		}
 		if ok {
 			if flattenAgg {
 				for _, part := range parts {
 					args = append(args, part.Type)
-					slots = append(slots, plan9asm.FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: -1})
+					slots = append(slots, plan9asm.FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: -1, Name: name})
 					argIdx++
 				}
 			} else {
@@ -1010,7 +1314,7 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 				}
 				args = append(args, ty)
 				for _, part := range parts {
-					slots = append(slots, plan9asm.FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field})
+					slots = append(slots, plan9asm.FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field, Fields: part.Fields})
 				}
 				argIdx++
 			}
@@ -1023,7 +1327,7 @@ func llvmArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz types.Siz
 			return nil, nil, 0, e
 		}
 		args = append(args, ty)
-		slots = append(slots, plan9asm.FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1})
+		slots = append(slots, plan9asm.FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1, Name: name})
 		argIdx++
 		off += int64(sz.Sizeof(t))
 	}
@@ -1034,39 +1338,114 @@ type framePart struct {
 	Offset int64
 	Type   plan9asm.LLVMType
 	Field  int
+	Fields []int
 }
 
-func framePartsForType(t types.Type, goarch string) ([]framePart, bool) {
+func framePartsForType(t types.Type, goarch string, sz types.Sizes) ([]framePart, bool, error) {
 	word := int64(wordSize(goarch))
 	wordTy := plan9asm.I64
 	if word == 4 {
 		wordTy = plan9asm.LLVMType("i32")
 	}
-	switch u := types.Unalias(t).(type) {
+	switch u := types.Unalias(t).Underlying().(type) {
 	case *types.Basic:
-		if u.Kind() == types.String {
+		switch u.Kind() {
+		case types.String:
 			return []framePart{
 				{Offset: 0, Type: plan9asm.Ptr, Field: 0},
 				{Offset: word, Type: wordTy, Field: 1},
-			}, true
+			}, true, nil
+		case types.Complex64:
+			return []framePart{
+				{Offset: 0, Type: plan9asm.LLVMType("float"), Field: 0},
+				{Offset: 4, Type: plan9asm.LLVMType("float"), Field: 1},
+			}, true, nil
+		case types.Complex128:
+			return []framePart{
+				{Offset: 0, Type: plan9asm.LLVMType("double"), Field: 0},
+				{Offset: 8, Type: plan9asm.LLVMType("double"), Field: 1},
+			}, true, nil
 		}
 	case *types.Slice:
 		return []framePart{
 			{Offset: 0, Type: plan9asm.Ptr, Field: 0},
 			{Offset: word, Type: wordTy, Field: 1},
 			{Offset: 2 * word, Type: wordTy, Field: 2},
-		}, true
+		}, true, nil
 	case *types.Interface:
 		// Both empty and non-empty interfaces occupy two pointers in Go ABI.
 		return []framePart{
 			{Offset: 0, Type: plan9asm.Ptr, Field: 0},
 			{Offset: word, Type: plan9asm.Ptr, Field: 1},
-		}, true
+		}, true, nil
+	case *types.Array:
+		elemParts, elemAggregate, err := framePartsForType(u.Elem(), goarch, sz)
+		if err != nil {
+			return nil, false, err
+		}
+		if !elemAggregate {
+			elemType, err := llvmTypeForGo(u.Elem(), goarch)
+			if err != nil {
+				return nil, false, err
+			}
+			elemParts = []framePart{{Type: elemType, Field: -1}}
+		}
+		elemSize := int64(sz.Sizeof(u.Elem()))
+		parts := make([]framePart, 0, int(u.Len())*len(elemParts))
+		for i := int64(0); i < u.Len(); i++ {
+			for _, part := range elemParts {
+				parts = append(parts, nestedFramePart(part, int(i), i*elemSize))
+			}
+		}
+		return parts, true, nil
+	case *types.Struct:
+		fields := make([]*types.Var, u.NumFields())
+		for i := range fields {
+			fields[i] = u.Field(i)
+		}
+		offsets := sz.Offsetsof(fields)
+		var parts []framePart
+		for i, field := range fields {
+			fieldParts, fieldAggregate, err := framePartsForType(field.Type(), goarch, sz)
+			if err != nil {
+				return nil, false, err
+			}
+			if !fieldAggregate {
+				fieldType, err := llvmTypeForGo(field.Type(), goarch)
+				if err != nil {
+					return nil, false, err
+				}
+				fieldParts = []framePart{{Type: fieldType, Field: -1}}
+			}
+			for _, part := range fieldParts {
+				parts = append(parts, nestedFramePart(part, i, offsets[i]))
+			}
+		}
+		return parts, true, nil
 	}
-	return nil, false
+	return nil, false, nil
+}
+
+func nestedFramePart(part framePart, field int, offset int64) framePart {
+	path := make([]int, 0, 1+len(part.Fields)+1)
+	path = append(path, field)
+	if len(part.Fields) != 0 {
+		path = append(path, part.Fields...)
+	} else if part.Field >= 0 {
+		path = append(path, part.Field)
+	}
+	part.Offset += offset
+	part.Field = field
+	if len(path) > 1 {
+		part.Fields = path
+	} else {
+		part.Fields = nil
+	}
+	return part
 }
 
 func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
+	t = types.Unalias(t)
 	switch tt := t.(type) {
 	case *types.Basic:
 		switch tt.Kind() {
@@ -1091,6 +1470,10 @@ func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
 			return plan9asm.LLVMType("float"), nil
 		case types.Float64:
 			return plan9asm.LLVMType("double"), nil
+		case types.Complex64:
+			return plan9asm.LLVMType("{ float, float }"), nil
+		case types.Complex128:
+			return plan9asm.LLVMType("{ double, double }"), nil
 		case types.String:
 			if wordSize(goarch) == 8 {
 				return plan9asm.LLVMType("{ ptr, i64 }"), nil
@@ -1101,6 +1484,8 @@ func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
 		}
 	case *types.Pointer:
 		return plan9asm.Ptr, nil
+	case *types.Signature, *types.Map, *types.Chan:
+		return plan9asm.Ptr, nil
 	case *types.Slice:
 		if wordSize(goarch) == 8 {
 			return plan9asm.LLVMType("{ ptr, i64, i64 }"), nil
@@ -1108,6 +1493,25 @@ func llvmTypeForGo(t types.Type, goarch string) (plan9asm.LLVMType, error) {
 		return plan9asm.LLVMType("{ ptr, i32, i32 }"), nil
 	case *types.Interface:
 		return plan9asm.LLVMType("{ ptr, ptr }"), nil
+	case *types.Array:
+		elem, err := llvmTypeForGo(tt.Elem(), goarch)
+		if err != nil {
+			return "", err
+		}
+		return plan9asm.LLVMType(fmt.Sprintf("[%d x %s]", tt.Len(), elem)), nil
+	case *types.Struct:
+		if tt.NumFields() == 0 {
+			return plan9asm.LLVMType("[0 x i8]"), nil
+		}
+		fields := make([]string, tt.NumFields())
+		for i := range fields {
+			fieldType, err := llvmTypeForGo(tt.Field(i).Type(), goarch)
+			if err != nil {
+				return "", err
+			}
+			fields[i] = string(fieldType)
+		}
+		return plan9asm.LLVMType("{ " + strings.Join(fields, ", ") + " }"), nil
 	case *types.Named:
 		return llvmTypeForGo(tt.Underlying(), goarch)
 	default:
@@ -1235,46 +1639,162 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", f, err)
 		}
-		for _, m := range reCaseString.FindAllSubmatch(src, -1) {
-			nop := normalizeOp(string(m[1]))
-			if nop != "" {
-				supported[nop] = struct{}{}
-			}
+		parsed, err := parser.ParseFile(token.NewFileSet(), f, src, 0)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s for supported instructions: %w", f, err)
 		}
-		for _, m := range reCaseOp.FindAllSubmatch(src, -1) {
-			nop := normalizeOp(string(m[1]))
-			if nop != "" {
-				supported[nop] = struct{}{}
-			}
-		}
-		// Handle multi-value case clauses like:
-		// case "A", "B", "C":
-		for _, ln := range strings.Split(string(src), "\n") {
-			if !strings.Contains(ln, "case") {
+		// Package-level opcode specification maps are dispatch tables even when
+		// their variable name does not contain "op" (for example a complete
+		// instruction-family Specs table). Restrict this broader inference to
+		// package declarations so local maps for predicates, registers, and LLVM
+		// spellings cannot accidentally advertise instructions.
+		for _, decl := range parsed.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
 				continue
 			}
-			for _, m := range reQuotedOp.FindAllStringSubmatch(ln, -1) {
-				nop := normalizeOp(m[1])
-				if nop != "" {
-					supported[nop] = struct{}{}
+			for _, declared := range gen.Specs {
+				spec, ok := declared.(*ast.ValueSpec)
+				if !ok {
+					continue
 				}
-			}
-			for _, m := range reOpToken.FindAllStringSubmatch(ln, -1) {
-				nop := normalizeOp(m[1])
-				if nop != "" {
-					supported[nop] = struct{}{}
+				for _, value := range spec.Values {
+					literal, ok := value.(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					collectSupportedOpcodeMap(supported, literal)
 				}
 			}
 		}
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			if spec, ok := node.(*ast.ValueSpec); ok {
+				for i, name := range spec.Names {
+					// Several backends keep their complete opcode tables in a
+					// map[string]spec rather than map[Op]spec. Limit string-key
+					// extraction to declarations explicitly named as opcode maps;
+					// otherwise condition-code and register-name tables would be
+					// mistaken for supported instructions.
+					if !strings.Contains(strings.ToLower(name.Name), "op") || len(spec.Values) == 0 {
+						continue
+					}
+					valueIndex := i
+					if len(spec.Values) == 1 {
+						valueIndex = 0
+					}
+					if valueIndex >= len(spec.Values) {
+						continue
+					}
+					literal, ok := spec.Values[valueIndex].(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					mapType, isMap := literal.Type.(*ast.MapType)
+					keyType, stringKeyed := mapTypeKeyIdent(mapType)
+					if !isMap || !stringKeyed || keyType != "string" {
+						continue
+					}
+					for _, elt := range literal.Elts {
+						pair, ok := elt.(*ast.KeyValueExpr)
+						if !ok {
+							continue
+						}
+						key, ok := pair.Key.(*ast.BasicLit)
+						if !ok || key.Kind != token.STRING {
+							continue
+						}
+						candidate, _ := strconv.Unquote(key.Value)
+						if nop := normalizeOp(candidate); nop != "" {
+							supported[nop] = struct{}{}
+						}
+					}
+				}
+			}
+			literal, ok := node.(*ast.CompositeLit)
+			if ok {
+				mapType, isMap := literal.Type.(*ast.MapType)
+				keyType, isOpMap := mapTypeKeyIdent(mapType)
+				if isMap && isOpMap && keyType == "Op" {
+					for _, elt := range literal.Elts {
+						pair, ok := elt.(*ast.KeyValueExpr)
+						if !ok {
+							continue
+						}
+						key, ok := pair.Key.(*ast.BasicLit)
+						if !ok || key.Kind != token.STRING {
+							continue
+						}
+						candidate, _ := strconv.Unquote(key.Value)
+						if nop := normalizeOp(candidate); nop != "" {
+							supported[nop] = struct{}{}
+						}
+					}
+				}
+			}
+			clause, ok := node.(*ast.CaseClause)
+			if !ok {
+				return true
+			}
+			for _, expr := range clause.List {
+				candidate := ""
+				switch value := expr.(type) {
+				case *ast.BasicLit:
+					if value.Kind == token.STRING {
+						candidate, _ = strconv.Unquote(value.Value)
+					}
+				case *ast.Ident:
+					if strings.HasPrefix(value.Name, "Op") {
+						candidate = strings.TrimPrefix(value.Name, "Op")
+					}
+				}
+				if nop := normalizeOp(candidate); nop != "" {
+					supported[nop] = struct{}{}
+				}
+			}
+			return true
+		})
 	}
 	return supported, nil
 }
 
-func unsupportedInAsmFile(path string, arch plan9asm.Arch, supported map[string]struct{}) ([]string, []unsupportedHit) {
+func collectSupportedOpcodeMap(supported map[string]struct{}, literal *ast.CompositeLit) {
+	mapType, isMap := literal.Type.(*ast.MapType)
+	keyType, supportedKey := mapTypeKeyIdent(mapType)
+	if !isMap || !supportedKey || keyType != "string" && keyType != "Op" {
+		return
+	}
+	for _, elt := range literal.Elts {
+		pair, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := pair.Key.(*ast.BasicLit)
+		if !ok || key.Kind != token.STRING {
+			continue
+		}
+		candidate, _ := strconv.Unquote(key.Value)
+		if nop := normalizeOp(candidate); nop != "" {
+			supported[nop] = struct{}{}
+		}
+	}
+}
+
+func mapTypeKeyIdent(mapType *ast.MapType) (string, bool) {
+	if mapType == nil {
+		return "", false
+	}
+	ident, ok := mapType.Key.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+	return ident.Name, true
+}
+
+func unsupportedInAsmFile(path, sourceRoot string, arch plan9asm.Arch, supported map[string]struct{}) ([]string, []unsupportedHit) {
 	if len(supported) == 0 {
 		return nil, nil
 	}
-	src, err := os.ReadFile(path)
+	src, err := readAsmSource(path, sourceRoot)
 	if err != nil {
 		return nil, nil
 	}

@@ -71,7 +71,13 @@ func translateModuleDirect(file *File, opt Options) (llvm.Module, error) {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("%s: %v", name, err)
 		}
-		if file.Arch == ArchARM && funcNeedsARMCFG(*fn) {
+		if file.Arch == ArchAMD64 {
+			if err := validateAMD64ScalarAddSubFunction(opt.Goarch, *fn); err != nil {
+				mod.Dispose()
+				return llvm.Module{}, fmt.Errorf("%s: %w", name, err)
+			}
+		}
+		if file.Arch == ArchARM {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm CFG lowering required for %s", name)
 		}
@@ -278,8 +284,11 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 				return directValue{}, directUnsupportedf("FP slot %s invalid arg index %d", op.String(), slot.Index)
 			}
 			arg := args[slot.Index]
-			if slot.Field >= 0 {
-				ev := b.CreateExtractValue(arg, slot.Field, "")
+			if fields := frameSlotFields(slot); len(fields) != 0 {
+				ev := arg
+				for _, field := range fields {
+					ev = b.CreateExtractValue(ev, field, "")
+				}
 				return directValue{typ: slot.Type, val: ev}, nil
 			}
 			return directValue{typ: slot.Type, val: arg}, nil
@@ -353,6 +362,9 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 				return directUnsupportedf("MOVL expects 2 args")
 			}
 			src, dst := ins.Args[0], ins.Args[1]
+			if dst.Kind == OpFP && (src.Kind == OpFP || src.Kind == OpMem || src.Kind == OpSym) {
+				return fmt.Errorf("x86 MOVL does not allow memory-to-result-memory: %q", ins.Raw)
+			}
 			v, err := valueOf(src)
 			if err != nil {
 				return err
@@ -383,9 +395,19 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 			if err != nil {
 				return err
 			}
-			rhs, err := valueOf(src)
-			if err != nil {
-				return err
+			var rhs directValue
+			if (ins.Op == OpADDQ || ins.Op == OpSUBQ) && src.Kind == OpImm {
+				i64Ty, typeErr := llvmTypeFromLLVMType(ctx, I64)
+				if typeErr != nil {
+					return typeErr
+				}
+				normalized := amd64ScalarAddSubImmediateInt64(src.Imm, 64)
+				rhs = directValue{typ: I64, val: llvm.ConstInt(i64Ty, uint64(normalized), true)}
+			} else {
+				rhs, err = valueOf(src)
+				if err != nil {
+					return err
+				}
 			}
 			lhs, err = cast(lhs, I64)
 			if err != nil {

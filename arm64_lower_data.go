@@ -6,6 +6,9 @@ import (
 )
 
 func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerARM64ScalarExtend(op, ins); ok {
+		return ok, terminated, err
+	}
 	switch op {
 	case "MOVKW":
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpImm || ins.Args[1].Kind != OpReg {

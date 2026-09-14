@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"math/bits"
 	"strings"
 )
 
@@ -23,16 +24,284 @@ func (c *armCtx) lowerArith(op, cond string, setFlags bool, ins Instr) (ok bool,
 		return true, false, c.lowerARMMULAL(cond, ins)
 	case "MULAWT":
 		return true, false, c.lowerARMMULAWT(cond, ins)
+	case "DIV", "DIVU", "MOD", "MODU":
+		return true, false, c.lowerARMDivMod(op, cond, setFlags, ins)
 	case "DIVUHW":
 		return true, false, c.lowerARMDIVUHW(cond, ins)
 	case "CLZ":
 		return true, false, c.lowerARMCLZ(cond, ins)
+	case "SLL", "SRL", "SRA":
+		return true, false, c.lowerARMShift(op, cond, setFlags, ins)
 	case "MRC":
 		return true, false, c.lowerARMMRC(ins)
 	case "CMP", "CMN", "TST", "TEQ":
 		return true, false, c.lowerARMCompare(op, ins)
 	}
 	return false, false, nil
+}
+
+func (c *armCtx) lowerARMDivMod(op, cond string, setFlags bool, ins Instr) error {
+	if err := armRequireConditionOnlySuffix(ins); err != nil {
+		return err
+	}
+	if setFlags {
+		return fmt.Errorf("arm %s does not accept the .S suffix: %q", op, ins.Raw)
+	}
+	if len(ins.Args) != 2 && len(ins.Args) != 3 {
+		return fmt.Errorf("arm %s expects divisor, dst or divisor, numerator, dst: %q", op, ins.Raw)
+	}
+	for _, operand := range ins.Args {
+		if operand.Kind != OpReg || !isARMGeneralReg(operand.Reg) {
+			return fmt.Errorf("arm %s accepts only general registers: %q", op, ins.Raw)
+		}
+	}
+
+	divisor, err := c.loadReg(ins.Args[0].Reg)
+	if err != nil {
+		return err
+	}
+	numeratorOperand := ins.Args[len(ins.Args)-2]
+	destination := ins.Args[len(ins.Args)-1].Reg
+	numerator, err := c.loadReg(numeratorOperand.Reg)
+	if err != nil {
+		return err
+	}
+
+	zero := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zero, divisor)
+	safeDivisor := divisor
+	overflow := "false"
+	if op == "DIV" || op == "MOD" {
+		isMin := c.newTmp()
+		isMinusOne := c.newTmp()
+		overflowTmp := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, -2147483648\n", isMin, numerator)
+		fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, -1\n", isMinusOne, divisor)
+		fmt.Fprintf(c.b, "  %%%s = and i1 %%%s, %%%s\n", overflowTmp, isMin, isMinusOne)
+		overflow = "%" + overflowTmp
+		invalid := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = or i1 %%%s, %s\n", invalid, zero, overflow)
+		safe := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 1, i32 %s\n", safe, invalid, divisor)
+		safeDivisor = "%" + safe
+	} else {
+		safe := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 1, i32 %s\n", safe, zero, divisor)
+		safeDivisor = "%" + safe
+	}
+
+	calculated := c.newTmp()
+	switch op {
+	case "DIV":
+		fmt.Fprintf(c.b, "  %%%s = sdiv i32 %s, %s\n", calculated, numerator, safeDivisor)
+	case "DIVU":
+		fmt.Fprintf(c.b, "  %%%s = udiv i32 %s, %s\n", calculated, numerator, safeDivisor)
+	case "MOD":
+		fmt.Fprintf(c.b, "  %%%s = srem i32 %s, %s\n", calculated, numerator, safeDivisor)
+	case "MODU":
+		fmt.Fprintf(c.b, "  %%%s = urem i32 %s, %s\n", calculated, numerator, safeDivisor)
+	}
+	result := "%" + calculated
+	if op == "DIV" {
+		wrapped := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i32 -2147483648, i32 %s\n", wrapped, overflow, result)
+		result = "%" + wrapped
+	} else if op == "MOD" {
+		wrapped := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i32 0, i32 %s\n", wrapped, overflow, result)
+		result = "%" + wrapped
+	}
+	zeroResult := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 0, i32 %s\n", zeroResult, zero, result)
+	return c.selectRegWrite(destination, cond, "%"+zeroResult)
+}
+
+func armRotatedImmediateEncodable(value uint32) bool {
+	for i := 0; i < 16; i++ {
+		if value&^uint32(0xff) == 0 {
+			return true
+		}
+		value = bits.RotateLeft32(value, 2)
+	}
+	return false
+}
+
+func (c *armCtx) lowerARMShift(op, cond string, setFlags bool, ins Instr) error {
+	if len(ins.Args) != 2 && len(ins.Args) != 3 {
+		return fmt.Errorf("arm %s expects shift, dstReg or shift, srcReg, dstReg: %q", op, ins.Raw)
+	}
+	shift := ins.Args[0]
+	var src, dst Operand
+	if len(ins.Args) == 2 {
+		src, dst = ins.Args[1], ins.Args[1]
+	} else {
+		src, dst = ins.Args[1], ins.Args[2]
+	}
+	if src.Kind != OpReg || dst.Kind != OpReg {
+		return fmt.Errorf("arm %s source and destination must be registers: %q", op, ins.Raw)
+	}
+	srcValue, err := c.loadReg(src.Reg)
+	if err != nil {
+		return err
+	}
+	if _, err := c.loadReg(dst.Reg); err != nil {
+		return err
+	}
+
+	execute := "true"
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		execute, err = c.condValue(cond)
+		if err != nil {
+			return err
+		}
+	}
+
+	var result, carry string
+	switch shift.Kind {
+	case OpImm:
+		if shift.Imm < 0 || uint64(shift.Imm) > uint64(^uint32(0)) || !armRotatedImmediateEncodable(uint32(shift.Imm)) {
+			return fmt.Errorf("arm %s immediate is not a Go ARM rotated immediate: %q", op, ins.Raw)
+		}
+		result, carry = c.emitARMImmediateShift(op, srcValue, uint32(shift.Imm)&31)
+	case OpReg:
+		shiftValue, loadErr := c.loadReg(shift.Reg)
+		if loadErr != nil {
+			return loadErr
+		}
+		result, carry = c.emitARMRegisterShift(op, srcValue, shiftValue)
+	default:
+		return fmt.Errorf("arm %s shift must be an immediate or register: %q", op, ins.Raw)
+	}
+	if err := c.selectRegWrite(dst.Reg, cond, result); err != nil {
+		return err
+	}
+	if setFlags {
+		return c.setARMShiftFlags(execute, result, carry)
+	}
+	return nil
+}
+
+func (c *armCtx) emitARMImmediateShift(op, value string, encodedAmount uint32) (result, carry string) {
+	amount := encodedAmount
+	if (op == "SRL" || op == "SRA") && amount == 0 {
+		amount = 32
+	}
+	switch op {
+	case "SLL":
+		if amount == 0 {
+			result = value
+			carry = c.loadFlagValue(c.flagsCSlot)
+			return result, carry
+		}
+		result = c.emitARMConstantShift("shl", value, amount)
+		carry = c.emitARMShiftBit(value, 32-amount)
+	case "SRL":
+		if amount == 32 {
+			result = "0"
+		} else {
+			result = c.emitARMConstantShift("lshr", value, amount)
+		}
+		carry = c.emitARMShiftBit(value, amount-1)
+	case "SRA":
+		if amount == 32 {
+			result = c.emitARMConstantShift("ashr", value, 31)
+		} else {
+			result = c.emitARMConstantShift("ashr", value, amount)
+		}
+		carry = c.emitARMShiftBit(value, amount-1)
+	}
+	return result, carry
+}
+
+func (c *armCtx) emitARMRegisterShift(op, value, rawAmount string) (result, carry string) {
+	amount := c.newTmp()
+	safeAmount := c.newTmp()
+	isZero := c.newTmp()
+	isAbove32 := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and i32 %s, 255\n", amount, rawAmount)
+	fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, 31\n", safeAmount, amount)
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %%%s, 0\n", isZero, amount)
+	fmt.Fprintf(c.b, "  %%%s = icmp ugt i32 %%%s, 32\n", isAbove32, amount)
+
+	shifted := c.newTmp()
+	llvmOp := map[string]string{"SLL": "shl", "SRL": "lshr", "SRA": "ashr"}[op]
+	fmt.Fprintf(c.b, "  %%%s = %s i32 %s, %%%s\n", shifted, llvmOp, value, safeAmount)
+	overflowResult := "0"
+	if op == "SRA" {
+		overflowResult = c.emitARMConstantShift("ashr", value, 31)
+	}
+	overflowSelected := c.newTmp()
+	zeroSelected := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 %s, i32 %%%s\n", overflowSelected, isAbove32, overflowResult, shifted)
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 %s, i32 %%%s\n", zeroSelected, isZero, value, overflowSelected)
+	result = "%" + zeroSelected
+
+	position := c.newTmp()
+	if op == "SLL" {
+		fmt.Fprintf(c.b, "  %%%s = sub i32 32, %%%s\n", position, amount)
+	} else {
+		fmt.Fprintf(c.b, "  %%%s = sub i32 %%%s, 1\n", position, amount)
+	}
+	safePosition := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, 31\n", safePosition, position)
+	candidateCarry := c.emitARMVariableShiftBit(value, "%"+safePosition)
+	overflowCarry := "false"
+	if op == "SRA" {
+		overflowCarry = c.emitARMShiftBit(value, 31)
+	}
+	overflowCarrySelected := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %s, i1 %s\n", overflowCarrySelected, isAbove32, overflowCarry, candidateCarry)
+	oldCarry := c.loadFlagValue(c.flagsCSlot)
+	zeroCarrySelected := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %s, i1 %%%s\n", zeroCarrySelected, isZero, oldCarry, overflowCarrySelected)
+	return result, "%" + zeroCarrySelected
+}
+
+func (c *armCtx) emitARMConstantShift(op, value string, amount uint32) string {
+	tmp := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = %s i32 %s, %d\n", tmp, op, value, amount)
+	return "%" + tmp
+}
+
+func (c *armCtx) emitARMShiftBit(value string, position uint32) string {
+	return c.emitARMVariableShiftBit(value, fmt.Sprintf("%d", position))
+}
+
+func (c *armCtx) emitARMVariableShiftBit(value, position string) string {
+	shifted := c.newTmp()
+	bit := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %s\n", shifted, value, position)
+	fmt.Fprintf(c.b, "  %%%s = trunc i32 %%%s to i1\n", bit, shifted)
+	return "%" + bit
+}
+
+func (c *armCtx) loadFlagValue(slot string) string {
+	tmp := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", tmp, slot)
+	return "%" + tmp
+}
+
+func (c *armCtx) setARMShiftFlags(execute, result, carry string) error {
+	c.flagsWritten = true
+	zero := c.newTmp()
+	negative := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %s, 0\n", zero, result)
+	fmt.Fprintf(c.b, "  %%%s = icmp slt i32 %s, 0\n", negative, result)
+	c.storeFlagPredicate(c.flagsZSlot, "%"+zero, execute)
+	c.storeFlagPredicate(c.flagsNSlot, "%"+negative, execute)
+	c.storeFlagPredicate(c.flagsCSlot, carry, execute)
+	return nil
+}
+
+func (c *armCtx) storeFlagPredicate(slot, value, execute string) {
+	if execute == "true" {
+		c.storeFlag(slot, value)
+		return
+	}
+	old := c.loadFlagValue(slot)
+	selected := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = select i1 %s, i1 %s, i1 %s\n", selected, execute, value, old)
+	c.storeFlag(slot, "%"+selected)
 }
 
 func (c *armCtx) lowerARMALU(op, cond string, setFlags bool, ins Instr) error {

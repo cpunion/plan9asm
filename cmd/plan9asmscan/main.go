@@ -7,6 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
@@ -143,7 +147,6 @@ type conformanceManifest struct {
 }
 
 var (
-	reCaseClause = regexp.MustCompile(`case\s+([^:]+):`)
 	reOpcodeName = regexp.MustCompile("(?m)^\\s*(?:obj\\.A_ARCHSPECIFIC:\\s*)?\"([A-Z][A-Za-z0-9.]*)\",\\s*$")
 )
 
@@ -770,56 +773,140 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		"PCDATA":   {},
 	}
 
-	seen := map[string]struct{}{}
-	var files []string
 	loweringArch := goarch
 	if loweringArch == "386" {
 		loweringArch = "amd64"
 	}
-	patterns := []string{
-		filepath.Join(repoRoot, loweringArch+"_*.go"),
-		filepath.Join(repoRoot, "parser.go"),
+	files, err := filepath.Glob(filepath.Join(repoRoot, loweringArch+"_*.go"))
+	if err != nil {
+		return nil, err
 	}
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, err
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			if strings.HasSuffix(match, "_test.go") {
-				continue
-			}
-			if _, ok := seen[match]; ok {
-				continue
-			}
-			seen[match] = struct{}{}
-			files = append(files, match)
-		}
+	parserPath := filepath.Join(repoRoot, "parser.go")
+	if _, err := os.Stat(parserPath); err == nil {
+		files = append(files, parserPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("stat %s: %w", parserPath, err)
 	}
+	sort.Strings(files)
 	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
 		src, err := os.ReadFile(f)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", f, err)
 		}
-		for _, m := range reCaseClause.FindAllSubmatch(src, -1) {
-			items := strings.Split(string(m[1]), ",")
-			for _, item := range items {
-				item = strings.TrimSpace(item)
-				switch {
-				case strings.HasPrefix(item, "\"") && strings.HasSuffix(item, "\"") && len(item) >= 2:
-					if op := normalizeOp(strings.Trim(item, "\"")); op != "" {
-						supported[op] = struct{}{}
-					}
-				case strings.HasPrefix(item, "Op"):
-					if op := normalizeOp(strings.TrimPrefix(item, "Op")); op != "" {
-						supported[op] = struct{}{}
+		parsed, err := parser.ParseFile(token.NewFileSet(), f, src, 0)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s for supported instructions: %w", f, err)
+		}
+		for _, decl := range parsed.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, declared := range gen.Specs {
+				spec, ok := declared.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, value := range spec.Values {
+					literal, ok := value.(*ast.CompositeLit)
+					if ok {
+						collectSupportedOpcodeMap(supported, literal)
 					}
 				}
 			}
 		}
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			if spec, ok := node.(*ast.ValueSpec); ok {
+				for i, name := range spec.Names {
+					if !strings.Contains(strings.ToLower(name.Name), "op") || len(spec.Values) == 0 {
+						continue
+					}
+					valueIndex := i
+					if len(spec.Values) == 1 {
+						valueIndex = 0
+					}
+					if valueIndex >= len(spec.Values) {
+						continue
+					}
+					literal, ok := spec.Values[valueIndex].(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					mapType, isMap := literal.Type.(*ast.MapType)
+					keyType, stringKeyed := mapTypeKeyIdent(mapType)
+					if !isMap || !stringKeyed || keyType != "string" {
+						continue
+					}
+					collectSupportedOpcodeMap(supported, literal)
+				}
+			}
+			if literal, ok := node.(*ast.CompositeLit); ok {
+				mapType, isMap := literal.Type.(*ast.MapType)
+				keyType, opKeyed := mapTypeKeyIdent(mapType)
+				if isMap && opKeyed && keyType == "Op" {
+					collectSupportedOpcodeMap(supported, literal)
+				}
+			}
+			clause, ok := node.(*ast.CaseClause)
+			if !ok {
+				return true
+			}
+			for _, expr := range clause.List {
+				candidate := ""
+				switch value := expr.(type) {
+				case *ast.BasicLit:
+					if value.Kind == token.STRING {
+						candidate, _ = strconv.Unquote(value.Value)
+					}
+				case *ast.Ident:
+					if strings.HasPrefix(value.Name, "Op") {
+						candidate = strings.TrimPrefix(value.Name, "Op")
+					}
+				}
+				if op := normalizeOp(candidate); op != "" {
+					supported[op] = struct{}{}
+				}
+			}
+			return true
+		})
 	}
 	return supported, nil
+}
+
+func collectSupportedOpcodeMap(supported map[string]struct{}, literal *ast.CompositeLit) {
+	mapType, isMap := literal.Type.(*ast.MapType)
+	keyType, supportedKey := mapTypeKeyIdent(mapType)
+	if !isMap || !supportedKey || keyType != "string" && keyType != "Op" {
+		return
+	}
+	for _, elt := range literal.Elts {
+		pair, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := pair.Key.(*ast.BasicLit)
+		if !ok || key.Kind != token.STRING {
+			continue
+		}
+		candidate, _ := strconv.Unquote(key.Value)
+		if op := normalizeOp(candidate); op != "" {
+			supported[op] = struct{}{}
+		}
+	}
+}
+
+func mapTypeKeyIdent(mapType *ast.MapType) (string, bool) {
+	if mapType == nil {
+		return "", false
+	}
+	ident, ok := mapType.Key.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+	return ident.Name, true
 }
 
 func attachEncoderCatalog(rep *report, ops map[string]*opStat, catalog []encoderFormReport) {

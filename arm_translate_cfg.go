@@ -96,13 +96,24 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 			return term, err
 		}
 		return false, fmt.Errorf("arm: unsupported instruction %s", ins.Op)
-	case "PCDATA", "FUNCDATA", "NO_LOCAL_POINTERS", string(OpWORD), "NOP", "DMB", "#IFDEF", "#ELSE", "#ENDIF":
+	case string(OpWORD):
+		if handled, err := c.lowerRawWord(ins); handled {
+			return false, err
+		}
+		return false, nil
+	case "PCDATA", "FUNCDATA", "NO_LOCAL_POINTERS", "NOP", "DMB", "#IFDEF", "#ELSE", "#ENDIF":
 		return false, nil
 	}
 	if ok, term, err := c.lowerData(baseOp, cond, postInc, ins); ok {
 		return term, err
 	}
+	if ok, term, err := c.lowerPreload(baseOp, cond, ins); ok {
+		return term, err
+	}
 	if ok, term, err := c.lowerArith(baseOp, cond, setFlags, ins); ok {
+		return term, err
+	}
+	if ok, term, err := c.lowerFloat(baseOp, cond, ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerAtomic(baseOp, ins); ok {
@@ -132,6 +143,20 @@ func (c *armCtx) lowerRET() error {
 			fmt.Fprintf(c.b, "  ret %s %%%s\n", c.sig.Ret, t)
 		case I32:
 			fmt.Fprintf(c.b, "  ret i32 %s\n", r0)
+		case I64:
+			r1, err := c.loadReg(Reg("R1"))
+			if err != nil {
+				return err
+			}
+			lo := c.newTmp()
+			hi := c.newTmp()
+			shifted := c.newTmp()
+			joined := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", lo, r0)
+			fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", hi, r1)
+			fmt.Fprintf(c.b, "  %%%s = shl i64 %%%s, 32\n", shifted, hi)
+			fmt.Fprintf(c.b, "  %%%s = or i64 %%%s, %%%s\n", joined, lo, shifted)
+			fmt.Fprintf(c.b, "  ret i64 %%%s\n", joined)
 		case Ptr:
 			t := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %s to ptr\n", t, r0)

@@ -3,7 +3,21 @@ package plan9asm
 import "fmt"
 
 func (c *arm64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerAtomicPair(op, ins); ok {
+		return ok, terminated, err
+	}
 	switch op {
+	case "CLREX":
+		if arm64AtomicOpcodeHasSuffix(ins.Op) || len(ins.Args) > 1 || len(ins.Args) == 1 && ins.Args[0].Kind != OpImm {
+			return true, false, fmt.Errorf("arm64 CLREX expects no operand or one immediate: %q", ins.Raw)
+		}
+		// LLVM IR has no exposed exclusive-monitor primitive. The ARM64
+		// backend models LDXR/STXR reservations explicitly, so clearing the
+		// validity bit implements both Go assembler forms exactly. The
+		// optional architectural immediate is only an implementation hint.
+		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.exclusiveValidSlot)
+		return true, false, nil
+
 	case "LDARW", "LDARB", "LDAR", "LDAXRW", "LDAXRB", "LDAXR":
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("arm64 %s expects mem, reg: %q", op, ins.Raw)

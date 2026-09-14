@@ -122,6 +122,9 @@ func (c *arm64Ctx) scanUsedRegs() {
 		if r == "" {
 			return
 		}
+		if r == Reg("RSP") {
+			r = SP
+		}
 		if idx, ok := arm64ParseVReg(r); ok {
 			c.usedVRegs[idx] = true
 			return
@@ -247,8 +250,8 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 	fmt.Fprintf(c.b, "  store ptr null, ptr %s\n", c.exclusivePtrSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i8\n", c.exclusiveSizeSlot)
 	fmt.Fprintf(c.b, "  store i8 0, ptr %s\n", c.exclusiveSizeSlot)
-	fmt.Fprintf(c.b, "  %s = alloca i64\n", c.exclusiveValueSlot)
-	fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", c.exclusiveValueSlot)
+	fmt.Fprintf(c.b, "  %s = alloca i128\n", c.exclusiveValueSlot)
+	fmt.Fprintf(c.b, "  store i128 0, ptr %s\n", c.exclusiveValueSlot)
 
 	// Frame result slots: allocate addressable storage so patterns like
 	// `$ret+off(FP)` and `MOVD x, ret+off(FP)` can work.
@@ -424,6 +427,9 @@ func (c *arm64Ctx) loadReg(r Reg) (string, error) {
 	if r == ZR {
 		return "0", nil
 	}
+	if r == Reg("RSP") {
+		r = SP
+	}
 	if _, ok := arm64ParseFReg(r); ok {
 		v, err := c.loadVReg(r)
 		if err != nil {
@@ -468,6 +474,9 @@ func (c *arm64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 func (c *arm64Ctx) storeReg(r Reg, v string) error {
 	if r == ZR {
 		return nil
+	}
+	if r == Reg("RSP") {
+		r = SP
 	}
 	if _, ok := arm64ParseFReg(r); ok {
 		lanes := c.newTmp()

@@ -808,6 +808,10 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 	off := startOff
 	argIdx := 0
 	for i := 0; i < tup.Len(); i++ {
+		name := ""
+		if flattenAgg {
+			name = tup.At(i).Name()
+		}
 		t := tup.At(i).Type()
 		a := int64(frameSz.Alignof(t))
 		off = goAlignOff(off, a)
@@ -817,7 +821,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 			if flattenAgg {
 				for _, part := range parts {
 					args = append(args, part.Type)
-					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: -1})
+					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: -1, Name: name})
 					argIdx++
 				}
 			} else {
@@ -840,7 +844,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 			return nil, nil, 0, e
 		}
 		args = append(args, ty)
-		slots = append(slots, FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1})
+		slots = append(slots, FrameSlot{Offset: off, Type: ty, Index: argIdx, Field: -1, Name: name})
 		argIdx++
 		off += int64(frameSz.Sizeof(t))
 	}

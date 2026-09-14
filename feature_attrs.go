@@ -69,15 +69,22 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		switch arch {
 		case ArchAMD64:
 			switch {
+			case op == "CMPXCHG16B":
+				add("+cx16")
+			case strings.HasPrefix(op, "VROUND"):
+				add("+avx")
+			case strings.HasPrefix(op, "ROUND"):
+				add("+sse4.1")
 			case goarch == "386" && (op == "MOVOU" || op == "PCMPEQB" || op == "PCMPEQL" || op == "PMOVMSKB"):
 				add("+sse2")
 			case strings.HasPrefix(op, "CRC32"):
 				add("+crc32", "+sse4.2")
-			case op == "PCLMULQDQ":
+			case op == "PCLMULQDQ" || op == "VPCLMULQDQ":
 				add("+pclmul", "+sse4.1")
 			case op == "PSHUFB" || op == "VPSHUFB":
 				add("+ssse3")
-			case op == "AESENC" || op == "AESENCLAST" || op == "AESDEC" || op == "AESDECLAST" || op == "AESIMC" || op == "AESKEYGENASSIST":
+			case op == "AESENC" || op == "AESENCLAST" || op == "AESDEC" || op == "AESDECLAST" || op == "AESIMC" || op == "AESKEYGENASSIST" ||
+				op == "VAESENC" || op == "VAESENCLAST" || op == "VAESDEC" || op == "VAESDECLAST" || op == "VAESIMC" || op == "VAESKEYGENASSIST":
 				add("+aes")
 			}
 		case ArchARM64:

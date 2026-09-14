@@ -6,6 +6,9 @@ import (
 )
 
 func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerNegate(op, ins); ok {
+		return ok, terminated, err
+	}
 	switch op {
 	case "MRS_TPIDR_R0":
 		// Pseudo-op used in runtime tls stubs.

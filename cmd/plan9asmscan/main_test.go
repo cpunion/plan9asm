@@ -381,13 +381,14 @@ GLOBL foo(SB), RODATA, $8
 
 func TestAddFormStatCachesConcreteInstructionsWithoutCollapsingValues(t *testing.T) {
 	forms := map[string]*formStat{}
-	for _, imm := range []int64{1, 7, 7} {
+	for _, imm := range []int64{1, 256, 256} {
 		addFormStat(forms, plan9asm.ArchAMD64, "amd64", plan9asm.Instr{
-			Op:  "RCRQ",
-			Raw: "RCRQ immediate, AX",
+			Op:  "PALIGNR",
+			Raw: "PALIGNR immediate, X0, X1",
 			Args: []plan9asm.Operand{
 				{Kind: plan9asm.OpImm, Imm: imm},
-				{Kind: plan9asm.OpReg, Reg: plan9asm.AX},
+				{Kind: plan9asm.OpReg, Reg: "X0"},
+				{Kind: plan9asm.OpReg, Reg: "X1"},
 			},
 		}, "fixture.s")
 	}
@@ -429,6 +430,27 @@ func TestBuildOpcodeCatalogIncludesGeneratedTables(t *testing.T) {
 	}
 	if catalog[1].Family != "sve" {
 		t.Fatalf("ZADD family = %q, want sve", catalog[1].Family)
+	}
+}
+
+func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_table.go"), []byte(`package sample
+var packedFamilySpecs = map[string]int{
+	"VTABLEOP": 1,
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "parser.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(dir, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := supported["VTABLEOP"]; !ok {
+		t.Fatal("package-level table-driven opcode was not extracted")
 	}
 }
 

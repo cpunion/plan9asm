@@ -129,6 +129,12 @@ func Parse(arch Arch, src string) (*File, error) {
 				if sym == "" {
 					return nil, fmt.Errorf("line %d: empty TEXT symbol: %q", lineno, stmt)
 				}
+				// Early Plan 9 assembly commonly spelled function definitions as
+				// TEXT ·name+0(SB). The zero is a symbol offset, not part of the
+				// linker name; current Go still accepts this legacy form.
+				if base, off := splitSymPlusOff(sym); base != sym && off == 0 {
+					sym = base
+				}
 				frameSize, argSize, err := parseTEXTFrame(parts)
 				if err != nil {
 					return nil, fmt.Errorf("line %d: %v", lineno, err)
@@ -327,14 +333,20 @@ func parseWidth(arch Arch, s string) (int64, error) {
 }
 
 func parseGLOBLStmt(rest string) (GloblStmt, error) {
+	// GLOBL sym(SB), $size
 	// GLOBL sym(SB), flags, $size
 	parts := strings.Split(rest, ",")
-	if len(parts) != 3 {
+	if len(parts) != 2 && len(parts) != 3 {
 		return GloblStmt{}, fmt.Errorf("invalid GLOBL: %q", "GLOBL "+rest)
 	}
 	symPart := strings.TrimSpace(parts[0])
-	flags := strings.TrimSpace(parts[1])
-	sizePart := strings.TrimSpace(parts[2])
+	flags := ""
+	sizePartIndex := 1
+	if len(parts) == 3 {
+		flags = strings.TrimSpace(parts[1])
+		sizePartIndex = 2
+	}
+	sizePart := strings.TrimSpace(parts[sizePartIndex])
 	if !strings.HasSuffix(symPart, "(SB)") {
 		return GloblStmt{}, fmt.Errorf("GLOBL symbol must end with (SB): %q", "GLOBL "+rest)
 	}
@@ -397,7 +409,7 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 			continue
 		}
 		legacy := []string{part}
-		if arch == ArchAMD64 && op == "SHLL" {
+		if arch == ArchAMD64 && (op == "SHLL" || op == "SHLQ" || op == "SHRL" || op == "SHRQ") {
 			legacy = splitLegacyColonOperand(part)
 		}
 		for _, item := range legacy {
@@ -419,6 +431,15 @@ func parseOperandsCSV(arch Arch, op Op, s string) ([]Operand, error) {
 }
 
 func parseOperandForArch(arch Arch, s string) (Operand, error) {
+	if arch == ArchARM || arch == ArchARM64 {
+		s = normalizeARMParenthesizedRegisters(arch, s)
+	}
+	if arch == ArchAMD64 {
+		reg := Reg(strings.ToUpper(strings.TrimSpace(s)))
+		if _, _, ok := x86MachineRegister(reg); ok {
+			return Operand{Kind: OpReg, Reg: reg}, nil
+		}
+	}
 	if arch == ArchWASM {
 		if reg, ok := parseWASMReg(s); ok {
 			return Operand{Kind: OpReg, Reg: reg}, nil
@@ -432,7 +453,112 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 			}
 		}
 	}
-	return parseOperand(s)
+	op, err := parseOperand(s)
+	if err != nil {
+		return Operand{}, err
+	}
+	if arch == ArchARM64 {
+		preserveARM64PhysicalStackPointer(s, &op)
+	}
+	return op, nil
+}
+
+// normalizeARMParenthesizedRegisters implements the numeric register-prefix
+// syntax accepted by Go's ARM assemblers, such as R(3), F(7), and V(16).
+// Keeping this architecture-specific prevents a symbol such as SPR(269) from
+// being mistaken for an ARM general-purpose register.
+func normalizeARMParenthesizedRegisters(arch Arch, source string) string {
+	limits := map[string]int{}
+	switch arch {
+	case ArchARM:
+		limits = map[string]int{"R": 15, "F": 15}
+	case ArchARM64:
+		limits = map[string]int{"R": 30, "F": 31, "V": 31, "Z": 31, "P": 15, "PN": 15}
+	default:
+		return source
+	}
+	prefixes := []string{"PN", "R", "F", "V", "Z", "P"}
+	var out strings.Builder
+	for i := 0; i < len(source); {
+		matched := false
+		for _, prefix := range prefixes {
+			endPrefix := i + len(prefix)
+			if endPrefix >= len(source) || !strings.EqualFold(source[i:endPrefix], prefix) || source[endPrefix] != '(' {
+				continue
+			}
+			if i > 0 && isIdentifierByte(source[i-1]) {
+				continue
+			}
+			close := strings.IndexByte(source[endPrefix+1:], ')')
+			if close < 0 {
+				continue
+			}
+			close += endPrefix + 1
+			numberText := strings.TrimSpace(source[endPrefix+1 : close])
+			number, err := strconv.Atoi(numberText)
+			limit, validPrefix := limits[prefix]
+			if err != nil || !validPrefix || number < 0 || number > limit {
+				continue
+			}
+			out.WriteString(prefix)
+			out.WriteString(strconv.Itoa(number))
+			i = close + 1
+			matched = true
+			break
+		}
+		if matched {
+			continue
+		}
+		out.WriteByte(source[i])
+		i++
+	}
+	return out.String()
+}
+
+func isIdentifierByte(ch byte) bool {
+	return ch == '_' || ch >= '0' && ch <= '9' || ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z'
+}
+
+// Go's arm64 assembler distinguishes the hardware stack pointer RSP from the
+// pseudo stack pointer SP. parseReg historically canonicalizes both to SP, so
+// restore the distinction here where the source spelling is still available.
+// This matters for exact optab validation: (RSP) is a C_ZOREG address, while a
+// named local+0(SP) address is C_ZAUTO, and RSP in a paired data operand
+// encodes register 31 (the zero register) rather than a writable stack pointer.
+func preserveARM64PhysicalStackPointer(source string, op *Operand) {
+	source = strings.TrimSpace(source)
+	switch op.Kind {
+	case OpReg:
+		if strings.EqualFold(source, "RSP") {
+			op.Reg = Reg("RSP")
+		}
+	case OpMem:
+		if open := strings.IndexByte(source, '('); open >= 0 {
+			if close := strings.IndexByte(source[open+1:], ')'); close >= 0 {
+				base := strings.TrimSpace(source[open+1 : open+1+close])
+				if strings.EqualFold(base, "RSP") {
+					op.Mem.Base = Reg("RSP")
+				}
+			}
+		}
+	case OpRegList:
+		if len(source) < 2 {
+			return
+		}
+		inner := strings.TrimSpace(strings.Trim(source, "()[]"))
+		parts := splitTopLevelCSV(inner)
+		index := 0
+		for _, part := range parts {
+			regs, ok := expandRegRange(strings.TrimSpace(part))
+			if !ok {
+				return
+			}
+			if len(regs) == 1 && strings.EqualFold(strings.TrimSpace(part), "RSP") && index < len(op.RegList) {
+				op.RegList[index] = Reg("RSP")
+			}
+			index += len(regs)
+		}
+	}
 }
 
 func parseWASMMem(s string) (mem MemRef, matched bool, err error) {

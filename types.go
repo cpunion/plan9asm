@@ -34,15 +34,29 @@ const (
 	PC Reg = "PC"
 	FS Reg = "FS"
 	GS Reg = "GS"
+	// TLS is the x86 thread-local-storage pseudo-register used by the Go
+	// assembler both as a loadable base and as a relocation-only memory index.
+	TLS Reg = "TLS"
 
-	AL Reg = "AL"
-	AH Reg = "AH"
-	BL Reg = "BL"
-	BH Reg = "BH"
-	CL Reg = "CL"
-	CH Reg = "CH"
-	DL Reg = "DL"
-	DH Reg = "DH"
+	AL   Reg = "AL"
+	AH   Reg = "AH"
+	BL   Reg = "BL"
+	BH   Reg = "BH"
+	CL   Reg = "CL"
+	CH   Reg = "CH"
+	DL   Reg = "DL"
+	DH   Reg = "DH"
+	BPB  Reg = "BPB"
+	SIB  Reg = "SIB"
+	DIB  Reg = "DIB"
+	R8B  Reg = "R8B"
+	R9B  Reg = "R9B"
+	R10B Reg = "R10B"
+	R11B Reg = "R11B"
+	R12B Reg = "R12B"
+	R13B Reg = "R13B"
+	R14B Reg = "R14B"
+	R15B Reg = "R15B"
 
 	ZR Reg = "ZR"
 )
@@ -88,6 +102,8 @@ func parseReg(s string) (Reg, bool) {
 		return FS, true
 	case "GS":
 		return GS, true
+	case "TLS":
+		return TLS, true
 	case "AL":
 		return AL, true
 	case "AH":
@@ -104,6 +120,28 @@ func parseReg(s string) (Reg, bool) {
 		return DL, true
 	case "DH":
 		return DH, true
+	case "BPB":
+		return BPB, true
+	case "SIB":
+		return SIB, true
+	case "DIB":
+		return DIB, true
+	case "R8B":
+		return R8B, true
+	case "R9B":
+		return R9B, true
+	case "R10B":
+		return R10B, true
+	case "R11B":
+		return R11B, true
+	case "R12B":
+		return R12B, true
+	case "R13B":
+		return R13B, true
+	case "R14B":
+		return R14B, true
+	case "R15B":
+		return R15B, true
 	case "ZR":
 		return ZR, true
 	case "G":
@@ -473,6 +511,19 @@ func evalImmExpr(e ast.Expr) (uint64, bool) {
 	case *ast.ParenExpr:
 		return evalImmExpr(x.X)
 	case *ast.BasicLit:
+		if x.Kind == token.CHAR {
+			if len(x.Value) < 2 || x.Value[0] != '\'' {
+				return 0, false
+			}
+			value, _, tail, err := strconv.UnquoteChar(x.Value[1:], '\'')
+			if err != nil {
+				return 0, false
+			}
+			if tail != "'" {
+				return 0, false
+			}
+			return uint64(value), true
+		}
 		if x.Kind != token.INT {
 			return 0, false
 		}
@@ -863,7 +914,8 @@ type DataStmt struct {
 
 // GloblStmt models a minimal Plan 9 GLOBL directive:
 //
-//	GLOBL sym(SB), flags, $size
+// GLOBL sym(SB), $size
+// GLOBL sym(SB), flags, $size
 //
 // Flags are preserved as raw text for now (e.g. "RODATA").
 type GloblStmt struct {
@@ -945,6 +997,24 @@ func parseMem(s string) (MemRef, bool) {
 	s = strings.TrimSpace(s)
 	if !strings.Contains(s, "(") || !strings.Contains(s, ")") {
 		return MemRef{}, false
+	}
+	// A displacement is a Go constant expression and may itself contain
+	// parentheses. Split from the final base-register group before the older
+	// left-to-right address parser so forms such as 0+(1*16)(BP) do not mistake
+	// the expression's first parenthesis for the address base.
+	if strings.HasSuffix(s, ")") {
+		if open := strings.LastIndexByte(s, '('); open > 0 {
+			prefix := strings.TrimSpace(s[:open])
+			baseText := strings.TrimSpace(s[open+1 : len(s)-1])
+			if base, ok := parseReg(baseText); ok {
+				if offset, ok := parseImmExpr(prefix); ok {
+					if base == FS || base == GS {
+						return MemRef{Segment: base, Off: int64(offset)}, true
+					}
+					return MemRef{Base: base, Off: int64(offset)}, true
+				}
+			}
+		}
 	}
 
 	parseIndexScale := func(inner string) (idx Reg, ext ExtendOp, scale int64, ok bool) {
@@ -1042,6 +1112,7 @@ func parseMem(s string) (MemRef, bool) {
 	}
 
 	var off int64
+	var offRaw string
 	if offPart != "" {
 		if n, err := strconv.ParseInt(offPart, 0, 64); err == nil {
 			off = n
@@ -1049,8 +1120,10 @@ func parseMem(s string) (MemRef, bool) {
 			off = int64(u)
 		} else {
 			// Stack slots commonly use a descriptive name before their numeric
-			// displacement (for example control-4(SP)). Preserve the displacement;
-			// only an unresolved include-derived expression degrades to zero.
+			// displacement (for example control-4(SP)). Preserve both the source
+			// spelling and displacement so architecture validators can distinguish
+			// named stack slots from plain register-relative memory.
+			offRaw = offPart
 			_, off = splitSymPlusOff(offPart)
 		}
 	}
@@ -1107,7 +1180,7 @@ func parseMem(s string) (MemRef, bool) {
 		return MemRef{Base: "", Off: off, Index: idx, IndexExt: ext, Scale: scale}, true
 	}
 
-	mem := MemRef{Base: base, Off: off}
+	mem := MemRef{Base: base, Off: off, OffRaw: offRaw}
 	if base == FS || base == GS {
 		mem.Base = ""
 		mem.Segment = base
