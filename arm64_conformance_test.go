@@ -12,6 +12,9 @@ import (
 )
 
 func TestARM64ConformanceNativeGo(t *testing.T) {
+	if !currentGoMinorAtLeast(27) {
+		t.Skip("native Go assembler oracle requires Go 1.27 widening-shift aliases")
+	}
 	crossLinux := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && os.Getenv("PLAN9ASM_CROSS_EXEC") == "1"
 	if runtime.GOARCH != "arm64" && !crossLinux {
 		t.Skip("native Go assembler oracle requires an arm64 host")

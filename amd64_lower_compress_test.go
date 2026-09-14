@@ -76,7 +76,9 @@ func TestTranslateX86PackedCompressRejectsFormsOutsideGoAssemblerTable(t *testin
 		"VPCOMPRESSQ Z0, K1, K2, Z1",
 	} {
 		t.Run(strings.NewReplacer(" ", "_", "(", "_", ")", "_").Replace(instruction), func(t *testing.T) {
-			requireX86GoAssemblerResult(t, "amd64", "TEXT bad(SB),$0-0\n\t"+instruction+"\n\tRET\n", false)
+			if currentGoMinorAtLeast(27) {
+				requireX86GoAssemblerResult(t, "amd64", "TEXT bad(SB),$0-0\n\t"+instruction+"\n\tRET\n", false)
+			}
 			assertX86PackedCompressRejected(t, "amd64", "x86_64-unknown-linux-gnu", instruction)
 		})
 	}
@@ -87,7 +89,9 @@ func TestTranslateX86PackedCompressRejectsFormsOutsideGoAssemblerTable(t *testin
 		"VPCOMPRESSQ Z0, K1, Z8",
 	} {
 		t.Run("386_"+strings.NewReplacer(" ", "_").Replace(instruction), func(t *testing.T) {
-			requireX86GoAssemblerResult(t, "386", "TEXT bad(SB),$0-0\n\t"+instruction+"\n\tRET\n", false)
+			if currentGoMinorAtLeast(27) {
+				requireX86GoAssemblerResult(t, "386", "TEXT bad(SB),$0-0\n\t"+instruction+"\n\tRET\n", false)
+			}
 			assertX86PackedCompressRejected(t, "386", "i386-unknown-linux-gnu", instruction)
 		})
 	}

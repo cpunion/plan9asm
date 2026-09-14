@@ -661,7 +661,7 @@ func probeAssemblySourceForTarget(filePath, goos, goarch string) (accepted, conc
 		return true, true
 	}
 	message := strings.ToLower(string(output))
-	if strings.Contains(message, "go_asm.h") && strings.Contains(message, "no such file or directory") {
+	if missingGoAsmHeader(message) {
 		stubDir, stubErr := os.MkdirTemp("", "plan9asm-go-asm-header-")
 		if stubErr != nil {
 			return false, false
@@ -682,6 +682,19 @@ func probeAssemblySourceForTarget(filePath, goos, goarch string) (accepted, conc
 		}
 	}
 	return false, true
+}
+
+func missingGoAsmHeader(message string) bool {
+	message = strings.ToLower(message)
+	if !strings.Contains(message, "go_asm.h") {
+		return false
+	}
+	for _, fragment := range []string{"no such file or directory", "cannot find", "could not find"} {
+		if strings.Contains(message, fragment) {
+			return true
+		}
+	}
+	return false
 }
 
 func discoveryConstraintTags(filePath string) ([]string, error) {

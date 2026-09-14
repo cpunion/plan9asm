@@ -4,6 +4,8 @@ package plan9asm
 
 import (
 	"fmt"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -36,7 +38,9 @@ func TestTranslateARM64WideningShiftCompleteGoAssemblerForms(t *testing.T) {
 		}
 	}
 	src.WriteString("\tRET\n")
-	requireARM64GoAssemblerResult(t, src.String(), true)
+	if currentGoMinorAtLeast(27) {
+		requireARM64GoAssemblerResult(t, src.String(), true)
+	}
 
 	for _, triple := range []string{
 		"aarch64-apple-darwin",
@@ -84,7 +88,9 @@ func TestTranslateARM64WideningShiftRejectsFormsOutsideGoAssemblerTable(t *testi
 	} {
 		t.Run(strings.Fields(instruction)[0]+"-"+strings.ReplaceAll(instruction, " ", "_"), func(t *testing.T) {
 			src := "TEXT ·badwidening(SB), $0-0\n\t" + instruction + "\n\tRET\n"
-			requireARM64GoAssemblerResult(t, src, false)
+			if currentGoMinorAtLeast(27) {
+				requireARM64GoAssemblerResult(t, src, false)
+			}
 			file, err := Parse(ArchARM64, src)
 			if err != nil {
 				t.Fatal(err)
@@ -101,4 +107,18 @@ func TestTranslateARM64WideningShiftRejectsFormsOutsideGoAssemblerTable(t *testi
 			}
 		})
 	}
+}
+
+func currentGoMinorAtLeast(want int) bool {
+	version := runtime.Version()
+	start := strings.Index(version, "go1.")
+	if start < 0 {
+		return false
+	}
+	minor := version[start+len("go1."):]
+	if end := strings.IndexFunc(minor, func(r rune) bool { return r < '0' || r > '9' }); end >= 0 {
+		minor = minor[:end]
+	}
+	got, err := strconv.Atoi(minor)
+	return err == nil && got >= want
 }

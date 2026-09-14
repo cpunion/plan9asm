@@ -65,7 +65,7 @@ func TestResolveModuleDownloadUsesCachedZipAfterToolchainVersionRejection(t *tes
 
 func TestRunDiscoveryAsmDeclUsesCurrentGoTargetABI(t *testing.T) {
 	dir := t.TempDir()
-	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/asmdecl\n\ngo 1.27\n")
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/asmdecl\n\ngo 1.20\n")
 	writeTestFile(t, filepath.Join(dir, "decl.go"), "package asmdecl\n\nfunc f(x int64)\n")
 	asm := filepath.Join(dir, "decl_amd64.s")
 	writeTestFile(t, asm, "TEXT ·f(SB), $0-1\nRET\n")
@@ -89,8 +89,8 @@ func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testin
 	if err := os.MkdirAll(dependency, 0755); err != nil {
 		t.Fatal(err)
 	}
-	writeTestFile(t, filepath.Join(dir, "go.mod"), "module plan9asm.local/probe\n\ngo 1.27\n\nrequire example.com/asmdeclbroken v0.0.0\nreplace example.com/asmdeclbroken => ../dependency\n")
-	writeTestFile(t, filepath.Join(dependency, "go.mod"), "module example.com/asmdeclbroken\n\ngo 1.27\n")
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module plan9asm.local/probe\n\ngo 1.20\n\nrequire example.com/asmdeclbroken v0.0.0\nreplace example.com/asmdeclbroken => ../dependency\n")
+	writeTestFile(t, filepath.Join(dependency, "go.mod"), "module example.com/asmdeclbroken\n\ngo 1.20\n")
 	writeTestFile(t, filepath.Join(dependency, "decl.go"), "package asmdeclbroken\n\nfunc f() uint32\n")
 	writeTestFile(t, filepath.Join(dependency, "decl_386.s"), "TEXT ·f(SB), $0-4\nMOVL AX, ret+4(FP)\nRET\n")
 	writeTestFile(t, filepath.Join(dependency, "decl_test.go"), "package asmdeclbroken\n\nvar _ uint32 = int64(1)\n")
@@ -103,7 +103,7 @@ func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testin
 
 func TestRunDiscoveryGoBuildChecksExactCurrentPackage(t *testing.T) {
 	dir := t.TempDir()
-	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/buildable\n\ngo 1.27\n")
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/buildable\n\ngo 1.20\n")
 	writeTestFile(t, filepath.Join(dir, "decl.go"), "package buildable\n\nfunc f()\n")
 	writeTestFile(t, filepath.Join(dir, "decl_amd64.s"), "TEXT ·f(SB), $0-0\nRET\n")
 	env := replaceEnv(os.Environ(), map[string]string{"GOFLAGS": "-mod=mod", "GOWORK": "off"})
@@ -219,6 +219,21 @@ func TestInferUnsuffixedAssemblyTargetsUsesEmptyGeneratedHeaderForArchitecturePr
 	}
 	if !restricted || !eligible["linux/amd64"] || eligible["linux/arm64"] || len(eligible) != 1 {
 		t.Fatalf("eligible = %#v, restricted = %v; want only linux/amd64", eligible, restricted)
+	}
+}
+
+func TestMissingGoAsmHeaderRecognizesHostDiagnostics(t *testing.T) {
+	for _, message := range []string{
+		`fatal error: go_asm.h: No such file or directory`,
+		`open go_asm.h: The system cannot find the file specified.`,
+		`could not find included file "go_asm.h"`,
+	} {
+		if !missingGoAsmHeader(message) {
+			t.Errorf("missingGoAsmHeader(%q) = false, want true", message)
+		}
+	}
+	if missingGoAsmHeader("missing unrelated.h: no such file or directory") {
+		t.Fatal("missingGoAsmHeader accepted an unrelated missing include")
 	}
 }
 

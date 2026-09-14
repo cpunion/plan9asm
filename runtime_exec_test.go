@@ -349,6 +349,12 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 	if err := os.WriteFile(llPath, []byte(ll), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if strings.Contains(triple, "windows") {
+		// LLVM-generated Windows objects reference the conventional floating
+		// point marker normally supplied by the MSVC CRT. The MinGW clang used
+		// by CI does not provide it when linking these freestanding test objects.
+		mainC = "int _fltused = 0;\n" + mainC
+	}
 	if err := os.WriteFile(mainPath, []byte(mainC), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -364,6 +370,12 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 
 	compilerArgs := append([]string(nil), compiler[1:]...)
 	compilerArgs = append(compilerArgs, objPath, mainPath, "-O2", "-o", exePath)
+	if !strings.Contains(triple, "windows") {
+		// LLVM may lower floating intrinsics such as roundeven and fma to the C
+		// math library. Darwin provides those symbols through libSystem, while
+		// ELF linkers require an explicit libm dependency.
+		compilerArgs = append(compilerArgs, "-lm")
+	}
 	compilerCmd := exec.Command(compiler[0], compilerArgs...)
 	if out, err := compilerCmd.CombinedOutput(); err != nil {
 		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
