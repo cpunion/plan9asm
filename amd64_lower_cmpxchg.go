@@ -76,6 +76,10 @@ func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
+	accumulator, err := c.loadReg(AX)
+	if err != nil {
+		return true, false, err
+	}
 	expected, err := c.evalIntSized(Operand{Kind: OpReg, Reg: AX}, typ)
 	if err != nil {
 		return true, false, err
@@ -114,11 +118,11 @@ func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr
 		old, success = "%"+oldName, "%"+successName
 	}
 
-	// On failure the accumulator receives the destination. On success it is
-	// unchanged at operand width. A 32-bit CMPXCHGL still has EAX write
-	// semantics and therefore clears the upper half of RAX on both outcomes.
+	// On failure the accumulator receives the destination. On success it is not
+	// written at all. In particular, CMPXCHGL zero-extends EAX only on failure;
+	// a successful compare must preserve the original high half of RAX.
 	if destination.Kind != OpReg || !amd64CompareExchangeDestinationIsAccumulator(destination.Reg, bits) {
-		if err := c.storeScalarCompareExchangeAccumulator(expected, old, success, typ); err != nil {
+		if err := c.storeScalarCompareExchangeAccumulator(accumulator, expected, old, success, typ); err != nil {
 			return true, false, err
 		}
 	}
@@ -132,7 +136,14 @@ func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr
 	return true, false, nil
 }
 
-func (c *amd64Ctx) storeScalarCompareExchangeAccumulator(expected, failureValue, success string, typ LLVMType) error {
+func (c *amd64Ctx) storeScalarCompareExchangeAccumulator(accumulator, expected, failureValue, success string, typ LLVMType) error {
+	if typ == I32 {
+		failure64 := c.newTmp()
+		selected := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", failure64, failureValue)
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i64 %s, i64 %%%s\n", selected, success, accumulator, failure64)
+		return c.storeReg(AX, "%"+selected)
+	}
 	selected := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", selected, success, typ, expected, typ, failureValue)
 	return c.storeRegSized(AX, typ, "%"+selected)

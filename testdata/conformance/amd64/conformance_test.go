@@ -296,9 +296,6 @@ func TestCompareExchangeScalarSemantics(t *testing.T) {
 			outputIndex := widthIndex * 6
 			want[outputIndex] = successInitial&^mask | desired&mask
 			want[outputIndex+1] = expected
-			if bits == 32 {
-				want[outputIndex+1] = uint64(uint32(expected))
-			}
 			_, want[outputIndex+2] = referenceScalarAddSub(false, bits, successInitial, expected, true)
 			want[outputIndex+3] = failureInitial
 			switch bits {
@@ -313,8 +310,9 @@ func TestCompareExchangeScalarSemantics(t *testing.T) {
 		}
 		if os.Getenv("PLAN9ASM_ROSETTA") == "1" {
 			// Rosetta 2 does not preserve CMPXCHG's architecturally defined CF
-			// and OF results. Keep the native oracle for every other result and
-			// flag; the LLVM runtime oracle still verifies CF/OF against x86.
+			// and OF results, and clears RAX's high half after a successful
+			// CMPXCHGL even though EAX is not written. Keep the native oracle for
+			// every other result; the LLVM runtime oracle verifies these details.
 			const rosettaUnreliableFlags = uint64(1) | uint64(1)<<8
 			for widthIndex := 0; widthIndex < 4; widthIndex++ {
 				got[widthIndex*6+2] &^= rosettaUnreliableFlags
@@ -322,6 +320,9 @@ func TestCompareExchangeScalarSemantics(t *testing.T) {
 				want[widthIndex*6+2] &^= rosettaUnreliableFlags
 				want[widthIndex*6+5] &^= rosettaUnreliableFlags
 			}
+			const cmpxchg32SuccessAccumulator = 2*6 + 1
+			got[cmpxchg32SuccessAccumulator] = uint64(uint32(got[cmpxchg32SuccessAccumulator]))
+			want[cmpxchg32SuccessAccumulator] = uint64(uint32(want[cmpxchg32SuccessAccumulator]))
 		}
 		if got != want {
 			t.Fatalf("compareExchangeScalarSemantics(%#x, %#x) = %#x, want %#x", expected, desired, got, want)

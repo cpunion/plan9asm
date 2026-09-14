@@ -826,7 +826,7 @@ int main(void) {
 			uint64_t failure_initial = initial[width_index * 2 + 1];
 			unsigned output_index = width_index * 6;
 			want[output_index] = (success_initial & ~mask) | (cmpxchg_desired & mask);
-			want[output_index + 1] = bits == 32 ? (uint32_t)expected : expected;
+			want[output_index + 1] = expected;
 			reference_scalar_add_sub(0, bits, success_initial, expected, 1, &want[output_index + 2]);
 			want[output_index + 3] = failure_initial;
 			if (bits == 8 || bits == 16) want[output_index + 4] = (expected & ~mask) | (failure_initial & mask);
