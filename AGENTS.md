@@ -106,6 +106,14 @@ needed by `github.com/nspcc-dev/tzhash`. Those families have Go 1.27
 positive/negative form tests, all applicable x86 platform object tests, LLVM
 22 semantic runtime tests, and supported-op extraction assertions.
 
+Discovery records can also contain `_test_<goarch>.s` files. When an exact file
+set contains test assembly, `plan9asmll` loads Go package test variants and
+prefers their type scope for translation; otherwise declarations that exist
+only in `_test.go` incorrectly degrade to the integer fallback ABI. Keep
+`cmd/plan9asmll/testdata/testsignature` as the regression for a `float32`
+result written by `MOVSS`. Do not fix this class of failure by accepting an
+`i64`/float frame mismatch.
+
 Shard 19 is green with 15 passing candidates, 5 source N/A candidates, 138
 translations, and 21 target-level N/A translations. TDD failures independently
 exposed `RCLQ/RCRQ` memory forms in `github.com/kilic/fp256`, `PSHUFLW` in
