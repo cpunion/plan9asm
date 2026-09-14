@@ -352,14 +352,17 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	if err != nil {
 		return runReport{}, nil, err
 	}
-	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad)
+	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, containsTestAssembly(exactAsmFiles))
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
 	pkgByPath := map[string]*packages.Package{}
 	for _, p := range pkgs {
 		if p != nil && p.PkgPath != "" {
-			pkgByPath[p.PkgPath] = p
+			previous := pkgByPath[p.PkgPath]
+			if previous == nil || isTestVariantPackage(p) && !isTestVariantPackage(previous) {
+				pkgByPath[p.PkgPath] = p
+			}
 		}
 	}
 	tasks, asmPackages := collectAsmTasks(pkgs, outDir, exactAsmFiles)
@@ -645,7 +648,7 @@ func llcExtraArgs(goarch string) []string {
 	}
 }
 
-func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath string, strict bool) ([]*packages.Package, error) {
+func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath string, strict, includeTests bool) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -660,6 +663,7 @@ func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath stri
 			"GOOS="+goos,
 			"GOARCH="+goarch,
 		),
+		Tests: includeTests,
 	}
 	if len(buildTags) != 0 {
 		cfg.BuildFlags = []string{"-tags=" + strings.Join(buildTags, ",")}
@@ -673,6 +677,20 @@ func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath stri
 		return nil, fmt.Errorf("%d package loading error(s)", count)
 	}
 	return pkgs, nil
+}
+
+func containsTestAssembly(files []string) bool {
+	for _, name := range files {
+		base := filepath.Base(filepath.FromSlash(name))
+		if strings.Contains(strings.TrimSuffix(base, filepath.Ext(base)), "_test_") || strings.HasSuffix(strings.TrimSuffix(base, filepath.Ext(base)), "_test") {
+			return true
+		}
+	}
+	return false
+}
+
+func isTestVariantPackage(pkg *packages.Package) bool {
+	return pkg != nil && strings.Contains(pkg.ID, " [") && strings.HasSuffix(pkg.ID, ".test]")
 }
 
 func filterPackagesByModule(pkgs []*packages.Package, modulePath string) []*packages.Package {

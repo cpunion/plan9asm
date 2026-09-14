@@ -25,6 +25,49 @@ func TestWASMABIForGoPackageTarget(t *testing.T) {
 	}
 }
 
+func TestContainsTestAssembly(t *testing.T) {
+	for _, name := range []string{"pkg/routine_test_amd64.s", "pkg/routine_test.s"} {
+		if !containsTestAssembly([]string{name}) {
+			t.Errorf("containsTestAssembly(%q) = false, want true", name)
+		}
+	}
+	if containsTestAssembly([]string{"pkg/contest_amd64.s", "pkg/routine_amd64.s"}) {
+		t.Fatal("containsTestAssembly accepted non-test assembly")
+	}
+}
+
+func TestIsTestVariantPackage(t *testing.T) {
+	base := &packages.Package{ID: "example.com/p", PkgPath: "example.com/p"}
+	variant := &packages.Package{ID: "example.com/p [example.com/p.test]", PkgPath: "example.com/p"}
+	if isTestVariantPackage(base) || !isTestVariantPackage(variant) {
+		t.Fatalf("test variant classification: base=%v variant=%v", isTestVariantPackage(base), isTestVariantPackage(variant))
+	}
+}
+
+func TestRunOneTargetUsesTestDeclarationForExactTestAssembly(t *testing.T) {
+	report, _, err := runOneTarget(
+		targetSpec{Goos: "linux", Goarch: "amd64"},
+		[]string{"./testdata/testsignature"},
+		nil,
+		[]string{"testdata/testsignature/convert_test_amd64.s"},
+		"github.com/xgo-dev/plan9asm/cmd/plan9asmll",
+		t.TempDir(),
+		false,
+		0,
+		true,
+		false,
+		false,
+		filepath.Join("..", ".."),
+		compileConfig{},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.TotalAsm != 1 || report.Success != 1 || report.Failed != 0 {
+		t.Fatalf("test assembly report = %#v, want one successful translation", report)
+	}
+}
+
 func TestTryDeclSigResolvesSamePackageQualifiedPlan9Symbol(t *testing.T) {
 	pkg := types.NewPackage("runtime/internal/atomic", "atomic")
 	params := types.NewTuple(
