@@ -3053,10 +3053,6 @@ func llvmVPSHUFDMask(lanes int, imm uint64) string {
 	return b.String()
 }
 
-func llvmSplatI32(lanes int, value uint64) string {
-	return llvmSplatInteger(lanes, 32, value)
-}
-
 func llvmSplatInteger(lanes, bits int, value uint64) string {
 	var b strings.Builder
 	b.WriteByte('<')
