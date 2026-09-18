@@ -163,3 +163,24 @@ go run -C cmd/plan9asm . transpile \
   -o /tmp/file.ll \
   -goos=linux -goarch=amd64
 ```
+
+## Foreign-ABI ARM64 assembly
+
+Raw C callbacks and tail-call trampolines sometimes have no Go function
+signature. Passing them through typed LLVM lowering cannot preserve an unknown
+set of incoming or outgoing registers. `ForeignARM64Functions` recognizes the
+restricted file-local, NOSPLIT, zero-Go-frame form (non-leaf callbacks must
+explicitly use NOFRAME).
+
+A compiler driver can assemble such a file with `go tool asm -p <package>` and
+pass the Darwin/ARM64 Go object to `TranslateNativeARM64Object`. The returned
+Mach-O assembly preserves the encoded instructions and maps R_ADDR and
+R_CALLARM64 relocations to selected local definitions or explicitly supplied
+dynamic imports. The accompanying DATA list lets the driver bind Go globals to
+their assembly definitions. The driver remains responsible for selecting the
+target, running tools, and supplying library link arguments.
+
+This path does not translate Go ABI functions. Unsupported object formats,
+relocations, and undeclared foreign calls return errors instead of inventing
+function signatures. The object reader accepts the go120ld format used since
+Go 1.20; the runtime tests execute native callbacks only on Darwin/ARM64.
