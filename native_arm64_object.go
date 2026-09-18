@@ -10,6 +10,35 @@ import (
 	"strings"
 )
 
+// Layout constants from Go 1.27 cmd/internal/goobj/objfile.go (go120ld)
+// and cmd/internal/objabi/reloctype.go. Reject other object formats below.
+const (
+	nativeBlockCount    = 19 // includes the end offset
+	nativeHeaderSize    = 20 + nativeBlockCount*4
+	nativeSymSize       = 21
+	nativeSymFlags      = 11
+	nativeSymSizeOffset = 13
+	nativeSymAlign      = 17
+	nativeRelocSize     = 23
+	nativeRelocKind     = 5
+	nativeRelocAddend   = 7
+	nativeRelocPkg      = 15
+	nativeRelocSym      = 19
+	nativeNoSplit       = 1 << 4
+	nativeRAddr         = 1
+	nativeRCallARM64    = 9
+	nativeBlkSymdef     = 3
+	nativeBlkNonpkgref  = 7
+	nativeBlkRelocIdx   = 11
+	nativeBlkDataIdx    = 13
+	nativeBlkReloc      = 14
+	nativeBlkData       = 16
+	nativePkgSelf       = 0x7ffffffb
+	nativePkgHashed64   = 0x7ffffffe
+	nativePkgHashed     = 0x7ffffffd
+	nativePkgNone       = 0x7fffffff
+)
+
 // NativeData describes a Go global whose storage is supplied by native assembly.
 type NativeData struct {
 	Name string
@@ -21,7 +50,7 @@ type NativeData struct {
 // reconstruct incoming registers. The Go assembler encodes those registers;
 // this bridge only converts its address and branch relocations to Mach-O asm.
 //
-// The input format is cmd/internal/goobj's go120ld format. Only explicitly
+// The input must be a darwin/arm64 cmd/asm object in go120ld format. Only explicitly
 // selected functions, their data, and declared dynamic imports are accepted.
 // Unknown formats, symbol references and relocations are errors.
 func TranslateNativeARM64Object(obj []byte, funcs map[string]bool, imports map[string]string, pkgPath string) (string, []NativeData, error) {
@@ -33,7 +62,7 @@ func TranslateNativeARM64Object(obj []byte, funcs map[string]bool, imports map[s
 	var data []NativeData
 	for i, s := range r.syms[:r.ndef] {
 		if funcs[s.name] {
-			if s.flags&16 == 0 {
+			if s.flags&nativeNoSplit == 0 {
 				return "", nil, fmt.Errorf("native function %s is not NOSPLIT", s.name)
 			}
 			labels[i] = fmt.Sprintf("Lllgo_native_%d", i)
@@ -105,9 +134,12 @@ func TranslateNativeARM64Object(obj []byte, funcs map[string]bool, imports map[s
 			}
 			nativeBytes(&out, code[pos:rel.off])
 			switch {
-			case rel.kind == 1 && rel.size == 8: // R_ADDR
+			case rel.kind == nativeRAddr && rel.size == 8: // R_ADDR
 				fmt.Fprintf(&out, ".quad %s\n", expr)
-			case rel.kind == 9 && rel.size == 4 && funcs[s.name]: // R_CALLARM64: B or BL
+			case rel.kind == nativeRCallARM64 && rel.size == 4 && funcs[s.name]: // R_CALLARM64: B or BL
+				if rel.add != 0 {
+					return "", nil, fmt.Errorf("unsupported native branch addend %d in %s", rel.add, s.name)
+				}
 				word := binary.LittleEndian.Uint32(code[rel.off:])
 				op := "b"
 				if word&0xfc000000 == 0x94000000 {
@@ -127,6 +159,7 @@ func TranslateNativeARM64Object(obj []byte, funcs map[string]bool, imports map[s
 }
 
 func nativeBytes(out *strings.Builder, b []byte) {
+	var digits [3]byte // largest byte value is 255
 	for len(b) > 0 {
 		n := len(b)
 		if n > 16 {
@@ -137,7 +170,7 @@ func nativeBytes(out *strings.Builder, b []byte) {
 			if i != 0 {
 				out.WriteByte(',')
 			}
-			fmt.Fprintf(out, "%d", x)
+			out.Write(strconv.AppendUint(digits[:0], uint64(x), 10))
 		}
 		out.WriteByte('\n')
 		b = b[n:]
@@ -158,7 +191,7 @@ type nativeReloc struct {
 }
 type nativeObject struct {
 	b      []byte
-	blocks [19]uint32
+	blocks [nativeBlockCount]uint32
 	syms   []nativeSym
 	ndef   int
 	counts [5]int
@@ -171,7 +204,7 @@ func readNativeObject(obj []byte) (*nativeObject, error) {
 		return nil, fmt.Errorf("expected darwin/arm64 Go assembler object")
 	}
 	b := obj[h+3:]
-	if len(b) < 96 || string(b[:8]) != "\x00go120ld" {
+	if len(b) < nativeHeaderSize || string(b[:8]) != "\x00go120ld" {
 		return nil, fmt.Errorf("unsupported Go assembler object format")
 	}
 	r := &nativeObject{b: b}
@@ -181,34 +214,34 @@ func readNativeObject(obj []byte) (*nativeObject, error) {
 			return nil, fmt.Errorf("invalid native object block %d", i)
 		}
 	}
-	if r.blocks[0] < 96 {
+	if r.blocks[0] < nativeHeaderSize {
 		return nil, fmt.Errorf("invalid native object header")
 	}
-	for block := 3; block <= 7; block++ {
+	for block := nativeBlkSymdef; block <= nativeBlkNonpkgref; block++ {
 		buf := r.block(block)
-		if len(buf)%21 != 0 {
+		if len(buf)%nativeSymSize != 0 {
 			return nil, fmt.Errorf("invalid native symbol table")
 		}
-		r.counts[block-3] = len(buf) / 21
+		r.counts[block-nativeBlkSymdef] = len(buf) / nativeSymSize
 		for len(buf) > 0 {
-			s := buf[:21]
+			s := buf[:nativeSymSize]
 			n, off := binary.LittleEndian.Uint32(s), binary.LittleEndian.Uint32(s[4:])
 			if uint64(off)+uint64(n) > uint64(len(b)) {
 				return nil, fmt.Errorf("invalid native symbol name")
 			}
-			size := binary.LittleEndian.Uint32(s[13:])
+			size := binary.LittleEndian.Uint32(s[nativeSymSizeOffset:])
 			if size > 64<<20 {
 				return nil, fmt.Errorf("native symbol too large")
 			}
-			r.syms = append(r.syms, nativeSym{string(b[off : off+n]), size, binary.LittleEndian.Uint32(s[17:]), s[11]})
-			buf = buf[21:]
+			r.syms = append(r.syms, nativeSym{string(b[off : off+n]), size, binary.LittleEndian.Uint32(s[nativeSymAlign:]), s[nativeSymFlags]})
+			buf = buf[nativeSymSize:]
 		}
 	}
 	r.ndef = len(r.syms) - r.counts[4]
-	if len(r.block(11)) != (r.ndef+1)*4 || len(r.block(13)) != (r.ndef+1)*4 || len(r.block(14))%23 != 0 {
+	if len(r.block(nativeBlkRelocIdx)) != (r.ndef+1)*4 || len(r.block(nativeBlkDataIdx)) != (r.ndef+1)*4 || len(r.block(nativeBlkReloc))%nativeRelocSize != 0 {
 		return nil, fmt.Errorf("invalid native object indices")
 	}
-	for _, pair := range [][2]int{{11, len(r.block(14)) / 23}, {13, len(r.block(16))}} {
+	for _, pair := range [][2]int{{nativeBlkRelocIdx, len(r.block(nativeBlkReloc)) / nativeRelocSize}, {nativeBlkDataIdx, len(r.block(nativeBlkData))}} {
 		prev := uint32(0)
 		buf := r.block(pair[0])
 		for len(buf) > 0 {
@@ -222,18 +255,21 @@ func readNativeObject(obj []byte) (*nativeObject, error) {
 	}
 	return r, nil
 }
+
+// block accepts only the block constants above, all strictly before the end
+// offset. readNativeObject validates every offset before calling it.
 func (r *nativeObject) block(i int) []byte { return r.b[r.blocks[i]:r.blocks[i+1]] }
 func (r *nativeObject) payload(i int) []byte {
-	idx := r.block(13)
-	return r.block(16)[binary.LittleEndian.Uint32(idx[i*4:]):binary.LittleEndian.Uint32(idx[(i+1)*4:])]
+	idx := r.block(nativeBlkDataIdx)
+	return r.block(nativeBlkData)[binary.LittleEndian.Uint32(idx[i*4:]):binary.LittleEndian.Uint32(idx[(i+1)*4:])]
 }
 func (r *nativeObject) relocs(i int) []nativeReloc {
-	idx := r.block(11)
+	idx := r.block(nativeBlkRelocIdx)
 	a, z := binary.LittleEndian.Uint32(idx[i*4:]), binary.LittleEndian.Uint32(idx[(i+1)*4:])
 	var out []nativeReloc
 	for n := a; n < z; n++ {
-		v := r.block(14)[int(n)*23:]
-		out = append(out, nativeReloc{binary.LittleEndian.Uint32(v), v[4], binary.LittleEndian.Uint16(v[5:]), int64(binary.LittleEndian.Uint64(v[7:])), binary.LittleEndian.Uint32(v[15:]), binary.LittleEndian.Uint32(v[19:])})
+		v := r.block(nativeBlkReloc)[int(n)*nativeRelocSize:]
+		out = append(out, nativeReloc{binary.LittleEndian.Uint32(v), v[4], binary.LittleEndian.Uint16(v[nativeRelocKind:]), int64(binary.LittleEndian.Uint64(v[nativeRelocAddend:])), binary.LittleEndian.Uint32(v[nativeRelocPkg:]), binary.LittleEndian.Uint32(v[nativeRelocSym:])})
 	}
 	return out
 }
@@ -242,15 +278,15 @@ func (r *nativeObject) target(pkg, sym uint32) (int, error) {
 	// runtime builtins have Go ABI and cannot be called by these foreign stubs.
 	var start, count int
 	switch pkg {
-	case 0x7ffffffb:
+	case nativePkgSelf:
 		count = r.counts[0]
-	case 0x7ffffffe:
+	case nativePkgHashed64:
 		start = r.counts[0]
 		count = r.counts[1]
-	case 0x7ffffffd:
+	case nativePkgHashed:
 		start = r.counts[0] + r.counts[1]
 		count = r.counts[2]
-	case 0x7fffffff:
+	case nativePkgNone:
 		start = r.counts[0] + r.counts[1] + r.counts[2]
 		count = r.counts[3] + r.counts[4]
 	default:
