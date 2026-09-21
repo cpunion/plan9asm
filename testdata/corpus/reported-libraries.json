@@ -360,7 +360,7 @@
       "id": "pierrec-lz4-v4",
       "origin": "ecosystem-scan",
       "module": "github.com/pierrec/lz4/v4",
-      "version": "v4.1.29",
+      "version": "v4.1.30",
       "inventory": {
         "darwin/amd64": {
           "asm_files": 1,

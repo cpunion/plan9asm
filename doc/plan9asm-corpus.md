@@ -229,7 +229,7 @@ The ecosystem scan also pins these latest modules:
 - `github.com/klauspost/reedsolomon v1.14.2`
 - `github.com/minio/highwayhash v1.0.4`
 - `github.com/modern-go/gls v0.0.0-20250215024828-78308f6bb19d`
-- `github.com/pierrec/lz4/v4 v4.1.29`
+- `github.com/pierrec/lz4/v4 v4.1.30`
 - `github.com/stevvooe/resumable v0.0.0-20180830230917-22b14a53ba50`
 - `github.com/tmthrgd/go-bitwise v0.0.0-20190904053232-1430ee983fca`
 - `github.com/tmthrgd/go-popcount v0.0.0-20190904054823-afb1ace8b04f`
