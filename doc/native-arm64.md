@@ -1,11 +1,16 @@
 # Native physical-register backend
 
-`TranslateNativeSource` takes explicit `NativeOptions` (`GOOS`, `GOARCH`,
-`PackagePath`, and `Imports`) and translates a restricted Plan 9 source file to
-native assembly. The implemented targets are Linux and Darwin, each on amd64
-and arm64. A native assembler such as LLVM's integrated assembler
-creates the final ELF or Mach-O object. There is no `go tool asm` invocation, dependency
-on a Go object layout, instruction-byte copying, or guessed LLVM function type.
+`TranslateNativeModule` takes an LLVM context and explicit `NativeOptions`
+(`GOOS`, `GOARCH`, `PackagePath`, and `Imports`). It lowers each restricted Plan 9
+TEXT to a naked LLVM function containing function-local inline assembly, and
+DATA/GLOBL to LLVM global definitions. Linux and Darwin on amd64 and arm64 are
+supported. The driver links the returned module into its package module before
+normal optimization, bitcode/LTO and object emission. No module-level assembly,
+separate native assembler invocation, Go object reader or Go toolchain is needed.
+
+`TranslateNativeSource` remains available for consumers needing standalone native
+assembly. It shares source validation and instruction lowering with the module
+backend; `TranslateNativeARM64Source` is its Darwin/ARM64 compatibility wrapper.
 
 The contract is **physical register preservation**, not inferred C typing. A
 caller of an entry point must arrange exactly the registers expected by its
@@ -39,18 +44,20 @@ it no longer silently receives `void()`.
   `Wn` aliases, and platform aliases are rejected. Floating registers are `F0`–`F31`.
 - Local function/branch/import identifiers use ASCII letters, digits and `_`,
   beginning with a letter or `_`. Data definitions use `·name` for a package global.
-- Local labels and function addresses are renamed per assembly file. Foreign
+- Local labels and function addresses are renamed per assembly file. Naked
+  modules use LLVM symbol operands and inline-asm unique IDs across module merges. Foreign
   symbols are resolved only through the driver's explicit import map; no Go
   package/runtime call, symbol addend, computed branch or indirect call is accepted.
 - `DATA` supports constant integers of 1/2/4/8 bytes and 8-byte addresses of selected
   local functions, defined data or declared imports. Each initializer must fit its
   `GLOBL` allocation and must not overlap another initializer. Gaps are zero-filled.
 - `GLOBL` requires a constant size from 1 byte to 64 MiB. Supported flags are `0`,
-  `RODATA` and `NOPTR`. Definitions are 8-byte aligned. `RODATA` is placed in
-  `__DATA_CONST,__const` on Mach-O and `.data.rel.ro` on ELF, allowing address
-  fixups before becoming read-only under a RELRO-enabled linker; mutable
-  definitions use `.data`. The returned DATA metadata lets the driver verify the
-  Go global size and bind its definition to the native object.
+  `RODATA` and `NOPTR`. Definitions are 8-byte aligned. Naked modules use packed LLVM constants with
+  pointer-typed address initializers and explicit zero-filled gaps; RODATA sets
+  LLVM's global constant flag. LLVM selects the target data sections. The driver
+  checks the storage size against the Go definition before module linking.
+  The standalone source emitter uses `__DATA_CONST,__const` on Mach-O and
+  `.data.rel.ro` on ELF for RODATA; mutable definitions use `.data`.
 
 ## ARM64 instruction and operand forms
 
@@ -119,3 +126,44 @@ Linux harnesses may also run locally via explicitly configured Docker images:
 They verify foreign calls, integer/FP argument shuffles, returns, physical stack
 frames, and data-address relocation in PIE executables. Unsupported targets such
 as Windows require their own ABI/format qualification before being enabled.
+
+## Naked LLVM function contract
+
+Each TEXT becomes an internal `void ()` function with `naked noinline`. This is
+an address/code carrier, **not an inferred C or Go prototype**. Its only body is
+one side-effecting inline-asm call followed by `unreachable`. All entry parameters,
+return values, stack alignment and callee-saved registers remain the source's
+physical-register contract. Call sites keep their own actual calling convention
+and types. Go has already marshalled syscall arguments before entering these
+stubs; no Go parameter slot or LLVM formal argument is read by the carrier.
+
+LLVM 22 explicitly exempts naked functions from prototype-based call rewriting
+in `InstCombineCalls.cpp` because their assembly may consume parameters absent
+from the prototype. This differs from synthesizing a typed `call void()` for an
+unknown assembly callee, which remains forbidden in typed LLVM translation.
+The backend must not mark a carrier `noreturn`: assembly RET returns to the
+machine caller even though it does not fall through to the IR terminator.
+Every body must end in RET or an unconditional branch; implicit fallthrough
+between TEXT functions is rejected by the module backend.
+
+Function and imported-symbol references are constant inline-asm operands (`s`
+on AMD64 PIC, `i` on ARM64). Imports are external byte-address declarations,
+not guessed foreign function prototypes. Native CALL/JMP still executes inside
+assembly. LLVM therefore sees dependencies for module renaming and DCE without
+lowering the call's arguments. Local branch labels use `${:uid}`; literal AMD64
+immediate `$` characters are escaped before adding LLVM template operands.
+The assembly call conservatively clobbers memory. It does not request compiler
+stack alignment, argument moves, or a generated prologue/epilogue.
+
+Module tests execute optimized IR consumers of the void() carriers with actual
+integer/pointer parameters, integer and floating-point results, external calls,
+register shuffles and tail calls. They run O2 and full-LTO optimization pipelines;
+merge identically named local functions/labels from separate files; check that
+referenced functions survive and unreachable carriers disappear; and resolve an
+external assembly address to a typed LLVM function definition. Packed DATA tests
+cover forward references, address relocations, gaps, truncation and mutable data.
+LLGo integration also exercises complete off/thin/full LTO links on Darwin/ARM64.
+
+The assembly instructions themselves remain opaque to IR optimization. This
+backend does not introduce Go ABI adapters, stack maps, unwinding or runtime
+transitions.

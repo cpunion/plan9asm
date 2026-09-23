@@ -50,109 +50,26 @@ func SupportsNativeTarget(goos, goarch string) bool {
 // TranslateNativeSource translates checked Plan 9 source directly to native
 // assembly, without Go object files, implicit frames, or signature inference.
 func TranslateNativeSource(src []byte, opts NativeOptions) (string, []NativeData, error) {
-	if !SupportsNativeTarget(opts.GOOS, opts.GOARCH) {
-		return "", nil, fmt.Errorf("unsupported native target %s/%s", opts.GOOS, opts.GOARCH)
-	}
-	imports, pkgPath := opts.Imports, opts.PackagePath
-
-	clean, err := nativeSource(src, opts.GOARCH)
+	f, ep, data, err := prepareNativeSource(src, opts)
 	if err != nil {
 		return "", nil, err
 	}
-	f, err := Parse(Arch(opts.GOARCH), clean)
-	if err != nil {
-		return "", nil, err
-	}
-	if len(f.Funcs) == 0 {
-		return "", nil, fmt.Errorf("native assembly requires TEXT")
-	}
-	e := nativeEmitter{target: opts, funcs: map[string]string{}, globals: map[string]string{}, imports: imports}
-	for name, alias := range imports {
-		if !nativeName.MatchString(name) || !nativeName.MatchString(alias) {
-			return "", nil, fmt.Errorf("unsupported native import %q -> %q", name, alias)
-		}
-	}
-	for i, fn := range f.Funcs {
-		name := strings.TrimSuffix(fn.Sym, "<>")
-		if name == fn.Sym || !nativeName.MatchString(name) {
-			return "", nil, fmt.Errorf("native TEXT must be file-local: %s", fn.Sym)
-		}
-		if _, ok := e.funcs[fn.Sym]; ok {
-			return "", nil, fmt.Errorf("duplicate native TEXT %s", fn.Sym)
-		}
-		e.funcs[fn.Sym] = fmt.Sprintf("Lnative_func_%d", i)
-		parts := strings.Split(fn.Instrs[0].Raw, ",")
-		if len(parts) != 3 || (strings.TrimSpace(parts[2]) != "$0" && strings.TrimSpace(parts[2]) != "$0-0") {
-			return "", nil, fmt.Errorf("native TEXT requires zero Go frame and arguments: %s", fn.Sym)
-		}
-		flags, err := nativeFlags(parts[1], "NOSPLIT", "NOFRAME")
-		if err != nil {
-			return "", nil, err
-		}
-		if !flags["NOSPLIT"] {
-			return "", nil, fmt.Errorf("native TEXT requires NOSPLIT: %s", fn.Sym)
-		}
-		for _, ins := range fn.Instrs {
-			if (ins.Op == "BL" || ins.Op == "CALL") && !flags["NOFRAME"] {
-				return "", nil, fmt.Errorf("native non-leaf TEXT requires NOFRAME: %s", fn.Sym)
-			}
-		}
-	}
-	var data []NativeData
-	for _, g := range f.Globl {
-		name := strings.TrimPrefix(g.Sym, "·")
-		if name == g.Sym || !nativeName.MatchString(name) {
-			return "", nil, fmt.Errorf("native GLOBL must name a package global: %s", g.Sym)
-		}
-		if _, ok := e.globals[g.Sym]; ok {
-			return "", nil, fmt.Errorf("duplicate native GLOBL %s", g.Sym)
-		}
-		if g.Size <= 0 || g.Size > 64<<20 {
-			return "", nil, fmt.Errorf("unsupported native GLOBL size %d", g.Size)
-		}
-		if _, err := nativeFlags(g.Flags, "RODATA", "NOPTR"); err != nil {
-			return "", nil, err
-		}
-		e.globals[g.Sym] = e.prefix() + pkgPath + "." + name
-		data = append(data, NativeData{pkgPath + "." + name, uint32(g.Size)})
-	}
+	e := *ep
 	var out strings.Builder
 	for i, fn := range f.Funcs {
-		e.labels = map[string]string{}
-		for _, ins := range fn.Instrs {
-			if ins.Op == OpLABEL {
-				name := ins.Args[0].Sym
-				if !nativeName.MatchString(name) {
-					return "", nil, fmt.Errorf("unsupported native label %s", name)
-				}
-				if _, ok := e.labels[name]; ok {
-					return "", nil, fmt.Errorf("duplicate native label %s", name)
-				}
-				e.labels[name] = fmt.Sprintf("Lnative_%d_label_%d", i, len(e.labels))
-			}
+		if err := e.functionLabels(fn, i); err != nil {
+			return "", nil, err
 		}
 		fmt.Fprintf(&out, ".text\n.p2align 2\n%s:\n", e.funcs[fn.Sym])
 		if opts.GOOS == "linux" {
 			fmt.Fprintf(&out, ".type %s, @function\n", e.funcs[fn.Sym])
 		}
-		for _, ins := range fn.Instrs {
-			var err error
-			if opts.GOARCH == "arm64" {
-				err = (&nativeARM64{&e}).instruction(&out, ins)
-			} else {
-				err = (&nativeAMD64{&e}).instruction(&out, ins)
-			}
-			if err != nil {
-				return "", nil, fmt.Errorf("native %s: %s: %w", fn.Sym, ins.Raw, err)
-			}
+		if err := e.functionBody(&out, fn); err != nil {
+			return "", nil, err
 		}
+
 		if opts.GOOS == "linux" {
 			fmt.Fprintf(&out, ".size %s, .-%s\n", e.funcs[fn.Sym], e.funcs[fn.Sym])
-		}
-	}
-	for _, d := range f.Data {
-		if _, ok := e.globals[d.Sym]; !ok {
-			return "", nil, fmt.Errorf("native DATA has no GLOBL: %s", d.Sym)
 		}
 	}
 	for _, g := range f.Globl {
@@ -168,38 +85,20 @@ func TranslateNativeSource(src []byte, opts NativeOptions) (string, []NativeData
 		}
 		label := strconv.Quote(e.globals[g.Sym])
 		fmt.Fprintf(&out, ".p2align 3\n.globl %s\n%s:\n", label, label)
-		var values []DataStmt
-		for _, d := range f.Data {
-			if d.Sym == g.Sym {
-				values = append(values, d)
-			}
-		}
-		sort.Slice(values, func(i, j int) bool { return values[i].Off < values[j].Off })
+		values, _ := e.dataValues(f, g)
 		pos := int64(0)
 		for _, d := range values {
-			if d.Off < pos || d.Width <= 0 || d.Off > g.Size || d.Width > g.Size-d.Off {
-				return "", nil, fmt.Errorf("overlapping or out-of-bounds native DATA for %s", g.Sym)
-			}
 			if d.Off > pos {
 				fmt.Fprintf(&out, ".zero %d\n", d.Off-pos)
 			}
 			if d.Addr != "" {
-				if d.Width != 8 {
-					return "", nil, fmt.Errorf("native address DATA requires width 8")
-				}
 				target, err := e.symbol(d.Addr, true)
 				if err != nil {
 					return "", nil, err
 				}
 				fmt.Fprintf(&out, ".quad %s\n", target)
 			} else {
-				if d.Payload != nil {
-					return "", nil, fmt.Errorf("native string DATA is unsupported")
-				}
 				directive := map[int64]string{1: ".byte", 2: ".short", 4: ".long", 8: ".quad"}[d.Width]
-				if directive == "" {
-					return "", nil, fmt.Errorf("unsupported native DATA width %d", d.Width)
-				}
 				mask := ^uint64(0)
 				if d.Width < 8 {
 					mask = (uint64(1) << (8 * d.Width)) - 1
@@ -216,6 +115,86 @@ func TranslateNativeSource(src []byte, opts NativeOptions) (string, []NativeData
 		out.WriteString(".section .note.GNU-stack,\"\",@progbits\n")
 	}
 	return out.String(), data, nil
+}
+
+func prepareNativeSource(src []byte, opts NativeOptions) (*File, *nativeEmitter, []NativeData, error) {
+	if !SupportsNativeTarget(opts.GOOS, opts.GOARCH) {
+		return nil, nil, nil, fmt.Errorf("unsupported native target %s/%s", opts.GOOS, opts.GOARCH)
+	}
+	imports, pkgPath := opts.Imports, opts.PackagePath
+
+	clean, err := nativeSource(src, opts.GOARCH)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	f, err := Parse(Arch(opts.GOARCH), clean)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if len(f.Funcs) == 0 {
+		return nil, nil, nil, fmt.Errorf("native assembly requires TEXT")
+	}
+	e := nativeEmitter{target: opts, funcs: map[string]string{}, globals: map[string]string{}, imports: imports}
+	for name, alias := range imports {
+		if !nativeName.MatchString(name) || !nativeName.MatchString(alias) {
+			return nil, nil, nil, fmt.Errorf("unsupported native import %q -> %q", name, alias)
+		}
+	}
+	for i, fn := range f.Funcs {
+		name := strings.TrimSuffix(fn.Sym, "<>")
+		if name == fn.Sym || !nativeName.MatchString(name) {
+			return nil, nil, nil, fmt.Errorf("native TEXT must be file-local: %s", fn.Sym)
+		}
+		if _, ok := e.funcs[fn.Sym]; ok {
+			return nil, nil, nil, fmt.Errorf("duplicate native TEXT %s", fn.Sym)
+		}
+		e.funcs[fn.Sym] = fmt.Sprintf("Lnative_func_%d", i)
+		parts := strings.Split(fn.Instrs[0].Raw, ",")
+		if len(parts) != 3 || (strings.TrimSpace(parts[2]) != "$0" && strings.TrimSpace(parts[2]) != "$0-0") {
+			return nil, nil, nil, fmt.Errorf("native TEXT requires zero Go frame and arguments: %s", fn.Sym)
+		}
+		flags, err := nativeFlags(parts[1], "NOSPLIT", "NOFRAME")
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if !flags["NOSPLIT"] {
+			return nil, nil, nil, fmt.Errorf("native TEXT requires NOSPLIT: %s", fn.Sym)
+		}
+		for _, ins := range fn.Instrs {
+			if (ins.Op == "BL" || ins.Op == "CALL") && !flags["NOFRAME"] {
+				return nil, nil, nil, fmt.Errorf("native non-leaf TEXT requires NOFRAME: %s", fn.Sym)
+			}
+		}
+	}
+	var data []NativeData
+	for _, g := range f.Globl {
+		name := strings.TrimPrefix(g.Sym, "·")
+		if name == g.Sym || !nativeName.MatchString(name) {
+			return nil, nil, nil, fmt.Errorf("native GLOBL must name a package global: %s", g.Sym)
+		}
+		if _, ok := e.globals[g.Sym]; ok {
+			return nil, nil, nil, fmt.Errorf("duplicate native GLOBL %s", g.Sym)
+		}
+		if g.Size <= 0 || g.Size > 64<<20 {
+			return nil, nil, nil, fmt.Errorf("unsupported native GLOBL size %d", g.Size)
+		}
+		if _, err := nativeFlags(g.Flags, "RODATA", "NOPTR"); err != nil {
+			return nil, nil, nil, err
+		}
+		e.globals[g.Sym] = e.prefix() + pkgPath + "." + name
+		data = append(data, NativeData{pkgPath + "." + name, uint32(g.Size)})
+	}
+	for _, d := range f.Data {
+		if _, ok := e.globals[d.Sym]; !ok {
+			return nil, nil, nil, fmt.Errorf("native DATA has no GLOBL: %s", d.Sym)
+		}
+	}
+	for _, g := range f.Globl {
+		if _, err := e.dataValues(f, g); err != nil {
+			return nil, nil, nil, err
+		}
+	}
+	return f, &e, data, nil
 }
 
 var nativeName = regexp.MustCompile(`^[A-Za-z_][A-Za-z_0-9]*$`)
@@ -319,6 +298,7 @@ func nativeFlags(s string, allowed ...string) (map[string]bool, error) {
 var nativeAMD64PseudoRegister = regexp.MustCompile(`\b(?:FP|g|G)\b`)
 
 type nativeEmitter struct {
+	symbolOperand                   func(string, bool) (string, error)
 	target                          NativeOptions
 	funcs, globals, imports, labels map[string]string
 }
@@ -331,6 +311,9 @@ func (e *nativeEmitter) prefix() string {
 }
 
 func (e *nativeEmitter) symbol(s string, data bool) (string, error) {
+	if e.symbolOperand != nil {
+		return e.symbolOperand(s, data)
+	}
 	if !strings.HasSuffix(s, "(SB)") {
 		return "", fmt.Errorf("unsupported native symbol %s", s)
 	}
@@ -361,4 +344,68 @@ func (e *nativeEmitter) branch(o Operand, external bool) (string, error) {
 		return label, nil
 	}
 	return "", fmt.Errorf("undefined native branch label %s", o.String())
+}
+
+func (e *nativeEmitter) functionLabels(fn Func, i int) error {
+	e.labels = map[string]string{}
+	for _, ins := range fn.Instrs {
+		if ins.Op == OpLABEL {
+			name := ins.Args[0].Sym
+			if !nativeName.MatchString(name) {
+				return fmt.Errorf("unsupported native label %s", name)
+			}
+			if _, ok := e.labels[name]; ok {
+				return fmt.Errorf("duplicate native label %s", name)
+			}
+			e.labels[name] = fmt.Sprintf("Lnative_%d_label_%d", i, len(e.labels))
+		}
+	}
+	return nil
+}
+func (e *nativeEmitter) functionBody(out *strings.Builder, fn Func) error {
+	for _, ins := range fn.Instrs {
+		var err error
+		if e.target.GOARCH == "arm64" {
+			err = (&nativeARM64{e}).instruction(out, ins)
+		} else {
+			err = (&nativeAMD64{e}).instruction(out, ins)
+		}
+		if err != nil {
+			return fmt.Errorf("native %s: %s: %w", fn.Sym, ins.Raw, err)
+		}
+	}
+	return nil
+}
+
+func (e *nativeEmitter) dataValues(f *File, g GloblStmt) ([]DataStmt, error) {
+	var values []DataStmt
+	for _, d := range f.Data {
+		if d.Sym == g.Sym {
+			values = append(values, d)
+		}
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i].Off < values[j].Off })
+	pos := int64(0)
+	for _, d := range values {
+		if d.Off < pos || d.Width <= 0 || d.Off > g.Size || d.Width > g.Size-d.Off {
+			return nil, fmt.Errorf("overlapping or out-of-bounds native DATA for %s", g.Sym)
+		}
+		if d.Addr != "" {
+			if d.Width != 8 {
+				return nil, fmt.Errorf("native address DATA requires width 8")
+			}
+			if _, err := e.symbol(d.Addr, true); err != nil {
+				return nil, err
+			}
+		} else {
+			if d.Payload != nil {
+				return nil, fmt.Errorf("native string DATA is unsupported")
+			}
+			if d.Width != 1 && d.Width != 2 && d.Width != 4 && d.Width != 8 {
+				return nil, fmt.Errorf("unsupported native DATA width %d", d.Width)
+			}
+		}
+		pos = d.Off + d.Width
+	}
+	return values, nil
 }
