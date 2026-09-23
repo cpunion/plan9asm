@@ -178,6 +178,26 @@ int main(void) {
 func TestNativeARM64RejectsUnsupportedSource(t *testing.T) {
 	const prefix = "TEXT raw<>(SB), NOSPLIT|NOFRAME, $0\n"
 	tests := []struct{ name, source, want string }{
+		{"empty", "", "no TEXT"},
+		{"data only", "GLOBL ·p(SB), RODATA, $8\n", "requires TEXT"},
+		{"invalid local name", "TEXT bad-name<>(SB), NOSPLIT, $0\nRET\n", "file-local"},
+		{"duplicate label", prefix + "here:\nRET\nhere:\nRET\n", "duplicate native label"},
+		{"invalid global name", prefix + "RET\nGLOBL p<>(SB), RODATA, $8\n", "package global"},
+		{"duplicate global", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nGLOBL ·p(SB), RODATA, $8\n", "duplicate native GLOBL"},
+		{"empty global", prefix + "RET\nGLOBL ·p(SB), RODATA, $0\n", "GLOBL size"},
+		{"huge global", prefix + "RET\nGLOBL ·p(SB), RODATA, $67108865\n", "GLOBL size"},
+		{"data width", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nDATA ·p(SB)/3, $1\n", "DATA width"},
+		{"data string", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nDATA ·p(SB)/3, $\"abc\"\n", "source syntax"},
+		{"block comment", prefix + "/* ignored */ RET\n", "source syntax"},
+		{"FP to FP integer move", prefix + "MOVD F0, R0\n", "unsupported native register"},
+		{"floating move without FP", prefix + "FMOVD R0, R1\n", "operand form"},
+		{"stack register arithmetic", prefix + "ADD R0, RSP\n", "operand form"},
+		{"stack immediate move", prefix + "MOVD $0, RSP\n", "operand form"},
+		{"narrow immediate move", prefix + "MOVW $1, R0\n", "operand form"},
+		{"zero memory base", prefix + "MOVD (ZR), R0\n", "memory base"},
+		{"zero immediate arithmetic", prefix + "ADD $1, ZR\n", "operand form"},
+		{"explicit return operand", prefix + "RET R0\n", "operand form"},
+
 		{"Go ABI", "TEXT ·goFunc(SB), NOSPLIT, $0\nRET\n", "file-local"},
 		{"frame", "TEXT raw<>(SB), NOSPLIT, $8-0\nRET\n", "zero Go frame"},
 		{"args", "TEXT raw<>(SB), NOSPLIT, $0-8\nRET\n", "zero Go frame"},
@@ -319,4 +339,15 @@ int main(void) {
  if(*(uint64_t *)(bytes+8)!=~0ULL || *(uint64_t *)(bytes+16)!=0) return 5;
  bytes[0]=42; return bytes[0]!=42;
 }`)
+}
+
+func TestNativeARM64RejectsInvalidImport(t *testing.T) {
+	for _, imports := range []map[string]string{
+		{"bad.name": "strlen"}, {"imported_strlen": "bad+8"},
+	} {
+		assembly, data, err := TranslateNativeARM64Source([]byte(nativeCallbackSource), imports, "probe")
+		if err == nil || !strings.Contains(err.Error(), "unsupported native import") || assembly != "" || data != nil {
+			t.Fatalf("invalid import returned %q, %v, %v", assembly, data, err)
+		}
+	}
 }
