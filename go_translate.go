@@ -232,17 +232,13 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 			b.sigs[resolved] = fs
 		}
 	}
-	// File-local TEXT symbols (the Plan 9 `<>` form) are commonly used for
-	// assembly trampolines that are only reached through a raw function
-	// pointer. They intentionally have no Go declaration. Give any such
-	// symbols that could not be inferred from a tail jump a conservative
-	// zero-argument/void signature so they can still be emitted and referenced
-	// by DATA directives. A caller-provided ManualSig remains authoritative.
+	// A file-local symbol does not imply a zero-argument C or Go signature.
+	// Keep signatures obtained from declarations, supported tail-call inference,
+	// or ManualSig; raw register entry points require the native backend.
 	for resolved := range b.localSigs {
-		if _, ok := b.sigs[resolved]; ok {
-			continue
+		if _, ok := b.sigs[resolved]; !ok {
+			return nil, fmt.Errorf("missing signature for file-local assembly %q; supply ManualSig or use the native backend", resolved)
 		}
-		b.sigs[resolved] = FuncSig{Name: resolved, Ret: Void}
 	}
 	return b.sigs, nil
 }
@@ -398,10 +394,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				// missing declaration instead of silently dropping arguments/results.
 				continue
 			}
-			// An undeclared tail target can be an assembly trampoline reached
-			// through a raw function pointer. Its ABI is opaque to go/types; keep a
-			// conservative declaration so the trampoline can still be emitted.
-			b.sigs[targetResolved] = FuncSig{Name: targetResolved, Ret: Void}
+			// A tail target with no known caller signature has no type evidence
+			// either. Leave it unresolved; native register entry points must not
+			// acquire an invented zero-argument declaration.
 		}
 	}
 	return nil

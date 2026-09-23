@@ -350,19 +350,14 @@ func TestTranslateGoModuleUndeclaredLocalTrampoline(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func F() {}
 `)
-	tr, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
+	_, err := TranslateGoModule(pkg, []byte(`TEXT local_trampoline<>(SB),NOSPLIT,$0-0
 JMP external_symbol(SB)
 `), GoModuleOptions{
 		GOARCH:       "arm64",
 		TargetTriple: "aarch64-unknown-linux-gnu",
 		ResolveSym:   testResolveSym("test/pkg"),
 	})
-	if err != nil {
-		t.Fatalf("TranslateGoModule(undeclared local trampoline) error = %v", err)
-	}
-	defer tr.Module.Dispose()
-	sig, ok := tr.Signatures["test/pkg.local_trampoline"]
-	if !ok || sig.Ret != Void || len(sig.Args) != 0 {
-		t.Fatalf("local trampoline signature = %#v, want void()", sig)
+	if err == nil || !strings.Contains(err.Error(), "missing signature for file-local assembly") {
+		t.Fatalf("undeclared trampoline must not receive a guessed void signature: %v", err)
 	}
 }

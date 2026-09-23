@@ -286,6 +286,7 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 
 	val, ok := parseImm(rhs)
 	var payload []byte
+	var addr string
 	if !ok {
 		trimRHS := strings.TrimSpace(rhs)
 		if strings.HasPrefix(trimRHS, "$\"") {
@@ -300,7 +301,8 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 		// Accept symbol-address initializers (e.g. $runtime·main(SB)) even when
 		// relocation details are not modeled; encode as zero placeholder.
 		if strings.HasPrefix(strings.TrimSpace(rhs), "$") {
-			if _, symOK := parseSym(strings.TrimPrefix(strings.TrimSpace(rhs), "$")); symOK {
+			if sym, symOK := parseSym(strings.TrimPrefix(strings.TrimSpace(rhs), "$")); symOK {
+				addr = sym
 				val = 0
 				ok = true
 			}
@@ -309,7 +311,7 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	if !ok {
 		return DataStmt{}, fmt.Errorf("DATA invalid immediate %q: %q", rhs, "DATA "+rest)
 	}
-	return DataStmt{Sym: sym, Off: off, Width: width, Value: uint64(val), Payload: payload}, nil
+	return DataStmt{Sym: sym, Off: off, Width: width, Value: uint64(val), Payload: payload, Addr: addr}, nil
 }
 
 func parseWidth(arch Arch, s string) (int64, error) {
