@@ -1,8 +1,10 @@
-# Native Darwin/ARM64 backend
+# Native physical-register backend
 
-`TranslateNativeARM64Source` translates a restricted Plan 9 source file to
-Darwin/ARM64 assembly. A native assembler such as LLVM's integrated assembler
-creates the final Mach-O object. There is no `go tool asm` invocation, dependency
+`TranslateNativeSource` takes explicit `NativeOptions` (`GOOS`, `GOARCH`,
+`PackagePath`, and `Imports`) and translates a restricted Plan 9 source file to
+native assembly. The implemented targets are Linux and Darwin, each on amd64
+and arm64. A native assembler such as LLVM's integrated assembler
+creates the final ELF or Mach-O object. There is no `go tool asm` invocation, dependency
 on a Go object layout, instruction-byte copying, or guessed LLVM function type.
 
 The contract is **physical register preservation**, not inferred C typing. A
@@ -12,7 +14,7 @@ alignment, saving/restoring the link register, callee-saved registers and any
 required native frame. This backend supplies no Go ABI wrappers, stack growth,
 GC stack maps, exception/unwind metadata or transitions into the Go runtime.
 
-`ForeignARM64Functions` is only a routing hint: it reports a file composed entirely
+`ForeignNativeFunctions` is only a routing hint: it reports a file composed entirely
 of file-local TEXT definitions. Local linkage does not prove a C ABI. A driver
 must explicitly choose native translation in a foreign-call context and report
 native translation errors rather than retrying with invented signatures.
@@ -22,7 +24,9 @@ it no longer silently receives `void()`.
 
 ## Source contract
 
-- The output target is Darwin/ARM64 only, independent of the build host.
+- The output target is explicit and independent of the build host. Unsupported
+  target pairs are errors. `TranslateNativeARM64Source` remains a compatibility
+  wrapper for Darwin/ARM64.
 - Every `TEXT` is file-local (`name<>`), has `NOSPLIT`, and declares `$0` or `$0-0`.
   `NOFRAME` is also required if the body uses `BL` or `CALL`. No implicit Go
   prologue or epilogue is generated, including for zero-frame functions.
@@ -30,7 +34,7 @@ it no longer silently receives `void()`.
 - Only `#include "textflag.h"` is accepted. Other includes, macros, conditional
   preprocessing, and block comments are currently rejected. Line comments and
   constant integer expressions are accepted.
-- Integer registers are `R0`–`R30` except Darwin's reserved `R18`, plus `ZR`.
+- On ARM64, integer registers are `R0`–`R30` except `R18` (reserved conservatively on both OSes), plus `ZR`.
   `RSP` is accepted in supported stack-pointer forms; `SP`, `FP`, `g`, `R31`,
   `Wn` aliases, and platform aliases are rejected. Floating registers are `F0`–`F31`.
 - Local function/branch/import identifiers use ASCII letters, digits and `_`,
@@ -43,11 +47,12 @@ it no longer silently receives `void()`.
   `GLOBL` allocation and must not overlap another initializer. Gaps are zero-filled.
 - `GLOBL` requires a constant size from 1 byte to 64 MiB. Supported flags are `0`,
   `RODATA` and `NOPTR`. Definitions are 8-byte aligned. `RODATA` is placed in
-  `__DATA_CONST,__const`, allowing address fixups before becoming read-only; mutable
+  `__DATA_CONST,__const` on Mach-O and `.data.rel.ro` on ELF, allowing address
+  fixups before becoming read-only under a RELRO-enabled linker; mutable
   definitions use `.data`. The returned DATA metadata lets the driver verify the
   Go global size and bind its definition to the native object.
 
-## Instruction and operand forms
+## ARM64 instruction and operand forms
 
 | Plan 9 operation | Supported forms and native semantics |
 | --- | --- |
@@ -78,3 +83,39 @@ register copies, signed and unsigned loads, constant expansion, negative and
 unaligned memory offsets, and local control flow. Rejection tests exercise the
 unsupported forms above. The parser retains address initializers explicitly;
 they are never inferred by decoding an object relocation.
+
+## AMD64 instruction and operand forms
+
+The native ABI is SysV AMD64 on Linux and the corresponding Darwin x86-64 ABI
+on macOS. Physical registers are AX/BX/CX/DX/SI/DI/BP/SP and R8 through R15;
+MOVQ also supports bit transfers between X0 through X15 and integer registers
+or base+offset memory. MOVL writes zero-extend the destination register.
+`SP` means the physical stack pointer only: named Go stack slots and `FP` are
+rejected. Callers and source code own stack alignment and callee-saved registers.
+
+The bounded instruction set is MOVQ/MOVL, LEAQ (memory to register),
+ADD/SUB/AND/OR/XOR/CMP/TEST in Q and L widths, immediate SHL/SHR/SAR in Q and L
+widths, CALL/JMP, RET, and JEQ/JNE/JLT/JLE/JGT/JGE/JCS/JCC/JHI/JLS/JMI/JPL/JOS/JOC.
+CMP reverses operands when emitting AT&T syntax to preserve Go comparison order.
+Memory has one base and a signed 32-bit constant displacement; indices, segment
+registers, named offsets, indirect calls, byte/word operations, and other forms
+are rejected. Q-width arithmetic immediates must fit signed 32 bits; MOVQ to a
+register can load a full 64-bit value. Shifts require counts below operand width.
+No implicit prologue, scratch register, Go ABI wrapper, or unwind metadata is added.
+
+## Target format and execution matrix
+
+Shared validation, TEXT/DATA/GLOBL handling and symbol resolution are separate
+from instruction lowering. Darwin symbols receive a leading underscore. ELF
+symbols do not; AMD64 imported calls use PLT references, ARM64 imported calls use
+native CALL26/JUMP26 relocations. ELF emits function type/size and non-executable
+GNU-stack metadata. Native assemblers and linkers perform instruction encoding
+and relocations; the backend does not read or depend on Go object files.
+
+`TestNativeTargetMatrix` cross-assembles all four combinations, checks object
+headers/data placement, and executes the C ABI harness on the matching host.
+Linux harnesses may also run locally via explicitly configured Docker images:
+`PLAN9ASM_NATIVE_DOCKER` (amd64), `PLAN9ASM_NATIVE_DOCKER_ARM64` (arm64).
+They verify foreign calls, integer/FP argument shuffles, returns, physical stack
+frames, and data-address relocation in PIE executables. Unsupported targets such
+as Windows require their own ABI/format qualification before being enabled.
