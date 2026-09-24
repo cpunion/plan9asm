@@ -854,6 +854,8 @@ type Instr struct {
 // global. String payloads are copied byte-for-byte and zero-padded to Width,
 // matching cmd/asm's DATA string semantics.
 type DataStmt struct {
+	// Addr retains a symbol-address initializer, including its (SB) suffix.
+	Addr    string
 	Sym     string
 	Off     int64
 	Width   int64

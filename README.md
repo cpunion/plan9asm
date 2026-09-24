@@ -164,23 +164,19 @@ go run -C cmd/plan9asm . transpile \
   -goos=linux -goarch=amd64
 ```
 
-## Foreign-ABI ARM64 assembly
+## Native Darwin/ARM64 assembly
 
-Raw C callbacks and tail-call trampolines sometimes have no Go function
-signature. Passing them through typed LLVM lowering cannot preserve an unknown
-set of incoming or outgoing registers. `ForeignARM64Functions` recognizes the
-restricted file-local, NOSPLIT, zero-Go-frame form (non-leaf callbacks must
-explicitly use NOFRAME).
+`TranslateNativeARM64Source` emits native assembly directly from a bounded Plan 9
+subset for raw callbacks and trampolines. It preserves explicitly written register
+interfaces without synthesizing LLVM function signatures or using Go assembler
+objects. The driver invokes the native assembler, binds the returned DATA globals,
+and supplies imported symbols and library link arguments.
 
-A compiler driver can assemble such a file with `go tool asm -p <package>` and
-pass the Darwin/ARM64 Go object to `TranslateNativeARM64Object`. The returned
-Mach-O assembly preserves the encoded instructions and maps R_ADDR and
-R_CALLARM64 relocations to selected local definitions or explicitly supplied
-dynamic imports. The accompanying DATA list lets the driver bind Go globals to
-their assembly definitions. The driver remains responsible for selecting the
-target, running tools, and supplying library link arguments.
+`ForeignARM64Functions` is a routing hint for files containing only local TEXT;
+it does not establish a C ABI. Unsupported frames, flags, instructions, operands,
+and references produce errors. Go-declared functions retain typed LLVM translation;
+unresolved local signatures require explicit metadata instead of a `void()` guess.
 
-This path does not translate Go ABI functions. Unsupported object formats,
-relocations, and undeclared foreign calls return errors instead of inventing
-function signatures. The object reader accepts the go120ld format used since
-Go 1.20; the runtime tests execute native callbacks only on Darwin/ARM64.
+See [the native backend contract](doc/native-arm64.md) for the exact source,
+instruction, data and runtime boundaries. The former `TranslateNativeARM64Object`
+API has been removed; callers pass source to `TranslateNativeARM64Source` instead.
