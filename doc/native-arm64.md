@@ -4,9 +4,12 @@
 (`GOOS`, `GOARCH`, `PackagePath`, and `Imports`). It lowers each restricted Plan 9
 TEXT to a naked LLVM function containing function-local inline assembly, and
 DATA/GLOBL to LLVM global definitions. Linux and Darwin on amd64 and arm64 are
-supported. The driver links the returned module into its package module before
-normal optimization, bitcode/LTO and object emission. No module-level assembly,
-separate native assembler invocation, Go object reader or Go toolchain is needed.
+supported. The caller owns the returned module. LLGo serializes it as LLVM IR
+and uses the same `.ll` compilation, object/archive and LTO pipeline as ordinary
+Plan 9 assembly. Native carriers bypass signature-based ABI rewrites. Other
+consumers may link the module into a larger LLVM module before optimization.
+No module-level assembly, separate native assembler invocation, Go object reader
+or Go toolchain is needed.
 
 `TranslateNativeSource` remains available for consumers needing standalone native
 assembly. It shares source validation and instruction lowering with the module
