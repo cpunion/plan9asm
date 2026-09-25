@@ -26,13 +26,15 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
 
 ## Validated work and live CI
 
-- At `c378a2b`, the full root `go test ./... -count=1 -timeout=20m` passes
-  with Go 1.27.1 (root package 544 seconds). The official Go 1.27 five-arch
-  coverage gate, the Linux/Darwin/Windows amd64 standard-library object
-  matrix, root vet, both nested CLI suites, and focused Go 1.20 compatibility
-  tests pass. The earlier x/arch ARM64 corpus gate also passed. Privileged
-  MSR semantics are checked by comparing Go and LLVM 22 machine-code words;
-  runtime execution is not claimed.
+- At `8e83ca2`, the full root `go test ./... -count=1 -timeout=20m` passes
+  with Go 1.27.1 (root package 544 seconds). At `c378a2b`, the official Go
+  1.27 five-arch coverage gate, the Linux/Darwin/Windows amd64 standard-library
+  object matrix, root vet, both nested CLI suites, and focused Go 1.20
+  compatibility tests passed. Subsequent instruction families have focused
+  Go 1.20/1.27 and three-target LLVM 22 object tests, but still need the
+  current-head full gates. The earlier x/arch ARM64 corpus gate also passed.
+  Privileged MSR semantics are checked by comparing Go and LLVM 22
+  machine-code words; runtime execution is not claimed.
 - Exact current-branch CLI replays prove `go-highway@v0.0.12` passes all
   three ARM64 targets (576/576 Linux, 577/577 Darwin, 576/576 Windows), and
   `go-highway@v0.0.0-dev9` passes its three ARM64 configurations (31/31
@@ -44,12 +46,13 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   frozen shard reports or ledger pass updates.
 - The new RIP constant decoder has focused Go-assembler and three-target LLVM
   22 object tests. A current-branch `simd@v1.21.1` amd64 diagnostic moves
-  from 9/73 to 19/73 successful assembly files. The complete
+  from 9/73 to 20/73 successful assembly files. The complete
   `nary_avx2_amd64.s`, `compare_avx2_amd64.s` and
   `compress_avx2_amd64.s`, `columnar_avx2_amd64.s`, `gemm_avx2_amd64.s`,
-  `numeric_avx2_amd64.s` and `scan_avx2_amd64.s` pass; other files advance
-  past broadcast, packed-move, logical and scalar-move constants to their
-  next unsupported form. The candidate remains
+  `numeric_avx2_amd64.s`, `scan_avx2_amd64.s` and
+  `bitunpack_avx2_amd64.s` pass; other files advance past broadcast,
+  packed-move, logical, scalar-move, min/max, compare, variable-shift and
+  VPSHUFB constants to their next unsupported form. The candidate remains
   failed; this is not a ledger pass or a frozen-shard report.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`
   22 MB ARM64 sources, including about 7,700 functions, on Linux and Windows
