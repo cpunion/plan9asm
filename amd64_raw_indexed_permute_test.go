@@ -137,12 +137,17 @@ func TestTranslateX86RawIndexedPermuteLLVM22Objects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	for _, triple := range []string{
-		"x86_64-apple-darwin",
-		"x86_64-unknown-linux-gnu",
-		"x86_64-pc-windows-msvc",
+	for _, target := range []struct {
+		goarch string
+		triple string
+	}{
+		{"amd64", "x86_64-apple-darwin"},
+		{"amd64", "x86_64-unknown-linux-gnu"},
+		{"amd64", "x86_64-pc-windows-msvc"},
+		{"386", "i386-unknown-linux-gnu"},
+		{"386", "i686-pc-windows-msvc"},
 	} {
-		t.Run(triple, func(t *testing.T) {
+		t.Run(target.triple, func(t *testing.T) {
 			var source strings.Builder
 			source.WriteString("TEXT rawIndexedPermute(SB),$0-0\n")
 			for _, opcode := range []int{0x75, 0x76, 0x77, 0x7d, 0x7e, 0x7f} {
@@ -154,26 +159,30 @@ func TestTranslateX86RawIndexedPermuteLLVM22Objects(t *testing.T) {
 					if opcode == 0x75 || opcode == 0x7d {
 						continue
 					}
-					code = encodeX86RawIndexedPermute(opcode, widthBit, 0, 3, true, true)
+					mask := 3
+					if target.goarch == "386" {
+						mask = 0
+					}
+					code = encodeX86RawIndexedPermute(opcode, widthBit, 0, mask, true, true)
 					for _, value := range code {
 						fmt.Fprintf(&source, "\tBYTE $0x%02x\n", value)
 					}
 				}
 			}
 			source.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, "amd64", source.String(), true)
+			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
 				t.Fatal(err)
 			}
 			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
+				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"rawIndexedPermute": {Name: "rawIndexedPermute", Ret: Void}},
 			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			compileLLVMToObject(t, llc, triple, "raw-indexed-permute.ll", "raw-indexed-permute.o", ir)
+			compileLLVMToObject(t, llc, target.triple, "raw-indexed-permute.ll", "raw-indexed-permute.o", ir)
 		})
 	}
 }
