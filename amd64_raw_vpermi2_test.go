@@ -25,7 +25,7 @@ func TestDecodedX86VPERMI2CompleteGo127Family(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			instruction, length, ok, err := decodedX86VPERMI2Instruction(test.code, 64)
+			instruction, length, ok, err := decodedX86IndexedPermuteInstruction(test.code, 64)
 			if !ok {
 				t.Fatal("VPERMI2 encoding was not recognized")
 			}

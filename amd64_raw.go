@@ -1770,9 +1770,22 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
-			if instruction, length, ok, err := decodedX86VPERMI2Instruction(code[offset:], mode); ok {
+			if instruction, length, literal, ok, err := decodeX86RawIndexedPermuteRIPData(code, offset, mode); ok {
 				if err != nil {
-					return nil, fmt.Errorf("decode raw x86 VPERMI2 at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+					return nil, fmt.Errorf("decode raw x86 indexed permute literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86IndexedPermuteInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 indexed permute at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
@@ -8214,10 +8227,9 @@ vectorPrefix:
 	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
 }
 
-// decodedX86VPERMI2Instruction recognizes the complete EVEX-only family
-// behind Go 1.27's shared _yvblendmpd table. x/arch v0.14 rejects these raw
-// encodings, including VPERMI2Q in github.com/minio/sha256-simd.
-func decodedX86VPERMI2Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+// decodedX86IndexedPermuteInstruction recognizes the complete EVEX-only
+// VPERMI2 and VPERMT2 families behind Go 1.27's shared _yvblendmpd table.
+func decodedX86IndexedPermuteInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -8246,7 +8258,8 @@ evex:
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
-	if p0&0x0f != 2 || p1&0x07 != 5 || opcode < 0x75 || opcode > 0x77 {
+	if p0&0x0f != 2 || p1&0x07 != 5 ||
+		(opcode < 0x75 || opcode > 0x77) && (opcode < 0x7d || opcode > 0x7f) {
 		return Instr{}, 0, false, nil
 	}
 	width64 := p1&0x80 != 0
@@ -8271,6 +8284,24 @@ evex:
 		} else {
 			op, laneBytes = "VPERMI2PS", 4
 		}
+	case 0x7d:
+		if width64 {
+			op, laneBytes = "VPERMT2W", 2
+		} else {
+			op, laneBytes = "VPERMT2B", 1
+		}
+	case 0x7e:
+		if width64 {
+			op, laneBytes = "VPERMT2Q", 8
+		} else {
+			op, laneBytes = "VPERMT2D", 4
+		}
+	case 0x7f:
+		if width64 {
+			op, laneBytes = "VPERMT2PD", 8
+		} else {
+			op, laneBytes = "VPERMT2PS", 4
+		}
 	}
 	ok = true
 	if addressOverride {
@@ -8286,6 +8317,9 @@ evex:
 	zeroing := p2&0x80 != 0
 	if zeroing && maskNumber == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
+	}
+	if mode == 32 && maskNumber != 0 {
+		return Instr{}, 0, true, fmt.Errorf("386 indexed permute mask form exceeds the Go assembler operand limit")
 	}
 
 	rExt := int(^p0>>7) & 1
@@ -8311,6 +8345,11 @@ evex:
 	}
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
+	if mode == 32 && vectorBits == 2 &&
+		(destinationNumber >= 8 || secondSourceNumber >= 8 ||
+			modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("386 Z register exceeds the Go assembler frontend's register class")
+	}
 	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, secondSourceNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
 	args := []Operand{firstSource, secondSource}

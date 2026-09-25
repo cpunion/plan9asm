@@ -1029,6 +1029,37 @@ func decodedX86LegacySIMDMoveInstruction(code []byte, mode int) (Instr, int, boo
 
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
+// decodeX86RawIndexedPermuteRIPData preserves local vector/scalar constants
+// for the complete VPERMI2/VPERMT2 family.
+func decodeX86RawIndexedPermuteRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 1 ||
+		(p.opcode < 0x75 || p.opcode > 0x77) && (p.opcode < 0x7d || p.opcode > 0x7f) ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = 4
+		if p.opcode == 0x76 || p.opcode == 0x77 || p.opcode == 0x7e || p.opcode == 0x7f {
+			if p.w {
+				width = 8
+			}
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86IndexedPermuteInstruction, "EVEX indexed permute",
+	)
+}
+
 // decodeX86RawMaskCompareRIPData resolves local full-vector or D/Q broadcast
 // constants and accounts for the comparison's trailing imm8.
 func decodeX86RawMaskCompareRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
