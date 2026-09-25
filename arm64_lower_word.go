@@ -200,6 +200,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawFMULByElement(word); ok {
 		return c.lowerRawFMULByElement(form)
 	}
+	if form, ok := decodeARM64RawScalarHalfUnary(word); ok {
+		return c.lowerRawScalarHalfUnary(form)
+	}
 	if form, ok := decodeARM64RawScalarFloatBinary(word); ok {
 		return c.lowerRawScalarFloatBinary(form)
 	}
