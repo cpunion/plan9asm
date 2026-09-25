@@ -71,9 +71,11 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   constant pool; Go's assembled first load points past that object's TEXT.
   Do not synthesize constants from comments or mark it passed. Other x86
   files in that candidate still need independent diagnosis.
-- `sharkie`, `simd`, and `gojit` depend on exact raw-byte layout, external
-  entry points or PC-relative references. Translation that changes the byte
-  layout must not be counted as semantic support.
+- `sharkie`, `simd`, `gojit`, and the locally replayed shard-0 candidate
+  `GopherJRE` depend on exact raw-byte layout, external entry points or
+  PC-relative references. `GopherJRE` hand-encodes `LEA RIP+9` across three
+  named instructions before an indirect jump. Translation that changes the
+  byte layout must not be counted as semantic support.
 - `knoxdb` and its forks tail-jump into shared-frame helper `TEXT`s that write
   the original caller's FP result. A cross-`TEXT` ABI0 frame model is needed;
   accepting the FP offset in isolation would compile wrong behavior.
