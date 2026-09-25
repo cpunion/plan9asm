@@ -609,6 +609,37 @@ func decodeX86RawVectorFloatCompareRIPData(code []byte, offset, mode int) (Instr
 	)
 }
 
+// decodeX86RawPackedMultiplyRIPData covers the five packed word/D/Q multiply
+// opcode rows, including EVEX D/Q memory broadcast and masked widths.
+func decodeX86RawPackedMultiplyRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.pp != 1 || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	form, recognized := x86PackedMultiplyFormFor(byte(p.mapNumber), byte(p.opcode))
+	if !recognized || p.evex && p.broadcast && form.broadcastByte == 0 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.evex && p.broadcast {
+		width = form.broadcastByte
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86PackedMultiplyInstruction, "packed multiply",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
