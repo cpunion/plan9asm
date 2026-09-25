@@ -339,6 +339,45 @@ func decodeX86RawFloatLogicalRIPData(code []byte, offset, mode int) (Instr, int,
 	)
 }
 
+// decodeX86RawImmediatePackedBlendRIPData covers the complete Go 1.27
+// legacy and VEX immediate blend family. The immediate follows disp32, so
+// the pool displacement is relative to the byte after that immediate.
+func decodeX86RawImmediatePackedBlendRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := -1
+	width := 16
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if matched && !p.evex && p.mapNumber == 3 && p.pp == 1 &&
+		p.segment == "" && !p.addressOverride {
+		switch p.opcode {
+		case 0x02, 0x0c, 0x0d, 0x0e:
+			modRMIndex = offset + p.modRM
+			width <<= p.vectorLength
+		}
+	}
+	if modRMIndex < 0 && code[offset] == 0x66 {
+		i := offset + 1
+		if i < len(code) && code[i]&0xf0 == 0x40 {
+			i++ // Optional REX extension for the legacy X registers.
+		}
+		if len(code) >= i+4 && code[i] == 0x0f && code[i+1] == 0x3a {
+			switch code[i+2] {
+			case 0x0c, 0x0d, 0x0e:
+				modRMIndex = i + 3
+			}
+		}
+	}
+	if modRMIndex < 0 || len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1,
+		decodedX86ImmediatePackedBlendInstruction, "immediate packed blend",
+	)
+}
+
 // decodeX86RawScalarMoveRIPData covers memory-to-X VMOVSS/VMOVSD VEX and
 // EVEX encodings. The typed scalar decoder enforces reserved fields and masks.
 func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
