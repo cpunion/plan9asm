@@ -667,6 +667,33 @@ func decodeX86RawPackedAbsRIPData(code []byte, offset, mode int) (Instr, int, x8
 	)
 }
 
+// decodeX86RawVEXRoundRIPData accounts for VROUND's trailing imm8 while
+// resolving packed or scalar source-local constant loads.
+func decodeX86RawVEXRoundRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 3 || p.pp != 1 || p.opcode < 0x08 || p.opcode > 0x0b ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.opcode == 0x0a {
+		width = 4
+	} else if p.opcode == 0x0b {
+		width = 8
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1,
+		decodedX86RawVEXRoundInstruction, "VROUND",
+	)
+}
+
 // decodeX86RawVEXPackedMADDRIPData covers both VPMADDWD and VPMADDUBSW
 // VEX.128/256 opcode rows. Their memory operand reads the full vector.
 func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
