@@ -436,6 +436,35 @@ func decodeX86RawCLMULRIPData(code []byte, offset, mode int) (Instr, int, x86Raw
 	)
 }
 
+// decodeX86RawMaskBlendRIPData folds source-local vector constants, or one
+// D/Q broadcast lane, for all six EVEX mask-blend operations.
+func decodeX86RawMaskBlendRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 1 ||
+		p.opcode < 0x64 || p.opcode > 0x66 ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = 4
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86RawMaskBlendInstruction, "EVEX mask blend",
+	)
+}
+
 // decodeX86RawScalarMoveRIPData covers memory-to-X VMOVSS/VMOVSD VEX and
 // EVEX encodings. The typed scalar decoder enforces reserved fields and masks.
 func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
