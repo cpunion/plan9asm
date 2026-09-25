@@ -868,6 +868,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ok, term, err := c.lowerPackedHalfConversion(Op(op), ins); ok {
 		return term, err
 	}
+	if ok, term, err := c.lowerBF16Convert(Op(op), ins); ok {
+		return term, err
+	}
 	if ok, term, err := c.lowerPackedDoubleDword(Op(op), ins); ok {
 		return term, err
 	}

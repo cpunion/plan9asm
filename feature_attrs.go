@@ -69,6 +69,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		switch arch {
 		case ArchAMD64:
 			switch {
+			case strings.HasPrefix(op, "VCVTNEPS2BF16"):
+				add("+avx512f", "+avx512bf16")
+				if strings.HasPrefix(op, "VCVTNEPS2BF16X") || strings.HasPrefix(op, "VCVTNEPS2BF16Y") {
+					add("+avx512vl")
+				}
 			case op == "XBEGIN" || op == "XABORT" || op == "XEND" || op == "XTEST":
 				add("+rtm")
 			case op == "RDPKRU" || op == "WRPKRU":
