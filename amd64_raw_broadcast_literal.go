@@ -516,6 +516,42 @@ func decodeX86RawFMA3RIPData(code []byte, offset, mode int) (Instr, int, x86RawL
 	)
 }
 
+// decodeX86RawBinaryFloatRIPData covers VADD/MUL/SUB/MIN/DIV/MAX packed and
+// scalar forms plus scalar VSQRT, with EVEX packed memory broadcast.
+func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 1 || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	switch p.opcode {
+	case 0x58, 0x59, 0x5c, 0x5d, 0x5e, 0x5f:
+	case 0x51:
+		if p.pp < 2 {
+			return Instr{}, 0, x86RawLiteralRange{}, false, nil
+		}
+	default:
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.pp >= 2 || p.evex && p.broadcast {
+		width = 4
+		if p.pp == 1 || p.pp == 3 {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86VEXBinaryFloatInstruction, "binary floating",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
