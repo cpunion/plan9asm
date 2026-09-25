@@ -336,7 +336,7 @@ func TestARM64ArithmeticCoverage(t *testing.T) {
 	out := b.String()
 	for _, want := range []string{
 		`asm sideeffect "mrs $0, TPIDR_EL0"`,
-		`asm sideeffect "msr S3_3_C4_C2_5, $0"`,
+		`asm sideeffect "msr DIT, #1"`,
 		"lshr i64",
 		"lshr i32",
 		"shl i64",

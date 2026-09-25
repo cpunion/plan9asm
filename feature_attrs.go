@@ -192,6 +192,10 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if op == "SMC" || op == "DCPS3" {
 				add("+el3")
 			}
+			if op == "MSR" && len(ins.Args) == 2 && ins.Args[0].Kind == OpImm &&
+				ins.Args[1].Kind == OpIdent && strings.EqualFold(ins.Args[1].Ident, "DIT") {
+				add("+dit")
+			}
 			if op == "WORD" && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
 				if _, ok := decodeARM64RawSVECharacterMatch(uint32(ins.Args[0].Imm)); ok {
 					add("+sve", "+sve2")

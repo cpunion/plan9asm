@@ -59,15 +59,40 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpIdent {
 			return true, false, fmt.Errorf("arm64 MSR expects src, ident: %q", ins.Raw)
 		}
-		sysreg := arm64CanonicalSysReg(ins.Args[1].Ident)
+		name := ins.Args[1].Ident
+		sysreg := arm64CanonicalSysReg(name)
 		switch ins.Args[0].Kind {
 		case OpImm:
 			imm := ins.Args[0].Imm
-			// Route immediates through a GPR so both ordinary sysregs and aliases
-			// (e.g. DIT) compile on LLVM's inline asm parser.
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %d)\n", "msr "+sysreg+", $0", "r,~{memory}", imm)
+			field := ""
+			switch strings.ToUpper(name) {
+			case "SPSEL":
+				field = "SPSel"
+			case "DAIFSET":
+				field = "DAIFSet"
+			case "DAIFCLR":
+				field = "DAIFClr"
+			case "DIT":
+				field = "DIT"
+			}
+			if imm == 0 && field != "DAIFSet" && field != "DAIFClr" {
+				// Go encodes $0 as the zero register for system-register
+				// writes, including SPSel and DIT, not as a PSTATE immediate.
+				if field != "" {
+					sysreg = field
+				}
+				fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", "msr "+sysreg+", xzr", "~{memory}")
+				return true, false, nil
+			}
+			if field == "" || imm < 1 || imm > 15 {
+				return true, false, fmt.Errorf("arm64 MSR immediate is not a Go PSTATE field form: %q", ins.Raw)
+			}
+			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", fmt.Sprintf("msr %s, #%d", field, imm), "~{memory}")
 			return true, false, nil
 		case OpReg:
+			if strings.EqualFold(name, "DAIFSet") || strings.EqualFold(name, "DAIFClr") {
+				return true, false, fmt.Errorf("arm64 MSR register source is not a Go PSTATE field form: %q", ins.Raw)
+			}
 			v, err := c.loadReg(ins.Args[0].Reg)
 			if err != nil {
 				return true, false, err
