@@ -183,10 +183,14 @@ func x86RawRIPLiteral(code []byte, offset, modRMIndex, width int) ([]byte, int64
 }
 
 func x86RawRIPBytes(code []byte, offset, modRMIndex, width int) ([]byte, []byte, x86RawLiteralRange, error) {
-	if len(code) < modRMIndex+5 {
+	return x86RawRIPBytesWithSuffix(code, offset, modRMIndex, width, 0)
+}
+
+func x86RawRIPBytesWithSuffix(code []byte, offset, modRMIndex, width, trailingBytes int) ([]byte, []byte, x86RawLiteralRange, error) {
+	if trailingBytes < 0 || len(code) < modRMIndex+5+trailingBytes {
 		return nil, nil, x86RawLiteralRange{}, fmt.Errorf("truncated RIP-relative literal")
 	}
-	length := modRMIndex + 5 - offset
+	length := modRMIndex + 5 + trailingBytes - offset
 	displacement := int32(binary.LittleEndian.Uint32(code[modRMIndex+1 : modRMIndex+5]))
 	first := offset + length + int(displacement)
 	last := first + width
@@ -577,30 +581,67 @@ func decodeX86RawScalarFlagCompareRIPData(code []byte, offset, mode int) (Instr,
 	)
 }
 
+// decodeX86RawVectorFloatCompareRIPData accounts for VCMP's trailing imm8
+// when resolving the RIP displacement and its second Plan 9 operand.
+func decodeX86RawVectorFloatCompareRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 1 || p.opcode != 0xc2 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.pp >= 2 || p.evex && p.broadcast {
+		width = 4
+		if p.pp == 1 || p.pp == 3 {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1,
+		decodedX86VectorFloatCompareInstruction, "vector floating compare",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
 	code []byte, offset, mode, modRMIndex, width int,
 	decode x86RawInstructionDecoder, family string,
 ) (Instr, int, x86RawLiteralRange, bool, error) {
-	patched, data, literal, err := x86RawRIPBytes(code, offset, modRMIndex, width)
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 0, 0, decode, family,
+	)
+}
+
+func x86RawRIPDataThroughDecoderOperand(
+	code []byte, offset, mode, modRMIndex, width, trailingBytes, sourceIndex int,
+	decode x86RawInstructionDecoder, family string,
+) (Instr, int, x86RawLiteralRange, bool, error) {
+	patched, data, literal, err := x86RawRIPBytesWithSuffix(code, offset, modRMIndex, width, trailingBytes)
 	if err != nil {
 		return Instr{}, 0, x86RawLiteralRange{}, true, err
 	}
 	instruction, consumed, ok, err := decode(patched, mode)
 	if err != nil || !ok || consumed != len(patched) ||
-		len(instruction.Args) < 2 || instruction.Args[0].Kind != OpMem {
+		len(instruction.Args) <= sourceIndex || instruction.Args[sourceIndex].Kind != OpMem {
 		if err == nil {
 			err = fmt.Errorf("RIP-relative %s did not match its grammar", family)
 		}
 		return Instr{}, 0, x86RawLiteralRange{}, true, err
 	}
-	setX86RawRIPData(&instruction, data)
+	setX86RawRIPDataOperand(&instruction, sourceIndex, data)
 	return instruction, len(patched), literal, true, nil
 }
 
-func setX86RawRIPData(instruction *Instr, data []byte) {
-	instruction.Args[0] = Operand{Kind: OpSym, Sym: "·__plan9asm_raw_literal_pending(SB)"}
+func setX86RawRIPDataOperand(instruction *Instr, sourceIndex int, data []byte) {
+	instruction.Args[sourceIndex] = Operand{Kind: OpSym, Sym: "·__plan9asm_raw_literal_pending(SB)"}
 	instruction.x86Encoded = true
 	instruction.x86RIPLiteral = true
 	instruction.x86RIPLiteralData = data
