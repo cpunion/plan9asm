@@ -470,9 +470,9 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
-			if instruction, length, literal, ok, err := decodeX86RawVBROADCASTI128RIPData(code, offset, mode); ok {
+			if instruction, length, literal, ok, err := decodeX86RawVBROADCAST128RIPData(code, offset, mode); ok {
 				if err != nil {
-					return nil, fmt.Errorf("decode raw x86 VBROADCASTI128 literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+					return nil, fmt.Errorf("decode raw x86 VBROADCAST128 literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
@@ -483,9 +483,9 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
-			if instruction, length, ok, err := decodedX86VBROADCASTI128Instruction(code[offset:], mode); ok {
+			if instruction, length, ok, err := decodedX86VBROADCAST128Instruction(code[offset:], mode); ok {
 				if err != nil {
-					return nil, fmt.Errorf("decode raw x86 VBROADCASTI128 at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+					return nil, fmt.Errorf("decode raw x86 VBROADCAST128 at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
@@ -8661,11 +8661,11 @@ func decodedX86RandomInstruction(code []byte, mode int) (syntax string, length i
 	return fmt.Sprintf("%s%s %s", family, width, registerNames[register]), i + 3, true
 }
 
-// decodedX86VBROADCASTI128Instruction recognizes the complete AVX2
-// VBROADCASTI128 m128, Y family. x/arch v0.14 misdecodes this VEX opcode as
-// legacy scalar instructions, so recover every ModRM/SIB memory form before
-// consulting the generic decoder.
-func decodedX86VBROADCASTI128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+// decodedX86VBROADCAST128Instruction recognizes the complete AVX2
+// VBROADCASTF128/I128 m128, Y family. x/arch v0.14 misdecodes these VEX
+// opcodes as legacy scalar instructions, so recover every ModRM/SIB memory
+// form before consulting the generic decoder.
+func decodedX86VBROADCAST128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -8686,9 +8686,10 @@ func decodedX86VBROADCASTI128Instruction(code []byte, mode int) (instruction Ins
 	}
 
 vex:
-	// VEX.256.66.0F38.W0 5A /r. The unused encoded vvvv field must be
+	// VEX.256.66.0F38.W0 1A/5A /r. The unused encoded vvvv field must be
 	// 1111, so the complete third VEX byte is 0x7d.
-	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 || code[i+2] != 0x7d || code[i+3] != 0x5a {
+	if len(code) < i+5 || code[i] != 0xc4 || code[i+1]&0x1f != 2 || code[i+2] != 0x7d ||
+		(code[i+3] != 0x1a && code[i+3] != 0x5a) {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
@@ -8714,10 +8715,14 @@ vex:
 		return Instr{}, 0, true, fmt.Errorf("source must be m128 memory")
 	}
 	destination := Reg(fmt.Sprintf("Y%d", destinationNumber))
+	op := Op("VBROADCASTI128")
+	if code[i+3] == 0x1a {
+		op = "VBROADCASTF128"
+	}
 	instruction = Instr{
-		Op:   "VBROADCASTI128",
+		Op:   op,
 		Args: []Operand{source, {Kind: OpReg, Reg: destination}},
-		Raw:  fmt.Sprintf("VBROADCASTI128 %s, %s", source.String(), destination),
+		Raw:  fmt.Sprintf("%s %s, %s", op, source.String(), destination),
 	}
 	return instruction, i + 4 + consumed, true, nil
 }

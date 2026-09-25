@@ -255,15 +255,15 @@ func decodeX86RawEVEXPackedIntegerMoveRIPData(code []byte, offset, mode int) (In
 	)
 }
 
-// decodeX86RawVBROADCASTI128RIPData resolves the complete VEX.256 m128-to-Y
-// form through the existing VBROADCASTI128 grammar.
-func decodeX86RawVBROADCASTI128RIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+// decodeX86RawVBROADCAST128RIPData resolves both VEX.256 F128/I128
+// m128-to-Y forms through their shared source-memory grammar.
+func decodeX86RawVBROADCAST128RIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
 	if !matched || p.evex || p.mapNumber != 2 || p.pp != 1 ||
-		p.vectorLength != 1 || p.opcode != 0x5a ||
+		p.vectorLength != 1 || (p.opcode != 0x1a && p.opcode != 0x5a) ||
 		p.segment != "" || p.addressOverride {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
@@ -273,7 +273,7 @@ func decodeX86RawVBROADCASTI128RIPData(code []byte, offset, mode int) (Instr, in
 	}
 	return x86RawRIPDataThroughDecoder(
 		code, offset, mode, modRMIndex, 16,
-		decodedX86VBROADCASTI128Instruction, "VBROADCASTI128",
+		decodedX86VBROADCAST128Instruction, "VBROADCASTF128/VBROADCASTI128",
 	)
 }
 
