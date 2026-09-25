@@ -694,6 +694,54 @@ func decodeX86RawVEXRoundRIPData(code []byte, offset, mode int) (Instr, int, x86
 	)
 }
 
+// decodeX86RawDuplicateMoveRIPData covers legacy, VEX and EVEX MOVDDUP,
+// MOVSLDUP and MOVSHDUP. The X-width DDUP form reads only one 64-bit lane;
+// all other forms read the complete source vector.
+func decodeX86RawDuplicateMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := -1
+	width := 0
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if matched && p.mapNumber == 1 && p.segment == "" && !p.addressOverride {
+		double := p.pp == 3 && p.opcode == 0x12
+		single := p.pp == 2 && (p.opcode == 0x12 || p.opcode == 0x16)
+		if double || single {
+			modRMIndex = offset + p.modRM
+			width = 16 << p.vectorLength
+			if double && p.vectorLength == 0 {
+				width = 8
+			}
+		}
+	} else {
+		i := offset
+		prefix := code[i]
+		if prefix == 0xf2 || prefix == 0xf3 {
+			i++
+			if i < len(code) && code[i]&0xf0 == 0x40 {
+				i++
+			}
+			if len(code) >= i+3 && code[i] == 0x0f &&
+				(prefix == 0xf2 && code[i+1] == 0x12 ||
+					prefix == 0xf3 && (code[i+1] == 0x12 || code[i+1] == 0x16)) {
+				modRMIndex = i + 2
+				width = 16
+				if prefix == 0xf2 {
+					width = 8
+				}
+			}
+		}
+	}
+	if modRMIndex < 0 || len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86DuplicateMoveInstruction, "duplicate move",
+	)
+}
+
 // decodeX86RawVEXPackedMADDRIPData covers both VPMADDWD and VPMADDUBSW
 // VEX.128/256 opcode rows. Their memory operand reads the full vector.
 func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
