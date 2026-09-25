@@ -16,12 +16,13 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   `scripts/update-assembly-ledger.sh _out/current-ci-shards 32` there after
   downloading each new shard report. Its `verified` flag must stay false while
   shards are missing or failures remain.
-- `codex/pr40-ecosystem-fixes-20260925` is the development branch. It has
-  unpushed fixes through `4668f72`: bounded compile-only LLVM modules and CI
-  concurrency, complete ARM64 BF16/FP16 and SVE/SME families, x86 raw
+- `codex/pr40-ecosystem-fixes-20260925` is the development branch. Its
+  unpushed fixes include bounded compile-only LLVM modules and CI concurrency,
+  complete ARM64 BF16/FP16 and SVE/SME families, x86 raw
   half-vector memory moves and AVX-512 BF16 narrowing, plus the Go 1.27
-  ARM64 MSR PSTATE immediate family. Keep this branch separate from the
-  frozen PR-head evidence worktree.
+  ARM64 MSR PSTATE immediate family and source-local RIP constants for
+  broadcasts, VMOVD/Q and packed X/Y/Z loads. Keep this branch separate from
+  the frozen PR-head evidence worktree.
 
 ## Validated work and live CI
 
@@ -40,6 +41,12 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   Both case-distinct `outfix` candidates pass 1/1; `pathtracer-ocl` passes
   its focused affected configurations. These are local diagnostics, not
   frozen shard reports or ledger pass updates.
+- The new RIP constant decoder has focused Go-assembler and three-target LLVM
+  22 object tests. A current-branch `simd@v1.21.1` amd64 diagnostic moves
+  from 9/73 to 13/73 successful assembly files. The complete
+  `nary_avx2_amd64.s` passes; several other files advance past broadcast and
+  packed-move constants to their next unsupported form. The candidate remains
+  failed; this is not a ledger pass or a frozen-shard report.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`
   22 MB ARM64 sources, including about 7,700 functions, on Linux and Windows
   targets, and on a 24 MB `spidermonkeywasm2go@v0.2.5` amd64 source for Darwin.
@@ -75,7 +82,9 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   `GopherJRE` depend on exact raw-byte layout, external entry points or
   PC-relative references. `GopherJRE` hand-encodes `LEA RIP+9` across three
   named instructions before an indirect jump. Translation that changes the
-  byte layout must not be counted as semantic support.
+  byte layout must not be counted as semantic support. For `simd`, remaining
+  amd64 failures include wider vector constant-pool loads, SSE2 PC-relative
+  forms and additional AVX-512 encodings.
 - `knoxdb` and its forks tail-jump into shared-frame helper `TEXT`s that write
   the original caller's FP result. A cross-`TEXT` ABI0 frame model is needed;
   accepting the FP offset in isolation would compile wrong behavior.

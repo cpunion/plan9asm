@@ -949,6 +949,9 @@ type Instr struct {
 	// A decoder folded a same-group, unreachable RIP-relative data read. Keep
 	// address-observed raw TEXT bodies on the byte-preserving path instead.
 	x86RIPLiteral bool
+	// A wide source-local constant is materialized as an LLVM data global by
+	// normalizeX86RawFile, preserving ordinary memory-operand lowering.
+	x86RIPLiteralData []byte
 }
 
 // DataStmt models a minimal Plan 9 DATA directive:

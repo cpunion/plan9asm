@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"sort"
@@ -16,6 +17,17 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 	}
 	normalized := *file
 	normalized.Funcs = append([]Func(nil), file.Funcs...)
+	normalized.Data = append([]DataStmt(nil), file.Data...)
+	usedSymbols := make(map[string]bool)
+	for _, fn := range file.Funcs {
+		usedSymbols[fn.Sym] = true
+	}
+	for _, datum := range file.Data {
+		usedSymbols[datum.Sym] = true
+	}
+	for _, global := range file.Globl {
+		usedSymbols[global.Sym] = true
+	}
 	if err := preserveAddressSensitiveX86RawText(&normalized); err != nil {
 		return nil, err
 	}
@@ -40,6 +52,25 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		}
 		if hasLiteral && x86RawTailLayoutObserved(&normalized, fn.Sym) {
 			return nil, fmt.Errorf("%s: address-observed RIP-relative raw literal cannot be folded safely", fn.Sym)
+		}
+		for j := range fn.Instrs {
+			ins := &fn.Instrs[j]
+			if len(ins.x86RIPLiteralData) == 0 {
+				continue
+			}
+			stem := fmt.Sprintf("·__plan9asm_raw_literal_%x_%d", sha256.Sum256([]byte(fn.Sym)), j)
+			name := stem
+			for suffix := 1; usedSymbols[name]; suffix++ {
+				name = fmt.Sprintf("%s_%d", stem, suffix)
+			}
+			usedSymbols[name] = true
+			normalized.Data = append(normalized.Data, DataStmt{
+				Sym: name, Width: int64(len(ins.x86RIPLiteralData)),
+				Payload: ins.x86RIPLiteralData,
+			})
+			ins.Args[0].Sym = name + "(SB)"
+			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[0].Sym, 1)
+			ins.x86RIPLiteralData = nil
 		}
 		normalized.Funcs[i] = fn
 	}
@@ -488,6 +519,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawEVEXPackedIntegerMoveRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX packed integer move literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86EVEXPackedIntegerMoveInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 EVEX packed integer move at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -497,6 +541,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, literal, ok, err := decodeX86RawPackedMoveRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 packed move literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
 				offset += length
 				continue
 			}
