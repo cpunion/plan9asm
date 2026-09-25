@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+
+	"golang.org/x/arch/x86/x86asm"
 )
 
 type x86RawLiteralRange struct {
@@ -662,6 +664,70 @@ func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int
 		code, offset, mode, modRMIndex, 16<<p.vectorLength,
 		decodedX86VEXPackedMADDInstruction, "packed multiply-add",
 	)
+}
+
+// decodeX86RawLegacyPackedMoveRIPData covers the six 128-bit legacy MOV
+// loads in Go's yxmov table. The other yxmov direction is a store and does
+// not read the RIP-relative source bytes.
+func decodeX86RawLegacyPackedMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	i := offset
+	prefix := byte(0)
+	unsafeAddress := false
+	for i < len(code) {
+		switch code[i] {
+		case 0x64, 0x65, 0x67:
+			unsafeAddress = true
+		case 0x66, 0xf3:
+			if prefix != 0 {
+				return Instr{}, 0, x86RawLiteralRange{}, false, nil
+			}
+			prefix = code[i]
+		default:
+			goto opcode
+		}
+		i++
+	}
+
+opcode:
+	if len(code) < i+3 || code[i] != 0x0f {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	opcode := code[i+1]
+	valid := opcode == 0x10 && (prefix == 0 || prefix == 0x66) ||
+		opcode == 0x28 && (prefix == 0 || prefix == 0x66) ||
+		opcode == 0x6f && (prefix == 0x66 || prefix == 0xf3)
+	if !valid || code[i+2]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	if unsafeAddress {
+		return Instr{}, 0, x86RawLiteralRange{}, true, fmt.Errorf("segment/address override is not source-layout safe")
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, i+2, 16,
+		decodedX86LegacyPackedMoveInstruction, "legacy packed move",
+	)
+}
+
+func decodedX86LegacyPackedMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	inst, err := x86asm.Decode(code, mode)
+	if err != nil || inst.Len <= 0 {
+		return Instr{}, 0, true, err
+	}
+	syntax, err := decodedX86GoSyntax(inst, code[:inst.Len])
+	if err != nil {
+		return Instr{}, 0, true, err
+	}
+	instrs, err := parseDecodedX86Instruction(syntax)
+	if err != nil || len(instrs) != 1 {
+		if err == nil {
+			err = fmt.Errorf("packed move decoded as %d instructions", len(instrs))
+		}
+		return Instr{}, 0, true, err
+	}
+	return instrs[0], inst.Len, true, nil
 }
 
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)

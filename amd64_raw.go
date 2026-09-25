@@ -1763,6 +1763,20 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				continue
 			}
 
+			if instruction, length, literal, ok, err := decodeX86RawLegacyPackedMoveRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 legacy packed move literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
+
 			inst, err := x86asm.Decode(code[offset:], mode)
 			if err != nil || inst.Len <= 0 || inst.Op == 0 {
 				if err == nil {
