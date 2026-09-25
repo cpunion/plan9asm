@@ -271,6 +271,45 @@ func decodeX86RawVBROADCASTI128RIPData(code []byte, offset, mode int) (Instr, in
 	)
 }
 
+// decodeX86RawPackedLogicalRIPData covers VEX VPAND/ANDN/OR/XOR and their
+// EVEX D/Q counterparts. EVEX.b reads one scalar lane; other forms read the
+// full X/Y/Z-width vector from the same unreachable source-local pool.
+func decodeX86RawPackedLogicalRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 1 || p.pp != 1 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	switch p.opcode {
+	case 0xdb, 0xdf, 0xeb, 0xef:
+	default:
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	decoder := x86RawInstructionDecoder(decodedX86VEXPackedIntegerLogicalInstruction)
+	family := "VEX packed integer logical"
+	if p.evex {
+		decoder = decodedX86EVEXPackedLogicalInstruction
+		family = "EVEX packed logical"
+		if p.broadcast {
+			width = 4
+			if p.w {
+				width = 8
+			}
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width, decoder, family,
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
