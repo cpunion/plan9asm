@@ -1763,9 +1763,9 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				continue
 			}
 
-			if instruction, length, literal, ok, err := decodeX86RawLegacyPackedMoveRIPData(code, offset, mode); ok {
+			if instruction, length, literal, ok, err := decodeX86RawLegacySIMDMoveRIPData(code, offset, mode); ok {
 				if err != nil {
-					return nil, fmt.Errorf("decode raw x86 legacy packed move literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+					return nil, fmt.Errorf("decode raw x86 legacy SIMD move literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err

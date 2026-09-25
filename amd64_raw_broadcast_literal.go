@@ -666,10 +666,10 @@ func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int
 	)
 }
 
-// decodeX86RawLegacyPackedMoveRIPData covers the six 128-bit legacy MOV
-// loads in Go's yxmov table. The other yxmov direction is a store and does
-// not read the RIP-relative source bytes.
-func decodeX86RawLegacyPackedMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+// decodeX86RawLegacySIMDMoveRIPData covers the six 128-bit and two scalar
+// legacy MOV loads in Go's yxmov table. The other direction is a store and
+// does not read the RIP-relative source bytes.
+func decodeX86RawLegacySIMDMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
@@ -680,7 +680,7 @@ func decodeX86RawLegacyPackedMoveRIPData(code []byte, offset, mode int) (Instr, 
 		switch code[i] {
 		case 0x64, 0x65, 0x67:
 			unsafeAddress = true
-		case 0x66, 0xf3:
+		case 0x66, 0xf2, 0xf3:
 			if prefix != 0 {
 				return Instr{}, 0, x86RawLiteralRange{}, false, nil
 			}
@@ -699,7 +699,7 @@ opcode:
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	opcode := code[i+1]
-	valid := opcode == 0x10 && (prefix == 0 || prefix == 0x66) ||
+	valid := opcode == 0x10 ||
 		opcode == 0x28 && (prefix == 0 || prefix == 0x66) ||
 		opcode == 0x6f && (prefix == 0x66 || prefix == 0xf3)
 	if !valid || code[i+2]&0xc7 != 0x05 {
@@ -708,13 +708,19 @@ opcode:
 	if unsafeAddress {
 		return Instr{}, 0, x86RawLiteralRange{}, true, fmt.Errorf("segment/address override is not source-layout safe")
 	}
+	width := 16
+	if opcode == 0x10 && prefix == 0xf3 {
+		width = 4
+	} else if opcode == 0x10 && prefix == 0xf2 {
+		width = 8
+	}
 	return x86RawRIPDataThroughDecoder(
-		code, offset, mode, i+2, 16,
-		decodedX86LegacyPackedMoveInstruction, "legacy packed move",
+		code, offset, mode, i+2, width,
+		decodedX86LegacySIMDMoveInstruction, "legacy SIMD move",
 	)
 }
 
-func decodedX86LegacyPackedMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
+func decodedX86LegacySIMDMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	inst, err := x86asm.Decode(code, mode)
 	if err != nil || inst.Len <= 0 {
 		return Instr{}, 0, true, err
@@ -726,7 +732,7 @@ func decodedX86LegacyPackedMoveInstruction(code []byte, mode int) (Instr, int, b
 	instrs, err := parseDecodedX86Instruction(syntax)
 	if err != nil || len(instrs) != 1 {
 		if err == nil {
-			err = fmt.Errorf("packed move decoded as %d instructions", len(instrs))
+			err = fmt.Errorf("legacy SIMD move decoded as %d instructions", len(instrs))
 		}
 		return Instr{}, 0, true, err
 	}
