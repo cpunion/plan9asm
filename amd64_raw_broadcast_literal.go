@@ -371,6 +371,36 @@ func decodeX86RawMinMaxRIPData(code []byte, offset, mode int) (Instr, int, x86Ra
 	return Instr{}, 0, x86RawLiteralRange{}, false, nil
 }
 
+// decodeX86RawPackedCompareRIPData covers all VPCMPEQ/GT B/W/D/Q source
+// memory forms. The ordinary decoder checks the EVEX mask-result grammar.
+func decodeX86RawPackedCompareRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	for _, spec := range amd64PackedIntegerCompareSpecs {
+		if p.mapNumber != spec.mapNumber || p.opcode != spec.opcode {
+			continue
+		}
+		width := 16 << p.vectorLength
+		if p.evex && p.broadcast {
+			width = spec.laneBits / 8
+		}
+		return x86RawRIPDataThroughDecoder(
+			code, offset, mode, modRMIndex, width,
+			decodedX86PackedIntegerCompareInstruction, "packed integer compare",
+		)
+	}
+	return Instr{}, 0, x86RawLiteralRange{}, false, nil
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
