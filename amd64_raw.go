@@ -1793,6 +1793,31 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawEVEXUnpackRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX packed unpack literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86EVEXPackedUnpackInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX packed unpack at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86VPUNPCKInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 VPUNPCK at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -8472,7 +8497,7 @@ vex:
 // low/high byte, word, dword, and qword unpack family. x/arch v0.14 can split
 // or reject VEX encodings with extended registers, so recover every VEX
 // register and ModRM/SIB memory form before the generic decoder. EVEX forms
-// continue through x/arch.
+// use the separate decodedX86EVEXPackedUnpackInstruction grammar.
 func decodedX86VPUNPCKInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")

@@ -1029,6 +1029,32 @@ func decodedX86LegacySIMDMoveInstruction(code []byte, mode int) (Instr, int, boo
 
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
+// decodeX86RawEVEXUnpackRIPData preserves source-local full-vector and
+// broadcast-lane constants for all eight EVEX integer interleave rows.
+func decodeX86RawEVEXUnpackRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	form, recognized := x86RawEVEXUnpackForms[p.opcode]
+	if !matched || !p.evex || p.mapNumber != 1 || p.pp != 1 || !recognized ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = form.broadcastBytes
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86EVEXPackedUnpackInstruction, "EVEX packed unpack",
+	)
+}
+
 // decodeX86RawBlockBroadcastRIPData resolves source-local m64/m128/m256
 // blocks for all Go EVEX packed-block broadcasts.
 func decodeX86RawBlockBroadcastRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
