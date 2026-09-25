@@ -26,10 +26,10 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
 
 ## Validated work and live CI
 
-- At `9336793`, the full root `go test ./... -count=1 -timeout=20m` passes
-  with Go 1.27.1 (root package 542 seconds). At `f5dffee`, the official Go
-  1.27 five-arch coverage gate and root vet pass. Later instruction families
-  have focused Go 1.20/1.27 and three-target LLVM 22 object tests, but still
+- At `bbbb86d`, the full root `go test ./... -count=1 -timeout=20m` passes
+  with Go 1.27.1 (root package 548 seconds). At `e85b300`, the official Go
+  1.27 five-arch coverage gate and root vet pass. The new instruction families
+  have focused Go 1.20/1.27 and multi-target LLVM 22 object tests, but still
   need current-head full gates. The earlier Linux/Darwin/Windows amd64
   standard-library object matrix, both nested CLI suites, and x/arch ARM64
   corpus gate also passed.
@@ -46,14 +46,15 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   frozen shard reports or ledger pass updates.
 - The new RIP constant decoder has focused Go-assembler and three-target LLVM
   22 object tests. A current-branch `simd@v1.21.1` amd64 diagnostic moves
-  from 9/73 to 37/73 successful assembly files. The complete
+  from 9/73 to 39/73 successful assembly files. The complete
   `nary_avx2_amd64.s`, `compare_avx2_amd64.s` and
   `compress_avx2_amd64.s`, `columnar_avx2_amd64.s`, `gemm_avx2_amd64.s`,
   `numeric_avx2_amd64.s`, `scan_avx2_amd64.s`,
   `bitunpack_avx2_amd64.s`, `convert_avx2_amd64.s` and
   `random_avx2_amd64.s`, `arith_avx2_amd64.s`,
-  `checksum_avx2_amd64.s`, `complex_avx2_amd64.s`, and
-  `reduce_avx2_amd64.s` pass; other files advance past broadcast,
+  `checksum_avx2_amd64.s`, `complex_avx2_amd64.s`,
+  `reduce_avx2_amd64.s`, `sets_avx512_amd64.s`, and
+  `argreduce_avx512_amd64.s` pass; other files advance past broadcast,
   packed-move, logical, scalar-move, min/max, compare, variable-shift,
   VPSHUFB, arithmetic, FMA3, carryless multiplication, immediate blends,
   and binary-float constants to their next
