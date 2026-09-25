@@ -32,6 +32,15 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 	return &normalized, nil
 }
 
+// NormalizeRawFileForTranslation performs the whole-file raw-byte analysis
+// before a compile-only caller partitions functions into bounded modules.
+// Address-sensitive TEXT bodies must be identified while all references are
+// still visible. TranslateModuleInContext may safely normalize the result
+// again after partitioning.
+func NormalizeRawFileForTranslation(file *File, goarch string) (*File, error) {
+	return normalizeX86RawFile(file, goarch)
+}
+
 // preserveAddressSensitiveX86RawText identifies raw-only TEXT bodies whose
 // exact byte layout is observed elsewhere in the same source file. Typical
 // examples are boot trampolines patched through symbol+offset references and

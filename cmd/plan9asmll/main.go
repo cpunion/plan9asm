@@ -116,6 +116,9 @@ type compileConfig struct {
 	LLC      string
 	KeepObj  bool
 	OptLevel int
+	// MaxFunctions bounds LLVM module size when object compilation is used
+	// only as a validation gate. Zero selects the production default.
+	MaxFunctions int
 }
 
 func main() {
@@ -514,6 +517,41 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {
 		return fmt.Errorf("target applicability: %w", err)
 	}
+	maxFunctions := ccfg.MaxFunctions
+	if maxFunctions <= 0 {
+		maxFunctions = 128
+	}
+	if ccfg.Enabled && !ccfg.KeepObj && len(file.Funcs) > maxFunctions {
+		// A complete pass is necessary before splitting: an x86 function may
+		// take the byte-exact address of raw TEXT in a different chunk.
+		file, err = plan9asm.NormalizeRawFileForTranslation(file, goarch)
+		if err != nil {
+			return fmt.Errorf("normalize raw file: %w", err)
+		}
+		for first, chunk := 0, 0; first < len(file.Funcs); first, chunk = first+maxFunctions, chunk+1 {
+			last := first + maxFunctions
+			if last > len(file.Funcs) {
+				last = len(file.Funcs)
+			}
+			part := *file
+			part.Funcs = file.Funcs[first:last]
+			partTask := t
+			if chunk != 0 {
+				stem := strings.TrimSuffix(t.OutLL, filepath.Ext(t.OutLL))
+				partTask.OutLL = fmt.Sprintf("%s.part-%04d.ll", stem, chunk)
+			}
+			if err := translateAndCompileModule(&part, triple, goarch, partTask, annotate, ccfg, resolve, sigs); err != nil {
+				return fmt.Errorf("functions %d-%d/%d: %w", first+1, last, len(file.Funcs), err)
+			}
+		}
+		return nil
+	}
+	return translateAndCompileModule(file, triple, goarch, t, annotate, ccfg, resolve, sigs)
+}
+
+func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asmTask, annotate bool,
+	ccfg compileConfig, resolve func(string) string, sigs map[string]plan9asm.FuncSig,
+) error {
 	ctx := llvm.NewContext()
 	mod, err := plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
 		TargetTriple:   triple,
