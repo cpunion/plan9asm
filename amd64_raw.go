@@ -31,6 +31,16 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
 		}
+		hasLiteral := false
+		for _, ins := range fn.Instrs {
+			if ins.x86RIPLiteral {
+				hasLiteral = true
+				break
+			}
+		}
+		if hasLiteral && x86RawTailLayoutObserved(&normalized, fn.Sym) {
+			return nil, fmt.Errorf("%s: address-observed RIP-relative raw literal cannot be folded safely", fn.Sym)
+		}
 		normalized.Funcs[i] = fn
 	}
 	return &normalized, nil
@@ -287,6 +297,7 @@ type x86RawDecodedInstruction struct {
 func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, knownLabels map[string]bool) ([]Instr, error) {
 	decodedByOffset := make(map[int]x86RawDecodedInstruction)
 	labels := make(map[int]string)
+	var literalRanges []x86RawLiteralRange
 	owners := make([]int, len(code))
 	for i := range owners {
 		owners[i] = -1
@@ -425,6 +436,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, literal, ok, err := decodeX86RawVMOVIntegerLiteral(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 VMOVD/VMOVQ literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
 				offset += length
 				continue
 			}
@@ -1076,6 +1100,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawPackedBroadcastLiteral(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 packed broadcast literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86VEXPackedBroadcastInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 packed broadcast at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -1513,6 +1550,14 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			offset += inst.Len
 			if inst.Op == x86asm.RET {
 				break
+			}
+		}
+	}
+
+	for _, literal := range literalRanges {
+		for offset := literal.first; offset < literal.last; offset++ {
+			if owners[offset] >= 0 {
+				return nil, fmt.Errorf("RIP-relative literal byte %d overlaps reachable instruction at byte %d: %q", offset, owners[offset], rawGroup)
 			}
 		}
 	}

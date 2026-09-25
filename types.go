@@ -946,6 +946,9 @@ type Instr struct {
 	// Set only by a validated machine-code decoder. Physical operands need
 	// not obey textual frontend limits (e.g. Go 386's three-operand limit).
 	x86Encoded bool
+	// A decoder folded a same-group, unreachable RIP-relative data read. Keep
+	// address-observed raw TEXT bodies on the byte-preserving path instead.
+	x86RIPLiteral bool
 }
 
 // DataStmt models a minimal Plan 9 DATA directive:

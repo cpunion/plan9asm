@@ -58,7 +58,7 @@ func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, term
 		if c.goarch == "386" && src.Kind == OpReg {
 			transferBits = 32
 		}
-		if !c.isGoVMOVScalarOperand(src) {
+		if !c.isGoVMOVScalarOperand(src) && !(src.Kind == OpImm && ins.x86RIPLiteral) {
 			return true, false, fmt.Errorf("%s %s source must be a GP register, memory, or X register: %q", c.goarch, rawOp, ins.Raw)
 		}
 		low, err := c.evalIntSized(src, amd64IntegerTypeForBits(transferBits))

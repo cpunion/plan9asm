@@ -67,7 +67,7 @@ func (c *amd64Ctx) lowerPackedScalarBroadcast(op Op, ins Instr) (ok bool, termin
 		}
 	}
 
-	scalar, err := c.loadPackedBroadcastScalar(ins.Args[0], laneBits)
+	scalar, err := c.loadPackedBroadcastScalar(ins.Args[0], laneBits, ins.x86Encoded)
 	if err != nil {
 		return true, false, fmt.Errorf("amd64 %s source: %w", baseOp, err)
 	}
@@ -86,7 +86,19 @@ func (c *amd64Ctx) lowerPackedScalarBroadcast(op Op, ins Instr) (ok bool, termin
 	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, "%"+out)
 }
 
-func (c *amd64Ctx) loadPackedBroadcastScalar(src Operand, laneBits int) (string, error) {
+func (c *amd64Ctx) loadPackedBroadcastScalar(src Operand, laneBits int, rawEncoded bool) (string, error) {
+	if src.Kind == OpImm && rawEncoded {
+		value := src.Imm
+		switch laneBits {
+		case 8:
+			value = int64(int8(value))
+		case 16:
+			value = int64(int16(value))
+		case 32:
+			value = int64(int32(value))
+		}
+		return fmt.Sprintf("%d", value), nil
+	}
 	if src.Kind == OpReg {
 		if isAMD64XReg(src.Reg) {
 			bytesValue, err := c.loadX(src.Reg)
