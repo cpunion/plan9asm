@@ -26,12 +26,13 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
 
 ## Validated work and live CI
 
-- At `4668f72`, the full root `go test ./... -count=1 -timeout=20m` passes with
-  Go 1.27.1 (root package 564 seconds). The official Go 1.27 five-arch
-  coverage gate, x/arch ARM64 corpus gate, root vet, both nested CLI suites,
-  and focused Go 1.20 compatibility tests pass. Privileged MSR semantics are
-  checked by comparing Go and LLVM 22 machine-code words; runtime execution
-  is not claimed.
+- At `c378a2b`, the full root `go test ./... -count=1 -timeout=20m` passes
+  with Go 1.27.1 (root package 544 seconds). The official Go 1.27 five-arch
+  coverage gate, the Linux/Darwin/Windows amd64 standard-library object
+  matrix, root vet, both nested CLI suites, and focused Go 1.20 compatibility
+  tests pass. The earlier x/arch ARM64 corpus gate also passed. Privileged
+  MSR semantics are checked by comparing Go and LLVM 22 machine-code words;
+  runtime execution is not claimed.
 - Exact current-branch CLI replays prove `go-highway@v0.0.12` passes all
   three ARM64 targets (576/576 Linux, 577/577 Darwin, 576/576 Windows), and
   `go-highway@v0.0.0-dev9` passes its three ARM64 configurations (31/31
@@ -43,8 +44,9 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   frozen shard reports or ledger pass updates.
 - The new RIP constant decoder has focused Go-assembler and three-target LLVM
   22 object tests. A current-branch `simd@v1.21.1` amd64 diagnostic moves
-  from 9/73 to 13/73 successful assembly files. The complete
-  `nary_avx2_amd64.s` passes; several other files advance past broadcast and
+  from 9/73 to 15/73 successful assembly files. The complete
+  `nary_avx2_amd64.s`, `compare_avx2_amd64.s` and
+  `compress_avx2_amd64.s` pass; other files advance past broadcast and
   packed-move constants to their next unsupported form. The candidate remains
   failed; this is not a ledger pass or a frozen-shard report.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`

@@ -220,20 +220,10 @@ func decodeX86RawPackedMoveRIPData(code []byte, offset, mode int) (Instr, int, x
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	width := 16 << p.vectorLength
-	patched, data, literal, err := x86RawRIPBytes(code, offset, modRMIndex, width)
-	if err != nil {
-		return Instr{}, 0, x86RawLiteralRange{}, true, err
-	}
-	instruction, consumed, ok, err := decodedX86PackedMoveInstruction(patched, mode)
-	if err != nil || !ok || consumed != len(patched) ||
-		len(instruction.Args) < 2 || instruction.Args[0].Kind != OpMem {
-		if err == nil {
-			err = fmt.Errorf("RIP-relative packed move did not match its VEX/EVEX grammar")
-		}
-		return Instr{}, 0, x86RawLiteralRange{}, true, err
-	}
-	setX86RawRIPData(&instruction, data)
-	return instruction, len(patched), literal, true, nil
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86PackedMoveInstruction, "packed move",
+	)
 }
 
 // decodeX86RawEVEXPackedIntegerMoveRIPData covers the six EVEX VMOVDQA/DQU
@@ -253,15 +243,49 @@ func decodeX86RawEVEXPackedIntegerMoveRIPData(code []byte, offset, mode int) (In
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	width := 16 << p.vectorLength
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86EVEXPackedIntegerMoveInstruction, "EVEX packed integer move",
+	)
+}
+
+// decodeX86RawVBROADCASTI128RIPData resolves the complete VEX.256 m128-to-Y
+// form through the existing VBROADCASTI128 grammar.
+func decodeX86RawVBROADCASTI128RIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.evex || p.mapNumber != 2 || p.pp != 1 ||
+		p.vectorLength != 1 || p.opcode != 0x5a ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, 16,
+		decodedX86VBROADCASTI128Instruction, "VBROADCASTI128",
+	)
+}
+
+type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
+
+func x86RawRIPDataThroughDecoder(
+	code []byte, offset, mode, modRMIndex, width int,
+	decode x86RawInstructionDecoder, family string,
+) (Instr, int, x86RawLiteralRange, bool, error) {
 	patched, data, literal, err := x86RawRIPBytes(code, offset, modRMIndex, width)
 	if err != nil {
 		return Instr{}, 0, x86RawLiteralRange{}, true, err
 	}
-	instruction, consumed, ok, err := decodedX86EVEXPackedIntegerMoveInstruction(patched, mode)
+	instruction, consumed, ok, err := decode(patched, mode)
 	if err != nil || !ok || consumed != len(patched) ||
 		len(instruction.Args) < 2 || instruction.Args[0].Kind != OpMem {
 		if err == nil {
-			err = fmt.Errorf("RIP-relative EVEX packed integer move did not match its grammar")
+			err = fmt.Errorf("RIP-relative %s did not match its grammar", family)
 		}
 		return Instr{}, 0, x86RawLiteralRange{}, true, err
 	}

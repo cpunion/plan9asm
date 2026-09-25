@@ -274,3 +274,73 @@ func TestDecodeX86RawEVEXPackedIntegerMoveRIPDataRejectsUnsafeSource(t *testing.
 		}
 	}
 }
+
+func x86RawVBROADCASTI128Literal() []byte {
+	code := []byte{0xc4, 0xe2, 0x7d, 0x5a, 0x05, 1, 0, 0, 0, 0xc3}
+	for index := 0; index < 16; index++ {
+		code = append(code, byte(index*11+2))
+	}
+	return code
+}
+
+func TestDecodeX86RawVBROADCASTI128RIPData(t *testing.T) {
+	code := x86RawVBROADCASTI128Literal()
+	decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, "VBROADCASTI128 literal", map[string]bool{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != 2 || decoded[0].Op != "VBROADCASTI128" ||
+		len(decoded[0].Args) != 2 || decoded[0].Args[0].Kind != OpSym ||
+		!decoded[0].x86RIPLiteral || decoded[1].Op != OpRET {
+		t.Fatalf("decoded %x as %#v, want VBROADCASTI128 source-local data", code, decoded)
+	}
+}
+
+func TestTranslateX86RawVBROADCASTI128RIPDataObjects(t *testing.T) {
+	code := x86RawVBROADCASTI128Literal()
+	var source strings.Builder
+	source.WriteString("TEXT blockLiteral(SB),$0-0\n")
+	for _, value := range code {
+		fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
+	}
+	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
+	file, err := Parse(ArchAMD64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	normalized, err := normalizeX86RawFile(file, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(normalized.Data) != 1 || !bytes.Equal(normalized.Data[0].Payload, code[len(code)-16:]) {
+		t.Fatalf("VBROADCASTI128 constant = %#v, want the exact source bytes", normalized.Data)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{
+		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{
+				Goarch: "amd64", TargetTriple: triple,
+				Sigs: map[string]FuncSig{"blockLiteral": {Name: "blockLiteral", Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "block-literal.ll", "block-literal.o", ir)
+		})
+	}
+}
+
+func TestDecodeX86RawVBROADCASTI128RIPDataRejectsUnsafeSource(t *testing.T) {
+	for _, displacement := range []byte{3, 0x7f} {
+		code := x86RawVBROADCASTI128Literal()
+		code[5] = displacement
+		if _, err := decodeX86RawDirectiveGroup(code, 64, 0, "unsafe block broadcast", map[string]bool{}); err == nil {
+			t.Fatalf("accepted out-of-group VBROADCASTI128 source %x", code)
+		}
+	}
+}
