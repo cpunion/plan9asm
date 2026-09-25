@@ -32,17 +32,17 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   targets, and on a 24 MB `spidermonkeywasm2go@v0.2.5` amd64 source for Darwin.
   These translate and compile with LLVM 22 and peak at roughly 2.4–3.6 GB
   resident memory. The exact three-file Windows configuration that CI killed
-  also passed locally (3/3 files, roughly 3.4 GB peak RSS). Objects are
-  deleted after verification; local diagnostic IR directories are removed
-  after measuring.
-- At 29 of 32 available CI shard artifacts, the old source revision has
-  3,560 passed, 21 failed, 757 source/target not applicable and 445 pending
+  also passed through the complete one-candidate discovery pipeline (3/3
+  files, roughly 3.4 GB peak RSS). Objects are deleted after verification;
+  local diagnostic IR directories are removed after measuring.
+- At 30 of 32 available CI shard artifacts, the old source revision has
+  3,671 passed, 21 failed, 781 source/target not applicable and 310 pending
   exact module versions out of 4,783. The evidence branch validates and
   commits these partial ledger states; the development branch must replay
   all shards after integration because its source fingerprint differs.
 - All non-external CI jobs have passed on `4cf5ade`. Discovered-corpus shard
-  0 lost its runner without an artifact; shards 12 and 29 were still running
-  at the last check. Do not report these three as passed.
+  0 lost its runner without an artifact; shard 29 was still running at the
+  last check. Do not report those two as passed.
 
 ## Remaining CI failure classes
 
