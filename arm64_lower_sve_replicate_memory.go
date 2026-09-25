@@ -31,6 +31,62 @@ var arm64SVEReplicateMemorySpecs = map[Op]arm64SVEReplicateMemorySpec{
 	"ZLD1RQD": {memoryBits: 64, blockBytes: 16},
 }
 
+// decodeARM64RawSVEReplicateScalar covers every scalar immediate-address
+// LD1R/LD1RS row in the Go 1.27 ARM64 encoder table. The decoded operands
+// use the same typed path as the corresponding Plan 9 mnemonics.
+func decodeARM64RawSVEReplicateScalar(word uint32) (Instr, bool) {
+	const fields = uint32(0x003f1fff) // imm6, Pg, Xn, Zt
+	forms := [...]struct {
+		op          Op
+		base        uint32
+		arrangement string
+		memoryBytes int64
+	}{
+		{"ZLD1RB", 0x84408000, "B", 1},
+		{"ZLD1RB", 0x8440a000, "H", 1},
+		{"ZLD1RB", 0x8440c000, "S", 1},
+		{"ZLD1RB", 0x8440e000, "D", 1},
+		{"ZLD1RH", 0x84c0a000, "H", 2},
+		{"ZLD1RH", 0x84c0c000, "S", 2},
+		{"ZLD1RH", 0x84c0e000, "D", 2},
+		{"ZLD1RW", 0x8540c000, "S", 4},
+		{"ZLD1RW", 0x8540e000, "D", 4},
+		{"ZLD1RD", 0x85c0e000, "D", 8},
+		{"ZLD1RSB", 0x85c0a000, "S", 1},
+		{"ZLD1RSB", 0x85c0c000, "H", 1},
+		{"ZLD1RSB", 0x85c08000, "D", 1},
+		{"ZLD1RSH", 0x8540a000, "S", 2},
+		{"ZLD1RSH", 0x85408000, "D", 2},
+		{"ZLD1RSW", 0x84c08000, "D", 4},
+	}
+	for _, form := range forms {
+		if word&^fields != form.base {
+			continue
+		}
+		baseNumber := int(word>>5) & 31
+		base := Reg(fmt.Sprintf("R%d", baseNumber))
+		if baseNumber == 31 {
+			base = SP
+		}
+		memory := MemRef{
+			Base: base,
+			Off:  int64(word>>16&63) * form.memoryBytes,
+		}
+		predicate := int(word>>10) & 7
+		vector := int(word) & 31
+		return Instr{
+			Op: form.op,
+			Args: []Operand{
+				{Kind: OpMem, Mem: memory},
+				{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.Z", predicate))},
+				{Kind: OpRegList, RegList: []Reg{Reg(fmt.Sprintf("Z%d.%s", vector, form.arrangement))}},
+			},
+			Raw: fmt.Sprintf("WORD $%#08x", word),
+		}, true
+	}
+	return Instr{}, false
+}
+
 // decodeARM64RawSVEReplicateBlock covers all sixteen Go 1.27 LD1RO/LD1RQ
 // register-offset and signed-immediate encoding rows. The decoded operands
 // are passed through the same typed lowering as the corresponding mnemonics.

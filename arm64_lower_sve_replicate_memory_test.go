@@ -172,6 +172,125 @@ func TestTranslateARM64RawSVEReplicateBlockCompleteFamily(t *testing.T) {
 	}
 }
 
+func TestTranslateARM64RawSVEReplicateScalarCompleteFamily(t *testing.T) {
+	// These are all sixteen immediate-address scalar replicate-load rows in
+	// Go 1.27's ARM64 instruction table, including the go-highway LD1RW word.
+	forms := []uint32{
+		0x84408000, 0x8440a000, 0x8440c000, 0x8440e000, // LD1RB
+		0x84c0a000, 0x84c0c000, 0x84c0e000, // LD1RH
+		0x8540c000, 0x8540e000, // LD1RW
+		0x85c0e000,                         // LD1RD
+		0x85c0a000, 0x85c0c000, 0x85c08000, // LD1RSB
+		0x8540a000, 0x85408000, // LD1RSH
+		0x84c08000, // LD1RSW
+	}
+	for _, base := range forms {
+		t.Run(fmt.Sprintf("encoding-%#08x", base), func(t *testing.T) {
+			source := fmt.Sprintf("TEXT scalar(SB),$0-0\n\tWORD $%#08x\n\tRET\n", base|5<<10|14<<5|13)
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ll, err := Translate(file, Options{
+				TargetTriple: "aarch64-unknown-linux-gnu",
+				Goarch:       "arm64",
+				Sigs:         map[string]FuncSig{"scalar": {Name: "scalar", Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(ll, `"target-features"="+sve"`) {
+				t.Fatal("raw scalar replicate load omitted SVE target feature")
+			}
+			llc := findLLVM22Tool("llc")
+			if llc == "" {
+				t.Fatal("LLVM 22 llc not found")
+			}
+			compileLLVMToObject(t, llc, "aarch64-unknown-linux-gnu", "scalar.ll", "scalar.o", ll)
+		})
+	}
+	var source strings.Builder
+	source.WriteString("TEXT rawSVEReplicateScalar(SB),$0-0\n")
+	source.WriteString("\tWORD $0x8540c0c0\n")
+	for _, base := range forms {
+		for _, offset := range []uint32{0, 63} {
+			word := base | offset<<16 | 5<<10 | 14<<5 | 13
+			fmt.Fprintf(&source, "\tWORD $%#08x\n", word)
+		}
+	}
+	source.WriteString("\tRET\n")
+	requireARM64GoAssemblerResult(t, source.String(), true)
+	file, err := Parse(ArchARM64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, triple := range []string{
+		"aarch64-apple-darwin",
+		"aarch64-unknown-linux-gnu",
+		"aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ll, err := Translate(file, Options{
+				TargetTriple: triple,
+				Goarch:       "arm64",
+				Sigs: map[string]FuncSig{
+					"rawSVEReplicateScalar": {Name: "rawSVEReplicateScalar", Ret: Void},
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{"shufflevector <vscale x ", "select <vscale x ", " sext i", " zext i"} {
+				if !strings.Contains(ll, want) {
+					t.Fatalf("%s raw scalar replicate lowering omitted %q", triple, want)
+				}
+			}
+			llc := findLLVM22Tool("llc")
+			if llc == "" {
+				t.Fatal("LLVM 22 llc not found")
+			}
+			compileLLVMToObject(t, llc, triple, "arm64-raw-sve-replicate-scalar.ll", "arm64-raw-sve-replicate-scalar.o", ll)
+		})
+	}
+}
+
+func TestDecodeARM64RawSVEReplicateScalarBoundaries(t *testing.T) {
+	tests := []struct {
+		word        uint32
+		op          Op
+		base        Reg
+		arrangement Reg
+		offset      int64
+	}{
+		{0x8540c0c0, "ZLD1RW", "R6", "Z0.S", 0},
+		{0x8540c000 | 63<<16 | 7<<10 | 31<<5 | 31, "ZLD1RW", SP, "Z31.S", 252},
+		{0x85c0e000 | 63<<16 | 7<<10 | 31<<5 | 31, "ZLD1RD", SP, "Z31.D", 504},
+		{0x84408000 | 63<<16 | 7<<10 | 31<<5 | 31, "ZLD1RB", SP, "Z31.B", 63},
+		{0x84c08000 | 63<<16 | 7<<10 | 31<<5 | 31, "ZLD1RSW", SP, "Z31.D", 252},
+	}
+	for _, test := range tests {
+		ins, ok := decodeARM64RawSVEReplicateScalar(test.word)
+		if !ok || ins.Op != test.op || len(ins.Args) != 3 {
+			t.Fatalf("decode %#08x = %+v, %v", test.word, ins, ok)
+		}
+		predicate := Reg(fmt.Sprintf("P%d.Z", test.word>>10&7))
+		if ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != test.base ||
+			ins.Args[0].Mem.Off != test.offset || ins.Args[1].Reg != predicate ||
+			ins.Args[2].RegList[0] != test.arrangement {
+			t.Errorf("decoded %#08x operands = %+v", test.word, ins.Args)
+		}
+	}
+	for _, word := range []uint32{
+		0x8540c0c0 | 1<<25,
+		0x8540c0c0 | 1<<27,
+		0x8540c0c0 | 1<<29,
+	} {
+		if ins, ok := decodeARM64RawSVEReplicateScalar(word); ok {
+			t.Errorf("decoded reserved scalar replicate load %#08x as %+v", word, ins)
+		}
+	}
+}
+
 func TestDecodeARM64RawSVEReplicateBlockBoundaries(t *testing.T) {
 	observed, ok := decodeARM64RawSVEReplicateBlock(0xa40024e1)
 	if !ok || observed.Op != "ZLD1RQB" || len(observed.Args) != 3 {

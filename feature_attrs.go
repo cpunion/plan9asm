@@ -203,6 +203,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEPredicateLogical(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
+				if _, ok := decodeARM64RawSVEReplicateScalar(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
 				if decoded, ok := decodeARM64RawSVEReplicateBlock(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if arm64SVEReplicateMemorySpecs[decoded.Op].blockBytes == 32 {
