@@ -401,6 +401,38 @@ func decodeX86RawPackedCompareRIPData(code []byte, offset, mode int) (Instr, int
 	return Instr{}, 0, x86RawLiteralRange{}, false, nil
 }
 
+// decodeX86RawVariableShiftRIPData covers the VEX and EVEX per-lane variable
+// shift family, including scalar D/Q memory broadcast in EVEX encodings.
+func decodeX86RawVariableShiftRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 2 || p.pp != 1 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	for _, spec := range amd64PerLaneVariableShiftSpecs {
+		if p.opcode != int(spec.opcode) || p.w != (spec.laneBits != 32) ||
+			!p.evex && !spec.vex {
+			continue
+		}
+		width := 16 << p.vectorLength
+		if p.evex && p.broadcast {
+			width = spec.laneBits / 8
+		}
+		return x86RawRIPDataThroughDecoder(
+			code, offset, mode, modRMIndex, width,
+			decodedX86PerLaneVariableShiftInstruction, "per-lane variable shift",
+		)
+	}
+	return Instr{}, 0, x86RawLiteralRange{}, false, nil
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
