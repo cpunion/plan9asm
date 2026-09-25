@@ -23,6 +23,10 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		if normalized.Funcs[i].X86RawText != nil {
 			continue
 		}
+		if x86HasTerminalRawTail(normalized.Funcs[i]) &&
+			x86RawTailLayoutObserved(&normalized, normalized.Funcs[i].Sym) {
+			return nil, fmt.Errorf("%s: address-observed raw tail after RET cannot be omitted safely", normalized.Funcs[i].Sym)
+		}
 		fn, err := decodeX86RawDirectives(normalized.Funcs[i], goarch)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
@@ -30,6 +34,57 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		normalized.Funcs[i] = fn
 	}
 	return &normalized, nil
+}
+
+func x86HasTerminalRawTail(fn Func) bool {
+	start := len(fn.Instrs)
+	for start > 0 && isX86RawDirective(fn.Instrs[start-1]) {
+		start--
+	}
+	return start > 0 && start < len(fn.Instrs) && fn.Instrs[start-1].Op == OpRET
+}
+
+func x86RawTailLayoutObserved(file *File, symbol string) bool {
+	target := strings.TrimSuffix(symbol, "<>")
+	for _, fn := range file.Funcs {
+		for _, ins := range fn.Instrs {
+			for _, operand := range ins.Args {
+				if fn.Sym == symbol && operand.Kind == OpMem && operand.Mem.Base == PC {
+					return true
+				}
+
+				ref := ""
+				switch operand.Kind {
+				case OpSym:
+					ref = operand.Sym
+				case OpMem:
+					ref = operand.Mem.Sym
+				}
+				if ref == "" {
+					continue
+				}
+				ref = strings.TrimSpace(strings.TrimPrefix(ref, "*"))
+				base, offset, ok := parseSBRef(ref)
+				if !ok || strings.TrimSuffix(strings.TrimPrefix(base, "$"), "<>") != target {
+					continue
+				}
+				if offset != 0 || !isX86DirectControlTransfer(ins.Op) {
+					return true
+				}
+			}
+		}
+	}
+	for _, datum := range file.Data {
+		base, _, ok := parseSBRef(datum.Addr)
+		if ok && strings.TrimSuffix(base, "<>") == target {
+			return true
+		}
+	}
+	return false
+}
+
+func isX86DirectControlTransfer(op Op) bool {
+	return op == OpCALL || op == OpJMP || op == OpRET || isAMD64ConditionalBranch(op)
 }
 
 // NormalizeRawFileForTranslation performs the whole-file raw-byte analysis
@@ -186,6 +241,15 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 			code = append(code, encoded...)
 			rawLines = append(rawLines, fn.Instrs[i].Raw)
 			i++
+		}
+		// Go appends BYTE/WORD/LONG/QUAD after a final RET to the previous
+		// TEXT, even when GLOBL declarations intervene. Without a following
+		// source label, the tail has no control-flow entry and is not an
+		// executable instruction stream. Generated tables can therefore
+		// contain arbitrary bytes, including apparent branches. Keep labeled
+		// tails on the normal decoder path so reachable code never disappears.
+		if i == len(fn.Instrs) && start > 0 && fn.Instrs[start-1].Op == OpRET {
+			continue
 		}
 		rawGroup := strings.Join(rawLines, "; ")
 		if mode == 64 {
