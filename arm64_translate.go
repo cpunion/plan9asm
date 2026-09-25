@@ -35,6 +35,8 @@ func emitARM64Prelude(b *strings.Builder) {
 	}
 	b.WriteString("declare <8 x i16> @llvm.aarch64.neon.pmull.v8i16(<8 x i8>, <8 x i8>)\n")
 	b.WriteString("declare <16 x i8> @llvm.aarch64.neon.pmull64(i64, i64)\n")
+	b.WriteString("declare <2 x float> @llvm.aarch64.neon.bfdot.v2f32.v4bf16(<2 x float>, <4 x bfloat>, <4 x bfloat>)\n")
+	b.WriteString("declare <4 x float> @llvm.aarch64.neon.bfdot.v4f32.v8bf16(<4 x float>, <8 x bfloat>, <8 x bfloat>)\n")
 	for _, shape := range []struct {
 		lanes    int
 		typeName string

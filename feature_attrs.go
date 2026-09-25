@@ -787,6 +787,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawBFloatConvert(word); ok {
 					add("+bf16")
 				}
+				if _, ok := decodeARM64RawBFloatDot(word); ok {
+					add("+bf16")
+				}
 				if _, ok := decodeARM64RawSHA3(word); ok {
 					add("+sha3")
 				}

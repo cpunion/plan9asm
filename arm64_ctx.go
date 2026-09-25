@@ -392,6 +392,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.left)))
 					markReg(Reg(fmt.Sprintf("V%d", form.right)))
 				}
+				if form, ok := decodeARM64RawBFloatDot(word); ok {
+					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+					markReg(Reg(fmt.Sprintf("V%d", form.left)))
+					markReg(Reg(fmt.Sprintf("V%d", form.right)))
+				}
 				if form, ok := decodeARM64RawMatrixMultiply(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 					markReg(Reg(fmt.Sprintf("V%d", form.left)))
