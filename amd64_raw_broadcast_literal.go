@@ -1060,6 +1060,32 @@ func decodeX86RawIndexedPermuteRIPData(code []byte, offset, mode int) (Instr, in
 	)
 }
 
+// decodeX86RawEVEXVariableDwordPermuteRIPData preserves local Y/Z data or
+// scalar broadcast constants for VPERMD and VPERMPS.
+func decodeX86RawEVEXVariableDwordPermuteRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 1 || p.w ||
+		(p.opcode != 0x36 && p.opcode != 0x16) ||
+		p.segment != "" || p.addressOverride || p.vectorLength < 1 || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = 4
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86EVEXVariableDwordPermuteInstruction, "EVEX variable dword permute",
+	)
+}
+
 // decodeX86RawMaskCompareRIPData resolves local full-vector or D/Q broadcast
 // constants and accounts for the comparison's trailing imm8.
 func decodeX86RawMaskCompareRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {

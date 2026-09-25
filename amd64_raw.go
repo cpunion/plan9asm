@@ -1916,6 +1916,31 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawEVEXVariableDwordPermuteRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX variable dword permute literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86EVEXVariableDwordPermuteInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX variable dword permute at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86SHAInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 SHA at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -9033,6 +9058,110 @@ vex:
 		Raw:  fmt.Sprintf("%s %s, %s, %s", op, data.String(), indices.String(), destination.String()),
 	}
 	return instruction, modRMIndex + consumed, true, nil
+}
+
+// decodedX86EVEXVariableDwordPermuteInstruction covers the Y/Z EVEX forms of
+// Go 1.27's shared VPERMD/VPERMPS _yvpermd table.
+func decodedX86EVEXVariableDwordPermuteInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	i := 0
+	segment := Reg("")
+	addressOverride := false
+	for i < len(code) {
+		switch code[i] {
+		case 0x64:
+			segment = FS
+			i++
+		case 0x65:
+			segment = GS
+			i++
+		case 0x67:
+			addressOverride = true
+			i++
+		default:
+			goto evex
+		}
+	}
+
+evex:
+	if mode != 32 && mode != 64 {
+		return Instr{}, 0, false, nil
+	}
+	if len(code) < i+6 || code[i] != 0x62 {
+		return Instr{}, 0, false, nil
+	}
+	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
+	opcode := code[i+4]
+	if p0&0x0f != 2 || p1&0x07 != 5 || (opcode != 0x36 && opcode != 0x16) {
+		return Instr{}, 0, false, nil
+	}
+	ok = true
+	if p1&0x80 != 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX.W must be zero for VPERMD/VPERMPS")
+	}
+	if addressOverride {
+		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
+	}
+	vectorBits := (p2 >> 5) & 3
+	if vectorBits != 1 && vectorBits != 2 {
+		return Instr{}, 0, true, fmt.Errorf("VPERMD/VPERMPS EVEX form requires Y or Z width")
+	}
+	vectorPrefix := [...]string{"X", "Y", "Z"}[vectorBits]
+	vectorWidth := [...]int{16, 32, 64}[vectorBits]
+	maskNumber := int(p2 & 7)
+	zeroing := p2&0x80 != 0
+	if zeroing && maskNumber == 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
+	}
+	if mode == 32 && maskNumber != 0 {
+		return Instr{}, 0, true, fmt.Errorf("386 VPERMD/VPERMPS mask form exceeds the Go assembler operand limit")
+	}
+	rExt := int(^p0>>7) & 1
+	rHighExt := int(^p0>>4) & 1
+	xExt := int(^p0>>6) & 1
+	bExt := int(^p0>>5) & 1
+	modRMIndex := i + 5
+	modRM := code[modRMIndex]
+	broadcast := p2&0x10 != 0
+	if broadcast && modRM>>6 == 3 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX broadcast requires a memory source")
+	}
+	disp8Scale := vectorWidth
+	if broadcast {
+		disp8Scale = 4
+	}
+	data, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
+	if decodeErr != nil {
+		return Instr{}, 0, true, decodeErr
+	}
+	indicesNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
+	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
+	if mode == 32 && vectorBits == 2 &&
+		(indicesNumber >= 8 || destinationNumber >= 8 ||
+			modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("386 Z register exceeds the Go assembler frontend's register class")
+	}
+	indices := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, indicesNumber))}
+	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
+	args := []Operand{data, indices}
+	if maskNumber != 0 {
+		args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("K%d", maskNumber))})
+	}
+	args = append(args, destination)
+	op := Op("VPERMD")
+	if opcode == 0x16 {
+		op = "VPERMPS"
+	}
+	if broadcast {
+		op += ".BCST"
+	}
+	if zeroing {
+		op += ".Z"
+	}
+	rawArgs := make([]string, len(args))
+	for index := range args {
+		rawArgs[index] = args[index].String()
+	}
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86RandomInstruction recognizes the complete register-only
