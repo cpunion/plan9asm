@@ -585,6 +585,14 @@ func (c *arm64Ctx) scanUsedRegs() {
 					}
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
+				if form, ok := decodeARM64RawFixedIntToFloat(word); ok {
+					if form.vectorSource {
+						markReg(Reg(fmt.Sprintf("V%d", form.source)))
+					} else if form.source != 31 {
+						markReg(Reg(fmt.Sprintf("R%d", form.source)))
+					}
+					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+				}
 				if form, ok := decodeARM64RawFloatGPMove(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.floatReg)))
 					if form.gpReg != 31 {

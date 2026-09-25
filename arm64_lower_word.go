@@ -229,6 +229,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawScalarIntToFloat(word); ok {
 		return c.lowerRawScalarIntToFloat(form)
 	}
+	if form, ok := decodeARM64RawFixedIntToFloat(word); ok {
+		return c.lowerRawFixedIntToFloat(form)
+	}
 	if form, ok := decodeARM64RawFloatGPMove(word); ok {
 		return c.lowerRawFloatGPMove(form)
 	}
