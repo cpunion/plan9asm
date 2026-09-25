@@ -18,15 +18,17 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   shards are missing or failures remain.
 - `codex/pr40-ecosystem-fixes-20260925` is the development branch. It has
   unpushed complete ARM64 BF16 matrix, FP16 FMA/unary, scalar FCVTZS/FCVTZU,
-  raw LDPSW pair, and bounded compile-only LLVM-module changes through
-  `e7f0d2b`. The last change also limits CI matrix concurrency to eight.
+  raw LDPSW pair, SVE scalar replicate-load, and bounded compile-only
+  LLVM-module changes through `5b24b13`. The bounded-module change also
+  limits CI matrix concurrency to eight.
 
 ## Validated work and live CI
 
 - LLVM 22 and Go 1.27 focused tests, the nested `plan9asmll` suite,
   `go vet` in the root and nested CLI, and `actionlint` pass on the
   development branch. Cross-target LLVM object and native ARM64 runtime
-  fixtures pass for the new instruction families.
+  fixtures pass for the new instruction families. The full root suite passed
+  on the pre-SVE development source; rerun affected gates after integration.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`
   22 MB ARM64 sources, including about 7,700 functions, on Linux and Windows
   targets, and on a 24 MB `spidermonkeywasm2go@v0.2.5` amd64 source for Darwin.
@@ -34,15 +36,18 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   resident memory. The exact three-file Windows configuration that CI killed
   also passed through the complete one-candidate discovery pipeline (3/3
   files, roughly 3.4 GB peak RSS). Objects are deleted after verification;
-  local diagnostic IR directories are removed after measuring.
-- At 30 of 32 available CI shard artifacts, the old source revision has
-  3,671 passed, 21 failed, 781 source/target not applicable and 310 pending
-  exact module versions out of 4,783. The evidence branch validates and
-  commits these partial ledger states; the development branch must replay
-  all shards after integration because its source fingerprint differs.
+  local diagnostic IR directories are removed after measuring. A third killed
+  candidate, `spanneranalyzerwasm2go/p8@v0.2.0`, passed its full one-candidate
+  Linux/amd64 replay (1/1 file, 2.6 GB peak RSS).
+- At 31 of 32 available CI shard artifacts, the old source revision has
+  3,797 passed, 23 failed, 804 source/target not applicable and 159 pending
+  exact module versions out of 4,783. The missing shard 0 is being replayed
+  locally for diagnostics. Its macOS LLVM and translator hashes differ from
+  Linux CI, so its report must remain separate from the 31 CI artifacts and
+  cannot be imported as a completed CI shard. The development branch must
+  replay all shards after integration because its source fingerprint differs.
 - All non-external CI jobs have passed on `4cf5ade`. Discovered-corpus shard
-  0 lost its runner without an artifact; shard 29 was still running at the
-  last check. Do not report those two as passed.
+  0 lost its runner without an artifact. Do not report it as passed.
 
 ## Remaining CI failure classes
 
@@ -62,16 +67,19 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   decode, even with relevant features enabled. `fiber/ai` has a private raw
   encoding. Do not label these instructions supported without preserving
   correct runtime register and memory semantics.
-- `skywire@v1.3.69` has an invalid version download; keep it failed/retryable
-  rather than pretending it was tested. `mazarin` has an ARM64 argument-size
+- `skywire@v1.3.69` has an invalid version download and its original GitHub
+  repository is currently inaccessible; keep it failed/retryable rather than
+  pretending it was tested. `mazarin` has an ARM64 argument-size
   mismatch rejected by Go's `vet -asmdecl`, so its source applicability must
   remain evidence-backed.
 
 ## Next actions
 
-1. Finish the old run; import and audit all artifacts in the evidence worktree.
-   For the lost shard 0, obtain a same-source complete rerun rather than
-   fabricating a result. Keep the ledger synchronized with actual reports.
+1. Finish the old shard 0 locally as diagnostic evidence. Its toolchain
+   provenance cannot be mixed with the 31 Linux CI reports. Obtain a complete
+   same-source, same-toolchain CI rerun for a complete old-head aggregate, or
+   supersede it with all 32 reports from one new frozen PR head. Keep the
+   ledger synchronized with actual reports.
 2. Reproduce each deterministic failure before changing its instruction or
    ABI family. Compare against Go assembler, Go vet/build and LLVM 22, then
    add Go-accepted format, cross-target object and runtime tests as needed.
