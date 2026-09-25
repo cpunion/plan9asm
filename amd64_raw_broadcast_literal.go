@@ -642,6 +642,31 @@ func decodeX86RawPackedMultiplyRIPData(code []byte, offset, mode int) (Instr, in
 	)
 }
 
+// decodeX86RawPackedAbsRIPData resolves source-local X/Y/Z VPABS loads,
+// including the D/Q EVEX memory-broadcast lanes.
+func decodeX86RawPackedAbsRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 2 || p.pp != 1 || p.opcode < 0x1c || p.opcode > 0x1f ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.evex && p.broadcast {
+		width = [...]int{1, 2, 4, 8}[p.opcode-0x1c]
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86RawPackedAbsInstruction, "VPABS",
+	)
+}
+
 // decodeX86RawVEXPackedMADDRIPData covers both VPMADDWD and VPMADDUBSW
 // VEX.128/256 opcode rows. Their memory operand reads the full vector.
 func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
