@@ -1320,6 +1320,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 	}
 	for _, op := range []string{
 		"ADR", "ADRP",
+		"SMOV", "SMOVW",
 		"VFCVTNS", "VFCVTNU", "VFCVTMS", "VFCVTMU", "VFCVTAS", "VFCVTAU", "VFCVTPS", "VFCVTPU", "VFCVTZS", "VFCVTZU",
 		"VZIP1", "VZIP2", "VUZP1", "VUZP2", "VTRN1", "VTRN2",
 		"VUSHLL", "VUSHLL2", "VSSHLL", "VSSHLL2",
