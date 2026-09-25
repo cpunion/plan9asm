@@ -58,6 +58,12 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 			if len(ins.x86RIPLiteralData) == 0 {
 				continue
 			}
+			// Bounded-module translation normalizes again after partitioning.
+			// Keep the payload for constant-specialized lowerers without
+			// materializing a second global on that pass.
+			if ins.Args[0].Sym != "·__plan9asm_raw_literal_pending(SB)" {
+				continue
+			}
 			stem := fmt.Sprintf("·__plan9asm_raw_literal_%x_%d", sha256.Sum256([]byte(fn.Sym)), j)
 			name := stem
 			for suffix := 1; usedSymbols[name]; suffix++ {
@@ -70,7 +76,6 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 			})
 			ins.Args[0].Sym = name + "(SB)"
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[0].Sym, 1)
-			ins.x86RIPLiteralData = nil
 		}
 		normalized.Funcs[i] = fn
 	}
@@ -1330,6 +1335,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, literal, ok, err := decodeX86RawVPSHUFBRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 VPSHUFB literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
 				offset += length
 				continue
 			}

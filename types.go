@@ -950,7 +950,8 @@ type Instr struct {
 	// address-observed raw TEXT bodies on the byte-preserving path instead.
 	x86RIPLiteral bool
 	// A wide source-local constant is materialized as an LLVM data global by
-	// normalizeX86RawFile, preserving ordinary memory-operand lowering.
+	// normalizeX86RawFile. Retain its bytes for lowerers that can specialize
+	// the constant without a memory access, after source-layout validation.
 	x86RIPLiteralData []byte
 }
 

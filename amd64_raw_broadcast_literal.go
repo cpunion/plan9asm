@@ -433,6 +433,28 @@ func decodeX86RawVariableShiftRIPData(code []byte, offset, mode int) (Instr, int
 	return Instr{}, 0, x86RawLiteralRange{}, false, nil
 }
 
+// decodeX86RawVPSHUFBRIPData covers every VEX and EVEX vector-width load
+// accepted by Go's VPSHUFB table. The instruction has no scalar broadcast.
+func decodeX86RawVPSHUFBRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 2 || p.pp != 1 || p.opcode != 0 ||
+		p.w || p.broadcast || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86VPSHUFBInstruction, "VPSHUFB",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(

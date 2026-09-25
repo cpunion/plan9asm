@@ -93,15 +93,20 @@ func (c *amd64Ctx) lowerVectorPackedByteShuffle(suffix string, ins Instr) (bool,
 		return true, false, fmt.Errorf("%s VPSHUFB control source must be a vector register or memory: %q", c.goarch, ins.Raw)
 	}
 
-	control, err := c.loadPackedCompareBytes(ins.Args[0], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
 	data, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
 	if err != nil {
 		return true, false, err
 	}
-	result := c.emitPackedByteShuffle(byteWidth, data, control)
+	var result string
+	if ins.x86RIPLiteral && len(ins.x86RIPLiteralData) == byteWidth {
+		result = c.emitPackedByteShuffleLiteral(byteWidth, data, ins.x86RIPLiteralData)
+	} else {
+		control, err := c.loadPackedCompareBytes(ins.Args[0], byteWidth)
+		if err != nil {
+			return true, false, err
+		}
+		result = c.emitPackedByteShuffle(byteWidth, data, control)
+	}
 	if masked {
 		mask, err := c.loadK(ins.Args[2].Reg)
 		if err != nil {
@@ -114,6 +119,21 @@ func (c *amd64Ctx) lowerVectorPackedByteShuffle(suffix string, ins Instr) (bool,
 		result = amd64ApplyIntegerLaneMask(c, byteWidth, 8, result, old, mask, zeroing)
 	}
 	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, result)
+}
+
+func (c *amd64Ctx) emitPackedByteShuffleLiteral(byteWidth int, data string, control []byte) string {
+	indices := make([]int, byteWidth)
+	for index, selected := range control {
+		if selected&0x80 != 0 {
+			indices[index] = byteWidth // Select a zero from the second vector.
+		} else {
+			indices[index] = index/16*16 + int(selected&0x0f)
+		}
+	}
+	result := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i8> %s, <%d x i8> zeroinitializer, <%d x i32> %s\n",
+		result, byteWidth, data, byteWidth, byteWidth, llvmI32Mask(indices))
+	return "%" + result
 }
 
 func (c *amd64Ctx) isGoVPSHUFBRegister(arg Operand, byteWidth int) bool {
