@@ -316,15 +316,14 @@ func decodeX86RawPackedLogicalRIPData(code []byte, offset, mode int) (Instr, int
 	)
 }
 
-// decodeX86RawFloatLogicalRIPData covers VEX VAND/ANDN/OR/XOR PS/PD reads
-// from an unreachable source-local X/Y-width constant pool. The ordinary
-// decoder still handles all register and non-RIP memory forms.
+// decodeX86RawFloatLogicalRIPData covers VEX/EVEX VAND/ANDN/OR/XOR PS/PD
+// reads from an unreachable source-local X/Y/Z-width constant pool.
 func decodeX86RawFloatLogicalRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
-	if !matched || p.evex || p.mapNumber != 1 || p.pp > 1 ||
+	if !matched || p.mapNumber != 1 || p.pp > 1 ||
 		p.opcode < 0x54 || p.opcode > 0x57 ||
 		p.segment != "" || p.addressOverride {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
@@ -333,9 +332,19 @@ func decodeX86RawFloatLogicalRIPData(code []byte, offset, mode int) (Instr, int,
 	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
+	width := 16 << p.vectorLength
+	decoder := x86RawInstructionDecoder(decodedX86VEXPackedFloatLogicalInstruction)
+	if p.evex {
+		decoder = decodedX86RawEVEXFloatLogicalInstruction
+		if p.broadcast {
+			width = 4
+			if p.w {
+				width = 8
+			}
+		}
+	}
 	return x86RawRIPDataThroughDecoder(
-		code, offset, mode, modRMIndex, 16<<p.vectorLength,
-		decodedX86VEXPackedFloatLogicalInstruction, "VEX packed floating logical",
+		code, offset, mode, modRMIndex, width, decoder, "packed floating logical",
 	)
 }
 
