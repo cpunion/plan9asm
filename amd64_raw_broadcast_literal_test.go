@@ -363,3 +363,149 @@ func TestTranslateX86RawVMOVIntegerRIPLiteralRejectsAddressObservedText(t *testi
 		t.Fatalf("address-observed raw TEXT was silently folded: %v", err)
 	}
 }
+
+func x86RawScalarFloatBroadcastLiteral(double, evex bool, vectorBits, mask int, zeroing bool) ([]byte, int64) {
+	opcode := byte(0x18)
+	width := 4
+	if double {
+		opcode = 0x19
+		width = 8
+	}
+	var code []byte
+	if evex {
+		p1 := byte(0x7d)
+		if double {
+			p1 |= 0x80
+		}
+		p2 := byte(map[int]int{128: 0, 256: 1, 512: 2}[vectorBits]<<5 | 0x08 | mask)
+		if zeroing {
+			p2 |= 0x80
+		}
+		code = []byte{0x62, 0xf2, p1, p2, opcode, 0x05}
+	} else {
+		p1 := byte(0x79)
+		if vectorBits == 256 {
+			p1 |= 0x04
+		}
+		code = []byte{0xc4, 0xe2, p1, opcode, 0x05}
+	}
+	code = append(code, 1, 0, 0, 0, 0xc3)
+	var value int64
+	for index := 0; index < width; index++ {
+		b := byte(0x21 + index*0x13)
+		code = append(code, b)
+		value |= int64(b) << (8 * index)
+	}
+	return code, value
+}
+
+func TestDecodeX86RawScalarFloatBroadcastRIPLiteral(t *testing.T) {
+	for _, test := range []struct {
+		double, evex bool
+		vectorBits   int
+		mask         int
+		zeroing      bool
+	}{
+		{vectorBits: 128}, {vectorBits: 256}, {double: true, vectorBits: 256},
+		{evex: true, vectorBits: 128}, {evex: true, vectorBits: 256, mask: 3},
+		{evex: true, vectorBits: 512, mask: 7, zeroing: true},
+		{double: true, evex: true, vectorBits: 256},
+		{double: true, evex: true, vectorBits: 512, mask: 7, zeroing: true},
+	} {
+		name := fmt.Sprintf("double%t/evex%t/%d/mask%d/zero%t", test.double, test.evex, test.vectorBits, test.mask, test.zeroing)
+		t.Run(name, func(t *testing.T) {
+			code, value := x86RawScalarFloatBroadcastLiteral(test.double, test.evex, test.vectorBits, test.mask, test.zeroing)
+			decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, name, map[string]bool{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			op := Op("VBROADCASTSS")
+			if test.double {
+				op = "VBROADCASTSD"
+			}
+			if test.zeroing {
+				op += ".Z"
+			}
+			if len(decoded) != 2 || decoded[0].Op != op ||
+				decoded[0].Args[0].Kind != OpImm || decoded[0].Args[0].Imm != value ||
+				!decoded[0].x86RIPLiteral || decoded[1].Op != OpRET {
+				t.Fatalf("decoded %x as %#v, want scalar broadcast of literal", code, decoded)
+			}
+		})
+	}
+}
+
+func TestTranslateX86RawScalarFloatBroadcastRIPLiteralObjects(t *testing.T) {
+	var source strings.Builder
+	sigs := make(map[string]FuncSig)
+	for index, test := range []struct {
+		double, evex bool
+		vectorBits   int
+		mask         int
+		zeroing      bool
+	}{
+		{vectorBits: 128}, {vectorBits: 256}, {double: true, vectorBits: 256},
+		{evex: true, vectorBits: 128}, {evex: true, vectorBits: 256, mask: 3},
+		{evex: true, vectorBits: 512, mask: 7, zeroing: true},
+		{double: true, evex: true, vectorBits: 256},
+		{double: true, evex: true, vectorBits: 512, mask: 7, zeroing: true},
+	} {
+		name := fmt.Sprintf("scalarFloatLiteral%d", index)
+		code, _ := x86RawScalarFloatBroadcastLiteral(test.double, test.evex, test.vectorBits, test.mask, test.zeroing)
+		fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
+		for _, value := range code {
+			fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
+		}
+		sigs[name] = FuncSig{Name: name, Ret: Void}
+	}
+	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
+	file, err := Parse(ArchAMD64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{
+		"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "scalar-float-literal.ll", "scalar-float-literal.o", ir)
+		})
+	}
+}
+
+func TestDecodeX86RawScalarFloatBroadcastRIPLiteralRejectsUnsafeSources(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		edit func([]byte) []byte
+	}{
+		{name: "instruction_overlap", edit: func(code []byte) []byte {
+			copy(code[6:10], []byte{0xfa, 0xff, 0xff, 0xff})
+			return code
+		}},
+		{name: "outside_group", edit: func(code []byte) []byte {
+			code[6] = 0x20
+			return code
+		}},
+		{name: "segment_override", edit: func(code []byte) []byte {
+			return append([]byte{0x65}, code...)
+		}},
+		{name: "address_override", edit: func(code []byte) []byte {
+			return append([]byte{0x67}, code...)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			code, _ := x86RawScalarFloatBroadcastLiteral(true, true, 512, 0, false)
+			code = test.edit(code)
+			if _, err := decodeX86RawDirectiveGroup(code, 64, 0, test.name, map[string]bool{}); err == nil {
+				t.Fatalf("folded unsafe scalar broadcast source: %x", code)
+			}
+		})
+	}
+}

@@ -47,7 +47,7 @@ func (c *amd64Ctx) lowerScalarFloatBroadcast(op Op, ins Instr) (ok bool, termina
 		if !isAMD64XReg(source.Reg) {
 			return true, false, fmt.Errorf("amd64 %s source must be X or memory: %q", baseOp, ins.Raw)
 		}
-	} else if !isAMD64MemoryOperand(source) {
+	} else if !isAMD64MemoryOperand(source) && !(source.Kind == OpImm && ins.x86RIPLiteral) {
 		return true, false, fmt.Errorf("amd64 %s source must be X or memory: %q", baseOp, ins.Raw)
 	}
 
@@ -74,6 +74,8 @@ func (c *amd64Ctx) lowerScalarFloatBroadcast(op Op, ins Instr) (ok bool, termina
 	var scalar string
 	if source.Kind == OpReg {
 		scalar, err = c.loadXLowInteger(source.Reg, laneBits)
+	} else if source.Kind == OpImm {
+		scalar, err = c.evalIntSized(source, amd64IntegerTypeForBits(laneBits))
 	} else {
 		if masked {
 			// Broadcasting reads the scalar only if any destination lane is

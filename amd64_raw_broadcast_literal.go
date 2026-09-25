@@ -118,6 +118,42 @@ func decodeX86RawVMOVIntegerLiteral(code []byte, offset, mode int) (Instr, int, 
 	return instruction, len(patched), literal, true, nil
 }
 
+// decodeX86RawScalarFloatBroadcastLiteral resolves VBROADCASTSS/SD loads
+// through the same source-local, unreachable constant-pool proof.
+func decodeX86RawScalarFloatBroadcastLiteral(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 2 || p.pp != 1 ||
+		(p.opcode != 0x18 && p.opcode != 0x19) ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 4
+	if p.opcode == 0x19 {
+		width = 8
+	}
+	patched, value, literal, err := x86RawRIPLiteral(code, offset, modRMIndex, width)
+	if err != nil {
+		return Instr{}, 0, x86RawLiteralRange{}, true, err
+	}
+	instruction, consumed, ok, err := decodedX86ScalarBroadcastInstruction(patched, mode)
+	if err != nil || !ok || consumed != len(patched) ||
+		len(instruction.Args) < 2 || instruction.Args[0].Kind != OpMem {
+		if err == nil {
+			err = fmt.Errorf("RIP-relative scalar float broadcast did not match its VEX/EVEX grammar")
+		}
+		return Instr{}, 0, x86RawLiteralRange{}, true, err
+	}
+	setX86RawRIPLiteral(&instruction, value)
+	return instruction, len(patched), literal, true, nil
+}
+
 func x86RawVMOVLoadWidth(opcode, pp byte, width64, evex bool) int {
 	if opcode == 0x6e && pp == 1 {
 		if width64 {
