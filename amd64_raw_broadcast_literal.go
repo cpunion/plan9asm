@@ -1029,6 +1029,35 @@ func decodedX86LegacySIMDMoveInstruction(code []byte, mode int) (Instr, int, boo
 
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
+// decodeX86RawVariableRotateRIPData preserves local vector or scalar
+// constant pools for all four EVEX per-lane variable-rotate forms.
+func decodeX86RawVariableRotateRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 1 ||
+		(p.opcode != 0x14 && p.opcode != 0x15) ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = 4
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86RawVariableRotateInstruction, "EVEX variable rotate",
+	)
+}
+
 // decodeX86RawQQToFloatRIPData resolves source-local literal pools for all
 // QWORD-to-PS/PD encodings before the raw-byte decoder treats them as memory.
 func decodeX86RawQQToFloatRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
