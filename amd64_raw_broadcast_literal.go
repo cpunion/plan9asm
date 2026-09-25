@@ -335,6 +335,42 @@ func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x
 	)
 }
 
+// decodeX86RawMinMaxRIPData covers the complete VEX/EVEX packed integer
+// min/max family. EVEX.b reads one D/Q lane; other forms read a full vector.
+func decodeX86RawMinMaxRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	for _, spec := range amd64PackedIntegerMinMaxSpecs {
+		if p.mapNumber != spec.mapNumber || p.opcode != spec.opcode {
+			continue
+		}
+		if !p.evex && spec.laneBits == 64 {
+			continue
+		}
+		if p.evex && spec.laneBits >= 32 && p.w != (spec.laneBits == 64) {
+			continue
+		}
+		width := 16 << p.vectorLength
+		if p.evex && p.broadcast {
+			width = spec.laneBits / 8
+		}
+		return x86RawRIPDataThroughDecoder(
+			code, offset, mode, modRMIndex, width,
+			decodedX86PackedIntegerMinMaxInstruction, "packed integer min/max",
+		)
+	}
+	return Instr{}, 0, x86RawLiteralRange{}, false, nil
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
