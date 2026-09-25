@@ -44,11 +44,12 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   frozen shard reports or ledger pass updates.
 - The new RIP constant decoder has focused Go-assembler and three-target LLVM
   22 object tests. A current-branch `simd@v1.21.1` amd64 diagnostic moves
-  from 9/73 to 16/73 successful assembly files. The complete
+  from 9/73 to 19/73 successful assembly files. The complete
   `nary_avx2_amd64.s`, `compare_avx2_amd64.s` and
-  `compress_avx2_amd64.s` and `columnar_avx2_amd64.s` pass; other files
-  advance past broadcast, packed-move and logical constants to their next
-  unsupported form. The candidate remains
+  `compress_avx2_amd64.s`, `columnar_avx2_amd64.s`, `gemm_avx2_amd64.s`,
+  `numeric_avx2_amd64.s` and `scan_avx2_amd64.s` pass; other files advance
+  past broadcast, packed-move, logical and scalar-move constants to their
+  next unsupported form. The candidate remains
   failed; this is not a ledger pass or a frozen-shard report.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`
   22 MB ARM64 sources, including about 7,700 functions, on Linux and Windows
