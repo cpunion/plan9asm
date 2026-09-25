@@ -49,7 +49,7 @@ func TestTranslateRawVEXHorizontalFloatWeaviateRegression(t *testing.T) {
 
 func TestDecodedX86VEXHorizontalFloatCompleteRegisterFamily(t *testing.T) {
 	count := 0
-	for opcode, stem := range map[byte]string{0x7c: "VHADD", 0x7d: "VHSUB"} {
+	for opcode, stem := range map[byte]string{0x7c: "VHADD", 0x7d: "VHSUB", 0xd0: "VADDSUB"} {
 		for pp, suffix := range map[byte]string{1: "PD", 3: "PS"} {
 			for _, vex3 := range []bool{false, true} {
 				for _, width256 := range []bool{false, true} {
@@ -87,8 +87,38 @@ func TestDecodedX86VEXHorizontalFloatCompleteRegisterFamily(t *testing.T) {
 			}
 		}
 	}
-	if count != 81920 {
-		t.Fatalf("covered %d VEX horizontal floating register encodings, want 81920", count)
+	if count != 122880 {
+		t.Fatalf("covered %d VEX horizontal and alternating floating register encodings, want 122880", count)
+	}
+}
+
+func TestTranslateRawVEXAddSubComplexAVX2Regression(t *testing.T) {
+	const source = "TEXT rawAddSub(SB),$0-0\n\tLONG $0xc1d0f9c5\n\tRET\n"
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{
+		"x86_64-apple-darwin",
+		"x86_64-unknown-linux-gnu",
+		"x86_64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{
+				"rawAddSub": {Name: "rawAddSub", Ret: Void},
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(ir, "fsub double") || !strings.Contains(ir, "fadd double") {
+				t.Fatalf("VADDSUBPD omitted alternating arithmetic:\n%s", ir)
+			}
+			compileLLVMToObject(t, llc, triple, "raw-vaddsub.ll", "raw-vaddsub.o", ir)
+		})
 	}
 }
 
@@ -98,6 +128,13 @@ func TestDecodedX86VEXHorizontalFloatMemoryAndInvalidForms(t *testing.T) {
 	wantSource := MemRef{Segment: FS, Base: "R8", Index: "R9", Scale: 4, Off: 32}
 	if err != nil || !ok || length != len(code) || got.Op != "VHSUBPD" || len(got.Args) != 3 || got.Args[0].Kind != OpMem || got.Args[0].Mem != wantSource || got.Args[1].String() != "Y3" || got.Args[2].String() != "Y12" {
 		t.Fatalf("decode %x = %+v, length=%d, ok=%v, err=%v", code, got, length, ok, err)
+	}
+	code[4] = 0xd0
+	got, length, ok, err = decodedX86VEXHorizontalFloatInstruction(code, 64)
+	if err != nil || !ok || length != len(code) || got.Op != "VADDSUBPD" ||
+		got.Args[0].Kind != OpMem || got.Args[0].Mem != wantSource ||
+		got.Args[1].String() != "Y3" || got.Args[2].String() != "Y12" {
+		t.Fatalf("VADDSUBPD memory source %x decoded as %+v, length=%d, ok=%v, err=%v", code, got, length, ok, err)
 	}
 
 	valid := encodeX86VEXHorizontalFloat(0x7c, 1, true, false, false, 0, 0, 0)

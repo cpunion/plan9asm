@@ -1181,6 +1181,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawHorizontalFloatRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 horizontal floating literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86VEXHorizontalFloatInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 VEX horizontal floating instruction at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -5836,7 +5849,7 @@ func vectorFloatCompareRawOperation(pp byte) Op {
 }
 
 // decodedX86VEXHorizontalFloatInstruction recognizes the complete VEX.128 and
-// VEX.256 VHADDPS/PD and VHSUBPS/PD family in Go 1.27's _yvaddsubpd table.
+// VEX.256 VHADD/VHSUB/VADDSUB PS/PD family in Go 1.27's _yvaddsubpd table.
 // VEX.W is ignored. Recover every register and ModRM/SIB memory form before
 // the generic decoder, which can misdecode these bytes as relative branches.
 func decodedX86VEXHorizontalFloatInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
@@ -5881,7 +5894,7 @@ vex:
 	default:
 		return Instr{}, 0, false, nil
 	}
-	stem, recognized := map[byte]string{0x7c: "VHADD", 0x7d: "VHSUB"}[opcode]
+	stem, recognized := map[byte]string{0x7c: "VHADD", 0x7d: "VHSUB", 0xd0: "VADDSUB"}[opcode]
 	if !recognized {
 		return Instr{}, 0, false, nil
 	}

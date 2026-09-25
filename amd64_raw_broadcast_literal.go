@@ -339,6 +339,32 @@ func decodeX86RawFloatLogicalRIPData(code []byte, offset, mode int) (Instr, int,
 	)
 }
 
+// decodeX86RawHorizontalFloatRIPData covers VHADD/VHSUB/VADDSUB PS/PD
+// VEX X/Y reads from unreachable source-local vector constants.
+func decodeX86RawHorizontalFloatRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.evex || p.mapNumber != 1 ||
+		(p.pp != 1 && p.pp != 3) || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	switch p.opcode {
+	case 0x7c, 0x7d, 0xd0:
+	default:
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, 16<<p.vectorLength,
+		decodedX86VEXHorizontalFloatInstruction, "horizontal/alternating floating",
+	)
+}
+
 // decodeX86RawImmediatePackedBlendRIPData covers the complete Go 1.27
 // legacy and VEX immediate blend family. The immediate follows disp32, so
 // the pool displacement is relative to the byte after that immediate.
