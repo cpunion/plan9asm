@@ -484,6 +484,38 @@ func decodeX86RawPackedArithmeticRIPData(code []byte, offset, mode int) (Instr, 
 	)
 }
 
+// decodeX86RawFMA3RIPData handles all packed and scalar FMA3 encodings.
+// Scalar operations read one lane; packed EVEX.b memory forms broadcast it.
+func decodeX86RawFMA3RIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 2 || p.pp != 1 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	spec, recognized := decodedX86VEXFMA3Ops[byte(p.opcode)]
+	if !recognized {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if spec.scalar || p.evex && p.broadcast {
+		width = 4
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86VEXFMA3Instruction, "FMA3",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
