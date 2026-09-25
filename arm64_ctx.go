@@ -552,6 +552,18 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
 					markReg(Reg(fmt.Sprintf("R%d", form.row)))
 				}
+				if form, ok := decodeARM64RawSMETileMemory(word); ok {
+					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
+					markReg(Reg(fmt.Sprintf("R%d", form.row)))
+					if form.base == 31 {
+						markReg(SP)
+					} else {
+						markReg(Reg(fmt.Sprintf("R%d", form.base)))
+					}
+					if form.offset != 31 {
+						markReg(Reg(fmt.Sprintf("R%d", form.offset)))
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
 					if destination, _, ok := arm64SVEFloatElementReg(decoded.Args[1]); ok {
 						markReg(Reg(fmt.Sprintf("Z%d", destination)))
