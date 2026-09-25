@@ -146,6 +146,16 @@ func decodedARM64GoSyntax(inst arm64asm.Inst) string {
 			rest = rest[:separator] + ", V" + rest[separator+3:]
 		}
 	}
+	// The x/arch printer emits LDPSW's two destinations as separate operands,
+	// unlike the pair operand accepted by Go's assembler and our pair lowerer.
+	if inst.Op == arm64asm.LDPSW {
+		operands := strings.Split(rest, ", ")
+		if len(operands) == 3 {
+			// The printer also reverses Rt and Rt2 in this three-operand
+			// spelling. The pair lowerer consumes them in memory order.
+			rest = operands[0] + ", (" + operands[2] + ", " + operands[1] + ")"
+		}
+	}
 	if rest == "" {
 		return op
 	}
