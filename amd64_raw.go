@@ -323,14 +323,39 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 		start := i
 		var code []byte
 		var rawLines []string
-		for i < len(fn.Instrs) && isX86RawDirective(fn.Instrs[i]) {
-			encoded, err := x86RawDirectiveBytes(fn.Instrs[i])
-			if err != nil {
-				return fn, err
+		opaque := make(map[int]x86RawDecodedInstruction)
+		for i < len(fn.Instrs) {
+			if isX86RawDirective(fn.Instrs[i]) {
+				encoded, err := x86RawDirectiveBytes(fn.Instrs[i])
+				if err != nil {
+					return fn, err
+				}
+				code = append(code, encoded...)
+				rawLines = append(rawLines, fn.Instrs[i].Raw)
+				i++
+				continue
 			}
-			code = append(code, encoded...)
-			rawLines = append(rawLines, fn.Instrs[i].Raw)
-			i++
+			// Keep a run of named SSE constant reads in the same physical
+			// layout only when raw bytes resume after it. Go's encoder lengths
+			// are checked against the official assembler in tests.
+			end := i
+			for end < len(fn.Instrs) {
+				if _, ok := x86RawMixedSSESymbolReadSize(fn.Instrs[end]); !ok {
+					break
+				}
+				end++
+			}
+			if end == i || end == len(fn.Instrs) || !isX86RawDirective(fn.Instrs[end]) {
+				break
+			}
+			for i < end {
+				ins := fn.Instrs[i]
+				length, _ := x86RawMixedSSESymbolReadSize(ins)
+				opaque[len(code)] = x86RawDecodedInstruction{length: length, instrs: []Instr{ins}}
+				code = append(code, make([]byte, length)...)
+				rawLines = append(rawLines, ins.Raw)
+				i++
+			}
 		}
 		// Go appends BYTE/WORD/LONG/QUAD after a final RET to the previous
 		// TEXT, even when GLOBL declarations intervene. Without a following
@@ -352,7 +377,7 @@ func decodeX86RawDirectives(fn Func, goarch string) (Func, error) {
 				continue
 			}
 		}
-		decoded, err := decodeX86RawDirectiveGroup(code, mode, start, rawGroup, knownLabels)
+		decoded, err := decodeX86RawDirectiveGroupWithOpaque(code, mode, start, rawGroup, knownLabels, opaque)
 		if err != nil {
 			return fn, err
 		}
@@ -375,6 +400,13 @@ type x86RawDecodedInstruction struct {
 // by generated assembly. Any edge outside the group or into an instruction is
 // still rejected rather than being guessed from final linked layout.
 func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, knownLabels map[string]bool) ([]Instr, error) {
+	return decodeX86RawDirectiveGroupWithOpaque(code, mode, start, rawGroup, knownLabels, nil)
+}
+
+func decodeX86RawDirectiveGroupWithOpaque(
+	code []byte, mode, start int, rawGroup string,
+	knownLabels map[string]bool, opaque map[int]x86RawDecodedInstruction,
+) ([]Instr, error) {
 	decodedByOffset := make(map[int]x86RawDecodedInstruction)
 	labels := make(map[int]string)
 	addressTargets := make(map[int]int)
@@ -386,6 +418,17 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 	owners := make([]int, len(code))
 	for i := range owners {
 		owners[i] = -1
+	}
+	for offset, named := range opaque {
+		if named.length <= 0 || offset < 0 || offset+named.length > len(code) {
+			return nil, fmt.Errorf("invalid named x86 source span at byte %d: %q", offset, rawGroup)
+		}
+		for current := offset; current < offset+named.length; current++ {
+			if owners[current] != -1 {
+				return nil, fmt.Errorf("overlapping named x86 source spans at byte %d: %q", current, rawGroup)
+			}
+			owners[current] = offset
+		}
 	}
 	queue := []int{0}
 	queued := map[int]bool{0: true}
@@ -453,6 +496,11 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			}
 			if owners[offset] >= 0 && owners[offset] != offset {
 				return nil, fmt.Errorf("raw x86 reachable byte %d at instruction %d is inside instruction at byte %d: %q", offset, start, owners[offset], rawGroup)
+			}
+			if named, ok := opaque[offset]; ok {
+				decodedByOffset[offset] = named
+				offset += named.length
+				continue
 			}
 			if instruction, length, ok, err := decodedX86ExtendedPrefetchInstruction(code[offset:], mode); ok {
 				if err != nil {
@@ -2373,6 +2421,16 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			opName := strings.Fields(syntax)[0]
 			op := Op(strings.ToUpper(opName))
 			if inst.PCRel != 0 {
+				if instruction, literal, ok, err := decodeX86RawLegacyScalarRIPData(code, offset, inst, syntax); ok {
+					if err != nil {
+						return nil, fmt.Errorf("decode raw x86 legacy scalar literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+					}
+					instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+					decodedByOffset[offset] = x86RawDecodedInstruction{length: inst.Len, instrs: []Instr{instruction}}
+					recordLiteral(offset, literal)
+					offset += inst.Len
+					continue
+				}
 				if mode == 64 && inst.Op == x86asm.LEA {
 					mem, ok := inst.Args[1].(x86asm.Mem)
 					if ok && mem.Base == x86asm.RIP {
@@ -9956,6 +10014,19 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 	}
 
 	switch inst.Op {
+	case x86asm.INC, x86asm.DEC:
+		bits := 0
+		switch destination := inst.Args[0].(type) {
+		case x86asm.Reg:
+			bits = decodedX86RegisterBits(destination)
+		case x86asm.Mem:
+			bits = inst.MemBytes * 8
+		}
+		width := map[int]string{8: "B", 16: "W", 32: "L", 64: "Q"}[bits]
+		if width == "" {
+			return "", fmt.Errorf("raw %s has unsupported destination width %d", inst.Op, bits)
+		}
+		replaceOp(inst.Op.String() + width)
 	case x86asm.SLDT, x86asm.STR, x86asm.SMSW:
 		// x/arch prints the unsuffixed Intel names, while Go's descriptor
 		// grammar selects the destination width in the mnemonic. Memory
