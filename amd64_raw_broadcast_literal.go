@@ -1013,6 +1013,42 @@ func decodeX86RawImmediateThreeVectorRIPData(
 	)
 }
 
+func decodeX86RawPackedWidenConversionRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 1 || p.pp != 1 ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	ops := x86RawPackedWidenConversionByOpcode
+	if p.w {
+		ops = x86RawPackedDoubleConversionByOpcode
+	}
+	if _, recognized := ops[p.opcode]; !recognized {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 8 << p.vectorLength
+	if p.w {
+		width *= 2
+	}
+	if p.broadcast {
+		width = 4
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 0, 0,
+		decodedX86PackedWidenConversionInstruction, "packed widening conversion",
+	)
+}
+
 // decodeX86RawLegacySIMDMoveRIPData covers the six 128-bit and two scalar
 // legacy MOV loads in Go's yxmov table. The other direction is a store and
 // does not read the RIP-relative source bytes.
