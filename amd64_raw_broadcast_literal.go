@@ -455,6 +455,35 @@ func decodeX86RawVPSHUFBRIPData(code []byte, offset, mode int) (Instr, int, x86R
 	)
 }
 
+// decodeX86RawPackedArithmeticRIPData covers the complete VEX/EVEX VPADD
+// and VPSUB families, including their D/Q scalar memory broadcasts.
+func decodeX86RawPackedArithmeticRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 1 || p.pp != 1 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	properties, recognized := decodedX86PackedIntegerArithmeticOps[byte(p.opcode)]
+	if !recognized {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.evex && p.broadcast {
+		width = properties.laneBytes
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86PackedIntegerArithmeticInstruction, "packed integer arithmetic",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
