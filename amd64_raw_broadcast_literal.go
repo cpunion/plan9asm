@@ -552,6 +552,31 @@ func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, 
 	)
 }
 
+// decodeX86RawScalarFlagCompareRIPData covers VCOMIS{S,D} and
+// VUCOMIS{S,D} VEX/EVEX memory sources. EVEX.b remains register-only SAE.
+func decodeX86RawScalarFlagCompareRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.mapNumber != 1 || (p.opcode != 0x2e && p.opcode != 0x2f) ||
+		(p.pp != 0 && p.pp != 1) || p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 4
+	if p.pp == 1 {
+		width = 8
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, width,
+		decodedX86ScalarFlagCompareInstruction, "scalar flag compare",
+	)
+}
+
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
 func x86RawRIPDataThroughDecoder(
