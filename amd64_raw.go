@@ -9164,14 +9164,24 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		replaceOp("CVTPD2PL")
 	case x86asm.CVTTPD2DQ, x86asm.CVTTPD2PI:
 		replaceOp("CVTTPD2PL")
-	case x86asm.IMUL:
+	case x86asm.MUL, x86asm.IMUL, x86asm.DIV, x86asm.IDIV:
 		argumentCount := 0
 		for _, argument := range inst.Args {
 			if argument != nil {
 				argumentCount++
 			}
 		}
-		if argumentCount == 3 {
+		if argumentCount == 1 {
+			bits := inst.MemBytes * 8
+			if source, ok := inst.Args[0].(x86asm.Reg); ok {
+				bits = decodedX86RegisterBits(source)
+			}
+			width := map[int]string{8: "B", 16: "W", 32: "L", 64: "Q"}[bits]
+			if width == "" {
+				return "", fmt.Errorf("%s has unsupported source width %d", inst.Op, bits)
+			}
+			replaceOp(inst.Op.String() + width)
+		} else if inst.Op == x86asm.IMUL && argumentCount == 3 {
 			destination, ok := inst.Args[0].(x86asm.Reg)
 			if !ok {
 				return "", fmt.Errorf("three-operand IMUL destination is not a register")
