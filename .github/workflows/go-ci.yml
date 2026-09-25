@@ -159,9 +159,12 @@ jobs:
           go-version: '1.27.x'
           cache: true
 
-      - name: Scan latest module and compile complete asm corpus
+      - name: Compile pinned complete asm corpus
         env:
           REPORTED_LIBRARY: ${{ matrix.library }}
+          # CI must validate the committed exact version. Incremental discovery
+          # tracks newly published versions without making old commits flaky.
+          PLAN9ASM_CORPUS_CHECK_LATEST: 'false'
         run: scripts/check-reported-library-corpus.sh "$REPORTED_LIBRARY"
 
   discovered_library_corpus:
