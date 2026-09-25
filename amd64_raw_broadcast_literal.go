@@ -1029,6 +1029,36 @@ func decodedX86LegacySIMDMoveInstruction(code []byte, mode int) (Instr, int, boo
 
 type x86RawInstructionDecoder func([]byte, int) (Instr, int, bool, error)
 
+// decodeX86RawScaledRoundRIPData accounts for the trailing imm8 while
+// resolving packed vectors, packed broadcasts, and scalar local constants.
+func decodeX86RawScaledRoundRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	w := 0
+	if p.w {
+		w = 1
+	}
+	form, recognized := x86RawScaledRoundForms[[2]int{p.opcode, w}]
+	if !matched || !p.evex || p.mapNumber != 3 || p.pp != 1 || !recognized ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if form.scalar || p.broadcast {
+		width = form.laneBytes
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1,
+		decodedX86RawScaledRoundInstruction, "EVEX scaled round",
+	)
+}
+
 // decodeX86RawEVEXUnpackRIPData preserves source-local full-vector and
 // broadcast-lane constants for all eight EVEX integer interleave rows.
 func decodeX86RawEVEXUnpackRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {

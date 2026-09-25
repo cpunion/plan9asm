@@ -1975,6 +1975,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawScaledRoundRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 scaled round literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
 			if instruction, length, literal, ok, err := decodeX86RawVEXRoundRIPData(code, offset, mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 VROUND literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -2004,6 +2017,18 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			if instruction, length, ok, err := decodedX86RawVectorByteShiftInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 vector byte shift at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86RawScaledRoundInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 scaled round at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
