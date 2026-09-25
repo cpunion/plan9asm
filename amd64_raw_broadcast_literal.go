@@ -925,14 +925,15 @@ func decodeX86RawVectorByteShiftRIPData(code []byte, offset, mode int) (Instr, i
 	)
 }
 
-// decodeX86RawVEXPackedMADDRIPData covers both VPMADDWD and VPMADDUBSW
-// VEX.128/256 opcode rows. Their memory operand reads the full vector.
-func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+// decodeX86RawPackedMADDRIPData covers VEX and EVEX VPMADDWD/VPMADDUBSW.
+// Their memory operand reads the full vector and never broadcasts.
+func decodeX86RawPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
-	if !matched || p.evex || p.pp != 1 || p.segment != "" || p.addressOverride {
+	if !matched || p.pp != 1 || p.segment != "" || p.addressOverride ||
+		p.evex && p.vectorLength > 2 {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	if !(p.mapNumber == 1 && p.opcode == 0xf5 ||
@@ -943,9 +944,13 @@ func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int
 	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
+	decode := x86RawInstructionDecoder(decodedX86VEXPackedMADDInstruction)
+	if p.evex {
+		decode = decodedX86EVEXPackedMADDInstruction
+	}
 	return x86RawRIPDataThroughDecoder(
 		code, offset, mode, modRMIndex, 16<<p.vectorLength,
-		decodedX86VEXPackedMADDInstruction, "packed multiply-add",
+		decode, "packed multiply-add",
 	)
 }
 

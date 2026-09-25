@@ -1317,7 +1317,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
-			if instruction, length, literal, ok, err := decodeX86RawVEXPackedMADDRIPData(code, offset, mode); ok {
+			if instruction, length, literal, ok, err := decodeX86RawPackedMADDRIPData(code, offset, mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 VEX packed multiply-add literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
 				}
@@ -1327,6 +1327,18 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
 				literalRanges = append(literalRanges, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86EVEXPackedMADDInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 EVEX packed multiply-add at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
 				offset += length
 				continue
 			}
