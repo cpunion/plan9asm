@@ -157,9 +157,12 @@ int main(void) {
 }
 
 func TestARM64RawSQSHLUCompleteScalarAndVectorForms(t *testing.T) {
+	type sqshluForm struct {
+		word   uint32
+		scalar bool
+	}
 	var source strings.Builder
-	source.WriteString("TEXT sqshluForms(SB),$0-0\n")
-	forms := 0
+	var forms []sqshluForm
 	for _, elementBits := range []int{8, 16, 32, 64} {
 		for _, scalar := range []bool{false, true} {
 			for _, wide := range []bool{false, true} {
@@ -175,35 +178,47 @@ func TestARM64RawSQSHLUCompleteScalarAndVectorForms(t *testing.T) {
 						t.Fatalf("decode SQSHLU scalar=%v wide=%v bits=%d shift=%d word=%#08x: %#v, %v",
 							scalar, wide, elementBits, shift, word, decoded, err)
 					}
-					fmt.Fprintf(&source, "\tWORD $%#08x\n", word)
-					forms++
+					name := fmt.Sprintf("sqshluForm%d", len(forms))
+					fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n\tWORD $%#08x\n\tRET\n", name, word)
+					forms = append(forms, sqshluForm{word: word, scalar: scalar})
 				}
 			}
 		}
 	}
-	source.WriteString("\tRET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
-	file, err := Parse(ArchARM64, source.String())
-	if err != nil {
-		t.Fatal(err)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, triple := range []string{
 		"aarch64-unknown-linux-gnu", "aarch64-apple-darwin", "aarch64-unknown-freebsd",
 	} {
-		ir, err := Translate(file, Options{
-			Goarch: "arm64", TargetTriple: triple,
-			Sigs: map[string]FuncSig{"sqshluForms": {Name: "sqshluForms", Ret: Void}},
-		})
-		if err != nil {
-			t.Fatalf("%s: %v", triple, err)
+		for index, form := range forms {
+			t.Run(fmt.Sprintf("%s/form-%02d", triple, index), func(t *testing.T) {
+				formSource := fmt.Sprintf("TEXT sqshluForm(SB),$0-0\n\tWORD $%#08x\n\tRET\n", form.word)
+				file, err := Parse(ArchARM64, formSource)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ir, err := Translate(file, Options{
+					Goarch: "arm64", TargetTriple: triple,
+					Sigs: map[string]FuncSig{"sqshluForm": {Name: "sqshluForm", Ret: Void}},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantCalls := 1
+				if form.scalar {
+					wantCalls = 0
+					if !strings.Contains(ir, " = icmp slt i") || !strings.Contains(ir, " = shl i") {
+						t.Fatal("scalar SQSHLU is missing signed clamp or shift")
+					}
+				}
+				if got := strings.Count(ir, " = call "); got != wantCalls {
+					t.Fatalf("got %d SQSHLU calls, want %d", got, wantCalls)
+				}
+				compileLLVMToObject(t, llc, triple, "arm64-sqshlu.ll", "arm64-sqshlu.o", ir)
+			})
 		}
-		if got := strings.Count(ir, " = call "); got != forms {
-			t.Fatalf("%s: got %d SQSHLU calls, want %d", triple, got, forms)
-		}
-		llc := findLLVM22Tool("llc")
-		if llc == "" {
-			t.Fatal("LLVM 22 llc not found")
-		}
-		compileLLVMToObject(t, llc, triple, "arm64-sqshlu.ll", "arm64-sqshlu.o", ir)
 	}
 }

@@ -63,6 +63,42 @@ func decodeARM64RawSQSHLU(word uint32) (arm64RawSQSHLU, bool) {
 }
 
 func (c *arm64Ctx) lowerRawSQSHLU(form arm64RawSQSHLU) error {
+	if form.scalar {
+		// LLVM 22 cannot legalize the scalar SQSHLU intrinsic reliably.
+		// Compare the original input against UMAX >> shift before selecting
+		// a wrapped shift result or the saturation value.
+		bits := form.arrangement.elementBits
+		value, err := c.arm64VDUPExtractLane(Reg(fmt.Sprintf("V%d", form.source)), bits, 0)
+		if err != nil {
+			return err
+		}
+		negative := c.newTmp()
+		shifted := c.newTmp()
+		result := c.newTmp()
+		packed := c.newTmp()
+		bytes := c.newTmp()
+		lanes := 128 / bits
+		fmt.Fprintf(c.b, "  %%%s = icmp slt i%d %s, 0\n", negative, bits, value)
+		fmt.Fprintf(c.b, "  %%%s = shl i%d %s, %d\n", shifted, bits, value, form.shift)
+		positive := "%" + shifted
+		if form.shift > 0 {
+			limit := (^uint64(0) >> (64 - bits)) >> form.shift
+			overflow := c.newTmp()
+			saturated := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = icmp ugt i%d %s, %d\n", overflow, bits, value, limit)
+			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i%d -1, i%d %%%s\n",
+				saturated, overflow, bits, bits, shifted)
+			positive = "%" + saturated
+		}
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i%d 0, i%d %s\n",
+			result, negative, bits, bits, positive)
+		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> zeroinitializer, i%d %%%s, i32 0\n",
+			packed, lanes, bits, bits, result)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n",
+			bytes, lanes, bits, packed)
+		return c.storeVReg(Reg(fmt.Sprintf("V%d", form.destination)), "%"+bytes)
+	}
+
 	value, err := c.loadRawARM64VectorOperand(form.source, form.arrangement, 0, form.scalar)
 	if err != nil {
 		return err
