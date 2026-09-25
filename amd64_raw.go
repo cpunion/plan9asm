@@ -1795,6 +1795,18 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, ok, err := decodedX86PackedCompressInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 packed compress at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86IFMAInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 IFMA at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -8360,6 +8372,119 @@ evex:
 	if broadcast {
 		op += ".BCST"
 	}
+	if zeroing {
+		op += ".Z"
+	}
+	rawArgs := make([]string, len(args))
+	for index := range args {
+		rawArgs[index] = args[index].String()
+	}
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+}
+
+// decodedX86PackedCompressInstruction covers Go 1.27's complete
+// _yvcompresspd family: six EVEX stores to a vector register or memory.
+func decodedX86PackedCompressInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	i := 0
+	segment := Reg("")
+	addressOverride := false
+	for i < len(code) {
+		switch code[i] {
+		case 0x64:
+			segment = FS
+			i++
+		case 0x65:
+			segment = GS
+			i++
+		case 0x67:
+			addressOverride = true
+			i++
+		default:
+			goto evex
+		}
+	}
+
+evex:
+	if mode != 32 && mode != 64 {
+		return Instr{}, 0, false, nil
+	}
+	if len(code) < i+6 || code[i] != 0x62 {
+		return Instr{}, 0, false, nil
+	}
+	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
+	opcode := code[i+4]
+	if p0&0x0f != 2 || p1&0x07 != 5 ||
+		(opcode != 0x63 && opcode != 0x8a && opcode != 0x8b) {
+		return Instr{}, 0, false, nil
+	}
+	ok = true
+	if p1&0x78 != 0x78 || p2&0x08 == 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX packed compress reserves the vvvv register field")
+	}
+	if addressOverride {
+		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
+	}
+	if p2&0x10 != 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX broadcast is unavailable for packed compress")
+	}
+	vectorBits := (p2 >> 5) & 3
+	if vectorBits == 3 {
+		return Instr{}, 0, true, fmt.Errorf("reserved EVEX vector length")
+	}
+	vectorPrefix := [...]string{"X", "Y", "Z"}[vectorBits]
+	maskNumber := int(p2 & 7)
+	zeroing := p2&0x80 != 0
+	if zeroing && maskNumber == 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX zeroing requires a nonzero mask")
+	}
+	if mode == 32 && maskNumber != 0 {
+		return Instr{}, 0, true, fmt.Errorf("386 packed compress mask form exceeds the Go assembler operand limit")
+	}
+	width64 := p1&0x80 != 0
+	op := Op("")
+	laneBytes := 0
+	switch opcode {
+	case 0x63:
+		if width64 {
+			op, laneBytes = "VPCOMPRESSW", 2
+		} else {
+			op, laneBytes = "VPCOMPRESSB", 1
+		}
+	case 0x8a:
+		if width64 {
+			op, laneBytes = "VCOMPRESSPD", 8
+		} else {
+			op, laneBytes = "VCOMPRESSPS", 4
+		}
+	case 0x8b:
+		if width64 {
+			op, laneBytes = "VPCOMPRESSQ", 8
+		} else {
+			op, laneBytes = "VPCOMPRESSD", 4
+		}
+	}
+	rExt := int(^p0>>7) & 1
+	rHighExt := int(^p0>>4) & 1
+	xExt := int(^p0>>6) & 1
+	bExt := int(^p0>>5) & 1
+	modRMIndex := i + 5
+	modRM := code[modRMIndex]
+	if mode == 32 && vectorBits == 2 &&
+		(int(modRM>>3&7)+rExt*8+rHighExt*16 >= 8 ||
+			modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("386 Z register exceeds the Go assembler frontend's register class")
+	}
+	sourceNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
+	source := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, sourceNumber))}
+	destination, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, laneBytes)
+	if decodeErr != nil {
+		return Instr{}, 0, true, decodeErr
+	}
+	args := []Operand{source}
+	if maskNumber != 0 {
+		args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("K%d", maskNumber))})
+	}
+	args = append(args, destination)
 	if zeroing {
 		op += ".Z"
 	}
