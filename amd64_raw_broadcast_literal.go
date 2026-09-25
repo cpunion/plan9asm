@@ -378,6 +378,38 @@ func decodeX86RawImmediatePackedBlendRIPData(code []byte, offset, mode int) (Ins
 	)
 }
 
+// decodeX86RawCLMULRIPData covers legacy PCLMULQDQ and all VEX/EVEX
+// VPCLMULQDQ widths. The imm8 follows the source displacement.
+func decodeX86RawCLMULRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := -1
+	width := 16
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if matched && p.mapNumber == 3 && p.pp == 1 && p.opcode == 0x44 &&
+		p.segment == "" && !p.addressOverride && p.vectorLength <= 2 {
+		modRMIndex = offset + p.modRM
+		width <<= p.vectorLength
+	}
+	if modRMIndex < 0 && code[offset] == 0x66 {
+		i := offset + 1
+		if i < len(code) && code[i]&0xf0 == 0x40 {
+			i++
+		}
+		if len(code) >= i+4 && code[i] == 0x0f && code[i+1] == 0x3a && code[i+2] == 0x44 {
+			modRMIndex = i + 3
+		}
+	}
+	if modRMIndex < 0 || len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1,
+		decodedX86RawCLMULInstruction, "carryless multiply",
+	)
+}
+
 // decodeX86RawScalarMoveRIPData covers memory-to-X VMOVSS/VMOVSD VEX and
 // EVEX encodings. The typed scalar decoder enforces reserved fields and masks.
 func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
