@@ -1,6 +1,3 @@
-//go:build !llgo
-// +build !llgo
-
 package plan9asm
 
 import (
@@ -20,7 +17,7 @@ func testGOROOT(t *testing.T) string {
 	}
 	goroot, err := testGoEnv("GOROOT")
 	if err != nil || goroot == "" {
-		t.Skip("GOROOT not available")
+		t.Fatal("GOROOT not available")
 	}
 	return goroot
 }
@@ -46,7 +43,7 @@ func compileLLVMToObject(t *testing.T, llc, triple, llName, objName, ll string) 
 	if err != nil {
 		s := string(out)
 		if llcUnsupportedTarget(s) {
-			t.Skipf("llc does not support triple %q: %s", triple, strings.TrimSpace(s))
+			t.Fatalf("llc does not support triple %q: %s", triple, strings.TrimSpace(s))
 		}
 		t.Fatalf("llc failed: %v\n%s", err, s)
 	}

@@ -7,6 +7,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"os/exec"
@@ -14,6 +17,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
@@ -143,7 +147,6 @@ type conformanceManifest struct {
 }
 
 var (
-	reCaseClause = regexp.MustCompile(`case\s+([^:]+):`)
 	reOpcodeName = regexp.MustCompile("(?m)^\\s*(?:obj\\.A_ARCHSPECIFIC:\\s*)?\"([A-Z][A-Za-z0-9.]*)\",\\s*$")
 )
 
@@ -365,26 +368,35 @@ func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch string) (map[string
 				continue
 			}
 			for _, fn := range file.Funcs {
-				for _, ins := range fn.Instrs {
+				for i := 0; i < len(fn.Instrs); {
+					ins := fn.Instrs[i]
 					if ins.Op == plan9asm.OpLABEL {
+						i++
+						continue
+					}
+					if isX86RawDirective(arch, ins) {
+						end := i + 1
+						for end < len(fn.Instrs) && isX86RawDirective(arch, fn.Instrs[end]) {
+							end++
+						}
+						sequence := fn.Instrs[i:end]
+						probeErr := plan9asm.ProbeInstructionSequence(arch, goarch, sequence)
+						probeKey := instructionSequenceProbeKey(sequence)
+						for _, raw := range sequence {
+							addFormStatWithProbeResult(forms, arch, goarch, raw, rel, probeKey, probeErr)
+							addOpStat(ops, string(raw.Op), rel, p.ImportPath, 1)
+						}
+						i = end
 						continue
 					}
 					nop := normalizeOp(string(ins.Op))
 					if nop == "" {
+						i++
 						continue
 					}
 					addFormStat(forms, arch, goarch, ins, rel)
-					s := ops[nop]
-					if s == nil {
-						s = &opStat{
-							Files: map[string]int{},
-							Pkgs:  map[string]int{},
-						}
-						ops[nop] = s
-					}
-					s.Count++
-					s.Files[rel]++
-					s.Pkgs[p.ImportPath]++
+					addOpStat(ops, nop, rel, p.ImportPath, 1)
+					i++
 				}
 			}
 			if len(file.Data) > 0 {
@@ -399,9 +411,26 @@ func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch string) (map[string
 }
 
 func addFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, ins plan9asm.Instr, file string) {
+	probeKey := fmt.Sprintf("%s %#v", ins.Op, ins.Args)
+	st, fresh := prepareFormStat(forms, arch, goarch, ins, file, probeKey)
+	if st == nil || !fresh {
+		return
+	}
+	classifyFormProbe(st, plan9asm.ProbeInstruction(arch, goarch, ins))
+}
+
+func addFormStatWithProbeResult(forms map[string]*formStat, arch plan9asm.Arch, goarch string, ins plan9asm.Instr, file, probeKey string, probeErr error) {
+	st, fresh := prepareFormStat(forms, arch, goarch, ins, file, probeKey)
+	if st == nil || !fresh {
+		return
+	}
+	classifyFormProbe(st, probeErr)
+}
+
+func prepareFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, ins plan9asm.Instr, file, probeKey string) (*formStat, bool) {
 	desc := plan9asm.DescribeInstruction(arch, goarch, ins)
 	if desc.Opcode == "" || desc.Opcode == string(plan9asm.OpLABEL) {
-		return
+		return nil, false
 	}
 	st := forms[desc.Form]
 	if st == nil {
@@ -421,12 +450,14 @@ func addFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, 
 	// Descriptor forms intentionally collapse concrete register numbers and
 	// immediate values. Those values can still select different lowerer paths,
 	// so cache exact instructions and aggregate their outcomes into the form.
-	probeKey := fmt.Sprintf("%s %#v", ins.Op, ins.Args)
 	if _, ok := st.ProbeKeys[probeKey]; ok {
-		return
+		return st, false
 	}
 	st.ProbeKeys[probeKey] = struct{}{}
-	err := plan9asm.ProbeInstruction(arch, goarch, ins)
+	return st, true
+}
+
+func classifyFormProbe(st *formStat, err error) {
 	switch {
 	case err == nil:
 		st.SupportedCount++
@@ -438,6 +469,27 @@ func addFormStat(forms map[string]*formStat, arch plan9asm.Arch, goarch string, 
 			st.Errors[err.Error()]++
 		}
 	}
+}
+
+func isX86RawDirective(arch plan9asm.Arch, ins plan9asm.Instr) bool {
+	if arch != plan9asm.ArchAMD64 {
+		return false
+	}
+	switch normalizeOp(string(ins.Op)) {
+	case "BYTE", "WORD", "LONG", "QUAD":
+		return true
+	default:
+		return false
+	}
+}
+
+func instructionSequenceProbeKey(instrs []plan9asm.Instr) string {
+	var b strings.Builder
+	b.WriteString("sequence")
+	for _, ins := range instrs {
+		fmt.Fprintf(&b, " %s %#v;", ins.Op, ins.Args)
+	}
+	return b.String()
 }
 
 func scanGoAssemblerTestdata(goroot string, arch plan9asm.Arch, goarch string) (map[string]*opStat, map[string]*formStat, []parseErr, int, error) {
@@ -770,56 +822,169 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		"PCDATA":   {},
 	}
 
-	seen := map[string]struct{}{}
-	var files []string
 	loweringArch := goarch
 	if loweringArch == "386" {
 		loweringArch = "amd64"
 	}
-	patterns := []string{
-		filepath.Join(repoRoot, loweringArch+"_*.go"),
-		filepath.Join(repoRoot, "parser.go"),
+	files, err := filepath.Glob(filepath.Join(repoRoot, loweringArch+"_*.go"))
+	if err != nil {
+		return nil, err
 	}
-	for _, pattern := range patterns {
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return nil, err
-		}
-		sort.Strings(matches)
-		for _, match := range matches {
-			if strings.HasSuffix(match, "_test.go") {
-				continue
-			}
-			if _, ok := seen[match]; ok {
-				continue
-			}
-			seen[match] = struct{}{}
-			files = append(files, match)
-		}
+	parserPath := filepath.Join(repoRoot, "parser.go")
+	if _, err := os.Stat(parserPath); err == nil {
+		files = append(files, parserPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("stat %s: %w", parserPath, err)
 	}
+	sort.Strings(files)
 	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
 		src, err := os.ReadFile(f)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", f, err)
 		}
-		for _, m := range reCaseClause.FindAllSubmatch(src, -1) {
-			items := strings.Split(string(m[1]), ",")
-			for _, item := range items {
-				item = strings.TrimSpace(item)
-				switch {
-				case strings.HasPrefix(item, "\"") && strings.HasSuffix(item, "\"") && len(item) >= 2:
-					if op := normalizeOp(strings.Trim(item, "\"")); op != "" {
-						supported[op] = struct{}{}
-					}
-				case strings.HasPrefix(item, "Op"):
-					if op := normalizeOp(strings.TrimPrefix(item, "Op")); op != "" {
-						supported[op] = struct{}{}
+		parsed, err := parser.ParseFile(token.NewFileSet(), f, src, 0)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s for supported instructions: %w", f, err)
+		}
+		for _, decl := range parsed.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.VAR {
+				continue
+			}
+			for _, declared := range gen.Specs {
+				spec, ok := declared.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, value := range spec.Values {
+					literal, ok := value.(*ast.CompositeLit)
+					if ok {
+						collectSupportedOpcodeMap(supported, literal)
 					}
 				}
 			}
 		}
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			// A single-family lowerer often starts with `if op != "VEXT"` rather
+			// than a switch. This is an implementation-backed support claim just
+			// like an opcode switch case. Only accept a literal compared directly
+			// with an identifier named op so unrelated strings cannot leak into
+			// the supported-instruction inventory.
+			if comparison, ok := node.(*ast.BinaryExpr); ok &&
+				(comparison.Op == token.EQL || comparison.Op == token.NEQ) {
+				if candidate, ok := opcodeComparedWithOp(comparison.X, comparison.Y); ok {
+					if op := normalizeOp(candidate); op != "" {
+						supported[op] = struct{}{}
+					}
+				}
+			}
+			if spec, ok := node.(*ast.ValueSpec); ok {
+				for i, name := range spec.Names {
+					if !strings.Contains(strings.ToLower(name.Name), "op") || len(spec.Values) == 0 {
+						continue
+					}
+					valueIndex := i
+					if len(spec.Values) == 1 {
+						valueIndex = 0
+					}
+					if valueIndex >= len(spec.Values) {
+						continue
+					}
+					literal, ok := spec.Values[valueIndex].(*ast.CompositeLit)
+					if !ok {
+						continue
+					}
+					mapType, isMap := literal.Type.(*ast.MapType)
+					keyType, stringKeyed := mapTypeKeyIdent(mapType)
+					if !isMap || !stringKeyed || keyType != "string" {
+						continue
+					}
+					collectSupportedOpcodeMap(supported, literal)
+				}
+			}
+			if literal, ok := node.(*ast.CompositeLit); ok {
+				mapType, isMap := literal.Type.(*ast.MapType)
+				keyType, opKeyed := mapTypeKeyIdent(mapType)
+				if isMap && opKeyed && keyType == "Op" {
+					collectSupportedOpcodeMap(supported, literal)
+				}
+			}
+			clause, ok := node.(*ast.CaseClause)
+			if !ok {
+				return true
+			}
+			for _, expr := range clause.List {
+				candidate := ""
+				switch value := expr.(type) {
+				case *ast.BasicLit:
+					if value.Kind == token.STRING {
+						candidate, _ = strconv.Unquote(value.Value)
+					}
+				case *ast.Ident:
+					if strings.HasPrefix(value.Name, "Op") {
+						candidate = strings.TrimPrefix(value.Name, "Op")
+					}
+				}
+				if op := normalizeOp(candidate); op != "" {
+					supported[op] = struct{}{}
+				}
+			}
+			return true
+		})
 	}
 	return supported, nil
+}
+
+func opcodeComparedWithOp(left, right ast.Expr) (string, bool) {
+	if ident, ok := left.(*ast.Ident); ok && ident.Name == "op" {
+		if literal, ok := right.(*ast.BasicLit); ok && literal.Kind == token.STRING {
+			candidate, err := strconv.Unquote(literal.Value)
+			return candidate, err == nil
+		}
+	}
+	if ident, ok := right.(*ast.Ident); ok && ident.Name == "op" {
+		if literal, ok := left.(*ast.BasicLit); ok && literal.Kind == token.STRING {
+			candidate, err := strconv.Unquote(literal.Value)
+			return candidate, err == nil
+		}
+	}
+	return "", false
+}
+
+func collectSupportedOpcodeMap(supported map[string]struct{}, literal *ast.CompositeLit) {
+	mapType, isMap := literal.Type.(*ast.MapType)
+	keyType, supportedKey := mapTypeKeyIdent(mapType)
+	if !isMap || !supportedKey || keyType != "string" && keyType != "Op" {
+		return
+	}
+	for _, elt := range literal.Elts {
+		pair, ok := elt.(*ast.KeyValueExpr)
+		if !ok {
+			continue
+		}
+		key, ok := pair.Key.(*ast.BasicLit)
+		if !ok || key.Kind != token.STRING {
+			continue
+		}
+		candidate, _ := strconv.Unquote(key.Value)
+		if op := normalizeOp(candidate); op != "" {
+			supported[op] = struct{}{}
+		}
+	}
+}
+
+func mapTypeKeyIdent(mapType *ast.MapType) (string, bool) {
+	if mapType == nil {
+		return "", false
+	}
+	ident, ok := mapType.Key.(*ast.Ident)
+	if !ok {
+		return "", false
+	}
+	return ident.Name, true
 }
 
 func attachEncoderCatalog(rep *report, ops map[string]*opStat, catalog []encoderFormReport) {

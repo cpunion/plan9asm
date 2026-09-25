@@ -78,12 +78,43 @@ type FrameSlot struct {
 	Offset int64
 	Type   LLVMType
 	Index  int // index into LLVM function arguments (for Params) or results tuple (for Results)
+	// Name is the source-level Go parameter or result name when available.
+	// It lets legacy assembly with a stale numeric FP offset still identify a
+	// unique named result without weakening validation for anonymous or
+	// aggregate frame slots.
+	Name string
 	// Field is the index of the extracted field within the argument aggregate.
 	// It is used for classic Go asm slots like b_base+0(FP) when the Go-level
 	// parameter is passed as a struct (string/slice header).
 	//
 	// When Field < 0, the slot refers directly to %arg(Index).
 	Field int
+	// Fields carries a nested extractvalue path for arrays and structs. It is
+	// empty for direct values and one-level aggregates, which continue to use
+	// Field for compatibility with existing callers.
+	Fields []int
+}
+
+func frameSlotFields(slot FrameSlot) []int {
+	if len(slot.Fields) != 0 {
+		return slot.Fields
+	}
+	if slot.Field >= 0 {
+		return []int{slot.Field}
+	}
+	return nil
+}
+
+func frameSlotExtractSuffix(slot FrameSlot) string {
+	fields := frameSlotFields(slot)
+	if len(fields) == 0 {
+		return ""
+	}
+	parts := make([]string, len(fields))
+	for i, field := range fields {
+		parts[i] = fmt.Sprintf("%d", field)
+	}
+	return ", " + strings.Join(parts, ", ")
 }
 
 // X87Mode selects how explicit x87 instructions in 386 Plan 9 assembly are
@@ -154,6 +185,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return "", fmt.Errorf("empty file")
 	}
+	file, err := normalizeX86RawFile(file, opt.Goarch)
+	if err != nil {
+		return "", err
+	}
 
 	resolve := opt.ResolveSym
 	if resolve == nil {
@@ -214,13 +249,35 @@ func translateIRText(file *File, opt Options) (string, error) {
 		if sig.Ret == "" {
 			return "", fmt.Errorf("missing return type for %q", name)
 		}
+		if file.Arch == ArchAMD64 && fn.X86RawText != nil {
+			if err := emitX86AddressSensitiveRawText(&b, *fn, sig); err != nil {
+				return "", fmt.Errorf("%s: %w", name, err)
+			}
+			b.WriteString("\n")
+			continue
+		}
+		if file.Arch == ArchAMD64 && amd64IsRelocationAnchor(*fn, sig) {
+			if err := emitX86RelocationAnchor(&b, *fn, sig, resolve, opt.Sigs); err != nil {
+				return "", fmt.Errorf("%s: %w", name, err)
+			}
+			b.WriteString("\n")
+			continue
+		}
 		if err := validateResolvedImmediates(file.Arch, *fn); err != nil {
 			return "", fmt.Errorf("%s: %w", name, err)
+		}
+		if file.Arch == ArchAMD64 {
+			if err := validateAMD64ScalarAddSubFunction(opt.Goarch, *fn); err != nil {
+				return "", fmt.Errorf("%s: %w", name, err)
+			}
 		}
 		if sig.Attrs == "" {
 			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, *fn))
 		}
-		if file.Arch == ArchARM && funcNeedsARMCFG(*fn) {
+		// ARM is a fully supported target. Always use its architecture-aware CFG
+		// lowerer so even straight-line functions receive the same operand-form
+		// validation; the legacy linear prototype silently accepts unknown forms.
+		if file.Arch == ArchARM {
 			if err := translateFuncARM(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
@@ -234,7 +291,12 @@ func translateIRText(file *File, opt Options) (string, error) {
 			b.WriteString("\n")
 			continue
 		}
-		if file.Arch == ArchAMD64 && (opt.Goarch == "386" || (opt.Goarch == "amd64" && funcNeedsAMD64CFG(*fn))) {
+		// X86 is fully supported. Always use its architecture-aware CFG lowerer
+		// so straight-line amd64 functions receive the same memory-width and
+		// operand-form semantics as functions containing branches or vector ops.
+		// The old linear prototype could silently reinterpret wide FP-frame stores
+		// as numeric conversions and leave adjacent aggregate result slots unwritten.
+		if file.Arch == ArchAMD64 {
 			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
@@ -254,6 +316,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 		b.WriteString("\n")
 	}
 	attrRegistry.emit(&b)
+	if fileUsesX86NonTemporalMetadata(file) {
+		b.WriteString("!0 = !{i32 1}\n\n")
+	}
 	return b.String(), nil
 }
 
@@ -366,12 +431,16 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 					continue
 				}
 				s := strings.TrimSpace(arg.Sym)
+				indirect := strings.HasPrefix(s, "*")
+				if indirect {
+					s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
+				}
 				base, off, ok := parseSBRef(s)
 				if !ok || base == "" {
 					continue
 				}
 				base = strings.TrimPrefix(base, "$")
-				if off == 0 {
+				if off == 0 && !indirect {
 					// Bare symbol refs are usually global data addresses
 					// (e.g. MOVQ runtime·vdsoGettimeofdaySym(SB), AX). Exclude only
 					// control-flow ops that use symbol operands as branch/call targets.
@@ -581,13 +650,6 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 	}
 	b.WriteString(" {\n")
 	b.WriteString("entry:\n")
-
-	// Fast path: permissive void lowering for marker/stub functions.
-	if sig.Ret == Void {
-		b.WriteString("  ret void\n")
-		b.WriteString("}\n")
-		return nil
-	}
 
 	type ssaVal struct {
 		typ LLVMType
@@ -879,10 +941,10 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 					return ssaVal{typ: I64, val: "0"}, nil
 				}
 				arg := fmt.Sprintf("%%arg%d", idx)
-				if slot.Field >= 0 {
+				if fields := frameSlotFields(slot); len(fields) != 0 {
 					aggTy := sig.Args[idx]
 					name := newTmp()
-					fmt.Fprintf(b, "  %%%s = extractvalue %s %s, %d\n", name, aggTy, arg, slot.Field)
+					fmt.Fprintf(b, "  %%%s = extractvalue %s %s%s\n", name, aggTy, arg, frameSlotExtractSuffix(slot))
 					return ssaVal{typ: slot.Type, val: "%" + name}, nil
 				}
 				return ssaVal{typ: slot.Type, val: arg}, nil
@@ -1084,9 +1146,14 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 			if err != nil {
 				return err
 			}
-			rhs, err := valueOf(src)
-			if err != nil {
-				return err
+			var rhs ssaVal
+			if (ins.Op == OpADDQ || ins.Op == OpSUBQ) && src.Kind == OpImm {
+				rhs = ssaVal{typ: I64, val: fmt.Sprintf("%d", amd64ScalarAddSubImmediateInt64(src.Imm, 64))}
+			} else {
+				rhs, err = valueOf(src)
+				if err != nil {
+					return err
+				}
 			}
 			lhs, err = emitCast(lhs, I64)
 			if err != nil {
