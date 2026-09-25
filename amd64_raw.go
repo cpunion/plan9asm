@@ -9202,6 +9202,19 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 			return "", fmt.Errorf("BSWAP has unsupported destination width %d", decodedX86RegisterBits(destination))
 		}
 		replaceOp("BSWAP" + width)
+	case x86asm.MOVBE:
+		bits := inst.MemBytes * 8
+		for _, operand := range inst.Args {
+			if register, ok := operand.(x86asm.Reg); ok {
+				bits = decodedX86RegisterBits(register)
+				break
+			}
+		}
+		width := map[int]string{16: "W", 32: "L", 64: "Q"}[bits]
+		if width == "" {
+			return "", fmt.Errorf("MOVBE has unsupported operand width %d", bits)
+		}
+		replaceOp("MOVBE" + width)
 	case x86asm.LZCNT, x86asm.TZCNT:
 		// Go names each bit-count width explicitly. x/arch prints the
 		// widthless Intel mnemonic, even for 16- and 64-bit encodings.
