@@ -531,6 +531,12 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.sourceReg)))
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
+				if form, ok := decodeARM64RawHalfFMA(word); ok {
+					markReg(Reg(fmt.Sprintf("V%d", form.first)))
+					markReg(Reg(fmt.Sprintf("V%d", form.second)))
+					markReg(Reg(fmt.Sprintf("V%d", form.addend)))
+					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+				}
 				if form, ok := decodeARM64RawFMULByElement(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.elementReg)))
 					markReg(Reg(fmt.Sprintf("V%d", form.sourceReg)))
