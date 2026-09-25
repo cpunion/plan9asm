@@ -119,6 +119,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawBFloatDot(word); ok {
 		return c.lowerRawBFloatDot(form)
 	}
+	if form, ok := decodeARM64RawBFloatMatrix(word); ok {
+		return c.lowerRawBFloatMatrix(form)
+	}
 	if form, ok := decodeARM64RawMatrixMultiply(word); ok {
 		return c.lowerRawMatrixMultiply(form)
 	}
