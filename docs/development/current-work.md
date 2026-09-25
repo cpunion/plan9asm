@@ -17,18 +17,29 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   downloading each new shard report. Its `verified` flag must stay false while
   shards are missing or failures remain.
 - `codex/pr40-ecosystem-fixes-20260925` is the development branch. It has
-  unpushed complete ARM64 BF16 matrix, FP16 FMA/unary, scalar FCVTZS/FCVTZU,
-  raw LDPSW pair, SVE scalar replicate-load, and bounded compile-only
-  LLVM-module changes through `5b24b13`. The bounded-module change also
-  limits CI matrix concurrency to eight.
+  unpushed fixes through `4668f72`: bounded compile-only LLVM modules and CI
+  concurrency, complete ARM64 BF16/FP16 and SVE/SME families, x86 raw
+  half-vector memory moves and AVX-512 BF16 narrowing, plus the Go 1.27
+  ARM64 MSR PSTATE immediate family. Keep this branch separate from the
+  frozen PR-head evidence worktree.
 
 ## Validated work and live CI
 
-- LLVM 22 and Go 1.27 focused tests, the nested `plan9asmll` suite,
-  `go vet` in the root and nested CLI, and `actionlint` pass on the
-  development branch. Cross-target LLVM object and native ARM64 runtime
-  fixtures pass for the new instruction families. The full root suite passed
-  on the pre-SVE development source; rerun affected gates after integration.
+- At `4668f72`, the full root `go test ./... -count=1 -timeout=20m` passes with
+  Go 1.27.1 (root package 564 seconds). The official Go 1.27 five-arch
+  coverage gate, x/arch ARM64 corpus gate, root vet, both nested CLI suites,
+  and focused Go 1.20 compatibility tests pass. Privileged MSR semantics are
+  checked by comparing Go and LLVM 22 machine-code words; runtime execution
+  is not claimed.
+- Exact current-branch CLI replays prove `go-highway@v0.0.12` passes all
+  three ARM64 targets (576/576 Linux, 577/577 Darwin, 576/576 Windows), and
+  `go-highway@v0.0.0-dev9` passes its three ARM64 configurations (31/31
+  Darwin, 21/21 Linux, 21/21 Windows). The latter's amd64 configurations
+  still fail, so that candidate is not passed. `mazarin` now has 64 compiled
+  objects over four targets, one evidence-backed asmdecl N/A and no failure.
+  Both case-distinct `outfix` candidates pass 1/1; `pathtracer-ocl` passes
+  its focused affected configurations. These are local diagnostics, not
+  frozen shard reports or ledger pass updates.
 - The bounded-module CLI was tested on actual `pythonwasm2go@v0.4.0`
   22 MB ARM64 sources, including about 7,700 functions, on Linux and Windows
   targets, and on a 24 MB `spidermonkeywasm2go@v0.2.5` amd64 source for Darwin.
@@ -41,11 +52,12 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
   Linux/amd64 replay (1/1 file, 2.6 GB peak RSS).
 - At 31 of 32 available CI shard artifacts, the old source revision has
   3,797 passed, 23 failed, 804 source/target not applicable and 159 pending
-  exact module versions out of 4,783. The missing shard 0 is being replayed
-  locally for diagnostics. Its macOS LLVM and translator hashes differ from
-  Linux CI, so its report must remain separate from the 31 CI artifacts and
-  cannot be imported as a completed CI shard. The development branch must
-  replay all shards after integration because its source fingerprint differs.
+  exact module versions out of 4,783. The missing shard 0 was replayed
+  locally for diagnostics (130 passed, 1 failed, 28 N/A). Its macOS LLVM and
+  translator hashes differ from Linux CI, so its report must remain separate
+  from the 31 CI artifacts and cannot be imported as a completed CI shard.
+  The development branch must replay all shards after integration because its
+  source fingerprint differs.
 - All non-external CI jobs have passed on `4cf5ade`. Discovered-corpus shard
   0 lost its runner without an artifact. Do not report it as passed.
 
@@ -54,19 +66,21 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
 - Large generated assembly caused worker termination in `pythonwasm2go`
   and `spidermonkeywasm2go`; the local bounded-module replay addresses the
   observed peak but needs new CI verification.
-- `go-highway` has 20/31 Darwin ARM64 files passing after the current family
-  work. The other 11 are primarily SME ZA/matrix and streaming-memory forms.
-  Model complete instruction families with register/state semantics.
+- `go-highway@dev9` amd64 still contains several raw RIP-relative loads.
+  Its GoAT-produced BF16 file refers to `LCPI` constants without defining a
+  constant pool; Go's assembled first load points past that object's TEXT.
+  Do not synthesize constants from comments or mark it passed. Other x86
+  files in that candidate still need independent diagnosis.
+- `sharkie`, `simd`, and `gojit` depend on exact raw-byte layout, external
+  entry points or PC-relative references. Translation that changes the byte
+  layout must not be counted as semantic support.
 - `knoxdb` and its forks tail-jump into shared-frame helper `TEXT`s that write
   the original caller's FP result. A cross-`TEXT` ABI0 frame model is needed;
   accepting the FP offset in isolation would compile wrong behavior.
-- `sharkie`, `outfix`, `gojit`, and `simd`/`pathtracer-ocl` use address-sensitive
-  raw x86 bytes, mixed directives or layout-dependent control flow. Do not
-  silently decode, skip or relocate bytes whose PC-relative meaning changes.
-- `gmgo` and `puter` contain raw ARM64 `WORD` values that LLVM 22 does not
-  decode, even with relevant features enabled. `fiber/ai` has a private raw
-  encoding. Do not label these instructions supported without preserving
-  correct runtime register and memory semantics.
+- `gmgo`, `gmsm` and `puter` contain raw ARM64 `WORD` values LLVM 22 does not
+  decode. In `gmsm`, the SM4 comments describe the byte-swapped valid
+  instruction, not the emitted word. `fiber/ai` has a private raw encoding.
+  Preserve the actual source bytes when deciding whether a form is valid.
 - `skywire@v1.3.69` has an invalid version download and its original GitHub
   repository is currently inaccessible; keep it failed/retryable rather than
   pretending it was tested. `mazarin` has an ARM64 argument-size
@@ -75,17 +89,15 @@ This is a replaceable handoff. Keep scan and coverage funnel tables in the
 
 ## Next actions
 
-1. Finish the old shard 0 locally as diagnostic evidence. Its toolchain
-   provenance cannot be mixed with the 31 Linux CI reports. Obtain a complete
-   same-source, same-toolchain CI rerun for a complete old-head aggregate, or
-   supersede it with all 32 reports from one new frozen PR head. Keep the
-   ledger synchronized with actual reports.
-2. Reproduce each deterministic failure before changing its instruction or
-   ABI family. Compare against Go assembler, Go vet/build and LLVM 22, then
-   add Go-accepted format, cross-target object and runtime tests as needed.
-3. Once the development batch addresses the failures, integrate it into the
-   contribution branch, run focused and official five-arch gates, then run
-   all 32 external shards on one frozen source fingerprint.
-4. Push a substantial verified batch to `cpunion` only, update the PR body
-   from validated counts, inspect new-head CI and review, and keep the PR
-   draft until its completion gates pass.
+1. Reproduce each remaining deterministic failure before changing its
+   instruction or ABI family. Compare against Go assembler, Go vet/build and
+   LLVM 22, then add Go-accepted format, cross-target object and runtime
+   tests as needed.
+2. Keep old shard 0 local replay diagnostic-only; it cannot mix with the 31
+   Linux CI reports. Do not import current-branch manual replays into that
+   frozen old-head ledger. A new complete 32-shard run must share one source,
+   toolchain and ledger fingerprint.
+3. Once the remaining fixable failures are addressed, integrate the development
+   branch into the contribution branch, push a substantial verified batch to
+   `cpunion` only, then inspect new-head CI and review. Update PR-body counts
+   from validated reports and keep the PR draft until its gates pass.
