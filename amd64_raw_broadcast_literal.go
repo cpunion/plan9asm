@@ -316,6 +316,29 @@ func decodeX86RawPackedLogicalRIPData(code []byte, offset, mode int) (Instr, int
 	)
 }
 
+// decodeX86RawFloatLogicalRIPData covers VEX VAND/ANDN/OR/XOR PS/PD reads
+// from an unreachable source-local X/Y-width constant pool. The ordinary
+// decoder still handles all register and non-RIP memory forms.
+func decodeX86RawFloatLogicalRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.evex || p.mapNumber != 1 || p.pp > 1 ||
+		p.opcode < 0x54 || p.opcode > 0x57 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoder(
+		code, offset, mode, modRMIndex, 16<<p.vectorLength,
+		decodedX86VEXPackedFloatLogicalInstruction, "VEX packed floating logical",
+	)
+}
+
 // decodeX86RawScalarMoveRIPData covers memory-to-X VMOVSS/VMOVSD VEX and
 // EVEX encodings. The typed scalar decoder enforces reserved fields and masks.
 func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
