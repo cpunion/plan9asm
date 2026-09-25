@@ -204,6 +204,29 @@ func TestX86RawVariableBlendInvalidAndMemoryForms(t *testing.T) {
 	}
 }
 
+func TestX86RawVariableBlendSourceLocalRIPData(t *testing.T) {
+	for _, family := range x86VariableBlendTestFamilies {
+		for vectorLength, width := range []int{16, 32} {
+			code := []byte{
+				0xc4, 0xe3, byte(0x69 | vectorLength<<2), family.vectorCode,
+				0x05, 0x01, 0, 0, 0, 0x70, 0xc3,
+			}
+			for value := 0; value < width; value++ {
+				code = append(code, byte(value))
+			}
+			decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, "variable blend RIP", map[string]bool{})
+			if err != nil {
+				t.Fatalf("%s width %d: %v", family.vector, width, err)
+			}
+			if len(decoded) != 2 || decoded[0].Op != Op(family.vector) ||
+				len(decoded[0].x86RIPLiteralData) != width ||
+				decoded[0].Args[1].Kind != OpSym {
+				t.Fatalf("%s width %d: %#v", family.vector, width, decoded)
+			}
+		}
+	}
+}
+
 func TestX86VariableBlendGoRejectedForms(t *testing.T) {
 	for _, family := range x86VariableBlendTestFamilies {
 		for _, form := range []struct {

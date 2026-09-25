@@ -53,6 +53,43 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		if hasLiteral && x86RawTailLayoutObserved(&normalized, fn.Sym) {
 			return nil, fmt.Errorf("%s: address-observed RIP-relative raw literal cannot be folded safely", fn.Sym)
 		}
+		addressSymbols := make(map[int]string)
+		for j := range fn.Instrs {
+			ins := &fn.Instrs[j]
+			if len(ins.x86RIPAddressData) == 0 {
+				continue
+			}
+			addressArg := -1
+			for index, arg := range ins.Args {
+				if arg.Kind == OpSym && arg.Sym == "·__plan9asm_raw_address_pending(SB)" {
+					addressArg = index
+					break
+				}
+			}
+			if addressArg < 0 {
+				continue
+			}
+			name := addressSymbols[ins.x86RIPAddressGroup]
+			if name == "" {
+				stem := fmt.Sprintf("·__plan9asm_raw_address_%x_%d", sha256.Sum256([]byte(fn.Sym)), ins.x86RIPAddressGroup)
+				name = stem
+				for suffix := 1; usedSymbols[name]; suffix++ {
+					name = fmt.Sprintf("%s_%d", stem, suffix)
+				}
+				usedSymbols[name] = true
+				addressSymbols[ins.x86RIPAddressGroup] = name
+				normalized.Data = append(normalized.Data, DataStmt{
+					Sym: name, Width: int64(len(ins.x86RIPAddressData)),
+					Payload: ins.x86RIPAddressData,
+				})
+			}
+			address := name
+			if ins.x86RIPAddressOff != 0 {
+				address += fmt.Sprintf("+%d", ins.x86RIPAddressOff)
+			}
+			ins.Args[addressArg].Sym = address + "(SB)"
+			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_address_pending(SB)", ins.Args[addressArg].Sym, 1)
+		}
 		for j := range fn.Instrs {
 			ins := &fn.Instrs[j]
 			if len(ins.x86RIPLiteralData) == 0 {
@@ -340,7 +377,12 @@ type x86RawDecodedInstruction struct {
 func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, knownLabels map[string]bool) ([]Instr, error) {
 	decodedByOffset := make(map[int]x86RawDecodedInstruction)
 	labels := make(map[int]string)
+	addressTargets := make(map[int]int)
 	var literalRanges []x86RawLiteralRange
+	recordLiteral := func(offset int, literal x86RawLiteralRange) {
+		literal.source = offset
+		literalRanges = append(literalRanges, literal)
+	}
 	owners := make([]int, len(code))
 	for i := range owners {
 		owners[i] = -1
@@ -479,7 +521,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -504,7 +546,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -529,7 +571,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -578,7 +620,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -603,7 +645,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -688,7 +730,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -713,7 +755,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -738,7 +780,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -799,7 +841,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -812,6 +854,19 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, literal, ok, err := decodeX86RawVariableBlendRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 variable blend literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -836,7 +891,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -849,7 +904,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -886,7 +941,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -947,7 +1002,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1044,7 +1099,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1081,7 +1136,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1106,7 +1161,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1131,7 +1186,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1240,7 +1295,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1289,7 +1344,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1326,7 +1381,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1351,7 +1406,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1388,7 +1443,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1425,7 +1480,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1534,7 +1589,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1559,7 +1614,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1644,7 +1699,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1681,7 +1736,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1706,7 +1761,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1734,6 +1789,21 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawImmediateThreeVectorRIPData(
+				code, offset, mode, 0x03, decodedX86VectorAlignInstruction, "vector align",
+			); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 vector align literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				recordLiteral(offset, literal)
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86VectorAlignInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 VALIGN at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -1743,6 +1813,21 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, literal, ok, err := decodeX86RawImmediateThreeVectorRIPData(
+				code, offset, mode, 0x25, decodedX86TernaryLogicInstruction, "ternary logic",
+			); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 ternary logic literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1791,7 +1876,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1888,7 +1973,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -1949,7 +2034,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2082,7 +2167,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2095,7 +2180,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2108,7 +2193,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2121,7 +2206,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2194,7 +2279,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2233,7 +2318,7 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				}
 				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
 				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
-				literalRanges = append(literalRanges, literal)
+				recordLiteral(offset, literal)
 				offset += length
 				continue
 			}
@@ -2247,7 +2332,11 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 						err = fmt.Errorf("incomplete or unknown instruction")
 					}
 				}
-				return nil, fmt.Errorf("decode raw x86 directive group at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				end := offset + 16
+				if end > len(code) {
+					end = len(code)
+				}
+				return nil, fmt.Errorf("decode raw x86 directive group at instruction %d byte %d (%x): %w: %q", start, offset, code[offset:end], err, rawGroup)
 			}
 			if err := markInstruction(offset, inst.Len); err != nil {
 				return nil, err
@@ -2259,11 +2348,30 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			opName := strings.Fields(syntax)[0]
 			op := Op(strings.ToUpper(opName))
 			if inst.PCRel != 0 {
+				if mode == 64 && inst.Op == x86asm.LEA {
+					mem, ok := inst.Args[1].(x86asm.Mem)
+					if ok && mem.Base == x86asm.RIP {
+						target := offset + inst.Len + int(mem.Disp)
+						if target < 0 || target >= len(code) {
+							return nil, fmt.Errorf("raw x86 local address target byte %d at instruction %d is outside directive group: %q", target, start, rawGroup)
+						}
+						instrs, err := parseDecodedX86Instruction(syntax)
+						if err != nil || len(instrs) != 1 || len(instrs[0].Args) != 2 {
+							return nil, fmt.Errorf("parse decoded raw x86 local address %q at instruction %d byte %d: %v", syntax, start, offset, err)
+						}
+						instrs[0].Args[0] = Operand{Kind: OpSym, Sym: "·__plan9asm_raw_address_pending(SB)"}
+						instrs[0].Raw = fmt.Sprintf("%s ·__plan9asm_raw_address_pending(SB), %s /* decoded from %s */", op, instrs[0].Args[1], rawGroup)
+						decodedByOffset[offset] = x86RawDecodedInstruction{length: inst.Len, instrs: instrs}
+						addressTargets[offset] = target
+						offset += inst.Len
+						continue
+					}
+				}
 				target, ok := x86RawRelativeTarget(inst, offset)
 				isJump := op == OpJMP
 				isConditional := isAMD64ConditionalBranch(op)
 				if !ok || (!isJump && !isConditional) {
-					return nil, fmt.Errorf("raw x86 PC-relative instruction at instruction %d byte %d cannot be mapped safely to source labels: %q", start, offset, rawGroup)
+					return nil, fmt.Errorf("raw x86 PC-relative instruction %q at instruction %d byte %d cannot be mapped safely to source labels: %q", syntax, start, offset, rawGroup)
 				}
 				if err := enqueue(target); err != nil {
 					return nil, fmt.Errorf("raw x86 branch at byte %d: %w", offset, err)
@@ -2298,6 +2406,70 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 			if owners[offset] >= 0 {
 				return nil, fmt.Errorf("RIP-relative literal byte %d overlaps reachable instruction at byte %d: %q", offset, owners[offset], rawGroup)
 			}
+		}
+	}
+	if len(addressTargets) != 0 {
+		first := len(code)
+		for _, target := range addressTargets {
+			if target < first {
+				first = target
+			}
+		}
+		// Only a fully unreachable suffix after a decoded RET can be moved to
+		// a shared global. Addressing executable bytes or a separately folded
+		// literal would lose source-relative pointer identity.
+		retBeforeSuffix := false
+		for offset, decoded := range decodedByOffset {
+			if offset >= first {
+				continue
+			}
+			for _, ins := range decoded.instrs {
+				if ins.Op == OpRET {
+					retBeforeSuffix = true
+				}
+			}
+		}
+		if !retBeforeSuffix {
+			return nil, fmt.Errorf("raw x86 local address data at byte %d has no preceding RET: %q", first, rawGroup)
+		}
+		for offset := first; offset < len(code); offset++ {
+			if owners[offset] >= 0 {
+				return nil, fmt.Errorf("raw x86 local address byte %d overlaps reachable instruction: %q", offset, rawGroup)
+			}
+		}
+		for _, literal := range literalRanges {
+			if literal.last <= first {
+				continue
+			}
+			if literal.first < first {
+				return nil, fmt.Errorf("raw x86 local address overlaps the middle of a folded literal: %q", rawGroup)
+			}
+			decoded := decodedByOffset[literal.source]
+			for index := range decoded.instrs {
+				ins := &decoded.instrs[index]
+				for arg := range ins.Args {
+					if ins.Args[arg].Kind != OpSym || ins.Args[arg].Sym != "·__plan9asm_raw_literal_pending(SB)" {
+						continue
+					}
+					ins.Args[arg].Sym = "·__plan9asm_raw_address_pending(SB)"
+					ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[arg].Sym, 1)
+					// An address escape may permit writes to this pool. Force a
+					// runtime load rather than specializing from its initial bytes.
+					ins.x86RIPLiteralData = nil
+					ins.x86RIPAddressData = code[first:]
+					ins.x86RIPAddressOff = literal.first - first
+					ins.x86RIPAddressGroup = start
+				}
+			}
+			decodedByOffset[literal.source] = decoded
+		}
+		for offset, target := range addressTargets {
+			decoded := decodedByOffset[offset]
+			decoded.instrs[0].x86RIPLiteral = true
+			decoded.instrs[0].x86RIPAddressData = code[first:]
+			decoded.instrs[0].x86RIPAddressOff = target - first
+			decoded.instrs[0].x86RIPAddressGroup = start
+			decodedByOffset[offset] = decoded
 		}
 	}
 

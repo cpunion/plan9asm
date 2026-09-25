@@ -9,8 +9,9 @@ import (
 )
 
 type x86RawLiteralRange struct {
-	first int
-	last  int
+	first  int
+	last   int
+	source int
 }
 
 // decodeX86RawPackedBroadcastLiteral resolves a RIP-relative packed scalar
@@ -951,6 +952,64 @@ func decodeX86RawPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x
 	return x86RawRIPDataThroughDecoder(
 		code, offset, mode, modRMIndex, 16<<p.vectorLength,
 		decode, "packed multiply-add",
+	)
+}
+
+// decodeX86RawVariableBlendRIPData covers all three VEX variable-blend
+// mnemonics in their X/Y memory forms. The mask register follows the RIP
+// displacement as an immediate selector, so it contributes to PC-relative
+// target calculation but is not part of the memory operand.
+func decodeX86RawVariableBlendRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || p.evex || p.mapNumber != 3 || p.pp != 1 || p.w ||
+		p.segment != "" || p.addressOverride || p.vectorLength > 1 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	if p.opcode != 0x4a && p.opcode != 0x4b && p.opcode != 0x4c {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, 16<<p.vectorLength, 1, 1,
+		decodedX86VariableBlendInstruction, "variable blend",
+	)
+}
+
+// VPTERNLOGD/Q and VALIGND/Q share Go's immediate three-vector grammar.
+// Their RIP-relative source is a full vector or a scalar broadcast, while
+// imm8 trails the displacement in both cases.
+func decodeX86RawImmediateThreeVectorRIPData(
+	code []byte, offset, mode int, opcode byte,
+	decode x86RawInstructionDecoder, family string,
+) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 3 || p.pp != 1 ||
+		p.opcode != int(opcode) || p.segment != "" || p.addressOverride ||
+		p.vectorLength > 2 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	width := 16 << p.vectorLength
+	if p.broadcast {
+		width = 4
+		if p.w {
+			width = 8
+		}
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, width, 1, 1, decode, family,
 	)
 }
 

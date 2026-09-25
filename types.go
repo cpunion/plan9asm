@@ -953,6 +953,11 @@ type Instr struct {
 	// normalizeX86RawFile. Retain its bytes for lowerers that can specialize
 	// the constant without a memory access, after source-layout validation.
 	x86RIPLiteralData []byte
+	// A reachable LEA addresses an offset of a source-local raw data suffix.
+	// The suffix is shared by all such LEAs in one raw directive group.
+	x86RIPAddressData  []byte
+	x86RIPAddressOff   int
+	x86RIPAddressGroup int
 }
 
 // DataStmt models a minimal Plan 9 DATA directive:

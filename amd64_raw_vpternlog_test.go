@@ -5,6 +5,45 @@ import (
 	"testing"
 )
 
+func TestX86RawImmediateThreeVectorSourceLocalRIPData(t *testing.T) {
+	for _, family := range []struct {
+		opcode byte
+		name   string
+	}{{0x25, "VPTERNLOG"}, {0x03, "VALIGN"}} {
+		for _, qword := range []bool{false, true} {
+			for vectorLength := 0; vectorLength < 3; vectorLength++ {
+				for _, broadcast := range []bool{false, true} {
+					p1 := byte(0x7d)
+					laneWidth := 4
+					suffix := "D"
+					if qword {
+						p1 |= 0x80
+						laneWidth = 8
+						suffix = "Q"
+					}
+					p2 := byte(0x08 | vectorLength<<5)
+					width := 16 << vectorLength
+					if broadcast {
+						p2 |= 0x10
+						width = laneWidth
+					}
+					code := []byte{0x62, 0xf3, p1, p2, family.opcode, 0x05, 1, 0, 0, 0, 0xca, 0xc3}
+					for value := 0; value < width; value++ {
+						code = append(code, byte(value))
+					}
+					decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, "immediate three-vector RIP", map[string]bool{})
+					if err != nil {
+						t.Fatalf("%s%s width %d broadcast=%t: %v", family.name, suffix, width, broadcast, err)
+					}
+					if len(decoded) != 2 || len(decoded[0].x86RIPLiteralData) != width {
+						t.Fatalf("%s%s width %d broadcast=%t: %#v", family.name, suffix, width, broadcast, decoded)
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestDecodedX86TernaryLogicCompleteGo127Family(t *testing.T) {
 	// Go 1.27 shares _yvalignd between VPTERNLOGD/Q. These LLVM 22 bytes
 	// cover X/Y/Z, high registers, memory, masks, zeroing, broadcast, and
