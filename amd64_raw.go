@@ -631,6 +631,18 @@ func decodeX86RawDirectiveGroup(code []byte, mode, start int, rawGroup string, k
 				offset += length
 				continue
 			}
+			if instruction, length, ok, err := decodedX86RawScatterInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 scatter at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86RawQwordPermuteInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 qword permute at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
