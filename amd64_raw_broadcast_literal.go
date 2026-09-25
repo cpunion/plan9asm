@@ -742,6 +742,31 @@ func decodeX86RawDuplicateMoveRIPData(code []byte, offset, mode int) (Instr, int
 	)
 }
 
+// decodeX86RawVectorByteShiftRIPData resolves EVEX X/Y/Z memory forms of
+// VPSLLDQ and VPSRLDQ, accounting for the trailing shift-count imm8.
+func decodeX86RawVectorByteShiftRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
+	if mode != 64 || offset >= len(code) {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	p, matched := decodeX86RawVectorEncoding(code[offset:])
+	if !matched || !p.evex || p.mapNumber != 1 || p.pp != 1 || p.opcode != 0x73 ||
+		p.segment != "" || p.addressOverride {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	modRMIndex := offset + p.modRM
+	if len(code) <= modRMIndex || code[modRMIndex]&0xc7 != 0x05 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	group := int(code[modRMIndex]>>3) & 7
+	if group != 3 && group != 7 {
+		return Instr{}, 0, x86RawLiteralRange{}, false, nil
+	}
+	return x86RawRIPDataThroughDecoderOperand(
+		code, offset, mode, modRMIndex, 16<<p.vectorLength, 1, 1,
+		decodedX86RawVectorByteShiftInstruction, "vector byte shift",
+	)
+}
+
 // decodeX86RawVEXPackedMADDRIPData covers both VPMADDWD and VPMADDUBSW
 // VEX.128/256 opcode rows. Their memory operand reads the full vector.
 func decodeX86RawVEXPackedMADDRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
