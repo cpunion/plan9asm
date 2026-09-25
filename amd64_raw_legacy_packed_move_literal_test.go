@@ -21,9 +21,16 @@ var x86RawLegacyPackedMoveForms = []struct {
 }
 
 func x86RawLegacyPackedMoveConstant(prefix, opcode byte) []byte {
+	return x86RawLegacyPackedMoveConstantRegister(prefix, opcode, 0)
+}
+
+func x86RawLegacyPackedMoveConstantRegister(prefix, opcode byte, register int) []byte {
 	var code []byte
 	if prefix != 0 {
 		code = append(code, prefix)
+	}
+	if register >= 8 {
+		code = append(code, 0x44)
 	}
 	code = append(code, 0x0f, opcode, 0x05, 1, 0, 0, 0, 0xc3)
 	for i := 0; i < 16; i++ {
@@ -34,18 +41,21 @@ func x86RawLegacyPackedMoveConstant(prefix, opcode byte) []byte {
 
 func TestDecodeX86RawLegacyPackedMoveConstantCompleteFamily(t *testing.T) {
 	for _, form := range x86RawLegacyPackedMoveForms {
-		t.Run(string(form.name), func(t *testing.T) {
-			code := x86RawLegacyPackedMoveConstant(form.prefix, form.opcode)
-			decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, string(form.name), map[string]bool{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(decoded) != 2 || decoded[0].Op != form.name ||
-				decoded[0].Args[0].Kind != OpSym || !decoded[0].x86RIPLiteral ||
-				decoded[1].Op != OpRET {
-				t.Fatalf("decoded %x as %#v, want %s source-local data", code, decoded, form.name)
-			}
-		})
+		for _, register := range []int{0, 8} {
+			t.Run(fmt.Sprintf("%s/X%d", form.name, register), func(t *testing.T) {
+				code := x86RawLegacyPackedMoveConstantRegister(form.prefix, form.opcode, register)
+				decoded, err := decodeX86RawDirectiveGroup(code, 64, 0, string(form.name), map[string]bool{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(decoded) != 2 || decoded[0].Op != form.name ||
+					decoded[0].Args[0].Kind != OpSym || !decoded[0].x86RIPLiteral ||
+					decoded[0].Args[1].String() != fmt.Sprintf("X%d", register) ||
+					decoded[1].Op != OpRET {
+					t.Fatalf("decoded %x as %#v, want %s source-local data", code, decoded, form.name)
+				}
+			})
+		}
 	}
 }
 
@@ -78,7 +88,7 @@ func TestTranslateX86RawLegacyPackedMoveConstantObjects(t *testing.T) {
 	sigs := make(map[string]FuncSig)
 	var pools [][]byte
 	for index, form := range x86RawLegacyPackedMoveForms {
-		code := x86RawLegacyPackedMoveConstant(form.prefix, form.opcode)
+		code := x86RawLegacyPackedMoveConstantRegister(form.prefix, form.opcode, 8)
 		name := fmt.Sprintf("legacyPackedMoveConstant%d", index)
 		fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
 		for _, value := range code {

@@ -686,6 +686,9 @@ func decodeX86RawLegacyPackedMoveRIPData(code []byte, offset, mode int) (Instr, 
 			}
 			prefix = code[i]
 		default:
+			if code[i] >= 0x40 && code[i] <= 0x4f {
+				i++
+			}
 			goto opcode
 		}
 		i++
