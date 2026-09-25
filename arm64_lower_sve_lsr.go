@@ -60,10 +60,42 @@ func decodeARM64SVEShiftImmediate(word uint32, lowBit int) (elementBits, shift i
 	return elementBits, shift, shift >= 1 && shift <= elementBits
 }
 
-func decodeARM64RawSVELSR(word uint32) (arm64RawSVELSR, bool) {
-	form := arm64RawSVELSR{op: "ZLSR"}
-	switch {
-	case word&0xff3fe000 == 0x04198000:
+// All five Go 1.27 forms of ASR, LSL, and LSR share register fields. Keep
+// the operation and form axes separate so raw WORDs use the named lowerer.
+var arm64SVEShiftWidePredicatedBases = map[uint32]Op{
+	0x04188000: "ZASR",
+	0x041b8000: "ZLSL",
+	0x04198000: "ZLSR",
+}
+
+var arm64SVEShiftWideUnpredicatedBases = map[uint32]Op{
+	0x04208000: "ZASR",
+	0x04208c00: "ZLSL",
+	0x04208400: "ZLSR",
+}
+
+var arm64SVEShiftVectorPredicatedBases = map[uint32]Op{
+	0x04108000: "ZASR",
+	0x04138000: "ZLSL",
+	0x04118000: "ZLSR",
+}
+
+var arm64SVEShiftImmediatePredicatedBases = map[uint32]Op{
+	0x04008000: "ZASR",
+	0x04038000: "ZLSL",
+	0x04018000: "ZLSR",
+}
+
+var arm64SVEShiftImmediateUnpredicatedBases = map[uint32]Op{
+	0x04209000: "ZASR",
+	0x04209c00: "ZLSL",
+	0x04209400: "ZLSR",
+}
+
+func decodeARM64RawSVEShift(word uint32) (arm64RawSVELSR, bool) {
+	form := arm64RawSVELSR{}
+	if op, ok := arm64SVEShiftWidePredicatedBases[word&0xff3fe000]; ok {
+		form.op = op
 		form.mode = arm64SVELSRWidePredicated
 		form.elementBits = 8 << (int(word>>22) & 3)
 		if form.elementBits == 64 {
@@ -73,7 +105,8 @@ func decodeARM64RawSVELSR(word uint32) (arm64RawSVELSR, bool) {
 		form.predicate = int(word>>10) & 7
 		form.destination = int(word) & 31
 		form.source = form.destination
-	case word&0xff20fc00 == 0x04208400:
+	} else if op, ok := arm64SVEShiftWideUnpredicatedBases[word&0xff20fc00]; ok {
+		form.op = op
 		form.mode = arm64SVELSRWideUnpredicated
 		form.elementBits = 8 << (int(word>>22) & 3)
 		if form.elementBits == 64 {
@@ -82,36 +115,50 @@ func decodeARM64RawSVELSR(word uint32) (arm64RawSVELSR, bool) {
 		form.shifts = int(word>>16) & 31
 		form.source = int(word>>5) & 31
 		form.destination = int(word) & 31
-	case word&0xff3fe000 == 0x04118000:
+	} else if op, ok := arm64SVEShiftVectorPredicatedBases[word&0xff3fe000]; ok {
+		form.op = op
 		form.mode = arm64SVELSRVectorPredicated
 		form.elementBits = 8 << (int(word>>22) & 3)
 		form.shifts = int(word>>5) & 31
 		form.predicate = int(word>>10) & 7
 		form.destination = int(word) & 31
 		form.source = form.destination
-	case word&0xff3fe000 == 0x04018000:
+	} else if op, ok := arm64SVEShiftImmediatePredicatedBases[word&0xff3fe000]; ok {
+		form.op = op
 		form.mode = arm64SVELSRImmediatePredicated
 		var ok bool
 		form.elementBits, form.shift, ok = decodeARM64SVEShiftImmediate(word, 5)
 		if !ok {
 			return arm64RawSVELSR{}, false
 		}
+		if op == "ZLSL" {
+			form.shift = form.elementBits - form.shift
+		}
 		form.predicate = int(word>>10) & 7
 		form.destination = int(word) & 31
 		form.source = form.destination
-	case word&0xff20fc00 == 0x04209400:
+	} else if op, ok := arm64SVEShiftImmediateUnpredicatedBases[word&0xff20fc00]; ok {
+		form.op = op
 		form.mode = arm64SVELSRImmediateUnpredicated
 		var ok bool
 		form.elementBits, form.shift, ok = decodeARM64SVEShiftImmediate(word, 16)
 		if !ok {
 			return arm64RawSVELSR{}, false
 		}
+		if op == "ZLSL" {
+			form.shift = form.elementBits - form.shift
+		}
 		form.source = int(word>>5) & 31
 		form.destination = int(word) & 31
-	default:
+	} else {
 		return arm64RawSVELSR{}, false
 	}
 	return form, true
+}
+
+func decodeARM64RawSVELSR(word uint32) (arm64RawSVELSR, bool) {
+	form, ok := decodeARM64RawSVEShift(word)
+	return form, ok && form.op == "ZLSR"
 }
 
 func (c *arm64Ctx) lowerARM64SVELSR(op Op, ins Instr) (ok bool, terminated bool, err error) {

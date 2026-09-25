@@ -229,6 +229,30 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawZAZero(uint32(ins.Args[0].Imm)); ok {
 					add("+sme")
 				}
+				if form, ok := decodeARM64RawSMEOuterProduct(uint32(ins.Args[0].Imm)); ok {
+					add("+sme", "+sve")
+					if form.sourceBits == 64 {
+						add("+sme-f64f64")
+					}
+				}
+				if _, ok := decodeARM64RawSMETileRead(uint32(ins.Args[0].Imm)); ok {
+					add("+sme", "+sve")
+				}
+				if _, ok := decodeARM64RawSMETileWrite(uint32(ins.Args[0].Imm)); ok {
+					add("+sme", "+sve")
+				}
+				if _, ok := decodeARM64RawSVEFloatImmediate(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
+				if _, ok := decodeARM64RawSVEDupM(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
+				if _, ok := decodeARM64RawSVEFloatMultiplyAccumulate(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
+				if _, ok := decodeARM64RawSVEConvert(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
 			}
 			if arm64CTERMOps[Op(op)] {
 				add("+sve")
@@ -892,7 +916,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, _, ok := decodeARM64RawSVESubtract(word); ok {
 					add("+sve")
 				}
-				if _, ok := decodeARM64RawSVELSR(word); ok {
+				if _, ok := decodeARM64RawSVEShift(word); ok {
 					add("+sve")
 				}
 				if _, ok := decodeARM64RawSVESelect(word); ok {

@@ -23,6 +23,31 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if mask, ok := decodeARM64RawZAZero(word); ok {
 		return c.lowerRawZAZero(mask)
 	}
+	if form, ok := decodeARM64RawSMEOuterProduct(word); ok {
+		return c.lowerRawSMEOuterProduct(form)
+	}
+	if form, ok := decodeARM64RawSMETileRead(word); ok {
+		return c.lowerRawSMETileRead(form)
+	}
+	if form, ok := decodeARM64RawSMETileWrite(word); ok {
+		return c.lowerRawSMETileWrite(form)
+	}
+	if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
+		_, _, err := c.lowerARM64SVEFloatImmediate(decoded.Op, decoded)
+		return err
+	}
+	if decoded, ok := decodeARM64RawSVEDupM(word); ok {
+		_, _, err := c.lowerARM64SVEDupM(decoded.Op, decoded)
+		return err
+	}
+	if decoded, ok := decodeARM64RawSVEFloatMultiplyAccumulate(word); ok {
+		_, _, err := c.lowerARM64SVEFloatMultiplyAccumulate(decoded.Op, decoded)
+		return err
+	}
+	if decoded, ok := decodeARM64RawSVEConvert(word); ok {
+		_, _, err := c.lowerARM64SVEConvert(decoded.Op, decoded)
+		return err
+	}
 	if reg, ok := decodeARM64RawICIVAU(word); ok {
 		return c.lowerRawICIVAU(reg)
 	}
@@ -345,7 +370,7 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if op, form, ok := decodeARM64RawSVESubtract(word); ok {
 		return c.lowerRawSVEAddSub(arm64SVEAddSubSpecs[op], form)
 	}
-	if form, ok := decodeARM64RawSVELSR(word); ok {
+	if form, ok := decodeARM64RawSVEShift(word); ok {
 		return c.lowerRawSVELSR(form)
 	}
 	if form, ok := decodeARM64RawSVESelect(word); ok {

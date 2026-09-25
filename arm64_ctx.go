@@ -536,6 +536,55 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.source)))
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
+				if form, ok := decodeARM64RawSMEOuterProduct(word); ok {
+					markReg(Reg(fmt.Sprintf("Z%d", form.first)))
+					markReg(Reg(fmt.Sprintf("Z%d", form.second)))
+					markReg(Reg(fmt.Sprintf("P%d", form.firstPred)))
+					markReg(Reg(fmt.Sprintf("P%d", form.secondPred)))
+				}
+				if form, ok := decodeARM64RawSMETileRead(word); ok {
+					markReg(Reg(fmt.Sprintf("Z%d", form.destination)))
+					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
+					markReg(Reg(fmt.Sprintf("R%d", form.row)))
+				}
+				if form, ok := decodeARM64RawSMETileWrite(word); ok {
+					markReg(Reg(fmt.Sprintf("Z%d", form.destination)))
+					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
+					markReg(Reg(fmt.Sprintf("R%d", form.row)))
+				}
+				if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
+					if destination, _, ok := arm64SVEFloatElementReg(decoded.Args[1]); ok {
+						markReg(Reg(fmt.Sprintf("Z%d", destination)))
+					}
+				}
+				if decoded, ok := decodeARM64RawSVEDupM(word); ok {
+					if destination, _, ok := arm64ParseSVEZElementReg(decoded.Args[1]); ok {
+						markReg(Reg(fmt.Sprintf("Z%d", destination)))
+					}
+				}
+				if decoded, ok := decodeARM64RawSVEFloatMultiplyAccumulate(word); ok {
+					for _, operand := range decoded.Args {
+						if reg, _, ok := arm64ParseSVEZElementReg(operand); ok {
+							markReg(Reg(fmt.Sprintf("Z%d", reg)))
+						}
+						if reg, ok := arm64ParseSVEPredicateMode(operand, "M", 7); ok {
+							markReg(Reg(fmt.Sprintf("P%d", reg)))
+						}
+					}
+				}
+				if decoded, ok := decodeARM64RawSVEConvert(word); ok {
+					if source, _, ok := arm64ParseSVEZElementReg(decoded.Args[0]); ok {
+						markReg(Reg(fmt.Sprintf("Z%d", source)))
+					}
+					if predicate, ok := arm64ParseSVEPredicateMode(decoded.Args[1], "M", 7); ok {
+						markReg(Reg(fmt.Sprintf("P%d", predicate)))
+					} else if predicate, ok := arm64ParseSVEPredicateMode(decoded.Args[1], "Z", 7); ok {
+						markReg(Reg(fmt.Sprintf("P%d", predicate)))
+					}
+					if destination, _, ok := arm64ParseSVEZElementReg(decoded.Args[2]); ok {
+						markReg(Reg(fmt.Sprintf("Z%d", destination)))
+					}
+				}
 				if form, ok := decodeARM64RawFMLA(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.elementReg)))
 					markReg(Reg(fmt.Sprintf("V%d", form.sourceReg)))
@@ -771,7 +820,7 @@ func (c *arm64Ctx) scanUsedRegs() {
 				if _, form, ok := decodeARM64RawSVESubtract(word); ok {
 					markSVEAddForm(form)
 				}
-				if form, ok := decodeARM64RawSVELSR(word); ok {
+				if form, ok := decodeARM64RawSVEShift(word); ok {
 					markReg(Reg(fmt.Sprintf("Z%d", form.source)))
 					if form.mode == arm64SVELSRWidePredicated || form.mode == arm64SVELSRWideUnpredicated || form.mode == arm64SVELSRVectorPredicated {
 						markReg(Reg(fmt.Sprintf("Z%d", form.shifts)))

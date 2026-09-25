@@ -9,12 +9,17 @@ import (
 func TestTranslateARM64SVEFloatMultiplyAccumulateCompleteGo127Family(t *testing.T) {
 	var source strings.Builder
 	source.WriteString("TEXT svefloatmultiplyaccumulateforms(SB),$0-0\n")
-	for _, op := range []string{"ZFMLA", "ZFMLS"} {
+	for _, op := range []string{
+		"ZFMLA", "ZFMLS", "ZFMAD", "ZFMSB",
+		"ZFNMLA", "ZFNMLS", "ZFNMAD", "ZFNMSB",
+	} {
 		for index, width := range []string{"H", "S", "D"} {
 			maximumVector := []int{7, 7, 15}[index]
 			maximumLane := []int{7, 3, 1}[index]
 			fmt.Fprintf(&source, "\t%s Z1.%s, Z2.%s, P%d.M, Z3.%s\n", op, width, width, index, width)
-			fmt.Fprintf(&source, "\t%s Z%d.%s[%d], Z4.%s, Z5.%s\n", op, maximumVector, width, maximumLane, width, width)
+			if op == "ZFMLA" || op == "ZFMLS" {
+				fmt.Fprintf(&source, "\t%s Z%d.%s[%d], Z4.%s, Z5.%s\n", op, maximumVector, width, maximumLane, width, width)
+			}
 		}
 	}
 	source.WriteString("\tRET\n")
@@ -35,6 +40,8 @@ func TestTranslateARM64SVEFloatMultiplyAccumulateCompleteGo127Family(t *testing.
 				"@llvm.aarch64.sve.fmla.lane.nxv4f32",
 				"@llvm.aarch64.sve.fmls.nxv2f64",
 				"@llvm.aarch64.sve.fmls.lane.nxv8f16",
+				"@llvm.aarch64.sve.fmsb.nxv4f32",
+				"@llvm.aarch64.sve.fnmsb.nxv2f64",
 			} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("%s SVE floating multiply-accumulate lowering omitted %q:\n%s", triple, want, ll)
