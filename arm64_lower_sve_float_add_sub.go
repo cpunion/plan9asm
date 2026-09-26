@@ -65,7 +65,8 @@ func (c *arm64Ctx) lowerARM64SVEFloatAddSub(op Op, ins Instr) (ok bool, terminat
 				return true, false, fmt.Errorf("arm64 %s immediate requires $(0.5) or $(1.0): %q", op, ins.Raw)
 			}
 			form.immediate = math.Float64frombits(uint64(ins.Args[0].Imm))
-			if form.immediate != 0.5 && form.immediate != 1.0 {
+			constants := arm64SVEFloatArithmeticSpecs[op].constants
+			if form.immediate != constants[0] && form.immediate != constants[1] {
 				return true, false, fmt.Errorf("arm64 %s immediate requires $(0.5) or $(1.0): %q", op, ins.Raw)
 			}
 			form.hasImmediate = true

@@ -10,16 +10,21 @@ const (
 	arm64RawSVEFloatMul
 	arm64RawSVEFloatFADDV
 	arm64RawSVEFloatFADDA
+	arm64RawSVEFloatSubReverse
 )
 
 type arm64RawSVEFloat struct {
-	kind        arm64RawSVEFloatKind
-	elementBits int
-	destination int
-	first       int
-	second      int
-	predicate   int
-	predicated  bool
+	kind         arm64RawSVEFloatKind
+	elementBits  int
+	destination  int
+	first        int
+	second       int
+	predicate    int
+	predicated   bool
+	immediate    float64
+	hasImmediate bool
+	lane         int
+	hasLane      bool
 }
 
 func (c *arm64Ctx) loadRawSVEFloatVector(index, elementBits int) (string, string, error) {
@@ -48,44 +53,14 @@ func (c *arm64Ctx) storeRawSVEFloatVector(index, elementBits int, value string, 
 // forms keep Zd as their first operand. FMA has its own complete decoder;
 // never let a relaxed arithmetic mask consume a neighboring opcode family.
 func decodeARM64RawSVEFloat(word uint32) (arm64RawSVEFloat, bool) {
+	if form, ok := decodeARM64RawSVEFloatArithmetic(word); ok {
+		return form, true
+	}
 	form := arm64RawSVEFloat{elementBits: 8 << (int(word>>22) & 3)}
 	if form.elementBits == 8 {
 		return arm64RawSVEFloat{}, false
 	}
 	switch {
-	case word&0xff20fc00 == 0x65000000:
-		form.kind = arm64RawSVEFloatAdd
-		form.first = int(word>>5) & 31
-		form.second = int(word>>16) & 31
-		form.destination = int(word) & 31
-	case word&0xff20fc00 == 0x65000400:
-		form.kind = arm64RawSVEFloatSub
-		form.first = int(word>>5) & 31
-		form.second = int(word>>16) & 31
-		form.destination = int(word) & 31
-	case word&0xff20fc00 == 0x65000800:
-		form.kind = arm64RawSVEFloatMul
-		form.first = int(word>>5) & 31
-		form.second = int(word>>16) & 31
-		form.destination = int(word) & 31
-	case word&0xff3fe000 == 0x65008000:
-		form.kind = arm64RawSVEFloatAdd
-		form.predicated = true
-		form.first = int(word>>5) & 31
-		form.destination = int(word) & 31
-		form.predicate = int(word>>10) & 7
-	case word&0xff3fe000 == 0x65018000:
-		form.kind = arm64RawSVEFloatSub
-		form.predicated = true
-		form.first = int(word>>5) & 31
-		form.destination = int(word) & 31
-		form.predicate = int(word>>10) & 7
-	case word&0xff3fe000 == 0x65028000:
-		form.kind = arm64RawSVEFloatMul
-		form.predicated = true
-		form.first = int(word>>5) & 31
-		form.destination = int(word) & 31
-		form.predicate = int(word>>10) & 7
 	case word&0xff20e000 == 0x65002000:
 		form.destination = int(word) & 31
 		form.predicate = int(word>>10) & 7
@@ -127,14 +102,19 @@ func (c *arm64Ctx) lowerRawSVEFloat(form arm64RawSVEFloat) error {
 		return c.lowerARM64SVEFloatMultiplyForm(arm64SVEFloatMultiplyForm{
 			elementBits: form.elementBits, first: first, second: second,
 			predicate: form.predicate, destination: form.destination, predicated: form.predicated,
+			immediate: form.immediate, hasImmediate: form.hasImmediate,
+			laneVector: second, lane: form.lane, hasLane: form.hasLane,
 		})
 	}
 	op := Op("ZFADD")
 	if form.kind == arm64RawSVEFloatSub {
 		op = "ZFSUB"
+	} else if form.kind == arm64RawSVEFloatSubReverse {
+		op = "ZFSUBR"
 	}
 	return c.lowerARM64SVEFloatAddSubForm(arm64SVEFloatAddSubSpecs[op], arm64SVEFloatAddSubForm{
 		elementBits: form.elementBits, first: first, second: second,
 		predicate: form.predicate, destination: form.destination, predicated: form.predicated,
+		immediate: form.immediate, hasImmediate: form.hasImmediate,
 	})
 }
