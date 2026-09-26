@@ -111,12 +111,12 @@ func TestDecodedX86PackedHalfConversionGorseEVEXMemory(t *testing.T) {
 }
 
 func TestDecodedX86PackedHalfConversionGoRowsAndWidths(t *testing.T) {
-	if len(x86RawHalfConversionForms) != 2 ||
-		x86RawHalfConversionForms[0] != (x86RawHalfConversionForm{"VCVTPH2PS", 2, 0x13, false}) ||
-		x86RawHalfConversionForms[1] != (x86RawHalfConversionForm{"VCVTPS2PH", 3, 0x1d, true}) {
+	if len(x86RawHalfConversionForms) != 4 ||
+		x86RawHalfConversionForms[0] != (x86RawHalfConversionForm{op: "VCVTPH2PS", mapNumber: 2, opcode: 0x13}) ||
+		x86RawHalfConversionForms[1] != (x86RawHalfConversionForm{op: "VCVTPS2PH", mapNumber: 3, opcode: 0x1d, immediate: true}) {
 		t.Fatalf("packed half conversion grammar does not match the two Go 1.27 opcode rows")
 	}
-	for _, form := range x86RawHalfConversionForms {
+	for _, form := range x86RawHalfConversionForms[:2] {
 		for _, width256 := range []bool{false, true} {
 			vector := "X"
 			if width256 {
@@ -170,7 +170,7 @@ func TestDecodedX86PackedHalfConversionGoRowsAndWidths(t *testing.T) {
 }
 
 func TestDecodedX86PackedHalfConversionSAEAndInvalidForms(t *testing.T) {
-	for _, form := range x86RawHalfConversionForms {
+	for _, form := range x86RawHalfConversionForms[:2] {
 		code := encodeX86RawEVEXHalfConversion(form, 2, 2, true, true, 1, 2, false, 7)
 		got, length, matched, err := decodedX86PackedHalfConversionInstruction(code, 64)
 		if err != nil || !matched || length != len(code) || got.Op != form.op+".SAE.Z" {
@@ -224,7 +224,7 @@ func TestTranslateRawPackedHalfConversionLLVM22Targets(t *testing.T) {
 					fmt.Fprintf(&source, "\tBYTE $0x%02x\n", value)
 				}
 			}
-			for _, form := range x86RawHalfConversionForms {
+			for _, form := range x86RawHalfConversionForms[:2] {
 				for _, width256 := range []bool{false, true} {
 					appendBytes(encodeX86RawVEXHalfConversion(form, width256, 2, 1, false, 7))
 					appendBytes(encodeX86RawVEXHalfConversion(form, width256, 2, 0, true, 7))

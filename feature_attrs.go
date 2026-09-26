@@ -71,6 +71,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			switch {
 			case isAMD64RawFP16Op(op):
 				add("+avx512fp16")
+				if ins.x86VectorBytes == 16 || ins.x86VectorBytes == 32 {
+					add("+avx512vl")
+				}
 				base := strings.SplitN(op, ".", 2)[0]
 				if strings.HasSuffix(base, "PH") && len(ins.Args) != 0 {
 					destination := ins.Args[len(ins.Args)-1]
@@ -1076,6 +1079,9 @@ func isAMD64RawFP16Op(op string) bool {
 	}
 	if base == "VMOVSH" || base == "VMOVW" {
 		return true
+	}
+	if spec, ok := amd64PackedHalfConversionOps[base]; ok {
+		return spec.rawOnly
 	}
 	if spec, ok := amd64FMA3Specs[Op(base)]; ok {
 		return spec.rawOnly && spec.laneBits == 16

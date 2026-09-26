@@ -10,9 +10,16 @@ type amd64HalfConversionSuffix struct {
 	zeroing bool
 }
 
-var amd64PackedHalfConversionOps = map[string]struct{}{
-	"VCVTPH2PS": {},
-	"VCVTPS2PH": {},
+type amd64HalfConversionSpec struct {
+	inputBits, outputBits int
+	rawOnly               bool
+}
+
+var amd64PackedHalfConversionOps = map[string]amd64HalfConversionSpec{
+	"VCVTPH2PS":  {inputBits: 16, outputBits: 32},
+	"VCVTPS2PH":  {inputBits: 32, outputBits: 16},
+	"VCVTPH2PSX": {inputBits: 16, outputBits: 32, rawOnly: true},
+	"VCVTPS2PHX": {inputBits: 32, outputBits: 16, rawOnly: true},
 }
 
 func parseAMD64HalfConversionSuffix(rawOp, baseOp string) (amd64HalfConversionSuffix, error) {
@@ -49,8 +56,12 @@ func (c *amd64Ctx) lowerPackedHalfConversion(op Op, ins Instr) (ok bool, termina
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp = rawOp[:dot]
 	}
-	if _, supported := amd64PackedHalfConversionOps[baseOp]; !supported {
+	spec, supported := amd64PackedHalfConversionOps[baseOp]
+	if !supported {
 		return false, false, nil
+	}
+	if spec.rawOnly {
+		return c.lowerRawFP16Conversion(ins, spec)
 	}
 	properties, err := parseAMD64HalfConversionSuffix(rawOp, baseOp)
 	if err != nil {
@@ -186,15 +197,14 @@ func (c *amd64Ctx) lowerPackedSingleToHalf(ins Instr, properties amd64HalfConver
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x float>\n", floats, lanes, sourceBits, lanes)
 	converted := c.newTmp()
 	rounding := int(ins.Args[0].Imm) & 7
-	if rounding == 0 || rounding&4 != 0 {
-		fmt.Fprintf(c.b, "  %%%s = fptrunc <%d x float> %%%s to <%d x half>\n", converted, lanes, floats, lanes)
-	} else {
-		metadata := [...]string{"round.tonearest", "round.downward", "round.upward", "round.towardzero"}[rounding]
-		fmt.Fprintf(c.b, "  %%%s = call <%d x half> @llvm.experimental.constrained.fptrunc.v%df16.v%df32(<%d x float> %%%s, metadata !\"%s\", metadata !\"fpexcept.ignore\")\n", converted, lanes, lanes, lanes, lanes, floats, metadata)
-	}
+	fmt.Fprintf(c.b, "  %%%s = fptrunc <%d x float> %%%s to <%d x half>\n", converted, lanes, floats, lanes)
 	bits := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x half> %%%s to <%d x i16>\n", bits, lanes, converted, lanes)
 	result := "%" + bits
+	if rounding > 0 && rounding < 4 {
+		mode := [...]string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"}[rounding]
+		result = c.adjustFP16NarrowRounding(lanes, "%"+floats, "%"+converted, result, mode)
+	}
 	outputBytes := sourceBytes / 2
 	if masked {
 		mask, err := c.loadK(ins.Args[2].Reg)
@@ -226,7 +236,7 @@ func (c *amd64Ctx) storePackedHalfResult(destination Operand, registerBytes, out
 		return c.storeVectorBytesOperand(destination, outputBytes, value)
 	}
 	if outputBytes == registerBytes {
-		return c.storeVectorBytes(destination.Reg, registerBytes, value)
+		return c.storePackedMoveOperand(destination, registerBytes, value)
 	}
 	widened := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i8> %s, <%d x i8> zeroinitializer, <%d x i32> <", widened, outputBytes, value, outputBytes, registerBytes)
@@ -237,5 +247,5 @@ func (c *amd64Ctx) storePackedHalfResult(destination Operand, registerBytes, out
 		fmt.Fprintf(c.b, "i32 %d", lane)
 	}
 	c.b.WriteString(">\n")
-	return c.storeVectorBytes(destination.Reg, registerBytes, "%"+widened)
+	return c.storePackedMoveOperand(destination, registerBytes, "%"+widened)
 }
