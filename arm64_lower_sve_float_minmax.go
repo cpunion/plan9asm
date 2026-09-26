@@ -58,6 +58,42 @@ type arm64SVEFloatMinMaxForm struct {
 	hasImmediate bool
 }
 
+// Four orthogonal opcode choices (min/max and numeric/propagating NaNs)
+// share the same direct, immediate, pairwise and quad-reduction fields.
+// Ordinary reductions already use decodeARM64RawSVEFloatMinMaxReduction.
+func decodeARM64RawSVEFloatMinMax(word uint32) (Instr, bool) {
+	size := word >> 22 & 3
+	if size == 0 {
+		return Instr{}, false
+	}
+	op := [...]Op{"ZFMAXNM", "ZFMINNM", "ZFMAX", "ZFMIN"}[word>>16&3]
+	width := "BHSD"[size]
+	source := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))}
+	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, width))}
+	predicate := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.M", word>>10&7))}
+	args := []Operand{source, destination, predicate, destination}
+	switch word & 0xff3ce000 {
+	case 0x65048000:
+	case 0x651c8000:
+		if word&0x3c0 != 0 {
+			return Instr{}, false
+		}
+		args[0] = Operand{Kind: OpImm, ImmIsFloat: true, Imm: int64(math.Float64bits(float64(word >> 5 & 1)))}
+	case 0x64148000:
+		op += "P"
+	case 0x6414a000:
+		op += "QV"
+		args = []Operand{
+			source,
+			{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d", word>>10&7))},
+			{Kind: OpReg, Reg: Reg(fmt.Sprintf("V%d.%c%d", word&31, width, 16>>size))},
+		}
+	default:
+		return Instr{}, false
+	}
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
+}
+
 func (c *arm64Ctx) lowerARM64SVEFloatMinMax(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	spec, ok := arm64SVEFloatMinMaxSpecs[op]
 	if !ok {

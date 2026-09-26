@@ -230,6 +230,15 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEPredicateIncDec(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
+				if decoded, ok := decodeARM64RawSVEFloatMinMax(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+					switch arm64SVEFloatMinMaxSpecs[decoded.Op].kind {
+					case arm64SVEFloatMinMaxPairwise:
+						add("+sve2")
+					case arm64SVEFloatMinMaxQuadReduce:
+						add("+sve2p1")
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEFloatUnary(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if arm64SVEFloatUnarySpecs[decoded.Op].fptoint {

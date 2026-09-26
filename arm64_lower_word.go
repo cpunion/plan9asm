@@ -39,6 +39,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEIndex(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEFloatMinMax(word); ok {
+		_, _, err := c.lowerARM64SVEFloatMinMax(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEFloatUnary(word); ok {
 		_, _, err := c.lowerARM64SVEFloatUnary(decoded.Op, decoded)
 		return err

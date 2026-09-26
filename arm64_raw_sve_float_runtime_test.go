@@ -13,6 +13,9 @@ func testARM64RawSVEFloatRuntime(t *testing.T, llc string) {
 	for _, op := range []string{"fabs", "fneg", "frecpx", "frinta", "frinti", "frintm", "frintn", "frintp", "frintx", "frintz", "fsqrt"} {
 		ops = append(ops, op, op+"_zero")
 	}
+	for _, op := range []string{"fmax", "fmin", "fmaxnm", "fminnm"} {
+		ops = append(ops, op, op+"_zeroimm", op+"_oneimm", op+"p", op+"v")
+	}
 	for _, width := range []struct {
 		suffix, scalar, ctype string
 		bytes                 int
@@ -20,6 +23,7 @@ func testARM64RawSVEFloatRuntime(t *testing.T, llc string) {
 		{"h", "h", "_Float16", 2}, {"s", "s", "float", 4}, {"d", "d", "double", 8},
 	} {
 		for _, op := range ops {
+			minmax := strings.HasPrefix(op, "fmax") || strings.HasPrefix(op, "fmin")
 			name := op + "_" + width.suffix
 			loadStore := map[int]string{2: "h", 4: "w", 8: "d"}[width.bytes]
 			native := []string{
@@ -35,6 +39,22 @@ func testARM64RawSVEFloatRuntime(t *testing.T, llc string) {
 				instruction := fmt.Sprintf("faddv %s0, p0, z5.%s", width.scalar, width.suffix)
 				if op == "fadda" {
 					instruction = fmt.Sprintf("fadda %s0, p0, %s0, z5.%s", width.scalar, width.scalar, width.suffix)
+				}
+				native = append(native, instruction, "st1b { z0.b }, p7, [x2]")
+			} else if minmax {
+				instruction := ""
+				if strings.HasSuffix(op, "v") {
+					instruction = fmt.Sprintf("%s %s0, p0, z5.%s", op, width.scalar, width.suffix)
+				} else {
+					operation, second := op, "z1."+width.suffix
+					if strings.HasSuffix(op, "imm") {
+						operation = strings.SplitN(op, "_", 2)[0]
+						second = "#0.0"
+						if strings.HasSuffix(op, "_oneimm") {
+							second = "#1.0"
+						}
+					}
+					instruction = fmt.Sprintf("%s z0.%s, p0/m, z0.%s, %s", operation, width.suffix, width.suffix, second)
 				}
 				native = append(native, instruction, "st1b { z0.b }, p7, [x2]")
 			} else if op == "fadd" || op == "fsub" || op == "fmul" {
@@ -67,23 +87,35 @@ func testARM64RawSVEFloatRuntime(t *testing.T, llc string) {
 			}}}
 			fmt.Fprintf(&declarations, "extern void %s(const void *, const void *, void *);\n", name)
 			assembly := strings.NewReplacer("[x0]", "[%[a]]", "[x1]", "[%[b]]", "[x2]", "[%[out]]").Replace(strings.Join(native, "\\n\\t"))
+			samples, sampleCount, phases := "65504, -65504, 0.125, -0.0, 0.00001, -1.0", 6, 1
+			second := fmt.Sprintf("(%s)(i + 2)", width.ctype)
+			if minmax {
+				samples = "0.0, -0.0, __builtin_nan(\"\"), 1.0, -1.0, __builtin_inf(), -__builtin_inf(), 0.00001, 65504, -65504"
+				sampleCount, phases = 10, 10
+				second = fmt.Sprintf("(%s)samples[(i + phase + 3) %% 10]", width.ctype)
+			}
 			fmt.Fprintf(&checks, `    {
+    for (unsigned phase = 0; phase < %d; phase++) {
       %s a[128], b[128];
-      const double samples[] = {65504, -65504, 0.125, -0.0, 0.00001, -1.0};
+      const double samples[] = {%s};
       for (unsigned i = 0; i < vl / %d; i++) {
-        a[i] = (%s)samples[i %% 6];
-        b[i] = (%s)(i + 2);
+        a[i] = (%s)samples[(i + phase) %% %d];
+        b[i] = %s;
       }
       unsigned char got[256] = {0}, want[256] = {0};
       __asm__ volatile("%s" :: [a]"r"(a), [b]"r"(b), [out]"r"(want)
         : "p0", "p7", "z0", "z1", "z5", "memory");
       %s(a, b, got);
-      if (memcmp(got, want, %s) != 0) return %d;
+      if (memcmp(got, want, %s) != 0) {
+        fprintf(stderr, "%s: vl=%%u phase=%%u\n", vl, phase);
+        return %d;
+      }
     }
-`, width.ctype, width.bytes, width.ctype, width.ctype, assembly, name, count, len(sigs))
+    }
+`, phases, width.ctype, samples, width.bytes, width.ctype, sampleCount, second, assembly, name, count, name, len(sigs))
 		}
 	}
-	main := "#include <stdint.h>\n#include <string.h>\n#include <sys/prctl.h>\n" + declarations.String() + `
+	main := "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n#include <sys/prctl.h>\n" + declarations.String() + `
 int main(void) {
   const unsigned lengths[] = {16, 32, 48, 64, 128, 256};
   for (unsigned i = 0; i < sizeof(lengths)/sizeof(lengths[0]); i++) {
@@ -99,6 +131,6 @@ int main(void) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "raw_float_sve", triple, ir, main,
+	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.5-a+sve2"}, "raw_float_sve", triple, ir, main,
 		[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
 }

@@ -282,6 +282,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markOp(operand)
 					}
 				}
+				if decoded, ok := decodeARM64RawSVEFloatMinMax(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEFloatUnary(word); ok {
 					for _, operand := range decoded.Args {
 						markOp(operand)
