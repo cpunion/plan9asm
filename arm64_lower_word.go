@@ -105,6 +105,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVECompact(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVECopy(word); ok {
+		_, _, err := c.lowerARM64SVECopy(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEIntegerUnary(word); ok {
 		_, _, err := c.lowerARM64SVEIntegerUnary(decoded.Op, decoded)
 		return err

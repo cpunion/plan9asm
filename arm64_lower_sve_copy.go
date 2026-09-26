@@ -12,6 +12,50 @@ var arm64SVECopyVectorBaseSize = map[Op]int{
 	"ZCPYD": 3,
 }
 
+func decodeARM64RawSVECopy(word uint32) (Instr, bool) {
+	size := word >> 22 & 3
+	width := "BHSD"[size]
+	op, mode := Op("ZCPY"), "M"
+	predicate := word >> 10 & 7
+	var source Operand
+	switch {
+	case word&0xff308000 == 0x05100000:
+		shifted := word&(1<<13) != 0
+		// Arm marks size:sh == 001 undefined, despite Go accepting a shifted
+		// byte immediate spelling. Never decode that reserved machine word.
+		if size == 0 && shifted {
+			return Instr{}, false
+		}
+		value := int64(int8(word >> 5))
+		if shifted {
+			value <<= 8
+		}
+		source = Operand{Kind: OpImm, Imm: value}
+		predicate = word >> 16 & 15
+		if word&(1<<14) == 0 {
+			mode = "Z"
+		}
+	case word&0xff3fe000 == 0x0528a000:
+		source = Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("R%d", word>>5&31))}
+		if word>>5&31 == 31 {
+			source.Reg = Reg("RSP")
+		}
+		if size != 3 {
+			op = "ZCPYW"
+		}
+	case word&0xff3fe000 == 0x05208000:
+		op = Op("ZCPY" + string(width))
+		source = Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("V%d", word>>5&31))}
+	default:
+		return Instr{}, false
+	}
+	return Instr{Op: op, Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		source,
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%s", predicate, mode))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, width))},
+	}}, true
+}
+
 func (c *arm64Ctx) lowerARM64SVECopy(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	vectorBaseSize, vectorForm := arm64SVECopyVectorBaseSize[op]
 	if op != "ZCPY" && op != "ZCPYW" && !vectorForm {
