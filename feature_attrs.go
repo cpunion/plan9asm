@@ -432,9 +432,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+sve2")
 				}
 			}
-			if _, ok := arm64SVEMADMSBIntrinsics[Op(op)]; ok {
-				add("+sve")
-			}
 			if op == "ZBFDOT" {
 				add("+bf16", "+sve")
 			}

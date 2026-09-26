@@ -17,10 +17,10 @@ func arm64RawSVEMultiplyAccumulateAssembly(op string, size, destination, first, 
 func TestARM64RawSVEMultiplyAccumulateCompleteFormats(t *testing.T) {
 	var source strings.Builder
 	var lines []string
-	for _, op := range []string{"mla", "mls"} {
+	for _, op := range []string{"mla", "mls", "mad", "msb"} {
 		for size := 0; size < 4; size++ {
 			lines = append(lines, arm64RawSVEMultiplyAccumulateAssembly(op, size, 31, 30, 29, 7, -1))
-			if size == 0 {
+			if size == 0 || op == "mad" || op == "msb" {
 				continue
 			}
 			for lane := 0; lane < 16>>size; lane++ {
@@ -60,10 +60,10 @@ func TestARM64RawSVEMultiplyAccumulateCompleteFormats(t *testing.T) {
 func TestARM64RawSVEMultiplyAccumulateOperandFields(t *testing.T) {
 	var lines []string
 	var wants []Instr
-	for _, op := range []string{"mla", "mls"} {
+	for _, op := range []string{"mla", "mls", "mad", "msb"} {
 		for size := 0; size < 4; size++ {
 			for _, indexed := range []bool{false, true} {
-				if indexed && size == 0 {
+				if indexed && (size == 0 || op == "mad" || op == "msb") {
 					continue
 				}
 				limits := []int{32, 32, 32, 8, 1}
@@ -106,7 +106,7 @@ func TestARM64RawSVEMultiplyAccumulateOperandFields(t *testing.T) {
 			t.Fatalf("%s: decoded %#08x as %+v, %v; want %+v", lines[i], word, got, ok, wants[i])
 		}
 	}
-	for _, word := range []uint32{0x04008000, 0x04204000, 0x44200400, 0x44a01000, 0x44c00800} {
+	for _, word := range []uint32{0, 0x04008000, 0x04204000, 0x44200400, 0x44a01000, 0x44c00800} {
 		if got, ok := decodeARM64RawSVEMultiplyAccumulate(word); ok {
 			t.Errorf("neighboring word %#08x decoded as %+v", word, got)
 		}

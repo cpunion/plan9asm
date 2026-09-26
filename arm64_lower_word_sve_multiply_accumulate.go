@@ -15,6 +15,9 @@ func arm64SVEMultiplyAccumulateRawTables() (map[uint32]Op, map[uint32]arm64RawSV
 	for op, spec := range arm64SVEMultiplyAccumulateSpecs {
 		predicated[spec.predicatedRaw] = op
 		for size, base := range spec.indexedRaw {
+			if base == 0 {
+				continue
+			}
 			indexed[base] = arm64RawSVEMultiplyAccumulateRow{op, uint32(size + 1)}
 		}
 	}
@@ -49,6 +52,11 @@ func decodeARM64RawSVEMultiplyAccumulate(word uint32) (Instr, bool) {
 	args := []Operand{
 		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c%s", multiplier, width, lane))},
 		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))},
+	}
+	if arm64SVEMultiplyAccumulateSpecs[op].destructiveProduct {
+		// MAD/MSB encode the addend in bits 9:5, unlike MLA/MLS's
+		// multiplicand. Normalize both encodings to Go's operand order.
+		args[0], args[1] = args[1], args[0]
 	}
 	if predicated {
 		args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.M", word>>10&7))})

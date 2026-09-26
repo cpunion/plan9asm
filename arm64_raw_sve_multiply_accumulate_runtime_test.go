@@ -9,10 +9,10 @@ import (
 func testARM64RawSVEMultiplyAccumulateRuntime(t *testing.T, llc string) {
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
-	for _, op := range []string{"mla", "mls"} {
+	for _, op := range []string{"mla", "mls", "mad", "msb"} {
 		for size := 0; size < 4; size++ {
 			lanes := []int{-1}
-			if size > 0 {
+			if size > 0 && (op == "mla" || op == "mls") {
 				for lane := 0; lane < 16>>size; lane++ {
 					lanes = append(lanes, lane)
 				}
@@ -53,6 +53,12 @@ func testARM64RawSVEMultiplyAccumulateRuntime(t *testing.T, llc string) {
 					if op == "mls" {
 						operator = "-"
 					}
+					expression := "accumulator " + operator + " x * y"
+					if op == "mad" {
+						expression = "y + accumulator * x"
+					} else if op == "msb" {
+						expression = "y - accumulator * x"
+					}
 					fmt.Fprintf(&checks, `    {
       unsigned char a[256], b[256], c[256], mask[256], got[256], native[256], scalar[256];
       const unsigned element = %d;
@@ -73,7 +79,7 @@ func testARM64RawSVEMultiplyAccumulateRuntime(t *testing.T, llc string) {
           memcpy(&x, %s + i, element);
           memcpy(&y, %s + multiplier_offset, element);
           memcpy(&accumulator, c + i, element);
-          if (lane >= 0 || mask[i]) accumulator = accumulator %s x * y;
+          if (lane >= 0 || mask[i]) accumulator = %s;
           memcpy(scalar + i, &accumulator, element);
         }
         __asm__ volatile("%s" :: [a]"r"(a), [b]"r"(b), [c]"r"(c), [mask]"r"(mask), [out]"r"(native)
@@ -85,7 +91,7 @@ func testARM64RawSVEMultiplyAccumulateRuntime(t *testing.T, llc string) {
         }
       }
     }
-`, 1<<size, lane, first, second, operator, assembly, name, name, len(sigs))
+`, 1<<size, lane, first, second, expression, assembly, name, name, len(sigs))
 				}
 			}
 		}

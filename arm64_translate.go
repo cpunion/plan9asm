@@ -1093,9 +1093,6 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	if ok, term, err := c.lowerARM64SVEMultiplyAccumulate(op, ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerARM64SVEMADMSB(op, ins); ok {
-		return term, err
-	}
 	if ok, term, err := c.lowerARM64SVEBFDOT(op, ins); ok {
 		return term, err
 	}

@@ -54,6 +54,9 @@ func TestTranslateARM64SVEMADMSBRejectsFormsOutsideGo127Table(t *testing.T) {
 		"ZMSB Z1.S, Z2.S, P0.Z, Z3.S",
 		"ZMAD Z1.S, Z2.S, P0.M",
 		"ZMSB.Z Z1.S, Z2.S, P0.M, Z3.S",
+		"ZMAD Z7.H[0], Z2.H, Z3.H",
+		"ZMSB Z15.D[1], Z2.D, Z3.D",
+		"ZMAD Z1.D, Z2.D, Z3.D",
 	} {
 		t.Run(strings.NewReplacer(" ", "_", ".", "_").Replace(instruction), func(t *testing.T) {
 			source := "TEXT badsvemadmsb(SB),$0-0\n\t" + instruction + "\n\tRET\n"
