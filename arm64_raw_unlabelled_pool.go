@@ -91,9 +91,10 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 	// An ADR can also construct a function pointer. Only classify its target
 	// as data when the produced address is used exclusively by loads and killed
 	// on every outgoing path (possibly by an explicit return contract).
+	values := newARM64RawPoolValues(fn.Instrs, start, pool, visited)
 	for at, target := range addresses {
 		if target >= pool && target < end {
-			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4}
+			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4, values: values}
 			if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
 				return nil, nil, nil
 			}
@@ -178,6 +179,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 type arm64RawPoolBounds struct {
 	offset int64
 	size   int64
+	values *arm64RawPoolValues
 }
 
 type arm64RawPoolFlow struct {
@@ -375,8 +377,15 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 					loaded = true
 				}
 			case arm64asm.MemExtend:
-				if isAddress(arm64asm.Reg(arg.Base)) || isAddress(arg.Index) {
+				if isAddress(arg.Index) {
 					return false
+				}
+				if isAddress(arm64asm.Reg(arg.Base)) {
+					if bounds == nil || !arm64RawPoolReadOnlyLoad(decoded.Op) ||
+						!arm64RawPoolIndexedLoadInBounds(decoded, word, arg, i, offset, bounds) {
+						return false
+					}
+					loaded = true
 				}
 			case arm64asm.RegExtshiftAmount:
 				// x/arch keeps this typed operand's register field private, but

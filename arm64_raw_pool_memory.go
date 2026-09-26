@@ -1,11 +1,41 @@
 package plan9asm
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
 	"golang.org/x/arch/arm64/arm64asm"
 )
+
+func arm64RawPoolIndexedLoadInBounds(ins arm64asm.Inst, word uint32, memory arm64asm.MemExtend, at int, offset int64, bounds *arm64RawPoolBounds) bool {
+	upper := bounds.values.upper(at, memory.Index)
+	switch memory.Extend.String() {
+	case "UXTW":
+		if upper > math.MaxUint32 {
+			upper = math.MaxUint32
+		}
+	case "SXTW":
+		if upper > math.MaxInt32 {
+			return false
+		}
+	case "SXTX":
+		if upper > math.MaxInt64 {
+			return false
+		}
+	case "LSL":
+	default:
+		return false
+	}
+	shift := memory.Amount
+	if memory.ShiftMustBeZero {
+		shift = 0
+	}
+	if offset < 0 || shift >= 63 || upper > uint64(math.MaxInt64-offset)>>shift {
+		return false
+	}
+	return arm64RawPoolContains(offset+int64(upper<<shift), arm64RawPoolLoadBytes(ins, word), bounds.size)
+}
 
 func arm64RawPoolContains(offset, bytes, size int64) bool {
 	return offset >= 0 && bytes > 0 && bytes <= size && offset <= size-bytes
