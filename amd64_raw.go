@@ -5802,7 +5802,7 @@ vex:
 
 // decodedX86VEXBinaryFloatInstruction recognizes the complete VEX and EVEX
 // VADD, VMUL, VSUB, VMIN, VDIV, and VMAX family for PS/PD/SS/SD, plus
-// VSQRTSS/VSQRTSD, plus raw-only packed FP16 MAP5 binary forms. Packed SQRT
+// VSQRTSS/VSQRTSD, plus raw-only packed/scalar FP16 MAP5 binary forms. Packed SQRT
 // has a distinct single-source grammar and is decoded by
 // decodedX86SameWidthConversionInstruction. Scalar VEX forms require VEX.128;
 // packed VEX forms accept both vector widths. EVEX adds X/Y/Z widths, masking,
@@ -5924,7 +5924,8 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 		0x5f: "VMAX",
 	}[opcode]
 	mapNumber := p0 & 0x0f
-	rawHalf := mapNumber == 5 && p1&3 == 0 && opcode != 0x51
+	rawHalf := mapNumber == 5 && (p1&3 == 0 || p1&3 == 2) && opcode != 0x51
+	rawHalfScalar := rawHalf && p1&3 == 2
 	if !recognized || mapNumber != 1 && !rawHalf {
 		return Instr{}, 0, false, nil
 	}
@@ -5959,7 +5960,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	if broadcast && scalar {
 		return Instr{}, 0, true, fmt.Errorf("scalar binary floating instruction does not support broadcast")
 	}
-	if !embeddedControl && vectorBits == 3 {
+	if !embeddedControl && vectorBits == 3 && !rawHalfScalar {
 		return Instr{}, 0, true, fmt.Errorf("reserved EVEX vector length")
 	}
 
@@ -6006,6 +6007,9 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	suffix := [...]string{"PS", "PD", "SS", "SD"}[pp]
 	if rawHalf {
 		suffix = "PH"
+		if rawHalfScalar {
+			suffix = "SH"
+		}
 	}
 	op := Op(stem + suffix)
 	if broadcast {

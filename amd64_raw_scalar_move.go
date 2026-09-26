@@ -79,7 +79,11 @@ vector:
 // both encode three-register merges; memory forms reserve vvvv and EVEX V'.
 func decodedX86ScalarMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	p, ok := decodeX86RawVectorEncoding(code)
-	if !ok || p.mapNumber != 1 || (p.opcode != 0x10 && p.opcode != 0x11) || (p.pp != 2 && p.pp != 3) {
+	if !ok || (p.opcode != 0x10 && p.opcode != 0x11) {
+		return Instr{}, 0, false, nil
+	}
+	fp16 := p.evex && p.mapNumber == 5 && p.pp == 2
+	if !fp16 && (p.mapNumber != 1 || (p.pp != 2 && p.pp != 3)) {
 		return Instr{}, 0, false, nil
 	}
 	fail := func(message string) (Instr, int, bool, error) {
@@ -91,7 +95,8 @@ func decodedX86ScalarMoveInstruction(code []byte, mode int) (Instr, int, bool, e
 	if p.addressOverride {
 		return fail("address-size override is not source-layout safe")
 	}
-	if p.vectorLength != 0 || p.broadcast {
+	// EVEX VMOVSH is LLIG; VMOVSS/SD reserve every nonzero length.
+	if (!fp16 && p.vectorLength != 0) || p.broadcast {
 		return fail("scalar moves require 128-bit encoding without broadcast/rounding")
 	}
 	if len(code) <= p.modRM {
@@ -101,6 +106,9 @@ func decodedX86ScalarMoveInstruction(code []byte, mode int) (Instr, int, bool, e
 		op    Op
 		bytes int
 	}{2: {"VMOVSS", 4}, 3: {"VMOVSD", 8}}[p.pp]
+	if fp16 {
+		spec.op, spec.bytes = "VMOVSH", 2
+	}
 	if p.evex && (!p.fixed || p.w != (spec.bytes == 8)) {
 		return fail("invalid EVEX fixed or width bit")
 	}
@@ -151,5 +159,9 @@ func decodedX86ScalarMoveInstruction(code []byte, mode int) (Instr, int, bool, e
 	for i := range args {
 		printed[i] = args[i].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(printed, ", "))}, p.modRM + consumed, true, nil
+	return Instr{
+		Op: op, Args: args,
+		Raw:        fmt.Sprintf("%s %s", op, strings.Join(printed, ", ")),
+		x86Encoded: fp16,
+	}, p.modRM + consumed, true, nil
 }

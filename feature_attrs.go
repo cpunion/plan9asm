@@ -69,6 +69,8 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		switch arch {
 		case ArchAMD64:
 			switch {
+			case isAMD64RawFP16Op(op):
+				add("+avx512fp16")
 			case strings.HasPrefix(op, "VCVTNEPS2BF16"):
 				add("+avx512f", "+avx512bf16")
 				if strings.HasPrefix(op, "VCVTNEPS2BF16X") || strings.HasPrefix(op, "VCVTNEPS2BF16Y") {
@@ -1052,4 +1054,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 	}
 	sort.Strings(featureSet)
 	return strings.Join(featureSet, ",")
+}
+
+func isAMD64RawFP16Op(op string) bool {
+	base := op
+	if dot := strings.IndexByte(op, '.'); dot >= 0 {
+		base = op[:dot]
+	}
+	if base == "VMOVSH" {
+		return true
+	}
+	spec, ok := amd64BinaryFloatingSpecs[Op(base)]
+	return ok && spec.rawOnly && spec.laneBits == 16
 }

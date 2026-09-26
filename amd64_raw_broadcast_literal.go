@@ -476,13 +476,15 @@ func decodeX86RawMaskBlendRIPData(code []byte, offset, mode int) (Instr, int, x8
 }
 
 // decodeX86RawScalarMoveRIPData covers memory-to-X VMOVSS/VMOVSD VEX and
-// EVEX encodings. The typed scalar decoder enforces reserved fields and masks.
+// EVEX encodings plus raw EVEX VMOVSH. The typed scalar decoder enforces
+// reserved fields and masks.
 func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
-	if !matched || p.mapNumber != 1 || p.opcode != 0x10 ||
+	half := p.evex && p.mapNumber == 5 && p.pp == 2
+	if !matched || (p.mapNumber != 1 && !half) || p.opcode != 0x10 ||
 		(p.pp != 2 && p.pp != 3) || p.segment != "" || p.addressOverride {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
@@ -491,7 +493,9 @@ func decodeX86RawScalarMoveRIPData(code []byte, offset, mode int) (Instr, int, x
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	width := 4
-	if p.pp == 3 {
+	if half {
+		width = 2
+	} else if p.pp == 3 {
 		width = 8
 	}
 	return x86RawRIPDataThroughDecoder(
@@ -682,19 +686,21 @@ func decodeX86RawFMA3RIPData(code []byte, offset, mode int) (Instr, int, x86RawL
 }
 
 // decodeX86RawBinaryFloatRIPData covers VADD/MUL/SUB/MIN/DIV/MAX packed and
-// scalar forms plus scalar VSQRT, with EVEX packed memory broadcast.
+// scalar forms, including raw AVX-512 FP16, plus scalar VSQRT and packed
+// memory broadcast.
 func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
 	if mode != 64 || offset >= len(code) {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
-	if !matched || p.mapNumber != 1 || p.segment != "" || p.addressOverride {
+	half := p.evex && p.mapNumber == 5 && (p.pp == 0 || p.pp == 2)
+	if !matched || (p.mapNumber != 1 && !half) || p.segment != "" || p.addressOverride {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	switch p.opcode {
 	case 0x58, 0x59, 0x5c, 0x5d, 0x5e, 0x5f:
 	case 0x51:
-		if p.pp < 2 {
+		if p.pp < 2 || half {
 			return Instr{}, 0, x86RawLiteralRange{}, false, nil
 		}
 	default:
@@ -705,7 +711,11 @@ func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, 
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	width := 16 << p.vectorLength
-	if p.pp >= 2 || p.evex && p.broadcast {
+	if half {
+		if p.pp == 2 || p.broadcast {
+			width = 2
+		}
+	} else if p.pp >= 2 || p.evex && p.broadcast {
 		width = 4
 		if p.pp == 1 || p.pp == 3 {
 			width = 8

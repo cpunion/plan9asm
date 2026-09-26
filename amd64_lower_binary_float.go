@@ -27,7 +27,7 @@ type amd64BinaryFloatingSpec struct {
 }
 
 // amd64BinaryFloatingSpecs covers Go 1.27's complete V-prefixed binary
-// floating-point family and the raw-only AVX-512 FP16 packed binary family.
+// floating-point family and the raw-only AVX-512 FP16 packed/scalar binary family.
 // Packed Go forms use _yvaddpd, while scalar Go forms and VSQRTSS/VSQRTSD
 // use _yvaddsd. SCALEF uses the same source/destination shape through
 // _yvscalefpd/_yvgetexpsd. MAX/MIN enable SAE; arithmetic, square-root, and
@@ -39,6 +39,12 @@ var amd64BinaryFloatingSpecs = map[Op]amd64BinaryFloatingSpec{
 	"VDIVPH":    {laneBits: 16, mode: amd64BinaryFloatingDiv, rawOnly: true},
 	"VMINPH":    {laneBits: 16, mode: amd64BinaryFloatingMin, sae: true, rawOnly: true},
 	"VMAXPH":    {laneBits: 16, mode: amd64BinaryFloatingMax, sae: true, rawOnly: true},
+	"VADDSH":    {laneBits: 16, mode: amd64BinaryFloatingAdd, scalar: true, rawOnly: true},
+	"VSUBSH":    {laneBits: 16, mode: amd64BinaryFloatingSub, scalar: true, rawOnly: true},
+	"VMULSH":    {laneBits: 16, mode: amd64BinaryFloatingMul, scalar: true, rawOnly: true},
+	"VDIVSH":    {laneBits: 16, mode: amd64BinaryFloatingDiv, scalar: true, rawOnly: true},
+	"VMINSH":    {laneBits: 16, mode: amd64BinaryFloatingMin, scalar: true, sae: true, rawOnly: true},
+	"VMAXSH":    {laneBits: 16, mode: amd64BinaryFloatingMax, scalar: true, sae: true, rawOnly: true},
 	"VADDPS":    {laneBits: 32, mode: amd64BinaryFloatingAdd},
 	"VADDPD":    {laneBits: 64, mode: amd64BinaryFloatingAdd},
 	"VADDSS":    {laneBits: 32, mode: amd64BinaryFloatingAdd, scalar: true},
@@ -257,7 +263,25 @@ func (c *amd64Ctx) lowerScalarBinaryFloating(spec amd64BinaryFloatingSpec, prope
 	}
 	var first, second string
 	var err error
-	if spec.laneBits == 32 {
+	if spec.laneBits == 16 {
+		var firstBits, secondBits string
+		if ins.Args[0].Kind == OpReg {
+			firstBits, err = c.loadXLowInteger(ins.Args[0].Reg, 16)
+		} else if mask != "" {
+			firstBits, err = c.loadVectorScalarMemory(ins.Args[0], 16, mask)
+		} else {
+			firstBits, err = c.evalIntSized(ins.Args[0], "i16")
+		}
+		if err == nil {
+			secondBits, err = c.loadXLowInteger(ins.Args[1].Reg, 16)
+		}
+		if err == nil {
+			firstTemp, secondTemp := c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast i16 %s to half\n", firstTemp, firstBits)
+			fmt.Fprintf(c.b, "  %%%s = bitcast i16 %s to half\n", secondTemp, secondBits)
+			first, second = "%"+firstTemp, "%"+secondTemp
+		}
+	} else if spec.laneBits == 32 {
 		first, err = c.evalF32(ins.Args[0])
 		if err == nil {
 			second, err = c.loadXLowF32(ins.Args[1].Reg)
@@ -280,6 +304,9 @@ func (c *amd64Ctx) lowerScalarBinaryFloating(spec amd64BinaryFloatingSpec, prope
 		return true, false, err
 	}
 	base := c.bitcastVectorBytesToIntegerLanes(16, 128/spec.laneBits, spec.laneBits, secondBytes)
+	if spec.rawOnly {
+		return true, false, c.storeScalarMoveRegister(destination.Reg, spec.laneBits, "%"+computedBits, base, mask, properties.zeroing)
+	}
 	return true, false, c.storeVectorScalarRegister(destination.Reg, spec.laneBits, "%"+computedBits, base, mask, properties.zeroing)
 }
 

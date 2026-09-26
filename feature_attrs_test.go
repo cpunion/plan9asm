@@ -61,6 +61,18 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 			want: "+avx512f,+avx512vl",
 		},
 		{
+			name: "x86 raw fp16",
+			arch: ArchAMD64,
+			ops:  []Op{"VMOVSH", "VADDSH.RU_SAE", "VMAXPH.SAE"},
+			want: "+avx512fp16",
+		},
+		{
+			name: "x86 single float duplicate is not fp16",
+			arch: ArchAMD64,
+			ops:  []Op{"VMOVSHDUP"},
+			want: "",
+		},
+		{
 			name: "amd64 combined sorted deduped",
 			arch: ArchAMD64,
 			ops:  []Op{"AESENC", "CRC32L", "PCLMULQDQ", "PSHUFB", "CRC32Q", "AESDEC", "VPSHUFB"},

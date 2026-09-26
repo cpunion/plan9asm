@@ -21,10 +21,15 @@ func (c *amd64Ctx) lowerVectorScalarMove(op Op, ins Instr) (ok bool, terminated 
 		elemBits = 64
 	case "VMOVSS":
 		elemBits = 32
+	case "VMOVSH":
+		if !ins.x86Encoded {
+			return true, false, fmt.Errorf("amd64 %s is not in Go's named assembler; use an encoded raw instruction: %q", baseOp, ins.Raw)
+		}
+		elemBits = 16
 	default:
 		return false, false, nil
 	}
-	if c.goarch == "386" && len(ins.Args) > 3 {
+	if c.goarch == "386" && len(ins.Args) > 3 && !ins.x86Encoded {
 		return true, false, fmt.Errorf("386 %s exceeds Go's three-operand frontend limit: %q", baseOp, ins.Raw)
 	}
 	if suffix != "" && suffix != "Z" {
