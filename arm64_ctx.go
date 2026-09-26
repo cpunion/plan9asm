@@ -19,6 +19,7 @@ type arm64Ctx struct {
 	blocks []arm64Block
 
 	rawDataGlobals map[string]string // local source label -> LLVM global
+	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
 
 	usedRegs map[Reg]bool
 	regSlot  map[Reg]string // reg -> alloca name

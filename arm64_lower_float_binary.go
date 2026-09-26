@@ -130,6 +130,13 @@ func (c *arm64Ctx) lowerARM64ScalarFloatBinaryValues(
 		fmt.Fprintf(c.b, "  %%%s = fneg %s %%%s\n", result, floatType, product)
 	case "maximum", "minimum", "maxnum", "minnum":
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s(%s %s, %s %s)\n", result, floatType, kind, suffix, floatType, lhs, floatType, rhs)
+	case "fabd", "fmulx":
+		family := "neon"
+		if kind == "fabd" {
+			family = "sisd"
+		}
+		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.%s.%s.%s(%s %s, %s %s)\n",
+			result, floatType, family, kind, suffix, floatType, lhs, floatType, rhs)
 	}
 	return c.storeARM64ScalarFloatReg(destination, bits, "%"+result)
 }

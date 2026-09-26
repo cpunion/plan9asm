@@ -39,7 +39,11 @@ func (c *arm64Ctx) lowerPCRelativeAddress(bi int, op Op, ins Instr) (ok bool, te
 
 	address := c.newTmp()
 	if global, ok := c.rawDataGlobals[target]; ok {
-		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", address, llvmGlobal(global))
+		pointer := llvmGlobal(global)
+		if offset := c.rawDataOffsets[target]; offset != 0 {
+			pointer = fmt.Sprintf("getelementptr (i8, ptr %s, i64 %d)", pointer, offset)
+		}
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", address, pointer)
 	} else {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr blockaddress(%s, %%%s) to i64\n", address, llvmGlobal(c.sig.Name), arm64LLVMBlockName(target))
 	}

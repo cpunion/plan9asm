@@ -16,8 +16,9 @@ type arm64RawLayoutPoint struct {
 }
 
 type arm64RawDataBlob struct {
-	label string
-	bytes []byte
+	label   string
+	bytes   []byte
+	aliases map[string]int64
 }
 
 const arm64RawDataOp Op = "ARM64_RAW_DATA"
@@ -71,18 +72,32 @@ func prepareARM64RawPCRelative(fn Func) (Func, []arm64RawDataBlob, error) {
 		boundaries[end] = len(fn.Instrs)
 	}
 
-	dataWords, dataBlobs, err := identifyARM64RawData(fn, points, boundaries, labels, labelIndices)
+	poolWords, poolBlobs, insertions := identifyARM64UnlabelledPool(fn, points, knownLabels)
+	inspection := fn
+	if len(poolWords) != 0 {
+		inspection.Instrs = append([]Instr(nil), fn.Instrs...)
+		for at := range poolWords {
+			inspection.Instrs[at].Op = arm64RawDataOp
+		}
+	}
+	dataWords, dataBlobs, err := identifyARM64RawData(inspection, points, boundaries, labels, labelIndices)
 	if err != nil {
 		return Func{}, nil, err
 	}
-	if anonymousData, err := identifyARM64AnonymousData(fn, dataWords, labelIndices); err != nil {
+	for at := range poolWords {
+		dataWords[at] = true
+	}
+	dataBlobs = append(dataBlobs, poolBlobs...)
+	if anonymousData, err := identifyARM64AnonymousData(inspection, dataWords, labelIndices); err != nil {
 		return Func{}, nil, err
 	} else {
 		dataBlobs = append(dataBlobs, anonymousData...)
 	}
 
 	replacements := make(map[int]Instr)
-	insertions := make(map[int]string)
+	if insertions == nil {
+		insertions = make(map[int]string)
+	}
 	for i, ins := range fn.Instrs {
 		if dataWords[i] {
 			continue

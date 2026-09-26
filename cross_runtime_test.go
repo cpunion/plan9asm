@@ -22,6 +22,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_count_index", func(t *testing.T) {
 		testARM64RawSVECountIndexRuntime(t, llc)
 	})
+	t.Run("arm64_raw_scalar_abd_mul", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64ScalarABDMulRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+fp16"},
+			"scalar_abd_mul", triple, ir, main, []string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"})
+	})
 
 	type target struct {
 		goarch    string

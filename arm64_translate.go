@@ -50,6 +50,8 @@ func emitARM64Prelude(b *strings.Builder) {
 		}
 	}
 	for _, scalar := range []struct{ typeName, suffix string }{{"half", "f16"}, {"float", "f32"}, {"double", "f64"}} {
+		fmt.Fprintf(b, "declare %s @llvm.aarch64.sisd.fabd.%s(%s, %s)\n",
+			scalar.typeName, scalar.suffix, scalar.typeName, scalar.typeName)
 		fmt.Fprintf(b, "declare %s @llvm.aarch64.neon.fmulx.%s(%s, %s)\n",
 			scalar.typeName, scalar.suffix, scalar.typeName, scalar.typeName)
 	}
@@ -890,9 +892,14 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		return err
 	}
 	rawDataGlobals := make(map[string]string, len(rawData))
+	rawDataOffsets := make(map[string]int64)
 	for _, data := range rawData {
 		name := sig.Name + "." + data.label + ".raw_data"
 		rawDataGlobals[data.label] = name
+		for label, offset := range data.aliases {
+			rawDataGlobals[label] = name
+			rawDataOffsets[label] = offset
+		}
 		fmt.Fprintf(b, "%s = private constant [%d x i8] %s, align %d\n", llvmGlobal(name), len(data.bytes), llvmI8ArrayInit(data.bytes), bestAlign(int64(len(data.bytes))))
 	}
 	if len(rawData) != 0 {
@@ -913,6 +920,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.rawDataGlobals = rawDataGlobals
+	c.rawDataOffsets = rawDataOffsets
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}

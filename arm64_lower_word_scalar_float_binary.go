@@ -41,6 +41,12 @@ var arm64RawScalarFloatBinarySpecs = map[uint32]struct {
 	0x1ee07800: {"minnum", 16},
 	0x1e207800: {"minnum", 32},
 	0x1e607800: {"minnum", 64},
+	0x7ec01400: {"fabd", 16},
+	0x7ea0d400: {"fabd", 32},
+	0x7ee0d400: {"fabd", 64},
+	0x5e401c00: {"fmulx", 16},
+	0x5e20dc00: {"fmulx", 32},
+	0x5e60dc00: {"fmulx", 64},
 }
 
 func decodeARM64RawScalarFloatBinary(word uint32) (arm64RawScalarFloatBinary, bool) {
