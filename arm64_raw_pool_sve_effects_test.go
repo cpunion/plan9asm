@@ -16,6 +16,26 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		cases = append(cases, effect{op + " p9.b, p15/z, p9.b, p14.b", true})
 	}
 	cases = append(cases, effect{"sel p9.b, p15, p9.b, p14.b", true})
+	for _, reg := range []string{"z31", "p15"} {
+		for _, op := range []string{"ldr", "str"} {
+			cases = append(cases,
+				effect{fmt.Sprintf("%s %s, [x30, #255, mul vl]", op, reg), true},
+				effect{fmt.Sprintf("%s %s, [sp, #-256, mul vl]", op, reg), true},
+				effect{fmt.Sprintf("%s %s, [x9]", op, reg), false},
+			)
+		}
+	}
+	for _, op := range []string{"addvl", "addpl"} {
+		for _, immediate := range []int{-32, 0, 31} {
+			cases = append(cases,
+				effect{fmt.Sprintf("%s x9, x30, #%d", op, immediate), true},
+				effect{fmt.Sprintf("%s x30, sp, #%d", op, immediate), true},
+				effect{fmt.Sprintf("%s x30, x9, #%d", op, immediate), false},
+				effect{fmt.Sprintf("%s x9, x9, #%d", op, immediate), false},
+			)
+		}
+	}
+	cases = append(cases, effect{"rdvl x9, #1", true}, effect{"rdvl x30, #-32", true})
 	cases = append(cases, effect{"dupm z9.d, #0x3ff0000000000000", true})
 	cases = append(cases, effect{"movprfx z9, z31\nadd z9.d, p0/m, z9.d, z30.d", true})
 	for _, op := range []string{"cntb", "cnth", "cntw", "cntd", "incb", "inch", "incw", "incd", "decb", "dech", "decw", "decd"} {

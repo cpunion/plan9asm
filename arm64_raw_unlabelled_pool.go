@@ -216,6 +216,15 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			return false
 		}
 		word := uint32(instructions[i].Args[0].Imm)
+		if form, ok := decodeARM64RawSVEAddress(word); ok {
+			if form.op != "RDVL" && form.source == int(register-arm64asm.X0) {
+				return false
+			}
+			if form.destination != int(register-arm64asm.X0) {
+				queue = append(queue, arm64RawPoolFlow{i + 1, offset})
+			}
+			continue
+		}
 		if form, ok := decodeARM64RawSVECnt(word); ok {
 			if !form.vector && form.destination == int(register-arm64asm.X0) {
 				if form.operation != "" { // INC/DEC reads and changes the address.
@@ -467,6 +476,9 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
 	if arm64RawPoolIndependentSVE(word) {
 		return true
+	}
+	if form, ok := decodeARM64RawSVELoadStore(word); ok {
+		return form.base != address
 	}
 	if form, ok := decodeARM64RawSVEWhileLO(word); ok && word&(1<<4) == 0 {
 		return form.first != address && form.second != address

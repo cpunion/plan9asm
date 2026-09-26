@@ -371,6 +371,7 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 			"mov x3, #1", "ptrue p0.s", "dup z0.s, w2",
 			"zip1 z0.s, z0.s, z0.s",
 			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
+			"addvl x5, x1, #2", "addpl x5, x5, #-8", "str z1, [x5]", "ldr z1, [x5]",
 			"movprfx z2, z1", "asrd z2.s, p0/m, z2.s, #1",
 			"whilelo p1.s, xzr, x3", "ands p1.b, p0/z, p1.b, p1.b", "cntp x4, p0, p1.s",
 			"st1w {z2.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
@@ -424,7 +425,7 @@ extern void pool_float(uint32_t *, const uint64_t *);
 extern void pool_sve(uint32_t *, const uint64_t *);
 extern void pool_carry(uint32_t *, const uint64_t *);
 int main(void) {
-  uint64_t restore[2] = {0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
+  uint64_t restore[512] = {0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
   uint32_t result[9] = {1, 0, 0, 0, 0, 0, 0, 0, 2};
   pool_pair_first(result + 1, restore);
   pool_pair_second(result + 2, restore);
