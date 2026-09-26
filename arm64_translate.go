@@ -1210,9 +1210,6 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	if ok, term, err := c.lowerARM64SVEPredicatePermute(op, ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerARM64SVEPredicateSelect(op, ins); ok {
-		return term, err
-	}
 	if ok, term, err := c.lowerARM64SVEPredicateState(op, ins); ok {
 		return term, err
 	}

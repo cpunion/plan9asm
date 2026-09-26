@@ -43,6 +43,19 @@ static uint64_t count(unsigned pattern, unsigned lanes) {
       if (%s(x) != (tested < governing ? tested : governing)) return 6;
     }
 `, pattern, 1<<size, 31-pattern, 1<<size, name)
+			selectName := name + "_select"
+			all := uint32(0x2518e3e2) | size<<22 // P2 is the inactive selection.
+			selectWord := uint32(0x25004210 | 2<<16 | 1<<5 | 15<<10 | 3)
+			selectCount := uint32(0x25208000) | size<<22 | 2<<10 | 3<<5 | 10
+			fmt.Fprintf(&source, "TEXT %s(SB),$0-16\nWORD $%#08x\nWORD $%#08x\nWORD $%#08x\nWORD $%#08x\nWORD $%#08x\nMOVD R10,ret+8(FP)\nRET\n", selectName, tested, governing, all, selectWord, selectCount)
+			sigs[selectName] = crossUnarySig("arm64", selectName)
+			fmt.Fprintf(&main, "extern uint64_t %s(uint64_t);\n", selectName)
+			fmt.Fprintf(&checks, `    {
+      uint64_t tested = count(%d, vl / %d), governing = count(%d, vl / %d);
+      uint64_t active = tested < governing ? tested : governing;
+      if (%s(x) != vl / %d - governing + active) return 7;
+    }
+`, pattern, 1<<size, 31-pattern, 1<<size, selectName, 1<<size)
 		}
 		for operation, base := range []uint32{0x0420e000, 0x0430e000, 0x0430e400} {
 			for pattern := uint32(0); pattern < 32; pattern++ {

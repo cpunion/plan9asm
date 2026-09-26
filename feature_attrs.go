@@ -582,9 +582,6 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if _, ok := arm64SVEPredicatePermuteSpecs[Op(op)]; ok {
 				add("+sve")
 			}
-			if _, ok := arm64SVEPredicateSelectOps[Op(op)]; ok {
-				add("+sve")
-			}
 			if _, ok := arm64SVEPredicateStateSpecs[Op(op)]; ok {
 				add("+sve")
 			}

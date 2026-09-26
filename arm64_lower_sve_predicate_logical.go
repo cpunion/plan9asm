@@ -25,10 +25,11 @@ var arm64SVEPredicateLogicalSpecs = map[Op]arm64SVEPredicateLogicalSpec{
 	"PORNS":  {operation: "orn", flags: true},
 	"PORR":   {operation: "or"},
 	"PORRS":  {operation: "or", flags: true},
+	"PSEL":   {operation: "select"},
 }
 
-// decodeARM64RawSVEPredicateLogical covers the fourteen Go 1.27 predicate
-// logical rows, all of which share Pm/Pn/Pg/Pd fields and .B elements.
+// Logical and select rows share Pm/Pn/Pg/Pd fields and .B elements. Logical
+// forms zero inactive lanes; PSEL chooses its first operand for those lanes.
 func decodeARM64RawSVEPredicateLogical(word uint32) (Instr, bool) {
 	const variableBits = uint32(0x000f3def)
 	forms := [...]struct {
@@ -42,6 +43,7 @@ func decodeARM64RawSVEPredicateLogical(word uint32) (Instr, bool) {
 		{"PNOR", 0x25804200}, {"PNORS", 0x25c04200},
 		{"PORN", 0x25804010}, {"PORNS", 0x25c04010},
 		{"PORR", 0x25804000}, {"PORRS", 0x25c04000},
+		{"PSEL", 0x25004210},
 	}
 	for _, form := range forms {
 		if word&^variableBits != form.base {
@@ -56,6 +58,9 @@ func decodeARM64RawSVEPredicateLogical(word uint32) (Instr, bool) {
 			{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.Z", word>>10&15))},
 			predicate(word & 15),
 		}
+		if form.op == "PSEL" {
+			args[2].Reg = Reg(fmt.Sprintf("P%d", word>>10&15))
+		}
 		return Instr{Op: form.op, Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
 	}
 	return Instr{}, false
@@ -66,15 +71,22 @@ func (c *arm64Ctx) lowerARM64SVEPredicateLogical(op Op, ins Instr) (ok bool, ter
 	if !ok {
 		return false, false, nil
 	}
+	governingSyntax := "Pg/Z"
+	if spec.operation == "select" {
+		governingSyntax = "Pg"
+	}
 	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("arm64 %s expects Pm.B, Pn.B, Pg/Z, Pd.B: %q", op, ins.Raw)
+		return true, false, fmt.Errorf("arm64 %s expects Pm.B, Pn.B, %s, Pd.B: %q", op, governingSyntax, ins.Raw)
 	}
 	first, firstBits, firstOK := arm64ParseSVEPredicateElement(ins.Args[0])
 	second, secondBits, secondOK := arm64ParseSVEPredicateElement(ins.Args[1])
 	governing, governingOK := arm64ParseSVEPredicateMode(ins.Args[2], "Z", 15)
+	if spec.operation == "select" {
+		governing, governingOK = arm64ParseSVEPredicateBare(ins.Args[2], 15)
+	}
 	destination, destinationBits, destinationOK := arm64ParseSVEPredicateElement(ins.Args[3])
 	if !firstOK || !secondOK || !governingOK || !destinationOK || firstBits != 8 || secondBits != 8 || destinationBits != 8 {
-		return true, false, fmt.Errorf("arm64 %s only accepts the Go 1.27 Pm.B, Pn.B, Pg/Z, Pd.B form: %q", op, ins.Raw)
+		return true, false, fmt.Errorf("arm64 %s only accepts the Go 1.27 Pm.B, Pn.B, %s, Pd.B form: %q", op, governingSyntax, ins.Raw)
 	}
 	return true, false, c.lowerARM64SVEPredicateLogicalForm(spec, first, second, governing, destination)
 }
@@ -95,6 +107,9 @@ func (c *arm64Ctx) lowerARM64SVEPredicateLogicalForm(spec arm64SVEPredicateLogic
 
 	result := c.newTmp()
 	switch spec.operation {
+	case "select":
+		fmt.Fprintf(c.b, "  %%%s = select %s %s, %s %s, %s %s\n", result, predicateType, governingValue, predicateType, secondValue, predicateType, firstValue)
+		return c.storePReg(destination, "%"+result)
 	case "and", "xor", "or":
 		fmt.Fprintf(c.b, "  %%%s = %s %s %s, %s\n", result, spec.operation, predicateType, secondValue, firstValue)
 	case "bic", "orn":
