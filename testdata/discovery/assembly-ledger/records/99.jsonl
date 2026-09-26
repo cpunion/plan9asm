@@ -1,6 +1,6 @@
 {"module":"github.com/CortexFoundation/CortexTheseus","version":"v1.10.72","status":"pending"}
 {"module":"github.com/DSISC/crypto-suite","version":"v1.1.0","status":"pending"}
-{"module":"github.com/DoMiNaNt-StRaTeGiEs/go-quai","version":"v0.56.0","status":"passed"}
+{"module":"github.com/DoMiNaNt-StRaTeGiEs/go-quai","version":"v0.56.0","status":"pending"}
 {"module":"github.com/MOACChain/Chain3Go","version":"v0.0.0-20190118072330-ae0c631eaeb2","status":"pending"}
 {"module":"github.com/Wangin1996/Xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"pending"}
 {"module":"github.com/andrueandersoncs/typescript-go","version":"v0.1.0","status":"pending"}
@@ -21,5 +21,5 @@
 {"module":"github.com/shopify/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/stanford-rc/minio-crc64nvme","version":"v1.1.1","status":"pending"}
 {"module":"github.com/wangyixiang/v2ray-core","version":"v1.24.4","status":"pending"}
-{"module":"github.com/zchee/websocket","version":"v1.8.14","status":"pending"}
+{"module":"github.com/zchee/websocket","version":"v1.8.14","status":"passed"}
 {"module":"github.laiyagushi.com/bytedance/gopkg","version":"v0.1.4","status":"pending"}

@@ -1,9 +1,9 @@
 {"module":"argc.dev/goexp","version":"v0.0.0-20260810214457-241c87b0557e","status":"pending"}
 {"module":"git.sr.ht/~runxiyu/furgit","version":"v0.1.184","status":"pending"}
 {"module":"github.com/BoyaoWang430/sonic","version":"v1.13.2","status":"pending"}
-{"module":"github.com/SimonWaldherr/tinySQL","version":"v0.56.0","status":"pending"}
+{"module":"github.com/SimonWaldherr/tinySQL","version":"v0.56.0","status":"passed"}
 {"module":"github.com/TokenPLS/Hako","version":"v1.19.30-hako.2","status":"pending"}
-{"module":"github.com/hushui502/go","version":"v0.0.0-20220121231633-b7fa0f941f05","status":"pending"}
+{"module":"github.com/hushui502/go","version":"v0.0.0-20220121231633-b7fa0f941f05","status":"passed"}
 {"module":"github.com/iDigitalFlame/xmt","version":"v0.6.0","status":"pending"}
 {"module":"github.com/kimmyeongjin/uranus","version":"v0.0.0-20190128074403-804eb6d01b30","status":"pending"}
 {"module":"github.com/pduveau/go-x509","version":"v1.25.1","status":"pending"}

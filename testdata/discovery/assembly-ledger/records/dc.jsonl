@@ -1,5 +1,5 @@
 {"module":"github.com/Asylian21/ripemd160-asm","version":"v0.1.1","status":"pending"}
-{"module":"github.com/DIETERBE/go-misc","version":"v0.0.0-20171227141207-51513dee1410","status":"pending"}
+{"module":"github.com/DIETERBE/go-misc","version":"v0.0.0-20171227141207-51513dee1410","status":"passed"}
 {"module":"github.com/alexaslan/parquet-go","version":"v0.0.0-20260902125039-144b6469bf93","status":"pending"}
 {"module":"github.com/bytedance/Mockey","version":"v1.4.6","status":"pending"}
 {"module":"github.com/dedis/kyber/v4","version":"v4.0.2","status":"pending"}
@@ -7,7 +7,7 @@
 {"module":"github.com/dop251/go","version":"v0.0.0-20221018191927-b6e1a563fc14","status":"pending"}
 {"module":"github.com/evasionlab/xray-core","version":"v1.251015.0","status":"pending"}
 {"module":"github.com/finals/libtcmu","version":"v0.0.0-20161018022703-b4eaaf829383","status":"pending"}
-{"module":"github.com/fluentlabs-xyz/go-ethereum","version":"v0.0.0-20230809151011-2fa01729af09","status":"pending"}
+{"module":"github.com/fluentlabs-xyz/go-ethereum","version":"v0.0.0-20230809151011-2fa01729af09","status":"passed"}
 {"module":"github.com/go-erasure/mojette","version":"v0.2.0","status":"pending"}
 {"module":"github.com/grailbio/bio","version":"v0.0.0-20200818183458-d966d878d120","status":"pending"}
 {"module":"github.com/irootyou/websocket","version":"v0.0.0-20241107130731-1253b774ead7","status":"pending"}

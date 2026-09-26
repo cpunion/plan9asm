@@ -5,7 +5,7 @@
 {"module":"github.com/aceroer/gvisor-module-go126","version":"v0.0.0-20260705174146-be00658afefe","status":"pending"}
 {"module":"github.com/aperturerobotics/wazero","version":"v0.0.0-20260216034438-ad84e6308a28","status":"pending"}
 {"module":"github.com/asvedr/go-json","version":"v0.11.2","status":"pending"}
-{"module":"github.com/dolotech/admins","version":"v0.0.0-20190103071941-4a0720bdd5ed","status":"pending"}
+{"module":"github.com/dolotech/admins","version":"v0.0.0-20190103071941-4a0720bdd5ed","status":"passed"}
 {"module":"github.com/hashicorp/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/klauspost/comPress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/pingcap/TiDB","version":"v1.0.9","status":"pending"}

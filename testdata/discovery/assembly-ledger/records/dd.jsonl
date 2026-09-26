@@ -1,6 +1,6 @@
 {"module":"ghproxy-9d2.pages.dev/etclabscore/core-geth","version":"v1.12.22","status":"pending"}
 {"module":"github.com/CNOSDB/cnosdb","version":"v1.0.1","status":"pending"}
-{"module":"github.com/Kilic/bls12-381","version":"v0.1.0","status":"passed"}
+{"module":"github.com/Kilic/bls12-381","version":"v0.1.0","status":"pending"}
 {"module":"github.com/Klauspost/Compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/RoaringBitmap/roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/ScriptRock/crypto","version":"v1.1.0","status":"pending"}

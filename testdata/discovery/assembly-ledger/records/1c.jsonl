@@ -16,5 +16,5 @@
 {"module":"github.com/myonkeminta/tidb","version":"v1.0.7","status":"pending"}
 {"module":"github.com/secretnamebasis/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"pending"}
 {"module":"github.com/umed-chat/pion-transport/v4","version":"v4.0.0-20260405223751-45a984036eb8","status":"pending"}
-{"module":"github.web.gylab.com/kubernetes-sigs/node-feature-discovery","version":"v0.18.3","status":"passed"}
+{"module":"github.web.gylab.com/kubernetes-sigs/node-feature-discovery","version":"v0.18.3","status":"pending"}
 {"module":"m31labs.dev/turboquant","version":"v0.2.1","status":"pending"}

@@ -14,11 +14,11 @@
 {"module":"github.com/hashicorp/go.net","version":"v0.0.1","status":"pending"}
 {"module":"github.com/lemon4ksan/sein","version":"v0.0.0-20260921100627-4be1ad4b77a9","status":"pending"}
 {"module":"github.com/lukechampine/crypto","version":"v0.0.0-20180608092829-8ac0e0d97ce4","status":"pending"}
-{"module":"github.com/luxfi/go-ethereum","version":"v0.0.0-20260909134402-c33dcbdd8474","status":"passed"}
-{"module":"github.com/psiphon-labs/utls","version":"v1.1.0","status":"pending"}
+{"module":"github.com/luxfi/go-ethereum","version":"v0.0.0-20260909134402-c33dcbdd8474","status":"pending"}
+{"module":"github.com/psiphon-labs/utls","version":"v1.1.0","status":"passed"}
 {"module":"github.com/regclient/regClient","version":"v0.11.6","status":"pending"}
 {"module":"github.com/renthraysk/go","version":"v0.0.0-20250707204235-86b5ba731044","status":"pending"}
 {"module":"github.com/rs-unity/constmap","version":"v1.1.0","status":"pending"}
 {"module":"github.com/shermpay/jet","version":"v0.0.0-20260129053507-31bbfc1b88e9","status":"pending"}
-{"module":"github.com/spachava753/core","version":"v0.3.38","status":"pending"}
+{"module":"github.com/spachava753/core","version":"v0.3.38","status":"not_applicable"}
 {"module":"github.com/tailscale/golang-x-crypto","version":"v0.91.0","status":"pending"}

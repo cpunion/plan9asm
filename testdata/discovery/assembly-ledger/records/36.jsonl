@@ -15,6 +15,6 @@
 {"module":"github.com/playstonex/sing-tun","version":"v0.0.0-20260819001319-734e2a3135f1","status":"pending"}
 {"module":"github.com/sparx7783/solana-go","version":"v0.0.0-20260416123340-828ac7847868","status":"pending"}
 {"module":"github.com/stokejo/gvisor","version":"v0.0.0-20260414085155-75bfadc3561e","status":"pending"}
-{"module":"github.com/tenderly/net-optimism","version":"v0.0.0-20250122175523-0c2f79a903cd","status":"pending"}
+{"module":"github.com/tenderly/net-optimism","version":"v0.0.0-20250122175523-0c2f79a903cd","status":"passed"}
 {"module":"github.com/woozymasta/bcn","version":"v0.7.0","status":"pending"}
 {"module":"gonum.org/v1/gonum","version":"v0.17.0","status":"pending"}
