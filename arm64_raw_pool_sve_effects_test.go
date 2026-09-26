@@ -12,6 +12,46 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		want bool
 	}
 	var cases []effect
+	cases = append(cases, effect{"dupm z9.d, #0x3ff0000000000000", true})
+	for _, op := range []string{"cntb", "cnth", "cntw", "cntd", "incb", "inch", "incw", "incd", "decb", "dech", "decw", "decd"} {
+		cases = append(cases, effect{op + " x30, all, mul #16", true})
+		cases = append(cases, effect{op + " x9, all, mul #16", strings.HasPrefix(op, "cnt")})
+	}
+	for _, width := range []string{"b", "h", "s", "d"} {
+		cases = append(cases,
+			effect{fmt.Sprintf("asrd z9.%s, p7/m, z9.%s, #1", width, width), true},
+			effect{fmt.Sprintf("mov z9.%s, p15/m, #7", width), true},
+			effect{fmt.Sprintf("mov z9.%s, p15/z, #-7", width), true},
+			effect{fmt.Sprintf("mov z9.%s, p7/m, %s9", width, width), true},
+			effect{fmt.Sprintf("sel z9.%s, p15, z30.%s, z31.%s", width, width, width), true},
+			effect{fmt.Sprintf("dup z9.%s, z31.%s[0]", width, width), true},
+		)
+		for _, op := range []string{"sub", "sqadd", "uqadd", "sqsub", "uqsub"} {
+			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, z30.%s, z31.%s", op, width, width, width), true})
+		}
+		for _, op := range []string{"lsl", "lsr", "asr"} {
+			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, z31.%s, #1", op, width, width), true})
+		}
+	}
+	for _, op := range []string{"zip1", "zip2", "uzp1", "uzp2", "trn1", "trn2"} {
+		for _, width := range []string{"b", "h", "s", "d"} {
+			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, z9.%s, z31.%s", op, width, width, width), true})
+		}
+	}
+	for _, width := range []string{"h", "s", "d"} {
+		for _, op := range []string{"fadd", "fsub", "fmul", "fdiv", "fdivr", "fscale", "fmax", "fmin"} {
+			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, p7/m, z9.%s, z31.%s", op, width, width, width), true})
+		}
+		for _, op := range []string{"fabs", "fneg", "fsqrt"} {
+			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, p7/m, z31.%s", op, width, width), true})
+		}
+		cases = append(cases,
+			effect{fmt.Sprintf("fmov z9.%s, #1.0", width), true},
+			effect{fmt.Sprintf("fcmgt p7.%s, p7/z, z9.%s, z31.%s", width, width, width), true},
+			effect{fmt.Sprintf("fmla z9.%s, p7/m, z9.%s, z31.%s", width, width, width), true},
+			effect{fmt.Sprintf("scvtf z9.%s, p7/m, z31.%s", width, width), true},
+		)
+	}
 	for _, width := range []string{"b", "h", "s", "d"} {
 		gp := "w"
 		if width == "d" {

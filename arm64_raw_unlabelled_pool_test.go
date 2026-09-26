@@ -369,7 +369,9 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 		{"pool_float", []string{"fmov d0, x1", "fmov x19, d0"}},
 		{"pool_sve", []string{
 			"mov x3, #1", "ptrue p0.s", "dup z0.s, w2",
+			"zip1 z0.s, z0.s, z0.s",
 			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
+			"asrd z1.s, p0/m, z1.s, #1",
 			"whilelo p1.s, xzr, x3", "cntp x4, p0, p1.s",
 			"st1w {z1.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
 		}},
@@ -433,7 +435,7 @@ int main(void) {
   for (unsigned i = 1; i < 6; i++) if (result[i] != 0x17b4a14d) return 1;
   unsigned count = 0;
   for (uint32_t value = 0x17b4a14d; value; value >>= 1) count += value & 1;
-  return result[0] != 1 || result[6] != count || result[7] != 0x17b4a14d || result[8] != 2;
+  return result[0] != 1 || result[6] != count / 2 || result[7] != 0x17b4a14d || result[8] != 2;
 }
 `
 

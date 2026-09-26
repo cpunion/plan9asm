@@ -134,9 +134,10 @@ func TestARM64RawPoolLoadFootprints(t *testing.T) {
 func arm64RawPoolOffsetIR(t *testing.T, triple string) string {
 	t.Helper()
 	lines := []string{
-		"adr x19, #64", "add x19, x19, #8", "ldr w2, [x19]", "str x2, [x0]",
+		"adr x19, #68", "add x19, x19, #8", "ldr w2, [x19]", "str x2, [x0]",
 		"sub x19, x19, #16", "mov x3, #1", "whilelo p0.d, xzr, x3",
-		"ld1rd {z0.d}, p0/z, [x19]", "add x1, x0, #8", "st1d {z0.d}, p0, [x1]",
+		"ld1rd {z0.d}, p0/z, [x19]", "fneg z0.d, p0/m, z0.d",
+		"add x1, x0, #8", "st1d {z0.d}, p0, [x1]",
 		"mov x19, xzr", "ret",
 	}
 	// ADR reaches byte 16 of this 32-byte pool; ADD and SUB then select
@@ -186,6 +187,6 @@ int main(void) {
   uint64_t result[4] = {1, 0, 0, 2};
   pool_offset(result + 1);
   return result[0] != 1 || result[1] != 0x17b4a14d ||
-         result[2] != 0x5566778811223344ULL || result[3] != 2;
+         result[2] != 0xd566778811223344ULL || result[3] != 2;
 }
 `

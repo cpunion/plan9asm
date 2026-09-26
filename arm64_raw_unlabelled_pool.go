@@ -216,6 +216,16 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			return false
 		}
 		word := uint32(instructions[i].Args[0].Imm)
+		if form, ok := decodeARM64RawSVECnt(word); ok {
+			if !form.vector && form.destination == int(register-arm64asm.X0) {
+				if form.operation != "" { // INC/DEC reads and changes the address.
+					return false
+				}
+			} else {
+				queue = append(queue, arm64RawPoolFlow{i + 1, offset})
+			}
+			continue
+		}
 		// CNTP has only predicate inputs and overwrites its explicit GP
 		// destination. Writing this register kills the old pool address.
 		if ins, ok := decodeARM64RawSVEPredicateCount(word); ok {
@@ -404,16 +414,41 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	if _, ok := decodeARM64RawSVEAdd(word); ok {
 		return true
 	}
+	if _, _, ok := decodeARM64RawSVEAddSub(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEShift(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVESelect(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEDupElement(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEPermute(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEFloat(word); ok {
+		return true
+	}
 	for _, decode := range []func(uint32) (Instr, bool){
 		decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare,
 		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
+		decodeARM64RawSVEFloatUnary, decodeARM64RawSVEFloatCompare,
+		decodeARM64RawSVEFloatMinMax, decodeARM64RawSVEFloatImmediate,
+		decodeARM64RawSVEFloatMultiplyAccumulate, decodeARM64RawSVEFloatDivideScale,
+		decodeARM64RawSVEConvert,
+		decodeARM64RawSVEDupM,
+		decodeARM64RawSVEExtraShift, decodeARM64RawSVECopy,
 	} {
 		if ins, ok := decode(word); ok {
 			for _, operand := range ins.Args {
 				if operand.Kind == OpImm {
 					continue
 				}
-				if operand.Kind != OpReg || !(strings.HasPrefix(string(operand.Reg), "Z") || strings.HasPrefix(string(operand.Reg), "P")) {
+				if operand.Kind != OpReg || !(strings.HasPrefix(string(operand.Reg), "Z") ||
+					strings.HasPrefix(string(operand.Reg), "P") || strings.HasPrefix(string(operand.Reg), "V")) {
 					return false
 				}
 			}
