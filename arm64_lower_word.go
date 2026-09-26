@@ -176,6 +176,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEMultiplyHigh(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEAddressGeneration(word); ok {
+		_, _, err := c.lowerARM64SVEAddressGeneration(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEUnpack(word); ok {
 		_, _, err := c.lowerARM64SVEUnpack(decoded.Op, decoded)
 		return err

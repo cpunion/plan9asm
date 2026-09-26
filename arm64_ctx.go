@@ -402,6 +402,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markOp(operand)
 					}
 				}
+				if decoded, ok := decodeARM64RawSVEAddressGeneration(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEUnpack(word); ok {
 					for _, operand := range decoded.Args {
 						markOp(operand)

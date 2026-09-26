@@ -5,6 +5,37 @@ import (
 	"strings"
 )
 
+type arm64SVEAddressGenerationSpec struct {
+	elementBits int
+	extension   ExtendOp
+}
+
+var arm64SVEAddressGenerationForms = [...]arm64SVEAddressGenerationSpec{
+	{elementBits: 64, extension: ExtendSXTW},
+	{elementBits: 64, extension: ExtendUXTW},
+	{elementBits: 32},
+	{elementBits: 64},
+}
+
+func decodeARM64RawSVEAddressGeneration(word uint32) (Instr, bool) {
+	if word&0xff20f000 != 0x0420a000 {
+		return Instr{}, false
+	}
+	spec := arm64SVEAddressGenerationForms[word>>22&3]
+	width := byte('D')
+	if spec.elementBits == 32 {
+		width = 'S'
+	}
+	reg := func(number uint32) Reg {
+		return Reg(fmt.Sprintf("Z%d.%c", number, width))
+	}
+	return Instr{Op: "ZADR", Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		{Kind: OpMem, Mem: MemRef{Base: reg(word >> 5 & 31), Index: reg(word >> 16 & 31),
+			IndexExt: spec.extension, Scale: 1 << (word >> 10 & 3)}},
+		{Kind: OpReg, Reg: reg(word & 31)},
+	}}, true
+}
+
 func (c *arm64Ctx) lowerARM64SVEAddressGeneration(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	if op != "ZADR" {
 		return false, false, nil
@@ -27,15 +58,15 @@ func (c *arm64Ctx) lowerARM64SVEAddressGeneration(op Op, ins Instr) (ok bool, te
 		return true, false, fmt.Errorf("arm64 ZADR operands must be scalable-vector element registers: %q", ins.Raw)
 	}
 	extended := memory.IndexExt == ExtendSXTW || memory.IndexExt == ExtendUXTW
-	if memory.IndexExt != "" && !extended {
-		return true, false, fmt.Errorf("arm64 ZADR only accepts UXTW or SXTW index extension: %q", ins.Raw)
-	}
-	if extended {
-		if baseBits != 64 || indexBits != 64 || destinationBits != 64 {
-			return true, false, fmt.Errorf("arm64 ZADR extended form requires D elements: %q", ins.Raw)
+	valid := false
+	for _, spec := range arm64SVEAddressGenerationForms {
+		if baseBits == spec.elementBits && memory.IndexExt == spec.extension {
+			valid = true
+			break
 		}
-	} else if (baseBits != 32 && baseBits != 64) || baseBits != indexBits || indexBits != destinationBits {
-		return true, false, fmt.Errorf("arm64 ZADR unextended operands must use one S/D width: %q", ins.Raw)
+	}
+	if !valid || baseBits != indexBits || indexBits != destinationBits {
+		return true, false, fmt.Errorf("arm64 ZADR requires matching S/D operands, with UXTW/SXTW only for D elements: %q", ins.Raw)
 	}
 	baseValue, vectorType, err := c.loadZRegElements(base, baseBits)
 	if err != nil {
