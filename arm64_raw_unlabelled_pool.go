@@ -315,7 +315,7 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 		case "ADD", "ADDS", "ADC", "ADCS", "SUB", "SUBS", "SBC", "SBCS",
 			"NEG", "NEGS", "NGC", "NGCS":
 			destinations = 1
-		case "LSL", "LSR", "ASR", "ROR", "FMOV":
+		case "LSL", "LSR", "ASR", "ROR", "FMOV", "SMOV", "UMOV":
 			destinations = 1
 		case "LDR", "LDRB", "LDRH", "LDRSB", "LDRSH", "LDRSW",
 			"LDUR", "LDURB", "LDURH", "LDURSB", "LDURSH", "LDURSW",
@@ -442,6 +442,9 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 		return true
 	}
 	if _, ok := decodeARM64RawSVEDupElement(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEDupImmediate(word); ok {
 		return true
 	}
 	if _, ok := decodeARM64RawSVEPermute(word); ok {

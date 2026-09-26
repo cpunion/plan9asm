@@ -12,6 +12,19 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		want bool
 	}
 	var cases []effect
+	for _, extract := range []struct {
+		op, destination, lane string
+		lanes                 int
+	}{
+		{"umov", "w9", "b", 16}, {"umov", "w9", "h", 8},
+		{"umov", "w9", "s", 4}, {"umov", "x9", "d", 2},
+		{"smov", "w9", "b", 16}, {"smov", "w9", "h", 8},
+		{"smov", "x9", "b", 16}, {"smov", "x9", "h", 8}, {"smov", "x9", "s", 4},
+	} {
+		for lane := 0; lane < extract.lanes; lane++ {
+			cases = append(cases, effect{fmt.Sprintf("%s %s, v31.%s[%d]", extract.op, extract.destination, extract.lane, lane), true})
+		}
+	}
 	for _, op := range []string{"and", "ands", "bic", "bics", "eor", "eors", "nand", "nands", "nor", "nors", "orn", "orns", "orr", "orrs"} {
 		cases = append(cases, effect{op + " p9.b, p15/z, p9.b, p14.b", true})
 	}
@@ -43,6 +56,12 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		cases = append(cases, effect{op + " x9, all, mul #16", strings.HasPrefix(op, "cnt")})
 	}
 	for _, width := range []string{"b", "h", "s", "d"} {
+		for _, immediate := range []int{-128, -1, 0, 1, 127} {
+			cases = append(cases, effect{fmt.Sprintf("dup z9.%s, #%d", width, immediate), true})
+			if width != "b" {
+				cases = append(cases, effect{fmt.Sprintf("dup z9.%s, #%d, lsl #8", width, immediate), true})
+			}
+		}
 		cases = append(cases,
 			effect{fmt.Sprintf("movprfx z9.%s, p7/m, z31.%s\nadd z9.%s, p7/m, z9.%s, z30.%s", width, width, width, width, width), true},
 			effect{fmt.Sprintf("movprfx z9.%s, p7/z, z31.%s\nadd z9.%s, p7/m, z9.%s, z30.%s", width, width, width, width, width), true},

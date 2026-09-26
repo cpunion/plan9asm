@@ -367,12 +367,15 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 		{"pool_shift", []string{"lsl x19, x1, #3"}},
 		{"pool_carry", []string{"adds x5, xzr, xzr", "adcs x19, x1, xzr"}},
 		{"pool_float", []string{"fmov d0, x1", "fmov x19, d0"}},
+		{"pool_umov", []string{"dup v0.4s, w2", "umov w19, v0.s[3]", "str w19, [x0, #4]"}},
+		{"pool_smov", []string{"movi v0.16b, #128", "smov x19, v0.b[15]", "str w19, [x0, #4]"}},
 		{"pool_sve", []string{
 			"mov x3, #1", "ptrue p0.s", "dup z0.s, w2",
 			"zip1 z0.s, z0.s, z0.s",
 			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
 			"addvl x5, x1, #2", "addpl x5, x5, #-8", "str z1, [x5]", "ldr z1, [x5]",
 			"movprfx z2, z1", "asrd z2.s, p0/m, z2.s, #1",
+			"dup z3.s, #1", "add z2.s, z2.s, z3.s",
 			"whilelo p1.s, xzr, x3", "ands p1.b, p0/z, p1.b, p1.b", "cntp x4, p0, p1.s",
 			"st1w {z2.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
 		}},
@@ -424,19 +427,25 @@ extern void pool_shift(uint32_t *, const uint64_t *);
 extern void pool_float(uint32_t *, const uint64_t *);
 extern void pool_sve(uint32_t *, const uint64_t *);
 extern void pool_carry(uint32_t *, const uint64_t *);
+extern void pool_umov(uint32_t *, const uint64_t *);
+extern void pool_smov(uint32_t *, const uint64_t *);
 int main(void) {
   uint64_t restore[512] = {0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
-  uint32_t result[9] = {1, 0, 0, 0, 0, 0, 0, 0, 2};
+  uint32_t result[13] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2};
   pool_pair_first(result + 1, restore);
   pool_pair_second(result + 2, restore);
   pool_shift(result + 3, restore);
   pool_float(result + 4, restore);
   pool_sve(result + 5, restore);
   pool_carry(result + 7, restore);
+  pool_umov(result + 8, restore);
+  pool_smov(result + 10, restore);
   for (unsigned i = 1; i < 6; i++) if (result[i] != 0x17b4a14d) return 1;
   unsigned count = 0;
   for (uint32_t value = 0x17b4a14d; value; value >>= 1) count += value & 1;
-  return result[0] != 1 || result[6] != count / 2 || result[7] != 0x17b4a14d || result[8] != 2;
+  return result[0] != 1 || result[6] != count / 2 + 1 || result[7] != 0x17b4a14d ||
+         result[8] != 0x17b4a14d || result[9] != 0x17b4a14d ||
+         result[10] != 0x17b4a14d || result[11] != 0xffffff80 || result[12] != 2;
 }
 `
 
