@@ -371,9 +371,9 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 			"mov x3, #1", "ptrue p0.s", "dup z0.s, w2",
 			"zip1 z0.s, z0.s, z0.s",
 			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
-			"asrd z1.s, p0/m, z1.s, #1",
+			"movprfx z2, z1", "asrd z2.s, p0/m, z2.s, #1",
 			"whilelo p1.s, xzr, x3", "cntp x4, p0, p1.s",
-			"st1w {z1.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
+			"st1w {z2.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
 		}},
 	} {
 		// R19 is deliberately outside every terminal-clobber mask: these

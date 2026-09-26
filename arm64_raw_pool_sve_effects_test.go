@@ -13,12 +13,15 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 	}
 	var cases []effect
 	cases = append(cases, effect{"dupm z9.d, #0x3ff0000000000000", true})
+	cases = append(cases, effect{"movprfx z9, z31\nadd z9.d, p0/m, z9.d, z30.d", true})
 	for _, op := range []string{"cntb", "cnth", "cntw", "cntd", "incb", "inch", "incw", "incd", "decb", "dech", "decw", "decd"} {
 		cases = append(cases, effect{op + " x30, all, mul #16", true})
 		cases = append(cases, effect{op + " x9, all, mul #16", strings.HasPrefix(op, "cnt")})
 	}
 	for _, width := range []string{"b", "h", "s", "d"} {
 		cases = append(cases,
+			effect{fmt.Sprintf("movprfx z9.%s, p7/m, z31.%s\nadd z9.%s, p7/m, z9.%s, z30.%s", width, width, width, width, width), true},
+			effect{fmt.Sprintf("movprfx z9.%s, p7/z, z31.%s\nadd z9.%s, p7/m, z9.%s, z30.%s", width, width, width, width, width), true},
 			effect{fmt.Sprintf("asrd z9.%s, p7/m, z9.%s, #1", width, width), true},
 			effect{fmt.Sprintf("mov z9.%s, p15/m, #7", width), true},
 			effect{fmt.Sprintf("mov z9.%s, p15/z, #-7", width), true},
@@ -112,18 +115,22 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 	// A GP source cannot be mistaken for a vector register sharing its number.
 	cases = append(cases, effect{"dup z31.d, x9", false})
 	var lines []string
+	starts := []int{0}
 	for _, test := range cases {
-		lines = append(lines, "adr x9, #64", "ldr w1, [x9]", test.line, "mov x9, xzr", "ret")
+		lines = append(lines, "adr x9, #64", "ldr w1, [x9]")
+		lines = append(lines, strings.Split(test.line, "\n")...)
+		lines = append(lines, "mov x9, xzr", "ret")
+		starts = append(starts, len(lines))
 	}
 	words := assembleARM64LLVMWords(t, lines, "+sve2p2")
 	for i, test := range cases {
 		t.Run(test.line, func(t *testing.T) {
 			var instructions []Instr
-			for _, word := range words[i*5 : (i+1)*5] {
+			for _, word := range words[starts[i]:starts[i+1]] {
 				instructions = append(instructions, Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}})
 			}
 			if got := arm64RawAddressOnlyLoaded(instructions, 0, len(instructions)); got != test.want {
-				t.Fatalf("load-only proof=%v, want %v for %s", got, test.want, strings.Join(lines[i*5:(i+1)*5], "; "))
+				t.Fatalf("load-only proof=%v, want %v for %s", got, test.want, test.line)
 			}
 		})
 	}

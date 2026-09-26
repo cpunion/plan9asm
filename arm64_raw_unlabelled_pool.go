@@ -441,6 +441,7 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 		decodeARM64RawSVEConvert,
 		decodeARM64RawSVEDupM,
 		decodeARM64RawSVEExtraShift, decodeARM64RawSVECopy,
+		decodeARM64RawSVEMOVPRFX,
 	} {
 		if ins, ok := decode(word); ok {
 			for _, operand := range ins.Args {
