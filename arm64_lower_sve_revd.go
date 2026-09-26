@@ -6,6 +6,22 @@ import (
 	"strings"
 )
 
+func decodeARM64RawSVERevd(word uint32) (Instr, bool) {
+	mode := "M"
+	switch word & 0xffffe000 {
+	case 0x052e8000:
+	case 0x052ea000:
+		mode = "Z"
+	default:
+		return Instr{}, false
+	}
+	return Instr{Op: "ZREVD", Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.Q", word>>5&31))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%s", word>>10&7, mode))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.Q", word&31))},
+	}}, true
+}
+
 func arm64ParseSVEZQReg(operand Operand) (int, bool) {
 	if operand.Kind != OpReg {
 		return 0, false

@@ -11,31 +11,33 @@ type arm64SVEIntegerUnarySpec struct {
 	minBits   int
 	maxBits   int
 	sve2      bool
+	rawMerge  uint32
+	rawZero   uint32
 }
 
 var arm64SVEIntegerUnarySpecs = map[Op]arm64SVEIntegerUnarySpec{
-	"ZABS":     {intrinsic: "abs", minBits: 8},
-	"ZCLS":     {intrinsic: "cls", minBits: 8},
-	"ZCLZ":     {intrinsic: "clz", minBits: 8},
-	"ZCNOT":    {intrinsic: "cnot", minBits: 8, sve2: true},
-	"ZCNT":     {intrinsic: "cnt", minBits: 8},
-	"ZNEG":     {intrinsic: "neg", minBits: 8},
-	"ZNOT":     {intrinsic: "not", minBits: 8},
-	"ZRBIT":    {intrinsic: "rbit", minBits: 8, sve2: true},
-	"ZREV":     {intrinsic: "vector.reverse", unpred: true, minBits: 8},
-	"ZREVB":    {intrinsic: "revb", minBits: 16, sve2: true},
-	"ZREVH":    {intrinsic: "revh", minBits: 32, sve2: true},
-	"ZREVW":    {intrinsic: "revw", minBits: 64, sve2: true},
-	"ZSQABS":   {intrinsic: "sqabs", minBits: 8},
-	"ZSQNEG":   {intrinsic: "sqneg", minBits: 8},
-	"ZSXTB":    {intrinsic: "sxtb", minBits: 16},
-	"ZSXTH":    {intrinsic: "sxth", minBits: 32},
-	"ZSXTW":    {intrinsic: "sxtw", minBits: 64},
-	"ZUXTB":    {intrinsic: "uxtb", minBits: 16},
-	"ZUXTH":    {intrinsic: "uxth", minBits: 32},
-	"ZUXTW":    {intrinsic: "uxtw", minBits: 64},
-	"ZURECPE":  {intrinsic: "urecpe", minBits: 32, maxBits: 32},
-	"ZURSQRTE": {intrinsic: "ursqrte", minBits: 32, maxBits: 32},
+	"ZABS":     {intrinsic: "abs", minBits: 8, rawMerge: 0x0416a000, rawZero: 0x0406a000},
+	"ZCLS":     {intrinsic: "cls", minBits: 8, rawMerge: 0x0418a000, rawZero: 0x0408a000},
+	"ZCLZ":     {intrinsic: "clz", minBits: 8, rawMerge: 0x0419a000, rawZero: 0x0409a000},
+	"ZCNOT":    {intrinsic: "cnot", minBits: 8, sve2: true, rawMerge: 0x041ba000, rawZero: 0x040ba000},
+	"ZCNT":     {intrinsic: "cnt", minBits: 8, rawMerge: 0x041aa000, rawZero: 0x040aa000},
+	"ZNEG":     {intrinsic: "neg", minBits: 8, rawMerge: 0x0417a000, rawZero: 0x0407a000},
+	"ZNOT":     {intrinsic: "not", minBits: 8, rawMerge: 0x041ea000, rawZero: 0x040ea000},
+	"ZRBIT":    {intrinsic: "rbit", minBits: 8, sve2: true, rawMerge: 0x05278000, rawZero: 0x0527a000},
+	"ZREV":     {intrinsic: "vector.reverse", unpred: true, minBits: 8, rawMerge: 0x05383800},
+	"ZREVB":    {intrinsic: "revb", minBits: 16, sve2: true, rawMerge: 0x05248000, rawZero: 0x0524a000},
+	"ZREVH":    {intrinsic: "revh", minBits: 32, sve2: true, rawMerge: 0x05258000, rawZero: 0x0525a000},
+	"ZREVW":    {intrinsic: "revw", minBits: 64, sve2: true, rawMerge: 0x05268000, rawZero: 0x0526a000},
+	"ZSQABS":   {intrinsic: "sqabs", minBits: 8, sve2: true, rawMerge: 0x4408a000, rawZero: 0x440aa000},
+	"ZSQNEG":   {intrinsic: "sqneg", minBits: 8, sve2: true, rawMerge: 0x4409a000, rawZero: 0x440ba000},
+	"ZSXTB":    {intrinsic: "sxtb", minBits: 16, rawMerge: 0x0410a000, rawZero: 0x0400a000},
+	"ZSXTH":    {intrinsic: "sxth", minBits: 32, rawMerge: 0x0412a000, rawZero: 0x0402a000},
+	"ZSXTW":    {intrinsic: "sxtw", minBits: 64, rawMerge: 0x0414a000, rawZero: 0x0404a000},
+	"ZUXTB":    {intrinsic: "uxtb", minBits: 16, rawMerge: 0x0411a000, rawZero: 0x0401a000},
+	"ZUXTH":    {intrinsic: "uxth", minBits: 32, rawMerge: 0x0413a000, rawZero: 0x0403a000},
+	"ZUXTW":    {intrinsic: "uxtw", minBits: 64, rawMerge: 0x0415a000, rawZero: 0x0405a000},
+	"ZURECPE":  {intrinsic: "urecpe", minBits: 32, maxBits: 32, sve2: true, rawMerge: 0x4400a000, rawZero: 0x4402a000},
+	"ZURSQRTE": {intrinsic: "ursqrte", minBits: 32, maxBits: 32, sve2: true, rawMerge: 0x4401a000, rawZero: 0x4403a000},
 }
 
 type arm64SVEIntegerUnaryForm struct {

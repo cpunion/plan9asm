@@ -272,6 +272,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+sve2")
 					}
 				}
+				if decoded, ok := decodeARM64RawSVERevd(uint32(ins.Args[0].Imm)); ok {
+					add("+sve", "+sve2p1")
+					if arm64SVERevdNeedsSVE2P2(decoded) {
+						add("+sve2p2")
+					}
+				}
 				if _, ok := decodeARM64RawSVEReplicateScalar(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
