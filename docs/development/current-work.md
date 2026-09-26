@@ -18,11 +18,11 @@ do not start new module-index inventory scans while failures remain.
 - Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
   `codex/pr40-ecosystem-fixes-20260925` (cross runtime and discovery).
   Inspect each HEAD and logs before advancing; never alter a running snapshot.
-  The root runner was advanced to clean `432314f` after both long gates
-  passed; it is running shard 1 under `_out/ci-repair-432314f-shard1/`.
-  The ecosystem runner remains frozen at `692fad1`: shard 17 completed with
-  only `simd@v1.21.1` failed, while shards 10 and 24 continue under
-  `_out/ci-repair-692fad1-shard17/`. Never mix these report snapshots.
+  The root runner finished shard 1 at `432314f`, then advanced to `f80fb8f`
+  for shard 4 under `_out/ci-repair-f80fb8f-shard4/`. The ecosystem runner
+  finished shards 10, 17 and 24 at `692fad1`, then advanced to `d7fa0e2`
+  for shard 29 under `_out/ci-repair-d7fa0e2-shard29/`. Never mix these
+  report snapshots.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -100,14 +100,19 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 - Exact-version invalid-source skips now have pinned SHA-256 files, evaluated
   raw WORD expressions, LLVM 22 rejection checks, and distinct report/ledger
   status. Local proof passed for puter v1.2.3, gmsm v0.15.6 and two distinct
-  gmgo module paths at v0.1.1.
+  gmgo module paths at v0.1.1. Shard 1 at `432314f` completed with 147
+  selected = 116 passed + 30 source N/A + one Puter invalid-source skip;
+  zero failures and 2,443 successful translations. Shard 4 at `f80fb8f`
+  has checkpointed the `gitee.com/zhaochuninhefei/gmgo@v0.1.1` skip and
+  remains partial.
   A skip is not a translated library. Rerun their shards on a clean snapshot.
 - Large multi-package candidates now compile one package per translator
   process, releasing its LLVM objects and output before the next package.
   Rerun `wasm2go` candidates to confirm this removes `signal: killed`; do not
   recast a resource failure as source N/A or an invalid-source skip.
-- A subsequent local change also bounds each object-validation LLVM module
-  by 32,768 assembly instructions as well as 128 functions. The `p8` module
+- A subsequent local change splits object-validation LLVM modules at 32,768
+  assembly instructions or 128 functions, whichever comes first; a single
+  oversized function remains whole and is still fully checked. The `p8` module
   has 2,179 functions and about 1.39 million amd64 assembly lines, so the
   function-only limit was not a reliable memory bound. Focused chunk tests
   pass, including complete coverage and cross-chunk raw TEXT references;
