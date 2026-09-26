@@ -1048,8 +1048,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEAdd(word); ok {
 					add("+sve")
 				}
-				if _, _, ok := decodeARM64RawSVESubtract(word); ok {
+				if op, form, ok := decodeARM64RawSVEAddSub(word); ok {
 					add("+sve")
+					if form.mode == arm64SVEAddPredicated && arm64SVEAddSubSpecs[op].intrinsic != "" {
+						add("+sve2")
+					}
 				}
 				if _, ok := decodeARM64RawSVEShift(word); ok {
 					add("+sve")

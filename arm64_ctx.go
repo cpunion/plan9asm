@@ -953,7 +953,7 @@ func (c *arm64Ctx) scanUsedRegs() {
 				if form, ok := decodeARM64RawSVEAdd(word); ok {
 					markSVEAddForm(form)
 				}
-				if _, form, ok := decodeARM64RawSVESubtract(word); ok {
+				if _, form, ok := decodeARM64RawSVEAddSub(word); ok {
 					markSVEAddForm(form)
 				}
 				if form, ok := decodeARM64RawSVEShift(word); ok {

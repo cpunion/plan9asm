@@ -152,7 +152,7 @@ func TestTranslateARM64RawSVESubtractCompleteFamily(t *testing.T) {
 }
 
 func TestDecodeARM64RawSVESubtractBoundaries(t *testing.T) {
-	op, form, ok := decodeARM64RawSVESubtract(0x04230404)
+	op, form, ok := decodeARM64RawSVEAddSub(0x04230404)
 	if !ok || op != "ZSUB" || form.mode != arm64SVEAddUnpredicated ||
 		form.elementBits != 8 || form.first != 0 || form.second != 3 || form.destination != 4 {
 		t.Fatalf("decode lightning SUB = %s %+v, %v", op, form, ok)
@@ -162,7 +162,7 @@ func TestDecodeARM64RawSVESubtractBoundaries(t *testing.T) {
 		0x04200c00,         // adjacent unpredicated opcode
 		0x04020000,         // adjacent predicated opcode
 	} {
-		if op, form, ok := decodeARM64RawSVESubtract(word); ok {
+		if op, form, ok := decodeARM64RawSVEAddSub(word); ok {
 			t.Errorf("decoded reserved SUB %#08x as %s %+v", word, op, form)
 		}
 	}

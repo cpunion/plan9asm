@@ -461,7 +461,7 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawSVEAdd(word); ok {
 		return c.lowerRawSVEAdd(form)
 	}
-	if op, form, ok := decodeARM64RawSVESubtract(word); ok {
+	if op, form, ok := decodeARM64RawSVEAddSub(word); ok {
 		return c.lowerRawSVEAddSub(arm64SVEAddSubSpecs[op], form)
 	}
 	if form, ok := decodeARM64RawSVEShift(word); ok {

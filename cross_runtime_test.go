@@ -82,6 +82,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_multiply_high", func(t *testing.T) {
 		testARM64RawSVEMultiplyHighRuntime(t, llc)
 	})
+	t.Run("arm64_raw_sve_saturating_add_sub", func(t *testing.T) {
+		testARM64RawSVESaturatingAddSubRuntime(t, llc)
+	})
 	t.Run("arm64_raw_sve_float_arithmetic", func(t *testing.T) {
 		testARM64RawSVEFloatArithmeticRuntime(t, llc)
 	})
