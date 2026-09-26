@@ -12,7 +12,7 @@ import (
 // address references: data bytes can themselves look like branches or ADRs.
 // Unknown source widths, indirect control flow, escaping addresses and mixed
 // code/data regions remain on the ordinary fail-closed path.
-func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known map[string]bool) (map[int]bool, []arm64RawDataBlob, map[int]string) {
+func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known map[string]bool, returnClobbers uint32) (map[int]bool, []arm64RawDataBlob, map[int]string) {
 	end := len(fn.Instrs)
 	if end > 0 && fn.Instrs[end-1].Op == OpRET {
 		end--
@@ -89,9 +89,9 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 
 	// An ADR can also construct a function pointer. Only classify its target
 	// as data when the produced address is used exclusively by loads and killed
-	// on every outgoing path; do not guess from comments.
+	// on every outgoing path (possibly by an explicit return contract).
 	for at, target := range addresses {
-		if target >= pool && target < end && !arm64RawAddressOnlyLoaded(fn.Instrs, at, pool) {
+		if target >= pool && target < end && !arm64RawAddressOnlyLoadedWithExit(fn.Instrs, at, pool, returnClobbers) {
 			return nil, nil, nil
 		}
 	}
@@ -122,6 +122,22 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 }
 
 func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
+	return arm64RawAddressOnlyLoadedWithExit(instructions, at, end, 0)
+}
+
+// Only the translating caller has a FuncSig. Standalone layout probes remain
+// conservative. A parameter-frame function with an explicit void result has
+// no register results; restrict terminal kills to R0..R17, avoiding platform,
+// callee-preserved, frame, Go-context and link registers. Custom ArgRegs and
+// missing frame contracts deliberately do not enable this rule.
+func arm64RawPoolReturnClobbers(fn Func, sig FuncSig) uint32 {
+	if sig.Ret != Void || len(sig.Frame.Results) != 0 || len(sig.ArgRegs) != 0 || len(sig.Frame.Params) == 0 || fn.ArgSize <= 0 {
+		return 0
+	}
+	return (1 << 18) - 1
+}
+
+func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, returnClobbers uint32) bool {
 	register := arm64asm.X0 + arm64asm.Reg(uint32(instructions[at].Args[0].Imm)&31)
 	wordRegister := register - arm64asm.X0 + arm64asm.W0
 	isAddress := func(r arm64asm.Reg) bool { return r == register || r == wordRegister }
@@ -148,8 +164,12 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 		if err != nil {
 			return false
 		}
-		// Calls, returns and indirect branches expose live registers to code
-		// outside this proof. No ABI or pointer-escape assumption is made here.
+		// A canonical return can kill a scratch address only when the caller
+		// supplied an explicit return contract. Calls and other indirect exits
+		// still expose live registers; RET through the address is never data.
+		if word == 0xd65f03c0 && returnClobbers&(1<<uint(register-arm64asm.X0)) != 0 {
+			continue
+		}
 		switch decoded.Op {
 		case arm64asm.BL, arm64asm.BLR, arm64asm.BR, arm64asm.RET, arm64asm.ERET, arm64asm.DRPS:
 			return false
@@ -159,6 +179,10 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 		writesFirst := false
 		switch decoded.Op.String() {
 		case "ADR", "MOV", "MOVZ", "MOVN", "ADD", "SUB", "AND", "ORR", "EOR":
+			writesFirst = true
+		case "LDR", "LDRB", "LDRH", "LDRSB", "LDRSH", "LDRSW",
+			"LDUR", "LDURB", "LDURH", "LDURSB", "LDURSH", "LDURSW",
+			"CSEL", "CSINC", "CSINV", "CSNEG":
 			writesFirst = true
 		}
 		kills := false
@@ -196,8 +220,13 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 				}
 			case arm64asm.MemImmediate:
 				if arg.Mode == arm64asm.AddrPostReg {
-					// The implicit post-index register is not exported by x/arch.
-					return false
+					// x/arch's arg_Xns_mem_post_Xm keeps Rm private, but its
+					// decoder defines it as bits 20:16. An unrelated post-index
+					// operand is harmless; using the address as Rm is not.
+					index := arm64asm.X0 + arm64asm.Reg(word>>16&31)
+					if isAddress(index) {
+						return false
+					}
 				}
 				if arm64asm.Reg(arg.Base) == register {
 					if !strings.HasPrefix(decoded.Op.String(), "LD") || arg.Mode != arm64asm.AddrOffset {

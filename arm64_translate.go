@@ -887,7 +887,7 @@ func emitARM64Prelude(b *strings.Builder) {
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
 	var err error
 	var rawData []arm64RawDataBlob
-	fn, rawData, err = prepareARM64RawPCRelative(fn)
+	fn, rawData, err = prepareARM64RawPCRelativeWithReturnClobbers(fn, arm64RawPoolReturnClobbers(fn, sig))
 	if err != nil {
 		return err
 	}

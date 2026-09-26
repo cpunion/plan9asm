@@ -34,6 +34,10 @@ func normalizeARM64RawPCRelative(fn Func) (Func, error) {
 }
 
 func prepareARM64RawPCRelative(fn Func) (Func, []arm64RawDataBlob, error) {
+	return prepareARM64RawPCRelativeWithReturnClobbers(fn, 0)
+}
+
+func prepareARM64RawPCRelativeWithReturnClobbers(fn Func, returnClobbers uint32) (Func, []arm64RawDataBlob, error) {
 	points := make([]arm64RawLayoutPoint, len(fn.Instrs))
 	boundaries := make(map[arm64RawLayoutPoint]int)
 	labels := make(map[arm64RawLayoutPoint]string)
@@ -72,7 +76,7 @@ func prepareARM64RawPCRelative(fn Func) (Func, []arm64RawDataBlob, error) {
 		boundaries[end] = len(fn.Instrs)
 	}
 
-	poolWords, poolBlobs, insertions := identifyARM64UnlabelledPool(fn, points, knownLabels)
+	poolWords, poolBlobs, insertions := identifyARM64UnlabelledPool(fn, points, knownLabels, returnClobbers)
 	inspection := fn
 	if len(poolWords) != 0 {
 		inspection.Instrs = append([]Instr(nil), fn.Instrs...)
