@@ -1,12 +1,12 @@
 {
   "format": "module-hashed-assembly-ledger-v1",
-  "semantic_source_sha256": "dcc12caa57ad7d0985605168111f34c3492416a49180e3d470ebfe286343a427",
+  "semantic_source_sha256": "68308d47f0e47d2cb625233776d68759edecbf34efe492fb32273478fe501457",
   "progress": {
     "schema_version": 1,
     "validation_kind": "translation_and_llvm22_object_compilation",
     "source": {
-      "revision": "41279bbd49d744db5d9ecc0ac9971073f35c68b3",
-      "sha256": "dcc12caa57ad7d0985605168111f34c3492416a49180e3d470ebfe286343a427",
+      "revision": "6e03524100837424b5fd25260f5f2e961aef3e76",
+      "sha256": "68308d47f0e47d2cb625233776d68759edecbf34efe492fb32273478fe501457",
       "dirty": false
     },
     "ledger_sha256": "eaffb5faf292a3ef4c2b5a9ce4ebc15be4297ce78dc4d5ac2683b1bebac77372",
@@ -25,13 +25,13 @@
     ],
     "provenance": {
       "source": {
-        "revision": "41279bbd49d744db5d9ecc0ac9971073f35c68b3",
-        "sha256": "dcc12caa57ad7d0985605168111f34c3492416a49180e3d470ebfe286343a427",
+        "revision": "6e03524100837424b5fd25260f5f2e961aef3e76",
+        "sha256": "68308d47f0e47d2cb625233776d68759edecbf34efe492fb32273478fe501457",
         "dirty": false
       },
       "ledger_sha256": "eaffb5faf292a3ef4c2b5a9ce4ebc15be4297ce78dc4d5ac2683b1bebac77372",
-      "translator_sha256": "e30e9d2b9ac48ea0a71485f49cbaa7cb79f93fcc4a643d18e50009b0723a4061",
-      "translator_revision": "41279bbd49d744db5d9ecc0ac9971073f35c68b3",
+      "translator_sha256": "f276fa64fd931bb03a17b7f1d249829718f7d072b68286437c87e3b6a6a6e924",
+      "translator_revision": "6e03524100837424b5fd25260f5f2e961aef3e76",
       "translator_modified": false,
       "translator_go_version": "go1.27.1",
       "go_version": "go1.27.1",
