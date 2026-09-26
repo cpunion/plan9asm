@@ -95,6 +95,28 @@ type discoveryPackageGroup struct {
 	AsmFiles []string
 }
 
+type discoveryTranslationUnit struct {
+	Patterns []string
+	AsmFiles []string
+}
+
+// A translator process owns LLVM objects for its whole lifetime. One package
+// per process bounds the peak for modules with many independent assembly
+// packages, while candidate-level accounting still covers every file.
+func discoveryTranslationUnits(groups []discoveryPackageGroup) []discoveryTranslationUnit {
+	units := make([]discoveryTranslationUnit, 0, len(groups))
+	for _, group := range groups {
+		if len(group.AsmFiles) == 0 {
+			continue
+		}
+		units = append(units, discoveryTranslationUnit{
+			Patterns: []string{group.Pattern},
+			AsmFiles: append([]string(nil), group.AsmFiles...),
+		})
+	}
+	return units
+}
+
 const (
 	discoverySourceNotApplicableGoAssembler = "go_assembler_rejected_all_supported_targets"
 	discoverySourceNotApplicableNoGoPackage = "no_current_go_package"
@@ -1642,7 +1664,8 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		packageGroups := discoveryPackageGroupsForModule(applicableCandidate, plan.ModulePath)
 		for _, target := range buildConfiguration.Targets {
 			err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
-				var targetAsmFiles, targetPatterns []string
+				var targetAsmFiles []string
+				var eligibleGroups []discoveryPackageGroup
 				for _, group := range packageGroups {
 					if err := runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, group.Pattern); err != nil {
 						if isDiscoveryInfrastructureFailure(err) {
@@ -1674,57 +1697,58 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						continue
 					}
 					targetAsmFiles = append(targetAsmFiles, validAsmFiles...)
-					targetPatterns = append(targetPatterns, group.Pattern)
+					eligibleGroups = append(eligibleGroups, discoveryPackageGroup{
+						Pattern: group.Pattern, AsmFiles: validAsmFiles,
+					})
 				}
 				if len(targetAsmFiles) == 0 {
 					return nil
 				}
 				targetAsmFiles = uniqueSortedDiscoveryStrings(targetAsmFiles)
-				targetPatterns = uniqueSortedDiscoveryStrings(targetPatterns)
-				for _, pattern := range targetPatterns {
-					patternSet[pattern] = true
-				}
-				targetCandidate := candidate
-				targetCandidate.AsmFiles = targetAsmFiles
 				executed := discoveryBuildConfiguration{
 					BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
 					Targets:   []string{target},
 					AsmFiles:  append([]string(nil), targetAsmFiles...),
 				}
 				executedBuildConfigurations = append(executedBuildConfigurations, executed)
-				reportPath := filepath.Join(workDir, fmt.Sprintf("matrix-report-%04d.json", invocationIndex))
-				outputIndex := invocationIndex
-				invocation := makeDiscoveryTranslatorInvocation(
-					workDir,
-					plan.ModulePath,
-					targetPatterns,
-					buildConfiguration.BuildTags,
-					[]string{target},
-					targetAsmFiles,
-					discoveryTargetOutputDirectory(workDir, outputIndex),
-					cfg.RepoRoot,
-					cfg.LLC,
-					reportPath,
-				)
-				invocationIndex++
-				if err := runCapturedCommand(ctx, invocation.Dir, env, cfg.Translator, invocation.Args...); err != nil {
-					return fmt.Errorf("translate and compile target %s with build tags %v: %w", target, buildConfiguration.BuildTags, err)
-				}
-				report, err := loadReport(reportPath)
-				if err != nil {
-					return err
-				}
-				if err := validateDiscoveryReport([]string{target}, targetCandidate, report); err != nil {
-					return fmt.Errorf("target %s build tags %v: %w", target, buildConfiguration.BuildTags, err)
-				}
-				runTargets[target] = true
-				aggregate.TotalAsm += report.TotalAsm
-				aggregate.Success += report.Success
-				aggregate.NotApplicable += report.NotApplicable
-				aggregate.Failed += report.Failed
-				aggregate.NotApplicableItems = append(aggregate.NotApplicableItems, collectMatrixNotApplicableItems(report)...)
-				if err := removeDiscoveryTargetOutput(workDir, outputIndex); err != nil {
-					return fmt.Errorf("remove target %s generated output: %w", target, err)
+				for _, unit := range discoveryTranslationUnits(eligibleGroups) {
+					patternSet[unit.Patterns[0]] = true
+					targetCandidate := candidate
+					targetCandidate.AsmFiles = unit.AsmFiles
+					reportPath := filepath.Join(workDir, fmt.Sprintf("matrix-report-%04d.json", invocationIndex))
+					outputIndex := invocationIndex
+					invocation := makeDiscoveryTranslatorInvocation(
+						workDir,
+						plan.ModulePath,
+						unit.Patterns,
+						buildConfiguration.BuildTags,
+						[]string{target},
+						unit.AsmFiles,
+						discoveryTargetOutputDirectory(workDir, outputIndex),
+						cfg.RepoRoot,
+						cfg.LLC,
+						reportPath,
+					)
+					invocationIndex++
+					if err := runCapturedCommand(ctx, invocation.Dir, env, cfg.Translator, invocation.Args...); err != nil {
+						return fmt.Errorf("translate and compile package %s for %s with build tags %v: %w", unit.Patterns[0], target, buildConfiguration.BuildTags, err)
+					}
+					report, err := loadReport(reportPath)
+					if err != nil {
+						return err
+					}
+					if err := validateDiscoveryReport([]string{target}, targetCandidate, report); err != nil {
+						return fmt.Errorf("package %s target %s build tags %v: %w", unit.Patterns[0], target, buildConfiguration.BuildTags, err)
+					}
+					runTargets[target] = true
+					aggregate.TotalAsm += report.TotalAsm
+					aggregate.Success += report.Success
+					aggregate.NotApplicable += report.NotApplicable
+					aggregate.Failed += report.Failed
+					aggregate.NotApplicableItems = append(aggregate.NotApplicableItems, collectMatrixNotApplicableItems(report)...)
+					if err := removeDiscoveryTargetOutput(workDir, outputIndex); err != nil {
+						return fmt.Errorf("remove target %s generated output: %w", target, err)
+					}
 				}
 				return nil
 			})

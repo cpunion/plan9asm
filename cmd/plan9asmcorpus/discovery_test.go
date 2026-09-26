@@ -169,6 +169,21 @@ func TestDiscoveryCandidateTimeoutIsFreshForEachConfiguration(t *testing.T) {
 	}
 }
 
+func TestDiscoveryTranslationUnitsKeepPackagesSeparate(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/large/p0", AsmFiles: []string{"p0/first_amd64.s", "p0/second_amd64.s"}},
+		{Pattern: "example.com/large/p1", AsmFiles: []string{"p1/first_amd64.s"}},
+	}
+	units := discoveryTranslationUnits(groups)
+	if len(units) != 2 ||
+		!reflect.DeepEqual(units[0].Patterns, []string{"example.com/large/p0"}) ||
+		!reflect.DeepEqual(units[0].AsmFiles, groups[0].AsmFiles) ||
+		!reflect.DeepEqual(units[1].Patterns, []string{"example.com/large/p1"}) ||
+		!reflect.DeepEqual(units[1].AsmFiles, groups[1].AsmFiles) {
+		t.Fatalf("translation units did not isolate package resources: %+v", units)
+	}
+}
+
 func TestDiscoveryOperationReportsItsOwnTimeout(t *testing.T) {
 	err := runDiscoveryOperation(10*time.Millisecond, func(ctx context.Context) error {
 		<-ctx.Done()

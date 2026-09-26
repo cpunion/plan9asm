@@ -217,6 +217,11 @@ removed on success or failure. Build caches last one shard or one coordinated
 `all` run, as described above. Keep diagnostics, not full packages. Replaying
 an uncached exact version can download
 it again; that is distinct from repeated inventory work.
+Each buildable Go package is translated in its own child process. This keeps
+large multi-package modules from accumulating LLVM objects across packages;
+the exact version is downloaded once and candidate-level file/target counts
+are still aggregated and validated. Target outputs are removed after each
+successful package compilation.
 Public module fetches ignore the user's global Git URL rewrites and disable
 interactive Git credential prompts. A failed direct fallback remains a failure
 to retry, never proof that assembly is inapplicable.

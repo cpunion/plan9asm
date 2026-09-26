@@ -99,6 +99,10 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   status. Local proof passed for puter v1.2.3, gmsm v0.15.6 and two distinct
   gmgo module paths at v0.1.1.
   A skip is not a translated library. Rerun their shards on a clean snapshot.
+- Large multi-package candidates now compile one package per translator
+  process, releasing its LLVM objects and output before the next package.
+  Rerun `wasm2go` candidates to confirm this removes `signal: killed`; do not
+  recast a resource failure as source N/A or an invalid-source skip.
 - Complete shard 17 at `6e03524`: 159 selected = 126 passed + 32 source N/A
   + one failed simd. Report is retained in the ecosystem runner under
   `_out/ci-repair-6e03524-shard17/shard-17.json`.
