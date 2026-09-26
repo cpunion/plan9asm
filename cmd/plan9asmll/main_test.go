@@ -1260,11 +1260,11 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 	}
 	for _, family := range []string{"VFMADD", "VFMSUB", "VFNMADD", "VFNMSUB", "VFMADDSUB", "VFMSUBADD"} {
 		for _, order := range []string{"132", "213", "231"} {
-			for _, element := range []string{"PS", "PD"} {
+			for _, element := range []string{"PS", "PD", "PH"} {
 				want = append(want, family+order+element)
 			}
 			if family != "VFMADDSUB" && family != "VFMSUBADD" {
-				for _, element := range []string{"SS", "SD"} {
+				for _, element := range []string{"SS", "SD", "SH"} {
 					want = append(want, family+order+element)
 				}
 			}

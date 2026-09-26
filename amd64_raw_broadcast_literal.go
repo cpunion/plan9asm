@@ -660,7 +660,8 @@ func decodeX86RawFMA3RIPData(code []byte, offset, mode int) (Instr, int, x86RawL
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
 	p, matched := decodeX86RawVectorEncoding(code[offset:])
-	if !matched || p.mapNumber != 2 || p.pp != 1 ||
+	half := p.evex && p.mapNumber == 6
+	if !matched || p.mapNumber != 2 && !half || p.pp != 1 ||
 		p.segment != "" || p.addressOverride {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
 	}
@@ -677,6 +678,9 @@ func decodeX86RawFMA3RIPData(code []byte, offset, mode int) (Instr, int, x86RawL
 		width = 4
 		if p.w {
 			width = 8
+		}
+		if half {
+			width = 2
 		}
 	}
 	return x86RawRIPDataThroughDecoder(

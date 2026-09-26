@@ -6654,12 +6654,16 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
 	spec, recognized := decodedX86VEXFMA3Ops[opcode]
-	if p0&0x0f != 2 || !recognized {
+	half := p0&0x0f == 6
+	if p0&0x0f != 2 && !half || !recognized {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
 	if p1&0x04 == 0 || p1&3 != 1 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX.pp must be 66")
+	}
+	if half && p1&0x80 != 0 {
+		return Instr{}, 0, true, fmt.Errorf("FP16 FMA3 requires EVEX.W0")
 	}
 	if addressOverride {
 		return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
@@ -6675,7 +6679,7 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	if broadcast && spec.scalar {
 		return Instr{}, 0, true, fmt.Errorf("scalar FMA3 does not support broadcast")
 	}
-	if !embeddedRounding && vectorBits == 3 {
+	if !embeddedRounding && vectorBits == 3 && !(half && spec.scalar) {
 		return Instr{}, 0, true, fmt.Errorf("reserved EVEX vector length")
 	}
 
@@ -6694,6 +6698,9 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	if width64 {
 		laneBytes = 8
 	}
+	if half {
+		laneBytes = 2
+	}
 	disp8Scale := vectorWidth
 	if spec.scalar || broadcast {
 		disp8Scale = laneBytes
@@ -6710,7 +6717,7 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	bExt := int(^p0>>5) & 1
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
+	if mode == 32 && (maskNumber != 0 && !half || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
 	}
 	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
@@ -6719,6 +6726,12 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	}
 
 	op := spec.op(width64)
+	if half {
+		op = Op(spec.stem + "PH")
+		if spec.scalar {
+			op = Op(spec.stem + "SH")
+		}
+	}
 	if broadcast {
 		op += ".BCST"
 	}
@@ -6739,7 +6752,7 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: half}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86VEXTRACT128Instruction recognizes the complete Go 1.27 vector

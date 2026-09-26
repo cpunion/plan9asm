@@ -63,7 +63,7 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 		{
 			name: "x86 raw fp16",
 			arch: ArchAMD64,
-			ops:  []Op{"VMOVSH", "VADDSH.RU_SAE", "VMAXPH.SAE"},
+			ops:  []Op{"VMOVSH", "VADDSH.RU_SAE", "VMAXPH.SAE", "VFMADD213SH", "VFNMADD231PH.Z"},
 			want: "+avx512fp16",
 		},
 		{
@@ -102,6 +102,21 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 				t.Fatalf("inferFuncTargetFeatures(%q, %v) = %q, want %q", tt.arch, tt.ops, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestInferFuncTargetFeaturesRawFP16VectorLength(t *testing.T) {
+	for _, op := range []Op{"VFMADD132PH", "VFMSUBADD231PH.Z", "VADDPH"} {
+		for _, reg := range []Reg{"X1", "Y1", "Z1"} {
+			fn := Func{Instrs: []Instr{{Op: op, Args: []Operand{{Kind: OpReg, Reg: reg}}}}}
+			want := "+avx512fp16"
+			if reg != "Z1" {
+				want += ",+avx512vl"
+			}
+			if got := inferFuncTargetFeatures(ArchAMD64, fn); got != want {
+				t.Fatalf("%s %s: features %q, want %q", op, reg, got, want)
+			}
+		}
 	}
 }
 

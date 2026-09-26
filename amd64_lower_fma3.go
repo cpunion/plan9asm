@@ -21,10 +21,12 @@ type amd64FMA3Spec struct {
 	order    int
 	mode     amd64FMA3Mode
 	scalar   bool
+	rawOnly  bool
 }
 
 // amd64FMA3Specs is the complete Go 1.27 FMA3 family. The 36 packed
 // instructions use _yvaddpd and the 24 scalar instructions use _yvaddsd.
+// The additional 30 MAP6 FP16 forms are accepted only from raw bytes.
 var amd64FMA3Specs = map[Op]amd64FMA3Spec{
 	"VFMADD132PS":    {laneBits: 32, order: 132, mode: amd64FMA3Add},
 	"VFMADD132PD":    {laneBits: 64, order: 132, mode: amd64FMA3Add},
@@ -86,6 +88,36 @@ var amd64FMA3Specs = map[Op]amd64FMA3Spec{
 	"VFMSUBADD213PD": {laneBits: 64, order: 213, mode: amd64FMA3SubAdd},
 	"VFMSUBADD231PS": {laneBits: 32, order: 231, mode: amd64FMA3SubAdd},
 	"VFMSUBADD231PD": {laneBits: 64, order: 231, mode: amd64FMA3SubAdd},
+	"VFMADD132PH":    {laneBits: 16, order: 132, mode: amd64FMA3Add, rawOnly: true},
+	"VFMADD132SH":    {laneBits: 16, order: 132, mode: amd64FMA3Add, scalar: true, rawOnly: true},
+	"VFMSUB132PH":    {laneBits: 16, order: 132, mode: amd64FMA3Sub, rawOnly: true},
+	"VFMSUB132SH":    {laneBits: 16, order: 132, mode: amd64FMA3Sub, scalar: true, rawOnly: true},
+	"VFNMADD132PH":   {laneBits: 16, order: 132, mode: amd64FMA3NegAdd, rawOnly: true},
+	"VFNMADD132SH":   {laneBits: 16, order: 132, mode: amd64FMA3NegAdd, scalar: true, rawOnly: true},
+	"VFNMSUB132PH":   {laneBits: 16, order: 132, mode: amd64FMA3NegSub, rawOnly: true},
+	"VFNMSUB132SH":   {laneBits: 16, order: 132, mode: amd64FMA3NegSub, scalar: true, rawOnly: true},
+	"VFMADDSUB132PH": {laneBits: 16, order: 132, mode: amd64FMA3AddSub, rawOnly: true},
+	"VFMSUBADD132PH": {laneBits: 16, order: 132, mode: amd64FMA3SubAdd, rawOnly: true},
+	"VFMADD213PH":    {laneBits: 16, order: 213, mode: amd64FMA3Add, rawOnly: true},
+	"VFMADD213SH":    {laneBits: 16, order: 213, mode: amd64FMA3Add, scalar: true, rawOnly: true},
+	"VFMSUB213PH":    {laneBits: 16, order: 213, mode: amd64FMA3Sub, rawOnly: true},
+	"VFMSUB213SH":    {laneBits: 16, order: 213, mode: amd64FMA3Sub, scalar: true, rawOnly: true},
+	"VFNMADD213PH":   {laneBits: 16, order: 213, mode: amd64FMA3NegAdd, rawOnly: true},
+	"VFNMADD213SH":   {laneBits: 16, order: 213, mode: amd64FMA3NegAdd, scalar: true, rawOnly: true},
+	"VFNMSUB213PH":   {laneBits: 16, order: 213, mode: amd64FMA3NegSub, rawOnly: true},
+	"VFNMSUB213SH":   {laneBits: 16, order: 213, mode: amd64FMA3NegSub, scalar: true, rawOnly: true},
+	"VFMADDSUB213PH": {laneBits: 16, order: 213, mode: amd64FMA3AddSub, rawOnly: true},
+	"VFMSUBADD213PH": {laneBits: 16, order: 213, mode: amd64FMA3SubAdd, rawOnly: true},
+	"VFMADD231PH":    {laneBits: 16, order: 231, mode: amd64FMA3Add, rawOnly: true},
+	"VFMADD231SH":    {laneBits: 16, order: 231, mode: amd64FMA3Add, scalar: true, rawOnly: true},
+	"VFMSUB231PH":    {laneBits: 16, order: 231, mode: amd64FMA3Sub, rawOnly: true},
+	"VFMSUB231SH":    {laneBits: 16, order: 231, mode: amd64FMA3Sub, scalar: true, rawOnly: true},
+	"VFNMADD231PH":   {laneBits: 16, order: 231, mode: amd64FMA3NegAdd, rawOnly: true},
+	"VFNMADD231SH":   {laneBits: 16, order: 231, mode: amd64FMA3NegAdd, scalar: true, rawOnly: true},
+	"VFNMSUB231PH":   {laneBits: 16, order: 231, mode: amd64FMA3NegSub, rawOnly: true},
+	"VFNMSUB231SH":   {laneBits: 16, order: 231, mode: amd64FMA3NegSub, scalar: true, rawOnly: true},
+	"VFMADDSUB231PH": {laneBits: 16, order: 231, mode: amd64FMA3AddSub, rawOnly: true},
+	"VFMSUBADD231PH": {laneBits: 16, order: 231, mode: amd64FMA3SubAdd, rawOnly: true},
 }
 
 type amd64FMA3Suffix struct {
@@ -123,6 +155,9 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 	if !recognized {
 		return false, false, nil
 	}
+	if spec.rawOnly && !ins.x86Encoded {
+		return true, false, fmt.Errorf("%s is absent from Go's named assembler table; raw encoding required", baseOp)
+	}
 	properties, validSuffix := parseAMD64FMA3Suffix(suffix)
 	if !validSuffix {
 		return true, false, fmt.Errorf("%s %s has a suffix absent from Go 1.27's FMA3 optab: %q", c.goarch, baseOp, ins.Raw)
@@ -134,7 +169,7 @@ func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err er
 		return true, false, fmt.Errorf("%s %s expects src1, src2, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
 	}
 	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
+	if c.goarch == "386" && masked && !ins.x86Encoded {
 		return true, false, fmt.Errorf("386 %s mask forms exceed Go 1.27's assembler operand limit: %q", baseOp, ins.Raw)
 	}
 	if properties.zeroing && !masked {
@@ -194,25 +229,16 @@ func (c *amd64Ctx) lowerPackedFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffi
 	lanes := byteWidth * 8 / spec.laneBits
 	llvmType := amd64FMA3LLVMType(lanes, spec.laneBits)
 	load := func(arg Operand, allowBroadcast bool) (string, error) {
-		if allowBroadcast && properties.broadcast {
-			var scalar string
-			var err error
-			if spec.laneBits == 32 {
-				scalar, err = c.evalF32(arg)
-			} else {
-				scalar, err = c.evalF64(arg)
-			}
-			if err != nil {
-				return "", err
-			}
-			return c.splatFMA3Scalar(lanes, spec.laneBits, scalar), nil
+		sourceMask := ""
+		if allowBroadcast {
+			sourceMask = mask
 		}
-		bytesValue, err := c.loadPackedCompareBytes(arg, byteWidth)
+		bits, err := c.loadMaskedPackedCompareLanes(arg, byteWidth, spec.laneBits, allowBroadcast && properties.broadcast, sourceMask)
 		if err != nil {
 			return "", err
 		}
 		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to %s\n", value, byteWidth, bytesValue, llvmType)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to %s\n", value, lanes, spec.laneBits, bits, llvmType)
 		return "%" + value, nil
 	}
 	first, err := load(ins.Args[0], true)
@@ -240,58 +266,51 @@ func (c *amd64Ctx) lowerPackedFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffi
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", out, llvmType, computed, byteWidth)
-	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(dstArg, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) lowerScalarFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffix, ins Instr, dstArg Operand, mask string) (bool, bool, error) {
-	var first, second, old string
-	var err error
-	if spec.laneBits == 32 {
-		first, err = c.evalF32(ins.Args[0])
-		if err == nil {
-			second, err = c.loadXLowF32(ins.Args[1].Reg)
-		}
-		if err == nil {
-			old, err = c.loadXLowF32(dstArg.Reg)
-		}
-	} else {
-		first, err = c.evalF64(ins.Args[0])
-		if err == nil {
-			second, err = c.loadXLowF64(ins.Args[1].Reg)
-		}
-		if err == nil {
-			old, err = c.loadXLowF64(dstArg.Reg)
-		}
+	first, err := c.loadFMA3Scalar(ins.Args[0], spec.laneBits, mask)
+	if err != nil {
+		return true, false, err
 	}
+	second, err := c.loadFMA3Scalar(ins.Args[1], spec.laneBits, "")
+	if err != nil {
+		return true, false, err
+	}
+	old, err := c.loadFMA3Scalar(dstArg, spec.laneBits, "")
 	if err != nil {
 		return true, false, err
 	}
 	llvmType := amd64FMA3LLVMType(1, spec.laneBits)
 	computed := c.emitFMA3(spec, llvmType, 1, first, second, old, properties.rounding)
-	if mask != "" {
-		bit := amd64MaskBitI1(c, mask, 0)
-		fallback := old
-		if properties.zeroing {
-			fallback = "0.000000e+00"
-		}
-		selected := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", selected, bit, llvmType, computed, llvmType, fallback)
-		computed = "%" + selected
-	}
 	destinationBytes, err := c.loadX(dstArg.Reg)
 	if err != nil {
 		return true, false, err
 	}
 	lanes := 128 / spec.laneBits
-	words := c.newTmp()
+	base := c.bitcastVectorBytesToIntegerLanes(16, lanes, spec.laneBits, destinationBytes)
 	bits := c.newTmp()
-	inserted := c.newTmp()
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", words, destinationBytes, lanes, spec.laneBits)
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", bits, llvmType, computed, spec.laneBits)
-	fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %%%s, i%d %%%s, i32 0\n", inserted, lanes, spec.laneBits, words, spec.laneBits, bits)
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", out, lanes, spec.laneBits, inserted)
-	return true, false, c.storeX(dstArg.Reg, "%"+out)
+	return true, false, c.storeScalarMoveRegister(dstArg.Reg, spec.laneBits, "%"+bits, base, mask, properties.zeroing)
+}
+
+func (c *amd64Ctx) loadFMA3Scalar(arg Operand, laneBits int, mask string) (string, error) {
+	var bits string
+	var err error
+	if arg.Kind == OpReg {
+		bits, err = c.loadXLowInteger(arg.Reg, laneBits)
+	} else if mask != "" {
+		bits, err = c.loadVectorScalarMemory(arg, laneBits, mask)
+	} else {
+		bits, err = c.evalIntSized(arg, amd64IntegerTypeForBits(laneBits))
+	}
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast i%d %s to %s\n", value, laneBits, bits, amd64FMA3LLVMType(1, laneBits))
+	return "%" + value, nil
 }
 
 func amd64FMA3LLVMType(lanes, laneBits int) string {
@@ -375,7 +394,9 @@ func amd64FMA3IntrinsicName(lanes, laneBits int, constrained bool) string {
 		prefix = "llvm.experimental.constrained.fma."
 	}
 	suffix := "f32"
-	if laneBits == 64 {
+	if laneBits == 16 {
+		suffix = "f16"
+	} else if laneBits == 64 {
 		suffix = "f64"
 	}
 	if lanes > 1 {
