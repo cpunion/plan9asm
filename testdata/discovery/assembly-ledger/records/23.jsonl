@@ -8,7 +8,7 @@
 {"module":"github.com/go-simd/jsonvalidate","version":"v0.0.0-20260908181122-12794a812a31","status":"pending"}
 {"module":"github.com/google/netstack","version":"v0.0.0-20191123085552-55fcc16cd0eb","status":"pending"}
 {"module":"github.com/manusw7/go-ethereum","version":"v1.17.3","status":"pending"}
-{"module":"github.com/mit-dci/lit","version":"v0.0.0-20221102210550-8c3d3b49f2ce","status":"passed"}
+{"module":"github.com/mit-dci/lit","version":"v0.0.0-20221102210550-8c3d3b49f2ce","status":"pending"}
 {"module":"github.com/obstor/obstor","version":"v0.0.0-20260830042923-b2f6a71eb78f","status":"pending"}
 {"module":"github.com/qorm/qorm","version":"v0.9.8","status":"pending"}
 {"module":"github.com/reminiscent/tidb","version":"v1.0.9","status":"pending"}

@@ -16,7 +16,7 @@
 {"module":"github.com/newmanifold/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/ponchione/websocket","version":"v1.8.15-shunter.1","status":"pending"}
 {"module":"github.com/reddit/milvus/pkg/v3","version":"v3.0.0-20260702082229-182134e29ebf","status":"pending"}
-{"module":"github.com/seeleteam/go-seele","version":"v1.3.2","status":"pending"}
+{"module":"github.com/seeleteam/go-seele","version":"v1.3.2","status":"passed"}
 {"module":"github.com/zmap/zgrab2","version":"v1.0.0","status":"pending"}
 {"module":"github.heygears.com/phuslu/log","version":"v1.0.134","status":"pending"}
 {"module":"gopkg.in/fyne-io/fyne.v2","version":"v2.8.1","status":"pending"}

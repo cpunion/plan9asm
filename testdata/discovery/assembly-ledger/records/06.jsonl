@@ -3,7 +3,7 @@
 {"module":"github.com/Consensys/gnark-crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/Dgryski/go-farm","version":"v0.0.0-20240924180020-3414d57e47da","status":"pending"}
 {"module":"github.com/DobbyVPN/fyne/v2","version":"v2.0.0-20260918171943-e3f1dd52c4ab","status":"pending"}
-{"module":"github.com/TETRATELABS/wazero","version":"v1.12.0","status":"pending"}
+{"module":"github.com/TETRATELABS/wazero","version":"v1.12.0","status":"passed"}
 {"module":"github.com/Zhao4Nicholas/only-owner","version":"v3.50.2+incompatible","status":"pending"}
 {"module":"github.com/aclements/go-misc","version":"v0.0.0-20260507185500-d9ea351965b0","status":"pending"}
 {"module":"github.com/datadog/opentelemetry-ebpf-profiler","version":"v0.0.202610","status":"pending"}
@@ -12,7 +12,7 @@
 {"module":"github.com/flc1125/go","version":"v0.0.0-20260921231307-ffc306b41731","status":"pending"}
 {"module":"github.com/getelastech/observer_learning_project/dep","version":"v0.0.0-20220508002938-1995cc97eec6","status":"pending"}
 {"module":"github.com/glycerine/pont","version":"v0.0.0-20260914073255-c2f3752b2c6f","status":"pending"}
-{"module":"github.com/go-compressions/matchlen","version":"v0.1.1","status":"passed"}
+{"module":"github.com/go-compressions/matchlen","version":"v0.1.1","status":"pending"}
 {"module":"github.com/go-simd/strconv","version":"v0.0.0-20260908181112-46f8d5cafa5f","status":"pending"}
 {"module":"github.com/m3db/m3db","version":"v1.5.0","status":"pending"}
 {"module":"github.com/polaris1119/go_src_comment","version":"v0.0.0-20131212154434-db5552f6835c","status":"pending"}

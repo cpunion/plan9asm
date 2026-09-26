@@ -16,8 +16,8 @@
 {"module":"github.com/longfen2026/mihomo-tcpmask","version":"v1.19.30","status":"pending"}
 {"module":"github.com/malivvan/tls-go","version":"v1.1.0","status":"pending"}
 {"module":"github.com/mewpull/gi","version":"v0.0.0-20181006102020-d25097d872a4","status":"pending"}
-{"module":"github.com/mimoo/strobeGo","version":"v0.0.0-20220103164710-9a04d6ca976b","status":"not_applicable"}
-{"module":"github.com/mykhailov-ua/ad-event-processor","version":"v0.0.0-20260912163147-74855916b1ce","status":"pending"}
+{"module":"github.com/mimoo/strobeGo","version":"v0.0.0-20220103164710-9a04d6ca976b","status":"pending"}
+{"module":"github.com/mykhailov-ua/ad-event-processor","version":"v0.0.0-20260912163147-74855916b1ce","status":"passed"}
 {"module":"github.com/tudorhulban/arenalog","version":"v0.0.6-0.20260601121910-51e15bf7c47f","status":"pending"}
 {"module":"github.com/wemixarchive/go-stablenet","version":"v1.1.0","status":"pending"}
 {"module":"github.com/winoros/tidb","version":"v1.0.0","status":"pending"}

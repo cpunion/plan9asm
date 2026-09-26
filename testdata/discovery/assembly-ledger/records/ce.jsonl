@@ -1,6 +1,6 @@
 {"module":"github.com/EthanGYoung/ContainerFS","version":"v0.0.0-20190824181837-c8de36334a9e","status":"pending"}
-{"module":"github.com/OffchainLabs/hashtree","version":"v0.2.6","status":"passed"}
-{"module":"github.com/PingCAP/TiDB","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/OffchainLabs/hashtree","version":"v0.2.6","status":"pending"}
+{"module":"github.com/PingCAP/TiDB","version":"v1.0.9","status":"pending"}
 {"module":"github.com/advanderveer/timer","version":"v0.6.0","status":"pending"}
 {"module":"github.com/amnezia-vpn/amnezia-xray-core","version":"v1.260728.0","status":"pending"}
 {"module":"github.com/bench/parquet-go","version":"v0.0.0-20260816053349-b306bcb043d2","status":"pending"}
@@ -11,7 +11,7 @@
 {"module":"github.com/fashionfarmer/utls","version":"v0.0.0-20260915082432-1663e634bd76","status":"pending"}
 {"module":"github.com/filosottile/bigmod","version":"v0.1.0","status":"pending"}
 {"module":"github.com/geewan-rd/xray-core","version":"v1.12.1","status":"pending"}
-{"module":"github.com/hoaxisr/sing-tun","version":"v0.9.5","status":"pending"}
+{"module":"github.com/hoaxisr/sing-tun","version":"v0.9.5","status":"passed"}
 {"module":"github.com/kvii/gmsme","version":"v0.0.0-20250123083532-ea592fe3d0e2","status":"pending"}
 {"module":"github.com/librefs/md5-simd","version":"v1.1.3","status":"pending"}
 {"module":"github.com/metacubex/clash.meta","version":"v1.19.31","status":"pending"}

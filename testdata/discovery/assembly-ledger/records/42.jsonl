@@ -9,7 +9,7 @@
 {"module":"github.com/drovosek229/xray-core","version":"v1.260401.3","status":"pending"}
 {"module":"github.com/ethernal-tech/bn256","version":"v0.0.0-20260512092402-9d67137eba57","status":"pending"}
 {"module":"github.com/janatshaban/xray-core","version":"v0.0.0-20260829071626-0af90331ac4b","status":"pending"}
-{"module":"github.com/jimmand/Xray-core-awg","version":"v0.0.0-20260914152211-f4591654c53a","status":"passed"}
+{"module":"github.com/jimmand/Xray-core-awg","version":"v0.0.0-20260914152211-f4591654c53a","status":"pending"}
 {"module":"github.com/lemire/Code-used-on-Daniel-Lemire-s-blog","version":"v0.0.0-20260922021503-45be0727a2f0","status":"pending"}
 {"module":"github.com/maxrobot/go-ethereum","version":"v1.8.11","status":"pending"}
 {"module":"github.com/oasysgames/oasys-op-geth","version":"v1.4.3","status":"pending"}

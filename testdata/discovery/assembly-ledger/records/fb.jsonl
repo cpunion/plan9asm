@@ -3,7 +3,7 @@
 {"module":"github.com/Skysolderone/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/Virtual0ps/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
 {"module":"github.com/Yuu518/sing-tun","version":"v0.0.0-20260912075549-869f0a4d76af","status":"pending"}
-{"module":"github.com/benjivesterby/go-fn-dsa","version":"v0.0.0-20250330155737-e24833f8637c","status":"passed"}
+{"module":"github.com/benjivesterby/go-fn-dsa","version":"v0.0.0-20250330155737-e24833f8637c","status":"pending"}
 {"module":"github.com/cespare/xxHash/v2","version":"v2.3.0","status":"pending"}
 {"module":"github.com/chenxiaolong/golang-x-sys","version":"v0.46.0-basicsync.0","status":"pending"}
 {"module":"github.com/doriancoin-project/dsvd/ltcutil","version":"v1.1.5","status":"pending"}
@@ -18,4 +18,4 @@
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p10","version":"v0.2.0","status":"pending"}
 {"module":"github.com/zerfoo/ztensor","version":"v1.20.0","status":"pending"}
 {"module":"github.com/zhangsan946/xray-core","version":"v0.0.0-20260627131803-45cf2898ab12","status":"pending"}
-{"module":"github.web.gylab.com/klaytn/klaytn","version":"v1.12.1","status":"passed"}
+{"module":"github.web.gylab.com/klaytn/klaytn","version":"v1.12.1","status":"pending"}

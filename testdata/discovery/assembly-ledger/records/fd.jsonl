@@ -7,4 +7,4 @@
 {"module":"github.com/statusx7/xray-core-oldxr","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/threshold-ml-dsa/threshold-ml-dsa/implementation","version":"v0.0.0-20260905090722-66e269e75dd8","status":"pending"}
 {"module":"github.com/tombrk/gvisor","version":"v0.0.0-20260312014806-293707e850ca","status":"pending"}
-{"module":"github.tiyicn.workers.dev/mmcloughlin/avo","version":"v0.6.0","status":"pending"}
+{"module":"github.tiyicn.workers.dev/mmcloughlin/avo","version":"v0.6.0","status":"passed"}

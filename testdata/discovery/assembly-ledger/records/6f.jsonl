@@ -1,6 +1,6 @@
 {"module":"github.com/AmmrFX/image","version":"v0.44.0","status":"pending"}
 {"module":"github.com/Fraunhofer-AISEC/cmc","version":"v0.9.15","status":"pending"}
-{"module":"github.com/GenaroNetwork/GenaroCore","version":"v1.0.3","status":"passed"}
+{"module":"github.com/GenaroNetwork/GenaroCore","version":"v1.0.3","status":"pending"}
 {"module":"github.com/InjectiveLabs/go-ethereum","version":"v1.16.3","status":"pending"}
 {"module":"github.com/T-J-L/parquet-go","version":"v0.0.0-20260713230428-988b7b98ab8d","status":"pending"}
 {"module":"github.com/Wangin1996/mihomo","version":"v1.19.29","status":"pending"}

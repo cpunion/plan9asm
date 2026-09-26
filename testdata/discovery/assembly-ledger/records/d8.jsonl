@@ -4,13 +4,13 @@
 {"module":"github.com/RonShih/Geth-MPT-db-test","version":"v0.0.0-20260127040412-e25083697396","status":"pending"}
 {"module":"github.com/ahrav/compress","version":"v0.0.0-20260719183354-6e462fe30476","status":"pending"}
 {"module":"github.com/amken3d/tamago","version":"v0.0.0-20260810214514-e5e19b31ce22","status":"pending"}
-{"module":"github.com/anunay-xin/XDPoSChain","version":"v1.6.0","status":"pending"}
+{"module":"github.com/anunay-xin/XDPoSChain","version":"v1.6.0","status":"passed"}
 {"module":"github.com/anyswap/FastMulThreshold-DSA","version":"v0.0.0-20230418072054-4c49fd5c9764","status":"pending"}
 {"module":"github.com/bobanetwork/erigon","version":"v1.10.16","status":"pending"}
 {"module":"github.com/cespare/xxhash/v2","version":"v2.3.0","status":"pending"}
 {"module":"github.com/eryugey/go-fuse/v2","version":"v2.10.1","status":"pending"}
 {"module":"github.com/hayabusa-cloud/dwcas","version":"v0.1.5","status":"pending"}
-{"module":"github.com/juelite/golang.org-x-sys","version":"v0.0.0-20181121071242-7b69e1c5db33","status":"pending"}
+{"module":"github.com/juelite/golang.org-x-sys","version":"v0.0.0-20181121071242-7b69e1c5db33","status":"passed"}
 {"module":"github.com/kryptex/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/me1ting/netstack","version":"v0.0.0-20230331111214-8e066e82ccc1","status":"pending"}
 {"module":"github.com/newsouther/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}

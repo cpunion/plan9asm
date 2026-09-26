@@ -1,4 +1,4 @@
-{"module":"git.chainmaker.org.cn/chainmaker/common/v2","version":"v2.4.0","status":"passed"}
+{"module":"git.chainmaker.org.cn/chainmaker/common/v2","version":"v2.4.0","status":"pending"}
 {"module":"github.com/BitnetMoney/bitnet","version":"v0.0.5","status":"pending"}
 {"module":"github.com/Mezo-org/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/Regclient/regclient","version":"v0.11.6","status":"pending"}

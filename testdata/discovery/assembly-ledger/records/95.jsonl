@@ -7,7 +7,7 @@
 {"module":"github.com/arthuryangcs/tidb","version":"v0.0.0-20170320061515-52100cb98646","status":"pending"}
 {"module":"github.com/c0mm4nd/wasman","version":"v1.7.3","status":"pending"}
 {"module":"github.com/clickyotomy/sys","version":"v0.0.0-20191005034450-2541f54a1cf2","status":"pending"}
-{"module":"github.com/cloudflare/bn256","version":"v0.0.0-20260909220639-22942e3c14a0","status":"pending"}
+{"module":"github.com/cloudflare/bn256","version":"v0.0.0-20260909220639-22942e3c14a0","status":"passed"}
 {"module":"github.com/complyue/fuse","version":"v0.0.0-20180417054321-cd3959611bcb","status":"pending"}
 {"module":"github.com/consensys-incorporated/gnark-crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/firehol/iprange/v4/go","version":"v0.0.0-20260916171743-271be2d90ae0","status":"pending"}
@@ -17,5 +17,5 @@
 {"module":"github.com/iKuiki/mqant","version":"v1.8.0","status":"pending"}
 {"module":"github.com/opengear/go-net","version":"v0.0.0-20220303072112-c7a32eeab7a9","status":"pending"}
 {"module":"github.com/rstkit/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
-{"module":"github.com/stanfordsnr/crypto","version":"v0.0.0-20180224013306-e451cabda2ac","status":"passed"}
+{"module":"github.com/stanfordsnr/crypto","version":"v0.0.0-20180224013306-e451cabda2ac","status":"pending"}
 {"module":"github.com/tebeka/go","version":"v0.0.0-20250414032058-13b7c7d8d217","status":"pending"}

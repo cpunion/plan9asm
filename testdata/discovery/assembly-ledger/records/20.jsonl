@@ -21,10 +21,10 @@
 {"module":"github.com/mavity/rusticated","version":"v0.0.0-20260915134237-469b5127e027","status":"pending"}
 {"module":"github.com/octaspace/go-octa","version":"v1.3.2","status":"pending"}
 {"module":"github.com/offchainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
-{"module":"github.com/onesyue/xray-core","version":"v1.260327.0","status":"passed"}
+{"module":"github.com/onesyue/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/oss-qm/golang","version":"v0.0.0-20200127164110-40de77758ca7","status":"pending"}
 {"module":"github.com/pgsty/silo-pkg/v3","version":"v3.14.1","status":"pending"}
 {"module":"github.com/pointlander/tensor","version":"v0.8.1","status":"pending"}
 {"module":"github.com/skylenet/swarm","version":"v1.8.27","status":"pending"}
-{"module":"github.com/tklauser/go","version":"v0.0.0-20230919055126-eca5a97340e6","status":"pending"}
+{"module":"github.com/tklauser/go","version":"v0.0.0-20230919055126-eca5a97340e6","status":"passed"}
 {"module":"github.com/zcalusic/sysinfo","version":"v1.1.3","status":"pending"}

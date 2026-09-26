@@ -1,7 +1,7 @@
 {"module":"github.com/4nd3r5on/Xray-core","version":"v1.250726.0","status":"pending"}
 {"module":"github.com/agustincou/fyne/v2","version":"v2.7.4-2","status":"pending"}
 {"module":"github.com/cbcwestwolf/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/centrifuge/go-ethereum","version":"v1.8.17","status":"passed"}
+{"module":"github.com/centrifuge/go-ethereum","version":"v1.8.17","status":"pending"}
 {"module":"github.com/go-hotfix/assembly","version":"v0.0.0-20260507105919-4e689533b2ec","status":"pending"}
 {"module":"github.com/gomlx/compute","version":"v0.1.14","status":"pending"}
 {"module":"github.com/hack3ric/plz","version":"v0.0.0-20230511054032-4840f44fa7ea","status":"pending"}
@@ -16,6 +16,6 @@
 {"module":"github.com/stevenh/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/sysverification/gokv","version":"v0.0.0-20250508184610-d007325b6ee8","status":"pending"}
 {"module":"github.com/thepudds/swisstable-wip","version":"v0.0.0-20221011152303-9c77dc657777","status":"pending"}
-{"module":"github.com/toliu/opentelemetry-ebpf-profiler","version":"v0.1.4-colasoft","status":"pending"}
+{"module":"github.com/toliu/opentelemetry-ebpf-profiler","version":"v0.1.4-colasoft","status":"not_applicable"}
 {"module":"github.com/vivint/infectious","version":"v0.0.0-20200605153912-25a574ae18a3","status":"pending"}
 {"module":"github.web.gylab.com/scroll-tech/go-ethereum","version":"v1.15.11","status":"pending"}

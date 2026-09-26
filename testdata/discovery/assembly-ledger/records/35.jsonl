@@ -13,7 +13,7 @@
 {"module":"github.com/metronlab/arrow/go/arrow","version":"v0.0.0-20200423063412-45a0ad389296","status":"pending"}
 {"module":"github.com/oakmound/shiny","version":"v0.4.2","status":"pending"}
 {"module":"github.com/odvcencio/turboquant","version":"v0.2.1","status":"pending"}
-{"module":"github.com/openvinotoolkit/openvino_contrib/modules/ollama_openvino","version":"v0.0.0-20260915110929-761bf3266560","status":"pending"}
+{"module":"github.com/openvinotoolkit/openvino_contrib/modules/ollama_openvino","version":"v0.0.0-20260915110929-761bf3266560","status":"not_applicable"}
 {"module":"github.com/pythonberg1997/bsc","version":"v1.1.8","status":"pending"}
 {"module":"github.com/statusX7/oldxr-xray-core","version":"v1.7.5-oldxr.1","status":"pending"}
 {"module":"github.com/tmthrgd/go-hex","version":"v0.0.0-20190904060850-447a3041c3bc","status":"pending"}

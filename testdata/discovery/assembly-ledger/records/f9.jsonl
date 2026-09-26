@@ -11,7 +11,7 @@
 {"module":"github.com/peterrk/pagebloomfilter","version":"v1.3.1","status":"pending"}
 {"module":"github.com/pjgraczyk/gomacro","version":"v0.0.0-20260616122001-83362707febb","status":"pending"}
 {"module":"github.com/scfchain/scf-core","version":"v0.0.0-20230818133812-a600d295d5b4","status":"pending"}
-{"module":"github.com/stereomonk/xray-core","version":"v0.0.0-20260701233659-b334169b2e17","status":"pending"}
+{"module":"github.com/stereomonk/xray-core","version":"v0.0.0-20260701233659-b334169b2e17","status":"passed"}
 {"module":"github.com/tangruilin/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/tenntenn/go","version":"v0.0.0-20190121233109-cad6d1fef514","status":"pending"}
 {"module":"github.com/visualfc/gid","version":"v0.3.6","status":"pending"}

@@ -7,9 +7,9 @@
 {"module":"github.com/dgryski/go-stadtx","version":"v0.0.0-20181220175827-101ddca05f0b","status":"pending"}
 {"module":"github.com/kiryuhakipyatok/screenshot","version":"v0.0.0-20260831201422-7730f3b52676","status":"pending"}
 {"module":"github.com/klaytn/Klaytn","version":"v1.12.1","status":"pending"}
-{"module":"github.com/leohalb/fyne/v2","version":"v2.8.0","status":"not_applicable"}
+{"module":"github.com/leohalb/fyne/v2","version":"v2.8.0","status":"pending"}
 {"module":"github.com/matrixorigin/MatrixOne","version":"v1.2.4","status":"pending"}
-{"module":"github.com/microstack-tech/parallax","version":"v1.2.0","status":"passed"}
+{"module":"github.com/microstack-tech/parallax","version":"v1.2.0","status":"pending"}
 {"module":"github.com/platonnetwork/platon-go","version":"v1.5.1","status":"pending"}
 {"module":"github.com/qbradq/go","version":"v0.0.0-20201128184244-4ce0a7cea680","status":"pending"}
 {"module":"github.com/swesmith/bytedance__sonic.de4f017f","version":"v0.0.0-20250704225717-16d240278dc8","status":"pending"}

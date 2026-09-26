@@ -5,9 +5,9 @@
 {"module":"github.com/UnIucky1/xray-core","version":"v0.0.0-20260124181826-59e6569c13e9","status":"pending"}
 {"module":"github.com/antoineco/delve","version":"v0.0.0-20260506113403-ae381d322b71","status":"pending"}
 {"module":"github.com/besmpl/ember","version":"v0.0.0-20260718230825-04cfa673484e","status":"pending"}
-{"module":"github.com/chewxy/gorgonia","version":"v0.9.18","status":"passed"}
+{"module":"github.com/chewxy/gorgonia","version":"v0.9.18","status":"pending"}
 {"module":"github.com/emmansun/gmsm","version":"v0.44.1","status":"pending"}
-{"module":"github.com/f-secure-foundry/tamago-go/src","version":"v0.0.0-20260710193149-03845e30f7b7","status":"passed"}
+{"module":"github.com/f-secure-foundry/tamago-go/src","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
 {"module":"github.com/getvocal/opentelemetry-ebpf-profiler","version":"v0.0.202601","status":"pending"}
 {"module":"github.com/gh6324/sunnynet","version":"v1.0.4","status":"pending"}
 {"module":"github.com/goceleris/celeris","version":"v1.5.11","status":"pending"}

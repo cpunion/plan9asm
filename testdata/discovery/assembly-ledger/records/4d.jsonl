@@ -11,11 +11,11 @@
 {"module":"github.com/go-delve/delve","version":"v1.27.2","status":"pending"}
 {"module":"github.com/go-simd/base32","version":"v0.0.0-20260908181146-4910d461bb0c","status":"pending"}
 {"module":"github.com/henrybear327/websocket","version":"v1.8.12","status":"pending"}
-{"module":"github.com/iwanicki92/go-linux-lowlevel-hw","version":"v0.0.0-20260318234023-e8d6a3ce0049","status":"pending"}
+{"module":"github.com/iwanicki92/go-linux-lowlevel-hw","version":"v0.0.0-20260318234023-e8d6a3ce0049","status":"passed"}
 {"module":"github.com/mark-kubacki/semver/v3","version":"v3.2.2","status":"pending"}
 {"module":"github.com/nebulatrade/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
 {"module":"github.com/prysmaticlabs/hashtree","version":"v0.2.6","status":"pending"}
-{"module":"github.com/quasilyte/GopherJRE","version":"v0.0.0-20250131090304-888098460476","status":"failed"}
+{"module":"github.com/quasilyte/GopherJRE","version":"v0.0.0-20250131090304-888098460476","status":"pending"}
 {"module":"github.com/rhysd/go","version":"v0.0.0-20240716164330-8b48290895d3","status":"pending"}
 {"module":"github.com/skerkour/go-benchmarks","version":"v0.0.0-20260408072817-b89a7648cb0a","status":"pending"}
 {"module":"github.com/tommyleng/gowebp","version":"v0.18.0","status":"pending"}

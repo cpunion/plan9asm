@@ -1,4 +1,4 @@
-{"module":"git.832008.xyz/pierrec/lz4","version":"v2.6.1+incompatible","status":"pending"}
+{"module":"git.832008.xyz/pierrec/lz4","version":"v2.6.1+incompatible","status":"not_applicable"}
 {"module":"github.com/HalalChain/qitmeer","version":"v0.10.6","status":"pending"}
 {"module":"github.com/Itxaka/sysinfo","version":"v0.0.0-20231020162343-30169cfb3711","status":"pending"}
 {"module":"github.com/Romaxa55/Xray-core","version":"v1.260327.0","status":"pending"}
@@ -15,7 +15,7 @@
 {"module":"github.com/podman-container-tools/buildah","version":"v1.45.1","status":"pending"}
 {"module":"github.com/saveio-backup/max","version":"v0.0.0-20230602073403-48c4401d2b0c","status":"pending"}
 {"module":"github.com/shaoting-huang/milvus/pkg","version":"v0.0.0-20240912034715-ebd75a584a45","status":"pending"}
-{"module":"github.com/sukunrt/go-ethereum","version":"v0.0.0-20260323171428-745b0a8c09ad","status":"pending"}
+{"module":"github.com/sukunrt/go-ethereum","version":"v0.0.0-20260323171428-745b0a8c09ad","status":"passed"}
 {"module":"github.com/tanaton/go-image","version":"v0.0.0-20161103133713-5469d0fa9a83","status":"pending"}
 {"module":"github.com/tixcoin/tixcash-api-core","version":"v0.0.0-20260511072735-53e04a9cd55c","status":"pending"}
 {"module":"github.com/tphakala/go-flac","version":"v1.1.0","status":"pending"}

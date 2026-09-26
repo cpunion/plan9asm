@@ -7,7 +7,7 @@
 {"module":"github.com/abeyfoundation/go-abey","version":"v0.0.0-20260831040716-30e3aaa1e041","status":"pending"}
 {"module":"github.com/darthshadow/go-fuse/v2","version":"v2.0.0-20260905074703-dbf033c20d82","status":"pending"}
 {"module":"github.com/e421083458/sys","version":"v0.0.1","status":"pending"}
-{"module":"github.com/intelligencedev/born","version":"v0.0.0-20260723051246-a716ef1d853c","status":"pending"}
+{"module":"github.com/intelligencedev/born","version":"v0.0.0-20260723051246-a716ef1d853c","status":"passed"}
 {"module":"github.com/joeycumines/goroutineid","version":"v1.1.1","status":"pending"}
 {"module":"github.com/marselester/perf","version":"v0.0.0-20260720174119-cd198c9c3cdb","status":"pending"}
 {"module":"github.com/mesos/mr-redis","version":"v0.0.0-20181210142107-705e2cbf7a03","status":"pending"}

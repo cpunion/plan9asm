@@ -1,7 +1,7 @@
 {"module":"github.com/0xpolygon/erigon/erigon-lib","version":"v0.0.0-20260803055935-b778c5b0d1df","status":"pending"}
 {"module":"github.com/AICHAIN-CORE/go-aichain","version":"v1.0.7","status":"pending"}
 {"module":"github.com/D-DePablos/juno","version":"v0.0.0-20220726125951-565805bd84e2","status":"pending"}
-{"module":"github.com/GH6324/SunnyNet","version":"v1.0.4","status":"pending"}
+{"module":"github.com/GH6324/SunnyNet","version":"v1.0.4","status":"passed"}
 {"module":"github.com/Inphi/go-ethereum","version":"v1.10.7","status":"pending"}
 {"module":"github.com/Klaytn/klaytn","version":"v1.12.1","status":"pending"}
 {"module":"github.com/anonymouse64/crypto","version":"v0.0.0-20180614221331-a8fb68e7206f","status":"pending"}

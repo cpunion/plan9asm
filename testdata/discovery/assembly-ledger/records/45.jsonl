@@ -1,6 +1,6 @@
 {"module":"blockwatch.cc/knoxdb","version":"v0.2.9","status":"pending"}
 {"module":"github.com/Agustincou/fyne/v2","version":"v2.7.4-2","status":"pending"}
-{"module":"github.com/HokageRegard/excrypto","version":"v0.0.5","status":"passed"}
+{"module":"github.com/HokageRegard/excrypto","version":"v0.0.5","status":"pending"}
 {"module":"github.com/MeKo-Christian/algo-dsp","version":"v0.7.1","status":"pending"}
 {"module":"github.com/Restream/reindexer/v5","version":"v5.16.0","status":"pending"}
 {"module":"github.com/Sonarsource/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"pending"}

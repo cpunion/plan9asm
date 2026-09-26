@@ -14,7 +14,7 @@
 {"module":"github.com/dxbwala/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
 {"module":"github.com/frida/typescript/tsc","version":"v0.0.0-20260906185614-e00a6a37c16e","status":"pending"}
 {"module":"github.com/ipfs/fs-repo-migrations","version":"v1.7.1","status":"pending"}
-{"module":"github.com/jclyons52/ts-go-morph","version":"v0.2.0","status":"passed"}
+{"module":"github.com/jclyons52/ts-go-morph","version":"v0.2.0","status":"pending"}
 {"module":"github.com/jfgiorgi/xnet","version":"v0.0.0-20260522014550-7770ec48d03f","status":"pending"}
 {"module":"github.com/kavu/go","version":"v0.0.0-20231103195800-d72f4542fea6","status":"pending"}
 {"module":"github.com/lekhanhtoan37/websocket","version":"v0.0.0-20251219134435-8d3545afb3ea","status":"pending"}

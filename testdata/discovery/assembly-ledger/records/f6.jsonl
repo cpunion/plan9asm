@@ -9,7 +9,7 @@
 {"module":"github.com/cristian-guerrero/go-indexing-mcp","version":"v0.8.0","status":"pending"}
 {"module":"github.com/emmansun/sm9","version":"v0.2.0","status":"pending"}
 {"module":"github.com/fabianofranz/origin","version":"v1.0.1","status":"pending"}
-{"module":"github.com/hcrosse/arrow-go/v18","version":"v18.5.2","status":"pending"}
+{"module":"github.com/hcrosse/arrow-go/v18","version":"v18.5.2","status":"passed"}
 {"module":"github.com/kilnfi/pgeth","version":"v0.0.0-20250923182716-29a05ae19e06","status":"pending"}
 {"module":"github.com/lemonhx/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/manifoldfinance/mev-geth","version":"v1.10.19","status":"pending"}
@@ -17,5 +17,5 @@
 {"module":"github.com/rwstechcortex/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/synopsys-sig/gls","version":"v0.0.0-20260902195921-4895e1878345","status":"pending"}
 {"module":"github.com/vechain/thor-go-vendor","version":"v0.0.0-20190902033906-455bf03e7c0d","status":"pending"}
-{"module":"github.com/yandex/yatool","version":"v0.0.0-20260922214909-ab247f7e4dea","status":"not_applicable"}
+{"module":"github.com/yandex/yatool","version":"v0.0.0-20260922214909-ab247f7e4dea","status":"pending"}
 {"module":"github.web.gylab.com/dominant-strategies/go-quai","version":"v0.52.0","status":"pending"}

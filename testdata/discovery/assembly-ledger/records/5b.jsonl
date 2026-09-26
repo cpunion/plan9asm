@@ -16,6 +16,6 @@
 {"module":"github.com/nikomalik/low-level-functions","version":"v0.0.0-20260410192916-fdeb921074be","status":"pending"}
 {"module":"github.com/sonarsource/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"pending"}
 {"module":"github.com/watchpoints/tidb","version":"v1.0.9","status":"pending"}
-{"module":"gitlab.com/eliasfaltin/erigon-pulse","version":"v1.0.2","status":"passed"}
+{"module":"gitlab.com/eliasfaltin/erigon-pulse","version":"v1.0.2","status":"pending"}
 {"module":"go.gnd.pw/random","version":"v0.0.0-20260922191143-b4d0be7efd57","status":"pending"}
 {"module":"wa-lang.org/wa","version":"v1.8.0","status":"pending"}

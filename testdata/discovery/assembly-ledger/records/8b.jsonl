@@ -16,6 +16,6 @@
 {"module":"github.com/phuslu/cheaprand","version":"v0.0.0-20240524171402-73cd4f71b09f","status":"pending"}
 {"module":"github.com/piko-sh/piko","version":"v0.0.0-alpha.38","status":"pending"}
 {"module":"github.com/pjeby/fzf","version":"v0.0.0-20260426090437-6fefe025461b","status":"pending"}
-{"module":"github.com/planetA/runc","version":"v0.1.1","status":"not_applicable"}
+{"module":"github.com/planetA/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/tomochain/go-tomo","version":"v1.5.4","status":"pending"}
-{"module":"github.com/virtual0ps/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
+{"module":"github.com/virtual0ps/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"passed"}

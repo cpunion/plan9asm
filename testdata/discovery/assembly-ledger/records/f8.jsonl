@@ -3,7 +3,7 @@
 {"module":"github.com/KYRDTeam/go-ethereum","version":"v1.13.14","status":"pending"}
 {"module":"github.com/Klaytn/KLAYTN","version":"v1.12.1","status":"pending"}
 {"module":"github.com/UzL-ITS/sev-ciphertext-side-channels/pfFingerprint/ssh","version":"v0.0.0-20220517215930-528a705300fa","status":"pending"}
-{"module":"github.com/benburkert/crypto","version":"v0.0.0-20160718211049-911fafb28f4e","status":"passed"}
+{"module":"github.com/benburkert/crypto","version":"v0.0.0-20160718211049-911fafb28f4e","status":"pending"}
 {"module":"github.com/bondaraval/sing-tun","version":"v0.0.0-20260317025907-bb97909f653b","status":"pending"}
 {"module":"github.com/brycewayne/hnsw","version":"v0.0.0-20260728174929-59a6d6260641","status":"pending"}
 {"module":"github.com/captainsooma/uni","version":"v0.0.0-20130624161451-cf8aefbd7f60","status":"pending"}

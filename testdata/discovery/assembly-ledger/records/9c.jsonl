@@ -9,7 +9,7 @@
 {"module":"github.com/ammrfx/image","version":"v0.44.0","status":"pending"}
 {"module":"github.com/bitwiresys/xray-core-wireguard-usermanager","version":"v0.0.0-20260525011047-e8ed5d7b535a","status":"pending"}
 {"module":"github.com/chainrd/evertrust","version":"v0.0.0-20200908031950-5204cb1eba71","status":"pending"}
-{"module":"github.com/furstenheim/simplertree","version":"v0.0.0-20190118211408-bef8d7c97e9c","status":"not_applicable"}
+{"module":"github.com/furstenheim/simplertree","version":"v0.0.0-20190118211408-bef8d7c97e9c","status":"pending"}
 {"module":"github.com/goccy/perlwasm2go","version":"v0.2.2","status":"pending"}
 {"module":"github.com/liusdu/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/maguro/go","version":"v0.0.0-20210319232121-6ae3b70ef255","status":"pending"}

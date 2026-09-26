@@ -9,11 +9,11 @@
 {"module":"github.com/cwbudde/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/gabriel-samfira/sys","version":"v0.0.0-20150608132119-9ddc60d56b51","status":"pending"}
 {"module":"github.com/grow-graphics/gd","version":"v0.0.0-20260918073432-bf29a5a8f806","status":"pending"}
-{"module":"github.com/itsthui/https-github.com-golang-go","version":"v0.0.0-20240103210156-6db1102605f2","status":"pending"}
+{"module":"github.com/itsthui/https-github.com-golang-go","version":"v0.0.0-20240103210156-6db1102605f2","status":"passed"}
 {"module":"github.com/lux5am/sing-box","version":"v1.14.1","status":"pending"}
 {"module":"github.com/nak3/kubernetes-manifest-scanner","version":"v0.0.0-20151207150536-d5cc57db0fac","status":"pending"}
 {"module":"github.com/ngtuna/tomochain","version":"v1.8.2","status":"pending"}
-{"module":"github.com/openagent-md/websocket","version":"v1.8.15","status":"pending"}
+{"module":"github.com/openagent-md/websocket","version":"v1.8.15","status":"passed"}
 {"module":"github.com/renthraysk/go/src","version":"v0.0.0-20250707204235-86b5ba731044","status":"pending"}
 {"module":"github.com/tenderly/net-scroll-geth","version":"v0.0.0-20251124132906-369bd0a9be88","status":"pending"}
 {"module":"github.com/vulcanize/go-ethereum","version":"v1.13.14","status":"pending"}

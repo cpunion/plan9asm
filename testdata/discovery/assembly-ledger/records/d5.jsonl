@@ -11,6 +11,6 @@
 {"module":"github.com/offchainlabs/hashtree","version":"v0.2.6","status":"pending"}
 {"module":"github.com/rsc/go","version":"v0.0.0-20260728020454-792a4f8f8995","status":"pending"}
 {"module":"github.com/stevenjnpearce/go-spacemesh","version":"v0.0.0-20190103132627-b75792c2b974","status":"pending"}
-{"module":"github.com/vmware-archive/vmw-guestinfo","version":"v0.0.0-20220317130741-510905f0efa3","status":"passed"}
+{"module":"github.com/vmware-archive/vmw-guestinfo","version":"v0.0.0-20220317130741-510905f0efa3","status":"pending"}
 {"module":"stokejo.com/mekosko/gvisor","version":"v0.0.0-20260413103409-6eb7d185f1b9","status":"pending"}
 {"module":"storj.io/infectious","version":"v1.0.1","status":"pending"}

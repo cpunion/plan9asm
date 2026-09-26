@@ -2,7 +2,7 @@
 {"module":"gitee.com/mirrors/tidb.git","version":"v1.0.9","status":"pending"}
 {"module":"github.com/ClifHouck/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/JohnnyTing/gomonkey/v2","version":"v2.14.4","status":"pending"}
-{"module":"github.com/agnitum2009/Xray-core","version":"v0.0.0-20260708144011-5f45a0be11a3","status":"passed"}
+{"module":"github.com/agnitum2009/Xray-core","version":"v0.0.0-20260708144011-5f45a0be11a3","status":"pending"}
 {"module":"github.com/annchain/kyber/v3","version":"v3.1.1","status":"pending"}
 {"module":"github.com/atewari-rh/net","version":"v0.38.0-sec.1","status":"pending"}
 {"module":"github.com/bobanetwork/v3-erigon/erigon-lib","version":"v0.0.0-20250421150011-83d629c0fa06","status":"pending"}
@@ -16,7 +16,7 @@
 {"module":"github.com/madbase/madnet","version":"v0.5.0","status":"pending"}
 {"module":"github.com/netBSD/pkgsrc","version":"v0.0.0-20260922184002-c9a2f5d18a51","status":"pending"}
 {"module":"github.com/ninjaninja140/typescript/tsc","version":"v0.0.0-20260901003445-363e4e637149","status":"pending"}
-{"module":"github.com/p-goral/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/p-goral/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/psiphon-Labs/psiphon-tunnel-core","version":"v1.0.10","status":"pending"}
 {"module":"github.com/suningrass/gi","version":"v0.9.6","status":"pending"}
 {"module":"github.com/tgruben/roaring","version":"v1.9.4","status":"pending"}
@@ -24,4 +24,4 @@
 {"module":"github.com/voidintheshell/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
 {"module":"github.com/vulhub/cve-2022-0778","version":"v0.0.0-20220407125841-7b5f33a6b388","status":"pending"}
 {"module":"github.com/xuyifangreeneyes/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.laiyagushi.com/templexxx/tsc","version":"v1.3.0","status":"pending"}
+{"module":"github.laiyagushi.com/templexxx/tsc","version":"v1.3.0","status":"passed"}
