@@ -30,13 +30,14 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const discoveryReportSchema = 4
+const discoveryReportSchema = 5
 
 const (
 	discoveryStatusPassed               = "passed"
 	discoveryStatusFailed               = "failed"
 	discoveryStatusNotApplicable        = "not_applicable"
 	discoveryStatusSkippedInvalidSource = "skipped_invalid_source"
+	discoveryStatusSkippedSuperseded    = "skipped_superseded"
 )
 
 type discoveryRecord struct {
@@ -176,6 +177,7 @@ type discoveryCorpusResult struct {
 	NotApplicableReason       string                                `json:"not_applicable_reason,omitempty"`
 	InvalidSourceReason       string                                `json:"invalid_source_reason,omitempty"`
 	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
 	Error                     string                                `json:"error,omitempty"`
 }
 
@@ -194,6 +196,7 @@ type discoveryCorpusReport struct {
 	Failed                    int                       `json:"failed"`
 	NotApplicable             int                       `json:"not_applicable"`
 	SkippedInvalidSource      int                       `json:"skipped_invalid_source"`
+	SkippedSuperseded         int                       `json:"skipped_superseded"`
 	Translations              int                       `json:"translations"`
 	NotApplicableTranslations int                       `json:"not_applicable_translations"`
 	Results                   []discoveryCorpusResult   `json:"results"`
@@ -353,7 +356,7 @@ func verifyDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTarget
 // The passing gate and the progress view deliberately share every integrity
 // check. Missing whole shards and genuine failures are useful progress, but
 // incomplete, stale or mixed-input reports are never evidence of a pass.
-func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity, skips map[string]discoveryInvalidMachineCodeSkip, progress *discoveryProgress) error {
+func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity, skips map[string]discoveryInvalidMachineCodeSkip, superseded map[string]discoverySupersededSkip, progress *discoveryProgress) error {
 	ledgerSHA, err := discoveryLedgerFingerprint(ledgerPath)
 	if err != nil {
 		return err
@@ -451,6 +454,11 @@ func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets
 					result.InvalidSourceReason == "" || len(result.InvalidSourceEvidence) == 0 {
 					return fmt.Errorf("%s: invalid-source skip %s lacks evidence or claims translations", filePath, key)
 				}
+			case discoveryStatusSkippedSuperseded:
+				if result.Translations != 0 || result.NotApplicableTranslations != 0 || result.Error != "" ||
+					result.Superseded == nil {
+					return fmt.Errorf("%s: superseded skip %s lacks evidence or claims translations", filePath, key)
+				}
 			}
 			candidate, ok := expected[key]
 			if !ok {
@@ -465,9 +473,14 @@ func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets
 			if !equalDiscoveryStrings(result.DiscoveredAsmFiles, candidate.AsmFiles) {
 				return fmt.Errorf("%s: result %s assembly inventory %v does not match ledger %v", filePath, key, result.DiscoveredAsmFiles, candidate.AsmFiles)
 			}
-			if result.Status == discoveryStatusSkippedInvalidSource && skips != nil {
+			if result.Status == discoveryStatusSkippedInvalidSource {
 				if !invalidSourceSkipMatchesResult(skips[key], result) {
 					return fmt.Errorf("%s: result %s invalid-source skip differs from the pinned manifest", filePath, key)
+				}
+			}
+			if result.Status == discoveryStatusSkippedSuperseded {
+				if !supersededSkipMatchesResult(superseded[key], result) {
+					return fmt.Errorf("%s: result %s supersession differs from the pinned manifest", filePath, key)
 				}
 			}
 			seenCandidates[key] = filePath
@@ -475,6 +488,7 @@ func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets
 				Module: result.Module, Version: result.Version, Status: result.Status,
 				InvalidSourceReason:   result.InvalidSourceReason,
 				InvalidSourceEvidence: append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
+				Superseded:            result.Superseded,
 			}
 		}
 		progress.ReportedShards++
@@ -490,6 +504,7 @@ func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets
 		progress.Failed += report.Failed
 		progress.NotApplicable += report.NotApplicable
 		progress.SkippedInvalidSource += report.SkippedInvalidSource
+		progress.SkippedSuperseded += report.SkippedSuperseded
 		progress.Translations += report.Translations
 		progress.NotApplicableTranslations += report.NotApplicableTranslations
 	}
@@ -1337,6 +1352,10 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	if err != nil {
 		return err
 	}
+	supersededSkips, err := loadSupersededSkips(cfg.RepoRoot, cfg.LedgerPath)
+	if err != nil {
+		return err
+	}
 	candidates := allCandidates
 	if cfg.FilterTargets {
 		candidates, err = filterDiscoveryCandidatesForTargets(allCandidates, cfg.Targets)
@@ -1415,6 +1434,18 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			DiscoveredAsmFiles: append([]string(nil), candidate.AsmFiles...),
 		}
 		candidateDir := filepath.Join(tmpRoot, fmt.Sprintf("candidate-%04d", i))
+		if skip, ok := supersededSkips[candidate.exactKey()]; ok {
+			result.Status = discoveryStatusSkippedSuperseded
+			result.Superseded = &skip
+			report.SkippedSuperseded++
+			report.Results = append(report.Results, result)
+			report.Selected++
+			fmt.Printf("SKIP_SUPERSEDED %s: %s replaces it\n", candidate.exactKey(), skip.ReplacementModule+"@"+skip.ReplacementVersion)
+			if err := checkpoint(i + 1); err != nil {
+				return err
+			}
+			continue
+		}
 		if skip, ok := invalidSourceSkips[candidate.exactKey()]; ok {
 			err := verifyInvalidMachineCodeCandidate(cfg, candidate, candidateDir, skip)
 			if err == nil {
@@ -1491,7 +1522,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	if report.Failed != 0 {
 		return fmt.Errorf("discovery shard %d/%d failed: passed=%d failed=%d selected=%d", cfg.ShardIndex, cfg.ShardCount, report.Passed, report.Failed, report.Selected)
 	}
-	fmt.Printf("discovery shard %d/%d passed: applicable=%d not_applicable=%d skipped_invalid_source=%d translations=%d not_applicable_translations=%d\n", cfg.ShardIndex, cfg.ShardCount, report.Passed, report.NotApplicable, report.SkippedInvalidSource, report.Translations, report.NotApplicableTranslations)
+	fmt.Printf("discovery shard %d/%d passed: applicable=%d not_applicable=%d skipped_invalid_source=%d skipped_superseded=%d translations=%d not_applicable_translations=%d\n", cfg.ShardIndex, cfg.ShardCount, report.Passed, report.NotApplicable, report.SkippedInvalidSource, report.SkippedSuperseded, report.Translations, report.NotApplicableTranslations)
 	return nil
 }
 
@@ -1515,19 +1546,20 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 	for _, count := range []int{
 		report.CandidateTotal, report.EligibleCandidates, report.Selected,
 		report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource,
+		report.SkippedSuperseded,
 		report.Translations, report.NotApplicableTranslations,
 	} {
 		if count < 0 {
 			return fmt.Errorf("discovery report contains a negative count")
 		}
 	}
-	if report.Selected != report.Passed+report.Failed+report.NotApplicable+report.SkippedInvalidSource {
-		return fmt.Errorf("discovery report accounting mismatch: selected=%d passed=%d failed=%d not_applicable=%d skipped_invalid_source=%d", report.Selected, report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource)
+	if report.Selected != report.Passed+report.Failed+report.NotApplicable+report.SkippedInvalidSource+report.SkippedSuperseded {
+		return fmt.Errorf("discovery report accounting mismatch: selected=%d passed=%d failed=%d not_applicable=%d skipped_invalid_source=%d skipped_superseded=%d", report.Selected, report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource, report.SkippedSuperseded)
 	}
 	if len(report.Results) != 0 && len(report.Results) != report.Selected {
 		return fmt.Errorf("discovery report result count mismatch: selected=%d results=%d", report.Selected, len(report.Results))
 	}
-	var passed, failed, notApplicable, skippedInvalidSource, translations, notApplicableTranslations int
+	var passed, failed, notApplicable, skippedInvalidSource, skippedSuperseded, translations, notApplicableTranslations int
 	for _, result := range report.Results {
 		if result.Translations < 0 || result.NotApplicableTranslations < 0 {
 			return fmt.Errorf("%s@%s: negative translation counts", result.Module, result.Version)
@@ -1544,8 +1576,20 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			if err := validateInvalidSourceReportEvidence(result); err != nil {
 				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 			}
+		case discoveryStatusSkippedSuperseded:
+			skippedSuperseded++
+			if result.Superseded == nil || result.Superseded.Module != result.Module ||
+				result.Superseded.Version != result.Version || result.Translations != 0 ||
+				result.NotApplicableTranslations != 0 || result.Error != "" ||
+				len(result.ApplicableAsmFiles) != 0 || len(result.BuildConfigurations) != 0 ||
+				len(result.InvalidSourceEvidence) != 0 || result.InvalidSourceReason != "" {
+				return fmt.Errorf("%s@%s: invalid superseded skip", result.Module, result.Version)
+			}
 		default:
 			return fmt.Errorf("%s@%s: invalid discovery result status %q", result.Module, result.Version, result.Status)
+		}
+		if result.Status != discoveryStatusSkippedSuperseded && result.Superseded != nil {
+			return fmt.Errorf("%s@%s: non-superseded result carries supersession", result.Module, result.Version)
 		}
 		translations += result.Translations
 		notApplicableTranslations += result.NotApplicableTranslations
@@ -1553,8 +1597,8 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 		}
 	}
-	if len(report.Results) != 0 && (passed != report.Passed || failed != report.Failed || notApplicable != report.NotApplicable || skippedInvalidSource != report.SkippedInvalidSource) {
-		return fmt.Errorf("discovery report result status counts are passed=%d failed=%d not_applicable=%d skipped_invalid_source=%d, summary is passed=%d failed=%d not_applicable=%d skipped_invalid_source=%d", passed, failed, notApplicable, skippedInvalidSource, report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource)
+	if len(report.Results) != 0 && (passed != report.Passed || failed != report.Failed || notApplicable != report.NotApplicable || skippedInvalidSource != report.SkippedInvalidSource || skippedSuperseded != report.SkippedSuperseded) {
+		return fmt.Errorf("discovery report result status counts differ from summary")
 	}
 	if len(report.Results) != 0 && (translations != report.Translations || notApplicableTranslations != report.NotApplicableTranslations) {
 		return fmt.Errorf("discovery report result translation counts are translations=%d not_applicable=%d, summary is translations=%d not_applicable=%d", translations, notApplicableTranslations, report.Translations, report.NotApplicableTranslations)

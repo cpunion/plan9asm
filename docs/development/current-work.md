@@ -7,7 +7,8 @@ do not start new module-index inventory scans while failures remain.
 ## Contribution and frozen worktrees
 
 - PR 40 is OPEN/DRAFT at remote head `4cf5ade`: last live inspection found
-  74 successful checks, 19 failed discovery shards and a failed aggregate.
+  74 successful checks and 20 failures, including discovery shards and the
+  aggregate.
   Run `gh pr view` again for current state. No later local repair was pushed.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`, never upstream.
   The user requests complete repairs before a batch push. Keep the PR draft.
@@ -15,14 +16,14 @@ do not start new module-index inventory scans while failures remain.
 - Develop on `codex/pr40-arm64-raw-20260926`. Inspect
   status, worktrees and running processes before editing. Do not push until
   the failing CI classes are fixed and the assembly ledger is refreshed.
-- Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
-  `codex/pr40-ecosystem-fixes-20260925` (cross runtime and discovery).
-  Inspect each HEAD and logs before advancing; never alter a running snapshot.
-  The root runner finished shard 1 at `432314f`, then advanced to `f80fb8f`
-  for shard 4 under `_out/ci-repair-f80fb8f-shard4/`. The ecosystem runner
-  finished shards 10, 17 and 24 at `692fad1`, then advanced to `d7fa0e2`
-  for shard 29 under `_out/ci-repair-d7fa0e2-shard29/`. Never mix these
-  report snapshots.
+- Frozen Go 1.27.1 runners at `9aa59b1` are replaying shard 24 in the fp16
+  worktree and shard 29 in the native-toolchain worktree. Their ignored logs
+  are `_out/shard24-ci-replay-9aa59b1.log` and
+  `_out/shard29-ci-replay-9aa59b1.log`. Inspect HEAD and processes before
+  advancing; never edit a running snapshot or combine report provenance.
+- Development at `9aa59b1` has a local, not-yet-pushed superseded-version
+  change under test. It records exact old gVisor and Skywire mirrors as skips
+  only because newer canonical versions are already in the scan ledger.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -131,8 +132,9 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   CPI0_4 and CPI1_1 constants are absent. Go 1.27's own assembled objects
   place the fixed RIP targets beyond all TEXT symbols. A new exact-version,
   SHA-pinned invalid-source proof distinguishes this from invalid ARM64
-  encodings and retains a specific skip reason. Focused proof tests pass;
-  the complete candidate and shard still need replay on the new revision.
+  encodings and retains a specific skip reason. The `9aa59b1` Go 1.27.1
+  replay has classified it as `SKIP_INVALID_SOURCE`; the shard is still
+  running.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
@@ -143,9 +145,20 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   no failures. Shard 24 at the same revision: 164 selected = 134 passed +
   29 source N/A + one failed old `celliott/gvisor` dependency resolution.
   The latter produced both 404 and transient 429/503 responses, so it was
-  correctly kept failed rather than relabelled source N/A. Later local code
-  recognizes 429 as infrastructure and retries only transient network
-  failures twice; that needs a clean-shard replay.
+  correctly kept failed rather than relabelled source N/A. The new 9aa59b1
+  replay confirms the old 2018 source is not buildable with current Go even
+  when its legacy import path is aliased to the downloaded module. The fork
+  shares commit `3b895abd3b05` with canonical `google/gvisor`, whose 2026
+  version is separately scanned and assembly-bearing.
+- Shard 4 at `f80fb8f` completed: 168 selected = 129 passed + 38 source N/A
+  + one exact gmgo invalid-source skip, zero failures. Shard 29 at `d7fa0e2`
+  completed: 151 selected = 125 passed + 25 N/A + one pre-fix go-highway
+  failure. The large `spanneranalyzerwasm2go/p8` candidate passed 6/6 object
+  translations on that snapshot. Both are diagnostic-only for current source.
+- Clean `9aa59b1` passed full root tests, nested CLI tests, vet, build,
+  official five-architecture coverage, strict benchmark (184/184) and stdlib
+  corpus. Its shard 24 and 29 replays remain in progress. Do not call the
+  complete external corpus verified yet.
 - Validated updater published that evidence via `5cec520`, merged at
   `e67462c`: 4,783 candidates, 4,624 pending, 126 passed, 32 N/A, one failed;
   incomplete and unverified. Evidence is stale against later implementation.
@@ -163,11 +176,12 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    address/entry contracts; large `wasm2go` modules need bounded memory even
    when a single package contains thousands of generated functions.
 3. Keep unproven upstream defects failed. Only the five confirmed exact
-   versions above qualify for `skipped_invalid_source`; private Apple
+   versions in the invalid-machine-code manifest qualify for
+   `skipped_invalid_source`; private Apple
    instructions alone are not proof of invalid source. Continue other
    applicable forms and candidates normally.
-4. Resolve the historical `skywire@v1.3.69` unavailable source without
-   pretending a failed download is a pass. Run all 32 discovery shards with
+4. Finish and review the exact superseded-version mechanism for historical
+   gVisor and Skywire mirrors; neither skip is a pass. Run all 32 shards with
    identical frozen provenance, refresh the validated assembly ledger, then
    batch-push to the allowed fork. Its current source fingerprint is stale.
 5. Shard 0's old runner lost communication, confirmed by its check annotation.

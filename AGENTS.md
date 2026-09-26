@@ -46,6 +46,11 @@ tests establish the relevant runtime semantics.
   or Go's own object places an unrelocated raw AMD64 RIP target outside every
   TEXT symbol with its named constant absent. The report/ledger retain the
   reason. A skip is never a pass.
+- A frozen historical mirror/fork may be `skipped_superseded` only when
+  `testdata/corpus/superseded-modules.json` names an exact newer version
+  already in the scan ledger and gives reviewable project-identity evidence.
+  This is separate from both source N/A and assembly success; the replacement
+  is independently scanned and, if it has assembly, tested.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.

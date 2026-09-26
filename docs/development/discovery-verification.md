@@ -121,7 +121,7 @@ runner.
 
 The aggregate checks exact ledger ownership/inventory and these identities:
 
-- `selected = passed + not_applicable + skipped_invalid_source + failed`;
+- `selected = passed + not_applicable + skipped_invalid_source + skipped_superseded + failed`;
 - each target's `total_asm = success + not_applicable + failed`;
 - final `failed = 0`, each candidate appearing exactly once.
 
@@ -142,7 +142,15 @@ never contributes to passed candidates or translation counts. Reports and
 the assembly ledger retain the reason and witnesses; progress and aggregate
 verification compare them with the current pinned manifest.
 
-Schema 4 binds Git revision/content/dirty state, full ledger fingerprint,
+An obsolete exact mirror/fork may instead be `skipped_superseded` when the
+reviewed `testdata/corpus/superseded-modules.json` pins its replacement module
+and a strictly newer version already recorded as scanned. Evidence links must
+establish project identity, not just a similar name. The runner does not
+download or translate the old version; the report and assembly ledger retain
+its reason and replacement. This is not a pass. If the replacement has
+assembly, it remains a separate corpus candidate and must pass the same gate.
+
+Schema 5 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22
 version/llc bytes. Before/after capture detects mutations. All shards need
 identical provenance. Dirty builds are diagnostic-only; schema-2, stale tools,
@@ -167,9 +175,10 @@ bash scripts/discovery-status.sh [reports-directory] [shard-count]
 The defaults are `_out/discovered-library-corpus` and 32. `scan-status.json`
 contains validated contiguous index endpoints and scan counts.
 `assembly-progress.json` binds the ledger/source and lists every selected exact
-version as `pending`, `passed`, `not_applicable`, `skipped_invalid_source` or
+version as `pending`, `passed`, `not_applicable`, `skipped_invalid_source`,
+`skipped_superseded` or
 `failed`. Its invariant is `candidate_total = pending + passed +
-not_applicable + skipped_invalid_source + failed`. Missing whole
+not_applicable + skipped_invalid_source + skipped_superseded + failed`. Missing whole
 shards remain pending, including in-progress shards not yet published.
 
 The progress reader and final passing gate share the same provenance, inventory,
