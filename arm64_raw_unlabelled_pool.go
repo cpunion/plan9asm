@@ -92,8 +92,11 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 	// as data when the produced address is used exclusively by loads and killed
 	// on every outgoing path (possibly by an explicit return contract).
 	for at, target := range addresses {
-		if target >= pool && target < end && !arm64RawAddressOnlyLoadedWithExit(fn.Instrs, at, pool, returnClobbers) {
-			return nil, nil, nil
+		if target >= pool && target < end {
+			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4}
+			if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
+				return nil, nil, nil
+			}
 		}
 	}
 	insertions := make(map[int]string)
@@ -169,22 +172,46 @@ func arm64RawPoolReturnClobbers(fn Func, sig FuncSig) uint32 {
 }
 
 func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, returnClobbers uint32) bool {
+	return arm64RawAddressOnlyLoadedWithinPool(instructions, at, end, returnClobbers, nil)
+}
+
+type arm64RawPoolBounds struct {
+	offset int64
+	size   int64
+}
+
+type arm64RawPoolFlow struct {
+	at     int
+	offset int64
+}
+
+func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, returnClobbers uint32, bounds *arm64RawPoolBounds) bool {
 	register := arm64asm.X0 + arm64asm.Reg(uint32(instructions[at].Args[0].Imm)&31)
 	wordRegister := register - arm64asm.X0 + arm64asm.W0
 	isAddress := func(r arm64asm.Reg) bool { return r == register || r == wordRegister }
 	loaded := false
-	visited := make(map[int]bool)
-	queue := []int{at + 1}
+	initialOffset := int64(0)
+	if bounds != nil {
+		initialOffset = bounds.offset
+	}
+	visited := make(map[int]int64)
+	queue := []arm64RawPoolFlow{{at + 1, initialOffset}}
 	for len(queue) > 0 {
-		i := queue[len(queue)-1]
+		state := queue[len(queue)-1]
+		i, offset := state.at, state.offset
 		queue = queue[:len(queue)-1]
 		if i < 0 || i >= end {
 			return false
 		}
-		if visited[i] {
+		if previous, ok := visited[i]; ok {
+			// A changing loop offset or disagreeing join needs range analysis,
+			// not an instruction-only visited set that drops the second path.
+			if previous != offset {
+				return false
+			}
 			continue
 		}
-		visited[i] = true
+		visited[i] = offset
 		if !arm64RawLiteralWord(instructions[i]) {
 			return false
 		}
@@ -193,22 +220,53 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 		// destination. Writing this register kills the old pool address.
 		if ins, ok := decodeARM64RawSVEPredicateCount(word); ok {
 			if ins.Args[2].Reg != Reg(fmt.Sprintf("R%d", register-arm64asm.X0)) {
-				queue = append(queue, i+1)
+				queue = append(queue, arm64RawPoolFlow{i + 1, offset})
 			}
 			continue
 		}
-		// ADD/SUB Xn, Xn, #0 preserves the address exactly. Wn truncates it,
-		// flag-setting forms expose its bits, and nonzero offsets need a
-		// separate range proof; none of those match this identity encoding.
-		if word&0xbfbffc00 == 0x91000000 && word&31 == word>>5&31 && word&31 == uint32(register-arm64asm.X0) {
-			queue = append(queue, i+1)
+		// Only 64-bit, non-flag-setting, in-place immediate arithmetic can
+		// preserve a relocatable pool pointer. Every derived pointer and its
+		// reads must stay within the same contiguous data blob.
+		if word&0xbf800000 == 0x91000000 && word&31 == word>>5&31 && word&31 == uint32(register-arm64asm.X0) {
+			delta := int64(word >> 10 & 4095)
+			if word&(1<<22) != 0 {
+				delta <<= 12
+			}
+			if word&(1<<30) != 0 {
+				delta = -delta
+			}
+			if delta != 0 && (bounds == nil || !arm64RawPoolContains(offset+delta, 1, bounds.size)) {
+				return false
+			}
+			queue = append(queue, arm64RawPoolFlow{i + 1, offset + delta})
+			continue
+		}
+		if ins, ok := arm64RawPoolReplicateLoad(word); ok {
+			memory := ins.Args[0].Mem
+			name := Reg(fmt.Sprintf("R%d", register-arm64asm.X0))
+			if memory.Index == name {
+				return false
+			}
+			if memory.Base == name {
+				spec := arm64SVEReplicateMemorySpecs[ins.Op]
+				bytes := spec.blockBytes
+				if bytes == 0 {
+					bytes = spec.memoryBits / 8
+				}
+				if bounds == nil || memory.Index != "" && memory.Index != ZR || memory.OffRaw != "" ||
+					!arm64RawPoolContains(offset+memory.Off, int64(bytes), bounds.size) {
+					return false
+				}
+				loaded = true
+			}
+			queue = append(queue, arm64RawPoolFlow{i + 1, offset})
 			continue
 		}
 		// x/arch does not decode SVE. Consult validated typed grammars for
 		// vector-only effects and explicit unrelated scalar/memory operands.
 		// Unknown effects and any use of this address still fail below.
 		if arm64RawPoolSVEIgnoresAddress(word, int(register-arm64asm.X0)) {
-			queue = append(queue, i+1)
+			queue = append(queue, arm64RawPoolFlow{i + 1, offset})
 			continue
 		}
 		var code [4]byte
@@ -258,7 +316,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 					if int64(arg)%4 != 0 {
 						return false
 					}
-					queue = append(queue, i+int(arg)/4)
+					queue = append(queue, arm64RawPoolFlow{i + int(arg)/4, offset})
 				default:
 					return false
 				}
@@ -292,6 +350,9 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 					if !arm64RawPoolReadOnlyLoad(decoded.Op) || arg.Mode != arm64asm.AddrOffset {
 						return false
 					}
+					if bounds != nil && !arm64RawPoolLoadInBounds(decoded, word, arg, offset, bounds.size) {
+						return false
+					}
 					loaded = true
 				}
 			case arm64asm.MemExtend:
@@ -311,7 +372,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 			continue
 		}
 		if word&0xfc000000 != 0x14000000 {
-			queue = append(queue, i+1)
+			queue = append(queue, arm64RawPoolFlow{i + 1, offset})
 		}
 	}
 	return loaded

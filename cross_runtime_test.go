@@ -130,6 +130,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "pool_result", triple, ir,
 			arm64RawPoolResultMain, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
 	})
+	t.Run("arm64_raw_pool_bounded_offsets", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir := arm64RawPoolOffsetIR(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "pool_offset", triple, ir,
+			arm64RawPoolOffsetMain, []string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_fixed_gp_float", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64FixedGPFloatRuntime(t, triple)
