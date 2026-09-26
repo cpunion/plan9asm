@@ -5,6 +5,19 @@ import (
 	"strings"
 )
 
+func decodeARM64RawSVECompact(word uint32) (Instr, bool) {
+	// The B/H (SVE2.2) and S/D (SVE) rows differ only in size[23:22].
+	if word&0xff3fe000 != 0x05218000 {
+		return Instr{}, false
+	}
+	width := "BHSD"[word>>22&3]
+	return Instr{Op: "ZCOMPACT", Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d", word>>10&7))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, width))},
+	}}, true
+}
+
 func arm64SVECompactNeedsSVE2P2(ins Instr) bool {
 	if len(ins.Args) != 3 {
 		return false
