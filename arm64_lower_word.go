@@ -35,6 +35,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawSMETileMemory(word); ok {
 		return c.lowerRawSMETileMemory(form)
 	}
+	if decoded, ok := decodeARM64RawSVEIndex(word); ok {
+		_, _, err := c.lowerARM64SVEIndex(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
 		_, _, err := c.lowerARM64SVEFloatImmediate(decoded.Op, decoded)
 		return err

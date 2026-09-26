@@ -19,6 +19,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	if llc == "" {
 		t.Fatal("llc not found")
 	}
+	t.Run("arm64_raw_sve_count_index", func(t *testing.T) {
+		testARM64RawSVECountIndexRuntime(t, llc)
+	})
 
 	type target struct {
 		goarch    string

@@ -5,6 +5,37 @@ import (
 	"strings"
 )
 
+// The two operand-class bits describe the complete INDEX family independently
+// of element size: immediate/immediate, register/immediate, immediate/register,
+// and register/register. Unlike Go's ZINDEX spelling, raw register forms do not
+// force D elements; select ZINDEXW for their B/H/S encodings.
+func decodeARM64RawSVEIndex(word uint32) (Instr, bool) {
+	const operands = uint32(3<<22 | 31<<16 | 3<<10 | 31<<5 | 31)
+	if word&^operands != 0x04204000 {
+		return Instr{}, false
+	}
+	scalar := func(value uint32, register bool) Operand {
+		if !register {
+			return Operand{Kind: OpImm, Imm: int64(int32(value<<27) >> 27)}
+		}
+		if value == 31 {
+			return Operand{Kind: OpReg, Reg: ZR}
+		}
+		return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("R%d", value))}
+	}
+	size := word >> 22 & 3
+	form := word >> 10 & 3
+	op := Op("ZINDEX")
+	if form != 0 && size != 3 {
+		op = "ZINDEXW"
+	}
+	return Instr{Op: op, Raw: fmt.Sprintf("decoded ARM64 WORD %#08x as %s", word, op), Args: []Operand{
+		scalar(word>>16&31, form&2 != 0),
+		scalar(word>>5&31, form&1 != 0),
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, "BHSD"[size]))},
+	}}, true
+}
+
 func (c *arm64Ctx) lowerARM64SVEIndex(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	if op != "ZINDEX" && op != "ZINDEXW" {
 		return false, false, nil

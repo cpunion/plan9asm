@@ -874,6 +874,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEAddress(word); ok {
 					add("+sve")
 				}
+				if _, ok := decodeARM64RawSVEIndex(word); ok {
+					add("+sve")
+				}
 				if _, ok := decodeARM64RawSVECnt(word); ok {
 					add("+sve")
 				}

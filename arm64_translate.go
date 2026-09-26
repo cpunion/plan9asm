@@ -269,6 +269,9 @@ func emitARM64Prelude(b *strings.Builder) {
 		}
 		fmt.Fprintf(b, "declare void @llvm.aarch64.sve.st%dq.nxv2i64(%s, %s, ptr)\n", count, strings.Join(values, ", "), predicateType)
 	}
+	for _, suffix := range []string{"b", "h", "w", "d"} {
+		fmt.Fprintf(b, "declare i64 @llvm.aarch64.sve.cnt%s(i32 immarg)\n", suffix)
+	}
 	for _, elementBits := range []int{8, 16, 32, 64} {
 		fmt.Fprintf(b, "declare target(\"aarch64.svcount\") @llvm.aarch64.sve.ptrue.c%d()\n", elementBits)
 		fmt.Fprintf(b, "declare i64 @llvm.aarch64.sve.cntp.c%d(target(\"aarch64.svcount\"), i32 immarg)\n", elementBits)

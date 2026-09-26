@@ -9,33 +9,63 @@ type arm64RawSVECnt struct {
 	op          Op
 	elementBits int
 	destination int
+	pattern     int
+	multiplier  int
+	operation   string
 }
 
 func decodeARM64RawSVECnt(word uint32) (arm64RawSVECnt, bool) {
-	base := word & 0xffe0ffe0
-	forms := map[uint32]struct {
-		op   Op
-		bits int
-	}{
-		0x0420e3e0: {"CNTB", 8},
-		0x0460e3e0: {"CNTH", 16},
-		0x04a0e3e0: {"CNTW", 32},
-		0x04e0e3e0: {"CNTD", 64},
-	}
-	form, ok := forms[base]
-	if !ok {
+	const variable = uint32(3<<22 | 15<<16 | 31<<5 | 31)
+	operation := ""
+	prefix := "CNT"
+	switch word &^ variable {
+	case 0x0420e000:
+	case 0x0430e000:
+		prefix, operation = "INC", "add"
+	case 0x0430e400:
+		prefix, operation = "DEC", "sub"
+	default:
 		return arm64RawSVECnt{}, false
 	}
-	return arm64RawSVECnt{op: form.op, elementBits: form.bits, destination: int(word & 31)}, true
+	size := word >> 22 & 3
+	return arm64RawSVECnt{
+		op: Op(prefix + string("BHWD"[size])), elementBits: 8 << size,
+		destination: int(word & 31), pattern: int(word >> 5 & 31),
+		multiplier: int(word>>16&15) + 1, operation: operation,
+	}, true
 }
 
 func (c *arm64Ctx) lowerRawSVECnt(form arm64RawSVECnt) error {
-	ins := Instr{Op: form.op, Raw: fmt.Sprintf("decoded ARM64 WORD as %s", form.op), Args: []Operand{{Kind: OpReg, Reg: Reg(fmt.Sprintf("R%d", form.destination))}}}
-	ok, _, err := c.lowerARM64SVECnt(form.op, ins)
-	if !ok && err == nil {
-		return fmt.Errorf("arm64 raw %s decoder reached no semantic lowerer", form.op)
+	reg := Reg(fmt.Sprintf("R%d", form.destination))
+	if form.destination == 31 {
+		reg = ZR
 	}
-	return err
+	return c.lowerARM64SVEElementCount(reg, form.elementBits, form.pattern, form.multiplier, form.operation)
+}
+
+// CNT/INC/DEC share predicate-pattern counts and the encoded 1..16 multiplier.
+// LLVM's count intrinsics implement POW2, fixed VL, MUL3/MUL4, ALL and unknown
+// pattern values (which architecturally select zero elements).
+func (c *arm64Ctx) lowerARM64SVEElementCount(reg Reg, bits, pattern, multiplier int, operation string) error {
+	count := c.newTmp()
+	suffix := map[int]string{8: "b", 16: "h", 32: "w", 64: "d"}[bits]
+	fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.aarch64.sve.cnt%s(i32 %d)\n", count, suffix, pattern)
+	value := "%" + count
+	if multiplier != 1 {
+		scaled := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = mul i64 %s, %d\n", scaled, value, multiplier)
+		value = "%" + scaled
+	}
+	if operation != "" {
+		previous, err := c.loadReg(reg)
+		if err != nil {
+			return err
+		}
+		updated := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = %s i64 %s, %s\n", updated, operation, previous, value)
+		value = "%" + updated
+	}
+	return c.storeReg(reg, value)
 }
 
 func (c *arm64Ctx) lowerARM64SVECnt(op Op, ins Instr) (ok bool, terminated bool, err error) {
@@ -46,9 +76,5 @@ func (c *arm64Ctx) lowerARM64SVECnt(op Op, ins Instr) (ok bool, terminated bool,
 	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isARM64GeneralOrZeroReg(ins.Args[0].Reg) || ins.Args[0].Reg == ZR {
 		return true, false, fmt.Errorf("arm64 %s expects one general destination register: %q", op, ins.Raw)
 	}
-	vscale := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.vscale.i64()\n", vscale)
-	count := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = mul i64 %%%s, %d\n", count, vscale, multiplier)
-	return true, false, c.storeReg(ins.Args[0].Reg, "%"+count)
+	return true, false, c.lowerARM64SVEElementCount(ins.Args[0].Reg, 128/multiplier, 31, 1, "")
 }
