@@ -31,10 +31,16 @@ import (
 )
 func main() {
     source, err := plan9asm.ReadGoAssemblySource(os.Args[1], os.Args[2])
-    if err != nil { panic(err) }
+    if err != nil {
+        panic(err)
+    }
     file, err := plan9asm.Parse(plan9asm.ArchAMD64, string(source))
-    if err != nil { panic(err) }
-    for _, ins := range file.Funcs[0].Instrs { fmt.Println(ins.Op) }
+    if err != nil {
+        panic(err)
+    }
+    for _, ins := range file.Funcs[0].Instrs {
+        fmt.Println(ins.Op)
+    }
 }
 `
 	mainFile := filepath.Join(dir, "main.go")
