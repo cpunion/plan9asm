@@ -277,6 +277,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markOp(operand)
 					}
 				}
+				if decoded, ok := decodeARM64RawSVEFloatCompare(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEIntegerCompare(word); ok {
 					for _, operand := range decoded.Args {
 						markOp(operand)
@@ -804,7 +809,7 @@ func (c *arm64Ctx) scanUsedRegs() {
 					default:
 						markReg(Reg(fmt.Sprintf("Z%d", form.destination)))
 						markReg(Reg(fmt.Sprintf("Z%d", form.first)))
-						if form.kind == arm64RawSVEFloatFMLA || form.kind == arm64RawSVEFloatFMAD || form.second != form.first {
+						if form.second != form.first {
 							markReg(Reg(fmt.Sprintf("Z%d", form.second)))
 						}
 					}
@@ -998,6 +1003,12 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 	}
 	sort.Ints(vIdx)
 	for _, i := range vIdx {
+		if c.usedZRegs[i] {
+			// Vn/Fn are the low 128/64 bits of Zn, not separate registers.
+			// One scalable slot makes SVE writes visible to NEON/scalar reads.
+			c.vRegSlot[i] = fmt.Sprintf("%%z%d", i)
+			continue
+		}
 		name := c.vSlotName(i)
 		c.vRegSlot[i] = name
 		fmt.Fprintf(c.b, "  %s = alloca <16 x i8>\n", name)
@@ -1372,6 +1383,10 @@ func (c *arm64Ctx) storeVReg(r Reg, v string) error {
 	slot, ok := c.vRegSlot[idx]
 	if !ok {
 		return fmt.Errorf("arm64: unknown vreg %s", r)
+	}
+	if zSlot := c.zRegSlot[idx]; zSlot != "" {
+		// Architectural NEON/scalar writes clear the scalable upper bits.
+		fmt.Fprintf(c.b, "  store <vscale x 16 x i8> zeroinitializer, ptr %s\n", zSlot)
 	}
 	fmt.Fprintf(c.b, "  store <16 x i8> %s, ptr %s\n", v, slot)
 	return nil

@@ -13,6 +13,8 @@ type arm64SVECompareSpec struct {
 	allowImm    bool
 	unsignedImm bool
 	wideOnly    bool
+	rawBase     uint32
+	rawImmBase  uint32
 }
 
 var arm64SVECompareSpecs = map[Op]arm64SVECompareSpec{
@@ -26,15 +28,44 @@ var arm64SVECompareSpecs = map[Op]arm64SVECompareSpec{
 	"ZCMPLS": {predicate: "ule", allowReg: true, allowImm: true, unsignedImm: true, wideOnly: true},
 	"ZCMPLT": {predicate: "slt", allowReg: true, allowImm: true, wideOnly: true},
 	"ZCMPNE": {predicate: "ne", allowReg: true, allowImm: true},
-	"ZFACGE": {predicate: "oge", floating: true, absolute: true, allowReg: true},
-	"ZFACGT": {predicate: "ogt", floating: true, absolute: true, allowReg: true},
-	"ZFCMEQ": {predicate: "oeq", floating: true, allowReg: true, allowImm: true},
-	"ZFCMGE": {predicate: "oge", floating: true, allowReg: true, allowImm: true},
-	"ZFCMGT": {predicate: "ogt", floating: true, allowReg: true, allowImm: true},
-	"ZFCMLE": {predicate: "ole", floating: true, allowImm: true},
-	"ZFCMLT": {predicate: "olt", floating: true, allowImm: true},
-	"ZFCMNE": {predicate: "une", floating: true, allowReg: true, allowImm: true},
-	"ZFCMUO": {predicate: "uno", floating: true, allowReg: true},
+	"ZFACGE": {predicate: "oge", floating: true, absolute: true, allowReg: true, rawBase: 0x6500c010},
+	"ZFACGT": {predicate: "ogt", floating: true, absolute: true, allowReg: true, rawBase: 0x6500e010},
+	"ZFCMEQ": {predicate: "oeq", floating: true, allowReg: true, allowImm: true, rawBase: 0x65006000, rawImmBase: 0x65122000},
+	"ZFCMGE": {predicate: "oge", floating: true, allowReg: true, allowImm: true, rawBase: 0x65004000, rawImmBase: 0x65102000},
+	"ZFCMGT": {predicate: "ogt", floating: true, allowReg: true, allowImm: true, rawBase: 0x65004010, rawImmBase: 0x65102010},
+	"ZFCMLE": {predicate: "ole", floating: true, allowImm: true, rawImmBase: 0x65112010},
+	"ZFCMLT": {predicate: "olt", floating: true, allowImm: true, rawImmBase: 0x65112000},
+	"ZFCMNE": {predicate: "une", floating: true, allowReg: true, allowImm: true, rawBase: 0x65006010, rawImmBase: 0x65132000},
+	"ZFCMUO": {predicate: "uno", floating: true, allowReg: true, rawBase: 0x6500c000},
+}
+
+func decodeARM64RawSVEFloatCompare(word uint32) (Instr, bool) {
+	size := word >> 22 & 3
+	if size == 0 {
+		return Instr{}, false
+	}
+	for op, spec := range arm64SVECompareSpecs {
+		if !spec.floating {
+			continue
+		}
+		regular := spec.allowReg && word&^uint32(0x00df1fef) == spec.rawBase
+		immediate := spec.allowImm && word&^uint32(0x00c01fef) == spec.rawImmBase
+		if !regular && !immediate {
+			continue
+		}
+		width := "BHSD"[size]
+		second := Operand{Kind: OpImm, ImmIsFloat: true}
+		if regular {
+			second = Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>16&31, width))}
+		}
+		return Instr{Op: op, Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+			second,
+			{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))},
+			{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.Z", word>>10&7))},
+			{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%c", word&15, width))},
+		}}, true
+	}
+	return Instr{}, false
 }
 
 // decodeARM64RawSVEIntegerCompare covers every Go 1.27 integer compare row.

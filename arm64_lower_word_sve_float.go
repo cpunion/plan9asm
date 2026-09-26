@@ -8,8 +8,6 @@ const (
 	arm64RawSVEFloatAdd arm64RawSVEFloatKind = iota
 	arm64RawSVEFloatSub
 	arm64RawSVEFloatMul
-	arm64RawSVEFloatFMLA
-	arm64RawSVEFloatFMAD
 	arm64RawSVEFloatFADDV
 	arm64RawSVEFloatFADDA
 )
@@ -47,10 +45,13 @@ func (c *arm64Ctx) storeRawSVEFloatVector(index, elementBits int, value string, 
 
 // decodeARM64RawSVEFloat covers the scalar-vector SVE floating arithmetic
 // encodings emitted by Go's generated assembly. The destructive predicated
-// forms keep Zd as their first operand; FMLA/FMAD use the two encoded source
-// vectors and accumulate into Zd.
+// forms keep Zd as their first operand. FMA has its own complete decoder;
+// never let a relaxed arithmetic mask consume a neighboring opcode family.
 func decodeARM64RawSVEFloat(word uint32) (arm64RawSVEFloat, bool) {
 	form := arm64RawSVEFloat{elementBits: 8 << (int(word>>22) & 3)}
+	if form.elementBits == 8 {
+		return arm64RawSVEFloat{}, false
+	}
 	switch {
 	case word&0xff20fc00 == 0x65000000:
 		form.kind = arm64RawSVEFloatAdd
@@ -67,36 +68,22 @@ func decodeARM64RawSVEFloat(word uint32) (arm64RawSVEFloat, bool) {
 		form.first = int(word>>5) & 31
 		form.second = int(word>>16) & 31
 		form.destination = int(word) & 31
-	case word&0xff20e000 == 0x65008000:
+	case word&0xff3fe000 == 0x65008000:
 		form.kind = arm64RawSVEFloatAdd
 		form.predicated = true
 		form.first = int(word>>5) & 31
 		form.destination = int(word) & 31
 		form.predicate = int(word>>10) & 7
-	case word&0xff20e000 == 0x65008400:
+	case word&0xff3fe000 == 0x65018000:
 		form.kind = arm64RawSVEFloatSub
 		form.predicated = true
 		form.first = int(word>>5) & 31
 		form.destination = int(word) & 31
 		form.predicate = int(word>>10) & 7
-	case word&0xff20e000 == 0x65008800:
+	case word&0xff3fe000 == 0x65028000:
 		form.kind = arm64RawSVEFloatMul
 		form.predicated = true
 		form.first = int(word>>5) & 31
-		form.destination = int(word) & 31
-		form.predicate = int(word>>10) & 7
-	case word&0xff20e000 == 0x65200000:
-		form.kind = arm64RawSVEFloatFMLA
-		form.predicated = true
-		form.first = int(word>>5) & 31
-		form.second = int(word>>16) & 31
-		form.destination = int(word) & 31
-		form.predicate = int(word>>10) & 7
-	case word&0xff20e000 == 0x65208000:
-		form.kind = arm64RawSVEFloatFMAD
-		form.predicated = true
-		form.first = int(word>>5) & 31
-		form.second = int(word>>16) & 31
 		form.destination = int(word) & 31
 		form.predicate = int(word>>10) & 7
 	case word&0xff20e000 == 0x65002000:
@@ -104,7 +91,7 @@ func decodeARM64RawSVEFloat(word uint32) (arm64RawSVEFloat, bool) {
 		form.predicate = int(word>>10) & 7
 		if word&0x001f0000 == 0 {
 			form.kind = arm64RawSVEFloatFADDV
-			form.first = form.destination
+			form.first = int(word>>5) & 31
 		} else if word&0x001f0000 == 0x00180000 {
 			form.kind = arm64RawSVEFloatFADDA
 			form.first = int(word>>5) & 31
@@ -118,110 +105,36 @@ func decodeARM64RawSVEFloat(word uint32) (arm64RawSVEFloat, bool) {
 }
 
 func (c *arm64Ctx) lowerRawSVEFloat(form arm64RawSVEFloat) error {
-	switch form.kind {
-	case arm64RawSVEFloatFADDV, arm64RawSVEFloatFADDA:
-		return c.lowerRawSVEFloatReduction(form)
+	// Raw bytes and named syntax must share semantics, including predicate
+	// merging, exact reduction order, and scalar destination lane clearing.
+	if form.kind == arm64RawSVEFloatFADDV || form.kind == arm64RawSVEFloatFADDA {
+		kind := arm64SVEFloatAddReduce
+		if form.kind == arm64RawSVEFloatFADDA {
+			kind = arm64SVEFloatAddAccumulate
+		}
+		return c.lowerARM64SVEAddReductionForm(
+			arm64SVEAddReductionSpec{kind: kind, elementBits: form.elementBits},
+			arm64SVEAddReductionForm{elementBits: form.elementBits, source: form.first,
+				predicate: form.predicate, destination: form.destination},
+			Reg(fmt.Sprintf("V%d", form.destination)))
 	}
-	_, _, err := arm64SVEVectorType(form.elementBits)
-	if err != nil {
-		return err
-	}
-	result := c.newTmp()
-	var vectorType string
-	if form.kind == arm64RawSVEFloatFMLA || form.kind == arm64RawSVEFloatFMAD {
-		first, vt, err := c.loadRawSVEFloatVector(form.first, form.elementBits)
-		if err != nil {
-			return err
-		}
-		vectorType = vt
-		second, _, err := c.loadRawSVEFloatVector(form.second, form.elementBits)
-		if err != nil {
-			return err
-		}
-		old, _, err := c.loadRawSVEFloatVector(form.destination, form.elementBits)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.fma.nxv%df%d(%s %s, %s %s, %s %s)\n", result, vectorType, 128/form.elementBits, form.elementBits, vectorType, first, vectorType, second, vectorType, old)
-	} else {
-		first, vt, err := c.loadRawSVEFloatVector(form.first, form.elementBits)
-		if err != nil {
-			return err
-		}
-		vectorType = vt
-		second := first
-		if !form.predicated {
-			second, _, err = c.loadRawSVEFloatVector(form.second, form.elementBits)
-			if err != nil {
-				return err
-			}
-		}
-		op := map[arm64RawSVEFloatKind]string{
-			arm64RawSVEFloatAdd: "fadd",
-			arm64RawSVEFloatSub: "fsub",
-			arm64RawSVEFloatMul: "fmul",
-		}[form.kind]
-		if form.predicated {
-			old, _, err := c.loadRawSVEFloatVector(form.destination, form.elementBits)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintf(c.b, "  %%%s = %s %s %s, %s\n", result, op, vectorType, old, second)
-		} else {
-			fmt.Fprintf(c.b, "  %%%s = %s %s %s, %s\n", result, op, vectorType, first, second)
-		}
-	}
-	value := "%" + result
-	if form.predicated {
-		predicate, predicateType, err := c.loadPRegElements(form.predicate, form.elementBits)
-		if err != nil {
-			return err
-		}
-		old, _, err := c.loadRawSVEFloatVector(form.destination, form.elementBits)
-		if err != nil {
-			return err
-		}
-		selected := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select %s %s, %s %s, %s %s\n", selected, predicateType, predicate, vectorType, value, vectorType, old)
-		value = "%" + selected
-	}
-	return c.storeRawSVEFloatVector(form.destination, form.elementBits, value, vectorType)
-}
 
-func (c *arm64Ctx) lowerRawSVEFloatReduction(form arm64RawSVEFloat) error {
-	sourceIndex := form.destination
-	if form.kind == arm64RawSVEFloatFADDA {
-		sourceIndex = form.first
+	first, second := form.first, form.second
+	if form.predicated {
+		first, second = form.destination, form.first
 	}
-	source, vectorType, err := c.loadZRegElements(sourceIndex, form.elementBits)
-	if err != nil {
-		return err
+	if form.kind == arm64RawSVEFloatMul {
+		return c.lowerARM64SVEFloatMultiplyForm(arm64SVEFloatMultiplyForm{
+			elementBits: form.elementBits, first: first, second: second,
+			predicate: form.predicate, destination: form.destination, predicated: form.predicated,
+		})
 	}
-	predicate, predicateType, err := c.loadPRegElements(form.predicate, form.elementBits)
-	if err != nil {
-		return err
+	op := Op("ZFADD")
+	if form.kind == arm64RawSVEFloatSub {
+		op = "ZFSUB"
 	}
-	masked := c.newTmp()
-	floatingType := map[int]string{16: "half", 32: "float", 64: "double"}[form.elementBits]
-	if floatingType == "" {
-		return fmt.Errorf("unsupported ARM64 SVE floating element width %d", form.elementBits)
-	}
-	floatingVectorType := fmt.Sprintf("<vscale x %d x %s>", 128/form.elementBits, floatingType)
-	if vectorType != floatingVectorType {
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to %s\n", converted, vectorType, source, floatingVectorType)
-		source = "%" + converted
-	}
-	zero := fmt.Sprintf("%s zeroinitializer", floatingVectorType)
-	fmt.Fprintf(c.b, "  %%%s = select %s %s, %s %s, %s\n", masked, predicateType, predicate, floatingVectorType, source, zero)
-	initial := fmt.Sprintf("0.000000e+00")
-	if form.kind == arm64RawSVEFloatFADDA {
-		initial, err = c.loadARM64ScalarFloatReg(Reg(fmt.Sprintf("F%d", form.destination)), form.elementBits)
-		if err != nil {
-			return err
-		}
-	}
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.vector.reduce.fadd.nxv%df%d(%s %s, %s %%%s)\n", result, floatingType, 128/form.elementBits, form.elementBits, floatingType, initial, floatingVectorType, masked)
-	return c.storeARM64ScalarFloatReg(Reg(fmt.Sprintf("F%d", form.destination)), form.elementBits, "%"+result)
+	return c.lowerARM64SVEFloatAddSubForm(arm64SVEFloatAddSubSpecs[op], arm64SVEFloatAddSubForm{
+		elementBits: form.elementBits, first: first, second: second,
+		predicate: form.predicate, destination: form.destination, predicated: form.predicated,
+	})
 }

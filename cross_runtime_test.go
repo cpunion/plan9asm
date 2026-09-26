@@ -22,6 +22,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_count_index", func(t *testing.T) {
 		testARM64RawSVECountIndexRuntime(t, llc)
 	})
+	t.Run("arm64_raw_sve_float", func(t *testing.T) {
+		testARM64RawSVEFloatRuntime(t, llc)
+	})
+	t.Run("arm64_raw_sve_float_compare", func(t *testing.T) {
+		testARM64RawSVEFloatCompareRuntime(t, llc)
+	})
 	t.Run("arm64_raw_scalar_abd_mul", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64ScalarABDMulRuntime(t, triple)
