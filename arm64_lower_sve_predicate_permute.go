@@ -9,18 +9,46 @@ type arm64SVEPredicatePermuteSpec struct {
 	intrinsic string
 	inputs    int
 	unpack    bool
+	rawBase   uint32
 }
 
 var arm64SVEPredicatePermuteSpecs = map[Op]arm64SVEPredicatePermuteSpec{
-	"PREV":     {intrinsic: "rev", inputs: 1},
-	"PTRN1":    {intrinsic: "trn1", inputs: 2},
-	"PTRN2":    {intrinsic: "trn2", inputs: 2},
-	"PUZP1":    {intrinsic: "uzp1", inputs: 2},
-	"PUZP2":    {intrinsic: "uzp2", inputs: 2},
-	"PZIP1":    {intrinsic: "zip1", inputs: 2},
-	"PZIP2":    {intrinsic: "zip2", inputs: 2},
-	"PPUNPKHI": {intrinsic: "punpkhi", inputs: 1, unpack: true},
-	"PPUNPKLO": {intrinsic: "punpklo", inputs: 1, unpack: true},
+	"PREV":     {intrinsic: "rev", inputs: 1, rawBase: 0x05344000},
+	"PTRN1":    {intrinsic: "trn1", inputs: 2, rawBase: 0x05205000},
+	"PTRN2":    {intrinsic: "trn2", inputs: 2, rawBase: 0x05205400},
+	"PUZP1":    {intrinsic: "uzp1", inputs: 2, rawBase: 0x05204800},
+	"PUZP2":    {intrinsic: "uzp2", inputs: 2, rawBase: 0x05204c00},
+	"PZIP1":    {intrinsic: "zip1", inputs: 2, rawBase: 0x05204000},
+	"PZIP2":    {intrinsic: "zip2", inputs: 2, rawBase: 0x05204400},
+	"PPUNPKHI": {intrinsic: "punpkhi", inputs: 1, unpack: true, rawBase: 0x05314000},
+	"PPUNPKLO": {intrinsic: "punpklo", inputs: 1, unpack: true, rawBase: 0x05304000},
+}
+
+func decodeARM64RawSVEPredicatePermute(word uint32) (Instr, bool) {
+	for op, spec := range arm64SVEPredicatePermuteSpecs {
+		variableBits := uint32(0x000001ef) // Pn[8:5], Pd[3:0]; bit 4/9 are fixed.
+		if !spec.unpack {
+			variableBits |= 0x00c00000
+		}
+		if spec.inputs == 2 {
+			variableBits |= 0x000f0000
+		}
+		if word&^variableBits != spec.rawBase {
+			continue
+		}
+		width := "BHSD"[word>>22&3]
+		operand := func(number uint32, arrangement byte) Operand {
+			return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%c", number, arrangement))}
+		}
+		args := []Operand{operand(word>>5&15, width), operand(word&15, width)}
+		if spec.unpack {
+			args = []Operand{operand(word>>5&15, 'B'), operand(word&15, 'H')}
+		} else if spec.inputs == 2 {
+			args = append([]Operand{operand(word>>16&15, width)}, args...)
+		}
+		return Instr{Op: op, Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
+	}
+	return Instr{}, false
 }
 
 func (c *arm64Ctx) lowerARM64SVEPredicatePermute(op Op, ins Instr) (ok bool, terminated bool, err error) {
