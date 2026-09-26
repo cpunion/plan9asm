@@ -136,7 +136,8 @@ expression and an independently rejected LLVM 22 encoding can be
 version into a disposable workspace and rechecks every witness. A changed
 file, decodable word or missing LLVM 22 decoder fails the candidate; a skip
 never contributes to passed candidates or translation counts. Reports and
-the assembly ledger retain the reason and witnesses.
+the assembly ledger retain the reason and witnesses; progress and aggregate
+verification compare them with the current pinned manifest.
 
 Schema 4 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22

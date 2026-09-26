@@ -333,8 +333,8 @@ func discoveryCandidateShard(candidate discoveryCandidate, shardCount int) int {
 	return int(binary.BigEndian.Uint64(sum[:8]) % uint64(shardCount))
 }
 
-func verifyDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity) error {
-	progress, err := collectDiscoveryProgress(ledgerPath, reportsPath, expectedTargets, source, 0)
+func verifyDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity, repoRoot ...string) error {
+	progress, err := collectDiscoveryProgress(ledgerPath, reportsPath, expectedTargets, source, 0, repoRoot...)
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func verifyDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTarget
 // The passing gate and the progress view deliberately share every integrity
 // check. Missing whole shards and genuine failures are useful progress, but
 // incomplete, stale or mixed-input reports are never evidence of a pass.
-func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity, progress *discoveryProgress) error {
+func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets []string, source discoverySourceIdentity, skips map[string]discoveryInvalidMachineCodeSkip, progress *discoveryProgress) error {
 	ledgerSHA, err := discoveryLedgerFingerprint(ledgerPath)
 	if err != nil {
 		return err
@@ -464,6 +464,11 @@ func auditDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTargets
 			}
 			if !equalDiscoveryStrings(result.DiscoveredAsmFiles, candidate.AsmFiles) {
 				return fmt.Errorf("%s: result %s assembly inventory %v does not match ledger %v", filePath, key, result.DiscoveredAsmFiles, candidate.AsmFiles)
+			}
+			if result.Status == discoveryStatusSkippedInvalidSource && skips != nil {
+				if !invalidSourceSkipMatchesResult(skips[key], result) {
+					return fmt.Errorf("%s: result %s invalid-source skip differs from the pinned manifest", filePath, key)
+				}
 			}
 			seenCandidates[key] = filePath
 			outcomes[key] = discoveryCandidateProgress{

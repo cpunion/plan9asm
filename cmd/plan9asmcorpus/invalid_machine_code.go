@@ -145,6 +145,19 @@ func validateInvalidSourceReportEvidence(result discoveryCorpusResult) error {
 	return nil
 }
 
+func invalidSourceSkipMatchesResult(skip discoveryInvalidMachineCodeSkip, result discoveryCorpusResult) bool {
+	if skip.Module != result.Module || skip.Version != result.Version ||
+		skip.Reason != result.InvalidSourceReason || len(skip.Evidence) != len(result.InvalidSourceEvidence) {
+		return false
+	}
+	for i, item := range skip.Evidence {
+		if item != result.InvalidSourceEvidence[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func rawWordFromEvidence(item discoveryInvalidMachineCodeEvidence) (uint32, error) {
 	if item.MacroInvocation == "" {
 		match := rawWordPattern.FindStringSubmatch(strings.TrimSpace(item.SourceExpression))

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -78,7 +79,23 @@ func TestDiscoveryProgressPreservesInvalidSourceSkipReasonInAssemblyLedger(t *te
 	if err := writeDiscoveryCorpusReport(path, report); err != nil {
 		t.Fatal(err)
 	}
-	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	repoRoot := t.TempDir()
+	manifestPath := filepath.Join(repoRoot, "testdata", "corpus", "invalid-machine-code.json")
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := json.Marshal(discoveryInvalidMachineCodeManifest{
+		SchemaVersion: 1,
+		Skips: []discoveryInvalidMachineCodeSkip{{
+			Module: result.Module, Version: result.Version,
+			Reason: result.InvalidSourceReason, Evidence: result.InvalidSourceEvidence,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, manifestPath, string(manifest))
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2, repoRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,6 +115,13 @@ func TestDiscoveryProgressPreservesInvalidSourceSkipReasonInAssemblyLedger(t *te
 		if candidate.Status == discoveryStatusSkippedInvalidSource {
 			if candidate.InvalidSourceReason != result.InvalidSourceReason || len(candidate.InvalidSourceEvidence) != 1 {
 				t.Fatalf("skip reason/evidence lost: %+v", candidate)
+			}
+			report.Results[0].InvalidSourceReason = "unlisted reason"
+			if err := writeDiscoveryCorpusReport(path, report); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2, repoRoot); err == nil {
+				t.Fatal("report skip reason did not match pinned manifest")
 			}
 			return
 		}

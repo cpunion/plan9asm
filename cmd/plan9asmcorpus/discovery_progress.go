@@ -40,9 +40,23 @@ type discoveryProgress struct {
 	Candidates                []discoveryCandidateProgress `json:"candidates"`
 }
 
-func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, source discoverySourceIdentity, shardCount int) (discoveryProgress, error) {
+func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, source discoverySourceIdentity, shardCount int, repoRoot ...string) (discoveryProgress, error) {
 	if shardCount < 0 {
 		return discoveryProgress{}, fmt.Errorf("invalid discovery shard count %d", shardCount)
+	}
+	if len(repoRoot) > 1 {
+		return discoveryProgress{}, fmt.Errorf("discovery progress accepts at most one repository root")
+	}
+	var skips map[string]discoveryInvalidMachineCodeSkip
+	if len(repoRoot) == 1 {
+		var err error
+		skips, err = loadInvalidMachineCodeSkips(repoRoot[0])
+		if err != nil {
+			return discoveryProgress{}, err
+		}
+		if skips == nil {
+			skips = map[string]discoveryInvalidMachineCodeSkip{}
+		}
 	}
 	progress := discoveryProgress{
 		SchemaVersion:  1,
@@ -54,7 +68,7 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 		PendingShards:  []int{},
 		Candidates:     []discoveryCandidateProgress{},
 	}
-	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, &progress); err != nil {
+	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, &progress); err != nil {
 		// Never return a plausible partial total after detecting corrupt evidence.
 		return discoveryProgress{}, err
 	}

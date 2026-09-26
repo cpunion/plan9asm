@@ -149,7 +149,7 @@ func main() {
 		}
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
-		check(verifyDiscoveryCorpusReports(*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source))
+		check(verifyDiscoveryCorpusReports(*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, *repoRoot))
 		fmt.Printf("verified discovery corpus reports against %s\n", *discoveryLedger)
 		return
 	}
@@ -174,7 +174,7 @@ func main() {
 		}
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
-		progress, err := collectDiscoveryProgress(*discoveryLedger, *discoveryProgressReports, manifest.Targets, source, *discoveryShardCount)
+		progress, err := collectDiscoveryProgress(*discoveryLedger, *discoveryProgressReports, manifest.Targets, source, *discoveryShardCount, *repoRoot)
 		check(err)
 		finalSource, err := collectDiscoverySource(*repoRoot)
 		check(err)
