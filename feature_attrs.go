@@ -320,6 +320,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEAddSubWide(uint32(ins.Args[0].Imm)); ok {
 					add("+sve", "+sve2")
 				}
+				if decoded, ok := decodeARM64RawSVEMultiplyHigh(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+					if arm64SVEMultiplyHighNeedsSVE2(decoded) {
+						add("+sve2")
+					}
+				}
 				if decoded, ok := decodeARM64RawSVESplice(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if len(decoded.Args) == 3 {

@@ -5,9 +5,49 @@ import (
 	"strings"
 )
 
-var arm64SVEMultiplyHighIntrinsics = map[Op]string{
-	"ZSMULH": "smulh",
-	"ZUMULH": "umulh",
+type arm64SVEMultiplyHighSpec struct {
+	intrinsic       string
+	predicatedRaw   uint32
+	unpredicatedRaw uint32
+}
+
+var arm64SVEMultiplyHighIntrinsics = map[Op]arm64SVEMultiplyHighSpec{
+	"ZSMULH": {intrinsic: "smulh", predicatedRaw: 0x04120000, unpredicatedRaw: 0x04206800},
+	"ZUMULH": {intrinsic: "umulh", predicatedRaw: 0x04130000, unpredicatedRaw: 0x04206c00},
+}
+
+var arm64SVEMultiplyHighPredicatedRaw, arm64SVEMultiplyHighUnpredicatedRaw = arm64SVEMultiplyHighRawTables()
+
+func arm64SVEMultiplyHighRawTables() (map[uint32]Op, map[uint32]Op) {
+	predicated, unpredicated := make(map[uint32]Op), make(map[uint32]Op)
+	for op, spec := range arm64SVEMultiplyHighIntrinsics {
+		predicated[spec.predicatedRaw], unpredicated[spec.unpredicatedRaw] = op, op
+	}
+	return predicated, unpredicated
+}
+
+func decodeARM64RawSVEMultiplyHigh(word uint32) (Instr, bool) {
+	op, predicated := arm64SVEMultiplyHighPredicatedRaw[word&0xff3fe000]
+	first, second := word>>5&31, word>>16&31
+	if predicated {
+		first, second = word&31, first
+	} else {
+		var ok bool
+		op, ok = arm64SVEMultiplyHighUnpredicatedRaw[word&0xff20fc00]
+		if !ok {
+			return Instr{}, false
+		}
+	}
+	width := "BHSD"[word>>22&3]
+	reg := func(number uint32) Operand {
+		return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", number, width))}
+	}
+	args := []Operand{reg(second), reg(first)}
+	if predicated {
+		args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.M", word>>10&7))})
+	}
+	args = append(args, reg(word&31))
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
 }
 
 func arm64SVEMultiplyHighNeedsSVE2(ins Instr) bool {
@@ -15,7 +55,7 @@ func arm64SVEMultiplyHighNeedsSVE2(ins Instr) bool {
 }
 
 func (c *arm64Ctx) lowerARM64SVEMultiplyHigh(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	intrinsic, ok := arm64SVEMultiplyHighIntrinsics[op]
+	spec, ok := arm64SVEMultiplyHighIntrinsics[op]
 	if !ok {
 		return false, false, nil
 	}
@@ -50,6 +90,7 @@ func (c *arm64Ctx) lowerARM64SVEMultiplyHigh(op Op, ins Instr) (ok bool, termina
 	if err != nil {
 		return true, false, err
 	}
+	intrinsic := spec.intrinsic
 	var predicateValue, predicateType string
 	if predicated {
 		predicateValue, predicateType, err = c.loadPRegElements(predicate, firstBits)
