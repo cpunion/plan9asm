@@ -52,6 +52,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_xar", func(t *testing.T) {
 		testARM64RawSVEXARRuntime(t, llc)
 	})
+	t.Run("arm64_raw_sve_splice", func(t *testing.T) {
+		testARM64RawSVESpliceRuntime(t, llc)
+	})
 	t.Run("arm64_raw_pool_control_flow", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir := arm64RawPoolControlFlowIR(t, triple)

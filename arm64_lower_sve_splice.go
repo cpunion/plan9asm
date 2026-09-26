@@ -5,6 +5,43 @@ import (
 	"strings"
 )
 
+func decodeARM64RawSVESplice(word uint32) (Instr, bool) {
+	base := word & 0xff3fe000
+	if base != 0x052c8000 && base != 0x052d8000 {
+		return Instr{}, false
+	}
+	width := "BHSD"[word>>22&3]
+	vector := func(index uint32) Operand {
+		return Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", index&31, width))}
+	}
+	destination, source := vector(word), vector(word>>5)
+	predicate := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d", word>>10&7))}
+	args := []Operand{source, destination, predicate, destination}
+	if base == 0x052d8000 {
+		list := Operand{Kind: OpRegList, RegList: []Reg{source.Reg, vector((word >> 5 & 31) + 1).Reg}}
+		args = []Operand{list, predicate, destination}
+	}
+	return Instr{Op: "ZSPLICE", Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
+}
+
+func (c *arm64Ctx) lowerARM64RawSVESplice(ins Instr) error {
+	var first, second, predicate, destination, width int
+	if len(ins.Args) == 3 {
+		// The architecture wraps Z31's second register to Z0, unlike the
+		// named Go grammar. Both paths share the same semantic form lowerer.
+		first, width, _ = arm64ParseSVEZElementReg(Operand{Kind: OpReg, Reg: ins.Args[0].RegList[0]})
+		second = (first + 1) % 32
+		predicate, _ = arm64ParseSVEPredicateBare(ins.Args[1], 7)
+		destination, _, _ = arm64ParseSVEZElementReg(ins.Args[2])
+	} else {
+		second, width, _ = arm64ParseSVEZElementReg(ins.Args[0])
+		destination, _, _ = arm64ParseSVEZElementReg(ins.Args[1])
+		first = destination
+		predicate, _ = arm64ParseSVEPredicateBare(ins.Args[2], 7)
+	}
+	return c.lowerARM64SVESpliceForm(first, second, predicate, destination, width)
+}
+
 func (c *arm64Ctx) lowerARM64SVESplice(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	if op != "ZSPLICE" {
 		return false, false, nil
@@ -43,24 +80,28 @@ func (c *arm64Ctx) lowerARM64SVESplice(op Op, ins Instr) (ok bool, terminated bo
 		}
 	}
 
+	return true, false, c.lowerARM64SVESpliceForm(first, second, predicate, destination, elementBits)
+}
+
+func (c *arm64Ctx) lowerARM64SVESpliceForm(first, second, predicate, destination, elementBits int) error {
 	predicateValue, predicateType, err := c.loadPRegElements(predicate, elementBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	firstValue, vectorType, err := c.loadZRegElements(first, elementBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	secondValue, _, err := c.loadZRegElements(second, elementBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	_, lanes, err := arm64SVEVectorType(elementBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.sve.splice.nxv%di%d(%s %s, %s %s, %s %s)\n",
 		result, vectorType, lanes, elementBits, predicateType, predicateValue, vectorType, firstValue, vectorType, secondValue)
-	return true, false, c.storeZRegElements(destination, elementBits, "%"+result)
+	return c.storeZRegElements(destination, elementBits, "%"+result)
 }

@@ -128,6 +128,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if decoded, ok := decodeARM64RawSVEXAR(word); ok {
 		return c.lowerARM64RawSVEXAR(decoded)
 	}
+	if decoded, ok := decodeARM64RawSVESplice(word); ok {
+		return c.lowerARM64RawSVESplice(decoded)
+	}
 	if decoded, ok := decodeARM64RawSVEReplicateScalar(word); ok {
 		_, _, err := c.lowerARM64SVEReplicateMemory(decoded.Op, decoded)
 		return err
