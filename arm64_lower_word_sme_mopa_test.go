@@ -6,6 +6,11 @@ import (
 )
 
 func TestARM64RawSMEOuterProductAndTileRegisterFields(t *testing.T) {
+	if form, ok := decodeARM64RawSMEOuterProduct(0x80800020); !ok ||
+		form.op != "fmopa" || form.first != 1 || form.second != 0 ||
+		form.firstPred != 0 || form.secondPred != 0 || form.sourceBits != 32 {
+		t.Fatalf("FMOPA ZA0.S with Z1/Z0 decode = %+v, %v", form, ok)
+	}
 	if form, ok := decodeARM64RawSMEOuterProduct(0x80c30002); !ok || form.tile != 2 || form.second != 3 || form.sourceBits != 64 {
 		t.Fatalf("FMOPA ZA2.D decode = %+v, %v", form, ok)
 	}
@@ -26,6 +31,7 @@ TEXT rawSMEOuterProduct(SB),$0-0
 	WORD $0xd503477f // SMSTART
 	WORD $0x2598e3e0 // PTRUE P0.S
 	WORD $0xc00800ff // ZERO {ZA}
+	WORD $0x80800020 // FMOPA ZA0.S, P0/M, P0/M, Z1.S, Z0.S
 	WORD $0x80810000 // FMOPA ZA0.S, P0/M, P0/M, Z0.S, Z1.S
 	WORD $0xc0820000 // MOV Z0.S, P0/M, ZA0H.S[W12, 0]
 	WORD $0x80c10000 // FMOPA ZA0.D, P0/M, P0/M, Z0.D, Z1.D
