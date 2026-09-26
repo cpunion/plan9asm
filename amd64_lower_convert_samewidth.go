@@ -18,6 +18,16 @@ type amd64SameWidthConversionSpec struct {
 	laneBits int
 	mode     amd64SameWidthConversionMode
 	sae      bool
+	rawOnly  bool
+}
+
+var amd64SameWidthConversionSpecs = map[Op]amd64SameWidthConversionSpec{
+	"VCVTDQ2PS":  {laneBits: 32, mode: amd64SameWidthIntToFloat},
+	"VCVTPS2DQ":  {laneBits: 32, mode: amd64SameWidthFloatToInt},
+	"VCVTTPS2DQ": {laneBits: 32, mode: amd64SameWidthFloatToIntTruncate, sae: true},
+	"VSQRTPD":    {laneBits: 64, mode: amd64SameWidthSqrt},
+	"VSQRTPS":    {laneBits: 32, mode: amd64SameWidthSqrt},
+	"VSQRTPH":    {laneBits: 16, mode: amd64SameWidthSqrt, rawOnly: true},
 }
 
 // lowerSameWidthPackedConversion implements all five opcodes sharing Go
@@ -29,20 +39,12 @@ func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, te
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
 	}
-	var spec amd64SameWidthConversionSpec
-	switch baseOp {
-	case "VCVTDQ2PS":
-		spec = amd64SameWidthConversionSpec{laneBits: 32, mode: amd64SameWidthIntToFloat}
-	case "VCVTPS2DQ":
-		spec = amd64SameWidthConversionSpec{laneBits: 32, mode: amd64SameWidthFloatToInt}
-	case "VCVTTPS2DQ":
-		spec = amd64SameWidthConversionSpec{laneBits: 32, mode: amd64SameWidthFloatToIntTruncate, sae: true}
-	case "VSQRTPD":
-		spec = amd64SameWidthConversionSpec{laneBits: 64, mode: amd64SameWidthSqrt}
-	case "VSQRTPS":
-		spec = amd64SameWidthConversionSpec{laneBits: 32, mode: amd64SameWidthSqrt}
-	default:
+	spec, recognized := amd64SameWidthConversionSpecs[Op(baseOp)]
+	if !recognized {
 		return false, false, nil
+	}
+	if spec.rawOnly && !ins.x86Encoded {
+		return true, false, fmt.Errorf("%s is absent from Go's named assembler table; raw encoding required", baseOp)
 	}
 
 	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
@@ -93,26 +95,19 @@ func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, te
 	}
 
 	lanes := byteWidth * 8 / spec.laneBits
-	var sourceBits string
-	if properties.broadcast {
-		scalar, err := c.evalIntSized(source, amd64IntegerTypeForBits(spec.laneBits))
+	mask := ""
+	if masked {
+		mask, err = c.loadK(ins.Args[1].Reg)
 		if err != nil {
 			return true, false, err
 		}
-		sourceBits = amd64SplatInteger(c, lanes, spec.laneBits, scalar)
-	} else {
-		bytes, err := c.loadPackedCompareBytes(source, byteWidth)
-		if err != nil {
-			return true, false, err
-		}
-		sourceBits = c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, spec.laneBits, bytes)
+	}
+	sourceBits, err := c.loadMaskedPackedCompareLanes(source, byteWidth, spec.laneBits, properties.broadcast, mask)
+	if err != nil {
+		return true, false, err
 	}
 	computedBits := c.emitSameWidthPackedConversion(spec, sourceBits, byteWidth, properties)
 	if masked {
-		mask, err := c.loadK(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
 		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
 		if err != nil {
 			return true, false, err
@@ -122,7 +117,7 @@ func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, te
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, computedBits, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitSameWidthPackedConversion(spec amd64SameWidthConversionSpec, sourceBits string, byteWidth int, properties amd64BinaryFloatingSuffix) string {

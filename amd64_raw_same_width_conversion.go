@@ -121,10 +121,14 @@ func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segm
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
-	if p0&0x0f != 1 {
+	half := p0&0x0f == 5 && opcode == 0x51 && p1&3 == 0
+	if p0&0x0f != 1 && !half {
 		return Instr{}, 0, false, nil
 	}
 	properties, recognized := decodedX86SameWidthConversionOpcode(opcode, p1&3)
+	if half {
+		properties = decodedX86SameWidthConversionProperties{op: "VSQRTPH", laneBytes: 2}
+	}
 	if !recognized {
 		return Instr{}, 0, false, nil
 	}
@@ -176,7 +180,7 @@ func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segm
 	xExt := int(^p0>>6) & 1
 	bExt := int(^p0>>5) & 1
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+	if mode == 32 && (maskNumber != 0 && !half || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register or mask in 32-bit mode")
 	}
 	source, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
@@ -208,5 +212,5 @@ func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segm
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: half}, modRMIndex + consumed, true, nil
 }

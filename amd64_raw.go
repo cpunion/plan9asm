@@ -5924,7 +5924,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 		0x5f: "VMAX",
 	}[opcode]
 	mapNumber := p0 & 0x0f
-	rawHalf := mapNumber == 5 && (p1&3 == 0 || p1&3 == 2) && opcode != 0x51
+	rawHalf := mapNumber == 5 && (p1&3 == 0 || p1&3 == 2)
 	rawHalfScalar := rawHalf && p1&3 == 2
 	if !recognized || mapNumber != 1 && !rawHalf {
 		return Instr{}, 0, false, nil

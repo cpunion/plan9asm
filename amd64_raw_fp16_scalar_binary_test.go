@@ -7,6 +7,7 @@ import (
 )
 
 var rawFP16ScalarBinaryOpcodes = map[byte]Op{
+	0x51: "VSQRTSH",
 	0x58: "VADDSH",
 	0x59: "VMULSH",
 	0x5c: "VSUBSH",
@@ -114,6 +115,9 @@ func TestDecodeRawFP16BinaryRIPLiteral(t *testing.T) {
 		{"scalar", encodeRawFP16ScalarBinary(0x58, 0, 1, 0, 2, 0, false, false, false), 2, "VADDSH"},
 		{"packed", encodeRawFP16Binary(0x58, 0, 1, 0, 2, 0, false, false, false), 16, "VADDPH"},
 		{"broadcast", encodeRawFP16Binary(0x58, 1, 1, 0, 2, 0, false, true, false), 2, "VADDPH.BCST"},
+		{"sqrt-scalar", encodeRawFP16ScalarBinary(0x51, 0, 1, 0, 2, 0, false, false, false), 2, "VSQRTSH"},
+		{"sqrt-packed", rawFP16PackedSqrt(0, 0, 2, 0, false, false, false), 16, "VSQRTPH"},
+		{"sqrt-broadcast", rawFP16PackedSqrt(1, 0, 2, 0, false, true, false), 2, "VSQRTPH.BCST"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code := append([]byte(nil), tc.code...)
@@ -185,7 +189,7 @@ func TestTranslateRawFP16ScalarBinaryLLVM22Targets(t *testing.T) {
 }
 
 func TestRawFP16ScalarRejectsNamedGoForms(t *testing.T) {
-	for _, op := range []Op{"VMOVSH", "VADDSH", "VSUBSH", "VMULSH", "VDIVSH", "VMINSH", "VMAXSH"} {
+	for _, op := range []Op{"VMOVSH", "VADDSH", "VSUBSH", "VMULSH", "VDIVSH", "VMINSH", "VMAXSH", "VSQRTSH"} {
 		t.Run(string(op), func(t *testing.T) {
 			source := fmt.Sprintf("TEXT namedHalf(SB),4,$0-0\n\t%s X0, X1, X2\n\tRET\n", op)
 			requireX86GoAssemblerResult(t, "amd64", source, false)

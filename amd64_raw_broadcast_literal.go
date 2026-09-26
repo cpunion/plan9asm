@@ -704,7 +704,7 @@ func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, 
 	switch p.opcode {
 	case 0x58, 0x59, 0x5c, 0x5d, 0x5e, 0x5f:
 	case 0x51:
-		if p.pp < 2 || half {
+		if p.pp < 2 && !half {
 			return Instr{}, 0, x86RawLiteralRange{}, false, nil
 		}
 	default:
@@ -725,9 +725,13 @@ func decodeX86RawBinaryFloatRIPData(code []byte, offset, mode int) (Instr, int, 
 			width = 8
 		}
 	}
+	decoder := decodedX86VEXBinaryFloatInstruction
+	if half && p.opcode == 0x51 && p.pp == 0 {
+		decoder = decodedX86SameWidthConversionInstruction
+	}
 	return x86RawRIPDataThroughDecoder(
 		code, offset, mode, modRMIndex, width,
-		decodedX86VEXBinaryFloatInstruction, "binary floating",
+		decoder, "binary floating",
 	)
 }
 

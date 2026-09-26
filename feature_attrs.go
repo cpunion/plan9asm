@@ -1075,6 +1075,9 @@ func isAMD64RawFP16Op(op string) bool {
 	if spec, ok := amd64FMA3Specs[Op(base)]; ok {
 		return spec.rawOnly && spec.laneBits == 16
 	}
+	if spec, ok := amd64SameWidthConversionSpecs[Op(base)]; ok {
+		return spec.rawOnly && spec.laneBits == 16
+	}
 	spec, ok := amd64BinaryFloatingSpecs[Op(base)]
 	return ok && spec.rawOnly && spec.laneBits == 16
 }

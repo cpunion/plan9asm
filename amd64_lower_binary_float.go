@@ -71,6 +71,7 @@ var amd64BinaryFloatingSpecs = map[Op]amd64BinaryFloatingSpec{
 	"VMINSD":    {laneBits: 64, mode: amd64BinaryFloatingMin, scalar: true, sae: true},
 	"VSQRTSS":   {laneBits: 32, mode: amd64BinaryFloatingSqrt, scalar: true},
 	"VSQRTSD":   {laneBits: 64, mode: amd64BinaryFloatingSqrt, scalar: true},
+	"VSQRTSH":   {laneBits: 16, mode: amd64BinaryFloatingSqrt, scalar: true, rawOnly: true},
 	"VSCALEFPS": {laneBits: 32, mode: amd64BinaryFloatingScale},
 	"VSCALEFPD": {laneBits: 64, mode: amd64BinaryFloatingScale},
 	"VSCALEFSS": {laneBits: 32, mode: amd64BinaryFloatingScale, scalar: true},
