@@ -9,7 +9,7 @@
 {"module":"github.com/cristian-guerrero/go-indexing-mcp","version":"v0.8.0","status":"pending"}
 {"module":"github.com/emmansun/sm9","version":"v0.2.0","status":"pending"}
 {"module":"github.com/fabianofranz/origin","version":"v1.0.1","status":"pending"}
-{"module":"github.com/hcrosse/arrow-go/v18","version":"v18.5.2","status":"passed"}
+{"module":"github.com/hcrosse/arrow-go/v18","version":"v18.5.2","status":"pending"}
 {"module":"github.com/kilnfi/pgeth","version":"v0.0.0-20250923182716-29a05ae19e06","status":"pending"}
 {"module":"github.com/lemonhx/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/manifoldfinance/mev-geth","version":"v1.10.19","status":"pending"}

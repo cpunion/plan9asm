@@ -9,4 +9,4 @@
 {"module":"github.com/liexusong/qrpc","version":"v0.0.0-20190821154145-f59ff7b19f1f","status":"pending"}
 {"module":"github.com/tHinqa/outside","version":"v0.0.0-20131227223926-48a9c99b2195","status":"pending"}
 {"module":"github.com/tiefgang-gmbh/gvisor","version":"v0.0.0-20260914201203-f2f951cb50be","status":"pending"}
-{"module":"github.com/wemixarchive/stable-one","version":"v1.1.0","status":"passed"}
+{"module":"github.com/wemixarchive/stable-one","version":"v1.1.0","status":"pending"}

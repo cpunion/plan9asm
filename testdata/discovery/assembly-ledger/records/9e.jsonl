@@ -14,7 +14,7 @@
 {"module":"github.com/keybase/go-crypto","version":"v0.0.0-20200123153347-de78d2cb44f4","status":"pending"}
 {"module":"github.com/kolbe/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/orca-zhang/webp","version":"v0.0.0-20260704102930-25bc43b74534","status":"pending"}
-{"module":"github.com/textnode/fencer","version":"v0.0.0-20121219195347-6baed0e5ef9a","status":"pending"}
+{"module":"github.com/textnode/fencer","version":"v0.0.0-20121219195347-6baed0e5ef9a","status":"passed"}
 {"module":"github.com/theapemachine/qpool","version":"v1.2.6","status":"pending"}
 {"module":"github.com/thesyncim/goav","version":"v0.0.0-20260713225815-2d9b65b490f8","status":"pending"}
 {"module":"gitlab.com/yawning/secp256k1-voi","version":"v0.0.0-20230925100816-f2616030848b","status":"pending"}

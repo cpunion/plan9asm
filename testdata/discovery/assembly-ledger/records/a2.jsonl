@@ -4,7 +4,7 @@
 {"module":"github.com/cosmos/go-ethereum","version":"v1.17.2-cosmos-1","status":"pending"}
 {"module":"github.com/ethereum/Go-ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/h0rn3t/gopolars","version":"v0.5.0","status":"pending"}
-{"module":"github.com/lhyPingcap/tidb","version":"v1.0.8","status":"not_applicable"}
+{"module":"github.com/lhyPingcap/tidb","version":"v1.0.8","status":"pending"}
 {"module":"github.com/liggitt/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/nebulasio/go-nebulas","version":"v2.1.0+incompatible","status":"pending"}
 {"module":"github.com/ryt-io/libevm","version":"v1.16.2","status":"pending"}

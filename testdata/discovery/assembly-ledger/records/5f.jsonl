@@ -1,9 +1,9 @@
 {"module":"git.haikiri.ru/golang/image.git","version":"v0.45.0","status":"pending"}
-{"module":"git.schwanenlied.me/yawning/kyber.git","version":"v0.0.0-20180530164001-a270899bd22c","status":"passed"}
+{"module":"git.schwanenlied.me/yawning/kyber.git","version":"v0.0.0-20180530164001-a270899bd22c","status":"pending"}
 {"module":"github.com/JmPotato/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/abakCroc/fyne/v2","version":"v2.7.4","status":"pending"}
 {"module":"github.com/databricks/m3","version":"v1.5.0","status":"pending"}
-{"module":"github.com/dobbyvpn/fyne/v2","version":"v2.0.0-20260918171943-e3f1dd52c4ab","status":"not_applicable"}
+{"module":"github.com/dobbyvpn/fyne/v2","version":"v2.0.0-20260918171943-e3f1dd52c4ab","status":"pending"}
 {"module":"github.com/fedarisha/xray-core-fedarisha","version":"v1.260608.0","status":"pending"}
 {"module":"github.com/go101/go/src","version":"v0.0.0-20251113215531-17a02b910697","status":"pending"}
 {"module":"github.com/gogf/gkafka","version":"v1.0.0","status":"pending"}

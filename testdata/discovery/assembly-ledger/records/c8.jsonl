@@ -1,5 +1,5 @@
 {"module":"github.com/Aurorachain-io/go-aoa","version":"v0.0.0-20240326064047-d85cb2053876","status":"pending"}
-{"module":"github.com/ConsenSys/quorum","version":"v1.10.26","status":"pending"}
+{"module":"github.com/ConsenSys/quorum","version":"v1.10.26","status":"passed"}
 {"module":"github.com/GaussDing/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/capricornus007/sing-tun","version":"v0.9.3","status":"pending"}
 {"module":"github.com/dlfld/ruijie-auto-login","version":"v0.0.0-20251207070704-f64d77ceda50","status":"pending"}

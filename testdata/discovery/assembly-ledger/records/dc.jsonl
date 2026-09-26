@@ -12,7 +12,7 @@
 {"module":"github.com/grailbio/bio","version":"v0.0.0-20200818183458-d966d878d120","status":"pending"}
 {"module":"github.com/irootyou/websocket","version":"v0.0.0-20241107130731-1253b774ead7","status":"pending"}
 {"module":"github.com/nyan233/littlerpc","version":"v0.4.7","status":"pending"}
-{"module":"github.com/rorkai/app-store-connect-cli","version":"v0.0.0-20260922172443-c5239885dc29","status":"passed"}
+{"module":"github.com/rorkai/app-store-connect-cli","version":"v0.0.0-20260922172443-c5239885dc29","status":"pending"}
 {"module":"github.com/sjy-dv/nnv","version":"v0.0.0-20250323072807-1624b2fbce7b","status":"pending"}
 {"module":"github.com/sliverarmory/reflektor","version":"v0.0.8","status":"pending"}
 {"module":"github.com/tomekit/common","version":"v0.0.0-20260424095045-b08642b6e25d","status":"pending"}

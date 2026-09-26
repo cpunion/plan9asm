@@ -6,7 +6,7 @@
 {"module":"github.com/SagerNet/v2ray-core/v5","version":"v5.0.16","status":"pending"}
 {"module":"github.com/alexandercarlis2-dotcom/websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/amangupta00011/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
-{"module":"github.com/bane-labs/go-ethereum","version":"v0.6.2","status":"pending"}
+{"module":"github.com/bane-labs/go-ethereum","version":"v0.6.2","status":"passed"}
 {"module":"github.com/birdayz/jton-go","version":"v0.0.0-20260623212300-fd5a49b48ea1","status":"pending"}
 {"module":"github.com/blocktree/OpenWallet","version":"v1.7.0","status":"pending"}
 {"module":"github.com/cocktail828/go-tools","version":"v0.3.25","status":"pending"}

@@ -6,7 +6,7 @@
 {"module":"github.com/benjivesterby/go-fn-dsa","version":"v0.0.0-20250330155737-e24833f8637c","status":"pending"}
 {"module":"github.com/cespare/xxHash/v2","version":"v2.3.0","status":"pending"}
 {"module":"github.com/chenxiaolong/golang-x-sys","version":"v0.46.0-basicsync.0","status":"pending"}
-{"module":"github.com/doriancoin-project/dsvd/ltcutil","version":"v1.1.5","status":"pending"}
+{"module":"github.com/doriancoin-project/dsvd/ltcutil","version":"v1.1.5","status":"passed"}
 {"module":"github.com/fwessels/go-cv-simd","version":"v0.0.0-20170420180047-8cf4257fbf24","status":"pending"}
 {"module":"github.com/jmhodges/crypto","version":"v0.0.0-20260714033321-10b54ffa51b1","status":"pending"}
 {"module":"github.com/mccoysc/go-ethereum","version":"v0.0.0-20260211230034-5eb0f96a85dc","status":"pending"}

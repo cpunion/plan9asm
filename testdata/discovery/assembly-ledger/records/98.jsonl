@@ -17,5 +17,5 @@
 {"module":"github.com/netbsd/pkgsrc","version":"v0.0.0-20260922205539-a97271e6ca87","status":"pending"}
 {"module":"github.com/prysmaticlabs/bazel-go-ethereum","version":"v0.0.0-20211019000226-435ab2ab11d3","status":"pending"}
 {"module":"github.com/xiaokangwang/netstack","version":"v0.0.0-20180523013319-ccb7ae6947f6","status":"pending"}
-{"module":"gitlab.com/xaydras/DEAI","version":"v0.1.0","status":"pending"}
+{"module":"gitlab.com/xaydras/DEAI","version":"v0.1.0","status":"passed"}
 {"module":"lukechampine.com/US","version":"v0.19.5","status":"pending"}

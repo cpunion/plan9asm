@@ -10,4 +10,4 @@
 {"module":"github.com/wshwsh12/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/xll-gen/shm","version":"v0.9.1","status":"pending"}
 {"module":"github.com/zkmips/zkmips/crates/go-runtime/zkvm_runtime","version":"v0.0.0-20260904015846-89a2b745b5c2","status":"pending"}
-{"module":"gitlab.com/yawning/chacha20.git","version":"v0.0.0-20230427033715-7877545b1b37","status":"pending"}
+{"module":"gitlab.com/yawning/chacha20.git","version":"v0.0.0-20230427033715-7877545b1b37","status":"passed"}

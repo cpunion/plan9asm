@@ -14,11 +14,11 @@
 {"module":"github.com/codahale/aesnicheck","version":"v0.0.0-20140702143623-349fcc471aac","status":"pending"}
 {"module":"github.com/da3zKi7/saferith","version":"v0.33.0","status":"pending"}
 {"module":"github.com/ibuler/crypto","version":"v0.0.0-20190715092645-911d13b3bf6e","status":"pending"}
-{"module":"github.com/iden3/go-rapidsnark/verifier","version":"v0.0.5","status":"pending"}
+{"module":"github.com/iden3/go-rapidsnark/verifier","version":"v0.0.5","status":"passed"}
 {"module":"github.com/kilic/bls12-381","version":"v0.1.0","status":"pending"}
 {"module":"github.com/kortschak/gonum","version":"v0.8.1","status":"pending"}
 {"module":"github.com/laoxiechuzheng/Xray-core","version":"v1.260327.0-laoxie.1","status":"pending"}
-{"module":"github.com/maxgyver83/fyne/v2","version":"v2.0.0-20260708203007-26a8e80cfa2b","status":"not_applicable"}
+{"module":"github.com/maxgyver83/fyne/v2","version":"v2.0.0-20260708203007-26a8e80cfa2b","status":"pending"}
 {"module":"github.com/metalmatze/parquet-go","version":"v0.0.0-20230209224803-1d85e8136681","status":"pending"}
 {"module":"github.com/myitcvscratch/tools","version":"v0.0.0-20190830223141-573d9926052a","status":"pending"}
 {"module":"github.com/orgtestcodacy11krepos110mb/repo-2622-please/test/go_rules","version":"v0.0.0-20230130131442-711d2b16eb3f","status":"pending"}

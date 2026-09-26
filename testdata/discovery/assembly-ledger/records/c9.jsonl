@@ -6,7 +6,7 @@
 {"module":"github.com/cbysal/go-ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/dterei/gotsc","version":"v0.0.0-20160722215413-e78f872945c6","status":"pending"}
 {"module":"github.com/glycerine/rpc25519","version":"v1.46.0","status":"pending"}
-{"module":"github.com/google/gvisor","version":"v0.0.0-20260922222726-edc61702468b","status":"pending"}
+{"module":"github.com/google/gvisor","version":"v0.0.0-20260922222726-edc61702468b","status":"passed"}
 {"module":"github.com/malivvan/tls","version":"v1.0.0","status":"pending"}
 {"module":"github.com/njgheorghita/go-ethereum","version":"v1.5.9","status":"pending"}
 {"module":"github.com/oasisprotocol/curve25519-voi","version":"v0.0.0-20251114093237-2ab5a27a1729","status":"pending"}

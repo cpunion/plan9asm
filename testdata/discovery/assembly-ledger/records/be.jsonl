@@ -11,8 +11,8 @@
 {"module":"github.com/getvocal/opentelemetry-ebpf-profiler","version":"v0.0.202601","status":"pending"}
 {"module":"github.com/gh6324/sunnynet","version":"v1.0.4","status":"pending"}
 {"module":"github.com/goceleris/celeris","version":"v1.5.11","status":"pending"}
-{"module":"github.com/jahru23/xray-core","version":"v1.260327.0","status":"pending"}
-{"module":"github.com/neogeny/ogopego","version":"v1.2.0","status":"pending"}
+{"module":"github.com/jahru23/xray-core","version":"v1.260327.0","status":"passed"}
+{"module":"github.com/neogeny/ogopego","version":"v1.2.0","status":"not_applicable"}
 {"module":"github.com/platonnetwork/alaya-go","version":"v0.0.0-20210205025322-34c3857c9fb2","status":"pending"}
 {"module":"github.com/rayen-hamza/nanovec-go","version":"v0.0.0-20260817210001-fa960443d0d6","status":"pending"}
 {"module":"github.com/runtimelink/module","version":"v0.0.0-20230907105430-7cd22395ff8c","status":"pending"}

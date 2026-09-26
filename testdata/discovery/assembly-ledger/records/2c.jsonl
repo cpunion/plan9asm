@@ -8,7 +8,7 @@
 {"module":"github.com/deolan/gosip","version":"v0.0.0-20260616071536-7dc19f3b1bae","status":"pending"}
 {"module":"github.com/easyxray/Xray-core","version":"v1.260206.0","status":"pending"}
 {"module":"github.com/ebitengine/PureGo","version":"v0.11.1","status":"pending"}
-{"module":"github.com/ericsyh/tidb","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/ericsyh/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/evacchi/wazero","version":"v1.7.0","status":"pending"}
 {"module":"github.com/go-again/az","version":"v0.5.0","status":"pending"}
 {"module":"github.com/gokern/werr/v2","version":"v2.0.0","status":"pending"}

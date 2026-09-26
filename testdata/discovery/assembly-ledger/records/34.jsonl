@@ -25,7 +25,7 @@
 {"module":"github.com/segmentio/asm","version":"v1.2.1","status":"pending"}
 {"module":"github.com/seiflotfy/onpair","version":"v0.0.0-20260803085312-b0b66d28d4cb","status":"pending"}
 {"module":"github.com/semafind/semadb","version":"v1.2.0","status":"pending"}
-{"module":"github.com/shirikatsu/go-ethereum","version":"v1.8.19","status":"passed"}
+{"module":"github.com/shirikatsu/go-ethereum","version":"v1.8.19","status":"pending"}
 {"module":"github.com/spruce-solutions/go-quai","version":"v0.56.0","status":"pending"}
 {"module":"github.com/syvbrunnr/modernc-libc","version":"v1.72.0","status":"pending"}
 {"module":"github.com/udaya2899/celo-blockchain","version":"v1.2.1","status":"pending"}

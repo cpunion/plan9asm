@@ -15,7 +15,7 @@
 {"module":"github.com/erbieio/erbie","version":"v1.0.2","status":"pending"}
 {"module":"github.com/fzzf678/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/go-DELVE/delve","version":"v1.27.2","status":"pending"}
-{"module":"github.com/gorse-io/xvec","version":"v0.0.0-20260921042059-0f0a0645abb9","status":"passed"}
+{"module":"github.com/gorse-io/xvec","version":"v0.0.0-20260921042059-0f0a0645abb9","status":"pending"}
 {"module":"github.com/greatliontech/gofresh","version":"v0.105.1","status":"pending"}
 {"module":"github.com/ilcm96/minio","version":"v0.0.0-20260515071949-69a6cfc9da65","status":"pending"}
 {"module":"github.com/noah-blockchain/noah-go-node","version":"v0.2.5","status":"pending"}

@@ -9,6 +9,6 @@
 {"module":"github.com/klauspost/crc32","version":"v1.3.0","status":"pending"}
 {"module":"github.com/microsoft/TypeScript/tsc","version":"v0.0.0-20260922205721-fafb768713d8","status":"pending"}
 {"module":"github.com/my-stocks-pro/earnings-scheduler","version":"v0.0.0-20180812164947-3b53e6f4b76f","status":"pending"}
-{"module":"github.com/sigma/kubernetes","version":"v1.2.2","status":"not_applicable"}
+{"module":"github.com/sigma/kubernetes","version":"v1.2.2","status":"pending"}
 {"module":"github.com/thesyncim/goh264","version":"v0.0.0-20260714162114-14b36a2bfcc4","status":"pending"}
 {"module":"github.xm233.cn/pingcap/tidb","version":"v1.0.9","status":"pending"}

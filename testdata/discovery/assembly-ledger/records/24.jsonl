@@ -16,6 +16,6 @@
 {"module":"github.com/stevenh/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/sysverification/gokv","version":"v0.0.0-20250508184610-d007325b6ee8","status":"pending"}
 {"module":"github.com/thepudds/swisstable-wip","version":"v0.0.0-20221011152303-9c77dc657777","status":"pending"}
-{"module":"github.com/toliu/opentelemetry-ebpf-profiler","version":"v0.1.4-colasoft","status":"not_applicable"}
+{"module":"github.com/toliu/opentelemetry-ebpf-profiler","version":"v0.1.4-colasoft","status":"pending"}
 {"module":"github.com/vivint/infectious","version":"v0.0.0-20200605153912-25a574ae18a3","status":"pending"}
 {"module":"github.web.gylab.com/scroll-tech/go-ethereum","version":"v1.15.11","status":"pending"}

@@ -7,7 +7,7 @@
 {"module":"github.com/arthuryangcs/tidb","version":"v0.0.0-20170320061515-52100cb98646","status":"pending"}
 {"module":"github.com/c0mm4nd/wasman","version":"v1.7.3","status":"pending"}
 {"module":"github.com/clickyotomy/sys","version":"v0.0.0-20191005034450-2541f54a1cf2","status":"pending"}
-{"module":"github.com/cloudflare/bn256","version":"v0.0.0-20260909220639-22942e3c14a0","status":"passed"}
+{"module":"github.com/cloudflare/bn256","version":"v0.0.0-20260909220639-22942e3c14a0","status":"pending"}
 {"module":"github.com/complyue/fuse","version":"v0.0.0-20180417054321-cd3959611bcb","status":"pending"}
 {"module":"github.com/consensys-incorporated/gnark-crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/firehol/iprange/v4/go","version":"v0.0.0-20260916171743-271be2d90ae0","status":"pending"}

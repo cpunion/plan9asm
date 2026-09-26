@@ -1,5 +1,5 @@
 {"module":"github.com/AeonSw4n/circl","version":"v1.1.0","status":"pending"}
-{"module":"github.com/Agiledragon/gomonkey/v2","version":"v2.14.3","status":"passed"}
+{"module":"github.com/Agiledragon/gomonkey/v2","version":"v2.14.3","status":"pending"}
 {"module":"github.com/SagerNet/gvisor","version":"v0.0.0-20260727.0-sing-box-mod.1","status":"pending"}
 {"module":"github.com/VitessIo/vitess","version":"v0.24.3","status":"pending"}
 {"module":"github.com/cavaliercoder/go-abs","version":"v0.0.0-20180115041200-a69d5703f942","status":"pending"}

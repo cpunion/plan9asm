@@ -11,7 +11,7 @@
 {"module":"github.com/achille-roussel/wazero","version":"v0.0.0-20260508161934-e6dd6c0c144f","status":"pending"}
 {"module":"github.com/chaintable/go-ethereum-morph-x","version":"v0.0.0-20260901053348-747822e0a4e5","status":"pending"}
 {"module":"github.com/compose-network/op-geth","version":"v1.101602.3","status":"pending"}
-{"module":"github.com/consensys/gurvy","version":"v0.21.0","status":"pending"}
+{"module":"github.com/consensys/gurvy","version":"v0.21.0","status":"passed"}
 {"module":"github.com/fsh2502/xray-core","version":"v0.0.0-20260917020203-11a8ff14483b","status":"pending"}
 {"module":"github.com/go-delve/Delve","version":"v1.27.2","status":"pending"}
 {"module":"github.com/go-simd/ascii","version":"v0.0.0-20260908181140-4c76603c857a","status":"pending"}

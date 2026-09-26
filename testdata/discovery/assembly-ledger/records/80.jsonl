@@ -5,7 +5,7 @@
 {"module":"github.com/aarzilli/exp","version":"v0.0.0-20250508142343-e302c350bfce","status":"pending"}
 {"module":"github.com/caitinggui/seelog","version":"v0.0.0-20201101100052-c937a28847c5","status":"pending"}
 {"module":"github.com/cloudflare/CIRCL","version":"v1.6.5","status":"pending"}
-{"module":"github.com/criyle/go-judger","version":"v0.13.7","status":"pending"}
+{"module":"github.com/criyle/go-judger","version":"v0.13.7","status":"passed"}
 {"module":"github.com/ericlagergren/aegis","version":"v0.0.0-20250325060835-cd0defd64358","status":"pending"}
 {"module":"github.com/james-bowman/sparse","version":"v0.0.0-20260216202247-495ee4f84d35","status":"pending"}
 {"module":"github.com/ltcsuite/ltcd/ltcutil","version":"v1.1.4","status":"pending"}

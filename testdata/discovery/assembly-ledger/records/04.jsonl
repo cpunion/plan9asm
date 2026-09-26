@@ -12,7 +12,7 @@
 {"module":"github.com/libui-ng/libui-ng","version":"v0.0.0-20250315223706-43ba1ef553c8","status":"pending"}
 {"module":"github.com/snissn/gomap","version":"v0.6.1","status":"pending"}
 {"module":"github.com/szmcdull/go-forceexport","version":"v0.0.0-20260909104929-197063656b82","status":"pending"}
-{"module":"github.com/tangwz/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/tangwz/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/tmthrgd/go-popcount","version":"v0.0.0-20190904054823-afb1ace8b04f","status":"pending"}
 {"module":"github.com/ubiubi18/idena-go","version":"v0.17.1","status":"pending"}
 {"module":"github.com/zshannon/typescript/public/v7","version":"v7.0.2","status":"pending"}

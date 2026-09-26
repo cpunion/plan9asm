@@ -3,7 +3,7 @@
 {"module":"github.com/PiotrKozimor/gatt","version":"v0.0.0-20260822181158-11a43174353b","status":"pending"}
 {"module":"github.com/XinFINORG/xdposchain","version":"v1.6.0","status":"pending"}
 {"module":"github.com/Yawning/aez","version":"v0.0.0-20211027044916-e49e68abd344","status":"pending"}
-{"module":"github.com/binance-chain/bsc","version":"v1.7.8","status":"passed"}
+{"module":"github.com/binance-chain/bsc","version":"v1.7.8","status":"pending"}
 {"module":"github.com/codahale/kt128","version":"v0.0.0-20260816024117-995a9da55b83","status":"pending"}
 {"module":"github.com/coredao-org/core-chain","version":"v1.0.26","status":"pending"}
 {"module":"github.com/dgraph-io/caffeine","version":"v0.2.0","status":"pending"}
