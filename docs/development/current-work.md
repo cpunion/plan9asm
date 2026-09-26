@@ -12,7 +12,7 @@ do not start new module-index inventory scans while failures remain.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`, never upstream.
   The user requests complete repairs before a batch push. Keep the PR draft.
 - Upstream main `7cc8c0f` was fetched and is already an ancestor.
-- Develop on `codex/pr40-arm64-raw-20260926` (currently `2769fc1`). Inspect
+- Develop on `codex/pr40-arm64-raw-20260926`. Inspect
   status, worktrees and running processes before editing. Do not push until
   the failing CI classes are fixed and the assembly ledger is refreshed.
 - Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
@@ -106,6 +106,12 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   process, releasing its LLVM objects and output before the next package.
   Rerun `wasm2go` candidates to confirm this removes `signal: killed`; do not
   recast a resource failure as source N/A or an invalid-source skip.
+- A subsequent local change also bounds each object-validation LLVM module
+  by 32,768 assembly instructions as well as 128 functions. The `p8` module
+  has 2,179 functions and about 1.39 million amd64 assembly lines, so the
+  function-only limit was not a reliable memory bound. Focused chunk tests
+  pass, including complete coverage and cross-chunk raw TEXT references;
+  the actual `p8` candidate and strict benchmark still need replay.
 - A direct `pythonwasm2go/p0` Windows/ARM64 object replay passed in 39 seconds
   with a 3.3 GB maximum resident set. Its previous three-package translator
   process is still being exercised by shard 1 at `432314f`; per-package

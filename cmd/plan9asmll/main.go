@@ -119,6 +119,10 @@ type compileConfig struct {
 	// MaxFunctions bounds LLVM module size when object compilation is used
 	// only as a validation gate. Zero selects the production default.
 	MaxFunctions int
+	// MaxInstructions also bounds generated-source-heavy modules whose few
+	// functions each contain thousands of assembly instructions. A single
+	// oversized function stays intact and is checked on its own.
+	MaxInstructions int
 }
 
 func main() {
@@ -521,17 +525,32 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if maxFunctions <= 0 {
 		maxFunctions = 128
 	}
-	if ccfg.Enabled && !ccfg.KeepObj && len(file.Funcs) > maxFunctions {
+	maxInstructions := ccfg.MaxInstructions
+	if maxInstructions <= 0 {
+		maxInstructions = 32768
+	}
+	instructionCount := 0
+	for _, fn := range file.Funcs {
+		instructionCount += len(fn.Instrs)
+	}
+	if ccfg.Enabled && !ccfg.KeepObj &&
+		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.
 		file, err = plan9asm.NormalizeRawFileForTranslation(file, goarch)
 		if err != nil {
 			return fmt.Errorf("normalize raw file: %w", err)
 		}
-		for first, chunk := 0, 0; first < len(file.Funcs); first, chunk = first+maxFunctions, chunk+1 {
-			last := first + maxFunctions
-			if last > len(file.Funcs) {
-				last = len(file.Funcs)
+		for first, chunk := 0, 0; first < len(file.Funcs); chunk++ {
+			last := first
+			chunkInstructions := 0
+			for last < len(file.Funcs) && last-first < maxFunctions {
+				next := len(file.Funcs[last].Instrs)
+				if last > first && chunkInstructions+next > maxInstructions {
+					break
+				}
+				chunkInstructions += next
+				last++
 			}
 			part := *file
 			part.Funcs = file.Funcs[first:last]
@@ -543,6 +562,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			if err := translateAndCompileModule(&part, triple, goarch, partTask, annotate, ccfg, resolve, sigs); err != nil {
 				return fmt.Errorf("functions %d-%d/%d: %w", first+1, last, len(file.Funcs), err)
 			}
+			first = last
 		}
 		return nil
 	}

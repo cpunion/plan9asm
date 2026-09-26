@@ -59,6 +59,52 @@ TEXT ·third(SB),$0-0
 	}
 }
 
+func TestCompileOneBoundsModuleByInstructionCount(t *testing.T) {
+	config, err := resolveCompileConfig(true, "", false, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.MaxFunctions = 128
+	config.MaxInstructions = 3
+
+	dir := t.TempDir()
+	asm := filepath.Join(dir, "instructions_amd64.s")
+	const source = `
+TEXT ·first(SB),$0-0
+	NOP
+	RET
+TEXT ·second(SB),$0-0
+	NOP
+	RET
+TEXT ·third(SB),$0-0
+	NOP
+	RET
+`
+	if err := os.WriteFile(asm, []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pkg := &packages.Package{
+		PkgPath: "example.com/instructionchunks",
+		Types:   types.NewPackage("example.com/instructionchunks", "instructionchunks"),
+		Imports: map[string]*packages.Package{},
+	}
+	out := filepath.Join(dir, "instructions.ll")
+	err = compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+		asmTask{PkgPath: pkg.PkgPath, AsmFile: asm, OutLL: out}, false, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"instructions.ll", "instructions.part-0001.ll", "instructions.part-0002.ll"} {
+		ir, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Count(string(ir), "define "); got != 1 {
+			t.Fatalf("%s contains %d functions, want one", name, got)
+		}
+	}
+}
+
 func TestCompileOneBoundedModulesDoNotHideLateFailure(t *testing.T) {
 	config, err := resolveCompileConfig(true, "", false, 0)
 	if err != nil {
