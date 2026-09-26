@@ -23,6 +23,24 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 	}
 }
 
+func TestDiscoveryGoVersionCannotAutoSwitch(t *testing.T) {
+	dir := t.TempDir()
+	goCommand := filepath.Join(dir, "go")
+	writeTestFile(t, goCommand, "#!/bin/sh\nif [ \"$GOTOOLCHAIN\" = local ]; then\n  echo go1.27.0\nelse\n  echo go1.27.1\nfi\n")
+	if err := os.Chmod(goCommand, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GOTOOLCHAIN", "go1.27.1")
+	version, err := readDiscoveryGoVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "go1.27.0" {
+		t.Fatalf("local child Go version = %q, want go1.27.0", version)
+	}
+}
+
 func TestDiscoveryProvenanceAcceptsEquivalentPRMergeTree(t *testing.T) {
 	ledger := filepath.Join(t.TempDir(), "records.jsonl")
 	writeTestFile(t, ledger, "{}\n")

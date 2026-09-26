@@ -235,15 +235,14 @@ func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProve
 	if p.TranslatorRevision != p.Source.Revision || p.TranslatorModified != p.Source.Dirty {
 		return p, fmt.Errorf("translator build does not match source revision/dirty state; rebuild plan9asmll with VCS metadata")
 	}
-	output, err := exec.Command("go", "env", "GOVERSION").CombinedOutput()
+	p.GoVersion, err = readDiscoveryGoVersion()
 	if err != nil {
-		return p, fmt.Errorf("read Go toolchain provenance: %w: %s", err, output)
+		return p, err
 	}
-	p.GoVersion = strings.TrimSpace(string(output))
 	if !discoveryGoVersionPattern.MatchString(p.GoVersion) || p.TranslatorGo != p.GoVersion {
 		return p, fmt.Errorf("discovery requires matching Go 1.27 tools, got go=%q translator=%q", p.GoVersion, p.TranslatorGo)
 	}
-	output, err = exec.Command(cfg.LLC, "--version").CombinedOutput()
+	output, err := exec.Command(cfg.LLC, "--version").CombinedOutput()
 	if err != nil {
 		return p, fmt.Errorf("read LLVM toolchain provenance: %w: %s", err, output)
 	}
@@ -261,6 +260,19 @@ func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProve
 		return p, err
 	}
 	return p, nil
+}
+
+// Candidate builds intentionally disable toolchain auto-switching. Provenance
+// must inspect that same local go command, or an auto-switched parent can claim
+// a newer version while every candidate runs an older compiler from PATH.
+func readDiscoveryGoVersion() (string, error) {
+	cmd := exec.Command("go", "env", "GOVERSION")
+	cmd.Env = replaceEnv(os.Environ(), map[string]string{"GOTOOLCHAIN": "local"})
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("read Go toolchain provenance (local): %w: %s", err, output)
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func validateDiscoveryProvenance(p discoveryCorpusProvenance, source discoverySourceIdentity, ledgerSHA string) error {

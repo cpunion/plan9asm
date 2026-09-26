@@ -670,6 +670,7 @@ func TestDiscoveryGoBuildInfrastructureFailuresAreNotSourceNotApplicable(t *test
 		"fatal: Could not read from remote repository.",
 		"write /tmp/go-build/object.o: no space left on device",
 		"go build example.com/pkg: signal: killed",
+		"compile: version \"go1.27.1\" does not match go tool version \"go1.27.0\"",
 		"reading https://gvisor.googlesource.com/gvisor/pkg/abi/linux?go-get=1: 429 Too Many Requests",
 	} {
 		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) {

@@ -2200,6 +2200,7 @@ func isDiscoveryGoBuildInfrastructureFailure(diagnostic string) bool {
 	}
 	for _, marker := range []string{
 		"captured output exceeds",
+		"does not match go tool version",
 		"context deadline exceeded",
 		"i/o timeout",
 		"tls handshake timeout",

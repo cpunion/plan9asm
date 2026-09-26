@@ -47,9 +47,19 @@ if [[ ! -f "$go_root/pkg/include/funcdata.h" ]]; then
   echo "active Go toolchain is missing pkg/include/funcdata.h" >&2
   exit 1
 fi
-# Keep every trimpath-built translator on the exact headers used by go build.
-# This also avoids resolving GOROOT again in each per-package process.
+# Keep every child process on the same Go binary, tools and headers. Resolving
+# GOROOT alone is insufficient when the invoking go binary auto-switched
+# toolchains: a child with GOTOOLCHAIN=local may otherwise use the older go on
+# PATH and classify its version-mismatch build error as source-inapplicable.
 export GOROOT="$go_root"
+export PATH="$go_root/bin:$PATH"
+export GOTOOLCHAIN=local
+if [[ "$(go env GOVERSION)" != "$go_version" ||
+      "$(go tool compile -V)" != "compile version $go_version" ||
+      "$(go tool asm -V)" != "asm version $go_version" ]]; then
+  echo "Go command, compiler, assembler and GOROOT versions do not match" >&2
+  exit 1
+fi
 
 # Resolved relative to the checked-out repository.
 # shellcheck disable=SC1091
