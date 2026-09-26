@@ -164,9 +164,18 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   different AMD64 source files. Go 1.27 object disassembly put their fixed
   RIP targets beyond every TEXT symbol. Commit `7299f51` pins both file hashes
   and evidence as another exact invalid-source skip; corpus tests and the
-  actual-source/object proof pass. Rerun shard 16 on that commit before
-  treating the old failed report as resolved. KnoxDB remains independently
-  failed in that shard.
+  actual-source/object proof pass. KnoxDB remains independently failed.
+- Clean `cc307d5` reran shard 16 with Go 1.27.1 and LLVM 22: 164 selected =
+  132 passed + 30 source N/A + one exact go-highway invalid-source skip + one
+  failed KnoxDB alias. Its report passed the provenance/integrity audit, but
+  the shard and aggregate remain failed. The runner now pins its child `go`
+  binary to the recorded GOROOT and checks the compiler and assembler versions;
+  a version mismatch is infrastructure failure, never source N/A.
+- Frozen `8134b3e` shard 20 passed: 154 selected = 124 passed + 30 source N/A,
+  zero failures, 2,807 LLVM 22 object translations. Shard 28 finished with
+  109 passed + 26 source N/A + one lowercase Sharkie native-layout failure;
+  both reports passed their individual integrity audits. These older reports
+  cannot be combined with the clean `cc307d5` report.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
@@ -212,7 +221,7 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    shared-frame/register semantics; JIT libraries need native code layout and
    address/entry contracts; large `wasm2go` modules need bounded memory even
    when a single package contains thousands of generated functions.
-3. Keep unproven upstream defects failed. Only the six confirmed exact
+3. Keep unproven upstream defects failed. Only the exact, source-pinned
    versions in the invalid-machine-code manifest qualify for
    `skipped_invalid_source`. The distinct private-extension exception is
    authorized only for its pinned file/target and is not a pass. Continue
