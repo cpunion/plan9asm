@@ -290,6 +290,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+i8mm")
 					}
 				}
+				if _, ok := decodeARM64RawSVEXAR(uint32(ins.Args[0].Imm)); ok {
+					add("+sve", "+sve2")
+				}
 				if _, ok := decodeARM64RawSVEReplicateScalar(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
