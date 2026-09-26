@@ -11,6 +11,31 @@ var arm64SVEPredicateCounterOps = map[Op]struct{}{
 	"PPEXT":  {},
 }
 
+// PCNTP has both ordinary predicate and SVE2.1 predicate-as-counter forms.
+// The latter adds one VLx2/VLx4 selector, not a governing predicate register.
+func decodeARM64RawSVEPredicateCount(word uint32) (Instr, bool) {
+	ordinary := word&^uint32(0x00c03dff) == 0x25208000
+	counter := word&^uint32(0x00c005ff) == 0x25208200
+	if !ordinary && !counter {
+		return Instr{}, false
+	}
+	width := "BHSD"[word>>22&3]
+	destination := Reg(fmt.Sprintf("R%d", word&31))
+	if word&31 == 31 {
+		destination = ZR
+	}
+	args := []Operand{
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%c", word>>5&15, width))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d", word>>10&15))},
+		{Kind: OpReg, Reg: destination},
+	}
+	if counter {
+		args[0] = Operand{Kind: OpIdent, Ident: fmt.Sprintf("VLX%d", 2<<uint(word>>10&1))}
+		args[1] = Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("PN%d.%c", word>>5&15, width))}
+	}
+	return Instr{Op: "PCNTP", Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
+}
+
 func arm64SVEPredicateCounterNeedsSVE2P1(op Op, ins Instr) bool {
 	if op == "PPTRUE" || op == "PPEXT" {
 		return true

@@ -6,7 +6,10 @@ import (
 	"testing"
 )
 
-var arm64SVEPTruePatterns = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 29, 30, 31}
+var arm64SVEPTruePatterns = []int{
+	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+	16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+}
 
 func encodeARM64RawSVEPTrue(elementBits, pattern, destination int) uint32 {
 	size := map[int]uint32{8: 0, 16: 1, 32: 2, 64: 3}[elementBits]
@@ -74,8 +77,8 @@ func TestARM64RawSVEPTrueDecoderCoversArchitecturalDomain(t *testing.T) {
 
 func TestARM64RawSVEPTrueDecoderRejectsReservedAndAdjacentEncodings(t *testing.T) {
 	for _, word := range []uint32{
-		encodeARM64RawSVEPTrue(8, 14, 0),
-		encodeARM64RawSVEPTrue(64, 28, 15),
+		0x2518e010, // PTRUES, which also updates flags.
+		0x2519e000, // Neighboring opcode, not a pattern field.
 		0x2518e400, // PFALSE.
 	} {
 		if _, ok := decodeARM64RawSVEPTrue(word); ok {

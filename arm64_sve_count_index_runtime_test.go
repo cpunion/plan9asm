@@ -30,6 +30,20 @@ static uint64_t count(unsigned pattern, unsigned lanes) {
 `)
 	var checks strings.Builder
 	for size := uint32(0); size < 4; size++ {
+		for pattern := uint32(0); pattern < 32; pattern++ {
+			name := fmt.Sprintf("predicate_count_%d_%d", size, pattern)
+			tested := uint32(0x2518e000) | size<<22 | pattern<<5 | 1
+			governing := uint32(0x2518e000) | size<<22 | (31-pattern)<<5 | 15
+			count := uint32(0x25208000) | size<<22 | 15<<10 | 1<<5 | 10
+			fmt.Fprintf(&source, "TEXT %s(SB),$0-16\nWORD $%#08x\nWORD $%#08x\nWORD $%#08x\nMOVD R10,ret+8(FP)\nRET\n", name, tested, governing, count)
+			sigs[name] = crossUnarySig("arm64", name)
+			fmt.Fprintf(&main, "extern uint64_t %s(uint64_t);\n", name)
+			fmt.Fprintf(&checks, `    {
+      uint64_t tested = count(%d, vl / %d), governing = count(%d, vl / %d);
+      if (%s(x) != (tested < governing ? tested : governing)) return 6;
+    }
+`, pattern, 1<<size, 31-pattern, 1<<size, name)
+		}
 		for operation, base := range []uint32{0x0420e000, 0x0430e000, 0x0430e400} {
 			for pattern := uint32(0); pattern < 32; pattern++ {
 				name := fmt.Sprintf("count_%d_%d_%d", size, operation, pattern)

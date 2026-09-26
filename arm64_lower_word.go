@@ -73,6 +73,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEPredicateBreak(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEPredicateCount(word); ok {
+		_, _, err := c.lowerARM64SVEPredicateCounter(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEPredicateIncDec(word); ok {
 		_, _, err := c.lowerARM64SVEPredicateIncDec(decoded.Op, decoded)
 		return err

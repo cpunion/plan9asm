@@ -8,18 +8,13 @@ type arm64RawSVEPTrue struct {
 	destination int
 }
 
-func arm64SVEPTruePatternValid(pattern int) bool {
-	return (pattern >= 0 && pattern <= 13) || pattern == 29 || pattern == 30 || pattern == 31
-}
-
 func decodeARM64RawSVEPTrue(word uint32) (arm64RawSVEPTrue, bool) {
 	if word&0xff3ffc10 != 0x2518e000 {
 		return arm64RawSVEPTrue{}, false
 	}
 	pattern := int(word>>5) & 31
-	if !arm64SVEPTruePatternValid(pattern) {
-		return arm64RawSVEPTrue{}, false
-	}
+	// Unknown pattern encodings architecturally produce an empty predicate;
+	// they are not undefined instructions (Arm PTRUE / DecodePredCount).
 	return arm64RawSVEPTrue{
 		elementBits: 8 << (int(word>>22) & 3),
 		pattern:     pattern,

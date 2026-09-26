@@ -221,6 +221,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEPredicateBreak(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
+				if decoded, ok := decodeARM64RawSVEPredicateCount(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+					if arm64SVEPredicateCounterNeedsSVE2P1(decoded.Op, decoded) {
+						add("+sve2p1")
+					}
+				}
 				if _, ok := decodeARM64RawSVEPredicateIncDec(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
