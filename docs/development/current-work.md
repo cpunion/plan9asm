@@ -91,8 +91,9 @@ the [draft PR](https://github.com/xgo-dev/plan9asm/pull/40), not this checkpoint
 
 - `simd@v1.21.1`: earlier amd64 replay passed all 73 files. At `4885851`,
   ARM64 passes 28/47 files on each of Darwin/Linux/Windows (84/141 total).
-  Remaining first failures include unsigned LD1W widening/gather, FCVT,
-  ASR-immediate variants and ADDVL. Wide ADD/SUB needs a fresh replay.
+  Remaining first failures include unsigned LD1W widening/gather, predicated
+  FADD immediate, UMULH and vector ADR. LLVM 22 disassembly confirms these
+  raw opcodes; do not infer them from function names. Wide ADD/SUB needs a fresh replay.
   Unlabelled constant pools also remain. Removing the first instruction
   failure does not establish a whole-file/candidate pass.
 - Constant-pool relocation requires a load-only address-use proof. Unknown
