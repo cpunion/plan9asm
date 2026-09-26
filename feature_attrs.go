@@ -1074,7 +1074,7 @@ func isAMD64RawFP16Op(op string) bool {
 	if dot := strings.IndexByte(op, '.'); dot >= 0 {
 		base = op[:dot]
 	}
-	if base == "VMOVSH" {
+	if base == "VMOVSH" || base == "VMOVW" {
 		return true
 	}
 	if spec, ok := amd64FMA3Specs[Op(base)]; ok {

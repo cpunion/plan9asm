@@ -2968,7 +2968,8 @@ func x86RawRelativeTarget(inst x86asm.Inst, offset int) (int, bool) {
 // _yvmovq families. VMOVD has the X-to-GP/memory and reverse forms; VMOVQ
 // additionally has two X-to-X encodings. Recover every VEX and EVEX form
 // before consulting the generic decoder, which can split the raw VMOVD bytes
-// emitted by Weaviate into a relative branch.
+// emitted by Weaviate into a relative branch. Raw AVX512-FP16 VMOVW uses the
+// same operand grammar with a two-byte transfer and a distinct opcode map.
 func decodedX86VMOVQInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
@@ -3102,7 +3103,14 @@ func decodedX86EVEXVMOVDQInstruction(code []byte, i, mode int, segment Reg, addr
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
-	if p0&0x0f != 1 || p1&0x04 == 0 || p1&0x78 != 0x78 || p2 != 0x08 {
+	wordMove := p0&0x0f == 5 && p1&3 == 1 && (opcode == 0x6e || opcode == 0x7e)
+	if p0&0x0f != 1 && !wordMove {
+		return Instr{}, 0, false, nil
+	}
+	if p1&0x04 == 0 || p1&0x78 != 0x78 || p2 != 0x08 {
+		if wordMove {
+			return Instr{}, 0, true, fmt.Errorf("VMOVW requires reserved vvvv, fixed 128-bit length, and no mask or broadcast")
+		}
 		return Instr{}, 0, false, nil
 	}
 	pp := p1 & 3
@@ -3117,6 +3125,11 @@ func decodedX86EVEXVMOVDQInstruction(code []byte, i, mode int, segment Reg, addr
 	op := Op("")
 	direction := xToGeneral
 	switch {
+	case wordMove:
+		op = "VMOVW"
+		if opcode == 0x6e {
+			direction = generalToX
+		}
 	case opcode == 0x7e && pp == 1 && !width64:
 		op = "VMOVD"
 		direction = xToGeneral
@@ -3161,7 +3174,9 @@ func decodedX86EVEXVMOVDQInstruction(code []byte, i, mode int, segment Reg, addr
 	}
 	vector := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", vectorNumber))}
 	transferBytes := 4
-	if op == "VMOVQ" {
+	if wordMove {
+		transferBytes = 2
+	} else if op == "VMOVQ" {
 		transferBytes = 8
 	}
 	var rm Operand
@@ -3183,9 +3198,10 @@ func decodedX86EVEXVMOVDQInstruction(code []byte, i, mode int, segment Reg, addr
 		args[0], args[1] = rm, vector
 	}
 	instruction = Instr{
-		Op:   op,
-		Args: args,
-		Raw:  fmt.Sprintf("%s %s, %s", op, args[0].String(), args[1].String()),
+		Op:         op,
+		Args:       args,
+		Raw:        fmt.Sprintf("%s %s, %s", op, args[0].String(), args[1].String()),
+		x86Encoded: wordMove,
 	}
 	return instruction, modRMIndex + consumed, true, nil
 }

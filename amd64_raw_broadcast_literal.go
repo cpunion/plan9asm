@@ -77,7 +77,7 @@ func decodeX86RawPackedBroadcastLiteral(code []byte, offset, mode int) (Instr, i
 	return instruction, length, literal, true, nil
 }
 
-// decodeX86RawVMOVIntegerLiteral covers all memory-to-X VMOVD/VMOVQ VEX and
+// decodeX86RawVMOVIntegerLiteral covers all memory-to-X VMOVW/VMOVD/VMOVQ VEX and
 // EVEX encodings, including VMOVQ's alternate F3 7E encoding. The ordinary
 // decoder validates the full grammar after the fixed-length ModRM rewrite.
 func decodeX86RawVMOVIntegerLiteral(code []byte, offset, mode int) (Instr, int, x86RawLiteralRange, bool, error) {
@@ -97,9 +97,13 @@ func decodeX86RawVMOVIntegerLiteral(code []byte, offset, mode int) (Instr, int, 
 	} else if len(code) >= offset+5 && code[offset] == 0xc4 && code[offset+1]&0x1f == 1 {
 		modRMIndex = offset + 4
 		width = x86RawVMOVLoadWidth(code[offset+3], code[offset+2]&3, code[offset+2]&0x80 != 0, false)
-	} else if len(code) >= offset+6 && code[offset] == 0x62 && code[offset+1]&0x0f == 1 {
+	} else if len(code) >= offset+6 && code[offset] == 0x62 {
 		modRMIndex = offset + 5
-		width = x86RawVMOVLoadWidth(code[offset+4], code[offset+2]&3, code[offset+2]&0x80 != 0, true)
+		if code[offset+1]&0x0f == 1 {
+			width = x86RawVMOVLoadWidth(code[offset+4], code[offset+2]&3, code[offset+2]&0x80 != 0, true)
+		} else if code[offset+1]&0x0f == 5 && code[offset+4] == 0x6e && code[offset+2]&3 == 1 {
+			width = 2
+		}
 	}
 	if width == 0 || modRMIndex < 0 || code[modRMIndex]&0xc7 != 0x05 {
 		return Instr{}, 0, x86RawLiteralRange{}, false, nil
@@ -113,7 +117,7 @@ func decodeX86RawVMOVIntegerLiteral(code []byte, offset, mode int) (Instr, int, 
 	if err != nil || !ok || consumed != len(patched) ||
 		len(instruction.Args) != 2 || instruction.Args[0].Kind != OpMem {
 		if err == nil {
-			err = fmt.Errorf("RIP-relative VMOVD/VMOVQ load did not match its VEX/EVEX grammar")
+			err = fmt.Errorf("RIP-relative VMOVW/VMOVD/VMOVQ load did not match its VEX/EVEX grammar")
 		}
 		return Instr{}, 0, x86RawLiteralRange{}, true, err
 	}

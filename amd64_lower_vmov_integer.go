@@ -8,16 +8,22 @@ import (
 // lowerVectorScalarIntegerMove implements the complete Go 1.27 _yvmovd and
 // _yvmovq tables. Both instructions transfer between X registers and scalar
 // GP/memory operands; VMOVQ additionally permits X-to-X transfers.
+// Raw VMOVW shares this grammar with a 16-bit transfer and GP zero-extension.
 func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
 	bits := 0
 	switch rawOp {
+	case "VMOVW":
+		if !ins.x86Encoded {
+			return true, false, fmt.Errorf("%s VMOVW is absent from Go's named assembler table: %q", c.goarch, ins.Raw)
+		}
+		bits = 16
 	case "VMOVD":
 		bits = 32
 	case "VMOVQ":
 		bits = 64
 	default:
-		if strings.HasPrefix(rawOp, "VMOVD.") || strings.HasPrefix(rawOp, "VMOVQ.") {
+		if strings.HasPrefix(rawOp, "VMOVW.") || strings.HasPrefix(rawOp, "VMOVD.") || strings.HasPrefix(rawOp, "VMOVQ.") {
 			return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's scalar integer move tables: %q", c.goarch, strings.SplitN(rawOp, ".", 2)[0], ins.Raw)
 		}
 		return false, false, nil
@@ -31,7 +37,7 @@ func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, term
 	dstX := isAMD64GoXRegister(dst)
 	if srcX && dstX {
 		if rawOp != "VMOVQ" {
-			return true, false, fmt.Errorf("%s VMOVD has no X-to-X form in Go 1.27's _yvmovd table: %q", c.goarch, ins.Raw)
+			return true, false, fmt.Errorf("%s %s has no X-to-X form: %q", c.goarch, rawOp, ins.Raw)
 		}
 		low, err := c.loadXLowInteger(src.Reg, 64)
 		if err != nil {
@@ -41,7 +47,7 @@ func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, term
 	}
 	if srcX {
 		transferBits := bits
-		if c.goarch == "386" && dst.Kind == OpReg {
+		if c.goarch == "386" && dst.Kind == OpReg && transferBits > 32 {
 			transferBits = 32
 		}
 		if !c.isGoVMOVScalarOperand(dst) {
@@ -55,7 +61,7 @@ func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, term
 	}
 	if dstX {
 		transferBits := bits
-		if c.goarch == "386" && src.Kind == OpReg {
+		if c.goarch == "386" && src.Kind == OpReg && transferBits > 32 {
 			transferBits = 32
 		}
 		if !c.isGoVMOVScalarOperand(src) && !(src.Kind == OpImm && ins.x86RIPLiteral) {
@@ -91,7 +97,7 @@ func (c *amd64Ctx) storeVMOVIntegerX(dst Reg, bits int, low string) error {
 	fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> zeroinitializer, i%d %s, i32 0\n", inserted, lanes, bits, bits, low)
 	bytes := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", bytes, lanes, bits, inserted)
-	return c.storeX(dst, "%"+bytes)
+	return c.storePackedMoveOperand(Operand{Kind: OpReg, Reg: dst}, 16, "%"+bytes)
 }
 
 func (c *amd64Ctx) storeVMOVIntegerScalar(dst Operand, bits int, value string) error {
@@ -103,6 +109,6 @@ func (c *amd64Ctx) storeVMOVIntegerScalar(dst Operand, bits int, value string) e
 		return c.storeRegUnchecked(dst.Reg, value)
 	}
 	widened := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", widened, value)
+	fmt.Fprintf(c.b, "  %%%s = zext i%d %s to i64\n", widened, bits, value)
 	return c.storeRegUnchecked(dst.Reg, "%"+widened)
 }
