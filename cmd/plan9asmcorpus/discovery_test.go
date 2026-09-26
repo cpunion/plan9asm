@@ -93,6 +93,95 @@ func TestInvalidMachineCodeSkipRequiresPinnedSourceAndDecoderRejection(t *testin
 	}
 }
 
+func TestInvalidSourceSkipRejectsMissingAMD64RawRIPConstant(t *testing.T) {
+	moduleDir := t.TempDir()
+	const asmFile = "pkg/raw_amd64.s"
+	const source = "DATA CPI0_0<>+0(SB)/4, $1\n" +
+		"GLOBL CPI0_0<>(SB), RODATA, $4\n" +
+		"TEXT ·Bad(SB), $0-0\n" +
+		"QUAD $0x00001592256ffdc5 // vmovdqa LCPI0_4(%rip), %ymm4\n"
+	if err := os.MkdirAll(filepath.Join(moduleDir, "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(moduleDir, asmFile), source)
+	checksum := sha256.Sum256([]byte(source))
+	candidate := discoveryCandidate{
+		Module: "example.com/raw", Version: "v1.0.0",
+		AsmFiles: []string{asmFile},
+	}
+	skip := discoveryInvalidMachineCodeSkip{
+		Module: candidate.Module, Version: candidate.Version,
+		Reason: "raw RIP reference has no corresponding constant",
+		Evidence: []discoveryInvalidMachineCodeEvidence{{
+			Kind:    "amd64_missing_rip_constant",
+			AsmFile: asmFile, SHA256: fmt.Sprintf("%x", checksum),
+			SourceExpression: "QUAD $0x00001592256ffdc5 // vmovdqa LCPI0_4(%rip), %ymm4",
+			MissingSymbol:    "CPI0_4", Architecture: "amd64",
+		}},
+	}
+	if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, skip, nil); err != nil {
+		t.Fatalf("missing raw RIP constant was not proved: %v", err)
+	}
+	declaredSource := "DATA CPI0_4<>+0(SB)/4, $1\n" + source
+	writeTestFile(t, filepath.Join(moduleDir, asmFile), declaredSource)
+	declared := skip
+	declared.Evidence = append([]discoveryInvalidMachineCodeEvidence(nil), skip.Evidence...)
+	declaredChecksum := sha256.Sum256([]byte(declaredSource))
+	declared.Evidence[0].SHA256 = fmt.Sprintf("%x", declaredChecksum)
+	if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, declared, nil); err == nil {
+		t.Fatal("declared constant was misclassified as absent")
+	}
+	writeTestFile(t, filepath.Join(moduleDir, asmFile), source)
+	for _, change := range []struct {
+		name string
+		edit func(*discoveryInvalidMachineCodeSkip)
+	}{
+		{"wrong checksum", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].SHA256 = strings.Repeat("0", 64) }},
+		{"wrong constant", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].MissingSymbol = "CPI0_0" }},
+		{"wrong expression", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].SourceExpression = "QUAD $0x0000000000000000" }},
+		{"wrong architecture", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].Architecture = "arm64" }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			changed := skip
+			changed.Evidence = append([]discoveryInvalidMachineCodeEvidence(nil), skip.Evidence...)
+			change.edit(&changed)
+			if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, changed, nil); err == nil {
+				t.Fatal("unproved raw RIP constant was skipped")
+			}
+		})
+	}
+}
+
+func TestAMD64MissingRIPConstantRequiresGoObjectOutsideText(t *testing.T) {
+	moduleDir := t.TempDir()
+	workDir := t.TempDir()
+	const asmFile = "raw_amd64.s"
+	for _, tc := range []struct {
+		name      string
+		quad      string
+		wantError bool
+	}{
+		{name: "outside all text", quad: "0x00001592256ffdc5"},
+		{name: "inside text", quad: "0x00000000256ffdc5", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			expression := "QUAD $" + tc.quad + " // vmovdqa LCPI0_4(%rip), %ymm4"
+			writeTestFile(t, filepath.Join(moduleDir, asmFile),
+				"#include \"textflag.h\"\nTEXT ·Bad(SB), NOSPLIT, $0-0\n"+
+					expression+"\nRET\n")
+			item := discoveryInvalidMachineCodeEvidence{
+				Kind: "amd64_missing_rip_constant", AsmFile: asmFile,
+				SourceExpression: expression, MissingSymbol: "CPI0_4",
+				Architecture: "amd64",
+			}
+			err := verifyAMD64MissingRIPConstantObject(context.Background(), moduleDir, workDir, item)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("Go object proof error = %v, wantError = %t", err, tc.wantError)
+			}
+		})
+	}
+}
+
 func TestDiscoveryCorpusAccountsForInvalidMachineCodeSkipSeparately(t *testing.T) {
 	report := discoveryCorpusReport{
 		Selected: 1, SkippedInvalidSource: 1,
@@ -117,16 +206,48 @@ func TestDiscoveryCorpusAccountsForInvalidMachineCodeSkipSeparately(t *testing.T
 	}
 }
 
+func TestDiscoveryCorpusAccountsForMissingAMD64RIPConstantSkip(t *testing.T) {
+	evidence := discoveryInvalidMachineCodeEvidence{
+		Kind: "amd64_missing_rip_constant", AsmFile: "pkg/raw_amd64.s",
+		SHA256:           strings.Repeat("a", 64),
+		SourceExpression: "QUAD $0x00001592256ffdc5 // vmovdqa LCPI0_4(%rip), %ymm4",
+		Architecture:     "amd64", MissingSymbol: "CPI0_4",
+	}
+	report := discoveryCorpusReport{
+		Selected: 1, SkippedInvalidSource: 1,
+		Results: []discoveryCorpusResult{{
+			Module: "example.com/raw", Version: "v1.0.0",
+			Status:                discoveryStatusSkippedInvalidSource,
+			InvalidSourceReason:   "Go object lacks the referenced constant",
+			InvalidSourceEvidence: []discoveryInvalidMachineCodeEvidence{evidence},
+			DiscoveredAsmFiles:    []string{evidence.AsmFile},
+		}},
+	}
+	if err := validateDiscoveryCorpusAccounting(report); err != nil {
+		t.Fatal(err)
+	}
+	report.Results[0].InvalidSourceEvidence[0].MissingSymbol = "CPI0_0"
+	if err := validateDiscoveryCorpusAccounting(report); err == nil {
+		t.Fatal("unrelated constant name was accepted as evidence")
+	}
+}
+
 func TestInvalidMachineCodeManifestExpressionsEmitClaimedWords(t *testing.T) {
 	skips, err := loadInvalidMachineCodeSkips(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skips) != 4 {
-		t.Fatalf("got %d independently reviewed exact-version skips, want 4", len(skips))
+	if len(skips) != 5 {
+		t.Fatalf("got %d independently reviewed exact-version skips, want 5", len(skips))
 	}
 	for key, skip := range skips {
 		for _, item := range skip.Evidence {
+			if item.Kind == "amd64_missing_rip_constant" {
+				if err := verifyAMD64MissingRIPConstant(item, nil); err != nil {
+					t.Fatalf("%s %s: %v", key, item.AsmFile, err)
+				}
+				continue
+			}
 			word, err := strconv.ParseUint(item.Word, 0, 32)
 			if err != nil {
 				t.Fatalf("%s: %v", key, err)

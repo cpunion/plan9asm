@@ -129,12 +129,15 @@ A passing candidate needs a successful target and no failed applicable target.
 A global N/A candidate has no applicable target. Translation counts are
 per-target; applicable assembly files form a unique set.
 
-Only an exact module version with pinned source SHA-256, a checked raw WORD
-expression and an independently rejected LLVM 22 encoding can be
-`skipped_invalid_source`. The exception manifest is
+Only an exact module version with pinned source SHA-256 and independently
+checked evidence can be `skipped_invalid_source`: either LLVM 22 rejects the
+evaluated raw ARM64 WORD, or an AMD64 raw RIP instruction names an absent
+file-local constant and Go's own assembled object places its fixed target
+outside every TEXT symbol. The exception manifest is
 `testdata/corpus/invalid-machine-code.json`. The runner downloads the exact
 version into a disposable workspace and rechecks every witness. A changed
-file, decodable word or missing LLVM 22 decoder fails the candidate; a skip
+file, decodable ARM64 word, missing constant proof or required tool fails the
+candidate; a skip
 never contributes to passed candidates or translation counts. Reports and
 the assembly ledger retain the reason and witnesses; progress and aggregate
 verification compare them with the current pinned manifest.

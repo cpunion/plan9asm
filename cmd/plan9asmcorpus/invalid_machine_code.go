@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,20 +17,25 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/arch/x86/x86asm"
 )
 
 // These exceptions are exact module versions, never wildcard packages or
 // instruction families. A skip is not a translation pass.
 type discoveryInvalidMachineCodeEvidence struct {
+	Kind             string `json:"kind,omitempty"`
 	AsmFile          string `json:"asm_file"`
 	SHA256           string `json:"sha256"`
 	SourceExpression string `json:"source_expression"`
 	MacroInvocation  string `json:"macro_invocation,omitempty"`
-	Word             string `json:"word"`
+	Word             string `json:"word,omitempty"`
 	Architecture     string `json:"architecture"`
+	MissingSymbol    string `json:"missing_symbol,omitempty"`
 }
 
 type discoveryInvalidMachineCodeSkip struct {
@@ -46,6 +53,8 @@ type discoveryInvalidMachineCodeManifest struct {
 var rawWordPattern = regexp.MustCompile(`^WORD\s+\$(0[xX][0-9a-fA-F]+)\b`)
 var macroWordPattern = regexp.MustCompile(`^#define\s+(\w+)\(([^)]*)\)\s+WORD\s+\$\((.*)\)$`)
 var macroCallPattern = regexp.MustCompile(`^(\w+)\(([^)]*)\)$`)
+var rawQuadPattern = regexp.MustCompile(`^QUAD\s+\$(0[xX][0-9a-fA-F]+)\s+//`)
+var rawRIPConstantPattern = regexp.MustCompile(`^CPI[0-9]+_[0-9]+$`)
 
 func loadInvalidMachineCodeSkips(repoRoot string) (map[string]discoveryInvalidMachineCodeSkip, error) {
 	path := filepath.Join(repoRoot, "testdata", "corpus", "invalid-machine-code.json")
@@ -86,15 +95,11 @@ func verifyInvalidMachineCodeSkip(moduleDir string, candidate discoveryCandidate
 		discovered[file] = true
 	}
 	for _, item := range skip.Evidence {
-		if !discovered[item.AsmFile] || item.Architecture != "arm64" ||
+		if !discovered[item.AsmFile] ||
 			!discoverySHA256Pattern.MatchString(item.SHA256) ||
 			path.Clean(item.AsmFile) != item.AsmFile || path.IsAbs(item.AsmFile) ||
 			strings.HasPrefix(item.AsmFile, "../") || strings.Contains(item.AsmFile, "\\") {
 			return fmt.Errorf("%s: invalid or unlisted evidence file %q", candidate.exactKey(), item.AsmFile)
-		}
-		word, err := strconv.ParseUint(item.Word, 0, 32)
-		if err != nil || !strings.HasPrefix(item.Word, "0x") {
-			return fmt.Errorf("%s: invalid evidence word %q", candidate.exactKey(), item.Word)
 		}
 		file := filepath.Join(moduleDir, filepath.FromSlash(item.AsmFile))
 		data, err := os.ReadFile(file)
@@ -107,12 +112,29 @@ func verifyInvalidMachineCodeSkip(moduleDir string, candidate discoveryCandidate
 			item.MacroInvocation != "" && !strings.Contains(string(data), item.MacroInvocation) {
 			return fmt.Errorf("%s: source evidence changed in %s", candidate.exactKey(), item.AsmFile)
 		}
-		emitted, err := rawWordFromEvidence(item)
-		if err != nil || emitted != uint32(word) {
-			return fmt.Errorf("%s: source expression does not emit %s: %v", candidate.exactKey(), item.Word, err)
-		}
-		if err := rejectWord(item.Architecture, uint32(word)); err != nil {
-			return fmt.Errorf("%s: word %s is not independently invalid: %w", candidate.exactKey(), item.Word, err)
+		switch item.Kind {
+		case "":
+			word, err := strconv.ParseUint(item.Word, 0, 32)
+			if item.Architecture != "arm64" || item.MissingSymbol != "" ||
+				err != nil || !strings.HasPrefix(item.Word, "0x") {
+				return fmt.Errorf("%s: invalid ARM64 word evidence", candidate.exactKey())
+			}
+			emitted, err := rawWordFromEvidence(item)
+			if err != nil || emitted != uint32(word) {
+				return fmt.Errorf("%s: source expression does not emit %s: %v", candidate.exactKey(), item.Word, err)
+			}
+			if rejectWord == nil {
+				return fmt.Errorf("%s: independent ARM64 decoder unavailable", candidate.exactKey())
+			}
+			if err := rejectWord(item.Architecture, uint32(word)); err != nil {
+				return fmt.Errorf("%s: word %s is not independently invalid: %w", candidate.exactKey(), item.Word, err)
+			}
+		case "amd64_missing_rip_constant":
+			if err := verifyAMD64MissingRIPConstant(item, data); err != nil {
+				return fmt.Errorf("%s: %w", candidate.exactKey(), err)
+			}
+		default:
+			return fmt.Errorf("%s: unknown invalid-source evidence kind %q", candidate.exactKey(), item.Kind)
 		}
 	}
 	return nil
@@ -130,17 +152,175 @@ func validateInvalidSourceReportEvidence(result discoveryCorpusResult) error {
 	}
 	for _, item := range result.InvalidSourceEvidence {
 		if !files[item.AsmFile] || !discoverySHA256Pattern.MatchString(item.SHA256) ||
-			item.Architecture != "arm64" || item.SourceExpression == "" {
+			item.SourceExpression == "" {
 			return fmt.Errorf("invalid source evidence for %q", item.AsmFile)
 		}
-		word, err := strconv.ParseUint(item.Word, 0, 32)
+		switch item.Kind {
+		case "":
+			word, err := strconv.ParseUint(item.Word, 0, 32)
+			if item.Architecture != "arm64" || item.MissingSymbol != "" || err != nil {
+				return fmt.Errorf("invalid ARM64 source word %q: %v", item.Word, err)
+			}
+			emitted, err := rawWordFromEvidence(item)
+			if err != nil || emitted != uint32(word) {
+				return fmt.Errorf("source expression does not emit %q: %v", item.Word, err)
+			}
+		case "amd64_missing_rip_constant":
+			if err := verifyAMD64MissingRIPConstant(item, nil); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unknown invalid-source evidence kind %q", item.Kind)
+		}
+	}
+	return nil
+}
+
+// Go's assembler accepts raw QUAD bytes without creating a relocation. A
+// RIP-relative reference to a missing file-local constant therefore remains
+// a fixed numeric displacement, even though the source comment names a pool.
+func verifyAMD64MissingRIPConstant(item discoveryInvalidMachineCodeEvidence, source []byte) error {
+	if item.Architecture != "amd64" || item.Word != "" || item.MacroInvocation != "" ||
+		!rawRIPConstantPattern.MatchString(item.MissingSymbol) {
+		return fmt.Errorf("invalid AMD64 missing-constant evidence")
+	}
+	match := rawQuadPattern.FindStringSubmatch(strings.TrimSpace(item.SourceExpression))
+	if match == nil || !strings.Contains(item.SourceExpression, "L"+item.MissingSymbol+"(%rip)") {
+		return fmt.Errorf("AMD64 raw QUAD does not identify the missing RIP constant")
+	}
+	value, err := strconv.ParseUint(match[1], 0, 64)
+	if err != nil {
+		return err
+	}
+	var code [8]byte
+	binary.LittleEndian.PutUint64(code[:], value)
+	inst, err := x86asm.Decode(code[:], 64)
+	if err != nil || inst.Len != len(code) {
+		return fmt.Errorf("AMD64 raw QUAD is not one complete x86 instruction: %v", err)
+	}
+	rip := false
+	for _, arg := range inst.Args {
+		mem, ok := arg.(x86asm.Mem)
+		if ok && mem.Base == x86asm.RIP && int64(inst.Len)+mem.Disp >= int64(len(code)) {
+			rip = true
+		}
+	}
+	if !rip {
+		return fmt.Errorf("AMD64 raw QUAD does not reference an external RIP location")
+	}
+	if source != nil {
+		declaration := regexp.MustCompile(`(?m)^\s*(?:DATA|GLOBL)\s+` +
+			regexp.QuoteMeta(item.MissingSymbol) + `(?:<>|)(?:\+|\()`)
+		if declaration.Match(source) {
+			return fmt.Errorf("AMD64 RIP constant %s is declared in the source", item.MissingSymbol)
+		}
+	}
+	return nil
+}
+
+// The source proof above establishes that the constant is absent. Verify the
+// actual Go object as well: a fixed raw RIP displacement must not accidentally
+// land in any emitted TEXT symbol. This check uses Go's own assembler rather
+// than plan9asm's translation or LLVM's layout.
+func verifyAMD64MissingRIPConstantObject(ctx context.Context, moduleDir, workDir string, item discoveryInvalidMachineCodeEvidence) error {
+	if err := verifyAMD64MissingRIPConstant(item, nil); err != nil {
+		return err
+	}
+	match := rawQuadPattern.FindStringSubmatch(strings.TrimSpace(item.SourceExpression))
+	value, err := strconv.ParseUint(match[1], 0, 64)
+	if err != nil {
+		return err
+	}
+	var code [8]byte
+	binary.LittleEndian.PutUint64(code[:], value)
+	inst, err := x86asm.Decode(code[:], 64)
+	if err != nil {
+		return err
+	}
+	var displacement int64
+	for _, arg := range inst.Args {
+		if mem, ok := arg.(x86asm.Mem); ok && mem.Base == x86asm.RIP {
+			displacement = mem.Disp
+			break
+		}
+	}
+	object, err := os.CreateTemp(workDir, "raw-rip-proof-*.o")
+	if err != nil {
+		return err
+	}
+	objectPath := object.Name()
+	if err := object.Close(); err != nil {
+		return err
+	}
+	defer os.Remove(objectPath)
+
+	sourcePath := filepath.Join(moduleDir, filepath.FromSlash(item.AsmFile))
+	cmd := exec.CommandContext(ctx, "go", "tool", "asm",
+		"-I", filepath.Join(runtime.GOROOT(), "pkg", "include"),
+		"-I", filepath.Dir(sourcePath), "-o", objectPath, sourcePath)
+	cmd.Env = replaceEnv(os.Environ(), map[string]string{
+		"GOOS": "linux", "GOARCH": "amd64", "GOTOOLCHAIN": "local",
+	})
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("Go assembler could not prove raw RIP source: %w: %s", err, output)
+	}
+
+	disassembly, err := exec.CommandContext(ctx, "go", "tool", "objdump", objectPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Go objdump raw RIP source: %w: %s", err, disassembly)
+	}
+	needle := hex.EncodeToString(code[:])
+	var instructionPC int64
+	matches := 0
+	for _, line := range strings.Split(string(disassembly), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 || fields[2] != needle {
+			continue
+		}
+		pc, err := strconv.ParseInt(fields[1], 0, 64)
 		if err != nil {
-			return fmt.Errorf("invalid source word %q: %w", item.Word, err)
+			return fmt.Errorf("parse Go objdump PC: %w", err)
 		}
-		emitted, err := rawWordFromEvidence(item)
-		if err != nil || emitted != uint32(word) {
-			return fmt.Errorf("source expression does not emit %q: %v", item.Word, err)
+		instructionPC = pc
+		matches++
+	}
+	if matches != 1 {
+		return fmt.Errorf("Go object contains %d instances of raw RIP instruction, want exactly one", matches)
+	}
+	target := instructionPC + int64(inst.Len) + displacement
+	if target < 0 {
+		return fmt.Errorf("raw RIP target is negative")
+	}
+
+	symbols, err := exec.CommandContext(ctx, "go", "tool", "nm", "-size", objectPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Go nm raw RIP source: %w: %s", err, symbols)
+	}
+	textCount := 0
+	for _, line := range strings.Split(string(symbols), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
 		}
+		if fields[3] == item.MissingSymbol ||
+			strings.HasPrefix(fields[3], item.MissingSymbol+"<") {
+			return fmt.Errorf("raw RIP constant %s exists in Go object", item.MissingSymbol)
+		}
+		if fields[2] != "T" {
+			continue
+		}
+		start, startErr := strconv.ParseInt(fields[0], 16, 64)
+		size, sizeErr := strconv.ParseInt(fields[1], 10, 64)
+		if startErr != nil || sizeErr != nil || size <= 0 {
+			return fmt.Errorf("invalid Go TEXT symbol bounds: %q", line)
+		}
+		textCount++
+		if target >= start && target < start+size {
+			return fmt.Errorf("raw RIP target %#x lands in Go TEXT symbol %s", target, fields[3])
+		}
+	}
+	if textCount == 0 {
+		return fmt.Errorf("Go object has no TEXT symbols to bound raw RIP target")
 	}
 	return nil
 }
@@ -295,10 +475,20 @@ func verifyInvalidMachineCodeCandidate(cfg discoveryCorpusConfig, candidate disc
 		if err != nil {
 			return fmt.Errorf("download skip evidence module: %w", err)
 		}
-		return verifyInvalidMachineCodeSkip(download.Dir, candidate, skip, func(arch string, word uint32) error {
+		if err := verifyInvalidMachineCodeSkip(download.Dir, candidate, skip, func(arch string, word uint32) error {
 			decodeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 			defer cancel()
 			return rejectInvalidMachineCodeWithLLVM(decodeCtx, decoder, arch, word)
-		})
+		}); err != nil {
+			return err
+		}
+		for _, item := range skip.Evidence {
+			if item.Kind == "amd64_missing_rip_constant" {
+				if err := verifyAMD64MissingRIPConstantObject(ctx, download.Dir, workDir, item); err != nil {
+					return fmt.Errorf("%s: independent Go object proof: %w", item.AsmFile, err)
+				}
+			}
+		}
+		return nil
 	})
 }

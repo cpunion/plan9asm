@@ -126,6 +126,13 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 - Selected `go-highway@v0.0.12` Darwin/ARM64 failures from the old CI passed
   against current code: BF16 image 2/2, SME matmul 3/3, NEON matmul 1/1.
   These are direct replays, not a whole-module or shard pass.
+- Shard 29 at `d7fa0e2` reached `go-highway@v0.0.12` and failed in two AMD64
+  GoAT-generated files. Their raw QUAD opcodes decode, but the referenced
+  CPI0_4 and CPI1_1 constants are absent. Go 1.27's own assembled objects
+  place the fixed RIP targets beyond all TEXT symbols. A new exact-version,
+  SHA-pinned invalid-source proof distinguishes this from invalid ARM64
+  encodings and retains a specific skip reason. Focused proof tests pass;
+  the complete candidate and shard still need replay on the new revision.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
@@ -155,7 +162,7 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    shared-frame/register semantics; JIT libraries need native code layout and
    address/entry contracts; large `wasm2go` modules need bounded memory even
    when a single package contains thousands of generated functions.
-3. Keep unproven upstream defects failed. Only the four confirmed exact
+3. Keep unproven upstream defects failed. Only the five confirmed exact
    versions above qualify for `skipped_invalid_source`; private Apple
    instructions alone are not proof of invalid source. Continue other
    applicable forms and candidates normally.
