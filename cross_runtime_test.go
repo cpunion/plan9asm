@@ -70,6 +70,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_signed_load", func(t *testing.T) {
 		testARM64RawSVESignedLoadRuntime(t, llc)
 	})
+	t.Run("arm64_raw_sve_add_sub_wide", func(t *testing.T) {
+		testARM64RawSVEAddSubWideRuntime(t, llc)
+	})
 	t.Run("arm64_raw_sve_vector_count", func(t *testing.T) {
 		testARM64RawSVEVectorCountRuntime(t, llc)
 	})

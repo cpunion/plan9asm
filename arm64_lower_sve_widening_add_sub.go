@@ -17,6 +17,7 @@ const (
 type arm64SVEWideningAddSubSpec struct {
 	intrinsic string
 	kind      arm64SVEWideningAddSubKind
+	rawBase   uint32
 }
 
 var arm64SVEWideningAddSubSpecs = map[Op]arm64SVEWideningAddSubSpec{
@@ -27,26 +28,49 @@ var arm64SVEWideningAddSubSpecs = map[Op]arm64SVEWideningAddSubSpec{
 	"ZSADDLB":  {intrinsic: "saddlb", kind: arm64SVEAddSubLong},
 	"ZSADDLBT": {intrinsic: "saddlbt", kind: arm64SVEAddSubLong},
 	"ZSADDLT":  {intrinsic: "saddlt", kind: arm64SVEAddSubLong},
-	"ZSADDWB":  {intrinsic: "saddwb", kind: arm64SVEAddSubWide},
-	"ZSADDWT":  {intrinsic: "saddwt", kind: arm64SVEAddSubWide},
+	"ZSADDWB":  {intrinsic: "saddwb", kind: arm64SVEAddSubWide, rawBase: 0x45004000},
+	"ZSADDWT":  {intrinsic: "saddwt", kind: arm64SVEAddSubWide, rawBase: 0x45004400},
 	"ZSSUBLB":  {intrinsic: "ssublb", kind: arm64SVEAddSubLong},
 	"ZSSUBLBT": {intrinsic: "ssublbt", kind: arm64SVEAddSubLong},
 	"ZSSUBLT":  {intrinsic: "ssublt", kind: arm64SVEAddSubLong},
 	"ZSSUBLTB": {intrinsic: "ssubltb", kind: arm64SVEAddSubLong},
-	"ZSSUBWB":  {intrinsic: "ssubwb", kind: arm64SVEAddSubWide},
-	"ZSSUBWT":  {intrinsic: "ssubwt", kind: arm64SVEAddSubWide},
+	"ZSSUBWB":  {intrinsic: "ssubwb", kind: arm64SVEAddSubWide, rawBase: 0x45005000},
+	"ZSSUBWT":  {intrinsic: "ssubwt", kind: arm64SVEAddSubWide, rawBase: 0x45005400},
 	"ZSUBHNB":  {intrinsic: "subhnb", kind: arm64SVEAddSubNarrowBottom},
 	"ZSUBHNT":  {intrinsic: "subhnt", kind: arm64SVEAddSubNarrowTop},
 	"ZRSUBHNB": {intrinsic: "rsubhnb", kind: arm64SVEAddSubNarrowBottom},
 	"ZRSUBHNT": {intrinsic: "rsubhnt", kind: arm64SVEAddSubNarrowTop},
 	"ZUADDLB":  {intrinsic: "uaddlb", kind: arm64SVEAddSubLong},
 	"ZUADDLT":  {intrinsic: "uaddlt", kind: arm64SVEAddSubLong},
-	"ZUADDWB":  {intrinsic: "uaddwb", kind: arm64SVEAddSubWide},
-	"ZUADDWT":  {intrinsic: "uaddwt", kind: arm64SVEAddSubWide},
+	"ZUADDWB":  {intrinsic: "uaddwb", kind: arm64SVEAddSubWide, rawBase: 0x45004800},
+	"ZUADDWT":  {intrinsic: "uaddwt", kind: arm64SVEAddSubWide, rawBase: 0x45004c00},
 	"ZUSUBLB":  {intrinsic: "usublb", kind: arm64SVEAddSubLong},
 	"ZUSUBLT":  {intrinsic: "usublt", kind: arm64SVEAddSubLong},
-	"ZUSUBWB":  {intrinsic: "usubwb", kind: arm64SVEAddSubWide},
-	"ZUSUBWT":  {intrinsic: "usubwt", kind: arm64SVEAddSubWide},
+	"ZUSUBWB":  {intrinsic: "usubwb", kind: arm64SVEAddSubWide, rawBase: 0x45005800},
+	"ZUSUBWT":  {intrinsic: "usubwt", kind: arm64SVEAddSubWide, rawBase: 0x45005c00},
+}
+
+var arm64SVEAddSubWideRawOps = func() map[uint32]Op {
+	rows := make(map[uint32]Op)
+	for op, spec := range arm64SVEWideningAddSubSpecs {
+		if spec.kind == arm64SVEAddSubWide && spec.rawBase != 0 {
+			rows[spec.rawBase] = op
+		}
+	}
+	return rows
+}()
+
+func decodeARM64RawSVEAddSubWide(word uint32) (Instr, bool) {
+	op, ok := arm64SVEAddSubWideRawOps[word&0xff20fc00]
+	size := word >> 22 & 3
+	if !ok || size == 0 {
+		return Instr{}, false
+	}
+	return Instr{Op: op, Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>16&31, "BHSD"[size-1]))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, "BHSD"[size]))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, "BHSD"[size]))},
+	}}, true
 }
 
 type arm64SVEWideningAddSubForm struct {
