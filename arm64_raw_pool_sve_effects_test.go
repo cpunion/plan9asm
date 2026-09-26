@@ -18,6 +18,10 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 			gp = "x"
 		}
 		cases = append(cases,
+			effect{fmt.Sprintf("cntp x30, p15, p14.%s", width), true},
+			effect{fmt.Sprintf("cntp x9, p15, p14.%s", width), true},
+			effect{fmt.Sprintf("cntp x30, pn15.%s, vlx2", width), true},
+			effect{fmt.Sprintf("cntp x9, pn15.%s, vlx4", width), true},
 			effect{fmt.Sprintf("dup z31.%s, %s30", width, gp), true},
 			effect{fmt.Sprintf("dup z31.%s, %s9", width, gp), false},
 			effect{fmt.Sprintf("compact z31.%s, p7, z30.%s", width, width), true},
@@ -86,6 +90,28 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 	for _, word := range []uint32{0, 0x25ae1ff3, 0x6ea0f16c, 0x6ebee0e4} {
 		if arm64RawPoolSVEIgnoresAddress(word, 9) {
 			t.Fatalf("unknown or unmodeled encoding %#08x acquired a safe effect", word)
+		}
+	}
+}
+
+func TestARM64RawPoolFlagArithmeticKills(t *testing.T) {
+	for _, width := range []string{"w", "x"} {
+		for _, op := range []string{"add", "adds", "adc", "adcs", "sub", "subs", "sbc", "sbcs", "neg", "negs", "ngc", "ngcs"} {
+			for _, source := range []int{0, 9} {
+				line := fmt.Sprintf("%s %s9, %s%d", op, width, width, source)
+				if !strings.HasPrefix(op, "n") {
+					line += fmt.Sprintf(", %s1", width)
+				}
+				t.Run(line, func(t *testing.T) {
+					var instructions []Instr
+					for _, word := range assembleARM64LLVMWords(t, []string{"adr x9, #64", "ldr w2, [x9]", line, "ret"}, "") {
+						instructions = append(instructions, Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}})
+					}
+					if got := arm64RawAddressOnlyLoaded(instructions, 0, len(instructions)); got != (source != 9) {
+						t.Fatalf("load-only proof=%v for %s", got, line)
+					}
+				})
+			}
 		}
 	}
 }

@@ -189,6 +189,14 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 			return false
 		}
 		word := uint32(instructions[i].Args[0].Imm)
+		// CNTP has only predicate inputs and overwrites its explicit GP
+		// destination. Writing this register kills the old pool address.
+		if ins, ok := decodeARM64RawSVEPredicateCount(word); ok {
+			if ins.Args[2].Reg != Reg(fmt.Sprintf("R%d", register-arm64asm.X0)) {
+				queue = append(queue, i+1)
+			}
+			continue
+		}
 		// ADD/SUB Xn, Xn, #0 preserves the address exactly. Wn truncates it,
 		// flag-setting forms expose its bits, and nonzero offsets need a
 		// separate range proof; none of those match this identity encoding.
@@ -223,7 +231,10 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 		// operations. Other encodings can read/write registers implicitly.
 		destinations := 0
 		switch decoded.Op.String() {
-		case "ADR", "MOV", "MOVZ", "MOVN", "ADD", "SUB", "AND", "ORR", "EOR":
+		case "ADR", "MOV", "MOVZ", "MOVN", "AND", "ORR", "EOR":
+			destinations = 1
+		case "ADD", "ADDS", "ADC", "ADCS", "SUB", "SUBS", "SBC", "SBCS",
+			"NEG", "NEGS", "NGC", "NGCS":
 			destinations = 1
 		case "LSL", "LSR", "ASR", "ROR", "FMOV":
 			destinations = 1
