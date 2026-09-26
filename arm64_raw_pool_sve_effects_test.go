@@ -12,6 +12,10 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		want bool
 	}
 	var cases []effect
+	for _, op := range []string{"and", "ands", "bic", "bics", "eor", "eors", "nand", "nands", "nor", "nors", "orn", "orns", "orr", "orrs"} {
+		cases = append(cases, effect{op + " p9.b, p15/z, p9.b, p14.b", true})
+	}
+	cases = append(cases, effect{"sel p9.b, p15, p9.b, p14.b", true})
 	cases = append(cases, effect{"dupm z9.d, #0x3ff0000000000000", true})
 	cases = append(cases, effect{"movprfx z9, z31\nadd z9.d, p0/m, z9.d, z30.d", true})
 	for _, op := range []string{"cntb", "cnth", "cntw", "cntd", "incb", "inch", "incw", "incd", "decb", "dech", "decw", "decd"} {

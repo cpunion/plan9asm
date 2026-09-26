@@ -372,7 +372,7 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 			"zip1 z0.s, z0.s, z0.s",
 			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
 			"movprfx z2, z1", "asrd z2.s, p0/m, z2.s, #1",
-			"whilelo p1.s, xzr, x3", "cntp x4, p0, p1.s",
+			"whilelo p1.s, xzr, x3", "ands p1.b, p0/z, p1.b, p1.b", "cntp x4, p0, p1.s",
 			"st1w {z2.s}, p1, [x0, x4, lsl #2]", "cntp x19, p0, p1.s",
 		}},
 	} {
