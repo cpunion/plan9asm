@@ -128,7 +128,7 @@ func (c *arm64Ctx) lowerARM64SVEOrdinarySingleLoad(op Op, spec arm64SVEOrdinaryM
 	if _, _, vectorBase := arm64ParseSVEZElementReg(Operand{Kind: OpReg, Reg: memory.Base}); vectorBase {
 		return c.lowerARM64SVEOrdinaryVectorBaseLoad(op, spec, memory, predicate, destination, elementBits, ins)
 	}
-	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 1)
+	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, elementBits)
 	if err != nil {
 		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}
@@ -284,7 +284,7 @@ func (c *arm64Ctx) lowerARM64SVEOrdinarySingleStore(op Op, spec arm64SVEOrdinary
 			lanes, spec.memoryBits, lanes, elementBits, storedType, stored, predicateType, predicateValue, baseType, baseValue, memory.Off)
 		return true, false, nil
 	}
-	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 1)
+	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, elementBits)
 	if err != nil {
 		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}
@@ -307,7 +307,7 @@ func arm64SVETruncateStoreValue(c *arm64Ctx, value, vectorType string, lanes, me
 }
 
 func (c *arm64Ctx) lowerARM64SVEOrdinaryQContiguousLoad(op Op, spec arm64SVEOrdinaryMemorySpec, memory MemRef, predicate, destination int, ins Instr) (ok bool, terminated bool, err error) {
-	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 1)
+	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 128)
 	if err != nil {
 		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}
@@ -326,7 +326,7 @@ func (c *arm64Ctx) lowerARM64SVEOrdinaryQContiguousLoad(op Op, spec arm64SVEOrdi
 }
 
 func (c *arm64Ctx) lowerARM64SVEOrdinaryQContiguousStore(op Op, spec arm64SVEOrdinaryMemorySpec, memory MemRef, predicate, source int, ins Instr) (ok bool, terminated bool, err error) {
-	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 1)
+	address, err := c.arm64SVEOrdinaryContiguousAddress(memory, spec.memoryBits, 128)
 	if err != nil {
 		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}
@@ -412,14 +412,16 @@ func (c *arm64Ctx) loadARM64SVEQPredicate(predicate int) (string, error) {
 	return "%" + converted, nil
 }
 
-func (c *arm64Ctx) arm64SVEOrdinaryContiguousAddress(memory MemRef, memoryBits, vectorCount int) (string, error) {
+func (c *arm64Ctx) arm64SVEOrdinaryContiguousAddress(memory MemRef, memoryBits, elementBits int) (string, error) {
 	if memory.Index != "" {
 		if _, _, vectorIndex := arm64ParseSVEZElementReg(Operand{Kind: OpReg, Reg: memory.Index}); vectorIndex {
 			return "", fmt.Errorf("contiguous form does not accept a scalable-vector index")
 		}
 		return c.arm64SVERegisterOffsetAddress(memory, int64(memoryBits/8))
 	}
-	return c.arm64SVENonTemporalContiguousAddress(memory, memoryBits, vectorCount)
+	// MUL VL counts the vector's in-memory footprint, not its register
+	// footprint. Widening loads and truncating stores transfer fewer bytes.
+	return c.arm64SVEVLAddress(memory, -8, 7, int64(16*memoryBits/elementBits))
 }
 
 func (c *arm64Ctx) arm64SVEOrdinaryVectorOffset(op Op, memory MemRef, elementBits, memoryBits int, ins Instr) (pointer, indexValue, indexType, suffix string, err error) {

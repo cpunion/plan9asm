@@ -35,7 +35,7 @@ func (c *arm64Ctx) lowerARM64SVENonFaultingMemory(op Op, ins Instr) (ok bool, te
 	if !predicateOK || !vectorsOK || len(vectors) != 1 || elementBits < spec.memoryBits || spec.signed && elementBits == spec.memoryBits {
 		return true, false, fmt.Errorf("arm64 %s has predicate or destination widths outside its Go 1.27 table: %q", op, ins.Raw)
 	}
-	address, err := c.arm64SVEVLAddress(ins.Args[0].Mem, -8, 7, 16)
+	address, err := c.arm64SVEVLAddress(ins.Args[0].Mem, -8, 7, int64(16*spec.memoryBits/elementBits))
 	if err != nil {
 		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}

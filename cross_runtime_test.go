@@ -67,6 +67,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_vector_count", func(t *testing.T) {
 		testARM64RawSVEVectorCountRuntime(t, llc)
 	})
+	t.Run("arm64_sve_ordinary_memory_offset", func(t *testing.T) {
+		testARM64SVEMemoryOffsetRuntime(t, llc, false)
+	})
+	t.Run("arm64_sve_non_faulting_memory_offset", func(t *testing.T) {
+		testARM64SVEMemoryOffsetRuntime(t, llc, true)
+	})
 	t.Run("arm64_raw_pool_control_flow", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir := arm64RawPoolControlFlowIR(t, triple)
