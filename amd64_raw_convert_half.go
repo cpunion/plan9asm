@@ -114,7 +114,7 @@ func decodedX86PackedHalfConversionInstruction(code []byte, mode int) (Instr, in
 				width *= 2
 			}
 			if form.rawOnly && p.broadcast && !registerSource {
-				width = amd64PackedHalfConversionOps[string(form.op)].inputBits / 8
+				width = amd64HalfConversionSpecs[string(form.op)].inputBits / 8
 			}
 			return decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, prefix, width)
 		}

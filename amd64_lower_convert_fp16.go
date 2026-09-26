@@ -12,10 +12,14 @@ func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpe
 		return true, false, fmt.Errorf("%s has no named Go assembler form: %q", ins.Op, ins.Raw)
 	}
 	vl := ins.x86VectorBytes
-	if vl != 16 && vl != 32 && vl != 64 {
+	if !spec.scalar && vl != 16 && vl != 32 && vl != 64 {
 		return true, false, fmt.Errorf("%s has invalid encoded vector length %d", ins.Op, vl)
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
+	operandCount := 2
+	if spec.scalar {
+		operandCount = 3
+	}
+	if len(ins.Args) != operandCount && len(ins.Args) != operandCount+1 {
 		return true, false, fmt.Errorf("%s requires source, [K mask,] destination", ins.Op)
 	}
 	base := strings.SplitN(string(ins.Op), ".", 2)[0]
@@ -25,12 +29,15 @@ func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpe
 		suffix = strings.TrimPrefix(suffix, ".SAE")
 	}
 	properties, valid := parseAMD64FMA3Suffix(strings.TrimPrefix(suffix, "."))
-	if !valid || spec.inputBits == 16 && properties.rounding != "" || spec.inputBits == 32 && sae {
+	if !valid || spec.inputBits == 16 && properties.rounding != "" || spec.outputBits == 16 && sae {
 		return true, false, fmt.Errorf("%s has invalid conversion controls", ins.Op)
 	}
-	masked := len(ins.Args) == 3
-	if properties.zeroing && !masked || masked && !amd64NonzeroKOperand(ins.Args[1]) {
+	masked := len(ins.Args) == operandCount+1
+	if properties.zeroing && !masked || masked && !amd64NonzeroKOperand(ins.Args[len(ins.Args)-2]) {
 		return true, false, fmt.Errorf("%s requires K1-K7 for masking", ins.Op)
+	}
+	if spec.scalar {
+		return c.lowerRawScalarHalfConversion(ins, spec, properties, sae)
 	}
 	source, destination := ins.Args[0], ins.Args[len(ins.Args)-1]
 	lanes := vl / 4
@@ -73,19 +80,7 @@ func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpe
 	if err != nil {
 		return true, false, err
 	}
-	inputType, outputType, conversion := "half", "float", "fpext"
-	if spec.inputBits == 32 {
-		inputType, outputType, conversion = "float", "half", "fptrunc"
-	}
-	floats, converted := c.newTmp(), c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x %s>\n", floats, lanes, spec.inputBits, input, lanes, inputType)
-	fmt.Fprintf(c.b, "  %%%s = %s <%d x %s> %%%s to <%d x %s>\n", converted, conversion, lanes, inputType, floats, lanes, outputType)
-	bits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x %s> %%%s to <%d x i%d>\n", bits, lanes, outputType, converted, lanes, spec.outputBits)
-	result := "%" + bits
-	if spec.inputBits == 32 {
-		result = c.adjustFP16NarrowRounding(lanes, "%"+floats, "%"+converted, result, properties.rounding)
-	}
+	result := c.emitHalfConversion(lanes, spec, input, properties.rounding)
 	if masked {
 		old, err := c.loadPackedExtendInputs(destination, destinationRegisterBytes, lanes, spec.outputBits)
 		if err != nil {
@@ -98,19 +93,37 @@ func (c *amd64Ctx) lowerRawFP16Conversion(ins Instr, spec amd64HalfConversionSpe
 	return true, false, c.storePackedHalfResult(destination, destinationRegisterBytes, outputBytes, "%"+bytes)
 }
 
+func (c *amd64Ctx) emitHalfConversion(lanes int, spec amd64HalfConversionSpec, input, rounding string) string {
+	inputType := amd64FMA3LLVMType(1, spec.inputBits)
+	outputType := amd64FMA3LLVMType(1, spec.outputBits)
+	conversion := "fpext"
+	if spec.outputBits == 16 {
+		conversion = "fptrunc"
+	}
+	floats, converted, bits := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x %s>\n", floats, lanes, spec.inputBits, input, lanes, inputType)
+	fmt.Fprintf(c.b, "  %%%s = %s <%d x %s> %%%s to <%d x %s>\n", converted, conversion, lanes, inputType, floats, lanes, outputType)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x %s> %%%s to <%d x i%d>\n", bits, lanes, outputType, converted, lanes, spec.outputBits)
+	result := "%" + bits
+	if spec.outputBits == 16 {
+		result = c.adjustFP16NarrowRounding(lanes, inputType, "%"+floats, "%"+converted, result, rounding)
+	}
+	return result
+}
+
 // Directed rounding differs from nearest-even by at most one half ULP.
 // Comparing the exactly widened result lets integer correction preserve
 // signed zero, subnormals, NaNs and directed overflow without changing the
 // host FP environment. LLVM 22's AArch64 constrained fptrunc does not honor
 // these static rounding modes for half, so it cannot serve as this oracle.
-func (c *amd64Ctx) adjustFP16NarrowRounding(lanes int, original, halves, bits, rounding string) string {
+func (c *amd64Ctx) adjustFP16NarrowRounding(lanes int, inputType, original, halves, bits, rounding string) string {
 	if rounding == "" || rounding == "RN_SAE" {
 		return bits
 	}
 	widened, below, above, negative := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = fpext <%d x half> %s to <%d x float>\n", widened, lanes, halves, lanes)
-	fmt.Fprintf(c.b, "  %%%s = fcmp olt <%d x float> %%%s, %s\n", below, lanes, widened, original)
-	fmt.Fprintf(c.b, "  %%%s = fcmp ogt <%d x float> %%%s, %s\n", above, lanes, widened, original)
+	fmt.Fprintf(c.b, "  %%%s = fpext <%d x half> %s to <%d x %s>\n", widened, lanes, halves, lanes, inputType)
+	fmt.Fprintf(c.b, "  %%%s = fcmp olt <%d x %s> %%%s, %s\n", below, lanes, inputType, widened, original)
+	fmt.Fprintf(c.b, "  %%%s = fcmp ogt <%d x %s> %%%s, %s\n", above, lanes, inputType, widened, original)
 	fmt.Fprintf(c.b, "  %%%s = icmp slt <%d x i16> %s, zeroinitializer\n", negative, lanes, bits)
 	one := amd64SplatInteger(c, lanes, 16, "1")
 	plus, minus := c.newTmp(), c.newTmp()

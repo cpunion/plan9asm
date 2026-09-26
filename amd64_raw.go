@@ -1127,6 +1127,31 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawScalarHalfConversionRIPData(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 scalar FP16 literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				recordLiteral(offset, literal)
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86ScalarHalfConversionInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 scalar FP16 conversion at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, literal, ok, err := decodeX86RawFP16ConversionRIPData(code, offset, mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 FP16 conversion literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)

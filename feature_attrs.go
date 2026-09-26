@@ -1080,7 +1080,7 @@ func isAMD64RawFP16Op(op string) bool {
 	if base == "VMOVSH" || base == "VMOVW" {
 		return true
 	}
-	if spec, ok := amd64PackedHalfConversionOps[base]; ok {
+	if spec, ok := amd64HalfConversionSpecs[base]; ok {
 		return spec.rawOnly
 	}
 	if spec, ok := amd64FMA3Specs[Op(base)]; ok {

@@ -13,13 +13,18 @@ type amd64HalfConversionSuffix struct {
 type amd64HalfConversionSpec struct {
 	inputBits, outputBits int
 	rawOnly               bool
+	scalar                bool
 }
 
-var amd64PackedHalfConversionOps = map[string]amd64HalfConversionSpec{
+var amd64HalfConversionSpecs = map[string]amd64HalfConversionSpec{
 	"VCVTPH2PS":  {inputBits: 16, outputBits: 32},
 	"VCVTPS2PH":  {inputBits: 32, outputBits: 16},
 	"VCVTPH2PSX": {inputBits: 16, outputBits: 32, rawOnly: true},
 	"VCVTPS2PHX": {inputBits: 32, outputBits: 16, rawOnly: true},
+	"VCVTSH2SS":  {inputBits: 16, outputBits: 32, rawOnly: true, scalar: true},
+	"VCVTSS2SH":  {inputBits: 32, outputBits: 16, rawOnly: true, scalar: true},
+	"VCVTSH2SD":  {inputBits: 16, outputBits: 64, rawOnly: true, scalar: true},
+	"VCVTSD2SH":  {inputBits: 64, outputBits: 16, rawOnly: true, scalar: true},
 }
 
 func parseAMD64HalfConversionSuffix(rawOp, baseOp string) (amd64HalfConversionSuffix, error) {
@@ -56,7 +61,7 @@ func (c *amd64Ctx) lowerPackedHalfConversion(op Op, ins Instr) (ok bool, termina
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp = rawOp[:dot]
 	}
-	spec, supported := amd64PackedHalfConversionOps[baseOp]
+	spec, supported := amd64HalfConversionSpecs[baseOp]
 	if !supported {
 		return false, false, nil
 	}
@@ -203,7 +208,7 @@ func (c *amd64Ctx) lowerPackedSingleToHalf(ins Instr, properties amd64HalfConver
 	result := "%" + bits
 	if rounding > 0 && rounding < 4 {
 		mode := [...]string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"}[rounding]
-		result = c.adjustFP16NarrowRounding(lanes, "%"+floats, "%"+converted, result, mode)
+		result = c.adjustFP16NarrowRounding(lanes, "float", "%"+floats, "%"+converted, result, mode)
 	}
 	outputBytes := sourceBytes / 2
 	if masked {
