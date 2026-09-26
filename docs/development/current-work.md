@@ -1,119 +1,117 @@
-# Current work: PR 40 CI and ecosystem coverage
+# Current work: PR 40 CI repair
 
 Read [instruction development](instructions.md), [validation](validation.md),
-and [report provenance](discovery-verification.md). Keep progress funnels in
-the [draft PR](https://github.com/xgo-dev/plan9asm/pull/40), not this checkpoint.
+and [report provenance](discovery-verification.md). Do not resume discovery
+while the existing CI failures remain.
 
-## Contribution and frozen runners
+## Contribution and source
 
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`. The user
-  requests complete fixes before pushing. Remote head is still `4cf5ade`;
-  upstream main `7cc8c0f` is an ancestor. PR 40 is open and draft. Old CI
-  `36087649450` has 74 successful jobs, 19 failed discovery shards and one
-  failed aggregate. Do not describe local fixes as a current-head CI pass.
-- Active development branch: `codex/pr40-arm64-raw-20260926`, implementation
-  through `e002ae5`. Focused Go 1.20/1.27, CLI, vet, LLVM 22 objects and
-  required runtime checks pass for these batches. Inspect Git before editing.
-- Full-root runner: `codex/pr40-fp16-20260926`. Complete suites passed at
-  `b6ccde3` (602 seconds) and `a5b0605` (591 seconds). It has advanced to
-  `4885851` for signed-load corpus/official/benchmark checks; inspect Git and
-  running processes before advancing. `_out/simd-signed-load.json` is a
-  completed diagnostic replay, not a full discovery-candidate pass.
-- `codex/pr40-ecosystem-fixes-20260925` completed shard 25/32 at `bc4c7cb`:
-  137 selected, 111 passed, 26 source N/A, zero failed, 1,811 translations.
-  Inspect `_out/shard25-proxy-repair.log` and
-  `_out/ci-repair-223-shard25/shard-25.json`; the directory name is not its
-  source revision. Preserve these completed reports when advancing the runner.
-- This runner also preserves completed historical reports:
-  `_out/ci-repair-02a1850/shard-0.json` (159 selected, 130 passed, 28 source
-  N/A, one failed GopherJRE) and `_out/current-local-shards/shard-10.json`
-  (173 selected, 142 passed, 31 source N/A, zero failures, source `74b02be`).
-  Never combine reports with different source fingerprints.
-- The committed assembly ledger (`1780b49`, merged at `4885851`) records the
-  validated `bc4c7cb` shard-25 snapshot: 4,783 candidates, 4,646 pending,
-  111 passed, 26 source N/A, zero failed; incomplete and unverified. It is
-  stale against later source. Publish replacement evidence with the update
-  script in an evidence checkout at the exact tested source, not by manually
-  promoting statuses. Documentation changes also alter the source fingerprint.
+  requests complete fixes before a batch push. Remote head remains
+  `4cf5ade`; PR 40 is open and draft. Run `gh pr view` for current checks.
+  Last inspection: 74 successful checks, 19 failed discovery shards and a
+  failed aggregate. No later local batch has been pushed.
+- Upstream main `7cc8c0f` was fetched again and is already an ancestor.
+  Never rewrite a frozen runner or push upstream.
+- Develop on `codex/pr40-arm64-raw-20260926`, implementation through
+  `e0d4b4d`. Check worktrees, status and running processes before editing.
+  Use current Go 1.27 and LLVM 22; focused root compatibility uses Go 1.20.
+- Frozen runners are `codex/pr40-fp16-20260926` and
+  `codex/pr40-ecosystem-fixes-20260925`. Inspect each HEAD and its logs
+  before advancing. Reports and generated tools live under ignored `_out/`.
 
-## Verified implementation batches
+## Completed local batches and gates
 
-- Earlier work covers raw FP16/BF16, SVE floating arithmetic/conversions,
-  comparisons, predicates, INDEX/count, compact, copies and integer unary
-  families, plus coherent Z/V/F register aliases. Use Git history and focused
-  tests for details; do not restart completed families.
-- `87457ea`: complete raw structured LD2/3/4 and ST2/3/4 memory grammar.
-  `f292cb3`: all raw integer DOT forms, including indexed lanes and mixed
-  signedness. SVE2.3 byte-to-halfword DOT retains encoding/object tests;
-  available QEMU does not execute that newer ISA.
-- `1b43a4e`, `7bc1db0`: complete XAR rotations and both SPLICE forms, including
-  raw full-width shifts and wrapping vector lists absent from Go's named
-  grammar. Native instructions and scalar oracles check six SVE lengths.
-- `65c6d9f`, `e30558b`: ordinary/quad logical reductions and all six ternary
-  bitwise operations share typed specs with named lowering. Independent
-  encoding fields, aliases, predicate identities and runtime results pass.
-- `1f2d6d6`, `a023a58`: all predicated/indexed integer MLA/MLS forms and
-  vector INC/DEC patterns/multipliers. Runtime tests cover every indexed lane,
-  accumulator aliases, wraparound, all predicate-count patterns and six VLs.
-- `01688b7`: ordinary and non-faulting contiguous memory offsets scale by
-  actual memory footprint, including widening loads, truncating stores and
-  Q elements. TDD reproduced wrong addresses; 132 ordinary and 48 non-faulting
-  functions now agree with native/scalar oracles, including null inactive
-  pointers, signed extension, positive/negative offsets and memory guards.
-- `0734bbe`: MAD/MSB join the shared MLA/MLS grammar, removing duplicated
-  lowering while retaining distinct destructive-product operand semantics.
-- `a5b0605`: all 13 extra-shift operations, 52 width formats and 1,212 raw
-  immediate/reverse-vector cases. `db4e655` batches assembly and shares C
-  oracle loops: identical 344 runtime cases dropped from 109 to 4.7 seconds.
-- `e920d8a`: all 38 LD1SB/SH/SW scalar/vector address forms share ordinary
-  memory lowering. Runtime oracles cover guarded low-address memory, null
-  inactive pointers, signed/unsigned extended indices, aliases and six VLs.
-- `e002ae5`: all eight wide ADD/SUB operations and 24 widths, with independent
-  register fields and 72 native/scalar runtime functions in 1.8 seconds.
+- Earlier commits cover complete raw SVE memory, arithmetic, conversions,
+  predicates, DOT, wide add/sub, extra shifts, ADR, and aliasing families.
+  Consult Git and focused tests; do not restart completed families.
+- `acf334b`: all 79 ordinary unsigned load formats, including gather,
+  widening, PN multi-vector and quad forms, share typed ordinary-memory
+  lowering. Negative/reserved encodings and runtime address effects pass.
+- `6a7ad09`: FDIV/FDIVR/FSCALE share raw/named typed grammar. Full root suite
+  passed in 704 seconds; official five-arch classification gate passed.
+- `f70af81`: complete raw saturating add/sub family. Runtime TDD also exposed
+  incorrect signed-byte/halfword saturation with unsigned large immediates.
+  Raw and named lowering now widen and clamp correctly.
+- `630cdef`: complete ZFCPY/ZFDUP floating-immediate decoding, including
+  P0–P15/M. Native/scalar/translated runtime checks cover all 256 constants
+  and H/S/D at six SVE lengths, batched into fifteen functions.
+- Full root at `630cdef` passed in 644 seconds:
+  `_out/full-root-float-copy.log` in the full-root runner. Its official gate
+  and strict five-arch benchmark passed: 184/184 files, 26 target-seconds.
+  Official observed-form classification is not all-encoder semantic coverage.
+- Full required cross-runtime gate at `f70af81` passed in 463 seconds:
+  `_out/cross-runtime-saturating.log` in the ecosystem runner. Newer pool
+  and floating-copy batches have focused cross-runtime passes and need the
+  next combined gate. Use checksum-pinned QEMU 10.2.3, not QEMU 8.2.
+- All recent batches passed focused Go 1.20/1.27 tests, CLI tests, vet and
+  affected Darwin/Linux/Windows LLVM 22 object checks. Logs include
+  `sve-saturating-add-sub-*`, `sve-float-copy-*`,
+  `raw-pool-register-effects-*` and `raw-pool-contract-identity-*`.
 
-## CI infrastructure and tool evidence
+## Constant-pool proof: preserve its safety boundary
 
-- `bc4c7cb` pins checksum-verified QEMU 10.2.3 using
-  `scripts/install-ci-qemu.sh`. QEMU 8.2 misexecutes indexed H-to-D DOT at
-  non-power-of-two VLs and can overwrite predicate state at maximum VL.
-  Do not work around that emulator bug in translation or skip the oracle.
-- Required full cross-runtime matrix passed at `4885851` (405 seconds),
-  including MAD/MSB, shifts and signed loads. Wide ADD/SUB has a focused
-  pass and still needs the next combined gate. Use LLVM 22 and pinned QEMU.
-- The strict five-arch standard-library benchmark at `4885851` passed all
-  184 files in 24 target-seconds, within 300-second/900-second budgets.
-- Discovery CI uses `GOPROXY=https://proxy.golang.org,https://goproxy.cn,direct`.
-  Skywire's exact version remains on the fallback proxy, authenticated by
-  Go's checksum database; its candidate now passed 11 translations. Never
-  disable checksum verification or turn download failures into N/A.
+- `eafa6a8`, `f7cb75f`, `e0d4b4d` establish typed instruction effects and
+  explicit return contracts, not a blanket caller-saved assumption.
+- Only R0–R17 can be terminal scratch kills. Explicit parameter/result
+  contracts are required. Normal ABI results and every frame-result fallback
+  register are excluded. Unknown signatures and custom ArgRegs stay strict.
+- Proven independent loads, ordinary pair loads, shifts and FMOV can overwrite
+  an old pointer. Known vector-only effects reuse validated SVE decoders.
+  ADD/SUB Xn,Xn,#0 is an identity; W truncation, flags and nonzero offsets
+  are deliberately not equivalent.
+- Calls, indirect branches, escaping addresses, exclusive-monitor accesses,
+  unknown effects and reachable invalid words still fail. Read-only memory
+  effects use an explicit whitelist, not an LD mnemonic prefix.
+- Remaining simd pools need proper offset/alias/range and additional SVE
+  operand-effect proofs. Do not simply permit arbitrary pointer arithmetic,
+  memory operands, unknown words or native-code address escapes.
 
-## Remaining failures and next actions
+## External replay and ledger evidence
 
-- `simd@v1.21.1`: earlier amd64 replay passed all 73 files. At `4885851`,
-  ARM64 passes 28/47 files on each of Darwin/Linux/Windows (84/141 total).
-  Remaining first failures include unsigned LD1W widening/gather, predicated
-  FADD immediate, UMULH and vector ADR. LLVM 22 disassembly confirms these
-  raw opcodes; do not infer them from function names. Wide ADD/SUB needs a fresh replay.
-  Unlabelled constant pools also remain. Removing the first instruction
-  failure does not establish a whole-file/candidate pass.
-- Constant-pool relocation requires a load-only address-use proof. Unknown
-  effects, escaping addresses, indirect calls and reachable invalid words
-  remain failures; do not guess data from comments or caller-saved registers.
-- Knoxdb/forks require a real cross-TEXT ABI0 shared-frame/register model.
-  GopherJRE/sharkie/gojit observe native code addresses/layout/markers.
-  GopherJRE also hardcodes a JIT entry offset; loose label/frame checks would
-  silently miscompile it. Go-highway dev9 has three absent amd64 RIP pools.
-- gmgo/gmsm, puter and fiber/ai retain raw-word issues, including byte-swapped
-  words and private Apple instructions. Inspect the latest exact report,
-  not only its first old diagnostic. Do not invent missing source constants.
-  `initLijing/gmsm@v0.15.6` has byte-swapped SM4 WORDs; LLVM 22 rejects the
-  original `0x09c961ce` and decodes `0xce61c909` as SM4EKEY. An optional user
-  question asks whether proven upstream defects may be isolated as
-  `blocked_external`. No permission or policy change has been received;
-  keep failures and do not silently rewrite the exact module or relax CI.
-- Finish all current gates, continue failing families with red/green tests,
-  and rerun all shards in one frozen source/tool/scan snapshot. Publish
-  validated assembly evidence, then push only to the allowed fork. Keep the
-  PR draft until tests, CI, review and coverage satisfy completion gates.
-  Do not resume discovery while CI failures remain. Clean owned temporary
-  packages/objects and containers; retain reports, not generated IR caches.
+- `simd@v1.21.1` ARM64 replay at `630cdef` passes 35/47 files on each of
+  Darwin/Linux/Windows (105/141); see `_out/simd-float-copy.{json,log}` in
+  the full-root runner. The latest development diagnostic reaches 40/47 on
+  Darwin only, with seven remaining failures:
+  `_out/simd-contract-pool-diagnostic.{json,log}` in the active tree.
+  This dirty diagnostic is not a whole-candidate or ledger pass.
+- Remaining simd first failures: jsonQuote NEON/SVE, atan2 NEON, exp SVE,
+  their fast variants, and partitionFloat32SVE2. Constants resemble branches
+  or other instructions because the pool proof still rejects their uses.
+- Historical complete shard 17 at `41279bb`: 159 selected = 126 passed +
+  32 source N/A + one failed simd. The validated snapshot is committed via
+  `e54160f` (merged at `7b13d39`): 4,783 total, 4,624 pending, 126 passed,
+  32 N/A, one failed, incomplete and unverified. It is stale against new code.
+- Its report is retained in the ecosystem runner:
+  `_out/ci-repair-41279bb-shard17/shard-17.json`.
+  Historical shard 25 at `bc4c7cb` passed 111, with 26 source N/A and zero
+  failed; retain `_out/ci-repair-223-shard25/shard-25.json` and the evidence
+  branch `codex/pr40-shard25-evidence-preserved-20260926`.
+  Never combine those different source snapshots.
+- Update assembly evidence only with the validated updater at the exact
+  tested source. Documentation changes also alter corpus fingerprints.
+  Never hand-promote dirty, partial or stale reports to current passes.
+
+## Remaining CI failures and next actions
+
+- Finish the combined gates on a clean snapshot; continue simd pool proofs
+  with red/green and runtime tests, then rerun the discovering shard.
+- Knoxdb/forks need cross-TEXT ABI0 shared-frame/register semantics.
+  GopherJRE/sharkie/gojit depend on native code layout/addresses; GopherJRE
+  also hardcodes its JIT entry offset. Loose label/frame checks are unsafe.
+  Go-highway dev9 retains three absent amd64 RIP pools.
+- gmgo/gmsm, puter and fiber/ai have remaining raw-word issues, including
+  private Apple instructions and genuine upstream defects.
+  `initLijing/gmsm@v0.15.6` has byte-swapped SM4 WORDs: LLVM 22 rejects
+  `0x09c961ce`, while `0xce61c909` decodes as SM4EKEY.
+  No user authorization to isolate proven external defects as
+  `blocked_external` has been received. Keep them failed; do not patch the
+  exact module silently, invent constants or relax CI.
+- Once fixes are complete, rerun all 32 shards with identical frozen
+  source/tool/scan provenance, publish validated ledger evidence, then push
+  only to the allowed fork. Keep the PR draft until current-head tests, CI,
+  review and required coverage pass.
+- Clean owned generated IR/candidate caches and containers after completion;
+  retain reports and logs. Several completed IR directories were moved to
+  the system trash; they are regenerable. Do not delete global module caches
+  or unrelated containers. No new inventory scans were started.
