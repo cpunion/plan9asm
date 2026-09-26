@@ -822,8 +822,12 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markReg(Reg(fmt.Sprintf("R%d", form.destination)))
 					}
 				}
-				if form, ok := decodeARM64RawSVECnt(word); ok && form.destination != 31 {
-					markReg(Reg(fmt.Sprintf("R%d", form.destination)))
+				if form, ok := decodeARM64RawSVECnt(word); ok {
+					if form.vector {
+						markReg(Reg(fmt.Sprintf("Z%d.%c", form.destination, map[int]byte{16: 'H', 32: 'S', 64: 'D'}[form.elementBits])))
+					} else if form.destination != 31 {
+						markReg(Reg(fmt.Sprintf("R%d", form.destination)))
+					}
 				}
 				if form, ok := decodeARM64RawBitfield(word); ok {
 					if form.source != 31 {
