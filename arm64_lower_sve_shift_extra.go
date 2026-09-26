@@ -10,32 +10,38 @@ type arm64SVEImmediateShiftSpec struct {
 	predicated bool
 	minimum    int64
 	sve2       bool
+	rawBase    uint32
 }
 
 var arm64SVEImmediateShiftSpecs = map[Op]arm64SVEImmediateShiftSpec{
-	"ZASRD":   {intrinsic: "asrd", predicated: true, minimum: 1},
-	"ZSLI":    {intrinsic: "sli", sve2: true},
-	"ZSQSHLU": {intrinsic: "sqshlu", predicated: true, sve2: true},
-	"ZSRI":    {intrinsic: "sri", minimum: 1, sve2: true},
-	"ZSRSHR":  {intrinsic: "srshr", predicated: true, minimum: 1, sve2: true},
-	"ZSRSRA":  {intrinsic: "srsra", minimum: 1, sve2: true},
-	"ZSSRA":   {intrinsic: "ssra", minimum: 1, sve2: true},
-	"ZURSHR":  {intrinsic: "urshr", predicated: true, minimum: 1, sve2: true},
-	"ZURSRA":  {intrinsic: "ursra", minimum: 1, sve2: true},
-	"ZUSRA":   {intrinsic: "usra", minimum: 1, sve2: true},
+	"ZASRD":   {intrinsic: "asrd", predicated: true, minimum: 1, rawBase: 0x04048000},
+	"ZSLI":    {intrinsic: "sli", sve2: true, rawBase: 0x4500f400},
+	"ZSQSHLU": {intrinsic: "sqshlu", predicated: true, sve2: true, rawBase: 0x040f8000},
+	"ZSRI":    {intrinsic: "sri", minimum: 1, sve2: true, rawBase: 0x4500f000},
+	"ZSRSHR":  {intrinsic: "srshr", predicated: true, minimum: 1, sve2: true, rawBase: 0x040c8000},
+	"ZSRSRA":  {intrinsic: "srsra", minimum: 1, sve2: true, rawBase: 0x4500e800},
+	"ZSSRA":   {intrinsic: "ssra", minimum: 1, sve2: true, rawBase: 0x4500e000},
+	"ZURSHR":  {intrinsic: "urshr", predicated: true, minimum: 1, sve2: true, rawBase: 0x040d8000},
+	"ZURSRA":  {intrinsic: "ursra", minimum: 1, sve2: true, rawBase: 0x4500ec00},
+	"ZUSRA":   {intrinsic: "usra", minimum: 1, sve2: true, rawBase: 0x4500e400},
 }
 
-var arm64SVEReverseShiftIntrinsics = map[Op]string{
-	"ZASRR": "asr",
-	"ZLSLR": "lsl",
-	"ZLSRR": "lsr",
+type arm64SVEReverseShiftSpec struct {
+	intrinsic string
+	rawBase   uint32
+}
+
+var arm64SVEReverseShiftIntrinsics = map[Op]arm64SVEReverseShiftSpec{
+	"ZASRR": {intrinsic: "asr", rawBase: 0x04148000},
+	"ZLSLR": {intrinsic: "lsl", rawBase: 0x04178000},
+	"ZLSRR": {intrinsic: "lsr", rawBase: 0x04158000},
 }
 
 func (c *arm64Ctx) lowerARM64SVEExtraShift(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	if spec, ok := arm64SVEImmediateShiftSpecs[op]; ok {
 		return c.lowerARM64SVEExtraImmediateShift(op, ins, spec)
 	}
-	intrinsic, ok := arm64SVEReverseShiftIntrinsics[op]
+	spec, ok := arm64SVEReverseShiftIntrinsics[op]
 	if !ok {
 		return false, false, nil
 	}
@@ -67,7 +73,7 @@ func (c *arm64Ctx) lowerARM64SVEExtraShift(op Op, ins Instr) (ok bool, terminate
 	}
 	_, lanes, _ := arm64SVEVectorType(dataBits)
 	active := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.sve.%s.nxv%di%d(%s %s, %s %s, %s %s)\n", active, vectorType, intrinsic, lanes, dataBits, predicateType, allTrue, vectorType, dataValue, vectorType, oldValue)
+	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.sve.%s.nxv%di%d(%s %s, %s %s, %s %s)\n", active, vectorType, spec.intrinsic, lanes, dataBits, predicateType, allTrue, vectorType, dataValue, vectorType, oldValue)
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select %s %s, %s %%%s, %s %s\n", result, predicateType, predicateValue, vectorType, active, vectorType, oldValue)
 	return true, false, c.storeZRegElements(destination, dataBits, "%"+result)
@@ -88,20 +94,29 @@ func (c *arm64Ctx) lowerARM64SVEExtraImmediateShift(op Op, ins Instr, spec arm64
 	if !sourceOK || !destinationOK || sourceBits != destinationBits || shift < spec.minimum || shift >= int64(sourceBits) {
 		return true, false, fmt.Errorf("arm64 %s immediate is outside Go 1.27's element-width range: %q", op, ins.Raw)
 	}
-	var predicateValue, predicateType string
+	predicate := 0
 	if spec.predicated {
-		predicate, predicateOK := arm64ParseSVEPredicateMerge(ins.Args[2])
+		var predicateOK bool
+		predicate, predicateOK = arm64ParseSVEPredicateMerge(ins.Args[2])
 		if !predicateOK || source != destination {
 			return true, false, fmt.Errorf("arm64 %s requires a repeated destructive destination and Pg/M: %q", op, ins.Raw)
 		}
+	}
+	return true, false, c.lowerARM64SVEExtraImmediateShiftForm(spec, sourceBits, source, destination, predicate, shift)
+}
+
+func (c *arm64Ctx) lowerARM64SVEExtraImmediateShiftForm(spec arm64SVEImmediateShiftSpec, sourceBits, source, destination, predicate int, shift int64) error {
+	var predicateValue, predicateType string
+	var err error
+	if spec.predicated {
 		predicateValue, predicateType, err = c.loadPRegElements(predicate, sourceBits)
 		if err != nil {
-			return true, false, err
+			return err
 		}
 	}
 	sourceValue, vectorType, err := c.loadZRegElements(source, sourceBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
 	_, lanes, _ := arm64SVEVectorType(sourceBits)
 	result := c.newTmp()
@@ -110,9 +125,9 @@ func (c *arm64Ctx) lowerARM64SVEExtraImmediateShift(op Op, ins Instr, spec arm64
 	} else {
 		oldDestination, _, err := c.loadZRegElements(destination, sourceBits)
 		if err != nil {
-			return true, false, err
+			return err
 		}
 		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.aarch64.sve.%s.nxv%di%d(%s %s, %s %s, i32 %d)\n", result, vectorType, spec.intrinsic, lanes, sourceBits, vectorType, oldDestination, vectorType, sourceValue, shift)
 	}
-	return true, false, c.storeZRegElements(destination, sourceBits, "%"+result)
+	return c.storeZRegElements(destination, sourceBits, "%"+result)
 }

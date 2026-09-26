@@ -140,6 +140,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if decoded, ok := decodeARM64RawSVEXAR(word); ok {
 		return c.lowerARM64RawSVEXAR(decoded)
 	}
+	if decoded, ok := decodeARM64RawSVEExtraShift(word); ok {
+		return c.lowerARM64RawSVEExtraShift(decoded)
+	}
 	if decoded, ok := decodeARM64RawSVESplice(word); ok {
 		return c.lowerARM64RawSVESplice(decoded)
 	}

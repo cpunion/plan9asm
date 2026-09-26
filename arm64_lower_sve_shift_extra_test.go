@@ -66,10 +66,13 @@ func TestTranslateARM64SVEExtraShiftCompleteGo127Family(t *testing.T) {
 func TestTranslateARM64SVEExtraShiftRejectsFormsOutsideGo127Table(t *testing.T) {
 	for _, instruction := range []string{
 		"ZASRD $0, Z1.B, P0.M, Z1.B",
+		"ZASRD $8, Z1.B, P0.M, Z1.B",
 		"ZASRD $9, Z1.B, P0.M, Z1.B",
 		"ZASRR Z1.B, Z2.B, P0.M, Z3.B",
 		"ZSLI $8, Z1.B, Z2.B",
 		"ZSRI $0, Z1.B, Z2.B",
+		"ZSRI $8, Z1.B, Z2.B",
+		"ZURSHR $64, Z1.D, P0.M, Z1.D",
 		"ZSQSHLU $8, Z1.B, P0.M, Z1.B",
 		"ZSRSHR $1, Z1.H, P0.M, Z2.H",
 		"ZURSRA $1, Z1.H, Z2.S",
