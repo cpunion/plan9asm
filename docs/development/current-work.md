@@ -16,7 +16,7 @@ do not start new module-index inventory scans while failures remain.
 - Develop on `codex/pr40-arm64-raw-20260926`. Inspect
   status, worktrees and running processes before editing. Do not push until
   the failing CI classes are fixed and the assembly ledger is refreshed.
-- Development is at `2d17842`, not pushed. At clean `e7d12c7`, shard 24
+- Development is on `codex/pr40-arm64-raw-20260926`, not pushed. At clean `e7d12c7`, shard 24
   completed 164 selected = 134 passed + 29 N/A + one superseded skip;
   shard 25 completed 137 selected = 109 passed + 27 N/A + one superseded
   skip. Both had zero failures. At clean `9aa59b1`, shard 29 completed
@@ -29,9 +29,16 @@ do not start new module-index inventory scans while failures remain.
 - Corpus tool builds now use `-trimpath`: same-revision translator and runner
   builds in two clean worktrees produced identical SHA-256 values. Earlier
   e7 shard reports used path-dependent binaries and cannot be aggregated;
-  replay required on a later shared frozen revision. A new shard 22 replay
-  at `2d17842` is running in the former shard-25 worktree. Inspect its
-  process and report before advancing that tree.
+  replay required on a later shared frozen revision. Shard 22 at `2d17842`
+  completed 163 candidates with two failures: fiber/ai's private AMX word and
+  wagon's unexpanded `GO_ARGS`. The latter came from `runtime.GOROOT()` being
+  empty in a `-trimpath` translator. A regression first failed, then passed
+  after resolving the matching Go toolchain root. A focused exact wagon replay
+  passed its Darwin/AMD64 assembly through LLVM 22. A later shard-22 replay
+  at `e509472` was deliberately interrupted before completion: the runner
+  itself still used empty `runtime.GOROOT()` for source probes. No result from
+  that interrupted run counts as corpus evidence. A shared toolchain-root
+  helper now fixes translator, runner and scanner; freeze and replay shard 22.
 - The user authorized a distinct, not-passed private-extension skip for the
   exact fiber/ai v0.1.2 Darwin/ARM64 Apple AMX file. The manifest pins its
   source hash and opcode. The new runner verifies current Go assembly and
@@ -175,10 +182,11 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   official five-architecture coverage, strict benchmark (184/184) and stdlib
   corpus. Clean `e7d12c7` passed full root tests in 610 seconds after three
   concurrent heavy shards had caused an earlier 20-minute timeout. A focused
-  root test and package tests confirmed the timeout was load-related. Current
-  `2d17842` changes only the corpus build script; its corpus package tests,
-  bash syntax and shellcheck passed. Do not call the complete external corpus
-  verified yet.
+  root test and package tests confirmed the timeout was load-related. The new
+  toolchain-root tests and corpus/scanner packages pass on Go 1.27.1; the
+  trimpath regression also passes on Go 1.20.14. Full root and shard tests
+  remain required on a clean new revision. Do not call the complete external
+  corpus verified yet.
 - Validated updater published that evidence via `5cec520`, merged at
   `e67462c`: 4,783 candidates, 4,624 pending, 126 passed, 32 N/A, one failed;
   incomplete and unverified. Evidence is stale against later implementation.

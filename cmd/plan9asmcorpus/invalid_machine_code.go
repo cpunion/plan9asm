@@ -17,11 +17,11 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -255,12 +255,16 @@ func verifyAMD64MissingRIPConstantObject(ctx context.Context, moduleDir, workDir
 	defer os.Remove(objectPath)
 
 	sourcePath := filepath.Join(moduleDir, filepath.FromSlash(item.AsmFile))
-	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
+	goRoot, err := gotoolchain.Root()
+	if err != nil {
+		return err
+	}
+	goBinary := filepath.Join(goRoot, "bin", "go")
 	toolEnv := replaceEnv(os.Environ(), map[string]string{
 		"GOOS": "linux", "GOARCH": "amd64", "GOTOOLCHAIN": "local",
 	})
 	cmd := exec.CommandContext(ctx, goBinary, "tool", "asm",
-		"-I", filepath.Join(runtime.GOROOT(), "pkg", "include"),
+		"-I", filepath.Join(goRoot, "pkg", "include"),
 		"-I", filepath.Dir(sourcePath), "-o", objectPath, sourcePath)
 	cmd.Env = toolEnv
 	if output, err := cmd.CombinedOutput(); err != nil {

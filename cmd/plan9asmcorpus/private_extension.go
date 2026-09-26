@@ -11,10 +11,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/mod/module"
 )
 
@@ -142,11 +142,15 @@ func verifyPrivateExtensionGoAssembler(
 	source := filepath.Join(moduleDir, filepath.FromSlash(skip.AsmFile))
 	object := filepath.Join(workDir, "private-extension-source.o")
 	includeDir := filepath.Dir(source)
-	goIncludeDir := filepath.Join(runtime.GOROOT(), "pkg", "include")
+	goRoot, err := gotoolchain.Root()
+	if err != nil {
+		return err
+	}
+	goIncludeDir := filepath.Join(goRoot, "pkg", "include")
 	targetEnv := replaceEnv(env, map[string]string{
 		"GOOS": goos, "GOARCH": goarch, "CGO_ENABLED": "0",
 	})
-	err := runCapturedCommand(ctx, workDir, targetEnv, "go",
+	err = runCapturedCommand(ctx, workDir, targetEnv, "go",
 		"tool", "asm", "-I", includeDir, "-I", goIncludeDir,
 		"-o", object, source)
 	if err != nil {

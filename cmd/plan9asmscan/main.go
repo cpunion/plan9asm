@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 )
 
 type pkgJSON struct {
@@ -158,10 +159,17 @@ func main() {
 		format   = flag.String("format", "md", "output format: md|json")
 		repoRoot = flag.String("repo-root", ".", "plan9asm repository root for lowerers and conformance data")
 		corpus   = flag.String("corpus", "std", "corpus to scan: std|go-asm|arm64-plan9")
-		goroot   = flag.String("goroot", runtime.GOROOT(), "Go root containing official assembler testdata")
+		goroot   = flag.String("goroot", "", "Go root containing official assembler testdata (default: active Go toolchain)")
 		input    = flag.String("input", "", "input file for corpora that require one")
 	)
 	flag.Parse()
+	if *goroot == "" {
+		root, err := gotoolchain.Root()
+		if err != nil {
+			fatalf("resolve active Go toolchain: %v", err)
+		}
+		*goroot = root
+	}
 
 	if *goarch != "386" && *goarch != "amd64" && *goarch != "arm64" && *goarch != "arm" && *goarch != "wasm" {
 		fatalf("unsupported -goarch %q (expect 386/amd64/arm64/arm/wasm)", *goarch)

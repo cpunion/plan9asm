@@ -20,12 +20,12 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/discoverymeta"
+	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
@@ -939,6 +939,10 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string) (bool, e
 	if declaresSymbols {
 		return false, nil
 	}
+	goRoot, err := gotoolchain.Root()
+	if err != nil {
+		return false, err
+	}
 
 	tempDir, err := os.MkdirTemp("", "plan9asm-asm-symbols-")
 	if err != nil {
@@ -948,7 +952,7 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string) (bool, e
 	object := filepath.Join(tempDir, "source.o")
 	asmArgs := []string{
 		"tool", "asm", "-I", filepath.Dir(filePath),
-		"-I", filepath.Join(runtime.GOROOT(), "pkg", "include"),
+		"-I", filepath.Join(goRoot, "pkg", "include"),
 		"-o", object, filePath,
 	}
 	targetEnv := replaceEnv(os.Environ(), map[string]string{
@@ -1027,6 +1031,10 @@ func inferUnsuffixedAssemblyTargetsDetailed(filePath string, contexts []build.Co
 	if explicitAssemblyFilenameArchitecture(path.Base(filePath)) != "" {
 		return nil, false, "", nil
 	}
+	goRoot, err := gotoolchain.Root()
+	if err != nil {
+		return nil, false, "", err
+	}
 	eligible := make(map[string]bool, len(contexts))
 	probed := make(map[string]struct {
 		accepted   bool
@@ -1038,7 +1046,7 @@ func inferUnsuffixedAssemblyTargetsDetailed(filePath string, contexts []build.Co
 		key := ctx.GOOS + "/" + ctx.GOARCH
 		result, ok := probed[key]
 		if !ok {
-			accepted, conclusive := probeAssemblySourceForTarget(filePath, ctx.GOOS, ctx.GOARCH)
+			accepted, conclusive := probeAssemblySourceForTarget(filePath, ctx.GOOS, ctx.GOARCH, goRoot)
 			result = struct {
 				accepted   bool
 				conclusive bool
@@ -1087,13 +1095,13 @@ func explicitAssemblyFilenameArchitecture(name string) string {
 	return ""
 }
 
-func probeAssemblySourceForTarget(filePath, goos, goarch string) (accepted, conclusive bool) {
+func probeAssemblySourceForTarget(filePath, goos, goarch, goRoot string) (accepted, conclusive bool) {
 	run := func(extraInclude string) ([]byte, error) {
 		args := []string{"tool", "asm"}
 		if extraInclude != "" {
 			args = append(args, "-I", extraInclude)
 		}
-		args = append(args, "-I", filepath.Dir(filePath), "-I", filepath.Join(runtime.GOROOT(), "pkg", "include"), "-o", os.DevNull, filePath)
+		args = append(args, "-I", filepath.Dir(filePath), "-I", filepath.Join(goRoot, "pkg", "include"), "-o", os.DevNull, filePath)
 		cmd := exec.Command("go", args...)
 		cmd.Env = replaceEnv(os.Environ(), map[string]string{
 			"GOOS":        goos,
