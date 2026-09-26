@@ -12,14 +12,17 @@ do not start new module-index inventory scans while failures remain.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`, never upstream.
   The user requests complete repairs before a batch push. Keep the PR draft.
 - Upstream main `7cc8c0f` was fetched and is already an ancestor.
-- Develop on `codex/pr40-arm64-raw-20260926`. Inspect status, worktrees and
-  running processes before editing.
+- Develop on `codex/pr40-arm64-raw-20260926` (currently `2769fc1`). Inspect
+  status, worktrees and running processes before editing. Do not push until
+  the failing CI classes are fixed and the assembly ledger is refreshed.
 - Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
   `codex/pr40-ecosystem-fixes-20260925` (cross runtime and discovery).
   Inspect each HEAD and logs before advancing; never alter a running snapshot.
-  Both are frozen at `692fad1`; the root runner currently also hosts the full
-  cross-runtime gate. Discovery shards 10 and 17 are running in the ecosystem
-  runner with reports under `_out/ci-repair-692fad1-shard17/`.
+  The root runner was advanced to clean `432314f` after both long gates
+  passed; it is running shard 1 under `_out/ci-repair-432314f-shard1/`.
+  The ecosystem runner remains frozen at `692fad1`: shard 17 completed with
+  only `simd@v1.21.1` failed, while shards 10 and 24 continue under
+  `_out/ci-repair-692fad1-shard17/`. Never mix these report snapshots.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -103,6 +106,17 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   process, releasing its LLVM objects and output before the next package.
   Rerun `wasm2go` candidates to confirm this removes `signal: killed`; do not
   recast a resource failure as source N/A or an invalid-source skip.
+- A direct `pythonwasm2go/p0` Windows/ARM64 object replay passed in 39 seconds
+  with a 3.3 GB maximum resident set. Its previous three-package translator
+  process is still being exercised by shard 1 at `432314f`; per-package
+  isolation is newer and needs a clean-shard rerun. Generated probe outputs
+  were removed after measurement.
+- Selected `go-highway@v0.0.12` Darwin/ARM64 failures from the old CI passed
+  against current code: BF16 image 2/2, SME matmul 3/3, NEON matmul 1/1.
+  These are direct replays, not a whole-module or shard pass.
+- `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
+  after the function body, not evidence of invalid source. Keep its two
+  `parseInts` files failed until the pool-address and alias proof is sound.
 - Complete shard 17 at `6e03524`: 159 selected = 126 passed + 32 source N/A
   + one failed simd. Report is retained in the ecosystem runner under
   `_out/ci-repair-6e03524-shard17/shard-17.json`.
@@ -115,17 +129,21 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 
 ## Remaining work
 
-1. Run combined gates and simd replay on a clean fixed snapshot. Remaining
-   atan2/json quoting pools require real indexed-load/range proofs.
+1. Finish current shards and rerun failure shards on one clean revision.
+   `simd` needs a sound derived-pool-pointer alias and range proof; do not
+   decode its numeric pool as executable branches.
 2. Resolve other actual CI failures: Knoxdb/forks need cross-TEXT ABI0
    shared-frame/register semantics; JIT libraries need native code layout and
-   address/entry contracts; go-highway retains absent RIP constant pools.
+   address/entry contracts; large `wasm2go` modules need bounded memory even
+   when a single package contains thousands of generated functions.
 3. Keep unproven upstream defects failed. Only the four confirmed exact
    versions above qualify for `skipped_invalid_source`; private Apple
    instructions alone are not proof of invalid source. Continue other
    applicable forms and candidates normally.
-4. Run all 32 discovery shards with identical frozen provenance, publish
-   validated ledger evidence, then batch-push to the allowed fork.
+4. Resolve the historical `skywire@v1.3.69` unavailable source without
+   pretending a failed download is a pass. Run all 32 discovery shards with
+   identical frozen provenance, refresh the validated assembly ledger, then
+   batch-push to the allowed fork. Its current source fingerprint is stale.
 5. Shard 0's old runner lost communication, confirmed by its check annotation.
    It is infrastructure failure, not a pass and not proven OOM. Rerun it.
 6. Clean owned generated IR/candidate caches and containers after use; retain
