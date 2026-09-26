@@ -13,22 +13,27 @@ do not start new module-index inventory scans while failures remain.
   The user requests complete repairs before a batch push. Keep the PR draft.
 - Upstream main `7cc8c0f` was fetched and is already an ancestor.
 - Develop on `codex/pr40-arm64-raw-20260926`, implementation through
-  `3549877`. Inspect status, worktrees and running processes before editing.
+  `692fad1`. Inspect status, worktrees and running processes before editing.
 - Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
   `codex/pr40-ecosystem-fixes-20260925` (cross runtime and discovery).
   Inspect each HEAD and logs before advancing; never alter a running snapshot.
+  Both are frozen at `692fad1`; the root runner currently also hosts the full
+  cross-runtime gate. Discovery shards 10 and 17 are running in the ecosystem
+  runner with reports under `_out/ci-repair-692fad1-shard17/`.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
 ## Completed gates and recent implementation
 
-- At clean `6e03524`, full root passed in 755 seconds and required complete
-  cross-runtime tests passed in 581 seconds. Logs are respectively
-  `_out/full-root-pool-contract.log` and
-  `_out/cross-runtime-pool-contract.log` in the runners.
-- The same snapshot passed the official five-architecture classification gate
-  and strict benchmark: 184/184 files, no N/A, 33 target-seconds.
+- At clean `a48a4fd`, full root passed in 642 seconds and required complete
+  cross-runtime tests passed in 479 seconds. Logs are respectively
+  `_out/full-root-bounded-vector-pool.log` and
+  `_out/cross-runtime-bounded-vector-pool.log` in the runners.
+- Clean `692fad1` passed the official five-architecture classification gate
+  and strict benchmark: 184/184 files, no N/A, 43 target-seconds.
   Observed form classification is not all-encoder runtime-semantic coverage.
+  Full root and cross runtime are being rerun at that snapshot; inspect
+  `_out/full-root-index-pool.log` and `_out/cross-runtime-index-pool.log`.
 - Earlier batches cover ordinary SVE loads, floating divide/scale, all
   floating-immediate values, and saturating arithmetic including signed
   byte/halfword operations with unsigned large immediates. Consult Git/tests.
@@ -42,10 +47,19 @@ do not start new module-index inventory scans while failures remain.
   truncation, flag exposure and unknown indexed accesses remain rejected.
 - `3549877`: vector permutations, arithmetic, shifts, floating operations,
   copies and counts reuse existing typed decoders in pointer-flow analysis.
+- `95f9251`, `f19a49d`, `ed613ca`: MOVPRFX, predicate logical/select, unrelated
+  scalable spills, RDVL and ADDVL/ADDPL effects reuse validated typed grammars.
+- `e2de140`: bounded indexed loads use a backward reaching-definition proof
+  across every reachable CFG edge. MOV, masks, unsigned loads, LSR and CSEL
+  establish upper bounds. Unknown definitions, value-changing cycles, skipped
+  masks, negative signed indexes and overflow remain rejected. Cover all
+  integer/FP/vector load widths, index extensions and natural shifts.
+- `692fad1`: signed/unsigned vector lane extraction kills and SVE immediate
+  duplication effects, including every legal lane/width and shifted forms.
 - These batches passed focused Go 1.20/1.27, CLI, vet, three-OS LLVM 22 object
   checks and Linux/QEMU runtime tests. Logs use `raw-pool-sve-*`,
-  `raw-pool-counters-flags-*`, `raw-pool-offset-*`, `raw-pool-vector-all-*`.
-  The combined full gates must now be rerun on the final clean snapshot.
+  `raw-pool-counters-flags-*`, `raw-pool-offset-*`, `raw-pool-vector-all-*`,
+  `raw-pool-index-*` and `raw-pool-vector-transfer-*`.
 
 ## Pool safety boundary
 
@@ -63,12 +77,18 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 
 ## External results and ledger
 
-- `simd@v1.21.1` ARM64 at `422a906` and `e67462c`: 41/47 files on each
-  of Darwin/Linux/Windows (123/141). Sorting now passes; six files still fail.
-  See `_out/simd-counters-flags.{json,log}` and
-  `_out/simd-bounded-pool.{json,log}` in the root runner.
-- After `3549877`, a diagnostic proves the exp SVE pool; a clean complete
-  external replay is still required before claiming either exp file passes.
+- `simd@v1.21.1` ARM64 at `692fad1`: 45/47 files on each of
+  Darwin/Linux/Windows (135/141), up from 41/47. All four math files now pass.
+  Both JSON-quoting routines also advance, but the same two byte-processing
+  files fail later at `parseIntsNEON`/`parseIntsSVE2`. See the root runner's
+  `_out/simd-vector-transfer.{json,log}`; these are object, not runtime results.
+- `parseInts` derives a second pointer (`ADD X12,X9,X13,LSL #3`) and reads
+  `[X12,#-8]`. This needs alias/offset range and loop/branch reasoning; do not
+  simply permit pointer copies. Diagnostic `_out/raw-pool-parseints-detail.log`
+  in the development tree shows the instruction sequence, not proof of safety.
+- At `692fad1`, outfix passed all three AMD64 OS targets (3/3). Go-highway dev9
+  passed its selected ARM64 files across three OS targets (73/73). These exact
+  replays do not establish complete discovery candidate or shard passes.
 - Mazarin's exact failing Linux/arm64 configuration at `6e03524` passed
   14 files with one concrete source-ABI N/A. This is not a whole-module pass.
 - Puter activation at `6e03524`: 5/8 files per ARM64 OS; LLVM 22 independently
