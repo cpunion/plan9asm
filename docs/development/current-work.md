@@ -159,6 +159,14 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   encodings and retains a specific skip reason. The `9aa59b1` Go 1.27.1
   replay classified it as `SKIP_INVALID_SOURCE`, and the shard completed
   with zero failures.
+- `janpfeifer/go-highway@v0.0.0-dev9` is its current `@latest`, and the
+  `8134b3e` shard 16 replay exposed the same missing GoAT constants in two
+  different AMD64 source files. Go 1.27 object disassembly put their fixed
+  RIP targets beyond every TEXT symbol. Commit `7299f51` pins both file hashes
+  and evidence as another exact invalid-source skip; corpus tests and the
+  actual-source/object proof pass. Rerun shard 16 on that commit before
+  treating the old failed report as resolved. KnoxDB remains independently
+  failed in that shard.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
@@ -204,7 +212,7 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    shared-frame/register semantics; JIT libraries need native code layout and
    address/entry contracts; large `wasm2go` modules need bounded memory even
    when a single package contains thousands of generated functions.
-3. Keep unproven upstream defects failed. Only the five confirmed exact
+3. Keep unproven upstream defects failed. Only the six confirmed exact
    versions in the invalid-machine-code manifest qualify for
    `skipped_invalid_source`. The distinct private-extension exception is
    authorized only for its pinned file/target and is not a pass. Continue
