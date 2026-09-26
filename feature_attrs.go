@@ -335,6 +335,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEAddressGeneration(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
+				if _, ok := decodeARM64RawSVEFloatDivideScale(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
 				if decoded, ok := decodeARM64RawSVESplice(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if len(decoded.Args) == 3 {

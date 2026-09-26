@@ -7,6 +7,14 @@ import (
 )
 
 func testARM64RawSVEFloatArithmeticRuntime(t *testing.T, llc string) {
+	testARM64RawSVEFloatBinaryRuntime(t, llc, arm64RawSVEFloatArithmeticCases())
+}
+
+func testARM64RawSVEFloatDivideScaleRuntime(t *testing.T, llc string) {
+	testARM64RawSVEFloatBinaryRuntime(t, llc, arm64RawSVEFloatDivideScaleCases())
+}
+
+func testARM64RawSVEFloatBinaryRuntime(t *testing.T, llc string, forms []arm64RawSVEFloatArithmeticCase) {
 	type runtimeCase struct {
 		form                arm64RawSVEFloatArithmeticCase
 		destination, second int
@@ -14,7 +22,7 @@ func testARM64RawSVEFloatArithmeticRuntime(t *testing.T, llc string) {
 	}
 	var cases []runtimeCase
 	var allNative []string
-	for _, form := range arm64RawSVEFloatArithmeticCases() {
+	for _, form := range forms {
 		second := 29
 		if form.mode == "indexed" {
 			second = 7
@@ -66,7 +74,7 @@ static void %[1]s_native(const void *a, const void *b, const void *mask, void *o
 		} else if test.form.mode == "indexed" {
 			lane = test.form.lane
 		}
-		operation := map[string]int{"fadd": 0, "fsub": 1, "fsubr": 2, "fmul": 3}[test.form.op]
+		operation := map[string]int{"fadd": 0, "fsub": 1, "fsubr": 2, "fmul": 3, "fdiv": 4, "fdivr": 5, "fscale": 6}[test.form.op]
 		fmt.Fprintf(&checks, "  if (check_float_arithmetic(vl, %d, %d, %d, %d, %d, %.1f, %s, %s_native, %q)) return 1;\n",
 			1<<test.form.size, operation, predicated, firstB, lane, test.form.immediate, name, name, name)
 	}
@@ -114,6 +122,10 @@ static int check_float_arithmetic(unsigned vl, unsigned bytes, unsigned operatio
     for (unsigned i = 0; i < sizeof(a); i += bytes) {
       unsigned element = i / bytes;
       uint64_t x = patterns[row][(element + phase) % 12], y = patterns[row][(element * 3 + phase * 7) % 12];
+      if (operation == 6) {
+        const int64_t exponents[] = {0, 1, -1, 2, -2, 127, -149, 1023, -1074, 32767, -32768, INT64_MIN};
+        y = (uint64_t)exponents[(element * 3 + phase * 7) % 12];
+      }
       memcpy(a + i, &x, bytes);
       memcpy(b + i, &y, bytes);
       for (unsigned j = 0; j < bytes; j++) mask[i + j] = phase < 2 ? phase : (element + phase) % 3 != 0;
@@ -126,7 +138,23 @@ static int check_float_arithmetic(unsigned vl, unsigned bytes, unsigned operatio
       if (predicated && !mask[i]) { memcpy(scalar + i, first, bytes); continue; }
       double x = unpack_float(first, bytes);
       double y = immediate ? immediate : unpack_float(b + (lane < 0 ? i : (i & ~15u) + lane * bytes), bytes);
-      double value = operation == 0 ? x + y : operation == 1 ? x - y : operation == 2 ? y - x : x * y;
+      double value;
+      switch (operation) {
+        case 0: value = x + y; break;
+        case 1: value = x - y; break;
+        case 2: value = y - x; break;
+        case 3: value = x * y; break;
+        case 4: value = x / y; break;
+        case 5: value = y / x; break;
+        default: {
+          uint64_t encoded = 0;
+          memcpy(&encoded, b + i, bytes);
+          int64_t exponent = bytes == 2 ? (int16_t)encoded : bytes == 4 ? (int32_t)encoded : (int64_t)encoded;
+          int clamped = exponent > 65536 ? 65536 : exponent < -65536 ? -65536 : (int)exponent;
+          value = scalbn(x, clamped);
+          break;
+        }
+      }
       pack_float(scalar + i, bytes, value);
     }
     native_instruction(a, b, mask, native);

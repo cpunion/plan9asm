@@ -56,6 +56,11 @@ func TestARM64RawSVEFloatArithmeticCompleteFormats(t *testing.T) {
 	if len(forms) != 59 {
 		t.Fatalf("floating arithmetic cases=%d, want 59 including every indexed lane", len(forms))
 	}
+	testARM64RawSVEFloatArithmeticObjects(t, forms)
+}
+
+func testARM64RawSVEFloatArithmeticObjects(t *testing.T, forms []arm64RawSVEFloatArithmeticCase) {
+	t.Helper()
 	var lines []string
 	for _, form := range forms {
 		second := 29

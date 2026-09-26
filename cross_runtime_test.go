@@ -85,6 +85,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_float_arithmetic", func(t *testing.T) {
 		testARM64RawSVEFloatArithmeticRuntime(t, llc)
 	})
+	t.Run("arm64_raw_sve_float_divide_scale", func(t *testing.T) {
+		testARM64RawSVEFloatDivideScaleRuntime(t, llc)
+	})
 	t.Run("arm64_raw_sve_address_generation", func(t *testing.T) {
 		testARM64RawSVEAddressGenerationRuntime(t, llc)
 	})

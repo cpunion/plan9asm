@@ -186,6 +186,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEAddressGeneration(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEFloatDivideScale(word); ok {
+		_, _, err := c.lowerARM64SVEFloatDivideScale(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEUnpack(word); ok {
 		_, _, err := c.lowerARM64SVEUnpack(decoded.Op, decoded)
 		return err
