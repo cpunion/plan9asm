@@ -42,6 +42,14 @@ if [[ ! "$go_version" =~ ^go1[.]27([.]|$) ]]; then
   echo "discovered third-party corpus requires Go 1.27, got $go_version" >&2
   exit 1
 fi
+go_root=$(go env GOROOT)
+if [[ ! -f "$go_root/pkg/include/funcdata.h" ]]; then
+  echo "active Go toolchain is missing pkg/include/funcdata.h" >&2
+  exit 1
+fi
+# Keep every trimpath-built translator on the exact headers used by go build.
+# This also avoids resolving GOROOT again in each per-package process.
+export GOROOT="$go_root"
 
 # Resolved relative to the checked-out repository.
 # shellcheck disable=SC1091
