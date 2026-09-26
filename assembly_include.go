@@ -1,15 +1,59 @@
 package plan9asm
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 var quotedGoAssemblyIncludeRE = regexp.MustCompile(`^#include[ \t]+"([^"\r\n]+)"[ \t]*(?://.*)?$`)
+
+var goAssemblyRootFallback struct {
+	once sync.Once
+	root string
+	err  error
+}
+
+// A Go binary built with -trimpath has no embedded GOROOT. The Go command
+// that owns the active assembly headers is then the only reliable source of
+// pkg/include; require it to be the same toolchain that built this binary.
+func goAssemblyToolchainRoot() (string, error) {
+	if root := runtime.GOROOT(); root != "" {
+		return root, nil
+	}
+	goAssemblyRootFallback.once.Do(func() {
+		out, err := exec.Command("go", "env", "-json", "GOROOT", "GOVERSION").Output()
+		if err != nil {
+			goAssemblyRootFallback.err = fmt.Errorf("resolve GOROOT for trimpath binary: %w", err)
+			return
+		}
+		goAssemblyRootFallback.root, goAssemblyRootFallback.err = parseGoAssemblyToolchainRoot(out, runtime.Version())
+	})
+	return goAssemblyRootFallback.root, goAssemblyRootFallback.err
+}
+
+func parseGoAssemblyToolchainRoot(output []byte, binaryVersion string) (string, error) {
+	var env struct {
+		GOROOT    string `json:"GOROOT"`
+		GOVERSION string `json:"GOVERSION"`
+	}
+	if err := json.Unmarshal(output, &env); err != nil {
+		return "", fmt.Errorf("decode Go toolchain environment: %w", err)
+	}
+	if env.GOVERSION != binaryVersion {
+		return "", fmt.Errorf("Go toolchain version %q does not match binary version %q", env.GOVERSION, binaryVersion)
+	}
+	if !filepath.IsAbs(env.GOROOT) {
+		return "", fmt.Errorf("Go toolchain GOROOT %q is not absolute", env.GOROOT)
+	}
+	return env.GOROOT, nil
+}
 
 // ReadGoAssemblySource reads one .s file and recursively expands quoted
 // includes from its module/source root or the active Go toolchain. Generated
@@ -78,7 +122,11 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 			included, includeErr = expandGoAssemblyIncludes(includedPath, sourceRoot, active, depth+1)
 		}
 		if !localAllowed || os.IsNotExist(includeErr) {
-			goRoot, err := evalGoAssemblyPath(filepath.Clean(runtime.GOROOT()))
+			goRoot, err := goAssemblyToolchainRoot()
+			if err != nil {
+				return nil, err
+			}
+			goRoot, err = evalGoAssemblyPath(filepath.Clean(goRoot))
 			if err != nil {
 				return nil, fmt.Errorf("resolve GOROOT symlinks: %w", err)
 			}
@@ -123,7 +171,15 @@ func expandGoAssemblyIncludes(file, sourceRoot string, active map[string]bool, d
 // is readable. In that one trusted tree, retain the absolute path after proving
 // it exists; module and arbitrary source roots still require full resolution.
 func evalGoAssemblyPath(path string) (string, error) {
-	return evalGoAssemblyPathForOS(path, runtime.GOOS, runtime.GOROOT(), filepath.EvalSymlinks)
+	goRoot := runtime.GOROOT()
+	if goRoot == "" && runtime.GOOS == "windows" {
+		var err error
+		goRoot, err = goAssemblyToolchainRoot()
+		if err != nil {
+			return "", err
+		}
+	}
+	return evalGoAssemblyPathForOS(path, runtime.GOOS, goRoot, filepath.EvalSymlinks)
 }
 
 func evalGoAssemblyPathForOS(path, goos, goRoot string, eval func(string) (string, error)) (string, error) {

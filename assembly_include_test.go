@@ -3,10 +3,105 @@ package plan9asm
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestReadGoAssemblySourceExpandsToolchainHeadersInTrimpathBinary(t *testing.T) {
+	dir := t.TempDir()
+	asm := filepath.Join(dir, "funcdata_amd64.s")
+	source := `#include "funcdata.h"
+TEXT ·metadata(SB),$0-0
+ GO_ARGS
+ GO_RESULTS_INITIALIZED
+ NO_LOCAL_POINTERS
+ RET
+`
+	if err := os.WriteFile(asm, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	program := `package main
+import (
+    "fmt"
+    "os"
+    plan9asm "github.com/xgo-dev/plan9asm"
+)
+func main() {
+    source, err := plan9asm.ReadGoAssemblySource(os.Args[1], os.Args[2])
+    if err != nil { panic(err) }
+    file, err := plan9asm.Parse(plan9asm.ArchAMD64, string(source))
+    if err != nil { panic(err) }
+    for _, ins := range file.Funcs[0].Instrs { fmt.Println(ins.Op) }
+}
+`
+	mainFile := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(mainFile, []byte(program), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, "read-asm")
+	build := exec.Command("go", "build", "-trimpath", "-o", bin, mainFile)
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build trimpath reader: %v\n%s", err, out)
+	}
+	run := exec.Command(bin, asm, dir)
+	for _, item := range os.Environ() {
+		if !strings.HasPrefix(item, "GOROOT=") {
+			run.Env = append(run.Env, item)
+		}
+	}
+	out, err := run.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run trimpath reader: %v\n%s", err, out)
+	}
+	want := "TEXT\nFUNCDATA\nPCDATA\nFUNCDATA\nRET\n"
+	if string(out) != want {
+		t.Fatalf("trimpath reader ops = %q, want %q", out, want)
+	}
+}
+
+func TestParseGoAssemblyToolchainRootRejectsMismatchedOrInvalidGo(t *testing.T) {
+	root := t.TempDir()
+	for _, test := range []struct {
+		name    string
+		output  string
+		version string
+		wantErr bool
+	}{
+		{
+			name: "matching", output: `{"GOROOT":` + strconv.Quote(root) + `,"GOVERSION":"go1.27.1"}`,
+			version: "go1.27.1",
+		},
+		{
+			name: "different version", output: `{"GOROOT":` + strconv.Quote(root) + `,"GOVERSION":"go1.27.0"}`,
+			version: "go1.27.1", wantErr: true,
+		},
+		{
+			name: "relative root", output: `{"GOROOT":"relative","GOVERSION":"go1.27.1"}`,
+			version: "go1.27.1", wantErr: true,
+		},
+		{
+			name: "missing root", output: `{"GOVERSION":"go1.27.1"}`,
+			version: "go1.27.1", wantErr: true,
+		},
+		{
+			name: "invalid JSON", output: `{`, version: "go1.27.1", wantErr: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseGoAssemblyToolchainRoot([]byte(test.output), test.version)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("root = %q, error = %v, want error %v", got, err, test.wantErr)
+			}
+			if !test.wantErr && got != root {
+				t.Fatalf("root = %q, want %q", got, root)
+			}
+		})
+	}
+}
 
 func TestEvalGoAssemblyPathWindowsGOROOTLinkFallback(t *testing.T) {
 	goRoot := t.TempDir()
