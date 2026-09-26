@@ -9,25 +9,57 @@ type arm64SVEIntegerReductionSpec struct {
 	intrinsic   string
 	elementBits int
 	quad        bool
+	rawBase     uint32
 }
 
 var arm64SVEIntegerReductionSpecs = map[Op]arm64SVEIntegerReductionSpec{
-	"ZADDQV": {intrinsic: "addqv", quad: true},
-	"ZANDQV": {intrinsic: "andqv", quad: true},
-	"ZANDVB": {intrinsic: "andv", elementBits: 8},
-	"ZANDVH": {intrinsic: "andv", elementBits: 16},
-	"ZANDVS": {intrinsic: "andv", elementBits: 32},
-	"ZANDVD": {intrinsic: "andv", elementBits: 64},
-	"ZEORQV": {intrinsic: "eorqv", quad: true},
-	"ZEORVB": {intrinsic: "eorv", elementBits: 8},
-	"ZEORVH": {intrinsic: "eorv", elementBits: 16},
-	"ZEORVS": {intrinsic: "eorv", elementBits: 32},
-	"ZEORVD": {intrinsic: "eorv", elementBits: 64},
-	"ZORQV":  {intrinsic: "orqv", quad: true},
-	"ZORVB":  {intrinsic: "orv", elementBits: 8},
-	"ZORVH":  {intrinsic: "orv", elementBits: 16},
-	"ZORVS":  {intrinsic: "orv", elementBits: 32},
-	"ZORVD":  {intrinsic: "orv", elementBits: 64},
+	"ZADDQV": {intrinsic: "addqv", quad: true, rawBase: 0x04052000},
+	"ZANDQV": {intrinsic: "andqv", quad: true, rawBase: 0x041e2000},
+	"ZANDVB": {intrinsic: "andv", elementBits: 8, rawBase: 0x041a2000},
+	"ZANDVH": {intrinsic: "andv", elementBits: 16, rawBase: 0x045a2000},
+	"ZANDVS": {intrinsic: "andv", elementBits: 32, rawBase: 0x049a2000},
+	"ZANDVD": {intrinsic: "andv", elementBits: 64, rawBase: 0x04da2000},
+	"ZEORQV": {intrinsic: "eorqv", quad: true, rawBase: 0x041d2000},
+	"ZEORVB": {intrinsic: "eorv", elementBits: 8, rawBase: 0x04192000},
+	"ZEORVH": {intrinsic: "eorv", elementBits: 16, rawBase: 0x04592000},
+	"ZEORVS": {intrinsic: "eorv", elementBits: 32, rawBase: 0x04992000},
+	"ZEORVD": {intrinsic: "eorv", elementBits: 64, rawBase: 0x04d92000},
+	"ZORQV":  {intrinsic: "orqv", quad: true, rawBase: 0x041c2000},
+	"ZORVB":  {intrinsic: "orv", elementBits: 8, rawBase: 0x04182000},
+	"ZORVH":  {intrinsic: "orv", elementBits: 16, rawBase: 0x04582000},
+	"ZORVS":  {intrinsic: "orv", elementBits: 32, rawBase: 0x04982000},
+	"ZORVD":  {intrinsic: "orv", elementBits: 64, rawBase: 0x04d82000},
+}
+
+var arm64RawSVEIntegerReductionOps = func() map[uint32]Op {
+	ops := make(map[uint32]Op)
+	for op, spec := range arm64SVEIntegerReductionSpecs {
+		ops[spec.rawBase] = op
+		if spec.quad {
+			for size := uint32(1); size < 4; size++ {
+				ops[spec.rawBase|size<<22] = op
+			}
+		}
+	}
+	return ops
+}()
+
+func decodeARM64RawSVEIntegerReduction(word uint32) (Instr, bool) {
+	op, ok := arm64RawSVEIntegerReductionOps[word&0xffffe000]
+	if !ok {
+		return Instr{}, false
+	}
+	size := word >> 22 & 3
+	width := "BHSD"[size]
+	destination := fmt.Sprintf("V%d", word&31)
+	if arm64SVEIntegerReductionSpecs[op].quad {
+		destination += fmt.Sprintf(".%c%d", width, 16>>size)
+	}
+	return Instr{Op: op, Raw: fmt.Sprintf("WORD $%#08x", word), Args: []Operand{
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))},
+		{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d", word>>10&7))},
+		{Kind: OpReg, Reg: Reg(destination)},
+	}}, true
 }
 
 type arm64SVEIntegerReductionForm struct {
