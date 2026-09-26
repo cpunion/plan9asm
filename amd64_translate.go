@@ -139,6 +139,7 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 			"double @llvm.experimental.constrained.%s.f64(double, double, metadata, metadata)",
 			"<16 x float> @llvm.experimental.constrained.%s.v16f32(<16 x float>, <16 x float>, metadata, metadata)",
 			"<8 x double> @llvm.experimental.constrained.%s.v8f64(<8 x double>, <8 x double>, metadata, metadata)",
+			"<32 x half> @llvm.experimental.constrained.%s.v32f16(<32 x half>, <32 x half>, metadata, metadata)",
 		} {
 			b.WriteString("declare " + fmt.Sprintf(signature, operation) + "\n")
 		}

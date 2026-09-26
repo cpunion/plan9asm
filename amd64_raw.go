@@ -5802,10 +5802,11 @@ vex:
 
 // decodedX86VEXBinaryFloatInstruction recognizes the complete VEX and EVEX
 // VADD, VMUL, VSUB, VMIN, VDIV, and VMAX family for PS/PD/SS/SD, plus
-// VSQRTSS/VSQRTSD. The packed SQRT forms have a distinct single-source
-// grammar and are decoded by decodedX86SameWidthConversionInstruction. Scalar VEX
-// forms require VEX.128; packed VEX forms accept both vector widths. EVEX adds
-// X/Y/Z widths, masking, zeroing, packed broadcasts, rounding, and SAE.
+// VSQRTSS/VSQRTSD, plus raw-only packed FP16 MAP5 binary forms. Packed SQRT
+// has a distinct single-source grammar and is decoded by
+// decodedX86SameWidthConversionInstruction. Scalar VEX forms require VEX.128;
+// packed VEX forms accept both vector widths. EVEX adds X/Y/Z widths, masking,
+// zeroing, packed broadcasts, rounding, and SAE.
 // Recover every register and ModRM/SIB memory form before the generic decoder.
 func decodedX86VEXBinaryFloatInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
 	i := 0
@@ -5922,7 +5923,9 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 		0x5e: "VDIV",
 		0x5f: "VMAX",
 	}[opcode]
-	if p0&0x0f != 1 || !recognized {
+	mapNumber := p0 & 0x0f
+	rawHalf := mapNumber == 5 && p1&3 == 0 && opcode != 0x51
+	if !recognized || mapNumber != 1 && !rawHalf {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
@@ -5935,6 +5938,9 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	}
 	width64 := p1&0x80 != 0
 	wantWidth64 := pp == 1 || pp == 3
+	if rawHalf {
+		wantWidth64 = false
+	}
 	if width64 != wantWidth64 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX.W does not match floating element type")
 	}
@@ -5968,7 +5974,9 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 		vectorWidth = [...]int{16, 32, 64}[vectorBits]
 	}
 	laneBytes := 4
-	if pp == 1 || pp == 3 {
+	if rawHalf {
+		laneBytes = 2
+	} else if pp == 1 || pp == 3 {
 		laneBytes = 8
 	}
 	disp8Scale := vectorWidth
@@ -5987,7 +5995,7 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	bExt := int(^p0>>5) & 1
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
+	if mode == 32 && (!rawHalf && maskNumber != 0 || rExt != 0 || rHighExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register or mask in 32-bit mode")
 	}
 	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
@@ -5996,6 +6004,9 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	}
 
 	suffix := [...]string{"PS", "PD", "SS", "SD"}[pp]
+	if rawHalf {
+		suffix = "PH"
+	}
 	op := Op(stem + suffix)
 	if broadcast {
 		op += ".BCST"
@@ -6021,7 +6032,11 @@ func decodedX86EVEXBinaryFloatInstruction(code []byte, i, mode int, segment Reg,
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, modRMIndex + consumed, true, nil
+	return Instr{
+		Op: op, Args: args,
+		Raw:        fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")),
+		x86Encoded: rawHalf,
+	}, modRMIndex + consumed, true, nil
 }
 
 // decodedX86ScalarIntegerFloatInstruction recognizes Go 1.27's complete

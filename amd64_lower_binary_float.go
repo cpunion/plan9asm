@@ -23,14 +23,22 @@ type amd64BinaryFloatingSpec struct {
 	mode     amd64BinaryFloatingMode
 	scalar   bool
 	sae      bool
+	rawOnly  bool
 }
 
-// amd64BinaryFloatingSpecs is the complete Go 1.27 V-prefixed binary
-// floating-point family. Packed binary operations use _yvaddpd, while scalar
-// binary operations and VSQRTSS/VSQRTSD use _yvaddsd. SCALEF uses the same
-// source/destination shape through _yvscalefpd/_yvgetexpsd. MAX/MIN enable
-// SAE; arithmetic, square-root, and scale operations enable explicit rounding.
+// amd64BinaryFloatingSpecs covers Go 1.27's complete V-prefixed binary
+// floating-point family and the raw-only AVX-512 FP16 packed binary family.
+// Packed Go forms use _yvaddpd, while scalar Go forms and VSQRTSS/VSQRTSD
+// use _yvaddsd. SCALEF uses the same source/destination shape through
+// _yvscalefpd/_yvgetexpsd. MAX/MIN enable SAE; arithmetic, square-root, and
+// scale operations enable explicit rounding.
 var amd64BinaryFloatingSpecs = map[Op]amd64BinaryFloatingSpec{
+	"VADDPH":    {laneBits: 16, mode: amd64BinaryFloatingAdd, rawOnly: true},
+	"VSUBPH":    {laneBits: 16, mode: amd64BinaryFloatingSub, rawOnly: true},
+	"VMULPH":    {laneBits: 16, mode: amd64BinaryFloatingMul, rawOnly: true},
+	"VDIVPH":    {laneBits: 16, mode: amd64BinaryFloatingDiv, rawOnly: true},
+	"VMINPH":    {laneBits: 16, mode: amd64BinaryFloatingMin, sae: true, rawOnly: true},
+	"VMAXPH":    {laneBits: 16, mode: amd64BinaryFloatingMax, sae: true, rawOnly: true},
 	"VADDPS":    {laneBits: 32, mode: amd64BinaryFloatingAdd},
 	"VADDPD":    {laneBits: 64, mode: amd64BinaryFloatingAdd},
 	"VADDSS":    {laneBits: 32, mode: amd64BinaryFloatingAdd, scalar: true},
@@ -103,6 +111,9 @@ func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bo
 	if !recognized {
 		return false, false, nil
 	}
+	if spec.rawOnly && !ins.x86Encoded {
+		return true, false, fmt.Errorf("%s has no named Go assembler form: %q", baseOp, ins.Raw)
+	}
 	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
 	if !validSuffix {
 		return true, false, fmt.Errorf("%s %s has a suffix absent from Go 1.27's binary floating optab: %q", c.goarch, baseOp, ins.Raw)
@@ -121,7 +132,7 @@ func (c *amd64Ctx) lowerBinaryFloating(op Op, ins Instr) (ok bool, terminated bo
 		return true, false, fmt.Errorf("%s %s expects src1, src2, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
 	}
 	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
+	if c.goarch == "386" && masked && !spec.rawOnly {
 		return true, false, fmt.Errorf("386 %s mask forms exceed Go 1.27's assembler operand limit: %q", baseOp, ins.Raw)
 	}
 	if properties.zeroing && !masked {
@@ -187,9 +198,18 @@ func (c *amd64Ctx) lowerPackedBinaryFloating(spec amd64BinaryFloatingSpec, prope
 		if allowBroadcast && properties.broadcast {
 			var scalar string
 			var err error
-			if spec.laneBits == 32 {
+			switch spec.laneBits {
+			case 16:
+				bits, loadErr := c.loadPackedBroadcastScalar(operand, 16, ins.x86Encoded)
+				if loadErr != nil {
+					return "", loadErr
+				}
+				value := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast i16 %s to half\n", value, bits)
+				scalar = "%" + value
+			case 32:
 				scalar, err = c.evalF32(operand)
-			} else {
+			case 64:
 				scalar, err = c.evalF64(operand)
 			}
 			if err != nil {
@@ -313,7 +333,9 @@ func (c *amd64Ctx) bitcastFloatingToIntegerLanes(llvmType string, lanes, laneBit
 
 func amd64BinaryFloatingIntrinsicSuffix(lanes, laneBits int) string {
 	suffix := "f32"
-	if laneBits == 64 {
+	if laneBits == 16 {
+		suffix = "f16"
+	} else if laneBits == 64 {
 		suffix = "f64"
 	}
 	if lanes > 1 {

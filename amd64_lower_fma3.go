@@ -296,7 +296,9 @@ func (c *amd64Ctx) lowerScalarFMA3(spec amd64FMA3Spec, properties amd64FMA3Suffi
 
 func amd64FMA3LLVMType(lanes, laneBits int) string {
 	element := "float"
-	if laneBits == 64 {
+	if laneBits == 16 {
+		element = "half"
+	} else if laneBits == 64 {
 		element = "double"
 	}
 	if lanes == 1 {

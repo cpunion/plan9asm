@@ -1025,6 +1025,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"MOVD", "VMOVD", "VMOVQ", "PREFETCHNTA", "PREFETCHT0", "PREFETCHT1", "PREFETCHT2", "UD2",
 		"CVTSL2SS", "CVTSL2SD", "CVTSQ2SS", "CVTSQ2SD", "CVTPL2PS", "CVTPL2PD",
 		"VBROADCASTSS", "VBROADCASTSD",
+		"VADDPH", "VSUBPH", "VMULPH", "VDIVPH", "VMINPH", "VMAXPH",
 		"VCVTNEPS2BF16X", "VCVTNEPS2BF16Y", "VCVTNEPS2BF16",
 		"PMULDQ", "PMULULQ", "VPMULDQ", "VPMULUDQ",
 		"MOVDDUP", "MOVSHDUP", "MOVSLDUP",
@@ -1281,6 +1282,15 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 	for _, op := range want {
 		if _, ok := supported[op]; !ok {
 			t.Errorf("supported opcode extraction omitted %s", op)
+		}
+	}
+	supported386, err := extractSupportedOps(repoRoot, "386")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"VADDPH", "VSUBPH", "VMULPH", "VDIVPH", "VMINPH", "VMAXPH"} {
+		if _, ok := supported386[op]; !ok {
+			t.Errorf("386 supported opcode extraction omitted raw FP16 %s", op)
 		}
 	}
 	for _, op := range []string{
