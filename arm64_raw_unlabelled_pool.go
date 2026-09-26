@@ -89,7 +89,7 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 
 	// An ADR can also construct a function pointer. Only classify its target
 	// as data when the produced address is used exclusively by loads and killed
-	// before the next control-flow boundary; do not guess from comments.
+	// on every outgoing path; do not guess from comments.
 	for at, target := range addresses {
 		if target >= pool && target < end && !arm64RawAddressOnlyLoaded(fn.Instrs, at, pool) {
 			return nil, nil, nil
@@ -123,15 +123,35 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 
 func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 	register := arm64asm.X0 + arm64asm.Reg(uint32(instructions[at].Args[0].Imm)&31)
+	wordRegister := register - arm64asm.X0 + arm64asm.W0
+	isAddress := func(r arm64asm.Reg) bool { return r == register || r == wordRegister }
 	loaded := false
-	for i := at + 1; i < end; i++ {
+	visited := make(map[int]bool)
+	queue := []int{at + 1}
+	for len(queue) > 0 {
+		i := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+		if i < 0 || i >= end {
+			return false
+		}
+		if visited[i] {
+			continue
+		}
+		visited[i] = true
 		if !arm64RawLiteralWord(instructions[i]) {
 			return false
 		}
+		word := uint32(instructions[i].Args[0].Imm)
 		var code [4]byte
-		binary.LittleEndian.PutUint32(code[:], uint32(instructions[i].Args[0].Imm))
+		binary.LittleEndian.PutUint32(code[:], word)
 		decoded, err := arm64asm.Decode(code[:])
 		if err != nil {
+			return false
+		}
+		// Calls, returns and indirect branches expose live registers to code
+		// outside this proof. No ABI or pointer-escape assumption is made here.
+		switch decoded.Op {
+		case arm64asm.BL, arm64asm.BLR, arm64asm.BR, arm64asm.RET, arm64asm.ERET, arm64asm.DRPS:
 			return false
 		}
 		// Restrict kill recognition to these unambiguous destination-first
@@ -148,11 +168,18 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 			}
 			switch arg := arg.(type) {
 			case arm64asm.PCRel:
-				if decoded.Op != arm64asm.ADR {
+				switch decoded.Op {
+				case arm64asm.ADR:
+				case arm64asm.B, arm64asm.CBZ, arm64asm.CBNZ, arm64asm.TBZ, arm64asm.TBNZ:
+					if int64(arg)%4 != 0 {
+						return false
+					}
+					queue = append(queue, i+int(arg)/4)
+				default:
 					return false
 				}
 			case arm64asm.Reg:
-				if arg == register || arg == register-arm64asm.X0+arm64asm.W0 {
+				if isAddress(arg) {
 					if n == 0 && writesFirst {
 						kills = true
 					} else {
@@ -160,7 +187,7 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 					}
 				}
 			case arm64asm.RegSP:
-				if arm64asm.Reg(arg) == register {
+				if isAddress(arm64asm.Reg(arg)) {
 					if n == 0 && writesFirst {
 						kills = true
 					} else {
@@ -168,24 +195,35 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 					}
 				}
 			case arm64asm.MemImmediate:
+				if arg.Mode == arm64asm.AddrPostReg {
+					// The implicit post-index register is not exported by x/arch.
+					return false
+				}
 				if arm64asm.Reg(arg.Base) == register {
 					if !strings.HasPrefix(decoded.Op.String(), "LD") || arg.Mode != arm64asm.AddrOffset {
 						return false
 					}
 					loaded = true
 				}
-			case arm64asm.MemExtend, arm64asm.RegExtshiftAmount:
-				// Register-indexed addressing and shifted uses need a broader
-				// value-flow proof; keep them on the strict path for now.
-				return false
+			case arm64asm.MemExtend:
+				if isAddress(arm64asm.Reg(arg.Base)) || isAddress(arg.Index) {
+					return false
+				}
+			case arm64asm.RegExtshiftAmount:
+				// x/arch keeps this typed operand's register field private, but
+				// prints the register before the comma separating its modifier.
+				name := strings.SplitN(arg.String(), ",", 2)[0]
+				if name == register.String() || name == wordRegister.String() {
+					return false
+				}
 			}
 		}
 		if kills {
-			return loaded
+			continue
 		}
-		if arm64RawIsNonFallthroughTerminator(instructions[i]) || decoded.Op == arm64asm.BLR {
-			return false
+		if word&0xfc000000 != 0x14000000 {
+			queue = append(queue, i+1)
 		}
 	}
-	return false
+	return loaded
 }

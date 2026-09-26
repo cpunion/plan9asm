@@ -28,6 +28,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	t.Run("arm64_raw_sve_float_compare", func(t *testing.T) {
 		testARM64RawSVEFloatCompareRuntime(t, llc)
 	})
+	t.Run("arm64_raw_pool_control_flow", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir := arm64RawPoolControlFlowIR(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "branchpool", triple, ir,
+			arm64RawPoolControlFlowMain, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_raw_scalar_abd_mul", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64ScalarABDMulRuntime(t, triple)

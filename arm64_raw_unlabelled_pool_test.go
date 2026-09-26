@@ -1,10 +1,109 @@
 package plan9asm
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func arm64RawPoolControlFlowIR(t *testing.T, triple string) string {
+	words := assembleARM64LLVMWords(t, []string{
+		"adr x9, #52", "cbz x3, #32", "ldr w1, [x9]",
+		"add x4, x3, x3, lsl #2", "sub x3, x3, #1", "cbnz x3, #-12",
+		"mov x9, xzr", "str w1, [x0]", "ret",
+		"ldr w1, [x9, #4]", "mov x9, xzr", "str w1, [x0]", "ret",
+	}, "")
+	words = append(words, 0x11223344, 0xaabbccdd)
+	var source strings.Builder
+	source.WriteString("TEXT branchpool(SB),$0-16\nMOVD out+0(FP),R0\nMOVD count+8(FP),R3\n")
+	for _, word := range words {
+		fmt.Fprintf(&source, "WORD $%#08x\n", word)
+	}
+	source.WriteString("RET\n")
+	file, err := Parse(ArchARM64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple,
+		Sigs: map[string]FuncSig{"branchpool": {Name: "branchpool", Args: []LLVMType{Ptr, I64}, Ret: Void,
+			Frame: FrameLayout{Params: []FrameSlot{
+				{Offset: 0, Type: Ptr, Index: 0, Field: -1},
+				{Offset: 8, Type: I64, Index: 1, Field: -1},
+			}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, "private constant [8 x i8]") {
+		t.Fatal("missing proven data pool")
+	}
+	return ir
+}
+
+const arm64RawPoolControlFlowMain = `
+#include <stdint.h>
+extern void branchpool(uint32_t *, uint64_t);
+int main(void) {
+  for (unsigned count = 0; count < 5; count++) {
+    uint32_t got = 0;
+    branchpool(&got, count);
+    if (got != (count ? 0x11223344U : 0xaabbccddU)) return 1;
+  }
+  return 0;
+}
+`
+
+func TestARM64RawPoolControlFlowLLVM(t *testing.T) {
+	llc, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM 22 llc/clang not found")
+	}
+	for _, triple := range []string{"aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := arm64RawPoolControlFlowIR(t, triple)
+			compileLLVMToObject(t, llc, triple, "branchpool.ll", "branchpool.o", ir)
+			native := runtime.GOOS == "darwin" && triple == "aarch64-apple-darwin" ||
+				runtime.GOOS == "linux" && triple == "aarch64-unknown-linux-gnu"
+			if runtime.GOARCH == "arm64" && native {
+				compileAndRunRuntimeTestForTarget(t, llc, clang, "branchpool", triple, ir, arm64RawPoolControlFlowMain, nil)
+			}
+		})
+	}
+}
+
+func TestARM64RawPoolAddressAcrossControlFlow(t *testing.T) {
+	lines := []string{
+		"adr x9, #48", "cbz x3, #28",
+		"ldr w1, [x9]", "add x4, x4, x5, lsl #2", "sub x3, x3, #1", "cbnz x3, #-12",
+		"mov x9, xzr", "ret",
+		"ldr w1, [x9, #4]", "ldr w2, [x0, x4, lsl #2]", "mov x9, xzr", "ret",
+	}
+	for _, test := range []struct {
+		name, old, replacement string
+		want                   bool
+	}{
+		{name: "loop-and-diamond", want: true},
+		{"escape-one-edge", "mov x9, xzr", "str x9, [x0]", false},
+		{"shifted-address", "add x4, x4, x5, lsl #2", "add x4, x4, x9, lsl #2", false},
+		{"indexed-address", "ldr w2, [x0, x4, lsl #2]", "ldr w2, [x0, x9, lsl #2]", false},
+		{"call-with-live-address", "add x4, x4, x5, lsl #2", "blr x5", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			asm := strings.Join(lines, "\n")
+			if test.old != "" {
+				asm = strings.Replace(asm, test.old, test.replacement, 1)
+			}
+			words := assembleARM64LLVMWords(t, strings.Split(asm, "\n"), "")
+			var instructions []Instr
+			for _, word := range words {
+				instructions = append(instructions, Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}})
+			}
+			if got := arm64RawAddressOnlyLoaded(instructions, 0, len(instructions)); got != test.want {
+				t.Fatalf("load-only proof = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
 
 const arm64RawUnlabelledPoolSource = `TEXT rawpool(SB),$0-8
 MOVD out+0(FP),R0
