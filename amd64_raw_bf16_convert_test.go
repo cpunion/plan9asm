@@ -55,7 +55,7 @@ func TestDecodedX86RawBF16ConvertCompleteLLVM22Forms(t *testing.T) {
 							continue
 						}
 						code := encodeX86RawBF16Convert(vectorBits, 20, 21, mask, zeroing, broadcast, memory)
-						got, length, ok, err := decodedX86RawBF16ConvertInstruction(code, 64)
+						got, length, ok, err := decodedX86RawBF16Instruction(code, 64)
 						if err != nil || !ok || length != len(code) {
 							t.Fatalf("decode %x = %+v, length=%d, ok=%v, err=%v", code, got, length, ok, err)
 						}
@@ -96,11 +96,11 @@ func TestDecodedX86RawBF16ConvertRejectsReservedFields(t *testing.T) {
 	} {
 		bad := append([]byte(nil), valid...)
 		bad[change.index] ^= change.bits
-		if _, _, ok, err := decodedX86RawBF16ConvertInstruction(bad, 64); !ok || err == nil {
+		if _, _, ok, err := decodedX86RawBF16Instruction(bad, 64); !ok || err == nil {
 			t.Fatalf("accepted reserved BF16 conversion %x: ok=%v err=%v", bad, ok, err)
 		}
 	}
-	if _, _, ok, err := decodedX86RawBF16ConvertInstruction(valid[:5], 64); ok && err == nil {
+	if _, _, ok, err := decodedX86RawBF16Instruction(valid[:5], 64); ok && err == nil {
 		t.Fatal("accepted truncated BF16 conversion")
 	}
 }

@@ -8,6 +8,15 @@ import (
 type amd64PackedDotProductSpec struct {
 	inputBits int
 	saturate  bool
+	bfloat    bool
+}
+
+var amd64PackedDotProductSpecs = map[Op]amd64PackedDotProductSpec{
+	"VPDPBUSD":  {inputBits: 8},
+	"VPDPBUSDS": {inputBits: 8, saturate: true},
+	"VPDPWSSD":  {inputBits: 16},
+	"VPDPWSSDS": {inputBits: 16, saturate: true},
+	"VDPBF16PS": {inputBits: 16, bfloat: true},
 }
 
 // lowerPackedDotProduct implements the four VNNI dot-product opcodes sharing
@@ -19,18 +28,12 @@ func (c *amd64Ctx) lowerPackedDotProduct(op Op, ins Instr) (ok bool, terminated 
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
 	}
-	var spec amd64PackedDotProductSpec
-	switch baseOp {
-	case "VPDPBUSD":
-		spec = amd64PackedDotProductSpec{inputBits: 8}
-	case "VPDPBUSDS":
-		spec = amd64PackedDotProductSpec{inputBits: 8, saturate: true}
-	case "VPDPWSSD":
-		spec = amd64PackedDotProductSpec{inputBits: 16}
-	case "VPDPWSSDS":
-		spec = amd64PackedDotProductSpec{inputBits: 16, saturate: true}
-	default:
+	spec, recognized := amd64PackedDotProductSpecs[Op(baseOp)]
+	if !recognized {
 		return false, false, nil
+	}
+	if spec.bfloat && !ins.x86Encoded {
+		return true, false, fmt.Errorf("%s has no named Go encoder form; raw encoding required", baseOp)
 	}
 
 	properties, validSuffix := parseAMD64BinaryFloatingSuffix(suffix)
@@ -41,7 +44,7 @@ func (c *amd64Ctx) lowerPackedDotProduct(op Op, ins Instr) (ok bool, terminated 
 		return true, false, fmt.Errorf("%s %s expects source2, source1, [K mask,] accumulator: %q", c.goarch, baseOp, ins.Raw)
 	}
 	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
+	if c.goarch == "386" && masked && !ins.x86Encoded {
 		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
 	}
 	if properties.zeroing && !masked {
@@ -76,22 +79,20 @@ func (c *amd64Ctx) lowerPackedDotProduct(op Op, ins Instr) (ok bool, terminated 
 
 	dwordLanes := byteWidth / 4
 	inputLanes := byteWidth * 8 / spec.inputBits
-	var rmBytes string
-	if properties.broadcast {
-		scalar, err := c.evalIntSized(rmSource, I32)
-		if err != nil {
-			return true, false, err
-		}
-		dwords := amd64SplatInteger(c, dwordLanes, 32, scalar)
-		cast := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x i8>\n", cast, dwordLanes, dwords, byteWidth)
-		rmBytes = "%" + cast
-	} else {
-		rmBytes, err = c.loadPackedCompareBytes(rmSource, byteWidth)
+	mask := ""
+	if masked {
+		mask, err = c.loadK(ins.Args[2].Reg)
 		if err != nil {
 			return true, false, err
 		}
 	}
+	// One mask bit controls a complete output dword and its input pair/group.
+	rmDwords, err := c.loadMaskedPackedCompareLanes(rmSource, byteWidth, 32, properties.broadcast, mask)
+	if err != nil {
+		return true, false, err
+	}
+	rmValue := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x i%d>\n", rmValue, dwordLanes, rmDwords, inputLanes, spec.inputBits)
 	vBytes, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
 	if err != nil {
 		return true, false, err
@@ -100,23 +101,37 @@ func (c *amd64Ctx) lowerPackedDotProduct(op Op, ins Instr) (ok bool, terminated 
 	if err != nil {
 		return true, false, err
 	}
-	rm := c.bitcastVectorBytesToIntegerLanes(byteWidth, inputLanes, spec.inputBits, rmBytes)
+	rm := "%" + rmValue
 	v := c.bitcastVectorBytesToIntegerLanes(byteWidth, inputLanes, spec.inputBits, vBytes)
 	old := c.bitcastVectorBytesToIntegerLanes(byteWidth, dwordLanes, 32, oldBytes)
 	computed := c.emitPackedDotProduct(spec, dwordLanes, rm, v, old)
 	if masked {
-		mask, err := c.loadK(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
 		computed = amd64ApplyI32LaneMask(c, dwordLanes, computed, old, mask, properties.zeroing)
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x i8>\n", out, dwordLanes, computed, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(destination, byteWidth, "%"+out)
+}
+
+// LLVM's dedicated intrinsic preserves the instruction's RNE, DAZ/FTZ and
+// NaN-priority semantics independently of MXCSR. Generic fmul/fadd cannot.
+func (c *amd64Ctx) emitBF16DotProduct(lanes int, rm, v, accumulator string) string {
+	left, right, old := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x bfloat>\n", left, lanes*2, v, lanes*2)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x bfloat>\n", right, lanes*2, rm, lanes*2)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x float>\n", old, lanes, accumulator, lanes)
+	result := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call <%d x float> @llvm.x86.avx512bf16.dpbf16ps.%d(<%d x float> %%%s, <%d x bfloat> %%%s, <%d x bfloat> %%%s)\n",
+		result, lanes, lanes*32, lanes, old, lanes*2, left, lanes*2, right)
+	bits := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x float> %%%s to <%d x i32>\n", bits, lanes, result, lanes)
+	return "%" + bits
 }
 
 func (c *amd64Ctx) emitPackedDotProduct(spec amd64PackedDotProductSpec, dwordLanes int, rm, v, accumulator string) string {
+	if spec.bfloat {
+		return c.emitBF16DotProduct(dwordLanes, rm, v, accumulator)
+	}
 	inputsPerDword := 32 / spec.inputBits
 	result := "poison"
 	for lane := 0; lane < dwordLanes; lane++ {

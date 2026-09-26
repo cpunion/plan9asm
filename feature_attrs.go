@@ -79,6 +79,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+avx512vl")
 					}
 				}
+			case strings.HasPrefix(op, "VDPBF16PS"):
+				add("+avx512f", "+avx512bf16")
+				if len(ins.Args) != 0 && amd64VectorByteWidth(ins.Args[len(ins.Args)-1].Reg) < 64 {
+					add("+avx512vl")
+				}
 			case strings.HasPrefix(op, "VCVTNEPS2BF16"):
 				add("+avx512f", "+avx512bf16")
 				if strings.HasPrefix(op, "VCVTNEPS2BF16X") || strings.HasPrefix(op, "VCVTNEPS2BF16Y") {

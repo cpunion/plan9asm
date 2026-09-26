@@ -67,6 +67,12 @@ func TestInferFuncTargetFeatures(t *testing.T) {
 			want: "+avx512fp16",
 		},
 		{
+			name: "x86 raw BF16 dot product",
+			arch: ArchAMD64,
+			ops:  []Op{"VDPBF16PS", "VDPBF16PS.BCST.Z"},
+			want: "+avx512bf16,+avx512f",
+		},
+		{
 			name: "x86 single float duplicate is not fp16",
 			arch: ArchAMD64,
 			ops:  []Op{"VMOVSHDUP"},
