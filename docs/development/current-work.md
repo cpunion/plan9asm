@@ -32,6 +32,14 @@ do not start new module-index inventory scans while failures remain.
   replay required on a later shared frozen revision. A new shard 22 replay
   at `2d17842` is running in the former shard-25 worktree. Inspect its
   process and report before advancing that tree.
+- The user authorized a distinct, not-passed private-extension skip for the
+  exact fiber/ai v0.1.2 Darwin/ARM64 Apple AMX file. The manifest pins its
+  source hash and opcode. The new runner verifies current Go assembly and
+  still translates the other files. A focused local replay passed all three
+  remaining Darwin/ARM64 files; log `_out/fiber-private-replay.log` in the
+  development worktree. Old shard 22 at `2d17842` independently confirmed
+  Mazarin passed (91 translations, 3 source/ABI N/A), while fiber failed only
+  on that AMX file. The new classification needs a frozen full-shard replay.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -189,9 +197,9 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    when a single package contains thousands of generated functions.
 3. Keep unproven upstream defects failed. Only the five confirmed exact
    versions in the invalid-machine-code manifest qualify for
-   `skipped_invalid_source`; private Apple
-   instructions alone are not proof of invalid source. Continue other
-   applicable forms and candidates normally.
+   `skipped_invalid_source`. The distinct private-extension exception is
+   authorized only for its pinned file/target and is not a pass. Continue
+   other applicable forms and candidates normally.
 4. Run all 32 shards with identical frozen provenance, refresh the validated
    assembly ledger, then batch-push to the allowed fork. The current evidence
    snapshot is stale. Reuse neither path-dependent e7 reports nor reports

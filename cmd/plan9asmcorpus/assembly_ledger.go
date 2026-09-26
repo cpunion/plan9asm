@@ -40,8 +40,11 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		!discoverySHA256Pattern.MatchString(progress.Source.SHA256) || progress.Source.Dirty {
 		return fmt.Errorf("assembly ledger requires a clean, identified source")
 	}
+	classified := progress.Passed + progress.Failed + progress.NotApplicable +
+		progress.SkippedInvalidSource + progress.SkippedSuperseded +
+		progress.SkippedPrivateExtension
 	if progress.CandidateTotal != len(progress.Candidates) ||
-		progress.CandidateTotal != progress.Passed+progress.Failed+progress.NotApplicable+progress.SkippedInvalidSource+progress.SkippedSuperseded+progress.Pending {
+		progress.CandidateTotal != classified+progress.Pending {
 		return fmt.Errorf("assembly ledger candidate counts do not balance")
 	}
 	if progress.Complete != (progress.ShardCount > 0 && progress.ReportedShards == progress.ShardCount && progress.Pending == 0) ||
@@ -53,7 +56,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		progress.PassedShards+progress.FailedShards+len(progress.PartialShards) != progress.ReportedShards {
 		return fmt.Errorf("assembly ledger shard counts do not balance")
 	}
-	if progress.Passed+progress.Failed+progress.NotApplicable+progress.SkippedInvalidSource+progress.SkippedSuperseded > 0 && progress.Provenance == nil {
+	if classified > 0 && progress.Provenance == nil {
 		return fmt.Errorf("assembly ledger outcomes lack report provenance")
 	}
 	if progress.Provenance != nil {
@@ -73,7 +76,9 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		}
 		seen[key] = true
 		switch candidate.Status {
-		case "pending", discoveryStatusPassed, discoveryStatusFailed, discoveryStatusNotApplicable, discoveryStatusSkippedInvalidSource, discoveryStatusSkippedSuperseded:
+		case "pending", discoveryStatusPassed, discoveryStatusFailed,
+			discoveryStatusNotApplicable, discoveryStatusSkippedInvalidSource,
+			discoveryStatusSkippedSuperseded, discoveryStatusSkippedPrivateExtension:
 			counts[candidate.Status]++
 		default:
 			return fmt.Errorf("assembly ledger candidate %s has invalid status %q", key, candidate.Status)
@@ -92,12 +97,21 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		} else if candidate.Superseded != nil {
 			return fmt.Errorf("assembly ledger non-superseded %s carries supersession", key)
 		}
+		if candidate.Status == discoveryStatusSkippedPrivateExtension {
+			if candidate.PrivateExtension == nil || candidate.PrivateExtension.Module != candidate.Module ||
+				candidate.PrivateExtension.Version != candidate.Version || candidate.PrivateExtension.Reason == "" {
+				return fmt.Errorf("assembly ledger private extension %s lacks matching evidence", key)
+			}
+		} else if candidate.PrivateExtension != nil {
+			return fmt.Errorf("assembly ledger non-private result %s carries private-extension evidence", key)
+		}
 	}
 	if counts["pending"] != progress.Pending || counts[discoveryStatusPassed] != progress.Passed ||
 		counts[discoveryStatusFailed] != progress.Failed ||
 		counts[discoveryStatusNotApplicable] != progress.NotApplicable ||
 		counts[discoveryStatusSkippedInvalidSource] != progress.SkippedInvalidSource ||
-		counts[discoveryStatusSkippedSuperseded] != progress.SkippedSuperseded {
+		counts[discoveryStatusSkippedSuperseded] != progress.SkippedSuperseded ||
+		counts[discoveryStatusSkippedPrivateExtension] != progress.SkippedPrivateExtension {
 		return fmt.Errorf("assembly ledger candidate statuses do not match summary")
 	}
 	return nil

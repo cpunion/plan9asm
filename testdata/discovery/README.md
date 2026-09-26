@@ -32,7 +32,11 @@ committed `.gz` discovery results.
 The scan ledger's `scanned` records include inspected versions with no
 assembly; `matched` records retain assembly candidates. The separate
 `assembly-ledger/` records each matched exact version as `pending`, `passed`,
-`failed`, or evidence-backed `not_applicable`. Its manifest binds the scan
+`failed`, evidence-backed `not_applicable`, or a distinct audited skip
+(`skipped_invalid_source`, `skipped_superseded`, or
+`skipped_private_extension`). Private-extension skips identify one exact
+file/target and retain successful translations of other files without counting
+the module as passed. Its manifest binds the scan
 fingerprint, frozen report/tool provenance and source content. It is an
 audited status snapshot, not input to discovery or corpus compilation. A
 change to the scanner/compiler source or scan ledger makes the snapshot

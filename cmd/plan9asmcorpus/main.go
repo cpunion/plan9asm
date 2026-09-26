@@ -55,6 +55,7 @@ type matrixReport struct {
 	Failed                   int                                `json:"failed"`
 	NotApplicableItems       []matrixTargetNotApplicableItem    `json:"not_applicable_items,omitempty"`
 	SourceNotApplicableItems []discoverySourceNotApplicableItem `json:"source_not_applicable_items,omitempty"`
+	PrivateExtension         *discoveryPrivateExtensionSkip     `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"

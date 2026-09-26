@@ -9,6 +9,7 @@ type discoveryCandidateProgress struct {
 	InvalidSourceReason   string                                `json:"invalid_source_reason,omitempty"`
 	InvalidSourceEvidence []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
 	Superseded            *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension      *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
 }
 
 // This is a derived view, not a mutable flag attached to a scanned version.
@@ -33,6 +34,7 @@ type discoveryProgress struct {
 	NotApplicable             int                          `json:"not_applicable"`
 	SkippedInvalidSource      int                          `json:"skipped_invalid_source"`
 	SkippedSuperseded         int                          `json:"skipped_superseded"`
+	SkippedPrivateExtension   int                          `json:"skipped_private_extension"`
 	Pending                   int                          `json:"pending"`
 	DiscoveredAsmFiles        int                          `json:"discovered_asm_files"`
 	Translations              int                          `json:"translations"`
@@ -51,6 +53,7 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 	}
 	var skips map[string]discoveryInvalidMachineCodeSkip
 	var superseded map[string]discoverySupersededSkip
+	var privateExtensions map[string]discoveryPrivateExtensionSkip
 	if len(repoRoot) == 1 {
 		var err error
 		skips, err = loadInvalidMachineCodeSkips(repoRoot[0])
@@ -67,6 +70,13 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 		if superseded == nil {
 			superseded = map[string]discoverySupersededSkip{}
 		}
+		privateExtensions, err = loadPrivateExtensionSkips(repoRoot[0], ledgerPath)
+		if err != nil {
+			return discoveryProgress{}, err
+		}
+		if privateExtensions == nil {
+			privateExtensions = map[string]discoveryPrivateExtensionSkip{}
+		}
 	}
 	progress := discoveryProgress{
 		SchemaVersion:  1,
@@ -78,7 +88,7 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 		PendingShards:  []int{},
 		Candidates:     []discoveryCandidateProgress{},
 	}
-	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, superseded, &progress); err != nil {
+	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, superseded, privateExtensions, &progress); err != nil {
 		// Never return a plausible partial total after detecting corrupt evidence.
 		return discoveryProgress{}, err
 	}

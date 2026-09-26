@@ -121,7 +121,7 @@ runner.
 
 The aggregate checks exact ledger ownership/inventory and these identities:
 
-- `selected = passed + not_applicable + skipped_invalid_source + skipped_superseded + failed`;
+- `selected = passed + not_applicable + skipped_invalid_source + skipped_superseded + skipped_private_extension + failed`;
 - each target's `total_asm = success + not_applicable + failed`;
 - final `failed = 0`, each candidate appearing exactly once.
 
@@ -150,7 +150,16 @@ download or translate the old version; the report and assembly ledger retain
 its reason and replacement. This is not a pass. If the replacement has
 assembly, it remains a separate corpus candidate and must pass the same gate.
 
-Schema 5 binds Git revision/content/dirty state, full ledger fingerprint,
+`skipped_private_extension` is a file/target exception, not a module-wide
+translation exemption. The reviewed `testdata/corpus/private-extensions.json`
+pins an exact source SHA-256, raw opcode, target and source link. The runner
+requires current Go to assemble that file, excludes only the pinned
+file/target from LLVM translation, and still compiles all other applicable
+files. Its successful translations are retained, but the module is counted
+as skipped rather than passed. A changed file, failed Go assembly or failed
+other translation makes the candidate fail.
+
+Schema 6 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22
 version/llc bytes. Before/after capture detects mutations. All shards need
 identical provenance. Dirty builds are diagnostic-only; schema-2, stale tools,
@@ -176,10 +185,9 @@ The defaults are `_out/discovered-library-corpus` and 32. `scan-status.json`
 contains validated contiguous index endpoints and scan counts.
 `assembly-progress.json` binds the ledger/source and lists every selected exact
 version as `pending`, `passed`, `not_applicable`, `skipped_invalid_source`,
-`skipped_superseded` or
-`failed`. Its invariant is `candidate_total = pending + passed +
-not_applicable + skipped_invalid_source + skipped_superseded + failed`. Missing whole
-shards remain pending, including in-progress shards not yet published.
+`skipped_superseded`, `skipped_private_extension` or `failed`. Its invariant
+includes every one of those categories exactly once. Missing whole shards
+remain pending, including in-progress shards not yet published.
 
 The progress reader and final passing gate share the same provenance, inventory,
 target and accounting checks. Stale/mixed reports or a truncated shard fail the

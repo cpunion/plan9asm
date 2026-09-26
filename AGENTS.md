@@ -51,6 +51,10 @@ tests establish the relevant runtime semantics.
   already in the scan ledger and gives reviewable project-identity evidence.
   This is separate from both source N/A and assembly success; the replacement
   is independently scanned and, if it has assembly, tested.
+- A private-extension gap may be `skipped_private_extension` only for the
+  exact file and target pinned in `testdata/corpus/private-extensions.json`.
+  Verify the source hash and current Go assembler, compile every other
+  applicable file, and count the candidate separately from passes.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.
