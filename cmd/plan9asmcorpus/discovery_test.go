@@ -237,8 +237,11 @@ func TestInvalidMachineCodeManifestExpressionsEmitClaimedWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skips) != 5 {
-		t.Fatalf("got %d independently reviewed exact-version skips, want 5", len(skips))
+	if len(skips) != 6 {
+		t.Fatalf("got %d independently reviewed exact-version skips, want 6", len(skips))
+	}
+	if _, ok := skips["github.com/janpfeifer/go-highway@v0.0.0-dev9"]; !ok {
+		t.Fatal("missing independently reviewed go-highway dev9 source evidence")
 	}
 	for key, skip := range skips {
 		for _, item := range skip.Evidence {

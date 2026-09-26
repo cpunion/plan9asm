@@ -67,6 +67,29 @@
       ]
     },
     {
+      "module": "github.com/janpfeifer/go-highway",
+      "version": "v0.0.0-dev9",
+      "reason": "Go 1.27 accepts the raw AMD64 instructions, but its objects place the fixed RIP targets for the absent GoAT constants CPI0_4 and CPI1_1 beyond every TEXT symbol. Both exact source files are pinned by SHA-256.",
+      "evidence": [
+        {
+          "kind": "amd64_missing_rip_constant",
+          "asm_file": "hwy/asm/ops_bf16_avx512_amd64.s",
+          "sha256": "6cc174d2aee0a6f85f488c5955c141dbfc3a37b06a88d1883c84fbebfb2872b1",
+          "source_expression": "QUAD $0x00001592256ffdc5               // vmovdqa\tLCPI0_4(%rip), %ymm4",
+          "architecture": "amd64",
+          "missing_symbol": "CPI0_4"
+        },
+        {
+          "kind": "amd64_missing_rip_constant",
+          "asm_file": "hwy/asm/ops_f16_avx2_amd64.s",
+          "sha256": "ba97e70f6d4b0bd929540bce715facbc75efe21bcf436b203752199631470ff6",
+          "source_expression": "QUAD $0x000003bd0ddbf5c5               // vpand\tLCPI1_1(%rip), %ymm1, %ymm1",
+          "architecture": "amd64",
+          "missing_symbol": "CPI1_1"
+        }
+      ]
+    },
+    {
       "module": "github.com/initLijing/gmsm",
       "version": "v0.15.6",
       "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
