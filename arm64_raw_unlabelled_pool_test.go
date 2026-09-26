@@ -295,13 +295,45 @@ func TestARM64RawPoolLoadKillsAndPostIndexEffects(t *testing.T) {
 		{"ld1 {v0.16b}, [x9], x0\nmov x9, xzr", false},
 		{"csel x9, x0, x9, eq", false}, {"csinc x9, x9, x1, eq", false},
 		{"str x9, [x0]\nmov x9, xzr", false},
+		{"ldp x9, x10, [x0]", true}, {"ldp x10, x9, [x0]", true},
+		{"ldp w9, w10, [x0]", true}, {"ldp w10, w9, [x0]", true},
+		{"ldnp x9, x10, [x0]", true}, {"ldnp x10, x9, [x0]", true},
+		{"ldnp w9, w10, [x0]", true}, {"ldnp w10, w9, [x0]", true},
+		{"ldpsw x9, x10, [x0]", true}, {"ldpsw x10, x9, [x0]", true},
+		{"ldp x9, x10, [x0, #16]!", true}, {"ldp x10, x9, [x0], #16", true},
+		{"ldp x9, x10, [x9]", true},
+		{"ldp x0, x1, [x9], #16", false},
+		{"ldp d9, d10, [x0]", false}, {"ldp q9, q10, [x0]", false},
+		{"stp x9, x10, [x0]\nmov x9, xzr", false},
+		{"stp x10, x9, [x0]\nmov x9, xzr", false},
+		{"ldxr x0, [x9]\nmov x9, xzr", false}, // The exclusive monitor would retain the address.
+		{"lsl x9, x0, #3", true}, {"lsl w9, w0, w1", true},
+		{"lsr w9, w0, #3", true}, {"lsr x9, x0, x1", true},
+		{"asr x9, x0, #3", true}, {"asr w9, w0, w1", true},
+		{"ror w9, w0, #3", true}, {"ror x9, x0, x1", true},
+		{"lsl x9, x9, #3", false}, {"lsr w9, w0, w9", false},
+		{"fmov w9, s0", true}, {"fmov x9, d0", true},
+		{"fmov d0, x9\nmov x9, xzr", false},
+		{"ptrue p15.b\nmov x9, xzr", true},
+		{"ptrue p0.h, vl4\nmov x9, xzr", true},
+		{"ptrue p7.s\nmov x9, xzr", true},
+		{"ptrue p8.d\nmov x9, xzr", true},
+		{"orr z31.d, z30.d, z29.d\nmov x9, xzr", true},
+		{"and z31.h, p7/m, z31.h, z30.h\nmov x9, xzr", true},
+		{"eor z31.s, z31.s, #1\nmov x9, xzr", true},
+		{"bic z31.d, z30.d, z29.d\nmov x9, xzr", true},
+		{"add z31.b, z30.b, z29.b\nmov x9, xzr", true},
+		{"add z31.h, p7/m, z31.h, z30.h\nmov x9, xzr", true},
+		{"add z31.s, z31.s, #12\nmov x9, xzr", true},
+		{"dup z31.d, x9\nmov x9, xzr", false},
+		{"ld1b { z31.b }, p0/z, [x9]\nmov x9, xzr", false}, // Not a proven scalar load effect.
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
 			lines := []string{"adr x9, #64", "ldr w1, [x9]"}
 			lines = append(lines, strings.Split(test.instruction, "\n")...)
 			lines = append(lines, "ret")
 			var instructions []Instr
-			for _, word := range assembleARM64LLVMWords(t, lines, "") {
+			for _, word := range assembleARM64LLVMWords(t, lines, "+sve") {
 				instructions = append(instructions, Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}})
 			}
 			if got := arm64RawAddressOnlyLoaded(instructions, 0, len(instructions)); got != test.want {
@@ -310,3 +342,73 @@ func TestARM64RawPoolLoadKillsAndPostIndexEffects(t *testing.T) {
 		})
 	}
 }
+
+func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
+	t.Helper()
+	var source strings.Builder
+	sigs := make(map[string]FuncSig)
+	for _, test := range []struct {
+		name    string
+		effects []string
+	}{
+		{"pool_pair_first", []string{"ptrue p15.b", "ldp x19, x20, [x1]"}},
+		{"pool_pair_second", []string{"ldp x20, x19, [x1]"}},
+		{"pool_shift", []string{"lsl x19, x1, #3"}},
+		{"pool_float", []string{"fmov d0, x1", "fmov x19, d0"}},
+	} {
+		// R19 is deliberately outside every terminal-clobber mask: these
+		// functions need an actual overwrite, not just a void return contract.
+		lines := []string{fmt.Sprintf("adr x19, #%d", (4+len(test.effects))*4), "ldr w2, [x19]", "str w2, [x0]"}
+		lines = append(lines, test.effects...)
+		lines = append(lines, "ret")
+		fmt.Fprintf(&source, "TEXT %s(SB),$0-16\nMOVD out+0(FP),R0\nMOVD restore+8(FP),R1\n", test.name)
+		for _, word := range assembleARM64LLVMWords(t, lines, "+sve") {
+			fmt.Fprintf(&source, "WORD $%#08x\n", word)
+		}
+		source.WriteString("WORD $0x17b4a14d\nRET\n")
+		sigs[test.name] = FuncSig{Name: test.name, Args: []LLVMType{Ptr, Ptr}, Ret: Void,
+			Frame: FrameLayout{Params: []FrameSlot{
+				{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1},
+			}}}
+	}
+	file, err := Parse(ArchARM64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ir
+}
+
+func TestARM64RawPoolRegisterEffectsLLVM(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{"aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := arm64RawPoolRegisterEffectsIR(t, triple)
+			compileLLVMToObject(t, llc, triple, "pool_effects.ll", "pool_effects.o", ir)
+		})
+	}
+}
+
+const arm64RawPoolRegisterEffectsMain = `
+#include <stdint.h>
+extern void pool_pair_first(uint32_t *, const uint64_t *);
+extern void pool_pair_second(uint32_t *, const uint64_t *);
+extern void pool_shift(uint32_t *, const uint64_t *);
+extern void pool_float(uint32_t *, const uint64_t *);
+int main(void) {
+  uint64_t restore[2] = {0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
+  uint32_t result[6] = {1, 0, 0, 0, 0, 2};
+  pool_pair_first(result + 1, restore);
+  pool_pair_second(result + 2, restore);
+  pool_shift(result + 3, restore);
+  pool_float(result + 4, restore);
+  for (unsigned i = 1; i < 5; i++) if (result[i] != 0x17b4a14d) return 1;
+  return result[0] != 1 || result[5] != 2;
+}
+`

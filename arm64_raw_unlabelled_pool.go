@@ -158,6 +158,13 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 			return false
 		}
 		word := uint32(instructions[i].Args[0].Imm)
+		// x/arch does not decode SVE. These validated typed grammars affect
+		// only vector/predicate registers (and possibly flags), never GP or
+		// memory state. Unknown SVE instructions still fail below.
+		if arm64RawPoolIndependentSVE(word) {
+			queue = append(queue, i+1)
+			continue
+		}
 		var code [4]byte
 		binary.LittleEndian.PutUint32(code[:], word)
 		decoded, err := arm64asm.Decode(code[:])
@@ -176,14 +183,18 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 		}
 		// Restrict kill recognition to these unambiguous destination-first
 		// operations. Other encodings can read/write registers implicitly.
-		writesFirst := false
+		destinations := 0
 		switch decoded.Op.String() {
 		case "ADR", "MOV", "MOVZ", "MOVN", "ADD", "SUB", "AND", "ORR", "EOR":
-			writesFirst = true
+			destinations = 1
+		case "LSL", "LSR", "ASR", "ROR", "FMOV":
+			destinations = 1
 		case "LDR", "LDRB", "LDRH", "LDRSB", "LDRSH", "LDRSW",
 			"LDUR", "LDURB", "LDURH", "LDURSB", "LDURSH", "LDURSW",
 			"CSEL", "CSINC", "CSINV", "CSNEG":
-			writesFirst = true
+			destinations = 1
+		case "LDP", "LDNP", "LDPSW":
+			destinations = 2
 		}
 		kills := false
 		for n, arg := range decoded.Args {
@@ -204,7 +215,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 				}
 			case arm64asm.Reg:
 				if isAddress(arg) {
-					if n == 0 && writesFirst {
+					if n < destinations {
 						kills = true
 					} else {
 						return false
@@ -212,7 +223,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 				}
 			case arm64asm.RegSP:
 				if isAddress(arm64asm.Reg(arg)) {
-					if n == 0 && writesFirst {
+					if n < destinations {
 						kills = true
 					} else {
 						return false
@@ -229,7 +240,7 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 					}
 				}
 				if arm64asm.Reg(arg.Base) == register {
-					if !strings.HasPrefix(decoded.Op.String(), "LD") || arg.Mode != arm64asm.AddrOffset {
+					if !arm64RawPoolReadOnlyLoad(decoded.Op) || arg.Mode != arm64asm.AddrOffset {
 						return false
 					}
 					loaded = true
@@ -255,4 +266,33 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 		}
 	}
 	return loaded
+}
+
+// Do not infer memory effects from an LD prefix: exclusive loads retain an
+// address in the monitor and newer LD* atomics can also write memory.
+func arm64RawPoolReadOnlyLoad(op arm64asm.Op) bool {
+	switch op {
+	case arm64asm.LDR, arm64asm.LDRB, arm64asm.LDRH, arm64asm.LDRSB, arm64asm.LDRSH, arm64asm.LDRSW,
+		arm64asm.LDUR, arm64asm.LDURB, arm64asm.LDURH, arm64asm.LDURSB, arm64asm.LDURSH, arm64asm.LDURSW,
+		arm64asm.LDTR, arm64asm.LDTRB, arm64asm.LDTRH, arm64asm.LDTRSB, arm64asm.LDTRSH, arm64asm.LDTRSW,
+		arm64asm.LDAR, arm64asm.LDARB, arm64asm.LDARH,
+		arm64asm.LDP, arm64asm.LDNP, arm64asm.LDPSW,
+		arm64asm.LD1, arm64asm.LD2, arm64asm.LD3, arm64asm.LD4,
+		arm64asm.LD1R, arm64asm.LD2R, arm64asm.LD3R, arm64asm.LD4R:
+		return true
+	}
+	return false
+}
+
+func arm64RawPoolIndependentSVE(word uint32) bool {
+	if _, ok := decodeARM64RawSVEPTrue(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEEOR(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEAdd(word); ok {
+		return true
+	}
+	return false
 }
