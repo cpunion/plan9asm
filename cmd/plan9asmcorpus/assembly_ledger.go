@@ -41,7 +41,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		return fmt.Errorf("assembly ledger requires a clean, identified source")
 	}
 	if progress.CandidateTotal != len(progress.Candidates) ||
-		progress.CandidateTotal != progress.Passed+progress.Failed+progress.NotApplicable+progress.Pending {
+		progress.CandidateTotal != progress.Passed+progress.Failed+progress.NotApplicable+progress.SkippedInvalidSource+progress.Pending {
 		return fmt.Errorf("assembly ledger candidate counts do not balance")
 	}
 	if progress.Complete != (progress.ShardCount > 0 && progress.ReportedShards == progress.ShardCount && progress.Pending == 0) ||
@@ -53,7 +53,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		progress.PassedShards+progress.FailedShards+len(progress.PartialShards) != progress.ReportedShards {
 		return fmt.Errorf("assembly ledger shard counts do not balance")
 	}
-	if progress.Passed+progress.Failed+progress.NotApplicable > 0 && progress.Provenance == nil {
+	if progress.Passed+progress.Failed+progress.NotApplicable+progress.SkippedInvalidSource > 0 && progress.Provenance == nil {
 		return fmt.Errorf("assembly ledger outcomes lack report provenance")
 	}
 	if progress.Provenance != nil {
@@ -73,15 +73,23 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		}
 		seen[key] = true
 		switch candidate.Status {
-		case "pending", discoveryStatusPassed, discoveryStatusFailed, discoveryStatusNotApplicable:
+		case "pending", discoveryStatusPassed, discoveryStatusFailed, discoveryStatusNotApplicable, discoveryStatusSkippedInvalidSource:
 			counts[candidate.Status]++
 		default:
 			return fmt.Errorf("assembly ledger candidate %s has invalid status %q", key, candidate.Status)
 		}
+		if candidate.Status == discoveryStatusSkippedInvalidSource {
+			if strings.TrimSpace(candidate.InvalidSourceReason) == "" || len(candidate.InvalidSourceEvidence) == 0 {
+				return fmt.Errorf("assembly ledger skip %s lacks reason or evidence", key)
+			}
+		} else if candidate.InvalidSourceReason != "" || len(candidate.InvalidSourceEvidence) != 0 {
+			return fmt.Errorf("assembly ledger non-skip %s carries skip evidence", key)
+		}
 	}
 	if counts["pending"] != progress.Pending || counts[discoveryStatusPassed] != progress.Passed ||
 		counts[discoveryStatusFailed] != progress.Failed ||
-		counts[discoveryStatusNotApplicable] != progress.NotApplicable {
+		counts[discoveryStatusNotApplicable] != progress.NotApplicable ||
+		counts[discoveryStatusSkippedInvalidSource] != progress.SkippedInvalidSource {
 		return fmt.Errorf("assembly ledger candidate statuses do not match summary")
 	}
 	return nil

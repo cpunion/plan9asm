@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "skips": [
+    {
+      "module": "gitee.com/zhaochuninhefei/gmgo",
+      "version": "v0.1.1",
+      "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
+      "evidence": [
+        {
+          "asm_file": "sm4/asm_arm64.s",
+          "sha256": "58b49d5b3654ea67dfec86f1610d09bc0c4f06a2bac8ad228d90e2671421cecc",
+          "source_expression": "WORD $0x09c961ce",
+          "word": "0x09c961ce",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "sm4/gcm_sm4ni_arm64.s",
+          "sha256": "62ffa0a70de1bf435c9dddd22aea9c0add4326a2e355edc44faa40de1abe7fcd",
+          "source_expression": "WORD $0x6086c0ce",
+          "word": "0x6086c0ce",
+          "architecture": "arm64"
+        }
+      ]
+    },
+    {
+      "module": "github.com/initLijing/gmsm",
+      "version": "v0.15.6",
+      "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
+      "evidence": [
+        {
+          "asm_file": "sm4/asm_arm64.s",
+          "sha256": "91abd9e5fda27424864619c4035026f8ed5fe78c2ad7b724c51494404f7a071f",
+          "source_expression": "WORD $0x09c961ce",
+          "word": "0x09c961ce",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "sm4/gcm_sm4ni_arm64.s",
+          "sha256": "cbe77320c45781dc83283556edaf8a5d4cfb5f5f8fb465d858d92f5375d3bd18",
+          "source_expression": "WORD $0x6086c0ce",
+          "word": "0x6086c0ce",
+          "architecture": "arm64"
+        }
+      ]
+    },
+    {
+      "module": "github.com/theapemachine/puter",
+      "version": "v1.2.3",
+      "reason": "ARM64 WORD macros emit encodings that LLVM 22 independently rejects; each macro expression is evaluated and the source files are pinned by SHA-256.",
+      "evidence": [
+        {
+          "asm_file": "device/cpu/activation/neon_arm64.s",
+          "sha256": "4084a60750a9fd4fa3538d8344d1b7a108fe541f8fde18c8bbcfaa9a46d4cd19",
+          "source_expression": "#define VFABS_S4(n, d)     WORD $(0x6EA0F000 | ((n) << 5) | (d))",
+          "macro_invocation": "VFABS_S4(11, 12)",
+          "word": "0x6ea0f16c",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "device/cpu/activation/neon_extra_arm64.s",
+          "sha256": "2e1c95a85069fba96ed41dd37dd5c0aa6e18fa43b795f66c41bce4fba2e217be",
+          "source_expression": "#define VFCMLE_S4(m, n, d) WORD $(0x6EA0E000 | ((m) << 16) | ((n) << 5) | (d))",
+          "macro_invocation": "VFCMLE_S4(30, 7, 4)",
+          "word": "0x6ebee0e4",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "device/cpu/activation/param_extra_neon_arm64.s",
+          "sha256": "0f14a57173f2ee527584570b0943faf6a4880bd487e37ca40140c66d223eac63",
+          "source_expression": "#define VFABS_S4(n, d)     WORD $(0x6EA0F000 | ((n) << 5) | (d))",
+          "macro_invocation": "VFABS_S4(0, 1)",
+          "word": "0x6ea0f001",
+          "architecture": "arm64"
+        }
+      ]
+    }
+  ]
+}

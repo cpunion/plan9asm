@@ -12,8 +12,8 @@ do not start new module-index inventory scans while failures remain.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`, never upstream.
   The user requests complete repairs before a batch push. Keep the PR draft.
 - Upstream main `7cc8c0f` was fetched and is already an ancestor.
-- Develop on `codex/pr40-arm64-raw-20260926`, implementation through
-  `692fad1`. Inspect status, worktrees and running processes before editing.
+- Develop on `codex/pr40-arm64-raw-20260926`. Inspect status, worktrees and
+  running processes before editing.
 - Runners: `codex/pr40-fp16-20260926` (root gates and external replay) and
   `codex/pr40-ecosystem-fixes-20260925` (cross runtime and discovery).
   Inspect each HEAD and logs before advancing; never alter a running snapshot.
@@ -32,7 +32,7 @@ do not start new module-index inventory scans while failures remain.
 - Clean `692fad1` passed the official five-architecture classification gate
   and strict benchmark: 184/184 files, no N/A, 43 target-seconds.
   Observed form classification is not all-encoder runtime-semantic coverage.
-  Full root and cross runtime are being rerun at that snapshot; inspect
+  Full root and cross runtime also passed at that snapshot; logs are
   `_out/full-root-index-pool.log` and `_out/cross-runtime-index-pool.log`.
 - Earlier batches cover ordinary SVE loads, floating divide/scale, all
   floating-immediate values, and saturating arithmetic including signed
@@ -94,6 +94,10 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 - Puter activation at `6e03524`: 5/8 files per ARM64 OS; LLVM 22 independently
   rejects the remaining raw words `0x6ea0f16c`, `0x6ebee0e4`, `0x6ea0f001`
   as invalid encodings. Do not reinterpret them as their macro names.
+- Exact-version invalid-source skips now have pinned SHA-256 files, evaluated
+  raw WORD expressions, LLVM 22 rejection checks, and distinct report/ledger
+  status. Local proof passed for puter v1.2.3, gmsm v0.15.6 and gmgo v0.1.1.
+  A skip is not a translated library. Rerun their shards on a clean snapshot.
 - Complete shard 17 at `6e03524`: 159 selected = 126 passed + 32 source N/A
   + one failed simd. Report is retained in the ecosystem runner under
   `_out/ci-repair-6e03524-shard17/shard-17.json`.
@@ -111,10 +115,10 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 2. Resolve other actual CI failures: Knoxdb/forks need cross-TEXT ABI0
    shared-frame/register semantics; JIT libraries need native code layout and
    address/entry contracts; go-highway retains absent RIP constant pools.
-3. Keep genuine upstream source defects failed. Gmsm/gmgo contain byte-swapped
-   SM4 WORDs; puter includes invalid words and private Apple instructions;
-   fiber/ai includes private Apple instructions. No permission was received
-   to isolate proven defects as `blocked_external` or patch exact versions.
+3. Keep unproven upstream defects failed. Only the three confirmed exact
+   versions above qualify for `skipped_invalid_source`; private Apple
+   instructions alone are not proof of invalid source. Continue other
+   applicable forms and candidates normally.
 4. Run all 32 discovery shards with identical frozen provenance, publish
    validated ledger evidence, then batch-push to the allowed fork.
 5. Shard 0's old runner lost communication, confirmed by its check annotation.

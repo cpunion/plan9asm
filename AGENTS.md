@@ -40,6 +40,10 @@ tests establish the relevant runtime semantics.
   not just an observed spelling. Consult full Go tables before implementation.
 - Never disguise unsupported instructions, translation/LLVM failures, missing
   tools or infrastructure errors as success or source N/A.
+- An exact external module version may be `skipped_invalid_source` only when
+  `testdata/corpus/invalid-machine-code.json` pins the source SHA-256 and raw
+  WORD expression, LLVM 22 independently rejects the resulting encoding, and
+  the report/assembly ledger retain the reason. A skip is never a pass.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.

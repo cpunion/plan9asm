@@ -56,6 +56,55 @@ func TestDiscoveryProgressAccountsForPendingShards(t *testing.T) {
 	}
 }
 
+func TestDiscoveryProgressPreservesInvalidSourceSkipReasonInAssemblyLedger(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	path := filepath.Join(reports, "shard-1.json")
+	report, err := readDiscoveryCorpusReport(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := &report.Results[0]
+	result.Status = discoveryStatusSkippedInvalidSource
+	result.Translations = 0
+	result.InvalidSourceReason = "raw ARM64 word is invalid"
+	result.InvalidSourceEvidence = []discoveryInvalidMachineCodeEvidence{{
+		AsmFile: result.DiscoveredAsmFiles[0], SHA256: strings.Repeat("a", 64),
+		SourceExpression: "WORD $0x09c961ce", Word: "0x09c961ce",
+		Architecture: "arm64",
+	}}
+	report.Passed--
+	report.Translations--
+	report.SkippedInvalidSource++
+	if err := writeDiscoveryCorpusReport(path, report); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !progress.Verified || progress.SkippedInvalidSource != 1 || progress.Passed != 1 {
+		t.Fatalf("invalid-source skip miscounted: %+v", progress)
+	}
+	snapshot := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("c", 64)
+	if err := writeAssemblyLedger(snapshot, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := readAssemblyLedger(snapshot, progress.LedgerSHA256, semanticSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range restored.Candidates {
+		if candidate.Status == discoveryStatusSkippedInvalidSource {
+			if candidate.InvalidSourceReason != result.InvalidSourceReason || len(candidate.InvalidSourceEvidence) != 1 {
+				t.Fatalf("skip reason/evidence lost: %+v", candidate)
+			}
+			return
+		}
+	}
+	t.Fatal("missing skipped exact version in assembly ledger")
+}
+
 func TestDiscoveryProgressKeepsCheckpointedShardIncomplete(t *testing.T) {
 	ledger, reports, source := writeDiscoveryReportFixture(t)
 	path := filepath.Join(reports, "shard-1.json")

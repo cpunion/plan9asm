@@ -3,9 +3,11 @@ package main
 import "fmt"
 
 type discoveryCandidateProgress struct {
-	Module  string `json:"module"`
-	Version string `json:"version"`
-	Status  string `json:"status"`
+	Module                string                                `json:"module"`
+	Version               string                                `json:"version"`
+	Status                string                                `json:"status"`
+	InvalidSourceReason   string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
 }
 
 // This is a derived view, not a mutable flag attached to a scanned version.
@@ -28,6 +30,7 @@ type discoveryProgress struct {
 	Passed                    int                          `json:"passed"`
 	Failed                    int                          `json:"failed"`
 	NotApplicable             int                          `json:"not_applicable"`
+	SkippedInvalidSource      int                          `json:"skipped_invalid_source"`
 	Pending                   int                          `json:"pending"`
 	DiscoveredAsmFiles        int                          `json:"discovered_asm_files"`
 	Translations              int                          `json:"translations"`

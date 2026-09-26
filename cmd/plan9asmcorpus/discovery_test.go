@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +33,109 @@ func TestDiscoveryCandidateRemovesWorkspaceAfterDownloadFailure(t *testing.T) {
 	}
 	if contents, err := os.ReadFile(marker); err != nil || string(contents) != "keep shared cache untouched" {
 		t.Fatalf("shared cache changed: %q %v", contents, err)
+	}
+}
+
+func TestInvalidMachineCodeSkipRequiresPinnedSourceAndDecoderRejection(t *testing.T) {
+	moduleDir := t.TempDir()
+	const asmFile = "pkg/raw_arm64.s"
+	const source = "TEXT ·Bad(SB), $0-0\nWORD $0x09c961ce\n"
+	if err := os.MkdirAll(filepath.Join(moduleDir, "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(moduleDir, asmFile), source)
+	checksum := sha256.Sum256([]byte(source))
+	candidate := discoveryCandidate{
+		Module: "example.com/raw", Version: "v1.0.0",
+		AsmFiles: []string{asmFile},
+	}
+	skip := discoveryInvalidMachineCodeSkip{
+		Module: candidate.Module, Version: candidate.Version,
+		Reason: "raw SM4EKEY word has an invalid ARM64 encoding",
+		Evidence: []discoveryInvalidMachineCodeEvidence{{
+			AsmFile: asmFile, SHA256: fmt.Sprintf("%x", checksum),
+			SourceExpression: "WORD $0x09c961ce", Word: "0x09c961ce",
+			Architecture: "arm64",
+		}},
+	}
+	reject := func(arch string, word uint32) error {
+		if arch != "arm64" || word != 0x09c961ce {
+			return fmt.Errorf("unexpected decode request %s %#x", arch, word)
+		}
+		return nil
+	}
+	if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, skip, reject); err != nil {
+		t.Fatalf("valid skip rejected: %v", err)
+	}
+	for _, change := range []struct {
+		name string
+		edit func(*discoveryInvalidMachineCodeSkip)
+	}{
+		{"wrong version", func(s *discoveryInvalidMachineCodeSkip) { s.Version = "v1.0.1" }},
+		{"wrong checksum", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].SHA256 = strings.Repeat("0", 64) }},
+		{"absent expression", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].SourceExpression = "WORD $0x00000000" }},
+		{"unlisted file", func(s *discoveryInvalidMachineCodeSkip) { s.Evidence[0].AsmFile = "pkg/other_arm64.s" }},
+		{"missing reason", func(s *discoveryInvalidMachineCodeSkip) { s.Reason = "" }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			changed := skip
+			changed.Evidence = append([]discoveryInvalidMachineCodeEvidence(nil), skip.Evidence...)
+			change.edit(&changed)
+			if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, changed, reject); err == nil {
+				t.Fatal("invalid skip was accepted")
+			}
+		})
+	}
+	if err := verifyInvalidMachineCodeSkip(moduleDir, candidate, skip, func(string, uint32) error {
+		return errors.New("decodes as a valid instruction")
+	}); err == nil {
+		t.Fatal("decodable word was skipped")
+	}
+}
+
+func TestDiscoveryCorpusAccountsForInvalidMachineCodeSkipSeparately(t *testing.T) {
+	report := discoveryCorpusReport{
+		Selected: 1, SkippedInvalidSource: 1,
+		Results: []discoveryCorpusResult{{
+			Module: "example.com/raw", Version: "v1.0.0",
+			Status:              discoveryStatusSkippedInvalidSource,
+			InvalidSourceReason: "verified invalid ARM64 word",
+			InvalidSourceEvidence: []discoveryInvalidMachineCodeEvidence{{
+				AsmFile: "pkg/raw_arm64.s", SHA256: strings.Repeat("a", 64),
+				SourceExpression: "WORD $0x09c961ce", Word: "0x09c961ce",
+				Architecture: "arm64",
+			}},
+			DiscoveredAsmFiles: []string{"pkg/raw_arm64.s"},
+		}},
+	}
+	if err := validateDiscoveryCorpusAccounting(report); err != nil {
+		t.Fatal(err)
+	}
+	report.Results[0].Translations = 1
+	if err := validateDiscoveryCorpusAccounting(report); err == nil {
+		t.Fatal("skipped source counted as a translation")
+	}
+}
+
+func TestInvalidMachineCodeManifestExpressionsEmitClaimedWords(t *testing.T) {
+	skips, err := loadInvalidMachineCodeSkips(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skips) != 3 {
+		t.Fatalf("got %d independently reviewed exact-version skips, want 3", len(skips))
+	}
+	for key, skip := range skips {
+		for _, item := range skip.Evidence {
+			word, err := strconv.ParseUint(item.Word, 0, 32)
+			if err != nil {
+				t.Fatalf("%s: %v", key, err)
+			}
+			emitted, err := rawWordFromEvidence(item)
+			if err != nil || emitted != uint32(word) {
+				t.Fatalf("%s %s: emitted %#x, claimed %#x: %v", key, item.AsmFile, emitted, word, err)
+			}
+		}
 	}
 }
 
