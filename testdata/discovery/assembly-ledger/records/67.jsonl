@@ -11,7 +11,7 @@
 {"module":"github.com/magomedcoder/gguf.go","version":"v0.0.0-20260910165904-0b93a9ea3c72","status":"pending"}
 {"module":"github.com/pomhg/sing-tun","version":"v0.9.0-dev.98e457e3-pomhg.3","status":"pending"}
 {"module":"github.com/rdlaitila/graphics.gd","version":"v0.0.0-20260707041417-7fc105c9822f","status":"pending"}
-{"module":"github.com/sudo-bmitch/regclient","version":"v0.11.6","status":"passed"}
+{"module":"github.com/sudo-bmitch/regclient","version":"v0.11.6","status":"pending"}
 {"module":"github.com/tejzpr/gonum","version":"v0.0.0-20260228225357-67b620e630be","status":"pending"}
 {"module":"github.com/tphakala/go-mp3","version":"v0.1.0","status":"pending"}
-{"module":"go.fuchsia.dev/fuchsia","version":"v0.0.0-20211206140801-bbc9ce36f629","status":"pending"}
+{"module":"go.fuchsia.dev/fuchsia","version":"v0.0.0-20211206140801-bbc9ce36f629","status":"passed"}

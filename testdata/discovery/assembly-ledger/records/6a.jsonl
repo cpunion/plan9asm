@@ -1,5 +1,5 @@
 {"module":"github.com/AeonSw4n/circl","version":"v1.1.0","status":"pending"}
-{"module":"github.com/Agiledragon/gomonkey/v2","version":"v2.14.3","status":"pending"}
+{"module":"github.com/Agiledragon/gomonkey/v2","version":"v2.14.3","status":"passed"}
 {"module":"github.com/SagerNet/gvisor","version":"v0.0.0-20260727.0-sing-box-mod.1","status":"pending"}
 {"module":"github.com/VitessIo/vitess","version":"v0.24.3","status":"pending"}
 {"module":"github.com/cavaliercoder/go-abs","version":"v0.0.0-20180115041200-a69d5703f942","status":"pending"}
@@ -16,6 +16,6 @@
 {"module":"github.com/openrelayxyz/go-ethereum","version":"v1.12.8","status":"pending"}
 {"module":"github.com/stanford-rc/minio-sha256-simd","version":"v1.0.1","status":"pending"}
 {"module":"github.com/synexim/xray-core","version":"v0.0.0-20260901043321-ee52112658ce","status":"pending"}
-{"module":"github.com/yell-li/qml","version":"v0.0.0-20150209141031-2ee7e5ff7370","status":"not_applicable"}
+{"module":"github.com/yell-li/qml","version":"v0.0.0-20150209141031-2ee7e5ff7370","status":"pending"}
 {"module":"github.com/yuhaiin/wireguard-go","version":"v0.0.0-20260803153011-42cbda171106","status":"pending"}
 {"module":"leb.io/aeshash","version":"v0.1.2","status":"pending"}

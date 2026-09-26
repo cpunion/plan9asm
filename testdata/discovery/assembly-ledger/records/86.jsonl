@@ -8,7 +8,7 @@
 {"module":"github.com/dataence/encoding","version":"v0.0.0-20171223221521-b90e310a0325","status":"pending"}
 {"module":"github.com/dessaya/wasp","version":"v1.0.3","status":"pending"}
 {"module":"github.com/fanyiguang/xray-core","version":"v0.0.0-20240120214034-53de58fad3a0","status":"pending"}
-{"module":"github.com/gramework/runtimer","version":"v0.0.0-20211014201118-d25b6e2ccefd","status":"pending"}
+{"module":"github.com/gramework/runtimer","version":"v0.0.0-20211014201118-d25b6e2ccefd","status":"passed"}
 {"module":"github.com/metacubex/Clash.Meta","version":"v1.19.31","status":"pending"}
 {"module":"github.com/onesyue/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/phoreproject/bls","version":"v0.0.0-20200525203911-a88a5ae26844","status":"pending"}

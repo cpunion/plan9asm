@@ -1,4 +1,4 @@
-{"module":"code.hybscloud.com/atomix","version":"v0.1.4","status":"passed"}
+{"module":"code.hybscloud.com/atomix","version":"v0.1.4","status":"pending"}
 {"module":"git.k2software.com.cn/go/crypto","version":"v0.0.0-20190228161510-8dd112bcdc25","status":"pending"}
 {"module":"github.com/928799934/solana-go","version":"v0.0.0-20260522073313-ce705da7fe22","status":"pending"}
 {"module":"github.com/LiuTangLei/wireguard-go","version":"v0.0.32","status":"pending"}
@@ -8,7 +8,7 @@
 {"module":"github.com/ethereum/go-Ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/hundundm/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/koeng101/dnadesign/lib","version":"v0.0.0-20260609010609-bbfca4a16380","status":"pending"}
-{"module":"github.com/luhaihui106/Xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"pending"}
+{"module":"github.com/luhaihui106/Xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"passed"}
 {"module":"github.com/m3Db/m3","version":"v1.5.0","status":"pending"}
 {"module":"github.com/steamgjk/gokv","version":"v0.0.0-20250508184610-d007325b6ee8","status":"pending"}
 {"module":"github.com/tanglichun/xray-core","version":"v0.0.0-20260527192839-8f8b9e334e3d","status":"pending"}

@@ -1,7 +1,7 @@
 {"module":"git.k2software.com.cn/go/net","version":"v0.0.0-20190301231341-16b79f2e4e95","status":"pending"}
 {"module":"github.com/Datadog/opentelemetry-ebpf-profiler","version":"v0.0.202610","status":"pending"}
 {"module":"github.com/Deatil/go-cryptobin","version":"v1.1.1020","status":"pending"}
-{"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"passed"}
+{"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"pending"}
 {"module":"github.com/Tendermint/crypto","version":"v0.0.0-20191022145703-50d29ede1e15","status":"pending"}
 {"module":"github.com/ThiraSoft/golem","version":"v0.38.2","status":"pending"}
 {"module":"github.com/WJQSERVER/go2zig","version":"v0.0.3","status":"pending"}
@@ -20,7 +20,7 @@
 {"module":"github.com/soulteary/minio","version":"v0.0.0-20260603191954-2d51447ec726","status":"pending"}
 {"module":"github.com/tokamak-network/go-ethereum","version":"v1.8.23","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p5","version":"v0.2.0","status":"pending"}
-{"module":"github.com/unxed/go2xp","version":"v0.0.0-20260919201014-0e9ac5be70e1","status":"pending"}
+{"module":"github.com/unxed/go2xp","version":"v0.0.0-20260919201014-0e9ac5be70e1","status":"passed"}
 {"module":"github.com/usbarmory/go-boot","version":"v1.9.1","status":"pending"}
 {"module":"github.com/xakep666/purego","version":"v0.0.0-20260812182835-f9d41fc60f1f","status":"pending"}
 {"module":"github.com/zeebo/xxh3","version":"v1.1.0","status":"pending"}

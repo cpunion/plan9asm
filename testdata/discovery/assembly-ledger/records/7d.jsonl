@@ -1,10 +1,10 @@
 {"module":"avyos.dev","version":"v0.0.0-20260325122151-155abb75d6c4","status":"pending"}
 {"module":"ekyu.moe/cryptonight","version":"v0.3.0","status":"pending"}
 {"module":"ghproxy-9d2.pages.dev/igor53627/gethrelay","version":"v0.19.0","status":"pending"}
-{"module":"github.com/EagleQL/Xray-core","version":"v1.4.4","status":"pending"}
+{"module":"github.com/EagleQL/Xray-core","version":"v1.4.4","status":"passed"}
 {"module":"github.com/LucaWilliams4831/go-ethereum-dd","version":"v1.0.14","status":"pending"}
-{"module":"github.com/Qitmeer/qng","version":"v1.2.0","status":"passed"}
-{"module":"github.com/Yayg/noise","version":"v1.1.0","status":"pending"}
+{"module":"github.com/Qitmeer/qng","version":"v1.2.0","status":"pending"}
+{"module":"github.com/Yayg/noise","version":"v1.1.0","status":"passed"}
 {"module":"github.com/ajroetker/go-highway","version":"v0.0.12","status":"pending"}
 {"module":"github.com/bamiaux/rez","version":"v0.0.0-20170731184118-29f4463c688b","status":"pending"}
 {"module":"github.com/boyaowang430/mockey","version":"v0.0.0-20260417060207-d48df5943369","status":"pending"}

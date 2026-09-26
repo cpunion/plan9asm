@@ -8,6 +8,6 @@
 {"module":"github.com/hemilabs/op-geth","version":"v1.101305.3","status":"pending"}
 {"module":"github.com/metacubex/gvisor","version":"v0.0.0-20260922041103-e2cbcd6e7400","status":"pending"}
 {"module":"github.com/photostorm/gatt","version":"v0.0.0-20260714015304-9bc60ee4434b","status":"pending"}
-{"module":"github.com/statusx7/oldxr-xray-core","version":"v1.7.5-oldxr.1","status":"passed"}
+{"module":"github.com/statusx7/oldxr-xray-core","version":"v1.7.5-oldxr.1","status":"pending"}
 {"module":"github.com/webclinic017/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/zesun96/go-av1","version":"v0.0.0-20260802113905-f6dbd07e5d1a","status":"pending"}

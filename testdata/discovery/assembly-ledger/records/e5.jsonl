@@ -12,7 +12,7 @@
 {"module":"github.com/inwecrypto/sha3","version":"v0.0.0-20171123094127-d0fd118c5827","status":"pending"}
 {"module":"github.com/kayaklee/etunnel","version":"v0.0.0-20170204161420-23588b751312","status":"pending"}
 {"module":"github.com/microsoft/TypeScript-Go","version":"v0.0.0-20260820064610-89d5d5b2849a","status":"pending"}
-{"module":"github.com/mnightingale/rapidyenc","version":"v0.0.0-20260902082024-527fe101576b","status":"passed"}
+{"module":"github.com/mnightingale/rapidyenc","version":"v0.0.0-20260902082024-527fe101576b","status":"pending"}
 {"module":"github.com/msuiche/excrypto","version":"v0.43.1","status":"pending"}
 {"module":"github.com/npaw2005/xray-core-allowinsecure","version":"v0.0.0-20260601194305-8b67118c6fc4","status":"pending"}
 {"module":"github.com/pgpst/pgpst","version":"v0.0.0-20151102223409-7438d6acf562","status":"pending"}

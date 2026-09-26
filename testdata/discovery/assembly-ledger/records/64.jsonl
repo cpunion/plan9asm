@@ -1,6 +1,6 @@
 {"module":"git.chainmaker.org.cn/chainmaker/common.git/v2","version":"v2.4.0","status":"pending"}
 {"module":"github.com/LLC-INCY/x-net","version":"v0.56.0","status":"pending"}
-{"module":"github.com/Qitmeer/qitmeer-lib","version":"v0.0.0-20190929044832-b10740b316a8","status":"pending"}
+{"module":"github.com/Qitmeer/qitmeer-lib","version":"v0.0.0-20190929044832-b10740b316a8","status":"passed"}
 {"module":"github.com/Shelnutt2/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/WoozyMasta/bcn","version":"v0.7.0","status":"pending"}
 {"module":"github.com/YuJuncen/tidb","version":"v1.0.9","status":"pending"}

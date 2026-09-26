@@ -8,9 +8,9 @@
 {"module":"github.com/ebhb010/v2ray-core/v5","version":"v5.53.1","status":"pending"}
 {"module":"github.com/guno1928/antidebug","version":"v0.0.0-20260421082017-fc7a99cfec3c","status":"pending"}
 {"module":"github.com/maizeli/covertrace","version":"v0.0.0-20260504092159-dd233b7ae1f5","status":"pending"}
-{"module":"github.com/qida/go","version":"v0.0.0-20260828131353-ea7d327c8005","status":"pending"}
+{"module":"github.com/qida/go","version":"v0.0.0-20260828131353-ea7d327c8005","status":"passed"}
 {"module":"github.com/qitmeer/qitmeer","version":"v0.10.6","status":"pending"}
-{"module":"github.com/sagernet/purego","version":"v0.10.1","status":"passed"}
+{"module":"github.com/sagernet/purego","version":"v0.10.1","status":"pending"}
 {"module":"github.com/xtls/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/yooba-team/yooba","version":"v0.0.0-20181014214727-e31de8065b24","status":"pending"}
 {"module":"github.com/yuu518/sing-tun","version":"v0.0.0-20260912075549-869f0a4d76af","status":"pending"}

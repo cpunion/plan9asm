@@ -1,4 +1,4 @@
-{"module":"github.com/AriesAlex/mihomo","version":"v1.19.29","status":"pending"}
+{"module":"github.com/AriesAlex/mihomo","version":"v1.19.29","status":"passed"}
 {"module":"github.com/CockroachDB/cockroach","version":"v19.2.12+incompatible","status":"pending"}
 {"module":"github.com/Injectivelabs/go-ethereum","version":"v1.16.3","status":"pending"}
 {"module":"github.com/KianYang-Lee/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"pending"}

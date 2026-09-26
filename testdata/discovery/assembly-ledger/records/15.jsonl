@@ -6,7 +6,7 @@
 {"module":"github.com/deadpoets/secmem/secmem-crypto","version":"v0.7.0","status":"pending"}
 {"module":"github.com/fyne-io/mobile","version":"v0.1.2","status":"pending"}
 {"module":"github.com/golangci/go-misc","version":"v0.0.0-20220329215616-d24fe342adfe","status":"pending"}
-{"module":"github.com/pmcalpine/rules_go","version":"v0.0.0-20170731131147-a814e5641ed2","status":"passed"}
+{"module":"github.com/pmcalpine/rules_go","version":"v0.0.0-20170731131147-a814e5641ed2","status":"pending"}
 {"module":"github.com/rod-hynes/psiphon-tunnel-core","version":"v0.0.0-20260921160406-9718e9cbedb1","status":"pending"}
 {"module":"github.com/tkuchiki/go-p5-regexp","version":"v0.1.1","status":"pending"}
 {"module":"github.com/voiceblender/goamr-nb","version":"v1.0.0","status":"pending"}

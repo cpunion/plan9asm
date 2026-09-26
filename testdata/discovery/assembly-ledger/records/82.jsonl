@@ -9,7 +9,7 @@
 {"module":"github.com/axiomis-labs/go-ethereum","version":"v1.17.3","status":"pending"}
 {"module":"github.com/doug/goffi","version":"v0.6.2","status":"pending"}
 {"module":"github.com/go-asmgen/asmgen","version":"v0.8.0","status":"pending"}
-{"module":"github.com/henryborner/go-rsync","version":"v0.4.7","status":"pending"}
+{"module":"github.com/henryborner/go-rsync","version":"v0.4.7","status":"passed"}
 {"module":"github.com/mzz2017/v2ray-core/v5","version":"v5.0.6","status":"pending"}
 {"module":"github.com/qw4990/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/tg123/sshpiper.crypto","version":"v0.56.0-sshpiper-20260906","status":"pending"}

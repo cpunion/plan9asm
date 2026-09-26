@@ -9,7 +9,7 @@
 {"module":"github.com/catogram/catogram","version":"v0.0.0-20211105113049-a34ddfb42f50","status":"pending"}
 {"module":"github.com/golang/image","version":"v0.46.0","status":"pending"}
 {"module":"github.com/huyn58/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
-{"module":"github.com/lrita/numa","version":"v1.0.3","status":"passed"}
+{"module":"github.com/lrita/numa","version":"v1.0.3","status":"pending"}
 {"module":"github.com/marktheunissen/pkg/v3","version":"v3.7.0","status":"pending"}
 {"module":"github.com/second-state/lityvm","version":"v1.9.7","status":"pending"}
 {"module":"github.com/snissn/compress","version":"v1.18.2-snissn.0","status":"pending"}
@@ -17,4 +17,4 @@
 {"module":"github.com/tokamak-network/gochain/v3","version":"v3.2.8","status":"pending"}
 {"module":"github.com/tsurubee/sshr.crypto","version":"v0.0.0-20240305065357-8e62722501ab","status":"pending"}
 {"module":"github.com/yangzh/exp","version":"v0.0.0-20190912050518-24fee2ba644c","status":"pending"}
-{"module":"github.com/yeeeku/mihomo","version":"v1.19.25","status":"passed"}
+{"module":"github.com/yeeeku/mihomo","version":"v1.19.25","status":"pending"}

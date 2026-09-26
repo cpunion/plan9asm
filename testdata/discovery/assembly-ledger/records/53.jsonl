@@ -15,7 +15,7 @@
 {"module":"github.com/legiz-ru/moshen","version":"v1.19.31","status":"pending"}
 {"module":"github.com/lhumanl/echowarp","version":"v0.9.0","status":"pending"}
 {"module":"github.com/moacchain/MoacLib","version":"v1.0.1004","status":"pending"}
-{"module":"github.com/muyo/sno","version":"v1.2.1","status":"pending"}
+{"module":"github.com/muyo/sno","version":"v1.2.1","status":"passed"}
 {"module":"github.com/npaw2005/Xray-core-allowinsecure","version":"v0.0.0-20260601194305-8b67118c6fc4","status":"pending"}
 {"module":"github.com/nspcc-dev/tzhash","version":"v1.8.4","status":"pending"}
 {"module":"github.com/owulveryck/goMarkableStream","version":"v1.4.0","status":"pending"}

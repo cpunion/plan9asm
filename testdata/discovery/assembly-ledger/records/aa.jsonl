@@ -1,9 +1,9 @@
 {"module":"github.com/Beeketing/snappy","version":"v0.0.1","status":"pending"}
 {"module":"github.com/DanielZhangQD/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/TEtratelabs/WAzero","version":"v1.12.0","status":"pending"}
-{"module":"github.com/XXcipherX/Xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"pending"}
+{"module":"github.com/XXcipherX/Xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"passed"}
 {"module":"github.com/bodgit/lz4","version":"v2.6.1+incompatible","status":"pending"}
-{"module":"github.com/bytedance/bosun","version":"v0.0.0-20150803222325-9abccac70052","status":"pending"}
+{"module":"github.com/bytedance/bosun","version":"v0.0.0-20150803222325-9abccac70052","status":"not_applicable"}
 {"module":"github.com/cherrling/wireguard-go","version":"v0.0.2-beta.1","status":"pending"}
 {"module":"github.com/cofyc/kubernetes","version":"v1.5.5","status":"pending"}
 {"module":"github.com/firedtoad/gls","version":"v0.0.0-20250114022216-3e9103df5e53","status":"pending"}

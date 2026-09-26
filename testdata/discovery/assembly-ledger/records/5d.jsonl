@@ -22,4 +22,4 @@
 {"module":"github.com/saxy/tellstone","version":"v1.3.0","status":"pending"}
 {"module":"github.com/sodinokibi/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
 {"module":"github.com/weisslj/cockroach","version":"v19.2.10+incompatible","status":"pending"}
-{"module":"github.com/zhaobingss/sonic","version":"v1.115.2","status":"pending"}
+{"module":"github.com/zhaobingss/sonic","version":"v1.115.2","status":"passed"}
