@@ -7,7 +7,7 @@
 {"module":"github.com/aquachain/aquachain","version":"v1.7.20","status":"pending"}
 {"module":"github.com/archlinux-de/pkgstats-cli","version":"v0.0.0-20260821125326-fcc0f701e559","status":"pending"}
 {"module":"github.com/cosmos72/gomacro","version":"v0.0.0-20260901205243-0df6c0cd20af","status":"pending"}
-{"module":"github.com/couchbasedeps/crypto","version":"v0.53.0","status":"pending"}
+{"module":"github.com/couchbasedeps/crypto","version":"v0.53.0","status":"passed"}
 {"module":"github.com/flachnetz/startup/v2","version":"v2.10.38","status":"pending"}
 {"module":"github.com/go-fft/fft","version":"v0.0.0-20260831114610-598cacbd5c9a","status":"pending"}
 {"module":"github.com/jedisct1/go-aes","version":"v0.1.1","status":"pending"}

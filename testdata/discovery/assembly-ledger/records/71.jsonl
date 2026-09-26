@@ -6,7 +6,7 @@
 {"module":"github.com/andrewrynhard/kubernetes","version":"v1.5.2","status":"pending"}
 {"module":"github.com/farcloser/ossein","version":"v0.2.0","status":"pending"}
 {"module":"github.com/favadi/go-ethereum","version":"v1.8.16","status":"pending"}
-{"module":"github.com/fraunhofer-aisec/cmc","version":"v0.9.15","status":"pending"}
+{"module":"github.com/fraunhofer-aisec/cmc","version":"v0.9.15","status":"passed"}
 {"module":"github.com/giantswarm/go.crypto","version":"v0.0.0-20151015074924-d5be63d84f08","status":"pending"}
 {"module":"github.com/igor53627/gethrelay","version":"v0.19.0","status":"pending"}
 {"module":"github.com/lesismal/llib","version":"v1.2.4","status":"pending"}

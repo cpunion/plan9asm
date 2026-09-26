@@ -15,7 +15,7 @@
 {"module":"github.com/mantlenetworkio/mantle/l2geth","version":"v0.0.0-20230816101534-5cda5f811f73","status":"pending"}
 {"module":"github.com/monetr/monetr","version":"v1.15.3","status":"pending"}
 {"module":"github.com/monitoring-forge/sampdo","version":"v0.0.3","status":"pending"}
-{"module":"github.com/savid/go-ethereum","version":"v0.0.0-20260225060823-406a852ec8de","status":"pending"}
+{"module":"github.com/savid/go-ethereum","version":"v0.0.0-20260225060823-406a852ec8de","status":"passed"}
 {"module":"github.com/svera/webp","version":"v0.0.0-20260617072844-30a14b60eb60","status":"pending"}
-{"module":"github.com/twsre/sn_v2ray-core/v5","version":"v5.0.16","status":"pending"}
+{"module":"github.com/twsre/sn_v2ray-core/v5","version":"v5.0.16","status":"passed"}
 {"module":"github.com/w-floyd/go-mp3packer","version":"v0.0.0-20260806230216-f063f91dcf92","status":"pending"}

@@ -3,7 +3,7 @@
 {"module":"github.com/8cbx/tidb","version":"v0.0.0-20171021014228-4867bcfa3eec","status":"pending"}
 {"module":"github.com/Chaintable/go-ethereum-iotex","version":"v0.0.0-20260210120827-e14aec359740","status":"pending"}
 {"module":"github.com/LagPixelLOL/Xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"pending"}
-{"module":"github.com/PlatOnnetwork/wagon","version":"v0.6.0","status":"pending"}
+{"module":"github.com/PlatOnnetwork/wagon","version":"v0.6.0","status":"passed"}
 {"module":"github.com/PresleyHank/go-lib","version":"v0.0.0-20180301041647-f185a8ba31b7","status":"pending"}
 {"module":"github.com/Roaringbitmap/roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/ammrfx/image","version":"v0.44.0","status":"pending"}

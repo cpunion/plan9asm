@@ -15,5 +15,5 @@
 {"module":"github.com/qiyichain/peculiar","version":"v1.0.0","status":"pending"}
 {"module":"github.com/quicklers/golang_doc","version":"v0.0.0-20220112001210-9bce08999a41","status":"pending"}
 {"module":"github.com/ralexstokes/go-ethereum","version":"v1.10.16","status":"pending"}
-{"module":"github.com/rewrewby/core-geth","version":"v1.11.9","status":"pending"}
+{"module":"github.com/rewrewby/core-geth","version":"v1.11.9","status":"passed"}
 {"module":"github.com/usercenter/crypto","version":"v0.0.0-20150831041233-44faeaa9420e","status":"pending"}

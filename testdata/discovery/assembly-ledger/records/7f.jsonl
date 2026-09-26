@@ -5,7 +5,7 @@
 {"module":"github.com/RyuaNerin/go-krypto","version":"v1.3.0","status":"pending"}
 {"module":"github.com/Shopify/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
 {"module":"github.com/abeyfoundation/go-abey","version":"v0.0.0-20260831040716-30e3aaa1e041","status":"pending"}
-{"module":"github.com/darthshadow/go-fuse/v2","version":"v2.0.0-20260905074703-dbf033c20d82","status":"pending"}
+{"module":"github.com/darthshadow/go-fuse/v2","version":"v2.0.0-20260905074703-dbf033c20d82","status":"passed"}
 {"module":"github.com/e421083458/sys","version":"v0.0.1","status":"pending"}
 {"module":"github.com/intelligencedev/born","version":"v0.0.0-20260723051246-a716ef1d853c","status":"pending"}
 {"module":"github.com/joeycumines/goroutineid","version":"v1.1.1","status":"pending"}
@@ -17,7 +17,7 @@
 {"module":"github.com/sonarcommunity/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"pending"}
 {"module":"github.com/tailscale/go/src","version":"v0.0.0-20260919225036-24ee2fd0610e","status":"pending"}
 {"module":"github.com/timwhitez/screencapture","version":"v0.0.0-20220615101205-0330c0488a0a","status":"pending"}
-{"module":"github.com/tmthrgd/go-bitset","version":"v0.0.0-20190904054048-394d9a556c05","status":"pending"}
+{"module":"github.com/tmthrgd/go-bitset","version":"v0.0.0-20190904054048-394d9a556c05","status":"passed"}
 {"module":"github.com/usbarmory/tamago-go/src/cmd","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
 {"module":"github.com/v2fly/v2ray-core/v5","version":"v5.54.2","status":"pending"}
 {"module":"gitlab.com/cznic/libc","version":"v1.77.0","status":"pending"}

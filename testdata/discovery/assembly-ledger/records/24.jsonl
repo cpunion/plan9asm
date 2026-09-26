@@ -3,7 +3,7 @@
 {"module":"github.com/cbcwestwolf/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/centrifuge/go-ethereum","version":"v1.8.17","status":"pending"}
 {"module":"github.com/go-hotfix/assembly","version":"v0.0.0-20260507105919-4e689533b2ec","status":"pending"}
-{"module":"github.com/gomlx/compute","version":"v0.1.14","status":"pending"}
+{"module":"github.com/gomlx/compute","version":"v0.1.14","status":"passed"}
 {"module":"github.com/hack3ric/plz","version":"v0.0.0-20230511054032-4840f44fa7ea","status":"pending"}
 {"module":"github.com/incognitochain/incognito-chain","version":"v0.0.0-20230829105230-3dcca64b8a3c","status":"pending"}
 {"module":"github.com/justwasm/go/src","version":"v0.0.0-20260823081445-d90a163e71fa","status":"pending"}

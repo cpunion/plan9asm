@@ -3,7 +3,7 @@
 {"module":"github.com/akshathasgshetty/websocket","version":"v0.0.0-20260109125802-9f473adfa595","status":"pending"}
 {"module":"github.com/arr-ai/frozen/v2","version":"v2.0.0","status":"pending"}
 {"module":"github.com/bobanetwork/v3-erigon","version":"v1.10.16","status":"pending"}
-{"module":"github.com/cam-coffee/go_adiantum","version":"v1.0.0","status":"pending"}
+{"module":"github.com/cam-coffee/go_adiantum","version":"v1.0.0","status":"passed"}
 {"module":"github.com/cortexFoundation/cortexTheseus","version":"v1.10.72","status":"pending"}
 {"module":"github.com/fake-mahdi/acheron","version":"v0.0.0-20260905053135-7efb58e5fb85","status":"pending"}
 {"module":"github.com/fanyiguang/gvisor-dev-gvisor-copy","version":"v0.0.0-20260323070810-f64ee6c9ac15","status":"pending"}

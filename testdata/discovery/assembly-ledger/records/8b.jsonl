@@ -7,7 +7,7 @@
 {"module":"github.com/alisayyah/xray-core","version":"v0.0.0-20230210134707-9e0a3d9aa8f3","status":"pending"}
 {"module":"github.com/barklan/go-cryptobin","version":"v1.0.1","status":"pending"}
 {"module":"github.com/binkyrailways/binkyrailways","version":"v0.0.0-20260507191611-3d094d0dd166","status":"pending"}
-{"module":"github.com/cerbos/errtrace","version":"v0.0.0-20260910081732-3d9302b5f529","status":"pending"}
+{"module":"github.com/cerbos/errtrace","version":"v0.0.0-20260910081732-3d9302b5f529","status":"passed"}
 {"module":"github.com/domac/hibox","version":"v0.0.0-20181206070114-3151927d1fb0","status":"pending"}
 {"module":"github.com/fsamin/go","version":"v0.0.0-20230408153534-ee522e2cdad0","status":"pending"}
 {"module":"github.com/getlantern/utls","version":"v0.0.0-20230801230015-21ad1b626d98","status":"pending"}

@@ -2,7 +2,7 @@
 {"module":"github.com/CWBudde/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/CosmWasm/tinygo","version":"v0.21.0","status":"pending"}
 {"module":"github.com/Parquet-Go/Parquet-Go","version":"v0.32.0","status":"pending"}
-{"module":"github.com/Quasilyte/concat","version":"v0.0.0-20180717223007-181498035785","status":"pending"}
+{"module":"github.com/Quasilyte/concat","version":"v0.0.0-20180717223007-181498035785","status":"not_applicable"}
 {"module":"github.com/asubiotto/go","version":"v0.0.1-test","status":"pending"}
 {"module":"github.com/celo-org/CELO-BLOCKCHAIN","version":"v1.8.9","status":"pending"}
 {"module":"github.com/dariomarchetti/go-ethereum","version":"v1.16.7","status":"pending"}

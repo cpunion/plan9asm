@@ -1,6 +1,6 @@
 {"module":"github.com/JohanLindvall/lightning","version":"v0.0.100","status":"pending"}
 {"module":"github.com/Qtgolang/SunnyNet","version":"v1.5.1","status":"pending"}
-{"module":"github.com/Yawning/Aez","version":"v0.0.0-20211027044916-e49e68abd344","status":"pending"}
+{"module":"github.com/Yawning/Aez","version":"v0.0.0-20211027044916-e49e68abd344","status":"passed"}
 {"module":"github.com/aarzilli/nucular","version":"v0.0.0-20260922071552-58b808aa5772","status":"pending"}
 {"module":"github.com/aybabtme/reedsolomon","version":"v0.0.0-20150622163627-6350190f568f","status":"pending"}
 {"module":"github.com/cc14514/go-ydcoin","version":"v0.0.0-20181014011348-94c5a3b1feaf","status":"pending"}
@@ -13,7 +13,7 @@
 {"module":"github.com/hanwen/go-fuse/v2","version":"v2.11.0","status":"pending"}
 {"module":"github.com/intelafy-llc/simd","version":"v0.0.0-20260904203813-82654211f52b","status":"pending"}
 {"module":"github.com/itering/scale.go","version":"v1.11.2","status":"pending"}
-{"module":"github.com/karingx/wireguard-go","version":"v0.0.1-beta.5","status":"pending"}
+{"module":"github.com/karingx/wireguard-go","version":"v0.0.1-beta.5","status":"passed"}
 {"module":"github.com/lichunzhu/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/oasislabs/deoxysii","version":"v0.0.0-20220228165953-2091330c22b7","status":"pending"}
 {"module":"github.com/pk910/hashtree-bindings","version":"v0.2.6","status":"pending"}
