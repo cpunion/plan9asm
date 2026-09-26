@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"encoding/binary"
+	"fmt"
 	"strings"
 
 	"golang.org/x/arch/arm64/arm64asm"
@@ -195,10 +196,10 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 			queue = append(queue, i+1)
 			continue
 		}
-		// x/arch does not decode SVE. These validated typed grammars affect
-		// only vector/predicate registers (and possibly flags), never GP or
-		// memory state. Unknown SVE instructions still fail below.
-		if arm64RawPoolIndependentSVE(word) {
+		// x/arch does not decode SVE. Consult validated typed grammars for
+		// vector-only effects and explicit unrelated scalar/memory operands.
+		// Unknown effects and any use of this address still fail below.
+		if arm64RawPoolSVEIgnoresAddress(word, int(register-arm64asm.X0)) {
 			queue = append(queue, i+1)
 			continue
 		}
@@ -331,7 +332,10 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	if _, ok := decodeARM64RawSVEAdd(word); ok {
 		return true
 	}
-	for _, decode := range []func(uint32) (Instr, bool){decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare} {
+	for _, decode := range []func(uint32) (Instr, bool){
+		decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare,
+		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
+	} {
 		if ins, ok := decode(word); ok {
 			for _, operand := range ins.Args {
 				if operand.Kind == OpImm {
@@ -342,6 +346,37 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 				}
 			}
 			return true
+		}
+	}
+	return false
+}
+
+// These instruction families have no implicit GP operands or writeback.
+// Their memory may be mutable, but cannot contain the relocated pool address:
+// the proof rejects every earlier copy/escape of that address. Do not extend
+// this to exclusive/first-fault operations with hidden architectural state.
+func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
+	if arm64RawPoolIndependentSVE(word) {
+		return true
+	}
+	if form, ok := decodeARM64RawSVEWhileLO(word); ok && word&(1<<4) == 0 {
+		return form.first != address && form.second != address
+	}
+	if form, ok := decodeARM64RawSVEDupGeneral(word); ok {
+		return form.source != address
+	}
+	if form, ok := decodeARM64RawSVELDST1W(word); ok {
+		return form.base != address && (!form.registerOffset || form.index != address)
+	}
+	if form, ok := decodeARM64RawSVELDST1D(word); ok {
+		return form.base != address && (!form.registerOffset || form.index != address)
+	}
+	if ins, ok := decodeARM64RawSVEContiguousMemory(word); ok {
+		register := Reg(fmt.Sprintf("R%d", address))
+		for _, operand := range ins.Args {
+			if operand.Kind == OpMem {
+				return operand.Mem.Base != register && operand.Mem.Index != register
+			}
 		}
 	}
 	return false

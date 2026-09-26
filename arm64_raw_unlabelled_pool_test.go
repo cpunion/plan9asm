@@ -366,6 +366,12 @@ func arm64RawPoolRegisterEffectsIR(t *testing.T, triple string) string {
 		{"pool_pair_second", []string{"ldp x20, x19, [x1]"}},
 		{"pool_shift", []string{"lsl x19, x1, #3"}},
 		{"pool_float", []string{"fmov d0, x1", "fmov x19, d0"}},
+		{"pool_sve", []string{
+			"mov x3, #1", "ptrue p0.s", "dup z0.s, w2",
+			"compact z1.s, p0, z0.s", "cnt z1.s, p0/m, z1.s",
+			"whilelo p1.s, xzr, x3", "mov x4, #1",
+			"st1w {z1.s}, p1, [x0, x4, lsl #2]", "mov x19, xzr",
+		}},
 	} {
 		// R19 is deliberately outside every terminal-clobber mask: these
 		// functions need an actual overwrite, not just a void return contract.
@@ -412,15 +418,19 @@ extern void pool_pair_first(uint32_t *, const uint64_t *);
 extern void pool_pair_second(uint32_t *, const uint64_t *);
 extern void pool_shift(uint32_t *, const uint64_t *);
 extern void pool_float(uint32_t *, const uint64_t *);
+extern void pool_sve(uint32_t *, const uint64_t *);
 int main(void) {
   uint64_t restore[2] = {0x123456789abcdef0ULL, 0xfedcba9876543210ULL};
-  uint32_t result[6] = {1, 0, 0, 0, 0, 2};
+  uint32_t result[8] = {1, 0, 0, 0, 0, 0, 0, 2};
   pool_pair_first(result + 1, restore);
   pool_pair_second(result + 2, restore);
   pool_shift(result + 3, restore);
   pool_float(result + 4, restore);
-  for (unsigned i = 1; i < 5; i++) if (result[i] != 0x17b4a14d) return 1;
-  return result[0] != 1 || result[5] != 2;
+  pool_sve(result + 5, restore);
+  for (unsigned i = 1; i < 6; i++) if (result[i] != 0x17b4a14d) return 1;
+  unsigned count = 0;
+  for (uint32_t value = 0x17b4a14d; value; value >>= 1) count += value & 1;
+  return result[0] != 1 || result[6] != count || result[7] != 2;
 }
 `
 
