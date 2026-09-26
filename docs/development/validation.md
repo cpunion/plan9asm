@@ -71,7 +71,14 @@ PLAN9ASM_CROSS_EXEC=1 go test . \
 ```
 
 The cross driver runs on Linux/amd64 with matching cross compilers and QEMU.
-For i386, install `gcc-i686-linux-gnu`, `libc6-dev-i386-cross` and `qemu-user`;
+Install the pinned QEMU 10.2.3 user-mode tools with
+`bash scripts/install-ci-qemu.sh`, then prepend
+`$PWD/_out/qemu-10.2.3-linux-amd64` to `PATH`. The script checks the release
+SHA-256 before installation and updates `GITHUB_PATH` in CI. It does not
+register kernel binfmt handlers or replace system packages. Ubuntu 24.04's
+QEMU 8.2 has an indexed SVE dot-product correctness/overflow bug fixed by
+[QEMU e6b2fa1](https://github.com/qemu/qemu/commit/e6b2fa1b81ac6b05c4397237c846a295a9857920).
+For i386, also install `gcc-i686-linux-gnu` and `libc6-dev-i386-cross`;
 missing tools must fail. Use disposable containers/caches, not the remote
 inventory server, to compile or execute external code.
 When the container's temporary directory is tmpfs-backed, enable execution

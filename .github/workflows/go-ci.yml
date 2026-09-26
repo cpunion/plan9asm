@@ -193,6 +193,10 @@ jobs:
           cache: true
 
       - name: Translate and compile discovered assembly
+        env:
+          # Retained exact versions can outlive their public origin and the
+          # first proxy's cache. Keep normal Go checksum-database verification.
+          GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
         run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 32
 
       - name: Upload shard report
@@ -333,12 +337,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install LLVM, cross compilers, and QEMU
+      - name: Install LLVM and cross compilers
         timeout-minutes: 14
         run: >-
           bash scripts/install-ci-llvm22-ubuntu.sh
           gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
-          gcc-aarch64-linux-gnu qemu-user
+          gcc-aarch64-linux-gnu
+
+      - name: Install pinned QEMU user-mode emulators
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
@@ -349,7 +357,7 @@ jobs:
       - name: Cross transpile, compile, link, and run
         env:
           PLAN9ASM_CROSS_EXEC: '1'
-        run: go test . -run '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' -count=1 -v
+        run: go test . -run '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' -count=1 -timeout=20m -v
 
   test:
     name: test (${{ matrix.os }}, ${{ matrix.go-version }}, ${{ matrix.nested_modules }})
