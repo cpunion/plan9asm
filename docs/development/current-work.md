@@ -16,14 +16,22 @@ do not start new module-index inventory scans while failures remain.
 - Develop on `codex/pr40-arm64-raw-20260926`. Inspect
   status, worktrees and running processes before editing. Do not push until
   the failing CI classes are fixed and the assembly ledger is refreshed.
-- Frozen Go 1.27.1 runners at `9aa59b1` are replaying shard 24 in the fp16
-  worktree and shard 29 in the native-toolchain worktree. Their ignored logs
-  are `_out/shard24-ci-replay-9aa59b1.log` and
-  `_out/shard29-ci-replay-9aa59b1.log`. Inspect HEAD and processes before
-  advancing; never edit a running snapshot or combine report provenance.
-- Development at `9aa59b1` has a local, not-yet-pushed superseded-version
-  change under test. It records exact old gVisor and Skywire mirrors as skips
-  only because newer canonical versions are already in the scan ledger.
+- Development is at `2d17842`, not pushed. At clean `e7d12c7`, shard 24
+  completed 164 selected = 134 passed + 29 N/A + one superseded skip;
+  shard 25 completed 137 selected = 109 passed + 27 N/A + one superseded
+  skip. Both had zero failures. At clean `9aa59b1`, shard 29 completed
+  151 selected = 127 passed + 23 N/A + one invalid-source skip, zero
+  failures. These are different provenance snapshots and cannot be combined.
+- Exact historical gVisor and Skywire mirrors are now pinned as
+  `skipped_superseded`, never passed. Their newer canonical projects and
+  project-identity evidence are in `testdata/corpus/superseded-modules.json`.
+  Same-path `@latest` updates replace old candidates through discovery.
+- Corpus tool builds now use `-trimpath`: same-revision translator and runner
+  builds in two clean worktrees produced identical SHA-256 values. Earlier
+  e7 shard reports used path-dependent binaries and cannot be aggregated;
+  replay required on a later shared frozen revision. A new shard 22 replay
+  at `2d17842` is running in the former shard-25 worktree. Inspect its
+  process and report before advancing that tree.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -109,20 +117,20 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   A skip is not a translated library. Rerun their shards on a clean snapshot.
 - Large multi-package candidates now compile one package per translator
   process, releasing its LLVM objects and output before the next package.
-  Rerun `wasm2go` candidates to confirm this removes `signal: killed`; do not
-  recast a resource failure as source N/A or an invalid-source skip.
+  Subsequent frozen shard 24 and 25 replays passed giant `wasm2go` candidates.
+  Do not recast a resource failure as source N/A or an invalid-source skip.
 - A subsequent local change splits object-validation LLVM modules at 32,768
   assembly instructions or 128 functions, whichever comes first; a single
   oversized function remains whole and is still fully checked. The `p8` module
   has 2,179 functions and about 1.39 million amd64 assembly lines, so the
   function-only limit was not a reliable memory bound. Focused chunk tests
   pass, including complete coverage and cross-chunk raw TEXT references;
-  the actual `p8` candidate still needs replay. The strict benchmark passed
+  the actual `p8` candidate passed at `9aa59b1`. The strict benchmark passed
   all 184 applicable files on five targets with no N/A in 25 target-seconds.
 - A direct `pythonwasm2go/p0` Windows/ARM64 object replay passed in 39 seconds
   with a 3.3 GB maximum resident set. Its previous three-package translator
-  process is still being exercised by shard 1 at `432314f`; per-package
-  isolation is newer and needs a clean-shard rerun. Generated probe outputs
+  process was exercised by shard 1 at `432314f`; per-package isolation is
+  newer and still needs a clean-shard rerun. Generated probe outputs
   were removed after measurement.
 - Selected `go-highway@v0.0.12` Darwin/ARM64 failures from the old CI passed
   against current code: BF16 image 2/2, SME matmul 3/3, NEON matmul 1/1.
@@ -133,8 +141,8 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   place the fixed RIP targets beyond all TEXT symbols. A new exact-version,
   SHA-pinned invalid-source proof distinguishes this from invalid ARM64
   encodings and retains a specific skip reason. The `9aa59b1` Go 1.27.1
-  replay has classified it as `SKIP_INVALID_SOURCE`; the shard is still
-  running.
+  replay classified it as `SKIP_INVALID_SOURCE`, and the shard completed
+  with zero failures.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
@@ -157,8 +165,12 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   translations on that snapshot. Both are diagnostic-only for current source.
 - Clean `9aa59b1` passed full root tests, nested CLI tests, vet, build,
   official five-architecture coverage, strict benchmark (184/184) and stdlib
-  corpus. Its shard 24 and 29 replays remain in progress. Do not call the
-  complete external corpus verified yet.
+  corpus. Clean `e7d12c7` passed full root tests in 610 seconds after three
+  concurrent heavy shards had caused an earlier 20-minute timeout. A focused
+  root test and package tests confirmed the timeout was load-related. Current
+  `2d17842` changes only the corpus build script; its corpus package tests,
+  bash syntax and shellcheck passed. Do not call the complete external corpus
+  verified yet.
 - Validated updater published that evidence via `5cec520`, merged at
   `e67462c`: 4,783 candidates, 4,624 pending, 126 passed, 32 N/A, one failed;
   incomplete and unverified. Evidence is stale against later implementation.
@@ -180,10 +192,10 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
    `skipped_invalid_source`; private Apple
    instructions alone are not proof of invalid source. Continue other
    applicable forms and candidates normally.
-4. Finish and review the exact superseded-version mechanism for historical
-   gVisor and Skywire mirrors; neither skip is a pass. Run all 32 shards with
-   identical frozen provenance, refresh the validated assembly ledger, then
-   batch-push to the allowed fork. Its current source fingerprint is stale.
+4. Run all 32 shards with identical frozen provenance, refresh the validated
+   assembly ledger, then batch-push to the allowed fork. The current evidence
+   snapshot is stale. Reuse neither path-dependent e7 reports nor reports
+   from older revisions in that aggregate.
 5. Shard 0's old runner lost communication, confirmed by its check annotation.
    It is infrastructure failure, not a pass and not proven OOM. Rerun it.
 6. Clean owned generated IR/candidate caches and containers after use; retain
