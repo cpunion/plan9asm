@@ -255,17 +255,21 @@ func verifyAMD64MissingRIPConstantObject(ctx context.Context, moduleDir, workDir
 	defer os.Remove(objectPath)
 
 	sourcePath := filepath.Join(moduleDir, filepath.FromSlash(item.AsmFile))
-	cmd := exec.CommandContext(ctx, "go", "tool", "asm",
-		"-I", filepath.Join(runtime.GOROOT(), "pkg", "include"),
-		"-I", filepath.Dir(sourcePath), "-o", objectPath, sourcePath)
-	cmd.Env = replaceEnv(os.Environ(), map[string]string{
+	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
+	toolEnv := replaceEnv(os.Environ(), map[string]string{
 		"GOOS": "linux", "GOARCH": "amd64", "GOTOOLCHAIN": "local",
 	})
+	cmd := exec.CommandContext(ctx, goBinary, "tool", "asm",
+		"-I", filepath.Join(runtime.GOROOT(), "pkg", "include"),
+		"-I", filepath.Dir(sourcePath), "-o", objectPath, sourcePath)
+	cmd.Env = toolEnv
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("Go assembler could not prove raw RIP source: %w: %s", err, output)
 	}
 
-	disassembly, err := exec.CommandContext(ctx, "go", "tool", "objdump", objectPath).CombinedOutput()
+	objdumpCmd := exec.CommandContext(ctx, goBinary, "tool", "objdump", objectPath)
+	objdumpCmd.Env = toolEnv
+	disassembly, err := objdumpCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Go objdump raw RIP source: %w: %s", err, disassembly)
 	}
@@ -292,7 +296,9 @@ func verifyAMD64MissingRIPConstantObject(ctx context.Context, moduleDir, workDir
 		return fmt.Errorf("raw RIP target is negative")
 	}
 
-	symbols, err := exec.CommandContext(ctx, "go", "tool", "nm", "-size", objectPath).CombinedOutput()
+	nmCmd := exec.CommandContext(ctx, goBinary, "tool", "nm", "-size", objectPath)
+	nmCmd.Env = toolEnv
+	symbols, err := nmCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Go nm raw RIP source: %w: %s", err, symbols)
 	}
