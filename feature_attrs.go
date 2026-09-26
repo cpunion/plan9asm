@@ -284,6 +284,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+sve2p1")
 					}
 				}
+				if _, ok := decodeARM64RawSVETernaryBitwise(uint32(ins.Args[0].Imm)); ok {
+					add("+sve", "+sve2")
+				}
 				if decoded, ok := decodeARM64RawSVEIntegerReduction(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if arm64SVEIntegerReductionSpecs[decoded.Op].quad {
@@ -783,7 +786,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if _, ok := arm64SVEDivideIntrinsics[Op(op)]; ok {
 				add("+sve")
 			}
-			if _, ok := arm64SVETernaryBitwiseIntrinsics[Op(op)]; ok {
+			if _, ok := arm64SVETernaryBitwiseSpecs[Op(op)]; ok {
 				add("+sve", "+sve2")
 			}
 			if _, ok := arm64SVEEORInterleaveIntrinsics[Op(op)]; ok {

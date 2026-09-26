@@ -337,6 +337,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markOp(operand)
 					}
 				}
+				if decoded, ok := decodeARM64RawSVETernaryBitwise(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEIntegerReduction(word); ok {
 					for _, operand := range decoded.Args {
 						markOp(operand)
