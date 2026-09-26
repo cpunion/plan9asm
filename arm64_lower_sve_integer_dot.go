@@ -9,13 +9,35 @@ type arm64SVEIntegerDotSpec struct {
 	intrinsic   string
 	mixed       bool
 	indexedOnly bool
+	rawBases    [4][2]uint32 // B->H, H->S, B->S, H->D; vector and indexed.
 }
 
 var arm64SVEIntegerDotSpecs = map[Op]arm64SVEIntegerDotSpec{
-	"ZSDOT":  {intrinsic: "sdot"},
-	"ZUDOT":  {intrinsic: "udot"},
-	"ZSUDOT": {intrinsic: "sudot", mixed: true, indexedOnly: true},
-	"ZUSDOT": {intrinsic: "usdot", mixed: true},
+	"ZSDOT": {intrinsic: "sdot", rawBases: [4][2]uint32{
+		{0x44400000, 0x44200000}, {0x4400c800, 0x4480c800},
+		{0x44800000, 0x44a00000}, {0x44c00000, 0x44e00000},
+	}},
+	"ZUDOT": {intrinsic: "udot", rawBases: [4][2]uint32{
+		{0x44400400, 0x44200400}, {0x4400cc00, 0x4480cc00},
+		{0x44800400, 0x44a00400}, {0x44c00400, 0x44e00400},
+	}},
+	"ZSUDOT": {intrinsic: "sudot", mixed: true, indexedOnly: true,
+		rawBases: [4][2]uint32{2: {0, 0x44a01c00}}},
+	"ZUSDOT": {intrinsic: "usdot", mixed: true,
+		rawBases: [4][2]uint32{2: {0x44807800, 0x44a01800}}},
+}
+
+type arm64SVEIntegerDotWidths struct {
+	source, destination        int
+	maximumVector, maximumLane int
+	feature                    string
+}
+
+var arm64SVEIntegerDotWidthForms = [...]arm64SVEIntegerDotWidths{
+	{8, 16, 7, 7, "+sve2p3"},
+	{16, 32, 7, 3, "+sve2p1"},
+	{8, 32, 7, 3, ""},
+	{16, 64, 15, 1, ""},
 }
 
 type arm64SVEIntegerDotForm struct {
@@ -41,11 +63,10 @@ func arm64SVEIntegerDotFeature(ins Instr) string {
 	if !ok || !destinationOK {
 		return ""
 	}
-	if sourceBits == 8 && destinationBits == 16 {
-		return "+sve2p3"
-	}
-	if sourceBits == 16 && destinationBits == 32 {
-		return "+sve2p1"
+	for _, widths := range arm64SVEIntegerDotWidthForms {
+		if widths.source == sourceBits && widths.destination == destinationBits {
+			return widths.feature
+		}
 	}
 	return ""
 }
@@ -93,23 +114,21 @@ func arm64SVEIntegerDotWidthOK(spec arm64SVEIntegerDotSpec, sourceBits, destinat
 	if spec.mixed {
 		return sourceBits == 8 && destinationBits == 32
 	}
-	return sourceBits == 8 && (destinationBits == 16 || destinationBits == 32) ||
-		sourceBits == 16 && (destinationBits == 32 || destinationBits == 64)
+	for _, widths := range arm64SVEIntegerDotWidthForms {
+		if widths.source == sourceBits && widths.destination == destinationBits {
+			return true
+		}
+	}
+	return false
 }
 
 func arm64SVEIntegerDotIndexedLimits(sourceBits, destinationBits int) (maximumVector, maximumLane int) {
-	switch {
-	case sourceBits == 8 && destinationBits == 16:
-		return 7, 7
-	case sourceBits == 8 && destinationBits == 32:
-		return 7, 3
-	case sourceBits == 16 && destinationBits == 32:
-		return 7, 3
-	case sourceBits == 16 && destinationBits == 64:
-		return 15, 1
-	default:
-		return -1, -1
+	for _, widths := range arm64SVEIntegerDotWidthForms {
+		if widths.source == sourceBits && widths.destination == destinationBits {
+			return widths.maximumVector, widths.maximumLane
+		}
 	}
+	return -1, -1
 }
 
 func (c *arm64Ctx) lowerARM64SVEIntegerDotForm(form arm64SVEIntegerDotForm) error {

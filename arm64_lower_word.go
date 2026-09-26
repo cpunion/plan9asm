@@ -121,6 +121,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEStructuredMemory(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEIntegerDot(word); ok {
+		_, _, err := c.lowerARM64SVEIntegerDot(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEReplicateScalar(word); ok {
 		_, _, err := c.lowerARM64SVEReplicateMemory(decoded.Op, decoded)
 		return err

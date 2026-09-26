@@ -1539,6 +1539,7 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		"ZSQABS", "ZSQNEG", "ZSXTB", "ZSXTH", "ZSXTW",
 		"ZUXTB", "ZUXTH", "ZUXTW", "ZURECPE", "ZURSQRTE",
 		"ZSMULH", "ZUMULH",
+		"ZSDOT", "ZUDOT", "ZSUDOT", "ZUSDOT",
 		"ZSQSHL", "ZUQSHL",
 		"ZFMUL", "ZFMULX", "ZFTMAD", "ZFTSMUL", "ZFTSSEL", "ZFCMLA", "ZFMLA", "ZFMLS", "ZFMAD", "ZFMSB",
 		"ZFNMLA", "ZFNMLS", "ZFNMAD", "ZFNMSB", "ZMLA", "ZMLS",
