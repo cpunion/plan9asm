@@ -12,21 +12,25 @@ the [draft PR](https://github.com/xgo-dev/plan9asm/pull/40), not this checkpoint
 - Old CI run `36087649450`: 74 successful jobs, 19 failed discovered shards
   and one failed aggregate. Base/root, standard library, race, coverage,
   benchmark, curated libraries and cross-runtime jobs passed on that old head.
-- Active development: `codex/pr40-fp16-20260926`. Latest additions after
-  `74b02be` cover raw SVE INDEX, scalar CNT/INC/DEC, scalar FABD/FMULX and
-  proven unlabelled ARM64 constant pools. Focused Go 1.20/1.27, three-platform
-  LLVM 22 object tests and relevant native/QEMU runtime checks pass. Inspect
-  `_out/` logs and processes for the newest full-run completion.
-- Frozen runner: `codex/pr40-ecosystem-fixes-20260925` at `74b02be`.
-  Its full root suite passed (607 seconds), as did the official five-arch gate
-  and nested CLI suite. Its full shard 10/32 replay is still running; inspect
-  `_out/current-local-shard-10.log` and the atomically published report under
-  `_out/current-local-shards/`. Do not edit/rebase this tree while it runs.
+- Active development: `codex/pr40-arm64-raw-20260926`. Commits through
+  `c144677` add complete raw SVE floating comparisons, unary operations and
+  predicate counts; fix floating opcode masks, reduction source registers,
+  Z/V/F aliasing and fixed-point conversion destination width. Focused Go
+  1.20/1.27, three-platform LLVM 22 objects and required QEMU checks pass.
+- Full-root runner: `codex/pr40-fp16-20260926`. Full suites at `97c89a0`
+  and `052a7f6` passed (631 and 602 seconds); the latter also passed the
+  official five-arch gate. Inspect Git/logs before treating later changes as
+  fully tested. Never advance its source while a verification is running.
+- `codex/pr40-ecosystem-fixes-20260925` retains complete shard 10/32 evidence
+  for `74b02be`: 173 selected, 142 passed, 31 source N/A, zero failures and
+  2,889 successful translations. Its report is
+  `_out/current-local-shards/shard-10.json`; preserve that historical report
+  if advancing the checkout for another frozen verification.
 - `codex/pr40-shift-rip-20260925` retains completed shard 17 at `aacbcc6`:
   159 selected, 126 passed, one failed (simd), 32 source N/A. These results and
   the old Linux reports are historical evidence, not current-source passes.
-- The committed assembly ledger at `569f8e3` publishes partial shard 10
-  evidence for source `74b02be`. Subsequent code changes make it stale until
+- The committed assembly ledger from `d779df4` (merged at `4a57deb`) publishes
+  complete shard 10 evidence for `74b02be`. Subsequent code changes make it stale until
   validated reports for the new source replace it. Never hand-promote statuses.
 
 ## Completed implementation batches
@@ -43,18 +47,29 @@ the [draft PR](https://github.com/xgo-dev/plan9asm/pull/40), not this checkpoint
 - Scalar FABD/FMULX cover H/S/D and coherent upper-lane clearing, sharing the
   scalar binary spec. Native ARM64 and QEMU compare finite/zero/subnormal/
   infinity/NaN results against architectural instructions.
+- Raw floating comparisons cover register and zero operands; unary operations
+  cover all 17 Go families and their distinct merging/zeroing size fields.
+  Required QEMU oracles exercise arithmetic, comparisons and ordinary unary
+  semantics over six SVE lengths. Newer zeroing operations use a cleared-
+  destination SVE1 reference; sized-rounding and counter forms have object
+  checks, not a claim of native execution on an unavailable newer ISA.
+- PCNTP covers both ordinary predicates and SVE2.1 counters. PTRUE unnamed
+  patterns produce empty predicates as specified by Arm. Fixed GPR-to-float
+  conversion uses destination precision independently of integer width;
+  all signed/unsigned W/X-to-S/D combinations have runtime oracles.
 - Unlabelled trailing ARM64 pools use raw control-flow reachability and a
   conservative load-only address-use proof. Pool aliases share one contiguous
-  global, preserving positive and negative offsets. Escaping addresses,
-  indirect branches and reachable invalid words remain failures.
+  global, preserving positive and negative offsets. The load-only proof now
+  follows branches/loops until every live address is killed. Escaping addresses,
+  indirect calls and reachable invalid words remain failures.
 
 ## External diagnostics and next blockers
 
 - `simd@v1.21.1`: all 73 amd64 files passed the earlier replay. New ARM64
-  diagnostics pass 21/47 files on each of Darwin/Linux/Windows (63/141 total).
-  Remaining 26 files per platform include more complex pool address lifetimes
-  and raw SVE compare/selection, floating min/max, ordinary memory, permutation
-  and predicate-count encodings. See `_out/simd-arm64-pools-scalar.{json,log}`.
+  diagnostics pass 22/47 files on each of Darwin/Linux/Windows (66/141 total).
+  Remaining files include more complex pool address lifetimes and raw SVE
+  predicate logic, compact/selection, floating min/max, ordinary memory and
+  permutation encodings. See `_out/simd-cntp.{json,log}` in the active tree.
 - `go-highway@v0.0.0-dev9`: ARM64 diagnostics passed; amd64 now passes 4/7
   files on each of Darwin/Linux/Windows. Three source files reference absent
   RIP constant pools. Do not invent data from comments. See the frozen
