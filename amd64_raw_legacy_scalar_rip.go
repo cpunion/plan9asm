@@ -11,7 +11,7 @@ import (
 // and update only a vector register or flags. A source-local constant can be
 // materialized without losing an in-place memory write or relocation.
 var x86RawLegacyScalarReadOps = map[Op]bool{
-	"MOVD": true, "MOVQ": true,
+	"MOVL": true, "MOVQ": true,
 	"UCOMISD": true, "UCOMISS": true, "COMISD": true, "COMISS": true,
 	"CMPSS": true, "CMPSD": true,
 	"ADDSS": true, "ADDSD": true, "SUBSS": true, "SUBSD": true,

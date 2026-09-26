@@ -171,23 +171,43 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	// MOVL src, Xn (seed vector low 32 bits).
 	if op == "MOVL" && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
 		if _, ok := amd64ParseXReg(ins.Args[1].Reg); ok {
-			var v64 string
-			var err error
+			var v32 string
 			switch ins.Args[0].Kind {
-			case OpImm, OpReg, OpFP, OpMem, OpSym:
-				v64, err = c.evalI64(ins.Args[0])
+			case OpMem:
+				ptr, ptrType, err := c.ptrFromMem(ins.Args[0].Mem)
+				if err != nil {
+					return true, false, err
+				}
+				tmp := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = load i32, %s %s, align 1\n", tmp, ptrType, ptr)
+				v32 = "%" + tmp
+			case OpSym:
+				if !strings.HasPrefix(strings.TrimSpace(ins.Args[0].Sym), "$") {
+					ptr, err := c.ptrFromSB(ins.Args[0].Sym)
+					if err != nil {
+						return true, false, err
+					}
+					tmp := c.newTmp()
+					fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", tmp, ptr)
+					v32 = "%" + tmp
+				}
+			case OpImm, OpReg, OpFP:
+				// These values are already typed; truncate below after evaluation.
 			default:
 				return true, false, fmt.Errorf("amd64 MOVL to X reg unsupported src: %q", ins.Raw)
 			}
-			if err != nil {
-				return true, false, err
+			if v32 == "" {
+				v64, err := c.evalI64(ins.Args[0])
+				if err != nil {
+					return true, false, err
+				}
+				tmp := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tmp, v64)
+				v32 = "%" + tmp
 			}
-			tr := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", tr, v64)
 			// Build <4 x i32> { crc, 0, 0, 0 } then bitcast to <16 x i8>.
-			v0 := "%" + tr
 			tvec := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i32> zeroinitializer, i32 %s, i32 0\n", tvec, v0)
+			fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i32> zeroinitializer, i32 %s, i32 0\n", tvec, v32)
 			bc := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", bc, tvec)
 			return true, false, c.storeX(ins.Args[1].Reg, "%"+bc)

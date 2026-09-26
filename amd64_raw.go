@@ -10078,6 +10078,10 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		return "NOP", nil
 	case x86asm.MOVSXD:
 		replaceOp("MOVLQSX")
+	case x86asm.MOVD:
+		// Intel MOVD transfers 32 bits. Go's MOVD spelling instead aliases
+		// AMOVQ and transfers 64 bits for XMM/memory forms.
+		replaceOp("MOVL")
 	case x86asm.MOVDQA:
 		replaceOp("MOVO")
 	case x86asm.MOVDQU:
