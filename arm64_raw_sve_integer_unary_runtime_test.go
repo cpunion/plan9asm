@@ -80,24 +80,7 @@ func testARM64RawSVEIntegerUnaryRuntime(t *testing.T, llc string) {
 	}
 	// A vector-length change must not occur in a live SVE-compiled frame:
 	// compiler-generated spills can use the previous length and corrupt it.
-	main := "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n#include <sys/prctl.h>\n" + declarations.String() + `
-__attribute__((noinline)) static int check_length(unsigned vl) {
-` + checks.String() + `
-  return 0;
-}
-
-__attribute__((target("arch=armv8-a")))
-int main(void) {
-  const unsigned lengths[] = {16, 32, 48, 64, 128, 256};
-  for (unsigned i = 0; i < sizeof(lengths)/sizeof(lengths[0]); i++) {
-    unsigned vl = lengths[i];
-    if (prctl(PR_SVE_SET_VL, vl) != (int)vl) return 99;
-    int result = check_length(vl);
-    if (result) return result;
-  }
-  return 0;
-}
-`
+	main := arm64SVEVectorLengthMain(declarations.String(), checks.String())
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
 		t.Fatal(err)

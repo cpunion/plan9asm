@@ -115,13 +115,7 @@ func testARM64RawSVEFloatRuntime(t *testing.T, llc string) {
 `, phases, width.ctype, samples, width.bytes, width.ctype, sampleCount, second, assembly, name, count, name, len(sigs))
 		}
 	}
-	main := "#include <stdint.h>\n#include <string.h>\n#include <stdio.h>\n#include <sys/prctl.h>\n" + declarations.String() + `
-int main(void) {
-  const unsigned lengths[] = {16, 32, 48, 64, 128, 256};
-  for (unsigned i = 0; i < sizeof(lengths)/sizeof(lengths[0]); i++) {
-    unsigned vl = lengths[i];
-    if (prctl(PR_SVE_SET_VL, vl) != (int)vl) return 99;
-` + checks.String() + "  }\n  return 0;\n}\n"
+	main := arm64SVEVectorLengthMain(declarations.String(), checks.String())
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
 		t.Fatal(err)

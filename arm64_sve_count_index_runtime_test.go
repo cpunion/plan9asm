@@ -107,16 +107,8 @@ static uint64_t count(unsigned pattern, unsigned lanes) {
 `, name, 1<<size, wantStart, wantStep, 1<<size, 1<<size, 1<<size)
 		}
 	}
-	main.WriteString(`int main(void) {
-  const unsigned lengths[] = {16, 32, 48, 64, 128, 256};
-  for (unsigned j = 0; j < sizeof(lengths) / sizeof(lengths[0]); j++) {
-    unsigned vl = lengths[j];
-    if (prctl(PR_SVE_SET_VL, vl) != (int)vl) return 5;
-    unsigned char buf[256] = {0};
-    uint64_t x = UINT64_MAX - 3;
-`)
-	main.WriteString(checks.String())
-	main.WriteString("  }\n  return 0;\n}\n")
+	mainC := arm64SVEVectorLengthMain(main.String(),
+		"unsigned char buf[256] = {0};\nuint64_t x = UINT64_MAX - 3;\n"+checks.String())
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
 		t.Fatal(err)
@@ -126,6 +118,6 @@ static uint64_t count(unsigned pattern, unsigned lanes) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "raw_sve_count_index", triple, ir, main.String(),
+	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "raw_sve_count_index", triple, ir, mainC,
 		[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
 }
