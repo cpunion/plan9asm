@@ -850,7 +850,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 					}
 				}
 				if form, ok := decodeARM64RawSVELoadStore(word); ok {
-					markReg(Reg(fmt.Sprintf("Z%d", form.vector)))
+					if form.predicate {
+						markReg(Reg(fmt.Sprintf("P%d", form.vector)))
+					} else {
+						markReg(Reg(fmt.Sprintf("Z%d", form.vector)))
+					}
 					if form.base == 31 {
 						markReg(SP)
 					} else {
