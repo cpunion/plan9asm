@@ -117,6 +117,25 @@ func discoveryTranslationUnits(groups []discoveryPackageGroup) []discoveryTransl
 	return units
 }
 
+func validateDiscoveryTranslationUnits(units []discoveryTranslationUnit, expectedFiles []string) error {
+	seen := make(map[string]bool, len(expectedFiles))
+	for _, unit := range units {
+		if len(unit.Patterns) != 1 || unit.Patterns[0] == "" || len(unit.AsmFiles) == 0 {
+			return fmt.Errorf("discovery translation unit must contain one package and its assembly")
+		}
+		for _, file := range unit.AsmFiles {
+			if seen[file] {
+				return fmt.Errorf("duplicate discovery translation file %s", file)
+			}
+			seen[file] = true
+		}
+	}
+	if !equalDiscoveryStrings(uniqueSortedDiscoveryStrings(expectedFiles), sortedDiscoverySet(seen)) {
+		return fmt.Errorf("discovery translation units do not cover every applicable assembly file")
+	}
+	return nil
+}
+
 const (
 	discoverySourceNotApplicableGoAssembler = "go_assembler_rejected_all_supported_targets"
 	discoverySourceNotApplicableNoGoPackage = "no_current_go_package"
@@ -1711,7 +1730,11 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					AsmFiles:  append([]string(nil), targetAsmFiles...),
 				}
 				executedBuildConfigurations = append(executedBuildConfigurations, executed)
-				for _, unit := range discoveryTranslationUnits(eligibleGroups) {
+				units := discoveryTranslationUnits(eligibleGroups)
+				if err := validateDiscoveryTranslationUnits(units, targetAsmFiles); err != nil {
+					return err
+				}
+				for _, unit := range units {
 					patternSet[unit.Patterns[0]] = true
 					targetCandidate := candidate
 					targetCandidate.AsmFiles = unit.AsmFiles

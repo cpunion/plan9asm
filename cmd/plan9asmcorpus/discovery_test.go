@@ -182,6 +182,17 @@ func TestDiscoveryTranslationUnitsKeepPackagesSeparate(t *testing.T) {
 		!reflect.DeepEqual(units[1].AsmFiles, groups[1].AsmFiles) {
 		t.Fatalf("translation units did not isolate package resources: %+v", units)
 	}
+	all := []string{"p0/first_amd64.s", "p0/second_amd64.s", "p1/first_amd64.s"}
+	if err := validateDiscoveryTranslationUnits(units, all); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateDiscoveryTranslationUnits(units[:1], all); err == nil {
+		t.Fatal("missing package unit silently dropped assembly")
+	}
+	duplicated := append(append([]discoveryTranslationUnit(nil), units...), units[0])
+	if err := validateDiscoveryTranslationUnits(duplicated, all); err == nil {
+		t.Fatal("duplicate package unit silently inflated translations")
+	}
 }
 
 func TestDiscoveryOperationReportsItsOwnTimeout(t *testing.T) {
