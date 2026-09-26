@@ -16,8 +16,9 @@ do not start new module-index inventory scans while failures remain.
 - Develop on `codex/pr40-arm64-raw-20260926`. Inspect
   status, worktrees and running processes before editing. Do not push until
   the failing CI classes are fixed and the assembly ledger is refreshed.
-- Development is on `codex/pr40-arm64-raw-20260926`, not pushed. At clean `e7d12c7`, shard 24
-  completed 164 selected = 134 passed + 29 N/A + one superseded skip;
+- Development is on `codex/pr40-arm64-raw-20260926`, not pushed. At clean
+  `e7d12c7`, shard 24 completed 164 selected = 134 passed + 29 N/A + one
+  superseded skip;
   shard 25 completed 137 selected = 109 passed + 27 N/A + one superseded
   skip. Both had zero failures. At clean `9aa59b1`, shard 29 completed
   151 selected = 127 passed + 23 N/A + one invalid-source skip, zero
@@ -30,23 +31,23 @@ do not start new module-index inventory scans while failures remain.
   builds in two clean worktrees produced identical SHA-256 values. Earlier
   e7 shard reports used path-dependent binaries and cannot be aggregated;
   replay required on a later shared frozen revision. Shard 22 at `2d17842`
-  completed 163 candidates with two failures: fiber/ai's private AMX word and
-  wagon's unexpanded `GO_ARGS`. The latter came from `runtime.GOROOT()` being
-  empty in a `-trimpath` translator. A regression first failed, then passed
-  after resolving the matching Go toolchain root. A focused exact wagon replay
-  passed its Darwin/AMD64 assembly through LLVM 22. A later shard-22 replay
-  at `e509472` was deliberately interrupted before completion: the runner
-  itself still used empty `runtime.GOROOT()` for source probes. No result from
-  that interrupted run counts as corpus evidence. A shared toolchain-root
-  helper now fixes translator, runner and scanner; freeze and replay shard 22.
+  failed on fiber/ai's private AMX word and wagon's unexpanded `GO_ARGS`.
+  Trimpath-built tools had an empty `runtime.GOROOT()`; the shared matching-Go
+  root helper now covers translator, runner and scanner. The complete shard 22
+  replay at clean `f888f58` passed: 163 selected = 131 passed + 31 source N/A
+  + one private-extension skip, zero failures, 2,773 object translations and
+  three N/A translations. Its partial-progress audit passed. The current
+  development branch has later scanner/script/doc-only changes, so this report
+  is diagnostic and cannot be combined with current-head reports.
 - The user authorized a distinct, not-passed private-extension skip for the
   exact fiber/ai v0.1.2 Darwin/ARM64 Apple AMX file. The manifest pins its
   source hash and opcode. The new runner verifies current Go assembly and
   still translates the other files. A focused local replay passed all three
   remaining Darwin/ARM64 files; log `_out/fiber-private-replay.log` in the
-  development worktree. Old shard 22 at `2d17842` independently confirmed
-  Mazarin passed (91 translations, 3 source/ABI N/A), while fiber failed only
-  on that AMX file. The new classification needs a frozen full-shard replay.
+  development worktree. The `f888f58` full replay confirmed Mazarin's 91
+  translations plus three source/ABI N/A, wagon's three target translations,
+  and fiber's 24 translations of all other applicable files. Fiber is not
+  counted among the passed candidates.
 - Use Go 1.27 and LLVM 22 only. Root focused compatibility also uses Go 1.20.
   Cross runtime requires checksum-pinned QEMU 10.2.3, not QEMU 8.2.
 
@@ -182,11 +183,11 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   official five-architecture coverage, strict benchmark (184/184) and stdlib
   corpus. Clean `e7d12c7` passed full root tests in 610 seconds after three
   concurrent heavy shards had caused an earlier 20-minute timeout. A focused
-  root test and package tests confirmed the timeout was load-related. The new
-  toolchain-root tests and corpus/scanner packages pass on Go 1.27.1; the
-  trimpath regression also passes on Go 1.20.14. Full root and shard tests
-  remain required on a clean new revision. Do not call the complete external
-  corpus verified yet.
+  root test and package tests confirmed the timeout was load-related. At clean
+  `d64a529`, full root passed in 596 seconds. Both nested CLIs, vet, official
+  five-architecture classification, ARM64 Plan 9 corpus and strict benchmark
+  (184/184, 25 target-seconds) also passed. The trimpath regression passes on
+  Go 1.20.14 and Go 1.27.1. The full external corpus is not verified yet.
 - Validated updater published that evidence via `5cec520`, merged at
   `e67462c`: 4,783 candidates, 4,624 pending, 126 passed, 32 N/A, one failed;
   incomplete and unverified. Evidence is stale against later implementation.
