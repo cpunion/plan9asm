@@ -5,9 +5,15 @@ import (
 	"strings"
 )
 
-var arm64SVEMultiplyAccumulateIntrinsics = map[Op]string{
-	"ZMLA": "mla",
-	"ZMLS": "mls",
+type arm64SVEMultiplyAccumulateSpec struct {
+	intrinsic     string
+	predicatedRaw uint32
+	indexedRaw    [3]uint32
+}
+
+var arm64SVEMultiplyAccumulateSpecs = map[Op]arm64SVEMultiplyAccumulateSpec{
+	"ZMLA": {"mla", 0x04004000, [3]uint32{0x44200800, 0x44a00800, 0x44e00800}},
+	"ZMLS": {"mls", 0x04006000, [3]uint32{0x44200c00, 0x44a00c00, 0x44e00c00}},
 }
 
 type arm64SVEMultiplyAccumulateForm struct {
@@ -26,14 +32,14 @@ func arm64SVEMultiplyAccumulateNeedsSVE2(ins Instr) bool {
 }
 
 func (c *arm64Ctx) lowerARM64SVEMultiplyAccumulate(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	intrinsic, ok := arm64SVEMultiplyAccumulateIntrinsics[op]
+	spec, ok := arm64SVEMultiplyAccumulateSpecs[op]
 	if !ok {
 		return false, false, nil
 	}
 	if strings.ToUpper(string(ins.Op)) != string(op) || (len(ins.Args) != 3 && len(ins.Args) != 4) {
 		return true, false, fmt.Errorf("arm64 %s expects one complete Go 1.27 multiply-accumulate form without a suffix: %q", op, ins.Raw)
 	}
-	form := arm64SVEMultiplyAccumulateForm{intrinsic: intrinsic}
+	form := arm64SVEMultiplyAccumulateForm{intrinsic: spec.intrinsic}
 	if len(ins.Args) == 4 {
 		multiplier, multiplierBits, multiplierOK := arm64ParseSVEZElementReg(ins.Args[0])
 		multiplicand, multiplicandBits, multiplicandOK := arm64ParseSVEZElementReg(ins.Args[1])

@@ -284,6 +284,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+sve2p1")
 					}
 				}
+				if decoded, ok := decodeARM64RawSVEMultiplyAccumulate(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+					if arm64SVEMultiplyAccumulateNeedsSVE2(decoded) {
+						add("+sve2")
+					}
+				}
 				if _, ok := decodeARM64RawSVETernaryBitwise(uint32(ins.Args[0].Imm)); ok {
 					add("+sve", "+sve2")
 				}
@@ -420,7 +426,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if _, ok := arm64SVEFloatMultiplyAccumulateSpecs[Op(op)]; ok {
 				add("+sve")
 			}
-			if _, ok := arm64SVEMultiplyAccumulateIntrinsics[Op(op)]; ok {
+			if _, ok := arm64SVEMultiplyAccumulateSpecs[Op(op)]; ok {
 				add("+sve")
 				if arm64SVEMultiplyAccumulateNeedsSVE2(ins) {
 					add("+sve2")
