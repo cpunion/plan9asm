@@ -96,7 +96,8 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   as invalid encodings. Do not reinterpret them as their macro names.
 - Exact-version invalid-source skips now have pinned SHA-256 files, evaluated
   raw WORD expressions, LLVM 22 rejection checks, and distinct report/ledger
-  status. Local proof passed for puter v1.2.3, gmsm v0.15.6 and gmgo v0.1.1.
+  status. Local proof passed for puter v1.2.3, gmsm v0.15.6 and two distinct
+  gmgo module paths at v0.1.1.
   A skip is not a translated library. Rerun their shards on a clean snapshot.
 - Complete shard 17 at `6e03524`: 159 selected = 126 passed + 32 source N/A
   + one failed simd. Report is retained in the ecosystem runner under
@@ -115,7 +116,7 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 2. Resolve other actual CI failures: Knoxdb/forks need cross-TEXT ABI0
    shared-frame/register semantics; JIT libraries need native code layout and
    address/entry contracts; go-highway retains absent RIP constant pools.
-3. Keep unproven upstream defects failed. Only the three confirmed exact
+3. Keep unproven upstream defects failed. Only the four confirmed exact
    versions above qualify for `skipped_invalid_source`; private Apple
    instructions alone are not proof of invalid source. Continue other
    applicable forms and candidates normally.

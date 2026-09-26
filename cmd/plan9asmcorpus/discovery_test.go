@@ -122,8 +122,8 @@ func TestInvalidMachineCodeManifestExpressionsEmitClaimedWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skips) != 3 {
-		t.Fatalf("got %d independently reviewed exact-version skips, want 3", len(skips))
+	if len(skips) != 4 {
+		t.Fatalf("got %d independently reviewed exact-version skips, want 4", len(skips))
 	}
 	for key, skip := range skips {
 		for _, item := range skip.Evidence {

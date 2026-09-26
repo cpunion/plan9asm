@@ -2,6 +2,27 @@
   "schema_version": 1,
   "skips": [
     {
+      "module": "gitee.com/aibuy/gmgo",
+      "version": "v0.1.1",
+      "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; this separately fetched module path is pinned by SHA-256.",
+      "evidence": [
+        {
+          "asm_file": "sm4/asm_arm64.s",
+          "sha256": "58b49d5b3654ea67dfec86f1610d09bc0c4f06a2bac8ad228d90e2671421cecc",
+          "source_expression": "WORD $0x09c961ce",
+          "word": "0x09c961ce",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "sm4/gcm_sm4ni_arm64.s",
+          "sha256": "62ffa0a70de1bf435c9dddd22aea9c0add4326a2e355edc44faa40de1abe7fcd",
+          "source_expression": "WORD $0x6086c0ce",
+          "word": "0x6086c0ce",
+          "architecture": "arm64"
+        }
+      ]
+    },
+    {
       "module": "gitee.com/zhaochuninhefei/gmgo",
       "version": "v0.1.1",
       "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
