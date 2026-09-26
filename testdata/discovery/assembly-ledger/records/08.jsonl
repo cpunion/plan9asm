@@ -1,5 +1,5 @@
 {"module":"github.com/0pcom/skywire","version":"v1.3.69","status":"pending"}
-{"module":"github.com/Consensys/gurvy","version":"v0.21.0","status":"pending"}
+{"module":"github.com/Consensys/gurvy","version":"v0.21.0","status":"passed"}
 {"module":"github.com/OrlovEvgeny/go-mcache","version":"v1.0.3","status":"pending"}
 {"module":"github.com/anjakefala/arrow/go/v14","version":"v14.0.2","status":"pending"}
 {"module":"github.com/ava-labs/go-ethereum","version":"v1.16.2","status":"pending"}
