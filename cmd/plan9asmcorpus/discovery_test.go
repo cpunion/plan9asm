@@ -546,6 +546,7 @@ func TestDiscoveryGoBuildInfrastructureFailuresAreNotSourceNotApplicable(t *test
 		"fatal: Could not read from remote repository.",
 		"write /tmp/go-build/object.o: no space left on device",
 		"go build example.com/pkg: signal: killed",
+		"reading https://gvisor.googlesource.com/gvisor/pkg/abi/linux?go-get=1: 429 Too Many Requests",
 	} {
 		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
 			t.Fatalf("infrastructure diagnostic was classified as source incompatibility: %q", diagnostic)
@@ -560,6 +561,41 @@ func TestDiscoveryGoBuildInfrastructureFailuresAreNotSourceNotApplicable(t *test
 		if isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
 			t.Fatalf("source diagnostic was classified as infrastructure failure: %q", diagnostic)
 		}
+	}
+}
+
+func TestRetryDiscoveryGoBuildOnlyRetriesTransientNetworkFailures(t *testing.T) {
+	transient := errors.New("reading https://example.com/pkg?go-get=1: 503 Service Unavailable")
+	source := errors.New("pkg/file.go:12:2: undefined: removedSymbol")
+
+	attempts := 0
+	err := retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		if attempts < 3 {
+			return transient
+		}
+		return source
+	})
+	if !errors.Is(err, source) || attempts != 3 {
+		t.Fatalf("retry after network failure: attempts=%d error=%v", attempts, err)
+	}
+
+	attempts = 0
+	err = retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		return source
+	})
+	if !errors.Is(err, source) || attempts != 1 {
+		t.Fatalf("source failure was retried: attempts=%d error=%v", attempts, err)
+	}
+
+	attempts = 0
+	err = retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		return errors.New("go build: signal: killed")
+	})
+	if err == nil || attempts != 1 {
+		t.Fatalf("resource failure was retried: attempts=%d error=%v", attempts, err)
 	}
 }
 

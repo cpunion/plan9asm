@@ -1995,7 +1995,53 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 		"GOOS":        goos,
 		"GOARCH":      goarch,
 	})
-	return runCapturedCommand(ctx, dir, targetEnv, "go", args...)
+	return retryDiscoveryGoBuild(ctx, []time.Duration{time.Second, 3 * time.Second}, func() error {
+		return runCapturedCommand(ctx, dir, targetEnv, "go", args...)
+	})
+}
+
+// A fresh build can resolve a temporary dependency-host failure. Retry only
+// network diagnostics; a compiler error, missing disk space or killed process
+// needs a different fix and must not be hidden behind repeated attempts.
+func retryDiscoveryGoBuild(ctx context.Context, delays []time.Duration, build func() error) error {
+	for attempt := 0; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		err := build()
+		if err == nil || attempt >= len(delays) || !isDiscoveryRetryableNetworkFailure(err.Error()) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return errors.Join(err, ctx.Err())
+		case <-time.After(delays[attempt]):
+		}
+	}
+}
+
+func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
+	if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
+		return false
+	}
+	diagnostic = strings.ToLower(diagnostic)
+	for _, marker := range []string{
+		"too many requests",
+		"service unavailable",
+		"bad gateway",
+		"gateway timeout",
+		"i/o timeout",
+		"tls handshake timeout",
+		"connection reset",
+		"connection closed by",
+		"temporary failure",
+		"unexpected eof",
+	} {
+		if strings.Contains(diagnostic, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func isDiscoveryGoBuildInfrastructureFailure(diagnostic string) bool {
@@ -2024,6 +2070,7 @@ func isDiscoveryGoBuildInfrastructureFailure(diagnostic string) bool {
 		"unexpected eof",
 		"bad gateway",
 		"service unavailable",
+		"too many requests",
 		"gateway timeout",
 		"no space left on device",
 		"signal: killed",

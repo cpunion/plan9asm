@@ -111,7 +111,8 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   has 2,179 functions and about 1.39 million amd64 assembly lines, so the
   function-only limit was not a reliable memory bound. Focused chunk tests
   pass, including complete coverage and cross-chunk raw TEXT references;
-  the actual `p8` candidate and strict benchmark still need replay.
+  the actual `p8` candidate still needs replay. The strict benchmark passed
+  all 184 applicable files on five targets with no N/A in 25 target-seconds.
 - A direct `pythonwasm2go/p0` Windows/ARM64 object replay passed in 39 seconds
   with a 3.3 GB maximum resident set. Its previous three-package translator
   process is still being exercised by shard 1 at `432314f`; per-package
@@ -126,6 +127,13 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
 - Complete shard 17 at `6e03524`: 159 selected = 126 passed + 32 source N/A
   + one failed simd. Report is retained in the ecosystem runner under
   `_out/ci-repair-6e03524-shard17/shard-17.json`.
+- Complete shard 10 at `692fad1`: 173 selected = 142 passed + 31 source N/A,
+  no failures. Shard 24 at the same revision: 164 selected = 134 passed +
+  29 source N/A + one failed old `celliott/gvisor` dependency resolution.
+  The latter produced both 404 and transient 429/503 responses, so it was
+  correctly kept failed rather than relabelled source N/A. Later local code
+  recognizes 429 as infrastructure and retries only transient network
+  failures twice; that needs a clean-shard replay.
 - Validated updater published that evidence via `5cec520`, merged at
   `e67462c`: 4,783 candidates, 4,624 pending, 126 passed, 32 N/A, one failed;
   incomplete and unverified. Evidence is stale against later implementation.
