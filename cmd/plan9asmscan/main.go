@@ -196,7 +196,7 @@ func main() {
 		if err != nil {
 			fatalf("list std packages: %v", err)
 		}
-		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch)
+		ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot)
 	case "go-asm":
 		if *goarch == "wasm" {
 			// Go has no cmd/asm end-to-end testdata or operand-class encoder
@@ -205,7 +205,7 @@ func main() {
 			// comes from cmd/internal/obj/wasm below.
 			pkgs, err = listStdPackagesAtGOROOT(*goos, *goarch, *goroot)
 			if err == nil {
-				ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch)
+				ops, forms, parseErrs, pkgWithSFiles, asmFiles, err = scanPackages(pkgs, arch, *goarch, *goroot)
 			}
 		} else {
 			ops, forms, parseErrs, asmFiles, err = scanGoAssemblerTestdata(*goroot, arch, *goarch)
@@ -343,7 +343,7 @@ func listStdPackagesWithCommand(goCommand, goos, goarch string, extraEnv []strin
 	return outPkgs, nil
 }
 
-func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch string) (map[string]*opStat, map[string]*formStat, []parseErr, int, int, error) {
+func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch, goRoot string) (map[string]*opStat, map[string]*formStat, []parseErr, int, int, error) {
 	ops := map[string]*opStat{}
 	forms := map[string]*formStat{}
 	var parseErrs []parseErr
@@ -365,7 +365,7 @@ func scanPackages(pkgs []pkgJSON, arch plan9asm.Arch, goarch string) (map[string
 				return nil, nil, nil, 0, 0, fmt.Errorf("read %s: %w", path, err)
 			}
 			asmFiles++
-			rel := shortStdPath(path)
+			rel := shortStdPath(path, goRoot)
 
 			file, err := plan9asm.Parse(arch, string(src))
 			if err != nil {
@@ -1487,12 +1487,11 @@ func topFiles(m map[string]int, n int) []string {
 	return out
 }
 
-func shortStdPath(path string) string {
-	goroot := runtime.GOROOT()
-	if goroot == "" {
+func shortStdPath(path, goRoot string) string {
+	if goRoot == "" {
 		return filepath.ToSlash(path)
 	}
-	root := filepath.ToSlash(filepath.Join(goroot, "src")) + "/"
+	root := filepath.ToSlash(filepath.Join(goRoot, "src")) + "/"
 	p := filepath.ToSlash(path)
 	if strings.HasPrefix(p, root) {
 		return strings.TrimPrefix(p, root)

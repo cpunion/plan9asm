@@ -131,12 +131,12 @@ func TestShortStdPath(t *testing.T) {
 	}
 
 	inRoot := filepath.Join(goroot, "src", "runtime", "sys_arm64.s")
-	if got := shortStdPath(inRoot); got != "runtime/sys_arm64.s" {
+	if got := shortStdPath(inRoot, goroot); got != "runtime/sys_arm64.s" {
 		t.Fatalf("shortStdPath(inRoot) = %q", got)
 	}
 
 	outside := filepath.Join(t.TempDir(), "local.s")
-	if got := shortStdPath(outside); got != filepath.ToSlash(outside) {
+	if got := shortStdPath(outside, goroot); got != filepath.ToSlash(outside) {
 		t.Fatalf("shortStdPath(outside) = %q", got)
 	}
 }
@@ -325,7 +325,7 @@ GLOBL foo(SB), RODATA, $8
 		Dir:        dir,
 		SFiles:     []string{"good.s", "bad.s", "data.s"},
 	}}
-	ops, forms, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64, "amd64")
+	ops, forms, parseErrs, pkgsWithS, asmFiles, err := scanPackages(pkgs, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
 	if err != nil {
 		t.Fatalf("scanPackages() error = %v", err)
 	}
@@ -394,7 +394,7 @@ func TestScanPackagesProbesContiguousX86RawDirectiveGroups(t *testing.T) {
 			ImportPath: "example/raw",
 			Dir:        dir,
 			SFiles:     []string{"raw.s"},
-		}}, plan9asm.ArchAMD64, "amd64")
+		}}, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -424,7 +424,7 @@ func TestScanPackagesProbesContiguousX86RawDirectiveGroups(t *testing.T) {
 			ImportPath: "example/raw",
 			Dir:        dir,
 			SFiles:     []string{"raw.s"},
-		}}, plan9asm.ArchAMD64, "amd64")
+		}}, plan9asm.ArchAMD64, "amd64", runtime.GOROOT())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -447,7 +447,7 @@ func TestScanPackagesProbesARMRawUndefinedInstruction(t *testing.T) {
 		ImportPath: "example/raw",
 		Dir:        dir,
 		SFiles:     []string{"raw.s"},
-	}}, plan9asm.ArchARM, "arm")
+	}}, plan9asm.ArchARM, "arm", runtime.GOROOT())
 	if err != nil {
 		t.Fatal(err)
 	}
