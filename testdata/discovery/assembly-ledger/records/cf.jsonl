@@ -14,7 +14,7 @@
 {"module":"github.com/mrjoshuak/go-openexr","version":"v1.4.38","status":"pending"}
 {"module":"github.com/paperpaperru/go-x-net","version":"v0.56.1","status":"pending"}
 {"module":"github.com/project-arda/bn256","version":"v0.0.0-20180117071128-8ece34836ac8","status":"pending"}
-{"module":"github.com/sasswart/websocket","version":"v0.0.0-20240822081019-3dd723ae69f0","status":"pending"}
+{"module":"github.com/sasswart/websocket","version":"v0.0.0-20240822081019-3dd723ae69f0","status":"passed"}
 {"module":"github.com/tamirms/roaring/v2","version":"v2.0.0-20260525185859-482ea719feb6","status":"pending"}
 {"module":"github.com/teslamotors/go","version":"v0.0.0-20180827154946-2b69ad0b3c97","status":"pending"}
 {"module":"github.com/tetratelabs/wazERO","version":"v1.12.0","status":"pending"}

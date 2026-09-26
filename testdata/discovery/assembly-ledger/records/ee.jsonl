@@ -1,5 +1,5 @@
 {"module":"code.hybscloud.com/lfq","version":"v0.1.5","status":"pending"}
-{"module":"ghproxy-9d2.pages.dev/dominant-strategies/go-quai","version":"v0.51.1","status":"pending"}
+{"module":"ghproxy-9d2.pages.dev/dominant-strategies/go-quai","version":"v0.51.1","status":"passed"}
 {"module":"gitee.com/qtr/SunnyNet","version":"v1.5.0","status":"pending"}
 {"module":"github.com/Jolymmiles/Xray-core","version":"v1.250608.0","status":"pending"}
 {"module":"github.com/Psiphon-Labs/psiphon-tunnel-core/MobileLibrary/go-mobile","version":"v0.0.0-20260921160406-9718e9cbedb1","status":"pending"}
@@ -12,7 +12,7 @@
 {"module":"github.com/lichao0211/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
 {"module":"github.com/pipermerriam/go-ethereum","version":"v1.7.1","status":"pending"}
 {"module":"github.com/projectzkm/ziren/crates/go-runtime/zkvm_runtime","version":"v0.0.0-20260904015846-89a2b745b5c2","status":"pending"}
-{"module":"github.com/raggi/finetime","version":"v0.0.0-20260829041106-950bb3b53ad4","status":"pending"}
+{"module":"github.com/raggi/finetime","version":"v0.0.0-20260829041106-950bb3b53ad4","status":"passed"}
 {"module":"github.com/secondarykey/image","version":"v0.0.0-20260623160930-7a0cfdab1f61","status":"pending"}
 {"module":"github.com/thongtech/go-legacy-win7","version":"v1.27.1-1","status":"pending"}
 {"module":"github.com/xchacha20-poly1305/sing-tun","version":"v0.8.15","status":"pending"}

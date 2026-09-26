@@ -12,7 +12,7 @@
 {"module":"github.com/gagliardetto/Solana-go","version":"v1.24.0","status":"pending"}
 {"module":"github.com/getlantern/netstack","version":"v0.0.0-20231119015617-99c37f85abd3","status":"pending"}
 {"module":"github.com/glycerine/sshego","version":"v7.0.3+incompatible","status":"pending"}
-{"module":"github.com/gmh5225/Go-Detection-Hyper-v","version":"v0.0.5","status":"pending"}
+{"module":"github.com/gmh5225/Go-Detection-Hyper-v","version":"v0.0.5","status":"passed"}
 {"module":"github.com/hanzos3/blake2b-simd","version":"v1.0.0","status":"pending"}
 {"module":"github.com/hbtgmbh/gosaxml","version":"v0.0.44","status":"pending"}
 {"module":"github.com/imannamdari/xray-core","version":"v1.3.1","status":"pending"}

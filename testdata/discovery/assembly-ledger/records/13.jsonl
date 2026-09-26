@@ -1,5 +1,5 @@
 {"module":"git.sr.ht/~shulhan/go-x-crypto","version":"v0.51.0","status":"pending"}
-{"module":"github.com/2jyk2/go-lib/common","version":"v0.0.0-20260616035354-f8571a02ef0a","status":"pending"}
+{"module":"github.com/2jyk2/go-lib/common","version":"v0.0.0-20260616035354-f8571a02ef0a","status":"passed"}
 {"module":"github.com/CbcWestwolf/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/LdDl/gorgonia","version":"v0.9.13","status":"pending"}
 {"module":"github.com/TheDevNiko/Xray-core","version":"v0.0.0-20260711155151-50231eaff98c","status":"pending"}

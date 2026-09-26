@@ -6,7 +6,7 @@
 {"module":"github.com/electroneum/electroneum-sc","version":"v0.0.0-20260828133443-74194a6cf48c","status":"pending"}
 {"module":"github.com/hokageregard/excrypto","version":"v0.0.5","status":"pending"}
 {"module":"github.com/karataliu/kubernetes","version":"v1.7.0-alpha.0","status":"pending"}
-{"module":"github.com/percona-lab/crypto","version":"v0.0.0-20251219125031-82d8ba2cda22","status":"pending"}
+{"module":"github.com/percona-lab/crypto","version":"v0.0.0-20251219125031-82d8ba2cda22","status":"passed"}
 {"module":"github.com/petermattis/goid","version":"v0.0.0-20260918085751-abfca077860b","status":"pending"}
 {"module":"github.com/piotrkozimor/gatt","version":"v0.0.0-20260822181158-11a43174353b","status":"pending"}
 {"module":"github.com/qtgolang/sunnyNet","version":"v1.5.1","status":"pending"}

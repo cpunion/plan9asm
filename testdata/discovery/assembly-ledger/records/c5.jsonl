@@ -6,8 +6,8 @@
 {"module":"github.com/modal-labs/gvisor","version":"v0.0.0-20260522211940-1e4ca67d5328","status":"pending"}
 {"module":"github.com/oteldb/storage","version":"v0.48.0","status":"pending"}
 {"module":"github.com/phpor/go-example","version":"v0.0.0-20260505061142-027fab09a82a","status":"pending"}
-{"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p0","version":"v0.2.0","status":"pending"}
+{"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p0","version":"v0.2.0","status":"passed"}
 {"module":"github.com/wshwsh12/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/xll-gen/shm","version":"v0.9.1","status":"pending"}
-{"module":"github.com/zkmips/zkmips/crates/go-runtime/zkvm_runtime","version":"v0.0.0-20260904015846-89a2b745b5c2","status":"pending"}
+{"module":"github.com/xll-gen/shm","version":"v0.9.1","status":"passed"}
+{"module":"github.com/zkmips/zkmips/crates/go-runtime/zkvm_runtime","version":"v0.0.0-20260904015846-89a2b745b5c2","status":"not_applicable"}
 {"module":"gitlab.com/yawning/chacha20.git","version":"v0.0.0-20230427033715-7877545b1b37","status":"pending"}

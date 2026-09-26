@@ -10,7 +10,7 @@
 {"module":"github.com/henrydcase/nobscrypto","version":"v0.0.0-20230313231516-25b66236df73","status":"pending"}
 {"module":"github.com/javi11/gopar-turbo","version":"v0.3.0","status":"pending"}
 {"module":"github.com/jpkrohling/compress","version":"v1.19.2","status":"pending"}
-{"module":"github.com/kLaytn/klaytn","version":"v1.12.1","status":"pending"}
+{"module":"github.com/kLaytn/klaytn","version":"v1.12.1","status":"passed"}
 {"module":"github.com/mzpqnxow/zgrab2","version":"v0.0.0-20260608053715-e91fc9860ca6","status":"pending"}
 {"module":"github.com/mzzsfy/go-util","version":"v1.7.4","status":"pending"}
 {"module":"github.com/sbinet-gonum/arrow/go/arrow","version":"v0.0.0-20191030140155-41753ace481a","status":"pending"}

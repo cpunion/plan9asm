@@ -16,5 +16,5 @@
 {"module":"github.com/miretskiy/simba","version":"v0.0.0-20250916153244-b234af0f653e","status":"pending"}
 {"module":"github.com/pingCAP/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/voiceblender/goamr-wb","version":"v1.1.1","status":"pending"}
-{"module":"github.laiyagushi.com/timandy/routine","version":"v1.1.6","status":"pending"}
+{"module":"github.laiyagushi.com/timandy/routine","version":"v1.1.6","status":"passed"}
 {"module":"gopkg.in/ro-ag/posix.v1","version":"v1.1.1","status":"pending"}

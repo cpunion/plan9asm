@@ -2,7 +2,7 @@
 {"module":"github.com/Asylian21/secp256k1-field","version":"v0.1.0","status":"pending"}
 {"module":"github.com/FacMata/wyxray","version":"v0.0.0-20260411164932-46fe6d3e7f95","status":"pending"}
 {"module":"github.com/NebulaOSS/nebula-nightly","version":"v1.12.0-nightly20260915-3fc627e","status":"pending"}
-{"module":"github.com/cassio-paesleme/arrow-go/v18","version":"v18.5.2","status":"pending"}
+{"module":"github.com/cassio-paesleme/arrow-go/v18","version":"v18.5.2","status":"passed"}
 {"module":"github.com/googlecloudplatform/cloud-image-tests","version":"v0.0.0-20260922193536-ca7bd14c3ce9","status":"pending"}
 {"module":"github.com/guvanchhojamov/go","version":"v0.0.0-20250516223215-642574969513","status":"pending"}
 {"module":"github.com/liyansum/xray-core","version":"v1.260327.0","status":"pending"}

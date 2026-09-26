@@ -13,8 +13,8 @@
 {"module":"github.com/nelhage/gojit","version":"v0.0.0-20151106164540-4098a5faeff1","status":"pending"}
 {"module":"github.com/privata-vpn/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/reactive-network/geth-rnk2-genesis","version":"v0.0.0-20260827231907-8cce496420cd","status":"pending"}
-{"module":"github.com/redplug/study_golang","version":"v0.0.0-20220209135131-2cb817945244","status":"pending"}
+{"module":"github.com/redplug/study_golang","version":"v0.0.0-20220209135131-2cb817945244","status":"not_applicable"}
 {"module":"github.com/shayonj/gvisor","version":"v0.0.0-20260729181002-1872043f6406","status":"pending"}
-{"module":"github.com/tenderly/net-avalanche-libevm","version":"v0.0.0-20260828090006-81a353856b31","status":"pending"}
+{"module":"github.com/tenderly/net-avalanche-libevm","version":"v0.0.0-20260828090006-81a353856b31","status":"passed"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p2","version":"v0.2.0","status":"pending"}
 {"module":"github.com/usbarmory/armory-boot","version":"v0.0.0-20260903083139-2c26f96024c6","status":"pending"}

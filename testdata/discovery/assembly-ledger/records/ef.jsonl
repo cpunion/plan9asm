@@ -1,6 +1,6 @@
 {"module":"git.k2software.com.cn/go/tools","version":"v0.0.0-20190402062621-3b431fc0260a","status":"pending"}
 {"module":"github.com/Aniruddhraam/Agilehash","version":"v1.0.0","status":"pending"}
-{"module":"github.com/Layr-Labs/nitro-go-ethereum","version":"v0.0.0-20250811182357-de879e81ab29","status":"pending"}
+{"module":"github.com/Layr-Labs/nitro-go-ethereum","version":"v0.0.0-20250811182357-de879e81ab29","status":"passed"}
 {"module":"github.com/XiaoConstantine/sgrep","version":"v0.14.2","status":"pending"}
 {"module":"github.com/YoohPH/v2ray-core/v5","version":"v5.51.0","status":"pending"}
 {"module":"github.com/c-loftus/arrow-go/v18","version":"v18.0.0-20260724181644-69c2fd50fa2f","status":"pending"}

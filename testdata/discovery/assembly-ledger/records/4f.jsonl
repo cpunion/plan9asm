@@ -1,5 +1,5 @@
 {"module":"github.com/AliSayyah/xray-core","version":"v1.7.5","status":"pending"}
-{"module":"github.com/GrayCodeAI/tok","version":"v0.1.4","status":"pending"}
+{"module":"github.com/GrayCodeAI/tok","version":"v0.1.4","status":"passed"}
 {"module":"github.com/Hanwen/go-fuse/v2","version":"v2.11.0","status":"pending"}
 {"module":"github.com/Kodecable/wsfs-core-coder-websocket","version":"v1.8.15-wsfs.1","status":"pending"}
 {"module":"github.com/M3DB/m3","version":"v1.5.0","status":"pending"}

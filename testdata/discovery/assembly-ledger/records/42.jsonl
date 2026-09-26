@@ -6,7 +6,7 @@
 {"module":"github.com/Psiphon-Labs/net","version":"v0.0.0-20191204183604-f5d60dada742","status":"pending"}
 {"module":"github.com/aiyang-zh/zhenyi-base","version":"v1.1.5","status":"pending"}
 {"module":"github.com/cloakd/solana-go","version":"v0.0.0-20260630125454-cd51d9586dd6","status":"pending"}
-{"module":"github.com/drovosek229/xray-core","version":"v1.260401.3","status":"pending"}
+{"module":"github.com/drovosek229/xray-core","version":"v1.260401.3","status":"passed"}
 {"module":"github.com/ethernal-tech/bn256","version":"v0.0.0-20260512092402-9d67137eba57","status":"pending"}
 {"module":"github.com/janatshaban/xray-core","version":"v0.0.0-20260829071626-0af90331ac4b","status":"pending"}
 {"module":"github.com/jimmand/Xray-core-awg","version":"v0.0.0-20260914152211-f4591654c53a","status":"pending"}

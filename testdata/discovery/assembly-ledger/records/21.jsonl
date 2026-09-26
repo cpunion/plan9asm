@@ -6,5 +6,5 @@
 {"module":"github.com/itohio/EasyRobot","version":"v0.0.0-20260512085029-abb5c9cca7f7","status":"pending"}
 {"module":"github.com/ledgerwatch/erigon","version":"v1.10.16","status":"pending"}
 {"module":"github.com/samyfodil/wazy","version":"v0.3.0","status":"pending"}
-{"module":"github.com/stable-net/go-stablenet","version":"v1.1.0","status":"pending"}
+{"module":"github.com/stable-net/go-stablenet","version":"v1.1.0","status":"passed"}
 {"module":"gitlab.wikimedia.org/repos/sre/cfssl","version":"v0.0.0-20260224203339-936ef4d06295","status":"pending"}

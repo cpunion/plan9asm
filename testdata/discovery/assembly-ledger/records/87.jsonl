@@ -8,7 +8,7 @@
 {"module":"github.com/bradfitz/gvisor","version":"v0.0.0-20260227001111-d6e815a044f0","status":"pending"}
 {"module":"github.com/campoy/go","version":"v0.0.0-20180109015338-9044f018ec7b","status":"pending"}
 {"module":"github.com/loreste/limyedb","version":"v0.2.0","status":"pending"}
-{"module":"github.com/ltcmweb/blake3","version":"v1.4.1-tinygo","status":"pending"}
+{"module":"github.com/ltcmweb/blake3","version":"v1.4.1-tinygo","status":"not_applicable"}
 {"module":"github.com/marcelocantos/hash","version":"v1.2.0","status":"pending"}
 {"module":"github.com/omnibusor/golang-x-sys","version":"v0.42.0-go1.20","status":"pending"}
 {"module":"github.com/pingcap/TiDb","version":"v1.0.9","status":"pending"}

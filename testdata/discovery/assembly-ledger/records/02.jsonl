@@ -16,7 +16,7 @@
 {"module":"github.com/iotaledger/hive.go/core","version":"v1.0.0-rc.3","status":"pending"}
 {"module":"github.com/kevlau1/xray-core","version":"v1.260327.1","status":"pending"}
 {"module":"github.com/mrpalide/skycoin","version":"v0.27.1","status":"pending"}
-{"module":"github.com/peterfyj/u12proj","version":"v0.0.0-20110610055027-664f7b68312e","status":"pending"}
+{"module":"github.com/peterfyj/u12proj","version":"v0.0.0-20110610055027-664f7b68312e","status":"passed"}
 {"module":"github.com/tsaikd/tools","version":"v0.0.0-20190912100236-53e5711c875d","status":"pending"}
 {"module":"github.com/wjordan/compress","version":"v0.0.0-20260407100334-1b63f2fece78","status":"pending"}
 {"module":"github.com/zabertech/go-ethereum","version":"v1.14.3","status":"pending"}

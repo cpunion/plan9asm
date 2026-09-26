@@ -1,11 +1,11 @@
 {"module":"github.com/Justype/x-crypto","version":"v0.57.0-hostbased.1","status":"pending"}
 {"module":"github.com/MxcZkevm/mxc-geth","version":"v1.11.1","status":"pending"}
 {"module":"github.com/ParallaxProtocol/parallax/v2","version":"v2.1.0","status":"pending"}
-{"module":"github.com/anghami/poly1305","version":"v0.0.0-20260513101326-bae1f9e1769c","status":"pending"}
+{"module":"github.com/anghami/poly1305","version":"v0.0.0-20260513101326-bae1f9e1769c","status":"not_applicable"}
 {"module":"github.com/bnb-chain/gnark-crypto","version":"v0.14.0","status":"pending"}
 {"module":"github.com/chef/automate","version":"v0.0.0-20260312110504-61ca031112bf","status":"pending"}
 {"module":"github.com/driekey/net","version":"v0.52.0-patch.1","status":"pending"}
-{"module":"github.com/elastic/otel-profiling-agent","version":"v0.0.202636","status":"pending"}
+{"module":"github.com/elastic/otel-profiling-agent","version":"v0.0.202636","status":"not_applicable"}
 {"module":"github.com/erikkassubek/deadlockdetectorgo","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
 {"module":"github.com/ethoxy/multi-geth","version":"v1.9.21","status":"pending"}
 {"module":"github.com/farcloser/primordium","version":"v0.9.1","status":"pending"}
