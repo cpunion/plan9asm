@@ -14,6 +14,6 @@
 {"module":"github.com/sagerNet/sing-tun","version":"v0.9.5","status":"pending"}
 {"module":"github.com/simplexidev/libui-ng","version":"v0.0.0-20230805010717-672539b53de2","status":"pending"}
 {"module":"github.com/soarpenguin/redis-trib","version":"v0.1.0","status":"pending"}
-{"module":"github.com/tokenpls/hako/third_party/sing-tun","version":"v0.0.0-20260907043401-35c9bb675f1c","status":"passed"}
+{"module":"github.com/tokenpls/hako/third_party/sing-tun","version":"v0.0.0-20260907043401-35c9bb675f1c","status":"pending"}
 {"module":"github.com/usbarmory/tamago-go","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
 {"module":"github.laiyagushi.com/33cn/chain33","version":"v1.71.0","status":"pending"}

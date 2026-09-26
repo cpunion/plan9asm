@@ -1,12 +1,12 @@
 {"module":"github.com/BryceWayne/hnsw","version":"v0.0.0-20260728174929-59a6d6260641","status":"pending"}
-{"module":"github.com/LiunxPaisley/v2ray-core","version":"v3.50.2+incompatible","status":"pending"}
+{"module":"github.com/LiunxPaisley/v2ray-core","version":"v3.50.2+incompatible","status":"not_applicable"}
 {"module":"github.com/Psiphon-labs/psiphon-tunnel-core","version":"v1.0.10","status":"pending"}
 {"module":"github.com/RoaringBitmap/Roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/alrighttt/core","version":"v0.2.1","status":"pending"}
 {"module":"github.com/andrewrynhard/kubernetes","version":"v1.5.2","status":"pending"}
 {"module":"github.com/farcloser/ossein","version":"v0.2.0","status":"pending"}
 {"module":"github.com/favadi/go-ethereum","version":"v1.8.16","status":"pending"}
-{"module":"github.com/fraunhofer-aisec/cmc","version":"v0.9.15","status":"passed"}
+{"module":"github.com/fraunhofer-aisec/cmc","version":"v0.9.15","status":"pending"}
 {"module":"github.com/giantswarm/go.crypto","version":"v0.0.0-20151015074924-d5be63d84f08","status":"pending"}
 {"module":"github.com/igor53627/gethrelay","version":"v0.19.0","status":"pending"}
 {"module":"github.com/lesismal/llib","version":"v1.2.4","status":"pending"}

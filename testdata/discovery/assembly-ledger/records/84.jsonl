@@ -2,8 +2,8 @@
 {"module":"github.com/33cn/Chain33","version":"v1.72.0","status":"pending"}
 {"module":"github.com/REGCLIENT/regclient","version":"v0.11.6","status":"pending"}
 {"module":"github.com/StarpTech/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
-{"module":"github.com/anthony-chaudhary/fak","version":"v0.55.0","status":"passed"}
-{"module":"github.com/bobanetwork/erigon/erigon-lib","version":"v0.0.0-20250421150011-83d629c0fa06","status":"pending"}
+{"module":"github.com/anthony-chaudhary/fak","version":"v0.55.0","status":"pending"}
+{"module":"github.com/bobanetwork/erigon/erigon-lib","version":"v0.0.0-20250421150011-83d629c0fa06","status":"passed"}
 {"module":"github.com/consensys/gnark-Crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/howardlau1999/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/lazily-hub/lazily-go","version":"v0.27.0","status":"pending"}

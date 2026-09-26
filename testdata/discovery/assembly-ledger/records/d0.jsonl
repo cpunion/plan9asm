@@ -1,5 +1,5 @@
 {"module":"codeberg.org/nestcloud/snappy","version":"v1.0.0","status":"pending"}
-{"module":"git.gammaspectra.live/p2pool/go-randomx/v5","version":"v5.0.1","status":"pending"}
+{"module":"git.gammaspectra.live/p2pool/go-randomx/v5","version":"v5.0.1","status":"passed"}
 {"module":"github.com/AndriiDiachuk/flow-go","version":"v0.33.17","status":"pending"}
 {"module":"github.com/Arachnid/go-ethereum","version":"v1.5.2","status":"pending"}
 {"module":"github.com/M3db/m3","version":"v1.5.0","status":"pending"}
@@ -8,7 +8,7 @@
 {"module":"github.com/PlatONenterprise/PlatONE-Go","version":"v0.9.11","status":"pending"}
 {"module":"github.com/SagerNet/tun-bench","version":"v0.0.0-20260915013010-201b780e709b","status":"pending"}
 {"module":"github.com/Shirikatsu/go-ethereum","version":"v1.8.19","status":"pending"}
-{"module":"github.com/Zeebo/xxh3","version":"v1.1.0","status":"pending"}
+{"module":"github.com/Zeebo/xxh3","version":"v1.1.0","status":"passed"}
 {"module":"github.com/Zxilly/go","version":"v0.0.0-20260722155911-5f4285930335","status":"pending"}
 {"module":"github.com/aojea/gvisor","version":"v0.0.0-20260213195347-813e3124c3d7","status":"pending"}
 {"module":"github.com/endlesscheng/go","version":"v0.0.0-20210504001527-2422c5eae5dc","status":"pending"}

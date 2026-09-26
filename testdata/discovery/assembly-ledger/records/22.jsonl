@@ -2,7 +2,7 @@
 {"module":"github.com/CircleCI-Public/golang-crypto","version":"v0.0.0-20241210214221-cbf2b06ceef2","status":"pending"}
 {"module":"github.com/GpsLypy/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/JFJun/scale.go","version":"v1.1.39","status":"pending"}
-{"module":"github.com/MetalBlockchain/libevm","version":"v1.16.2","status":"pending"}
+{"module":"github.com/MetalBlockchain/libevm","version":"v1.16.2","status":"passed"}
 {"module":"github.com/NikoMalik/sync_pool","version":"v0.0.0-20250112112541-6cc2e3b107fe","status":"pending"}
 {"module":"github.com/StoryProtocol/story-geth","version":"v0.9.0","status":"pending"}
 {"module":"github.com/TTCECO/gttc","version":"v0.2.5","status":"pending"}

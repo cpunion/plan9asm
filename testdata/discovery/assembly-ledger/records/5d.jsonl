@@ -8,7 +8,7 @@
 {"module":"github.com/chaintable/go-ethereum-iotex","version":"v0.0.0-20260210120827-e14aec359740","status":"pending"}
 {"module":"github.com/criyle/go-sandbox","version":"v0.13.7","status":"pending"}
 {"module":"github.com/fulminate-io/knowledge-mcp","version":"v0.10.6","status":"pending"}
-{"module":"github.com/gochain/gochain/v5","version":"v5.0.13","status":"passed"}
+{"module":"github.com/gochain/gochain/v5","version":"v5.0.13","status":"pending"}
 {"module":"github.com/golang/exp/shiny","version":"v0.0.0-20260908205506-85c1c2202aba","status":"pending"}
 {"module":"github.com/happyEgg/crypto","version":"v0.0.0-20190629042834-9f42ade1640d","status":"pending"}
 {"module":"github.com/iansmith/mazarin","version":"v0.0.0-20260918141540-c0d2f3dbbeb4","status":"pending"}

@@ -2,7 +2,7 @@
 {"module":"github.com/XinFinOrg/XDPOSChain","version":"v1.6.0","status":"pending"}
 {"module":"github.com/chainsafe/geth","version":"v0.0.0-20180822083900-316fc7ecfc10","status":"pending"}
 {"module":"github.com/gsqblockchain/gsqbc","version":"v0.0.0-20210402131428-0833c38e44d3","status":"pending"}
-{"module":"github.com/intel/cpuid","version":"v0.0.0-20241219215823-96de68d22bf5","status":"pending"}
+{"module":"github.com/intel/cpuid","version":"v0.0.0-20241219215823-96de68d22bf5","status":"passed"}
 {"module":"github.com/ixios-io/ixiosSpark","version":"v1.1.0","status":"pending"}
 {"module":"github.com/jluF/go-fuse/v2","version":"v2.0.0-20260515064020-5141bf23db18","status":"pending"}
 {"module":"github.com/katexochen/go-sev-guest","version":"v0.0.0-20260914203047-260cf497365c","status":"pending"}
@@ -13,7 +13,7 @@
 {"module":"github.com/openshift-sustaining/net","version":"v0.56.0","status":"pending"}
 {"module":"github.com/philhug/go-boot","version":"v0.0.0-20260410071416-234beea2a0fe","status":"pending"}
 {"module":"github.com/runzeroinc/excrypto","version":"v0.43.3","status":"pending"}
-{"module":"github.com/sevaktigranyan305-netizen/Xray-core","version":"v0.0.14-test","status":"passed"}
+{"module":"github.com/sevaktigranyan305-netizen/Xray-core","version":"v0.0.14-test","status":"pending"}
 {"module":"github.com/theapemachine/simd","version":"v0.0.0-20251210203756-acb8b44bc54e","status":"pending"}
 {"module":"github.com/xjasonlyu/gvisor","version":"v0.0.0-20260108001629-a1eb5ffdceab","status":"pending"}
 {"module":"github.com/y123456yz/reading-and-annotate-quic","version":"v0.0.0-20201224071421-810eaf856fb8","status":"pending"}

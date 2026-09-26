@@ -3,7 +3,7 @@
 {"module":"github.com/JueShanCoder/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
 {"module":"github.com/emotab87/vibe_coding","version":"v0.0.0-20250825030350-96f886a9bf3c","status":"pending"}
 {"module":"github.com/kde/syntax-highlighting","version":"v6.30.0+incompatible","status":"pending"}
-{"module":"github.com/new-jamneration/jam-protocol","version":"v0.0.0-20260724124157-c7fb743aa000","status":"pending"}
+{"module":"github.com/new-jamneration/jam-protocol","version":"v0.0.0-20260724124157-c7fb743aa000","status":"not_applicable"}
 {"module":"github.com/nikirill/go-crypto","version":"v0.0.0-20210204153324-694bf46cc691","status":"pending"}
 {"module":"github.com/pierrec/lz4/v4","version":"v4.1.30","status":"pending"}
 {"module":"github.com/readykit/gd","version":"v0.0.0-20260922120337-7d185eb38e69","status":"pending"}

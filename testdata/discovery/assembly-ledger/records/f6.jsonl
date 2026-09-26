@@ -17,5 +17,5 @@
 {"module":"github.com/rwstechcortex/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/synopsys-sig/gls","version":"v0.0.0-20260902195921-4895e1878345","status":"pending"}
 {"module":"github.com/vechain/thor-go-vendor","version":"v0.0.0-20190902033906-455bf03e7c0d","status":"pending"}
-{"module":"github.com/yandex/yatool","version":"v0.0.0-20260922214909-ab247f7e4dea","status":"pending"}
+{"module":"github.com/yandex/yatool","version":"v0.0.0-20260922214909-ab247f7e4dea","status":"not_applicable"}
 {"module":"github.web.gylab.com/dominant-strategies/go-quai","version":"v0.52.0","status":"pending"}

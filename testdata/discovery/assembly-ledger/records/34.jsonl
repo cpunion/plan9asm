@@ -5,13 +5,13 @@
 {"module":"github.com/Parsurvan/justitia/third_party/wasm","version":"v0.0.0-20260622210618-cc581d799dd2","status":"pending"}
 {"module":"github.com/RookieCoderrr/neo3fura-ctrverification","version":"v0.0.0-20221201045318-9878de6dbeed","status":"pending"}
 {"module":"github.com/aead/argon2","version":"v0.0.0-20180111183520-a87724528b07","status":"pending"}
-{"module":"github.com/bouine-cache/xxhash/v3","version":"v3.0.0","status":"pending"}
+{"module":"github.com/bouine-cache/xxhash/v3","version":"v3.0.0","status":"passed"}
 {"module":"github.com/brendoncarroll/go-exp","version":"v0.0.0-20260502194125-44f3dd6ca513","status":"pending"}
 {"module":"github.com/cloudwego/runtimex","version":"v0.1.2","status":"pending"}
 {"module":"github.com/coder/mutagen","version":"v0.18.5","status":"pending"}
 {"module":"github.com/dderona/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"pending"}
 {"module":"github.com/ebitengine/PureGO","version":"v0.11.1","status":"pending"}
-{"module":"github.com/emmansun/gmsM","version":"v0.44.1","status":"pending"}
+{"module":"github.com/emmansun/gmsM","version":"v0.44.1","status":"passed"}
 {"module":"github.com/go-simd/streamvbyte","version":"v0.1.2","status":"pending"}
 {"module":"github.com/kardiachain/go-kardiamain","version":"v1.7.0","status":"pending"}
 {"module":"github.com/lucor-sm/parquet-go","version":"v0.0.0-20260513160931-48d67fc43fe8","status":"pending"}
@@ -22,7 +22,7 @@
 {"module":"github.com/pilinux/crypto","version":"v0.0.0-20260826144058-afebf4cb4efb","status":"pending"}
 {"module":"github.com/recallsong/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/sagernet/sing-tun","version":"v0.9.5","status":"pending"}
-{"module":"github.com/segmentio/asm","version":"v1.2.1","status":"pending"}
+{"module":"github.com/segmentio/asm","version":"v1.2.1","status":"passed"}
 {"module":"github.com/seiflotfy/onpair","version":"v0.0.0-20260803085312-b0b66d28d4cb","status":"pending"}
 {"module":"github.com/semafind/semadb","version":"v1.2.0","status":"pending"}
 {"module":"github.com/shirikatsu/go-ethereum","version":"v1.8.19","status":"pending"}

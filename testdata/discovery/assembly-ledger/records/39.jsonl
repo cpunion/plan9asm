@@ -5,7 +5,7 @@
 {"module":"github.com/MOACChain/chain3go","version":"v0.0.0-20190118072330-ae0c631eaeb2","status":"pending"}
 {"module":"github.com/OasisLabs/ed25519","version":"v0.0.0-20210505154701-76d8c688d86e","status":"pending"}
 {"module":"github.com/Offchainlabs/hashtree","version":"v0.2.5","status":"pending"}
-{"module":"github.com/ava-labs/libevm","version":"v1.16.2","status":"passed"}
+{"module":"github.com/ava-labs/libevm","version":"v1.16.2","status":"pending"}
 {"module":"github.com/axiomis-labs/websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/cloudquery/arrow/go/v14","version":"v14.0.0-20231029080147-50d3871d0804","status":"pending"}
 {"module":"github.com/drovosek229/Xray-core","version":"v1.260401.3","status":"pending"}

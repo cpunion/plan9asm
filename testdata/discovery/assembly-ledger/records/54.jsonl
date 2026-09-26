@@ -13,6 +13,6 @@
 {"module":"github.com/justype/x-crypto","version":"v0.57.0-hostbased.1","status":"pending"}
 {"module":"github.com/linckode/circl","version":"v1.3.72","status":"pending"}
 {"module":"github.com/metaCubeX/Clash.Meta","version":"v1.19.31","status":"pending"}
-{"module":"github.com/remyoudompheng/go-misc","version":"v0.0.0-20190427085024-2d6ac652a50e","status":"pending"}
+{"module":"github.com/remyoudompheng/go-misc","version":"v0.0.0-20190427085024-2d6ac652a50e","status":"passed"}
 {"module":"github.com/simplechain-org/go-simplechain","version":"v1.0.6","status":"pending"}
 {"module":"github.com/zhangsan946/Xray-core","version":"v0.0.0-20260627131803-45cf2898ab12","status":"pending"}

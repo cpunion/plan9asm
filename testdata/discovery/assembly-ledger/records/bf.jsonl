@@ -1,7 +1,7 @@
 {"module":"git.k2software.com.cn/go/net","version":"v0.0.0-20190301231341-16b79f2e4e95","status":"pending"}
 {"module":"github.com/Datadog/opentelemetry-ebpf-profiler","version":"v0.0.202610","status":"pending"}
 {"module":"github.com/Deatil/go-cryptobin","version":"v1.1.1020","status":"pending"}
-{"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"pending"}
+{"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"passed"}
 {"module":"github.com/Tendermint/crypto","version":"v0.0.0-20191022145703-50d29ede1e15","status":"pending"}
 {"module":"github.com/ThiraSoft/golem","version":"v0.38.2","status":"pending"}
 {"module":"github.com/WJQSERVER/go2zig","version":"v0.0.3","status":"pending"}
@@ -10,7 +10,7 @@
 {"module":"github.com/ajaxorg/ace-builds","version":"v1.44.0","status":"pending"}
 {"module":"github.com/boyaowang430/plz","version":"v0.0.0-20260626095300-25c9e7733413","status":"pending"}
 {"module":"github.com/deroproject/derosuite","version":"v2.1.5+incompatible","status":"pending"}
-{"module":"github.com/gofiber/utils/v2","version":"v2.5.3","status":"passed"}
+{"module":"github.com/gofiber/utils/v2","version":"v2.5.3","status":"pending"}
 {"module":"github.com/golang/crypto","version":"v0.57.0","status":"pending"}
 {"module":"github.com/jimmygchen/go-ethereum","version":"v1.12.0","status":"pending"}
 {"module":"github.com/obscuronet/go-ethereum","version":"v1.10.16","status":"pending"}

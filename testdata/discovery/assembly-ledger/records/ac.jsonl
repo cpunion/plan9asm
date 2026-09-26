@@ -1,4 +1,4 @@
-{"module":"github.com/CESPARE/xxhash/v2","version":"v2.3.0","status":"passed"}
+{"module":"github.com/CESPARE/xxhash/v2","version":"v2.3.0","status":"pending"}
 {"module":"github.com/anacrolix/go","version":"v0.0.0-20260831222737-ef00dcff0118","status":"pending"}
 {"module":"github.com/fangliding/xray","version":"v1.260202.0","status":"pending"}
 {"module":"github.com/henkerik/circl","version":"v0.0.0-20260428113841-072d63b0a559","status":"pending"}

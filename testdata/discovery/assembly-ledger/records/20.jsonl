@@ -12,7 +12,7 @@
 {"module":"github.com/gagliardetto/Solana-go","version":"v1.24.0","status":"pending"}
 {"module":"github.com/getlantern/netstack","version":"v0.0.0-20231119015617-99c37f85abd3","status":"pending"}
 {"module":"github.com/glycerine/sshego","version":"v7.0.3+incompatible","status":"pending"}
-{"module":"github.com/gmh5225/Go-Detection-Hyper-v","version":"v0.0.5","status":"passed"}
+{"module":"github.com/gmh5225/Go-Detection-Hyper-v","version":"v0.0.5","status":"pending"}
 {"module":"github.com/hanzos3/blake2b-simd","version":"v1.0.0","status":"pending"}
 {"module":"github.com/hbtgmbh/gosaxml","version":"v0.0.44","status":"pending"}
 {"module":"github.com/imannamdari/xray-core","version":"v1.3.1","status":"pending"}
@@ -21,7 +21,7 @@
 {"module":"github.com/mavity/rusticated","version":"v0.0.0-20260915134237-469b5127e027","status":"pending"}
 {"module":"github.com/octaspace/go-octa","version":"v1.3.2","status":"pending"}
 {"module":"github.com/offchainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
-{"module":"github.com/onesyue/xray-core","version":"v1.260327.0","status":"pending"}
+{"module":"github.com/onesyue/xray-core","version":"v1.260327.0","status":"passed"}
 {"module":"github.com/oss-qm/golang","version":"v0.0.0-20200127164110-40de77758ca7","status":"pending"}
 {"module":"github.com/pgsty/silo-pkg/v3","version":"v3.14.1","status":"pending"}
 {"module":"github.com/pointlander/tensor","version":"v0.8.1","status":"pending"}

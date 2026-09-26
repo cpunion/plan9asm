@@ -1,6 +1,6 @@
 {"module":"gitee.com/wangHvip/sys","version":"v0.0.0-20190316082340-a2f829d7f35f","status":"pending"}
 {"module":"github.com/CELO-ORG/CELO-BLOCKCHAIN","version":"v1.8.9","status":"pending"}
-{"module":"github.com/ClaudioTheobaldo/fyne/v2","version":"v2.7.3","status":"not_applicable"}
+{"module":"github.com/ClaudioTheobaldo/fyne/v2","version":"v2.7.3","status":"pending"}
 {"module":"github.com/MeKo-Christian/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/Storj/common","version":"v0.0.0-20260903112600-b776c2238d07","status":"pending"}
 {"module":"github.com/gmwxio/tools","version":"v0.1.0","status":"pending"}
@@ -9,7 +9,7 @@
 {"module":"github.com/liquentlabs/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/mediagui/go","version":"v0.0.0-20260227122306-34024557799e","status":"pending"}
 {"module":"github.com/modernc-tree-sitter/libc","version":"v1.73.5","status":"pending"}
-{"module":"github.com/ontio/ontology-crypto","version":"v1.2.2","status":"pending"}
+{"module":"github.com/ontio/ontology-crypto","version":"v1.2.2","status":"passed"}
 {"module":"github.com/peterrk/parquet-go","version":"v0.30.2","status":"pending"}
 {"module":"github.com/sailfishos-mirror/go","version":"v0.0.0-20260921231307-ffc306b41731","status":"pending"}
 {"module":"github.com/templexxx/xor","version":"v0.0.0-20191217153810-f85b25db303b","status":"pending"}

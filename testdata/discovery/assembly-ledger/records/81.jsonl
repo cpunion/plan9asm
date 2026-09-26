@@ -2,7 +2,7 @@
 {"module":"github.com/Fedarisha/Xray-core-fedarisha","version":"v1.260608.0","status":"pending"}
 {"module":"github.com/GFW-Knocker/Xray-core","version":"v1.8.7","status":"pending"}
 {"module":"github.com/Isletier/dvelve","version":"v0.0.0-20260305175844-5435acac9168","status":"pending"}
-{"module":"github.com/Leadaxe/wireguard-go","version":"v0.0.0-20260622082839-0c0c10b5d323","status":"pending"}
+{"module":"github.com/Leadaxe/wireguard-go","version":"v0.0.0-20260622082839-0c0c10b5d323","status":"passed"}
 {"module":"github.com/MaxwellCalkin/ollama","version":"v0.17.7","status":"pending"}
 {"module":"github.com/Vinci10/fyne/v2","version":"v2.0.0-20260309145412-963f0f88d466","status":"pending"}
 {"module":"github.com/agiledragon/gomOnkey/v2","version":"v2.14.3","status":"pending"}

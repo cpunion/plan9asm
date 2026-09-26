@@ -2,7 +2,7 @@
 {"module":"gitee.com/mirrors/tidb.git","version":"v1.0.9","status":"pending"}
 {"module":"github.com/ClifHouck/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/JohnnyTing/gomonkey/v2","version":"v2.14.4","status":"pending"}
-{"module":"github.com/agnitum2009/Xray-core","version":"v0.0.0-20260708144011-5f45a0be11a3","status":"pending"}
+{"module":"github.com/agnitum2009/Xray-core","version":"v0.0.0-20260708144011-5f45a0be11a3","status":"passed"}
 {"module":"github.com/annchain/kyber/v3","version":"v3.1.1","status":"pending"}
 {"module":"github.com/atewari-rh/net","version":"v0.38.0-sec.1","status":"pending"}
 {"module":"github.com/bobanetwork/v3-erigon/erigon-lib","version":"v0.0.0-20250421150011-83d629c0fa06","status":"pending"}

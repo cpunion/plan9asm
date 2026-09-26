@@ -6,9 +6,9 @@
 {"module":"github.com/dylenfu/Zion","version":"v0.0.0-20221017075600-fa41aa310f48","status":"pending"}
 {"module":"github.com/erikkassubek/cobufi-go","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
 {"module":"github.com/go-crypt/x","version":"v0.4.17","status":"pending"}
-{"module":"github.com/jaurray/xray-core","version":"v0.0.0-20260221095907-efdf21efb5b2","status":"pending"}
+{"module":"github.com/jaurray/xray-core","version":"v0.0.0-20260221095907-efdf21efb5b2","status":"passed"}
 {"module":"github.com/loinfish/truechain-engineering-code","version":"v2.1.4+incompatible","status":"pending"}
-{"module":"github.com/mimusic-org/wazero","version":"v1.11.1-mimusic","status":"pending"}
+{"module":"github.com/mimusic-org/wazero","version":"v1.11.1-mimusic","status":"passed"}
 {"module":"github.com/mmcloughlin/pearl","version":"v0.0.0-20200201204240-15325b8b9c93","status":"pending"}
 {"module":"github.com/samuel/go-dsp","version":"v0.0.0-20260920164338-3b9183961423","status":"pending"}
 {"module":"github.com/second-state/go-ethereum","version":"v1.9.7","status":"pending"}

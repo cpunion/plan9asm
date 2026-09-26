@@ -1,5 +1,5 @@
 {"module":"git.gammaspectra.live/p2pool/consensus/v5","version":"v5.0.10","status":"pending"}
-{"module":"gitee.com/wangHvip/net","version":"v0.0.0-20190415214537-1da14a5a36f2","status":"passed"}
+{"module":"gitee.com/wangHvip/net","version":"v0.0.0-20190415214537-1da14a5a36f2","status":"pending"}
 {"module":"github.com/AdamKorcz/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/BlackDark/fork-go-fuse/v2","version":"v2.12.0-csi.5","status":"pending"}
 {"module":"github.com/DevLothen/Xray-core","version":"v0.0.0-20260912102929-36e4ed475c07","status":"pending"}

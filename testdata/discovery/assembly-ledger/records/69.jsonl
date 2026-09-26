@@ -1,7 +1,7 @@
 {"module":"gitee.com/matrixorigin/matrixone","version":"v1.2.4","status":"pending"}
 {"module":"github.com/BobJustFry/xray-core","version":"v0.0.0-20260425212042-3bc24a3d5d0f","status":"pending"}
 {"module":"github.com/IOV-Blockchain/goiov","version":"v1.0.1","status":"pending"}
-{"module":"github.com/atoonk/packetio","version":"v0.1.11","status":"pending"}
+{"module":"github.com/atoonk/packetio","version":"v0.1.11","status":"passed"}
 {"module":"github.com/dewebprotocol/malt","version":"v0.0.7","status":"pending"}
 {"module":"github.com/dparker1990/dbg","version":"v1.27.2","status":"pending"}
 {"module":"github.com/heroku/netstack","version":"v0.0.0-20211012154010-fa441848dcd1","status":"pending"}

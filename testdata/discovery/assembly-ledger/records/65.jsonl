@@ -18,5 +18,5 @@
 {"module":"github.com/wailovet/nps","version":"v0.20.2","status":"pending"}
 {"module":"github.com/waterfall-network/wf-go-ethereum","version":"v0.0.0-20260406192048-7c0d7845559c","status":"pending"}
 {"module":"github.com/weaviate/weaviate","version":"v1.39.6","status":"pending"}
-{"module":"github.com/yosuke-furukawa/programming-go-study","version":"v0.0.0-20181220174421-94586a512736","status":"passed"}
+{"module":"github.com/yosuke-furukawa/programming-go-study","version":"v0.0.0-20181220174421-94586a512736","status":"pending"}
 {"module":"gopkg.in/RoaringBitmap/roaring.v2","version":"v2.29.0","status":"pending"}

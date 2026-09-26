@@ -10,7 +10,7 @@
 {"module":"github.com/postmannen/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"pending"}
 {"module":"github.com/qwqgong-ui/mihomo","version":"v1.19.29","status":"pending"}
 {"module":"github.com/scrense-hash/Xray-core","version":"v0.0.0-20260417205931-6d7e985e0a01","status":"pending"}
-{"module":"github.com/tannerryan/roughtime","version":"v1.27.2","status":"not_applicable"}
+{"module":"github.com/tannerryan/roughtime","version":"v1.27.2","status":"pending"}
 {"module":"github.com/tatsumack/go","version":"v0.0.0-20210923215930-4e308d73ba36","status":"pending"}
 {"module":"github.com/timewn1/go-ethereum","version":"v0.0.0-20220528191516-52322b8120d0","status":"pending"}
 {"module":"github.com/usbarmory/gotee-example","version":"v0.0.0-20260902214239-fde95e412823","status":"pending"}

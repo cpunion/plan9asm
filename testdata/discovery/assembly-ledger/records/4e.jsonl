@@ -11,5 +11,5 @@
 {"module":"github.com/m3dbx/xxhash/v2","version":"v2.1.1","status":"pending"}
 {"module":"github.com/natefinch/fyne/v2","version":"v2.7.3","status":"pending"}
 {"module":"github.com/paimoncai/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
-{"module":"github.com/tenderly/net-xlayer","version":"v0.1.5-tenderly","status":"passed"}
+{"module":"github.com/tenderly/net-xlayer","version":"v0.1.5-tenderly","status":"pending"}
 {"module":"github.com/unstablebuild/pty","version":"v1.3.1","status":"pending"}

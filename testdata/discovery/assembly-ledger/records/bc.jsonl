@@ -18,6 +18,6 @@
 {"module":"github.com/sukunrt/go-ethereum","version":"v0.0.0-20260323171428-745b0a8c09ad","status":"pending"}
 {"module":"github.com/tanaton/go-image","version":"v0.0.0-20161103133713-5469d0fa9a83","status":"pending"}
 {"module":"github.com/tixcoin/tixcash-api-core","version":"v0.0.0-20260511072735-53e04a9cd55c","status":"pending"}
-{"module":"github.com/tphakala/go-flac","version":"v1.1.0","status":"passed"}
+{"module":"github.com/tphakala/go-flac","version":"v1.1.0","status":"pending"}
 {"module":"github.laiyagushi.com/huandu/go-tls","version":"v1.0.1","status":"pending"}
 {"module":"www.github.com/golang/go.git","version":"v0.0.0-20260922222353-a532f497dcd5","status":"pending"}

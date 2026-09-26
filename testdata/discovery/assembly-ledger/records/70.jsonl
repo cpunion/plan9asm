@@ -2,7 +2,7 @@
 {"module":"github.com/CWBudde/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/CosmWasm/tinygo","version":"v0.21.0","status":"pending"}
 {"module":"github.com/Parquet-Go/Parquet-Go","version":"v0.32.0","status":"pending"}
-{"module":"github.com/Quasilyte/concat","version":"v0.0.0-20180717223007-181498035785","status":"not_applicable"}
+{"module":"github.com/Quasilyte/concat","version":"v0.0.0-20180717223007-181498035785","status":"pending"}
 {"module":"github.com/asubiotto/go","version":"v0.0.1-test","status":"pending"}
 {"module":"github.com/celo-org/CELO-BLOCKCHAIN","version":"v1.8.9","status":"pending"}
 {"module":"github.com/dariomarchetti/go-ethereum","version":"v1.16.7","status":"pending"}
@@ -12,7 +12,7 @@
 {"module":"github.com/next-bin/go-sqlite3/pkg/libc","version":"v1.0.7","status":"pending"}
 {"module":"github.com/oballm/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
 {"module":"github.com/openethereum/go-ethereum","version":"v1.17.2","status":"pending"}
-{"module":"github.com/rhnvrm/tools","version":"v0.0.0-20191022213345-0bbdf54effa2","status":"pending"}
+{"module":"github.com/rhnvrm/tools","version":"v0.0.0-20191022213345-0bbdf54effa2","status":"not_applicable"}
 {"module":"github.com/shiaho777/jseek","version":"v0.2.0","status":"pending"}
 {"module":"github.com/sila-chain/gohashtree","version":"v0.0.4-beta-sila.1","status":"pending"}
 {"module":"github.com/snissn/go-ethereum-nitro","version":"v0.0.0-20260605162256-fc526354a6f5","status":"pending"}
