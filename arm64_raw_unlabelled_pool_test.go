@@ -327,6 +327,17 @@ func TestARM64RawPoolLoadKillsAndPostIndexEffects(t *testing.T) {
 		{"add z31.s, z31.s, #12\nmov x9, xzr", true},
 		{"dup z31.d, x9\nmov x9, xzr", false},
 		{"ld1b { z31.b }, p0/z, [x9]\nmov x9, xzr", false}, // Not a proven scalar load effect.
+		{"add x9, x9, #0\nmov x9, xzr", true},
+		{"sub x9, x9, #0, lsl #12\nmov x9, xzr", true},
+		{"add w9, w9, #0\nmov x9, xzr", false},  // Truncates the address.
+		{"adds x9, x9, #0\nmov x9, xzr", false}, // Exposes address bits through flags.
+		{"add x9, x9, #40\nmov x9, xzr", false}, // Requires an offset/range proof.
+		{"sub x9, x9, #40\nmov x9, xzr", false},
+		{"index z31.s, #1, #1\nmov x9, xzr", true},
+		{"index z31.d, x9, #1\nmov x9, xzr", false},
+		{"index z31.d, #1, x9\nmov x9, xzr", false},
+		{"cmpne p3.s, p0/z, z17.s, #0\nmov x9, xzr", true},
+		{"cmpeq p15.d, p7/z, z31.d, z30.d\nmov x9, xzr", true},
 	} {
 		t.Run(test.instruction, func(t *testing.T) {
 			lines := []string{"adr x9, #64", "ldr w1, [x9]"}
@@ -410,5 +421,92 @@ int main(void) {
   pool_float(result + 4, restore);
   for (unsigned i = 1; i < 5; i++) if (result[i] != 0x17b4a14d) return 1;
   return result[0] != 1 || result[5] != 2;
+}
+`
+
+func arm64RawPoolResultIR(t *testing.T, triple string) string {
+	t.Helper()
+	file, err := Parse(ArchARM64, `
+TEXT pool_result(SB),$0-16
+MOVD unused+0(FP), R1
+	WORD $0x10000089 // ADR X9, #16
+	WORD $0xf9400120 // LDR X0, [X9]
+	WORD $0x91000129 // ADD X9, X9, #0: still the same non-result pointer.
+WORD $0xd65f03c0 // RET: X0 is observable, X9 is not.
+WORD $0x17b4a14d
+WORD $0x11223344
+RET
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := FuncSig{Name: "pool_result", Args: []LLVMType{Ptr}, Ret: I64, Frame: FrameLayout{
+		Params:  []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
+		Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
+	}}
+	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: map[string]FuncSig{"pool_result": sig}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ir
+}
+
+func TestARM64RawPoolExplicitResultContract(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{"aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir := arm64RawPoolResultIR(t, triple)
+			compileLLVMToObject(t, llc, triple, "pool_result.ll", "pool_result.o", ir)
+		})
+	}
+}
+
+func TestARM64RawPoolResultRegistersRemainObservable(t *testing.T) {
+	const scratch = (1 << 18) - 1
+	for _, test := range []struct {
+		name    string
+		ret     LLVMType
+		results []FrameSlot
+		want    uint32
+	}{
+		{"integer", I64, []FrameSlot{{Type: I64, Index: 0}}, scratch &^ 1},
+		{"pointer", Ptr, []FrameSlot{{Type: Ptr, Index: 0}}, scratch &^ 1},
+		{"float-frame-fallback", "double", []FrameSlot{{Type: "double", Index: 3}}, scratch &^ (1 << 3)},
+		{"aggregate", "{ i64, double, ptr }", []FrameSlot{{Type: I64, Index: 0}, {Type: "double", Index: 1}, {Type: Ptr, Index: 2}}, scratch &^ 7},
+		{"high-frame-fallback", I64, []FrameSlot{{Type: I64, Index: 9}}, scratch &^ (1 | 1<<9)},
+		{"missing-result-contract", I64, nil, 0},
+		{"unknown-result-type", "i128", []FrameSlot{{Type: "i128", Index: 0}}, 0},
+		{"inconsistent-void", Void, []FrameSlot{{Type: Ptr, Index: 0}}, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sig := FuncSig{Ret: test.ret, Args: []LLVMType{Ptr}, Frame: FrameLayout{
+				Params: []FrameSlot{{Type: Ptr, Index: 0, Field: -1}}, Results: test.results,
+			}}
+			mask := arm64RawPoolReturnClobbers(Func{ArgSize: 16}, sig)
+			if mask != test.want {
+				t.Fatalf("terminal-clobber mask=%#x, want %#x", mask, test.want)
+			}
+			for _, reg := range []int{0, 1, 2, 3, 9, 17, 19} {
+				lines := []string{fmt.Sprintf("adr x%d, #12", reg), fmt.Sprintf("ldr d0, [x%d]", reg), "ret"}
+				var instructions []Instr
+				for _, word := range assembleARM64LLVMWords(t, lines, "") {
+					instructions = append(instructions, Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}})
+				}
+				if got := arm64RawAddressOnlyLoadedWithExit(instructions, 0, len(instructions), mask); got != (test.want&(1<<reg) != 0) {
+					t.Fatalf("incorrect pool proof for R%d result contract", reg)
+				}
+			}
+		})
+	}
+}
+
+const arm64RawPoolResultMain = `
+#include <stdint.h>
+extern uint64_t pool_result(void *);
+int main(void) {
+  return pool_result(0) != UINT64_C(0x1122334417b4a14d);
 }
 `

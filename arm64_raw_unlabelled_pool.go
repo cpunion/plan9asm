@@ -126,15 +126,45 @@ func arm64RawAddressOnlyLoaded(instructions []Instr, at, end int) bool {
 }
 
 // Only the translating caller has a FuncSig. Standalone layout probes remain
-// conservative. A parameter-frame function with an explicit void result has
-// no register results; restrict terminal kills to R0..R17, avoiding platform,
-// callee-preserved, frame, Go-context and link registers. Custom ArgRegs and
-// missing frame contracts deliberately do not enable this rule.
+// conservative. Explicit parameter/result contracts identify registers that
+// cannot be results. Restrict terminal kills to R0..R17, avoiding platform,
+// callee-preserved, frame, Go-context and link registers. Exclude both normal
+// ABI results and every frame-slot fallback register used by lowerRET.
 func arm64RawPoolReturnClobbers(fn Func, sig FuncSig) uint32 {
-	if sig.Ret != Void || len(sig.Frame.Results) != 0 || len(sig.ArgRegs) != 0 || len(sig.Frame.Params) == 0 || fn.ArgSize <= 0 {
+	if len(sig.ArgRegs) != 0 || len(sig.Frame.Params) == 0 || fn.ArgSize <= 0 {
 		return 0
 	}
-	return (1 << 18) - 1
+	const scratch = (1 << 18) - 1
+	if sig.Ret == Void {
+		if len(sig.Frame.Results) != 0 {
+			return 0
+		}
+		return scratch
+	}
+	if len(sig.Frame.Results) == 0 {
+		return 0
+	}
+	fields, aggregate := parseLiteralStructFields(sig.Ret)
+	if !aggregate {
+		fields = []LLVMType{sig.Ret}
+	}
+	mask := uint32(scratch)
+	cursor := arm64ABIRegisterCursor{}
+	for _, typ := range fields {
+		if _, err := cursor.next(typ); err != nil {
+			return 0
+		}
+		if isARM64ABIIntegerType(typ) {
+			mask &^= 1 << (cursor.integer - 1)
+		}
+	}
+	for _, slot := range sig.Frame.Results {
+		if slot.Index < 0 || slot.Index > 31 {
+			return 0
+		}
+		mask &^= 1 << slot.Index
+	}
+	return mask
 }
 
 func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, returnClobbers uint32) bool {
@@ -158,6 +188,13 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 			return false
 		}
 		word := uint32(instructions[i].Args[0].Imm)
+		// ADD/SUB Xn, Xn, #0 preserves the address exactly. Wn truncates it,
+		// flag-setting forms expose its bits, and nonzero offsets need a
+		// separate range proof; none of those match this identity encoding.
+		if word&0xbfbffc00 == 0x91000000 && word&31 == word>>5&31 && word&31 == uint32(register-arm64asm.X0) {
+			queue = append(queue, i+1)
+			continue
+		}
 		// x/arch does not decode SVE. These validated typed grammars affect
 		// only vector/predicate registers (and possibly flags), never GP or
 		// memory state. Unknown SVE instructions still fail below.
@@ -293,6 +330,19 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	}
 	if _, ok := decodeARM64RawSVEAdd(word); ok {
 		return true
+	}
+	for _, decode := range []func(uint32) (Instr, bool){decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare} {
+		if ins, ok := decode(word); ok {
+			for _, operand := range ins.Args {
+				if operand.Kind == OpImm {
+					continue
+				}
+				if operand.Kind != OpReg || !(strings.HasPrefix(string(operand.Reg), "Z") || strings.HasPrefix(string(operand.Reg), "P")) {
+					return false
+				}
+			}
+			return true
+		}
 	}
 	return false
 }
