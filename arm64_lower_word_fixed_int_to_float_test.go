@@ -214,6 +214,12 @@ func TestARM64RawFixedIntToFloatAllModesCompile(t *testing.T) {
 		word uint32
 	}{
 		{"signed GPR S/W", 0x1e02fc20},
+		{"unsigned GPR S/W", 0x1e03fc20},
+		{"signed GPR S/X", 0x9e02fc20},
+		{"unsigned GPR S/X", 0x9e03a1c0},
+		{"signed GPR D/W", 0x1e42fc20},
+		{"unsigned GPR D/W", 0x1e43fc20},
+		{"signed GPR D/X", 0x9e42fc20},
 		{"unsigned GPR D/X", 0x9e43fc20},
 		{"signed scalar S", 0x5f28e420},
 		{"unsigned scalar D", 0x7f40e420},

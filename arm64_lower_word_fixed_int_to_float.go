@@ -103,7 +103,11 @@ func (c *arm64Ctx) lowerRawFixedIntToFloat(form arm64RawFixedIntToFloat) error {
 		conversion = "uitofp"
 	}
 	floatType := "float"
-	if form.integerBits == 64 || form.scalar && form.vectorBits == 64 {
+	floatBits := form.integerBits
+	if form.scalar {
+		floatBits = form.vectorBits
+	}
+	if floatBits == 64 {
 		floatType = "double"
 	}
 	scale := arm64FixedIntToFloatScale(form.fractionalBits)
