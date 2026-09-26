@@ -681,8 +681,12 @@ func (c *arm64Ctx) scanUsedRegs() {
 					}
 				}
 				if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
-					if destination, _, ok := arm64SVEFloatElementReg(decoded.Args[1]); ok {
+					if destination, _, ok := arm64SVEFloatElementReg(decoded.Args[len(decoded.Args)-1]); ok {
 						markReg(Reg(fmt.Sprintf("Z%d", destination)))
+					}
+					if decoded.Op == "ZFCPY" {
+						predicate, _ := arm64ParseSVEPredicateMode(decoded.Args[1], "M", 15)
+						markReg(Reg(fmt.Sprintf("P%d", predicate)))
 					}
 				}
 				if decoded, ok := decodeARM64RawSVEDupM(word); ok {
