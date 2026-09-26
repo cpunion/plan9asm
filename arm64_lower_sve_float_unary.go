@@ -12,26 +12,70 @@ type arm64SVEFloatUnarySpec struct {
 	sdOnly      bool
 	integerBits int
 	fptoint     bool
+	rawBase     uint32
+	rawZeroBase uint32
 }
 
 var arm64SVEFloatUnarySpecs = map[Op]arm64SVEFloatUnarySpec{
-	"ZFABS":     {intrinsic: "fabs"},
-	"ZFNEG":     {intrinsic: "fneg"},
-	"ZFRECPE":   {intrinsic: "frecpe.x", unpred: true},
-	"ZFRECPX":   {intrinsic: "frecpx"},
-	"ZFRINT32X": {intrinsic: "rint", sdOnly: true, integerBits: 32, fptoint: true},
-	"ZFRINT32Z": {intrinsic: "trunc", sdOnly: true, integerBits: 32, fptoint: true},
-	"ZFRINT64X": {intrinsic: "rint", sdOnly: true, integerBits: 64, fptoint: true},
-	"ZFRINT64Z": {intrinsic: "trunc", sdOnly: true, integerBits: 64, fptoint: true},
-	"ZFRINTA":   {intrinsic: "frinta"},
-	"ZFRINTI":   {intrinsic: "frinti"},
-	"ZFRINTM":   {intrinsic: "frintm"},
-	"ZFRINTN":   {intrinsic: "frintn"},
-	"ZFRINTP":   {intrinsic: "frintp"},
-	"ZFRINTX":   {intrinsic: "frintx"},
-	"ZFRINTZ":   {intrinsic: "frintz"},
-	"ZFRSQRTE":  {intrinsic: "frsqrte.x", unpred: true},
-	"ZFSQRT":    {intrinsic: "fsqrt"},
+	"ZFABS":     {intrinsic: "fabs", rawBase: 0x041ca000, rawZeroBase: 0x040ca000},
+	"ZFNEG":     {intrinsic: "fneg", rawBase: 0x041da000, rawZeroBase: 0x040da000},
+	"ZFRECPE":   {intrinsic: "frecpe.x", unpred: true, rawBase: 0x650e3000},
+	"ZFRECPX":   {intrinsic: "frecpx", rawBase: 0x650ca000, rawZeroBase: 0x641b8000},
+	"ZFRINT32X": {intrinsic: "rint", sdOnly: true, integerBits: 32, fptoint: true, rawBase: 0x6511a000, rawZeroBase: 0x641ca000},
+	"ZFRINT32Z": {intrinsic: "trunc", sdOnly: true, integerBits: 32, fptoint: true, rawBase: 0x6510a000, rawZeroBase: 0x641c8000},
+	"ZFRINT64X": {intrinsic: "rint", sdOnly: true, integerBits: 64, fptoint: true, rawBase: 0x6515a000, rawZeroBase: 0x641da000},
+	"ZFRINT64Z": {intrinsic: "trunc", sdOnly: true, integerBits: 64, fptoint: true, rawBase: 0x6514a000, rawZeroBase: 0x641d8000},
+	"ZFRINTA":   {intrinsic: "frinta", rawBase: 0x6504a000, rawZeroBase: 0x64198000},
+	"ZFRINTI":   {intrinsic: "frinti", rawBase: 0x6507a000, rawZeroBase: 0x6419e000},
+	"ZFRINTM":   {intrinsic: "frintm", rawBase: 0x6502a000, rawZeroBase: 0x6418c000},
+	"ZFRINTN":   {intrinsic: "frintn", rawBase: 0x6500a000, rawZeroBase: 0x64188000},
+	"ZFRINTP":   {intrinsic: "frintp", rawBase: 0x6501a000, rawZeroBase: 0x6418a000},
+	"ZFRINTX":   {intrinsic: "frintx", rawBase: 0x6506a000, rawZeroBase: 0x6419c000},
+	"ZFRINTZ":   {intrinsic: "frintz", rawBase: 0x6503a000, rawZeroBase: 0x6418e000},
+	"ZFRSQRTE":  {intrinsic: "frsqrte.x", unpred: true, rawBase: 0x650f3000},
+	"ZFSQRT":    {intrinsic: "fsqrt", rawBase: 0x650da000, rawZeroBase: 0x641ba000},
+}
+
+// The opcode bases and operand fields are the complete Go 1.27 unary family.
+// Named and raw forms share one spec, including predication and sized rounding.
+func decodeARM64RawSVEFloatUnary(word uint32) (Instr, bool) {
+	size := word >> 22 & 3
+	for op, spec := range arm64SVEFloatUnarySpecs {
+		if !spec.sdOnly && size == 0 {
+			continue
+		}
+		mask, zeroMask := uint32(0x00c01fff), uint32(0x00c01fff)
+		if spec.unpred {
+			mask = 0x00c003ff
+		} else if spec.sdOnly {
+			// Go's SzSD1718 and SzSD1415 put the S/D selector in
+			// different positions for merging and zeroing encodings.
+			mask, zeroMask = 0x00021fff, 0x00005fff
+		}
+		zero := !spec.unpred && word&^zeroMask == spec.rawZeroBase
+		if !zero && word&^mask != spec.rawBase {
+			continue
+		}
+		width := "BHSD"[size]
+		if spec.sdOnly {
+			shift := uint(17)
+			if zero {
+				shift = 14
+			}
+			width = "SD"[word>>shift&1]
+		}
+		args := []Operand{{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word>>5&31, width))}}
+		if !spec.unpred {
+			mode := "M"
+			if zero {
+				mode = "Z"
+			}
+			args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.%s", word>>10&7, mode))})
+		}
+		args = append(args, Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("Z%d.%c", word&31, width))})
+		return Instr{Op: op, Args: args, Raw: fmt.Sprintf("WORD $%#08x", word)}, true
+	}
+	return Instr{}, false
 }
 
 type arm64SVEFloatUnaryForm struct {
