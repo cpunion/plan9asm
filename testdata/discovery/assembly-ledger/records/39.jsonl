@@ -11,14 +11,14 @@
 {"module":"github.com/drovosek229/Xray-core","version":"v1.260401.3","status":"pending"}
 {"module":"github.com/ernoaapa/typescript-go","version":"v0.0.0-20260820064610-89d5d5b2849a","status":"pending"}
 {"module":"github.com/forkcloser/blake3","version":"v1.0.0","status":"pending"}
-{"module":"github.com/huoyijie/go","version":"v0.0.0-20180913213456-9f59918cae5e","status":"pending"}
+{"module":"github.com/huoyijie/go","version":"v0.0.0-20180913213456-9f59918cae5e","status":"passed"}
 {"module":"github.com/liamsi/gf16","version":"v0.0.0-20250821222757-1814eeb25673","status":"pending"}
 {"module":"github.com/lordmartron94/memcore","version":"v0.0.0-20260603110113-abb3e2c91804","status":"pending"}
 {"module":"github.com/obstor/md5-simd","version":"v1.1.2","status":"pending"}
 {"module":"github.com/spacemeshos/sha256-simd","version":"v0.1.0","status":"pending"}
 {"module":"github.com/timelinelabs/vulcand","version":"v0.8.0-beta.3","status":"pending"}
-{"module":"github.com/xmdhs/go-kms","version":"v0.0.0-20260819164515-f74de34c83cb","status":"pending"}
-{"module":"github.com/yaklib/log","version":"v0.0.0-20260801160658-261841c3c6ad","status":"pending"}
+{"module":"github.com/xmdhs/go-kms","version":"v0.0.0-20260819164515-f74de34c83cb","status":"passed"}
+{"module":"github.com/yaklib/log","version":"v0.0.0-20260801160658-261841c3c6ad","status":"passed"}
 {"module":"github.com/zhangjinpeng87/tidb","version":"v1.0.8","status":"pending"}
 {"module":"go.googlesource.com/crypto.git","version":"v0.57.0","status":"pending"}
 {"module":"go.googlesource.com/net.git","version":"v0.59.0","status":"pending"}

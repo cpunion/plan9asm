@@ -16,7 +16,7 @@
 {"module":"github.com/madbase/madnet","version":"v0.5.0","status":"pending"}
 {"module":"github.com/netBSD/pkgsrc","version":"v0.0.0-20260922184002-c9a2f5d18a51","status":"pending"}
 {"module":"github.com/ninjaninja140/typescript/tsc","version":"v0.0.0-20260901003445-363e4e637149","status":"pending"}
-{"module":"github.com/p-goral/tidb","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/p-goral/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/psiphon-Labs/psiphon-tunnel-core","version":"v1.0.10","status":"pending"}
 {"module":"github.com/suningrass/gi","version":"v0.9.6","status":"pending"}
 {"module":"github.com/tgruben/roaring","version":"v1.9.4","status":"pending"}
@@ -24,4 +24,4 @@
 {"module":"github.com/voidintheshell/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
 {"module":"github.com/vulhub/cve-2022-0778","version":"v0.0.0-20220407125841-7b5f33a6b388","status":"pending"}
 {"module":"github.com/xuyifangreeneyes/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.laiyagushi.com/templexxx/tsc","version":"v1.3.0","status":"passed"}
+{"module":"github.laiyagushi.com/templexxx/tsc","version":"v1.3.0","status":"pending"}

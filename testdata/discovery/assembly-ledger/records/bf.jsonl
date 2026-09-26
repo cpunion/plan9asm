@@ -7,7 +7,7 @@
 {"module":"github.com/WJQSERVER/go2zig","version":"v0.0.3","status":"pending"}
 {"module":"github.com/adrianthees/capslock","version":"v0.0.0-20250516132443-b8141a18f32c","status":"pending"}
 {"module":"github.com/agiledragon/gomonkey/v2","version":"v2.14.3","status":"pending"}
-{"module":"github.com/ajaxorg/ace-builds","version":"v1.44.0","status":"pending"}
+{"module":"github.com/ajaxorg/ace-builds","version":"v1.44.0","status":"not_applicable"}
 {"module":"github.com/boyaowang430/plz","version":"v0.0.0-20260626095300-25c9e7733413","status":"pending"}
 {"module":"github.com/deroproject/derosuite","version":"v2.1.5+incompatible","status":"pending"}
 {"module":"github.com/gofiber/utils/v2","version":"v2.5.3","status":"pending"}
@@ -20,7 +20,7 @@
 {"module":"github.com/soulteary/minio","version":"v0.0.0-20260603191954-2d51447ec726","status":"pending"}
 {"module":"github.com/tokamak-network/go-ethereum","version":"v1.8.23","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p5","version":"v0.2.0","status":"pending"}
-{"module":"github.com/unxed/go2xp","version":"v0.0.0-20260919201014-0e9ac5be70e1","status":"passed"}
+{"module":"github.com/unxed/go2xp","version":"v0.0.0-20260919201014-0e9ac5be70e1","status":"pending"}
 {"module":"github.com/usbarmory/go-boot","version":"v1.9.1","status":"pending"}
 {"module":"github.com/xakep666/purego","version":"v0.0.0-20260812182835-f9d41fc60f1f","status":"pending"}
 {"module":"github.com/zeebo/xxh3","version":"v1.1.0","status":"pending"}

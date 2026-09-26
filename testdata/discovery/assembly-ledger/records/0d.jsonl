@@ -1,7 +1,7 @@
 {"module":"fuchsia.googlesource.com/third_party/golang.org/x/sys.git","version":"v0.48.0","status":"pending"}
 {"module":"github.com/DTRules/DTRules","version":"v1.25.0","status":"pending"}
 {"module":"github.com/K900/mobile","version":"v0.0.0-20260514233045-7de0a8fa7f4d","status":"pending"}
-{"module":"github.com/PinGCAP/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/PinGCAP/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/base/op-geth","version":"v1.101701.0-rc.3-eip8130.6","status":"pending"}
 {"module":"github.com/conductant/gohm","version":"v0.0.0-20160904190135-21d6f6e44c4e","status":"pending"}
 {"module":"github.com/consensys/Gnark-Crypto","version":"v0.21.0","status":"pending"}

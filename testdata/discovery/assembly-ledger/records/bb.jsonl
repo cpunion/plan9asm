@@ -6,7 +6,7 @@
 {"module":"github.com/ROaringBItmap/roaring","version":"v1.9.4","status":"pending"}
 {"module":"github.com/SpadeA-Tang/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/XMPlusDev/Xray-core","version":"v1.260113.0","status":"pending"}
-{"module":"github.com/bytedance/Gopkg","version":"v0.1.4","status":"passed"}
+{"module":"github.com/bytedance/Gopkg","version":"v0.1.4","status":"pending"}
 {"module":"github.com/masacento/aikit","version":"v0.0.0-20260909033224-1e3237431da8","status":"pending"}
 {"module":"github.com/oh-my-tidb/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/orijtech/m3","version":"v1.2.0","status":"pending"}
@@ -14,6 +14,6 @@
 {"module":"github.com/sonnt85/gosutils","version":"v0.0.0-20260722035954-bfb1ae22d7d4","status":"pending"}
 {"module":"github.com/stanford-rc/minio-pkg/v3","version":"v3.6.1","status":"pending"}
 {"module":"github.com/urchin-tidebot/go-fuse/v2","version":"v2.11.0","status":"pending"}
-{"module":"github.com/vlpraneeth/gorgonia-gorgonia","version":"v0.9.18","status":"passed"}
+{"module":"github.com/vlpraneeth/gorgonia-gorgonia","version":"v0.9.18","status":"pending"}
 {"module":"github.com/zerfoo/zerfoo","version":"v1.60.0","status":"pending"}
 {"module":"gitlab.com/cznic/libc.git","version":"v1.77.0","status":"pending"}

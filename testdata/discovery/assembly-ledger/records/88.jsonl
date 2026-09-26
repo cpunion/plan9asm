@@ -14,7 +14,7 @@
 {"module":"github.com/intelafy-llc/simd","version":"v0.0.0-20260904203813-82654211f52b","status":"pending"}
 {"module":"github.com/itering/scale.go","version":"v1.11.2","status":"pending"}
 {"module":"github.com/karingx/wireguard-go","version":"v0.0.1-beta.5","status":"pending"}
-{"module":"github.com/lichunzhu/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/lichunzhu/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/oasislabs/deoxysii","version":"v0.0.0-20220228165953-2091330c22b7","status":"pending"}
 {"module":"github.com/pk910/hashtree-bindings","version":"v0.2.6","status":"pending"}
 {"module":"github.com/richardwilkes/unison","version":"v0.106.0","status":"pending"}

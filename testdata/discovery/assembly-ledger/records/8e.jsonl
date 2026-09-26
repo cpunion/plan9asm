@@ -11,4 +11,4 @@
 {"module":"github.com/schollz/gatt","version":"v0.0.0-20180724021353-a05b37823302","status":"pending"}
 {"module":"github.com/stingkeer/v2ray-core/v5","version":"v5.43.5","status":"pending"}
 {"module":"github.com/vt7org/websocket","version":"v0.0.0-20260109125802-9f473adfa595","status":"pending"}
-{"module":"github.com/ydnar/wazero","version":"v1.8.1","status":"pending"}
+{"module":"github.com/ydnar/wazero","version":"v1.8.1","status":"passed"}

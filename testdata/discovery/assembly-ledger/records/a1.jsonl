@@ -16,7 +16,7 @@
 {"module":"github.com/peterebden/tools","version":"v0.0.0-20190805132753-b2a0db951d2a","status":"pending"}
 {"module":"github.com/sqlex/mysql","version":"v1.0.9","status":"pending"}
 {"module":"github.com/stackdump/gnark-crypto","version":"v0.20.1","status":"pending"}
-{"module":"github.com/tecu23/argo","version":"v1.0.0","status":"pending"}
+{"module":"github.com/tecu23/argo","version":"v1.0.0","status":"not_applicable"}
 {"module":"github.com/tenortim/delve","version":"v1.0.0","status":"pending"}
 {"module":"github.com/wondertan/reedsolomon","version":"v0.0.0-20260306184119-a7ce27480afe","status":"pending"}
 {"module":"github.com/zahgon/websocket","version":"v1.8.14","status":"pending"}

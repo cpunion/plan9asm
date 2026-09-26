@@ -2,7 +2,7 @@
 {"module":"github.com/CloudWego/base64x","version":"v0.1.7","status":"pending"}
 {"module":"github.com/celo-org/celo-blockchain","version":"v1.8.4","status":"pending"}
 {"module":"github.com/cubefs/cubefs/depends/jacobsa/fuse","version":"v0.0.0-20260819030822-ca5609b0af91","status":"pending"}
-{"module":"github.com/cwbudde/algo-glockenspiel","version":"v0.1.0","status":"passed"}
+{"module":"github.com/cwbudde/algo-glockenspiel","version":"v0.1.0","status":"pending"}
 {"module":"github.com/ethpar/go-ethereum.par","version":"v0.0.0-20260428183820-15915c6d3da5","status":"pending"}
 {"module":"github.com/frankreh/tools","version":"v0.0.0-20180313150341-a3945ff35c92","status":"pending"}
 {"module":"github.com/gate-computer/wag","version":"v0.36.0","status":"pending"}

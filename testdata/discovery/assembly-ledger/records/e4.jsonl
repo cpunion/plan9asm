@@ -10,7 +10,7 @@
 {"module":"github.com/holdenk/predict-pr-comments","version":"v0.0.0-20190202233457-994a6504442e","status":"pending"}
 {"module":"github.com/mlange-42/gonum","version":"v0.0.0-20250422220541-720fcb9699a9","status":"pending"}
 {"module":"github.com/njj0121/DST-Nucleus","version":"v1.3.0","status":"pending"}
-{"module":"github.com/ooni/go","version":"v0.0.0-20220812032259-8cb350d69a1b","status":"passed"}
+{"module":"github.com/ooni/go","version":"v0.0.0-20220812032259-8cb350d69a1b","status":"pending"}
 {"module":"github.com/proorc/minio","version":"v0.0.0-20240520071914-9c76fd7b2e25","status":"pending"}
 {"module":"github.com/quarkchain/op-geth","version":"v1.0.2","status":"pending"}
 {"module":"github.com/rx-bob/toon-go","version":"v0.0.0-20260904172052-3a9836e9227a","status":"pending"}

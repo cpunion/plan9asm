@@ -3,7 +3,7 @@
 {"module":"github.com/PeterRK/slices","version":"v1.2.0","status":"pending"}
 {"module":"github.com/SmartMeshFoundation/Spectrum","version":"v0.0.0-20260905103753-54d7a6184dd7","status":"pending"}
 {"module":"github.com/abusizhishen/roaring","version":"v0.4.18","status":"pending"}
-{"module":"github.com/aperturerobotics/go-websocket","version":"v1.8.14","status":"passed"}
+{"module":"github.com/aperturerobotics/go-websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/artyomkun/gorgonia.org/vecf32","version":"v1.0.0","status":"pending"}
 {"module":"github.com/chelpis/circl","version":"v0.0.0-20240217013037-fd7a97f474ba","status":"pending"}
 {"module":"github.com/condatainer/x-crypto","version":"v0.57.0-hostbased.1","status":"pending"}

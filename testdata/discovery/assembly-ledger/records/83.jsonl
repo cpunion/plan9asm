@@ -9,7 +9,7 @@
 {"module":"github.com/erikkassubek/deadlockdetectorgo","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
 {"module":"github.com/ethoxy/multi-geth","version":"v1.9.21","status":"pending"}
 {"module":"github.com/farcloser/primordium","version":"v0.9.1","status":"pending"}
-{"module":"github.com/honny1/buildah","version":"v0.0.0-20260917094059-6ad05660bfe1","status":"not_applicable"}
+{"module":"github.com/honny1/buildah","version":"v0.0.0-20260917094059-6ad05660bfe1","status":"pending"}
 {"module":"github.com/juagargi/scion","version":"v0.14.1-humm.0","status":"pending"}
 {"module":"github.com/mhr3/gocc","version":"v0.16.5","status":"pending"}
 {"module":"github.com/mitchellh/websocket-fork","version":"v0.0.0-20260615030002-70393646f4d7","status":"pending"}

@@ -9,6 +9,6 @@
 {"module":"github.com/readykit/gd","version":"v0.0.0-20260922120337-7d185eb38e69","status":"pending"}
 {"module":"github.com/samhowes/rules_go","version":"v0.27.0","status":"pending"}
 {"module":"github.com/theapemachine/sonic","version":"v0.0.1","status":"pending"}
-{"module":"github.com/tonistiigi/gvisor","version":"v0.0.0-20190612225946-7add64fa67a5","status":"passed"}
+{"module":"github.com/tonistiigi/gvisor","version":"v0.0.0-20190612225946-7add64fa67a5","status":"pending"}
 {"module":"github.com/wyx2685/xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"go-staging.aikido.io/bb0ac2b032c2202bda/golang.org/x/net","version":"v0.52.0-aikido.1","status":"pending"}
