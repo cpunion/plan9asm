@@ -355,11 +355,15 @@ func (c *arm64Ctx) lowerARM64SVEOrdinaryQGatherLoad(op Op, memory MemRef, predic
 	if !baseOK || baseBits != 64 || !isARM64GeneralOrZeroReg(memory.Base) || memory.Base == ZR || memory.Base == SP || memory.Base == Reg("RSP") {
 		return true, false, fmt.Errorf("arm64 %s requires Zn.D bases and R0..R30 offset: %q", op, ins.Raw)
 	}
-	baseValue, baseType, err := c.loadZRegElements(bases, 64)
+	offset, err := c.loadReg(memory.Base)
 	if err != nil {
 		return true, false, err
 	}
-	offset, err := c.loadReg(memory.Base)
+	return c.emitARM64SVEOrdinaryQGatherLoad(bases, predicate, destination, offset)
+}
+
+func (c *arm64Ctx) emitARM64SVEOrdinaryQGatherLoad(bases, predicate, destination int, offset string) (bool, bool, error) {
+	baseValue, baseType, err := c.loadZRegElements(bases, 64)
 	if err != nil {
 		return true, false, err
 	}

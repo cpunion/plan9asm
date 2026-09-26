@@ -154,6 +154,12 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEReplicateMemory(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEUnsignedLoad(word); ok {
+		return c.lowerRawSVEUnsignedLoad(decoded)
+	}
+	if _, reservedLoad := arm64RawSVEUnsignedLoadRows[word&0xffe0e000]; reservedLoad {
+		return fmt.Errorf("reserved ARM64 SVE load encoding %#08x: %q", word, ins.Raw)
+	}
 	if form, ok := decodeARM64RawSVELD1B(word); ok {
 		return c.lowerRawSVELD1B(form)
 	}

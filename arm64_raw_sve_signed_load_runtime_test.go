@@ -7,14 +7,22 @@ import (
 )
 
 func testARM64RawSVESignedLoadRuntime(t *testing.T, llc string) {
+	testARM64RawSVELoadRuntime(t, llc, arm64RawSVESignedLoadCases(), true)
+}
+
+func testARM64RawSVEUnsignedLoadRuntime(t *testing.T, llc string) {
+	testARM64RawSVELoadRuntime(t, llc, arm64RawSVEUnsignedLoadCases(), false)
+}
+
+func testARM64RawSVELoadRuntime(t *testing.T, llc string, forms []arm64RawSVELoadCase, signed bool) {
 	type runtimeCase struct {
-		form                arm64RawSVESignedLoadCase
+		form                arm64RawSVELoadCase
 		destination, offset int
 		native              []string
 	}
 	var cases []runtimeCase
 	var allNative []string
-	for _, form := range arm64RawSVESignedLoadCases() {
+	for _, form := range forms {
 		offsets := []int{0}
 		if form.kind == "immediate" {
 			offsets = []int{-8, 0, 7}
@@ -32,7 +40,7 @@ func testARM64RawSVESignedLoadRuntime(t *testing.T, llc string) {
 				native := []string{
 					"ptrue p0.b", "ld1b { z30.b }, p0/z, [x1]", "ld1b { z31.b }, p0/z, [x1]",
 					"ld1b { z29.b }, p0/z, [x2]", "cmpne p7.b, p0/z, z29.b, #0", "ldr x4, [x1]",
-					form.assembly(destination, 7, base, index, offset),
+					form.loadAssembly(signed, destination, 7, base, index, offset),
 					fmt.Sprintf("st1b { z%d.b }, p0, [x3]", destination),
 				}
 				cases = append(cases, runtimeCase{form, destination, offset, native})
@@ -44,10 +52,10 @@ func testARM64RawSVESignedLoadRuntime(t *testing.T, llc string) {
 	// every operand combination. C data/oracle loops are shared below as well.
 	words := assembleARM64LLVMWords(t, allNative, "+sve")
 	var source, declarations, checks strings.Builder
-	declarations.WriteString(arm64SVESignedLoadRuntimeReference)
+	declarations.WriteString(arm64SVELoadRuntimeReference)
 	sigs := make(map[string]FuncSig)
 	for _, test := range cases {
-		name := fmt.Sprintf("signed_load_%d", len(sigs))
+		name := fmt.Sprintf("ordinary_load_%d", len(sigs))
 		fmt.Fprintf(&source, "TEXT %s(SB),$0-32\nMOVD base+0(FP),R0\nMOVD indices+8(FP),R1\nMOVD mask+16(FP),R2\nMOVD out+24(FP),R3\n", name)
 		for _, word := range words[:len(test.native)] {
 			fmt.Fprintf(&source, "WORD $%#08x\n", word)
@@ -71,8 +79,12 @@ static void %[1]s_native(const void *base, const void *indices, const void *mask
 		if test.form.scaled {
 			scale <<= test.form.memorySize
 		}
-		fmt.Fprintf(&checks, "  if (check_signed_load(vl, %d, %d, %d, %d, %d, %d, %s, %s_native, %q)) return 1;\n",
-			1<<test.form.memorySize, 1<<test.form.elementSize, kind, extension, scale, test.offset, name, name, name)
+		signedInput := 0
+		if signed {
+			signedInput = 1
+		}
+		fmt.Fprintf(&checks, "  if (check_ordinary_load(vl, %d, %d, %d, %d, %d, %d, %d, %s, %s_native, %q)) return 1;\n",
+			1<<test.form.memorySize, 1<<test.form.elementSize, kind, extension, scale, test.offset, signedInput, name, name, name)
 	}
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
@@ -84,18 +96,18 @@ static void %[1]s_native(const void *base, const void *indices, const void *mask
 		t.Fatal(err)
 	}
 	main := arm64SVEVectorLengthMain(declarations.String(), checks.String())
-	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "raw_signed_load", triple, ir, main,
+	compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "raw_ordinary_load", triple, ir, main,
 		[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
 }
 
-const arm64SVESignedLoadRuntimeReference = `
+const arm64SVELoadRuntimeReference = `
 #include <sys/mman.h>
-typedef void (*signed_load_fn)(const void *, const void *, const void *, void *);
+typedef void (*ordinary_load_fn)(const void *, const void *, const void *, void *);
 
 __attribute__((noinline, noclone))
-static int check_signed_load(unsigned vl, unsigned access, unsigned element, unsigned kind,
-    unsigned extension, unsigned scale, int offset, signed_load_fn translated,
-    signed_load_fn native_instruction, const char *name) {
+static int check_ordinary_load(unsigned vl, unsigned access, unsigned element, unsigned kind,
+    unsigned extension, unsigned scale, int offset, int signed_input, ordinary_load_fn translated,
+    ordinary_load_fn native_instruction, const char *name) {
   const size_t allocation = 32768;
   unsigned char *memory = mmap((void *)0x20000000, allocation, PROT_NONE,
     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -140,7 +152,7 @@ static int check_signed_load(unsigned vl, unsigned access, unsigned element, uns
       if (i < vl && active) {
         uint64_t value = 0;
         memcpy(&value, (void *)address, access);
-        if (value >> (access * 8 - 1)) value |= ~(UINT64_MAX >> (64 - access * 8));
+        if (signed_input && (value >> (access * 8 - 1))) value |= ~(UINT64_MAX >> (64 - access * 8));
         memcpy(scalar + i, &value, element);
       }
     }

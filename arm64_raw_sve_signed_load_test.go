@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-type arm64RawSVESignedLoadCase struct {
+type arm64RawSVELoadCase struct {
 	memorySize  int
 	elementSize int
 	kind        string
@@ -14,15 +14,15 @@ type arm64RawSVESignedLoadCase struct {
 	scaled      bool
 }
 
-func arm64RawSVESignedLoadCases() []arm64RawSVESignedLoadCase {
-	var forms []arm64RawSVESignedLoadCase
+func arm64RawSVESignedLoadCases() []arm64RawSVELoadCase {
+	var forms []arm64RawSVELoadCase
 	for memory := 0; memory < 3; memory++ {
 		for element := memory + 1; element < 4; element++ {
 			for _, kind := range []string{"immediate", "register", "offset", "base"} {
 				if element < 2 && (kind == "offset" || kind == "base") {
 					continue
 				}
-				form := arm64RawSVESignedLoadCase{memorySize: memory, elementSize: element, kind: kind}
+				form := arm64RawSVELoadCase{memorySize: memory, elementSize: element, kind: kind}
 				if kind != "offset" {
 					forms = append(forms, form)
 					continue
@@ -46,7 +46,11 @@ func arm64RawSVESignedLoadCases() []arm64RawSVESignedLoadCase {
 	return forms
 }
 
-func (form arm64RawSVESignedLoadCase) assembly(dst, pred, base, index, offset int) string {
+func (form arm64RawSVELoadCase) assembly(dst, pred, base, index, offset int) string {
+	return form.loadAssembly(true, dst, pred, base, index, offset)
+}
+
+func (form arm64RawSVELoadCase) loadAssembly(signed bool, dst, pred, base, index, offset int) string {
 	baseName := fmt.Sprintf("x%d", base)
 	if base == 31 {
 		baseName = "sp"
@@ -77,7 +81,11 @@ func (form arm64RawSVESignedLoadCase) assembly(dst, pred, base, index, offset in
 	case "base":
 		address = fmt.Sprintf("[z%d.%c, #%d]", base, width, offset<<form.memorySize)
 	}
-	return fmt.Sprintf("ld1s%c { z%d.%c }, p%d/z, %s", "bhw"[form.memorySize], dst, width, pred, address)
+	op := "ld1"
+	if signed {
+		op += "s"
+	}
+	return fmt.Sprintf("%s%c { z%d.%c }, p%d/z, %s", op, "bhwd"[form.memorySize], dst, width, pred, address)
 }
 
 func TestARM64RawSVESignedLoadCompleteFormats(t *testing.T) {
@@ -120,10 +128,20 @@ func TestARM64RawSVESignedLoadCompleteFormats(t *testing.T) {
 }
 
 func TestARM64RawSVESignedLoadOperandFields(t *testing.T) {
+	testARM64RawSVELoadOperandFields(t, arm64RawSVESignedLoadCases(), true, decodeARM64RawSVESignedLoad)
+	for _, word := range []uint32{0xa4a0a000, 0xc4a0c000, 0xc440a000, 0x8420a000, 0x84a02000} {
+		if got, ok := decodeARM64RawSVESignedLoad(word); ok {
+			t.Errorf("unsigned/first-fault/neighboring word %#08x decoded as %+v", word, got)
+		}
+	}
+}
+
+func testARM64RawSVELoadOperandFields(t *testing.T, forms []arm64RawSVELoadCase, signed bool, decode func(uint32) (Instr, bool)) {
+	t.Helper()
 	var lines []string
 	var wants []Instr
 	var reserved []int
-	for _, form := range arm64RawSVESignedLoadCases() {
+	for _, form := range forms {
 		limits := []int{32, 8, 32, 32, 1}
 		if form.kind == "register" {
 			limits[3] = 31
@@ -140,7 +158,7 @@ func TestARM64RawSVESignedLoadOperandFields(t *testing.T) {
 				if form.kind == "immediate" {
 					offset -= 8
 				}
-				lines = append(lines, form.assembly(dst, pred, base, index, offset))
+				lines = append(lines, form.loadAssembly(signed, dst, pred, base, index, offset))
 				memory := MemRef{Base: Reg(fmt.Sprintf("R%d", base))}
 				if base == 31 {
 					memory.Base = "RSP"
@@ -171,7 +189,11 @@ func TestARM64RawSVESignedLoadOperandFields(t *testing.T) {
 					memory.Base = Reg(fmt.Sprintf("Z%d.%c", base, width))
 					memory.Off = int64(offset) << form.memorySize
 				}
-				wants = append(wants, Instr{Op: Op("ZLD1S" + string("BHW"[form.memorySize])), Args: []Operand{
+				op := "ZLD1"
+				if signed {
+					op += "S"
+				}
+				wants = append(wants, Instr{Op: Op(op + string("BHWD"[form.memorySize])), Args: []Operand{
 					{Kind: OpMem, Mem: memory},
 					{Kind: OpReg, Reg: Reg(fmt.Sprintf("P%d.Z", pred))},
 					{Kind: OpRegList, RegList: []Reg{Reg(fmt.Sprintf("Z%d.%c", dst, width))}},
@@ -181,20 +203,15 @@ func TestARM64RawSVESignedLoadOperandFields(t *testing.T) {
 	}
 	words := assembleARM64LLVMWords(t, lines, "+sve")
 	for i, word := range words {
-		got, ok := decodeARM64RawSVESignedLoad(word)
+		got, ok := decode(word)
 		if !ok || got.Op != wants[i].Op || fmt.Sprint(got.Args) != fmt.Sprint(wants[i].Args) {
 			t.Fatalf("%s: decoded %#08x as %+v, %v; want %+v", lines[i], word, got, ok, wants[i])
 		}
 	}
 	for _, i := range reserved {
 		word := words[i] | 31<<16
-		if got, ok := decodeARM64RawSVESignedLoad(word); ok {
+		if got, ok := decode(word); ok {
 			t.Errorf("reserved scalar-index/immediate bits in %#08x decoded as %+v", word, got)
-		}
-	}
-	for _, word := range []uint32{0xa4a0a000, 0xc4a0c000, 0xc440a000, 0x8420a000, 0x84a02000} {
-		if got, ok := decodeARM64RawSVESignedLoad(word); ok {
-			t.Errorf("unsigned/first-fault/neighboring word %#08x decoded as %+v", word, got)
 		}
 	}
 }

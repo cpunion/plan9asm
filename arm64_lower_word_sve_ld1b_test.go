@@ -26,12 +26,12 @@ func TestTranslateARM64RawSVELD1BRegisterOffsetForms(t *testing.T) {
 	}
 	loads := 0
 	for _, line := range strings.Split(ll, "\n") {
-		if strings.Contains(line, " = call ") && strings.Contains(line, "@llvm.masked.load.nxv") {
+		if strings.Contains(line, " = call ") && strings.Contains(line, "@llvm.aarch64.sve.ld1.nxv") {
 			loads++
 		}
 	}
 	if loads != 2 {
-		t.Fatalf("raw LD1B lowering omitted masked loads:\n%s", ll)
+		t.Fatalf("raw LD1B lowering omitted predicated zeroing loads:\n%s", ll)
 	}
 	if !strings.Contains(ll, `zext <vscale x 8 x i8>`) {
 		t.Fatalf("raw LD1B H arrangement was not zero-extended:\n%s", ll)

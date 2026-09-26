@@ -2,30 +2,30 @@ package plan9asm
 
 import "fmt"
 
-type arm64SVESignedLoadAddress uint8
+type arm64SVELoadAddress uint8
 
 const (
-	arm64SVESignedLoadRegister arm64SVESignedLoadAddress = iota
-	arm64SVESignedLoadImmediate
-	arm64SVESignedLoadVectorOffset
-	arm64SVESignedLoadVectorBase
+	arm64SVELoadRegister arm64SVELoadAddress = iota
+	arm64SVELoadImmediate
+	arm64SVELoadVectorOffset
+	arm64SVELoadVectorBase
 )
 
-type arm64RawSVESignedLoadRow struct {
+type arm64RawSVELoadRow struct {
 	op          Op
 	elementBits int
-	address     arm64SVESignedLoadAddress
+	address     arm64SVELoadAddress
 	extension   ExtendOp
 	scale       int64
 }
 
-var arm64RawSVESignedLoadRows = arm64SVESignedLoadRawTable()
+var arm64RawSVELoadRows = arm64SVESignedLoadRawTable()
 
 // LD1SB/SH/SW share the signed ordinary-load semantics. Expand only the
 // encoding axes here: widening element size, scalar/vector address, index
 // extension and scale. No opcode-specific lowering is needed.
-func arm64SVESignedLoadRawTable() map[uint32]arm64RawSVESignedLoadRow {
-	rows := make(map[uint32]arm64RawSVESignedLoadRow)
+func arm64SVESignedLoadRawTable() map[uint32]arm64RawSVELoadRow {
+	rows := make(map[uint32]arm64RawSVELoadRow)
 	for op, spec := range arm64SVEOrdinaryMemorySpecs {
 		if !spec.load || !spec.signed {
 			continue
@@ -35,11 +35,11 @@ func arm64SVESignedLoadRawTable() map[uint32]arm64RawSVESignedLoadRow {
 			memorySize++
 		}
 		for elementSize := memorySize + 1; elementSize < 4; elementSize++ {
-			row := arm64RawSVESignedLoadRow{op: op, elementBits: 8 << elementSize, scale: int64(spec.memoryBits / 8)}
+			row := arm64RawSVELoadRow{op: op, elementBits: 8 << elementSize, scale: int64(spec.memoryBits / 8)}
 			base := uint32(0xa5804000) - memorySize<<23 + (3-elementSize)<<21
-			row.address = arm64SVESignedLoadRegister
+			row.address = arm64SVELoadRegister
 			rows[base] = row
-			row.address = arm64SVESignedLoadImmediate
+			row.address = arm64SVELoadImmediate
 			rows[base+0x6000] = row
 			if elementSize < 2 {
 				continue
@@ -48,9 +48,9 @@ func arm64SVESignedLoadRawTable() map[uint32]arm64RawSVESignedLoadRow {
 			if elementSize == 3 {
 				vectorBase |= 1 << 30
 			}
-			row.address = arm64SVESignedLoadVectorBase
+			row.address = arm64SVELoadVectorBase
 			rows[vectorBase] = row
-			row.address = arm64SVESignedLoadVectorOffset
+			row.address = arm64SVELoadVectorOffset
 			for scale := uint32(0); scale < 2; scale++ {
 				if memorySize == 0 && scale != 0 {
 					continue
@@ -75,18 +75,24 @@ func arm64SVESignedLoadRawTable() map[uint32]arm64RawSVESignedLoadRow {
 }
 
 func decodeARM64RawSVESignedLoad(word uint32) (Instr, bool) {
-	row, ok := arm64RawSVESignedLoadRows[word&0xffe0e000]
+	row, ok := arm64RawSVELoadRows[word&0xffe0e000]
 	if !ok {
 		return Instr{}, false
 	}
+	return decodeARM64RawSVELoadAddress(word, row)
+}
+
+// Both signed and unsigned loads normalize the same address grammar before
+// using the ordinary-memory semantic lowerer.
+func decodeARM64RawSVELoadAddress(word uint32, row arm64RawSVELoadRow) (Instr, bool) {
 	base, index := word>>5&31, word>>16&31
-	width := map[int]byte{16: 'H', 32: 'S', 64: 'D'}[row.elementBits]
+	width := map[int]byte{8: 'B', 16: 'H', 32: 'S', 64: 'D', 128: 'Q'}[row.elementBits]
 	memory := MemRef{Base: Reg(fmt.Sprintf("R%d", base))}
 	if base == 31 {
 		memory.Base = "RSP"
 	}
 	switch row.address {
-	case arm64SVESignedLoadRegister:
+	case arm64SVELoadRegister:
 		if index == 31 { // Xm excludes 31; this is not a zero-index alias.
 			return Instr{}, false
 		}
@@ -94,7 +100,7 @@ func decodeARM64RawSVESignedLoad(word uint32) (Instr, bool) {
 		if row.scale == 1 {
 			memory.Base, memory.Index = memory.Index, memory.Base
 		}
-	case arm64SVESignedLoadImmediate:
+	case arm64SVELoadImmediate:
 		if index&16 != 0 {
 			return Instr{}, false
 		}
@@ -107,10 +113,10 @@ func decodeARM64RawSVESignedLoad(word uint32) (Instr, bool) {
 		} else if offset > 0 {
 			memory.OffRaw = fmt.Sprintf("VL*%d", offset)
 		}
-	case arm64SVESignedLoadVectorOffset:
+	case arm64SVELoadVectorOffset:
 		memory.Index = Reg(fmt.Sprintf("Z%d.%c", index, width))
 		memory.IndexExt, memory.Scale = row.extension, row.scale
-	case arm64SVESignedLoadVectorBase:
+	case arm64SVELoadVectorBase:
 		memory.Base = Reg(fmt.Sprintf("Z%d.%c", base, width))
 		memory.Off = int64(index) * row.scale
 	}

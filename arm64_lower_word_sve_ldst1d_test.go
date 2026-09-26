@@ -41,7 +41,7 @@ func TestTranslateARM64RawSVELDST1DScalarImmediateCompleteFormats(t *testing.T) 
 			for _, want := range []string{
 				`"target-features"="+sve"`,
 				"@llvm.aarch64.sve.convert.from.svbool.nxv2i1",
-				"@llvm.masked.load.nxv2i64.p0", "<vscale x 2 x i64> zeroinitializer",
+				"call <vscale x 2 x i64> @llvm.aarch64.sve.ld1.nxv2i64",
 				"@llvm.masked.store.nxv2i64.p0", "call i64 @llvm.vscale.i64()",
 			} {
 				if !strings.Contains(ll, want) {
@@ -108,7 +108,7 @@ func TestTranslateARM64RawSVELDST1DScalarRegisterCompleteFormat(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"shl i64", "@llvm.masked.load.nxv2i64.p0", "@llvm.masked.store.nxv2i64.p0", `"target-features"="+sve"`} {
+			for _, want := range []string{"shl i64", "call <vscale x 2 x i64> @llvm.aarch64.sve.ld1.nxv2i64", "@llvm.masked.store.nxv2i64.p0", `"target-features"="+sve"`} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("ARM64 raw SVE register-offset LD1D/ST1D lowering for %s omitted %q:\n%s", triple, want, ll)
 				}
