@@ -54,8 +54,10 @@ tmp_root=$(mktemp -d)
 trap 'rm -rf "$tmp_root"' EXIT
 translator="$tmp_root/plan9asmll"
 runner="$tmp_root/plan9asmcorpus"
-go build -C "$repo_root/cmd/plan9asmll" -o "$translator" .
-go build -C "$repo_root" -o "$runner" ./cmd/plan9asmcorpus
+# Reports from separate shard worktrees must identify the same source build
+# with the same binary hash, without embedding absolute checkout paths.
+go build -C "$repo_root/cmd/plan9asmll" -trimpath -o "$translator" .
+go build -C "$repo_root" -trimpath -o "$runner" ./cmd/plan9asmcorpus
 
 if [[ -z "$report_path" ]]; then
   report_path="$repo_root/_out/discovered-library-corpus/shard-$shard_index.json"
