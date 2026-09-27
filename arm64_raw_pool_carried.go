@@ -14,7 +14,7 @@ func (flow *arm64RawPoolValues) loopExpressionDelta(head, latch int, expression 
 			return 0, false
 		}
 		if affected := writes & next.registerMask(); affected != 0 {
-			destination, value, valid := arm64PoolAffineDefinition(word)
+			destination, value, valid := flow.affineDefinition(word)
 			if !valid || affected != 1<<uint(destination) || !next.substitute(destination, value) {
 				return 0, false
 			}

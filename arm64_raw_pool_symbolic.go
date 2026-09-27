@@ -12,7 +12,8 @@ func (bounds *arm64RawPoolBounds) withSymbolicOrigin(at int) *arm64RawPoolBounds
 	// Origins share one pool base but remain proof-local. Never reuse a cache
 	// computed with a different pool basis or modify ordinary integer analysis.
 	copy.values = &arm64RawPoolValues{
-		words: bounds.values.words, before: bounds.values.before,
+		vectorBytes: bounds.values.vectorBytes,
+		words:       bounds.values.words, before: bounds.values.before,
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
 		poolOrigins: origins,
 		excluded:    bounds.values.excluded, loopBounds: bounds.values.loopBounds,

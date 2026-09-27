@@ -98,19 +98,10 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 			origins[at] = uint64(target-pool) * 4
 		}
 	}
-	for at, target := range addresses {
-		if target >= pool && target < end {
-			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4, values: values, origins: origins}
-			if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
-				// The fast interval walker rejects transient offsets outside the
-				// blob. A symbolic proof may cancel them before a read, but it
-				// must still prove every final footprint and reject all escapes.
-				bounds = bounds.withSymbolicOrigin(at)
-				if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
-					return nil, nil, nil
-				}
-			}
-		}
+	size := int64(end-pool) * 4
+	if !arm64RawPoolAddressProof(fn.Instrs, pool, size, returnClobbers, values, origins) &&
+		!arm64RawPoolAllVectorLengths(fn.Instrs, start, pool, size, returnClobbers, visited, origins) {
+		return nil, nil, nil
 	}
 	insertions := make(map[int]string)
 	label := func(at int) string {

@@ -219,7 +219,7 @@ func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (in
 		if writes&(1<<uint(register)) == 0 {
 			continue
 		}
-		destination, expression, affine := arm64PoolAffineDefinition(current)
+		destination, expression, affine := flow.affineDefinition(current)
 		expected := arm64PoolRegisterExpression(register)
 		if !affine || destination != register || expression.coefficient != expected.coefficient || update != -1 {
 			return 0, 0, false
@@ -237,7 +237,8 @@ func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolV
 	// execution reached through an enclosing loop is opaque: deleting a
 	// backedge must not assume that such an earlier execution ran just once.
 	entry := &arm64RawPoolValues{
-		words: flow.words, before: append([][]int(nil), flow.before...),
+		vectorBytes: flow.vectorBytes,
+		words:       flow.words, before: append([][]int(nil), flow.before...),
 		opaque: map[int]bool{latch: true}, loopBounds: flow.loopBounds,
 		opaqueLoops: map[int]int{latch: head},
 	}

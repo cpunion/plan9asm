@@ -12,10 +12,11 @@ import (
 // Predecessors include every reachable edge. A conditional edge can narrow a
 // value only when its exact comparison and flag provenance are established.
 type arm64RawPoolValues struct {
-	words  []uint32
-	before [][]int
-	cache  map[arm64RawPoolValue]uint64
-	active map[arm64RawPoolValue]bool
+	words       []uint32
+	before      [][]int
+	cache       map[arm64RawPoolValue]uint64
+	active      map[arm64RawPoolValue]bool
+	vectorBytes int64
 
 	affineCache    map[arm64PoolAffineQuery]arm64PoolInterval
 	affineActive   map[arm64PoolAffineQuery]bool
@@ -41,8 +42,13 @@ type arm64RawPoolEdge struct {
 }
 
 func newARM64RawPoolValues(instructions []Instr, start, end int, reachable map[int]bool) *arm64RawPoolValues {
+	return newARM64RawPoolValuesForVL(instructions, start, end, reachable, 0)
+}
+
+func newARM64RawPoolValuesForVL(instructions []Instr, start, end int, reachable map[int]bool, vectorBytes int64) *arm64RawPoolValues {
 	flow := &arm64RawPoolValues{
-		words: make([]uint32, end), before: make([][]int, end),
+		vectorBytes: vectorBytes,
+		words:       make([]uint32, end), before: make([][]int, end),
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
 	}
 	flow.before[start] = []int{-1} // The function's unknown incoming registers.

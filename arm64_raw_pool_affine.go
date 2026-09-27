@@ -337,7 +337,7 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 					continue
 				}
 			}
-			destination, value, affine := arm64PoolAffineDefinition(word)
+			destination, value, affine := flow.affineDefinition(word)
 			if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 				index := int(word & 31)
 				// An offset proof may replace one occurrence of the relocation
