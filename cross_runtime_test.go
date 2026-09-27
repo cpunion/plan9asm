@@ -35,6 +35,14 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc", "-no-pie"},
 			"continuation386", "i386-unknown-linux-gnu", ir, main, []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"})
 	})
+	t.Run("amd64_integer_broadcast_views", func(t *testing.T) {
+		clang := findLLVM22Tool("clang")
+		if clang == "" {
+			t.Fatal("LLVM 22 clang not found")
+		}
+		ir, main := integerBroadcastViews(t, "x86_64-unknown-linux-gnu")
+		compileAndRunRuntimeTestForTarget(t, llc, clang, "integer_broadcast", "x86_64-unknown-linux-gnu", ir, main, nil)
+	})
 	t.Run("arm64_raw_sve_count_index", func(t *testing.T) {
 		testARM64RawSVECountIndexRuntime(t, llc)
 	})

@@ -119,11 +119,17 @@ func (c *amd64Ctx) loadVectorScalarMemory(src Operand, elemBits int, mask string
 }
 
 func (c *amd64Ctx) loadX86ScalarMemoryIf(src Operand, elemBits int, condition string) (string, error) {
+	return c.loadX86ScalarIf(elemBits, condition, func() (string, error) {
+		return c.evalIntSized(src, amd64IntegerTypeForBits(elemBits))
+	})
+}
+
+func (c *amd64Ctx) loadX86ScalarIf(elemBits int, condition string, load func() (string, error)) (string, error) {
 	loadLabel := c.newTmp() + "_scalar_load"
 	skipLabel := c.newTmp() + "_scalar_skip"
 	joinLabel := c.newTmp() + "_scalar_join"
 	fmt.Fprintf(c.b, "  br i1 %s, label %%%s, label %%%s\n%s:\n", condition, loadLabel, skipLabel, loadLabel)
-	value, err := c.evalIntSized(src, amd64IntegerTypeForBits(elemBits))
+	value, err := load()
 	if err != nil {
 		return "", err
 	}

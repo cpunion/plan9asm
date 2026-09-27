@@ -67,7 +67,21 @@ func (c *amd64Ctx) lowerPackedScalarBroadcast(op Op, ins Instr) (ok bool, termin
 		}
 	}
 
-	scalar, err := c.loadPackedBroadcastScalar(ins.Args[0], laneBits, ins.x86Encoded)
+	load := func() (string, error) {
+		return c.loadPackedBroadcastScalar(ins.Args[0], laneBits, ins.x86Encoded)
+	}
+	var scalar string
+	if masked && ins.Args[0].Kind != OpReg {
+		// Any active destination lane enables the one scalar read. Irrelevant
+		// high K bits must not turn a fully masked memory source into a load.
+		lanes := byteWidth * 8 / laneBits
+		relevant, active := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", relevant, mask, uint64(1)<<uint(lanes)-1)
+		fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", active, relevant)
+		scalar, err = c.loadX86ScalarIf(laneBits, "%"+active, load)
+	} else {
+		scalar, err = load()
+	}
 	if err != nil {
 		return true, false, fmt.Errorf("amd64 %s source: %w", baseOp, err)
 	}
@@ -83,7 +97,7 @@ func (c *amd64Ctx) lowerPackedScalarBroadcast(op Op, ins Instr) (ok bool, termin
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(dstArg, byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) loadPackedBroadcastScalar(src Operand, laneBits int, rawEncoded bool) (string, error) {
