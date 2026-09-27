@@ -18,7 +18,7 @@ func TestARM64StackMemoryScalableExtent(t *testing.T) {
 		}
 	}
 	for _, source := range []string{"unknown_offset", "VL*8192", "-VL*8192"} {
-		if _, _, _, err := arm64StackMemoryExtent(Instr{Op: "ZLDR"}, MemRef{Base: SP, OffRaw: source}); err == nil {
+		if _, _, _, err := arm64StackMemoryExtent(Instr{Op: "ZLDR"}, MemRef{Base: "RSP", OffRaw: source}); err == nil {
 			t.Fatalf("accepted unresolved or excessive displacement %s", source)
 		}
 	}

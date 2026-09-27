@@ -434,7 +434,8 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 			if arg.Mem.Base == PC {
 				return fmt.Errorf("%w: %s uses a PC-relative target", ErrProbeNeedsContext, ins.Raw)
 			}
-			if arch == ArchARM && armMemoryOffsetNeedsContext(arg.Mem) {
+			if arch == ArchARM && armMemoryOffsetNeedsContext(arg.Mem) ||
+				arch == ArchARM64 && arm64MemoryOffsetNeedsContext(arg.Mem) {
 				return fmt.Errorf("%w: %s uses an unresolved memory-offset macro", ErrProbeNeedsContext, ins.Raw)
 			}
 		case OpIdent:

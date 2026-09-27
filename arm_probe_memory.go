@@ -27,6 +27,10 @@ func armMemoryOffsetNeedsContext(memory MemRef) bool {
 			}
 		}
 	}
+	return memoryOffsetExpressionNeedsContext(raw)
+}
+
+func memoryOffsetExpressionNeedsContext(raw string) bool {
 	expr, err := parser.ParseExpr(strings.ReplaceAll(strings.TrimSpace(raw), "~", "^"))
 	if err != nil {
 		return false
