@@ -261,6 +261,15 @@ func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolV
 		opaqueLoops: map[int]int{latch: head},
 	}
 	entry.clearValueCaches()
+	// Only already-proved, structurally earlier loops can help establish this
+	// loop's entry values. Never use this loop or an enclosing loop as its
+	// own induction premise. Carried-invariant entry proofs disable these
+	// summaries again, keeping that analysis non-recursive.
+	for previousHead, previousLatch := range flow.loopLatches {
+		if previousLatch < head {
+			entry.recordLoopLatch(previousHead, previousLatch)
+		}
+	}
 	entry.before[head] = nil
 	for _, previous := range flow.before[head] {
 		if previous == latch {

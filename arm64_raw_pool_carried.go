@@ -2,6 +2,39 @@ package plan9asm
 
 import "math"
 
+// Rewind an unchanged query through a certified loop without replacing it by
+// an interval. This retains relationships to earlier definitions, such as a
+// nonzero remainder guarded using a different copy of the original length.
+// Only active constraints independently preserved by the entire body survive;
+// a counter predicate from one iteration must not constrain its entry value.
+func (flow *arm64RawPoolValues) rewindInvariantLoop(state *arm64PoolAffineState) (int, bool) {
+	latch, ok := flow.loopLatches[state.at]
+	if !ok || flow.affineDirect {
+		return 0, false
+	}
+	delta, valid := flow.loopExpressionDelta(state.at, latch, state.expression)
+	if !valid || delta != 0 {
+		return 0, false
+	}
+	count := 0
+	for _, constraint := range state.constraints[:state.count] {
+		if constraint.after != 0 {
+			continue
+		}
+		change, preserved := flow.loopExpressionDelta(state.at, latch, constraint.expression)
+		if !preserved || change != 0 {
+			continue
+		}
+		state.constraints[count] = constraint
+		count++
+	}
+	for index := count; index < state.count; index++ {
+		state.constraints[index] = arm64PoolConstraint{}
+	}
+	state.count = count
+	return latch, true
+}
+
 // The loop body is already certified straight-line and single-entry. Substitute
 // its effects backwards to prove a constant per-iteration delta; an unknown
 // load result, nonlinear update or changing coefficient is not such a proof.
@@ -54,6 +87,7 @@ func (flow *arm64RawPoolValues) carriedLoopBound(head int, query arm64PoolAffine
 		return arm64PoolInterval{}, false
 	}
 	entry.poolOrigins = flow.poolOrigins
+	entry.loopLatches = nil // Entry proof must not recursively summarize another loop.
 	// Keep the entire relation while substituting entry definitions. Bounding
 	// p and remaining separately would lose their correlation before the
 	// cancellation that establishes the invariant constant.

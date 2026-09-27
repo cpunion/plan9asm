@@ -76,7 +76,17 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	}
 	lines = append(lines, "and x11,x1,#15", "add x11,x11,#8", "and x10,x11,#24",
 		"cmp x11,x10", "b.eq #20", "sub x10,x11,x10", "sub x10,x10,#1",
-		"ldrb w5,[x9,x10]", "str x5,[x0,#168]", "mov x9,xzr", "ret")
+		"ldrb w5,[x9,x10]", "str x5,[x0,#168]")
+	// The earlier loop preserves a relation expressed using different copies
+	// of the length. Its guard excludes a zero remainder before the later
+	// countdown indexes the pool. The input is also an arbitrary base offset,
+	// including values for which base+length wraps at the machine width.
+	lines = append(lines, "and x17,x1,#15", "add x17,x17,#8", "mov x16,x1",
+		"add x14,x16,x17", "and x6,x17,#24", "neg x7,x6",
+		"nop", "add x7,x7,#8", "cbnz x7,#-8", "cmp x17,x6",
+		"b.eq #44", "sub x17,x14,x6", "add x6,x6,x16", "sub x16,x17,x16", "mov x12,#0",
+		"sub x7,x16,#1", "ldrb w5,[x9,x7]", "add x12,x12,x5", "subs x16,x16,#1", "b.ne #-16",
+		"str x12,[x0,#176]", "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
 	source.WriteString("TEXT pool_masked(SB),$0-16\nMOVD out+0(FP),R0\nMOVD input+8(FP),R1\n")
@@ -137,11 +147,11 @@ int main(void) {
   uint8_t poolBytes[24];
   memcpy(poolBytes, poolWords, sizeof(poolBytes));
   for (unsigned test = 0; test < 32 + sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[24] = {0x1234};
-    out[23] = 0x5678;
+    uint64_t out[25] = {0x1234};
+    out[24] = 0x5678;
     uint64_t n = test < 32 ? test : inputs[test - 32];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[23] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[24] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
@@ -162,6 +172,9 @@ int main(void) {
     }
     if (out[20] != byteSum || out[21] != byteSum) return 6;
     if (out[22] != ((n & 7) ? poolBytes[(n & 7) - 1] : 0)) return 7;
+    uint64_t tailSum = 0;
+    for (unsigned index = 0; index < (n & 7); index++) tailSum += poolBytes[index];
+    if (out[23] != tailSum) return 8;
   }
   return 0;
 }

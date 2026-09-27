@@ -224,13 +224,22 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 			continue
 		}
 		visited[state] = true
-		if constraint, ok := flow.loopBounds[state.at]; ok {
+		invariantLatch, invariantLoop := flow.rewindInvariantLoop(&state)
+		if constraint, ok := flow.loopBounds[state.at]; ok && !invariantLoop {
 			value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint)
 			if !bounded || value == arm64PoolUnknownInterval {
 				value, bounded = flow.carriedLoopBound(state.at, state.expression, constraint)
 			}
 			if bounded && value != arm64PoolUnknownInterval {
-				addResult(value)
+				if state.bound.low > value.low {
+					value.low = state.bound.low
+				}
+				if state.bound.high < value.high {
+					value.high = state.bound.high
+				}
+				if value.low <= value.high {
+					addResult(value)
+				}
 				continue
 			}
 		}
@@ -305,6 +314,9 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 		}
 	predecessors:
 		for _, previous := range flow.before[state.at] {
+			if invariantLoop && previous == invariantLatch {
+				continue
+			}
 			if previous < 0 {
 				addResult(bound)
 				continue
