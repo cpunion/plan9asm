@@ -45,6 +45,25 @@ func TestARM64PoolAffineIntervalImages(t *testing.T) {
 	}
 }
 
+func TestARM64PoolMaskIntervals(t *testing.T) {
+	for _, base := range []uint64{0, 8, 16, 1 << 63, math.MaxUint64 - 31} {
+		for width := uint64(0); width < 16; width++ {
+			for _, mask := range []uint64{0, 1, 7, 16, 24, 0xff, math.MaxUint64, math.MaxUint64 - 7} {
+				span := arm64PoolMaskInterval(arm64PoolInterval{base, base + width}, mask)
+				for n := uint64(0); n <= width; n++ {
+					value := (base + n) & mask
+					if value < span.low || value > span.high {
+						t.Fatalf("mask excludes %d: base=%d width=%d mask=%x span=%+v", value, base, width, mask, span)
+					}
+				}
+			}
+		}
+	}
+	if got := arm64PoolMaskInterval(arm64PoolInterval{8, 15}, 24); got != (arm64PoolInterval{8, 8}) {
+		t.Fatalf("guarded mask: %+v", got)
+	}
+}
+
 func arm64RawPoolAffineIR(t *testing.T, triple string) string {
 	t.Helper()
 	lines := []string{
@@ -53,6 +72,8 @@ func arm64RawPoolAffineIR(t *testing.T, triple string) string {
 		"sub x5, x1, x2", "ldrb w5, [x9, x5]", "str x5, [x0]",
 		"cmp x3, #3", "b.hi #20", "lsl x6, x1, #2", "sub x6, x6, x2, lsl #2",
 		"ldr w6, [x9, x6]", "str x6, [x0, #8]",
+		"cmp x3, #8", "b.lo #28", "cmp x3, #15", "b.hi #20",
+		"and x7, x3, #24", "sub x7, x7, #8", "ldr q0, [x9, x7]", "str q0, [x0, #16]",
 		"mov x9, xzr", "ret",
 	}
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
@@ -119,11 +140,14 @@ int main(void) {
   for (unsigned i = 0; i < sizeof(starts) / sizeof(starts[0]); i++) {
     for (unsigned j = 0; j < sizeof(lengths) / sizeof(lengths[0]); j++) {
       uint64_t n = lengths[j];
-      uint64_t result[4] = {0x1234, 0, 0, 0x5678};
+      uint64_t result[6] = {0x1234, 0, 0, 0, 0, 0x5678};
       pool_affine(result + 1, starts[i] + n, starts[i]);
-      if (result[0] != 0x1234 || result[3] != 0x5678 ||
+      uint64_t expected[2] = {0, 0};
+      if (n >= 8 && n <= 15) memcpy(expected, words, sizeof(words));
+      if (result[0] != 0x1234 || result[5] != 0x5678 ||
           result[1] != (n >= 1 && n <= 15 ? bytes[n] : 0) ||
-          result[2] != (n <= 3 ? words[n] : 0)) return 1;
+          result[2] != (n <= 3 ? words[n] : 0) ||
+          result[3] != expected[0] || result[4] != expected[1]) return 1;
     }
   }
   return 0;

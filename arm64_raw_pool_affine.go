@@ -27,8 +27,14 @@ type arm64PoolConstraint struct {
 type arm64PoolAffineState struct {
 	at          int
 	expression  arm64PoolAffine
+	bound       arm64PoolInterval
 	constraints [8]arm64PoolConstraint
 	count       int
+}
+
+type arm64PoolAffineQuery struct {
+	at         int
+	expression arm64PoolAffine
 }
 
 var arm64PoolUnknownInterval = arm64PoolInterval{0, math.MaxUint64}
@@ -132,11 +138,27 @@ func (flow *arm64RawPoolValues) boundedUpper(at int, reg arm64asm.Reg) uint64 {
 // its branch constraints. This is intentionally not a source-pattern match:
 // copies, cancellation, scaling and joins share the same expression grammar.
 // A changing cycle, unknown effect or exhausted budget makes the proof fail.
-func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffine) arm64PoolInterval {
+func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
 	if flow == nil || at < 0 || at >= len(flow.before) {
 		return arm64PoolUnknownInterval
 	}
-	queue := []arm64PoolAffineState{{at: at, expression: expression}}
+	query := arm64PoolAffineQuery{at, expression}
+	if cached, ok := flow.affineCache[query]; ok {
+		return cached
+	}
+	if flow.affineActive[query] || len(flow.affineActive) >= 32 {
+		return arm64PoolUnknownInterval
+	}
+	if flow.affineActive == nil {
+		flow.affineActive = make(map[arm64PoolAffineQuery]bool)
+		flow.affineCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
+	}
+	flow.affineActive[query] = true
+	defer func() {
+		delete(flow.affineActive, query)
+		flow.affineCache[query] = answer
+	}()
+	queue := []arm64PoolAffineState{{at: at, expression: expression, bound: arm64PoolUnknownInterval}}
 	visited := make(map[arm64PoolAffineState]bool)
 	result, found := arm64PoolInterval{math.MaxUint64, 0}, false
 	addResult := func(value arm64PoolInterval) {
@@ -159,7 +181,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		}
 		visited[state] = true
 		impossible := false
-		bound := arm64PoolUnknownInterval
+		bound := state.bound
 		for _, constraint := range state.constraints[:state.count] {
 			if constraint.expression.isConstant() {
 				value := constraint.expression.constant
@@ -177,20 +199,26 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		if impossible || bound.low > bound.high {
 			continue
 		}
+		state.bound = bound
 		if state.expression.isConstant() {
-			addResult(arm64PoolInterval{state.expression.constant, state.expression.constant})
+			if value := state.expression.constant; value >= bound.low && value <= bound.high {
+				addResult(arm64PoolInterval{value, value})
+			}
 			continue
 		}
-		if bound != arm64PoolUnknownInterval {
+		if bound.low == bound.high {
 			addResult(bound)
 			continue
 		}
 		if state.at < 0 || len(flow.before[state.at]) == 0 {
-			return arm64PoolUnknownInterval
+			addResult(bound)
+			continue
 		}
+	predecessors:
 		for _, previous := range flow.before[state.at] {
 			if previous < 0 {
-				return arm64PoolUnknownInterval
+				addResult(bound)
+				continue
 			}
 			next := state
 			next.at = previous
@@ -204,9 +232,15 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 			word := flow.words[previous]
 			writes, known := arm64RawPoolGPWrites(word)
 			if !known {
-				return arm64PoolUnknownInterval
+				addResult(bound)
+				continue
 			}
 			destination, value, affine := arm64PoolAffineDefinition(word)
+			if !affine && writes != 0 {
+				if masked, ok := flow.affineMaskInterval(previous, word); ok && masked.low == masked.high {
+					destination, value, affine = int(word&31), arm64PoolAffine{constant: masked.low}, true
+				}
+			}
 			for index := 0; index < 31; index++ {
 				if writes&(1<<uint(index)) == 0 {
 					continue
@@ -216,7 +250,8 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 						return arm64PoolUnknownInterval
 					}
 				} else if next.expression.coefficient[index] != 0 {
-					return arm64PoolUnknownInterval
+					addResult(bound)
+					continue predecessors
 				}
 				count := 0
 				for _, constraint := range next.constraints[:next.count] {
