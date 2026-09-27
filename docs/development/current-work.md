@@ -10,7 +10,11 @@ another module-index inventory scan.
   678-second full suite passed. Its CI exposed 10 standard-library job
   failures (unexpanded ARM64 displacement macros and runtime-sized syscall
   frames) plus one Windows test job with four fixture failures. All those
-  logs were inspected; the repairs below are prepared for the next push.
+  logs were inspected; the repairs were pushed as `0d96d26`. Its run
+  `36307233650` has passed all 10 standard-library lanes, the Linux root
+  matrix, race, cross-runtime, benchmark, coverage and Codecov patch checks.
+  Windows root tests and the 32 external shards are still unfinished at this
+  checkpoint. Inspect live results; this is not a complete green CI run.
   Earlier ledger, FFR-oracle and Go-download-bootstrap repairs have passed
   the affected build, cross-runtime and old-Go root CI checks. Inspect live
   checks rather than treating partial results as green CI.
@@ -72,12 +76,34 @@ another module-index inventory scan.
 - Windows fixture repair `ebf6579` adds the executable suffix, tests both
   LF/CRLF workflow content, and builds a native fake Go executable whose
   selection and auto/local behavior are asserted. Focused Go 1.20/1.27 and
-  the full corpus-tool suite pass locally; actual Windows results still need
-  the next CI run. The previous Windows failures were not instruction gaps.
-- The development branch retains bounded ADDVL/ADDPL pool aliases at
-  `79e31ac` (128 immediate combinations and 120 Linux/QEMU runtime results).
-  It is not included in this CI-hotfix push. A further scalable-value TDD
-  fixture is still red and uncommitted; resume it after CI is repaired.
+  the full corpus-tool suite pass locally; actual Windows root results still
+  need the running CI job. The previous Windows failures were fixture gaps.
+- Local, not yet pushed: `735fa37` rejects effective-address aliases such as
+  `$8(RSP)` before moving a dynamic stack. The prefix must account for every
+  live address, not just explicit register copies. Red/green and runtime
+  regressions passed; no escape exception was introduced.
+- Local scalable pool batch: `79e31ac` adds bounded ADDVL/ADDPL aliases;
+  `fe70f20` partitions proofs over every architectural VL (16..256 bytes in
+  16-byte increments). RDVL, ADDVL/ADDPL and scalar CNT/INC/DEC use the typed
+  decoders and exact pattern/multiplier values within each partition. Unknown
+  effects or vector-length mode changes reject. Tests cover all address
+  immediates and 6,144 count forms at every VL; 96 runtime cases execute at
+  all 16 lengths. Three-OS LLVM 22 objects, Go 1.20, vet, required Linux/QEMU,
+  official coverage, both CLI suites and the full root suite passed at
+  `fe70f20` (656 seconds). Benchmark: 184/184, zero N/A, 25 target-seconds.
+- `38305da`, `b0f4b05`, `bc67343` share typed unpack, multiply-accumulate and
+  integer-reduction effects with the pool proof. Each family has retained
+  red/green evidence and complete-format checks. This changes effect
+  classification, not instruction semantics or unknown-op acceptance.
+- `6104e5f` bounds whole Z/P pool loads with their actual VL or VL/8 footprint.
+  All 512 signed displacements and 16 vector lengths are checked. Three-OS
+  objects and 128 Linux/QEMU byte-and-canary cases pass. Stores, short pools,
+  negative/oversized footprints and mode changes reject. Focused pool tests,
+  Go 1.20 and vet pass. The development worktree is frozen at this revision
+  for another full suite (`_out/root-tests-sve-pool-memory.log`); inspect its
+  actual process/log before changing the tree. All these batches remain local
+  to avoid cancelling the current CI shards. Refresh derived provenance
+  after the final source checkpoint and before the next push.
 - Metadata-download bootstrap and its synthetic retry fixture use the root
   Go 1.20 floor; actual corpus build plans still require Go 1.27. The old
   bootstrap required Go 1.27 before making even one proxy request, failing
@@ -261,10 +287,13 @@ passing module evidence. Do not upgrade its assembly ledger.
   Repeated ADRs retain relocation cardinality. The ignored function probe's
   scratch mask now has explicit parentheses; its earlier missing parentheses
   caused a diagnostic-only false return-escape failure.
-  Signed SVE first fails at instruction 23, a vector-length-dependent address
-  operation; it needs actual SVE length relationships, not a fixed-host-length
-  assumption. Ignored `pool-function-*` probes and disassemblies retain these
-  diagnostics; their temporary traced walker must be regenerated after edits.
+  Signed SVE's instruction 23 now has all-VL address semantics and all its GP
+  effects are recognized. It still needs indexed predicated pool-load
+  footprints, flag preservation through typed SVE operations and relational
+  loop bounds. In the current diagnostic, instruction 76's `R12+8*R20`
+  footprint is still unknown at every checked VL; do not accept it merely
+  because the typed load is supported. Ignored `pool-function-*` probes and
+  disassemblies retain diagnostics; regenerate any traced walker after edits.
   The apparent branch
   word `0x540be400` is numeric pool data, not invalid source. Implement in
   `arm64_raw_pool_*.go`; do not relax the proof merely to relocate the pool.
