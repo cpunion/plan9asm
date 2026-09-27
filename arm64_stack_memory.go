@@ -19,6 +19,9 @@ func arm64StackMemoryExtent(ins Instr, mem MemRef) (low, high, width int64, err 
 	if mem.OffRaw == "" {
 		return
 	}
+	if arm64NamedStackOffset(mem) {
+		return
+	}
 	if offset, ok := parseNamedStackConstantOffset(mem.OffRaw); ok && offset == mem.Off {
 		return
 	}

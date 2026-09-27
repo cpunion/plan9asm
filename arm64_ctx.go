@@ -33,6 +33,8 @@ type arm64Ctx struct {
 	usedPNRegs     map[int]bool
 	pnRegSlot      map[int]string // SVE predicate-as-counter index -> alloca name (target("aarch64.svcount"))
 	localStackSlot string
+	localStackSize int64
+	dynamicStack   *arm64DynamicStackPlan
 
 	flagsNSlot   string
 	flagsZSlot   string
@@ -1117,7 +1119,8 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 			size = 256
 		}
 		c.localStackSlot = "%local_stack"
-		fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
+		c.localStackSize = size
+		fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 16\n", c.localStackSlot, size)
 		base := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
 		addr := c.newTmp()

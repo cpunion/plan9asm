@@ -13,6 +13,9 @@ func (c *arm64Ctx) imm64(n int64) string {
 // addrI64 computes an i64 address from a MemRef.
 // If postInc is true, mem.Off is treated as post-increment (address displacement is 0).
 func (c *arm64Ctx) addrI64(mem MemRef, postInc bool) (addr string, base Reg, inc int64, err error) {
+	if mem.OffRaw != "" && !arm64NamedStackOffset(mem) {
+		return "", "", 0, fmt.Errorf("arm64: unresolved memory displacement %q", mem.OffRaw)
+	}
 	base = mem.Base
 	// Register encoding 31 denotes SP in an address operand even when the Go
 	// source spells it ZR. RSP is the explicit hardware-stack-pointer spelling;

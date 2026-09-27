@@ -148,7 +148,7 @@ func TestARM64StackMovementControlFlow(t *testing.T) {
 		{"unbalanced-loop", "loop:\nSUB $192,RSP\nCBNZ R0,loop\nRET\n", 0, 0, true},
 		{"diamond", "CBZ R0,small\nSUB $512,RSP\nB done\nsmall:\nSUB $192,RSP\ndone:\nMOVD R0,(RSP)\nRET\n", -512, 0, false},
 		{"raw-return", "SUB $192,RSP\nCBZ R0,tail\nend:\nADD $192,RSP\nWORD $0xd65f03c0\ntail:\nB end\nRET\n", -192, 0, false},
-		{"dynamic", "SUB R0,RSP\nMOVD R1,(RSP)\nRET\n", 0, 0, true},
+		{"runtime-sized-backing", "SUB R0,RSP\nMOVD R1,(RSP)\nRET\n", 0, 64, false},
 		{"saved-sp", "MOVD RSP,R3\nSUB $192,RSP\nMOVD R3,RSP\nSUB $512,RSP\nRET\n", -512, 0, false},
 		{"derived-sp", "SUB $512,RSP,R3\nMOVD R3,RSP\nRET\n", -512, 0, false},
 		{"aligned-sp-bic", "SUB $16,RSP,R3\nBIC $15,R3\nMOVD R3,RSP\nRET\n", -31, 0, false},

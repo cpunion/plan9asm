@@ -93,6 +93,7 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 	if len(c.blocks) == 0 {
 		return 0, 0, nil
 	}
+	c.dynamicStack = c.planDynamicStack()
 	labels := make(map[string]int)
 	zeroRegisters := c.stackUnwrittenZeroRegisters()
 	for i, block := range c.blocks {
@@ -162,8 +163,11 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 			if call && state[31].unknown {
 				return 0, 0, fmt.Errorf("ARM64 cannot bound call frame after dynamic stack restore: %q", original.Raw)
 			}
-			if err := arm64StackStep(&state, original, ins); err != nil {
-				return 0, 0, err
+			amount, dynamic := arm64DynamicStackAmount(ins)
+			if !dynamic || c.dynamicStack == nil || amount != c.dynamicStack.amount {
+				if err := arm64StackStep(&state, original, ins); err != nil {
+					return 0, 0, err
+				}
 			}
 			sp := state[31]
 			if !sp.local || sp.unknown {

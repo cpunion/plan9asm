@@ -109,6 +109,9 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, c.lowerBitfield(op, ins)
 
 	case "ADD", "SUB", "ADDS":
+		if handled, dynamicErr := c.lowerDynamicStack(ins); handled {
+			return true, false, dynamicErr
+		}
 		if len(ins.Args) != 2 && len(ins.Args) != 3 {
 			return true, false, fmt.Errorf("arm64 %s expects 2 or 3 operands: %q", op, ins.Raw)
 		}
