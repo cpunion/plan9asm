@@ -90,6 +90,7 @@ func (flow *arm64RawPoolValues) prepareControlFlow() {
 	for pass := 0; pass < 3; pass++ {
 		excluded, loops := len(flow.excluded), len(flow.loopBounds)
 		flow.refineBitEdges()
+		flow.refineConstantCompareEdges()
 		for latch := range flow.words {
 			flow.proveCounterLoop(latch)
 			flow.proveOrderedCounterLoop(latch)

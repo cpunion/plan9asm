@@ -30,6 +30,11 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		lines[start+1] = fmt.Sprintf("b.lo #%d", (len(lines)-start-1)*4)
 		lines[start+3] = fmt.Sprintf("b.hi #%d", (len(lines)-start-3)*4)
 	}
+	// The alternative load is genuinely out of bounds. Only the proved
+	// incoming 16..19 interval makes its branch impossible.
+	lines = append(lines, "and x12,x1,#3", "add x12,x12,#16", "mov x6,#32",
+		"cmp x12,x6", "b.hs #12", "ldr x5,[x9]", "b #8", "ldr x5,[x9,#8]",
+		"str x5,[x0,#80]")
 	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
@@ -84,14 +89,15 @@ extern void pool_masked(uint64_t *, uint64_t);
 int main(void) {
   const uint64_t inputs[] = {0, 1, 15, 16, 17, 18, 19, 20, 31, 255, UINT64_C(1)<<63, UINT64_MAX};
   for (unsigned test = 0; test < sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[12] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
+    uint64_t out[13] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
     uint64_t n = inputs[test];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[11] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[12] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
     }
+    if (out[11] != UINT64_C(0x17b4a14117b4a140)) return 3;
   }
   return 0;
 }
