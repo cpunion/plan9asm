@@ -135,3 +135,54 @@ func TestDiscoveryActualAssemblerEOFRemainsSourceRejection(t *testing.T) {
 		t.Fatalf("actual Go source rejection was classified as infrastructure failure: %v", err)
 	}
 }
+
+func TestDiscoveryProgressRejectsInfrastructureSourceNotApplicable(t *testing.T) {
+	for _, status := range []string{discoveryStatusPassed, discoveryStatusNotApplicable} {
+		t.Run(status, func(t *testing.T) {
+			ledger, reports, source := writeDiscoveryReportFixture(t)
+			files, err := discoveryCorpusReportFiles(reports)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, filename := range files {
+				report, err := readDiscoveryCorpusReport(filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(report.Results) == 0 {
+					continue
+				}
+				result := &report.Results[0]
+				result.SourceNotApplicableItems = []discoverySourceNotApplicableItem{{
+					AsmFiles: result.DiscoveredAsmFiles,
+					Targets:  []string{"linux/arm64"},
+					Kind:     discoverySourceNotApplicableGoBuild,
+					Reason: "pkg/file.s:12: unexpected EOF\nasm: assembly of pkg/file.s failed\n" +
+						"reading https://example.com/pkg: 503 Service Unavailable",
+				}}
+				if status == discoveryStatusNotApplicable {
+					result.Status = status
+					result.NotApplicableReason = "current Go package rejected"
+					report.Passed--
+					report.NotApplicable++
+					report.Translations -= result.Translations
+					result.Translations = 0
+				}
+				if err := writeDiscoveryCorpusReport(filename, report); err != nil {
+					t.Fatal(err)
+				}
+				targets := []string{"linux/amd64", "linux/arm64"}
+				if _, err := collectDiscoveryProgress(ledger, reports, targets, source, 2); err == nil ||
+					!strings.Contains(err.Error(), "infrastructure failure") {
+					t.Fatalf("progress must reject infrastructure N/A before ledger publication: %v", err)
+				}
+				if err := verifyDiscoveryCorpusReports(ledger, reports, targets, source); err == nil ||
+					!strings.Contains(err.Error(), "infrastructure failure") {
+					t.Fatalf("final gate accepted infrastructure N/A: %v", err)
+				}
+				return
+			}
+			t.Fatal("fixture contains no candidate")
+		})
+	}
+}

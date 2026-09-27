@@ -1710,6 +1710,9 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		if !valid {
 			return fmt.Errorf("invalid source not-applicable evidence: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)
 		}
+		if isDiscoveryGoBuildInfrastructureFailure(item.Reason) {
+			return fmt.Errorf("source not-applicable evidence contains an infrastructure failure: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)
+		}
 	}
 	return nil
 }
