@@ -25,7 +25,7 @@ func arm64PoolIntervalBits(interval arm64PoolInterval) (must, may uint64) {
 
 // A pool-relative offset is not the numeric address's bit pattern. Logical
 // proofs must use ordinary integer definitions even inside a relocation proof.
-func (flow *arm64RawPoolValues) integerInterval(at int, reg arm64asm.Reg) arm64PoolInterval {
+func (flow *arm64RawPoolValues) numericValues() *arm64RawPoolValues {
 	numeric := flow
 	if len(flow.poolOrigins) != 0 {
 		copy := *flow
@@ -38,6 +38,11 @@ func (flow *arm64RawPoolValues) integerInterval(at int, reg arm64asm.Reg) arm64P
 		}
 		numeric = &copy
 	}
+	return numeric
+}
+
+func (flow *arm64RawPoolValues) integerInterval(at int, reg arm64asm.Reg) arm64PoolInterval {
+	numeric := flow.numericValues()
 	expression := arm64PoolRegisterExpression(int(reg - arm64asm.X0))
 	interval := numeric.invariantInterval(at, expression)
 	if interval == arm64PoolUnknownInterval {

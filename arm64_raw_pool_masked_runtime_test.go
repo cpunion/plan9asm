@@ -9,11 +9,13 @@ import (
 
 func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	t.Helper()
-	lines := []string{"adr x9,#0", "mov x2,#15", "mov x3,#-16"}
+	lines := []string{"adr x9,#0", "mov x2,#15", "mov x3,#-16", "mov x6,#16", "mov x7,#19"}
 	forms := []string{"and x4,x1,x2", "and x4,x2,x1", "bic x4,x1,x3", "and x4,x1,#15"}
-	for index, form := range forms {
-		lines = append(lines, "cmp x1,#16", "b.lo #32", "cmp x1,#19", "b.hi #24", form,
-			"sub x5,x1,x4", "sub x5,x5,#16", "ldr x5,[x9,x5]", fmt.Sprintf("str x5,[x0,#%d]", index*8))
+	for mode, limits := range [][2]string{{"#16", "#19"}, {"x6", "x7"}} {
+		for index, form := range forms {
+			lines = append(lines, "cmp x1,"+limits[0], "b.lo #32", "cmp x1,"+limits[1], "b.hi #24", form,
+				"sub x5,x1,x4", "sub x5,x5,#16", "ldr x5,[x9,x5]", fmt.Sprintf("str x5,[x0,#%d]", (mode*len(forms)+index)*8))
+		}
 	}
 	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
@@ -69,12 +71,12 @@ extern void pool_masked(uint64_t *, uint64_t);
 int main(void) {
   const uint64_t inputs[] = {0, 1, 15, 16, 17, 18, 19, 20, 31, 255, UINT64_C(1)<<63, UINT64_MAX};
   for (unsigned test = 0; test < sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[6] = {0x1234, 0, 0, 0, 0, 0x5678};
+    uint64_t out[10] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
     uint64_t n = inputs[test];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[5] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[9] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
-    for (unsigned form = 0; form < 4; form++) {
+    for (unsigned form = 0; form < 8; form++) {
       if (out[form+1] != expected) return 2;
     }
   }
