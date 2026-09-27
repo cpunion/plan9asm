@@ -490,6 +490,9 @@ func arm64RawPoolReadOnlyLoad(op arm64asm.Op) bool {
 }
 
 func arm64RawPoolIndependentSVE(word uint32) bool {
+	if form, ok := decodeARM64RawSVECnt(word); ok && form.vector {
+		return true
+	}
 	if _, ok := decodeARM64RawSVEPTrue(word); ok {
 		return true
 	}

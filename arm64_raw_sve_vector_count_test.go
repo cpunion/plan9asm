@@ -67,6 +67,12 @@ func TestARM64RawSVEVectorCountOperandFields(t *testing.T) {
 		}
 	}
 	for i, word := range assembleARM64LLVMWords(t, lines, "+sve") {
+		requireARM64PoolScalableFlags(t, lines[i], word, 0)
+		for address := 0; address < 32; address++ {
+			if !arm64RawPoolSVEIgnoresAddress(word, address) {
+				t.Fatalf("%s: vector-only count unexpectedly reads R%d", lines[i], address)
+			}
+		}
 		got, ok := decodeARM64RawSVECnt(word)
 		if !ok || got != wants[i] {
 			t.Fatalf("%s: decoded %#08x as %+v, %v; want %+v", lines[i], word, got, ok, wants[i])

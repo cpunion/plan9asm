@@ -71,11 +71,17 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 	return 0, 0, 0, false
 }
 
-// These complete vector families preserve NZCV. Predicate logical operations
+// These complete scalable families preserve NZCV. Predicate logical operations
 // instead share the lowerer's explicit flag bit; their S variants cannot carry
 // an earlier scalar comparison. In particular, no-GP-output is insufficient:
 // SVE comparisons, WHILE*, PTEST and unknown instructions remain barriers.
 func arm64RawPoolSVEPreservesNZCV(word uint32) bool {
+	if _, ok := decodeARM64RawSVEAddress(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVECnt(word); ok {
+		return true
+	}
 	if _, ok := decodeARM64RawSVEEOR(word); ok {
 		return true
 	}

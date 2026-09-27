@@ -23,15 +23,26 @@ func arm64RawPoolSVEValuesRuntime(t *testing.T, triple string) (string, string) 
 	for _, op := range []string{"cnt", "inc", "dec"} {
 		for width, suffix := range "bhwd" {
 			for _, pattern := range []int{0, 8, 9, 13, 14, 29, 30, 31} {
-				body := []string{"addvl x9,x9,#-8", "mov x10,#0",
+				body := []string{"mov x15,#7", "cmp x15,#7", "addvl x9,x9,#-8", "mov x10,#0",
 					fmt.Sprintf("%s%c x10,#%d,mul #16", op, suffix, pattern),
-					"rdvl x11,#8", "add x9,x9,x11"}
+					"rdvl x11,#8", "addpl x12,x11,#-1", "b.hs #8", "ldr x1,[x9,#16384]", "add x9,x9,x11"}
 				sign := "+"
 				if op == "dec" {
 					sign = "-"
 				}
 				body = append(body, "add x9,x9,x10")
 				add(body, fmt.Sprintf("8192 %s 16 * pattern_count(vl >> %d, %d)", sign, width, pattern))
+			}
+		}
+	}
+	for _, op := range []string{"inc", "dec"} {
+		for size := 1; size < 4; size++ {
+			for _, pattern := range []int{0, 14, 31} {
+				for _, multiplier := range []int{1, 16} {
+					add([]string{"dup z10.d,#1", "mov x15,#7", "cmp x15,#7",
+						fmt.Sprintf("%s%c z10.%c,#%d,mul #%d", op, "bhwd"[size], "bhsd"[size], pattern, multiplier),
+						"b.hs #8", "ldr x1,[x9,#16384]"}, "8192")
+				}
 			}
 		}
 	}
