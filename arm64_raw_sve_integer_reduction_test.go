@@ -77,6 +77,9 @@ func TestARM64RawSVEIntegerReductionOperandFields(t *testing.T) {
 		}
 	}
 	for i, word := range assembleARM64LLVMWords(t, lines, "+sve2p1") {
+		if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 || !arm64RawPoolSVEIgnoresAddress(word, 9) {
+			t.Fatalf("%s: vector reduction has unknown or address-dependent GP effects", lines[i])
+		}
 		got, ok := decodeARM64RawSVEIntegerReduction(word)
 		if !ok || got.Op != wants[i].Op || fmt.Sprint(got.Args) != fmt.Sprint(wants[i].Args) {
 			t.Fatalf("%s: decoded %#08x as %+v, %v; want %+v", lines[i], word, got, ok, wants[i])

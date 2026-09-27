@@ -75,6 +75,9 @@ func TestDecodeARM64RawSVEIntegerAddReductionRegistersAndBoundaries(t *testing.T
 		0x04012000, 0x04412000, 0x04812000, 0x04c12000,
 	} {
 		word := base | 17 | 23<<5 | 5<<10
+		if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 || !arm64RawPoolSVEIgnoresAddress(word, 17) {
+			t.Fatalf("%#08x: scalar vector result was mistaken for a GP write", word)
+		}
 		reduction, ok := decodeARM64RawSVEIntegerAddReduction(word)
 		if !ok {
 			t.Fatalf("failed to decode %#08x", word)

@@ -502,6 +502,9 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	if _, ok := decodeARM64RawSVEFloat(word); ok {
 		return true
 	}
+	if _, ok := decodeARM64RawSVEIntegerAddReduction(word); ok {
+		return true // Scalar result is a V register, not a GP destination.
+	}
 	for _, decode := range []func(uint32) (Instr, bool){
 		decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare,
 		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
@@ -511,6 +514,7 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 		decodeARM64RawSVEConvert,
 		decodeARM64RawSVEUnpack,
 		decodeARM64RawSVEMultiplyAccumulate,
+		decodeARM64RawSVEIntegerReduction,
 		decodeARM64RawSVEDupM,
 		decodeARM64RawSVEExtraShift, decodeARM64RawSVECopy,
 		decodeARM64RawSVEMOVPRFX,
