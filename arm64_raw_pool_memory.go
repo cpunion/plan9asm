@@ -49,23 +49,80 @@ func arm64RawPoolReplicateLoad(word uint32) (Instr, bool) {
 }
 
 func arm64RawPoolLoadInBounds(ins arm64asm.Inst, word uint32, memory arm64asm.MemImmediate, offset, size int64) bool {
-	// x/arch exposes the addressing mode but keeps the decoded immediate
-	// private. Its AddrOffset printer is exactly [Base] or [Base,#decimal].
-	// Use that checked representation rather than duplicating every encoder.
-	text := memory.String()
-	prefix := "[" + memory.Base.String()
-	displacement := int64(0)
-	if text != prefix+"]" {
-		if !strings.HasPrefix(text, prefix+",#") || !strings.HasSuffix(text, "]") {
-			return false
-		}
-		var err error
-		displacement, err = strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(text, prefix+",#"), "]"), 10, 32)
-		if err != nil {
+	displacement, _, ok := arm64PoolImmediateAddress(memory)
+	if !ok {
+		return false
+	}
+	if memory.Mode != arm64asm.AddrOffset {
+		if _, _, valid := arm64PoolLoadWriteback(ins, word); !valid {
 			return false
 		}
 	}
 	return arm64RawPoolContains(offset+displacement, arm64RawPoolLoadBytes(ins, word), size)
+}
+
+// Return the load displacement and the separate base-register update. A post
+// index is not part of the read footprint; a pre index is part of both effects.
+func arm64PoolImmediateAddress(memory arm64asm.MemImmediate) (int64, int64, bool) {
+	// x/arch exposes the addressing mode but keeps the decoded immediate
+	// private. Its checked printer specifies offset, pre and post separately.
+	// Use that checked representation rather than duplicating every encoder.
+	text := memory.String()
+	prefix := "[" + memory.Base.String()
+	suffix := "]"
+	switch memory.Mode {
+	case arm64asm.AddrOffset:
+		if text == prefix+"]" {
+			return 0, 0, true
+		}
+		prefix += ",#"
+	case arm64asm.AddrPreIndex:
+		prefix, suffix = prefix+",#", "]!"
+	case arm64asm.AddrPostIndex:
+		prefix, suffix = prefix+"],#", ""
+	default:
+		return 0, 0, false
+	}
+	if !strings.HasPrefix(text, prefix) || !strings.HasSuffix(text, suffix) {
+		return 0, 0, false
+	}
+	delta, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(text, prefix), suffix), 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	switch memory.Mode {
+	case arm64asm.AddrPreIndex:
+		return delta, delta, true
+	case arm64asm.AddrPostIndex:
+		return 0, delta, true
+	}
+	return delta, 0, true
+}
+
+func arm64PoolLoadWriteback(ins arm64asm.Inst, word uint32) (int, int64, bool) {
+	if !arm64RawPoolReadOnlyLoad(ins.Op) || arm64RawPoolLoadBytes(ins, word) == 0 {
+		return 0, 0, false
+	}
+	for _, arg := range ins.Args {
+		memory, ok := arg.(arm64asm.MemImmediate)
+		if !ok || memory.Mode != arm64asm.AddrPreIndex && memory.Mode != arm64asm.AddrPostIndex {
+			continue
+		}
+		base, gp := arm64RawPoolGP(arm64asm.Reg(memory.Base))
+		_, delta, valid := arm64PoolImmediateAddress(memory)
+		if !gp || !valid {
+			return 0, 0, false
+		}
+		for _, output := range ins.Args {
+			if register, ok := output.(arm64asm.Reg); ok {
+				if index, gp := arm64RawPoolGP(register); gp && index == base {
+					return 0, 0, false // Constrained-unpredictable base/destination overlap.
+				}
+			}
+		}
+		return base, delta, true
+	}
+	return 0, 0, false
 }
 
 func arm64RawPoolLoadBytes(ins arm64asm.Inst, word uint32) int64 {

@@ -1,0 +1,101 @@
+package plan9asm
+
+import "math"
+
+// Prove an independent residual without collecting branch predicates. In a
+// loop an invariant pool origin retains its value while the counter and its
+// predicates change on every iteration. Repeated predicate substitution can
+// obscure that simple fact. This proof unions every path and never uses a
+// guard to discard one; changing recurrences and unknown effects fail closed.
+func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
+	query := arm64PoolAffineQuery{at, expression}
+	if cached, ok := flow.invariantCache[query]; ok {
+		return cached
+	}
+	if flow.invariantCache == nil {
+		flow.invariantCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
+	}
+	defer func() { flow.invariantCache[query] = answer }()
+	if len(flow.affineActive) == 0 {
+		flow.affineWork = 0
+	}
+	queue := []arm64PoolAffineQuery{{at, expression}}
+	visited := make(map[arm64PoolAffineQuery]bool)
+	type recurrence struct {
+		at          int
+		coefficient [31]int64
+	}
+	constants := make(map[recurrence]uint64)
+	result, found := arm64PoolInterval{math.MaxUint64, 0}, false
+	for steps := 0; len(queue) > 0; steps++ {
+		if steps >= 4096 || flow.affineWork >= 16384 {
+			return arm64PoolUnknownInterval
+		}
+		flow.affineWork++
+		state := queue[len(queue)-1]
+		queue = queue[:len(queue)-1]
+		if visited[state] {
+			continue
+		}
+		visited[state] = true
+		key := recurrence{state.at, state.expression.coefficient}
+		if previous, ok := constants[key]; ok && previous != state.expression.constant {
+			return arm64PoolUnknownInterval
+		}
+		constants[key] = state.expression.constant
+		if state.expression.isConstant() {
+			value := state.expression.constant
+			if value < result.low {
+				result.low = value
+			}
+			if value > result.high {
+				result.high = value
+			}
+			found = true
+			continue
+		}
+		if state.at < 0 || state.at >= len(flow.before) || len(flow.before[state.at]) == 0 {
+			return arm64PoolUnknownInterval
+		}
+		for _, previous := range flow.before[state.at] {
+			if previous < 0 || flow.opaque[previous] {
+				return arm64PoolUnknownInterval
+			}
+			word := flow.words[previous]
+			writes, known := arm64RawPoolGPWrites(word)
+			if !known {
+				return arm64PoolUnknownInterval
+			}
+			next := arm64PoolAffineQuery{previous, state.expression}
+			if affected := writes & next.expression.registerMask(); affected != 0 {
+				destination, value, valid := arm64PoolAffineDefinition(word)
+				if origin := flow.poolOrigin; origin != nil && previous == origin.at && word&0x9f000000 == 0x10000000 {
+					destination = int(word & 31)
+					if next.expression.coefficient[destination] != 1 {
+						return arm64PoolUnknownInterval
+					}
+					value, valid = arm64PoolAffine{constant: origin.offset}, true
+				}
+				// Follow constants, copies and constant displacements. A changing
+				// displacement recurrence is rejected above on its second visit;
+				// multi-register arithmetic belongs to the guarded solver.
+				if !value.isConstant() {
+					mask := value.registerMask()
+					copy := mask != 0 && mask&(mask-1) == 0
+					for _, coefficient := range value.coefficient {
+						copy = copy && (coefficient == 0 || coefficient == 1)
+					}
+					valid = valid && copy
+				}
+				if !valid || affected != 1<<uint(destination) || !next.expression.substitute(destination, value) {
+					return arm64PoolUnknownInterval
+				}
+			}
+			queue = append(queue, next)
+		}
+	}
+	if !found {
+		return arm64PoolUnknownInterval
+	}
+	return result
+}

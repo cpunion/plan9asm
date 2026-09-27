@@ -30,7 +30,10 @@ func (flow *arm64RawPoolValues) affineConstraintBound(at int, query arm64PoolAff
 		}
 		// The eliminated coefficient makes this a strictly different query.
 		// Recursive proof budgets and active-query detection still apply.
-		residual := flow.affineInterval(at, remainder)
+		residual := flow.invariantInterval(at, remainder)
+		if residual == arm64PoolUnknownInterval {
+			residual = flow.affineInterval(at, remainder)
+		}
 		if residual == arm64PoolUnknownInterval {
 			continue
 		}

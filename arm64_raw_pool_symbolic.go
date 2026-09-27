@@ -16,6 +16,7 @@ func (bounds *arm64RawPoolBounds) withSymbolicOrigin(at int) *arm64RawPoolBounds
 		words: bounds.values.words, before: bounds.values.before,
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
 		poolOrigin: &arm64PoolOrigin{at, uint64(bounds.offset)},
+		excluded:   bounds.values.excluded, loopBounds: bounds.values.loopBounds,
 	}
 	return &copy
 }
@@ -24,7 +25,11 @@ func (bounds *arm64RawPoolBounds) offsetAt(at int, register arm64asm.Reg, fallba
 	if bounds == nil || !bounds.symbolic {
 		return fallback, true
 	}
-	value := bounds.values.affineInterval(at, arm64PoolRegisterExpression(int(register-arm64asm.X0)))
+	expression := arm64PoolRegisterExpression(int(register - arm64asm.X0))
+	value := bounds.values.invariantInterval(at, expression)
+	if value == arm64PoolUnknownInterval {
+		value = bounds.values.affineInterval(at, expression)
+	}
 	if value.low > value.high || value.high > uint64(bounds.size) {
 		return arm64RawPoolRange{}, false
 	}

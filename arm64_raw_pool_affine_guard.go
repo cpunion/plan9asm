@@ -5,6 +5,17 @@ import "math"
 func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm64PoolConstraint, bool) {
 	var constraint arm64PoolConstraint
 	word := flow.words[edge.from]
+	if word&0xfe000000 == 0xb4000000 { // CBZ/CBNZ X: W does not bound the high bits.
+		target := edge.from + int(int32(word<<8)>>13)
+		if target == edge.from+1 || edge.to != target && edge.to != edge.from+1 {
+			return constraint, false
+		}
+		constraint.expression = arm64PoolRegisterExpression(int(word & 31))
+		if (edge.to == target) == (word&(1<<24) != 0) {
+			constraint.interval = arm64PoolInterval{1, math.MaxUint64}
+		}
+		return constraint, true
+	}
 	if word&0x7e000000 == 0x36000000 { // TBZ/TBNZ, including W views of low bits.
 		target := edge.from + int(int32(word<<13)>>18)
 		if target == edge.from+1 || edge.to != target && edge.to != edge.from+1 {

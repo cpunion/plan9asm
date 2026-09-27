@@ -191,6 +191,12 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 			continue
 		}
 		visited[state] = true
+		if constraint, ok := flow.loopBounds[state.at]; ok {
+			if value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint); bounded && value != arm64PoolUnknownInterval {
+				addResult(value)
+				continue
+			}
+		}
 		impossible := false
 		bound := state.bound
 		for _, constraint := range state.constraints[:state.count] {
@@ -236,6 +242,10 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 	predecessors:
 		for _, previous := range flow.before[state.at] {
 			if previous < 0 {
+				addResult(bound)
+				continue
+			}
+			if flow.opaque[previous] {
 				addResult(bound)
 				continue
 			}
@@ -318,7 +328,15 @@ func arm64PoolAffineDefinition(word uint32) (int, arm64PoolAffine, bool) {
 	binary.LittleEndian.PutUint32(code[:], word)
 	ins, err := arm64asm.Decode(code[:])
 	destination := int(word & 31)
-	if err != nil || destination == 31 {
+	if err != nil {
+		return 0, arm64PoolAffine{}, false
+	}
+	if base, delta, ok := arm64PoolLoadWriteback(ins, word); ok {
+		value := arm64PoolRegisterExpression(base)
+		value.constant = uint64(delta)
+		return base, value, true
+	}
+	if destination == 31 {
 		return 0, arm64PoolAffine{}, false
 	}
 	var value arm64PoolAffine

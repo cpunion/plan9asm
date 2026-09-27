@@ -214,6 +214,9 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 		wordRegister := register - arm64asm.X0 + arm64asm.W0
 		isAddress := func(r arm64asm.Reg) bool { return r == register || r == wordRegister }
 		next := func(at int) {
+			if bounds != nil && bounds.values != nil && bounds.values.excluded[arm64RawPoolEdge{i, at}] {
+				return
+			}
 			nextOffset := offset
 			if bounds != nil && bounds.symbolic {
 				nextOffset = arm64RawPoolRange{}
@@ -395,8 +398,13 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 					}
 				}
 				if arm64asm.Reg(arg.Base) == register {
-					if !arm64RawPoolReadOnlyLoad(decoded.Op) || arg.Mode != arm64asm.AddrOffset {
+					if !arm64RawPoolReadOnlyLoad(decoded.Op) {
 						return false
+					}
+					if arg.Mode != arm64asm.AddrOffset {
+						if _, _, valid := arm64PoolLoadWriteback(decoded, word); !valid || bounds == nil || !bounds.symbolic {
+							return false
+						}
 					}
 					var proven bool
 					offset, proven = bounds.offsetAt(i, register, offset)

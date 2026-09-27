@@ -17,10 +17,14 @@ type arm64RawPoolValues struct {
 	cache  map[arm64RawPoolValue]uint64
 	active map[arm64RawPoolValue]bool
 
-	affineCache  map[arm64PoolAffineQuery]arm64PoolInterval
-	affineActive map[arm64PoolAffineQuery]bool
-	affineWork   int
-	poolOrigin   *arm64PoolOrigin
+	affineCache    map[arm64PoolAffineQuery]arm64PoolInterval
+	affineActive   map[arm64PoolAffineQuery]bool
+	affineWork     int
+	invariantCache map[arm64PoolAffineQuery]arm64PoolInterval
+	poolOrigin     *arm64PoolOrigin
+	excluded       map[arm64RawPoolEdge]bool
+	loopBounds     map[int]arm64PoolConstraint
+	opaque         map[int]bool
 }
 
 type arm64RawPoolValue struct {
@@ -38,7 +42,12 @@ func newARM64RawPoolValues(instructions []Instr, start, end int, reachable map[i
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
 	}
 	flow.before[start] = []int{-1} // The function's unknown incoming registers.
-	for at := range reachable {
+	// Stable predecessor order keeps bounded proofs and their caches
+	// reproducible; map iteration must not decide whether a budget is met.
+	for at := start; at < end; at++ {
+		if !reachable[at] {
+			continue
+		}
 		word := uint32(instructions[at].Args[0].Imm)
 		flow.words[at] = word
 		if word&0xfffffc1f == 0xd65f0000 {
@@ -55,6 +64,7 @@ func newARM64RawPoolValues(instructions []Instr, start, end int, reachable map[i
 			flow.before[at+1] = append(flow.before[at+1], at)
 		}
 	}
+	flow.prepareControlFlow()
 	return flow
 }
 
@@ -107,6 +117,9 @@ func (flow *arm64RawPoolValues) upper(at int, reg arm64asm.Reg) uint64 {
 		previous := edge.from
 		queue = queue[:len(queue)-1]
 		if previous < 0 {
+			return limit
+		}
+		if flow.opaque[previous] {
 			return limit
 		}
 		if bound, ok := flow.edgeUpper(edge, reg); ok {
