@@ -9,7 +9,7 @@ import (
 )
 
 func arm64RawPoolIndexedLoadInBounds(ins arm64asm.Inst, word uint32, memory arm64asm.MemExtend, at int, offset int64, bounds *arm64RawPoolBounds) bool {
-	upper := bounds.values.upper(at, memory.Index)
+	upper := bounds.values.boundedUpper(at, memory.Index)
 	switch memory.Extend.String() {
 	case "UXTW":
 		if upper > math.MaxUint32 {

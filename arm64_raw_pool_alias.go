@@ -64,7 +64,7 @@ func arm64RawPoolAlias(word uint32, at, address int, offset arm64RawPoolRange, b
 		if bounds == nil {
 			return 0, delta, false
 		}
-		upper := bounds.values.upper(at, arm64asm.X0+arm64asm.Reg(index))
+		upper := bounds.values.boundedUpper(at, arm64asm.X0+arm64asm.Reg(index))
 		switch kind {
 		case 0: // LSL: prove that no bit is lost or enters the sign bit.
 			if upper > math.MaxInt64>>shift {
@@ -95,7 +95,7 @@ func arm64RawPoolAlias(word uint32, at, address int, offset arm64RawPoolRange, b
 		if bits < 64 {
 			reg = arm64asm.W0 + arm64asm.Reg(index)
 		}
-		upper := bounds.values.upper(at, reg)
+		upper := bounds.values.boundedUpper(at, reg)
 		if extension < 4 { // Unsigned extension masks the source.
 			limit := uint64(math.MaxUint64) >> (64 - bits)
 			if upper > limit {
