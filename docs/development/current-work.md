@@ -7,15 +7,22 @@ in Git history; red/green logs remain in ignored `_out/`.
 
 ## Authority and current CI
 
-- PR 40 is OPEN/DRAFT. Push only to
-  `cpunion:codex/expand-ecosystem-corpus-20260913`. Never push to `origin`
-  or `xgo-dev`, merge/approve/close the upstream PR, or mutate its settings/runs.
+- PR 40 stays OPEN/DRAFT. Its existing fork head is
+  `cpunion:codex/expand-ecosystem-corpus-20260913`. Do not update it during
+  repair iterations. Never push to `origin` or `xgo-dev`, merge/approve/close
+  the upstream PR, or mutate its settings/runs.
 - Pushed head is `b93666f5`, including upstream `main@7cc8c0f`.
   CI run `36311131855` is still active. **The user requires this run to finish
   once: do not push, cancel or rerun it while active.** Inspect live jobs first;
   intermediate failures are not its final result.
 - A read-only watcher writes `_out/ci-b936-watch.log` in the instruction tree.
-  The PR body has the audited scan/assembly funnel and CI counts.
+- After this run finishes, create a Draft PR **inside `cpunion/plan9asm`** from
+  `codex/pr40-fork-ci-20260927` to the existing PR 40 head branch. The staging
+  branch is local at this checkpoint. Only promote its commits to the PR 40
+  head after fork CI passes. See [fork-first CI](validation.md#fork-first-ci).
+- The workflow already chooses GitHub-hosted runners outside `xgo-dev`;
+  staging must not consume its qiniu runners. Fork Actions are enabled and the
+  workflow passes `actionlint`. Do not weaken coverage or platform gates.
 - Inspect status, worktrees, remotes and processes before editing. Never change
   a frozen corpus runner, its tools or scan ledger during verification.
 
@@ -23,22 +30,26 @@ in Git history; red/green logs remain in ignored `_out/`.
 
 Identify persistent trees by branch, not by machine-specific paths:
 
-- `codex/pr40-arm64-raw-20260926`: main instruction development. At
-  `66ef3967`, semantic source equals `2265cb14`; later evidence commits only
-  update the derived assembly ledger. Preserve the SIMD snapshot before
-  integrating the diagnostic fixes below.
+- `codex/pr40-fork-ci-20260927`: integrated staging branch, initially based on
+  `3e8331fd`. This documentation update changes its source fingerprint; bind
+  a fresh pending ledger before pushing. Prior snapshots remain historical
+  evidence, not current-head passes.
+- `codex/pr40-arm64-raw-20260926`: integrated code at `f063972d`, with derived
+  evidence at `3e8331fd`. Its semantic source matches the frozen diagnostic
+  runner below. Publish that runner's completed report here before advancing
+  the source, not into the staging branch with changed documentation.
 - `codex/pr40-ci-hotfix-20260927`: frozen at `2265cb14`. Reports are in
   `_out/simd-replay-2265cb14/`, with sibling `*-shard15.log` and
-  `*-shard17.log`. Shard 15 passed; shard 17 is finishing at this checkpoint.
-  Both exact SIMD module candidates passed. Do not modify this tree while any
-  verification process remains active.
-- `codex/pr40-network-classify-20260927`: new fixes `0674b925`,
-  `855675f2`, `abb64a5d`. After committing this checkpoint and rebinding the
-  pending ledger, freeze it for a complete shard 21 replay. Its source differs
-  from the SIMD checkpoint; old reports cannot become new-source passes.
+  `*-shard17.log`. Both shards passed completely; snapshot `46ca52a7` retains
+  their audited evidence. Both exact SIMD module candidates passed.
+- `codex/pr40-network-classify-20260927`: frozen at `a9972b4d` with fixes
+  `0674b925`, `855675f2`, `abb64a5d`. Full shard 21 replay is still running in
+  `_out/proxy-replay-a9972b4d/`, with sibling `*-shard21.log`. Both candidates
+  that failed CI with HTTP EOF have passed locally, but wait for the whole
+  shard. Do not modify this tree or promote its report to a different source.
 - `codex/pr40-ci-evidence-b93666f5`: exact pushed-source CI artifacts in
-  `_out/ci-b936-reports`. Evidence `1965527d` retains 21 complete reports:
-  13 passing and eight failing shards. Complete/verified remain false.
+  `_out/ci-b936-reports`. Evidence `95393b81` retains 22 complete reports:
+  14 passing and eight failing shards. Complete/verified remain false.
 
 Historical evidence, including `b434d36e` and `16c4685`, is not disposable.
 Missing reports remain pending. Publish through the validated updater, never
@@ -90,6 +101,13 @@ Use actual Go 1.27.1 in PATH for external jobs and LLVM 22 only. The existing
 Linux cross container uses Go 1.27.0 for root runtime oracles and pinned QEMU
 10.2.3. Missing tools fail. Root compatibility remains Go 1.20.
 
+At integrated diagnostic source `f063972d`, the full root suite and all root
+subpackages pass in 764.659 seconds (`_out/root-tests-proxy-f063972d.jsonl`).
+Both CLI suites, root vet/build, both CLI builds, tracked-file formatting and
+diff checks also pass; logs use `_out/proxy-*` in the instruction tree. The
+instruction code is unchanged from the cross-runtime checkpoint above. Timing
+variation under different parallel workloads is not a performance improvement.
+
 ## New corpus-diagnostic fixes (not pushed)
 
 - `0674b925`: exclude only exact matching Go assembler EOF source lines,
@@ -117,14 +135,13 @@ not promote their old source/tool provenance.
 
 1. Let CI finish once; download and audit new artifacts in the exact-source
    evidence tree. Keep Draft. Verify the shard 21 EOF fix with a full replay.
-2. Finish shard 17; publish both SIMD reports using
-   `scripts/update-assembly-ledger.sh` in a same-source evidence/development
-   tree. An in-progress shard is not passed.
-3. Preserve the SIMD snapshot, then integrate the three diagnostic source
-   commits and this checkpoint into the main development branch. Refresh its
-   ledger for the new semantic fingerprint and freeze the final source for
-   verification. Documentation changes also invalidate old fingerprints;
-   derived assembly-ledger changes alone do not.
+2. Publish the completed shard 21 report using
+   `scripts/update-assembly-ledger.sh` in the same-source instruction tree.
+   Preserve this and the complete SIMD snapshot; never mix their provenance.
+3. Refresh the staging branch's pending ledger after documentation changes,
+   then freeze it and create the fork Draft PR after the original run ends.
+   Documentation changes invalidate old fingerprints; derived assembly-ledger
+   changes alone do not. Run the full matrix in the fork before promotion.
 4. Native-layout/JIT failures remain real: GopherJRE takes an out-of-group
    RIP-relative continuation and exchanges a custom register/stack contract;
    GoJIT scans bytes for `0xDEADBE00` and enters code after it; Sharkie switches
@@ -137,9 +154,9 @@ not promote their old source/tool provenance.
    gVisor dependencies, with 503/429 mixed into 404s. Proxy latest resolves to
    the same version. No newer same-project replacement is verified. Do not
    disguise transport errors as source N/A or invent a supersession.
-6. Only after the run finishes and relevant failures are repaired, batch-push
-   the allowed fork and inspect CI, review and patch coverage. Distinguish
-   compilation, runtime execution and inventory claims.
+6. Batch-push only the new staging branch for repair CI. Do not update the
+   upstream-connected head until fork CI passes. Inspect review and patch
+   coverage too; distinguish compilation, runtime and inventory claims.
 
 The remote inventory was not refreshed during CI repair. Scan records,
 assembly evidence and the separately stored cgo inventory remain distinct.

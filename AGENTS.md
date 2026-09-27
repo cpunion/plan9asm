@@ -62,6 +62,9 @@ tests establish the relevant runtime semantics.
   compressed discovery results or obsolete per-run ledgers, even in history.
 - Commit verified development promptly. Keep PR 40 draft until current-head
   tests, CI, review and coverage meet the completion gates.
+- Stage PR 40 repairs in a separate branch and Draft PR inside `cpunion`.
+  Do not update its upstream-connected head until fork CI passes. Follow
+  [the fork validation procedure](docs/development/validation.md#fork-first-ci).
 
 ## Common commands
 

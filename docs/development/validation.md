@@ -140,3 +140,30 @@ head success. See [discovery verification](discovery-verification.md).
 - Keep obsolete compressed/run records out of contribution history as well as
   the final tree. A necessary rewrite uses `--force-with-lease` only on the
   allowed fork after checking for remote changes.
+
+## Fork-first CI
+
+PR 40 remains open upstream, but repair iterations run in `cpunion/plan9asm`:
+
+1. Let the already active upstream CI run finish once. Do not cancel it or
+   update its head while it is running.
+2. Create a distinct repair branch from the integrated fixes. Open a Draft PR
+   **in the fork**, targeting `codex/expand-ecosystem-corpus-20260913`, the fork
+   branch already used by upstream PR 40. Do not target fork `main` or update
+   the upstream-connected branch during repair iterations.
+3. Inspect the workflow before pushing. Its owner-based runner selection must
+   use GitHub-hosted runners in the fork, not upstream qiniu runners. Preserve
+   all test and coverage gates. A Draft PR still needs to execute CI.
+4. Batch fixes on the new branch; inspect completed job logs and publish only
+   reports matching the frozen source and scan ledger. An old upstream pass
+   does not establish a pass for the repair branch.
+5. Only after the fork PR's current-head CI passes, refresh both remote refs
+   and integrate the validated commits into the existing PR 40 head in the
+   fork. Prefer a fast-forward; if either branch changed, verify the resulting
+   tree before promotion. This is a branch update, not a merge of upstream
+   PR 40. Upstream CI is then expected to run once on the promoted batch.
+
+Use explicit `--repo cpunion/plan9asm`, `--base`, and `--head` arguments when
+creating the staging PR. Its body should link PR 40 and distinguish the repair
+diff, original-run evidence and current-head validation. Keep both PRs draft
+until their respective completion gates pass; do not close upstream PR 40.
