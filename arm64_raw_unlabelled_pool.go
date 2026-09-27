@@ -92,9 +92,15 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 	// as data when the produced address is used exclusively by loads and killed
 	// on every outgoing path (possibly by an explicit return contract).
 	values := newARM64RawPoolValues(fn.Instrs, start, pool, visited)
+	origins := make(map[int]uint64)
 	for at, target := range addresses {
 		if target >= pool && target < end {
-			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4, values: values}
+			origins[at] = uint64(target-pool) * 4
+		}
+	}
+	for at, target := range addresses {
+		if target >= pool && target < end {
+			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4, values: values, origins: origins}
 			if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
 				// The fast interval walker rejects transient offsets outside the
 				// blob. A symbolic proof may cancel them before a read, but it
@@ -186,6 +192,7 @@ type arm64RawPoolBounds struct {
 	offset   int64
 	size     int64
 	values   *arm64RawPoolValues
+	origins  map[int]uint64
 	symbolic bool
 }
 

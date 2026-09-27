@@ -24,6 +24,7 @@ func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAf
 	type recurrence struct {
 		at          int
 		coefficient [31]int64
+		relocations int64
 	}
 	constants := make(map[recurrence]uint64)
 	result, found := arm64PoolInterval{math.MaxUint64, 0}, false
@@ -38,7 +39,7 @@ func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAf
 			continue
 		}
 		visited[state] = true
-		key := recurrence{state.at, state.expression.coefficient}
+		key := recurrence{state.at, state.expression.coefficient, state.expression.relocations}
 		if previous, ok := constants[key]; ok && previous != state.expression.constant {
 			return arm64PoolUnknownInterval
 		}
@@ -69,12 +70,12 @@ func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAf
 			next := arm64PoolAffineQuery{previous, state.expression}
 			if affected := writes & next.expression.registerMask(); affected != 0 {
 				destination, value, valid := arm64PoolAffineDefinition(word)
-				if origin := flow.poolOrigin; origin != nil && previous == origin.at && word&0x9f000000 == 0x10000000 {
+				if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 					destination = int(word & 31)
 					if next.expression.coefficient[destination] != 1 {
 						return arm64PoolUnknownInterval
 					}
-					value, valid = arm64PoolAffine{constant: origin.offset}, true
+					value, valid = arm64PoolAffine{constant: offset, relocations: 1}, true
 				}
 				// Follow constants, copies and constant displacements. A changing
 				// displacement recurrence is rejected above on its second visit;

@@ -21,7 +21,7 @@ type arm64RawPoolValues struct {
 	affineActive   map[arm64PoolAffineQuery]bool
 	affineWork     int
 	invariantCache map[arm64PoolAffineQuery]arm64PoolInterval
-	poolOrigin     *arm64PoolOrigin
+	poolOrigins    map[int]uint64
 	excluded       map[arm64RawPoolEdge]bool
 	loopBounds     map[int]arm64PoolConstraint
 	opaque         map[int]bool

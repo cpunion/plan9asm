@@ -13,6 +13,7 @@ import (
 type arm64PoolAffine struct {
 	coefficient [31]int64
 	constant    uint64
+	relocations int64 // Unresolved common pool base; never two relocated addresses.
 }
 
 type arm64PoolInterval struct {
@@ -59,6 +60,10 @@ func (expression *arm64PoolAffine) add(other arm64PoolAffine, scale int64) bool 
 	if scale < -limit || scale > limit {
 		return false
 	}
+	relocations := expression.relocations + other.relocations*scale
+	if relocations < 0 || relocations > 1 {
+		return false
+	}
 	for n, coefficient := range other.coefficient {
 		value := expression.coefficient[n] + coefficient*scale
 		if value < -limit || value > limit {
@@ -67,6 +72,7 @@ func (expression *arm64PoolAffine) add(other arm64PoolAffine, scale int64) bool 
 		expression.coefficient[n] = value
 	}
 	expression.constant += other.constant * uint64(scale)
+	expression.relocations = relocations
 	return true
 }
 
@@ -124,6 +130,9 @@ func (expression arm64PoolAffine) constrainedBy(constraint arm64PoolConstraint) 
 		}
 	}
 	if !found {
+		return arm64PoolInterval{}, false
+	}
+	if expression.relocations != other.relocations*scale {
 		return arm64PoolInterval{}, false
 	}
 	delta := expression.constant - other.constant*uint64(scale)
@@ -197,6 +206,25 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				continue
 			}
 		}
+		// Substitution can expose a stable origin after cancelling a transient
+		// index. Resolve that complete expression without accumulating unrelated
+		// loop predicates. The invariant proof preserves relocation cardinality
+		// and unions all entries, including separate ADRs of the same pool.
+		mask := state.expression.registerMask()
+		if len(flow.poolOrigins) != 0 && mask != 0 && mask&(mask-1) == 0 {
+			if invariant := flow.invariantInterval(state.at, state.expression); invariant != arm64PoolUnknownInterval {
+				if invariant.low < state.bound.low {
+					invariant.low = state.bound.low
+				}
+				if invariant.high > state.bound.high {
+					invariant.high = state.bound.high
+				}
+				if invariant.low <= invariant.high {
+					addResult(invariant)
+				}
+				continue
+			}
+		}
 		impossible := false
 		bound := state.bound
 		for _, constraint := range state.constraints[:state.count] {
@@ -265,7 +293,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				continue
 			}
 			destination, value, affine := arm64PoolAffineDefinition(word)
-			if origin := flow.poolOrigin; origin != nil && previous == origin.at && word&0x9f000000 == 0x10000000 {
+			if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 				index := int(word & 31)
 				// An offset proof may replace one occurrence of the relocation
 				// origin, never a sum of two aliases. The latter changes by
@@ -280,7 +308,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 						return arm64PoolUnknownInterval
 					}
 				}
-				destination, value, affine = int(word&31), arm64PoolAffine{constant: origin.offset}, true
+				destination, value, affine = int(word&31), arm64PoolAffine{constant: offset, relocations: 1}, true
 			}
 			if !affine && writes != 0 {
 				if masked, ok := flow.affineMaskInterval(previous, word); ok && masked.low == masked.high {

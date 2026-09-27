@@ -32,9 +32,18 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 		"stp q2, q3, [x0, #48]",
 
 		"add x10, x9, #24", "ldr x2, [x10], #8", "ldr x3, [x10, #8]!",
-		"stp x2, x3, [x0, #80]", "mov x9, xzr", "mov x10, xzr", "ret",
+		"stp x2, x3, [x0, #80]",
+
+		"mov x10, x9", "cbz x1, #8", "adr x10, #0",
+		"sub x12, x10, x2", "add x12, x12, x2", "ldr x3, [x12]", "str x3, [x0, #96]",
+		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret",
 	)
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
+	for at, line := range lines {
+		if line == "adr x10, #0" {
+			lines[at] = fmt.Sprintf("adr x10, #%d", (len(lines)-at)*4+8)
+		}
+	}
 	var source strings.Builder
 	source.WriteString("TEXT pool_loop(SB),$0-16\nMOVD out+0(FP),R0\nMOVD count+8(FP),R1\n")
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
@@ -96,9 +105,9 @@ int main(void) {
   const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 20, 255,
                              1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[14] = {0}, expected[12] = {0};
+    uint64_t result[15] = {0}, expected[13] = {0};
     result[0] = 0x12345678;
-    result[13] = 0x87654321;
+    result[14] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -106,8 +115,9 @@ int main(void) {
     memcpy(expected + 6, values + 2, 32);
     expected[10] = values[3];
     expected[11] = values[5];
+    expected[12] = values[counts[i] > 7 ? 1 : 0];
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[13] != 0x87654321 ||
+    if (result[0] != 0x12345678 || result[14] != 0x87654321 ||
         memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
   }
   return 0;

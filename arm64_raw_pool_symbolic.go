@@ -2,21 +2,20 @@ package plan9asm
 
 import "golang.org/x/arch/arm64/arm64asm"
 
-type arm64PoolOrigin struct {
-	at     int
-	offset uint64
-}
-
 func (bounds *arm64RawPoolBounds) withSymbolicOrigin(at int) *arm64RawPoolBounds {
 	copy := *bounds
 	copy.symbolic = true
-	// Origins are proof-local. Never reuse a cache computed with another ADR
-	// replaced by a relative offset, or modify the ordinary integer analysis.
+	origins := bounds.origins
+	if len(origins) == 0 {
+		origins = map[int]uint64{at: uint64(bounds.offset)}
+	}
+	// Origins share one pool base but remain proof-local. Never reuse a cache
+	// computed with a different pool basis or modify ordinary integer analysis.
 	copy.values = &arm64RawPoolValues{
 		words: bounds.values.words, before: bounds.values.before,
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
-		poolOrigin: &arm64PoolOrigin{at, uint64(bounds.offset)},
-		excluded:   bounds.values.excluded, loopBounds: bounds.values.loopBounds,
+		poolOrigins: origins,
+		excluded:    bounds.values.excluded, loopBounds: bounds.values.loopBounds,
 	}
 	return &copy
 }
