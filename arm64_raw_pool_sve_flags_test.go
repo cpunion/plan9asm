@@ -52,11 +52,7 @@ func arm64PoolSVEFlagPreservingForms() []string {
 		}
 	}
 	for size, width := range "bhsdq" {
-		lanes := 16 >> size
-		if width == 'q' {
-			lanes = 2
-		}
-		for lane := 0; lane < lanes; lane++ {
+		for lane := 0; lane < 64>>size; lane++ {
 			lines = append(lines, fmt.Sprintf("dup z9.%c,z31.%c[%d]", width, width, lane))
 		}
 	}

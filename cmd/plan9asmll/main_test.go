@@ -1565,7 +1565,7 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		"ZFDIV", "ZFDIVR", "ZFSCALE",
 		"ZSUQADD", "ZUSQADD",
 		"ZFCADD",
-		"ZDUPW",
+		"ZDUP", "ZDUPW",
 		"ZDUPQ",
 		"ZDUPM",
 		"ZFDOT",

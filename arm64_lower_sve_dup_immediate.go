@@ -20,7 +20,7 @@ type arm64RawSVEDupElement struct {
 }
 
 func decodeARM64RawSVEDupElement(word uint32) (arm64RawSVEDupElement, bool) {
-	if word&0xffa0fc00 != 0x05202000 {
+	if word&0xff20fc00 != 0x05202000 {
 		return arm64RawSVEDupElement{}, false
 	}
 	imm5 := int(word>>16) & 31
@@ -39,17 +39,9 @@ func decodeARM64RawSVEDupElement(word uint32) (arm64RawSVEDupElement, bool) {
 		source:      int(word>>5) & 31,
 		destination: int(word) & 31,
 	}
-	if size == 4 {
-		if imm5 != 16 {
-			return arm64RawSVEDupElement{}, false
-		}
-		form.lane = int(word>>22) & 1
-	} else {
-		if word&(1<<22) != 0 {
-			return arm64RawSVEDupElement{}, false
-		}
-		form.lane = imm5 >> (size + 1)
-	}
+	// imm2:tsz describes an element in the first 512 bits, not just the
+	// minimum 128-bit vector. The two upper index bits are shared by all widths.
+	form.lane = (int(word>>22&3)<<5 | imm5) >> (size + 1)
 	return form, true
 }
 
@@ -120,7 +112,7 @@ func arm64ParseSVEDupElementReg(operand Operand) (index, elementBits, lane int, 
 	}
 	elementBits, ok = map[string]int{"B": 8, "H": 16, "S": 32, "D": 64, "Q": 128}[name[dot+1:open]]
 	lane, err = strconv.Atoi(name[open+1 : len(name)-1])
-	if err != nil || !ok || lane < 0 || lane >= 256/elementBits {
+	if err != nil || !ok || lane < 0 || lane >= 512/elementBits {
 		return 0, 0, 0, false
 	}
 	return index, elementBits, lane, true
@@ -212,7 +204,25 @@ func (c *arm64Ctx) lowerRawSVEDupElement(form arm64RawSVEDupElement) error {
 	element := c.newTmp()
 	inserted := c.newTmp()
 	splat := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = extractelement %s %s, i64 %d\n", element, vectorType, typedSource, form.lane)
+	index := fmt.Sprint(form.lane)
+	valid := ""
+	if form.lane >= lanes {
+		// The architecture returns zero beyond the current VL. An unchecked
+		// extractelement would instead create LLVM poison. Clamp the extraction
+		// itself, then select zero, so both evaluated operands remain defined.
+		vscale, length, inRange, safeIndex := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = call i64 @llvm.vscale.i64()\n", vscale)
+		fmt.Fprintf(c.b, "  %%%s = mul i64 %%%s, %d\n", length, vscale, lanes)
+		fmt.Fprintf(c.b, "  %%%s = icmp ugt i64 %%%s, %d\n", inRange, length, form.lane)
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i64 %d, i64 0\n", safeIndex, inRange, form.lane)
+		index, valid = "%"+safeIndex, "%"+inRange
+	}
+	fmt.Fprintf(c.b, "  %%%s = extractelement %s %s, i64 %s\n", element, vectorType, typedSource, index)
+	if valid != "" {
+		selected := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = select i1 %s, i%d %%%s, i%d 0\n", selected, valid, form.elementBits, element, form.elementBits)
+		element = selected
+	}
 	fmt.Fprintf(c.b, "  %%%s = insertelement %s poison, i%d %%%s, i64 0\n", inserted, vectorType, form.elementBits, element)
 	fmt.Fprintf(c.b, "  %%%s = shufflevector %s %%%s, %s poison, <vscale x %d x i32> zeroinitializer\n", splat, vectorType, inserted, vectorType, lanes)
 	result := "%" + splat
