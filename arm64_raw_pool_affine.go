@@ -366,6 +366,11 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				// value. An unrelated masked predicate may be forgotten below;
 				// recursively proving it must not consume the address's budget.
 				interval, bounded := flow.affineMaskInterval(previous, word)
+				if bounded && interval.low != interval.high {
+					// A partial mask may still subtract only fixed bits. Keep
+					// that relation instead of replacing it by an independent range.
+					value, _, affine, _ = flow.affineLogicalDefinition(previous, word)
+				}
 				if !bounded {
 					interval, bounded = flow.affineMoveKeepInterval(previous, word)
 				}

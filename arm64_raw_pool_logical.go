@@ -10,7 +10,8 @@ import (
 // Logical operations already have lowering for the complete Go grammar. This
 // proof layer recognizes when OR/XOR also preserve an affine relationship:
 // operands with disjoint possible one-bits cannot carry, so OR/XOR equal ADD.
-// Other cases retain conservative bit bounds, never an invented ADD identity.
+// AND/BIC can subtract bits proved constant across the input interval. Other
+// cases retain conservative bit bounds, never an invented affine identity.
 type arm64PoolLogicalOperand struct {
 	must, may uint64
 	value     arm64PoolAffine
@@ -95,7 +96,7 @@ func (flow *arm64RawPoolValues) affineLogicalDefinition(at int, word uint32) (ar
 	binary.LittleEndian.PutUint32(code[:], word)
 	ins, err := arm64asm.Decode(code[:])
 	if err != nil || word>>31 == 0 || word&31 == 31 ||
-		(ins.Op != arm64asm.ORR && ins.Op != arm64asm.EOR) {
+		(ins.Op != arm64asm.ORR && ins.Op != arm64asm.EOR && ins.Op != arm64asm.AND && ins.Op != arm64asm.BIC) {
 		return arm64PoolAffine{}, arm64PoolInterval{}, false, false
 	}
 	// The decoder validates the complete logical-immediate/shifted-register
@@ -116,10 +117,27 @@ func (flow *arm64RawPoolValues) affineLogicalDefinition(at int, word uint32) (ar
 		right = arm64PoolLogicalOperand{
 			must: value, may: value, value: arm64PoolAffine{constant: value}, affine: true,
 		}
-	case word&0x1f200000 == 0x0a000000:
+	case word&0x1f000000 == 0x0a000000:
 		right = flow.logicalRegister(at, int(word>>16&31)).shifted(word>>22&3, word>>10&63)
 	default:
 		return arm64PoolAffine{}, arm64PoolInterval{}, false, false
+	}
+	if ins.Op == arm64asm.AND || ins.Op == arm64asm.BIC {
+		if ins.Op == arm64asm.BIC {
+			right.must, right.may = ^right.may, ^right.must
+			right.affine = false
+		}
+		interval := arm64PoolInterval{left.must & right.must, left.may & right.may}
+		if interval.low == interval.high {
+			return arm64PoolAffine{constant: interval.low}, interval, true, true
+		}
+		if value, ok := left.maskedAffine(right); ok {
+			return value, interval, true, true
+		}
+		if value, ok := right.maskedAffine(left); ok {
+			return value, interval, true, true
+		}
+		return arm64PoolAffine{}, interval, false, true
 	}
 	interval := arm64PoolInterval{left.must | right.must, left.may | right.may}
 	if ins.Op == arm64asm.EOR {
@@ -132,4 +150,19 @@ func (flow *arm64RawPoolValues) affineLogicalDefinition(at int, word uint32) (ar
 	value := left.value
 	affine := left.affine && right.affine && left.may&right.may == 0 && value.add(right.value, 1)
 	return value, interval, affine, true
+}
+
+func (operand arm64PoolLogicalOperand) maskedAffine(mask arm64PoolLogicalOperand) (arm64PoolAffine, bool) {
+	if !operand.affine || mask.must != mask.may {
+		return arm64PoolAffine{}, false
+	}
+	removed := operand.must &^ mask.must
+	if removed != operand.may&^mask.must {
+		return arm64PoolAffine{}, false
+	}
+	// Clearing fixed one-bits is subtraction without a borrow. This preserves
+	// the relation to the original input, including modular high-bit values.
+	value := operand.value
+	value.constant -= removed
+	return value, true
 }
