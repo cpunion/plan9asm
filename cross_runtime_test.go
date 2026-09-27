@@ -215,6 +215,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "pool_sve_values", triple, ir, main,
 			[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
 	})
+	t.Run("arm64_sve_pool_memory", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64RawPoolSVEMemoryRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "pool_sve_memory", triple, ir, main,
+			[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_raw_pool_counter_loops", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir := arm64RawPoolLoopIR(t, triple)

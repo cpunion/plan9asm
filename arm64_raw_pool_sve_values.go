@@ -99,6 +99,9 @@ func arm64RawPoolAllVectorLengths(instructions []Instr, start, end int, size int
 		if form, count := decodeARM64RawSVECnt(word); count && !form.vector {
 			usesLength = true
 		}
+		if _, memory := decodeARM64RawSVELoadStore(word); memory {
+			usesLength = true
+		}
 	}
 	if !usesLength {
 		return false

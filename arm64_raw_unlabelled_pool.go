@@ -316,6 +316,14 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			next(i + 1)
 			continue
 		}
+		if form, ok := decodeARM64RawSVELoadStore(word); ok && form.base == int(register-arm64asm.X0) {
+			if !bounds.wholeScalableLoadInBounds(i, form) {
+				return false
+			}
+			loaded = true
+			next(i + 1)
+			continue
+		}
 		// x/arch does not decode SVE. Consult validated typed grammars for
 		// vector-only effects and explicit unrelated scalar/memory operands.
 		// Unknown effects and any use of this address still fail below.
