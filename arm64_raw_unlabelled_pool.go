@@ -324,6 +324,16 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			next(i + 1)
 			continue
 		}
+		if row, ok := arm64RawPoolContiguousLoad(word); ok &&
+			(int(word>>5)&31 == int(register-arm64asm.X0) ||
+				row.address == arm64SVELoadRegister && int(word>>16)&31 == int(register-arm64asm.X0)) {
+			if !bounds.contiguousScalableLoadInBounds(i, word, row) {
+				return false
+			}
+			loaded = true
+			next(i + 1)
+			continue
+		}
 		// x/arch does not decode SVE. Consult validated typed grammars for
 		// vector-only effects and explicit unrelated scalar/memory operands.
 		// Unknown effects and any use of this address still fail below.
@@ -551,6 +561,10 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
 	if arm64RawPoolIndependentSVE(word) {
 		return true
+	}
+	if row, ok := arm64RawPoolContiguousLoad(word); ok {
+		return int(word>>5)&31 != address &&
+			(row.address != arm64SVELoadRegister || int(word>>16)&31 != address)
 	}
 	if form, ok := decodeARM64RawSVELoadStore(word); ok {
 		return form.base != address

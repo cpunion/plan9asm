@@ -102,6 +102,9 @@ func arm64RawPoolAllVectorLengths(instructions []Instr, start, end int, size int
 		if _, memory := decodeARM64RawSVELoadStore(word); memory {
 			usesLength = true
 		}
+		if _, memory := arm64RawPoolContiguousLoad(word); memory {
+			usesLength = true
+		}
 	}
 	if !usesLength {
 		return false
