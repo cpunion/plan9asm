@@ -6,16 +6,14 @@ another module-index inventory scan.
 
 ## Contribution and worktrees
 
-- PR 40 remains OPEN/DRAFT. Reciprocal/multiply repairs were pushed as
-  `634b122`; its local full root suite and CLI tests passed. The strict
-  benchmark passed 184/184 files with zero N/A in 25 target-seconds.
-  Its CI exposed stale derived assembly evidence and an SVE runtime oracle
-  assumption. Evidence refresh `81bbd5e` passed CI's build/provenance check.
-  FFR repair `6f7c192` passed both build and Linux cross-runtime CI checks;
-  later Go 1.22/1.23/1.25 jobs exposed the same download-bootstrap version
-  error. Hotfix `320c751` is now pushed; its build passed and other jobs were
-  still running at the last inspection.
-  Inspect live checks rather than treating these partial results as green CI.
+- PR 40 remains OPEN/DRAFT. Stack repair `b05c9ee` was pushed after its
+  678-second full suite passed. Its CI exposed 10 standard-library job
+  failures (unexpanded ARM64 displacement macros and runtime-sized syscall
+  frames) plus one Windows test job with four fixture failures. All those
+  logs were inspected; the repairs below are prepared for the next push.
+  Earlier ledger, FFR-oracle and Go-download-bootstrap repairs have passed
+  the affected build, cross-runtime and old-Go root CI checks. Inspect live
+  checks rather than treating partial results as green CI.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`. Never push to
   `origin` or `xgo-dev`. The latest request is to push verified CI repairs
   promptly, inspect the new checks and continue fixing; keep the PR draft.
@@ -50,6 +48,36 @@ another module-index inventory scan.
 
 ## Latest committed repairs
 
+- `997aaf7`: classify unresolved ARM64 displacement macros as requiring
+  header context, while full translation rejects unexpanded offsets instead
+  of silently using zero. Preserve concrete pseudo-SP annotations and SVE
+  VL units. All seven integer load/store spellings, both directions and
+  hardware-SP/GP bases have Go-oracle and three-OS LLVM 22 tests.
+- `75eba97`: one proved private runtime-sized stack extension uses real
+  dynamic storage, copies the original frame and relocates all live SP
+  aliases together. This preserves old data, saved SPs and address
+  differences. A straight-line incoming prefix must not expose the old
+  address; calls, escapes, numeric observations, unknown effects, multiple
+  extensions and re-entry reject. Size arithmetic is overflow-checked;
+  positive and negative register displacements preserve the original frame.
+  This is not a general arbitrary-pointer memory-safety proof.
+  Full root suite passed in 665 seconds; both nested CLIs, vet, Go 1.20
+  focused tests, Darwin execution, required Linux/QEMU, three-OS objects,
+  official five-architecture coverage and benchmark passed. Benchmark:
+  184/184 files, zero N/A, 28 target-seconds plus one second build.
+  Darwin/Windows ARM64 standard-library corpora passed on Go 1.27 (49/46
+  IR files) and Go 1.20 (43/40), using the prebuilt current-Go CLI for the
+  old compiler lane. Logs use `_out/arm64-dynamic-*` and
+  `_out/root-tests-dynamic-stack.log` in the CI-hotfix worktree.
+- Windows fixture repair `ebf6579` adds the executable suffix, tests both
+  LF/CRLF workflow content, and builds a native fake Go executable whose
+  selection and auto/local behavior are asserted. Focused Go 1.20/1.27 and
+  the full corpus-tool suite pass locally; actual Windows results still need
+  the next CI run. The previous Windows failures were not instruction gaps.
+- The development branch retains bounded ADDVL/ADDPL pool aliases at
+  `79e31ac` (128 immediate combinations and 120 Linux/QEMU runtime results).
+  It is not included in this CI-hotfix push. A further scalable-value TDD
+  fixture is still red and uncommitted; resume it after CI is repaired.
 - Metadata-download bootstrap and its synthetic retry fixture use the root
   Go 1.20 floor; actual corpus build plans still require Go 1.27. The old
   bootstrap required Go 1.27 before making even one proxy request, failing
@@ -82,7 +110,8 @@ another module-index inventory scan.
   indexes are not frame-size declarations. All affected family tests and the
   five-architecture official gate pass again without changing the baseline:
   ARM64 1,980 supported forms, 68 context forms, zero unsupported forms.
-  Keep this stack batch local until its fresh frozen full suite passes.
+  The frozen full suite passed before pushing `b05c9ee`; the subsequent
+  standard-library integration failures are handled by the repairs above.
 - `cc307d5`: reject Go command/compiler/assembler version mismatches as
   infrastructure failures, never source N/A. The shard script pins its child
   Go binary to the recorded GOROOT and checks all three versions.
@@ -289,9 +318,11 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 5. Batch-push the allowed fork, update PR body with validated scan/coverage
    funnels, and inspect current-head CI/review/coverage before making ready.
 
-The development branch's assembly evidence remains stale and incomplete: 4,783 candidates,
-4,624 pending, 126 passed, 32 N/A and one failed at its older revision. Do not
-hand-edit it to match diagnostic counts. Reports/binaries belong in ignored
+The current-source assembly evidence remains incomplete: all 4,783 candidates
+are pending until compatible frozen shard reports exist. Earlier passes are
+preserved in their own snapshots, not promoted to this source. Refresh the
+derived ledger with its validated updater before pushing; never hand-edit it
+to match diagnostic counts. Reports/binaries belong in ignored
 `_out/`; clean only owned generated files and candidate caches, never shared
 module caches or unrelated containers. Old progress narratives remain in Git
 history instead of accumulating in this checkpoint.
