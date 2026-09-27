@@ -75,6 +75,7 @@ type discoveryCorpusConfig struct {
 	// directory, which runDiscoveryCorpus must never remove.
 	buildCache            string
 	privateExtensionSkips map[string]discoveryPrivateExtensionSkip
+	embeddedAliases       map[string]discoveryEmbeddedModuleAlias
 	// Allows deterministic, offline orchestration tests; the CLI always uses
 	// collectDiscoveryProvenance and cannot supply a claimed identity.
 	captureProvenance func(discoveryCorpusConfig) (discoveryCorpusProvenance, error)
@@ -161,6 +162,7 @@ type moduleDownloadInfo struct {
 	Dir     string `json:"Dir"`
 	GoMod   string `json:"GoMod"`
 	Zip     string `json:"Zip"`
+	Sum     string `json:"Sum"`
 	Error   string `json:"Error"`
 }
 
@@ -1392,6 +1394,11 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		return err
 	}
 	cfg.privateExtensionSkips = privateExtensionSkips
+	embeddedAliases, err := loadDiscoveryEmbeddedModuleAliases(cfg.RepoRoot, allCandidates)
+	if err != nil {
+		return err
+	}
+	cfg.embeddedAliases = embeddedAliases
 	candidates := allCandidates
 	if cfg.FilterTargets {
 		candidates, err = filterDiscoveryCandidatesForTargets(allCandidates, cfg.Targets)
@@ -1808,6 +1815,12 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			PrivateExtension:         privateExtension,
 		}, nil, buildConfigurations, nil
 	}
+	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
+	if hasEmbeddedAlias {
+		if err := prepareDiscoveryEmbeddedAlias(workDir, download, embeddedAlias); err != nil {
+			return matrixReport{}, nil, buildConfigurations, fmt.Errorf("prepare embedded self-import: %w", err)
+		}
+	}
 	declaredModule := candidate.Module
 	if download.GoMod != "" {
 		goModContents, err := os.ReadFile(download.GoMod)
@@ -1833,6 +1846,12 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		plan, err := makeDiscoveryExecutionPlan(applicableCandidate, declaredModule)
 		if err != nil {
 			return matrixReport{}, nil, buildConfigurations, err
+		}
+		if hasEmbeddedAlias {
+			plan, err = addDiscoveryEmbeddedAliasToPlan(plan, embeddedAlias)
+			if err != nil {
+				return matrixReport{}, nil, buildConfigurations, err
+			}
 		}
 		if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte(plan.GoMod), 0644); err != nil {
 			return matrixReport{}, nil, buildConfigurations, fmt.Errorf("write exact module mapping: %w", err)
