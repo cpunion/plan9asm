@@ -12,7 +12,7 @@
 {"module":"github.com/eh-steve/goloader","version":"v0.0.0-20240111193454-90ff3cfdae39","status":"pending"}
 {"module":"github.com/go-encryptions/xts","version":"v0.0.0-20260911133109-312298263872","status":"pending"}
 {"module":"github.com/lesismal/lib","version":"v1.2.4","status":"pending"}
-{"module":"github.com/mhughdo/solana-go","version":"v1.24.1","status":"passed"}
+{"module":"github.com/mhughdo/solana-go","version":"v1.24.1","status":"pending"}
 {"module":"github.com/mickael-kerjean/net","version":"v0.0.0-20191120063050-2457c043ba06","status":"pending"}
 {"module":"github.com/rowandark/0xgen","version":"v0.0.0-20260914174309-928989fc31c4","status":"pending"}
 {"module":"github.com/tobischo/argon2","version":"v0.2.0","status":"pending"}

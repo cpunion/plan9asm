@@ -1,5 +1,5 @@
 {"module":"gitee.com/sero-cash/go-sero","version":"v1.0.1-rc5","status":"pending"}
-{"module":"github.com/Asylian21/secp256k1-field","version":"v0.1.0","status":"passed"}
+{"module":"github.com/Asylian21/secp256k1-field","version":"v0.1.0","status":"pending"}
 {"module":"github.com/FacMata/wyxray","version":"v0.0.0-20260411164932-46fe6d3e7f95","status":"pending"}
 {"module":"github.com/NebulaOSS/nebula-nightly","version":"v1.12.0-nightly20260915-3fc627e","status":"pending"}
 {"module":"github.com/cassio-paesleme/arrow-go/v18","version":"v18.5.2","status":"pending"}
@@ -18,5 +18,5 @@
 {"module":"github.com/xDarkicex/memory","version":"v1.2.9","status":"pending"}
 {"module":"github.com/yelhousni/batch-subgroup-membership","version":"v0.0.0-20260429151704-a8d878f3e735","status":"pending"}
 {"module":"github.laiyagushi.com/c2gohq/c2go_libc","version":"v0.20260809.0-rc.5","status":"pending"}
-{"module":"github.tiyicn.workers.dev/lindb/lindb","version":"v0.4.1","status":"passed"}
+{"module":"github.tiyicn.workers.dev/lindb/lindb","version":"v0.4.1","status":"pending"}
 {"module":"gvisor.dev/gvisor","version":"v0.0.0-20260922222726-edc61702468b","status":"pending"}

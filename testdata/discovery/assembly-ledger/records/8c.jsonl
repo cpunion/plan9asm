@@ -8,7 +8,7 @@
 {"module":"github.com/dolphinet-labs/dolphinet-geth","version":"v1.2.0","status":"pending"}
 {"module":"github.com/florianl/opentelemetry-ebpf-profiler","version":"v0.0.202531","status":"pending"}
 {"module":"github.com/ixios-io/ixiosspark","version":"v1.1.0","status":"pending"}
-{"module":"github.com/koykov/simd","version":"v0.0.14","status":"passed"}
+{"module":"github.com/koykov/simd","version":"v0.0.14","status":"pending"}
 {"module":"github.com/lsongdev/xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"pending"}
 {"module":"github.com/metacubeX/Clash.Meta","version":"v1.19.31","status":"pending"}
 {"module":"github.com/open-Telemetry/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}

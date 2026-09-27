@@ -2,7 +2,7 @@
 {"module":"github.com/CryptoPro/go","version":"v1.26.4-msspi-1","status":"pending"}
 {"module":"github.com/DSiSc/crypto-suite","version":"v1.1.0","status":"pending"}
 {"module":"github.com/Freeaqingme/opencontainers-runc","version":"v0.1.1","status":"pending"}
-{"module":"github.com/OffChainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"passed"}
+{"module":"github.com/OffChainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
 {"module":"github.com/OffchainLAbs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
 {"module":"github.com/Sesachain/sxc","version":"v0.0.0-20221208022340-5831dab467a0","status":"pending"}
 {"module":"github.com/angr/binaries","version":"v9.2.227+incompatible","status":"pending"}

@@ -13,6 +13,6 @@
 {"module":"github.com/lucalolee/websocket","version":"v0.0.0-20250130123249-d1468a75eee5","status":"pending"}
 {"module":"github.com/m3db/m3","version":"v1.5.0","status":"pending"}
 {"module":"github.com/mattn/gorgonia","version":"v0.9.3","status":"pending"}
-{"module":"github.com/ncruces/wazero","version":"v0.0.0-20260508161934-e6dd6c0c144f","status":"passed"}
+{"module":"github.com/ncruces/wazero","version":"v0.0.0-20260508161934-e6dd6c0c144f","status":"pending"}
 {"module":"github.com/orgtestcodacy11krepos110mb/repo-5135-under-the-hood","version":"v0.0.0-20220521092526-d433f404cd13","status":"pending"}
 {"module":"github.com/svent/sift","version":"v0.9.2","status":"pending"}

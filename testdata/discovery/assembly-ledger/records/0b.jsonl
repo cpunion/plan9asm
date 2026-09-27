@@ -15,7 +15,7 @@
 {"module":"github.com/reF1nd/sing-tun","version":"v0.9.3","status":"pending"}
 {"module":"github.com/slackhq/vitess","version":"v0.22.1","status":"pending"}
 {"module":"github.com/wanchain/go-wanchain","version":"v2.2.0+incompatible","status":"pending"}
-{"module":"github.com/xssnick/raptorq","version":"v1.5.2","status":"passed"}
+{"module":"github.com/xssnick/raptorq","version":"v1.5.2","status":"pending"}
 {"module":"github.com/zertgraf/aeol","version":"v0.0.0-20260531135831-07089060e9b5","status":"pending"}
 {"module":"github.com/zhoushx1018/gballet-go-ethereum","version":"v1.6.7","status":"pending"}
 {"module":"github.laiyagushi.com/OrlovEvgeny/go-mcache","version":"v1.0.3","status":"pending"}

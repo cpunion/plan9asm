@@ -1,4 +1,4 @@
-{"module":"github.com/DeviousDrops/mindb","version":"v0.1.0","status":"passed"}
+{"module":"github.com/DeviousDrops/mindb","version":"v0.1.0","status":"pending"}
 {"module":"github.com/Klauspost/compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/Parquet-go/parquet-go","version":"v0.32.0","status":"pending"}
 {"module":"github.com/ademartellecher/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
@@ -10,7 +10,7 @@
 {"module":"github.com/edgelesssys/go-sev-guest","version":"v0.0.0-20260729130516-c98bf131aac5","status":"pending"}
 {"module":"github.com/f1uddy/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/hashicorp/golang-math-big","version":"v0.0.0-20260220095737-218035ad5ff6","status":"pending"}
-{"module":"github.com/hayabusa-cloud/zcall","version":"v0.4.4","status":"passed"}
+{"module":"github.com/hayabusa-cloud/zcall","version":"v0.4.4","status":"pending"}
 {"module":"github.com/imkk000/go-offset-scanner","version":"v0.0.0-20260515020628-801f3bf8ddd9","status":"pending"}
 {"module":"github.com/jewharton/storj-common","version":"v0.0.0-20260123113635-a4b3510b6286","status":"pending"}
 {"module":"github.com/romanovcaesar/cproxy","version":"v1.19.25","status":"pending"}

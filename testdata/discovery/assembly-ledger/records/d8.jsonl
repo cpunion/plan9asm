@@ -1,6 +1,6 @@
 {"module":"github.com/Cloudflare/Circl","version":"v1.6.5","status":"pending"}
-{"module":"github.com/Designdocs/Xray-core","version":"v0.0.0-20260910100458-56ad0ec08cc9","status":"passed"}
-{"module":"github.com/Kiyo5hi/pid","version":"v0.0.0-20250225005251-66f610330126","status":"not_applicable"}
+{"module":"github.com/Designdocs/Xray-core","version":"v0.0.0-20260910100458-56ad0ec08cc9","status":"pending"}
+{"module":"github.com/Kiyo5hi/pid","version":"v0.0.0-20250225005251-66f610330126","status":"pending"}
 {"module":"github.com/RonShih/Geth-MPT-db-test","version":"v0.0.0-20260127040412-e25083697396","status":"pending"}
 {"module":"github.com/ahrav/compress","version":"v0.0.0-20260719183354-6e462fe30476","status":"pending"}
 {"module":"github.com/amken3d/tamago","version":"v0.0.0-20260810214514-e5e19b31ce22","status":"pending"}

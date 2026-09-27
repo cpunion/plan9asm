@@ -11,6 +11,6 @@
 {"module":"github.com/kocort/purego","version":"v0.10.0","status":"pending"}
 {"module":"github.com/phenomenon0/vectordb","version":"v1.1.0","status":"pending"}
 {"module":"github.com/sagernet/v2ray-core/v5","version":"v5.0.16","status":"pending"}
-{"module":"github.com/tkmchain/go-tkmchain","version":"v1.21.22","status":"passed"}
+{"module":"github.com/tkmchain/go-tkmchain","version":"v1.21.22","status":"pending"}
 {"module":"github.com/wyusgw/xray-core","version":"v0.0.0-20260923053514-0eb595e86ac7","status":"pending"}
 {"module":"zgo.at/zli","version":"v0.0.0-20260831213520-2d12e8b7b832","status":"pending"}

@@ -9,7 +9,7 @@
 {"module":"github.com/justwasm/go4js/src/cmd","version":"v0.0.2","status":"pending"}
 {"module":"github.com/librefs/pkg/v3","version":"v3.8.0","status":"pending"}
 {"module":"github.com/loov/hrtime","version":"v1.0.4","status":"pending"}
-{"module":"github.com/meoyawn/tspls","version":"v0.1.0","status":"passed"}
+{"module":"github.com/meoyawn/tspls","version":"v0.1.0","status":"pending"}
 {"module":"github.com/sila-chain/sila","version":"v1.17.4","status":"pending"}
 {"module":"github.com/simonwaldherr/gopherllm","version":"v1.10.0","status":"pending"}
 {"module":"github.com/vuuvv/goid","version":"v0.1.25","status":"pending"}
