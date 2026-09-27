@@ -33,4 +33,13 @@ func TestARM64PoolAffineResidualBudget(t *testing.T) {
 	if bound, ok := flow.affineConstraintBound(1, query, tight); !ok || bound != (arm64PoolInterval{9, 27}) {
 		t.Fatalf("bounded residual: %+v %v", bound, ok)
 	}
+	// A partially eliminated guard is not an independent subproblem. Unless
+	// its residual is already invariant, wait for reaching definitions to
+	// normalize it instead of recursively chasing the same unknown operands.
+	flow = newFlow()
+	flow.words[0] = assembleARM64LLVMWords(t, []string{"mov x15, x0"}, "")[0]
+	bound, ok = flow.affineConstraintBound(1, query, tight)
+	if ok || len(flow.affineCache) != 0 {
+		t.Fatalf("partially eliminated guard recursed: bound=%+v ok=%v queries=%d", bound, ok, len(flow.affineCache))
+	}
 }

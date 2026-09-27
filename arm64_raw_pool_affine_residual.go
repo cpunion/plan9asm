@@ -32,6 +32,13 @@ func (flow *arm64RawPoolValues) affineConstraintBound(at int, query arm64PoolAff
 		// Recursive proof budgets and active-query detection still apply.
 		residual := flow.invariantInterval(at, remainder)
 		if residual == arm64PoolUnknownInterval {
+			// If only part of the guard was eliminated, recursively bounding
+			// its remaining operands chases the same dependency cycle. A known
+			// invariant above is fine; otherwise defer until definitions have
+			// normalized all guard operands out of the remainder.
+			if remainder.registerMask()&constraint.expression.registerMask() != 0 {
+				continue
+			}
 			residual = flow.affineInterval(at, remainder)
 		}
 		if residual == arm64PoolUnknownInterval {
