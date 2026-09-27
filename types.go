@@ -1321,7 +1321,7 @@ func parseNamedStackConstantOffset(prefix string) (int64, bool) {
 		return 0, false
 	}
 	sep := strings.IndexAny(prefix[1:], "+-") + 1
-	if sep <= 1 || sep >= len(prefix)-1 {
+	if sep == 0 || sep >= len(prefix)-1 {
 		return 0, false
 	}
 	if _, ok := parseIdent(prefix[:sep]); !ok {

@@ -62,7 +62,15 @@ func arm64StackBoundsRuntime(t *testing.T, triple string) (string, string) {
 			fmt.Sprintf("str x1,[x0,#%d]", i*8))
 	}
 	var source strings.Builder
-	source.WriteString("TEXT stack_runtime(SB),$0-16\nMOVD out+0(FP),R0\nMOVD value+8(FP),R1\n")
+	source.WriteString(`TEXT stack_runtime(SB),$32-16
+MOVD out+0(FP),R0
+MOVD value+8(FP),R1
+MOVD R1,n-8(SP)
+MOVD R0,p-16(SP)
+MOVD $0,R1
+MOVD n-8(SP),R1
+MOVD p-16(SP),R0
+`)
 	for _, word := range assembleARM64LLVMWords(t, machine, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
