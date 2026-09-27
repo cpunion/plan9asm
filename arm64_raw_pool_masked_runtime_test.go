@@ -86,7 +86,13 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		"nop", "add x7,x7,#8", "cbnz x7,#-8", "cmp x17,x6",
 		"b.eq #44", "sub x17,x14,x6", "add x6,x6,x16", "sub x16,x17,x16", "mov x12,#0",
 		"sub x7,x16,#1", "ldrb w5,[x9,x7]", "add x12,x12,x5", "subs x16,x16,#1", "b.ne #-16",
-		"str x12,[x0,#176]", "mov x9,xzr", "ret")
+		"str x12,[x0,#176]")
+	for index, op := range []string{"orr", "eor"} {
+		lines = append(lines, "and x11,x1,#15", "add x11,x11,#8", "and x10,x11,#24",
+			"and x12,x1,#1", op+" x10,x10,x12", "sub x10,x10,x12", "sub x10,x11,x10",
+			"ldrb w5,[x9,x10]", fmt.Sprintf("str x5,[x0,#%d]", 184+index*8))
+	}
+	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
 	source.WriteString("TEXT pool_masked(SB),$0-16\nMOVD out+0(FP),R0\nMOVD input+8(FP),R1\n")
@@ -147,11 +153,11 @@ int main(void) {
   uint8_t poolBytes[24];
   memcpy(poolBytes, poolWords, sizeof(poolBytes));
   for (unsigned test = 0; test < 32 + sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[25] = {0x1234};
-    out[24] = 0x5678;
+    uint64_t out[27] = {0x1234};
+    out[26] = 0x5678;
     uint64_t n = test < 32 ? test : inputs[test - 32];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[24] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[26] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
@@ -175,6 +181,7 @@ int main(void) {
     uint64_t tailSum = 0;
     for (unsigned index = 0; index < (n & 7); index++) tailSum += poolBytes[index];
     if (out[23] != tailSum) return 8;
+    if (out[24] != poolBytes[n & 7] || out[25] != poolBytes[n & 7]) return 9;
   }
   return 0;
 }

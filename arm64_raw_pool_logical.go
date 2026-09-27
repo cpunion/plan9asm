@@ -144,6 +144,23 @@ func (flow *arm64RawPoolValues) affineLogicalDefinition(at int, word uint32) (ar
 		}
 		return arm64PoolAffine{}, interval, false, true
 	}
+	if overlap := left.may & right.may; overlap != 0 && left.affine && right.affine {
+		// An interval loses alignment bits: [8,16] includes odd numbers even
+		// when the actual values came from n&24. Independently prove just the
+		// low-bit residue needed for disjointness, using the existing bounded
+		// arithmetic/mask grammar. Never infer alignment from the endpoints.
+		width := bits.Len64(overlap)
+		if width <= 30 {
+			step := uint64(1) << uint(width)
+			numeric := flow.numericValues()
+			if numeric.multipleOfPowerOfTwo(at, right.value, step) {
+				right.may &^= step - 1
+			} else if numeric.multipleOfPowerOfTwo(at, left.value, step) {
+				left.may &^= step - 1
+			}
+			flow.affineWork = numeric.affineWork
+		}
+	}
 	interval := arm64PoolInterval{left.must | right.must, left.may | right.may}
 	if ins.Op == arm64asm.EOR {
 		interval.low = left.must&^right.may | right.must&^left.may
