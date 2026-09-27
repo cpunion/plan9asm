@@ -11,6 +11,26 @@ func (flow *arm64RawPoolValues) clearValueCaches() {
 	flow.invariantCache = nil
 }
 
+// Positive bounds remain valid across queries on this immutable graph.
+// Unknown can instead reflect a recursive dependency or an exhausted shared
+// budget. Keep that negative cache within one proof, not across fresh roots.
+func (flow *arm64RawPoolValues) beginAffineProof() {
+	if len(flow.affineActive) != 0 {
+		return
+	}
+	flow.affineWork = 0
+	for query, bound := range flow.affineCache {
+		if bound == arm64PoolUnknownInterval {
+			delete(flow.affineCache, query)
+		}
+	}
+	for query, bound := range flow.invariantCache {
+		if bound == arm64PoolUnknownInterval {
+			delete(flow.invariantCache, query)
+		}
+	}
+}
+
 func (flow *arm64RawPoolValues) excludeEdge(edge arm64RawPoolEdge) {
 	if flow.excluded == nil {
 		flow.excluded = make(map[arm64RawPoolEdge]bool)

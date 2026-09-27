@@ -158,6 +158,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 	if flow == nil || at < 0 || at >= len(flow.before) {
 		return arm64PoolUnknownInterval
 	}
+	flow.beginAffineProof()
 	query := arm64PoolAffineQuery{at, expression}
 	if cached, ok := flow.affineCache[query]; ok {
 		return cached
@@ -168,9 +169,6 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 	if flow.affineActive == nil {
 		flow.affineActive = make(map[arm64PoolAffineQuery]bool)
 		flow.affineCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
-	}
-	if len(flow.affineActive) == 0 {
-		flow.affineWork = 0
 	}
 	flow.affineActive[query] = true
 	defer func() {

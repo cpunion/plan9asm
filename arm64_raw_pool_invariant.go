@@ -8,6 +8,7 @@ import "math"
 // obscure that simple fact. This proof unions every path and never uses a
 // guard to discard one; changing recurrences and unknown effects fail closed.
 func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
+	flow.beginAffineProof()
 	query := arm64PoolAffineQuery{at, expression}
 	if cached, ok := flow.invariantCache[query]; ok {
 		return cached
@@ -16,9 +17,6 @@ func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAf
 		flow.invariantCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
 	}
 	defer func() { flow.invariantCache[query] = answer }()
-	if len(flow.affineActive) == 0 {
-		flow.affineWork = 0
-	}
 	queue := []arm64PoolAffineQuery{{at, expression}}
 	visited := make(map[arm64PoolAffineQuery]bool)
 	type recurrence struct {
