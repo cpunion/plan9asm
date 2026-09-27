@@ -8,7 +8,7 @@
 {"module":"github.com/huangjimmy/go-ethereum","version":"v1.8.6","status":"pending"}
 {"module":"github.com/iconshelf/ace","version":"v1.44.0","status":"pending"}
 {"module":"github.com/imranansari/dotGo2016","version":"v0.0.0-20161006203346-22d279434281","status":"pending"}
-{"module":"github.com/infinilabs/framework-vendor","version":"v0.0.0-20260522083554-933df1743af8","status":"passed"}
+{"module":"github.com/infinilabs/framework-vendor","version":"v0.0.0-20260522083554-933df1743af8","status":"pending"}
 {"module":"github.com/mimoo/StrobeGo","version":"v0.0.0-20220103164710-9a04d6ca976b","status":"pending"}
 {"module":"github.com/moralpriest/dirtybird-go-miner","version":"v0.0.0-20260821072625-4b2dbb2288aa","status":"pending"}
 {"module":"github.heygears.com/pilinux/argon2","version":"v0.25.0","status":"pending"}

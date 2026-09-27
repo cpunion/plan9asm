@@ -16,7 +16,7 @@
 {"module":"github.com/reducedb/encoding","version":"v0.0.0-20171223221521-b90e310a0325","status":"pending"}
 {"module":"github.com/remyoudompheng/go-vectops","version":"v0.0.0-20171128230507-52922cf12600","status":"pending"}
 {"module":"github.com/royzhong7070/go-x-net","version":"v0.57.2-0.20260724054507-5d55e4ad9454","status":"pending"}
-{"module":"github.com/storj/minio","version":"v0.0.0-20260609124736-fc17c581773a","status":"passed"}
+{"module":"github.com/storj/minio","version":"v0.0.0-20260609124736-fc17c581773a","status":"pending"}
 {"module":"github.com/twacqwq/go","version":"v0.0.0-20240119223849-f19f31f2e7c1","status":"pending"}
 {"module":"github.com/whyvps/xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"github.com/zchee/go-sandbox","version":"v0.0.0-20250129110512-1bd90c056274","status":"pending"}

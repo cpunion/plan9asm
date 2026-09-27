@@ -1,9 +1,9 @@
 {"module":"github.com/0gfoundation/0g-geth","version":"v1.15.4","status":"pending"}
-{"module":"github.com/Btcsuite/fastsha256","version":"v0.0.0-20160815193821-637e65642941","status":"passed"}
+{"module":"github.com/Btcsuite/fastsha256","version":"v0.0.0-20160815193821-637e65642941","status":"pending"}
 {"module":"github.com/FactomProject/fastsha256","version":"v0.2.1","status":"pending"}
 {"module":"github.com/Fisco-Bcos/crypto","version":"v0.0.0-20200202032121-bd8ab0b5d4f1","status":"pending"}
 {"module":"github.com/JayChoi1736/klaytn","version":"v1.10.1","status":"pending"}
-{"module":"github.com/Mandukhai-Alimaa/arrow-go/v18","version":"v18.0.0-20260810175812-4f42a9e05d17","status":"passed"}
+{"module":"github.com/Mandukhai-Alimaa/arrow-go/v18","version":"v18.0.0-20260810175812-4f42a9e05d17","status":"pending"}
 {"module":"github.com/MetaCubeX/Mihomo","version":"v1.19.31","status":"pending"}
 {"module":"github.com/Tecu23/argo","version":"v1.0.0","status":"pending"}
 {"module":"github.com/aceroer/gvisor-aceroe","version":"v0.0.0-20260701223756-abf59273b7ba","status":"pending"}
@@ -11,7 +11,7 @@
 {"module":"github.com/dapengaiteach/zdpgo_fasthttp","version":"v0.0.0-20220624084242-4336771abc49","status":"pending"}
 {"module":"github.com/embeddedgo/fs","version":"v0.1.6","status":"pending"}
 {"module":"github.com/f-secure-foundry/GoTEE-example","version":"v0.0.0-20260902214239-fde95e412823","status":"pending"}
-{"module":"github.com/factomproject/golangcrypto","version":"v0.0.0-20150426031145-83a5c1a363ee","status":"passed"}
+{"module":"github.com/factomproject/golangcrypto","version":"v0.0.0-20150426031145-83a5c1a363ee","status":"pending"}
 {"module":"github.com/klauspost/compreSs","version":"v1.20.0","status":"pending"}
 {"module":"github.com/lukechampine/blake3","version":"v1.4.1","status":"pending"}
 {"module":"github.com/mdp/go","version":"v0.0.0-20150912083452-0b5bcf53ee4a","status":"pending"}

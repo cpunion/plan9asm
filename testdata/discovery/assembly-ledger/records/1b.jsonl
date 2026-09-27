@@ -7,7 +7,7 @@
 {"module":"github.com/dgryski/go-groupvarint","version":"v0.0.0-20230630160417-2bfb7969fb3c","status":"pending"}
 {"module":"github.com/esdfurkan/gvisor","version":"v0.0.0-20260909091436-1c97a35e7956","status":"pending"}
 {"module":"github.com/go-simd/ascii85","version":"v0.1.2","status":"pending"}
-{"module":"github.com/gozssky/tidb","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/gozssky/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/grailbio/base","version":"v0.0.11","status":"pending"}
 {"module":"github.com/jeonghonah/klaytn","version":"v1.0.0","status":"pending"}
 {"module":"github.com/kibsoft/Xray-core","version":"v1.260327.0","status":"pending"}

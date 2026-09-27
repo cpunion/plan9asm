@@ -4,7 +4,7 @@
 {"module":"github.com/PlatONEnterprise/PlatONE-Go","version":"v0.9.11","status":"pending"}
 {"module":"github.com/W-Floyd/go-mp3packer","version":"v0.0.0-20260806230216-f063f91dcf92","status":"pending"}
 {"module":"github.com/general252/EasyDarwinLib","version":"v1.0.1","status":"pending"}
-{"module":"github.com/jlidx/godx","version":"v0.0.0-20190807072337-cd7b9ceb46de","status":"passed"}
+{"module":"github.com/jlidx/godx","version":"v0.0.0-20190807072337-cd7b9ceb46de","status":"pending"}
 {"module":"github.com/matsuridayo/v2ray-core/v5","version":"v5.0.0-20230212021550-8134d3cc23aa","status":"pending"}
 {"module":"github.com/mvertes/mvm","version":"v0.4.1","status":"pending"}
 {"module":"github.com/onesyue/gvisor","version":"v0.0.0-20260826100401-79317d808312","status":"pending"}

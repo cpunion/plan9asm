@@ -4,7 +4,7 @@
 {"module":"github.com/alexanderbez/go-ethereum","version":"v1.8.16","status":"pending"}
 {"module":"github.com/gen2brain/vpx","version":"v0.2.1","status":"pending"}
 {"module":"github.com/hugefiver/fakessh","version":"v0.5.6","status":"pending"}
-{"module":"github.com/iotaledger/iota.lib.go","version":"v1.0.0","status":"passed"}
+{"module":"github.com/iotaledger/iota.lib.go","version":"v1.0.0","status":"pending"}
 {"module":"github.com/janpfeifer/go-highway","version":"v0.0.0-dev9","status":"pending"}
 {"module":"github.com/klauspost/Compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/kobe-finance/go-mediatoolkit","version":"v1.4.0","status":"pending"}

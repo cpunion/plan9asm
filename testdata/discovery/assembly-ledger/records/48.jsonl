@@ -12,7 +12,7 @@
 {"module":"github.com/gballet/go-ethereum","version":"v1.14.13","status":"pending"}
 {"module":"github.com/jabberwocky238/go-pop3","version":"v0.1.6","status":"pending"}
 {"module":"github.com/lightclient/go-ethereum","version":"v1.10.12","status":"pending"}
-{"module":"github.com/mantlenetworkio/mantle/l2geth","version":"v0.0.0-20230816101534-5cda5f811f73","status":"passed"}
+{"module":"github.com/mantlenetworkio/mantle/l2geth","version":"v0.0.0-20230816101534-5cda5f811f73","status":"pending"}
 {"module":"github.com/monetr/monetr","version":"v1.15.3","status":"pending"}
 {"module":"github.com/monitoring-forge/sampdo","version":"v0.0.3","status":"pending"}
 {"module":"github.com/savid/go-ethereum","version":"v0.0.0-20260225060823-406a852ec8de","status":"pending"}

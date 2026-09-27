@@ -13,11 +13,11 @@
 {"module":"github.com/ebitengine/PureGO","version":"v0.11.1","status":"pending"}
 {"module":"github.com/emmansun/gmsM","version":"v0.44.1","status":"pending"}
 {"module":"github.com/go-simd/streamvbyte","version":"v0.1.2","status":"pending"}
-{"module":"github.com/kardiachain/go-kardiamain","version":"v1.7.0","status":"passed"}
+{"module":"github.com/kardiachain/go-kardiamain","version":"v1.7.0","status":"pending"}
 {"module":"github.com/lucor-sm/parquet-go","version":"v0.0.0-20260513160931-48d67fc43fe8","status":"pending"}
 {"module":"github.com/mengzhuo/nabhash","version":"v1.0.0","status":"pending"}
 {"module":"github.com/metacubex/x509","version":"v0.1.0","status":"pending"}
-{"module":"github.com/mymmsc/gox","version":"v1.26.0","status":"passed"}
+{"module":"github.com/mymmsc/gox","version":"v1.26.0","status":"pending"}
 {"module":"github.com/new-Jamneration/jam-protocol","version":"v0.0.0-20260724124157-c7fb743aa000","status":"pending"}
 {"module":"github.com/pilinux/crypto","version":"v0.0.0-20260826144058-afebf4cb4efb","status":"pending"}
 {"module":"github.com/recallsong/etcd","version":"v2.3.8+incompatible","status":"pending"}

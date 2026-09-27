@@ -5,7 +5,7 @@
 {"module":"github.com/crate-crypto/go-ipa","version":"v0.0.0-20240724233137-53bbb0ceb27a","status":"pending"}
 {"module":"github.com/dindinw/go-ethereum","version":"v1.5.8","status":"pending"}
 {"module":"github.com/dvyukov/go-fuzz","version":"v0.0.0-20240924070022-e577bee5275c","status":"pending"}
-{"module":"github.com/ebhb010/v2ray-core/v5","version":"v5.53.1","status":"passed"}
+{"module":"github.com/ebhb010/v2ray-core/v5","version":"v5.53.1","status":"pending"}
 {"module":"github.com/guno1928/antidebug","version":"v0.0.0-20260421082017-fc7a99cfec3c","status":"pending"}
 {"module":"github.com/maizeli/covertrace","version":"v0.0.0-20260504092159-dd233b7ae1f5","status":"pending"}
 {"module":"github.com/qida/go","version":"v0.0.0-20260828131353-ea7d327c8005","status":"pending"}

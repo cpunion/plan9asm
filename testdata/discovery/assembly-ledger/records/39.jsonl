@@ -16,7 +16,7 @@
 {"module":"github.com/lordmartron94/memcore","version":"v0.0.0-20260603110113-abb3e2c91804","status":"pending"}
 {"module":"github.com/obstor/md5-simd","version":"v1.1.2","status":"pending"}
 {"module":"github.com/spacemeshos/sha256-simd","version":"v0.1.0","status":"pending"}
-{"module":"github.com/timelinelabs/vulcand","version":"v0.8.0-beta.3","status":"not_applicable"}
+{"module":"github.com/timelinelabs/vulcand","version":"v0.8.0-beta.3","status":"pending"}
 {"module":"github.com/xmdhs/go-kms","version":"v0.0.0-20260819164515-f74de34c83cb","status":"pending"}
 {"module":"github.com/yaklib/log","version":"v0.0.0-20260801160658-261841c3c6ad","status":"pending"}
 {"module":"github.com/zhangjinpeng87/tidb","version":"v1.0.8","status":"pending"}

@@ -15,5 +15,5 @@
 {"module":"github.com/tlyakhov/gofoom","version":"v0.0.0-20260910210731-e5ca1f102913","status":"pending"}
 {"module":"github.com/valhalla-ac-001/go-ethereum","version":"v1.13.3","status":"pending"}
 {"module":"github.com/you-li-nu/imagefe","version":"v0.0.0-20211205223646-29065824d826","status":"pending"}
-{"module":"github.zerozr99.workers.dev/ethereum/go-ethereum","version":"v1.17.5","status":"passed"}
+{"module":"github.zerozr99.workers.dev/ethereum/go-ethereum","version":"v1.17.5","status":"pending"}
 {"module":"nhooyr.io/websocket","version":"v1.8.17","status":"pending"}

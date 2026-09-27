@@ -1,4 +1,4 @@
-{"module":"github.com/Btcsuite/golangcrypto","version":"v0.0.0-20150304025918-53f62d9b43e8","status":"passed"}
+{"module":"github.com/Btcsuite/golangcrypto","version":"v0.0.0-20150304025918-53f62d9b43e8","status":"pending"}
 {"module":"github.com/ForestL18/sing-tun","version":"v0.4.24","status":"pending"}
 {"module":"github.com/KYRDTeam/go-ethereum","version":"v1.13.14","status":"pending"}
 {"module":"github.com/Klaytn/KLAYTN","version":"v1.12.1","status":"pending"}
@@ -9,7 +9,7 @@
 {"module":"github.com/captainsooma/uni","version":"v0.0.0-20130624161451-cf8aefbd7f60","status":"pending"}
 {"module":"github.com/deis/distribution","version":"v2.1.1+incompatible","status":"pending"}
 {"module":"github.com/gnosischain/go-ethereum","version":"v1.17.2","status":"pending"}
-{"module":"github.com/hexis-ys/xray-core","version":"v1.8.9","status":"passed"}
+{"module":"github.com/hexis-ys/xray-core","version":"v1.8.9","status":"pending"}
 {"module":"github.com/jacalz/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/jschwinger233/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/libreFS/pkg/v3","version":"v3.8.0","status":"pending"}

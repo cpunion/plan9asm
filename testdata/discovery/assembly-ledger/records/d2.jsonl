@@ -7,5 +7,5 @@
 {"module":"github.com/kt3k/go","version":"v0.0.0-20180506054606-4ebc67d33433","status":"pending"}
 {"module":"github.com/microsoft/go-crypto-openssl","version":"v0.5.0","status":"pending"}
 {"module":"github.com/visualphoenix/sys","version":"v0.45.0","status":"pending"}
-{"module":"github.laiyagushi.com/iotaledger/iota.go","version":"v1.0.0","status":"passed"}
+{"module":"github.laiyagushi.com/iotaledger/iota.go","version":"v1.0.0","status":"pending"}
 {"module":"github.web.gylab.com/ethereum/go-ethereum","version":"v1.17.2","status":"pending"}

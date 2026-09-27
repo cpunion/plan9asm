@@ -9,5 +9,5 @@
 {"module":"github.com/klauspost/cpuid/v2","version":"v2.4.0","status":"pending"}
 {"module":"github.com/levi380/contrib","version":"v0.1.0","status":"pending"}
 {"module":"github.com/ngtuna/go-ethereum","version":"v1.8.2","status":"pending"}
-{"module":"github.com/pjbgf/sha1cd","version":"v0.6.0","status":"passed"}
+{"module":"github.com/pjbgf/sha1cd","version":"v0.6.0","status":"pending"}
 {"module":"github.com/zsfelfoldi/go-ethereum","version":"v0.8.5","status":"pending"}

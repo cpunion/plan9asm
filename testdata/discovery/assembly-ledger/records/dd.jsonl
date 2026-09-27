@@ -8,7 +8,7 @@
 {"module":"github.com/couchbasedeps/golang-snappy","version":"v0.0.0-20170215233205-553a64147049","status":"pending"}
 {"module":"github.com/eleme/lindb","version":"v0.4.1","status":"pending"}
 {"module":"github.com/f4rd1n/xray-core","version":"v0.0.0-20260612230504-ba067510a653","status":"pending"}
-{"module":"github.com/microyahoo/go-exercises","version":"v0.0.0-20260310085626-035f6f05177d","status":"passed"}
+{"module":"github.com/microyahoo/go-exercises","version":"v0.0.0-20260310085626-035f6f05177d","status":"pending"}
 {"module":"github.com/re7gog/utls","version":"v1.8.4","status":"pending"}
 {"module":"github.com/stokejo/gomobile","version":"v0.0.0-20260415074042-5b0a418f04c6","status":"pending"}
 {"module":"github.com/sunrunaway/tidb","version":"v1.0.9","status":"pending"}

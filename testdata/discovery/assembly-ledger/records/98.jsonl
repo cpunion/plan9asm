@@ -3,7 +3,7 @@
 {"module":"github.com/Minio/Sha256-simd","version":"v1.0.1","status":"pending"}
 {"module":"github.com/btcsuite/winsvc","version":"v1.0.0","status":"pending"}
 {"module":"github.com/cedar2025/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
-{"module":"github.com/cryptopro/go","version":"v1.26.4-msspi-1","status":"passed"}
+{"module":"github.com/cryptopro/go","version":"v1.26.4-msspi-1","status":"pending"}
 {"module":"github.com/djbarber/ipfs-hack","version":"v0.0.0-20150929135451-fd27864bf0b2","status":"pending"}
 {"module":"github.com/dvstc/purego","version":"v0.10.1","status":"pending"}
 {"module":"github.com/ensamblatec/neoanvil/pkg/rag","version":"v0.0.0-20260725001428-1f2950dce36c","status":"pending"}

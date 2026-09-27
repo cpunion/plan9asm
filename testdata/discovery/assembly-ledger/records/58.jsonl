@@ -9,7 +9,7 @@
 {"module":"github.com/charlievieth/fastwalk","version":"v1.0.14","status":"pending"}
 {"module":"github.com/ciscoxll/tidb","version":"v1.0.8","status":"pending"}
 {"module":"github.com/discord/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
-{"module":"github.com/gameofpointers/go-quai","version":"v0.0.0-20260909182723-f3f345c87730","status":"passed"}
+{"module":"github.com/gameofpointers/go-quai","version":"v0.0.0-20260909182723-f3f345c87730","status":"pending"}
 {"module":"github.com/keep-network/go-ethereum","version":"v1.9.7","status":"pending"}
 {"module":"github.com/l0nelynx/cheezy-core","version":"v0.0.0-20260921192621-2f2b7ce9a1c1","status":"pending"}
 {"module":"github.com/piersy/celo-blockchain","version":"v1.3.2","status":"pending"}

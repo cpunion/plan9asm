@@ -5,7 +5,7 @@
 {"module":"github.com/Quasilyte/concat","version":"v0.0.0-20180717223007-181498035785","status":"pending"}
 {"module":"github.com/asubiotto/go","version":"v0.0.1-test","status":"pending"}
 {"module":"github.com/celo-org/CELO-BLOCKCHAIN","version":"v1.8.9","status":"pending"}
-{"module":"github.com/dariomarchetti/go-ethereum","version":"v1.16.7","status":"passed"}
+{"module":"github.com/dariomarchetti/go-ethereum","version":"v1.16.7","status":"pending"}
 {"module":"github.com/gorgonia/gorgonia","version":"v0.9.18","status":"pending"}
 {"module":"github.com/gwaysys/gometalinter","version":"v2.0.12+incompatible","status":"pending"}
 {"module":"github.com/mjopsec/taburtuaic2","version":"v0.0.0-20260506125907-8d1123e6fe37","status":"pending"}

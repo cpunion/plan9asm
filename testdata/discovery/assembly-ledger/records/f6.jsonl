@@ -2,7 +2,7 @@
 {"module":"github.com/GFW-knocker/Xray-core","version":"v1.8.7","status":"pending"}
 {"module":"github.com/Golang/snappy","version":"v1.0.0","status":"pending"}
 {"module":"github.com/SnowLukin/amnezia-xray-core","version":"v1.260724.0","status":"pending"}
-{"module":"github.com/benakaben10/websocket","version":"v0.0.0-20260223084351-c98e9dc2d6f6","status":"passed"}
+{"module":"github.com/benakaben10/websocket","version":"v0.0.0-20260223084351-c98e9dc2d6f6","status":"pending"}
 {"module":"github.com/cheb0/roaring/v2","version":"v2.18.2-patch","status":"pending"}
 {"module":"github.com/cloudwego/base64x","version":"v0.1.7","status":"pending"}
 {"module":"github.com/couchbasedeps/sys","version":"v0.0.0-20220503163025-988cb79eb6c6","status":"pending"}

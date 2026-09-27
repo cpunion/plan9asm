@@ -1,4 +1,4 @@
-{"module":"github.com/Gessiux/bls","version":"v1.0.0","status":"passed"}
+{"module":"github.com/Gessiux/bls","version":"v1.0.0","status":"pending"}
 {"module":"github.com/PingCAP/Tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/coreos/Etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/dmznlin/znlib-go","version":"v0.0.13","status":"pending"}

@@ -7,7 +7,7 @@
 {"module":"github.com/lilybw/typescript-go","version":"v0.1.0","status":"pending"}
 {"module":"github.com/linj-disanbo/plugin","version":"v0.0.0-20220331060128-420af44bf797","status":"pending"}
 {"module":"github.com/martian-lang/martian","version":"v2.3.3+incompatible","status":"pending"}
-{"module":"github.com/mmyj/tidb","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/mmyj/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/muazhari/gomacro","version":"v0.0.0-20260417092753-2cf7a2cc8eb7","status":"pending"}
 {"module":"github.com/nooga/wazero","version":"v1.12.0","status":"pending"}
 {"module":"github.com/pingcAP/tidb","version":"v1.0.9","status":"pending"}

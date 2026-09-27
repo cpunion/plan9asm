@@ -3,7 +3,7 @@
 {"module":"github.com/CryptoGoAI/secp256k1","version":"v0.0.1-batch-affine.1","status":"pending"}
 {"module":"github.com/DE8468/chacha20","version":"v0.0.0-20191002011852-9b120ce5c56a","status":"pending"}
 {"module":"github.com/Ethereum-optimism/op-geth","version":"v1.101702.3","status":"pending"}
-{"module":"github.com/IniZio/mutagen","version":"v0.18.1","status":"not_applicable"}
+{"module":"github.com/IniZio/mutagen","version":"v0.18.1","status":"pending"}
 {"module":"github.com/Overclock-Validator/narya-ed25519","version":"v0.0.0-20260730051143-c265ee966713","status":"pending"}
 {"module":"github.com/PlatonNetwork/Platon-Go","version":"v1.5.1","status":"pending"}
 {"module":"github.com/SoftwareHeritage/swh-web","version":"v0.17.12","status":"pending"}

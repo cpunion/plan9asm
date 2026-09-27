@@ -10,7 +10,7 @@
 {"module":"github.com/dotwaffle/bootup","version":"v0.0.0-20260811190029-24500c98c522","status":"pending"}
 {"module":"github.com/ecadlabs/crypto","version":"v0.0.0-20190715192459-7e701899cb7f","status":"pending"}
 {"module":"github.com/flc1125/go","version":"v0.0.0-20260921231307-ffc306b41731","status":"pending"}
-{"module":"github.com/getelastech/observer_learning_project/dep","version":"v0.0.0-20220508002938-1995cc97eec6","status":"passed"}
+{"module":"github.com/getelastech/observer_learning_project/dep","version":"v0.0.0-20220508002938-1995cc97eec6","status":"pending"}
 {"module":"github.com/glycerine/pont","version":"v0.0.0-20260914073255-c2f3752b2c6f","status":"pending"}
 {"module":"github.com/go-compressions/matchlen","version":"v0.1.1","status":"pending"}
 {"module":"github.com/go-simd/strconv","version":"v0.0.0-20260908181112-46f8d5cafa5f","status":"pending"}

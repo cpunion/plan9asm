@@ -11,7 +11,7 @@
 {"module":"github.com/ericsyh/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/evacchi/wazero","version":"v1.7.0","status":"pending"}
 {"module":"github.com/go-again/az","version":"v0.5.0","status":"pending"}
-{"module":"github.com/gokern/werr/v2","version":"v2.0.0","status":"passed"}
+{"module":"github.com/gokern/werr/v2","version":"v2.0.0","status":"pending"}
 {"module":"github.com/jiasu9527/xray-core","version":"v1.260327.0-jiasu3","status":"pending"}
 {"module":"github.com/joamag/parchive-go","version":"v0.1.0","status":"pending"}
 {"module":"github.com/kubernetes-sigs/node-feature-discovery","version":"v0.19.0","status":"pending"}

@@ -1,5 +1,5 @@
 {"module":"github.com/OffchainLabs/arbstate","version":"v0.1.1","status":"pending"}
-{"module":"github.com/armfazh/crypto","version":"v0.0.0-20181203042331-505ab145d0a9","status":"passed"}
+{"module":"github.com/armfazh/crypto","version":"v0.0.0-20181203042331-505ab145d0a9","status":"pending"}
 {"module":"github.com/bilkoua/fyne/v2","version":"v2.0.0-20260510141934-79ab2f6c8bbc","status":"pending"}
 {"module":"github.com/celo-org/celo-BlockChain","version":"v1.8.9","status":"pending"}
 {"module":"github.com/cockroachdb/Cockroach","version":"v19.2.12+incompatible","status":"pending"}
