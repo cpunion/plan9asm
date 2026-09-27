@@ -9,6 +9,8 @@ type arm64EmitBr func(target string)
 type arm64EmitCondBr func(cond string, target string, fall string) error
 
 func emitARM64Prelude(b *strings.Builder) {
+	b.WriteString("declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1 immarg)\n")
+	b.WriteString("declare void @llvm.trap()\n")
 	b.WriteString("declare i64 @syscall(i64, i64, i64, i64, i64, i64, i64)\n")
 	b.WriteString("declare { i64, i1 } @llvm.aarch64.rndr()\n")
 	b.WriteString("declare { i64, i1 } @llvm.aarch64.rndrrs()\n")
