@@ -19,19 +19,20 @@ another module-index inventory scan.
   Root `go test ./... -count=1 -timeout=20m` passed in 1,040 seconds; both
   nested CLI suites passed. Official five-architecture classification and
   strict benchmark passed: 184/184 files, no N/A, 25 target-seconds plus six
-  seconds for driver build. Shards 4, 6, 16 and 26 passed; shard 10 is still
-  running. Preserve the reports. They predate the affine proof work below.
+  seconds for driver build. Shards 4, 6, 10, 16 and 26 passed; all its runners
+  finished. Preserve the reports. They predate the affine proof work below.
 - `codex/pr40-evidence-20260927` separately records validated progress for
-  that snapshot: 633 passed, 147 source N/A, two invalid-source skips, zero
-  failures and 4,001 pending. This includes shard 10's validated partial
-  checkpoint; the updater also reads back its own output. Evidence commit:
-  `48cf89f`. Four shards are complete; 13,645 translations are recorded.
+  that snapshot: 649 passed, 152 source N/A, two invalid-source skips, zero
+  failures and 3,980 pending. The updater also reads back its own output.
+  Evidence commit `16c4685`: five complete shards, 13,882 translations and
+  43 target N/A; no partial shards. The complete/verified flags remain false.
   This is incomplete historical evidence, not current-development success;
   do not import it into a changed source snapshot as current proof.
 - The affine verification worktree completed the full root suite at
-  `198307f` in 835 seconds, and is now frozen at `487fed6` for another full
-  root run. Do not change it while that process runs. Its official
-  five-architecture classification gate passed again.
+  `198307f` in 835 seconds and `487fed6` in 753 seconds. It is now frozen at
+  `8eab02c` for another full root run; both nested CLI suites already passed.
+  Do not change it while that process runs. Official five-architecture
+  classification also passed again at `487fed6`.
 - Use Go 1.27.1 and LLVM 22 for external modules. Put the actual Go binary in
   PATH; setting only GOTOOLCHAIN can select a different child compiler.
   Required cross execution uses checksum-pinned QEMU 10.2.3.
@@ -86,6 +87,11 @@ another module-index inventory scan.
 - `4ed0872`: trace flags across long integer-multiply and SIMD schedules, with
   an explicit preserving-family whitelist. A TST/unknown effect still stops
   the proof. The runtime oracle includes 48 instructions between SUBS and B.NE.
+- `8eab02c`: multiple ADRs may reacquire the same pool at a branch join. Affine
+  expressions retain a relocation count and reject a sum of two origins,
+  including distinct ADRs. Resolve stable origins exposed after transient-index
+  cancellation without collecting unrelated loop predicates. Join/overrun
+  regressions and three-OS/native/Linux-QEMU runtime oracles passed.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -116,7 +122,7 @@ passed 184/184 files, zero N/A, 30 target-seconds plus seven seconds build.
 ## External evidence and remaining real failures
 
 A passing fixture or one target replay is not a passing module or shard.
-The latest three-OS SIMD replay (`_out/simd-loop-green.json`) passed translation
+The latest three-OS SIMD replay (`_out/simd-origins.json`) passed translation
 of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
 `parseIntsSVE2`. Do not upgrade its assembly ledger.
 
@@ -125,10 +131,9 @@ of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
   remaining bytes files need further proof work. Signed NEON now proves both
   vector loops run once and the tail counter stays in 1..7, including pair
   writeback. Unsigned NEON's two vector loops are also proved one-iteration,
-  but its ascending signed-comparison tail, stack-spilled indexes and repeated
-  ADRs of the same pool remain unresolved. Its first failed read is instruction
-  333, `LDR X10,[X16],#-8`. Do not normalize multiple origins independently:
-  the sum of two relocated addresses must never become a valid relative offset.
+  but its ascending signed-comparison tail and stack-spilled indexes remain
+  unresolved. Repeated ADRs are modeled, with explicit relocation cardinality.
+  Its first failed read is instruction 333, `LDR X10,[X16],#-8`.
   Signed SVE first fails at instruction 23, a vector-length-dependent address
   operation; it needs actual SVE length relationships, not a fixed-host-length
   assumption. Ignored `pool-function-*` probes and disassemblies retain these
@@ -170,10 +175,11 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 
 ## Next actions and completion gates
 
-1. Preserve the validated 4/6/16/26 evidence. Finish shard 10 with bounded
-   retry support, then update its ledger in the same-source evidence tree.
+1. Preserve the validated 4/6/10/16/26 evidence in its same-source tree.
    Shard 4 passed 168 candidates: 130 passed, 37 N/A, one invalid-source skip,
    4,152 translations and 25 target N/A. Never relabel network failures as N/A.
+   Shard 10 passed 173 candidates: 142 passed, 31 N/A, 2,889 translations and
+   six target N/A. Both retry runs and their ledger updates are complete.
 2. Continue real semantic fixes above with red/green and runtime tests.
    The address-proof work does not yet resolve the two complete SIMD files.
 3. Run full root, both nested CLIs, vet/build, official five-architecture
