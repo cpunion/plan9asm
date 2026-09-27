@@ -1406,6 +1406,7 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 	for _, op := range []string{
 		// NEON SM4 is WORD-only; the named SM4 forms below are SVE.
 		"WORD",
+		"MADD", "MSUB", "MADDW", "MSUBW", "SMADDL", "SMSUBL", "UMADDL", "UMSUBL",
 		"FABSS", "FABSD", "FNEGS", "FNEGD", "FSQRTS", "FSQRTD", "FMOVS", "FMOVD",
 		"FCVTSD", "FCVTDS", "FCVTSH", "FCVTHS", "FCVTDH", "FCVTHD",
 		"FRINTNS", "FRINTND", "FRINTPS", "FRINTPD", "FRINTMS", "FRINTMD",

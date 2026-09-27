@@ -9,6 +9,20 @@ import (
 // by Go 1.27's AMUL and AMADD optabs. In particular, the two-operand AMUL-row
 // form uses the destination as the second multiplicand.
 func (c *arm64Ctx) lowerARM64ScalarMultiply(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if spec, found := arm64MultiplyAccumulateOps[op]; found {
+		if strings.ToUpper(string(ins.Op)) != string(op) {
+			return true, false, fmt.Errorf("arm64 %s does not accept instruction suffixes: %q", op, ins.Raw)
+		}
+		if len(ins.Args) != 4 {
+			return true, false, fmt.Errorf("arm64 %s expects four C_ZREG operands: %q", op, ins.Raw)
+		}
+		for _, operand := range ins.Args {
+			if !arm64ScalarMultiplyRegister(operand) {
+				return true, false, fmt.Errorf("arm64 %s expects four C_ZREG operands: %q", op, ins.Raw)
+			}
+		}
+		return true, false, c.lowerARM64MultiplyAccumulate(spec, ins)
+	}
 	switch op {
 	case "MNEG", "MNEGW", "SMULL", "UMULL", "SMNEGL", "UMNEGL", "SMULH", "UMULH":
 		if strings.ToUpper(string(ins.Op)) != string(op) {
@@ -29,21 +43,6 @@ func (c *arm64Ctx) lowerARM64ScalarMultiply(op Op, ins Instr) (ok bool, terminat
 			return true, false, c.lowerARM64MultiplyHigh(op == "SMULH", first, second, destination)
 		}
 
-	case "SMADDL", "SMSUBL", "UMADDL", "UMSUBL":
-		if strings.ToUpper(string(ins.Op)) != string(op) {
-			return true, false, fmt.Errorf("arm64 %s does not accept instruction suffixes: %q", op, ins.Raw)
-		}
-		if len(ins.Args) != 4 {
-			return true, false, fmt.Errorf("arm64 %s expects four C_ZREG operands: %q", op, ins.Raw)
-		}
-		for _, operand := range ins.Args {
-			if !arm64ScalarMultiplyRegister(operand) {
-				return true, false, fmt.Errorf("arm64 %s expects four C_ZREG operands: %q", op, ins.Raw)
-			}
-		}
-		signed := op == "SMADDL" || op == "SMSUBL"
-		subtract := op == "SMSUBL" || op == "UMSUBL"
-		return true, false, c.lowerARM64MultiplyAddLong(signed, subtract, ins.Args[0], ins.Args[1], ins.Args[2], ins.Args[3].Reg)
 	}
 	return false, false, nil
 }
