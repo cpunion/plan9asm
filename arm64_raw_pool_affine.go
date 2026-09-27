@@ -22,6 +22,7 @@ type arm64PoolInterval struct {
 type arm64PoolConstraint struct {
 	expression arm64PoolAffine
 	interval   arm64PoolInterval
+	mask       uint64 // Zero denotes an ordinary unmasked interval.
 }
 
 type arm64PoolAffineState struct {
@@ -99,6 +100,9 @@ func arm64PoolIntervalImage(input arm64PoolInterval, scale int64, delta uint64) 
 }
 
 func (expression arm64PoolAffine) constrainedBy(constraint arm64PoolConstraint) (arm64PoolInterval, bool) {
+	if constraint.mask != 0 {
+		return arm64PoolInterval{}, false
+	}
 	other := constraint.expression
 	var scale int64
 	found := false
@@ -128,10 +132,13 @@ func (expression arm64PoolAffine) constrainedBy(constraint arm64PoolConstraint) 
 
 func (flow *arm64RawPoolValues) boundedUpper(at int, reg arm64asm.Reg) uint64 {
 	upper := flow.upper(at, reg)
-	if flow == nil || reg < arm64asm.X0 || reg >= arm64asm.XZR || upper != math.MaxUint64 {
+	if flow == nil || reg < arm64asm.X0 || reg >= arm64asm.XZR || upper == 0 {
 		return upper
 	}
-	return flow.affineInterval(at, arm64PoolRegisterExpression(int(reg-arm64asm.X0))).high
+	if refined := flow.affineInterval(at, arm64PoolRegisterExpression(int(reg-arm64asm.X0))).high; refined < upper {
+		return refined
+	}
+	return upper
 }
 
 // Walk all predecessor paths, substituting definitions into both the query and
@@ -189,6 +196,9 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		for _, constraint := range state.constraints[:state.count] {
 			if constraint.expression.isConstant() {
 				value := constraint.expression.constant
+				if constraint.mask != 0 {
+					value &= constraint.mask
+				}
 				impossible = impossible || value < constraint.interval.low || value > constraint.interval.high
 			}
 			if value, ok := flow.affineConstraintBound(state.at, state.expression, constraint); ok {
@@ -200,7 +210,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				}
 			}
 		}
-		if impossible || bound.low > bound.high {
+		if impossible || bound.low > bound.high || !arm64PoolConstraintsFeasible(state.constraints[:state.count]) {
 			continue
 		}
 		state.bound = bound
