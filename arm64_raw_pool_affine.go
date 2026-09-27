@@ -225,7 +225,11 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 		}
 		visited[state] = true
 		if constraint, ok := flow.loopBounds[state.at]; ok {
-			if value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint); bounded && value != arm64PoolUnknownInterval {
+			value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint)
+			if !bounded || value == arm64PoolUnknownInterval {
+				value, bounded = flow.carriedLoopBound(state.at, state.expression, constraint)
+			}
+			if bounded && value != arm64PoolUnknownInterval {
 				addResult(value)
 				continue
 			}

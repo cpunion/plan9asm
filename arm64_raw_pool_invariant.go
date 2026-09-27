@@ -8,15 +8,24 @@ import "math"
 // obscure that simple fact. This proof unions every path and never uses a
 // guard to discard one; changing recurrences and unknown effects fail closed.
 func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
+	return flow.invariantIntervalProof(at, expression, false)
+}
+
+// Full arithmetic is reserved for a certified carried invariant's entry
+// expression. Ordinary speculative residual queries keep the cheap copy-only
+// walk and its cache; they must not acquire this more expensive search mode.
+func (flow *arm64RawPoolValues) invariantIntervalProof(at int, expression arm64PoolAffine, arithmetic bool) (answer arm64PoolInterval) {
 	flow.beginAffineProof()
 	query := arm64PoolAffineQuery{at, expression}
-	if cached, ok := flow.invariantCache[query]; ok {
-		return cached
+	if !arithmetic {
+		if cached, ok := flow.invariantCache[query]; ok {
+			return cached
+		}
+		if flow.invariantCache == nil {
+			flow.invariantCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
+		}
+		defer func() { flow.invariantCache[query] = answer }()
 	}
-	if flow.invariantCache == nil {
-		flow.invariantCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
-	}
-	defer func() { flow.invariantCache[query] = answer }()
 	queue := []arm64PoolAffineQuery{{at, expression}}
 	visited := make(map[arm64PoolAffineQuery]bool)
 	type recurrence struct {
@@ -78,7 +87,7 @@ func (flow *arm64RawPoolValues) invariantInterval(at int, expression arm64PoolAf
 				// Follow constants, copies and constant displacements. A changing
 				// displacement recurrence is rejected above on its second visit;
 				// multi-register arithmetic belongs to the guarded solver.
-				if !value.isConstant() {
+				if !arithmetic && !value.isConstant() {
 					mask := value.registerMask()
 					copy := mask != 0 && mask&(mask-1) == 0
 					for _, coefficient := range value.coefficient {

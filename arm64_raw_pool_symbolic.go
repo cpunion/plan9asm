@@ -16,6 +16,7 @@ func (bounds *arm64RawPoolBounds) withSymbolicOrigin(at int) *arm64RawPoolBounds
 		cache: make(map[arm64RawPoolValue]uint64), active: make(map[arm64RawPoolValue]bool),
 		poolOrigins: origins,
 		excluded:    bounds.values.excluded, loopBounds: bounds.values.loopBounds,
+		loopLatches: bounds.values.loopLatches,
 	}
 	return &copy
 }

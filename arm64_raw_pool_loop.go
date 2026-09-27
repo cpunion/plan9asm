@@ -181,7 +181,15 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 		flow.loopBounds = make(map[int]arm64PoolConstraint)
 	}
 	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: arm64PoolInterval{1, initial.high}}
+	flow.recordLoopLatch(head, latch)
 	flow.clearValueCaches()
+}
+
+func (flow *arm64RawPoolValues) recordLoopLatch(head, latch int) {
+	if flow.loopLatches == nil {
+		flow.loopLatches = make(map[int]int)
+	}
+	flow.loopLatches[head] = latch
 }
 
 func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (int, uint64, bool) {

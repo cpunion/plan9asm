@@ -26,6 +26,7 @@ type arm64RawPoolValues struct {
 	poolOrigins    map[int]uint64
 	excluded       map[arm64RawPoolEdge]bool
 	loopBounds     map[int]arm64PoolConstraint
+	loopLatches    map[int]int
 	opaque         map[int]bool
 }
 

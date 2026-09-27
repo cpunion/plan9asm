@@ -93,6 +93,7 @@ func (flow *arm64RawPoolValues) proveOrderedCounterLoop(latch int) {
 		flow.loopBounds[head] = arm64PoolConstraint{
 			expression: remaining, interval: arm64PoolInterval{minimum, initial.high},
 		}
+		flow.recordLoopLatch(head, latch)
 		flow.clearValueCaches()
 		return
 	}
