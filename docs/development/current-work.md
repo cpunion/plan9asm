@@ -126,6 +126,19 @@ another module-index inventory scan.
   An enclosing-loop entry barrier may preserve only registers that the
   certified body never writes. Focused Go 1.27/1.20, three-OS LLVM 22,
   Darwin-native, required Linux/QEMU and vet tests passed.
+- `5bbda9b`: correct Go's Rm, Ra, Rn, Rd operand order across all eight
+  integer multiply-accumulate operations. One typed spec replaces duplicated
+  ordinary/word branches. Named/raw forms, all source/destination aliases and
+  zero operands cover 768 results against both native Go and LLVM, including
+  required Linux/QEMU. The prior long-multiply fixture also had the wrong
+  source order; the corrected fixture demonstrated the old lowering failure.
+- `7f5f838`: prove exact reciprocal division with full 128-bit arithmetic,
+  UDIV/MSUB remainders, MOVK constant construction and LSR guard preimages.
+  Historical value identities reject changed/truncated operands; a guard on
+  an in-place quotient cannot constrain its old numerator. Focused Go 1.27
+  and Go 1.20 suites, three-OS LLVM 22 objects, Darwin-native, Linux/QEMU,
+  supported-op extraction and vet passed. Full NEON bytes assembly compiled
+  on all three OS targets in diagnostics; rebuild for final corpus evidence.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -156,23 +169,24 @@ passed 184/184 files, zero N/A, 30 target-seconds plus seven seconds build.
 ## External evidence and remaining real failures
 
 A passing fixture or one target replay is not a passing module or shard.
-The latest three-OS SIMD replay (`_out/simd-stack.json`) passed translation
-of `parseIntsNEON` and `parseUintsNEON`, but still fails the full files at
-`formatIntsNEON` and
-`parseIntsSVE2`. Do not upgrade its assembly ledger.
+The latest three-OS SIMD replay (`_out/simd-division.json`) compiled the full
+NEON bytes file, including both integer parsers and formatting. The SVE bytes
+file still fails at `parseIntsSVE2`. These dirty-build diagnostics are not
+passing module evidence. Do not upgrade its assembly ledger.
 
 - **SIMD**: `github.com/sebishogun/simd@v1.21.1` and its mirror have 45/47
-  applicable ARM64 files passing in earlier three-OS diagnostics. The two
-  remaining bytes files need further proof work. Signed NEON now proves both
+  applicable ARM64 files passing in earlier three-OS diagnostics. NEON bytes
+  now compiles; SVE bytes needs further proof work. Signed NEON proves both
   vector loops run once and the tail counter stays in 1..7, including pair
   writeback. Unsigned NEON's two vector loops are also proved one-iteration,
   and the ascending signed-comparison tail now has a certified remaining
   interval of 1..19. The saved SP+8 index (instruction 181 to 323) now proves
   the carried pointer/count invariant is exactly 144 bytes relative to the
-  pool. Both integer parsers translate. Formatting first fails at instruction
-  59, a two-digit table read. Its UMULH/shift reciprocal division and MSUB
-  remainder need a general exact unsigned-division proof, plus historical
-  right-shift guard bounds; do not special-case the divisor 100.
+  pool. Both integer parsers translate. Formatting's instruction 59 two-digit
+  table read is now bounded by a general UMULH/shift reciprocal-division and
+  MSUB-remainder proof, plus historical right-shift guard bounds. The proof
+  is not special-cased to divisor 100. The expanded runtime oracle exposed
+  and now guards the independent multiply-accumulate operand-order bug.
   Inspect `_out/format-ints-neon-disasm.log` and `pool-format-neon.log`.
   Repeated ADRs retain relocation cardinality. The ignored function probe's
   scratch mask now has explicit parentheses; its earlier missing parentheses
@@ -224,7 +238,7 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
    Shard 10 passed 173 candidates: 142 passed, 31 N/A, 2,889 translations and
    six target N/A. Both retry runs and their ledger updates are complete.
 2. Continue real semantic fixes above with red/green and runtime tests.
-   The address-proof work does not yet resolve the two complete SIMD files.
+   NEON bytes now compiles; SVE bytes and native-layout/JIT failures remain.
 3. Run full root, both nested CLIs, vet/build, official five-architecture
    coverage, ARM64/stdlib corpus, cross runtime and strict benchmark after
    the final implementation. Preserve evidence by exact source snapshot.
