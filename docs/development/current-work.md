@@ -10,14 +10,22 @@ another index scan. Older detailed checkpoints remain in Git history.
   `cpunion:codex/expand-ecosystem-corpus-20260913`, never `origin` or
   `xgo-dev`. Upstream `main@7cc8c0f` is already an ancestor. Inspect
   remotes, worktrees, processes and live checks before continuing.
-- Pushed head: `b93666f5`, CI run `36311131855`. At 10:37 UTC on
-  2026-09-27 it had 59 successful jobs, no failures, nine running and
-  24 queued. This is not complete green CI. Its exact-source local full root
+- Pushed head: `b93666f5`, CI run `36311131855`. At 11:00 UTC on
+  2026-09-27 it had 64 successful jobs, no failures, eight running and
+  20 queued. This is not complete green CI. Its exact-source local full root
   suite passed in 627.880 seconds, including all root subpackages.
+- The user explicitly requires this CI run to finish once. Do not push,
+  cancel or rerun it; accumulate verified local commits meanwhile.
 - Develop on `codex/pr40-arm64-raw-20260926`. The persistent
-  `codex/pr40-ci-hotfix-20260927` tree is testing `4e00663c` with
-  `go test ./... -count=1 -timeout=20m`; inspect its process and
-  `_out/root-tests-sve-copy-4e00663c.log` before advancing that tree.
+  `codex/pr40-ci-hotfix-20260927` tree passed full root suites at `4e00663c`
+  (663 seconds) and `a880ec19` (668 seconds); both CLI suites passed at the
+  latter. Logs are `_out/root-tests-sve-copy-4e00663c.log` and
+  `_out/root-tests-masked-a880ec19.log`. Inspect its actual revision/process
+  before changing it; the next frozen gate includes the compare/loop batch.
+- `codex/pr40-ci-evidence-b93666f5` retains current CI artifacts separately
+  in `_out/ci-b936-reports`. Audited shards 2/3/7 at `1cc62c90` account for
+  374 passes, 66 source N/A and 6,241 translations. Shard 6 also passed CI;
+  download/audit it next. Do not combine this source with earlier reports.
 - `codex/pr40-ci-evidence-0d96d26` preserves 12 validated previous-CI
   reports: four complete and eight partial. Evidence `b434d36e` has 1,046
   passed, 219 source N/A, two invalid-source skips, five failed and 3,511
@@ -81,12 +89,25 @@ library lanes and Windows. Subsequent external failures remain separate.
   Linux/QEMU, all pool regressions, Go 1.20, vet and the official five-arch
   gate pass. Strict benchmark: 184/184 files, zero N/A, 25 target-seconds
   plus one build-second.
+- `86a21fe6`: independently prove a numeric CMP/CMN register limit at its
+  defining comparison, including shifts/extensions and unsigned carry/zero
+  conditions. Later writes and relocated offsets cannot supply the limit.
+  Full pool regression, Go 1.20, three-OS objects, Darwin/Linux runtime,
+  official coverage and benchmark (184/184, 23 target-seconds) pass.
+- `6e8ff7d3`: rewind the actual compared expression through a single-entry
+  straight-line body, then exclude B.NE only if every external entry gives
+  equality on the first iteration. This is not a general induction proof.
+  Wrong steps, underflow, side entries, enclosing iterations, changed flags
+  and unknown effects remain barriers. Full pool tests, three-OS objects,
+  Darwin/Linux execution, Go 1.20, vet and benchmark (184/184, 24 seconds)
+  pass. Retained pre-fix overlays fail the executable fixture.
 
 Logs use ignored `_out/pool-sve-contiguous-*`, `sve-dup-indexed-*`,
 `pool-sve-copy-*` and `pool-masked-logical-*`. The masked before-fix
-overlay references the frozen `4e00663c` tree; preserve its baseline before
-advancing it if another red replay is needed. Do not claim the newer masked
-source passed that older snapshot's full suite.
+overlays reference the hotfix tree and become stale when it advances. The red
+logs retain the actual failures; reconstruct old implementations from their
+Git revisions before repeating a red replay. New compare/loop diagnostics use
+`_out/pool-constant-compare-*` and `_out/pool-relational-loop-*`.
 
 ## Remaining external failures
 
@@ -97,9 +118,10 @@ source passed that older snapshot's full suite.
   In `parseIntsSVE2`, CMP at instruction 98 now reaches B.NE at 121 with
   correct NZCV provenance. Loop 74..121 subtracts invariant RDVL from X20
   until X20 equals X7. X7 is length AND (VL-1). Entry length is 8..19.
-  Register-CMP guards, relational countdowns and impossible higher-VL
-  paths still need proof. The masked batch proves X7=length for VL>=32,
-  but instruction 76's pool footprint remains unknown.
+  Register-CMP guards now prove length 16..19 at VL=16; X20-X7 equals 16.
+  The first backedge is excluded at VL=16 and instruction 76's pool-relative
+  offset is 12..36. The whole function still fails: impossible higher-VL
+  paths and later loads/loops require proof. Do not claim a module pass.
   Ignored `pool-function-probe_test.go` and `parse-int-sve-disasm.log`
   retain diagnostics. Do not loosen a bound because the load is supported.
 - **Native-layout/JIT**: GopherJRE, GoJIT and both case-distinct Sharkie
