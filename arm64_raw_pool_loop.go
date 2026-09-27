@@ -93,6 +93,7 @@ func (flow *arm64RawPoolValues) prepareControlFlow() {
 		for latch := range flow.words {
 			flow.proveCounterLoop(latch)
 			flow.proveOrderedCounterLoop(latch)
+			flow.proveRelationalOneIterationLoop(latch)
 		}
 		flow.clearValueCaches()
 		if excluded == len(flow.excluded) && loops == len(flow.loopBounds) {
@@ -193,29 +194,14 @@ func (flow *arm64RawPoolValues) recordLoopLatch(head, latch int) {
 }
 
 func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (int, uint64, bool) {
-	if register >= 31 || head < 0 || head >= latch || latch-head > 512 {
+	if register >= 31 || !flow.straightLineLoopBody(head, latch) {
 		return 0, 0, false
-	}
-	for at := head + 1; at <= latch; at++ {
-		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
-			return 0, 0, false
-		}
 	}
 	update := -1
 	var delta uint64
 	for at := head; at < latch; at++ {
 		current := flow.words[at]
-		// The body must fall through only, including instructions that would
-		// otherwise appear harmless in the GP destination-effect classifier.
-		if current&0x7c000000 == 0x14000000 || current&0x7e000000 == 0x34000000 ||
-			current&0x7e000000 == 0x36000000 || current&0xff000010 == 0x54000000 ||
-			current&0xfe000000 == 0xd6000000 {
-			return 0, 0, false
-		}
-		writes, known := arm64RawPoolGPWrites(current)
-		if !known {
-			return 0, 0, false
-		}
+		writes, _ := arm64RawPoolGPWrites(current)
 		if writes&(1<<uint(register)) == 0 {
 			continue
 		}
@@ -230,6 +216,29 @@ func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (in
 		return 0, 0, false
 	}
 	return update, delta, true
+}
+
+func (flow *arm64RawPoolValues) straightLineLoopBody(head, latch int) bool {
+	if head < 0 || head >= latch || latch-head > 512 {
+		return false
+	}
+	for at := head + 1; at <= latch; at++ {
+		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
+			return false
+		}
+	}
+	for at := head; at < latch; at++ {
+		word := flow.words[at]
+		if word&0x7c000000 == 0x14000000 || word&0x7e000000 == 0x34000000 ||
+			word&0x7e000000 == 0x36000000 || word&0xff000010 == 0x54000000 ||
+			word&0xfe000000 == 0xd6000000 {
+			return false
+		}
+		if _, known := arm64RawPoolGPWrites(word); !known {
+			return false
+		}
+	}
+	return true
 }
 
 func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolValues {

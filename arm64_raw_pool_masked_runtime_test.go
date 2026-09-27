@@ -17,6 +17,19 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 				"sub x5,x1,x4", "sub x5,x5,#16", "ldr x5,[x9,x5]", fmt.Sprintf("str x5,[x0,#%d]", (mode*len(forms)+index)*8))
 		}
 	}
+	for index, compare := range []string{"cmp x11,x4", "cmp x4,x11"} {
+		start := len(lines)
+		lines = append(lines, "cmp x1,#16", "b.lo #0", "cmp x1,#19", "b.hi #0",
+			"mov x10,x9", "mov x11,x1", "and x4,x1,x2")
+		head := len(lines)
+		// A second iteration would read beyond the eight-byte pool. The
+		// relational zero proof must establish that the backedge is impossible.
+		lines = append(lines, "ldr x5,[x10],#8", "sub x11,x11,x6", compare)
+		lines = append(lines, fmt.Sprintf("b.ne #%d", (head-len(lines))*4),
+			fmt.Sprintf("str x5,[x0,#%d]", 64+index*8), "mov x10,xzr")
+		lines[start+1] = fmt.Sprintf("b.lo #%d", (len(lines)-start-1)*4)
+		lines[start+3] = fmt.Sprintf("b.hi #%d", (len(lines)-start-3)*4)
+	}
 	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
@@ -71,12 +84,12 @@ extern void pool_masked(uint64_t *, uint64_t);
 int main(void) {
   const uint64_t inputs[] = {0, 1, 15, 16, 17, 18, 19, 20, 31, 255, UINT64_C(1)<<63, UINT64_MAX};
   for (unsigned test = 0; test < sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[10] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
+    uint64_t out[12] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
     uint64_t n = inputs[test];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[9] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[11] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
-    for (unsigned form = 0; form < 8; form++) {
+    for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
     }
   }
