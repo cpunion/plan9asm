@@ -137,6 +137,15 @@ func (m X87Mode) valid() bool {
 type Options struct {
 	TargetTriple string
 
+	// X86TailGroups identifies closed, assembly-only continuation groups. Their
+	// helpers have no callable Go/native entry: the caller must establish that
+	// their addresses are used only for jumps within the group's root. The
+	// group's every indirect JMP must target one of its named helpers. No
+	// helper address may escape to other code or be read as machine-code bytes.
+	// helpers are folded into that root's CFG, preserving its entire machine
+	// state and FP frame. Ordinary TEXT tail calls must not use this option.
+	X86TailGroups []X86TailGroup
+
 	// ResolveSym maps the TEXT symbol (with (SB) trimmed) into the final linker
 	// symbol name to emit in LLVM IR. If nil, the symbol is used as-is.
 	ResolveSym func(sym string) string
@@ -186,6 +195,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 		return "", fmt.Errorf("empty file")
 	}
 	file, err := normalizeX86RawFile(file, opt.Goarch)
+	if err != nil {
+		return "", err
+	}
+	file, err = coalesceX86Continuations(file, opt)
 	if err != nil {
 		return "", err
 	}
@@ -348,7 +361,7 @@ func emitExternFuncDecls(b *strings.Builder, file *File, resolve func(string) st
 	// Deterministic order for tests/debugging.
 	names := make([]string, 0, len(sigs))
 	for name := range sigs {
-		if defined[name] {
+		if defined[name] || file.isX86Continuation(name, resolve) {
 			continue
 		}
 		names = append(names, name)
@@ -475,8 +488,10 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string) error {
 	// Merge DATA and GLOBL into resolved symbol -> bytes.
 	type symData struct {
-		size  int64
-		bytes map[int64][]byte // off -> payload
+		size     int64
+		bytes    map[int64][]byte // off -> payload
+		readOnly bool
+		local    bool
 	}
 
 	syms := map[string]*symData{}
@@ -491,6 +506,10 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 	}
 
 	for _, g := range file.Globl {
+		readOnly, err := globlReadOnly(g.Flags)
+		if err != nil {
+			return err
+		}
 		name := resolveData(g.Sym)
 		sd := syms[name]
 		if sd == nil {
@@ -500,6 +519,8 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		if g.Size > sd.size {
 			sd.size = g.Size
 		}
+		sd.readOnly = readOnly
+		sd.local = strings.HasSuffix(g.Sym, "<>")
 	}
 
 	for _, d := range file.Data {
@@ -509,6 +530,7 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
+		sd.local = strings.HasSuffix(d.Sym, "<>")
 		end, err := dataStmtEnd(d)
 		if err != nil {
 			return err
@@ -550,13 +572,20 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 			copy(buf[off:], p)
 		}
 		align := bestAlign(int64(len(buf)))
-		fmt.Fprintf(b, "%s = constant [%d x i8] %s, align %d\n", llvmGlobal(name), len(buf), llvmI8ArrayInit(buf), align)
+		kind := "global"
+		if sd.readOnly {
+			kind = "constant"
+		}
+		if sd.local {
+			kind = "internal " + kind
+		}
+		fmt.Fprintf(b, "%s = %s [%d x i8] %s, align %d\n", llvmGlobal(name), kind, len(buf), llvmI8ArrayInit(buf), align)
 	}
 	return nil
 }
 
 // Data globals are currently materialized as byte slices and then as LLVM
-// constant arrays. Bound their size so malformed input cannot exhaust the
+// initializer arrays. Bound their size so malformed input cannot exhaust the
 // translator's memory before LLVM sees it. The Go standard library's largest
 // assembly global is only a few KiB.
 const maxDataGlobalSize int64 = 64 << 20

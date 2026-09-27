@@ -23,6 +23,10 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (llvm.M
 	if err != nil {
 		return llvm.Module{}, err
 	}
+	file, err = coalesceX86Continuations(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
 	mod, err := translateModuleDirectInContext(ctx, file, opt)
 	if err == nil {
 		return finishTranslatedModule(file, mod)

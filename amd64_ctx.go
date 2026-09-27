@@ -16,9 +16,11 @@ type amd64Ctx struct {
 	goarch       string
 	targetTriple string
 
-	resolve  func(string) string
-	sigs     map[string]FuncSig
-	annotate bool
+	resolve        func(string) string
+	sigs           map[string]FuncSig
+	annotate       bool
+	continuations  map[string]x86Continuation
+	indirectLabels []string
 
 	tmp int
 
@@ -112,6 +114,12 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s
 	}
+	c.continuations = make(map[string]x86Continuation, len(fn.x86ContinuationAddresses))
+	for symbol, target := range fn.x86ContinuationAddresses {
+		target.root = resolve(target.root)
+		c.continuations[resolve(symbol)] = target
+	}
+	c.indirectLabels = fn.x86IndirectLabels
 	c.fpResults = append([]FrameSlot(nil), sig.Frame.Results...)
 	base := 0
 	for i, blk := range c.blocks {
@@ -2168,6 +2176,12 @@ func (c *amd64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 		res = c.resolve("·" + base)
 	}
 	p := llvmGlobal(res)
+	if continuation, ok := c.continuations[res]; ok {
+		if off != 0 {
+			return "", fmt.Errorf("continuation address cannot have a byte offset: %q", sym)
+		}
+		return fmt.Sprintf("blockaddress(%s, %%%s)", llvmGlobal(continuation.root), amd64LLVMBlockName(continuation.label)), nil
+	}
 	if off == 0 {
 		return p, nil
 	}

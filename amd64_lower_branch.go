@@ -315,6 +315,15 @@ func (c *amd64Ctx) callIndirectAddr(addr string) error {
 }
 
 func (c *amd64Ctx) tailCallIndirectAddrAndRet(addr string) error {
+	if len(c.indirectLabels) != 0 {
+		ptr := c.ptrFromAddrI64(addr)
+		labels := make([]string, len(c.indirectLabels))
+		for i, label := range c.indirectLabels {
+			labels[i] = "label %" + amd64LLVMBlockName(label)
+		}
+		fmt.Fprintf(c.b, "  indirectbr ptr %s, [%s]\n", ptr, strings.Join(labels, ", "))
+		return nil
+	}
 	if err := c.callIndirectAddr(addr); err != nil {
 		return err
 	}

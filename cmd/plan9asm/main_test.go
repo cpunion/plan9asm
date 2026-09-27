@@ -125,7 +125,7 @@ RET
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !ok || !strings.Contains(tr.LLVMIR, `@"runtime.zeroTLS$local" = constant [48 x i8]`) {
+	if !ok || !strings.Contains(tr.LLVMIR, `@"runtime.zeroTLS$local" = internal constant [48 x i8]`) {
 		t.Fatalf("generated const_tlsSize was not expanded:\n%s", tr.LLVMIR)
 	}
 }

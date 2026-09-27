@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -19,6 +20,21 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 	if llc == "" {
 		t.Fatal("llc not found")
 	}
+	t.Run("amd64_text_continuations", func(t *testing.T) {
+		runX86ContinuationGo(t)
+		clang := findLLVM22Tool("clang")
+		if clang == "" {
+			t.Fatal("LLVM 22 clang not found")
+		}
+		ir := x86ContinuationIR(t, "x86_64-unknown-linux-gnu", x86ContinuationSource)
+		runX86Continuation(t, llc, clang, "x86_64-unknown-linux-gnu", ir)
+	})
+	t.Run("386_text_continuations", func(t *testing.T) {
+		ir := x86Continuation386IR(t, "i386-unknown-linux-gnu")
+		main := strings.NewReplacer("uint64_t", "uint32_t", "UINT64_MAX", "UINT32_MAX").Replace(x86ContinuationMain)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc", "-no-pie"},
+			"continuation386", "i386-unknown-linux-gnu", ir, main, []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"})
+	})
 	t.Run("arm64_raw_sve_count_index", func(t *testing.T) {
 		testARM64RawSVECountIndexRuntime(t, llc)
 	})

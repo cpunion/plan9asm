@@ -9,8 +9,9 @@ import (
 
 // File is a parsed Plan 9 asm source file (subset).
 type File struct {
-	Arch  Arch
-	Funcs []Func
+	Arch             Arch
+	Funcs            []Func
+	x86Continuations map[string]x86Continuation
 	// UnlinkedPrelude records instructions before the first TEXT. Go assembles
 	// them into no named function, so they cannot affect any translated symbol.
 	// Corpus verification checks the same source with Go's assembler first.
@@ -48,6 +49,9 @@ type Func struct {
 	// X86RawAlign retains a leading PCALIGN on an address-sensitive raw body.
 	// Go aligns the function itself when PCALIGN precedes its first byte.
 	X86RawAlign int64
+
+	x86ContinuationAddresses map[string]x86Continuation
+	x86IndirectLabels        []string
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.

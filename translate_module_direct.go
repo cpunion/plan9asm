@@ -27,6 +27,9 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 	if file == nil {
 		return llvm.Module{}, fmt.Errorf("nil file")
 	}
+	if len(file.x86Continuations) != 0 {
+		return llvm.Module{}, directUnsupportedf("x86 continuations require shared CFG lowering")
+	}
 	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return llvm.Module{}, fmt.Errorf("empty file")
 	}
@@ -579,8 +582,10 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 
 func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) string) error {
 	type symData struct {
-		size  int64
-		bytes map[int64][]byte
+		size     int64
+		bytes    map[int64][]byte
+		readOnly bool
+		local    bool
 	}
 	syms := map[string]*symData{}
 	resolveData := func(sym string) string {
@@ -590,6 +595,10 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		return resolve("·" + sym)
 	}
 	for _, g := range file.Globl {
+		readOnly, err := globlReadOnly(g.Flags)
+		if err != nil {
+			return err
+		}
 		name := resolveData(g.Sym)
 		sd := syms[name]
 		if sd == nil {
@@ -599,6 +608,8 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		if g.Size > sd.size {
 			sd.size = g.Size
 		}
+		sd.readOnly = readOnly
+		sd.local = strings.HasSuffix(g.Sym, "<>")
 	}
 	for _, d := range file.Data {
 		name := resolveData(d.Sym)
@@ -607,6 +618,7 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 			sd = &symData{bytes: map[int64][]byte{}}
 			syms[name] = sd
 		}
+		sd.local = strings.HasSuffix(d.Sym, "<>")
 		end, err := dataStmtEnd(d)
 		if err != nil {
 			return err
@@ -649,7 +661,10 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		init := llvm.ConstArray(i8Ty, elems)
 		g := llvm.AddGlobal(mod, arrTy, name)
 		g.SetInitializer(init)
-		g.SetGlobalConstant(true)
+		g.SetGlobalConstant(sd.readOnly)
+		if sd.local {
+			g.SetLinkage(llvm.InternalLinkage)
+		}
 		g.SetAlignment(int(bestAlign(int64(len(buf)))))
 	}
 	return nil

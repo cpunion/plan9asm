@@ -112,8 +112,8 @@ GLOBL ·ROUNDING(SB), $2
 	}
 	defer mod.Dispose()
 	for _, want := range []string{
-		`@legacy.REDMASK51 = constant [8 x i8]`,
-		`@legacy.ROUNDING = constant [2 x i8]`,
+		`@legacy.REDMASK51 = global [8 x i8]`,
+		`@legacy.ROUNDING = global [2 x i8]`,
 	} {
 		if ir := mod.String(); !strings.Contains(ir, want) {
 			t.Fatalf("legacy GLOBL translation missing %q:\n%s", want, ir)

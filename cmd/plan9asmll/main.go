@@ -123,6 +123,7 @@ type compileConfig struct {
 	// functions each contain thousands of assembly instructions. A single
 	// oversized function stays intact and is checked on its own.
 	MaxInstructions int
+	X86TailGroups   []plan9asm.X86TailGroup
 }
 
 func main() {
@@ -521,6 +522,10 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {
 		return fmt.Errorf("target applicability: %w", err)
 	}
+	ccfg.X86TailGroups, err = inferX86TailGroups(pkg, file, t.AsmFile, goarch, resolve, sigs)
+	if err != nil {
+		return fmt.Errorf("prove private continuation entries: %w", err)
+	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {
 		maxFunctions = 128
@@ -533,7 +538,9 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	for _, fn := range file.Funcs {
 		instructionCount += len(fn.Instrs)
 	}
-	if ccfg.Enabled && !ccfg.KeepObj &&
+	// A continuation and the initializer taking its block address must remain
+	// in one LLVM module, just as an oversized ordinary function stays intact.
+	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 &&
 		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.
@@ -580,6 +587,7 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 		Goarch:         goarch,
 		WASMABI:        wasmABIForGoPackageTarget(goarch),
 		AnnotateSource: annotate,
+		X86TailGroups:  ccfg.X86TailGroups,
 	})
 	if err != nil {
 		ctx.Dispose()
