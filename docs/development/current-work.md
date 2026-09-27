@@ -6,11 +6,15 @@ another module-index inventory scan.
 
 ## Contribution and worktrees
 
-- PR 40 remains OPEN/DRAFT. Latest live inspection: remote head `4cf5ade`,
-  base `7cc8c0f`, 74 successful checks and 20 failures (19 discovery shards
-  plus their aggregate). Local repairs have not been pushed.
+- PR 40 remains OPEN/DRAFT. Reciprocal/multiply repairs were pushed as
+  `634b122`; its local full root suite and CLI tests passed. The strict
+  benchmark passed 184/184 files with zero N/A in 25 target-seconds.
+  Its CI exposed stale derived assembly evidence and an SVE runtime oracle
+  assumption. Evidence refresh `81bbd5e` passed CI's build/provenance check.
+  Inspect live checks rather than treating these partial results as green CI.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`. Never push to
-  `origin` or `xgo-dev`. Batch the repairs before pushing; keep the PR draft.
+  `origin` or `xgo-dev`. The latest request is to push verified CI repairs
+  promptly, inspect the new checks and continue fixing; keep the PR draft.
 - Develop on `codex/pr40-arm64-raw-20260926`. Upstream main `7cc8c0f` is
   already an ancestor. Inspect status, worktrees and processes first.
 - `codex/pr40-shard25-replay-20260926` retains frozen `8134b3e` diagnostics.
@@ -42,6 +46,18 @@ another module-index inventory scan.
 
 ## Latest committed repairs
 
+- The SVE memory-offset runtime oracle now compares FFR as well as values.
+  Pinned QEMU deliberately stops non-faulting loads at the second page, even
+  for mapped memory. A deterministic cross-page fixture reproduced CI's
+  VL=256 failure with identical native/translated bytes and a wrong scalar
+  expectation. Both aligned/full-load and cross-page/valid-prefix layouts
+  now run; all seven non-faulting mnemonics and ordinary loads/stores pass.
+  No instruction, vector length or page-crossing case is skipped.
+- The uncommitted ARM64 stack-allocation repair includes named/raw manual SP
+  adjustments and saved-SP aliases. Its real NEON integer-parser crash is
+  reproduced and repaired (130 parsing plus 65 formatting runtime cases).
+  Finish alias/clobber/CFG review and full gates before committing it; these
+  diagnostic results are not complete external-module or shard evidence.
 - `cc307d5`: reject Go command/compiler/assembler version mismatches as
   infrastructure failures, never source N/A. The shard script pins its child
   Go binary to the recorded GOROOT and checks all three versions.
