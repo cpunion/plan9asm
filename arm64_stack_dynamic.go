@@ -111,6 +111,16 @@ func arm64StackRelocatablePrefix(state arm64StackState, ins Instr) bool {
 			if state.value(arg.Mem.Index).local {
 				return false
 			}
+		case OpSym:
+			// Effective-address operands are values, not memory reads. Their
+			// destinations are not in the register-copy alias proof above;
+			// never relocate storage while leaving such a hidden alias behind.
+			if strings.HasPrefix(arg.Sym, "$") {
+				memory, ok := parseMem(strings.TrimSpace(strings.TrimPrefix(arg.Sym, "$")))
+				if ok && (state.value(memory.Base).local || state.value(memory.Index).local || memory.Base == ZR) {
+					return false
+				}
+			}
 		}
 	}
 	if !usesAddress {

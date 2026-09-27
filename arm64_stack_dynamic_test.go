@@ -96,6 +96,8 @@ func TestARM64DynamicStackLLVM(t *testing.T) {
 
 func TestARM64DynamicStackRejectsUnprovedRelocation(t *testing.T) {
 	for _, body := range []string{
+		"MOVD $8(RSP),R3\nSUB R1,RSP\nMOVD R2,(RSP)",
+		"MOVD RSP,R20\nMOVD $8(R20),R3\nSUB R1,RSP\nMOVD R2,(RSP)",
 		"MOVD RSP,R3\nMOVD R3,(R0)\nSUB R1,RSP\nMOVD R2,(RSP)",
 		"MOVD RSP,R3\nMOVD R3,8(RSP)\nSUB R1,RSP\nMOVD R2,(RSP)",
 		"CMP RSP,R0\nSUB R1,RSP\nMOVD R2,(RSP)",
