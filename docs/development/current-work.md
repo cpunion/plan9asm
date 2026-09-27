@@ -187,6 +187,13 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   instead of a floating 1.27.x patch release. `actionlint` passed. All three
   KnoxDB module paths still resolve `@latest` to v0.2.9, so none qualifies
   for the old-version superseded rule.
+- Frozen `8134b3e` shards 23, 24 and 25 completed with zero failures and
+  individually audited reports. Respectively: 143 = 114 passed + 28 N/A +
+  one invalid-source skip (2,328 objects); 164 = 134 passed + 29 N/A + one
+  superseded skip (2,447 objects); 137 = 110 passed + 26 N/A + one
+  superseded skip (1,801 objects). Their large `wasm2go/p10`, `p9` and `p1`
+  candidates all passed. These are diagnostic reports from an older commit,
+  not evidence for the eventual final aggregate.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
