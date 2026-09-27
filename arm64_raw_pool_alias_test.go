@@ -13,6 +13,7 @@ func TestARM64RawPoolAliases(t *testing.T) {
 	// Go asm7.go's MOVD and ADD/SUB rows include immediate, shifted and
 	// extended registers. Relocation must follow every surviving alias,
 	// including aliases whose original register has already been overwritten.
+	const loadedDifference = "ldr x1, [x0]\nldr x2, [x0, #8]\nsub x3, x2, x1\n"
 	for _, test := range []struct {
 		name, body string
 		want       bool
@@ -23,8 +24,34 @@ func TestARM64RawPoolAliases(t *testing.T) {
 		{"alias-chain", "add x10, x9, #16\nsub x12, x10, #8\nldr x0, [x12]\nmov x10, xzr", true},
 		{"transient-offset-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
 		{"transient-add-cancelled", "add x10, x9, x1, lsl #3\nsub x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
-		{"transient-guarded-difference", "ldr x1, [x0]\nldr x2, [x0, #8]\nsub x3, x2, x1\ncmp x3, #5\nb.hi #16\nsub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
-		{"transient-guarded-overrun", "ldr x1, [x0]\nldr x2, [x0, #8]\nsub x3, x2, x1\ncmp x3, #6\nb.hi #16\nsub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
+		{
+			"transient-guarded-difference",
+			loadedDifference + "cmp x3, #5\nb.hi #16\n" +
+				"sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\n" +
+				"ldr x0, [x12]\nmov x10, xzr",
+			true,
+		},
+		{
+			"transient-guarded-overrun",
+			loadedDifference + "cmp x3, #6\nb.hi #16\n" +
+				"sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\n" +
+				"ldr x0, [x12]\nmov x10, xzr",
+			false,
+		},
+		{
+			"transient-guarded-negative-displacement",
+			loadedDifference + "cmp x3, #8\nb.lo #28\ncmp x3, #13\nb.hi #20\n" +
+				"sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\n" +
+				"sub x12, x12, #64\nldr x0, [x12]\nmov x10, xzr",
+			true,
+		},
+		{
+			"transient-guarded-negative-underrun",
+			loadedDifference + "cmp x3, #5\nb.lo #28\ncmp x3, #13\nb.hi #20\n" +
+				"sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\n" +
+				"sub x12, x12, #64\nldr x0, [x12]\nmov x10, xzr",
+			false,
+		},
 		{"transient-offset-not-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
 		{"transient-index-clobbered", "sub x10, x9, x1\nmov x1, x2\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
 		{"transient-flags-observed", "sub x10, x9, x1\ncmp x10, #0\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
@@ -48,6 +75,8 @@ func TestARM64RawPoolAliases(t *testing.T) {
 		{"unknown-index", "add x12, x9, x1\nldr x0, [x12]", false},
 		{"shifted-address", "mov x1, #1\nadd x12, x1, x9, lsl #1\nldr x0, [x12]", false},
 		{"two-addresses", "add x12, x9, x9\nldr x0, [x12]", false},
+		{"two-address-aliases", "mov x10, x9\nadd x12, x9, x10\nldr x0, [x12]\nmov x10, xzr", false},
+		{"two-address-aliases-shifted", "mov x10, x9\nadd x12, x9, x10, lsl #1\nldr x0, [x12]\nmov x10, xzr", false},
 		{"reverse-subtraction", "mov x1, #1\nsub x12, x1, x9\nldr x0, [x12]", false},
 		{"negative-sxtw", "mov w1, #-1\nadd x12, x9, w1, sxtw\nldr x0, [x12]", false},
 		{"shift-overflow", "mov x1, #2\nadd x12, x9, x1, lsl #63\nldr x0, [x12]", false},

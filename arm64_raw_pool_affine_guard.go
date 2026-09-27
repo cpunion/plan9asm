@@ -112,3 +112,23 @@ func arm64PoolConstraintsFeasible(constraints []arm64PoolConstraint) bool {
 	}
 	return true
 }
+
+// Intersect guards before projecting through scaled or negative offsets.
+// Separate images can each straddle the unsigned wrap point even when the
+// intersection has one small, non-wrapping image, e.g. 8 <= n <= 15 and 8*n-64.
+func arm64PoolTightenConstraint(target arm64PoolConstraint, constraints []arm64PoolConstraint) arm64PoolConstraint {
+	if target.mask != 0 {
+		return target
+	}
+	for _, constraint := range constraints {
+		if value, ok := target.expression.constrainedBy(constraint); ok {
+			if value.low > target.interval.low {
+				target.interval.low = value.low
+			}
+			if value.high < target.interval.high {
+				target.interval.high = value.high
+			}
+		}
+	}
+	return target
+}

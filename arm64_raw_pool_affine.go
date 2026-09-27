@@ -194,6 +194,11 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		impossible := false
 		bound := state.bound
 		for _, constraint := range state.constraints[:state.count] {
+			constraint = arm64PoolTightenConstraint(constraint, state.constraints[:state.count])
+			if constraint.interval.low > constraint.interval.high {
+				impossible = true
+				continue
+			}
 			if constraint.expression.isConstant() {
 				value := constraint.expression.constant
 				if constraint.mask != 0 {
@@ -251,6 +256,20 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 			}
 			destination, value, affine := arm64PoolAffineDefinition(word)
 			if origin := flow.poolOrigin; origin != nil && previous == origin.at && word&0x9f000000 == 0x10000000 {
+				index := int(word & 31)
+				// An offset proof may replace one occurrence of the relocation
+				// origin, never a sum of two aliases. The latter changes by
+				// twice the relocation distance, even when its numeric offset
+				// would happen to fit in the blob. Guards must not observe it.
+				coefficient := next.expression.coefficient[index]
+				if coefficient != 0 && coefficient != 1 {
+					return arm64PoolUnknownInterval
+				}
+				for _, constraint := range next.constraints[:next.count] {
+					if constraint.expression.coefficient[index] != 0 {
+						return arm64PoolUnknownInterval
+					}
+				}
 				destination, value, affine = int(word&31), arm64PoolAffine{constant: origin.offset}, true
 			}
 			if !affine && writes != 0 {
