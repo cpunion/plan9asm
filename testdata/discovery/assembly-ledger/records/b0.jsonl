@@ -4,7 +4,7 @@
 {"module":"github.com/agilicus/golang-net","version":"v0.0.0-20210119194325-5f4716e94777","status":"pending"}
 {"module":"github.com/andremouche/tidb","version":"v1.0.0","status":"pending"}
 {"module":"github.com/fmstephe/flib","version":"v0.0.1","status":"pending"}
-{"module":"github.com/luoqingciya/mihomo-teyvat","version":"v1.19.30","status":"pending"}
+{"module":"github.com/luoqingciya/mihomo-teyvat","version":"v1.19.30","status":"passed"}
 {"module":"github.com/mikerquinn/x-crypto-pqc","version":"v0.54.0-pqc","status":"pending"}
 {"module":"github.com/puneetdixit200/u-root","version":"v0.16.0","status":"pending"}
 {"module":"github.com/quantumcoinproject/quantum-coin-go","version":"v1.11.12","status":"pending"}

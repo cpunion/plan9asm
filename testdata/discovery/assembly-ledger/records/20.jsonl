@@ -15,7 +15,7 @@
 {"module":"github.com/gmh5225/Go-Detection-Hyper-v","version":"v0.0.5","status":"pending"}
 {"module":"github.com/hanzos3/blake2b-simd","version":"v1.0.0","status":"pending"}
 {"module":"github.com/hbtgmbh/gosaxml","version":"v0.0.44","status":"pending"}
-{"module":"github.com/imannamdari/xray-core","version":"v1.3.1","status":"pending"}
+{"module":"github.com/imannamdari/xray-core","version":"v1.3.1","status":"passed"}
 {"module":"github.com/istio/vendor-istio","version":"v0.0.0-20180417220523-e2668764eae3","status":"pending"}
 {"module":"github.com/karingx/sing-tun","version":"v0.6.1","status":"pending"}
 {"module":"github.com/mavity/rusticated","version":"v0.0.0-20260915134237-469b5127e027","status":"pending"}

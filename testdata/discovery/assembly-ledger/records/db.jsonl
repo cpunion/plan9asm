@@ -12,7 +12,7 @@
 {"module":"github.com/malivvan/http","version":"v1.0.0","status":"pending"}
 {"module":"github.com/mathetake/gasm","version":"v1.12.0","status":"pending"}
 {"module":"github.com/megamsys/urknall","version":"v0.0.0-20161123162216-83cb5db8f2cb","status":"pending"}
-{"module":"github.com/meko-christian/algo-fft","version":"v0.8.0","status":"pending"}
+{"module":"github.com/meko-christian/algo-fft","version":"v0.8.0","status":"passed"}
 {"module":"github.com/mikyllyn/utls","version":"v0.0.0-20260912114335-404f173a3254","status":"pending"}
 {"module":"github.com/nikkolasg/crypto","version":"v0.0.0-20161113202010-a36b87a41a7b","status":"pending"}
 {"module":"github.com/nitrix/fastcgo","version":"v0.0.0-20260320233917-ff1e9ee57d1f","status":"pending"}

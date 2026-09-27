@@ -9,8 +9,8 @@
 {"module":"github.com/ekexium/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/erigontech/ERIGON","version":"v1.10.16","status":"pending"}
 {"module":"github.com/evmOS/go-ethereum","version":"v1.10.26","status":"pending"}
-{"module":"github.com/hanfei1991/TiDB","version":"v1.0.0","status":"pending"}
-{"module":"github.com/joshcohen-ai/incognito-chain-web-js/wasm/internal","version":"v0.0.0-20220909040933-37f3abde52de","status":"pending"}
+{"module":"github.com/hanfei1991/TiDB","version":"v1.0.0","status":"not_applicable"}
+{"module":"github.com/joshcohen-ai/incognito-chain-web-js/wasm/internal","version":"v0.0.0-20220909040933-37f3abde52de","status":"passed"}
 {"module":"github.com/keybase/go-crypto","version":"v0.0.0-20200123153347-de78d2cb44f4","status":"pending"}
 {"module":"github.com/kolbe/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/orca-zhang/webp","version":"v0.0.0-20260704102930-25bc43b74534","status":"pending"}

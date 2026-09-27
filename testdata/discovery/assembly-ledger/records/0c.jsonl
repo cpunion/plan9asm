@@ -11,7 +11,7 @@
 {"module":"github.com/cloudflare/cfssl","version":"v1.6.5","status":"pending"}
 {"module":"github.com/crayrae1975/u-root","version":"v0.0.0-20150524060106-ff33bd1a114b","status":"pending"}
 {"module":"github.com/dave/tools","version":"v0.0.0-20160205015733-fe74a4186116","status":"pending"}
-{"module":"github.com/dxbwala/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
+{"module":"github.com/dxbwala/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"passed"}
 {"module":"github.com/frida/typescript/tsc","version":"v0.0.0-20260906185614-e00a6a37c16e","status":"pending"}
 {"module":"github.com/ipfs/fs-repo-migrations","version":"v1.7.1","status":"pending"}
 {"module":"github.com/jclyons52/ts-go-morph","version":"v0.2.0","status":"pending"}

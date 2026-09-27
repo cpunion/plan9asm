@@ -1,5 +1,5 @@
 {"module":"github.com/0xsoniclabs/go-ethereum","version":"v0.0.0-20240529085303-2400937cc3b1","status":"pending"}
-{"module":"github.com/DeBankDeFi/go-ethereum-debank","version":"v0.0.0-20230810105212-32e328be393d","status":"pending"}
+{"module":"github.com/DeBankDeFi/go-ethereum-debank","version":"v0.0.0-20230810105212-32e328be393d","status":"passed"}
 {"module":"github.com/Enzoic/enzoic-go-client","version":"v1.10.0","status":"pending"}
 {"module":"github.com/ForestL18/mihomo","version":"v1.19.30","status":"pending"}
 {"module":"github.com/Minio/blake2b-simd","version":"v0.0.0-20160723061019-3f5f724cb5b1","status":"pending"}
@@ -19,4 +19,4 @@
 {"module":"github.com/raidancampbell/godsp","version":"v0.4.0","status":"pending"}
 {"module":"github.com/to-nexus/go-cross","version":"v1.3.12","status":"pending"}
 {"module":"github.com/x3speed/xray-core","version":"v1.260327.0","status":"pending"}
-{"module":"lukechampine.com/blake3","version":"v1.4.1","status":"pending"}
+{"module":"lukechampine.com/blake3","version":"v1.4.1","status":"not_applicable"}

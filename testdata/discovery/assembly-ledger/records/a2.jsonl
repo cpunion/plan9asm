@@ -9,7 +9,7 @@
 {"module":"github.com/nebulasio/go-nebulas","version":"v2.1.0+incompatible","status":"pending"}
 {"module":"github.com/ryt-io/libevm","version":"v1.16.2","status":"pending"}
 {"module":"github.com/tailscale/go/src/cmd","version":"v0.0.0-20260919225036-24ee2fd0610e","status":"pending"}
-{"module":"github.com/thanhminhmr/phuslu-log","version":"v0.0.0-20260606130551-bcad29f74736","status":"pending"}
-{"module":"github.com/windtalker/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/thanhminhmr/phuslu-log","version":"v0.0.0-20260606130551-bcad29f74736","status":"passed"}
+{"module":"github.com/windtalker/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/yawning/bsaes","version":"v0.0.0-20190320102049-26d1add596b6","status":"pending"}
 {"module":"golang.org/x/crypto","version":"v0.57.0","status":"pending"}

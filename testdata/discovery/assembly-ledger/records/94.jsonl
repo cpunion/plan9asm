@@ -8,6 +8,6 @@
 {"module":"github.com/jonhoo/drwmutex","version":"v0.0.0-20190519183033-0cffe0733098","status":"pending"}
 {"module":"github.com/juelite/golang.org-x-net","version":"v0.0.0-20181121071049-2e517e6865f5","status":"pending"}
 {"module":"github.com/onflow/go-ethereum","version":"v1.16.2","status":"pending"}
-{"module":"github.com/ubiq/go-ubiq","version":"v2.3.0+incompatible","status":"pending"}
+{"module":"github.com/ubiq/go-ubiq","version":"v2.3.0+incompatible","status":"passed"}
 {"module":"github.com/xxntmctx/xray-core","version":"v0.0.0-20260625143059-ca5847c6d7aa","status":"pending"}
 {"module":"gitlab.com/yawning/norx","version":"v0.0.0-20180319220635-fa677fda67f0","status":"pending"}

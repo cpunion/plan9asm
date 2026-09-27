@@ -6,7 +6,7 @@
 {"module":"github.com/fengpf/goroutineid","version":"v0.0.0-20190905112800-23f4ede2fcd5","status":"pending"}
 {"module":"github.com/go-simd/int8dot","version":"v0.0.0-20260908181124-25b8d723bda1","status":"pending"}
 {"module":"github.com/inspektor-gadget/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
-{"module":"github.com/justwasm/go","version":"v0.0.2","status":"pending"}
+{"module":"github.com/justwasm/go","version":"v0.0.2","status":"passed"}
 {"module":"github.com/minio/c2goasm","version":"v0.0.0-20190812172519-36a3d3bbc4f3","status":"pending"}
 {"module":"github.com/nuaays/go-ethereum","version":"v1.4.5","status":"pending"}
 {"module":"github.com/timpalpant/go-cfr","version":"v0.0.0-20230208023716-2c859fbaa0a5","status":"pending"}

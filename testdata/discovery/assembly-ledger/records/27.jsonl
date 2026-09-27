@@ -1,6 +1,6 @@
 {"module":"git.gammaspectra.live/P2Pool/go-randomx/v5","version":"v5.0.1","status":"pending"}
 {"module":"github.com/Bytedance/sonic","version":"v1.15.4","status":"pending"}
-{"module":"github.com/FlowerWrong/netstack","version":"v0.0.0-20191009041010-964b57cc9e6e","status":"pending"}
+{"module":"github.com/FlowerWrong/netstack","version":"v0.0.0-20191009041010-964b57cc9e6e","status":"not_applicable"}
 {"module":"github.com/MatusKysel/go-ethereum","version":"v0.0.0-20260422144838-8e2107dc39dc","status":"pending"}
 {"module":"github.com/MetaCubeX/Clash.Meta","version":"v1.19.31","status":"pending"}
 {"module":"github.com/boomshroom/gopher-os","version":"v0.0.0-20170715162504-37e32d9960ff","status":"pending"}

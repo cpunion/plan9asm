@@ -15,6 +15,6 @@
 {"module":"github.com/minio/pkg/v3","version":"v3.11.0","status":"pending"}
 {"module":"github.com/neclepsio/qml","version":"v0.0.0-20190227130933-4d1f36bcccd2","status":"pending"}
 {"module":"github.com/pion/transport/v5","version":"v5.1.0","status":"pending"}
-{"module":"github.com/pk910/hashtree","version":"v0.0.0-20260408182445-fba14494dada","status":"pending"}
+{"module":"github.com/pk910/hashtree","version":"v0.0.0-20260408182445-fba14494dada","status":"passed"}
 {"module":"github.com/specifai-net/crypto","version":"v0.0.0-20260804050112-5ed494470b06","status":"pending"}
 {"module":"github.com/w3tech/go-ethereum","version":"v1.16.7","status":"pending"}

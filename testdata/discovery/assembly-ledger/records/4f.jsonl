@@ -11,7 +11,7 @@
 {"module":"github.com/huyn58/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
 {"module":"github.com/lrita/numa","version":"v1.0.3","status":"pending"}
 {"module":"github.com/marktheunissen/pkg/v3","version":"v3.7.0","status":"pending"}
-{"module":"github.com/second-state/lityvm","version":"v1.9.7","status":"pending"}
+{"module":"github.com/second-state/lityvm","version":"v1.9.7","status":"passed"}
 {"module":"github.com/snissn/compress","version":"v1.18.2-snissn.0","status":"pending"}
 {"module":"github.com/steakknife/hamming","version":"v0.0.0-20180906055917-c99c65617cd3","status":"pending"}
 {"module":"github.com/tokamak-network/gochain/v3","version":"v3.2.8","status":"pending"}

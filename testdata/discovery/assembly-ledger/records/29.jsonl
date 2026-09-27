@@ -1,7 +1,7 @@
 {"module":"codeberg.org/arichard/polyglot","version":"v0.0.0-20260321162642-3d440efb4921","status":"pending"}
 {"module":"github.com/GFW-knocker/xray-core","version":"v1.8.7","status":"pending"}
 {"module":"github.com/HyNetwork/hysteria/app","version":"v1.3.5","status":"pending"}
-{"module":"github.com/Klauspost/reedsolomon","version":"v1.14.2","status":"pending"}
+{"module":"github.com/Klauspost/reedsolomon","version":"v1.14.2","status":"passed"}
 {"module":"github.com/PIngcAp/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/XinFinOrg/XDPoSChain","version":"v1.6.0","status":"pending"}
 {"module":"github.com/bkawk/websocket","version":"v1.8.14","status":"pending"}

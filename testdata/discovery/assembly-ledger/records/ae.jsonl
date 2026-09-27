@@ -1,5 +1,5 @@
 {"module":"github.com/Cerebellum-Network/blake3","version":"v1.0.2","status":"pending"}
-{"module":"github.com/DoMiNaNt-StRaTeGiEs/Go-Quai","version":"v0.56.0","status":"pending"}
+{"module":"github.com/DoMiNaNt-StRaTeGiEs/Go-Quai","version":"v0.56.0","status":"passed"}
 {"module":"github.com/Fake-Mahdi/acheron","version":"v0.0.0-20260905053135-7efb58e5fb85","status":"pending"}
 {"module":"github.com/GoAsyncFunc/Xray-core","version":"v0.0.0-20260912200935-c412e77a9b71","status":"pending"}
 {"module":"github.com/ROaringbitmap/roaring","version":"v1.9.4","status":"pending"}

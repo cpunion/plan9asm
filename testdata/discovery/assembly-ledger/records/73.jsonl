@@ -12,6 +12,6 @@
 {"module":"github.com/rovars/xray-core","version":"v0.0.0-20260714213224-5193ff872cd7","status":"pending"}
 {"module":"github.com/skerkour/stdx-go","version":"v0.0.0-20260825090241-98622c7e7a79","status":"pending"}
 {"module":"github.com/templexxx/tsc","version":"v1.3.0","status":"pending"}
-{"module":"github.com/templexxx/xhex","version":"v0.0.0-20260402074241-592c5e7ae28c","status":"pending"}
+{"module":"github.com/templexxx/xhex","version":"v0.0.0-20260402074241-592c5e7ae28c","status":"passed"}
 {"module":"github.com/usbarmory/GoTEE-example","version":"v0.0.0-20260902214239-fde95e412823","status":"pending"}
 {"module":"github.com/usbarmory/gotee","version":"v0.0.0-20260610100805-7155b9252462","status":"pending"}

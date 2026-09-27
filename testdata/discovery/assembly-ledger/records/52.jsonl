@@ -4,7 +4,7 @@
 {"module":"github.com/MetaCubeX/Clash.meta","version":"v1.19.31","status":"pending"}
 {"module":"github.com/MetaCubeX/sing-tun","version":"v0.4.24","status":"pending"}
 {"module":"github.com/NikoMalik/low-level-functions","version":"v0.0.0-20260410192916-fdeb921074be","status":"pending"}
-{"module":"github.com/aead/siphash","version":"v1.0.1","status":"pending"}
+{"module":"github.com/aead/siphash","version":"v1.0.1","status":"passed"}
 {"module":"github.com/avary/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
 {"module":"github.com/beyondblog/k8s-web-terminal","version":"v0.0.0-20160710041025-d4cc26ca17ae","status":"pending"}
 {"module":"github.com/byteDance/sonic","version":"v1.15.4","status":"pending"}

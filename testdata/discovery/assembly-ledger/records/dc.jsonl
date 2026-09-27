@@ -5,7 +5,7 @@
 {"module":"github.com/dedis/kyber/v4","version":"v4.0.2","status":"pending"}
 {"module":"github.com/defined2014/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/dop251/go","version":"v0.0.0-20221018191927-b6e1a563fc14","status":"pending"}
-{"module":"github.com/evasionlab/xray-core","version":"v1.251015.0","status":"pending"}
+{"module":"github.com/evasionlab/xray-core","version":"v1.251015.0","status":"passed"}
 {"module":"github.com/finals/libtcmu","version":"v0.0.0-20161018022703-b4eaaf829383","status":"pending"}
 {"module":"github.com/fluentlabs-xyz/go-ethereum","version":"v0.0.0-20230809151011-2fa01729af09","status":"pending"}
 {"module":"github.com/go-erasure/mojette","version":"v0.2.0","status":"pending"}

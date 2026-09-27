@@ -6,7 +6,7 @@
 {"module":"github.com/andrueandersoncs/typescript-go","version":"v0.1.0","status":"pending"}
 {"module":"github.com/cert-manager/crypto","version":"v0.0.0-20260522151721-3927be5d216d","status":"pending"}
 {"module":"github.com/exwallet/go-common","version":"v1.1.41","status":"pending"}
-{"module":"github.com/flywukong/bsc","version":"v1.1.2","status":"pending"}
+{"module":"github.com/flywukong/bsc","version":"v1.1.2","status":"passed"}
 {"module":"github.com/glycerine/uart","version":"v0.13.4","status":"pending"}
 {"module":"github.com/itsubaki/asm-go","version":"v0.0.0-20260414102029-e737f6937ab7","status":"pending"}
 {"module":"github.com/junnplus/runc","version":"v0.1.1","status":"pending"}

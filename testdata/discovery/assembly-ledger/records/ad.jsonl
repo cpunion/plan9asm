@@ -2,7 +2,7 @@
 {"module":"github.com/DATABASE64128/chacha8-go","version":"v0.0.0-20250815115417-e0f2726d8bd0","status":"pending"}
 {"module":"github.com/JohanLindvall/haste","version":"v0.1.36","status":"pending"}
 {"module":"github.com/Nanyan/heco-chain","version":"v1.2.1","status":"pending"}
-{"module":"github.com/ZhangZhenghao/gorse","version":"v0.1.5","status":"pending"}
+{"module":"github.com/ZhangZhenghao/gorse","version":"v0.1.5","status":"not_applicable"}
 {"module":"github.com/bytedANCE/mockey","version":"v1.4.6","status":"pending"}
 {"module":"github.com/calmh/lz4","version":"v2.6.1+incompatible","status":"pending"}
 {"module":"github.com/getamis/go-ethereum","version":"v1.16.701","status":"pending"}
