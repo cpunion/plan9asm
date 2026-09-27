@@ -6,7 +6,7 @@
 {"module":"github.com/anyswap/FASTMULTHRESHOLD-DSA","version":"v0.0.0-20230418072054-4c49fd5c9764","status":"pending"}
 {"module":"github.com/autorepobot/xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"pending"}
 {"module":"github.com/bitxx/go-zhenai-spider","version":"v0.0.0-20190813130327-af6b7aca12ac","status":"pending"}
-{"module":"github.com/bobbyunknown/Xray-core","version":"v0.0.0-20260504131600-6f4cc3633530","status":"pending"}
+{"module":"github.com/bobbyunknown/Xray-core","version":"v0.0.0-20260504131600-6f4cc3633530","status":"passed"}
 {"module":"github.com/csunatl/crypto","version":"v0.53.0","status":"pending"}
 {"module":"github.com/ctrsploit/ctrsploit","version":"v0.27.3","status":"pending"}
 {"module":"github.com/eh-steve/goloader","version":"v0.0.0-20240111193454-90ff3cfdae39","status":"pending"}

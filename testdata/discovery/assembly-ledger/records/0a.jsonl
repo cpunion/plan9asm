@@ -1,7 +1,7 @@
 {"module":"cdr.dev/websocket","version":"v1.8.15","status":"pending"}
 {"module":"gitee.com/wangHvip/tools","version":"v0.0.0-20190417223002-a5870b403859","status":"pending"}
 {"module":"github.com/0magnet/u-root","version":"v0.16.0","status":"pending"}
-{"module":"github.com/1345695/Xray-core","version":"v0.0.0-20260920105842-bc94b72a9e98","status":"pending"}
+{"module":"github.com/1345695/Xray-core","version":"v0.0.0-20260920105842-bc94b72a9e98","status":"passed"}
 {"module":"github.com/ProfoundNetworks/net","version":"v0.20260729.1","status":"pending"}
 {"module":"github.com/alt-research/go-ethereum","version":"v0.0.0-20240404102610-9cb8de87037b","status":"pending"}
 {"module":"github.com/anthony-dong/pid","version":"v0.0.10","status":"pending"}

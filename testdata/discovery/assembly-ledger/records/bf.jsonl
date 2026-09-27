@@ -1,6 +1,6 @@
 {"module":"git.k2software.com.cn/go/net","version":"v0.0.0-20190301231341-16b79f2e4e95","status":"pending"}
 {"module":"github.com/Datadog/opentelemetry-ebpf-profiler","version":"v0.0.202610","status":"pending"}
-{"module":"github.com/Deatil/go-cryptobin","version":"v1.1.1020","status":"pending"}
+{"module":"github.com/Deatil/go-cryptobin","version":"v1.1.1020","status":"passed"}
 {"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"pending"}
 {"module":"github.com/Tendermint/crypto","version":"v0.0.0-20191022145703-50d29ede1e15","status":"pending"}
 {"module":"github.com/ThiraSoft/golem","version":"v0.38.2","status":"pending"}

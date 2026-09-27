@@ -3,7 +3,7 @@
 {"module":"github.com/KaringX/sing-tun","version":"v0.6.1","status":"pending"}
 {"module":"github.com/LamkasDev/sharkie","version":"v0.0.0-20260919122514-0af66a893005","status":"pending"}
 {"module":"github.com/albasha1990/go","version":"v0.0.0-20260718122909-3d9556d9cc38","status":"pending"}
-{"module":"github.com/asylian21/secp256k1-field","version":"v0.1.0","status":"pending"}
+{"module":"github.com/asylian21/secp256k1-field","version":"v0.1.0","status":"passed"}
 {"module":"github.com/deepfence/compliance","version":"v0.1.2","status":"pending"}
 {"module":"github.com/derekchiang/go-ethereum","version":"v1.6.7","status":"pending"}
 {"module":"github.com/dusk-network/bn256","version":"v0.5.1-lattices","status":"pending"}

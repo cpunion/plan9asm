@@ -1,5 +1,5 @@
 {"module":"gitee.com/ByteDance/sonic.git","version":"v1.15.4","status":"pending"}
-{"module":"github.com/0xpolygonhermez/erigon","version":"v1.10.16","status":"pending"}
+{"module":"github.com/0xpolygonhermez/erigon","version":"v1.10.16","status":"passed"}
 {"module":"github.com/HanFei1991/TiDB","version":"v1.0.0","status":"pending"}
 {"module":"github.com/Onflow/flow-go","version":"v0.51.1","status":"pending"}
 {"module":"github.com/PLatONnetwork/PLatON-Go","version":"v1.5.1","status":"pending"}

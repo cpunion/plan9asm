@@ -1,5 +1,5 @@
 {"module":"github.com/AbeyFoundation/go-abey","version":"v0.0.0-20260831040716-30e3aaa1e041","status":"pending"}
-{"module":"github.com/CyberMiles/go-ethereum","version":"v1.9.7","status":"pending"}
+{"module":"github.com/CyberMiles/go-ethereum","version":"v1.9.7","status":"passed"}
 {"module":"github.com/EndlessChenG/Go","version":"v0.0.0-20210504001527-2422c5eae5dc","status":"pending"}
 {"module":"github.com/GeObts/websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/MInterTeam/minter-go-node","version":"v1.2.1","status":"pending"}

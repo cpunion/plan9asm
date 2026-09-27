@@ -1,7 +1,7 @@
 {"module":"github.com/BanYeHanFeng/sing-tun","version":"v0.0.0-20260513175836-d599b8f89d88","status":"pending"}
 {"module":"github.com/HalalChain/qitmeer-lib","version":"v0.0.0-20190929044832-b10740b316a8","status":"pending"}
 {"module":"github.com/Offchainlabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
-{"module":"github.com/anazh/gf","version":"v1.7.0","status":"pending"}
+{"module":"github.com/anazh/gf","version":"v1.7.0","status":"passed"}
 {"module":"github.com/blocktree/go-owcrypt","version":"v1.1.14","status":"pending"}
 {"module":"github.com/bysomeone/plugin","version":"v0.0.0-20260514052816-a1d535303148","status":"pending"}
 {"module":"github.com/caopingcp/chain33","version":"v0.0.0-20210201101945-4687352f7a99","status":"pending"}

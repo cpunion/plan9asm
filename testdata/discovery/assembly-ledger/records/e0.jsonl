@@ -2,7 +2,7 @@
 {"module":"github.com/Noddy76/treeboost","version":"v0.3.1","status":"pending"}
 {"module":"github.com/PayRange/gatt","version":"v0.0.0-20191111230209-2046ed81c20c","status":"pending"}
 {"module":"github.com/amirwopi/xray-core","version":"v0.0.0-20260919090311-dcdfc57ccdad","status":"pending"}
-{"module":"github.com/aslanth1/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
+{"module":"github.com/aslanth1/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"passed"}
 {"module":"github.com/blaise-pov/errors","version":"v0.0.0-20260727184411-4179a556aa6d","status":"pending"}
 {"module":"github.com/cryptocurrencydevelopers/go-ethereum","version":"v1.10.15","status":"pending"}
 {"module":"github.com/eliotcougar/xray-core","version":"v0.0.0-20260827223245-c1958dba04ba","status":"pending"}

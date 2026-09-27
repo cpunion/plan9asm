@@ -4,7 +4,7 @@
 {"module":"github.com/NibiruChain/go-ethereum","version":"v1.15.8","status":"pending"}
 {"module":"github.com/VT7org/websocket","version":"v0.0.0-20260109125802-9f473adfa595","status":"pending"}
 {"module":"github.com/Zhangjinpeng1987/tidb","version":"v1.0.8","status":"pending"}
-{"module":"github.com/arsydoni4326-alt/xray-core","version":"v1.260327.0","status":"pending"}
+{"module":"github.com/arsydoni4326-alt/xray-core","version":"v1.260327.0","status":"passed"}
 {"module":"github.com/aryx/goken9cc","version":"v0.0.0-20260910205740-d2068b45a108","status":"pending"}
 {"module":"github.com/cmarkh/SMTP","version":"v0.0.0-20200914192226-a8e93450edfe","status":"pending"}
 {"module":"github.com/dgryski/go-bits","version":"v0.0.0-20180113010104-bd8a69a71dc2","status":"pending"}

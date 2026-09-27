@@ -1,7 +1,7 @@
 {"module":"git.sr.ht/~sbinet/go-arrow","version":"v0.4.0","status":"pending"}
 {"module":"github.com/2JYK2/go-lib/common","version":"v0.0.0-20260616035354-f8571a02ef0a","status":"pending"}
 {"module":"github.com/Mrwafflez17/u-root","version":"v0.8.0","status":"pending"}
-{"module":"github.com/calebdoxsey/tutorials","version":"v0.0.0-20190815190919-3633571d40da","status":"pending"}
+{"module":"github.com/calebdoxsey/tutorials","version":"v0.0.0-20190815190919-3633571d40da","status":"not_applicable"}
 {"module":"github.com/dimitrisbaltzis/vroom_go","version":"v0.0.0-20260715183014-79b70e607bd2","status":"pending"}
 {"module":"github.com/docker-archive/v1.10-migrator","version":"v0.0.0-20160219191812-c417a6a022c5","status":"pending"}
 {"module":"github.com/grafana/parquet-go","version":"v0.0.0-20230724165737-1e4f8bbc561c","status":"pending"}

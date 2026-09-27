@@ -4,7 +4,7 @@
 {"module":"github.com/DolbyLaboratories/pmd_tool","version":"v2.5.0+incompatible","status":"pending"}
 {"module":"github.com/Keisawaakira/sing-tun","version":"v0.4.24","status":"pending"}
 {"module":"github.com/MeKo-Christian/algoforge","version":"v0.8.0","status":"pending"}
-{"module":"github.com/XTLS/XRay-core","version":"v1.260327.0","status":"pending"}
+{"module":"github.com/XTLS/XRay-core","version":"v1.260327.0","status":"passed"}
 {"module":"github.com/XTLS/Xray-Core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/arloliu/mebo","version":"v1.10.0","status":"pending"}
 {"module":"github.com/as/ms","version":"v0.1.0","status":"pending"}

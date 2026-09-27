@@ -1,6 +1,6 @@
 {"module":"github.com/FuPeiJiang/Xray-core","version":"v0.0.0-20260707075239-3ce799ad3590","status":"pending"}
 {"module":"github.com/Languege/sys","version":"v1.0.0","status":"pending"}
-{"module":"github.com/Leadaxe/wireguard-go-awg2-lx","version":"v0.0.0-20260622082839-0c0c10b5d323","status":"pending"}
+{"module":"github.com/Leadaxe/wireguard-go-awg2-lx","version":"v0.0.0-20260622082839-0c0c10b5d323","status":"passed"}
 {"module":"github.com/LeeCenY/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/UnIucky1/xray-core","version":"v0.0.0-20260124181826-59e6569c13e9","status":"pending"}
 {"module":"github.com/antoineco/delve","version":"v0.0.0-20260506113403-ae381d322b71","status":"pending"}

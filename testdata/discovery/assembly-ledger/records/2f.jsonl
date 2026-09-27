@@ -1,4 +1,4 @@
-{"module":"github.com/AdaMjacoBmuller/cfssl","version":"v0.0.0-20181129230153-438437361058","status":"pending"}
+{"module":"github.com/AdaMjacoBmuller/cfssl","version":"v0.0.0-20181129230153-438437361058","status":"passed"}
 {"module":"github.com/LinDB/LinDB","version":"v0.4.1","status":"pending"}
 {"module":"github.com/MetaCubeX/gvisor","version":"v0.0.0-20260826100401-79317d808312","status":"pending"}
 {"module":"github.com/VinuChain/go-vinu","version":"v1.9.6","status":"pending"}

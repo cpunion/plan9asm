@@ -4,7 +4,7 @@
 {"module":"github.com/Beeketing/siphash","version":"v1.2.1","status":"pending"}
 {"module":"github.com/Enlighten-Fund/bsc","version":"v1.2.10","status":"pending"}
 {"module":"github.com/GoLang/Go","version":"v0.0.0-20260921231307-ffc306b41731","status":"pending"}
-{"module":"github.com/TheEdgeOfRage/fyne/v2","version":"v2.0.0-20260720083819-7bcd87fc9730","status":"pending"}
+{"module":"github.com/TheEdgeOfRage/fyne/v2","version":"v2.0.0-20260720083819-7bcd87fc9730","status":"not_applicable"}
 {"module":"github.com/go-simd/bitset","version":"v0.0.0-20260908181101-129d8f24749d","status":"pending"}
 {"module":"github.com/go-simd/crc64","version":"v0.1.2","status":"pending"}
 {"module":"github.com/haiyan1301/Xray-core","version":"v1.260327.0","status":"pending"}

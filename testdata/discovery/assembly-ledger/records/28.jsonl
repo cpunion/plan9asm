@@ -1,7 +1,7 @@
 {"module":"github.com/0xCLWN/xray-core","version":"v0.0.0-20260830071648-834b6e223659","status":"pending"}
 {"module":"github.com/DGraph-io/ristretto","version":"v0.2.0","status":"pending"}
 {"module":"github.com/Dgraph-io/ristretto/v2","version":"v2.4.2","status":"pending"}
-{"module":"github.com/HUK-Coburg/klauspost-compress","version":"v1.20.0","status":"pending"}
+{"module":"github.com/HUK-Coburg/klauspost-compress","version":"v1.20.0","status":"passed"}
 {"module":"github.com/KabiriCloud/go-ethereum","version":"v1.14.5","status":"pending"}
 {"module":"github.com/Query-farm/arrow-go/v18","version":"v18.0.0-20260219212650-dcb85bfa48c0","status":"pending"}
 {"module":"github.com/Rethereum-blockchain/go-rethereum","version":"v1.13.5","status":"pending"}

@@ -1,6 +1,6 @@
 {"module":"github.com/Ava-Labs/libevm","version":"v1.16.2","status":"pending"}
 {"module":"github.com/asylian21/ripemd160-asm","version":"v0.1.1","status":"pending"}
-{"module":"github.com/bronlabs/bron-crypto","version":"v0.1.0","status":"pending"}
+{"module":"github.com/bronlabs/bron-crypto","version":"v0.1.0","status":"passed"}
 {"module":"github.com/buptbill220/goasm","version":"v0.0.0-20180919054237-772e3d3914b9","status":"pending"}
 {"module":"github.com/eichgee/Xray-core","version":"v1.250516.0","status":"pending"}
 {"module":"github.com/joyent/pkgsrc","version":"v0.0.0-20241007104430-fef85f14a780","status":"pending"}

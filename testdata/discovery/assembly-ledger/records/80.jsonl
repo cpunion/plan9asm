@@ -1,6 +1,6 @@
 {"module":"github.com/Eidon-AI/go-ethereum","version":"v1.10.26","status":"pending"}
 {"module":"github.com/FiloSottile/bigmod","version":"v0.1.0","status":"pending"}
-{"module":"github.com/KLAUSPost/compress","version":"v1.20.0","status":"pending"}
+{"module":"github.com/KLAUSPost/compress","version":"v1.20.0","status":"passed"}
 {"module":"github.com/Reactive-Network/geth-rnk2-genesis","version":"v0.0.0-20260827231907-8cce496420cd","status":"pending"}
 {"module":"github.com/aarzilli/exp","version":"v0.0.0-20250508142343-e302c350bfce","status":"pending"}
 {"module":"github.com/caitinggui/seelog","version":"v0.0.0-20201101100052-c937a28847c5","status":"pending"}
