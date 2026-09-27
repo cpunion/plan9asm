@@ -239,6 +239,7 @@ func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolV
 	entry := &arm64RawPoolValues{
 		words: flow.words, before: append([][]int(nil), flow.before...),
 		opaque: map[int]bool{latch: true}, loopBounds: flow.loopBounds,
+		opaqueLoops: map[int]int{latch: head},
 	}
 	entry.clearValueCaches()
 	entry.before[head] = nil
@@ -255,4 +256,25 @@ func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolV
 		return nil
 	}
 	return entry
+}
+
+// An earlier execution of the same body is opaque for changing values, but
+// cannot change an expression made solely from preserved registers. Checking
+// every instruction avoids inventing a first-iteration value in an outer loop.
+func (flow *arm64RawPoolValues) opaquePreserves(at int, expression arm64PoolAffine) bool {
+	head, ok := flow.opaqueLoops[at]
+	if !ok {
+		return false
+	}
+	for instruction := head; instruction < at; instruction++ {
+		if flow.affineWork >= 16384 {
+			return false
+		}
+		flow.affineWork++
+		writes, known := arm64RawPoolGPWrites(flow.words[instruction])
+		if !known || writes&expression.registerMask() != 0 {
+			return false
+		}
+	}
+	return true
 }

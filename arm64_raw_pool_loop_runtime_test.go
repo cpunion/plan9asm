@@ -108,7 +108,15 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 			fmt.Sprintf("str x4, [x0, #%d]", output), "mov x10, xzr")
 		output += 8
 	}
-	lines = append(lines, "mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
+	lines = append(lines,
+		"and x2, x1, #7", "str x2, [sp, #8]", "mov x2, #99", "ldr x3, [sp, #8]",
+		"ldr x3, [x9, x3, lsl #3]", fmt.Sprintf("str x3, [x0, #%d]", output),
+		"and x2, x1, #3", "add x4, x2, #4", "stp x2, x4, [sp, #8]",
+		"mov x2, #99", "mov x4, #99", "ldp x2, x4, [sp, #8]",
+		"ldr x2, [x9, x2, lsl #3]", "ldr x4, [x9, x4, lsl #3]",
+		fmt.Sprintf("str x2, [x0, #%d]", output+8), fmt.Sprintf("str x4, [x0, #%d]", output+16),
+		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret",
+	)
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
 		if line == "adr x10, #0" {
@@ -116,7 +124,7 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 		}
 	}
 	var source strings.Builder
-	source.WriteString("TEXT pool_loop(SB),$0-16\nMOVD out+0(FP),R0\nMOVD count+8(FP),R1\n")
+	source.WriteString("TEXT pool_loop(SB),$32-16\nMOVD out+0(FP),R0\nMOVD count+8(FP),R1\n")
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
@@ -176,9 +184,9 @@ int main(void) {
   const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 19, 20, 23, 32, 255,
                              1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[48] = {0}, expected[46] = {0};
+    uint64_t result[51] = {0}, expected[49] = {0};
     result[0] = 0x12345678;
-    result[47] = 0x87654321;
+    result[50] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -208,8 +216,11 @@ int main(void) {
       expected[44] += values[n];
       expected[45] += values[7-n];
     }
+    expected[46] = values[remaining & 7];
+    expected[47] = values[remaining & 3];
+    expected[48] = values[4 + (remaining & 3)];
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[47] != 0x87654321 ||
+    if (result[0] != 0x12345678 || result[50] != 0x87654321 ||
         memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
   }
   return 0;

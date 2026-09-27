@@ -28,6 +28,7 @@ type arm64RawPoolValues struct {
 	loopBounds     map[int]arm64PoolConstraint
 	loopLatches    map[int]int
 	opaque         map[int]bool
+	opaqueLoops    map[int]int
 }
 
 type arm64RawPoolValue struct {

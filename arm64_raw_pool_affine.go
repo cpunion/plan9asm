@@ -326,6 +326,17 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				addResult(bound)
 				continue
 			}
+			if writes&next.expression.registerMask() != 0 {
+				if savedAt, saved, ok := flow.rewindStackLoad(previous, next.expression); ok {
+					// The proof rebases all queried values, not all predicates.
+					// Forget historical path facts rather than applying them to
+					// unrelated register values at the earlier save.
+					queue = append(queue, arm64PoolAffineState{
+						at: savedAt, expression: saved, bound: next.bound,
+					})
+					continue
+				}
+			}
 			destination, value, affine := arm64PoolAffineDefinition(word)
 			if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 				index := int(word & 31)

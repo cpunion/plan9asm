@@ -66,7 +66,7 @@ func (flow *arm64RawPoolValues) invariantIntervalProof(at int, expression arm64P
 			return arm64PoolUnknownInterval
 		}
 		for _, previous := range flow.before[state.at] {
-			if previous < 0 || flow.opaque[previous] {
+			if previous < 0 || flow.opaque[previous] && !flow.opaquePreserves(previous, state.expression) {
 				return arm64PoolUnknownInterval
 			}
 			word := flow.words[previous]
@@ -76,6 +76,12 @@ func (flow *arm64RawPoolValues) invariantIntervalProof(at int, expression arm64P
 			}
 			next := arm64PoolAffineQuery{previous, state.expression}
 			if affected := writes & next.expression.registerMask(); affected != 0 {
+				if arithmetic {
+					if savedAt, saved, ok := flow.rewindStackLoad(previous, next.expression); ok {
+						queue = append(queue, arm64PoolAffineQuery{savedAt, saved})
+						continue
+					}
+				}
 				destination, value, valid := arm64PoolAffineDefinition(word)
 				if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 					destination = int(word & 31)
