@@ -12,7 +12,9 @@ another module-index inventory scan.
   Its CI exposed stale derived assembly evidence and an SVE runtime oracle
   assumption. Evidence refresh `81bbd5e` passed CI's build/provenance check.
   FFR repair `6f7c192` passed both build and Linux cross-runtime CI checks;
-  remaining jobs were still running at the last inspection.
+  later Go 1.22/1.23/1.25 jobs exposed the same download-bootstrap version
+  error. Hotfix `320c751` is now pushed; its build passed and other jobs were
+  still running at the last inspection.
   Inspect live checks rather than treating these partial results as green CI.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`. Never push to
   `origin` or `xgo-dev`. The latest request is to push verified CI repairs
@@ -48,6 +50,10 @@ another module-index inventory scan.
 
 ## Latest committed repairs
 
+- Metadata-download bootstrap and its synthetic retry fixture use the root
+  Go 1.20 floor; actual corpus build plans still require Go 1.27. The old
+  bootstrap required Go 1.27 before making even one proxy request, failing
+  older compatibility jobs. Go 1.20, 1.25 and 1.27 corpus tool suites pass.
 - The SVE memory-offset runtime oracle now compares FFR as well as values.
   Pinned QEMU deliberately stops non-faulting loads at the second page, even
   for mapped memory. A deterministic cross-page fixture reproduced CI's
@@ -68,6 +74,15 @@ another module-index inventory scan.
   Darwin runtime, Linux/QEMU and vet pass. Strict benchmark: 184/184 files,
   zero N/A, 29 target-seconds. Rebuild frozen full-suite and corpus evidence;
   these diagnostics are not complete external-module or shard passes.
+- Its first full gate exposed 67 official SVE form regressions plus raw
+  structure-form writeback failures. Fixed allocation sizing for scalable
+  displacements/predicate units and up to four maximum-width vectors. A small
+  whole-function proof recognizes untouched zero-initialized GP registers
+  used in post-indexing; calls and writes invalidate it. Dynamic address
+  indexes are not frame-size declarations. All affected family tests and the
+  five-architecture official gate pass again without changing the baseline:
+  ARM64 1,980 supported forms, 68 context forms, zero unsupported forms.
+  Keep this stack batch local until its fresh frozen full suite passes.
 - `cc307d5`: reject Go command/compiler/assembler version mismatches as
   infrastructure failures, never source N/A. The shard script pins its child
   Go binary to the recorded GOROOT and checks all three versions.

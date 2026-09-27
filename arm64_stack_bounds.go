@@ -94,6 +94,7 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 		return 0, 0, nil
 	}
 	labels := make(map[string]int)
+	zeroRegisters := c.stackUnwrittenZeroRegisters()
 	for i, block := range c.blocks {
 		labels[block.name] = i
 	}
@@ -118,6 +119,15 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 		returned := false
 		for _, original := range c.blocks[at].instrs {
 			ins := arm64StackInstruction(original)
+			ins.Args = append([]Operand(nil), ins.Args...)
+			for i := range ins.Args {
+				arg := &ins.Args[i]
+				if arg.Kind == OpMem {
+					if index, ok := arm64StackIndex(arg.Mem.Index); ok && zeroRegisters&(1<<uint(index)) != 0 {
+						arg.Mem.Index = ""
+					}
+				}
+			}
 			if ins.Op == OpRET {
 				returned = true
 				break
@@ -134,17 +144,14 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 				if !address.local {
 					continue
 				}
-				resolved := arg.Mem.OffRaw == ""
-				if offset, ok := parseNamedStackConstantOffset(arg.Mem.OffRaw); ok && offset == arg.Mem.Off {
-					resolved = true
-				}
-				if address.unknown || !resolved || arg.Mem.Index != "" && arg.Mem.Index != ZR {
+				offsetLow, offsetHigh, width, err := arm64StackMemoryExtent(ins, arg.Mem)
+				if address.unknown || err != nil {
 					return 0, 0, fmt.Errorf("ARM64 cannot bound dynamic local stack access: %q", original.Raw)
 				}
 				if arg.Mem.Off < -arm64MaxLocalStackSpan || arg.Mem.Off > arm64MaxLocalStackSpan {
 					return 0, 0, fmt.Errorf("ARM64 local stack operand exceeds %d bytes", arm64MaxLocalStackSpan)
 				}
-				low, high := address.low+arg.Mem.Off, address.high+arg.Mem.Off+64
+				low, high := address.low+offsetLow, address.high+offsetHigh+width
 				if low < minimum {
 					minimum = low
 				}
@@ -155,7 +162,7 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 			if call && state[31].unknown {
 				return 0, 0, fmt.Errorf("ARM64 cannot bound call frame after dynamic stack restore: %q", original.Raw)
 			}
-			if err := arm64StackStep(&state, original); err != nil {
+			if err := arm64StackStep(&state, original, ins); err != nil {
 				return 0, 0, err
 			}
 			sp := state[31]
@@ -200,8 +207,7 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 	return minimum, maximum, nil
 }
 
-func arm64StackStep(state *arm64StackState, original Instr) error {
-	ins := arm64StackInstruction(original)
+func arm64StackStep(state *arm64StackState, original, ins Instr) error {
 	op := strings.ToUpper(string(ins.Op))
 	base, suffix, _ := strings.Cut(op, ".")
 	adjust := func(value arm64StackRange, delta int64) arm64StackRange {
