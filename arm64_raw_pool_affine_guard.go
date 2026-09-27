@@ -2,6 +2,44 @@ package plan9asm
 
 import "math"
 
+func (state *arm64PoolAffineState) addConstraint(constraint arm64PoolConstraint) bool {
+	for n := 0; n < state.count; n++ {
+		previous := &state.constraints[n]
+		if previous.expression != constraint.expression || previous.mask != constraint.mask {
+			continue
+		}
+		if constraint.interval.low > previous.interval.low {
+			previous.interval.low = constraint.interval.low
+		}
+		if constraint.interval.high < previous.interval.high {
+			previous.interval.high = constraint.interval.high
+		}
+		return true
+	}
+	if state.count == len(state.constraints) {
+		return false
+	}
+	state.constraints[state.count] = constraint
+	state.count++
+	return true
+}
+
+// Called only after infeasible constants have been rejected. Satisfied constant
+// guards are tautologies, and substitution may make different guards identical.
+// Neither should consume the small budget for still-symbolic path predicates.
+func (state *arm64PoolAffineState) compactConstraints() {
+	count := state.count
+	state.count = 0
+	for _, constraint := range state.constraints[:count] {
+		if !constraint.expression.isConstant() {
+			state.addConstraint(constraint)
+		}
+	}
+	for n := state.count; n < count; n++ {
+		state.constraints[n] = arm64PoolConstraint{}
+	}
+}
+
 func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm64PoolConstraint, bool) {
 	var constraint arm64PoolConstraint
 	word := flow.words[edge.from]

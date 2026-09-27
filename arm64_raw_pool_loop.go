@@ -9,6 +9,7 @@ func (flow *arm64RawPoolValues) clearValueCaches() {
 	flow.affineActive = nil
 	flow.affineWork = 0
 	flow.invariantCache = nil
+	flow.maskConstants = make(map[int]uint64)
 }
 
 // Positive bounds remain valid across queries on this immutable graph.

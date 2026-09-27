@@ -32,11 +32,18 @@ func (flow *arm64RawPoolValues) affineMaskInterval(at int, word uint32) (arm64Po
 	default:
 		return arm64PoolInterval{}, false
 	}
+	if flow.maskConstants == nil {
+		flow.maskConstants = make(map[int]uint64)
+	}
 	input := flow.integerInterval(at, source)
 	if input.low > input.high {
 		return arm64PoolUnknownInterval, false
 	}
-	return arm64PoolMaskInterval(input, mask), true
+	result := arm64PoolMaskInterval(input, mask)
+	if result.low == result.high {
+		flow.maskConstants[at] = result.low
+	}
+	return result, true
 }
 
 func arm64PoolMaskInterval(input arm64PoolInterval, mask uint64) arm64PoolInterval {

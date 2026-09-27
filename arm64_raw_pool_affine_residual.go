@@ -12,6 +12,9 @@ func (flow *arm64RawPoolValues) affineConstraintBound(at int, query arm64PoolAff
 	if bound, ok := query.constrainedBy(constraint); ok {
 		return bound, true
 	}
+	if flow.affineDirect {
+		return arm64PoolInterval{}, false
+	}
 	// An almost-full-width NE/range guard cannot independently bound a pool
 	// footprint through an unrelated residual. Recursing on it repeatedly
 	// consumes the shared budget in loops. Keep the direct fact above, and

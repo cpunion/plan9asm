@@ -155,6 +155,31 @@ func (flow *arm64RawPoolValues) boundedUpper(at int, reg arm64asm.Reg) uint64 {
 // copies, cancellation, scaling and joins share the same expression grammar.
 // A changing cycle, unknown effect or exhausted budget makes the proof fail.
 func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
+	// First try definitions and directly matching guards. Speculating about an
+	// independent residual at every intermediate instruction can exhaust the
+	// budget before reaching a simple dominating guard. Isolate the cheap
+	// proof's caches: its unknowns must not poison the richer fallback.
+	if flow != nil && !flow.affineDirect && len(flow.affineActive) == 0 {
+		query := arm64PoolAffineQuery{at, expression}
+		if cached, ok := flow.affineCache[query]; ok && cached != arm64PoolUnknownInterval {
+			return cached
+		}
+		direct := *flow
+		direct.clearValueCaches()
+		direct.affineDirect = true
+		if bound := direct.affineIntervalProof(at, expression); bound != arm64PoolUnknownInterval {
+			if flow.affineCache == nil {
+				flow.affineCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
+			}
+			flow.affineCache[query] = bound
+			flow.affineWork = direct.affineWork
+			return bound
+		}
+	}
+	return flow.affineIntervalProof(at, expression)
+}
+
+func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64PoolAffine) (answer arm64PoolInterval) {
 	if flow == nil || at < 0 || at >= len(flow.before) {
 		return arm64PoolUnknownInterval
 	}
@@ -209,7 +234,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		// loop predicates. The invariant proof preserves relocation cardinality
 		// and unions all entries, including separate ADRs of the same pool.
 		mask := state.expression.registerMask()
-		if len(flow.poolOrigins) != 0 && mask != 0 && mask&(mask-1) == 0 {
+		if !flow.affineDirect && len(flow.poolOrigins) != 0 && mask != 0 && mask&(mask-1) == 0 {
 			if invariant := flow.invariantInterval(state.at, state.expression); invariant != arm64PoolUnknownInterval {
 				if invariant.low < state.bound.low {
 					invariant.low = state.bound.low
@@ -250,6 +275,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		if impossible || bound.low > bound.high || !arm64PoolConstraintsFeasible(state.constraints[:state.count]) {
 			continue
 		}
+		state.compactConstraints()
 		state.bound = bound
 		if state.expression.isConstant() {
 			if value := state.expression.constant; value >= bound.low && value <= bound.high {
@@ -278,11 +304,9 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 			next := state
 			next.at = previous
 			if constraint, ok := flow.affineEdgeConstraint(arm64RawPoolEdge{previous, state.at}); ok {
-				if next.count == len(next.constraints) {
+				if !next.addConstraint(constraint) {
 					return arm64PoolUnknownInterval
 				}
-				next.constraints[next.count] = constraint
-				next.count++
 			}
 			word := flow.words[previous]
 			writes, known := arm64RawPoolGPWrites(word)
@@ -307,6 +331,12 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 					}
 				}
 				destination, value, affine = int(word&31), arm64PoolAffine{constant: offset, relocations: 1}, true
+			}
+			// An earlier index proof may already have resolved this mask. Reuse
+			// that exact numeric definition for predicates too: folding the
+			// query must not erase a later comparison with the same result.
+			if constant, cached := flow.maskConstants[previous]; !affine && cached {
+				destination, value, affine = int(word&31), arm64PoolAffine{constant: constant}, true
 			}
 			if !affine && writes&next.expression.registerMask() != 0 {
 				// Resolve a non-affine mask only when it defines the queried
