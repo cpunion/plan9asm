@@ -7,9 +7,8 @@ import (
 	"golang.org/x/arch/arm64/arm64asm"
 )
 
-// AND is not affine. A guarded interval can nevertheless prove its exact
-// result, for example length in [8,15] implies (length & 24) == 8. Only then
-// substitute a constant into a larger affine expression.
+// AND is not affine. Keep its interval even when it is not an exact value.
+// Only an exact result, such as [8,15] & 24 == 8, permits constant substitution.
 func (flow *arm64RawPoolValues) affineMaskInterval(at int, word uint32) (arm64PoolInterval, bool) {
 	if word&0xff800000 != 0x92000000 { // AND Xd, Xn, logical immediate.
 		return arm64PoolInterval{}, false
@@ -33,10 +32,7 @@ func (flow *arm64RawPoolValues) affineMaskInterval(at int, word uint32) (arm64Po
 	default:
 		return arm64PoolInterval{}, false
 	}
-	input := flow.affineInterval(at, arm64PoolRegisterExpression(int(source-arm64asm.X0)))
-	if upper := flow.upper(at, source); upper < input.high {
-		input.high = upper
-	}
+	input := flow.integerInterval(at, source)
 	if input.low > input.high {
 		return arm64PoolUnknownInterval, false
 	}

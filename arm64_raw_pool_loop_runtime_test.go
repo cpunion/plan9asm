@@ -36,8 +36,23 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 
 		"mov x10, x9", "cbz x1, #8", "adr x10, #0",
 		"sub x12, x10, x2", "add x12, x12, x2", "ldr x3, [x12]", "str x3, [x0, #96]",
-		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret",
 	)
+	output := 104
+	for _, op := range []string{"orr", "eor"} {
+		for _, source := range []struct {
+			operand string
+			value   int
+		}{
+			{"x4", 16}, {"x4, lsl #4", 1}, {"x4, lsr #1", 32},
+			{"x4, asr #1", 32}, {"x4, ror #63", 8}, {"#16", 0},
+		} {
+			lines = append(lines, "and x2, x1, #1", fmt.Sprintf("mov x4, #%d", source.value),
+				fmt.Sprintf("%s x3, x2, %s", op, source.operand),
+				"ldrb w3, [x9, x3]", fmt.Sprintf("str x3, [x0, #%d]", output))
+			output += 8
+		}
+	}
+	lines = append(lines, "mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
 		if line == "adr x10, #0" {
@@ -105,9 +120,9 @@ int main(void) {
   const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 20, 255,
                              1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[15] = {0}, expected[13] = {0};
+    uint64_t result[27] = {0}, expected[25] = {0};
     result[0] = 0x12345678;
-    result[14] = 0x87654321;
+    result[26] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -116,8 +131,11 @@ int main(void) {
     expected[10] = values[3];
     expected[11] = values[5];
     expected[12] = values[counts[i] > 7 ? 1 : 0];
+    const uint8_t *bytes = (const uint8_t *)words;
+    uint64_t remaining = counts[i] > 7 ? counts[i] : 0;
+    for (unsigned j = 13; j < 25; j++) expected[j] = bytes[16 + (remaining & 1)];
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[14] != 0x87654321 ||
+    if (result[0] != 0x12345678 || result[26] != 0x87654321 ||
         memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
   }
   return 0;

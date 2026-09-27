@@ -308,9 +308,33 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				}
 				destination, value, affine = int(word&31), arm64PoolAffine{constant: offset, relocations: 1}, true
 			}
-			if !affine && writes != 0 {
-				if masked, ok := flow.affineMaskInterval(previous, word); ok && masked.low == masked.high {
-					destination, value, affine = int(word&31), arm64PoolAffine{constant: masked.low}, true
+			if !affine && writes&next.expression.registerMask() != 0 {
+				// Resolve a non-affine mask only when it defines the queried
+				// value. An unrelated masked predicate may be forgotten below;
+				// recursively proving it must not consume the address's budget.
+				interval, bounded := flow.affineMaskInterval(previous, word)
+				if !bounded {
+					value, interval, affine, bounded = flow.affineLogicalDefinition(previous, word)
+				}
+				if bounded {
+					destination = int(word & 31)
+					if interval.low == interval.high {
+						value, affine = arm64PoolAffine{constant: interval.low}, true
+					}
+					constraint := arm64PoolConstraint{
+						expression: arm64PoolRegisterExpression(destination), interval: interval,
+					}
+					if span, ok := flow.affineConstraintBound(previous, next.expression, constraint); ok {
+						if span.low > next.bound.low {
+							next.bound.low = span.low
+						}
+						if span.high < next.bound.high {
+							next.bound.high = span.high
+						}
+					}
+					if next.bound.low > next.bound.high {
+						continue predecessors
+					}
 				}
 			}
 			for index := 0; index < 31; index++ {
@@ -322,7 +346,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 						return arm64PoolUnknownInterval
 					}
 				} else if next.expression.coefficient[index] != 0 {
-					addResult(bound)
+					addResult(next.bound)
 					continue predecessors
 				}
 				count := 0
