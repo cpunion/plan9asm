@@ -9,7 +9,8 @@ import (
 
 // Value bounds are separate from pointer relocation: a bound proves only an
 // unsigned integer interval, never that copying or escaping a pointer is safe.
-// Predecessors include every reachable conditional edge, without assuming flags.
+// Predecessors include every reachable edge. A conditional edge can narrow a
+// value only when its exact comparison and flag provenance are established.
 type arm64RawPoolValues struct {
 	words  []uint32
 	before [][]int
@@ -20,6 +21,10 @@ type arm64RawPoolValues struct {
 type arm64RawPoolValue struct {
 	at  int
 	reg arm64asm.Reg
+}
+
+type arm64RawPoolEdge struct {
+	from, to int
 }
 
 func newARM64RawPoolValues(instructions []Instr, start, end int, reachable map[int]bool) *arm64RawPoolValues {
@@ -83,14 +88,31 @@ func (flow *arm64RawPoolValues) upper(at int, reg arm64asm.Reg) uint64 {
 	flow.active[key] = true
 	defer delete(flow.active, key)
 
-	queue := append([]int(nil), flow.before[at]...)
+	var queue []arm64RawPoolEdge
+	enqueue := func(at int) {
+		for _, previous := range flow.before[at] {
+			queue = append(queue, arm64RawPoolEdge{previous, at})
+		}
+	}
+	enqueue(at)
 	visited := make(map[int]bool)
 	upper, found := uint64(0), false
 	for len(queue) > 0 {
-		previous := queue[len(queue)-1]
+		edge := queue[len(queue)-1]
+		previous := edge.from
 		queue = queue[:len(queue)-1]
 		if previous < 0 {
 			return limit
+		}
+		if bound, ok := flow.edgeUpper(edge, reg); ok {
+			if bound > limit {
+				bound = limit
+			}
+			if bound > upper {
+				upper = bound
+			}
+			found = true
+			continue
 		}
 		if visited[previous] {
 			continue
@@ -102,7 +124,7 @@ func (flow *arm64RawPoolValues) upper(at int, reg arm64asm.Reg) uint64 {
 			return limit
 		}
 		if writes&(1<<uint(index)) == 0 {
-			queue = append(queue, flow.before[previous]...)
+			enqueue(previous)
 			continue
 		}
 		value := flow.definitionUpper(previous, word, index)

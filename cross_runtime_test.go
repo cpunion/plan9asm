@@ -148,6 +148,12 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "pool_alias", triple, ir,
 			arm64RawPoolAliasesMain, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
 	})
+	t.Run("arm64_raw_pool_guarded_indexes", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir := arm64RawPoolGuardIR(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "pool_guard", triple, ir,
+			arm64RawPoolGuardMain, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_fixed_gp_float", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64FixedGPFloatRuntime(t, triple)
