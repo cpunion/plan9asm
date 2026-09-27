@@ -12,7 +12,7 @@
 {"module":"github.com/embeddedgo/fs","version":"v0.1.6","status":"pending"}
 {"module":"github.com/f-secure-foundry/GoTEE-example","version":"v0.0.0-20260902214239-fde95e412823","status":"pending"}
 {"module":"github.com/factomproject/golangcrypto","version":"v0.0.0-20150426031145-83a5c1a363ee","status":"pending"}
-{"module":"github.com/klauspost/compreSs","version":"v1.20.0","status":"pending"}
+{"module":"github.com/klauspost/compreSs","version":"v1.20.0","status":"passed"}
 {"module":"github.com/lukechampine/blake3","version":"v1.4.1","status":"pending"}
 {"module":"github.com/mdp/go","version":"v0.0.0-20150912083452-0b5bcf53ee4a","status":"pending"}
 {"module":"github.com/microsoft/go-crypto-darwin","version":"v0.0.2","status":"pending"}

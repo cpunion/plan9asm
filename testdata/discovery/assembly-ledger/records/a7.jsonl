@@ -14,7 +14,7 @@
 {"module":"github.com/codahale/aesnicheck","version":"v0.0.0-20140702143623-349fcc471aac","status":"pending"}
 {"module":"github.com/da3zKi7/saferith","version":"v0.33.0","status":"pending"}
 {"module":"github.com/ibuler/crypto","version":"v0.0.0-20190715092645-911d13b3bf6e","status":"pending"}
-{"module":"github.com/iden3/go-rapidsnark/verifier","version":"v0.0.5","status":"pending"}
+{"module":"github.com/iden3/go-rapidsnark/verifier","version":"v0.0.5","status":"passed"}
 {"module":"github.com/kilic/bls12-381","version":"v0.1.0","status":"pending"}
 {"module":"github.com/kortschak/gonum","version":"v0.8.1","status":"pending"}
 {"module":"github.com/laoxiechuzheng/Xray-core","version":"v1.260327.0-laoxie.1","status":"pending"}

@@ -16,7 +16,7 @@
 {"module":"github.com/monetarium/monetarium-node/crypto/blake256","version":"v1.3.10","status":"passed"}
 {"module":"github.com/nakagami/grdp","version":"v0.9.11","status":"pending"}
 {"module":"github.com/spachava753/mvm","version":"v0.5.0","status":"pending"}
-{"module":"github.com/tljk/gvisor-ohos","version":"v0.0.0-20260909092552-25f056f9a8d4","status":"pending"}
+{"module":"github.com/tljk/gvisor-ohos","version":"v0.0.0-20260909092552-25f056f9a8d4","status":"passed"}
 {"module":"github.com/vbhledger-blockchain/library","version":"v1.1.0","status":"pending"}
 {"module":"github.com/zombiezen/goray","version":"v0.0.0-20170126195651-fbb9e5c379e2","status":"pending"}
 {"module":"github.laiyagushi.com/templexxx/xhex","version":"v0.0.0-20260402074241-592c5e7ae28c","status":"pending"}

@@ -11,7 +11,7 @@
 {"module":"github.com/hexonal/xray-core","version":"v1.260711.10","status":"pending"}
 {"module":"github.com/iosmanthus/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/khaliullov/Xray-core","version":"v1.251208.0","status":"pending"}
-{"module":"github.com/magicjva/websocket","version":"v0.0.0-20250710084959-91013c129147","status":"pending"}
+{"module":"github.com/magicjva/websocket","version":"v0.0.0-20250710084959-91013c129147","status":"passed"}
 {"module":"github.com/piNgCaP/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/someone4else/sing-tun","version":"v0.9.0","status":"pending"}
 {"module":"github.com/topxeq/xxlang","version":"v0.9.11","status":"pending"}

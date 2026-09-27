@@ -10,7 +10,7 @@
 {"module":"github.com/espressosystems/go-ethereum","version":"v0.0.0-20251003222612-2bc9415e52a1","status":"pending"}
 {"module":"github.com/google/trillian-examples","version":"v0.0.0-20260918101759-ce8609b7343f","status":"pending"}
 {"module":"github.com/jeremiah-masters/dlht","version":"v0.0.0-20260611042516-5d42ede3c230","status":"pending"}
-{"module":"github.com/kkkmmu/gopacket","version":"v1.1.13","status":"pending"}
+{"module":"github.com/kkkmmu/gopacket","version":"v1.1.13","status":"not_applicable"}
 {"module":"github.com/lsgrep/go-ethereum","version":"v1.8.3","status":"pending"}
 {"module":"github.com/mrjoshuak/go-jpeg2000","version":"v1.5.12","status":"pending"}
 {"module":"github.com/nikomalik/low-level-functions","version":"v0.0.0-20260410192916-fdeb921074be","status":"pending"}

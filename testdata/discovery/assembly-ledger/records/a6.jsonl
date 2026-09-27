@@ -12,7 +12,7 @@
 {"module":"github.com/groove-x/gatt","version":"v0.0.2","status":"pending"}
 {"module":"github.com/lemire/constmap","version":"v1.2.0","status":"pending"}
 {"module":"github.com/mmcloughlin/geohash","version":"v0.10.0","status":"pending"}
-{"module":"github.com/quaadgras/runtime.link","version":"v0.0.0-20260915220010-48da4dc9940b","status":"pending"}
+{"module":"github.com/quaadgras/runtime.link","version":"v0.0.0-20260915220010-48da4dc9940b","status":"not_applicable"}
 {"module":"github.com/sw33tlie/http","version":"v0.0.0-20251029225617-e8254e59a930","status":"pending"}
 {"module":"github.com/tebeka/go/src","version":"v0.0.0-20250414032058-13b7c7d8d217","status":"pending"}
 {"module":"github.com/tenderly/net-mantle","version":"v0.0.1-tenderly","status":"pending"}

@@ -12,6 +12,6 @@
 {"module":"github.com/prOOrc/minio","version":"v0.0.0-20240520071914-9c76fd7b2e25","status":"pending"}
 {"module":"github.com/ro-ag/posix","version":"v1.1.1","status":"pending"}
 {"module":"github.com/v00d00-swagginzzz/ollama","version":"v0.5.9","status":"pending"}
-{"module":"github.com/xssplater/smq-fyne/v2","version":"v2.7.4","status":"pending"}
+{"module":"github.com/xssplater/smq-fyne/v2","version":"v2.7.4","status":"not_applicable"}
 {"module":"github.com/yisaer/tidb","version":"v1.0.9","status":"pending"}
 {"module":"graphics.gd","version":"v0.0.0-20260918073432-bf29a5a8f806","status":"pending"}

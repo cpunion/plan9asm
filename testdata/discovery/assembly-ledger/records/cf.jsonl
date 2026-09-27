@@ -8,7 +8,7 @@
 {"module":"github.com/elastic/go-freelru/bench","version":"v0.0.0-20260708075946-3a0a715f3309","status":"pending"}
 {"module":"github.com/forestl18/sing-tun","version":"v0.4.24","status":"pending"}
 {"module":"github.com/golang/mobile","version":"v0.0.0-20260908204917-8b95e45f8d3e","status":"pending"}
-{"module":"github.com/hallicopter/go-dtmf","version":"v0.1.8","status":"pending"}
+{"module":"github.com/hallicopter/go-dtmf","version":"v0.1.8","status":"passed"}
 {"module":"github.com/mantlenetworkio/op-geth","version":"v1.6.3","status":"pending"}
 {"module":"github.com/modern-go/gls","version":"v0.0.0-20250215024828-78308f6bb19d","status":"pending"}
 {"module":"github.com/mrjoshuak/go-openexr","version":"v1.4.38","status":"pending"}

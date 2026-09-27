@@ -6,7 +6,7 @@
 {"module":"github.com/clmul/netstack","version":"v0.0.0-20190308035238-c320e3f68db0","status":"pending"}
 {"module":"github.com/cloudflare/sidh","version":"v0.0.0-20190228162259-d2f0f90e08aa","status":"pending"}
 {"module":"github.com/httpsgithu/go","version":"v0.0.0-20260921203455-e96f64ffe84c","status":"pending"}
-{"module":"github.com/jetuuuu/image","version":"v0.0.0-20200430140353-33d19683fad8","status":"pending"}
+{"module":"github.com/jetuuuu/image","version":"v0.0.0-20200430140353-33d19683fad8","status":"passed"}
 {"module":"github.com/onflow/crypto","version":"v0.27.2","status":"pending"}
 {"module":"github.com/sesachain/sxc","version":"v0.0.0-20221208022340-5831dab467a0","status":"passed"}
 {"module":"github.com/specularL2/go-ethereum","version":"v0.0.0-20240215124523-3381d86fa52a","status":"pending"}

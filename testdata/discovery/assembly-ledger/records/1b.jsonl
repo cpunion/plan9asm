@@ -16,7 +16,7 @@
 {"module":"github.com/pictor01/ALBA","version":"v1.10.13","status":"pending"}
 {"module":"github.com/stanford-rc/minio-highwayhash","version":"v1.0.3","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p8","version":"v0.2.0","status":"pending"}
-{"module":"github.com/unxed/zlib4go","version":"v0.1.16","status":"pending"}
+{"module":"github.com/unxed/zlib4go","version":"v0.1.16","status":"not_applicable"}
 {"module":"github.com/xuri/go","version":"v0.0.0-20260526002535-e28acf5506e8","status":"pending"}
 {"module":"github.heygears.com/sp301415/tfhe-go","version":"v0.6.1","status":"pending"}
 {"module":"gopkg.in/agiledragon/gomonkey.v2","version":"v2.14.3","status":"pending"}

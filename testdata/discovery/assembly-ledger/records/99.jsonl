@@ -14,7 +14,7 @@
 {"module":"github.com/linux-team/loongson-golang","version":"v0.0.0-20141024174919-7db43b248ca6","status":"pending"}
 {"module":"github.com/morph-dev/go-ethereum","version":"v1.16.2","status":"pending"}
 {"module":"github.com/overclock-validator/narya-ed25519","version":"v0.0.0-20260730051143-c265ee966713","status":"pending"}
-{"module":"github.com/paxb-paul/paxb-net","version":"v0.0.0-20240617000936-f6be88c5bccf","status":"pending"}
+{"module":"github.com/paxb-paul/paxb-net","version":"v0.0.0-20240617000936-f6be88c5bccf","status":"passed"}
 {"module":"github.com/quaadgras/graphics.gd","version":"v0.0.0-20260918073432-bf29a5a8f806","status":"pending"}
 {"module":"github.com/quant1x/gox","version":"v1.26.0","status":"pending"}
 {"module":"github.com/ricyaben/zgrab2","version":"v0.0.0-20260823105936-3fd9824a4792","status":"pending"}

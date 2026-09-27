@@ -15,4 +15,4 @@
 {"module":"github.com/twiss/crypto","version":"v0.0.0-20190328161812-ae7fad7780ba","status":"pending"}
 {"module":"github.com/unxed/xz","version":"v0.1.44","status":"pending"}
 {"module":"github.com/wjqserver/go2zig","version":"v0.0.3","status":"pending"}
-{"module":"github.com/zchee/gows","version":"v0.0.0-20260723212002-4a8b73521b99","status":"pending"}
+{"module":"github.com/zchee/gows","version":"v0.0.0-20260723212002-4a8b73521b99","status":"passed"}

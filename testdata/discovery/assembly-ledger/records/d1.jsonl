@@ -7,7 +7,7 @@
 {"module":"github.com/nakurai/goblas","version":"v0.0.0-20260618124956-093de1c7fc58","status":"pending"}
 {"module":"github.com/paypal/gatt","version":"v0.0.0-20151011220935-4ae819d591cf","status":"pending"}
 {"module":"github.com/pictor01/alba","version":"v1.10.13","status":"pending"}
-{"module":"github.com/sandbox0-ai/go-fuse/v2","version":"v2.10.1","status":"pending"}
+{"module":"github.com/sandbox0-ai/go-fuse/v2","version":"v2.10.1","status":"passed"}
 {"module":"github.com/shopify/go-fuse/v2","version":"v2.10.1-shopify.4","status":"pending"}
 {"module":"github.com/thiagopnts/switchframe/server","version":"v0.0.0-20260610005340-792361540f14","status":"pending"}
 {"module":"github.com/xunleichain/wagon","version":"v0.6.0","status":"pending"}

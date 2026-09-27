@@ -11,7 +11,7 @@
 {"module":"github.com/cwbudde/lz4","version":"v2.6.1+incompatible","status":"pending"}
 {"module":"github.com/drewp1ter/xray-core","version":"v0.0.0-20260601021109-94ffd50060f1","status":"pending"}
 {"module":"github.com/funny/goid","version":"v0.0.0-20160427001359-6a684ff6602f","status":"pending"}
-{"module":"github.com/greatroar/lz4","version":"v2.4.1+incompatible","status":"pending"}
+{"module":"github.com/greatroar/lz4","version":"v2.4.1+incompatible","status":"not_applicable"}
 {"module":"github.com/josexy/net","version":"v0.0.0-20260809092324-c0d6b15b8e7b","status":"pending"}
 {"module":"github.com/longfen2026/mihomo-tcpmask","version":"v1.19.30","status":"pending"}
 {"module":"github.com/malivvan/tls-go","version":"v1.1.0","status":"pending"}

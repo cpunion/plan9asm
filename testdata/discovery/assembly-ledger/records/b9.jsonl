@@ -12,6 +12,6 @@
 {"module":"github.com/parallaxprotocol/parallax/v2","version":"v2.1.0","status":"pending"}
 {"module":"github.com/thedevniko/xray-core","version":"v0.0.0-20260711155151-50231eaff98c","status":"pending"}
 {"module":"github.com/tumi8/goscanner","version":"v1.0.0","status":"pending"}
-{"module":"github.com/xdarkicex/memory","version":"v1.2.9","status":"pending"}
+{"module":"github.com/xdarkicex/memory","version":"v1.2.9","status":"passed"}
 {"module":"github.com/xssplater/fyne/v2","version":"v2.7.4","status":"pending"}
 {"module":"github.com/xtlsee/Xray-core","version":"v1.2.1","status":"pending"}

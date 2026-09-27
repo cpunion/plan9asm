@@ -19,7 +19,7 @@
 {"module":"github.com/tailscale/wireguard-go","version":"v0.0.0-20260911194433-e3222a3340cd","status":"pending"}
 {"module":"github.com/tmthrgd/go-memset","version":"v0.0.0-20190904060434-6fb7a21f88f1","status":"pending"}
 {"module":"github.com/xtryan/websocket","version":"v0.0.0-20250710084959-91013c129147","status":"pending"}
-{"module":"github.com/zchee/go-qcow2","version":"v0.0.0-20170102190316-9a991fd172f0","status":"pending"}
+{"module":"github.com/zchee/go-qcow2","version":"v0.0.0-20170102190316-9a991fd172f0","status":"passed"}
 {"module":"github.com/zhaohb/ollama_ov","version":"v0.0.0-20260416132033-21909a6f00fc","status":"pending"}
 {"module":"gopkg.in/qml.v1","version":"v1.0.0-20150209141031-2ee7e5ff7370","status":"pending"}
 {"module":"lindenii.org/go/furgit","version":"v0.1.184","status":"pending"}

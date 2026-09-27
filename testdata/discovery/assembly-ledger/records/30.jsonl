@@ -18,5 +18,5 @@
 {"module":"github.com/xDarkicex/memory","version":"v1.2.9","status":"pending"}
 {"module":"github.com/yelhousni/batch-subgroup-membership","version":"v0.0.0-20260429151704-a8d878f3e735","status":"pending"}
 {"module":"github.laiyagushi.com/c2gohq/c2go_libc","version":"v0.20260809.0-rc.5","status":"pending"}
-{"module":"github.tiyicn.workers.dev/lindb/lindb","version":"v0.4.1","status":"pending"}
+{"module":"github.tiyicn.workers.dev/lindb/lindb","version":"v0.4.1","status":"passed"}
 {"module":"gvisor.dev/gvisor","version":"v0.0.0-20260922222726-edc61702468b","status":"pending"}

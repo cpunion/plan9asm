@@ -7,7 +7,7 @@
 {"module":"github.com/donge/coregex","version":"v0.0.0-20260515171637-2f994d508532","status":"pending"}
 {"module":"github.com/dyhkwong/v2ray-core/v5","version":"v5.50.0","status":"passed"}
 {"module":"github.com/nlpodyssey/spago","version":"v1.1.0","status":"pending"}
-{"module":"github.com/rewrewby/powkit","version":"v0.0.0-20260725184124-42b7490ee08c","status":"pending"}
+{"module":"github.com/rewrewby/powkit","version":"v0.0.0-20260725184124-42b7490ee08c","status":"passed"}
 {"module":"github.com/truvvor/Xray-core","version":"v1.0.0-ios","status":"pending"}
 {"module":"github.com/w3tech/bas-template-bsc","version":"v1.0.3","status":"pending"}
 {"module":"github.com/wudi/jsonx","version":"v0.1.1","status":"pending"}

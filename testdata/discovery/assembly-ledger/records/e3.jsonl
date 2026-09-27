@@ -18,7 +18,7 @@
 {"module":"github.com/runZeroInc/excrypto","version":"v0.43.3","status":"pending"}
 {"module":"github.com/sshverify/crypto","version":"v0.0.0-20260408083538-51ad11849019","status":"pending"}
 {"module":"github.com/unarto/xraycorev26.1.3","version":"v0.0.0-20260630064345-b151e2aa7ad5","status":"pending"}
-{"module":"github.com/vinci10/fyne/v2","version":"v2.0.0-20260309145412-963f0f88d466","status":"pending"}
+{"module":"github.com/vinci10/fyne/v2","version":"v2.0.0-20260309145412-963f0f88d466","status":"not_applicable"}
 {"module":"github.com/xgo-dev/llgo/runtime","version":"v0.0.0-20260922013802-130974dadec6","status":"pending"}
 {"module":"github.com/xucanxx/born","version":"v0.0.0-20260720022524-8ea4ebc97f4b","status":"pending"}
 {"module":"github.com/yoohph/v2ray-core/v5","version":"v5.51.0","status":"pending"}

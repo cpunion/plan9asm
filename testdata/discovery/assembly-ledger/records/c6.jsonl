@@ -7,7 +7,7 @@
 {"module":"github.com/bondaraval/gvisor","version":"v0.0.0-20250915152807-20b7e9b2d7e2","status":"pending"}
 {"module":"github.com/bytebase/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/go-simd/hex","version":"v0.0.0-20260908181127-412603e19f22","status":"pending"}
-{"module":"github.com/mahsanet/gomobile","version":"v0.0.0-20260524100338-9902ac1f2255","status":"pending"}
+{"module":"github.com/mahsanet/gomobile","version":"v0.0.0-20260524100338-9902ac1f2255","status":"passed"}
 {"module":"github.com/oasysgames/oasys-validator","version":"v1.9.1","status":"pending"}
 {"module":"github.com/openagent-md/wireguard-go","version":"v0.0.0-20260304043104-4184faf59e56","status":"pending"}
 {"module":"github.com/shambel-amare/websocket","version":"v0.0.0-20250710084959-91013c129147","status":"pending"}
