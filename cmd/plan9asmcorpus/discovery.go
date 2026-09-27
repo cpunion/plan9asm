@@ -1747,25 +1747,27 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		if cfg.buildCache != "" {
 			env = replaceEnv(env, map[string]string{"GOCACHE": cfg.buildCache})
 		}
-		downloadJSON, commandErr := runCapturedCommandOutput(
-			ctx,
-			workDir,
-			env,
-			"go",
-			"mod",
-			"download",
-			"-json",
-			candidate.Module+"@"+candidate.Version,
-		)
-		download, err = resolveModuleDownload(
-			downloadJSON,
-			commandErr,
-			filepath.Join(workDir, "module-source"),
-		)
-		if err != nil {
-			return fmt.Errorf("download module: %w", err)
-		}
-		return nil
+		return retryDiscoveryGoNetwork(ctx, []time.Duration{time.Second, 3 * time.Second}, func() error {
+			downloadJSON, commandErr := runCapturedCommandOutput(
+				ctx,
+				workDir,
+				env,
+				"go",
+				"mod",
+				"download",
+				"-json",
+				candidate.Module+"@"+candidate.Version,
+			)
+			download, err = resolveModuleDownload(
+				downloadJSON,
+				commandErr,
+				filepath.Join(workDir, "module-source"),
+			)
+			if err != nil {
+				return fmt.Errorf("download module: %w", err)
+			}
+			return nil
+		})
 	})
 	if err != nil {
 		return matrixReport{}, nil, nil, err
@@ -2139,20 +2141,21 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 		"GOOS":        goos,
 		"GOARCH":      goarch,
 	})
-	return retryDiscoveryGoBuild(ctx, []time.Duration{time.Second, 3 * time.Second}, func() error {
+	return retryDiscoveryGoNetwork(ctx, []time.Duration{time.Second, 3 * time.Second}, func() error {
 		return runCapturedCommand(ctx, dir, targetEnv, "go", args...)
 	})
 }
 
-// A fresh build can resolve a temporary dependency-host failure. Retry only
-// network diagnostics; a compiler error, missing disk space or killed process
-// needs a different fix and must not be hidden behind repeated attempts.
-func retryDiscoveryGoBuild(ctx context.Context, delays []time.Duration, build func() error) error {
+// Downloading a module and building its dependencies can both encounter
+// transient proxy failures. Retry only network diagnostics within the original
+// operation deadline. Source, checksum, resource and toolchain errors need a
+// different fix and must not be hidden behind repeated attempts.
+func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operation func() error) error {
 	for attempt := 0; ; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := build()
+		err := operation()
 		if err == nil || attempt >= len(delays) || !isDiscoveryRetryableNetworkFailure(err.Error()) {
 			return err
 		}

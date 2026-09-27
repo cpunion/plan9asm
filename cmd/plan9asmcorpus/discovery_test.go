@@ -694,7 +694,7 @@ func TestRetryDiscoveryGoBuildOnlyRetriesTransientNetworkFailures(t *testing.T) 
 	source := errors.New("pkg/file.go:12:2: undefined: removedSymbol")
 
 	attempts := 0
-	err := retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
 		attempts++
 		if attempts < 3 {
 			return transient
@@ -706,7 +706,7 @@ func TestRetryDiscoveryGoBuildOnlyRetriesTransientNetworkFailures(t *testing.T) 
 	}
 
 	attempts = 0
-	err = retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+	err = retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
 		attempts++
 		return source
 	})
@@ -715,7 +715,7 @@ func TestRetryDiscoveryGoBuildOnlyRetriesTransientNetworkFailures(t *testing.T) 
 	}
 
 	attempts = 0
-	err = retryDiscoveryGoBuild(context.Background(), []time.Duration{0, 0}, func() error {
+	err = retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
 		attempts++
 		return errors.New("go build: signal: killed")
 	})
