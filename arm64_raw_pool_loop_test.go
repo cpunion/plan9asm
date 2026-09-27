@@ -1,6 +1,9 @@
 package plan9asm
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func arm64PoolTestFlow(t *testing.T, lines []string) *arm64RawPoolValues {
 	t.Helper()
@@ -86,5 +89,29 @@ func TestARM64PoolCounterLoopInvariantResidual(t *testing.T) {
 	})
 	if got := flow.affineInterval(3, arm64PoolRegisterExpression(3)); got != (arm64PoolInterval{72, 120}) {
 		t.Fatalf("invariant residual lost: %+v", got)
+	}
+}
+
+func TestARM64PoolCounterLoopLongPreservedFlags(t *testing.T) {
+	for _, clobber := range []bool{false, true} {
+		t.Run(fmt.Sprintf("clobber=%v", clobber), func(t *testing.T) {
+			lines := []string{"mov x1, #7", "nop", "subs x1, x1, #1"}
+			for i := 0; i < 12; i++ {
+				lines = append(lines, "ext v0.16b, v1.16b, v2.16b, #8", "uxtl v3.4s, v4.4h",
+					"cmhi v5.8b, v6.8b, v7.8b", "mul x2, x3, x4")
+			}
+			if clobber {
+				lines[20] = "tst x2, x3"
+			}
+			lines = append(lines, fmt.Sprintf("b.ne #%d", (1-len(lines))*4), "ret")
+			flow := arm64PoolTestFlow(t, lines)
+			want := arm64PoolInterval{1, 7}
+			if clobber {
+				want = arm64PoolUnknownInterval
+			}
+			if got := flow.affineInterval(1, arm64PoolRegisterExpression(1)); got != want {
+				t.Fatalf("counter = %+v, want %+v", got, want)
+			}
+		})
 	}
 }

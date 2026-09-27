@@ -10,8 +10,17 @@ import (
 func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 	t.Helper()
 	lines := []string{
-		"adr x9, #0", "mov x4, xzr", "cmp x1, #7", "b.hi #24", "cbz x1, #20",
-		"ldr x3, [x9, x1, lsl #3]", "add x4, x4, x3", "subs x1, x1, #1", "b.ne #-12",
+		"adr x9, #0", "mov x4, xzr", "cmp x1, #7", "b.hi #0", "cbz x1, #0",
+		"ldr x3, [x9, x1, lsl #3]", "add x4, x4, x3", "subs x1, x1, #1",
+	}
+	for i := 0; i < 12; i++ {
+		lines = append(lines, "ext v0.16b, v1.16b, v2.16b, #8", "uxtl v3.4s, v4.4h",
+			"cmhi v5.8b, v6.8b, v7.8b", "mul x2, xzr, xzr")
+	}
+	lines = append(lines, fmt.Sprintf("b.ne #%d", (5-len(lines))*4))
+	lines[3] = fmt.Sprintf("b.hi #%d", (len(lines)-3)*4)
+	lines[4] = fmt.Sprintf("cbz x1, #%d", (len(lines)-4)*4)
+	lines = append(lines,
 		"str x4, [x0]",
 
 		"add x10, x9, #32", "mov x2, #-8",
@@ -24,7 +33,7 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 
 		"add x10, x9, #24", "ldr x2, [x10], #8", "ldr x3, [x10, #8]!",
 		"stp x2, x3, [x0, #80]", "mov x9, xzr", "mov x10, xzr", "ret",
-	}
+	)
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	var source strings.Builder
 	source.WriteString("TEXT pool_loop(SB),$0-16\nMOVD out+0(FP),R0\nMOVD count+8(FP),R1\n")

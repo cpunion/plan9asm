@@ -22,7 +22,7 @@ func (expression arm64PoolAffine) registerMask() uint32 {
 // finding an earlier CMP in the instruction stream proves neither property.
 func (flow *arm64RawPoolValues) affineFlagsBefore(at int) (uint32, uint32, bool) {
 	var clobbered uint32
-	for steps := 0; steps < 16; steps++ {
+	for steps := 0; steps < 512; steps++ {
 		if at < 0 || at >= len(flow.before) || len(flow.before[at]) != 1 {
 			return 0, 0, false
 		}
@@ -66,6 +66,12 @@ func arm64RawPoolPreservesNZCV(op arm64asm.Op) bool {
 		arm64asm.AND, arm64asm.BIC, arm64asm.ORR, arm64asm.ORN, arm64asm.EOR, arm64asm.EON, arm64asm.MVN,
 		arm64asm.LSL, arm64asm.LSR, arm64asm.ASR, arm64asm.ROR,
 		arm64asm.FMOV, arm64asm.UMOV, arm64asm.SMOV, arm64asm.ADDP, arm64asm.FADDP,
+		arm64asm.MUL, arm64asm.MNEG, arm64asm.MADD, arm64asm.MSUB,
+		arm64asm.SMADDL, arm64asm.SMSUBL, arm64asm.SMULL, arm64asm.SMNEGL, arm64asm.SMULH,
+		arm64asm.UMADDL, arm64asm.UMSUBL, arm64asm.UMULL, arm64asm.UMNEGL, arm64asm.UMULH,
+		arm64asm.EXT, arm64asm.UXTL, arm64asm.UXTL2, arm64asm.SXTL, arm64asm.SXTL2,
+		arm64asm.CMEQ, arm64asm.CMGE, arm64asm.CMGT, arm64asm.CMHI, arm64asm.CMHS,
+		arm64asm.CMLE, arm64asm.CMLT, arm64asm.CMTST,
 		arm64asm.CSEL, arm64asm.CSINC, arm64asm.CSINV, arm64asm.CSNEG,
 		arm64asm.CSET, arm64asm.CSETM, arm64asm.CINC, arm64asm.CINV, arm64asm.CNEG,
 		arm64asm.STR, arm64asm.STRB, arm64asm.STRH, arm64asm.STUR, arm64asm.STURB, arm64asm.STURH,
