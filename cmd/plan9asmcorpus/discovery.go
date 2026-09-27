@@ -2170,69 +2170,6 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 	}
 }
 
-func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
-	if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
-		return false
-	}
-	diagnostic = strings.ToLower(diagnostic)
-	for _, marker := range []string{
-		"too many requests",
-		"service unavailable",
-		"bad gateway",
-		"gateway timeout",
-		"i/o timeout",
-		"tls handshake timeout",
-		"connection reset",
-		"connection closed by",
-		"temporary failure",
-		"unexpected eof",
-	} {
-		if strings.Contains(diagnostic, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-func isDiscoveryGoBuildInfrastructureFailure(diagnostic string) bool {
-	diagnostic = strings.ToLower(diagnostic)
-	// "unexpected EOF" is also the Go assembler's deterministic diagnostic
-	// for a truncated source file. Do not retain that source failure as a
-	// transient network retry merely because proxies use the same phrase.
-	if strings.Contains(diagnostic, "unexpected eof") &&
-		strings.Contains(diagnostic, ".s:") &&
-		strings.Contains(diagnostic, "asm: assembly of") {
-		return false
-	}
-	for _, marker := range []string{
-		"captured output exceeds",
-		"does not match go tool version",
-		"context deadline exceeded",
-		"i/o timeout",
-		"tls handshake timeout",
-		"temporary failure",
-		"no such host",
-		"connection refused",
-		"connection reset",
-		"connection closed by",
-		"could not read from remote repository",
-		"network is unreachable",
-		"proxyconnect",
-		"unexpected eof",
-		"bad gateway",
-		"service unavailable",
-		"too many requests",
-		"gateway timeout",
-		"no space left on device",
-		"signal: killed",
-	} {
-		if strings.Contains(diagnostic, marker) {
-			return true
-		}
-	}
-	return false
-}
-
 func isDiscoveryInfrastructureFailure(err error) bool {
 	return err != nil && (errors.Is(err, errDiscoveryCommandOutputExceeded) ||
 		isDiscoveryGoBuildInfrastructureFailure(err.Error()))
