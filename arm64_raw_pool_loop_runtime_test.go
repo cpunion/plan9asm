@@ -52,6 +52,35 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 			output += 8
 		}
 	}
+	for _, branch := range []struct{ up, down string }{
+		{"lt", "gt"}, {"lo", "hi"}, {"le", "ge"}, {"ls", "hs"},
+	} {
+		for _, ascending := range []bool{true, false} {
+			for _, reversed := range []bool{false, true} {
+				initial, difference, update := 8, "sub x5, x3, x2", "add x2, x2, #1"
+				condition, compare := branch.up, "cmp x2, x3"
+				if !ascending {
+					initial, difference, update = 24, "sub x5, x2, x3", "sub x2, x2, #1"
+					condition = branch.down
+				}
+				if reversed {
+					compare = "cmp x3, x2"
+					condition = branch.down
+					if !ascending {
+						condition = branch.up
+					}
+				}
+				lines = append(lines, "and x2, x1, #7", fmt.Sprintf("add x2, x2, #%d", initial),
+					"mov x3, #16", "mov x4, xzr")
+				head := len(lines)
+				lines = append(lines, difference, "ldrb w5, [x9, x5]", "add x4, x4, x5",
+					update, compare, "orr w6, w6, w7")
+				lines = append(lines, fmt.Sprintf("b.%s #%d", condition, (head-len(lines))*4),
+					fmt.Sprintf("str x4, [x0, #%d]", output))
+				output += 8
+			}
+		}
+	}
 	lines = append(lines, "mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
@@ -120,9 +149,9 @@ int main(void) {
   const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 20, 255,
                              1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[27] = {0}, expected[25] = {0};
+    uint64_t result[43] = {0}, expected[41] = {0};
     result[0] = 0x12345678;
-    result[26] = 0x87654321;
+    result[42] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -134,8 +163,18 @@ int main(void) {
     const uint8_t *bytes = (const uint8_t *)words;
     uint64_t remaining = counts[i] > 7 ? counts[i] : 0;
     for (unsigned j = 13; j < 25; j++) expected[j] = bytes[16 + (remaining & 1)];
+    unsigned output = 25;
+    for (unsigned kind = 0; kind < 4; kind++) {
+      for (unsigned direction = 0; direction < 2; direction++) {
+        for (unsigned reversed = 0; reversed < 2; reversed++) {
+          unsigned distance = direction ? 8 + (remaining & 7) : 8 - (remaining & 7);
+          for (unsigned n = kind < 2 ? 1 : 0; n <= distance; n++) expected[output] += bytes[n];
+          output++;
+        }
+      }
+    }
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[26] != 0x87654321 ||
+    if (result[0] != 0x12345678 || result[42] != 0x87654321 ||
         memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
   }
   return 0;

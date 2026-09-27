@@ -91,6 +91,7 @@ func (flow *arm64RawPoolValues) prepareControlFlow() {
 		flow.refineBitEdges()
 		for latch := range flow.words {
 			flow.proveCounterLoop(latch)
+			flow.proveOrderedCounterLoop(latch)
 		}
 		flow.clearValueCaches()
 		if excluded == len(flow.excluded) && loops == len(flow.loopBounds) {
@@ -142,40 +143,8 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 		return
 	}
 	head := latch + int(int32(word<<8)>>13)
-	if register >= 31 || head < 0 || head >= latch || latch-head > 512 {
-		return
-	}
-	for at := head + 1; at <= latch; at++ {
-		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
-			return
-		}
-	}
-	update := -1
-	var delta uint64
-	for at := head; at < latch; at++ {
-		current := flow.words[at]
-		// The body must fall through only, including instructions that would
-		// otherwise appear harmless in the GP destination-effect classifier.
-		if current&0x7c000000 == 0x14000000 || current&0x7e000000 == 0x34000000 ||
-			current&0x7e000000 == 0x36000000 || current&0xff000010 == 0x54000000 ||
-			current&0xfe000000 == 0xd6000000 {
-			return
-		}
-		writes, known := arm64RawPoolGPWrites(current)
-		if !known {
-			return
-		}
-		if writes&(1<<uint(register)) == 0 {
-			continue
-		}
-		destination, expression, affine := arm64PoolAffineDefinition(current)
-		expected := arm64PoolRegisterExpression(register)
-		if !affine || destination != register || expression.coefficient != expected.coefficient || update != -1 {
-			return
-		}
-		update, delta = at, expression.constant
-	}
-	if update == -1 || delta == 0 {
+	update, delta, valid := flow.counterLoopUpdate(head, latch, register)
+	if !valid {
 		return
 	}
 	if word&0xff00001f == 0x54000001 {
@@ -185,25 +154,8 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 		}
 	}
 
-	// Infer the first iteration from external entry paths only. A prior body
-	// execution reached through an enclosing loop is opaque: deleting a
-	// backedge must not assume that such an earlier execution ran just once.
-	entry := &arm64RawPoolValues{
-		words: flow.words, before: append([][]int(nil), flow.before...),
-		opaque: map[int]bool{latch: true}, loopBounds: flow.loopBounds,
-	}
-	entry.clearValueCaches()
-	entry.before[head] = nil
-	for _, previous := range flow.before[head] {
-		if previous == latch {
-			continue
-		}
-		if previous >= head && previous < latch {
-			return
-		}
-		entry.before[head] = append(entry.before[head], previous)
-	}
-	if len(entry.before[head]) == 0 {
+	entry := flow.counterLoopEntry(head, latch)
+	if entry == nil {
 		return
 	}
 	expression := arm64PoolRegisterExpression(register)
@@ -229,4 +181,69 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 	}
 	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: arm64PoolInterval{1, initial.high}}
 	flow.clearValueCaches()
+}
+
+func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (int, uint64, bool) {
+	if register >= 31 || head < 0 || head >= latch || latch-head > 512 {
+		return 0, 0, false
+	}
+	for at := head + 1; at <= latch; at++ {
+		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
+			return 0, 0, false
+		}
+	}
+	update := -1
+	var delta uint64
+	for at := head; at < latch; at++ {
+		current := flow.words[at]
+		// The body must fall through only, including instructions that would
+		// otherwise appear harmless in the GP destination-effect classifier.
+		if current&0x7c000000 == 0x14000000 || current&0x7e000000 == 0x34000000 ||
+			current&0x7e000000 == 0x36000000 || current&0xff000010 == 0x54000000 ||
+			current&0xfe000000 == 0xd6000000 {
+			return 0, 0, false
+		}
+		writes, known := arm64RawPoolGPWrites(current)
+		if !known {
+			return 0, 0, false
+		}
+		if writes&(1<<uint(register)) == 0 {
+			continue
+		}
+		destination, expression, affine := arm64PoolAffineDefinition(current)
+		expected := arm64PoolRegisterExpression(register)
+		if !affine || destination != register || expression.coefficient != expected.coefficient || update != -1 {
+			return 0, 0, false
+		}
+		update, delta = at, expression.constant
+	}
+	if update == -1 || delta == 0 {
+		return 0, 0, false
+	}
+	return update, delta, true
+}
+
+func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolValues {
+	// Infer the first iteration from external entry paths only. A prior body
+	// execution reached through an enclosing loop is opaque: deleting a
+	// backedge must not assume that such an earlier execution ran just once.
+	entry := &arm64RawPoolValues{
+		words: flow.words, before: append([][]int(nil), flow.before...),
+		opaque: map[int]bool{latch: true}, loopBounds: flow.loopBounds,
+	}
+	entry.clearValueCaches()
+	entry.before[head] = nil
+	for _, previous := range flow.before[head] {
+		if previous == latch {
+			continue
+		}
+		if previous >= head && previous < latch {
+			return nil
+		}
+		entry.before[head] = append(entry.before[head], previous)
+	}
+	if len(entry.before[head]) == 0 {
+		return nil
+	}
+	return entry
 }
