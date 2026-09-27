@@ -5,7 +5,7 @@
 {"module":"github.com/bigwhite/GoProgrammingFromBeginnerToMaster","version":"v0.0.0-20240415083102-c0b790a1fa05","status":"pending"}
 {"module":"github.com/cpuguy83/go","version":"v0.0.0-20230313212128-e8543a6fa6e6","status":"pending"}
 {"module":"github.com/dappledger/AnnChain","version":"v1.5.0","status":"pending"}
-{"module":"github.com/dolphinet-labs/dolphinet-geth","version":"v1.2.0","status":"pending"}
+{"module":"github.com/dolphinet-labs/dolphinet-geth","version":"v1.2.0","status":"passed"}
 {"module":"github.com/florianl/opentelemetry-ebpf-profiler","version":"v0.0.202531","status":"pending"}
 {"module":"github.com/ixios-io/ixiosspark","version":"v1.1.0","status":"pending"}
 {"module":"github.com/koykov/simd","version":"v0.0.14","status":"pending"}

@@ -2,7 +2,7 @@
 {"module":"github.com/PingCAP/Tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/coreos/Etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/dmznlin/znlib-go","version":"v0.0.13","status":"pending"}
-{"module":"github.com/drand/kyber","version":"v1.3.2","status":"pending"}
+{"module":"github.com/drand/kyber","version":"v1.3.2","status":"passed"}
 {"module":"github.com/fyne-io/go-image","version":"v0.24.2","status":"pending"}
 {"module":"github.com/go-erasure/reedsolomon","version":"v0.3.0","status":"pending"}
 {"module":"github.com/go-simd/jsonvalidate","version":"v0.0.0-20260908181122-12794a812a31","status":"pending"}

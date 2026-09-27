@@ -3,7 +3,7 @@
 {"module":"github.com/authzed/roaring/v2","version":"v2.0.0-20260916192932-b642a9f31cae","status":"pending"}
 {"module":"github.com/bigwhite/experiments","version":"v0.0.0-20260327062558-e3a40e4b0ecb","status":"pending"}
 {"module":"github.com/duynguyendang/meb","version":"v0.7.0","status":"pending"}
-{"module":"github.com/ebitengine/gomobile","version":"v0.0.0-20260820040257-d11f821a26a6","status":"pending"}
+{"module":"github.com/ebitengine/gomobile","version":"v0.0.0-20260820040257-d11f821a26a6","status":"passed"}
 {"module":"github.com/eliotcougar/Xray-core","version":"v0.0.0-20260827223245-c1958dba04ba","status":"pending"}
 {"module":"github.com/emseco/go-hashgrid","version":"v0.0.0-20180822125425-cc391c2613e9","status":"pending"}
 {"module":"github.com/goexlib/cgo","version":"v0.1.0","status":"pending"}

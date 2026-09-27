@@ -7,7 +7,7 @@
 {"module":"github.com/cnxysoft/ddbot-wsa/bot","version":"v0.0.0-20260727180652-4dc369390a8f","status":"pending"}
 {"module":"github.com/fatcorn/go-ethereum","version":"v1.14.6","status":"pending"}
 {"module":"github.com/hanchaoqun/codrax","version":"v0.0.0-20260922160811-6ae7150d089b","status":"pending"}
-{"module":"github.com/ice-blockchain/go","version":"v0.0.0-20240325093808-c4792e60f332","status":"pending"}
+{"module":"github.com/ice-blockchain/go","version":"v0.0.0-20240325093808-c4792e60f332","status":"passed"}
 {"module":"github.com/jochem-brouwer/go-ethereum","version":"v0.0.0-20260502112921-f0b21fa11061","status":"pending"}
 {"module":"github.com/lomotho/parquet-go","version":"v0.0.0-20260420183122-dd463c7aa3bf","status":"pending"}
 {"module":"github.com/muravlev/fastsax","version":"v0.0.0-20260724124850-492a74a4404f","status":"pending"}

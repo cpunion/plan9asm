@@ -6,7 +6,7 @@
 {"module":"github.com/andrewkroh/sys","version":"v0.0.0-20151128191922-287798fe3e43","status":"pending"}
 {"module":"github.com/cortexfoundation/cortextheseus","version":"v1.10.72","status":"pending"}
 {"module":"github.com/dOmInAnT-sTrAtEgIeS/go-quai","version":"v0.56.0","status":"pending"}
-{"module":"github.com/diega/go-ethereum-classic","version":"v1.17.4-etc.1","status":"pending"}
+{"module":"github.com/diega/go-ethereum-classic","version":"v1.17.4-etc.1","status":"passed"}
 {"module":"github.com/erigontech/erigon","version":"v1.10.16","status":"pending"}
 {"module":"github.com/kasra73/vulcand","version":"v0.8.0-beta.3","status":"pending"}
 {"module":"github.com/lbe/imagemeta","version":"v0.3.1","status":"pending"}

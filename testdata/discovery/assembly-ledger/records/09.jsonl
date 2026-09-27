@@ -10,7 +10,7 @@
 {"module":"github.com/go-compressions/blake3","version":"v0.5.0","status":"pending"}
 {"module":"github.com/gostdlib/deps","version":"v0.0.0-20260618182714-aa0489fb9f69","status":"pending"}
 {"module":"github.com/hunter-packages/boringssl","version":"v1.0.0","status":"pending"}
-{"module":"github.com/junegunn/fzf","version":"v0.74.4","status":"pending"}
+{"module":"github.com/junegunn/fzf","version":"v0.74.4","status":"passed"}
 {"module":"github.com/muthuishere/cljgo","version":"v0.9.0","status":"pending"}
 {"module":"github.com/nhooyr/ws","version":"v1.8.15","status":"pending"}
 {"module":"github.com/nspcc-Dev/tzhash","version":"v1.8.4","status":"pending"}

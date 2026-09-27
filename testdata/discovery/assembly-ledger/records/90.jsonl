@@ -5,7 +5,7 @@
 {"module":"github.com/Storj/common","version":"v0.0.0-20260903112600-b776c2238d07","status":"pending"}
 {"module":"github.com/gmwxio/tools","version":"v0.1.0","status":"pending"}
 {"module":"github.com/josephrandall577/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
-{"module":"github.com/juicedata/minio","version":"v0.0.0-20260915033819-47296b1b89b0","status":"pending"}
+{"module":"github.com/juicedata/minio","version":"v0.0.0-20260915033819-47296b1b89b0","status":"not_applicable"}
 {"module":"github.com/liquentlabs/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/mediagui/go","version":"v0.0.0-20260227122306-34024557799e","status":"pending"}
 {"module":"github.com/modernc-tree-sitter/libc","version":"v1.73.5","status":"pending"}

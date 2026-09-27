@@ -3,7 +3,7 @@
 {"module":"github.com/DiscreteTom/graphics.gd","version":"v0.0.0-20260817220714-796d920a68e7","status":"pending"}
 {"module":"github.com/SunRunAway/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/andrew-aiken/grdp","version":"v0.0.0-20260813144707-1e14be631b37","status":"pending"}
-{"module":"github.com/axiomhq/drain3","version":"v0.0.0-20260721054929-d1ca3e81c2aa","status":"pending"}
+{"module":"github.com/axiomhq/drain3","version":"v0.0.0-20260721054929-d1ca3e81c2aa","status":"passed"}
 {"module":"github.com/berachain/polaris-geth","version":"v1.13.10","status":"pending"}
 {"module":"github.com/bojieli/whitehat","version":"v0.0.0-20150513155927-d1adbd70417a","status":"pending"}
 {"module":"github.com/everanium/itb","version":"v0.4.1","status":"pending"}

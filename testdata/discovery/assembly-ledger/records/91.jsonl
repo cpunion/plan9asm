@@ -1,7 +1,7 @@
 {"module":"github.com/AlekSi/go-fuzz","version":"v0.0.0-20191206100749-a378175e205c","status":"pending"}
 {"module":"github.com/HITEYY/go-obsidian","version":"v0.0.0-20260227075436-d204b251ffe7","status":"pending"}
 {"module":"github.com/al1c3-1337/tamago-patched","version":"v1.26.5","status":"pending"}
-{"module":"github.com/bldy/gvisor-1","version":"v0.0.0-20190607215227-48961d27a8bc","status":"pending"}
+{"module":"github.com/bldy/gvisor-1","version":"v0.0.0-20190607215227-48961d27a8bc","status":"not_applicable"}
 {"module":"github.com/elastos/elastos.ela.sidechain.esc","version":"v0.2.8","status":"pending"}
 {"module":"github.com/golang/go","version":"v0.0.0-20260922222353-a532f497dcd5","status":"pending"}
 {"module":"github.com/hacash/core","version":"v0.0.0-20250110142447-8bb265fc1a68","status":"pending"}

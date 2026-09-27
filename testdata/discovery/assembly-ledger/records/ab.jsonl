@@ -3,7 +3,7 @@
 {"module":"github.com/JukLee0ira/XDPoSChain","version":"v1.5.0","status":"pending"}
 {"module":"github.com/PaiHL/h265","version":"v0.0.0-20260915024054-e62c3d55b32d","status":"pending"}
 {"module":"github.com/aminvici/wasm","version":"v0.0.0-20260210004448-1bcd9a71f540","status":"pending"}
-{"module":"github.com/etherzero-org/go-etherzero","version":"v2.0.8+incompatible","status":"pending"}
+{"module":"github.com/etherzero-org/go-etherzero","version":"v2.0.8+incompatible","status":"passed"}
 {"module":"github.com/fiber/ai","version":"v0.1.2","status":"pending"}
 {"module":"github.com/jotchuadevz/xray-core","version":"v0.0.16","status":"pending"}
 {"module":"github.com/justwasm/go4js/src/cmd","version":"v0.0.2","status":"pending"}

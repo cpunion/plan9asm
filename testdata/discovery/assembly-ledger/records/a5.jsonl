@@ -7,7 +7,7 @@
 {"module":"github.com/ZergsLaw/net","version":"v0.58.0","status":"pending"}
 {"module":"github.com/aishen138/gtubox-xray-core","version":"v0.0.0-20260430150443-28cd9ccad116","status":"pending"}
 {"module":"github.com/arachnid/go-ethereum","version":"v1.5.2","status":"pending"}
-{"module":"github.com/glen0xfff/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
+{"module":"github.com/glen0xfff/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"passed"}
 {"module":"github.com/go-simd/crc32","version":"v0.0.0-20260908181101-5e83f8649a72","status":"pending"}
 {"module":"github.com/gorgonia/Tensor","version":"v0.9.24","status":"pending"}
 {"module":"github.com/graycodeai/tok","version":"v0.1.4","status":"pending"}

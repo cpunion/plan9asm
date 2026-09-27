@@ -10,7 +10,7 @@
 {"module":"github.com/couchbasedeps/crypto","version":"v0.53.0","status":"pending"}
 {"module":"github.com/flachnetz/startup/v2","version":"v2.10.38","status":"pending"}
 {"module":"github.com/go-fft/fft","version":"v0.0.0-20260831114610-598cacbd5c9a","status":"pending"}
-{"module":"github.com/jedisct1/go-aes","version":"v0.1.1","status":"pending"}
+{"module":"github.com/jedisct1/go-aes","version":"v0.1.1","status":"passed"}
 {"module":"github.com/kevinburke/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/lufia/try","version":"v0.5.1","status":"pending"}
 {"module":"github.com/newmanifold/go-ethereum","version":"v1.17.2","status":"pending"}

@@ -1,6 +1,6 @@
 {"module":"git.schwanenlied.me/yawning/chacha20","version":"v0.0.0-20190903091407-6d1cb28dc72c","status":"pending"}
 {"module":"github.com/Anykey-Nomad/imaging","version":"v0.0.0-20260701200637-2ec20dc9e5ec","status":"pending"}
-{"module":"github.com/CryptoGoAI/secp256k1","version":"v0.0.1-batch-affine.1","status":"pending"}
+{"module":"github.com/CryptoGoAI/secp256k1","version":"v0.0.1-batch-affine.1","status":"passed"}
 {"module":"github.com/DE8468/chacha20","version":"v0.0.0-20191002011852-9b120ce5c56a","status":"pending"}
 {"module":"github.com/Ethereum-optimism/op-geth","version":"v1.101702.3","status":"pending"}
 {"module":"github.com/IniZio/mutagen","version":"v0.18.1","status":"pending"}

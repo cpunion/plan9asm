@@ -3,7 +3,7 @@
 {"module":"github.com/M3DB/M3","version":"v1.5.0","status":"pending"}
 {"module":"github.com/MaaXYZ/MaaEnd/agent/go-service","version":"v0.0.0-20260921161315-33179cac319f","status":"pending"}
 {"module":"github.com/RegClient/regclient","version":"v0.11.6","status":"pending"}
-{"module":"github.com/Taraxa-project/taraxa-evm","version":"v1.8.22","status":"pending"}
+{"module":"github.com/Taraxa-project/taraxa-evm","version":"v1.8.22","status":"passed"}
 {"module":"github.com/Yawning/edwards25519","version":"v1.0.0-beta.3","status":"pending"}
 {"module":"github.com/aperturerobotics/circl","version":"v1.6.3","status":"pending"}
 {"module":"github.com/atoonk/packetio/netstack","version":"v0.0.0-20260912191401-6bc4ff1d99ce","status":"pending"}

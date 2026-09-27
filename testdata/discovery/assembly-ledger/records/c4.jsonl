@@ -2,11 +2,11 @@
 {"module":"github.com/Honny1/buildah","version":"v0.0.0-20260917094059-6ad05660bfe1","status":"pending"}
 {"module":"github.com/Tenderly/net-nitro","version":"v0.0.0-20260727074129-aea863015217","status":"pending"}
 {"module":"github.com/bobotu/myk","version":"v0.0.0-20200319053650-d0d28432a934","status":"pending"}
-{"module":"github.com/cedar2025/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
+{"module":"github.com/cedar2025/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"passed"}
 {"module":"github.com/consensys/gnark-CRYPTO","version":"v0.21.0","status":"pending"}
 {"module":"github.com/dgryski/go-stadtx","version":"v0.0.0-20181220175827-101ddca05f0b","status":"pending"}
 {"module":"github.com/kiryuhakipyatok/screenshot","version":"v0.0.0-20260831201422-7730f3b52676","status":"pending"}
-{"module":"github.com/klaytn/Klaytn","version":"v1.12.1","status":"pending"}
+{"module":"github.com/klaytn/Klaytn","version":"v1.12.1","status":"passed"}
 {"module":"github.com/leohalb/fyne/v2","version":"v2.8.0","status":"pending"}
 {"module":"github.com/matrixorigin/MatrixOne","version":"v1.2.4","status":"pending"}
 {"module":"github.com/microstack-tech/parallax","version":"v1.2.0","status":"pending"}

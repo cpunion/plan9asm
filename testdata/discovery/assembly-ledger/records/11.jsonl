@@ -5,7 +5,7 @@
 {"module":"github.com/aarzilli/delve","version":"v0.0.0-20251201141722-f5b361a03840","status":"pending"}
 {"module":"github.com/beevik/siv-go","version":"v0.0.0-20180922214919-5ff40651e2c4","status":"pending"}
 {"module":"github.com/customerio/roaring/v2","version":"v2.19.0","status":"pending"}
-{"module":"github.com/duckzland/fyne/v2","version":"v2.7.0","status":"pending"}
+{"module":"github.com/duckzland/fyne/v2","version":"v2.7.0","status":"not_applicable"}
 {"module":"github.com/erikkassubek/dedego","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
 {"module":"github.com/fsyyft-go/monorepo/kit/runtime","version":"v0.0.1","status":"pending"}
 {"module":"github.com/goplus/llgo/runtime","version":"v0.0.0-20260922045550-1f27d9d8b560","status":"pending"}

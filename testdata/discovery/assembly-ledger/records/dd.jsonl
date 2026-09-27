@@ -4,7 +4,7 @@
 {"module":"github.com/Klauspost/Compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/RoaringBitmap/roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/ScriptRock/crypto","version":"v1.1.0","status":"pending"}
-{"module":"github.com/as/shiny","version":"v0.8.2","status":"pending"}
+{"module":"github.com/as/shiny","version":"v0.8.2","status":"passed"}
 {"module":"github.com/couchbasedeps/golang-snappy","version":"v0.0.0-20170215233205-553a64147049","status":"pending"}
 {"module":"github.com/eleme/lindb","version":"v0.4.1","status":"pending"}
 {"module":"github.com/f4rd1n/xray-core","version":"v0.0.0-20260612230504-ba067510a653","status":"pending"}
