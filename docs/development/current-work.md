@@ -15,12 +15,17 @@ another module-index inventory scan.
   already an ancestor. Inspect status, worktrees and processes first.
 - `codex/pr40-shard25-replay-20260926` retains frozen `8134b3e` diagnostics.
   All its runners have finished; shard 29's final report was audited.
-- A separate persistent verification worktree is detached at `f151495`.
-  Its root `go test ./... -count=1 -timeout=20m` passed in 765 seconds. Official
-  five-architecture classification and strict benchmark passed there:
-  184/184 files, no N/A, 28 target-seconds plus four seconds for driver build.
-  This predates the network-retry and guarded-index commits; it is not
-  current-head full-suite evidence.
+- A separate persistent verification worktree is frozen at `1c42a95`.
+  Root `go test ./... -count=1 -timeout=20m` passed in 1,040 seconds; both
+  nested CLI suites passed. Official five-architecture classification and
+  strict benchmark passed: 184/184 files, no N/A, 25 target-seconds plus six
+  seconds for driver build. Shards 6, 16 and 26 passed; all its runners have
+  finished. Preserve the reports. They predate the affine proof work below.
+- `codex/pr40-evidence-20260927` separately records validated progress for
+  that snapshot: 377 passed, 84 source N/A, one invalid-source skip, zero
+  failures and 4,321 pending. The updater also reads back its own output.
+  This is incomplete historical evidence, not current-development success;
+  do not import it into a changed source snapshot as current proof.
 - Use Go 1.27.1 and LLVM 22 for external modules. Put the actual Go binary in
   PATH; setting only GOTOOLCHAIN can select a different child compiler.
   Required cross execution uses checksum-pinned QEMU 10.2.3.
@@ -55,6 +60,13 @@ another module-index inventory scan.
 - `43a576e`: fix the whole VPBROADCASTB/W/D/Q family's overlapping X/Y/Z views
   and inactive masked memory reads. Its 108 source/width/mask cases compile
   on three OS targets and execute on Darwin/Rosetta and required Linux tests.
+- `c9122cf` through `e9f131a`: add bounded modular-affine pool analysis,
+  guarded CMN ranges, exact AND results, transient address cancellation,
+  independent origin offsets, TBZ/TBNZ path constraints and pre-projection
+  intersections. Preserve exactly one relocation origin: two address aliases
+  added together must be rejected. Unknown effects/cycles and exhausted proof
+  budgets remain failures. See `arm64_raw_pool_affine*.go` and
+  `arm64_raw_pool_symbolic.go`; do not treat an ADR as an ordinary constant.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -71,6 +83,13 @@ previously failing files passed all 12 three-OS object compilations. A separate
 Linux scalar oracle passed 40 scenarios per Uint8/16/32/64 decoder (160 total),
 covering all 16 selectors and mixed helper transitions. Diagnostic artifacts
 are under `_out/knox-continuation-*`; these are not final shard/ledger evidence.
+The affine batch passed all focused pool tests, Go 1.20 compatibility, vet,
+three-OS LLVM 22 objects and Darwin/Linux-QEMU runtime oracles (80 input pairs).
+TBZ/TBNZ guard tests cover all 64 bits and both edge directions. At `e9f131a`,
+official classification, the ARM64 decoder-corpus gate and the strict benchmark
+passed again: 184/184 files, zero N/A, 31 target-seconds plus two seconds build.
+These classification and compilation gates do not establish every instruction's
+runtime semantics. Keep the final full-suite and external-corpus gates separate.
 
 ## External evidence and remaining real failures
 
@@ -80,14 +99,17 @@ The latest direct SIMD replay (`_out/simd-guard.json`) still fails both
 
 - **SIMD**: `github.com/sebishogun/simd@v1.21.1` and its mirror have 45/47
   applicable ARM64 files passing in earlier three-OS diagnostics. The two
-  remaining bytes files need relational index bounds and loop reasoning,
-  including derived aliases and post-indexed pair loads. The apparent branch
+  remaining bytes files still need loop reasoning and post-indexed pair loads.
+  The new proof derives length 1..19, the eight-lane path's length 8..15,
+  scaled delta 64..120 and mask value 8 in the actual NEON source. Scalar
+  countdown bounds and vector-loop pointer writeback are still unresolved.
+  The apparent branch
   word `0x540be400` is numeric pool data, not invalid source. Implement in
   `arm64_raw_pool_*.go`; do not relax the proof merely to relocate the pool.
-- **KnoxDB**: the canonical v0.2.9 failures are repaired as described above.
-  Rerun complete candidates/shards for `blockwatch.cc/knoxdb`,
-  `github.com/blockwatch-cc/knoxdb` and `github.com/os2357/knx` before updating
-  the ledger. Empty Go declarations do not imply callable helpers: private
+- **KnoxDB**: all three complete v0.2.9 candidates (`blockwatch.cc/knoxdb`,
+  `github.com/blockwatch-cc/knoxdb`, `github.com/os2357/knx`) passed at `1c42a95`:
+  each has 29 applicable files and 87 object translations. Shards 6/16/26
+  passed. Empty Go declarations do not imply callable helpers: private
   entry proof is essential. Never apply signature widening to ordinary calls.
 - **Native-layout/JIT**: GopherJRE, GoJIT and both case-distinct Sharkie module
   paths still fail. Their source observes exact code offsets or transfers
@@ -118,8 +140,8 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 
 ## Next actions and completion gates
 
-1. Freeze the new continuation/broadcast batch for full gates and rerun
-   KnoxDB shards 6/16/26. Retry network failures in shards 4/10 with current
+1. Preserve the validated 6/16/26 evidence. Retry network failures in shards
+   4/10 with current
    bounded retry support; never reclassify them as source N/A.
 2. Continue real semantic fixes above with red/green and runtime tests.
    The address-proof work does not yet resolve the two complete SIMD files.
@@ -132,7 +154,7 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 5. Batch-push the allowed fork, update PR body with validated scan/coverage
    funnels, and inspect current-head CI/review/coverage before making ready.
 
-The committed assembly evidence remains stale and incomplete: 4,783 candidates,
+The development branch's assembly evidence remains stale and incomplete: 4,783 candidates,
 4,624 pending, 126 passed, 32 N/A and one failed at its older revision. Do not
 hand-edit it to match diagnostic counts. Reports/binaries belong in ignored
 `_out/`; clean only owned generated files and candidate caches, never shared
