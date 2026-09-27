@@ -11,10 +11,12 @@ another module-index inventory scan.
   failures (unexpanded ARM64 displacement macros and runtime-sized syscall
   frames) plus one Windows test job with four fixture failures. All those
   logs were inspected; the repairs were pushed as `0d96d26`. Its run
-  `36307233650` has passed all 10 standard-library lanes, the Linux root
+  `36307233650` has passed all 10 standard-library lanes, the Linux/Windows root
   matrix, race, cross-runtime, benchmark, coverage and Codecov patch checks.
-  Windows root tests and the 32 external shards are still unfinished at this
-  checkpoint. Inspect live results; this is not a complete green CI run.
+  At 09:30 UTC on 2026-09-27, 60 jobs passed, none failed, eight external
+  shards were running and 24 were queued. All 11 preceding failed jobs are
+  repaired, but the 32-shard replay and aggregate are still incomplete.
+  Inspect live results; this is not a complete green CI run.
   Earlier ledger, FFR-oracle and Go-download-bootstrap repairs have passed
   the affected build, cross-runtime and old-Go root CI checks. Inspect live
   checks rather than treating partial results as green CI.
@@ -76,8 +78,9 @@ another module-index inventory scan.
 - Windows fixture repair `ebf6579` adds the executable suffix, tests both
   LF/CRLF workflow content, and builds a native fake Go executable whose
   selection and auto/local behavior are asserted. Focused Go 1.20/1.27 and
-  the full corpus-tool suite pass locally; actual Windows root results still
-  need the running CI job. The previous Windows failures were fixture gaps.
+  the full corpus-tool suite pass locally. Actual Windows CI now passes:
+  root 1,566.780 seconds with 89.6% statement coverage, and both CLI suites
+  passed. The previous Windows failures were fixture gaps.
 - Local, not yet pushed: `735fa37` rejects effective-address aliases such as
   `$8(RSP)` before moving a dynamic stack. The prefix must account for every
   live address, not just explicit register copies. Red/green and runtime
@@ -99,9 +102,10 @@ another module-index inventory scan.
   All 512 signed displacements and 16 vector lengths are checked. Three-OS
   objects and 128 Linux/QEMU byte-and-canary cases pass. Stores, short pools,
   negative/oversized footprints and mode changes reject. Focused pool tests,
-  Go 1.20 and vet pass. The development worktree is frozen at this revision
-  for another full suite (`_out/root-tests-sve-pool-memory.log`); inspect its
-  actual process/log before changing the tree. All these batches remain local
+  Go 1.20 and vet pass. The development worktree completed another full suite
+  at this revision in 616 seconds (`_out/root-tests-sve-pool-memory.log`),
+  plus the official five-architecture and ARM64 Go/x/arch gates. Its runners
+  have finished. All these batches remain local
   to avoid cancelling the current CI shards. Refresh derived provenance
   after the final source checkpoint and before the next push.
 - Metadata-download bootstrap and its synthetic retry fixture use the root
