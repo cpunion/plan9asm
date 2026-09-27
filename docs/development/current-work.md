@@ -10,9 +10,9 @@ another index scan. Older detailed checkpoints remain in Git history.
   `cpunion:codex/expand-ecosystem-corpus-20260913`, never `origin` or
   `xgo-dev`. Upstream `main@7cc8c0f` is already an ancestor. Inspect
   remotes, worktrees, processes and live checks before continuing.
-- Pushed head: `b93666f5`, CI run `36311131855`. At 12:03 UTC on
-  2026-09-27 it had 67 successful jobs, four failures, eight running and
-  13 queued. This is not complete green CI. Its exact-source local full root
+- Pushed head: `b93666f5`, CI run `36311131855`. The latest observed
+  checkpoint on 2026-09-27 has 69 successful jobs, five failures, eight
+  running and ten queued. This is not complete green CI. Its exact-source local full root
   suite passed in 627.880 seconds, including all root subpackages.
 - The user explicitly requires this CI run to finish once. Do not push,
   cancel or rerun it; accumulate verified local commits meanwhile.
@@ -24,13 +24,15 @@ another index scan. Older detailed checkpoints remain in Git history.
   at `9dfb793b` (1.004/2.473 seconds). The full root suite at that snapshot
   also passed in 680.377 seconds, with all root subpackages; its log is
   `_out/root-tests-mask-anchor-9dfb793b.log`. Inspect
-  revision/process before changing a frozen tree. The later `95ab1bc6`
-  guard-intersection fix requires its own subsequent full gate.
+  revision/process before changing a frozen tree. The `95ab1bc6`
+  guard-intersection fix passed the full root suite at `03182350` in
+  712.316 seconds, including all root subpackages. Its log is
+  `_out/root-tests-guard-03182350.log`.
 - `codex/pr40-ci-evidence-b93666f5` retains current CI artifacts separately
-  in `_out/ci-b936-reports`. Evidence `dac24b6c` has eleven complete reports:
-  shards 1/2/3/4/6/7/8 pass; 0/5/9/11 fail. There are 1,350 passed versions,
-  283 source N/A, two invalid-source skips, four failed and 3,144 pending;
-  27,075 translations. Complete/verified remain false. Do not combine this
+  in `_out/ci-b936-reports`. Evidence `ab1d3b1f` has fourteen complete reports:
+  shards 1/2/3/4/6/7/8/10/13 pass; 0/5/9/11/15 fail. There are 1,696 passed
+  versions, 365 source N/A, three invalid-source skips, five failed and
+  2,714 pending; 34,205 translations. Complete/verified remain false. Do not combine this
   source with earlier reports or promote it to the newer development source.
 - `codex/pr40-ci-evidence-0d96d26` preserves 12 validated previous-CI
   reports: four complete and eight partial. Evidence `b434d36e` has 1,046
@@ -132,6 +134,15 @@ library lanes and Windows. Subsequent external failures remain separate.
   official five-arch gate pass. Benchmark: 184/184 files, zero N/A, 24 target-
   seconds plus two build-seconds.
   Diagnostics use `_out/pool-mask-nonzero-*`.
+- `7c07c82b`: retain unchanged expressions and independently invariant
+  constraints across a proved earlier loop. Changing and inactive predicates
+  are discarded; counter entry cannot use its own or an enclosing latch.
+  Red unit/runtime overlays reproduce the original failure. Full pool tests
+  (61.387 seconds), Go 1.20, three-OS objects, Darwin/Linux execution, vet,
+  official coverage and benchmark (184/184 files, zero N/A, 24 target-seconds
+  plus two build-seconds) pass. Logs use `_out/pool-sequential-*`; the old
+  runtime overlay is in the hotfix tree at `03182350` and becomes stale if
+  that tree advances.
 
 Logs use ignored `_out/pool-sve-contiguous-*`, `sve-dup-indexed-*`,
 `pool-sve-copy-*` and `pool-masked-logical-*`. The masked before-fix
@@ -152,12 +163,16 @@ Later logs use `_out/pool-stride-*`, `_out/pool-carried-stride-*`,
   correct NZCV provenance. Loop 74..121 subtracts invariant RDVL from X20
   until X20 equals X7. X7 is length AND (VL-1). Entry length is 8..19.
   Register-CMP guards now prove length 16..19 at VL=16; X20-X7 equals 16.
-  The complete pool-use proof succeeds at VL=16. At higher VL the first
-  vector loop is proved unreachable, and loop 153..176 has an independently
-  proved -16/-8 counter with step +8. Its carried pointer range is 12..132;
-  reads 155/157 are bounded. The whole function still fails for VL>=32:
-  inspect later scalar paths/loops and proof budgets. Do not claim a module
-  pass. `_out/pool-mask-anchor-final-diagnostic.log` has this last probe.
+  The complete `parseIntsSVE2` pool-use proof now succeeds at tested VLs
+  16/32/48/64/128/256. At higher VL the first vector loop is unreachable;
+  loop 153..176 has a proved -16/-8 counter with step +8, and the later
+  scalar loop has count 1..7. See `_out/pool-sequential-relational-diagnostic.log`.
+  Whole-file LLVM testing on three OS targets now reaches the next function,
+  `parseUintsSVE2`, which still fails. Its first loop 91..137 is not proved
+  one-iteration at VL=16; at higher VL that loop is unreachable but later
+  loops still need analysis. Logs are `_out/simd-sequential.log`,
+  `_out/parse-uint-sve-disasm.log` and
+  `_out/pool-sequential-unsigned-diagnostic.log`. Do not claim a module pass.
   Ignored `pool-function-probe_test.go` and `parse-int-sve-disasm.log`
   retain diagnostics. Do not loosen a bound because the load is supported.
 - **Native-layout/JIT**: GopherJRE, GoJIT and both case-distinct Sharkie
