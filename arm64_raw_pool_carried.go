@@ -27,8 +27,8 @@ func (flow *arm64RawPoolValues) loopExpressionDelta(head, latch int, expression 
 }
 
 // A carried address and the remaining count can change together even though
-// they occupy unrelated registers: p -= 8 and remaining -= 1 preserve
-// p-8*remaining. Prove that invariant from the external entries, then combine
+// they occupy unrelated registers: p -= 64 and remaining += 8 preserve
+// p+8*remaining. Prove that invariant from the external entries, then combine
 // it with the independently established counter range. No loop is unrolled or
 // assumed to run once, and entry analysis cannot recursively use this rule.
 func (flow *arm64RawPoolValues) carriedLoopBound(head int, query arm64PoolAffine, counter arm64PoolConstraint) (arm64PoolInterval, bool) {
@@ -37,14 +37,14 @@ func (flow *arm64RawPoolValues) carriedLoopBound(head int, query arm64PoolAffine
 		return arm64PoolInterval{}, false
 	}
 	step, valid := flow.loopExpressionDelta(head, latch, counter.expression)
-	if !valid || step != -1 {
+	if !valid || step == 0 || step < -(1<<30) || step > 1<<30 {
 		return arm64PoolInterval{}, false
 	}
 	delta, valid := flow.loopExpressionDelta(head, latch, query)
-	if !valid || delta < -(1<<30) || delta > 1<<30 {
+	if !valid || delta < -(1<<30) || delta > 1<<30 || delta%step != 0 {
 		return arm64PoolInterval{}, false
 	}
-	scale := -delta
+	scale := delta / step
 	invariant := query
 	if !invariant.add(counter.expression, -scale) {
 		return arm64PoolInterval{}, false
