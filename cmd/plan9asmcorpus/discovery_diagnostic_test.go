@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,5 +187,40 @@ func TestDiscoveryProgressRejectsInfrastructureSourceNotApplicable(t *testing.T)
 			}
 			t.Fatal("fixture contains no candidate")
 		})
+	}
+}
+
+func TestDiscoveryHTTPResponseEOFIsRetryable(t *testing.T) {
+	for _, method := range []string{
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut,
+		http.MethodDelete, http.MethodPatch, http.MethodOptions,
+		http.MethodConnect, http.MethodTrace,
+	} {
+		for _, scheme := range []string{"http", "https"} {
+			failure := &url.Error{Op: method, URL: scheme + "://example.com/sumdb/supported", Err: io.EOF}
+			for _, diagnostic := range []string{
+				failure.Error(),
+				"verifying go.mod: initializing sumdb.Client: checking tree#1: " + failure.Error(),
+				failure.Error() + "\r\n",
+			} {
+				if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) || !isDiscoveryRetryableNetworkFailure(diagnostic) {
+					t.Errorf("HTTP response EOF must be an infrastructure retry: %s", diagnostic)
+				}
+			}
+			terminal := "checksum mismatch\n" + failure.Error()
+			if isDiscoveryRetryableNetworkFailure(terminal) {
+				t.Errorf("HTTP EOF must not override checksum failure: %s", terminal)
+			}
+		}
+	}
+	for _, diagnostic := range []string{
+		"source.s:12: EOF",
+		"EOF",
+		`Get "file:///source.s": EOF`,
+		`Get "https://example.com/module": EOF in source`,
+	} {
+		if isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Errorf("non-HTTP EOF was retried as a network failure: %s", diagnostic)
+		}
 	}
 }

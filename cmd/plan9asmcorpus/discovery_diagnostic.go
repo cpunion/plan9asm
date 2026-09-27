@@ -1,8 +1,16 @@
 package main
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
+)
+
+// net/url.Error quotes the request URL. Require that HTTP request envelope
+// instead of retrying any source/file diagnostic that happens to end in EOF.
+var discoveryHTTPResponseEOFPattern = regexp.MustCompile(
+	`(?m)(?:^|[ :\t])(?:get|head|post|put|delete|patch|options|connect|trace)` +
+		` "https?://[^"\r\n]+": eof[ \t]*\r?$`,
 )
 
 func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
@@ -38,6 +46,9 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 		if strings.Contains(diagnostic, marker) {
 			return true, false
 		}
+	}
+	if discoveryHTTPResponseEOFPattern.MatchString(diagnostic) {
+		return true, true
 	}
 	for _, marker := range []string{
 		"too many requests",

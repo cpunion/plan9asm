@@ -42,6 +42,8 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 		{"recover", http.StatusServiceUnavailable, 2, 3, false},
 		{"bounded-retries", http.StatusServiceUnavailable, 9, 3, true},
 		{"permanent-not-found", http.StatusNotFound, 9, 1, true},
+		{"closed-response-recovers", 0, 2, 3, false},
+		{"closed-response-bounded", 0, 9, 3, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var requests atomic.Int32
@@ -49,6 +51,15 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 				switch r.URL.Path {
 				case "/" + module + "/@v/" + version + ".info":
 					if requests.Add(1) <= test.failures {
+						if test.status == 0 {
+							conn, _, err := w.(http.Hijacker).Hijack()
+							if err != nil {
+								t.Errorf("hijack proxy response: %v", err)
+								return
+							}
+							conn.Close()
+							return
+						}
 						http.Error(w, http.StatusText(test.status), test.status)
 						return
 					}
@@ -74,7 +85,11 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 			if (err != nil) != test.wantErr || requests.Load() != test.wantRuns {
 				t.Fatalf("download requests=%d, error=%v; want requests=%d, error=%v", requests.Load(), err, test.wantRuns, test.wantErr)
 			}
-			if err != nil && !strings.Contains(err.Error(), http.StatusText(test.status)) {
+			wantDiagnostic := http.StatusText(test.status)
+			if test.status == 0 {
+				wantDiagnostic = ": EOF"
+			}
+			if err != nil && !strings.Contains(err.Error(), wantDiagnostic) {
 				t.Fatalf("lost final proxy diagnostic: %v", err)
 			}
 			if _, err := os.Stat(work); !os.IsNotExist(err) {
