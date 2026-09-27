@@ -76,6 +76,8 @@ func arm64RawPoolAffineIR(t *testing.T, triple string) string {
 		"and x7, x3, #24", "sub x7, x7, #8", "ldr q0, [x9, x7]", "str q0, [x0, #16]",
 		"sub x10, x9, x1, lsl #3", "add x10, x10, x1, lsl #3", "ldr w10, [x10]", "str x10, [x0, #32]",
 		"mov x11, x9", "cbz x2, #8", "add x11, x11, #8", "ldr x11, [x11]", "str x11, [x0, #40]",
+		"ldr x1, [x0, #48]", "ldr x2, [x0, #56]", "sub x3, x2, x1", "cmp x3, #1", "b.hi #20",
+		"sub x10, x9, x1, lsl #3", "add x10, x10, x2, lsl #3", "ldr x10, [x10]", "str x10, [x0, #64]",
 		"mov x9, xzr", "ret",
 	}
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
@@ -142,17 +144,20 @@ int main(void) {
   for (unsigned i = 0; i < sizeof(starts) / sizeof(starts[0]); i++) {
     for (unsigned j = 0; j < sizeof(lengths) / sizeof(lengths[0]); j++) {
       uint64_t n = lengths[j];
-      uint64_t result[8] = {0x1234, 0, 0, 0, 0, 0, 0, 0x5678};
+      uint64_t result[11] = {0x1234, 0, 0, 0, 0, 0, 0, starts[i], starts[i] + n, 0, 0x5678};
       pool_affine(result + 1, starts[i] + n, starts[i]);
       uint64_t expected[2] = {0, 0};
       if (n >= 8 && n <= 15) memcpy(expected, words, sizeof(words));
       uint64_t joined;
       memcpy(&joined, words + (starts[i] != 0 ? 2 : 0), sizeof(joined));
-      if (result[0] != 0x1234 || result[7] != 0x5678 ||
+      uint64_t loaded = 0;
+      if (n <= 1) memcpy(&loaded, words + n * 2, sizeof(loaded));
+      if (result[0] != 0x1234 || result[10] != 0x5678 ||
           result[1] != (n >= 1 && n <= 15 ? bytes[n] : 0) ||
           result[2] != (n <= 3 ? words[n] : 0) ||
           result[3] != expected[0] || result[4] != expected[1] ||
-          result[5] != words[0] || result[6] != joined) return 1;
+          result[5] != words[0] || result[6] != joined ||
+          result[7] != starts[i] || result[8] != starts[i] + n || result[9] != loaded) return 1;
     }
   }
   return 0;

@@ -153,6 +153,9 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		flow.affineActive = make(map[arm64PoolAffineQuery]bool)
 		flow.affineCache = make(map[arm64PoolAffineQuery]arm64PoolInterval)
 	}
+	if len(flow.affineActive) == 0 {
+		flow.affineWork = 0
+	}
 	flow.affineActive[query] = true
 	defer func() {
 		delete(flow.affineActive, query)
@@ -171,9 +174,10 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 		found = true
 	}
 	for steps := 0; len(queue) > 0; steps++ {
-		if steps >= 4096 {
+		if steps >= 4096 || flow.affineWork >= 16384 {
 			return arm64PoolUnknownInterval
 		}
+		flow.affineWork++
 		state := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
 		if visited[state] {
@@ -187,7 +191,7 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				value := constraint.expression.constant
 				impossible = impossible || value < constraint.interval.low || value > constraint.interval.high
 			}
-			if value, ok := state.expression.constrainedBy(constraint); ok {
+			if value, ok := flow.affineConstraintBound(state.at, state.expression, constraint); ok {
 				if value.low > bound.low {
 					bound.low = value.low
 				}

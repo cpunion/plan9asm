@@ -23,6 +23,8 @@ func TestARM64RawPoolAliases(t *testing.T) {
 		{"alias-chain", "add x10, x9, #16\nsub x12, x10, #8\nldr x0, [x12]\nmov x10, xzr", true},
 		{"transient-offset-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
 		{"transient-add-cancelled", "add x10, x9, x1, lsl #3\nsub x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
+		{"transient-guarded-difference", "ldr x1, [x0]\nldr x2, [x0, #8]\nsub x3, x2, x1\ncmp x3, #5\nb.hi #16\nsub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
+		{"transient-guarded-overrun", "ldr x1, [x0]\nldr x2, [x0, #8]\nsub x3, x2, x1\ncmp x3, #6\nb.hi #16\nsub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
 		{"transient-offset-not-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
 		{"transient-index-clobbered", "sub x10, x9, x1\nmov x1, x2\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
 		{"transient-flags-observed", "sub x10, x9, x1\ncmp x10, #0\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
