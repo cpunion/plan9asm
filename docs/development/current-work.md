@@ -176,6 +176,17 @@ overlays under `_out/` are not evidence; keep them synchronized before use.
   109 passed + 26 source N/A + one lowercase Sharkie native-layout failure;
   both reports passed their individual integrity audits. These older reports
   cannot be combined with the clean `cc307d5` report.
+- Frozen `8134b3e` shard 6 completed with 121 passed + 30 source N/A + one
+  KnoxDB failure. Shard 26 completed with 121 passed + 24 source N/A + the
+  same KnoxDB failure; its large `llamawasm2go` candidate passed. Shard 15
+  completed with 90 passed + 24 source N/A + one SIMD mirror failure: 45 of
+  its 47 applicable ARM64 assembly files passed and the two `parseInts`
+  constant-pool files failed. Each report passed its individual integrity
+  audit; none is a passing shard or current-source aggregate evidence.
+- CI's discovered-corpus and aggregate jobs are now pinned to Go 1.27.1
+  instead of a floating 1.27.x patch release. `actionlint` passed. All three
+  KnoxDB module paths still resolve `@latest` to v0.2.9, so none qualifies
+  for the old-version superseded rule.
 - `simd`'s apparent raw branch `0x540be400` is an inline numeric constant
   after the function body, not evidence of invalid source. Keep its two
   `parseInts` files failed until the pool-address and alias proof is sound.
