@@ -10,9 +10,9 @@ another index scan. Older detailed checkpoints remain in Git history.
   `cpunion:codex/expand-ecosystem-corpus-20260913`, never `origin` or
   `xgo-dev`. Upstream `main@7cc8c0f` is already an ancestor. Inspect
   remotes, worktrees, processes and live checks before continuing.
-- Pushed head: `b93666f5`, CI run `36311131855`. At 11:45 UTC on
-  2026-09-27 it had 67 successful jobs, three failures, eight running and
-  14 queued. This is not complete green CI. Its exact-source local full root
+- Pushed head: `b93666f5`, CI run `36311131855`. At 12:03 UTC on
+  2026-09-27 it had 67 successful jobs, four failures, eight running and
+  13 queued. This is not complete green CI. Its exact-source local full root
   suite passed in 627.880 seconds, including all root subpackages.
 - The user explicitly requires this CI run to finish once. Do not push,
   cancel or rerun it; accumulate verified local commits meanwhile.
@@ -21,13 +21,16 @@ another index scan. Older detailed checkpoints remain in Git history.
   (680 seconds) and `d9477276` (691 seconds), including all root subpackages.
   Logs are `_out/root-tests-compare-loops-8a3cb6c9.log` and
   `_out/root-tests-strides-d9477276.log`. Both CLI suites previously passed
-  at `a880ec19`. Inspect revision/process before changing a frozen tree;
-  the next full gate must include `75962bd3` and `f271511f`.
+  at `9dfb793b` (1.004/2.473 seconds). The full root suite at that snapshot
+  also passed in 680.377 seconds, with all root subpackages; its log is
+  `_out/root-tests-mask-anchor-9dfb793b.log`. Inspect
+  revision/process before changing a frozen tree. The later `95ab1bc6`
+  guard-intersection fix requires its own subsequent full gate.
 - `codex/pr40-ci-evidence-b93666f5` retains current CI artifacts separately
-  in `_out/ci-b936-reports`. Evidence `cbb63c68` has ten complete reports:
-  shards 1/2/3/4/6/7/8 pass; 5/9/11 fail. There are 1,220 passed versions,
-  255 source N/A, two invalid-source skips, three failed and 3,303 pending;
-  24,627 translations. Complete/verified remain false. Do not combine this
+  in `_out/ci-b936-reports`. Evidence `dac24b6c` has eleven complete reports:
+  shards 1/2/3/4/6/7/8 pass; 0/5/9/11 fail. There are 1,350 passed versions,
+  283 source N/A, two invalid-source skips, four failed and 3,144 pending;
+  27,075 translations. Complete/verified remain false. Do not combine this
   source with earlier reports or promote it to the newer development source.
 - `codex/pr40-ci-evidence-0d96d26` preserves 12 validated previous-CI
   reports: four complete and eight partial. Evidence `b434d36e` has 1,046
@@ -122,6 +125,13 @@ library lanes and Windows. Subsequent external failures remain separate.
   objects, Darwin execution, Linux/QEMU, vet and benchmark evidence. The
   latest benchmark compiled 184/184 files, zero N/A, 24 target-seconds plus
   two build-seconds; the official five-arch gate passes.
+- `95ab1bc6`: intersect masked-difference guards before applying a negative
+  displacement, including a nonzero difference followed by subtracting one.
+  Unit and three-OS runtime-fixture red logs reproduce the old failure;
+  all pool tests (60 seconds), Go 1.20, Darwin/Linux execution, vet and the
+  official five-arch gate pass. Benchmark: 184/184 files, zero N/A, 24 target-
+  seconds plus two build-seconds.
+  Diagnostics use `_out/pool-mask-nonzero-*`.
 
 Logs use ignored `_out/pool-sve-contiguous-*`, `sve-dup-indexed-*`,
 `pool-sve-copy-*` and `pool-masked-logical-*`. The masked before-fix
@@ -154,6 +164,9 @@ Later logs use `_out/pool-stride-*`, `_out/pool-carried-stride-*`,
   module paths observe code offsets or exchange registers/stack with
   generated native code. Widening branch boundaries is insufficient.
   There is no authorized generic native-layout skip.
+  Current CI shard 0 fails GopherJRE's raw RIP-relative continuation address
+  outside its directive group. Its JIT also expects DI/SI register and stack
+  contracts; accepting the byte displacement alone is not a runtime fix.
   Current CI shard 9 fails GoJIT on the `0xDEADBE00` marker. Its Go source
   searches function bytes and jumps past the marker; this is data/native
   layout, not an invalid executable opcode exception. A user question about
