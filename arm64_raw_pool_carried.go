@@ -57,21 +57,36 @@ func (flow *arm64RawPoolValues) carriedLoopBound(head int, query arm64PoolAffine
 	// Keep the entire relation while substituting entry definitions. Bounding
 	// p and remaining separately would lose their correlation before the
 	// cancellation that establishes the invariant constant.
-	value := entry.invariantIntervalProof(head, invariant, true)
-	if value == arm64PoolUnknownInterval {
-		work := entry.affineWork
-		value = entry.affineInterval(head, invariant)
-		entry.affineWork += work
+	nearest := counter.interval.low
+	if nearest > math.MaxInt64 {
+		nearest = counter.interval.high
 	}
-	flow.affineWork += entry.affineWork
-	if value == arm64PoolUnknownInterval || flow.affineWork >= 16384 {
-		return arm64PoolInterval{}, false
+	for _, anchor := range []uint64{0, nearest} {
+		// Shift the reference count, not the represented address. An invariant
+		// spanning unsigned zero may become one ordinary interval when centered
+		// at the counter endpoint nearest zero. No wraparound is clamped away.
+		anchored := invariant
+		anchored.constant += uint64(scale) * anchor
+		value := entry.invariantIntervalProof(head, anchored, true)
+		if value == arm64PoolUnknownInterval {
+			work := entry.affineWork
+			value = entry.affineInterval(head, anchored)
+			entry.affineWork += work
+		}
+		flow.affineWork += entry.affineWork
+		if flow.affineWork >= 16384 {
+			return arm64PoolInterval{}, false
+		}
+		if value == arm64PoolUnknownInterval {
+			continue
+		}
+		result := arm64PoolIntervalImage(counter.interval, scale, value.low-uint64(scale)*anchor)
+		width := value.high - value.low
+		if result == arm64PoolUnknownInterval || result.high > math.MaxUint64-width {
+			continue
+		}
+		result.high += width
+		return result, true
 	}
-	result := arm64PoolIntervalImage(counter.interval, scale, value.low)
-	width := value.high - value.low
-	if result.high > math.MaxUint64-width {
-		return arm64PoolInterval{}, false
-	}
-	result.high += width
-	return result, true
+	return arm64PoolInterval{}, false
 }

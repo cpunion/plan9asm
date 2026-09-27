@@ -48,6 +48,24 @@ func TestARM64PoolCounterStrideFlags(t *testing.T) {
 	}
 }
 
+func TestARM64PoolCounterStrideRoundsProvedResidue(t *testing.T) {
+	for _, ascending := range []bool{false, true} {
+		lines := []string{"and x1,x0,#8", "add x1,x1,#8"}
+		initial, want, delta := arm64PoolInterval{1, 19}, arm64PoolInterval{8, 16}, ^uint64(7)
+		if ascending {
+			lines = append(lines, "neg x1,x1")
+			initial = arm64PoolInterval{^uint64(18), ^uint64(0)}
+			want, delta = arm64PoolInterval{^uint64(15), ^uint64(7)}, 8
+		}
+		at := len(lines)
+		flow := arm64PoolTestFlow(t, append(lines, "ret"))
+		got, proved := flow.counterStrideBound(at, arm64PoolRegisterExpression(1), initial, delta)
+		if !proved || got != want {
+			t.Fatalf("ascending=%v: residue-refined bound=%+v proved=%v, want %+v", ascending, got, proved, want)
+		}
+	}
+}
+
 func TestARM64PoolCounterResidueMasks(t *testing.T) {
 	for _, test := range []struct {
 		lines []string

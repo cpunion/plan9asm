@@ -22,9 +22,9 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		lines = append(lines, "cmp x1,#16", "b.lo #0", "cmp x1,#19", "b.hi #0",
 			"mov x10,x9", "mov x11,x1", "and x4,x1,x2")
 		head := len(lines)
-		// A second iteration would read beyond the sixteen-byte pool. The
+		// A second iteration would read beyond the twenty-four-byte pool. The
 		// relational zero proof must establish that the backedge is impossible.
-		lines = append(lines, "ldr x5,[x10],#16", "sub x11,x11,x6", compare)
+		lines = append(lines, "ldr x5,[x10],#24", "sub x11,x11,x6", compare)
 		lines = append(lines, fmt.Sprintf("b.ne #%d", (head-len(lines))*4),
 			fmt.Sprintf("str x5,[x0,#%d]", 64+index*8), "mov x10,xzr")
 		lines[start+1] = fmt.Sprintf("b.lo #%d", (len(lines)-start-1)*4)
@@ -33,7 +33,7 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	// The alternative load is genuinely out of bounds. Only the proved
 	// incoming 16..19 interval makes its branch impossible.
 	lines = append(lines, "and x12,x1,#3", "add x12,x12,#16", "mov x6,#32",
-		"cmp x12,x6", "b.hs #12", "ldr x5,[x9]", "b #8", "ldr x5,[x9,#16]",
+		"cmp x12,x6", "b.hs #12", "ldr x5,[x9]", "b #8", "ldr x5,[x9,#24]",
 		"str x5,[x0,#80]")
 	for index := 0; index < 4; index++ {
 		ascending, carried := index&1 != 0, index&2 != 0
@@ -56,6 +56,24 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		lines = append(lines, fmt.Sprintf("cbnz x11,#%d", (head-len(lines))*4),
 			fmt.Sprintf("str x12,[x0,#%d]", 88+index*8), "mov x10,xzr")
 	}
+	lines = append(lines, "mov x6,#-25")
+	for index, mask := range []string{"and x10,x11,#24", "ands x10,x11,#24", "bic x10,x11,x6", "bics x10,x11,x6"} {
+		lines = append(lines, "and x11,x1,#15", "add x11,x11,#8", mask,
+			"sub x10,x11,x10", "ldrb w5,[x9,x10]", fmt.Sprintf("str x5,[x0,#%d]", 120+index*8))
+	}
+	for index, ascending := range []bool{false, true} {
+		lines = append(lines, "and x11,x1,#8", "add x11,x11,#8", "and x12,x1,#7",
+			"add x10,x11,x12", "sub x10,x10,#4", "add x10,x9,x10", "mov x12,#0")
+		update := "sub x11,x11,#8"
+		if ascending {
+			lines = append(lines, "neg x11,x11")
+			update = "add x11,x11,#8"
+		}
+		head := len(lines)
+		lines = append(lines, "ldrb w5,[x10],#-8", "add x12,x12,x5", update)
+		lines = append(lines, fmt.Sprintf("cbnz x11,#%d", (head-len(lines))*4),
+			fmt.Sprintf("str x12,[x0,#%d]", 152+index*8), "mov x10,xzr")
+	}
 	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
@@ -63,7 +81,10 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
-	source.WriteString("WORD $0x17b4a140\nWORD $0x17b4a141\nWORD $0x17b4a142\nWORD $0x17b4a143\nRET\n")
+	for index := 0; index < 6; index++ {
+		fmt.Fprintf(&source, "WORD $%#x\n", 0x17b4a140+index)
+	}
+	source.WriteString("RET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
@@ -106,15 +127,19 @@ func TestARM64RawPoolMaskedLLVM(t *testing.T) {
 
 const arm64RawPoolMaskedMain = `
 #include <stdint.h>
+#include <string.h>
 extern void pool_masked(uint64_t *, uint64_t);
 int main(void) {
   const uint64_t inputs[] = {0, 1, 15, 16, 17, 18, 19, 20, 31, 255, UINT64_C(1)<<63, UINT64_MAX};
-  for (unsigned test = 0; test < sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[17] = {0x1234};
-    out[16] = 0x5678;
-    uint64_t n = inputs[test];
+  const uint64_t poolWords[] = {UINT64_C(0x17b4a14117b4a140), UINT64_C(0x17b4a14317b4a142), UINT64_C(0x17b4a14517b4a144)};
+  uint8_t poolBytes[24];
+  memcpy(poolBytes, poolWords, sizeof(poolBytes));
+  for (unsigned test = 0; test < 32 + sizeof(inputs)/sizeof(inputs[0]); test++) {
+    uint64_t out[23] = {0x1234};
+    out[22] = 0x5678;
+    uint64_t n = test < 32 ? test : inputs[test - 32];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[16] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[22] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
@@ -125,6 +150,15 @@ int main(void) {
     for (unsigned form = 12; form < 16; form++) {
       if (out[form] != sum) return 4;
     }
+    uint64_t remainderByte = (UINT64_C(0x17b4a14117b4a140) >> ((n & 7) * 8)) & 255;
+    for (unsigned form = 16; form < 20; form++) {
+      if (out[form] != remainderByte) return 5;
+    }
+    uint64_t byteSum = 0;
+    for (unsigned remaining = (n & 8) + 8; remaining; remaining -= 8) {
+      byteSum += poolBytes[remaining + (n & 7) - 4];
+    }
+    if (out[20] != byteSum || out[21] != byteSum) return 6;
   }
   return 0;
 }

@@ -70,6 +70,22 @@ func TestARM64PoolCounterLoops(t *testing.T) {
 	}
 }
 
+func TestARM64PoolExcludedBackedgeDropsInductionMetadata(t *testing.T) {
+	flow := arm64PoolTestFlow(t, []string{
+		"and x1,x0,#8", "add x1,x1,#8", "nop", "sub x1,x1,#8", "cbnz x1,#-8", "ret",
+	})
+	if _, proved := flow.loopBounds[2]; !proved {
+		t.Fatal("fixture did not establish a counter loop")
+	}
+	flow.excludeEdge(arm64RawPoolEdge{4, 2})
+	if _, retained := flow.loopBounds[2]; retained {
+		t.Fatal("excluded backedge retained its induction constraint")
+	}
+	if _, retained := flow.loopLatches[2]; retained {
+		t.Fatal("excluded backedge retained its carried-value latch")
+	}
+}
+
 func TestARM64PoolImpossibleBitEdge(t *testing.T) {
 	// The backwards TBNZ edge is impossible for 16..19, but its MOV would
 	// otherwise pollute the joined result before the query becomes constant.

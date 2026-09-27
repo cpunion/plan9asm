@@ -52,6 +52,26 @@ func TestARM64PoolCarriedStrideRejectsUnprovedRelation(t *testing.T) {
 	}
 }
 
+func TestARM64PoolCarriedInvariantAcrossUnsignedZero(t *testing.T) {
+	for _, ascending := range []bool{false, true} {
+		lines := []string{"and x1,x0,#8", "add x1,x1,#8", "and x4,x0,#7",
+			"add x3,x1,x4", "sub x3,x3,#4"}
+		update := "sub x1,x1,#8"
+		if ascending {
+			lines = append(lines, "neg x1,x1")
+			update = "add x1,x1,#8"
+		}
+		head := len(lines)
+		lines = append(lines, "ldr x5,[x3],#-8", update, "cbnz x1,#-8", "ret")
+		flow := arm64PoolTestFlow(t, lines)
+		// The invariant is x4-4, spanning [-4,3], but every actual address
+		// remains in [4,19]. Recenter the invariant; never clamp a wrapped span.
+		if got := flow.affineInterval(head, arm64PoolRegisterExpression(3)); got != (arm64PoolInterval{4, 19}) {
+			t.Fatalf("ascending=%v: carried bound=%+v, want [4,19]", ascending, got)
+		}
+	}
+}
+
 func TestARM64PoolCarriedAddressCounterRelation(t *testing.T) {
 	for _, test := range []struct {
 		name          string

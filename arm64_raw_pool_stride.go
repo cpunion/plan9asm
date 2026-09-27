@@ -1,11 +1,6 @@
 package plan9asm
 
-import (
-	"encoding/binary"
-	"math"
-
-	"golang.org/x/arch/arm64/arm64asm"
-)
+import "math"
 
 func (flow *arm64RawPoolValues) counterStrideBound(at int, expression arm64PoolAffine, initial arm64PoolInterval, delta uint64) (arm64PoolInterval, bool) {
 	signed := int64(delta)
@@ -19,18 +14,29 @@ func (flow *arm64RawPoolValues) counterStrideBound(at int, expression arm64PoolA
 	if step&(step-1) != 0 {
 		return arm64PoolInterval{}, false
 	}
-	bound := arm64PoolInterval{step, initial.high}
 	if signed < 0 {
-		if initial.low < step || initial.high > math.MaxInt64 {
+		if initial.low == 0 || initial.high > math.MaxInt64 {
 			return arm64PoolInterval{}, false
 		}
 	} else {
-		if initial.low <= math.MaxInt64 || initial.high > -step {
+		if initial.low <= math.MaxInt64 {
 			return arm64PoolInterval{}, false
 		}
-		bound = arm64PoolInterval{initial.low, -step}
 	}
-	return bound, flow.multipleOfPowerOfTwo(at, expression, step)
+	if !flow.multipleOfPowerOfTwo(at, expression, step) || initial.low > math.MaxUint64-(step-1) {
+		return arm64PoolInterval{}, false
+	}
+	// Refine the independently proved interval with the independently proved
+	// residue. For example [-19,-1] contains only -16 and -8 divisible by eight.
+	initial.low = (initial.low + step - 1) &^ (step - 1)
+	initial.high &^= step - 1
+	if initial.low > initial.high {
+		return arm64PoolInterval{}, false
+	}
+	if signed < 0 {
+		return arm64PoolInterval{step, initial.high}, true
+	}
+	return arm64PoolInterval{initial.low, -step}, true
 }
 
 // Retain only the residue through arithmetic definitions. In particular,
@@ -104,47 +110,15 @@ func (flow *arm64RawPoolValues) multipleOfPowerOfTwo(at int, expression arm64Poo
 }
 
 func (flow *arm64RawPoolValues) maskedResidueDefinition(at int, word uint32, residueMask uint64) (int, arm64PoolAffine, bool) {
-	var code [4]byte
-	binary.LittleEndian.PutUint32(code[:], word)
-	ins, err := arm64asm.Decode(code[:])
-	if err != nil || word>>31 == 0 || word&31 == 31 ||
-		(ins.Op != arm64asm.AND && ins.Op != arm64asm.ANDS && ins.Op != arm64asm.BIC && ins.Op != arm64asm.BICS) {
+	definition, ok := flow.maskedConstantDefinition(at, word)
+	if !ok {
 		return 0, arm64PoolAffine{}, false
 	}
-	var mask uint64
-	switch {
-	case word&0x1f800000 == 0x12000000:
-		switch immediate := ins.Args[2].(type) {
-		case arm64asm.Imm:
-			mask = uint64(immediate.Imm)
-		case arm64asm.Imm64:
-			mask = immediate.Imm
-		default:
-			return 0, arm64PoolAffine{}, false
-		}
-	case word&0x1f000000 == 0x0a000000:
-		// An independent mask query must not reset the residue walk's budget
-		// or reuse a pool-relative offset as the mask's numeric bit pattern.
-		numeric := *flow.numericValues()
-		numeric.clearValueCaches()
-		value := numeric.invariantInterval(at, arm64PoolRegisterExpression(int(word>>16&31)))
-		flow.affineWork += numeric.affineWork
-		if value.low != value.high {
-			return 0, arm64PoolAffine{}, false
-		}
-		operand := arm64PoolLogicalOperand{must: value.low, may: value.low}.shifted(word>>22&3, word>>10&63)
-		mask = operand.must
-	default:
-		return 0, arm64PoolAffine{}, false
-	}
-	if ins.Op == arm64asm.BIC || ins.Op == arm64asm.BICS {
-		mask = ^mask
-	}
-	switch mask & residueMask {
+	switch definition.mask & residueMask {
 	case 0:
-		return int(word & 31), arm64PoolAffine{}, true
+		return definition.destination, arm64PoolAffine{}, true
 	case residueMask:
-		return int(word & 31), arm64PoolRegisterExpression(int(word >> 5 & 31)), true
+		return definition.destination, arm64PoolRegisterExpression(definition.source), true
 	default:
 		return 0, arm64PoolAffine{}, false
 	}

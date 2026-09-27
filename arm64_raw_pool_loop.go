@@ -44,6 +44,10 @@ func (flow *arm64RawPoolValues) excludeEdge(edge arm64RawPoolEdge) {
 		}
 	}
 	flow.before[edge.to] = remaining
+	if latch, recorded := flow.loopLatches[edge.to]; recorded && latch == edge.from {
+		delete(flow.loopBounds, edge.to)
+		delete(flow.loopLatches, edge.to)
+	}
 	flow.pruneUnreachablePredecessors()
 	flow.clearValueCaches()
 }
