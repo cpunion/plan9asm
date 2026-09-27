@@ -13,8 +13,8 @@ another module-index inventory scan.
   `origin` or `xgo-dev`. Batch the repairs before pushing; keep the PR draft.
 - Develop on `codex/pr40-arm64-raw-20260926`. Upstream main `7cc8c0f` is
   already an ancestor. Inspect status, worktrees and processes first.
-- `codex/pr40-shard25-replay-20260926` is frozen at `8134b3e`. Shard 29
-  is still running there. Do not change that checkout or ledger.
+- `codex/pr40-shard25-replay-20260926` retains frozen `8134b3e` diagnostics.
+  All its runners have finished; shard 29's final report was audited.
 - A separate persistent verification worktree is detached at `f151495`.
   Its root `go test ./... -count=1 -timeout=20m` passed in 765 seconds. Official
   five-architecture classification and strict benchmark passed there:
@@ -45,6 +45,16 @@ another module-index inventory scan.
   An adjacent CMP must dominate B.cond; CBZ/CBNZ zero edges are also modeled.
   A W comparison does not bound an X register. Bypassed guards, changed flags,
   signed-negative possibilities and converging unconstrained edges fail.
+- `c2567c6`: fold proven private x86 threaded TEXT helpers into one CFG. Keep
+  GP/vector/flag/FP state across direct and indirect jumps. CLI proof rejects
+  Go calls/address uses, linkname/other-file references, incomplete or escaping
+  tables, and paths bypassing table-base initialization. Initializers and
+  continuations stay in one LLVM module; wasm cannot use this mechanism.
+  Also honor GLOBL RODATA instead of making every global constant, and retain
+  file-local linkage for `<>` data. The former caused an actual runtime crash.
+- `43a576e`: fix the whole VPBROADCASTB/W/D/Q family's overlapping X/Y/Z views
+  and inactive masked memory reads. Its 108 source/width/mask cases compile
+  on three OS targets and execute on Darwin/Rosetta and required Linux tests.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -54,6 +64,13 @@ Both nested CLI test suites and vet passed again after the guarded-index
 commit. Corpus unit tests and focused race tests passed for download retry.
 Logs in the development worktree use `raw-pool-alias*`,
 `raw-pool-guard*` and `discovery-download-retry*`.
+The continuation batch additionally passed amd64 native-Go/LLVM runtime
+oracles, required Linux amd64 and 386/QEMU execution, five x86 object targets,
+Go 1.20 compatibility, both CLI suites and vet. Canonical KnoxDB's four
+previously failing files passed all 12 three-OS object compilations. A separate
+Linux scalar oracle passed 40 scenarios per Uint8/16/32/64 decoder (160 total),
+covering all 16 selectors and mixed helper transitions. Diagnostic artifacts
+are under `_out/knox-continuation-*`; these are not final shard/ledger evidence.
 
 ## External evidence and remaining real failures
 
@@ -67,15 +84,11 @@ The latest direct SIMD replay (`_out/simd-guard.json`) still fails both
   including derived aliases and post-indexed pair loads. The apparent branch
   word `0x540be400` is numeric pool data, not invalid source. Implement in
   `arm64_raw_pool_*.go`; do not relax the proof merely to relocate the pool.
-- **KnoxDB**: `blockwatch.cc/knoxdb`, `github.com/blockwatch-cc/knoxdb` and
-  `github.com/os2357/knx` all still resolve latest to v0.2.9. Four Uint8/16/32/64
-  AVX2 files require cross-TEXT ABI0 register and frame preservation. The
-  root's indirect dispatch enters helper TEXTs sharing DI/SI/BX/R14/R15 and
-  the root's result at +48(FP). Widening the exit helper's FP slot alone is
-  incorrect. These helpers actually have Go declarations of the form
-  `func helper()`, so declaration-free tail-signature inference does not
-  apply. Preserve the distinction between their Go entry ABI and assembly
-  continuation state. Ordinary AVX2 and Uint64 AVX512 files already pass.
+- **KnoxDB**: the canonical v0.2.9 failures are repaired as described above.
+  Rerun complete candidates/shards for `blockwatch.cc/knoxdb`,
+  `github.com/blockwatch-cc/knoxdb` and `github.com/os2357/knx` before updating
+  the ledger. Empty Go declarations do not imply callable helpers: private
+  entry proof is essential. Never apply signature widening to ordinary calls.
 - **Native-layout/JIT**: GopherJRE, GoJIT and both case-distinct Sharkie module
   paths still fail. Their source observes exact code offsets or transfers
   registers/stack through generated machine code. Widening raw branch
@@ -89,14 +102,15 @@ The latest direct SIMD replay (`_out/simd-guard.json`) still fails both
 
 The frozen `8134b3e` diagnostics are stored under
 `_out/ci-repair-8134-shardN/shard-N.json`. Completed shards 1, 13, 20, 22,
-23, 24 and 25 have zero failures and individually audited reports. Shards
+23, 24, 25 and 29 have zero failures and individually audited reports. Shards
 0, 6, 9, 14, 15, 16, 17, 26 and 28 retain the real failure classes above
 (shard 16 also predates the dev9 invalid-source fix). Shard 4 completed
 168 candidates = 123 passed + 35 source N/A + one invalid-source skip +
 nine download TLS-timeout failures; its integrity audit passed, not its
 coverage gate. Shard 10 completed 173 candidates with 133 passed, 29 N/A and
 11 proxy TLS-timeout failures; its large spanneranalyzer p0/p6 candidates
-passed. Shard 29's large reflectx candidate passed 48 object translations.
+passed. Shard 29 completed 151 candidates = 127 passed + 23 source N/A + one
+invalid-source skip, with 2,052 object translations and three target N/A files.
 
 A separate clean `cc307d5` shard 16 report has 132 passed + 30 N/A + one
 go-highway invalid-source skip + one KnoxDB failure. It is not compatible
@@ -104,7 +118,8 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 
 ## Next actions and completion gates
 
-1. Finish/audit active tests and shards. Retry network failures with current
+1. Freeze the new continuation/broadcast batch for full gates and rerun
+   KnoxDB shards 6/16/26. Retry network failures in shards 4/10 with current
    bounded retry support; never reclassify them as source N/A.
 2. Continue real semantic fixes above with red/green and runtime tests.
    The address-proof work does not yet resolve the two complete SIMD files.
