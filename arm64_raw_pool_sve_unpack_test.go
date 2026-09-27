@@ -15,6 +15,9 @@ func TestARM64RawPoolSVEUnpackEffects(t *testing.T) {
 		}
 	}
 	for index, word := range assembleARM64LLVMWords(t, lines, "+sve") {
+		if !arm64RawPoolSVEPreservesNZCV(word) {
+			t.Errorf("%s: unpack unexpectedly clobbers NZCV", lines[index])
+		}
 		if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 {
 			t.Errorf("%s: GP effects=%#x/%v, want no GP writes", lines[index], writes, known)
 		}
@@ -22,7 +25,7 @@ func TestARM64RawPoolSVEUnpackEffects(t *testing.T) {
 			t.Errorf("%s: vector register was mistaken for an address use", lines[index])
 		}
 		// Size zero is reserved, even though the register fields are valid.
-		if arm64RawPoolIndependentSVE(word &^ (3 << 22)) {
+		if arm64RawPoolIndependentSVE(word&^(3<<22)) || arm64RawPoolSVEPreservesNZCV(word&^(3<<22)) {
 			t.Errorf("%s: reserved byte destination acquired a safe effect", lines[index])
 		}
 	}

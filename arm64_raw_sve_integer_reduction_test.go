@@ -77,6 +77,9 @@ func TestARM64RawSVEIntegerReductionOperandFields(t *testing.T) {
 		}
 	}
 	for i, word := range assembleARM64LLVMWords(t, lines, "+sve2p1") {
+		if !arm64RawPoolSVEPreservesNZCV(word) {
+			t.Fatalf("%s: integer reduction unexpectedly clobbers NZCV", lines[i])
+		}
 		if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 || !arm64RawPoolSVEIgnoresAddress(word, 9) {
 			t.Fatalf("%s: vector reduction has unknown or address-dependent GP effects", lines[i])
 		}

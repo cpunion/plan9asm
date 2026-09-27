@@ -39,6 +39,16 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 			return 0, 0, 0, false
 		}
 		word := flow.words[at]
+		if arm64RawPoolSVEPreservesNZCV(word) {
+			// x/arch does not decode these SVE families. Reuse their typed
+			// grammar, but keep flag effects separate from GP write effects.
+			writes, known := arm64RawPoolGPWrites(word)
+			if !known {
+				return 0, 0, 0, false
+			}
+			clobbered |= writes
+			continue
+		}
 		var code [4]byte
 		binary.LittleEndian.PutUint32(code[:], word)
 		ins, err := arm64asm.Decode(code[:])
@@ -59,6 +69,33 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 		clobbered |= writes
 	}
 	return 0, 0, 0, false
+}
+
+// These complete vector families preserve NZCV. Predicate logical operations
+// instead share the lowerer's explicit flag bit; their S variants cannot carry
+// an earlier scalar comparison. In particular, no-GP-output is insufficient:
+// SVE comparisons, WHILE*, PTEST and unknown instructions remain barriers.
+func arm64RawPoolSVEPreservesNZCV(word uint32) bool {
+	if _, ok := decodeARM64RawSVEEOR(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEUnpack(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEMultiplyAccumulate(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEIntegerReduction(word); ok {
+		return true
+	}
+	if _, ok := decodeARM64RawSVEIntegerAddReduction(word); ok {
+		return true
+	}
+	if ins, ok := decodeARM64RawSVEPredicateLogical(word); ok {
+		spec, known := arm64SVEPredicateLogicalSpecs[ins.Op]
+		return known && !spec.flags
+	}
+	return false
 }
 
 // An explicit effect whitelist, not a guess from a mnemonic suffix. In
