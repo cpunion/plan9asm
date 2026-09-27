@@ -67,7 +67,8 @@ func arm64PoolSVEFlagPreservingForms() []string {
 	for _, op := range []string{"and", "bic", "eor", "nand", "nor", "orn", "orr"} {
 		lines = append(lines, op+" p9.b,p15/z,p9.b,p14.b")
 	}
-	return append(lines, "sel p9.b,p15,p9.b,p14.b")
+	lines = append(lines, "sel p9.b,p15,p9.b,p14.b")
+	return append(lines, arm64RawSVECopyForms()...)
 }
 
 func TestARM64RawPoolSVEFlagProvenance(t *testing.T) {
@@ -132,5 +133,32 @@ func TestARM64RawPoolSVEFlagsRespectControlFlow(t *testing.T) {
 				t.Fatalf("counter interval=%+v, want %+v", got, want)
 			}
 		})
+	}
+}
+
+func TestARM64RawPoolSVECopyGeneralEffects(t *testing.T) {
+	for _, width := range "bhsd" {
+		for _, source := range []int{0, 9, 30, 31} {
+			register := fmt.Sprintf("w%d", source)
+			if width == 'd' {
+				register = fmt.Sprintf("x%d", source)
+			}
+			if source == 31 {
+				register = "wsp"
+				if width == 'd' {
+					register = "sp"
+				}
+			}
+			line := fmt.Sprintf("cpy z9.%c,p7/m,%s", width, register)
+			word := assembleARM64LLVMWords(t, []string{line}, "+sve")[0]
+			if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 {
+				t.Errorf("%s: GP writes=%#x, known=%v", line, writes, known)
+			}
+			for address := 0; address < 32; address++ {
+				if ignored := arm64RawPoolSVEIgnoresAddress(word, address); ignored != (address != source) {
+					t.Errorf("%s: ignored address R%d=%v", line, address, ignored)
+				}
+			}
+		}
 	}
 }

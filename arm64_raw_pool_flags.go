@@ -88,6 +88,9 @@ func arm64RawPoolSVEPreservesNZCV(word uint32) bool {
 	if _, ok := decodeARM64RawSVEDupGeneral(word); ok {
 		return true
 	}
+	if _, ok := decodeARM64RawSVECopy(word); ok {
+		return true
+	}
 	if _, ok := decodeARM64RawSVEUnpack(word); ok {
 		return true
 	}

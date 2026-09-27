@@ -562,6 +562,11 @@ func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
 	if arm64RawPoolIndependentSVE(word) {
 		return true
 	}
+	if ins, ok := decodeARM64RawSVECopy(word); ok && arm64SVECopyGeneralRegister(ins.Args[0]) {
+		// A GP/SP copy writes only a vector, but copying this pool address
+		// into that vector would expose a relocation-dependent numeric value.
+		return int(word>>5)&31 != address
+	}
 	if row, ok := arm64RawPoolContiguousLoad(word); ok {
 		return int(word>>5)&31 != address &&
 			(row.address != arm64SVELoadRegister || int(word>>16)&31 != address)
