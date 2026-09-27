@@ -17,4 +17,4 @@
 {"module":"github.com/stokejo/gvisor","version":"v0.0.0-20260414085155-75bfadc3561e","status":"pending"}
 {"module":"github.com/tenderly/net-optimism","version":"v0.0.0-20250122175523-0c2f79a903cd","status":"pending"}
 {"module":"github.com/woozymasta/bcn","version":"v0.7.0","status":"pending"}
-{"module":"gonum.org/v1/gonum","version":"v0.17.0","status":"passed"}
+{"module":"gonum.org/v1/gonum","version":"v0.17.0","status":"pending"}

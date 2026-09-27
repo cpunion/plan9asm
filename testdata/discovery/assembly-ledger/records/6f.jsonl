@@ -13,7 +13,7 @@
 {"module":"github.com/mgilbir/andsifr","version":"v0.0.0-20260706220517-1793eb745c6f","status":"pending"}
 {"module":"github.com/mnightingale/go-yencode","version":"v0.0.0-20260902082024-527fe101576b","status":"pending"}
 {"module":"github.com/real-uangi/allingo","version":"v0.1.14","status":"pending"}
-{"module":"github.com/runxiyu/furgit","version":"v0.1.184","status":"passed"}
+{"module":"github.com/runxiyu/furgit","version":"v0.1.184","status":"pending"}
 {"module":"github.com/smoxy-io/go-x-crypto","version":"v0.46.0","status":"pending"}
 {"module":"github.com/spance/go-callprivate","version":"v0.0.0-20151213012958-d8b9b5523668","status":"pending"}
 {"module":"github.com/theedgeofrage/fyne/v2","version":"v2.0.0-20260720083819-7bcd87fc9730","status":"pending"}

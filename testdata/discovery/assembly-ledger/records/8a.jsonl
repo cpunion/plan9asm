@@ -17,4 +17,4 @@
 {"module":"github.com/russfellows/warp-replay","version":"v1.4.1-replay.3","status":"pending"}
 {"module":"github.com/sakuralins/unit_go","version":"v0.0.0-20260807090811-7aa49729c861","status":"pending"}
 {"module":"github.com/seriousbug/webp-go-pure","version":"v1.2.0","status":"pending"}
-{"module":"modernc.org/libc","version":"v1.77.1","status":"passed"}
+{"module":"modernc.org/libc","version":"v1.77.1","status":"pending"}

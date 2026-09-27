@@ -1,6 +1,6 @@
 {"module":"git.vdb.to/cerc-io/go-ethereum","version":"v1.13.14","status":"pending"}
 {"module":"github.com/HBTGmbH/gosaxml","version":"v0.0.44","status":"pending"}
-{"module":"github.com/MetisProtocol/go-ethereum","version":"v1.9.10","status":"passed"}
+{"module":"github.com/MetisProtocol/go-ethereum","version":"v1.9.10","status":"pending"}
 {"module":"github.com/akif-dogan/core","version":"v0.0.0-20250506080424-89b4ba03cd8d","status":"pending"}
 {"module":"github.com/bistutu/go","version":"v0.0.0-20240713091623-53f3d0472569","status":"pending"}
 {"module":"github.com/erigontech/fastkeccak","version":"v0.1.0","status":"pending"}

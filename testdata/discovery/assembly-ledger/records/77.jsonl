@@ -11,7 +11,7 @@
 {"module":"github.com/justwasm/go4js","version":"v0.0.2","status":"pending"}
 {"module":"github.com/khalednassar/cve-2022-21449-tls-poc","version":"v0.0.0-20260315113212-fa239eebae2b","status":"pending"}
 {"module":"github.com/meko-christian/algo-dsp","version":"v0.7.1","status":"pending"}
-{"module":"github.com/sanserogames/letsgo-os","version":"v0.0.0-20260911125559-457a4716c098","status":"passed"}
+{"module":"github.com/sanserogames/letsgo-os","version":"v0.0.0-20260911125559-457a4716c098","status":"pending"}
 {"module":"github.com/simonwaldherr/tinySQL","version":"v0.56.0","status":"pending"}
 {"module":"github.com/splizard/go","version":"v0.0.0-20260116174045-7251c9e0f00a","status":"pending"}
 {"module":"github.com/testinprod-io/op-erigon","version":"v1.9.6","status":"pending"}

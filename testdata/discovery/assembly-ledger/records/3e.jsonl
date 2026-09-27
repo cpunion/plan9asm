@@ -5,4 +5,4 @@
 {"module":"github.com/cockroachdb/Cockroach","version":"v19.2.12+incompatible","status":"pending"}
 {"module":"github.com/lizthegrey/lz4/v4","version":"v4.1.29","status":"pending"}
 {"module":"github.com/shizukumiray-hue/xray-core-onering","version":"v0.0.0-20260827070522-ce19fe71b898","status":"pending"}
-{"module":"github.com/simonwaldherr/tinysql","version":"v0.56.0","status":"passed"}
+{"module":"github.com/simonwaldherr/tinysql","version":"v0.56.0","status":"pending"}

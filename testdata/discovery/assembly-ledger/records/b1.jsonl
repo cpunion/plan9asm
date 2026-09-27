@@ -1,7 +1,7 @@
 {"module":"github.com/DarioMarchetti/go-ethereum","version":"v1.16.7","status":"pending"}
 {"module":"github.com/Fantom-Foundation/go-ethereum-sonic","version":"v0.0.0-20240529085303-2400937cc3b1","status":"pending"}
 {"module":"github.com/Muravlev/fastsax","version":"v0.0.0-20260724124850-492a74a4404f","status":"pending"}
-{"module":"github.com/RetVal/lux","version":"v0.0.0-20160613104523-3147f93bb3c6","status":"passed"}
+{"module":"github.com/RetVal/lux","version":"v0.0.0-20160613104523-3147f93bb3c6","status":"pending"}
 {"module":"github.com/Usechain/go-usechain","version":"v1.0.1","status":"pending"}
 {"module":"github.com/astriaorg/go-ethereum","version":"v1.13.9","status":"pending"}
 {"module":"github.com/facebookincubator/Buck2","version":"v0.0.0-20260922215043-0363b6a6ffdb","status":"pending"}

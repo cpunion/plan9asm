@@ -1,5 +1,5 @@
 {"module":"github.com/Microsoft/go-crypto-openssl","version":"v0.5.0","status":"pending"}
-{"module":"github.com/TangLiChun/Xray-core","version":"v0.0.0-20260527192839-8f8b9e334e3d","status":"passed"}
+{"module":"github.com/TangLiChun/Xray-core","version":"v0.0.0-20260527192839-8f8b9e334e3d","status":"pending"}
 {"module":"github.com/TeslaSmith/v2ray-vless","version":"v0.0.0-20201120000903-9c1f251173be","status":"pending"}
 {"module":"github.com/adrianduke/tools","version":"v0.0.0-20160727171133-9e7459099f9a","status":"pending"}
 {"module":"github.com/asheshgoplani/agent-deck","version":"v1.16.16","status":"pending"}

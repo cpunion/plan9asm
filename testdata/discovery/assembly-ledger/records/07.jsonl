@@ -6,7 +6,7 @@
 {"module":"github.com/Meko-Christian/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/Tetratelabs/wazero","version":"v1.12.0","status":"pending"}
 {"module":"github.com/Yohox/go-ethereum","version":"v0.0.0-20260420084123-95f9d5bf9cfe","status":"pending"}
-{"module":"github.com/YoohPHL/xray-core-mod","version":"v1.260629.0","status":"passed"}
+{"module":"github.com/YoohPHL/xray-core-mod","version":"v1.260629.0","status":"pending"}
 {"module":"github.com/chaintable/go-ethereum-sonic","version":"v0.0.0-20260508154537-b1aefb6f2091","status":"pending"}
 {"module":"github.com/dgryski/trifles","version":"v0.0.0-20260922202040-4f260e6f130b","status":"pending"}
 {"module":"github.com/elastos/Elastos.ELA.SideChain.ETH","version":"v0.2.8","status":"pending"}

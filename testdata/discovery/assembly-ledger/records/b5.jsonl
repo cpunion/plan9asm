@@ -1,6 +1,6 @@
 {"module":"github.com/Arkiv-Network/arkiv-op-geth","version":"v1.101605.0-test.1","status":"pending"}
 {"module":"github.com/Creativesoftwarefdn/weaviate","version":"v1.39.6","status":"pending"}
-{"module":"github.com/DimensionDev/crypto","version":"v2.0.0+incompatible","status":"passed"}
+{"module":"github.com/DimensionDev/crypto","version":"v2.0.0+incompatible","status":"pending"}
 {"module":"github.com/Psiphon-Labs/utls","version":"v1.1.0","status":"pending"}
 {"module":"github.com/SysVerification/gokv","version":"v0.0.0-20250508184610-d007325b6ee8","status":"pending"}
 {"module":"github.com/aeneasr/kubernetes","version":"v1.2.3","status":"pending"}

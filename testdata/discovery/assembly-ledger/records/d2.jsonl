@@ -1,4 +1,4 @@
-{"module":"ghproxy-9d2.pages.dev/thesyncim/gopus","version":"v0.0.0-20260325193327-b10f6f9bdfd0","status":"passed"}
+{"module":"ghproxy-9d2.pages.dev/thesyncim/gopus","version":"v0.0.0-20260325193327-b10f6f9bdfd0","status":"pending"}
 {"module":"github.com/0glabs/0g-geth","version":"v1.15.4","status":"pending"}
 {"module":"github.com/CELO-ORG/celo-blockchain","version":"v1.8.9","status":"pending"}
 {"module":"github.com/Core-Coin/go-core","version":"v1.1.7","status":"pending"}
