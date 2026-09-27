@@ -6,7 +6,7 @@
 {"module":"github.com/allanrogerr/pkg/v3","version":"v3.0.0-20260421214503-7e6b596fabf1","status":"pending"}
 {"module":"github.com/anbangr/agnt2-op-geth","version":"v1.101702.1","status":"pending"}
 {"module":"github.com/charmikansara2000/mangtas-test","version":"v0.0.0-20220116110312-08047d8955c3","status":"pending"}
-{"module":"github.com/fearless743/mihomo","version":"v1.19.25","status":"passed"}
+{"module":"github.com/fearless743/mihomo","version":"v1.19.25","status":"pending"}
 {"module":"github.com/gen2brain/jpegn","version":"v0.6.1","status":"pending"}
 {"module":"github.com/go-delve/delve","version":"v1.27.2","status":"pending"}
 {"module":"github.com/go-simd/base32","version":"v0.0.0-20260908181146-4910d461bb0c","status":"pending"}

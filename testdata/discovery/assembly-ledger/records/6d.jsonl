@@ -1,4 +1,4 @@
-{"module":"github.com/Apache/arrow/go/v13","version":"v13.0.0","status":"passed"}
+{"module":"github.com/Apache/arrow/go/v13","version":"v13.0.0","status":"pending"}
 {"module":"github.com/DEROFDN/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"pending"}
 {"module":"github.com/KlausPost/cpuid/v2","version":"v2.4.0","status":"pending"}
 {"module":"github.com/VLPraneeth/gorgonia-gorgonia","version":"v0.9.18","status":"pending"}

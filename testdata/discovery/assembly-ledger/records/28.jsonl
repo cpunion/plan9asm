@@ -5,7 +5,7 @@
 {"module":"github.com/KabiriCloud/go-ethereum","version":"v1.14.5","status":"pending"}
 {"module":"github.com/Query-farm/arrow-go/v18","version":"v18.0.0-20260219212650-dcb85bfa48c0","status":"pending"}
 {"module":"github.com/Rethereum-blockchain/go-rethereum","version":"v1.13.5","status":"pending"}
-{"module":"github.com/SpecularL2/go-ethereum","version":"v0.0.0-20240215124523-3381d86fa52a","status":"passed"}
+{"module":"github.com/SpecularL2/go-ethereum","version":"v0.0.0-20240215124523-3381d86fa52a","status":"pending"}
 {"module":"github.com/Zeebo/blake3","version":"v0.2.4","status":"pending"}
 {"module":"github.com/bihua-university/alisten","version":"v0.0.0-20260920032147-d03d1469850e","status":"pending"}
 {"module":"github.com/celo-org/geth","version":"v1.8.9","status":"pending"}
@@ -19,7 +19,7 @@
 {"module":"github.com/hacash/chain","version":"v0.0.0-20240106023138-03c569ec569a","status":"pending"}
 {"module":"github.com/janatshaban/Xray-core","version":"v0.0.0-20260829071626-0af90331ac4b","status":"pending"}
 {"module":"github.com/jolymmiles/xray-core","version":"v1.250608.0","status":"pending"}
-{"module":"github.com/lewdest/yuri","version":"v0.0.13","status":"passed"}
+{"module":"github.com/lewdest/yuri","version":"v0.0.13","status":"pending"}
 {"module":"github.com/mjopsec/taburtuaiC2","version":"v0.0.0-20260506125907-8d1123e6fe37","status":"pending"}
 {"module":"github.com/mycophonic/primordium","version":"v0.9.1","status":"pending"}
 {"module":"github.com/nkane/chippy","version":"v1.12.0","status":"pending"}

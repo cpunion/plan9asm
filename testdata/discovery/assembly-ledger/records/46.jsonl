@@ -5,7 +5,7 @@
 {"module":"github.com/asheshgoplani/agent-deck","version":"v1.16.16","status":"pending"}
 {"module":"github.com/deepin-community/golang-gvisor-gvisor","version":"v0.0.0-20241112074236-54495ee5a152","status":"pending"}
 {"module":"github.com/enfplove/sing-tun","version":"v0.9.3","status":"pending"}
-{"module":"github.com/headlands-org/go-semantica","version":"v0.3.1","status":"passed"}
+{"module":"github.com/headlands-org/go-semantica","version":"v0.3.1","status":"pending"}
 {"module":"github.com/jmozah/swarm","version":"v1.8.27","status":"pending"}
 {"module":"github.com/lf-decentralized-trust-labs/waterfall-gwat","version":"v0.0.0-20250128112811-15c1c664a423","status":"pending"}
 {"module":"github.com/mediagui/Go","version":"v0.0.0-20260227122306-34024557799e","status":"pending"}

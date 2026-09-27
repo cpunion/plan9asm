@@ -3,7 +3,7 @@
 {"module":"gitee.com/wangHvip/exp","version":"v0.0.0-20190417140011-e40e924fdd3f","status":"pending"}
 {"module":"github.com/0x1488/xray-core","version":"v0.0.0-20260830071648-834b6e223659","status":"pending"}
 {"module":"github.com/AlexeyAkhunov/go-ethereum","version":"v1.7.3","status":"pending"}
-{"module":"github.com/CPerezz/go-ethereum","version":"v0.0.0-20260729025918-b988c00bf4cb","status":"passed"}
+{"module":"github.com/CPerezz/go-ethereum","version":"v0.0.0-20260729025918-b988c00bf4cb","status":"pending"}
 {"module":"github.com/Dolphinet-labs/Dolphinet-geth","version":"v1.2.0","status":"pending"}
 {"module":"github.com/Open-Telemetry/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
 {"module":"github.com/SleeplessCatty/Xray-core","version":"v0.0.0-20260826212958-aa3d6589da5e","status":"pending"}

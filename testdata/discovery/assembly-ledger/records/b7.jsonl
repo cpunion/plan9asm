@@ -7,7 +7,7 @@
 {"module":"github.com/egzakutacno/go-crypto-ssh","version":"v0.54.0","status":"pending"}
 {"module":"github.com/evanoberholster/image-meta","version":"v1.1.0","status":"pending"}
 {"module":"github.com/exclavenetwork/exclave-core/v5","version":"v5.50.0","status":"pending"}
-{"module":"github.com/gimli-rs/object-testfiles","version":"v0.0.0-20260912091714-372470ab139b","status":"not_applicable"}
+{"module":"github.com/gimli-rs/object-testfiles","version":"v0.0.0-20260912091714-372470ab139b","status":"pending"}
 {"module":"github.com/llc-incy/x-net","version":"v0.56.0","status":"pending"}
 {"module":"github.com/maxeasn/nitro","version":"v0.0.0-20240624094058-f9b6834e19a0","status":"pending"}
 {"module":"github.com/miku/go","version":"v0.0.0-20180807105656-a9dcbab0fd4b","status":"pending"}

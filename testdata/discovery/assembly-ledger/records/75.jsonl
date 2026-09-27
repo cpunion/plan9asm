@@ -7,7 +7,7 @@
 {"module":"github.com/deepteams/webp","version":"v1.2.8","status":"pending"}
 {"module":"github.com/devintegral/go-lachesis","version":"v0.0.0-20190607123615-755023435ec7","status":"pending"}
 {"module":"github.com/goccy/googlesqlwasm2go","version":"v0.2.0","status":"pending"}
-{"module":"github.com/jmwoliver/blake3","version":"v0.0.0-20260801225300-b11c1cdefad3","status":"passed"}
+{"module":"github.com/jmwoliver/blake3","version":"v0.0.0-20260801225300-b11c1cdefad3","status":"pending"}
 {"module":"github.com/junliurs/pid","version":"v0.0.22","status":"pending"}
 {"module":"github.com/mmatczuk/go","version":"v0.0.0-20221209104903-e76c87b1915c","status":"pending"}
 {"module":"github.com/nelhage/gojit","version":"v0.0.0-20151106164540-4098a5faeff1","status":"pending"}

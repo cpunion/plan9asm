@@ -9,7 +9,7 @@
 {"module":"github.com/clearmatics/bn256","version":"v0.0.0-20190516154049-c6c2a2b131e6","status":"pending"}
 {"module":"github.com/coderzhi/go-ethereum","version":"v1.7.3","status":"pending"}
 {"module":"github.com/goccy/spidermonkeywasm2go","version":"v0.2.5","status":"pending"}
-{"module":"github.com/junyan-ling/parquet-go","version":"v0.0.0-20260310191220-86b366ef2008","status":"passed"}
+{"module":"github.com/junyan-ling/parquet-go","version":"v0.0.0-20260310191220-86b366ef2008","status":"pending"}
 {"module":"github.com/minio/highwayhash","version":"v1.0.4","status":"pending"}
 {"module":"github.com/mshafiee/fastparse","version":"v0.1.0","status":"pending"}
 {"module":"github.com/muesli/noise","version":"v1.1.0","status":"pending"}

@@ -1,6 +1,6 @@
 {"module":"github.com/FactomProject/golangcrypto","version":"v0.0.0-20150426031145-83a5c1a363ee","status":"pending"}
 {"module":"github.com/MetaCubeX/clash.meta","version":"v1.19.31","status":"pending"}
-{"module":"github.com/MinterTeam/minter-go-node","version":"v1.2.1","status":"passed"}
+{"module":"github.com/MinterTeam/minter-go-node","version":"v1.2.1","status":"pending"}
 {"module":"github.com/Quaadgras/graphics.gd","version":"v0.0.0-20260918073432-bf29a5a8f806","status":"pending"}
 {"module":"github.com/elastos/elastos.ela.sidechain.eth","version":"v0.2.8","status":"pending"}
 {"module":"github.com/ember-moth/xray-core","version":"v0.0.0-20260808112618-54a3e1271eb7","status":"pending"}

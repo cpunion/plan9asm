@@ -1,6 +1,6 @@
 {"module":"bitbucket.org/dtolpin/infergo","version":"v1.2.4","status":"pending"}
 {"module":"github.com/Caqil/xray-core","version":"v1.8.24","status":"pending"}
-{"module":"github.com/JRU1/etcd","version":"v2.3.8+incompatible","status":"not_applicable"}
+{"module":"github.com/JRU1/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/MatrixOrigin/matrixone","version":"v1.2.4","status":"pending"}
 {"module":"github.com/ProjectZKM/ziren/crates/go-runtime/zkvm_runtime","version":"v0.0.0-20260904015846-89a2b745b5c2","status":"pending"}
 {"module":"github.com/Psiphon-Labs/net","version":"v0.0.0-20191204183604-f5d60dada742","status":"pending"}

@@ -1,5 +1,5 @@
 {"module":"github.com/AlwaysBusyStack/utls","version":"v0.0.0-20260610070929-4da93ccb72d6","status":"pending"}
-{"module":"github.com/CELO-org/celo-blockchain","version":"v1.8.9","status":"passed"}
+{"module":"github.com/CELO-org/celo-blockchain","version":"v1.8.9","status":"pending"}
 {"module":"github.com/alimy/tryst","version":"v1.3.2","status":"pending"}
 {"module":"github.com/arror/xray-core","version":"v0.0.0-20260609205355-da21a8f77f31","status":"pending"}
 {"module":"github.com/consenSys/gnark-crypto","version":"v0.21.0","status":"pending"}

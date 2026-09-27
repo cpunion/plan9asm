@@ -6,8 +6,8 @@
 {"module":"github.com/RookieCoderrr/neo3fura-ctrverification","version":"v0.0.0-20221201045318-9878de6dbeed","status":"pending"}
 {"module":"github.com/aead/argon2","version":"v0.0.0-20180111183520-a87724528b07","status":"pending"}
 {"module":"github.com/bouine-cache/xxhash/v3","version":"v3.0.0","status":"pending"}
-{"module":"github.com/brendoncarroll/go-exp","version":"v0.0.0-20260502194125-44f3dd6ca513","status":"passed"}
-{"module":"github.com/cloudwego/runtimex","version":"v0.1.2","status":"passed"}
+{"module":"github.com/brendoncarroll/go-exp","version":"v0.0.0-20260502194125-44f3dd6ca513","status":"pending"}
+{"module":"github.com/cloudwego/runtimex","version":"v0.1.2","status":"pending"}
 {"module":"github.com/coder/mutagen","version":"v0.18.5","status":"pending"}
 {"module":"github.com/dderona/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"pending"}
 {"module":"github.com/ebitengine/PureGO","version":"v0.11.1","status":"pending"}

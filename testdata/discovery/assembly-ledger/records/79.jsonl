@@ -11,7 +11,7 @@
 {"module":"github.com/espressosystems/geth-arbitrum","version":"v0.0.0-20241125020615-bbfe2a682291","status":"pending"}
 {"module":"github.com/golang/Go","version":"v0.0.0-20260922222353-a532f497dcd5","status":"pending"}
 {"module":"github.com/insolar/x-crypto","version":"v0.0.0-20191031140942-75fab8a325f6","status":"pending"}
-{"module":"github.com/lagpixellol/xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"passed"}
+{"module":"github.com/lagpixellol/xray-core","version":"v0.0.0-20260728075948-5ca6f4b7d4dc","status":"pending"}
 {"module":"github.com/leeceny/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/meta-apex/gopkg","version":"v0.0.0-20260518061825-40930747d7bf","status":"pending"}
 {"module":"github.com/r0music/incognito-chain-web-js/wasm/internal","version":"v0.0.0-20220909040933-37f3abde52de","status":"pending"}

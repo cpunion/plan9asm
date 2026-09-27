@@ -6,7 +6,7 @@
 {"module":"github.com/couchbasedeps/roaring","version":"v0.4.21","status":"pending"}
 {"module":"github.com/cypherium/cypherBFT","version":"v0.0.0-20211013080530-9fbb1458f709","status":"pending"}
 {"module":"github.com/hadamard/op-geth","version":"v1.101702.2","status":"pending"}
-{"module":"github.com/harishtpj/project-unikode","version":"v0.0.0-20260424075804-7d6f2ace2876","status":"not_applicable"}
+{"module":"github.com/harishtpj/project-unikode","version":"v0.0.0-20260424075804-7d6f2ace2876","status":"pending"}
 {"module":"github.com/hayabusa-cloud/lfq","version":"v0.1.5","status":"pending"}
 {"module":"github.com/hop-proto/hop-go","version":"v0.0.0-20260728221743-9a198a93a3a9","status":"pending"}
 {"module":"github.com/klauspost/reedsolomon","version":"v1.14.2","status":"pending"}

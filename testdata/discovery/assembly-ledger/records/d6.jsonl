@@ -4,7 +4,7 @@
 {"module":"github.com/LoveBlock/loveblock","version":"v0.0.0-20180926022952-64d6040c7b91","status":"pending"}
 {"module":"github.com/MAAXYZ/MaaEnd/agent/go-service","version":"v0.0.0-20260921161315-33179cac319f","status":"pending"}
 {"module":"github.com/Phuslu/log","version":"v1.0.134","status":"pending"}
-{"module":"github.com/bluefishx/xray-core","version":"v0.0.0-20260601021109-94ffd50060f1","status":"passed"}
+{"module":"github.com/bluefishx/xray-core","version":"v0.0.0-20260601021109-94ffd50060f1","status":"pending"}
 {"module":"github.com/f3nixsec/go-ethereum","version":"v0.0.0-20260408105729-a8ea6319f155","status":"pending"}
 {"module":"github.com/fako1024/slimcap","version":"v1.0.12","status":"pending"}
 {"module":"github.com/glycerine/blake2b-simd","version":"v0.0.0-20190319060614-116061190a9b","status":"pending"}

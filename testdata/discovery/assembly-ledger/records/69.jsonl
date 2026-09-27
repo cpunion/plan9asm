@@ -1,4 +1,4 @@
-{"module":"gitee.com/matrixorigin/matrixone","version":"v1.2.4","status":"passed"}
+{"module":"gitee.com/matrixorigin/matrixone","version":"v1.2.4","status":"pending"}
 {"module":"github.com/BobJustFry/xray-core","version":"v0.0.0-20260425212042-3bc24a3d5d0f","status":"pending"}
 {"module":"github.com/IOV-Blockchain/goiov","version":"v1.0.1","status":"pending"}
 {"module":"github.com/atoonk/packetio","version":"v0.1.11","status":"pending"}

@@ -7,7 +7,7 @@
 {"module":"github.com/itohio/easyrobot","version":"v0.0.0-20260512085029-abb5c9cca7f7","status":"pending"}
 {"module":"github.com/kelindar/search","version":"v0.5.0","status":"pending"}
 {"module":"github.com/kvantdev-test/kvant-node","version":"v0.0.0-20200323133039-7012bb6b88f5","status":"pending"}
-{"module":"github.com/lee101/gobed","version":"v1.0.4","status":"passed"}
+{"module":"github.com/lee101/gobed","version":"v1.0.4","status":"pending"}
 {"module":"github.com/marten-seemann/chacha20","version":"v0.2.0","status":"pending"}
 {"module":"github.com/mazino3/golang","version":"v0.0.0-20221217011222-0b2ad1d815ea","status":"pending"}
 {"module":"github.com/metaCubex/mihomo","version":"v1.19.31","status":"pending"}

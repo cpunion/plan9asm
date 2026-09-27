@@ -1,4 +1,4 @@
-{"module":"code.hybscloud.com/spin","version":"v0.1.6","status":"passed"}
+{"module":"code.hybscloud.com/spin","version":"v0.1.6","status":"pending"}
 {"module":"gitee.com/limuren/golang_sys","version":"v0.48.0","status":"pending"}
 {"module":"github.com/0x9n0p/gosharp/src/cmd","version":"v0.0.0-20250911113804-5d02eaeb9895","status":"pending"}
 {"module":"github.com/Cloudwego/base64x","version":"v0.1.7","status":"pending"}

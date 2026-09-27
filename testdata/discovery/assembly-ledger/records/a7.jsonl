@@ -3,7 +3,7 @@
 {"module":"github.com/AESNooper/go/src","version":"v0.0.0-20220218095104-b56a4ab1bbbb","status":"pending"}
 {"module":"github.com/Byczax/scion","version":"v0.14.1-humm.0","status":"pending"}
 {"module":"github.com/ETHEREUM/go-ethereum","version":"v1.17.5","status":"pending"}
-{"module":"github.com/KakashiHatake324/tlsclient/v2","version":"v2.1.47","status":"passed"}
+{"module":"github.com/KakashiHatake324/tlsclient/v2","version":"v2.1.47","status":"pending"}
 {"module":"github.com/Percona-Lab/crypto","version":"v0.0.0-20251219125031-82d8ba2cda22","status":"pending"}
 {"module":"github.com/Youtube/vitess","version":"v0.24.3","status":"pending"}
 {"module":"github.com/ahrav/go-gitpack","version":"v0.0.0-20260816032712-92d95a561646","status":"pending"}

@@ -9,7 +9,7 @@
 {"module":"github.com/bobbyunknown/xray-core","version":"v0.0.0-20260504131600-6f4cc3633530","status":"pending"}
 {"module":"github.com/dollarkillerx/Xray-core","version":"v0.0.6","status":"pending"}
 {"module":"github.com/dtolpin/gls","version":"v0.0.0-20190329183129-97f8c06b9ddc","status":"pending"}
-{"module":"github.com/gofish/golang-net","version":"v0.0.0-20190926025831-c00fd9afed17","status":"passed"}
+{"module":"github.com/gofish/golang-net","version":"v0.0.0-20190926025831-c00fd9afed17","status":"pending"}
 {"module":"github.com/guno1928/turbo","version":"v0.0.0-20260706091412-3b318c1e1ce7","status":"pending"}
 {"module":"github.com/hashicorp/go.net","version":"v0.0.1","status":"pending"}
 {"module":"github.com/lemon4ksan/sein","version":"v0.0.0-20260921100627-4be1ad4b77a9","status":"pending"}

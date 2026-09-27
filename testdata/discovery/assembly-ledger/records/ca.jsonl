@@ -4,7 +4,7 @@
 {"module":"github.com/coderZhi/go-ethereum","version":"v1.7.3","status":"pending"}
 {"module":"github.com/cyberroadie/go-sctp","version":"v0.0.0-20260327100146-be055d5ed2ae","status":"pending"}
 {"module":"github.com/gonum/Gonum","version":"v0.17.0","status":"pending"}
-{"module":"github.com/greatroar/compress","version":"v1.10.2","status":"passed"}
+{"module":"github.com/greatroar/compress","version":"v1.10.2","status":"pending"}
 {"module":"github.com/kaijuengine/kaiju/src","version":"v0.0.0-20260913024248-5eda268233b1","status":"pending"}
 {"module":"github.com/kelleyma49/fzf","version":"v0.0.0-20260814101631-bd4efa277b49","status":"pending"}
 {"module":"github.com/longfangsong/tidb","version":"v1.0.9","status":"pending"}

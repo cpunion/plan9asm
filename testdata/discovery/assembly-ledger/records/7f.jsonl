@@ -1,6 +1,6 @@
 {"module":"github.com/Bluefishx/Xray-core","version":"v0.0.0-20260601021109-94ffd50060f1","status":"pending"}
 {"module":"github.com/EchoCog/echollama","version":"v0.11.4","status":"pending"}
-{"module":"github.com/Go-zh/tools","version":"v0.0.0-20190318102628-d7df357d3e99","status":"not_applicable"}
+{"module":"github.com/Go-zh/tools","version":"v0.0.0-20190318102628-d7df357d3e99","status":"pending"}
 {"module":"github.com/OffchainLabs/polygeth","version":"v0.0.0-20240503082158-72f81daa8c59","status":"pending"}
 {"module":"github.com/RyuaNerin/go-krypto","version":"v1.3.0","status":"pending"}
 {"module":"github.com/Shopify/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}

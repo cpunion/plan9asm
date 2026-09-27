@@ -4,7 +4,7 @@
 {"module":"github.com/PGSTY/minio-pkg/v3","version":"v3.14.1","status":"pending"}
 {"module":"github.com/Rutenioum/Xray-core","version":"v1.260711.0-oa.2","status":"pending"}
 {"module":"github.com/anyproto/any-store/v2","version":"v2.2.0","status":"pending"}
-{"module":"github.com/byTEDance/mockey","version":"v1.4.6","status":"not_applicable"}
+{"module":"github.com/byTEDance/mockey","version":"v1.4.6","status":"pending"}
 {"module":"github.com/frida/TypeScript/tsc","version":"v0.0.0-20260906185614-e00a6a37c16e","status":"pending"}
 {"module":"github.com/kzahedi/gonum","version":"v0.0.0-20180907224847-f0ff95a240f2","status":"pending"}
 {"module":"github.com/ldkk25/websocket","version":"v0.0.0-20240822081019-3dd723ae69f0","status":"pending"}

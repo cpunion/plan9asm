@@ -1,4 +1,4 @@
-{"module":"github.com/Golang/Crypto","version":"v0.57.0","status":"passed"}
+{"module":"github.com/Golang/Crypto","version":"v0.57.0","status":"pending"}
 {"module":"github.com/iluobei/xray-core-mmwx","version":"v0.0.0-20260914081524-e42f16fa89b4","status":"pending"}
 {"module":"github.com/inspirer/textmapper","version":"v0.0.0-20260909193047-16d23030da4f","status":"pending"}
 {"module":"github.com/jxsl13/tensor","version":"v0.0.0-20220718004217-87b8a9a0b91f","status":"pending"}
