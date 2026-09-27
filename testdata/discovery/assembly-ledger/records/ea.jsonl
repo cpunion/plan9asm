@@ -6,7 +6,7 @@
 {"module":"github.com/andrzejressel/rust2go","version":"v0.0.0-20260314034108-6f06b0697c1b","status":"pending"}
 {"module":"github.com/blocktree/go-OWCRypt","version":"v1.1.14","status":"pending"}
 {"module":"github.com/cielavenir/codeiq_solutions","version":"v0.0.0-20250303052434-82c30e86af7e","status":"pending"}
-{"module":"github.com/cwbudde/agg_go","version":"v0.5.0","status":"pending"}
+{"module":"github.com/cwbudde/agg_go","version":"v0.5.0","status":"passed"}
 {"module":"github.com/danielpacak/opentelemetry-ebpf-profiler","version":"v0.0.0-20260721045557-d00431263501","status":"pending"}
 {"module":"github.com/filosottile/go/src/cmd","version":"v0.0.0-20250127143042-c190aef6e432","status":"pending"}
 {"module":"github.com/google/gVisor","version":"v0.0.0-20260922014844-164b166ce347","status":"pending"}

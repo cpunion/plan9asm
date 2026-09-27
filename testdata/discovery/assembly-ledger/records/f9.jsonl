@@ -8,7 +8,7 @@
 {"module":"github.com/hideo55/go-popcount","version":"v0.0.0-20170530181440-863800c130e8","status":"pending"}
 {"module":"github.com/maclof/goja-perf","version":"v0.2.2","status":"pending"}
 {"module":"github.com/msoap/factorial-multi-language","version":"v0.0.0-20260823220549-551968eca4cc","status":"pending"}
-{"module":"github.com/peterrk/pagebloomfilter","version":"v1.3.1","status":"pending"}
+{"module":"github.com/peterrk/pagebloomfilter","version":"v1.3.1","status":"passed"}
 {"module":"github.com/pjgraczyk/gomacro","version":"v0.0.0-20260616122001-83362707febb","status":"pending"}
 {"module":"github.com/scfchain/scf-core","version":"v0.0.0-20230818133812-a600d295d5b4","status":"pending"}
 {"module":"github.com/stereomonk/xray-core","version":"v0.0.0-20260701233659-b334169b2e17","status":"pending"}

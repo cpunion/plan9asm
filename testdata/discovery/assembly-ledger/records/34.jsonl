@@ -19,14 +19,14 @@
 {"module":"github.com/metacubex/x509","version":"v0.1.0","status":"pending"}
 {"module":"github.com/mymmsc/gox","version":"v1.26.0","status":"pending"}
 {"module":"github.com/new-Jamneration/jam-protocol","version":"v0.0.0-20260724124157-c7fb743aa000","status":"pending"}
-{"module":"github.com/pilinux/crypto","version":"v0.0.0-20260826144058-afebf4cb4efb","status":"pending"}
+{"module":"github.com/pilinux/crypto","version":"v0.0.0-20260826144058-afebf4cb4efb","status":"passed"}
 {"module":"github.com/recallsong/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/sagernet/sing-tun","version":"v0.9.5","status":"pending"}
 {"module":"github.com/segmentio/asm","version":"v1.2.1","status":"pending"}
 {"module":"github.com/seiflotfy/onpair","version":"v0.0.0-20260803085312-b0b66d28d4cb","status":"pending"}
 {"module":"github.com/semafind/semadb","version":"v1.2.0","status":"pending"}
 {"module":"github.com/shirikatsu/go-ethereum","version":"v1.8.19","status":"pending"}
-{"module":"github.com/spruce-solutions/go-quai","version":"v0.56.0","status":"pending"}
+{"module":"github.com/spruce-solutions/go-quai","version":"v0.56.0","status":"passed"}
 {"module":"github.com/syvbrunnr/modernc-libc","version":"v1.72.0","status":"pending"}
 {"module":"github.com/udaya2899/celo-blockchain","version":"v1.2.1","status":"pending"}
 {"module":"github.com/xinrea/go-with-ternary","version":"v0.0.0-20250225155044-ce0f31ed9a1f","status":"pending"}

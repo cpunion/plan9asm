@@ -5,7 +5,7 @@
 {"module":"github.com/deeptiman/forgelattice/crypto","version":"v0.0.0-20260731225009-66b457180500","status":"pending"}
 {"module":"github.com/dylenfu/Zion","version":"v0.0.0-20221017075600-fa41aa310f48","status":"pending"}
 {"module":"github.com/erikkassubek/cobufi-go","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
-{"module":"github.com/go-crypt/x","version":"v0.4.17","status":"pending"}
+{"module":"github.com/go-crypt/x","version":"v0.4.17","status":"passed"}
 {"module":"github.com/jaurray/xray-core","version":"v0.0.0-20260221095907-efdf21efb5b2","status":"pending"}
 {"module":"github.com/loinfish/truechain-engineering-code","version":"v2.1.4+incompatible","status":"pending"}
 {"module":"github.com/mimusic-org/wazero","version":"v1.11.1-mimusic","status":"pending"}

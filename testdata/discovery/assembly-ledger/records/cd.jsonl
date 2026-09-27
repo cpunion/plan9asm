@@ -11,7 +11,7 @@
 {"module":"github.com/m3db/M3","version":"v1.5.0","status":"pending"}
 {"module":"github.com/rsc/tmp","version":"v0.0.0-20260826135005-a7dac69396f1","status":"pending"}
 {"module":"github.com/secure-io/siv-go","version":"v0.0.0-20180922214919-5ff40651e2c4","status":"pending"}
-{"module":"github.com/shelnutt2/websocket","version":"v1.8.15","status":"pending"}
+{"module":"github.com/shelnutt2/websocket","version":"v1.8.15","status":"passed"}
 {"module":"github.com/sola97/xray-core","version":"v0.0.0-20260802131416-77ae50451803","status":"pending"}
 {"module":"github.com/tenderly/net-bera","version":"v1.17.5","status":"pending"}
 {"module":"github.com/thirdfort/cfssl","version":"v1.6.6","status":"pending"}

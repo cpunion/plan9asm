@@ -18,7 +18,7 @@
 {"module":"github.com/tailscale/go/src","version":"v0.0.0-20260919225036-24ee2fd0610e","status":"pending"}
 {"module":"github.com/timwhitez/screencapture","version":"v0.0.0-20220615101205-0330c0488a0a","status":"pending"}
 {"module":"github.com/tmthrgd/go-bitset","version":"v0.0.0-20190904054048-394d9a556c05","status":"pending"}
-{"module":"github.com/usbarmory/tamago-go/src/cmd","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
+{"module":"github.com/usbarmory/tamago-go/src/cmd","version":"v0.0.0-20260710193149-03845e30f7b7","status":"not_applicable"}
 {"module":"github.com/v2fly/v2ray-core/v5","version":"v5.54.2","status":"pending"}
 {"module":"gitlab.com/cznic/libc","version":"v1.77.0","status":"pending"}
 {"module":"gorgonia.org/vecf64","version":"v0.9.0","status":"pending"}

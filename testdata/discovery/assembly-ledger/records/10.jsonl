@@ -11,7 +11,7 @@
 {"module":"github.com/orlovevgeny/go-mcache","version":"v1.0.3","status":"pending"}
 {"module":"github.com/rchod/websocket","version":"v0.0.0-20241204191143-11bda985bf5f","status":"pending"}
 {"module":"github.com/rostamlabs/rostam","version":"v0.6.0","status":"pending"}
-{"module":"github.com/sentinelb51/rgoclient-fyne/v2","version":"v2.8.0-rgo.8","status":"pending"}
+{"module":"github.com/sentinelb51/rgoclient-fyne/v2","version":"v2.8.0-rgo.8","status":"not_applicable"}
 {"module":"github.com/tidwall/qcgo","version":"v0.0.2","status":"pending"}
 {"module":"github.com/tmc/apple","version":"v0.6.18","status":"pending"}
 {"module":"github.com/zuoyebang/bitalostored","version":"v0.0.0-20260403024840-6150692f5a79","status":"pending"}

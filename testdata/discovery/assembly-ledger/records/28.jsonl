@@ -27,7 +27,7 @@
 {"module":"github.com/rkusa/gm","version":"v0.0.0-20160203133140-acc6b6d0b64a","status":"pending"}
 {"module":"github.com/sergeymakinen/go-crypt","version":"v1.0.6","status":"pending"}
 {"module":"github.com/smira/siv-go","version":"v0.0.0-20260706144621-2093d2730928","status":"pending"}
-{"module":"github.com/taran-p/pkg/v3","version":"v3.0.0-20250930081146-5adb14e7fb22","status":"pending"}
+{"module":"github.com/taran-p/pkg/v3","version":"v3.0.0-20250930081146-5adb14e7fb22","status":"passed"}
 {"module":"github.com/tixcoin/tixcashv3.0-api-core","version":"v0.0.0-20260511072735-53e04a9cd55c","status":"pending"}
 {"module":"github.com/vinaes/xray-core","version":"v0.0.0-20260711062401-3b17dd9bc38f","status":"pending"}
 {"module":"github.com/xinfinorg/xdpos-testnet-apothem","version":"v1.6.0","status":"pending"}

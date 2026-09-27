@@ -10,7 +10,7 @@
 {"module":"github.com/gorse-io/gorse","version":"v0.5.11","status":"pending"}
 {"module":"github.com/newchainlab/blockchain-core","version":"v0.0.0-20230110174135-51b9e5836508","status":"pending"}
 {"module":"github.com/rodd-oss/gomp","version":"v0.0.0-20260316170228-908cfe19d934","status":"pending"}
-{"module":"github.com/sixofclubsss/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"pending"}
+{"module":"github.com/sixofclubsss/derohe","version":"v0.0.0-20240229002921-e9df1205b660","status":"passed"}
 {"module":"github.com/slow-craft/nautilus-core","version":"v1.1.3","status":"pending"}
 {"module":"github.com/tthogho1/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"pending"}
 {"module":"github.com/worldneedme/xray-core","version":"v0.0.0-20260624014836-20531d9dab04","status":"pending"}

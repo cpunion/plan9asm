@@ -2,7 +2,7 @@
 {"module":"github.com/Artyomkun/gorgonia.org/vecf64","version":"v1.0.0","status":"pending"}
 {"module":"github.com/Segmentio/Asm","version":"v1.2.1","status":"pending"}
 {"module":"github.com/bwesterb/go-and","version":"v0.4.1","status":"pending"}
-{"module":"github.com/cloudpassion/xray-core","version":"v0.0.0-20260409232119-b9ed23478f9e","status":"pending"}
+{"module":"github.com/cloudpassion/xray-core","version":"v0.0.0-20260409232119-b9ed23478f9e","status":"passed"}
 {"module":"github.com/consensys/go-ethereum","version":"v1.4.6","status":"pending"}
 {"module":"github.com/gabrielmartinezrodriguez/chiliz-chain-fork","version":"v0.0.0-20240701072609-1106e754139a","status":"pending"}
 {"module":"github.com/glendc/go-ethereum","version":"v3.2.3+incompatible","status":"pending"}

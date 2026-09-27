@@ -13,7 +13,7 @@
 {"module":"github.com/minio/highwayhash","version":"v1.0.4","status":"pending"}
 {"module":"github.com/mshafiee/fastparse","version":"v0.1.0","status":"pending"}
 {"module":"github.com/muesli/noise","version":"v1.1.0","status":"pending"}
-{"module":"github.com/sevaktigranyan305-netizen/xray-core","version":"v0.0.14-test","status":"pending"}
+{"module":"github.com/sevaktigranyan305-netizen/xray-core","version":"v0.0.14-test","status":"passed"}
 {"module":"github.com/tenderly/net-nitro","version":"v0.0.0-20260727074129-aea863015217","status":"pending"}
 {"module":"github.com/therealutkarshpriyadarshi/network","version":"v0.0.0-20251118092209-d8597ad748c4","status":"pending"}
 {"module":"golang.org/x/exp/shiny","version":"v0.0.0-20260908205506-85c1c2202aba","status":"pending"}

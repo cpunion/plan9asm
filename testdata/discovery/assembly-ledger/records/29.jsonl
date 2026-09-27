@@ -16,5 +16,5 @@
 {"module":"github.com/tronuo0/Xray-core","version":"v0.0.0-20260912200935-c412e77a9b71","status":"pending"}
 {"module":"github.com/visualfc/reflectx","version":"v1.7.4","status":"pending"}
 {"module":"github.com/zhangjinpeng1987/tidb","version":"v1.0.8","status":"pending"}
-{"module":"github.laiyagushi.com/sebishogun/simd","version":"v1.21.1","status":"pending"}
+{"module":"github.laiyagushi.com/sebishogun/simd","version":"v1.21.1","status":"passed"}
 {"module":"gopkg.in/roaringbitmap/roaring.v2","version":"v2.29.0","status":"pending"}

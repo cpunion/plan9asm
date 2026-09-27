@@ -14,6 +14,6 @@
 {"module":"github.com/lfreijo/net","version":"v0.0.0-20180723140658-b239179bcf3d","status":"pending"}
 {"module":"github.com/liorgold2/go-ethereum","version":"v1.8.27","status":"pending"}
 {"module":"github.com/saracen/id","version":"v0.0.0-20250924113628-92e0c6be9b34","status":"pending"}
-{"module":"github.com/tardisgo/tardisgo","version":"v0.0.0-20161119180838-e0dd9a7e46b5","status":"pending"}
+{"module":"github.com/tardisgo/tardisgo","version":"v0.0.0-20161119180838-e0dd9a7e46b5","status":"passed"}
 {"module":"github.com/truffle-dev/arrow-go/v18","version":"v18.6.0","status":"pending"}
 {"module":"github.laiyagushi.com/tphakala/go-flac","version":"v1.1.0","status":"pending"}

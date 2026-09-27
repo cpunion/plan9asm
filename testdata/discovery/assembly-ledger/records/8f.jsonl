@@ -14,5 +14,5 @@
 {"module":"github.com/neurlang/classifier","version":"v0.3.0","status":"pending"}
 {"module":"github.com/paxosglobal/go-ethereum","version":"v1.11.6","status":"pending"}
 {"module":"github.com/reserve-protocol/go-ethereum","version":"v1.8.22","status":"pending"}
-{"module":"github.com/sduoduo233/xray-core","version":"v1.260327.0","status":"pending"}
+{"module":"github.com/sduoduo233/xray-core","version":"v1.260327.0","status":"passed"}
 {"module":"github.com/valllabh/hush","version":"v0.1.13","status":"pending"}

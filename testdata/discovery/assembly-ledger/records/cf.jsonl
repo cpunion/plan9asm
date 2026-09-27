@@ -12,7 +12,7 @@
 {"module":"github.com/mantlenetworkio/op-geth","version":"v1.6.3","status":"pending"}
 {"module":"github.com/modern-go/gls","version":"v0.0.0-20250215024828-78308f6bb19d","status":"pending"}
 {"module":"github.com/mrjoshuak/go-openexr","version":"v1.4.38","status":"pending"}
-{"module":"github.com/paperpaperru/go-x-net","version":"v0.56.1","status":"pending"}
+{"module":"github.com/paperpaperru/go-x-net","version":"v0.56.1","status":"passed"}
 {"module":"github.com/project-arda/bn256","version":"v0.0.0-20180117071128-8ece34836ac8","status":"pending"}
 {"module":"github.com/sasswart/websocket","version":"v0.0.0-20240822081019-3dd723ae69f0","status":"pending"}
 {"module":"github.com/tamirms/roaring/v2","version":"v2.0.0-20260525185859-482ea719feb6","status":"pending"}
