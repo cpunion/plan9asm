@@ -26,6 +26,17 @@ func arm64PoolSVEFlagPreservingForms() []string {
 		}
 	}
 	for _, width := range "bhsd" {
+		for _, immediate := range []int{-128, -1, 0, 1, 127} {
+			lines = append(lines, fmt.Sprintf("dup z9.%c,#%d", width, immediate))
+			if width != 'b' {
+				lines = append(lines, fmt.Sprintf("dup z9.%c,#%d,lsl #8", width, immediate))
+			}
+		}
+		general := "w1"
+		if width == 'd' {
+			general = "x1"
+		}
+		lines = append(lines, fmt.Sprintf("dup z9.%c,%s", width, general))
 		for _, op := range []string{"and", "bic", "eor", "orr"} {
 			lines = append(lines, fmt.Sprintf("%s z9.%c,p7/m,z9.%c,z31.%c", op, width, width, width))
 			if op != "bic" {
@@ -38,6 +49,15 @@ func arm64PoolSVEFlagPreservingForms() []string {
 		lines = append(lines, fmt.Sprintf("uaddv d9,p7,z31.%c", width))
 		if width != 'd' {
 			lines = append(lines, fmt.Sprintf("saddv d9,p7,z31.%c", width))
+		}
+	}
+	for size, width := range "bhsdq" {
+		lanes := 16 >> size
+		if width == 'q' {
+			lanes = 2
+		}
+		for lane := 0; lane < lanes; lane++ {
+			lines = append(lines, fmt.Sprintf("dup z9.%c,z31.%c[%d]", width, width, lane))
 		}
 	}
 	for _, op := range []string{"and", "bic", "eor", "orr"} {
