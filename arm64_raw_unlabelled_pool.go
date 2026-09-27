@@ -250,7 +250,12 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 		word := uint32(instructions[i].Args[0].Imm)
 		if form, ok := decodeARM64RawSVEAddress(word); ok {
 			if form.op != "RDVL" && form.source == int(register-arm64asm.X0) {
-				return false
+				derived, ok := arm64RawPoolScalableAlias(form, offset, bounds)
+				if !ok {
+					return false
+				}
+				alias := arm64asm.X0 + arm64asm.Reg(form.destination)
+				queue = append(queue, arm64RawPoolFlow{i + 1, alias, derived})
 			}
 			if form.destination != int(register-arm64asm.X0) {
 				next(i + 1)

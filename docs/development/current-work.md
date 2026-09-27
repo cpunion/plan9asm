@@ -50,6 +50,14 @@ another module-index inventory scan.
 
 ## Latest committed repairs
 
+- Constant-pool address tracking now accepts bounded ADDVL/ADDPL aliases
+  using the complete architectural VL/PL interval. All 128 signed-immediate
+  combinations have independent bounds checks; overrun at maximum VL,
+  underrun, escapes and SP destinations reject. Twenty runtime cases execute
+  at six VLs in Linux/QEMU (120 results), with three-OS LLVM 22 objects,
+  focused Go 1.20, all pool regressions on Go 1.27 and vet passing. This is
+  the interval case only: the real SVE parser still needs transient negative
+  offsets, VL/count correlations and predicated-load footprint proofs.
 - Metadata-download bootstrap and its synthetic retry fixture use the root
   Go 1.20 floor; actual corpus build plans still require Go 1.27. The old
   bootstrap required Go 1.27 before making even one proxy request, failing
