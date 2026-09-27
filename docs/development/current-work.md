@@ -29,9 +29,11 @@ another module-index inventory scan.
   This is incomplete historical evidence, not current-development success;
   do not import it into a changed source snapshot as current proof.
 - The affine verification worktree completed the full root suite at
-  `198307f` in 835 seconds, `487fed6` in 753 seconds and `8eab02c` in
-  824 seconds. Both nested CLI suites passed at `8eab02c`; those runners
-  finished. Official five-architecture classification also passed again at
+  `198307f` in 835 seconds, `487fed6` in 753 seconds, `8eab02c` in
+  824 seconds and `a740c74` in 822 seconds. Both nested CLI suites passed
+  at `a740c74`; those runners finished. Its strict benchmark passed
+  184/184 files, zero N/A, 60 target-seconds plus four seconds build.
+  Official five-architecture classification also passed again at
   `487fed6`. Check the actual frozen revision and running processes before
   changing that worktree.
 - Use Go 1.27.1 and LLVM 22 for external modules. Put the actual Go binary in
@@ -116,6 +118,14 @@ another module-index inventory scan.
   runtime loops preserve the relationship instead of multiplying independent
   ranges. The focused Go 1.27/1.20, three-OS LLVM 22, Darwin-native,
   required Linux/QEMU and vet gates passed for every batch above.
+- `a9000c0`: rewind ordinary 64-bit scalar/pair stack reloads to the exact
+  dominating save only when every other queried GP value is preserved.
+  Overlaps, possible aliasing stores, calls, SP changes, width mismatches,
+  joins and unknown effects reject; direct nonoverlapping SP stores are safe.
+  Rewinding uses the saved source value, never its later replacement.
+  An enclosing-loop entry barrier may preserve only registers that the
+  certified body never writes. Focused Go 1.27/1.20, three-OS LLVM 22,
+  Darwin-native, required Linux/QEMU and vet tests passed.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -146,8 +156,9 @@ passed 184/184 files, zero N/A, 30 target-seconds plus seven seconds build.
 ## External evidence and remaining real failures
 
 A passing fixture or one target replay is not a passing module or shard.
-The latest three-OS SIMD replay (`_out/simd-origins.json`) passed translation
-of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
+The latest three-OS SIMD replay (`_out/simd-stack.json`) passed translation
+of `parseIntsNEON` and `parseUintsNEON`, but still fails the full files at
+`formatIntsNEON` and
 `parseIntsSVE2`. Do not upgrade its assembly ledger.
 
 - **SIMD**: `github.com/sebishogun/simd@v1.21.1` and its mirror have 45/47
@@ -156,12 +167,16 @@ of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
   vector loops run once and the tail counter stays in 1..7, including pair
   writeback. Unsigned NEON's two vector loops are also proved one-iteration,
   and the ascending signed-comparison tail now has a certified remaining
-  interval of 1..19. The unresolved entry invariant reads a stack-spilled
-  index: instruction 323 reloads X9 from SP+8, saved at instruction 181.
-  Prove that exact memory/value relationship before using it; do not assume
-  arbitrary stores cannot alias the slot or use the source register's current
-  value in place of its saved value. Repeated ADRs retain relocation cardinality.
-  Its first failed read is instruction 333, `LDR X10,[X16],#-8`.
+  interval of 1..19. The saved SP+8 index (instruction 181 to 323) now proves
+  the carried pointer/count invariant is exactly 144 bytes relative to the
+  pool. Both integer parsers translate. Formatting first fails at instruction
+  59, a two-digit table read. Its UMULH/shift reciprocal division and MSUB
+  remainder need a general exact unsigned-division proof, plus historical
+  right-shift guard bounds; do not special-case the divisor 100.
+  Inspect `_out/format-ints-neon-disasm.log` and `pool-format-neon.log`.
+  Repeated ADRs retain relocation cardinality. The ignored function probe's
+  scratch mask now has explicit parentheses; its earlier missing parentheses
+  caused a diagnostic-only false return-escape failure.
   Signed SVE first fails at instruction 23, a vector-length-dependent address
   operation; it needs actual SVE length relationships, not a fixed-host-length
   assumption. Ignored `pool-function-*` probes and disassemblies retain these
