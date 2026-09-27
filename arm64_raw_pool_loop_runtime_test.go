@@ -115,8 +115,32 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 		"mov x2, #99", "mov x4, #99", "ldp x2, x4, [sp, #8]",
 		"ldr x2, [x9, x2, lsl #3]", "ldr x4, [x9, x4, lsl #3]",
 		fmt.Sprintf("str x2, [x0, #%d]", output+8), fmt.Sprintf("str x4, [x0, #%d]", output+16),
-		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret",
 	)
+	output += 24
+	for _, division := range []struct {
+		divisor, multiplier uint64
+		pre, post           uint
+	}{
+		{3, 0xaaaaaaaaaaaaaaab, 0, 1}, {5, 0xcccccccccccccccd, 0, 2},
+		{10, 0xcccccccccccccccd, 0, 3}, {100, 0x28f5c28f5c28f5c3, 2, 2},
+		{8, 0x8000000000000000, 2, 0},
+	} {
+		lines = append(lines, arm64PoolMaterialize("x15", division.multiplier)...)
+		lines = append(lines, fmt.Sprintf("mov x16, #%d", division.divisor), "mov x21, x1",
+			fmt.Sprintf("lsr x7, x1, #%d", division.pre), "umulh x7, x7, x15",
+			fmt.Sprintf("lsr x7, x7, #%d", division.post), "msub x22, x7, x16, x21",
+			"ldrb w22, [x9, x22]", fmt.Sprintf("str x22, [x0, #%d]", output))
+		output += 8
+	}
+	lines = append(lines, "mov x16, #7", "udiv x7, x1, x16", "msub x22, x7, x16, x1",
+		"ldrb w22, [x9, x22]", fmt.Sprintf("str x22, [x0, #%d]", output))
+	output += 8
+	lines = append(lines, arm64PoolMaterialize("x15", 0x28f5c28f5c28f5c3)...)
+	lines = append(lines, "and x2, x1, #16383", "mov x21, x2",
+		"lsr x7, x2, #2", "umulh x7, x7, x15", "lsr x7, x7, #2",
+		"lsr x21, x21, #4", "cmp x21, #624", "b.hi #12",
+		"ldrb w7, [x9, x7]", fmt.Sprintf("str x7, [x0, #%d]", output),
+		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
 		if line == "adr x10, #0" {
@@ -128,7 +152,7 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 32; i++ {
 		fmt.Fprintf(&source, "WORD $%#08x\n", uint32(0x17b4a140+i))
 	}
 	source.WriteString("RET\n")
@@ -174,19 +198,20 @@ func TestARM64RawPoolLoopLLVM(t *testing.T) {
 
 const arm64RawPoolLoopMain = `
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 extern void pool_loop(uint64_t *, uint64_t);
 int main(void) {
-  uint32_t words[16];
-  for (unsigned i = 0; i < 16; i++) words[i] = 0x17b4a140 + i;
-  uint64_t values[8];
+  uint32_t words[32];
+  for (unsigned i = 0; i < 32; i++) words[i] = 0x17b4a140 + i;
+  uint64_t values[16];
   memcpy(values, words, sizeof(values));
   const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 19, 20, 23, 32, 255,
-                             1ULL << 32, 1ULL << 63, UINT64_MAX};
+                             1234, 9999, 10000, 16383, 1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[51] = {0}, expected[49] = {0};
+    uint64_t result[58] = {0}, expected[56] = {0};
     result[0] = 0x12345678;
-    result[50] = 0x87654321;
+    result[57] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -219,9 +244,22 @@ int main(void) {
     expected[46] = values[remaining & 7];
     expected[47] = values[remaining & 3];
     expected[48] = values[4 + (remaining & 3)];
+    const unsigned divisors[] = {3, 5, 10, 100, 8, 7};
+    for (unsigned j = 0; j < 6; j++) expected[49+j] = bytes[remaining % divisors[j]];
+    if ((remaining & 16383) <= 9999) expected[55] = bytes[(remaining & 16383) / 100];
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[50] != 0x87654321 ||
-        memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
+    if (result[0] != 0x12345678 || result[57] != 0x87654321) {
+      fprintf(stderr, "pool loop overwrote a canary for count %llu\n", (unsigned long long)counts[i]);
+      return 1;
+    }
+    for (unsigned j = 0; j < sizeof(expected) / sizeof(expected[0]); j++) {
+      if (result[j+1] != expected[j]) {
+        fprintf(stderr, "pool loop count=%llu output=%u actual=%llx expected=%llx\n",
+                (unsigned long long)counts[i], j,
+                (unsigned long long)result[j+1], (unsigned long long)expected[j]);
+        return 1;
+      }
+    }
   }
   return 0;
 }

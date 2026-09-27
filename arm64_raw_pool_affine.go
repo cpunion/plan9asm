@@ -367,7 +367,13 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				// recursively proving it must not consume the address's budget.
 				interval, bounded := flow.affineMaskInterval(previous, word)
 				if !bounded {
+					interval, bounded = flow.affineMoveKeepInterval(previous, word)
+				}
+				if !bounded {
 					value, interval, affine, bounded = flow.affineLogicalDefinition(previous, word)
+				}
+				if !bounded {
+					interval, bounded = flow.affineDivisionInterval(previous, word, next.constraints[:next.count])
 				}
 				if bounded {
 					destination = int(word & 31)
@@ -411,7 +417,13 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				count := 0
 				for _, constraint := range next.constraints[:next.count] {
 					if constraint.after == 0 && constraint.expression.coefficient[index] != 0 {
-						if !affine || index != destination || !constraint.expression.substitute(index, value) {
+						if !affine || index != destination {
+							replaced, ok := arm64PoolShiftConstraint(word, constraint)
+							if !ok {
+								continue
+							}
+							constraint = replaced
+						} else if !constraint.expression.substitute(index, value) {
 							continue // Forget this fact, never the queried value.
 						}
 					}

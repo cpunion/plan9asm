@@ -83,6 +83,11 @@ func (flow *arm64RawPoolValues) invariantIntervalProof(at int, expression arm64P
 					}
 				}
 				destination, value, valid := arm64PoolAffineDefinition(word)
+				if !valid && word&0x7f800000 == 0x72800000 {
+					if constant, known := flow.materializedConstant(previous, word); known {
+						destination, value, valid = int(word&31), arm64PoolAffine{constant: constant}, true
+					}
+				}
 				if offset, origin := flow.poolOrigins[previous]; origin && word&0x9f000000 == 0x10000000 {
 					destination = int(word & 31)
 					if next.expression.coefficient[destination] != 1 {

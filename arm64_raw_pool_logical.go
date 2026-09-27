@@ -37,7 +37,11 @@ func (flow *arm64RawPoolValues) integerInterval(at int, reg arm64asm.Reg) arm64P
 		}
 		numeric = &copy
 	}
-	interval := numeric.affineInterval(at, arm64PoolRegisterExpression(int(reg-arm64asm.X0)))
+	expression := arm64PoolRegisterExpression(int(reg - arm64asm.X0))
+	interval := numeric.invariantInterval(at, expression)
+	if interval == arm64PoolUnknownInterval {
+		interval = numeric.affineInterval(at, expression)
+	}
 	flow.affineWork = numeric.affineWork
 	if upper := flow.upper(at, reg); upper < interval.high {
 		interval.high = upper
