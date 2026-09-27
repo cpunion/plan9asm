@@ -13,9 +13,10 @@ another module-index inventory scan.
   logs were inspected; the repairs were pushed as `0d96d26`. Its run
   `36307233650` has passed all 10 standard-library lanes, the Linux/Windows root
   matrix, race, cross-runtime, benchmark, coverage and Codecov patch checks.
-  At 09:30 UTC on 2026-09-27, 60 jobs passed, none failed, eight external
-  shards were running and 24 were queued. All 11 preceding failed jobs are
-  repaired, but the 32-shard replay and aggregate are still incomplete.
+  At 09:57 UTC on 2026-09-27, 63 jobs passed, one failed, eight external
+  shards were running and 20 were queued. All 11 preceding failed jobs are
+  repaired. The new shard-3 failure is fixed by `a7e98cc` below; the 32-shard
+  replay and aggregate are still incomplete.
   Inspect live results; this is not a complete green CI run.
   Earlier ledger, FFR-oracle and Go-download-bootstrap repairs have passed
   the affected build, cross-runtime and old-Go root CI checks. Inspect live
@@ -40,6 +41,12 @@ another module-index inventory scan.
   43 target N/A; no partial shards. The complete/verified flags remain false.
   This is incomplete historical evidence, not current-development success;
   do not import it into a changed source snapshot as current proof.
+- `codex/pr40-ci-evidence-0d96d26` preserves current CI artifacts separately:
+  shards 2/6/7 pass, shard 3 has the single-character stack-slot failure.
+  Evidence commit `cc69e2c` records 495 passed, 96 source N/A, one failed and
+  4,191 pending, with 8,682 successful translations. All four reports were
+  audited by the updater and read back; complete/verified remain false.
+  Do not import these reports into the changed development snapshot.
 - The affine verification worktree completed the full root suite at
   `198307f` in 835 seconds, `487fed6` in 753 seconds, `8eab02c` in
   824 seconds and `a740c74` in 822 seconds. Both nested CLI suites passed
@@ -81,7 +88,7 @@ another module-index inventory scan.
   the full corpus-tool suite pass locally. Actual Windows CI now passes:
   root 1,566.780 seconds with 89.6% statement coverage, and both CLI suites
   passed. The previous Windows failures were fixture gaps.
-- Local, not yet pushed: `735fa37` rejects effective-address aliases such as
+- The next verified push batch includes `735fa37`, which rejects effective-address aliases such as
   `$8(RSP)` before moving a dynamic stack. The prefix must account for every
   live address, not just explicit register copies. Red/green and runtime
   regressions passed; no escape exception was introduced.
@@ -105,9 +112,23 @@ another module-index inventory scan.
   Go 1.20 and vet pass. The development worktree completed another full suite
   at this revision in 616 seconds (`_out/root-tests-sve-pool-memory.log`),
   plus the official five-architecture and ARM64 Go/x/arch gates. Its runners
-  have finished. All these batches remain local
-  to avoid cancelling the current CI shards. Refresh derived provenance
-  after the final source checkpoint and before the next push.
+  have finished. These changes are included in the next batch push. Refresh
+  derived provenance after the final source checkpoint and before pushing.
+- `a7e98cc` fixes shared parsing of Go-valid single-character named stack
+  displacements such as `n-8(SP)`. CI shard 3 exposed the failure in
+  `gopkg.in/agiledragon/gomonkey.v2@v2.14.3`; both assembly files now compile
+  in an exact-candidate diagnostic. Identifier/offset red/green tests,
+  Go 1.20/1.27, three-OS objects, Darwin and required Linux/QEMU runtime pass.
+  Its frozen full root suite passed in 631 seconds and both CLI suites passed
+  (`_out/root-tests-stack-single-name.log` in the CI-hotfix worktree).
+- `6b3a20ca` keeps scalar NZCV provenance through typed SVE unpack,
+  multiply-accumulate, integer reduction and vector/predicate logical families.
+  Predicate S variants, SVE comparisons, PTEST, unknown/system instructions
+  and bypassed comparisons remain barriers. LLVM 22 encoder tables and
+  red/green tests cover 131 preserving forms plus flag-writing siblings;
+  131 forms x nine inputs x 16 vector lengths pass required Linux/QEMU checks.
+  Three-OS objects, Go 1.20, complete operand-field tests, vet and all pool
+  regression tests pass. The pre-fix overlay fails the new integration fixture.
 - Metadata-download bootstrap and its synthetic retry fixture use the root
   Go 1.20 floor; actual corpus build plans still require Go 1.27. The old
   bootstrap required Go 1.27 before making even one proxy request, failing
@@ -292,8 +313,8 @@ passing module evidence. Do not upgrade its assembly ledger.
   scratch mask now has explicit parentheses; its earlier missing parentheses
   caused a diagnostic-only false return-escape failure.
   Signed SVE's instruction 23 now has all-VL address semantics and all its GP
-  effects are recognized. It still needs indexed predicated pool-load
-  footprints, flag preservation through typed SVE operations and relational
+  effects are recognized. Typed SVE flag preservation is now implemented.
+  It still needs indexed predicated pool-load footprints and relational
   loop bounds. In the current diagnostic, instruction 76's `R12+8*R20`
   footprint is still unknown at every checked VL; do not accept it merely
   because the typed load is supported. Ignored `pool-function-*` probes and
