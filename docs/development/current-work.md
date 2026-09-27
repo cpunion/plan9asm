@@ -29,10 +29,11 @@ another module-index inventory scan.
   This is incomplete historical evidence, not current-development success;
   do not import it into a changed source snapshot as current proof.
 - The affine verification worktree completed the full root suite at
-  `198307f` in 835 seconds and `487fed6` in 753 seconds. It is now frozen at
-  `8eab02c` for another full root run; both nested CLI suites already passed.
-  Do not change it while that process runs. Official five-architecture
-  classification also passed again at `487fed6`.
+  `198307f` in 835 seconds, `487fed6` in 753 seconds and `8eab02c` in
+  824 seconds. Both nested CLI suites passed at `8eab02c`; those runners
+  finished. Official five-architecture classification also passed again at
+  `487fed6`. Check the actual frozen revision and running processes before
+  changing that worktree.
 - Use Go 1.27.1 and LLVM 22 for external modules. Put the actual Go binary in
   PATH; setting only GOTOOLCHAIN can select a different child compiler.
   Required cross execution uses checksum-pinned QEMU 10.2.3.
@@ -92,6 +93,29 @@ another module-index inventory scan.
   including distinct ADRs. Resolve stable origins exposed after transient-index
   cancellation without collecting unrelated loop predicates. Join/overrun
   regressions and three-OS/native/Linux-QEMU runtime oracles passed.
+- `3ed6437`, `c043b91`, `b41c426`: avoid cyclic residual speculation, retry
+  inconclusive caches with a fresh proof budget, and try direct guards before
+  residual decomposition. Compact tautologies/duplicate predicates and retain
+  already-proved mask constants for later comparisons. The real unsigned
+  parser's length proof fell from exhausting 16,384 steps to 334 steps.
+- `c0652bb`: retain nonconstant AND intervals and prove disjoint-bit ORR/EOR
+  relationships across immediate/register/all shifted-register forms. Numeric
+  bit proofs must not interpret a relocated pool offset as physical address
+  bits. Overlap, truncation and unrelated-mask regressions remain conservative.
+- `22ffd2d`: certify unit-step ordered loops, both directions, all eight
+  signed/unsigned strict/inclusive conditions and reversed operands. Prove
+  entry ordering, invariant limits, flag provenance and no arithmetic wrap.
+- `4fe7c89`: comparisons constrain values at their defining program point,
+  including operands reused before the branch. Pending historical predicates
+  cannot constrain replacement values. Intersect mask/guard bounds before
+  applying negative displacements. Bypasses and newer flags still reject.
+- `99fbba8`: infer carried address/count relationships from certified loop
+  deltas and prove the whole invariant at external entries. Only this entry
+  proof enables full affine arithmetic in the unguarded invariant walker;
+  speculative residuals keep the cheap mode. Increasing/decreasing post-index
+  runtime loops preserve the relationship instead of multiplying independent
+  ranges. The focused Go 1.27/1.20, three-OS LLVM 22, Darwin-native,
+  required Linux/QEMU and vet gates passed for every batch above.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -131,8 +155,12 @@ of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
   remaining bytes files need further proof work. Signed NEON now proves both
   vector loops run once and the tail counter stays in 1..7, including pair
   writeback. Unsigned NEON's two vector loops are also proved one-iteration,
-  but its ascending signed-comparison tail and stack-spilled indexes remain
-  unresolved. Repeated ADRs are modeled, with explicit relocation cardinality.
+  and the ascending signed-comparison tail now has a certified remaining
+  interval of 1..19. The unresolved entry invariant reads a stack-spilled
+  index: instruction 323 reloads X9 from SP+8, saved at instruction 181.
+  Prove that exact memory/value relationship before using it; do not assume
+  arbitrary stores cannot alias the slot or use the source register's current
+  value in place of its saved value. Repeated ADRs retain relocation cardinality.
   Its first failed read is instruction 333, `LDR X10,[X16],#-8`.
   Signed SVE first fails at instruction 23, a vector-length-dependent address
   operation; it needs actual SVE length relationships, not a fixed-host-length
