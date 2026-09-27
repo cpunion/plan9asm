@@ -8,7 +8,7 @@
 {"module":"github.com/emseco/go-hashgrid","version":"v0.0.0-20180822125425-cc391c2613e9","status":"pending"}
 {"module":"github.com/goexlib/cgo","version":"v0.1.0","status":"pending"}
 {"module":"github.com/gzliudan/XDPoSChain","version":"v0.0.0-20260915070722-cdce8fc5c285","status":"pending"}
-{"module":"github.com/infinite1st/exclave-core/v5","version":"v5.50.0","status":"pending"}
+{"module":"github.com/infinite1st/exclave-core/v5","version":"v5.50.0","status":"passed"}
 {"module":"github.com/klaytn/klaytn","version":"v1.12.1","status":"pending"}
 {"module":"github.com/leadaxe/utls-lx","version":"v1.8.7","status":"pending"}
 {"module":"github.com/nem-toolchain/crypto","version":"v0.0.0-20171011054418-90a8fb66ba62","status":"pending"}

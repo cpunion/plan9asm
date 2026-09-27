@@ -8,7 +8,7 @@
 {"module":"github.com/WyX2685/xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"github.com/alcutter/gotee","version":"v0.0.0-20230717085113-1beadf7e5429","status":"pending"}
 {"module":"github.com/bcseputetto/sing-tun","version":"v0.9.0-beta.8","status":"pending"}
-{"module":"github.com/bearbearfoxsquirrel/epaxos/src","version":"v0.0.0-20221010123117-26995a09dc79","status":"pending"}
+{"module":"github.com/bearbearfoxsquirrel/epaxos/src","version":"v0.0.0-20221010123117-26995a09dc79","status":"passed"}
 {"module":"github.com/danielzhangqd/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/golang/go/src/cmd","version":"v0.0.0-20260716173446-1ad6b283d410","status":"pending"}
 {"module":"github.com/gzliudan/xdposchain","version":"v0.0.0-20260915070722-cdce8fc5c285","status":"pending"}

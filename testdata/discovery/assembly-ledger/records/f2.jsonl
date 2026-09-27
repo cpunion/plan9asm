@@ -6,7 +6,7 @@
 {"module":"github.com/allo-rs/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/bitnetmoney/bitnet","version":"v0.0.5","status":"pending"}
 {"module":"github.com/cag2050/go_xorm_demo","version":"v0.0.0-20221228112702-80516304b692","status":"pending"}
-{"module":"github.com/dogeprotocol/go-dp","version":"v1.10.13","status":"pending"}
+{"module":"github.com/dogeprotocol/go-dp","version":"v1.10.13","status":"passed"}
 {"module":"github.com/getlantern/sing-tun","version":"v0.0.0-20260618010023-b6fca15e1e01","status":"pending"}
 {"module":"github.com/manifoldfinance/geth","version":"v1.12.0","status":"pending"}
 {"module":"github.com/offchainlabs/stylus-geth","version":"v0.0.0-20240503082158-72f81daa8c59","status":"pending"}

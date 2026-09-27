@@ -11,7 +11,7 @@
 {"module":"github.com/joeycumines/goroutineid","version":"v1.1.1","status":"pending"}
 {"module":"github.com/marselester/perf","version":"v0.0.0-20260720174119-cd198c9c3cdb","status":"pending"}
 {"module":"github.com/mesos/mr-redis","version":"v0.0.0-20181210142107-705e2cbf7a03","status":"pending"}
-{"module":"github.com/minio/highwayHash","version":"v1.0.4","status":"pending"}
+{"module":"github.com/minio/highwayHash","version":"v1.0.4","status":"passed"}
 {"module":"github.com/onflow/FLOW-Go","version":"v0.51.1","status":"pending"}
 {"module":"github.com/siyuan-community/siyuan/kernel","version":"v0.0.0-20260908072218-79db20732b8d","status":"pending"}
 {"module":"github.com/sonarcommunity/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"pending"}

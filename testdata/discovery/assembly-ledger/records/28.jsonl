@@ -17,11 +17,11 @@
 {"module":"github.com/fearless743/xray-core","version":"v0.0.0-20260807085725-832855197c2b","status":"pending"}
 {"module":"github.com/fengou1/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/hacash/chain","version":"v0.0.0-20240106023138-03c569ec569a","status":"pending"}
-{"module":"github.com/janatshaban/Xray-core","version":"v0.0.0-20260829071626-0af90331ac4b","status":"pending"}
+{"module":"github.com/janatshaban/Xray-core","version":"v0.0.0-20260829071626-0af90331ac4b","status":"passed"}
 {"module":"github.com/jolymmiles/xray-core","version":"v1.250608.0","status":"pending"}
 {"module":"github.com/lewdest/yuri","version":"v0.0.13","status":"pending"}
 {"module":"github.com/mjopsec/taburtuaiC2","version":"v0.0.0-20260506125907-8d1123e6fe37","status":"pending"}
-{"module":"github.com/mycophonic/primordium","version":"v0.9.1","status":"pending"}
+{"module":"github.com/mycophonic/primordium","version":"v0.9.1","status":"passed"}
 {"module":"github.com/nkane/chippy","version":"v1.12.0","status":"pending"}
 {"module":"github.com/qiangli/sh/v3","version":"v3.0.0-20260922023215-e01da46a6fa2","status":"pending"}
 {"module":"github.com/rkusa/gm","version":"v0.0.0-20160203133140-acc6b6d0b64a","status":"pending"}

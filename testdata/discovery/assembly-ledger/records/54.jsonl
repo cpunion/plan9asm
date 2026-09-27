@@ -1,5 +1,5 @@
 {"module":"atomgit.com/golang/go","version":"v0.0.0-20260820022322-c1969e2f0588","status":"pending"}
-{"module":"github.com/Barnadrot/gnark-crypto","version":"v0.0.0-20260422151303-363351c1f799","status":"pending"}
+{"module":"github.com/Barnadrot/gnark-crypto","version":"v0.0.0-20260422151303-363351c1f799","status":"passed"}
 {"module":"github.com/LF-Decentralized-Trust-labs/waterfall-gwat","version":"v0.0.0-20250128112811-15c1c664a423","status":"pending"}
 {"module":"github.com/NurfitraPujo/websocket","version":"v0.0.0-20250905081622-7d7c644330e7","status":"pending"}
 {"module":"github.com/PINGCAP/TIDB","version":"v1.0.9","status":"pending"}

@@ -1,5 +1,5 @@
 {"module":"github.com/Ethersphere/bee/v2","version":"v2.8.2","status":"pending"}
-{"module":"github.com/Go-delve/delve","version":"v1.27.2","status":"pending"}
+{"module":"github.com/Go-delve/delve","version":"v1.27.2","status":"passed"}
 {"module":"github.com/LimeChain/scroll-go-ethereum","version":"v0.0.0-20231025095240-bbf42042e2ec","status":"pending"}
 {"module":"github.com/benchflow/commons","version":"v0.0.0-20161120184547-d158804f6880","status":"pending"}
 {"module":"github.com/chainpqc/chainpqc-node","version":"v0.0.0-20240716032056-d104ce71ce02","status":"pending"}

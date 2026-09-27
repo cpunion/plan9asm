@@ -7,8 +7,8 @@
 {"module":"github.com/fibonacciTeam/go-ethereum1_12_2","version":"v1.14.7","status":"pending"}
 {"module":"github.com/fxfactorial/bsc-evmone","version":"v0.0.0-20220414045849-555d46656712","status":"pending"}
 {"module":"github.com/go-images/images","version":"v0.0.0-20260912071231-12ebfec58453","status":"pending"}
-{"module":"github.com/gorse-io/zvec","version":"v0.0.0-20260921042059-0f0a0645abb9","status":"pending"}
-{"module":"github.com/offchainlabs/hashtree","version":"v0.2.6","status":"pending"}
+{"module":"github.com/gorse-io/zvec","version":"v0.0.0-20260921042059-0f0a0645abb9","status":"passed"}
+{"module":"github.com/offchainlabs/hashtree","version":"v0.2.6","status":"passed"}
 {"module":"github.com/rsc/go","version":"v0.0.0-20260728020454-792a4f8f8995","status":"pending"}
 {"module":"github.com/stevenjnpearce/go-spacemesh","version":"v0.0.0-20190103132627-b75792c2b974","status":"pending"}
 {"module":"github.com/vmware-archive/vmw-guestinfo","version":"v0.0.0-20220317130741-510905f0efa3","status":"pending"}

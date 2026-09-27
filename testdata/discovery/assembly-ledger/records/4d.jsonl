@@ -1,7 +1,7 @@
 {"module":"git.haikiri.ru/golang/net.git","version":"v0.58.0","status":"passed"}
 {"module":"github.com/ClawSeven/gvisor","version":"v0.0.0-20240912013411-8373ad69f1ac","status":"pending"}
 {"module":"github.com/FelixN1l/Xray-core","version":"v1.260327.0","status":"pending"}
-{"module":"github.com/HeXis-YS/Xray-core","version":"v1.8.9","status":"pending"}
+{"module":"github.com/HeXis-YS/Xray-core","version":"v1.8.9","status":"passed"}
 {"module":"github.com/NeptuneIsTheBest/v2ray-core/v5","version":"v5.51.2","status":"pending"}
 {"module":"github.com/allanrogerr/pkg/v3","version":"v3.0.0-20260421214503-7e6b596fabf1","status":"pending"}
 {"module":"github.com/anbangr/agnt2-op-geth","version":"v1.101702.1","status":"pending"}

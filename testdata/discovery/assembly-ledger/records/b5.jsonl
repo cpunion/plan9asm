@@ -1,6 +1,6 @@
 {"module":"github.com/Arkiv-Network/arkiv-op-geth","version":"v1.101605.0-test.1","status":"pending"}
 {"module":"github.com/Creativesoftwarefdn/weaviate","version":"v1.39.6","status":"pending"}
-{"module":"github.com/DimensionDev/crypto","version":"v2.0.0+incompatible","status":"pending"}
+{"module":"github.com/DimensionDev/crypto","version":"v2.0.0+incompatible","status":"passed"}
 {"module":"github.com/Psiphon-Labs/utls","version":"v1.1.0","status":"pending"}
 {"module":"github.com/SysVerification/gokv","version":"v0.0.0-20250508184610-d007325b6ee8","status":"pending"}
 {"module":"github.com/aeneasr/kubernetes","version":"v1.2.3","status":"pending"}
@@ -11,7 +11,7 @@
 {"module":"github.com/honue/sing-tun","version":"v0.0.0-20260622065136-634d5f715d0c","status":"pending"}
 {"module":"github.com/kirides/go-d3d","version":"v1.0.1","status":"pending"}
 {"module":"github.com/knull-cn/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/lHumaNl/EchoWarp","version":"v0.9.0","status":"pending"}
+{"module":"github.com/lHumaNl/EchoWarp","version":"v0.9.0","status":"not_applicable"}
 {"module":"github.com/lethalres/crypto","version":"v0.0.0-20180925222037-eec417348f72","status":"pending"}
 {"module":"github.com/metisprotocol/go-ethereum","version":"v1.9.10","status":"pending"}
 {"module":"github.com/minio/HighwayHash","version":"v1.0.4","status":"pending"}

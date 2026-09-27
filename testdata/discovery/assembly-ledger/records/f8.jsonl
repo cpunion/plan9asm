@@ -13,8 +13,8 @@
 {"module":"github.com/jacalz/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/jschwinger233/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/libreFS/pkg/v3","version":"v3.8.0","status":"pending"}
-{"module":"github.com/magomedcoder/gogguf","version":"v0.0.0-20260910165904-0b93a9ea3c72","status":"pending"}
-{"module":"github.com/metacubeX/clash.meta","version":"v1.19.31","status":"pending"}
+{"module":"github.com/magomedcoder/gogguf","version":"v0.0.0-20260910165904-0b93a9ea3c72","status":"passed"}
+{"module":"github.com/metacubeX/clash.meta","version":"v1.19.31","status":"passed"}
 {"module":"github.com/metacubex/ssh","version":"v0.1.0","status":"pending"}
 {"module":"github.com/nuclearkev/wireguard-go","version":"v0.0.0-20260804172100-69219e8c3ea5","status":"pending"}
 {"module":"github.com/petermattis/goID","version":"v0.0.0-20260918085751-abfca077860b","status":"pending"}

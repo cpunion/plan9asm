@@ -14,7 +14,7 @@
 {"module":"github.com/halalchain/qitmeer","version":"v0.10.6","status":"pending"}
 {"module":"github.com/ingonyama-zk/gnark-crypto","version":"v0.0.0-20241122181107-03e007d865c0","status":"pending"}
 {"module":"github.com/mgilbir/wazero","version":"v1.12.0","status":"pending"}
-{"module":"github.com/nautrouds/mmfg/v2","version":"v2.0.1","status":"pending"}
+{"module":"github.com/nautrouds/mmfg/v2","version":"v2.0.1","status":"passed"}
 {"module":"github.com/nonsense/op-geth","version":"v1.101605.0","status":"pending"}
 {"module":"github.com/parable-work/typescript-go","version":"v0.0.0-20260701192534-c5de5679073f","status":"pending"}
 {"module":"github.com/probe-lab/go-ethereum","version":"v0.0.0-20250509194247-08af87b0c67d","status":"pending"}

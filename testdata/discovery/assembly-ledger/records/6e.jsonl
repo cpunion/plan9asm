@@ -4,7 +4,7 @@
 {"module":"github.com/Leadaxe/sing-tun-lx","version":"v0.0.0-20260913201557-6f13ebcc131c","status":"pending"}
 {"module":"github.com/Libertymutual/cfops","version":"v1.0.17","status":"pending"}
 {"module":"github.com/SeriousBug/webp-go-pure","version":"v1.2.0","status":"pending"}
-{"module":"github.com/VoidSecSoftwares/voidsyscall","version":"v1.1.0","status":"pending"}
+{"module":"github.com/VoidSecSoftwares/voidsyscall","version":"v1.1.0","status":"not_applicable"}
 {"module":"github.com/Xtls/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/cwbudde/algo-fft","version":"v0.8.0","status":"pending"}
 {"module":"github.com/gabriel-samfira/sys","version":"v0.0.0-20150608132119-9ddc60d56b51","status":"pending"}

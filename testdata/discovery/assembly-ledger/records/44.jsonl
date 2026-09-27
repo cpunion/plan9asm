@@ -13,7 +13,7 @@
 {"module":"github.com/ijaack/libevm","version":"v1.16.2","status":"pending"}
 {"module":"github.com/katzenpost/chacha20","version":"v0.0.1","status":"pending"}
 {"module":"github.com/lilin90/tidb","version":"v1.0.8","status":"pending"}
-{"module":"github.com/nyarime/compress","version":"v0.2.8","status":"pending"}
+{"module":"github.com/nyarime/compress","version":"v0.2.8","status":"passed"}
 {"module":"github.com/open-telemetry/Opentelemetry-Ebpf-Profiler","version":"v0.0.202636","status":"pending"}
 {"module":"github.com/requestSource/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"storj.io/minio","version":"v0.0.0-20260609124736-fc17c581773a","status":"pending"}

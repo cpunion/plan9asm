@@ -1,6 +1,6 @@
 {"module":"gitee.com/bytedance/sonic.git","version":"v1.15.4","status":"pending"}
 {"module":"github.com/CBcWestwolf/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/SonarCommunity/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"pending"}
+{"module":"github.com/SonarCommunity/javascript-test-sources","version":"v0.0.0-20221208151138-faa141eded84","status":"not_applicable"}
 {"module":"github.com/aead/poly1305","version":"v0.0.0-20180717145839-3fee0db0b635","status":"pending"}
 {"module":"github.com/agnitum2009/xray-core","version":"v0.0.0-20260708144011-5f45a0be11a3","status":"pending"}
 {"module":"github.com/creack/pty","version":"v1.1.24","status":"pending"}
@@ -13,7 +13,7 @@
 {"module":"github.com/kardiachain/go-dnc","version":"v1.7.0","status":"pending"}
 {"module":"github.com/karlfloersch/op-geth","version":"v0.0.0-20260317163533-d0734fd5f442","status":"pending"}
 {"module":"github.com/metamask/go-ethereum","version":"v1.9.20","status":"pending"}
-{"module":"github.com/monetarium/monetarium-node/crypto/blake256","version":"v1.3.10","status":"pending"}
+{"module":"github.com/monetarium/monetarium-node/crypto/blake256","version":"v1.3.10","status":"passed"}
 {"module":"github.com/nakagami/grdp","version":"v0.9.11","status":"pending"}
 {"module":"github.com/spachava753/mvm","version":"v0.5.0","status":"pending"}
 {"module":"github.com/tljk/gvisor-ohos","version":"v0.0.0-20260909092552-25f056f9a8d4","status":"pending"}
