@@ -62,6 +62,28 @@ func TestARM64PoolMaskIntervals(t *testing.T) {
 	if got := arm64PoolMaskInterval(arm64PoolInterval{8, 15}, 24); got != (arm64PoolInterval{8, 8}) {
 		t.Fatalf("guarded mask: %+v", got)
 	}
+	if got := arm64PoolMaskInterval(arm64PoolInterval{8, 19}, 24); got != (arm64PoolInterval{8, 16}) {
+		t.Fatalf("mask crossing a power-of-two boundary: %+v", got)
+	}
+	for low := uint64(0); low < 32; low++ {
+		for high := low; high < 32; high++ {
+			for mask := uint64(0); mask < 32; mask++ {
+				want := arm64PoolInterval{math.MaxUint64, 0}
+				for value := low; value <= high; value++ {
+					masked := value & mask
+					if masked < want.low {
+						want.low = masked
+					}
+					if masked > want.high {
+						want.high = masked
+					}
+				}
+				if got := arm64PoolMaskInterval(arm64PoolInterval{low, high}, mask); got != want {
+					t.Fatalf("[%d,%d] & %d = %+v, want %+v", low, high, mask, got, want)
+				}
+			}
+		}
+	}
 }
 
 func arm64RawPoolAffineIR(t *testing.T, triple string) string {

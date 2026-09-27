@@ -22,9 +22,9 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		lines = append(lines, "cmp x1,#16", "b.lo #0", "cmp x1,#19", "b.hi #0",
 			"mov x10,x9", "mov x11,x1", "and x4,x1,x2")
 		head := len(lines)
-		// A second iteration would read beyond the eight-byte pool. The
+		// A second iteration would read beyond the sixteen-byte pool. The
 		// relational zero proof must establish that the backedge is impossible.
-		lines = append(lines, "ldr x5,[x10],#8", "sub x11,x11,x6", compare)
+		lines = append(lines, "ldr x5,[x10],#16", "sub x11,x11,x6", compare)
 		lines = append(lines, fmt.Sprintf("b.ne #%d", (head-len(lines))*4),
 			fmt.Sprintf("str x5,[x0,#%d]", 64+index*8), "mov x10,xzr")
 		lines[start+1] = fmt.Sprintf("b.lo #%d", (len(lines)-start-1)*4)
@@ -33,8 +33,20 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	// The alternative load is genuinely out of bounds. Only the proved
 	// incoming 16..19 interval makes its branch impossible.
 	lines = append(lines, "and x12,x1,#3", "add x12,x12,#16", "mov x6,#32",
-		"cmp x12,x6", "b.hs #12", "ldr x5,[x9]", "b #8", "ldr x5,[x9,#8]",
+		"cmp x12,x6", "b.hs #12", "ldr x5,[x9]", "b #8", "ldr x5,[x9,#16]",
 		"str x5,[x0,#80]")
+	for index, ascending := range []bool{false, true} {
+		lines = append(lines, "and x11,x1,#8", "add x11,x11,#8", "mov x12,#0")
+		copy, update := "mov x10,x11", "sub x11,x11,#8"
+		if ascending {
+			lines = append(lines, "neg x11,x11")
+			copy, update = "neg x10,x11", "add x11,x11,#8"
+		}
+		head := len(lines)
+		lines = append(lines, copy, "sub x10,x10,#8", "ldr x5,[x9,x10]", "add x12,x12,x5", update)
+		lines = append(lines, fmt.Sprintf("cbnz x11,#%d", (head-len(lines))*4),
+			fmt.Sprintf("str x12,[x0,#%d]", 88+index*8))
+	}
 	lines = append(lines, "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
@@ -42,7 +54,7 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
-	source.WriteString("WORD $0x17b4a140\nWORD $0x17b4a141\nRET\n")
+	source.WriteString("WORD $0x17b4a140\nWORD $0x17b4a141\nWORD $0x17b4a142\nWORD $0x17b4a143\nRET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
@@ -89,15 +101,19 @@ extern void pool_masked(uint64_t *, uint64_t);
 int main(void) {
   const uint64_t inputs[] = {0, 1, 15, 16, 17, 18, 19, 20, 31, 255, UINT64_C(1)<<63, UINT64_MAX};
   for (unsigned test = 0; test < sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[13] = {0x1234, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x5678};
+    uint64_t out[15] = {0x1234};
+    out[14] = 0x5678;
     uint64_t n = inputs[test];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[12] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[14] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
     }
     if (out[11] != UINT64_C(0x17b4a14117b4a140)) return 3;
+    uint64_t sum = UINT64_C(0x17b4a14117b4a140);
+    if (n & 8) sum += UINT64_C(0x17b4a14317b4a142);
+    if (out[12] != sum || out[13] != sum) return 4;
   }
   return 0;
 }

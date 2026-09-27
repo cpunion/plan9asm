@@ -173,16 +173,20 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 		flow.excludeEdge(arm64RawPoolEdge{latch, head})
 		return
 	}
-	// A unit countdown from a positive unsigned value cannot wrap before
-	// reaching zero. At the loop head it stays in [1, initial.high]. Larger
-	// steps require a divisibility proof and are deliberately not inferred.
+	// Non-unit power-of-two strides additionally require a residue proof;
+	// a contiguous interval alone cannot establish that zero is reached.
+	bound := arm64PoolInterval{1, initial.high}
 	if delta != ^uint64(0) || initial.low == 0 || initial == arm64PoolUnknownInterval {
-		return
+		var proved bool
+		bound, proved = entry.counterStrideBound(head, expression, initial, delta)
+		if !proved {
+			return
+		}
 	}
 	if flow.loopBounds == nil {
 		flow.loopBounds = make(map[int]arm64PoolConstraint)
 	}
-	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: arm64PoolInterval{1, initial.high}}
+	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: bound}
 	flow.recordLoopLatch(head, latch)
 	flow.clearValueCaches()
 }

@@ -495,13 +495,17 @@ func arm64PoolAffineDefinition(word uint32) (int, arm64PoolAffine, bool) {
 			return destination, value, valid
 		}
 	}
-	if ins.Op != arm64asm.ADD && ins.Op != arm64asm.SUB && ins.Op != arm64asm.ADDS && ins.Op != arm64asm.SUBS {
+	switch ins.Op {
+	case arm64asm.ADD, arm64asm.ADDS, arm64asm.SUB, arm64asm.SUBS, arm64asm.NEG, arm64asm.NEGS:
+		// NEG/NEGS are SUB/SUBS with a zero-register first operand. The
+		// decoder chooses the alias, but its modular affine effect is shared.
+	default:
 		return 0, value, false
 	}
 	base := int(word >> 5 & 31)
 	value = arm64PoolRegisterExpression(base)
 	scale := int64(1)
-	if ins.Op == arm64asm.SUB || ins.Op == arm64asm.SUBS {
+	if word&(1<<30) != 0 {
 		scale = -1
 	}
 	switch {
