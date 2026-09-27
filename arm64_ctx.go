@@ -1097,7 +1097,19 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
 	}
 	if spSlot := c.regSlot[SP]; spSlot != "" {
-		minOff, maxOff := c.stackOffsetRange()
+		minOff, maxOff, err := c.stackOffsetRange()
+		if err != nil {
+			return err
+		}
+		minimum, maximum, err := c.stackMovementRange()
+		if err != nil {
+			return err
+		}
+		minOff += minimum
+		maxOff += maximum
+		if minOff < -arm64MaxLocalStackSpan || maxOff > arm64MaxLocalStackSpan {
+			return fmt.Errorf("ARM64 local stack footprint exceeds %d bytes", arm64MaxLocalStackSpan)
+		}
 		const guard = int64(64)
 		bias := guard - minOff
 		size := bias + maxOff + guard
@@ -1273,8 +1285,13 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 	return nil
 }
 
-func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64) {
+func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64, err error) {
 	add := func(off, size int64) {
+		if off < -arm64MaxLocalStackSpan || off > arm64MaxLocalStackSpan ||
+			size < 0 || size > arm64MaxLocalStackSpan {
+			err = fmt.Errorf("ARM64 local stack operand exceeds %d bytes", arm64MaxLocalStackSpan)
+			return
+		}
 		if off < minOff {
 			minOff = off
 		}
@@ -1283,10 +1300,13 @@ func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 		}
 	}
 	for _, block := range c.blocks {
-		for _, ins := range block.instrs {
+		for _, original := range block.instrs {
+			ins := arm64StackInstruction(original)
 			for _, arg := range ins.Args {
 				if arg.Kind == OpMem && (arg.Mem.Base == SP || arg.Mem.Base == Reg("RSP") || arg.Mem.Base == ZR) {
-					add(arg.Mem.Off, 16)
+					// Four 128-bit NEON registers are the largest ordinary
+					// structured transfer. Scalar/pair forms fit this bound too.
+					add(arg.Mem.Off, 64)
 				}
 			}
 			op := strings.ToUpper(string(ins.Op))
@@ -1309,7 +1329,7 @@ func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64) {
 			}
 		}
 	}
-	return minOff, maxOff
+	return minOff, maxOff, err
 }
 
 func arm64ValueAsI64(c *arm64Ctx, ty LLVMType, v string) (out string, ok bool, err error) {

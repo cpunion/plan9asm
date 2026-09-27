@@ -11,6 +11,8 @@ another module-index inventory scan.
   benchmark passed 184/184 files with zero N/A in 25 target-seconds.
   Its CI exposed stale derived assembly evidence and an SVE runtime oracle
   assumption. Evidence refresh `81bbd5e` passed CI's build/provenance check.
+  FFR repair `6f7c192` passed both build and Linux cross-runtime CI checks;
+  remaining jobs were still running at the last inspection.
   Inspect live checks rather than treating these partial results as green CI.
 - Push only to `cpunion:codex/expand-ecosystem-corpus-20260913`. Never push to
   `origin` or `xgo-dev`. The latest request is to push verified CI repairs
@@ -53,11 +55,19 @@ another module-index inventory scan.
   expectation. Both aligned/full-load and cross-page/valid-prefix layouts
   now run; all seven non-faulting mnemonics and ordinary loads/stores pass.
   No instruction, vector length or page-crossing case is skipped.
-- The uncommitted ARM64 stack-allocation repair includes named/raw manual SP
-  adjustments and saved-SP aliases. Its real NEON integer-parser crash is
-  reproduced and repaired (130 parsing plus 65 formatting runtime cases).
-  Finish alias/clobber/CFG review and full gates before committing it; these
-  diagnostic results are not complete external-module or shard evidence.
+- The ARM64 stack-allocation repair includes named/raw manual SP adjustments,
+  pre/post-indexed transfers, saved-SP aliases, alignment and ADDVL/ADDPL at
+  every architectural VL. Static-offset overflow fails before allocation.
+  Widen changing GP aliases to unknown so pointer walks converge, but never
+  silently treat an unknown restored local SP as external storage. Require
+  bounds when SP is used again; an unused final restore before RET needs no
+  further allocation. This is allocation sizing, not a general memory-safety
+  proof for arbitrary pointer dereferences. Its real NEON parser crash is
+  repaired: 130 parsing and 65 formatting runtime cases pass, and the full
+  NEON bytes file compiles on all three OS targets. Focused Go 1.27/1.20,
+  Darwin runtime, Linux/QEMU and vet pass. Strict benchmark: 184/184 files,
+  zero N/A, 29 target-seconds. Rebuild frozen full-suite and corpus evidence;
+  these diagnostics are not complete external-module or shard passes.
 - `cc307d5`: reject Go command/compiler/assembler version mismatches as
   infrastructure failures, never source N/A. The shard script pins its child
   Go binary to the recorded GOROOT and checks all three versions.
