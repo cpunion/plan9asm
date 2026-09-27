@@ -19,13 +19,19 @@ another module-index inventory scan.
   Root `go test ./... -count=1 -timeout=20m` passed in 1,040 seconds; both
   nested CLI suites passed. Official five-architecture classification and
   strict benchmark passed: 184/184 files, no N/A, 25 target-seconds plus six
-  seconds for driver build. Shards 6, 16 and 26 passed; all its runners have
-  finished. Preserve the reports. They predate the affine proof work below.
+  seconds for driver build. Shards 4, 6, 16 and 26 passed; shard 10 is still
+  running. Preserve the reports. They predate the affine proof work below.
 - `codex/pr40-evidence-20260927` separately records validated progress for
-  that snapshot: 377 passed, 84 source N/A, one invalid-source skip, zero
-  failures and 4,321 pending. The updater also reads back its own output.
+  that snapshot: 633 passed, 147 source N/A, two invalid-source skips, zero
+  failures and 4,001 pending. This includes shard 10's validated partial
+  checkpoint; the updater also reads back its own output. Evidence commit:
+  `48cf89f`. Four shards are complete; 13,645 translations are recorded.
   This is incomplete historical evidence, not current-development success;
   do not import it into a changed source snapshot as current proof.
+- The affine verification worktree completed the full root suite at
+  `198307f` in 835 seconds, and is now frozen at `487fed6` for another full
+  root run. Do not change it while that process runs. Its official
+  five-architecture classification gate passed again.
 - Use Go 1.27.1 and LLVM 22 for external modules. Put the actual Go binary in
   PATH; setting only GOTOOLCHAIN can select a different child compiler.
   Required cross execution uses checksum-pinned QEMU 10.2.3.
@@ -67,6 +73,19 @@ another module-index inventory scan.
   added together must be rejected. Unknown effects/cycles and exhausted proof
   budgets remain failures. See `arm64_raw_pool_affine*.go` and
   `arm64_raw_pool_symbolic.go`; do not treat an ADR as an ordinary constant.
+- `9acb690`: retain CMP/CMN/ADDS/SUBS provenance through known NZCV-preserving
+  instructions; avoid speculative residual recursion on almost-full ranges.
+- `487fed6`: prove single-entry counter loops, eliminate only proved-impossible
+  edges, and validate the full scalar/pair pre/post-indexed load footprints.
+  Positive unit countdowns retain an induction bound; a proved one-iteration
+  loop does not invent further pointer updates. Seed proofs make a prior body
+  execution through an enclosing loop opaque. Invariant-origin queries use
+  separate cached proofs and reject changing recurrences. Predecessor order is
+  deterministic. Overlap, overrun, wrong-step, zero-entry and side-entry tests
+  fail closed. See `arm64_raw_pool_{loop,invariant,memory}.go`.
+- `4ed0872`: trace flags across long integer-multiply and SIMD schedules, with
+  an explicit preserving-family whitelist. A TST/unknown effect still stops
+  the proof. The runtime oracle includes 48 instructions between SUBS and B.NE.
 
 The pointer/guard batches passed all focused pool tests on Go 1.27.1,
 focused Go 1.20 compatibility, LLVM 22 ARM64 objects for Darwin/Linux/Windows,
@@ -90,19 +109,30 @@ official classification, the ARM64 decoder-corpus gate and the strict benchmark
 passed again: 184/184 files, zero N/A, 31 target-seconds plus two seconds build.
 These classification and compilation gates do not establish every instruction's
 runtime semantics. Keep the final full-suite and external-corpus gates separate.
+The loop batches passed focused Go 1.27/1.20 tests, three-OS LLVM 22 objects,
+Darwin native and required Linux/QEMU oracles. At `4ed0872`, strict benchmark
+passed 184/184 files, zero N/A, 30 target-seconds plus seven seconds build.
 
 ## External evidence and remaining real failures
 
 A passing fixture or one target replay is not a passing module or shard.
-The latest direct SIMD replay (`_out/simd-guard.json`) still fails both
-`parseIntsNEON` and `parseIntsSVE2`; do not upgrade its assembly ledger.
+The latest three-OS SIMD replay (`_out/simd-loop-green.json`) passed translation
+of `parseIntsNEON`, but still fails the full files at `parseUintsNEON` and
+`parseIntsSVE2`. Do not upgrade its assembly ledger.
 
 - **SIMD**: `github.com/sebishogun/simd@v1.21.1` and its mirror have 45/47
   applicable ARM64 files passing in earlier three-OS diagnostics. The two
-  remaining bytes files still need loop reasoning and post-indexed pair loads.
-  The new proof derives length 1..19, the eight-lane path's length 8..15,
-  scaled delta 64..120 and mask value 8 in the actual NEON source. Scalar
-  countdown bounds and vector-loop pointer writeback are still unresolved.
+  remaining bytes files need further proof work. Signed NEON now proves both
+  vector loops run once and the tail counter stays in 1..7, including pair
+  writeback. Unsigned NEON's two vector loops are also proved one-iteration,
+  but its ascending signed-comparison tail, stack-spilled indexes and repeated
+  ADRs of the same pool remain unresolved. Its first failed read is instruction
+  333, `LDR X10,[X16],#-8`. Do not normalize multiple origins independently:
+  the sum of two relocated addresses must never become a valid relative offset.
+  Signed SVE first fails at instruction 23, a vector-length-dependent address
+  operation; it needs actual SVE length relationships, not a fixed-host-length
+  assumption. Ignored `pool-function-*` probes and disassemblies retain these
+  diagnostics; their temporary traced walker must be regenerated after edits.
   The apparent branch
   word `0x540be400` is numeric pool data, not invalid source. Implement in
   `arm64_raw_pool_*.go`; do not relax the proof merely to relocate the pool.
@@ -140,9 +170,10 @@ with the older frozen reports. Keep all of these as diagnostic evidence.
 
 ## Next actions and completion gates
 
-1. Preserve the validated 6/16/26 evidence. Retry network failures in shards
-   4/10 with current
-   bounded retry support; never reclassify them as source N/A.
+1. Preserve the validated 4/6/16/26 evidence. Finish shard 10 with bounded
+   retry support, then update its ledger in the same-source evidence tree.
+   Shard 4 passed 168 candidates: 130 passed, 37 N/A, one invalid-source skip,
+   4,152 translations and 25 target N/A. Never relabel network failures as N/A.
 2. Continue real semantic fixes above with red/green and runtime tests.
    The address-proof work does not yet resolve the two complete SIMD files.
 3. Run full root, both nested CLIs, vet/build, official five-architecture
