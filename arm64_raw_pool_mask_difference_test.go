@@ -42,3 +42,18 @@ func TestARM64PoolMaskedDifferenceRejectsUnrelatedValues(t *testing.T) {
 		}
 	}
 }
+
+func TestARM64PoolMaskedDifferenceIntersectsNonzeroGuard(t *testing.T) {
+	flow := arm64PoolTestFlow(t, []string{
+		"and x1,x0,#15", "add x1,x1,#8", "and x3,x1,#24",
+		"cmp x1,x3", "b.eq #12", "sub x4,x1,x3", "nop", "ret",
+	})
+	if got := flow.affineInterval(6, arm64PoolRegisterExpression(4)); got != (arm64PoolInterval{1, 7}) {
+		t.Fatalf("nonzero masked difference=%+v, want [1,7]", got)
+	}
+	query := arm64PoolRegisterExpression(4)
+	query.constant = ^uint64(0)
+	if got := flow.affineInterval(6, query); got != (arm64PoolInterval{0, 6}) {
+		t.Fatalf("nonzero masked difference minus one=%+v, want [0,6]", got)
+	}
+}

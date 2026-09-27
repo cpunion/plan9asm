@@ -74,7 +74,9 @@ func arm64RawPoolMaskedIR(t *testing.T, triple string) string {
 		lines = append(lines, fmt.Sprintf("cbnz x11,#%d", (head-len(lines))*4),
 			fmt.Sprintf("str x12,[x0,#%d]", 152+index*8), "mov x10,xzr")
 	}
-	lines = append(lines, "mov x9,xzr", "ret")
+	lines = append(lines, "and x11,x1,#15", "add x11,x11,#8", "and x10,x11,#24",
+		"cmp x11,x10", "b.eq #20", "sub x10,x11,x10", "sub x10,x10,#1",
+		"ldrb w5,[x9,x10]", "str x5,[x0,#168]", "mov x9,xzr", "ret")
 	lines[0] = fmt.Sprintf("adr x9,#%d", len(lines)*4)
 	var source strings.Builder
 	source.WriteString("TEXT pool_masked(SB),$0-16\nMOVD out+0(FP),R0\nMOVD input+8(FP),R1\n")
@@ -135,11 +137,11 @@ int main(void) {
   uint8_t poolBytes[24];
   memcpy(poolBytes, poolWords, sizeof(poolBytes));
   for (unsigned test = 0; test < 32 + sizeof(inputs)/sizeof(inputs[0]); test++) {
-    uint64_t out[23] = {0x1234};
-    out[22] = 0x5678;
+    uint64_t out[24] = {0x1234};
+    out[23] = 0x5678;
     uint64_t n = test < 32 ? test : inputs[test - 32];
     pool_masked(out+1, n);
-    if (out[0] != 0x1234 || out[22] != 0x5678) return 1;
+    if (out[0] != 0x1234 || out[23] != 0x5678) return 1;
     uint64_t expected = n >= 16 && n <= 19 ? UINT64_C(0x17b4a14117b4a140) : 0;
     for (unsigned form = 0; form < 10; form++) {
       if (out[form+1] != expected) return 2;
@@ -159,6 +161,7 @@ int main(void) {
       byteSum += poolBytes[remaining + (n & 7) - 4];
     }
     if (out[20] != byteSum || out[21] != byteSum) return 6;
+    if (out[22] != ((n & 7) ? poolBytes[(n & 7) - 1] : 0)) return 7;
   }
   return 0;
 }

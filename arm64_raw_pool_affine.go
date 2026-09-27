@@ -406,9 +406,17 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 						continue predecessors
 					}
 				}
-				if !affine && next.bound == arm64PoolUnknownInterval {
-					if span, ok := flow.maskedDifferenceBound(previous, word, next.expression); ok {
-						next.bound = span
+				if !affine && next.bound.low != next.bound.high {
+					if span, ok := flow.maskedDifferenceBound(previous, word, next.expression, next.constraints[:next.count]); ok {
+						if span.low > next.bound.low {
+							next.bound.low = span.low
+						}
+						if span.high < next.bound.high {
+							next.bound.high = span.high
+						}
+						if next.bound.low > next.bound.high {
+							continue predecessors
+						}
 					}
 				}
 			}

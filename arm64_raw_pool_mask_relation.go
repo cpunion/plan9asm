@@ -73,7 +73,7 @@ func (flow *arm64RawPoolValues) independentMaskConstant(at, register int) (uint6
 // n-(n&mask) equals n&^mask without borrow. Retain that relation even when the
 // removed bits vary. The source must survive the write; an in-place mask's old
 // source cannot be confused with its new destination.
-func (flow *arm64RawPoolValues) maskedDifferenceBound(at int, word uint32, query arm64PoolAffine) (arm64PoolInterval, bool) {
+func (flow *arm64RawPoolValues) maskedDifferenceBound(at int, word uint32, query arm64PoolAffine, constraints []arm64PoolConstraint) (arm64PoolInterval, bool) {
 	definition, ok := flow.maskedConstantDefinition(at, word)
 	if !ok || definition.source == definition.destination {
 		return arm64PoolInterval{}, false
@@ -100,7 +100,13 @@ func (flow *arm64RawPoolValues) maskedDifferenceBound(at int, word uint32, query
 	}
 	input := flow.integerInterval(at, arm64asm.X0+arm64asm.Reg(definition.source))
 	span := arm64PoolMaskInterval(input, ^definition.mask)
-	result := arm64PoolIntervalImage(span, scale, residual.low)
+	// Apply matching guards before a negative displacement can wrap the
+	// unsigned image, e.g. n-(n&mask) != 0 followed by subtracting one.
+	constraint := arm64PoolTightenConstraint(arm64PoolConstraint{expression: relation, interval: span}, constraints)
+	if constraint.interval.low > constraint.interval.high {
+		return constraint.interval, true
+	}
+	result := arm64PoolIntervalImage(constraint.interval, scale, residual.low)
 	width := residual.high - residual.low
 	if result.high > math.MaxUint64-width || flow.affineWork >= 16384 {
 		return arm64PoolInterval{}, false
