@@ -6,7 +6,7 @@ import "math"
 // value, notably the relocated pool origin. Prove it at this exact program
 // point rather than treating an unrelated register as a constant by name.
 func (flow *arm64RawPoolValues) affineConstraintBound(at int, query arm64PoolAffine, constraint arm64PoolConstraint) (arm64PoolInterval, bool) {
-	if constraint.mask != 0 {
+	if constraint.mask != 0 || constraint.after != 0 {
 		return arm64PoolInterval{}, false
 	}
 	if bound, ok := query.constrainedBy(constraint); ok {

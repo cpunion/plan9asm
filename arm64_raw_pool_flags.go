@@ -21,36 +21,44 @@ func (expression arm64PoolAffine) registerMask() uint32 {
 // check that it did not overwrite a register used in the comparison. Merely
 // finding an earlier CMP in the instruction stream proves neither property.
 func (flow *arm64RawPoolValues) affineFlagsBefore(at int) (uint32, uint32, bool) {
+	word, clobbered, _, ok := flow.affineFlagSourceBefore(at)
+	return word, clobbered, ok
+}
+
+// after is the point just after the defining arithmetic instruction. A guard
+// whose GP operands were overwritten later can still constrain their historic
+// values here, never their unrelated replacements at the branch.
+func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, int, bool) {
 	var clobbered uint32
 	for steps := 0; steps < 512; steps++ {
 		if at < 0 || at >= len(flow.before) || len(flow.before[at]) != 1 {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
 		at = flow.before[at][0]
 		if at < 0 {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
 		word := flow.words[at]
 		var code [4]byte
 		binary.LittleEndian.PutUint32(code[:], word)
 		ins, err := arm64asm.Decode(code[:])
 		if err != nil {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
 		switch ins.Op {
 		case arm64asm.CMP, arm64asm.CMN, arm64asm.ADDS, arm64asm.SUBS:
 			if word>>31 == 0 {
-				return 0, 0, false // A W comparison does not constrain an X value.
+				return 0, 0, 0, false // A W comparison does not constrain an X value.
 			}
-			return word, clobbered, true
+			return word, clobbered, at + 1, true
 		}
 		writes, known := arm64RawPoolGPWrites(word)
 		if !known || !arm64RawPoolPreservesNZCV(ins.Op) {
-			return 0, 0, false
+			return 0, 0, 0, false
 		}
 		clobbered |= writes
 	}
-	return 0, 0, false
+	return 0, 0, 0, false
 }
 
 // An explicit effect whitelist, not a guess from a mnemonic suffix. In

@@ -24,6 +24,7 @@ type arm64PoolConstraint struct {
 	expression arm64PoolAffine
 	interval   arm64PoolInterval
 	mask       uint64 // Zero denotes an ordinary unmasked interval.
+	after      int    // A historical flag fact activates at this program point.
 }
 
 type arm64PoolAffineState struct {
@@ -106,7 +107,7 @@ func arm64PoolIntervalImage(input arm64PoolInterval, scale int64, delta uint64) 
 }
 
 func (expression arm64PoolAffine) constrainedBy(constraint arm64PoolConstraint) (arm64PoolInterval, bool) {
-	if constraint.mask != 0 {
+	if constraint.mask != 0 || constraint.after != 0 {
 		return arm64PoolInterval{}, false
 	}
 	other := constraint.expression
@@ -250,7 +251,14 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 		}
 		impossible := false
 		bound := state.bound
-		for _, constraint := range state.constraints[:state.count] {
+		for n, constraint := range state.constraints[:state.count] {
+			if constraint.after != 0 {
+				if state.at != constraint.after {
+					continue
+				}
+				constraint.after = 0
+				state.constraints[n] = constraint
+			}
 			constraint = arm64PoolTightenConstraint(constraint, state.constraints[:state.count])
 			if constraint.interval.low > constraint.interval.high {
 				impossible = true
@@ -326,7 +334,7 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 					return arm64PoolUnknownInterval
 				}
 				for _, constraint := range next.constraints[:next.count] {
-					if constraint.expression.coefficient[index] != 0 {
+					if constraint.after == 0 && constraint.expression.coefficient[index] != 0 {
 						return arm64PoolUnknownInterval
 					}
 				}
@@ -353,6 +361,12 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 					}
 					constraint := arm64PoolConstraint{
 						expression: arm64PoolRegisterExpression(destination), interval: interval,
+					}
+					// Intersect before a negative displacement or scale can
+					// wrap the interval image, e.g. (n & 7) != 0 then n-1.
+					constraint = arm64PoolTightenConstraint(constraint, next.constraints[:next.count])
+					if constraint.interval.low > constraint.interval.high {
+						continue predecessors
 					}
 					if span, ok := flow.affineConstraintBound(previous, next.expression, constraint); ok {
 						if span.low > next.bound.low {
@@ -381,7 +395,7 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				}
 				count := 0
 				for _, constraint := range next.constraints[:next.count] {
-					if constraint.expression.coefficient[index] != 0 {
+					if constraint.after == 0 && constraint.expression.coefficient[index] != 0 {
 						if !affine || index != destination || !constraint.expression.substitute(index, value) {
 							continue // Forget this fact, never the queried value.
 						}

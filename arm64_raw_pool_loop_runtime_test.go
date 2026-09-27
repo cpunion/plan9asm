@@ -81,7 +81,19 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 			}
 		}
 	}
-	lines = append(lines, "mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
+	lines = append(lines,
+		"and x2, x1, #7", "add x2, x2, #8", "and x4, x2, #0xfffffffffffffff8",
+		"sub x5, x2, x4", "cmp x2, x4", "mov x4, xzr", "b.eq #16",
+		"sub x5, x5, #1", "ldrb w5, [x9, x5]", fmt.Sprintf("str x5, [x0, #%d]", output),
+
+		"adds x2, x1, #1", "mov x5, x2", "mov x2, xzr", "b.ne #12",
+		"ldrb w5, [x9, x5]", fmt.Sprintf("str x5, [x0, #%d]", output+8),
+
+		"and x2, x1, #15", "mov x5, x2", "cmp x2, #7", "mov x2, xzr", "b.hi #12",
+		"ldrb w5, [x9, x5]", fmt.Sprintf("str x5, [x0, #%d]", output+16),
+
+		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret",
+	)
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
 		if line == "adr x10, #0" {
@@ -146,12 +158,12 @@ int main(void) {
   for (unsigned i = 0; i < 16; i++) words[i] = 0x17b4a140 + i;
   uint64_t values[8];
   memcpy(values, words, sizeof(values));
-  const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 16, 19, 20, 255,
+  const uint64_t counts[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 19, 20, 23, 32, 255,
                              1ULL << 32, 1ULL << 63, UINT64_MAX};
   for (unsigned i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
-    uint64_t result[43] = {0}, expected[41] = {0};
+    uint64_t result[46] = {0}, expected[44] = {0};
     result[0] = 0x12345678;
-    result[42] = 0x87654321;
+    result[45] = 0x87654321;
     if (counts[i] <= 7) {
       for (uint64_t n = 1; n <= counts[i]; n++) expected[0] += values[n];
     }
@@ -173,8 +185,11 @@ int main(void) {
         }
       }
     }
+    if ((remaining & 7) != 0) expected[41] = bytes[(remaining & 7) - 1];
+    if (remaining == UINT64_MAX) expected[42] = bytes[0];
+    if ((remaining & 15) <= 7) expected[43] = bytes[remaining & 15];
     pool_loop(result + 1, counts[i]);
-    if (result[0] != 0x12345678 || result[42] != 0x87654321 ||
+    if (result[0] != 0x12345678 || result[45] != 0x87654321 ||
         memcmp(result + 1, expected, sizeof(expected)) != 0) return 1;
   }
   return 0;

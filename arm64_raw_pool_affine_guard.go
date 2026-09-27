@@ -5,7 +5,7 @@ import "math"
 func (state *arm64PoolAffineState) addConstraint(constraint arm64PoolConstraint) bool {
 	for n := 0; n < state.count; n++ {
 		previous := &state.constraints[n]
-		if previous.expression != constraint.expression || previous.mask != constraint.mask {
+		if previous.expression != constraint.expression || previous.mask != constraint.mask || previous.after != constraint.after {
 			continue
 		}
 		if constraint.interval.low > previous.interval.low {
@@ -31,7 +31,7 @@ func (state *arm64PoolAffineState) compactConstraints() {
 	count := state.count
 	state.count = 0
 	for _, constraint := range state.constraints[:count] {
-		if !constraint.expression.isConstant() {
+		if constraint.after != 0 || !constraint.expression.isConstant() {
 			state.addConstraint(constraint)
 		}
 	}
@@ -74,7 +74,7 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 	if target == edge.from+1 || edge.to != target && edge.to != edge.from+1 {
 		return constraint, false
 	}
-	compare, clobbered, ok := flow.affineFlagsBefore(edge.from)
+	compare, clobbered, after, ok := flow.affineFlagSourceBefore(edge.from)
 	if !ok {
 		return constraint, false
 	}
@@ -96,7 +96,7 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 			constraint.expression = expression
 		}
 		if constraint.expression.registerMask()&clobbered != 0 {
-			return constraint, false
+			constraint.after = after
 		}
 		if condition == 1 {
 			constraint.interval = arm64PoolInterval{1, math.MaxUint64}
@@ -110,7 +110,7 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 	}
 	constraint.expression = arm64PoolRegisterExpression(int(compare >> 5 & 31))
 	if constraint.expression.registerMask()&clobbered != 0 {
-		return constraint, false
+		constraint.after = after
 	}
 	constraint.interval = arm64PoolUnknownInterval
 	immediate := uint64(compare >> 10 & 4095)
@@ -160,7 +160,7 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 // their expressions; this retains path information across arithmetic aliases.
 func arm64PoolConstraintsFeasible(constraints []arm64PoolConstraint) bool {
 	for _, test := range constraints {
-		if test.mask == 0 {
+		if test.mask == 0 || test.after != 0 {
 			continue
 		}
 		input := arm64PoolUnknownInterval
@@ -189,7 +189,7 @@ func arm64PoolConstraintsFeasible(constraints []arm64PoolConstraint) bool {
 // Separate images can each straddle the unsigned wrap point even when the
 // intersection has one small, non-wrapping image, e.g. 8 <= n <= 15 and 8*n-64.
 func arm64PoolTightenConstraint(target arm64PoolConstraint, constraints []arm64PoolConstraint) arm64PoolConstraint {
-	if target.mask != 0 {
+	if target.mask != 0 || target.after != 0 {
 		return target
 	}
 	for _, constraint := range constraints {
