@@ -1,4 +1,4 @@
-{"module":"ghproxy-9d2.pages.dev/criyle/go-sandbox","version":"v0.12.3","status":"pending"}
+{"module":"ghproxy-9d2.pages.dev/criyle/go-sandbox","version":"v0.12.3","status":"passed"}
 {"module":"github.com/Anthony-Dong/pid","version":"v0.0.10","status":"pending"}
 {"module":"github.com/Asylian21/sha256mb","version":"v0.1.0","status":"pending"}
 {"module":"github.com/Capricornus007/gvisor-awg","version":"v0.0.0-20260902104837-6728272f3831","status":"pending"}

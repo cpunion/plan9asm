@@ -1,5 +1,5 @@
 {"module":"gitee.com/firefly05/libc","version":"v1.75.7","status":"pending"}
-{"module":"github.com/0xmichalis/chiapos","version":"v0.0.0-20231114134725-c634baf3a243","status":"pending"}
+{"module":"github.com/0xmichalis/chiapos","version":"v0.0.0-20231114134725-c634baf3a243","status":"passed"}
 {"module":"github.com/Ethereum/go-Ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/Git-brid/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/Zeta-chain/go-ethereum","version":"v1.14.7","status":"pending"}
