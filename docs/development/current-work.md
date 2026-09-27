@@ -11,8 +11,8 @@ another index scan. Older detailed checkpoints remain in Git history.
   `xgo-dev`. Upstream `main@7cc8c0f` is already an ancestor. Inspect
   remotes, worktrees, processes and live checks before continuing.
 - Pushed head: `b93666f5`, CI run `36311131855`. The latest observed
-  checkpoint on 2026-09-27 has 69 successful jobs, five failures, eight
-  running and ten queued. This is not complete green CI. Its exact-source local full root
+  checkpoint on 2026-09-27 has 69 successful jobs, six failures, eight
+  running and nine queued. This is not complete green CI. Its exact-source local full root
   suite passed in 627.880 seconds, including all root subpackages.
 - The user explicitly requires this CI run to finish once. Do not push,
   cancel or rerun it; accumulate verified local commits meanwhile.
@@ -27,12 +27,15 @@ another index scan. Older detailed checkpoints remain in Git history.
   revision/process before changing a frozen tree. The `95ab1bc6`
   guard-intersection fix passed the full root suite at `03182350` in
   712.316 seconds, including all root subpackages. Its log is
-  `_out/root-tests-guard-03182350.log`.
+  `_out/root-tests-guard-03182350.log`. The sequential-loop checkpoint
+  `5805df44` also passed the full root suite (745.763 seconds) and both CLI
+  suites (0.834/2.546 seconds). Logs use `_out/root-tests-sequential-5805df44.log`
+  and `_out/sequential-cli-*`.
 - `codex/pr40-ci-evidence-b93666f5` retains current CI artifacts separately
-  in `_out/ci-b936-reports`. Evidence `ab1d3b1f` has fourteen complete reports:
-  shards 1/2/3/4/6/7/8/10/13 pass; 0/5/9/11/15 fail. There are 1,696 passed
-  versions, 365 source N/A, three invalid-source skips, five failed and
-  2,714 pending; 34,205 translations. Complete/verified remain false. Do not combine this
+  in `_out/ci-b936-reports`. Evidence `e6e3fafe` has fifteen complete reports:
+  shards 1/2/3/4/6/7/8/10/13 pass; 0/5/9/11/14/15 fail. There are 1,817 passed
+  versions, 385 source N/A, three invalid-source skips, six failed and
+  2,572 pending; 37,054 translations. Complete/verified remain false. Do not combine this
   source with earlier reports or promote it to the newer development source.
 - `codex/pr40-ci-evidence-0d96d26` preserves 12 validated previous-CI
   reports: four complete and eight partial. Evidence `b434d36e` has 1,046
@@ -143,6 +146,21 @@ library lanes and Windows. Subsequent external failures remain separate.
   plus two build-seconds) pass. Logs use `_out/pool-sequential-*`; the old
   runtime overlay is in the hotfix tree at `03182350` and becomes stale if
   that tree advances.
+- `0186a071`: typed count/address families preserve NZCV while retaining
+  their distinct GP effects. Vector counts have no GP input/output. Scalar
+  count grammar tests cover all patterns/multipliers; the runtime fixture
+  checks 132 cases at all 16 VLs. Three-OS objects, Linux/QEMU, full pool
+  regression (67.713 seconds), Go 1.20, vet and official coverage pass.
+  Benchmark: 184/184 files, zero N/A, 23 target-seconds plus two build-seconds.
+  Logs use `_out/pool-scalable-flags-*`.
+- Disjoint ORR/EOR now reuse the independent residue proof when intervals
+  lose low alignment bits. Copies, masks, commuted operands, shifts and
+  modular arithmetic have positive/negative tests; overlapping or unknown
+  bits cannot invent a sum relationship. Red unit/runtime logs reproduce
+  the original failure. Full pool tests (61.903 seconds), Go 1.20, three-OS
+  objects, Darwin/Linux execution, vet, official coverage and benchmark
+  (184/184, zero N/A, 23 target-seconds plus two build-seconds) pass.
+  Logs use `_out/pool-aligned-*`.
 
 Logs use ignored `_out/pool-sve-contiguous-*`, `sve-dup-indexed-*`,
 `pool-sve-copy-*` and `pool-masked-logical-*`. The masked before-fix
@@ -157,7 +175,14 @@ Later logs use `_out/pool-stride-*`, `_out/pool-carried-stride-*`,
 
 - **SIMD** `github.com/sebishogun/simd@v1.21.1` and its mirror: full NEON
   bytes assembly compiles on three OS targets; 130 parsing and 65 formatting
-  runtime cases pass. SVE bytes still needs relational loop proof.
+  runtime cases pass. The entire SVE bytes file now also compiles on all
+  three OS targets: `_out/simd-aligned.json` records 3/3 files, zero N/A.
+  Its actual SVE2 parse/format functions execute successfully at all 16 VLs,
+  with 130 parsing and 65 formatting scenarios per VL (3,120 total).
+  `_out/simd-sve-oracle-run.log` retains that Linux/QEMU diagnostic. The
+  shared C harness still prints its original NEON label, but the IR wrapper
+  explicitly calls the SVE2 symbols; its final line identifies the SVE2 run.
+  This is not a whole-module or shard pass; rerun complete shard 15.
   `0x540be400` is numeric pool data, not invalid source.
   In `parseIntsSVE2`, CMP at instruction 98 now reaches B.NE at 121 with
   correct NZCV provenance. Loop 74..121 subtracts invariant RDVL from X20
@@ -167,12 +192,11 @@ Later logs use `_out/pool-stride-*`, `_out/pool-carried-stride-*`,
   16/32/48/64/128/256. At higher VL the first vector loop is unreachable;
   loop 153..176 has a proved -16/-8 counter with step +8, and the later
   scalar loop has count 1..7. See `_out/pool-sequential-relational-diagnostic.log`.
-  Whole-file LLVM testing on three OS targets now reaches the next function,
-  `parseUintsSVE2`, which still fails. Its first loop 91..137 is not proved
-  one-iteration at VL=16; at higher VL that loop is unreachable but later
-  loops still need analysis. Logs are `_out/simd-sequential.log`,
-  `_out/parse-uint-sve-disasm.log` and
-  `_out/pool-sequential-unsigned-diagnostic.log`. Do not claim a module pass.
+  In `parseUintsSVE2`, NZCV now reaches its first loop latch through DECB;
+  the disjoint low-bit ORR then preserves the later loop relation. Its pool
+  proof passes all tested VLs, and whole-file translation checks all 16.
+  Earlier failed diagnostics remain in `_out/simd-sequential.log`; the
+  final detail is `_out/pool-aligned-unsigned-diagnostic.log`.
   Ignored `pool-function-probe_test.go` and `parse-int-sve-disasm.log`
   retain diagnostics. Do not loosen a bound because the load is supported.
 - **Native-layout/JIT**: GopherJRE, GoJIT and both case-distinct Sharkie
@@ -187,6 +211,9 @@ Later logs use `_out/pool-stride-*`, `_out/pool-carried-stride-*`,
   layout, not an invalid executable opcode exception. A user question about
   a separately counted exact native-layout exception is pending; without
   explicit approval, preserve the failure and implement compatibility.
+  Current CI shard 14 also fails the mixed-case Sharkie candidate on a raw
+  short JMP into ordinary assembly; 4/5 Windows/amd64 files compile. Its
+  custom stack/return-PC ABI still needs a real compatibility mechanism.
 - **ContainerFS**, both case-distinct paths at the 2019 version: current CI
   shards 5 and 11 fail after three retries, with 503/429 responses mixed
   into obsolete gVisor dependency 404s. Local HTTP probes also alternate
