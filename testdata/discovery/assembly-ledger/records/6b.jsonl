@@ -11,8 +11,8 @@
 {"module":"github.com/please-build/go-rules","version":"v1.33.1","status":"pending"}
 {"module":"github.com/pleme-io/x-crypto","version":"v0.54.1-pleme.1","status":"pending"}
 {"module":"github.com/riven-blade/etcd","version":"v2.3.8+incompatible","status":"pending"}
-{"module":"github.com/sirkon/netring","version":"v0.0.0-20260903022716-9cbcd2502e08","status":"passed"}
+{"module":"github.com/sirkon/netring","version":"v0.0.0-20260903022716-9cbcd2502e08","status":"pending"}
 {"module":"github.com/stanford-rc/minio-md5-simd","version":"v1.1.2","status":"pending"}
 {"module":"github.com/xTLS/xray-core","version":"v1.260327.0","status":"pending"}
-{"module":"gitverse.ru/uzer_007/gobase64.git","version":"v1.2.0","status":"passed"}
-{"module":"gitverse.ru/uzer_007/gogost.git","version":"v1.0.6","status":"not_applicable"}
+{"module":"gitverse.ru/uzer_007/gobase64.git","version":"v1.2.0","status":"pending"}
+{"module":"gitverse.ru/uzer_007/gogost.git","version":"v1.0.6","status":"pending"}

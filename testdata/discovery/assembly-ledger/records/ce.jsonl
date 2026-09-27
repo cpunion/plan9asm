@@ -6,8 +6,8 @@
 {"module":"github.com/bench/parquet-go","version":"v0.0.0-20260816053349-b306bcb043d2","status":"pending"}
 {"module":"github.com/cloudment/obstor","version":"v0.0.0-20260830042923-b2f6a71eb78f","status":"pending"}
 {"module":"github.com/creack/PTY","version":"v1.1.24","status":"pending"}
-{"module":"github.com/erikkassubek/advocate","version":"v0.0.0-20260815125643-d20f5754232e","status":"passed"}
-{"module":"github.com/f-secure-foundry/tamago","version":"v1.27.1","status":"passed"}
+{"module":"github.com/erikkassubek/advocate","version":"v0.0.0-20260815125643-d20f5754232e","status":"pending"}
+{"module":"github.com/f-secure-foundry/tamago","version":"v1.27.1","status":"pending"}
 {"module":"github.com/fashionfarmer/utls","version":"v0.0.0-20260915082432-1663e634bd76","status":"pending"}
 {"module":"github.com/filosottile/bigmod","version":"v0.1.0","status":"pending"}
 {"module":"github.com/geewan-rd/xray-core","version":"v1.12.1","status":"pending"}

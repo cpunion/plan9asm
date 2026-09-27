@@ -8,7 +8,7 @@
 {"module":"github.com/Yawning/bsaes","version":"v0.0.0-20190320102049-26d1add596b6","status":"pending"}
 {"module":"github.com/algoadv/etcd","version":"v2.2.1+incompatible","status":"pending"}
 {"module":"github.com/alldev-run/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
-{"module":"github.com/colduction/proxykit-go","version":"v0.7.1","status":"passed"}
+{"module":"github.com/colduction/proxykit-go","version":"v0.7.1","status":"pending"}
 {"module":"github.com/go-simd/base64","version":"v0.0.0-20260908181144-8662cdcd88b8","status":"pending"}
 {"module":"github.com/hanzoai/visor","version":"v0.0.0-20260919171916-c81459409295","status":"pending"}
 {"module":"github.com/legiz-ru/prizrak-core","version":"v1.19.31","status":"pending"}

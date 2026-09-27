@@ -2,7 +2,7 @@
 {"module":"github.com/KuangBo/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/ScottMansfield/tools","version":"v0.0.0-20160116173134-3c782264fbde","status":"pending"}
 {"module":"github.com/StanfordSNR/crypto","version":"v0.0.0-20180224013306-e451cabda2ac","status":"pending"}
-{"module":"github.com/bronze1man/go","version":"v0.0.0-20190114075844-4e8aaf6b2255","status":"passed"}
+{"module":"github.com/bronze1man/go","version":"v0.0.0-20190114075844-4e8aaf6b2255","status":"pending"}
 {"module":"github.com/consenSys/gurvy","version":"v0.21.0","status":"pending"}
 {"module":"github.com/dazzar56/thrupty","version":"v0.1.3","status":"pending"}
 {"module":"github.com/honeycombio/lz4/v4","version":"v4.1.26","status":"pending"}

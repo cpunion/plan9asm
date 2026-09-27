@@ -12,7 +12,7 @@
 {"module":"github.com/marten-seemann/tcp","version":"v0.0.0-20210406111302-dfbc87cc63fd","status":"pending"}
 {"module":"github.com/ozouai-6sense/typescript-go","version":"v0.0.0-20260605205542-d38d6b711e17","status":"pending"}
 {"module":"github.com/qingche123/ontology-crypto","version":"v1.0.7","status":"pending"}
-{"module":"github.com/tangenta/tidb","version":"v1.0.9","status":"not_applicable"}
+{"module":"github.com/tangenta/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/twsre/SN_v2ray-core/v5","version":"v5.0.16","status":"pending"}
 {"module":"github.com/v2pro/plz","version":"v0.0.0-20221028024117-e5f9aec5b631","status":"pending"}
 {"module":"rsc.io/tmp/mulx","version":"v0.0.2","status":"pending"}

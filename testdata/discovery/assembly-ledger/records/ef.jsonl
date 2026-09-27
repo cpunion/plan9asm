@@ -12,7 +12,7 @@
 {"module":"github.com/enfein/mieru/v3","version":"v3.37.0","status":"pending"}
 {"module":"github.com/lcwangchao/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/metacubex/mihomo","version":"v1.19.31","status":"pending"}
-{"module":"github.com/nintendobox/gvisor","version":"v0.0.3-fix","status":"passed"}
+{"module":"github.com/nintendobox/gvisor","version":"v0.0.3-fix","status":"pending"}
 {"module":"github.com/ruslano69/xxh3-bloom","version":"v0.9.0","status":"pending"}
 {"module":"github.com/thepudds/go-fuzz","version":"v0.0.0-20210914135545-4980593459a1","status":"pending"}
 {"module":"github.com/xinfinorg/xdposchain","version":"v1.6.0","status":"pending"}

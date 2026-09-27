@@ -8,7 +8,7 @@
 {"module":"github.com/matsuridayo/v2ray-core/v5","version":"v5.0.0-20230212021550-8134d3cc23aa","status":"pending"}
 {"module":"github.com/mvertes/mvm","version":"v0.4.1","status":"pending"}
 {"module":"github.com/onesyue/gvisor","version":"v0.0.0-20260826100401-79317d808312","status":"pending"}
-{"module":"github.com/rockdaboot/otel-profiling-agent","version":"v0.0.202636","status":"not_applicable"}
+{"module":"github.com/rockdaboot/otel-profiling-agent","version":"v0.0.202636","status":"pending"}
 {"module":"github.com/snowlukin/amnezia-xray-core","version":"v1.260724.0","status":"pending"}
 {"module":"github.com/tenderly/polygon-bor","version":"v0.0.2-tenderly","status":"pending"}
 {"module":"github.com/xinix00/HopOS/metal/v2","version":"v2.2.7","status":"pending"}

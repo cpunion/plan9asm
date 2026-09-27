@@ -5,7 +5,7 @@
 {"module":"github.com/Gagliardetto/solana-go","version":"v1.24.0","status":"pending"}
 {"module":"github.com/PeterRK/w1hash","version":"v0.0.1","status":"pending"}
 {"module":"github.com/Specter-Foundation/go-ethereum","version":"v1.16.2-cosmos-1","status":"pending"}
-{"module":"github.com/base-org/op-geth","version":"v1.101701.0-rc.3-eip8130.6","status":"passed"}
+{"module":"github.com/base-org/op-geth","version":"v1.101701.0-rc.3-eip8130.6","status":"pending"}
 {"module":"github.com/cachalots/reedsolomon","version":"v1.14.1","status":"pending"}
 {"module":"github.com/charlievieth/utils","version":"v0.0.0-20260917021123-b023ecf66fbe","status":"pending"}
 {"module":"github.com/f-secure-foundry/GoTEE","version":"v0.0.0-20260610100805-7155b9252462","status":"pending"}

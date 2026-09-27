@@ -7,7 +7,7 @@
 {"module":"github.com/josephrandall577/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
 {"module":"github.com/juicedata/minio","version":"v0.0.0-20260915033819-47296b1b89b0","status":"pending"}
 {"module":"github.com/liquentlabs/go-ethereum","version":"v1.17.2","status":"pending"}
-{"module":"github.com/mediagui/go","version":"v0.0.0-20260227122306-34024557799e","status":"not_applicable"}
+{"module":"github.com/mediagui/go","version":"v0.0.0-20260227122306-34024557799e","status":"pending"}
 {"module":"github.com/modernc-tree-sitter/libc","version":"v1.73.5","status":"pending"}
 {"module":"github.com/ontio/ontology-crypto","version":"v1.2.2","status":"pending"}
 {"module":"github.com/peterrk/parquet-go","version":"v0.30.2","status":"pending"}

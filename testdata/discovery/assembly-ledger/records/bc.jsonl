@@ -8,7 +8,7 @@
 {"module":"github.com/contiv-experimental/cluster","version":"v0.0.0","status":"pending"}
 {"module":"github.com/golang/go/src","version":"v0.0.0-20260716173446-1ad6b283d410","status":"pending"}
 {"module":"github.com/gunzi-666/Xray-core","version":"v0.0.0-20260723174000-8cbd7ba3d2bb","status":"pending"}
-{"module":"github.com/korli/sys_haiku","version":"v0.38.0","status":"passed"}
+{"module":"github.com/korli/sys_haiku","version":"v0.38.0","status":"pending"}
 {"module":"github.com/lambdaclass/go-ethereum","version":"v0.0.0-20260715124104-d91b71fb3627","status":"pending"}
 {"module":"github.com/libertymutual/cfops","version":"v1.0.17","status":"pending"}
 {"module":"github.com/llmofang/golang.org","version":"v0.0.0-20170613150718-c32b2539b832","status":"pending"}

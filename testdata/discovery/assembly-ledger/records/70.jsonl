@@ -20,4 +20,4 @@
 {"module":"github.com/starquake/webp","version":"v0.0.0-20260615180040-7d874db6f3b8","status":"pending"}
 {"module":"github.com/swishlabsco/crypto","version":"v0.0.0-20190531000330-76a94ff009f0","status":"pending"}
 {"module":"golang.org/x/mobile","version":"v0.0.0-20260908204917-8b95e45f8d3e","status":"pending"}
-{"module":"gopkg.in/hlandau/svcutils.v1","version":"v1.0.11","status":"not_applicable"}
+{"module":"gopkg.in/hlandau/svcutils.v1","version":"v1.0.11","status":"pending"}

@@ -2,7 +2,7 @@
 {"module":"github.com/InWeCrypto/sha3","version":"v0.0.0-20171123094127-d0fd118c5827","status":"pending"}
 {"module":"github.com/LordMartron94/Memcore","version":"v0.0.0-20260603110113-abb3e2c91804","status":"pending"}
 {"module":"github.com/alwaysbusystack/utls","version":"v0.0.0-20260610070929-4da93ccb72d6","status":"pending"}
-{"module":"github.com/andreypfau/raptorq-go","version":"v1.1.0","status":"passed"}
+{"module":"github.com/andreypfau/raptorq-go","version":"v1.1.0","status":"pending"}
 {"module":"github.com/coder/wireguard-go","version":"v0.0.0-20260113101225-9b7a56210e49","status":"pending"}
 {"module":"github.com/denizumutdereli/qubicdb","version":"v0.0.0-20260220151114-032c041becf7","status":"pending"}
 {"module":"github.com/detailyang/fastgcd-go","version":"v0.0.0-20190523075402-d6580f1ea831","status":"pending"}
@@ -21,5 +21,5 @@
 {"module":"github.com/owulveryck/goMarkableStream","version":"v1.4.0","status":"pending"}
 {"module":"github.com/plakarkorp/aes-gcm-siv","version":"v0.1.0","status":"pending"}
 {"module":"github.com/rhawrami/pegosus","version":"v0.0.0-20260916041911-e105842a6867","status":"pending"}
-{"module":"github.com/v2fly/v2Ray-core/v5","version":"v5.54.2","status":"passed"}
+{"module":"github.com/v2fly/v2Ray-core/v5","version":"v5.54.2","status":"pending"}
 {"module":"github.com/yougg/slog-writer","version":"v1.0.4","status":"pending"}

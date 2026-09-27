@@ -4,7 +4,7 @@
 {"module":"github.com/dmznlin/znlib-go","version":"v0.0.13","status":"pending"}
 {"module":"github.com/drand/kyber","version":"v1.3.2","status":"pending"}
 {"module":"github.com/fyne-io/go-image","version":"v0.24.2","status":"pending"}
-{"module":"github.com/go-erasure/reedsolomon","version":"v0.3.0","status":"passed"}
+{"module":"github.com/go-erasure/reedsolomon","version":"v0.3.0","status":"pending"}
 {"module":"github.com/go-simd/jsonvalidate","version":"v0.0.0-20260908181122-12794a812a31","status":"pending"}
 {"module":"github.com/google/netstack","version":"v0.0.0-20191123085552-55fcc16cd0eb","status":"pending"}
 {"module":"github.com/manusw7/go-ethereum","version":"v1.17.3","status":"pending"}

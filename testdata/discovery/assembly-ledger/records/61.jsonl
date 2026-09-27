@@ -15,5 +15,5 @@
 {"module":"github.com/oasisprotocol/ed25519","version":"v0.0.0-20210505154701-76d8c688d86e","status":"pending"}
 {"module":"github.com/pekim/thorvg","version":"v1.0.7","status":"pending"}
 {"module":"lukechampine.com/adiantum","version":"v1.1.1","status":"pending"}
-{"module":"modernc.org/Libc","version":"v1.77.0","status":"passed"}
+{"module":"modernc.org/Libc","version":"v1.77.0","status":"pending"}
 {"module":"piko.sh/vectormaths","version":"v0.2.0","status":"pending"}

@@ -14,7 +14,7 @@
 {"module":"github.com/pinpoint-apm/pinpoint-go-agent","version":"v1.4.7","status":"pending"}
 {"module":"github.com/qltysh-testing/websocket","version":"v0.0.0-20250905081622-7d7c644330e7","status":"pending"}
 {"module":"github.com/rorkai/App-Store-Connect-CLI","version":"v0.0.0-20260922025704-186cefa26192","status":"pending"}
-{"module":"github.com/sebishogun/simd","version":"v1.21.1","status":"passed"}
+{"module":"github.com/sebishogun/simd","version":"v1.21.1","status":"pending"}
 {"module":"github.com/tg123/crypto","version":"v0.56.0-sshpiper-20260906","status":"pending"}
 {"module":"github.com/zchee/go-toml","version":"v0.0.0-20260722214334-70b8c27cb946","status":"pending"}
 {"module":"github.com/zentures/encoding","version":"v0.0.0-20171223221521-b90e310a0325","status":"pending"}

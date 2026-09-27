@@ -3,7 +3,7 @@
 {"module":"github.com/ProjectZKM/zkm/go-runtime/zkm_runtime","version":"v0.0.0-20250410003119-eb09cf6c81be","status":"pending"}
 {"module":"github.com/WoozyMasta/tga","version":"v1.3.2","status":"pending"}
 {"module":"github.com/catap/wazero","version":"v0.0.0-20260521072212-475a1f8f0dc3","status":"pending"}
-{"module":"github.com/cdr/mutagen","version":"v0.18.5","status":"not_applicable"}
+{"module":"github.com/cdr/mutagen","version":"v0.18.5","status":"pending"}
 {"module":"github.com/coder/gvisor","version":"v0.0.0-20230714132058-be2e4ac102c3","status":"pending"}
 {"module":"github.com/determined-ai/tools","version":"v0.0.0-20200506211335-99ba2166f19f","status":"pending"}
 {"module":"github.com/fkautz/gvisor","version":"v0.0.0-20260723204949-42f4b4bbe596","status":"pending"}

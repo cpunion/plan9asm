@@ -11,7 +11,7 @@
 {"module":"github.com/junliurs/pid","version":"v0.0.22","status":"pending"}
 {"module":"github.com/mmatczuk/go","version":"v0.0.0-20221209104903-e76c87b1915c","status":"pending"}
 {"module":"github.com/nelhage/gojit","version":"v0.0.0-20151106164540-4098a5faeff1","status":"pending"}
-{"module":"github.com/privata-vpn/xray-core","version":"v1.260327.0","status":"passed"}
+{"module":"github.com/privata-vpn/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/reactive-network/geth-rnk2-genesis","version":"v0.0.0-20260827231907-8cce496420cd","status":"pending"}
 {"module":"github.com/redplug/study_golang","version":"v0.0.0-20220209135131-2cb817945244","status":"pending"}
 {"module":"github.com/shayonj/gvisor","version":"v0.0.0-20260729181002-1872043f6406","status":"pending"}

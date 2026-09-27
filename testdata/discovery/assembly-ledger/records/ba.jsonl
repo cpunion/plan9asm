@@ -3,7 +3,7 @@
 {"module":"github.com/RoaringBitMap/roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/brendanporter/goled","version":"v0.0.0-20230331022557-6bff3254da56","status":"pending"}
 {"module":"github.com/chenyang8094/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/cybermiles/go-ethereum","version":"v1.9.7","status":"passed"}
+{"module":"github.com/cybermiles/go-ethereum","version":"v1.9.7","status":"pending"}
 {"module":"github.com/efritz/sourcegraph","version":"v0.0.0-20231113150114-8af4951af53e","status":"pending"}
 {"module":"github.com/ethereum/go-ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/gaurav-gosain/turbograph","version":"v0.1.0","status":"pending"}

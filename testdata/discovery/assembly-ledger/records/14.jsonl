@@ -7,7 +7,7 @@
 {"module":"github.com/bbaktaeho/avax-libevm","version":"v1.13.15-nativeassetcallfix.0","status":"pending"}
 {"module":"github.com/gaozhengxin/cryptocoins","version":"v0.0.0-20190729074904-c3cdd996f722","status":"pending"}
 {"module":"github.com/horizon-games/ethkit","version":"v1.43.5","status":"pending"}
-{"module":"github.com/jcs/go-crypto","version":"v0.0.0-20210905144206-cd8edf8c7f53","status":"passed"}
+{"module":"github.com/jcs/go-crypto","version":"v0.0.0-20210905144206-cd8edf8c7f53","status":"pending"}
 {"module":"github.com/jluf/go-fuse/v2","version":"v2.0.0-20260515064020-5141bf23db18","status":"pending"}
 {"module":"github.com/legiz-ru/Prizrak-Core","version":"v1.19.31","status":"pending"}
 {"module":"github.com/meitu/go-ethereum","version":"v0.0.0-20190715102930-7cbe5da6eb36","status":"pending"}

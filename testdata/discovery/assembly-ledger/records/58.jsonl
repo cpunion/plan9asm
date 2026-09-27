@@ -1,6 +1,6 @@
 {"module":"github.com/DogeProtocol/go-ethereum","version":"v1.10.13","status":"pending"}
 {"module":"github.com/MetacubeX/clash.Meta","version":"v1.19.31","status":"pending"}
-{"module":"github.com/NetBSD/pkgsrc","version":"v0.0.0-20260922184002-c9a2f5d18a51","status":"not_applicable"}
+{"module":"github.com/NetBSD/pkgsrc","version":"v0.0.0-20260922184002-c9a2f5d18a51","status":"pending"}
 {"module":"github.com/Oasisprotocol/Curve25519-voi","version":"v0.0.0-20251114093237-2ab5a27a1729","status":"pending"}
 {"module":"github.com/PersistentJZH/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
 {"module":"github.com/PeterRK/PageBloomFilter","version":"v1.3.1","status":"pending"}

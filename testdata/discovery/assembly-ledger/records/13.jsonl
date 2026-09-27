@@ -10,7 +10,7 @@
 {"module":"github.com/cnosdb/cnosdb","version":"v1.0.1","status":"pending"}
 {"module":"github.com/evanoberholster/imagemeta","version":"v1.1.0","status":"pending"}
 {"module":"github.com/haircommander/runc","version":"v0.1.1","status":"pending"}
-{"module":"github.com/harborforks/capslock","version":"v0.3.2","status":"passed"}
+{"module":"github.com/harborforks/capslock","version":"v0.3.2","status":"pending"}
 {"module":"github.com/iluobei/Xray-core-mmwx","version":"v0.0.0-20260914081524-e42f16fa89b4","status":"pending"}
 {"module":"github.com/ktr0731/go","version":"v0.0.0-20210610202058-770f1de8c542","status":"pending"}
 {"module":"github.com/linkdata/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
