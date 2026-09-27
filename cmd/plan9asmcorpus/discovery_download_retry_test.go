@@ -19,7 +19,7 @@ import (
 func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 	const module = "example.com/discovery-retry"
 	const version = "v1.0.0"
-	const goMod = "module " + module + "\n\ngo 1.27\n"
+	const goMod = "module " + module + "\n\ngo 1.20\n"
 	var archive bytes.Buffer
 	writer := zip.NewWriter(&archive)
 	entry, err := writer.Create(module + "@" + version + "/go.mod")

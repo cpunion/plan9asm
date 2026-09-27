@@ -1733,7 +1733,10 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			runErr = errors.Join(runErr, fmt.Errorf("clean candidate workspace: %w", err))
 		}
 	}()
-	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("module plan9asm.local/discovery\n\ngo 1.27\n"), 0644); err != nil {
+	// Downloading metadata does not require the corpus build toolchain. Keep
+	// this bootstrap workspace compatible with the root module's Go floor;
+	// the later build plan still explicitly requires the current corpus Go.
+	if err := os.WriteFile(filepath.Join(workDir, "go.mod"), []byte("module plan9asm.local/discovery\n\ngo 1.20\n"), 0644); err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("write temporary go.mod: %w", err)
 	}
 	var env []string
