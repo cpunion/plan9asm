@@ -41,11 +41,10 @@ func TestCICrossRuntimeUsesPinnedQEMU(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, cross, found := strings.Cut(string(data), "\n  cross-runtime:\n")
+	cross, found := ciWorkflowJob(string(data), "cross-runtime")
 	if !found {
 		t.Fatal("cross-runtime job not found")
 	}
-	cross, _, _ = strings.Cut(cross, "\n  test:\n")
 	if !strings.Contains(cross, "bash scripts/install-ci-qemu.sh") || strings.Contains(cross, "qemu-user") {
 		t.Fatal("cross-runtime must install checksum-pinned QEMU, not Ubuntu 24.04's broken 8.2 dot-product implementation")
 	}
@@ -72,17 +71,45 @@ func TestCIDiscoveredCorpusRetainsAuthenticatedProxyFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, corpus, found := strings.Cut(string(data), "\n  discovered_library_corpus:\n")
+	corpus, found := ciWorkflowJob(string(data), "discovered_library_corpus")
 	if !found {
 		t.Fatal("discovered corpus job not found")
 	}
-	corpus, _, _ = strings.Cut(corpus, "\n  discovered_library_corpus_verify:\n")
 	if !strings.Contains(corpus, "GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct") {
 		t.Fatal("exact-version corpus must try both public module caches before the origin")
 	}
 	for _, disabled := range []string{"GOSUMDB:", "GONOSUMDB:", "GOPRIVATE:"} {
 		if strings.Contains(corpus, disabled) {
 			t.Fatalf("public corpus must not bypass checksum-database authentication with %s", disabled)
+		}
+	}
+}
+
+func ciWorkflowJob(source, name string) (string, bool) {
+	source = strings.ReplaceAll(source, "\r\n", "\n")
+	_, job, found := strings.Cut(source, "\n  "+name+":\n")
+	if !found {
+		return "", false
+	}
+	lines := strings.Split(job, "\n")
+	for index, line := range lines {
+		if strings.HasPrefix(line, "  ") && len(line) > 2 && line[2] != ' ' && line[2] != '#' {
+			return strings.Join(lines[:index], "\n"), true
+		}
+	}
+	return job, true
+}
+
+func TestCIWorkflowJobLineEndings(t *testing.T) {
+	const source = "jobs:\n  first:\n    run: first\n\n  second:\n    run: second\n"
+	for _, ending := range []string{"\n", "\r\n"} {
+		text := strings.ReplaceAll(source, "\n", ending)
+		job, found := ciWorkflowJob(text, "first")
+		if !found || !strings.Contains(job, "run: first") || strings.Contains(job, "second") {
+			t.Fatalf("line ending %q: job=%q found=%v", ending, job, found)
+		}
+		if _, found := ciWorkflowJob(text, "absent"); found {
+			t.Fatal("missing job accepted")
 		}
 	}
 }

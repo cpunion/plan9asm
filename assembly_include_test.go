@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -48,6 +49,9 @@ func main() {
 		t.Fatal(err)
 	}
 	bin := filepath.Join(dir, "read-asm")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.Command("go", "build", "-trimpath", "-o", bin, mainFile)
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build trimpath reader: %v\n%s", err, out)

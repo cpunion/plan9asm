@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -26,12 +27,37 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 func TestDiscoveryGoVersionCannotAutoSwitch(t *testing.T) {
 	dir := t.TempDir()
 	goCommand := filepath.Join(dir, "go")
-	writeTestFile(t, goCommand, "#!/bin/sh\nif [ \"$GOTOOLCHAIN\" = local ]; then\n  echo go1.27.0\nelse\n  echo go1.27.1\nfi\n")
-	if err := os.Chmod(goCommand, 0755); err != nil {
-		t.Fatal(err)
+	if runtime.GOOS == "windows" {
+		goCommand += ".exe"
+	}
+	source := filepath.Join(dir, "fake_go.go")
+	writeTestFile(t, source, `package main
+import (
+	"fmt"
+	"os"
+)
+func main() {
+	if os.Getenv("GOTOOLCHAIN") == "local" {
+		fmt.Println("go1.27.0")
+	} else {
+		fmt.Println("go1.27.1")
+	}
+}
+`)
+	build := exec.Command("go", "build", "-o", goCommand, source)
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build native Go version fixture: %v\n%s", err, output)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("GOTOOLCHAIN", "go1.27.1")
+	resolved, err := exec.LookPath("go")
+	if err != nil || !strings.EqualFold(resolved, goCommand) {
+		t.Fatalf("version fixture not selected: got %q, %v; want %q", resolved, err, goCommand)
+	}
+	auto := exec.Command("go", "env", "GOVERSION")
+	if output, err := auto.CombinedOutput(); err != nil || strings.TrimSpace(string(output)) != "go1.27.1" {
+		t.Fatalf("fixture did not expose auto-switching: %q, %v", output, err)
+	}
 	version, err := readDiscoveryGoVersion()
 	if err != nil {
 		t.Fatal(err)
