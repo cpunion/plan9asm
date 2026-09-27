@@ -25,25 +25,48 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 	if target == edge.from+1 || edge.to != target && edge.to != edge.from+1 {
 		return constraint, false
 	}
-	predecessors := flow.before[edge.from]
-	if edge.from == 0 || len(predecessors) != 1 || predecessors[0] != edge.from-1 {
+	compare, clobbered, ok := flow.affineFlagsBefore(edge.from)
+	if !ok {
 		return constraint, false
 	}
-	compare := flow.words[edge.from-1]
+	condition := word & 15
+	if edge.to != target {
+		condition ^= 1
+	}
+	// Z describes the modular arithmetic result, including register CMP/CMN
+	// and a retained ADDS/SUBS result. A retained result is a post-instruction
+	// register; CMP/CMN leave their input registers unchanged.
+	if condition <= 1 {
+		if compare&31 != 31 {
+			constraint.expression = arm64PoolRegisterExpression(int(compare & 31))
+		} else {
+			_, expression, valid := arm64PoolAffineDefinition(compare &^ ((1 << 29) | 31))
+			if !valid {
+				return constraint, false
+			}
+			constraint.expression = expression
+		}
+		if constraint.expression.registerMask()&clobbered != 0 {
+			return constraint, false
+		}
+		if condition == 1 {
+			constraint.interval = arm64PoolInterval{1, math.MaxUint64}
+		}
+		return constraint, true
+	}
 	// CMP/CMN immediate, 64-bit only. SP and W comparisons do not establish
 	// this expression domain's 64-bit GP constraints.
 	if compare&0xbf80001f != 0xb100001f || compare>>5&31 == 31 {
 		return constraint, false
 	}
 	constraint.expression = arm64PoolRegisterExpression(int(compare >> 5 & 31))
+	if constraint.expression.registerMask()&clobbered != 0 {
+		return constraint, false
+	}
 	constraint.interval = arm64PoolUnknownInterval
 	immediate := uint64(compare >> 10 & 4095)
 	if compare&(1<<22) != 0 {
 		immediate <<= 12
-	}
-	condition := word & 15
-	if edge.to != target {
-		condition ^= 1
 	}
 	if compare&(1<<30) == 0 { // CMN: C is the carry out of unsigned addition.
 		if immediate == 0 {

@@ -68,7 +68,7 @@ func arm64RawPoolAffineIR(t *testing.T, triple string) string {
 	t.Helper()
 	lines := []string{
 		"adr x9, #0",
-		"sub x3, x1, x2", "sub x4, x3, #16", "cmn x4, #15", "b.lo #16",
+		"sub x3, x1, x2", "sub x4, x3, #16", "cmn x4, #15", "orr x8, x1, x1", "b.lo #16",
 		"sub x5, x1, x2", "ldrb w5, [x9, x5]", "str x5, [x0]",
 		"cmp x3, #3", "b.hi #20", "lsl x6, x1, #2", "sub x6, x6, x2, lsl #2",
 		"ldr w6, [x9, x6]", "str x6, [x0, #8]",
@@ -83,6 +83,10 @@ func arm64RawPoolAffineIR(t *testing.T, triple string) string {
 		"cmp x3, #8", "b.lo #32", "cmp x3, #9", "b.hi #24",
 		"sub x10, x9, x1, lsl #3", "add x10, x10, x2, lsl #3", "sub x10, x10, #64",
 		"ldr x10, [x10]", "str x10, [x0, #80]",
+		"cmp x1, x2", "orr x8, x1, x1", "b.ne #16",
+		"sub x10, x2, x1", "ldr q0, [x9, x10]", "str q0, [x0, #88]",
+		"cmn x1, x2", "orr x8, x1, x1", "b.ne #16",
+		"add x10, x1, x2", "ldr q0, [x9, x10]", "str q0, [x0, #104]",
 		"mov x9, xzr", "ret",
 	}
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
@@ -150,7 +154,11 @@ int main(void) {
   for (unsigned i = 0; i < sizeof(starts) / sizeof(starts[0]); i++) {
     for (unsigned j = 0; j < sizeof(lengths) / sizeof(lengths[0]); j++) {
       uint64_t n = lengths[j];
-      uint64_t result[13] = {0x1234, 0, 0, 0, 0, 0, 0, starts[i], starts[i] + n, 0, 0, 0, 0x5678};
+      uint64_t result[17] = {0};
+      result[0] = 0x1234;
+      result[16] = 0x5678;
+      result[7] = starts[i];
+      result[8] = starts[i] + n;
       pool_affine(result + 1, starts[i] + n, starts[i]);
       uint64_t expected[2] = {0, 0};
       if (n >= 8 && n <= 15) memcpy(expected, words, sizeof(words));
@@ -160,13 +168,18 @@ int main(void) {
       if (n <= 1) memcpy(&loaded, words + n * 2, sizeof(loaded));
       uint64_t negative = 0;
       if (n >= 8 && n <= 9) memcpy(&negative, words + (n - 8) * 2, sizeof(negative));
-      if (result[0] != 0x1234 || result[12] != 0x5678 ||
+      uint64_t equal[2] = {0, 0}, zero_sum[2] = {0, 0};
+      if (n == 0) memcpy(equal, words, sizeof(words));
+      if (starts[i] + starts[i] + n == 0) memcpy(zero_sum, words, sizeof(words));
+      if (result[0] != 0x1234 || result[16] != 0x5678 ||
           result[1] != (n >= 1 && n <= 15 ? bytes[n] : 0) ||
           result[2] != (n <= 3 ? words[n] : 0) ||
           result[3] != expected[0] || result[4] != expected[1] ||
           result[5] != words[0] || result[6] != joined ||
           result[7] != starts[i] || result[8] != starts[i] + n || result[9] != loaded ||
-          result[10] != (n <= 15 ? bytes[n] : 0) || result[11] != negative) return 1;
+          result[10] != (n <= 15 ? bytes[n] : 0) || result[11] != negative ||
+          result[12] != equal[0] || result[13] != equal[1] ||
+          result[14] != zero_sum[0] || result[15] != zero_sum[1]) return 1;
     }
   }
   return 0;

@@ -12,6 +12,13 @@ func (flow *arm64RawPoolValues) affineConstraintBound(at int, query arm64PoolAff
 	if bound, ok := query.constrainedBy(constraint); ok {
 		return bound, true
 	}
+	// An almost-full-width NE/range guard cannot independently bound a pool
+	// footprint through an unrelated residual. Recursing on it repeatedly
+	// consumes the shared budget in loops. Keep the direct fact above, and
+	// defer decomposition until guard intersection narrows the interval.
+	if constraint.interval.high-constraint.interval.low > math.MaxInt64 {
+		return arm64PoolInterval{}, false
+	}
 	for index, coefficient := range constraint.expression.coefficient {
 		if coefficient == 0 || query.coefficient[index] == 0 || query.coefficient[index]%coefficient != 0 {
 			continue
