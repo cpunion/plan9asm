@@ -21,6 +21,13 @@ func TestARM64RawPoolAliases(t *testing.T) {
 		{"immediate-add", "add x12, x9, #8\nldr x0, [x12]", true},
 		{"immediate-sub", "sub x12, x9, #8\nldr x0, [x12]", true},
 		{"alias-chain", "add x10, x9, #16\nsub x12, x10, #8\nldr x0, [x12]\nmov x10, xzr", true},
+		{"transient-offset-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
+		{"transient-add-cancelled", "add x10, x9, x1, lsl #3\nsub x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", true},
+		{"transient-offset-not-cancelled", "sub x10, x9, x1, lsl #3\nadd x12, x10, x2, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
+		{"transient-index-clobbered", "sub x10, x9, x1\nmov x1, x2\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
+		{"transient-flags-observed", "sub x10, x9, x1\ncmp x10, #0\nadd x12, x10, x1\nldr x0, [x12]\nmov x10, xzr", false},
+		{"transient-offset-escapes", "sub x10, x9, x1, lsl #3\nstr x10, [x0]\nadd x12, x10, x1, lsl #3\nldr x0, [x12]\nmov x10, xzr", false},
+		{"transient-offset-writes", "sub x10, x9, x1, lsl #3\nadd x12, x10, x1, lsl #3\nstr x0, [x12]\nmov x10, xzr", false},
 		{"original-killed", "mov x12, x9\nmov x9, xzr\nldr x0, [x12]", true},
 		{"load-kills-alias", "mov x12, x9\nldr x12, [x12]", true},
 		{"shifted-add", "and x1, x0, #3\nadd x12, x9, x1, lsl #3\nldr x0, [x12]", true},
@@ -44,7 +51,8 @@ func TestARM64RawPoolAliases(t *testing.T) {
 		{"shift-overflow", "mov x1, #2\nadd x12, x9, x1, lsl #63\nldr x0, [x12]", false},
 		{"out-of-bounds", "add x12, x9, #48\nldr x0, [x12]", false},
 		{"negative-footprint", "sub x12, x9, #16\nldur x0, [x12, #-1]", false},
-		{"alias-join", "mov x12, x9\ncbz x1, #8\nadd x12, x12, #8\nldr x0, [x12]", false},
+		{"alias-join", "mov x12, x9\ncbz x1, #8\nadd x12, x12, #8\nldr x0, [x12]", true},
+		{"alias-join-overrun", "mov x12, x9\ncbz x1, #8\nadd x12, x12, #48\nldr x0, [x12]", false},
 		{"alias-changing-loop", "mov x12, x9\nldr x0, [x12]\nadd x12, x12, #8\ncbnz x1, #-8", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {

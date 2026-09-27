@@ -19,6 +19,7 @@ type arm64RawPoolValues struct {
 
 	affineCache  map[arm64PoolAffineQuery]arm64PoolInterval
 	affineActive map[arm64PoolAffineQuery]bool
+	poolOrigin   *arm64PoolOrigin
 }
 
 type arm64RawPoolValue struct {

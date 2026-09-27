@@ -34,7 +34,8 @@ func TestARM64RawPoolBoundedOffsets(t *testing.T) {
 		{"index-unknown", "add x9, x9, #16\nldr x0, [x9, x1]", false},
 		{"offset-loop", "add x9, x9, #8\nldr x0, [x9]\ncbnz x1, #-8", false},
 		{"same-offset-join", "cbz x1, #8\nadd x9, x9, #0\nldr x0, [x9]", true},
-		{"different-offset-join", "cbz x1, #8\nadd x9, x9, #8\nldr x0, [x9]", false},
+		{"different-offset-join", "cbz x1, #8\nadd x9, x9, #8\nldr x0, [x9]", true},
+		{"different-offset-join-overrun", "cbz x1, #8\nadd x9, x9, #48\nldr x0, [x9]", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			body := strings.Split(test.body, "\n")

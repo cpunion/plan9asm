@@ -96,7 +96,13 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 		if target >= pool && target < end {
 			bounds := &arm64RawPoolBounds{offset: int64(target-pool) * 4, size: int64(end-pool) * 4, values: values}
 			if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
-				return nil, nil, nil
+				// The fast interval walker rejects transient offsets outside the
+				// blob. A symbolic proof may cancel them before a read, but it
+				// must still prove every final footprint and reject all escapes.
+				bounds = bounds.withSymbolicOrigin(at)
+				if !arm64RawAddressOnlyLoadedWithinPool(fn.Instrs, at, pool, returnClobbers, bounds) {
+					return nil, nil, nil
+				}
 			}
 		}
 	}
@@ -177,9 +183,10 @@ func arm64RawAddressOnlyLoadedWithExit(instructions []Instr, at, end int, return
 }
 
 type arm64RawPoolBounds struct {
-	offset int64
-	size   int64
-	values *arm64RawPoolValues
+	offset   int64
+	size     int64
+	values   *arm64RawPoolValues
+	symbolic bool
 }
 
 type arm64RawPoolFlow struct {
@@ -194,6 +201,9 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 	initialOffset := int64(0)
 	if bounds != nil {
 		initialOffset = bounds.offset
+		if bounds.symbolic {
+			initialOffset = 0 // Numeric offsets come from reaching definitions at each read.
+		}
 	}
 	visited := make(map[arm64RawPoolValue]arm64RawPoolRange)
 	queue := []arm64RawPoolFlow{{at + 1, register, arm64RawPoolRange{initialOffset, initialOffset}}}
@@ -203,7 +213,13 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 		register := state.register
 		wordRegister := register - arm64asm.X0 + arm64asm.W0
 		isAddress := func(r arm64asm.Reg) bool { return r == register || r == wordRegister }
-		next := func(at int) { queue = append(queue, arm64RawPoolFlow{at, register, offset}) }
+		next := func(at int) {
+			nextOffset := offset
+			if bounds != nil && bounds.symbolic {
+				nextOffset = arm64RawPoolRange{}
+			}
+			queue = append(queue, arm64RawPoolFlow{at, register, nextOffset})
+		}
 		queue = queue[:len(queue)-1]
 		if i < 0 || i >= end {
 			return false
@@ -249,6 +265,16 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			}
 			continue
 		}
+		if bounds != nil && bounds.symbolic {
+			if destination, ok := arm64RawPoolSymbolicAlias(word, int(register-arm64asm.X0)); ok {
+				alias := arm64asm.X0 + arm64asm.Reg(destination)
+				queue = append(queue, arm64RawPoolFlow{i + 1, alias, arm64RawPoolRange{}})
+				if alias != register {
+					next(i + 1)
+				}
+				continue
+			}
+		}
 		if destination, derived, ok := arm64RawPoolAlias(word, i, int(register-arm64asm.X0), offset, bounds); ok {
 			alias := arm64asm.X0 + arm64asm.Reg(destination)
 			queue = append(queue, arm64RawPoolFlow{i + 1, alias, derived})
@@ -264,6 +290,11 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 				return false
 			}
 			if memory.Base == name {
+				var proven bool
+				offset, proven = bounds.offsetAt(i, register, offset)
+				if !proven {
+					return false
+				}
 				spec := arm64SVEReplicateMemorySpecs[ins.Op]
 				bytes := spec.blockBytes
 				if bytes == 0 {
@@ -367,6 +398,11 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 					if !arm64RawPoolReadOnlyLoad(decoded.Op) || arg.Mode != arm64asm.AddrOffset {
 						return false
 					}
+					var proven bool
+					offset, proven = bounds.offsetAt(i, register, offset)
+					if !proven {
+						return false
+					}
 					if bounds != nil && (!arm64RawPoolLoadInBounds(decoded, word, arg, offset.low, bounds.size) ||
 						!arm64RawPoolLoadInBounds(decoded, word, arg, offset.high, bounds.size)) {
 						return false
@@ -378,6 +414,11 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 					return false
 				}
 				if isAddress(arm64asm.Reg(arg.Base)) {
+					var proven bool
+					offset, proven = bounds.offsetAt(i, register, offset)
+					if !proven {
+						return false
+					}
 					if bounds == nil || !arm64RawPoolReadOnlyLoad(decoded.Op) ||
 						offset.low < 0 || !arm64RawPoolIndexedLoadInBounds(decoded, word, arg, i, offset.high, bounds) {
 						return false

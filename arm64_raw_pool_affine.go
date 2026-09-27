@@ -236,6 +236,9 @@ func (flow *arm64RawPoolValues) affineInterval(at int, expression arm64PoolAffin
 				continue
 			}
 			destination, value, affine := arm64PoolAffineDefinition(word)
+			if origin := flow.poolOrigin; origin != nil && previous == origin.at && word&0x9f000000 == 0x10000000 {
+				destination, value, affine = int(word&31), arm64PoolAffine{constant: origin.offset}, true
+			}
 			if !affine && writes != 0 {
 				if masked, ok := flow.affineMaskInterval(previous, word); ok && masked.low == masked.high {
 					destination, value, affine = int(word&31), arm64PoolAffine{constant: masked.low}, true
