@@ -38,9 +38,8 @@ test('priority and remaining shards use identical test and artifact steps', () =
     /needs: \[discovered_library_priority, discovered_library_corpus\]/);
 });
 
-test('priority concurrency can start every failed shard without other work', () => {
-  const section = jobSection('discovered_library_priority');
-  const match = section.match(/^      max-parallel: (\d+)$/m);
-  assert.ok(match, 'missing priority concurrency');
-  assert.ok(Number(match[1]) >= shards(section).length);
+test('discovery matrices have no explicit concurrency cap', () => {
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    assert.doesNotMatch(jobSection(name), /^      max-parallel:/m, name);
+  }
 });

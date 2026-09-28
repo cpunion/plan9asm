@@ -24,7 +24,6 @@ jobs:
     strategy:
       fail-fast: false
       # Require every previously failing shard to pass before other work.
-      max-parallel: 5
       matrix:
         shard: [11, 15, 16, 19, 30]
 
@@ -221,9 +220,6 @@ jobs:
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
-      # Keep large generated-assembly candidates from exhausting runners in
-      # parallel. Every shard still runs and uploads its own report.
-      max-parallel: 8
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 17, 18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31]
 
