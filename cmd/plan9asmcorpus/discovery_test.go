@@ -8,11 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"go/build"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -631,6 +635,124 @@ func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testin
 	}
 }
 
+func TestRunDiscoveryAsmDeclTestOnlyProxyFailureDoesNotHideAssembly(t *testing.T) {
+	var requests atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "test-only dependency unavailable", http.StatusServiceUnavailable)
+	}))
+	defer proxy.Close()
+
+	root := t.TempDir()
+	work := filepath.Join(root, "work")
+	module := filepath.Join(root, "module")
+	for _, dir := range []string{work, module} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(work, "go.mod"),
+		"module plan9asm.local/probe\n\ngo 1.20\n\nrequire example.com/testonly v0.0.0\nreplace example.com/testonly => ../module\n")
+	writeTestFile(t, filepath.Join(module, "go.mod"), "module example.com/testonly\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(module, "decl.go"), "package testonly\n\nfunc f() uint32\n")
+	writeTestFile(t, filepath.Join(module, "decl_test.go"),
+		"package testonly\n\nimport _ \"example.com/unavailable-test-dependency\"\n")
+	asm := filepath.Join(module, "decl_386.s")
+	writeTestFile(t, asm, "TEXT ·f(SB), $0-4\nMOVL AX, ret+0(FP)\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "GOPROXY": proxy.URL, "GOSUMDB": "off",
+	})
+	pattern := []string{"example.com/testonly"}
+	if err := runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern); err != nil {
+		t.Fatalf("valid assembly rejected by test-only proxy failure: %v", err)
+	}
+	if requests.Load() == 0 {
+		t.Fatal("test dependency did not reach the failing proxy")
+	}
+
+	writeTestFile(t, asm, "TEXT ·f(SB), $0-4\nMOVL AX, ret+4(FP)\nRET\n")
+	err := runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern)
+	if err == nil || !isDiscoveryAsmDeclABIMismatch(discoveryCommandDiagnostic(err)) {
+		t.Fatalf("ABI mismatch hidden by test-only proxy failure: %v", err)
+	}
+
+	writeTestFile(t, filepath.Join(module, "decl.go"),
+		"package testonly\n\nimport _ \"example.com/unavailable-production-dependency\"\n\nfunc f() uint32\n")
+	err = runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern)
+	if !isDiscoveryInfrastructureFailure(err) {
+		t.Fatalf("production dependency failure was hidden: %v", err)
+	}
+}
+
+func TestRunDiscoveryAsmDeclDoesNotAttributeDependencyABIToPackage(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "work")
+	module := filepath.Join(root, "module")
+	for _, name := range []string{dir, filepath.Join(module, "dep"), filepath.Join(module, "consumer")} {
+		if err := os.MkdirAll(name, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(dir, "go.mod"),
+		"module plan9asm.local/probe\n\ngo 1.20\n\nrequire example.com/asmdep v0.0.0\nreplace example.com/asmdep => ../module\n")
+	writeTestFile(t, filepath.Join(module, "go.mod"), "module example.com/asmdep\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(module, "dep", "decl.go"), "package dep\n\nfunc bad() uint32\n")
+	writeTestFile(t, filepath.Join(module, "dep", "dep_amd64.s"),
+		"TEXT ·bad(SB), $0-4\nMOVL AX, ret+4(FP)\nRET\n")
+	writeTestFile(t, filepath.Join(module, "consumer", "decl.go"),
+		"package consumer\n\nfunc good(x uint32)\n")
+	writeTestFile(t, filepath.Join(module, "consumer", "decl_test.go"),
+		"package consumer\n\nimport _ \"example.com/asmdep/dep\"\n")
+	asm := filepath.Join(module, "consumer", "consumer_amd64.s")
+	writeTestFile(t, asm, "TEXT ·good(SB), $0-4\nMOVL x+0(FP), AX\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "amd64",
+	})
+	pattern := []string{"example.com/asmdep/consumer"}
+	_, depErr := runCapturedCommandOutput(context.Background(), dir, env,
+		"go", "vet", "-asmdecl", "example.com/asmdep/dep")
+	if depErr == nil {
+		t.Fatal("dependency fixture does not have an asmdecl mismatch")
+	}
+	_, rawErr := runCapturedCommandOutput(context.Background(), dir, env,
+		"go", "vet", "-asmdecl", pattern[0])
+	if rawErr == nil && strings.HasPrefix(runtime.Version(), "go1.27") {
+		t.Fatalf("current Go did not reproduce the dependency ABI failure: %v", rawErr)
+	}
+	if rawErr != nil && !strings.Contains(discoveryCommandDiagnostic(rawErr), "dep_amd64.s") {
+		t.Fatalf("dependency ABI failure was not reproduced: %v", rawErr)
+	}
+	if err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, pattern); err != nil {
+		t.Fatalf("dependency ABI failure was attributed to valid consumer: %v", err)
+	}
+
+	writeTestFile(t, asm, "TEXT ·good(SB), $0-4\nMOVL x+4(FP), AX\nRET\n")
+	err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, pattern)
+	if err == nil || !strings.Contains(discoveryCommandDiagnostic(err), "consumer_amd64.s") {
+		t.Fatalf("consumer ABI mismatch was hidden by dependency mismatch: %v", err)
+	}
+}
+
+func TestDiscoveryTestlessAsmDeclRetryRequiresSelectedTests(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/no-tests\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(dir, "decl.go"), "package notests\n\nfunc f()\n")
+	writeTestFile(t, filepath.Join(dir, "decl_386.s"), "TEXT ·f(SB), $0-0\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "386",
+	})
+	err := runDiscoveryAsmDeclWithTestlessModuleCopies(
+		context.Background(), dir, env,
+		[]string{"vet", "-asmdecl", "example.com/no-tests"},
+		nil, []string{"example.com/no-tests"},
+	)
+	if err == nil {
+		t.Fatal("testless retry reported success without running vet")
+	}
+}
+
 func TestRunDiscoveryAsmDeclPropagatesExpiredContext(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/asmdecltimeout\n\ngo 1.20\n")
@@ -741,6 +863,108 @@ func TestDiscoveryAsmDeclOnlyClassifiesConcreteABIMismatches(t *testing.T) {
 	} {
 		if isDiscoveryAsmDeclABIMismatch(diagnostic) {
 			t.Fatalf("non-ABI diagnostic was classified as N/A: %q", diagnostic)
+		}
+	}
+}
+
+func TestDiscoveryAsmDeclRejectsOnlyFilesWithConcreteABIErrors(t *testing.T) {
+	diagnostic := strings.Join([]string{
+		"pkg/first_amd64.s:3:1: [amd64] first: wrong argument size 16; expected $...-8",
+		"pkg/second_amd64.s:4:1: [amd64] second: unknown variable ret0; offset 8 is ret+8(FP)",
+	}, "\n")
+	files := []string{"pkg/first_amd64.s", "pkg/second_amd64.s"}
+	if got := discoveryAsmDeclRejectedFiles(files, diagnostic); !reflect.DeepEqual(got, files[:1]) {
+		t.Fatalf("ABI-rejected files = %v, want %v", got, files[:1])
+	}
+	evidence := discoveryAsmDeclRejectionEvidence(errors.New(diagnostic), files[:1])
+	if !strings.Contains(evidence, "first_amd64.s:3:1") || strings.Contains(evidence, "second_amd64.s") {
+		t.Fatalf("ABI evidence does not identify only the rejected file: %q", evidence)
+	}
+}
+
+func TestDiscoveryAsmDeclInfrastructureCannotBecomeSourceNotApplicable(t *testing.T) {
+	failure := &discoveryCapturedCommandError{
+		command: "go vet -asmdecl",
+		cause:   errors.New("exit status 1"),
+		output:  "go: write build cache: no space left on device\n" + strings.Repeat("x", 70<<10),
+		display: strings.Repeat("x", 64<<10),
+	}
+	rejected, err := classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, failure)
+	if err == nil || len(rejected) != 0 {
+		t.Fatalf("infrastructure failure became source N/A: rejected=%v error=%v", rejected, err)
+	}
+	unknownFile := errors.New("other_amd64.s:1:1: [amd64] other: wrong argument size 16; expected $...-8")
+	rejected, err = classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, unknownFile)
+	if err == nil || len(rejected) != 0 {
+		t.Fatalf("unmapped ABI failure became source N/A: rejected=%v error=%v", rejected, err)
+	}
+}
+
+func TestDiscoveryAsmDeclAttributesCoSelectedFileWithoutRetranslatingIt(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"pkg", "other"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(dir, "pkg", "common_amd64.s"),
+		"//go:build !purego\n\nTEXT ·common(SB),0,$0-0\nRET\n")
+	writeTestFile(t, filepath.Join(dir, "pkg", "plugin_amd64.s"),
+		"//go:build plugin && !purego\n\nTEXT ·plugin(SB),0,$0-0\nRET\n")
+	writeTestFile(t, filepath.Join(dir, "other", "common_amd64.s"),
+		"TEXT ·other(SB),0,$0-0\nRET\n")
+	candidate := discoveryCandidate{
+		AsmFiles: []string{
+			"pkg/common_amd64.s", "pkg/plugin_amd64.s", "other/common_amd64.s",
+		},
+	}
+	group := discoveryPackageGroup{
+		Pattern: "example.com/test/pkg", AsmFiles: []string{"pkg/plugin_amd64.s"},
+	}
+	files, err := discoveryAsmDeclPackageFiles(candidate, group, dir, "darwin/amd64", []string{"plugin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pkg/common_amd64.s", "pkg/plugin_amd64.s"}
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("Go-selected asmdecl files = %v, want %v", files, want)
+	}
+	diagnostic := errors.New("pkg/common_amd64.s:12:1: [amd64] common: invalid MOVL of idx+16(FP); int is 8-byte value")
+	rejected, err := classifyDiscoveryAsmDeclFailure(files, diagnostic)
+	if err != nil || !reflect.DeepEqual(rejected, want[:1]) {
+		t.Fatalf("classified ABI files = %v, error = %v", rejected, err)
+	}
+	if remaining := subtractDiscoveryStrings(group.AsmFiles, rejected); !reflect.DeepEqual(remaining, group.AsmFiles) {
+		t.Fatalf("ABI error in co-selected source hid selected translation: %v", remaining)
+	}
+	unknown := errors.New("other/common_amd64.s:12:1: [amd64] other: invalid MOVL of idx+16(FP); int is 8-byte value")
+	if rejected, err := classifyDiscoveryAsmDeclFailure(files, unknown); err == nil || len(rejected) != 0 {
+		t.Fatalf("another package's ABI error became source N/A: rejected=%v error=%v", rejected, err)
+	}
+}
+
+func TestDiscoveryAsmDeclForeignCandidateABIRequiresExactOtherFile(t *testing.T) {
+	files := []string{
+		"internal/utils/cpuid_amd64.s",
+		"p503/arith_amd64.s",
+	}
+	packageFiles := files[1:]
+	foreign := errors.New("module-cache/example.com/asm@v1.0.0/internal/utils/cpuid_amd64.s:5:1: " +
+		"[amd64] cpuid: wrong argument size 4; expected $...-24\n" +
+		"module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:695:1: " +
+		"[amd64] mul: use of unnamed argument 0(FP)")
+	if !discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, foreign) {
+		t.Fatal("exactly attributed other-package ABI error was not recognized")
+	}
+	for _, err := range []error{
+		errors.New("module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:5:1: " +
+			"[amd64] mul: wrong argument size 4; expected $...-24"),
+		errors.New("other-module/cpuid_amd64.s:5:1: " +
+			"[amd64] cpuid: wrong argument size 4; expected $...-24"),
+		errors.New("go vet: no space left on device\n" + foreign.Error()),
+	} {
+		if discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, err) {
+			t.Fatalf("unattributed or infrastructure error became ignorable: %v", err)
 		}
 	}
 }

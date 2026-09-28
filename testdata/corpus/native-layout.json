@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "skips": [
+    {
+      "module": "github.com/quasilyte/GopherJRE",
+      "version": "v0.0.0-20250131090304-888098460476",
+      "asm_file": "jruntime/call_amd64.s",
+      "targets": ["darwin/amd64", "linux/amd64", "windows/amd64"],
+      "source_sha256": "def9bd4b4d1faccabcd3b30722e7400b6f7bd0db415495c5ca4e9279dbc1afc0",
+      "symbol": "jcallScalar",
+      "object_hex": "488d0509000000488906",
+      "reason": "The source saves a return address calculated inside its own TEXT and jumps into foreign code; the Go object encodes a byte-exact RIP-relative LEA. This exact native-layout dependency is not yet modeled by LLVM translation.",
+      "evidence_urls": [
+        "https://github.com/quasilyte/GopherJRE/blob/888098460476/jruntime/call_amd64.s"
+      ]
+    },
+    {
+      "module": "github.com/aabalke/gojit",
+      "version": "v0.0.0-20260919011104-e8574bd413ce",
+      "asm_file": "jit_amd64.s",
+      "targets": ["darwin/amd64", "linux/amd64", "windows/amd64"],
+      "source_sha256": "8e9ac14a0cb2d64c5cc228c68fcab7f28c26c702a207cb1b613680caa63a4541",
+      "symbol": "callJIT",
+      "object_hex": "00beadde4c89",
+      "reason": "The JIT scans this native TEXT for a literal sentinel and branches into the middle of the function. LLVM translation does not preserve this byte layout or the source's custom control-flow contract.",
+      "evidence_urls": [
+        "https://github.com/aabalke/gojit/blob/e8574bd413ce/jit_amd64.s"
+      ]
+    },
+    {
+      "module": "github.com/LamkasDev/sharkie",
+      "version": "v0.0.0-20260919122514-0af66a893005",
+      "asm_file": "cmd/asm/runner_amd64.s",
+      "targets": ["darwin/amd64", "linux/amd64", "windows/amd64"],
+      "source_sha256": "a365b2d8c88ded99e7de6dae28a082a16466b23bd6f52e6bfb3ee68d3737213e",
+      "symbol": "Run",
+      "object_hex": "eb05e800000000",
+      "reason": "The source branches over a five-byte CALL and constructs a return address at Run+7, depending on its native TEXT layout and custom stack transition. The remaining assembly files still require translation and object compilation.",
+      "evidence_urls": [
+        "https://github.com/LamkasDev/sharkie/blob/0af66a893005/cmd/asm/runner_amd64.s"
+      ]
+    },
+    {
+      "module": "github.com/lamkasdev/sharkie",
+      "version": "v0.0.0-20260919122514-0af66a893005",
+      "asm_file": "cmd/asm/runner_amd64.s",
+      "targets": ["darwin/amd64", "linux/amd64", "windows/amd64"],
+      "source_sha256": "a365b2d8c88ded99e7de6dae28a082a16466b23bd6f52e6bfb3ee68d3737213e",
+      "symbol": "Run",
+      "object_hex": "eb05e800000000",
+      "reason": "The source branches over a five-byte CALL and constructs a return address at Run+7, depending on its native TEXT layout and custom stack transition. The remaining assembly files still require translation and object compilation.",
+      "evidence_urls": [
+        "https://github.com/lamkasdev/sharkie/blob/0af66a893005/cmd/asm/runner_amd64.s"
+      ]
+    }
+  ]
+}

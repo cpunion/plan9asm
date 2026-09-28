@@ -658,7 +658,7 @@ func parseFP(s string) (name string, off int64, ok bool) {
 		return "", 0, false
 	}
 	name, off = splitSymPlusOff(base)
-	if name == "" || strings.IndexAny(name, " \t,()") >= 0 {
+	if name == "" || strings.IndexAny(name, " \t,()+-") >= 0 {
 		return "", 0, false
 	}
 	return name, off, true

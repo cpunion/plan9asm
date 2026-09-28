@@ -55,6 +55,12 @@ tests establish the relevant runtime semantics.
   exact file and target pinned in `testdata/corpus/private-extensions.json`.
   Verify the source hash and current Go assembler, compile every other
   applicable file, and count the candidate separately from passes.
+- A native-byte-layout/JIT gap requires an explicitly reviewed exception
+  policy before promotion. A proposal may be tested in the fork Draft PR,
+  clearly labeled provisional. Pin its module, version, file and targets in
+  `testdata/corpus/native-layout.json`. Recheck source SHA-256 and Go object
+  bytes for each target; compile all other assembly and count the skip outside
+  passes. Do not use this for an ordinary unsupported instruction.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.

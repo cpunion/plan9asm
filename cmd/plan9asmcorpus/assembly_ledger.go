@@ -42,7 +42,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 	}
 	classified := progress.Passed + progress.Failed + progress.NotApplicable +
 		progress.SkippedInvalidSource + progress.SkippedSuperseded +
-		progress.SkippedPrivateExtension
+		progress.SkippedPrivateExtension + progress.SkippedNativeLayout
 	if progress.CandidateTotal != len(progress.Candidates) ||
 		progress.CandidateTotal != classified+progress.Pending {
 		return fmt.Errorf("assembly ledger candidate counts do not balance")
@@ -78,7 +78,8 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		switch candidate.Status {
 		case "pending", discoveryStatusPassed, discoveryStatusFailed,
 			discoveryStatusNotApplicable, discoveryStatusSkippedInvalidSource,
-			discoveryStatusSkippedSuperseded, discoveryStatusSkippedPrivateExtension:
+			discoveryStatusSkippedSuperseded, discoveryStatusSkippedPrivateExtension,
+			discoveryStatusSkippedNativeLayout:
 			counts[candidate.Status]++
 		default:
 			return fmt.Errorf("assembly ledger candidate %s has invalid status %q", key, candidate.Status)
@@ -105,13 +106,22 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		} else if candidate.PrivateExtension != nil {
 			return fmt.Errorf("assembly ledger non-private result %s carries private-extension evidence", key)
 		}
+		if candidate.Status == discoveryStatusSkippedNativeLayout {
+			if candidate.NativeLayout == nil || candidate.NativeLayout.Module != candidate.Module ||
+				candidate.NativeLayout.Version != candidate.Version || candidate.NativeLayout.Reason == "" {
+				return fmt.Errorf("assembly ledger native layout %s lacks matching evidence", key)
+			}
+		} else if candidate.NativeLayout != nil {
+			return fmt.Errorf("assembly ledger non-native result %s carries native-layout evidence", key)
+		}
 	}
 	if counts["pending"] != progress.Pending || counts[discoveryStatusPassed] != progress.Passed ||
 		counts[discoveryStatusFailed] != progress.Failed ||
 		counts[discoveryStatusNotApplicable] != progress.NotApplicable ||
 		counts[discoveryStatusSkippedInvalidSource] != progress.SkippedInvalidSource ||
 		counts[discoveryStatusSkippedSuperseded] != progress.SkippedSuperseded ||
-		counts[discoveryStatusSkippedPrivateExtension] != progress.SkippedPrivateExtension {
+		counts[discoveryStatusSkippedPrivateExtension] != progress.SkippedPrivateExtension ||
+		counts[discoveryStatusSkippedNativeLayout] != progress.SkippedNativeLayout {
 		return fmt.Errorf("assembly ledger candidate statuses do not match summary")
 	}
 	return nil

@@ -64,6 +64,78 @@ func TestDiscoveryAsmDeclRetryOutputOverflowIsNotIgnored(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAsmDeclRetainsEarlyABIErrorInLargeDiagnostic(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		diagnostic string
+	}{
+		{
+			name:       "ABI mismatch",
+			diagnostic: "source_amd64.s:10:1: [amd64] source: wrong argument size 16; expected $...-8",
+		},
+		{
+			name:       "infrastructure failure",
+			diagnostic: "go: write build cache: no space left on device",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/pkg\n\ngo 1.20\n")
+			toolDir := t.TempDir()
+			source := filepath.Join(toolDir, "go.go")
+			program := `package main
+
+import (
+	"bytes"
+	"os"
+)
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "vet" {
+		_, _ = os.Stderr.WriteString(` + fmt.Sprintf("%q", test.diagnostic+"\n") + `)
+		_, _ = os.Stderr.Write(bytes.Repeat([]byte{'x'}, 70<<10))
+		os.Exit(1)
+	}
+}
+`
+			writeTestFile(t, source, program)
+			name := "go"
+			if runtime.GOOS == "windows" {
+				name += ".exe"
+			}
+			command := exec.Command("go", "build", "-o", filepath.Join(toolDir, name), source)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("build fake Go tool: %v\n%s", err, output)
+			}
+			t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+			err := runDiscoveryAsmDecl(context.Background(), dir, os.Environ(), "linux/amd64", nil, []string{"example.com/pkg"})
+			if err == nil {
+				t.Fatal("early diagnostic disappeared after display truncation")
+			}
+			if !strings.Contains(discoveryCommandDiagnostic(err), test.diagnostic) {
+				t.Fatalf("full command diagnostic lost %q", test.diagnostic)
+			}
+			if strings.Contains(err.Error(), test.diagnostic) {
+				t.Fatal("display error unexpectedly retained the large diagnostic prefix")
+			}
+			if test.name == "ABI mismatch" {
+				rejected := discoveryAsmDeclRejectedFiles(
+					[]string{"source_amd64.s", "other_amd64.s"}, discoveryCommandDiagnostic(err),
+				)
+				if len(rejected) != 1 || rejected[0] != "source_amd64.s" {
+					t.Fatalf("ABI rejection affected wrong files: %v", rejected)
+				}
+				if evidence := discoveryAsmDeclRejectionEvidence(err, rejected); !strings.Contains(evidence, test.diagnostic) {
+					t.Fatalf("persisted ABI evidence lost the early mismatch: %q", evidence)
+				}
+			} else if !isDiscoveryInfrastructureFailure(err) {
+				t.Fatal("early resource failure was classified as source incompatibility")
+			}
+		})
+	}
+}
+
 func buildDiscoveryOverflowGoTool(t *testing.T, vetFails bool) string {
 	t.Helper()
 	dir := t.TempDir()

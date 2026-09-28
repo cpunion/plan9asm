@@ -69,6 +69,7 @@
     "skipped_invalid_source": 0,
     "skipped_superseded": 0,
     "skipped_private_extension": 0,
+    "skipped_native_layout": 0,
     "pending": 4783,
     "discovered_asm_files": 61029,
     "translations": 0,

@@ -121,7 +121,7 @@ runner.
 
 The aggregate checks exact ledger ownership/inventory and these identities:
 
-- `selected = passed + not_applicable + skipped_invalid_source + skipped_superseded + skipped_private_extension + failed`;
+- `selected = passed + not_applicable + skipped_invalid_source + skipped_superseded + skipped_private_extension + skipped_native_layout + failed`;
 - each target's `total_asm = success + not_applicable + failed`;
 - final `failed = 0`, each candidate appearing exactly once.
 
@@ -159,7 +159,17 @@ files. Its successful translations are retained, but the module is counted
 as skipped rather than passed. A changed file, failed Go assembly or failed
 other translation makes the candidate fail.
 
-Schema 6 binds Git revision/content/dirty state, full ledger fingerprint,
+`skipped_native_layout` is reserved for byte-exact native TEXT/JIT behavior,
+not a missing instruction form. This is a provisional Draft PR proposal, not
+an accepted coverage policy. `testdata/corpus/native-layout.json` pins the
+exact module version, source file, every selected target, source SHA-256,
+symbol, Go object bytes and reviewable evidence. The runner reassembles the
+file with current Go for each target, checks the byte witness inside that
+symbol, and compiles every other applicable file. The candidate is never
+counted as passed; an unpinned target, stale source, changed object bytes or
+failed remaining translation fails the candidate.
+
+Schema 7 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22
 version/llc bytes. Before/after capture detects mutations. All shards need
 identical provenance. Dirty builds are diagnostic-only; schema-2, stale tools,
@@ -185,7 +195,8 @@ The defaults are `_out/discovered-library-corpus` and 32. `scan-status.json`
 contains validated contiguous index endpoints and scan counts.
 `assembly-progress.json` binds the ledger/source and lists every selected exact
 version as `pending`, `passed`, `not_applicable`, `skipped_invalid_source`,
-`skipped_superseded`, `skipped_private_extension` or `failed`. Its invariant
+`skipped_superseded`, `skipped_private_extension`, `skipped_native_layout` or
+`failed`. Its invariant
 includes every one of those categories exactly once. Missing whole shards
 remain pending, including in-progress shards not yet published.
 

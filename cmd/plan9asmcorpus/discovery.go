@@ -30,7 +30,7 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const discoveryReportSchema = 6
+const discoveryReportSchema = 7
 
 const (
 	discoveryStatusPassed                  = "passed"
@@ -39,6 +39,7 @@ const (
 	discoveryStatusSkippedInvalidSource    = "skipped_invalid_source"
 	discoveryStatusSkippedSuperseded       = "skipped_superseded"
 	discoveryStatusSkippedPrivateExtension = "skipped_private_extension"
+	discoveryStatusSkippedNativeLayout     = "skipped_native_layout"
 )
 
 type discoveryRecord struct {
@@ -75,6 +76,7 @@ type discoveryCorpusConfig struct {
 	// directory, which runDiscoveryCorpus must never remove.
 	buildCache            string
 	privateExtensionSkips map[string]discoveryPrivateExtensionSkip
+	nativeLayoutSkips     map[string]discoveryNativeLayoutSkip
 	embeddedAliases       map[string]discoveryEmbeddedModuleAlias
 	// Allows deterministic, offline orchestration tests; the CLI always uses
 	// collectDiscoveryProvenance and cannot supply a claimed identity.
@@ -183,6 +185,7 @@ type discoveryCorpusResult struct {
 	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
 	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
 	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 	Error                     string                                `json:"error,omitempty"`
 }
 
@@ -203,6 +206,7 @@ type discoveryCorpusReport struct {
 	SkippedInvalidSource      int                       `json:"skipped_invalid_source"`
 	SkippedSuperseded         int                       `json:"skipped_superseded"`
 	SkippedPrivateExtension   int                       `json:"skipped_private_extension"`
+	SkippedNativeLayout       int                       `json:"skipped_native_layout"`
 	Translations              int                       `json:"translations"`
 	NotApplicableTranslations int                       `json:"not_applicable_translations"`
 	Results                   []discoveryCorpusResult   `json:"results"`
@@ -369,6 +373,7 @@ func auditDiscoveryCorpusReports(
 	skips map[string]discoveryInvalidMachineCodeSkip,
 	superseded map[string]discoverySupersededSkip,
 	privateExtensions map[string]discoveryPrivateExtensionSkip,
+	nativeLayouts map[string]discoveryNativeLayoutSkip,
 	progress *discoveryProgress,
 ) error {
 	ledgerSHA, err := discoveryLedgerFingerprint(ledgerPath)
@@ -477,6 +482,10 @@ func auditDiscoveryCorpusReports(
 				if err := validatePrivateExtensionResult(result); err != nil {
 					return fmt.Errorf("%s: private-extension skip %s: %w", filePath, key, err)
 				}
+			case discoveryStatusSkippedNativeLayout:
+				if err := validateNativeLayoutResult(result); err != nil {
+					return fmt.Errorf("%s: native-layout skip %s: %w", filePath, key, err)
+				}
 			}
 			candidate, ok := expected[key]
 			if !ok {
@@ -490,6 +499,10 @@ func auditDiscoveryCorpusReports(
 			}
 			if !equalDiscoveryStrings(result.DiscoveredAsmFiles, candidate.AsmFiles) {
 				return fmt.Errorf("%s: result %s assembly inventory %v does not match ledger %v", filePath, key, result.DiscoveredAsmFiles, candidate.AsmFiles)
+			}
+			if _, pinned := nativeLayouts[key]; pinned &&
+				result.Status != discoveryStatusSkippedNativeLayout && result.Status != discoveryStatusFailed {
+				return fmt.Errorf("%s: result %s ignores its pinned native-layout exception", filePath, key)
 			}
 			if result.Status == discoveryStatusSkippedInvalidSource {
 				if !invalidSourceSkipMatchesResult(skips[key], result) {
@@ -506,6 +519,11 @@ func auditDiscoveryCorpusReports(
 					return fmt.Errorf("%s: result %s private-extension skip differs from the pinned manifest", filePath, key)
 				}
 			}
+			if result.Status == discoveryStatusSkippedNativeLayout {
+				if !nativeLayoutSkipMatchesResult(nativeLayouts[key], result) {
+					return fmt.Errorf("%s: result %s native-layout skip differs from the pinned manifest", filePath, key)
+				}
+			}
 			seenCandidates[key] = filePath
 			outcomes[key] = discoveryCandidateProgress{
 				Module: result.Module, Version: result.Version, Status: result.Status,
@@ -513,6 +531,7 @@ func auditDiscoveryCorpusReports(
 				InvalidSourceEvidence: append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
 				Superseded:            result.Superseded,
 				PrivateExtension:      result.PrivateExtension,
+				NativeLayout:          result.NativeLayout,
 			}
 		}
 		progress.ReportedShards++
@@ -530,6 +549,7 @@ func auditDiscoveryCorpusReports(
 		progress.SkippedInvalidSource += report.SkippedInvalidSource
 		progress.SkippedSuperseded += report.SkippedSuperseded
 		progress.SkippedPrivateExtension += report.SkippedPrivateExtension
+		progress.SkippedNativeLayout += report.SkippedNativeLayout
 		progress.Translations += report.Translations
 		progress.NotApplicableTranslations += report.NotApplicableTranslations
 	}
@@ -1394,6 +1414,11 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		return err
 	}
 	cfg.privateExtensionSkips = privateExtensionSkips
+	nativeLayoutSkips, err := loadNativeLayoutSkips(cfg.RepoRoot, cfg.LedgerPath)
+	if err != nil {
+		return err
+	}
+	cfg.nativeLayoutSkips = nativeLayoutSkips
 	embeddedAliases, err := loadDiscoveryEmbeddedModuleAliases(cfg.RepoRoot, allCandidates)
 	if err != nil {
 		return err
@@ -1533,6 +1558,17 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			fmt.Printf("SKIP_PRIVATE_EXTENSION %s: %s on %s; other translations=%d\n",
 				candidate.exactKey(), matrix.PrivateExtension.AsmFile,
 				matrix.PrivateExtension.Target, matrix.Success)
+		} else if matrix.NativeLayout != nil {
+			result.Status = discoveryStatusSkippedNativeLayout
+			result.NativeLayout = matrix.NativeLayout
+			result.Translations = matrix.Success
+			result.NotApplicableTranslations = matrix.NotApplicable
+			report.SkippedNativeLayout++
+			report.Translations += matrix.Success
+			report.NotApplicableTranslations += matrix.NotApplicable
+			fmt.Printf("SKIP_NATIVE_LAYOUT %s: %s on %s; other translations=%d\n",
+				candidate.exactKey(), matrix.NativeLayout.AsmFile,
+				strings.Join(matrix.NativeLayout.Targets, ","), matrix.Success)
 		} else if len(applicableAsmFiles) == 0 || matrix.Success == 0 {
 			result.Status = discoveryStatusNotApplicable
 			if len(applicableAsmFiles) == 0 {
@@ -1577,13 +1613,15 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		return fmt.Errorf("discovery shard %d/%d failed: passed=%d failed=%d selected=%d", cfg.ShardIndex, cfg.ShardCount, report.Passed, report.Failed, report.Selected)
 	}
 	fmt.Printf(
-		"discovery shard %d/%d passed: applicable=%d not_applicable=%d "+
+		"discovery shard %d/%d completed: passed=%d not_applicable=%d "+
 			"skipped_invalid_source=%d skipped_superseded=%d "+
-			"skipped_private_extension=%d translations=%d not_applicable_translations=%d\n",
+			"skipped_private_extension=%d skipped_native_layout=%d "+
+			"translations=%d not_applicable_translations=%d\n",
 		cfg.ShardIndex, cfg.ShardCount,
 		report.Passed, report.NotApplicable,
 		report.SkippedInvalidSource, report.SkippedSuperseded,
-		report.SkippedPrivateExtension, report.Translations, report.NotApplicableTranslations,
+		report.SkippedPrivateExtension, report.SkippedNativeLayout,
+		report.Translations, report.NotApplicableTranslations,
 	)
 	return nil
 }
@@ -1609,6 +1647,7 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		report.CandidateTotal, report.EligibleCandidates, report.Selected,
 		report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource,
 		report.SkippedSuperseded, report.SkippedPrivateExtension,
+		report.SkippedNativeLayout,
 		report.Translations, report.NotApplicableTranslations,
 	} {
 		if count < 0 {
@@ -1616,7 +1655,8 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		}
 	}
 	classified := report.Passed + report.Failed + report.NotApplicable +
-		report.SkippedInvalidSource + report.SkippedSuperseded + report.SkippedPrivateExtension
+		report.SkippedInvalidSource + report.SkippedSuperseded +
+		report.SkippedPrivateExtension + report.SkippedNativeLayout
 	if report.Selected != classified {
 		return fmt.Errorf(
 			"discovery report accounting mismatch: selected=%d classified=%d",
@@ -1627,7 +1667,7 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		return fmt.Errorf("discovery report result count mismatch: selected=%d results=%d", report.Selected, len(report.Results))
 	}
 	var passed, failed, notApplicable int
-	var skippedInvalidSource, skippedSuperseded, skippedPrivateExtension int
+	var skippedInvalidSource, skippedSuperseded, skippedPrivateExtension, skippedNativeLayout int
 	var translations, notApplicableTranslations int
 	for _, result := range report.Results {
 		if result.Translations < 0 || result.NotApplicableTranslations < 0 {
@@ -1659,6 +1699,11 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			if err := validatePrivateExtensionResult(result); err != nil {
 				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 			}
+		case discoveryStatusSkippedNativeLayout:
+			skippedNativeLayout++
+			if err := validateNativeLayoutResult(result); err != nil {
+				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
+			}
 		default:
 			return fmt.Errorf("%s@%s: invalid discovery result status %q", result.Module, result.Version, result.Status)
 		}
@@ -1667,6 +1712,9 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		}
 		if result.Status != discoveryStatusSkippedPrivateExtension && result.PrivateExtension != nil {
 			return fmt.Errorf("%s@%s: non-private result carries private-extension skip", result.Module, result.Version)
+		}
+		if result.Status != discoveryStatusSkippedNativeLayout && result.NativeLayout != nil {
+			return fmt.Errorf("%s@%s: non-native result carries native-layout skip", result.Module, result.Version)
 		}
 		translations += result.Translations
 		notApplicableTranslations += result.NotApplicableTranslations
@@ -1679,7 +1727,8 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			notApplicable != report.NotApplicable ||
 			skippedInvalidSource != report.SkippedInvalidSource ||
 			skippedSuperseded != report.SkippedSuperseded ||
-			skippedPrivateExtension != report.SkippedPrivateExtension) {
+			skippedPrivateExtension != report.SkippedPrivateExtension ||
+			skippedNativeLayout != report.SkippedNativeLayout) {
 		return fmt.Errorf("discovery report result status counts differ from summary")
 	}
 	if len(report.Results) != 0 && (translations != report.Translations || notApplicableTranslations != report.NotApplicableTranslations) {
@@ -1809,10 +1858,37 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			privateExtension = &skip
 		}
 	}
+	var nativeLayout *discoveryNativeLayoutSkip
+	if skip, ok := cfg.nativeLayoutSkips[candidate.exactKey()]; ok {
+		if privateExtension != nil {
+			return matrixReport{}, nil, nil, fmt.Errorf("candidate has both native-layout and private-extension skips")
+		}
+		filtered, active, err := filterNativeLayoutConfigurations(buildConfigurations, skip)
+		if err != nil {
+			return matrixReport{}, nil, nil, err
+		}
+		if !active {
+			return matrixReport{}, nil, nil, fmt.Errorf(
+				"native-layout source %s on %s is not selected by Go build constraints",
+				skip.AsmFile, strings.Join(skip.Targets, ","),
+			)
+		}
+		if err := verifyNativeLayoutSource(download.Dir, skip); err != nil {
+			return matrixReport{}, nil, nil, err
+		}
+		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			return verifyNativeLayoutGoObject(ctx, workDir, download.Dir, env, skip)
+		}); err != nil {
+			return matrixReport{}, nil, nil, err
+		}
+		buildConfigurations = filtered
+		nativeLayout = &skip
+	}
 	if len(buildConfigurations) == 0 {
 		return matrixReport{
 			SourceNotApplicableItems: sourceNotApplicable,
 			PrivateExtension:         privateExtension,
+			NativeLayout:             nativeLayout,
 		}, nil, buildConfigurations, nil
 	}
 	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
@@ -1836,6 +1912,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	aggregate := matrixReport{
 		SourceNotApplicableItems: sourceNotApplicable,
 		PrivateExtension:         privateExtension,
+		NativeLayout:             nativeLayout,
 	}
 	runTargets := make(map[string]bool)
 	executedBuildConfigurations := make([]discoveryBuildConfiguration, 0, len(buildConfigurations))
@@ -1876,17 +1953,29 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					}
 					validAsmFiles := append([]string(nil), group.AsmFiles...)
 					if err := runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, []string{group.Pattern}); err != nil {
-						rejected := discoveryAsmDeclRejectedFiles(validAsmFiles, err.Error())
-						if len(rejected) == 0 {
-							rejected = append(rejected, validAsmFiles...)
+						packageAsmFiles, packageErr := discoveryAsmDeclPackageFiles(
+							candidate, group, download.Dir, target, buildConfiguration.BuildTags,
+						)
+						if packageErr != nil {
+							return fmt.Errorf("enumerate Go-selected assembly for %s on %s: %w",
+								group.Pattern, target, packageErr)
 						}
-						aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
-							AsmFiles: append([]string(nil), rejected...),
-							Targets:  []string{target},
-							Kind:     discoverySourceNotApplicableAsmDecl,
-							Reason:   limitDiscoveryEvidence(err.Error(), 8192),
-						})
-						validAsmFiles = subtractDiscoveryStrings(validAsmFiles, rejected)
+						rejected, classifyErr := classifyDiscoveryAsmDeclFailure(packageAsmFiles, err)
+						foreignOnly := classifyErr != nil && discoveryAsmDeclOnlyForeignCandidateABI(
+							candidate.AsmFiles, packageAsmFiles, err,
+						)
+						if classifyErr != nil && !foreignOnly {
+							return fmt.Errorf("verify current Go asmdecl for %s on %s: %w", group.Pattern, target, classifyErr)
+						}
+						if !foreignOnly {
+							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+								AsmFiles: append([]string(nil), rejected...),
+								Targets:  []string{target},
+								Kind:     discoverySourceNotApplicableAsmDecl,
+								Reason:   discoveryAsmDeclRejectionEvidence(err, rejected),
+							})
+							validAsmFiles = subtractDiscoveryStrings(validAsmFiles, rejected)
+						}
 					}
 					if len(validAsmFiles) == 0 {
 						continue
@@ -2181,7 +2270,7 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 			return err
 		}
 		err := operation()
-		if err == nil || attempt >= len(delays) || !isDiscoveryRetryableNetworkFailure(err.Error()) {
+		if err == nil || attempt >= len(delays) || !isDiscoveryRetryableNetworkFailure(discoveryCommandDiagnostic(err)) {
 			return err
 		}
 		select {
@@ -2194,7 +2283,7 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 
 func isDiscoveryInfrastructureFailure(err error) bool {
 	return err != nil && (errors.Is(err, errDiscoveryCommandOutputExceeded) ||
-		isDiscoveryGoBuildInfrastructureFailure(err.Error()))
+		isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)))
 }
 
 func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target string, buildTags, patterns []string) error {
@@ -2216,19 +2305,21 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if err == nil {
 		return nil
 	}
-	if isDiscoveryInfrastructureFailure(err) {
+	// A test-only dependency may fail at the proxy before vet inspects valid
+	// production assembly. Retry without tests for transient network errors;
+	// resource, integrity, and toolchain failures still stop immediately.
+	if isDiscoveryInfrastructureFailure(err) &&
+		!isDiscoveryRetryableNetworkFailure(discoveryCommandDiagnostic(err)) {
 		return err
 	}
 	if ctx.Err() != nil {
 		return err
 	}
-	if isDiscoveryAsmDeclABIMismatch(err.Error()) {
-		return err
-	}
 	// go vet type-checks package tests before running asmdecl. Old modules can
-	// have tests that no longer compile even though their production package
-	// builds; retry against temporary module copies with only *_test.go files
-	// emptied so unrelated diagnostics cannot hide an assembly ABI mismatch.
+	// have tests that no longer compile or import another package with an ABI
+	// mismatch even though their production package builds. Retry against
+	// temporary module copies with only *_test.go files emptied so unrelated
+	// diagnostics cannot hide this package's assembly ABI result.
 	// Go forbids overlays beneath GOMODCACHE, hence the explicit module copies.
 	retryErr := runDiscoveryAsmDeclWithTestlessModuleCopies(ctx, dir, targetEnv, args, buildTags, patterns)
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -2237,11 +2328,15 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 		}
 		return fmt.Errorf("go vet -asmdecl: %w", ctxErr)
 	}
-	if retryErr != nil && isDiscoveryAsmDeclABIMismatch(retryErr.Error()) {
+	if retryErr != nil && isDiscoveryAsmDeclABIMismatch(discoveryCommandDiagnostic(retryErr)) {
 		return retryErr
 	}
 	if isDiscoveryInfrastructureFailure(retryErr) {
 		return retryErr
+	}
+	if retryErr != nil &&
+		(isDiscoveryInfrastructureFailure(err) || isDiscoveryAsmDeclABIMismatch(discoveryCommandDiagnostic(err))) {
+		return fmt.Errorf("testless go vet did not clear the original failure: %v; original: %w", retryErr, err)
 	}
 	return nil
 }
@@ -2344,7 +2439,7 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 		}
 	}
 	if !hasTests {
-		return nil
+		return errors.New("testless asmdecl retry found no selected test files")
 	}
 	formattedGoMod, err := parsedGoMod.Format()
 	if err != nil {
@@ -2397,20 +2492,161 @@ func isDiscoveryAsmDeclABIMismatch(diagnostic string) bool {
 
 func discoveryAsmDeclRejectedFiles(asmFiles []string, diagnostic string) []string {
 	diagnostic = filepath.ToSlash(diagnostic)
-	var rejected []string
-	for _, asmFile := range asmFiles {
-		asmFile = filepath.ToSlash(asmFile)
-		if strings.Contains(diagnostic, asmFile+":") || strings.Contains(diagnostic, "/"+asmFile+":") {
-			rejected = append(rejected, asmFile)
+	rejected := make(map[string]bool)
+	for _, line := range strings.Split(diagnostic, "\n") {
+		if !isDiscoveryAsmDeclABIMismatch(line) {
 			continue
 		}
-		// The Go command sometimes shortens diagnostics to a package-local
-		// basename. Only use that fallback when it identifies this file.
-		if strings.Contains(diagnostic, path.Base(asmFile)+":") {
-			rejected = append(rejected, asmFile)
+		for _, asmFile := range asmFiles {
+			if discoveryAsmDeclLineNamesFile(line, asmFile) {
+				rejected[asmFile] = true
+			}
 		}
 	}
-	return uniqueSortedDiscoveryStrings(rejected)
+	return sortedDiscoverySet(rejected)
+}
+
+// go vet -asmdecl reports every file selected in a package, including a
+// default-tag file when this corpus configuration was seeded by a tagged file.
+// Expand only the diagnostic attribution set. Translation still uses the
+// minimal file/target configurations selected by discovery.
+func discoveryAsmDeclPackageFiles(
+	candidate discoveryCandidate,
+	group discoveryPackageGroup,
+	moduleDir, target string,
+	buildTags []string,
+) ([]string, error) {
+	if len(group.AsmFiles) == 0 {
+		return nil, fmt.Errorf("empty assembly package group")
+	}
+	goos, goarch, ok := strings.Cut(target, "/")
+	if !ok || goos == "" || goarch == "" {
+		return nil, fmt.Errorf("invalid discovery target %q", target)
+	}
+	ctx := build.Default
+	ctx.GOOS = goos
+	ctx.GOARCH = goarch
+	ctx.Compiler = "gc"
+	ctx.CgoEnabled = false
+	ctx.BuildTags = buildTags
+
+	dirRel := path.Dir(group.AsmFiles[0])
+	dir := filepath.Join(moduleDir, filepath.FromSlash(dirRel))
+	for _, asmFile := range group.AsmFiles[1:] {
+		if path.Dir(asmFile) != dirRel {
+			return nil, fmt.Errorf("assembly package group spans multiple directories")
+		}
+	}
+	selected := make(map[string]bool, len(candidate.AsmFiles))
+	for _, asmFile := range candidate.AsmFiles {
+		if path.Dir(asmFile) != dirRel {
+			continue
+		}
+		matches, err := ctx.MatchFile(dir, path.Base(asmFile))
+		if err != nil {
+			return nil, fmt.Errorf("match assembly %s for %s with tags %v: %w",
+				asmFile, target, buildTags, err)
+		}
+		if matches {
+			selected[asmFile] = true
+		}
+	}
+	for _, asmFile := range group.AsmFiles {
+		if !selected[asmFile] {
+			return nil, fmt.Errorf("selected package source %s does not match Go build constraints", asmFile)
+		}
+	}
+	return sortedDiscoverySet(selected), nil
+}
+
+func classifyDiscoveryAsmDeclFailure(asmFiles []string, err error) ([]string, error) {
+	if err == nil {
+		return nil, nil
+	}
+	if isDiscoveryInfrastructureFailure(err) {
+		return nil, err
+	}
+	diagnostic := discoveryCommandDiagnostic(err)
+	if !isDiscoveryAsmDeclABIMismatch(diagnostic) {
+		return nil, fmt.Errorf("go vet failed without a concrete ABI mismatch: %w", err)
+	}
+	rejected := discoveryAsmDeclRejectedFiles(asmFiles, diagnostic)
+	if len(rejected) == 0 {
+		return nil, fmt.Errorf("go vet ABI mismatch does not identify an applicable assembly file: %w", err)
+	}
+	return rejected, nil
+}
+
+// A package's vet action can report an ABI mismatch in another package from
+// the same discovered module. That other file has its own package/target
+// verification; do not assign its mismatch to the package under inspection.
+// Unknown files and infrastructure failures still stop the candidate.
+func discoveryAsmDeclOnlyForeignCandidateABI(
+	candidateFiles, packageFiles []string,
+	err error,
+) bool {
+	if err == nil || isDiscoveryInfrastructureFailure(err) {
+		return false
+	}
+	foreign := false
+	for _, line := range strings.Split(filepath.ToSlash(discoveryCommandDiagnostic(err)), "\n") {
+		if !isDiscoveryAsmDeclABIMismatch(line) {
+			continue
+		}
+		for _, file := range packageFiles {
+			if discoveryAsmDeclLineNamesFile(line, file) {
+				return false
+			}
+		}
+		matched := false
+		for _, file := range candidateFiles {
+			if discoveryAsmDeclLineNamesFile(line, file) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+		foreign = true
+	}
+	return foreign
+}
+
+func discoveryAsmDeclLineNamesFile(line, asmFile string) bool {
+	asmFile = filepath.ToSlash(asmFile)
+	end := strings.LastIndex(line, ".s:")
+	if end < 0 {
+		return false
+	}
+	reported := strings.TrimSpace(line[:end+2])
+	if strings.Contains(reported, "/") {
+		return reported == asmFile || strings.HasSuffix(reported, "/"+asmFile)
+	}
+	return reported == path.Base(asmFile)
+}
+
+func discoveryAsmDeclRejectionEvidence(err error, rejected []string) string {
+	if err == nil {
+		return ""
+	}
+	var proof []string
+	seen := make(map[string]bool, len(rejected))
+	for _, line := range strings.Split(filepath.ToSlash(discoveryCommandDiagnostic(err)), "\n") {
+		if !isDiscoveryAsmDeclABIMismatch(line) {
+			continue
+		}
+		for _, asmFile := range rejected {
+			if !seen[asmFile] && discoveryAsmDeclLineNamesFile(line, asmFile) {
+				proof = append(proof, line)
+				seen[asmFile] = true
+			}
+		}
+	}
+	if len(proof) == 0 {
+		return limitDiscoveryEvidence(err.Error(), 8192)
+	}
+	return limitDiscoveryEvidence(strings.Join(proof, "\n"), 8192)
 }
 
 func subtractDiscoveryStrings(values, removed []string) []string {
@@ -2463,6 +2699,38 @@ func runCapturedCommand(ctx context.Context, dir string, env []string, name stri
 const discoveryCommandOutputLimit = 8 << 20
 
 var errDiscoveryCommandOutputExceeded = errors.New("captured output exceeds limit")
+
+// Keep the bounded complete diagnostic for classification while keeping error
+// messages and persisted report reasons compact. Trimming display text must
+// never change which assembly files are excluded by an ABI error.
+type discoveryCapturedCommandError struct {
+	command string
+	cause   error
+	output  string
+	display string
+}
+
+func (failure *discoveryCapturedCommandError) Error() string {
+	if failure.display == "" {
+		return fmt.Sprintf("%s: %v", failure.command, failure.cause)
+	}
+	return fmt.Sprintf("%s: %v\n%s", failure.command, failure.cause, failure.display)
+}
+
+func (failure *discoveryCapturedCommandError) Unwrap() error {
+	return failure.cause
+}
+
+func discoveryCommandDiagnostic(err error) string {
+	if err == nil {
+		return ""
+	}
+	var failure *discoveryCapturedCommandError
+	if errors.As(err, &failure) {
+		return err.Error() + "\n" + failure.output
+	}
+	return err.Error()
+}
 
 // Candidate tools can emit arbitrarily large diagnostics. Bound the capture
 // while still draining both pipes so the child cannot block on a full pipe.
@@ -2524,10 +2792,13 @@ func runCapturedCommandOutput(ctx context.Context, dir string, env []string, nam
 	if err == nil {
 		return output.Bytes(), nil
 	}
-	if message == "" {
-		return nil, fmt.Errorf("%s: %w", strings.Join(append([]string{name}, args...), " "), err)
+	failure := &discoveryCapturedCommandError{
+		command: strings.Join(append([]string{name}, args...), " "),
+		cause:   err,
+		output:  output.String(),
+		display: message,
 	}
-	return output.Bytes(), fmt.Errorf("%s: %w\n%s", strings.Join(append([]string{name}, args...), " "), err, message)
+	return output.Bytes(), failure
 }
 
 func replaceEnv(base []string, replacements map[string]string) []string {

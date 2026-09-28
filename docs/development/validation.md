@@ -111,7 +111,7 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 32 schema-6 reports, exact candidate ownership and
+The aggregate requires all 32 schema-7 reports, exact candidate ownership and
 one identical source/ledger/tool provenance. Never mix revisions, dirty builds,
 tool binaries or partial CI artifact sets. Even documentation changes alter the
 source fingerprint: old reports prove only their exact revision, not current-
@@ -157,7 +157,8 @@ PR 40 remains open upstream, but repair iterations run in `cpunion/plan9asm`:
 4. Batch fixes on the new branch; inspect completed job logs and publish only
    reports matching the frozen source and scan ledger. An old upstream pass
    does not establish a pass for the repair branch.
-5. Only after the fork PR's current-head CI passes, refresh both remote refs
+5. Only after the fork PR's current-head CI passes and review accepts any
+   proposed coverage exclusions, refresh both remote refs
    and integrate the validated commits into the existing PR 40 head in the
    fork. Prefer a fast-forward; if either branch changed, verify the resulting
    tree before promotion. This is a branch update, not a merge of upstream
@@ -167,3 +168,7 @@ Use explicit `--repo cpunion/plan9asm`, `--base`, and `--head` arguments when
 creating the staging PR. Its body should link PR 40 and distinguish the repair
 diff, original-run evidence and current-head validation. Keep both PRs draft
 until their respective completion gates pass; do not close upstream PR 40.
+
+A clearly disclosed, provisional exception mechanism may be evaluated in the
+authorized fork Draft PR. That does not accept the exception policy: count
+exclusions separately, keep Draft, and resolve their review before promotion.

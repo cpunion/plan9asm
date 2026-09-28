@@ -1427,19 +1427,7 @@ func tupleRetType(ts []plan9asm.LLVMType) plan9asm.LLVMType {
 }
 
 func splitSymPlusOff(s string) (base string, off int64) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "", 0
-	}
-	sep := strings.LastIndexAny(s, "+-")
-	if sep <= 0 || sep == len(s)-1 {
-		return s, 0
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(s[sep:]), 0, 64)
-	if err != nil {
-		return s, 0
-	}
-	return strings.TrimSpace(s[:sep]), n
+	return plan9asm.SplitSymbolOffset(s)
 }
 
 func linknameRemoteToLocal(files []*ast.File) map[string]string {
