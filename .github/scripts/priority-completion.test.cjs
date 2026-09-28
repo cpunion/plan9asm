@@ -36,6 +36,7 @@ test('all failed shards run and no priority failure can become success', () => {
 
 test('cheap CI policy checks pass before expensive corpus or test jobs start', () => {
   const policy = jobSection('ci_policy');
+  assert.match(policy, /bash scripts\/install-ci-llvm22-ubuntu\.sh/);
   assert.match(policy, /node --test \.github\/scripts\/priority-\*\.test\.cjs/);
   assert.match(policy, /go test \. -run '\^TestCI' -count=1/);
   assert.doesNotMatch(policy, /^    (needs|if):/m);

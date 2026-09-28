@@ -32,6 +32,12 @@ from different source fingerprints or edit a frozen corpus runner.
   3,943 passed, 826 source N/A, 13 explicitly skipped, one failed, zero
   pending; `complete=true`, `verified=false`. These reports prove only frozen
   `7e9bebca`, not the local repair head.
+- Fork run `36457489591` attempt 2 at `456ca85e` stopped at the new
+  `ci_policy` gate. Its scheduling tests passed, but the root Go test could not
+  compile without `llvm-c/Core.h`; downstream matrix jobs were skipped, and
+  the strict aggregate failed. The local gate now installs LLVM 22 before
+  compiling the root test package. Red/green scheduling tests, `actionlint`
+  and the actual focused policy test pass locally; CI has not yet rerun it.
 
 ## Repairs and local evidence
 
@@ -82,8 +88,9 @@ from different source fingerprints or edit a frozen corpus runner.
 - The local workflow now runs a cheap `ci_policy` job before the expensive
   priority shards. It executes scheduling regressions and the `TestCI` root
   tests, which would have caught the 11-job failure before any corpus
-  runner started. The gate has red/green scheduling tests and passes
-  `actionlint`; it is not yet validated by a fork run.
+  runner started. The gate must install LLVM 22 because compiling the root
+  package needs LLVM C headers. It has red/green scheduling tests and passes
+  `actionlint`; the corrected gate is not yet validated by a fork run.
 
 ## Provisional native-layout proposal
 
@@ -107,9 +114,9 @@ implement a compatible native-object mechanism instead of relaxing checks.
 
 ## Next actions
 
-1. Commit this checkpoint and rebind the pending assembly ledger to its new
-   semantic source fingerprint. Keep old `7e9bebca` reports as failure
-   evidence, not as current-head passes.
+1. Commit the LLVM 22 preflight correction and this checkpoint, then rebind
+   the pending assembly ledger to its new semantic source fingerprint. Keep
+   old reports as failure evidence, not as current-head passes.
 2. Push only the `cpunion` fork staging head. Cancel the automatic run, wait
    for cancellation, then rerun the workflow. The new policy preflight must
    pass before the priority shards and all other jobs.
