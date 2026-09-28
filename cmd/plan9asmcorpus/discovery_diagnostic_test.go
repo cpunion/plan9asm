@@ -13,6 +13,9 @@ import (
 	"time"
 )
 
+const discoveryTestHTTP2GoAway = `http2: server sent GOAWAY and closed the connection; ` +
+	`LastStreamID=3, ErrCode=NO_ERROR, debug="server_shutting_down"`
+
 func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 	const source = "pkg/file.s:12: unexpected EOF\nasm: assembly of pkg/file.s failed"
 	for _, diagnostic := range []struct {
@@ -24,6 +27,11 @@ func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 		{"network EOF", "Get https://example.com/pkg: unexpected EOF", true},
 		{"checksum HTTP2 stream", "reading https://sum.golang.org/tile/8/0/x218/247: stream error: stream ID 13; INTERNAL_ERROR; received from peer", true},
 		{"module ZIP HTTP2 stream", "read \"https://proxy.golang.org/example.com/pkg/@v/v1.0.0.zip\": stream error: stream ID 5; INTERNAL_ERROR; received from peer", true},
+		{
+			"module HTTP2 GOAWAY",
+			`read "https://proxy.golang.org/example.com/pkg/@v/v1.0.0.mod": ` + discoveryTestHTTP2GoAway,
+			true,
+		},
 		{"assembly URL EOF", "Get https://example.com/file.s:12: unexpected EOF", true},
 		{"disk", "write object.o: no space left on device", false},
 		{"killed", "go build: signal: killed", false},
@@ -80,6 +88,49 @@ func TestDiscoveryHTTP2StreamRetryRequiresHTTPRead(t *testing.T) {
 		if isDiscoveryRetryableNetworkFailure(diagnostic) {
 			t.Fatalf("non-HTTP stream error was retried: %s", diagnostic)
 		}
+	}
+}
+
+func TestDiscoveryHTTP2GoAwayRetryRequiresHTTPReadAndShutdown(t *testing.T) {
+	for _, diagnostic := range []string{
+		`read "https://proxy.golang.org/example.com/pkg/@v/v1.0.0.mod": ` + discoveryTestHTTP2GoAway,
+		`reading https://sum.golang.org/tile/8/0/x218/247: ` + discoveryTestHTTP2GoAway,
+	} {
+		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) || !isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Errorf("HTTP/2 server shutdown must be retried: %s", diagnostic)
+		}
+	}
+	for _, diagnostic := range []string{
+		"go build: " + discoveryTestHTTP2GoAway,
+		"pkg/file.s:12: " + discoveryTestHTTP2GoAway,
+		`read "file:///source.s": ` + discoveryTestHTTP2GoAway,
+		`read "https://proxy.golang.org/pkg.mod": ` +
+			`http2: server sent GOAWAY and closed the connection; ` +
+			`LastStreamID=3, ErrCode=PROTOCOL_ERROR, debug="protocol_error"`,
+	} {
+		if isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Errorf("non-shutdown source/tool diagnostic was retried: %s", diagnostic)
+		}
+	}
+	if isDiscoveryRetryableNetworkFailure("checksum mismatch\n" +
+		`read "https://proxy.golang.org/pkg.mod": ` + discoveryTestHTTP2GoAway) {
+		t.Fatal("checksum mismatch must not be hidden by an HTTP/2 shutdown")
+	}
+}
+
+func TestDiscoveryRetryHTTP2GoAway(t *testing.T) {
+	const diagnostic = `read "https://proxy.golang.org/example.com/pkg/@v/v1.0.0.mod": ` +
+		discoveryTestHTTP2GoAway
+	attempts := 0
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0}, func() error {
+		attempts++
+		if attempts == 1 {
+			return errors.New(diagnostic)
+		}
+		return nil
+	})
+	if err != nil || attempts != 2 {
+		t.Fatalf("GOAWAY retry: attempts=%d error=%v, want two attempts and success", attempts, err)
 	}
 }
 

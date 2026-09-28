@@ -21,6 +21,15 @@ var discoveryHTTP2StreamErrorPattern = regexp.MustCompile(
 		`stream error: stream id [0-9]+; [a-z_]+; received from peer`,
 )
 
+// A proxy shutting down can close an in-flight HTTP/2 module or checksum
+// request with GOAWAY/NO_ERROR. Require the HTTP read URL and shutdown reason;
+// an arbitrary source or tool diagnostic mentioning GOAWAY is not retryable.
+var discoveryHTTP2GoAwayPattern = regexp.MustCompile(
+	`(?m)(?:^|[ :\t])(?:read|reading) "?https?://[^"\r\n \t]+"?: ` +
+		`http2: server sent goaway and closed the connection; ` +
+		`laststreamid=[0-9]+, errcode=no_error, debug="server_shutting_down"`,
+)
+
 func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
 	_, retryable := classifyDiscoveryGoBuildFailure(diagnostic)
 	return retryable
@@ -56,7 +65,8 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 		}
 	}
 	if discoveryHTTPResponseEOFPattern.MatchString(diagnostic) ||
-		discoveryHTTP2StreamErrorPattern.MatchString(diagnostic) {
+		discoveryHTTP2StreamErrorPattern.MatchString(diagnostic) ||
+		discoveryHTTP2GoAwayPattern.MatchString(diagnostic) {
 		return true, true
 	}
 	for _, marker := range []string{
