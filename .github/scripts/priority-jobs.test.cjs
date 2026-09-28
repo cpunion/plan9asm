@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -31,6 +32,20 @@ test('priority and remaining matrices partition all 64 shards exactly once', () 
     const section = jobSection(name);
     assert.match(section, /discovered-corpus \(shard \$\{\{ matrix\.shard \}\}\/64\)/);
     assert.match(section, /check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 64/);
+  }
+});
+
+test('failed exact versions rehash into priority shards', () => {
+  const priority = shards(jobSection('discovered_library_priority'));
+  for (const exactVersion of [
+    'github.com/Qitmeer/go-ethereum@v1.10.12',
+    'github.com/RookieCoderrr/neo3fura-ctrverification@v0.0.0-20221201045318-9878de6dbeed',
+    'github.com/SysVerification/gokv@v0.0.0-20250508184610-d007325b6ee8',
+    'github.com/reddit/milvus/pkg/v3@v3.0.0-20260702082229-182134e29ebf',
+  ]) {
+    const hash = createHash('sha256').update(exactVersion).digest();
+    const shard = Number(hash.readBigUInt64BE(0) % 64n);
+    assert.ok(priority.includes(shard), `${exactVersion} belongs to shard ${shard}`);
   }
 });
 

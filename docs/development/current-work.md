@@ -57,7 +57,7 @@ from different source fingerprints or edit a frozen corpus runner.
   failures pass targeted real-module replays after the fix. Shard 29's reddit
   Milvus failure has the same HTTP/2 diagnostic and still needs its replay.
 - A 32-shard job took 129 minutes. Rehashing all 4,783 candidates into 64
-  shards reduces the largest shard from 168 to 94 candidates, while retaining
+  shards reduces the largest shard from 173 to 94 candidates, while retaining
   deterministic exact-version ownership and aggregate verification.
 
 ## Provisional native-layout proposal
