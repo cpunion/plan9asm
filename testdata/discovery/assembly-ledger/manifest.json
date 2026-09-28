@@ -1,12 +1,12 @@
 {
   "format": "module-hashed-assembly-ledger-v1",
-  "semantic_source_sha256": "003a67f09f2d466066be742a9e559daadd26cdf5b8c1d789f12907462311931c",
+  "semantic_source_sha256": "67258256908874f462bea6db18248abf295309bd519543f54dae6040365727a3",
   "progress": {
     "schema_version": 1,
     "validation_kind": "translation_and_llvm22_object_compilation",
     "source": {
-      "revision": "176df1f9ffe71aae6a70a01a0f8a41f2b06f091d",
-      "sha256": "003a67f09f2d466066be742a9e559daadd26cdf5b8c1d789f12907462311931c",
+      "revision": "6eff69ce3a69c1f04c061e1981ab7dc42774cf68",
+      "sha256": "67258256908874f462bea6db18248abf295309bd519543f54dae6040365727a3",
       "dirty": false
     },
     "ledger_sha256": "eaffb5faf292a3ef4c2b5a9ce4ebc15be4297ce78dc4d5ac2683b1bebac77372",
