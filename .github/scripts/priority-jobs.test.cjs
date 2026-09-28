@@ -43,3 +43,11 @@ test('discovery matrices have no explicit concurrency cap', () => {
     assert.doesNotMatch(jobSection(name), /^      max-parallel:/m, name);
   }
 });
+
+test('discovery matrices verify checksums against direct signed databases', () => {
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    const section = jobSection(name);
+    assert.match(section, /^          GOSUMDB:.*sum\.golang\.google\.cn.*sum\.golang\.org https:\/\/sum\.golang\.org/m, name);
+    assert.doesNotMatch(section, /^          GOSUMDB: ['"]?off/m, name);
+  }
+});

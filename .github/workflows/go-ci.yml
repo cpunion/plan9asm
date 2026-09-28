@@ -46,8 +46,10 @@ jobs:
       - name: Translate and compile discovered assembly
         env:
           # Retained exact versions can outlive their public origin and the
-          # first proxy's cache. Keep normal Go checksum-database verification.
+          # first proxy's cache. Verify against the signed database directly;
+          # some module proxies return 404 for checksum tiles they advertise.
           GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+          GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
         run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 32
 
       - name: Upload shard report
@@ -242,8 +244,10 @@ jobs:
       - name: Translate and compile discovered assembly
         env:
           # Retained exact versions can outlive their public origin and the
-          # first proxy's cache. Keep normal Go checksum-database verification.
+          # first proxy's cache. Verify against the signed database directly;
+          # some module proxies return 404 for checksum tiles they advertise.
           GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+          GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}
         run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 32
 
       - name: Upload shard report
