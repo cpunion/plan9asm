@@ -22,8 +22,8 @@ function shards(section) {
 test('priority and remaining matrices partition all 32 shards exactly once', () => {
   const priority = shards(jobSection('discovered_library_priority'));
   const remaining = shards(jobSection('discovered_library_corpus'));
-  // Actual failed shards from completed fork run 36371763306.
-  assert.deepEqual(priority, [11, 15, 16, 19, 30]);
+  // Failed shards reported so far by fork run 36391542382, attempt 2.
+  assert.deepEqual(priority, [4, 5]);
   assert.deepEqual([...priority, ...remaining].sort((a, b) => a - b),
     Array.from({ length: 32 }, (_, index) => index));
 });
