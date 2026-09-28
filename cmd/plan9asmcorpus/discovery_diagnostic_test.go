@@ -22,6 +22,8 @@ func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 	}{
 		{"proxy", "reading https://example.com/pkg: 503 Service Unavailable", true},
 		{"network EOF", "Get https://example.com/pkg: unexpected EOF", true},
+		{"checksum HTTP2 stream", "reading https://sum.golang.org/tile/8/0/x218/247: stream error: stream ID 13; INTERNAL_ERROR; received from peer", true},
+		{"module ZIP HTTP2 stream", "read \"https://proxy.golang.org/example.com/pkg/@v/v1.0.0.zip\": stream error: stream ID 5; INTERNAL_ERROR; received from peer", true},
 		{"assembly URL EOF", "Get https://example.com/file.s:12: unexpected EOF", true},
 		{"disk", "write object.o: no space left on device", false},
 		{"killed", "go build: signal: killed", false},
@@ -66,6 +68,17 @@ func TestDiscoveryAssemblerEOFRequiresMatchingSourceDiagnostic(t *testing.T) {
 	} {
 		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
 			t.Fatalf("ambiguous EOF diagnostic was treated as source rejection: %q", diagnostic)
+		}
+	}
+}
+
+func TestDiscoveryHTTP2StreamRetryRequiresHTTPRead(t *testing.T) {
+	for _, diagnostic := range []string{
+		"pkg/file.s:12: stream error: stream ID 13; INTERNAL_ERROR; received from peer",
+		"go build: stream error: stream ID 13; INTERNAL_ERROR; received from peer",
+	} {
+		if isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Fatalf("non-HTTP stream error was retried: %s", diagnostic)
 		}
 	}
 }

@@ -139,3 +139,18 @@ func TestDiscoveryNetworkRetryKeepsDeadlineAndDeterministicFailures(t *testing.T
 		}
 	}
 }
+
+func TestDiscoveryNetworkRetriesHTTP2StreamError(t *testing.T) {
+	const diagnostic = "reading https://sum.golang.org/tile/8/0/x218/247: stream error: stream ID 13; INTERNAL_ERROR; received from peer"
+	attempts := 0
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New(diagnostic)
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("HTTP/2 stream error did not recover after retry: attempts=%d error=%v", attempts, err)
+	}
+}

@@ -13,6 +13,14 @@ var discoveryHTTPResponseEOFPattern = regexp.MustCompile(
 		` "https?://[^"\r\n]+": eof[ \t]*\r?$`,
 )
 
+// Go's HTTP/2 transport can reset a module ZIP or checksum tile stream after
+// the request starts. Only retry this diagnostic when it names an HTTP read;
+// a source or tool error containing "stream error" is not a network failure.
+var discoveryHTTP2StreamErrorPattern = regexp.MustCompile(
+	`(?m)(?:^|[ :\t])(?:read|reading) "?https?://[^"\r\n \t]+"?: ` +
+		`stream error: stream id [0-9]+; [a-z_]+; received from peer`,
+)
+
 func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
 	_, retryable := classifyDiscoveryGoBuildFailure(diagnostic)
 	return retryable
@@ -47,7 +55,8 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 			return true, false
 		}
 	}
-	if discoveryHTTPResponseEOFPattern.MatchString(diagnostic) {
+	if discoveryHTTPResponseEOFPattern.MatchString(diagnostic) ||
+		discoveryHTTP2StreamErrorPattern.MatchString(diagnostic) {
 		return true, true
 	}
 	for _, marker := range []string{
