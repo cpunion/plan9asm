@@ -175,23 +175,30 @@ exclusions separately, keep Draft, and resolve their review before promotion.
 
 ### Failure-first scheduling
 
-The current repair matrix starts the five previously failing discovery shards
-first. A read-only startup gate checks the **current run attempt**, then releases
-all remaining jobs once every priority shard is running or has finished an
-actual execution. The gate does not require success: failures remain failures
-and still reach aggregate verification. Missing, skipped or cancelled jobs
-cannot satisfy it. All 32 shards remain required; no old-source artifact is
-reused to replace a rerun.
+Let the active full run finish before fixing its failures or publishing another
+batch. The current repair matrix runs the five previously failing discovery
+shards first. Every other entry job has a native `needs` dependency on that
+matrix: **all priority shards must succeed**, not merely start, before the
+remaining jobs run. Fail-fast is disabled so every failed shard is checked.
+There is no polling job consuming a runner while waiting.
+
+The strict aggregate still runs after a failed priority matrix and reports the
+missing/failed coverage; skipped downstream work cannot make the run green.
+All 32 shards remain required, with identical compilation and artifact steps.
+No old-source artifact can replace a current-head rerun.
 
 When changing the priority set, update both workflow matrices and
-`.github/scripts/priority-jobs.cjs` together. Validate their exhaustive,
-non-overlapping partition and identical test steps:
+the scheduling regression tests together. Validate their exhaustive,
+non-overlapping partition, identical test steps and success dependencies:
 
 ```sh
-node --test .github/scripts/priority-jobs.test.cjs
+node --test .github/scripts/priority-*.test.cjs
 actionlint .github/workflows/go-ci.yml
 ```
 
-GitHub rejects another single-job rerun while that workflow attempt is running.
-Do not assume repeated rerun API calls can enqueue the priority group. The
-startup gate handles this scheduling without weakening completion checks.
+If the user requests cancellation after pushing, cancel the new automatic run,
+wait for its terminal status, then rerun the workflow. The dependency graph
+starts only the priority matrix and releases the other jobs after it passes.
+GitHub rejects another single-job rerun while a workflow attempt is running;
+repeated job-rerun API calls cannot enqueue a concurrent priority group. Keep
+all scheduling operations in the allowed fork, never in upstream Actions.

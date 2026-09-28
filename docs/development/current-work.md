@@ -12,17 +12,18 @@ from different source fingerprints or edit a frozen corpus runner.
   Its remote head is `codex/pr40-fork-ci-20260927`; its base is the existing
   upstream contribution branch `codex/expand-ecosystem-corpus-20260913`.
   Do not update that base during experimental CI.
-- Full fork run `36333189048` at `a48ebfc2` finished. Shards 0, 9, 14, 28
-  and 29, plus aggregate verification, failed. All other jobs passed.
-  A green Codecov check alone is not evidence of reviewed patch coverage.
-- Repair head `1a8f37c2` was pushed to the fork. The user then requested
-  cancellation and failure-first scheduling for run `36370791072`.
-  GitHub accepted rerunning shard 0 but rejected adding shard 9 while that
-  attempt was running. Single-job rerun cannot launch this group concurrently.
-- `codex/pr40-fork-review-20260928` adds a tested startup gate: shards 0, 9,
-  14, 28 and 29 start first; after all enter execution, all other jobs are
-  released. The two matrices partition all 32 shards, use identical steps,
-  and feed the same strict aggregate. No compilation code changed.
+- Full fork run `36371763306` at `ded20b17` finished without cancellation:
+  88 jobs passed; discovery shards 11, 15, 16, 19 and 30, plus the aggregate,
+  failed. The previous five failing shards all passed. A green Codecov check
+  alone is not evidence of reviewed patch coverage.
+- All 32 reports passed the provenance/inventory audit. The historical
+  evidence branch is `codex/pr40-ci-evidence-ded20-20260928`; its ledger is
+  complete but not verified because seven exact versions failed. It proves
+  only the frozen `ded20b17` source, not the next repair head.
+- The user now requires priority **success**, not just startup. The next
+  workflow uses native dependencies: shards 11, 15, 16, 19 and 30 must all
+  pass before other jobs execute. Both matrices still partition all 32 shards
+  and feed the strict aggregate; no coverage gate is removed.
 
 ## Repairs and local evidence
 
@@ -32,24 +33,22 @@ from different source fingerprints or edit a frozen corpus runner.
 - The parser and both command frontends share Go's symbol-offset grammar,
   including whitespace and constant expressions, with red/green regressions.
   Invalid unresolved FP offsets remain rejected.
-- Focused clean-source external checks pass Cloudflare SIDH, Apache Arrow
-  v15/v18, Query-farm Arrow v18, Milvus Arrow v17, acolita/crypto,
-  gitpod-io/golang-crypto and hashicorp/go.net. The local repair branch is
-  `codex/pr40-asmdecl-dependency-20260928`; focused reports remain in `_out/`.
-- All five ancestor-source diagnostic shards finished. Seven ordinary
-  failures (two proxy timeouts and five foreign asmdecl attributions) now
-  pass focused checks on the repaired code. Those reports also include four
-  native-layout exceptions and one invalid-source exception, never passes.
-  These old reports cannot establish current-source canonical coverage.
-- The repaired code passed the Go 1.27 full root and both frontend suites,
-  Go 1.20/1.27 corpus-command suites, corpus-command race tests, Go 1.20
-  focused parser tests and root vet. The frontends require Go 1.24.
-  A first 20-minute root run timed out under heavy shard contention; the
-  60-minute rerun passed in about 17 minutes.
-- The current-Go official observed-form gate passes all five supported
-  architectures with zero unsupported forms or parse errors. All 44 Go 1.27
-  standard-library target settings compile with LLVM 22. The ARM64 Plan 9
-  reference-corpus gate also passes. These are not runtime coverage claims.
+- Those earlier repairs now pass the full fork CI outside the five newly
+  failing discovery shards, including platform, runtime, official corpus,
+  benchmark and coverage jobs. These are separate evidence categories, not
+  execution of every external library's own tests.
+- All seven failures are gVisor-derived versions whose ring0 raw bytes decode
+  to unsuffixed `RDGSBASE`. The complete typed named FSGSBASE lowerer already
+  exists; raw-to-Go normalization was missing for its eight L/Q spellings.
+- Repair branch `codex/pr40-raw-segment-base-20260928` first reproduces the
+  failure, then reuses that named grammar. Width comes from the decoded GPR,
+  not DataSize (66 may be ignored). Invalid memory operands, LOCK, extra
+  operands and non-64-bit raw encodings fail. Named Go 386 L compatibility
+  remains independently tested; it is not a claim of CPU runtime validity.
+- Red/green tests cover all 16 GPRs, both widths, ignored prefixes and invalid
+  forms. The full reported SWAPGS/RDGSBASE sequence and all siblings produce
+  the same semantic IR as named instructions, compiled with LLVM 22 on all
+  three amd64 OS targets. The scheduling regression is also red/green.
 
 ## Provisional native-layout proposal
 
@@ -73,16 +72,16 @@ implement a compatible native-object mechanism instead of relaxing checks.
 
 ## Next actions
 
-1. Verify the scheduling regression tests and actionlint, commit, then rebind
-   the all-pending assembly ledger with the validated updater. Documentation
-   affects source fingerprints; derived assembly-ledger output does not.
-2. Push the scheduling batch only to the fork staging head. This replaces
-   the single-shard rerun at the user's request. Confirm all five priority
-   shards enter execution before the remaining jobs start; then let the full
-   run finish before another push. Prepare any fixes separately.
-3. Download all 32 reports and audit their exact source, tools, candidate
-   ownership and scan-ledger provenance. Publish passing and failing evidence
-   through `scripts/update-assembly-ledger.sh`, never hand-edit pass flags.
+1. Finish focused Go 1.20/current-Go checks, commit the repair and scheduling
+   changes, then rebind the pending assembly ledger with the validated updater.
+   Documentation affects source fingerprints; derived assembly output does not.
+2. Freeze that source and replay all seven failed exact versions plus relevant
+   root/frontend tests. Keep diagnostic replays separate from canonical 32-shard
+   evidence. Fix any additional failure before pushing the batch.
+3. Push only the fork staging head. As requested, cancel the new automatic run,
+   wait for cancellation, then restart the workflow. Its five priority shards
+   run first; all other jobs remain blocked until they pass. Watch the full run
+   and audit/publish current-source reports with the ledger updater.
 4. Resolve all CI failures, review findings, patch-coverage requirements and
    the provisional exception scope before ready/promotion. Keep inventory,
    translation/object compilation and executed runtime claims distinct.
