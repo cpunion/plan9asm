@@ -71,16 +71,22 @@ func TestCIDiscoveredCorpusRetainsAuthenticatedProxyFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	corpus, found := ciWorkflowJob(string(data), "discovered_library_corpus")
-	if !found {
-		t.Fatal("discovered corpus job not found")
-	}
-	if !strings.Contains(corpus, "GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct") {
-		t.Fatal("exact-version corpus must try both public module caches before the origin")
-	}
-	for _, disabled := range []string{"GOSUMDB:", "GONOSUMDB:", "GOPRIVATE:"} {
-		if strings.Contains(corpus, disabled) {
-			t.Fatalf("public corpus must not bypass checksum-database authentication with %s", disabled)
+	const signedSumDB = "GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}"
+	for _, name := range []string{"discovered_library_priority", "discovered_library_corpus"} {
+		corpus, found := ciWorkflowJob(string(data), name)
+		if !found {
+			t.Fatalf("%s job not found", name)
+		}
+		if !strings.Contains(corpus, "GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct") {
+			t.Errorf("%s must try both public module caches before the origin", name)
+		}
+		if !strings.Contains(corpus, signedSumDB) {
+			t.Errorf("%s must verify against an official signed checksum database", name)
+		}
+		for _, disabled := range []string{"GONOSUMDB:", "GOPRIVATE:", "GOSUMDB: off"} {
+			if strings.Contains(corpus, disabled) {
+				t.Errorf("%s must not bypass checksum authentication with %s", name, disabled)
+			}
 		}
 	}
 }
