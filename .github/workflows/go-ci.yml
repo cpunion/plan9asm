@@ -18,7 +18,79 @@ permissions:
   contents: read
 
 jobs:
+  discovered_library_priority:
+    name: discovered-corpus (shard ${{ matrix.shard }}/32)
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    strategy:
+      fail-fast: false
+      # Start the five previously failing shards before releasing other work.
+      max-parallel: 5
+      matrix:
+        shard: [0, 9, 14, 28, 29]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          # Discovery reports and the audited assembly ledger pin this exact
+          # compiler/assembler version; do not silently advance to 1.27.2.
+          go-version: '1.27.1'
+          cache: true
+
+      - name: Translate and compile discovered assembly
+        env:
+          # Retained exact versions can outlive their public origin and the
+          # first proxy's cache. Keep normal Go checksum-database verification.
+          GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct
+        run: scripts/check-discovered-library-corpus.sh "${{ matrix.shard }}" 32
+
+      - name: Upload shard report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: discovered-corpus-shard-${{ matrix.shard }}
+          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  priority_started:
+    name: Release CI after priority shards start
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Wait for all priority shards to enter execution
+        uses: actions/github-script@v8
+        with:
+          retries: 3
+          script: |
+            const { waitForPriorityJobs } = require('./.github/scripts/priority-jobs.cjs');
+            await waitForPriorityJobs({
+              listJobs: () => github.paginate(
+                github.rest.actions.listJobsForWorkflowRunAttempt,
+                {
+                  ...context.repo,
+                  run_id: context.runId,
+                  attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                  per_page: 100,
+                },
+              ),
+              log: core.info,
+            });
+
   fmt:
+    needs: priority_started
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
 
     steps:
@@ -31,6 +103,9 @@ jobs:
           go-version: '1.27.x'
           cache: true
 
+      - name: CI scheduling regression tests
+        run: node --test .github/scripts/priority-jobs.test.cjs
+
       - name: Go fmt check
         run: |
           unformatted="$(gofmt -l .)"
@@ -41,6 +116,7 @@ jobs:
           fi
 
   build:
+    needs: priority_started
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
 
     steps:
@@ -83,6 +159,7 @@ jobs:
             >/dev/null
 
   benchmark:
+    needs: priority_started
     name: compile benchmark (Go 1.27, LLVM 22)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     timeout-minutes: 35
@@ -116,6 +193,7 @@ jobs:
           if-no-files-found: error
 
   reported_library_list:
+    needs: priority_started
     name: Third-party corpus matrix
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     outputs:
@@ -168,6 +246,7 @@ jobs:
         run: scripts/check-reported-library-corpus.sh "$REPORTED_LIBRARY"
 
   discovered_library_corpus:
+    needs: priority_started
     name: discovered-corpus (shard ${{ matrix.shard }}/32)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     strategy:
@@ -176,7 +255,7 @@ jobs:
       # parallel. Every shard still runs and uploads its own report.
       max-parallel: 8
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 30, 31]
 
     steps:
       - name: Checkout
@@ -211,7 +290,7 @@ jobs:
 
   discovered_library_corpus_verify:
     name: discovered-corpus aggregate verification
-    needs: discovered_library_corpus
+    needs: [discovered_library_priority, discovered_library_corpus]
     if: ${{ !cancelled() }}
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     steps:
@@ -250,6 +329,7 @@ jobs:
         run: scripts/verify-discovered-library-corpus.sh
 
   stdlib-corpus:
+    needs: priority_started
     name: stdlib-corpus (${{ matrix.os }}, Go ${{ matrix.go-version }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && matrix.runner || matrix.os }}
     strategy:
@@ -332,6 +412,7 @@ jobs:
           scripts/check-go-asm-coverage.sh
 
   cross-runtime:
+    needs: priority_started
     name: cross compile, link, and run (Linux)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
 
@@ -362,6 +443,7 @@ jobs:
         run: go test . -run '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' -count=1 -timeout=20m -v
 
   test:
+    needs: priority_started
     name: test (${{ matrix.os }}, ${{ matrix.go-version }}, ${{ matrix.nested_modules }})
     timeout-minutes: 60
     permissions:
@@ -478,6 +560,7 @@ jobs:
           verbose: true
 
   arm-scan:
+    needs: priority_started
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
@@ -529,6 +612,7 @@ jobs:
           PY
 
   race:
+    needs: priority_started
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     timeout-minutes: 75
 
@@ -550,6 +634,7 @@ jobs:
         run: go test -race -timeout=60m ./...
 
   coverage:
+    needs: priority_started
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
     timeout-minutes: 60
     permissions:

@@ -15,10 +15,14 @@ from different source fingerprints or edit a frozen corpus runner.
 - Full fork run `36333189048` at `a48ebfc2` finished. Shards 0, 9, 14, 28
   and 29, plus aggregate verification, failed. All other jobs passed.
   A green Codecov check alone is not evidence of reviewed patch coverage.
-- This batch is integrated on `codex/pr40-fork-repair-20260928`, based on
-  the published staging head. It retains the embedded-module repair and
-  fork-first runner selection. Push the batch to the existing fork PR head
-  without updating the upstream-connected contribution branch.
+- Repair head `1a8f37c2` was pushed to the fork. The user then requested
+  cancellation and failure-first scheduling for run `36370791072`.
+  GitHub accepted rerunning shard 0 but rejected adding shard 9 while that
+  attempt was running. Single-job rerun cannot launch this group concurrently.
+- `codex/pr40-fork-review-20260928` adds a tested startup gate: shards 0, 9,
+  14, 28 and 29 start first; after all enter execution, all other jobs are
+  released. The two matrices partition all 32 shards, use identical steps,
+  and feed the same strict aggregate. No compilation code changed.
 
 ## Repairs and local evidence
 
@@ -69,11 +73,13 @@ implement a compatible native-object mechanism instead of relaxing checks.
 
 ## Next actions
 
-1. Verify integration matches the tested code, commit the batch, then rebind
+1. Verify the scheduling regression tests and actionlint, commit, then rebind
    the all-pending assembly ledger with the validated updater. Documentation
    affects source fingerprints; derived assembly-ledger output does not.
-2. Push the batch only to the fork staging head. Let one full CI run finish
-   before another push; inspect failures and prepare fixes separately.
+2. Push the scheduling batch only to the fork staging head. This replaces
+   the single-shard rerun at the user's request. Confirm all five priority
+   shards enter execution before the remaining jobs start; then let the full
+   run finish before another push. Prepare any fixes separately.
 3. Download all 32 reports and audit their exact source, tools, candidate
    ownership and scan-ledger provenance. Publish passing and failing evidence
    through `scripts/update-assembly-ledger.sh`, never hand-edit pass flags.

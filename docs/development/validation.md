@@ -172,3 +172,26 @@ until their respective completion gates pass; do not close upstream PR 40.
 A clearly disclosed, provisional exception mechanism may be evaluated in the
 authorized fork Draft PR. That does not accept the exception policy: count
 exclusions separately, keep Draft, and resolve their review before promotion.
+
+### Failure-first scheduling
+
+The current repair matrix starts the five previously failing discovery shards
+first. A read-only startup gate checks the **current run attempt**, then releases
+all remaining jobs once every priority shard is running or has finished an
+actual execution. The gate does not require success: failures remain failures
+and still reach aggregate verification. Missing, skipped or cancelled jobs
+cannot satisfy it. All 32 shards remain required; no old-source artifact is
+reused to replace a rerun.
+
+When changing the priority set, update both workflow matrices and
+`.github/scripts/priority-jobs.cjs` together. Validate their exhaustive,
+non-overlapping partition and identical test steps:
+
+```sh
+node --test .github/scripts/priority-jobs.test.cjs
+actionlint .github/workflows/go-ci.yml
+```
+
+GitHub rejects another single-job rerun while that workflow attempt is running.
+Do not assume repeated rerun API calls can enqueue the priority group. The
+startup gate handles this scheduling without weakening completion checks.
