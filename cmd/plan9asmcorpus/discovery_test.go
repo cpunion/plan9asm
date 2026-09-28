@@ -917,6 +917,68 @@ func TestDiscoveryPackageChecksUsesIndividualEvidenceForBatchOnlyFailure(t *test
 	}
 }
 
+func TestRunDiscoveryBoundedLimitsConcurrentPackages(t *testing.T) {
+	const packageCount = 6
+	var running atomic.Int32
+	var maximum atomic.Int32
+	started := make(chan struct{}, packageCount)
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- runDiscoveryBounded(context.Background(), packageCount, 2,
+			func(context.Context, int) error {
+				active := running.Add(1)
+				for {
+					peak := maximum.Load()
+					if active <= peak || maximum.CompareAndSwap(peak, active) {
+						break
+					}
+				}
+				started <- struct{}{}
+				<-release
+				running.Add(-1)
+				return nil
+			})
+	}()
+	for index := 0; index < 2; index++ {
+		select {
+		case <-started:
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatal("two independent packages never started together")
+		}
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := maximum.Load(); got != 2 {
+		t.Fatalf("maximum simultaneous packages = %d, want 2", got)
+	}
+}
+
+func TestRunDiscoveryBoundedCancelsPeersWithoutLosingFailure(t *testing.T) {
+	sentinel := errors.New("package translation failed")
+	secondStarted := make(chan struct{})
+	err := runDiscoveryBounded(context.Background(), 3, 2,
+		func(ctx context.Context, index int) error {
+			switch index {
+			case 0:
+				<-secondStarted
+				return sentinel
+			case 1:
+				close(secondStarted)
+				<-ctx.Done()
+				return ctx.Err()
+			default:
+				return nil
+			}
+		})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("bounded run error = %v, want original package failure", err)
+	}
+}
+
 func TestDiscoveryGoBuildInfrastructureFailuresAreNotSourceNotApplicable(t *testing.T) {
 	for _, diagnostic := range []string{
 		"go build example.com/pkg: context deadline exceeded",

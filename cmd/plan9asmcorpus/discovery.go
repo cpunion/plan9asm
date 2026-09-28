@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/discoverymeta"
@@ -105,6 +106,17 @@ type discoveryTranslationUnit struct {
 	Patterns []string
 	AsmFiles []string
 }
+
+type discoveryPendingTranslation struct {
+	Unit        discoveryTranslationUnit
+	ReportPath  string
+	OutputIndex int
+	Invocation  commandInvocation
+}
+
+// Separate translator processes release their LLVM contexts on exit. Keep
+// overlap small enough to bound peak memory on ordinary CI runners.
+const discoveryTranslationParallelism = 2
 
 // A translator process owns LLVM objects for its whole lifetime. One package
 // per process bounds the peak for modules with many independent assembly
@@ -2014,10 +2026,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				if err := validateDiscoveryTranslationUnits(units, targetAsmFiles); err != nil {
 					return err
 				}
+				translations := make([]discoveryPendingTranslation, 0, len(units))
 				for _, unit := range units {
 					patternSet[unit.Patterns[0]] = true
-					targetCandidate := candidate
-					targetCandidate.AsmFiles = unit.AsmFiles
 					reportPath := filepath.Join(workDir, fmt.Sprintf("matrix-report-%04d.json", invocationIndex))
 					outputIndex := invocationIndex
 					invocation := makeDiscoveryTranslatorInvocation(
@@ -2032,16 +2043,36 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						cfg.LLC,
 						reportPath,
 					)
+					translations = append(translations, discoveryPendingTranslation{
+						Unit:        unit,
+						ReportPath:  reportPath,
+						OutputIndex: outputIndex,
+						Invocation:  invocation,
+					})
 					invocationIndex++
-					if err := runCapturedCommand(ctx, invocation.Dir, env, cfg.Translator, invocation.Args...); err != nil {
-						return fmt.Errorf("translate and compile package %s for %s with build tags %v: %w", unit.Patterns[0], target, buildConfiguration.BuildTags, err)
-					}
-					report, err := loadReport(reportPath)
+				}
+				if err := runDiscoveryBounded(ctx, len(translations), discoveryTranslationParallelism,
+					func(ctx context.Context, index int) error {
+						translation := translations[index]
+						invocation := translation.Invocation
+						if err := runCapturedCommand(ctx, invocation.Dir, env, cfg.Translator, invocation.Args...); err != nil {
+							return fmt.Errorf("translate and compile package %s for %s with build tags %v: %w",
+								translation.Unit.Patterns[0], target, buildConfiguration.BuildTags, err)
+						}
+						return nil
+					}); err != nil {
+					return err
+				}
+				for _, translation := range translations {
+					targetCandidate := candidate
+					targetCandidate.AsmFiles = translation.Unit.AsmFiles
+					report, err := loadReport(translation.ReportPath)
 					if err != nil {
 						return err
 					}
 					if err := validateDiscoveryReport([]string{target}, targetCandidate, report); err != nil {
-						return fmt.Errorf("package %s target %s build tags %v: %w", unit.Patterns[0], target, buildConfiguration.BuildTags, err)
+						return fmt.Errorf("package %s target %s build tags %v: %w",
+							translation.Unit.Patterns[0], target, buildConfiguration.BuildTags, err)
 					}
 					runTargets[target] = true
 					aggregate.TotalAsm += report.TotalAsm
@@ -2049,7 +2080,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					aggregate.NotApplicable += report.NotApplicable
 					aggregate.Failed += report.Failed
 					aggregate.NotApplicableItems = append(aggregate.NotApplicableItems, collectMatrixNotApplicableItems(report)...)
-					if err := removeDiscoveryTargetOutput(workDir, outputIndex); err != nil {
+					if err := removeDiscoveryTargetOutput(workDir, translation.OutputIndex); err != nil {
 						return fmt.Errorf("remove target %s generated output: %w", target, err)
 					}
 				}
@@ -2306,6 +2337,62 @@ func runDiscoveryPackageChecks(
 		}
 	}
 	return results, nil
+}
+
+// Run independent package operations with a fixed worker count. The first
+// failure cancels in-flight commands, but every worker exits before returning
+// so no child process can outlive the candidate workspace that owns it.
+func runDiscoveryBounded(
+	parent context.Context,
+	count, limit int,
+	run func(context.Context, int) error,
+) error {
+	if limit <= 0 {
+		return fmt.Errorf("discovery parallelism must be positive")
+	}
+	if count == 0 {
+		return parent.Err()
+	}
+	if limit > count {
+		limit = count
+	}
+	ctx, cancel := context.WithCancel(parent)
+	defer cancel()
+	jobs := make(chan int)
+	var workers sync.WaitGroup
+	var firstFailure sync.Once
+	var firstErr error
+	for worker := 0; worker < limit; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				if ctx.Err() != nil {
+					continue
+				}
+				if err := run(ctx, index); err != nil {
+					firstFailure.Do(func() {
+						firstErr = err
+						cancel()
+					})
+				}
+			}
+		}()
+	}
+dispatch:
+	for index := 0; index < count; index++ {
+		select {
+		case <-ctx.Done():
+			break dispatch
+		case jobs <- index:
+		}
+	}
+	close(jobs)
+	workers.Wait()
+	if firstErr != nil {
+		return firstErr
+	}
+	return parent.Err()
 }
 
 // Downloading a module and building its dependencies can both encounter
