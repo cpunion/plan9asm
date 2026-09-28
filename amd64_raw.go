@@ -10113,6 +10113,34 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 	}
 
 	switch inst.Op {
+	case x86asm.RDFSBASE, x86asm.RDGSBASE, x86asm.WRFSBASE, x86asm.WRGSBASE:
+		// x/arch prints widthless Intel names. Reuse the complete named
+		// FSGSBASE grammar, selecting L/Q from the actual GPR: an ignored
+		// 66 prefix can set DataSize=16 while the operand remains 32-bit.
+		register, ok := inst.Args[0].(x86asm.Reg)
+		bits := decodedX86RegisterBits(register)
+		if !ok || inst.Mode != 64 || (bits != 32 && bits != 64) {
+			return "", fmt.Errorf("raw %s requires a 32/64-bit GPR in 64-bit mode", inst.Op)
+		}
+		for _, extra := range inst.Args[1:] {
+			if extra != nil {
+				return "", fmt.Errorf("raw %s requires exactly one register", inst.Op)
+			}
+		}
+		for _, prefix := range inst.Prefix {
+			if prefix&0xff == x86asm.PrefixLOCK || prefix&x86asm.PrefixInvalid != 0 {
+				return "", fmt.Errorf("raw %s has an invalid prefix %s", inst.Op, prefix)
+			}
+		}
+		// Segment/address/operand overrides do not affect this register-only
+		// family. Clear them only after rejecting invalid (not ignored) ones.
+		inst.Prefix = x86asm.Prefixes{}
+		syntax = x86asm.GoSyntax(inst, 0, nil)
+		width := "L"
+		if bits == 64 {
+			width = "Q"
+		}
+		replaceOp(inst.Op.String() + width)
 	case x86asm.INC, x86asm.DEC:
 		bits := 0
 		switch destination := inst.Args[0].(type) {
