@@ -175,11 +175,11 @@ exclusions separately, keep Draft, and resolve their review before promotion.
 
 ### Failure-first scheduling
 
-Let the active full run finish before fixing its failures or publishing another
-batch. The current repair matrix runs the five previously failing discovery
-shards first. Every other entry job has a native `needs` dependency on that
-matrix: **all priority shards must succeed**, not merely start, before the
-remaining jobs run. Fail-fast is disabled so every failed shard is checked.
+Let the active full run finish before publishing another batch. The current
+repair matrix runs the three previously failing discovery shards first. Every
+other entry job has a native `needs` dependency on that matrix: **all priority
+shards must succeed**, not merely start, before the remaining jobs run.
+Fail-fast is disabled so every failed shard is checked.
 There is no polling job consuming a runner while waiting.
 
 The strict aggregate still runs after a failed priority matrix and reports the

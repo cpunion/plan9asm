@@ -20,10 +20,15 @@ from different source fingerprints or edit a frozen corpus runner.
   evidence branch `codex/pr40-ci-evidence-be561a20` records 4,783 candidates:
   3,941 passed, 825 source N/A, 13 explicitly skipped, and four failed.
   It is complete but not verified, and proves only frozen `be561a20`.
-- The next workflow uses native priority **success** dependencies. Failed
-  versions rehash to 64-shard priorities 5, 29 and 36. The two matrices
+- The current fork workflow uses native priority **success** dependencies.
+  Failed versions rehash to 64-shard priorities 5, 29 and 36. The two matrices
   partition all 64 shards, without an explicit parallelism cap, and feed the
   strict aggregate. No coverage gate is removed.
+- Fork run `36432163029` attempt 2 is in progress at remote head `7e9bebca`.
+  All three priority shards passed. Eleven non-corpus jobs failed the same
+  stale CI policy test, which rejected any `GOSUMDB` setting even when it
+  selects the official signed checksum database. A focused red/green fix is
+  committed locally but will not be pushed before this full run finishes.
 
 ## Repairs and local evidence
 
@@ -53,12 +58,17 @@ from different source fingerprints or edit a frozen corpus runner.
   instructions: proxy checksum tiles returned 404 and HTTP/2 module or signed
   checksum streams reset. CI now uses the direct signed checksum database;
   bounded retries recognize HTTP/2 stream resets only on HTTP reads. The
-  original three failed versions and five additional locally observed network
-  failures pass targeted real-module replays after the fix. Shard 29's reddit
-  Milvus failure has the same HTTP/2 diagnostic and still needs its replay.
+  original failed versions and other locally observed network failures were
+  replayed with Go 1.27.1 and LLVM 22: eight passed and one was source N/A;
+  none failed. This is targeted evidence, not a replacement for frozen CI.
 - A 32-shard job took 129 minutes. Rehashing all 4,783 candidates into 64
   shards reduces the largest shard from 173 to 94 candidates, while retaining
-  deterministic exact-version ownership and aggregate verification.
+  deterministic exact-version ownership and aggregate verification. The
+  current run's three priority shards passed in about 19, 33 and 41 minutes;
+  measure the full run before deciding whether further splitting is needed.
+- At the local repair head, `go test ./... -count=1 -timeout=20m` and
+  `go vet ./...` pass with Go 1.27.1 and LLVM 22. The workflow policy test
+  also passed focused checks on Go 1.20 and under Go 1.27 race/coverage.
 
 ## Provisional native-layout proposal
 
@@ -82,15 +92,17 @@ implement a compatible native-object mechanism instead of relaxing checks.
 
 ## Next actions
 
-1. Finish the 64-shard workflow/default/documentation changes, run scheduling
-   tests and `actionlint`, then commit and rebind the pending assembly ledger.
-   Documentation affects source fingerprints; derived assembly output does not.
-2. Freeze that source and replay the reddit Milvus failure with Go 1.27.1 and
-   LLVM 22. Keep targeted replays separate from canonical 64-shard evidence.
-3. Push only the fork staging head. As requested, cancel its new automatic run,
-   wait for cancellation, then restart the workflow. Its three priority shards
-   must pass before the remaining jobs start. Watch the full run and audit the
-   current-source reports with the ledger updater.
+1. Let fork run `36432163029` attempt 2 finish. Inspect all completed job
+   logs and all 64 shard reports; do not assume the locally fixed policy test
+   is the only failure until the run is terminal. Record the longest shard
+   duration and investigate any remaining slow candidates.
+2. Batch any further red/green fixes on the separate local repair branch.
+   Rebind the pending assembly ledger after every source change and run the
+   relevant local gates. Do not mix reports from this remote head with a new
+   source fingerprint.
+3. Push only the `cpunion` fork staging head. Cancel the superseded automatic
+   run, wait for cancellation, then rerun the workflow. Audit all 64 reports
+   and update the ledger and PR body from that frozen evidence.
 4. Resolve all CI failures, review findings, patch-coverage requirements and
    the provisional exception scope before ready/promotion. Keep inventory,
    translation/object compilation and executed runtime claims distinct.
