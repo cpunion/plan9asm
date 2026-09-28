@@ -12,18 +12,18 @@ from different source fingerprints or edit a frozen corpus runner.
   Its remote head is `codex/pr40-fork-ci-20260927`; its base is the existing
   upstream contribution branch `codex/expand-ecosystem-corpus-20260913`.
   Do not update that base during experimental CI.
-- Full fork run `36371763306` at `ded20b17` finished without cancellation:
-  88 jobs passed; discovery shards 11, 15, 16, 19 and 30, plus the aggregate,
-  failed. The previous five failing shards all passed. A green Codecov check
-  alone is not evidence of reviewed patch coverage.
+- Full fork run `36391542382` attempt 2 at `be561a20` finished without
+  cancellation: 89 jobs passed; discovery shards 4, 5 and 29 plus the
+  aggregate failed. A green Codecov check alone is not evidence of reviewed
+  patch coverage.
 - All 32 reports passed the provenance/inventory audit. The historical
-  evidence branch is `codex/pr40-ci-evidence-ded20-20260928`; its ledger is
-  complete but not verified because seven exact versions failed. It proves
-  only the frozen `ded20b17` source, not the next repair head.
-- The user now requires priority **success**, not just startup. The next
-  workflow uses native dependencies: shards 11, 15, 16, 19 and 30 must all
-  pass before other jobs execute. Both matrices still partition all 32 shards
-  and feed the strict aggregate; no coverage gate is removed.
+  evidence branch `codex/pr40-ci-evidence-be561a20` records 4,783 candidates:
+  3,941 passed, 825 source N/A, 13 explicitly skipped, and four failed.
+  It is complete but not verified, and proves only frozen `be561a20`.
+- The next workflow uses native priority **success** dependencies. Failed
+  versions rehash to 64-shard priorities 5, 29 and 36. The two matrices
+  partition all 64 shards, without an explicit parallelism cap, and feed the
+  strict aggregate. No coverage gate is removed.
 
 ## Repairs and local evidence
 
@@ -49,6 +49,16 @@ from different source fingerprints or edit a frozen corpus runner.
   forms. The full reported SWAPGS/RDGSBASE sequence and all siblings produce
   the same semantic IR as named instructions, compiled with LLVM 22 on all
   three amd64 OS targets. The scheduling regression is also red/green.
+- The latest failures were module-service transport errors, not missing
+  instructions: proxy checksum tiles returned 404 and HTTP/2 module or signed
+  checksum streams reset. CI now uses the direct signed checksum database;
+  bounded retries recognize HTTP/2 stream resets only on HTTP reads. The
+  original three failed versions and five additional locally observed network
+  failures pass targeted real-module replays after the fix. Shard 29's reddit
+  Milvus failure has the same HTTP/2 diagnostic and still needs its replay.
+- A 32-shard job took 129 minutes. Rehashing all 4,783 candidates into 64
+  shards reduces the largest shard from 168 to 94 candidates, while retaining
+  deterministic exact-version ownership and aggregate verification.
 
 ## Provisional native-layout proposal
 
@@ -72,16 +82,15 @@ implement a compatible native-object mechanism instead of relaxing checks.
 
 ## Next actions
 
-1. Finish focused Go 1.20/current-Go checks, commit the repair and scheduling
-   changes, then rebind the pending assembly ledger with the validated updater.
+1. Finish the 64-shard workflow/default/documentation changes, run scheduling
+   tests and `actionlint`, then commit and rebind the pending assembly ledger.
    Documentation affects source fingerprints; derived assembly output does not.
-2. Freeze that source and replay all seven failed exact versions plus relevant
-   root/frontend tests. Keep diagnostic replays separate from canonical 32-shard
-   evidence. Fix any additional failure before pushing the batch.
-3. Push only the fork staging head. As requested, cancel the new automatic run,
-   wait for cancellation, then restart the workflow. Its five priority shards
-   run first; all other jobs remain blocked until they pass. Watch the full run
-   and audit/publish current-source reports with the ledger updater.
+2. Freeze that source and replay the reddit Milvus failure with Go 1.27.1 and
+   LLVM 22. Keep targeted replays separate from canonical 64-shard evidence.
+3. Push only the fork staging head. As requested, cancel its new automatic run,
+   wait for cancellation, then restart the workflow. Its three priority shards
+   must pass before the remaining jobs start. Watch the full run and audit the
+   current-source reports with the ledger updater.
 4. Resolve all CI failures, review findings, patch-coverage requirements and
    the provisional exception scope before ready/promotion. Keep inventory,
    translation/object compilation and executed runtime claims distinct.

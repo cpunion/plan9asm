@@ -154,9 +154,9 @@ replayed directly from the saved exact versions without reading the module
 index or revisiting no-assembly modules:
 
 ```sh
-for shard in $(seq 0 31); do
+for shard in $(seq 0 63); do
   PLAN9ASM_DISCOVERY_TARGETS=linux/riscv64 \
-    scripts/check-discovered-library-corpus.sh "$shard" 32 \
+    scripts/check-discovered-library-corpus.sh "$shard" 64 \
     "_out/discovered-library-corpus/riscv64-shard-$shard.json"
 done
 ```

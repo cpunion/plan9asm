@@ -100,12 +100,12 @@ Never accept arbitrary frame mismatches just to make historical modules pass.
 
 ## Reports and provenance
 
-Corpus sharding is `sha256(module@version) % 32`, independent of module-hashed
+Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed
 ledger files. Parallel shards read one frozen ledger and write distinct reports:
 
 ```sh
 PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 32
+  scripts/check-discovered-library-corpus.sh all 64
 scripts/verify-discovered-library-corpus.sh _out/discovered-library-corpus
 ```
 
@@ -191,7 +191,7 @@ reports yet:
 bash scripts/discovery-status.sh [reports-directory] [shard-count]
 ```
 
-The defaults are `_out/discovered-library-corpus` and 32. `scan-status.json`
+The defaults are `_out/discovered-library-corpus` and 64. `scan-status.json`
 contains validated contiguous index endpoints and scan counts.
 `assembly-progress.json` binds the ledger/source and lists every selected exact
 version as `pending`, `passed`, `not_applicable`, `skipped_invalid_source`,

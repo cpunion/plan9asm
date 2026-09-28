@@ -10,7 +10,7 @@ if [[ "$shard_index" == "all" ]]; then
     echo "usage: $0 all [shard-count]" >&2
     exit 2
   fi
-  shard_count=${2:-32}
+  shard_count=${2:-64}
   parallelism=${PLAN9ASM_DISCOVERY_PARALLELISM:-4}
   if ! [[ "$shard_count" =~ ^[1-9][0-9]*$ && "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
     echo "invalid shard count or PLAN9ASM_DISCOVERY_PARALLELISM" >&2

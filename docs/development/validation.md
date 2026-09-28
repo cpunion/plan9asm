@@ -56,7 +56,7 @@ scripts/benchmark-compile.sh
 
 scripts/check-reported-library-corpus.sh all
 PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 32
+  scripts/check-discovered-library-corpus.sh all 64
 ```
 
 Run race tests for changed concurrent code and focused Go 1.20 compatibility
@@ -111,7 +111,7 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 32 schema-7 reports, exact candidate ownership and
+The aggregate requires all 64 schema-7 reports, exact candidate ownership and
 one identical source/ledger/tool provenance. Never mix revisions, dirty builds,
 tool binaries or partial CI artifact sets. Even documentation changes alter the
 source fingerprint: old reports prove only their exact revision, not current-
@@ -184,7 +184,7 @@ There is no polling job consuming a runner while waiting.
 
 The strict aggregate still runs after a failed priority matrix and reports the
 missing/failed coverage; skipped downstream work cannot make the run green.
-All 32 shards remain required, with identical compilation and artifact steps.
+All 64 shards remain required, with identical compilation and artifact steps.
 No old-source artifact can replace a current-head rerun.
 
 When changing the priority set, update both workflow matrices and
