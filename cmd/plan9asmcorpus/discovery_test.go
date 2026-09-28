@@ -814,8 +814,15 @@ func TestDiscoveryBatchChecksRealGoPackagesAndIsolatesInvalidSource(t *testing.T
 	}
 
 	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
+		"package second\n\nfunc f(x int)\n")
+	results, err := runDiscoveryPackageChecks(groups, vet)
+	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
+		t.Fatalf("invalid second package ABI: results=%v error=%v", results, err)
+	}
+
+	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
 		"package second\n\nvar broken = missingIdentifier\n")
-	results, err := runDiscoveryPackageChecks(groups, build)
+	results, err = runDiscoveryPackageChecks(groups, build)
 	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
 		t.Fatalf("invalid second package: results=%v error=%v", results, err)
 	}
