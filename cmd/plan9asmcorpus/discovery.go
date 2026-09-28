@@ -1938,11 +1938,16 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
 				var targetAsmFiles []string
 				var eligibleGroups []discoveryPackageGroup
-				for _, group := range packageGroups {
-					if err := runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, group.Pattern); err != nil {
-						if isDiscoveryInfrastructureFailure(err) {
-							return fmt.Errorf("verify current Go package %s for %s with build tags %v: %w", group.Pattern, target, buildConfiguration.BuildTags, err)
-						}
+				buildErrors, err := runDiscoveryPackageChecks(packageGroups, func(patterns []string) error {
+					return runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns...)
+				})
+				if err != nil {
+					return fmt.Errorf("verify current Go packages for %s with build tags %v: %w",
+						target, buildConfiguration.BuildTags, err)
+				}
+				var buildableGroups []discoveryPackageGroup
+				for index, group := range packageGroups {
+					if err := buildErrors[index]; err != nil {
 						aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 							AsmFiles: append([]string(nil), group.AsmFiles...),
 							Targets:  []string{target},
@@ -1951,8 +1956,18 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						})
 						continue
 					}
+					buildableGroups = append(buildableGroups, group)
+				}
+				vetErrors, err := runDiscoveryPackageChecks(buildableGroups, func(patterns []string) error {
+					return runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns)
+				})
+				if err != nil {
+					return fmt.Errorf("verify current Go asmdecl for %s with build tags %v: %w",
+						target, buildConfiguration.BuildTags, err)
+				}
+				for index, group := range buildableGroups {
 					validAsmFiles := append([]string(nil), group.AsmFiles...)
-					if err := runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, []string{group.Pattern}); err != nil {
+					if err := vetErrors[index]; err != nil {
 						packageAsmFiles, packageErr := discoveryAsmDeclPackageFiles(
 							candidate, group, download.Dir, target, buildConfiguration.BuildTags,
 						)
@@ -2240,7 +2255,7 @@ func extractModuleZip(zipPath, destination, modulePath, version string) error {
 	return nil
 }
 
-func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target string, buildTags []string, pattern string) error {
+func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target string, buildTags []string, patterns ...string) error {
 	goos, goarch, ok := strings.Cut(target, "/")
 	if !ok || goos == "" || goarch == "" {
 		return fmt.Errorf("invalid discovery target %q", target)
@@ -2249,7 +2264,7 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 	if len(buildTags) != 0 {
 		args = append(args, "-tags="+strings.Join(buildTags, ","))
 	}
-	args = append(args, pattern)
+	args = append(args, patterns...)
 	targetEnv := replaceEnv(env, map[string]string{
 		"CGO_ENABLED": "0",
 		"GOOS":        goos,
@@ -2258,6 +2273,39 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 	return retryDiscoveryGoNetwork(ctx, []time.Duration{time.Second, 3 * time.Second}, func() error {
 		return runCapturedCommand(ctx, dir, targetEnv, "go", args...)
 	})
+}
+
+// Check all selected packages in one Go invocation when possible. This lets
+// Go share package loading and parallel compilation across sibling assembly
+// packages. On a source failure, repeat each package independently so the
+// corpus can record exact source-inapplicability evidence. Infrastructure
+// failures remain fatal, including failures from the initial batch.
+func runDiscoveryPackageChecks(
+	groups []discoveryPackageGroup,
+	check func([]string) error,
+) ([]error, error) {
+	results := make([]error, len(groups))
+	if len(groups) == 0 {
+		return results, nil
+	}
+	if len(groups) > 1 {
+		patterns := make([]string, 0, len(groups))
+		for _, group := range groups {
+			patterns = append(patterns, group.Pattern)
+		}
+		if err := check(patterns); err == nil {
+			return results, nil
+		} else if isDiscoveryInfrastructureFailure(err) {
+			return nil, err
+		}
+	}
+	for index, group := range groups {
+		results[index] = check([]string{group.Pattern})
+		if isDiscoveryInfrastructureFailure(results[index]) {
+			return nil, fmt.Errorf("package %s: %w", group.Pattern, results[index])
+		}
+	}
+	return results, nil
 }
 
 // Downloading a module and building its dependencies can both encounter

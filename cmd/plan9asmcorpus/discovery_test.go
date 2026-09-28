@@ -782,6 +782,134 @@ func TestRunDiscoveryGoBuildChecksExactCurrentPackage(t *testing.T) {
 	}
 }
 
+func TestDiscoveryBatchChecksRealGoPackagesAndIsolatesInvalidSource(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/batch\n\ngo 1.20\n")
+	for _, name := range []string{"first", "second"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(dir, name, "decl.go"),
+			"package "+name+"\n\nfunc f()\n")
+		writeTestFile(t, filepath.Join(dir, name, "decl_amd64.s"),
+			"TEXT ·f(SB), $0-0\nRET\n")
+	}
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/batch/first"},
+		{Pattern: "example.com/batch/second"},
+	}
+	env := replaceEnv(os.Environ(), map[string]string{"GOFLAGS": "-mod=mod", "GOWORK": "off"})
+	ctx := context.Background()
+	build := func(patterns []string) error {
+		return runDiscoveryGoBuild(ctx, dir, env, "linux/amd64", nil, patterns...)
+	}
+	vet := func(patterns []string) error {
+		return runDiscoveryAsmDecl(ctx, dir, env, "linux/amd64", nil, patterns)
+	}
+	for _, check := range []func([]string) error{build, vet} {
+		results, err := runDiscoveryPackageChecks(groups, check)
+		if err != nil || len(results) != 2 || results[0] != nil || results[1] != nil {
+			t.Fatalf("valid packages: results=%v error=%v", results, err)
+		}
+	}
+
+	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
+		"package second\n\nvar broken = missingIdentifier\n")
+	results, err := runDiscoveryPackageChecks(groups, build)
+	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
+		t.Fatalf("invalid second package: results=%v error=%v", results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksBatchAndIsolateSourceFailures(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+		{Pattern: "example.com/module/third"},
+	}
+	sourceFailure := errors.New("second package has invalid source")
+	var calls [][]string
+	check := func(patterns []string) error {
+		calls = append(calls, append([]string(nil), patterns...))
+		for _, pattern := range patterns {
+			if pattern == groups[1].Pattern {
+				return sourceFailure
+			}
+		}
+		return nil
+	}
+
+	results, err := runDiscoveryPackageChecks(groups, check)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != len(groups) || results[0] != nil ||
+		!errors.Is(results[1], sourceFailure) || results[2] != nil {
+		t.Fatalf("isolated package results = %v", results)
+	}
+	wantCalls := [][]string{
+		{groups[0].Pattern, groups[1].Pattern, groups[2].Pattern},
+		{groups[0].Pattern},
+		{groups[1].Pattern},
+		{groups[2].Pattern},
+	}
+	if !reflect.DeepEqual(calls, wantCalls) {
+		t.Fatalf("package checks = %v, want %v", calls, wantCalls)
+	}
+}
+
+func TestDiscoveryPackageChecksAvoidsPerPackageWorkAfterBatchPass(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func(patterns []string) error {
+		calls++
+		if len(patterns) != len(groups) {
+			t.Errorf("patterns = %v, want both packages", patterns)
+		}
+		return nil
+	})
+	if err != nil || calls != 1 || len(results) != 2 || results[0] != nil || results[1] != nil {
+		t.Fatalf("batch success: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksDoesNotHideBatchInfrastructureFailure(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	infrastructure := errors.New("go build: signal: killed")
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func([]string) error {
+		calls++
+		return infrastructure
+	})
+	if !errors.Is(err, infrastructure) || calls != 1 || results != nil {
+		t.Fatalf("batch infrastructure: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksUsesIndividualEvidenceForBatchOnlyFailure(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func([]string) error {
+		calls++
+		if calls == 1 {
+			return errors.New("batch-only failure")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 || len(results) != 2 || results[0] != nil || results[1] != nil {
+		t.Fatalf("individually verified batch failure: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
 func TestDiscoveryGoBuildInfrastructureFailuresAreNotSourceNotApplicable(t *testing.T) {
 	for _, diagnostic := range []string{
 		"go build example.com/pkg: context deadline exceeded",
