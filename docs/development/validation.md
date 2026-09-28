@@ -175,11 +175,12 @@ exclusions separately, keep Draft, and resolve their review before promotion.
 
 ### Failure-first scheduling
 
-Let the active full run finish before publishing another batch. The current
-repair matrix runs the three previously failing discovery shards first. Every
-other entry job has a native `needs` dependency on that matrix: **all priority
-shards must succeed**, not merely start, before the remaining jobs run.
-Fail-fast is disabled so every failed shard is checked.
+Let the active full run finish before publishing another batch. A cheap
+`ci_policy` job first checks workflow scheduling and root CI policy tests.
+The repair matrix then runs the three previously failing discovery shards.
+Every other entry job has a native `needs` dependency on that matrix: **all
+priority shards must succeed**, not merely start, before the remaining jobs
+run. Fail-fast is disabled so every failed shard is checked.
 There is no polling job consuming a runner while waiting.
 
 The strict aggregate still runs after a failed priority matrix and reports the
@@ -198,7 +199,8 @@ actionlint .github/workflows/go-ci.yml
 
 If the user requests cancellation after pushing, cancel the new automatic run,
 wait for its terminal status, then rerun the workflow. The dependency graph
-starts only the priority matrix and releases the other jobs after it passes.
+starts with `ci_policy`, then the priority matrix, and releases the other jobs
+after both pass.
 GitHub rejects another single-job rerun while a workflow attempt is running;
 repeated job-rerun API calls cannot enqueue a concurrent priority group. Keep
 all scheduling operations in the allowed fork, never in upstream Actions.

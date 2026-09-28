@@ -69,6 +69,11 @@ from different source fingerprints or edit a frozen corpus runner.
 - At the local repair head, `go test ./... -count=1 -timeout=20m` and
   `go vet ./...` pass with Go 1.27.1 and LLVM 22. The workflow policy test
   also passed focused checks on Go 1.20 and under Go 1.27 race/coverage.
+- The local workflow now runs a cheap `ci_policy` job before the expensive
+  priority shards. It executes scheduling regressions and the `TestCI` root
+  tests, which would have caught the current 11-job failure before any corpus
+  runner started. The gate has red/green scheduling tests and passes
+  `actionlint`; it is not yet validated by a fork run.
 
 ## Provisional native-layout proposal
 

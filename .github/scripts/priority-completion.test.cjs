@@ -30,5 +30,15 @@ test('all failed shards run and no priority failure can become success', () => {
   const priority = jobSection('discovered_library_priority');
   assert.match(priority, /^      fail-fast: false$/m);
   assert.doesNotMatch(priority, /continue-on-error:/);
-  assert.doesNotMatch(priority, /^    (needs|if):/m);
+  assert.match(priority, /^    needs: ci_policy$/m);
+  assert.doesNotMatch(priority, /^    if:/m);
+});
+
+test('cheap CI policy checks pass before expensive corpus or test jobs start', () => {
+  const policy = jobSection('ci_policy');
+  assert.match(policy, /node --test \.github\/scripts\/priority-\*\.test\.cjs/);
+  assert.match(policy, /go test \. -run '\^TestCI' -count=1/);
+  assert.doesNotMatch(policy, /^    (needs|if):/m);
+  assert.ok(workflow.indexOf('\n  ci_policy:\n') <
+    workflow.indexOf('\n  discovered_library_priority:\n'));
 });
