@@ -117,7 +117,7 @@ func TestTranslateX86MixedRawJumpAcrossNamedSSERead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(ir, "raw_jcc_") {
+			if !strings.Contains(ir, amd64LLVMBlockName("raw_jcc_")) {
 				t.Fatal("cross-segment branch label missing")
 			}
 			llc := findLLVM22Tool("llc")

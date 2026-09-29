@@ -1684,7 +1684,7 @@ func TestAMD64BranchCoverageDeep(t *testing.T) {
 		"or i1",
 		"call i64 @\"example.tail\"",
 		"ret i64",
-		"br label %V1",
+		"br label %" + amd64LLVMBlockName("V1"),
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)
