@@ -154,17 +154,7 @@ func (c *amd64Ctx) storeVectorBytesOperandWithMetadata(dst Operand, byteWidth in
 		fmt.Fprintf(c.b, "  store <%d x i8> %s, ptr %s, align 1%s\n", byteWidth, value, p, metadata)
 		return nil
 	case OpFP:
-		chunks := byteWidth / 8
-		words := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i64>\n", words, byteWidth, value, chunks)
-		for i := 0; i < chunks; i++ {
-			word := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i64> %%%s, i32 %d\n", word, chunks, words, i)
-			if err := c.storeFPResultWithMetadata(dst.FPOffset+int64(i*8), I64, "%"+word, metadata); err != nil {
-				return err
-			}
-		}
-		return nil
+		return c.storeFPVectorBytes(dst.FPOffset, byteWidth, value, metadata)
 	default:
 		return fmt.Errorf("expected vector register or memory destination, got %s", dst.String())
 	}

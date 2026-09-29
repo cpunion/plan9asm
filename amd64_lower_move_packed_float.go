@@ -30,6 +30,8 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 		elemBits = 8
 	case "VMOVDQU16":
 		elemBits = 16
+	case "VMOVDQA", "VMOVDQU":
+		elemBits = 8
 	default:
 		return false, false, nil
 	}
@@ -45,6 +47,10 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 		return true, false, fmt.Errorf("%s %s expects source, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
 	}
 	masked := len(ins.Args) == 3
+	vex := baseOp == "VMOVDQA" || baseOp == "VMOVDQU"
+	if vex && (masked || zeroing) {
+		return true, false, fmt.Errorf("%s %s VEX form has no mask or zeroing suffix: %q", c.goarch, baseOp, ins.Raw)
+	}
 	if zeroing && !masked {
 		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
 	}
@@ -60,6 +66,9 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 		byteWidth = amd64VectorByteWidth(src.Reg)
 		if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(src, byteWidth) {
 			return true, false, fmt.Errorf("%s %s source must be an in-range X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
+		}
+		if vex && !amd64VEXVectorRegister(src, byteWidth) {
+			return true, false, fmt.Errorf("%s %s requires an X0-X15 or Y0-Y15 source: %q", c.goarch, baseOp, ins.Raw)
 		}
 		if dst.Kind == OpReg {
 			if !c.isGoPackedVectorMoveRegister(dst, byteWidth) {
@@ -79,16 +88,17 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 	default:
 		return true, false, fmt.Errorf("%s %s source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
 	}
+	if vex {
+		if byteWidth == 64 || (dst.Kind == OpReg && !amd64VEXVectorRegister(dst, byteWidth)) {
+			return true, false, fmt.Errorf("%s %s requires matching X/Y registers in range: %q", c.goarch, baseOp, ins.Raw)
+		}
+	}
 	for _, operand := range []Operand{src, dst} {
 		if operand.Kind != OpFP {
 			continue
 		}
-		for offset := operand.FPOffset; offset < operand.FPOffset+int64(byteWidth); offset += 8 {
-			_, parameter := c.fpParam(offset)
-			_, _, result := c.fpResultAlloca(offset)
-			if !parameter && !result {
-				return true, false, fmt.Errorf("%s %s uses an undeclared FP vector slot at +%d(FP): %q", c.goarch, baseOp, offset, ins.Raw)
-			}
+		if err := c.validateFPVectorSpan(operand.FPOffset, byteWidth); err != nil {
+			return true, false, fmt.Errorf("%s %s: %w: %q", c.goarch, baseOp, err, ins.Raw)
 		}
 	}
 
