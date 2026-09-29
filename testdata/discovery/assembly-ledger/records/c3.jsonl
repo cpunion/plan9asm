@@ -1,7 +1,7 @@
-{"module":"github.com/amarxisoc/kkihos","version":"v0.0.0-20260321094113-4f93c9395471","status":"passed"}
-{"module":"github.com/celliott/gvisor","version":"v0.0.0-20180504232233-3b895abd3b05","status":"skipped_superseded","superseded":{"module":"github.com/celliott/gvisor","version":"v0.0.0-20180504232233-3b895abd3b05","replacement_module":"github.com/google/gvisor","replacement_version":"v0.0.0-20260922222726-edc61702468b","reason":"The 2018 mirror is frozen at the same commit present in the canonical gVisor repository; its historical imports and generated dependencies cannot build with current Go. The newer canonical module is scanned and its assembly is tested separately.","evidence_urls":["https://github.com/celliott/gvisor/commit/3b895abd3b05f13fc78561ddf8d1d27a756f0a89","https://github.com/google/gvisor/commit/3b895abd3b05f13fc78561ddf8d1d27a756f0a89"]}}
-{"module":"github.com/ichn-hu/tidb","version":"v1.0.9","status":"not_applicable"}
-{"module":"github.com/luhaihui106/xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"passed"}
-{"module":"github.com/risesalary/go-ethereum","version":"v1.17.2-quarix-0","status":"passed"}
-{"module":"github.com/sccreeper/goputer","version":"v0.0.0-20260125120906-850f3c482ba8","status":"passed"}
-{"module":"github.web.gylab.com/keilerkonzept/bitknn","version":"v0.8.0","status":"passed"}
+{"module":"github.com/amarxisoc/kkihos","version":"v0.0.0-20260321094113-4f93c9395471","status":"pending"}
+{"module":"github.com/celliott/gvisor","version":"v0.0.0-20180504232233-3b895abd3b05","status":"pending"}
+{"module":"github.com/ichn-hu/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/luhaihui106/xray-core","version":"v0.0.0-20260908094724-37ceb8b4b65e","status":"pending"}
+{"module":"github.com/risesalary/go-ethereum","version":"v1.17.2-quarix-0","status":"pending"}
+{"module":"github.com/sccreeper/goputer","version":"v0.0.0-20260125120906-850f3c482ba8","status":"pending"}
+{"module":"github.web.gylab.com/keilerkonzept/bitknn","version":"v0.8.0","status":"pending"}
