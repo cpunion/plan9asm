@@ -11,4 +11,4 @@
 {"module":"github.com/tkuchiki/go-p5-regexp","version":"v0.1.1","status":"pending"}
 {"module":"github.com/voiceblender/goamr-nb","version":"v1.0.0","status":"pending"}
 {"module":"gitlab.com/mayachain/arbitrum/go-ethereum/v3","version":"v3.9.81","status":"pending"}
-{"module":"sigs.k8s.io/node-feature-discovery","version":"v0.19.0","status":"pending"}
+{"module":"sigs.k8s.io/node-feature-discovery","version":"v0.19.0","status":"passed"}

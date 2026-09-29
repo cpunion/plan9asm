@@ -11,7 +11,7 @@
 {"module":"github.com/jochem-brouwer/go-ethereum","version":"v0.0.0-20260502112921-f0b21fa11061","status":"pending"}
 {"module":"github.com/lomotho/parquet-go","version":"v0.0.0-20260420183122-dd463c7aa3bf","status":"pending"}
 {"module":"github.com/muravlev/fastsax","version":"v0.0.0-20260724124850-492a74a4404f","status":"pending"}
-{"module":"github.com/saveio-backup/themis","version":"v0.0.0-20230602091354-28c736fa7598","status":"pending"}
+{"module":"github.com/saveio-backup/themis","version":"v0.0.0-20230602091354-28c736fa7598","status":"passed"}
 {"module":"github.com/sylabs/golang-x-crypto","version":"v0.0.0-20210902152239-d07836ab426a","status":"pending"}
 {"module":"github.com/wwnbb/websocket","version":"v0.0.0-20260615032528-9c8faadccd1b","status":"pending"}
 {"module":"github.com/xDarkicex/libraVDB","version":"v1.6.13","status":"pending"}

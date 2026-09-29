@@ -2,7 +2,7 @@
 {"module":"github.com/Dominant-Strategies/go-quai","version":"v0.56.0","status":"pending"}
 {"module":"github.com/EdgarBL1/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/Golang/go","version":"v0.0.0-20260921231307-ffc306b41731","status":"pending"}
-{"module":"github.com/KlausPost/reedsolomon","version":"v1.14.2","status":"pending"}
+{"module":"github.com/KlausPost/reedsolomon","version":"v1.14.2","status":"passed"}
 {"module":"github.com/aead/blake2b","version":"v0.0.0-20170427201451-8ae7938b9ede","status":"pending"}
 {"module":"github.com/blukat29/kaia","version":"v0.0.0-20260508005551-00bbc2385587","status":"pending"}
 {"module":"github.com/cwbudde/mayflycirclefit","version":"v0.0.0-20260920123143-273187b90700","status":"pending"}

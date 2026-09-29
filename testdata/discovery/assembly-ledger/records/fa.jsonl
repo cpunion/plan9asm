@@ -1,6 +1,6 @@
 {"module":"git.mills.io/prologic/gonix","version":"v0.0.0-20260921055138-cd4287bd8eef","status":"pending"}
 {"module":"gitee.com/fearwall/gmgo","version":"v0.0.11","status":"pending"}
-{"module":"github.com/FranzKafkaYu/Xray-core","version":"v1.5.5","status":"pending"}
+{"module":"github.com/FranzKafkaYu/Xray-core","version":"v1.5.5","status":"passed"}
 {"module":"github.com/achilleasa/gopher-os","version":"v0.0.0-20180616070140-1a7aca464ed2","status":"pending"}
 {"module":"github.com/byczax/scion","version":"v0.14.1-humm.0","status":"pending"}
 {"module":"github.com/creativesoftwarefdn/weaviate","version":"v1.39.6","status":"pending"}

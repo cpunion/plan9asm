@@ -2,7 +2,7 @@
 {"module":"github.com/Kava-Labs/go-ethereum","version":"v1.12.2","status":"pending"}
 {"module":"github.com/NOah-blockchain/noah-go-node","version":"v0.2.5","status":"pending"}
 {"module":"github.com/PaiMonCai/Xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
-{"module":"github.com/abakcroc/fyne/v2","version":"v2.7.4","status":"pending"}
+{"module":"github.com/abakcroc/fyne/v2","version":"v2.7.4","status":"not_applicable"}
 {"module":"github.com/apmckinlay/gsuneido","version":"v0.0.0-20260920225709-ef2be1cce786","status":"pending"}
 {"module":"github.com/bnb-chain/erigon","version":"v0.0.0-20230630035401-104928aa2c3a","status":"pending"}
 {"module":"github.com/bzync/nextsql","version":"v0.0.4","status":"pending"}

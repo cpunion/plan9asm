@@ -5,7 +5,7 @@
 {"module":"github.com/Minio/blake2b-simd","version":"v0.0.0-20160723061019-3f5f724cb5b1","status":"pending"}
 {"module":"github.com/Rutenioum/mieru/v3","version":"v3.34.1-admission.1","status":"pending"}
 {"module":"github.com/Splizard/go","version":"v0.0.0-20260116174045-7251c9e0f00a","status":"pending"}
-{"module":"github.com/c2gohq/c2go_libc","version":"v0.20260809.0-rc.5","status":"pending"}
+{"module":"github.com/c2gohq/c2go_libc","version":"v0.20260809.0-rc.5","status":"not_applicable"}
 {"module":"github.com/chetna-mittal/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/d3hunter/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/fsyyft-go/kit","version":"v0.0.16","status":"pending"}
@@ -17,6 +17,6 @@
 {"module":"github.com/minIO/highwayhash","version":"v1.0.4","status":"pending"}
 {"module":"github.com/minio/minlz","version":"v1.2.0","status":"pending"}
 {"module":"github.com/raidancampbell/godsp","version":"v0.4.0","status":"pending"}
-{"module":"github.com/to-nexus/go-cross","version":"v1.3.12","status":"pending"}
+{"module":"github.com/to-nexus/go-cross","version":"v1.3.12","status":"passed"}
 {"module":"github.com/x3speed/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"lukechampine.com/blake3","version":"v1.4.1","status":"pending"}

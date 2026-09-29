@@ -2,7 +2,7 @@
 {"module":"github.com/33cn/Chain33","version":"v1.72.0","status":"pending"}
 {"module":"github.com/REGCLIENT/regclient","version":"v0.11.6","status":"pending"}
 {"module":"github.com/StarpTech/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
-{"module":"github.com/anthony-chaudhary/fak","version":"v0.55.0","status":"pending"}
+{"module":"github.com/anthony-chaudhary/fak","version":"v0.55.0","status":"passed"}
 {"module":"github.com/bobanetwork/erigon/erigon-lib","version":"v0.0.0-20250421150011-83d629c0fa06","status":"pending"}
 {"module":"github.com/consensys/gnark-Crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/howardlau1999/tidb","version":"v1.0.9","status":"pending"}
@@ -20,6 +20,6 @@
 {"module":"github.com/truvvor/xray-core","version":"v1.0.0-ios","status":"pending"}
 {"module":"github.com/ultronglow/mainnet-beta","version":"v0.0.0-20230922041821-ee3bc42901c7","status":"pending"}
 {"module":"github.com/verizon/bosun","version":"v0.0.0-20151023213256-dda36ed3ce06","status":"pending"}
-{"module":"github.com/yuan71058/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
+{"module":"github.com/yuan71058/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"passed"}
 {"module":"github.com/zhao4nicholas/only-owner","version":"v3.50.2+incompatible","status":"pending"}
 {"module":"github.com/zuoyebang/bitalosdb/v2","version":"v2.0.0","status":"pending"}

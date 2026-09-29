@@ -1,9 +1,9 @@
 {"module":"github.com/Chewxy/math32","version":"v1.11.2","status":"pending"}
 {"module":"github.com/DataDog/otel-profiling-agent","version":"v0.0.1","status":"pending"}
-{"module":"github.com/ErigoNtech/erigon","version":"v1.10.16","status":"pending"}
+{"module":"github.com/ErigoNtech/erigon","version":"v1.10.16","status":"passed"}
 {"module":"github.com/Go-Delve/Delve","version":"v1.27.2","status":"pending"}
 {"module":"github.com/WillBeebe/nexum","version":"v0.3.0","status":"pending"}
-{"module":"github.com/ajaxorg/ace","version":"v1.44.0","status":"pending"}
+{"module":"github.com/ajaxorg/ace","version":"v1.44.0","status":"not_applicable"}
 {"module":"github.com/bgentry/flynn","version":"v0.0.0-20150218232219-6b262dc94557","status":"pending"}
 {"module":"github.com/chainbound/bolt-builder","version":"v0.0.0-20241126154839-56e2c2d0b75d","status":"pending"}
 {"module":"github.com/ekexium/tidb","version":"v1.0.9","status":"pending"}

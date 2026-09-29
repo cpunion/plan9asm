@@ -9,7 +9,7 @@
 {"module":"github.com/bobanetwork/erigon","version":"v1.10.16","status":"pending"}
 {"module":"github.com/cespare/xxhash/v2","version":"v2.3.0","status":"pending"}
 {"module":"github.com/eryugey/go-fuse/v2","version":"v2.10.1","status":"pending"}
-{"module":"github.com/hayabusa-cloud/dwcas","version":"v0.1.5","status":"pending"}
+{"module":"github.com/hayabusa-cloud/dwcas","version":"v0.1.5","status":"passed"}
 {"module":"github.com/juelite/golang.org-x-sys","version":"v0.0.0-20181121071242-7b69e1c5db33","status":"pending"}
 {"module":"github.com/kryptex/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/me1ting/netstack","version":"v0.0.0-20230331111214-8e066e82ccc1","status":"pending"}

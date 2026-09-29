@@ -2,9 +2,9 @@
 {"module":"github.com/Colduction/proxykit-go","version":"v0.7.1","status":"pending"}
 {"module":"github.com/ahuigo/golib","version":"v0.1.1","status":"pending"}
 {"module":"github.com/al-assad/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/arror/Xray-core","version":"v0.0.0-20260609205355-da21a8f77f31","status":"pending"}
+{"module":"github.com/arror/Xray-core","version":"v0.0.0-20260609205355-da21a8f77f31","status":"passed"}
 {"module":"github.com/byzantine-lab/go-ethereum","version":"v1.9.6","status":"pending"}
-{"module":"github.com/chai2010/advanced-go-programming-book","version":"v1.0.0","status":"pending"}
+{"module":"github.com/chai2010/advanced-go-programming-book","version":"v1.0.0","status":"passed"}
 {"module":"github.com/conformal/winsvc","version":"v1.0.0","status":"pending"}
 {"module":"github.com/endophage/gotuf","version":"v0.0.0-20151124190824-3b700e20e376","status":"pending"}
 {"module":"github.com/kaiachain/kaia","version":"v1.0.3","status":"pending"}

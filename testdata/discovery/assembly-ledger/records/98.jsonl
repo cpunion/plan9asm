@@ -13,7 +13,7 @@
 {"module":"github.com/hexdigest/websocket","version":"v0.0.0-20250710084959-91013c129147","status":"pending"}
 {"module":"github.com/hiddify/xray-core","version":"v0.0.0-20260124181826-59e6569c13e9","status":"pending"}
 {"module":"github.com/lochjin/qitmeer-lib","version":"v0.0.0-20190929044647-841b2b13be56","status":"pending"}
-{"module":"github.com/luange/sing-tun","version":"v0.8.11","status":"pending"}
+{"module":"github.com/luange/sing-tun","version":"v0.8.11","status":"passed"}
 {"module":"github.com/netbsd/pkgsrc","version":"v0.0.0-20260922205539-a97271e6ca87","status":"pending"}
 {"module":"github.com/prysmaticlabs/bazel-go-ethereum","version":"v0.0.0-20211019000226-435ab2ab11d3","status":"pending"}
 {"module":"github.com/xiaokangwang/netstack","version":"v0.0.0-20180523013319-ccb7ae6947f6","status":"pending"}

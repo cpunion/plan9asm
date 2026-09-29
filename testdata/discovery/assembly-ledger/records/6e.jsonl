@@ -11,7 +11,7 @@
 {"module":"github.com/grow-graphics/gd","version":"v0.0.0-20260918073432-bf29a5a8f806","status":"pending"}
 {"module":"github.com/itsthui/https-github.com-golang-go","version":"v0.0.0-20240103210156-6db1102605f2","status":"pending"}
 {"module":"github.com/lux5am/sing-box","version":"v1.14.1","status":"pending"}
-{"module":"github.com/nak3/kubernetes-manifest-scanner","version":"v0.0.0-20151207150536-d5cc57db0fac","status":"pending"}
+{"module":"github.com/nak3/kubernetes-manifest-scanner","version":"v0.0.0-20151207150536-d5cc57db0fac","status":"not_applicable"}
 {"module":"github.com/ngtuna/tomochain","version":"v1.8.2","status":"pending"}
 {"module":"github.com/openagent-md/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/renthraysk/go/src","version":"v0.0.0-20250707204235-86b5ba731044","status":"pending"}

@@ -11,7 +11,7 @@
 {"module":"github.com/mindrunner/solana-go","version":"v0.0.0-20260525093508-e93ff5e93773","status":"pending"}
 {"module":"github.com/nestybox/sysbox-runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/never-labs/gscript","version":"v0.1.0","status":"pending"}
-{"module":"github.com/nurfitrapujo/websocket","version":"v0.0.0-20250905081622-7d7c644330e7","status":"pending"}
+{"module":"github.com/nurfitrapujo/websocket","version":"v0.0.0-20250905081622-7d7c644330e7","status":"passed"}
 {"module":"github.com/polynetwork/zion","version":"v0.1.0","status":"pending"}
 {"module":"github.com/reducedb/encoding","version":"v0.0.0-20171223221521-b90e310a0325","status":"pending"}
 {"module":"github.com/remyoudompheng/go-vectops","version":"v0.0.0-20171128230507-52922cf12600","status":"pending"}

@@ -4,7 +4,7 @@
 {"module":"github.com/Freeaqingme/opencontainers-runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/OffChainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
 {"module":"github.com/OffchainLAbs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
-{"module":"github.com/Sesachain/sxc","version":"v0.0.0-20221208022340-5831dab467a0","status":"pending"}
+{"module":"github.com/Sesachain/sxc","version":"v0.0.0-20221208022340-5831dab467a0","status":"passed"}
 {"module":"github.com/angr/binaries","version":"v9.2.227+incompatible","status":"pending"}
 {"module":"github.com/axiomis-labs/go-ethereum","version":"v1.17.3","status":"pending"}
 {"module":"github.com/doug/goffi","version":"v0.6.2","status":"pending"}

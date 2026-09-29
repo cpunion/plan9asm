@@ -1,6 +1,6 @@
 {"module":"gitcode.com/gh_mirrors/de/delve","version":"v1.27.1","status":"pending"}
 {"module":"github.com/BlockdagNetworkLabs/go-ethereum","version":"v1.14.11","status":"pending"}
-{"module":"github.com/DogethereumProject/go-ethereum","version":"v1.0.3","status":"pending"}
+{"module":"github.com/DogethereumProject/go-ethereum","version":"v1.0.3","status":"passed"}
 {"module":"github.com/Tenderly/net-taiko-geth","version":"v0.0.0-20260616094817-ffcb9342c6f5","status":"pending"}
 {"module":"github.com/averylucas/gogogd","version":"v0.2.0","status":"pending"}
 {"module":"github.com/devlothen/xray-core","version":"v0.0.0-20260912102929-36e4ed475c07","status":"pending"}

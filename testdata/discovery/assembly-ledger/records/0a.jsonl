@@ -9,7 +9,7 @@
 {"module":"github.com/cortexfoundation/CortexTheseus","version":"v1.10.72","status":"pending"}
 {"module":"github.com/everyday-items/toolkit","version":"v0.3.4","status":"pending"}
 {"module":"github.com/igolaizola/websocket","version":"v0.0.0-20250129145148-aec630d59c74","status":"pending"}
-{"module":"github.com/jlhawn/go-crypto","version":"v0.0.0-20150401213827-cd738dde20f0","status":"pending"}
+{"module":"github.com/jlhawn/go-crypto","version":"v0.0.0-20150401213827-cd738dde20f0","status":"passed"}
 {"module":"github.com/kyoukaya/pid","version":"v0.0.0-20231226054438-ebfd3a3f3881","status":"pending"}
 {"module":"github.com/lfreijo/net","version":"v0.0.0-20180723140658-b239179bcf3d","status":"pending"}
 {"module":"github.com/liorgold2/go-ethereum","version":"v1.8.27","status":"pending"}

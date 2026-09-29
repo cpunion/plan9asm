@@ -10,7 +10,7 @@
 {"module":"github.com/cnuss/libraft","version":"v0.0.17","status":"pending"}
 {"module":"github.com/cwbudde/algo-tom","version":"v0.1.0","status":"pending"}
 {"module":"github.com/dragonly/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/harmony-one/go-ethereum","version":"v1.9.18","status":"pending"}
+{"module":"github.com/harmony-one/go-ethereum","version":"v1.9.18","status":"passed"}
 {"module":"github.com/klausPOST/compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/loopholelabs/gvisor","version":"v0.0.0-20260123013346-1c7c74f919f4","status":"pending"}
 {"module":"github.com/thiagolange/iceberg-ai-deltalakehouse/ailake-go","version":"v0.0.0-20260814130255-cfeb8467bc82","status":"pending"}

@@ -10,7 +10,7 @@
 {"module":"github.com/birdayz/jton-go","version":"v0.0.0-20260623212300-fd5a49b48ea1","status":"pending"}
 {"module":"github.com/blocktree/OpenWallet","version":"v1.7.0","status":"pending"}
 {"module":"github.com/cocktail828/go-tools","version":"v0.3.25","status":"pending"}
-{"module":"github.com/ledgerwatch/turbo-geth","version":"v1.10.16","status":"pending"}
+{"module":"github.com/ledgerwatch/turbo-geth","version":"v1.10.16","status":"passed"}
 {"module":"github.com/maybeyes111/outfix","version":"v0.8.0","status":"pending"}
 {"module":"github.com/meterio/meter-pov","version":"v1.2.0","status":"pending"}
 {"module":"github.com/myonkeminta/tidb","version":"v1.0.7","status":"pending"}

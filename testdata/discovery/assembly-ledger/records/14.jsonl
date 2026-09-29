@@ -1,7 +1,7 @@
 {"module":"github.com/Consensys/etcd","version":"v2.3.8+incompatible","status":"pending"}
 {"module":"github.com/FUSIONFoundation/efsn/v4","version":"v4.2.0","status":"pending"}
 {"module":"github.com/Fantom-foundation/go-ethereum","version":"v1.9.6","status":"pending"}
-{"module":"github.com/Pingcap/TIDB","version":"v1.0.9","status":"pending"}
+{"module":"github.com/Pingcap/TIDB","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/PlakarKorp/aes-gcm-siv","version":"v0.1.0","status":"pending"}
 {"module":"github.com/Vitessio/vitess","version":"v0.24.3","status":"pending"}
 {"module":"github.com/bbaktaeho/avax-libevm","version":"v1.13.15-nativeassetcallfix.0","status":"pending"}

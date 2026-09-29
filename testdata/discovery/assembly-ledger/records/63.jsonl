@@ -1,5 +1,5 @@
 {"module":"github.com/GOATNetwork/goat-geth","version":"v0.4.2","status":"pending"}
-{"module":"github.com/MerIijn/net","version":"v0.58.4-vibetls","status":"pending"}
+{"module":"github.com/MerIijn/net","version":"v0.58.4-vibetls","status":"passed"}
 {"module":"github.com/Scratch-net/mpc","version":"v0.0.0-20260611121342-f5e7e6d349b3","status":"pending"}
 {"module":"github.com/WeidiDeng/pty","version":"v0.0.0-20260311060139-820383ea2420","status":"pending"}
 {"module":"github.com/anykey-nomad/imaging","version":"v0.0.0-20260701200637-2ec20dc9e5ec","status":"pending"}

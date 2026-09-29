@@ -12,7 +12,7 @@
 {"module":"github.com/glide-the/weaviate","version":"v0.0.0-20250103071423-2314300a54dc","status":"pending"}
 {"module":"github.com/juztamau5/go-ipfs","version":"v0.3.9","status":"pending"}
 {"module":"github.com/kilic/fp256","version":"v0.0.0-20190626215920-7120361eb62e","status":"pending"}
-{"module":"github.com/monetarium/node/crypto/blake256","version":"v1.3.10","status":"pending"}
+{"module":"github.com/monetarium/node/crypto/blake256","version":"v1.3.10","status":"passed"}
 {"module":"github.com/mrabe89/crypto","version":"v0.0.0-20190829133144-629c3501cdf0","status":"pending"}
 {"module":"github.com/munew/wazero","version":"v0.0.0-20260731074528-937f411b125d","status":"pending"}
 {"module":"github.com/rainayangg/net-go","version":"v0.0.0-20260313180441-b5081d74e7cf","status":"pending"}

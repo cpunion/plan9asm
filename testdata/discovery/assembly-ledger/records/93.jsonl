@@ -10,6 +10,6 @@
 {"module":"github.com/jewharton/storj-minio","version":"v0.0.0-20250401203336-4f3c22e9dbf2","status":"pending"}
 {"module":"github.com/katzenpost/circl","version":"v1.3.8","status":"pending"}
 {"module":"github.com/korli/wazero_haiku","version":"v0.0.0-20260714071631-236c2458ed22","status":"pending"}
-{"module":"github.com/silentred/gid","version":"v1.0.3","status":"pending"}
+{"module":"github.com/silentred/gid","version":"v1.0.3","status":"passed"}
 {"module":"github.com/tdelov/imagemeta","version":"v0.0.0-20231207040420-aa22c60ecd67","status":"pending"}
 {"module":"github.com/timeglass/glass","version":"v0.6.0","status":"pending"}

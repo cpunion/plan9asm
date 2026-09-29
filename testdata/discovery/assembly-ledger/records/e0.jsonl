@@ -10,7 +10,7 @@
 {"module":"github.com/gnusec/xmt","version":"v0.0.0-20230802021232-b630658a1afa","status":"pending"}
 {"module":"github.com/lazydreamingdog/modifygeth","version":"v0.0.0-20260410083424-1f60ad2e3330","status":"pending"}
 {"module":"github.com/ness-network/privateness","version":"v0.27.1","status":"pending"}
-{"module":"github.com/next-bin/go-sqlite/v2/libc","version":"v1.0.0","status":"pending"}
+{"module":"github.com/next-bin/go-sqlite/v2/libc","version":"v1.0.0","status":"passed"}
 {"module":"github.com/pulse-network/go-pulse","version":"v1.0.2","status":"pending"}
 {"module":"github.com/rsksmart/native/altbn128/bn256","version":"v0.0.0-20221006115014-71c290cc5c21","status":"pending"}
 {"module":"github.com/skycoin/cx","version":"v0.7.5","status":"pending"}

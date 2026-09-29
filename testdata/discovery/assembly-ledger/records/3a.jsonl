@@ -8,7 +8,7 @@
 {"module":"github.com/borga-rasp/mobile","version":"v0.0.0-20260814210019-86666013d533","status":"pending"}
 {"module":"github.com/dreamquster/tidb","version":"v1.0.8","status":"pending"}
 {"module":"github.com/josephrandall577/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
-{"module":"github.com/liubo0127/tidb","version":"v1.0.2","status":"pending"}
+{"module":"github.com/liubo0127/tidb","version":"v1.0.2","status":"not_applicable"}
 {"module":"github.com/mhr3/veloz","version":"v0.2.0","status":"pending"}
 {"module":"github.com/obstor/sha256-simd","version":"v1.0.1","status":"pending"}
 {"module":"github.com/songzhibin97/GKit","version":"v1.5.0","status":"pending"}

@@ -6,7 +6,7 @@
 {"module":"github.com/etherzero-org/go-etherzero","version":"v2.0.8+incompatible","status":"pending"}
 {"module":"github.com/fiber/ai","version":"v0.1.2","status":"pending"}
 {"module":"github.com/jotchuadevz/xray-core","version":"v0.0.16","status":"pending"}
-{"module":"github.com/justwasm/go4js/src/cmd","version":"v0.0.2","status":"pending"}
+{"module":"github.com/justwasm/go4js/src/cmd","version":"v0.0.2","status":"not_applicable"}
 {"module":"github.com/librefs/pkg/v3","version":"v3.8.0","status":"pending"}
 {"module":"github.com/loov/hrtime","version":"v1.0.4","status":"pending"}
 {"module":"github.com/meoyawn/tspls","version":"v0.1.0","status":"pending"}

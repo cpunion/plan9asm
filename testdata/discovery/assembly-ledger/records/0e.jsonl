@@ -1,6 +1,6 @@
 {"module":"github.com/BNB-chain/op-geth","version":"v0.5.11","status":"pending"}
 {"module":"github.com/CWBudde/agg_go","version":"v0.5.0","status":"pending"}
-{"module":"github.com/ClarkQAQ/uw","version":"v0.0.0-20241105083208-1bc27a867be7","status":"pending"}
+{"module":"github.com/ClarkQAQ/uw","version":"v0.0.0-20241105083208-1bc27a867be7","status":"passed"}
 {"module":"github.com/HZ-PRE/XrarCore","version":"v1.0.74","status":"pending"}
 {"module":"github.com/Haoning-Sun/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
 {"module":"github.com/KaijuEngine/kaiju/src","version":"v0.0.0-20260913024248-5eda268233b1","status":"pending"}

@@ -1,5 +1,5 @@
 {"module":"gitea.com/golang/crypto","version":"v0.0.0-20200602180216-279210d13fed","status":"pending"}
-{"module":"github.com/DATABASE64128/chacha8-go","version":"v0.0.0-20250815115417-e0f2726d8bd0","status":"pending"}
+{"module":"github.com/DATABASE64128/chacha8-go","version":"v0.0.0-20250815115417-e0f2726d8bd0","status":"passed"}
 {"module":"github.com/JohanLindvall/haste","version":"v0.1.36","status":"pending"}
 {"module":"github.com/Nanyan/heco-chain","version":"v1.2.1","status":"pending"}
 {"module":"github.com/ZhangZhenghao/gorse","version":"v0.1.5","status":"pending"}

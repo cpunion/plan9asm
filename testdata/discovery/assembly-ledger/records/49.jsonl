@@ -6,7 +6,7 @@
 {"module":"github.com/andriidiachuk/flow-go","version":"v0.33.17","status":"pending"}
 {"module":"github.com/crazypeace/xray-core-allowinsecure","version":"v0.0.0-20260620233415-e7ae9b023739","status":"pending"}
 {"module":"github.com/ginjaninja78/websocket","version":"v0.0.0-20250905081622-7d7c644330e7","status":"pending"}
-{"module":"github.com/glen0xFFF/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
+{"module":"github.com/glen0xFFF/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"passed"}
 {"module":"github.com/herdius/herdius-core","version":"v0.0.0-20200908103011-868bdbc5e09b","status":"pending"}
 {"module":"github.com/homestuck-ng/utls","version":"v1.8.4","status":"pending"}
 {"module":"github.com/huianlei/modern-go","version":"v1.23.1","status":"pending"}

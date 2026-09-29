@@ -1,5 +1,5 @@
 {"module":"fuchsia.googlesource.com/third_party/golang.org/x/sys.git","version":"v0.48.0","status":"pending"}
-{"module":"github.com/DTRules/DTRules","version":"v1.25.0","status":"pending"}
+{"module":"github.com/DTRules/DTRules","version":"v1.25.0","status":"passed"}
 {"module":"github.com/K900/mobile","version":"v0.0.0-20260514233045-7de0a8fa7f4d","status":"pending"}
 {"module":"github.com/PinGCAP/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/base/op-geth","version":"v1.101701.0-rc.3-eip8130.6","status":"pending"}

@@ -7,7 +7,7 @@
 {"module":"github.com/as/exp","version":"v0.0.0-20171029094917-23dc768cca30","status":"pending"}
 {"module":"github.com/engoengine/math","version":"v1.0.4","status":"pending"}
 {"module":"github.com/h5-o5/mockey","version":"v1.4.6","status":"pending"}
-{"module":"github.com/kianyang-lee/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"pending"}
+{"module":"github.com/kianyang-lee/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"passed"}
 {"module":"github.com/leaanthony/go","version":"v0.0.0-20260807170124-35a7a64d0fef","status":"pending"}
 {"module":"github.com/onflow/flow-go","version":"v0.51.1","status":"pending"}
 {"module":"github.com/rcarmo/go-pherence","version":"v0.0.0-20260922225713-961c645958cd","status":"pending"}

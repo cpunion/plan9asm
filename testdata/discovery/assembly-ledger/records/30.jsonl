@@ -11,7 +11,7 @@
 {"module":"github.com/qorechain/circl","version":"v0.0.0-20250801215056-01fdb8717c38","status":"pending"}
 {"module":"github.com/rudrankriyam/app-store-connect-cli","version":"v0.0.0-20260922223737-c994f506d0fd","status":"pending"}
 {"module":"github.com/sachinmail223/t2d","version":"v0.0.0-20160716064708-8135c48d882e","status":"pending"}
-{"module":"github.com/sinspired/mihomo","version":"v1.19.21","status":"pending"}
+{"module":"github.com/sinspired/mihomo","version":"v1.19.21","status":"passed"}
 {"module":"github.com/sunziping2016/sing-tun","version":"v0.0.0-20260820154143-1ed0033872dd","status":"pending"}
 {"module":"github.com/tom-eon/arrow-go/v18","version":"v18.0.0-20260805191322-b73042f2294d","status":"pending"}
 {"module":"github.com/wdvxdr1123/pid","version":"v0.0.0-20260617021558-1bb5f0f888f7","status":"pending"}

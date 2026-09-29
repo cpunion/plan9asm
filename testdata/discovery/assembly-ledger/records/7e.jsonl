@@ -1,5 +1,5 @@
 {"module":"github.com/0xPolygonHermez/cdk-erigon/erigon-lib","version":"v0.0.0-20260218184130-080a7c37b3e1","status":"pending"}
-{"module":"github.com/apernet/hysteria/app/v2","version":"v2.12.3","status":"pending"}
+{"module":"github.com/apernet/hysteria/app/v2","version":"v2.12.3","status":"not_applicable"}
 {"module":"github.com/bjwbell/tools","version":"v0.0.0-20161220200941-908849c33792","status":"pending"}
 {"module":"github.com/daniel-sullivan/go-mediatoolkit","version":"v1.4.0","status":"pending"}
 {"module":"github.com/earentir/cpuid","version":"v1.0.8","status":"pending"}

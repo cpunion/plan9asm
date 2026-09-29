@@ -18,4 +18,4 @@
 {"module":"github.com/pendo-io/parquet-go","version":"v0.0.0-20260409201008-aa444cca503d","status":"pending"}
 {"module":"github.com/rgeraldes24/go-qrl","version":"v0.1.0","status":"pending"}
 {"module":"github.com/truechain/truechain-engineering-code","version":"v2.1.4+incompatible","status":"pending"}
-{"module":"github.laiyagushi.com/mmcloughlin/geohash","version":"v0.10.0","status":"pending"}
+{"module":"github.laiyagushi.com/mmcloughlin/geohash","version":"v0.10.0","status":"passed"}

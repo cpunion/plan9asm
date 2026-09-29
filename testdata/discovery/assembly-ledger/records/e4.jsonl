@@ -6,7 +6,7 @@
 {"module":"github.com/arj03/wazero","version":"v0.0.0-20260804131901-3ab421731a94","status":"pending"}
 {"module":"github.com/astriaorg/astria-geth","version":"v1.1.0","status":"pending"}
 {"module":"github.com/bronze1man/AesCtr","version":"v0.0.0-20171229153638-3cf02b6c48b9","status":"pending"}
-{"module":"github.com/hanfei1991/tidb","version":"v1.0.0","status":"pending"}
+{"module":"github.com/hanfei1991/tidb","version":"v1.0.0","status":"not_applicable"}
 {"module":"github.com/holdenk/predict-pr-comments","version":"v0.0.0-20190202233457-994a6504442e","status":"pending"}
 {"module":"github.com/mlange-42/gonum","version":"v0.0.0-20250422220541-720fcb9699a9","status":"pending"}
 {"module":"github.com/njj0121/DST-Nucleus","version":"v1.3.0","status":"pending"}

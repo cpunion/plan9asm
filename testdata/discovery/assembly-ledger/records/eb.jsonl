@@ -11,12 +11,12 @@
 {"module":"github.com/lempossible/chacha20","version":"v0.0.1","status":"pending"}
 {"module":"github.com/linxGnu/lz4","version":"v2.3.0+incompatible","status":"pending"}
 {"module":"github.com/lucas-clemente/aes12","version":"v0.0.0-20171027163421-cd47fb39b79f","status":"pending"}
-{"module":"github.com/qorm/platform","version":"v0.9.8","status":"pending"}
+{"module":"github.com/qorm/platform","version":"v0.9.8","status":"passed"}
 {"module":"github.com/racerxdl/segdsp","version":"v1.0.0","status":"pending"}
 {"module":"github.com/remobjects/goldbaselibrary","version":"v0.0.0-20260804134941-d1870f3c0851","status":"pending"}
 {"module":"github.com/shaia/BloomFilter","version":"v0.4.0","status":"pending"}
 {"module":"github.com/sudip2das/kyber","version":"v0.0.0-20180403173839-03bf21f37c67","status":"pending"}
-{"module":"github.com/tinyrange/cc","version":"v0.0.0-20260922124023-ef1ecd668ed2","status":"pending"}
+{"module":"github.com/tinyrange/cc","version":"v0.0.0-20260922124023-ef1ecd668ed2","status":"passed"}
 {"module":"github.com/tobyxdd/hysteria/app","version":"v1.3.5","status":"pending"}
 {"module":"github.com/v-fedorov/net","version":"v0.0.0-20260620022537-70d3f88887ba","status":"pending"}
 {"module":"github.web.gylab.com/mhmtszr/concurrent-swiss-map","version":"v1.0.10","status":"pending"}

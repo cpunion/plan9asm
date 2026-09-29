@@ -1,6 +1,6 @@
 {"module":"gitee.com/bigharvest/SunnyNet","version":"v1.2.2","status":"pending"}
 {"module":"github.com/DFWallet/klaytn","version":"v1.8.0","status":"pending"}
-{"module":"github.com/Mocachain/go-ethereum","version":"v1.10.26","status":"pending"}
+{"module":"github.com/Mocachain/go-ethereum","version":"v1.10.26","status":"passed"}
 {"module":"github.com/alexballas/fyne/v2","version":"v2.3.2","status":"pending"}
 {"module":"github.com/bigsheeper/milvus/pkg/v2","version":"v2.0.0-20260429082524-b50c296d030d","status":"pending"}
 {"module":"github.com/bitgoin/lyra2rev2","version":"v0.0.0-20161212102046-bae9ad2043bb","status":"pending"}
