@@ -302,6 +302,19 @@ func (c *amd64Ctx) loadIndirectSymbolAddr(sym string) (string, error) {
 func (c *amd64Ctx) callIndirectAddr(addr string) error {
 	fptr := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %s to ptr\n", fptr, addr)
+	if sig := c.indirectABI0; sig != nil {
+		args, err := c.abi0CallArgs("indirect callback", *sig)
+		if err != nil {
+			return err
+		}
+		if sig.Ret == Void {
+			fmt.Fprintf(c.b, "  call void %%%s(%s)\n", fptr, strings.Join(args, ", "))
+			return nil
+		}
+		result := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = call %s %%%s(%s)\n", result, sig.Ret, fptr, strings.Join(args, ", "))
+		return c.storeABI0CallResult("indirect callback", *sig, "%"+result)
+	}
 	di, _ := c.loadReg(DI)
 	si, _ := c.loadReg(SI)
 	dx, _ := c.loadReg(DX)
@@ -398,7 +411,8 @@ func (c *amd64Ctx) callSym(symOp Operand) error {
 	}
 	callee = funcSigSymbol(callee, csig)
 
-	stackABI := !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Params) != 0
+	stackABI := !internalABI && len(csig.ArgRegs) == 0 &&
+		(len(csig.Frame.Params) != 0 || len(csig.Frame.Results) != 0)
 	if stackABI {
 		args, err := c.abi0CallArgs(callee, csig)
 		if err != nil {

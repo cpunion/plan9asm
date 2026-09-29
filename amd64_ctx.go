@@ -21,6 +21,7 @@ type amd64Ctx struct {
 	annotate       bool
 	continuations  map[string]x86Continuation
 	indirectLabels []string
+	indirectABI0   *FuncSig // proven straight-line stack-argument callback adapter
 
 	tmp int
 
@@ -66,6 +67,7 @@ type amd64Ctx struct {
 	vstackSlot     string // [64 x i64] virtual stack for PUSHQ/POPQ
 	vspSlot        string // i64 virtual stack pointer (next free slot)
 	localStackSlot string // byte-addressable backing storage for x86 SP references
+	frameSize      int64  // local bytes below the Go assembler's implicit amd64 BP
 	classicFrame   string // contiguous classic Go ABI frame used by 386 FP addressing
 	classicSize    int64
 	classicBias    int64
@@ -92,6 +94,8 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
+		frameSize:      fn.FrameSize,
+		indirectABI0:   inferX86ABI0Forwarder(fn, sig, goarch),
 		blocks:         amd64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -348,6 +352,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 	// Ensure a few common regs exist even if only used implicitly by helpers.
 	markReg(AX)
+	if c.goarch != "386" && c.frameSize > 0 && c.usedRegs[BP] {
+		markReg(SP)
+	}
 
 	// Ensure arg regs exist for ABIInternal-style stdlib asm. This matters for:
 	//   - functions like runtime·cmpstring<ABIInternal> that tail-call helpers
@@ -419,6 +426,13 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		addr := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+		if bpSlot, ok := c.regSlot[BP]; ok && c.goarch != "386" && c.frameSize > 0 {
+			// Go saves BP before reserving TEXT's local frame. Thus a source
+			// -8(BP) aliases FrameSize-8(SP), including across outgoing calls.
+			bp := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = add i64 %%%s, %d\n", bp, addr, c.frameSize)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", bp, bpSlot)
+		}
 	}
 
 	xIdx := make([]int, 0, len(c.usedXRegs))
@@ -721,6 +735,7 @@ func (c *amd64Ctx) emit386ClassicFrame() error {
 }
 
 func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
+	maxOff = c.frameSize
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
 			for _, arg := range ins.Args {

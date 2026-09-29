@@ -133,9 +133,9 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{types.NewInterfaceType(nil, nil), "amd64", LLVMType("{ ptr, ptr }"), true},
 		{named, "amd64", I32, true},
 		{alias, "arm64", I64, true},
-		{types.Typ[types.Complex64], "amd64", "", false},
+		{types.Typ[types.Complex64], "amd64", "{ float, float }", true},
 		{types.NewStruct(nil, nil), "amd64", LLVMType("[0 x i8]"), true},
-		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "", false},
+		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "{ i64 }", true},
 	} {
 		got, err := goLLVMTypeForType(tc.typ, tc.goarch)
 		if (err == nil) != tc.ok || got != tc.want {

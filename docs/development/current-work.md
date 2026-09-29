@@ -35,6 +35,22 @@ coverage batch, not start a competing import or duplicate full corpus run.
 
 ## Current repairs
 
+- Issue [44](https://github.com/xgo-dev/plan9asm/issues/44): public Go binding
+  now retains x86 ABI0 frames for declared callees, including result-only
+  calls and nested aggregates. Framed amd64 BP references share SP storage.
+  Indirect callback signatures require a complete, straight-line typed stack
+  forwarding proof; names alone never select this path. The focused
+  `TestIssue44`, `TestX86ABI0Forward` and `TestGoABI0Nested` tests check LLVM 22
+  objects and values reaching direct/callback callees. Keep full external
+  project runtime claims separate from these independent oracles.
+- Discovery exposed raw Intel VMCALL in a TamaGo fork. Validate both KVM
+  hypercall encodings, VMCALL and VMMCALL, across all five x86 platform
+  targets. Privileged instructions have decode/ABI/object tests, not ordinary
+  user-space execution tests. Replay the discovering shard after integration.
+- A complete llgo integration probe also exposed a separate C ABI pass bug:
+  sizing an intrinsic's metadata parameter before excluding LLVM intrinsics.
+  Do not claim unmodified llgo end-to-end success or include a diagnostic-only
+  overlay in this contribution. An llgo change requires its own review.
 - Package checks are batched per target with precise per-package fallback;
   independent LLVM translator processes are bounded to two. All candidates,
   files and target outcomes remain accounted for across 64 shards.

@@ -464,7 +464,11 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	if !ok {
 		return nil
 	}
-	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, false)
+	// A Go declaration does not make a plain x86 CALL register-ABI. Assembly
+	// calls its ABI0 wrapper unless the instruction explicitly says ABIInternal.
+	// Keep the frame metadata even for a zero-argument, result-only callee.
+	withFrame := b.goarch == "amd64" || b.goarch == "386"
+	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, withFrame)
 	if err != nil {
 		return err
 	}
@@ -875,6 +879,10 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 			return LLVMType("float"), nil
 		case types.Float64:
 			return LLVMType("double"), nil
+		case types.Complex64:
+			return LLVMType("{ float, float }"), nil
+		case types.Complex128:
+			return LLVMType("{ double, double }"), nil
 		case types.String:
 			if wordSize == 8 {
 				return LLVMType("{ ptr, i64 }"), nil
@@ -897,11 +905,25 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 		return LLVMType("{ ptr, i32, i32 }"), nil
 	case *types.Interface:
 		return LLVMType("{ ptr, ptr }"), nil
+	case *types.Array:
+		elem, err := goLLVMTypeForTypeWithSizes(tt.Elem(), goarch, sz)
+		if err != nil {
+			return "", err
+		}
+		return LLVMType(fmt.Sprintf("[%d x %s]", tt.Len(), elem)), nil
 	case *types.Struct:
 		if tt.NumFields() == 0 {
 			return LLVMType("[0 x i8]"), nil
 		}
-		return "", fmt.Errorf("unsupported struct type %s", tt.String())
+		fields := make([]string, tt.NumFields())
+		for i := range fields {
+			field, err := goLLVMTypeForTypeWithSizes(tt.Field(i).Type(), goarch, sz)
+			if err != nil {
+				return "", err
+			}
+			fields[i] = string(field)
+		}
+		return LLVMType("{ " + strings.Join(fields, ", ") + " }"), nil
 	case *types.Named:
 		return goLLVMTypeForTypeWithSizes(tt.Underlying(), goarch, sz)
 	default:
@@ -948,7 +970,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 				}
 				args = append(args, ty)
 				for _, part := range parts {
-					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field})
+					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field, Fields: part.Fields})
 				}
 				argIdx++
 			}
@@ -972,6 +994,7 @@ type goFramePart struct {
 	Offset int64
 	Type   LLVMType
 	Field  int
+	Fields []int
 }
 
 func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
@@ -987,15 +1010,71 @@ func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types
 	}
 	switch u := t.Underlying().(type) {
 	case *types.Basic:
-		if u.Kind() == types.String {
+		switch u.Kind() {
+		case types.String:
 			return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: wordTy, Field: 1}}, true
+		case types.Complex64:
+			return []goFramePart{{Offset: 0, Type: "float", Field: 0}, {Offset: 4, Type: "float", Field: 1}}, true
+		case types.Complex128:
+			return []goFramePart{{Offset: 0, Type: "double", Field: 0}, {Offset: 8, Type: "double", Field: 1}}, true
 		}
 	case *types.Slice:
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: wordTy, Field: 1}, {Offset: 2 * word, Type: wordTy, Field: 2}}, true
 	case *types.Interface:
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: Ptr, Field: 1}}, true
+	case *types.Struct:
+		fields := make([]*types.Var, u.NumFields())
+		for i := range fields {
+			fields[i] = u.Field(i)
+		}
+		offsets := frameSz.Offsetsof(fields)
+		var parts []goFramePart
+		for i, field := range fields {
+			children, ok := goNestedFrameParts(field.Type(), goarch, sz, frameSz, i, offsets[i])
+			if !ok {
+				return nil, false
+			}
+			parts = append(parts, children...)
+		}
+		return parts, true
+	case *types.Array:
+		var parts []goFramePart
+		for i := int64(0); i < u.Len(); i++ {
+			children, ok := goNestedFrameParts(u.Elem(), goarch, sz, frameSz, int(i), i*frameSz.Sizeof(u.Elem()))
+			if !ok {
+				return nil, false
+			}
+			parts = append(parts, children...)
+		}
+		return parts, true
 	}
 	return nil, false
+}
+
+func goNestedFrameParts(t types.Type, goarch string, sz, frameSz types.Sizes, field int, offset int64) ([]goFramePart, bool) {
+	parts, aggregate := goFramePartsForTypeWithSizes(t, goarch, sz, frameSz)
+	if !aggregate {
+		typ, err := goLLVMTypeForTypeWithSizes(t, goarch, sz)
+		if err != nil {
+			return nil, false
+		}
+		parts = []goFramePart{{Type: typ, Field: -1}}
+	}
+	for i := range parts {
+		part := &parts[i]
+		path := []int{field}
+		if len(part.Fields) != 0 {
+			path = append(path, part.Fields...)
+		} else if part.Field >= 0 {
+			path = append(path, part.Field)
+		}
+		part.Offset += offset
+		part.Field = field
+		if len(path) > 1 {
+			part.Fields = path
+		}
+	}
+	return parts, true
 }
 
 func goWordSize(goarch string) int {
