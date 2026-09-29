@@ -6,6 +6,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -176,6 +177,56 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	}
 	if got := goAlignOff(5, 4); got != 8 {
 		t.Fatalf("goAlignOff(5,4) = %d", got)
+	}
+}
+
+func TestModerncUint128ABI0Signature(t *testing.T) {
+	pkg := mustGoPackageWithImports(t, "modernc.org/libc", map[string]string{
+		"abi0_linux_amd64.go": `package libc
+			type TLS struct{}
+			type Uint128 struct { Lo, Hi uint64 }
+			func Y__builtin_mul_overflowUint128(t *TLS, a, b Uint128, res uintptr) (result int32)`,
+	})
+	fn, ok := pkg.Types.Scope().Lookup("Y__builtin_mul_overflowUint128").(*types.Func)
+	if !ok {
+		t.Fatal("missing assembly declaration")
+	}
+	sizes := types.SizesFor("gc", "amd64")
+	sig, err := goFuncSigForDeclaredFunc("modernc.org/libc.Y__builtin_mul_overflowUint128", fn, "amd64", sizes, sizes, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := sig.Args, []LLVMType{Ptr, "{ i64, i64 }", "{ i64, i64 }", I64}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Args = %v, want %v", got, want)
+	}
+	if sig.Ret != I32 {
+		t.Fatalf("Ret = %s, want %s", sig.Ret, I32)
+	}
+	for _, slot := range []struct {
+		index  int
+		offset int64
+		field  int
+	}{
+		{0, 0, -1},
+		{1, 8, 0},
+		{1, 16, 1},
+		{2, 24, 0},
+		{2, 32, 1},
+		{3, 40, -1},
+	} {
+		found := false
+		for _, got := range sig.Frame.Params {
+			if got.Index == slot.index && got.Offset == slot.offset && got.Field == slot.field {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("missing ABI0 parameter slot %+v in %+v", slot, sig.Frame.Params)
+		}
+	}
+	if len(sig.Frame.Results) != 1 || sig.Frame.Results[0].Offset != 48 {
+		t.Fatalf("Results = %+v, want one slot at offset 48", sig.Frame.Results)
 	}
 }
 
