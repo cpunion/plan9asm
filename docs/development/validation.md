@@ -35,10 +35,13 @@ object tests must still cover affected architectures.
 
 Run focused red/green tests first, then the relevant full gates. Capture logs
 under ignored `_out/`; a nonzero exit remains a failure. The full root suite
-can exceed Go's default ten-minute timeout, so give it an explicit limit.
+can exceed twenty minutes on a busy development host. Use the CI root suite's
+45-minute limit, or exhaustively partition its listed tests and verify that
+the disjoint partitions cover the complete list. Keep any earlier timeout
+failure as evidence; do not count it as a successful run.
 
 ```sh
-go test ./... -count=1 -timeout=20m
+go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
 (cd cmd/plan9asmll && go test ./... -count=1)
 

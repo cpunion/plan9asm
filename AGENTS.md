@@ -79,7 +79,7 @@ Run from the repository root after selecting the tools described in
 
 ```sh
 go test . -run '<focused-family-regex>' -count=1
-go test ./... -count=1 -timeout=20m
+go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
 (cd cmd/plan9asmll && go test ./... -count=1)
 

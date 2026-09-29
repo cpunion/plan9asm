@@ -946,6 +946,9 @@ type Instr struct {
 	// Set only by a validated machine-code decoder. Physical operands need
 	// not obey textual frontend limits (e.g. Go 386's three-operand limit).
 	x86Encoded bool
+	// Effective address width for a raw address-size override; zero means
+	// the target's ordinary pointer width.
+	x86AddressBits int
 	// Decoded vector length, separate from register storage width. Narrowing
 	// conversions can write X from either a 128- or 256-bit memory source.
 	x86VectorBytes int

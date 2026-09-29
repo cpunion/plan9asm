@@ -1151,6 +1151,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"BTW", "BTL", "BTQ", "BTCW", "BTCL", "BTCQ",
 		"BTRW", "BTRL", "BTRQ", "BTSW", "BTSL", "BTSQ",
 		"RDMSR", "WRMSR",
+		"ENQCMD", "ENQCMDS",
 		"VMCALL", "VMRUN", "VMMCALL", "VMLOAD", "VMSAVE", "STGI", "CLGI", "SKINIT", "INVLPGA",
 		"LGDT", "LIDT", "SGDT", "SIDT",
 		"LLDT", "LTR", "LMSW",

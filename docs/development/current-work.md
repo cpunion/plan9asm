@@ -47,6 +47,16 @@ coverage batch, not start a competing import or duplicate full corpus run.
   hypercall encodings, VMCALL and VMMCALL, across all five x86 platform
   targets. Privileged instructions have decode/ABI/object tests, not ordinary
   user-space execution tests. Replay the discovering shard after integration.
+- Intel ixl-go exposed ENQCMD; ENQCMD/ENQCMDS now share one raw address
+  grammar and lowerer. Tests cover 32/64-bit modes, SIB/displacements,
+  extended registers, 16/32-bit address overrides, explicit FS/GS prefixes,
+  64-byte memory inputs and retry/status flags. Raw PC-relative command
+  sources still fail closed when source-layout context is unavailable.
+  Run `go test . -run '^TestX86(RawEnqueue|Enqueue)' -count=1` and the command's
+  supported-op extraction regression, then replay discovery shard 39.
+  LLVM inline-asm memory constraints discarded FS/GS pointer address spaces
+  in the regression; explicit segment prefixes are required. Audit the older
+  cache/descriptor inline-asm lowerers for the same issue separately.
 - A complete llgo integration probe also exposed a separate C ABI pass bug:
   sizing an intrinsic's metadata parameter before excluding LLVM intrinsics.
   Do not claim unmodified llgo end-to-end success or include a diagnostic-only

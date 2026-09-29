@@ -514,6 +514,18 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
+			if instruction, length, ok, err := decodedX86EnqueueInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 enqueue at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok := decodedX86SystemManagementInstruction(code[offset:]); ok {
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
