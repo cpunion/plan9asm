@@ -20,7 +20,7 @@ permissions:
 jobs:
   ci_policy:
     name: CI policy preflight
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
 
     steps:
@@ -46,7 +46,7 @@ jobs:
   discovered_library_priority:
     name: discovered-corpus (shard ${{ matrix.shard }}/64)
     needs: ci_policy
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       # Require every previously failing shard to pass before other work.
@@ -91,7 +91,7 @@ jobs:
 
   fmt:
     needs: discovered_library_priority
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout
@@ -114,7 +114,7 @@ jobs:
 
   build:
     needs: discovered_library_priority
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout
@@ -158,7 +158,7 @@ jobs:
   benchmark:
     needs: discovered_library_priority
     name: compile benchmark (Go 1.27, LLVM 22)
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 35
 
     steps:
@@ -192,7 +192,7 @@ jobs:
   reported_library_list:
     needs: discovered_library_priority
     name: Third-party corpus matrix
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     outputs:
       libraries: ${{ steps.matrix.outputs.libraries }}
 
@@ -214,7 +214,7 @@ jobs:
   reported_library_corpus:
     name: third-party-corpus (${{ matrix.library }})
     needs: reported_library_list
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -245,7 +245,7 @@ jobs:
   discovered_library_corpus:
     needs: discovered_library_priority
     name: discovered-corpus (shard ${{ matrix.shard }}/64)
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -474,7 +474,7 @@ jobs:
   cross-runtime:
     needs: discovered_library_priority
     name: cross compile, link, and run (Linux)
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
 
     steps:
       - name: Checkout
@@ -621,7 +621,7 @@ jobs:
 
   arm-scan:
     needs: discovered_library_priority
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -673,7 +673,7 @@ jobs:
 
   race:
     needs: discovered_library_priority
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 75
 
     steps:
@@ -695,7 +695,7 @@ jobs:
 
   coverage:
     needs: discovered_library_priority
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 60
     permissions:
       contents: read
