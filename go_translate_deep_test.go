@@ -216,6 +216,8 @@ func X(t *byte, a, b Uint128, res uintptr) int32
 	}
 
 	tr, err := TranslateGoModule(pkg, []byte(`TEXT ·Y(SB),$56-52
+GO_ARGS
+NO_LOCAL_POINTERS
 MOVQ t+0(FP), AX
 MOVQ AX, 0(SP)
 MOVQ a_Lo+8(FP), AX
@@ -243,6 +245,28 @@ RET
 	ir := tr.Module.String()
 	if !strings.Contains(ir, "extractvalue { i64, i64 } %arg1, 0") || !strings.Contains(ir, "extractvalue { i64, i64 } %arg2, 1") || !strings.Contains(ir, "call i32 @\"test/pkg.X\"") {
 		t.Fatalf("missing aggregate argument forwarding in LLVM IR:\n%s", ir)
+	}
+}
+
+func TestGoTranslateWordStructGuards(t *testing.T) {
+	for _, tc := range []struct {
+		name, arg, frameArch string
+	}{
+		{"padding", "struct { a uint8; b uint64 }", "amd64"},
+		{"subword", "struct { a, b uint32 }", "amd64"},
+		{"nested", "struct { inner struct { x uint64 } }", "amd64"},
+		{"float", "struct { x float64 }", "amd64"},
+		{"frame-word-mismatch", "struct { x uintptr }", "386"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pkg := mustGoPackage(t, "test/pkg", "package testpkg\nfunc F(x "+tc.arg+")")
+			fn := pkg.Types.Scope().Lookup("F").(*types.Func)
+			sz := types.SizesFor("gc", "amd64")
+			frameSz := types.SizesFor("gc", tc.frameArch)
+			if _, err := goFuncSigForDeclaredFunc("test/pkg.F", fn, "amd64", sz, frameSz, true); err == nil || !strings.Contains(err.Error(), "unsupported struct") {
+				t.Fatalf("expected unsupported struct layout, got %v", err)
+			}
+		})
 	}
 }
 

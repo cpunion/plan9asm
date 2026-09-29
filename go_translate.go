@@ -887,6 +887,8 @@ func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types
 // goWordStructParts accepts only flat structures whose fields are exactly one
 // integer/pointer word each in both the Go value and the assembly FP frame.
 // Other structures need target-specific padding and register classification.
+// Even word-sized nested structs are rejected: supporting them would require
+// recursive flattening and nested field-index mapping instead of a single Field.
 func goWordStructParts(st *types.Struct, goarch string, sz, frameSz types.Sizes) ([]goFramePart, bool) {
 	word := int64(goWordSizeForSizes(goarch, sz))
 	if st.NumFields() == 0 || word != int64(goWordSizeForSizes(goarch, frameSz)) {
