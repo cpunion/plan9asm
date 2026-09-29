@@ -16,7 +16,7 @@
 {"module":"github.com/mickael-kerjean/net","version":"v0.0.0-20191120063050-2457c043ba06","status":"pending"}
 {"module":"github.com/rowandark/0xgen","version":"v0.0.0-20260914174309-928989fc31c4","status":"pending"}
 {"module":"github.com/tobischo/argon2","version":"v0.2.0","status":"pending"}
-{"module":"github.com/viocle-kvanek/aiopty","version":"v0.1.5","status":"pending"}
+{"module":"github.com/viocle-kvanek/aiopty","version":"v0.1.5","status":"not_applicable"}
 {"module":"github.com/xushiwei/go.old","version":"v0.0.0-20121019202309-f26f6dff6d01","status":"pending"}
 {"module":"gitlab.com/Zinnia_Zirconium/dgryski-gospeck","version":"v0.0.0-20260430001131-81ab314d98a2","status":"pending"}
 {"module":"go.dedis.ch/kyber/v4","version":"v4.0.2","status":"pending"}

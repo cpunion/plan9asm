@@ -22,7 +22,7 @@
 {"module":"github.com/openshift-sustaining/crypto","version":"v0.53.0","status":"pending"}
 {"module":"github.com/soulteary/otterio","version":"v0.0.0-20260609143214-3d7f943ccd73","status":"pending"}
 {"module":"github.com/tamnd/typescript","version":"v0.0.0-20260807131754-68ae786bfac6","status":"pending"}
-{"module":"github.com/tiancaiamao/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/tiancaiamao/tidb","version":"v1.0.9","status":"not_applicable"}
 {"module":"github.com/tphakala/go-audio-resampler","version":"v1.7.0","status":"pending"}
 {"module":"github.com/zchee/phuslu-log","version":"v1.0.113","status":"pending"}
 {"module":"gopkg.in/alecthomas/gometalinter.v3","version":"v3.0.0","status":"pending"}

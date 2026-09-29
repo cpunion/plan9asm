@@ -25,5 +25,5 @@
 {"module":"github.com/xmplusdev/xray-core","version":"v1.260113.0","status":"pending"}
 {"module":"github.com/xsSplater/fyne/v2","version":"v2.7.4","status":"pending"}
 {"module":"github.com/yawning/edwards25519","version":"v1.0.0-beta.3","status":"pending"}
-{"module":"github.heygears.com/ethereum/go-ethereum","version":"v1.17.5","status":"pending"}
+{"module":"github.heygears.com/ethereum/go-ethereum","version":"v1.17.5","status":"passed"}
 {"module":"gitlab.com/gitlab-oss-package-research/source/golang/ti/tidb-04193957","version":"v1.0.9","status":"pending"}

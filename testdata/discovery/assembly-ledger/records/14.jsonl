@@ -21,6 +21,6 @@
 {"module":"github.com/walterchris/go-boot","version":"v1.6.2-tpba.8","status":"pending"}
 {"module":"github.com/yoohph/xray-core","version":"v0.0.0-20260609155802-e10347bf01f2","status":"pending"}
 {"module":"github.heygears.com/criyle/go-sandbox","version":"v0.13.7","status":"pending"}
-{"module":"github.laiyagushi.com/GrayCodeAI/tok","version":"v0.1.4","status":"pending"}
+{"module":"github.laiyagushi.com/GrayCodeAI/tok","version":"v0.1.4","status":"passed"}
 {"module":"github.tiyicn.workers.dev/nyan233/littlerpc","version":"v0.4.7","status":"pending"}
 {"module":"gitlab.com/yawning/utls.git","version":"v0.0.12-1","status":"pending"}
