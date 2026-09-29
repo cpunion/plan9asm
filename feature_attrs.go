@@ -1003,8 +1003,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVELoadStore(word); ok {
 					add("+sve")
 				}
-				if _, ok := decodeARM64RawSVEWhileLO(word); ok {
+				if decoded, ok := decodeARM64RawSVEWhile(word); ok {
 					add("+sve")
+					if arm64SVEPredicateWhileNeedsSVE2P1(decoded) {
+						add("+sve2p1")
+					}
 				}
 				if _, ok := decodeARM64RawSVELD1B(word); ok {
 					add("+sve")

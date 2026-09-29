@@ -66,8 +66,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if reg, ok := decodeARM64RawICIVAU(word); ok {
 		return c.lowerRawICIVAU(reg)
 	}
-	if form, ok := decodeARM64RawSVEWhileLO(word); ok {
-		return c.lowerRawSVEWhileLO(form)
+	if decoded, ok := decodeARM64RawSVEWhile(word); ok {
+		_, _, err := c.lowerARM64SVEPredicateWhile(decoded.Op, decoded)
+		return err
 	}
 	if decoded, ok := decodeARM64RawSVECharacterMatch(word); ok {
 		_, _, err := c.lowerARM64SVECharacterMatch(decoded.Op, decoded)

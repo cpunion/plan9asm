@@ -467,10 +467,10 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markReg(reg)
 					}
 				}
-				if form, ok := decodeARM64RawSVEWhileLO(word); ok {
-					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
-					markReg(Reg(fmt.Sprintf("R%d", form.first)))
-					markReg(Reg(fmt.Sprintf("R%d", form.second)))
+				if decoded, ok := decodeARM64RawSVEWhile(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
 				}
 				if form, ok := decodeARM64RawSVELD1B(word); ok {
 					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))

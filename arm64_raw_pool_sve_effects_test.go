@@ -114,16 +114,18 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 			effect{fmt.Sprintf("cnt z31.%s, p7/m, z30.%s", width, width), true},
 			effect{fmt.Sprintf("cnt z31.%s, p7/z, z30.%s", width, width), true},
 		)
-		for _, inputs := range []struct {
-			first, second string
-			want          bool
-		}{
-			{"xzr", "x30", true}, {"x9", "x30", false},
-			{"x30", "x9", false}, {"x9", "x9", false},
-		} {
-			cases = append(cases, effect{
-				fmt.Sprintf("whilelo p15.%s, %s, %s", width, inputs.first, inputs.second), inputs.want,
-			})
+		for _, condition := range []string{"ge", "gt", "hi", "hs", "le", "lo", "ls", "lt"} {
+			for _, inputs := range []struct {
+				first, second string
+				want          bool
+			}{
+				{"xzr", "x30", true}, {"x9", "x30", false},
+				{"x30", "x9", false}, {"x9", "x9", false},
+			} {
+				cases = append(cases, effect{
+					fmt.Sprintf("while%s p15.%s, %s, %s", condition, width, inputs.first, inputs.second), inputs.want,
+				})
+			}
 		}
 	}
 	for _, memory := range []struct {
@@ -177,7 +179,13 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 			}
 		})
 	}
-	for _, word := range []uint32{0, 0x25ae1ff3, 0x6ea0f16c, 0x6ebee0e4} {
+	if decoded, ok := decodeARM64RawSVEWhile(0x25ae1ff3); !ok || decoded.Op != "PWHILELS" {
+		t.Fatalf("previously unmodeled WHILELS word did not enter the typed family: %+v", decoded)
+	}
+	if !arm64RawPoolSVEIgnoresAddress(0x25ae1ff3, 9) {
+		t.Fatal("WHILELS reading XZR and X14 unexpectedly depends on the pool address in X9")
+	}
+	for _, word := range []uint32{0, 0x6ea0f16c, 0x6ebee0e4} {
 		if arm64RawPoolSVEIgnoresAddress(word, 9) {
 			t.Fatalf("unknown or unmodeled encoding %#08x acquired a safe effect", word)
 		}

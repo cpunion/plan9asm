@@ -577,8 +577,8 @@ func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
 	if form, ok := decodeARM64RawSVELoadStore(word); ok {
 		return form.base != address
 	}
-	if form, ok := decodeARM64RawSVEWhileLO(word); ok && word&(1<<4) == 0 {
-		return form.first != address && form.second != address
+	if _, ok := decodeARM64RawSVEWhile(word); ok {
+		return int(word>>5&31) != address && int(word>>16&31) != address
 	}
 	if form, ok := decodeARM64RawSVEDupGeneral(word); ok {
 		return form.source != address
