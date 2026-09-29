@@ -257,6 +257,12 @@ successful package compilation.
 Public module fetches ignore the user's global Git URL rewrites and disable
 interactive Git credential prompts. A failed direct fallback remains a failure
 to retry, never proof that assembly is inapplicable.
+Git automatic maintenance stays in the foreground. On Unix, each captured
+command owns a process group; cancellation and ordinary parent exit terminate
+remaining descendants before workspace removal. Output-pipe waits are bounded
+and failures remain infrastructure errors. Directory-not-empty cleanup races
+receive at most 20 attempts over two seconds; persistent errors fail the
+candidate rather than claiming successful cleanup.
 
 Traffic counts response-body bytes with identity encoding, not headers/TLS/IP
 overhead, separating index, latest, ZIP HEAD/range and whole-ZIP requests. Do

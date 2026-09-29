@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/xgo-dev/plan9asm/internal/discoverymeta"
@@ -2113,8 +2114,15 @@ func discoveryCommandEnvironment(base []string) []string {
 	// Direct GOPROXY fallback must not inherit a developer's URL rewrite to
 	// SSH or block waiting for credentials to public source repositories.
 	return replaceEnv(base, map[string]string{
-		"CGO_ENABLED":         "0",
-		"GIT_CONFIG_GLOBAL":   os.DevNull,
+		"CGO_ENABLED":       "0",
+		"GIT_CONFIG_GLOBAL": os.DevNull,
+		// Git maintenance may otherwise detach and keep mutating an owned
+		// cache after Go returns. Ephemeral caches do not need background work.
+		"GIT_CONFIG_COUNT":    "2",
+		"GIT_CONFIG_KEY_0":    "gc.autoDetach",
+		"GIT_CONFIG_VALUE_0":  "false",
+		"GIT_CONFIG_KEY_1":    "maintenance.autoDetach",
+		"GIT_CONFIG_VALUE_1":  "false",
 		"GIT_TERMINAL_PROMPT": "0",
 		"GOFLAGS":             "-mod=mod",
 		"GOTOOLCHAIN":         "local",
@@ -2165,14 +2173,38 @@ func isolatedDiscoveryModuleEnvironment(base []string, workDir, sharedCache, ups
 }
 
 func removeDiscoveryCandidateWorkspace(workDir string) error {
+	return retryDiscoveryWorkspaceCleanup(20, 100*time.Millisecond, func() error {
+		return removeDiscoveryCandidateWorkspaceOnce(workDir)
+	})
+}
+
+// Even after terminating subprocesses, an in-flight filesystem operation can
+// race directory removal. Bound retries to ENOTEMPTY; all persistent failures
+// remain errors and no shared or caller-owned cache is touched.
+func retryDiscoveryWorkspaceCleanup(attempts int, delay time.Duration, remove func() error) error {
+	for attempt := 1; ; attempt++ {
+		err := remove()
+		if err == nil || attempt >= attempts || !errors.Is(err, syscall.ENOTEMPTY) {
+			return err
+		}
+		time.Sleep(delay)
+	}
+}
+
+func removeDiscoveryCandidateWorkspaceOnce(workDir string) error {
 	// Go normally extracts read-only module directories. Only walk this owned
 	// candidate tree; WalkDir does not follow symlinks into any shared cache.
 	if err := filepath.WalkDir(workDir, func(name string, entry os.DirEntry, err error) error {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
 		if entry.IsDir() {
-			return os.Chmod(name, 0700)
+			if err := os.Chmod(name, 0700); err != nil && !os.IsNotExist(err) {
+				return err
+			}
 		}
 		return nil
 	}); err != nil {
@@ -2418,6 +2450,8 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 
 func isDiscoveryInfrastructureFailure(err error) bool {
 	return err != nil && (errors.Is(err, errDiscoveryCommandOutputExceeded) ||
+		errors.Is(err, exec.ErrWaitDelay) ||
+		errors.Is(err, errDiscoveryCommandCleanup) ||
 		isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)))
 }
 
@@ -2835,6 +2869,8 @@ const discoveryCommandOutputLimit = 8 << 20
 
 var errDiscoveryCommandOutputExceeded = errors.New("captured output exceeds limit")
 
+var errDiscoveryCommandCleanup = errors.New("terminate discovery command group")
+
 // Keep the bounded complete diagnostic for classification while keeping error
 // messages and persisted report reasons compact. Trimming display text must
 // never change which assembly files are excluded by an ABI error.
@@ -2907,7 +2943,10 @@ func runCapturedCommandOutput(ctx context.Context, dir string, env []string, nam
 	var output boundedDiscoveryCommandOutput
 	cmd.Stdout = &output
 	cmd.Stderr = &output
-	err := cmd.Run()
+	// Do not wait indefinitely when an escaped descendant retains an output
+	// pipe. ErrWaitDelay is infrastructure failure, never source N/A.
+	cmd.WaitDelay = 2 * time.Second
+	err := runDiscoveryCommand(cmd)
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("%s: %w", strings.Join(append([]string{name}, args...), " "), ctx.Err())
 	}

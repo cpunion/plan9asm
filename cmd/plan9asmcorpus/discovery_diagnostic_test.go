@@ -35,6 +35,8 @@ func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 		{"assembly URL EOF", "Get https://example.com/file.s:12: unexpected EOF", true},
 		{"disk", "write object.o: no space left on device", false},
 		{"killed", "go build: signal: killed", false},
+		{"output pipe deadline", "exec: WaitDelay expired before I/O complete", false},
+		{"descendant cleanup", "terminate discovery command group: operation not permitted", false},
 		{"toolchain", "compile: version does not match go tool version", false},
 		{"checksum", "verifying example.com/pkg: checksum mismatch\nSECURITY ERROR", false},
 	} {

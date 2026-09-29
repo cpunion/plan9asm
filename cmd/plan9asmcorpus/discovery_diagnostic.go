@@ -49,6 +49,8 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 		"checksum mismatch",
 		"security error",
 		"captured output exceeds",
+		"waitdelay expired",
+		"terminate discovery command group",
 		"does not match go tool version",
 		"context deadline exceeded",
 		"context canceled",

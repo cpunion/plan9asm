@@ -1,81 +1,69 @@
 # Current work: PR 40 fork validation
 
-Prioritize CI and the discovered third-party assembly corpus before resuming
-module-index history scanning. Read [validation](validation.md) and
-[discovery verification](discovery-verification.md) before changing source or
-ledger evidence.
+Prioritize fork CI and compilation of every already-scanned assembly candidate
+before resuming module-index history scanning. Read [validation](validation.md)
+and [discovery verification](discovery-verification.md) before changes.
 
-## Authority and frozen evidence
+## Authority and evidence
 
-- Upstream xgo-dev PR 40 remains OPEN/DRAFT. Push repairs only to the allowed
-  `cpunion` fork Draft PR 3, never directly to upstream. Do not merge, approve
-  or close upstream PRs.
-- Fork run [36458192352](https://github.com/cpunion/plan9asm/actions/runs/36458192352),
-  attempt 2, completed successfully at source `5a894a20`: 126/126 jobs,
-  including all 64 discovery shards and the strict aggregate.
-- Independent local report verification at that frozen source found 4,783
-  selected assembly-bearing module versions: 3,944 passed translation and
-  LLVM 22 object compilation, 826 were evidence-backed source N/A, six were
-  pinned invalid-source skips, two superseded, one private extension and four
-  provisional native-layout skips; zero failed or remained pending.
-- Local evidence commit `661acba4` records that exact source's passing ledger
-  (`complete=true`, `verified=true`). Do not reuse it after any source or
-  ledger change. The staging PR's current source is not yet this evidence
-  commit; its pending ledger must be rebound before the next push.
-- The inventory remains incomplete historically: 12,665,430 index entries,
-  811,704 unique module paths, 802,019 scanned exact versions, 4,783 matched
-  versions and 13,631 retained scan failures. Its recorded range starts in
-  March 2026; do not claim complete coverage of Go modules or back to 2019.
-  Keep the funnel table in the PR body, not this document.
+- Upstream xgo-dev PR 40 and fork cpunion PR 3 remain Draft. Push repairs only
+  to the fork PR 3 head, `codex/pr40-fork-ci-20260927`. Do not update its
+  upstream-connected base until current-head CI and exclusion review pass.
+- Fork run [36509240233](https://github.com/cpunion/plan9asm/actions/runs/36509240233)
+  checks source `5a0699c0`. Let it finish; audit all 64 reports together.
+  Shards 38 and 42 failed while removing Hysteria's private Git cache, with
+  `directory not empty`. This is a cleanup failure, not a missing instruction.
+- Older run 36458192352 attempt 2 passed all 126 jobs at source `5a894a20`:
+  3,944 passed candidates, 826 source N/A and 13 explicit exceptions, with
+  no failed or pending candidates. That evidence cannot certify new source.
+- The committed inventory remains 12,665,430 index entries, 811,704 unique
+  module paths, 802,019 scanned exact versions, 4,783 assembly candidates and
+  13,631 retained scan failures. History starts in March 2026, not 2019.
+  Keep funnel tables in the PR body and preserve input records during tests.
 
-## Staged performance repair
+## Current repairs
 
-- The earlier 32-shard run had a 129-minute job. Rehashing to 64 shards cut
-  the largest shard from 173 to 94 candidates, but the latest successful run
-  still had a roughly 112-minute shard. Its `reflectx@v1.8.2` candidate alone
-  took 59.2 minutes and covers eight packages across six targets.
-- A separate local branch, `codex/pr40-corpus-batch-20260929`, contains three
-  unpushed commits: `b57b6355` batches current-Go build/asmdecl checks per
-  target with per-package fallback; `be711e25` tests real ABI isolation;
-  `904b77df` bounds independent translator processes to two and aggregates
-  their reports deterministically after both finish.
-- A diagnostic replay of `googlesqlwasm2go@v0.2.0` on `linux/amd64` compiled
-  all 11 selected packages in 2m30s with the staged repair, versus 4m00s
-  serially (about 37.6% faster). No source or LLVM failures were reclassified.
-  Doubling LLVM chunk thresholds was slower and was discarded. Temporary
-  diagnostic source and binaries were removed; small logs remain ignored.
-- The staged branch passed Go 1.27.1/LLVM 22 `go test ./... -count=1
-  -timeout=20m`, both nested command-module suites, full `go vet ./...`, the
-  corpus test package and focused race tests. These are local results, not
-  current-head CI or full-corpus evidence.
+- Package checks are batched per target with precise per-package fallback;
+  independent LLVM translator processes are bounded to two. All candidates,
+  files and target outcomes remain accounted for across 64 shards.
+- Cache-writer regressions reproduce descendants surviving success, failure
+  and cancellation, including inherited output-pipe hangs. Captured Unix
+  commands now own and terminate their process groups; Git automatic
+  maintenance stays foreground. Bounded directory-not-empty retries still
+  report persistent cleanup failures. Other filesystem errors are not retried.
+- Priority shards are 5, 29, 36, 38 and 42. All must pass before the remaining
+  jobs run; all 64 shards and their strict aggregate remain mandatory.
+- Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and
+  test with Go while llgo support is incomplete; do not add `!llgo` tags.
 
 ## Provisional native-layout proposal
 
 GopherJRE, GoJIT and Sharkie use native object byte layouts or private JIT
 continuations that ordinary semantic LLVM translation does not preserve.
-The Draft proposes `skipped_native_layout` for four exact module versions,
-pinning source hashes and Go object witnesses. Other files still compile,
-and these four are counted separately from passes. This policy is **not
-accepted**; keep both PRs Draft until review resolves it. If rejected,
-implement a compatible native-object mechanism instead of relaxing checks.
+Four exact-version exceptions in `testdata/corpus/native-layout.json` are
+provisional, with source hashes and Go object witnesses. Other files still
+compile; exceptions count separately from passes. Keep both PRs Draft until
+review accepts this policy or a compatible implementation replaces it.
 
 ## Next actions
 
-1. Confirm the fork run and strict 64-report audit above remain available.
-   Inspect destination remote before any push.
-2. In the staged performance branch, update this checkpoint, then rebind the
-   pending assembly ledger to its new semantic source fingerprint using an
-   empty ignored reports directory. Do not copy the old verified outcomes.
-3. Commit the checkpoint/ledger, push only the `cpunion` PR 3 head, cancel
-   the automatic duplicate run after the push, wait until it is terminal,
-   then rerun the workflow. Keep the owner-based runner switch and every
-   coverage gate intact.
-4. Watch the complete new-source CI. Audit all 64 current reports and update
-   the passing ledger and PR body only when source, tool and ledger provenance
-   match. Compare longest job and runner-minutes with the 112-minute baseline.
-5. Resolve review, patch coverage and the provisional skip policy before
-   ready status or promotion to the upstream-connected fork branch. Keep
-   inventory, object compilation and executed runtime claims separate.
+1. Finish and audit the current run. Preserve its reports under ignored
+   `_out/`; do not mix them with reports from a repaired source.
+2. Validate cleanup regressions, corpus-tool tests, race tests and workflow
+   partition checks. Commit the repair and rebind the pending assembly ledger
+   from an empty ignored reports directory before pushing to the fork.
+3. Run the complete repaired-source CI. Audit all 64 reports against the
+   frozen source, tool bytes, scan ledger and candidate ownership; publish
+   actual progress through `scripts/update-assembly-ledger.sh`, including
+   failures or pending candidates rather than hand-upgrading statuses.
+4. Update the PR funnel and performance comparison from verified reports.
+   Resolve review, patch coverage and the provisional exclusions before
+   promotion. Object compilation is not every external project's runtime test.
 
-Clean only owned temporary files. Never commit caches, generated binaries,
-compressed scan results, personal paths or diagnostic-only reports.
+An incremental scan with an empty output ledger starts at now; `-seen-report`
+only deduplicates and does not inherit its cursor. Seed a separate output with
+the converter before continuing the saved interval. Do not merge an empty
+now-to-now scan as if it covered the committed incremental gap.
+
+Clean only owned temporary files. Never commit caches, binaries, compressed
+records, personal paths or diagnostic-only reports.
