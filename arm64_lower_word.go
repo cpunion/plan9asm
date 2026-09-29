@@ -59,6 +59,10 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 		_, _, err := c.lowerARM64SVEFloatMultiplyAccumulate(decoded.Op, decoded)
 		return err
 	}
+	if decoded, ok := decodeARM64RawSVEFloatReciprocalStep(word); ok {
+		_, _, err := c.lowerARM64SVEFloatReciprocalStep(decoded.Op, decoded)
+		return err
+	}
 	if decoded, ok := decodeARM64RawSVEConvert(word); ok {
 		_, _, err := c.lowerARM64SVEConvert(decoded.Op, decoded)
 		return err

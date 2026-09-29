@@ -85,6 +85,11 @@ func TestARM64RawPoolSVETypedEffects(t *testing.T) {
 		}
 	}
 	for _, width := range []string{"h", "s", "d"} {
+		for _, op := range []string{"frecps", "frsqrts"} {
+			cases = append(cases, effect{
+				fmt.Sprintf("%s z9.%s, z30.%s, z31.%s", op, width, width, width), true,
+			})
+		}
 		for _, op := range []string{"fadd", "fsub", "fmul", "fdiv", "fdivr", "fscale", "fmax", "fmin"} {
 			cases = append(cases, effect{fmt.Sprintf("%s z9.%s, p7/m, z9.%s, z31.%s", op, width, width, width), true})
 		}

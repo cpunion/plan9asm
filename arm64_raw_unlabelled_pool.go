@@ -531,6 +531,7 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
 		decodeARM64RawSVEFloatUnary, decodeARM64RawSVEFloatCompare,
 		decodeARM64RawSVEFloatMinMax, decodeARM64RawSVEFloatImmediate,
+		decodeARM64RawSVEFloatReciprocalStep,
 		decodeARM64RawSVEFloatMultiplyAccumulate, decodeARM64RawSVEFloatDivideScale,
 		decodeARM64RawSVEConvert,
 		decodeARM64RawSVEUnpack,
