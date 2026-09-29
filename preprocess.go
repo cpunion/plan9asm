@@ -248,6 +248,12 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		// after the continuation slash. In that spelling the slash only becomes
 		// the last token after comment removal (for example "MOVQ ... \\ // why").
 		physicalContinuation = physicalContinuation || strings.HasSuffix(line, "\\")
+		// A newline within a block comment is not the end of a macro body.
+		// cmd/asm removes the entire comment before parsing #define lines, so
+		// only the newline after the closing */ can terminate the definition.
+		if defCont && inBlockComment {
+			physicalContinuation = true
+		}
 		if defCont {
 			// Continue a definition body on the following line(s).
 			if !active {
