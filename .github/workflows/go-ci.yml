@@ -349,7 +349,10 @@ jobs:
     name: discovered-corpus aggregate verification
     needs: [discovered_library_priority, discovered_library_corpus]
     if: ${{ !cancelled() }}
-    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-24.04' }}
+    # Keep the final artifact-only gate on the broadly available hosted image.
+    # The fork's ubuntu-24.04 queue left this job unassigned after every shard
+    # passed, so do not make aggregation depend on a specialized runner label.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
