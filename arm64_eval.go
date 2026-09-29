@@ -378,10 +378,16 @@ func (c *arm64Ctx) extendReg64(v string, ext ExtendOp) (string, error) {
 
 func (c *arm64Ctx) evalFPValue64(op Operand) (string, error) {
 	slot, ok := c.fpParams[op.FPOffset]
-	if !ok {
-		return "", fmt.Errorf("arm64: unsupported FP param slot: %s", op.String())
+	var value string
+	var err error
+	if ok {
+		value, err = c.loadFPParameter(slot)
+	} else if result, found := c.fpResultSlotByOffset(op.FPOffset); found {
+		slot = result
+		value, err = c.loadFPResult(slot)
+	} else {
+		return "", fmt.Errorf("arm64: unsupported FP slot: %s", op.String())
 	}
-	arg, err := c.loadFPParameter(slot)
 	if err != nil {
 		return "", err
 	}
@@ -389,24 +395,24 @@ func (c *arm64Ctx) evalFPValue64(op Operand) (string, error) {
 
 	switch string(ty) {
 	case "i64":
-		return arg, nil
+		return value, nil
 	case "i32", "i16", "i8", "i1":
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", t, ty, arg)
+		fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", t, ty, value)
 		return "%" + t, nil
 	case "double":
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", t, arg)
+		fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", t, value)
 		return "%" + t, nil
 	case "float":
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast float %s to i32\n", t, arg)
+		fmt.Fprintf(c.b, "  %%%s = bitcast float %s to i32\n", t, value)
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, t)
 		return "%" + z, nil
 	case "ptr":
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", t, arg)
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", t, value)
 		return "%" + t, nil
 	default:
 		return "", fmt.Errorf("arm64: FP slot %s unsupported arg type %q", op.String(), ty)

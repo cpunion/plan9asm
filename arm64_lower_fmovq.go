@@ -3,11 +3,14 @@ package plan9asm
 import "fmt"
 
 // loadFMOVQFrame reconstructs the 16 contiguous bytes addressed by off(FP)
-// from the scalar LLVM fields used to model Go aggregate parameters.
+// from the scalar LLVM fields used to model Go parameters and results.
 func (c *arm64Ctx) loadFMOVQFrame(off int64) (string, error) {
 	packed := "0"
 	for cursor := off; cursor < off+16; {
 		slot, ok := c.fpParams[cursor]
+		if !ok {
+			slot, ok = c.fpResultSlotByOffset(cursor)
+		}
 		if !ok {
 			return "", fmt.Errorf("arm64: FMOVQ input frame range +%d(FP)..+%d(FP) has no slot at +%d(FP)", off, off+16, cursor)
 		}
