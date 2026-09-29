@@ -2497,7 +2497,9 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				if mode == 64 && inst.Op == x86asm.LEA {
 					mem, ok := inst.Args[1].(x86asm.Mem)
 					if ok && mem.Base == x86asm.RIP {
-						target := offset + inst.Len + int(mem.Disp)
+						// x86asm exposes disp32 as an unsigned magnitude here.
+						// RIP-relative LEA always sign-extends that 32-bit field.
+						target := offset + inst.Len + int(int32(mem.Disp))
 						if target < 0 || target >= len(code) {
 							return nil, fmt.Errorf("raw x86 local address target byte %d at instruction %d is outside directive group: %q", target, start, rawGroup)
 						}

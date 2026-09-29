@@ -139,3 +139,12 @@ func TestDecodeX86RawLocalAddressRejectsReachableCode(t *testing.T) {
 		t.Fatalf("address of reachable code: %v", err)
 	}
 }
+
+func TestDecodeX86RawLocalAddressSignExtendsNegativeDisplacement(t *testing.T) {
+	// LEAQ -7(RIP), AX points to its own first byte, not byte 2^32.
+	code := []byte{0x48, 0x8d, 0x05, 0xf9, 0xff, 0xff, 0xff, 0xc3}
+	_, err := decodeX86RawDirectiveGroup(code, 64, 0, "self address", map[string]bool{})
+	if err == nil || !strings.Contains(err.Error(), "no preceding RET") {
+		t.Fatalf("self-addressed native TEXT must fail with layout reason, got %v", err)
+	}
+}
