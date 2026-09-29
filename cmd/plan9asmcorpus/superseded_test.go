@@ -71,13 +71,14 @@ func TestCuratedSupersededVersionsAreInScanLedger(t *testing.T) {
 	for _, key := range []string{
 		"github.com/celliott/gvisor@v0.0.0-20180504232233-3b895abd3b05",
 		"github.com/0pcom/skywire@v1.3.69",
+		"github.com/goccy/sonic@v1.0.0-rc.3",
 	} {
 		if _, ok := skips[key]; !ok {
 			t.Fatalf("missing curated supersession %s", key)
 		}
 	}
-	if len(skips) != 2 {
-		t.Fatalf("got %d superseded versions, want 2", len(skips))
+	if len(skips) != 3 {
+		t.Fatalf("got %d superseded versions, want 3", len(skips))
 	}
 }
 
