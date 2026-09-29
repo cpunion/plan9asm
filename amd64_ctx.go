@@ -151,7 +151,7 @@ func (c *amd64Ctx) newTmp() string {
 }
 
 func (c *amd64Ctx) slotName(r Reg) string {
-	return "%" + amd64LLVMBlockName("reg_"+string(r))
+	return "%" + amd64LLVMSafeName("reg_"+string(r))
 }
 
 func (c *amd64Ctx) xSlotName(i int) string {
