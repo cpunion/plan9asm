@@ -1,25 +1,37 @@
-# Current work: PR 40 fork validation
+# Current work: concurrent inventory and assembly coverage
 
-Prioritize fork CI and compilation of every already-scanned assembly candidate
-before resuming module-index history scanning. Read [validation](validation.md)
-and [discovery verification](discovery-verification.md) before changes.
+Continue remote inventory and local corpus coverage concurrently. Do not wait
+for history backfill to finish before testing already-discovered assembly.
+Read [validation](validation.md) and [discovery verification](discovery-verification.md).
 
 ## Authority and evidence
 
 - Upstream xgo-dev PR 40 and fork cpunion PR 3 remain Draft. Push repairs only
   to the fork PR 3 head, `codex/pr40-fork-ci-20260927`. Do not update its
   upstream-connected base until current-head CI and exclusion review pass.
-- Fork run [36509240233](https://github.com/cpunion/plan9asm/actions/runs/36509240233)
-  checks source `5a0699c0`. Let it finish; audit all 64 reports together.
-  Shards 38 and 42 failed while removing Hysteria's private Git cache, with
-  `directory not empty`. This is a cleanup failure, not a missing instruction.
-- Older run 36458192352 attempt 2 passed all 126 jobs at source `5a894a20`:
-  3,944 passed candidates, 826 source N/A and 13 explicit exceptions, with
-  no failed or pending candidates. That evidence cannot certify new source.
-- The committed inventory remains 12,665,430 index entries, 811,704 unique
-  module paths, 802,019 scanned exact versions, 4,783 assembly candidates and
-  13,631 retained scan failures. History starts in March 2026, not 2019.
-  Keep funnel tables in the PR body and preserve input records during tests.
+- Fork [run 36524259971, attempt 2](https://github.com/cpunion/plan9asm/actions/runs/36524259971)
+  passed all 126 jobs and all 64 discovery shards at source `fe028700`.
+  All raw reports were independently audited; local evidence commit
+  `29d624c1` records its complete, verified assembly ledger.
+- That checkpoint proves only its frozen source and inventory. Importing new
+  records or changing source requires fresh reports, not copied pass flags.
+  Derive current counts from the ledgers and keep funnel tables in the PR body.
+
+## Two independent lanes
+
+1. The standalone server only inventories source. Its bounded history target
+   is `2025-10-01T00:00:00Z`, inclusive, with the existing head cursor preserved.
+   It publishes a locked snapshot at the cutoff and exits. Direct cgo inventory
+   and deployment settings stay outside this repository.
+2. Local coverage imports a validated assembly-only checkpoint into a separate
+   persistent worktree, commits it, then freezes source, tools and input ledger.
+   Prioritize shards with the most exact versions absent from the last verified
+   checkpoint. Every candidate and all 64 shards remain required; priority is
+   scheduling, not a coverage exemption.
+
+Queue newer scan exports outside the runner worktree. Do not merge them while
+tests run. The cutoff watcher must collect/export only during an active earlier
+coverage batch, not start a competing import or duplicate full corpus run.
 
 ## Current repairs
 
@@ -47,18 +59,19 @@ review accepts this policy or a compatible implementation replaces it.
 
 ## Next actions
 
-1. Finish and audit the current run. Preserve its reports under ignored
-   `_out/`; do not mix them with reports from a repaired source.
-2. Validate cleanup regressions, corpus-tool tests, race tests and workflow
-   partition checks. Commit the repair and rebind the pending assembly ledger
-   from an empty ignored reports directory before pushing to the fork.
-3. Run the complete repaired-source CI. Audit all 64 reports against the
-   frozen source, tool bytes, scan ledger and candidate ownership; publish
-   actual progress through `scripts/update-assembly-ledger.sh`, including
-   failures or pending candidates rather than hand-upgrading statuses.
-4. Update the PR funnel and performance comparison from verified reports.
-   Resolve review, patch coverage and the provisional exclusions before
-   promotion. Object compilation is not every external project's runtime test.
+1. Run four local shards concurrently with distinct reports and an owned shared
+   build cache. Remove candidate sources/output after processing. Keep every
+   applicable file and target, including non-host architectures.
+2. Query audited partial progress with `scripts/discovery-status.sh`. Publish
+   matching results with `scripts/update-assembly-ledger.sh` in a separate
+   evidence worktree, leaving the runner revision and inputs untouched.
+3. Reproduce failures in a separate development worktree. Follow the complete
+   instruction-family/operand-format TDD procedure; do not recategorize missing
+   support as source N/A. Changed source invalidates earlier reports.
+4. Audit all 64 reports and strict aggregation before the batch push. Update the
+   PR funnel, then let fork CI finish. Resolve review, patch coverage and the
+   provisional exclusions before Ready or promotion. Object compilation is not
+   every external project's runtime test.
 
 An incremental scan with an empty output ledger starts at now; `-seen-report`
 only deduplicates and does not inherit its cursor. Seed a separate output with
