@@ -514,7 +514,7 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
-			if instruction, length, ok := decodedX86AMDSystemManagementInstruction(code[offset:]); ok {
+			if instruction, length, ok := decodedX86SystemManagementInstruction(code[offset:]); ok {
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
 				}

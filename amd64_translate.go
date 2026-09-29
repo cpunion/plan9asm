@@ -1025,7 +1025,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ok, term, err := c.lowerSystemTransfer(Op(op), ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerAMDSystemManagement(Op(op), ins); ok {
+	if ok, term, err := c.lowerX86SystemManagement(Op(op), ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerSyscall(Op(op), ins); ok {
