@@ -261,9 +261,10 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 			return true, fmt.Errorf("amd64 RET expects at most 1 operand: %q", ins.Raw)
 		}
 		return true, c.lowerRET()
-	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "NOP",
+	case "PCALIGN", "GO_ARGS", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "NOP",
 		"PUSH_REGS_HOST_TO_ABI0()", "POP_REGS_HOST_TO_ABI0()":
-		// Alignment directive emitted by stdlib asm; no semantic effect in our IR.
+		// Go assembler metadata (including GO_ARGS's argument pointer map) has
+		// no machine-code effect here; LLVM handles the argument values directly.
 		return false, nil
 	case "ADJSP":
 		if c.goarch != "386" {

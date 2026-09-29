@@ -779,6 +779,13 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 		if tt.NumFields() == 0 {
 			return LLVMType("[0 x i8]"), nil
 		}
+		if parts, ok := goWordStructParts(tt, goarch, sz, sz); ok {
+			fields := make([]string, len(parts))
+			for i, part := range parts {
+				fields[i] = string(part.Type)
+			}
+			return LLVMType("{ " + strings.Join(fields, ", ") + " }"), nil
+		}
 		return "", fmt.Errorf("unsupported struct type %s", tt.String())
 	case *types.Named:
 		return goLLVMTypeForTypeWithSizes(tt.Underlying(), goarch, sz)
@@ -829,6 +836,9 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 			off += int64(frameSz.Sizeof(t))
 			continue
 		}
+		if st, ok := t.Underlying().(*types.Struct); ok && st.NumFields() != 0 {
+			return nil, nil, 0, fmt.Errorf("unsupported struct frame layout %s", t.String())
+		}
 
 		ty, e := goLLVMTypeForTypeWithSizes(t, goarch, sz)
 		if e != nil {
@@ -868,8 +878,42 @@ func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: wordTy, Field: 1}, {Offset: 2 * word, Type: wordTy, Field: 2}}, true
 	case *types.Interface:
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: Ptr, Field: 1}}, true
+	case *types.Struct:
+		return goWordStructParts(u, goarch, sz, frameSz)
 	}
 	return nil, false
+}
+
+// goWordStructParts accepts only flat structures whose fields are exactly one
+// integer/pointer word each in both the Go value and the assembly FP frame.
+// Other structures need target-specific padding and register classification.
+func goWordStructParts(st *types.Struct, goarch string, sz, frameSz types.Sizes) ([]goFramePart, bool) {
+	word := int64(goWordSizeForSizes(goarch, sz))
+	if st.NumFields() == 0 || word != int64(goWordSizeForSizes(goarch, frameSz)) {
+		return nil, false
+	}
+	fields := make([]*types.Var, st.NumFields())
+	for i := range fields {
+		fields[i] = st.Field(i)
+	}
+	valueOffsets := sz.Offsetsof(fields)
+	frameOffsets := frameSz.Offsetsof(fields)
+	if sz.Sizeof(st) != int64(len(fields))*word || frameSz.Sizeof(st) != int64(len(fields))*word {
+		return nil, false
+	}
+	parts := make([]goFramePart, len(fields))
+	for i, field := range fields {
+		if valueOffsets[i] != int64(i)*word || frameOffsets[i] != int64(i)*word ||
+			sz.Sizeof(field.Type()) != word || frameSz.Sizeof(field.Type()) != word {
+			return nil, false
+		}
+		ty, err := goLLVMTypeForTypeWithSizes(field.Type(), goarch, sz)
+		if err != nil || (ty != I32 && ty != I64 && ty != Ptr) {
+			return nil, false
+		}
+		parts[i] = goFramePart{Offset: frameOffsets[i], Type: ty, Field: i}
+	}
+	return parts, true
 }
 
 func goWordSize(goarch string) int {

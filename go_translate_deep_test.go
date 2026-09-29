@@ -6,8 +6,11 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func mustGoPackageWithImports(t *testing.T, pkgPath string, files map[string]string) GoPackage {
@@ -135,7 +138,8 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 		{alias, "arm64", I64, true},
 		{types.Typ[types.Complex64], "amd64", "", false},
 		{types.NewStruct(nil, nil), "amd64", LLVMType("[0 x i8]"), true},
-		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "", false},
+		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int])}, nil), "amd64", "{ i64 }", true},
+		{types.NewStruct([]*types.Var{types.NewVar(token.NoPos, nil, "x", types.Typ[types.Int8])}, nil), "amd64", "", false},
 	} {
 		got, err := goLLVMTypeForType(tc.typ, tc.goarch)
 		if (err == nil) != tc.ok || got != tc.want {
@@ -176,6 +180,69 @@ func TestGoTranslateTypeCoverage(t *testing.T) {
 	}
 	if got := goAlignOff(5, 4); got != 8 {
 		t.Fatalf("goAlignOff(5,4) = %d", got)
+	}
+}
+
+func TestGoTranslateWordStructABI(t *testing.T) {
+	pkg := mustGoPackage(t, "test/pkg", `package testpkg
+type Uint128 struct { Lo, Hi uint64 }
+func Y(t *byte, a, b Uint128, res uintptr) int32
+func X(t *byte, a, b Uint128, res uintptr) int32
+`)
+	fn := pkg.Types.Scope().Lookup("Y").(*types.Func)
+	sz := types.SizesFor("gc", "amd64")
+	sig, err := goFuncSigForDeclaredFunc("test/pkg.Y", fn, "amd64", sz, sz, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []LLVMType{Ptr, "{ i64, i64 }", "{ i64, i64 }", I64}; !reflect.DeepEqual(sig.Args, want) {
+		t.Fatalf("args = %v, want %v", sig.Args, want)
+	}
+	if want := []FrameSlot{
+		{Offset: 0, Type: Ptr, Index: 0, Field: -1},
+		{Offset: 8, Type: I64, Index: 1, Field: 0},
+		{Offset: 16, Type: I64, Index: 1, Field: 1},
+		{Offset: 24, Type: I64, Index: 2, Field: 0},
+		{Offset: 32, Type: I64, Index: 2, Field: 1},
+		{Offset: 40, Type: I64, Index: 3, Field: -1},
+	}; !reflect.DeepEqual(sig.Frame.Params, want) {
+		t.Fatalf("frame params = %v, want %v", sig.Frame.Params, want)
+	}
+	if want := []FrameSlot{{Offset: 48, Type: I32, Index: 0, Field: -1}}; !reflect.DeepEqual(sig.Frame.Results, want) {
+		t.Fatalf("frame results = %v, want %v", sig.Frame.Results, want)
+	}
+	if _, err := goFuncSigForDeclaredFunc("test/pkg.Y", fn, "386", types.SizesFor("gc", "386"), nil, true); err == nil {
+		t.Fatal("Uint128 must not be flattened into 32-bit frame words")
+	}
+
+	tr, err := TranslateGoModule(pkg, []byte(`TEXT ·Y(SB),$56-52
+MOVQ t+0(FP), AX
+MOVQ AX, 0(SP)
+MOVQ a_Lo+8(FP), AX
+MOVQ AX, 8(SP)
+MOVQ a_Hi+16(FP), AX
+MOVQ AX, 16(SP)
+MOVQ b_Lo+24(FP), AX
+MOVQ AX, 24(SP)
+MOVQ b_Hi+32(FP), AX
+MOVQ AX, 32(SP)
+MOVQ res+40(FP), AX
+MOVQ AX, 40(SP)
+CALL ·X(SB)
+MOVL 48(SP), AX
+MOVL AX, ret+48(FP)
+RET
+`), GoModuleOptions{GOARCH: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: testResolveSym("test/pkg")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tr.Module.Dispose()
+	if err := llvm.VerifyModule(tr.Module, llvm.ReturnStatusAction); err != nil {
+		t.Fatalf("invalid LLVM IR: %v", err)
+	}
+	ir := tr.Module.String()
+	if !strings.Contains(ir, "extractvalue { i64, i64 } %arg1, 0") || !strings.Contains(ir, "extractvalue { i64, i64 } %arg2, 1") || !strings.Contains(ir, "call i32 @\"test/pkg.X\"") {
+		t.Fatalf("missing aggregate argument forwarding in LLVM IR:\n%s", ir)
 	}
 }
 
