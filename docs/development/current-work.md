@@ -59,8 +59,16 @@ coverage batch, not start a competing import or duplicate full corpus run.
   cache/descriptor inline-asm lowerers for the same issue separately.
 - A complete llgo integration probe also exposed a separate C ABI pass bug:
   sizing an intrinsic's metadata parameter before excluding LLVM intrinsics.
-  Do not claim unmodified llgo end-to-end success or include a diagnostic-only
-  overlay in this contribution. An llgo change requires its own review.
+  The isolated fix and child-process regression are in
+  [cpunion/llgo PR 258](https://github.com/cpunion/llgo/pull/258), still Draft
+  until CI and review finish. Do not claim unmodified llgo end-to-end success
+  or include a diagnostic-only overlay in this contribution.
+- Keep all discovered instruction, signature and LLVM-object coverage here.
+  Third-party llgo final-link and runtime coverage belongs in a separate
+  `llgo-compat` repository. Its module/target results must be independently
+  evidenced; neither an object compilation nor `ld -r` is a final-link pass.
+  Cgo compatibility will use a separate repository and the standalone cgo
+  inventory, not this assembly ledger.
 - Package checks are batched per target with precise per-package fallback;
   independent LLVM translator processes are bounded to two. All candidates,
   files and target outcomes remain accounted for across 64 shards.
