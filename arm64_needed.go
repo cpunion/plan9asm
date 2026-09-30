@@ -6,6 +6,9 @@ import "strings"
 // translator. The linear prototype cannot handle labels/branches or opcode
 // suffixes like ".P".
 func funcNeedsARM64CFG(fn Func) bool {
+	if fn.FrameSize != 0 {
+		return true
+	}
 	for _, ins := range fn.Instrs {
 		if ins.Op == OpLABEL {
 			return true
@@ -30,6 +33,9 @@ func funcNeedsARM64CFG(fn Func) bool {
 		case OpMOVD:
 			// Linear arm64 lowering only supports immediate/reg/FP value moves.
 			for _, a := range ins.Args {
+				if a.Kind == OpReg && arm64StackReg(a.Reg) {
+					return true
+				}
 				switch a.Kind {
 				case OpImm, OpReg, OpFP:
 					// ok

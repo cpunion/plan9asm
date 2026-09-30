@@ -197,6 +197,13 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "stack", triple, ir,
 			main, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
 	})
+	t.Run("arm64_text_frame", func(t *testing.T) {
+		t.Run("native_go", TestARM64TextFrameNativeGo)
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64TextFrameRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "text_frame", triple, ir,
+			main, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_sve_pool_aliases", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64RawPoolSVEAliasesRuntime(t, triple)

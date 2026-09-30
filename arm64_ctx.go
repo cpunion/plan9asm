@@ -34,6 +34,7 @@ type arm64Ctx struct {
 	pnRegSlot      map[int]string // SVE predicate-as-counter index -> alloca name (target("aarch64.svcount"))
 	localStackSlot string
 	localStackSize int64
+	frameSize      int64 // TEXT local storage, including accesses through SP aliases
 	dynamicStack   *arm64DynamicStackPlan
 
 	flagsNSlot   string
@@ -64,6 +65,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
+		frameSize:      fn.FrameSize,
 		blocks:         arm64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -1294,6 +1296,17 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 }
 
 func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64, err error) {
+	maxOff = c.frameSize
+	if maxOff == -8 {
+		// Go's historical NOFRAME spelling declares no local storage.
+		maxOff = 0
+	}
+	if maxOff < 0 || maxOff > arm64MaxLocalStackSpan {
+		return 0, 0, fmt.Errorf("ARM64 TEXT frame size %d is outside [0,%d] (or -8 for NOFRAME)", c.frameSize, arm64MaxLocalStackSpan)
+	}
+	// Explicit SP displacements cannot reveal the extent of an array walked
+	// through a derived register (for example Snappy's 32 KiB hash table).
+	// The declared frame is therefore a lower bound, not an optional hint.
 	add := func(off, size int64) {
 		if off < -arm64MaxLocalStackSpan || off > arm64MaxLocalStackSpan ||
 			size < 0 || size > arm64MaxLocalStackSpan {
