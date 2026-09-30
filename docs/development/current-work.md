@@ -99,6 +99,10 @@ coverage batch, not start a competing import or duplicate full corpus run.
 - A truncated asmdecl display must never become a second, unattributable
   diagnostic. Classification replaces it with the complete bounded command
   output while retaining error wrappers; replay llamawasm2go in shard 26.
+- Go asmdecl compares type kinds, not only byte widths. Equal-width aggregate
+  moves must still reach translation and LLVM compilation; only an actual
+  size, offset or argument-frame mismatch is ABI N/A. Preserve the Go-build
+  regression for whole-array MOVOU and replay the affected discovery shard.
 - Priority shards are 5, 29, 36, 38, 39 and 42. All must pass before the remaining
   jobs run; all 64 shards and their strict aggregate remain mandatory.
 - Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and

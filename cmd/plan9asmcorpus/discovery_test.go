@@ -1064,6 +1064,48 @@ func TestDiscoveryAsmDeclOnlyClassifiesConcreteABIMismatches(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAsmDeclEqualWidthAggregateIsNotABIMismatch(t *testing.T) {
+	for _, diagnostic := range []string{
+		"simd_amd64.s:3:1: [amd64] f: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value",
+		"simd_amd64.s:4:1: [amd64] f: invalid MOVO of ret+16(FP); Vector is 16-byte value",
+		"simd_amd64.s:5:1: [amd64] f: invalid MOVQ of a+0(FP); [2]uint32 is 8-byte value",
+	} {
+		if isDiscoveryAsmDeclABIMismatch(diagnostic) {
+			t.Fatalf("equal-width aggregate type warning became ABI N/A: %q", diagnostic)
+		}
+	}
+	for _, diagnostic := range []string{
+		"simd_amd64.s:3:1: [amd64] f: invalid MOVOU of a+0(FP); uint64 is 8-byte value",
+		"simd_amd64.s:4:1: [amd64] f: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value",
+	} {
+		if !isDiscoveryAsmDeclABIMismatch(diagnostic) {
+			t.Fatalf("actual width mismatch was hidden: %q", diagnostic)
+		}
+	}
+}
+
+func TestRunDiscoveryAsmDeclKeepsGoAcceptedWholeVectorAggregate(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/vector\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(dir, "vector.go"), "package vector\n\nfunc Copy(a [2]uint64) [2]uint64\n")
+	writeTestFile(t, filepath.Join(dir, "vector_amd64.s"),
+		"TEXT ·Copy(SB),$0-32\nMOVOU a+0(FP), X0\nMOVOU X0, ret+16(FP)\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "amd64",
+	})
+	if err := runDiscoveryGoBuild(context.Background(), dir, env, "linux/amd64", nil, "example.com/vector"); err != nil {
+		t.Fatalf("Go rejected the valid whole-vector assembly fixture: %v", err)
+	}
+	_, rawErr := runCapturedCommandOutput(context.Background(), dir, env, "go", "vet", "-asmdecl", "example.com/vector")
+	if rawErr == nil || !strings.Contains(discoveryCommandDiagnostic(rawErr), "16-byte value") {
+		t.Fatalf("Go asmdecl aggregate-kind warning was not reproduced: %v", rawErr)
+	}
+	if err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, []string{"example.com/vector"}); err != nil {
+		t.Fatalf("Go-accepted equal-width aggregate never reached translation: %v", err)
+	}
+}
+
 func TestDiscoveryAsmDeclRejectsOnlyFilesWithConcreteABIErrors(t *testing.T) {
 	diagnostic := strings.Join([]string{
 		"pkg/first_amd64.s:3:1: [amd64] first: wrong argument size 16; expected $...-8",

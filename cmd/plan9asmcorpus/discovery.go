@@ -2658,14 +2658,57 @@ func copyDiscoveryModuleTree(source, destination string) error {
 
 func isDiscoveryAsmDeclABIMismatch(diagnostic string) bool {
 	diagnostic = strings.ToLower(diagnostic)
-	if strings.Contains(diagnostic, "wrong argument size") || strings.Contains(diagnostic, "invalid offset") {
-		return true
+	for _, line := range strings.Split(diagnostic, "\n") {
+		if strings.Contains(line, "wrong argument size") || strings.Contains(line, "invalid offset") {
+			return true
+		}
+		// asmdecl compares type kinds as well as byte widths. In particular,
+		// MOVOU's 16-byte kind differs from asmArray even for [2]uint64.
+		// An equal-width type warning must still reach translation; actual
+		// width/offset/argument-size failures remain scoped ABI N/A.
+		if strings.Contains(line, ": invalid ") && strings.Contains(line, "(fp)") &&
+			!isDiscoveryAsmDeclEqualWidthMove(line) {
+			return true
+		}
 	}
-	// asmdecl reports an invalid load/store width against an FP operand when
-	// the declared Go parameter or result has a different ABI width. Keep the
-	// FP requirement so generic assembler, dependency, and source diagnostics
-	// continue into translation instead of being hidden as not applicable.
-	return strings.Contains(diagnostic, ": invalid ") && strings.Contains(diagnostic, "(fp)")
+	return false
+}
+
+func isDiscoveryAsmDeclEqualWidthMove(line string) bool {
+	_, diagnostic, ok := strings.Cut(line, ": invalid ")
+	if !ok {
+		return false
+	}
+	op, _, ok := strings.Cut(diagnostic, " of ")
+	if !ok {
+		return false
+	}
+	width := 0
+	switch op {
+	case "movo", "movou":
+		width = 16
+	case "movb":
+		width = 1
+	case "movw":
+		width = 2
+	case "movl", "fmovs":
+		width = 4
+	case "movq", "fmovd":
+		width = 8
+	default:
+		return false
+	}
+	_, value, ok := strings.Cut(diagnostic, "(fp); ")
+	if !ok {
+		return false
+	}
+	separator := strings.LastIndex(value, " is ")
+	if separator < 0 {
+		return false
+	}
+	var declared int
+	_, err := fmt.Sscanf(value[separator+4:], "%d-byte value", &declared)
+	return err == nil && declared == width
 }
 
 func discoveryAsmDeclRejectedFiles(asmFiles []string, diagnostic string) []string {

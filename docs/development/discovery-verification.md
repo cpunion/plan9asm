@@ -84,6 +84,10 @@ For each target/tag/package group:
 1. Build that exact package with current Go, not `package/...`.
 2. Run `go vet -asmdecl`. Only concrete argument-size/FP offset/FP width
    mismatches are ABI N/A. Generic vet errors must not hide translation.
+   Equal-width whole-aggregate moves remain eligible: Go's asmdecl type-kind
+   comparison can reject a 16-byte MOVOU against a 16-byte array even though
+   the Go compiler accepts its layout. Such a warning is not a width mismatch;
+   translation and LLVM 22 compilation must still establish the outcome.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and

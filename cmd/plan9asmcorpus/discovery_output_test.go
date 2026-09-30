@@ -137,7 +137,7 @@ func main() {
 }
 
 func TestDiscoveryAsmDeclTruncatedDisplayDoesNotInventForeignABIError(t *testing.T) {
-	const foreign = "base/simd_amd64.s:17:1: [amd64] simd: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value"
+	const foreign = "base/simd_amd64.s:17:1: [amd64] simd: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value"
 	const local = "p0/arith_amd64.s:19:1: [amd64] mul: wrong argument size 4; expected $...-24"
 	files := []string{"base/simd_amd64.s", "p0/arith_amd64.s"}
 	for _, wrapped := range []bool{false, true} {
@@ -153,7 +153,7 @@ func TestDiscoveryAsmDeclTruncatedDisplayDoesNotInventForeignABIError(t *testing
 					output:  output,
 					// A tail-only display can begin inside an ABI diagnostic,
 					// losing the source path that is present in the full output.
-					display: "... output truncated ...\nq: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value\n",
+					display: "... output truncated ...\nq: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value\n",
 				}
 				var err error = failure
 				if wrapped {
