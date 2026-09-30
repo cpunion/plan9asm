@@ -89,6 +89,21 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		if candidate.Translations < 0 || candidate.NotApplicableTranslations < 0 {
 			return fmt.Errorf("assembly ledger candidate %s has negative translation counts", key)
 		}
+		if candidate.NotApplicableTranslations != len(candidate.NotApplicableItems) {
+			return fmt.Errorf("assembly ledger target skips for %s lack per-file evidence", key)
+		}
+		for _, item := range candidate.NotApplicableItems {
+			if err := validateDiscoveryRecord(discoveryRecord{
+				Module: candidate.Module, Version: candidate.Version, AsmFiles: []string{item.AsmFile},
+			}); err != nil {
+				return fmt.Errorf("assembly ledger target skip: %w", err)
+			}
+			if item.Kind != targetNotApplicableGoTextArgSize || item.Target == "" ||
+				item.PkgPath == "" || item.Symbol == "" || item.DeclaredArgSize == item.ExpectedArgSize ||
+				item.Reason != discoveryTargetSkipReason(item) {
+				return fmt.Errorf("assembly ledger target skip for %s has invalid evidence", key)
+			}
+		}
 		translations += candidate.Translations
 		notApplicableTranslations += candidate.NotApplicableTranslations
 		if candidate.Status == discoveryStatusPassed && candidate.Translations == 0 {

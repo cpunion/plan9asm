@@ -537,12 +537,16 @@ func auditDiscoveryCorpusReports(
 					return fmt.Errorf("%s: result %s native-layout skip differs from the pinned manifest", filePath, key)
 				}
 			}
+			targetSkips, err := summarizeDiscoveryTargetSkips(candidate, result.NotApplicableItems)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filePath, err)
+			}
 			seenCandidates[key] = filePath
 			outcomes[key] = discoveryCandidateProgress{
 				Module: result.Module, Version: result.Version, Status: result.Status,
 				Translations:              result.Translations,
 				NotApplicableTranslations: result.NotApplicableTranslations,
-				NotApplicableItems:        append([]matrixTargetNotApplicableItem(nil), result.NotApplicableItems...),
+				NotApplicableItems:        targetSkips,
 				SourceNotApplicableItems:  summarizeDiscoverySourceSkips(result.SourceNotApplicableItems),
 				NotApplicableReason:       result.NotApplicableReason,
 				InvalidSourceReason:       result.InvalidSourceReason,

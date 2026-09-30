@@ -153,6 +153,30 @@ func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
 			},
 		},
 		{
+			name: "target skip without per-file evidence",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].NotApplicableTranslations = 1
+				p.NotApplicableTranslations = 1
+			},
+		},
+		{
+			name: "target skip with absolute runner path",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].NotApplicableTranslations = 1
+				p.NotApplicableTranslations = 1
+				item := matrixTargetNotApplicableItem{
+					Target: "linux/amd64",
+					targetNotApplicableItem: targetNotApplicableItem{
+						PkgPath: "example.com/asm", AsmFile: "/tmp/runner/stub.s",
+						Kind: targetNotApplicableGoTextArgSize, Symbol: "example.com/asm.stub",
+						DeclaredArgSize: 16, ExpectedArgSize: 8,
+					},
+				}
+				item.Reason = discoveryTargetSkipReason(item)
+				p.Candidates[0].NotApplicableItems = []matrixTargetNotApplicableItem{item}
+			},
+		},
+		{
 			name: "source skip with raw diagnostic",
 			change: func(p *discoveryProgress) {
 				p.Candidates[0].SourceNotApplicableItems = []discoverySourceSkipSummary{{

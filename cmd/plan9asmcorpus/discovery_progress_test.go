@@ -511,3 +511,75 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 		}
 	}
 }
+
+func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	files, err := discoveryCorpusReportFiles(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		report, err := readDiscoveryCorpusReport(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range report.Results {
+			result := &report.Results[i]
+			result.NotApplicableTranslations = 1
+			report.NotApplicableTranslations++
+			result.NotApplicableItems = []matrixTargetNotApplicableItem{{
+				Target: "linux/amd64",
+				targetNotApplicableItem: targetNotApplicableItem{
+					PkgPath: result.Module,
+					AsmFile: "/tmp/private-runner/module-cache/" + result.Module + "@" + result.Version + "/" + result.DiscoveredAsmFiles[0],
+					Kind:    targetNotApplicableGoTextArgSize, Symbol: result.Module + ".stub",
+					DeclaredArgSize: 16, ExpectedArgSize: 8,
+					Reason: "TEXT argument size does not match",
+				},
+			}}
+		}
+		if err := writeDiscoveryCorpusReport(file, report); err != nil {
+			t.Fatal(err)
+		}
+	}
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range progress.Candidates {
+		if len(candidate.NotApplicableItems) != 1 {
+			t.Fatalf("missing target skip evidence: %+v", candidate)
+		}
+		if strings.HasPrefix(candidate.NotApplicableItems[0].AsmFile, "/") {
+			t.Fatalf("runner path leaked into assembly ledger: %+v", candidate.NotApplicableItems)
+		}
+	}
+}
+
+func TestDiscoveryTargetSkipPathsUseExactInventory(t *testing.T) {
+	candidate := discoveryCandidate{
+		Module: "example.com/asm", Version: "v1.0.0",
+		AsmFiles: []string{"stub.s", "internal/stub.s"},
+	}
+	for _, reported := range []string{
+		"internal/stub.s",
+		"/tmp/runner/module-cache/example.com/asm@v1.0.0/internal/stub.s",
+		`C:\runner\module-cache\example.com\asm@v1.0.0\internal\stub.s`,
+	} {
+		items := []matrixTargetNotApplicableItem{{
+			targetNotApplicableItem: targetNotApplicableItem{AsmFile: reported},
+		}}
+		got, err := summarizeDiscoveryTargetSkips(candidate, items)
+		if err != nil || len(got) != 1 || got[0].AsmFile != "internal/stub.s" {
+			t.Fatalf("canonicalize %q: %+v, %v", reported, got, err)
+		}
+		if items[0].AsmFile != reported {
+			t.Fatal("normalization mutated the raw report")
+		}
+	}
+	if _, err := summarizeDiscoveryTargetSkips(candidate, []matrixTargetNotApplicableItem{{
+		targetNotApplicableItem: targetNotApplicableItem{AsmFile: "/tmp/unrelated/not-scanned.s"},
+	}}); err == nil {
+		t.Fatal("accepted a skip for a file outside the scan inventory")
+	}
+}

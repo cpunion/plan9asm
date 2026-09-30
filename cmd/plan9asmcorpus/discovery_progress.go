@@ -1,6 +1,36 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
+
+// Raw matrix reports use absolute paths into their disposable module cache.
+// Persist the matching scan-inventory path, never the runner's cache prefix.
+func summarizeDiscoveryTargetSkips(candidate discoveryCandidate, items []matrixTargetNotApplicableItem) ([]matrixTargetNotApplicableItem, error) {
+	result := append([]matrixTargetNotApplicableItem(nil), items...)
+	for i := range result {
+		item := &result[i]
+		reported := strings.ReplaceAll(item.AsmFile, "\\", "/")
+		matched := ""
+		for _, file := range candidate.AsmFiles {
+			if (reported == file || strings.HasSuffix(reported, "/"+file)) && len(file) > len(matched) {
+				matched = file
+			}
+		}
+		if matched == "" {
+			return nil, fmt.Errorf("target skip file %q is absent from %s's scan inventory", item.AsmFile, candidate.exactKey())
+		}
+		item.AsmFile = matched
+		item.Reason = discoveryTargetSkipReason(*item)
+	}
+	return result, nil
+}
+
+func discoveryTargetSkipReason(item matrixTargetNotApplicableItem) string {
+	return fmt.Sprintf("%s: TEXT argument size disagrees with the Go declaration: got %d, want %d",
+		item.Symbol, item.DeclaredArgSize, item.ExpectedArgSize)
+}
 
 // The raw shard report keeps the full Go diagnostic. The committed ledger
 // keeps only stable, reviewable scope and classification: raw diagnostics can
