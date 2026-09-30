@@ -113,6 +113,30 @@ coverage batch, not start a competing import or duplicate full corpus run.
 - Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and
   test with Go while llgo support is incomplete; do not add `!llgo` tags.
 
+## Runtime-discovered ARM64 repairs
+
+Independent external-library calls exposed semantic defects that successful
+translation and object compilation alone did not detect. The integrated
+instruction families now have independent runtime oracles:
+
+- FP integer pairs span ABI fields rather than assuming adjacent LLVM allocas.
+  All five pair operations preserve both lanes, narrow signed loads and partial
+  writes. Invalid, overlapping and overflowing frame ranges fail closed.
+- Declared TEXT storage is retained independently of inferred SP movement.
+  Large frames use dynamic LLVM backing without suppressing Windows unwind
+  information; four-target object tests include Go's large reflect-call frames.
+- Named `n(PC)` operands resolve source instruction ordinals before CFG and
+  raw-pool transformations. Guessing a destination from block adjacency is
+  forbidden. Branch/address families have positive, zero and negative cases.
+- Scalar memory moves share pre/post-indexed writeback validation and preserve
+  the address update for both loads and stores, including narrow aliases.
+
+Run the focused family tests, then every local gate on the combined source.
+Old-source corpus reports remain historical evidence, not passes for these
+repairs. Keep final-link/runtime claims in the separate compatibility repository.
+Local-register return exploration and external-package native source selection
+remain separate work; do not declare them solved by the object tests above.
+
 ## Provisional native-layout proposal
 
 GopherJRE, GoJIT and Sharkie use native object byte layouts or private JIT
