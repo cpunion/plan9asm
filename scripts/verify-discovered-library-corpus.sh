@@ -14,4 +14,5 @@ go run -C "$repo_root" ./cmd/plan9asmdiscover \
 go run -C "$repo_root" ./cmd/plan9asmcorpus \
   -manifest "$repo_root/testdata/corpus/reported-libraries.json" \
   -discovery-ledger "$repo_root/testdata/discovery/ledger" \
-  -verify-discovery-reports "$reports_dir"
+  -verify-discovery-reports "$reports_dir" \
+  -compare-assembly-ledger "$repo_root/testdata/discovery/assembly-ledger"

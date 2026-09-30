@@ -46,6 +46,8 @@ inventory remains outside this repository.
 `pending` is an intermediate state, never completion. Before promotion,
 regenerate the assembly ledger from all 64 audited reports and require
 `-assembly-ledger-status ... -require-verified-assembly-ledger` to succeed.
+The CI aggregate also compares that snapshot with every result in the current
+64 shard reports; matching source and scan hashes alone are insufficient.
 Each `passed` record retains its positive LLVM object-compilation count; each
 source-inapplicable or explicit skip retains its reason and pinned evidence.
 This gate does not claim llgo compilation, linking, or execution.

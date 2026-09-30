@@ -172,6 +172,61 @@ func requireVerifiedAssemblyLedger(progress discoveryProgress) error {
 	)
 }
 
+// Reports and the committed snapshot may have different Git revisions when an
+// evidence-only commit follows a frozen corpus run. Their semantic source,
+// scan inventory, totals and exact candidate outcomes must still agree.
+func compareAssemblyLedgerProgress(stored, current discoveryProgress) error {
+	if err := requireVerifiedAssemblyLedger(stored); err != nil {
+		return fmt.Errorf("committed %w", err)
+	}
+	if err := requireVerifiedAssemblyLedger(current); err != nil {
+		return fmt.Errorf("current reports: %w", err)
+	}
+
+	storedSummary := stored
+	currentSummary := current
+	storedSummary.Source.Revision = ""
+	currentSummary.Source.Revision = ""
+	storedSummary.Provenance = nil
+	currentSummary.Provenance = nil
+	storedSummary.Candidates = nil
+	currentSummary.Candidates = nil
+	storedData, err := json.Marshal(storedSummary)
+	if err != nil {
+		return err
+	}
+	currentData, err := json.Marshal(currentSummary)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(storedData, currentData) {
+		return fmt.Errorf("committed assembly ledger summary differs from current reports")
+	}
+
+	if len(stored.Candidates) != len(current.Candidates) {
+		return fmt.Errorf("committed assembly candidate count differs from current reports")
+	}
+	byKey := make(map[string][]byte, len(stored.Candidates))
+	for _, candidate := range stored.Candidates {
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			return err
+		}
+		byKey[candidate.Module+"@"+candidate.Version] = data
+	}
+	for _, candidate := range current.Candidates {
+		key := candidate.Module + "@" + candidate.Version
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(byKey[key], data) {
+			return fmt.Errorf("committed assembly outcome %s differs from current reports", key)
+		}
+	}
+	return nil
+}
+
 func compareAssemblyLedgerCandidate(a, b discoveryCandidateProgress) int {
 	if compared := strings.Compare(a.Module, b.Module); compared != 0 {
 		return compared

@@ -164,6 +164,39 @@ func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
 	}
 }
 
+func TestAssemblyLedgerMatchesCurrentCorpusReports(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("a", 64)
+	if err := writeAssemblyLedger(output, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := readAssemblyLedger(output, progress.LedgerSHA256, semanticSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := progress
+	current.Source.Revision = strings.Repeat("b", 40)
+	if err := compareAssemblyLedgerProgress(stored, current); err != nil {
+		t.Fatalf("same semantic source with evidence-only revision change: %v", err)
+	}
+	current.Candidates = append([]discoveryCandidateProgress(nil), current.Candidates...)
+	current.Candidates[0].Translations++
+	if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+		t.Fatal("ledger accepted a different candidate compilation result")
+	}
+	current = progress
+	current.Pending = 1
+	current.Verified = false
+	if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+		t.Fatal("ledger accepted incomplete current reports")
+	}
+}
+
 func TestAssemblyLedgerRejectsTamperedShard(t *testing.T) {
 	ledger, reports, source := writeDiscoveryReportFixture(t)
 	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)

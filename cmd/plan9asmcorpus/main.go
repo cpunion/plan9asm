@@ -121,6 +121,7 @@ func main() {
 	discoveryReport := flag.String("discovery-report", "", "write the discovery shard result as JSON")
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
 	verifyDiscoveryReports := flag.String("verify-discovery-reports", "", "verify a complete directory of discovery shard reports against -discovery-ledger")
+	compareAssemblyLedgerPath := flag.String("compare-assembly-ledger", "", "compare verified shard results with the committed assembly ledger")
 	discoveryProgressReports := flag.String("discovery-progress", "", "report pending/passed/N/A/failed candidates from a possibly incomplete directory of frozen shard reports")
 	writeAssemblyLedgerPath := flag.String("write-assembly-ledger", "", "persist audited discovery progress in a separate module-hashed assembly ledger")
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
@@ -128,6 +129,9 @@ func main() {
 	flag.Parse()
 	if *verifyDiscoveryReports != "" && *discoveryProgressReports != "" {
 		check(errors.New("-verify-discovery-reports and -discovery-progress are mutually exclusive"))
+	}
+	if *compareAssemblyLedgerPath != "" && *verifyDiscoveryReports == "" {
+		check(errors.New("-compare-assembly-ledger requires -verify-discovery-reports"))
 	}
 	if *writeAssemblyLedgerPath != "" && *discoveryProgressReports == "" {
 		check(errors.New("-write-assembly-ledger requires -discovery-progress"))
@@ -156,6 +160,19 @@ func main() {
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
 		check(verifyDiscoveryCorpusReports(*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, *repoRoot))
+		if *compareAssemblyLedgerPath != "" {
+			current, err := collectDiscoveryProgress(
+				*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, 0, *repoRoot,
+			)
+			check(err)
+			semanticSourceSHA, err := collectDiscoverySemanticSourceSHA(*repoRoot)
+			check(err)
+			stored, err := readAssemblyLedger(
+				*compareAssemblyLedgerPath, current.LedgerSHA256, semanticSourceSHA,
+			)
+			check(err)
+			check(compareAssemblyLedgerProgress(stored, current))
+		}
 		fmt.Printf("verified discovery corpus reports against %s\n", *discoveryLedger)
 		return
 	}

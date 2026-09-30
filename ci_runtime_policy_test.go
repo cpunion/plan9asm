@@ -104,6 +104,13 @@ func TestCIRequiresVerifiedAssemblyLedger(t *testing.T) {
 		!strings.Contains(build, "-require-verified-assembly-ledger") {
 		t.Fatal("CI must require every discovered candidate to be passed or explicitly skipped")
 	}
+	script, err := os.ReadFile("scripts/verify-discovered-library-corpus.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(script), "-compare-assembly-ledger") {
+		t.Fatal("CI must compare committed assembly outcomes with current corpus reports")
+	}
 }
 
 func ciWorkflowJob(source, name string) (string, bool) {
