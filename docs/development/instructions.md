@@ -45,6 +45,12 @@ where practical. A completeness test must compare the whole spec table with
 the current Go encoder family so adding one observed spelling cannot leave
 sibling forms unmodeled.
 
+Macro expansion uses complete Go assembler identifier tokens, including middle
+dot and division slash, never prefixes or text inside string/character literals.
+Unresolved constants need context for an isolated instruction probe, but must
+fail full translation before raw decoding. Preserve resolved named stack
+addresses; never replace missing constants or malformed addresses with zero.
+
 For a newly discovered instruction, update all four layers before calling it
 complete: the family-specific lowerer, positive/negative Go-table form tests,
 LLVM 22 object compilation for every affected supported architecture, and the

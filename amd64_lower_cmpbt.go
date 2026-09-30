@@ -109,6 +109,9 @@ func (c *amd64Ctx) setTestFlagsSized(ty LLVMType, a, b string) {
 }
 
 func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
+	if err := unresolvedSymbolicImmediateError(op); err != nil {
+		return "", err
+	}
 	switch op.Kind {
 	case OpImm:
 		// LLVM will interpret the literal in the destination integer width.
@@ -161,10 +164,7 @@ func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
 				fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to %s\n", value, wide, ty)
 				return "%" + value, nil
 			}
-			// Macro-style symbolic immediates (e.g. $const_avxSupported) may
-			// survive preprocessing when include constants are unavailable.
-			// Keep translation progressing with a conservative zero value.
-			return "0", nil
+			return "", fmt.Errorf("unresolved symbolic immediate %q", op.Sym)
 		}
 		// Go's x86 syntax treats a bare integer as absolute memory. Keep
 		// this distinct from the '$' immediate spelling above.

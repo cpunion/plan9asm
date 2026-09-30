@@ -1343,7 +1343,7 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	check("CMPQ", Instr{Raw: "CMPQ example.global(SB), SI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: SI}}})
 	check("TESTB", Instr{Raw: "TESTB AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	check("TESTW", Instr{Raw: "TESTW $7, arg+0(FP)", Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpFP, FPOffset: 0}}})
-	check("TESTL", Instr{Raw: "TESTL $const, 8(BX)", Args: []Operand{{Kind: OpSym, Sym: "$const"}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}}})
+	check("TESTL", Instr{Raw: "TESTL $7, 8(BX)", Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}}})
 	check("TESTQ", Instr{Raw: "TESTQ example.global(SB), DI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: DI}}})
 	check("BTQ", Instr{Raw: "BTQ $3, AX", Args: []Operand{{Kind: OpImm, Imm: 3}, {Kind: OpReg, Reg: AX}}})
 	check("BTSQ", Instr{Raw: "BTSQ DX, AX", Args: []Operand{{Kind: OpReg, Reg: DX}, {Kind: OpReg, Reg: AX}}})
@@ -1368,8 +1368,8 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	if _, _, err := c.lowerCmpBt("BTRQ", Instr{Raw: "BTRQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}); err == nil {
 		t.Fatalf("short BTRQ unexpectedly succeeded")
 	}
-	if got, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$const"}, I32); err != nil || got != "0" {
-		t.Fatalf("evalIntSized($const) = (%q, %v)", got, err)
+	if _, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$const"}, I32); err == nil {
+		t.Fatal("evalIntSized($const) invented a value for an unresolved constant")
 	}
 	if _, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "bad"}, I32); err == nil {
 		t.Fatalf("evalIntSized(bad sym) unexpectedly succeeded")

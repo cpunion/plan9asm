@@ -194,6 +194,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		return "", fmt.Errorf("empty file")
 	}
+	if err := validateFileResolvedImmediates(file); err != nil {
+		return "", err
+	}
 	file, err := normalizeX86RawFile(file, opt.Goarch)
 	if err != nil {
 		return "", err
@@ -336,13 +339,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 }
 
 func validateResolvedImmediates(arch Arch, fn Func) error {
-	if arch != ArchARM && arch != ArchWASM {
-		return nil
-	}
 	for _, ins := range fn.Instrs {
 		for _, arg := range ins.Args {
-			if arch == ArchARM && arg.Kind == OpImm && arg.ImmRaw != "" {
-				return fmt.Errorf("unresolved symbolic immediate %q", arg.ImmRaw)
+			if err := unresolvedSymbolicImmediateError(arg); err != nil {
+				return err
 			}
 			if arch == ArchWASM && arg.Kind == OpMem && arg.Mem.OffRaw != "" {
 				return fmt.Errorf("unresolved wasm memory offset %q", arg.Mem.OffRaw)
@@ -350,6 +350,41 @@ func validateResolvedImmediates(arch Arch, fn Func) error {
 		}
 	}
 	return nil
+}
+
+func validateFileResolvedImmediates(file *File) error {
+	if file == nil {
+		return fmt.Errorf("nil file")
+	}
+	for _, fn := range file.Funcs {
+		if err := validateResolvedImmediates(file.Arch, fn); err != nil {
+			return fmt.Errorf("%s: %w", fn.Sym, err)
+		}
+	}
+	return nil
+}
+
+// The parser preserves unresolved expressions for scanners and callers that
+// supply generated headers. A translator must never mistake that marker for
+// its zero-valued Imm field, even when a raw decoder runs before lowering.
+func unresolvedSymbolicImmediateError(op Operand) error {
+	if op.Kind == OpImm && op.ImmRaw != "" {
+		return fmt.Errorf("unresolved symbolic immediate %q", op.ImmRaw)
+	}
+	if op.Kind != OpSym || !strings.HasPrefix(op.Sym, "$") {
+		return nil
+	}
+	address := strings.TrimSpace(strings.TrimPrefix(op.Sym, "$"))
+	if strings.HasSuffix(address, "(SB)") {
+		return nil
+	}
+	if _, _, ok := parseFPAddr(op.Sym); ok {
+		return nil
+	}
+	if _, ok := parseMem(address); ok {
+		return nil
+	}
+	return fmt.Errorf("unresolved symbolic immediate %q", op.Sym)
 }
 
 func emitExternFuncDecls(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI) {

@@ -423,13 +423,12 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 	for _, arg := range ins.Args {
+		if err := unresolvedSymbolicImmediateError(arg); err != nil {
+			return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
+		}
 		switch arg.Kind {
 		case OpFP, OpFPAddr:
 			return fmt.Errorf("%w: %s uses an FP frame slot", ErrProbeNeedsContext, ins.Raw)
-		case OpImm:
-			if arg.ImmRaw != "" {
-				return fmt.Errorf("%w: %s uses a symbolic immediate", ErrProbeNeedsContext, ins.Raw)
-			}
 		case OpMem:
 			if arg.Mem.Base == PC {
 				return fmt.Errorf("%w: %s uses a PC-relative target", ErrProbeNeedsContext, ins.Raw)
@@ -475,6 +474,9 @@ func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 	}
 	for _, ins := range instrs {
 		for _, arg := range ins.Args {
+			if err := unresolvedSymbolicImmediateError(arg); err != nil {
+				return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
+			}
 			if arg.Kind == OpLabel {
 				labels[arg.Sym] = struct{}{}
 				if ins.Op == OpLABEL {

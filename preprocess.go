@@ -6,6 +6,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"text/scanner"
+	"unicode"
 )
 
 type ppMacro struct {
@@ -563,24 +565,11 @@ func expandPPLine(line string, macros map[string]ppMacro, macroNames []string, d
 		return expandPPLine(line, macros, macroNames, depth+1)
 	}
 	// Expand object-like macro identifiers inline (e.g. "MOVD NR, R0").
-	if nl, changed := expandIdentMacros(line, macros, macroNames); changed {
+	if nl, changed := expandIdentMacros(line, macros); changed {
 		return expandPPLine(nl, macros, macroNames, depth+1)
 	}
-	// Expand immediate macro refs in-place: $NAME -> $<body>.
-	for _, name := range macroNames {
-		m := macros[name]
-		if m.params != nil {
-			continue
-		}
-		body := strings.TrimSpace(m.body)
-		if body == "" {
-			continue
-		}
-		line = strings.ReplaceAll(line, "$"+name, "$"+body)
-	}
-	// Expand identifiers inside immediate expressions:
-	//   $(Big - 1) -> $(0x433... - 1)
-	line = expandImmExprMacros(line, macros)
+	// Immediate expressions use the same identifier tokens as ordinary
+	// operands. A second substring pass would expand buf again inside buffer.
 	return []string{line}
 }
 
@@ -591,108 +580,41 @@ func ppIsIdentChar(ch byte) bool {
 		ch == '_' || ch >= 0x80
 }
 
-func expandIdentMacros(line string, macros map[string]ppMacro, macroNames []string) (string, bool) {
-	changed := false
-	for _, name := range macroNames {
-		m := macros[name]
-		if m.params != nil {
-			continue
-		}
-		body := strings.TrimSpace(m.body)
-		if body == "" || body == name {
-			continue
-		}
-		var out strings.Builder
-		i := 0
-		localChanged := false
-		for i < len(line) {
-			j := strings.Index(line[i:], name)
-			if j < 0 {
-				out.WriteString(line[i:])
-				break
-			}
-			j += i
-			k := j + len(name)
-			leftOK := j == 0 || !ppIsIdentChar(line[j-1])
-			rightOK := k >= len(line) || !ppIsIdentChar(line[k])
-			if leftOK && rightOK {
-				out.WriteString(line[i:j])
-				out.WriteString(body)
-				i = k
-				localChanged = true
-				continue
-			}
-			out.WriteString(line[i : j+1])
-			i = j + 1
-		}
-		if localChanged {
-			line = out.String()
-			changed = true
-		}
+func expandIdentMacros(line string, macros map[string]ppMacro) (string, bool) {
+	var tokens scanner.Scanner
+	tokens.Init(strings.NewReader(line))
+	tokens.Mode = scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats |
+		scanner.ScanChars | scanner.ScanStrings | scanner.ScanRawStrings
+	tokens.IsIdentRune = func(ch rune, index int) bool {
+		return unicode.IsLetter(ch) || ch == '_' || ch == '·' || ch == '∕' ||
+			index > 0 && unicode.IsDigit(ch)
 	}
-	return line, changed
-}
+	// Malformed literals are diagnosed by the parser; do not print an unrelated
+	// scanner diagnostic or transform a partially recognized token sequence.
+	tokens.Error = func(*scanner.Scanner, string) {}
 
-func expandImmExprMacros(line string, macros map[string]ppMacro) string {
 	var out strings.Builder
-	cur := 0
-	for cur < len(line) {
-		rel := strings.Index(line[cur:], "$(")
-		if rel < 0 {
-			out.WriteString(line[cur:])
-			break
-		}
-		i := cur + rel
-		out.WriteString(line[cur:i])
-
-		j := i + 2
-		depth := 1
-		for ; j < len(line); j++ {
-			switch line[j] {
-			case '(':
-				depth++
-			case ')':
-				depth--
-				if depth == 0 {
-					expr := line[i+2 : j]
-					out.WriteString("$(")
-					out.WriteString(replaceMacroIdents(expr, macros))
-					out.WriteByte(')')
-					cur = j + 1
-					goto next
-				}
-			}
-		}
-		// Unmatched ')': copy the rest unchanged.
-		out.WriteString(line[i:])
-		break
-	next:
-	}
-	return out.String()
-}
-
-func replaceMacroIdents(expr string, macros map[string]ppMacro) string {
-	var out strings.Builder
-	for i := 0; i < len(expr); {
-		ch := expr[i]
-		if isIdentStart(ch) {
-			j := i + 1
-			for j < len(expr) && isIdentPart(expr[j]) {
-				j++
-			}
-			name := expr[i:j]
-			if m, ok := macros[name]; ok && m.params == nil && strings.TrimSpace(m.body) != "" {
-				out.WriteString(strings.TrimSpace(m.body))
-			} else {
-				out.WriteString(name)
-			}
-			i = j
+	last := 0
+	for token := tokens.Scan(); token != scanner.EOF; token = tokens.Scan() {
+		if token != scanner.Ident {
 			continue
 		}
-		out.WriteByte(ch)
-		i++
+		name := tokens.TokenText()
+		macro, ok := macros[name]
+		body := strings.TrimSpace(macro.body)
+		if !ok || macro.params != nil || body == "" || body == name {
+			continue
+		}
+		start := tokens.Position.Offset
+		out.WriteString(line[last:start])
+		out.WriteString(body)
+		last = start + len(name)
 	}
-	return out.String()
+	if last == 0 || tokens.ErrorCount != 0 {
+		return line, false
+	}
+	out.WriteString(line[last:])
+	return out.String(), true
 }
 
 func isIdentStart(ch byte) bool {
