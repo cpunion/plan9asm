@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -957,10 +958,13 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		for _, match := range matches {
 			matchedContexts = append(matchedContexts, match.context)
 		}
-		sourceTargets, restrictBySource, reason, err := inferUnsuffixedAssemblyTargetsDetailed(filepath.Join(moduleDir, filepath.FromSlash(asmFile)), matchedContexts)
+		sourcePath := filepath.Join(moduleDir, filepath.FromSlash(asmFile))
+		inference, err := inferUnsuffixedAssemblyTargetsWithEvidence(sourcePath, matchedContexts)
 		if err != nil {
 			return nil, fmt.Errorf("classify assembly source %s: %w", asmFile, err)
 		}
+		sourceTargets, restrictBySource, reason := inference.eligible, inference.restrict, inference.reason
+		reason = strings.ReplaceAll(reason, sourcePath, asmFile)
 		if reason != "" && sourceNotApplicable != nil && selection == nil {
 			var sourceTargetNames []string
 			for _, match := range matches {
@@ -975,19 +979,19 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		}
 		for _, match := range matches {
 			if restrictBySource && !sourceTargets[match.target] {
+				rejection := strings.ReplaceAll(inference.rejected[match.target], sourcePath, asmFile)
 				if selection != nil {
 					selection.Decisions = append(selection.Decisions, nativeLayoutSelectionDecision{
 						Target: match.target, BuildTags: match.buildTags,
 						Kind:   nativeLayoutGoAssemblerTarget,
-						Reason: "current Go assembler rejected this source for the selected target",
+						Reason: rejection,
 					})
-					if sourceNotApplicable != nil {
-						*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
-							AsmFile: asmFile, Targets: []string{match.target}, BuildTags: match.buildTags,
-							Kind:   nativeLayoutGoAssemblerTarget,
-							Reason: "current Go assembler rejected this source for the selected target",
-						})
-					}
+				}
+				if sourceNotApplicable != nil && (selection != nil || reason == "") {
+					*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
+						AsmFile: asmFile, Targets: []string{match.target}, BuildTags: match.buildTags,
+						Kind: nativeLayoutGoAssemblerTarget, Reason: rejection,
+					})
 				}
 				continue
 			}
@@ -1164,33 +1168,54 @@ func inferUnsuffixedAssemblyTargets(filePath string, contexts []build.Context) (
 }
 
 func inferUnsuffixedAssemblyTargetsDetailed(filePath string, contexts []build.Context) (map[string]bool, bool, string, error) {
+	inference, err := inferUnsuffixedAssemblyTargetsWithEvidence(filePath, contexts)
+	return inference.eligible, inference.restrict, inference.reason, err
+}
+
+type assemblySourceTargetInference struct {
+	eligible map[string]bool
+	restrict bool
+	reason   string
+	rejected map[string]string
+}
+
+type assemblySourceTargetProbe struct {
+	accepted   bool
+	conclusive bool
+	reason     string
+}
+
+func inferUnsuffixedAssemblyTargetsWithEvidence(filePath string, contexts []build.Context) (assemblySourceTargetInference, error) {
+	var inference assemblySourceTargetInference
 	if explicitAssemblyFilenameArchitecture(path.Base(filePath)) != "" {
-		return nil, false, "", nil
+		return inference, nil
 	}
 	goRoot, err := gotoolchain.Root()
 	if err != nil {
-		return nil, false, "", err
+		return inference, err
 	}
 	eligible := make(map[string]bool, len(contexts))
-	probed := make(map[string]struct {
-		accepted   bool
-		conclusive bool
-	})
+	probed := make(map[string]assemblySourceTargetProbe)
+	inference.rejected = make(map[string]string)
 	acceptedAny := false
 	conclusiveAny := false
 	for _, ctx := range contexts {
 		key := ctx.GOOS + "/" + ctx.GOARCH
 		result, ok := probed[key]
 		if !ok {
-			accepted, conclusive := probeAssemblySourceForTarget(filePath, ctx.GOOS, ctx.GOARCH, goRoot)
-			result = struct {
-				accepted   bool
-				conclusive bool
-			}{accepted: accepted, conclusive: conclusive}
+			probeCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			result, err = probeAssemblySourceForTarget(probeCtx, filePath, ctx.GOOS, ctx.GOARCH, goRoot)
+			cancel()
+			if err != nil {
+				return assemblySourceTargetInference{}, fmt.Errorf("Go assembler architecture probe for %s: %w", key, err)
+			}
 			probed[key] = result
 		}
 		if result.accepted || !result.conclusive {
 			eligible[key] = true
+		}
+		if result.conclusive && !result.accepted {
+			inference.rejected[key] = result.reason
 		}
 		acceptedAny = acceptedAny || result.accepted
 		conclusiveAny = conclusiveAny || result.conclusive
@@ -1206,14 +1231,20 @@ func inferUnsuffixedAssemblyTargetsDetailed(filePath string, contexts []build.Co
 			rejectedTargets = append(rejectedTargets, target)
 		}
 		sort.Strings(rejectedTargets)
-		return eligible, true, fmt.Sprintf("current Go assembler rejected unsuffixed source for every selected target: %s", strings.Join(rejectedTargets, ", ")), nil
+		inference.eligible, inference.restrict = eligible, true
+		inference.reason = fmt.Sprintf("current Go assembler rejected unsuffixed source for every selected target: %s", strings.Join(rejectedTargets, ", "))
+		for _, target := range rejectedTargets {
+			inference.reason += "\n" + target + ": " + inference.rejected[target]
+		}
+		return inference, nil
 	}
 	if !conclusiveAny {
 		// Usually a generated go_asm.h (or another build-generated include) was
 		// unavailable. Keep every target visible instead of silently excluding it.
-		return nil, false, "", nil
+		return inference, nil
 	}
-	return eligible, true, "", nil
+	inference.eligible, inference.restrict = eligible, true
+	return inference, nil
 }
 
 func explicitAssemblyFilenameArchitecture(name string) string {
@@ -1231,48 +1262,109 @@ func explicitAssemblyFilenameArchitecture(name string) string {
 	return ""
 }
 
-func probeAssemblySourceForTarget(filePath, goos, goarch, goRoot string) (accepted, conclusive bool) {
+func probeAssemblySourceForTarget(ctx context.Context, filePath, goos, goarch, goRoot string) (assemblySourceTargetProbe, error) {
 	run := func(extraInclude string) ([]byte, error) {
 		args := []string{"tool", "asm"}
 		if extraInclude != "" {
 			args = append(args, "-I", extraInclude)
 		}
 		args = append(args, "-I", filepath.Dir(filePath), "-I", filepath.Join(goRoot, "pkg", "include"), "-o", os.DevNull, filePath)
-		cmd := exec.Command("go", args...)
-		cmd.Env = replaceEnv(os.Environ(), map[string]string{
+		env := replaceEnv(os.Environ(), map[string]string{
 			"GOOS":        goos,
 			"GOARCH":      goarch,
 			"GOTOOLCHAIN": "local",
 			"GOWORK":      "off",
 		})
-		return cmd.CombinedOutput()
+		return runCapturedCommandOutput(ctx, "", env, "go", args...)
 	}
 	output, err := run("")
 	if err == nil {
-		return true, true
+		return assemblySourceTargetProbe{accepted: true, conclusive: true}, nil
+	}
+	if isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)) {
+		return assemblySourceTargetProbe{}, err
 	}
 	message := strings.ToLower(string(output))
+	usedGeneratedHeaderStub := false
 	if missingGoAsmHeader(message) {
 		stubDir, stubErr := os.MkdirTemp("", "plan9asm-go-asm-header-")
 		if stubErr != nil {
-			return false, false
+			return assemblySourceTargetProbe{}, fmt.Errorf("create architecture probe header directory: %w", stubErr)
 		}
 		defer os.RemoveAll(stubDir)
 		if stubErr := os.WriteFile(filepath.Join(stubDir, "go_asm.h"), nil, 0o600); stubErr != nil {
-			return false, false
+			return assemblySourceTargetProbe{}, fmt.Errorf("write architecture probe header: %w", stubErr)
 		}
 		output, err = run(stubDir)
+		usedGeneratedHeaderStub = true
 		if err == nil {
-			return true, true
+			return assemblySourceTargetProbe{accepted: true, conclusive: true}, nil
 		}
 		message = strings.ToLower(string(output))
 	}
+	if isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)) {
+		return assemblySourceTargetProbe{}, err
+	}
+	var exitError *exec.ExitError
+	if !errors.As(err, &exitError) || exitError.ExitCode() <= 0 {
+		return assemblySourceTargetProbe{}, err
+	}
 	for _, fragment := range []string{"no such file or directory", "cannot find", "could not find"} {
 		if strings.Contains(message, fragment) {
-			return false, false
+			return assemblySourceTargetProbe{}, nil
 		}
 	}
-	return false, true
+	if !discoveryAssemblerSourceDiagnostic(filePath, string(output)) {
+		// A positive exit alone is not evidence of invalid assembly. Empty,
+		// internal, wrapper and unrecognized tool errors must remain failures.
+		return assemblySourceTargetProbe{}, err
+	}
+	if usedGeneratedHeaderStub && !strings.Contains(message, "unrecognized instruction") {
+		// An empty compiler-generated header supplies no constants/layouts.
+		// Its absence cannot prove that an operand or symbol is invalid. An
+		// unrecognized opcode is independent of those header definitions;
+		// otherwise keep the target eligible for its real package build.
+		return assemblySourceTargetProbe{}, nil
+	}
+	diagnostic := strings.TrimSpace(string(output))
+	if len(diagnostic) > 64<<10 {
+		diagnostic = diagnostic[:64<<10] + "\n... source diagnostic truncated ..."
+	}
+	return assemblySourceTargetProbe{
+		conclusive: true,
+		reason:     "current Go assembler rejected this source for the selected target:\n" + diagnostic,
+	}, nil
+}
+
+func discoveryAssemblerSourceDiagnostic(filePath, output string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "panic:") || strings.HasPrefix(trimmed, "fatal error:") ||
+			strings.HasPrefix(trimmed, "runtime:") || strings.HasPrefix(trimmed, "go tool asm:") {
+			return false
+		}
+	}
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, filePath+":") && !strings.HasPrefix(trimmed, "asm: ") {
+			continue
+		}
+		_, location, found := strings.Cut(trimmed, filePath+":")
+		if !found {
+			continue
+		}
+		end := 0
+		for end < len(location) && location[end] >= '0' && location[end] <= '9' {
+			end++
+		}
+		if end == 0 || end == len(location) || (location[end] != ':' && location[end] != ')') {
+			continue
+		}
+		if _, err := strconv.ParseUint(location[:end], 10, 32); err == nil {
+			return true
+		}
+	}
+	return strings.Contains(output, "asm: assembly of "+filePath+" failed") && strings.Contains(output, "asm: ")
 }
 
 func missingGoAsmHeader(message string) bool {

@@ -130,6 +130,9 @@ instruction families now have independent runtime oracles:
   forbidden. Branch/address families have positive, zero and negative cases.
 - Scalar memory moves share pre/post-indexed writeback validation and preserve
   the address update for both loads and stores, including narrow aliases.
+- ARM64 scalar SB moves load/store symbol memory rather than returning its
+  address. All seven integer aliases preserve signedness, unaligned widths,
+  literal-zero stores and distinct address-constant grammar.
 - ARM scalar SB references distinguish memory access from MOVW address
   constants. The seven integer move aliases share signedness, unaligned
   load/store helpers and Go's C_ADDR operand grammar, with native Go and
@@ -138,8 +141,15 @@ instruction families now have independent runtime oracles:
 Run the focused family tests, then every local gate on the combined source.
 Old-source corpus reports remain historical evidence, not passes for these
 repairs. Keep final-link/runtime claims in the separate compatibility repository.
-Local-register return exploration and external-package native source selection
-remain separate work; do not declare them solved by the object tests above.
+Local-register return and external-package native source selection are being
+integrated with independent runtime and provenance regressions. Neither their
+object tests nor a development compiler establishes passing pinned CI.
+
+Architecture applicability must not hide tool failures. The Go assembler
+probe now rejects infrastructure/unknown failures, bounds output and process
+lifetime, and retains each actual source rejection diagnostic. Generated
+header constants remain visible until the real package build provides them.
+Replay every schema-8 shard after the integrated source is frozen.
 
 ## Provisional native-layout proposal
 

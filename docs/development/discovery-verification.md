@@ -91,6 +91,15 @@ Probe unsuffixed architecture-specific assembly with the current Go assembler.
 Future-target queries conservatively retain unsuffixed/custom-suffixed paths
 before reevaluating source constraints.
 
+Architecture probes have bounded output, a one-minute deadline and owned
+process-group cleanup. Only a positive assembler exit with an actual source
+diagnostic can exclude a target. Missing tools, killed/crashed processes,
+resource errors and unknown/empty tool failures remain failures. Retain the
+actual target diagnostic in both ordinary source evidence and native-layout
+selection plans; do not replace it with a generic rejection message. If an
+empty generated-header stub lacks constants, keep the target eligible for the
+real package build rather than treating the missing layout as invalid source.
+
 For each target/tag/package group:
 
 1. Build that exact package with current Go, not `package/...`.
