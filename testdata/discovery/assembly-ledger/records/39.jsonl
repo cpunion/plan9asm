@@ -7,6 +7,7 @@
 {"module":"github.com/Offchainlabs/hashtree","version":"v0.2.5","status":"pending"}
 {"module":"github.com/ava-labs/libevm","version":"v1.16.2","status":"pending"}
 {"module":"github.com/axiomis-labs/websocket","version":"v1.8.14","status":"pending"}
+{"module":"github.com/blockchain-pro/bsc","version":"v1.5.19","status":"pending"}
 {"module":"github.com/cloudquery/arrow/go/v14","version":"v14.0.0-20231029080147-50d3871d0804","status":"pending"}
 {"module":"github.com/drovosek229/Xray-core","version":"v1.260401.3","status":"pending"}
 {"module":"github.com/ernoaapa/typescript-go","version":"v0.0.0-20260820064610-89d5d5b2849a","status":"pending"}

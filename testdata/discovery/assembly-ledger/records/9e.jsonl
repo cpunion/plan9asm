@@ -11,6 +11,7 @@
 {"module":"github.com/chainbound/bolt-builder","version":"v0.0.0-20241126154839-56e2c2d0b75d","status":"pending"}
 {"module":"github.com/ekexium/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/erigontech/ERIGON","version":"v1.10.16","status":"pending"}
+{"module":"github.com/etiennecossart/p2p_ntru","version":"v0.0.0-20181130010832-fa34903d3806","status":"pending"}
 {"module":"github.com/evmOS/go-ethereum","version":"v1.10.26","status":"pending"}
 {"module":"github.com/go-a2a/adk-go","version":"v0.0.0-20251031223353-02ca4c9009c8","status":"pending"}
 {"module":"github.com/hanfei1991/TiDB","version":"v1.0.0","status":"pending"}

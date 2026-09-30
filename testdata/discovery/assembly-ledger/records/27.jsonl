@@ -12,10 +12,13 @@
 {"module":"github.com/hareku/parquet-go","version":"v0.0.0-20260120183432-d55d52b830a9","status":"pending"}
 {"module":"github.com/koleter/go-util","version":"v1.3.0","status":"pending"}
 {"module":"github.com/lance6716/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/mapuri/serfer","version":"v0.0.0-20151213071318-eb4fd9cd2cbc","status":"pending"}
 {"module":"github.com/offchainlabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
 {"module":"github.com/philipludington/websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/probechain/rydberg-mainnet","version":"v0.0.0-20260316220959-5bbc454b15fd","status":"pending"}
+{"module":"github.com/quartercastle/vector","version":"v0.2.0","status":"pending"}
 {"module":"github.com/ramondeklein/minio-pkg/v3","version":"v3.5.0-ramon4","status":"pending"}
 {"module":"github.com/ryanligod/ma-nsw","version":"v0.0.0-20260126065952-0ef9335dba67","status":"pending"}
 {"module":"github.com/sigma/vmw-guestinfo","version":"v0.0.0-20170707015358-25eff159a728","status":"pending"}
+{"module":"github.com/vivpm/nft_dao/go","version":"v0.0.0-20240218043042-c524fde63c6f","status":"pending"}
 {"module":"github.laiyagushi.com/wasilibs/wazerox","version":"v0.0.0-20240124024944-4923be63ab5f","status":"pending"}

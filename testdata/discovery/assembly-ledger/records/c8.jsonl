@@ -1,6 +1,7 @@
 {"module":"ghproxy-9d2.pages.dev/fyrchik/lthash","version":"v0.0.0-20191204095745-745a40a52a04","status":"pending"}
 {"module":"ghproxy-9d2.pages.dev/xtaci/bdls","version":"v1.3.4","status":"pending"}
 {"module":"git.gammaspectra.live/P2Pool/go-hex","version":"v0.0.0-20251214231021-098f65fc1214","status":"pending"}
+{"module":"gitee.com/mirrors/nhooyr-websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/Aurorachain-io/go-aoa","version":"v0.0.0-20240326064047-d85cb2053876","status":"pending"}
 {"module":"github.com/CaduceusMetaverseProtocol/go-ethereum","version":"v1.15.9","status":"pending"}
 {"module":"github.com/ConsenSys/quorum","version":"v1.10.26","status":"pending"}
@@ -17,6 +18,7 @@
 {"module":"github.com/nikitadmitryuk/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/ontio/ontoLogy-crypto","version":"v1.2.2","status":"pending"}
 {"module":"github.com/payrange/gatt","version":"v0.0.0-20191111230209-2046ed81c20c","status":"pending"}
+{"module":"github.com/quentin-m/concurrent-swiss-map","version":"v0.0.0-20251002064441-db226d6c61be","status":"pending"}
 {"module":"github.com/richardwilkes/canvas","version":"v0.3.1","status":"pending"}
 {"module":"github.com/robomotionio/goant","version":"v0.2.1","status":"pending"}
 {"module":"github.com/statusX7/xray-core-oldxr","version":"v1.260327.0","status":"pending"}

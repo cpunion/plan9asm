@@ -10,6 +10,7 @@
 {"module":"github.com/onflow/crypto","version":"v0.27.2","status":"pending"}
 {"module":"github.com/reddts/xray-core","version":"v0.0.0-20260122064839-dbe6f6d8816e","status":"pending"}
 {"module":"github.com/sesachain/sxc","version":"v0.0.0-20221208022340-5831dab467a0","status":"pending"}
+{"module":"github.com/shiqinfeng1/gosolo/crypto","version":"v0.0.0-20230929131744-c318ae0133d4","status":"pending"}
 {"module":"github.com/specularL2/go-ethereum","version":"v0.0.0-20240215124523-3381d86fa52a","status":"pending"}
 {"module":"github.com/thanm/u-root","version":"v7.0.0+incompatible","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p7","version":"v0.2.0","status":"pending"}

@@ -9,6 +9,7 @@
 {"module":"github.com/cwbudde/agg_go","version":"v0.5.0","status":"pending"}
 {"module":"github.com/danielpacak/opentelemetry-ebpf-profiler","version":"v0.0.0-20260721045557-d00431263501","status":"pending"}
 {"module":"github.com/dessaya/iota.go","version":"v1.0.0","status":"pending"}
+{"module":"github.com/devicehive/gatt","version":"v0.0.0-20160304123721-478fd0a937cd","status":"pending"}
 {"module":"github.com/filosottile/go/src/cmd","version":"v0.0.0-20250127143042-c190aef6e432","status":"pending"}
 {"module":"github.com/google/gVisor","version":"v0.0.0-20260922014844-164b166ce347","status":"pending"}
 {"module":"github.com/gracefulearth/image","version":"v0.0.0-20260120042349-d3b5e916691e","status":"pending"}

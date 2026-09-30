@@ -11,6 +11,7 @@
 {"module":"github.com/mefistofelix/u-root","version":"v0.16.0","status":"pending"}
 {"module":"github.com/meko-christian/algo-approx","version":"v0.2.0","status":"pending"}
 {"module":"github.com/offchainLabs/nitro","version":"v0.1.1","status":"pending"}
+{"module":"github.com/openstor/crc64nvme","version":"v0.0.0-20251029033624-a8be6069b19b","status":"pending"}
 {"module":"github.com/tahardi/bearclave","version":"v0.2.0","status":"pending"}
 {"module":"github.com/tmc/purego","version":"v0.9.0","status":"pending"}
 {"module":"github.com/tos-network/gtos","version":"v0.0.0-20260326150235-078bc0377a57","status":"pending"}

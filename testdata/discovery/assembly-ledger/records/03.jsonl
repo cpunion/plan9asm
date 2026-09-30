@@ -4,6 +4,7 @@
 {"module":"github.com/brt-chain/go-ethereum","version":"v1.15.8","status":"pending"}
 {"module":"github.com/choleraehyq/goid","version":"v0.0.24","status":"pending"}
 {"module":"github.com/deviousdrops/mindb","version":"v0.1.0","status":"pending"}
+{"module":"github.com/drakkan/crypto","version":"v0.0.0-20210322153248-0c34fe9e7dc2","status":"pending"}
 {"module":"github.com/electroneum/electroneum-sc","version":"v0.0.0-20260828133443-74194a6cf48c","status":"pending"}
 {"module":"github.com/golang/gofrontend/libgo/go","version":"v0.0.0-20260225151516-d7cb797c4617","status":"pending"}
 {"module":"github.com/hokageregard/excrypto","version":"v0.0.5","status":"pending"}
@@ -20,6 +21,7 @@
 {"module":"github.com/t-j-l/parquet-go","version":"v0.0.0-20260713230428-988b7b98ab8d","status":"pending"}
 {"module":"github.com/uniqueuserajs/mathgl","version":"v0.0.0-20260215230215-f4e31288270a","status":"pending"}
 {"module":"github.com/vc42/parquet-go","version":"v0.0.0-20260309190417-7b56fd18a9b3","status":"pending"}
+{"module":"github.com/wingpig99/gmsm","version":"v0.0.0-20250106235300-5a0ff81dc32b","status":"pending"}
 {"module":"github.com/yperbasis/go-ethereum","version":"v0.0.0-20230824084913-1a2135044cd4","status":"pending"}
 {"module":"go.sia.tech/skyrecover","version":"v0.0.0-20221220194040-f393265a7110","status":"pending"}
 {"module":"lukechampine.com/noescape","version":"v0.0.0-20191006153127-214c369a3d1b","status":"pending"}

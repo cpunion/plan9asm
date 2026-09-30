@@ -13,5 +13,6 @@
 {"module":"github.com/puneetdixit200/u-root","version":"v0.16.0","status":"pending"}
 {"module":"github.com/quantumcoinproject/quantum-coin-go","version":"v1.11.12","status":"pending"}
 {"module":"github.com/restream/reindexer/v5","version":"v5.16.0","status":"pending"}
+{"module":"github.com/yetanotherco/gnark-crypto","version":"v0.0.0-20251017182346-bd8368b1eb9d","status":"pending"}
 {"module":"github.com/zhfreal/utls","version":"v1.8.7","status":"pending"}
 {"module":"gitproxy.zycloud.tk/gonum/gonum","version":"v0.16.0","status":"pending"}

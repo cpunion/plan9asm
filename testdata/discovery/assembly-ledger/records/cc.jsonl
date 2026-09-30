@@ -7,6 +7,7 @@
 {"module":"github.com/berachain/polaris-geth","version":"v1.13.10","status":"pending"}
 {"module":"github.com/blockdagnetworklabs/go-ethereum","version":"v1.14.11","status":"pending"}
 {"module":"github.com/bojieli/whitehat","version":"v0.0.0-20150513155927-d1adbd70417a","status":"pending"}
+{"module":"github.com/dailycrypto-me/daily-go-client/daily-evm","version":"v0.0.0-20240822205838-86892a063164","status":"pending"}
 {"module":"github.com/dan-strohschein/syndrdb-simd","version":"v0.0.3","status":"pending"}
 {"module":"github.com/everanium/itb","version":"v0.4.1","status":"pending"}
 {"module":"github.com/fancybits/parquet-go","version":"v0.0.0-20251104150735-8cb316288e0a","status":"pending"}

@@ -5,6 +5,7 @@
 {"module":"github.com/XTLS/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/alexgear/checker","version":"v0.0.0-20160114174053-8563a6ae24ad","status":"pending"}
 {"module":"github.com/alohabrowser/xray-core","version":"v1.260206.0","status":"pending"}
+{"module":"github.com/antoniomika/net","version":"v0.30.0","status":"pending"}
 {"module":"github.com/block/vitess","version":"v0.0.0-20260529195831-81e1a40f3499","status":"pending"}
 {"module":"github.com/costela/websocket","version":"v1.8.14","status":"pending"}
 {"module":"github.com/darkgl/websocket","version":"v0.0.0-20260109125802-9f473adfa595","status":"pending"}

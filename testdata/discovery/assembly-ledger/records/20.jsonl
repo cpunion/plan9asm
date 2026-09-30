@@ -30,4 +30,5 @@
 {"module":"github.com/pointlander/tensor","version":"v0.8.1","status":"pending"}
 {"module":"github.com/skylenet/swarm","version":"v1.8.27","status":"pending"}
 {"module":"github.com/tklauser/go","version":"v0.0.0-20230919055126-eca5a97340e6","status":"pending"}
+{"module":"github.com/weijun-sh/efsn-f","version":"v0.0.0-20190327060819-dfcd3dc51286","status":"pending"}
 {"module":"github.com/zcalusic/sysinfo","version":"v1.1.3","status":"pending"}

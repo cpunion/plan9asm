@@ -18,6 +18,7 @@
 {"module":"github.com/jimmygchen/go-ethereum","version":"v1.12.0","status":"pending"}
 {"module":"github.com/nethermindeth/rollup-geth","version":"v0.0.0-20250416134320-77bef63c5a8d","status":"pending"}
 {"module":"github.com/obscuronet/go-ethereum","version":"v1.10.16","status":"pending"}
+{"module":"github.com/ominiaccount/omni-account-bundler","version":"v0.0.0-20241230103012-4f1884ea241d","status":"pending"}
 {"module":"github.com/parquet-go/bitpack","version":"v1.1.0","status":"pending"}
 {"module":"github.com/quant1x/quant1x","version":"v0.8.1","status":"pending"}
 {"module":"github.com/shurizzle/editor","version":"v0.0.0-20250228204917-c1387144adb1","status":"pending"}

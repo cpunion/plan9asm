@@ -16,6 +16,7 @@
 {"module":"github.com/fann22/mobile","version":"v0.0.0-20251205173655-52a5fcb71992","status":"pending"}
 {"module":"github.com/jm33-m0/emp3r0r/core","version":"v0.0.0-20260921235139-b8c0daad3af8","status":"pending"}
 {"module":"github.com/jnb666/chip16","version":"v0.0.0-20260608114528-06cfcf284764","status":"pending"}
+{"module":"github.com/quarkchain/go-ethereum","version":"v1.9.22","status":"pending"}
 {"module":"github.com/rangersprotocolcode/go-rangers","version":"v1.0.24","status":"pending"}
 {"module":"github.com/regclient/regclient","version":"v0.11.6","status":"pending"}
 {"module":"github.com/sirzooro/pion_transport/v4","version":"v4.0.0-20260714181325-0ccb39d31e06","status":"pending"}

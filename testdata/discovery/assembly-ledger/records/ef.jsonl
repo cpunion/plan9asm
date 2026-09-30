@@ -23,6 +23,7 @@
 {"module":"github.com/ruslano69/xxh3-bloom","version":"v0.9.0","status":"pending"}
 {"module":"github.com/thepudds/go-fuzz","version":"v0.0.0-20210914135545-4980593459a1","status":"pending"}
 {"module":"github.com/wasix-org/go/src","version":"v0.0.0-20251217182555-e5fdf0eb2131","status":"pending"}
+{"module":"github.com/weijinrongyuan/sonic","version":"v0.0.0-20251021024132-c32d290aaf33","status":"pending"}
 {"module":"github.com/xinfinorg/xdposchain","version":"v1.6.0","status":"pending"}
 {"module":"github.com/yokecd/wazero","version":"v1.9.0","status":"pending"}
 {"module":"github.com/youtube/Vitess","version":"v0.24.3","status":"pending"}

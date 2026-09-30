@@ -3,6 +3,7 @@
 {"module":"github.com/CyberChainXyz/go-cyberchain","version":"v1.3.0","status":"pending"}
 {"module":"github.com/LiunxPaisley/v2ray-core","version":"v3.50.2+incompatible","status":"pending"}
 {"module":"github.com/Psiphon-labs/psiphon-tunnel-core","version":"v1.0.10","status":"pending"}
+{"module":"github.com/RezaEjtehadi/fyne/v2","version":"v2.0.0-20251002145519-32e37727062f","status":"pending"}
 {"module":"github.com/RoaringBitmap/Roaring/v2","version":"v2.29.0","status":"pending"}
 {"module":"github.com/alrighttt/core","version":"v0.2.1","status":"pending"}
 {"module":"github.com/andrewrynhard/kubernetes","version":"v1.5.2","status":"pending"}

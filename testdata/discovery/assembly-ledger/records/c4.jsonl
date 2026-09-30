@@ -2,6 +2,7 @@
 {"module":"github.com/Honny1/buildah","version":"v0.0.0-20260917094059-6ad05660bfe1","status":"pending"}
 {"module":"github.com/Tenderly/net-nitro","version":"v0.0.0-20260727074129-aea863015217","status":"pending"}
 {"module":"github.com/bobotu/myk","version":"v0.0.0-20200319053650-d0d28432a934","status":"pending"}
+{"module":"github.com/carte7000/crypto","version":"v0.0.0-20190715192459-7e701899cb7f","status":"pending"}
 {"module":"github.com/cedar2025/xray-core","version":"v0.0.0-20260407101012-e5a9fb752e0d","status":"pending"}
 {"module":"github.com/consensys/gnark-CRYPTO","version":"v0.21.0","status":"pending"}
 {"module":"github.com/dgryski/go-stadtx","version":"v0.0.0-20181220175827-101ddca05f0b","status":"pending"}

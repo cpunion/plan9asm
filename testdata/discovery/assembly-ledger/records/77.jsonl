@@ -11,6 +11,7 @@
 {"module":"github.com/derekchiang/go-ethereum","version":"v1.6.7","status":"pending"}
 {"module":"github.com/dusk-network/bn256","version":"v0.5.1-lattices","status":"pending"}
 {"module":"github.com/everyx/sing-tun","version":"v0.0.0-20260504084102-69f3a9e6bdd7","status":"pending"}
+{"module":"github.com/hnb-eco/hnb-blockchain","version":"v0.0.0-20190308021717-4b5b77217d7f","status":"pending"}
 {"module":"github.com/introsuit/go-dyno","version":"v0.0.0-20251202082039-95341003777e","status":"pending"}
 {"module":"github.com/jonjohnsonjr/dagdotdev/pkg/forks/github.com/klauspost/compress","version":"v0.0.0-20250627203740-6d22814abcf2","status":"pending"}
 {"module":"github.com/justwasm/go4js","version":"v0.0.2","status":"pending"}
@@ -22,6 +23,7 @@
 {"module":"github.com/sanserogames/letsgo-os","version":"v0.0.0-20260911125559-457a4716c098","status":"pending"}
 {"module":"github.com/simonwaldherr/tinySQL","version":"v0.56.0","status":"pending"}
 {"module":"github.com/splizard/go","version":"v0.0.0-20260116174045-7251c9e0f00a","status":"pending"}
+{"module":"github.com/sullivanmatt/check.tls.support","version":"v0.0.0-20240819142741-e177997a5c17","status":"pending"}
 {"module":"github.com/testinprod-io/op-erigon","version":"v1.9.6","status":"pending"}
 {"module":"github.com/traceableai/opentelemetry-ebpf-profiler","version":"v0.0.0-20250603064901-681f07fb2cdc","status":"pending"}
 {"module":"github.com/usbarmory/armored-witness-os","version":"v0.0.0-20251215144402-a3a8cf550def","status":"pending"}

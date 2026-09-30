@@ -9,5 +9,6 @@
 {"module":"github.com/nlamirault/docker-machine-scaleway","version":"v0.0.0-20160420111043-7df39b84adb1","status":"pending"}
 {"module":"github.com/starptech/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}
 {"module":"github.com/stratosnet/stratos-chain","version":"v0.12.2","status":"pending"}
+{"module":"github.com/timelinelabs/romulus","version":"v0.0.0-20160205235731-c36084430c3d","status":"pending"}
 {"module":"github.com/vinaes/sing-tun","version":"v0.8.9","status":"pending"}
 {"module":"gitlab.com/Yawning/chacha20.git","version":"v0.0.0-20230427033715-7877545b1b37","status":"pending"}

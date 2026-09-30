@@ -19,7 +19,9 @@
 {"module":"github.com/niaojiao/im","version":"v0.0.0-20241126065358-6d33a37df037","status":"pending"}
 {"module":"github.com/sbinet-gonum/arrow/go/arrow","version":"v0.0.0-20191030140155-41753ace481a","status":"pending"}
 {"module":"github.com/scriptrock/crypto","version":"v1.1.0","status":"pending"}
+{"module":"github.com/toffix17/xlayer-erigon","version":"v0.0.0-20240523085453-d3deb0acc9f1","status":"pending"}
 {"module":"github.com/tsenart/veloz","version":"v0.1.0","status":"pending"}
 {"module":"github.com/usbarmory/tamago","version":"v1.27.1","status":"pending"}
+{"module":"github.com/vikstrous2/flow-go","version":"v0.26.16","status":"pending"}
 {"module":"github.com/zhangzhenghao/gorse","version":"v0.1.5","status":"pending"}
 {"module":"go.opentelemetry.io/ebpf-profiler","version":"v0.0.202636","status":"pending"}

@@ -2,6 +2,7 @@
 {"module":"github.com/ByTedAnce/sonic","version":"v1.15.4","status":"pending"}
 {"module":"github.com/Fangliding/Xray","version":"v1.260202.0","status":"pending"}
 {"module":"github.com/NETBSD/pkgsrc","version":"v0.0.0-20260922205539-a97271e6ca87","status":"pending"}
+{"module":"github.com/anilchinchawale/quorum","version":"v0.0.0-20171022005719-a9452c1cb4ee","status":"pending"}
 {"module":"github.com/bestyourwallet/zkink-go-ethereum","version":"v0.0.1","status":"pending"}
 {"module":"github.com/blockchaindevsh/go-ethereum","version":"v1.9.22","status":"pending"}
 {"module":"github.com/donovandiamond/pty","version":"v0.0.0-20241031185650-edfbf75025b0","status":"pending"}
@@ -15,6 +16,7 @@
 {"module":"github.com/shirokhorshid/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/storj/infectious","version":"v1.0.1","status":"pending"}
 {"module":"github.com/taikochain/taiko-geth","version":"v1.18.0","status":"pending"}
+{"module":"github.com/thiagola92/go-lockedfile","version":"v0.1.0","status":"pending"}
 {"module":"github.com/trisia/gmsm","version":"v0.0.0-20250929065044-ce886f1c6b3c","status":"pending"}
 {"module":"github.com/unxed/wayland","version":"v0.0.0-20260817130529-bd63ae67ca17","status":"pending"}
 {"module":"github.com/yujhe-li-appier/parquet-go","version":"v0.0.0-20260126212724-30f6dd3d6952","status":"pending"}

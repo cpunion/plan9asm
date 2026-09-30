@@ -5,6 +5,7 @@
 {"module":"github.com/Injectivelabs/go-ethereum","version":"v1.16.3","status":"pending"}
 {"module":"github.com/KianYang-Lee/websocket","version":"v0.0.0-20240407163435-bd07a64be680","status":"pending"}
 {"module":"github.com/NAKsir-melody/go-ethereum-korean","version":"v0.0.0-20190409080608-a8e0099cbe24","status":"pending"}
+{"module":"github.com/Quantaureum/quantaureum-go-bigmodexpfix","version":"v1.0.0","status":"pending"}
 {"module":"github.com/Yewenyu/clash","version":"v1.19.17","status":"pending"}
 {"module":"github.com/YoohPHL/xray-core","version":"v0.0.0-20260709013122-149a1fe9445e","status":"pending"}
 {"module":"github.com/Zoinen/wayland","version":"v0.4.3","status":"pending"}

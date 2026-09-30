@@ -15,6 +15,7 @@
 {"module":"github.com/mlange-42/gonum","version":"v0.0.0-20250422220541-720fcb9699a9","status":"pending"}
 {"module":"github.com/njj0121/DST-Nucleus","version":"v1.3.0","status":"pending"}
 {"module":"github.com/ooni/go","version":"v0.0.0-20220812032259-8cb350d69a1b","status":"pending"}
+{"module":"github.com/panoptisDev/pano-chain-go-ethereum","version":"v0.0.0-20251001173328-c4da06fe3f3b","status":"pending"}
 {"module":"github.com/proorc/minio","version":"v0.0.0-20240520071914-9c76fd7b2e25","status":"pending"}
 {"module":"github.com/quarkchain/op-geth","version":"v1.0.2","status":"pending"}
 {"module":"github.com/roy19831015/commongmsm","version":"v1.0.20251210143358","status":"pending"}

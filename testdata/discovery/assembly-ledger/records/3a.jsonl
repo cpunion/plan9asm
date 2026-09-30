@@ -1,3 +1,4 @@
+{"module":"gitee.com/linbeat/minio","version":"v0.0.0-20250924072048-fcf8e398a0d0","status":"pending"}
 {"module":"github.com/AlaudaDevops/cfssl","version":"v1.6.5","status":"pending"}
 {"module":"github.com/EThereum/go-ethereum","version":"v1.17.5","status":"pending"}
 {"module":"github.com/GeorgeGuo2018/etcd","version":"v2.3.8+incompatible","status":"pending"}
@@ -18,4 +19,5 @@
 {"module":"github.com/tonnerre/golang-go.crypto","version":"v0.0.0-20140219195149-9bbb332f040b","status":"pending"}
 {"module":"github.com/tronuo0/xray-core","version":"v0.0.0-20260912200935-c412e77a9b71","status":"pending"}
 {"module":"github.com/uzqw/vex","version":"v0.2.1","status":"pending"}
+{"module":"github.com/xalanq/gls","version":"v0.0.0-20251028103321-c9411588f1ad","status":"pending"}
 {"module":"piko.sh/piko","version":"v0.0.0-alpha.38","status":"pending"}

@@ -27,4 +27,5 @@
 {"module":"github.com/tudorhulban/arenalog","version":"v0.0.6-0.20260601121910-51e15bf7c47f","status":"pending"}
 {"module":"github.com/vcvvvc/go-wallet-sdk/crypto","version":"v0.1.0","status":"pending"}
 {"module":"github.com/wemixarchive/go-stablenet","version":"v1.1.0","status":"pending"}
+{"module":"github.com/wenmyn/golang-src-analysis/go1.17.2.src/go/src","version":"v0.0.0-20211126084416-7366bc9f9dae","status":"pending"}
 {"module":"github.com/winoros/tidb","version":"v1.0.0","status":"pending"}

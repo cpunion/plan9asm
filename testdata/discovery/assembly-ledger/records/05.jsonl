@@ -1,4 +1,5 @@
 {"module":"bitbucket.org/brtzsnr/zurichess","version":"v0.0.0-20181124230012-ee20f164ad4a","status":"pending"}
+{"module":"git.gammaspectra.live/P2Pool/blake2b","version":"v0.42.1","status":"pending"}
 {"module":"github.com/AdemarTellecher/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/AlDanial/cloc","version":"v1.96.1","status":"pending"}
 {"module":"github.com/CRossel87a/go-ethereum-sonic","version":"v0.0.0-20251210124558-bbe3b82bbbb5","status":"pending"}
@@ -22,6 +23,7 @@
 {"module":"github.com/nonsense/op-geth","version":"v1.101605.0","status":"pending"}
 {"module":"github.com/parable-work/typescript-go","version":"v0.0.0-20260701192534-c5de5679073f","status":"pending"}
 {"module":"github.com/probe-lab/go-ethereum","version":"v0.0.0-20250509194247-08af87b0c67d","status":"pending"}
+{"module":"github.com/salitha-gunawardhana-99/wireguard-go","version":"v0.0.0-20250716170648-1d0488a3d7da","status":"pending"}
 {"module":"github.com/wyx2685/Xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"github.com/xtdlib/websocket","version":"v0.0.0-20241204191143-11bda985bf5f","status":"pending"}
 {"module":"github.com/xzav3r/chain33","version":"v6.1.0+incompatible","status":"pending"}

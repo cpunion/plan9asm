@@ -3,6 +3,7 @@
 {"module":"github.com/Asylian21/sha256mb","version":"v0.1.0","status":"pending"}
 {"module":"github.com/Capricornus007/gvisor-awg","version":"v0.0.0-20260902104837-6728272f3831","status":"pending"}
 {"module":"github.com/CopperCarbonateCollective/ollama-DreamingMetal","version":"v0.0.0-20251103073316-e1ffba4c4925","status":"pending"}
+{"module":"github.com/VictoriumProject/go-victorium","version":"v0.0.0-20190810212836-203965d47c4b","status":"pending"}
 {"module":"github.com/akzj/go-fast-kv","version":"v0.0.0-20260425150153-69633637c817","status":"pending"}
 {"module":"github.com/allo-rs/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/bitnetmoney/bitnet","version":"v0.0.5","status":"pending"}

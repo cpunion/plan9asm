@@ -1,9 +1,11 @@
 {"module":"code.kibou.tools","version":"v0.0.0-20260816184930-d8118a4a932a","status":"pending"}
 {"module":"codeberg.org/nestcloud/creack-pty","version":"v1.1.24","status":"pending"}
+{"module":"github.202132.xyz/scroll-tech/go-ethereum","version":"v1.15.11","status":"pending"}
 {"module":"github.com/0xPolygon/bor","version":"v1.14.13","status":"pending"}
 {"module":"github.com/Defined2014/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/Gagliardetto/solana-go","version":"v1.24.0","status":"pending"}
 {"module":"github.com/InsighterInc/bxmp","version":"v0.0.0-20180808223232-84ff2b1a0db2","status":"pending"}
+{"module":"github.com/LunaNode/vultr","version":"v0.0.0-20160527190103-acabab9deccd","status":"pending"}
 {"module":"github.com/MatsuriDayo/Matsuri/libcore","version":"v0.0.0-20230630085821-d16fff69534d","status":"pending"}
 {"module":"github.com/PeterRK/w1hash","version":"v0.0.1","status":"pending"}
 {"module":"github.com/Specter-Foundation/go-ethereum","version":"v1.16.2-cosmos-1","status":"pending"}
@@ -15,6 +17,7 @@
 {"module":"github.com/franzkafkayu/xray-core","version":"v1.5.5","status":"pending"}
 {"module":"github.com/goccy/wasm2go","version":"v0.5.15","status":"pending"}
 {"module":"github.com/hanchao886/sonic","version":"v1.14.2","status":"pending"}
+{"module":"github.com/jomagalo/dgi-node","version":"v1.1.1","status":"pending"}
 {"module":"github.com/lanruyi/mihomo-backup","version":"v0.0.0-20260919154937-9acd84630569","status":"pending"}
 {"module":"github.com/openwayz/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/qiufengyeluo1024/velcro-go","version":"v0.0.0-20260920011632-bb27ea3e9903","status":"pending"}

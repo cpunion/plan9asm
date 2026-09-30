@@ -1,3 +1,4 @@
+{"module":"docker.baopinshidai.com/ethereum/go-ethereum","version":"v1.16.4","status":"pending"}
 {"module":"github.com/DB2510/kryptology","version":"v1.5.5","status":"pending"}
 {"module":"github.com/DapengAiTeach/zdpgo_fasthttp","version":"v0.0.0-20220624084242-4336771abc49","status":"pending"}
 {"module":"github.com/LDkk25/websocket","version":"v0.0.0-20240822081019-3dd723ae69f0","status":"pending"}
@@ -8,6 +9,7 @@
 {"module":"github.com/hugefiver/fakessh","version":"v0.5.6","status":"pending"}
 {"module":"github.com/iotaledger/iota.lib.go","version":"v1.0.0","status":"pending"}
 {"module":"github.com/janpfeifer/go-highway","version":"v0.0.0-dev9","status":"pending"}
+{"module":"github.com/kastenhq/crypto","version":"v0.43.0-kastenhq","status":"pending"}
 {"module":"github.com/klauspost/Compress","version":"v1.20.0","status":"pending"}
 {"module":"github.com/kobe-finance/go-mediatoolkit","version":"v1.4.0","status":"pending"}
 {"module":"github.com/lixd/i-go","version":"v0.0.0-20250808060809-06115a221fa7","status":"pending"}

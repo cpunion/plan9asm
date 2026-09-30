@@ -10,6 +10,7 @@
 {"module":"github.com/gonum/gONum","version":"v0.17.0","status":"pending"}
 {"module":"github.com/inetaf/netstack","version":"v0.0.0-20220214151720-7585b01ddccf","status":"pending"}
 {"module":"github.com/jpalazzolo828/websocket","version":"v1.8.12","status":"pending"}
+{"module":"github.com/jzelinskie/ristretto","version":"v0.1.0","status":"pending"}
 {"module":"github.com/kk-code-lab/rdir","version":"v0.0.0-20260126212110-c491286e1159","status":"pending"}
 {"module":"github.com/mattn/tensai","version":"v0.0.30","status":"pending"}
 {"module":"github.com/mohasdev/D4C","version":"v0.0.0-20240401020425-065fc41efb8a","status":"pending"}

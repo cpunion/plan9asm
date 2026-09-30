@@ -8,6 +8,7 @@
 {"module":"github.com/chengcong1/compress","version":"v0.0.0-20260302172147-bcf0d1289c8d","status":"pending"}
 {"module":"github.com/chenxiaolong/golang-x-sys","version":"v0.46.0-basicsync.0","status":"pending"}
 {"module":"github.com/doriancoin-project/dsvd/ltcutil","version":"v1.1.5","status":"pending"}
+{"module":"github.com/felartu/gocrypto","version":"v0.0.0-20250927194341-2beaa59a3c99","status":"pending"}
 {"module":"github.com/fwessels/go-cv-simd","version":"v0.0.0-20170420180047-8cf4257fbf24","status":"pending"}
 {"module":"github.com/jmhodges/crypto","version":"v0.0.0-20260714033321-10b54ffa51b1","status":"pending"}
 {"module":"github.com/lightec-xyz/gnark-crypto","version":"v0.0.0-20250403072623-6d10578c6e27","status":"pending"}

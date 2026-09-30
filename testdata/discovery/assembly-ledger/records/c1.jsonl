@@ -17,4 +17,5 @@
 {"module":"github.com/redecoinproject/redecoin","version":"v0.0.0-20260210091828-8fee10143c6b","status":"pending"}
 {"module":"github.com/slok2024/xray-core","version":"v0.0.0-20260426100223-fca472d8caf0","status":"pending"}
 {"module":"github.com/yuuzin217/go","version":"v0.0.0-20260519090412-cb730ad23d1a","status":"pending"}
+{"module":"github.com/zono-swap/zsc-geth","version":"v1.101602.3","status":"pending"}
 {"module":"go.podman.io/buildah","version":"v1.45.1","status":"pending"}

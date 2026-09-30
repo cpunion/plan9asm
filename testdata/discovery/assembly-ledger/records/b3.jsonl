@@ -8,6 +8,7 @@
 {"module":"github.com/clark1013/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/continuumllc/cpuid","version":"v1.3.2","status":"pending"}
 {"module":"github.com/coocood/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/dominant-strategies/ltcd/ltcutil","version":"v0.0.0-20251027162144-b897567547e1","status":"pending"}
 {"module":"github.com/qitmeer/qng","version":"v1.2.0","status":"pending"}
 {"module":"github.com/roodeag/go-ethereum-arbirum","version":"v0.0.0-20240605100646-a9f5b9d40f9d","status":"pending"}
 {"module":"github.com/templexxx/xorsimd","version":"v0.4.4","status":"pending"}

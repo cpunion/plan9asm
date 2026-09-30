@@ -8,6 +8,7 @@
 {"module":"github.com/bluefishx/xray-core","version":"v0.0.0-20260601021109-94ffd50060f1","status":"pending"}
 {"module":"github.com/f3nixsec/go-ethereum","version":"v0.0.0-20260408105729-a8ea6319f155","status":"pending"}
 {"module":"github.com/fako1024/slimcap","version":"v1.0.12","status":"pending"}
+{"module":"github.com/fletaio/fleta_testnet_deprecated","version":"v0.0.0-20191014050904-2dc101cea604","status":"pending"}
 {"module":"github.com/glycerine/blake2b-simd","version":"v0.0.0-20190319060614-116061190a9b","status":"pending"}
 {"module":"github.com/james-lawrence/go-libutp","version":"v0.0.0-20251101151504-408c176293bf","status":"pending"}
 {"module":"github.com/kircloud/xray-core","version":"v0.0.0-20251212193736-4ee61aab15b5","status":"pending"}

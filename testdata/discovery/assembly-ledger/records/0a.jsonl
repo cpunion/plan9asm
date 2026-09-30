@@ -6,6 +6,7 @@
 {"module":"github.com/alexanderyastrebov/vanity25519","version":"v0.0.0-20250912201029-ee4ba178c078","status":"pending"}
 {"module":"github.com/alt-research/go-ethereum","version":"v0.0.0-20240404102610-9cb8de87037b","status":"pending"}
 {"module":"github.com/anthony-dong/pid","version":"v0.0.10","status":"pending"}
+{"module":"github.com/atomicvest/crypto","version":"v0.0.0-20240712192811-31393c1a7234","status":"pending"}
 {"module":"github.com/bwesterb/go-xmssmt","version":"v1.6.1","status":"pending"}
 {"module":"github.com/carved4/go-maldev","version":"v1.0.0","status":"pending"}
 {"module":"github.com/cortexfoundation/CortexTheseus","version":"v1.10.72","status":"pending"}
@@ -20,4 +21,5 @@
 {"module":"github.com/thampiotr/opentelemetry-ebpf-profiler","version":"v0.0.202545","status":"pending"}
 {"module":"github.com/thehippo/roaring/v2","version":"v2.4.5","status":"pending"}
 {"module":"github.com/truffle-dev/arrow-go/v18","version":"v18.6.0","status":"pending"}
+{"module":"github.com/zzl200012/matrixone","version":"v0.1.0","status":"pending"}
 {"module":"github.laiyagushi.com/tphakala/go-flac","version":"v1.1.0","status":"pending"}

@@ -2,6 +2,7 @@
 {"module":"github.com/Fred78290/gomobile","version":"v0.0.0-20250717123629-ffdd61169c99","status":"pending"}
 {"module":"github.com/XinFinOrg/XDPOSChain","version":"v1.6.0","status":"pending"}
 {"module":"github.com/chainsafe/geth","version":"v0.0.0-20180822083900-316fc7ecfc10","status":"pending"}
+{"module":"github.com/eni-chain/go-ethereum","version":"v0.0.1","status":"pending"}
 {"module":"github.com/gsqblockchain/gsqbc","version":"v0.0.0-20210402131428-0833c38e44d3","status":"pending"}
 {"module":"github.com/intel/cpuid","version":"v0.0.0-20241219215823-96de68d22bf5","status":"pending"}
 {"module":"github.com/ixios-io/ixiosSpark","version":"v1.1.0","status":"pending"}

@@ -14,6 +14,7 @@
 {"module":"github.com/linxGnu/lz4","version":"v2.3.0+incompatible","status":"pending"}
 {"module":"github.com/lucas-clemente/aes12","version":"v0.0.0-20171027163421-cd47fb39b79f","status":"pending"}
 {"module":"github.com/marconiprotocol/go-methereum","version":"v0.0.0-20200110221624-c11cd243dfa8","status":"pending"}
+{"module":"github.com/ovechkin-dm/go-dyno","version":"v0.5.3","status":"pending"}
 {"module":"github.com/qorm/platform","version":"v0.9.8","status":"pending"}
 {"module":"github.com/racerxdl/segdsp","version":"v1.0.0","status":"pending"}
 {"module":"github.com/remobjects/goldbaselibrary","version":"v0.0.0-20260804134941-d1870f3c0851","status":"pending"}

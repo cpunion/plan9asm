@@ -15,6 +15,7 @@
 {"module":"github.com/goccy/perlwasm2go","version":"v0.2.2","status":"pending"}
 {"module":"github.com/liusdu/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/maguro/go","version":"v0.0.0-20210319232121-6ae3b70ef255","status":"pending"}
+{"module":"github.com/mdp/crypto","version":"v0.0.0-20170126200616-854ae91cdcbf","status":"pending"}
 {"module":"github.com/tasty-gumi/milvus/pkg","version":"v0.0.0-20240705064010-7cac20f836da","status":"pending"}
 {"module":"github.com/vinted/vitess","version":"v0.23.3","status":"pending"}
 {"module":"github.com/yanfeizhang/go-training","version":"v0.0.0-20250709094048-122e149e4070","status":"pending"}

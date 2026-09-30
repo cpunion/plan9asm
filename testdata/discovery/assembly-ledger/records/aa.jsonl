@@ -7,6 +7,7 @@
 {"module":"github.com/bodgit/lz4","version":"v2.6.1+incompatible","status":"pending"}
 {"module":"github.com/bytedance/bosun","version":"v0.0.0-20150803222325-9abccac70052","status":"pending"}
 {"module":"github.com/cherrling/wireguard-go","version":"v0.0.2-beta.1","status":"pending"}
+{"module":"github.com/coderbradlee/go-ethereumoffchainlabs","version":"v0.0.0-20250728004126-6138ca8c0241","status":"pending"}
 {"module":"github.com/cofyc/kubernetes","version":"v1.5.5","status":"pending"}
 {"module":"github.com/fancybits/go-net","version":"v0.0.0-20231117213508-13e88dd2f743","status":"pending"}
 {"module":"github.com/firedtoad/gls","version":"v0.0.0-20250114022216-3e9103df5e53","status":"pending"}

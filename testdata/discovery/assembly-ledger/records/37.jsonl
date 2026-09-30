@@ -2,6 +2,7 @@
 {"module":"github.com/Readm/flow_sim","version":"v0.2.0","status":"pending"}
 {"module":"github.com/YoohPH/eRay-core/v5","version":"v5.0.0-20260623075140-5c1ede468da4","status":"pending"}
 {"module":"github.com/allocz/secp256k1","version":"v0.0.0-20260914175220-80a222d7e4d2","status":"pending"}
+{"module":"github.com/ballstest/go-ballstest","version":"v0.0.0-20180106042633-789acf1adafb","status":"pending"}
 {"module":"github.com/covalenthq/erigon","version":"v1.9.6","status":"pending"}
 {"module":"github.com/dubxcoin/go-dubxcoin","version":"v0.0.0-20260206162207-542458112e3f","status":"pending"}
 {"module":"github.com/facebookincubator/buck2","version":"v0.0.0-20260922215043-0363b6a6ffdb","status":"pending"}

@@ -14,6 +14,7 @@
 {"module":"github.com/onflow/flow-go","version":"v0.51.1","status":"pending"}
 {"module":"github.com/paxosglobal/go-ethereum-optimism","version":"v1.101311.13","status":"pending"}
 {"module":"github.com/rcarmo/go-pherence","version":"v0.0.0-20260922225713-961c645958cd","status":"pending"}
+{"module":"github.com/rizalgowandy/wazero","version":"v0.0.0-20220527082403-f9a59d269a18","status":"pending"}
 {"module":"github.com/s18721324824/solana-go","version":"v0.0.0-20260416123340-828ac7847868","status":"pending"}
 {"module":"github.com/soverenio/vanilla","version":"v0.0.0-20260613082714-9274a32a8411","status":"pending"}
 {"module":"github.com/srinivas-pokala/goid","version":"v0.0.0-20240503122002-4b96552b8156","status":"pending"}

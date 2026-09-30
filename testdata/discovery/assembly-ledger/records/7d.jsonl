@@ -18,6 +18,7 @@
 {"module":"github.com/izouxv/gmsm-fast","version":"v0.0.0-20231222095442-93f3a5e0201a","status":"pending"}
 {"module":"github.com/jason-luo/xray-core","version":"v0.0.0-20260613032203-546d802faf3c","status":"pending"}
 {"module":"github.com/jcs/crypto","version":"v0.0.0-20210905144206-cd8edf8c7f53","status":"pending"}
+{"module":"github.com/jessonzheng/seth","version":"v0.0.0-20180518055452-54169f629a5f","status":"pending"}
 {"module":"github.com/mariusvanderwijden/go-ethereum","version":"v1.8.22","status":"pending"}
 {"module":"github.com/martinsuchenak/scriptling-llm-lib","version":"v0.1.4","status":"pending"}
 {"module":"github.com/okex/go-ethereum-innertx","version":"v0.0.0-20201230121011-0a3993c55861","status":"pending"}

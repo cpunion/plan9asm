@@ -14,6 +14,7 @@
 {"module":"github.com/go-simd/base32","version":"v0.0.0-20260908181146-4910d461bb0c","status":"pending"}
 {"module":"github.com/henrybear327/websocket","version":"v1.8.12","status":"pending"}
 {"module":"github.com/iwanicki92/go-linux-lowlevel-hw","version":"v0.0.0-20260318234023-e8d6a3ce0049","status":"pending"}
+{"module":"github.com/jabberwocky238/sing-tun","version":"v1.0.0","status":"pending"}
 {"module":"github.com/jayantxie/delve","version":"v0.0.0-20251008220216-d5d75768ffc6","status":"pending"}
 {"module":"github.com/mark-kubacki/semver/v3","version":"v3.2.2","status":"pending"}
 {"module":"github.com/nebulatrade/websocket","version":"v0.0.0-20240919094401-cef8e11d00b0","status":"pending"}

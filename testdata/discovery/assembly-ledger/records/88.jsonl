@@ -1,5 +1,6 @@
 {"module":"git.frostfs.info/truecloudlab/tzhash","version":"v1.8.2","status":"pending"}
 {"module":"github.com/JohanLindvall/lightning","version":"v0.0.100","status":"pending"}
+{"module":"github.com/MatthiasKunnen/go-wayland/examples/imageviewer","version":"v0.0.0-20250821192337-412de804cb23","status":"pending"}
 {"module":"github.com/Qtgolang/SunnyNet","version":"v1.5.1","status":"pending"}
 {"module":"github.com/WinchainOS/Winchain","version":"v1.0.0","status":"pending"}
 {"module":"github.com/Yawning/Aez","version":"v0.0.0-20211027044916-e49e68abd344","status":"pending"}

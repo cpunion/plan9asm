@@ -10,6 +10,7 @@
 {"module":"github.com/confidentsecurity/go-sev-guest","version":"v0.0.1","status":"pending"}
 {"module":"github.com/deorth-kku/xray-core","version":"v0.0.0-20260527130646-f0949c4552cb","status":"pending"}
 {"module":"github.com/dewebprotocol/malt-core","version":"v0.0.8","status":"pending"}
+{"module":"github.com/esdb/plinear","version":"v0.0.0-20180104160048-211ddc68de27","status":"pending"}
 {"module":"github.com/felixn1l/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/hanzos3/sha256-simd","version":"v1.0.2","status":"pending"}
 {"module":"github.com/jwendell/runc","version":"v0.1.1","status":"pending"}

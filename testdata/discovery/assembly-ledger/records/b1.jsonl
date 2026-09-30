@@ -14,6 +14,7 @@
 {"module":"github.com/jdcloud-bds/bds-etc","version":"v0.0.0-20200109110913-80793c1723bb","status":"pending"}
 {"module":"github.com/justwasm/go4js/src","version":"v0.0.0-20260823081445-d90a163e71fa","status":"pending"}
 {"module":"github.com/marwan-at-work/tools","version":"v0.0.0-20180803180156-3c07937fe18c","status":"pending"}
+{"module":"github.com/matthiaskunnen/go-wayland/examples/imageviewer","version":"v0.0.0-20250821192337-412de804cb23","status":"pending"}
 {"module":"github.com/mconbere/quitlikeapro","version":"v0.0.0-20170529180004-8752c5bed340","status":"pending"}
 {"module":"github.com/mhmtszr/concurrent-swiss-map","version":"v1.0.10","status":"pending"}
 {"module":"github.com/mirgee/go-ethereum","version":"v0.0.0-20260720172557-85fe2723552f","status":"pending"}

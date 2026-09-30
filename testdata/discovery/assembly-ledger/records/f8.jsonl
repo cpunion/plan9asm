@@ -9,6 +9,7 @@
 {"module":"github.com/brycewayne/hnsw","version":"v0.0.0-20260728174929-59a6d6260641","status":"pending"}
 {"module":"github.com/captainsooma/uni","version":"v0.0.0-20130624161451-cf8aefbd7f60","status":"pending"}
 {"module":"github.com/deis/distribution","version":"v2.1.1+incompatible","status":"pending"}
+{"module":"github.com/fakedev9999/op-geth","version":"v0.0.0-20250908135634-dc5348bcfdfd","status":"pending"}
 {"module":"github.com/gnosischain/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/hexis-ys/xray-core","version":"v1.8.9","status":"pending"}
 {"module":"github.com/inkonchain/op-geth","version":"v0.0.0-20251117213213-dfef5d2d3ebc","status":"pending"}

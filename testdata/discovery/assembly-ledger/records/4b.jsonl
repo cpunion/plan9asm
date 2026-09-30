@@ -2,6 +2,7 @@
 {"module":"github.com/GenshIv/nexus","version":"v1.0.1","status":"pending"}
 {"module":"github.com/KasperLiu/gobcos","version":"v0.0.0-20190904035205-5663addff4ed","status":"pending"}
 {"module":"github.com/PingCap/Tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/Quentin-M/concurrent-swiss-map","version":"v0.0.0-20251002064441-db226d6c61be","status":"pending"}
 {"module":"github.com/apache/arrow/go/arrow","version":"v0.0.0-20211112161151-bc219186db40","status":"pending"}
 {"module":"github.com/decardlabs/uuhappyserver","version":"v0.0.0-20260323075351-2aa39d582ca8","status":"pending"}
 {"module":"github.com/dgryski/go-marvin32","version":"v0.0.0-20240117220238-0d39e8c5a8a9","status":"pending"}

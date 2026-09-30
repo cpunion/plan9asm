@@ -7,6 +7,7 @@
 {"module":"github.com/Tenderly/net-morph","version":"v0.0.0-20260421071758-02e49e78b754","status":"pending"}
 {"module":"github.com/bradfitz/gvisor","version":"v0.0.0-20260227001111-d6e815a044f0","status":"pending"}
 {"module":"github.com/campoy/go","version":"v0.0.0-20180109015338-9044f018ec7b","status":"pending"}
+{"module":"github.com/duzhi5368/FKGoTrojan","version":"v0.0.0-20241011212532-4b9e67c1e853","status":"pending"}
 {"module":"github.com/echocog/echo9llama","version":"v1.0.0","status":"pending"}
 {"module":"github.com/loreste/limyedb","version":"v0.2.0","status":"pending"}
 {"module":"github.com/ltcmweb/blake3","version":"v1.4.1-tinygo","status":"pending"}

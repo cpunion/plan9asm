@@ -12,6 +12,7 @@
 {"module":"github.com/VinithKrishnan/go-drb","version":"v0.0.0-20210411003407-a052efea27ba","status":"pending"}
 {"module":"github.com/anthonyle138/hello-requests","version":"v0.0.0-20251223094248-4e953b86909c","status":"pending"}
 {"module":"github.com/bobbyunknown/xray-core","version":"v0.0.0-20260504131600-6f4cc3633530","status":"pending"}
+{"module":"github.com/chyezh/milvus/pkg/v2","version":"v2.0.0-20251024070521-0cc20b19eaba","status":"pending"}
 {"module":"github.com/cronokirby/saferith","version":"v0.33.0","status":"pending"}
 {"module":"github.com/dollarkillerx/Xray-core","version":"v0.0.6","status":"pending"}
 {"module":"github.com/dtolpin/gls","version":"v0.0.0-20190329183129-97f8c06b9ddc","status":"pending"}

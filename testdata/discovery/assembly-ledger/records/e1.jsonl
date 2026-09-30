@@ -3,6 +3,7 @@
 {"module":"ghproxy-9d2.pages.dev/pion/transport","version":"v0.14.1","status":"pending"}
 {"module":"git.mleku.dev/mleku/orly","version":"v0.8.7","status":"pending"}
 {"module":"github.com/JotchuaDevz/xray-core","version":"v0.0.16","status":"pending"}
+{"module":"github.com/MarcosNicolau/gnark-crypto","version":"v0.0.0-20251001025247-8310aae2de61","status":"pending"}
 {"module":"github.com/SnellerInc/Sneller","version":"v0.0.0-20251209211248-dc69d73211f5","status":"pending"}
 {"module":"github.com/carved4/meltloader","version":"v1.0.3","status":"pending"}
 {"module":"github.com/celo-org/op-geth","version":"v1.101411.0","status":"pending"}

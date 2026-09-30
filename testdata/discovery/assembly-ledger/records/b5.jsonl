@@ -14,6 +14,7 @@
 {"module":"github.com/knull-cn/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/lHumaNl/EchoWarp","version":"v0.9.0","status":"pending"}
 {"module":"github.com/lethalres/crypto","version":"v0.0.0-20180925222037-eec417348f72","status":"pending"}
+{"module":"github.com/lunanode/vultr","version":"v0.0.0-20160527190103-acabab9deccd","status":"pending"}
 {"module":"github.com/metisprotocol/go-ethereum","version":"v1.9.10","status":"pending"}
 {"module":"github.com/minio/HighwayHash","version":"v1.0.4","status":"pending"}
 {"module":"github.com/pdf/go-wayland/examples/imageviewer","version":"v0.0.0-20250804142328-abbb107712b9","status":"pending"}

@@ -14,6 +14,7 @@
 {"module":"github.com/infinilabs/framework-vendor","version":"v0.0.0-20260522083554-933df1743af8","status":"pending"}
 {"module":"github.com/mimoo/StrobeGo","version":"v0.0.0-20220103164710-9a04d6ca976b","status":"pending"}
 {"module":"github.com/moralpriest/dirtybird-go-miner","version":"v0.0.0-20260821072625-4b2dbb2288aa","status":"pending"}
+{"module":"github.com/xuges/gothread","version":"v0.0.1","status":"pending"}
 {"module":"github.heygears.com/pilinux/argon2","version":"v0.25.0","status":"pending"}
 {"module":"github.heygears.com/zcalusic/sysinfo","version":"v1.1.3","status":"pending"}
 {"module":"golang.org/toolchain","version":"v0.0.1-go1.9rc2.windows-amd64","status":"pending"}

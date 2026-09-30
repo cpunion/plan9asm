@@ -12,6 +12,7 @@
 {"module":"github.com/nuaays/go-ethereum","version":"v1.4.5","status":"pending"}
 {"module":"github.com/paqx/Xray-core","version":"v1.260123.10-disguise-xpadding.1","status":"pending"}
 {"module":"github.com/sriharshaj/arrow-go/v18","version":"v18.5.1-test","status":"pending"}
+{"module":"github.com/tabilabs/go-ethereum","version":"v0.0.0-20251008125536-bcd46584feed","status":"pending"}
 {"module":"github.com/timpalpant/go-cfr","version":"v0.0.0-20230208023716-2c859fbaa0a5","status":"pending"}
 {"module":"github.com/yelhousni/octobear","version":"v0.0.0-20260611143655-4c683caf33c2","status":"pending"}
 {"module":"github.com/zchee/go-simdutf","version":"v0.0.0-20260814100243-006e6acb311f","status":"pending"}

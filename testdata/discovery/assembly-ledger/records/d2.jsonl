@@ -8,6 +8,7 @@
 {"module":"github.com/kt3k/go","version":"v0.0.0-20180506054606-4ebc67d33433","status":"pending"}
 {"module":"github.com/lab47/yalr4m","version":"v0.17.1","status":"pending"}
 {"module":"github.com/microsoft/go-crypto-openssl","version":"v0.5.0","status":"pending"}
+{"module":"github.com/nickeskov/circl","version":"v0.0.0-20251010041323-81c381b3097a","status":"pending"}
 {"module":"github.com/platONnetwork/PlatON-Go","version":"v1.5.1","status":"pending"}
 {"module":"github.com/unn4medproger/sing-tun","version":"v0.8.0-beta.11-chainpriofix2","status":"pending"}
 {"module":"github.com/visualphoenix/sys","version":"v0.45.0","status":"pending"}

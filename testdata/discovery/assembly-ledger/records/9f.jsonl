@@ -21,6 +21,7 @@
 {"module":"github.com/rudrankriyam/App-Store-Connect-CLI","version":"v0.0.0-20260922223737-c994f506d0fd","status":"pending"}
 {"module":"github.com/schnoddelbotz/fyne/v2","version":"v2.7.2","status":"pending"}
 {"module":"github.com/segmentio/avo","version":"v0.1.0","status":"pending"}
+{"module":"github.com/sergei-durkin/armtracer","version":"v0.0.0-20251004233256-49a3dc697c31","status":"pending"}
 {"module":"github.com/specularl2/go-ethereum","version":"v0.0.0-20240215124523-3381d86fa52a","status":"pending"}
 {"module":"github.com/streamingfast/go-ethereum","version":"v1.101702.1","status":"pending"}
 {"module":"github.com/tenderly/net-taiko-geth","version":"v0.0.0-20260616094817-ffcb9342c6f5","status":"pending"}

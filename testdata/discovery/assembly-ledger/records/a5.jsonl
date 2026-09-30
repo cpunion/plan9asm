@@ -1,5 +1,6 @@
 {"module":"ghproxy-9d2.pages.dev/v2fly/v2ray-core","version":"v3.50.2+incompatible","status":"pending"}
 {"module":"gitee.com/mirrors/crypto","version":"v0.48.0","status":"pending"}
+{"module":"github.com/100btcer/go-ethereum","version":"v1.16.6","status":"pending"}
 {"module":"github.com/Acheirial/sing-tun","version":"v0.0.0-20260919112229-54cba4862d73","status":"pending"}
 {"module":"github.com/Cockroachdb/cockroach","version":"v19.2.12+incompatible","status":"pending"}
 {"module":"github.com/LuckyLuke-a/Xray-core","version":"v1.9.6","status":"pending"}
@@ -12,6 +13,7 @@
 {"module":"github.com/aminvici/eth","version":"v1.0.0","status":"pending"}
 {"module":"github.com/arachnid/go-ethereum","version":"v1.5.2","status":"pending"}
 {"module":"github.com/bestyourwallet/go-ethereum","version":"v0.0.1","status":"pending"}
+{"module":"github.com/drillum-network/go-drillum","version":"v0.0.0-20250923193417-643d8fe026b0","status":"pending"}
 {"module":"github.com/glen0xfff/websocket","version":"v0.0.0-20250325122706-efb626be4424","status":"pending"}
 {"module":"github.com/go-simd/crc32","version":"v0.0.0-20260908181101-5e83f8649a72","status":"pending"}
 {"module":"github.com/gorgonia/Tensor","version":"v0.9.24","status":"pending"}

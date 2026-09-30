@@ -19,3 +19,4 @@
 {"module":"github.com/rachit77/cdk-erigon","version":"v0.0.0-20241112165503-4dbfc3b6e8ef","status":"pending"}
 {"module":"github.com/rfxct/websocket","version":"v0.0.0-20241204191143-11bda985bf5f","status":"pending"}
 {"module":"github.com/seerai/parquet-go","version":"v0.0.0-20260109200713-257669fbe74c","status":"pending"}
+{"module":"github.com/w3eleft/go-ethereum","version":"v0.0.0-20171127115913-ebf087f0d2c6","status":"pending"}

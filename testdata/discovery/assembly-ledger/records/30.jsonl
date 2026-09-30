@@ -10,6 +10,7 @@
 {"module":"github.com/guvanchhojamov/go","version":"v0.0.0-20250516223215-642574969513","status":"pending"}
 {"module":"github.com/kryptogo/go-ethereum-arbitrum","version":"v0.0.0-20241022172513-0c4905fd4897","status":"pending"}
 {"module":"github.com/liyansum/xray-core","version":"v1.260327.0","status":"pending"}
+{"module":"github.com/michahoffmann/tscodec-go","version":"v0.0.0-20251026131955-fd90d59b9773","status":"pending"}
 {"module":"github.com/nibiruchain/go-ethereum","version":"v1.15.8","status":"pending"}
 {"module":"github.com/peterrk/PageBloomFilter","version":"v1.3.1","status":"pending"}
 {"module":"github.com/qorechain/circl","version":"v0.0.0-20250801215056-01fdb8717c38","status":"pending"}

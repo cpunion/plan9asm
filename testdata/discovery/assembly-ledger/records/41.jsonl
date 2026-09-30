@@ -18,7 +18,9 @@
 {"module":"github.com/miretskiy/simba","version":"v0.0.0-20250916153244-b234af0f653e","status":"pending"}
 {"module":"github.com/pingCAP/tidb","version":"v1.0.9","status":"pending"}
 {"module":"github.com/smartmeshfoundation/Spectrum","version":"v0.0.0-20250325075110-1123247bc535","status":"pending"}
+{"module":"github.com/victoriumproject/go-victorium","version":"v0.0.0-20190810212836-203965d47c4b","status":"pending"}
 {"module":"github.com/voiceblender/goamr-wb","version":"v1.1.1","status":"pending"}
 {"module":"github.com/yuce/purego","version":"v0.0.0-20250820161937-572d9c4b5335","status":"pending"}
+{"module":"github.com/ziliuziliu/faasgraph/src/lambda_executor","version":"v0.0.0-20250302064542-eb9cdd9e0ef6","status":"pending"}
 {"module":"github.laiyagushi.com/timandy/routine","version":"v1.1.6","status":"pending"}
 {"module":"gopkg.in/ro-ag/posix.v1","version":"v1.1.1","status":"pending"}

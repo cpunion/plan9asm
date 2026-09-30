@@ -13,6 +13,7 @@
 {"module":"github.com/isletier/dvelve","version":"v0.0.0-20260305175844-5435acac9168","status":"pending"}
 {"module":"github.com/microsoft/typescript-go","version":"v0.0.0-20260820064610-89d5d5b2849a","status":"pending"}
 {"module":"github.com/mr-bossman/buildah","version":"v0.0.0-20251127180825-4507f72c8a70","status":"pending"}
+{"module":"github.com/mvo5/net","version":"v0.0.0-20170602190100-0c0cd2628b36","status":"pending"}
 {"module":"github.com/nisedo/medusa-geth","version":"v0.0.0-20260813120221-221ff19c653c","status":"pending"}
 {"module":"github.com/pexip/os-golang-1.23","version":"v0.0.0-20250407101823-ebfba697a505","status":"pending"}
 {"module":"github.com/roman-mazhut/m3","version":"v0.0.0-20250930192855-53573096eb8d","status":"pending"}
@@ -23,4 +24,5 @@
 {"module":"github.com/tokenpls/hako/third_party/sing-tun","version":"v0.0.0-20260907043401-35c9bb675f1c","status":"pending"}
 {"module":"github.com/usbarmory/tamago-go","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
 {"module":"github.com/wemixarchive/go-wemix","version":"v1.8.23","status":"pending"}
+{"module":"github.com/xalanq/runtimex","version":"v0.0.0-20251028095549-a2da06ad989c","status":"pending"}
 {"module":"github.laiyagushi.com/33cn/chain33","version":"v1.71.0","status":"pending"}
