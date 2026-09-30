@@ -6,6 +6,9 @@ import (
 )
 
 func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerRegisterAddressMove(op, cond, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerIntegerSymbolMove(op, cond, ins); ok {
 		return ok, terminated, err
 	}

@@ -89,7 +89,7 @@ func (c *armCtx) lowerIntegerSymbolMove(op, cond string, ins Instr) (bool, bool,
 	}
 	hasSymbol := false
 	for _, operand := range ins.Args {
-		hasSymbol = hasSymbol || operand.Kind == OpSym
+		hasSymbol = hasSymbol || operand.Kind == OpSym && strings.HasSuffix(strings.TrimSpace(operand.Sym), "(SB)")
 	}
 	if !hasSymbol {
 		return false, false, nil
