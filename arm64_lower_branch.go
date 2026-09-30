@@ -38,38 +38,15 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			if bi+1 >= len(c.blocks) {
 				return true, false, fmt.Errorf("arm64 %s local target has no continuation block: %q", op, ins.Raw)
 			}
-			continuation := c.blocks[bi+1].name
-			link := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr blockaddress(%s, %%%s) to i64\n", link, llvmGlobal(c.sig.Name), arm64LLVMBlockName(continuation))
-			if err := c.storeReg(Reg("R30"), "%"+link); err != nil {
+			if err := c.storeLocalLink(c.blocks[bi+1].name); err != nil {
 				return true, false, err
 			}
 			emitBr(target)
 			return true, true, nil
 		}
-		if ins.Args[0].Kind == OpReg {
-			if !isARM64GeneralOrZeroReg(ins.Args[0].Reg) {
-				return true, false, fmt.Errorf("arm64 %s expects general register: %q", op, ins.Raw)
-			}
-			addr, err := c.loadReg(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "blr $0", "r,~{memory}", addr)
-			return true, false, nil
-		}
-		if ins.Args[0].Kind == OpMem {
-			mem := ins.Args[0].Mem
-			baseOK := isARM64GeneralOrZeroReg(mem.Base) || mem.Base == SP || mem.Base == Reg("RSP")
-			if !baseOK || mem.Off != 0 || mem.Index != "" {
-				return true, false, fmt.Errorf("arm64 %s expects (general register): %q", op, ins.Raw)
-			}
-			addr, _, _, err := c.addrI64(ins.Args[0].Mem, false)
-			if err != nil {
-				return true, false, err
-			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "blr $0", "r,~{memory}", addr)
-			return true, false, nil
+		if ins.Args[0].Kind == OpReg || ins.Args[0].Kind == OpMem {
+			term, err := c.lowerRegisterControl(bi, op, ins)
+			return true, term, err
 		}
 		if ins.Args[0].Kind != OpSym || !strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, false, fmt.Errorf("arm64 %s expects symbol(SB)|reg|mem: %q", op, ins.Raw)
@@ -77,35 +54,23 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 		if err := c.callSym(ins.Args[0]); err != nil {
 			return true, false, err
 		}
+		if bi+1 < len(c.blocks) {
+			if err := c.storeLocalLink(c.blocks[bi+1].name); err != nil {
+				return true, false, err
+			}
+		}
 		return true, false, nil
 
 	case "B", "JMP":
 		if len(ins.Args) != 1 {
 			return true, false, fmt.Errorf("arm64 B expects 1 operand: %q", ins.Raw)
 		}
-		if ins.Args[0].Kind == OpReg {
-			if c.flagFlow != nil {
-				c.flagFlow.blocks[c.flagFlow.current].indirect = true
-			}
-			addr, err := c.loadReg(ins.Args[0].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "br $0", "r,~{memory}", addr)
-			c.lowerRetZero()
-			return true, true, nil
+		if strings.Contains(string(ins.Op), ".") {
+			return true, false, fmt.Errorf("arm64 %s does not accept a suffix: %q", op, ins.Raw)
 		}
-		if ins.Args[0].Kind == OpMem {
-			if c.flagFlow != nil {
-				c.flagFlow.blocks[c.flagFlow.current].indirect = true
-			}
-			addr, _, _, err := c.addrI64(ins.Args[0].Mem, false)
-			if err != nil {
-				return true, false, err
-			}
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "br $0", "r,~{memory}", addr)
-			c.lowerRetZero()
-			return true, true, nil
+		if ins.Args[0].Kind == OpReg || ins.Args[0].Kind == OpMem {
+			term, err := c.lowerRegisterControl(bi, op, ins)
+			return true, term, err
 		}
 		if ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
 			return true, true, c.tailCallAndRet(ins.Args[0])

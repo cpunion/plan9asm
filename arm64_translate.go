@@ -9,6 +9,7 @@ type arm64EmitBr func(target string)
 type arm64EmitCondBr func(cond string, target string, fall string) error
 
 func emitARM64Prelude(b *strings.Builder) {
+	b.WriteString("declare ptr @llvm.returnaddress(i32 immarg)\n")
 	b.WriteString("declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1 immarg)\n")
 	b.WriteString("declare void @llvm.trap()\n")
 	b.WriteString("declare i64 @syscall(i64, i64, i64, i64, i64, i64, i64)\n")
@@ -927,11 +928,18 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
+	if err := c.prepareLocalControl(); err != nil {
+		return err
+	}
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}
 	fmt.Fprintf(b, "  br label %%%s\n", arm64LLVMBlockName(c.blocks[0].name))
 	if err := c.lowerBlocks(); err != nil {
+		return err
+	}
+	fmt.Fprintf(b, "\n%s:\n", arm64LLVMBlockName(c.localControl.outer))
+	if err := c.lowerRET(); err != nil {
 		return err
 	}
 
@@ -962,7 +970,8 @@ func (c *arm64Ctx) lowerBlocks() error {
 		fmt.Fprintf(c.b, "\n%s:\n", arm64LLVMBlockName(blk.name))
 
 		terminated := false
-		for _, ins := range blk.instrs {
+		for ii, ins := range blk.instrs {
+			c.currentInstruction = ii
 			c.emitSourceComment(ins)
 			term, err := c.lowerInstr(bi, ins, emitBr, emitCondBr)
 			if err != nil {
@@ -1003,6 +1012,9 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case OpBYTE:
 		return false, fmt.Errorf("arm64 BYTE cannot be lowered safely as a partial machine instruction: %q", ins.Raw)
 	case OpRET:
+		if strings.Contains(string(ins.Op), ".") {
+			return true, fmt.Errorf("arm64 RET does not accept a suffix: %q", ins.Raw)
+		}
 		if c.flagFlow != nil {
 			c.flagFlow.blocks[c.flagFlow.current].returns = true
 		}
@@ -1011,6 +1023,17 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 		}
 		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("arm64 RET expects at most 1 operand: %q", ins.Raw)
+		}
+		if len(ins.Args) == 1 {
+			if _, err := c.registerBranchAddress(OpRET, ins); err != nil {
+				return true, err
+			}
+		}
+		if c.localControl != nil {
+			if target, register := arm64RegisterReturnTarget(ins, c.localControl.autoReturn); register {
+				ins.Args = []Operand{target}
+				return c.lowerRegisterControl(bi, OpRET, ins)
+			}
 		}
 		return true, c.lowerRET()
 	case OpWORD:
@@ -1027,6 +1050,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			}
 			return false, rawErr
 		}
+		decoded = arm64HardwareReturnAsBranch(decoded)
 		return c.lowerInstr(bi, decoded, emitBr, emitCondBr)
 	case arm64RawDataOp:
 		return false, nil

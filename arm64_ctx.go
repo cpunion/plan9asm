@@ -16,7 +16,9 @@ type arm64Ctx struct {
 
 	tmp int
 
-	blocks []arm64Block
+	blocks             []arm64Block
+	localControl       *arm64LocalControlPlan
+	currentInstruction int
 
 	rawDataGlobals map[string]string // local source label -> LLVM global
 	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
@@ -1104,6 +1106,11 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		c.regSlot[r] = name
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", name)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
+	}
+	if c.localControl != nil {
+		if err := c.storeCallerLink(); err != nil {
+			return err
+		}
 	}
 	if spSlot := c.regSlot[SP]; spSlot != "" {
 		minOff, maxOff, err := c.stackOffsetRange()
