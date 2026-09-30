@@ -2663,10 +2663,24 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 }
 
 func isDiscoveryInfrastructureFailure(err error) bool {
-	return err != nil && (errors.Is(err, errDiscoveryCommandOutputExceeded) ||
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, errDiscoveryCommandOutputExceeded) ||
 		errors.Is(err, exec.ErrWaitDelay) ||
 		errors.Is(err, errDiscoveryCommandCleanup) ||
-		isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)))
+		isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)) {
+		return true
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() <= 0 {
+		return true
+	}
+	var failure *discoveryCapturedCommandError
+	// An empty failed tool invocation proves no source incompatibility. Keep it
+	// visible for retry/diagnosis instead of excluding an entire package.
+	return errors.As(err, &failure) && strings.TrimSpace(failure.output) == ""
 }
 
 func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target string, buildTags, patterns []string) error {

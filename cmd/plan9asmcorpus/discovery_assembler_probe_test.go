@@ -77,6 +77,16 @@ func TestAssemblyArchitectureProbeCanceledAndMissingToolsFail(t *testing.T) {
 	}
 }
 
+func TestDiscoveryEmptyGoToolFailureCannotBecomePackageNA(t *testing.T) {
+	toolDir := buildDiscoveryAssemblerProbeGoTool(t)
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("PLAN9ASM_TEST_ASSEMBLER_PROBE_MODE", "empty")
+	_, err := runCapturedCommandOutput(context.Background(), "", os.Environ(), "go", "tool", "asm")
+	if err == nil || !isDiscoveryInfrastructureFailure(err) {
+		t.Fatalf("empty actual process failure became source evidence: %v", err)
+	}
+}
+
 func TestAssemblyArchitectureProbeRetainsTargetRejectionDiagnostic(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "package.go"), "package fixture\n")

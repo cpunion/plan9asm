@@ -62,6 +62,34 @@ func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 	}
 }
 
+func TestDiscoveryGoToolCrashesCannotBecomeSourceNA(t *testing.T) {
+	for _, diagnostic := range []string{
+		"go tool compile: signal: segmentation fault",
+		"go tool asm: signal: bus error",
+		"go tool link: signal: aborted",
+		"go tool vet: SIGILL: illegal instruction",
+		"SIGSEGV: segmentation violation\nruntime.getGCMask",
+		"panic: unexpected compiler state\nruntime.gopanic",
+		"compile: internal compiler error: invalid operand",
+	} {
+		t.Run(strings.Split(diagnostic, "\n")[0], func(t *testing.T) {
+			if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) || isDiscoveryRetryableNetworkFailure(diagnostic) {
+				t.Fatalf("tool crash became source N/A or a network retry: %q", diagnostic)
+			}
+			attempts := 0
+			results, err := runDiscoveryPackageChecks([]discoveryPackageGroup{
+				{Pattern: "example.com/first"}, {Pattern: "example.com/second"},
+			}, func([]string) error {
+				attempts++
+				return errors.New(diagnostic)
+			})
+			if err == nil || results != nil || attempts != 1 {
+				t.Fatalf("crashed batch was retried/classified per source: results=%v attempts=%d error=%v", results, attempts, err)
+			}
+		})
+	}
+}
+
 func TestDiscoveryAssemblerEOFRequiresMatchingSourceDiagnostic(t *testing.T) {
 	for _, filename := range []string{"pkg/file.s", "pkg with spaces/file.s", `C:\source\file.s`} {
 		for _, newline := range []string{"\n", "\r\n"} {

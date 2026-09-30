@@ -75,6 +75,14 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 		"out of memory",
 		"no space left on device",
 		"signal: killed",
+		"signal: segmentation fault",
+		"signal: bus error",
+		"signal: aborted",
+		"sigsegv:",
+		"sigbus:",
+		"sigill:",
+		"panic:",
+		"internal compiler error",
 	} {
 		if strings.Contains(diagnostic, marker) {
 			return true, false
