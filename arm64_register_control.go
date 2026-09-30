@@ -78,6 +78,9 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 			if call {
 				return false, fmt.Errorf("%w: ARM64 call through native caller link has no callee ABI contract: %q", ErrProbeNeedsContext, ins.Raw)
 			}
+			if op != OpRET && c.localControl.autoReturn {
+				return false, fmt.Errorf("%w: ARM64 branch through caller link has no Go frame epilogue proof: %q", ErrProbeNeedsContext, ins.Raw)
+			}
 			fmt.Fprintf(c.b, "  br label %%%s\n", arm64LLVMBlockName(targets[0]))
 			c.recordARM64FlagFlowEdges(targets[0])
 			return true, nil
@@ -110,10 +113,11 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 		}
 		return false, fmt.Errorf("%w: ARM64 native register call needs a callee ABI and virtual register/result contract: %q", ErrProbeNeedsContext, ins.Raw)
 	}
-	if c.flagFlow != nil {
-		c.flagFlow.blocks[c.flagFlow.current].indirect = true
+	if addr == "0" {
+		// As with BLR XZR, a physical zero branch cannot return. In
+		// particular it must not fabricate a successful LLVM return.
+		fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 0)\n  unreachable\n", "br $0", "r,~{memory}")
+		return true, nil
 	}
-	fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "br $0", "r,~{memory}", addr)
-	c.lowerRetZero()
-	return true, nil
+	return false, fmt.Errorf("%w: ARM64 native register branch needs a tail ABI, native frame/link and virtual register/result contract: %q", ErrProbeNeedsContext, ins.Raw)
 }

@@ -52,7 +52,7 @@ func TestIndirectMarkerGoBranchForms(t *testing.T) {
 					for i, marker := range []string{"", "*"} {
 						source := fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\nRET\n", op, marker, operand)
 						instructionIndex := 1
-						if target.arch == ArchARM64 && (op == "BL" || op == "CALL") {
+						if target.arch == ArchARM64 {
 							branch, err := parseOperandForArch(ArchARM64, operand)
 							if err != nil {
 								t.Fatal(err)
@@ -66,8 +66,16 @@ func TestIndirectMarkerGoBranchForms(t *testing.T) {
 								if reg == Reg("R28") {
 									spelling = "g"
 								}
-								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\nADR localTarget,%s\n%s %s%s\nRET\nlocalTarget:\nB (R30)\n", spelling, op, marker, operand)
+								continuation := ""
+								if op == "BL" || op == "CALL" {
+									continuation = "RET\n"
+								}
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\nADR localTarget,%s\n%s %s%s\n%slocalTarget:\nB (R30)\n", spelling, op, marker, operand, continuation)
 								instructionIndex = 2
+							} else if op == "BL" || op == "CALL" {
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\nB (ZR)\n", op, marker, operand)
+							} else {
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\n", op, marker, operand)
 							}
 						}
 						requireIndirectMarkerGoAssembly(t, target.goarch, source, true)

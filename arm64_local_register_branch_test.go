@@ -43,7 +43,7 @@ func TestARM64RegisterControlCompleteGoForms(t *testing.T) {
 				name := fmt.Sprintf("registerForm%d", forms)
 				forms++
 				prefix, suffix := "", "RET\n"
-				if op == "BL" || op == "CALL" {
+				if op == "B" || op == "JMP" || op == "BL" || op == "CALL" || op == "RET" {
 					target, err := parseOperandForArch(ArchARM64, operand)
 					if err != nil {
 						t.Fatal(err)
@@ -51,6 +51,9 @@ func TestARM64RegisterControlCompleteGoForms(t *testing.T) {
 					reg := target.Reg
 					if target.Kind == OpMem {
 						reg = target.Mem.Base
+					}
+					if op == "RET" && target.Kind == OpImm {
+						reg = Reg("R30")
 					}
 					if reg != ZR && reg != SP && reg != Reg("RSP") {
 						spelling := string(reg)
@@ -61,7 +64,15 @@ func TestARM64RegisterControlCompleteGoForms(t *testing.T) {
 							spelling = "R18_PLATFORM"
 						}
 						prefix = fmt.Sprintf("MOVD R30,R19\nADR localTarget,%s\n", spelling)
-						suffix = "MOVD R19,R30\nRET\nlocalTarget:\nB (R30)\n"
+						if op == "BL" || op == "CALL" {
+							suffix = "MOVD R19,R30\nRET\nlocalTarget:\nB (R30)\n"
+						} else {
+							suffix = "localTarget:\nMOVD R19,R30\nRET\n"
+						}
+					} else if op == "BL" || op == "CALL" {
+						suffix = "B (ZR)\n"
+					} else {
+						suffix = ""
 					}
 				}
 				fmt.Fprintf(&source, "TEXT %s(SB),516,$0-0\n%s%s %s%s\n%s", name, prefix, op, marker, operand, suffix)

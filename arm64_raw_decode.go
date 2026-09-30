@@ -72,6 +72,19 @@ func decodeARM64RawWordInstructionTarget(ins Instr, target string) (Instr, error
 }
 
 func decodedARM64GoSyntax(inst arm64asm.Inst) string {
+	// Branch-register encodings read register 31 as XZR, never SP.
+	// x/arch's older BR printer spells it R31, which is not a Go GP
+	// register. Keep this complete BR/BLR/RET field on the zero path.
+	if inst.Args[0] == arm64asm.XZR {
+		switch inst.Op {
+		case arm64asm.BR:
+			return "JMP (ZR)"
+		case arm64asm.BLR:
+			return "CALL ZR"
+		case arm64asm.RET:
+			return "RET ZR"
+		}
+	}
 	// x/arch's typed decoder knows the complete structure family, but its
 	// Plan 9 printer handles operand order and post-index suffixes only for
 	// LD1/ST1. Reuse those printer rules with the original typed operands and
