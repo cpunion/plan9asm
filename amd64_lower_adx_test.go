@@ -167,32 +167,25 @@ func TestAMD64ADXRuntimeSemanticsAndIndependentFlags(t *testing.T) {
 	SETCS 48(DI)
 	SETOS 49(DI)
 	SETEQ 50(DI)
+
+	// ADOXQ memory form consumes OF without changing CF, ZF or SF.
+	MOVL $0x7fffffff, R8
+	ADDL $1, R8
+	STC
+	MOVQ $0, BX
+	ADOXQ 32(DI), BX
+	MOVQ BX, 56(DI)
+	SETOS 64(DI)
+	SETCS 65(DI)
+	SETEQ 66(DI)
+	SETMI 67(DI)
 	RET
 `
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	var runPrefix []string
 	if crossRosetta {
 		triple = "x86_64-apple-macosx"
 		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{
-		TargetTriple: triple,
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"adxsemantics": {
-				Name:  "adxsemantics",
-				Args:  []LLVMType{Ptr},
-				Ret:   Void,
-				Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	const mainC = `
 #include <stdint.h>
@@ -204,7 +197,7 @@ static uint64_t load64(const uint8_t *p) {
   return value;
 }
 int main(void) {
-  uint8_t out[56] = {0};
+  uint8_t out[72] = {0};
   adxsemantics(out);
   if (load64(out + 0) != 0) return 10;
   const uint8_t adcx_flags[4] = {1, 1, 0, 1};
@@ -215,8 +208,38 @@ int main(void) {
   if (load64(out + 40) != 0) return 50;
   const uint8_t adcxq_flags[3] = {1, 0, 1};
   for (int i = 0; i < 3; i++) if (out[48+i] != adcxq_flags[i]) return 60+i;
+  if (load64(out + 56) != 0) return 70;
+  const uint8_t adoxq_flags[4] = {1, 1, 0, 1};
+  for (int i = 0; i < 4; i++) if (out[64+i] != adoxq_flags[i]) return 80+i;
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "adx_semantics", triple, ir, mainC, runPrefix)
+	rawSource := strings.NewReplacer(
+		"ADCXL AX, BX", "BYTE $0x66; BYTE $0x0f; BYTE $0x38; BYTE $0xf6; BYTE $0xd8",
+		"ADOXL AX, BX", "BYTE $0xf3; BYTE $0x0f; BYTE $0x38; BYTE $0xf6; BYTE $0xd8",
+		"ADCXQ 32(DI), BX", "BYTE $0x66; BYTE $0x48; BYTE $0x0f; BYTE $0x38; BYTE $0xf6; BYTE $0x5f; BYTE $0x20",
+		"ADOXQ 32(DI), BX", "BYTE $0xf3; BYTE $0x48; BYTE $0x0f; BYTE $0x38; BYTE $0xf6; BYTE $0x5f; BYTE $0x20",
+	).Replace(source)
+	for _, form := range []struct{ name, source string }{{"text", source}, {"raw", rawSource}} {
+		t.Run(form.name, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, form.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(file, Options{
+				TargetTriple: triple,
+				Goarch:       "amd64",
+				Sigs: map[string]FuncSig{
+					"adxsemantics": {
+						Name: "adxsemantics", Args: []LLVMType{Ptr}, Ret: Void,
+						Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}},
+					},
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileAndRunRuntimeTestForTarget(t, llc, clang, "adx_semantics_"+form.name, triple, ir, mainC, runPrefix)
+		})
+	}
 }

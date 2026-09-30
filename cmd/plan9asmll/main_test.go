@@ -1358,6 +1358,31 @@ func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testi
 var packedFamilySpecs = map[string]int{
 	"VTABLEOP": 1,
 }
+
+func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_lower_adx.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_lower_adx.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, op := range []string{"ADCXL", "ADCXQ", "ADOXL", "ADOXQ"} {
+			if _, ok := supported[op]; !ok {
+				t.Errorf("%s typed ADX extraction omitted %s", arch, op)
+			}
+		}
+	}
+}
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}

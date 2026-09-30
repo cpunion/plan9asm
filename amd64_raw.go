@@ -502,6 +502,21 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += named.length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawADX(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 ADX at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				if literal.last > literal.first {
+					recordLiteral(offset, literal)
+				}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86ExtendedPrefetchInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 extended prefetch at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
