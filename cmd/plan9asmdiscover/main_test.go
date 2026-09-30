@@ -482,7 +482,7 @@ func TestMergeDiscoveryReportsNewestExactFailureReplacesOlderSuccess(t *testing.
 	}
 }
 
-func TestMergeDiscoveryReportsMajorUpgradeReplacesLowerModulePaths(t *testing.T) {
+func TestMergeDiscoveryReportsKeepsLatestVersionPerModulePath(t *testing.T) {
 	base := discoveryReport{
 		SchemaVersion: discoverySchema,
 		Scanned:       []moduleVersion{{Path: "example.com/lib/v2", Version: "v2.99.0"}},
@@ -501,9 +501,8 @@ func TestMergeDiscoveryReportsMajorUpgradeReplacesLowerModulePaths(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(merged.Scanned) != 1 || merged.Scanned[0].Path != "example.com/lib/v3" ||
-		len(merged.Matched) != 1 || merged.Matched[0].Module != "example.com/lib/v3" {
-		t.Fatalf("major upgrade retained lower module path: %#v", merged)
+	if len(merged.Scanned) != 2 || len(merged.Matched) != 2 {
+		t.Fatalf("separate major module paths did not coexist: %#v", merged)
 	}
 
 	obsolete := discoveryReport{
@@ -514,9 +513,13 @@ func TestMergeDiscoveryReportsMajorUpgradeReplacesLowerModulePaths(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(merged.Scanned) != 1 || merged.Scanned[0].Path != "example.com/lib/v3" ||
-		len(merged.Matched) != 1 || merged.Matched[0].Module != "example.com/lib/v3" {
-		t.Fatalf("later lower-major history record displaced v3: %#v", merged)
+	want := []moduleVersion{
+		{Path: "example.com/lib/v2", Version: "v2.100.0"},
+		{Path: "example.com/lib/v3", Version: "v3.1.0"},
+	}
+	if !reflect.DeepEqual(merged.Scanned, want) || len(merged.Matched) != 1 ||
+		merged.Matched[0].Module != "example.com/lib/v3" {
+		t.Fatalf("latest version per path = %#v, want scanned %#v", merged, want)
 	}
 }
 
@@ -1179,7 +1182,7 @@ func TestModulesNeedingInspectionSkipsOlderIndexedVersionsByModule(t *testing.T)
 	}
 }
 
-func TestModulesNeedingInspectionKeepsOnlyHighestModulePathMajor(t *testing.T) {
+func TestModulesNeedingInspectionKeepsEachModulePathMajor(t *testing.T) {
 	entries := []indexEntry{
 		{Path: "example.com/lib/v2", Version: "v2.9.0"},
 		{Path: "example.com/lib", Version: "v1.10.0"},
@@ -1189,18 +1192,21 @@ func TestModulesNeedingInspectionKeepsOnlyHighestModulePathMajor(t *testing.T) {
 	}
 	got, skipped := modulesNeedingInspection(entries, nil)
 	want := []moduleVersion{
+		{Path: "example.com/lib", Version: "v1.10.0"},
+		{Path: "example.com/lib/v2", Version: "v2.9.0"},
 		{Path: "example.com/lib/v3", Version: "v3.1.0"},
+		{Path: "gopkg.in/yaml.v2", Version: "v2.4.0"},
 		{Path: "gopkg.in/yaml.v3", Version: "v3.0.1"},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("modulesNeedingInspection() = %#v, want only highest majors %#v", got, want)
+		t.Fatalf("modulesNeedingInspection() = %#v, want each major path %#v", got, want)
 	}
-	if skipped != 3 {
-		t.Fatalf("skipped obsolete major paths = %d, want 3", skipped)
+	if skipped != 0 {
+		t.Fatalf("skipped module paths = %d, want 0", skipped)
 	}
 }
 
-func TestModulesNeedingInspectionOrdersByMajorThenSemverAcrossHistory(t *testing.T) {
+func TestModulesNeedingInspectionOrdersBySemverWithinEachPath(t *testing.T) {
 	checkpoints := map[string]moduleCheckpoint{}
 
 	first, _ := modulesNeedingInspection([]indexEntry{
@@ -1211,8 +1217,7 @@ func TestModulesNeedingInspectionOrdersByMajorThenSemverAcrossHistory(t *testing
 	}
 	chooseModuleCheckpoint(checkpoints, first[0].Path, first[0].Version)
 
-	// This v3 index record is older than the v2 record above, but the module
-	// path major has priority over both index time and the v2 semver.
+	// A different major path remains independent even in an older window.
 	second, _ := modulesNeedingInspection([]indexEntry{
 		{Path: "example.com/lib/v3", Version: "v3.1.0"},
 	}, checkpoints)
@@ -1226,8 +1231,10 @@ func TestModulesNeedingInspectionOrdersByMajorThenSemverAcrossHistory(t *testing
 		{Path: "example.com/lib/v2", Version: "v2.99.0"},
 		{Path: "example.com/lib/v3", Version: "v3.0.0"},
 	}, checkpoints)
-	if len(obsolete) != 0 {
-		t.Fatalf("later history revisited lower priority modules: %#v", obsolete)
+	wantOlder := []moduleVersion{{Path: "example.com/lib", Version: "v1.99.0"},
+		{Path: "example.com/lib/v2", Version: "v2.99.0"}}
+	if !reflect.DeepEqual(obsolete, wantOlder) {
+		t.Fatalf("older history = %#v, want independent paths %#v", obsolete, wantOlder)
 	}
 
 	upgrade, _ := modulesNeedingInspection([]indexEntry{
@@ -1257,10 +1264,12 @@ func TestModulesNeedingInspectionAllowsNewMajorPastCheckpoint(t *testing.T) {
 		{Path: "example.com/lib/v3", Version: "v3.0.0"},
 	}
 	checkpoints := map[string]moduleCheckpoint{
-		"example.com/lib": {Path: "example.com/lib/v2", Version: "v2.8.0"},
+		"example.com/lib/v2": {Path: "example.com/lib/v2", Version: "v2.8.0"},
 	}
 	got, _ := modulesNeedingInspection(entries, checkpoints)
-	want := []moduleVersion{{Path: "example.com/lib/v3", Version: "v3.0.0"}}
+	want := []moduleVersion{{Path: "example.com/lib", Version: "v1.10.0"},
+		{Path: "example.com/lib/v2", Version: "v2.9.0"},
+		{Path: "example.com/lib/v3", Version: "v3.0.0"}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("modulesNeedingInspection() = %#v, want new major %#v", got, want)
 	}
@@ -1269,7 +1278,7 @@ func TestModulesNeedingInspectionAllowsNewMajorPastCheckpoint(t *testing.T) {
 func TestModulesNeedingInspectionAllowsNewMajorPastLatestFailure(t *testing.T) {
 	entries := []indexEntry{{Path: "example.com/lib/v3", Version: "v3.0.0"}}
 	checkpoints := map[string]moduleCheckpoint{
-		"example.com/lib": {Path: "example.com/lib/v2", Version: "@latest"},
+		"example.com/lib/v2": {Path: "example.com/lib/v2", Version: "@latest"},
 	}
 	got, _ := modulesNeedingInspection(entries, checkpoints)
 	want := []moduleVersion{{Path: "example.com/lib/v3", Version: "v3.0.0"}}
@@ -1390,7 +1399,7 @@ func TestModuleCheckpointsIncludeFailuresWithoutDowngradingExactVersion(t *testi
 	}
 }
 
-func TestModulesForFailureRetryUsesHighestMajorThenSemver(t *testing.T) {
+func TestModulesForFailureRetryKeepsEachMajorPath(t *testing.T) {
 	report := discoveryReport{Failures: []scanFailure{
 		{Module: "example.com/lib/v2", Version: "v2.9.0", Error: "old v2"},
 		{Module: "example.com/lib/v3", Version: "v3.1.0", Error: "current v3"},
@@ -1399,6 +1408,7 @@ func TestModulesForFailureRetryUsesHighestMajorThenSemver(t *testing.T) {
 	}}
 	got := modulesForFailureRetry(report)
 	want := []moduleVersion{
+		{Path: "example.com/lib/v2", Version: "v2.9.0"},
 		{Path: "example.com/lib/v3", Version: "v3.1.0"},
 		{Path: "example.com/other", Version: "@latest"},
 	}

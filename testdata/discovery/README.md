@@ -1,10 +1,10 @@
 # Go module assembly discovery ledger
 
 `ledger/` is the repository-owned checkpoint for newest-to-oldest scans of the
-official Go module index. The history pass stops at 2019-04-10. Within one
-logical module family, `/vN` major has priority first and Go semantic version
-second: discovering `/v3` replaces `/v2` even if the `/v3` index record is
-older, and still older `/v2` records are then skipped. It records the selected
+official Go module index. The history pass stops at 2019-04-10. Each exact
+module path keeps only its newest Go-semver version. Paths with distinct major
+suffixes, such as the base path, `/v2`, `/v3`, or `gopkg.in` `.v2`/`.v3`,
+coexist and advance independently. It records the selected
 exact `module@latest` version, including modules without Plan 9 assembly.
 Assembly matches retain every `.s` path and architecture hint for all current
 Go ports, including architectures plan9asm does not support yet; failures
@@ -68,10 +68,10 @@ manual cursor copying is part of normal operation. `-seen-report` remains
 available for additional legacy JSON, gzip-compressed JSON, or sharded import
 sources and is repeatable. Every selected module discovered in the index is
 resolved to an exact `@latest` version before ZIP inspection. A completed exact
-version is reused without another ZIP request. A higher module-path major, or a
-higher Go semver within the current major, crosses the family checkpoint and is
-resolved; lower majors and older versions do not cause metadata or ZIP traffic.
-If `@latest` resolves to a higher-priority exact version, the old family's
+version is reused without another ZIP request. A newly seen module path or a
+higher Go semver within one path crosses that path's checkpoint and is resolved;
+older versions of that same path do not cause metadata or ZIP traffic.
+If `@latest` resolves to a newer exact version, the old version's
 scanned, matched, and failure records are removed.
 For a new exact version, Discovery uses HEAD and range requests to read the ZIP
 directory and candidate `.s` contents; it does not materialize the complete
@@ -123,7 +123,7 @@ Incremental mode derives its lower bound from the greatest committed
 `index_ranges[].before` value and scans only up to the new current-time upper
 bound. It always drains that interval and ignores `-limit`, so it cannot
 publish a new high-water mark while leaving an unrecorded gap. A newly
-published `/v3` is therefore processed even when `/v2` is the current family
+published `/v3` is therefore processed even when `/v2` already has a
 checkpoint. Empty intervals are recorded with an exact zero count so the same
 head window is not fetched repeatedly. History extends the earliest range and
 incremental scanning extends the latest range, preserving one continuous

@@ -20,7 +20,7 @@ service/synchronization commands; never hard-code a host or local workspace.
 
 The standalone scanner persists successful latest resolutions with a
 conservative freshness boundary. Older history reuses them across restarts;
-incremental updates, higher module-path majors and retries remain eligible.
+incremental updates, newly seen major-suffixed paths and retries remain eligible.
 Resolving latest does not mark a failed ZIP inspection complete. Its assembly-
 only export omits cgo and latest metadata for compatibility with this
 repository's three record kinds.
@@ -33,9 +33,9 @@ repository's three record kinds.
 - Reverse scans consume complete windows and retain equal-timestamp groups;
   incremental scans drain their entire captured interval. Reject gaps,
   overlaps and inconsistent repeated ranges.
-- Prefer module-path major, then Go semver. Historical `/v3` still upgrades an
-  already-seen `/v2`; later older `/v2` records are skipped. A future `/v4`
-  remains discoverable incrementally.
+- Keep the highest Go-semver version per exact module path. `/v2` and `/v3`
+  are independent paths and coexist; older versions within either path are
+  skipped. A future `/v4` remains discoverable incrementally.
 - Concurrent network workers feed one publisher. Do not start a competing
   writer, remove a live lock, or overwrite a ledger being tested.
 - Remote snapshots/imports validate checksums, counts, sorting and ranges.
@@ -52,7 +52,7 @@ go run ./cmd/plan9asmdiscover -status -out-dir "$ASSEMBLY_LEDGER"
 
 Inspect ranges and records against the committed checkpoint and keep an ignored
 recovery copy. The writer merges with the existing destination under its writer
-lock, retaining the highest major/semver and rejecting discontinuous ranges.
+lock, retaining the highest semver per path and rejecting discontinuous ranges.
 
 For a validated checkpoint, the converter normalizes, merges, and atomically
 publishes the destination. It is not a file-copy replacement:
