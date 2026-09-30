@@ -61,6 +61,12 @@ func (c *arm64Ctx) lowerARM64SymbolScalarMove(op Op, ins Instr) (bool, bool, err
 		}
 		return true, false, c.storeReg(dst.Reg, value)
 	}
+	// obj7.progedit canonicalizes a resolved From literal $0 to ZR for all
+	// seven scalar moves, including C_ADDR stores. An unresolved expression
+	// with a placeholder zero value is not this alias.
+	if src.Kind == OpImm && src.Imm == 0 && src.ImmRaw == "" {
+		src = Operand{Kind: OpReg, Reg: ZR}
+	}
 	if strings.HasPrefix(strings.TrimSpace(dst.Sym), "$") || src.Kind != OpReg || !isARM64GeneralOrZeroReg(src.Reg) {
 		return true, false, fmt.Errorf("arm64 %s symbolic destination requires a general or zero source register: %q", op, ins.Raw)
 	}

@@ -21,7 +21,7 @@ func TestARM64SymbolScalarCompleteGoForms(t *testing.T) {
 	source.WriteString("TEXT symbolForms(SB),$0-0\n")
 	for _, form := range arm64ScalarWritebackOps {
 		for _, off := range []int{-65537, -8, 0, 1, 8, 65537} {
-			fmt.Fprintf(&source, "%s buffer%+d(SB), R2\n%s R2, buffer%+d(SB)\n%s ZR, buffer%+d(SB)\n", form.op, off, form.op, off, form.op, off)
+			fmt.Fprintf(&source, "%s buffer%+d(SB), R2\n%s R2, buffer%+d(SB)\n%s ZR, buffer%+d(SB)\n%s $0, buffer%+d(SB)\n", form.op, off, form.op, off, form.op, off, form.op, off)
 		}
 	}
 	// The encoder rejects MOVW addresses but permits MOVWU through its
@@ -75,14 +75,18 @@ func TestARM64SymbolScalarLoadStoreNotAddress(t *testing.T) {
 }
 
 func TestARM64SymbolScalarRejectsGoInvalidForms(t *testing.T) {
-	for _, instruction := range []string{
+	instructions := []string{
 		"MOVD buffer(SB), other(SB)", "MOVD $1, buffer(SB)",
 		"MOVD R2, $buffer(SB)", "MOVD $buffer(SB), buffer(SB)",
 		"MOVB $buffer(SB), R2", "MOVBU $buffer(SB), R2",
 		"MOVH $buffer(SB), R2", "MOVHU $buffer(SB), R2",
 		"MOVW $buffer(SB), R2",
 		"MOVD.P buffer(SB), R2", "MOVD.W R2, buffer(SB)",
-	} {
+	}
+	for _, form := range arm64ScalarWritebackOps {
+		instructions = append(instructions, form.op+" $1, buffer(SB)", form.op+" $UNRESOLVED_ZERO, buffer(SB)")
+	}
+	for _, instruction := range instructions {
 		t.Run(instruction, func(t *testing.T) {
 			source := "TEXT badSymbol(SB),$0-0\n" + instruction + "\nRET\n"
 			requireARM64GoAssemblerResult(t, source, false)
@@ -96,6 +100,34 @@ func TestARM64SymbolScalarRejectsGoInvalidForms(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCrossLinuxRuntimeMatrixARM64SymbolScalarZeroStore(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+	var source, declarations, checks, goDeclarations, goChecks strings.Builder
+	sigs := make(map[string]FuncSig)
+	for _, form := range arm64ScalarWritebackOps {
+		name := fmt.Sprintf("scalar_wb_zero_%d", len(sigs))
+		fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n%s $0, buffer+7(SB)\nRET\n", name, form.op)
+		sigs[name] = FuncSig{Name: name, Ret: Void}
+		fmt.Fprintf(&declarations, "extern void %s(void);\n", name)
+		fmt.Fprintf(&goDeclarations, "func %s()\n", name)
+		fmt.Fprintf(&checks, "{ unsigned char expected[80]; for(unsigned i=0;i<80;i++) buffer[i]=(unsigned char)(i*13+131); memcpy(expected,buffer,80); memset(expected+7,0,%d); %s(); if(memcmp(buffer,expected,80)) return %d; }\n", form.bits/8, name, len(sigs))
+		fmt.Fprintf(&goChecks, "{ for i:=range buffer { buffer[i]=byte(i*13+131) }; expected:=buffer; for i:=0;i<%d;i++ { expected[7+i]=0 }; %s(); if buffer!=expected { panic(\"%s zero store oracle\") } }\n", form.bits/8, name, form.op)
+	}
+	requireARM64GoAssemblerResult(t, source.String(), true)
+	goSource := "package main\nvar buffer [80]byte\n" + goDeclarations.String() + "func main() {\n" + goChecks.String() + "}\n"
+	arm64ScalarWritebackGoOracle(t, strings.ReplaceAll(source.String(), "buffer", "·buffer"), goSource, len(runner) != 0)
+	file, err := Parse(ArchARM64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, ResolveSym: resolveARM64SymbolMemoryTest, Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	main := "#include <stdint.h>\n#include <string.h>\nunsigned char buffer[80];\n" + declarations.String() + "int main(void) {\n" + checks.String() + "return 0;\n}\n"
+	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "symbol_scalar_zero_store", triple, ir, main, runner)
 }
 
 func TestCrossLinuxRuntimeMatrixARM64SymbolScalarMemory(t *testing.T) {
