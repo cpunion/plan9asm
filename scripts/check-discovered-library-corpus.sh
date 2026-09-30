@@ -16,6 +16,29 @@ if [[ "$shard_index" == "all" ]]; then
     echo "invalid shard count or PLAN9ASM_DISCOVERY_PARALLELISM" >&2
     exit 2
   fi
+  shard_order=()
+  selected_shards=()
+  priority=${PLAN9ASM_DISCOVERY_PRIORITY_SHARDS:-}
+  if [[ -n "$priority" ]]; then
+    if ! [[ "$priority" =~ ^(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*$ ]]; then
+      echo "invalid PLAN9ASM_DISCOVERY_PRIORITY_SHARDS: expected comma-separated indices" >&2
+      exit 2
+    fi
+    IFS=',' read -r -a shard_order <<< "$priority"
+    for index in "${shard_order[@]}"; do
+      if (( ${#index} > ${#shard_count} || index >= shard_count )) ||
+         [[ -n "${selected_shards[index]:-}" ]]; then
+        echo "invalid priority shard $index: out of range or repeated" >&2
+        exit 2
+      fi
+      selected_shards[index]=1
+    done
+  fi
+  for (( index=0; index<shard_count; index++ )); do
+    if [[ -z "${selected_shards[index]:-}" ]]; then
+      shard_order+=("$index")
+    fi
+  done
   report_dir="$repo_root/_out/discovered-library-corpus"
   mkdir -p "$report_dir"
   shared_build_cache=
@@ -38,7 +61,7 @@ if [[ "$shard_index" == "all" ]]; then
     fi
     shared_build_cache=$(mktemp -d)
     export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
-    if ! seq "$first" "$last" |
+    if ! printf '%s\n' "${shard_order[@]:first:last-first+1}" |
       xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"; then
       status=1
     fi

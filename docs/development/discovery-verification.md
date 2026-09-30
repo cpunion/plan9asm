@@ -12,6 +12,18 @@ results. `matched` additionally retains assembly paths. `failure` remains
 retryable and does not prove absence. Retain all architecture hints for future
 platform queries, not only currently supported targets.
 
+For a complete local replay, optional scheduling priorities do not reduce
+coverage or reuse old reports:
+
+```sh
+PLAN9ASM_DISCOVERY_PRIORITY_SHARDS=25,26,39 \
+  PLAN9ASM_DISCOVERY_PARALLELISM=4 \
+  scripts/check-discovered-library-corpus.sh all 64
+```
+
+The priority indices must be unique and in range. Every remaining shard runs
+exactly once, with the same bounded-batch cache and final aggregate check.
+
 The standalone inventory runs outside this repository and also collects direct
 cgo imports. Keep its program, cgo records, deployment settings and traffic
 reports outside plan9asm. Its server inventories source only: do not compile or

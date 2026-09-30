@@ -10,7 +10,7 @@ const source = fs.readFileSync(
   'utf8',
 );
 
-function runCorpusFixture(t, failedShard = '') {
+function runCorpusFixture(t, failedShard = '', priorityShards = '') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plan9asm-cache-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const scripts = path.join(root, 'scripts');
@@ -47,14 +47,17 @@ printf 'verified\n' >> "$FIXTURE_VERIFIED"
       PATH: `${bin}${path.delimiter}${process.env.PATH}`,
       TMPDIR: caches,
       PLAN9ASM_DISCOVERY_PARALLELISM: '2',
+      PLAN9ASM_DISCOVERY_PRIORITY_SHARDS: priorityShards,
       FIXTURE_CALLS: calls,
       FIXTURE_VERIFIED: verified,
       FIXTURE_FAILED_SHARD: failedShard,
     },
   });
   assert.ifError(result.error);
-  const records = fs.readFileSync(calls, 'utf8').trim().split('\n')
-    .map((line) => line.split('\t'));
+  const records = fs.existsSync(calls)
+    ? fs.readFileSync(calls, 'utf8').trim().split('\n')
+      .map((line) => line.split('\t'))
+    : [];
   return { result, records, caches, verified };
 }
 
@@ -75,4 +78,26 @@ test('failed discovery batches keep failures, clean caches and run the final gat
   assert.deepEqual(records.map(([shard]) => shard), ['0', '1', '2', '3', '4']);
   assert.deepEqual(fs.readdirSync(caches), []);
   assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
+});
+
+test('priority shards run first without omitting or repeating other shards', (t) => {
+  const { result, records, caches, verified } = runCorpusFixture(t, '', '4,2');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(records.map(([shard]) => shard), ['4', '2', '0', '1', '3']);
+  assert.equal(records[0][1], records[1][1]);
+  assert.equal(records[2][1], records[3][1]);
+  assert.equal(new Set(records.map(([, cache]) => cache)).size, 3);
+  assert.deepEqual(fs.readdirSync(caches), []);
+  assert.equal(fs.readFileSync(verified, 'utf8'), 'verified\n');
+});
+
+test('invalid priority lists fail before starting corpus work', (t) => {
+  for (const priority of ['5', '2,2', '-1', '1,,2', ',1', '1,', '01', '1 x',
+    '18446744073709551616']) {
+    const { result, records, caches, verified } = runCorpusFixture(t, '', priority);
+    assert.notEqual(result.status, 0, `accepted invalid priority ${priority}`);
+    assert.deepEqual(records, []);
+    assert.deepEqual(fs.readdirSync(caches), []);
+    assert.equal(fs.existsSync(verified), false);
+  }
 });
