@@ -154,3 +154,30 @@ func TestDiscoveryNetworkRetriesHTTP2StreamError(t *testing.T) {
 		t.Fatalf("HTTP/2 stream error did not recover after retry: attempts=%d error=%v", attempts, err)
 	}
 }
+
+func TestDiscoveryNetworkRetriesGitHTTPSDisconnect(t *testing.T) {
+	const diagnostic = "github.com/paxeer-network/pax-geth@v1.13.2: invalid version: " +
+		"git ls-remote -q --end-of-options https://github.com/paxeer-network/pax-geth: exit status 128:\n" +
+		"\tfatal: unable to access 'https://github.com/paxeer-network/pax-geth/': " +
+		"LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443"
+	attempts := 0
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New(diagnostic)
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("Git HTTPS disconnect retry: attempts=%d error=%v, want three attempts and success", attempts, err)
+	}
+
+	attempts = 0
+	err = retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		return errors.New(diagnostic)
+	})
+	if err == nil || attempts != 3 || !strings.Contains(err.Error(), "SSL_ERROR_SYSCALL") {
+		t.Fatalf("persistent Git HTTPS failure lost bound/diagnostic: attempts=%d error=%v", attempts, err)
+	}
+}

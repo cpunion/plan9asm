@@ -25,6 +25,12 @@ func TestDiscoveryMixedAssemblerAndInfrastructureDiagnostics(t *testing.T) {
 	}{
 		{"proxy", "reading https://example.com/pkg: 503 Service Unavailable", true},
 		{"network EOF", "Get https://example.com/pkg: unexpected EOF", true},
+		{
+			"Git HTTPS disconnect",
+			"fatal: unable to access 'https://github.com/example/repo/': " +
+				"LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443",
+			true,
+		},
 		{"checksum HTTP2 stream", "reading https://sum.golang.org/tile/8/0/x218/247: stream error: stream ID 13; INTERNAL_ERROR; received from peer", true},
 		{"module ZIP HTTP2 stream", "read \"https://proxy.golang.org/example.com/pkg/@v/v1.0.0.zip\": stream error: stream ID 5; INTERNAL_ERROR; received from peer", true},
 		{
@@ -171,6 +177,54 @@ func TestDiscoveryChecksumFailureCannotBecomeSourceNotApplicable(t *testing.T) {
 	}
 	if isDiscoveryRetryableNetworkFailure(diagnostic) {
 		t.Fatal("checksum mismatch must not be retried as a transient network error")
+	}
+}
+
+func TestDiscoveryGitHTTPSDisconnectClassification(t *testing.T) {
+	for _, cause := range []string{
+		"LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443",
+		"OpenSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443",
+		"LibreSSL SSL_read: SSL_ERROR_SYSCALL, errno 0",
+		"OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 0",
+		"GnuTLS recv error (-110): The TLS connection was non-properly terminated.",
+		"GnuTLS handshake error (-110): The TLS connection was non-properly terminated.",
+	} {
+		diagnostic := "fatal: unable to access 'https://github.com/example/repo/': " + cause
+		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) || !isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Errorf("Git TLS transport failure was not retryable infrastructure: %s", diagnostic)
+		}
+	}
+	for _, test := range []struct {
+		diagnostic     string
+		infrastructure bool
+	}{
+		{"pkg/file.s:12: SSL_ERROR_SYSCALL", false},
+		{"go build: LibreSSL SSL_connect: SSL_ERROR_SYSCALL", false},
+		{"fatal: unable to access 'file:///source.s': SSL_ERROR_SYSCALL", false},
+		{"pkg/file.s:12: fatal: unable to access 'https://github.com/example/repo/': LibreSSL SSL_connect: SSL_ERROR_SYSCALL", false},
+		{"fatal: unable to access 'https://github.com/example/repo/': server certificate verification failed", true},
+		{"fatal: unable to access 'https://github.com/example/repo/': SSL certificate problem: certificate has expired", true},
+		{"fatal: unable to access 'https://github.com/example/repo/': SSL_ERROR_SSL", true},
+		{"fatal: unable to access 'https://github.com/example/repo/': The requested URL returned error: 404", true},
+	} {
+		if got := isDiscoveryGoBuildInfrastructureFailure(test.diagnostic); got != test.infrastructure {
+			t.Errorf("infrastructure=%v, want %v: %s", got, test.infrastructure, test.diagnostic)
+		}
+		if isDiscoveryRetryableNetworkFailure(test.diagnostic) {
+			t.Errorf("non-transport or certificate failure was retried: %s", test.diagnostic)
+		}
+	}
+	for _, fatal := range []string{
+		"checksum mismatch\nSECURITY ERROR",
+		"write object: no space left on device",
+		"SSL certificate problem: unable to get local issuer certificate",
+		"server certificate verification failed",
+	} {
+		diagnostic := fatal + "\nfatal: unable to access 'https://github.com/example/repo/': " +
+			"LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443"
+		if !isDiscoveryGoBuildInfrastructureFailure(diagnostic) || isDiscoveryRetryableNetworkFailure(diagnostic) {
+			t.Errorf("fatal integrity/resource/certificate failure lost precedence: %s", diagnostic)
+		}
 	}
 }
 

@@ -30,6 +30,18 @@ var discoveryHTTP2GoAwayPattern = regexp.MustCompile(
 		`laststreamid=[0-9]+, errcode=no_error, debug="server_shutting_down"`,
 )
 
+// Git's libcurl transport reports a disconnected TLS session differently
+// from Go's HTTP client. Require Git's fatal HTTPS access envelope so source
+// diagnostics containing a TLS error token cannot become network retries.
+var discoveryGitHTTPSFailurePattern = regexp.MustCompile(
+	`(?m)^[ \t]*fatal: unable to access 'https://[^'\r\n]+': ([^\r\n]+)`,
+)
+
+var discoveryGitTLSDisconnectPattern = regexp.MustCompile(
+	`(?:libressl|openssl) ssl_(?:connect|read): ssl_error_syscall(?:[ ,]|$)|` +
+		`gnutls (?:recv|handshake) error \(-110\): the tls connection was non-properly terminated\.`,
+)
+
 func isDiscoveryRetryableNetworkFailure(diagnostic string) bool {
 	_, retryable := classifyDiscoveryGoBuildFailure(diagnostic)
 	return retryable
@@ -48,6 +60,8 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 	for _, marker := range []string{
 		"checksum mismatch",
 		"security error",
+		"ssl certificate problem",
+		"server certificate verification failed",
 		"captured output exceeds",
 		"waitdelay expired",
 		"terminate discovery command group",
@@ -64,6 +78,12 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 	} {
 		if strings.Contains(diagnostic, marker) {
 			return true, false
+		}
+	}
+	gitHTTPSFailures := discoveryGitHTTPSFailurePattern.FindAllStringSubmatch(diagnostic, -1)
+	for _, failure := range gitHTTPSFailures {
+		if discoveryGitTLSDisconnectPattern.MatchString(failure[1]) {
+			return true, true
 		}
 	}
 	if discoveryHTTPResponseEOFPattern.MatchString(diagnostic) ||
@@ -97,6 +117,11 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 		if strings.Contains(diagnostic, marker) {
 			return true, false
 		}
+	}
+	if len(gitHTTPSFailures) != 0 {
+		// Other Git HTTPS failures remain infrastructure errors, but their
+		// unknown or permanent cause must not be guessed transient.
+		return true, false
 	}
 	return false, false
 }
