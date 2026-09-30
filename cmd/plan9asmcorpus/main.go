@@ -484,6 +484,10 @@ func makeTranslatorInvocationForTargetsAndTags(corpusDir, modulePath string, pat
 		"-out="+outDir,
 		"-compile",
 		"-llc="+llc,
+		// Curated and discovery suites both verify real LLVM 22 objects.
+		// Optimization adds no instruction coverage and is prohibitively slow
+		// for some generated megabyte-scale assembly files.
+		"-llc-opt-level=0",
 		"-report="+reportPath,
 		"-repo-root="+repoRoot,
 	)
@@ -491,15 +495,10 @@ func makeTranslatorInvocationForTargetsAndTags(corpusDir, modulePath string, pat
 }
 
 func makeDiscoveryTranslatorInvocation(corpusDir, modulePath string, patterns, buildTags, targets, asmFiles []string, outDir, repoRoot, llc, reportPath string) commandInvocation {
-	invocation := makeTranslatorInvocationForTargetsAndTags(
+	return makeTranslatorInvocationForTargetsAndTags(
 		corpusDir, modulePath, patterns, buildTags, targets, asmFiles,
 		outDir, repoRoot, llc, reportPath,
 	)
-	// Discovery verifies IR and produces a real LLVM object for every selected
-	// source. Optimization does not add coverage, and -O0 keeps generated
-	// megabyte-scale files tractable in the complete module-index sweep.
-	invocation.Args = append(invocation.Args, "-llc-opt-level=0")
-	return invocation
 }
 
 func queryModule(dir, query string) (moduleInfo, error) {
