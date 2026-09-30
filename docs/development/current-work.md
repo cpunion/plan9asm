@@ -7,8 +7,8 @@ Read [validation](validation.md) and [discovery verification](discovery-verifica
 ## Authority and evidence
 
 - Upstream xgo-dev PR 40 remains Draft. Fork cpunion PR 3 was closed after
-  its CI passed; do not reopen it just to test subsequent changes. Stage this
-  batch in a new Draft PR against the fork's
+  its CI passed; do not reopen it just to test subsequent changes. This batch
+  is staged in fork Draft PR 4 against the fork's
   `codex/expand-ecosystem-corpus-20260913` branch. Do not update that
   upstream-connected branch until current-head CI and exclusion review pass.
 - Fork [run 36524259971, attempt 2](https://github.com/cpunion/plan9asm/actions/runs/36524259971)
@@ -62,9 +62,18 @@ coverage batch, not start a competing import or duplicate full corpus run.
 - A complete llgo integration probe also exposed a separate C ABI pass bug:
   sizing an intrinsic's metadata parameter before excluding LLVM intrinsics.
   The isolated fix and child-process regression are in
-  [cpunion/llgo PR 258](https://github.com/cpunion/llgo/pull/258), still Draft
-  until CI and review finish. Do not claim unmodified llgo end-to-end success
-  or include a diagnostic-only overlay in this contribution.
+  merged [xgo-dev/llgo PR 2709](https://github.com/xgo-dev/llgo/pull/2709).
+  End-to-end coverage must test the actual llgo revision, not a local overlay.
+- The cutoff inventory exposed raw ENDBR64 in ethereum-vanity-address.
+  The complete ENDBR32/64 byte family now has instruction-boundary, Go-form,
+  five-target LLVM 22 compilation and GP/flags-preservation tests. ENDBR32
+  remains raw-only because Go does not name it. These tests do not establish
+  operating-system CET enforcement. Replay the discovering external shard.
+- The assembly ledger must match all discovered assembly candidates and the
+  freshly verified shard outcomes. Passes require positive compiled counts;
+  every source or explicit skip retains scoped reasons/evidence. Pending and
+  failed are working states, not accepted final outcomes. Publish the full
+  ledger before promotion; CI rejects an incomplete or mismatching snapshot.
 - Keep all discovered instruction, signature and LLVM-object coverage here.
   Third-party llgo final-link and runtime coverage belongs in a separate
   `llgo-compat` repository. Its module/target results must be independently

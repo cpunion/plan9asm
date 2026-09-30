@@ -1170,7 +1170,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"CLDEMOTE", "INVLPG", "INVPCID",
 		"MONITOR", "MWAIT", "RDPMC", "RDPKRU", "WRPKRU", "XSETBV", "UMONITOR", "UMWAIT", "TPAUSE",
 		"XBEGIN", "XABORT", "XEND", "XTEST",
-		"CLAC", "CLI", "CLTS", "ENDBR64", "ICEBP", "INVD", "RSM", "STAC", "STI", "SWAPGS", "UD1", "WBINVD",
+		"CLAC", "CLI", "CLTS", "ENDBR32", "ENDBR64", "ICEBP", "INVD", "RSM", "STAC", "STI", "SWAPGS", "UD1", "WBINVD",
 		"IRETW", "IRETL", "IRETQ", "RETFW", "RETFL", "RETFQ",
 		"SYSENTER", "SYSENTER64", "SYSEXIT", "SYSEXIT64", "SYSRET",
 		"LEAVEW", "LEAVEL", "LEAVEQ", "XLAT",

@@ -16,10 +16,12 @@ const (
 type amd64FixedSystemSpec struct {
 	encoding string
 	effect   amd64FixedSystemEffect
+	rawOnly  bool
 }
 
 // amd64FixedSystemSpecs is the complete Go 1.27 operand-free system/state
-// family that has no modeled GP-register data flow. Exact bytes keep Go's
+// family that has no modeled GP-register data flow, plus raw-only ENDBR32.
+// Exact bytes keep Go's
 // accepted 386 compatibility rows (notably ENDBR64 and SWAPGS) object-level
 // compatible even when LLVM's mnemonic matcher applies architectural mode
 // restrictions. Effects remain typed so traps and non-returning RSM cannot
@@ -28,6 +30,7 @@ var amd64FixedSystemSpecs = map[Op]amd64FixedSystemSpec{
 	"CLAC":    {encoding: ".byte 0x0f, 0x01, 0xca"},
 	"CLI":     {encoding: ".byte 0xfa"},
 	"CLTS":    {encoding: ".byte 0x0f, 0x06"},
+	"ENDBR32": {encoding: ".byte 0xf3, 0x0f, 0x1e, 0xfb", rawOnly: true},
 	"ENDBR64": {encoding: ".byte 0xf3, 0x0f, 0x1e, 0xfa"},
 	"ICEBP":   {encoding: ".byte 0xf1", effect: amd64FixedSystemTrap},
 	"INVD":    {encoding: ".byte 0x0f, 0x08"},
@@ -48,6 +51,9 @@ func (c *amd64Ctx) lowerFixedSystem(op Op, ins Instr) (ok bool, terminated bool,
 	spec, recognized := amd64FixedSystemSpecs[Op(baseOp)]
 	if !recognized {
 		return false, false, nil
+	}
+	if spec.rawOnly && !ins.x86Encoded {
+		return true, false, fmt.Errorf("%s %s has no Go assembler mnemonic; use its raw encoding: %q", c.goarch, baseOp, ins.Raw)
 	}
 	if rawOp != baseOp {
 		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
