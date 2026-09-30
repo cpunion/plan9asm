@@ -66,6 +66,20 @@ func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, erro
 	if _, _, ok := parseSBRef(f.symbol); !ok || !strings.HasSuffix(f.symbol, "(SB)") {
 		return f, fmt.Errorf("arm %s requires a valid symbol(SB) reference: %q", op, ins.Raw)
 	}
+	switch strings.ToUpper(strings.TrimSpace(string(f.reg))) {
+	case "PC", "SP":
+		// Go rejects pseudo-register PC/SP in these forms. Hardware registers
+		// are spelled R15/R13; PC must not inherit an ordinary register's semantics.
+		return f, fmt.Errorf("arm %s symbol form cannot use pseudo-register %s: %q", op, f.reg, ins.Raw)
+	case "R15":
+		if f.load {
+			return f, fmt.Errorf("%w: arm %s symbol destination R15 requires explicit control-flow context: %q", ErrProbeNeedsContext, op, ins.Raw)
+		}
+		// Go first expands a symbolic address into a literal load through
+		// R11. Reading PC in the following store therefore depends on the
+		// source instruction layout, not on an initialized virtual register.
+		return f, fmt.Errorf("%w: arm %s symbol source R15 requires source instruction layout context: %q", ErrProbeNeedsContext, op, ins.Raw)
+	}
 	return f, nil
 }
 
