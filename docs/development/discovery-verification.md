@@ -208,6 +208,15 @@ candidates are accounted for; only `verified` additionally requires no failures.
 Status-query success is not test success: the final verifier still exits
 nonzero for failures or missing reports. CI publishes this view even when a
 shard fails. Reports are atomically published for concurrent status readers.
+
+Final assembly coverage has only two accepted outcomes: tested `passed`, or
+an explained skip. `not_applicable` is a source/target skip, not a pass; the
+other `skipped_*` statuses retain their specific reviewed reason and witnesses.
+`pending` and `failed` must remain visible during development and prevent
+completion. The completion gate validates each candidate's evidence, not just
+the summary's `verified` flag. Every selected assembly-bearing version must
+appear exactly once, including skipped versions.
+
 Windows publication coordinates local readers and retries transient sharing/
 deletion errors for at most two seconds; persistent errors still fail and keep
 the previous complete report. The required Windows job runs these concurrent

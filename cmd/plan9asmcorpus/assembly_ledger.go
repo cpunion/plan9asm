@@ -180,6 +180,12 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 }
 
 func requireVerifiedAssemblyLedger(progress discoveryProgress) error {
+	// Completion is an evidence gate, not a check of caller-supplied flags.
+	// Validate every pass and scoped skip even when the snapshot was already
+	// read or its summary claims that all shards are complete.
+	if err := validateAssemblyLedgerProgress(progress); err != nil {
+		return fmt.Errorf("assembly ledger completion evidence: %w", err)
+	}
 	if progress.Verified && progress.Complete && progress.Pending == 0 &&
 		progress.Failed == 0 && progress.ShardCount > 0 &&
 		progress.ReportedShards == progress.ShardCount {

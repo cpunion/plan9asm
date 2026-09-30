@@ -195,6 +195,9 @@ func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
 			if err := validateAssemblyLedgerProgress(changed); err == nil {
 				t.Fatal("accepted assembly outcome without required evidence")
 			}
+			if err := requireVerifiedAssemblyLedger(changed); err == nil {
+				t.Fatal("completion gate trusted summary flags instead of candidate evidence")
+			}
 		})
 	}
 }
