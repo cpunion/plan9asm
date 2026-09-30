@@ -12,16 +12,22 @@ TEXT branchLinkForms(SB),$0-0
 resume:
 	BL 1(PC)
 afterPC:
+	ADR indirectLocal, R3
 	BL R3
+	ADR indirectLocal, R4
 	BL (R4)
 	BL global(SB)
+	ADR indirectLocal, R5
 	CALL R5
+	ADR indirectLocal, R6
 	CALL (R6)
 	CALL global(SB)
 	B done
 local:
 	MOVD R30, R0
 	B resume
+indirectLocal:
+	B (R30)
 done:
 	RET
 `

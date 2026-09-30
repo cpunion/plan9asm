@@ -188,7 +188,7 @@ func (state *arm64ControlState) source(op Operand, post bool) arm64ControlValue 
 		return arm64ControlValue{"fpa:" + strconv.FormatInt(op.FPOffset, 10): true}
 	}
 	if key := state.memoryKey(op, post); key != "" && state.memory[key] != nil {
-		return state.memory[key]
+		return arm64ControlUnion(state.memory[key], arm64ControlLabels(state.escaped))
 	}
 	if op.Kind == OpMem || op.Kind == OpFP || op.Kind == OpSym {
 		return arm64ControlUnion(arm64ControlExternal(), state.escaped)
@@ -206,7 +206,7 @@ func (state *arm64ControlState) write(op Operand, value arm64ControlValue, post 
 		state.invalidateOverlappingControlCells(key, 8)
 		state.memory[key] = value
 	} else if op.Kind == OpMem || op.Kind == OpFP || op.Kind == OpSym {
-		state.escaped = arm64ControlUnion(state.escaped, arm64ControlLabels(value))
+		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
 		for key, old := range state.memory {
 			state.memory[key] = arm64ControlUnion(old, arm64ControlExternal())
 		}
@@ -225,6 +225,16 @@ func arm64ControlLabels(value arm64ControlValue) arm64ControlValue {
 		}
 	}
 	return labels
+}
+
+func arm64ControlAddressTaint(value arm64ControlValue) arm64ControlValue {
+	taint := make(arm64ControlValue)
+	for token := range value {
+		if token != "" {
+			taint[token] = true
+		}
+	}
+	return taint
 }
 
 func (state *arm64ControlState) invalidateOverlappingControlCells(key string, width int64) {
@@ -379,7 +389,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 								propagate(target, state)
 							}
 						} else {
-							propagate(bi+1, state)
+							nativeState := state.clone()
+							c.invalidateControlCallResults(nativeState, Operand{})
+							propagate(bi+1, nativeState)
 						}
 					}
 					terminated = true
@@ -604,13 +616,14 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operand Operand) {
 	name := c.resolve(strings.TrimSuffix(operand.Sym, "(SB)"))
 	sig, known := c.sigs[name]
-	if !known {
-		for key, value := range state.memory {
-			state.memory[key] = arm64ControlUnion(value, arm64ControlExternal())
-		}
-		return
+	// A native/Go callee has no virtual-GP preservation contract. In
+	// particular, even a scalar result may return the call's link address.
+	possibleCode := arm64ControlLabels(state.escaped)
+	for _, value := range state.regs {
+		possibleCode = arm64ControlUnion(possibleCode, arm64ControlLabels(value))
 	}
-	returnValue := arm64ControlUnion(arm64ControlExternal(), state.escaped)
+	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
+	mayWriteFrame := !known || len(state.escaped) != 0
 	for index := range sig.Args {
 		var value arm64ControlValue
 		if len(sig.Frame.Params) != 0 && len(sig.ArgRegs) == 0 {
@@ -626,15 +639,30 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 			}
 			value = arm64ControlRead(state.regs, reg)
 		}
+		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
 		returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
-	}
-	for _, typ := range sig.Args {
-		if typ == Ptr {
-			for key, value := range state.memory {
-				state.memory[key] = arm64ControlUnion(value, arm64ControlExternal())
-			}
-			break
+		if sig.Args[index] == Ptr {
+			mayWriteFrame = true
 		}
+		for token := range value {
+			if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
+				mayWriteFrame = true
+			}
+		}
+	}
+	for index := 0; index < 31; index++ {
+		reg := Reg(fmt.Sprintf("R%d", index))
+		if reg != Reg("R30") {
+			state.regs[reg] = arm64ControlUnion(arm64ControlRead(state.regs, reg), returnValue)
+		}
+	}
+	if mayWriteFrame {
+		for key, value := range state.memory {
+			state.memory[key] = arm64ControlUnion(value, returnValue)
+		}
+	}
+	if !known {
+		return
 	}
 	if len(sig.Frame.Results) == 0 {
 		if sig.Ret != Void {

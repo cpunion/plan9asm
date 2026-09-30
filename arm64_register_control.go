@@ -75,6 +75,9 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 		// reaching-definition proof of that one target lowers to an ordinary
 		// LLVM return block; no native pointer goes through indirectbr.
 		if len(targets) == 1 && targets[0] == c.localControl.outer {
+			if call {
+				return false, fmt.Errorf("%w: ARM64 call through native caller link has no callee ABI contract: %q", ErrProbeNeedsContext, ins.Raw)
+			}
 			fmt.Fprintf(c.b, "  br label %%%s\n", arm64LLVMBlockName(targets[0]))
 			c.recordARM64FlagFlowEdges(targets[0])
 			return true, nil
@@ -99,19 +102,13 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 		return true, nil
 	}
 	if call {
-		// LLVM must know the complete native caller-save effects, not only
-		// LR: arbitrary C-ABI code can clobber GP, vector and flag registers.
-		clobbers := []string{"r", "~{lr}", "~{cc}", "~{memory}"}
-		for index := 0; index <= 18; index++ {
-			clobbers = append(clobbers, fmt.Sprintf("~{x%d}", index))
+		if addr == "0" {
+			// Physical BLR XZR always faults; it cannot return to observe an
+			// ABI result. Keep the real zero branch, not a guessed void call.
+			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 0)\n  unreachable\n", "blr $0", "r,~{memory}")
+			return true, nil
 		}
-		for index := 0; index < 32; index++ {
-			if index < 8 || index >= 16 {
-				clobbers = append(clobbers, fmt.Sprintf("~{v%d}", index))
-			}
-		}
-		fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", "blr $0", strings.Join(clobbers, ","), addr)
-		return false, nil
+		return false, fmt.Errorf("%w: ARM64 native register call needs a callee ABI and virtual register/result contract: %q", ErrProbeNeedsContext, ins.Raw)
 	}
 	if c.flagFlow != nil {
 		c.flagFlow.blocks[c.flagFlow.current].indirect = true

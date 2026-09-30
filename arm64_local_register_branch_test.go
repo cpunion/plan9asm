@@ -42,7 +42,29 @@ func TestARM64RegisterControlCompleteGoForms(t *testing.T) {
 				}
 				name := fmt.Sprintf("registerForm%d", forms)
 				forms++
-				fmt.Fprintf(&source, "TEXT %s(SB),516,$0-0\n%s %s%s\nRET\n", name, op, marker, operand)
+				prefix, suffix := "", "RET\n"
+				if op == "BL" || op == "CALL" {
+					target, err := parseOperandForArch(ArchARM64, operand)
+					if err != nil {
+						t.Fatal(err)
+					}
+					reg := target.Reg
+					if target.Kind == OpMem {
+						reg = target.Mem.Base
+					}
+					if reg != ZR && reg != SP && reg != Reg("RSP") {
+						spelling := string(reg)
+						if reg == Reg("R28") {
+							spelling = "g"
+						}
+						if reg == Reg("R18") {
+							spelling = "R18_PLATFORM"
+						}
+						prefix = fmt.Sprintf("MOVD R30,R19\nADR localTarget,%s\n", spelling)
+						suffix = "MOVD R19,R30\nRET\nlocalTarget:\nB (R30)\n"
+					}
+				}
+				fmt.Fprintf(&source, "TEXT %s(SB),516,$0-0\n%s%s %s%s\n%s", name, prefix, op, marker, operand, suffix)
 				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
 		}

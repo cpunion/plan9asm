@@ -510,8 +510,8 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 	emitBr := arm64TestEmitBr(c)
 	emitCondBr := arm64TestEmitCondBr(c)
 	for _, tc := range []Instr{
-		{Op: "BL", Args: []Operand{arm64RegOp("R0")}, Raw: "BL R0"},
-		{Op: "CALL", Args: []Operand{arm64MemOp("R20", 0)}, Raw: "CALL (R20)"},
+		{Op: "BL", Args: []Operand{arm64RegOp(ZR)}, Raw: "BL ZR"},
+		{Op: "CALL", Args: []Operand{arm64MemOp(ZR, 0)}, Raw: "CALL (ZR)"},
 		{Op: "BL", Args: []Operand{arm64SymOp("helper(SB)")}, Raw: "BL helper(SB)"},
 		{Op: "B", Args: []Operand{arm64MemOp("R1", 0)}, Raw: "B (R1)"},
 		{Op: "JMP", Args: []Operand{arm64MemOp("R20", 0)}, Raw: "JMP (R20)"},
