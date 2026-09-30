@@ -29,6 +29,13 @@ func (c *arm64Ctx) lowerARM64ScalarMemoryWriteback(op Op, ins Instr) (bool, bool
 		memoryIndex, dataIndex = 1, 0
 	}
 	memory, data := ins.Args[memoryIndex], ins.Args[dataIndex]
+	// Go's arm64 progedit rewrites literal $0 to REGZERO for these seven
+	// move opcodes before matching asm7 types 22/23. Keep that exact source
+	// alias; unresolved expressions and nonzero immediates are not registers.
+	zeroStore := memoryIndex == 1 && data.Kind == OpImm && data.Imm == 0 && data.ImmRaw == ""
+	if zeroStore {
+		data = Operand{Kind: OpReg, Reg: ZR}
+	}
 	if memory.Kind != OpMem || data.Kind != OpReg || !isARM64GeneralOrZeroReg(data.Reg) {
 		return true, false, fmt.Errorf("arm64 %s writeback requires memory and a general or zero register: %q", op, ins.Raw)
 	}
@@ -42,6 +49,12 @@ func (c *arm64Ctx) lowerARM64ScalarMemoryWriteback(op Op, ins Instr) (bool, bool
 
 	normalized := ins
 	normalized.Op = op
+	if zeroStore || pre {
+		normalized.Args = append([]Operand(nil), ins.Args...)
+	}
+	if zeroStore {
+		normalized.Args[dataIndex] = data
+	}
 	if pre {
 		base := mem.Base
 		if base == ZR || base == Reg("RSP") {
@@ -50,7 +63,6 @@ func (c *arm64Ctx) lowerARM64ScalarMemoryWriteback(op Op, ins Instr) (bool, bool
 		if err := c.updatePostInc(base, mem.Off); err != nil {
 			return true, false, err
 		}
-		normalized.Args = append([]Operand(nil), ins.Args...)
 		memory.Mem.Off = 0
 		normalized.Args[memoryIndex] = memory
 	}

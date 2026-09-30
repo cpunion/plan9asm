@@ -37,6 +37,8 @@ func TestARM64ScalarWritebackCompleteGoForms(t *testing.T) {
 				fmt.Fprintf(&source, "%s%s %d(RSP), ZR\n", form.op, suffix, off)
 				fmt.Fprintf(&source, "%s%s R2, %d(R1)\n", form.op, suffix, off)
 				fmt.Fprintf(&source, "%s%s ZR, %d(RSP)\n", form.op, suffix, off)
+				fmt.Fprintf(&source, "%s%s $0, %d(R1)\n", form.op, suffix, off)
+				fmt.Fprintf(&source, "%s%s $0, %d(RSP)\n", form.op, suffix, off)
 			}
 		}
 	}
@@ -69,6 +71,13 @@ func TestARM64ScalarWritebackRejectsGoInvalidForms(t *testing.T) {
 		"MOVD.P 256(R1), R2", "MOVD.W R2, -257(R1)",
 		"MOVD.P 8(R1), R1", "MOVWU.W R1, 4(R1)",
 		"MOVBW.P R2, 1(R1)", "MOVHW.W R2, 1(R1)",
+		"MOVD.P $1, 8(R1)", "MOVD.W $-1, 8(R1)",
+		"MOVW.P $1, 4(R1)", "MOVW.W $-1, 4(R1)",
+		"MOVWU.P $1, 4(R1)", "MOVWU.W $-1, 4(R1)",
+		"MOVH.P $1, 2(R1)", "MOVH.W $-1, 2(R1)",
+		"MOVHU.P $1, 2(R1)", "MOVHU.W $-1, 2(R1)",
+		"MOVB.P $1, 1(R1)", "MOVB.W $-1, 1(R1)",
+		"MOVBU.P $1, 1(R1)", "MOVBU.W $-1, 1(R1)",
 	} {
 		t.Run(instruction, func(t *testing.T) {
 			source := "TEXT badScalarWriteback(SB),$0-16\n" + instruction + "\nRET\n"
@@ -94,11 +103,20 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarWriteback(t *testing.T) {
 	for _, form := range arm64ScalarWritebackOps {
 		for _, suffix := range []string{"", ".P", ".W"} {
 			for _, off := range []int{-4, 0, 4} {
-				for _, store := range []bool{false, true} {
+				for _, access := range []struct {
+					store bool
+					zero  bool
+				}{
+					{}, {store: true}, {store: true, zero: true},
+				} {
+					store := access.store
 					name := fmt.Sprintf("scalar_wb_%d", len(sigs))
 					instruction := fmt.Sprintf("%s%s %d(R1), R4", form.op, suffix, off)
 					if store {
 						instruction = fmt.Sprintf("%s%s R2, %d(R1)", form.op, suffix, off)
+					}
+					if access.zero {
+						instruction = fmt.Sprintf("%s%s $0, %d(R1)", form.op, suffix, off)
 					}
 					fmt.Fprintf(&source, "TEXT %s(SB),$0-32\nMOVD base+0(FP), R1\nMOVD R1, R0\nMOVD value+8(FP), R2\nMOVD out+16(FP), R3\n%s\n", name, instruction)
 					if !store {
@@ -120,6 +138,9 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarWriteback(t *testing.T) {
 						baseDelta = 0
 					}
 					fmt.Fprintf(&goChecks, "{\nvar buffer, expected [128]byte\nfor i := range buffer { buffer[i] = byte(i*13 + 131) }\nexpected = buffer\nvar observed, want uint64\nvalue := uint64(0xfedcba9876543210)\n")
+					if access.zero {
+						goChecks.WriteString("value = 0\n")
+					}
 					if store {
 						fmt.Fprintf(&goChecks, "for i := 0; i < %d; i++ { expected[%d+i] = byte(value >> (8*i)) }\n", form.bits/8, 64+addressOff)
 					} else {
@@ -130,6 +151,9 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarWriteback(t *testing.T) {
 					}
 					fmt.Fprintf(&goChecks, "delta := %s(&buffer[64], value, &observed)\nif delta != %d || observed != want || buffer != expected { println(\"%s\", delta, observed, want); panic(\"Go scalar writeback oracle\") }\n}\n", name, baseDelta, instruction)
 					fmt.Fprintf(&checks, "  { /* %s */\n    unsigned char bytes[128], expected[128];\n    for (unsigned i = 0; i < sizeof bytes; i++) bytes[i] = (unsigned char)(i * 13 + 131);\n    memcpy(expected, bytes, sizeof bytes);\n    uint64_t observed = 0, want = 0, value = UINT64_C(0xfedcba9876543210);\n", instruction)
+					if access.zero {
+						checks.WriteString("    value = 0;\n")
+					}
 					if store {
 						fmt.Fprintf(&checks, "    memcpy(expected + %d, &value, %d);\n", 64+addressOff, form.bits/8)
 					} else {
