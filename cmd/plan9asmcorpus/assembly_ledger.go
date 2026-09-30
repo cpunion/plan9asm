@@ -109,7 +109,10 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			return fmt.Errorf("assembly ledger non-skip %s carries skip evidence", key)
 		}
 		if candidate.Status == discoveryStatusSkippedSuperseded {
-			if candidate.Superseded == nil || candidate.Superseded.Module != candidate.Module || candidate.Superseded.Version != candidate.Version {
+			if candidate.Superseded == nil || candidate.Superseded.Module != candidate.Module ||
+				candidate.Superseded.Version != candidate.Version ||
+				strings.TrimSpace(candidate.Superseded.Reason) == "" ||
+				len(candidate.Superseded.EvidenceURLs) == 0 {
 				return fmt.Errorf("assembly ledger supersession %s lacks matching evidence", key)
 			}
 		} else if candidate.Superseded != nil {
@@ -117,7 +120,9 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		}
 		if candidate.Status == discoveryStatusSkippedPrivateExtension {
 			if candidate.PrivateExtension == nil || candidate.PrivateExtension.Module != candidate.Module ||
-				candidate.PrivateExtension.Version != candidate.Version || candidate.PrivateExtension.Reason == "" {
+				candidate.PrivateExtension.Version != candidate.Version ||
+				strings.TrimSpace(candidate.PrivateExtension.Reason) == "" ||
+				len(candidate.PrivateExtension.EvidenceURLs) == 0 {
 				return fmt.Errorf("assembly ledger private extension %s lacks matching evidence", key)
 			}
 		} else if candidate.PrivateExtension != nil {
@@ -125,7 +130,9 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		}
 		if candidate.Status == discoveryStatusSkippedNativeLayout {
 			if candidate.NativeLayout == nil || candidate.NativeLayout.Module != candidate.Module ||
-				candidate.NativeLayout.Version != candidate.Version || candidate.NativeLayout.Reason == "" {
+				candidate.NativeLayout.Version != candidate.Version ||
+				strings.TrimSpace(candidate.NativeLayout.Reason) == "" ||
+				len(candidate.NativeLayout.EvidenceURLs) == 0 {
 				return fmt.Errorf("assembly ledger native layout %s lacks matching evidence", key)
 			}
 		} else if candidate.NativeLayout != nil {
