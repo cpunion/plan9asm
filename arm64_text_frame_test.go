@@ -25,6 +25,9 @@ func TestARM64TextFrameAllocation(t *testing.T) {
 		{"negative-sp", 32904, -512, 32904, "SUB $512,RSP\nMOVD R0,(RSP)\nADD $512,RSP\n"},
 		{"positive-sp", 32904, 0, 32904 + 512, "ADD $512,RSP\nMOVD R0,(RSP)\nSUB $512,RSP\n"},
 		{"explicit-beyond-frame", 16, 0, 4160, "MOVD R0,4096(RSP)\n"},
+		{"runtime-call2MiB", 1 << 21, 0, 1 << 21, ""},
+		{"runtime-call1GiB", 1 << 30, 0, 1 << 30, ""},
+		{"large-frame-sp-movement", 1 << 21, -512, 1<<21 + 512, "SUB $512,RSP\nMOVD R0,(RSP)\nADD $1024,RSP\nMOVD R0,(RSP)\nSUB $512,RSP\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := fmt.Sprintf("TEXT stack_bounds(SB),$%d-0\nMOVD RSP,R9\n%sRET\n", test.frame, test.body)
@@ -44,7 +47,7 @@ func TestARM64TextFrameAllocation(t *testing.T) {
 }
 
 func TestARM64TextFrameRejectsInvalidSize(t *testing.T) {
-	for _, frame := range []int64{-16, -1, arm64MaxLocalStackSpan + 8, 1<<63 - 1} {
+	for _, frame := range []int64{-16, -1, 1<<31 + 8, 1<<63 - 1} {
 		t.Run(strconv.FormatInt(frame, 10), func(t *testing.T) {
 			file, err := Parse(ArchARM64, fmt.Sprintf("TEXT frame(SB),$%d-0\nMOVD RSP,R9\nRET\n", frame))
 			if err != nil {
@@ -57,6 +60,78 @@ func TestARM64TextFrameRejectsInvalidSize(t *testing.T) {
 				t.Fatalf("invalid or oversized TEXT frame %d accepted", frame)
 			}
 		})
+	}
+}
+
+func TestARM64LargeTextFrameLLVM(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, frame := range []int64{1 << 21, 1 << 28, 1 << 30} {
+		for _, triple := range []string{
+			"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+			"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+		} {
+			t.Run(fmt.Sprintf("%d/%s", frame, triple), func(t *testing.T) {
+				source := fmt.Sprintf("TEXT large_frame(SB),$%d-0\nADD $128,RSP,R3\nMOVD R3,R0\nRET\n", frame)
+				requireARM64GoAssemblerResult(t, source, true)
+				file, err := Parse(ArchARM64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple,
+					Sigs: map[string]FuncSig{"large_frame": {Name: "large_frame", Ret: Ptr, Attrs: "uwtable"}},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(ir, `asm sideeffect "", "=r,0"`) || !strings.Contains(ir, "%local_stack = alloca i8, i64 %") {
+					t.Fatal("large declared frame must retain its full size through a dynamic alloca")
+				}
+				compileLLVMToObject(t, llc, triple, "large-frame.ll", "large-frame.o", ir)
+				compileARM64LargeFrameOptimized(t, llc, triple, ir)
+			})
+		}
+	}
+}
+
+func compileARM64LargeFrameOptimized(t *testing.T, llc, triple, ir string) {
+	t.Helper()
+	opt := findLLVM22Tool("opt")
+	readobj := findLLVM22Tool("llvm-readobj")
+	if opt == "" || readobj == "" {
+		t.Fatal("LLVM 22 opt and llvm-readobj are required")
+	}
+	dir := t.TempDir()
+	input, optimized := filepath.Join(dir, "input.ll"), filepath.Join(dir, "optimized.ll")
+	if err := os.WriteFile(input, []byte(ir), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(opt, "-passes=default<O2>", "-S", input, "-o", optimized).CombinedOutput(); err != nil {
+		t.Fatalf("optimize large frame: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(optimized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "alloca i8, i64 %") || !strings.Contains(string(data), "uwtable") {
+		t.Fatal("optimization lost the dynamic allocation or caller's unwind attribute")
+	}
+	for _, level := range []string{"-O0", "-O2"} {
+		object := filepath.Join(dir, strings.TrimPrefix(level, "-")+".o")
+		if out, err := exec.Command(llc, level, "-mtriple="+triple, "-filetype=obj", optimized, "-o", object).CombinedOutput(); err != nil {
+			t.Fatalf("compile optimized large frame %s: %v\n%s", level, err, out)
+		}
+		if strings.Contains(triple, "windows") {
+			out, err := exec.Command(readobj, "--unwind", object).CombinedOutput()
+			if err != nil {
+				t.Fatalf("inspect Windows unwind: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), "RuntimeFunction {") || !strings.Contains(string(out), "mov x29, sp") {
+				t.Fatalf("dynamic frame lost its Windows unwind frame chain:\n%s", out)
+			}
+		}
 	}
 }
 
@@ -94,9 +169,13 @@ RET
 `
 
 func arm64TextFrameRuntime(t *testing.T, triple string) (string, string) {
+	return arm64TextFrameRuntimeForSource(t, triple, arm64TextFrameSource)
+}
+
+func arm64TextFrameRuntimeForSource(t *testing.T, triple, source string) (string, string) {
 	t.Helper()
-	requireARM64GoAssemblerResult(t, arm64TextFrameSource, true)
-	file, err := Parse(ArchARM64, arm64TextFrameSource)
+	requireARM64GoAssemblerResult(t, source, true)
+	file, err := Parse(ArchARM64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +206,7 @@ void frame_observe(volatile uint64_t* data, uint64_t bytes, uint64_t value) {
     }
   }
 }
+
 int main(void) {
   volatile uint64_t canary[2] = {UINT64_C(0x123456789abcdef0), UINT64_C(0xfedcba9876543210)};
   uint64_t value = UINT64_C(0x89abcdef01234567);
@@ -143,6 +223,33 @@ int main(void) {
 }
 `
 	return ir, main
+}
+
+func TestARM64LargeTextFrameRuntime(t *testing.T) {
+	llc, clang := findLLVM22Tool("llc"), findLLVM22Tool("clang")
+	if llc == "" || clang == "" {
+		t.Fatal("LLVM 22 llc and clang are required")
+	}
+	source := strings.ReplaceAll(arm64TextFrameSource, "32904", "2097288")
+	source = strings.ReplaceAll(source, "32768", "2097152")
+	for _, triple := range []string{
+		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, main := arm64TextFrameRuntimeForSource(t, triple, source)
+			if !strings.Contains(ir, "%local_stack = alloca i8, i64 %") {
+				t.Fatal("2 MiB runtime oracle did not exercise the large-frame allocation path")
+			}
+			compileLLVMToObject(t, llc, triple, "large-runtime.ll", "large-runtime.o", ir)
+			native := runtime.GOARCH == "arm64" && ((runtime.GOOS == "darwin" && strings.Contains(triple, "apple")) ||
+				(runtime.GOOS == "linux" && strings.Contains(triple, "linux")) ||
+				(runtime.GOOS == "freebsd" && strings.Contains(triple, "freebsd")))
+			if native {
+				compileAndRunRuntimeTestForTarget(t, llc, clang, "large-runtime", triple, ir, main, nil)
+			}
+		})
+	}
 }
 
 func TestARM64TextFrameLLVM(t *testing.T) {
@@ -186,27 +293,36 @@ func main() {
   }
 }
 `
-	dir := t.TempDir()
-	for name, data := range map[string]string{
-		"go.mod":        "module frameoracle\n\ngo 1.20\n",
-		"main.go":       main,
-		"frame_arm64.s": strings.Replace(strings.ReplaceAll(arm64TextFrameSource, "BL frame_observe(SB)\n", ""), "TEXT frame_table", "TEXT ·frame_table", 1),
-	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	args := []string{"run", "."}
-	if cross {
-		if _, err := exec.LookPath("qemu-aarch64"); err != nil {
-			t.Fatal(err)
-		}
-		args = []string{"run", "-exec=qemu-aarch64", "."}
-	}
-	cmd := exec.Command("go", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOARCH=arm64", "CGO_ENABLED=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Go TEXT frame oracle: %v\n%s", err, out)
+	for _, large := range []bool{false, true} {
+		t.Run(fmt.Sprintf("large=%v", large), func(t *testing.T) {
+			source := arm64TextFrameSource
+			if large {
+				source = strings.ReplaceAll(source, "32904", "2097288")
+				source = strings.ReplaceAll(source, "32768", "2097152")
+			}
+			dir := t.TempDir()
+			for name, data := range map[string]string{
+				"go.mod":        "module frameoracle\n\ngo 1.20\n",
+				"main.go":       main,
+				"frame_arm64.s": strings.Replace(strings.ReplaceAll(source, "BL frame_observe(SB)\n", ""), "TEXT frame_table", "TEXT ·frame_table", 1),
+			} {
+				if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"run", "."}
+			if cross {
+				if _, err := exec.LookPath("qemu-aarch64"); err != nil {
+					t.Fatal(err)
+				}
+				args = []string{"run", "-exec=qemu-aarch64", "."}
+			}
+			cmd := exec.Command("go", args...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "GOWORK=off", "GOARCH=arm64", "CGO_ENABLED=0")
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("Go TEXT frame oracle: %v\n%s", err, out)
+			}
+		})
 	}
 }

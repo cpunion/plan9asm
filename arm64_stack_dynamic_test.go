@@ -1,14 +1,19 @@
 package plan9asm
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 )
 
 func arm64DynamicStackRuntime(t *testing.T, triple string) (string, string) {
+	return arm64DynamicStackRuntimeWithFrame(t, triple, 0)
+}
+
+func arm64DynamicStackRuntimeWithFrame(t *testing.T, triple string, frame int64) (string, string) {
 	t.Helper()
-	const source = `TEXT dynamic_stack(SB),$0-24
+	source := fmt.Sprintf(`TEXT dynamic_stack(SB),$%d-24
 MOVD out+0(FP),R0
 MOVD size+8(FP),R1
 MOVD value+16(FP),R2
@@ -31,7 +36,7 @@ MOVD R20,RSP
 MOVD 8(RSP),R8
 MOVD R8,32(R0)
 RET
-`
+`, frame)
 	requireARM64GoAssemblerResult(t, source, true)
 	file, err := Parse(ArchARM64, source)
 	if err != nil {
@@ -70,8 +75,34 @@ int main(void) {
   }
   return 0;
 }
+
 `
 	return ir, main
+}
+
+func TestARM64DynamicStackLargeDeclaredFrameLLVM(t *testing.T) {
+	llc, clang := findLLVM22Tool("llc"), findLLVM22Tool("clang")
+	if llc == "" || clang == "" {
+		t.Fatal("LLVM 22 llc and clang are required")
+	}
+	for _, triple := range []string{
+		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, main := arm64DynamicStackRuntimeWithFrame(t, triple, 1<<21)
+			if !strings.Contains(ir, "%local_stack = alloca i8, i64 %") {
+				t.Fatal("declared backing must itself use the large-frame dynamic allocation path")
+			}
+			compileLLVMToObject(t, llc, triple, "dynamic-large.ll", "dynamic-large.o", ir)
+			native := runtime.GOARCH == "arm64" && ((runtime.GOOS == "darwin" && strings.Contains(triple, "apple")) ||
+				(runtime.GOOS == "linux" && strings.Contains(triple, "linux")) ||
+				(runtime.GOOS == "freebsd" && strings.Contains(triple, "freebsd")))
+			if native {
+				compileAndRunRuntimeTestForTarget(t, llc, clang, "dynamic-large", triple, ir, main, nil)
+			}
+		})
+	}
 }
 
 func TestARM64DynamicStackLLVM(t *testing.T) {

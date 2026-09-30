@@ -1116,7 +1116,14 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		}
 		minOff += minimum
 		maxOff += maximum
-		if minOff < -arm64MaxLocalStackSpan || maxOff > arm64MaxLocalStackSpan {
+		// Bound inferred SP movement separately from the explicit TEXT frame.
+		// Go's reflect-call wrappers declare frames up to 1 GiB; the 1 MiB
+		// movement-proof budget must not reject their declared storage.
+		upperBound := arm64MaxLocalStackSpan
+		if c.frameSize > upperBound {
+			upperBound = c.frameSize + arm64MaxLocalStackSpan
+		}
+		if minOff < -arm64MaxLocalStackSpan || maxOff > upperBound {
 			return fmt.Errorf("ARM64 local stack footprint exceeds %d bytes", arm64MaxLocalStackSpan)
 		}
 		const guard = int64(64)
@@ -1127,7 +1134,7 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		}
 		c.localStackSlot = "%local_stack"
 		c.localStackSize = size
-		fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 16\n", c.localStackSlot, size)
+		c.emitLocalStackAllocation(size)
 		base := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
 		addr := c.newTmp()
@@ -1295,14 +1302,38 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 	return nil
 }
 
+// Large Go TEXT frames must not become LLVM's fixed prologue allocation:
+// Windows ARM64's alloc_l unwind code cannot describe 256 MiB or more.
+// A real variable-sized alloca keeps the complete backing object in the body,
+// where LLVM probes it and preserves an unwindable frame-pointer chain.
+// Ordinary frames remain static to avoid an unnecessary dynamic stack path.
+const arm64DynamicFrameThreshold = int64(1 << 20)
+
+func (c *arm64Ctx) emitLocalStackAllocation(size int64) {
+	if size <= arm64DynamicFrameThreshold {
+		fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 16\n", c.localStackSlot, size)
+		return
+	}
+
+	// The empty asm changes no machine state. Its tied input/output register
+	// returns the exact size, but LLVM cannot fold that opaque result back
+	// into a static alloca, even after an optimized/inlined translation.
+	bytes := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect \"\", \"=r,0\"(i64 %d)\n", bytes, size)
+	fmt.Fprintf(c.b, "  %s = alloca i8, i64 %%%s, align 16\n", c.localStackSlot, bytes)
+}
+
 func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64, err error) {
 	maxOff = c.frameSize
 	if maxOff == -8 {
 		// Go's historical NOFRAME spelling declares no local storage.
 		maxOff = 0
 	}
-	if maxOff < 0 || maxOff > arm64MaxLocalStackSpan {
-		return 0, 0, fmt.Errorf("ARM64 TEXT frame size %d is outside [0,%d] (or -8 for NOFRAME)", c.frameSize, arm64MaxLocalStackSpan)
+	// Go records FuncInfo.Locals as int32. Declared storage has that source
+	// bound, rather than the much smaller limit on inferred SP movement.
+	const maxDeclaredFrame = int64(1<<31 - 1)
+	if maxOff < 0 || maxOff > maxDeclaredFrame {
+		return 0, 0, fmt.Errorf("ARM64 TEXT frame size %d is outside [0,%d] (or -8 for NOFRAME)", c.frameSize, maxDeclaredFrame)
 	}
 	// Explicit SP displacements cannot reveal the extent of an array walked
 	// through a derived register (for example Snappy's 32 KiB hash table).
