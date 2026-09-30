@@ -5,22 +5,10 @@ import (
 	"strings"
 )
 
-func (c *arm64Ctx) resolveBranchTarget(bi int, op Operand) (string, bool) {
-	if tgt, ok := arm64BranchTarget(op); ok {
-		return tgt, true
-	}
-	// Plan9's n(PC) is instruction-relative. Our lowering is block-based, so
-	// use a conservative target to keep translation total.
-	if op.Kind == OpMem && op.Mem.Base == PC {
-		if op.Mem.Off <= 0 {
-			return c.blocks[bi].name, true
-		}
-		if bi+1 < len(c.blocks) {
-			return c.blocks[bi+1].name, true
-		}
-		return c.blocks[bi].name, true
-	}
-	return "", false
+func (c *arm64Ctx) resolveBranchTarget(_ int, op Operand) (string, bool) {
+	// Named n(PC) operands must have been normalized to exact source labels.
+	// A block index cannot recover their instruction-relative destination.
+	return arm64BranchTarget(op)
 }
 
 func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emitCondBr arm64EmitCondBr) (ok bool, terminated bool, err error) {
@@ -124,11 +112,6 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 		}
 		tgt, ok := arm64BranchTarget(ins.Args[0])
 		if !ok {
-			// Legacy loop form in runtime stubs: B 0(PC)
-			if ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Base == PC {
-				emitBr(c.blocks[bi].name)
-				return true, true, nil
-			}
 			return true, false, fmt.Errorf("arm64 B invalid target: %q", ins.Raw)
 		}
 		emitBr(tgt)
@@ -139,15 +122,6 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			return true, false, fmt.Errorf("arm64 %s expects label: %q", op, ins.Raw)
 		}
 		tgt, ok := arm64BranchTarget(ins.Args[0])
-		if !ok {
-			if ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Base == PC {
-				// Relative PC branch in generated stubs; best-effort: use fallthrough.
-				if bi+1 < len(c.blocks) {
-					tgt = c.blocks[bi+1].name
-					ok = true
-				}
-			}
-		}
 		if !ok {
 			return true, false, fmt.Errorf("arm64 %s invalid target: %q", op, ins.Raw)
 		}
@@ -231,6 +205,9 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			return true, false, fmt.Errorf("arm64 %s expects $bit, reg, label: %q", op, ins.Raw)
 		}
 		bit := ins.Args[0].Imm
+		if bit < 0 || bit > 63 {
+			return true, false, fmt.Errorf("arm64 %s bit index must be in [0, 63]: %q", op, ins.Raw)
+		}
 		rv, err := c.loadReg(ins.Args[1].Reg)
 		if err != nil {
 			return true, false, err

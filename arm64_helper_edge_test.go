@@ -452,7 +452,7 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{"MOVBU", false, Instr{Op: "MOVBU", Args: []Operand{arm64RegOp("R10"), arm64MemOp("R20", 20)}, Raw: "MOVBU R10, 20(R20)"}, "data"},
 		{"MOVBU", false, Instr{Op: "MOVBU", Args: []Operand{arm64RegOp("R10"), arm64FPOp(16)}, Raw: "MOVBU R10, ret+16(FP)"}, "data"},
 		{"LDP", true, Instr{Op: "LDP.P", Args: []Operand{arm64MemOp("R20", 16), arm64RegListOp("R0", "R1")}, Raw: "LDP.P 16(R20), [R0, R1]"}, "data"},
-		{"LDP", false, Instr{Op: "LDP", Args: []Operand{arm64FPOp(24), arm64RegListOp("R2", "R3")}, Raw: "LDP arg+24(FP), [R2, R3]"}, "data"},
+		{"LDP", false, Instr{Op: "LDP", Args: []Operand{arm64FPOp(8), arm64RegListOp("R2", "R3")}, Raw: "LDP ret+8(FP), [R2, R3]"}, "data"},
 		{"LDP", false, Instr{Op: "LDP", Args: []Operand{arm64SymOp("example.global(SB)"), arm64RegListOp("R4", "R5")}, Raw: "LDP example.global(SB), [R4, R5]"}, "data"},
 		{"LDPW", true, Instr{Op: "LDPW.P", Args: []Operand{arm64MemOp("R20", 8), arm64RegListOp("R6", "R7")}, Raw: "LDPW.P 8(R20), [R6, R7]"}, "data"},
 		{"STPW", true, Instr{Op: "STPW.P", Args: []Operand{arm64RegListOp("R6", "R7"), arm64MemOp("R20", 8)}, Raw: "STPW.P [R6, R7], 8(R20)"}, "data"},
@@ -531,9 +531,9 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{Op: "BMI", Args: []Operand{arm64IdentOp("done")}, Raw: "BMI done"},
 		{Op: "BPL", Args: []Operand{arm64IdentOp("done")}, Raw: "BPL done"},
 		{Op: "CBZ", Args: []Operand{arm64RegOp("R2"), arm64IdentOp("done")}, Raw: "CBZ R2, done"},
-		{Op: "CBNZ", Args: []Operand{arm64RegOp("R3"), arm64MemOp(PC, 4)}, Raw: "CBNZ R3, 4(PC)"},
+		{Op: "CBNZ", Args: []Operand{arm64RegOp("R3"), arm64IdentOp("done")}, Raw: "CBNZ R3, done"},
 		{Op: "TBZ", Args: []Operand{arm64ImmOp(1), arm64RegOp("R4"), arm64IdentOp("done")}, Raw: "TBZ $1, R4, done"},
-		{Op: "TBNZ", Args: []Operand{arm64ImmOp(2), arm64RegOp("R5"), arm64MemOp(PC, 0)}, Raw: "TBNZ $2, R5, 0(PC)"},
+		{Op: "TBNZ", Args: []Operand{arm64ImmOp(2), arm64RegOp("R5"), arm64IdentOp("done")}, Raw: "TBNZ $2, R5, done"},
 		{Op: "CBZW", Args: []Operand{arm64RegOp("R6"), arm64IdentOp("done")}, Raw: "CBZW R6, done"},
 		{Op: "CBNZW", Args: []Operand{arm64RegOp("R7"), arm64IdentOp("done")}, Raw: "CBNZW R7, done"},
 	} {
@@ -541,11 +541,11 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		mustLowerARM64(t, "lowerBranch", tc, ok, err)
 	}
 
-	if tgt, ok := c.resolveBranchTarget(1, arm64MemOp(PC, -4)); !ok || tgt != c.blocks[1].name {
-		t.Fatalf("resolveBranchTarget(-4(PC)) = (%q, %v)", tgt, ok)
+	if tgt, ok := c.resolveBranchTarget(1, arm64MemOp(PC, -4)); ok {
+		t.Fatalf("unresolved -4(PC) was guessed as (%q, %v)", tgt, ok)
 	}
-	if tgt, ok := c.resolveBranchTarget(1, arm64MemOp(PC, 4)); !ok || tgt != c.blocks[2].name {
-		t.Fatalf("resolveBranchTarget(4(PC)) = (%q, %v)", tgt, ok)
+	if tgt, ok := c.resolveBranchTarget(1, arm64MemOp(PC, 4)); ok {
+		t.Fatalf("unresolved +4(PC) was guessed as (%q, %v)", tgt, ok)
 	}
 	if got, err := c.castI64RegToArg("9", I32); err != nil || got == "" {
 		t.Fatalf("castI64RegToArg(i32) = (%q, %v)", got, err)
@@ -1401,11 +1401,11 @@ func TestARM64BranchErrorCoverage(t *testing.T) {
 	emitBr := arm64TestEmitBr(c)
 	emitCondBr := arm64TestEmitCondBr(c)
 
-	if tgt, ok := c.resolveBranchTarget(2, arm64MemOp(PC, 4)); !ok || tgt != c.blocks[2].name {
-		t.Fatalf("resolveBranchTarget(last,+4) = (%q, %v)", tgt, ok)
+	if tgt, ok := c.resolveBranchTarget(2, arm64MemOp(PC, 4)); ok {
+		t.Fatalf("unresolved +4(PC) was guessed as (%q, %v)", tgt, ok)
 	}
-	if tgt, ok := c.resolveBranchTarget(0, arm64MemOp(PC, 0)); !ok || tgt != c.blocks[0].name {
-		t.Fatalf("resolveBranchTarget(0(PC)) = (%q, %v)", tgt, ok)
+	if tgt, ok := c.resolveBranchTarget(0, arm64MemOp(PC, 0)); ok {
+		t.Fatalf("unresolved 0(PC) was guessed as (%q, %v)", tgt, ok)
 	}
 	if _, ok := c.resolveBranchTarget(0, arm64ImmOp(1)); ok {
 		t.Fatalf("resolveBranchTarget($1) unexpectedly succeeded")
