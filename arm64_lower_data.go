@@ -9,6 +9,9 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 	if ok, terminated, err := c.lowerARM64ScalarMemoryWriteback(op, ins); ok {
 		return ok, terminated, err
 	}
+	if ok, terminated, err := c.lowerARM64SymbolScalarMove(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerARM64ScalarExtend(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -35,8 +38,6 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 			return true, false, c.storeMem(dst.Mem, 64, postInc, v)
 		case OpFP:
 			return true, false, c.storeFPResult64(dst.FPOffset, v)
-		case OpSym:
-			return true, false, nil
 		default:
 			return true, false, nil
 		}
@@ -131,6 +132,9 @@ func (c *arm64Ctx) lowerSignedNarrowLoadToWord(op Op, ins Instr, bits int, postI
 }
 
 func (c *arm64Ctx) lowerNarrowMove(op Op, ins Instr, bits int, signed, postInc bool) error {
+	if handled, _, err := c.lowerARM64SymbolScalarMove(op, ins); handled {
+		return err
+	}
 	if len(ins.Args) != 2 {
 		return fmt.Errorf("arm64 %s expects 2 operands: %q", op, ins.Raw)
 	}
@@ -140,19 +144,6 @@ func (c *arm64Ctx) lowerNarrowMove(op Op, ins Instr, bits int, signed, postInc b
 	switch src.Kind {
 	case OpMem:
 		value, err = c.loadMem(src.Mem, bits, postInc)
-	case OpSym:
-		if strings.HasPrefix(strings.TrimSpace(src.Sym), "$") {
-			return fmt.Errorf("arm64 %s does not accept an address source: %q", op, ins.Raw)
-		}
-		var ptr string
-		ptr, err = c.ptrFromSB(src.Sym)
-		if err == nil {
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load i%d, ptr %s\n", t, bits, ptr)
-			z := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i%d %%%s to i64\n", z, bits, t)
-			value = "%" + z
-		}
 	default:
 		value, err = c.eval64(src, false)
 	}
@@ -169,15 +160,6 @@ func (c *arm64Ctx) lowerNarrowMove(op Op, ins Instr, bits int, signed, postInc b
 		return c.storeReg(dst.Reg, value)
 	case OpMem:
 		return c.storeMem(dst.Mem, bits, postInc, value)
-	case OpSym:
-		ptr, err := c.ptrFromSB(dst.Sym)
-		if err != nil {
-			return err
-		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", t, value, bits)
-		fmt.Fprintf(c.b, "  store i%d %%%s, ptr %s\n", bits, t, ptr)
-		return nil
 	case OpFP:
 		value = c.arm64ExtendNarrow(value, bits, signed)
 		return c.storeFPResult64(dst.FPOffset, value)
