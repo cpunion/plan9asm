@@ -356,6 +356,33 @@ func TestShardedLedgerUpdateReplacesOlderModuleVersions(t *testing.T) {
 	}
 }
 
+func TestShardedLedgerKeepsMajorPathsIndependent(t *testing.T) {
+	ledger := filepath.Join(t.TempDir(), "ledger")
+	for _, item := range []moduleVersion{
+		{Path: "example.com/lib", Version: "v1.0.0"},
+		{Path: "example.com/lib/v2", Version: "v2.0.0"},
+		{Path: "example.com/lib", Version: "v1.1.0"},
+	} {
+		if err := writeShardedReport(ledger, discoveryReport{
+			Scanned: []moduleVersion{item},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	report, err := readSeenReport(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []moduleVersion{
+		{Path: "example.com/lib", Version: "v1.1.0"},
+		{Path: "example.com/lib/v2", Version: "v2.0.0"},
+	}
+	if !reflect.DeepEqual(report.Scanned, want) {
+		t.Fatalf("sharded scanned versions = %#v, want %#v", report.Scanned, want)
+	}
+}
+
 func TestMergeDiscoveryReportsRejectsPartiallyOverlappingIndexRanges(t *testing.T) {
 	_, err := mergeDiscoveryReports(
 		discoveryReport{SchemaVersion: discoverySchema, IndexRanges: []indexRange{{
