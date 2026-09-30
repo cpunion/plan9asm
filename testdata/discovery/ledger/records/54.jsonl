@@ -45,6 +45,7 @@
 {"kind":"scanned","module":"codeberg.org/solidapo/lisci","version":"v0.0.0-20260801191440-b5f8c978a73a"}
 {"kind":"scanned","module":"codeberg.org/xornor/joblex","version":"v0.0.0-20260811180354-8dee32081be0"}
 {"kind":"scanned","module":"cunicu.li/go-piv","version":"v0.4.12"}
+{"kind":"scanned","module":"docker.baopinshidai.com/kube-logging/logging-operator","version":"v0.0.0-20251017135456-daed40d20c26"}
 {"kind":"scanned","module":"fortio.org/sshd","version":"v0.4.0"}
 {"kind":"scanned","module":"gh.1s.fan/juicedata/juicefs","version":"v1.4.1"}
 {"kind":"scanned","module":"ghproxy-9d2.pages.dev/achannarasappa/ticker","version":"v1.1.1"}
@@ -93,6 +94,7 @@
 {"kind":"scanned","module":"git.gm6.ru/icewind/smsc","version":"v0.0.0-20260203184244-0238174f3da0"}
 {"kind":"scanned","module":"git.holanet.xyz/platform/go-util/usync","version":"v0.13.0"}
 {"kind":"scanned","module":"git.logal.dev/logaldeveloper/libdns-cloudns","version":"v0.0.0-20250611171335-d94f4eba396e"}
+{"kind":"scanned","module":"git.noncepad.com/pkg/tinybot","version":"v0.1.4"}
 {"kind":"scanned","module":"git.pektezol.dev/bitreader","version":"v1.4.3"}
 {"kind":"scanned","module":"git.sr.ht/~aqtrans/gowiki","version":"v0.0.0-20260825025659-37223e84b966"}
 {"kind":"scanned","module":"git.sr.ht/~finley/htmx","version":"v0.0.3"}
@@ -116,6 +118,7 @@
 {"kind":"scanned","module":"github.1485827954.workers.dev/gardener/gardener-extension-os-gardenlinux","version":"v0.49.0"}
 {"kind":"scanned","module":"github.1485827954.workers.dev/gogearbox/gearbox","version":"v1.2.4"}
 {"kind":"scanned","module":"github.1485827954.workers.dev/mbilski/exhaustivestruct","version":"v1.2.0"}
+{"kind":"scanned","module":"github.1485827954.workers.dev/stretchr/objx","version":"v0.5.3"}
 {"kind":"scanned","module":"github.1485827954.workers.dev/unused-interface-methods/unused-interface-methods","version":"v1.0.11"}
 {"kind":"scanned","module":"github.cnmirror.me/rancher/os","version":"v1.5.8"}
 {"kind":"scanned","module":"github.colasdn.workers.dev/dapr/go-sdk","version":"v1.13.0"}
@@ -148,6 +151,7 @@
 {"kind":"scanned","module":"github.com/360EntsecGroup-skylar/excelize/v2","version":"v2.11.0"}
 {"kind":"scanned","module":"github.com/3mdeb/docker-release-manager","version":"v0.0.0-20181214170006-d2899db9bea0"}
 {"kind":"scanned","module":"github.com/42Research/dynamic_mcp","version":"v1.0.9"}
+{"kind":"scanned","module":"github.com/4831c0/caddy-waf","version":"v0.0.0-20251001161649-0b814de6ce12"}
 {"kind":"scanned","module":"github.com/499602d2/ccgrep","version":"v0.1.0"}
 {"kind":"scanned","module":"github.com/4teamwork/ftw.aare","version":"v0.0.0-20180315130015-f2c6bcde6469"}
 {"kind":"scanned","module":"github.com/510908220/lintjenkins","version":"v0.0.0-20170928050322-7ef0aca80b47"}
@@ -171,6 +175,7 @@
 {"kind":"scanned","module":"github.com/Airr/nim-cocoa","version":"v0.0.0-20231014180402-998102b1b455"}
 {"kind":"scanned","module":"github.com/AlTheOne/go-app-ignition","version":"v0.0.2"}
 {"kind":"scanned","module":"github.com/Alecalve/python-bitcoin-blockchain-parser","version":"v0.0.0-20240323165817-24fac5461b63"}
+{"kind":"scanned","module":"github.com/AliasYermukanov/go-whatsapp/examples/sendTextMessages","version":"v0.0.0-20191002092139-da286875a234"}
 {"kind":"scanned","module":"github.com/Aman-Codes/MedBuddy","version":"v0.0.0-20240415173137-5c499e14cc3c"}
 {"kind":"scanned","module":"github.com/Ameshkov/dns","version":"v1.1.31"}
 {"kind":"scanned","module":"github.com/Amine7536/elastalert-rpm","version":"v0.0.0-20191107095627-0672685f3c5a"}
@@ -229,6 +234,7 @@
 {"kind":"scanned","module":"github.com/Bortlesboat/baip-python","version":"v0.1.0"}
 {"kind":"scanned","module":"github.com/Brawl345/gobot","version":"v0.0.0-20260910115850-fb96b8ee7a39"}
 {"kind":"scanned","module":"github.com/BrowserBox/BrowserBox","version":"v19.0.3+incompatible"}
+{"kind":"scanned","module":"github.com/ByteSizedMarius/gohttpprobe","version":"v0.0.1"}
 {"kind":"scanned","module":"github.com/BytesByFran/steamkit","version":"v0.0.0-20260512160729-f7eb1f14b65f"}
 {"kind":"scanned","module":"github.com/C0nstantin/pkg/sanitizer","version":"v0.4.0"}
 {"kind":"scanned","module":"github.com/CBIhalsen/PolyglotPDF","version":"v0.0.0-20250928051355-87b3e94654be"}
@@ -331,6 +337,7 @@
 {"kind":"scanned","module":"github.com/EduardoVega/run2-events","version":"v0.0.0-20210916014130-6842ef76d142"}
 {"kind":"scanned","module":"github.com/Embroidermodder/libembroidery","version":"v0.0.0-20260704213010-1138e043b811"}
 {"kind":"failure","module":"github.com/EodeCode/ArgoNavisV3-proto/Example","version":"@latest","error":"resolve @latest: 404 Not Found"}
+{"kind":"scanned","module":"github.com/Eratosthenes/denoue","version":"v0.1.1"}
 {"kind":"scanned","module":"github.com/EricJSanchez/php2go","version":"v1.2.1"}
 {"kind":"scanned","module":"github.com/Esimorp/Goimbal","version":"v0.0.0-20260105090650-3304b6f32087"}
 {"kind":"scanned","module":"github.com/Ethara-Ai/kaiju-harness","version":"v0.0.0-20260729131527-1dbaaa44676a"}
@@ -385,6 +392,7 @@
 {"kind":"scanned","module":"github.com/HKUST-C4G/diffusion-rm","version":"v0.0.0-20260630075131-5a5a025e3ed0"}
 {"kind":"scanned","module":"github.com/Hack-Light/leth-cli","version":"v0.0.0-20230914131915-8870fcb27f53"}
 {"kind":"scanned","module":"github.com/Hagb/lean-groebner","version":"v0.0.0-20250429031329-3b9a7bfe8c00"}
+{"kind":"scanned","module":"github.com/Hahn814/magos","version":"v0.0.0-20251008141245-33bcd7c0f7b2"}
 {"kind":"scanned","module":"github.com/Hakonslie/mtimehash","version":"v0.0.0-20260121123730-84ef6afae530"}
 {"kind":"scanned","module":"github.com/HammerSpb/aipaca","version":"v0.0.0-20251205052608-916872cc3a73"}
 {"kind":"scanned","module":"github.com/HarshDev1809/react-ui-component","version":"v0.0.0-20240910091430-fe3fb8844cd9"}
@@ -396,6 +404,7 @@
 {"kind":"scanned","module":"github.com/Hector1618/sympy","version":"v0.0.0-20120813045038-9215c280bc2c"}
 {"kind":"scanned","module":"github.com/HeminWon/proteus","version":"v0.1.13"}
 {"kind":"scanned","module":"github.com/Hermetiq/bb-storage","version":"v0.0.0-20251111104208-faf8fe60ecd0"}
+{"kind":"scanned","module":"github.com/Hex27/mongomap","version":"v0.0.0-20200702093654-d16cee2e0b2b"}
 {"kind":"scanned","module":"github.com/HexRabbit/CTF-writeup","version":"v0.0.0-20220224093829-4d90ebe8dce7"}
 {"kind":"scanned","module":"github.com/Hexta/envoy-tools","version":"v0.0.9"}
 {"kind":"scanned","module":"github.com/HiIamJeff67/go-start-monolithic-kit","version":"v0.0.0-20260531171632-a2ce2b29887f"}
@@ -404,6 +413,7 @@
 {"kind":"scanned","module":"github.com/HubSpot/hubspot-api-php","version":"v0.0.0-20260909220943-1e0bcd88b051"}
 {"kind":"scanned","module":"github.com/Huray-hub/eclass-utils/assignment","version":"v0.0.0-20250607170713-9b5eada5f594"}
 {"kind":"scanned","module":"github.com/Hyperfoil/Horreum","version":"v0.0.0-20260727135127-353f7185f14d"}
+{"kind":"scanned","module":"github.com/IAGrig/vt-csa-essays/backend/shared","version":"v0.0.0-20251001142017-7937ae694243"}
 {"kind":"failure","module":"github.com/IBiDat/dataviz","version":"@latest","error":"resolve @latest: 404 Not Found"}
 {"kind":"scanned","module":"github.com/ICRAR/dlg-nifty-components","version":"v1.1.0"}
 {"kind":"scanned","module":"github.com/IDerr/jobtracker","version":"v0.0.0-20260122180625-2ed9f3f12cad"}
@@ -418,6 +428,7 @@
 {"kind":"scanned","module":"github.com/Interactive-AI-Labs/interactive-cli","version":"v0.47.2"}
 {"kind":"scanned","module":"github.com/Intro0siddiqui/spectre-network/security-audit","version":"v0.0.0-20260809124208-6ae9fe2a674f"}
 {"kind":"scanned","module":"github.com/Ipiano/gdb-mcp","version":"v0.0.0-20260311203921-605220a4bbbb"}
+{"kind":"scanned","module":"github.com/IshaanNene/EliteCode-brew","version":"v0.0.0-20250729112032-f385376492b2"}
 {"kind":"scanned","module":"github.com/Iusemywalk88/closer","version":"v0.0.0-20260514104927-3e262481fd0f"}
 {"kind":"scanned","module":"github.com/JBrownlee/DAtasets","version":"v0.0.0-20201210000758-d20fcb6402ae"}
 {"kind":"scanned","module":"github.com/JRL-umi3218/eigen-quadprog","version":"v1.1.5"}
@@ -482,6 +493,7 @@
 {"kind":"scanned","module":"github.com/Lissy93/go-apod","version":"v0.0.0-20260918104938-4065daf1c617"}
 {"kind":"scanned","module":"github.com/Live-CTF/LiveCTF-DEFCON33","version":"v0.0.0-20260814161520-d1190246de01"}
 {"kind":"scanned","module":"github.com/Lombiq/Testing-Toolbox","version":"v6.0.0+incompatible"}
+{"kind":"scanned","module":"github.com/LophophanesCristatus/excelize/v2","version":"v2.10.0"}
 {"kind":"scanned","module":"github.com/Lovepreet-se7en/DOM-Recon","version":"v1.0.2"}
 {"kind":"scanned","module":"github.com/LucienVen/charline/server","version":"v0.0.0-20260304101749-489d50b1a5bd"}
 {"kind":"scanned","module":"github.com/LucyMountain/sympy","version":"v0.0.0-20210605142511-5c698dd09e1c"}
@@ -564,6 +576,7 @@
 {"kind":"scanned","module":"github.com/Oc3an-Spag3tti/envswitch","version":"v0.0.0-20260625155040-bfbcc4d496dd"}
 {"kind":"scanned","module":"github.com/OkaSher/Micro","version":"v0.0.0-20260422085556-b73b96cbe037"}
 {"kind":"scanned","module":"github.com/OmerFaruk-Celik/websocket","version":"v0.0.0-20250319132907-e064f32e3674"}
+{"kind":"scanned","module":"github.com/OmidRasouli/vod-streamer-edu","version":"v0.0.0-20250708165021-48b218e33067"}
 {"kind":"scanned","module":"github.com/OmkarKhilari/BlogShog","version":"v0.0.0-20250923094711-29ba5eb7f752"}
 {"kind":"scanned","module":"github.com/Omotolani98/foostash","version":"v0.4.13"}
 {"kind":"scanned","module":"github.com/OnlyPiglet/fly/cachetools","version":"v0.0.0-20260118081543-721a700afaf8"}
@@ -688,6 +701,7 @@
 {"kind":"scanned","module":"github.com/THUDM/ComplexFuncBench","version":"v0.0.0-20250120030300-c37b284e2f2e"}
 {"kind":"scanned","module":"github.com/TWolfis/goapod/v2","version":"v2.0.1"}
 {"kind":"scanned","module":"github.com/Taha95-dev/Omarchy-CLI-tool","version":"v1.13.1"}
+{"kind":"scanned","module":"github.com/Taik/zing-mp3","version":"v0.0.0-20160714222417-f14755307000"}
 {"kind":"scanned","module":"github.com/Tangerg/lynx/models/mistral","version":"v0.33.0"}
 {"kind":"scanned","module":"github.com/Tarun9640/pulseQ","version":"v0.0.0-20260302075053-3e3fee42bb2f"}
 {"kind":"scanned","module":"github.com/TcM1911/gore","version":"v0.7.1"}
@@ -730,6 +744,7 @@
 {"kind":"scanned","module":"github.com/Vickouma77/micro-proto/golang/shipping","version":"v1.1.0"}
 {"kind":"scanned","module":"github.com/Vidimuslabs/xap-go","version":"v0.1.1"}
 {"kind":"scanned","module":"github.com/Vim-Perl/vim-perl","version":"v0.0.0-20240309051733-25ecb0061a35"}
+{"kind":"scanned","module":"github.com/Vladimir220/markerplace/logger_lib","version":"v0.0.0-20251001174404-065c60781736"}
 {"kind":"scanned","module":"github.com/WL-Amigo/waifu2x-converter-cpp","version":"v1.1.1"}
 {"kind":"scanned","module":"github.com/WallfacerTech/wallfacer-cli","version":"v1.14.1"}
 {"kind":"scanned","module":"github.com/Wangmin362/ppu-exporter-mock","version":"v0.0.0-20250904072435-56e303a4bd60"}
@@ -793,6 +808,7 @@
 {"kind":"scanned","module":"github.com/actumn/touhou10-dqn","version":"v0.0.0-20181123051814-be11f93806c9"}
 {"kind":"scanned","module":"github.com/acuvity/go-autostart","version":"v0.0.0-20210130080809-00ed301c8e9a"}
 {"kind":"scanned","module":"github.com/adafruit/Adafruit_PCF8591","version":"v0.0.0-20231017142511-ef72f79835db"}
+{"kind":"scanned","module":"github.com/adamsanghera/redisBus","version":"v0.0.0-20171211023323-a0473d841d09"}
 {"kind":"scanned","module":"github.com/adaptiveengineering/linkgenericdash","version":"v0.0.0-20260117022532-cd7426e872a4"}
 {"kind":"scanned","module":"github.com/adbar/simplemma","version":"v2.0.0+incompatible"}
 {"kind":"scanned","module":"github.com/adedayojs/vue-tutorial-starwars","version":"v0.0.0-20191003022354-9072e6ff5e30"}
@@ -895,12 +911,14 @@
 {"kind":"scanned","module":"github.com/amberljc/falconn","version":"v1.3.1"}
 {"kind":"scanned","module":"github.com/amchess/stockfish","version":"v0.0.0-20230222231754-0b59b63a13d2"}
 {"kind":"scanned","module":"github.com/ames0k0/TT--Golang--User-Data-Aggregation","version":"v0.1.0"}
+{"kind":"scanned","module":"github.com/ameyk-gdb/go-curl","version":"v0.0.0-20220128123536-37f2054579a6"}
 {"kind":"scanned","module":"github.com/amianetworks/asn-service-api/v26","version":"v26.10.2"}
 {"kind":"scanned","module":"github.com/amirgholami/convnet-burden","version":"v0.0.0-20190117111451-9c7f31ba3bc1"}
 {"kind":"scanned","module":"github.com/amirhnajafiz/restful-go","version":"v0.0.0-20260323013216-4fefaa9077bb"}
 {"kind":"scanned","module":"github.com/amquake/go-coap/v3","version":"v3.4.2-windows-udp-fix.1"}
 {"kind":"scanned","module":"github.com/amrbashir/nvim-docs-view","version":"v0.0.0-20260611050852-a1696d058a42"}
 {"kind":"scanned","module":"github.com/amusablelemur/argument","version":"v0.0.0-20260807214700-b7b24ba67830"}
+{"kind":"scanned","module":"github.com/amusarra/migrate-git-azure-devops","version":"v0.0.0-20251001081822-6296201d617b"}
 {"kind":"scanned","module":"github.com/anakin87/gemini-cookbook","version":"v0.0.0-20260422160536-c51caf40aa04"}
 {"kind":"scanned","module":"github.com/anbreen/cloud-builders","version":"v0.0.0-20200806123515-f50f9159c2f8"}
 {"kind":"scanned","module":"github.com/andersonby/wps2office","version":"v0.1.0"}
@@ -939,6 +957,7 @@
 {"kind":"scanned","module":"github.com/apache/paimon-rust/bindings/go","version":"v0.3.0"}
 {"kind":"scanned","module":"github.com/apache/servicecomb-pack","version":"v0.0.0-20240910090555-427bf03485b8"}
 {"kind":"scanned","module":"github.com/apartmentlines/mattermost-plugin-poor-mans-scheduled-messages","version":"v1.3.1"}
+{"kind":"scanned","module":"github.com/apecloud/ape","version":"v0.2.1"}
 {"kind":"scanned","module":"github.com/apg/go-trello","version":"v0.0.0-20160712074135-524f0fb0c931"}
 {"kind":"scanned","module":"github.com/apiverve/bingocardgenerator-api/go","version":"v0.0.0-20260716200013-79d106829bf2"}
 {"kind":"scanned","module":"github.com/apiverve/lexicon-api","version":"v0.0.0-20260716203959-4689ff21c2f5"}
@@ -1056,6 +1075,7 @@
 {"kind":"scanned","module":"github.com/batmanpriv/404dpi","version":"v1.0.0"}
 {"kind":"scanned","module":"github.com/batsresearch/alfred","version":"v0.0.0-20250403020214-1e9e9532a952"}
 {"kind":"scanned","module":"github.com/bauerDOTuzh/openai-realtimeapi-mock","version":"v0.0.0-20251209111310-b04859ebbd4d"}
+{"kind":"scanned","module":"github.com/baujahr/caddy-storage-redis","version":"v0.0.0-20251010104851-cf629da7b9e3"}
 {"kind":"scanned","module":"github.com/bazelbuild/rules_apple","version":"v0.0.0-20260921211306-f22a98b7f7c1"}
 {"kind":"scanned","module":"github.com/bbaggerman/irig106lib","version":"v0.0.0-20241018145623-1e9c5d731566"}
 {"kind":"scanned","module":"github.com/bbiswy/mxaofmjbkabxthgl","version":"v0.0.0-20191001110037-d260a527e4f3"}
@@ -1107,6 +1127,7 @@
 {"kind":"scanned","module":"github.com/bitcoinops/bitcoinops.github.io","version":"v0.0.0-20260921165840-620c1f13fc5e"}
 {"kind":"scanned","module":"github.com/bitegen/order-platform","version":"v0.0.0-20260414182152-7103336706e8"}
 {"kind":"scanned","module":"github.com/bjodah/SYMPY","version":"v0.0.0-20260721071405-76f1a854ac02"}
+{"kind":"scanned","module":"github.com/bjornouderoelink/nizkp-benchmark/go","version":"v0.0.0-20240422130508-e7f77afc99c5"}
 {"kind":"scanned","module":"github.com/black40x/vue-pano","version":"v0.0.0-20201218141544-4f399eb215d7"}
 {"kind":"scanned","module":"github.com/blackb6a/blackb6a-ctf-2023-challenges","version":"v0.0.0-20240310095234-255a57a289a7"}
 {"kind":"scanned","module":"github.com/blackhc/mnist_by_zip","version":"v0.0.0-20191211223218-62fa148f5c95"}
@@ -1130,6 +1151,7 @@
 {"kind":"scanned","module":"github.com/boa-dev/boa","version":"v0.21.1"}
 {"kind":"scanned","module":"github.com/bobthebuilderberlin/vault-plugin-secrets-circleci","version":"v0.12.0"}
 {"kind":"scanned","module":"github.com/bobxwu/TraCo","version":"v0.0.0-20240524112337-d54516778beb"}
+{"kind":"scanned","module":"github.com/boecks/libdns-powerdns","version":"v1.0.0"}
 {"kind":"scanned","module":"github.com/bohops/rogueassemblyhunter","version":"v0.0.0-20220209141309-25ab4861d85b"}
 {"kind":"scanned","module":"github.com/bomsy/debugger.html","version":"v0.0.0-20190222222854-9acd66b1283b"}
 {"kind":"scanned","module":"github.com/bonezegei/Bonezegei_RS485","version":"v1.0.0"}
@@ -1142,6 +1164,7 @@
 {"kind":"scanned","module":"github.com/bosilca/collective_profiler","version":"v0.0.0-20231031184013-a153683982d2"}
 {"kind":"scanned","module":"github.com/bounceapp/elixir-calendarific","version":"v0.0.0-20260716082833-0302706f1f6b"}
 {"kind":"scanned","module":"github.com/bradfitz/iter","version":"v0.0.0-20191230175014-e8f45d346db8"}
+{"kind":"failure","module":"github.com/branden/up-sdk-go/apis","version":"@latest","error":"resolve @latest: 404 Not Found"}
 {"kind":"scanned","module":"github.com/brandfetch/n8n-nodes-brandfetch","version":"v0.0.0-20260421100709-5fd1401d7e58"}
 {"kind":"scanned","module":"github.com/brandoneprice31/async","version":"v0.0.0-20180613203135-f0f4c80ccbd4"}
 {"kind":"scanned","module":"github.com/brandonkramer/shellquote","version":"v0.1.1"}
@@ -1186,6 +1209,7 @@
 {"kind":"scanned","module":"github.com/canonical/curtin","version":"v0.0.0-20260826195128-e2fc2bb9e38c"}
 {"kind":"scanned","module":"github.com/cansik/pyrealsense2-macosx","version":"v2.50.0+incompatible"}
 {"kind":"scanned","module":"github.com/capevace/laravel-introspect","version":"v0.0.0-20260526173450-2df175edcbc4"}
+{"kind":"scanned","module":"github.com/captainhook-git/captainhook-bin","version":"v0.0.0-20251001013237-dfd86853c6b1"}
 {"kind":"scanned","module":"github.com/captbaritone/winamp2-js","version":"v2.3.1+incompatible"}
 {"kind":"scanned","module":"github.com/carbynestack/klyshko/klyshko-operator","version":"v0.0.0-20260731115630-4e56238094a6"}
 {"kind":"scanned","module":"github.com/cardmagic/simple-rss","version":"v2.3.0+incompatible"}
@@ -1291,6 +1315,7 @@
 {"kind":"scanned","module":"github.com/comprosoftceo/mothersday2020","version":"v0.0.0-20200622000706-810682d2681a"}
 {"kind":"scanned","module":"github.com/conceptofmind/pubmedgpt","version":"v0.0.0-20221217110940-4039841e2302"}
 {"kind":"scanned","module":"github.com/conductorone/baton-databricks","version":"v0.1.12"}
+{"kind":"scanned","module":"github.com/conduitio/evolviconf","version":"v0.1.0"}
 {"kind":"scanned","module":"github.com/conetcloud/rapid","version":"v0.0.0-20260110120811-b9c78bfdd0d3"}
 {"kind":"scanned","module":"github.com/configcat/cli","version":"v2.6.1+incompatible"}
 {"kind":"scanned","module":"github.com/consenSys/gnark","version":"v0.16.3"}
@@ -1340,6 +1365,7 @@
 {"kind":"scanned","module":"github.com/cristiancurteanu/slumber","version":"v0.2.0"}
 {"kind":"scanned","module":"github.com/crleonard/pingtower","version":"v1.4.0"}
 {"kind":"scanned","module":"github.com/crnh/tekst","version":"v0.0.0-20260627122405-e7941de819ef"}
+{"kind":"scanned","module":"github.com/crnvl96/counsil","version":"v0.3.0"}
 {"kind":"scanned","module":"github.com/crossmint/crossmint-swift-sdk","version":"v0.0.0-20260918174801-82e852294ba6"}
 {"kind":"scanned","module":"github.com/crossmint/wallets-server-quickstart","version":"v0.0.0-20260410001607-401c85668cc7"}
 {"kind":"scanned","module":"github.com/crossplane-contrib/provider-sonarqube","version":"v0.13.0"}
@@ -1442,6 +1468,7 @@
 {"kind":"scanned","module":"github.com/dgdsingen/caddy-fs-s3","version":"v0.0.0-20260609131426-88e9f4942835"}
 {"kind":"scanned","module":"github.com/dhrubomoy/to-arff","version":"v0.1.4"}
 {"kind":"scanned","module":"github.com/dianich2/jsonrpc2","version":"v0.0.0-20260417053811-03f9e3688558"}
+{"kind":"scanned","module":"github.com/diaozhatia163/kratos-bootstrap/registry/nacos","version":"v0.0.0-20250909101633-b9fd1dd5fb15"}
 {"kind":"scanned","module":"github.com/diasks2/yomu","version":"v0.1.10"}
 {"kind":"scanned","module":"github.com/dicklesworthstone/ntm","version":"v1.35.1"}
 {"kind":"scanned","module":"github.com/diegobraun/braunrate","version":"v0.6.0"}
@@ -1493,6 +1520,7 @@
 {"kind":"scanned","module":"github.com/drupal/core-dev","version":"v0.0.0-20260918225230-471128a05b0e"}
 {"kind":"scanned","module":"github.com/drwetter/testssl.sh","version":"v3.2.4+incompatible"}
 {"kind":"scanned","module":"github.com/dsmsgms/Stockfish","version":"v0.0.0-20260426074342-1a882efc7fc2"}
+{"kind":"scanned","module":"github.com/dsx137/gg-gin","version":"v0.0.0-20251001191328-6833e9eb9e9a"}
 {"kind":"scanned","module":"github.com/dtroncy/go-i2c","version":"v0.0.0-20190909090105-69d6b0ec024a"}
 {"kind":"scanned","module":"github.com/dualb/local-nosql-db","version":"v0.0.0-20260414184526-57aa5227e7f9"}
 {"kind":"scanned","module":"github.com/dudals3844/quant_service","version":"v0.0.0-20210317090449-ded3068f1f03"}
@@ -1590,6 +1618,7 @@
 {"kind":"scanned","module":"github.com/fahrradflucht/tonic_googleapis","version":"v0.0.0-20260827113623-fbacac50466c"}
 {"kind":"scanned","module":"github.com/fail-safe/noema","version":"v0.21.9"}
 {"kind":"scanned","module":"github.com/fanjindong/go-cache","version":"v0.0.6"}
+{"kind":"failure","module":"github.com/fantom-game/protos","version":"@latest","error":"resolve @latest: 404 Not Found"}
 {"kind":"scanned","module":"github.com/farridav/django-jazzmin","version":"v3.0.5+incompatible"}
 {"kind":"scanned","module":"github.com/farsightsec/dnsdbflex","version":"v1.0.7"}
 {"kind":"scanned","module":"github.com/fast-crypto-lab/bitpolymul2","version":"v0.0.0-20180227064728-09cc6dfadd4d"}
@@ -1597,6 +1626,7 @@
 {"kind":"scanned","module":"github.com/fatballfish-inc/uniquedialect","version":"v0.0.2"}
 {"kind":"scanned","module":"github.com/fatkulllin/metrilo","version":"v0.0.0-20251024060150-35cd6c320a97"}
 {"kind":"scanned","module":"github.com/fbufler/google-pubsub","version":"v0.0.0-20260716201521-362eb6a694c6"}
+{"kind":"scanned","module":"github.com/fckveza/http2","version":"v0.0.0-20251006085845-27883f89cd0a"}
 {"kind":"scanned","module":"github.com/fdlucifer/findomain","version":"v0.0.0-20200501150403-6ce507c15ad6"}
 {"kind":"scanned","module":"github.com/fdsmora/go-examples/custom-json-unmarshal-example","version":"v0.0.0-20260524215331-f93f9196f786"}
 {"kind":"scanned","module":"github.com/feathersjs-ecosystem/feathers-vuex","version":"v3.16.0+incompatible"}
@@ -1703,6 +1733,7 @@
 {"kind":"scanned","module":"github.com/ghthor/gotty/v2","version":"v2.3.4"}
 {"kind":"scanned","module":"github.com/giammarco-ferranti/deja","version":"v0.4.2"}
 {"kind":"scanned","module":"github.com/giantswarm/dns-operator-route53","version":"v0.14.0"}
+{"kind":"scanned","module":"github.com/ginanjar-template-golang/shared-pkg","version":"v0.0.0-20251023101332-1014288c339b"}
 {"kind":"scanned","module":"github.com/gitctrlx/llama.go","version":"v0.1.1"}
 {"kind":"scanned","module":"github.com/gitenberg/a-truthful-woman-in-southern-california_19391","version":"v0.0.0-20181019104423-b0add3896aec"}
 {"kind":"scanned","module":"github.com/gitenberg/the-adventures-of-tom-sawyer_74","version":"v0.0.0-20181022142112-9b4174649064"}
@@ -1711,6 +1742,7 @@
 {"kind":"scanned","module":"github.com/gitpan/moose","version":"v0.0.0-20150108202719-d9db9b5a8ad6"}
 {"kind":"scanned","module":"github.com/giuliaraineri/VolleyDataPipeline.R","version":"v0.0.0-20250722195736-7cef9e7b18e7"}
 {"kind":"scanned","module":"github.com/gkwa/creepymatrix","version":"v0.0.0-20260914062909-b72a77932697"}
+{"kind":"scanned","module":"github.com/glebateee/platform","version":"v1.0.1"}
 {"kind":"scanned","module":"github.com/globocom/dojo","version":"v0.0.0-20240626162620-79f4b7b0fe1d"}
 {"kind":"scanned","module":"github.com/gloos/mealie-cli","version":"v0.3.1"}
 {"kind":"scanned","module":"github.com/gmlewis/go-fonts-a/fonts/alegreya_extrabold","version":"v0.0.0-20260707161450-142edbd18122"}
@@ -1787,6 +1819,7 @@
 {"kind":"scanned","module":"github.com/guancecloud/dd-trace-go/contrib/elastic/go-elasticsearch.v6/v2","version":"v2.10.3-ext"}
 {"kind":"scanned","module":"github.com/guitarrapc/minipty","version":"v1.3.0"}
 {"kind":"scanned","module":"github.com/guricerin/nand2tetris","version":"v0.0.0-20210102151443-1843bef963a2"}
+{"kind":"scanned","module":"github.com/gurkslask/binogocular","version":"v0.0.0-20251014090418-c1edf8c2285c"}
 {"kind":"scanned","module":"github.com/gursevak56/food-delivery-platform","version":"v0.0.0-20260317100254-8a30b8d78877"}
 {"kind":"scanned","module":"github.com/gurusr/smallrtc","version":"v0.0.0-20260209145407-54c1ae7d2879"}
 {"kind":"scanned","module":"github.com/gustavocaso/docker-dash","version":"v0.1.3"}
@@ -1796,6 +1829,7 @@
 {"kind":"scanned","module":"github.com/gwkkwg/dynamic-classes","version":"v0.0.0-20230809200143-ebd7405603f6"}
 {"kind":"scanned","module":"github.com/gxanlvxgx/simple-app-operator","version":"v0.0.0-20260403215416-4d9d9a8bd9be"}
 {"kind":"scanned","module":"github.com/h2o/qrintf","version":"v0.9.2"}
+{"kind":"scanned","module":"github.com/h4kuna/fio","version":"v3.0.14+incompatible"}
 {"kind":"scanned","module":"github.com/hTrap/nameservice","version":"v0.0.0-20190918103032-fb7cdb8959a2"}
 {"kind":"scanned","module":"github.com/haashemi/uereader","version":"v0.0.0-20230210143439-f252c8daf99f"}
 {"kind":"scanned","module":"github.com/habitualdev/intelpackage","version":"v0.2.0"}
@@ -1835,6 +1869,7 @@
 {"kind":"scanned","module":"github.com/hellodword/any-sync","version":"v0.0.0-20240627184132-23390e556e5f"}
 {"kind":"scanned","module":"github.com/hellodword/tailscale-derp-client-verifier","version":"v0.0.0-20260911080736-c8f111ae71cb"}
 {"kind":"scanned","module":"github.com/hellolib/agent-notify","version":"v0.17.1"}
+{"kind":"scanned","module":"github.com/helloymf/elf_linker","version":"v0.0.0-20230404080844-775bcb39d713"}
 {"kind":"scanned","module":"github.com/hendrix-shen/magiclib","version":"v0.0.0-20260918024056-2dadf9cbff28"}
 {"kind":"scanned","module":"github.com/heossihq/qnsi-public/sdks/go/qnsi","version":"v0.4.0"}
 {"kind":"scanned","module":"github.com/heptio/ark","version":"v1.18.3"}
@@ -1850,6 +1885,7 @@
 {"kind":"scanned","module":"github.com/hjw3001/povray-projects","version":"v0.0.0-20120919054322-13cdfc614b95"}
 {"kind":"scanned","module":"github.com/hobbyfarm/gargantua/v3/services/progresssvc/v3","version":"v3.0.0-20260730063203-9d6f32b617cb"}
 {"kind":"scanned","module":"github.com/holgern/pynostr","version":"v0.7.0"}
+{"kind":"scanned","module":"github.com/holiman/usb","version":"v0.0.0-20230918112934-6ebdd594bda2"}
 {"kind":"scanned","module":"github.com/hollis-labs/go-otel","version":"v0.6.1"}
 {"kind":"scanned","module":"github.com/home-assistant/hassio-cli","version":"v1.4.0"}
 {"kind":"scanned","module":"github.com/homedepot/go-clouddriver","version":"v1.2.6"}
@@ -1897,6 +1933,7 @@
 {"kind":"scanned","module":"github.com/ibelikov/ghosctl","version":"v0.0.0-20201126125351-8f107302fbaf"}
 {"kind":"scanned","module":"github.com/ibm-cloud-solutions/hubot-ibmcloud-objectstorage","version":"v0.1.8"}
 {"kind":"scanned","module":"github.com/ices-tools-prod/taf","version":"v0.0.0-20260817042404-e7960d0d8092"}
+{"kind":"scanned","module":"github.com/icew4y/go-mitm","version":"v0.0.0-20250918054653-d5b204c243f5"}
 {"kind":"scanned","module":"github.com/icloudbb/buildmax","version":"v0.2.0-alpha.14"}
 {"kind":"scanned","module":"github.com/idelsink/idelsink","version":"v0.0.0-20260722230246-a69fe1833557"}
 {"kind":"scanned","module":"github.com/idiot-learning/clipper2","version":"v0.0.0-20250627013240-ee705be33ad9"}
@@ -1905,6 +1942,7 @@
 {"kind":"scanned","module":"github.com/iflytek/aiges_python","version":"v0.0.0-20241224083843-af64ff7d24a9"}
 {"kind":"scanned","module":"github.com/ignite/spn","version":"v0.2.1"}
 {"kind":"scanned","module":"github.com/ihanfeng/xxpay-master","version":"v0.0.0-20171121020627-14a0094ae16d"}
+{"kind":"scanned","module":"github.com/iidesho/bragi","version":"v0.7.8"}
 {"kind":"scanned","module":"github.com/iiitv/cp-contests","version":"v0.0.0-20241119104121-d56bebc81798"}
 {"kind":"scanned","module":"github.com/ikeikeikeike/gentest","version":"v0.0.0-20190904070807-394ee8230b75"}
 {"kind":"scanned","module":"github.com/ilanco/hugo-blog-awesome","version":"v0.0.0-20260513051647-e088b40c9cf6"}
@@ -1957,6 +1995,7 @@
 {"kind":"scanned","module":"github.com/isa0-gh/a2l","version":"v0.0.0-20260619165835-e796c17ffa00"}
 {"kind":"scanned","module":"github.com/isaacs/read","version":"v1.0.7"}
 {"kind":"scanned","module":"github.com/isaidiaz/wtg_desktop","version":"v0.0.0-20250615040010-d5d5d2ba3b7f"}
+{"kind":"scanned","module":"github.com/isalbertyu/go-binance","version":"v2.0.5+incompatible"}
 {"kind":"matched","module":"github.com/isarq/nem-sdk-go","version":"v0.0.6","architectures":["amd64"],"asm_files":["external/crypto/curve25519/const_amd64.s","external/crypto/curve25519/cswap_amd64.s","external/crypto/curve25519/freeze_amd64.s","external/crypto/curve25519/ladderstep_amd64.s","external/crypto/curve25519/mul_amd64.s","external/crypto/curve25519/square_amd64.s","external/crypto/sha3/keccakf_amd64.s"]}
 {"kind":"scanned","module":"github.com/isarq/nem-sdk-go","version":"v0.0.6"}
 {"kind":"scanned","module":"github.com/isopod/tree-sitter-pascal/bindings/go","version":"v0.0.0-20251223112411-042119eca2e1"}
@@ -2121,6 +2160,7 @@
 {"kind":"scanned","module":"github.com/karpathy/nn","version":"v0.0.0-20150516183554-3de925cff929"}
 {"kind":"scanned","module":"github.com/kasim200429/gobypass403","version":"v0.0.0-20260616122230-0c621427899d"}
 {"kind":"scanned","module":"github.com/kaspeya/go-url-shortener","version":"v0.0.0-20260312103505-aafe5200d16a"}
+{"kind":"scanned","module":"github.com/katallaxie/fiber-ws-relay/v3","version":"v3.0.0"}
 {"kind":"scanned","module":"github.com/kaungmyathan22/golang-order-management-system-microservice/common","version":"v0.0.0-20240518091501-9dcfd7a983e9"}
 {"kind":"scanned","module":"github.com/kaustubhdamania/sympy","version":"v0.0.0-20200616163613-ccb534c61f62"}
 {"kind":"scanned","module":"github.com/kazuki-sk/codepack","version":"v0.0.0-20260113030908-6b2f953df5b6"}
@@ -2137,6 +2177,7 @@
 {"kind":"scanned","module":"github.com/kerberos-io/opensource","version":"v3.12.3+incompatible"}
 {"kind":"scanned","module":"github.com/kestra-io/kestra2-flow-migration","version":"v0.0.0-20260913220935-bb3d1dc8a3d6"}
 {"kind":"scanned","module":"github.com/kevinresol/ansi","version":"v0.0.0-20170111201040-b0f43b49d08b"}
+{"kind":"scanned","module":"github.com/kevinroleke/ragflow-go","version":"v1.2.17"}
 {"kind":"scanned","module":"github.com/kevinwiranata/EV_Contract","version":"v0.0.0-20220511074512-b45f82c69be4"}
 {"kind":"scanned","module":"github.com/keyvank/femtoGPT","version":"v0.0.0-20251021111342-3976c47fa792"}
 {"kind":"scanned","module":"github.com/keyzon-technologies/mpcinfra","version":"v1.0.4"}
@@ -2178,6 +2219,7 @@
 {"kind":"scanned","module":"github.com/kubecost/ibm-finops-agent","version":"v1.0.26"}
 {"kind":"scanned","module":"github.com/kubeedge/kubernetes/staging/src/k8s.io/cri-api","version":"v1.32.10-kubeedge1"}
 {"kind":"scanned","module":"github.com/kubernetes-sigs/gcp-filestore-csi-driver","version":"v1.14.1"}
+{"kind":"scanned","module":"github.com/kubernetes-sigs/kube-scheduler-simulator/tools","version":"v0.0.0-20250921041012-e55795dfbad6"}
 {"kind":"scanned","module":"github.com/kubernetes-sigs/kustomize/v3","version":"v3.3.1"}
 {"kind":"scanned","module":"github.com/kubernetes/kubernetes/staging/src/k8s.io/apiserver","version":"v0.0.0-20260922190440-cc213a13bd4e"}
 {"kind":"scanned","module":"github.com/kubeshark/tracer","version":"v0.0.0-20260203143410-c76eaf4766fe"}
@@ -2201,6 +2243,7 @@
 {"kind":"scanned","module":"github.com/langheran/algorithms","version":"v0.0.0-20190523003029-03797825df48"}
 {"kind":"scanned","module":"github.com/larsartmann/go-cqrs-lite/metaengine/bigtableengine/v4","version":"v4.0.0"}
 {"kind":"scanned","module":"github.com/larsartmann/sqlc-wizzard","version":"v0.2.0"}
+{"kind":"scanned","module":"github.com/lastlogin-net/decent-auth-go","version":"v0.0.0-20250930130658-cd02ca43630e"}
 {"kind":"scanned","module":"github.com/lauramosherllc/hugo-spectral","version":"v0.0.0-20250123215641-3e7dd5272ff9"}
 {"kind":"scanned","module":"github.com/lauxjpn/pomelo.entityframeworkcore.mysql","version":"v0.0.0-20240312001614-5322b411c903"}
 {"kind":"scanned","module":"github.com/lavaorg/warp","version":"v0.0.0-20220412144146-8d5553f4ceae"}
@@ -2212,6 +2255,7 @@
 {"kind":"scanned","module":"github.com/ldsec/unlynx","version":"v1.4.3"}
 {"kind":"scanned","module":"github.com/leaflownet/leaflow-go/tunnel","version":"v0.13.0"}
 {"kind":"scanned","module":"github.com/leaningtech/cheerpj-meta","version":"v0.0.0-20260612144336-2fd80337df87"}
+{"kind":"scanned","module":"github.com/lechou-0/3ser-tfaas","version":"v0.0.0-20231109072116-9d4a4a334189"}
 {"kind":"scanned","module":"github.com/lejeunel/go-image-annotator-v2","version":"v0.1.0"}
 {"kind":"scanned","module":"github.com/lemmego/cli","version":"v0.1.41"}
 {"kind":"scanned","module":"github.com/lemonochka/keqrnel","version":"v0.0.0-20260819112021-38155c34606f"}
@@ -2368,6 +2412,7 @@
 {"kind":"scanned","module":"github.com/mengao64/kingdom-ngc-project","version":"v0.0.0-20241112012041-e10e5083ca9e"}
 {"kind":"scanned","module":"github.com/mephistools/diablo2-protocol","version":"v0.0.0-20190825114710-173e55723b90"}
 {"kind":"scanned","module":"github.com/mercoa-finance/go","version":"v0.7.3"}
+{"kind":"scanned","module":"github.com/mertyn/stadiacontroller","version":"v1.3.1"}
 {"kind":"scanned","module":"github.com/mesalock-linux/itoa-sgx","version":"v0.0.0-20201105012750-295ee451f5ec"}
 {"kind":"scanned","module":"github.com/mesalock-linux/num-sgx","version":"v0.0.0-20190919223132-22645415542c"}
 {"kind":"scanned","module":"github.com/mesalock-linux/serde-json-sgx","version":"v1.0.39"}
@@ -2423,6 +2468,7 @@
 {"kind":"scanned","module":"github.com/mitre/compass","version":"v0.0.0-20260527164556-81366bba0bed"}
 {"kind":"scanned","module":"github.com/mjwagner2277/omega-file-lister","version":"v0.2.9"}
 {"kind":"scanned","module":"github.com/mkamelll/goth-template","version":"v0.0.0-20250902184834-c5bbfc58360e"}
+{"kind":"scanned","module":"github.com/mkfoss/fpcnv","version":"v0.0.0-20251023164327-9b67acafea49"}
 {"kind":"scanned","module":"github.com/mkoeppe/ore_algebra","version":"v0.0.0-20260817132817-18680180c884"}
 {"kind":"scanned","module":"github.com/mkozjak/blutui","version":"v0.0.0-20260911095033-1a2dad062bf4"}
 {"kind":"scanned","module":"github.com/mlightcad/cad-viewer","version":"v1.7.1"}
@@ -2440,6 +2486,7 @@
 {"kind":"scanned","module":"github.com/modifa/project_redis","version":"v0.0.0-20251013174521-4f5f4d5288ee"}
 {"kind":"scanned","module":"github.com/mohuangnpc/go-onlyoffice","version":"v1.0.2"}
 {"kind":"scanned","module":"github.com/mojura/sync-s3","version":"v0.10.0"}
+{"kind":"scanned","module":"github.com/moleculer-go/compatibility","version":"v0.0.0-20250905064109-870049dc7c06"}
 {"kind":"scanned","module":"github.com/monasuite/monautil","version":"v1.1.2"}
 {"kind":"scanned","module":"github.com/mongoosejs/mpath","version":"v0.0.0-20220906012818-2c9a79bd2b46"}
 {"kind":"scanned","module":"github.com/monobilisim/caddy-url-ip","version":"v0.0.0-20250818180736-cd5c45325ade"}
@@ -2490,6 +2537,7 @@
 {"kind":"scanned","module":"github.com/myml/linglong-tools/v2","version":"v2.3.2"}
 {"kind":"scanned","module":"github.com/mysociety/politician_data","version":"v0.0.0-20260917082614-896e59d3bdbd"}
 {"kind":"scanned","module":"github.com/mystery00/gorm-dm","version":"v0.2.0"}
+{"kind":"scanned","module":"github.com/naivewong/tsdb","version":"v0.3.1"}
 {"kind":"scanned","module":"github.com/namespacelabs/spacectl","version":"v0.12.3"}
 {"kind":"scanned","module":"github.com/nandes007/daily-code-with-go","version":"v0.0.0-20250420083817-9428ac26e7f3"}
 {"kind":"scanned","module":"github.com/napulen/muspy","version":"v0.1.0"}
@@ -2537,6 +2585,7 @@
 {"kind":"scanned","module":"github.com/nickpak/netpoll","version":"v0.7.3-perf"}
 {"kind":"scanned","module":"github.com/nickpettit/glide","version":"v0.0.0-20111105231503-055088c625ab"}
 {"kind":"scanned","module":"github.com/nickschuch/marco","version":"v0.0.0-20151018022208-c5e47ec70e3f"}
+{"kind":"scanned","module":"github.com/nicolasgoutaland/gonmarkupparser","version":"v0.0.0-20200706151600-fc0277420964"}
 {"kind":"scanned","module":"github.com/niez/blog","version":"v0.0.0-20180404015945-d2004fb5b0a9"}
 {"kind":"scanned","module":"github.com/niftypet/niftypet","version":"v2.0.0+incompatible"}
 {"kind":"scanned","module":"github.com/nikan-ai-solution-gmbh/n8n-nodes-nybrix","version":"v0.0.0-20260709060820-0a0d10fc852f"}
@@ -2568,6 +2617,7 @@
 {"kind":"scanned","module":"github.com/nptri/GoLearn/custompackage","version":"v0.0.0-20240930015747-5a8580e452e2"}
 {"kind":"scanned","module":"github.com/nsecho/lateralus","version":"v0.2.0"}
 {"kind":"scanned","module":"github.com/nsxbet/rule","version":"v0.4.0"}
+{"kind":"scanned","module":"github.com/nubeva/etw","version":"v0.0.0-20250930094319-e128fba1d808"}
 {"kind":"scanned","module":"github.com/null2264/yokai","version":"v1.10.1"}
 {"kind":"scanned","module":"github.com/nullvoxpopuli/testem","version":"v0.0.0-20241209182627-d7953fecdd55"}
 {"kind":"scanned","module":"github.com/numberoverzero/slug-ebiten","version":"v0.0.4"}
@@ -2695,6 +2745,7 @@
 {"kind":"scanned","module":"github.com/pankona/japanese-jev-lint","version":"v0.0.0-20260921123255-a2372ac92a7c"}
 {"kind":"scanned","module":"github.com/pantheon-systems/terminus-secrets-manager-plugin","version":"v0.0.0-20260413205030-51f433a0096a"}
 {"kind":"scanned","module":"github.com/panyam/turnengine","version":"v0.0.0-20251114194118-ec38784b561a"}
+{"kind":"scanned","module":"github.com/paragonie/halite","version":"v5.1.4+incompatible"}
 {"kind":"failure","module":"github.com/parhelia512/cronet-go/lib/linux_loong64","version":"@latest","error":"resolve @latest: 404 Not Found"}
 {"kind":"scanned","module":"github.com/pariigh/xzbot","version":"v0.0.0-20240403045847-8ae5b706fb2c"}
 {"kind":"scanned","module":"github.com/paritytech/srtool","version":"v0.18.4"}
@@ -2714,6 +2765,7 @@
 {"kind":"scanned","module":"github.com/pedroalbanese/smaz","version":"v0.0.0-alpha"}
 {"kind":"scanned","module":"github.com/pedrosanzmtz/massive-csv","version":"v0.0.0-20260217024223-1a6b351f6087"}
 {"kind":"scanned","module":"github.com/pefish/yaml","version":"v2.1.0+incompatible"}
+{"kind":"scanned","module":"github.com/pendoragon/go-misc","version":"v0.0.0-20230918083404-11e0a11959e5"}
 {"kind":"scanned","module":"github.com/pendra-ai/stable-diffusion-go","version":"v0.3.2"}
 {"kind":"scanned","module":"github.com/pentops/o5-builds","version":"v0.0.0-20260109043354-ecbc80c53995"}
 {"kind":"scanned","module":"github.com/pepa65/enc","version":"v0.0.0-20260910001535-8010244b44a9"}
@@ -2754,6 +2806,7 @@
 {"kind":"scanned","module":"github.com/pivoshenko/catppuccin-startpage","version":"v0.0.0-20260913180247-532ed12ed8c1"}
 {"kind":"scanned","module":"github.com/piwi3910/nebulaio","version":"v0.0.0-20260101214518-93be07837e38"}
 {"kind":"scanned","module":"github.com/pixagram-blockchain/pixa-bip39","version":"v0.0.0-20260804180038-fd4adeee1f83"}
+{"kind":"scanned","module":"github.com/pixelplex/tac-evm","version":"v0.4.1"}
 {"kind":"scanned","module":"github.com/pkjmesra/nsepy","version":"v0.0.0-20200720105001-447b4f9984ef"}
 {"kind":"scanned","module":"github.com/pkjmesra/nseta","version":"v0.7.386"}
 {"kind":"scanned","module":"github.com/pku-yuangroup/edit-r1","version":"v0.0.0-20260124154319-4217f251a5ab"}
@@ -2817,6 +2870,7 @@
 {"kind":"scanned","module":"github.com/purpleclay/gpg-import","version":"v0.0.0-20260804053913-8d6fa804839d"}
 {"kind":"scanned","module":"github.com/purpose168/charm-experimental-packages-cn/exp/golden","version":"v0.0.0-20260213061716-274704c1cd09"}
 {"kind":"scanned","module":"github.com/purpurmc/papyrus","version":"v0.0.0-20260820155111-cf255dc7df6a"}
+{"kind":"scanned","module":"github.com/purwadarozatun/go-sentry-fiber-3","version":"v1.0.1"}
 {"kind":"scanned","module":"github.com/pvrlabs/aibadger","version":"v0.6.1"}
 {"kind":"scanned","module":"github.com/pydy/pydy","version":"v0.9.4"}
 {"kind":"scanned","module":"github.com/pyenv/pyenv-pip-rehash","version":"v0.0.4"}
@@ -2847,6 +2901,7 @@
 {"kind":"scanned","module":"github.com/raftersecurity/rafter-secrets","version":"v0.4.0"}
 {"kind":"scanned","module":"github.com/rahacloud/darkubectl","version":"v0.5.0"}
 {"kind":"scanned","module":"github.com/rahix/avr-hal","version":"v0.0.0-20260829151808-e0b0105b11a7"}
+{"kind":"scanned","module":"github.com/raininfall/gotemplate","version":"v0.0.0-20160725072300-688b320ef9dc"}
 {"kind":"scanned","module":"github.com/rajarshi/simple-graph/go/simplegraph","version":"v0.0.0-20221218172251-6640ae86af1f"}
 {"kind":"scanned","module":"github.com/rajatsen91/deepglo","version":"v0.0.0-20200402234827-525578d4bd50"}
 {"kind":"scanned","module":"github.com/ramendr/ramenctl","version":"v0.25.1"}
@@ -3032,6 +3087,7 @@
 {"kind":"scanned","module":"github.com/shirayu/go-word2vec","version":"v0.0.0-20210716150441-8b440c3582f6"}
 {"kind":"scanned","module":"github.com/shitshowprob/pomodoro","version":"v0.0.0-20260202091902-ade071cda08c"}
 {"kind":"scanned","module":"github.com/shivas/abyss-blackbox","version":"v0.10.0"}
+{"kind":"scanned","module":"github.com/shlyyy/micro-services","version":"v0.0.0-20251016083722-963c22a45291"}
 {"kind":"scanned","module":"github.com/shnavo/pokedexcli","version":"v0.0.0-20260722180418-5654584ef7c5"}
 {"kind":"scanned","module":"github.com/shokunin/contrib","version":"v0.0.0-20171205194453-173abe4418e2"}
 {"kind":"scanned","module":"github.com/shoot3rs/sseor","version":"v0.0.3"}
@@ -3067,11 +3123,13 @@
 {"kind":"scanned","module":"github.com/slembcke/chipmunk-physics","version":"v0.0.0-20260505184527-f2f3d66220b8"}
 {"kind":"scanned","module":"github.com/slidebolt/sb-api","version":"v1.0.10"}
 {"kind":"scanned","module":"github.com/slimtoolkit/uilive","version":"v0.0.2"}
+{"kind":"scanned","module":"github.com/slipros/devicedetector","version":"v1.2.1"}
 {"kind":"scanned","module":"github.com/slyd0g/lnkmod","version":"v0.0.0-20221018164755-e751200da6d5"}
 {"kind":"scanned","module":"github.com/smartass08/aria2go","version":"v0.0.0-20260522170811-a2e4442bb8dc"}
 {"kind":"scanned","module":"github.com/smartcontractkit/chainlink-testing-framework/framework/components/fake","version":"v0.15.0"}
 {"kind":"scanned","module":"github.com/smartstocktz/smartstock-stocks","version":"v1.1.7"}
 {"kind":"scanned","module":"github.com/smell-of-curry/dragonfly","version":"v0.0.0-20250802114609-4bc77c487189"}
+{"kind":"scanned","module":"github.com/smithy-security/smithy/components/scanners/kics","version":"v1.1.6"}
 {"kind":"scanned","module":"github.com/snacklog/database-config-lib","version":"v0.2.1"}
 {"kind":"scanned","module":"github.com/snapdragonpartners/maestro-llms","version":"v0.7.1"}
 {"kind":"scanned","module":"github.com/snchen1990/xxpay-master","version":"v0.0.0-20190321022143-0fbae81a58c9"}
@@ -3135,6 +3193,7 @@
 {"kind":"scanned","module":"github.com/streamrail/golang-lru","version":"v0.0.0-20160813221303-0a025b7e63ad"}
 {"kind":"scanned","module":"github.com/strongo/logus","version":"v0.4.4"}
 {"kind":"scanned","module":"github.com/stuartsierra/dependency","version":"v0.0.0-20200307163604-3a467918cd0e"}
+{"kind":"scanned","module":"github.com/stv0g/Gose","version":"v0.11.4"}
 {"kind":"scanned","module":"github.com/suapapa/diagrams_be","version":"v1.2.12"}
 {"kind":"scanned","module":"github.com/suchipi/popularity-contest","version":"v0.0.0-20181102225921-8068242981e9"}
 {"kind":"scanned","module":"github.com/suddengunter/hsd","version":"v0.3.5"}
@@ -3142,6 +3201,7 @@
 {"kind":"scanned","module":"github.com/sumologic/opentelemetry-collector-contrib/receiver/hostmetricsreceiver","version":"v0.0.0-20260303155926-2693d2310e75"}
 {"kind":"scanned","module":"github.com/sund3rrr/nix-go-bindings","version":"v0.3.0"}
 {"kind":"scanned","module":"github.com/sundaeswap-finance/bramble/examples/gqlgen-service","version":"v0.0.0-20260217144106-55eea0f6ddd3"}
+{"kind":"scanned","module":"github.com/sunnogo/ygot","version":"v0.5.0"}
 {"kind":"scanned","module":"github.com/superdmz/SuperDMZ-Arduino","version":"v0.0.0-20260704154243-18a5a0a157bb"}
 {"kind":"scanned","module":"github.com/superpowerdotcom/go-pdf-lib","version":"v0.0.6"}
 {"kind":"scanned","module":"github.com/suppicoder/Codeforces","version":"v0.0.0-20151030235719-d54295d78ac4"}
@@ -3155,9 +3215,11 @@
 {"kind":"scanned","module":"github.com/sylius/pdfgenerationbundle","version":"v1.0.0"}
 {"kind":"scanned","module":"github.com/sylvanarevalo/topcodermovingnqueens","version":"v0.0.0-20150302171940-b09c5caf2d09"}
 {"kind":"scanned","module":"github.com/symantec/dominator","version":"v0.0.0-20191021213919-aa74118a1c98"}
+{"kind":"scanned","module":"github.com/synacker/daggy","version":"v2.2.4+incompatible"}
 {"kind":"scanned","module":"github.com/synapticloop/caddy_image_gallery","version":"v0.0.0-20260702211830-3907ea75553c"}
 {"kind":"scanned","module":"github.com/systemli/ticker","version":"v0.0.0-20260901044612-ca4328ef2247"}
 {"kind":"scanned","module":"github.com/szatmary/filmstock","version":"v0.0.0-20260917142439-0f7f91162594"}
+{"kind":"scanned","module":"github.com/tabilabs/tabi-cosmos","version":"v0.0.0-20251008140433-b9d104efe0d2"}
 {"kind":"scanned","module":"github.com/taco-group/4kagent","version":"v0.0.0-20250923231944-04179ffed12c"}
 {"kind":"scanned","module":"github.com/tadeuszjt/ecosystem/fish","version":"v0.0.0-20230903143425-eb9a2712e8ba"}
 {"kind":"scanned","module":"github.com/taiiwo/cicada","version":"v0.0.0-20250614214124-8e44135491ec"}
@@ -3256,6 +3318,7 @@
 {"kind":"scanned","module":"github.com/tinted-theming/base16-foot","version":"v0.0.0-20250101115152-0515195e0315"}
 {"kind":"failure","module":"github.com/tis24dev/cPanel_self-migration","version":"@latest","error":"resolve @latest: 404 Not Found"}
 {"kind":"scanned","module":"github.com/titikkoma88/bwa-golang","version":"v0.0.0-20251018180758-f64c337c9dcc"}
+{"kind":"scanned","module":"github.com/tj-actions/coverage-badge-go","version":"v3.0.0+incompatible"}
 {"kind":"scanned","module":"github.com/tjade273/BTCRelay-tools","version":"v0.0.0-20160714205925-7114a746e9c8"}
 {"kind":"scanned","module":"github.com/tk75attractions/monitoring-system","version":"v0.0.0-20260615022813-6f433a13f78b"}
 {"kind":"scanned","module":"github.com/tkmaxim9/eventorganizationapp/proto","version":"v0.0.0-20250323132234-23aad90bfa6d"}
@@ -3331,6 +3394,7 @@
 {"kind":"scanned","module":"github.com/uknownothingsnow/JsBridge","version":"v2.1.0+incompatible"}
 {"kind":"scanned","module":"github.com/ukreddyredhat/tekton-demo","version":"v0.0.0-20220722140019-952ff87521a1"}
 {"kind":"scanned","module":"github.com/ulas96/luima","version":"v0.6.0"}
+{"kind":"scanned","module":"github.com/ultrabear/bfi","version":"v0.0.0-20250929050625-205756702a40"}
 {"kind":"scanned","module":"github.com/ultramozg/pulumi","version":"v0.0.0-20260208112311-9366dcf84963"}
 {"kind":"scanned","module":"github.com/un1tz3r0/oeisrlvr","version":"v0.0.0-20260719151652-439bceb239c3"}
 {"kind":"scanned","module":"github.com/unclestep/Rogue","version":"v0.0.0-20260524082934-848a6c2b956d"}
@@ -3398,6 +3462,7 @@
 {"kind":"scanned","module":"github.com/voduchuy/numcme.jl","version":"v0.1.4"}
 {"kind":"scanned","module":"github.com/vogler/FlowMeter","version":"v0.0.0-20201210163316-0d14919fba1b"}
 {"kind":"scanned","module":"github.com/voidwyrm-2/ffget","version":"v0.0.0-20250307214618-dcd3a552fd2e"}
+{"kind":"scanned","module":"github.com/voldemorte/golang-leetcode","version":"v0.0.0-20251017052027-27d3486a695c"}
 {"kind":"scanned","module":"github.com/vomarred11/ghopertunnel","version":"v0.0.0-20251225140545-2f2eddbb5fde"}
 {"kind":"scanned","module":"github.com/voronov-nikita/skillbase","version":"v0.0.0-20250622185431-86a5863fe154"}
 {"kind":"scanned","module":"github.com/voronovsg/rocket-factory","version":"v0.0.0-20260821104134-fd854af78544"}
@@ -3406,6 +3471,7 @@
 {"kind":"scanned","module":"github.com/vscodethemes/backend","version":"v0.0.0-20260810184405-45b2abc9d212"}
 {"kind":"scanned","module":"github.com/vsekhar/braid","version":"v0.0.0-20260328031940-a0735ceef564"}
 {"kind":"scanned","module":"github.com/vsjadeja/sqlm","version":"v1.0.0"}
+{"kind":"scanned","module":"github.com/vtolstov/go-spice","version":"v0.0.0-20170708202317-f3a0197dd96f"}
 {"kind":"scanned","module":"github.com/vulcanize/go-ipfs","version":"v0.4.22-alpha"}
 {"kind":"scanned","module":"github.com/vulnchain/vulnchain.github.io","version":"v0.0.0-20251107184438-6213c934597c"}
 {"kind":"scanned","module":"github.com/vvs551/irremoteesp32","version":"v0.0.0-20240708163703-bddd1143fa3b"}
@@ -3536,6 +3602,7 @@
 {"kind":"scanned","module":"github.com/ye111566/browser","version":"v0.0.0-20250802103359-8c29ad7d0e11"}
 {"kind":"scanned","module":"github.com/yearn/yearn-vaults-v2","version":"v0.4.6"}
 {"kind":"scanned","module":"github.com/yell0w4x/cobra","version":"v0.0.0-20230511195817-9727c2f1a87e"}
+{"kind":"scanned","module":"github.com/yellow-shine/objstore","version":"v0.0.5"}
 {"kind":"scanned","module":"github.com/yersonargotev/packy-delivery","version":"v0.7.0"}
 {"kind":"scanned","module":"github.com/yeswanthganesh/electric-motor-temperature-prediction","version":"v0.0.0-20260220093237-90efc8fcd1a6"}
 {"kind":"scanned","module":"github.com/yeyimilk/llm-zero-shot-classifiers","version":"v0.0.0-20240530161143-b936e4868a2f"}
@@ -3556,6 +3623,7 @@
 {"kind":"scanned","module":"github.com/yukinagae/genkit-go-plugins","version":"v0.2.2"}
 {"kind":"scanned","module":"github.com/yuntianfeijing/oxy/v2","version":"v2.1.0"}
 {"kind":"scanned","module":"github.com/yuta-sksn/slack-term","version":"v0.0.0-20200505071729-c19c20a3e5c5"}
+{"kind":"scanned","module":"github.com/yyd01245/pcap_rtpParse","version":"v0.0.0-20170204061632-39a08e8096dd"}
 {"kind":"scanned","module":"github.com/yyued/SVGAPlayer-Web","version":"v0.0.0-20230206063416-a218cbeca656"}
 {"kind":"scanned","module":"github.com/zac-nixon/aws-load-balancer-controller/v3","version":"v3.0.0-20260911195913-183555f6bb79"}
 {"kind":"scanned","module":"github.com/zaccari/go-syslog","version":"v2.3.0+incompatible"}
@@ -3576,6 +3644,7 @@
 {"kind":"matched","module":"github.com/zhangsan946/Xray-core","version":"v0.0.0-20260627131803-45cf2898ab12","architectures":["amd64"],"asm_files":["transport/internet/finalmask/mkcp/original/xor_amd64.s"]}
 {"kind":"scanned","module":"github.com/zhangsan946/Xray-core","version":"v0.0.0-20260627131803-45cf2898ab12"}
 {"kind":"scanned","module":"github.com/zhangyu836/xlwt","version":"v0.0.0-20190720105449-837da9efb0ac"}
+{"kind":"scanned","module":"github.com/zheltyj/go1fl-sprint6-final-tpl","version":"v0.0.0-20250827225105-4292c020452c"}
 {"kind":"scanned","module":"github.com/zhouhailin/go-version","version":"v0.0.0-20260114110948-f7c3a559f333"}
 {"kind":"scanned","module":"github.com/zhuharev/adet","version":"v0.0.3"}
 {"kind":"scanned","module":"github.com/zigui-ps/VoronoiDiagram","version":"v0.0.0-20200224081323-838dbe3bb1bc"}
@@ -3584,12 +3653,14 @@
 {"kind":"scanned","module":"github.com/zju-real/clawgui","version":"v0.0.0-20260603071058-d990d3e3f239"}
 {"kind":"scanned","module":"github.com/zjulearning/efanna_graph","version":"v0.0.0-20250902021616-6d741ad44a3c"}
 {"kind":"scanned","module":"github.com/zkcrypto/subtle-ng","version":"v0.0.0-20210916020504-3a65884fdb7f"}
+{"kind":"scanned","module":"github.com/zleodai/fsaesoftware","version":"v0.0.0-20250429060205-9874991c96a4"}
 {"kind":"scanned","module":"github.com/zo-bro-23/github-readme-stats","version":"v0.0.0-20230129141901-112000667c01"}
 {"kind":"scanned","module":"github.com/zonkhead/trmg","version":"v0.1.9"}
 {"kind":"scanned","module":"github.com/zoom/videosdk-ui-toolkit-ios","version":"v2.1.13+incompatible"}
 {"kind":"scanned","module":"github.com/zoroqi/rubbish/zettel","version":"v0.0.0-20260712050053-a1d2438dc5ae"}
 {"kind":"scanned","module":"github.com/zshi-redhat/ovn-kubernetes/go-controller","version":"v0.0.0-20201113215927-cb759997ddbc"}
 {"kind":"scanned","module":"github.com/zstreeter/quantumgrid","version":"v0.0.0-20210426151713-0827b7be5fce"}
+{"kind":"scanned","module":"github.com/zw3rk/gtd","version":"v0.0.0-20250622055127-237ffd2c9076"}
 {"kind":"scanned","module":"github.com/zzqq0212/ecg","version":"v0.0.0-20260117070926-e9c18b6127ec"}
 {"kind":"scanned","module":"github.heygears.com/delivery-club/delivery-club-rules","version":"v0.2.3"}
 {"kind":"scanned","module":"github.heygears.com/devploit/nomore403","version":"v1.4.0"}
@@ -3714,6 +3785,7 @@
 {"kind":"scanned","module":"go.studsgaard.dev/boil","version":"v0.1.1"}
 {"kind":"scanned","module":"go.temporal.io/server","version":"v1.32.0"}
 {"kind":"scanned","module":"go.unistack.org/micro/v5/fsm","version":"v1.19.0"}
+{"kind":"scanned","module":"go.wit.com/apps/control-panel-dns","version":"v0.22.9"}
 {"kind":"scanned","module":"gopkg.in/DATADOg/dd-trace-go.v1","version":"v1.74.8"}
 {"kind":"scanned","module":"gopkg.in/blang/semver.v1","version":"v1.1.0"}
 {"kind":"scanned","module":"gopkg.in/davaops/go-syslog.v3","version":"v3.0.1"}
@@ -3737,6 +3809,7 @@
 {"kind":"scanned","module":"huggingface.co/datasets/swe-bench/SWE-bench_Lite.git","version":"v0.0.0-20260816041926-b0dde1093fe4"}
 {"kind":"scanned","module":"isoliman.sh/pulp/api-go","version":"v0.0.2"}
 {"kind":"scanned","module":"jaytaylor.com/andromeda/pkg/unique/cmd","version":"v0.0.0-20190625181641-23501e8b88b6"}
+{"kind":"scanned","module":"jaytaylor.com/andromeda/proc/69941/ns","version":"v0.0.0-20190625181641-23501e8b88b6"}
 {"kind":"scanned","module":"l7e.io/yama/rt","version":"v0.5.0"}
 {"kind":"scanned","module":"labs.etsi.org/rep/osl/hypo/code/org.etsi.osl.hypo.core/base.go","version":"v1.1.1"}
 {"kind":"scanned","module":"lds.li/oauth2ext/keychainsecrets","version":"v1.0.0-alpha.1"}

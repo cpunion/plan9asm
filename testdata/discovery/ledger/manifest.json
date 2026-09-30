@@ -1,9 +1,64 @@
 {
   "schema_version": 2,
   "format": "plan9asmdiscover-jsonl-v1",
-  "generated_at": "2026-09-24T21:20:31.363916322Z",
+  "generated_at": "2026-09-29T12:22:17.195632435Z",
   "scan_direction": "bidirectional",
   "index_ranges": [
+    {
+      "since": "2025-10-01T00:00:00Z",
+      "before": "2025-10-02T09:54:55.471483Z",
+      "index_entries": 93668
+    },
+    {
+      "since": "2025-10-02T09:54:55.471483Z",
+      "before": "2025-10-04T00:00:43.26692Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-04T00:00:43.26692Z",
+      "before": "2025-10-06T19:58:32.311Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-06T19:58:32.311Z",
+      "before": "2025-10-09T04:56:49.664666Z",
+      "index_entries": 99865
+    },
+    {
+      "since": "2025-10-09T04:56:49.664666Z",
+      "before": "2025-10-11T10:31:36.698091Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-11T10:31:36.698091Z",
+      "before": "2025-10-14T14:44:12.18951Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-14T14:44:12.18951Z",
+      "before": "2025-10-16T16:19:43.563924Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-16T16:19:43.563924Z",
+      "before": "2025-10-20T09:05:32.533833Z",
+      "index_entries": 99865
+    },
+    {
+      "since": "2025-10-20T09:05:32.533833Z",
+      "before": "2025-10-22T20:25:25.262323Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-22T20:25:25.262323Z",
+      "before": "2025-10-26T01:11:01.304101Z",
+      "index_entries": 100000
+    },
+    {
+      "since": "2025-10-26T01:11:01.304101Z",
+      "before": "2025-10-29T09:08:47.38533Z",
+      "index_entries": 100000
+    },
     {
       "since": "2025-10-29T09:08:47.38533Z",
       "before": "2025-10-31T17:52:21.920693Z",
@@ -1025,11 +1080,11 @@
       "index_entries": 40418
     }
   ],
-  "index_entries": 17665136,
-  "unique_modules": 946924,
-  "skipped_previously_scanned": 3284233,
-  "scanned_records": 934854,
-  "matched_records": 5891,
-  "failure_records": 16013,
+  "index_entries": 18758534,
+  "unique_modules": 965347,
+  "skipped_previously_scanned": 3464682,
+  "scanned_records": 952900,
+  "matched_records": 6067,
+  "failure_records": 16390,
   "shard_key": "sha256(module)[0]"
 }
