@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,13 @@ func TestAssemblyLedgerPersistsAuditedProgress(t *testing.T) {
 	for _, candidate := range got.Candidates {
 		if candidate.Status != discoveryStatusPassed {
 			t.Fatalf("candidate = %+v", candidate)
+		}
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), `"translations":1`) {
+			t.Fatalf("passed candidate lost compilation count: %s", data)
 		}
 	}
 	if _, err := readAssemblyLedger(output, strings.Repeat("b", 64), semanticSource); err == nil {
@@ -95,6 +103,64 @@ func TestAssemblyLedgerKeepsMissingReportsPending(t *testing.T) {
 	}
 	if got.Pending == 0 {
 		t.Fatal("missing report did not leave any candidate pending")
+	}
+	if err := requireVerifiedAssemblyLedger(got); err == nil {
+		t.Fatal("pending candidates satisfied the strict completion gate")
+	}
+}
+
+func TestAssemblyLedgerCompletionGateAcceptsAuditedOutcomes(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := requireVerifiedAssemblyLedger(progress); err != nil {
+		t.Fatal(err)
+	}
+	progress.Failed = 1
+	progress.Verified = false
+	if err := requireVerifiedAssemblyLedger(progress); err == nil {
+		t.Fatal("failed candidate satisfied the strict completion gate")
+	}
+}
+
+func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*discoveryProgress)
+	}{
+		{
+			name: "pass without translation",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].Translations = 0
+				p.Translations--
+			},
+		},
+		{
+			name: "source skip without reason",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].Status = discoveryStatusNotApplicable
+				p.Candidates[0].Translations = 0
+				p.Passed--
+				p.NotApplicable++
+				p.Translations--
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := progress
+			changed.Candidates = append([]discoveryCandidateProgress(nil), progress.Candidates...)
+			tc.change(&changed)
+			if err := validateAssemblyLedgerProgress(changed); err == nil {
+				t.Fatal("accepted assembly outcome without required evidence")
+			}
+		})
 	}
 }
 

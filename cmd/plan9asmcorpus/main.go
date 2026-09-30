@@ -124,6 +124,7 @@ func main() {
 	discoveryProgressReports := flag.String("discovery-progress", "", "report pending/passed/N/A/failed candidates from a possibly incomplete directory of frozen shard reports")
 	writeAssemblyLedgerPath := flag.String("write-assembly-ledger", "", "persist audited discovery progress in a separate module-hashed assembly ledger")
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
+	requireVerifiedAssembly := flag.Bool("require-verified-assembly-ledger", false, "require every assembly candidate to be passed or explicitly skipped by complete reports")
 	flag.Parse()
 	if *verifyDiscoveryReports != "" && *discoveryProgressReports != "" {
 		check(errors.New("-verify-discovery-reports and -discovery-progress are mutually exclusive"))
@@ -133,6 +134,9 @@ func main() {
 	}
 	if *assemblyLedgerStatusPath != "" && (*discoveryProgressReports != "" || *verifyDiscoveryReports != "") {
 		check(errors.New("-assembly-ledger-status cannot be combined with report verification or progress"))
+	}
+	if *requireVerifiedAssembly && *assemblyLedgerStatusPath == "" {
+		check(errors.New("-require-verified-assembly-ledger requires -assembly-ledger-status"))
 	}
 
 	manifest, err := loadManifest(*manifestPath)
@@ -165,6 +169,9 @@ func main() {
 		check(err)
 		progress, err := readAssemblyLedger(*assemblyLedgerStatusPath, ledgerSHA, semanticSourceSHA)
 		check(err)
+		if *requireVerifiedAssembly {
+			check(requireVerifiedAssemblyLedger(progress))
+		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		check(encoder.Encode(progress))

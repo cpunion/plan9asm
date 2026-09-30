@@ -91,6 +91,21 @@ func TestCIDiscoveredCorpusRetainsAuthenticatedProxyFallback(t *testing.T) {
 	}
 }
 
+func TestCIRequiresVerifiedAssemblyLedger(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	build, found := ciWorkflowJob(string(data), "build")
+	if !found {
+		t.Fatal("build job not found")
+	}
+	if !strings.Contains(build, "-assembly-ledger-status testdata/discovery/assembly-ledger") ||
+		!strings.Contains(build, "-require-verified-assembly-ledger") {
+		t.Fatal("CI must require every discovered candidate to be passed or explicitly skipped")
+	}
+}
+
 func ciWorkflowJob(source, name string) (string, bool) {
 	source = strings.ReplaceAll(source, "\r\n", "\n")
 	_, job, found := strings.Cut(source, "\n  "+name+":\n")

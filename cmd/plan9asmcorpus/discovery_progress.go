@@ -3,14 +3,19 @@ package main
 import "fmt"
 
 type discoveryCandidateProgress struct {
-	Module                string                                `json:"module"`
-	Version               string                                `json:"version"`
-	Status                string                                `json:"status"`
-	InvalidSourceReason   string                                `json:"invalid_source_reason,omitempty"`
-	InvalidSourceEvidence []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
-	Superseded            *discoverySupersededSkip              `json:"superseded,omitempty"`
-	PrivateExtension      *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
-	NativeLayout          *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	Module                    string                                `json:"module"`
+	Version                   string                                `json:"version"`
+	Status                    string                                `json:"status"`
+	Translations              int                                   `json:"translations,omitempty"`
+	NotApplicableTranslations int                                   `json:"not_applicable_translations,omitempty"`
+	NotApplicableItems        []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems  []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
+	NotApplicableReason       string                                `json:"not_applicable_reason,omitempty"`
+	InvalidSourceReason       string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 }
 
 // This is a derived view, not a mutable flag attached to a scanned version.

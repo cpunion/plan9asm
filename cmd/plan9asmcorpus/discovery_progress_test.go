@@ -486,4 +486,26 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 	if err := verifyDiscoveryCorpusReports(ledger, reports, targets, source); err != nil {
 		t.Fatalf("valid source N/A rejected: %v", err)
 	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("c", 64)
+	if err := writeAssemblyLedger(output, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := readAssemblyLedger(output, progress.LedgerSHA256, semanticSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range restored.Candidates {
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), `"not_applicable_reason":"current Go rejects the exact package"`) {
+			t.Fatalf("source skip reason lost from assembly ledger: %s", data)
+		}
+		if !strings.Contains(string(data), `"source_not_applicable_items"`) ||
+			!strings.Contains(string(data), "current Go compiler rejection") {
+			t.Fatalf("source skip details lost from assembly ledger: %s", data)
+		}
+	}
 }

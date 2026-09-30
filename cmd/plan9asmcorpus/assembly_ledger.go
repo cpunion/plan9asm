@@ -66,6 +66,8 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 	}
 	counts := map[string]int{}
 	seen := map[string]bool{}
+	translations := 0
+	notApplicableTranslations := 0
 	for _, candidate := range progress.Candidates {
 		if candidate.Module == "" || !semver.IsValid(candidate.Version) {
 			return fmt.Errorf("assembly ledger candidate has invalid module or version")
@@ -83,6 +85,21 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			counts[candidate.Status]++
 		default:
 			return fmt.Errorf("assembly ledger candidate %s has invalid status %q", key, candidate.Status)
+		}
+		if candidate.Translations < 0 || candidate.NotApplicableTranslations < 0 {
+			return fmt.Errorf("assembly ledger candidate %s has negative translation counts", key)
+		}
+		translations += candidate.Translations
+		notApplicableTranslations += candidate.NotApplicableTranslations
+		if candidate.Status == discoveryStatusPassed && candidate.Translations == 0 {
+			return fmt.Errorf("assembly ledger pass %s lacks compiled translations", key)
+		}
+		if candidate.Status == discoveryStatusNotApplicable {
+			if candidate.Translations != 0 || strings.TrimSpace(candidate.NotApplicableReason) == "" {
+				return fmt.Errorf("assembly ledger source skip %s lacks reason or claims translations", key)
+			}
+		} else if candidate.NotApplicableReason != "" {
+			return fmt.Errorf("assembly ledger non-source-skip %s carries source skip reason", key)
 		}
 		if candidate.Status == discoveryStatusSkippedInvalidSource {
 			if strings.TrimSpace(candidate.InvalidSourceReason) == "" || len(candidate.InvalidSourceEvidence) == 0 {
@@ -124,7 +141,28 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		counts[discoveryStatusSkippedNativeLayout] != progress.SkippedNativeLayout {
 		return fmt.Errorf("assembly ledger candidate statuses do not match summary")
 	}
+	if translations != progress.Translations {
+		return fmt.Errorf("assembly ledger candidate translations do not match summary")
+	}
+	if notApplicableTranslations != progress.NotApplicableTranslations {
+		return fmt.Errorf("assembly ledger candidate inapplicable translations do not match summary")
+	}
 	return nil
+}
+
+func requireVerifiedAssemblyLedger(progress discoveryProgress) error {
+	if progress.Verified && progress.Complete && progress.Pending == 0 &&
+		progress.Failed == 0 && progress.ShardCount > 0 &&
+		progress.ReportedShards == progress.ShardCount {
+		return nil
+	}
+	return fmt.Errorf(
+		"assembly ledger is not verified: reported_shards=%d/%d pending=%d failed=%d",
+		progress.ReportedShards,
+		progress.ShardCount,
+		progress.Pending,
+		progress.Failed,
+	)
 }
 
 func compareAssemblyLedgerCandidate(a, b discoveryCandidateProgress) int {

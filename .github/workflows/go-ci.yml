@@ -155,6 +155,7 @@ jobs:
             -repo-root . \
             -discovery-ledger testdata/discovery/ledger \
             -assembly-ledger-status testdata/discovery/assembly-ledger \
+            -require-verified-assembly-ledger \
             >/dev/null
 
   benchmark:

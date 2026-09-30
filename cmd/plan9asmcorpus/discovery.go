@@ -540,11 +540,16 @@ func auditDiscoveryCorpusReports(
 			seenCandidates[key] = filePath
 			outcomes[key] = discoveryCandidateProgress{
 				Module: result.Module, Version: result.Version, Status: result.Status,
-				InvalidSourceReason:   result.InvalidSourceReason,
-				InvalidSourceEvidence: append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
-				Superseded:            result.Superseded,
-				PrivateExtension:      result.PrivateExtension,
-				NativeLayout:          result.NativeLayout,
+				Translations:              result.Translations,
+				NotApplicableTranslations: result.NotApplicableTranslations,
+				NotApplicableItems:        append([]matrixTargetNotApplicableItem(nil), result.NotApplicableItems...),
+				SourceNotApplicableItems:  append([]discoverySourceNotApplicableItem(nil), result.SourceNotApplicableItems...),
+				NotApplicableReason:       result.NotApplicableReason,
+				InvalidSourceReason:       result.InvalidSourceReason,
+				InvalidSourceEvidence:     append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
+				Superseded:                result.Superseded,
+				PrivateExtension:          result.PrivateExtension,
+				NativeLayout:              result.NativeLayout,
 			}
 		}
 		progress.ReportedShards++
