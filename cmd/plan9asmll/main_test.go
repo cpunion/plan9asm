@@ -1358,6 +1358,20 @@ func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testi
 var packedFamilySpecs = map[string]int{
 	"VTABLEOP": 1,
 }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(dir, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := supported["VTABLEOP"]; !ok {
+		t.Fatal("package-level table-driven opcode was not extracted")
+	}
+}
 
 func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("../..", "amd64_lower_adx.go"))
@@ -1383,18 +1397,25 @@ func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
 		}
 	}
 }
-`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package sample\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	supported, err := extractSupportedOps(dir, "amd64")
+
+func TestExtractSupportedOpsDoesNotAdvertiseSystemRegistersAsOpcodes(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := supported["VTABLEOP"]; !ok {
-		t.Fatal("package-level table-driven opcode was not extracted")
+	supported, err := extractSupportedOps(repoRoot, "arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MRS", "MSR", "WORD"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("system-register instruction %s not advertised", op)
+		}
+	}
+	for _, register := range []string{"MIDR_EL1", "ID_AA64ISAR0_EL1", "TPIDR_EL0", "ACTLR_EL1"} {
+		if _, ok := supported[register]; ok {
+			t.Errorf("register operand %s was mistaken for an opcode", register)
+		}
 	}
 }
 
