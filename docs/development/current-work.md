@@ -130,6 +130,10 @@ instruction families now have independent runtime oracles:
   forbidden. Branch/address families have positive, zero and negative cases.
 - Scalar memory moves share pre/post-indexed writeback validation and preserve
   the address update for both loads and stores, including narrow aliases.
+- ARM scalar SB references distinguish memory access from MOVW address
+  constants. The seven integer move aliases share signedness, unaligned
+  load/store helpers and Go's C_ADDR operand grammar, with native Go and
+  independent Linux ARM runtime oracles.
 
 Run the focused family tests, then every local gate on the combined source.
 Old-source corpus reports remain historical evidence, not passes for these

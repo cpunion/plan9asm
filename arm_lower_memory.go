@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 )
 
@@ -28,6 +29,91 @@ type armIntegerMemoryForm struct {
 	postIndex bool
 	writeback bool
 	subtract  bool
+}
+
+type armIntegerSymbolForm struct {
+	spec    armIntegerMemorySpec
+	symbol  string
+	reg     Reg
+	load    bool
+	address bool
+}
+
+func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, error) {
+	f := armIntegerSymbolForm{spec: armIntegerMemorySpecs[op]}
+	if len(ins.Args) != 2 {
+		return f, fmt.Errorf("arm %s symbol form expects two operands: %q", op, ins.Raw)
+	}
+	symbol, register := ins.Args[1], ins.Args[0]
+	if ins.Args[0].Kind == OpSym {
+		symbol, register, f.load = ins.Args[0], ins.Args[1], true
+	}
+	if symbol.Kind != OpSym || register.Kind != OpReg || !isARMGeneralReg(register.Reg) {
+		return f, fmt.Errorf("arm %s symbol form requires a symbol and a general register: %q", op, ins.Raw)
+	}
+	f.symbol, f.reg = strings.TrimSpace(symbol.Sym), register.Reg
+	f.address = strings.HasPrefix(f.symbol, "$")
+	if f.address {
+		if op != "MOVW" || !f.load {
+			return f, fmt.Errorf("arm symbol address constants require MOVW $symbol(SB),register: %q", ins.Raw)
+		}
+		if err := armRequireConditionOnlySuffix(ins); err != nil {
+			return f, err
+		}
+	} else if _, _, _, err := armMemoryModifiers(ins); err != nil {
+		return f, err
+	}
+	if _, _, ok := parseSBRef(f.symbol); !ok || !strings.HasSuffix(f.symbol, "(SB)") {
+		return f, fmt.Errorf("arm %s requires a valid symbol(SB) reference: %q", op, ins.Raw)
+	}
+	return f, nil
+}
+
+func (c *armCtx) lowerIntegerSymbolMove(op, cond string, ins Instr) (bool, bool, error) {
+	if _, ok := armIntegerMemorySpecs[op]; !ok {
+		return false, false, nil
+	}
+	hasSymbol := false
+	for _, operand := range ins.Args {
+		hasSymbol = hasSymbol || operand.Kind == OpSym
+	}
+	if !hasSymbol {
+		return false, false, nil
+	}
+	f, err := parseARMIntegerSymbolForm(op, ins)
+	if err != nil {
+		return true, false, err
+	}
+	err = c.emitConditionalEffect(cond, func() error {
+		ptr, err := c.ptrFromSB(f.symbol)
+		if err != nil {
+			return err
+		}
+		address := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", address, ptr)
+		if f.address {
+			return c.storeReg(f.reg, "%"+address)
+		}
+		// Go's C_ADDR rows materialize the address in REGTMP (R11) before
+		// the actual load/store. P/W/U operate on a zero displacement from
+		// that scratch address, not on the symbol's relocation addend.
+		if err := c.storeReg("R11", "%"+address); err != nil {
+			return err
+		}
+		if f.load {
+			value, err := c.loadMemoryPointer(ptr, f.spec.bits, f.spec.signed)
+			if err != nil {
+				return err
+			}
+			return c.storeReg(f.reg, value)
+		}
+		value, err := c.loadReg(f.reg)
+		if err != nil {
+			return err
+		}
+		return c.storeMemoryPointer(ptr, f.spec.bits, value)
+	})
+	return true, false, err
 }
 
 func armMemoryShift(mem MemRef) (Operand, bool) {
