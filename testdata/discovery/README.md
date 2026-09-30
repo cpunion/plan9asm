@@ -50,6 +50,9 @@ The CI aggregate also compares that snapshot with every result in the current
 64 shard reports; matching source and scan hashes alone are insufficient.
 Each `passed` record retains its positive LLVM object-compilation count; each
 source-inapplicable or explicit skip retains its reason and pinned evidence.
+Source-inapplicable ledger details keep the affected files, targets and stable
+reason category. Full Go diagnostics remain in the shard reports because they
+can contain temporary runner paths and are unsuitable for committed records.
 This gate does not claim llgo compilation, linking, or execution.
 
 Continue from this checkpoint without downloading completed versions again:

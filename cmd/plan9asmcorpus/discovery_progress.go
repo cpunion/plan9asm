@@ -2,6 +2,52 @@ package main
 
 import "fmt"
 
+// The raw shard report keeps the full Go diagnostic. The committed ledger
+// keeps only stable, reviewable scope and classification: raw diagnostics can
+// contain runner-specific cache paths and differ across otherwise equivalent
+// runs.
+type discoverySourceSkipSummary struct {
+	AsmFile  string   `json:"asm_file,omitempty"`
+	AsmFiles []string `json:"asm_files,omitempty"`
+	Targets  []string `json:"targets"`
+	Kind     string   `json:"kind"`
+	Reason   string   `json:"reason"`
+}
+
+func discoverySourceSkipReason(kind string) string {
+	switch kind {
+	case discoverySourceNotApplicableGoAssembler:
+		return "Go 1.27 assembler rejected this source on all supported targets"
+	case discoverySourceNotApplicableNoGoPackage:
+		return "no current Go package selects this assembly source"
+	case discoverySourceNotApplicableGoBuild:
+		return "Go 1.27 package build rejected this target"
+	case discoverySourceNotApplicableAsmDecl:
+		return "Go 1.27 asmdecl rejected the source or ABI for this target"
+	case discoverySourceNotApplicableNoSymbols:
+		return "Go 1.27 assembler emitted no symbols for this source"
+	default:
+		return ""
+	}
+}
+
+func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []discoverySourceSkipSummary {
+	if len(items) == 0 {
+		return nil
+	}
+	summaries := make([]discoverySourceSkipSummary, 0, len(items))
+	for _, item := range items {
+		summaries = append(summaries, discoverySourceSkipSummary{
+			AsmFile:  item.AsmFile,
+			AsmFiles: append([]string(nil), item.AsmFiles...),
+			Targets:  append([]string(nil), item.Targets...),
+			Kind:     item.Kind,
+			Reason:   discoverySourceSkipReason(item.Kind),
+		})
+	}
+	return summaries
+}
+
 type discoveryCandidateProgress struct {
 	Module                    string                                `json:"module"`
 	Version                   string                                `json:"version"`
@@ -9,7 +55,7 @@ type discoveryCandidateProgress struct {
 	Translations              int                                   `json:"translations,omitempty"`
 	NotApplicableTranslations int                                   `json:"not_applicable_translations,omitempty"`
 	NotApplicableItems        []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
-	SourceNotApplicableItems  []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
+	SourceNotApplicableItems  []discoverySourceSkipSummary          `json:"source_not_applicable_items,omitempty"`
 	NotApplicableReason       string                                `json:"not_applicable_reason,omitempty"`
 	InvalidSourceReason       string                                `json:"invalid_source_reason,omitempty"`
 	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`

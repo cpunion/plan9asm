@@ -101,6 +101,13 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		} else if candidate.NotApplicableReason != "" {
 			return fmt.Errorf("assembly ledger non-source-skip %s carries source skip reason", key)
 		}
+		for _, item := range candidate.SourceNotApplicableItems {
+			if (item.AsmFile == "" && len(item.AsmFiles) == 0) ||
+				len(item.Targets) == 0 || item.Reason == "" ||
+				item.Reason != discoverySourceSkipReason(item.Kind) {
+				return fmt.Errorf("assembly ledger source skip %s has invalid scope or reason", key)
+			}
+		}
 		if candidate.Status == discoveryStatusSkippedInvalidSource {
 			if strings.TrimSpace(candidate.InvalidSourceReason) == "" || len(candidate.InvalidSourceEvidence) == 0 {
 				return fmt.Errorf("assembly ledger skip %s lacks reason or evidence", key)

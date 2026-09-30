@@ -448,6 +448,7 @@ func TestDiscoveryProgressRejectsContradictoryOutcomes(t *testing.T) {
 
 func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 	ledger, reports, source := writeDiscoveryReportFixture(t)
+	const rawDiagnostic = "go build failed at /tmp/ephemeral/cache/file.go: undefined name"
 	files, err := discoveryCorpusReportFiles(reports)
 	if err != nil {
 		t.Fatal(err)
@@ -468,7 +469,7 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 				AsmFiles: result.DiscoveredAsmFiles,
 				Targets:  report.Targets,
 				Kind:     discoverySourceNotApplicableGoBuild,
-				Reason:   "current Go compiler rejection",
+				Reason:   rawDiagnostic,
 			}}
 		}
 		if err := writeDiscoveryCorpusReport(file, report); err != nil {
@@ -504,7 +505,8 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 			t.Fatalf("source skip reason lost from assembly ledger: %s", data)
 		}
 		if !strings.Contains(string(data), `"source_not_applicable_items"`) ||
-			!strings.Contains(string(data), "current Go compiler rejection") {
+			!strings.Contains(string(data), "Go 1.27 package build rejected") ||
+			strings.Contains(string(data), "/tmp/ephemeral") {
 			t.Fatalf("source skip details lost from assembly ledger: %s", data)
 		}
 	}

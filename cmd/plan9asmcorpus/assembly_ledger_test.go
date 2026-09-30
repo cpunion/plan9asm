@@ -152,6 +152,17 @@ func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
 				p.Translations--
 			},
 		},
+		{
+			name: "source skip with raw diagnostic",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].SourceNotApplicableItems = []discoverySourceSkipSummary{{
+					AsmFile: "a_amd64.s",
+					Targets: []string{"linux/amd64"},
+					Kind:    discoverySourceNotApplicableGoBuild,
+					Reason:  "build failed at /tmp/ephemeral/cache/file.go",
+				}}
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := progress

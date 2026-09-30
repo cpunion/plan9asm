@@ -543,7 +543,7 @@ func auditDiscoveryCorpusReports(
 				Translations:              result.Translations,
 				NotApplicableTranslations: result.NotApplicableTranslations,
 				NotApplicableItems:        append([]matrixTargetNotApplicableItem(nil), result.NotApplicableItems...),
-				SourceNotApplicableItems:  append([]discoverySourceNotApplicableItem(nil), result.SourceNotApplicableItems...),
+				SourceNotApplicableItems:  summarizeDiscoverySourceSkips(result.SourceNotApplicableItems),
 				NotApplicableReason:       result.NotApplicableReason,
 				InvalidSourceReason:       result.InvalidSourceReason,
 				InvalidSourceEvidence:     append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
