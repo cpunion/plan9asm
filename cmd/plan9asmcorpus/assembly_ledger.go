@@ -157,7 +157,32 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				len(candidate.NativeLayout.EvidenceURLs) == 0 {
 				return fmt.Errorf("assembly ledger native layout %s lacks matching evidence", key)
 			}
-		} else if candidate.NativeLayout != nil {
+			result := discoveryCorpusResult{
+				Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
+				DiscoveredAsmFiles:  candidate.DiscoveredAsmFiles,
+				ApplicableAsmFiles:  candidate.ApplicableAsmFiles,
+				BuildConfigurations: candidate.BuildConfigurations,
+				Translations:        candidate.Translations, NotApplicableTranslations: candidate.NotApplicableTranslations,
+				NotApplicableItems: candidate.NotApplicableItems,
+				NativeLayout:       candidate.NativeLayout, NativeLayoutPlan: candidate.NativeLayoutPlan,
+			}
+			for _, item := range candidate.SourceNotApplicableItems {
+				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
+					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason,
+				})
+			}
+			if err := validateNativeLayoutResult(result); err != nil {
+				return fmt.Errorf("assembly ledger native layout %s: %w", key, err)
+			}
+			if !equalDiscoveryStrings(uniqueSortedDiscoveryStrings(progress.Targets), candidate.NativeLayoutPlan.Targets) {
+				return fmt.Errorf("assembly ledger native-layout plan differs from target matrix")
+			}
+			if progress.Provenance != nil && candidate.NativeLayoutPlan.GoVersion != progress.Provenance.GoVersion {
+				return fmt.Errorf("assembly ledger native-layout Go selection version differs from provenance")
+			}
+		} else if candidate.NativeLayout != nil || candidate.NativeLayoutPlan != nil ||
+			len(candidate.DiscoveredAsmFiles) != 0 || len(candidate.ApplicableAsmFiles) != 0 || len(candidate.BuildConfigurations) != 0 {
 			return fmt.Errorf("assembly ledger non-native result %s carries native-layout evidence", key)
 		}
 	}

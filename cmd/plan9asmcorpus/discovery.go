@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -32,7 +33,7 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const discoveryReportSchema = 7
+const discoveryReportSchema = 8
 
 const (
 	discoveryStatusPassed                  = "passed"
@@ -164,11 +165,12 @@ const (
 )
 
 type discoverySourceNotApplicableItem struct {
-	AsmFile  string   `json:"asm_file,omitempty"`
-	AsmFiles []string `json:"asm_files,omitempty"`
-	Targets  []string `json:"targets"`
-	Kind     string   `json:"kind"`
-	Reason   string   `json:"reason"`
+	BuildTags []string `json:"build_tags,omitempty"`
+	AsmFile   string   `json:"asm_file,omitempty"`
+	AsmFiles  []string `json:"asm_files,omitempty"`
+	Targets   []string `json:"targets"`
+	Kind      string   `json:"kind"`
+	Reason    string   `json:"reason"`
 }
 
 type moduleDownloadInfo struct {
@@ -199,6 +201,7 @@ type discoveryCorpusResult struct {
 	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
 	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
 	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
 	Error                     string                                `json:"error,omitempty"`
 }
 
@@ -554,6 +557,14 @@ func auditDiscoveryCorpusReports(
 				Superseded:                result.Superseded,
 				PrivateExtension:          result.PrivateExtension,
 				NativeLayout:              result.NativeLayout,
+				NativeLayoutPlan:          result.NativeLayoutPlan,
+			}
+			if result.NativeLayoutPlan != nil {
+				outcome := outcomes[key]
+				outcome.DiscoveredAsmFiles = append([]string(nil), result.DiscoveredAsmFiles...)
+				outcome.ApplicableAsmFiles = append([]string(nil), result.ApplicableAsmFiles...)
+				outcome.BuildConfigurations = result.BuildConfigurations
+				outcomes[key] = outcome
 			}
 		}
 		progress.ReportedShards++
@@ -784,7 +795,7 @@ func discoveryBuildConfigurations(candidate discoveryCandidate, moduleDir string
 	return discoveryBuildConfigurationsWithEvidence(candidate, moduleDir, targets, nil)
 }
 
-func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, moduleDir string, targets []string, sourceNotApplicable *[]discoverySourceNotApplicableItem) ([]discoveryBuildConfiguration, error) {
+func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, moduleDir string, targets []string, sourceNotApplicable *[]discoverySourceNotApplicableItem, nativePlans ...*discoveryNativeLayoutPlan) ([]discoveryBuildConfiguration, error) {
 	if moduleDir == "" {
 		return nil, fmt.Errorf("%s: downloaded module has no directory", candidate.exactKey())
 	}
@@ -801,6 +812,14 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		ctx.CgoEnabled = false
 		contexts = append(contexts, ctx)
 	}
+	var nativePlan *discoveryNativeLayoutPlan
+	if len(nativePlans) != 0 {
+		nativePlan = nativePlans[0]
+		nativePlan.GoVersion = runtime.Version()
+		nativePlan.Targets = uniqueSortedDiscoveryStrings(targets)
+		nativePlan.ReleaseTags = append([]string(nil), build.Default.ReleaseTags...)
+		nativePlan.ToolTags = append([]string(nil), build.Default.ToolTags...)
+	}
 
 	goFilesByDir := make(map[string][]string)
 	invalidGoFilesByDir := make(map[string][]string)
@@ -808,7 +827,21 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 	configsByTargetAndTags := make(map[string]*discoveryBuildConfiguration)
 	for _, asmFile := range candidate.AsmFiles {
 		dirRel := path.Dir(asmFile)
+		var selection *nativeLayoutSourceSelection
+		if nativePlan != nil {
+			input, err := readNativeLayoutSourceInput(moduleDir, asmFile)
+			if err != nil {
+				return nil, err
+			}
+			nativePlan.Selections = append(nativePlan.Selections, nativeLayoutSourceSelection{Assembly: input})
+			recordNativeLayoutSourceInput(nativePlan, input)
+			selection = &nativePlan.Selections[len(nativePlan.Selections)-1]
+		}
 		if discoveryDirIsIgnored(dirRel) {
+			if selection != nil {
+				selection.ExcludedKind = nativeLayoutIgnoredDirectory
+				selection.ExcludedReason = "Go ignores this assembly directory"
+			}
 			continue
 		}
 		nested, err := discoveryDirIsNestedModule(moduleDir, dirRel)
@@ -816,6 +849,15 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 			return nil, err
 		}
 		if nested {
+			if selection != nil {
+				selection.ExcludedKind = nativeLayoutNestedModule
+				selection.ExcludedReason = "assembly belongs to a nested module"
+				selection.NestedModule, err = nativeLayoutNestedModuleInput(moduleDir, dirRel)
+				if err != nil {
+					return nil, err
+				}
+				recordNativeLayoutSourceInput(nativePlan, *selection.NestedModule)
+			}
 			continue
 		}
 		dir := filepath.Join(moduleDir, filepath.FromSlash(dirRel))
@@ -838,6 +880,16 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 			}
 			goFilesByDir[dir] = goFiles
 		}
+		if selection != nil {
+			for _, name := range goFiles {
+				input, err := readNativeLayoutSourceInput(moduleDir, path.Join(dirRel, name))
+				if err != nil {
+					return nil, err
+				}
+				selection.GoFiles = append(selection.GoFiles, input)
+				recordNativeLayoutSourceInput(nativePlan, input)
+			}
+		}
 		if len(goFiles) == 0 {
 			if sourceNotApplicable != nil {
 				invalid := uniqueSortedDiscoveryStrings(invalidGoFilesByDir[dir])
@@ -851,6 +903,10 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 					Kind:    discoverySourceNotApplicableNoGoPackage,
 					Reason:  reason,
 				})
+			}
+			if selection != nil {
+				selection.ExcludedKind = discoverySourceNotApplicableNoGoPackage
+				selection.ExcludedReason = "assembly directory contains no accepted non-test Go source"
 			}
 			continue
 		}
@@ -887,6 +943,12 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 				return nil, fmt.Errorf("classify assembly %s: %w", asmFile, err)
 			}
 			if !ok {
+				if selection != nil {
+					selection.Decisions = append(selection.Decisions, nativeLayoutSelectionDecision{
+						Target: target, Kind: nativeLayoutBuildConstraints,
+						Reason: "Go filename or build constraints do not select an assembly/Go source pair",
+					})
+				}
 				continue
 			}
 			matches = append(matches, contextMatch{context: contexts[i], target: target, buildTags: buildTags})
@@ -899,7 +961,7 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		if err != nil {
 			return nil, fmt.Errorf("classify assembly source %s: %w", asmFile, err)
 		}
-		if reason != "" && sourceNotApplicable != nil {
+		if reason != "" && sourceNotApplicable != nil && selection == nil {
 			var sourceTargetNames []string
 			for _, match := range matches {
 				sourceTargetNames = append(sourceTargetNames, match.target)
@@ -913,6 +975,20 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		}
 		for _, match := range matches {
 			if restrictBySource && !sourceTargets[match.target] {
+				if selection != nil {
+					selection.Decisions = append(selection.Decisions, nativeLayoutSelectionDecision{
+						Target: match.target, BuildTags: match.buildTags,
+						Kind:   nativeLayoutGoAssemblerTarget,
+						Reason: "current Go assembler rejected this source for the selected target",
+					})
+					if sourceNotApplicable != nil {
+						*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
+							AsmFile: asmFile, Targets: []string{match.target}, BuildTags: match.buildTags,
+							Kind:   nativeLayoutGoAssemblerTarget,
+							Reason: "current Go assembler rejected this source for the selected target",
+						})
+					}
+				}
 				continue
 			}
 			noSymbols, err := discoveryAssemblyObjectHasNoSymbols(
@@ -925,13 +1001,26 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 			if noSymbols {
 				if sourceNotApplicable != nil {
 					*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
-						AsmFile: asmFile,
-						Targets: []string{match.target},
-						Kind:    discoverySourceNotApplicableNoSymbols,
-						Reason:  "current Go assembler accepted the source but emitted no object symbols",
+						AsmFile:   asmFile,
+						BuildTags: append([]string(nil), match.buildTags...),
+						Targets:   []string{match.target},
+						Kind:      discoverySourceNotApplicableNoSymbols,
+						Reason:    "current Go assembler accepted the source but emitted no object symbols",
+					})
+				}
+				if selection != nil {
+					selection.Decisions = append(selection.Decisions, nativeLayoutSelectionDecision{
+						Target: match.target, BuildTags: match.buildTags,
+						Kind:   discoverySourceNotApplicableNoSymbols,
+						Reason: "current Go assembler emitted no object symbols",
 					})
 				}
 				continue
+			}
+			if selection != nil {
+				selection.Decisions = append(selection.Decisions, nativeLayoutSelectionDecision{
+					Target: match.target, BuildTags: match.buildTags, Kind: nativeLayoutSelected,
+				})
 			}
 			key := match.target + "\x00" + strings.Join(match.buildTags, ",")
 			config := configsByTargetAndTags[key]
@@ -971,6 +1060,9 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		config := configsByShape[key]
 		config.Targets = uniqueSortedDiscoveryStrings(config.Targets)
 		configs = append(configs, *config)
+	}
+	if nativePlan != nil {
+		nativePlan.BuildConfigurations = configs
 	}
 	return configs, nil
 }
@@ -1583,6 +1675,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		} else if matrix.NativeLayout != nil {
 			result.Status = discoveryStatusSkippedNativeLayout
 			result.NativeLayout = matrix.NativeLayout
+			result.NativeLayoutPlan = matrix.NativeLayoutPlan
 			result.Translations = matrix.Success
 			result.NotApplicableTranslations = matrix.NotApplicable
 			report.SkippedNativeLayout++
@@ -1726,6 +1819,12 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			if err := validateNativeLayoutResult(result); err != nil {
 				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 			}
+			if !equalDiscoveryStrings(uniqueSortedDiscoveryStrings(report.Targets), result.NativeLayoutPlan.Targets) {
+				return fmt.Errorf("native-layout pre-filter plan differs from report target matrix")
+			}
+			if report.Provenance.GoVersion != "" && result.NativeLayoutPlan.GoVersion != report.Provenance.GoVersion {
+				return fmt.Errorf("native-layout plan Go selection version differs from report provenance")
+			}
 		default:
 			return fmt.Errorf("%s@%s: invalid discovery result status %q", result.Module, result.Version, result.Status)
 		}
@@ -1737,6 +1836,9 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		}
 		if result.Status != discoveryStatusSkippedNativeLayout && result.NativeLayout != nil {
 			return fmt.Errorf("%s@%s: non-native result carries native-layout skip", result.Module, result.Version)
+		}
+		if result.Status != discoveryStatusSkippedNativeLayout && result.NativeLayoutPlan != nil {
+			return fmt.Errorf("non-native result carries native-layout plan")
 		}
 		translations += result.Translations
 		notApplicableTranslations += result.NotApplicableTranslations
@@ -1770,6 +1872,7 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		discoverySourceNotApplicableGoBuild:     true,
 		discoverySourceNotApplicableAsmDecl:     true,
 		discoverySourceNotApplicableNoSymbols:   true,
+		nativeLayoutGoAssemblerTarget:           true,
 	}
 	for _, item := range result.SourceNotApplicableItems {
 		files := append([]string(nil), item.AsmFiles...)
@@ -1857,7 +1960,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		return matrixReport{}, nil, nil, err
 	}
 	var sourceNotApplicable []discoverySourceNotApplicableItem
-	buildConfigurations, err := discoveryBuildConfigurationsWithEvidence(candidate, download.Dir, cfg.Targets, &sourceNotApplicable)
+	var nativePlan *discoveryNativeLayoutPlan
+	var nativePlans []*discoveryNativeLayoutPlan
+	if _, ok := cfg.nativeLayoutSkips[candidate.exactKey()]; ok {
+		nativePlan = &discoveryNativeLayoutPlan{}
+		nativePlans = append(nativePlans, nativePlan)
+	}
+	buildConfigurations, err := discoveryBuildConfigurationsWithEvidence(candidate, download.Dir, cfg.Targets, &sourceNotApplicable, nativePlans...)
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
 	}
@@ -1911,6 +2020,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			SourceNotApplicableItems: sourceNotApplicable,
 			PrivateExtension:         privateExtension,
 			NativeLayout:             nativeLayout,
+			NativeLayoutPlan:         nativePlan,
 		}, nil, buildConfigurations, nil
 	}
 	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
@@ -1935,6 +2045,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		SourceNotApplicableItems: sourceNotApplicable,
 		PrivateExtension:         privateExtension,
 		NativeLayout:             nativeLayout,
+		NativeLayoutPlan:         nativePlan,
 	}
 	runTargets := make(map[string]bool)
 	executedBuildConfigurations := make([]discoveryBuildConfiguration, 0, len(buildConfigurations))
@@ -1971,10 +2082,11 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				for index, group := range packageGroups {
 					if err := buildErrors[index]; err != nil {
 						aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
-							AsmFiles: append([]string(nil), group.AsmFiles...),
-							Targets:  []string{target},
-							Kind:     discoverySourceNotApplicableGoBuild,
-							Reason:   limitDiscoveryEvidence(err.Error(), 8192),
+							BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
+							AsmFiles:  append([]string(nil), group.AsmFiles...),
+							Targets:   []string{target},
+							Kind:      discoverySourceNotApplicableGoBuild,
+							Reason:    limitDiscoveryEvidence(err.Error(), 8192),
 						})
 						continue
 					}
@@ -2006,10 +2118,11 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						}
 						if !foreignOnly {
 							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
-								AsmFiles: append([]string(nil), rejected...),
-								Targets:  []string{target},
-								Kind:     discoverySourceNotApplicableAsmDecl,
-								Reason:   discoveryAsmDeclRejectionEvidence(err, rejected),
+								BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
+								AsmFiles:  append([]string(nil), rejected...),
+								Targets:   []string{target},
+								Kind:      discoverySourceNotApplicableAsmDecl,
+								Reason:    discoveryAsmDeclRejectionEvidence(err, rejected),
 							})
 							validAsmFiles = subtractDiscoveryStrings(validAsmFiles, rejected)
 						}

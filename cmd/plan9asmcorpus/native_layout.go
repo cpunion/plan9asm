@@ -296,19 +296,5 @@ func validateNativeLayoutResult(result discoveryCorpusResult) error {
 		skip.Symbol == "" || skip.ObjectHex == "" {
 		return fmt.Errorf("invalid native-layout skip evidence")
 	}
-	expectedTranslations := 0
-	for _, config := range result.BuildConfigurations {
-		for _, target := range skip.Targets {
-			if containsDiscoveryString(config.Targets, target) &&
-				containsDiscoveryString(config.AsmFiles, skip.AsmFile) {
-				return fmt.Errorf("native-layout file %s on %s was also claimed as translated", skip.AsmFile, target)
-			}
-		}
-		expectedTranslations += len(config.Targets) * len(config.AsmFiles)
-	}
-	if result.Translations+result.NotApplicableTranslations != expectedTranslations ||
-		!equalDiscoveryStrings(result.ApplicableAsmFiles, discoveryConfigurationAsmFiles(result.BuildConfigurations)) {
-		return fmt.Errorf("native-layout result does not account for every remaining applicable file and target")
-	}
-	return nil
+	return validateNativeLayoutPlan(result)
 }

@@ -37,11 +37,12 @@ func discoveryTargetSkipReason(item matrixTargetNotApplicableItem) string {
 // contain runner-specific cache paths and differ across otherwise equivalent
 // runs.
 type discoverySourceSkipSummary struct {
-	AsmFile  string   `json:"asm_file,omitempty"`
-	AsmFiles []string `json:"asm_files,omitempty"`
-	Targets  []string `json:"targets"`
-	Kind     string   `json:"kind"`
-	Reason   string   `json:"reason"`
+	BuildTags []string `json:"build_tags,omitempty"`
+	AsmFile   string   `json:"asm_file,omitempty"`
+	AsmFiles  []string `json:"asm_files,omitempty"`
+	Targets   []string `json:"targets"`
+	Kind      string   `json:"kind"`
+	Reason    string   `json:"reason"`
 }
 
 func discoverySourceSkipReason(kind string) string {
@@ -56,6 +57,8 @@ func discoverySourceSkipReason(kind string) string {
 		return "Go 1.27 asmdecl rejected the source or ABI for this target"
 	case discoverySourceNotApplicableNoSymbols:
 		return "Go 1.27 assembler emitted no symbols for this source"
+	case nativeLayoutGoAssemblerTarget:
+		return "Go 1.27 assembler rejected this source for this target"
 	default:
 		return ""
 	}
@@ -68,11 +71,12 @@ func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []d
 	summaries := make([]discoverySourceSkipSummary, 0, len(items))
 	for _, item := range items {
 		summaries = append(summaries, discoverySourceSkipSummary{
-			AsmFile:  item.AsmFile,
-			AsmFiles: append([]string(nil), item.AsmFiles...),
-			Targets:  append([]string(nil), item.Targets...),
-			Kind:     item.Kind,
-			Reason:   discoverySourceSkipReason(item.Kind),
+			BuildTags: append([]string(nil), item.BuildTags...),
+			AsmFile:   item.AsmFile,
+			AsmFiles:  append([]string(nil), item.AsmFiles...),
+			Targets:   append([]string(nil), item.Targets...),
+			Kind:      item.Kind,
+			Reason:    discoverySourceSkipReason(item.Kind),
 		})
 	}
 	return summaries
@@ -92,6 +96,12 @@ type discoveryCandidateProgress struct {
 	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
 	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
 	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	// Only native-layout outcomes persist these scopes, so the audited ledger
+	// can revalidate the pre-filter proof without expanding ordinary outcomes.
+	DiscoveredAsmFiles  []string                      `json:"discovered_asm_files,omitempty"`
+	ApplicableAsmFiles  []string                      `json:"applicable_asm_files,omitempty"`
+	BuildConfigurations []discoveryBuildConfiguration `json:"build_configurations,omitempty"`
 }
 
 // This is a derived view, not a mutable flag attached to a scanned version.

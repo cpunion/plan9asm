@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,7 +166,9 @@ func TestNativeLayoutCandidateIsNotPassed(t *testing.T) {
 		}},
 		Translations: 1, NativeLayout: &skip,
 	}
+	result.NativeLayoutPlan = fixtureNativeLayoutPlan(t, &skip, result.DiscoveredAsmFiles, []string{"darwin/amd64"}, nil)
 	report := discoveryCorpusReport{
+		Targets:  []string{"darwin/amd64"},
 		Selected: 1, SkippedNativeLayout: 1, Translations: 1,
 		Results: []discoveryCorpusResult{result},
 	}
@@ -202,6 +205,15 @@ func TestNativeLayoutSkipSurvivesAuditedAssemblyLedger(t *testing.T) {
 		SourceSHA256: strings.Repeat("a", 64), Symbol: "a", ObjectHex: "90",
 		Reason: "native layout", EvidenceURLs: []string{"https://example.com/source"},
 	}
+	plan := fixtureNativeLayoutPlan(t, &skip, []string{skip.AsmFile}, []string{"linux/amd64", "linux/arm64"}, nil)
+	// The offline report fixture uses synthetic Go 1.27 provenance, even in
+	// the root module's Go 1.20 compatibility lane. These headers contain no
+	// release/experiment constraints; this is not external corpus evidence.
+	plan.GoVersion = "go1.27.1"
+	plan.ReleaseTags = nil
+	for version := 1; version <= 27; version++ {
+		plan.ReleaseTags = append(plan.ReleaseTags, fmt.Sprintf("go1.%d", version))
+	}
 	manifest := discoveryNativeLayoutManifest{SchemaVersion: 1, Skips: []discoveryNativeLayoutSkip{skip}}
 	writeManifest := func() {
 		t.Helper()
@@ -229,6 +241,7 @@ func TestNativeLayoutSkipSurvivesAuditedAssemblyLedger(t *testing.T) {
 			report.Results[i].Status = discoveryStatusSkippedNativeLayout
 			report.Results[i].Translations = 0
 			report.Results[i].NativeLayout = &skip
+			report.Results[i].NativeLayoutPlan = plan
 			report.Passed--
 			report.Translations--
 			report.SkippedNativeLayout++
@@ -248,6 +261,28 @@ func TestNativeLayoutSkipSurvivesAuditedAssemblyLedger(t *testing.T) {
 	restored, err := readAssemblyLedger(output, progress.LedgerSHA256, strings.Repeat("c", 64))
 	if err != nil || restored.SkippedNativeLayout != 1 {
 		t.Fatalf("restored native-layout progress = %+v, %v", restored, err)
+	}
+	for _, mutate := range []func(*discoveryCandidateProgress){
+		func(candidate *discoveryCandidateProgress) { candidate.NativeLayoutPlan = nil },
+		func(candidate *discoveryCandidateProgress) { candidate.NativeLayoutPlan.BuildConfigurations = nil },
+		func(candidate *discoveryCandidateProgress) { candidate.DiscoveredAsmFiles = nil },
+	} {
+		data, err := json.Marshal(restored)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var invalid discoveryProgress
+		if err := json.Unmarshal(data, &invalid); err != nil {
+			t.Fatal(err)
+		}
+		for i := range invalid.Candidates {
+			if invalid.Candidates[i].NativeLayout != nil {
+				mutate(&invalid.Candidates[i])
+			}
+		}
+		if err := validateAssemblyLedgerProgress(invalid); err == nil {
+			t.Fatal("persisted native-layout ledger accepted missing or reduced pre-filter proof")
+		}
 	}
 	manifest.Skips[0].ObjectHex = "91"
 	writeManifest()

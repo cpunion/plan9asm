@@ -57,6 +57,7 @@ type matrixReport struct {
 	SourceNotApplicableItems []discoverySourceNotApplicableItem `json:"source_not_applicable_items,omitempty"`
 	PrivateExtension         *discoveryPrivateExtensionSkip     `json:"-"`
 	NativeLayout             *discoveryNativeLayoutSkip         `json:"-"`
+	NativeLayoutPlan         *discoveryNativeLayoutPlan         `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"

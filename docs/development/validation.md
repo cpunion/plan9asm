@@ -114,7 +114,7 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 64 schema-7 reports, exact candidate ownership and
+The aggregate requires all 64 schema-8 reports, exact candidate ownership and
 one identical source/ledger/tool provenance. Never mix revisions, dirty builds,
 tool binaries or partial CI artifact sets. Even documentation changes alter the
 source fingerprint: old reports prove only their exact revision, not current-

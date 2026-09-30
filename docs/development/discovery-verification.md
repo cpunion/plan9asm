@@ -190,7 +190,24 @@ symbol, and compiles every other applicable file. The candidate is never
 counted as passed; an unpinned target, stale source, changed object bytes or
 failed remaining translation fails the candidate.
 
-Schema 7 binds Git revision/content/dirty state, full ledger fingerprint,
+Schema 8 requires a native-only pre-filter source-selection plan, captured
+before exception filtering. It covers every discovered file with its source
+hash, Go source/constraint-header inputs, and every report target's selected
+tags or explicit exclusion. Verification replays Go filename/build-constraint
+selection, checks the original plan against that selection and the full report
+matrix, applies only the exact pinned file/targets, and requires each remaining
+(file, target, tags) to be executed or covered by structured source N/A evidence.
+Duplicate, omitted or added scopes and forged empty remainder counts fail.
+The audited assembly ledger retains and revalidates the same proof; old native
+reports without it cannot be promoted. Ordinary outcomes omit this metadata.
+
+The Go object witnesses establish byte-layout dependence, not runtime success.
+GopherJRE's fixed +73 entry is stale on Go 1.27.1 Linux/amd64 (+63), and Sharkie's
+Run+7 lands inside a CALL displacement after Go's four-byte prologue. GoJIT's
+sentinel entry and fixed private frame assumptions also require runtime review.
+These defects do not justify skipping ordinary instructions or other files.
+
+Schema 8 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22
 version/llc bytes. Before/after capture detects mutations. All shards need
 identical provenance. Dirty builds are diagnostic-only; schema-2, stale tools,
