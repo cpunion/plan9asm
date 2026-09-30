@@ -115,6 +115,14 @@ Do not add an `unsupported_forms` skip for a supported target. Context-dependent
 forms may be classified separately only when translation genuinely requires
 information unavailable to the scanner.
 
+The x/arch decoder corpus is not a Go-accepted instruction list. Its
+`MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
+base/data writeback-overlap check. The mixed MOVHU decoder form is therefore
+unsupported, not a missing valid Go format. The independent
+`TestARM64DecoderWritebackOverlapRejectedLikeGo` regression checks both
+assemblers' rejection; `check-arm64-plan9-corpus.sh` separately requires every
+Go-accepted selected-family case to remain lowerable.
+
 ## Semantic and raw-encoding checks
 
 - Distinguish physical encoding rules from Go frontend acceptance, especially
