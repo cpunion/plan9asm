@@ -136,6 +136,43 @@ func main() {
 	}
 }
 
+func TestDiscoveryAsmDeclTruncatedDisplayDoesNotInventForeignABIError(t *testing.T) {
+	const foreign = "base/simd_amd64.s:17:1: [amd64] simd: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value"
+	const local = "p0/arith_amd64.s:19:1: [amd64] mul: wrong argument size 4; expected $...-24"
+	files := []string{"base/simd_amd64.s", "p0/arith_amd64.s"}
+	for _, wrapped := range []bool{false, true} {
+		for _, hasLocal := range []bool{false, true} {
+			t.Run(fmt.Sprintf("wrapped=%t/local=%t", wrapped, hasLocal), func(t *testing.T) {
+				output := foreign + "\n" + strings.Repeat("padding\n", 10<<10)
+				if hasLocal {
+					output += local + "\n"
+				}
+				failure := &discoveryCapturedCommandError{
+					command: "go vet -asmdecl example.com/asm/p0",
+					cause:   errors.New("exit status 1"),
+					output:  output,
+					// A tail-only display can begin inside an ABI diagnostic,
+					// losing the source path that is present in the full output.
+					display: "... output truncated ...\nq: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value\n",
+				}
+				var err error = failure
+				if wrapped {
+					err = fmt.Errorf("testless retry found no selected tests; original: %w", err)
+				}
+				if got := discoveryAsmDeclOnlyForeignCandidateABI(files, files[1:], err); got == hasLocal {
+					t.Fatalf("foreign-only = %t, want %t", got, !hasLocal)
+				}
+				if hasLocal {
+					rejected, err := classifyDiscoveryAsmDeclFailure(files[1:], err)
+					if err != nil || len(rejected) != 1 || rejected[0] != files[1] {
+						t.Fatalf("local ABI failure lost: rejected=%v error=%v", rejected, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func buildDiscoveryOverflowGoTool(t *testing.T, vetFails bool) string {
 	t.Helper()
 	dir := t.TempDir()

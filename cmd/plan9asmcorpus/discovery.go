@@ -2907,7 +2907,12 @@ func discoveryCommandDiagnostic(err error) string {
 	}
 	var failure *discoveryCapturedCommandError
 	if errors.As(err, &failure) {
-		return err.Error() + "\n" + failure.output
+		// Replace the compact display, rather than appending the full output.
+		// A tail-only display can start inside an asmdecl error and invent an
+		// unattributable ABI diagnostic even though its complete line names
+		// an exact file. Preserve surrounding context from wrapped errors.
+		complete := fmt.Sprintf("%s: %v\n%s", failure.command, failure.cause, failure.output)
+		return strings.Replace(err.Error(), failure.Error(), complete, 1)
 	}
 	return err.Error()
 }
