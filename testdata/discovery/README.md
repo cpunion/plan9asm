@@ -1,10 +1,10 @@
 # Go module assembly discovery ledger
 
 `ledger/` is the repository-owned checkpoint for newest-to-oldest scans of the
-official Go module index. The history pass stops at 2019-04-10. Each exact
-module path keeps only its newest Go-semver version. Paths with distinct major
-suffixes, such as the base path, `/v2`, `/v3`, or `gopkg.in` `.v2`/`.v3`,
-coexist and advance independently. It records the selected
+official Go module index. The history pass stops at 2019-04-10. Each
+`(module path, Go-semver major)` line keeps only its newest scanned version.
+Thus v0 and v1 coexist even on the same path; `/v2`, `/v3`, and `gopkg.in`
+`.v2`/`.v3` paths also advance independently. It records the selected
 exact `module@latest` version, including modules without Plan 9 assembly.
 Assembly matches retain every `.s` path and architecture hint for all current
 Go ports, including architectures plan9asm does not support yet; failures
@@ -24,7 +24,7 @@ assembly-ledger/
 
 `sha256(module)[0]` selects one of 256 shards, so all records for a module stay
 in one stable file. Records are sorted by module, Go semantic version, and
-result kind. Updating the ledger replaces obsolete exact versions; a later
+result kind. Updating the ledger replaces obsolete versions within one line; a later
 success also clears the corresponding retryable failure. Repository tests
 validate the layout, shard ownership, ordering, and counts, and reject
 committed `.gz` discovery results.
@@ -68,10 +68,11 @@ manual cursor copying is part of normal operation. `-seen-report` remains
 available for additional legacy JSON, gzip-compressed JSON, or sharded import
 sources and is repeatable. Every selected module discovered in the index is
 resolved to an exact `@latest` version before ZIP inspection. A completed exact
-version is reused without another ZIP request. A newly seen module path or a
-higher Go semver within one path crosses that path's checkpoint and is resolved;
-older versions of that same path do not cause metadata or ZIP traffic.
-If `@latest` resolves to a newer exact version, the old version's
+version is reused without another ZIP request. A newly seen version line or a
+higher Go semver within one line crosses its checkpoint and is resolved;
+older versions of that same line do not cause metadata or ZIP traffic. If
+`@latest` selects another major, the indexed exact version is inspected.
+If `@latest` resolves to a newer version in the same line, the old version's
 scanned, matched, and failure records are removed.
 For a new exact version, Discovery uses HEAD and range requests to read the ZIP
 directory and candidate `.s` contents; it does not materialize the complete
@@ -128,6 +129,8 @@ checkpoint. Empty intervals are recorded with an exact zero count so the same
 head window is not fetched repeatedly. History extends the earliest range and
 incremental scanning extends the latest range, preserving one continuous
 coverage chain in both directions.
+Changing deduplication does not rewind either cursor or reconstruct records
+discarded by an older rule; only unscanned intervals are processed next.
 
 Retry retained failures without rereading the module index:
 

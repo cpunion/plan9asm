@@ -33,9 +33,10 @@ repository's three record kinds.
 - Reverse scans consume complete windows and retain equal-timestamp groups;
   incremental scans drain their entire captured interval. Reject gaps,
   overlaps and inconsistent repeated ranges.
-- Keep the highest Go-semver version per exact module path. `/v2` and `/v3`
-  are independent paths and coexist; older versions within either path are
-  skipped. A future `/v4` remains discoverable incrementally.
+- Keep the highest Go-semver version per `(module path, semver major)` line.
+  v0/v1 can share a path, while `/v2` and `/v3` have distinct paths. All
+  coexist; older versions within each line are skipped. Do not replay already
+  committed ranges after changing this rule.
 - Concurrent network workers feed one publisher. Do not start a competing
   writer, remove a live lock, or overwrite a ledger being tested.
 - Remote snapshots/imports validate checksums, counts, sorting and ranges.
@@ -52,7 +53,7 @@ go run ./cmd/plan9asmdiscover -status -out-dir "$ASSEMBLY_LEDGER"
 
 Inspect ranges and records against the committed checkpoint and keep an ignored
 recovery copy. The writer merges with the existing destination under its writer
-lock, retaining the highest semver per path and rejecting discontinuous ranges.
+lock, retaining the highest semver per version line and rejecting discontinuous ranges.
 
 For a validated checkpoint, the converter normalizes, merges, and atomically
 publishes the destination. It is not a file-copy replacement:
