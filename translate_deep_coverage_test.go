@@ -1246,8 +1246,9 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 		for _, want := range []string{
 			"call { i32, i32, i32, i32 } asm sideeffect \"cpuid\"",
 			"call { i32, i32 } asm sideeffect \"xgetbv\"",
-			"call i64 asm \"mrs $0, TPIDR_EL0\"",
-			"ret i64 0",
+			"call i64 asm sideeffect \"mrs $0, S3_3_C13_C0_2\"",
+			"call i64 asm sideeffect \"mrs $0, S3_0_C0_C0_0\"",
+			"ret i64 %",
 		} {
 			if !strings.Contains(ir, want) {
 				t.Fatalf("missing %q in module IR:\n%s", want, ir)

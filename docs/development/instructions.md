@@ -52,6 +52,15 @@ architecture's supported-op extraction test in `cmd/plan9asmll/main_test.go`.
 The external corpus uses that extraction result in its diagnostics, so omitting
 the last layer can make a supported instruction look unsupported.
 
+ARM64 named system registers share the raw encoding grammar. Regenerate their
+encoding/access metadata with current Go using `go generate arm64_sysregs.go`;
+do not edit `arm64_sysregs_generated.go` manually. The completeness regression
+compares the full current Go table and checks every readable register against
+LLVM 22. Use physical system-register names to avoid feature-gated LLVM aliases,
+never fabricated constants for CPU-ID reads. Keep text/direct-module/CFG/raw
+paths observable and require the Linux MRS runtime oracle: only the kernel's
+HWCAP_CPUID-advertised ID-register space is safe for unprivileged execution.
+
 A typical x86 investigation starts with the Go 1.27 tables and an assembler
 probe:
 

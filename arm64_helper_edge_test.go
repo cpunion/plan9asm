@@ -326,16 +326,11 @@ func TestARM64ArithmeticCoverage(t *testing.T) {
 	if got := arm64CanonicalSysReg("DIT"); got != "S3_3_C4_C2_5" {
 		t.Fatalf("arm64CanonicalSysReg(DIT) = %q", got)
 	}
-	if v, ok := arm64CompileSafeMRSValue("MIDR_EL1"); !ok || v != "0" {
-		t.Fatalf("arm64CompileSafeMRSValue(MIDR_EL1) = (%q, %v)", v, ok)
-	}
-	if _, ok := arm64CompileSafeMRSValue("TPIDR_EL0"); ok {
-		t.Fatalf("arm64CompileSafeMRSValue(TPIDR_EL0) unexpectedly succeeded")
-	}
 
 	out := b.String()
 	for _, want := range []string{
-		`asm sideeffect "mrs $0, TPIDR_EL0"`,
+		`asm sideeffect "mrs $0, S3_3_C13_C0_2"`,
+		`asm sideeffect "mrs $0, S3_0_C0_C0_0"`,
 		`asm sideeffect "msr DIT, #1"`,
 		"lshr i64",
 		"lshr i32",

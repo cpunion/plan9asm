@@ -45,11 +45,11 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		if len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("arm64 MRS expects ident, reg: %q", ins.Raw)
 		}
-		sysreg := arm64CanonicalSysReg(ins.Args[0].Ident)
-		dst := ins.Args[1].Reg
-		if v, ok := arm64CompileSafeMRSValue(sysreg); ok {
-			return true, false, c.storeReg(dst, v)
+		sysreg, err := arm64CheckedSystemRegister(ins.Args[0].Ident, true)
+		if err != nil {
+			return true, false, err
 		}
+		dst := ins.Args[1].Reg
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect %q, %q()\n", t, "mrs $0, "+sysreg, "=r,~{memory}")
 		return true, false, c.storeReg(dst, "%"+t)
@@ -80,6 +80,8 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 				// writes, including SPSel and DIT, not as a PSTATE immediate.
 				if field != "" {
 					sysreg = field
+				} else if _, err := arm64CheckedSystemRegister(name, false); err != nil {
+					return true, false, err
 				}
 				fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", "msr "+sysreg+", xzr", "~{memory}")
 				return true, false, nil
@@ -92,6 +94,10 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		case OpReg:
 			if strings.EqualFold(name, "DAIFSet") || strings.EqualFold(name, "DAIFClr") {
 				return true, false, fmt.Errorf("arm64 MSR register source is not a Go PSTATE field form: %q", ins.Raw)
+			}
+			sysreg, err := arm64CheckedSystemRegister(name, false)
+			if err != nil {
+				return true, false, err
 			}
 			v, err := c.loadReg(ins.Args[0].Reg)
 			if err != nil {
@@ -1386,23 +1392,8 @@ func arm64IntConstant(typeName string, value uint64) int64 {
 }
 
 func arm64CanonicalSysReg(name string) string {
-	switch name {
-	case "DIT":
-		// LLVM inline-asm parser on current toolchains does not accept the DIT
-		// alias directly; use its canonical system-register encoding name.
-		return "S3_3_C4_C2_5"
-	default:
-		return name
+	if spec, ok := arm64GoSystemRegisters[name]; ok {
+		return arm64EncodedSystemRegisterName(spec.encoding)
 	}
-}
-
-func arm64CompileSafeMRSValue(sysreg string) (string, bool) {
-	switch sysreg {
-	case "ID_AA64ISAR0_EL1", "ID_AA64PFR0_EL1", "ID_AA64ZFR0_EL1", "MIDR_EL1":
-		// LLVM 19's inline-asm parser lags behind newer arm64 feature register names.
-		// For compile-only corpus coverage, return a conservative zero value.
-		return "0", true
-	default:
-		return "", false
-	}
+	return name
 }

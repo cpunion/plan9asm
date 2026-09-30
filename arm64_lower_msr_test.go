@@ -55,9 +55,9 @@ func TestTranslateARM64MSRCompleteGoAssemblerForms(t *testing.T) {
 				"msr DIT, xzr",
 				"msr DIT, #1",
 				`"target-features"="+dit"`,
-				"msr CPACR_EL1, xzr",
-				"msr DAIF, $0",
-				"mrs $0, DAIF",
+				"msr S3_0_C1_C0_2, xzr",
+				"msr S3_3_C4_C2_1, $0",
+				"mrs $0, S3_3_C4_C2_1",
 			} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("ARM64 MSR lowering omitted %q", want)

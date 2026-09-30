@@ -103,6 +103,11 @@ coverage batch, not start a competing import or duplicate full corpus run.
   moves must still reach translation and LLVM compilation; only an actual
   size, offset or argument-frame mismatch is ABI N/A. Preserve the Go-build
   regression for whole-array MOVOU and replay the affected discovery shard.
+- ARM64 feature-register MRS reads must not retain the former LLVM-19
+  compile-only zero substitution. Named register encoding/access metadata now
+  shares the physical raw grammar across text, direct modules and CFG paths.
+  Check the complete Go table and the required Linux MRS runtime oracle;
+  package-object success alone cannot establish CPU-detection correctness.
 - Priority shards are 5, 29, 36, 38, 39 and 42. All must pass before the remaining
   jobs run; all 64 shards and their strict aggregate remain mandatory.
 - Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and

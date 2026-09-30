@@ -332,16 +332,12 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 				return directUnsupportedf("MRS expects ident, reg: %q", ins.Raw)
 			}
 			i64Ty, _ := llvmTypeFromLLVMType(ctx, I64)
-			sysreg := arm64CanonicalSysReg(src.Ident)
-			if v, ok := arm64CompileSafeMRSValue(sysreg); ok {
-				if v != "0" {
-					return directUnsupportedf("unexpected compile-safe MRS value %q", v)
-				}
-				reg[dst.Reg] = directValue{typ: I64, val: llvm.ConstInt(i64Ty, 0, false)}
-				continue
+			sysreg, err := arm64CheckedSystemRegister(src.Ident, true)
+			if err != nil {
+				return err
 			}
 			asmTy := llvm.FunctionType(i64Ty, nil, false)
-			asmv := llvm.InlineAsm(asmTy, "mrs $0, "+sysreg, "=r", false, false, llvm.InlineAsmDialectATT, false)
+			asmv := llvm.InlineAsm(asmTy, "mrs $0, "+sysreg, "=r,~{memory}", true, false, llvm.InlineAsmDialectATT, false)
 			callv := b.CreateCall(asmTy, asmv, nil, "")
 			reg[dst.Reg] = directValue{typ: I64, val: callv}
 		case OpMOVD, OpMOVQ:

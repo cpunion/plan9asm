@@ -1052,19 +1052,21 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 			continue
 		case OpMRS:
 			// ARM64: MRS <sysreg>, Rn
+			if len(ins.Args) != 2 {
+				return fmt.Errorf("MRS expects 2 args: %q", ins.Raw)
+			}
 			src, dst := ins.Args[0], ins.Args[1]
 			if src.Kind != OpIdent || dst.Kind != OpReg {
 				return fmt.Errorf("MRS expects ident, reg: %q", ins.Raw)
 			}
-			sysreg := arm64CanonicalSysReg(src.Ident)
-			if v, ok := arm64CompileSafeMRSValue(sysreg); ok {
-				reg[dst.Reg] = ssaVal{typ: I64, val: v}
-				continue
+			sysreg, err := arm64CheckedSystemRegister(src.Ident, true)
+			if err != nil {
+				return err
 			}
 			name := newTmp()
 			// Read system register via inline asm.
 			// Example: call i64 asm "mrs $0, MIDR_EL1", "=r"()
-			fmt.Fprintf(b, "  %%%s = call i64 asm %q, %q()\n", name, "mrs $0, "+sysreg, "=r")
+			fmt.Fprintf(b, "  %%%s = call i64 asm sideeffect %q, %q()\n", name, "mrs $0, "+sysreg, "=r,~{memory}")
 			reg[dst.Reg] = ssaVal{typ: I64, val: "%" + name}
 			continue
 		case OpMOVD:
