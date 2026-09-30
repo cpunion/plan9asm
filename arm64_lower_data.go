@@ -6,6 +6,9 @@ import (
 )
 
 func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerARM64ScalarMemoryWriteback(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerARM64ScalarExtend(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -29,7 +32,7 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 		case OpReg:
 			return true, false, c.storeReg(dst.Reg, v)
 		case OpMem:
-			return true, false, c.storeMem(dst.Mem, 64, false, v)
+			return true, false, c.storeMem(dst.Mem, 64, postInc, v)
 		case OpFP:
 			return true, false, c.storeFPResult64(dst.FPOffset, v)
 		case OpSym:
