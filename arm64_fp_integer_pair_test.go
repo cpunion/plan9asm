@@ -194,10 +194,11 @@ func TestARM64FPIntegerPairRejectsMissingFrameBytes(t *testing.T) {
 
 func TestARM64FPFrameRangeValidation(t *testing.T) {
 	for _, test := range []struct {
-		name  string
-		off   int64
-		size  int64
-		slots []FrameSlot
+		name   string
+		off    int64
+		size   int64
+		slots  []FrameSlot
+		result bool
 	}{
 		{name: "empty", size: 0},
 		{name: "negative size", size: -1},
@@ -206,9 +207,20 @@ func TestARM64FPFrameRangeValidation(t *testing.T) {
 		{name: "aggregate", size: 8, slots: []FrameSlot{{Offset: 0, Type: "[2 x i64]"}}},
 		{name: "overlap at start", size: 8, slots: []FrameSlot{{Offset: 0, Type: I64}, {Offset: 0, Type: I32}}},
 		{name: "overlap inside", size: 8, slots: []FrameSlot{{Offset: 0, Type: I64}, {Offset: 4, Type: I32}}},
+		{name: "negative request", off: -8, size: 8, slots: []FrameSlot{{Offset: -8, Type: I64}}},
+		{name: "negative slot", size: 4, slots: []FrameSlot{{Offset: -1, Type: I64}}},
+		{name: "minimum slot subtraction overflow", off: 1<<63 - 17, size: 8, slots: []FrameSlot{{Offset: -1 << 63, Type: I64}}},
+		{name: "negative maximum slot subtraction overflow", off: 1<<63 - 17, size: 8, slots: []FrameSlot{{Offset: -(1<<63 - 1), Type: I64}}},
+		{name: "slot end overflow", off: 1<<63 - 4, size: 1, slots: []FrameSlot{{Offset: 1<<63 - 4, Type: I64}}},
+		{name: "negative result slot", size: 4, slots: []FrameSlot{{Offset: -1, Type: I64}}, result: true},
+		{name: "result slot end overflow", off: 1<<63 - 4, size: 1, slots: []FrameSlot{{Offset: 1<<63 - 4, Type: I64}}, result: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			c := arm64Ctx{sig: FuncSig{Frame: FrameLayout{Params: test.slots}}}
+			if test.result {
+				c.sig.Frame.Params = nil
+				c.fpResults = test.slots
+			}
 			if _, err := c.fpFrameParts(test.off, test.size); err == nil {
 				t.Fatal("invalid FP frame range accepted")
 			}

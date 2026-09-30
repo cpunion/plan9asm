@@ -12,8 +12,20 @@ type arm64FPFramePart struct {
 // Frame fields have independent allocas: their ABI offsets describe byte
 // adjacency, not the physical adjacency of the LLVM allocations.
 func (c *arm64Ctx) fpFrameParts(off, size int64) ([]arm64FPFramePart, error) {
-	if size <= 0 || size > 16 || off+size < off {
+	const maxOffset = int64(1<<63 - 1)
+	if off < 0 || size <= 0 || size > 16 || off > maxOffset-size {
 		return nil, fmt.Errorf("arm64: invalid FP frame range +%d(FP), size %d", off, size)
+	}
+	// Generated Go argument/result layouts start at zero and advance by
+	// nonnegative field sizes. Reject malformed slot extents before any signed
+	// subtraction or end-offset arithmetic can wrap and appear in-range.
+	for _, slots := range [][]FrameSlot{c.sig.Frame.Params, c.fpResults} {
+		for _, slot := range slots {
+			slotSize := frameTypeSize(slot.Type, 8)
+			if slot.Offset < 0 || slot.Offset > maxOffset-slotSize {
+				return nil, fmt.Errorf("arm64: invalid FP frame slot +%d(FP), size %d", slot.Offset, slotSize)
+			}
+		}
 	}
 	var parts []arm64FPFramePart
 	for cursor := off; cursor < off+size; {
@@ -21,7 +33,7 @@ func (c *arm64Ctx) fpFrameParts(off, size int64) ([]arm64FPFramePart, error) {
 		for _, slots := range [][]FrameSlot{c.sig.Frame.Params, c.fpResults} {
 			for _, slot := range slots {
 				slotSize := frameTypeSize(slot.Type, 8)
-				if cursor < slot.Offset || cursor-slot.Offset >= slotSize {
+				if cursor < slot.Offset || cursor >= slot.Offset+slotSize {
 					continue
 				}
 				if slotSize > 8 {
