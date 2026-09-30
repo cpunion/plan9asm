@@ -18,14 +18,36 @@ if [[ "$shard_index" == "all" ]]; then
   fi
   report_dir="$repo_root/_out/discovered-library-corpus"
   mkdir -p "$report_dir"
-  shared_build_cache=$(mktemp -d)
-  trap 'rm -rf "$shared_build_cache"' EXIT
-  export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
+  shared_build_cache=
+  cleanup_build_cache() {
+    if [[ -n "$shared_build_cache" ]]; then
+      rm -r -- "$shared_build_cache"
+      shared_build_cache=
+    fi
+  }
+  trap cleanup_build_cache EXIT
   find "$report_dir" -maxdepth 1 -type f -name 'shard-*.json' -delete
-  seq 0 "$((shard_count - 1))" |
-    xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"
-  "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir"
-  exit 0
+  status=0
+  # The complete ecosystem can populate tens of GiB of package build objects.
+  # Share only within a bounded parallel batch; never remove a live writer's
+  # cache. Preserve reports and sticky failures across every batch.
+  for (( first=0; first<shard_count; first+=parallelism )); do
+    last=$((first + parallelism - 1))
+    if (( last >= shard_count )); then
+      last=$((shard_count - 1))
+    fi
+    shared_build_cache=$(mktemp -d)
+    export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
+    if ! seq "$first" "$last" |
+      xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"; then
+      status=1
+    fi
+    cleanup_build_cache
+  done
+  if ! "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir"; then
+    status=1
+  fi
+  exit "$status"
 fi
 if [[ -z "$shard_index" || -z "$shard_count" || $# -gt 3 ]]; then
   echo "usage: $0 <zero-based-shard-index> <shard-count> [report.json]" >&2

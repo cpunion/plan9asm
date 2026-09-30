@@ -92,6 +92,13 @@ coverage batch, not start a competing import or duplicate full corpus run.
   decode as MFENCE, nor TPAUSE as CLWB. UMONITOR/UMWAIT/TPAUSE now share the
   typed implicit-system grammar, with raw register/address/segment tests.
   Replay shard 39 after the complete family and flag-state regressions pass.
+- Raw ADCX/ADOX in ethereum-vanity-address now shares the typed Go encoder
+  grammar with textual forms, including 32/64-bit widths, register/memory
+  operands, addressing and independent carry flags. Replay shard 25 with
+  fresh reports; its previous ENDBR repair did not cover these raw encodings.
+- A truncated asmdecl display must never become a second, unattributable
+  diagnostic. Classification replaces it with the complete bounded command
+  output while retaining error wrappers; replay llamawasm2go in shard 26.
 - Priority shards are 5, 29, 36, 38, 39 and 42. All must pass before the remaining
   jobs run; all 64 shards and their strict aggregate remain mandatory.
 - Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and
@@ -108,8 +115,10 @@ review accepts this policy or a compatible implementation replaces it.
 
 ## Next actions
 
-1. Run four local shards concurrently with distinct reports and an owned shared
-   build cache. Remove candidate sources/output after processing. Keep every
+1. Run four local shards concurrently in bounded batches with distinct reports
+   and an owned build cache shared only within each batch. Clean the cache
+   after all its writers exit; never retain all 64 shards' build objects.
+   Remove candidate sources/output after processing. Keep every
    applicable file and target, including non-host architectures.
 2. Query audited partial progress with `scripts/discovery-status.sh`. Publish
    matching results with `scripts/update-assembly-ledger.sh` in a separate

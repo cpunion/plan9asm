@@ -114,8 +114,12 @@ The `all` command replaces stale canonical reports; save evidence elsewhere
 under `_out/` first when needed. Download, applicability and each target
 translation/compile operation each have a 60-minute deadline. Diagnostic
 override: `PLAN9ASM_DISCOVERY_CANDIDATE_TIMEOUT`. A timeout fails.
-The `all` command also gives its parallel shards one temporary Go build cache
-and removes it after every shard exits. Independently invoked shards keep their
+The `all` command gives each bounded parallel batch one temporary Go build
+cache and removes it after every writer in that batch exits. It then starts
+the next batch with a fresh cache, preventing one full ecosystem run from
+retaining tens of GiB of unrelated build objects. Failed batches retain their
+reports and a failing exit status; all remaining batches and the final strict
+aggregate still run. Independently invoked shards keep their
 own build caches unless `PLAN9ASM_DISCOVERY_BUILD_CACHE` names an existing
 absolute directory; an independently supplied cache is never deleted by the
 runner.
@@ -255,8 +259,9 @@ Larger EOCD scans are fallbacks. Change thresholds only with measured evidence.
 
 The corpus uses the shared Go download cache as a read-only file proxy. New
 downloads, extracted sources and LLVM outputs live in a private candidate cache
-removed on success or failure. Build caches last one shard or one coordinated
-`all` run, as described above. Keep diagnostics, not full packages. Replaying
+removed on success or failure. Build caches last one shard or one bounded
+parallel batch within a coordinated `all` run, as described above. Keep
+diagnostics, not full packages. Replaying
 an uncached exact version can download
 it again; that is distinct from repeated inventory work.
 Each buildable Go package is translated in its own child process. This keeps
