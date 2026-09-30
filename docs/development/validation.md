@@ -180,7 +180,7 @@ exclusions separately, keep Draft, and resolve their review before promotion.
 
 Let the active full run finish before publishing another batch. A cheap
 `ci_policy` job first checks workflow scheduling and root CI policy tests.
-The repair matrix then runs the five previously failing discovery shards.
+The repair matrix then runs the six previously failing discovery shards.
 Every other entry job has a native `needs` dependency on that matrix: **all
 priority shards must succeed**, not merely start, before the remaining jobs
 run. Fail-fast is disabled so every failed shard is checked.

@@ -10,6 +10,7 @@ type amd64ImplicitSystemOperand uint8
 const (
 	amd64ImplicitSystemNoOperand amd64ImplicitSystemOperand = iota
 	amd64ImplicitSystemGP
+	amd64ImplicitSystemAddressGP
 )
 
 type amd64ImplicitRegisterSet uint8
@@ -25,6 +26,7 @@ type amd64ImplicitSystemSpec struct {
 	inputs      amd64ImplicitRegisterSet
 	outputs     amd64ImplicitRegisterSet
 	writesCarry bool
+	rawPrefix   byte
 }
 
 // amd64ImplicitSystemSpecs is the complete Go 1.27 grammar for the system
@@ -39,13 +41,15 @@ var amd64ImplicitSystemSpecs = map[Op]amd64ImplicitSystemSpec{
 	"RDPKRU":   {inputs: amd64ImplicitCX, outputs: amd64ImplicitAX | amd64ImplicitDX},
 	"WRPKRU":   {inputs: amd64ImplicitAX | amd64ImplicitCX | amd64ImplicitDX},
 	"XSETBV":   {inputs: amd64ImplicitAX | amd64ImplicitCX | amd64ImplicitDX},
-	"UMONITOR": {operand: amd64ImplicitSystemGP},
-	"UMWAIT":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true},
-	"TPAUSE":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true},
+	"UMONITOR": {operand: amd64ImplicitSystemAddressGP, rawPrefix: 0xf3},
+	"UMWAIT":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true, rawPrefix: 0xf2},
+	"TPAUSE":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true, rawPrefix: 0x66},
 }
 
 type amd64ImplicitSystemForm struct {
-	register Reg
+	register      Reg
+	addressBits   int
+	segmentPrefix byte
 }
 
 func (c *amd64Ctx) lowerImplicitSystem(op Op, ins Instr) (ok bool, terminated bool, err error) {
@@ -75,11 +79,26 @@ func (c *amd64Ctx) parseImplicitSystemForm(op string, spec amd64ImplicitSystemSp
 		if len(ins.Args) != 0 {
 			return form, fmt.Errorf("%s %s takes no operands: %q", c.goarch, op, ins.Raw)
 		}
-	case amd64ImplicitSystemGP:
+	case amd64ImplicitSystemGP, amd64ImplicitSystemAddressGP:
 		if len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[0].Reg, c.goarch) {
 			return form, fmt.Errorf("%s %s expects one Go 1.27 Yrl register: %q", c.goarch, op, ins.Raw)
 		}
 		form.register = ins.Args[0].Reg
+		if spec.operand == amd64ImplicitSystemAddressGP {
+			form.addressBits = 64
+			if c.goarch == "386" {
+				form.addressBits = 32
+			}
+			if ins.x86Encoded {
+				if ins.x86AddressBits != 0 {
+					if ins.x86AddressBits != form.addressBits && ins.x86AddressBits != form.addressBits/2 {
+						return form, fmt.Errorf("invalid %s address size %d", c.goarch, ins.x86AddressBits)
+					}
+					form.addressBits = ins.x86AddressBits
+				}
+				form.segmentPrefix = ins.x86SegmentPrefix
+			}
+		}
 	default:
 		panic("unknown amd64 implicit-system operand kind")
 	}
@@ -99,13 +118,24 @@ func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, f
 	if spec.writesCarry {
 		constraints = append(constraints, "=q")
 	}
-	if spec.operand == amd64ImplicitSystemGP {
-		value, err := c.evalIntSized(Operand{Kind: OpReg, Reg: form.register}, wordType)
+	if spec.operand != amd64ImplicitSystemNoOperand {
+		operandType := I32 // UMWAIT/TPAUSE read control[31:0], even with REX.W.
+		if spec.operand == amd64ImplicitSystemAddressGP {
+			operandType = LLVMType(fmt.Sprintf("i%d", form.addressBits))
+		}
+		value, err := c.evalIntSized(Operand{Kind: OpReg, Reg: form.register}, operandType)
 		if err != nil {
 			return true, false, err
 		}
+		if spec.operand == amd64ImplicitSystemAddressGP && operandType != wordType {
+			// Monitor the same zero-extended offset using the native address
+			// width. The segment base is still applied by the actual instruction.
+			extended := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext %s %s to %s\n", extended, operandType, value, wordType)
+			value, operandType = "%"+extended, wordType
+		}
 		constraints = append(constraints, "r")
-		arguments = append(arguments, fmt.Sprintf("%s %s", wordType, value))
+		arguments = append(arguments, fmt.Sprintf("%s %s", operandType, value))
 	}
 	for _, implicit := range []struct {
 		bit        amd64ImplicitRegisterSet
@@ -129,7 +159,10 @@ func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, f
 	constraints = append(constraints, "~{memory}", "~{dirflag}", "~{fpsr}", "~{flags}")
 
 	assembly := strings.ToLower(op)
-	if spec.operand == amd64ImplicitSystemGP {
+	if form.segmentPrefix != 0 {
+		assembly = fmt.Sprintf(".byte 0x%02x; %s", form.segmentPrefix, assembly)
+	}
+	if spec.operand != amd64ImplicitSystemNoOperand {
 		operandIndex := 0
 		if spec.writesCarry {
 			operandIndex = 1
@@ -144,6 +177,10 @@ func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, f
 		carry := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = trunc i8 %%%s to i1\n", carry, call)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carry, c.flagsCFSlot)
+		// WAITPKG defines CF and clears the other arithmetic flags (Intel SDM).
+		for _, slot := range []string{c.flagsZSlot, c.flagsSltSlot, c.flagsPFSlot, c.flagsOFSlot} {
+			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", slot)
+		}
 		return true, false, nil
 	}
 	if spec.outputs == amd64ImplicitAX|amd64ImplicitDX {

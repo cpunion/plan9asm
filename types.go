@@ -949,6 +949,8 @@ type Instr struct {
 	// Effective address width for a raw address-size override; zero means
 	// the target's ordinary pointer width.
 	x86AddressBits int
+	// Segment override on a raw instruction with an implicit register address.
+	x86SegmentPrefix byte
 	// Decoded vector length, separate from register storage width. Narrowing
 	// conversions can write X from either a 128- or 256-bit memory source.
 	x86VectorBytes int

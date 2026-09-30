@@ -88,7 +88,11 @@ coverage batch, not start a competing import or duplicate full corpus run.
   commands now own and terminate their process groups; Git automatic
   maintenance stays foreground. Bounded directory-not-empty retries still
   report persistent cleanup failures. Other filesystem errors are not retried.
-- Priority shards are 5, 29, 36, 38 and 42. All must pass before the remaining
+- Fork PR 4 also exposed raw WAITPKG in ixl-go: prefixed UMONITOR must not
+  decode as MFENCE, nor TPAUSE as CLWB. UMONITOR/UMWAIT/TPAUSE now share the
+  typed implicit-system grammar, with raw register/address/segment tests.
+  Replay shard 39 after the complete family and flag-state regressions pass.
+- Priority shards are 5, 29, 36, 38, 39 and 42. All must pass before the remaining
   jobs run; all 64 shards and their strict aggregate remain mandatory.
 - Go 1.27.1 and LLVM 22 are pinned for external corpus evidence. Build and
   test with Go while llgo support is incomplete; do not add `!llgo` tags.

@@ -14,9 +14,9 @@ func TestAMD64ImplicitSystemGrammarIsComplete(t *testing.T) {
 		"RDPKRU":   {inputs: amd64ImplicitCX, outputs: amd64ImplicitAX | amd64ImplicitDX},
 		"WRPKRU":   {inputs: amd64ImplicitAX | amd64ImplicitCX | amd64ImplicitDX},
 		"XSETBV":   {inputs: amd64ImplicitAX | amd64ImplicitCX | amd64ImplicitDX},
-		"UMONITOR": {operand: amd64ImplicitSystemGP},
-		"UMWAIT":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true},
-		"TPAUSE":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true},
+		"UMONITOR": {operand: amd64ImplicitSystemAddressGP, rawPrefix: 0xf3},
+		"UMWAIT":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true, rawPrefix: 0xf2},
+		"TPAUSE":   {operand: amd64ImplicitSystemGP, inputs: amd64ImplicitAX | amd64ImplicitDX, writesCarry: true, rawPrefix: 0x66},
 	}
 	if !reflect.DeepEqual(amd64ImplicitSystemSpecs, want) {
 		t.Fatalf("implicit-system grammar = %+v, want %+v", amd64ImplicitSystemSpecs, want)

@@ -26,7 +26,7 @@ test('priority and remaining matrices partition all 64 shards exactly once', () 
   const remaining = shards(jobSection('discovered_library_corpus'));
   // Retain instruction/ABI regressions and the cache cleanup failure from
   // fork run 36509240233.
-  assert.deepEqual(priority, [5, 29, 36, 38, 42]);
+  assert.deepEqual(priority, [5, 29, 36, 38, 39, 42]);
   assert.deepEqual([...priority, ...remaining].sort((a, b) => a - b),
     Array.from({ length: 64 }, (_, index) => index));
   for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
@@ -45,6 +45,7 @@ test('failed exact versions rehash into priority shards', () => {
     'github.com/reddit/milvus/pkg/v3@v3.0.0-20260702082229-182134e29ebf',
     'github.com/apernet/hysteria/app/v2@v2.12.3',
     'github.com/HyNetwork/hysteria/app@v1.3.5',
+    'github.com/intel/ixl-go@v0.0.0-20260223204051-3e809238f558',
   ]) {
     const hash = createHash('sha256').update(exactVersion).digest();
     const shard = Number(hash.readBigUInt64BE(0) % 64n);
