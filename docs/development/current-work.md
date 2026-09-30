@@ -6,11 +6,13 @@ Read [validation](validation.md) and [discovery verification](discovery-verifica
 
 ## Authority and evidence
 
-- Upstream xgo-dev PR 40 and fork cpunion PR 3 remain Draft. Push repairs only
-  to the fork PR 3 head, `codex/pr40-fork-ci-20260927`. Do not update its
-  upstream-connected base until current-head CI and exclusion review pass.
+- Upstream xgo-dev PR 40 remains Draft. Fork cpunion PR 3 was closed after
+  its CI passed; do not reopen it just to test subsequent changes. Stage this
+  batch in a new Draft PR against the fork's
+  `codex/expand-ecosystem-corpus-20260913` branch. Do not update that
+  upstream-connected branch until current-head CI and exclusion review pass.
 - Fork [run 36524259971, attempt 2](https://github.com/cpunion/plan9asm/actions/runs/36524259971)
-  passed all 126 jobs and all 64 discovery shards at source `fe028700`.
+  passed all 128 jobs and all 64 discovery shards at source `fe028700`.
   All raw reports were independently audited; local evidence commit
   `29d624c1` records its complete, verified assembly ledger.
 - That checkpoint proves only its frozen source and inventory. Importing new
