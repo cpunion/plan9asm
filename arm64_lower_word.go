@@ -11,6 +11,9 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	}
 
 	word := uint32(ins.Args[0].Imm)
+	if family, _, ok := decodeARM64RawFloatFamily(word); ok {
+		return family.lower(c, word)
+	}
 	if form, ok := decodeARM64RawException(word); ok {
 		return c.lowerRawException(form)
 	}
@@ -80,17 +83,8 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawDotProduct(word); ok {
 		return c.lowerRawDotProduct(form)
 	}
-	if form, ok := decodeARM64RawBFloatDot(word); ok {
-		return c.lowerRawBFloatDot(form)
-	}
-	if form, ok := decodeARM64RawBFloatMatrix(word); ok {
-		return c.lowerRawBFloatMatrix(form)
-	}
 	if form, ok := decodeARM64RawMatrixMultiply(word); ok {
 		return c.lowerRawMatrixMultiply(form)
-	}
-	if form, ok := decodeARM64RawFloatMultiplyLong(word); ok {
-		return c.lowerRawFloatMultiplyLong(form)
 	}
 	if form, ok := decodeARM64RawTableLookup(word); ok {
 		return c.lowerRawTableLookup(form)
@@ -152,98 +146,14 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawMLA(word); ok {
 		return c.lowerRawMLA(form)
 	}
-	if form, ok := decodeARM64RawCVTF(word); ok {
-		return c.lowerRawCVTF(form)
-	}
-	if form, ok := decodeARM64RawFMLA(word); ok {
-		return c.lowerRawFMLA(form)
-	}
-	if form, ok := decodeARM64RawHalfFMA(word); ok {
-		return c.lowerRawHalfFMA(form)
-	}
-	if form, ok := decodeARM64RawFMULByElement(word); ok {
-		return c.lowerRawFMULByElement(form)
-	}
-	if form, ok := decodeARM64RawScalarHalfUnary(word); ok {
-		return c.lowerRawScalarHalfUnary(form)
-	}
-	if form, ok := decodeARM64RawScalarVectorFCVTZ(word); ok {
-		return c.lowerRawScalarVectorFCVTZ(form)
-	}
-	if form, ok := decodeARM64RawScalarFloatBinary(word); ok {
-		return c.lowerRawScalarFloatBinary(form)
-	}
-	if form, ok := decodeARM64RawScalarFloatCompare(word); ok {
-		return c.lowerRawScalarFloatCompare(form)
-	}
-	if form, ok := decodeARM64RawScalarFloatSelect(word); ok {
-		return c.lowerRawScalarFloatSelect(form)
-	}
-	if form, ok := decodeARM64RawScalarFloatImmediate(word); ok {
-		return c.lowerRawScalarFloatImmediate(form)
-	}
-	if form, ok := decodeARM64RawScalarIntToFloat(word); ok {
-		return c.lowerRawScalarIntToFloat(form)
-	}
-	if form, ok := decodeARM64RawFixedIntToFloat(word); ok {
-		return c.lowerRawFixedIntToFloat(form)
-	}
-	if form, ok := decodeARM64RawFloatGPMove(word); ok {
-		return c.lowerRawFloatGPMove(form)
-	}
-	if form, ok := decodeARM64RawBFloatConvert(word); ok {
-		return c.lowerRawBFloatConvert(form)
-	}
 	if form, ok := decodeARM64RawSHA3(word); ok {
 		return c.lowerRawSHA3(form)
-	}
-	if form, ok := decodeARM64RawVectorFloatRound(word); ok {
-		return c.lowerRawVectorFloatRound(form)
-	}
-	if form, ok := decodeARM64RawVectorFloatNarrow(word); ok {
-		return c.lowerRawVectorFloatNarrow(form)
-	}
-	if form, ok := decodeARM64RawVectorFloatWiden(word); ok {
-		return c.lowerRawVectorFloatWiden(form)
-	}
-	if form, ok := decodeARM64RawFloatMinMaxAcross(word); ok {
-		return c.lowerRawFloatMinMaxAcross(form)
-	}
-	if form, ok := decodeARM64RawFADDP(word); ok {
-		return c.lowerRawFADDP(form)
-	}
-	if form, ok := decodeARM64RawFloatPairwiseMinMax(word); ok {
-		return c.lowerRawFloatPairwiseMinMax(form)
-	}
-	if form, ok := decodeARM64RawFloatBinary(word); ok {
-		return c.lowerRawFloatBinary(form)
-	}
-	if form, ok := decodeARM64RawReciprocalEstimate(word); ok {
-		return c.lowerRawReciprocalEstimate(form)
-	}
-	if form, ok := decodeARM64RawFSQRT(word); ok {
-		return c.lowerRawFSQRT(form)
-	}
-	if form, ok := decodeARM64RawFloatAbsNeg(word); ok {
-		return c.lowerRawFloatAbsNeg(form)
-	}
-	if form, ok := decodeARM64RawFloatCompare(word); ok {
-		return c.lowerRawFloatCompare(form)
 	}
 	if form, ok := decodeARM64RawLogical(word); ok {
 		return c.lowerRawLogical(form)
 	}
-	if form, ok := decodeARM64RawFloatImmediate(word); ok {
-		return c.lowerRawFloatImmediate(form)
-	}
 	if form, ok := decodeARM64RawModifiedImmediate(word); ok {
 		return c.lowerRawModifiedImmediate(form)
-	}
-	if form, ok := decodeARM64RawScalarFCVTToInt(word); ok {
-		return c.lowerRawScalarFCVTToInt(form)
-	}
-	if form, ok := decodeARM64RawFCVTZ(word); ok {
-		return c.lowerRawFCVTZ(form)
 	}
 	if form, ok := decodeARM64RawMoveWide(word); ok {
 		return c.lowerRawMoveWide(form)

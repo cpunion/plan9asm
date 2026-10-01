@@ -589,7 +589,9 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		stores := true
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
 			word := uint32(ins.Args[0].Imm)
-			if effects, ok := arm64RawSVEEffects(word); ok {
+			if _, effects, ok := decodeARM64RawFloatFamily(word); ok {
+				writes, stores, known = effects.gpWrites, false, true
+			} else if effects, ok := arm64RawSVEEffects(word); ok {
 				writes, stores, known = effects.gpWrites, effects.stores, true
 			} else {
 				writes, known = arm64RawPoolGPWrites(word)
