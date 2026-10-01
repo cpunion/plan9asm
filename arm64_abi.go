@@ -41,7 +41,11 @@ func (cursor *arm64ABIRegisterCursor) next(typ LLVMType) (Reg, error) {
 }
 
 func (c *arm64Ctx) loadABIRegisterValue(reg Reg, typ LLVMType) (string, error) {
-	raw, err := c.loadReg(reg)
+	width := 64
+	if typ == "float" {
+		width = 32
+	}
+	raw, err := c.loadRegisterWidth(reg, width)
 	if err != nil {
 		return "", err
 	}

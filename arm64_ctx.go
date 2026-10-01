@@ -8,17 +8,19 @@ import (
 )
 
 type arm64Ctx struct {
-	b        *strings.Builder
-	sig      FuncSig
-	resolve  func(string) string
-	sigs     map[string]FuncSig
-	annotate bool
+	b               *strings.Builder
+	sig             FuncSig
+	resolve         func(string) string
+	sigs            map[string]FuncSig
+	annotate        bool
+	goRegisterEntry bool
 
 	tmp int
 
-	blocks             []arm64Block
-	localControl       *arm64LocalControlPlan
-	currentInstruction int
+	blocks              []arm64Block
+	localControl        *arm64LocalControlPlan
+	currentInstruction  int
+	machineAvailability *arm64MachineAvailability
 
 	rawDataGlobals map[string]string // local source label -> LLVM global
 	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
@@ -92,6 +94,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		c.fpParams[s.Offset] = s
 	}
 	c.fpResults = append([]FrameSlot(nil), sig.Frame.Results...)
+	c.goRegisterEntry = strings.HasSuffix(fn.Sym, "<ABIInternal>") && sig.ARM64GoRegisterABI != nil
 	return c
 }
 
@@ -1047,6 +1050,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 		}
 	}
 	// Ensure arg regs exist.
+	if c.sig.ARM64GoRegisterABI != nil {
+		for _, slot := range append(append([]ARM64GoRegisterValue(nil), c.sig.ARM64GoRegisterABI.Params...), c.sig.ARM64GoRegisterABI.Results...) {
+			markReg(slot.Register)
+		}
+	}
 	if len(c.sig.ArgRegs) > 0 {
 		for i := 0; i < len(c.sig.Args) && i < len(c.sig.ArgRegs); i++ {
 			markReg(c.sig.ArgRegs[i])
@@ -1276,6 +1284,15 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 
 	// Map args -> the independent integer and floating-point ABIInternal banks,
 	// or to an explicit helper register assignment.
+	if c.goRegisterEntry {
+		for _, slot := range c.sig.ARM64GoRegisterABI.Params {
+			value := c.extractGoABIValue(c.sig.Args[slot.Index], fmt.Sprintf("%%arg%d", slot.Index), slot)
+			if err := c.storeABIRegisterValue(slot.Register, slot.Type, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if len(c.sig.ArgRegs) > 0 {
 		if len(c.sig.ArgRegs) != len(c.sig.Args) {
 			return fmt.Errorf("arm64 entry %q: %d explicit argument registers for %d arguments", c.sig.Name, len(c.sig.ArgRegs), len(c.sig.Args))
@@ -1494,6 +1511,7 @@ func llvmZeroValue(ty LLVMType) string {
 }
 
 func (c *arm64Ctx) loadReg(r Reg) (string, error) {
+	c.recordMachineRegister(r, 64, false)
 	if r == ZR {
 		return "0", nil
 	}
@@ -1501,6 +1519,10 @@ func (c *arm64Ctx) loadReg(r Reg) (string, error) {
 		r = SP
 	}
 	if _, ok := arm64ParseFReg(r); ok {
+		if flow := c.machineAvailability; flow != nil {
+			flow.suspended++
+			defer func() { flow.suspended-- }()
+		}
 		v, err := c.loadVReg(r)
 		if err != nil {
 			return "", err
@@ -1542,6 +1564,7 @@ func (c *arm64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 }
 
 func (c *arm64Ctx) storeReg(r Reg, v string) error {
+	c.recordMachineRegister(r, 64, true)
 	if r == ZR {
 		return nil
 	}
@@ -1564,6 +1587,7 @@ func (c *arm64Ctx) storeReg(r Reg, v string) error {
 }
 
 func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
+	c.recordMachineRegister(r, 128, false)
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
 		idx, ok = arm64ParseFReg(r)
@@ -1581,6 +1605,7 @@ func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 }
 
 func (c *arm64Ctx) storeVReg(r Reg, v string) error {
+	c.recordMachineRegister(r, arm64WholeScalableRegister, true)
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
 		idx, ok = arm64ParseFReg(r)

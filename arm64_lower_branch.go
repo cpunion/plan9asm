@@ -391,6 +391,7 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 	// Syscall stubs invoke runtime entersyscall/exitsyscall around SVC.
 	// llgo runtime does not require these scheduler hooks at this layer.
 	if callee == "runtime.entersyscall" || callee == "runtime.exitsyscall" {
+		c.recordMachineCall(nil)
 		return nil
 	}
 	csig, ok := c.sigs[callee]
@@ -398,13 +399,25 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 		// Default for external runtime helpers not discovered in this asm file.
 		csig = FuncSig{Name: callee, Ret: Void}
 	}
-	if internalABI && (len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args)) {
-		return fmt.Errorf("%w: ARM64 ABIInternal call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
+	if internalABI {
+		if csig.ARM64GoRegisterABI != nil {
+			if err := arm64ValidateGoRegisterABI(csig); err != nil {
+				return err
+			}
+		} else if len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args) {
+			return fmt.Errorf("%w: ARM64 ABIInternal call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
+		}
 	}
 	callee = funcSigSymbol(callee, csig)
 	stackABI := !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Params) != 0
 	var args []string
-	if stackABI {
+	if internalABI && csig.ARM64GoRegisterABI != nil {
+		var err error
+		args, err = c.goABIRegisterCallArgs(csig)
+		if err != nil {
+			return err
+		}
+	} else if stackABI {
 		var err error
 		args, err = c.abi0CallArgs(callee, csig)
 		if err != nil {
@@ -419,14 +432,34 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 	}
 	if csig.Ret == Void {
 		fmt.Fprintf(c.b, "  call void %s(%s)\n", llvmGlobal(callee), strings.Join(args, ", "))
+		if internalABI {
+			c.recordMachineCall(csig.ARM64GoRegisterABI)
+		} else {
+			c.recordMachineCall(nil)
+		}
 		return nil
 	}
 	t := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = call %s %s(%s)\n", t, csig.Ret, llvmGlobal(callee), strings.Join(args, ", "))
-	if !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Results) != 0 {
-		return c.storeABI0CallResult(callee, csig, "%"+t)
+	if internalABI && csig.ARM64GoRegisterABI != nil {
+		if err := c.storeGoABIRegisterResult(csig, "%"+t); err != nil {
+			return err
+		}
+		c.recordMachineCall(csig.ARM64GoRegisterABI)
+		return nil
 	}
-	return c.storeABIRegisterResult(callee, csig.Ret, "%"+t)
+	if !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Results) != 0 {
+		if err := c.storeABI0CallResult(callee, csig, "%"+t); err != nil {
+			return err
+		}
+		c.recordMachineCall(nil)
+		return nil
+	}
+	if err := c.storeABIRegisterResult(callee, csig.Ret, "%"+t); err != nil {
+		return err
+	}
+	c.recordMachineCall(nil)
+	return nil
 }
 
 func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
@@ -446,13 +479,23 @@ func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
 		// If we don't have an explicit signature, fall back to caller signature.
 		csig = c.sig
 		csig.Name = callee
+		csig.ARM64GoRegisterABI = nil
 	}
-	if internalABI && (len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args)) {
-		return fmt.Errorf("%w: ARM64 ABIInternal tail call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
+	if c.goRegisterEntry && !internalABI && len(csig.ArgRegs) == 0 {
+		return arm64GoABIContext("register entry tail to %q needs an explicit target register or cross-ABI frame contract", callee)
+	}
+	if internalABI {
+		if csig.ARM64GoRegisterABI != nil {
+			if err := arm64ValidateGoRegisterABI(csig); err != nil {
+				return err
+			}
+		} else if len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args) {
+			return fmt.Errorf("%w: ARM64 ABIInternal tail call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
+		}
 	}
 	callee = funcSigSymbol(callee, csig)
 
-	useLLVMArgs := len(csig.ArgRegs) == 0 && len(csig.Args) == len(c.sig.Args) && csig.Ret == c.sig.Ret
+	useLLVMArgs := !c.goRegisterEntry && !internalABI && len(csig.ArgRegs) == 0 && len(csig.Args) == len(c.sig.Args) && csig.Ret == c.sig.Ret
 	if useLLVMArgs {
 		for i := range csig.Args {
 			if csig.Args[i] != c.sig.Args[i] {
@@ -465,6 +508,12 @@ func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
 	if useLLVMArgs {
 		for i, typ := range csig.Args {
 			args = append(args, fmt.Sprintf("%s %%arg%d", typ, i))
+		}
+	} else if internalABI && csig.ARM64GoRegisterABI != nil {
+		var err error
+		args, err = c.goABIRegisterCallArgs(csig)
+		if err != nil {
+			return err
 		}
 	} else if !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Params) != 0 {
 		var err error

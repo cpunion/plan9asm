@@ -3,6 +3,7 @@ package plan9asm
 import "fmt"
 
 func (c *arm64Ctx) loadZReg(index int) (string, error) {
+	c.recordMachineRegister(Reg(fmt.Sprintf("Z%d", index)), arm64WholeScalableRegister, false)
 	slot := c.zRegSlot[index]
 	if slot == "" {
 		return "", fmt.Errorf("arm64 SVE Z%d was not allocated", index)
@@ -13,6 +14,7 @@ func (c *arm64Ctx) loadZReg(index int) (string, error) {
 }
 
 func (c *arm64Ctx) storeZReg(index int, value string) error {
+	c.recordMachineRegister(Reg(fmt.Sprintf("Z%d", index)), arm64WholeScalableRegister, true)
 	slot := c.zRegSlot[index]
 	if slot == "" {
 		return fmt.Errorf("arm64 SVE Z%d was not allocated", index)
@@ -22,6 +24,7 @@ func (c *arm64Ctx) storeZReg(index int, value string) error {
 }
 
 func (c *arm64Ctx) loadPReg(index int) (string, error) {
+	c.recordMachineRegister(Reg(fmt.Sprintf("P%d", index)), arm64WholeScalableRegister, false)
 	slot := c.pRegSlot[index]
 	if slot == "" {
 		return "", fmt.Errorf("arm64 SVE P%d was not allocated", index)
@@ -32,6 +35,7 @@ func (c *arm64Ctx) loadPReg(index int) (string, error) {
 }
 
 func (c *arm64Ctx) storePReg(index int, value string) error {
+	c.recordMachineRegister(Reg(fmt.Sprintf("P%d", index)), arm64WholeScalableRegister, true)
 	slot := c.pRegSlot[index]
 	if slot == "" {
 		return fmt.Errorf("arm64 SVE P%d was not allocated", index)
@@ -41,6 +45,7 @@ func (c *arm64Ctx) storePReg(index int, value string) error {
 }
 
 func (c *arm64Ctx) loadPNReg(index int) (string, error) {
+	c.recordMachineRegister(Reg(fmt.Sprintf("PN%d", index)), arm64WholeScalableRegister, false)
 	slot := c.pnRegSlot[index]
 	if slot == "" {
 		return "", fmt.Errorf("arm64 SVE PN%d was not allocated", index)
@@ -51,6 +56,7 @@ func (c *arm64Ctx) loadPNReg(index int) (string, error) {
 }
 
 func (c *arm64Ctx) storePNReg(index int, value string) error {
+	c.recordMachineRegister(Reg(fmt.Sprintf("PN%d", index)), arm64WholeScalableRegister, true)
 	slot := c.pnRegSlot[index]
 	if slot == "" {
 		return fmt.Errorf("arm64 SVE PN%d was not allocated", index)

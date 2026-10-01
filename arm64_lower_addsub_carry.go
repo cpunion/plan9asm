@@ -58,6 +58,7 @@ func (c *arm64Ctx) lowerARM64AddSubCarry32(op Op, ins Instr, leftOperand, destin
 		return true, false, err
 	}
 	carryFlag := c.newTmp()
+	c.recordMachineRegister(Reg(c.flagsCSlot), 1, false)
 	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", carryFlag, c.flagsCSlot)
 	carryOrBorrow := "%" + carryFlag
 	if subtract {
@@ -116,6 +117,7 @@ func (c *arm64Ctx) lowerARM64AddSubCarry64(op Op, ins Instr, leftOperand, destin
 		return true, false, err
 	}
 	carryFlag := c.newTmp()
+	c.recordMachineRegister(Reg(c.flagsCSlot), 1, false)
 	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", carryFlag, c.flagsCSlot)
 	carryOrBorrow := "%" + carryFlag
 	if subtract {

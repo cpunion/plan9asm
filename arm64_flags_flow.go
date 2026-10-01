@@ -36,6 +36,10 @@ func newARM64FlagFlow(blocks []arm64Block) *arm64FlagFlow {
 }
 
 func (c *arm64Ctx) recordARM64FlagFlowEdges(targets ...string) {
+	if flow := c.machineAvailability; flow != nil {
+		block := &flow.blocks[flow.current]
+		block.successors = append(block.successors, targets...)
+	}
 	if c.flagFlow != nil {
 		block := &c.flagFlow.blocks[c.flagFlow.current]
 		block.successors = append(block.successors, targets...)

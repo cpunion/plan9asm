@@ -48,6 +48,14 @@ type FuncSig struct {
 	// where helper expects inputs in a custom register assignment.
 	ArgRegs []Reg
 
+	// ARM64GoRegisterABI is an explicit, complete Go ABIInternal register
+	// contract. Nil does not assert a register ABI, even with a classic Frame.
+	// The Go binding derives this only from an actual declaration combined
+	// with an explicit source ABIInternal selector. Manual callers must supply
+	// equivalent evidence. Stack-assigned values are not modeled by this
+	// register-only contract. ArgRegs retains its separate custom ABI meaning.
+	ARM64GoRegisterABI *ARM64GoRegisterABI
+
 	// Frame provides a minimal stack-frame model for resolving name+off(FP)
 	// references in Go/Plan9 assembly into LLVM function args/returns.
 	//

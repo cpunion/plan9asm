@@ -76,7 +76,7 @@ func (c *arm64Ctx) lowerScalarFloatMove(op Op, ins Instr) (ok bool, terminated b
 	case src.Kind == OpImm:
 		value, err = arm64FloatImmediateBits(src, bits)
 	case srcF || srcGP:
-		value, err = c.loadReg(src.Reg)
+		value, err = c.loadRegisterWidth(src.Reg, bits)
 	case srcMem:
 		value, err = c.loadScalarFloatMemory(src, bits, postIndex, preIndex)
 	}

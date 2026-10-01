@@ -1003,7 +1003,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if resolved == "" {
 			continue
 		}
-		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, strings.HasSuffix(fn.Sym, "<ABIInternal>"))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1050,16 +1050,26 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		}
 	}
 
+	var targetSigErr error
 	addTargetSig := func(sym string, caller plan9asm.FuncSig, tail bool) {
 		if sym == "" {
 			return
 		}
+		internal := goarch == "arm64" && strings.HasSuffix(sym, "<ABIInternal>")
 		sym = stripABISuffix(sym)
 		resolved := resolve(sym)
 		if resolved == "" {
 			return
 		}
-		if _, ok := sigs[resolved]; ok {
+		if existing, ok := sigs[resolved]; ok {
+			if internal && declaredSigs[resolved] && existing.ARM64GoRegisterABI == nil {
+				fs, _, _, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, true)
+				if err != nil {
+					targetSigErr = err
+				} else {
+					sigs[resolved] = fs
+				}
+			}
 			return
 		}
 		if goarch == "wasm" {
@@ -1069,7 +1079,11 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 				return
 			}
 		}
-		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, internal)
+		if internal && err != nil {
+			targetSigErr = err
+			return
+		}
 		if err == nil && ok {
 			sigs[resolved] = fs
 			declaredSigs[resolved] = true
@@ -1079,6 +1093,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if tail && caller.Name != "" {
 			copySig := caller
 			copySig.Name = resolved
+			copySig.ARM64GoRegisterABI = nil
 			sigs[resolved] = copySig
 			return
 		}
@@ -1113,10 +1128,15 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 			if tail && declaredSigs[callerResolved] && fallbackAsmSigs[targetResolved] {
 				candidate := caller
 				candidate.Name = targetResolved
+				candidate.ARM64GoRegisterABI = nil
 				declaredTailCallers[targetResolved] = append(declaredTailCallers[targetResolved], candidate)
 				declaredTailCallerFuncs[targetResolved] = append(declaredTailCallerFuncs[targetResolved], fn)
 			}
 		}
+	}
+
+	if targetSigErr != nil {
+		return nil, nil, targetSigErr
 	}
 
 	// A declaration-free local helper reached only through tail transfers from
@@ -1357,7 +1377,7 @@ func sortOffsets(m map[int64]struct{}) []int64 {
 	return out
 }
 
-func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes) (plan9asm.FuncSig, int64, bool, error) {
+func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes, internal ...bool) (plan9asm.FuncSig, int64, bool, error) {
 	declName := strings.TrimPrefix(sym, "·")
 	if strings.ContainsRune(declName, '·') {
 		key := strings.ReplaceAll(sym, "∕", "/")
@@ -1405,7 +1425,7 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 		return plan9asm.FuncSig{}, 0, false, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
 	ret := tupleRetType(retTys)
-	return plan9asm.FuncSig{
+	fs := plan9asm.FuncSig{
 		Name: resolved,
 		Args: args,
 		Ret:  ret,
@@ -1413,7 +1433,14 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 			Params:  frameParams,
 			Results: frameResults,
 		},
-	}, argSize, true, nil
+	}
+	if goarch == "arm64" && len(internal) != 0 && internal[0] {
+		fs.ARM64GoRegisterABI, err = plan9asm.DeriveARM64GoRegisterABI(fn, fs)
+		if err != nil {
+			return plan9asm.FuncSig{}, 0, false, err
+		}
+	}
+	return fs, argSize, true, nil
 }
 
 func tupleRetType(ts []plan9asm.LLVMType) plan9asm.LLVMType {

@@ -358,7 +358,7 @@ func (c *arm64Ctx) evalF32(op Operand) (string, error) {
 	if op.Kind != OpReg {
 		return "", fmt.Errorf("arm64: unsupported f32 operand %s", op.String())
 	}
-	v64, err := c.loadReg(op.Reg)
+	v64, err := c.loadRegisterWidth(op.Reg, 32)
 	if err != nil {
 		return "", err
 	}

@@ -889,6 +889,22 @@ func emitARM64Prelude(b *strings.Builder) {
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
 	sourceGoFrame := arm64SourceGoFrame(fn)
+	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+		if sig.ARM64GoRegisterABI != nil {
+			if err := arm64ValidateGoRegisterABI(sig); err != nil {
+				return err
+			}
+			for _, ins := range fn.Instrs {
+				for _, arg := range ins.Args {
+					if arg.Kind == OpFP || arg.Kind == OpFPAddr {
+						return arm64GoABIContext("%q references FP spill storage not described by its register-only contract", sig.Name)
+					}
+				}
+			}
+		} else if len(sig.ArgRegs) == 0 || len(sig.ArgRegs) != len(sig.Args) {
+			return arm64GoABIContext("entry %q needs a complete typed register contract", sig.Name)
+		}
+	}
 	var err error
 	fn, err = normalizeARM64NamedPCRelative(fn)
 	if err != nil {
@@ -936,12 +952,20 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}
+	c.machineAvailability = newARM64MachineAvailability(c)
 	fmt.Fprintf(b, "  br label %%%s\n", arm64LLVMBlockName(c.blocks[0].name))
 	if err := c.lowerBlocks(); err != nil {
 		return err
 	}
 	fmt.Fprintf(b, "\n%s:\n", arm64LLVMBlockName(c.localControl.outer))
+	if flow := c.machineAvailability; flow != nil {
+		flow.current = len(c.blocks)
+		flow.source = "typed caller return"
+	}
 	if err := c.lowerRET(); err != nil {
+		return err
+	}
+	if err := c.machineAvailability.validate(); err != nil {
 		return err
 	}
 
@@ -969,13 +993,24 @@ func (c *arm64Ctx) lowerBlocks() error {
 		blk := c.blocks[bi]
 		c.flagFlow.current = bi
 		c.flagsWritten = false
+		if flow := c.machineAvailability; flow != nil {
+			flow.current = bi
+		}
 		fmt.Fprintf(c.b, "\n%s:\n", arm64LLVMBlockName(blk.name))
 
 		terminated := false
 		for ii, ins := range blk.instrs {
 			c.currentInstruction = ii
 			c.emitSourceComment(ins)
+			start := c.b.Len()
+			if flow := c.machineAvailability; flow != nil {
+				flow.source, flow.skipReads = ins.Raw, arm64MachineZeroInputs(ins)
+			}
 			term, err := c.lowerInstr(bi, ins, emitBr, emitCondBr)
+			c.recordMachineOpaqueIR(start, ins)
+			if flow := c.machineAvailability; flow != nil {
+				flow.skipReads = false
+			}
 			if err != nil {
 				return err
 			}
@@ -1484,6 +1519,18 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 }
 
 func (c *arm64Ctx) lowerRET() error {
+	if c.goRegisterEntry {
+		if c.sig.Ret == Void {
+			c.b.WriteString("  ret void\n")
+			return nil
+		}
+		value, err := c.collectGoABIValue(c.sig.Ret, c.sig.ARM64GoRegisterABI.Results)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.b, "  ret %s %s\n", c.sig.Ret, value)
+		return nil
+	}
 	// Prefer classic Go asm return slots if present; many stdlib asm functions
 	// never materialize the return value in R0 and only store to ret+off(FP).
 	if len(c.fpResults) == 0 {

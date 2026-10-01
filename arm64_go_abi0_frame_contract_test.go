@@ -20,12 +20,18 @@ func TestARM64DeclaredGoABIInternalNeedsRegisterContract(t *testing.T) {
 		requireARM64GoABIInternalObject(t, source)
 		tr, err := TranslateGoModule(pkg, []byte(source), GoModuleOptions{
 			GOARCH: "arm64", ResolveSym: func(sym string) string { return strings.TrimPrefix(goStripABISuffix(sym), "·") },
+			// A manual classic ABI0 frame has no standard register contract.
+			// Actual declarations plus selectors now derive one independently;
+			// overriding that evidence must not silently gain a register ABI.
+			ManualSig: func(name string) (FuncSig, bool) {
+				return sigWithClassicFrame("X", []LLVMType{I64}, I64), name == "X"
+			},
 		})
 		if err == nil {
 			tr.Module.Dispose()
 		}
 		if !errors.Is(err, ErrProbeNeedsContext) {
-			t.Errorf("%s: a Go ABI0 declaration cannot prove an explicit register entry: %v", branch, err)
+			t.Errorf("%s: a manual ABI0 frame cannot prove an explicit register entry: %v", branch, err)
 		}
 	}
 }

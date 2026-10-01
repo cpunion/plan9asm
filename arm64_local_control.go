@@ -714,7 +714,32 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	}
 	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
 	mayWriteFrame := !known || len(state.escaped) != 0
+	internal := strings.HasSuffix(strings.TrimSuffix(operand.Sym, "(SB)"), "<ABIInternal>")
+	if internal && sig.ARM64GoRegisterABI != nil {
+		// The classic ABI0 Frame is not the location of an explicit
+		// ABIInternal call's values. Inspect every typed scalar register leaf,
+		// including pointers nested within aggregates. This only invalidates
+		// possible aliases; it asserts no ownership or register preservation.
+		if err := arm64ValidateGoRegisterABI(sig); err != nil {
+			mayWriteFrame = true
+		} else {
+			for _, param := range sig.ARM64GoRegisterABI.Params {
+				value := arm64ControlRead(state.regs, param.Register)
+				state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
+				returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
+				mayWriteFrame = mayWriteFrame || param.Type == Ptr
+				for token := range value {
+					if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
+						mayWriteFrame = true
+					}
+				}
+			}
+		}
+	}
 	for index := range sig.Args {
+		if internal && sig.ARM64GoRegisterABI != nil {
+			break
+		}
 		var value arm64ControlValue
 		if len(sig.Frame.Params) != 0 && len(sig.ArgRegs) == 0 {
 			for _, param := range sig.Frame.Params {
@@ -752,6 +777,14 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		}
 	}
 	if !known {
+		return
+	}
+	if internal && sig.ARM64GoRegisterABI != nil {
+		for _, result := range sig.ARM64GoRegisterABI.Results {
+			if !isARM64ABIFloatingType(result.Type) {
+				state.regs[result.Register] = returnValue
+			}
+		}
 		return
 	}
 	if len(sig.Frame.Results) == 0 {

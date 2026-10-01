@@ -326,6 +326,12 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		if err != nil {
 			return err
 		}
+		if b.goarch == "arm64" && strings.HasSuffix(textSym, "<ABIInternal>") {
+			fs.ARM64GoRegisterABI, err = DeriveARM64GoRegisterABI(fn, fs)
+			if err != nil {
+				return err
+			}
+		}
 		b.sigs[resolved] = fs
 	}
 	return nil
@@ -417,6 +423,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				// via ManualSig when the inferred signature is not identical.
 				fs := callerSig
 				fs.Name = targetResolved
+				// A borrowed scalar signature is not a declaration-backed Go
+				// register-entry proof for the unresolved helper.
+				fs.ARM64GoRegisterABI = nil
 				b.sigs[targetResolved] = fs
 				continue
 			}
@@ -434,12 +443,13 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 }
 
 func (b *goSigBuilder) addGoDeclSig(sym string) error {
+	internal := b.goarch == "arm64" && strings.HasSuffix(sym, "<ABIInternal>")
 	sym = goStripABISuffix(sym)
 	resolved := b.resolve(sym)
 	if resolved == "" {
 		return nil
 	}
-	if _, ok := b.sigs[resolved]; ok {
+	if _, ok := b.sigs[resolved]; ok && !internal {
 		return nil
 	}
 	if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
@@ -477,6 +487,12 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, withFrame)
 	if err != nil {
 		return err
+	}
+	if internal {
+		fs.ARM64GoRegisterABI, err = DeriveARM64GoRegisterABI(fn, fs)
+		if err != nil {
+			return err
+		}
 	}
 	b.sigs[resolved] = fs
 	return nil
