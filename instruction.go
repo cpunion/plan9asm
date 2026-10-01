@@ -444,7 +444,20 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 
-	err := probeInstructionSequence(arch, goarch, []Instr{ins})
+	instrs := []Instr{ins}
+	op, _, _, _ := armDecodeOp(string(ins.Op))
+	if arch == ArchARM && (op == "ADC" || op == "SBC" || op == "RSC") {
+		// A single-form coverage fixture may supply the ordinary implicit
+		// carry-family input with real source. CMP preserves every GPR
+		// and defines all NZCV bits, unlike invented entry flag slots.
+		// Do not apply this to other native predicates, a CPSR read, or full
+		// source sequences, which retain their independently checked context.
+		instrs = append([]Instr{{
+			Op: "CMP", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpReg, Reg: "R0"}},
+			Raw: "CMP R0,R0 // explicit single-instruction probe flags fixture",
+		}}, instrs...)
+	}
+	err := probeInstructionSequence(arch, goarch, instrs)
 	if arch == ArchARM && ins.Op == OpWORD && err != nil {
 		return fmt.Errorf("%w: %s requires surrounding instruction, register, and control-flow state: %v", ErrProbeNeedsContext, ins.Raw, err)
 	}
