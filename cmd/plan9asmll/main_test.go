@@ -1370,6 +1370,20 @@ func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testi
 var packedFamilySpecs = map[string]int{
 	"VTABLEOP": 1,
 }
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package sample\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(dir, "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := supported["VTABLEOP"]; !ok {
+		t.Fatal("package-level table-driven opcode was not extracted")
+	}
+}
 
 func TestExtractSupportedOpsFindsARMShifterAndMultiplySpecifications(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
@@ -1384,20 +1398,6 @@ func TestExtractSupportedOpsFindsARMShifterAndMultiplySpecifications(t *testing.
 		if _, ok := supported[op]; !ok {
 			t.Errorf("ARM typed family omitted supported opcode %s", op)
 		}
-	}
-}
-`), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package sample\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	supported, err := extractSupportedOps(dir, "amd64")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := supported["VTABLEOP"]; !ok {
-		t.Fatal("package-level table-driven opcode was not extracted")
 	}
 }
 
