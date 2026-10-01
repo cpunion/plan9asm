@@ -158,10 +158,10 @@ func TestCPPInputsDetectsNewPreferredHeaderWithoutChangingOldBytes(t *testing.T)
 	}
 }
 
-func TestDiscoveryCandidateUnknownCPPIncludeFailsBeforeSourceNA(t *testing.T) {
+func TestDiscoveryCandidateGeneratedCPPNeedsActualMetadataToolNotSourceNA(t *testing.T) {
 	_, err := runFixtureCPPProductionCandidate(t, "#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-0\nRET\n")
-	if err == nil || !strings.Contains(err.Error(), "unbound CPP/generated include") {
-		t.Fatalf("production candidate consumed an unbound CPP source or reduced it to N/A: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "actual absolute metadata consumer executable (not N/A)") {
+		t.Fatalf("production candidate accepted a generated origin without its actual metadata tool or reduced it to N/A: %v", err)
 	}
 }
 

@@ -37,6 +37,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if !equalOrdinaryProfileDecisions(decisions, plan.ProfileDecisions) {
 		return fmt.Errorf("source-required actual profile decisions differ from original headers")
 	}
+	if err := validateDiscoveryGeneratedHeaderQueries(plan, profiles, eligible); err != nil {
+		return err
+	}
 	if len(eligible) != 0 && plan.CPPInputs == nil {
 		return fmt.Errorf("selected ordinary profile lacks original CPP source/registration inputs")
 	}
@@ -51,6 +54,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	}
 	executed, err := ordinaryProfileConfigurationKeys(result.BuildConfigurations, eligible)
 	if err != nil {
+		return err
+	}
+	if err := validateDiscoveryGeneratedHeaderExecution(plan, executed); err != nil {
 		return err
 	}
 	noPackage := make(map[discoveryProfileScope]bool)
@@ -136,7 +142,7 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		if err != nil {
 			return err
 		}
-		input := ordinaryProfileConsumerInput(plan, profile, module, "", files)
+		input := ordinaryProfileConsumerInput(plan, profile, module, "", files, proof.CustomTags)
 		if err := gotoolprofile.ValidateSelectionWithABI(input, proof, proof.CustomTags, true, allowedABI); err != nil {
 			return err
 		}
@@ -160,6 +166,30 @@ func validateOrdinaryProfileCPPConsumption(plan *discoveryOrdinarySelectionPlan,
 		unit, found := units[cpp.File]
 		if !found {
 			return fmt.Errorf("actual CPP source has no original graph: %s", cpp.File)
+		}
+		if plan.CPPInputs.Protocol == discoveryDeferredCPPInputsProtocol {
+			var selected *gotoolprofile.PackageProof
+			for index := range proof.Packages {
+				if containsTargetFeature(proof.Packages[index].SFiles, cpp.File) {
+					selected = &proof.Packages[index]
+				}
+			}
+			if selected == nil || selected.Macros == nil {
+				return fmt.Errorf("deferred CPP consumer lacks its actual selected package/macros")
+			}
+			var header *gotoolprofile.GeneratedHeaderProof
+			if proof.GeneratedHeaders != nil {
+				for index := range proof.GeneratedHeaders.Headers {
+					if proof.GeneratedHeaders.Headers[index].PackagePath == selected.PackagePath {
+						header = &proof.GeneratedHeaders.Headers[index]
+					}
+				}
+			}
+			wanted, err := discoveryDeferredCPPConsumption(plan.CPPInputs, unit, header, selected.Macros.Defines)
+			if err != nil || !reflect.DeepEqual(wanted, cpp.Inputs) {
+				return fmt.Errorf("actual deferred CPP consumption differs from source-order replay: %s: %v", cpp.File, err)
+			}
+			continue
 		}
 		wanted := map[string]string{"module/" + unit.File: plan.CPPInputs.Sources["module/"+unit.File].SHA256}
 		for _, included := range unit.Includes {
@@ -196,7 +226,7 @@ func ordinaryProfileConfigurationKeys(configs []discoveryBuildConfiguration, eli
 	return keys, nil
 }
 
-func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, module, sourceRoot string, files []string) *gotoolprofile.ConsumerInput {
+func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, module, sourceRoot string, files []string, customTags ...[]string) *gotoolprofile.ConsumerInput {
 	input := &gotoolprofile.ConsumerInput{
 		Protocol: gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
 		Module: module, Version: plan.Version, SourceModule: plan.Module,
@@ -215,6 +245,20 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 	}
 	for _, source := range plan.Sources {
 		input.Headers[source.File] = source.Header
+	}
+	for file, digest := range plan.GeneratedGoSources {
+		if prior := input.Sources[file]; prior != "" && prior != digest {
+			input.Sources[file] = "" // Reject conflicting original/source snapshots.
+		} else {
+			input.Sources[file] = digest
+		}
+	}
+	var tags []string
+	if len(customTags) == 1 {
+		tags = customTags[0]
+	}
+	if metadata, err := ordinaryGeneratedMetadata(plan, profile.ID, files, tags); err == nil {
+		input.GeneratedHeaders = metadata
 	}
 	if plan.CPPInputs != nil {
 		for id, source := range plan.CPPInputs.Sources {

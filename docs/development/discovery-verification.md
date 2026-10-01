@@ -277,17 +277,26 @@ and presence must match the selected-types emitter, not only referenced offsets.
 The compact `actual_go_asmhdr_full_definitions_v1` witness retains package/source
 roles, language/target/profile identity, complete ImportMap and dependency source
 and export hashes, actual header/object hashes and canonical full definitions.
-Offline replay relies on frozen producer provenance; production must compare
-the actual compiler bytes and full definitions independently. This query alone
-does not resolve discovery's generated-include scope or branch coverage.
+Offline replay relies on frozen producer provenance; production compares
+the actual compiler bytes and full definitions independently. Metadata queries
+alone never discharge a translation scope.
 An explicit consumer input may register this metadata for a later translation.
 That consumer independently reloads the same source/profile/import roles and
 recompiles the full header before translating; self-consistent changed JSON is
 not accepted. Effective header bytes use deterministic full definitions, with
 an explicit `generated/<package>/go_asm.h` CPP origin rather than ZIP/tool origin.
 Active includes use source-order Go package-directory search; inactive includes
-do not enter the consumption graph. Discovery still needs its own deferred raw
-registration and bounded profile closure before these inputs can be produced.
+do not enter the consumption graph. Discovery's deferred-source protocol retains
+every raw include/condition, including unresolved inactive edges. Raw registration
+and actual-profile selection must converge within eight iterations. Unknown
+generated presence cannot hide nested CPU conditions: bounded legal proposals
+are observed before per-package headers decide actual consumption. After actual
+Go export/asmdecl checks, each executed package/file/target/profile/tag scope with
+a generated origin records a metadata query and independently consumes it.
+Same-module imported Go inputs are hashed before loading, compared with the exact
+original ZIP, and guarded through final objects. Reports and ledger replay reject
+missing, duplicate, changed or unexecuted metadata scopes; no header is an empty
+stub and no query increases translation counts.
 Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
 after the actual Go assembler accepts the original source, creates a nonempty
 object, and emits an empty `-S` symbol/data listing under the same target,
@@ -333,7 +342,7 @@ Run+7 lands inside a CALL displacement after Go's four-byte prologue. GoJIT's
 sentinel entry and fixed private frame assumptions also require runtime review.
 These defects do not justify skipping ordinary instructions or other files.
 
-Schema 9 binds Git revision/content/dirty state, full ledger fingerprint,
+Schema 10 binds Git revision/content/dirty state, full ledger fingerprint,
 translator bytes/VCS metadata, matching Go build/runtime versions and LLVM 22
 version/llc bytes. Before/after capture detects mutations. All shards need
 identical provenance. Dirty builds are diagnostic-only; schema-2, stale tools,

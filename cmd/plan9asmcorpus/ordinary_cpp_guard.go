@@ -129,6 +129,15 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 			return &discoverySourceProofError{err}
 		}
 	}
+	for file, before := range plan.GeneratedGoSources {
+		if err := discoveryCPPRegularSource(moduleDir, filepath.Join(moduleDir, filepath.FromSlash(file))); err != nil {
+			return &discoverySourceProofError{err}
+		}
+		after, err := discoveryFeatureFileSHA256(filepath.Join(moduleDir, filepath.FromSlash(file)))
+		if err != nil || before != after {
+			return &discoverySourceProofError{fmt.Errorf("generated-header original imported Go source changed: %s: %v", file, err)}
+		}
+	}
 	return nil
 }
 

@@ -70,16 +70,36 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			return nil, nil, nil, nil, "", fmt.Errorf("actual CPP root/Go version differs from the source producer")
 		}
 		goRoot = actual["GOROOT"]
-		plan.CPPInputs, err = captureDiscoveryCPPInputs(plan, download.Dir, goRoot, files, ctx)
-		if err != nil {
-			return nil, nil, nil, nil, "", err
+		// Registration and profile selection reach a bounded fixed point
+		// before any Go rejection or translation can close a scope. Generated
+		// headers contain only object-like definitions, not new include edges;
+		// unknown presence conservatively retains legal CPU proposals here.
+		stable := false
+		for iteration := 0; iteration < 8; iteration++ {
+			plan.CPPInputs, err = captureDiscoveryDeferredCPPInputs(plan, download.Dir, goRoot, files, ctx)
+			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			if err := verifyDiscoveryCPPModuleZIP(plan.CPPInputs, plan, download.Zip); err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			profiles, err = captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, candidate.AsmFiles, cache)
+			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			_, selected, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			next := ordinaryProfileEligibleCPPFiles(selected)
+			if equalDiscoveryStrings(files, next) {
+				stable = true
+				break
+			}
+			files = uniqueSortedDiscoveryStrings(append(files, next...))
 		}
-		if err := verifyDiscoveryCPPModuleZIP(plan.CPPInputs, plan, download.Zip); err != nil {
-			return nil, nil, nil, nil, "", err
-		}
-		profiles, err = captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, candidate.AsmFiles, cache)
-		if err != nil {
-			return nil, nil, nil, nil, "", err
+		if !stable {
+			return nil, nil, nil, nil, "", fmt.Errorf("source/CPP/profile registration did not reach its bounded fixed point (not N/A)")
 		}
 	}
 	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)

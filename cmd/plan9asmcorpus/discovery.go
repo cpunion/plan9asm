@@ -2455,6 +2455,25 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				}
 				translations := make([]discoveryPendingTranslation, 0, len(units))
 				for _, unit := range units {
+					if activeProfile != nil && discoveryCPPFilesNeedGeneratedMetadata(ordinaryPlan.CPPInputs, unit.AsmFiles) {
+						if len(ordinaryPlan.GeneratedHeaders) >= 4096 {
+							return fmt.Errorf("actual generated-header queries exceed their explicit scope bound")
+						}
+						var metadata *gotoolprofile.MetadataProof
+						if err := guard(func() error {
+							var err error
+							metadata, err = captureDiscoveryGeneratedHeaderQuery(ctx, ordinaryPlan, download, *activeProfile,
+								buildConfiguration.BuildTags, discoveryPackageGroup{Pattern: unit.Patterns[0], AsmFiles: unit.AsmFiles},
+								workDir, operationEnv, cfg.Translator, invocationIndex)
+							return err
+						}); err != nil {
+							return fmt.Errorf("actual generated-header origin for %s on %s: %w", unit.Patterns[0], target, err)
+						}
+						ordinaryPlan.GeneratedHeaders = append(ordinaryPlan.GeneratedHeaders, discoveryGeneratedHeaderQuery{
+							Target: target, ProfileID: activeProfile.ID, BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
+							AsmFiles: append([]string(nil), unit.AsmFiles...), Metadata: metadata,
+						})
+					}
 					patternSet[unit.Patterns[0]] = true
 					reportPath := filepath.Join(workDir, fmt.Sprintf("matrix-report-%04d.json", invocationIndex))
 					outputIndex := invocationIndex
@@ -2471,7 +2490,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						reportPath,
 					)
 					if activeProfile != nil {
-						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, unit.AsmFiles)
+						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, unit.AsmFiles, buildConfiguration.BuildTags)
 						inputPath := filepath.Join(workDir, fmt.Sprintf("feature-input-%04d.json", invocationIndex))
 						data, err := json.Marshal(input)
 						if err != nil {
@@ -2545,7 +2564,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							return fmt.Errorf("actual profile consumer omitted its single target report")
 						}
 						proof := report.Targets[0].FeatureSelection
-						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, translation.Unit.AsmFiles)
+						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, translation.Unit.AsmFiles, buildConfiguration.BuildTags)
 						if err := gotoolprofile.ValidateSelectionWithABI(input, proof, buildConfiguration.BuildTags, true, allowedABI); err != nil {
 							return fmt.Errorf("actual package/profile/CPP/LLVM consumption: %w", err)
 						}
