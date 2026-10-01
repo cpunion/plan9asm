@@ -273,6 +273,13 @@ files selected by Go MatchFile. A file tested with baseline declarations is not
 evidence for declarations selected by another tag configuration. Do not spread
 one package's custom tags to unrelated packages or discard shared-file asmdecl
 diagnostics to make the scope denominator fit.
+Go also selects zero-byte `.s` siblings which Discovery does not inventory.
+Capture their original ZIP-bound hashes and selection headers with the actual
+package source roles. Such a sibling is accepted only with the exact empty-byte
+SHA-256 and an empty selection header; it does not add a CPP translation or
+LLVM output. Whitespace, comments and macro-empty nonzero files remain required
+translation scopes and cannot use this allowance. Missing hashes, changed
+original bytes and unregistered nonempty selected assembly fail closed.
 Ordinary profiles are noninstrumented: Go partner constraints impossible with
 `race`, `msan` and `asan` false do not propose profiles for otherwise ordinary
 assembly. Boolean/custom/CPU alternatives and negations remain selectable.

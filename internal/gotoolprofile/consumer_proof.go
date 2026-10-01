@@ -50,6 +50,10 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tags []string) (map[string]bool, map[string]PackageProof, error) {
 	selectedFiles, seenPackages := make(map[string]bool), make(map[string]bool)
 	filePackages := make(map[string]PackageProof)
+	requiredAssembly := make(map[string]bool)
+	for _, file := range input.AsmFiles {
+		requiredAssembly[file] = true
+	}
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
 		return nil, nil, err
@@ -113,6 +117,13 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 		for _, file := range pkg.SFiles {
 			if selectedFiles[file] || path.Ext(file) != ".s" {
 				return nil, nil, fmt.Errorf("duplicate/non-ASM actual selected file")
+			}
+			// Discovery does not inventory zero-byte assembly files, but Go
+			// still selects and compiles them with their ordinary package.
+			// Only those exact empty bytes may supplement the tested scope:
+			// comments, whitespace and macro-empty files are not zero bytes.
+			if !requiredAssembly[file] && (input.Sources[file] != bytesSHA256(nil) || input.Headers[file] != "") {
+				return nil, nil, fmt.Errorf("nonempty Go-selected assembly lies outside the tested scope: %s", file)
 			}
 			selectedFiles[file] = true
 			filePackages[file] = pkg

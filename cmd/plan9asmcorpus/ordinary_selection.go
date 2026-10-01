@@ -143,7 +143,8 @@ func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir stri
 				}
 			}
 			captured.Entries = append(captured.Entries, witness)
-			if kind == "file" && (packageDirs[dir] && strings.HasSuffix(entry.Name(), ".go") || entry.Name() == "go.mod") {
+			if kind == "file" && (packageDirs[dir] &&
+				(strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), ".s")) || entry.Name() == "go.mod") {
 				files[path.Join(dir, entry.Name())] = true
 			}
 		}
@@ -518,7 +519,8 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 			}
 			usedDirs[ancestor] = true
 			for name, kind := range entries {
-				if kind == "file" && (packageDirs[ancestor] && strings.HasSuffix(name, ".go") || name == "go.mod") {
+				if kind == "file" && (packageDirs[ancestor] &&
+					(strings.HasSuffix(name, ".go") || strings.HasSuffix(name, ".s")) || name == "go.mod") {
 					input := path.Join(ancestor, name)
 					if _, ok := sources[input]; !ok {
 						return nil, nil, fmt.Errorf("directory listing omits source bytes for %s", input)
