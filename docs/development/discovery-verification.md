@@ -431,6 +431,11 @@ exception witnesses remain exact; only host ToolTags unreferenced by every
 saved source constraint are ignored. This private projection is not evidence
 and cannot pass a report reader. Within one run, shards still require identical
 complete physical provenance. Old reports cannot be upgraded by relabeling.
+Generated-header comparison retains full definition names/values/presence,
+selected Go and dependency sources, ImportMap, language and package roles.
+Only independently verified compile/header/object and dependency-export byte
+hashes are projected out; producer and consumer exports remain bound within
+each original snapshot. The projection never repairs missing metadata.
 
 ## Traffic and cleanup
 

@@ -7,6 +7,8 @@ import (
 	"go/build/constraint"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 // This private comparison view is never evidence and cannot pass a report or
@@ -67,6 +69,33 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 		*id = mapped
 		return nil
 	}
+	projectMetadata := func(metadata *gotoolprofile.MetadataProof) error {
+		if metadata == nil {
+			return nil
+		}
+		if err := replaceID(&metadata.ProfileID); err != nil {
+			return err
+		}
+		for index := range metadata.Packages {
+			if err := replaceID(&metadata.Packages[index].Macros.FeatureID); err != nil {
+				return err
+			}
+		}
+		for index := range metadata.Headers {
+			header := &metadata.Headers[index]
+			if err := replaceID(&header.ProfileID); err != nil {
+				return err
+			}
+			// Both complete originals were independently verified first.
+			// Full definitions, selected sources, imports, role, language and
+			// target remain exact; only physical compiler/archive bytes differ.
+			header.CompileToolSHA256, header.HeaderSHA256, header.ObjectSHA256 = "", "", ""
+			for index := range header.Imports {
+				header.Imports[index].ExportSHA256 = ""
+			}
+		}
+		return nil
+	}
 	for index := range result.Candidates {
 		candidate := &result.Candidates[index]
 		for index := range candidate.FeatureProfiles {
@@ -80,6 +109,18 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		if plan := candidate.OrdinarySelectionPlan; plan != nil {
+			for index := range plan.GeneratedHeaders {
+				query := &plan.GeneratedHeaders[index]
+				if err := replaceID(&query.ProfileID); err != nil {
+					return result, err
+				}
+				if err := projectMetadata(query.Metadata); err != nil {
+					return result, err
+				}
+			}
+			if err := sortSemanticRows(plan.GeneratedHeaders); err != nil {
+				return result, err
+			}
 			if metadata := plan.ProxyGoMod; metadata != nil {
 				// Each original inclusion/signature was verified first. Tree
 				// checkpoints may advance between hosts; exact authenticated
@@ -127,6 +168,9 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		for _, proof := range candidate.FeatureConsumption {
+			if err := projectMetadata(proof.GeneratedHeaders); err != nil {
+				return result, err
+			}
 			if err := replaceID(&proof.ProfileID); err != nil {
 				return result, err
 			}
