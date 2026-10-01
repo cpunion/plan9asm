@@ -5,7 +5,7 @@
 {"module":"github.com/VinuChain/go-vinu","version":"v1.9.6","status":"pending"}
 {"module":"github.com/clawdbuddy/wireguard-go","version":"v0.0.1","status":"pending"}
 {"module":"github.com/consulo/delve","version":"v0.0.0-20260424204139-811a939f9b61","status":"pending"}
-{"module":"github.com/dominikh/avo","version":"v0.0.0-20260314015840-88ad9c81f33f","status":"failed"}
+{"module":"github.com/dominikh/avo","version":"v0.0.0-20260314015840-88ad9c81f33f","status":"pending"}
 {"module":"github.com/donge/coregex","version":"v0.0.0-20260515171637-2f994d508532","status":"pending"}
 {"module":"github.com/dyhkwong/v2ray-core/v5","version":"v5.50.0","status":"pending"}
 {"module":"github.com/nlpodyssey/spago","version":"v1.1.0","status":"pending"}

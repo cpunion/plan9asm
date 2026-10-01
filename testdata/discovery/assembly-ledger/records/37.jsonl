@@ -12,7 +12,7 @@
 {"module":"github.com/jackysp/tidb","version":"v1.0.0","status":"pending"}
 {"module":"github.com/jueshancoder/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
 {"module":"github.com/kokizzu/gomacro","version":"v0.0.0-20260901205243-0df6c0cd20af","status":"pending"}
-{"module":"github.com/lemon4ksan/foundation","version":"v0.0.0-20260920191713-7709c688b2d7","status":"failed"}
+{"module":"github.com/lemon4ksan/foundation","version":"v0.0.0-20260920191713-7709c688b2d7","status":"pending"}
 {"module":"github.com/mmcloughlin/avo","version":"v0.6.0","status":"pending"}
 {"module":"github.com/modulix-systems/go-ethereum","version":"v0.0.1","status":"pending"}
 {"module":"github.com/open-telemetry/OpenTelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}

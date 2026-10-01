@@ -13,7 +13,7 @@
 {"module":"github.com/optimism-java/go-ethereum","version":"v0.0.0-20250122130636-a840e9b59f28","status":"pending"}
 {"module":"github.com/rink-labs/libevm","version":"v1.0.0","status":"pending"}
 {"module":"github.com/rockdaboot/opentelemetry-ebpf-profiler","version":"v0.0.202636","status":"pending"}
-{"module":"github.com/thesyncim/govpx","version":"v0.0.0-20260716224042-691cd0512c48","status":"failed"}
+{"module":"github.com/thesyncim/govpx","version":"v0.0.0-20260716224042-691cd0512c48","status":"pending"}
 {"module":"github.com/tianon-sso/golang-sys","version":"v0.0.0-20260825160830-e812f53e86a9","status":"pending"}
 {"module":"github.com/vernesong/mihomo-oix","version":"v0.0.0-20260914123646-76a3e9e39460","status":"pending"}
 {"module":"github.com/zhwn/gvisor","version":"v0.0.0-20260411170118-dee23e3a1f5e","status":"pending"}
