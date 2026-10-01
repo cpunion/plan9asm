@@ -265,8 +265,9 @@ func (state *arm64ControlState) write(op Operand, value arm64ControlValue, post 
 
 func (state *arm64ControlState) invalidateUnknownStore(destination Operand, value arm64ControlValue) {
 	state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
-	// The whole-function proof excludes forming/transporting this allocation's
-	// address. An incoming pointer or SB global therefore cannot name its SP
+	// The whole-function proof excludes escaping this allocation's address.
+	// Locally read affine aliases remain explicit SP tokens below; an incoming
+	// pointer or SB global therefore cannot name its SP
 	// cells. Explicit SP-relative indexing remains potentially overlapping even
 	// when the exact displacement is unknown; it must not borrow this exception.
 	preserveSP := state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped)

@@ -52,8 +52,12 @@ fail full translation before raw decoding. Preserve resolved named stack
 addresses; never replace missing constants or malformed addresses with zero.
 
 ARM64's fresh virtual SP allocation is disjoint from incoming pointers only
-when the complete original and normalized source excludes forming or escaping
-its address and entry transport cannot replace SP. Under that bounded proof,
+when the complete original and normalized source excludes escaping its address
+and entry transport cannot replace SP. A source CFG proof may admit exact
+affine GP temporaries used only for bounded, non-writeback local reads and
+fully overwritten before calls or returns. Mixed/different-offset joins keep
+may-frame taint; unknown effects, indexing, address stores and live call/result
+transport cannot wash it away. Under that bounded proof,
 ordinary pointer stores and escaped code-address values cannot corrupt saved
 SP cells. Explicit/aliased/indexed SP writes, FP contents, unknown callouts,
 raw/native effects and frame-address escape remain conservative. Audited

@@ -125,7 +125,7 @@ func TestARM64PrivateFrameCoalescedCallRetainsOriginalSourceProof(t *testing.T) 
 	for _, escape := range []bool{false, true} {
 		source := strings.Replace(arm64PrivateCallCopySource, "\tCALL runtime·memmove(SB)", "\tMOVD $1,R9\n\tCALL helper<>(SB)\n\tMOVB R9,(R6)", 1)
 		if escape {
-			source = strings.Replace(source, "\tMOVD R5, 8(RSP)", "\tMOVD RSP,R9\n\tMOVD R5, 8(RSP)", 1)
+			source = strings.Replace(source, "\tMOVD R5, 8(RSP)", "\tMOVD RSP,R10\n\tMOVD R10,(R6)\n\tMOVD R5, 8(RSP)", 1)
 		}
 		source += "TEXT helper<>(SB),NOSPLIT,$0\nADD $1,R9\nRET\n"
 		file, err := Parse(ArchARM64, source)

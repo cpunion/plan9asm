@@ -7,14 +7,15 @@ import "strings"
 // A typed call transports only its declared values, never that virtual SP as an
 // implicit ABI0 frame. Incoming pointers therefore cannot name this allocation
 // unless the source first exposes its address. This bounded, whole-function
-// check is deliberately stricter than a reaching-definition no-escape proof:
-// even dead address formation disables it, before and after raw normalization.
+// check also admits bounded affine temporaries used only by known local reads
+// and fully overwritten before calls/returns, before and after normalization.
+// Dead escapes and unknown effects still disable the complete source proof.
 // It does not establish ownership of incoming pointers or the separate FP slots.
 func arm64CallFrameUnexposed(fn Func) bool {
 	if !arm64SourceGoFrame(fn).present {
 		return false
 	}
-	text := false
+	text, affine := false, false
 	for _, original := range fn.Instrs {
 		if original.Op == OpTEXT {
 			_, rest := splitOpcode(original.Raw)
@@ -63,12 +64,12 @@ func arm64CallFrameUnexposed(fn Func) bool {
 			}
 			for _, reg := range registers {
 				if arm64StackReg(reg) {
-					return false
+					affine = true
 				}
 			}
 		}
 	}
-	return text
+	return text && (!affine || arm64PrivateFrameReadProof(fn))
 }
 
 // Entry transport is emitted after the fresh SP initialization. A custom
