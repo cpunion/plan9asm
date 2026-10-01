@@ -26,7 +26,9 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	result.Provenance = &discoveryCorpusProvenance{
 		GoVersion:    original.Provenance.GoVersion,
 		TranslatorGo: original.Provenance.TranslatorGo,
-		LLVMVersion:  original.Provenance.LLVMVersion,
+		// Each original already matched the anchored LLVM 22.x.y identity
+		// rule. Only the cross-host contract discards patch differences.
+		LLVMVersion: "22",
 	}
 	identities := make(map[string]string)
 	inventory := newDiscoveryFeatureInventory()

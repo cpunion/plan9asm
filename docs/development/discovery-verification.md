@@ -360,8 +360,9 @@ snapshot to a current pass after source or scan-ledger changes. cgo scan
 records remain in the separate inventory, never in this repository.
 
 CI compares two independently verified snapshots semantically, not by physical
-host tool or output-object bytes. The comparison preserves Go/LLVM versions,
-target/profile environment, registered sources/ASTs, marker/tag selection,
+host tool or output-object bytes. Each original retains its exact LLVM version
+and tool hash. The comparison preserves Go versions, the verified LLVM 22 major
+contract, target/profile environment, registered sources/ASTs, marker/tag selection,
 module/source/package role, CPP inputs and consumed macros, all four scope
 dimensions, source-diagnostic kinds/positions and exact outcomes/counts. Profile
 IDs are rebound to those retained semantics. Native-layout source/decision and

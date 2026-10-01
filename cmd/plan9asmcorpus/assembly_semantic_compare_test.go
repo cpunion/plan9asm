@@ -447,3 +447,46 @@ func TestAssemblyLedgerCrossHostComparisonDoesNotRelaxSingleRunProvenance(t *tes
 		t.Fatal("accepted different physical translator identities within a single report run")
 	}
 }
+
+func TestAssemblyLedgerSemanticLLVMContractUsesStrictlyVerifiedMajor(t *testing.T) {
+	stored := fixtureSemanticProgress(t)
+	current := cloneSemanticProgress(t, stored)
+	stored.Provenance.LLVMVersion = "22.1.8"
+	current.Provenance.LLVMVersion = "22.2.3"
+	for _, progress := range []discoveryProgress{stored, current} {
+		if err := requireVerifiedAssemblyLedger(progress); err != nil {
+			t.Fatalf("each LLVM 22 patch must independently retain valid provenance: %v", err)
+		}
+	}
+	if err := compareAssemblyLedgerProgress(stored, current); err != nil {
+		t.Fatalf("independently verified LLVM 22 patch versions share the supported contract: %v", err)
+	}
+	if stored.Provenance.LLVMVersion != "22.1.8" || current.Provenance.LLVMVersion != "22.2.3" {
+		t.Fatal("comparison overwrote the original exact LLVM version")
+	}
+	for _, version := range []string{"21.1.8", "23.1.0", "unknown", "LLVM version 22.1.8", "22.1.8-fallback", "22"} {
+		t.Run(version, func(t *testing.T) {
+			current := cloneSemanticProgress(t, stored)
+			current.Provenance.LLVMVersion = version
+			if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+				t.Fatal("unverified or unsupported LLVM version acquired a semantic comparison pass")
+			}
+		})
+	}
+}
+
+func TestAssemblyLedgerSingleRunStillRequiresExactLLVMVersion(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	name := filepath.Join(reports, "shard-0.json")
+	report, err := readDiscoveryCorpusReport(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report.Provenance.LLVMVersion = "22.2.3"
+	if err := writeDiscoveryCorpusReport(name, report); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2); err == nil {
+		t.Fatal("accepted mixed exact LLVM versions within one frozen run")
+	}
+}
