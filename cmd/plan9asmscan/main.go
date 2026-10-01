@@ -85,6 +85,7 @@ type report struct {
 	UnsupportedByForm []formReport          `json:"unsupported_by_form"`
 	OpcodeCatalog     []opcodeCatalogReport `json:"opcode_catalog,omitempty"`
 	EncoderCatalog    []encoderFormReport   `json:"encoder_form_catalog,omitempty"`
+	FrontendInventory *frontendInventory    `json:"frontend_inventory,omitempty"`
 	ParseErrs         []parseErr            `json:"parse_errs,omitempty"`
 }
 
@@ -229,7 +230,12 @@ func main() {
 
 	var catalog []opcodeCatalogReport
 	var encoderCatalog []encoderFormReport
+	var frontend *frontendInventory
 	if *corpus == "go-asm" {
+		frontend, err = loadFrontendInventory(*goroot, *goarch)
+		if err != nil {
+			fatalf("load Go assembler frontend inventory: %v", err)
+		}
 		encoderCatalog, err = loadEncoderForms(*goroot, *goarch)
 		if err != nil {
 			fatalf("load official encoder forms: %v", err)
@@ -245,6 +251,7 @@ func main() {
 	}
 	rep := buildReport(*corpus, goVersion(*goroot), *goos, *goarch, len(pkgs), pkgWithSFiles, asmFiles, ops, forms, supported, catalog, verified, compileOnly, parseErrs)
 	attachEncoderCatalog(&rep, ops, encoderCatalog)
+	rep.FrontendInventory = frontend
 
 	var content []byte
 	switch strings.ToLower(strings.TrimSpace(*format)) {

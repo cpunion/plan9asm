@@ -22,11 +22,14 @@ semi-abstract instruction set, and its accepted language evolves with the Go
 toolchain. Coverage therefore uses the union of Go 1.20 through the latest
 supported release, through these increasingly strong layers:
 
-1. Official opcode namespace
+1. Architecture-specific opcode namespace
    - `cmd/internal/obj/x86/anames*.go`
    - `cmd/internal/obj/arm/anames*.go`
    - `cmd/internal/obj/arm64/anames*.go`
    - `cmd/internal/obj/wasm/anames*.go`
+   - `official_opcodes` counts only normalized names in the registered `Anames`
+     arrays (including the registered ARM64 supplement), not operand classes,
+     portable `obj.Anames`, frontend aliases, or parser pseudo directives
 2. Official architecture encoder tables
    - x86 `optab`, `ytab`, `ymovtab`, and generated AVX/EVEX tables
    - ARM and ARM64 `optab` rows and their alias mappings
@@ -69,6 +72,17 @@ a common inventory, not proof that every listed form is legal in both modes.
 Native assembly of generated concrete cases supplies that mode check. Positive
 testdata is useful but not complete: for example, the Go 1.27 386 corpus
 observes only 21 opcodes from the shared 1,600-name x86 namespace.
+
+The scanner's separate `frontend_inventory` records exact, case-sensitive
+spellings from portable and architecture name arrays, the selected `arch.Set`
+constructor's aliases, and `Parser.pseudo`. Entries carry `common`, `arch`,
+`alias`, `pseudo`, and explicit `sentinel` origins, numeric `obj.As` identities
+(null for directives without one), canonical namespaces, source positions and
+source hashes. WASM `Call` and portable `CALL`, for example, remain distinct.
+Unknown registration patterns fail closed. This is source enumeration only:
+neither presence nor a non-sentinel entry proves operand legality, lowering,
+LLVM object compilation, linking, or execution. Existing form baselines are
+independent of this inventory.
 
 `x/arch` is deliberately not treated as a second assembler specification. Its
 Plan 9 case files originate from instruction decoding and formatting, and can
