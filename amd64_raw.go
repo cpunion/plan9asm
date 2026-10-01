@@ -11,9 +11,13 @@ import (
 	"golang.org/x/arch/x86/x86asm"
 )
 
-func normalizeX86RawFile(file *File, goarch string) (*File, error) {
+func normalizeX86RawFile(file *File, goarch string, translationOptions ...Options) (*File, error) {
 	if file == nil || file.Arch != ArchAMD64 {
 		return file, nil
+	}
+	opt := Options{Goarch: goarch}
+	if len(translationOptions) != 0 {
+		opt = translationOptions[0]
 	}
 	normalized := *file
 	normalized.Funcs = append([]Func(nil), file.Funcs...)
@@ -46,7 +50,7 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
 		}
-		if err := validateX86RawNearReturns(fn); err != nil {
+		if err := validateX86RawNearReturns(fn, &normalized, opt, len(translationOptions) != 0); err != nil {
 			return nil, fmt.Errorf("%s: %w", fn.Sym, err)
 		}
 		hasLiteral := false
@@ -187,7 +191,9 @@ func isX86DirectControlTransfer(op Op) bool {
 // before a compile-only caller partitions functions into bounded modules.
 // Address-sensitive TEXT bodies must be identified while all references are
 // still visible. TranslateModuleInContext may safely normalize the result
-// again after partitioning.
+// again after partitioning. This preparation API has no function signatures:
+// final typed FP return-contract validation runs when translation consumes its
+// existing Options.Sigs. Preparation does not prove a callable return ABI.
 func NormalizeRawFileForTranslation(file *File, goarch string) (*File, error) {
 	return normalizeX86RawFile(file, goarch)
 }

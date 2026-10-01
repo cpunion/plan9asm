@@ -214,7 +214,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return "", err
 	}
-	file, err := normalizeX86RawFile(file, opt.Goarch)
+	file, err := normalizeX86RawFile(file, opt.Goarch, opt)
 	if err != nil {
 		return "", err
 	}

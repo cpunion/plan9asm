@@ -24,7 +24,7 @@ func x86RawNearReturnEncoding(code []byte) x86RawNearReturnForm {
 	return x86RawNearReturnForm{}
 }
 
-func validateX86RawNearReturns(fn Func) error {
+func validateX86RawNearReturns(fn Func, file *File, opt Options, bindFrame bool) error {
 	hasReturn := false
 	for _, ins := range fn.Instrs {
 		form := ins.x86RawNearReturn
@@ -46,7 +46,138 @@ func validateX86RawNearReturns(fn Func) error {
 	if fn.FrameSize != 0 || !x86RawReturnLeafStackUnobserved(fn) {
 		return fmt.Errorf("%w: raw near RET requires a proved source stack/continuation; Go's TEXT frame epilogue is not encoded in raw bytes", ErrProbeNeedsContext)
 	}
+	if !x86RawReturnMemoryBound(fn, file, opt, bindFrame) {
+		return fmt.Errorf("%w: raw near RET needs bounded typed FP/static memory; ordinary pointers have no native return-PC nonalias contract", ErrProbeNeedsContext)
+	}
 	return nil
+}
+
+// This bounded contract does not infer noalias from a Go pointer type or a
+// register value. It proves only scalar MOV accesses to bound FP slots or a
+// same-file static object. Other memory forms need their own complete effects
+// and access-range proof. In particular, this is not a general store whitelist.
+func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) bool {
+	name := fn.Sym
+	if opt.ResolveSym != nil {
+		name = opt.ResolveSym(name)
+	}
+	sig := opt.Sigs[name]
+	for _, ins := range fn.Instrs {
+		op := Op(normalizeInstructionOpcode(ins.Op))
+		if _, _, _, memory := x86StringProperties(op); memory {
+			return false
+		}
+		if _, _, memory := x86PortStringProperties(op); memory {
+			return false
+		}
+		if _, memory := amd64ImplicitMaskMoveSpecs[op]; memory || op == "XLAT" {
+			return false
+		}
+		for _, arg := range ins.Args {
+			switch arg.Kind {
+			case OpMem:
+				// Even a static symbol plus an index is not a bounded object.
+				// Address-only register expressions have no dereference, but
+				// their later uses still have to satisfy this same contract.
+				if op != "LEAW" && op != "LEAL" && op != "LEAQ" {
+					return false
+				}
+			case OpFP:
+				if !bindFrame {
+					continue // Pure prepartition normalization retains metadata.
+				}
+				width := x86RawReturnScalarMoveBytes(op)
+				if width == 0 || !x86RawReturnFPBound(arg.FPOffset, width, sig, opt.Goarch) {
+					return false
+				}
+			case OpSym:
+				symbol := strings.TrimSpace(arg.Sym)
+				if strings.HasPrefix(symbol, "$") || ins.Op == OpTEXT || ins.Op == OpLABEL {
+					continue
+				}
+				base, offset, static := parseSBRef(symbol)
+				if !static {
+					continue // Non-memory control operands retain their own checks.
+				}
+				if !x86RawReturnStaticBound(base, offset, x86RawReturnScalarMoveBytes(op), file) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func x86RawReturnScalarMoveBytes(op Op) int64 {
+	switch op {
+	case "MOVB":
+		return 1
+	case "MOVW":
+		return 2
+	case "MOVL":
+		return 4
+	case "MOVQ":
+		return 8
+	default:
+		return 0
+	}
+}
+
+func x86RawReturnFPBound(offset, width int64, sig FuncSig, goarch string) bool {
+	if offset < 0 || width <= 0 {
+		return false
+	}
+	for group, slots := range [][]FrameSlot{sig.Frame.Params, sig.Frame.Results} {
+		for _, slot := range slots {
+			if slot.Offset != offset || slot.Index < 0 {
+				continue
+			}
+			if group == 0 && slot.Index >= len(sig.Args) {
+				continue
+			}
+			if group == 1 {
+				if sig.Ret == Void || sig.Ret == "" {
+					continue
+				}
+				fields, aggregate := parseLiteralStructFields(sig.Ret)
+				if aggregate && slot.Index >= len(fields) || !aggregate && slot.Index != 0 {
+					continue
+				}
+			}
+			var size int64
+			switch slot.Type {
+			case I1, I8:
+				size = 1
+			case I16:
+				size = 2
+			case I32, LLVMType("float"):
+				size = 4
+			case I64, LLVMType("double"):
+				size = 8
+			case Ptr:
+				size = 8
+				if goarch == "386" {
+					size = 4
+				}
+			}
+			if width <= size && offset <= int64(^uint64(0)>>1)-size {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func x86RawReturnStaticBound(symbol string, offset, width int64, file *File) bool {
+	if file == nil || offset < 0 || width <= 0 {
+		return false
+	}
+	for _, object := range file.Globl {
+		if object.Sym == symbol && object.SizeRaw == "" && object.Size >= width && offset <= object.Size-width {
+			return true
+		}
+	}
+	return false
 }
 
 func x86RawReturnLeafStackUnobserved(fn Func) bool {
