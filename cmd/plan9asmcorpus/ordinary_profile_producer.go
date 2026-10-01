@@ -92,11 +92,13 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 				return nil, nil, nil, nil, "", err
 			}
 			next := ordinaryProfileEligibleCPPFiles(selected)
-			if equalDiscoveryStrings(files, next) {
-				stable = true
+			files, stable, err = ordinaryProfileCPPRegistrationUnion(files, next)
+			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			if stable {
 				break
 			}
-			files = uniqueSortedDiscoveryStrings(append(files, next...))
 		}
 		if !stable {
 			return nil, nil, nil, nil, "", fmt.Errorf("source/CPP/profile registration did not reach its bounded fixed point (not N/A)")
@@ -106,8 +108,12 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
-	if !equalDiscoveryStrings(files, ordinaryProfileEligibleCPPFiles(eligible)) {
-		return nil, nil, nil, nil, "", fmt.Errorf("CPP-required profiles changed the captured assembly file union")
+	if plan.CPPInputs != nil {
+		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, ordinaryProfileEligibleCPPFiles(eligible)); err != nil {
+			return nil, nil, nil, nil, "", err
+		}
+	} else if len(eligible) != 0 {
+		return nil, nil, nil, nil, "", fmt.Errorf("eligible assembly lacks its complete raw CPP registration")
 	}
 	plan.ProfileDecisions = decisions
 	configs := ordinaryProfileConfigurations(eligible)
@@ -125,6 +131,14 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 		return nil, nil, nil, nil, "", err
 	}
 	return plan, profiles, configs, rejected, goRoot, nil
+}
+
+func ordinaryProfileCPPRegistrationUnion(registered, selected []string) ([]string, bool, error) {
+	union := uniqueSortedDiscoveryStrings(append(append([]string(nil), registered...), selected...))
+	if len(union) > 512 {
+		return nil, false, fmt.Errorf("raw CPP root registration exceeds its bounded source scope (not N/A)")
+	}
+	return union, equalDiscoveryStrings(registered, union), nil
 }
 
 func ordinaryProfileEligibleCPPFiles(scopes map[discoveryProfileScope]bool) []string {

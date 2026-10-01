@@ -250,8 +250,11 @@ func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (str
 func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, files []string) error {
 	if inputs == nil || plan == nil || inputs.Protocol != discoveryCPPInputsProtocol && inputs.Protocol != discoveryDeferredCPPInputsProtocol || inputs.Module != plan.Module || inputs.Version != plan.Version ||
 		inputs.ModuleSum != plan.ModuleSum || inputs.ZipSHA256 != plan.ZipSHA256 || !discoverySHA256Pattern.MatchString(inputs.ZipSHA256) ||
-		!strings.HasPrefix(inputs.ModuleSum, "h1:") || len(inputs.Sources) == 0 || len(inputs.Sources) > 512 || len(inputs.Units) != len(files) || len(files) > 512 {
+		!strings.HasPrefix(inputs.ModuleSum, "h1:") || len(inputs.Sources) == 0 || len(inputs.Sources) > 512 || len(inputs.Units) < len(files) || len(inputs.Units) > 512 || len(files) > 512 {
 		return fmt.Errorf("missing exact bounded CPP module/source protocol")
+	}
+	if inputs.Protocol == discoveryCPPInputsProtocol && len(inputs.Units) != len(files) {
+		return fmt.Errorf("legacy CPP inventory differs from its exact required root set")
 	}
 	digest, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(inputs.ModuleSum, "h1:"))
 	if err != nil || len(digest) != sha256.Size {
@@ -299,12 +302,17 @@ func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdin
 			}
 		}
 	}
-	used := make(map[string]bool)
+	used, roots := make(map[string]bool), make(map[string]bool)
 	for _, unit := range inputs.Units {
 		root, exists := inputs.Sources["module/"+unit.File]
-		if !wanted[unit.File] || !exists || root.SHA256 != rootSHAs[unit.File] {
+		// Deferred raw registration is monotonic, not the final eligible
+		// translation denominator. Retained roots must still be original
+		// candidate assembly; arbitrary sibling files/Go sources are forbidden.
+		if roots[unit.File] || !ordinarySelectionLocalPath(unit.File) || !strings.HasSuffix(unit.File, ".s") ||
+			!exists || root.SHA256 != rootSHAs[unit.File] || inputs.Protocol == discoveryCPPInputsProtocol && !wanted[unit.File] {
 			return fmt.Errorf("CPP root omitted, duplicated or detached from exact ordinary ASM source")
 		}
+		roots[unit.File] = true
 		delete(wanted, unit.File)
 		if _, err := discoveryCPPUnitDirectives(inputs, unit, used); err != nil {
 			return err

@@ -288,7 +288,10 @@ an explicit `generated/<package>/go_asm.h` CPP origin rather than ZIP/tool origi
 Active includes use source-order Go package-directory search; inactive includes
 do not enter the consumption graph. Discovery's deferred-source protocol retains
 every raw include/condition, including unresolved inactive edges. Raw registration
-and actual-profile selection must converge within eight iterations. Unknown
+and actual-profile selection must converge within eight iterations. Registration
+converges on the monotonic union of original candidate roots; a shrinking selected
+set does not erase raw controls or consume the iteration bound. Final eligible
+file/target/profile/tag scopes independently determine translation counts. Unknown
 generated presence cannot hide nested CPU conditions: bounded legal proposals
 are observed before per-package headers decide actual consumption. After actual
 Go export/asmdecl checks, each executed package/file/target/profile/tag scope with
