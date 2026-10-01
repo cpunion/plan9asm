@@ -257,6 +257,13 @@ func arm64StackStep(state *arm64StackState, original, ins Instr) error {
 				state[index] = arm64StackRange{}
 				return nil
 			case "MOVD":
+				if form, handled, err := parseARM64RegisterAddressForm(Op(base), ins); handled && err == nil {
+					if form.usesScratch {
+						state[27] = arm64StackRange{}
+					}
+					state[index] = adjust(state.value(form.base), form.offset)
+					return nil
+				}
 				if len(ins.Args) == 2 && ins.Args[0].Kind == OpReg {
 					state[index] = state.value(ins.Args[0].Reg)
 					return nil

@@ -575,6 +575,17 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 			return
 		}
 	}
+	if form, handled, err := parseARM64RegisterAddressForm(op, ins); handled && err == nil {
+		if form.usesScratch {
+			state.regs[Reg("R27")] = arm64ControlExternal()
+		}
+		value := state.source(Operand{Kind: OpReg, Reg: form.base}, false)
+		if form.offset != 0 {
+			value = arm64ControlUnion(arm64ControlOffset(value, form.offset), arm64ControlLabels(value))
+		}
+		state.write(ins.Args[1], value, false)
+		return
+	}
 	if op == "MOVD" && len(ins.Args) == 2 {
 		value := state.source(ins.Args[0], post)
 		state.write(ins.Args[1], value, post)
