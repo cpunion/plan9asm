@@ -773,7 +773,7 @@ TEXT undefined(SB),NOSPLIT,$0-0
 
 TEXT rawret(SB),NOSPLIT,$0-0
 	BYTE $0xc2
-	WORD $4
+	WORD $0
 	RET
 
 TEXT cpuidProbe(SB),NOSPLIT,$0-0

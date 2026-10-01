@@ -948,6 +948,9 @@ type Instr struct {
 	// Set only by a validated machine-code decoder. Physical operands need
 	// not obey textual frontend limits (e.g. Go 386's three-operand limit).
 	x86Encoded bool
+	// A decoded near return is a physical C2/C3 instruction, not a Go RET
+	// pseudo-instruction with an automatically generated frame epilogue.
+	x86RawNearReturn *x86RawNearReturnForm
 	// Effective address width for a raw address-size override; zero means
 	// the target's ordinary pointer width.
 	x86AddressBits int

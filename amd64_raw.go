@@ -43,6 +43,9 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
 		}
+		if err := validateX86RawNearReturns(fn); err != nil {
+			return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+		}
 		hasLiteral := false
 		for _, ins := range fn.Instrs {
 			if ins.x86RIPLiteral {
@@ -2576,6 +2579,20 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			instrs, err := parseDecodedX86Instruction(syntax)
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
+			}
+			if inst.Op == x86asm.RET {
+				form := x86RawNearReturnEncoding(code[offset : offset+inst.Len])
+				for i := range instrs {
+					if instrs[i].Op != OpRET {
+						continue
+					}
+					instrs[i].x86RawNearReturn = &form
+					if form.nativeWidth && form.cleanup == 0 {
+						// Keep the encoded semantics in private metadata. Removing the
+						// zero operand does not validate the containing source frame.
+						instrs[i].Args = nil
+					}
+				}
 			}
 			decodedByOffset[offset] = x86RawDecodedInstruction{length: inst.Len, instrs: annotate(instrs)}
 			offset += inst.Len
