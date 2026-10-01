@@ -2967,43 +2967,6 @@ func isDiscoveryAsmDeclABIMismatch(diagnostic string) bool {
 	return false
 }
 
-func isDiscoveryAsmDeclEqualWidthMove(line string) bool {
-	_, diagnostic, ok := strings.Cut(line, ": invalid ")
-	if !ok {
-		return false
-	}
-	op, _, ok := strings.Cut(diagnostic, " of ")
-	if !ok {
-		return false
-	}
-	width := 0
-	switch op {
-	case "movo", "movou":
-		width = 16
-	case "movb":
-		width = 1
-	case "movw":
-		width = 2
-	case "movl", "fmovs":
-		width = 4
-	case "movq", "fmovd":
-		width = 8
-	default:
-		return false
-	}
-	_, value, ok := strings.Cut(diagnostic, "(fp); ")
-	if !ok {
-		return false
-	}
-	separator := strings.LastIndex(value, " is ")
-	if separator < 0 {
-		return false
-	}
-	var declared int
-	_, err := fmt.Sscanf(value[separator+4:], "%d-byte value", &declared)
-	return err == nil && declared == width
-}
-
 func discoveryAsmDeclRejectedFiles(asmFiles []string, diagnostic string) []string {
 	diagnostic = filepath.ToSlash(diagnostic)
 	rejected := make(map[string]bool)
