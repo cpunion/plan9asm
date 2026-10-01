@@ -254,6 +254,11 @@ inventory. Missing scope dimensions or consumer proofs fail closed. Unknown
 CPU macros and experiment predicates
 without an actual package-role binding fail closed. Reachable predicate sides
 do not by themselves prove complete operand-form or runtime coverage.
+Every package-local custom-tag configuration also includes its shared assembly
+files selected by Go MatchFile. A file tested with baseline declarations is not
+evidence for declarations selected by another tag configuration. Do not spread
+one package's custom tags to unrelated packages or discard shared-file asmdecl
+diagnostics to make the scope denominator fit.
 Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
 legacy modules lacking original declared-module metadata remain failures.

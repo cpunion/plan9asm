@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -102,5 +103,88 @@ func TestProfileSelectionRootDirectoryAndCustomTagsRemainEligible(t *testing.T) 
 		if !seen[kind] {
 			t.Errorf("lost explicit filename/directory/nested policy evidence: %s", kind)
 		}
+	}
+}
+
+func TestProfileSelectionCustomTagsIncludeSharedPackageAssembly(t *testing.T) {
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	root := t.TempDir()
+	sources := map[string]string{
+		"go.mod":                    "module example.invalid/tag-scopes\n\ngo 1.20\n",
+		"pkg/decl.go":               "package fixture\nfunc Shared()\nfunc Variant()\n",
+		"pkg/shared_arm64.s":        "TEXT ·Shared(SB),$0-0\nRET\n",
+		"pkg/basic_arm64.s":         "//go:build arm64 && !lse2\n\nTEXT ·Variant(SB),$0-0\nRET\n",
+		"pkg/lse_arm64.s":           "//go:build arm64 && lse2\n\nTEXT ·Variant(SB),$0-0\nRET\n",
+		"other/decl.go":             "package other\nfunc Independent()\n",
+		"other/independent_arm64.s": "TEXT ·Independent(SB),$0-0\nRET\n",
+	}
+	var asmFiles []string
+	for file, source := range sources {
+		name := filepath.Join(root, filepath.FromSlash(file))
+		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, name, source)
+		if strings.HasSuffix(file, ".s") {
+			asmFiles = append(asmFiles, file)
+		}
+	}
+	asmFiles = uniqueSortedDiscoveryStrings(asmFiles)
+	candidate := discoveryCandidate{Module: "example.invalid/tag-scopes", Version: "v1.0.0", AsmFiles: asmFiles}
+	plan, err := captureOrdinarySelectionInputs(candidate, root, []string{"linux/arm64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, binary, t.TempDir(), targetFeatureTestEnv(), plan, asmFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisions, scopes, err := replayOrdinarySelectionForProfiles(plan, asmFiles, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 1 {
+		t.Fatalf("ordinary custom tag invented CPU profiles: %d", len(profiles))
+	}
+	var actual []string
+	for scope := range scopes {
+		if scope.Target != "linux/arm64" || scope.ProfileID != profiles[0].ID {
+			t.Fatalf("scope lost its actual target/profile: %+v", scope)
+		}
+		actual = append(actual, scope.File+"#"+scope.Tags)
+	}
+	want := []string{
+		"other/independent_arm64.s#",
+		"pkg/basic_arm64.s#",
+		"pkg/lse_arm64.s#lse2",
+		"pkg/shared_arm64.s#",
+		"pkg/shared_arm64.s#lse2",
+	}
+	actual = uniqueSortedDiscoveryStrings(actual)
+	if !reflect.DeepEqual(actual, want) {
+		t.Fatalf("package/tag scope closure = %v, want %v", actual, want)
+	}
+	selected := make(map[discoveryProfileScope]bool)
+	for _, decision := range decisions {
+		if decision.Kind != nativeLayoutSelected {
+			continue
+		}
+		for _, file := range decision.AsmFiles {
+			for _, target := range decision.Targets {
+				key := discoveryProfileScope{File: file, Target: target, ProfileID: decision.ProfileID, Tags: strings.Join(decision.BuildTags, "\x00")}
+				if selected[key] {
+					t.Fatalf("duplicate source selection decision: %+v", key)
+				}
+				selected[key] = true
+			}
+		}
+	}
+	if !reflect.DeepEqual(scopes, selected) {
+		t.Fatalf("source decisions do not preserve expanded four-part scopes: %v != %v", selected, scopes)
 	}
 }
