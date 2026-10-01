@@ -2668,6 +2668,7 @@ func isDiscoveryInfrastructureFailure(err error) bool {
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, errDiscoveryCommandOutputExceeded) ||
+		errors.Is(err, errDiscoveryAsmDeclSourceProof) ||
 		errors.Is(err, exec.ErrWaitDelay) ||
 		errors.Is(err, errDiscoveryCommandCleanup) ||
 		isDiscoveryGoBuildInfrastructureFailure(discoveryCommandDiagnostic(err)) {
@@ -2712,6 +2713,10 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if ctx.Err() != nil {
 		return err
 	}
+	err = filterDiscoveryAsmDeclUnspecifiedArgs(ctx, dir, targetEnv, buildTags, patterns, "", err)
+	if err == nil || errors.Is(err, errDiscoveryAsmDeclSourceProof) {
+		return err
+	}
 	// go vet type-checks package tests before running asmdecl. Old modules can
 	// have tests that no longer compile or import another package with an ABI
 	// mismatch even though their production package builds. Retry against
@@ -2739,7 +2744,9 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 }
 
 type discoveryGoListPackage struct {
+	ImportPath   string
 	Dir          string
+	SFiles       []string
 	TestGoFiles  []string
 	XTestGoFiles []string
 	Module       *struct {
@@ -2848,7 +2855,8 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 	}
 	args := append([]string{"vet", "-modfile=" + modfilePath}, vetArgs[1:]...)
 	_, err = runCapturedCommandOutput(ctx, dir, env, "go", args...)
-	return err
+	// Inspect staged sources before their owning temporary modules are removed.
+	return filterDiscoveryAsmDeclUnspecifiedArgs(ctx, dir, env, buildTags, patterns, modfilePath, err)
 }
 
 func copyDiscoveryModuleTree(source, destination string) error {

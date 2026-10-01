@@ -109,6 +109,10 @@ For each target/tag/package group:
    comparison can reject a 16-byte MOVOU against a 16-byte array even though
    the Go compiler accepts its layout. Such a warning is not a width mismatch;
    translation and LLVM 22 compilation must still establish the outcome.
+   A zero-size warning is not conclusive when the selected source's exact
+   TEXT line uses omitted arguments or the historical literal `-0` form.
+   Check its selected package, physical line and symbol before filtering just
+   that warning. Preserve other ABI diagnostics; unknown source metadata fails.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and

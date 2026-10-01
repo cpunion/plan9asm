@@ -613,6 +613,50 @@ func TestRunDiscoveryAsmDeclUsesCurrentGoTargetABI(t *testing.T) {
 	}
 }
 
+func TestRunDiscoveryAsmDeclKeepsGoAcceptedUnspecifiedArgumentSize(t *testing.T) {
+	for _, frame := range []string{"$0", "$0-0"} {
+		t.Run(frame, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/unspecified\n\ngo 1.20\n")
+			writeTestFile(t, filepath.Join(dir, "decl.go"), "package unspecified\n\nfunc Value() bool\n")
+			writeTestFile(t, filepath.Join(dir, "decl_amd64.s"),
+				"TEXT ·Value(SB),"+frame+"\nMOVB $1, ret+0(FP)\nRET\n")
+			writeTestFile(t, filepath.Join(dir, "decl_arm64.s"),
+				"TEXT ·Value(SB),"+frame+"\nMOVD $1, R0\nMOVB R0, ret+0(FP)\nRET\n")
+			writeTestFile(t, filepath.Join(dir, "decl_test.go"),
+				"package unspecified\n\nimport \"testing\"\n\nfunc TestValue(t *testing.T) { if !Value() { t.Fatal(\"assembly returned false\") } }\n")
+			env := replaceEnv(os.Environ(), map[string]string{
+				"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+			})
+			for _, arch := range []string{"amd64", "arm64"} {
+				t.Run(arch, func(t *testing.T) {
+					target := "linux/" + arch
+					if err := runDiscoveryGoBuild(context.Background(), dir, env, target, nil, "example.com/unspecified"); err != nil {
+						t.Fatalf("Go rejected unspecified argument size: %v", err)
+					}
+					targetEnv := replaceEnv(env, map[string]string{"GOOS": "linux", "GOARCH": arch})
+					_, rawErr := runCapturedCommandOutput(context.Background(), dir, targetEnv,
+						"go", "vet", "-asmdecl", "example.com/unspecified")
+					if rawErr == nil || !strings.Contains(discoveryCommandDiagnostic(rawErr), "wrong argument size 0; expected $...-1") {
+						t.Fatalf("zero-argument asmdecl warning was not reproduced: %v", rawErr)
+					}
+					if err := runDiscoveryAsmDecl(context.Background(), dir, env, target, nil, []string{"example.com/unspecified"}); err != nil {
+						t.Fatalf("Go-accepted unspecified argument size was excluded before translation: %v", err)
+					}
+				})
+			}
+			if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+				nativeEnv := replaceEnv(env, map[string]string{"GOOS": runtime.GOOS, "GOARCH": runtime.GOARCH})
+				if _, err := runCapturedCommandOutput(context.Background(), dir, nativeEnv,
+					"go", "test", "-vet=off", "-count=1", "example.com/unspecified"); err != nil {
+					t.Fatalf("native Go unspecified-argument oracle failed: %v", err)
+				}
+				t.Log("native Go Value() oracle passed")
+			}
+		})
+	}
+}
+
 func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "work")
