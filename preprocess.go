@@ -135,6 +135,8 @@ func GoAssemblerDefinesWithEnv(goos, goarch string, env map[string]string) []str
 // package/toolchain search. It returns a stable source identity and its bytes;
 // identities are used to diagnose include recursion. An inactive include never
 // calls the resolver, including when its operand is malformed or missing.
+// The API bounds include depth (32); the caller must bound individual/aggregate
+// input bytes and emitted output for its own source inventory/resource budget.
 type AssemblyPreprocessOptions struct {
 	FileName    string
 	Defines     []string
@@ -651,6 +653,7 @@ func validPPIdentifier(name string) bool {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(name))
 	s.Mode = scanner.ScanIdents
+	s.IsIdentRune = ppIdentRune
 	s.Error = func(*scanner.Scanner, string) {}
 	return s.Scan() == scanner.Ident && s.TokenText() == name && s.Scan() == scanner.EOF && s.ErrorCount == 0
 }
@@ -757,10 +760,7 @@ func expandIdentMacros(line string, macros map[string]ppMacro) (string, bool) {
 	tokens.Init(strings.NewReader(line))
 	tokens.Mode = scanner.ScanIdents | scanner.ScanInts | scanner.ScanFloats |
 		scanner.ScanChars | scanner.ScanStrings | scanner.ScanRawStrings
-	tokens.IsIdentRune = func(ch rune, index int) bool {
-		return unicode.IsLetter(ch) || ch == '_' || ch == '·' || ch == '∕' ||
-			index > 0 && unicode.IsDigit(ch)
-	}
+	tokens.IsIdentRune = ppIdentRune
 	// Malformed literals are diagnosed by the parser; do not print an unrelated
 	// scanner diagnostic or transform a partially recognized token sequence.
 	tokens.Error = func(*scanner.Scanner, string) {}
@@ -787,6 +787,13 @@ func expandIdentMacros(line string, macros map[string]ppMacro) (string, bool) {
 	}
 	out.WriteString(line[last:])
 	return out.String(), true
+}
+
+// cmd/asm's identifier grammar is not Go's: assembly identifiers also allow
+// the middle dot and division slash, including as their first rune.
+func ppIdentRune(ch rune, index int) bool {
+	return unicode.IsLetter(ch) || ch == '_' || ch == '·' || ch == '∕' ||
+		index > 0 && unicode.IsDigit(ch)
 }
 
 func isIdentStart(ch byte) bool {

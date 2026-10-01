@@ -159,3 +159,50 @@ func TestGoAssemblerDefinesExplicitEnvironment(t *testing.T) {
 		t.Fatalf("defines use process rather than resolved configuration: %v", got)
 	}
 }
+
+func TestPreprocessAssemblyGoControlTokenOracle(t *testing.T) {
+	for _, name := range []string{"A·B", "A∕B", "·Start", "∕Start"} {
+		t.Run(name, func(t *testing.T) {
+			source := "#define " + name + " 1\n#ifdef " + name + "\n#define VALUE 42\n#endif\n#undef " + name + "\n#ifndef " + name +
+				"\nDATA ·value(SB)/4,$VALUE\n#endif\nGLOBL ·value(SB),8,$4\n"
+			runGoAssemblyControlOracle(t, source, true)
+			got, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{})
+			if err != nil || !strings.Contains(got, "$42") {
+				t.Fatalf("Go assembly control identifier %q: %q, %v", name, got, err)
+			}
+		})
+	}
+	for _, source := range []string{
+		"#ifdef\n#endif\n", "#ifndef A/B\n#endif\n", "#ifdef 42\n#endif\n",
+		"#define A 1\n#undef A·\n", "#define A 1\n#undef A trailing\n", "#else extra\n", "#endif extra\n",
+		"#line 337\n", "#line nope \"file.s\"\n", "#line 337 \"file.s\" trailing\n",
+	} {
+		runGoAssemblyControlOracle(t, source, false)
+		if _, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{}); err == nil {
+			t.Errorf("Go-rejected preprocessor control accepted: %q", source)
+		}
+	}
+	const validLine = "#line 337 \"source name.s\"\nDATA ·value(SB)/4,$42\nGLOBL ·value(SB),8,$4\n"
+	runGoAssemblyControlOracle(t, validLine, true)
+	if got, err := PreprocessAssemblySource(validLine, AssemblyPreprocessOptions{}); err != nil || !strings.Contains(got, "$42") {
+		t.Fatalf("valid Go #line: %q, %v", got, err)
+	}
+}
+
+func runGoAssemblyControlOracle(t *testing.T, source string, accepted bool) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "source.s")
+	if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command("go", "tool", "asm", "-S", "-p", "control", "-o", filepath.Join(dir, "go.o"), path)
+	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
+	out, err := command.CombinedOutput()
+	if (err == nil) != accepted {
+		t.Fatalf("Go control oracle accepted=%v, want %v: %v\n%s", err == nil, accepted, err, out)
+	}
+	if accepted && !strings.Contains(string(out), "2a 00 00 00") {
+		t.Fatalf("actual Go data bytes missing:\n%s", out)
+	}
+}
