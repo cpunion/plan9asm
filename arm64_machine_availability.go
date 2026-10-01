@@ -33,6 +33,23 @@ type arm64MachineAvailability struct {
 	entry      *ARM64GoRegisterABI
 	entryError error
 	used       bool
+	nativeIR   map[int]string
+}
+
+// A validated lowerer can prove that one emitted native instruction has no
+// additional virtual GP/NZCV/data-store effects. Its actual typed operands are
+// still recorded by loadReg/storeReg. Bind the proof to the exact emitted IR
+// line; other callouts, including another callout in the same source
+// instruction, remain opaque. A compiler memory barrier is not a data store.
+func (c *arm64Ctx) emitMachineNeutralNativeIR(format string, args ...any) {
+	start := c.b.Len()
+	fmt.Fprintf(c.b, format, args...)
+	if flow := c.machineAvailability; flow != nil {
+		if flow.nativeIR == nil {
+			flow.nativeIR = make(map[int]string)
+		}
+		flow.nativeIR[start] = c.b.String()[start:]
+	}
 }
 
 const arm64WholeScalableRegister = 1 << 20
@@ -315,7 +332,13 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 	// source machine state just because their IR is a normal LLVM call.
 	symbolCall := (op == "CALL" || op == "BL" || op == "B" || op == "JMP" || op == OpRET) &&
 		len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)")
-	for _, line := range strings.Split(c.b.String()[start:], "\n") {
+	offset := start
+	for _, line := range strings.SplitAfter(c.b.String()[start:], "\n") {
+		proven := flow.nativeIR[offset] == line && line != ""
+		offset += len(line)
+		if proven {
+			continue
+		}
 		if strings.Contains(line, " asm ") || (!symbolCall && strings.Contains(line, " call ") && !strings.Contains(line, "@llvm.")) {
 			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{opaque: true, source: flow.source})
 			return

@@ -35,12 +35,15 @@ func arm64EncodedSystemRegisterName(encoding uint16) string {
 func (c *arm64Ctx) lowerRawSystemRegister(form arm64RawSystemRegister) error {
 	sysreg := arm64EncodedSystemRegisterName(form.encoding)
 	if form.read {
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect %q, %q()\n", value, "mrs $0, "+sysreg, "=r,~{memory}")
+		dst := ZR
+		if form.reg != 31 {
+			dst = Reg(fmt.Sprintf("R%d", form.reg))
+		}
+		value := c.emitARM64SystemRegisterRead(sysreg, form.encoding, true, dst)
 		if form.reg == 31 {
 			return nil
 		}
-		return c.storeReg(Reg(fmt.Sprintf("R%d", form.reg)), "%"+value)
+		return c.storeReg(Reg(fmt.Sprintf("R%d", form.reg)), value)
 	}
 	value := "0"
 	if form.reg != 31 {

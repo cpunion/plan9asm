@@ -42,7 +42,8 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 
 	case "MRS":
 		// MRS <sysreg>, Rn
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg {
+		if ins.Op != "MRS" || len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg ||
+			!isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
 			return true, false, fmt.Errorf("arm64 MRS expects ident, reg: %q", ins.Raw)
 		}
 		sysreg, err := arm64CheckedSystemRegister(ins.Args[0].Ident, true)
@@ -50,9 +51,9 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			return true, false, err
 		}
 		dst := ins.Args[1].Reg
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect %q, %q()\n", t, "mrs $0, "+sysreg, "=r,~{memory}")
-		return true, false, c.storeReg(dst, "%"+t)
+		spec, known := arm64GoSystemRegisters[ins.Args[0].Ident]
+		value := c.emitARM64SystemRegisterRead(sysreg, spec.encoding, known, dst)
+		return true, false, c.storeReg(dst, value)
 
 	case "MSR":
 		// MSR src, <sysreg>

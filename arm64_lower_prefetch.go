@@ -77,7 +77,7 @@ func (c *arm64Ctx) lowerARM64Prefetch(op Op, ins Instr) (ok bool, terminated boo
 	// three offset bits without issuing offsetshift's usual odd-offset error.
 	encodedOffset := memory.Off &^ 7
 	assembly := fmt.Sprintf("prfm #%d, [$0, #%d]", hint, encodedOffset)
-	fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s)\n", assembly, "r,~{memory}", base)
+	c.emitMachineNeutralNativeIR("  call void asm sideeffect %q, %q(i64 %s)\n", assembly, "r,~{memory}", base)
 	return true, false, nil
 }
 
@@ -123,7 +123,7 @@ func (c *arm64Ctx) lowerARM64RangePrefetch(ins Instr) (ok bool, terminated bool,
 		return true, false, err
 	}
 	assembly := fmt.Sprintf("rprfm #%d, $1, [$0]", hint)
-	fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i64 %s, i64 %s)\n", assembly, "r,r,~{memory}", baseValue, rangeValue)
+	c.emitMachineNeutralNativeIR("  call void asm sideeffect %q, %q(i64 %s, i64 %s)\n", assembly, "r,r,~{memory}", baseValue, rangeValue)
 	return true, false, nil
 }
 
