@@ -123,6 +123,15 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 					if err := add(request); err != nil {
 						return nil, err
 					}
+					cppRequests, err := planDiscoveryCPPFeaturePair(plan, ctx, baseline, asmFile, goFile, request)
+					if err != nil {
+						return nil, fmt.Errorf("CPP profiles for %s + %s on %s: %w", asmFile, goFile, baseline.Target, err)
+					}
+					for _, cppRequest := range cppRequests {
+						if err := add(cppRequest); err != nil {
+							return nil, err
+						}
+					}
 				}
 			}
 		}

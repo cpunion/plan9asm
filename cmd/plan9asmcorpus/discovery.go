@@ -2467,6 +2467,9 @@ func discoveryCandidateEnvironment(ctx context.Context, workDir string, base []s
 	if err := os.Mkdir(filepath.Join(workDir, "tmp"), 0700); err != nil {
 		return nil, fmt.Errorf("create candidate temporary directory: %w", err)
 	}
+	if err := os.Mkdir(filepath.Join(workDir, "build-cache"), 0700); err != nil {
+		return nil, fmt.Errorf("create owned candidate build cache: %w", err)
+	}
 	return isolatedDiscoveryModuleEnvironment(env, workDir, shared.GOMODCACHE, shared.GOPROXY), nil
 }
 

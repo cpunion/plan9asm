@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // Source/driver proof failures are never Go-source incompatibility evidence.
@@ -50,7 +53,57 @@ func captureDiscoveryOrdinaryCPP(ctx context.Context, candidate discoveryCandida
 		return nil, "", err
 	}
 	plan.CPPInputs = inputs
+	if err := rejectDiscoveryUnconsumedCPPProfiles(ctx, plan, candidate.AsmFiles, dir, env); err != nil {
+		return nil, "", err
+	}
 	return plan, actual["GOROOT"], nil
+}
+
+// Until the profile-aware package/translator/report consumers are all wired,
+// an observed CPP feature profile is a pending coverage requirement, not a
+// baseline pass or an empty-object N/A. This production guard deliberately
+// blocks those inputs; it is replaced only by the schema-10 scope consumer.
+func rejectDiscoveryUnconsumedCPPProfiles(ctx context.Context, plan *discoveryOrdinarySelectionPlan, files []string, dir string, env []string) error {
+	required, err := discoveryCPPRequiresFeatureProfiles(plan.CPPInputs)
+	if err != nil {
+		return err
+	}
+	if !required {
+		return nil
+	}
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		return err
+	}
+	markerDir := filepath.Join(dir, "cpp-feature-markers")
+	if err := os.Mkdir(markerDir, 0700); err != nil {
+		return err
+	}
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, markerDir, env, plan, files)
+	if err != nil {
+		return fmt.Errorf("required CPP feature observation (not source N/A): %w", err)
+	}
+	var identities []string
+	for _, profile := range profiles {
+		key := discoveryCPPFeatureCPUKey(profile.Observed.Environment["GOARCH"])
+		identities = append(identities, profile.Observed.Target+" "+key+"="+profile.Observed.Environment[key]+" id="+profile.ID)
+	}
+	return fmt.Errorf("CPP profiles require profile-aware production consumers; pending, not N/A: %s", strings.Join(identities, "; "))
+}
+
+func discoveryCPPRequiresFeatureProfiles(inputs *discoveryCPPInputs) (bool, error) {
+	if inputs == nil {
+		return false, nil
+	}
+	required := false
+	for _, unit := range inputs.Units {
+		directives, err := discoveryCPPUnitDirectives(inputs, unit, make(map[string]bool))
+		if err != nil {
+			return false, err
+		}
+		required = required || discoveryCPPHasFeatureConditions(directives)
+	}
+	return required, nil
 }
 
 func ordinarySelectionEligibleCPPFiles(eligible map[nativeLayoutPlanKey]bool) []string {

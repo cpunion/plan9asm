@@ -721,6 +721,15 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, ordinarySelectionEligibleCPPFiles(eligible)); err != nil {
 			return err
 		}
+		if result.Status == discoveryStatusPassed || result.Status == discoveryStatusNotApplicable || len(result.SourceNotApplicableItems) != 0 {
+			required, err := discoveryCPPRequiresFeatureProfiles(plan.CPPInputs)
+			if err != nil {
+				return err
+			}
+			if required {
+				return fmt.Errorf("CPP profiles require profile-aware production consumers; unconsumed profile cannot give pass/N/A credit")
+			}
+		}
 	}
 	if !equalOrdinarySelectionDecisions(decisions, plan.Decisions) {
 		return fmt.Errorf("ordinary source-selection decisions disagree with exact source replay")

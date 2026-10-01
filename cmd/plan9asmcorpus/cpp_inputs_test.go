@@ -19,15 +19,23 @@ import (
 )
 
 func fixtureCPPInputs(t *testing.T) (*discoveryOrdinarySelectionPlan, string, string) {
+	return fixtureCPPInputsForTarget(t, "linux/amd64", nil)
+}
+
+func fixtureCPPInputsForTarget(t *testing.T, target string, overrides map[string]string) (*discoveryOrdinarySelectionPlan, string, string) {
 	t.Helper()
 	root := t.TempDir()
+	asmFile := "pkg/native_" + strings.Split(target, "/")[1] + ".s"
 	sources := map[string]string{
-		"go.mod":             "module example.invalid/cpp-inputs\n\ngo 1.20\n",
-		"pkg/decl.go":        "package fixture\n",
-		"pkg/native_amd64.s": "#include \"sub/outer.h\"\n#include \"textflag.h\"\nTEXT ·Probe(SB),$0-0\nRET\n",
-		"pkg/sub/outer.h":    "#include \"choice.h\"\n#ifdef GOAMD64_v3\n#define V3 1\n#endif\n",
-		"pkg/choice.h":       "#define CORRECT_GO_PACKAGE_DIR 1\n",
-		"pkg/sub/choice.h":   "#define WRONG_NESTED_HEADER_DIR 1\n",
+		"go.mod":           "module example.invalid/cpp-inputs\n\ngo 1.20\n",
+		"pkg/decl.go":      "package fixture\n",
+		asmFile:            "#include \"sub/outer.h\"\n#include \"textflag.h\"\nTEXT ·Probe(SB),$0-0\nRET\n",
+		"pkg/sub/outer.h":  "#include \"choice.h\"\n#ifdef GOAMD64_v3\n#define V3 1\n#endif\n",
+		"pkg/choice.h":     "#define CORRECT_GO_PACKAGE_DIR 1\n",
+		"pkg/sub/choice.h": "#define WRONG_NESTED_HEADER_DIR 1\n",
+	}
+	for file, source := range overrides {
+		sources[file] = source
 	}
 	for file, source := range sources {
 		name := filepath.Join(root, filepath.FromSlash(file))
@@ -62,8 +70,8 @@ func fixtureCPPInputs(t *testing.T) (*discoveryOrdinarySelectionPlan, string, st
 	if err := archive.Close(); err != nil {
 		t.Fatal(err)
 	}
-	candidate := discoveryCandidate{Module: "example.invalid/cpp-inputs", Version: "v1.0.0", AsmFiles: []string{"pkg/native_amd64.s"}}
-	plan, err := captureOrdinarySelectionInputs(candidate, root, []string{"linux/amd64"})
+	candidate := discoveryCandidate{Module: "example.invalid/cpp-inputs", Version: "v1.0.0", AsmFiles: []string{asmFile}}
+	plan, err := captureOrdinarySelectionInputs(candidate, root, []string{target})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +159,14 @@ func TestCPPInputsDetectsNewPreferredHeaderWithoutChangingOldBytes(t *testing.T)
 }
 
 func TestDiscoveryCandidateUnknownCPPIncludeFailsBeforeSourceNA(t *testing.T) {
+	_, err := runFixtureCPPProductionCandidate(t, "#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-0\nRET\n")
+	if err == nil || !strings.Contains(err.Error(), "unbound CPP/generated include") {
+		t.Fatalf("production candidate consumed an unbound CPP source or reduced it to N/A: %v", err)
+	}
+}
+
+func runFixtureCPPProductionCandidate(t *testing.T, asm string) (matrixReport, error) {
+	t.Helper()
 	const module = "example.invalid/cpp-candidate"
 	const version = "v1.0.0"
 	const goMod = "module " + module + "\n\ngo 1.20\n"
@@ -158,7 +174,7 @@ func TestDiscoveryCandidateUnknownCPPIncludeFailsBeforeSourceNA(t *testing.T) {
 	writer := zip.NewWriter(&archive)
 	for file, source := range map[string]string{
 		"go.mod": goMod, "decl.go": "package fixture\nfunc Probe()\n",
-		"native_amd64.s": "#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-0\nRET\n",
+		"native_amd64.s": asm,
 	} {
 		entry, err := writer.Create(module + "@" + version + "/" + file)
 		if err != nil {
@@ -188,11 +204,9 @@ func TestDiscoveryCandidateUnknownCPPIncludeFailsBeforeSourceNA(t *testing.T) {
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv("GONOPROXY", "none")
 	t.Setenv("GOMODCACHE", t.TempDir())
-	_, _, _, err := runDiscoveryCandidate(discoveryCorpusConfig{CandidateTimeout: 30 * time.Second, Targets: []string{"linux/amd64"}},
+	result, _, _, err := runDiscoveryCandidate(discoveryCorpusConfig{CandidateTimeout: 30 * time.Second, Targets: []string{"linux/amd64"}},
 		discoveryCandidate{Module: module, Version: version, AsmFiles: []string{"native_amd64.s"}}, filepath.Join(t.TempDir(), "candidate"))
-	if err == nil || !strings.Contains(err.Error(), "unbound CPP/generated include") {
-		t.Fatalf("production candidate consumed an unbound CPP source or reduced it to N/A: %v", err)
-	}
+	return result, err
 }
 
 func TestOrdinaryCPPGuardPreservesNativeErrorAndRejectsNestedHeaderMutation(t *testing.T) {
@@ -233,7 +247,9 @@ func TestCPPInputsOfflineRejectsImpossibleHeaderBinding(t *testing.T) {
 }
 
 func TestOrdinaryResultRevalidatesStoredCPPProof(t *testing.T) {
-	plan, root, _ := fixtureCPPInputs(t)
+	plan, root, _ := fixtureCPPInputsForTarget(t, "linux/amd64", map[string]string{
+		"pkg/sub/outer.h": "#include \"choice.h\"\n#define FIXED_HEADER 1\n",
+	})
 	files := []string{"pkg/native_amd64.s"}
 	inputs, err := captureDiscoveryCPPInputs(plan, root, runtime.GOROOT(), files)
 	if err != nil {

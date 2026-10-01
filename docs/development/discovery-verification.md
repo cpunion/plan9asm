@@ -239,9 +239,15 @@ translation recheck those inputs; changed nested headers, newly preferred
 headers and source-proof errors fail, even alongside a native source error.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
-guard alone does not establish feature-profile or branch coverage. CPP proof
-compatibility retains schema 9; source-diagnostic checks separately reject
-reason-only rejections. Profile-aware reporting is still separate.
+guard alone does not establish feature-profile or branch coverage. Historical
+schema-9 reports without CPP input claims remain historical evidence, not
+profile-aware reporting. CPP-only CPU predicates now propose legal profiles
+and require actual Go-driver observations; exclusive assembler macros are not
+cumulative build tags. Until the profile-aware package/translator and four-part
+scope consumers are connected, the producer and reader reject these unconsumed
+CPP scopes for pass/N/A credit. Unknown CPU macros and experiment predicates
+without an actual package-role binding fail closed. Reachable predicate sides
+do not by themselves prove complete operand-form or runtime coverage.
 The producer checks captured files and directory names against that ZIP;
 aggregate/progress/ledger readers replay MatchFile and the custom-tag search.
 Offline readers validate frozen producer/source/tool provenance; they do not
