@@ -91,8 +91,14 @@ func TestTranslateARM64RawVariableShiftCompleteArchitectureFamily(t *testing.T) 
 				t.Fatal(err)
 			}
 			for _, intrinsic := range []string{"sshl", "srshl", "ushl", "urshl"} {
-				if got := strings.Count(ll, " = call "); got != 32 {
-					t.Fatalf("%s emitted %d intrinsic calls, want 32:\n%s", triple, got, ll)
+				calls := 0
+				for _, line := range strings.Split(ll, "\n") {
+					if strings.Contains(line, " = call ") && strings.Contains(line, "@llvm.aarch64.neon."+intrinsic+".") {
+						calls++
+					}
+				}
+				if calls != 8 {
+					t.Fatalf("%s emitted %d %s calls, want all 7 vector and 1 scalar forms:\n%s", triple, calls, intrinsic, ll)
 				}
 				if !strings.Contains(ll, "@llvm.aarch64.neon."+intrinsic+".i64") || !strings.Contains(ll, "@llvm.aarch64.neon."+intrinsic+".v16i8") {
 					t.Fatalf("%s omitted scalar or vector %s intrinsic:\n%s", triple, intrinsic, ll)

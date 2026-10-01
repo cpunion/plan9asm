@@ -620,6 +620,14 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("amd64 RET expects at most 1 operand: %q", ins.Raw)
 		}
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpReg && isX86YrlRegisterForArch(ins.Args[0].Reg, c.goarch) {
+			// Go preprocesses RET Rn into its frame epilogue followed by JMP
+			// Rn. It is not an ordinary return or a guessed generic C call.
+			return true, fmt.Errorf("%w: %s register RET needs a native tail-target ABI and frame contract: %q", ErrProbeNeedsContext, c.goarch, ins.Raw)
+		}
+		if len(ins.Args) != 0 {
+			return true, fmt.Errorf("%s RET accepts only no operand, a GP register or a symbol tail target: %q", c.goarch, ins.Raw)
+		}
 		return true, c.lowerRET()
 	case "NOPW", "NOPL":
 		if len(ins.Args) != 1 {
