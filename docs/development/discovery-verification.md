@@ -223,6 +223,15 @@ constraint/package-clause inputs, complete package/ancestor directory names,
 the exact module ZIP SHA-256 and Go h1 identity, and every target/tag decision.
 Related directory files (including assembly headers) also retain byte hashes;
 the producer rechecks them after package checks before releasing its workspace.
+New ordinary runs additionally capture compact `cpp_inputs` before their Go
+checks: exact ZIP-bound assembly/header SHA-256, registered CPP controls and
+Go's fixed package-directory/tool-include search. Go export/vet checks and
+translation recheck those inputs; changed nested headers, newly preferred
+headers and source-proof errors fail, even alongside a native source error.
+Unbound generated includes, unsupported control expansion, include cycles and
+explicit inventory bounds remain failures, not empty-object N/A. This source
+guard alone does not establish feature-profile or branch coverage. Historical
+schema-9 proof compatibility is unchanged; profile-aware reporting is separate.
 The producer checks captured files and directory names against that ZIP;
 aggregate/progress/ledger readers replay MatchFile and the custom-tag search.
 Offline readers validate frozen producer/source/tool provenance; they do not
@@ -235,6 +244,8 @@ source diagnostic; omissions, duplicates, changed headers and reason-only N/A
 fail. The virtual root `.` is a package directory, not a hidden-directory skip.
 Reasons distinguish filename targets, disabled-cgo selection, constraints,
 package-clause absence, source diagnostics and explicit target ABI evidence.
+`no_current_go_package` describes the ordinary non-test Go/ASM pairing scope;
+it does not prove that `go list -test` cannot select a test-only assembly package.
 Ignored directories and nested modules explicitly identify recursive corpus
 walk boundaries, not a claim that Go cannot build an explicitly named package.
 Raw diagnostics remain in reports; the ledger keeps stable source-skip categories

@@ -58,6 +58,7 @@ func classifyDiscoveryGoBuildFailure(diagnostic string) (infrastructure, retryab
 	// also encounters a transient network error. Never retry past an integrity
 	// failure or hide a resource/toolchain failure as source incompatibility.
 	for _, marker := range []string{
+		"source proof failure:",
 		"checksum mismatch",
 		"security error",
 		"ssl certificate problem",

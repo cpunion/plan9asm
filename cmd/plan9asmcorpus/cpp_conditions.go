@@ -35,9 +35,7 @@ func discoveryCPPConditionsFromBytes(file string, data []byte) (discoveryCPPSour
 	scan.Filename = file
 	scan.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
 	scan.Mode = scanner.ScanChars | scanner.ScanFloats | scanner.ScanIdents | scanner.ScanInts | scanner.ScanStrings | scanner.ScanComments | scanner.SkipComments
-	scan.IsIdentRune = func(ch rune, index int) bool {
-		return unicode.IsLetter(ch) || ch == '_' || ch == '\u00B7' || ch == '\u2215' || index > 0 && unicode.IsDigit(ch)
-	}
+	scan.IsIdentRune = discoveryCPPIdentifierRune
 	var scanErr error
 	scan.Error = func(scan *scanner.Scanner, message string) {
 		if scanErr == nil {
@@ -137,6 +135,22 @@ func discoveryCPPConditionsFromBytes(file string, data []byte) (discoveryCPPSour
 		return input, scanErr
 	}
 	return input, nil
+}
+
+func discoveryCPPIdentifierRune(ch rune, index int) bool {
+	return unicode.IsLetter(ch) || ch == '_' || ch == '\u00B7' || ch == '\u2215' || index > 0 && unicode.IsDigit(ch)
+}
+
+func validDiscoveryCPPMacroName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for index, ch := range name {
+		if !discoveryCPPIdentifierRune(ch, index) {
+			return false
+		}
+	}
+	return true
 }
 
 func replayDiscoveryCPPConditions(directives []discoveryCPPDirective, defines []string) (map[int]discoveryCPPBranchState, error) {

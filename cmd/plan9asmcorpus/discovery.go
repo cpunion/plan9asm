@@ -2104,6 +2104,27 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	if err != nil {
 		return matrixReport{}, nil, nil, err
 	}
+	var ordinaryPlan *discoveryOrdinarySelectionPlan
+	var cppGoRoot string
+	captureOrdinary := func() error {
+		return runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			var err error
+			ordinaryPlan, cppGoRoot, err = captureDiscoveryOrdinaryCPP(ctx, candidate, download, cfg.Targets, workDir, env)
+			return err
+		})
+	}
+	_, nativeConfigured := cfg.nativeLayoutSkips[candidate.exactKey()]
+	_, privateConfigured := cfg.privateExtensionSkips[candidate.exactKey()]
+	if len(candidate.AsmFiles) != 0 && !nativeConfigured && !privateConfigured {
+		if err := captureOrdinary(); err != nil {
+			return matrixReport{}, nil, nil, fmt.Errorf("capture exact ordinary/CPP inputs before package checks: %w", err)
+		}
+	}
+	defer func() {
+		if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
+	}()
 	var sourceNotApplicable []discoverySourceNotApplicableItem
 	var nativePlan *discoveryNativeLayoutPlan
 	var nativePlans []*discoveryNativeLayoutPlan
@@ -2114,6 +2135,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	buildConfigurations, err := discoveryBuildConfigurationsWithEvidence(candidate, download.Dir, cfg.Targets, &sourceNotApplicable, nativePlans...)
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
+	}
+	if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+		return matrixReport{}, nil, nil, err
 	}
 	var privateExtension *discoveryPrivateExtensionSkip
 	if skip, ok := cfg.privateExtensionSkips[candidate.exactKey()]; ok {
@@ -2160,22 +2184,12 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		buildConfigurations = filtered
 		nativeLayout = &skip
 	}
-	var ordinaryPlan *discoveryOrdinarySelectionPlan
 	// Only an active, independently verified exception has a separate proof
 	// protocol. A configured but unselected private exception remains ordinary.
-	if nativeLayout == nil && privateExtension == nil && len(candidate.AsmFiles) != 0 {
-		ordinaryPlan, err = captureOrdinarySelectionPlan(candidate, download.Dir, cfg.Targets)
-		if err != nil {
-			return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection: %w", err)
+	if ordinaryPlan == nil && nativeLayout == nil && privateExtension == nil && len(candidate.AsmFiles) != 0 {
+		if err := captureOrdinary(); err != nil {
+			return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection/CPP inputs: %w", err)
 		}
-		if err := verifyOrdinarySelectionZIP(ordinaryPlan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
-			return matrixReport{}, nil, nil, fmt.Errorf("capture exact module ZIP identity: %w", err)
-		}
-		defer func() {
-			if err := verifyOrdinarySelectionUnchanged(ordinaryPlan, download.Dir, candidate); err != nil {
-				runErr = errors.Join(runErr, fmt.Errorf("ordinary source-selection inputs changed during package checks: %w", err))
-			}
-		}()
 	}
 	if len(buildConfigurations) == 0 {
 		return matrixReport{
@@ -2236,7 +2250,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var targetAsmFiles []string
 				var eligibleGroups []discoveryPackageGroup
 				buildErrors, err := runDiscoveryPackageChecks(packageGroups, func(patterns []string) error {
-					return runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns...)
+					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, func() error {
+						return runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns...)
+					})
 				})
 				if err != nil {
 					return fmt.Errorf("verify current Go packages for %s with build tags %v: %w",
@@ -2257,7 +2273,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					buildableGroups = append(buildableGroups, group)
 				}
 				vetErrors, err := runDiscoveryPackageChecks(buildableGroups, func(patterns []string) error {
-					return runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns)
+					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, func() error {
+						return runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns)
+					})
 				})
 				if err != nil {
 					return fmt.Errorf("verify current Go asmdecl for %s with build tags %v: %w",
@@ -2338,6 +2356,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					})
 					invocationIndex++
 				}
+				if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+					return err
+				}
 				if err := runDiscoveryBounded(ctx, len(translations), discoveryTranslationParallelism,
 					func(ctx context.Context, index int) error {
 						translation := translations[index]
@@ -2346,8 +2367,14 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							return fmt.Errorf("translate and compile package %s for %s with build tags %v: %w",
 								translation.Unit.Patterns[0], target, buildConfiguration.BuildTags, err)
 						}
+						if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+							return err
+						}
 						return nil
 					}); err != nil {
+					return err
+				}
+				if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
 					return err
 				}
 				for _, translation := range translations {
@@ -2741,6 +2768,10 @@ func retryDiscoveryGoNetwork(ctx context.Context, delays []time.Duration, operat
 func isDiscoveryInfrastructureFailure(err error) bool {
 	if err == nil {
 		return false
+	}
+	var sourceProof *discoverySourceProofError
+	if errors.As(err, &sourceProof) {
+		return true
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
 		errors.Is(err, errDiscoveryCommandOutputExceeded) ||

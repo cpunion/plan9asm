@@ -46,6 +46,7 @@ type discoveryOrdinarySelectionPlan struct {
 	Sources     []ordinarySelectionSource    `json:"sources"`
 	Directories []ordinarySelectionDirectory `json:"directories"`
 	Decisions   []ordinarySelectionDecision  `json:"decisions"`
+	CPPInputs   *discoveryCPPInputs          `json:"cpp_inputs,omitempty"`
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The
@@ -715,6 +716,11 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 	decisions, eligible, err := replayOrdinarySelection(plan, result.DiscoveredAsmFiles)
 	if err != nil {
 		return err
+	}
+	if plan.CPPInputs != nil {
+		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, ordinarySelectionEligibleCPPFiles(eligible)); err != nil {
+			return err
+		}
 	}
 	if !equalOrdinarySelectionDecisions(decisions, plan.Decisions) {
 		return fmt.Errorf("ordinary source-selection decisions disagree with exact source replay")
