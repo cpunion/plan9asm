@@ -81,7 +81,7 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 			if call {
 				return false, fmt.Errorf("%w: ARM64 call through native caller link has no callee ABI contract: %q", ErrProbeNeedsContext, ins.Raw)
 			}
-			if op != OpRET && c.localControl.autoReturn {
+			if op != OpRET && c.localControl.autoFrame {
 				return false, fmt.Errorf("%w: ARM64 branch through caller link has no Go frame epilogue proof: %q", ErrProbeNeedsContext, ins.Raw)
 			}
 			if err := c.requireCallerSPRestored(bi, ins); err != nil {
@@ -91,7 +91,7 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 			c.recordARM64FlagFlowEdges(targets[0])
 			return true, nil
 		}
-		if op == OpRET && c.localControl.autoReturn {
+		if op == OpRET && c.localControl.autoFrame {
 			for _, target := range targets {
 				if target != c.localControl.outer {
 					return false, fmt.Errorf("%w: ARM64 framed RET to a local code address requires the caller-frame epilogue, not a local helper return: %q", ErrProbeNeedsContext, ins.Raw)

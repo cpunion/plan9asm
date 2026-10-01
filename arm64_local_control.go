@@ -21,9 +21,44 @@ type arm64ControlState struct {
 type arm64LocalControlPlan struct {
 	before      map[[2]int]arm64ControlValue
 	stackBefore map[[2]int]arm64ControlValue
+	linkBefore  map[[2]int]arm64ControlValue
 	reachable   []bool
 	outer       string
-	autoReturn  bool
+	autoFrame   bool
+}
+
+type arm64GoFrame struct {
+	present      bool
+	restoresLink bool
+}
+
+// Go obj7 marks only source ABL instructions nonleaf, before expanding raw
+// AWORD instructions. A decoded WORD BL must not invent a Go LR/FP prologue.
+func arm64SourceGoFrame(fn Func) arm64GoFrame {
+	noFrame, leaf := fn.FrameSize == -8, true
+	for _, ins := range fn.Instrs {
+		op := arm64ControlOp(ins)
+		if op == "BL" || op == "CALL" {
+			leaf = false
+		}
+		if op != OpTEXT {
+			continue
+		}
+		_, rest := splitOpcode(ins.Raw)
+		parts := strings.Split(rest, ",")
+		if len(parts) != 3 {
+			continue
+		}
+		if flags, ok := parseImmExpr(strings.TrimSpace(parts[1])); ok {
+			noFrame = noFrame || flags&512 != 0 // objabi.NOFRAME
+		} else {
+			for _, flag := range strings.Split(parts[1], "|") {
+				noFrame = noFrame || strings.TrimSpace(flag) == "NOFRAME"
+			}
+		}
+	}
+	present := !noFrame && (!leaf || fn.FrameSize > 0)
+	return arm64GoFrame{present: present, restoresLink: present && !leaf}
 }
 
 func arm64ControlExternal() arm64ControlValue { return arm64ControlValue{"": true} }
@@ -311,32 +346,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	plan := &arm64LocalControlPlan{
 		before:      make(map[[2]int]arm64ControlValue),
 		stackBefore: make(map[[2]int]arm64ControlValue),
+		linkBefore:  make(map[[2]int]arm64ControlValue),
 	}
-	noFrame, leaf := c.frameSize == -8, true
-	for _, block := range c.blocks {
-		for _, ins := range block.instrs {
-			op := arm64ControlOp(ins)
-			if op == "BL" || op == "BLR" || op == "CALL" {
-				leaf = false
-			}
-			if op == OpTEXT {
-				_, rest := splitOpcode(ins.Raw)
-				parts := strings.Split(rest, ",")
-				if len(parts) == 3 {
-					if flags, ok := parseImmExpr(strings.TrimSpace(parts[1])); ok {
-						noFrame = noFrame || flags&512 != 0 // objabi.NOFRAME
-					} else {
-						for _, flag := range strings.Split(parts[1], "|") {
-							noFrame = noFrame || strings.TrimSpace(flag) == "NOFRAME"
-						}
-					}
-				}
-			}
-		}
-	}
-	// Go's framed nonleaf RET restores the caller LR in its auto-epilogue.
-	// NOFRAME and zero-frame leaf RET instead branch through the selected LR.
-	plan.autoReturn = !noFrame && (!leaf || c.frameSize > 0)
+	plan.autoFrame = c.sourceGoFrame.present
 	indices := make(map[string]int, len(c.blocks))
 	for index, block := range c.blocks {
 		indices[block.name] = index
@@ -350,6 +362,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	entry := &arm64ControlState{regs: map[Reg]arm64ControlValue{
 		SP: {"sp:0": true}, Reg("R30"): {"label:" + plan.outer: true},
 	}, memory: make(map[string]arm64ControlValue)}
+	if c.sourceGoFrame.present {
+		entry.memory["sp:0"] = entry.regs[Reg("R30")]
+	}
 	for _, reg := range c.sig.ArgRegs {
 		entry.regs[reg] = arm64ControlExternal()
 	}
@@ -382,6 +397,11 @@ func (c *arm64Ctx) prepareLocalControl() error {
 			post := strings.HasSuffix(string(ins.Op), ".P")
 			if op == "B" || op == "JMP" || op == OpRET {
 				plan.stackBefore[[2]int{bi, ii}] = arm64ControlRead(state.regs, SP)
+				link := arm64ControlRead(state.regs, Reg("R30"))
+				if op == OpRET && c.sourceGoFrame.restoresLink {
+					link = state.source(Operand{Kind: OpMem, Mem: MemRef{Base: SP}}, false)
+				}
+				plan.linkBefore[[2]int{bi, ii}] = link
 			}
 			if op == "BL" || op == "BLR" || op == "CALL" {
 				if len(ins.Args) != 1 || bi+1 >= len(c.blocks) {
@@ -441,7 +461,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 				break
 			}
 			if op == OpRET {
-				if target, register := arm64RegisterReturnTarget(ins, plan.autoReturn); register {
+				if target, register := arm64RegisterReturnTarget(ins, plan.autoFrame); register {
 					value := state.branchValue(target)
 					plan.before[[2]int{bi, ii}] = value
 					for token := range value {
@@ -507,6 +527,17 @@ func (c *arm64Ctx) requireCallerSPRestored(bi int, ins Instr) error {
 	return nil
 }
 
+func (c *arm64Ctx) requireCallerLinkRestored(bi int, ins Instr) error {
+	if c.localControl == nil {
+		return fmt.Errorf("%w: ARM64 caller return has no LR reaching-definition proof: %q", ErrProbeNeedsContext, ins.Raw)
+	}
+	value := c.localControl.linkBefore[[2]int{bi, c.currentInstruction}]
+	if len(value) != 1 || !value["label:"+c.localControl.outer] {
+		return fmt.Errorf("%w: ARM64 caller return requires the caller LR on every reaching path: %q", ErrProbeNeedsContext, ins.Raw)
+	}
+	return nil
+}
+
 func (state *arm64ControlState) branchValue(op Operand) arm64ControlValue {
 	reg := op.Reg
 	if op.Kind == OpMem {
@@ -519,12 +550,12 @@ func (state *arm64ControlState) branchValue(op Operand) arm64ControlValue {
 	return arm64ControlRead(state.regs, reg)
 }
 
-func arm64RegisterReturnTarget(ins Instr, autoReturn bool) (Operand, bool) {
+func arm64RegisterReturnTarget(ins Instr, hasGoFrame bool) (Operand, bool) {
 	if len(ins.Args) == 0 {
-		return Operand{Kind: OpReg, Reg: Reg("R30")}, !autoReturn
+		return Operand{Kind: OpReg, Reg: Reg("R30")}, !hasGoFrame
 	}
 	if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
-		return Operand{Kind: OpReg, Reg: Reg("R30")}, !autoReturn
+		return Operand{Kind: OpReg, Reg: Reg("R30")}, !hasGoFrame
 	}
 	if len(ins.Args) != 1 || (ins.Args[0].Kind != OpReg && ins.Args[0].Kind != OpMem) {
 		return Operand{}, false
@@ -538,7 +569,7 @@ func arm64RegisterReturnTarget(ins Instr, autoReturn bool) (Operand, bool) {
 	if reg == SP || reg == Reg("RSP") {
 		target = Operand{Kind: OpReg, Reg: ZR}
 	}
-	return target, !autoReturn || reg != Reg("R30")
+	return target, !hasGoFrame || reg != Reg("R30")
 }
 
 func arm64IsConditionalBranch(op Op) bool {

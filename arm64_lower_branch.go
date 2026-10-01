@@ -76,7 +76,13 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			if c.lowerProvenUnreachableControl(bi) {
 				return true, true, nil
 			}
+			if c.sourceGoFrame.present {
+				return true, false, fmt.Errorf("%w: ARM64 symbol branch has no implicit Go frame epilogue: %q", ErrProbeNeedsContext, ins.Raw)
+			}
 			if err := c.requireCallerSPRestored(bi, ins); err != nil {
+				return true, false, err
+			}
+			if err := c.requireCallerLinkRestored(bi, ins); err != nil {
 				return true, false, err
 			}
 			return true, true, c.tailCallAndRet(ins.Args[0])

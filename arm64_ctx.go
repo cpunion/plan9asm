@@ -37,6 +37,7 @@ type arm64Ctx struct {
 	localStackSlot string
 	localStackSize int64
 	frameSize      int64 // TEXT local storage, including accesses through SP aliases
+	sourceGoFrame  arm64GoFrame
 	dynamicStack   *arm64DynamicStackPlan
 
 	flagsNSlot   string
@@ -68,6 +69,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		sigs:           sigs,
 		annotate:       annotate,
 		frameSize:      fn.FrameSize,
+		sourceGoFrame:  arm64SourceGoFrame(fn),
 		blocks:         arm64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -1147,6 +1149,16 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		addr := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+		if c.sourceGoFrame.present {
+			// Go saves the incoming LR at the bottom of every implicit frame,
+			// including a framed leaf. Explicit source loads/stores can observe
+			// this cell; it is not a fabricated source-level local-call link.
+			link, err := c.loadReg(Reg("R30"))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.b, "  store i64 %s, ptr %%%s\n", link, base)
+		}
 	}
 
 	// Vector registers: keep as <16 x i8> to cover most stdlib NEON byte ops.

@@ -888,6 +888,7 @@ func emitARM64Prelude(b *strings.Builder) {
 }
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+	sourceGoFrame := arm64SourceGoFrame(fn)
 	var err error
 	fn, err = normalizeARM64NamedPCRelative(fn)
 	if err != nil {
@@ -926,6 +927,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	b.WriteString(" {\n")
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
+	c.sourceGoFrame = sourceGoFrame
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
 	if err := c.prepareLocalControl(); err != nil {
@@ -1028,6 +1030,9 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			if err := c.requireCallerSPRestored(bi, ins); err != nil {
 				return true, err
 			}
+			if err := c.requireCallerLinkRestored(bi, ins); err != nil {
+				return true, err
+			}
 			return true, c.tailCallAndRet(ins.Args[0])
 		}
 		if len(ins.Args) > 1 {
@@ -1039,7 +1044,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			}
 		}
 		if c.localControl != nil {
-			if target, register := arm64RegisterReturnTarget(ins, c.localControl.autoReturn); register {
+			if target, register := arm64RegisterReturnTarget(ins, c.localControl.autoFrame); register {
 				ins.Args = []Operand{target}
 				return c.lowerRegisterControl(bi, OpRET, ins)
 			}
@@ -1048,6 +1053,9 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			return true, nil
 		}
 		if err := c.requireCallerSPRestored(bi, ins); err != nil {
+			return true, err
+		}
+		if err := c.requireCallerLinkRestored(bi, ins); err != nil {
 			return true, err
 		}
 		return true, c.lowerRET()
