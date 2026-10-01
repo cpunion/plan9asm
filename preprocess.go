@@ -563,8 +563,22 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 		trim := strings.TrimSpace(line)
 		if opt != nil && strings.HasPrefix(trim, "#") {
 			fields := strings.Fields(strings.TrimPrefix(trim, "#"))
-			if len(fields) == 0 || (fields[0] != "ifdef" && fields[0] != "ifndef" && fields[0] != "else" && fields[0] != "endif") {
+			if len(fields) == 0 {
+				return "", fmt.Errorf("invalid macro-expanded preprocessor directive: %s", trim)
+			}
+			conditional := fields[0] == "ifdef" || fields[0] == "ifndef" || fields[0] == "else" || fields[0] == "endif"
+			if !active && !conditional {
+				continue // cmd/asm does not parse inactive include/define operands
+			}
+			if !conditional {
 				return "", fmt.Errorf("unsupported macro-expanded preprocessor directive: %s", trim)
+			}
+			if fields[0] == "ifdef" || fields[0] == "ifndef" {
+				if len(fields) != 2 || !validPPIdentifier(fields[1]) {
+					return "", fmt.Errorf("invalid macro-expanded #%s: %s", fields[0], trim)
+				}
+			} else if len(fields) != 1 {
+				return "", fmt.Errorf("unexpected tokens in macro-expanded #%s: %s", fields[0], trim)
 			}
 		}
 		switch {

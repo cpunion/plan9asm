@@ -187,6 +187,16 @@ func TestPreprocessAssemblyGoControlTokenOracle(t *testing.T) {
 	if got, err := PreprocessAssemblySource(validLine, AssemblyPreprocessOptions{}); err != nil || !strings.Contains(got, "$42") {
 		t.Fatalf("valid Go #line: %q, %v", got, err)
 	}
+	const inactiveExpandedInclude = "#define BODY \\\n#ifdef ABSENT \\\n#include malformed missing operand \\\n#endif\nBODY\nDATA ·value(SB)/4,$42\nGLOBL ·value(SB),8,$4\n"
+	runGoAssemblyControlOracle(t, inactiveExpandedInclude, true)
+	if got, err := PreprocessAssemblySource(inactiveExpandedInclude, AssemblyPreprocessOptions{}); err != nil || !strings.Contains(got, "$42") {
+		t.Errorf("inactive macro-expanded include parsed: %q, %v", got, err)
+	}
+	const invalidExpandedCondition = "#define BODY \\\n#ifdef ABSENT garbage \\\n#endif\nBODY\n"
+	runGoAssemblyControlOracle(t, invalidExpandedCondition, false)
+	if _, err := PreprocessAssemblySource(invalidExpandedCondition, AssemblyPreprocessOptions{}); err == nil {
+		t.Fatal("Go-rejected macro-expanded condition accepted")
+	}
 }
 
 func runGoAssemblyControlOracle(t *testing.T, source string, accepted bool) {
