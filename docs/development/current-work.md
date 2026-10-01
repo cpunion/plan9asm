@@ -44,17 +44,28 @@ it using Git, not a personal filesystem path. Its important repairs include:
 - Shared typed raw ARM64 decoders: SVE, floating, integer/crypto SIMD and
   state/memory effects. Z/V/ZA registers are not GP registers; real stores
   taint saved continuation memory. Unknown exceptions/calls remain conservative.
+- Shared complete paired-atomic grammar/effects, including Go's physical
+  zero-offset named-SP forms. Operand probes preserve real source SP/LR or
+  explicitly terminate; they never manufacture an ordinary return proof.
+- Declaration-backed ARM64 ABIInternal aggregates, caller-save availability,
+  narrow-bit transport and all seven VMOV duplication arrangements, with
+  independent Go/LLVM runtime oracles. Hidden native registers remain explicit.
 - ARM kuser/native-continuation support and complete barrel-shift/multiply
-  flag semantics. The native asyncPreempt entry contract remains unfinished.
+  flag semantics. An explicit address-only machine-entry shim captures physical
+  state and bounded source stack storage; asyncPreempt is not yet supported.
 - Compile-only exact Go package checks via `go list -export`, rather than
   executable linking; explicit target CPU macros and actual Go package-role
-  experiment macro registration. These helpers do not yet establish complete
-  feature-profile-aware discovery evidence.
+  experiment macro registration. Source-required profile planning and offline
+  replay helpers are integrated, but production profile/CPP report closure is
+  unfinished. These helpers alone do not validate any old source N/A.
 
 Checkpoint `794b98b5` finished the full root suite with 37 failing top-level
 tests. Its corpus/scanner units and nested command suites passed. Subsequent
 bounded repairs passed their focused tests, but no current-head full-suite or
 fresh external-corpus success is claimed.
+Checkpoint `3900b033` reran the 31 unchanged historical failure titles and
+passed. The six renamed tests retain original-source negatives and independent
+positive oracles; they require the full current suite, not name-only counting.
 
 Checkpoint `cd2b46a4` passed all five current official classification gates,
 including ARM carry-dependent single-form probes with an explicit source CMP.
@@ -70,13 +81,13 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
    reports, aggregation, progress and ledger verification together. Old
    schema-9 evidence cannot be relabeled. Reevaluate historical source N/A;
    missing proof or infrastructure errors must not become a source skip.
-2. ARM native machine entry: explicit address-only entry shim and bounded
-   stack/register/flags capture, without a hidden ordinary function argument.
-   Validate against actual Go source and runtime before a stdlib pass claim.
-3. ARM64 typed Go register ABI: declaration plus explicit ABIInternal selector,
-   recursive aggregate assignment, caller-save availability and narrow-bit
-   transport. Review and integrate independent Go/LLVM runtime evidence.
-   Hidden closure/native registers need their own contract, not guessed R26.
+2. ARM native entry/returns: extend the explicit physical shim only with closed
+   continuation/effect proofs. Go accepts RET register operands that are not
+   ordinary caller returns; preserve actual Go/runtime counterexamples.
+3. ARM64 private register helpers: fold only complete same-file, register-only
+   leaf call graphs into their caller CFG with a proved source continuation.
+   Memory/frame escapes, unknown entries and hidden closure/native registers
+   require separate contracts. Never guess scalar signatures from body shape.
 4. Remaining root regressions: distinguish genuinely unsafe source returns
    from stale IR-shape assertions; fix complete typed effect families and retain
    unsafe-source negatives. Framed tail jumps must not acquire an invented
