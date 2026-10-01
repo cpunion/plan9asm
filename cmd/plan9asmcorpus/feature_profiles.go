@@ -17,6 +17,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 type discoveryFeatureProfileRequest struct {
@@ -328,34 +330,7 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 }
 
 func discoveryModeledCPUFeatures(tags []string, arch, value string, minor int) []string {
-	var modeled []string
-	for _, tag := range tags {
-		if !strings.HasPrefix(tag, arch+".") {
-			modeled = append(modeled, tag)
-		}
-	}
-	level := strings.Split(value, ",")[0]
-	for _, candidate := range discoveryCPUFeatureCandidates() {
-		if !strings.HasPrefix(candidate, arch+".") {
-			continue
-		}
-		selected := candidate == arch+"."+level
-		switch arch {
-		case "amd64", "arm":
-			selected = candidate <= arch+"."+level
-		case "arm64":
-			selected = value != "" && (candidate <= "arm64."+level && strings.HasPrefix(candidate, "arm64."+level[:2]))
-			if strings.HasPrefix(level, "v9.") && strings.HasPrefix(candidate, "arm64.v8.") {
-				selected = int(candidate[len(candidate)-1]-'0') <= int(level[len(level)-1]-'0')+5
-			}
-		case "wasm":
-			selected = minor >= 27 || containsTargetFeature(strings.Split(value, ","), strings.TrimPrefix(candidate, "wasm."))
-		}
-		if selected {
-			modeled = append(modeled, candidate)
-		}
-	}
-	return uniqueSortedDiscoveryStrings(modeled)
+	return gotoolprofile.CPUFeatures(tags, arch, value, minor)
 }
 
 func discoveryFeatureRequestKey(request discoveryFeatureProfileRequest) string {
