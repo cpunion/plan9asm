@@ -139,6 +139,15 @@ Go-accepted selected-family case to remain lowerable.
 
 ## Semantic and raw-encoding checks
 
+The Advanced SIMD SM3 family is WORD-only in Go 1.27. Its exact seven forms
+follow [Arm DDI 0602](https://documentation-service.arm.com/static/67e40f3398aa3c3b6eea6a85)
+and LLVM 22's crypto encoder: PARTW1/PARTW2, SS1 and TT1A/B/TT2A/B, with
+four-word vectors and TT indices 0–3. The shared raw-vector registry records no
+GP/SP or memory effects; destructive destination reads and all aliases remain
+explicit. Portable LLVM arithmetic is checked separately from original Go
+WORD execution, which is required on Linux/QEMU CPU=max. Host-only arithmetic
+execution is not evidence that the host implements FEAT_SM3.
+
 - Distinguish physical encoding rules from Go frontend acceptance, especially
   for 386 VEX/EVEX registers and ignored VEX.W bits. Check primary architecture
   specifications in addition to Go tables.

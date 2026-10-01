@@ -13,6 +13,7 @@ func arm64RawVectorFamilyOracleLines() []string {
 	return []string{
 		"aese v30.16b, v31.16b",
 		"sm4e v30.4s, v31.4s",
+		"sm3ss1 v30.4s, v31.4s, v29.4s, v28.4s",
 		"sqrdmlah v30.4s, v31.4s, v29.4s",
 		"addp d30, v31.2d",
 		"sdot v30.4s, v31.16b, v29.16b",
@@ -88,6 +89,7 @@ func TestARM64RawVectorDecodersHaveSharedEffectsAndLowering(t *testing.T) {
 		"arm64_lower_word_uadalp.go",
 		"arm64_lower_word_sqdmulh.go",
 		"arm64_lower_word_sm4.go",
+		"arm64_lower_word_sm3.go",
 		"arm64_lower_word_dot_product.go",
 		"arm64_lower_aes.go",
 		"arm64_lower_word_umlal.go",

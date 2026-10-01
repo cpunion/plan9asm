@@ -7,6 +7,7 @@ package plan9asm
 var arm64RawVectorFamilies = [...]arm64RawFamily{
 	arm64RawNoGPOrMemoryForm(decodeARM64RawAES, (*arm64Ctx).lowerRawAES),
 	arm64RawNoGPOrMemoryForm(decodeARM64RawSM4, (*arm64Ctx).lowerRawSM4),
+	arm64RawNoGPOrMemoryForm(decodeARM64RawSM3, (*arm64Ctx).lowerRawSM3),
 	arm64RawNoGPOrMemoryForm(decodeARM64RawRDMA, (*arm64Ctx).lowerRawRDMA),
 	arm64RawNoGPOrMemoryForm(decodeARM64RawScalarADDP, (*arm64Ctx).lowerRawScalarADDP),
 	arm64RawNoGPOrMemoryForm(decodeARM64RawDotProduct, (*arm64Ctx).lowerRawDotProduct),

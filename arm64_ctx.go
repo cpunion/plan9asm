@@ -526,6 +526,14 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.second)))
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
+				if form, ok := decodeARM64RawSM3(word); ok {
+					markReg(Reg(fmt.Sprintf("V%d", form.first)))
+					markReg(Reg(fmt.Sprintf("V%d", form.second)))
+					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+					if form.spec.fourRegisters {
+						markReg(Reg(fmt.Sprintf("V%d", form.third)))
+					}
+				}
 				if form, ok := decodeARM64RawRDMA(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.first)))
 					markReg(Reg(fmt.Sprintf("V%d", form.second)))
