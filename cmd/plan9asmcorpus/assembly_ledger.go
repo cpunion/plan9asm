@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
@@ -513,12 +512,17 @@ func readAssemblyLedgerSnapshot(outputDir, scanSHA, semanticSourceSHA string, al
 		if fmt.Sprintf("%x", checksum) != shard.SHA256 {
 			return discoveryProgress{}, fmt.Errorf("assembly ledger shard %s checksum mismatch", shard.Name)
 		}
-		scanner := bufio.NewScanner(bytes.NewReader(contents))
 		count := 0
 		var previous discoveryCandidateProgress
-		for scanner.Scan() {
+		// The whole shard is already loaded and checksum-verified. Slice its
+		// lines without copying or imposing Scanner's unrelated 64 KiB limit:
+		// a single candidate can retain many file/target/profile proofs.
+		remaining := contents
+		for len(remaining) > 0 {
+			line, rest, _ := bytes.Cut(remaining, []byte{'\n'})
+			remaining = rest
 			var candidate discoveryCandidateProgress
-			if err := decodeAssemblyLedgerJSON(scanner.Bytes(), &candidate); err != nil {
+			if err := decodeAssemblyLedgerJSON(line, &candidate); err != nil {
 				return discoveryProgress{}, err
 			}
 			if legacy {
@@ -535,9 +539,6 @@ func readAssemblyLedgerSnapshot(outputDir, scanSHA, semanticSourceSHA string, al
 			progress.Candidates = append(progress.Candidates, candidate)
 			previous = candidate
 			count++
-		}
-		if err := scanner.Err(); err != nil {
-			return discoveryProgress{}, err
 		}
 		if count != shard.Count {
 			return discoveryProgress{}, fmt.Errorf("assembly ledger shard %s count mismatch", shard.Name)

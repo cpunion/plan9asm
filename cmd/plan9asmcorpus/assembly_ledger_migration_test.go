@@ -79,6 +79,37 @@ func TestAssemblyLedgerWriterReplacesValidatedLegacyPendingOnly(t *testing.T) {
 	}
 }
 
+func TestAssemblyLedgerLargePendingRecordRoundTrip(t *testing.T) {
+	_, progress, source := legacyPendingLedgerFixture(t)
+	// Stress serialization only: this artificial pending path is never counted
+	// as a scanned module, a translation or an executed corpus pass.
+	progress.Candidates[0].Module = "example.com/" + strings.Repeat("nested/", 11000) + "pending"
+	encoded, err := json.Marshal(progress.Candidates[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) <= 64*1024 {
+		t.Fatal("fixture did not exceed Scanner's default token limit")
+	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	if err := writeAssemblyLedger(output, progress, source); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readAssemblyLedger(output, progress.LedgerSHA256, source)
+	if err != nil {
+		t.Fatalf("writer published evidence its own reader cannot consume: %v", err)
+	}
+	if got.CandidateTotal != progress.CandidateTotal || got.Pending != progress.Pending || got.Passed != 0 || got.Verified {
+		t.Fatalf("large pending record changed outcome accounting: %+v", got)
+	}
+	for _, candidate := range got.Candidates {
+		if candidate.Module == progress.Candidates[0].Module {
+			return
+		}
+	}
+	t.Fatal("large pending record was lost")
+}
+
 func TestAssemblyLedgerLegacyReplacementRefusesClaimedOrDamagedEvidence(t *testing.T) {
 	for _, name := range []string{"outcome", "reported shard", "wrong schema", "unknown format", "tampered shard", "record proof", "unknown field", "unrelated file"} {
 		t.Run(name, func(t *testing.T) {
