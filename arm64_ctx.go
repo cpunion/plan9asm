@@ -1056,6 +1056,9 @@ func (c *arm64Ctx) scanUsedRegs() {
 		}
 	}
 	// Ensure arg regs exist.
+	if c.sig.ARM64ClosureABI != nil {
+		markReg(c.sig.ARM64ClosureABI.ContextRegister)
+	}
 	if c.sig.ARM64GoRegisterABI != nil {
 		for _, slot := range append(append([]ARM64GoRegisterValue(nil), c.sig.ARM64GoRegisterABI.Params...), c.sig.ARM64GoRegisterABI.Results...) {
 			markReg(slot.Register)
@@ -1290,6 +1293,11 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 
 	// Map args -> the independent integer and floating-point ABIInternal banks,
 	// or to an explicit helper register assignment.
+	if c.sig.ARM64ClosureABI != nil {
+		if err := c.storeABIRegisterValue(c.sig.ARM64ClosureABI.ContextRegister, Ptr, "%closure"); err != nil {
+			return err
+		}
+	}
 	if c.goRegisterEntry {
 		for _, slot := range c.sig.ARM64GoRegisterABI.Params {
 			value := c.extractGoABIValue(c.sig.Args[slot.Index], fmt.Sprintf("%%arg%d", slot.Index), slot)

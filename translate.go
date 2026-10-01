@@ -62,6 +62,10 @@ type FuncSig struct {
 	// register-only contract. ArgRegs retains its separate custom ABI meaning.
 	ARM64GoRegisterABI *ARM64GoRegisterABI
 
+	// ARM64ClosureABI is an explicit required hidden carrier. It does not add
+	// an Args element or permit calls which have no matching carrier producer.
+	ARM64ClosureABI *ARM64ClosureABI
+
 	// Frame provides a minimal stack-frame model for resolving name+off(FP)
 	// references in Go/Plan9 assembly into LLVM function args/returns.
 	//
@@ -229,6 +233,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 	resolve := opt.ResolveSym
 	if resolve == nil {
 		resolve = func(s string) string { return s }
+	}
+	if err := validateARM64ClosureFile(file, opt, resolve); err != nil {
+		return "", err
 	}
 	if !opt.WASMABI.valid() {
 		return "", fmt.Errorf("invalid wasm ABI %d", opt.WASMABI)
@@ -447,6 +454,10 @@ func emitExternFuncDecls(b *strings.Builder, file *File, resolve func(string) st
 		}
 		fmt.Fprintf(b, "declare %s %s(", sig.Ret, llvmGlobal(funcSigSymbol(name, sig)))
 		argIndex := 0
+		if sig.ARM64ClosureABI != nil {
+			fmt.Fprintf(b, "ptr %s", sig.ARM64ClosureABI.llvmAttribute())
+			argIndex++
+		}
 		if sig.WASMContext != "" {
 			b.WriteString(string(sig.WASMContext))
 			argIndex++

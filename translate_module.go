@@ -22,6 +22,13 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (llvm.M
 	if err := validateARMMachineEntryArchitecture(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
+	resolve := opt.ResolveSym
+	if resolve == nil {
+		resolve = func(symbol string) string { return symbol }
+	}
+	if err := validateARM64ClosureFile(file, opt, resolve); err != nil {
+		return llvm.Module{}, err
+	}
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return llvm.Module{}, err
 	}

@@ -395,6 +395,9 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 		return nil
 	}
 	csig, ok := c.sigs[callee]
+	if csig.ARM64ClosureABI != nil {
+		return arm64GoABIContext("call %q requires a matching typed closure carrier", callee)
+	}
 	if !ok {
 		// Default for external runtime helpers not discovered in this asm file.
 		csig = FuncSig{Name: callee, Ret: Void}
@@ -474,6 +477,9 @@ func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
 	s = strings.TrimSuffix(s, "(SB)")
 	callee := c.resolve(s)
 	csig, ok := c.sigs[callee]
+	if csig.ARM64ClosureABI != nil {
+		return arm64GoABIContext("tail call %q requires a matching typed closure carrier", callee)
+	}
 	if !ok {
 		// Cross-package trampoline (e.g. sync/atomic -> internal/runtime/atomic).
 		// If we don't have an explicit signature, fall back to caller signature.

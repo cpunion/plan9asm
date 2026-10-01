@@ -888,6 +888,9 @@ func emitARM64Prelude(b *strings.Builder) {
 }
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool) error {
+	if err := validateARM64ClosureSource(fn, sig); err != nil {
+		return err
+	}
 	// Validate the original complete function as well as the normalized CFG
 	// checked by the lowerer. Raw layout rewriting must not erase a private
 	// address source before granting native, hardware-sized store effects.
@@ -926,6 +929,9 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	if err != nil {
 		return err
 	}
+	if err := validateARM64ClosureSource(fn, sig); err != nil {
+		return err
+	}
 	rawDataGlobals := make(map[string]string, len(rawData))
 	rawDataOffsets := make(map[string]int64)
 	for _, data := range rawData {
@@ -941,8 +947,11 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
+	if sig.ARM64ClosureABI != nil {
+		fmt.Fprintf(b, "ptr %s %%closure", sig.ARM64ClosureABI.llvmAttribute())
+	}
 	for i, t := range sig.Args {
-		if i > 0 {
+		if i > 0 || sig.ARM64ClosureABI != nil {
 			b.WriteString(", ")
 		}
 		fmt.Fprintf(b, "%s %%arg%d", t, i)

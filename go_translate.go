@@ -49,6 +49,10 @@ type GoModuleOptions struct {
 	ResolveSym func(sym string) string
 	KeepFunc   func(textSym, resolved string) bool
 	ManualSig  func(resolved string) (FuncSig, bool)
+
+	// ARM64ClosureABIs supplies producer-proven hidden carriers after binding
+	// actual Go declarations. It neither invents Go args nor infers R26 input.
+	ARM64ClosureABIs map[string]ARM64ClosureABI
 }
 
 // GoFunction records the original TEXT symbol and its resolved LLVM symbol.
@@ -111,6 +115,8 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
+	closureSource := *file
+	closureSource.Funcs = append([]Func(nil), file.Funcs...)
 	file, err = coalesceARM64PrivateRegisterHelpers(file)
 	if err != nil {
 		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
@@ -129,6 +135,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
+	}
+	if err := bindGoARM64ClosureABIs(pkg, &closureSource, sigs, opt, resolve); err != nil {
+		return nil, err
 	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
 		TargetTriple:   opt.TargetTriple,
@@ -149,6 +158,52 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	return &GoModuleTranslation{Module: mod, Signatures: sigs, Functions: funcs}, nil
+}
+
+func bindGoARM64ClosureABIs(pkg GoPackage, original *File, sigs map[string]FuncSig, opt GoModuleOptions, resolve func(string) string) error {
+	if len(opt.ARM64ClosureABIs) == 0 {
+		return nil
+	}
+	linknames := goLinknameRemoteToLocal(pkg.Syntax)
+	pkgPath := pkg.Path
+	if pkgPath == "" {
+		pkgPath = pkg.Types.Path()
+	}
+	for name, abi := range opt.ARM64ClosureABIs {
+		sig, ok := sigs[name]
+		if !ok {
+			return arm64GoABIContext("closure carrier %q has no declaration-bound assembly signature", name)
+		}
+		var declaration *types.Func
+		for _, fn := range original.Funcs {
+			if resolve(goTextSymbolForResolution(fn.Sym)) != name {
+				continue
+			}
+			if !strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+				return arm64GoABIContext("closure entry %q needs its actual source ABIInternal identity", name)
+			}
+			declName := strings.TrimPrefix(name, pkgPath+".")
+			if declName == name {
+				var err error
+				declName, err = goDeclNameForSymbol(goStripABISuffix(fn.Sym), linknames)
+				if err != nil {
+					return arm64GoABIContext("closure entry %q has no source Go declaration: %v", name, err)
+				}
+			}
+			declaration, _ = pkg.Types.Scope().Lookup(declName).(*types.Func)
+		}
+		if _, err := DeriveARM64GoRegisterABI(declaration, sig); err != nil {
+			return err
+		}
+		carrier := abi
+		sig.ARM64ClosureABI = &carrier
+		sigs[name] = sig
+	}
+	// KeepFunc may omit a sibling, but it may not hide the original entry's
+	// address or an ordinary direct call which never supplied a carrier.
+	return validateARM64ClosureFile(original, Options{
+		Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, Sigs: sigs,
+	}, resolve)
 }
 
 // ExpandGoAssemblySource resolves the constants and type-layout identifiers

@@ -32,6 +32,7 @@ type arm64MachineAvailability struct {
 	skipReads  bool
 	source     string
 	entry      *ARM64GoRegisterABI
+	closure    *ARM64ClosureABI
 	entryError error
 	used       bool
 	nativeIR   map[int]arm64MachineNativeProof
@@ -96,6 +97,7 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 	flow.blocks[len(c.blocks)].name = c.localControl.outer
 	if c.goRegisterEntry {
 		flow.entry, flow.used = c.sig.ARM64GoRegisterABI, true
+		flow.closure = c.sig.ARM64ClosureABI
 	} else if c.privateRegisterEntry {
 		// Explicit empty presence: only SP and the real caller LR are
 		// available at an ABI0 entry. FP loads define the data registers.
@@ -276,6 +278,9 @@ func (flow *arm64MachineAvailability) validate() error {
 	entry := arm64MachineState{values: make(map[string]int)}
 	if flow.entry != nil {
 		entry = arm64MachineBoundary(flow.entry.Params)
+	}
+	if flow.closure != nil {
+		entry.values[string(flow.closure.ContextRegister)] = 64
 	}
 	before := make([]*arm64MachineState, len(flow.blocks))
 	before[0] = &entry
