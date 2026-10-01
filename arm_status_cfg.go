@@ -105,6 +105,9 @@ func proveARMStatusReads(fn Func, sig FuncSig) error {
 
 func armFunctionUsesModeledFlags(fn Func) bool {
 	for _, ins := range fn.Instrs {
+		if _, matched, _ := parseARMStatusMove(ins); matched {
+			return true
+		}
 		if armInstructionReadsStatus(ins) || armInstructionFlagInputs(ins) != 0 {
 			return true
 		}
@@ -113,6 +116,9 @@ func armFunctionUsesModeledFlags(fn Func) bool {
 }
 
 func armInstructionFlagInputs(ins Instr) armKernelState {
+	if form, matched, err := parseARMStatusMove(ins); matched && err == nil {
+		return armKernelConditionBits(form.condition)
+	}
 	op, condition, _, _ := armDecodeOp(string(ins.Op))
 	if len(op) > 1 && op[0] == 'B' && armCondCodes[op[1:]] {
 		condition = op[1:]
@@ -139,6 +145,38 @@ func armInstructionReadsStatus(ins Instr) bool {
 }
 
 func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr, check bool) (armStatusState, error) {
+	if form, matched, err := parseARMStatusMove(ins); matched {
+		if err != nil {
+			return state, err
+		}
+		predicate := armKernelConditionBits(form.condition)
+		if check && predicate != 0 && !state.initialized.has(predicate) {
+			return state, fmt.Errorf("%w: ARM CPSR continuation in %q has no initialized %s predicate: %s", ErrProbeNeedsContext, name, form.condition, ins.Raw)
+		}
+		if !form.write {
+			if check && !state.initialized.has(armKernelFlags) {
+				return state, fmt.Errorf("%w: ARM CPSR read in %q needs source-defined NZCV on every path or an explicit native-entry state bridge: %s", ErrProbeNeedsContext, name, ins.Raw)
+			}
+			mask := armKernelRegBit(form.dest)
+			known := state.initialized.has(armKernelFlags) && (predicate == 0 || state.values.has(mask))
+			state.values &^= mask
+			if known {
+				state.values |= mask
+			}
+			return state, nil
+		}
+		known := armKernelValueDefined(form.source, sig, state.values)
+		if check && !known {
+			return state, fmt.Errorf("%w: ARM CPSR write in %q requires a typed/source-defined status value: %s", ErrProbeNeedsContext, name, ins.Raw)
+		}
+		if !known {
+			state.initialized = 0
+		} else if predicate == 0 {
+			state.initialized = armKernelFlags
+		}
+		state.vfpWitness = false
+		return state, nil
+	}
 	op, condition, _, setFlags := armDecodeOp(string(ins.Op))
 	if len(op) > 1 && op[0] == 'B' && armCondCodes[op[1:]] {
 		condition = op[1:]

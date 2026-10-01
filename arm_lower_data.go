@@ -215,9 +215,7 @@ func (c *armCtx) storeARMValue(dst Operand, v string, bits int, cond string, pos
 	case OpIdent:
 		switch strings.ToUpper(dst.Ident) {
 		case "CPSR":
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "msr cpsr_fsxc, $0", "r,~{cc},~{memory}", v)
-			c.storeFlagsFromStatus(v)
-			return nil
+			return fmt.Errorf("ARM CPSR write must pass the typed Go/raw status transfer grammar: %q", raw)
 		case "FPCR", "FPSR":
 			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "vmsr fpscr, $0", "r,~{memory}", v)
 			return nil

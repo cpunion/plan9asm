@@ -8,6 +8,9 @@ import (
 
 func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
 	for _, ins := range fn.Instrs {
+		if _, _, err := parseARMStatusMove(ins); err != nil {
+			return err // Validate even source-dead status operands before CFG proof.
+		}
 		op, _, _, _ := armDecodeOp(string(ins.Op))
 		if _, move := armIntegerMemorySpecs[op]; !move {
 			continue
@@ -96,6 +99,12 @@ func (c *armCtx) lowerBlocks() error {
 }
 
 func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armEmitCondBr) (bool, error) {
+	if form, matched, err := parseARMStatusMove(ins); matched {
+		if err != nil {
+			return false, err
+		}
+		return false, c.lowerStatusMove(form)
+	}
 	if ins.armKernelCall != nil {
 		return c.lowerKernelHelperCall(*ins.armKernelCall)
 	}

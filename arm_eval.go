@@ -203,8 +203,10 @@ func (c *armCtx) eval32(op Operand, postInc bool) (string, error) {
 			}
 			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "vmrs $0, fpscr", "=r,~{memory}")
 			return "%" + t, nil
+		case "SPSR":
+			return "", fmt.Errorf("ARM SPSR spelling is not accepted by the Go assembler register table")
 		}
-		return "0", nil
+		return "", fmt.Errorf("ARM unknown status/value identifier %q needs an actual source definition", op.Ident)
 	default:
 		return "", fmt.Errorf("arm: unsupported operand for i32: %s", op.String())
 	}

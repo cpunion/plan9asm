@@ -118,6 +118,13 @@ func proveARMKernelInputs(fn Func, sig FuncSig) error {
 
 func armKernelTransfer(name string, sig FuncSig, state armKernelState, ins Instr, check bool) (armKernelState, error) {
 	op, condition, post, setFlags := armDecodeOp(string(ins.Op))
+	status, statusMove, statusError := parseARMStatusMove(ins)
+	if statusMove {
+		if statusError != nil {
+			return state, statusError
+		}
+		condition = status.condition
+	}
 	if len(op) > 1 && op[0] == 'B' && armCondCodes[op[1:]] {
 		condition = op[1:]
 	}
@@ -134,6 +141,14 @@ func armKernelTransfer(name string, sig FuncSig, state armKernelState, ins Instr
 		if known {
 			state |= mask
 		}
+	}
+	if statusMove {
+		if status.write {
+			assign(armKernelFlags, armKernelValueDefined(status.source, sig, state))
+		} else {
+			assign(armKernelRegBit(status.dest), state.has(armKernelFlags))
+		}
+		return state, nil
 	}
 	if call := ins.armKernelCall; call != nil {
 		for _, reg := range call.spec.inputs {
