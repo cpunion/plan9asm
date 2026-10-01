@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -151,5 +153,70 @@ func TestFeatureProfileCaptureSharesOwnedObservationCache(t *testing.T) {
 	second, err := captureDiscoveryFeatureProfiles(ctx, goBinary, ownedDir, targetFeatureTestEnv(), plan, files, cache)
 	if err != nil || captures != 2 || !reflect.DeepEqual(first, second) {
 		t.Fatalf("candidate plans repeated shared marker selection or changed evidence: captures=%d err=%v", captures, err)
+	}
+}
+
+func TestFeatureObservationCacheConcurrentObserversOwnDeepClones(t *testing.T) {
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cache := &discoveryFeatureObservationCache{}
+	var captures int32
+	cache.capture = func(ctx context.Context, binary, dir string, env []string, target string, overrides map[string]string) (*discoveryTargetFeatures, error) {
+		atomic.AddInt32(&captures, 1)
+		return captureDiscoveryTargetFeatures(ctx, binary, dir, env, target, overrides)
+	}
+	const workers = 4
+	type result struct {
+		worker   int
+		observed *discoveryTargetFeatures
+		id       string
+		err      error
+	}
+	root, env := t.TempDir(), targetFeatureTestEnv()
+	start, results := make(chan struct{}), make(chan result, workers)
+	var wg sync.WaitGroup
+	for worker := 0; worker < workers; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			<-start
+			observed, err := cache.observe(ctx, goBinary, root, env, "linux/amd64", nil)
+			if err != nil {
+				results <- result{worker: worker, err: err}
+				return
+			}
+			id := discoveryFeatureProfileID(observed)
+			// Mutate every nested mutable map while peers observe the shared
+			// cache. Returned caller-owned maps must never alias shared proof.
+			value := discoveryFeatureBytesSHA256([]byte{byte(worker)})
+			observed.Environment["GOAMD64"] = value
+			observed.ToolSourceSHA256["VERSION"] = value
+			observed.MarkerSelection["amd64.v1"] = false
+			results <- result{worker: worker, observed: observed, id: id}
+		}(worker)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	var id string
+	for result := range results {
+		if result.err != nil {
+			t.Fatal(result.err)
+		}
+		if id == "" {
+			id = result.id
+		}
+		value := discoveryFeatureBytesSHA256([]byte{byte(result.worker)})
+		if id != result.id || result.observed.Environment["GOAMD64"] != value || result.observed.ToolSourceSHA256["VERSION"] != value {
+			t.Fatal("concurrent callers shared mutable maps or different actual proofs")
+		}
+	}
+	final, err := cache.observe(ctx, goBinary, root, env, "linux/amd64", nil)
+	if err != nil || atomic.LoadInt32(&captures) != 1 || discoveryFeatureProfileID(final) != id || !final.MarkerSelection["amd64.v1"] || final.Environment["GOAMD64"] != "v1" {
+		t.Fatalf("concurrent observers damaged shared provenance or repeated markers: captures=%d err=%v", captures, err)
 	}
 }
