@@ -55,15 +55,7 @@ func TestX86RawScalarFlagCompareGoEncoderForms(t *testing.T) {
 					t.Fatalf("instruction %d=%+v, want %+v", i, got, want[i])
 				}
 			}
-			var raw strings.Builder
-			raw.WriteString("TEXT flagcompare(SB),4,$0-0\n")
-			for _, b := range code {
-				fmt.Fprintf(&raw, "BYTE $%#02x\n", b)
-			}
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
+			file := x86RawUnprovedReturnFormProbeFile(t, arch, "flagcompare", code)
 			triples := []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"}
 			if arch == "386" {
 				triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}

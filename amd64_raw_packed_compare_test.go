@@ -247,15 +247,7 @@ func TestX86RawPackedCompareGoEncoderForms(t *testing.T) {
 					t.Fatalf("instruction %d: %+v, want %+v", i, instruction, want[i])
 				}
 			}
-			var raw strings.Builder
-			raw.WriteString("TEXT compare(SB),4,$0-0\n")
-			for _, b := range code {
-				fmt.Fprintf(&raw, "BYTE $%#x\n", b)
-			}
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
+			file := x86RawUnprovedReturnFormProbeFile(t, arch, "compare", code)
 			for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
 				if (arch == "386") != strings.HasPrefix(triple, "i") {
 					continue
@@ -466,15 +458,7 @@ func TestX86RawPackedCompare386Mask(t *testing.T) {
 	// Raw instructions have architectural operands, not Go's textual 386
 	// frontend three-operand limit. Both source vectors are physical X0-7.
 	code := assembleX87ControlBytes(t, "amd64", "TEXT compare(SB),4,$0-0\nVPCMPEQB (AX),X1,K2,K3\nRET\n")
-	var source strings.Builder
-	source.WriteString("TEXT compare(SB),4,$0-0\n")
-	for _, b := range code {
-		fmt.Fprintf(&source, "BYTE $%#x\n", b)
-	}
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	file := x86RawUnprovedReturnFormProbeFile(t, "386", "compare", code)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
