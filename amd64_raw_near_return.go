@@ -127,45 +127,76 @@ func x86RawReturnFPBound(offset, width int64, sig FuncSig, goarch string) bool {
 	if offset < 0 || width <= 0 {
 		return false
 	}
+	const maxOffset = int64(1<<63 - 1)
+	var checked []FrameSlot
+	matched := false
 	for group, slots := range [][]FrameSlot{sig.Frame.Params, sig.Frame.Results} {
 		for _, slot := range slots {
-			if slot.Offset != offset || slot.Index < 0 {
-				continue
+			size := x86RawReturnSlotBytes(slot.Type, goarch)
+			if !x86RawReturnSlotMatchesSignature(slot, group, sig) || size == 0 ||
+				slot.Offset < 0 || slot.Offset > maxOffset-size {
+				return false
 			}
-			if group == 0 && slot.Index >= len(sig.Args) {
-				continue
-			}
-			if group == 1 {
-				if sig.Ret == Void || sig.Ret == "" {
-					continue
-				}
-				fields, aggregate := parseLiteralStructFields(sig.Ret)
-				if aggregate && slot.Index >= len(fields) || !aggregate && slot.Index != 0 {
-					continue
+			for _, previous := range checked {
+				previousSize := x86RawReturnSlotBytes(previous.Type, goarch)
+				if slot.Offset < previous.Offset+previousSize && previous.Offset < slot.Offset+size {
+					return false
 				}
 			}
-			var size int64
-			switch slot.Type {
-			case I1, I8:
-				size = 1
-			case I16:
-				size = 2
-			case I32, LLVMType("float"):
-				size = 4
-			case I64, LLVMType("double"):
-				size = 8
-			case Ptr:
-				size = 8
-				if goarch == "386" {
-					size = 4
-				}
-			}
-			if width <= size && offset <= int64(^uint64(0)>>1)-size {
-				return true
-			}
+			checked = append(checked, slot)
+			// Exact whole-slot moves avoid relying on generic partial FP writes
+			// preserving the untouched high bytes. This does not repair those
+			// writes elsewhere in the translator.
+			matched = matched || slot.Offset == offset && width == size
 		}
 	}
-	return false
+	return matched
+}
+
+func x86RawReturnSlotMatchesSignature(slot FrameSlot, group int, sig FuncSig) bool {
+	if slot.Index < 0 {
+		return false
+	}
+	path := frameSlotFields(slot)
+	if group == 0 {
+		if slot.Index >= len(sig.Args) {
+			return false
+		}
+		typ := sig.Args[slot.Index]
+		if len(path) != 0 {
+			// Reuse the existing flat literal-aggregate grammar. Nested paths
+			// and arrays need a richer validated binding, not a new guessed
+			// layout parser inside the native-return proof.
+			fields, aggregate := parseLiteralStructFields(typ)
+			if !aggregate || len(path) != 1 || path[0] < 0 || path[0] >= len(fields) {
+				return false
+			}
+			typ = fields[path[0]]
+		}
+		return slot.Type == typ
+	}
+	// Classic result slots index the already flattened return tuple. Field
+	// paths are parameter extraction metadata, not a result-slot binding.
+	if sig.Ret == Void || sig.Ret == "" || len(path) != 0 {
+		return false
+	}
+	if fields, aggregate := parseLiteralStructFields(sig.Ret); aggregate {
+		return slot.Index < len(fields) && slot.Type == fields[slot.Index]
+	}
+	return slot.Index == 0 && slot.Type == sig.Ret
+}
+
+func x86RawReturnSlotBytes(typ LLVMType, goarch string) int64 {
+	switch typ {
+	case I1, I8, I16, I32, I64, Ptr, LLVMType("float"), LLVMType("double"):
+		pointerSize := int64(8)
+		if goarch == "386" {
+			pointerSize = 4
+		}
+		return frameTypeSize(typ, pointerSize)
+	default:
+		return 0
+	}
 }
 
 func x86RawReturnStaticBound(symbol string, offset, width int64, file *File) bool {
