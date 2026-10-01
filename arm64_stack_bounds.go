@@ -120,14 +120,22 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 		returned := false
 		for _, original := range c.blocks[at].instrs {
 			ins := arm64StackInstruction(original)
-			ins.Args = append([]Operand(nil), ins.Args...)
-			for i := range ins.Args {
-				arg := &ins.Args[i]
-				if arg.Kind == OpMem {
-					if index, ok := arm64StackIndex(arg.Mem.Index); ok && zeroRegisters&(1<<uint(index)) != 0 {
-						arg.Mem.Index = ""
-					}
+			copied := false
+			for i, arg := range ins.Args {
+				if arg.Kind != OpMem {
+					continue
 				}
+				index, ok := arm64StackIndex(arg.Mem.Index)
+				if !ok || zeroRegisters&(1<<uint(index)) == 0 {
+					continue
+				}
+				// Proofs normally inspect immutable operands. Copy only when
+				// normalizing a proved-zero index; never alter source slices.
+				if !copied {
+					ins.Args = append([]Operand(nil), ins.Args...)
+					copied = true
+				}
+				ins.Args[i].Mem.Index = ""
 			}
 			if ins.Op == OpRET {
 				returned = true
