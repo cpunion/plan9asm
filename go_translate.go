@@ -49,6 +49,10 @@ type GoModuleOptions struct {
 	ResolveSym func(sym string) string
 	KeepFunc   func(textSym, resolved string) bool
 	ManualSig  func(resolved string) (FuncSig, bool)
+
+	// ARM64ClosureABIs supplies producer-proven hidden carriers after binding
+	// actual Go declarations. It neither invents Go args nor infers R26 input.
+	ARM64ClosureABIs map[string]ARM64ClosureABI
 }
 
 // GoFunction records the original TEXT symbol and its resolved LLVM symbol.
@@ -72,6 +76,12 @@ type GoModuleTranslation struct {
 // The package must provide go/types information for the declarations referenced
 // by the assembly. Methods and variadic functions are not supported.
 func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
+	return translateGoModuleInContext(llvm.GlobalContext(), pkg, src, opt)
+}
+
+// Internal high-volume callers can own the context without changing the public
+// binding contract. Dispose the returned module before disposing ctx.
+func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
 	pkgPath := pkg.Path
 	if pkgPath == "" && pkg.Types != nil {
 		pkgPath = pkg.Types.Path()
@@ -105,6 +115,12 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
+	closureSource := *file
+	closureSource.Funcs = append([]Func(nil), file.Funcs...)
+	file, err = coalesceARM64PrivateRegisterHelpers(file)
+	if err != nil {
+		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
+	}
 	if opt.KeepFunc != nil {
 		keep := make([]Func, 0, len(file.Funcs))
 		for _, fn := range file.Funcs {
@@ -120,7 +136,10 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
-	mod, err := TranslateModule(file, Options{
+	if err := bindGoARM64ClosureABIs(pkg, &closureSource, sigs, opt, resolve); err != nil {
+		return nil, err
+	}
+	mod, err := TranslateModuleInContext(ctx, file, Options{
 		TargetTriple:   opt.TargetTriple,
 		ResolveSym:     resolve,
 		Sigs:           sigs,
@@ -139,6 +158,52 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	}
 
 	return &GoModuleTranslation{Module: mod, Signatures: sigs, Functions: funcs}, nil
+}
+
+func bindGoARM64ClosureABIs(pkg GoPackage, original *File, sigs map[string]FuncSig, opt GoModuleOptions, resolve func(string) string) error {
+	if len(opt.ARM64ClosureABIs) == 0 {
+		return nil
+	}
+	linknames := goLinknameRemoteToLocal(pkg.Syntax)
+	pkgPath := pkg.Path
+	if pkgPath == "" {
+		pkgPath = pkg.Types.Path()
+	}
+	for name, abi := range opt.ARM64ClosureABIs {
+		sig, ok := sigs[name]
+		if !ok {
+			return arm64GoABIContext("closure carrier %q has no declaration-bound assembly signature", name)
+		}
+		var declaration *types.Func
+		for _, fn := range original.Funcs {
+			if resolve(goTextSymbolForResolution(fn.Sym)) != name {
+				continue
+			}
+			if !strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+				return arm64GoABIContext("closure entry %q needs its actual source ABIInternal identity", name)
+			}
+			declName := strings.TrimPrefix(name, pkgPath+".")
+			if declName == name {
+				var err error
+				declName, err = goDeclNameForSymbol(goStripABISuffix(fn.Sym), linknames)
+				if err != nil {
+					return arm64GoABIContext("closure entry %q has no source Go declaration: %v", name, err)
+				}
+			}
+			declaration, _ = pkg.Types.Scope().Lookup(declName).(*types.Func)
+		}
+		if _, err := DeriveARM64GoRegisterABI(declaration, sig); err != nil {
+			return err
+		}
+		carrier := abi
+		sig.ARM64ClosureABI = &carrier
+		sigs[name] = sig
+	}
+	// KeepFunc may omit a sibling, but it may not hide the original entry's
+	// address or an ordinary direct call which never supplied a carrier.
+	return validateARM64ClosureFile(original, Options{
+		Goarch: opt.GOARCH, TargetTriple: opt.TargetTriple, Sigs: sigs,
+	}, resolve)
 }
 
 // ExpandGoAssemblySource resolves the constants and type-layout identifiers
@@ -247,6 +312,9 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	// or ManualSig; raw register entry points require the native backend.
 	for resolved := range b.localSigs {
 		if _, ok := b.sigs[resolved]; !ok {
+			if goarch == "arm64" {
+				return nil, arm64GoABIContext("missing signature for file-local assembly %q; supply an explicit entry or closed source continuation contract", resolved)
+			}
 			return nil, fmt.Errorf("missing signature for file-local assembly %q; supply ManualSig or use the native backend", resolved)
 		}
 	}
@@ -309,6 +377,11 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 					b.localSigs = make(map[string]bool)
 				}
 				b.localSigs[resolved] = true
+				if b.goarch == "arm" {
+					if native, ok := ARMKernelHelperFuncSig(file.Funcs[i], resolved); ok {
+						b.sigs[resolved] = native
+					}
+				}
 				continue
 			}
 			return fmt.Errorf("missing Go declaration for asm symbol %q", sym)
@@ -320,6 +393,12 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 		fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, true)
 		if err != nil {
 			return err
+		}
+		if b.goarch == "arm64" && strings.HasSuffix(textSym, "<ABIInternal>") {
+			fs.ARM64GoRegisterABI, err = DeriveARM64GoRegisterABI(fn, fs)
+			if err != nil {
+				return err
+			}
 		}
 		b.sigs[resolved] = fs
 	}
@@ -412,6 +491,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				// via ManualSig when the inferred signature is not identical.
 				fs := callerSig
 				fs.Name = targetResolved
+				// A borrowed scalar signature is not a declaration-backed Go
+				// register-entry proof for the unresolved helper.
+				fs.ARM64GoRegisterABI = nil
 				b.sigs[targetResolved] = fs
 				continue
 			}
@@ -429,12 +511,13 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 }
 
 func (b *goSigBuilder) addGoDeclSig(sym string) error {
+	internal := b.goarch == "arm64" && strings.HasSuffix(sym, "<ABIInternal>")
 	sym = goStripABISuffix(sym)
 	resolved := b.resolve(sym)
 	if resolved == "" {
 		return nil
 	}
-	if _, ok := b.sigs[resolved]; ok {
+	if _, ok := b.sigs[resolved]; ok && !internal {
 		return nil
 	}
 	if ms, ok := goLookupManualSig(b.manualSig, resolved); ok {
@@ -464,9 +547,20 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	if !ok {
 		return nil
 	}
-	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, false)
+	// A Go declaration does not make a plain CALL/BL register-ABI. On x86
+	// and ARM64 assembly calls its ABI0 wrapper unless the instruction says
+	// ABIInternal. Keep result-only frame metadata too. ARM's outgoing-stack
+	// bridge is separate; do not claim it merely by adding signature slots.
+	withFrame := b.goarch == "amd64" || b.goarch == "386" || b.goarch == "arm64"
+	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, withFrame)
 	if err != nil {
 		return err
+	}
+	if internal {
+		fs.ARM64GoRegisterABI, err = DeriveARM64GoRegisterABI(fn, fs)
+		if err != nil {
+			return err
+		}
 	}
 	b.sigs[resolved] = fs
 	return nil
@@ -474,7 +568,7 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 
 func goReferencedFunc(ins Instr) (base string, tailJump bool, ok bool) {
 	switch string(ins.Op) {
-	case "JMP", "B":
+	case "JMP", "B", "RET":
 		tailJump = true
 	case "CALL", "CALLNORESUME", "WASMCALL", "BL":
 	default:
@@ -875,6 +969,10 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 			return LLVMType("float"), nil
 		case types.Float64:
 			return LLVMType("double"), nil
+		case types.Complex64:
+			return LLVMType("{ float, float }"), nil
+		case types.Complex128:
+			return LLVMType("{ double, double }"), nil
 		case types.String:
 			if wordSize == 8 {
 				return LLVMType("{ ptr, i64 }"), nil
@@ -897,11 +995,25 @@ func goLLVMTypeForTypeWithSizes(t types.Type, goarch string, sz types.Sizes) (LL
 		return LLVMType("{ ptr, i32, i32 }"), nil
 	case *types.Interface:
 		return LLVMType("{ ptr, ptr }"), nil
+	case *types.Array:
+		elem, err := goLLVMTypeForTypeWithSizes(tt.Elem(), goarch, sz)
+		if err != nil {
+			return "", err
+		}
+		return LLVMType(fmt.Sprintf("[%d x %s]", tt.Len(), elem)), nil
 	case *types.Struct:
 		if tt.NumFields() == 0 {
 			return LLVMType("[0 x i8]"), nil
 		}
-		return "", fmt.Errorf("unsupported struct type %s", tt.String())
+		fields := make([]string, tt.NumFields())
+		for i := range fields {
+			field, err := goLLVMTypeForTypeWithSizes(tt.Field(i).Type(), goarch, sz)
+			if err != nil {
+				return "", err
+			}
+			fields[i] = string(field)
+		}
+		return LLVMType("{ " + strings.Join(fields, ", ") + " }"), nil
 	case *types.Named:
 		return goLLVMTypeForTypeWithSizes(tt.Underlying(), goarch, sz)
 	default:
@@ -948,7 +1060,7 @@ func goLLVMArgsAndFrameSlotsForTuple(tup *types.Tuple, goarch string, sz, frameS
 				}
 				args = append(args, ty)
 				for _, part := range parts {
-					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field})
+					slots = append(slots, FrameSlot{Offset: off + part.Offset, Type: part.Type, Index: argIdx, Field: part.Field, Fields: part.Fields})
 				}
 				argIdx++
 			}
@@ -972,6 +1084,7 @@ type goFramePart struct {
 	Offset int64
 	Type   LLVMType
 	Field  int
+	Fields []int
 }
 
 func goFramePartsForType(t types.Type, goarch string) ([]goFramePart, bool) {
@@ -987,15 +1100,71 @@ func goFramePartsForTypeWithSizes(t types.Type, goarch string, sz, frameSz types
 	}
 	switch u := t.Underlying().(type) {
 	case *types.Basic:
-		if u.Kind() == types.String {
+		switch u.Kind() {
+		case types.String:
 			return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: wordTy, Field: 1}}, true
+		case types.Complex64:
+			return []goFramePart{{Offset: 0, Type: "float", Field: 0}, {Offset: 4, Type: "float", Field: 1}}, true
+		case types.Complex128:
+			return []goFramePart{{Offset: 0, Type: "double", Field: 0}, {Offset: 8, Type: "double", Field: 1}}, true
 		}
 	case *types.Slice:
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: wordTy, Field: 1}, {Offset: 2 * word, Type: wordTy, Field: 2}}, true
 	case *types.Interface:
 		return []goFramePart{{Offset: 0, Type: Ptr, Field: 0}, {Offset: word, Type: Ptr, Field: 1}}, true
+	case *types.Struct:
+		fields := make([]*types.Var, u.NumFields())
+		for i := range fields {
+			fields[i] = u.Field(i)
+		}
+		offsets := frameSz.Offsetsof(fields)
+		var parts []goFramePart
+		for i, field := range fields {
+			children, ok := goNestedFrameParts(field.Type(), goarch, sz, frameSz, i, offsets[i])
+			if !ok {
+				return nil, false
+			}
+			parts = append(parts, children...)
+		}
+		return parts, true
+	case *types.Array:
+		var parts []goFramePart
+		for i := int64(0); i < u.Len(); i++ {
+			children, ok := goNestedFrameParts(u.Elem(), goarch, sz, frameSz, int(i), i*frameSz.Sizeof(u.Elem()))
+			if !ok {
+				return nil, false
+			}
+			parts = append(parts, children...)
+		}
+		return parts, true
 	}
 	return nil, false
+}
+
+func goNestedFrameParts(t types.Type, goarch string, sz, frameSz types.Sizes, field int, offset int64) ([]goFramePart, bool) {
+	parts, aggregate := goFramePartsForTypeWithSizes(t, goarch, sz, frameSz)
+	if !aggregate {
+		typ, err := goLLVMTypeForTypeWithSizes(t, goarch, sz)
+		if err != nil {
+			return nil, false
+		}
+		parts = []goFramePart{{Type: typ, Field: -1}}
+	}
+	for i := range parts {
+		part := &parts[i]
+		path := []int{field}
+		if len(part.Fields) != 0 {
+			path = append(path, part.Fields...)
+		} else if part.Field >= 0 {
+			path = append(path, part.Field)
+		}
+		part.Offset += offset
+		part.Field = field
+		if len(path) > 1 {
+			part.Fields = path
+		}
+	}
+	return parts, true
 }
 
 func goWordSize(goarch string) int {

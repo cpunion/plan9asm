@@ -8,7 +8,11 @@
 {"module":"github.com/golangci/tools","version":"v0.0.0-20190915081210-016959b1a823","status":"pending"}
 {"module":"github.com/jbhurat/quorum","version":"v2.0.0+incompatible","status":"pending"}
 {"module":"github.com/koykov/lab","version":"v0.0.0-20260730202256-be7bbd024883","status":"pending"}
+{"module":"github.com/merlinlayer2/cdk-erigon","version":"v1.0.2","status":"pending"}
 {"module":"github.com/nelbert442/derosuite","version":"v2.1.5+incompatible","status":"pending"}
 {"module":"github.com/noddy76/treeboost","version":"v0.3.1","status":"pending"}
 {"module":"github.com/oiooj/tools","version":"v0.0.0-20190716042052-c98e93965fb1","status":"pending"}
+{"module":"github.com/pgmig/pgmig","version":"v0.35.2","status":"pending"}
+{"module":"github.com/sesafoundation/sesn","version":"v0.0.0-20251022171024-c3143fc28b7c","status":"pending"}
+{"module":"github.com/vinithkrishnan/go-drb","version":"v0.0.0-20210411003407-a052efea27ba","status":"pending"}
 {"module":"rsc.io/go","version":"v0.0.0-20260728020454-792a4f8f8995","status":"pending"}

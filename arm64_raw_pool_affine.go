@@ -224,13 +224,22 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 			continue
 		}
 		visited[state] = true
-		if constraint, ok := flow.loopBounds[state.at]; ok {
+		invariantLatch, invariantLoop := flow.rewindInvariantLoop(&state)
+		if constraint, ok := flow.loopBounds[state.at]; ok && !invariantLoop {
 			value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint)
 			if !bounded || value == arm64PoolUnknownInterval {
 				value, bounded = flow.carriedLoopBound(state.at, state.expression, constraint)
 			}
 			if bounded && value != arm64PoolUnknownInterval {
-				addResult(value)
+				if state.bound.low > value.low {
+					value.low = state.bound.low
+				}
+				if state.bound.high < value.high {
+					value.high = state.bound.high
+				}
+				if value.low <= value.high {
+					addResult(value)
+				}
 				continue
 			}
 		}
@@ -305,6 +314,9 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 		}
 	predecessors:
 		for _, previous := range flow.before[state.at] {
+			if invariantLoop && previous == invariantLatch {
+				continue
+			}
 			if previous < 0 {
 				addResult(bound)
 				continue
@@ -366,6 +378,11 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				// value. An unrelated masked predicate may be forgotten below;
 				// recursively proving it must not consume the address's budget.
 				interval, bounded := flow.affineMaskInterval(previous, word)
+				if bounded && interval.low != interval.high {
+					// A partial mask may still subtract only fixed bits. Keep
+					// that relation instead of replacing it by an independent range.
+					value, _, affine, _ = flow.affineLogicalDefinition(previous, word)
+				}
 				if !bounded {
 					interval, bounded = flow.affineMoveKeepInterval(previous, word)
 				}
@@ -399,6 +416,19 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 					}
 					if next.bound.low > next.bound.high {
 						continue predecessors
+					}
+				}
+				if !affine && next.bound.low != next.bound.high {
+					if span, ok := flow.maskedDifferenceBound(previous, word, next.expression, next.constraints[:next.count]); ok {
+						if span.low > next.bound.low {
+							next.bound.low = span.low
+						}
+						if span.high < next.bound.high {
+							next.bound.high = span.high
+						}
+						if next.bound.low > next.bound.high {
+							continue predecessors
+						}
 					}
 				}
 			}
@@ -490,13 +520,17 @@ func arm64PoolAffineDefinition(word uint32) (int, arm64PoolAffine, bool) {
 			return destination, value, valid
 		}
 	}
-	if ins.Op != arm64asm.ADD && ins.Op != arm64asm.SUB && ins.Op != arm64asm.ADDS && ins.Op != arm64asm.SUBS {
+	switch ins.Op {
+	case arm64asm.ADD, arm64asm.ADDS, arm64asm.SUB, arm64asm.SUBS, arm64asm.NEG, arm64asm.NEGS:
+		// NEG/NEGS are SUB/SUBS with a zero-register first operand. The
+		// decoder chooses the alias, but its modular affine effect is shared.
+	default:
 		return 0, value, false
 	}
 	base := int(word >> 5 & 31)
 	value = arm64PoolRegisterExpression(base)
 	scale := int64(1)
-	if ins.Op == arm64asm.SUB || ins.Op == arm64asm.SUBS {
+	if word&(1<<30) != 0 {
 		scale = -1
 	}
 	switch {

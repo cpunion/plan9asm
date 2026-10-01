@@ -42,6 +42,8 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 		{"recover", http.StatusServiceUnavailable, 2, 3, false},
 		{"bounded-retries", http.StatusServiceUnavailable, 9, 3, true},
 		{"permanent-not-found", http.StatusNotFound, 9, 1, true},
+		{"closed-response-recovers", 0, 2, 3, false},
+		{"closed-response-bounded", 0, 9, 3, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			var requests atomic.Int32
@@ -49,6 +51,15 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 				switch r.URL.Path {
 				case "/" + module + "/@v/" + version + ".info":
 					if requests.Add(1) <= test.failures {
+						if test.status == 0 {
+							conn, _, err := w.(http.Hijacker).Hijack()
+							if err != nil {
+								t.Errorf("hijack proxy response: %v", err)
+								return
+							}
+							conn.Close()
+							return
+						}
 						http.Error(w, http.StatusText(test.status), test.status)
 						return
 					}
@@ -74,7 +85,11 @@ func TestDiscoveryDownloadRetriesTransientProxyFailure(t *testing.T) {
 			if (err != nil) != test.wantErr || requests.Load() != test.wantRuns {
 				t.Fatalf("download requests=%d, error=%v; want requests=%d, error=%v", requests.Load(), err, test.wantRuns, test.wantErr)
 			}
-			if err != nil && !strings.Contains(err.Error(), http.StatusText(test.status)) {
+			wantDiagnostic := http.StatusText(test.status)
+			if test.status == 0 {
+				wantDiagnostic = ": EOF"
+			}
+			if err != nil && !strings.Contains(err.Error(), wantDiagnostic) {
 				t.Fatalf("lost final proxy diagnostic: %v", err)
 			}
 			if _, err := os.Stat(work); !os.IsNotExist(err) {
@@ -122,5 +137,47 @@ func TestDiscoveryNetworkRetryKeepsDeadlineAndDeterministicFailures(t *testing.T
 		if !errors.Is(err, failure) || calls != 1 {
 			t.Fatalf("retried deterministic failure: calls=%d error=%v", calls, err)
 		}
+	}
+}
+
+func TestDiscoveryNetworkRetriesHTTP2StreamError(t *testing.T) {
+	const diagnostic = "reading https://sum.golang.org/tile/8/0/x218/247: stream error: stream ID 13; INTERNAL_ERROR; received from peer"
+	attempts := 0
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New(diagnostic)
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("HTTP/2 stream error did not recover after retry: attempts=%d error=%v", attempts, err)
+	}
+}
+
+func TestDiscoveryNetworkRetriesGitHTTPSDisconnect(t *testing.T) {
+	const diagnostic = "github.com/paxeer-network/pax-geth@v1.13.2: invalid version: " +
+		"git ls-remote -q --end-of-options https://github.com/paxeer-network/pax-geth: exit status 128:\n" +
+		"\tfatal: unable to access 'https://github.com/paxeer-network/pax-geth/': " +
+		"LibreSSL SSL_connect: SSL_ERROR_SYSCALL in connection to github.com:443"
+	attempts := 0
+	err := retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		if attempts < 3 {
+			return errors.New(diagnostic)
+		}
+		return nil
+	})
+	if err != nil || attempts != 3 {
+		t.Fatalf("Git HTTPS disconnect retry: attempts=%d error=%v, want three attempts and success", attempts, err)
+	}
+
+	attempts = 0
+	err = retryDiscoveryGoNetwork(context.Background(), []time.Duration{0, 0}, func() error {
+		attempts++
+		return errors.New(diagnostic)
+	})
+	if err == nil || attempts != 3 || !strings.Contains(err.Error(), "SSL_ERROR_SYSCALL") {
+		t.Fatalf("persistent Git HTTPS failure lost bound/diagnostic: attempts=%d error=%v", attempts, err)
 	}
 }

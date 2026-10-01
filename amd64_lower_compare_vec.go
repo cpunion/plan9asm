@@ -262,20 +262,7 @@ func (c *amd64Ctx) loadPackedCompareBytes(op Operand, byteWidth int) (string, er
 		}
 	}
 	if op.Kind == OpFP {
-		chunks := byteWidth / 8
-		value := "zeroinitializer"
-		for i := 0; i < chunks; i++ {
-			word, err := c.evalFPToI64(op.FPOffset + int64(i*8))
-			if err != nil {
-				return "", err
-			}
-			inserted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i64> %s, i64 %s, i32 %d\n", inserted, chunks, value, word, i)
-			value = "%" + inserted
-		}
-		bytesValue := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", bytesValue, chunks, value, byteWidth)
-		return "%" + bytesValue, nil
+		return c.loadFPVectorBytes(op.FPOffset, byteWidth)
 	}
 	if op.Kind == OpSym {
 		// As in Go's x86 assembler, an unprefixed integer denotes an

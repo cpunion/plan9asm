@@ -159,7 +159,7 @@ func TestX86RawInternalConditionalBranchCompleteFamily(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(ir, "raw_jcc") {
+			if !strings.Contains(ir, amd64LLVMBlockName("raw_jcc")) {
 				t.Fatalf("synthetic raw branch labels missing:\n%s", ir)
 			}
 			compileLLVMToObject(t, llc, target.triple, "raw-jcc-"+target.goarch+".ll", "raw-jcc-"+target.goarch+".o", ir)

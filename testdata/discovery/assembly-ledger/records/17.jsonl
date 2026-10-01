@@ -1,3 +1,4 @@
+{"module":"blitter.com/go/kyber","version":"v1.0.0","status":"pending"}
 {"module":"github.com/NESS-Network/privateness","version":"v0.27.1","status":"pending"}
 {"module":"github.com/OffchainLabs/go-ethereum","version":"v0.0.0-20260616221752-260bc5dcbd5a","status":"pending"}
 {"module":"github.com/Onther-Tech/go-ethereum","version":"v1.8.23","status":"pending"}
@@ -13,7 +14,11 @@
 {"module":"github.com/kpango/unk","version":"v0.0.0-20260521082050-d9005f07d563","status":"pending"}
 {"module":"github.com/leongross/u-root","version":"v0.14.0","status":"pending"}
 {"module":"github.com/okjiang/tidb","version":"v1.0.9","status":"pending"}
+{"module":"github.com/puneet2019/XDPoSChain","version":"v0.0.0-20250731071239-af4178b2c7f9","status":"pending"}
+{"module":"github.com/saurav-datta/ollama","version":"v0.13.5","status":"pending"}
 {"module":"github.com/tenderly/net-sei","version":"v0.0.1-tenderly","status":"pending"}
 {"module":"github.com/theapemachine/puter","version":"v1.2.3","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p4","version":"v0.2.0","status":"pending"}
+{"module":"github.com/xigexb/go-kit","version":"v0.0.0-20251230074723-6ef4fb9daa8b","status":"pending"}
 {"module":"github.com/zhenghaoz/gorse","version":"v0.4.16","status":"pending"}
+{"module":"gitproxy.zycloud.tk/ethereum/go-ethereum","version":"v1.16.7","status":"pending"}

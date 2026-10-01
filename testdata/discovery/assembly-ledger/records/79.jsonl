@@ -1,3 +1,4 @@
+{"module":"ghproxy-9d2.pages.dev/morph-l2/go-ethereum","version":"v1.10.26","status":"pending"}
 {"module":"github.com/AkihiroSuda/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/Dominant-Strategies/go-quai","version":"v0.56.0","status":"pending"}
 {"module":"github.com/EdgarBL1/Xray-core","version":"v1.260327.0","status":"pending"}
@@ -5,6 +6,7 @@
 {"module":"github.com/KlausPost/reedsolomon","version":"v1.14.2","status":"pending"}
 {"module":"github.com/aead/blake2b","version":"v0.0.0-20170427201451-8ae7938b9ede","status":"pending"}
 {"module":"github.com/blukat29/kaia","version":"v0.0.0-20260508005551-00bbc2385587","status":"pending"}
+{"module":"github.com/coppercarbonatecollective/ollama-dreamingmetal","version":"v0.0.0-20251103073316-e1ffba4c4925","status":"pending"}
 {"module":"github.com/cwbudde/mayflycirclefit","version":"v0.0.0-20260920123143-273187b90700","status":"pending"}
 {"module":"github.com/cyenxchen/mihomo","version":"v1.19.31","status":"pending"}
 {"module":"github.com/dtunnel0/xray-core","version":"v0.0.0-20260601131837-698a440da090","status":"pending"}

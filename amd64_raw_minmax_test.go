@@ -386,15 +386,7 @@ func TestX86RawMinMaxGoEncoderForms(t *testing.T) {
 				}
 			}
 
-			var raw strings.Builder
-			raw.WriteString("TEXT minmax(SB),4,$0-0\n")
-			for _, b := range code {
-				fmt.Fprintf(&raw, "BYTE $%#x\n", b)
-			}
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
+			file := x86RawUnprovedReturnFormProbeFile(t, arch, "minmax", code)
 			targets := []string{
 				"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
 				"i386-unknown-linux-gnu", "i686-pc-windows-msvc",

@@ -1,10 +1,10 @@
 # Go module assembly discovery ledger
 
 `ledger/` is the repository-owned checkpoint for newest-to-oldest scans of the
-official Go module index. The history pass stops at 2019-04-10. Within one
-logical module family, `/vN` major has priority first and Go semantic version
-second: discovering `/v3` replaces `/v2` even if the `/v3` index record is
-older, and still older `/v2` records are then skipped. It records the selected
+official Go module index. The history pass stops at 2019-04-10. Each
+`(module path, Go-semver major)` line keeps only its newest scanned version.
+Thus v0 and v1 coexist even on the same path; `/v2`, `/v3`, and `gopkg.in`
+`.v2`/`.v3` paths also advance independently. It records the selected
 exact `module@latest` version, including modules without Plan 9 assembly.
 Assembly matches retain every `.s` path and architecture hint for all current
 Go ports, including architectures plan9asm does not support yet; failures
@@ -24,7 +24,7 @@ assembly-ledger/
 
 `sha256(module)[0]` selects one of 256 shards, so all records for a module stay
 in one stable file. Records are sorted by module, Go semantic version, and
-result kind. Updating the ledger replaces obsolete exact versions; a later
+result kind. Updating the ledger replaces obsolete versions within one line; a later
 success also clears the corresponding retryable failure. Repository tests
 validate the layout, shard ownership, ordering, and counts, and reject
 committed `.gz` discovery results.
@@ -42,6 +42,35 @@ audited status snapshot, not input to discovery or corpus compilation. A
 change to the scanner/compiler source or scan ledger makes the snapshot
 stale; updating only the evidence snapshot does not. Direct cgo-import
 inventory remains outside this repository.
+
+`pending` is an intermediate state, never completion. Before promotion,
+regenerate the assembly ledger from all 64 audited reports and require
+`-assembly-ledger-status ... -require-verified-assembly-ledger` to succeed.
+The CI aggregate also compares that snapshot with every result in the current
+64 shard reports; matching source and scan hashes alone are insufficient.
+Each `passed` record retains its positive LLVM object-compilation count; each
+source-inapplicable or explicit skip retains its reason and pinned evidence.
+Source-inapplicable ledger details keep the affected files, targets and stable
+reason category. Full Go diagnostics remain in the shard reports because they
+can contain temporary runner paths and are unsuitable for committed records.
+This gate does not claim llgo compilation, linking, or execution. Schema-10
+reports, progress schema 2 and assembly-ledger v2 preserve ordinary
+file/target/profile-ID/custom-tag scopes, shared actual Go/tool observations,
+package-role selection, CPP graphs and LLVM object consumer proofs. Old reports
+or ledgers cannot acquire these claims by relabeling their schema. Fresh reports
+are required after integration; the existing historical snapshot is not upgraded
+by these implementation changes.
+
+Concrete source-rejection witnesses sample at most the first 256 distinct
+source positions, then sort that sample canonically. This is a compact evidence
+bound, not a limit on valid Go diagnostics or their repeated occurrences. The
+witness digest binds the complete diagnostic retained in the frozen report,
+not an error-display tail or a truncated prefix. The producer still inspects
+the complete command output for infrastructure failures; output exceeding its
+8 MiB capture limit fails explicitly instead of becoming source N/A.
+Go omits unknown columns. Explicit column fields must be positive canonical
+decimal positions, not zero, signed/overflow values or empty messages; invalid
+fields must not backtrack into a line-only source message.
 
 Continue from this checkpoint without downloading completed versions again:
 
@@ -68,10 +97,11 @@ manual cursor copying is part of normal operation. `-seen-report` remains
 available for additional legacy JSON, gzip-compressed JSON, or sharded import
 sources and is repeatable. Every selected module discovered in the index is
 resolved to an exact `@latest` version before ZIP inspection. A completed exact
-version is reused without another ZIP request. A higher module-path major, or a
-higher Go semver within the current major, crosses the family checkpoint and is
-resolved; lower majors and older versions do not cause metadata or ZIP traffic.
-If `@latest` resolves to a higher-priority exact version, the old family's
+version is reused without another ZIP request. A newly seen version line or a
+higher Go semver within one line crosses its checkpoint and is resolved;
+older versions of that same line do not cause metadata or ZIP traffic. If
+`@latest` selects another major, the indexed exact version is inspected.
+If `@latest` resolves to a newer version in the same line, the old version's
 scanned, matched, and failure records are removed.
 For a new exact version, Discovery uses HEAD and range requests to read the ZIP
 directory and candidate `.s` contents; it does not materialize the complete
@@ -123,11 +153,13 @@ Incremental mode derives its lower bound from the greatest committed
 `index_ranges[].before` value and scans only up to the new current-time upper
 bound. It always drains that interval and ignores `-limit`, so it cannot
 publish a new high-water mark while leaving an unrecorded gap. A newly
-published `/v3` is therefore processed even when `/v2` is the current family
+published `/v3` is therefore processed even when `/v2` already has a
 checkpoint. Empty intervals are recorded with an exact zero count so the same
 head window is not fetched repeatedly. History extends the earliest range and
 incremental scanning extends the latest range, preserving one continuous
 coverage chain in both directions.
+Changing deduplication does not rewind either cursor or reconstruct records
+discarded by an older rule; only unscanned intervals are processed next.
 
 Retry retained failures without rereading the module index:
 
@@ -154,9 +186,9 @@ replayed directly from the saved exact versions without reading the module
 index or revisiting no-assembly modules:
 
 ```sh
-for shard in $(seq 0 31); do
+for shard in $(seq 0 63); do
   PLAN9ASM_DISCOVERY_TARGETS=linux/riscv64 \
-    scripts/check-discovered-library-corpus.sh "$shard" 32 \
+    scripts/check-discovered-library-corpus.sh "$shard" 64 \
     "_out/discovered-library-corpus/riscv64-shard-$shard.json"
 done
 ```

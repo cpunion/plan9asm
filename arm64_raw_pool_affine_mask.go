@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"encoding/binary"
+	"math"
 	"math/bits"
 
 	"golang.org/x/arch/arm64/arm64asm"
@@ -47,13 +48,32 @@ func (flow *arm64RawPoolValues) affineMaskInterval(at int, word uint32) (arm64Po
 }
 
 func arm64PoolMaskInterval(input arm64PoolInterval, mask uint64) arm64PoolInterval {
-	// Bits above the highest differing endpoint bit are constant throughout
-	// an unsigned interval. Everything below is conservatively free to vary.
-	varying := uint64(1)<<uint(bits.Len64(input.low^input.high)) - 1
-	low := input.low &^ varying & mask
-	high := low | varying&mask
-	if high > input.high {
-		high = input.high // AND never increases an unsigned operand.
+	if input.low > input.high {
+		return arm64PoolUnknownInterval
 	}
-	return arm64PoolInterval{low, high}
+	// Partition into aligned power-of-two blocks. Each block has independent
+	// low bits, so its masked extrema are exact. Union at most 128 blocks;
+	// treating every bit below the endpoints' common prefix as free would
+	// incorrectly include zero in [8,19] & 24 and lose loop termination proof.
+	result := arm64PoolInterval{math.MaxUint64, 0}
+	for low := input.low; ; {
+		remaining := input.high - low
+		width := bits.TrailingZeros64(low)
+		if remaining != math.MaxUint64 {
+			if available := bits.Len64(remaining+1) - 1; available < width {
+				width = available
+			}
+		}
+		varying := uint64(1)<<uint(width) - 1
+		if minimum := low & mask; minimum < result.low {
+			result.low = minimum
+		}
+		if maximum := (low | varying) & mask; maximum > result.high {
+			result.high = maximum
+		}
+		if varying == remaining {
+			return result
+		}
+		low += varying + 1
+	}
 }

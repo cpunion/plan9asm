@@ -197,6 +197,13 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "stack", triple, ir,
 			main, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
 	})
+	t.Run("arm64_text_frame_no_escape", func(t *testing.T) {
+		t.Run("native_go", TestARM64TextFrameNoEscapeNativeGo)
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64TextFrameNoEscapeRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "text_frame", triple, ir,
+			main, []string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
+	})
 	t.Run("arm64_sve_pool_aliases", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"
 		ir, main := arm64RawPoolSVEAliasesRuntime(t, triple)
@@ -226,6 +233,24 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		ir, main := arm64RawPoolSVEFlagsRuntime(t, triple)
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "pool_sve_flags", triple, ir, main,
 			[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
+	})
+	t.Run("arm64_sve_pool_contiguous", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64RawPoolSVEContiguousRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "pool_sve_contiguous", triple, ir, main,
+			[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
+	})
+	t.Run("arm64_sve_dup_indexed", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir, main := arm64SVEDupIndexedRuntime(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-march=armv8.2-a+sve"}, "dup_indexed", triple, ir, main,
+			[]string{"qemu-aarch64", "-cpu", "max,sve-max-vq=16", "-L", "/usr/aarch64-linux-gnu"})
+	})
+	t.Run("arm64_raw_pool_masked", func(t *testing.T) {
+		const triple = "aarch64-unknown-linux-gnu"
+		ir := arm64RawPoolMaskedIR(t, triple)
+		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc"}, "pool_masked", triple, ir, arm64RawPoolMaskedMain,
+			[]string{"qemu-aarch64", "-L", "/usr/aarch64-linux-gnu"})
 	})
 	t.Run("arm64_raw_pool_counter_loops", func(t *testing.T) {
 		const triple = "aarch64-unknown-linux-gnu"

@@ -14,6 +14,8 @@
 {"module":"github.com/mshafiee/fastparse","version":"v0.1.0","status":"pending"}
 {"module":"github.com/muesli/noise","version":"v1.1.0","status":"pending"}
 {"module":"github.com/sevaktigranyan305-netizen/xray-core","version":"v0.0.14-test","status":"pending"}
+{"module":"github.com/sriharshaj/parquet-go","version":"v0.0.2","status":"pending"}
 {"module":"github.com/tenderly/net-nitro","version":"v0.0.0-20260727074129-aea863015217","status":"pending"}
 {"module":"github.com/therealutkarshpriyadarshi/network","version":"v0.0.0-20251118092209-d8597ad748c4","status":"pending"}
+{"module":"github.com/travelliu/fyne/v2","version":"v2.0.0-20250728103330-1e7e609e4f51","status":"pending"}
 {"module":"golang.org/x/exp/shiny","version":"v0.0.0-20260908205506-85c1c2202aba","status":"pending"}

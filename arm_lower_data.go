@@ -6,6 +6,12 @@ import (
 )
 
 func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerRegisterAddressMove(op, cond, ins); ok {
+		return ok, terminated, err
+	}
+	if ok, terminated, err := c.lowerIntegerSymbolMove(op, cond, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerIntegerMemoryMove(op, cond, ins); ok {
 		return ok, terminated, err
 	}
@@ -57,16 +63,23 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 			})
 			return true, false, err
 		}
-		v := ""
+		v, shifterCarry := "", ""
 		if src.Kind == OpMem {
 			v, err = c.loadMem(src.Mem, 32, postInc, false)
 		} else {
-			v, err = c.eval32(src, false)
+			v, shifterCarry, err = c.evalARMLogicalOperand("MOVW", src)
 		}
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeARMValue(dst, v, 32, cond, postInc, ins.Raw)
+		if err := c.storeARMValue(dst, v, 32, cond, postInc, ins.Raw); err != nil {
+			return true, false, err
+		}
+		_, _, _, setFlags := armDecodeOp(string(ins.Op))
+		if setFlags && (src.Kind == OpReg || src.Kind == OpRegShift) && dst.Kind == OpReg {
+			return true, false, c.setARMLogicalFlags(cond, v, shifterCarry)
+		}
+		return true, false, nil
 	case "MOVB", "MOVBS", "MOVBU", "MOVH", "MOVHS", "MOVHU":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)
@@ -86,6 +99,25 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 		}
 		if src.Kind == OpMem {
 			v, err = c.loadMem(src.Mem, bits, postInc, op == "MOVB" || op == "MOVBS" || op == "MOVH" || op == "MOVHS")
+		} else if src.Kind == OpRegShift {
+			// Go asm5 type 23 is SXTB/SXTH/UXTB/UXTH with an optional
+			// rotation, not the data-processing ROR #0 (RRX) shifter.
+			if src.ShiftOp != ShiftRotate || src.ShiftReg != "" || src.ShiftAmount < 0 || src.ShiftAmount > 24 || src.ShiftAmount%8 != 0 {
+				return true, false, fmt.Errorf("arm %s extension rotation must be 0/8/16/24: %q", op, ins.Raw)
+			}
+			base, loadErr := c.loadReg(src.Reg)
+			if loadErr != nil {
+				return true, false, loadErr
+			}
+			v = c.emitARMRotate(base, fmt.Sprint(src.ShiftAmount))
+			narrow, extended := c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i%d\n", narrow, v, bits)
+			extension := "zext"
+			if op == "MOVB" || op == "MOVBS" || op == "MOVH" || op == "MOVHS" {
+				extension = "sext"
+			}
+			fmt.Fprintf(c.b, "  %%%s = %s i%d %%%s to i32\n", extended, extension, bits, narrow)
+			v = "%" + extended
 		} else {
 			v, err = c.eval32(src, false)
 			if err == nil && (op == "MOVBS" || op == "MOVHS") {
@@ -183,9 +215,7 @@ func (c *armCtx) storeARMValue(dst Operand, v string, bits int, cond string, pos
 	case OpIdent:
 		switch strings.ToUpper(dst.Ident) {
 		case "CPSR":
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "msr cpsr_fsxc, $0", "r,~{cc},~{memory}", v)
-			c.storeFlagsFromStatus(v)
-			return nil
+			return fmt.Errorf("ARM CPSR write must pass the typed Go/raw status transfer grammar: %q", raw)
 		case "FPCR", "FPSR":
 			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(i32 %s)\n", "vmsr fpscr, $0", "r,~{memory}", v)
 			return nil

@@ -22,6 +22,7 @@ func arm64SplitBlocks(fn Func) []arm64Block {
 	}
 
 	isTerminator := func(ins Instr) bool {
+		ins = arm64ControlDecode(ins)
 		if ins.Op == OpRET {
 			return true
 		}
@@ -31,7 +32,7 @@ func arm64SplitBlocks(fn Func) []arm64Block {
 		}
 		switch Op(op) {
 		case "BL", "BLR", "CALL":
-			return arm64IsLocalBranchLink(ins)
+			return true
 		case "B", "JMP", "BEQ", "BNE", "BLO", "BHI", "BLT", "BGE", "BLE", "BGT", "BHS", "BLS", "BMI", "BPL", "BVS", "BVC",
 			"BCC", "BCS", "CBZ", "CBNZ", "CBZW", "CBNZW", "TBZ", "TBNZ":
 			return true
@@ -64,7 +65,11 @@ func arm64SplitBlocks(fn Func) []arm64Block {
 	// Drop trailing empty synthetic block if present.
 	if len(blocks) > 1 && len(blocks[len(blocks)-1].instrs) == 0 && strings.HasPrefix(blocks[len(blocks)-1].name, "anon_") {
 		previous := blocks[len(blocks)-2]
-		if len(previous.instrs) == 0 || !arm64IsLocalBranchLink(previous.instrs[len(previous.instrs)-1]) {
+		lastOp := Op("")
+		if len(previous.instrs) != 0 {
+			lastOp = arm64ControlOp(arm64ControlDecode(previous.instrs[len(previous.instrs)-1]))
+		}
+		if lastOp != "BL" && lastOp != "BLR" && lastOp != "CALL" {
 			blocks = blocks[:len(blocks)-1]
 		}
 	}

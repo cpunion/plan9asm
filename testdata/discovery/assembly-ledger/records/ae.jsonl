@@ -12,7 +12,9 @@
 {"module":"github.com/kevmo314/sing-tun","version":"v0.9.0","status":"pending"}
 {"module":"github.com/klauspost/go","version":"v0.0.0-20251023102915-3f1778f38b01","status":"pending"}
 {"module":"github.com/leadaxe/gvisor-lx","version":"v0.0.0-20260805115331-117243aa02fa","status":"pending"}
+{"module":"github.com/litoopcmbjp340/fleta","version":"v0.0.0-20210130151048-69cd0c28f582","status":"pending"}
 {"module":"github.com/tailscale/go","version":"v0.0.0-20260919225036-24ee2fd0610e","status":"pending"}
+{"module":"github.com/throneproj/Xray-core","version":"v1.251015.0","status":"pending"}
 {"module":"github.laiyagushi.com/tphakala/go-opus","version":"v1.1.0","status":"pending"}
 {"module":"github.tiyicn.workers.dev/muyo/sno","version":"v1.2.1","status":"pending"}
 {"module":"github.web.gylab.com/phuslu/log","version":"v1.0.124","status":"pending"}

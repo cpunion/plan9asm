@@ -103,36 +103,24 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 		}
 		return constraint, true
 	}
-	// CMP/CMN immediate, 64-bit only. SP and W comparisons do not establish
-	// this expression domain's 64-bit GP constraints.
-	if compare&0xbf80001f != 0xb100001f || compare>>5&31 == 31 {
+	// A register limit must be an independently proved numeric constant at
+	// the comparison, not a later value or a relocated pool offset.
+	register, immediate, subtract, valid := flow.compareConstant(compare, after-1)
+	if !valid {
 		return constraint, false
 	}
-	constraint.expression = arm64PoolRegisterExpression(int(compare >> 5 & 31))
+	constraint.expression = arm64PoolRegisterExpression(register)
 	if constraint.expression.registerMask()&clobbered != 0 {
 		constraint.after = after
 	}
 	constraint.interval = arm64PoolUnknownInterval
-	immediate := uint64(compare >> 10 & 4095)
-	if compare&(1<<22) != 0 {
-		immediate <<= 12
-	}
-	if compare&(1<<30) == 0 { // CMN: C is the carry out of unsigned addition.
+	if !subtract { // CMN: C is the carry out of unsigned addition.
 		if immediate == 0 {
 			return constraint, false
 		}
-		switch condition {
-		case 2:
-			constraint.interval.low = math.MaxUint64 - immediate + 1
-		case 3:
-			constraint.interval.high = math.MaxUint64 - immediate
-		case 0:
-			constraint.interval.low = -immediate
-			constraint.interval.high = -immediate
-		default:
-			return constraint, false
-		}
-		return constraint, true
+		// For a nonzero constant, carry and zero have the same unsigned
+		// conditions as CMP against its modular negation.
+		immediate = -immediate
 	}
 	switch condition {
 	case 0:
@@ -145,6 +133,9 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 		}
 		constraint.interval.high = immediate - 1
 	case 8:
+		if immediate == math.MaxUint64 {
+			return constraint, false
+		}
 		constraint.interval.low = immediate + 1
 	case 9:
 		constraint.interval.high = immediate
@@ -152,6 +143,58 @@ func (flow *arm64RawPoolValues) affineEdgeConstraint(edge arm64RawPoolEdge) (arm
 		return constraint, false
 	}
 	return constraint, true
+}
+
+// affineFlagSourceBefore already validated the CMP/CMN encoding with the
+// architecture decoder. Cover its immediate, shifted-register and extended-
+// register operand classes. SP and W comparisons stay outside this X domain.
+func (flow *arm64RawPoolValues) compareConstant(word uint32, at int) (register int, value uint64, subtract, ok bool) {
+	register, subtract = int(word>>5&31), word&(1<<30) != 0
+	if register == 31 {
+		return
+	}
+	if word&0xbf80001f == 0xb100001f {
+		value = uint64(word >> 10 & 4095)
+		if word&(1<<22) != 0 {
+			value <<= 12
+		}
+		ok = true
+		return
+	}
+	if word&0xbf00001f != 0xab00001f {
+		return
+	}
+	numeric := flow.numericValues()
+	bound := numeric.invariantInterval(at, arm64PoolRegisterExpression(int(word>>16&31)))
+	flow.affineWork = numeric.affineWork
+	if bound.low != bound.high {
+		return
+	}
+	value = bound.low
+	if word&(1<<21) == 0 {
+		shift := word >> 10 & 63
+		switch word >> 22 & 3 {
+		case 0:
+			value <<= shift
+		case 1:
+			value >>= shift
+		case 2:
+			value = uint64(int64(value) >> shift)
+		default:
+			return
+		}
+	} else {
+		width := uint32(8) << (word >> 13 & 3)
+		value <<= 64 - width
+		if word&(1<<15) != 0 {
+			value = uint64(int64(value) >> (64 - width))
+		} else {
+			value >>= 64 - width
+		}
+		value <<= word >> 10 & 7
+	}
+	ok = true
+	return
 }
 
 // A tested bit can exclude a path only when another reaching guard proves

@@ -114,6 +114,10 @@ func TestTranslatorInvocationFiltersExactModule(t *testing.T) {
 	if !containsString(invocation.Args, "-module-path=example.com/root") {
 		t.Fatalf("translator args = %#v, want exact module ownership filter", invocation.Args)
 	}
+	if !containsString(invocation.Args, "-compile") ||
+		!containsString(invocation.Args, "-llc-opt-level=0") {
+		t.Fatalf("curated translator args = %v, want LLVM 22 object compilation at -O0", invocation.Args)
+	}
 }
 
 func containsString(items []string, want string) bool {

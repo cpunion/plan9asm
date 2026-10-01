@@ -34,7 +34,7 @@ func TestAMD64FarReturnSplitsFollowingInstructions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "anon_1:") || !strings.Contains(ir, "zext i32 1 to i64") {
+	if !strings.Contains(ir, amd64LLVMBlockName("anon_1")+":") || !strings.Contains(ir, "zext i32 1 to i64") {
 		t.Fatalf("instruction after IRETL was not retained in its own block:\n%s", ir)
 	}
 }

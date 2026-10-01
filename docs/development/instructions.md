@@ -45,12 +45,41 @@ where practical. A completeness test must compare the whole spec table with
 the current Go encoder family so adding one observed spelling cannot leave
 sibling forms unmodeled.
 
+Macro expansion uses complete Go assembler identifier tokens, including middle
+dot and division slash, never prefixes or text inside string/character literals.
+Unresolved constants need context for an isolated instruction probe, but must
+fail full translation before raw decoding. Preserve resolved named stack
+addresses; never replace missing constants or malformed addresses with zero.
+
+ARM64's fresh virtual SP allocation is disjoint from incoming pointers only
+when the complete original and normalized source excludes escaping its address
+and entry transport cannot replace SP. A source CFG proof may admit exact
+affine GP temporaries used only for bounded, non-writeback local reads and
+fully overwritten before calls or returns. Mixed/different-offset joins keep
+may-frame taint; unknown effects, indexing, address stores and live call/result
+transport cannot wash it away. Under that bounded proof,
+ordinary pointer stores and escaped code-address values cannot corrupt saved
+SP cells. Explicit/aliased/indexed SP writes, FP contents, unknown callouts,
+raw/native effects and frame-address escape remain conservative. Audited
+same-file register helpers retain the original proof across local-call
+rewriting; a bare source-local call never acquires it. Scalar and paired atomic
+stores must account for their memory operand as well as GP outputs.
+
 For a newly discovered instruction, update all four layers before calling it
 complete: the family-specific lowerer, positive/negative Go-table form tests,
 LLVM 22 object compilation for every affected supported architecture, and the
 architecture's supported-op extraction test in `cmd/plan9asmll/main_test.go`.
 The external corpus uses that extraction result in its diagnostics, so omitting
 the last layer can make a supported instruction look unsupported.
+
+ARM64 named system registers share the raw encoding grammar. Regenerate their
+encoding/access metadata with current Go using `go generate arm64_sysregs.go`;
+do not edit `arm64_sysregs_generated.go` manually. The completeness regression
+compares the full current Go table and checks every readable register against
+LLVM 22. Use physical system-register names to avoid feature-gated LLVM aliases,
+never fabricated constants for CPU-ID reads. Keep text/direct-module/CFG/raw
+paths observable and require the Linux MRS runtime oracle: only the kernel's
+HWCAP_CPUID-advertised ID-register space is safe for unprivileged execution.
 
 A typical x86 investigation starts with the Go 1.27 tables and an assembler
 probe:
@@ -100,7 +129,24 @@ Do not add an `unsupported_forms` skip for a supported target. Context-dependent
 forms may be classified separately only when translation genuinely requires
 information unavailable to the scanner.
 
+The x/arch decoder corpus is not a Go-accepted instruction list. Its
+`MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
+base/data writeback-overlap check. The mixed MOVHU decoder form is therefore
+unsupported, not a missing valid Go format. The independent
+`TestARM64DecoderWritebackOverlapRejectedLikeGo` regression checks both
+assemblers' rejection; `check-arm64-plan9-corpus.sh` separately requires every
+Go-accepted selected-family case to remain lowerable.
+
 ## Semantic and raw-encoding checks
+
+The Advanced SIMD SM3 family is WORD-only in Go 1.27. Its exact seven forms
+follow [Arm DDI 0602](https://documentation-service.arm.com/static/67e40f3398aa3c3b6eea6a85)
+and LLVM 22's crypto encoder: PARTW1/PARTW2, SS1 and TT1A/B/TT2A/B, with
+four-word vectors and TT indices 0–3. The shared raw-vector registry records no
+GP/SP or memory effects; destructive destination reads and all aliases remain
+explicit. Portable LLVM arithmetic is checked separately from original Go
+WORD execution, which is required on Linux/QEMU CPU=max. Host-only arithmetic
+execution is not evidence that the host implements FEAT_SM3.
 
 - Distinguish physical encoding rules from Go frontend acceptance, especially
   for 386 VEX/EVEX registers and ignored VEX.W bits. Check primary architecture

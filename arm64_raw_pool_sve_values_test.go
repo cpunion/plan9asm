@@ -33,6 +33,7 @@ func TestARM64RawPoolScalableCountGrammar(t *testing.T) {
 	}
 	words := assembleARM64LLVMWords(t, assembly, "+sve")
 	for index, word := range words {
+		requireARM64PoolScalableFlags(t, assembly[index], word, 1<<10)
 		op, width := index/(4*32*16), index/(32*16)%4
 		pattern, multiplier := index/16%32, index%16+1
 		for vectorBytes := int64(16); vectorBytes <= 256; vectorBytes += 16 {
@@ -65,6 +66,7 @@ func TestARM64RawPoolScalableAddressGrammar(t *testing.T) {
 		}
 	}
 	for index, word := range assembleARM64LLVMWords(t, assembly, "+sve") {
+		requireARM64PoolScalableFlags(t, assembly[index], word, 1<<10)
 		for vectorBytes := int64(16); vectorBytes <= 256; vectorBytes += 16 {
 			unit := vectorBytes
 			if index >= 128 {
@@ -80,6 +82,17 @@ func TestARM64RawPoolScalableAddressGrammar(t *testing.T) {
 				t.Fatalf("%s VL=%d: got r%d %+v/%v, want %+v", assembly[index], vectorBytes, destination, got, ok, want)
 			}
 		}
+	}
+}
+
+func requireARM64PoolScalableFlags(t *testing.T, line string, word, wantWrites uint32) {
+	t.Helper()
+	flow := &arm64RawPoolValues{
+		words: []uint32{0xf1001c3f, word, 0xd503201f}, before: [][]int{{-1}, {0}, {1}},
+	}
+	compare, writes, after, ok := flow.affineFlagSourceBefore(2)
+	if !ok || compare != flow.words[0] || writes != wantWrites || after != 1 {
+		t.Fatalf("%s: flags=(%#x,%#x,%d,%v), want preserved with writes=%#x", line, compare, writes, after, ok, wantWrites)
 	}
 }
 

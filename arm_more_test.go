@@ -149,8 +149,8 @@ func TestARMHelperCoverage(t *testing.T) {
 		}
 
 		fn := Func{Instrs: []Instr{{Args: []Operand{{Kind: OpImm, ImmRaw: "$(sym)"}}}}}
-		if err := validateResolvedImmediates(ArchAMD64, fn); err != nil {
-			t.Fatalf("validateResolvedImmediates(amd64) error = %v", err)
+		if err := validateResolvedImmediates(ArchAMD64, fn); err == nil {
+			t.Fatal("validateResolvedImmediates(amd64) accepted an unresolved constant")
 		}
 		if err := validateResolvedImmediates(ArchARM, fn); err == nil {
 			t.Fatalf("validateResolvedImmediates(arm) unexpectedly succeeded")

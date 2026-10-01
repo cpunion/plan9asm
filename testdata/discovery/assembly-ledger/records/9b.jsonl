@@ -1,5 +1,6 @@
 {"module":"ghproxy-9d2.pages.dev/gorse-io/gorse","version":"v0.5.6","status":"pending"}
 {"module":"git.gammaspectra.live/p2pool/edwards25519","version":"v0.0.0-20260825130805-da04a0f706b8","status":"pending"}
+{"module":"github.com/D3Ext/hooka","version":"v0.0.0-20241231101226-02d02211d4cf","status":"pending"}
 {"module":"github.com/apache/Arrow/go/v15","version":"v15.0.2","status":"pending"}
 {"module":"github.com/coder/websocket","version":"v1.8.15","status":"pending"}
 {"module":"github.com/crazypeace/Xray-core-allowInsecure","version":"v0.0.0-20260620233415-e7ae9b023739","status":"pending"}
@@ -17,6 +18,7 @@
 {"module":"github.com/remyoudompheng/go-vectops","version":"v0.0.0-20171128230507-52922cf12600","status":"pending"}
 {"module":"github.com/royzhong7070/go-x-net","version":"v0.57.2-0.20260724054507-5d55e4ad9454","status":"pending"}
 {"module":"github.com/storj/minio","version":"v0.0.0-20260609124736-fc17c581773a","status":"pending"}
+{"module":"github.com/tencentcodedog/win-go-1.12.6","version":"v0.0.0-20211109075958-cfdb25a0a994","status":"pending"}
 {"module":"github.com/twacqwq/go","version":"v0.0.0-20240119223849-f19f31f2e7c1","status":"pending"}
 {"module":"github.com/whyvps/xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"github.com/zchee/go-sandbox","version":"v0.0.0-20250129110512-1bd90c056274","status":"pending"}

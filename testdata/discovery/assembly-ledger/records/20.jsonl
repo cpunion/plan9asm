@@ -1,4 +1,6 @@
 {"module":"code.hybscloud.com/dwcas","version":"v0.1.5","status":"pending"}
+{"module":"code.hybscloud.com/sox","version":"v0.0.0-20251118161513-36d5e2cf07e6","status":"pending"}
+{"module":"ghproxy-9d2.pages.dev/fako1024/slimcap","version":"v1.0.10","status":"pending"}
 {"module":"gitee.com/wangHvip/crypto","version":"v0.0.0-20190417174047-f416ebab96af","status":"pending"}
 {"module":"github.1485827954.workers.dev/james-bowman/sparse","version":"v0.0.0-20260216202247-495ee4f84d35","status":"pending"}
 {"module":"github.com/AnthraX1/zgrab2","version":"v0.0.0-20260714122503-f5fbb420614b","status":"pending"}
@@ -6,6 +8,7 @@
 {"module":"github.com/Kirides/screen-share","version":"v0.0.0-20221227093200-5f754daa8f9d","status":"pending"}
 {"module":"github.com/ROKT/crypto","version":"v0.0.0-20260921070245-7a4a4d6beae2","status":"pending"}
 {"module":"github.com/WhyVPS/Xray-core","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
+{"module":"github.com/aditikhare007/cockroach","version":"v0.0.0-20230612123518-09190e22042f","status":"pending"}
 {"module":"github.com/andyyuanfzm/chain33","version":"v0.0.0-20260520013940-35ad20d69f45","status":"pending"}
 {"module":"github.com/embeddedgo/go","version":"v0.0.0-20250617133900-719bb08c5b49","status":"pending"}
 {"module":"github.com/ethangyoung/containerfs","version":"v0.0.0-20190824181837-c8de36334a9e","status":"pending"}
@@ -27,4 +30,5 @@
 {"module":"github.com/pointlander/tensor","version":"v0.8.1","status":"pending"}
 {"module":"github.com/skylenet/swarm","version":"v1.8.27","status":"pending"}
 {"module":"github.com/tklauser/go","version":"v0.0.0-20230919055126-eca5a97340e6","status":"pending"}
+{"module":"github.com/weijun-sh/efsn-f","version":"v0.0.0-20190327060819-dfcd3dc51286","status":"pending"}
 {"module":"github.com/zcalusic/sysinfo","version":"v1.1.3","status":"pending"}

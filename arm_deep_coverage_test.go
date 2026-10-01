@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -57,10 +58,13 @@ func TestARMEvalCoverage(t *testing.T) {
 		{Kind: OpFPAddr, FPName: "ret", FPOffset: 32},
 		{Kind: OpMem, Mem: MemRef{Base: "R7", Off: 4}},
 		{Kind: OpSym, Sym: "$runtime·main+4(SB)"},
-		{Kind: OpIdent, Ident: "CS"},
 	}
-	if got, err := c.evalFPAddr32(Operand{Kind: OpFPAddr, FPName: "argframe", FPOffset: 99}); err != nil || got != "0" {
-		t.Fatalf("evalFPAddr32(dynamic) = (%q, %v), want (0, nil)", got, err)
+	// ARM has no x86 CS value operand: an unknown identifier is not zero.
+	if got, err := c.eval32(Operand{Kind: OpIdent, Ident: "CS"}, false); err == nil || got != "" {
+		t.Fatalf("eval32(unknown CS) fabricated a value: (%q, %v)", got, err)
+	}
+	if got, err := c.evalFPAddr32(Operand{Kind: OpFPAddr, FPName: "argframe", FPOffset: 99}); !errors.Is(err, ErrProbeNeedsContext) || got != "" {
+		t.Fatalf("evalFPAddr32(dynamic) = (%q, %v), want unbound frame context", got, err)
 	}
 	if got, err := c.evalFPValue32(Operand{Kind: OpFP, FPName: "f_hi", FPOffset: 24}); err != nil || got == "" {
 		t.Fatalf("evalFPValue32(split i64 high) = (%q, %v)", got, err)

@@ -481,18 +481,7 @@ func arm64RawKnownSourceWidth(fn Func, ins Instr) (int64, bool) {
 	case OpWORD:
 		return 4, true
 	case OpRET:
-		if len(ins.Args) != 0 {
-			return 0, false
-		}
-		if fn.FrameSize == 0 {
-			return 4, true
-		}
-		// cmd/asm emits restore-FP, restore-SP, RET for ordinary framed
-		// functions whose rounded frame fits ARM64's immediate ADD.
-		if fn.FrameSize > 0 && fn.FrameSize <= 4080 {
-			return 12, true
-		}
-		return 0, false
+		return arm64SourceReturnWidth(fn, ins)
 	case "B", OpJMP:
 		if arm64RawFixedWidthJumpOperand(ins, false) {
 			return 4, true

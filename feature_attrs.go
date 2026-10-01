@@ -338,6 +338,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEFloatDivideScale(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 				}
+				if _, ok := decodeARM64RawSVEFloatReciprocalStep(uint32(ins.Args[0].Imm)); ok {
+					add("+sve")
+				}
 				if decoded, ok := decodeARM64RawSVESplice(uint32(ins.Args[0].Imm)); ok {
 					add("+sve")
 					if len(decoded.Args) == 3 {
@@ -994,6 +997,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVEFloat(word); ok {
 					add("+sve")
 				}
+				if _, ok := decodeARM64RawSVEFloatReciprocalStep(word); ok {
+					add("+sve")
+				}
 				if _, ok := decodeARM64RawSVEFloatMinMaxReduction(word); ok {
 					add("+sve")
 				}
@@ -1003,8 +1009,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				if _, ok := decodeARM64RawSVELoadStore(word); ok {
 					add("+sve")
 				}
-				if _, ok := decodeARM64RawSVEWhileLO(word); ok {
+				if decoded, ok := decodeARM64RawSVEWhile(word); ok {
 					add("+sve")
+					if arm64SVEPredicateWhileNeedsSVE2P1(decoded) {
+						add("+sve2p1")
+					}
 				}
 				if _, ok := decodeARM64RawSVELD1B(word); ok {
 					add("+sve")

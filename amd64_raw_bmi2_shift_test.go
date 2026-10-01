@@ -217,15 +217,7 @@ func TestX86RawBMI2ShiftGoEncoderForms(t *testing.T) {
 				}
 			}
 
-			var raw strings.Builder
-			raw.WriteString("TEXT bmi2shift(SB),4,$0-0\n")
-			for _, b := range code {
-				fmt.Fprintf(&raw, "BYTE $%#02x\n", b)
-			}
-			file, err := Parse(ArchAMD64, raw.String())
-			if err != nil {
-				t.Fatal(err)
-			}
+			file := x86RawStackObservingFormProbeFile(t, arch, "bmi2shift", code)
 			triples := []string{
 				"x86_64-apple-darwin",
 				"x86_64-unknown-linux-gnu",

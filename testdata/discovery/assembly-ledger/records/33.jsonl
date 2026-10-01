@@ -1,3 +1,4 @@
+{"module":"ghproxy-9d2.pages.dev/bytedance/mockey","version":"v1.4.5","status":"pending"}
 {"module":"github.com/Bithack/go-hnsw","version":"v0.0.0-20170629124716-52a932462077","status":"pending"}
 {"module":"github.com/New-JAmneration/JAM-Protocol","version":"v0.0.0-20260724124157-c7fb743aa000","status":"pending"}
 {"module":"github.com/PinkDiamond1/bn256","version":"v0.0.0-20200201162908-76a1f2d58d04","status":"pending"}
@@ -13,6 +14,7 @@
 {"module":"github.com/jedisct1/go-aes","version":"v0.1.1","status":"pending"}
 {"module":"github.com/kevinburke/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/lufia/try","version":"v0.5.1","status":"pending"}
+{"module":"github.com/mountos-app/minio","version":"v0.0.0-20260116075713-2fa66c3341d4","status":"pending"}
 {"module":"github.com/newmanifold/go-ethereum","version":"v1.17.2","status":"pending"}
 {"module":"github.com/ponchione/websocket","version":"v1.8.15-shunter.1","status":"pending"}
 {"module":"github.com/reddit/milvus/pkg/v3","version":"v3.0.0-20260702082229-182134e29ebf","status":"pending"}
@@ -20,3 +22,4 @@
 {"module":"github.com/zmap/zgrab2","version":"v1.0.0","status":"pending"}
 {"module":"github.heygears.com/phuslu/log","version":"v1.0.134","status":"pending"}
 {"module":"gopkg.in/fyne-io/fyne.v2","version":"v2.8.1","status":"pending"}
+{"module":"sources.truenas.cloud/code/edwards25519","version":"v1.1.0","status":"pending"}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,13 @@ func TestAssemblyLedgerPersistsAuditedProgress(t *testing.T) {
 	for _, candidate := range got.Candidates {
 		if candidate.Status != discoveryStatusPassed {
 			t.Fatalf("candidate = %+v", candidate)
+		}
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), `"translations":1`) {
+			t.Fatalf("passed candidate lost compilation count: %s", data)
 		}
 	}
 	if _, err := readAssemblyLedger(output, strings.Repeat("b", 64), semanticSource); err == nil {
@@ -95,6 +103,135 @@ func TestAssemblyLedgerKeepsMissingReportsPending(t *testing.T) {
 	}
 	if got.Pending == 0 {
 		t.Fatal("missing report did not leave any candidate pending")
+	}
+	if err := requireVerifiedAssemblyLedger(got); err == nil {
+		t.Fatal("pending candidates satisfied the strict completion gate")
+	}
+}
+
+func TestAssemblyLedgerCompletionGateAcceptsAuditedOutcomes(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := requireVerifiedAssemblyLedger(progress); err != nil {
+		t.Fatal(err)
+	}
+	progress.Failed = 1
+	progress.Verified = false
+	if err := requireVerifiedAssemblyLedger(progress); err == nil {
+		t.Fatal("failed candidate satisfied the strict completion gate")
+	}
+}
+
+func TestAssemblyLedgerRejectsUnexplainedOrUncompiledOutcome(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(*discoveryProgress)
+	}{
+		{
+			name: "pass without translation",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].Translations = 0
+				p.Translations--
+			},
+		},
+		{
+			name: "source skip without reason",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].Status = discoveryStatusNotApplicable
+				p.Candidates[0].Translations = 0
+				p.Passed--
+				p.NotApplicable++
+				p.Translations--
+			},
+		},
+		{
+			name: "target skip without per-file evidence",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].NotApplicableTranslations = 1
+				p.NotApplicableTranslations = 1
+			},
+		},
+		{
+			name: "target skip with absolute runner path",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].NotApplicableTranslations = 1
+				p.NotApplicableTranslations = 1
+				item := matrixTargetNotApplicableItem{
+					Target: "linux/amd64",
+					targetNotApplicableItem: targetNotApplicableItem{
+						PkgPath: "example.com/asm", AsmFile: "/tmp/runner/stub.s",
+						Kind: targetNotApplicableGoTextArgSize, Symbol: "example.com/asm.stub",
+						DeclaredArgSize: 16, ExpectedArgSize: 8,
+					},
+				}
+				item.Reason = discoveryTargetSkipReason(item)
+				p.Candidates[0].NotApplicableItems = []matrixTargetNotApplicableItem{item}
+			},
+		},
+		{
+			name: "source skip with raw diagnostic",
+			change: func(p *discoveryProgress) {
+				p.Candidates[0].SourceNotApplicableItems = []discoverySourceSkipSummary{{
+					AsmFile: "a_amd64.s",
+					Targets: []string{"linux/amd64"},
+					Kind:    discoverySourceNotApplicableGoBuild,
+					Reason:  "build failed at /tmp/ephemeral/cache/file.go",
+				}}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := progress
+			changed.Candidates = append([]discoveryCandidateProgress(nil), progress.Candidates...)
+			tc.change(&changed)
+			if err := validateAssemblyLedgerProgress(changed); err == nil {
+				t.Fatal("accepted assembly outcome without required evidence")
+			}
+			if err := requireVerifiedAssemblyLedger(changed); err == nil {
+				t.Fatal("completion gate trusted summary flags instead of candidate evidence")
+			}
+		})
+	}
+}
+
+func TestAssemblyLedgerMatchesCurrentCorpusReports(t *testing.T) {
+	ledger, reports, source := writeDiscoveryReportFixture(t)
+	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("a", 64)
+	if err := writeAssemblyLedger(output, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := readAssemblyLedger(output, progress.LedgerSHA256, semanticSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current := progress
+	current.Source.Revision = strings.Repeat("b", 40)
+	if err := compareAssemblyLedgerProgress(stored, current); err != nil {
+		t.Fatalf("same semantic source with evidence-only revision change: %v", err)
+	}
+	current.Candidates = append([]discoveryCandidateProgress(nil), current.Candidates...)
+	current.Candidates[0].Translations++
+	if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+		t.Fatal("ledger accepted a different candidate compilation result")
+	}
+	current = progress
+	current.Pending = 1
+	current.Verified = false
+	if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+		t.Fatal("ledger accepted incomplete current reports")
 	}
 }
 

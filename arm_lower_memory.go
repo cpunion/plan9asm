@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 )
 
@@ -28,6 +29,105 @@ type armIntegerMemoryForm struct {
 	postIndex bool
 	writeback bool
 	subtract  bool
+}
+
+type armIntegerSymbolForm struct {
+	spec    armIntegerMemorySpec
+	symbol  string
+	reg     Reg
+	load    bool
+	address bool
+}
+
+func parseARMIntegerSymbolForm(op string, ins Instr) (armIntegerSymbolForm, error) {
+	f := armIntegerSymbolForm{spec: armIntegerMemorySpecs[op]}
+	if len(ins.Args) != 2 {
+		return f, fmt.Errorf("arm %s symbol form expects two operands: %q", op, ins.Raw)
+	}
+	symbol, register := ins.Args[1], ins.Args[0]
+	if ins.Args[0].Kind == OpSym {
+		symbol, register, f.load = ins.Args[0], ins.Args[1], true
+	}
+	if symbol.Kind != OpSym || register.Kind != OpReg || !isARMGeneralReg(register.Reg) {
+		return f, fmt.Errorf("arm %s symbol form requires a symbol and a general register: %q", op, ins.Raw)
+	}
+	f.symbol, f.reg = strings.TrimSpace(symbol.Sym), register.Reg
+	f.address = strings.HasPrefix(f.symbol, "$")
+	if f.address {
+		if op != "MOVW" || !f.load {
+			return f, fmt.Errorf("arm symbol address constants require MOVW $symbol(SB),register: %q", ins.Raw)
+		}
+		if err := armRequireConditionOnlySuffix(ins); err != nil {
+			return f, err
+		}
+	} else if _, _, _, err := armMemoryModifiers(ins); err != nil {
+		return f, err
+	}
+	if _, _, ok := parseSBRef(f.symbol); !ok || !strings.HasSuffix(f.symbol, "(SB)") {
+		return f, fmt.Errorf("arm %s requires a valid symbol(SB) reference: %q", op, ins.Raw)
+	}
+	switch strings.ToUpper(strings.TrimSpace(string(f.reg))) {
+	case "PC", "SP":
+		// Go rejects pseudo-register PC/SP in these forms. Hardware registers
+		// are spelled R15/R13; PC must not inherit an ordinary register's semantics.
+		return f, fmt.Errorf("arm %s symbol form cannot use pseudo-register %s: %q", op, f.reg, ins.Raw)
+	case "R15":
+		if f.load {
+			return f, fmt.Errorf("%w: arm %s symbol destination R15 requires explicit control-flow context: %q", ErrProbeNeedsContext, op, ins.Raw)
+		}
+		// Go first expands a symbolic address into a literal load through
+		// R11. Reading PC in the following store therefore depends on the
+		// source instruction layout, not on an initialized virtual register.
+		return f, fmt.Errorf("%w: arm %s symbol source R15 requires source instruction layout context: %q", ErrProbeNeedsContext, op, ins.Raw)
+	}
+	return f, nil
+}
+
+func (c *armCtx) lowerIntegerSymbolMove(op, cond string, ins Instr) (bool, bool, error) {
+	if _, ok := armIntegerMemorySpecs[op]; !ok {
+		return false, false, nil
+	}
+	hasSymbol := false
+	for _, operand := range ins.Args {
+		hasSymbol = hasSymbol || operand.Kind == OpSym && strings.HasSuffix(strings.TrimSpace(operand.Sym), "(SB)")
+	}
+	if !hasSymbol {
+		return false, false, nil
+	}
+	f, err := parseARMIntegerSymbolForm(op, ins)
+	if err != nil {
+		return true, false, err
+	}
+	err = c.emitConditionalEffect(cond, func() error {
+		ptr, err := c.ptrFromSB(f.symbol)
+		if err != nil {
+			return err
+		}
+		address := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", address, ptr)
+		if f.address {
+			return c.storeReg(f.reg, "%"+address)
+		}
+		// Go's C_ADDR rows materialize the address in REGTMP (R11) before
+		// the actual load/store. P/W/U operate on a zero displacement from
+		// that scratch address, not on the symbol's relocation addend.
+		if err := c.storeReg("R11", "%"+address); err != nil {
+			return err
+		}
+		if f.load {
+			value, err := c.loadMemoryPointer(ptr, f.spec.bits, f.spec.signed)
+			if err != nil {
+				return err
+			}
+			return c.storeReg(f.reg, value)
+		}
+		value, err := c.loadReg(f.reg)
+		if err != nil {
+			return err
+		}
+		return c.storeMemoryPointer(ptr, f.spec.bits, value)
+	})
+	return true, false, err
 }
 
 func armMemoryShift(mem MemRef) (Operand, bool) {
@@ -119,31 +219,9 @@ func (c *armCtx) integerMemoryAddress(f armIntegerMemoryForm) (address, updated 
 	if err != nil {
 		return "", "", err
 	}
-	var delta string
-	if f.offset.Kind == OpRegShift && f.offset.ShiftAmount == 0 && f.offset.ShiftOp != ShiftLeft {
-		value, loadErr := c.loadReg(f.offset.Reg)
-		if loadErr != nil {
-			return "", "", loadErr
-		}
-		switch f.offset.ShiftOp {
-		case ShiftRight:
-			delta = "0" // encoded LSR #0 means LSR #32
-		case ShiftArith:
-			tmp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = ashr i32 %s, 31\n", tmp, value)
-			delta = "%" + tmp
-		case ShiftRotate:
-			carry := c.loadFlagValue(c.flagsCSlot)
-			ext, high, low, result := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i1 %s to i32\n  %%%s = shl i32 %%%s, 31\n", ext, carry, high, ext)
-			fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, 1\n  %%%s = or i32 %%%s, %%%s\n", low, value, result, low, high)
-			delta = "%" + result // encoded ROR #0 means RRX, without updating C
-		}
-	} else {
-		delta, err = c.eval32(f.offset, false)
-		if err != nil {
-			return "", "", err
-		}
+	delta, err := c.eval32(f.offset, false)
+	if err != nil {
+		return "", "", err
 	}
 	if f.displace != 0 {
 		tmp := c.newTmp()

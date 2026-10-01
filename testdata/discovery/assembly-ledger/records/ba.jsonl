@@ -1,3 +1,4 @@
+{"module":"ghproxy-9d2.pages.dev/quartercastle/vector","version":"v0.2.0","status":"pending"}
 {"module":"github.1485827954.workers.dev/pilinux/argon2","version":"v0.25.0","status":"pending"}
 {"module":"github.com/DQNEO/babygo","version":"v0.4.1","status":"pending"}
 {"module":"github.com/RoaringBitMap/roaring/v2","version":"v2.29.0","status":"pending"}
@@ -14,5 +15,6 @@
 {"module":"github.com/oldnicke/advanced-go-programming-book","version":"v0.0.0-20190122032112-aeb446d940ad","status":"pending"}
 {"module":"github.com/qc16/evrynet-node","version":"v0.0.0-20200529083755-80c3619a7f9d","status":"pending"}
 {"module":"github.com/rutenioum/mieru/v3","version":"v3.34.1-admission.1","status":"pending"}
+{"module":"github.com/smirnoffq/gatt","version":"v0.0.0-20260219205553-bbb5897b98e7","status":"pending"}
 {"module":"github.com/taurusgroup/go-ethereum-pocr","version":"v1.10.26-taurus","status":"pending"}
 {"module":"github.com/yoohphl/xray-core-mod","version":"v1.260629.0","status":"pending"}

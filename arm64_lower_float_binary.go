@@ -35,7 +35,7 @@ func arm64ScalarFloatBinaryKind(op Op) (kind string, bits int, ok bool) {
 }
 
 func (c *arm64Ctx) loadARM64ScalarFloatReg(reg Reg, bits int) (string, error) {
-	encoded, err := c.loadReg(reg)
+	encoded, err := c.loadRegisterWidth(reg, bits)
 	if err != nil {
 		return "", err
 	}

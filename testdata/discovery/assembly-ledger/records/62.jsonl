@@ -3,6 +3,7 @@
 {"module":"github.com/aperturerobotics/ristretto/v2","version":"v2.0.0-20260922205806-ef08161157dc","status":"pending"}
 {"module":"github.com/betaxab/xray-core-wyx","version":"v0.0.0-20260828071630-83ad74c46335","status":"pending"}
 {"module":"github.com/boyaowang430/sonic","version":"v1.13.2","status":"pending"}
+{"module":"github.com/chewxy/blas","version":"v0.0.0-20170328203910-430a98d0f42f","status":"pending"}
 {"module":"github.com/docker/runc","version":"v0.1.1","status":"pending"}
 {"module":"github.com/facebook/buck2","version":"v0.0.0-20260922215043-0363b6a6ffdb","status":"pending"}
 {"module":"github.com/go-simd/xxhash","version":"v0.1.2","status":"pending"}

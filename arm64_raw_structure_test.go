@@ -134,22 +134,24 @@ func TestARM64RawStructureRejectsReservedEncodings(t *testing.T) {
 func TestARM64RawStructureCompleteGoForms(t *testing.T) {
 	cases := arm64RawStructureCases()
 	var named, raw strings.Builder
-	named.WriteString("TEXT rawStructureForms(SB),$0-0\n")
-	raw.WriteString("TEXT rawStructureForms(SB),$0-0\n")
+	// Post-indexed address-bank SP is a real write. R18_PLATFORM is never
+	// an output of these vector forms; restore source SP before returning.
+	named.WriteString("TEXT rawStructureForms(SB),$0-0\nMOVD RSP,R18_PLATFORM\n")
+	raw.WriteString("TEXT rawStructureForms(SB),$0-0\nMOVD RSP,R18_PLATFORM\n")
 	for _, test := range cases {
 		fmt.Fprintln(&named, test.syntax)
 		fmt.Fprintf(&raw, "WORD $%#08x\n", test.word)
 	}
-	named.WriteString("RET\n")
-	raw.WriteString("RET\n")
+	named.WriteString("MOVD R18_PLATFORM,RSP\nRET\n")
+	raw.WriteString("MOVD R18_PLATFORM,RSP\nRET\n")
 	// These forms predate Go 1.20, so use each compatibility lane's real
 	// assembler. Checking WORD acceptance alone cannot validate an encoding.
 	code := assembleARM64StructureTestBytes(t, named.String())
-	if len(code) < 4*(len(cases)+1) {
-		t.Fatalf("Go assembler emitted %d bytes for %d instructions", len(code), len(cases)+1)
+	if len(code) < 4*(len(cases)+3) {
+		t.Fatalf("Go assembler emitted %d bytes for %d instructions", len(code), len(cases)+3)
 	}
 	for i, test := range cases {
-		if got := binary.LittleEndian.Uint32(code[4*i:]); got != test.word {
+		if got := binary.LittleEndian.Uint32(code[4*(i+1):]); got != test.word {
 			t.Fatalf("Go encoded %s as %#08x, fixture expected %#08x", test.syntax, got, test.word)
 		}
 	}
@@ -162,7 +164,7 @@ func TestARM64RawStructureCompleteGoForms(t *testing.T) {
 		if err != nil {
 			t.Fatalf("decode %s (%#08x): %v", test.syntax, test.word, err)
 		}
-		want := file.Funcs[0].Instrs[i+1]
+		want := file.Funcs[0].Instrs[i+2]
 		if got.Op != want.Op || !reflect.DeepEqual(got.Args, want.Args) {
 			t.Fatalf("decode %#08x = %s %+v; want %s %+v", test.word, got.Op, got.Args, want.Op, want.Args)
 		}

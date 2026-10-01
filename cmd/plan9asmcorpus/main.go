@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 type corpusManifest struct {
@@ -56,6 +58,11 @@ type matrixReport struct {
 	NotApplicableItems       []matrixTargetNotApplicableItem    `json:"not_applicable_items,omitempty"`
 	SourceNotApplicableItems []discoverySourceNotApplicableItem `json:"source_not_applicable_items,omitempty"`
 	PrivateExtension         *discoveryPrivateExtensionSkip     `json:"-"`
+	NativeLayout             *discoveryNativeLayoutSkip         `json:"-"`
+	NativeLayoutPlan         *discoveryNativeLayoutPlan         `json:"-"`
+	OrdinarySelectionPlan    *discoveryOrdinarySelectionPlan    `json:"-"`
+	FeatureProfiles          []discoveryFeatureProfile          `json:"-"`
+	FeatureConsumption       []*gotoolprofile.SelectionProof    `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"
@@ -71,21 +78,24 @@ type targetNotApplicableItem struct {
 }
 
 type matrixTargetNotApplicableItem struct {
-	Target string `json:"target"`
+	Target    string   `json:"target"`
+	ProfileID string   `json:"profile_id,omitempty"`
+	BuildTags []string `json:"build_tags,omitempty"`
 	targetNotApplicableItem
 }
 
 type targetReport struct {
-	Goos               string                    `json:"goos"`
-	Goarch             string                    `json:"goarch"`
-	TotalPkgs          int                       `json:"total_pkgs"`
-	AsmPackages        []string                  `json:"asm_packages"`
-	AsmFiles           []string                  `json:"asm_files"`
-	TotalAsm           int                       `json:"total_asm"`
-	Success            int                       `json:"success"`
-	NotApplicable      int                       `json:"not_applicable"`
-	Failed             int                       `json:"failed"`
-	NotApplicableItems []targetNotApplicableItem `json:"not_applicable_items,omitempty"`
+	Goos               string                        `json:"goos"`
+	Goarch             string                        `json:"goarch"`
+	TotalPkgs          int                           `json:"total_pkgs"`
+	AsmPackages        []string                      `json:"asm_packages"`
+	AsmFiles           []string                      `json:"asm_files"`
+	TotalAsm           int                           `json:"total_asm"`
+	Success            int                           `json:"success"`
+	NotApplicable      int                           `json:"not_applicable"`
+	Failed             int                           `json:"failed"`
+	NotApplicableItems []targetNotApplicableItem     `json:"not_applicable_items,omitempty"`
+	FeatureSelection   *gotoolprofile.SelectionProof `json:"feature_selection,omitempty"`
 }
 
 var (
@@ -120,18 +130,26 @@ func main() {
 	discoveryReport := flag.String("discovery-report", "", "write the discovery shard result as JSON")
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
 	verifyDiscoveryReports := flag.String("verify-discovery-reports", "", "verify a complete directory of discovery shard reports against -discovery-ledger")
+	compareAssemblyLedgerPath := flag.String("compare-assembly-ledger", "", "compare verified shard results with the committed assembly ledger")
 	discoveryProgressReports := flag.String("discovery-progress", "", "report pending/passed/N/A/failed candidates from a possibly incomplete directory of frozen shard reports")
 	writeAssemblyLedgerPath := flag.String("write-assembly-ledger", "", "persist audited discovery progress in a separate module-hashed assembly ledger")
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
+	requireVerifiedAssembly := flag.Bool("require-verified-assembly-ledger", false, "require every assembly candidate to be passed or explicitly skipped by complete reports")
 	flag.Parse()
 	if *verifyDiscoveryReports != "" && *discoveryProgressReports != "" {
 		check(errors.New("-verify-discovery-reports and -discovery-progress are mutually exclusive"))
+	}
+	if *compareAssemblyLedgerPath != "" && *verifyDiscoveryReports == "" {
+		check(errors.New("-compare-assembly-ledger requires -verify-discovery-reports"))
 	}
 	if *writeAssemblyLedgerPath != "" && *discoveryProgressReports == "" {
 		check(errors.New("-write-assembly-ledger requires -discovery-progress"))
 	}
 	if *assemblyLedgerStatusPath != "" && (*discoveryProgressReports != "" || *verifyDiscoveryReports != "") {
 		check(errors.New("-assembly-ledger-status cannot be combined with report verification or progress"))
+	}
+	if *requireVerifiedAssembly && *assemblyLedgerStatusPath == "" {
+		check(errors.New("-require-verified-assembly-ledger requires -assembly-ledger-status"))
 	}
 
 	manifest, err := loadManifest(*manifestPath)
@@ -151,6 +169,19 @@ func main() {
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
 		check(verifyDiscoveryCorpusReports(*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, *repoRoot))
+		if *compareAssemblyLedgerPath != "" {
+			current, err := collectDiscoveryProgress(
+				*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, 0, *repoRoot,
+			)
+			check(err)
+			semanticSourceSHA, err := collectDiscoverySemanticSourceSHA(*repoRoot)
+			check(err)
+			stored, err := readAssemblyLedger(
+				*compareAssemblyLedgerPath, current.LedgerSHA256, semanticSourceSHA,
+			)
+			check(err)
+			check(compareAssemblyLedgerProgress(stored, current))
+		}
 		fmt.Printf("verified discovery corpus reports against %s\n", *discoveryLedger)
 		return
 	}
@@ -164,6 +195,9 @@ func main() {
 		check(err)
 		progress, err := readAssemblyLedger(*assemblyLedgerStatusPath, ledgerSHA, semanticSourceSHA)
 		check(err)
+		if *requireVerifiedAssembly {
+			check(requireVerifiedAssemblyLedger(progress))
+		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		check(encoder.Encode(progress))
@@ -483,6 +517,10 @@ func makeTranslatorInvocationForTargetsAndTags(corpusDir, modulePath string, pat
 		"-out="+outDir,
 		"-compile",
 		"-llc="+llc,
+		// Curated and discovery suites both verify real LLVM 22 objects.
+		// Optimization adds no instruction coverage and is prohibitively slow
+		// for some generated megabyte-scale assembly files.
+		"-llc-opt-level=0",
 		"-report="+reportPath,
 		"-repo-root="+repoRoot,
 	)
@@ -490,15 +528,10 @@ func makeTranslatorInvocationForTargetsAndTags(corpusDir, modulePath string, pat
 }
 
 func makeDiscoveryTranslatorInvocation(corpusDir, modulePath string, patterns, buildTags, targets, asmFiles []string, outDir, repoRoot, llc, reportPath string) commandInvocation {
-	invocation := makeTranslatorInvocationForTargetsAndTags(
+	return makeTranslatorInvocationForTargetsAndTags(
 		corpusDir, modulePath, patterns, buildTags, targets, asmFiles,
 		outDir, repoRoot, llc, reportPath,
 	)
-	// Discovery verifies IR and produces a real LLVM object for every selected
-	// source. Optimization does not add coverage, and -O0 keeps generated
-	// megabyte-scale files tractable in the complete module-index sweep.
-	invocation.Args = append(invocation.Args, "-llc-opt-level=0")
-	return invocation
 }
 
 func queryModule(dir, query string) (moduleInfo, error) {

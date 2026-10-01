@@ -35,10 +35,13 @@ object tests must still cover affected architectures.
 
 Run focused red/green tests first, then the relevant full gates. Capture logs
 under ignored `_out/`; a nonzero exit remains a failure. The full root suite
-can exceed Go's default ten-minute timeout, so give it an explicit limit.
+can exceed twenty minutes on a busy development host. Use the CI root suite's
+45-minute limit, or exhaustively partition its listed tests and verify that
+the disjoint partitions cover the complete list. Keep any earlier timeout
+failure as evidence; do not count it as a successful run.
 
 ```sh
-go test ./... -count=1 -timeout=20m
+go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
 (cd cmd/plan9asmll && go test ./... -count=1)
 
@@ -56,7 +59,7 @@ scripts/benchmark-compile.sh
 
 scripts/check-reported-library-corpus.sh all
 PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 32
+  scripts/check-discovered-library-corpus.sh all 64
 ```
 
 Run race tests for changed concurrent code and focused Go 1.20 compatibility
@@ -111,8 +114,11 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 32 schema-6 reports, exact candidate ownership and
-one identical source/ledger/tool provenance. Never mix revisions, dirty builds,
+The aggregate requires all 64 schema-10 reports, exact candidate ownership and
+one identical source/ledger/tool provenance. Ordinary file/target/profile-ID/
+custom-tag scopes retain actual Go/package-role, CPP and LLVM object proofs in
+progress schema 2 and assembly-ledger v2. Old reports cannot be relabeled.
+Never mix revisions, dirty builds,
 tool binaries or partial CI artifact sets. Even documentation changes alter the
 source fingerprint: old reports prove only their exact revision, not current-
 head success. See [discovery verification](discovery-verification.md).
@@ -140,3 +146,67 @@ head success. See [discovery verification](discovery-verification.md).
 - Keep obsolete compressed/run records out of contribution history as well as
   the final tree. A necessary rewrite uses `--force-with-lease` only on the
   allowed fork after checking for remote changes.
+
+## Fork-first CI
+
+PR 40 remains open upstream, but repair iterations run in `cpunion/plan9asm`:
+
+1. Let the already active upstream CI run finish once. Do not cancel it or
+   update its head while it is running.
+2. Create a distinct repair branch from the integrated fixes. Open a Draft PR
+   **in the fork**, targeting `codex/expand-ecosystem-corpus-20260913`, the fork
+   branch already used by upstream PR 40. Do not target fork `main` or update
+   the upstream-connected branch during repair iterations.
+3. Inspect the workflow before pushing. Its owner-based runner selection must
+   use GitHub-hosted runners in the fork, not upstream qiniu runners. Preserve
+   all test and coverage gates. A Draft PR still needs to execute CI.
+4. Batch fixes on the new branch; inspect completed job logs and publish only
+   reports matching the frozen source and scan ledger. An old upstream pass
+   does not establish a pass for the repair branch.
+5. Only after the fork PR's current-head CI passes and review accepts any
+   proposed coverage exclusions, refresh both remote refs
+   and integrate the validated commits into the existing PR 40 head in the
+   fork. Prefer a fast-forward; if either branch changed, verify the resulting
+   tree before promotion. This is a branch update, not a merge of upstream
+   PR 40. Upstream CI is then expected to run once on the promoted batch.
+
+Use explicit `--repo cpunion/plan9asm`, `--base`, and `--head` arguments when
+creating the staging PR. Its body should link PR 40 and distinguish the repair
+diff, original-run evidence and current-head validation. Keep both PRs draft
+until their respective completion gates pass; do not close upstream PR 40.
+
+A clearly disclosed, provisional exception mechanism may be evaluated in the
+authorized fork Draft PR. That does not accept the exception policy: count
+exclusions separately, keep Draft, and resolve their review before promotion.
+
+### Failure-first scheduling
+
+Let the active full run finish before publishing another batch. A cheap
+`ci_policy` job first checks workflow scheduling and root CI policy tests.
+The repair matrix then runs the six previously failing discovery shards.
+Every other entry job has a native `needs` dependency on that matrix: **all
+priority shards must succeed**, not merely start, before the remaining jobs
+run. Fail-fast is disabled so every failed shard is checked.
+There is no polling job consuming a runner while waiting.
+
+The strict aggregate still runs after a failed priority matrix and reports the
+missing/failed coverage; skipped downstream work cannot make the run green.
+All 64 shards remain required, with identical compilation and artifact steps.
+No old-source artifact can replace a current-head rerun.
+
+When changing the priority set, update both workflow matrices and
+the scheduling regression tests together. Validate their exhaustive,
+non-overlapping partition, identical test steps and success dependencies:
+
+```sh
+node --test .github/scripts/priority-*.test.cjs
+actionlint .github/workflows/go-ci.yml
+```
+
+If the user requests cancellation after pushing, cancel the new automatic run,
+wait for its terminal status, then rerun the workflow. The dependency graph
+starts with `ci_policy`, then the priority matrix, and releases the other jobs
+after both pass.
+GitHub rejects another single-job rerun while a workflow attempt is running;
+repeated job-rerun API calls cannot enqueue a concurrent priority group. Keep
+all scheduling operations in the allowed fork, never in upstream Actions.

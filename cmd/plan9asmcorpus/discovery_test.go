@@ -8,11 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"go/build"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -449,13 +453,14 @@ func TestDiscoveryShardKeepsCallerOwnedBuildCache(t *testing.T) {
 		captureProvenance: func(discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 			return fixtureDiscoveryProvenance(t, ledger), nil
 		},
-		runCandidate: func(cfg discoveryCorpusConfig, _ discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
+		runCandidate: func(cfg discoveryCorpusConfig, candidate discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
 			if cfg.buildCache != cache {
 				t.Errorf("build cache = %q, want %q", cfg.buildCache, cache)
 			}
 			writeTestFile(t, filepath.Join(cache, "marker"), "reusable build cache")
-			return matrixReport{Success: 1, TotalTargets: 1}, nil,
-				[]discoveryBuildConfiguration{{AsmFiles: []string{"f_amd64.s"}}}, nil
+			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
+			return fixtureProfileMatrix(t, result),
+				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
 	if err != nil {
@@ -517,7 +522,7 @@ func TestDiscoveryShardPublishesAuditableCheckpoints(t *testing.T) {
 		captureProvenance: func(discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 			return fixtureDiscoveryProvenance(t, ledger), nil
 		},
-		runCandidate: func(_ discoveryCorpusConfig, _ discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
+		runCandidate: func(cfg discoveryCorpusConfig, candidate discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
 			if calls == 0 || calls == 8 {
 				report, err := readDiscoveryCorpusReport(reportPath)
 				if err != nil {
@@ -528,8 +533,9 @@ func TestDiscoveryShardPublishesAuditableCheckpoints(t *testing.T) {
 				}
 			}
 			calls++
-			return matrixReport{Success: 1, TotalTargets: 1}, nil,
-				[]discoveryBuildConfiguration{{AsmFiles: []string{"f_amd64.s"}}}, nil
+			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
+			return fixtureProfileMatrix(t, result),
+				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
 	if err != nil {
@@ -609,6 +615,50 @@ func TestRunDiscoveryAsmDeclUsesCurrentGoTargetABI(t *testing.T) {
 	}
 }
 
+func TestRunDiscoveryAsmDeclKeepsGoAcceptedUnspecifiedArgumentSize(t *testing.T) {
+	for _, frame := range []string{"$0", "$0-0"} {
+		t.Run(frame, func(t *testing.T) {
+			dir := t.TempDir()
+			writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/unspecified\n\ngo 1.20\n")
+			writeTestFile(t, filepath.Join(dir, "decl.go"), "package unspecified\n\nfunc Value() bool\n")
+			writeTestFile(t, filepath.Join(dir, "decl_amd64.s"),
+				"TEXT ·Value(SB),"+frame+"\nMOVB $1, ret+0(FP)\nRET\n")
+			writeTestFile(t, filepath.Join(dir, "decl_arm64.s"),
+				"TEXT ·Value(SB),"+frame+"\nMOVD $1, R0\nMOVB R0, ret+0(FP)\nRET\n")
+			writeTestFile(t, filepath.Join(dir, "decl_test.go"),
+				"package unspecified\n\nimport \"testing\"\n\nfunc TestValue(t *testing.T) { if !Value() { t.Fatal(\"assembly returned false\") } }\n")
+			env := replaceEnv(os.Environ(), map[string]string{
+				"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+			})
+			for _, arch := range []string{"amd64", "arm64"} {
+				t.Run(arch, func(t *testing.T) {
+					target := "linux/" + arch
+					if err := runDiscoveryGoBuild(context.Background(), dir, env, target, nil, "example.com/unspecified"); err != nil {
+						t.Fatalf("Go rejected unspecified argument size: %v", err)
+					}
+					targetEnv := replaceEnv(env, map[string]string{"GOOS": "linux", "GOARCH": arch})
+					_, rawErr := runCapturedCommandOutput(context.Background(), dir, targetEnv,
+						"go", "vet", "-asmdecl", "example.com/unspecified")
+					if rawErr == nil || !strings.Contains(discoveryCommandDiagnostic(rawErr), "wrong argument size 0; expected $...-1") {
+						t.Fatalf("zero-argument asmdecl warning was not reproduced: %v", rawErr)
+					}
+					if err := runDiscoveryAsmDecl(context.Background(), dir, env, target, nil, []string{"example.com/unspecified"}); err != nil {
+						t.Fatalf("Go-accepted unspecified argument size was excluded before translation: %v", err)
+					}
+				})
+			}
+			if runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64" {
+				nativeEnv := replaceEnv(env, map[string]string{"GOOS": runtime.GOOS, "GOARCH": runtime.GOARCH})
+				if _, err := runCapturedCommandOutput(context.Background(), dir, nativeEnv,
+					"go", "test", "-vet=off", "-count=1", "example.com/unspecified"); err != nil {
+					t.Fatalf("native Go unspecified-argument oracle failed: %v", err)
+				}
+				t.Log("native Go Value() oracle passed")
+			}
+		})
+	}
+}
+
 func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "work")
@@ -628,6 +678,124 @@ func TestRunDiscoveryAsmDeclStillFindsABIMismatchWhenTestsDoNotCompile(t *testin
 	err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/386", nil, []string{"example.com/asmdeclbroken"})
 	if err == nil || !isDiscoveryAsmDeclABIMismatch(err.Error()) {
 		t.Fatalf("runDiscoveryAsmDecl() error = %v, want assembly ABI mismatch despite broken tests", err)
+	}
+}
+
+func TestRunDiscoveryAsmDeclTestOnlyProxyFailureDoesNotHideAssembly(t *testing.T) {
+	var requests atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		http.Error(w, "test-only dependency unavailable", http.StatusServiceUnavailable)
+	}))
+	defer proxy.Close()
+
+	root := t.TempDir()
+	work := filepath.Join(root, "work")
+	module := filepath.Join(root, "module")
+	for _, dir := range []string{work, module} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(work, "go.mod"),
+		"module plan9asm.local/probe\n\ngo 1.20\n\nrequire example.com/testonly v0.0.0\nreplace example.com/testonly => ../module\n")
+	writeTestFile(t, filepath.Join(module, "go.mod"), "module example.com/testonly\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(module, "decl.go"), "package testonly\n\nfunc f() uint32\n")
+	writeTestFile(t, filepath.Join(module, "decl_test.go"),
+		"package testonly\n\nimport _ \"example.com/unavailable-test-dependency\"\n")
+	asm := filepath.Join(module, "decl_386.s")
+	writeTestFile(t, asm, "TEXT ·f(SB), $0-4\nMOVL AX, ret+0(FP)\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "GOPROXY": proxy.URL, "GOSUMDB": "off",
+	})
+	pattern := []string{"example.com/testonly"}
+	if err := runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern); err != nil {
+		t.Fatalf("valid assembly rejected by test-only proxy failure: %v", err)
+	}
+	if requests.Load() == 0 {
+		t.Fatal("test dependency did not reach the failing proxy")
+	}
+
+	writeTestFile(t, asm, "TEXT ·f(SB), $0-4\nMOVL AX, ret+4(FP)\nRET\n")
+	err := runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern)
+	if err == nil || !isDiscoveryAsmDeclABIMismatch(discoveryCommandDiagnostic(err)) {
+		t.Fatalf("ABI mismatch hidden by test-only proxy failure: %v", err)
+	}
+
+	writeTestFile(t, filepath.Join(module, "decl.go"),
+		"package testonly\n\nimport _ \"example.com/unavailable-production-dependency\"\n\nfunc f() uint32\n")
+	err = runDiscoveryAsmDecl(context.Background(), work, env, "linux/386", nil, pattern)
+	if !isDiscoveryInfrastructureFailure(err) {
+		t.Fatalf("production dependency failure was hidden: %v", err)
+	}
+}
+
+func TestRunDiscoveryAsmDeclDoesNotAttributeDependencyABIToPackage(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "work")
+	module := filepath.Join(root, "module")
+	for _, name := range []string{dir, filepath.Join(module, "dep"), filepath.Join(module, "consumer")} {
+		if err := os.MkdirAll(name, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(dir, "go.mod"),
+		"module plan9asm.local/probe\n\ngo 1.20\n\nrequire example.com/asmdep v0.0.0\nreplace example.com/asmdep => ../module\n")
+	writeTestFile(t, filepath.Join(module, "go.mod"), "module example.com/asmdep\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(module, "dep", "decl.go"), "package dep\n\nfunc bad() uint32\n")
+	writeTestFile(t, filepath.Join(module, "dep", "dep_amd64.s"),
+		"TEXT ·bad(SB), $0-4\nMOVL AX, ret+4(FP)\nRET\n")
+	writeTestFile(t, filepath.Join(module, "consumer", "decl.go"),
+		"package consumer\n\nfunc good(x uint32)\n")
+	writeTestFile(t, filepath.Join(module, "consumer", "decl_test.go"),
+		"package consumer\n\nimport _ \"example.com/asmdep/dep\"\n")
+	asm := filepath.Join(module, "consumer", "consumer_amd64.s")
+	writeTestFile(t, asm, "TEXT ·good(SB), $0-4\nMOVL x+0(FP), AX\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "amd64",
+	})
+	pattern := []string{"example.com/asmdep/consumer"}
+	_, depErr := runCapturedCommandOutput(context.Background(), dir, env,
+		"go", "vet", "-asmdecl", "example.com/asmdep/dep")
+	if depErr == nil {
+		t.Fatal("dependency fixture does not have an asmdecl mismatch")
+	}
+	_, rawErr := runCapturedCommandOutput(context.Background(), dir, env,
+		"go", "vet", "-asmdecl", pattern[0])
+	if rawErr == nil && strings.HasPrefix(runtime.Version(), "go1.27") {
+		t.Fatalf("current Go did not reproduce the dependency ABI failure: %v", rawErr)
+	}
+	if rawErr != nil && !strings.Contains(discoveryCommandDiagnostic(rawErr), "dep_amd64.s") {
+		t.Fatalf("dependency ABI failure was not reproduced: %v", rawErr)
+	}
+	if err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, pattern); err != nil {
+		t.Fatalf("dependency ABI failure was attributed to valid consumer: %v", err)
+	}
+
+	writeTestFile(t, asm, "TEXT ·good(SB), $0-4\nMOVL x+4(FP), AX\nRET\n")
+	err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, pattern)
+	if err == nil || !strings.Contains(discoveryCommandDiagnostic(err), "consumer_amd64.s") {
+		t.Fatalf("consumer ABI mismatch was hidden by dependency mismatch: %v", err)
+	}
+}
+
+func TestDiscoveryTestlessAsmDeclRetryRequiresSelectedTests(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/no-tests\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(dir, "decl.go"), "package notests\n\nfunc f()\n")
+	writeTestFile(t, filepath.Join(dir, "decl_386.s"), "TEXT ·f(SB), $0-0\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "386",
+	})
+	err := runDiscoveryAsmDeclWithTestlessModuleCopies(
+		context.Background(), dir, env,
+		[]string{"vet", "-asmdecl", "example.com/no-tests"},
+		nil, []string{"example.com/no-tests"},
+	)
+	if err == nil {
+		t.Fatal("testless retry reported success without running vet")
 	}
 }
 
@@ -657,6 +825,203 @@ func TestRunDiscoveryGoBuildChecksExactCurrentPackage(t *testing.T) {
 	writeTestFile(t, filepath.Join(dir, "decl.go"), "package buildable\n\nvar broken = missingIdentifier\n")
 	if err := runDiscoveryGoBuild(context.Background(), dir, env, "linux/amd64", nil, "example.com/buildable"); err == nil {
 		t.Fatal("runDiscoveryGoBuild() accepted source rejected by the current Go compiler")
+	}
+}
+
+func TestDiscoveryBatchChecksRealGoPackagesAndIsolatesInvalidSource(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/batch\n\ngo 1.20\n")
+	for _, name := range []string{"first", "second"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(dir, name, "decl.go"),
+			"package "+name+"\n\nfunc f()\n")
+		writeTestFile(t, filepath.Join(dir, name, "decl_amd64.s"),
+			"TEXT ·f(SB), $0-0\nRET\n")
+	}
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/batch/first"},
+		{Pattern: "example.com/batch/second"},
+	}
+	env := replaceEnv(os.Environ(), map[string]string{"GOFLAGS": "-mod=mod", "GOWORK": "off"})
+	ctx := context.Background()
+	build := func(patterns []string) error {
+		return runDiscoveryGoBuild(ctx, dir, env, "linux/amd64", nil, patterns...)
+	}
+	vet := func(patterns []string) error {
+		return runDiscoveryAsmDecl(ctx, dir, env, "linux/amd64", nil, patterns)
+	}
+	for _, check := range []func([]string) error{build, vet} {
+		results, err := runDiscoveryPackageChecks(groups, check)
+		if err != nil || len(results) != 2 || results[0] != nil || results[1] != nil {
+			t.Fatalf("valid packages: results=%v error=%v", results, err)
+		}
+	}
+
+	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
+		"package second\n\nfunc f(x int)\n")
+	results, err := runDiscoveryPackageChecks(groups, vet)
+	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
+		t.Fatalf("invalid second package ABI: results=%v error=%v", results, err)
+	}
+
+	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
+		"package second\n\nvar broken = missingIdentifier\n")
+	results, err = runDiscoveryPackageChecks(groups, build)
+	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
+		t.Fatalf("invalid second package: results=%v error=%v", results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksBatchAndIsolateSourceFailures(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+		{Pattern: "example.com/module/third"},
+	}
+	sourceFailure := errors.New("second/decl.go:3:14: undefined: missingDeclaration")
+	var calls [][]string
+	check := func(patterns []string) error {
+		calls = append(calls, append([]string(nil), patterns...))
+		for _, pattern := range patterns {
+			if pattern == groups[1].Pattern {
+				return sourceFailure
+			}
+		}
+		return nil
+	}
+
+	results, err := runDiscoveryPackageChecks(groups, check)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != len(groups) || results[0] != nil ||
+		!errors.Is(results[1], sourceFailure) || results[2] != nil {
+		t.Fatalf("isolated package results = %v", results)
+	}
+	wantCalls := [][]string{
+		{groups[0].Pattern, groups[1].Pattern, groups[2].Pattern},
+		{groups[0].Pattern},
+		{groups[1].Pattern},
+		{groups[2].Pattern},
+	}
+	if !reflect.DeepEqual(calls, wantCalls) {
+		t.Fatalf("package checks = %v, want %v", calls, wantCalls)
+	}
+}
+
+func TestDiscoveryPackageChecksAvoidsPerPackageWorkAfterBatchPass(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func(patterns []string) error {
+		calls++
+		if len(patterns) != len(groups) {
+			t.Errorf("patterns = %v, want both packages", patterns)
+		}
+		return nil
+	})
+	if err != nil || calls != 1 || len(results) != 2 || results[0] != nil || results[1] != nil {
+		t.Fatalf("batch success: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksDoesNotHideBatchInfrastructureFailure(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	infrastructure := errors.New("go build: signal: killed")
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func([]string) error {
+		calls++
+		return infrastructure
+	})
+	if !errors.Is(err, infrastructure) || calls != 1 || results != nil {
+		t.Fatalf("batch infrastructure: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
+func TestDiscoveryPackageChecksUsesIndividualEvidenceForBatchOnlyFailure(t *testing.T) {
+	groups := []discoveryPackageGroup{
+		{Pattern: "example.com/module/first"},
+		{Pattern: "example.com/module/second"},
+	}
+	calls := 0
+	results, err := runDiscoveryPackageChecks(groups, func([]string) error {
+		calls++
+		if calls == 1 {
+			return errors.New("batch-only failure")
+		}
+		return nil
+	})
+	if err != nil || calls != 3 || len(results) != 2 || results[0] != nil || results[1] != nil {
+		t.Fatalf("individually verified batch failure: calls=%d results=%v error=%v", calls, results, err)
+	}
+}
+
+func TestRunDiscoveryBoundedLimitsConcurrentPackages(t *testing.T) {
+	const packageCount = 6
+	var running atomic.Int32
+	var maximum atomic.Int32
+	started := make(chan struct{}, packageCount)
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- runDiscoveryBounded(context.Background(), packageCount, 2,
+			func(context.Context, int) error {
+				active := running.Add(1)
+				for {
+					peak := maximum.Load()
+					if active <= peak || maximum.CompareAndSwap(peak, active) {
+						break
+					}
+				}
+				started <- struct{}{}
+				<-release
+				running.Add(-1)
+				return nil
+			})
+	}()
+	for index := 0; index < 2; index++ {
+		select {
+		case <-started:
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatal("two independent packages never started together")
+		}
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := maximum.Load(); got != 2 {
+		t.Fatalf("maximum simultaneous packages = %d, want 2", got)
+	}
+}
+
+func TestRunDiscoveryBoundedCancelsPeersWithoutLosingFailure(t *testing.T) {
+	sentinel := errors.New("package translation failed")
+	secondStarted := make(chan struct{})
+	err := runDiscoveryBounded(context.Background(), 3, 2,
+		func(ctx context.Context, index int) error {
+			switch index {
+			case 0:
+				<-secondStarted
+				return sentinel
+			case 1:
+				close(secondStarted)
+				<-ctx.Done()
+				return ctx.Err()
+			default:
+				return nil
+			}
+		})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("bounded run error = %v, want original package failure", err)
 	}
 }
 
@@ -741,6 +1106,150 @@ func TestDiscoveryAsmDeclOnlyClassifiesConcreteABIMismatches(t *testing.T) {
 	} {
 		if isDiscoveryAsmDeclABIMismatch(diagnostic) {
 			t.Fatalf("non-ABI diagnostic was classified as N/A: %q", diagnostic)
+		}
+	}
+}
+
+func TestDiscoveryAsmDeclEqualWidthAggregateIsNotABIMismatch(t *testing.T) {
+	for _, diagnostic := range []string{
+		"simd_amd64.s:3:1: [amd64] f: invalid MOVOU of a+0(FP); [2]uint64 is 16-byte value",
+		"simd_amd64.s:4:1: [amd64] f: invalid MOVO of ret+16(FP); Vector is 16-byte value",
+		"simd_amd64.s:5:1: [amd64] f: invalid MOVQ of a+0(FP); [2]uint32 is 8-byte value",
+	} {
+		if isDiscoveryAsmDeclABIMismatch(diagnostic) {
+			t.Fatalf("equal-width aggregate type warning became ABI N/A: %q", diagnostic)
+		}
+	}
+	for _, diagnostic := range []string{
+		"simd_amd64.s:3:1: [amd64] f: invalid MOVOU of a+0(FP); uint64 is 8-byte value",
+		"simd_amd64.s:4:1: [amd64] f: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value",
+	} {
+		if !isDiscoveryAsmDeclABIMismatch(diagnostic) {
+			t.Fatalf("actual width mismatch was hidden: %q", diagnostic)
+		}
+	}
+}
+
+func TestRunDiscoveryAsmDeclKeepsGoAcceptedWholeVectorAggregate(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/vector\n\ngo 1.20\n")
+	writeTestFile(t, filepath.Join(dir, "vector.go"), "package vector\n\nfunc Copy(a [2]uint64) [2]uint64\n")
+	writeTestFile(t, filepath.Join(dir, "vector_amd64.s"),
+		"TEXT ·Copy(SB),$0-32\nMOVOU a+0(FP), X0\nMOVOU X0, ret+16(FP)\nRET\n")
+	env := replaceEnv(os.Environ(), map[string]string{
+		"GOFLAGS": "-mod=mod", "GOWORK": "off", "CGO_ENABLED": "0",
+		"GOOS": "linux", "GOARCH": "amd64",
+	})
+	if err := runDiscoveryGoBuild(context.Background(), dir, env, "linux/amd64", nil, "example.com/vector"); err != nil {
+		t.Fatalf("Go rejected the valid whole-vector assembly fixture: %v", err)
+	}
+	_, rawErr := runCapturedCommandOutput(context.Background(), dir, env, "go", "vet", "-asmdecl", "example.com/vector")
+	if rawErr == nil || !strings.Contains(discoveryCommandDiagnostic(rawErr), "16-byte value") {
+		t.Fatalf("Go asmdecl aggregate-kind warning was not reproduced: %v", rawErr)
+	}
+	if err := runDiscoveryAsmDecl(context.Background(), dir, env, "linux/amd64", nil, []string{"example.com/vector"}); err != nil {
+		t.Fatalf("Go-accepted equal-width aggregate never reached translation: %v", err)
+	}
+}
+
+func TestDiscoveryAsmDeclRejectsOnlyFilesWithConcreteABIErrors(t *testing.T) {
+	diagnostic := strings.Join([]string{
+		"pkg/first_amd64.s:3:1: [amd64] first: wrong argument size 16; expected $...-8",
+		"pkg/second_amd64.s:4:1: [amd64] second: unknown variable ret0; offset 8 is ret+8(FP)",
+	}, "\n")
+	files := []string{"pkg/first_amd64.s", "pkg/second_amd64.s"}
+	if got := discoveryAsmDeclRejectedFiles(files, diagnostic); !reflect.DeepEqual(got, files[:1]) {
+		t.Fatalf("ABI-rejected files = %v, want %v", got, files[:1])
+	}
+	evidence := discoveryAsmDeclRejectionEvidence(errors.New(diagnostic), files[:1])
+	if !strings.Contains(evidence, "first_amd64.s:3:1") || strings.Contains(evidence, "second_amd64.s") {
+		t.Fatalf("ABI evidence does not identify only the rejected file: %q", evidence)
+	}
+}
+
+func TestDiscoveryAsmDeclInfrastructureCannotBecomeSourceNotApplicable(t *testing.T) {
+	failure := &discoveryCapturedCommandError{
+		command: "go vet -asmdecl",
+		cause:   errors.New("exit status 1"),
+		output:  "go: write build cache: no space left on device\n" + strings.Repeat("x", 70<<10),
+		display: strings.Repeat("x", 64<<10),
+	}
+	rejected, err := classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, failure)
+	if err == nil || len(rejected) != 0 {
+		t.Fatalf("infrastructure failure became source N/A: rejected=%v error=%v", rejected, err)
+	}
+	unknownFile := errors.New("other_amd64.s:1:1: [amd64] other: wrong argument size 16; expected $...-8")
+	rejected, err = classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, unknownFile)
+	if err == nil || len(rejected) != 0 {
+		t.Fatalf("unmapped ABI failure became source N/A: rejected=%v error=%v", rejected, err)
+	}
+}
+
+func TestDiscoveryAsmDeclAttributesCoSelectedFileWithoutRetranslatingIt(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"pkg", "other"} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeTestFile(t, filepath.Join(dir, "pkg", "common_amd64.s"),
+		"//go:build !purego\n\nTEXT ·common(SB),0,$0-0\nRET\n")
+	writeTestFile(t, filepath.Join(dir, "pkg", "plugin_amd64.s"),
+		"//go:build plugin && !purego\n\nTEXT ·plugin(SB),0,$0-0\nRET\n")
+	writeTestFile(t, filepath.Join(dir, "other", "common_amd64.s"),
+		"TEXT ·other(SB),0,$0-0\nRET\n")
+	candidate := discoveryCandidate{
+		AsmFiles: []string{
+			"pkg/common_amd64.s", "pkg/plugin_amd64.s", "other/common_amd64.s",
+		},
+	}
+	group := discoveryPackageGroup{
+		Pattern: "example.com/test/pkg", AsmFiles: []string{"pkg/plugin_amd64.s"},
+	}
+	files, err := discoveryAsmDeclPackageFiles(candidate, group, dir, "darwin/amd64", []string{"plugin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"pkg/common_amd64.s", "pkg/plugin_amd64.s"}
+	if !reflect.DeepEqual(files, want) {
+		t.Fatalf("Go-selected asmdecl files = %v, want %v", files, want)
+	}
+	diagnostic := errors.New("pkg/common_amd64.s:12:1: [amd64] common: invalid MOVL of idx+16(FP); int is 8-byte value")
+	rejected, err := classifyDiscoveryAsmDeclFailure(files, diagnostic)
+	if err != nil || !reflect.DeepEqual(rejected, want[:1]) {
+		t.Fatalf("classified ABI files = %v, error = %v", rejected, err)
+	}
+	if remaining := subtractDiscoveryStrings(group.AsmFiles, rejected); !reflect.DeepEqual(remaining, group.AsmFiles) {
+		t.Fatalf("ABI error in co-selected source hid selected translation: %v", remaining)
+	}
+	unknown := errors.New("other/common_amd64.s:12:1: [amd64] other: invalid MOVL of idx+16(FP); int is 8-byte value")
+	if rejected, err := classifyDiscoveryAsmDeclFailure(files, unknown); err == nil || len(rejected) != 0 {
+		t.Fatalf("another package's ABI error became source N/A: rejected=%v error=%v", rejected, err)
+	}
+}
+
+func TestDiscoveryAsmDeclForeignCandidateABIRequiresExactOtherFile(t *testing.T) {
+	files := []string{
+		"internal/utils/cpuid_amd64.s",
+		"p503/arith_amd64.s",
+	}
+	packageFiles := files[1:]
+	foreign := errors.New("module-cache/example.com/asm@v1.0.0/internal/utils/cpuid_amd64.s:5:1: " +
+		"[amd64] cpuid: wrong argument size 4; expected $...-24\n" +
+		"module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:695:1: " +
+		"[amd64] mul: use of unnamed argument 0(FP)")
+	if !discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, foreign) {
+		t.Fatal("exactly attributed other-package ABI error was not recognized")
+	}
+	for _, err := range []error{
+		errors.New("module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:5:1: " +
+			"[amd64] mul: wrong argument size 4; expected $...-24"),
+		errors.New("other-module/cpuid_amd64.s:5:1: " +
+			"[amd64] cpuid: wrong argument size 4; expected $...-24"),
+		errors.New("go vet: no space left on device\n" + foreign.Error()),
+	} {
+		if discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, err) {
+			t.Fatalf("unattributed or infrastructure error became ignorable: %v", err)
 		}
 	}
 }
@@ -1379,12 +1888,17 @@ func TestDiscoveryCorpusReportAccountsForEverySelectedCandidate(t *testing.T) {
 }
 
 func TestDiscoveryCorpusReportAccountingMatchesAuditableResults(t *testing.T) {
+	targets := []string{"linux/amd64"}
+	passed := fixtureOrdinaryPassedResult(t, discoveryCandidate{
+		Module: "example.com/a", Version: "v1.0.0", AsmFiles: []string{"a_amd64.s"},
+	}, targets)
 	report := discoveryCorpusReport{
+		Targets:      targets,
 		Selected:     2,
 		Passed:       2,
 		Translations: 3,
 		Results: []discoveryCorpusResult{
-			{Module: "example.com/a", Version: "v1.0.0", Status: discoveryStatusPassed, Translations: 1},
+			passed,
 			{Module: "example.com/b", Version: "v1.0.0", Status: discoveryStatusFailed, Translations: 2},
 		},
 	}
@@ -1401,6 +1915,11 @@ func TestDiscoveryCorpusReportAccountingMatchesAuditableResults(t *testing.T) {
 }
 
 func writeDiscoveryReportFixture(t *testing.T) (string, string, discoverySourceIdentity) {
+	t.Helper()
+	return writeDiscoveryReportFixtureWithTargets(t, []string{"linux/amd64", "linux/arm64"})
+}
+
+func writeDiscoveryReportFixtureWithTargets(t *testing.T, targets []string) (string, string, discoverySourceIdentity) {
 	t.Helper()
 	ledger := filepath.Join(t.TempDir(), "ledger")
 	records := filepath.Join(ledger, "records")
@@ -1430,20 +1949,22 @@ func writeDiscoveryReportFixture(t *testing.T) (string, string, discoverySourceI
 		report := discoveryCorpusReport{
 			SchemaVersion:      discoveryReportSchema,
 			Provenance:         provenance,
-			Targets:            []string{"linux/amd64", "linux/arm64"},
+			Targets:            targets,
 			ShardIndex:         shard,
 			ShardCount:         shardCount,
 			CandidateTotal:     len(candidates),
 			EligibleCandidates: len(candidates),
 			Selected:           len(selected),
 			Passed:             len(selected),
+			FeatureInventory:   newDiscoveryFeatureInventory(),
 		}
 		for _, candidate := range selected {
-			report.Results = append(report.Results, discoveryCorpusResult{
-				Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
-				DiscoveredAsmFiles: candidate.AsmFiles, Translations: 1,
-			})
-			report.Translations++
+			result := fixtureOrdinaryPassedResult(t, candidate, report.Targets)
+			if err := mergeDiscoveryFeatureInventory(report.FeatureInventory, result.featureInventory); err != nil {
+				t.Fatal(err)
+			}
+			report.Results = append(report.Results, result)
+			report.Translations += result.Translations
 		}
 		data, err := json.Marshal(report)
 		if err != nil {
@@ -1502,12 +2023,20 @@ func TestDiscoveryCorpusReportValidatesSourceNotApplicableEvidence(t *testing.T)
 		Status:             discoveryStatusNotApplicable,
 		DiscoveredAsmFiles: []string{"pkg/a_amd64.s", "pkg/b.s", "pkg/c.s"},
 		SourceNotApplicableItems: []discoverySourceNotApplicableItem{
-			{AsmFile: "pkg/a_amd64.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableGoAssembler, Reason: "current Go assembler rejected the source"},
-			{AsmFiles: []string{"pkg/b.s"}, Targets: []string{"windows/amd64"}, Kind: discoverySourceNotApplicableGoBuild, Reason: "current Go compiler rejected the exact package"},
+			{AsmFile: "pkg/a_amd64.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableGoAssembler, Reason: "pkg/a_amd64.s:3: unrecognized instruction \"NOT_AN_OPCODE\""},
+			{AsmFiles: []string{"pkg/b.s"}, Targets: []string{"windows/amd64"}, Kind: discoverySourceNotApplicableGoBuild, Reason: "pkg/decl.go:3:14: undefined: missingDeclaration"},
 			{AsmFile: "pkg/c.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableNoSymbols, Reason: "current Go assembler emitted no object symbols"},
 		},
 	}
-	report := discoveryCorpusReport{Selected: 1, NotApplicable: 1, Results: []discoveryCorpusResult{result}}
+	targets := []string{"linux/amd64", "windows/amd64"}
+	result.OrdinarySelectionPlan = fixtureOrdinarySelection(t, result.DiscoveredAsmFiles, targets, map[string]string{
+		"pkg/decl.go":   "package ordinary\n",
+		"pkg/a_amd64.s": "//go:build linux\n\nTEXT ·F(SB),$0-0\nRET\n",
+		"pkg/b.s":       "//go:build windows\n\nTEXT ·F(SB),$0-0\nRET\n",
+		"pkg/c.s":       "//go:build linux\n\nTEXT ·F(SB),$0-0\nRET\n",
+	})
+	result.OrdinarySelectionPlan.Module = result.Module
+	report := discoveryCorpusReport{Targets: targets, Selected: 1, NotApplicable: 1, Results: []discoveryCorpusResult{result}}
 	if err := validateDiscoveryCorpusAccounting(report); err != nil {
 		t.Fatalf("valid source N/A evidence error = %v", err)
 	}

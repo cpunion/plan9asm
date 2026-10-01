@@ -2,10 +2,30 @@ package asmsig
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm"
 )
+
+func TestRefineTailForwarderDoesNotInventGoRegisterDeclaration(t *testing.T) {
+	file, err := plan9asm.Parse(plan9asm.ArchARM64, "TEXT wrapper<ABIInternal>(SB),$0\nB target(SB)\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract := &plan9asm.ARM64GoRegisterABI{
+		Params: []plan9asm.ARM64GoRegisterValue{{Index: 0, Type: plan9asm.I64, Register: "R0"}},
+	}
+	sigs := map[string]plan9asm.FuncSig{
+		"wrapper": {Name: "wrapper", Ret: plan9asm.Void},
+		"target":  {Name: "target", Args: []plan9asm.LLVMType{plan9asm.I64}, Ret: plan9asm.Void, ARM64GoRegisterABI: contract},
+	}
+	resolve := func(s string) string { return strings.TrimSuffix(s, "<ABIInternal>") }
+	RefineTailForwarders(file, sigs, resolve, map[string]bool{"target": true})
+	if sigs["wrapper"].ARM64GoRegisterABI != nil {
+		t.Fatal("a copied tail signature invented a declaration-backed register entry")
+	}
+}
 
 func TestRefineTailForwardersEvidenceAndPurity(t *testing.T) {
 	for _, tc := range []struct {

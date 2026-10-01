@@ -120,26 +120,44 @@ func (c *armCtx) lowerRawWord(ins Instr) (bool, error) {
 		}
 		return true, c.setARMFloatCompareFlags(lhs, rhs, floatType, compare.condition)
 	}
-	if word>>28 != 0xe || word&(3<<26) != 0 || (word>>21)&0xf != 8 || word&(1<<20) == 0 {
+	decoded, carry, ok := decodeARMRawTST(word, ins.Raw)
+	if !ok {
 		return false, nil
+	}
+	return true, c.lowerARMCompareWithCarry("TST", decoded, carry)
+}
+
+// Raw immediate carry depends on the encoded rotation, not on the canonical
+// rotation that Go would choose for the decoded literal. Share this narrow
+// grammar between source proof and lowering.
+func decodeARMRawTST(word uint32, raw string) (Instr, string, bool) {
+	if word>>28 != 0xe || word&(3<<26) != 0 || (word>>21)&0xf != 8 || word&(1<<20) == 0 {
+		return Instr{}, "", false
 	}
 	rn := Reg(fmt.Sprintf("R%d", (word>>16)&0xf))
 	operand2 := word & 0xfff
 	var src Operand
+	carry := ""
 	if word&(1<<25) != 0 {
 		rotate := int(((operand2 >> 8) & 0xf) * 2)
 		value := bits.RotateLeft32(operand2&0xff, -rotate)
 		src = Operand{Kind: OpImm, Imm: int64(value)}
+		if rotate != 0 {
+			carry = "false"
+			if value>>31 != 0 {
+				carry = "true"
+			}
+		}
 	} else {
 		if operand2&0xff0 != 0 {
-			return false, nil
+			return Instr{}, "", false
 		}
 		src = Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("R%d", operand2&0xf))}
 	}
 	decoded := Instr{
 		Op:   "TST",
 		Args: []Operand{src, {Kind: OpReg, Reg: rn}},
-		Raw:  ins.Raw,
+		Raw:  raw,
 	}
-	return true, c.lowerARMCompare("TST", decoded)
+	return decoded, carry, true
 }

@@ -55,13 +55,26 @@ tests establish the relevant runtime semantics.
   exact file and target pinned in `testdata/corpus/private-extensions.json`.
   Verify the source hash and current Go assembler, compile every other
   applicable file, and count the candidate separately from passes.
+- A native-byte-layout/JIT gap requires an explicitly reviewed exception
+  policy before promotion. A proposal may be tested in the fork Draft PR,
+  clearly labeled provisional. Pin its module, version, file and targets in
+  `testdata/corpus/native-layout.json`. Recheck source SHA-256 and Go object
+  bytes for each target; compile all other assembly and count the skip outside
+  passes. Do not use this for an ordinary unsupported instruction.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.
 - Keep reports/binaries under ignored `_out/`. Never commit caches, ZIPs,
   compressed discovery results or obsolete per-run ledgers, even in history.
+- Ordinary profile coverage uses report schema 10, progress schema 2 and
+  assembly-ledger v2: preserve file/target/profile-ID/custom-tag scopes, actual
+  Go/tool/package-role and CPP/LLVM consumer proofs. Do not relabel old reports
+  or treat feature-only files, unknown diagnostics or unconsumed variants as N/A.
 - Commit verified development promptly. Keep PR 40 draft until current-head
   tests, CI, review and coverage meet the completion gates.
+- Stage PR 40 repairs in a separate branch and Draft PR inside `cpunion`.
+  Do not update its upstream-connected head until fork CI passes. Follow
+  [the fork validation procedure](docs/development/validation.md#fork-first-ci).
 
 ## Common commands
 
@@ -70,7 +83,7 @@ Run from the repository root after selecting the tools described in
 
 ```sh
 go test . -run '<focused-family-regex>' -count=1
-go test ./... -count=1 -timeout=20m
+go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
 (cd cmd/plan9asmll && go test ./... -count=1)
 

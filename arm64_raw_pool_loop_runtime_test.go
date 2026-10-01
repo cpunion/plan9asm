@@ -7,7 +7,9 @@ import (
 	"testing"
 )
 
-func arm64RawPoolLoopIR(t *testing.T, triple string) string {
+const arm64RawPoolLoopWordCount = 32
+
+func arm64RawPoolLoopSource(t *testing.T) string {
 	t.Helper()
 	lines := []string{
 		"adr x9, #0", "mov x4, xzr", "cmp x1, #7", "b.hi #0", "cbz x1, #0",
@@ -140,7 +142,10 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 		"lsr x7, x2, #2", "umulh x7, x7, x15", "lsr x7, x7, #2",
 		"lsr x21, x21, #4", "cmp x21, #624", "b.hi #12",
 		"ldrb w7, [x9, x7]", fmt.Sprintf("str x7, [x0, #%d]", output),
-		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr", "ret")
+		"mov x12, xzr", "mov x9, xzr", "mov x10, xzr",
+		// Skip the 32 raw data words and reach the source RET below. A
+		// hardware RET here would bypass Go's automatic $32 epilogue.
+		fmt.Sprintf("b #%d", 4*(arm64RawPoolLoopWordCount+1)))
 	lines[0] = fmt.Sprintf("adr x9, #%d", len(lines)*4)
 	for at, line := range lines {
 		if line == "adr x10, #0" {
@@ -152,12 +157,17 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 	for _, word := range assembleARM64LLVMWords(t, lines, "") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
-	for i := 0; i < 32; i++ {
+	for i := 0; i < arm64RawPoolLoopWordCount; i++ {
 		fmt.Fprintf(&source, "WORD $%#08x\n", uint32(0x17b4a140+i))
 	}
 	source.WriteString("RET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
-	file, err := Parse(ArchARM64, source.String())
+	return source.String()
+}
+
+func arm64RawPoolLoopIR(t *testing.T, triple string) string {
+	t.Helper()
+	file, err := Parse(ArchARM64, arm64RawPoolLoopSource(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +184,14 @@ func arm64RawPoolLoopIR(t *testing.T, triple string) string {
 		t.Fatal(err)
 	}
 	return ir
+}
+
+func TestCrossLinuxRuntimeMatrixARM64RawPoolLoop(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+	source := strings.Replace(arm64RawPoolLoopSource(t), "TEXT pool_loop(SB)", "TEXT ·pool_loop(SB)", 1)
+	runARM64LocalRegisterGoOracle(t, source, arm64RawPoolLoopGoMain, len(runner) != 0)
+	ir := arm64RawPoolLoopIR(t, triple)
+	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "pool_loop_oracle", triple, ir, arm64RawPoolLoopMain, runner)
 }
 
 func TestARM64RawPoolLoopLLVM(t *testing.T) {
@@ -262,5 +280,100 @@ int main(void) {
     }
   }
   return 0;
+}
+`
+
+const arm64RawPoolLoopGoMain = `package main
+
+import "encoding/binary"
+
+func pool_loop(*uint64, uint64)
+
+func main() {
+	var bytes [128]byte
+	var values [16]uint64
+	for i := 0; i < 32; i++ {
+		binary.LittleEndian.PutUint32(bytes[i*4:], uint32(0x17b4a140+i))
+	}
+	for i := range values {
+		values[i] = binary.LittleEndian.Uint64(bytes[i*8:])
+	}
+	counts := []uint64{
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17, 19, 20, 23, 32, 255,
+		1234, 9999, 10000, 16383, 1 << 32, 1 << 63, ^uint64(0),
+	}
+	for _, count := range counts {
+		var result [58]uint64
+		var expected [56]uint64
+		result[0], result[57] = 0x12345678, 0x87654321
+		if count <= 7 {
+			for n := uint64(1); n <= count; n++ {
+				expected[0] += values[n]
+			}
+		}
+		copy(expected[2:6], values[4:8])
+		copy(expected[6:10], values[2:6])
+		expected[10], expected[11] = values[3], values[5]
+		remaining := uint64(0)
+		if count > 7 {
+			expected[12], remaining = values[1], count
+		} else {
+			expected[12] = values[0]
+		}
+		for j := 13; j < 25; j++ {
+			expected[j] = uint64(bytes[16+(remaining&1)])
+		}
+		output := 25
+		for kind := 0; kind < 4; kind++ {
+			for direction := 0; direction < 2; direction++ {
+				for reversed := 0; reversed < 2; reversed++ {
+					distance := uint64(8) - (remaining & 7)
+					if direction != 0 {
+						distance = 8 + (remaining & 7)
+					}
+					start := uint64(0)
+					if kind < 2 {
+						start = 1
+					}
+					for n := start; n <= distance; n++ {
+						expected[output] += uint64(bytes[n])
+					}
+					output++
+				}
+			}
+		}
+		if remaining&7 != 0 {
+			expected[41] = uint64(bytes[(remaining&7)-1])
+		}
+		if remaining == ^uint64(0) {
+			expected[42] = uint64(bytes[0])
+		}
+		if remaining&15 <= 7 {
+			expected[43] = uint64(bytes[remaining&15])
+		}
+		for n := uint64(0); n < (remaining&7)+1; n++ {
+			expected[44] += values[n]
+			expected[45] += values[7-n]
+		}
+		expected[46] = values[remaining&7]
+		expected[47] = values[remaining&3]
+		expected[48] = values[4+(remaining&3)]
+		for j, divisor := range []uint64{3, 5, 10, 100, 8, 7} {
+			expected[49+j] = uint64(bytes[remaining%divisor])
+		}
+		if remaining&16383 <= 9999 {
+			expected[55] = uint64(bytes[(remaining&16383)/100])
+		}
+		pool_loop(&result[1], count)
+		if result[0] != 0x12345678 || result[57] != 0x87654321 {
+			panic("native Go pool loop overwrote a canary")
+		}
+		for j, want := range expected {
+			if result[j+1] != want {
+				println("pool loop", count, j, result[j+1], want)
+				panic("native Go pool loop mismatch")
+			}
+		}
+	}
 }
 `

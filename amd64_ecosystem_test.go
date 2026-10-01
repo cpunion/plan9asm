@@ -324,7 +324,7 @@ func TestTranslate386RejectsQwordStringInstructions(t *testing.T) {
 	}
 }
 
-func TestTranslate386UsesUniqueFPResultNamesForLegacyOffsets(t *testing.T) {
+func TestTranslate386RejectsStaleNamedFPResultOffsets(t *testing.T) {
 	src := `TEXT legacyresults(SB),NOSPLIT,$0-56
 	MOVL AX, retax+28(FP)
 	MOVL BX, retbx+32(FP)
@@ -335,6 +335,7 @@ func TestTranslate386UsesUniqueFPResultNamesForLegacyOffsets(t *testing.T) {
 	MOVL BP, retbp+56(FP)
 	RET
 `
+	requireStaleNamedFPGoDiagnostic(t, src)
 	file, err := Parse(ArchAMD64, src)
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +345,7 @@ func TestTranslate386UsesUniqueFPResultNamesForLegacyOffsets(t *testing.T) {
 	for i, name := range names {
 		results = append(results, FrameSlot{Offset: int64(28 + 4*i), Type: I32, Index: i, Field: -1, Name: name})
 	}
-	ll, err := Translate(file, Options{
+	_, err = Translate(file, Options{
 		TargetTriple: "i386-unknown-linux-gnu",
 		Goarch:       "386",
 		Sigs: map[string]FuncSig{
@@ -356,14 +357,9 @@ func TestTranslate386UsesUniqueFPResultNamesForLegacyOffsets(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if err == nil {
+		t.Fatal("stale explicit result offsets were silently rewritten by name")
 	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "legacy-named-results.ll", "legacy-named-results.o", ll)
 }
 
 func TestTranslateX86MOVLScalarResultMemoryForms(t *testing.T) {

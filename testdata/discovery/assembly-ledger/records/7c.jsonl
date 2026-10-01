@@ -5,6 +5,7 @@
 {"module":"github.com/deatil/go-hash","version":"v1.0.3006","status":"pending"}
 {"module":"github.com/fancybits/gorgonia","version":"v0.0.0-20231013091305-d7a3ce27c9a1","status":"pending"}
 {"module":"github.com/fatcorn/bls12-381","version":"v0.0.0-20241212035339-9765d5ca2eed","status":"pending"}
+{"module":"github.com/kub-chain/bkc","version":"v1.10.15","status":"pending"}
 {"module":"github.com/mechanizm/jubjub","version":"v0.0.0-20260714223300-42272bbb09ce","status":"pending"}
 {"module":"github.com/oioio-space/maldev","version":"v0.186.0","status":"pending"}
 {"module":"github.com/parquet-go/parquet-go","version":"v0.32.0","status":"pending"}

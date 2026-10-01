@@ -2,6 +2,7 @@
 {"module":"gitee.com/limuren/golang_sys","version":"v0.48.0","status":"pending"}
 {"module":"github.com/0x9n0p/gosharp/src/cmd","version":"v0.0.0-20250911113804-5d02eaeb9895","status":"pending"}
 {"module":"github.com/Cloudwego/base64x","version":"v0.1.7","status":"pending"}
+{"module":"github.com/Eun/go","version":"v0.0.0-20170811110501-92cfd07a6cfd","status":"pending"}
 {"module":"github.com/avila-r/ego","version":"v0.0.0-20251203203011-2d89fc672f64","status":"pending"}
 {"module":"github.com/badu/reflector","version":"v0.0.0-20190326074541-2427793d6069","status":"pending"}
 {"module":"github.com/clever-vpn/sing-tun","version":"v0.8.7","status":"pending"}
@@ -17,5 +18,6 @@
 {"module":"github.com/thomas-samoht/circl","version":"v1.6.3","status":"pending"}
 {"module":"github.com/tyzerrr/spanneranalyzerwasm2go/p11","version":"v0.2.0","status":"pending"}
 {"module":"github.com/yanhu007/websocket","version":"v1.8.14","status":"pending"}
+{"module":"github.com/yehordudukin/go-ethereum","version":"v0.0.0-20250419151512-2f04917c34ce","status":"pending"}
 {"module":"github.zerozr99.workers.dev/timpalpant/go-cfr","version":"v0.0.0-20230208023716-2c859fbaa0a5","status":"pending"}
 {"module":"pkg.si-go.dev/sigo","version":"v0.0.0-20260705204752-a179ba91a1d8","status":"pending"}

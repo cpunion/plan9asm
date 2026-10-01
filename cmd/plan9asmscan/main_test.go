@@ -492,10 +492,10 @@ func TestBuildOpcodeCatalogIncludesGeneratedTables(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("var Anames = []string{\n\"ADD\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("package arm64\nvar Anames = []string{\n\"ADD\",\n\"LAST\",\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "anames_gen.go"), []byte("var sveAnames = []string{\n\"ZADD\",\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "anames_gen.go"), []byte("package arm64\nvar sveAnames = []string{\n\"ZADD\",\n}\nfunc init() { Anames = append(Anames, sveAnames...) }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ops := map[string]*opStat{"ADD": {Count: 1}}
@@ -572,7 +572,7 @@ func TestBuildWASMOpcodeCatalogNormalizesOfficialNames(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("var Anames = []string{\n\"I32Add\",\n\"ReservedFD01\",\n\"LAST\",\n}\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "anames.go"), []byte("package wasm\nvar Anames = []string{\n\"I32Add\",\n\"ReservedFD01\",\n\"LAST\",\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	catalog, err := buildOpcodeCatalog(goroot, plan9asm.ArchWASM, "wasm", map[string]*opStat{"I32ADD": {Count: 1}}, nil, map[string]struct{}{"I32ADD": {}})

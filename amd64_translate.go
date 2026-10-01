@@ -445,6 +445,9 @@ func emitX86AddressSensitiveRawText(b *strings.Builder, fn Func, sig FuncSig) er
 	if len(fn.X86RawText) == 0 {
 		return fmt.Errorf("empty address-sensitive raw TEXT body")
 	}
+	if len(sig.Frame.Params) != 0 || len(sig.Frame.Results) != 0 {
+		return fmt.Errorf("%w: byte-exact naked TEXT cannot synthesize Go frame transport for %s", ErrProbeNeedsContext, fn.Sym)
+	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
 	for index, typ := range sig.Args {
 		if index != 0 {
@@ -591,11 +594,9 @@ func (c *amd64Ctx) lowerBlocks() error {
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
 	c.allowSPWrite = models386SPWrite(ins)
 	defer func() { c.allowSPWrite = false }()
-	for i := range ins.Args {
-		if ins.Args[i].Kind == OpFP || ins.Args[i].Kind == OpFPAddr {
-			ins.Args[i].FPOffset = c.namedFPResultOffset(ins.Args[i].FPName, ins.Args[i].FPOffset)
-		}
-	}
+	// Go's assembler uses the explicit FP displacement, not the descriptive
+	// name, for machine addressing. Never repair a stale displacement by name:
+	// that would silently change source behavior and hide padding accesses.
 	op := strings.ToUpper(string(ins.Op))
 	_, _, _, regularString := x86StringProperties(Op(op))
 	_, _, portString := x86PortStringProperties(Op(op))
@@ -619,6 +620,14 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		}
 		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("amd64 RET expects at most 1 operand: %q", ins.Raw)
+		}
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpReg && isX86YrlRegisterForArch(ins.Args[0].Reg, c.goarch) {
+			// Go preprocesses RET Rn into its frame epilogue followed by JMP
+			// Rn. It is not an ordinary return or a guessed generic C call.
+			return true, fmt.Errorf("%w: %s register RET needs a native tail-target ABI and frame contract: %q", ErrProbeNeedsContext, c.goarch, ins.Raw)
+		}
+		if len(ins.Args) != 0 {
+			return true, fmt.Errorf("%s RET accepts only no operand, a GP register or a symbol tail target: %q", c.goarch, ins.Raw)
 		}
 		return true, c.lowerRET()
 	case "NOPW", "NOPL":
@@ -1025,7 +1034,10 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ok, term, err := c.lowerSystemTransfer(Op(op), ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerAMDSystemManagement(Op(op), ins); ok {
+	if ok, term, err := c.lowerEnqueue(Op(op), ins); ok {
+		return term, err
+	}
+	if ok, term, err := c.lowerX86SystemManagement(Op(op), ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerSyscall(Op(op), ins); ok {

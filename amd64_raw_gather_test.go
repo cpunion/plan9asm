@@ -203,15 +203,7 @@ func TestTranslateX86RawGatherLLVM22AllTargets(t *testing.T) {
 			} {
 				t.Run(target.triple, func(t *testing.T) {
 					code := assembleX87ControlBytes(t, target.goarch, form.source)
-					var raw strings.Builder
-					raw.WriteString("TEXT rawgather(SB),4,$0-0\n")
-					for _, value := range code {
-						fmt.Fprintf(&raw, "BYTE $%#02x\n", value)
-					}
-					file, err := Parse(ArchAMD64, raw.String())
-					if err != nil {
-						t.Fatal(err)
-					}
+					file := x86RawUnprovedReturnFormProbeFile(t, target.goarch, "rawgather", code)
 					ir, err := Translate(file, Options{
 						Goarch:       target.goarch,
 						TargetTriple: target.triple,

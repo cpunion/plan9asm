@@ -185,8 +185,10 @@ func TestTranslateGoModule_UsesManualSigExternalName(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func Call()
 `)
+	// This checks external-name resolution, not runtime.memmove's ABI. An
+	// uninitialized pointer call cannot prove that the saved caller LR survives.
 	asm := []byte(`TEXT ·Call(SB),NOSPLIT,$0-0
-	CALL runtime·memmove(SB)
+	CALL external·namedSink(SB)
 	RET
 `)
 
@@ -197,10 +199,10 @@ func Call()
 				GOARCH:     goarch,
 				ResolveSym: testResolveSym("test/pkg"),
 				ManualSig: func(resolved string) (FuncSig, bool) {
-					if resolved != "runtime.memmove" {
+					if resolved != "external.namedSink" {
 						return FuncSig{}, false
 					}
-					return FuncSig{Name: "memmove", Args: []LLVMType{Ptr, Ptr, I64}, Ret: Ptr}, true
+					return FuncSig{Name: "namedSink", Ret: Void}, true
 				},
 			})
 			if err != nil {
@@ -208,7 +210,7 @@ func Call()
 			}
 			defer tr.Module.Dispose()
 			ir := tr.Module.String()
-			if !strings.Contains(ir, "@memmove") || strings.Contains(ir, "runtime.memmove") {
+			if !strings.Contains(ir, "@namedSink") || strings.Contains(ir, "external.namedSink") {
 				t.Fatalf("manual external name not applied:\n%s", ir)
 			}
 		})

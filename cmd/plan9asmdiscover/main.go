@@ -766,7 +766,12 @@ func modulesForFailureRetry(report discoveryReport) []moduleVersion {
 	for _, item := range checkpoints {
 		modules = append(modules, moduleVersion{Path: item.Path, Version: item.Version})
 	}
-	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
+	sort.Slice(modules, func(i, j int) bool {
+		if modules[i].Path != modules[j].Path {
+			return modules[i].Path < modules[j].Path
+		}
+		return compareModuleCandidates(modules[i], modules[j]) < 0
+	})
 	return modules
 }
 
@@ -880,34 +885,30 @@ func validateFetchedIndexWindow(entries []indexEntry, nextBefore, before, after 
 }
 
 func modulesNeedingInspection(entries []indexEntry, checkpoints map[string]moduleCheckpoint) ([]moduleVersion, int) {
-	moduleSet := make(map[string]string, len(entries))
+	moduleSet := make(map[string]moduleVersion, len(entries))
 	for _, entry := range entries {
-		// Module-path major has priority across a family; within one exact path,
-		// retain the greatest Go semantic version regardless of index arrival
-		// order. The index entry only triggers a fresh @latest resolution.
-		if previous, ok := moduleSet[entry.Path]; !ok || compareModuleVersions(previous, entry.Version) < 0 {
-			moduleSet[entry.Path] = entry.Version
+		// v0 and v1 share a path in Go, but are independent version lines.
+		key := moduleLineKey(entry.Path, entry.Version)
+		if previous, ok := moduleSet[key]; !ok || compareModuleVersions(previous.Version, entry.Version) < 0 {
+			moduleSet[key] = moduleVersion{Path: entry.Path, Version: entry.Version}
 		}
 	}
-	families := make(map[string]moduleVersion, len(moduleSet))
-	for modulePath, indexedVersion := range moduleSet {
-		item := moduleVersion{Path: modulePath, Version: indexedVersion}
-		family := moduleFamily(modulePath)
-		if previous, ok := families[family]; !ok || compareModuleCandidates(previous, item) < 0 {
-			families[family] = item
-		}
-	}
-	modules := make([]moduleVersion, 0, len(families))
-	skipped := len(moduleSet) - len(families)
-	for family, item := range families {
-		checkpoint, ok := checkpoints[family]
+	modules := make([]moduleVersion, 0, len(moduleSet))
+	skipped := 0
+	for key, item := range moduleSet {
+		checkpoint, ok := checkpoints[key]
 		if ok && !indexedVersionMayBeNewer(item, checkpoint) {
 			skipped++
 			continue
 		}
 		modules = append(modules, item)
 	}
-	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
+	sort.Slice(modules, func(i, j int) bool {
+		if modules[i].Path != modules[j].Path {
+			return modules[i].Path < modules[j].Path
+		}
+		return compareModuleVersions(modules[i].Version, modules[j].Version) < 0
+	})
 	return modules, skipped
 }
 
@@ -1016,20 +1017,19 @@ func chooseModuleCheckpoint(checkpoints map[string]moduleCheckpoint, modulePath,
 	if modulePath == "" || version == "" {
 		return
 	}
-	family := moduleFamily(modulePath)
 	candidate := moduleCheckpoint{Path: modulePath, Version: version}
-	previous, ok := checkpoints[family]
+	key := moduleLineKey(modulePath, version)
+	previous, ok := checkpoints[key]
 	if !ok || compareModuleCheckpoints(previous, candidate) < 0 {
-		checkpoints[family] = candidate
+		checkpoints[key] = candidate
 	}
 }
 
-func moduleFamily(modulePath string) string {
-	prefix, _, ok := module.SplitPathVersion(modulePath)
-	if ok {
-		return prefix
+func moduleLineKey(modulePath, version string) string {
+	if version == "@latest" {
+		return modulePath + "\x00@latest"
 	}
-	return modulePath
+	return modulePath + "\x00" + semver.Major(version)
 }
 
 func compareModuleCandidates(a, b moduleVersion) int {
@@ -1049,14 +1049,6 @@ func compareModuleCheckpoints(a, b moduleCheckpoint) int {
 		}
 		return -1
 	}
-	aMajor := moduleMajor(a.Path, a.Version)
-	bMajor := moduleMajor(b.Path, b.Version)
-	if aMajor != bMajor {
-		if aMajor < bMajor {
-			return -1
-		}
-		return 1
-	}
 	if a.Version == "@latest" || b.Version == "@latest" {
 		if a.Version == b.Version {
 			return strings.Compare(a.Path, b.Path)
@@ -1070,19 +1062,6 @@ func compareModuleCheckpoints(a, b moduleCheckpoint) int {
 		return compared
 	}
 	return strings.Compare(a.Path, b.Path)
-}
-
-func moduleMajor(modulePath, version string) int {
-	_, pathMajor, ok := module.SplitPathVersion(modulePath)
-	if ok && pathMajor != "" {
-		raw := strings.TrimPrefix(strings.TrimPrefix(pathMajor, "/v"), ".v")
-		if major, err := strconv.Atoi(raw); err == nil {
-			return major
-		}
-	}
-	major := strings.TrimPrefix(semver.Major(version), "v")
-	parsed, _ := strconv.Atoi(major)
-	return parsed
 }
 
 func readSeenReport(reportPath string) (discoveryReport, error) {
@@ -1380,12 +1359,8 @@ func mergeDiscoveryReports(base, update discoveryReport) (discoveryReport, error
 		arches    map[string]bool
 		asmFiles  map[string]bool
 	}
-	// The active record for a module family is selected by module-path major
-	// first and Go semantic version second, across both sides of the merge.
-	// This is deliberately monotonic while history is scanned backwards: an
-	// older index window may introduce /v3 after /v2 was already inspected,
-	// but a still older /v2 record can never displace that /v3 checkpoint.
-	// Exact failures participate too, keeping the highest version retryable.
+	// Keep only the greatest semantic version for each exact module path.
+	// Different major paths coexist; exact failures remain retryable.
 	authoritative := make(map[string]moduleCheckpoint)
 	for _, report := range []discoveryReport{base, update} {
 		for _, item := range report.Scanned {
@@ -1403,10 +1378,9 @@ func mergeDiscoveryReports(base, update discoveryReport) (discoveryReport, error
 		if !semver.IsValid(version) {
 			return
 		}
-		family := moduleFamily(modulePath)
-		latest := authoritative[family]
+		latest := authoritative[moduleLineKey(modulePath, version)]
 		if latest.Path == modulePath && latest.Version == version {
-			resolvedByUpdate[family] = true
+			resolvedByUpdate[modulePath] = true
 		}
 	}
 	for _, item := range update.Scanned {
@@ -1419,12 +1393,12 @@ func mergeDiscoveryReports(base, update discoveryReport) (discoveryReport, error
 		markResolvedByUpdate(item.Module, item.Version)
 	}
 	keep := func(isUpdate bool, modulePath, version string) bool {
-		latest, ok := authoritative[moduleFamily(modulePath)]
+		latest, ok := authoritative[moduleLineKey(modulePath, version)]
 		if version == "@latest" {
 			// A current resolution failure remains retryable alongside the last
 			// known exact result. Only an authoritative exact resolution in this
 			// update removes it; unrelated history batches must preserve it.
-			return isUpdate || !resolvedByUpdate[moduleFamily(modulePath)]
+			return isUpdate || !resolvedByUpdate[modulePath]
 		}
 		return !ok || modulePath == latest.Path && version == latest.Version
 	}
@@ -1509,10 +1483,10 @@ func chooseAuthoritativeVersion(versions map[string]moduleCheckpoint, modulePath
 	if modulePath == "" || !semver.IsValid(version) {
 		return
 	}
-	family := moduleFamily(modulePath)
 	candidate := moduleCheckpoint{Path: modulePath, Version: version}
-	if previous, ok := versions[family]; !ok || compareModuleCheckpoints(previous, candidate) < 0 {
-		versions[family] = candidate
+	key := moduleLineKey(modulePath, version)
+	if previous, ok := versions[key]; !ok || compareModuleCheckpoints(previous, candidate) < 0 {
+		versions[key] = candidate
 	}
 }
 
@@ -2129,7 +2103,7 @@ func inspectModules(ctx context.Context, client *http.Client, proxyURL string, m
 				if collector != nil {
 					collector.setModuleScan(module.Path, module.Version, "", "")
 				}
-				item, latest, didScan, wasReused, err := inspectLatestModule(moduleCtx, client, proxyURL, module.Path, seen, sourceCache, maxZipSize)
+				item, latest, didScan, wasReused, err := inspectLatestModule(moduleCtx, client, proxyURL, module, seen, sourceCache, maxZipSize)
 				if collector != nil {
 					outcome := "scanned"
 					switch {
@@ -2220,25 +2194,29 @@ func inspectModules(ctx context.Context, client *http.Client, proxyURL string, m
 	return matched, failures, scanned, skipped
 }
 
-func inspectLatestModule(ctx context.Context, client *http.Client, proxyURL, modulePath string, seen map[string]seenResult, sourceCache *sourceInspectionCache, maxZipSize int64) (candidate, moduleVersion, bool, bool, error) {
-	latest := moduleVersion{Path: modulePath, Version: "@latest"}
-	latestVersion, err := resolveLatest(ctx, client, proxyURL, modulePath)
+func inspectLatestModule(ctx context.Context, client *http.Client, proxyURL string, indexed moduleVersion, seen map[string]seenResult, sourceCache *sourceInspectionCache, maxZipSize int64) (candidate, moduleVersion, bool, bool, error) {
+	latest := moduleVersion{Path: indexed.Path, Version: "@latest"}
+	latestVersion, err := resolveLatest(ctx, client, proxyURL, indexed.Path)
 	if err != nil {
 		return candidate{}, latest, false, false, err
 	}
-	latest.Version = latestVersion
+	if semver.IsValid(indexed.Version) && semver.Major(latestVersion) != semver.Major(indexed.Version) {
+		latest.Version = indexed.Version
+	} else {
+		latest.Version = latestVersion
+	}
 	if previous, ok := seen[scanKey(latest)]; ok {
 		return previous.Match, latest, false, true, nil
 	}
 	item, sourceReused, err := sourceCache.inspect(ctx, sourceScanKey(latest), func() (candidate, error) {
-		return inspectModuleVersion(ctx, client, proxyURL, modulePath, latestVersion, maxZipSize)
+		return inspectModuleVersion(ctx, client, proxyURL, latest.Path, latest.Version, maxZipSize)
 	})
 	if err != nil {
 		return candidate{}, latest, false, false, err
 	}
 	if sourceReused && item.Module != "" {
-		item.Module = modulePath
-		item.Version = latestVersion
+		item.Module = latest.Path
+		item.Version = latest.Version
 	}
 	return item, latest, !sourceReused, sourceReused, nil
 }

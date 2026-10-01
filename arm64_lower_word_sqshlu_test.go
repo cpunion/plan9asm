@@ -214,7 +214,15 @@ func TestARM64RawSQSHLUCompleteScalarAndVectorForms(t *testing.T) {
 						t.Fatal("scalar SQSHLU is missing signed clamp or shift")
 					}
 				}
-				if got := strings.Count(ir, " = call "); got != wantCalls {
+				// Count this family's intrinsic, not the independent caller
+				// continuation capture introduced by checked CFG translation.
+				got := 0
+				for _, line := range strings.Split(ir, "\n") {
+					if strings.Contains(line, " = call ") && strings.Contains(line, "@llvm.aarch64.neon.sqshlu.") {
+						got++
+					}
+				}
+				if got != wantCalls {
 					t.Fatalf("got %d SQSHLU calls, want %d", got, wantCalls)
 				}
 				compileLLVMToObject(t, llc, triple, "arm64-sqshlu.ll", "arm64-sqshlu.o", ir)

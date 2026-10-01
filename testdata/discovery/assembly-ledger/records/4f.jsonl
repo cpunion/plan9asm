@@ -11,9 +11,13 @@
 {"module":"github.com/huyn58/websocket","version":"v0.0.0-20251117091240-8bf6dd28ef54","status":"pending"}
 {"module":"github.com/lrita/numa","version":"v1.0.3","status":"pending"}
 {"module":"github.com/marktheunissen/pkg/v3","version":"v3.7.0","status":"pending"}
+{"module":"github.com/openstor/highwayhash","version":"v0.0.0-20251030061156-5ec327efb424","status":"pending"}
+{"module":"github.com/pohanhuangtw/neuvector","version":"v0.0.0-20260113012006-9a2218e8251a","status":"pending"}
 {"module":"github.com/second-state/lityvm","version":"v1.9.7","status":"pending"}
 {"module":"github.com/snissn/compress","version":"v1.18.2-snissn.0","status":"pending"}
 {"module":"github.com/steakknife/hamming","version":"v0.0.0-20180906055917-c99c65617cd3","status":"pending"}
+{"module":"github.com/stevendpclark/crypto","version":"v0.0.0-20241104001025-71ed71b4faf9","status":"pending"}
+{"module":"github.com/suited-entertainment/go-ethereum","version":"v0.0.0-20250625051901-f560a304854b","status":"pending"}
 {"module":"github.com/tokamak-network/gochain/v3","version":"v3.2.8","status":"pending"}
 {"module":"github.com/tsurubee/sshr.crypto","version":"v0.0.0-20240305065357-8e62722501ab","status":"pending"}
 {"module":"github.com/yangzh/exp","version":"v0.0.0-20190912050518-24fee2ba644c","status":"pending"}

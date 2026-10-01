@@ -7,59 +7,26 @@ import (
 )
 
 func (c *arm64Ctx) lowerAtomicPair(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "CASPW", "CASPD":
-		if arm64AtomicOpcodeHasSuffix(ins.Op) {
-			return true, false, fmt.Errorf("arm64 %s does not accept an opcode suffix: %q", op, ins.Raw)
-		}
-		if len(ins.Args) != 3 || !arm64AtomicRegisterPair(ins.Args[0]) || ins.Args[1].Kind != OpMem || !arm64AtomicRegisterPair(ins.Args[2]) {
-			return true, false, fmt.Errorf("arm64 %s expects register-pair, zero-offset memory, register-pair: %q", op, ins.Raw)
-		}
-		expectedRegs := ins.Args[0].RegList
-		newRegs := ins.Args[2].RegList
-		if err := validateARM64CASPRegisterPair("source", expectedRegs); err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		if err := validateARM64CASPRegisterPair("destination", newRegs); err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		ptr, err := c.atomicPairMemPtr(ins.Args[1].Mem, true)
-		if err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
+	form, handled, err := parseARM64AtomicPairForm(op, ins)
+	if !handled || err != nil {
+		return handled, false, err
+	}
+	ptr, err := c.atomicMemPtr(form.memory)
+	if err != nil {
+		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
+	}
+	typeName, align := "i64", 8
+	if form.spec.bits == 64 {
+		typeName, align = "i128", 16
+	}
 
-		elemBits := 32
-		if op == "CASPD" {
-			elemBits = 64
-		}
-		return true, false, c.lowerAtomicPairCompareExchange(expectedRegs, newRegs, elemBits, ptr, "seq_cst", "seq_cst")
-
-	case "LDXPW", "LDXP", "LDAXPW", "LDAXP":
-		if arm64AtomicOpcodeHasSuffix(ins.Op) {
-			return true, false, fmt.Errorf("arm64 %s does not accept an opcode suffix: %q", op, ins.Raw)
-		}
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || !arm64AtomicRegisterPair(ins.Args[1]) {
-			return true, false, fmt.Errorf("arm64 %s expects zero-offset memory, register-pair: %q", op, ins.Raw)
-		}
-		regs := ins.Args[1].RegList
-		if err := validateARM64ExclusiveLoadPair(regs); err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		ptr, err := c.atomicPairMemPtr(ins.Args[0].Mem, false)
-		if err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		elemBits := 32
-		typeName := "i64"
-		align := 8
-		if op == "LDXP" || op == "LDAXP" {
-			elemBits = 64
-			typeName = "i128"
-			align = 16
-		}
+	switch form.spec.kind {
+	case arm64AtomicPairCAS:
+		return true, false, c.lowerAtomicPairCompareExchange(form.expected, form.data, form.spec.bits, ptr, "seq_cst", "seq_cst")
+	case arm64AtomicPairLoad:
 		loaded := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = load atomic %s, ptr %s seq_cst, align %d\n", loaded, typeName, ptr, align)
-		if err := c.storeAtomicPairValue(regs, elemBits, "%"+loaded); err != nil {
+		if err := c.storeAtomicPairValue(form.data, form.spec.bits, "%"+loaded); err != nil {
 			return true, false, err
 		}
 		fmt.Fprintf(c.b, "  store i1 true, ptr %s\n", c.exclusiveValidSlot)
@@ -71,42 +38,19 @@ func (c *arm64Ctx) lowerAtomicPair(op Op, ins Instr) (ok bool, terminated bool, 
 		}
 		fmt.Fprintf(c.b, "  store i128 %s, ptr %s\n", reserved, c.exclusiveValueSlot)
 		return true, false, nil
-
-	case "STXPW", "STXP", "STLXPW", "STLXP":
-		if arm64AtomicOpcodeHasSuffix(ins.Op) {
-			return true, false, fmt.Errorf("arm64 %s does not accept an opcode suffix: %q", op, ins.Raw)
-		}
-		if len(ins.Args) != 3 || !arm64AtomicRegisterPair(ins.Args[0]) || ins.Args[1].Kind != OpMem || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 %s expects register-pair, zero-offset memory, status-register: %q", op, ins.Raw)
-		}
-		regs := ins.Args[0].RegList
-		status := ins.Args[2].Reg
-		if err := validateARM64ExclusiveStorePair(regs, ins.Args[1].Mem.Base, status); err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		ptr, err := c.atomicPairMemPtr(ins.Args[1].Mem, false)
-		if err != nil {
-			return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
-		}
-		elemBits := 32
-		typeName := "i64"
-		align := 8
-		if op == "STXP" || op == "STLXP" {
-			elemBits = 64
-			typeName = "i128"
-			align = 16
-		}
-		newValue, err := c.loadAtomicPairValue(regs, elemBits)
+	case arm64AtomicPairStore:
+		newValue, err := c.loadAtomicPairValue(form.data, form.spec.bits)
 		if err != nil {
 			return true, false, err
 		}
-		statusValue, err := c.lowerAtomicPairExclusiveStore(typeName, align, ptr, newValue)
+		status, err := c.lowerAtomicPairExclusiveStore(typeName, align, ptr, newValue)
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeReg(status, statusValue)
+		return true, false, c.storeReg(form.status, status)
+	default:
+		return true, false, fmt.Errorf("arm64 %s has an unrecognized paired atomic grammar", op)
 	}
-	return false, false, nil
 }
 
 func (c *arm64Ctx) lowerAtomicPairCompareExchange(expectedRegs, newRegs []Reg, elemBits int, ptr, successOrder, failureOrder string) error {
@@ -212,23 +156,31 @@ func arm64AtomicStatusRegister(reg Reg) bool {
 	return ok
 }
 
+// Raw CASP uses the same address grammar without a named instruction form.
 func (c *arm64Ctx) atomicPairMemPtr(mem MemRef, allowNamedSP bool) (string, error) {
+	if err := validateARM64AtomicPairMemory(mem, allowNamedSP); err != nil {
+		return "", err
+	}
+	return c.atomicMemPtr(mem)
+}
+
+func validateARM64AtomicPairMemory(mem MemRef, allowNamedSP bool) error {
 	if mem.Sym != "" || mem.Segment != "" || mem.Index != "" || mem.Off != 0 {
-		return "", fmt.Errorf("paired atomic memory must have zero displacement and no index")
+		return fmt.Errorf("paired atomic memory must have zero displacement and no index")
 	}
 	if mem.OffRaw != "" {
 		if !allowNamedSP || mem.Base != SP {
-			return "", fmt.Errorf("named SP memory is only accepted by CASP")
+			return fmt.Errorf("named SP memory is only accepted by CASP")
 		}
 	} else if mem.Base == SP {
-		return "", fmt.Errorf("plain SP is a pseudo-register; use RSP for register-relative memory")
+		return fmt.Errorf("plain SP is a pseudo-register; use RSP for register-relative memory")
 	}
 	if mem.Base != SP && mem.Base != Reg("RSP") && mem.Base != ZR {
 		if _, ok := arm64AtomicNumberedRegister(mem.Base); !ok {
-			return "", fmt.Errorf("paired atomic memory base must be R0-R30, RSP, or ZR")
+			return fmt.Errorf("paired atomic memory base must be R0-R30, RSP, or ZR")
 		}
 	}
-	return c.atomicMemPtr(mem)
+	return nil
 }
 
 func (c *arm64Ctx) loadAtomicPairDataReg(reg Reg) (string, error) {

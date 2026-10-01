@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,6 +26,8 @@ import (
 	"github.com/xgo-dev/llvm"
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/asmsig"
+	"github.com/xgo-dev/plan9asm/internal/goabi"
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -76,20 +80,21 @@ type unsupportedHit struct {
 }
 
 type runReport struct {
-	Goos               string              `json:"goos"`
-	Goarch             string              `json:"goarch"`
-	Patterns           []string            `json:"patterns"`
-	TotalPkgs          int                 `json:"total_pkgs"`
-	AsmPackages        []string            `json:"asm_packages,omitempty"`
-	AsmFiles           []string            `json:"asm_files,omitempty"`
-	TotalAsm           int                 `json:"total_asm"`
-	Success            int                 `json:"success"`
-	NotApplicable      int                 `json:"not_applicable"`
-	Failed             int                 `json:"failed"`
-	Duration           string              `json:"duration"`
-	UnsupportedOps     []opCount           `json:"unsupported_ops,omitempty"`
-	Fails              []failItem          `json:"fails,omitempty"`
-	NotApplicableItems []notApplicableItem `json:"not_applicable_items,omitempty"`
+	Goos               string                 `json:"goos"`
+	Goarch             string                 `json:"goarch"`
+	Patterns           []string               `json:"patterns"`
+	TotalPkgs          int                    `json:"total_pkgs"`
+	AsmPackages        []string               `json:"asm_packages,omitempty"`
+	AsmFiles           []string               `json:"asm_files,omitempty"`
+	TotalAsm           int                    `json:"total_asm"`
+	Success            int                    `json:"success"`
+	NotApplicable      int                    `json:"not_applicable"`
+	Failed             int                    `json:"failed"`
+	Duration           string                 `json:"duration"`
+	UnsupportedOps     []opCount              `json:"unsupported_ops,omitempty"`
+	Fails              []failItem             `json:"fails,omitempty"`
+	NotApplicableItems []notApplicableItem    `json:"not_applicable_items,omitempty"`
+	FeatureSelection   *featureSelectionProof `json:"feature_selection,omitempty"`
 }
 
 type targetSpec struct {
@@ -124,30 +129,37 @@ type compileConfig struct {
 	// oversized function stays intact and is checked on its own.
 	MaxInstructions int
 	X86TailGroups   []plan9asm.X86TailGroup
+	Feature         *featureConsumer
+	FeaturePath     string
+	Context         context.Context
+	emptyAssembly   *gotoolprofile.EmptyAssemblyProof
 }
 
 func main() {
 	var (
-		goos        = flag.String("goos", runtime.GOOS, "target GOOS")
-		goarch      = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm/arm64/wasm)")
-		targets     = flag.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,windows/arm64)")
-		allTargets  = flag.Bool("all-targets", false, "run the complete default Plan 9 target matrix")
-		patterns    = flag.String("patterns", "std", "comma-separated package patterns")
-		asmFiles    = flag.String("asm-files", "", "comma-separated module-relative assembly files to exercise exactly")
-		buildTags   = flag.String("tags", "", "comma-separated Go build tags used to expose tagged assembly implementations")
-		modulePath  = flag.String("module-path", "", "only include packages owned by this module path")
-		outDir      = flag.String("out", "", "output dir for generated .ll files")
-		annotate    = flag.Bool("annotate", false, "emit source asm lines as IR comments")
-		limit       = flag.Int("limit", 0, "max number of asm files per target (0 means all)")
-		keepGoing   = flag.Bool("keep-going", true, "continue on per-file failures")
-		listOnly    = flag.Bool("list-only", false, "only print asm task list and exit")
-		compile     = flag.Bool("compile", false, "compile generated .ll to .o via llc")
-		llcPath     = flag.String("llc", "", "path to llc executable (auto-detect when empty)")
-		llcOptLevel = flag.Int("llc-opt-level", 2, "LLVM llc optimization level (0-3)")
-		keepObj     = flag.Bool("keep-obj", false, "keep generated .o files when -compile is set")
-		strictLoad  = flag.Bool("strict-load", false, "fail when go/packages reports any package loading error")
-		reportOut   = flag.String("report", "", "optional report json path")
-		repoRoot    = flag.String("repo-root", "../..", "repo root for extracting supported instruction set")
+		goos           = flag.String("goos", runtime.GOOS, "target GOOS")
+		goarch         = flag.String("goarch", runtime.GOARCH, "target GOARCH (386/amd64/arm/arm64/wasm)")
+		targets        = flag.String("targets", "", "comma-separated GOOS/GOARCH list (e.g. linux/amd64,windows/arm64)")
+		allTargets     = flag.Bool("all-targets", false, "run the complete default Plan 9 target matrix")
+		patterns       = flag.String("patterns", "std", "comma-separated package patterns")
+		asmFiles       = flag.String("asm-files", "", "comma-separated module-relative assembly files to exercise exactly")
+		buildTags      = flag.String("tags", "", "comma-separated Go build tags used to expose tagged assembly implementations")
+		modulePath     = flag.String("module-path", "", "only include packages owned by this module path")
+		outDir         = flag.String("out", "", "output dir for generated .ll files")
+		annotate       = flag.Bool("annotate", false, "emit source asm lines as IR comments")
+		limit          = flag.Int("limit", 0, "max number of asm files per target (0 means all)")
+		keepGoing      = flag.Bool("keep-going", true, "continue on per-file failures")
+		listOnly       = flag.Bool("list-only", false, "only print asm task list and exit")
+		compile        = flag.Bool("compile", false, "compile generated .ll to .o via llc")
+		llcPath        = flag.String("llc", "", "path to llc executable (auto-detect when empty)")
+		llcOptLevel    = flag.Int("llc-opt-level", 2, "LLVM llc optimization level (0-3)")
+		keepObj        = flag.Bool("keep-obj", false, "keep generated .o files when -compile is set")
+		strictLoad     = flag.Bool("strict-load", false, "fail when go/packages reports any package loading error")
+		reportOut      = flag.String("report", "", "optional report json path")
+		repoRoot       = flag.String("repo-root", "../..", "repo root for extracting supported instruction set")
+		featureProfile = flag.String("feature-profile", "", "explicit actual Go CPU profile and source proof (single target, ordinary external module only)")
+		featureTimeout = flag.Duration("feature-timeout", time.Hour, "deadline for the explicit feature-profile consumer")
+		metadataOnly   = flag.Bool("metadata-only", false, "private actual Go generated-header query; never translates assembly")
 	)
 	flag.Parse()
 
@@ -165,9 +177,20 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
+	if *metadataOnly && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets) {
+		fatalf("metadata-only requires one explicit ordinary profile and cannot emit translation/list/matrix evidence")
+	}
 	ccfg, err := resolveCompileConfig(*compile, *llcPath, *keepObj, *llcOptLevel)
 	if err != nil {
 		fatalf("%v", err)
+	}
+	if *featureProfile != "" {
+		if len(specs) != 1 || *featureTimeout <= 0 {
+			fatalf("explicit feature profile requires one target and a positive deadline")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *featureTimeout)
+		defer cancel()
+		ccfg.FeaturePath, ccfg.Context = *featureProfile, ctx
 	}
 
 	baseOut := *outDir
@@ -177,6 +200,14 @@ func main() {
 		} else {
 			baseOut = filepath.Join("_out", "plan9asmll")
 		}
+	}
+	if *metadataOnly {
+		metadata, err := queryGeneratedHeaders(specs[0], pats, tags, exactAsmFiles, *modulePath, baseOut, ccfg)
+		if err != nil {
+			fatalf("generated-header metadata: %v", err)
+		}
+		writeReport(*reportOut, metadata)
+		return
 	}
 
 	allReports := make([]runReport, 0, len(specs))
@@ -372,9 +403,39 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	if err != nil {
 		return runReport{}, nil, err
 	}
-	pkgs, err := loadPkgs(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, containsTestAssembly(exactAsmFiles))
+	if ccfg.FeaturePath != "" {
+		if listOnly || limit != 0 {
+			return runReport{}, nil, fmt.Errorf("feature consumer requires the complete ordinary non-test package scope")
+		}
+		ccfg.Feature, err = loadFeatureConsumer(ccfg.Context, ccfg.FeaturePath, outDir, spec.Goos+"/"+spec.Goarch, modulePath, buildTags)
+		if err != nil {
+			return runReport{}, nil, err
+		}
+		strictLoad = true
+	}
+	var pkgs []*packages.Package
+	if ccfg.Feature != nil && ccfg.Feature.Input.GeneratedHeaders != nil {
+		pkgs, err = loadGeneratedHeaderPackages(ccfg.Feature, pats, buildTags)
+	} else {
+		// Go treats _test.go specially, not similarly named assembly files.
+		// An explicit ordinary profile always loads non-test packages and
+		// proves their actual role below. Keep the legacy test-declaration
+		// lookup heuristic separate from that evidence-producing path.
+		includeTests := ccfg.Feature == nil && containsTestAssembly(exactAsmFiles)
+		pkgs, err = loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, includeTests, ccfg.Feature)
+	}
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
+	}
+	if ccfg.Feature != nil {
+		if err := ccfg.Feature.capturePackages(pkgs); err != nil {
+			return runReport{}, nil, err
+		}
+		if ccfg.Feature.Input.GeneratedHeaders != nil {
+			if err := ccfg.Feature.captureGeneratedMetadata(pkgs, buildTags, outDir); err != nil {
+				return runReport{}, nil, err
+			}
+		}
 	}
 	pkgByPath := map[string]*packages.Package{}
 	for _, p := range pkgs {
@@ -386,6 +447,20 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		}
 	}
 	tasks, asmPackages := collectAsmTasks(pkgs, outDir, exactAsmFiles)
+	if ccfg.Feature != nil {
+		var actual []string
+		for _, task := range tasks {
+			name, err := ccfg.Feature.sourceName(task.AsmFile)
+			if err != nil {
+				return runReport{}, nil, err
+			}
+			actual = append(actual, name)
+		}
+		sort.Strings(actual)
+		if len(actual) == 0 || !reflect.DeepEqual(actual, ccfg.Feature.Input.AsmFiles) {
+			return runReport{}, nil, fmt.Errorf("actual selected assembly differs from the exact profile scope")
+		}
+	}
 	if limit > 0 && limit < len(tasks) {
 		tasks = tasks[:limit]
 	}
@@ -399,6 +474,9 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		TotalPkgs:   len(asmPackages),
 		AsmPackages: asmPackages,
 		TotalAsm:    len(tasks),
+	}
+	if ccfg.Feature != nil {
+		rep.FeatureSelection = ccfg.Feature.Proof
 	}
 	for _, task := range tasks {
 		rep.AsmFiles = append(rep.AsmFiles, task.AsmFile)
@@ -479,6 +557,19 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 
 	rep.Duration = time.Since(start).String()
 	rep.UnsupportedOps = flattenUnsupportedAgg(unsupportedAgg)
+	if ccfg.Feature != nil {
+		binary, err := exec.LookPath("go")
+		if err != nil {
+			return rep, nil, err
+		}
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			return rep, nil, err
+		}
+		if err := ccfg.Feature.reobserve(binary, outDir); err != nil {
+			return rep, nil, err
+		}
+	}
 	if rep.Failed != 0 {
 		fmt.Fprintf(os.Stderr, "finished with failures: success=%d not_applicable=%d failed=%d total=%d\n", rep.Success, rep.NotApplicable, rep.Failed, rep.TotalAsm)
 	} else {
@@ -487,10 +578,53 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	return rep, nil, nil
 }
 
-func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) error {
-	src, err := readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
-	if err != nil {
-		return fmt.Errorf("read asm: %w", err)
+func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
+	defines := plan9asm.GoAssemblerDefines(goos, goarch)
+	var cppProof *featureCPPProof
+	var src []byte
+	if ccfg.Feature != nil {
+		if ccfg.Feature.Observed == nil || ccfg.Feature.Observed.Target != goos+"/"+goarch || ccfg.Feature.ID != gotoolprofile.ProfileID(ccfg.Feature.Observed) {
+			return fmt.Errorf("assembler profile identity differs from the actual compilation target")
+		}
+		macros, err := ccfg.Feature.packageMacros(pkg)
+		if err != nil {
+			return err
+		}
+		if macros.PackageRole == "allow_asm_abi_path" {
+			return fmt.Errorf("explicit ordinary CPU consumer does not cover special assembler package roles")
+		}
+		defines = macros.Defines
+		if ccfg.Feature.Proof != nil {
+			var inputs map[string]string
+			src, inputs, err = ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)
+			if err != nil {
+				return err
+			}
+			name, err := ccfg.Feature.sourceName(t.AsmFile)
+			if err != nil {
+				return err
+			}
+			cppProof = &featureCPPProof{File: name, Emission: "assembly", Inputs: inputs}
+			expandedSource := append([]byte(nil), src...)
+			defer func() {
+				afterSource, after, err := ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)
+				if err == nil && (!reflect.DeepEqual(inputs, after) || !bytes.Equal(expandedSource, afterSource)) {
+					err = fmt.Errorf("actual CPP input graph changed during translation")
+				}
+				_, macroErr := ccfg.Feature.packageMacros(pkg)
+				compileErr = errors.Join(compileErr, err, macroErr)
+			}()
+		}
+	}
+	if src == nil {
+		var err error
+		src, err = readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
+		if err != nil {
+			return fmt.Errorf("read asm: %w", err)
+		}
+	}
+	if cppProof != nil {
+		cppProof.ExpandedSHA256 = featureBytesSHA256(src)
 	}
 	imports := make(map[string]*types.Package, len(pkg.Imports))
 	for path, imported := range pkg.Imports {
@@ -503,15 +637,28 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		Types:   pkg.Types,
 		Imports: imports,
 	}, src, goarch)
-	file, err := plan9asm.ParseWithDefines(arch, string(src), plan9asm.GoAssemblerDefines(goos, goarch))
-	if err != nil {
-		if strings.Contains(err.Error(), "no TEXT directive found") {
-			return nil
-		}
-		return fmt.Errorf("parse asm: %w", err)
+	if cppProof != nil {
+		cppProof.TypedExpandedSHA256 = featureBytesSHA256(src)
+		ccfg.Feature.Proof.CPP = append(ccfg.Feature.Proof.CPP, *cppProof)
 	}
-	if len(file.Funcs) == 0 {
-		return nil
+	file, err := plan9asm.ParseWithDefines(arch, string(src), defines)
+	if err != nil {
+		if err.Error() == "no TEXT directive found" {
+			proof, err := proveEmptyAssembly(pkg, t, goos+"/"+goarch, defines, ccfg)
+			if err != nil {
+				return err
+			}
+			if cppProof != nil {
+				// The CPP entry was appended before parsing; retain the
+				// separate native emptiness witness on that exact entry.
+				ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].EmptyAssembly = proof
+				ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].Emission = "symbol_free"
+			}
+			file = &plan9asm.File{Arch: arch}
+			ccfg.emptyAssembly = proof
+		} else {
+			return fmt.Errorf("parse asm: %w", err)
+		}
 	}
 
 	resolve := resolveSymFunc(pkg.PkgPath)
@@ -580,15 +727,29 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 	ccfg compileConfig, resolve func(string) string, sigs map[string]plan9asm.FuncSig,
 ) error {
 	ctx := llvm.NewContext()
-	mod, err := plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
-		TargetTriple:   triple,
-		ResolveSym:     resolve,
-		Sigs:           sigs,
-		Goarch:         goarch,
-		WASMABI:        wasmABIForGoPackageTarget(goarch),
-		AnnotateSource: annotate,
-		X86TailGroups:  ccfg.X86TailGroups,
-	})
+	var mod llvm.Module
+	var err error
+	if ccfg.emptyAssembly != nil {
+		if ccfg.emptyAssembly.Protocol != gotoolprofile.EmptyAssemblyProtocol ||
+			len(file.Funcs) != 0 || len(file.Data) != 0 || len(file.Globl) != 0 {
+			ctx.Dispose()
+			return fmt.Errorf("symbol-free emission contradicts its native proof")
+		}
+		// Do not broaden the public translator's empty-file contract. Only
+		// this CLI's actual successful Go object/listing check grants this.
+		mod = ctx.NewModule("plan9asm-empty-assembly")
+		mod.SetTarget(triple)
+	} else {
+		mod, err = plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
+			TargetTriple:   triple,
+			ResolveSym:     resolve,
+			Sigs:           sigs,
+			Goarch:         goarch,
+			WASMABI:        wasmABIForGoPackageTarget(goarch),
+			AnnotateSource: annotate,
+			X86TailGroups:  ccfg.X86TailGroups,
+		})
+	}
 	if err != nil {
 		ctx.Dispose()
 		return fmt.Errorf("translate: %w", err)
@@ -616,6 +777,10 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 		}
 		args := llcCompileArgs(triple, goarch, t.OutLL, objPath, ccfg.OptLevel)
 		cmd := exec.Command(ccfg.LLC, args...)
+		if ccfg.Context != nil {
+			cmd = exec.CommandContext(ccfg.Context, ccfg.LLC, args...)
+			cmd.WaitDelay = 2 * time.Second
+		}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			s := strings.TrimSpace(string(out))
 			if s == "" {
@@ -627,14 +792,34 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 		if err != nil || !stat.Mode().IsRegular() || stat.Size() == 0 {
 			return fmt.Errorf("llc did not produce a nonempty object %s: %v", objPath, err)
 		}
+		if ccfg.Feature != nil && ccfg.Feature.Proof != nil {
+			object, err := gotoolprofile.FileSHA256(objPath)
+			if err != nil {
+				return err
+			}
+			name, err := ccfg.Feature.sourceName(t.AsmFile)
+			if err != nil {
+				return err
+			}
+			ccfg.Feature.Proof.Outputs = append(ccfg.Feature.Proof.Outputs, featureOutputProof{File: name, Part: filepath.Base(t.OutLL), IR: featureBytesSHA256([]byte(ll)), Object: object})
+		}
 		if !ccfg.KeepObj {
 			if err := os.Remove(objPath); err != nil {
 				return fmt.Errorf("remove generated object: %w", err)
 			}
 		}
 	}
+	if !ccfg.Enabled && ccfg.Feature != nil && ccfg.Feature.Proof != nil {
+		name, err := ccfg.Feature.sourceName(t.AsmFile)
+		if err != nil {
+			return err
+		}
+		ccfg.Feature.Proof.Outputs = append(ccfg.Feature.Proof.Outputs, featureOutputProof{File: name, Part: filepath.Base(t.OutLL), IR: featureBytesSHA256([]byte(ll))})
+	}
 	return nil
 }
+
+func featureBytesSHA256(data []byte) string { return fmt.Sprintf("%x", sha256.Sum256(data)) }
 
 func llcCompileArgs(triple, goarch, input, output string, optLevel int) []string {
 	args := []string{"-mtriple=" + triple, fmt.Sprintf("-O%d", optLevel)}
@@ -686,6 +871,10 @@ func llcExtraArgs(goarch string) []string {
 }
 
 func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath string, strict, includeTests bool) ([]*packages.Package, error) {
+	return loadPkgsForFeature(goos, goarch, patterns, buildTags, modulePath, strict, includeTests, nil)
+}
+
+func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modulePath string, strict, includeTests bool, feature *featureConsumer) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
@@ -700,8 +889,15 @@ func loadPkgs(goos, goarch string, patterns, buildTags []string, modulePath stri
 		),
 		Tests: includeTests,
 	}
+	if feature != nil {
+		cfg.Context, cfg.Env, cfg.Dir = feature.Context, feature.Env, feature.WorkDir
+		cfg.Mode |= packages.NeedCompiledGoFiles
+		// The producer's export/vet gates use this explicit module mode too.
+		// Do not pass it through GOFLAGS, where it could hide selection tags.
+		cfg.BuildFlags = append(cfg.BuildFlags, "-mod=mod")
+	}
 	if len(buildTags) != 0 {
-		cfg.BuildFlags = []string{"-tags=" + strings.Join(buildTags, ",")}
+		cfg.BuildFlags = append(cfg.BuildFlags, "-tags="+strings.Join(buildTags, ","))
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
@@ -1003,7 +1199,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if resolved == "" {
 			continue
 		}
-		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, argSize, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, strings.HasSuffix(fn.Sym, "<ABIInternal>"))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1050,16 +1246,26 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		}
 	}
 
+	var targetSigErr error
 	addTargetSig := func(sym string, caller plan9asm.FuncSig, tail bool) {
 		if sym == "" {
 			return
 		}
+		internal := goarch == "arm64" && strings.HasSuffix(sym, "<ABIInternal>")
 		sym = stripABISuffix(sym)
 		resolved := resolve(sym)
 		if resolved == "" {
 			return
 		}
-		if _, ok := sigs[resolved]; ok {
+		if existing, ok := sigs[resolved]; ok {
+			if internal && declaredSigs[resolved] && existing.ARM64GoRegisterABI == nil {
+				fs, _, _, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, true)
+				if err != nil {
+					targetSigErr = err
+				} else {
+					sigs[resolved] = fs
+				}
+			}
 			return
 		}
 		if goarch == "wasm" {
@@ -1069,7 +1275,11 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 				return
 			}
 		}
-		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz)
+		fs, _, ok, err := tryDeclSig(scope, sym, resolved, linknames, goarch, sz, internal)
+		if internal && err != nil {
+			targetSigErr = err
+			return
+		}
 		if err == nil && ok {
 			sigs[resolved] = fs
 			declaredSigs[resolved] = true
@@ -1079,6 +1289,7 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 		if tail && caller.Name != "" {
 			copySig := caller
 			copySig.Name = resolved
+			copySig.ARM64GoRegisterABI = nil
 			sigs[resolved] = copySig
 			return
 		}
@@ -1113,10 +1324,15 @@ func sigsForAsmFile(pkg *packages.Package, file *plan9asm.File, resolve func(str
 			if tail && declaredSigs[callerResolved] && fallbackAsmSigs[targetResolved] {
 				candidate := caller
 				candidate.Name = targetResolved
+				candidate.ARM64GoRegisterABI = nil
 				declaredTailCallers[targetResolved] = append(declaredTailCallers[targetResolved], candidate)
 				declaredTailCallerFuncs[targetResolved] = append(declaredTailCallerFuncs[targetResolved], fn)
 			}
 		}
+	}
+
+	if targetSigErr != nil {
+		return nil, nil, targetSigErr
 	}
 
 	// A declaration-free local helper reached only through tail transfers from
@@ -1226,13 +1442,17 @@ func validateDeclaredTextArgSizes(file *plan9asm.File, resolve func(string) stri
 		// declaration-backed functions whose arguments are supplied by ABI
 		// wrappers or intentionally unused (for example runtime.procyieldAsm
 		// and exitThread on wasm). The assembler treats that zero as a legacy
-		// wildcard, so only a non-zero conflicting size proves incompatibility.
+		// wildcard. A nonzero size must match either the declared data end or
+		// the ABI0 allocation; trailing alignment does not create FP slots.
 		if fn.ArgSize == 0 {
 			continue
 		}
 		resolved := resolve(stripABISuffix(fn.Sym))
 		expected, ok := declaredArgSizes[resolved]
 		if !ok || fn.ArgSize == expected {
+			continue
+		}
+		if !strings.Contains(fn.Sym, "<ABIInternal>") && goabi.MatchesABI0TextSize(goarch, fn.ArgSize, expected) {
 			continue
 		}
 		return &asmABINotApplicableError{
@@ -1264,6 +1484,11 @@ func hasExplicitTextArgSize(fn plan9asm.Func) bool {
 }
 
 func fallbackSigForAsmFunc(fn plan9asm.Func, resolved, goarch string) plan9asm.FuncSig {
+	if goarch == "arm" {
+		if native, ok := plan9asm.ARMKernelHelperFuncSig(fn, resolved); ok {
+			return native
+		}
+	}
 	paramOff := map[int64]struct{}{}
 	retOff := map[int64]struct{}{}
 
@@ -1352,7 +1577,7 @@ func sortOffsets(m map[int64]struct{}) []int64 {
 	return out
 }
 
-func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes) (plan9asm.FuncSig, int64, bool, error) {
+func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]string, goarch string, sz types.Sizes, internal ...bool) (plan9asm.FuncSig, int64, bool, error) {
 	declName := strings.TrimPrefix(sym, "·")
 	if strings.ContainsRune(declName, '·') {
 		key := strings.ReplaceAll(sym, "∕", "/")
@@ -1400,7 +1625,7 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 		return plan9asm.FuncSig{}, 0, false, fmt.Errorf("%s: %w", fn.FullName(), err)
 	}
 	ret := tupleRetType(retTys)
-	return plan9asm.FuncSig{
+	fs := plan9asm.FuncSig{
 		Name: resolved,
 		Args: args,
 		Ret:  ret,
@@ -1408,7 +1633,14 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 			Params:  frameParams,
 			Results: frameResults,
 		},
-	}, argSize, true, nil
+	}
+	if goarch == "arm64" && len(internal) != 0 && internal[0] {
+		fs.ARM64GoRegisterABI, err = plan9asm.DeriveARM64GoRegisterABI(fn, fs)
+		if err != nil {
+			return plan9asm.FuncSig{}, 0, false, err
+		}
+	}
+	return fs, argSize, true, nil
 }
 
 func tupleRetType(ts []plan9asm.LLVMType) plan9asm.LLVMType {
@@ -1427,19 +1659,7 @@ func tupleRetType(ts []plan9asm.LLVMType) plan9asm.LLVMType {
 }
 
 func splitSymPlusOff(s string) (base string, off int64) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return "", 0
-	}
-	sep := strings.LastIndexAny(s, "+-")
-	if sep <= 0 || sep == len(s)-1 {
-		return s, 0
-	}
-	n, err := strconv.ParseInt(strings.TrimSpace(s[sep:]), 0, 64)
-	if err != nil {
-		return s, 0
-	}
-	return strings.TrimSpace(s[:sep]), n
+	return plan9asm.SplitSymbolOffset(s)
 }
 
 func linknameRemoteToLocal(files []*ast.File) map[string]string {

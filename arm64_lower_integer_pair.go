@@ -38,29 +38,48 @@ func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated 
 			return true, false, fmt.Errorf("arm64 %s expects a pair of general registers: %q", op, ins.Raw)
 		}
 	}
-	if memory.Kind == OpFP {
-		if op != "LDP" || preIndex || postIndex {
-			return true, false, fmt.Errorf("arm64 %s does not support this FP-relative pair form: %q", op, ins.Raw)
-		}
-		// Preserve the established ABI-frame behavior: the first register
-		// receives the modeled frame slot and the unavailable adjacent slot is
-		// materialized as zero.
-		value, err := c.eval64(memory, false)
-		if err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(pair.RegList[0], value); err != nil {
-			return true, false, err
-		}
-		return true, false, c.storeReg(pair.RegList[1], "0")
-	}
-	ptr, base, increment, update, err := c.arm64IntegerPairPointer(memory, preIndex, postIndex)
-	if err != nil {
-		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
+	if load && pair.RegList[0] == pair.RegList[1] {
+		return true, false, fmt.Errorf("arm64 %s requires distinct destination registers: %q", op, ins.Raw)
 	}
 	elementBytes := 8
 	if op == "LDPW" || op == "LDPSW" || op == "STPW" {
 		elementBytes = 4
+	}
+	if memory.Kind == OpFP {
+		if preIndex || postIndex {
+			return true, false, fmt.Errorf("arm64 %s does not support this FP-relative pair form: %q", op, ins.Raw)
+		}
+		if _, err := c.fpFrameParts(memory.FPOffset, int64(elementBytes*2)); err != nil {
+			return true, false, err
+		}
+		for index, reg := range pair.RegList {
+			off := memory.FPOffset + int64(index*elementBytes)
+			if load {
+				value, err := c.loadFPFrameBits(off, int64(elementBytes))
+				if err != nil {
+					return true, false, err
+				}
+				if op == "LDPSW" {
+					value = c.arm64ExtendNarrow(value, 32, true)
+				}
+				if err := c.storeReg(reg, value); err != nil {
+					return true, false, err
+				}
+			} else {
+				value, err := c.loadReg(reg)
+				if err != nil {
+					return true, false, err
+				}
+				if err := c.storeFPFrameBits(off, int64(elementBytes), value); err != nil {
+					return true, false, err
+				}
+			}
+		}
+		return true, false, nil
+	}
+	ptr, base, increment, update, err := c.arm64IntegerPairPointer(memory, preIndex, postIndex)
+	if err != nil {
+		return true, false, fmt.Errorf("arm64 %s: %w: %q", op, err, ins.Raw)
 	}
 	for index, reg := range pair.RegList {
 		elementPtr := ptr

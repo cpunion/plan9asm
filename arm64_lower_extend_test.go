@@ -56,6 +56,10 @@ func TestTranslateARM64ScalarExtendRejectsFormsOutsideGoAssemblerTable(t *testin
 		"SXTWW R0, R1",
 		"UXTWW R0, R1",
 		"SXTB.P R0, R1",
+		"UXTB F0, R1",
+		"SXTH R0, F1",
+		"UXTW RSP, R1",
+		"SXTW R0, RSP",
 	} {
 		t.Run(strings.ReplaceAll(instruction, " ", "_"), func(t *testing.T) {
 			src := "TEXT ·badScalarExtend(SB), $0-0\n\t" + instruction + "\n\tRET\n"

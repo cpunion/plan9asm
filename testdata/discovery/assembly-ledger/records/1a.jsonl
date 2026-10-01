@@ -10,6 +10,7 @@
 {"module":"github.com/loinfish/truechain-engineering-code","version":"v2.1.4+incompatible","status":"pending"}
 {"module":"github.com/mimusic-org/wazero","version":"v1.11.1-mimusic","status":"pending"}
 {"module":"github.com/mmcloughlin/pearl","version":"v0.0.0-20200201204240-15325b8b9c93","status":"pending"}
+{"module":"github.com/pydio/minio","version":"v0.0.0-20251127102432-d3b575770589","status":"pending"}
 {"module":"github.com/samuel/go-dsp","version":"v0.0.0-20260920164338-3b9183961423","status":"pending"}
 {"module":"github.com/second-state/go-ethereum","version":"v1.9.7","status":"pending"}
 {"module":"github.com/sillyousu/goid","version":"v0.0.0-20170828045124-4c1c17f636f6","status":"pending"}

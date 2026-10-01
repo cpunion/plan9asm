@@ -423,13 +423,12 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 	for _, arg := range ins.Args {
+		if err := unresolvedSymbolicImmediateError(arg); err != nil {
+			return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
+		}
 		switch arg.Kind {
 		case OpFP, OpFPAddr:
 			return fmt.Errorf("%w: %s uses an FP frame slot", ErrProbeNeedsContext, ins.Raw)
-		case OpImm:
-			if arg.ImmRaw != "" {
-				return fmt.Errorf("%w: %s uses a symbolic immediate", ErrProbeNeedsContext, ins.Raw)
-			}
 		case OpMem:
 			if arg.Mem.Base == PC {
 				return fmt.Errorf("%w: %s uses a PC-relative target", ErrProbeNeedsContext, ins.Raw)
@@ -445,7 +444,20 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 
-	err := probeInstructionSequence(arch, goarch, []Instr{ins})
+	instrs := []Instr{ins}
+	op, _, _, _ := armDecodeOp(string(ins.Op))
+	if arch == ArchARM && (op == "ADC" || op == "SBC" || op == "RSC") {
+		// A single-form coverage fixture may supply the ordinary implicit
+		// carry-family input with real source. CMP preserves every GPR
+		// and defines all NZCV bits, unlike invented entry flag slots.
+		// Do not apply this to other native predicates, a CPSR read, or full
+		// source sequences, which retain their independently checked context.
+		instrs = append([]Instr{{
+			Op: "CMP", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpReg, Reg: "R0"}},
+			Raw: "CMP R0,R0 // explicit single-instruction probe flags fixture",
+		}}, instrs...)
+	}
+	err := probeInstructionSequence(arch, goarch, instrs)
 	if arch == ArchARM && ins.Op == OpWORD && err != nil {
 		return fmt.Errorf("%w: %s requires surrounding instruction, register, and control-flow state: %v", ErrProbeNeedsContext, ins.Raw, err)
 	}
@@ -475,6 +487,9 @@ func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 	}
 	for _, ins := range instrs {
 		for _, arg := range ins.Args {
+			if err := unresolvedSymbolicImmediateError(arg); err != nil {
+				return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
+			}
 			if arg.Kind == OpLabel {
 				labels[arg.Sym] = struct{}{}
 				if ins.Op == OpLABEL {
@@ -493,7 +508,16 @@ func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 		}
 		fn.Instrs = append(fn.Instrs, Instr{Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: label}}, Raw: label + ":"})
 	}
-	fn.Instrs = append(fn.Instrs, Instr{Op: OpRET, Raw: "RET"})
+	exit := Instr{Op: OpRET, Raw: "RET"}
+	if arch == ArchARM64 {
+		// Isolated data may overwrite LR or SP. A synthetic caller RET
+		// would incorrectly require that data to preserve return state.
+		// This compile-only harness ends with a real faulting zero branch;
+		// it is never executed or counted as runtime conformance. Original
+		// control instructions retain all their ABI and target checks.
+		exit = Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: ZR}}}, Raw: "B (ZR)"}
+	}
+	fn.Instrs = append(fn.Instrs, exit)
 	file := &File{Arch: arch, Funcs: []Func{fn}}
 	triple := ""
 	switch goarch {

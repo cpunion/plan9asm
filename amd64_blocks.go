@@ -126,8 +126,15 @@ func amd64SplitBlocks(fn Func) []amd64Block {
 }
 
 func amd64LLVMBlockName(src string) string {
+	return "bb_" + amd64LLVMSafeName(src)
+}
+
+// Keep block names in a namespace distinct from SSA temporaries and register
+// allocas. Go permits local labels such as x1 and t1, which otherwise collide
+// with the translator's %x1 and %t1 values in LLVM IR.
+func amd64LLVMSafeName(src string) string {
 	if src == "" {
-		return "bb"
+		return "empty"
 	}
 	var out []byte
 	for i := 0; i < len(src); i++ {
@@ -137,16 +144,15 @@ func amd64LLVMBlockName(src string) string {
 			continue
 		}
 		out = append(out, '_')
+		out = append(out, "0123456789abcdef"[ch>>4])
+		out = append(out, "0123456789abcdef"[ch&0xf])
 	}
 	s := string(out)
 	if s == "" {
-		return "bb"
+		return "empty"
 	}
 	if s[0] >= '0' && s[0] <= '9' {
-		s = "bb_" + s
-	}
-	if s == "entry" {
-		s = "bb_entry"
+		s = "n_" + s
 	}
 	return s
 }

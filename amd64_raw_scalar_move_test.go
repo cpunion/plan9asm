@@ -53,15 +53,7 @@ func TestDecodeX86RawScalarMoveCompleteGoForms(t *testing.T) {
 			t.Fatalf("instruction %d decoded %+v, want %+v", i, ins, want[i])
 		}
 	}
-	var raw strings.Builder
-	raw.WriteString("TEXT scalarmoves(SB),4,$0-0\n")
-	for _, b := range code {
-		fmt.Fprintf(&raw, "BYTE $%#02x\n", b)
-	}
-	rawFile, err := Parse(ArchAMD64, raw.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	rawFile := x86RawUnprovedReturnFormProbeFile(t, "amd64", "scalarmoves", code)
 	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
 		ir, err := Translate(rawFile, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{"scalarmoves": {Name: "scalarmoves", Ret: Void}}})
 		if err != nil {

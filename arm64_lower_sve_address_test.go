@@ -21,12 +21,14 @@ func encodeARM64RawSVEAddress(op Op, immediate, source, destination int) uint32 
 func TestTranslateARM64SVEAddressCompleteGo127Forms(t *testing.T) {
 	const named = `
 TEXT sveaddressnamed(SB),$0-0
+	MOVD RSP,R25
 	ADDVL $-32, R0, R1
 	ADDVL $31, RSP, RSP
 	ADDPL $-32, R2, R3
 	ADDPL $31, RSP, R4
 	RDVL $-32, R5
 	RDVL $31, R6
+	MOVD R25,RSP
 	RET
 `
 	var raw strings.Builder

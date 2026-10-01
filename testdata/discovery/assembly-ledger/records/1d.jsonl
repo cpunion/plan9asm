@@ -4,7 +4,9 @@
 {"module":"github.com/YoohPH/xray-core","version":"v0.0.0-20260609155802-e10347bf01f2","status":"pending"}
 {"module":"github.com/abacusaix/websocket","version":"v0.0.0-20260311172538-d099e1621e8d","status":"pending"}
 {"module":"github.com/arsham6ix/xray-core","version":"v1.1.6","status":"pending"}
+{"module":"github.com/blockcypher/go-ethereum","version":"v1.16.7","status":"pending"}
 {"module":"github.com/bobjustfry/xray-core","version":"v0.0.0-20260425212042-3bc24a3d5d0f","status":"pending"}
+{"module":"github.com/crandles/ristretto/v2","version":"v2.0.0-20260121220411-402101df6c69","status":"pending"}
 {"module":"github.com/cube-network/Cube","version":"v1.1.0","status":"pending"}
 {"module":"github.com/f1uddy/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/fynnss/bsc","version":"v0.0.0-20260325092946-ce498e9d873b","status":"pending"}
@@ -19,3 +21,4 @@
 {"module":"github.com/sila-chain/go-sila","version":"v1.17.3","status":"pending"}
 {"module":"github.com/stagnation/bb-storage","version":"v0.0.0-20230804153757-d2663dc3d79c","status":"pending"}
 {"module":"github.com/trainyao/mosn","version":"v0.0.0-20200121031005-2f216954b5bf","status":"pending"}
+{"module":"github.com/yaozengzeng/yustack","version":"v0.0.0-20171221121925-7ea8bc4542e7","status":"pending"}

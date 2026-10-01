@@ -632,7 +632,11 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("LEAQ", Instr{Raw: "LEAQ 8(BX)(CX*2), DI", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Index: CX, Scale: 2, Off: 8}}, {Kind: OpReg, Reg: DI}}})
 	mustLower("LEAL", Instr{Raw: "LEAL 4(BX), SI", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 4}}, {Kind: OpReg, Reg: SI}}})
 	mustLower("LEAQ", Instr{Raw: "LEAQ ret+16(FP), R8", Args: []Operand{{Kind: OpFP, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R8")}}})
-	mustLower("LEAQ", Instr{Raw: "LEAQ $ret+16(FP), R9", Args: []Operand{{Kind: OpFPAddr, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R9")}}})
+	// TYPE_ADDR is not Go's LEA Ym source; retain the former false-positive
+	// spelling as a rejection, independently checked by the full LEA oracle.
+	if _, _, err := c.lowerArith("LEAQ", Instr{Raw: "LEAQ $ret+16(FP), R9", Args: []Operand{{Kind: OpFPAddr, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R9")}}}); err == nil {
+		t.Fatal("LEAQ accepted a TYPE_ADDR operand outside Go's Ym/Yrl row")
+	}
 	mustLower("LEAQ", Instr{Raw: "LEAQ global<>(SB), AX", Args: []Operand{{Kind: OpSym, Sym: "global<>(SB)"}, {Kind: OpReg, Reg: AX}}})
 	mustLower("POPCNTL", Instr{Raw: "POPCNTL AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	mustLower("POPCNTQ", Instr{Raw: "POPCNTQ AX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: CX}}})
@@ -1343,7 +1347,7 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	check("CMPQ", Instr{Raw: "CMPQ example.global(SB), SI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: SI}}})
 	check("TESTB", Instr{Raw: "TESTB AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	check("TESTW", Instr{Raw: "TESTW $7, arg+0(FP)", Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpFP, FPOffset: 0}}})
-	check("TESTL", Instr{Raw: "TESTL $const, 8(BX)", Args: []Operand{{Kind: OpSym, Sym: "$const"}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}}})
+	check("TESTL", Instr{Raw: "TESTL $7, 8(BX)", Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}}})
 	check("TESTQ", Instr{Raw: "TESTQ example.global(SB), DI", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: DI}}})
 	check("BTQ", Instr{Raw: "BTQ $3, AX", Args: []Operand{{Kind: OpImm, Imm: 3}, {Kind: OpReg, Reg: AX}}})
 	check("BTSQ", Instr{Raw: "BTSQ DX, AX", Args: []Operand{{Kind: OpReg, Reg: DX}, {Kind: OpReg, Reg: AX}}})
@@ -1368,8 +1372,8 @@ func TestAMD64CmpBtCoverage(t *testing.T) {
 	if _, _, err := c.lowerCmpBt("BTRQ", Instr{Raw: "BTRQ AX", Args: []Operand{{Kind: OpReg, Reg: AX}}}); err == nil {
 		t.Fatalf("short BTRQ unexpectedly succeeded")
 	}
-	if got, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$const"}, I32); err != nil || got != "0" {
-		t.Fatalf("evalIntSized($const) = (%q, %v)", got, err)
+	if _, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "$const"}, I32); err == nil {
+		t.Fatal("evalIntSized($const) invented a value for an unresolved constant")
 	}
 	if _, err := c.evalIntSized(Operand{Kind: OpSym, Sym: "bad"}, I32); err == nil {
 		t.Fatalf("evalIntSized(bad sym) unexpectedly succeeded")
@@ -1684,7 +1688,7 @@ func TestAMD64BranchCoverageDeep(t *testing.T) {
 		"or i1",
 		"call i64 @\"example.tail\"",
 		"ret i64",
-		"br label %V1",
+		"br label %" + amd64LLVMBlockName("V1"),
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)

@@ -8,6 +8,7 @@ import (
 func TestTranslateARM64PCRelativeAddressCompleteGoAssemblerForms(t *testing.T) {
 	const source = `
 TEXT pcRelativeAddressForms(SB),$0-0
+	MOVD R30, R19
 	ADR target, R0
 	ADRP target, R1
 	ADR -2(PC), R2
@@ -17,6 +18,7 @@ TEXT pcRelativeAddressForms(SB),$0-0
 	ADR target, ZR
 	ADRP target, ZR
 target:
+	MOVD R19, R30
 	RET
 `
 	requireARM64GoAssemblerResult(t, source, true)

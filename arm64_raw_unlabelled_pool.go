@@ -18,6 +18,7 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 	if end > 0 && fn.Instrs[end-1].Op == OpRET {
 		end--
 	}
+	sourceReturn := end < len(fn.Instrs) && len(fn.Instrs[end].Args) == 0
 	start := end
 	for start > 0 && arm64RawLiteralWord(fn.Instrs[start-1]) {
 		start--
@@ -44,6 +45,13 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 		at := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
 		if visited[at] {
+			continue
+		}
+		if at == end && sourceReturn {
+			// A raw branch may cross the appended data to the ordinary
+			// source RET. Preserve its Go auto-epilogue rather than require
+			// an unsafe hardware RET before the pool. No other boundary or
+			// register-return contract is inferred here.
 			continue
 		}
 		if at < start || at >= end {
@@ -324,6 +332,16 @@ func arm64RawAddressOnlyLoadedWithinPool(instructions []Instr, at, end int, retu
 			next(i + 1)
 			continue
 		}
+		if row, ok := arm64RawPoolContiguousLoad(word); ok &&
+			(int(word>>5)&31 == int(register-arm64asm.X0) ||
+				row.address == arm64SVELoadRegister && int(word>>16)&31 == int(register-arm64asm.X0)) {
+			if !bounds.contiguousScalableLoadInBounds(i, word, row) {
+				return false
+			}
+			loaded = true
+			next(i + 1)
+			continue
+		}
 		// x/arch does not decode SVE. Consult validated typed grammars for
 		// vector-only effects and explicit unrelated scalar/memory operands.
 		// Unknown effects and any use of this address still fail below.
@@ -480,6 +498,12 @@ func arm64RawPoolReadOnlyLoad(op arm64asm.Op) bool {
 }
 
 func arm64RawPoolIndependentSVE(word uint32) bool {
+	if effects, ok := arm64RawSVEEffects(word); ok {
+		return effects.gpReads == 0 && effects.gpWrites == 0 && !effects.accesses
+	}
+	if form, ok := decodeARM64RawSVECnt(word); ok && form.vector {
+		return true
+	}
 	if _, ok := decodeARM64RawSVEPTrue(word); ok {
 		return true
 	}
@@ -513,34 +537,6 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	if _, ok := decodeARM64RawSVEIntegerAddReduction(word); ok {
 		return true // Scalar result is a V register, not a GP destination.
 	}
-	for _, decode := range []func(uint32) (Instr, bool){
-		decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare,
-		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
-		decodeARM64RawSVEFloatUnary, decodeARM64RawSVEFloatCompare,
-		decodeARM64RawSVEFloatMinMax, decodeARM64RawSVEFloatImmediate,
-		decodeARM64RawSVEFloatMultiplyAccumulate, decodeARM64RawSVEFloatDivideScale,
-		decodeARM64RawSVEConvert,
-		decodeARM64RawSVEUnpack,
-		decodeARM64RawSVEMultiplyAccumulate,
-		decodeARM64RawSVEIntegerReduction,
-		decodeARM64RawSVEDupM,
-		decodeARM64RawSVEExtraShift, decodeARM64RawSVECopy,
-		decodeARM64RawSVEMOVPRFX,
-		decodeARM64RawSVEPredicateLogical,
-	} {
-		if ins, ok := decode(word); ok {
-			for _, operand := range ins.Args {
-				if operand.Kind == OpImm {
-					continue
-				}
-				if operand.Kind != OpReg || !(strings.HasPrefix(string(operand.Reg), "Z") ||
-					strings.HasPrefix(string(operand.Reg), "P") || strings.HasPrefix(string(operand.Reg), "V")) {
-					return false
-				}
-			}
-			return true
-		}
-	}
 	return false
 }
 
@@ -549,14 +545,26 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 // the proof rejects every earlier copy/escape of that address. Do not extend
 // this to exclusive/first-fault operations with hidden architectural state.
 func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
+	if effects, ok := arm64RawSVEEffects(word); ok {
+		return address < 0 || address < 32 && effects.gpReads&(1<<uint(address)) == 0
+	}
 	if arm64RawPoolIndependentSVE(word) {
 		return true
+	}
+	if ins, ok := decodeARM64RawSVECopy(word); ok && arm64SVECopyGeneralRegister(ins.Args[0]) {
+		// A GP/SP copy writes only a vector, but copying this pool address
+		// into that vector would expose a relocation-dependent numeric value.
+		return int(word>>5)&31 != address
+	}
+	if row, ok := arm64RawPoolContiguousLoad(word); ok {
+		return int(word>>5)&31 != address &&
+			(row.address != arm64SVELoadRegister || int(word>>16)&31 != address)
 	}
 	if form, ok := decodeARM64RawSVELoadStore(word); ok {
 		return form.base != address
 	}
-	if form, ok := decodeARM64RawSVEWhileLO(word); ok && word&(1<<4) == 0 {
-		return form.first != address && form.second != address
+	if _, ok := decodeARM64RawSVEWhile(word); ok {
+		return int(word>>5&31) != address && int(word>>16&31) != address
 	}
 	if form, ok := decodeARM64RawSVEDupGeneral(word); ok {
 		return form.source != address

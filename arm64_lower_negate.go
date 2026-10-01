@@ -144,6 +144,7 @@ func (c *arm64Ctx) lowerNegateWithCarry(op string, word, setFlags bool, ins Inst
 	carry := c.newTmp()
 	borrow := c.newTmp()
 	wideBorrow := c.newTmp()
+	c.recordMachineRegister(Reg(c.flagsCSlot), 1, false)
 	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", carry, c.flagsCSlot)
 	fmt.Fprintf(c.b, "  %%%s = xor i1 %%%s, true\n", borrow, carry)
 	fmt.Fprintf(c.b, "  %%%s = zext i1 %%%s to %s\n", wideBorrow, borrow, wideType)

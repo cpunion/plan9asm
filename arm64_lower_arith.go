@@ -42,17 +42,18 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 
 	case "MRS":
 		// MRS <sysreg>, Rn
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg {
+		if ins.Op != "MRS" || len(ins.Args) != 2 || ins.Args[0].Kind != OpIdent || ins.Args[1].Kind != OpReg ||
+			!isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
 			return true, false, fmt.Errorf("arm64 MRS expects ident, reg: %q", ins.Raw)
 		}
-		sysreg := arm64CanonicalSysReg(ins.Args[0].Ident)
-		dst := ins.Args[1].Reg
-		if v, ok := arm64CompileSafeMRSValue(sysreg); ok {
-			return true, false, c.storeReg(dst, v)
+		sysreg, err := arm64CheckedSystemRegister(ins.Args[0].Ident, true)
+		if err != nil {
+			return true, false, err
 		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect %q, %q()\n", t, "mrs $0, "+sysreg, "=r,~{memory}")
-		return true, false, c.storeReg(dst, "%"+t)
+		dst := ins.Args[1].Reg
+		spec, known := arm64GoSystemRegisters[ins.Args[0].Ident]
+		value := c.emitARM64SystemRegisterRead(sysreg, spec.encoding, known, dst)
+		return true, false, c.storeReg(dst, value)
 
 	case "MSR":
 		// MSR src, <sysreg>
@@ -80,6 +81,8 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 				// writes, including SPSel and DIT, not as a PSTATE immediate.
 				if field != "" {
 					sysreg = field
+				} else if _, err := arm64CheckedSystemRegister(name, false); err != nil {
+					return true, false, err
 				}
 				fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", "msr "+sysreg+", xzr", "~{memory}")
 				return true, false, nil
@@ -92,6 +95,10 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		case OpReg:
 			if strings.EqualFold(name, "DAIFSet") || strings.EqualFold(name, "DAIFClr") {
 				return true, false, fmt.Errorf("arm64 MSR register source is not a Go PSTATE field form: %q", ins.Raw)
+			}
+			sysreg, err := arm64CheckedSystemRegister(name, false)
+			if err != nil {
+				return true, false, err
 			}
 			v, err := c.loadReg(ins.Args[0].Reg)
 			if err != nil {
@@ -1250,13 +1257,23 @@ func (c *arm64Ctx) lowerBitfield(op Op, ins Instr) error {
 		return fmt.Errorf("arm64 %s invalid range lsb=%d width=%d for %d-bit form: %q", op, lsb, width, bits, ins.Raw)
 	}
 
-	src64, err := c.loadReg(ins.Args[1].Reg)
+	// Only insert forms preserve destination bits. Extracts consume their
+	// selected source field without reading the old destination value.
+	sourceBits := lsb + width
+	insert := strings.HasPrefix(string(op), "BFI") || strings.HasPrefix(string(op), "BFXIL")
+	if strings.HasPrefix(string(op), "BFI") || strings.HasPrefix(string(op), "UBFIZ") || strings.HasPrefix(string(op), "SBFIZ") {
+		sourceBits = width
+	}
+	src64, err := c.loadRegisterWidth(ins.Args[1].Reg, int(sourceBits))
 	if err != nil {
 		return err
 	}
-	dst64, err := c.loadReg(ins.Args[3].Reg)
-	if err != nil {
-		return err
+	dst64 := "0"
+	if insert {
+		dst64, err = c.loadRegisterWidth(ins.Args[3].Reg, int(bits))
+		if err != nil {
+			return err
+		}
 	}
 	typeName := "i64"
 	src, dst := src64, dst64
@@ -1386,23 +1403,8 @@ func arm64IntConstant(typeName string, value uint64) int64 {
 }
 
 func arm64CanonicalSysReg(name string) string {
-	switch name {
-	case "DIT":
-		// LLVM inline-asm parser on current toolchains does not accept the DIT
-		// alias directly; use its canonical system-register encoding name.
-		return "S3_3_C4_C2_5"
-	default:
-		return name
+	if spec, ok := arm64GoSystemRegisters[name]; ok {
+		return arm64EncodedSystemRegisterName(spec.encoding)
 	}
-}
-
-func arm64CompileSafeMRSValue(sysreg string) (string, bool) {
-	switch sysreg {
-	case "ID_AA64ISAR0_EL1", "ID_AA64PFR0_EL1", "ID_AA64ZFR0_EL1", "MIDR_EL1":
-		// LLVM 19's inline-asm parser lags behind newer arm64 feature register names.
-		// For compile-only corpus coverage, return a conservative zero value.
-		return "0", true
-	default:
-		return "", false
-	}
+	return name
 }

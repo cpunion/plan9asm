@@ -75,21 +75,23 @@ func (c *armCtx) loadMem(mem MemRef, bits int, postInc bool, signed bool) (strin
 func (c *armCtx) loadMemAddress(addr string, bits int, signed bool) (string, error) {
 	pt := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %s to ptr\n", pt, addr)
-	ptr := "%" + pt
+	return c.loadMemoryPointer("%"+pt, bits, signed)
+}
 
+func (c *armCtx) loadMemoryPointer(ptr string, bits int, signed bool) (string, error) {
 	var out string
 	switch bits {
 	case 64:
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 1\n", t, ptr)
 		out = "%" + t
 	case 32:
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  %%%s = load i32, ptr %s, align 1\n", t, ptr)
 		out = "%" + t
 	case 16:
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s, align 1\n", t, ptr)
 		e := c.newTmp()
 		if signed {
 			fmt.Fprintf(c.b, "  %%%s = sext i16 %%%s to i32\n", e, t)
@@ -99,7 +101,7 @@ func (c *armCtx) loadMemAddress(addr string, bits int, signed bool) (string, err
 		out = "%" + e
 	case 8:
 		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i8, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  %%%s = load i8, ptr %s, align 1\n", t, ptr)
 		e := c.newTmp()
 		if signed {
 			fmt.Fprintf(c.b, "  %%%s = sext i8 %%%s to i32\n", e, t)
@@ -127,20 +129,23 @@ func (c *armCtx) storeMem(mem MemRef, bits int, postInc bool, v32 string) error 
 func (c *armCtx) storeMemAddress(addr string, bits int, v32 string) error {
 	pt := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = inttoptr i32 %s to ptr\n", pt, addr)
-	ptr := "%" + pt
+	return c.storeMemoryPointer("%"+pt, bits, v32)
+}
+
+func (c *armCtx) storeMemoryPointer(ptr string, bits int, v32 string) error {
 	switch bits {
 	case 64:
-		fmt.Fprintf(c.b, "  store i64 %s, ptr %s\n", v32, ptr)
+		fmt.Fprintf(c.b, "  store i64 %s, ptr %s, align 1\n", v32, ptr)
 	case 32:
-		fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v32, ptr)
+		fmt.Fprintf(c.b, "  store i32 %s, ptr %s, align 1\n", v32, ptr)
 	case 16:
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i16\n", t, v32)
-		fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s, align 1\n", t, ptr)
 	case 8:
 		t := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = trunc i32 %s to i8\n", t, v32)
-		fmt.Fprintf(c.b, "  store i8 %%%s, ptr %s\n", t, ptr)
+		fmt.Fprintf(c.b, "  store i8 %%%s, ptr %s, align 1\n", t, ptr)
 	default:
 		return fmt.Errorf("arm: unsupported store bits %d", bits)
 	}
@@ -187,46 +192,29 @@ func (c *armCtx) eval32(op Operand, postInc bool) (string, error) {
 		t := c.newTmp()
 		switch strings.ToUpper(op.Ident) {
 		case "CPSR":
+			if c.machineState != "" {
+				return c.statusWithModeledNZCV(c.loadMachineValue(armMachineCPSROffset, I32)), nil
+			}
 			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "mrs $0, cpsr", "=r,~{memory}")
-			return "%" + t, nil
+			return c.statusWithModeledNZCV("%" + t), nil
 		case "FPCR", "FPSR":
+			if c.machineState != "" {
+				return c.loadMachineValue(armMachineFPSCROffset, I32), nil
+			}
 			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "vmrs $0, fpscr", "=r,~{memory}")
 			return "%" + t, nil
+		case "SPSR":
+			return "", fmt.Errorf("ARM SPSR spelling is not accepted by the Go assembler register table")
 		}
-		return "0", nil
+		return "", fmt.Errorf("ARM unknown status/value identifier %q needs an actual source definition", op.Ident)
 	default:
 		return "", fmt.Errorf("arm: unsupported operand for i32: %s", op.String())
 	}
 }
 
 func (c *armCtx) evalShift(op Operand) (string, error) {
-	base, err := c.loadReg(op.Reg)
-	if err != nil {
-		return "", err
-	}
-	var sh string
-	if op.ShiftReg != "" {
-		sh, err = c.loadReg(op.ShiftReg)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		sh = c.imm32(op.ShiftAmount)
-	}
-	t := c.newTmp()
-	switch op.ShiftOp {
-	case ShiftLeft:
-		fmt.Fprintf(c.b, "  %%%s = shl i32 %s, %s\n", t, base, sh)
-	case ShiftRight:
-		fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %s\n", t, base, sh)
-	case ShiftArith:
-		fmt.Fprintf(c.b, "  %%%s = ashr i32 %s, %s\n", t, base, sh)
-	case ShiftRotate:
-		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.fshr.i32(i32 %s, i32 %s, i32 %s)\n", t, base, base, sh)
-	default:
-		return "", fmt.Errorf("arm: unsupported shift op %q", op.ShiftOp)
-	}
-	return "%" + t, nil
+	value, _, err := c.evalARMShifter(op)
+	return value, err
 }
 
 func (c *armCtx) evalFPValue32(op Operand) (string, error) {
@@ -314,23 +302,10 @@ func (c *armCtx) evalFPAddr32(op Operand) (string, error) {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", t, ptr)
 		return "%" + t, nil
 	}
-	if op.FPName == "argframe" {
-		// Dynamic reflect/callback stubs use $argframe(FP) without a statically
-		// declared argument frame. An ordinary LLVM function signature cannot
-		// recover that caller-owned address. Keep corpus/object lowering permissive,
-		// as the ARM64 lowering does, while executable ABI tests remain responsible
-		// for using only addressable, modeled slots.
-		return "0", nil
-	}
-	if strings.EqualFold(op.FPName, "sp") && op.FPOffset == -4 {
-		// runtime.vdsoCall spells the caller's stack pointer as $sp-4(FP).
-		// An ordinary LLVM function signature does not expose that caller-owned
-		// address. Match the explicit argframe context fallback above so corpus
-		// and object lowering remain possible; executable ABI coverage must not
-		// treat this placeholder as an addressable modeled frame slot.
-		return "0", nil
-	}
-	return "", fmt.Errorf("arm: unsupported FP addr slot: %s", op.String())
+	// Neither a familiar source name nor a TEXT frame declaration supplies a
+	// caller-owned FP address. Only the typed backing resolved above may be
+	// materialized; an unbound address must not become a zero placeholder.
+	return "", fmt.Errorf("%w: arm FP address %s requires bound typed frame storage", ErrProbeNeedsContext, op.String())
 }
 
 func armFrameTypeSize(typ LLVMType) int64 {

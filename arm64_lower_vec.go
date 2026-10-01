@@ -275,6 +275,9 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 		return true, false, c.storeVReg(ins.Args[1].Reg, "<"+strings.Join(elems, ", ")+">")
 
 	case "VMOV":
+		if strings.ToUpper(string(ins.Op)) != "VMOV" {
+			return true, false, fmt.Errorf("arm64 VMOV has no opcode suffix: %q", ins.Raw)
+		}
 		// Patterns used by stdlib:
 		// - VMOV Rn, Vm.B16      (broadcast low byte)
 		// - VMOV Vm.D[0], Rn     (extract low 64-bit)
@@ -296,7 +299,7 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 			}
 			if k, lane, laneOK := arm64ParseVRegLane(dst); laneOK {
 				// GPR -> V lane insert.
-				rv, err := c.loadReg(src)
+				rv, err := c.loadRegisterWidth(src, map[byte]int{'B': 8, 'H': 16, 'S': 32, 'D': 64}[k])
 				if err != nil {
 					return true, false, err
 				}
@@ -341,29 +344,11 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 					return true, false, c.storeVReg(dst, "%"+insv)
 				}
 			}
-			rv, err := c.loadReg(src)
-			if err != nil {
-				return true, false, err
+			arrangement, ok := parseARM64VectorArrangement(dst)
+			if !ok || !arm64VDUPArrangementAllowed(arrangement) || !isARM64GeneralOrZeroReg(src) {
+				return true, false, fmt.Errorf("arm64 VMOV requires a Go case-82 arranged vector destination: %q", ins.Raw)
 			}
-			ds := strings.ToUpper(string(dst))
-			switch {
-			case strings.Contains(ds, ".S4"):
-				b := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", b, rv)
-				v, err := c.broadcastI32ToV16("%" + b)
-				if err != nil {
-					return true, false, err
-				}
-				return true, false, c.storeVReg(dst, v)
-			default:
-				b := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", b, rv)
-				v, err := c.broadcastI8ToV16("%" + b)
-				if err != nil {
-					return true, false, err
-				}
-				return true, false, c.storeVReg(dst, v)
-			}
+			return true, false, c.lowerARM64GPVectorDuplicate(src, dst, arrangement)
 		}
 
 		// V -> GPR (lane extract).

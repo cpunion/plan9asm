@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -9,7 +10,10 @@ import (
 	"testing"
 )
 
-func TestStdlibInternalBytealg_ARM64_Compile(t *testing.T) {
+// This is partial function object coverage, not a complete-file or standard
+// library pass. An ordinary declaration omits memequal_varlen's closure R26
+// input; that genuine missing entry contract remains an explicit negative.
+func TestStdlibInternalBytealg_ARM64_PartialFunctionObjectsAndClosureContext(t *testing.T) {
 	llc, _, ok := findLlcAndClang(t)
 	if !ok {
 		t.Fatal("llc not found")
@@ -52,36 +56,70 @@ func TestStdlibInternalBytealg_ARM64_Compile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse %s: %v", path, err)
 		}
-		ll, err := Translate(file, Options{
-			TargetTriple: triple,
-			ResolveSym:   resolve,
-			Sigs:         sigs,
-			Goarch:       "arm64",
-		})
-		if err != nil {
-			t.Fatalf("translate %s: %v", path, err)
+		if sig, ok := sigs["internal/bytealg.cmpbody"]; ok {
+			// This private source helper's documented register inputs and R0
+			// result are an explicit fixture contract, not a Go ABI0 Frame.
+			sig.ArgRegs = []Reg{"R0", "R1", "R2", "R3"}
+			sig.Frame = FrameLayout{}
+			sigs[sig.Name] = sig
 		}
-
-		tmp := t.TempDir()
-		llPath := filepath.Join(tmp, filepath.Base(path)+".ll")
-		objPath := filepath.Join(tmp, filepath.Base(path)+".o")
-		if err := os.WriteFile(llPath, []byte(ll), 0644); err != nil {
-			t.Fatal(err)
-		}
-		cmd := exec.Command(llc, "-mtriple="+triple, "-filetype=obj", llPath, "-o", objPath)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			s := string(out)
-			if strings.Contains(s, "No available targets") ||
-				strings.Contains(s, "no targets are registered") ||
-				strings.Contains(s, "unknown target triple") ||
-				strings.Contains(s, "unknown target") ||
-				strings.Contains(s, "is not a registered target") {
-				t.Fatalf("llc does not support triple %q: %s", triple, strings.TrimSpace(s))
+		// These manually reviewed Go transport types are an explicit fixture
+		// contract only for source ABIInternal entries. A classic Frame alone
+		// remains insufficient. This gate compiles objects, not all bytealg
+		// runtime semantics; Count has a separate actual Go/LLVM oracle.
+		for _, fn := range file.Funcs {
+			if !strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+				continue
 			}
-			t.Fatalf("llc failed for %s: %v\n%s", path, err, s)
+			name := resolve(fn.Sym)
+			sig := sigs[name]
+			sig.ARM64GoRegisterABI, err = arm64GoRegisterABIForSig(sig)
+			if err != nil {
+				t.Fatalf("explicit bytealg fixture contract %s: %v", name, err)
+			}
+			sigs[name] = sig
 		}
-		compiled++
+		for _, fn := range file.Funcs {
+			selected := *file
+			selected.Funcs = []Func{fn}
+			ll, err := Translate(&selected, Options{
+				TargetTriple: triple,
+				ResolveSym:   resolve,
+				Sigs:         sigs,
+				Goarch:       "arm64",
+			})
+			if resolve(fn.Sym) == "runtime.memequal_varlen" {
+				if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "R26 read") {
+					t.Fatalf("missing Go closure entry must remain Context, got %v", err)
+				}
+				t.Logf("not an object/file pass: %s requires the missing typed closure R26 entry contract", fn.Sym)
+				continue
+			}
+			if err != nil {
+				t.Fatalf("translate function %s in %s: %v", fn.Sym, path, err)
+			}
+
+			tmp := t.TempDir()
+			llPath := filepath.Join(tmp, filepath.Base(path)+".ll")
+			objPath := filepath.Join(tmp, filepath.Base(path)+".o")
+			if err := os.WriteFile(llPath, []byte(ll), 0644); err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(llc, "-mtriple="+triple, "-filetype=obj", llPath, "-o", objPath)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				s := string(out)
+				if strings.Contains(s, "No available targets") ||
+					strings.Contains(s, "no targets are registered") ||
+					strings.Contains(s, "unknown target triple") ||
+					strings.Contains(s, "unknown target") ||
+					strings.Contains(s, "is not a registered target") {
+					t.Fatalf("llc does not support triple %q: %s", triple, strings.TrimSpace(s))
+				}
+				t.Fatalf("llc failed for %s: %v\n%s", path, err, s)
+			}
+			compiled++
+		}
 	}
 	if compiled == 0 {
 		t.Fatalf("expected at least one successful llc compilation")

@@ -658,7 +658,7 @@ func parseFP(s string) (name string, off int64, ok bool) {
 		return "", 0, false
 	}
 	name, off = splitSymPlusOff(base)
-	if name == "" || strings.IndexAny(name, " \t,()") >= 0 {
+	if name == "" || strings.IndexAny(name, " \t,()+-") >= 0 {
 		return "", 0, false
 	}
 	return name, off, true
@@ -943,9 +943,19 @@ type Instr struct {
 	Op   Op
 	Args []Operand
 	Raw  string
+	// Set only after validating a closed, source-local Linux native helper.
+	armKernelCall *armKernelCall
 	// Set only by a validated machine-code decoder. Physical operands need
 	// not obey textual frontend limits (e.g. Go 386's three-operand limit).
 	x86Encoded bool
+	// A decoded near return is a physical C2/C3 instruction, not a Go RET
+	// pseudo-instruction with an automatically generated frame epilogue.
+	x86RawNearReturn *x86RawNearReturnForm
+	// Effective address width for a raw address-size override; zero means
+	// the target's ordinary pointer width.
+	x86AddressBits int
+	// Segment override on a raw instruction with an implicit register address.
+	x86SegmentPrefix byte
 	// Decoded vector length, separate from register storage width. Narrowing
 	// conversions can write X from either a 128- or 256-bit memory source.
 	x86VectorBytes int
@@ -956,6 +966,10 @@ type Instr struct {
 	// normalizeX86RawFile. Retain its bytes for lowerers that can specialize
 	// the constant without a memory access, after source-layout validation.
 	x86RIPLiteralData []byte
+	// A shared RIP decoder proved this exact read operand and physical width.
+	// The bound source/global must still be rechecked after materialization;
+	// changed exported operands cannot inherit the old decoder proof.
+	x86RIPMemoryRead x86RawStaticRead
 	// A reachable LEA addresses an offset of a source-local raw data suffix.
 	// The suffix is shared by all such LEAs in one raw directive group.
 	x86RIPAddressData  []byte

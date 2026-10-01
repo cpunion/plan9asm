@@ -10,22 +10,67 @@ if [[ "$shard_index" == "all" ]]; then
     echo "usage: $0 all [shard-count]" >&2
     exit 2
   fi
-  shard_count=${2:-32}
+  shard_count=${2:-64}
   parallelism=${PLAN9ASM_DISCOVERY_PARALLELISM:-4}
   if ! [[ "$shard_count" =~ ^[1-9][0-9]*$ && "$parallelism" =~ ^[1-9][0-9]*$ ]]; then
     echo "invalid shard count or PLAN9ASM_DISCOVERY_PARALLELISM" >&2
     exit 2
   fi
+  shard_order=()
+  selected_shards=()
+  priority=${PLAN9ASM_DISCOVERY_PRIORITY_SHARDS:-}
+  if [[ -n "$priority" ]]; then
+    if ! [[ "$priority" =~ ^(0|[1-9][0-9]*)(,(0|[1-9][0-9]*))*$ ]]; then
+      echo "invalid PLAN9ASM_DISCOVERY_PRIORITY_SHARDS: expected comma-separated indices" >&2
+      exit 2
+    fi
+    IFS=',' read -r -a shard_order <<< "$priority"
+    for index in "${shard_order[@]}"; do
+      if (( ${#index} > ${#shard_count} || index >= shard_count )) ||
+         [[ -n "${selected_shards[index]:-}" ]]; then
+        echo "invalid priority shard $index: out of range or repeated" >&2
+        exit 2
+      fi
+      selected_shards[index]=1
+    done
+  fi
+  for (( index=0; index<shard_count; index++ )); do
+    if [[ -z "${selected_shards[index]:-}" ]]; then
+      shard_order+=("$index")
+    fi
+  done
   report_dir="$repo_root/_out/discovered-library-corpus"
   mkdir -p "$report_dir"
-  shared_build_cache=$(mktemp -d)
-  trap 'rm -rf "$shared_build_cache"' EXIT
-  export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
+  shared_build_cache=
+  cleanup_build_cache() {
+    if [[ -n "$shared_build_cache" ]]; then
+      rm -r -- "$shared_build_cache"
+      shared_build_cache=
+    fi
+  }
+  trap cleanup_build_cache EXIT
   find "$report_dir" -maxdepth 1 -type f -name 'shard-*.json' -delete
-  seq 0 "$((shard_count - 1))" |
-    xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"
-  "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir"
-  exit 0
+  status=0
+  # The complete ecosystem can populate tens of GiB of package build objects.
+  # Share only within a bounded parallel batch; never remove a live writer's
+  # cache. Preserve reports and sticky failures across every batch.
+  for (( first=0; first<shard_count; first+=parallelism )); do
+    last=$((first + parallelism - 1))
+    if (( last >= shard_count )); then
+      last=$((shard_count - 1))
+    fi
+    shared_build_cache=$(mktemp -d)
+    export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
+    if ! printf '%s\n' "${shard_order[@]:first:last-first+1}" |
+      xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"; then
+      status=1
+    fi
+    cleanup_build_cache
+  done
+  if ! "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir"; then
+    status=1
+  fi
+  exit "$status"
 fi
 if [[ -z "$shard_index" || -z "$shard_count" || $# -gt 3 ]]; then
   echo "usage: $0 <zero-based-shard-index> <shard-count> [report.json]" >&2

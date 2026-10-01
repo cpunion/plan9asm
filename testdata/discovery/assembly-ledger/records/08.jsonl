@@ -15,5 +15,9 @@
 {"module":"github.com/loreweis/xray-core","version":"v1.251202.0","status":"pending"}
 {"module":"github.com/malayinfotech/common","version":"v0.0.0-20230324234800-c912f40bfb4c","status":"pending"}
 {"module":"github.com/mjago/meow","version":"v0.0.0-20181101092817-84c515278c95","status":"pending"}
+{"module":"github.com/platonnetwork/Platon-Go","version":"v1.5.1","status":"pending"}
+{"module":"github.com/realkonik/hello-requests","version":"v0.0.0-20251121214648-c4347c6be845","status":"pending"}
 {"module":"github.com/republicprotocol/republic-go","version":"v0.0.0-20190103042513-946ca4bb72d9","status":"pending"}
 {"module":"github.com/stokejo/mobile","version":"v0.0.0-20260414145545-8f42302e80be","status":"pending"}
+{"module":"github.com/xuges/purego","version":"v0.9.1","status":"pending"}
+{"module":"gitlab.com/freect/tensor","version":"v0.0.0-20251017205456-d2ff4e6e6e8b","status":"pending"}

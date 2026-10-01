@@ -1,6 +1,8 @@
 {"module":"argc.dev/goexp","version":"v0.0.0-20260810214457-241c87b0557e","status":"pending"}
 {"module":"git.sr.ht/~runxiyu/furgit","version":"v0.1.184","status":"pending"}
 {"module":"github.com/BoyaoWang430/sonic","version":"v1.13.2","status":"pending"}
+{"module":"github.com/For-ACGN/monkey","version":"v1.0.2","status":"pending"}
+{"module":"github.com/SNUCP/carousel","version":"v0.0.0-20250520014613-21d580046292","status":"pending"}
 {"module":"github.com/SimonWaldherr/tinySQL","version":"v0.56.0","status":"pending"}
 {"module":"github.com/TokenPLS/Hako","version":"v1.19.30-hako.2","status":"pending"}
 {"module":"github.com/hushui502/go","version":"v0.0.0-20220121231633-b7fa0f941f05","status":"pending"}

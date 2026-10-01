@@ -1,3 +1,4 @@
+{"module":"ghproxy-9d2.pages.dev/iden3/go-iden3-crypto","version":"v0.0.17","status":"pending"}
 {"module":"github.com/Pion/Transport","version":"v0.14.1","status":"pending"}
 {"module":"github.com/The-k-r-o-k/flow-go","version":"v0.39.1","status":"pending"}
 {"module":"github.com/cespare/go","version":"v0.0.0-20171208051213-6c877e5da7ab","status":"pending"}
@@ -9,8 +10,10 @@
 {"module":"github.com/m-Peter/flow-go","version":"v0.0.0-20241114083648-22daf5cdccbe","status":"pending"}
 {"module":"github.com/meko-christian/agg_go","version":"v0.5.0","status":"pending"}
 {"module":"github.com/mre-fog/neta","version":"v0.0.0-20230606164102-77f7754c9e53","status":"pending"}
+{"module":"github.com/mshafiee/bigmath","version":"v1.2.0","status":"pending"}
 {"module":"github.com/nyarime/gofec/v2","version":"v2.0.0","status":"pending"}
 {"module":"github.com/orisano/golzma","version":"v0.0.0-20260516123207-86b81f2d6ea5","status":"pending"}
+{"module":"github.com/r5-labs/r5-core/client","version":"v0.0.0-20251117171834-02426756f679","status":"pending"}
 {"module":"github.com/randomizedcoder/some-go-benchmarks","version":"v1.0.0","status":"pending"}
 {"module":"github.com/sakurasis/unit_go","version":"v0.0.0-20260807090811-7aa49729c861","status":"pending"}
 {"module":"github.com/sentinelb51/gtcrn-go","version":"v0.2.0","status":"pending"}

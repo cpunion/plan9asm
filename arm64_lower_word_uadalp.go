@@ -41,21 +41,6 @@ func decodeARM64RawPairwiseAddLong(word uint32) (arm64RawPairwiseAddLong, bool) 
 	return form, true
 }
 
-// Keep the instruction-specific entry point for focused compatibility tests.
-type arm64RawUADALP = arm64RawPairwiseAddLong
-
-func decodeARM64RawUADALP(word uint32) (arm64RawUADALP, bool) {
-	form, ok := decodeARM64RawPairwiseAddLong(word)
-	if !ok || form.signed || !form.accumulate {
-		return arm64RawUADALP{}, false
-	}
-	return form, true
-}
-
-func (c *arm64Ctx) lowerRawUADALP(form arm64RawUADALP) error {
-	return c.lowerRawPairwiseAddLong(form)
-}
-
 func (c *arm64Ctx) lowerRawPairwiseAddLong(form arm64RawPairwiseAddLong) error {
 	source, err := c.loadRawARM64VectorOperand(form.sourceReg, form.source, 0, false)
 	if err != nil {

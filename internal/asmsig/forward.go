@@ -38,6 +38,9 @@ func RefineTailForwarders(file *plan9asm.File, sigs map[string]plan9asm.FuncSig,
 				continue
 			}
 			target.Name = caller
+			// A pure tail-forwarder's value signature is not a real Go
+			// declaration plus source-selector proof for its register entry.
+			target.ARM64GoRegisterABI = nil
 			if !reflect.DeepEqual(sigs[caller], target) || !evidence[caller] {
 				sigs[caller] = target
 				evidence[caller] = true

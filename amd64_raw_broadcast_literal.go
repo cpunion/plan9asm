@@ -1404,6 +1404,16 @@ func setX86RawRIPDataOperand(instruction *Instr, sourceIndex int, data []byte) {
 	instruction.x86Encoded = true
 	instruction.x86RIPLiteral = true
 	instruction.x86RIPLiteralData = data
+	args := append([]Operand(nil), instruction.Args...)
+	for index := range args {
+		args[index].RegList = append([]Reg(nil), args[index].RegList...)
+	}
+	instruction.x86RIPMemoryRead = x86RawStaticRead{
+		op: instruction.Op, source: sourceIndex, width: int64(len(data)),
+		symbol: instruction.Args[sourceIndex].Sym,
+		object: append([]byte(nil), data...),
+		args:   args,
+	}
 	rawArgs := make([]string, len(instruction.Args))
 	for index, operand := range instruction.Args {
 		rawArgs[index] = operand.String()

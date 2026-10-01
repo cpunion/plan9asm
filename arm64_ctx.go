@@ -8,18 +8,26 @@ import (
 )
 
 type arm64Ctx struct {
-	b        *strings.Builder
-	sig      FuncSig
-	resolve  func(string) string
-	sigs     map[string]FuncSig
-	annotate bool
+	b               *strings.Builder
+	sig             FuncSig
+	resolve         func(string) string
+	sigs            map[string]FuncSig
+	annotate        bool
+	goRegisterEntry bool
+
+	privateRegisterEntry bool
+	unexposedCallFrame   bool // source/normalized proof for this fresh SP object only
 
 	tmp int
 
-	blocks []arm64Block
+	blocks              []arm64Block
+	localControl        *arm64LocalControlPlan
+	currentInstruction  int
+	machineAvailability *arm64MachineAvailability
 
 	rawDataGlobals map[string]string // local source label -> LLVM global
 	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
+	sourceData     []DataStmt        // complete file DATA provenance, before function normalization
 
 	usedRegs map[Reg]bool
 	regSlot  map[Reg]string // reg -> alloca name
@@ -34,6 +42,8 @@ type arm64Ctx struct {
 	pnRegSlot      map[int]string // SVE predicate-as-counter index -> alloca name (target("aarch64.svcount"))
 	localStackSlot string
 	localStackSize int64
+	frameSize      int64 // TEXT local storage, including accesses through SP aliases
+	sourceGoFrame  arm64GoFrame
 	dynamicStack   *arm64DynamicStackPlan
 
 	flagsNSlot   string
@@ -64,6 +74,8 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
+		frameSize:      fn.FrameSize,
+		sourceGoFrame:  arm64SourceGoFrame(fn),
 		blocks:         arm64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -82,10 +94,13 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		fpResWritten:   map[int]bool{},
 		fpResAddrTaken: map[int]bool{},
 	}
+	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
+	c.unexposedCallFrame = arm64CallFrameUnexposed(fn) && arm64CallFrameFreshEntry(sig)
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s
 	}
 	c.fpResults = append([]FrameSlot(nil), sig.Frame.Results...)
+	c.goRegisterEntry = strings.HasSuffix(fn.Sym, "<ABIInternal>") && sig.ARM64GoRegisterABI != nil
 	return c
 }
 
@@ -419,6 +434,11 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markOp(operand)
 					}
 				}
+				if decoded, ok := decodeARM64RawSVEFloatReciprocalStep(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
+				}
 				if decoded, ok := decodeARM64RawSVEUnpack(word); ok {
 					for _, operand := range decoded.Args {
 						markOp(operand)
@@ -467,10 +487,10 @@ func (c *arm64Ctx) scanUsedRegs() {
 						markReg(reg)
 					}
 				}
-				if form, ok := decodeARM64RawSVEWhileLO(word); ok {
-					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
-					markReg(Reg(fmt.Sprintf("R%d", form.first)))
-					markReg(Reg(fmt.Sprintf("R%d", form.second)))
+				if decoded, ok := decodeARM64RawSVEWhile(word); ok {
+					for _, operand := range decoded.Args {
+						markOp(operand)
+					}
 				}
 				if form, ok := decodeARM64RawSVELD1B(word); ok {
 					markReg(Reg(fmt.Sprintf("P%d", form.predicate)))
@@ -505,6 +525,14 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.first)))
 					markReg(Reg(fmt.Sprintf("V%d", form.second)))
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+				}
+				if form, ok := decodeARM64RawSM3(word); ok {
+					markReg(Reg(fmt.Sprintf("V%d", form.first)))
+					markReg(Reg(fmt.Sprintf("V%d", form.second)))
+					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
+					if form.spec.fourRegisters {
+						markReg(Reg(fmt.Sprintf("V%d", form.third)))
+					}
 				}
 				if form, ok := decodeARM64RawRDMA(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.first)))
@@ -1036,6 +1064,14 @@ func (c *arm64Ctx) scanUsedRegs() {
 		}
 	}
 	// Ensure arg regs exist.
+	if c.sig.ARM64ClosureABI != nil {
+		markReg(c.sig.ARM64ClosureABI.ContextRegister)
+	}
+	if c.sig.ARM64GoRegisterABI != nil {
+		for _, slot := range append(append([]ARM64GoRegisterValue(nil), c.sig.ARM64GoRegisterABI.Params...), c.sig.ARM64GoRegisterABI.Results...) {
+			markReg(slot.Register)
+		}
+	}
 	if len(c.sig.ArgRegs) > 0 {
 		for i := 0; i < len(c.sig.Args) && i < len(c.sig.ArgRegs); i++ {
 			markReg(c.sig.ArgRegs[i])
@@ -1098,6 +1134,11 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", name)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
 	}
+	if c.localControl != nil {
+		if err := c.storeCallerLink(); err != nil {
+			return err
+		}
+	}
 	if spSlot := c.regSlot[SP]; spSlot != "" {
 		minOff, maxOff, err := c.stackOffsetRange()
 		if err != nil {
@@ -1109,7 +1150,14 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		}
 		minOff += minimum
 		maxOff += maximum
-		if minOff < -arm64MaxLocalStackSpan || maxOff > arm64MaxLocalStackSpan {
+		// Bound inferred SP movement separately from the explicit TEXT frame.
+		// Go's reflect-call wrappers declare frames up to 1 GiB; the 1 MiB
+		// movement-proof budget must not reject their declared storage.
+		upperBound := arm64MaxLocalStackSpan
+		if c.frameSize > upperBound {
+			upperBound = c.frameSize + arm64MaxLocalStackSpan
+		}
+		if minOff < -arm64MaxLocalStackSpan || maxOff > upperBound {
 			return fmt.Errorf("ARM64 local stack footprint exceeds %d bytes", arm64MaxLocalStackSpan)
 		}
 		const guard = int64(64)
@@ -1120,12 +1168,22 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		}
 		c.localStackSlot = "%local_stack"
 		c.localStackSize = size
-		fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 16\n", c.localStackSlot, size)
+		c.emitLocalStackAllocation(size)
 		base := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
 		addr := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+		if c.sourceGoFrame.present {
+			// Go saves the incoming LR at the bottom of every implicit frame,
+			// including a framed leaf. Explicit source loads/stores can observe
+			// this cell; it is not a fabricated source-level local-call link.
+			link, err := c.loadReg(Reg("R30"))
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.b, "  store i64 %s, ptr %%%s\n", link, base)
+		}
 	}
 
 	// Vector registers: keep as <16 x i8> to cover most stdlib NEON byte ops.
@@ -1243,6 +1301,20 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 
 	// Map args -> the independent integer and floating-point ABIInternal banks,
 	// or to an explicit helper register assignment.
+	if c.sig.ARM64ClosureABI != nil {
+		if err := c.storeABIRegisterValue(c.sig.ARM64ClosureABI.ContextRegister, Ptr, "%closure"); err != nil {
+			return err
+		}
+	}
+	if c.goRegisterEntry {
+		for _, slot := range c.sig.ARM64GoRegisterABI.Params {
+			value := c.extractGoABIValue(c.sig.Args[slot.Index], fmt.Sprintf("%%arg%d", slot.Index), slot)
+			if err := c.storeABIRegisterValue(slot.Register, slot.Type, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	if len(c.sig.ArgRegs) > 0 {
 		if len(c.sig.ArgRegs) != len(c.sig.Args) {
 			return fmt.Errorf("arm64 entry %q: %d explicit argument registers for %d arguments", c.sig.Name, len(c.sig.ArgRegs), len(c.sig.Args))
@@ -1288,7 +1360,42 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 	return nil
 }
 
+// Large Go TEXT frames must not become LLVM's fixed prologue allocation:
+// Windows ARM64's alloc_l unwind code cannot describe 256 MiB or more.
+// A real variable-sized alloca keeps the complete backing object in the body,
+// where LLVM probes it and preserves an unwindable frame-pointer chain.
+// Ordinary frames remain static to avoid an unnecessary dynamic stack path.
+const arm64DynamicFrameThreshold = int64(1 << 20)
+
+func (c *arm64Ctx) emitLocalStackAllocation(size int64) {
+	if size <= arm64DynamicFrameThreshold {
+		fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 16\n", c.localStackSlot, size)
+		return
+	}
+
+	// The empty asm changes no machine state. Its tied input/output register
+	// returns the exact size, but LLVM cannot fold that opaque result back
+	// into a static alloca, even after an optimized/inlined translation.
+	bytes := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call i64 asm sideeffect \"\", \"=r,0\"(i64 %d)\n", bytes, size)
+	fmt.Fprintf(c.b, "  %s = alloca i8, i64 %%%s, align 16\n", c.localStackSlot, bytes)
+}
+
 func (c *arm64Ctx) stackOffsetRange() (minOff, maxOff int64, err error) {
+	maxOff = c.frameSize
+	if maxOff == -8 {
+		// Go's historical NOFRAME spelling declares no local storage.
+		maxOff = 0
+	}
+	// Go records FuncInfo.Locals as int32. Declared storage has that source
+	// bound, rather than the much smaller limit on inferred SP movement.
+	const maxDeclaredFrame = int64(1<<31 - 1)
+	if maxOff < 0 || maxOff > maxDeclaredFrame {
+		return 0, 0, fmt.Errorf("ARM64 TEXT frame size %d is outside [0,%d] (or -8 for NOFRAME)", c.frameSize, maxDeclaredFrame)
+	}
+	// Explicit SP displacements cannot reveal the extent of an array walked
+	// through a derived register (for example Snappy's 32 KiB hash table).
+	// The declared frame is therefore a lower bound, not an optional hint.
 	add := func(off, size int64) {
 		if off < -arm64MaxLocalStackSpan || off > arm64MaxLocalStackSpan ||
 			size < 0 || size > arm64MaxLocalStackSpan {
@@ -1426,6 +1533,7 @@ func llvmZeroValue(ty LLVMType) string {
 }
 
 func (c *arm64Ctx) loadReg(r Reg) (string, error) {
+	c.recordMachineRegister(r, 64, false)
 	if r == ZR {
 		return "0", nil
 	}
@@ -1433,6 +1541,10 @@ func (c *arm64Ctx) loadReg(r Reg) (string, error) {
 		r = SP
 	}
 	if _, ok := arm64ParseFReg(r); ok {
+		if flow := c.machineAvailability; flow != nil {
+			flow.suspended++
+			defer func() { flow.suspended-- }()
+		}
 		v, err := c.loadVReg(r)
 		if err != nil {
 			return "", err
@@ -1474,6 +1586,7 @@ func (c *arm64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 }
 
 func (c *arm64Ctx) storeReg(r Reg, v string) error {
+	c.recordMachineRegister(r, 64, true)
 	if r == ZR {
 		return nil
 	}
@@ -1496,6 +1609,7 @@ func (c *arm64Ctx) storeReg(r Reg, v string) error {
 }
 
 func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
+	c.recordMachineRegister(r, 128, false)
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
 		idx, ok = arm64ParseFReg(r)
@@ -1513,6 +1627,7 @@ func (c *arm64Ctx) loadVReg(r Reg) (string, error) {
 }
 
 func (c *arm64Ctx) storeVReg(r Reg, v string) error {
+	c.recordMachineRegister(r, arm64WholeScalableRegister, true)
 	idx, ok := arm64ParseVReg(r)
 	if !ok {
 		idx, ok = arm64ParseFReg(r)

@@ -100,14 +100,14 @@ func encodeARM64RawSVEDupElement(elementBits, lane, source, destination int) uin
 	}
 	size := map[int]int{8: 0, 16: 1, 32: 2, 64: 3}[elementBits]
 	imm5 := lane<<(size+1) | 1<<size
-	return 0x05202000 | uint32(imm5)<<16 | uint32(source)<<5 | uint32(destination)
+	return 0x05202000 | uint32(imm5&31)<<16 | uint32(imm5>>5)<<22 | uint32(source)<<5 | uint32(destination)
 }
 
 func TestARM64RawSVEDupElementDecoderCoversEveryEncodingField(t *testing.T) {
 	count := 0
 	for _, domain := range []struct {
 		bits, lanes int
-	}{{8, 16}, {16, 8}, {32, 4}, {64, 2}, {128, 2}} {
+	}{{8, 64}, {16, 32}, {32, 16}, {64, 8}, {128, 4}} {
 		for lane := 0; lane < domain.lanes; lane++ {
 			for source := 0; source < 32; source++ {
 				for destination := 0; destination < 32; destination++ {
@@ -121,13 +121,13 @@ func TestARM64RawSVEDupElementDecoderCoversEveryEncodingField(t *testing.T) {
 			}
 		}
 	}
-	if count != (16+8+4+2+2)*32*32 {
+	if count != (64+32+16+8+4)*32*32 {
 		t.Fatalf("covered %d SVE DUP element encodings", count)
 	}
 }
 
 func TestARM64RawSVEDupElementRejectsReservedAndAdjacentEncodings(t *testing.T) {
-	for _, word := range []uint32{0x05202000, 0x05612000, 0x05202400} {
+	for _, word := range []uint32{0x05202000, 0x05602000, 0x05a02000, 0x05e02000, 0x05202400} {
 		if _, ok := decodeARM64RawSVEDupElement(word); ok {
 			t.Fatalf("SVE DUP element decoder accepted reserved/adjacent encoding %#08x", word)
 		}

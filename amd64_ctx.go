@@ -21,6 +21,7 @@ type amd64Ctx struct {
 	annotate       bool
 	continuations  map[string]x86Continuation
 	indirectLabels []string
+	indirectABI0   *FuncSig // proven straight-line stack-argument callback adapter
 
 	tmp int
 
@@ -66,6 +67,7 @@ type amd64Ctx struct {
 	vstackSlot     string // [64 x i64] virtual stack for PUSHQ/POPQ
 	vspSlot        string // i64 virtual stack pointer (next free slot)
 	localStackSlot string // byte-addressable backing storage for x86 SP references
+	frameSize      int64  // local bytes below the Go assembler's implicit amd64 BP
 	classicFrame   string // contiguous classic Go ABI frame used by 386 FP addressing
 	classicSize    int64
 	classicBias    int64
@@ -92,6 +94,8 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		resolve:        resolve,
 		sigs:           sigs,
 		annotate:       annotate,
+		frameSize:      fn.FrameSize,
+		indirectABI0:   inferX86ABI0Forwarder(fn, sig, goarch),
 		blocks:         amd64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
 		regSlot:        map[Reg]string{},
@@ -147,7 +151,7 @@ func (c *amd64Ctx) newTmp() string {
 }
 
 func (c *amd64Ctx) slotName(r Reg) string {
-	return "%" + amd64LLVMBlockName("reg_"+string(r))
+	return "%reg_" + amd64LLVMSafeName(string(r))
 }
 
 func (c *amd64Ctx) xSlotName(i int) string {
@@ -348,6 +352,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 	// Ensure a few common regs exist even if only used implicitly by helpers.
 	markReg(AX)
+	if c.goarch != "386" && c.frameSize > 0 && c.usedRegs[BP] {
+		markReg(SP)
+	}
 
 	// Ensure arg regs exist for ABIInternal-style stdlib asm. This matters for:
 	//   - functions like runtime·cmpstring<ABIInternal> that tail-call helpers
@@ -419,6 +426,13 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		addr := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+		if bpSlot, ok := c.regSlot[BP]; ok && c.goarch != "386" && c.frameSize > 0 {
+			// Go saves BP before reserving TEXT's local frame. Thus a source
+			// -8(BP) aliases FrameSize-8(SP), including across outgoing calls.
+			bp := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = add i64 %%%s, %d\n", bp, addr, c.frameSize)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", bp, bpSlot)
+		}
 	}
 
 	xIdx := make([]int, 0, len(c.usedXRegs))
@@ -548,15 +562,15 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 				fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s%s\n", extracted, c.sig.Args[slot.Index], value, frameSlotExtractSuffix(slot))
 				value = "%" + extracted
 			}
-			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, slot.Type)
-			fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", slot.Type, value, name)
+			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, x86FPStorageType(slot.Type))
+			c.storeFPStorage(slot.Type, value, name, "", "")
 		}
 		for _, r := range c.fpResults {
 			name := fmt.Sprintf("%%fp_ret_%d", r.Index)
 			c.fpResAllocaIdx[r.Index] = name
 			c.fpResAllocaOff[r.Offset] = name
-			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, r.Type)
-			fmt.Fprintf(c.b, "  store %s %s, ptr %s\n", r.Type, llvmZeroValue(r.Type), name)
+			fmt.Fprintf(c.b, "  %s = alloca %s\n", name, x86FPStorageType(r.Type))
+			c.storeFPStorage(r.Type, llvmZeroValue(r.Type), name, "", "")
 		}
 	}
 
@@ -709,18 +723,19 @@ func (c *amd64Ctx) emit386ClassicFrame() error {
 			fmt.Fprintf(c.b, "  %%%s = extractvalue %s %s%s\n", extracted, c.sig.Args[slot.Index], value, frameSlotExtractSuffix(slot))
 			value = "%" + extracted
 		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", slot.Type, value, c.classicFramePtr(slot.Offset))
+		c.storeFPStorage(slot.Type, value, c.classicFramePtr(slot.Offset), ", align 1", "")
 	}
 	for _, slot := range c.fpResults {
 		ptr := c.classicFramePtr(slot.Offset)
 		c.fpResAllocaIdx[slot.Index] = ptr
 		c.fpResAllocaOff[slot.Offset] = ptr
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", slot.Type, llvmZeroValue(slot.Type), ptr)
+		c.storeFPStorage(slot.Type, llvmZeroValue(slot.Type), ptr, ", align 1", "")
 	}
 	return nil
 }
 
 func (c *amd64Ctx) stackOffsetRange() (minOff, maxOff int64) {
+	maxOff = c.frameSize
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
 			for _, arg := range ins.Args {
@@ -1435,14 +1450,10 @@ func (c *amd64Ctx) loadFPParamValue(slot FrameSlot) (string, error) {
 		return "", fmt.Errorf("FP read slot: invalid arg index %d at +%d(FP)", slot.Index, slot.Offset)
 	}
 	if c.classicFrame != "" {
-		loaded := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", loaded, slot.Type, c.classicFramePtr(slot.Offset))
-		return "%" + loaded, nil
+		return c.loadFPStorage(slot.Type, c.classicFramePtr(slot.Offset), ", align 1"), nil
 	}
 	if shadow := c.fpParamAlloca[slot.Offset]; shadow != "" {
-		loaded := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s\n", loaded, slot.Type, shadow)
-		return "%" + loaded, nil
+		return c.loadFPStorage(slot.Type, shadow, ""), nil
 	}
 	value := fmt.Sprintf("%%arg%d", slot.Index)
 	if fields := frameSlotFields(slot); len(fields) != 0 {
@@ -1505,13 +1516,11 @@ func (c *amd64Ctx) evalFPToI64(off int64) (string, error) {
 			}
 		}
 		if alloca, ty, rok := c.fpResultAlloca(off); rok && ty != "" {
-			ld := c.newTmp()
 			align := ""
 			if c.classicFrame != "" {
 				align = ", align 1"
 			}
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s%s\n", ld, ty, alloca, align)
-			v := "%" + ld
+			v := c.loadFPStorage(ty, alloca, align)
 			switch ty {
 			case I64:
 				return v, nil
@@ -1732,7 +1741,7 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 		if err != nil {
 			return fmt.Errorf("FP parameter write type mismatch: have %s want %s at +%d(FP): %w", ty, slot.Type, off, err)
 		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s%s%s\n", slot.Type, value, ptr, align, metadata)
+		c.storeFPStorage(slot.Type, value, ptr, align, metadata)
 		return nil
 	}
 	if c.goarch == "386" && ty == I32 {
@@ -1778,6 +1787,15 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 	alloca, slotTy, ok := c.fpResultAlloca(off)
 	if !ok {
 		return fmt.Errorf("unsupported FP write slot: +%d(FP)", off)
+	}
+	if slotTy == I1 {
+		value, err := c.coerceFPStoreValue(ty, I1, v)
+		if err != nil {
+			return fmt.Errorf("FP bool result write at +%d(FP): %w", off, err)
+		}
+		c.storeFPStorage(I1, value, alloca, align, metadata)
+		c.markFPResultWritten(off)
+		return nil
 	}
 	if slotTy != "" && slotTy != ty {
 		if c.goarch == "386" && ty == I32 && slotTy == Ptr {
@@ -1904,30 +1922,6 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 	return nil
 }
 
-func (c *amd64Ctx) namedFPResultOffset(name string, fallback int64) int64 {
-	if name == "" {
-		return fallback
-	}
-	match := int64(0)
-	found := false
-	for _, slot := range c.fpResults {
-		if slot.Name != name {
-			continue
-		}
-		if found {
-			// Aggregate results can have multiple physical FP slots with one Go
-			// name. Their explicit offsets remain authoritative.
-			return fallback
-		}
-		match = slot.Offset
-		found = true
-	}
-	if found {
-		return match
-	}
-	return fallback
-}
-
 func isSplit64FrameType(typ LLVMType) bool {
 	return typ == I64 || typ == LLVMType("double")
 }
@@ -1937,13 +1931,11 @@ func (c *amd64Ctx) loadFPResult(slot FrameSlot) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("missing fp result alloca for index %d", slot.Index)
 	}
-	t := c.newTmp()
 	align := ""
 	if c.classicFrame != "" {
 		align = ", align 1"
 	}
-	fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s%s\n", t, slot.Type, alloca, align)
-	return "%" + t, nil
+	return c.loadFPStorage(slot.Type, alloca, align), nil
 }
 
 func isAMD64FloatRetTy(ty LLVMType) bool {

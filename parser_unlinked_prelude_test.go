@@ -24,16 +24,47 @@ TEXT linked(SB),$0-0
 	if len(file.UnlinkedPrelude) != 2 || !strings.HasPrefix(file.UnlinkedPrelude[0], "VST1.P") || file.UnlinkedPrelude[1] != "RET" {
 		t.Fatalf("unlinked prelude not retained as evidence: %#v", file.UnlinkedPrelude)
 	}
-	ir, err := Translate(file, Options{
+	opt := Options{
 		Goarch: "arm64", TargetTriple: arm64LinuxGNUTriple,
 		Sigs: map[string]FuncSig{"linked": {Name: "linked", Ret: I64}},
-	})
+	}
+	ir, err := Translate(file, opt)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "ret i64 7") {
-		t.Fatalf("linked function changed by Go's unlinked prelude:\n%s", ir)
+	// Compare with an independently parsed linked-only source. Its return may
+	// use an SSA load rather than a folded constant; that is not a parser bug.
+	const linkedSource = "TEXT linked(SB),$0-0\nMOVD $7,R0\nRET\n"
+	requireARM64GoAssemblerResult(t, linkedSource, true)
+	linked, err := Parse(ArchARM64, linkedSource)
+	if err != nil {
+		t.Fatal(err)
 	}
+	want, err := Translate(linked, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutModulePath := func(ir string) string {
+		var body strings.Builder
+		for _, line := range strings.Split(ir, "\n") {
+			// LLVM assigns each independent parse a temporary module path.
+			// Ignore only that provenance, not instructions or attributes.
+			if strings.HasPrefix(line, "; ModuleID = ") || strings.HasPrefix(line, "source_filename = ") {
+				continue
+			}
+			body.WriteString(line)
+			body.WriteByte('\n')
+		}
+		return body.String()
+	}
+	if withoutModulePath(ir) != withoutModulePath(want) {
+		t.Fatalf("unlinked prelude changed linked IR:\ngot:\n%s\nwant:\n%s", ir, want)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, arm64LinuxGNUTriple, "unlinked-prelude.ll", "unlinked-prelude.o", ir)
 }
 
 func TestParseStillRejectsSourceWithoutTEXTOrData(t *testing.T) {

@@ -2,23 +2,39 @@ package plan9asm
 
 import "fmt"
 
+type amd64ADXCarry uint8
+
+const (
+	amd64ADXCarryCF amd64ADXCarry = iota
+	amd64ADXCarryOF
+)
+
+type amd64ADXSpec struct {
+	bits   int
+	prefix byte
+	carry  amd64ADXCarry
+}
+
+// Go 1.27 asm6.go uses yml_rl for every ADX form. One spec binds the
+// register/memory grammar, encoded mandatory prefix, width and carry chain.
+var amd64ADXSpecs = map[Op]amd64ADXSpec{
+	"ADCXL": {bits: 32, prefix: 0x66, carry: amd64ADXCarryCF},
+	"ADCXQ": {bits: 64, prefix: 0x66, carry: amd64ADXCarryCF},
+	"ADOXL": {bits: 32, prefix: 0xf3, carry: amd64ADXCarryOF},
+	"ADOXQ": {bits: 64, prefix: 0xf3, carry: amd64ADXCarryOF},
+}
+
 // lowerADX implements ADCXL/Q and ADOXL/Q. All four opcodes use Go 1.27's
 // yml_rl row: register/memory source and register destination. ADCX consumes
 // and updates CF; ADOX independently consumes and updates OF.
 func (c *amd64Ctx) lowerADX(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	bits := 0
-	flagSlot := ""
-	switch op {
-	case "ADCXL":
-		bits, flagSlot = 32, c.flagsCFSlot
-	case "ADCXQ":
-		bits, flagSlot = 64, c.flagsCFSlot
-	case "ADOXL":
-		bits, flagSlot = 32, c.flagsOFSlot
-	case "ADOXQ":
-		bits, flagSlot = 64, c.flagsOFSlot
-	default:
+	spec, supported := amd64ADXSpecs[op]
+	if !supported {
 		return false, false, nil
+	}
+	bits, flagSlot := spec.bits, c.flagsCFSlot
+	if spec.carry == amd64ADXCarryOF {
+		flagSlot = c.flagsOFSlot
 	}
 	if c.goarch == "386" && bits == 64 {
 		return true, false, fmt.Errorf("386 %s is illegal in 32-bit mode: %q", op, ins.Raw)
@@ -39,7 +55,7 @@ func (c *amd64Ctx) lowerADX(op Op, ins Instr) (ok bool, terminated bool, err err
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
-	sourceValue, err := c.evalIntSized(source, typ)
+	sourceValue, err := c.evalADXSource(source, typ, ins.x86AddressBits)
 	if err != nil {
 		return true, false, err
 	}
@@ -65,4 +81,27 @@ func (c *amd64Ctx) lowerADX(op Op, ins Instr) (ok bool, terminated bool, err err
 	}
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carryOut, flagSlot)
 	return true, false, nil
+}
+
+func (c *amd64Ctx) evalADXSource(source Operand, typ LLVMType, addressBits int) (string, error) {
+	wordBits := 64
+	if c.goarch == "386" {
+		wordBits = 32
+	}
+	if addressBits == 0 || addressBits == wordBits || source.Kind != OpMem {
+		return c.evalIntSized(source, typ)
+	}
+	if addressBits != wordBits/2 {
+		return "", fmt.Errorf("invalid ADX address size %d for %s", addressBits, c.goarch)
+	}
+	ptr, ptrType, err := c.ptrFromMem(source.Mem)
+	if err != nil {
+		return "", err
+	}
+	// Wrap the effective offset before applying an FS/GS address space.
+	address, wrapped, value := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = ptrtoint %s %s to i%d\n", address, ptrType, ptr, addressBits)
+	fmt.Fprintf(c.b, "  %%%s = inttoptr i%d %%%s to %s\n", wrapped, addressBits, address, ptrType)
+	fmt.Fprintf(c.b, "  %%%s = load %s, %s %%%s, align 1\n", value, typ, ptrType, wrapped)
+	return "%" + value, nil
 }

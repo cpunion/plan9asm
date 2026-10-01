@@ -52,6 +52,10 @@ type Func struct {
 
 	x86ContinuationAddresses map[string]x86Continuation
 	x86IndirectLabels        []string
+	// Set only by the closed same-file Go binding proof, never by a guessed
+	// helper FuncSig. The ABI0 root's GP/NZCV entry is otherwise unspecified.
+	arm64PrivateRegisterEntry  bool
+	arm64PrivateUnexposedFrame bool // original source proof retained across audited helper coalescing
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.
@@ -334,8 +338,8 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 		}
 	}
 	if !ok {
-		// Accept symbol-address initializers (e.g. $runtime·main(SB)) even when
-		// relocation details are not modeled; encode as zero placeholder.
+		// Preserve symbol-address initializers for relocation-aware lowering.
+		// Value is not a byte payload for an address initializer.
 		if strings.HasPrefix(strings.TrimSpace(rhs), "$") {
 			if sym, symOK := parseSym(strings.TrimPrefix(strings.TrimSpace(rhs), "$")); symOK {
 				addr = sym
@@ -400,24 +404,34 @@ func parseGLOBLStmt(rest string) (GloblStmt, error) {
 }
 
 func splitSymPlusOff(s string) (sym string, off int64) {
-	// Best-effort parse for forms like:
-	//   name+0
-	//   name-8
-	// If offset parsing fails, treat the entire string as a symbol name.
+	// Go's assembler parses the displacement as a constant expression after
+	// the symbol token. Whitespace around the operator and expressions such
+	// as name+(2*4) are therefore valid, not part of the symbol name.
+	// If no suffix parses as an expression, retain the entire symbol.
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return "", 0
 	}
-	// Prefer the last '+' or '-' as the separator.
-	sep := strings.LastIndexAny(s, "+-")
-	if sep <= 0 || sep == len(s)-1 {
-		return s, 0
+	for sep := 1; sep < len(s); sep++ {
+		if s[sep] != '+' && s[sep] != '-' {
+			continue
+		}
+		name := strings.TrimSpace(s[:sep])
+		if name == "" {
+			continue
+		}
+		if n, ok := parseImmExpr(s[sep:]); ok {
+			return name, int64(n)
+		}
 	}
-	n, err := parseInt(s[sep:])
-	if err != nil {
-		return s, 0
-	}
-	return strings.TrimSpace(s[:sep]), n
+	return s, 0
+}
+
+// SplitSymbolOffset parses a Go assembly symbol and its constant-expression
+// displacement. An unparseable displacement leaves the input unchanged so
+// callers can report the original symbol in their own context.
+func SplitSymbolOffset(s string) (sym string, off int64) {
+	return splitSymPlusOff(s)
 }
 
 func parseInt(s string) (int64, error) {

@@ -1,6 +1,8 @@
 {"module":"git.k2software.com.cn/go/net","version":"v0.0.0-20190301231341-16b79f2e4e95","status":"pending"}
+{"module":"github.com/AlekseiMalkov/websocket","version":"v0.0.0-20260109125802-9f473adfa595","status":"pending"}
 {"module":"github.com/Datadog/opentelemetry-ebpf-profiler","version":"v0.0.202610","status":"pending"}
 {"module":"github.com/Deatil/go-cryptobin","version":"v1.1.1020","status":"pending"}
+{"module":"github.com/MerlinLayer2/cdk-erigon/erigon-lib","version":"v0.0.0-20260206095844-b53398ea155f","status":"pending"}
 {"module":"github.com/Pjbgf/sha1cd","version":"v0.6.0","status":"pending"}
 {"module":"github.com/Tendermint/crypto","version":"v0.0.0-20191022145703-50d29ede1e15","status":"pending"}
 {"module":"github.com/ThiraSoft/golem","version":"v0.38.2","status":"pending"}
@@ -10,10 +12,13 @@
 {"module":"github.com/ajaxorg/ace-builds","version":"v1.44.0","status":"pending"}
 {"module":"github.com/boyaowang430/plz","version":"v0.0.0-20260626095300-25c9e7733413","status":"pending"}
 {"module":"github.com/deroproject/derosuite","version":"v2.1.5+incompatible","status":"pending"}
+{"module":"github.com/gattaca-com/based-op-geth","version":"v1.101503.4","status":"pending"}
 {"module":"github.com/gofiber/utils/v2","version":"v2.5.3","status":"pending"}
 {"module":"github.com/golang/crypto","version":"v0.57.0","status":"pending"}
 {"module":"github.com/jimmygchen/go-ethereum","version":"v1.12.0","status":"pending"}
+{"module":"github.com/nethermindeth/rollup-geth","version":"v0.0.0-20250416134320-77bef63c5a8d","status":"pending"}
 {"module":"github.com/obscuronet/go-ethereum","version":"v1.10.16","status":"pending"}
+{"module":"github.com/ominiaccount/omni-account-bundler","version":"v0.0.0-20241230103012-4f1884ea241d","status":"pending"}
 {"module":"github.com/parquet-go/bitpack","version":"v1.1.0","status":"pending"}
 {"module":"github.com/quant1x/quant1x","version":"v0.8.1","status":"pending"}
 {"module":"github.com/shurizzle/editor","version":"v0.0.0-20250228204917-c1387144adb1","status":"pending"}

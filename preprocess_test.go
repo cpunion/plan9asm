@@ -136,6 +136,38 @@ TEXT macro(SB),$0-0
 	}
 }
 
+func TestPreprocessKeepsDefineAcrossUnsplicedMultilineBlockComment(t *testing.T) {
+	// Go's assembler removes a block comment before recognizing the end of a
+	// macro definition. The comment's physical newlines need no backslashes.
+	const src = `
+#define ROUND(dst) \
+	MOVQ $1, dst; \
+	/* This comment spans
+	   several physical lines
+	*/ \
+	ADDQ $2, dst
+TEXT macro(SB),$0-0
+	ROUND(AX)
+	RET
+`
+	requireX86GoAssemblerResult(t, "amd64", src, true)
+	pp, err := preprocess(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(pp, "\\") || strings.Contains(pp, "several physical lines") {
+		t.Fatalf("block comment leaked into expanded assembly:\n%s", pp)
+	}
+	for _, want := range []string{"MOVQ $1, AX", "ADDQ $2, AX"} {
+		if !strings.Contains(pp, want) {
+			t.Fatalf("macro expansion omitted %q:\n%s", want, pp)
+		}
+	}
+	if _, err := Parse(ArchAMD64, src); err != nil {
+		t.Fatalf("Parse rejected a Go-assembler-compatible comment in a macro: %v\n%s", err, pp)
+	}
+}
+
 func TestPreprocessKeepsMultilineDefineWhenContinuationPrecedesLineComment(t *testing.T) {
 	// Several Go assembly packages, including IOTA, MinIO HighwayHash, and
 	// go-ethereum, put a line comment after the continuation slash. The Go
@@ -277,5 +309,16 @@ func TestGoAssemblerDefinesMatchToolchainFeatureRules(t *testing.T) {
 	t.Setenv("GOARM64", "v8.0,lse")
 	if got := strings.Join(GoAssemblerDefines("windows", "arm64"), ","); got != "GOOS_windows,GOARCH_arm64,GOARM64_LSE" {
 		t.Fatalf("arm64 defines = %q", got)
+	}
+}
+
+func TestGoAssemblerDefinesImplicitARM64LSE(t *testing.T) {
+	for _, value := range []string{"v8.1", "v8.9,crypto", "v9.0", "v9.5,crypto"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("GOARM64", value)
+			if got := strings.Join(GoAssemblerDefines("linux", "arm64"), ","); got != "GOOS_linux,GOARCH_arm64,GOARM64_LSE" {
+				t.Fatalf("GOARM64=%s defines = %q; cmd/go enables mandatory LSE", value, got)
+			}
+		})
 	}
 }

@@ -108,11 +108,7 @@ func TestTranslateX86RawEVEXVPINSRLLVM22Objects(t *testing.T) {
 		t.Run(triple, func(t *testing.T) {
 			source := x86RawEVEXVPINSRGoForms()
 			code := assembleX87ControlBytes(t, "amd64", source)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			file.Funcs[0].Instrs = append(file.Funcs[0].Instrs[:1], rawX86Function(code).Instrs...)
+			file := x86RawUnprovedReturnFormProbeFile(t, "amd64", "rawVPINSR", code)
 			ir, err := Translate(file, Options{
 				Goarch: "amd64", TargetTriple: triple,
 				Sigs: map[string]FuncSig{"rawVPINSR": {Name: "rawVPINSR", Ret: Void}},

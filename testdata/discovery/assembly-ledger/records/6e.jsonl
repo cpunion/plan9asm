@@ -14,9 +14,12 @@
 {"module":"github.com/nak3/kubernetes-manifest-scanner","version":"v0.0.0-20151207150536-d5cc57db0fac","status":"pending"}
 {"module":"github.com/ngtuna/tomochain","version":"v1.8.2","status":"pending"}
 {"module":"github.com/openagent-md/websocket","version":"v1.8.15","status":"pending"}
+{"module":"github.com/pduykhang/incognito-chain","version":"v0.0.0-20210121082946-4a4818b0daca","status":"pending"}
 {"module":"github.com/renthraysk/go/src","version":"v0.0.0-20250707204235-86b5ba731044","status":"pending"}
+{"module":"github.com/sentioxyz/go-ethereum","version":"v0.0.0-20240326093830-c9f5e64d5a2f","status":"pending"}
 {"module":"github.com/tenderly/net-scroll-geth","version":"v0.0.0-20251124132906-369bd0a9be88","status":"pending"}
 {"module":"github.com/vulcanize/go-ethereum","version":"v1.13.14","status":"pending"}
+{"module":"github.com/xiaowenwe/eth","version":"v0.0.0-20190121063334-1b63d29ca622","status":"pending"}
 {"module":"github.com/yelhousni/gnark-crypto","version":"v0.4.0","status":"pending"}
 {"module":"github.com/yywing/cve-2022-0778","version":"v0.0.0-20220407125841-7b5f33a6b388","status":"pending"}
 {"module":"go.coder.com/websocket","version":"v1.8.15","status":"pending"}

@@ -120,14 +120,22 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 		returned := false
 		for _, original := range c.blocks[at].instrs {
 			ins := arm64StackInstruction(original)
-			ins.Args = append([]Operand(nil), ins.Args...)
-			for i := range ins.Args {
-				arg := &ins.Args[i]
-				if arg.Kind == OpMem {
-					if index, ok := arm64StackIndex(arg.Mem.Index); ok && zeroRegisters&(1<<uint(index)) != 0 {
-						arg.Mem.Index = ""
-					}
+			copied := false
+			for i, arg := range ins.Args {
+				if arg.Kind != OpMem {
+					continue
 				}
+				index, ok := arm64StackIndex(arg.Mem.Index)
+				if !ok || zeroRegisters&(1<<uint(index)) == 0 {
+					continue
+				}
+				// Proofs normally inspect immutable operands. Copy only when
+				// normalizing a proved-zero index; never alter source slices.
+				if !copied {
+					ins.Args = append([]Operand(nil), ins.Args...)
+					copied = true
+				}
+				ins.Args[i].Mem.Index = ""
 			}
 			if ins.Op == OpRET {
 				returned = true
@@ -136,9 +144,13 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 			// A restored SP need not be bounded if it is never dereferenced
 			// again (for example asmcgocall's final restore before RET).
 			// Require bounds at each actual local-memory use instead.
-			call := ins.Op == "BL" || ins.Op == "CALL" || ins.Op == "BLR"
+			controlOp := normalizeInstructionOpcode(ins.Op)
+			call := controlOp == "BL" || controlOp == "CALL" || controlOp == "BLR"
+			branch := controlOp == "B" || controlOp == "JMP" || controlOp == "BR"
 			for _, arg := range ins.Args {
-				if arg.Kind != OpMem || call || !arm64StackReg(arg.Mem.Base) && arg.Mem.Base != ZR {
+				// A parenthesized branch target is a register, not a memory
+				// dereference. In BR/BLR register 31 reads XZR, not SP.
+				if arg.Kind != OpMem || call || branch || !arm64StackReg(arg.Mem.Base) && arg.Mem.Base != ZR {
 					continue
 				}
 				address := state[31]
@@ -257,6 +269,13 @@ func arm64StackStep(state *arm64StackState, original, ins Instr) error {
 				state[index] = arm64StackRange{}
 				return nil
 			case "MOVD":
+				if form, handled, err := parseARM64RegisterAddressForm(Op(base), ins); handled && err == nil {
+					if form.usesScratch {
+						state[27] = arm64StackRange{}
+					}
+					state[index] = adjust(state.value(form.base), form.offset)
+					return nil
+				}
 				if len(ins.Args) == 2 && ins.Args[0].Kind == OpReg {
 					state[index] = state.value(ins.Args[0].Reg)
 					return nil

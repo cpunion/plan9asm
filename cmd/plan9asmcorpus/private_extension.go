@@ -169,29 +169,36 @@ func filterPrivateExtensionConfigurations(
 	configs []discoveryBuildConfiguration,
 	skip discoveryPrivateExtensionSkip,
 ) ([]discoveryBuildConfiguration, bool, error) {
+	return filterExactAssemblyConfiguration(configs, skip.AsmFile, skip.Target, "private-extension")
+}
+
+func filterExactAssemblyConfiguration(
+	configs []discoveryBuildConfiguration,
+	asmFile, target, kind string,
+) ([]discoveryBuildConfiguration, bool, error) {
 	filtered := make([]discoveryBuildConfiguration, 0, len(configs)+1)
 	active := false
 	for _, config := range configs {
-		if !containsDiscoveryString(config.Targets, skip.Target) || !containsDiscoveryString(config.AsmFiles, skip.AsmFile) {
+		if !containsDiscoveryString(config.Targets, target) || !containsDiscoveryString(config.AsmFiles, asmFile) {
 			filtered = append(filtered, config)
 			continue
 		}
 		if active {
 			return nil, false, fmt.Errorf(
-				"private-extension file %s on %s occurs in multiple build configurations",
-				skip.AsmFile, skip.Target,
+				"%s file %s on %s occurs in multiple build configurations",
+				kind, asmFile, target,
 			)
 		}
 		active = true
-		remainingFiles := subtractDiscoveryStrings(config.AsmFiles, []string{skip.AsmFile})
+		remainingFiles := subtractDiscoveryStrings(config.AsmFiles, []string{asmFile})
 		if len(remainingFiles) != 0 {
 			filtered = append(filtered, discoveryBuildConfiguration{
 				BuildTags: append([]string(nil), config.BuildTags...),
-				Targets:   []string{skip.Target},
+				Targets:   []string{target},
 				AsmFiles:  remainingFiles,
 			})
 		}
-		remainingTargets := subtractDiscoveryStrings(config.Targets, []string{skip.Target})
+		remainingTargets := subtractDiscoveryStrings(config.Targets, []string{target})
 		if len(remainingTargets) != 0 {
 			filtered = append(filtered, discoveryBuildConfiguration{
 				BuildTags: append([]string(nil), config.BuildTags...),

@@ -5,19 +5,20 @@ import (
 	"strings"
 )
 
-// lowerAMDSystemManagement implements AMD's fixed no-operand 0F 01 D8-DF
-// family. Their architectural operands are implicit: VMRUN/VMLOAD/VMSAVE use
-// rAX, SKINIT uses EAX, INVLPGA uses rAX and ECX, and VMMCALL follows the common
+// lowerX86SystemManagement implements AMD's fixed no-operand 0F 01 D8-DF
+// family and Intel's VMCALL. Their architectural operands are implicit:
+// VMRUN/VMLOAD/VMSAVE use rAX, SKINIT uses EAX, INVLPGA uses rAX and ECX,
+// and VMCALL/VMMCALL follow the common
 // KVM hypercall convention with rAX as the result and rBX/rCX/rDX/rSI as input
 // arguments. The remaining instructions have no general-register operands.
-func (c *amd64Ctx) lowerAMDSystemManagement(op Op, ins Instr) (ok bool, terminated bool, err error) {
+func (c *amd64Ctx) lowerX86SystemManagement(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
 		baseOp = rawOp[:dot]
 	}
 	switch baseOp {
-	case "VMRUN", "VMMCALL", "VMLOAD", "VMSAVE", "STGI", "CLGI", "SKINIT", "INVLPGA":
+	case "VMCALL", "VMRUN", "VMMCALL", "VMLOAD", "VMSAVE", "STGI", "CLGI", "SKINIT", "INVLPGA":
 		// handled below
 	default:
 		return false, false, nil
@@ -62,7 +63,7 @@ func (c *amd64Ctx) lowerAMDSystemManagement(op Op, ins Instr) (ok bool, terminat
 			return true, false, err
 		}
 		fmt.Fprintf(c.b, "  call void asm sideeffect \"invlpga\", %q(%s %s, i32 %s)\n", "{ax},{cx},"+clobbers, wordType, ax, cx)
-	case "VMMCALL":
+	case "VMCALL", "VMMCALL":
 		regs := []Reg{AX, BX, CX, DX, SI}
 		args := make([]string, len(regs))
 		for i, reg := range regs {
@@ -73,8 +74,8 @@ func (c *amd64Ctx) lowerAMDSystemManagement(op Op, ins Instr) (ok bool, terminat
 			args[i] = value
 		}
 		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect \"vmmcall\", %q(%s %s, %s %s, %s %s, %s %s, %s %s)\n",
-			call, wordType, "={ax},0,{bx},{cx},{dx},{si},"+clobbers,
+		fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s %s, %s %s, %s %s, %s %s, %s %s)\n",
+			call, wordType, strings.ToLower(baseOp), "={ax},0,{bx},{cx},{dx},{si},"+clobbers,
 			wordType, args[0], wordType, args[1], wordType, args[2], wordType, args[3], wordType, args[4],
 		)
 		if err := c.storeRegSized(AX, wordType, "%"+call); err != nil {

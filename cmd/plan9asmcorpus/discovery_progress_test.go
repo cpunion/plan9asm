@@ -67,6 +67,7 @@ func TestDiscoveryProgressPreservesInvalidSourceSkipReasonInAssemblyLedger(t *te
 	result := &report.Results[0]
 	result.Status = discoveryStatusSkippedInvalidSource
 	result.Translations = 0
+	result.OrdinarySelectionPlan, result.BuildConfigurations, result.ApplicableAsmFiles = nil, nil, nil
 	result.InvalidSourceReason = "raw ARM64 word is invalid"
 	result.InvalidSourceEvidence = []discoveryInvalidMachineCodeEvidence{{
 		AsmFile: result.DiscoveredAsmFiles[0], SHA256: strings.Repeat("a", 64),
@@ -448,6 +449,7 @@ func TestDiscoveryProgressRejectsContradictoryOutcomes(t *testing.T) {
 
 func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 	ledger, reports, source := writeDiscoveryReportFixture(t)
+	const rawDiagnostic = "/tmp/ephemeral/cache/file.go:3:14: undefined: missingDeclaration"
 	files, err := discoveryCorpusReportFiles(reports)
 	if err != nil {
 		t.Fatal(err)
@@ -463,13 +465,23 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 			result := &report.Results[i]
 			result.Status = discoveryStatusNotApplicable
 			result.Translations = 0
+			result.BuildConfigurations, result.ApplicableAsmFiles = nil, nil
 			result.NotApplicableReason = "current Go rejects the exact package"
-			result.SourceNotApplicableItems = []discoverySourceNotApplicableItem{{
-				AsmFiles: result.DiscoveredAsmFiles,
-				Targets:  report.Targets,
-				Kind:     discoverySourceNotApplicableGoBuild,
-				Reason:   "current Go compiler rejection",
-			}}
+			sources := map[string]string{"decl.go": "package ordinary\n"}
+			for _, asmFile := range result.DiscoveredAsmFiles {
+				sources[asmFile] = "TEXT ·F(SB),$0-0\nRET\n"
+			}
+			result.OrdinarySelectionPlan = fixtureOrdinarySelection(t, result.DiscoveredAsmFiles, report.Targets, sources)
+			result.OrdinarySelectionPlan.Module, result.OrdinarySelectionPlan.Version = result.Module, result.Version
+			for _, decision := range result.OrdinarySelectionPlan.Decisions {
+				if decision.Kind == nativeLayoutSelected {
+					result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+						AsmFiles: decision.AsmFiles, Targets: decision.Targets, BuildTags: decision.BuildTags,
+						Kind: discoverySourceNotApplicableGoBuild, Reason: rawDiagnostic,
+					})
+				}
+			}
+			fixtureProfileEvidence(t, result, report.FeatureInventory)
 		}
 		if err := writeDiscoveryCorpusReport(file, report); err != nil {
 			t.Fatal(err)
@@ -485,5 +497,119 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 	}
 	if err := verifyDiscoveryCorpusReports(ledger, reports, targets, source); err != nil {
 		t.Fatalf("valid source N/A rejected: %v", err)
+	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("c", 64)
+	if err := writeAssemblyLedger(output, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := readAssemblyLedger(output, progress.LedgerSHA256, semanticSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range restored.Candidates {
+		data, err := json.Marshal(candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), `"not_applicable_reason":"current Go rejects the exact package"`) {
+			t.Fatalf("source skip reason lost from assembly ledger: %s", data)
+		}
+		if !strings.Contains(string(data), `"source_not_applicable_items"`) ||
+			!strings.Contains(string(data), "Go 1.27 package build rejected") ||
+			strings.Contains(string(data), "/tmp/ephemeral") {
+			t.Fatalf("source skip details lost from assembly ledger: %s", data)
+		}
+		for _, item := range candidate.SourceNotApplicableItems {
+			if err := validateDiscoverySourceDiagnostic(item.Diagnostic); err != nil {
+				t.Fatal("ledger lost the concrete diagnostic witness:", err)
+			}
+		}
+	}
+	missingEvidence := restored
+	missingEvidence.Candidates = append([]discoveryCandidateProgress(nil), restored.Candidates...)
+	first := &missingEvidence.Candidates[0]
+	first.SourceNotApplicableItems = append([]discoverySourceSkipSummary(nil), first.SourceNotApplicableItems...)
+	first.SourceNotApplicableItems[0].Diagnostic = nil
+	if err := validateAssemblyLedgerProgress(missingEvidence); err == nil {
+		t.Fatal("reason-only ledger skip was accepted after its diagnostic witness was removed")
+	}
+}
+
+func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
+	targets := []string{"darwin/amd64", "darwin/arm64", "linux/amd64", "linux/arm64"}
+	ledger, reports, source := writeDiscoveryReportFixtureWithTargets(t, targets)
+	files, err := discoveryCorpusReportFiles(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		report, err := readDiscoveryCorpusReport(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range report.Results {
+			result := &report.Results[i]
+			result.NotApplicableTranslations = 1
+			report.NotApplicableTranslations++
+			result.Translations--
+			report.Translations--
+			result.NotApplicableItems = []matrixTargetNotApplicableItem{{
+				Target:    result.BuildConfigurations[0].Targets[0],
+				ProfileID: result.BuildConfigurations[0].ProfileID,
+				BuildTags: result.BuildConfigurations[0].BuildTags,
+				targetNotApplicableItem: targetNotApplicableItem{
+					PkgPath: result.Module,
+					AsmFile: "/tmp/private-runner/module-cache/" + result.Module + "@" + result.Version + "/" + result.DiscoveredAsmFiles[0],
+					Kind:    targetNotApplicableGoTextArgSize, Symbol: result.Module + ".stub",
+					DeclaredArgSize: 16, ExpectedArgSize: 8,
+					Reason: "TEXT argument size does not match",
+				},
+			}}
+			result.FeatureConsumption[0].Outputs = nil // this exact scoped ABI rejection must not claim an LLVM object
+		}
+		if err := writeDiscoveryCorpusReport(file, report); err != nil {
+			t.Fatal(err)
+		}
+	}
+	progress, err := collectDiscoveryProgress(ledger, reports, targets, source, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range progress.Candidates {
+		if len(candidate.NotApplicableItems) != 1 {
+			t.Fatalf("missing target skip evidence: %+v", candidate)
+		}
+		if strings.HasPrefix(candidate.NotApplicableItems[0].AsmFile, "/") {
+			t.Fatalf("runner path leaked into assembly ledger: %+v", candidate.NotApplicableItems)
+		}
+	}
+}
+
+func TestDiscoveryTargetSkipPathsUseExactInventory(t *testing.T) {
+	candidate := discoveryCandidate{
+		Module: "example.com/asm", Version: "v1.0.0",
+		AsmFiles: []string{"stub.s", "internal/stub.s"},
+	}
+	for _, reported := range []string{
+		"internal/stub.s",
+		"/tmp/runner/module-cache/example.com/asm@v1.0.0/internal/stub.s",
+		`C:\runner\module-cache\example.com\asm@v1.0.0\internal\stub.s`,
+	} {
+		items := []matrixTargetNotApplicableItem{{
+			targetNotApplicableItem: targetNotApplicableItem{AsmFile: reported},
+		}}
+		got, err := summarizeDiscoveryTargetSkips(candidate, items)
+		if err != nil || len(got) != 1 || got[0].AsmFile != "internal/stub.s" {
+			t.Fatalf("canonicalize %q: %+v, %v", reported, got, err)
+		}
+		if items[0].AsmFile != reported {
+			t.Fatal("normalization mutated the raw report")
+		}
+	}
+	if _, err := summarizeDiscoveryTargetSkips(candidate, []matrixTargetNotApplicableItem{{
+		targetNotApplicableItem: targetNotApplicableItem{AsmFile: "/tmp/unrelated/not-scanned.s"},
+	}}); err == nil {
+		t.Fatal("accepted a skip for a file outside the scan inventory")
 	}
 }

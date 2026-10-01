@@ -84,20 +84,20 @@ TEXT foo(SB),NOSPLIT,$0-0 // trailing comment
 	}); !changed || !strings.Contains(got, "MOVQ AX, BX") {
 		t.Fatalf("expandInlineMacroCalls() = (%q, %v)", got, changed)
 	}
-	if got, changed := expandIdentMacros("MOVQ VALUE, AX", map[string]ppMacro{"VALUE": {body: "9"}}, []string{"VALUE"}); !changed || got != "MOVQ 9, AX" {
+	if got, changed := expandIdentMacros("MOVQ VALUE, AX", map[string]ppMacro{"VALUE": {body: "9"}}); !changed || got != "MOVQ 9, AX" {
 		t.Fatalf("expandIdentMacros() = (%q, %v)", got, changed)
 	}
-	if got := expandImmExprMacros("MOVQ $(VALUE+1), AX", map[string]ppMacro{"VALUE": {body: "9"}}); got != "MOVQ $(9+1), AX" {
-		t.Fatalf("expandImmExprMacros() = %q", got)
+	if got, changed := expandIdentMacros("MOVQ $(VALUE+1), AX", map[string]ppMacro{"VALUE": {body: "9"}}); !changed || got != "MOVQ $(9+1), AX" {
+		t.Fatalf("expandIdentMacros(immediate expression) = %q, %v", got, changed)
 	}
 	if got := replaceMacroParams("ADDQ a, b", []string{"a", "b"}, []string{"CX", "DX"}); got != "ADDQ CX, DX" {
 		t.Fatalf("replaceMacroParams() = %q", got)
 	}
-	if got := replaceMacroIdents("VALUE+KEEP", map[string]ppMacro{
+	if got, changed := expandIdentMacros("VALUE+KEEP", map[string]ppMacro{
 		"VALUE": {body: "5"},
 		"KEEP":  {body: "AX"},
-	}); got != "5+AX" {
-		t.Fatalf("replaceMacroIdents() = %q", got)
+	}); !changed || got != "5+AX" {
+		t.Fatalf("expandIdentMacros(expression) = %q, %v", got, changed)
 	}
 	if out := expandPPLine("WRAP(AX, BX)", map[string]ppMacro{
 		"WRAP": {body: "PAIR(a, b)", params: []string{"a", "b"}},
@@ -199,8 +199,8 @@ func TestTranslateIRTextCoverage(t *testing.T) {
 	}
 	if err := validateResolvedImmediates(ArchAMD64, Func{
 		Instrs: []Instr{{Args: []Operand{{Kind: OpImm, ImmRaw: "$(sym)"}}}},
-	}); err != nil {
-		t.Fatalf("validateResolvedImmediates(amd64) error = %v", err)
+	}); err == nil {
+		t.Fatal("validateResolvedImmediates(amd64) accepted an unresolved constant")
 	}
 
 	var dataIR strings.Builder
@@ -409,13 +409,20 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 			},
 		}},
 	}
-	armMod, err := translateModuleDirect(arm64File, Options{
+	armOptions := Options{
 		ResolveSym: resolve,
 		Goarch:     "arm64",
 		Sigs:       map[string]FuncSig{"example.arm64m": {Name: "example.arm64m", Ret: I64}},
-	})
+	}
+	if direct, err := translateModuleDirect(arm64File, armOptions); err == nil {
+		direct.Dispose()
+		t.Fatal("ARM64 direct prototype bypassed architecture-aware proof")
+	} else if !errors.Is(err, errDirectModuleUnsupported) {
+		t.Fatalf("ARM64 direct path must request checked fallback: %v", err)
+	}
+	armMod, err := TranslateModule(arm64File, armOptions)
 	if err != nil {
-		t.Fatalf("translateModuleDirect(arm64) error = %v", err)
+		t.Fatalf("TranslateModule(arm64 checked fallback) error = %v", err)
 	}
 	defer armMod.Dispose()
 	if !strings.Contains(armMod.String(), `@example.arm64m`) {
@@ -1246,8 +1253,9 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 		for _, want := range []string{
 			"call { i32, i32, i32, i32 } asm sideeffect \"cpuid\"",
 			"call { i32, i32 } asm sideeffect \"xgetbv\"",
-			"call i64 asm \"mrs $0, TPIDR_EL0\"",
-			"ret i64 0",
+			"call i64 asm sideeffect \"mrs $0, S3_3_C13_C0_2\"",
+			"call i64 asm sideeffect \"mrs $0, S3_0_C0_C0_0\"",
+			"ret i64 %",
 		} {
 			if !strings.Contains(ir, want) {
 				t.Fatalf("missing %q in module IR:\n%s", want, ir)

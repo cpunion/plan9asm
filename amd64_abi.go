@@ -40,9 +40,8 @@ func (c *amd64Ctx) abi0CallArgs(callee string, sig FuncSig) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", value, argType, ptr)
-			args = append(args, fmt.Sprintf("%s %%%s", argType, value))
+			value := c.loadFPStorage(argType, ptr, ", align 1")
+			args = append(args, fmt.Sprintf("%s %s", argType, value))
 			continue
 		}
 		aggregate := "undef"
@@ -54,10 +53,9 @@ func (c *amd64Ctx) abi0CallArgs(callee string, sig FuncSig) ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", value, slot.Type, ptr)
+			value := c.loadFPStorage(slot.Type, ptr, ", align 1")
 			inserted := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = insertvalue %s %s, %s %%%s%s\n", inserted, argType, aggregate, slot.Type, value, frameSlotExtractSuffix(slot))
+			fmt.Fprintf(c.b, "  %%%s = insertvalue %s %s, %s %s%s\n", inserted, argType, aggregate, slot.Type, value, frameSlotExtractSuffix(slot))
 			aggregate = "%" + inserted
 		}
 		args = append(args, fmt.Sprintf("%s %s", argType, aggregate))
@@ -86,7 +84,7 @@ func (c *amd64Ctx) storeABI0CallResult(callee string, sig FuncSig, result string
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", slot.Type, value, ptr)
+		c.storeFPStorage(slot.Type, value, ptr, ", align 1", "")
 	}
 	return nil
 }

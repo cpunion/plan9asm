@@ -1,9 +1,13 @@
 {"module":"ghproxy-9d2.pages.dev/zerfoo/zerfoo","version":"v1.38.4","status":"pending"}
 {"module":"github.com/1345695/xray-core","version":"v0.0.0-20260920105842-bc94b72a9e98","status":"pending"}
+{"module":"github.com/Boos-Labs/go-ethereum","version":"v1.10.26","status":"pending"}
 {"module":"github.com/CoreGX/coregex","version":"v0.12.25","status":"pending"}
+{"module":"github.com/MarconiProtocol/go-methereum","version":"v0.0.0-20200110221624-c11cd243dfa8","status":"pending"}
+{"module":"github.com/Sakura286/math32","version":"v1.11.1","status":"pending"}
 {"module":"github.com/binkyrailways/BinkyRailways","version":"v0.0.0-20260507191611-3d094d0dd166","status":"pending"}
 {"module":"github.com/cedarlogic/go-ethereum","version":"v0.8.5","status":"pending"}
 {"module":"github.com/conformal/fastsha256","version":"v0.0.0-20160815193821-637e65642941","status":"pending"}
+{"module":"github.com/creack/pty/v2","version":"v2.0.0-20240228220112-08e77a045af8","status":"pending"}
 {"module":"github.com/debiansid/sing-tun","version":"v0.9.3","status":"pending"}
 {"module":"github.com/f-secure-foundry/tamago-go","version":"v0.0.0-20260710193149-03845e30f7b7","status":"pending"}
 {"module":"github.com/fearl0rd/ollama","version":"v0.0.0-20260516052344-139771c5b70a","status":"pending"}

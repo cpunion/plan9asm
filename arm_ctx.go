@@ -28,6 +28,10 @@ type armCtx struct {
 	flagsVSlot   string
 	flagsWritten bool
 
+	// Only a validated physical entry shim supplies this private body input.
+	// It never changes the source entry's caller-visible arguments.
+	machineState string
+
 	exclusiveValidSlot string
 	exclusivePtrSlot   string
 	exclusiveSizeSlot  string
@@ -379,6 +383,11 @@ func (c *armCtx) scanUsedRegs() {
 		markReg(Reg(fmt.Sprintf("R%d", i)))
 	}
 	markReg(SP)
+	if c.machineState != "" && c.sig.ARMEntry.VFP {
+		for i := 0; i < 16; i++ {
+			markReg(Reg(fmt.Sprintf("F%d", i)))
+		}
+	}
 }
 
 func (c *armCtx) emitEntryAllocasAndArgInit() error {
@@ -476,6 +485,9 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, slot)
 		}
 	}
+	if c.machineState != "" {
+		return c.initializeMachineState()
+	}
 	return nil
 }
 
@@ -509,6 +521,14 @@ func armValueAsI32(c *armCtx, ty LLVMType, v string) (out string, ok bool, err e
 }
 
 func (c *armCtx) loadReg(r Reg) (string, error) {
+	if r == PC {
+		return "", fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// Architectural PC reads depend on the source instruction's actual
+		// address and encoding, not on an initialized LLVM register slot.
+		return "", fmt.Errorf("%w: arm hardware PC R15 requires source instruction layout context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return "", fmt.Errorf("arm: unknown reg %s", r)
@@ -519,6 +539,14 @@ func (c *armCtx) loadReg(r Reg) (string, error) {
 }
 
 func (c *armCtx) storeReg(r Reg, v string) error {
+	if r == PC {
+		return fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// PC destinations are control transfers or instruction-specific
+		// system-state effects. Storing a virtual value is not either contract.
+		return fmt.Errorf("%w: arm hardware PC R15 requires explicit control-flow/system-state context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return fmt.Errorf("arm: unknown reg %s", r)

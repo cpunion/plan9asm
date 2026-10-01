@@ -1,11 +1,32 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
 
 func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+	for _, ins := range fn.Instrs {
+		if _, _, err := parseARMStatusMove(ins); err != nil {
+			return err // Validate even source-dead status operands before CFG proof.
+		}
+		op, _, _, _ := armDecodeOp(string(ins.Op))
+		if _, move := armIntegerMemorySpecs[op]; !move {
+			continue
+		}
+		for _, source := range ins.Args {
+			if source.Kind == OpSym && strings.HasSuffix(strings.TrimSpace(source.Sym), "(SB)") {
+				if _, err := parseARMIntegerSymbolForm(op, ins); err != nil {
+					return err // Preserve source grammar/PC failures before flags-context proof.
+				}
+				break
+			}
+		}
+	}
+	if err := proveARMStatusReads(fn, sig); err != nil {
+		return err
+	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
 	for i, t := range sig.Args {
 		if i > 0 {
@@ -20,6 +41,10 @@ func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	b.WriteString(" {\n")
 
 	c := newARMCtx(b, fn, sig, resolve, sigs, annotateSource)
+	// The source proof above establishes initialization at each flag use,
+	// including a read block emitted before its backward-edge predecessor.
+	// This boolean selects the modeled representation, not initial NZCV.
+	c.flagsWritten = armFunctionUsesModeledFlags(fn)
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}
@@ -74,6 +99,15 @@ func (c *armCtx) lowerBlocks() error {
 }
 
 func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armEmitCondBr) (bool, error) {
+	if form, matched, err := parseARMStatusMove(ins); matched {
+		if err != nil {
+			return false, err
+		}
+		return false, c.lowerStatusMove(form)
+	}
+	if ins.armKernelCall != nil {
+		return c.lowerKernelHelperCall(*ins.armKernelCall)
+	}
 	rawOp := strings.ToUpper(string(ins.Op))
 	baseOp, cond, postInc, setFlags := armDecodeOp(rawOp)
 	switch baseOp {
@@ -214,7 +248,7 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 		}
 		decoded, err := decodeARMRawWordInstruction(ins)
 		if err != nil {
-			if strings.Contains(err.Error(), "PC-relative") {
+			if errors.Is(err, ErrProbeNeedsContext) || strings.Contains(err.Error(), "PC-relative") {
 				return false, err
 			}
 			return false, fmt.Errorf("arm WORD cannot be lowered safely because its encoding is unsupported: %q", ins.Raw)
@@ -251,6 +285,9 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 }
 
 func (c *armCtx) lowerRET() error {
+	if c.machineState != "" {
+		return c.returnMachineState()
+	}
 	if len(c.fpResults) == 0 {
 		r0, err := c.loadReg(Reg("R0"))
 		if err != nil {

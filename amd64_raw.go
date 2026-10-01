@@ -11,9 +11,13 @@ import (
 	"golang.org/x/arch/x86/x86asm"
 )
 
-func normalizeX86RawFile(file *File, goarch string) (*File, error) {
+func normalizeX86RawFile(file *File, goarch string, translationOptions ...Options) (*File, error) {
 	if file == nil || file.Arch != ArchAMD64 {
 		return file, nil
+	}
+	opt := Options{Goarch: goarch}
+	if len(translationOptions) != 0 {
+		opt = translationOptions[0]
 	}
 	normalized := *file
 	normalized.Funcs = append([]Func(nil), file.Funcs...)
@@ -33,6 +37,9 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 	}
 	for i := range normalized.Funcs {
 		if normalized.Funcs[i].X86RawText != nil {
+			if err := validateX86AddressSensitiveRawText(normalized.Funcs[i], goarch); err != nil {
+				return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
+			}
 			continue
 		}
 		if x86HasTerminalRawTail(normalized.Funcs[i]) &&
@@ -87,7 +94,9 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 			if ins.x86RIPAddressOff != 0 {
 				address += fmt.Sprintf("+%d", ins.x86RIPAddressOff)
 			}
-			ins.Args[addressArg].Sym = address + "(SB)"
+			if err := rebindX86RawStaticRead(ins, addressArg, address+"(SB)"); err != nil {
+				return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_address_pending(SB)", ins.Args[addressArg].Sym, 1)
 		}
 		for j := range fn.Instrs {
@@ -118,10 +127,17 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 				Sym: name, Width: int64(len(ins.x86RIPLiteralData)),
 				Payload: ins.x86RIPLiteralData,
 			})
-			ins.Args[literalArg].Sym = name + "(SB)"
+			if err := rebindX86RawStaticRead(ins, literalArg, name+"(SB)"); err != nil {
+				return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[literalArg].Sym, 1)
 		}
 		normalized.Funcs[i] = fn
+		// A folded read needs the actual allocated DATA object, not the
+		// pending placeholder or only the source instruction's mnemonic.
+		if err := validateX86RawNearReturns(fn, &normalized, opt, len(translationOptions) != 0); err != nil {
+			return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+		}
 	}
 	return &normalized, nil
 }
@@ -181,7 +197,9 @@ func isX86DirectControlTransfer(op Op) bool {
 // before a compile-only caller partitions functions into bounded modules.
 // Address-sensitive TEXT bodies must be identified while all references are
 // still visible. TranslateModuleInContext may safely normalize the result
-// again after partitioning.
+// again after partitioning. This preparation API has no function signatures:
+// final typed FP return-contract validation runs when translation consumes its
+// existing Options.Sigs. Preparation does not prove a callable return ABI.
 func NormalizeRawFileForTranslation(file *File, goarch string) (*File, error) {
 	return normalizeX86RawFile(file, goarch)
 }
@@ -502,6 +520,21 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += named.length
 				continue
 			}
+			if instruction, length, literal, ok, err := decodeX86RawADX(code, offset, mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 ADX at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				if literal.last > literal.first {
+					recordLiteral(offset, literal)
+				}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86ExtendedPrefetchInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 extended prefetch at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -514,7 +547,40 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
-			if instruction, length, ok := decodedX86AMDSystemManagementInstruction(code[offset:]); ok {
+			if instruction, length, ok, err := decodedX86EnqueueInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 enqueue at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, ok, err := decodedX86WaitPackageInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 WAITPKG at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, ok := decodedX86EndBranchInstruction(code[offset:]); ok {
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
+			if instruction, length, ok := decodedX86SystemManagementInstruction(code[offset:]); ok {
 				if err := markInstruction(offset, length); err != nil {
 					return nil, err
 				}
@@ -2485,7 +2551,9 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				if mode == 64 && inst.Op == x86asm.LEA {
 					mem, ok := inst.Args[1].(x86asm.Mem)
 					if ok && mem.Base == x86asm.RIP {
-						target := offset + inst.Len + int(mem.Disp)
+						// x86asm exposes disp32 as an unsigned magnitude here.
+						// RIP-relative LEA always sign-extends that 32-bit field.
+						target := offset + inst.Len + int(int32(mem.Disp))
 						if target < 0 || target >= len(code) {
 							return nil, fmt.Errorf("raw x86 local address target byte %d at instruction %d is outside directive group: %q", target, start, rawGroup)
 						}
@@ -2526,6 +2594,20 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			instrs, err := parseDecodedX86Instruction(syntax)
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
+			}
+			if inst.Op == x86asm.RET {
+				form := x86RawNearReturnEncoding(code[offset : offset+inst.Len])
+				for i := range instrs {
+					if instrs[i].Op != OpRET {
+						continue
+					}
+					instrs[i].x86RawNearReturn = &form
+					if form.nativeWidth && form.cleanup == 0 {
+						// Keep the encoded semantics in private metadata. Removing the
+						// zero operand does not validate the containing source frame.
+						instrs[i].Args = nil
+					}
+				}
 			}
 			decodedByOffset[offset] = x86RawDecodedInstruction{length: inst.Len, instrs: annotate(instrs)}
 			offset += inst.Len
@@ -2585,11 +2667,18 @@ func decodeX86RawDirectiveGroupWithOpaque(
 					if ins.Args[arg].Kind != OpSym || ins.Args[arg].Sym != "·__plan9asm_raw_literal_pending(SB)" {
 						continue
 					}
-					ins.Args[arg].Sym = "·__plan9asm_raw_address_pending(SB)"
+					if err := rebindX86RawStaticRead(ins, arg, "·__plan9asm_raw_address_pending(SB)"); err != nil {
+						return nil, err
+					}
 					ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[arg].Sym, 1)
 					// An address escape may permit writes to this pool. Force a
 					// runtime load rather than specializing from its initial bytes.
 					ins.x86RIPLiteralData = nil
+					// Address escape forbids constant specialization, not a
+					// read of this exact allocated static object. Retain the
+					// physical read range and bind the shared whole suffix.
+					ins.x86RIPMemoryRead.offset = int64(literal.first - first)
+					ins.x86RIPMemoryRead.object = append([]byte(nil), code[first:]...)
 					ins.x86RIPAddressData = code[first:]
 					ins.x86RIPAddressOff = literal.first - first
 					ins.x86RIPAddressGroup = start
@@ -10113,6 +10202,34 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 	}
 
 	switch inst.Op {
+	case x86asm.RDFSBASE, x86asm.RDGSBASE, x86asm.WRFSBASE, x86asm.WRGSBASE:
+		// x/arch prints widthless Intel names. Reuse the complete named
+		// FSGSBASE grammar, selecting L/Q from the actual GPR: an ignored
+		// 66 prefix can set DataSize=16 while the operand remains 32-bit.
+		register, ok := inst.Args[0].(x86asm.Reg)
+		bits := decodedX86RegisterBits(register)
+		if !ok || inst.Mode != 64 || (bits != 32 && bits != 64) {
+			return "", fmt.Errorf("raw %s requires a 32/64-bit GPR in 64-bit mode", inst.Op)
+		}
+		for _, extra := range inst.Args[1:] {
+			if extra != nil {
+				return "", fmt.Errorf("raw %s requires exactly one register", inst.Op)
+			}
+		}
+		for _, prefix := range inst.Prefix {
+			if prefix&0xff == x86asm.PrefixLOCK || prefix&x86asm.PrefixInvalid != 0 {
+				return "", fmt.Errorf("raw %s has an invalid prefix %s", inst.Op, prefix)
+			}
+		}
+		// Segment/address/operand overrides do not affect this register-only
+		// family. Clear them only after rejecting invalid (not ignored) ones.
+		inst.Prefix = x86asm.Prefixes{}
+		syntax = x86asm.GoSyntax(inst, 0, nil)
+		width := "L"
+		if bits == 64 {
+			width = "Q"
+		}
+		replaceOp(inst.Op.String() + width)
 	case x86asm.INC, x86asm.DEC:
 		bits := 0
 		switch destination := inst.Args[0].(type) {

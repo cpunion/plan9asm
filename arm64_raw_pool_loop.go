@@ -44,6 +44,10 @@ func (flow *arm64RawPoolValues) excludeEdge(edge arm64RawPoolEdge) {
 		}
 	}
 	flow.before[edge.to] = remaining
+	if latch, recorded := flow.loopLatches[edge.to]; recorded && latch == edge.from {
+		delete(flow.loopBounds, edge.to)
+		delete(flow.loopLatches, edge.to)
+	}
 	flow.pruneUnreachablePredecessors()
 	flow.clearValueCaches()
 }
@@ -90,9 +94,11 @@ func (flow *arm64RawPoolValues) prepareControlFlow() {
 	for pass := 0; pass < 3; pass++ {
 		excluded, loops := len(flow.excluded), len(flow.loopBounds)
 		flow.refineBitEdges()
+		flow.refineConstantCompareEdges()
 		for latch := range flow.words {
 			flow.proveCounterLoop(latch)
 			flow.proveOrderedCounterLoop(latch)
+			flow.proveRelationalOneIterationLoop(latch)
 		}
 		flow.clearValueCaches()
 		if excluded == len(flow.excluded) && loops == len(flow.loopBounds) {
@@ -171,16 +177,20 @@ func (flow *arm64RawPoolValues) proveCounterLoop(latch int) {
 		flow.excludeEdge(arm64RawPoolEdge{latch, head})
 		return
 	}
-	// A unit countdown from a positive unsigned value cannot wrap before
-	// reaching zero. At the loop head it stays in [1, initial.high]. Larger
-	// steps require a divisibility proof and are deliberately not inferred.
+	// Non-unit power-of-two strides additionally require a residue proof;
+	// a contiguous interval alone cannot establish that zero is reached.
+	bound := arm64PoolInterval{1, initial.high}
 	if delta != ^uint64(0) || initial.low == 0 || initial == arm64PoolUnknownInterval {
-		return
+		var proved bool
+		bound, proved = entry.counterStrideBound(head, expression, initial, delta)
+		if !proved {
+			return
+		}
 	}
 	if flow.loopBounds == nil {
 		flow.loopBounds = make(map[int]arm64PoolConstraint)
 	}
-	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: arm64PoolInterval{1, initial.high}}
+	flow.loopBounds[head] = arm64PoolConstraint{expression: expression, interval: bound}
 	flow.recordLoopLatch(head, latch)
 	flow.clearValueCaches()
 }
@@ -193,29 +203,14 @@ func (flow *arm64RawPoolValues) recordLoopLatch(head, latch int) {
 }
 
 func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (int, uint64, bool) {
-	if register >= 31 || head < 0 || head >= latch || latch-head > 512 {
+	if register >= 31 || !flow.straightLineLoopBody(head, latch) {
 		return 0, 0, false
-	}
-	for at := head + 1; at <= latch; at++ {
-		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
-			return 0, 0, false
-		}
 	}
 	update := -1
 	var delta uint64
 	for at := head; at < latch; at++ {
 		current := flow.words[at]
-		// The body must fall through only, including instructions that would
-		// otherwise appear harmless in the GP destination-effect classifier.
-		if current&0x7c000000 == 0x14000000 || current&0x7e000000 == 0x34000000 ||
-			current&0x7e000000 == 0x36000000 || current&0xff000010 == 0x54000000 ||
-			current&0xfe000000 == 0xd6000000 {
-			return 0, 0, false
-		}
-		writes, known := arm64RawPoolGPWrites(current)
-		if !known {
-			return 0, 0, false
-		}
+		writes, _ := arm64RawPoolGPWrites(current)
 		if writes&(1<<uint(register)) == 0 {
 			continue
 		}
@@ -232,6 +227,29 @@ func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (in
 	return update, delta, true
 }
 
+func (flow *arm64RawPoolValues) straightLineLoopBody(head, latch int) bool {
+	if head < 0 || head >= latch || latch-head > 512 {
+		return false
+	}
+	for at := head + 1; at <= latch; at++ {
+		if len(flow.before[at]) != 1 || flow.before[at][0] != at-1 {
+			return false
+		}
+	}
+	for at := head; at < latch; at++ {
+		word := flow.words[at]
+		if word&0x7c000000 == 0x14000000 || word&0x7e000000 == 0x34000000 ||
+			word&0x7e000000 == 0x36000000 || word&0xff000010 == 0x54000000 ||
+			word&0xfe000000 == 0xd6000000 {
+			return false
+		}
+		if _, known := arm64RawPoolGPWrites(word); !known {
+			return false
+		}
+	}
+	return true
+}
+
 func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolValues {
 	// Infer the first iteration from external entry paths only. A prior body
 	// execution reached through an enclosing loop is opaque: deleting a
@@ -243,6 +261,15 @@ func (flow *arm64RawPoolValues) counterLoopEntry(head, latch int) *arm64RawPoolV
 		opaqueLoops: map[int]int{latch: head},
 	}
 	entry.clearValueCaches()
+	// Only already-proved, structurally earlier loops can help establish this
+	// loop's entry values. Never use this loop or an enclosing loop as its
+	// own induction premise. Carried-invariant entry proofs disable these
+	// summaries again, keeping that analysis non-recursive.
+	for previousHead, previousLatch := range flow.loopLatches {
+		if previousLatch < head {
+			entry.recordLoopLatch(previousHead, previousLatch)
+		}
+	}
 	entry.before[head] = nil
 	for _, previous := range flow.before[head] {
 		if previous == latch {

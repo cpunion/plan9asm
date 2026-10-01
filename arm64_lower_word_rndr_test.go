@@ -46,9 +46,17 @@ func TestARM64RawRNDRCompleteRegisterAndStatusForms(t *testing.T) {
 		for reg := uint32(0); reg < 32; reg++ {
 			name := fmt.Sprintf("%s%d", form.name, reg)
 			fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
+			// RNDR really writes its GP destination, including physical LR.
+			// Preserve the caller link in a distinct source register so every
+			// accepted form has a valid return, rather than inventing one.
+			savedLink := 25
+			if reg == 25 {
+				savedLink = 26
+			}
+			fmt.Fprintf(&source, "MOVD R30,R%d\n", savedLink)
 			fmt.Fprintf(&source, "WORD $%#08x\n", form.base|reg)
 			fmt.Fprintf(&source, "BEQ %sdone\n", name)
-			fmt.Fprintf(&source, "%sdone:\nRET\n", name)
+			fmt.Fprintf(&source, "%sdone:\nMOVD R%d,R30\nRET\n", name, savedLink)
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 	}

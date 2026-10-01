@@ -1,15 +1,121 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+)
+
+const discoveryProgressSchema = 2
+
+// Raw matrix reports use absolute paths into their disposable module cache.
+// Persist the matching scan-inventory path, never the runner's cache prefix.
+func summarizeDiscoveryTargetSkips(candidate discoveryCandidate, items []matrixTargetNotApplicableItem) ([]matrixTargetNotApplicableItem, error) {
+	result := append([]matrixTargetNotApplicableItem(nil), items...)
+	for i := range result {
+		item := &result[i]
+		reported := strings.ReplaceAll(item.AsmFile, "\\", "/")
+		matched := ""
+		for _, file := range candidate.AsmFiles {
+			if (reported == file || strings.HasSuffix(reported, "/"+file)) && len(file) > len(matched) {
+				matched = file
+			}
+		}
+		if matched == "" {
+			return nil, fmt.Errorf("target skip file %q is absent from %s's scan inventory", item.AsmFile, candidate.exactKey())
+		}
+		item.AsmFile = matched
+		item.Reason = discoveryTargetSkipReason(*item)
+	}
+	return result, nil
+}
+
+func discoveryTargetSkipReason(item matrixTargetNotApplicableItem) string {
+	return fmt.Sprintf("%s: TEXT argument size disagrees with the Go declaration: got %d, want %d",
+		item.Symbol, item.DeclaredArgSize, item.ExpectedArgSize)
+}
+
+// The raw shard report keeps the full Go diagnostic. The committed ledger
+// keeps only stable, reviewable scope and classification: raw diagnostics can
+// contain runner-specific cache paths and differ across otherwise equivalent
+// runs.
+type discoverySourceSkipSummary struct {
+	ProfileID  string                            `json:"profile_id,omitempty"`
+	BuildTags  []string                          `json:"build_tags,omitempty"`
+	AsmFile    string                            `json:"asm_file,omitempty"`
+	AsmFiles   []string                          `json:"asm_files,omitempty"`
+	Targets    []string                          `json:"targets"`
+	Kind       string                            `json:"kind"`
+	Reason     string                            `json:"reason"`
+	Diagnostic *discoverySourceDiagnosticWitness `json:"diagnostic,omitempty"`
+}
+
+func discoverySourceSkipReason(kind string) string {
+	switch kind {
+	case discoverySourceNotApplicableGoAssembler:
+		return "Go 1.27 assembler rejected this source on all supported targets"
+	case discoverySourceNotApplicableNoGoPackage:
+		return "no current Go package selects this assembly source"
+	case discoverySourceNotApplicableGoBuild:
+		return "Go 1.27 package build rejected this target"
+	case discoverySourceNotApplicableAsmDecl:
+		return "Go 1.27 asmdecl rejected the source or ABI for this target"
+	case discoverySourceNotApplicableNoSymbols:
+		return "Go 1.27 assembler emitted no symbols for this source"
+	case nativeLayoutGoAssemblerTarget:
+		return "Go 1.27 assembler rejected this source for this target"
+	default:
+		return ""
+	}
+}
+
+func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []discoverySourceSkipSummary {
+	if len(items) == 0 {
+		return nil
+	}
+	summaries := make([]discoverySourceSkipSummary, 0, len(items))
+	for _, item := range items {
+		var diagnostic *discoverySourceDiagnosticWitness
+		if discoverySourceRejectionRequiresDiagnostic(item.Kind) {
+			diagnostic = captureDiscoverySourceDiagnostic(item.Reason)
+		}
+		summaries = append(summaries, discoverySourceSkipSummary{
+			ProfileID:  item.ProfileID,
+			BuildTags:  append([]string(nil), item.BuildTags...),
+			AsmFile:    item.AsmFile,
+			AsmFiles:   append([]string(nil), item.AsmFiles...),
+			Targets:    append([]string(nil), item.Targets...),
+			Kind:       item.Kind,
+			Reason:     discoverySourceSkipReason(item.Kind),
+			Diagnostic: diagnostic,
+		})
+	}
+	return summaries
+}
 
 type discoveryCandidateProgress struct {
-	Module                string                                `json:"module"`
-	Version               string                                `json:"version"`
-	Status                string                                `json:"status"`
-	InvalidSourceReason   string                                `json:"invalid_source_reason,omitempty"`
-	InvalidSourceEvidence []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
-	Superseded            *discoverySupersededSkip              `json:"superseded,omitempty"`
-	PrivateExtension      *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	Module                    string                                `json:"module"`
+	Version                   string                                `json:"version"`
+	Status                    string                                `json:"status"`
+	Translations              int                                   `json:"translations,omitempty"`
+	NotApplicableTranslations int                                   `json:"not_applicable_translations,omitempty"`
+	NotApplicableItems        []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems  []discoverySourceSkipSummary          `json:"source_not_applicable_items,omitempty"`
+	NotApplicableReason       string                                `json:"not_applicable_reason,omitempty"`
+	InvalidSourceReason       string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	OrdinarySelectionPlan     *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	FeatureProfiles           []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
+	FeatureConsumption        []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
+	// Source-selection proofs persist their exact scopes for ledger replay.
+	DiscoveredAsmFiles  []string                      `json:"discovered_asm_files,omitempty"`
+	ApplicableAsmFiles  []string                      `json:"applicable_asm_files,omitempty"`
+	BuildConfigurations []discoveryBuildConfiguration `json:"build_configurations,omitempty"`
 }
 
 // This is a derived view, not a mutable flag attached to a scanned version.
@@ -35,6 +141,7 @@ type discoveryProgress struct {
 	SkippedInvalidSource      int                          `json:"skipped_invalid_source"`
 	SkippedSuperseded         int                          `json:"skipped_superseded"`
 	SkippedPrivateExtension   int                          `json:"skipped_private_extension"`
+	SkippedNativeLayout       int                          `json:"skipped_native_layout"`
 	Pending                   int                          `json:"pending"`
 	DiscoveredAsmFiles        int                          `json:"discovered_asm_files"`
 	Translations              int                          `json:"translations"`
@@ -42,6 +149,7 @@ type discoveryProgress struct {
 	Complete                  bool                         `json:"complete"`
 	Verified                  bool                         `json:"verified"`
 	Candidates                []discoveryCandidateProgress `json:"candidates"`
+	FeatureInventory          *discoveryFeatureInventory   `json:"feature_inventory"`
 }
 
 func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, source discoverySourceIdentity, shardCount int, repoRoot ...string) (discoveryProgress, error) {
@@ -54,6 +162,7 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 	var skips map[string]discoveryInvalidMachineCodeSkip
 	var superseded map[string]discoverySupersededSkip
 	var privateExtensions map[string]discoveryPrivateExtensionSkip
+	var nativeLayouts map[string]discoveryNativeLayoutSkip
 	if len(repoRoot) == 1 {
 		var err error
 		skips, err = loadInvalidMachineCodeSkips(repoRoot[0])
@@ -77,18 +186,26 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 		if privateExtensions == nil {
 			privateExtensions = map[string]discoveryPrivateExtensionSkip{}
 		}
+		nativeLayouts, err = loadNativeLayoutSkips(repoRoot[0], ledgerPath)
+		if err != nil {
+			return discoveryProgress{}, err
+		}
+		if nativeLayouts == nil {
+			nativeLayouts = map[string]discoveryNativeLayoutSkip{}
+		}
 	}
 	progress := discoveryProgress{
-		SchemaVersion:  1,
-		ValidationKind: "translation_and_llvm22_object_compilation",
-		Source:         source,
-		Targets:        append([]string(nil), targets...),
-		ShardCount:     shardCount,
-		PartialShards:  []int{},
-		PendingShards:  []int{},
-		Candidates:     []discoveryCandidateProgress{},
+		SchemaVersion:    discoveryProgressSchema,
+		ValidationKind:   "translation_and_llvm22_object_compilation",
+		Source:           source,
+		Targets:          append([]string(nil), targets...),
+		ShardCount:       shardCount,
+		PartialShards:    []int{},
+		PendingShards:    []int{},
+		Candidates:       []discoveryCandidateProgress{},
+		FeatureInventory: newDiscoveryFeatureInventory(),
 	}
-	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, superseded, privateExtensions, &progress); err != nil {
+	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, superseded, privateExtensions, nativeLayouts, &progress); err != nil {
 		// Never return a plausible partial total after detecting corrupt evidence.
 		return discoveryProgress{}, err
 	}

@@ -66,6 +66,57 @@ func TestARM64PoolLogicalBoundsDoNotInventRelations(t *testing.T) {
 	}
 }
 
+func TestARM64PoolLogicalDisjointAlignmentRelation(t *testing.T) {
+	for _, op := range []string{"orr", "eor"} {
+		for _, operands := range []string{"x1,x2", "x2,x1"} {
+			line := op + " x3," + operands
+			t.Run(line, func(t *testing.T) {
+				flow := arm64PoolTestFlow(t, []string{
+					"and x1,x0,#1", "and x2,x0,#24", line, "ret",
+				})
+				query := arm64PoolRegisterExpression(3)
+				query.add(arm64PoolRegisterExpression(1), -1)
+				query.add(arm64PoolRegisterExpression(2), -1)
+				if got := flow.affineInterval(3, query); got != (arm64PoolInterval{0, 0}) {
+					t.Fatalf("disjoint variable low/aligned bits lost their sum relation: %+v", got)
+				}
+			})
+		}
+	}
+}
+
+func TestARM64PoolLogicalAlignmentProofBoundaries(t *testing.T) {
+	for _, op := range []string{"orr", "eor"} {
+		for _, test := range []struct {
+			name, operand string
+			definitions   []string
+			want          bool
+		}{
+			{"mask-copy", "x2", []string{"and x4,x0,#24", "mov x2,x4"}, true},
+			{"mask-bic", "x2", []string{"mov x4,#-25", "bic x2,x0,x4"}, true},
+			{"aligned-add", "x2", []string{"and x2,x0,#24", "add x2,x2,#8"}, true},
+			{"aligned-subtract-wrap", "x2", []string{"and x2,x0,#24", "sub x2,x2,#8"}, true},
+			{"shifted-alignment", "x2,lsl #1", []string{"and x2,x0,#12"}, true},
+			{"unaligned-add", "x2", []string{"and x2,x0,#24", "add x2,x2,#1"}, false},
+			{"overlapping-mask", "x2", []string{"mov x4,#25", "and x2,x0,x4"}, false},
+			{"unknown-load", "x2", []string{"ldr x2,[x4]"}, false},
+			{"unaligned-join", "x2", []string{"and x2,x0,#24", "cbz x4,#8", "add x2,x2,#1"}, false},
+			{"non-affine-right-shift", "x2,lsr #3", []string{"and x2,x0,#24"}, false},
+		} {
+			t.Run(op+"/"+test.name, func(t *testing.T) {
+				lines := append([]string{"and x1,x0,#1"}, test.definitions...)
+				at := len(lines)
+				lines = append(lines, op+" x3,x1,"+test.operand, "ret")
+				flow := arm64PoolTestFlow(t, lines)
+				_, _, affine, known := flow.affineLogicalDefinition(at, flow.words[at])
+				if !known || affine != test.want {
+					t.Fatalf("alignment relation=%v known=%v, want %v", affine, known, test.want)
+				}
+			})
+		}
+	}
+}
+
 func TestARM64PoolLogicalBitsAreNotRelocatedOffsets(t *testing.T) {
 	for _, test := range []struct {
 		line string

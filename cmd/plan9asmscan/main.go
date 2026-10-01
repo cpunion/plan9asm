@@ -85,6 +85,7 @@ type report struct {
 	UnsupportedByForm []formReport          `json:"unsupported_by_form"`
 	OpcodeCatalog     []opcodeCatalogReport `json:"opcode_catalog,omitempty"`
 	EncoderCatalog    []encoderFormReport   `json:"encoder_form_catalog,omitempty"`
+	FrontendInventory *frontendInventory    `json:"frontend_inventory,omitempty"`
 	ParseErrs         []parseErr            `json:"parse_errs,omitempty"`
 }
 
@@ -229,7 +230,12 @@ func main() {
 
 	var catalog []opcodeCatalogReport
 	var encoderCatalog []encoderFormReport
+	var frontend *frontendInventory
 	if *corpus == "go-asm" {
+		frontend, err = loadFrontendInventory(*goroot, *goarch)
+		if err != nil {
+			fatalf("load Go assembler frontend inventory: %v", err)
+		}
 		encoderCatalog, err = loadEncoderForms(*goroot, *goarch)
 		if err != nil {
 			fatalf("load official encoder forms: %v", err)
@@ -245,6 +251,7 @@ func main() {
 	}
 	rep := buildReport(*corpus, goVersion(*goroot), *goos, *goarch, len(pkgs), pkgWithSFiles, asmFiles, ops, forms, supported, catalog, verified, compileOnly, parseErrs)
 	attachEncoderCatalog(&rep, ops, encoderCatalog)
+	rep.FrontendInventory = frontend
 
 	var content []byte
 	switch strings.ToLower(strings.TrimSpace(*format)) {
@@ -658,42 +665,16 @@ func buildOpcodeCatalog(
 	forms map[string]*formStat,
 	claimed map[string]struct{},
 ) ([]opcodeCatalogReport, error) {
-	dir := goarch
-	if goarch == "386" || goarch == "amd64" {
-		dir = "x86"
-	}
-	pattern := filepath.Join(goroot, "src", "cmd", "internal", "obj", dir, "anames*.go")
-	files, err := filepath.Glob(pattern)
+	names, err := loadOfficialOpcodeNames(goroot, goarch)
 	if err != nil {
 		return nil, err
 	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no official opcode tables match %s", pattern)
-	}
-	sort.Strings(files)
-	var names [][][]byte
-	for _, path := range files {
-		src, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
-		}
-		names = append(names, reOpcodeName.FindAllSubmatch(src, -1)...)
-	}
 	out := make([]opcodeCatalogReport, 0, len(names))
-	seen := map[string]struct{}{}
 	formsByOpcode := make(map[string][]*formStat, len(forms))
 	for _, st := range forms {
 		formsByOpcode[st.Descriptor.Opcode] = append(formsByOpcode[st.Descriptor.Opcode], st)
 	}
-	for _, match := range names {
-		op := normalizeOp(string(match[1]))
-		if op == "" || op == "LAST" || strings.HasPrefix(op, "RESERVED") {
-			continue
-		}
-		if _, ok := seen[op]; ok {
-			continue
-		}
-		seen[op] = struct{}{}
+	for _, op := range names {
 		item := opcodeCatalogReport{
 			Opcode:   op,
 			Family:   plan9asm.InstructionFamily(arch, op),

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/build"
 	"go/build/constraint"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -116,11 +117,11 @@ func solveDiscoveryPairTags(
 	var asmExpr, goExpr constraint.Expr
 	if len(tags) > 16 {
 		var err error
-		asmExpr, err = discoveryFileBuildExpression(filepath.Join(dir, asmFile))
+		asmExpr, err = discoveryFileBuildExpression(filepath.Join(dir, asmFile), ctx.OpenFile)
 		if err != nil {
 			return nil, false, err
 		}
-		goExpr, err = discoveryFileBuildExpression(filepath.Join(dir, goFile))
+		goExpr, err = discoveryFileBuildExpression(filepath.Join(dir, goFile), ctx.OpenFile)
 		if err != nil {
 			return nil, false, err
 		}
@@ -214,8 +215,12 @@ func discoveryExpressionOutcomes(expr constraint.Expr, assignments map[string]bo
 	}
 }
 
-func discoveryFileBuildExpression(filePath string) (constraint.Expr, error) {
-	file, err := os.Open(filePath)
+func discoveryFileBuildExpression(filePath string, openers ...func(string) (io.ReadCloser, error)) (constraint.Expr, error) {
+	open := func(file string) (io.ReadCloser, error) { return os.Open(file) }
+	if len(openers) != 0 && openers[0] != nil {
+		open = openers[0]
+	}
+	file, err := open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("open build constraints %s: %w", filePath, err)
 	}

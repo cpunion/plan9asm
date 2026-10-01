@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) evalI64(op Operand) (string, error) {
+	if err := unresolvedSymbolicImmediateError(op); err != nil {
+		return "", err
+	}
 	switch op.Kind {
 	case OpImm:
 		return fmt.Sprintf("%d", op.Imm), nil
@@ -32,12 +35,6 @@ func (c *amd64Ctx) evalI64(op Operand) (string, error) {
 		}
 		p, err := c.ptrFromSB(s)
 		if err != nil {
-			// Some runtime asm constants (e.g. $const_stackGuard) come from
-			// includes/macros that we don't fully materialize. Treat unresolved
-			// bare symbols as immediate zero to keep translation progressing.
-			if !strings.Contains(s, "(SB)") {
-				return "0", nil
-			}
 			return "", err
 		}
 		if addrOnly {

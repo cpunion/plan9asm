@@ -13,10 +13,10 @@
 {"module":"github.com/dimchansky/zkrangeproof","version":"v0.0.0-20171116104835-27a87550035b","status":"pending"}
 {"module":"github.com/dkblackley/bins-go","version":"v0.0.0-20260921204019-e059646ba8ae","status":"pending"}
 {"module":"github.com/dveeden/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/gochain-io/gochain/v3","version":"v3.4.9","status":"pending"}
 {"module":"github.com/haiyan1301/xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"github.com/leadaxe/sing-tun-lx","version":"v0.0.0-20260913201557-6f13ebcc131c","status":"pending"}
 {"module":"github.com/leonidasspart/zrp-wallet-sdk/crypto","version":"v0.0.0-20260718101947-019e180da489","status":"pending"}
+{"module":"github.com/linuxliu/SunnyNet","version":"v1.0.5","status":"pending"}
 {"module":"github.com/molecule-man/go-brrr","version":"v1.1.1","status":"pending"}
 {"module":"github.com/stingkeer/gvisor","version":"v0.0.0-20260525132711-97f34937052a","status":"pending"}
 {"module":"github.com/ttherules/avail-nitro-adapter","version":"v0.0.0-20231101033256-e815395d2e91","status":"pending"}

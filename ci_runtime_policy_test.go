@@ -36,6 +36,22 @@ func TestCIFullSuitesHaveExplicitTimeout(t *testing.T) {
 	}
 }
 
+func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"test", "race", "coverage"} {
+		job, found := ciWorkflowJob(string(data), name)
+		if !found {
+			t.Fatalf("full-suite job %s is missing", name)
+		}
+		if !strings.Contains(job, "uses: actions/setup-node@v6") || !strings.Contains(job, "node-version: '22'") {
+			t.Errorf("%s must install the required wasm execution runtime, not depend on a runner's incidental PATH", name)
+		}
+	}
+}
+
 func TestCICrossRuntimeUsesPinnedQEMU(t *testing.T) {
 	data, err := os.ReadFile(".github/workflows/go-ci.yml")
 	if err != nil {
@@ -71,17 +87,45 @@ func TestCIDiscoveredCorpusRetainsAuthenticatedProxyFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	corpus, found := ciWorkflowJob(string(data), "discovered_library_corpus")
-	if !found {
-		t.Fatal("discovered corpus job not found")
-	}
-	if !strings.Contains(corpus, "GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct") {
-		t.Fatal("exact-version corpus must try both public module caches before the origin")
-	}
-	for _, disabled := range []string{"GOSUMDB:", "GONOSUMDB:", "GOPRIVATE:"} {
-		if strings.Contains(corpus, disabled) {
-			t.Fatalf("public corpus must not bypass checksum-database authentication with %s", disabled)
+	const signedSumDB = "GOSUMDB: ${{ github.repository_owner == 'xgo-dev' && 'sum.golang.google.cn' || 'sum.golang.org https://sum.golang.org' }}"
+	for _, name := range []string{"discovered_library_priority", "discovered_library_corpus"} {
+		corpus, found := ciWorkflowJob(string(data), name)
+		if !found {
+			t.Fatalf("%s job not found", name)
 		}
+		if !strings.Contains(corpus, "GOPROXY: https://proxy.golang.org,https://goproxy.cn,direct") {
+			t.Errorf("%s must try both public module caches before the origin", name)
+		}
+		if !strings.Contains(corpus, signedSumDB) {
+			t.Errorf("%s must verify against an official signed checksum database", name)
+		}
+		for _, disabled := range []string{"GONOSUMDB:", "GOPRIVATE:", "GOSUMDB: off"} {
+			if strings.Contains(corpus, disabled) {
+				t.Errorf("%s must not bypass checksum authentication with %s", name, disabled)
+			}
+		}
+	}
+}
+
+func TestCIRequiresVerifiedAssemblyLedger(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	build, found := ciWorkflowJob(string(data), "build")
+	if !found {
+		t.Fatal("build job not found")
+	}
+	if !strings.Contains(build, "-assembly-ledger-status testdata/discovery/assembly-ledger") ||
+		!strings.Contains(build, "-require-verified-assembly-ledger") {
+		t.Fatal("CI must require every discovered candidate to be passed or explicitly skipped")
+	}
+	script, err := os.ReadFile("scripts/verify-discovered-library-corpus.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(script), "-compare-assembly-ledger") {
+		t.Fatal("CI must compare committed assembly outcomes with current corpus reports")
 	}
 }
 

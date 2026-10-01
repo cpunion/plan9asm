@@ -6,6 +6,7 @@ import (
 )
 
 func (c *arm64Ctx) storeFlag(slot string, v string) {
+	c.recordMachineRegister(Reg(slot), 1, true)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", v, slot)
 }
 
@@ -240,6 +241,9 @@ func (c *arm64Ctx) setFlagsLogic32(res string) {
 }
 
 func (c *arm64Ctx) condValue(cond string) (string, error) {
+	for _, slot := range []string{c.flagsNSlot, c.flagsZSlot, c.flagsCSlot, c.flagsVSlot} {
+		c.recordMachineRegister(Reg(slot), 1, false)
+	}
 	if !c.flagsWritten {
 		if c.flagFlow == nil {
 			return "", fmt.Errorf("%w: arm64 condition %s has no prior flags write", ErrProbeNeedsContext, cond)
@@ -326,4 +330,11 @@ func (c *arm64Ctx) condValue(cond string) (string, error) {
 	default:
 		return "", fmt.Errorf("arm64: unsupported condition %q", cond)
 	}
+}
+
+type arm64Flags struct {
+	kind  string // "cmp" or "res"
+	dst   string // i64 SSA or constant
+	src   string // i64 SSA or constant (for cmp)
+	width LLVMType
 }

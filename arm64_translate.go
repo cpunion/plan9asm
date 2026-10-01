@@ -9,6 +9,7 @@ type arm64EmitBr func(target string)
 type arm64EmitCondBr func(cond string, target string, fall string) error
 
 func emitARM64Prelude(b *strings.Builder) {
+	b.WriteString("declare ptr @llvm.returnaddress(i32 immarg)\n")
 	b.WriteString("declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1 immarg)\n")
 	b.WriteString("declare void @llvm.trap()\n")
 	b.WriteString("declare i64 @syscall(i64, i64, i64, i64, i64, i64, i64)\n")
@@ -886,11 +887,49 @@ func emitARM64Prelude(b *strings.Builder) {
 	b.WriteString("\n")
 }
 
-func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool) error {
+	if err := validateARM64ClosureSource(fn, sig); err != nil {
+		return err
+	}
+	// Validate the original complete function as well as the normalized CFG
+	// checked by the lowerer. Raw layout rewriting must not erase a private
+	// address source before granting native, hardware-sized store effects.
+	if err := validateARM64DCZVASource(fn, data); err != nil {
+		return err
+	}
+	sourceGoFrame := arm64SourceGoFrame(fn)
+	unexposedCallFrame := arm64CallFrameUnexposed(fn)
+	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+		if sig.ARM64GoRegisterABI != nil {
+			if err := arm64ValidateGoRegisterABI(sig); err != nil {
+				return err
+			}
+			for _, ins := range fn.Instrs {
+				for _, arg := range ins.Args {
+					if arg.Kind == OpFP || arg.Kind == OpFPAddr {
+						return arm64GoABIContext("%q references FP spill storage not described by its register-only contract", sig.Name)
+					}
+				}
+			}
+		} else if len(sig.ArgRegs) == 0 || len(sig.ArgRegs) != len(sig.Args) {
+			return arm64GoABIContext("entry %q needs a complete typed register contract", sig.Name)
+		}
+	}
 	var err error
+	fn, err = normalizeARM64AtomicPairNamedMemory(fn)
+	if err != nil {
+		return err
+	}
+	fn, err = normalizeARM64NamedPCRelative(fn)
+	if err != nil {
+		return err
+	}
 	var rawData []arm64RawDataBlob
 	fn, rawData, err = prepareARM64RawPCRelativeWithReturnClobbers(fn, arm64RawPoolReturnClobbers(fn, sig))
 	if err != nil {
+		return err
+	}
+	if err := validateARM64ClosureSource(fn, sig); err != nil {
 		return err
 	}
 	rawDataGlobals := make(map[string]string, len(rawData))
@@ -908,8 +947,11 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		b.WriteString("\n")
 	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
+	if sig.ARM64ClosureABI != nil {
+		fmt.Fprintf(b, "ptr %s %%closure", sig.ARM64ClosureABI.llvmAttribute())
+	}
 	for i, t := range sig.Args {
-		if i > 0 {
+		if i > 0 || sig.ARM64ClosureABI != nil {
 			b.WriteString(", ")
 		}
 		fmt.Fprintf(b, "%s %%arg%d", t, i)
@@ -921,13 +963,31 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	b.WriteString(" {\n")
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
+	c.sourceGoFrame = sourceGoFrame
+	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
+	c.sourceData = data
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
+	if err := c.prepareLocalControl(); err != nil {
+		return err
+	}
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}
+	c.machineAvailability = newARM64MachineAvailability(c)
 	fmt.Fprintf(b, "  br label %%%s\n", arm64LLVMBlockName(c.blocks[0].name))
 	if err := c.lowerBlocks(); err != nil {
+		return err
+	}
+	fmt.Fprintf(b, "\n%s:\n", arm64LLVMBlockName(c.localControl.outer))
+	if flow := c.machineAvailability; flow != nil {
+		flow.current = len(c.blocks)
+		flow.source = "typed caller return"
+	}
+	if err := c.lowerRET(); err != nil {
+		return err
+	}
+	if err := c.machineAvailability.validate(); err != nil {
 		return err
 	}
 
@@ -955,12 +1015,24 @@ func (c *arm64Ctx) lowerBlocks() error {
 		blk := c.blocks[bi]
 		c.flagFlow.current = bi
 		c.flagsWritten = false
+		if flow := c.machineAvailability; flow != nil {
+			flow.current = bi
+		}
 		fmt.Fprintf(c.b, "\n%s:\n", arm64LLVMBlockName(blk.name))
 
 		terminated := false
-		for _, ins := range blk.instrs {
+		for ii, ins := range blk.instrs {
+			c.currentInstruction = ii
 			c.emitSourceComment(ins)
+			start := c.b.Len()
+			if flow := c.machineAvailability; flow != nil {
+				flow.source, flow.skipReads = ins.Raw, arm64MachineZeroInputs(ins)
+			}
 			term, err := c.lowerInstr(bi, ins, emitBr, emitCondBr)
+			c.recordMachineOpaqueIR(start, ins)
+			if flow := c.machineAvailability; flow != nil {
+				flow.skipReads = false
+			}
 			if err != nil {
 				return err
 			}
@@ -972,6 +1044,9 @@ func (c *arm64Ctx) lowerBlocks() error {
 		c.flagFlow.blocks[bi].writes = c.flagsWritten
 
 		if terminated {
+			continue
+		}
+		if c.lowerProvenUnreachableControl(bi) {
 			continue
 		}
 		// Fallthrough to next block.
@@ -999,14 +1074,46 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 	case OpBYTE:
 		return false, fmt.Errorf("arm64 BYTE cannot be lowered safely as a partial machine instruction: %q", ins.Raw)
 	case OpRET:
+		if strings.Contains(string(ins.Op), ".") {
+			return true, fmt.Errorf("arm64 RET does not accept a suffix: %q", ins.Raw)
+		}
 		if c.flagFlow != nil {
 			c.flagFlow.blocks[c.flagFlow.current].returns = true
 		}
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
+			if c.lowerProvenUnreachableControl(bi) {
+				return true, nil
+			}
+			if err := c.requireCallerSPRestored(bi, ins); err != nil {
+				return true, err
+			}
+			if err := c.requireCallerLinkRestored(bi, ins); err != nil {
+				return true, err
+			}
 			return true, c.tailCallAndRet(ins.Args[0])
 		}
 		if len(ins.Args) > 1 {
 			return true, fmt.Errorf("arm64 RET expects at most 1 operand: %q", ins.Raw)
+		}
+		if len(ins.Args) == 1 {
+			if _, err := c.registerBranchAddress(OpRET, ins); err != nil {
+				return true, err
+			}
+		}
+		if c.localControl != nil {
+			if target, register := arm64RegisterReturnTarget(ins, c.localControl.autoFrame); register {
+				ins.Args = []Operand{target}
+				return c.lowerRegisterControl(bi, OpRET, ins)
+			}
+		}
+		if c.lowerProvenUnreachableControl(bi) {
+			return true, nil
+		}
+		if err := c.requireCallerSPRestored(bi, ins); err != nil {
+			return true, err
+		}
+		if err := c.requireCallerLinkRestored(bi, ins); err != nil {
+			return true, err
 		}
 		return true, c.lowerRET()
 	case OpWORD:
@@ -1023,6 +1130,7 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			}
 			return false, rawErr
 		}
+		decoded = arm64HardwareReturnAsBranch(decoded)
 		return c.lowerInstr(bi, decoded, emitBr, emitCondBr)
 	case arm64RawDataOp:
 		return false, nil
@@ -1433,6 +1541,18 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 }
 
 func (c *arm64Ctx) lowerRET() error {
+	if c.goRegisterEntry {
+		if c.sig.Ret == Void {
+			c.b.WriteString("  ret void\n")
+			return nil
+		}
+		value, err := c.collectGoABIValue(c.sig.Ret, c.sig.ARM64GoRegisterABI.Results)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.b, "  ret %s %s\n", c.sig.Ret, value)
+		return nil
+	}
 	// Prefer classic Go asm return slots if present; many stdlib asm functions
 	// never materialize the return value in R0 and only store to ret+off(FP).
 	if len(c.fpResults) == 0 {

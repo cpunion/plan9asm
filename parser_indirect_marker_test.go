@@ -51,6 +51,33 @@ func TestIndirectMarkerGoBranchForms(t *testing.T) {
 					var parsed [2]Operand
 					for i, marker := range []string{"", "*"} {
 						source := fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\nRET\n", op, marker, operand)
+						instructionIndex := 1
+						if target.arch == ArchARM64 {
+							branch, err := parseOperandForArch(ArchARM64, operand)
+							if err != nil {
+								t.Fatal(err)
+							}
+							reg := branch.Reg
+							if branch.Kind == OpMem {
+								reg = branch.Mem.Base
+							}
+							if reg != SP && reg != Reg("RSP") && reg != ZR {
+								spelling := string(reg)
+								if reg == Reg("R28") {
+									spelling = "g"
+								}
+								continuation := ""
+								if op == "BL" || op == "CALL" {
+									continuation = "RET\n"
+								}
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\nADR localTarget,%s\n%s %s%s\n%slocalTarget:\nB (R30)\n", spelling, op, marker, operand, continuation)
+								instructionIndex = 2
+							} else if op == "BL" || op == "CALL" {
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\nB (ZR)\n", op, marker, operand)
+							} else {
+								source = fmt.Sprintf("TEXT indirect(SB),4,$0-0\n%s %s%s\n", op, marker, operand)
+							}
+						}
 						requireIndirectMarkerGoAssembly(t, target.goarch, source, true)
 						file, err := Parse(target.arch, source)
 						if err != nil {
@@ -72,9 +99,9 @@ func TestIndirectMarkerGoBranchForms(t *testing.T) {
 								compileLLVMToObject(t, llc, extraTriple, "indirect.ll", "indirect.o", extraIR)
 							}
 						}
-						parsed[i] = file.Funcs[0].Instrs[1].Args[0]
+						parsed[i] = file.Funcs[0].Instrs[instructionIndex].Args[0]
 						// Raw source is diagnostic text in emitted IR comments.
-						file.Funcs[0].Instrs[1].Raw = op + " " + operand
+						file.Funcs[0].Instrs[instructionIndex].Raw = op + " " + operand
 						ir[i], err = Translate(file, Options{
 							Goarch: target.goarch, TargetTriple: target.triple,
 							Sigs: map[string]FuncSig{"indirect": {Name: "indirect", Ret: Void}},

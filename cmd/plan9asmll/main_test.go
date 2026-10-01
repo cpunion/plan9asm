@@ -426,6 +426,17 @@ func TestFallbackSigIncludesAddressedFrameParameters(t *testing.T) {
 	}
 }
 
+func TestFallbackARMKernelHelperIsNotGuessedIntegerReturn(t *testing.T) {
+	file, err := plan9asm.Parse(plan9asm.ArchARM, "TEXT renamed<>(SB),$0\nMOVW $0xffff0fc0,R15\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := fallbackSigForAsmFunc(file.Funcs[0], "example.renamed$local", "arm")
+	if sig.Ret != plan9asm.Void || len(sig.Args)+len(sig.Frame.Params)+len(sig.Frame.Results) != 0 {
+		t.Fatalf("kernel native entry acquired a guessed Go/C ABI: %#v", sig)
+	}
+}
+
 func TestSigsForAsmFileDiscoversRETTailTarget(t *testing.T) {
 	typesPkg := types.NewPackage("example.com/retjmp", "retjmp")
 	voidSig := types.NewSignatureType(nil, nil, nil, nil, nil, false)
@@ -1052,7 +1063,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"VUNPCKLPS", "VUNPCKHPS", "VUNPCKLPD", "VUNPCKHPD",
 		"VPERMQ", "VPERMPD",
 		"VPERMILPD", "VPERMILPS",
-		"VMOVAPD", "VMOVAPS", "VMOVUPD", "VMOVUPS",
+		"VMOVAPD", "VMOVAPS", "VMOVUPD", "VMOVUPS", "VMOVDQA", "VMOVDQU",
 		"VMOVDQA32", "VMOVDQA64", "VMOVDQU8", "VMOVDQU16", "VMOVDQU32", "VMOVDQU64",
 		"MOVNTO", "MOVNTPD", "MOVNTPS", "MOVNTDQA",
 		"VMOVNTDQ", "VMOVNTPD", "VMOVNTPS", "VMOVNTDQA",
@@ -1151,7 +1162,8 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"BTW", "BTL", "BTQ", "BTCW", "BTCL", "BTCQ",
 		"BTRW", "BTRL", "BTRQ", "BTSW", "BTSL", "BTSQ",
 		"RDMSR", "WRMSR",
-		"VMRUN", "VMMCALL", "VMLOAD", "VMSAVE", "STGI", "CLGI", "SKINIT", "INVLPGA",
+		"ENQCMD", "ENQCMDS",
+		"VMCALL", "VMRUN", "VMMCALL", "VMLOAD", "VMSAVE", "STGI", "CLGI", "SKINIT", "INVLPGA",
 		"LGDT", "LIDT", "SGDT", "SIDT",
 		"LLDT", "LTR", "LMSW",
 		"LARW", "LARL", "LARQ", "LSLW", "LSLL", "LSLQ",
@@ -1169,7 +1181,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		"CLDEMOTE", "INVLPG", "INVPCID",
 		"MONITOR", "MWAIT", "RDPMC", "RDPKRU", "WRPKRU", "XSETBV", "UMONITOR", "UMWAIT", "TPAUSE",
 		"XBEGIN", "XABORT", "XEND", "XTEST",
-		"CLAC", "CLI", "CLTS", "ENDBR64", "ICEBP", "INVD", "RSM", "STAC", "STI", "SWAPGS", "UD1", "WBINVD",
+		"CLAC", "CLI", "CLTS", "ENDBR32", "ENDBR64", "ICEBP", "INVD", "RSM", "STAC", "STI", "SWAPGS", "UD1", "WBINVD",
 		"IRETW", "IRETL", "IRETQ", "RETFW", "RETFL", "RETFQ",
 		"SYSENTER", "SYSENTER64", "SYSEXIT", "SYSEXIT64", "SYSRET",
 		"LEAVEW", "LEAVEL", "LEAVEQ", "XLAT",
@@ -1335,6 +1347,7 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 	}
 	for _, op := range []string{
 		"ADR", "ADRP",
+		"LDP", "LDPW", "LDPSW", "STP", "STPW",
 		"SMOV", "SMOVW",
 		"VFCVTNS", "VFCVTNU", "VFCVTMS", "VFCVTMU", "VFCVTAS", "VFCVTAU", "VFCVTPS", "VFCVTPU", "VFCVTZS", "VFCVTZU",
 		"VZIP1", "VZIP2", "VUZP1", "VUZP2", "VTRN1", "VTRN2",
@@ -1372,6 +1385,68 @@ var packedFamilySpecs = map[string]int{
 	}
 }
 
+func TestExtractSupportedOpsFindsARMShifterAndMultiplySpecifications(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "arm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MOVW", "MVN", "AND", "ORR", "EOR", "BIC", "TST", "TEQ", "SLL", "SRL", "SRA", "MUL", "MULU", "MULA", "MULL", "MULLU", "MULAL", "MULALU"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("ARM typed family omitted supported opcode %s", op)
+		}
+	}
+}
+
+func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_lower_adx.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_lower_adx.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, op := range []string{"ADCXL", "ADCXQ", "ADOXL", "ADOXQ"} {
+			if _, ok := supported[op]; !ok {
+				t.Errorf("%s typed ADX extraction omitted %s", arch, op)
+			}
+		}
+	}
+}
+
+func TestExtractSupportedOpsDoesNotAdvertiseSystemRegistersAsOpcodes(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "arm64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MRS", "MSR", "WORD"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("system-register instruction %s not advertised", op)
+		}
+	}
+	for _, register := range []string{"MIDR_EL1", "ID_AA64ISAR0_EL1", "TPIDR_EL0", "ACTLR_EL1"} {
+		if _, ok := supported[register]; ok {
+			t.Errorf("register operand %s was mistaken for an opcode", register)
+		}
+	}
+}
+
 func TestExplicitSingleTargetUsesMatrixReport(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -1404,7 +1479,8 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, op := range []string{
-		// NEON SM4 is WORD-only; the named SM4 forms below are SVE.
+		"B", "JMP", "BL", "BLR", "CALL", "RET",
+		// NEON SM3/SM4 are WORD-only; the named SM4 forms below are SVE.
 		"WORD",
 		"MADD", "MSUB", "MADDW", "MSUBW", "SMADDL", "SMSUBL", "UMADDL", "UMSUBL",
 		"FABSS", "FABSD", "FNEGS", "FNEGD", "FSQRTS", "FSQRTD", "FMOVS", "FMOVD",
@@ -1565,7 +1641,7 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		"ZFDIV", "ZFDIVR", "ZFSCALE",
 		"ZSUQADD", "ZUSQADD",
 		"ZFCADD",
-		"ZDUPW",
+		"ZDUP", "ZDUPW",
 		"ZDUPQ",
 		"ZDUPM",
 		"ZFDOT",
@@ -1643,6 +1719,22 @@ func TestExtractSupportedOpsFindsCompleteWasmFloatUnaryFamily(t *testing.T) {
 			if _, ok := supported[op]; !ok {
 				t.Errorf("supported opcode extraction omitted %s", op)
 			}
+		}
+	}
+}
+
+func TestExtractSupportedOpsFindsCompleteWasmMoveFamily(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MOVB", "MOVH", "MOVW", "MOVD"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("supported opcode extraction omitted %s", op)
 		}
 	}
 }

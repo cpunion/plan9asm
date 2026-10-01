@@ -11,6 +11,7 @@ func TestAMD64FixedSystemGrammarIsComplete(t *testing.T) {
 		"CLAC":    {encoding: ".byte 0x0f, 0x01, 0xca"},
 		"CLI":     {encoding: ".byte 0xfa"},
 		"CLTS":    {encoding: ".byte 0x0f, 0x06"},
+		"ENDBR32": {encoding: ".byte 0xf3, 0x0f, 0x1e, 0xfb", rawOnly: true},
 		"ENDBR64": {encoding: ".byte 0xf3, 0x0f, 0x1e, 0xfa"},
 		"ICEBP":   {encoding: ".byte 0xf1", effect: amd64FixedSystemTrap},
 		"INVD":    {encoding: ".byte 0x0f, 0x08"},
