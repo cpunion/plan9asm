@@ -83,39 +83,33 @@ it using Git, not a personal filesystem path. Its important repairs include:
   byte-exact naked TEXT cannot silently omit Go's prologue or FP transport.
   Exact slot width, signature field/type binding and nonoverlap are checked.
   Generic partial FP writes still need a separate high-byte preservation fix.
+  Shared RIP decoders now bind read width and the complete operand shape to
+  actual materialized DATA bytes. Address escapes disable constant folding
+  without losing the independently bounded runtime-read contract.
+- Go bool FP storage is canonical i8, with explicit i1 conversions at typed
+  parameter/result and outgoing ABI0 call boundaries. LEA takes that storage's
+  address. Five-target objects and native Go/LLVM scalar, aggregate-field and
+  outgoing-call oracles cover the change; partial/wider-slot negatives remain.
 - Unbound ARM/ARM64 FP addresses fail instead of becoming zero pointers.
   Unknown compiler diagnostics and assembler failure footers cannot establish
   source N/A. Compact ledger source rejections retain a diagnostic digest and
   portable source positions; old reason-only skips cannot acquire invented
   evidence.
 
-Checkpoint `865b3fa6` finished the full root suite with two failing top-level
-tests: declaration-less ARM64 RetArg fallback and a raw x86 RET with nonzero
-caller-stack cleanup. Corpus/scanner units passed. The RetArg fixture now
-derives its complete ABIInternal contract from an actual Go declaration;
-raw-return repairs remain under independent source-stack review. Earlier
-checkpoint `794b98b5` had 37 failures, and `3900b033` passed the 31 unchanged
-failure titles. These are exact-revision results, not current-head success.
-
-Checkpoint `69e9f37a` passed production `go build ./...`, the full corpus unit
-suite, feature-cache race tests and `go vet ./...`. No current-head full root,
-strict standard-library or fresh external-corpus success is claimed.
-
 The full root run at `ac3681dc` failed 48 top-level tests after strengthened
-raw x86 return contracts; corpus and other root subpackages passed. Those
-failures remain open and cannot be hidden by a later focused ABI regression
-pass or by historical corpus results.
+raw x86 return contracts. Subsequent repairs distinguish bounded static reads
+from unbound-pointer instruction-form fixtures. For the latter, the original
+Go bytes remain a required return-contract rejection; an independent UD2
+probe preserves every preceding instruction and proves only operand lowering
+and object compilation, never execution of the original function. All affected
+families have focused red/green logs. No current-head exhaustive root or fresh
+external-corpus success is claimed until its frozen gates finish.
 
-Later checkpoint `a50f0870` passed bounded root regression tests, the full
-corpus unit suite, vet/build and all five official classification gates.
-The raw-return predecessor also passed actual Linux amd64/386 Go/LLVM numeric
-oracles with Go 1.27.1, LLVM 22.1.8 and pinned QEMU 10.2.3. This does not execute
-external packages or establish the complete cross-runtime matrix.
-Source-diagnostic repair `b853ac1c` retains true opaque-error/footer RED logs;
-its full corpus, vet/build, focused Go 1.20 and ledger-witness roundtrip gates
-passed before commit. Exact-slot companion `9415db0e` is integrated from an
-independently frozen focused/Go 1.20/five-target-object green batch. Its source
-still needs current-head exhaustive and external-corpus verification.
+The new strict benchmark advanced past `internal/bytealg/equal_386.s` after
+the bool storage repair, but still fails at `reflect.makeFuncStub`'s dynamic
+`argframe+0(FP)` address. Its source has no fixed argument-size declaration.
+Do not invent a byte alloca or zero pointer: it needs an explicit physical
+source-frame/entry bridge. Retain the real failure while investigating.
 
 ARM source-frame companions `276e74f8`, `327df1ba` and `d2e373a8` are not yet
 integrated. Their source SP/continuation guards expose 16 real ARM top-level
@@ -123,11 +117,10 @@ failures and a strict stdlib/benchmark failure at MD5's named local `end-4(SP)`.
 Do not relabel them as green: ARM currently lacks Go NAME_AUTO local backing,
 private outgoing ABI0 slots and the required callee/effect bridges.
 
-Checkpoint `cd2b46a4` passed all five current official classification gates,
-including ARM carry-dependent single-form probes with an explicit source CMP.
-All 40 Go 1.20–1.27 source-table audits passed earlier: those are enumeration
-checks, not eight toolchain runtime runs. ARM32 QEMU 7.2 diagnostic oracles
-do not replace the required pinned QEMU 10.2.3 cross gate.
+Earlier five-architecture classification gates and all 40 Go 1.20–1.27
+source-table audits passed. These are enumeration checks, not eight toolchain
+runtime runs. New source still requires fresh gates. ARM32 QEMU 7.2 diagnostic
+oracles do not replace the required pinned QEMU 10.2.3 cross gate.
 
 ## Active independent work
 
@@ -139,6 +132,10 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
    infrastructure errors must not become a source skip. The ordinary matrix
    is non-test and cgo-disabled: test-only and cgo-enabled roles need their own
    explicit source/tool/consumer scopes, not an invented blanket Go exclusion.
+   Each ledger comparison independently verifies both snapshots first, then
+   compares source/target/profile/CPP/outcome semantics. Cross-host tool/object
+   hashes and LLVM 22 patch differences are not semantic coverage differences;
+   complete exact physical provenance remains mandatory within each run.
 2. ARM native entry/returns: extend the explicit physical shim only with closed
    continuation/effect proofs. Go accepts RET register operands that are not
    ordinary caller returns; preserve actual Go/runtime counterexamples.
@@ -156,6 +153,15 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
    ARM framed returns must not assume their saved LR slot stayed intact, and
    ARM64 private helpers must not virtualize hidden platform registers or
    escape through excluded siblings and native-layout observers.
+5. llgo user regressions: the separate contribution uses a remotely resolvable
+   `go.mod` replacement pinned to the final fork plan9asm head. The actual
+   Linux/amd64 baseline passes native Go for huff0, websocket, crc32, go-hex,
+   purego and modernc/libc. llgo currently passes the first two but retains
+   getAuxv link failures, syscall15X helper metadata failure and modernc GO_ARGS
+   macro handling failure. websocket's public API uses maskGo in the tested
+   version; its direct maskAsm oracle is separate. ARM64 also needs an explicit
+   hidden closure-register bridge, not a guessed third argument. Keep all
+   remaining failures visible; compilation alone is not executed ABI proof.
 
 ## Completion sequence
 
