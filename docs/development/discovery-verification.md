@@ -259,6 +259,12 @@ files selected by Go MatchFile. A file tested with baseline declarations is not
 evidence for declarations selected by another tag configuration. Do not spread
 one package's custom tags to unrelated packages or discard shared-file asmdecl
 diagnostics to make the scope denominator fit.
+Ordinary profiles are noninstrumented: Go partner constraints impossible with
+`race`, `msan` and `asan` false do not propose profiles for otherwise ordinary
+assembly. Boolean/custom/CPU alternatives and negations remain selectable.
+Assembly requiring instrumentation still fails until an actual driver profile
+and its source/tool/consumer contract exist; these flags are never custom tags
+and instrumentation-only assembly is not an ordinary N/A exemption.
 Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
 legacy modules lacking authenticated declared-module metadata remain failures.

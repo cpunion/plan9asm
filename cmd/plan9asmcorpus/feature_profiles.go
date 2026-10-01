@@ -224,6 +224,9 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 			return discoveryFeatureProfileRequest{}, false, nil
 		}
 	}
+	if ordinaryInstrumentationGoPartnerMayMatch(expressions[0]) && !ordinaryInstrumentationGoPartnerMayMatch(expressions[1]) {
+		return discoveryFeatureProfileRequest{}, false, nil
+	}
 	var experimentVars []string
 	var unsupported []string
 	cpuMentioned := false
