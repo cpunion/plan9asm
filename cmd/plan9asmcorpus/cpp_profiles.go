@@ -134,12 +134,13 @@ func discoveryCPPFeatureCPUValues(arch string, minor int, baseline string) []str
 		values = append(values, "5", "6", "7")
 	case "arm64":
 		if minor >= 23 {
-			// Keep high-level Go source constraints while trying both legal
-			// LSE states. v8.0,nolse cannot select a v9-only Go declaration.
+			// Keep high-level Go constraints. Actual Go registers ,lse but
+			// no ,nolse; every level above v8.0 already implies LSE. A high-
+			// level Go declaration has no reachable non-LSE CPP variant.
 			for _, tag := range discoveryCPUFeatureCandidates() {
 				if strings.HasPrefix(tag, "arm64.") {
 					level := strings.TrimPrefix(tag, "arm64.")
-					values = append(values, level, level+",lse", level+",nolse")
+					values = append(values, level, level+",lse")
 				}
 			}
 		}

@@ -265,3 +265,60 @@ func TestCPPProfilesActualDriverAndAsmAgreeFiveArchitectures(t *testing.T) {
 		})
 	}
 }
+
+func TestCPPProfilesARM64HighLevelsCannotDisableLSE(t *testing.T) {
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	baseline, err := captureDiscoveryTargetFeatures(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), "linux/arm64", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	minor, _ := discoveryGoMinor(baseline.GoVersion)
+	for _, value := range discoveryCPPFeatureCPUValues("arm64", minor, baseline.Environment["GOARM64"]) {
+		if strings.Contains(value, "nolse") {
+			t.Fatalf("planner invented an environment actual Go cannot accept: %s", value)
+		}
+	}
+	if minor < 23 {
+		if !equalDiscoveryStrings(discoveryCPPFeatureCPUValues("arm64", minor, baseline.Environment["GOARM64"]), []string{""}) {
+			t.Fatal("pre-Go1.23 invented an ARM64 CPU profile")
+		}
+		return // Verify actual version absence rather than Skip.
+	}
+	plan, moduleDir, _ := fixtureCPPInputsForTarget(t, baseline.Target, map[string]string{
+		"pkg/decl.go":     "//go:build arm64.v9.1\n\npackage fixture\n",
+		"pkg/sub/outer.h": "#ifdef GOARM64_LSE\n#endif\n",
+	})
+	files := []string{"pkg/native_arm64.s"}
+	inputs, err := captureDiscoveryCPPInputs(plan, moduleDir, runtime.GOROOT(), files, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.CPPInputs = inputs
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), plan, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("high-level source fabricated a reachable non-LSE variant: %+v", profiles)
+	}
+	for _, profile := range profiles {
+		if profile.Request.Baseline {
+			continue
+		}
+		proof, err := captureDiscoveryAssemblerMacros(runtime.GOROOT(), profile.Observed, plan.Module+"/pkg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if profile.Observed.Environment["GOARM64"] != "v9.1" || !containsTargetFeature(proof.Defines, "GOARM64_LSE") {
+			t.Fatalf("actual required high-level source did not imply LSE: %+v %+v", profile, proof)
+		}
+	}
+	if _, err := captureDiscoveryTargetFeatures(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), baseline.Target, map[string]string{"GOARM64": "v9.1,nolse"}); err == nil {
+		t.Fatal("actual Go observation accepted the fictitious nolse setting")
+	}
+}
