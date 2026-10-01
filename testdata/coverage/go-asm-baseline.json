@@ -63,7 +63,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "bebce6de19fef7f88d32061a16036e1d270573ea513ce66dc1c599834277e456",
-        "official_opcodes": 179,
+        "official_opcodes": 135,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 453,
@@ -78,7 +78,7 @@
       "arm64": {
         "context_forms": 66,
         "coverage_fingerprint": "c491779c2bdce3968db4e74dfa0fda5a58d0174b6327499ef185c692e950f917",
-        "official_opcodes": 608,
+        "official_opcodes": 535,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 845,
@@ -140,7 +140,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "bebce6de19fef7f88d32061a16036e1d270573ea513ce66dc1c599834277e456",
-        "official_opcodes": 179,
+        "official_opcodes": 135,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 453,
@@ -155,7 +155,7 @@
       "arm64": {
         "context_forms": 66,
         "coverage_fingerprint": "55819d509fde7bef7f19d250ac7c8c1796d0eae119f43eb7301f78cb54104f20",
-        "official_opcodes": 604,
+        "official_opcodes": 531,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 879,
@@ -217,7 +217,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "bebce6de19fef7f88d32061a16036e1d270573ea513ce66dc1c599834277e456",
-        "official_opcodes": 179,
+        "official_opcodes": 135,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 453,
@@ -232,7 +232,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "60870a1654d457a0afc8e54aa5e3c54b871ad29a788cc9df6aeeabade9b3a804",
-        "official_opcodes": 606,
+        "official_opcodes": 531,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 879,
@@ -294,7 +294,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "bebce6de19fef7f88d32061a16036e1d270573ea513ce66dc1c599834277e456",
-        "official_opcodes": 179,
+        "official_opcodes": 135,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 453,
@@ -309,7 +309,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "a09a6d62c104e8b51c47eba688a5f02e661b0f2f028bb9c7910acb06ffd5c960",
-        "official_opcodes": 606,
+        "official_opcodes": 531,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 880,
@@ -371,7 +371,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "e4b40628c50da969e06d93552884a0c27e276a361d45cb221ccfc5c82c5a11bc",
-        "official_opcodes": 181,
+        "official_opcodes": 137,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 455,
@@ -386,7 +386,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "a09a6d62c104e8b51c47eba688a5f02e661b0f2f028bb9c7910acb06ffd5c960",
-        "official_opcodes": 606,
+        "official_opcodes": 531,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 880,
@@ -448,7 +448,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "e4b40628c50da969e06d93552884a0c27e276a361d45cb221ccfc5c82c5a11bc",
-        "official_opcodes": 181,
+        "official_opcodes": 137,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 455,
@@ -463,7 +463,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "c5a10dbec4b7b9179cd8f235b381898d01862be2e89dfac7a2daee2f22de1370",
-        "official_opcodes": 607,
+        "official_opcodes": 532,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 881,
@@ -525,7 +525,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "e4b40628c50da969e06d93552884a0c27e276a361d45cb221ccfc5c82c5a11bc",
-        "official_opcodes": 181,
+        "official_opcodes": 137,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 455,
@@ -540,7 +540,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "f3aef4ea39c97304679260f98ec6ee3d92d6c77c3cc3dc571175f72fef4a5963",
-        "official_opcodes": 613,
+        "official_opcodes": 538,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 887,
@@ -602,7 +602,7 @@
       "arm": {
         "context_forms": 44,
         "coverage_fingerprint": "e4b40628c50da969e06d93552884a0c27e276a361d45cb221ccfc5c82c5a11bc",
-        "official_opcodes": 181,
+        "official_opcodes": 137,
         "parse_err_count": 0,
         "runtime_verified_forms": 0,
         "supported_forms": 455,
@@ -617,7 +617,7 @@
       "arm64": {
         "context_forms": 68,
         "coverage_fingerprint": "375e6ad3881b96ec7b98f566f3a04060569b35687790c8700a4aec1e27bd5f25",
-        "official_opcodes": 1417,
+        "official_opcodes": 1342,
         "parse_err_count": 0,
         "runtime_verified_forms": 62,
         "supported_forms": 1980,
