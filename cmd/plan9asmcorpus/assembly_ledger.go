@@ -269,13 +269,20 @@ func compareAssemblyLedgerProgress(stored, current discoveryProgress) error {
 	if err := requireVerifiedAssemblyLedger(current); err != nil {
 		return fmt.Errorf("current reports: %w", err)
 	}
+	var err error
+	stored, err = semanticAssemblyLedgerProgress(stored)
+	if err != nil {
+		return fmt.Errorf("committed semantic comparison: %w", err)
+	}
+	current, err = semanticAssemblyLedgerProgress(current)
+	if err != nil {
+		return fmt.Errorf("current semantic comparison: %w", err)
+	}
 
 	storedSummary := stored
 	currentSummary := current
 	storedSummary.Source.Revision = ""
 	currentSummary.Source.Revision = ""
-	storedSummary.Provenance = nil
-	currentSummary.Provenance = nil
 	storedSummary.Candidates = nil
 	currentSummary.Candidates = nil
 	storedData, err := json.Marshal(storedSummary)

@@ -359,6 +359,17 @@ requires complete shard coverage and zero failures. Do not promote the
 snapshot to a current pass after source or scan-ledger changes. cgo scan
 records remain in the separate inventory, never in this repository.
 
+CI compares two independently verified snapshots semantically, not by physical
+host tool or output-object bytes. The comparison preserves Go/LLVM versions,
+target/profile environment, registered sources/ASTs, marker/tag selection,
+module/source/package role, CPP inputs and consumed macros, all four scope
+dimensions, source-diagnostic kinds/positions and exact outcomes/counts. Profile
+IDs are rebound to those retained semantics. Native-layout source/decision and
+exception witnesses remain exact; only host ToolTags unreferenced by every
+saved source constraint are ignored. This private projection is not evidence
+and cannot pass a report reader. Within one run, shards still require identical
+complete physical provenance. Old reports cannot be upgraded by relabeling.
+
 ## Traffic and cleanup
 
 Inspection reads ZIP metadata/ranges and candidate sources; only matched
