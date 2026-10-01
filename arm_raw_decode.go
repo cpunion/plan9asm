@@ -43,6 +43,23 @@ func decodeARMRawWordInstruction(ins Instr) (Instr, error) {
 			return Instr{}, fmt.Errorf("ARM WORD %#08x is PC-relative and cannot be mapped safely to source labels: %q", word, ins.Raw)
 		}
 	}
+	if decoded.Op&^15 == armasm.LDR_EQ {
+		reg, _ := decoded.Args[0].(armasm.Reg)
+		mem, _ := decoded.Args[1].(armasm.Mem)
+		if reg == armasm.R15 && mem.Base == armasm.SP && mem.Sign == 0 && mem.Mode == armasm.AddrPostIndex {
+			// GoSyntax prints this physical load and SP writeback as RET.
+			// That alias cannot establish the caller's stack-return contract;
+			// reject it before the original R15 destination is discarded.
+			return Instr{}, fmt.Errorf("%w: ARM WORD %#08x loads R15 with SP writeback and requires explicit control-flow/stack-return context: %q", ErrProbeNeedsContext, word, ins.Raw)
+		}
+	}
+	if decoded.Op&^15 == armasm.POP_EQ {
+		for _, arg := range decoded.Args {
+			if registers, ok := arg.(armasm.RegList); ok && registers&(1<<15) != 0 {
+				return Instr{}, fmt.Errorf("%w: ARM WORD %#08x pops R15 and requires explicit control-flow/stack-return context: %q", ErrProbeNeedsContext, word, ins.Raw)
+			}
+		}
+	}
 	syntax := armasm.GoSyntax(decoded, 0, nil, nil)
 	if op, rest, ok := strings.Cut(syntax, " "); ok && strings.HasPrefix(op, "BLX") {
 		condition := strings.TrimPrefix(op, "BLX")

@@ -509,6 +509,14 @@ func armValueAsI32(c *armCtx, ty LLVMType, v string) (out string, ok bool, err e
 }
 
 func (c *armCtx) loadReg(r Reg) (string, error) {
+	if r == PC {
+		return "", fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// Architectural PC reads depend on the source instruction's actual
+		// address and encoding, not on an initialized LLVM register slot.
+		return "", fmt.Errorf("%w: arm hardware PC R15 requires source instruction layout context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return "", fmt.Errorf("arm: unknown reg %s", r)
@@ -519,6 +527,14 @@ func (c *armCtx) loadReg(r Reg) (string, error) {
 }
 
 func (c *armCtx) storeReg(r Reg, v string) error {
+	if r == PC {
+		return fmt.Errorf("arm: pseudo-register PC is not a general-register operand")
+	}
+	if r == Reg("R15") {
+		// PC destinations are control transfers or instruction-specific
+		// system-state effects. Storing a virtual value is not either contract.
+		return fmt.Errorf("%w: arm hardware PC R15 requires explicit control-flow/system-state context", ErrProbeNeedsContext)
+	}
 	slot, ok := c.regSlot[r]
 	if !ok {
 		return fmt.Errorf("arm: unknown reg %s", r)

@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -214,7 +215,7 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 		}
 		decoded, err := decodeARMRawWordInstruction(ins)
 		if err != nil {
-			if strings.Contains(err.Error(), "PC-relative") {
+			if errors.Is(err, ErrProbeNeedsContext) || strings.Contains(err.Error(), "PC-relative") {
 				return false, err
 			}
 			return false, fmt.Errorf("arm WORD cannot be lowered safely because its encoding is unsupported: %q", ins.Raw)
