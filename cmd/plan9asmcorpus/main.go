@@ -58,6 +58,7 @@ type matrixReport struct {
 	PrivateExtension         *discoveryPrivateExtensionSkip     `json:"-"`
 	NativeLayout             *discoveryNativeLayoutSkip         `json:"-"`
 	NativeLayoutPlan         *discoveryNativeLayoutPlan         `json:"-"`
+	OrdinarySelectionPlan    *discoveryOrdinarySelectionPlan    `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"

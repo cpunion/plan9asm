@@ -97,8 +97,8 @@ type discoveryCandidateProgress struct {
 	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
 	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
-	// Only native-layout outcomes persist these scopes, so the audited ledger
-	// can revalidate the pre-filter proof without expanding ordinary outcomes.
+	OrdinarySelectionPlan     *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	// Source-selection proofs persist their exact scopes for ledger replay.
 	DiscoveredAsmFiles  []string                      `json:"discovered_asm_files,omitempty"`
 	ApplicableAsmFiles  []string                      `json:"applicable_asm_files,omitempty"`
 	BuildConfigurations []discoveryBuildConfiguration `json:"build_configurations,omitempty"`

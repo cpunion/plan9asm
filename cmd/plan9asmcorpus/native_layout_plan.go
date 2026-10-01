@@ -75,6 +75,10 @@ func readNativeLayoutSourceInput(moduleDir, file string) (nativeLayoutSourceInpu
 	if err != nil {
 		return nativeLayoutSourceInput{}, fmt.Errorf("read native-layout selection input %s: %w", file, err)
 	}
+	return nativeLayoutSourceInputFromBytes(file, data)
+}
+
+func nativeLayoutSourceInputFromBytes(file string, data []byte) (nativeLayoutSourceInput, error) {
 	digest := sha256.Sum256(data)
 	input := nativeLayoutSourceInput{File: file, SHA256: hex.EncodeToString(digest[:])}
 	if strings.HasSuffix(file, ".go") {

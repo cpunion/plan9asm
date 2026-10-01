@@ -465,12 +465,20 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 			result.Status = discoveryStatusNotApplicable
 			result.Translations = 0
 			result.NotApplicableReason = "current Go rejects the exact package"
-			result.SourceNotApplicableItems = []discoverySourceNotApplicableItem{{
-				AsmFiles: result.DiscoveredAsmFiles,
-				Targets:  report.Targets,
-				Kind:     discoverySourceNotApplicableGoBuild,
-				Reason:   rawDiagnostic,
-			}}
+			sources := map[string]string{"decl.go": "package ordinary\n"}
+			for _, asmFile := range result.DiscoveredAsmFiles {
+				sources[asmFile] = "TEXT ·F(SB),$0-0\nRET\n"
+			}
+			result.OrdinarySelectionPlan = fixtureOrdinarySelection(t, result.DiscoveredAsmFiles, report.Targets, sources)
+			result.OrdinarySelectionPlan.Module, result.OrdinarySelectionPlan.Version = result.Module, result.Version
+			for _, decision := range result.OrdinarySelectionPlan.Decisions {
+				if decision.Kind == nativeLayoutSelected {
+					result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+						AsmFiles: decision.AsmFiles, Targets: decision.Targets, BuildTags: decision.BuildTags,
+						Kind: discoverySourceNotApplicableGoBuild, Reason: rawDiagnostic,
+					})
+				}
+			}
 		}
 		if err := writeDiscoveryCorpusReport(file, report); err != nil {
 			t.Fatal(err)

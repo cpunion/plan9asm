@@ -2014,7 +2014,15 @@ func TestDiscoveryCorpusReportValidatesSourceNotApplicableEvidence(t *testing.T)
 			{AsmFile: "pkg/c.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableNoSymbols, Reason: "current Go assembler emitted no object symbols"},
 		},
 	}
-	report := discoveryCorpusReport{Selected: 1, NotApplicable: 1, Results: []discoveryCorpusResult{result}}
+	targets := []string{"linux/amd64", "windows/amd64"}
+	result.OrdinarySelectionPlan = fixtureOrdinarySelection(t, result.DiscoveredAsmFiles, targets, map[string]string{
+		"pkg/decl.go":   "package ordinary\n",
+		"pkg/a_amd64.s": "//go:build linux\n\nTEXT ·F(SB),$0-0\nRET\n",
+		"pkg/b.s":       "//go:build windows\n\nTEXT ·F(SB),$0-0\nRET\n",
+		"pkg/c.s":       "//go:build linux\n\nTEXT ·F(SB),$0-0\nRET\n",
+	})
+	result.OrdinarySelectionPlan.Module = result.Module
+	report := discoveryCorpusReport{Targets: targets, Selected: 1, NotApplicable: 1, Results: []discoveryCorpusResult{result}}
 	if err := validateDiscoveryCorpusAccounting(report); err != nil {
 		t.Fatalf("valid source N/A evidence error = %v", err)
 	}

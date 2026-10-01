@@ -60,6 +60,12 @@ These are enumeration/classification checks, not eight toolchain runtime runs.
 
 Use separate persistent worktrees and commits, then review before integration:
 
+Architecture applicability must not hide tool failures. The Go assembler
+probe now rejects infrastructure/unknown failures, bounds output and process
+lifetime, and retains each actual source rejection diagnostic. Generated
+header constants remain visible until the real package build provides them.
+Replay every schema-9 shard after the integrated source is frozen.
+
 1. Ordinary applicability evidence: replay exact source selection, including
    root-directory files, ignored/nested directory boundaries, suffixes and tags.
    Generic empty-config reasons are insufficient. Keep compact deduplicated

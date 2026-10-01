@@ -34,7 +34,7 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const discoveryReportSchema = 8
+const discoveryReportSchema = 9
 
 const (
 	discoveryStatusPassed                  = "passed"
@@ -203,6 +203,7 @@ type discoveryCorpusResult struct {
 	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
 	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	OrdinarySelectionPlan     *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
 	Error                     string                                `json:"error,omitempty"`
 }
 
@@ -559,8 +560,9 @@ func auditDiscoveryCorpusReports(
 				PrivateExtension:          result.PrivateExtension,
 				NativeLayout:              result.NativeLayout,
 				NativeLayoutPlan:          result.NativeLayoutPlan,
+				OrdinarySelectionPlan:     result.OrdinarySelectionPlan,
 			}
-			if result.NativeLayoutPlan != nil {
+			if result.NativeLayoutPlan != nil || result.OrdinarySelectionPlan != nil {
 				outcome := outcomes[key]
 				outcome.DiscoveredAsmFiles = append([]string(nil), result.DiscoveredAsmFiles...)
 				outcome.ApplicableAsmFiles = append([]string(nil), result.ApplicableAsmFiles...)
@@ -963,20 +965,7 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 		if err != nil {
 			return nil, fmt.Errorf("classify assembly source %s: %w", asmFile, err)
 		}
-		sourceTargets, restrictBySource, reason := inference.eligible, inference.restrict, inference.reason
-		reason = strings.ReplaceAll(reason, sourcePath, asmFile)
-		if reason != "" && sourceNotApplicable != nil && selection == nil {
-			var sourceTargetNames []string
-			for _, match := range matches {
-				sourceTargetNames = append(sourceTargetNames, match.target)
-			}
-			*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
-				AsmFile: asmFile,
-				Targets: uniqueSortedDiscoveryStrings(sourceTargetNames),
-				Kind:    discoverySourceNotApplicableGoAssembler,
-				Reason:  reason,
-			})
-		}
+		sourceTargets, restrictBySource := inference.eligible, inference.restrict
 		for _, match := range matches {
 			if restrictBySource && !sourceTargets[match.target] {
 				rejection := strings.ReplaceAll(inference.rejected[match.target], sourcePath, asmFile)
@@ -987,7 +976,7 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 						Reason: rejection,
 					})
 				}
-				if sourceNotApplicable != nil && (selection != nil || reason == "") {
+				if sourceNotApplicable != nil {
 					*sourceNotApplicable = append(*sourceNotApplicable, discoverySourceNotApplicableItem{
 						AsmFile: asmFile, Targets: []string{match.target}, BuildTags: match.buildTags,
 						Kind: nativeLayoutGoAssemblerTarget, Reason: rejection,
@@ -1748,6 +1737,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		result.BuildConfigurations = buildConfigurations
 		result.NotApplicableItems = append(result.NotApplicableItems, matrix.NotApplicableItems...)
 		result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, matrix.SourceNotApplicableItems...)
+		result.OrdinarySelectionPlan = matrix.OrdinarySelectionPlan
 		if runErr != nil {
 			result.Status = discoveryStatusFailed
 			result.Error = runErr.Error()
@@ -1782,6 +1772,9 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 				result.NotApplicableReason = "no discovered assembly file belongs to a buildable Go package on the supported target matrix"
 			} else {
 				result.NotApplicableReason = "every target-selected assembly source has evidence-backed current-Go source or ABI incompatibility"
+			}
+			if result.OrdinarySelectionPlan != nil {
+				result.NotApplicableReason = ordinarySelectionReason(result.OrdinarySelectionPlan, result.SourceNotApplicableItems, result.NotApplicableItems)
 			}
 			result.NotApplicableTranslations = matrix.NotApplicable
 			report.NotApplicableTranslations += matrix.NotApplicable
@@ -1937,6 +1930,13 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 			return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 		}
+		if result.Status == discoveryStatusPassed || result.Status == discoveryStatusNotApplicable {
+			if err := validateOrdinarySelectionResult(result, report.Targets, report.Provenance.GoVersion); err != nil {
+				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
+			}
+		} else if result.OrdinarySelectionPlan != nil && result.Status != discoveryStatusFailed {
+			return fmt.Errorf("non-ordinary result carries ordinary source-selection proof")
+		}
 	}
 	if len(report.Results) != 0 &&
 		(passed != report.Passed || failed != report.Failed ||
@@ -2062,6 +2062,23 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
 	}
+	var ordinaryPlan *discoveryOrdinarySelectionPlan
+	if _, native := cfg.nativeLayoutSkips[candidate.exactKey()]; !native && len(candidate.AsmFiles) != 0 {
+		if _, private := cfg.privateExtensionSkips[candidate.exactKey()]; !private {
+			ordinaryPlan, err = captureOrdinarySelectionPlan(candidate, download.Dir, cfg.Targets)
+			if err != nil {
+				return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection: %w", err)
+			}
+			if err := verifyOrdinarySelectionZIP(ordinaryPlan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
+				return matrixReport{}, nil, nil, fmt.Errorf("capture exact module ZIP identity: %w", err)
+			}
+			defer func() {
+				if err := verifyOrdinarySelectionUnchanged(ordinaryPlan, download.Dir, candidate); err != nil {
+					runErr = errors.Join(runErr, fmt.Errorf("ordinary source-selection inputs changed during package checks: %w", err))
+				}
+			}()
+		}
+	}
 	var privateExtension *discoveryPrivateExtensionSkip
 	if skip, ok := cfg.privateExtensionSkips[candidate.exactKey()]; ok {
 		filtered, active, err := filterPrivateExtensionConfigurations(buildConfigurations, skip)
@@ -2113,6 +2130,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			PrivateExtension:         privateExtension,
 			NativeLayout:             nativeLayout,
 			NativeLayoutPlan:         nativePlan,
+			OrdinarySelectionPlan:    ordinaryPlan,
 		}, nil, buildConfigurations, nil
 	}
 	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
@@ -2138,6 +2156,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		PrivateExtension:         privateExtension,
 		NativeLayout:             nativeLayout,
 		NativeLayoutPlan:         nativePlan,
+		OrdinarySelectionPlan:    ordinaryPlan,
 	}
 	runTargets := make(map[string]bool)
 	executedBuildConfigurations := make([]discoveryBuildConfiguration, 0, len(buildConfigurations))

@@ -123,6 +123,33 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				return fmt.Errorf("assembly ledger source skip %s has invalid scope or reason", key)
 			}
 		}
+		if (candidate.Status == discoveryStatusNotApplicable || candidate.Status == discoveryStatusPassed) &&
+			(candidate.OrdinarySelectionPlan != nil || candidate.Status == discoveryStatusNotApplicable || len(candidate.SourceNotApplicableItems) != 0) {
+			result := discoveryCorpusResult{
+				Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
+				DiscoveredAsmFiles: candidate.DiscoveredAsmFiles, ApplicableAsmFiles: candidate.ApplicableAsmFiles,
+				BuildConfigurations: candidate.BuildConfigurations, Translations: candidate.Translations,
+				NotApplicableTranslations: candidate.NotApplicableTranslations, NotApplicableItems: candidate.NotApplicableItems,
+				OrdinarySelectionPlan: candidate.OrdinarySelectionPlan,
+			}
+			for _, item := range candidate.SourceNotApplicableItems {
+				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
+					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason,
+				})
+			}
+			goVersion := ""
+			if progress.Provenance != nil {
+				goVersion = progress.Provenance.GoVersion
+			}
+			if err := validateOrdinarySelectionResult(result, progress.Targets, goVersion); err != nil {
+				return fmt.Errorf("assembly ledger ordinary selection %s: %w", key, err)
+			}
+		}
+		if candidate.OrdinarySelectionPlan != nil && candidate.Status != discoveryStatusPassed &&
+			candidate.Status != discoveryStatusNotApplicable && candidate.Status != discoveryStatusFailed {
+			return fmt.Errorf("assembly ledger non-ordinary outcome carries ordinary selection proof")
+		}
 		if candidate.Status == discoveryStatusSkippedInvalidSource {
 			if strings.TrimSpace(candidate.InvalidSourceReason) == "" || len(candidate.InvalidSourceEvidence) == 0 {
 				return fmt.Errorf("assembly ledger skip %s lacks reason or evidence", key)
@@ -182,7 +209,8 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				return fmt.Errorf("assembly ledger native-layout Go selection version differs from provenance")
 			}
 		} else if candidate.NativeLayout != nil || candidate.NativeLayoutPlan != nil ||
-			len(candidate.DiscoveredAsmFiles) != 0 || len(candidate.ApplicableAsmFiles) != 0 || len(candidate.BuildConfigurations) != 0 {
+			candidate.OrdinarySelectionPlan == nil &&
+				(len(candidate.DiscoveredAsmFiles) != 0 || len(candidate.ApplicableAsmFiles) != 0 || len(candidate.BuildConfigurations) != 0) {
 			return fmt.Errorf("assembly ledger non-native result %s carries native-layout evidence", key)
 		}
 	}
