@@ -61,8 +61,11 @@ GLOBL ·symptr<>(SB), NOPTR, $(machTimebaseInfo__size)
 	if err != nil || string(payload[:5]) != "hello" || len(payload) != 8 || payload[5] != 0 {
 		t.Fatalf("padded string DATA payload = (%v, %v)", payload, err)
 	}
-	if ds := file.Data[2]; ds.Sym != "·symptr<>" || ds.Value != 0 {
-		t.Fatalf("unexpected symbol DATA placeholder: %#v", ds)
+	if ds := file.Data[2]; ds.Sym != "·symptr<>" || ds.Addr != "runtime·main(SB)" || ds.Value != 0 || ds.Payload != nil {
+		t.Fatalf("unexpected symbol DATA relocation descriptor: %#v", ds)
+	}
+	if _, err := dataStmtPayload(file.Data[2]); err == nil {
+		t.Fatal("symbol DATA was converted to a zero byte placeholder")
 	}
 
 	if gs := file.Globl[0]; gs.Sym != "·tab<>" || gs.Flags != "RODATA" || gs.Size != 16 {

@@ -557,6 +557,11 @@ jobs:
           command -v clang
           clang --version
 
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
       - name: Go test (Ubuntu)
         if: runner.os != 'Windows'
         run: go test -timeout=45m ./...
@@ -689,6 +694,11 @@ jobs:
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh
 
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
       - name: Go test (race)
         run: go test -race -timeout=60m ./...
 
@@ -713,6 +723,11 @@ jobs:
       - name: Install LLVM 22
         timeout-minutes: 14
         run: bash scripts/install-ci-llvm22-ubuntu.sh
+
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
 
       - name: Go test with coverage
         run: |

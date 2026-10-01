@@ -233,6 +233,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if !opt.WASMABI.valid() {
 		return "", fmt.Errorf("invalid wasm ABI %d", opt.WASMABI)
 	}
+	if err := validateDataRelocations(file, opt.Goarch); err != nil {
+		return "", err
+	}
 	if file.Arch == ArchWASM && opt.WASMABI == WASMABIDirect {
 		for _, fn := range file.Funcs {
 			if !wasmNeedsIncomingContext(fn) {
@@ -260,7 +263,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	emitExternSBGlobals(&b, file, resolve, opt.Sigs)
 
 	if len(file.Data) != 0 || len(file.Globl) != 0 {
-		if err := emitDataGlobals(&b, file, resolve); err != nil {
+		if err := emitDataGlobalsWithSigs(&b, file, resolve, opt.Sigs, opt.WASMABI); err != nil {
 			return "", err
 		}
 		b.WriteString("\n")
@@ -500,6 +503,22 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 	for _, fn := range file.Funcs {
 		defined[resolve(fn.Sym)] = true
 	}
+	for _, d := range file.Data {
+		if d.Addr == "" {
+			continue
+		}
+		base, _, err := dataAddress(d)
+		if err != nil {
+			continue // The relocation grammar gate reports this before emission.
+		}
+		name := resolveDataAddressSymbol(file, base, resolve, sigs)
+		resolved := resolveDataSymbol(base, resolve)
+		if !defined[name] && !defined[resolved] {
+			if !dataAddressIsFunction(file, base, resolve, sigs) {
+				need[name] = true
+			}
+		}
+	}
 
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
@@ -544,19 +563,29 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 	if len(need) == 0 {
 		return
 	}
+	names := make([]string, 0, len(need))
 	for name := range need {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
 		fmt.Fprintf(b, "%s = external global i8\n", llvmGlobal(name))
 	}
 	b.WriteString("\n")
 }
 
 func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string) error {
+	return emitDataGlobalsWithSigs(b, file, resolve, nil, WASMABIDirect)
+}
+
+func emitDataGlobalsWithSigs(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI) error {
 	// Merge DATA and GLOBL into resolved symbol -> bytes.
 	type symData struct {
-		size     int64
-		bytes    map[int64][]byte // off -> payload
-		readOnly bool
-		local    bool
+		size      int64
+		bytes     map[int64][]byte // off -> payload
+		addresses map[int64]DataStmt
+		readOnly  bool
+		local     bool
 	}
 
 	syms := map[string]*symData{}
@@ -600,11 +629,18 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		if err != nil {
 			return err
 		}
-		payload, err := dataStmtPayload(d)
-		if err != nil {
-			return err
+		if d.Addr != "" {
+			if sd.addresses == nil {
+				sd.addresses = make(map[int64]DataStmt)
+			}
+			sd.addresses[d.Off] = d
+		} else {
+			payload, err := dataStmtPayload(d)
+			if err != nil {
+				return err
+			}
+			sd.bytes[d.Off] = payload
 		}
-		sd.bytes[d.Off] = payload
 		if end > sd.size {
 			sd.size = end
 		}
@@ -644,7 +680,24 @@ func emitDataGlobals(b *strings.Builder, file *File, resolve func(string) string
 		if sd.local {
 			kind = "internal " + kind
 		}
-		fmt.Fprintf(b, "%s = %s [%d x i8] %s, align %d\n", llvmGlobal(name), kind, len(buf), llvmI8ArrayInit(buf), align)
+		if len(sd.addresses) == 0 {
+			fmt.Fprintf(b, "%s = %s [%d x i8] %s, align %d\n", llvmGlobal(name), kind, len(buf), llvmI8ArrayInit(buf), align)
+			continue
+		}
+		if file.Arch == ArchWASM {
+			if err := emitWASMDataRelocations(b, file, name, buf, sd.addresses, resolve, sigs, wasmABI, sd.readOnly, sd.local, align); err != nil {
+				return err
+			}
+			continue
+		}
+		typ, initializer, err := dataRelocationInitializer(file, buf, sd.addresses, resolve, sigs)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(b, "%s = %s %s %s, align %d\n", llvmGlobal(name), kind, typ, initializer, align)
+	}
+	if file.Arch == ArchWASM {
+		return emitWASMDataRelocationRoots(b, file, resolve, sigs)
 	}
 	return nil
 }
@@ -673,6 +726,9 @@ func makeDataGlobal(name string, size int64) ([]byte, error) {
 }
 
 func dataStmtPayload(d DataStmt) ([]byte, error) {
+	if d.Addr != "" {
+		return nil, fmt.Errorf("DATA %s: symbol address requires relocation-aware lowering, not a byte placeholder", d.Sym)
+	}
 	if d.Width <= 0 {
 		return nil, fmt.Errorf("DATA %s: invalid width %d", d.Sym, d.Width)
 	}

@@ -36,6 +36,9 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 	if opt.AnnotateSource {
 		return llvm.Module{}, directUnsupportedf("source annotation requires textual lowering")
 	}
+	if err := validateDataRelocations(file, opt.Goarch); err != nil {
+		return llvm.Module{}, err
+	}
 
 	resolve := opt.ResolveSym
 	if resolve == nil {
@@ -577,6 +580,13 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 }
 
 func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) string) error {
+	for _, data := range file.Data {
+		if data.Addr != "" {
+			// The shared textual route emits real packed relocation constants.
+			// Fall back before adding any partially initialized globals.
+			return directUnsupportedf("DATA symbol addresses require relocation-aware constants")
+		}
+	}
 	type symData struct {
 		size     int64
 		bytes    map[int64][]byte

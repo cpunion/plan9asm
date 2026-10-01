@@ -337,8 +337,8 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 		}
 	}
 	if !ok {
-		// Accept symbol-address initializers (e.g. $runtime·main(SB)) even when
-		// relocation details are not modeled; encode as zero placeholder.
+		// Preserve symbol-address initializers for relocation-aware lowering.
+		// Value is not a byte payload for an address initializer.
 		if strings.HasPrefix(strings.TrimSpace(rhs), "$") {
 			if sym, symOK := parseSym(strings.TrimPrefix(strings.TrimSpace(rhs), "$")); symOK {
 				addr = sym

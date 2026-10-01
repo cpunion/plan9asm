@@ -36,6 +36,22 @@ func TestCIFullSuitesHaveExplicitTimeout(t *testing.T) {
 	}
 }
 
+func TestCIFullSuitesInstallWASMExecutionRuntime(t *testing.T) {
+	data, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"test", "race", "coverage"} {
+		job, found := ciWorkflowJob(string(data), name)
+		if !found {
+			t.Fatalf("full-suite job %s is missing", name)
+		}
+		if !strings.Contains(job, "uses: actions/setup-node@v6") || !strings.Contains(job, "node-version: '22'") {
+			t.Errorf("%s must install the required wasm execution runtime, not depend on a runner's incidental PATH", name)
+		}
+	}
+}
+
 func TestCICrossRuntimeUsesPinnedQEMU(t *testing.T) {
 	data, err := os.ReadFile(".github/workflows/go-ci.yml")
 	if err != nil {
