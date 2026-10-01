@@ -54,6 +54,11 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 		return nil, nil, nil, nil, "", err
 	}
 	files := ordinaryProfileEligibleCPPFiles(eligible)
+	if len(files) != 0 {
+		if err := captureDiscoveryProxyGoMod(ctx, plan, download, dir, env); err != nil {
+			return nil, nil, nil, nil, "", err
+		}
+	}
 	var goRoot string
 	if len(files) != 0 {
 		output, _, err := runDiscoveryMachineCommand(ctx, dir, env, binary, "env", "-json", "GOROOT", "GOVERSION")

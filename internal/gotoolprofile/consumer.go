@@ -6,18 +6,20 @@ const ConsumerProtocol = "actual_go_cpu_profile_consumer_v1"
 // source root binds an actual replacement/module directory; all selected bytes
 // must match the producer's pre-load hashes. Only SelectionProof is published.
 type ConsumerInput struct {
-	Protocol     string              `json:"protocol"`
-	ID           string              `json:"id"`
-	Observed     *Observation        `json:"observed"`
-	Module       string              `json:"module"`
-	Version      string              `json:"version"`
-	SourceModule string              `json:"source_module,omitempty"`
-	SourceRoot   string              `json:"source_root"`
-	Sources      map[string]string   `json:"sources"`
-	Headers      map[string]string   `json:"selection_headers"`
-	ToolSources  map[string]string   `json:"tool_sources,omitempty"`
-	Directories  map[string][]string `json:"directories"`
-	AsmFiles     []string            `json:"asm_files"`
+	Protocol       string              `json:"protocol"`
+	ID             string              `json:"id"`
+	Observed       *Observation        `json:"observed"`
+	Module         string              `json:"module"`
+	Version        string              `json:"version"`
+	SourceModule   string              `json:"source_module,omitempty"`
+	SourceRoot     string              `json:"source_root"`
+	Sources        map[string]string   `json:"sources"`
+	Headers        map[string]string   `json:"selection_headers"`
+	ToolSources    map[string]string   `json:"tool_sources,omitempty"`
+	Directories    map[string][]string `json:"directories"`
+	AsmFiles       []string            `json:"asm_files"`
+	ProxyGoMod     *ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
+	ProxyGoModPath string              `json:"proxy_go_mod_path,omitempty"`
 }
 
 type SelectionProof struct {
@@ -41,6 +43,9 @@ type PackageProof struct {
 	SFiles          []string          `json:"s_files"`
 	SourceSHA256    map[string]string `json:"source_sha256"`
 	Macros          *AssemblerMacros  `json:"macros"`
+	GoModOrigin     string            `json:"go_mod_origin,omitempty"`
+	GoModSHA256     string            `json:"go_mod_sha256,omitempty"`
+	GoModSum        string            `json:"go_mod_sum,omitempty"`
 }
 
 type CPPProof struct {

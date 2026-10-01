@@ -141,6 +141,17 @@ func ValidatePackageModule(input *ConsumerInput, pkg PackageProof) error {
 	if input == nil || pkg.ModulePath != input.Module || pkg.ModuleVersion != input.Version {
 		return fmt.Errorf("actual Go package module/version differs from the explicit consumer input")
 	}
+	if metadata := input.ProxyGoMod; metadata != nil {
+		if err := ValidateProxyGoMod(metadata); err != nil {
+			return err
+		}
+		if input.Sources["go.mod"] != "" || input.Module != metadata.Module || input.SourceModule != metadata.Module || input.Version != metadata.Version ||
+			pkg.GoModOrigin != metadata.Protocol || pkg.GoModSHA256 != metadata.SHA256 || pkg.GoModSum != metadata.GoModSum {
+			return fmt.Errorf("actual package lacks the independent authenticated proxy metadata origin")
+		}
+	} else if pkg.GoModOrigin != "" || pkg.GoModSHA256 != "" || pkg.GoModSum != "" {
+		return fmt.Errorf("package proxy metadata has no independently authenticated source proof")
+	}
 	module := input.SourceModule
 	if module == "" {
 		module = input.Module

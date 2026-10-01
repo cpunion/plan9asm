@@ -174,8 +174,31 @@ func (consumer *featureConsumer) verifySources() error {
 	if consumer.Context != nil && consumer.Context.Err() != nil {
 		return consumer.Context.Err()
 	}
-	if consumer.Input == nil || consumer.Input.Sources["go.mod"] == "" || len(consumer.Input.Directories) == 0 {
+	if consumer.Input == nil || len(consumer.Input.Directories) == 0 {
 		return fmt.Errorf("feature consumer requires exact pre-load module source hashes")
+	}
+	if proof := consumer.Input.ProxyGoMod; proof != nil {
+		if err := gotoolprofile.ValidateProxyGoMod(proof); err != nil {
+			return err
+		}
+		if consumer.Input.Sources["go.mod"] != "" || consumer.Input.Module != proof.Module ||
+			consumer.Input.SourceModule != proof.Module || consumer.Input.Version != proof.Version ||
+			!filepath.IsAbs(consumer.Input.ProxyGoModPath) {
+			return fmt.Errorf("proxy metadata differs from its exact non-ZIP module role")
+		}
+		if _, err := os.Stat(filepath.Join(consumer.Dir, "go.mod")); !os.IsNotExist(err) {
+			return fmt.Errorf("proxy metadata cannot impersonate original ZIP go.mod")
+		}
+		resolved, err := filepath.EvalSymlinks(consumer.Input.ProxyGoModPath)
+		if err != nil || resolved != consumer.Input.ProxyGoModPath {
+			return fmt.Errorf("authenticated proxy metadata is missing or redirected")
+		}
+		actual, err := gotoolprofile.FileSHA256(resolved)
+		if err != nil || actual != proof.SHA256 {
+			return fmt.Errorf("authenticated proxy metadata changed before or after package loading")
+		}
+	} else if consumer.Input.Sources["go.mod"] == "" || consumer.Input.ProxyGoModPath != "" {
+		return fmt.Errorf("feature consumer requires exact ZIP go.mod or independently authenticated proxy metadata")
 	}
 	for dir, expected := range consumer.Input.Directories {
 		if filepath.IsAbs(dir) || filepath.ToSlash(filepath.Clean(dir)) != dir || strings.HasPrefix(dir, "../") || strings.Contains(dir, "\\") {
@@ -256,6 +279,17 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 			PackagePath: pkg.PkgPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
 			SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module",
 			Macros: macros, SourceSHA256: make(map[string]string),
+		}
+		if metadata := consumer.Input.ProxyGoMod; metadata != nil {
+			used := pkg.Module.GoMod
+			if pkg.Module.Replace != nil {
+				used = pkg.Module.Replace.GoMod
+			}
+			resolved, err := filepath.EvalSymlinks(used)
+			if err != nil || resolved != consumer.Input.ProxyGoModPath {
+				return fmt.Errorf("actual package used different proxy go.mod metadata")
+			}
+			proof.GoModOrigin, proof.GoModSHA256, proof.GoModSum = metadata.Protocol, metadata.SHA256, metadata.GoModSum
 		}
 		if pkg.Module.Main {
 			proof.SourceRole = "main"

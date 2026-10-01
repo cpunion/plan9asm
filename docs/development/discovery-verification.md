@@ -261,7 +261,17 @@ one package's custom tags to unrelated packages or discard shared-file asmdecl
 diagnostics to make the scope denominator fit.
 Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
-legacy modules lacking original declared-module metadata remain failures.
+legacy modules lacking authenticated declared-module metadata remain failures.
+If an exact ZIP has no `go.mod`, the ordinary producer may use Go's canonical
+proxy-generated module directive. This is separate `proxy_go_mod` evidence,
+never an added ZIP member: exact ZIP and GoMod h1 sums, metadata bytes/SHA-256,
+the public SumDB-signed tree and exact record inclusion are verified by producer,
+compiler consumer and offline ledger readers. The actual download metadata path
+and actual package metadata origin are checked before and after loading; changed
+files, missing authentication or noncanonical synthesized directives fail.
+Checksum metadata reads are bounded and read-only (or fetched in memory from
+the official service), with no cache mutation. Cross-host comparison first
+authenticates both checkpoints and retains their exact record/metadata identity.
 `no_current_go_package` describes ordinary non-test source pairing only; it
 does not prove that `go list -test` could not select a test-only package.
 The producer checks captured files and directory names against that ZIP;

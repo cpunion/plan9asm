@@ -181,13 +181,14 @@ type discoverySourceNotApplicableItem struct {
 }
 
 type moduleDownloadInfo struct {
-	Path    string `json:"Path"`
-	Version string `json:"Version"`
-	Dir     string `json:"Dir"`
-	GoMod   string `json:"GoMod"`
-	Zip     string `json:"Zip"`
-	Sum     string `json:"Sum"`
-	Error   string `json:"Error"`
+	Path     string `json:"Path"`
+	Version  string `json:"Version"`
+	Dir      string `json:"Dir"`
+	GoMod    string `json:"GoMod"`
+	Zip      string `json:"Zip"`
+	Sum      string `json:"Sum"`
+	GoModSum string `json:"GoModSum"`
+	Error    string `json:"Error"`
 }
 
 type discoveryCorpusResult struct {

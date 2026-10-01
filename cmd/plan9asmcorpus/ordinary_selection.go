@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 	"golang.org/x/mod/sumdb/dirhash"
 )
 
@@ -34,20 +35,22 @@ const (
 // package. Ignored directories and nested modules are recursive corpus-walk
 // boundaries. Constraints and source diagnostics are separate decisions.
 type discoveryOrdinarySelectionPlan struct {
-	Protocol         string                       `json:"protocol"`
-	Module           string                       `json:"module"`
-	Version          string                       `json:"version"`
-	ModuleSum        string                       `json:"module_sum"`
-	ZipSHA256        string                       `json:"zip_sha256"`
-	GoVersion        string                       `json:"go_version"`
-	Targets          []string                     `json:"targets"`
-	ReleaseTags      []string                     `json:"release_tags"`
-	ToolTags         []string                     `json:"tool_tags"`
-	Sources          []ordinarySelectionSource    `json:"sources"`
-	Directories      []ordinarySelectionDirectory `json:"directories"`
-	Decisions        []ordinarySelectionDecision  `json:"decisions"`
-	CPPInputs        *discoveryCPPInputs          `json:"cpp_inputs,omitempty"`
-	ProfileDecisions []ordinaryProfileDecision    `json:"profile_decisions,omitempty"`
+	Protocol         string                         `json:"protocol"`
+	Module           string                         `json:"module"`
+	Version          string                         `json:"version"`
+	ModuleSum        string                         `json:"module_sum"`
+	ZipSHA256        string                         `json:"zip_sha256"`
+	GoVersion        string                         `json:"go_version"`
+	Targets          []string                       `json:"targets"`
+	ReleaseTags      []string                       `json:"release_tags"`
+	ToolTags         []string                       `json:"tool_tags"`
+	Sources          []ordinarySelectionSource      `json:"sources"`
+	Directories      []ordinarySelectionDirectory   `json:"directories"`
+	Decisions        []ordinarySelectionDecision    `json:"decisions"`
+	CPPInputs        *discoveryCPPInputs            `json:"cpp_inputs,omitempty"`
+	ProfileDecisions []ordinaryProfileDecision      `json:"profile_decisions,omitempty"`
+	ProxyGoMod       *gotoolprofile.ProxyGoModProof `json:"proxy_go_mod,omitempty"`
+	proxyGoModPath   string
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The

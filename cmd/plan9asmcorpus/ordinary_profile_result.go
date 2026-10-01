@@ -19,6 +19,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 		return err
 	}
+	if err := validateDiscoveryProxyGoMod(plan); err != nil {
+		return err
+	}
 	digest, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(plan.ModuleSum, "h1:"))
 	if !strings.HasPrefix(plan.ModuleSum, "h1:") || err != nil || len(digest) != sha256.Size || !discoverySHA256Pattern.MatchString(plan.ZipSHA256) {
 		return fmt.Errorf("ordinary profile inputs lack exact original ZIP/h1 identity")
@@ -200,6 +203,7 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		SourceRoot: sourceRoot, AsmFiles: append([]string(nil), files...),
 		Sources: make(map[string]string), Headers: make(map[string]string),
 		ToolSources: make(map[string]string), Directories: make(map[string][]string),
+		ProxyGoMod: plan.ProxyGoMod, ProxyGoModPath: plan.proxyGoModPath,
 	}
 	for _, dir := range plan.Directories {
 		for _, entry := range dir.Entries {
@@ -223,6 +227,12 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 }
 
 func ordinaryProfileDeclaredModule(plan *discoveryOrdinarySelectionPlan) (string, error) {
+	if plan.ProxyGoMod != nil {
+		if err := validateDiscoveryProxyGoMod(plan); err != nil {
+			return "", err
+		}
+		return plan.ProxyGoMod.Module, nil
+	}
 	for _, source := range plan.Sources {
 		if source.File == "go.mod" {
 			return parseDeclaredModulePath([]byte(source.Header))

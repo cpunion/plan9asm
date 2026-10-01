@@ -80,6 +80,12 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		if plan := candidate.OrdinarySelectionPlan; plan != nil {
+			if metadata := plan.ProxyGoMod; metadata != nil {
+				// Each original inclusion/signature was verified first. Tree
+				// checkpoints may advance between hosts; exact authenticated
+				// record, ZIP/mod sums, bytes and declared origin stay intact.
+				metadata.SignedTree, metadata.Inclusion = "", nil
+			}
 			// This legacy host default is not used by schema10 replay. Its
 			// actual target ToolTags remain in every required observation.
 			plan.ToolTags = nil

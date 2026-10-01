@@ -118,6 +118,9 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 	if plan == nil {
 		return nil // independently verified native/private exception protocol
 	}
+	if err := verifyDiscoveryProxyGoMod(plan); err != nil {
+		return &discoverySourceProofError{err}
+	}
 	if err := verifyOrdinarySelectionUnchanged(plan, moduleDir, candidate); err != nil {
 		return &discoverySourceProofError{err}
 	}
