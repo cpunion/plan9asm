@@ -131,7 +131,7 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 			} else if !os.IsNotExist(err) {
 				return "", nil, err
 			}
-			if name == "go_asm.h" {
+			if filepath.Clean(name) == "go_asm.h" {
 				return read("", true)
 			}
 			return read(filepath.Join(consumer.Root, "pkg/include", filepath.FromSlash(name)), false)

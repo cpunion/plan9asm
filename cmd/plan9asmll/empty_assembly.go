@@ -78,7 +78,36 @@ func proveEmptyAssembly(pkg *packages.Package, task asmTask, target string, defi
 	defer func() { proofErr = errors.Join(proofErr, os.RemoveAll(owned)) }()
 	object := filepath.Join(owned, "source.o")
 	dir := filepath.Dir(task.AsmFile)
-	args := []string{"tool", "asm", "-S", "-p", pkg.PkgPath, "-I", dir, "-I", filepath.Join(root, "pkg", "include"), "-o", object}
+	args := []string{"tool", "asm", "-S", "-p", pkg.PkgPath, "-I", dir}
+	if cfg.Feature != nil && cfg.Feature.Proof != nil && cfg.Feature.Proof.GeneratedHeaders != nil {
+		var definitions map[string]string
+		for _, header := range cfg.Feature.Proof.GeneratedHeaders.Headers {
+			if header.PackagePath == pkg.PkgPath {
+				definitions = header.Definitions
+			}
+		}
+		data, err := gotoolprofile.CanonicalGeneratedHeader(definitions)
+		if err != nil {
+			return nil, fmt.Errorf("native empty-object generated header lacks actual selected package origin: %w", err)
+		}
+		headerFile := filepath.Join(owned, "go_asm.h")
+		if err := os.WriteFile(headerFile, data, 0600); err != nil {
+			return nil, err
+		}
+		before := featureBytesSHA256(data)
+		defer func() {
+			after, err := gotoolprofile.FileSHA256(headerFile)
+			if err == nil && before != after {
+				err = fmt.Errorf("actual full generated header changed during native empty-object assembly")
+			}
+			proofErr = errors.Join(proofErr, err)
+		}()
+		// The Go-generated object directory follows the original package CWD
+		// and precedes tool headers. This is the complete independently
+		// compiled header, never cmd/go's earlier empty gensymabis stub.
+		args = append(args, "-I", owned)
+	}
+	args = append(args, "-I", filepath.Join(root, "pkg", "include"), "-o", object)
 	for _, define := range defines {
 		args = append(args, "-D", define)
 	}
