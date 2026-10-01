@@ -31,7 +31,9 @@ func TestARM64RegisterAddressGrammarMatchesGoEncoder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := regexp.MustCompile(`\{AMOVD, C_(AACON2?|LACON), C_NONE, C_NONE, C_RSP, C_NONE, (\d+),`).FindAllStringSubmatch(string(source), -1)
+	// Older Go tables have no trailing To3 operand class. In both layouts
+	// the same three address classes select encoder types 4 and 34.
+	rows := regexp.MustCompile(`\{AMOVD, C_(AACON2?|LACON), C_NONE, C_NONE, C_RSP, (?:C_NONE, )?(\d+),`).FindAllStringSubmatch(string(source), -1)
 	want := map[string]string{"AACON": "4", "AACON2": "4", "LACON": "34"}
 	if len(rows) != len(want) {
 		t.Fatalf("Go register-address family has %d rows, want %d", len(rows), len(want))
