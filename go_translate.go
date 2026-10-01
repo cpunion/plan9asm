@@ -72,6 +72,12 @@ type GoModuleTranslation struct {
 // The package must provide go/types information for the declarations referenced
 // by the assembly. Methods and variadic functions are not supported.
 func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
+	return translateGoModuleInContext(llvm.GlobalContext(), pkg, src, opt)
+}
+
+// Internal high-volume callers can own the context without changing the public
+// binding contract. Dispose the returned module before disposing ctx.
+func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
 	pkgPath := pkg.Path
 	if pkgPath == "" && pkg.Types != nil {
 		pkgPath = pkg.Types.Path()
@@ -120,7 +126,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
-	mod, err := TranslateModule(file, Options{
+	mod, err := TranslateModuleInContext(ctx, file, Options{
 		TargetTriple:   opt.TargetTriple,
 		ResolveSym:     resolve,
 		Sigs:           sigs,
