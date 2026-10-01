@@ -888,6 +888,12 @@ func emitARM64Prelude(b *strings.Builder) {
 }
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+	// Validate the original complete function as well as the normalized CFG
+	// checked by the lowerer. Raw layout rewriting must not erase a private
+	// address source before granting native, hardware-sized store effects.
+	if err := validateARM64DCZVASource(fn); err != nil {
+		return err
+	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
 	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 		if sig.ARM64GoRegisterABI != nil {

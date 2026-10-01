@@ -318,6 +318,13 @@ func arm64ControlOp(ins Instr) Op {
 
 func arm64ControlDecode(ins Instr) Instr {
 	if ins.Op == OpWORD {
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
+			if form, ok := decodeARM64RawDCZVA(uint32(ins.Args[0].Imm)); ok {
+				decoded := arm64DCZVAInstruction(form)
+				decoded.Raw = ins.Raw
+				return decoded
+			}
+		}
 		if decoded, err := decodeARM64RawWordInstruction(ins); err == nil {
 			return arm64HardwareReturnAsBranch(decoded)
 		}
@@ -582,6 +589,15 @@ func arm64IsConditionalBranch(op Op) bool {
 
 func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[string]string) {
 	if len(ins.Args) == 0 {
+		return
+	}
+	if form, handled, err := parseARM64CacheForm(op, ins); handled && err == nil && form.operation == "ZVA" {
+		// Neither address nor GP/NZCV state is written. The granule size and
+		// downward alignment are architectural runtime values, so no owned
+		// continuation cell can remain a known saved LR/FP pointer contents.
+		for key, value := range state.memory {
+			state.memory[key] = arm64ControlUnion(value, arm64ControlExternal())
+		}
 		return
 	}
 	if op == OpWORD {

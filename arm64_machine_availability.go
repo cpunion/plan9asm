@@ -15,6 +15,7 @@ type arm64MachineEffect struct {
 	write    bool
 	call     *ARM64GoRegisterABI
 	opaque   bool
+	store    bool
 	source   string
 }
 
@@ -33,7 +34,12 @@ type arm64MachineAvailability struct {
 	entry      *ARM64GoRegisterABI
 	entryError error
 	used       bool
-	nativeIR   map[int]string
+	nativeIR   map[int]arm64MachineNativeProof
+}
+
+type arm64MachineNativeProof struct {
+	line  string
+	store bool
 }
 
 // A validated lowerer can prove that one emitted native instruction has no
@@ -42,13 +48,24 @@ type arm64MachineAvailability struct {
 // line; other callouts, including another callout in the same source
 // instruction, remain opaque. A compiler memory barrier is not a data store.
 func (c *arm64Ctx) emitMachineNeutralNativeIR(format string, args ...any) {
+	c.emitMachineNativeIR(false, format, args...)
+}
+
+// Store-native IR has a separate continuation memory proof. It is not a
+// neutral instruction: callers of this helper must validate the address
+// sources, and the matching control transfer must invalidate affected cells.
+func (c *arm64Ctx) emitMachineStoreNativeIR(format string, args ...any) {
+	c.emitMachineNativeIR(true, format, args...)
+}
+
+func (c *arm64Ctx) emitMachineNativeIR(store bool, format string, args ...any) {
 	start := c.b.Len()
 	fmt.Fprintf(c.b, format, args...)
 	if flow := c.machineAvailability; flow != nil {
 		if flow.nativeIR == nil {
-			flow.nativeIR = make(map[int]string)
+			flow.nativeIR = make(map[int]arm64MachineNativeProof)
 		}
-		flow.nativeIR[start] = c.b.String()[start:]
+		flow.nativeIR[start] = arm64MachineNativeProof{line: c.b.String()[start:], store: store}
 	}
 }
 
@@ -280,6 +297,12 @@ func (flow *arm64MachineAvailability) validate() error {
 			if effect.opaque {
 				return arm64GoABIContext("native/raw effects need a complete machine-state contract at %q", effect.source)
 			}
+			if effect.store {
+				// The source continuation analysis, not GP availability, owns
+				// memory/return-link provenance. This effect is explicit so a
+				// validated store cannot silently acquire a neutral proof.
+				continue
+			}
 			if effect.copyFrom != "" {
 				width := state.values[effect.copyFrom]
 				if effect.copyFrom == string(ZR) {
@@ -334,9 +357,14 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 		len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)")
 	offset := start
 	for _, line := range strings.SplitAfter(c.b.String()[start:], "\n") {
-		proven := flow.nativeIR[offset] == line && line != ""
+		proof := flow.nativeIR[offset]
+		proven := proof.line == line && line != ""
 		offset += len(line)
 		if proven {
+			if proof.store {
+				flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects,
+					arm64MachineEffect{store: true, source: flow.source})
+			}
 			continue
 		}
 		if strings.Contains(line, " asm ") || (!symbolCall && strings.Contains(line, " call ") && !strings.Contains(line, "@llvm.")) {

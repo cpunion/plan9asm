@@ -4,7 +4,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"go/ast"
 	"go/importer"
 	"go/parser"
@@ -13,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/xgo-dev/llvm"
@@ -82,28 +80,30 @@ func TestStdlibARM64TypedNativeEffectsMemHashCompleteSource(t *testing.T) {
 	}
 }
 
-func TestStdlibARM64TypedNativeEffectsMemclrRetainsDCZVAContext(t *testing.T) {
+func TestStdlibARM64TypedNativeEffectsMemclrCompleteSource(t *testing.T) {
 	sourcePath := filepath.Join(testGOROOT(t), "src/runtime/memclr_arm64.s")
 	arm64TypedNativeStdlibObject(t, sourcePath)
 	source, err := os.ReadFile(sourcePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// This is the real declaration, but not an invented cache-zero operation or
-	// a generic pointer noalias contract. The complete original source remains
-	// a genuine Context failure at its next unmodeled architectural operation.
 	pkg := arm64TypedNativeStdlibPackage(t, "runtime", "package runtime\nimport \"unsafe\"\nfunc memclrNoHeapPointers(ptr unsafe.Pointer,n uintptr)\n")
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
 	for _, target := range arm64TypedNativeTargets {
 		ctx := llvm.NewContext()
 		tr, err := translateGoModuleInContext(ctx, pkg, source, GoModuleOptions{
 			GOARCH: "arm64", GOOS: "linux", TargetTriple: target, ResolveSym: testResolveSym("runtime"),
 		})
-		if tr != nil {
-			tr.Module.Dispose()
+		if err != nil {
+			ctx.Dispose()
+			t.Errorf("%s: complete unchanged memclr source: %v", target, err)
+			continue
 		}
+		compileLLVMToObject(t, llc, target, "memclr-arm64.ll", "memclr-arm64.o", tr.Module.String())
+		tr.Module.Dispose()
 		ctx.Dispose()
-		if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "DC\\tZVA") {
-			t.Errorf("%s: expected next actual DC ZVA Context, got %v", target, err)
-		}
 	}
 }
