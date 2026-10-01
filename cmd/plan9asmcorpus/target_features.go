@@ -103,6 +103,11 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if actualEnv["GOOS"] != parts[0] || actualEnv["GOARCH"] != parts[1] || actualEnv["CGO_ENABLED"] != "0" {
 		return nil, fmt.Errorf("Go driver returned a different feature target")
 	}
+	for key, wanted := range overrides {
+		if actualEnv[key] != wanted {
+			return nil, fmt.Errorf("actual Go driver did not preserve required %s=%q (reported %q)", key, wanted, actualEnv[key])
+		}
+	}
 	minor, err := discoveryGoMinor(actualEnv["GOVERSION"])
 	if err != nil || minor < 20 || minor > 27 {
 		return nil, fmt.Errorf("feature registration is not audited for Go version %q", actualEnv["GOVERSION"])
@@ -110,7 +115,7 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if err := validateDiscoveryCPUEnvironment(parts[1], actualEnv[cpuKey], minor); err != nil {
 		return nil, err
 	}
-	tags, sourceHashes, err := discoveryBuiltinFeatureCandidates(actualEnv["GOROOT"])
+	tags, sourceHashes, err := discoveryBuiltinFeatureCandidates(actualEnv["GOROOT"], actualEnv["GOVERSION"])
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +208,10 @@ func validateDiscoveryCPUEnvironment(arch, value string, minor int) error {
 			valid = valid || value == version || value == version+",softfloat" || value == version+",hardfloat"
 		}
 	case "arm64":
-		valid = value == "" && minor < 23
+		if minor < 23 {
+			valid = value == ""
+			break
+		}
 		level := strings.Split(value, ",")[0]
 		for _, candidate := range discoveryCPUFeatureCandidates() {
 			valid = valid || candidate == "arm64."+level
@@ -244,17 +252,25 @@ func discoveryCPUFeatureCandidates() []string {
 	return tags
 }
 
-func discoveryBuiltinFeatureCandidates(root string) ([]string, map[string]string, error) {
+func discoveryBuiltinFeatureCandidates(root string, versions ...string) ([]string, map[string]string, error) {
 	if !filepath.IsAbs(root) {
 		return nil, nil, fmt.Errorf("actual Go driver returned non-absolute GOROOT")
 	}
 	const cfg = "src/internal/buildcfg/cfg.go"
 	const flags = "src/internal/goexperiment/flags.go"
+	versionData, err := os.ReadFile(filepath.Join(root, "VERSION"))
+	if err != nil || len(versions) != 1 || strings.TrimSpace(strings.Split(string(versionData), "\n")[0]) != versions[0] {
+		return nil, nil, fmt.Errorf("actual Go source VERSION does not match driver GOVERSION")
+	}
+	minor, err := discoveryGoMinor(versions[0])
+	if err != nil || minor < 20 || minor > 27 {
+		return nil, nil, fmt.Errorf("unsupported actual feature source version")
+	}
 	cfgData, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(cfg)))
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := validateDiscoveryFeatureRegistration(cfgData); err != nil {
+	if err := validateDiscoveryFeatureRegistration(cfgData, minor); err != nil {
 		return nil, nil, err
 	}
 	flagsData, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(flags)))
@@ -265,9 +281,27 @@ func discoveryBuiltinFeatureCandidates(root string) ([]string, map[string]string
 	if err != nil {
 		return nil, nil, err
 	}
+	encoded, err := json.Marshal(experiments)
+	if err != nil || discoveryFeatureBytesSHA256(encoded) != discoveryVersionedExperimentFingerprints[minor] {
+		return nil, nil, fmt.Errorf("actual experiment Flags namespace differs from audited Go 1.%d source", minor)
+	}
 	tags := append(discoveryCPUFeatureCandidates(), experiments...)
 	sort.Strings(tags)
-	return tags, map[string]string{cfg: discoveryFeatureBytesSHA256(cfgData), flags: discoveryFeatureBytesSHA256(flagsData)}, nil
+	return tags, map[string]string{"VERSION": discoveryFeatureBytesSHA256(versionData), cfg: discoveryFeatureBytesSHA256(cfgData), flags: discoveryFeatureBytesSHA256(flagsData)}, nil
+}
+
+// Sorted actual Flags names from the same eight source versions audited below.
+// Binding their inventory to GOVERSION prevents a valid old Flags AST from
+// hiding experiments registered in the current driver.
+var discoveryVersionedExperimentFingerprints = map[int]string{
+	20: "48b85ced0e6d664288c06553e34762cd631e2b0399bdad5688d7798c6785e08f",
+	21: "40a8da1e5be03c7cd358c2692b1acb73c597a5efe7c02cf193be22c32c2d70c7",
+	22: "878f99519db76a94823059333c94e0610cfeef96ea911547b68d3cf3f769d6b7",
+	23: "9726432e4577241c2cd37c474d29245742f932fd88f62a706e89f099fe05c880",
+	24: "7f6653c3871242ec1e4f7dc3be2e00c66a64d224176b45acfe8dc8fdad5ada9c",
+	25: "438bf2033e42b67f81f59d72126b0c341d110b9c3ffdea46c47f35442f2121b1",
+	26: "91203a6562b47777218dbb24bba84f16083d8abbf9d169a8770207d6fdb8c325",
+	27: "aee888ef48c2fb3276d64ef9c9229667bd4a7187e2e0fd886444d2d9a7daab7d",
 }
 
 // These are normalized AST-token fingerprints of the complete registration
@@ -287,7 +321,7 @@ var discoveryFeatureRegistrationFingerprints = map[string][]string{
 	},
 }
 
-func validateDiscoveryFeatureRegistration(data []byte) error {
+func validateDiscoveryFeatureRegistration(data []byte, minors ...int) error {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, "cfg.go", data, 0)
 	if err != nil || f.Name.Name != "buildcfg" {
@@ -302,6 +336,13 @@ func validateDiscoveryFeatureRegistration(data []byte) error {
 		allowed, registered := discoveryFeatureRegistrationFingerprints[fn.Name.Name]
 		if !registered {
 			continue
+		}
+		if len(minors) != 0 && fn.Name.Name == "gogoarchTags" {
+			index, known := map[int]int{20: 0, 21: 0, 22: 1, 23: 2, 24: 2, 25: 3, 26: 4, 27: 4}[minors[0]]
+			if len(minors) != 1 || !known {
+				return fmt.Errorf("unrecognized actual feature registration Go version")
+			}
+			allowed = allowed[index : index+1]
 		}
 		if seen[fn.Name.Name] || fn.Recv != nil || fn.Body == nil {
 			return fmt.Errorf("invalid feature registration function %s", fn.Name.Name)

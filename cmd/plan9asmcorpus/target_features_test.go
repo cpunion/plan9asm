@@ -83,7 +83,7 @@ func TestTargetFeaturesActualDriverFiveTargets(t *testing.T) {
 					t.Fatalf("invalid portable tool source identity: %s %s", name, digest)
 				}
 			}
-			if len(features.ToolSourceSHA256) != 2 || len(features.DriverSHA256) != 64 || len(features.MarkerSourceSHA256) != 64 || len(features.DriverSelectionSHA256) != 64 {
+			if len(features.ToolSourceSHA256) != 3 || len(features.DriverSHA256) != 64 || len(features.MarkerSourceSHA256) != 64 || len(features.DriverSelectionSHA256) != 64 {
 				t.Fatalf("incomplete actual driver proof: %+v", features)
 			}
 			proofJSON, err := json.Marshal(features)
@@ -392,4 +392,34 @@ func containsTargetFeature(tags []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+func TestTargetFeaturesRejectsCrossVersionOrMissingExperimentSource(t *testing.T) {
+	for _, mutation := range []string{"wrong-version", "missing-real-flag"} {
+		t.Run(mutation, func(t *testing.T) {
+			root := t.TempDir()
+			for _, name := range []string{"VERSION", "src/internal/buildcfg/cfg.go", "src/internal/goexperiment/flags.go"} {
+				data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), filepath.FromSlash(name)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if mutation == "wrong-version" && name == "VERSION" {
+					data = []byte("go1.19.1\n")
+				}
+				if mutation == "missing-real-flag" && strings.HasSuffix(name, "flags.go") {
+					data = []byte(strings.Replace(string(data), "FieldTrack", "MadeUpExperiment", 1))
+				}
+				destination := filepath.Join(root, filepath.FromSlash(name))
+				if err := os.MkdirAll(filepath.Dir(destination), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(destination, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, _, err := discoveryBuiltinFeatureCandidates(root, runtime.Version()); err == nil {
+				t.Fatalf("actual Go driver could observe an incomplete/cross-version feature denominator: %s", mutation)
+			}
+		})
+	}
 }
