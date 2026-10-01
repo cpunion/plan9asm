@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -183,8 +184,11 @@ TEXT eretform(SB),$0-0
 func TestTranslateARM64RawSMC(t *testing.T) {
 	const source = `TEXT rawsmc(SB),$0-0
 	WORD $0xd4000003
-	RET
+	UNDEF
 `
+	// This checks encoding/object lowering, not a monitor's machine-state
+	// preservation contract or unprivileged runtime execution.
+	requireARM64GoAssemblerResult(t, source, true)
 	file, err := Parse(ArchARM64, source)
 	if err != nil {
 		t.Fatal(err)
@@ -205,6 +209,20 @@ func TestTranslateARM64RawSMC(t *testing.T) {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	compileLLVMToObject(t, llc, "aarch64-unknown-linux-gnu", "arm64-raw-smc.ll", "arm64-raw-smc.o", ll)
+}
+
+func TestTranslateARM64RawSMCReturnRequiresMonitorContract(t *testing.T) {
+	const source = "TEXT rawsmc(SB),4,$0-0\nWORD $0xd4000003\nRET\n"
+	requireARM64GoAssemblerResult(t, source, true)
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Translate(file, Options{Goarch: "arm64", TargetTriple: arm64LinuxGNUTriple,
+		Sigs: map[string]FuncSig{"rawsmc": {Name: "rawsmc", Ret: Void}},
+	}); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("unknown monitor continuation must require context, got %v", err)
+	}
 }
 
 func TestTranslateARM64RejectsUnexpandedExceptionMacros(t *testing.T) {

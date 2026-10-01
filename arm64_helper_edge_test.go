@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -538,6 +539,14 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{Op: "CBNZW", Args: []Operand{arm64RegOp("R7"), arm64IdentOp("done")}, Raw: "CBNZW R7, done"},
 	} {
 		ok, _, err := c.lowerBranch(1, tc.Op, tc, emitBr, emitCondBr)
+		if tc.Op == "B" && len(tc.Args) == 1 && tc.Args[0].Kind == OpSym {
+			// This direct lowerer unit has no complete source CFG proof.
+			// A tail return must not receive fabricated SP/LR provenance.
+			if !ok || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("unproven direct tail branch must need context, got %v", err)
+			}
+			continue
+		}
 		mustLowerARM64(t, "lowerBranch", tc, ok, err)
 	}
 

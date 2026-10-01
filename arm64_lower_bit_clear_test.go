@@ -8,6 +8,7 @@ import (
 
 func TestTranslateARM64BitClearCompleteGo127Forms(t *testing.T) {
 	const source = `TEXT bitClearForms(SB), $0-0
+	MOVD RSP, R18_PLATFORM
 	BIC R0, R1
 	BIC R2, R3, R4
 	BIC R5>>7, R6, R7
@@ -22,6 +23,7 @@ func TestTranslateARM64BitClearCompleteGo127Forms(t *testing.T) {
 	BICSW R24, R25
 	BICSW R26@>15, R27, R29
 	BICSW $255, R30, R0
+	MOVD R18_PLATFORM, RSP
 	RET
 `
 	requireARM64GoAssemblerResult(t, source, true)

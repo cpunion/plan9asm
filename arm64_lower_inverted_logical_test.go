@@ -8,6 +8,7 @@ import (
 
 const arm64InvertedLogicalForms = `
 TEXT invertedlogicalforms(SB),$0-0
+	MOVD RSP, R18_PLATFORM
 	ORN R0, R1
 	ORN R2, R3, R4
 	ORN R5>>7, R6, R7
@@ -22,6 +23,7 @@ TEXT invertedlogicalforms(SB),$0-0
 	EONW R24, R25
 	EONW R26@>15, R27, R29
 	EONW $255, R30, R0
+	MOVD R18_PLATFORM, RSP
 	RET
 `
 

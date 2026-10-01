@@ -58,7 +58,15 @@ func TestARM64RawSignedLaneExtractCompleteArchitecturalFormats(t *testing.T) {
 				dst := (lane*11 + src) % 31
 				imm5 := lane*form.elemBytes*2 + form.elemBytes
 				word := base | uint32(imm5)<<16 | uint32(src)<<5 | uint32(dst)
+				// The complete destination bank includes LR. Preserve it in
+				// actual source around each form, using a distinct GP register.
+				saved := 25
+				if dst == saved {
+					saved = 26
+				}
+				fmt.Fprintf(&source, "MOVD R30,R%d\n", saved)
 				fmt.Fprintf(&source, "\tWORD $%#08x\n", word)
+				fmt.Fprintf(&source, "MOVD R%d,R30\n", saved)
 			}
 		}
 	}
