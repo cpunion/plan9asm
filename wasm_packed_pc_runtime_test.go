@@ -42,7 +42,7 @@ RET
 		t.Fatal("actual Go native contract absent")
 	}
 	sigs["runtime.wasmDiv"] = native
-	goSource.WriteString("package main\nimport \"fmt\"\nfunc dynamicCall()\nfunc dynamicJump()\nfunc readCalls() uint64\n")
+	goSource.WriteString("package main\nimport \"fmt\"\nfunc target()\nfunc dynamicCall()\nfunc dynamicJump()\nfunc readCalls() uint64\n")
 	goSource.WriteString("//go:noinline\nfunc nativeDivision(a,b int64)int64{return a/b}\n")
 	var addresses []string
 	for _, target := range []string{"·target", "runtime·wasmDiv"} {

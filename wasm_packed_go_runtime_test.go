@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,19 +26,10 @@ func TestWASMPackedFunctionAddressActualGoRuntime(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("actual Go wasm oracle build: %v\n%s", err, out)
 	}
-	wasmPackedNode(t)
-	helper := ""
-	for _, directory := range []string{"lib", "misc"} {
-		candidate := filepath.Join(runtime.GOROOT(), directory, "wasm", "go_js_wasm_exec")
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0111 != 0 {
-			helper = candidate
-			break
-		}
+	cmd, err := wasmPackedGoRuntimeCommand(runtime.GOROOT(), wasmPackedNode(t), filepath.Join(dir, "oracle.wasm"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if helper == "" {
-		t.Fatal("selected Go toolchain lacks its required lib/misc wasm runtime helper")
-	}
-	cmd = exec.Command(helper, filepath.Join(dir, "oracle.wasm"))
 	// Go wasm has no native OS-thread creation; the build concurrency setting
 	// must not request two runtime Ps in this single-thread host.
 	cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
@@ -45,5 +37,28 @@ func TestWASMPackedFunctionAddressActualGoRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("actual Go wasm runtime: %v\n%s", err, result)
 	}
+	if strings.TrimSpace(string(result)) != "actual Go packed address + complete MOV widths + dynamic calls + native division PASS" {
+		t.Fatalf("runtime helper exited without executing the complete Go oracle:\n%s", result)
+	}
 	t.Log(strings.TrimSpace(string(result)))
+}
+
+func wasmPackedGoRuntimeCommand(root, node, wasm string) (*exec.Cmd, error) {
+	for _, directory := range []string{"lib", "misc"} {
+		dir := filepath.Join(root, directory, "wasm")
+		complete := true
+		for _, name := range []string{"wasm_exec_node.js", "wasm_exec.js"} {
+			info, err := os.Stat(filepath.Join(dir, name))
+			if err != nil || !info.Mode().IsRegular() {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			// These are the arguments of Go's go_js_wasm_exec wrapper,
+			// without invoking its POSIX shell or requiring execute bits.
+			return exec.Command(node, "--stack-size=8192", filepath.Join(dir, "wasm_exec_node.js"), wasm), nil
+		}
+	}
+	return nil, fmt.Errorf("selected Go toolchain lacks its required lib/misc wasm runtime JavaScript files")
 }
