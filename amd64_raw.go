@@ -33,6 +33,9 @@ func normalizeX86RawFile(file *File, goarch string) (*File, error) {
 	}
 	for i := range normalized.Funcs {
 		if normalized.Funcs[i].X86RawText != nil {
+			if err := validateX86AddressSensitiveRawText(normalized.Funcs[i], goarch); err != nil {
+				return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
+			}
 			continue
 		}
 		if x86HasTerminalRawTail(normalized.Funcs[i]) &&

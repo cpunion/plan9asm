@@ -445,6 +445,9 @@ func emitX86AddressSensitiveRawText(b *strings.Builder, fn Func, sig FuncSig) er
 	if len(fn.X86RawText) == 0 {
 		return fmt.Errorf("empty address-sensitive raw TEXT body")
 	}
+	if len(sig.Frame.Params) != 0 || len(sig.Frame.Results) != 0 {
+		return fmt.Errorf("%w: byte-exact naked TEXT cannot synthesize Go frame transport for %s", ErrProbeNeedsContext, fn.Sym)
+	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
 	for index, typ := range sig.Args {
 		if index != 0 {
