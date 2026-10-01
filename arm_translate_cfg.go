@@ -75,6 +75,9 @@ func (c *armCtx) lowerBlocks() error {
 }
 
 func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armEmitCondBr) (bool, error) {
+	if ins.armKernelCall != nil {
+		return c.lowerKernelHelperCall(*ins.armKernelCall)
+	}
 	rawOp := strings.ToUpper(string(ins.Op))
 	baseOp, cond, postInc, setFlags := armDecodeOp(rawOp)
 	switch baseOp {

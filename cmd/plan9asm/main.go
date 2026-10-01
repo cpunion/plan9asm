@@ -975,6 +975,11 @@ func asmDeclLookupSym(pkg *packages.Package, sym string) string {
 }
 
 func fallbackSigForAsmFunc(fn plan9asm.Func, resolved, goarch string) plan9asm.FuncSig {
+	if goarch == "arm" {
+		if native, ok := plan9asm.ARMKernelHelperFuncSig(fn, resolved); ok {
+			return native
+		}
+	}
 	paramOff := map[int64]struct{}{}
 	retOff := map[int64]struct{}{}
 

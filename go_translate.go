@@ -309,6 +309,11 @@ func (b *goSigBuilder) addDeclaredFuncSigs(file *File) error {
 					b.localSigs = make(map[string]bool)
 				}
 				b.localSigs[resolved] = true
+				if b.goarch == "arm" {
+					if native, ok := ARMKernelHelperFuncSig(file.Funcs[i], resolved); ok {
+						b.sigs[resolved] = native
+					}
+				}
 				continue
 			}
 			return fmt.Errorf("missing Go declaration for asm symbol %q", sym)

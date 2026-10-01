@@ -262,6 +262,17 @@ TEXT helper<>(SB),NOSPLIT,$0-1
 	}
 }
 
+func TestFallbackARMKernelHelperIsNotGuessedIntegerReturn(t *testing.T) {
+	file, err := plan9asm.Parse(plan9asm.ArchARM, "TEXT renamed<>(SB),$0\nMOVW $0xffff0fc0,R15\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := fallbackSigForAsmFunc(file.Funcs[0], "example.renamed$local", "arm")
+	if sig.Ret != plan9asm.Void || len(sig.Args)+len(sig.Frame.Params)+len(sig.Frame.Results) != 0 {
+		t.Fatalf("kernel native entry acquired a guessed Go/C ABI: %#v", sig)
+	}
+}
+
 func TestPackageQualifiedAsmSymbolUsesLocalDeclaration(t *testing.T) {
 	file, err := plan9asm.Parse(plan9asm.ArchARM, `TEXT runtime·pipe2(SB),NOSPLIT,$0-16
 	MOVW $r+4(FP), R0

@@ -943,6 +943,8 @@ type Instr struct {
 	Op   Op
 	Args []Operand
 	Raw  string
+	// Set only after validating a closed, source-local Linux native helper.
+	armKernelCall *armKernelCall
 	// Set only by a validated machine-code decoder. Physical operands need
 	// not obey textual frontend limits (e.g. Go 386's three-operand limit).
 	x86Encoded bool

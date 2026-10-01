@@ -205,6 +205,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	file, err = prepareARMKernelHelpers(file, opt)
+	if err != nil {
+		return "", err
+	}
 
 	resolve := opt.ResolveSym
 	if resolve == nil {

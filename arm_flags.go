@@ -38,6 +38,32 @@ func (c *armCtx) storeFlagsFromStatus(status string) {
 	c.flagsWritten = true
 }
 
+// LLVM arithmetic does not carry Plan 9's modeled NZCV in physical APSR.
+// Keep the physical non-NZCV status bits, but read the same condition state
+// used by source predicates after a source flags write or typed native call.
+func (c *armCtx) statusWithModeledNZCV(status string) string {
+	if !c.flagsWritten {
+		return status
+	}
+	result := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = and i32 %s, 268435455\n", result, status)
+	for _, item := range []struct {
+		shift int
+		slot  string
+	}{
+		{31, c.flagsNSlot}, {30, c.flagsZSlot},
+		{29, c.flagsCSlot}, {28, c.flagsVSlot},
+	} {
+		flag, wide, shifted, merged := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", flag, item.slot)
+		fmt.Fprintf(c.b, "  %%%s = zext i1 %%%s to i32\n", wide, flag)
+		fmt.Fprintf(c.b, "  %%%s = shl i32 %%%s, %d\n", shifted, wide, item.shift)
+		fmt.Fprintf(c.b, "  %%%s = or i32 %%%s, %%%s\n", merged, result, shifted)
+		result = merged
+	}
+	return "%" + result
+}
+
 func (c *armCtx) storeFlagCond(cond, slot, v string) error {
 	if cond == "" || strings.EqualFold(cond, "AL") {
 		c.storeFlag(slot, v)
