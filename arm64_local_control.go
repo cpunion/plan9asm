@@ -734,6 +734,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	}
 	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
 	mayWriteFrame := !known || len(state.escaped) != 0
+	callTransportKnown := known && operand.Kind == OpSym
 	internal := strings.HasSuffix(strings.TrimSuffix(operand.Sym, "(SB)"), "<ABIInternal>")
 	if internal && sig.ARM64GoRegisterABI != nil {
 		// The classic ABI0 Frame is not the location of an explicit
@@ -742,6 +743,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		// possible aliases; it asserts no ownership or register preservation.
 		if err := arm64ValidateGoRegisterABI(sig); err != nil {
 			mayWriteFrame = true
+			callTransportKnown = false
 		} else {
 			for _, param := range sig.ARM64GoRegisterABI.Params {
 				value := arm64ControlRead(state.regs, param.Register)
@@ -776,7 +778,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		}
 		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
 		returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
-		if sig.Args[index] == Ptr {
+		if arm64CallTypeMayContainPointer(sig.Args[index]) {
 			mayWriteFrame = true
 		}
 		for token := range value {
@@ -792,7 +794,15 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		}
 	}
 	if mayWriteFrame {
+		// FP slots can alias an incoming pointer and must still be invalidated.
+		// Only this invocation's fresh, unexposed SP object is disjoint from
+		// declared call values. Actual frame-address arguments, prior escape,
+		// unknown calls and unproved source/raw forms retain the old clobber.
+		preserveSP := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && len(state.escaped) == 0
 		for key, value := range state.memory {
+			if preserveSP && strings.HasPrefix(key, "sp:") {
+				continue
+			}
 			state.memory[key] = arm64ControlUnion(value, returnValue)
 		}
 	}

@@ -895,6 +895,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		return err
 	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
+	unexposedCallFrame := arm64CallFrameUnexposed(fn)
 	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 		if sig.ARM64GoRegisterABI != nil {
 			if err := arm64ValidateGoRegisterABI(sig); err != nil {
@@ -954,6 +955,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.sourceGoFrame = sourceGoFrame
+	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
 	c.sourceData = data
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
