@@ -632,7 +632,11 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("LEAQ", Instr{Raw: "LEAQ 8(BX)(CX*2), DI", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Index: CX, Scale: 2, Off: 8}}, {Kind: OpReg, Reg: DI}}})
 	mustLower("LEAL", Instr{Raw: "LEAL 4(BX), SI", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 4}}, {Kind: OpReg, Reg: SI}}})
 	mustLower("LEAQ", Instr{Raw: "LEAQ ret+16(FP), R8", Args: []Operand{{Kind: OpFP, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R8")}}})
-	mustLower("LEAQ", Instr{Raw: "LEAQ $ret+16(FP), R9", Args: []Operand{{Kind: OpFPAddr, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R9")}}})
+	// TYPE_ADDR is not Go's LEA Ym source; retain the former false-positive
+	// spelling as a rejection, independently checked by the full LEA oracle.
+	if _, _, err := c.lowerArith("LEAQ", Instr{Raw: "LEAQ $ret+16(FP), R9", Args: []Operand{{Kind: OpFPAddr, FPOffset: 16}, {Kind: OpReg, Reg: Reg("R9")}}}); err == nil {
+		t.Fatal("LEAQ accepted a TYPE_ADDR operand outside Go's Ym/Yrl row")
+	}
 	mustLower("LEAQ", Instr{Raw: "LEAQ global<>(SB), AX", Args: []Operand{{Kind: OpSym, Sym: "global<>(SB)"}, {Kind: OpReg, Reg: AX}}})
 	mustLower("POPCNTL", Instr{Raw: "POPCNTL AX, BX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: BX}}})
 	mustLower("POPCNTQ", Instr{Raw: "POPCNTQ AX, CX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: CX}}})

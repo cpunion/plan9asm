@@ -1052,44 +1052,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			}
 			return true, false, storeLEA(addr)
 		case OpFP:
-			if c.classicFrame != "" {
-				c.markFPResultAddrTaken(ins.Args[0].FPOffset)
-				addr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", addr, c.classicFramePtr(ins.Args[0].FPOffset))
-				return true, false, storeLEA("%" + addr)
-			}
-			// LEA of a return slot, e.g. "LEAQ ret+32(FP), R8".
-			alloca, _, ok := c.fpResultAlloca(ins.Args[0].FPOffset)
-			if ok {
-				c.markFPResultAddrTaken(ins.Args[0].FPOffset)
-				t := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", t, alloca)
-				return true, false, storeLEA("%" + t)
-			}
-			// Fallback: treat FP slot value as pointer-like integer address.
-			v, err := c.evalFPToI64(ins.Args[0].FPOffset)
+			v, err := c.boundFPAddress(ins.Args[0].FPOffset)
 			if err != nil {
-				v = "0"
-			}
-			return true, false, storeLEA(v)
-		case OpFPAddr:
-			if c.classicFrame != "" {
-				c.markFPResultAddrTaken(ins.Args[0].FPOffset)
-				addr := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", addr, c.classicFramePtr(ins.Args[0].FPOffset))
-				return true, false, storeLEA("%" + addr)
-			}
-			// Address of a return slot alloca.
-			alloca, _, ok := c.fpResultAlloca(ins.Args[0].FPOffset)
-			if ok {
-				c.markFPResultAddrTaken(ins.Args[0].FPOffset)
-				t := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", t, alloca)
-				return true, false, storeLEA("%" + t)
-			}
-			v, err := c.evalFPToI64(ins.Args[0].FPOffset)
-			if err != nil {
-				v = "0"
+				return true, false, err
 			}
 			return true, false, storeLEA(v)
 		case OpSym:

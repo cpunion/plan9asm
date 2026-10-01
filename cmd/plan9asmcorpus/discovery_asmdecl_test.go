@@ -43,7 +43,7 @@ func TestDiscoveryAsmDeclUnspecifiedArgsRequiresSelectedLiteralText(t *testing.T
 		t.Run(test.name, func(t *testing.T) {
 			writeTestFile(t, file, test.source)
 			warning := test.reported + ": [amd64] Value: wrong argument size 0; expected $...-1"
-			got := filterDiscoveryAsmDeclZeroArgLines([]string{warning}, packages)
+			got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning}, packages)
 			if (len(got) == 0) != test.ignored {
 				t.Fatalf("filtered = %v, want ignored=%v", got, test.ignored)
 			}
@@ -62,21 +62,21 @@ func TestDiscoveryAsmDeclUnspecifiedArgsPreservesOtherABIAndUnknownFailures(t *t
 		"decl_amd64.s:5:1: [amd64] Value: invalid MOVQ of ret+0(FP); bool is 1-byte value",
 		"go: type checker failed before completing analysis",
 	} {
-		if got := filterDiscoveryAsmDeclZeroArgLines([]string{zero, diagnostic}, packages); !reflect.DeepEqual(got, []string{diagnostic}) {
+		if got := filterDiscoveryAsmDeclTextMetadataLines([]string{zero, diagnostic}, packages); !reflect.DeepEqual(got, []string{diagnostic}) {
 			t.Fatalf("remaining diagnostics = %v, want %q", got, diagnostic)
 		}
 	}
 	foreign := []string{"# example.com/foreign", zero}
-	if got := filterDiscoveryAsmDeclZeroArgLines(foreign, packages); !reflect.DeepEqual(got, foreign) {
+	if got := filterDiscoveryAsmDeclTextMetadataLines(foreign, packages); !reflect.DeepEqual(got, foreign) {
 		t.Fatalf("foreign warning was removed: %v", got)
 	}
 	otherDir := t.TempDir()
 	writeTestFile(t, filepath.Join(otherDir, "decl_amd64.s"), "TEXT ·Value(SB),$0\nRET\n")
 	packages = append(packages, discoveryGoListPackage{ImportPath: "example.com/other", Dir: otherDir, SFiles: []string{"decl_amd64.s"}})
-	if got := filterDiscoveryAsmDeclZeroArgLines([]string{zero}, packages); !reflect.DeepEqual(got, []string{zero}) {
+	if got := filterDiscoveryAsmDeclTextMetadataLines([]string{zero}, packages); !reflect.DeepEqual(got, []string{zero}) {
 		t.Fatalf("ambiguous basename warning was removed: %v", got)
 	}
-	if got := filterDiscoveryAsmDeclZeroArgLines([]string{"# [example.com/literal]", zero}, packages); !reflect.DeepEqual(got, []string{"# [example.com/literal]"}) {
+	if got := filterDiscoveryAsmDeclTextMetadataLines([]string{"# [example.com/literal]", zero}, packages); !reflect.DeepEqual(got, []string{"# [example.com/literal]"}) {
 		t.Fatalf("package-qualified warning not resolved: %v", got)
 	}
 }
@@ -89,7 +89,7 @@ func TestDiscoveryAsmDeclUnspecifiedArgsSourceLookupFailureCannotBecomeNA(t *tes
 		output: "decl_amd64.s:1:1: [amd64] Value: wrong argument size 0; expected $...-1\n",
 	}
 	env := replaceEnv(os.Environ(), map[string]string{"GOFLAGS": "-mod=mod", "GOWORK": "off", "GOPROXY": "off"})
-	err := filterDiscoveryAsmDeclUnspecifiedArgs(context.Background(), dir, env, nil, []string{"./missing"}, "", failure)
+	err := filterDiscoveryAsmDeclTextMetadata(context.Background(), dir, env, nil, []string{"./missing"}, "", failure)
 	if !errors.Is(err, errDiscoveryAsmDeclSourceProof) || !isDiscoveryInfrastructureFailure(err) {
 		t.Fatalf("missing source metadata became ABI N/A: %v", err)
 	}

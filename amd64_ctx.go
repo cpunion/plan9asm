@@ -1919,30 +1919,6 @@ func (c *amd64Ctx) storeFPResultWithMetadata(off int64, ty LLVMType, v, metadata
 	return nil
 }
 
-func (c *amd64Ctx) namedFPResultOffset(name string, fallback int64) int64 {
-	if name == "" {
-		return fallback
-	}
-	match := int64(0)
-	found := false
-	for _, slot := range c.fpResults {
-		if slot.Name != name {
-			continue
-		}
-		if found {
-			// Aggregate results can have multiple physical FP slots with one Go
-			// name. Their explicit offsets remain authoritative.
-			return fallback
-		}
-		match = slot.Offset
-		found = true
-	}
-	if found {
-		return match
-	}
-	return fallback
-}
-
 func isSplit64FrameType(typ LLVMType) bool {
 	return typ == I64 || typ == LLVMType("double")
 }

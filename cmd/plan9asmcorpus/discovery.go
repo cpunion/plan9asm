@@ -2834,7 +2834,7 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if ctx.Err() != nil {
 		return err
 	}
-	err = filterDiscoveryAsmDeclUnspecifiedArgs(ctx, dir, targetEnv, buildTags, patterns, "", err)
+	err = filterDiscoveryAsmDeclTextMetadata(ctx, dir, targetEnv, buildTags, patterns, "", err)
 	if err == nil || errors.Is(err, errDiscoveryAsmDeclSourceProof) {
 		return err
 	}
@@ -2977,7 +2977,7 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 	args := append([]string{"vet", "-modfile=" + modfilePath}, vetArgs[1:]...)
 	_, err = runCapturedCommandOutput(ctx, dir, env, "go", args...)
 	// Inspect staged sources before their owning temporary modules are removed.
-	return filterDiscoveryAsmDeclUnspecifiedArgs(ctx, dir, env, buildTags, patterns, modfilePath, err)
+	return filterDiscoveryAsmDeclTextMetadata(ctx, dir, env, buildTags, patterns, modfilePath, err)
 }
 
 func copyDiscoveryModuleTree(source, destination string) error {

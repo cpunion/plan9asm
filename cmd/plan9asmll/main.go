@@ -24,6 +24,7 @@ import (
 	"github.com/xgo-dev/llvm"
 	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/asmsig"
+	"github.com/xgo-dev/plan9asm/internal/goabi"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -1246,13 +1247,17 @@ func validateDeclaredTextArgSizes(file *plan9asm.File, resolve func(string) stri
 		// declaration-backed functions whose arguments are supplied by ABI
 		// wrappers or intentionally unused (for example runtime.procyieldAsm
 		// and exitThread on wasm). The assembler treats that zero as a legacy
-		// wildcard, so only a non-zero conflicting size proves incompatibility.
+		// wildcard. A nonzero size must match either the declared data end or
+		// the ABI0 allocation; trailing alignment does not create FP slots.
 		if fn.ArgSize == 0 {
 			continue
 		}
 		resolved := resolve(stripABISuffix(fn.Sym))
 		expected, ok := declaredArgSizes[resolved]
 		if !ok || fn.ArgSize == expected {
+			continue
+		}
+		if !strings.Contains(fn.Sym, "<ABIInternal>") && goabi.MatchesABI0TextSize(goarch, fn.ArgSize, expected) {
 			continue
 		}
 		return &asmABINotApplicableError{

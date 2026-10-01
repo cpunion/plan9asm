@@ -13,10 +13,16 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
+
+	"github.com/xgo-dev/plan9asm/internal/goabi"
 )
 
 var discoveryAsmDeclZeroArgs = regexp.MustCompile(
 	`^(.+\.s):([0-9]+)(?::[0-9]+)?: \[([^]]+)\] ([^:]+): wrong argument size 0; expected \$\.\.\.-[1-9][0-9]*$`,
+)
+
+var discoveryAsmDeclPaddedArgs = regexp.MustCompile(
+	`^(.+\.s):([0-9]+)(?::[0-9]+)?: \[([^]]+)\] ([^:]+): wrong argument size ([1-9][0-9]*); expected \$\.\.\.-([0-9]+)$`,
 )
 
 var errDiscoveryAsmDeclSourceProof = errors.New("cannot verify asmdecl source metadata")
@@ -25,10 +31,10 @@ var errDiscoveryAsmDeclSourceProof = errors.New("cannot verify asmdecl source me
 // different symbol, stale line number or unselected source must not turn an
 // actual ABI failure into an unspecified-argument warning.
 var discoveryAsmDeclLiteralText = regexp.MustCompile(
-	`^\s*TEXT\s+[^,\s]*·([^\s(]+)\(SB\)\s*,\s*(?:[0-9A-Z|+()]+\s*,\s*)?\$(-?[0-9]+)(?:-(0+))?\s*$`,
+	`^\s*TEXT\s+[^,\s]*·([^\s(]+)\(SB\)\s*,\s*(?:[0-9A-Z|+()]+\s*,\s*)?\$(-?[0-9]+)(?:-([0-9]+))?\s*$`,
 )
 
-func filterDiscoveryAsmDeclUnspecifiedArgs(
+func filterDiscoveryAsmDeclTextMetadata(
 	ctx context.Context,
 	dir string,
 	env, buildTags, patterns []string,
@@ -43,14 +49,15 @@ func filterDiscoveryAsmDeclUnspecifiedArgs(
 		return err
 	}
 	lines := strings.Split(failure.output, "\n")
-	hasZeroArgs := false
+	hasMetadataWarning := false
 	for _, line := range lines {
-		if discoveryAsmDeclZeroArgs.MatchString(strings.TrimSpace(line)) {
-			hasZeroArgs = true
+		line = strings.TrimSpace(line)
+		if discoveryAsmDeclZeroArgs.MatchString(line) || discoveryAsmDeclPaddedArgs.MatchString(line) {
+			hasMetadataWarning = true
 			break
 		}
 	}
-	if !hasZeroArgs {
+	if !hasMetadataWarning {
 		return err
 	}
 
@@ -78,7 +85,7 @@ func filterDiscoveryAsmDeclUnspecifiedArgs(
 		}
 		packages = append(packages, pkg)
 	}
-	filtered := filterDiscoveryAsmDeclZeroArgLines(lines, packages)
+	filtered := filterDiscoveryAsmDeclTextMetadataLines(lines, packages)
 	if strings.Join(filtered, "\n") == failure.output {
 		return err
 	}
@@ -101,7 +108,7 @@ func filterDiscoveryAsmDeclUnspecifiedArgs(
 	return &copy
 }
 
-func filterDiscoveryAsmDeclZeroArgLines(lines []string, packages []discoveryGoListPackage) []string {
+func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discoveryGoListPackage) []string {
 	retained := make([]string, 0, len(lines))
 	packagePath := ""
 	for _, line := range lines {
@@ -111,15 +118,51 @@ func filterDiscoveryAsmDeclZeroArgLines(lines []string, packages []discoveryGoLi
 			packagePath = strings.Trim(packagePath, "[]")
 		}
 		match := discoveryAsmDeclZeroArgs.FindStringSubmatch(strings.TrimSpace(line))
-		if match == nil || !discoveryAsmDeclHasLiteralUnspecifiedArgs(match, packagePath, packages) {
-			retained = append(retained, line)
+		if match != nil && discoveryAsmDeclHasLiteralUnspecifiedArgs(match, packagePath, packages) {
+			continue
 		}
+		match = discoveryAsmDeclPaddedArgs.FindStringSubmatch(strings.TrimSpace(line))
+		if match != nil && discoveryAsmDeclHasLiteralPaddedArgs(match, packagePath, packages) {
+			continue
+		}
+		retained = append(retained, line)
 	}
 	return retained
 }
 
 func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath string, packages []discoveryGoListPackage) bool {
-	reported := filepath.Clean(filepath.FromSlash(match[1]))
+	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages)
+	if text == nil {
+		return false
+	}
+	symbol := text[1]
+	if beforeABI, _, ok := strings.Cut(symbol, "<ABI"); ok {
+		symbol = beforeABI
+	}
+	if text[3] != "" {
+		args, err := strconv.ParseInt(text[3], 10, 64)
+		if err != nil || args != 0 {
+			return false
+		}
+	}
+	return symbol == match[4]
+}
+
+func discoveryAsmDeclHasLiteralPaddedArgs(match []string, packagePath string, packages []discoveryGoListPackage) bool {
+	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages)
+	if text == nil || text[3] == "" || strings.Contains(text[1], "<ABIInternal>") {
+		return false
+	}
+	symbol := strings.TrimSuffix(text[1], "<ABI0>")
+	declared, declaredErr := strconv.ParseInt(match[5], 10, 64)
+	expected, expectedErr := strconv.ParseInt(match[6], 10, 64)
+	actual, actualErr := strconv.ParseInt(text[3], 10, 64)
+	return symbol == match[4] && declaredErr == nil && expectedErr == nil && actualErr == nil &&
+		actual == declared && goabi.MatchesABI0TextSize(match[3], declared, expected)
+}
+
+func discoveryAsmDeclSelectedText(filename, reportedLine, packagePath string, packages []discoveryGoListPackage) []string {
+	reported := filepath.Clean(filepath.FromSlash(filename))
 	var selected string
 	for _, pkg := range packages {
 		if packagePath != "" && pkg.ImportPath != packagePath {
@@ -131,32 +174,24 @@ func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath strin
 				continue
 			}
 			if selected != "" && selected != file {
-				return false
+				return nil
 			}
 			selected = file
 		}
 	}
 	if selected == "" {
-		return false
+		return nil
 	}
 	source, err := os.ReadFile(selected)
 	if err != nil {
-		return false
+		return nil
 	}
-	lineNumber, err := strconv.Atoi(match[2])
+	lineNumber, err := strconv.Atoi(reportedLine)
 	lines := discoveryAsmDeclUncommentedLines(source)
 	if err != nil || lineNumber < 1 || lineNumber > len(lines) {
-		return false
+		return nil
 	}
-	text := discoveryAsmDeclLiteralText.FindStringSubmatch(lines[lineNumber-1])
-	if text == nil {
-		return false
-	}
-	symbol := text[1]
-	if beforeABI, _, ok := strings.Cut(symbol, "<ABI"); ok {
-		symbol = beforeABI
-	}
-	return symbol == match[4]
+	return discoveryAsmDeclLiteralText.FindStringSubmatch(lines[lineNumber-1])
 }
 
 // Go's assembly lexer uses text/scanner comments. Mask them without moving

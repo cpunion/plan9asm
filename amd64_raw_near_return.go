@@ -187,16 +187,7 @@ func x86RawReturnSlotMatchesSignature(slot FrameSlot, group int, sig FuncSig) bo
 }
 
 func x86RawReturnSlotBytes(typ LLVMType, goarch string) int64 {
-	switch typ {
-	case I1, I8, I16, I32, I64, Ptr, LLVMType("float"), LLVMType("double"):
-		pointerSize := int64(8)
-		if goarch == "386" {
-			pointerSize = 4
-		}
-		return frameTypeSize(typ, pointerSize)
-	default:
-		return 0
-	}
+	return x86FrameScalarBytes(typ, goarch)
 }
 
 func x86RawReturnStaticBound(symbol string, offset, width int64, file *File) bool {

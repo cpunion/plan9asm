@@ -62,6 +62,13 @@ it using Git, not a personal filesystem path. Its important repairs include:
   actual memory width, and ARM MOVW is not an x86 two-byte access. Real Go
   declarations and LLVM 22 objects cover the affected forms; historical
   external-module exclusions still require an exact-source replay.
+- ABI0 TEXT metadata accepts the logical data end or its Go register-size
+  alignment, without creating FP fields in padding. Explicit x86 FP offsets
+  remain authoritative even for uniquely named results; never relocate them
+  by name. Padded float32 sqrt and stale-offset source counterexamples are
+  covered by Go/LLVM object, numeric and rejection regressions.
+  The shared x86 LEA family takes addresses of bound typed storage, not FP
+  values or invented zeros; Go-rejected immediate FP spellings stay rejected.
 - Caller-owned internal LLVM contexts for Go binding, with module-before-context
   disposal. Concurrent feature observations use canonical keys, deep-cloned
   results and actual-driver/subtool byte and route rechecks. Ordinary production
@@ -90,6 +97,11 @@ failure titles. These are exact-revision results, not current-head success.
 Checkpoint `69e9f37a` passed production `go build ./...`, the full corpus unit
 suite, feature-cache race tests and `go vet ./...`. No current-head full root,
 strict standard-library or fresh external-corpus success is claimed.
+
+The full root run at `ac3681dc` failed 48 top-level tests after strengthened
+raw x86 return contracts; corpus and other root subpackages passed. Those
+failures remain open and cannot be hidden by a later focused ABI regression
+pass or by historical corpus results.
 
 Later checkpoint `a50f0870` passed bounded root regression tests, the full
 corpus unit suite, vet/build and all five official classification gates.

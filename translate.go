@@ -93,9 +93,8 @@ type FrameSlot struct {
 	Type   LLVMType
 	Index  int // index into LLVM function arguments (for Params) or results tuple (for Results)
 	// Name is the source-level Go parameter or result name when available.
-	// It lets legacy assembly with a stale numeric FP offset still identify a
-	// unique named result without weakening validation for anonymous or
-	// aggregate frame slots.
+	// It is descriptive metadata, never permission to rewrite the explicit
+	// displacement in a source FP operand.
 	Name string
 	// Field is the index of the extracted field within the argument aggregate.
 	// It is used for classic Go asm slots like b_base+0(FP) when the Go-level

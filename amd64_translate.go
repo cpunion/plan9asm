@@ -594,11 +594,9 @@ func (c *amd64Ctx) lowerBlocks() error {
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
 	c.allowSPWrite = models386SPWrite(ins)
 	defer func() { c.allowSPWrite = false }()
-	for i := range ins.Args {
-		if ins.Args[i].Kind == OpFP || ins.Args[i].Kind == OpFPAddr {
-			ins.Args[i].FPOffset = c.namedFPResultOffset(ins.Args[i].FPName, ins.Args[i].FPOffset)
-		}
-	}
+	// Go's assembler uses the explicit FP displacement, not the descriptive
+	// name, for machine addressing. Never repair a stale displacement by name:
+	// that would silently change source behavior and hide padding accesses.
 	op := strings.ToUpper(string(ins.Op))
 	_, _, _, regularString := x86StringProperties(Op(op))
 	_, _, portString := x86PortStringProperties(Op(op))
