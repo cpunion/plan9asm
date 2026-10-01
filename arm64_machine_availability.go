@@ -25,19 +25,20 @@ type arm64MachineBlock struct {
 }
 
 type arm64MachineAvailability struct {
-	blocks    []arm64MachineBlock
-	current   int
-	suspended int
-	skipReads bool
-	source    string
-	entry     *ARM64GoRegisterABI
-	used      bool
+	blocks     []arm64MachineBlock
+	current    int
+	suspended  int
+	skipReads  bool
+	source     string
+	entry      *ARM64GoRegisterABI
+	entryError error
+	used       bool
 }
 
 const arm64WholeScalableRegister = 1 << 20
 
 func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
-	needed := c.goRegisterEntry
+	needed := c.goRegisterEntry || c.privateRegisterEntry
 	for _, block := range c.blocks {
 		for _, instruction := range block.instrs {
 			ins := arm64ControlDecode(instruction)
@@ -61,6 +62,24 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 	flow.blocks[len(c.blocks)].name = c.localControl.outer
 	if c.goRegisterEntry {
 		flow.entry, flow.used = c.sig.ARM64GoRegisterABI, true
+	} else if c.privateRegisterEntry {
+		// Explicit empty presence: only SP and the real caller LR are
+		// available at an ABI0 entry. FP loads define the data registers.
+		flow.entry, flow.used = &ARM64GoRegisterABI{}, true
+		if len(c.sig.ArgRegs) != 0 {
+			// Retain custom ArgRegs' scalar len/type contract, rather than
+			// applying standard Go recursive ABIInternal assignment to it.
+			if len(c.sig.ArgRegs) != len(c.sig.Args) {
+				flow.entryError = arm64GoABIContext("custom private root entry has incomplete ArgRegs")
+			} else {
+				for i, reg := range c.sig.ArgRegs {
+					if arm64MachineScalarWidth(c.sig.Args[i]) == 0 {
+						flow.entryError = arm64GoABIContext("custom private root entry has unknown register width")
+					}
+					flow.entry.Params = append(flow.entry.Params, ARM64GoRegisterValue{Register: reg, Type: c.sig.Args[i]})
+				}
+			}
+		}
 	}
 	return flow
 }
@@ -212,6 +231,9 @@ func (state *arm64MachineState) merge(other arm64MachineState) bool {
 func (flow *arm64MachineAvailability) validate() error {
 	if flow == nil || !flow.used {
 		return nil
+	}
+	if flow.entryError != nil {
+		return flow.entryError
 	}
 	indices := make(map[string]int, len(flow.blocks))
 	for i, block := range flow.blocks {

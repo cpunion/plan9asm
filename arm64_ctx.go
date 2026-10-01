@@ -15,6 +15,8 @@ type arm64Ctx struct {
 	annotate        bool
 	goRegisterEntry bool
 
+	privateRegisterEntry bool
+
 	tmp int
 
 	blocks              []arm64Block
@@ -90,6 +92,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		fpResWritten:   map[int]bool{},
 		fpResAddrTaken: map[int]bool{},
 	}
+	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s
 	}

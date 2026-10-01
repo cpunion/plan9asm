@@ -111,6 +111,10 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: parse %s: %w", pkgPath, asmName, err)
 	}
+	file, err = coalesceARM64PrivateRegisterHelpers(file)
+	if err != nil {
+		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
+	}
 	if opt.KeepFunc != nil {
 		keep := make([]Func, 0, len(file.Funcs))
 		for _, fn := range file.Funcs {
@@ -253,6 +257,9 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 	// or ManualSig; raw register entry points require the native backend.
 	for resolved := range b.localSigs {
 		if _, ok := b.sigs[resolved]; !ok {
+			if goarch == "arm64" {
+				return nil, arm64GoABIContext("missing signature for file-local assembly %q; supply an explicit entry or closed source continuation contract", resolved)
+			}
 			return nil, fmt.Errorf("missing signature for file-local assembly %q; supply ManualSig or use the native backend", resolved)
 		}
 	}
