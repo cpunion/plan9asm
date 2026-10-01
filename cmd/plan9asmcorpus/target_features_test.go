@@ -385,13 +385,15 @@ func TestTargetFeaturesMachineCommandSeparatesStderr(t *testing.T) {
 	}
 }
 
-func containsTargetFeature(tags []string, wanted string) bool {
-	for _, tag := range tags {
-		if tag == wanted {
-			return true
+func TestTargetFeatureMembershipUsesExactNamespaceSpelling(t *testing.T) {
+	for _, tags := range [][]string{nil, {}, {"amd64.v1", "goexperiment.fieldtrack"}} {
+		if containsTargetFeature(tags, "amd64.v3") || containsTargetFeature(tags, "AMD64.v1") || containsTargetFeature(tags, "fieldtrack") {
+			t.Fatalf("feature membership invented an alias or CPU level: %v", tags)
 		}
 	}
-	return false
+	if !containsTargetFeature([]string{"amd64.v1", "goexperiment.fieldtrack"}, "goexperiment.fieldtrack") {
+		t.Fatal("registered exact feature spelling is missing")
+	}
 }
 
 func TestTargetFeaturesRejectsCrossVersionOrMissingExperimentSource(t *testing.T) {

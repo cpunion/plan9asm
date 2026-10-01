@@ -537,6 +537,15 @@ func discoveryFeatureProfileID(observed *discoveryTargetFeatures) string {
 	return discoveryFeatureBytesSHA256(data)
 }
 
+func containsTargetFeature(tags []string, wanted string) bool {
+	for _, tag := range tags {
+		if tag == wanted {
+			return true
+		}
+	}
+	return false
+}
+
 func discoveryFeatureFileSHA256(name string) (string, error) {
 	f, err := os.Open(name)
 	if err != nil {
