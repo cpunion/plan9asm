@@ -586,8 +586,14 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 	}
 	if op == OpWORD {
 		writes, known := uint32(0), false
+		stores := true
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
-			writes, known = arm64RawPoolGPWrites(uint32(ins.Args[0].Imm))
+			word := uint32(ins.Args[0].Imm)
+			if effects, ok := arm64RawSVEEffects(word); ok {
+				writes, stores, known = effects.gpWrites, effects.stores, true
+			} else {
+				writes, known = arm64RawPoolGPWrites(word)
+			}
 		}
 		for reg, value := range state.regs {
 			index, gp := arm64StackIndex(reg)
@@ -595,8 +601,10 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 				state.regs[reg] = arm64ControlUnion(value, arm64ControlExternal())
 			}
 		}
-		for key, value := range state.memory {
-			state.memory[key] = arm64ControlUnion(value, arm64ControlExternal())
+		if stores {
+			for key, value := range state.memory {
+				state.memory[key] = arm64ControlUnion(value, arm64ControlExternal())
+			}
 		}
 		return
 	}

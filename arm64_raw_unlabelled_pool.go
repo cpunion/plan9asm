@@ -498,6 +498,9 @@ func arm64RawPoolReadOnlyLoad(op arm64asm.Op) bool {
 }
 
 func arm64RawPoolIndependentSVE(word uint32) bool {
+	if effects, ok := arm64RawSVEEffects(word); ok {
+		return effects.gpReads == 0 && effects.gpWrites == 0 && !effects.accesses
+	}
 	if form, ok := decodeARM64RawSVECnt(word); ok && form.vector {
 		return true
 	}
@@ -534,35 +537,6 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 	if _, ok := decodeARM64RawSVEIntegerAddReduction(word); ok {
 		return true // Scalar result is a V register, not a GP destination.
 	}
-	for _, decode := range []func(uint32) (Instr, bool){
-		decodeARM64RawSVEIndex, decodeARM64RawSVEIntegerCompare,
-		decodeARM64RawSVECompact, decodeARM64RawSVEIntegerUnary,
-		decodeARM64RawSVEFloatUnary, decodeARM64RawSVEFloatCompare,
-		decodeARM64RawSVEFloatMinMax, decodeARM64RawSVEFloatImmediate,
-		decodeARM64RawSVEFloatReciprocalStep,
-		decodeARM64RawSVEFloatMultiplyAccumulate, decodeARM64RawSVEFloatDivideScale,
-		decodeARM64RawSVEConvert,
-		decodeARM64RawSVEUnpack,
-		decodeARM64RawSVEMultiplyAccumulate,
-		decodeARM64RawSVEIntegerReduction,
-		decodeARM64RawSVEDupM,
-		decodeARM64RawSVEExtraShift, decodeARM64RawSVECopy,
-		decodeARM64RawSVEMOVPRFX,
-		decodeARM64RawSVEPredicateLogical,
-	} {
-		if ins, ok := decode(word); ok {
-			for _, operand := range ins.Args {
-				if operand.Kind == OpImm {
-					continue
-				}
-				if operand.Kind != OpReg || !(strings.HasPrefix(string(operand.Reg), "Z") ||
-					strings.HasPrefix(string(operand.Reg), "P") || strings.HasPrefix(string(operand.Reg), "V")) {
-					return false
-				}
-			}
-			return true
-		}
-	}
 	return false
 }
 
@@ -571,6 +545,9 @@ func arm64RawPoolIndependentSVE(word uint32) bool {
 // the proof rejects every earlier copy/escape of that address. Do not extend
 // this to exclusive/first-fault operations with hidden architectural state.
 func arm64RawPoolSVEIgnoresAddress(word uint32, address int) bool {
+	if effects, ok := arm64RawSVEEffects(word); ok {
+		return address < 0 || address < 32 && effects.gpReads&(1<<uint(address)) == 0
+	}
 	if arm64RawPoolIndependentSVE(word) {
 		return true
 	}

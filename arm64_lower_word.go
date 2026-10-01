@@ -35,132 +35,16 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawSMETileMemory(word); ok {
 		return c.lowerRawSMETileMemory(form)
 	}
-	if decoded, ok := decodeARM64RawSVEIndex(word); ok {
-		_, _, err := c.lowerARM64SVEIndex(decoded.Op, decoded)
-		return err
+	if family, decoded, ok := decodeARM64RawSVEFamily(word); ok {
+		return family.lower(c, decoded)
 	}
-	if decoded, ok := decodeARM64RawSVEFloatMinMax(word); ok {
-		_, _, err := c.lowerARM64SVEFloatMinMax(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatUnary(word); ok {
-		_, _, err := c.lowerARM64SVEFloatUnary(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatImmediate(word); ok {
-		_, _, err := c.lowerARM64SVEFloatImmediate(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEDupM(word); ok {
-		_, _, err := c.lowerARM64SVEDupM(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatMultiplyAccumulate(word); ok {
-		_, _, err := c.lowerARM64SVEFloatMultiplyAccumulate(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatReciprocalStep(word); ok {
-		_, _, err := c.lowerARM64SVEFloatReciprocalStep(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEConvert(word); ok {
-		_, _, err := c.lowerARM64SVEConvert(decoded.Op, decoded)
-		return err
+	for _, family := range arm64RawSVEVectorFamilies {
+		if family.matches(word) {
+			return family.lower(c, word)
+		}
 	}
 	if reg, ok := decodeARM64RawICIVAU(word); ok {
 		return c.lowerRawICIVAU(reg)
-	}
-	if decoded, ok := decodeARM64RawSVEWhile(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateWhile(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVECharacterMatch(word); ok {
-		_, _, err := c.lowerARM64SVECharacterMatch(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPredicateBreak(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateBreak(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPredicateCount(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateCounter(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPredicateIncDec(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateIncDec(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatCompare(word); ok {
-		_, _, err := c.lowerARM64SVECompare(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerCompare(word); ok {
-		_, _, err := c.lowerARM64SVECompare(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPredicateLogical(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateLogical(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPredicatePermute(word); ok {
-		_, _, err := c.lowerARM64SVEPredicatePermute(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVECompact(word); ok {
-		_, _, err := c.lowerARM64SVECompact(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVECopy(word); ok {
-		_, _, err := c.lowerARM64SVECopy(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerUnary(word); ok {
-		_, _, err := c.lowerARM64SVEIntegerUnary(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVERevd(word); ok {
-		_, _, err := c.lowerARM64SVERevd(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEStructuredMemory(word); ok {
-		_, _, err := c.lowerARM64SVEStructuredMemory(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEMultiplyAccumulate(word); ok {
-		_, _, err := c.lowerARM64SVEMultiplyAccumulate(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVETernaryBitwise(word); ok {
-		_, _, err := c.lowerARM64SVETernaryBitwise(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerReduction(word); ok {
-		_, _, err := c.lowerARM64SVEIntegerReduction(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerDot(word); ok {
-		_, _, err := c.lowerARM64SVEIntegerDot(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEXAR(word); ok {
-		return c.lowerARM64RawSVEXAR(decoded)
-	}
-	if decoded, ok := decodeARM64RawSVEExtraShift(word); ok {
-		return c.lowerARM64RawSVEExtraShift(decoded)
-	}
-	if decoded, ok := decodeARM64RawSVESplice(word); ok {
-		return c.lowerARM64RawSVESplice(decoded)
-	}
-	if decoded, ok := decodeARM64RawSVEReplicateScalar(word); ok {
-		_, _, err := c.lowerARM64SVEReplicateMemory(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEReplicateBlock(word); ok {
-		_, _, err := c.lowerARM64SVEReplicateMemory(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEUnsignedLoad(word); ok {
-		return c.lowerRawSVEUnsignedLoad(decoded)
 	}
 	if _, reservedLoad := arm64RawSVEUnsignedLoadRows[word&0xffe0e000]; reservedLoad {
 		return fmt.Errorf("reserved ARM64 SVE load encoding %#08x: %q", word, ins.Raw)
@@ -170,58 +54,6 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	}
 	if form, ok := decodeARM64RawRNDR(word); ok {
 		return c.lowerRawRNDR(form)
-	}
-	if decoded, ok := decodeARM64RawSVEContiguousMemory(word); ok {
-		_, _, err := c.lowerARM64SVEOrdinaryMemory(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVESignedLoad(word); ok {
-		_, _, err := c.lowerARM64SVEOrdinaryMemory(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEAddSubWide(word); ok {
-		_, _, err := c.lowerARM64SVEWideningAddSub(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEMultiplyHigh(word); ok {
-		_, _, err := c.lowerARM64SVEMultiplyHigh(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEAddressGeneration(word); ok {
-		_, _, err := c.lowerARM64SVEAddressGeneration(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEFloatDivideScale(word); ok {
-		_, _, err := c.lowerARM64SVEFloatDivideScale(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEUnpack(word); ok {
-		_, _, err := c.lowerARM64SVEUnpack(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEAddPairwiseLong(word); ok {
-		_, _, err := c.lowerARM64SVEAbsoluteDifference(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerMinMax(word); ok {
-		_, _, err := c.lowerARM64SVEMinMax(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEIntegerMinMaxReduction(word); ok {
-		_, _, err := c.lowerARM64SVEMinMax(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEPTest(word); ok {
-		_, _, err := c.lowerARM64SVEPredicateState(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVEMOVPRFX(word); ok {
-		_, _, err := c.lowerARM64SVEMOVPRFX(decoded.Op, decoded)
-		return err
-	}
-	if decoded, ok := decodeARM64RawSVELast(word); ok {
-		_, _, err := c.lowerARM64SVELast(decoded.Op, decoded)
-		return err
 	}
 	if form, ok := decodeARM64RawSystemRegister(word); ok {
 		return c.lowerRawSystemRegister(form)
@@ -434,13 +266,6 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawSVELDST1W(word); ok {
 		return c.lowerRawSVELDST1W(form)
 	}
-	if reduction, ok := decodeARM64RawSVEFloatMinMaxReduction(word); ok {
-		return c.lowerARM64SVEFloatMinMaxReductionForm(
-			reduction.spec,
-			reduction.form,
-			reduction.destination,
-		)
-	}
 	if reduction, ok := decodeARM64RawSVEIntegerAddReduction(word); ok {
 		return c.lowerARM64SVEAddReductionForm(
 			reduction.spec,
@@ -475,20 +300,8 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawSVESelect(word); ok {
 		return c.lowerRawSVESelect(form)
 	}
-	if form, ok := decodeARM64RawSVEMultiply(word); ok {
-		return c.lowerRawSVEMultiply(form)
-	}
 	if form, ok := decodeARM64RawSVEEOR(word); ok {
 		return c.lowerRawSVEEOR(form)
-	}
-	if form, ok := decodeARM64RawSVETable(word); ok {
-		return c.lowerRawSVETable(form)
-	}
-	if form, ok := decodeARM64RawSVEUMULLB(word); ok {
-		return c.lowerRawSVEUMULLB(form)
-	}
-	if form, ok := decodeARM64RawSVEMultiplyAccumulateLong(word); ok {
-		return c.lowerRawSVEMultiplyAccumulateLong(form)
 	}
 	if form, ok := decodeARM64RawSVEPermute(word); ok {
 		return c.lowerRawSVEPermute(form)

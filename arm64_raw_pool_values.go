@@ -236,6 +236,9 @@ func (flow *arm64RawPoolValues) definitionUpper(at int, word uint32, index int) 
 // ordinary memory instructions. x/arch must validate the encoding first. Do
 // not infer effects for system, call, exclusive, atomic or unknown operations.
 func arm64RawPoolGPWrites(word uint32) (uint32, bool) {
+	if effects, ok := arm64RawSVEEffects(word); ok {
+		return effects.gpWrites, true
+	}
 	if form, ok := decodeARM64RawSVEAddress(word); ok {
 		return 1 << uint(form.destination), true
 	}

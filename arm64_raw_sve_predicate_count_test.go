@@ -20,11 +20,13 @@ func arm64RawSVEPredicateCountNativeForms() []string {
 
 func TestARM64RawSVEPredicateCountCompleteFormats(t *testing.T) {
 	var source strings.Builder
-	source.WriteString("TEXT rawcntp(SB),$0-0\n")
+	// Some complete forms write X30. Preserve the real source continuation;
+	// the instruction-format fixture must not synthesize a return after losing it.
+	source.WriteString("TEXT rawcntp(SB),$0-0\nMOVD R30,R25\n")
 	for _, word := range assembleARM64LLVMWords(t, arm64RawSVEPredicateCountNativeForms(), "+sve2p1") {
 		fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	}
-	source.WriteString("RET\n")
+	source.WriteString("MOVD R25,R30\nRET\n")
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
 		t.Fatal(err)
