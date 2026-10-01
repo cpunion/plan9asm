@@ -64,8 +64,20 @@ it using Git, not a personal filesystem path. Its important repairs include:
   external-module exclusions still require an exact-source replay.
 - Caller-owned internal LLVM contexts for Go binding, with module-before-context
   disposal. Concurrent feature observations use canonical keys, deep-cloned
-  results and actual-driver rechecks. CPP inventory is bounded and fail-closed,
-  but its production consumer and report closure are not yet complete.
+  results and actual-driver/subtool byte and route rechecks. Ordinary production
+  CPP capture binds actual assembly/header bytes and Go include search to the
+  exact module ZIP, with guards around package checks and translation. Its
+  feature-profile/branch reporting closure is still unfinished.
+- Raw x86 near returns retain native width and imm16 cleanup. Zero-cleanup
+  forms need a stack-unobserving leaf and bounded static/typed FP accesses;
+  byte-exact naked TEXT cannot silently omit Go's prologue or FP transport.
+  Exact slot width, signature field/type binding and nonoverlap are checked.
+  Generic partial FP writes still need a separate high-byte preservation fix.
+- Unbound ARM/ARM64 FP addresses fail instead of becoming zero pointers.
+  Unknown compiler diagnostics and assembler failure footers cannot establish
+  source N/A. Compact ledger source rejections retain a diagnostic digest and
+  portable source positions; old reason-only skips cannot acquire invented
+  evidence.
 
 Checkpoint `865b3fa6` finished the full root suite with two failing top-level
 tests: declaration-less ARM64 RetArg fallback and a raw x86 RET with nonzero
@@ -78,6 +90,23 @@ failure titles. These are exact-revision results, not current-head success.
 Checkpoint `69e9f37a` passed production `go build ./...`, the full corpus unit
 suite, feature-cache race tests and `go vet ./...`. No current-head full root,
 strict standard-library or fresh external-corpus success is claimed.
+
+Later checkpoint `a50f0870` passed bounded root regression tests, the full
+corpus unit suite, vet/build and all five official classification gates.
+The raw-return predecessor also passed actual Linux amd64/386 Go/LLVM numeric
+oracles with Go 1.27.1, LLVM 22.1.8 and pinned QEMU 10.2.3. This does not execute
+external packages or establish the complete cross-runtime matrix.
+Source-diagnostic repair `b853ac1c` retains true opaque-error/footer RED logs;
+its full corpus, vet/build, focused Go 1.20 and ledger-witness roundtrip gates
+passed before commit. Exact-slot companion `9415db0e` is integrated from an
+independently frozen focused/Go 1.20/five-target-object green batch. Its source
+still needs current-head exhaustive and external-corpus verification.
+
+ARM source-frame companions `276e74f8`, `327df1ba` and `d2e373a8` are not yet
+integrated. Their source SP/continuation guards expose 16 real ARM top-level
+failures and a strict stdlib/benchmark failure at MD5's named local `end-4(SP)`.
+Do not relabel them as green: ARM currently lacks Go NAME_AUTO local backing,
+private outgoing ABI0 slots and the required callee/effect bridges.
 
 Checkpoint `cd2b46a4` passed all five current official classification gates,
 including ARM carry-dependent single-form probes with an explicit source CMP.
