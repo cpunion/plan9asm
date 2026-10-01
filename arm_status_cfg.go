@@ -1,0 +1,205 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+type armStatusState struct {
+	initialized armKernelState
+	values      armKernelState
+	vfpWitness  bool
+}
+
+// The emitter's flagsWritten boolean only describes compile-time traversal.
+// Reading CPSR instead requires a must-initialized proof for all four modeled
+// NZCV slots on every source path. Entry has no invented physical flags, and
+// an ordinary C call has no source-native flags-result contract.
+func proveARMStatusReads(fn Func, sig FuncSig) error {
+	if !armFunctionReadsStatus(fn) {
+		return nil
+	}
+	blocks := armSplitBlocks(fn)
+	preds, reachable := armSourcePredecessors(blocks)
+	entry := armStatusState{}
+	for i, reg := range sig.ArgRegs {
+		if i < len(sig.Args) {
+			entry.values |= armKernelRegBit(reg)
+		}
+	}
+	in, out := make([]armStatusState, len(blocks)), make([]armStatusState, len(blocks))
+	for i := range blocks {
+		if reachable[i] {
+			in[i] = armStatusState{initialized: armKernelFlags, values: armKernelTop, vfpWitness: true}
+			out[i] = in[i]
+		}
+	}
+	for changed := true; changed; {
+		changed = false
+		for i, block := range blocks {
+			if !reachable[i] {
+				continue
+			}
+			state := armStatusState{initialized: armKernelFlags, values: armKernelTop, vfpWitness: true}
+			if i == 0 {
+				state = entry
+			}
+			for _, pred := range preds[i] {
+				state.initialized &= out[pred].initialized
+				state.values &= out[pred].values
+				state.vfpWitness = state.vfpWitness && out[pred].vfpWitness
+			}
+			in[i] = state
+			for _, ins := range block.instrs {
+				state, _ = armStatusTransfer(fn.Sym, sig, state, ins, false)
+			}
+			if out[i] != state {
+				out[i], changed = state, true
+			}
+		}
+	}
+	for i, block := range blocks {
+		state := in[i]
+		for _, ins := range block.instrs {
+			var err error
+			state, err = armStatusTransfer(fn.Sym, sig, state, ins, true)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func armFunctionReadsStatus(fn Func) bool {
+	for _, ins := range fn.Instrs {
+		if armInstructionReadsStatus(ins) {
+			return true
+		}
+	}
+	return false
+}
+
+func armInstructionReadsStatus(ins Instr) bool {
+	op, _, _, _ := armDecodeOp(string(ins.Op))
+	for i, arg := range ins.Args {
+		if arg.Kind != OpIdent || !strings.EqualFold(arg.Ident, "CPSR") {
+			continue
+		}
+		if _, move := armIntegerMemorySpecs[op]; move && i == 1 && len(ins.Args) == 2 {
+			continue // A destination is a source write, not a status read.
+		}
+		return true
+	}
+	return false
+}
+
+func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr, check bool) (armStatusState, error) {
+	op, condition, _, setFlags := armDecodeOp(string(ins.Op))
+	if len(op) > 1 && op[0] == 'B' && armCondCodes[op[1:]] {
+		condition = op[1:]
+	}
+	predicate := armKernelConditionBits(condition)
+	if check && predicate != 0 && !state.initialized.has(predicate) {
+		return state, fmt.Errorf("%w: ARM CPSR continuation in %q has no initialized %s predicate: %s", ErrProbeNeedsContext, name, condition, ins.Raw)
+	}
+	readsStatus := armInstructionReadsStatus(ins)
+	if check && readsStatus && !state.initialized.has(armKernelFlags) {
+		return state, fmt.Errorf("%w: ARM CPSR read in %q needs source-defined NZCV on every path or an explicit native-entry state bridge: %s", ErrProbeNeedsContext, name, ins.Raw)
+	}
+	values, _ := armKernelTransfer(name, sig, state.values, ins, false)
+	if readsStatus && state.initialized.has(armKernelFlags) && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
+		mask := armKernelRegBit(ins.Args[1].Reg)
+		if predicate == 0 || state.values.has(mask) {
+			values |= mask
+		}
+	}
+	if call := ins.armKernelCall; call != nil {
+		if call.spec.entry == armKernelCompareExchange32 && predicate == 0 {
+			// Unlike a C call, this typed region captures APSR in the same
+			// assembly region as the documented native helper return.
+			state.initialized = armKernelFlags
+		}
+		if call.spec.entry == armKernelCompareExchange32 {
+			state.vfpWitness = false
+		}
+		state.values = values
+		return state, nil
+	}
+	write := armKernelState(0)
+	logical := op == "TST" || op == "TEQ" || setFlags && (op == "AND" || op == "ORR" || op == "EOR" || op == "BIC" || op == "MVN")
+	if logical && len(ins.Args) != 0 && ins.Args[0].Kind == OpRegShift {
+		return state, fmt.Errorf("ARM %s flags-result shifter carry is not modeled: %s", op, ins.Raw)
+	}
+	switch op {
+	case "CMP", "CMN", "CMPF", "CMPD":
+		write = armKernelFlags
+	case "TST", "TEQ":
+		write = armKernelN | armKernelZ
+	case "BL", "CALL", "BX", "DIV", "DIVU", "MOD", "MODU", "DUFFZERO", "DUFFCOPY":
+		state.initialized = 0
+		state.vfpWitness = false
+	case "WORD", "BYTE", "LONG":
+		keep := false
+		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
+			form, ok := decodeARMRawVFPStatusTransfer(uint32(ins.Args[0].Imm))
+			keep = ok && form.toFlags && state.vfpWitness
+		}
+		if !keep {
+			state.initialized = 0
+			state.vfpWitness = false
+		}
+	default:
+		if setFlags {
+			switch op {
+			case "ADD", "SUB", "RSB", "ADC", "SBC", "RSC":
+				write = armKernelFlags
+			case "AND", "ORR", "EOR", "BIC", "MVN", "SLL", "SRL", "SRA", "MULL":
+				write = armKernelN | armKernelZ
+			default:
+				// Do not retain older slot values across an unmodeled .S
+				// source effect merely because some earlier CMP ran.
+				if op == "MOVW" && len(ins.Args) == 2 && ins.Args[0].Kind == OpSym {
+					address := strings.TrimSpace(ins.Args[0].Sym)
+					if strings.HasPrefix(address, "$") {
+						memory, ok := parseMem(strings.TrimPrefix(address, "$"))
+						if _, err := parseARMRegisterAddressForm(op, ins, memory); ok && err == nil {
+							write = armKernelFlags
+						}
+					}
+				}
+				if op == "MOVW" && len(ins.Args) == 2 && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg {
+					write = armKernelN | armKernelZ
+				}
+				if write == 0 {
+					return state, fmt.Errorf("ARM %s flag-setting source effect is not modeled: %s", op, ins.Raw)
+				}
+			}
+		}
+	}
+	if _, move := armIntegerMemorySpecs[op]; move && len(ins.Args) == 2 && ins.Args[1].Kind == OpIdent && strings.EqualFold(ins.Args[1].Ident, "CPSR") {
+		if armKernelValueDefined(ins.Args[0], sig, state.values) {
+			write = armKernelFlags
+		} else {
+			state.initialized = 0
+		}
+	}
+	if predicate == 0 {
+		state.initialized |= write
+		if logical && len(ins.Args) != 0 && armLogicalImmediateCarry(op, ins.Args[0]) != "" {
+			state.initialized |= armKernelC
+		}
+	}
+	if write != 0 {
+		if op == "CMPF" || op == "CMPD" {
+			state.vfpWitness = predicate == 0 || state.vfpWitness
+		} else {
+			state.vfpWitness = false
+		}
+	}
+	if len(ins.Args) == 2 && ins.Args[1].Kind == OpIdent && (strings.EqualFold(ins.Args[1].Ident, "FPCR") || strings.EqualFold(ins.Args[1].Ident, "FPSR")) {
+		state.vfpWitness = false
+	}
+	state.values = values
+	return state, nil
+}

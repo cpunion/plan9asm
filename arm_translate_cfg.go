@@ -7,6 +7,9 @@ import (
 )
 
 func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+	if err := proveARMStatusReads(fn, sig); err != nil {
+		return err
+	}
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
 	for i, t := range sig.Args {
 		if i > 0 {
@@ -21,6 +24,10 @@ func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	b.WriteString(" {\n")
 
 	c := newARMCtx(b, fn, sig, resolve, sigs, annotateSource)
+	// The source proof above establishes initialization at each flag use,
+	// including a read block emitted before its backward-edge predecessor.
+	// This boolean selects the modeled representation, not initial NZCV.
+	c.flagsWritten = armFunctionReadsStatus(fn)
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}

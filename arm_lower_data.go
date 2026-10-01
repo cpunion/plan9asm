@@ -72,7 +72,14 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeARMValue(dst, v, 32, cond, postInc, ins.Raw)
+		if err := c.storeARMValue(dst, v, 32, cond, postInc, ins.Raw); err != nil {
+			return true, false, err
+		}
+		_, _, _, setFlags := armDecodeOp(string(ins.Op))
+		if setFlags && src.Kind == OpReg && dst.Kind == OpReg {
+			return true, false, c.setFlagsLogic(cond, v)
+		}
+		return true, false, nil
 	case "MOVB", "MOVBS", "MOVBU", "MOVH", "MOVHS", "MOVHU":
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)

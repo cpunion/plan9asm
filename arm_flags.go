@@ -82,6 +82,11 @@ func (c *armCtx) storeFlagCond(cond, slot, v string) error {
 }
 
 func (c *armCtx) setFlagsSub(cond, dst, src, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsSub("", dst, src, res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -110,6 +115,11 @@ func (c *armCtx) setFlagsSub(cond, dst, src, res string) error {
 }
 
 func (c *armCtx) setFlagsAdd(cond, dst, src, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsAdd("", dst, src, res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -140,6 +150,11 @@ func (c *armCtx) setFlagsAdd(cond, dst, src, res string) error {
 }
 
 func (c *armCtx) setFlagsLogic(cond, res string) error {
+	if cond != "" && !strings.EqualFold(cond, "AL") {
+		return c.emitConditionalEffect(cond, func() error {
+			return c.setFlagsLogic("", res)
+		})
+	}
 	c.flagsWritten = true
 	z := c.newTmp()
 	n := c.newTmp()
@@ -149,6 +164,42 @@ func (c *armCtx) setFlagsLogic(cond, res string) error {
 		return err
 	}
 	return c.storeFlagCond(cond, c.flagsNSlot, "%"+n)
+}
+
+// Go's ARM C_RCON row encodes an eight-bit immediate rotated right by an
+// even count. A nonzero rotation supplies C from bit 31; an unshifted register
+// (including a materialized large constant) preserves C. AND's C_NCON row
+// instead uses BIC with the complemented immediate (asm5 encoder type 114).
+func armLogicalImmediateCarry(op string, source Operand) string {
+	if source.Kind != OpImm || source.ImmRaw != "" {
+		return ""
+	}
+	value := uint32(source.Imm)
+	if op == "AND" && !armRotatedImmediateEncodable(value) && armRotatedImmediateEncodable(^value) {
+		value = ^value
+	}
+	if value <= 255 || !armRotatedImmediateEncodable(value) {
+		return ""
+	}
+	if value&(1<<31) != 0 {
+		return "true"
+	}
+	return "false"
+}
+
+func (c *armCtx) setARMLogicalFlags(op, condition, result string, source Operand) error {
+	if condition != "" && !strings.EqualFold(condition, "AL") {
+		return c.emitConditionalEffect(condition, func() error {
+			return c.setARMLogicalFlags(op, "", result, source)
+		})
+	}
+	if err := c.setFlagsLogic("", result); err != nil {
+		return err
+	}
+	if carry := armLogicalImmediateCarry(op, source); carry != "" {
+		c.storeFlag(c.flagsCSlot, carry)
+	}
+	return nil
 }
 
 func (c *armCtx) condValue(cond string) (string, error) {

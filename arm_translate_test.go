@@ -113,6 +113,8 @@ TEXT ·spin(SB),NOSPLIT,$0-0
 
 func TestTranslateARMSystemRegisterMoves(t *testing.T) {
 	ll := translateARMForTest(t, `TEXT ·systemregs(SB),NOSPLIT,$0-0
+	MOVW $0,R0
+	CMP R0,R0
 	MOVW CPSR, R0
 	MOVW R0, CPSR
 	MOVW FPCR, R1

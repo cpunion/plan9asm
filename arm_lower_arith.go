@@ -383,7 +383,7 @@ func (c *armCtx) lowerARMALU(op, cond string, setFlags bool, ins Instr) error {
 	case "RSB":
 		return c.setFlagsSub(cond, src, lhs, "%"+t)
 	case "AND", "ORR", "EOR", "BIC":
-		return c.setFlagsLogic(cond, "%"+t)
+		return c.setARMLogicalFlags(op, cond, "%"+t, ins.Args[0])
 	default:
 		return nil
 	}
@@ -392,6 +392,14 @@ func (c *armCtx) lowerARMALU(op, cond string, setFlags bool, ins Instr) error {
 func (c *armCtx) lowerARMCompare(op string, ins Instr) error {
 	if len(ins.Args) != 2 {
 		return fmt.Errorf("arm %s expects 2 operands: %q", op, ins.Raw)
+	}
+	_, condition, _, _ := armDecodeOp(string(ins.Op))
+	if condition != "" && condition != "AL" {
+		unconditional := ins
+		unconditional.Op = Op(op)
+		return c.emitConditionalEffect(condition, func() error {
+			return c.lowerARMCompare(op, unconditional)
+		})
 	}
 	src, err := c.eval32(ins.Args[0], false)
 	if err != nil {
@@ -415,12 +423,12 @@ func (c *armCtx) lowerARMCompare(op string, ins Instr) error {
 		}
 	case "TST":
 		fmt.Fprintf(c.b, "  %%%s = and i32 %s, %s\n", res, lhs, src)
-		if err := c.setFlagsLogic("", "%"+res); err != nil {
+		if err := c.setARMLogicalFlags(op, "", "%"+res, ins.Args[0]); err != nil {
 			return err
 		}
 	case "TEQ":
 		fmt.Fprintf(c.b, "  %%%s = xor i32 %s, %s\n", res, lhs, src)
-		if err := c.setFlagsLogic("", "%"+res); err != nil {
+		if err := c.setARMLogicalFlags(op, "", "%"+res, ins.Args[0]); err != nil {
 			return err
 		}
 	}
