@@ -61,6 +61,14 @@ or ledgers cannot acquire these claims by relabeling their schema. Fresh reports
 are required after integration; the existing historical snapshot is not upgraded
 by these implementation changes.
 
+Concrete source-rejection witnesses sample at most the first 256 distinct
+source positions, then sort that sample canonically. This is a compact evidence
+bound, not a limit on valid Go diagnostics or their repeated occurrences. The
+witness digest binds the complete diagnostic retained in the frozen report,
+not an error-display tail or a truncated prefix. The producer still inspects
+the complete command output for infrastructure failures; output exceeding its
+8 MiB capture limit fails explicitly instead of becoming source N/A.
+
 Continue from this checkpoint without downloading completed versions again:
 
 ```sh

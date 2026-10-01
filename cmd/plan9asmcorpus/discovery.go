@@ -1387,13 +1387,9 @@ func probeAssemblySourceForTarget(ctx context.Context, filePath, goos, goarch, g
 		// otherwise keep the target eligible for its real package build.
 		return assemblySourceTargetProbe{}, nil
 	}
-	diagnostic := strings.TrimSpace(string(output))
-	if len(diagnostic) > 64<<10 {
-		diagnostic = diagnostic[:64<<10] + "\n... source diagnostic truncated ..."
-	}
 	return assemblySourceTargetProbe{
 		conclusive: true,
-		reason:     "current Go assembler rejected this source for the selected target:\n" + diagnostic,
+		reason:     "current Go assembler rejected this source for the selected target:\n" + string(output),
 	}, nil
 }
 
@@ -1410,9 +1406,22 @@ func discoveryAssemblerSourceDiagnostic(filePath, output string) bool {
 		if !strings.HasPrefix(trimmed, filePath+":") && !strings.HasPrefix(trimmed, "asm: ") {
 			continue
 		}
-		_, location, found := strings.Cut(trimmed, filePath+":")
+		prefix, location, found := strings.Cut(trimmed, filePath+":")
 		if !found {
 			continue
+		}
+		var encoderMessage string
+		if prefix != "" && prefix != "asm: " {
+			// Encoder errors put the exact full source location in parentheses.
+			// A suffix match in another directory's same-named file must not
+			// establish rejection of the file currently being probed.
+			if !strings.HasPrefix(prefix, "asm: ") || !strings.HasSuffix(prefix, "(") {
+				continue
+			}
+			encoderMessage = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(prefix, "asm: "), "("))
+			if encoderMessage == "" {
+				continue
+			}
 		}
 		end := 0
 		for end < len(location) && location[end] >= '0' && location[end] <= '9' {
@@ -1421,7 +1430,25 @@ func discoveryAssemblerSourceDiagnostic(filePath, output string) bool {
 		if end == 0 || end == len(location) || (location[end] != ':' && location[end] != ')') {
 			continue
 		}
-		if _, err := strconv.ParseUint(location[:end], 10, 32); err == nil {
+		lineNumber, err := strconv.ParseUint(location[:end], 10, 32)
+		if err != nil || lineNumber == 0 {
+			continue
+		}
+		message := strings.TrimSpace(location[end+1:])
+		if location[end] == ':' {
+			// cmd/asm's ordinary diagnostics may carry a column, while its
+			// encoder diagnostics use "asm: file:line) instruction". A bare
+			// location, zero/overflow position or empty message is not evidence.
+			columnText, rest, found := strings.Cut(message, ":")
+			if found && columnText != "" && strings.Trim(columnText, "0123456789") == "" {
+				column, err := strconv.ParseUint(columnText, 10, 32)
+				if err != nil || column == 0 {
+					continue
+				}
+				message = strings.TrimSpace(rest)
+			}
+		}
+		if message != "" || encoderMessage != "" {
 			return true
 		}
 	}
@@ -2385,7 +2412,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							AsmFiles:  append([]string(nil), group.AsmFiles...),
 							Targets:   []string{target},
 							Kind:      discoverySourceNotApplicableGoBuild,
-							Reason:    limitDiscoveryEvidence(err.Error(), 8192),
+							Reason:    discoveryCommandDiagnostic(err),
 						})
 						continue
 					}
@@ -3417,9 +3444,10 @@ var errDiscoveryCommandOutputExceeded = errors.New("captured output exceeds limi
 
 var errDiscoveryCommandCleanup = errors.New("terminate discovery command group")
 
-// Keep the bounded complete diagnostic for classification while keeping error
-// messages and persisted report reasons compact. Trimming display text must
-// never change which assembly files are excluded by an ABI error.
+// Keep the bounded complete diagnostic for classification and source-rejection
+// reports, while keeping ordinary error displays compact. Trimming display text
+// must never change which assembly files are excluded by an ABI error or the
+// digest of the original source diagnostic retained in a frozen report.
 type discoveryCapturedCommandError struct {
 	command string
 	cause   error

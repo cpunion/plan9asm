@@ -34,7 +34,8 @@ type discoverySourceDiagnosticLocation struct {
 }
 
 // Full diagnostics stay in frozen reports. The ledger retains a compact
-// producer witness: only source basenames/positions and the diagnostic digest.
+// producer witness: the first 256 distinct source positions, sorted canonically,
+// and a digest of the complete raw diagnostic, not the sample or display text.
 // It contains neither runner-specific paths nor arbitrary diagnostic text.
 // Like the other offline proofs, it depends on frozen producer provenance;
 // the digest alone cannot authenticate a diagnostic without its report bytes.
@@ -48,12 +49,17 @@ func captureDiscoverySourceDiagnostic(diagnostic string) *discoverySourceDiagnos
 	if isDiscoveryGoBuildInfrastructureFailure(diagnostic) {
 		return nil
 	}
-	matches := discoveryConcreteSourceDiagnostic.FindAllStringSubmatch(diagnostic, 257)
-	if len(matches) == 0 || len(matches) > 256 {
-		return nil
-	}
 	seen := make(map[discoverySourceDiagnosticLocation]bool)
-	for _, match := range matches {
+	// Scan every original line without allocating an unbounded match inventory.
+	// The compact sample's capacity must not reject valid repeated/bulk source
+	// errors or hide an invalid numeric location after the sample fills.
+	for remaining := diagnostic; remaining != ""; {
+		lineText, rest, _ := strings.Cut(remaining, "\n")
+		remaining = rest
+		match := discoveryConcreteSourceDiagnostic.FindStringSubmatch(lineText)
+		if match == nil {
+			continue
+		}
 		line, err := strconv.ParseUint(match[2], 10, 32)
 		if err != nil {
 			return nil
@@ -65,7 +71,9 @@ func captureDiscoverySourceDiagnostic(diagnostic string) *discoverySourceDiagnos
 				return nil
 			}
 		}
-		seen[discoverySourceDiagnosticLocation{File: match[1], Line: uint32(line), Column: uint32(column)}] = true
+		if len(seen) < 256 {
+			seen[discoverySourceDiagnosticLocation{File: match[1], Line: uint32(line), Column: uint32(column)}] = true
+		}
 	}
 	locations := make([]discoverySourceDiagnosticLocation, 0, len(seen))
 	for location := range seen {
