@@ -280,6 +280,14 @@ and export hashes, actual header/object hashes and canonical full definitions.
 Offline replay relies on frozen producer provenance; production must compare
 the actual compiler bytes and full definitions independently. This query alone
 does not resolve discovery's generated-include scope or branch coverage.
+An explicit consumer input may register this metadata for a later translation.
+That consumer independently reloads the same source/profile/import roles and
+recompiles the full header before translating; self-consistent changed JSON is
+not accepted. Effective header bytes use deterministic full definitions, with
+an explicit `generated/<package>/go_asm.h` CPP origin rather than ZIP/tool origin.
+Active includes use source-order Go package-directory search; inactive includes
+do not enter the consumption graph. Discovery still needs its own deferred raw
+registration and bounded profile closure before these inputs can be produced.
 Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
 after the actual Go assembler accepts the original source, creates a nonempty
 object, and emits an empty `-S` symbol/data listing under the same target,

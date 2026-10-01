@@ -413,13 +413,23 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		}
 		strictLoad = true
 	}
-	pkgs, err := loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, containsTestAssembly(exactAsmFiles), ccfg.Feature)
+	var pkgs []*packages.Package
+	if ccfg.Feature != nil && ccfg.Feature.Input.GeneratedHeaders != nil {
+		pkgs, err = loadGeneratedHeaderPackages(ccfg.Feature, pats, buildTags)
+	} else {
+		pkgs, err = loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, containsTestAssembly(exactAsmFiles), ccfg.Feature)
+	}
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
 	if ccfg.Feature != nil {
 		if err := ccfg.Feature.capturePackages(pkgs); err != nil {
 			return runReport{}, nil, err
+		}
+		if ccfg.Feature.Input.GeneratedHeaders != nil {
+			if err := ccfg.Feature.captureGeneratedMetadata(pkgs, buildTags, outDir); err != nil {
+				return runReport{}, nil, err
+			}
 		}
 	}
 	pkgByPath := map[string]*packages.Package{}
@@ -566,6 +576,7 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
 	defines := plan9asm.GoAssemblerDefines(goos, goarch)
 	var cppProof *featureCPPProof
+	var src []byte
 	if ccfg.Feature != nil {
 		if ccfg.Feature.Observed == nil || ccfg.Feature.Observed.Target != goos+"/"+goarch || ccfg.Feature.ID != gotoolprofile.ProfileID(ccfg.Feature.Observed) {
 			return fmt.Errorf("assembler profile identity differs from the actual compilation target")
@@ -579,7 +590,8 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		}
 		defines = macros.Defines
 		if ccfg.Feature.Proof != nil {
-			inputs, err := ccfg.Feature.captureCPPInputs(t.AsmFile)
+			var inputs map[string]string
+			src, inputs, err = ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)
 			if err != nil {
 				return err
 			}
@@ -588,9 +600,10 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 				return err
 			}
 			cppProof = &featureCPPProof{File: name, Emission: "assembly", Inputs: inputs}
+			expandedSource := append([]byte(nil), src...)
 			defer func() {
-				after, err := ccfg.Feature.captureCPPInputs(t.AsmFile)
-				if err == nil && !reflect.DeepEqual(inputs, after) {
+				afterSource, after, err := ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)
+				if err == nil && (!reflect.DeepEqual(inputs, after) || !bytes.Equal(expandedSource, afterSource)) {
 					err = fmt.Errorf("actual CPP input graph changed during translation")
 				}
 				_, macroErr := ccfg.Feature.packageMacros(pkg)
@@ -598,9 +611,12 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			}()
 		}
 	}
-	src, err := readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
-	if err != nil {
-		return fmt.Errorf("read asm: %w", err)
+	if src == nil {
+		var err error
+		src, err = readAsmSource(t.AsmFile, asmSourceRoot(pkg, t.AsmFile))
+		if err != nil {
+			return fmt.Errorf("read asm: %w", err)
+		}
 	}
 	if cppProof != nil {
 		cppProof.ExpandedSHA256 = featureBytesSHA256(src)

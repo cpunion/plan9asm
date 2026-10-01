@@ -6,29 +6,31 @@ const ConsumerProtocol = "actual_go_cpu_profile_consumer_v1"
 // source root binds an actual replacement/module directory; all selected bytes
 // must match the producer's pre-load hashes. Only SelectionProof is published.
 type ConsumerInput struct {
-	Protocol       string              `json:"protocol"`
-	ID             string              `json:"id"`
-	Observed       *Observation        `json:"observed"`
-	Module         string              `json:"module"`
-	Version        string              `json:"version"`
-	SourceModule   string              `json:"source_module,omitempty"`
-	SourceRoot     string              `json:"source_root"`
-	Sources        map[string]string   `json:"sources"`
-	Headers        map[string]string   `json:"selection_headers"`
-	ToolSources    map[string]string   `json:"tool_sources,omitempty"`
-	Directories    map[string][]string `json:"directories"`
-	AsmFiles       []string            `json:"asm_files"`
-	ProxyGoMod     *ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
-	ProxyGoModPath string              `json:"proxy_go_mod_path,omitempty"`
+	Protocol         string              `json:"protocol"`
+	ID               string              `json:"id"`
+	Observed         *Observation        `json:"observed"`
+	Module           string              `json:"module"`
+	Version          string              `json:"version"`
+	SourceModule     string              `json:"source_module,omitempty"`
+	SourceRoot       string              `json:"source_root"`
+	Sources          map[string]string   `json:"sources"`
+	Headers          map[string]string   `json:"selection_headers"`
+	ToolSources      map[string]string   `json:"tool_sources,omitempty"`
+	Directories      map[string][]string `json:"directories"`
+	AsmFiles         []string            `json:"asm_files"`
+	ProxyGoMod       *ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
+	ProxyGoModPath   string              `json:"proxy_go_mod_path,omitempty"`
+	GeneratedHeaders *MetadataProof      `json:"generated_headers,omitempty"`
 }
 
 type SelectionProof struct {
-	Protocol   string         `json:"protocol"`
-	ProfileID  string         `json:"profile_id"`
-	CustomTags []string       `json:"custom_tags,omitempty"`
-	Packages   []PackageProof `json:"packages"`
-	CPP        []CPPProof     `json:"cpp"`
-	Outputs    []OutputProof  `json:"outputs"`
+	Protocol         string         `json:"protocol"`
+	ProfileID        string         `json:"profile_id"`
+	CustomTags       []string       `json:"custom_tags,omitempty"`
+	Packages         []PackageProof `json:"packages"`
+	CPP              []CPPProof     `json:"cpp"`
+	Outputs          []OutputProof  `json:"outputs"`
+	GeneratedHeaders *MetadataProof `json:"generated_headers,omitempty"`
 }
 
 type PackageProof struct {

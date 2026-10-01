@@ -47,3 +47,23 @@ func TestGeneratedHeaderDefinitionsRejectUnsupportedAndAmbiguousInput(t *testing
 		})
 	}
 }
+
+func TestCanonicalGeneratedHeaderRetainsExactFullDefinitions(t *testing.T) {
+	definitions := map[string]string{"Layout__size": "48", "const_String": `"x y\n"`, "const_Huge": "123456789012345678901234567890"}
+	data, err := CanonicalGeneratedHeader(definitions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := HeaderDefinitions(data)
+	if err != nil || !reflect.DeepEqual(actual, definitions) {
+		t.Fatalf("canonical effective header changed values/presence: %s: %v", data, err)
+	}
+	if _, err := CanonicalGeneratedHeader(nil); err == nil {
+		t.Fatal("missing definitions became an empty generated input")
+	}
+	for _, bad := range []map[string]string{{"Bad-Name": "1"}, {"NAME": ""}, {"NAME": "1\n#define OTHER 2"}, {"NAME": "1\\"}} {
+		if _, err := CanonicalGeneratedHeader(bad); err == nil {
+			t.Fatal("noncanonical definitions became generated source bytes")
+		}
+	}
+}

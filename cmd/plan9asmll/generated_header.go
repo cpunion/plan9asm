@@ -116,6 +116,9 @@ func loadGeneratedHeaderPackagesWithLoader(consumer *featureConsumer, patterns, 
 	if !reflect.DeepEqual(guard, after) {
 		return nil, fmt.Errorf("generated-header dependency/source selection changed during actual Go export/type load")
 	}
+	if err := consumer.retainGeneratedGuard(guard.Sources); err != nil {
+		return nil, err
+	}
 	pkgs = filterPackagesByModule(pkgs, consumer.Input.Module)
 	if len(pkgs) == 0 {
 		return nil, fmt.Errorf("generated-header query selected no exact ordinary package")
@@ -141,6 +144,11 @@ func captureGeneratedHeader(consumer *featureConsumer, pkg *packages.Package, se
 	imports, exports, importcfg, sourceGuard, err := generatedHeaderImports(consumer, pkg)
 	if err != nil {
 		return proof, err
+	}
+	for _, guard := range []map[string]string{exports, sourceGuard} {
+		if err := consumer.retainGeneratedGuard(guard); err != nil {
+			return proof, err
+		}
 	}
 	configFile := filepath.Join(owned, "importcfg")
 	if err := os.WriteFile(configFile, []byte(importcfg), 0600); err != nil {

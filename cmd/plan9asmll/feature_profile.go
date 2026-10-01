@@ -24,15 +24,16 @@ type featureInput = gotoolprofile.ConsumerInput
 // A consumer is populated only after reobserving the actual driver and its
 // finite marker package. Supplying JSON alone does not create this proof.
 type featureConsumer struct {
-	ID       string
-	Observed *gotoolprofile.Observation
-	Root     string
-	Env      []string
-	Context  context.Context
-	Input    *featureInput
-	Dir      string
-	WorkDir  string
-	Proof    *featureSelectionProof
+	ID             string
+	Observed       *gotoolprofile.Observation
+	Root           string
+	Env            []string
+	Context        context.Context
+	Input          *featureInput
+	Dir            string
+	WorkDir        string
+	Proof          *featureSelectionProof
+	GeneratedGuard map[string]string
 }
 
 type featureSelectionProof = gotoolprofile.SelectionProof
@@ -242,6 +243,15 @@ func (consumer *featureConsumer) verifySources() error {
 			if err != nil || actual != expected {
 				return fmt.Errorf("feature tool header differs from its pre-load proof: %s", file)
 			}
+		}
+	}
+	for file, expected := range consumer.GeneratedGuard {
+		if consumer.Context != nil && consumer.Context.Err() != nil {
+			return consumer.Context.Err()
+		}
+		actual, err := gotoolprofile.FileSHA256(file)
+		if err != nil || actual != expected {
+			return fmt.Errorf("generated-header dependency/export changed before final object proof")
 		}
 	}
 	return nil

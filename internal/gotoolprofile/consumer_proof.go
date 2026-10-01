@@ -34,6 +34,14 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	if err != nil {
 		return err
 	}
+	if input.GeneratedHeaders != nil || proof.GeneratedHeaders != nil {
+		if err := ValidateGeneratedHeaderAgreement(input, input.GeneratedHeaders, proof.GeneratedHeaders, tags); err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(proof.Packages, proof.GeneratedHeaders.Packages) {
+			return fmt.Errorf("actual generated header was compiled from a different package selection")
+		}
+	}
 	return validateAssemblyConsumption(input, proof, selectedFiles, filePackages, requireObject, abi)
 }
 
@@ -126,7 +134,10 @@ func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, se
 			if origin == "tool" {
 				wanted = input.ToolSources[file]
 			}
-			if !present || origin != "module" && origin != "tool" || wanted == "" || digest != wanted {
+			if origin == "generated" {
+				wanted = generatedCPPSourceSHA(proof.GeneratedHeaders, filePackages[cpp.File].PackagePath, file)
+			}
+			if !present || origin != "module" && origin != "tool" && origin != "generated" || wanted == "" || digest != wanted {
 				return fmt.Errorf("actual CPP source differs from exact original input: %s", id)
 			}
 		}
