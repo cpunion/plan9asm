@@ -459,7 +459,7 @@ func TestDiscoveryShardKeepsCallerOwnedBuildCache(t *testing.T) {
 			}
 			writeTestFile(t, filepath.Join(cache, "marker"), "reusable build cache")
 			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
-			return matrixReport{Success: result.Translations, TotalTargets: 1, OrdinarySelectionPlan: result.OrdinarySelectionPlan},
+			return fixtureProfileMatrix(t, result),
 				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
@@ -534,7 +534,7 @@ func TestDiscoveryShardPublishesAuditableCheckpoints(t *testing.T) {
 			}
 			calls++
 			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
-			return matrixReport{Success: result.Translations, TotalTargets: 1, OrdinarySelectionPlan: result.OrdinarySelectionPlan},
+			return fixtureProfileMatrix(t, result),
 				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
@@ -1956,9 +1956,13 @@ func writeDiscoveryReportFixtureWithTargets(t *testing.T, targets []string) (str
 			EligibleCandidates: len(candidates),
 			Selected:           len(selected),
 			Passed:             len(selected),
+			FeatureInventory:   newDiscoveryFeatureInventory(),
 		}
 		for _, candidate := range selected {
 			result := fixtureOrdinaryPassedResult(t, candidate, report.Targets)
+			if err := mergeDiscoveryFeatureInventory(report.FeatureInventory, result.featureInventory); err != nil {
+				t.Fatal(err)
+			}
 			report.Results = append(report.Results, result)
 			report.Translations += result.Translations
 		}

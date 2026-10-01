@@ -21,6 +21,37 @@ type discoveryFeatureProfileReference struct {
 
 const discoveryFeatureInventoryProtocol = "go_driver_feature_inventory_v1"
 
+func newDiscoveryFeatureInventory() *discoveryFeatureInventory {
+	return &discoveryFeatureInventory{
+		Protocol:     discoveryFeatureInventoryProtocol,
+		Observations: make(map[string]*discoveryTargetFeatures),
+	}
+}
+
+func mergeDiscoveryFeatureInventory(destination, source *discoveryFeatureInventory) error {
+	if err := validateDiscoveryFeatureInventory(source); err != nil {
+		return err
+	}
+	if err := validateDiscoveryFeatureInventory(destination); err != nil {
+		return err
+	}
+	for _, id := range sortedDiscoveryFeatureInventoryIDs(source) {
+		_, err := registerDiscoveryFeatureProfiles(destination, []discoveryFeatureProfile{{ID: id, Observed: source.Observations[id]}})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sortedDiscoveryFeatureInventoryIDs(inventory *discoveryFeatureInventory) []string {
+	set := make(map[string]bool)
+	for id := range inventory.Observations {
+		set[id] = true
+	}
+	return sortedDiscoverySet(set)
+}
+
 func registerDiscoveryFeatureProfiles(inventory *discoveryFeatureInventory, profiles []discoveryFeatureProfile) ([]discoveryFeatureProfileReference, error) {
 	if inventory == nil || len(profiles) == 0 {
 		return nil, fmt.Errorf("missing actual feature inventory or observations")

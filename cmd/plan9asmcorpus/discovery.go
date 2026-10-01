@@ -35,7 +35,7 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const discoveryReportSchema = 9
+const discoveryReportSchema = 10
 
 const (
 	discoveryStatusPassed                  = "passed"
@@ -450,6 +450,9 @@ func auditDiscoveryCorpusReports(
 		if err := validateDiscoveryCorpusAccounting(report); err != nil {
 			return fmt.Errorf("%s: %w", filePath, err)
 		}
+		if err := mergeDiscoveryFeatureInventory(progress.FeatureInventory, report.FeatureInventory); err != nil {
+			return fmt.Errorf("%s: merge actual feature inventory: %w", filePath, err)
+		}
 		if len(report.Results) == 0 && (report.Translations != 0 || report.NotApplicableTranslations != 0) {
 			return fmt.Errorf("%s: empty shard has nonzero translation counts", filePath)
 		}
@@ -574,6 +577,8 @@ func auditDiscoveryCorpusReports(
 				NativeLayout:              result.NativeLayout,
 				NativeLayoutPlan:          result.NativeLayoutPlan,
 				OrdinarySelectionPlan:     result.OrdinarySelectionPlan,
+				FeatureProfiles:           result.FeatureProfiles,
+				FeatureConsumption:        result.FeatureConsumption,
 			}
 			if result.NativeLayoutPlan != nil || result.OrdinarySelectionPlan != nil {
 				outcome := outcomes[key]
@@ -1706,6 +1711,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		EligibleCandidates: len(candidates),
 		Partial:            len(selected) > 0,
 		Results:            make([]discoveryCorpusResult, 0, len(selected)),
+		FeatureInventory:   newDiscoveryFeatureInventory(),
 	}
 	tmpRoot, err := os.MkdirTemp("", fmt.Sprintf("plan9asm-discovery-%02d-", cfg.ShardIndex))
 	if err != nil {
@@ -1811,6 +1817,13 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		result.NotApplicableItems = append(result.NotApplicableItems, matrix.NotApplicableItems...)
 		result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, matrix.SourceNotApplicableItems...)
 		result.OrdinarySelectionPlan = matrix.OrdinarySelectionPlan
+		result.FeatureConsumption = matrix.FeatureConsumption
+		if len(matrix.FeatureProfiles) != 0 {
+			result.FeatureProfiles, err = registerDiscoveryFeatureProfiles(report.FeatureInventory, matrix.FeatureProfiles)
+			if err != nil {
+				return fmt.Errorf("register actual candidate profiles: %w", err)
+			}
+		}
 		if runErr != nil {
 			result.Status = discoveryStatusFailed
 			result.Error = runErr.Error()
@@ -1916,6 +1929,11 @@ func resolveDiscoveryExecutable(name string) (string, error) {
 }
 
 func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
+	if report.SchemaVersion == discoveryReportSchema {
+		if err := validateDiscoveryFeatureInventory(report.FeatureInventory); err != nil {
+			return err
+		}
+	}
 	if report.SchemaVersion == 9 {
 		if report.FeatureInventory != nil {
 			return fmt.Errorf("schema 9 cannot claim profile-aware source/CPP/compiler coverage")
@@ -2020,7 +2038,14 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 		}
 		if result.Status == discoveryStatusPassed || result.Status == discoveryStatusNotApplicable {
-			if err := validateOrdinarySelectionResult(result, report.Targets, report.Provenance.GoVersion); err != nil {
+			var err error
+			if report.SchemaVersion == discoveryReportSchema {
+				result.featureInventory = report.FeatureInventory
+				err = validateOrdinaryProfileResult(result, report.Targets, report.Provenance.GoVersion)
+			} else {
+				err = validateOrdinarySelectionResult(result, report.Targets, report.Provenance.GoVersion)
+			}
+			if err != nil {
 				return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
 			}
 		} else if result.OrdinarySelectionPlan != nil && result.Status != discoveryStatusFailed {
@@ -2502,6 +2527,10 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					aggregate.Failed += report.Failed
 					items := collectMatrixNotApplicableItems(report)
 					if activeProfile != nil {
+						items, err = summarizeDiscoveryTargetSkips(targetCandidate, items)
+						if err != nil {
+							return err
+						}
 						allowedABI := make(map[string]bool)
 						for index := range items {
 							items[index].ProfileID = activeProfile.ID

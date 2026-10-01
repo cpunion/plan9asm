@@ -310,6 +310,7 @@ func fixtureOrdinarySelectionForCandidate(t *testing.T, candidate discoveryCandi
 	if err != nil {
 		t.Fatal(err)
 	}
+	ordinaryFixtureRoots.Store(plan, dir)
 	archivePath := filepath.Join(t.TempDir(), "fixture.zip")
 	archive, err := os.Create(archivePath)
 	if err != nil {
@@ -350,7 +351,7 @@ func fixtureOrdinarySelectionForCandidate(t *testing.T, candidate discoveryCandi
 
 func fixtureOrdinaryPassedResult(t *testing.T, candidate discoveryCandidate, targets []string) discoveryCorpusResult {
 	t.Helper()
-	sources := make(map[string]string)
+	sources := map[string]string{"go.mod": "module " + candidate.Module + "\n"}
 	for _, file := range candidate.AsmFiles {
 		sources[file] = "TEXT ·F(SB),$0-0\nRET\n"
 		sources[filepath.ToSlash(filepath.Join(filepath.Dir(file), "decl.go"))] = "package fixture\n"
@@ -368,6 +369,7 @@ func fixtureOrdinaryPassedResult(t *testing.T, candidate discoveryCandidate, tar
 		}
 	}
 	result.ApplicableAsmFiles = discoveryConfigurationAsmFiles(result.BuildConfigurations)
+	fixtureProfileEvidence(t, &result, newDiscoveryFeatureInventory())
 	return result
 }
 

@@ -127,9 +127,11 @@ checks selected source hashes and package-role macros, and records CPP/LLVM
 output hashes. Source directories and module replacements must match the
 artifact's exact source root. Special and test-only package roles remain
 outside this mode. Without the flag, existing CLI behavior is unchanged.
-The consumer proof alone is not runtime coverage or corpus completion; the
-corpus still rejects feature requirements until profile-aware scope accounting
-is connected.
+Schema-10 ordinary discovery records each `(file, target, profile ID, custom
+tags)` scope, using that same observed CPU environment for Go export/vet and
+translation. Progress schema 2 and assembly-ledger v2 preserve the shared
+inventory and actual consumer proof; old reports cannot be relabeled. These
+are translation/object checks, not operand-form or runtime coverage.
 
 ## Output behavior
 

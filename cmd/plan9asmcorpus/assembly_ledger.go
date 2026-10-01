@@ -14,7 +14,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const assemblyLedgerFormat = "module-hashed-assembly-ledger-v1"
+const assemblyLedgerFormat = "module-hashed-assembly-ledger-v2"
 
 type assemblyLedgerShard struct {
 	Name   string `json:"name"`
@@ -30,8 +30,11 @@ type assemblyLedgerManifest struct {
 }
 
 func validateAssemblyLedgerProgress(progress discoveryProgress) error {
-	if progress.SchemaVersion != 1 || progress.ValidationKind != "translation_and_llvm22_object_compilation" {
+	if progress.SchemaVersion != discoveryProgressSchema || progress.ValidationKind != "translation_and_llvm22_object_compilation" {
 		return fmt.Errorf("invalid assembly ledger progress schema or validation kind")
+	}
+	if err := validateDiscoveryFeatureInventory(progress.FeatureInventory); err != nil {
+		return err
 	}
 	if !discoverySHA256Pattern.MatchString(progress.LedgerSHA256) {
 		return fmt.Errorf("invalid assembly ledger scan fingerprint")
@@ -131,18 +134,20 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				BuildConfigurations: candidate.BuildConfigurations, Translations: candidate.Translations,
 				NotApplicableTranslations: candidate.NotApplicableTranslations, NotApplicableItems: candidate.NotApplicableItems,
 				OrdinarySelectionPlan: candidate.OrdinarySelectionPlan,
+				FeatureProfiles:       candidate.FeatureProfiles, FeatureConsumption: candidate.FeatureConsumption,
+				featureInventory: progress.FeatureInventory,
 			}
 			for _, item := range candidate.SourceNotApplicableItems {
 				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
-					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
+					ProfileID: item.ProfileID, BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
 				})
 			}
 			goVersion := ""
 			if progress.Provenance != nil {
 				goVersion = progress.Provenance.GoVersion
 			}
-			if err := validateOrdinarySelectionResult(result, progress.Targets, goVersion); err != nil {
+			if err := validateOrdinaryProfileResult(result, progress.Targets, goVersion); err != nil {
 				return fmt.Errorf("assembly ledger ordinary selection %s: %w", key, err)
 			}
 		}
@@ -197,7 +202,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			for _, item := range candidate.SourceNotApplicableItems {
 				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
-					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
+					ProfileID: item.ProfileID, BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
 				})
 			}
 			if err := validateNativeLayoutResult(result); err != nil {

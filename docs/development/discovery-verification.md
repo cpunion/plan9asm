@@ -240,14 +240,25 @@ headers and source-proof errors fail, even alongside a native source error.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical
-schema-9 reports without CPP input claims remain historical evidence, not
-profile-aware reporting. CPP-only CPU predicates now propose legal profiles
+schema-9 reports remain historical evidence and cannot be relabeled as
+schema-10 profile-aware reporting; source-diagnostic checks separately reject
+reason-only rejections. CPP-only CPU predicates propose legal profiles
 and require actual Go-driver observations; exclusive assembler macros are not
-cumulative build tags. Until the profile-aware package/translator and four-part
-scope consumers are connected, the producer and reader reject these unconsumed
-CPP scopes for pass/N/A credit. Unknown CPU macros and experiment predicates
+cumulative build tags. The producer first observes source-tag profiles and
+captures their selected CPP file union, then observes CPP-required profiles.
+Each ordinary `(file, target, profile ID, custom tags)` scope must have either a
+concrete source diagnostic or same-profile Go export/vet, actual package-role
+selection, exact CPP graph and LLVM object consumption. Progress schema 2 and
+assembly-ledger v2 preserve these scopes and a canonical shared observation
+inventory. Missing scope dimensions or consumer proofs fail closed. Unknown
+CPU macros and experiment predicates
 without an actual package-role binding fail closed. Reachable predicate sides
 do not by themselves prove complete operand-form or runtime coverage.
+Special/test-only roles, unproved generated headers, incompatible include
+binding, no-TEXT profile variants without actual empty-object evidence, and
+legacy modules lacking original declared-module metadata remain failures.
+`no_current_go_package` describes ordinary non-test source pairing only; it
+does not prove that `go list -test` could not select a test-only package.
 The producer checks captured files and directory names against that ZIP;
 aggregate/progress/ledger readers replay MatchFile and the custom-tag search.
 Offline readers validate frozen producer/source/tool provenance; they do not

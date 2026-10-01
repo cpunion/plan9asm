@@ -836,7 +836,16 @@ func equalOrdinarySelectionDecisions(left, right []ordinarySelectionDecision) bo
 
 func ordinarySelectionReason(plan *discoveryOrdinarySelectionPlan, evidence []discoverySourceNotApplicableItem, targetABI []matrixTargetNotApplicableItem) string {
 	counts := make(map[string]int)
-	for _, decision := range plan.Decisions {
+	decisions := plan.Decisions
+	scope := "file/target scopes"
+	if len(plan.ProfileDecisions) != 0 {
+		decisions = nil
+		for _, decision := range plan.ProfileDecisions {
+			decisions = append(decisions, decision.ordinarySelectionDecision)
+		}
+		scope = "ordinary non-test file/target/profile/custom-tag scopes"
+	}
+	for _, decision := range decisions {
 		if decision.Kind != nativeLayoutSelected {
 			counts[decision.Kind] += len(decision.AsmFiles) * len(decision.Targets)
 		}
@@ -859,7 +868,7 @@ func ordinarySelectionReason(plan *discoveryOrdinarySelectionPlan, evidence []di
 	}
 	var summaries []string
 	for _, kind := range sortedDiscoveryMapKeys(counts) {
-		summaries = append(summaries, fmt.Sprintf("%s=%d file/target scopes", kind, counts[kind]))
+		summaries = append(summaries, fmt.Sprintf("%s=%d %s", kind, counts[kind], scope))
 	}
 	if len(summaries) == 0 {
 		return "all source-selected scopes have separately recorded target ABI rejection"

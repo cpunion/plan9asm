@@ -481,6 +481,7 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 					})
 				}
 			}
+			fixtureProfileEvidence(t, result, report.FeatureInventory)
 		}
 		if err := writeDiscoveryCorpusReport(file, report); err != nil {
 			t.Fatal(err)
@@ -554,7 +555,9 @@ func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
 			result.Translations--
 			report.Translations--
 			result.NotApplicableItems = []matrixTargetNotApplicableItem{{
-				Target: result.BuildConfigurations[0].Targets[0],
+				Target:    result.BuildConfigurations[0].Targets[0],
+				ProfileID: result.BuildConfigurations[0].ProfileID,
+				BuildTags: result.BuildConfigurations[0].BuildTags,
 				targetNotApplicableItem: targetNotApplicableItem{
 					PkgPath: result.Module,
 					AsmFile: "/tmp/private-runner/module-cache/" + result.Module + "@" + result.Version + "/" + result.DiscoveredAsmFiles[0],
@@ -563,6 +566,7 @@ func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
 					Reason: "TEXT argument size does not match",
 				},
 			}}
+			result.FeatureConsumption[0].Outputs = nil // this exact scoped ABI rejection must not claim an LLVM object
 		}
 		if err := writeDiscoveryCorpusReport(file, report); err != nil {
 			t.Fatal(err)

@@ -3,7 +3,11 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
+
+const discoveryProgressSchema = 2
 
 // Raw matrix reports use absolute paths into their disposable module cache.
 // Persist the matching scan-inventory path, never the runner's cache prefix.
@@ -37,6 +41,7 @@ func discoveryTargetSkipReason(item matrixTargetNotApplicableItem) string {
 // contain runner-specific cache paths and differ across otherwise equivalent
 // runs.
 type discoverySourceSkipSummary struct {
+	ProfileID  string                            `json:"profile_id,omitempty"`
 	BuildTags  []string                          `json:"build_tags,omitempty"`
 	AsmFile    string                            `json:"asm_file,omitempty"`
 	AsmFiles   []string                          `json:"asm_files,omitempty"`
@@ -76,6 +81,7 @@ func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []d
 			diagnostic = captureDiscoverySourceDiagnostic(item.Reason)
 		}
 		summaries = append(summaries, discoverySourceSkipSummary{
+			ProfileID:  item.ProfileID,
 			BuildTags:  append([]string(nil), item.BuildTags...),
 			AsmFile:    item.AsmFile,
 			AsmFiles:   append([]string(nil), item.AsmFiles...),
@@ -104,6 +110,8 @@ type discoveryCandidateProgress struct {
 	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
 	OrdinarySelectionPlan     *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	FeatureProfiles           []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
+	FeatureConsumption        []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
 	// Source-selection proofs persist their exact scopes for ledger replay.
 	DiscoveredAsmFiles  []string                      `json:"discovered_asm_files,omitempty"`
 	ApplicableAsmFiles  []string                      `json:"applicable_asm_files,omitempty"`
@@ -141,6 +149,7 @@ type discoveryProgress struct {
 	Complete                  bool                         `json:"complete"`
 	Verified                  bool                         `json:"verified"`
 	Candidates                []discoveryCandidateProgress `json:"candidates"`
+	FeatureInventory          *discoveryFeatureInventory   `json:"feature_inventory"`
 }
 
 func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, source discoverySourceIdentity, shardCount int, repoRoot ...string) (discoveryProgress, error) {
@@ -186,14 +195,15 @@ func collectDiscoveryProgress(ledgerPath, reportsPath string, targets []string, 
 		}
 	}
 	progress := discoveryProgress{
-		SchemaVersion:  1,
-		ValidationKind: "translation_and_llvm22_object_compilation",
-		Source:         source,
-		Targets:        append([]string(nil), targets...),
-		ShardCount:     shardCount,
-		PartialShards:  []int{},
-		PendingShards:  []int{},
-		Candidates:     []discoveryCandidateProgress{},
+		SchemaVersion:    discoveryProgressSchema,
+		ValidationKind:   "translation_and_llvm22_object_compilation",
+		Source:           source,
+		Targets:          append([]string(nil), targets...),
+		ShardCount:       shardCount,
+		PartialShards:    []int{},
+		PendingShards:    []int{},
+		Candidates:       []discoveryCandidateProgress{},
+		FeatureInventory: newDiscoveryFeatureInventory(),
 	}
 	if err := auditDiscoveryCorpusReports(ledgerPath, reportsPath, targets, source, skips, superseded, privateExtensions, nativeLayouts, &progress); err != nil {
 		// Never return a plausible partial total after detecting corrupt evidence.

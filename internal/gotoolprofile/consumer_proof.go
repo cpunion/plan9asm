@@ -152,7 +152,8 @@ func ValidatePackageModule(input *ConsumerInput, pkg PackageProof) error {
 		if pkg.SourceRole != "module" && pkg.SourceRole != "version_replace" {
 			return fmt.Errorf("original exact-module proof cannot be relabeled from main/owned-local sources")
 		}
-	} else if pkg.SourceRole != "main" && pkg.SourceRole != "owned_local_replace" || pkg.SourceRole == "main" && input.Version != "" {
+	} else if (pkg.SourceRole != "main" && pkg.SourceRole != "owned_local_replace") ||
+		(pkg.SourceRole == "main" && input.Version != "") {
 		return fmt.Errorf("explicit own-source consumer lacks an exact main/local role")
 	}
 	return nil
