@@ -34,7 +34,11 @@ func (c *arm64Ctx) addrI64(mem MemRef, postInc bool) (addr string, base Reg, inc
 	}
 	sum := baseVal
 	if mem.Index != "" {
-		idxVal, err := c.loadReg(mem.Index)
+		bits, err := arm64RegisterExtensionWidth(mem.IndexExt)
+		if err != nil {
+			return "", "", 0, err
+		}
+		idxVal, err := c.loadRegisterWidth(mem.Index, bits)
 		if err != nil {
 			return "", "", 0, err
 		}
@@ -173,7 +177,11 @@ func (c *arm64Ctx) eval64(op Operand, postInc bool) (string, error) {
 	case OpReg:
 		return c.loadReg(op.Reg)
 	case OpRegExtend:
-		v, err := c.loadReg(op.Reg)
+		bits, err := arm64RegisterExtensionWidth(op.Ext)
+		if err != nil {
+			return "", err
+		}
+		v, err := c.loadRegisterWidth(op.Reg, bits)
 		if err != nil {
 			return "", err
 		}
@@ -258,13 +266,20 @@ func (c *arm64Ctx) eval32(op Operand) (string, error) {
 	case OpImm:
 		return strconv.FormatUint(uint64(uint32(op.Imm)), 10), nil
 	case OpReg:
-		v, err := c.loadReg(op.Reg)
+		v, err := c.loadRegisterWidth(op.Reg, 32)
 		if err != nil {
 			return "", err
 		}
 		return truncate(v), nil
 	case OpRegExtend:
-		v, err := c.loadReg(op.Reg)
+		bits, err := arm64RegisterExtensionWidth(op.Ext)
+		if err != nil {
+			return "", err
+		}
+		if bits > 32 {
+			bits = 32
+		}
+		v, err := c.loadRegisterWidth(op.Reg, bits)
 		if err != nil {
 			return "", err
 		}
@@ -306,7 +321,7 @@ func (c *arm64Ctx) eval32(op Operand) (string, error) {
 		if op.ShiftReg != "" || op.ShiftAmount < 0 || op.ShiftAmount > 31 {
 			return "", fmt.Errorf("arm64: invalid 32-bit shift: %s", op)
 		}
-		v, err := c.loadReg(op.Reg)
+		v, err := c.loadRegisterWidth(op.Reg, 32)
 		if err != nil {
 			return "", err
 		}
@@ -342,6 +357,21 @@ func (c *arm64Ctx) rotateInt(value, typeName string, bits int, shift string) str
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = or %s %%%s, %%%s\n", out, typeName, right, left)
 	return "%" + out
+}
+
+func arm64RegisterExtensionWidth(ext ExtendOp) (int, error) {
+	switch ext {
+	case ExtendUXTB, ExtendSXTB:
+		return 8, nil
+	case ExtendUXTH, ExtendSXTH:
+		return 16, nil
+	case ExtendUXTW, ExtendSXTW:
+		return 32, nil
+	case "", ExtendUXTX, ExtendSXTX:
+		return 64, nil
+	default:
+		return 0, fmt.Errorf("arm64: unsupported register extension %q", ext)
+	}
 }
 
 func (c *arm64Ctx) extendReg64(v string, ext ExtendOp) (string, error) {

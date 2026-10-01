@@ -1256,13 +1256,23 @@ func (c *arm64Ctx) lowerBitfield(op Op, ins Instr) error {
 		return fmt.Errorf("arm64 %s invalid range lsb=%d width=%d for %d-bit form: %q", op, lsb, width, bits, ins.Raw)
 	}
 
-	src64, err := c.loadReg(ins.Args[1].Reg)
+	// Only insert forms preserve destination bits. Extracts consume their
+	// selected source field without reading the old destination value.
+	sourceBits := lsb + width
+	insert := strings.HasPrefix(string(op), "BFI") || strings.HasPrefix(string(op), "BFXIL")
+	if strings.HasPrefix(string(op), "BFI") || strings.HasPrefix(string(op), "UBFIZ") || strings.HasPrefix(string(op), "SBFIZ") {
+		sourceBits = width
+	}
+	src64, err := c.loadRegisterWidth(ins.Args[1].Reg, int(sourceBits))
 	if err != nil {
 		return err
 	}
-	dst64, err := c.loadReg(ins.Args[3].Reg)
-	if err != nil {
-		return err
+	dst64 := "0"
+	if insert {
+		dst64, err = c.loadRegisterWidth(ins.Args[3].Reg, int(bits))
+		if err != nil {
+			return err
+		}
 	}
 	typeName := "i64"
 	src, dst := src64, dst64

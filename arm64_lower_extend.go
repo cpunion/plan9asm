@@ -32,10 +32,11 @@ func (c *arm64Ctx) lowerARM64ScalarExtend(op Op, ins Instr) (ok bool, terminated
 	if strings.ToUpper(string(ins.Op)) != string(op) {
 		return true, false, fmt.Errorf("arm64 %s does not accept an opcode suffix: %q", op, ins.Raw)
 	}
-	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
+	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg ||
+		!isARM64GeneralOrZeroReg(ins.Args[0].Reg) || !isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
 		return true, false, fmt.Errorf("arm64 %s expects source and destination registers: %q", op, ins.Raw)
 	}
-	source, err := c.loadReg(ins.Args[0].Reg)
+	source, err := c.loadRegisterWidth(ins.Args[0].Reg, spec.sourceBits)
 	if err != nil {
 		return true, false, err
 	}

@@ -30,6 +30,11 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 			return true, false, fmt.Errorf("arm64 MOVD expects 2 operands: %q", ins.Raw)
 		}
 		src, dst := ins.Args[0], ins.Args[1]
+		if src.Kind == OpReg && dst.Kind == OpReg &&
+			(isARM64GeneralOrZeroReg(src.Reg) || src.Reg == SP || src.Reg == "RSP") &&
+			(isARM64GeneralOrZeroReg(dst.Reg) || dst.Reg == SP || dst.Reg == "RSP") {
+			return true, false, c.lowerMachineRegisterCopy(src.Reg, dst.Reg)
+		}
 		v, err := c.eval64(src, postInc)
 		if err != nil {
 			return true, false, err
@@ -147,6 +152,8 @@ func (c *arm64Ctx) lowerNarrowMove(op Op, ins Instr, bits int, signed, postInc b
 	switch src.Kind {
 	case OpMem:
 		value, err = c.loadMem(src.Mem, bits, postInc)
+	case OpReg:
+		value, err = c.loadRegisterWidth(src.Reg, bits)
 	default:
 		value, err = c.eval64(src, false)
 	}

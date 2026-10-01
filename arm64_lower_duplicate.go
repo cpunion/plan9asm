@@ -62,17 +62,23 @@ func (c *arm64Ctx) lowerARM64VectorDuplicate(op Op, ins Instr) (ok bool, termina
 	if !arrangedDst || !isARM64GeneralOrZeroReg(src) {
 		return true, false, fmt.Errorf("arm64 VDUP expects a vector lane or R/ZR source and a valid arranged vector destination: %q", ins.Raw)
 	}
-	value, err := c.loadReg(src)
+	return true, false, c.lowerARM64GPVectorDuplicate(src, dst, dstArrangement)
+}
+
+// Go's AVMOV and AVDUP register-to-arranged-vector forms share case 82.
+// Consume exactly one element and clear the inactive upper half for Q=0.
+func (c *arm64Ctx) lowerARM64GPVectorDuplicate(src, dst Reg, arrangement arm64VectorArrangement) error {
+	value, err := c.loadRegisterWidth(src, arrangement.elementBits)
 	if err != nil {
-		return true, false, err
+		return err
 	}
-	if dstArrangement.elementBits < 64 {
+	if arrangement.elementBits < 64 {
 		truncated := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", truncated, value, dstArrangement.elementBits)
+		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i%d\n", truncated, value, arrangement.elementBits)
 		value = "%" + truncated
 	}
-	vector := c.arm64VDUPSplat(dstArrangement, value)
-	return true, false, c.storeARM64VectorInteger(dst, dstArrangement, vector)
+	vector := c.arm64VDUPSplat(arrangement, value)
+	return c.storeARM64VectorInteger(dst, arrangement, vector)
 }
 
 func arm64VDUPArrangementAllowed(arrangement arm64VectorArrangement) bool {

@@ -10,6 +10,7 @@ import (
 // state. Record real lowering reads/writes instead of guessing opcode effects.
 type arm64MachineEffect struct {
 	register string
+	copyFrom string
 	width    int
 	write    bool
 	call     *ARM64GoRegisterABI
@@ -102,6 +103,9 @@ func (c *arm64Ctx) recordMachineCall(abi *ARM64GoRegisterABI) {
 }
 
 func (c *arm64Ctx) loadRegisterWidth(reg Reg, width int) (string, error) {
+	if width <= 0 {
+		return "", arm64GoABIContext("unrecognized typed register read width %d", width)
+	}
 	c.recordMachineRegister(reg, width, false)
 	if flow := c.machineAvailability; flow != nil {
 		flow.suspended++
@@ -111,10 +115,43 @@ func (c *arm64Ctx) loadRegisterWidth(reg Reg, width int) (string, error) {
 }
 
 func arm64MachineLeafWidth(slot ARM64GoRegisterValue) int {
-	if slot.Type == "float" {
+	return arm64MachineScalarWidth(slot.Type)
+}
+
+func arm64MachineScalarWidth(typ LLVMType) int {
+	switch typ {
+	case I1:
+		return 1
+	case I8:
+		return 8
+	case I16:
+		return 16
+	case I32, "float":
 		return 32
+	case I64, Ptr, "double":
+		return 64
+	default:
+		return 0
 	}
-	return 64
+}
+
+// A full-register move transports unspecified bits without making them
+// available to a typed caller. Its reaching low-bit guarantee is unchanged.
+// This hook is used only after the scalar move lowerer validates both operands.
+func (c *arm64Ctx) lowerMachineRegisterCopy(src, dst Reg) error {
+	if flow := c.machineAvailability; flow != nil {
+		flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
+			register: arm64MachineRegister(dst), copyFrom: arm64MachineRegister(src),
+			width: 64, source: flow.source,
+		})
+		flow.suspended++
+		defer func() { flow.suspended-- }()
+	}
+	value, err := c.loadReg(src)
+	if err != nil {
+		return err
+	}
+	return c.storeReg(dst, value)
 }
 
 // Only proven register XOR zero idioms need no input value. Their ordinary
@@ -204,7 +241,21 @@ func (flow *arm64MachineAvailability) validate() error {
 			if effect.opaque {
 				return arm64GoABIContext("native/raw effects need a complete machine-state contract at %q", effect.source)
 			}
-			if effect.write {
+			if effect.copyFrom != "" {
+				width := state.values[effect.copyFrom]
+				if effect.copyFrom == string(ZR) {
+					width = 64
+				}
+				if width == 0 {
+					return arm64GoABIContext("%s copy has no supplied input at %q", effect.copyFrom, effect.source)
+				}
+				if effect.register != string(ZR) {
+					if width > effect.width {
+						width = effect.width
+					}
+					state.values[effect.register] = width
+				}
+			} else if effect.write {
 				state.values[effect.register] = effect.width
 			} else if state.values[effect.register] < effect.width {
 				return arm64GoABIContext("%s read (%d bits) is not supplied by entry, call results or a reaching write at %q", effect.register, effect.width, effect.source)
