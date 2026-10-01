@@ -2,104 +2,119 @@
 
 Read [validation](validation.md) and
 [discovery verification](discovery-verification.md). Locate persistent worktrees
-with Git; never edit or rebase a tree with an active verification run.
+with Git. Never edit, rebase or import records into a running verification tree.
 
-## Authority and remote state
+## Contribution boundary
 
 Repair batches belong in fork Draft PR 4, targeting
 `codex/expand-ecosystem-corpus-20260913`, not fork main. Push only to `cpunion`.
-Do not promote its upstream-connected head until current-head fork CI, review
+Do not promote its upstream-connected branch until current-head fork CI, review
 and exception-policy gates pass. Upstream PR 40 remains Draft.
 
 The last inspected fork run is `36662878534` at `3aeb6b7c`: discovery shard 39
-failed Intel's raw UMONITOR decoding, then aggregate verification failed.
-Subsequent local commits are not pushed. Keep scan/coverage funnel tables in
-the PR body, derived from validated evidence rather than console PASS lines.
+failed Intel's raw UMONITOR decoding, followed by the aggregate. Subsequent
+repairs need a new run; old successful jobs are not current-source evidence.
+Keep scan/coverage funnel tables in the PR body, derived from audited reports.
 
 ## Evidence boundaries
 
-The imported Index ranges are continuous from `2025-10-01T00:00:00Z` through
-`2026-09-22T22:43:08Z`. That interval is consumed, not the whole Index or later
-incremental updates. Failed inspections remain retries. Do not rescan/import
-records while verification uses this immutable input. Standalone inventory and
-cgo records remain outside this repository.
+Imported Index ranges are continuous from `2025-10-01T00:00:00Z` through
+`2026-09-22T22:43:08Z`. This interval is consumed, not the whole Index or later
+incremental updates. Failed inspections remain retries. Standalone inventory
+and cgo records remain outside this repository. Do not resume scans while the
+current assembly verification consumes this immutable ledger.
 
-Historical source `754cbebb` completed all 64 shards with five failures;
-publisher `3c32ecc3` preserves those outcomes. Complete accounting is not
-verified success. Read-only exact-download recovery evidence does not prove
-translation, and a Go compiler crash is not source N/A.
+Historical source `754cbebb` completed all 64 shards with five failures. Later
+`6b0c20a4` reports exposed ordinary profile, generated-header and scope defects.
+Both are historical diagnostics, not passes to copy into a new ledger.
+Only matching, clean stamped tools and complete current-schema reports may
+update the assembly snapshot. Metadata capture alone is never translation PASS.
 
-The frozen `codex/pr40-validation-20261001` tree is at `6b0c20a4`. Its full root
-run had one failing LEA fixture: the fixture constructed an immediate FP address
-despite spelling a Go non-immediate operand. The subsequent fixture repair
-parses real Go syntax and preserves Go-rejected immediate-FP negatives.
-Its five-architecture enumeration gate passed; its strict standard-library and
-benchmark gates did not. Its discovery replay also exposed proof/scope defects.
-These reports are diagnostic historical inputs, not evidence for later commits.
-Never relabel, mix revisions, or copy their passes into the current ledger.
+Clean frozen source `b7938b27` passed the full root suite in about 20 minutes
+38 seconds, all five architecture instruction-table gates, and both nested CLI
+suites. These results prove that revision, not later producer or instruction
+changes. Its unmodified strict standard-library and benchmark gates failed.
+The separate exhaustive object walk produced 171 successes and 13 failures;
+all 44 official profiles were attempted and failed their object gates despite
+zero classified unsupported instructions. These are not performance or runtime
+passes. Missing contracts include dynamic reflect FP frames, native runtime
+entries/continuations, hidden ARM64 closure registers and wasm packed PCs.
 
-## Integration and active independent work
+## Integrated repairs
 
 Development branch: `codex/pr40-guarded-integration-20261001`.
-Important completed local repairs include declaration-backed ABI0 frames, exact
-bool FP storage, raw return-width and bounded static-read contracts, ordinary
-schema-10 profile consumers, shared-file custom-tag scope closure, authenticated
-proxy metadata for legacy ZIPs, and actual data/BSS object generation.
+Integrated changes include declaration-backed ABI0 frames, exact bool FP
+storage, complete raw return-width decoding, bounded static-read contracts,
+ordinary schema-10 profile consumers, shared-file custom-tag scope closure,
+authenticated proxy metadata for legacy ZIPs, and real data/BSS objects.
 
-Ordinary noninstrumented profile planning no longer pairs an otherwise normal
-assembly file with an impossible race/msan/asan-only Go partner. Actual
-instrumentation-only assembly still needs its own driver contract.
-Macro-only files require successful same-scope Go assembly with a real object
-and empty `-S` listing, plus actual LLVM output; no-TEXT is not a silent pass.
-The default owned build cache exists before actual Go subtool-route capture.
+Source-order CPP preprocessing and complete typed `go_asm.h` generation have
+actual Go compiler/assembler oracles. Generated-header discovery now registers
+raw include edges, retains legal CPU proposals when definition presence is
+unknown, captures actual package metadata, independently recompiles it at the
+consumer, and binds executed file/target/profile/tag scopes to offline replay.
+Same-module imported Go source is checked against original ZIP bytes through
+final objects. Macro-only files require an actual same-scope Go empty object
+and a real LLVM object; their generated include directory is explicit.
+Cross-host physical output projection and fresh external replays remain gates.
 
-Source-order active-include preprocessing and typed complete `go_asm.h`
-generation have Go assembler/compiler oracles for all five architectures.
-Generic-alias fixtures use a separate Go 1.24 language-version file; common
-header/instruction tests still execute on Go 1.20, without missing-tool skips.
-The discovery producer/consumer/offline generated-header binding is being
-developed independently on `codex/generated-go-header-profile-proof-20261001`.
-Metadata-only header capture must never count as translation PASS.
+ARM64 typed prefetch/DCZID/ZVA lowering retains exact native-emission and Go
+oracles. ZVA granule comes from the checked source protocol, never an inferred
+constant. Fresh private SP call-frame backing survives only when original and
+normalized whole-source proofs exclude escaped stack/FP addresses. Unknown
+calls and pointer-bearing incoming FP frames remain conservative.
 
-ARM64 typed prefetch/DCZID effects now retain exact native-emission proofs.
-The independent `codex/pr40-arm64-dc-zva-effects-20261001` branch additionally
-models hardware-sized ZVA stores, with complete named/raw grammar, conservative
-continuation-memory invalidation and actual Go/LLVM runtime oracles. Review its
-original/normalized private-address gates before integration; no inferred
-granule, noalias or privileged-operation exemption is permitted.
+Typed DATA addresses use real native relocations and wasm 64-bit memory/table
+relocations, signed data addends, actual LLVM 22/LLD objects and Node execution.
+They never become zero placeholders or truncated low-word pointers. Go-mode
+wasm function addresses still need the logical packed resume-PC contract;
+direct LLVM table indices are not equivalent. Do not use constructors or
+`blockaddress` to conceal that gap.
 
-## Remaining gates and contracts
+## Required next gates
 
-Fresh current-source exhaustive tests and all 64 reports are still required.
-Generate evidence only from clean stamped tools and frozen source/scan inputs;
-use the automatic assembly-ledger writer after its shared audit succeeds.
-Keep failed and pending candidates visible; only complete zero-failure coverage
-may become verified. Release owned caches after every writer exits.
+Finish current generated-header and wasm address batches, review them, then
+freeze a new clean source revision. Rebuild stamped tools and run the affected
+full suites, strict official corpus, benchmark and all 64 Discovery shards.
+Use bounded parallel batches, separate report paths, and release owned caches
+only after every writer exits. Never relabel or mix old-source reports.
 
-The strict benchmark still exposes dynamic reflect FP frames and native entry/
-continuation contracts. ARM NAME_AUTO/local-frame and outgoing-call companions
-are not integrated; hidden ARM64 closure registers, private tail entries and
-runtime context-switch functions also need real caller/effect contracts.
-Never invent FP allocation sizes, signatures or constant register values, or
-turn these translation failures into source N/A.
+Run the automatic assembly-ledger writer after its shared audit succeeds.
+Retain genuine failures and pending candidates until their contracts are
+implemented. Verified completion requires every shard and zero failures;
+source applicability, audited skips, object compilation and runtime execution
+remain separate claims. Provisional native-layout/JIT exceptions still require
+review before promotion.
 
-## llgo user-regression contribution
+Reflect's `makeFuncStub()` declarations have no explicit arguments, but native
+callers supply dynamically sized argument frames and closure/register state.
+Do not invent ordinary `GoArgs`, FP bounds or register values to make these
+files translate. ARM native-entry machinery does not supply the x86 reflect
+contract. Private tails, runtime context switches and ARM64 R26 entries
+likewise need actual caller/effect evidence.
 
-Branch `codex/pr40-user-package-e2e-20261001` uses a local replacement only for
-development. Before creating the contribution, pin `go.mod` to the remotely
-resolvable final fork plan9asm head; never commit a local path or invented version.
-Exact regressions live in the nested `test/asm` module.
+## Dependent llgo contribution
 
-Actual Linux/AMD64 Go execution passes all six issue libraries. Actual llgo
-execution passes huff0, CRC32, go-hex, websocket and modernc/libc Uint128.
-Websocket's public mask uses Go in the reported version; its separately named
-private-kernel oracle executes assembly. Unavailable CRC AVX512/go-hex AVX
-branches are not claimed as executed. None of this is final pinned CI evidence.
+Branch `codex/pr40-assembly-user-regressions-20261002` is rebased onto upstream
+main `5b1c2c359`. Before creating its contribution, publish the reviewed plan9asm
+repair head to the allowed fork and resolve its version with Go. Pin a public
+`replace` to that exact head, never a local path or invented pseudo-version.
 
-Purego still fails at `syscall15X`: its native C/g0 calls, callbacks, closure
-bridge and fixed callback-address table need a broader explicit runtime contract.
-The user has been asked whether that bridge belongs in this or a separate PR.
-The whole ARM64 llgo translator suite also retains its two R26 closure failures
-and a memmove continuation fixture failure. Do not delete symbols, skip these
-failures, or claim all reported issues fixed. Provisional native-byte-layout/JIT
-exceptions still require review before promotion.
+Exact regressions live in the nested `test/asm` module, which root
+`./test/...` does not traverse. Dedicated Linux/AMD64 and Darwin CI uses the
+checkout compiler, Go 1.27.1 and LLVM 22, executes every source-applicable
+package even after a sibling failure, and preserves actual tool/dependency
+provenance. Linux also requires pinned-QEMU ARM64 memmove execution.
+
+Actual Linux/AMD64 Go execution passed all six issue libraries. Diagnostic
+llgo execution passed huff0, CRC32, go-hex, websocket and modernc/libc Uint128.
+Websocket's reported public path uses Go; a separately labeled private-kernel
+oracle executed assembly. Unavailable CRC AVX512/go-hex AVX branches are not
+claimed executed. None is final pinned CI evidence.
+
+ARM64 memmove now passes actual Go and LLVM/C overlap/continuation execution,
+including required Linux/QEMU execution. The two R26 closure-entry failures
+remain in the whole translator suite. Purego still fails at `syscall15X`:
+native C/g0 calls, callbacks, closure representation and fixed callback-address
+tables need an explicit broader contract, not a guessed Go declaration.
+Keep these failures visible and the contribution Draft.
