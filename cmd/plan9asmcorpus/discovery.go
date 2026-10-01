@@ -1060,7 +1060,10 @@ func discoveryBuildConfigurationsWithEvidence(candidate discoveryCandidate, modu
 	return configs, nil
 }
 
-func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string) (bool, error) {
+func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string, profiles ...*discoveryAsmCommandProfile) (noSymbols bool, inspectErr error) {
+	if len(profiles) > 1 {
+		return false, fmt.Errorf("direct assembler symbol check requires one actual profile")
+	}
 	declaresSymbols, err := discoverySourceMentionsSymbolDirective(filePath)
 	if err != nil {
 		return false, err
@@ -1068,9 +1071,34 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string) (bool, e
 	if declaresSymbols {
 		return false, nil
 	}
-	goRoot, err := gotoolchain.Root()
-	if err != nil {
-		return false, err
+	var goRoot string
+	goBinary := "go"
+	baseArgs := []string{"tool", "asm"}
+	targetEnv := replaceEnv(os.Environ(), map[string]string{
+		"GOOS": goos, "GOARCH": goarch,
+		"GOTOOLCHAIN": "local", "GOWORK": "off",
+	})
+	if len(profiles) == 1 {
+		if profiles[0] == nil {
+			return false, fmt.Errorf("missing actual assembly profile")
+		}
+		goRoot = profiles[0].GoRoot
+		var macroSources map[string]string
+		goBinary, baseArgs, targetEnv, macroSources, err = discoveryAssemblyProfileCommand(profiles[0], goos, goarch, goRoot)
+		if err != nil {
+			return false, err
+		}
+		defer func() {
+			if err := verifyDiscoveryAssemblyProfileTools(profiles[0], macroSources); err != nil {
+				noSymbols = false
+				inspectErr = errors.Join(inspectErr, err)
+			}
+		}()
+	} else {
+		goRoot, err = gotoolchain.Root()
+		if err != nil {
+			return false, err
+		}
 	}
 
 	tempDir, err := os.MkdirTemp("", "plan9asm-asm-symbols-")
@@ -1079,23 +1107,22 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string) (bool, e
 	}
 	defer os.RemoveAll(tempDir)
 	object := filepath.Join(tempDir, "source.o")
-	asmArgs := []string{
-		"tool", "asm", "-I", filepath.Dir(filePath),
+	asmArgs := append(append([]string(nil), baseArgs...), []string{
+		"-I", filepath.Dir(filePath),
 		"-I", filepath.Join(goRoot, "pkg", "include"),
 		"-o", object, filePath,
-	}
-	targetEnv := replaceEnv(os.Environ(), map[string]string{
-		"GOOS": goos, "GOARCH": goarch,
-		"GOTOOLCHAIN": "local", "GOWORK": "off",
-	})
-	asm := exec.Command("go", asmArgs...)
+	}...)
+	asm := exec.Command(goBinary, asmArgs...)
 	asm.Env = targetEnv
-	if _, err := asm.CombinedOutput(); err != nil {
+	if output, err := asm.CombinedOutput(); err != nil {
+		if len(profiles) == 1 && (isDiscoveryGoBuildInfrastructureFailure(string(output)) || !discoveryAssemblerSourceDiagnostic(filePath, string(output))) {
+			return false, fmt.Errorf("direct assembler symbol probe: %w: %s", err, output)
+		}
 		// This probe establishes no-symbol evidence only. Other classification
 		// and build checks retain any Go-assembler failure as a real outcome.
 		return false, nil
 	}
-	nm := exec.Command("go", "tool", "nm", object)
+	nm := exec.Command(goBinary, "tool", "nm", object)
 	nm.Env = targetEnv
 	output, err := nm.CombinedOutput()
 	lines := strings.TrimSpace(string(output))
@@ -1251,20 +1278,36 @@ func explicitAssemblyFilenameArchitecture(name string) string {
 	return ""
 }
 
-func probeAssemblySourceForTarget(ctx context.Context, filePath, goos, goarch, goRoot string) (assemblySourceTargetProbe, error) {
+func probeAssemblySourceForTarget(ctx context.Context, filePath, goos, goarch, goRoot string, profiles ...*discoveryAsmCommandProfile) (result assemblySourceTargetProbe, probeErr error) {
+	if len(profiles) > 1 {
+		return assemblySourceTargetProbe{}, fmt.Errorf("direct assembler probe requires one actual profile")
+	}
+	goBinary := "go"
+	baseArgs := []string{"tool", "asm"}
+	baseEnv := replaceEnv(os.Environ(), map[string]string{
+		"GOOS": goos, "GOARCH": goarch, "GOTOOLCHAIN": "local", "GOWORK": "off",
+	})
+	if len(profiles) == 1 {
+		var err error
+		var macroSources map[string]string
+		goBinary, baseArgs, baseEnv, macroSources, err = discoveryAssemblyProfileCommand(profiles[0], goos, goarch, goRoot)
+		if err != nil {
+			return assemblySourceTargetProbe{}, err
+		}
+		defer func() {
+			if err := verifyDiscoveryAssemblyProfileTools(profiles[0], macroSources); err != nil {
+				result = assemblySourceTargetProbe{}
+				probeErr = errors.Join(probeErr, err)
+			}
+		}()
+	}
 	run := func(extraInclude string) ([]byte, error) {
-		args := []string{"tool", "asm"}
+		args := append([]string(nil), baseArgs...)
 		if extraInclude != "" {
 			args = append(args, "-I", extraInclude)
 		}
 		args = append(args, "-I", filepath.Dir(filePath), "-I", filepath.Join(goRoot, "pkg", "include"), "-o", os.DevNull, filePath)
-		env := replaceEnv(os.Environ(), map[string]string{
-			"GOOS":        goos,
-			"GOARCH":      goarch,
-			"GOTOOLCHAIN": "local",
-			"GOWORK":      "off",
-		})
-		return runCapturedCommandOutput(ctx, "", env, "go", args...)
+		return runCapturedCommandOutput(ctx, "", baseEnv, goBinary, args...)
 	}
 	output, err := run("")
 	if err == nil {
