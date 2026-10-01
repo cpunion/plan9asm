@@ -39,10 +39,14 @@ type Alias = Mixed
 type Named Mixed
 type Array [2]uint64
 type Generic[T any] struct { Value T }
-type GenericAlias[T any] = Generic[T]
 type Concrete = Generic[uint64]
 type ConcreteNamed Generic[uint64]
 `
+	testGoAssemblyHeaderCompileOracle(t, source)
+}
+
+func testGoAssemblyHeaderCompileOracle(t *testing.T, source string) {
+	t.Helper()
 	pkg := mustGoPackage(t, "oracle/header", source)
 	for _, target := range []struct{ arch, goos string }{
 		{"amd64", "linux"}, {"386", "linux"}, {"arm", "linux"}, {"arm64", "linux"}, {"wasm", "js"},
