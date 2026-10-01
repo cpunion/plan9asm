@@ -307,6 +307,7 @@ func TestFeatureConsumerCLIChild(t *testing.T) {
 
 func TestFeatureConsumerExactLocalReplacementKeepsSourceRootIdentity(t *testing.T) {
 	input, dir := featureConsumerFixture(t)
+	input.Version = "v1.0.0"
 	work := t.TempDir()
 	mod := "module example.invalid/wrapper\n\ngo 1.24\n\nrequire " + input.Module + " v1.0.0\nreplace " + input.Module + " => " + filepath.ToSlash(dir) + "\n"
 	if err := os.WriteFile(filepath.Join(work, "go.mod"), []byte(mod), 0600); err != nil {
@@ -327,6 +328,11 @@ func TestFeatureConsumerExactLocalReplacementKeepsSourceRootIdentity(t *testing.
 	if len(consumer.Proof.Packages) != 1 || consumer.Proof.Packages[0].CompiledGoFiles[0] != "selected.go" {
 		t.Fatalf("exact owned replacement selection was lost: %#v", consumer.Proof)
 	}
+	pkgs[0].Module.Version = "v2.0.0"
+	if err := consumer.capturePackages(pkgs); err == nil {
+		t.Fatal("different actual selected module version was accepted")
+	}
+	pkgs[0].Module.Version = input.Version
 	pkgs[0].Module.Replace.Dir = t.TempDir()
 	if err := consumer.capturePackages(pkgs); err == nil {
 		t.Fatal("redirected local replacement was accepted")
@@ -349,7 +355,7 @@ func featureConsumerFixture(t *testing.T) (*featureInput, string) {
 			t.Fatal(err)
 		}
 		input.Sources[name] = featureBytesSHA256([]byte(source))
-		if strings.HasSuffix(name, ".go") {
+		if strings.HasSuffix(name, ".go") || strings.HasSuffix(name, ".s") {
 			input.Headers[name] = source
 		}
 		names = append(names, name)

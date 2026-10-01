@@ -6,16 +6,18 @@ const ConsumerProtocol = "actual_go_cpu_profile_consumer_v1"
 // source root binds an actual replacement/module directory; all selected bytes
 // must match the producer's pre-load hashes. Only SelectionProof is published.
 type ConsumerInput struct {
-	Protocol    string              `json:"protocol"`
-	ID          string              `json:"id"`
-	Observed    *Observation        `json:"observed"`
-	Module      string              `json:"module"`
-	SourceRoot  string              `json:"source_root"`
-	Sources     map[string]string   `json:"sources"`
-	Headers     map[string]string   `json:"selection_headers"`
-	ToolSources map[string]string   `json:"tool_sources,omitempty"`
-	Directories map[string][]string `json:"directories"`
-	AsmFiles    []string            `json:"asm_files"`
+	Protocol     string              `json:"protocol"`
+	ID           string              `json:"id"`
+	Observed     *Observation        `json:"observed"`
+	Module       string              `json:"module"`
+	Version      string              `json:"version"`
+	SourceModule string              `json:"source_module,omitempty"`
+	SourceRoot   string              `json:"source_root"`
+	Sources      map[string]string   `json:"sources"`
+	Headers      map[string]string   `json:"selection_headers"`
+	ToolSources  map[string]string   `json:"tool_sources,omitempty"`
+	Directories  map[string][]string `json:"directories"`
+	AsmFiles     []string            `json:"asm_files"`
 }
 
 type SelectionProof struct {
@@ -29,6 +31,11 @@ type SelectionProof struct {
 
 type PackageProof struct {
 	PackagePath     string            `json:"package_path"`
+	ModulePath      string            `json:"module_path"`
+	ModuleVersion   string            `json:"module_version"`
+	SourceModule    string            `json:"source_module"`
+	SourceVersion   string            `json:"source_version"`
+	SourceRole      string            `json:"source_role"`
 	GoFiles         []string          `json:"go_files"`
 	CompiledGoFiles []string          `json:"compiled_go_files"`
 	SFiles          []string          `json:"s_files"`

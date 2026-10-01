@@ -130,13 +130,13 @@ func TestDiscoveryCandidateCPPProfilesCannotBecomeBaselineNA(t *testing.T) {
 	t.Setenv("GOEXPERIMENT", "")
 	started := time.Now()
 	result, err := runFixtureCPPProductionCandidate(t, "TEXT ·Probe(SB),$0-0\nRET\n#ifdef GOAMD64_v3\nGLOBL ·v3Marker(SB),0,$8\n#endif\n")
-	if err == nil || !strings.Contains(err.Error(), "CPP profiles require profile-aware production consumers") || !strings.Contains(err.Error(), "GOAMD64=v3 id=") {
+	if err == nil || !strings.Contains(err.Error(), "-feature-profile=") || !strings.Contains(err.Error(), "exec: no command") {
 		t.Fatalf("actual production fixture swallowed the CPP-only profile or called it baseline N/A: result=%+v err=%v", result, err)
 	}
 	if len(result.SourceNotApplicableItems) != 0 || result.NotApplicable != 0 {
 		t.Fatalf("unconsumed actual profiles produced N/A scope credit: %+v", result)
 	}
-	t.Logf("production own-module CPP capture + actual baseline/v3 driver observations elapsed=%s; fail-closed pending consumer: %v", time.Since(started), err)
+	t.Logf("production own-module CPP capture + actual baseline/v3 driver observations elapsed=%s; absent consumer fails closed: %v", time.Since(started), err)
 }
 
 func TestOrdinaryReaderRejectsUnconsumedCPPProfile(t *testing.T) {

@@ -53,6 +53,20 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan.ProfileDecisions = decisions
+	registration, err := captureDiscoveryCPPRegistration(runtime.GOROOT(), plan.GoVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cppSource, err := discoveryCPPConditionsFromBytes("vector_amd64.s", []byte("//go:build amd64.v3\n\nTEXT ·probe(SB),$0-0\nRET\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.CPPInputs = &discoveryCPPInputs{
+		Protocol: discoveryCPPInputsProtocol, Module: plan.Module, Version: plan.Version,
+		ModuleSum: plan.ModuleSum, ZipSHA256: plan.ZipSHA256, Registration: registration,
+		Sources: map[string]discoveryCPPSource{"module/vector_amd64.s": cppSource},
+		Units:   []discoveryCPPUnit{{File: "vector_amd64.s"}},
+	}
 	var selected discoveryFeatureProfile
 	for _, profile := range profiles {
 		if profile.Observed.Environment["GOAMD64"] == "v3" {
@@ -91,7 +105,9 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 	// semantics; the separate actual compiler fixture covers real Go/LLVM objects.
 	result.FeatureConsumption = []*gotoolprofile.SelectionProof{{
 		Protocol: gotoolprofile.ConsumerProtocol, ProfileID: selected.ID,
-		Packages: []gotoolprofile.PackageProof{{PackagePath: candidate.Module, GoFiles: []string{"vector.go"}, CompiledGoFiles: []string{"vector.go"}, SFiles: candidate.AsmFiles, Macros: macros,
+		Packages: []gotoolprofile.PackageProof{{PackagePath: candidate.Module, ModulePath: candidate.Module, ModuleVersion: candidate.Version,
+			SourceModule: candidate.Module, SourceVersion: candidate.Version, SourceRole: "module",
+			GoFiles: []string{"vector.go"}, CompiledGoFiles: []string{"vector.go"}, SFiles: candidate.AsmFiles, Macros: macros,
 			SourceSHA256: map[string]string{"vector.go": input.Sources["vector.go"], "vector_amd64.s": input.Sources["vector_amd64.s"]}}},
 		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}}},
 		Outputs: []gotoolprofile.OutputProof{{File: "vector_amd64.s", Part: "vector_amd64.s.ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64)}},
@@ -116,7 +132,16 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 		"wrong macro role": func(result *discoveryCorpusResult) {
 			result.FeatureConsumption[0].Packages[0].Macros.PackageRole = "allow_asm_abi_path"
 		},
-		"missing source decisions": func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.ProfileDecisions = nil },
+		"wrong selected module version": func(result *discoveryCorpusResult) {
+			result.FeatureConsumption[0].Packages[0].ModuleVersion = "v2.0.0"
+		},
+		"unpublished local source relabel": func(result *discoveryCorpusResult) {
+			result.FeatureConsumption[0].Packages[0].SourceRole = "owned_local_replace"
+		},
+		"missing source decisions":   func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.ProfileDecisions = nil },
+		"missing original ZIP hash":  func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.ZipSHA256 = "" },
+		"missing exact ZIP h1":       func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.ModuleSum = "" },
+		"missing original CPP graph": func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.CPPInputs = nil },
 	} {
 		t.Run(name, func(t *testing.T) {
 			var changed discoveryCorpusResult

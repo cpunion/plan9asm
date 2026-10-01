@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"reflect"
 	"strings"
@@ -17,6 +19,10 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 		return err
 	}
+	digest, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(plan.ModuleSum, "h1:"))
+	if !strings.HasPrefix(plan.ModuleSum, "h1:") || err != nil || len(digest) != sha256.Size || !discoverySHA256Pattern.MatchString(plan.ZipSHA256) {
+		return fmt.Errorf("ordinary profile inputs lack exact original ZIP/h1 identity")
+	}
 	profiles, err := resolveDiscoveryFeatureProfiles(result.featureInventory, result.FeatureProfiles)
 	if err != nil {
 		return err
@@ -27,6 +33,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	}
 	if !equalOrdinaryProfileDecisions(decisions, plan.ProfileDecisions) {
 		return fmt.Errorf("source-required actual profile decisions differ from original headers")
+	}
+	if len(eligible) != 0 && plan.CPPInputs == nil {
+		return fmt.Errorf("selected ordinary profile lacks original CPP source/registration inputs")
 	}
 	if plan.CPPInputs != nil {
 		files := make(map[string]bool)
@@ -99,6 +108,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		if proof == nil {
 			return fmt.Errorf("missing actual compiler-consumption evidence")
 		}
+		if err := validateOrdinaryProfileCPPConsumption(plan, proof); err != nil {
+			return err
+		}
 		profile, found := profileByID[proof.ProfileID]
 		if !found {
 			return fmt.Errorf("compiler consumption references an unknown actual profile")
@@ -117,7 +129,11 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 			}
 		}
 		files = uniqueSortedDiscoveryStrings(files)
-		input := ordinaryProfileConsumerInput(plan, profile, result.Module, "", files)
+		module, err := ordinaryProfileDeclaredModule(plan)
+		if err != nil {
+			return err
+		}
+		input := ordinaryProfileConsumerInput(plan, profile, module, "", files)
 		if err := gotoolprofile.ValidateSelectionWithABI(input, proof, proof.CustomTags, true, allowedABI); err != nil {
 			return err
 		}
@@ -125,6 +141,30 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if len(consumed) != len(executed) || result.Translations+result.NotApplicableTranslations != len(executed) ||
 		result.NotApplicableTranslations != len(abi) || !equalDiscoveryStrings(result.ApplicableAsmFiles, discoveryConfigurationAsmFiles(result.BuildConfigurations)) {
 		return fmt.Errorf("ordinary profile consumption/count/file union differs from its four-part scope denominator")
+	}
+	return nil
+}
+
+func validateOrdinaryProfileCPPConsumption(plan *discoveryOrdinarySelectionPlan, proof *gotoolprofile.SelectionProof) error {
+	if plan.CPPInputs == nil {
+		return fmt.Errorf("actual CPP consumption has no exact original source graph")
+	}
+	units := make(map[string]discoveryCPPUnit)
+	for _, unit := range plan.CPPInputs.Units {
+		units[unit.File] = unit
+	}
+	for _, cpp := range proof.CPP {
+		unit, found := units[cpp.File]
+		if !found {
+			return fmt.Errorf("actual CPP source has no original graph: %s", cpp.File)
+		}
+		wanted := map[string]string{"module/" + unit.File: plan.CPPInputs.Sources["module/"+unit.File].SHA256}
+		for _, included := range unit.Includes {
+			wanted[included] = plan.CPPInputs.Sources[included].SHA256
+		}
+		if !reflect.DeepEqual(wanted, cpp.Inputs) {
+			return fmt.Errorf("actual CPP consumption omitted or changed an original include graph: %s", cpp.File)
+		}
 	}
 	return nil
 }
@@ -156,7 +196,8 @@ func ordinaryProfileConfigurationKeys(configs []discoveryBuildConfiguration, eli
 func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, module, sourceRoot string, files []string) *gotoolprofile.ConsumerInput {
 	input := &gotoolprofile.ConsumerInput{
 		Protocol: gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
-		Module: module, SourceRoot: sourceRoot, AsmFiles: append([]string(nil), files...),
+		Module: module, Version: plan.Version, SourceModule: plan.Module,
+		SourceRoot: sourceRoot, AsmFiles: append([]string(nil), files...),
 		Sources: make(map[string]string), Headers: make(map[string]string),
 		ToolSources: make(map[string]string), Directories: make(map[string][]string),
 	}
@@ -179,6 +220,15 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		}
 	}
 	return input
+}
+
+func ordinaryProfileDeclaredModule(plan *discoveryOrdinarySelectionPlan) (string, error) {
+	for _, source := range plan.Sources {
+		if source.File == "go.mod" {
+			return parseDeclaredModulePath([]byte(source.Header))
+		}
+	}
+	return "", fmt.Errorf("ordinary profile consumer lacks the original declared module path; legacy metadata needs a separate exact proof")
 }
 
 func equalOrdinaryProfileDecisions(left, right []ordinaryProfileDecision) bool {

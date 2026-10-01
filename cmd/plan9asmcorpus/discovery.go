@@ -67,6 +67,8 @@ func (c discoveryCandidate) exactKey() string {
 }
 
 type discoveryCorpusConfig struct {
+	featureMarkerDir string
+	featureCache     *discoveryFeatureObservationCache
 	LedgerPath       string
 	RepoRoot         string
 	Translator       string
@@ -1714,6 +1716,11 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			runErr = errors.Join(runErr, fmt.Errorf("clean discovery shard workspace: %w", err))
 		}
 	}()
+	cfg.featureMarkerDir = filepath.Join(tmpRoot, "actual-feature-markers")
+	if err := os.Mkdir(cfg.featureMarkerDir, 0700); err != nil {
+		return err
+	}
+	cfg.featureCache = &discoveryFeatureObservationCache{}
 	// Reuse standard-library compilation within this shard. A caller-owned
 	// cache can also be shared by parallel shards; only the shard-owned default
 	// is discarded when this run returns.
@@ -2139,11 +2146,26 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		return matrixReport{}, nil, nil, err
 	}
 	var ordinaryPlan *discoveryOrdinarySelectionPlan
+	var ordinaryProfiles []discoveryFeatureProfile
+	var ordinaryConfigurations []discoveryBuildConfiguration
+	var ordinarySourceItems []discoverySourceNotApplicableItem
+	profileCache := &discoveryFeatureObservationCache{}
+	profileMarkers := cfg.featureMarkerDir
+	if profileMarkers == "" {
+		profileMarkers = filepath.Join(workDir, "actual-feature-markers")
+		if err := os.Mkdir(profileMarkers, 0700); err != nil {
+			return matrixReport{}, nil, nil, err
+		}
+	} else if cfg.featureCache == nil {
+		return matrixReport{}, nil, nil, fmt.Errorf("shared feature markers lack their owned observation cache")
+	} else {
+		profileCache = cfg.featureCache
+	}
 	var cppGoRoot string
 	captureOrdinary := func() error {
 		return runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
 			var err error
-			ordinaryPlan, cppGoRoot, err = captureDiscoveryOrdinaryCPP(ctx, candidate, download, cfg.Targets, workDir, env)
+			ordinaryPlan, ordinaryProfiles, ordinaryConfigurations, ordinarySourceItems, cppGoRoot, err = captureDiscoveryOrdinaryProfiles(ctx, candidate, download, cfg.Targets, workDir, env, discoveryProfileCaptureOptions{Markers: profileMarkers, Cache: profileCache})
 			return err
 		})
 	}
@@ -2166,7 +2188,12 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		nativePlan = &discoveryNativeLayoutPlan{}
 		nativePlans = append(nativePlans, nativePlan)
 	}
-	buildConfigurations, err := discoveryBuildConfigurationsWithEvidence(candidate, download.Dir, cfg.Targets, &sourceNotApplicable, nativePlans...)
+	buildConfigurations := ordinaryConfigurations
+	if ordinaryPlan != nil {
+		sourceNotApplicable = ordinarySourceItems
+	} else {
+		buildConfigurations, err = discoveryBuildConfigurationsWithEvidence(candidate, download.Dir, cfg.Targets, &sourceNotApplicable, nativePlans...)
+	}
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
 	}
@@ -2224,6 +2251,8 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		if err := captureOrdinary(); err != nil {
 			return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection/CPP inputs: %w", err)
 		}
+		buildConfigurations = ordinaryConfigurations
+		sourceNotApplicable = ordinarySourceItems
 	}
 	if len(buildConfigurations) == 0 {
 		return matrixReport{
@@ -2232,6 +2261,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			NativeLayout:             nativeLayout,
 			NativeLayoutPlan:         nativePlan,
 			OrdinarySelectionPlan:    ordinaryPlan,
+			FeatureProfiles:          ordinaryProfiles,
 		}, nil, buildConfigurations, nil
 	}
 	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
@@ -2258,11 +2288,25 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		NativeLayout:             nativeLayout,
 		NativeLayoutPlan:         nativePlan,
 		OrdinarySelectionPlan:    ordinaryPlan,
+		FeatureProfiles:          ordinaryProfiles,
 	}
 	runTargets := make(map[string]bool)
 	executedBuildConfigurations := make([]discoveryBuildConfiguration, 0, len(buildConfigurations))
 	invocationIndex := 0
 	for _, buildConfiguration := range buildConfigurations {
+		var activeProfile *discoveryFeatureProfile
+		operationEnv := env
+		if ordinaryPlan != nil {
+			for index := range ordinaryProfiles {
+				if ordinaryProfiles[index].ID == buildConfiguration.ProfileID {
+					activeProfile = &ordinaryProfiles[index]
+				}
+			}
+			if activeProfile == nil || len(buildConfiguration.Targets) != 1 || buildConfiguration.Targets[0] != activeProfile.Observed.Target {
+				return matrixReport{}, nil, nil, fmt.Errorf("ordinary configuration lacks its exact actual target profile")
+			}
+			operationEnv = ordinaryProfileEnvironment(env, activeProfile.Observed)
+		}
 		applicableCandidate := candidate
 		applicableCandidate.AsmFiles = buildConfiguration.AsmFiles
 		plan, err := makeDiscoveryExecutionPlan(applicableCandidate, declaredModule)
@@ -2281,11 +2325,22 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		packageGroups := discoveryPackageGroupsForModule(applicableCandidate, plan.ModulePath)
 		for _, target := range buildConfiguration.Targets {
 			err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+				guard := func(run func() error) (operationErr error) {
+					if activeProfile != nil {
+						if err := verifyDiscoveryProfileCurrent(ctx, profileMarkers, env, *activeProfile, profileCache); err != nil {
+							return err
+						}
+						defer func() {
+							operationErr = errors.Join(operationErr, verifyDiscoveryProfileCurrent(ctx, profileMarkers, env, *activeProfile, profileCache))
+						}()
+					}
+					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, run)
+				}
 				var targetAsmFiles []string
 				var eligibleGroups []discoveryPackageGroup
 				buildErrors, err := runDiscoveryPackageChecks(packageGroups, func(patterns []string) error {
-					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, func() error {
-						return runDiscoveryGoBuild(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns...)
+					return guard(func() error {
+						return runDiscoveryGoBuild(ctx, workDir, operationEnv, target, buildConfiguration.BuildTags, patterns...)
 					})
 				})
 				if err != nil {
@@ -2296,6 +2351,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				for index, group := range packageGroups {
 					if err := buildErrors[index]; err != nil {
 						aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+							ProfileID: buildConfiguration.ProfileID,
 							BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
 							AsmFiles:  append([]string(nil), group.AsmFiles...),
 							Targets:   []string{target},
@@ -2307,8 +2363,8 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					buildableGroups = append(buildableGroups, group)
 				}
 				vetErrors, err := runDiscoveryPackageChecks(buildableGroups, func(patterns []string) error {
-					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, func() error {
-						return runDiscoveryAsmDecl(ctx, workDir, env, target, buildConfiguration.BuildTags, patterns)
+					return guard(func() error {
+						return runDiscoveryAsmDecl(ctx, workDir, operationEnv, target, buildConfiguration.BuildTags, patterns)
 					})
 				})
 				if err != nil {
@@ -2320,6 +2376,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					if err := vetErrors[index]; err != nil {
 						packageAsmFiles, packageErr := discoveryAsmDeclPackageFiles(
 							candidate, group, download.Dir, target, buildConfiguration.BuildTags,
+							profileObservation(activeProfile),
 						)
 						if packageErr != nil {
 							return fmt.Errorf("enumerate Go-selected assembly for %s on %s: %w",
@@ -2334,6 +2391,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						}
 						if !foreignOnly {
 							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+								ProfileID: buildConfiguration.ProfileID,
 								BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
 								AsmFiles:  append([]string(nil), rejected...),
 								Targets:   []string{target},
@@ -2356,6 +2414,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				}
 				targetAsmFiles = uniqueSortedDiscoveryStrings(targetAsmFiles)
 				executed := discoveryBuildConfiguration{
+					ProfileID: buildConfiguration.ProfileID,
 					BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
 					Targets:   []string{target},
 					AsmFiles:  append([]string(nil), targetAsmFiles...),
@@ -2382,6 +2441,18 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						cfg.LLC,
 						reportPath,
 					)
+					if activeProfile != nil {
+						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, unit.AsmFiles)
+						inputPath := filepath.Join(workDir, fmt.Sprintf("feature-input-%04d.json", invocationIndex))
+						data, err := json.Marshal(input)
+						if err != nil {
+							return err
+						}
+						if err := os.WriteFile(inputPath, data, 0600); err != nil {
+							return err
+						}
+						invocation.Args = append(invocation.Args, "-feature-profile="+inputPath, "-feature-timeout="+cfg.CandidateTimeout.String())
+					}
 					translations = append(translations, discoveryPendingTranslation{
 						Unit:        unit,
 						ReportPath:  reportPath,
@@ -2397,7 +2468,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					func(ctx context.Context, index int) error {
 						translation := translations[index]
 						invocation := translation.Invocation
-						if err := runCapturedCommand(ctx, invocation.Dir, env, cfg.Translator, invocation.Args...); err != nil {
+						if err := guard(func() error {
+							return runCapturedCommand(ctx, invocation.Dir, operationEnv, cfg.Translator, invocation.Args...)
+						}); err != nil {
 							return fmt.Errorf("translate and compile package %s for %s with build tags %v: %w",
 								translation.Unit.Patterns[0], target, buildConfiguration.BuildTags, err)
 						}
@@ -2427,7 +2500,25 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					aggregate.Success += report.Success
 					aggregate.NotApplicable += report.NotApplicable
 					aggregate.Failed += report.Failed
-					aggregate.NotApplicableItems = append(aggregate.NotApplicableItems, collectMatrixNotApplicableItems(report)...)
+					items := collectMatrixNotApplicableItems(report)
+					if activeProfile != nil {
+						allowedABI := make(map[string]bool)
+						for index := range items {
+							items[index].ProfileID = activeProfile.ID
+							items[index].BuildTags = append([]string(nil), buildConfiguration.BuildTags...)
+							allowedABI[items[index].AsmFile] = true
+						}
+						if len(report.Targets) != 1 {
+							return fmt.Errorf("actual profile consumer omitted its single target report")
+						}
+						proof := report.Targets[0].FeatureSelection
+						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, translation.Unit.AsmFiles)
+						if err := gotoolprofile.ValidateSelectionWithABI(input, proof, buildConfiguration.BuildTags, true, allowedABI); err != nil {
+							return fmt.Errorf("actual package/profile/CPP/LLVM consumption: %w", err)
+						}
+						aggregate.FeatureConsumption = append(aggregate.FeatureConsumption, proof)
+					}
+					aggregate.NotApplicableItems = append(aggregate.NotApplicableItems, items...)
 					if err := removeDiscoveryTargetOutput(workDir, translation.OutputIndex); err != nil {
 						return fmt.Errorf("remove target %s generated output: %w", target, err)
 					}
@@ -2677,7 +2768,7 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 	// without requiring a main package to final-link. Library coverage belongs
 	// here; executable linking and execution have separate compatibility gates.
 	// Do not use -e or -find: compiler/assembler errors must remain failures.
-	args := []string{"list", "-export"}
+	args := []string{"list", "-export", "-mod=mod"}
 	if len(buildTags) != 0 {
 		args = append(args, "-tags="+strings.Join(buildTags, ","))
 	}
@@ -2836,7 +2927,7 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if !ok || goos == "" || goarch == "" {
 		return fmt.Errorf("invalid discovery target %q", target)
 	}
-	args := []string{"vet", "-asmdecl"}
+	args := []string{"vet", "-asmdecl", "-mod=mod"}
 	if len(buildTags) != 0 {
 		args = append(args, "-tags="+strings.Join(buildTags, ","))
 	}
@@ -3073,7 +3164,11 @@ func discoveryAsmDeclPackageFiles(
 	group discoveryPackageGroup,
 	moduleDir, target string,
 	buildTags []string,
+	profiles ...*discoveryTargetFeatures,
 ) ([]string, error) {
+	if len(profiles) > 1 {
+		return nil, fmt.Errorf("assembly package selection accepts one actual target profile")
+	}
 	if len(group.AsmFiles) == 0 {
 		return nil, fmt.Errorf("empty assembly package group")
 	}
@@ -3086,6 +3181,16 @@ func discoveryAsmDeclPackageFiles(
 	ctx.GOARCH = goarch
 	ctx.Compiler = "gc"
 	ctx.CgoEnabled = false
+	if len(profiles) == 1 && profiles[0] != nil {
+		if profiles[0].Target != target {
+			return nil, fmt.Errorf("assembly package selection profile differs from its target")
+		}
+		actualContext, err := discoveryContextForFeatureProfile(profiles[0])
+		if err != nil {
+			return nil, err
+		}
+		ctx = actualContext
+	}
 	ctx.BuildTags = buildTags
 
 	dirRel := path.Dir(group.AsmFiles[0])

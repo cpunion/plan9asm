@@ -232,7 +232,7 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 		return fmt.Errorf("feature consumer has no actual package observation")
 	}
 	for _, pkg := range pkgs {
-		if pkg == nil || pkg.Module == nil || pkg.Module.Path != consumer.Input.Module || isTestVariantPackage(pkg) {
+		if pkg == nil || pkg.Module == nil || pkg.Module.Path != consumer.Input.Module || pkg.Module.Version != consumer.Input.Version || isTestVariantPackage(pkg) {
 			return fmt.Errorf("actual package role/module differs from the explicit ordinary scope")
 		}
 		moduleDir, err := filepath.EvalSymlinks(pkg.Module.Dir)
@@ -252,7 +252,24 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 		if macros.PackageRole == "allow_asm_abi_path" {
 			return fmt.Errorf("ordinary CPU profile cannot consume a special assembler package role")
 		}
-		proof := featurePackageProof{PackagePath: pkg.PkgPath, Macros: macros, SourceSHA256: make(map[string]string)}
+		proof := featurePackageProof{
+			PackagePath: pkg.PkgPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
+			SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module",
+			Macros: macros, SourceSHA256: make(map[string]string),
+		}
+		if pkg.Module.Main {
+			proof.SourceRole = "main"
+		}
+		if replacement := pkg.Module.Replace; replacement != nil {
+			proof.SourceRole = "owned_local_replace"
+			if replacement.Version != "" {
+				proof.SourceModule, proof.SourceVersion = replacement.Path, replacement.Version
+				proof.SourceRole = "version_replace"
+			}
+		}
+		if err := gotoolprofile.ValidatePackageModule(consumer.Input, proof); err != nil {
+			return err
+		}
 		capture := func(files []string, assemblyOnly bool) ([]string, error) {
 			var names []string
 			for _, filename := range files {

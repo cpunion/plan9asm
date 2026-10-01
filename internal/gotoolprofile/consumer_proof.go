@@ -50,6 +50,9 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 		return io.NopCloser(strings.NewReader(header)), nil
 	}
 	for _, pkg := range proof.Packages {
+		if err := ValidatePackageModule(input, pkg); err != nil {
+			return err
+		}
 		if pkg.PackagePath != input.Module && !strings.HasPrefix(pkg.PackagePath, input.Module+"/") || seenPackages[pkg.PackagePath] {
 			return fmt.Errorf("actual selected package has a different or duplicate module role")
 		}
@@ -70,10 +73,17 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 					return fmt.Errorf("actual selected source has no exact original SHA: %s", file)
 				}
 				usedSources[file] = pkg.SourceSHA256[file]
-				if path.Ext(file) == ".go" {
+				wantedPath := input.Module
+				if path.Dir(file) != "." {
+					wantedPath += "/" + path.Dir(file)
+				}
+				if pkg.PackagePath != wantedPath {
+					return fmt.Errorf("actual package role differs from the original source directory: %s", file)
+				}
+				if path.Ext(file) == ".go" || path.Ext(file) == ".s" {
 					selected, err := ctx.MatchFile(path.Dir(file), path.Base(file))
 					if err != nil || !selected || strings.HasSuffix(file, "_test.go") {
-						return fmt.Errorf("actual Go selection contradicts its original feature constraints: %s: %v", file, err)
+						return fmt.Errorf("actual source selection contradicts its original feature constraints: %s: %v", file, err)
 					}
 				}
 			}
@@ -123,6 +133,27 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	}
 	if len(consumed) != len(input.AsmFiles) || len(outputs)+len(abi) != len(input.AsmFiles) {
 		return fmt.Errorf("compiler consumption differs from the exact file/profile scope")
+	}
+	return nil
+}
+
+func ValidatePackageModule(input *ConsumerInput, pkg PackageProof) error {
+	if input == nil || pkg.ModulePath != input.Module || pkg.ModuleVersion != input.Version {
+		return fmt.Errorf("actual Go package module/version differs from the explicit consumer input")
+	}
+	module := input.SourceModule
+	if module == "" {
+		module = input.Module
+	}
+	if pkg.SourceModule != module || pkg.SourceVersion != input.Version {
+		return fmt.Errorf("actual Go replacement source module/version differs from exact original inputs")
+	}
+	if input.SourceModule != "" {
+		if pkg.SourceRole != "module" && pkg.SourceRole != "version_replace" {
+			return fmt.Errorf("original exact-module proof cannot be relabeled from main/owned-local sources")
+		}
+	} else if pkg.SourceRole != "main" && pkg.SourceRole != "owned_local_replace" || pkg.SourceRole == "main" && input.Version != "" {
+		return fmt.Errorf("explicit own-source consumer lacks an exact main/local role")
 	}
 	return nil
 }

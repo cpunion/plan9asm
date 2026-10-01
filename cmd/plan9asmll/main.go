@@ -841,9 +841,12 @@ func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modul
 	if feature != nil {
 		cfg.Context, cfg.Env, cfg.Dir = feature.Context, feature.Env, feature.WorkDir
 		cfg.Mode |= packages.NeedCompiledGoFiles
+		// The producer's export/vet gates use this explicit module mode too.
+		// Do not pass it through GOFLAGS, where it could hide selection tags.
+		cfg.BuildFlags = append(cfg.BuildFlags, "-mod=mod")
 	}
 	if len(buildTags) != 0 {
-		cfg.BuildFlags = []string{"-tags=" + strings.Join(buildTags, ",")}
+		cfg.BuildFlags = append(cfg.BuildFlags, "-tags="+strings.Join(buildTags, ","))
 	}
 	pkgs, err := packages.Load(cfg, patterns...)
 	if err != nil {
