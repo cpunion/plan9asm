@@ -906,6 +906,10 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		}
 	}
 	var err error
+	fn, err = normalizeARM64AtomicPairNamedMemory(fn)
+	if err != nil {
+		return err
+	}
 	fn, err = normalizeARM64NamedPCRelative(fn)
 	if err != nil {
 		return err

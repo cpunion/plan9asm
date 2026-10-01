@@ -26,21 +26,25 @@ func TestTranslateARM64AtomicPairFamilyCompleteGoAssemblerForms(t *testing.T) {
 	// Register pairs for LDXP/STXP need not be contiguous; SP/RSP in a data
 	// pair encodes register 31 (ZR), rather than changing the stack pointer.
 	src := `
-TEXT atomicpairforms(SB),NOSPLIT,$16-0
+TEXT atomicpairforms(SB),4,$16-0
 	CASPW (R0, R1), (R2), (R4, R5)
-	CASPW (R6, R7), local+0(SP), (R10, R11)
+	CASPW (R6, R7), local-24(SP), (R10, R11)
 	CASPD (R12, R13), (ZR), (R14, R15)
-	CASPD (R30, ZR), (RSP), (R28, R29)
+	CASPD (R30, ZR), (RSP), (g, R29)
 	LDXPW (R16), (R0, R7)
 	LDXP (RSP), (R30, ZR)
 	LDAXPW (ZR), (RSP, R1)
-	LDAXP (R18), (R2, R17)
+	LDAXP (R18_PLATFORM), (R2, R17)
 	STXPW (R3, R3), (R19), R20
 	STXP (RSP, R21), (RSP), ZR
 	STLXPW (ZR, R22), (R23), R24
 	STLXP (R25, R26), (ZR), R27
-	RET
+	// This is a compile-only operand probe, not a callable program. Some
+	// forms overwrite LR or the implicit frame's saved link, so terminate
+	// explicitly rather than inventing a return contract.
+	UNDEF
 `
+	requireARM64GoAssemblerResult(t, src, true)
 	ll, err := translateARM64AtomicPairSource(src)
 	if err != nil {
 		t.Fatal(err)
@@ -133,7 +137,7 @@ func TestTranslateARM64AtomicPairFamilyRejectsFormsOutsideGoOptabs(t *testing.T)
 
 	for _, instruction := range invalid {
 		t.Run(strings.NewReplacer(" ", "_", "(", "", ")", "", ",", "_").Replace(instruction), func(t *testing.T) {
-			src := fmt.Sprintf("TEXT atomicpairforms(SB),NOSPLIT,$16-0\n\t%s\n\tRET\n", instruction)
+			src := fmt.Sprintf("TEXT atomicpairforms(SB),4,$16-0\n\t%s\n\tRET\n", instruction)
 			if _, err := translateARM64AtomicPairSource(src); err == nil {
 				t.Fatalf("Translate accepted %q, which is outside the Go 1.27 paired-atomic optabs", instruction)
 			}
@@ -143,7 +147,7 @@ func TestTranslateARM64AtomicPairFamilyRejectsFormsOutsideGoOptabs(t *testing.T)
 
 func TestParseARM64AtomicPairPreservesRSPAndNamedSP(t *testing.T) {
 	file, err := Parse(ArchARM64, `
-TEXT atomicpairforms(SB),NOSPLIT,$16-0
+TEXT atomicpairforms(SB),4,$16-0
 	CASPD (R0, R1), local+0(SP), (R2, R3)
 	LDAXP (RSP), (RSP, R4)
 	RET

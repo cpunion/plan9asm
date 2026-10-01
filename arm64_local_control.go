@@ -610,6 +610,10 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		}
 		return
 	}
+	if form, handled, err := parseARM64AtomicPairForm(op, ins); handled && err == nil {
+		state.transferAtomicPair(form)
+		return
+	}
 	if op == "ADR" && len(ins.Args) == 2 {
 		if target, ok := arm64BranchTarget(ins.Args[0]); ok && data[target] == "" {
 			state.write(ins.Args[1], arm64ControlValue{"label:" + target: true}, false)
