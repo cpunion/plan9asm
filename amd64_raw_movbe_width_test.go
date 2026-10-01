@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -48,24 +47,17 @@ func TestDecodeX86RawMOVBECompleteWidthsAndDirections(t *testing.T) {
 }
 
 func TestTranslateX86RawMOVBEObjects(t *testing.T) {
-	var source strings.Builder
+	file := &File{Arch: ArchAMD64}
 	sigs := make(map[string]FuncSig)
 	index := 0
 	for _, width := range []int{16, 32, 64} {
 		for _, store := range []bool{false, true} {
 			name := fmt.Sprintf("rawMOVBE%d", index)
-			fmt.Fprintf(&source, "TEXT %s(SB),$0-0\n", name)
-			for _, value := range x86RawMOVBE(width, store, 8) {
-				fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
-			}
+			probe := x86RawUnprovedReturnFormProbeFile(t, "amd64", name, x86RawMOVBE(width, store, 8))
+			file.Funcs = append(file.Funcs, probe.Funcs...)
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 			index++
 		}
-	}
-	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {

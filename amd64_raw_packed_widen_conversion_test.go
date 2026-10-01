@@ -111,11 +111,7 @@ func TestDecodeX86RawPackedWidenConversionSourceLocalRIPData(t *testing.T) {
 func TestTranslateX86RawPackedWidenConversionLLVM22Objects(t *testing.T) {
 	source := x86RawPackedWidenConversionGoForms()
 	code := assembleX87ControlBytes(t, "amd64", source)
-	file, err := Parse(ArchAMD64, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	file.Funcs[0].Instrs = append(file.Funcs[0].Instrs[:1], rawX86Function(code).Instrs...)
+	file := x86RawUnprovedReturnFormProbeFile(t, "amd64", "rawPackedWidenConversion", code)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

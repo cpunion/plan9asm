@@ -135,13 +135,8 @@ func TestTranslateX86RawScatterLLVM22AllTargets(t *testing.T) {
 	} {
 		t.Run(target.triple, func(t *testing.T) {
 			source := x86RawScatterGoForms(target.goarch)
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
 			code := assembleX87ControlBytes(t, target.goarch, source)
-			decoded := rawX86Function(code)
-			file.Funcs[0].Instrs = append(file.Funcs[0].Instrs[:1], decoded.Instrs...)
+			file := x86RawUnprovedReturnFormProbeFile(t, target.goarch, "rawScatterForms", code)
 			ir, err := Translate(file, Options{
 				Goarch: target.goarch, TargetTriple: target.triple,
 				Sigs: map[string]FuncSig{"rawScatterForms": {Name: "rawScatterForms", Ret: Void}},

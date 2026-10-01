@@ -1,9 +1,7 @@
 package plan9asm
 
 import (
-	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -77,16 +75,8 @@ func TestDecodedX86RawBZHIRealMemoryAndInvalidForms(t *testing.T) {
 }
 
 func TestTranslateX86RawBZHIRealMemoryObjects(t *testing.T) {
-	var source strings.Builder
-	source.WriteString("TEXT rawBZHI(SB),$0-0\n")
-	for _, value := range []byte{0xc4, 0x62, 0xf0, 0xf5, 0x04, 0xc6, 0xc3} {
-		fmt.Fprintf(&source, "\tBYTE $%#02x\n", value)
-	}
-	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	code := []byte{0xc4, 0x62, 0xf0, 0xf5, 0x04, 0xc6, 0xc3}
+	file := x86RawUnprovedReturnFormProbeFile(t, "amd64", "rawBZHI", code)
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")

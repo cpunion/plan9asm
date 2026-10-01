@@ -107,6 +107,9 @@ func TestTranslateX86RawPackedSignLLVM22AllTargets(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if strings.Contains(form, "(") {
+					file = x86RawUnprovedReturnFormProbeFile(t, target.goarch, "rawpackedsign", code)
+				}
 				ir, err := Translate(file, Options{
 					Goarch:       target.goarch,
 					TargetTriple: target.triple,

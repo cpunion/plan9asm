@@ -102,11 +102,17 @@ func TestX86RawNearReturnCannotInventGoEpilogue(t *testing.T) {
 	}
 }
 
-// Retain the original Go encoder object as a negative return-contract test.
-// An operand-format object probe ends in UD2 instead of inventing a native
-// caller epilogue for arbitrary SP/BP addresses. Every preceding byte/form is
-// unchanged and separately accepted by Go's assembler.
 func x86RawStackObservingFormProbeFile(t *testing.T, arch, symbol string, code []byte) *File {
+	t.Helper()
+	return x86RawUnprovedReturnFormProbeFile(t, arch, symbol, code)
+}
+
+// Retain the original Go encoder object as a negative return-contract test.
+// A compile-only operand probe ends in UD2: it cannot promise a caller return
+// after observing a physical stack or dereferencing unbound native pointers.
+// Every preceding instruction byte is unchanged. These objects prove operand
+// lowering, not execution of the original machine-entry function.
+func x86RawUnprovedReturnFormProbeFile(t *testing.T, arch, symbol string, code []byte) *File {
 	t.Helper()
 	if len(code) == 0 || code[len(code)-1] != 0xc3 {
 		t.Fatalf("Go form fixture must end in its ordinary encoded RET, got %x", code)
@@ -132,10 +138,54 @@ func x86RawStackObservingFormProbeFile(t *testing.T, arch, symbol string, code [
 	_, err := Translate(original, Options{Goarch: arch, TargetTriple: triple,
 		Sigs: map[string]FuncSig{symbol: {Name: symbol, Ret: Void}}})
 	if !errors.Is(err, ErrProbeNeedsContext) {
-		t.Fatalf("original stack-observing format fixture must retain its native return-contract failure, got %v", err)
+		t.Fatalf("original format fixture must retain its native return-contract failure, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "source stack/continuation") &&
+		!strings.Contains(err.Error(), "bounded typed FP/static memory") {
+		t.Fatalf("unrelated Context error is not a native return-contract witness: %v", err)
 	}
 	probe := append(append([]byte(nil), code[:len(code)-1]...), 0x0f, 0x0b)
 	return makeFile(probe)
+}
+
+func TestX86RawUnprovedReturnFormProbePreservesInstructions(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, target := range x86RawReturnTargets {
+		for _, instruction := range []string{"MOVL (AX),CX", "MOVL CX,(AX)"} {
+			t.Run(target.triple+"/"+instruction, func(t *testing.T) {
+				code := assembleX87ControlBytes(t, target.arch,
+					"TEXT form(SB),4,$0-0\n"+instruction+"\nRET\n")
+				original := append([]byte(nil), code...)
+				file := x86RawUnprovedReturnFormProbeFile(t, target.arch, "form", code)
+				if string(code) != string(original) {
+					t.Fatal("form probe modified its independent Go encoder input")
+				}
+				body := file.Funcs[0].Instrs[1:]
+				if len(body) != len(code)+1 {
+					t.Fatalf("probe directives=%d, want %d", len(body), len(code)+1)
+				}
+				want := append(append([]byte(nil), code[:len(code)-1]...), 0x0f, 0x0b)
+				for index, ins := range body {
+					if ins.Op != OpBYTE || len(ins.Args) != 1 ||
+						ins.Args[0].Kind != OpImm || ins.Args[0].Imm != int64(want[index]) {
+						t.Fatalf("changed operand-form byte %d: %+v, want %#x", index, ins, want[index])
+					}
+				}
+				ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
+					Sigs: map[string]FuncSig{"form": {Name: "form", Ret: Void}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(ir, `asm sideeffect "ud2"`) || !strings.Contains(ir, "unreachable") {
+					t.Fatal("compile-only form probe invented an ordinary caller return")
+				}
+				compileLLVMToObject(t, llc, target.triple, "memory-form.ll", "memory-form.o", ir)
+			})
+		}
+	}
 }
 
 func TestX86RawNearReturnZeroCleanupLeafObjects(t *testing.T) {
