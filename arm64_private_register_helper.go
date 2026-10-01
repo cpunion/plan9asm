@@ -59,17 +59,32 @@ func arm64PrivateDataGP(reg Reg) bool {
 	if reg == ZR {
 		return true
 	}
-	// R27 is the Go assembler scratch register; R28/R29/R30 have hidden
+	// R18 is a physical platform register even after the source spelling
+	// R18_PLATFORM has been normalized. R27 is the Go assembler scratch
+	// register; R28/R29/R30 have hidden
 	// runtime/frame/link roles. No source-private data promise is made for them.
-	return isARM64GeneralOrZeroReg(reg) && reg != "R27" && reg != "R28" && reg != "R29" && reg != "R30"
+	return isARM64GeneralOrZeroReg(reg) && !arm64PrivateReservedGP(reg) && reg != "R28" && reg != "R29" && reg != "R30"
 }
 
-func arm64PrivateOperandMentionsScratch(arg Operand) bool {
-	if arg.Reg == "R27" || arg.ShiftReg == "R27" || arg.Mem.Base == "R27" || arg.Mem.Index == "R27" {
+func arm64PrivateReservedGP(reg Reg) bool {
+	if root, ok := parseReg(string(reg)); ok {
+		reg = root
+	}
+	return reg == "R18" || reg == "R27"
+}
+
+func arm64PrivateOperandMentionsReserved(arg Operand) bool {
+	if arm64PrivateReservedGP(arg.Reg) || arm64PrivateReservedGP(arg.ShiftReg) || arm64PrivateReservedGP(arg.Mem.Base) || arm64PrivateReservedGP(arg.Mem.Index) {
 		return true
 	}
 	for _, reg := range arg.RegList {
-		if reg == "R27" {
+		if arm64PrivateReservedGP(reg) {
+			return true
+		}
+	}
+	if arg.Kind == OpSym && strings.HasPrefix(arg.Sym, "$") {
+		address, ok := parseMem(strings.TrimSpace(strings.TrimPrefix(arg.Sym, "$")))
+		if ok && (arm64PrivateReservedGP(address.Base) || arm64PrivateReservedGP(address.Index)) {
 			return true
 		}
 	}
@@ -126,9 +141,17 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 		return file, nil
 	}
 	for _, data := range file.Data {
-		base, _, _ := arm64PrivateSymbolRef(data.Addr)
+		for _, symbol := range []string{data.Sym, data.Addr} {
+			base, _, _ := arm64PrivateSymbolRef(symbol)
+			if _, escaped := helpers[base]; escaped {
+				return nil, arm64GoABIContext("private helper %q escapes through DATA", base)
+			}
+		}
+	}
+	for _, global := range file.Globl {
+		base, _, _ := arm64PrivateSymbolRef(global.Sym)
 		if _, escaped := helpers[base]; escaped {
-			return nil, arm64GoABIContext("private helper %q escapes through DATA", base)
+			return nil, arm64GoABIContext("private helper %q has a GLOBL/native address use", base)
 		}
 	}
 	uses := map[string]int{}
@@ -138,7 +161,26 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 			if ins.Op == OpTEXT {
 				continue
 			}
+			// Folding removes the helper's standalone native TEXT identity.
+			// A sibling excluded by KeepFunc must not hide an observation of
+			// that original byte layout or a raw branch into the helper.
+			if ins.Op == OpWORD || ins.Op == "DWORD" || ins.Op == "ADR" || ins.Op == "ADRP" || ins.Op == "PCALIGN" {
+				return nil, arm64GoABIContext("private helper file requires native byte-layout effects at %q", ins.Raw)
+			}
 			for ai, arg := range ins.Args {
+				memory, hasMemory := arg.Mem, arg.Kind == OpMem
+				if arg.Kind == OpSym && strings.HasPrefix(arg.Sym, "$") {
+					memory, hasMemory = parseMem(strings.TrimSpace(strings.TrimPrefix(arg.Sym, "$")))
+				}
+				if hasMemory && memory.Base == PC {
+					return nil, arm64GoABIContext("private helper file has a native PC use at %q", ins.Raw)
+				}
+				if hasMemory && memory.Sym != "" {
+					base, _, _ := arm64PrivateSymbolRef(memory.Sym)
+					if _, escaped := helpers[base]; escaped {
+						return nil, arm64GoABIContext("private helper %q has a native memory/address use at %q", base, ins.Raw)
+					}
+				}
 				if arg.Kind != OpSym {
 					continue
 				}
@@ -206,8 +248,8 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 				return nil, arm64GoABIContext("private helper root %q requires native byte-layout effects at %q", fn.Sym, ins.Raw)
 			}
 			for _, arg := range ins.Args {
-				if arm64PrivateOperandMentionsScratch(arg) {
-					return nil, arm64GoABIContext("private helper root %q observes assembler scratch R27 at %q", fn.Sym, ins.Raw)
+				if arm64PrivateOperandMentionsReserved(arg) {
+					return nil, arm64GoABIContext("private helper root %q observes unmodelled platform/scratch state at %q", fn.Sym, ins.Raw)
 				}
 			}
 			if (ins.Op == "CALL" || ins.Op == "BL") && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {

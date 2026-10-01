@@ -34,6 +34,7 @@ func TestCrossLinuxRuntimeMatrixARM64PrivateRegisterHelper(t *testing.T) {
 		extra              uint64
 		rootFrame          int64
 		saveLink           bool
+		data26             string
 	}{
 		{name: "normal-leaf"},
 		{name: "default-flags", header: "0,$0-0", call: "BL mix<>(SB)"},
@@ -46,6 +47,8 @@ func TestCrossLinuxRuntimeMatrixARM64PrivateRegisterHelper(t *testing.T) {
 		{name: "helper-label-collision", call: "__arm64_private_0:\nCALL mix<>(SB)"},
 		{name: "framed-root", rootFrame: 24},
 		{name: "no-frame-root-restores-real-lr", saveLink: true},
+		{name: "helper-initializes-data26", data26: "helper"},
+		{name: "caller-initializes-data26", data26: "caller"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if test.header == "" {
@@ -55,6 +58,13 @@ func TestCrossLinuxRuntimeMatrixARM64PrivateRegisterHelper(t *testing.T) {
 				test.call = "CALL mix<>(SB)"
 			}
 			source := arm64PrivateRegisterHelperSource(test.header, test.call)
+			if test.data26 == "helper" {
+				source = strings.Replace(source, "ADC $0,R9,R20", "ADC $0,R9,R26\nMOVD R26,R20", 1)
+			}
+			if test.data26 == "caller" {
+				source = strings.Replace(source, "CALL mix<>(SB)", "MOVD R9,R26\nCALL mix<>(SB)", 1)
+				source = strings.Replace(source, "ADC $0,R9,R20", "ADC $0,R26,R20", 1)
+			}
 			if test.rootFrame != 0 {
 				source = strings.Replace(source, "TEXT ·Run(SB),4,$0-16", fmt.Sprintf("TEXT ·Run(SB),4,$%d-16", test.rootFrame), 1)
 			}
