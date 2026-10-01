@@ -10,10 +10,9 @@ func (c *amd64Ctx) boundFPAddress(off int64) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("%w: %s FP address at +%d(FP) requires bound typed frame storage", ErrProbeNeedsContext, c.goarch, off)
 	}
-	if x86FrameScalarBytes(slot.Type, c.goarch) == 0 || slot.Type == I1 {
+	if x86FrameScalarBytes(slot.Type, c.goarch) == 0 {
 		// The vector lookup's conservative aggregate-size fallback is not a
-		// storage-width proof. Nor does store i1 establish canonical Go byte
-		// memory for later loads through an escaped bool address.
+		// storage-width proof. Scalar bool fields use canonical i8 backing.
 		return "", fmt.Errorf("%w: %s FP address at +%d(FP) lacks a scalar byte-storage contract for %s", ErrProbeNeedsContext, c.goarch, off, slot.Type)
 	}
 	if result {

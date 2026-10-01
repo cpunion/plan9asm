@@ -69,7 +69,7 @@ func TestX86LEAFPAddressCannotInventScalarBacking(t *testing.T) {
 		if arch == "386" {
 			lea, triple = "LEAL", "i386-unknown-linux-gnu"
 		}
-		for _, typ := range []LLVMType{I1, "{ i8 }", "{}", "<8 x i8>"} {
+		for _, typ := range []LLVMType{"{ i8 }", "{}", "<8 x i8>"} {
 			t.Run(arch+"/"+string(typ), func(t *testing.T) {
 				file, err := Parse(ArchAMD64, "TEXT Address(SB),4,$0-16\n"+lea+" x+0(FP),AX\nRET\n")
 				if err != nil {
