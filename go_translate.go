@@ -464,10 +464,11 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 	if !ok {
 		return nil
 	}
-	// A Go declaration does not make a plain x86 CALL register-ABI. Assembly
-	// calls its ABI0 wrapper unless the instruction explicitly says ABIInternal.
-	// Keep the frame metadata even for a zero-argument, result-only callee.
-	withFrame := b.goarch == "amd64" || b.goarch == "386"
+	// A Go declaration does not make a plain CALL/BL register-ABI. On x86
+	// and ARM64 assembly calls its ABI0 wrapper unless the instruction says
+	// ABIInternal. Keep result-only frame metadata too. ARM's outgoing-stack
+	// bridge is separate; do not claim it merely by adding signature slots.
+	withFrame := b.goarch == "amd64" || b.goarch == "386" || b.goarch == "arm64"
 	fs, err := goFuncSigForDeclaredFunc(resolved, fn, b.goarch, b.sz, b.frameSz, withFrame)
 	if err != nil {
 		return err
@@ -478,7 +479,7 @@ func (b *goSigBuilder) addGoDeclSig(sym string) error {
 
 func goReferencedFunc(ins Instr) (base string, tailJump bool, ok bool) {
 	switch string(ins.Op) {
-	case "JMP", "B":
+	case "JMP", "B", "RET":
 		tailJump = true
 	case "CALL", "CALLNORESUME", "WASMCALL", "BL":
 	default:

@@ -392,6 +392,9 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 		// Default for external runtime helpers not discovered in this asm file.
 		csig = FuncSig{Name: callee, Ret: Void}
 	}
+	if internalABI && (len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args)) {
+		return fmt.Errorf("%w: ARM64 ABIInternal call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
+	}
 	callee = funcSigSymbol(callee, csig)
 	stackABI := !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Params) != 0
 	var args []string
@@ -437,6 +440,9 @@ func (c *arm64Ctx) tailCallAndRet(symOp Operand) error {
 		// If we don't have an explicit signature, fall back to caller signature.
 		csig = c.sig
 		csig.Name = callee
+	}
+	if internalABI && (len(csig.ArgRegs) == 0 || len(csig.ArgRegs) != len(csig.Args)) {
+		return fmt.Errorf("%w: ARM64 ABIInternal tail call %q requires an explicit complete register-entry contract", ErrProbeNeedsContext, callee)
 	}
 	callee = funcSigSymbol(callee, csig)
 
