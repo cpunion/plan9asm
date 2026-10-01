@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -168,8 +169,60 @@ MOVD R5,ret+8(FP)
 RET
 `
 
-func arm64TextFrameRuntime(t *testing.T, triple string) (string, string) {
-	return arm64TextFrameRuntimeForSource(t, triple, arm64TextFrameSource)
+// The original observer call escapes a pointer to the private Go frame. Its
+// manual register signature provides no bounds or non-escape memory contract.
+// Keep that full source as a Context regression rather than pretending that the
+// C observer body is a contract available to the translator.
+func TestARM64TextFrameObserverNeedsBoundedMemoryContract(t *testing.T) {
+	for _, large := range []bool{false, true} {
+		source := arm64TextFrameSource
+		if large {
+			source = strings.ReplaceAll(source, "32904", "2097288")
+			source = strings.ReplaceAll(source, "32768", "2097152")
+		}
+		requireARM64GoAssemblerResult(t, source, true)
+		file, err := Parse(ArchARM64, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, triple := range []string{
+			"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+			"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+		} {
+			t.Run(fmt.Sprintf("large=%v/%s", large, triple), func(t *testing.T) {
+				_, err := Translate(file, Options{
+					Goarch: "arm64", TargetTriple: triple,
+					Sigs: arm64TextFrameSigs(),
+				})
+				if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "caller LR") {
+					t.Fatalf("unbounded private-frame observer must retain Context: %v", err)
+				}
+			})
+		}
+	}
+}
+
+// This separate positive fixture has no escaping call. Both its Go and LLVM
+// runtime oracles execute this exact source, not different versions of it.
+func arm64TextFrameNoEscapeSource() string {
+	return strings.ReplaceAll(arm64TextFrameSource, "BL frame_observe(SB)\n", "")
+}
+
+func arm64TextFrameNoEscapeRuntime(t *testing.T, triple string) (string, string) {
+	return arm64TextFrameRuntimeForSource(t, triple, arm64TextFrameNoEscapeSource())
+}
+
+func arm64TextFrameSigs() map[string]FuncSig {
+	return map[string]FuncSig{"frame_table": {
+		Name: "frame_table", Args: []LLVMType{I64}, Ret: I64,
+		Frame: FrameLayout{
+			Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
+			Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
+		},
+	}, "frame_observe": {
+		Name: "frame_observe", Args: []LLVMType{Ptr, I64, I64}, Ret: Void,
+		ArgRegs: []Reg{"R17", "R4", "R0"},
+	}}
 }
 
 func arm64TextFrameRuntimeForSource(t *testing.T, triple, source string) (string, string) {
@@ -180,16 +233,7 @@ func arm64TextFrameRuntimeForSource(t *testing.T, triple, source string) (string
 		t.Fatal(err)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple,
-		Sigs: map[string]FuncSig{"frame_table": {
-			Name: "frame_table", Args: []LLVMType{I64}, Ret: I64,
-			Frame: FrameLayout{
-				Params:  []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
-				Results: []FrameSlot{{Offset: 8, Type: I64, Index: 0, Field: -1}},
-			},
-		}, "frame_observe": {
-			Name: "frame_observe", Args: []LLVMType{Ptr, I64, I64}, Ret: Void,
-			ArgRegs: []Reg{"R17", "R4", "R0"},
-		}},
+		Sigs: arm64TextFrameSigs(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -198,15 +242,6 @@ func arm64TextFrameRuntimeForSource(t *testing.T, triple, source string) (string
 #include <stdint.h>
 #include <stdio.h>
 extern uint64_t frame_table(uint64_t);
-void frame_observe(volatile uint64_t* data, uint64_t bytes, uint64_t value) {
-  for (uint64_t i = 0; i < bytes / sizeof(*data); i++) {
-    if (data[i] != value) {
-      fprintf(stderr, "frame observation mismatch at %llu\n", (unsigned long long)i);
-      __builtin_trap();
-    }
-  }
-}
-
 int main(void) {
   volatile uint64_t canary[2] = {UINT64_C(0x123456789abcdef0), UINT64_C(0xfedcba9876543210)};
   uint64_t value = UINT64_C(0x89abcdef01234567);
@@ -225,12 +260,12 @@ int main(void) {
 	return ir, main
 }
 
-func TestARM64LargeTextFrameRuntime(t *testing.T) {
+func TestARM64LargeTextFrameNoEscapeRuntime(t *testing.T) {
 	llc, clang := findLLVM22Tool("llc"), findLLVM22Tool("clang")
 	if llc == "" || clang == "" {
 		t.Fatal("LLVM 22 llc and clang are required")
 	}
-	source := strings.ReplaceAll(arm64TextFrameSource, "32904", "2097288")
+	source := strings.ReplaceAll(arm64TextFrameNoEscapeSource(), "32904", "2097288")
 	source = strings.ReplaceAll(source, "32768", "2097152")
 	for _, triple := range []string{
 		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
@@ -252,7 +287,7 @@ func TestARM64LargeTextFrameRuntime(t *testing.T) {
 	}
 }
 
-func TestARM64TextFrameLLVM(t *testing.T) {
+func TestARM64TextFrameNoEscapeLLVM(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
@@ -262,7 +297,7 @@ func TestARM64TextFrameLLVM(t *testing.T) {
 		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, main := arm64TextFrameRuntime(t, triple)
+			ir, main := arm64TextFrameNoEscapeRuntime(t, triple)
 			compileLLVMToObject(t, llc, triple, "frame.ll", "frame.o", ir)
 			native := runtime.GOARCH == "arm64" && ((runtime.GOOS == "darwin" && strings.Contains(triple, "apple")) ||
 				(runtime.GOOS == "linux" && strings.Contains(triple, "linux")) ||
@@ -278,7 +313,7 @@ func TestARM64TextFrameLLVM(t *testing.T) {
 	}
 }
 
-func TestARM64TextFrameNativeGo(t *testing.T) {
+func TestARM64TextFrameNoEscapeNativeGo(t *testing.T) {
 	cross := runtime.GOOS == "linux" && runtime.GOARCH == "amd64" && os.Getenv("PLAN9ASM_CROSS_EXEC") == "1"
 	if runtime.GOARCH != "arm64" && !cross {
 		t.Skip("native Go oracle runs on arm64 or required Linux/QEMU")
@@ -295,7 +330,7 @@ func main() {
 `
 	for _, large := range []bool{false, true} {
 		t.Run(fmt.Sprintf("large=%v", large), func(t *testing.T) {
-			source := arm64TextFrameSource
+			source := arm64TextFrameNoEscapeSource()
 			if large {
 				source = strings.ReplaceAll(source, "32904", "2097288")
 				source = strings.ReplaceAll(source, "32768", "2097152")
@@ -304,7 +339,7 @@ func main() {
 			for name, data := range map[string]string{
 				"go.mod":        "module frameoracle\n\ngo 1.20\n",
 				"main.go":       main,
-				"frame_arm64.s": strings.Replace(strings.ReplaceAll(source, "BL frame_observe(SB)\n", ""), "TEXT frame_table", "TEXT ·frame_table", 1),
+				"frame_arm64.s": strings.Replace(source, "TEXT frame_table", "TEXT ·frame_table", 1),
 			} {
 				if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 					t.Fatal(err)

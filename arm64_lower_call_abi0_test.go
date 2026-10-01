@@ -1,7 +1,7 @@
 package plan9asm
 
 import (
-	"fmt"
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -79,22 +79,10 @@ int main(void) {
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "arm64_abi0_call", triple, ll, mainC, nil)
 }
 
-func TestARM64ABI0TailCallSupportsStackArgumentsBeyondRegisterBank(t *testing.T) {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		t.Skip("runtime execution test requires a Darwin arm64 host")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	var source strings.Builder
-	source.WriteString("TEXT ·arm64ABI0StackTail(SB),$144-0\n")
-	for index := 0; index < 17; index++ {
-		fmt.Fprintf(&source, "\tMOVD $%d, R0\n\tMOVD R0, %d(RSP)\n", index+1, 8+index*8)
-	}
-	source.WriteString("\tJMP ·arm64ABI0TailTarget(SB)\n")
-	requireARM64GoAssemblerResult(t, source.String(), true)
-	file, err := Parse(ArchARM64, source.String())
+func TestARM64ABI0FramedStackTailRequiresNativeStackContract(t *testing.T) {
+	source := arm64StackTailOriginalSource()
+	requireARM64GoAssemblerResult(t, source, true)
+	file, err := Parse(ArchARM64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,29 +93,23 @@ func TestARM64ABI0TailCallSupportsStackArgumentsBeyondRegisterBank(t *testing.T)
 		params[index] = FrameSlot{Offset: int64(index * 8), Type: I64, Index: index, Field: -1}
 	}
 	resolve := func(sym string) string { return strings.TrimPrefix(sym, "·") }
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	ir, err := Translate(file, Options{
-		TargetTriple: triple, Goarch: "arm64", ResolveSym: resolve,
-		Sigs: map[string]FuncSig{
-			"arm64ABI0StackTail":  {Name: "arm64ABI0StackTail", Ret: I64},
-			"arm64ABI0TailTarget": {Name: "arm64ABI0TailTarget", Args: args, Ret: I64, Frame: FrameLayout{Params: params}},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
+	for _, triple := range []string{
+		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			_, err := Translate(file, Options{
+				TargetTriple: triple, Goarch: "arm64", ResolveSym: resolve,
+				Sigs: map[string]FuncSig{
+					"arm64ABI0StackTail":  {Name: "arm64ABI0StackTail", Ret: I64},
+					"arm64ABI0TailTarget": {Name: "arm64ABI0TailTarget", Args: args, Ret: I64, Frame: FrameLayout{Params: params}},
+				},
+			})
+			if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "symbol branch has no implicit Go frame epilogue") {
+				t.Fatalf("framed JMP must not synthesize a Go epilogue: %v", err)
+			}
+		})
 	}
-	const mainC = `
-#include <stdint.h>
-extern uint64_t arm64ABI0StackTail(void);
-uint64_t arm64ABI0TailTarget(
-  uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5,
-  uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10, uint64_t a11,
-  uint64_t a12, uint64_t a13, uint64_t a14, uint64_t a15, uint64_t a16) {
-  return a0+a1+a2+a3+a4+a5+a6+a7+a8+a9+a10+a11+a12+a13+a14+a15+a16;
-}
-int main(void) { return arm64ABI0StackTail() == 153 ? 0 : 1; }
-`
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "arm64_abi0_stack_tail", triple, ir, mainC, nil)
 }
 
 func TestARM64ABIInternalCallUsesIndependentRegisterBanks(t *testing.T) {
