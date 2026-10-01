@@ -1,12 +1,12 @@
 {
-  "format": "module-hashed-assembly-ledger-v1",
-  "semantic_source_sha256": "08a7ef2fc26597bdbfacb796a1ae7e79512d086db330e84702de3de9e8c44918",
+  "format": "module-hashed-assembly-ledger-v2",
+  "semantic_source_sha256": "8cda8f89c099cf61e0563d2756b8b7eee636520b508222d373692ae77363200d",
   "progress": {
-    "schema_version": 1,
+    "schema_version": 2,
     "validation_kind": "translation_and_llvm22_object_compilation",
     "source": {
-      "revision": "2a0f004257d8dc63142a991f8a4f046359968f45",
-      "sha256": "08a7ef2fc26597bdbfacb796a1ae7e79512d086db330e84702de3de9e8c44918",
+      "revision": "0caf43a217a6a149ae14a346e27c28ebe3715957",
+      "sha256": "8cda8f89c099cf61e0563d2756b8b7eee636520b508222d373692ae77363200d",
       "dirty": false
     },
     "ledger_sha256": "117c294353d000902dab6cb06370e99549579a7cb7bdd6338ac5f3137c84b2a1",
@@ -108,7 +108,11 @@
     "not_applicable_translations": 0,
     "complete": false,
     "verified": false,
-    "candidates": null
+    "candidates": null,
+    "feature_inventory": {
+      "protocol": "go_driver_feature_inventory_v1",
+      "observations": {}
+    }
   },
   "shards": [
     {
