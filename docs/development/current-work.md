@@ -58,14 +58,26 @@ it using Git, not a personal filesystem path. Its important repairs include:
   experiment macro registration. Source-required profile planning and offline
   replay helpers are integrated, but production profile/CPP report closure is
   unfinished. These helpers alone do not validate any old source N/A.
+- Architecture-aware asmdecl access widths: scalar broadcast reads use their
+  actual memory width, and ARM MOVW is not an x86 two-byte access. Real Go
+  declarations and LLVM 22 objects cover the affected forms; historical
+  external-module exclusions still require an exact-source replay.
+- Caller-owned internal LLVM contexts for Go binding, with module-before-context
+  disposal. Concurrent feature observations use canonical keys, deep-cloned
+  results and actual-driver rechecks. CPP inventory is bounded and fail-closed,
+  but its production consumer and report closure are not yet complete.
 
-Checkpoint `794b98b5` finished the full root suite with 37 failing top-level
-tests. Its corpus/scanner units and nested command suites passed. Subsequent
-bounded repairs passed their focused tests, but no current-head full-suite or
-fresh external-corpus success is claimed.
-Checkpoint `3900b033` reran the 31 unchanged historical failure titles and
-passed. The six renamed tests retain original-source negatives and independent
-positive oracles; they require the full current suite, not name-only counting.
+Checkpoint `865b3fa6` finished the full root suite with two failing top-level
+tests: declaration-less ARM64 RetArg fallback and a raw x86 RET with nonzero
+caller-stack cleanup. Corpus/scanner units passed. The RetArg fixture now
+derives its complete ABIInternal contract from an actual Go declaration;
+raw-return repairs remain under independent source-stack review. Earlier
+checkpoint `794b98b5` had 37 failures, and `3900b033` passed the 31 unchanged
+failure titles. These are exact-revision results, not current-head success.
+
+Checkpoint `69e9f37a` passed production `go build ./...`, the full corpus unit
+suite, feature-cache race tests and `go vet ./...`. No current-head full root,
+strict standard-library or fresh external-corpus success is claimed.
 
 Checkpoint `cd2b46a4` passed all five current official classification gates,
 including ARM carry-dependent single-form probes with an explicit source CMP.
@@ -81,6 +93,9 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
    reports, aggregation, progress and ledger verification together. Old
    schema-9 evidence cannot be relabeled. Reevaluate historical source N/A;
    missing proof or infrastructure errors must not become a source skip.
+   Bind the actual assembler/package-role macros in the translation consumer,
+   not just the selection probe. Capture actual Go child-tool identities and
+   exact include resolution before enabling new-schema production reports.
 2. ARM native entry/returns: extend the explicit physical shim only with closed
    continuation/effect proofs. Go accepts RET register operands that are not
    ordinary caller returns; preserve actual Go/runtime counterexamples.
@@ -92,6 +107,12 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
    from stale IR-shape assertions; fix complete typed effect families and retain
    unsafe-source negatives. Framed tail jumps must not acquire an invented
    epilogue. Keep genuine failures until independently demonstrated fixes pass.
+   Raw x86 near returns must retain native return-width and imm16 stack effects;
+   only a proved zero-cleanup, stack-unobserving leaf is an ordinary return.
+   Include effective-address constants and subregister views in that proof.
+   ARM framed returns must not assume their saved LR slot stayed intact, and
+   ARM64 private helpers must not virtualize hidden platform registers or
+   escape through excluded siblings and native-layout observers.
 
 ## Completion sequence
 
