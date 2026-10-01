@@ -138,6 +138,13 @@ one at translation-unit EOF. Preserve the original bytes/hashes and verify the
 actual source graph; do not append newlines, relabel capture errors as source
 N/A, or infer whole-package/runtime success from successful registration.
 
+Go's special test-source rule applies to `_test.go`, not to assembly names
+containing `_test`. A selected `probe_test.s` or `probe_test_amd64.s` can belong
+to an ordinary package. Explicit ordinary profiles load non-test Go packages
+and prove their actual source/module/package roles; do not reject or admit a
+role from the assembly basename. The unprofiled CLI's separate test-declaration
+lookup remains available, but cannot supply ordinary profile evidence.
+
 ## Reports and provenance
 
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed

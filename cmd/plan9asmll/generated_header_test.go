@@ -251,7 +251,7 @@ func TestGeneratedHeaderMetadataEmptyDefinitionsRoundtrip(t *testing.T) {
 }
 
 func TestGeneratedHeaderMetadataCLIRejectsTranslationModes(t *testing.T) {
-	for _, mode := range []string{"missing-profile", "missing-report", "compile", "list-only", "all-targets", "limit=1", "asm-files=probe_test.s"} {
+	for _, mode := range []string{"missing-profile", "missing-report", "compile", "list-only", "all-targets", "limit=1"} {
 		t.Run(mode, func(t *testing.T) {
 			args := []string{"-metadata-only", "-feature-profile=must-not-be-read", "-report=" + filepath.Join(t.TempDir(), "metadata.json")}
 			switch mode {

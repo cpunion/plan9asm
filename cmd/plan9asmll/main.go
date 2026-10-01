@@ -177,7 +177,7 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
-	if *metadataOnly && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets || containsTestAssembly(exactAsmFiles)) {
+	if *metadataOnly && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets) {
 		fatalf("metadata-only requires one explicit ordinary profile and cannot emit translation/list/matrix evidence")
 	}
 	ccfg, err := resolveCompileConfig(*compile, *llcPath, *keepObj, *llcOptLevel)
@@ -404,7 +404,7 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		return runReport{}, nil, err
 	}
 	if ccfg.FeaturePath != "" {
-		if containsTestAssembly(exactAsmFiles) || listOnly || limit != 0 {
+		if listOnly || limit != 0 {
 			return runReport{}, nil, fmt.Errorf("feature consumer requires the complete ordinary non-test package scope")
 		}
 		ccfg.Feature, err = loadFeatureConsumer(ccfg.Context, ccfg.FeaturePath, outDir, spec.Goos+"/"+spec.Goarch, modulePath, buildTags)
@@ -417,7 +417,12 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	if ccfg.Feature != nil && ccfg.Feature.Input.GeneratedHeaders != nil {
 		pkgs, err = loadGeneratedHeaderPackages(ccfg.Feature, pats, buildTags)
 	} else {
-		pkgs, err = loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, containsTestAssembly(exactAsmFiles), ccfg.Feature)
+		// Go treats _test.go specially, not similarly named assembly files.
+		// An explicit ordinary profile always loads non-test packages and
+		// proves their actual role below. Keep the legacy test-declaration
+		// lookup heuristic separate from that evidence-producing path.
+		includeTests := ccfg.Feature == nil && containsTestAssembly(exactAsmFiles)
+		pkgs, err = loadPkgsForFeature(spec.Goos, spec.Goarch, pats, buildTags, modulePath, strictLoad, includeTests, ccfg.Feature)
 	}
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
