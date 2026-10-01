@@ -56,7 +56,14 @@ consumer, and binds executed file/target/profile/tag scopes to offline replay.
 Same-module imported Go source is checked against original ZIP bytes through
 final objects. Macro-only files require an actual same-scope Go empty object
 and a real LLVM object; their generated include directory is explicit.
-Cross-host physical output projection and fresh external replays remain gates.
+Cross-host comparison validates both original proofs before projecting only
+physical output digests. Fresh multi-host external replays remain a gate.
+
+The automatic writer can replace only an intact legacy pending-only queue;
+ordinary status readers still require v2. Unknown fields, old outcomes and
+damaged shards prevent replacement. Large JSONL records round-trip without
+Scanner's unrelated 64 KiB token limit. Neither migration nor a storage unit
+fixture provides compilation evidence.
 
 ARM64 typed prefetch/DCZID/ZVA lowering retains exact native-emission and Go
 oracles. ZVA granule comes from the checked source protocol, never an inferred
@@ -66,15 +73,18 @@ calls and pointer-bearing incoming FP frames remain conservative.
 
 Typed DATA addresses use real native relocations and wasm 64-bit memory/table
 relocations, signed data addends, actual LLVM 22/LLD objects and Node execution.
-They never become zero placeholders or truncated low-word pointers. Go-mode
-wasm function addresses still need the logical packed resume-PC contract;
-direct LLVM table indices are not equivalent. Do not use constructors or
-`blockaddress` to conceal that gap.
+They never become zero placeholders or truncated low-word pointers. Source-bound
+Go-mode wasm function PCs now use static low-16-bit plus table-index relocations;
+immediate addresses share that contract. MOVB/H/W/D use complete unsigned memory
+widths while preserving 64-bit register/constant/address values. Actual Go,
+LLVM/LLD objects and first-host-memory Node checks cover this batch, including
+portable current-toolchain JS helper invocation. Unknown logical-PC origins or
+unrepresentable static addends remain Context. No constructors or `blockaddress`.
 
 ## Required next gates
 
-Finish current generated-header and wasm address batches, review them, then
-freeze a new clean source revision. Rebuild stamped tools and run the affected
+The generated-header and wasm address batches are integrated and reviewed.
+Freeze a new clean source revision. Rebuild stamped tools and run the affected
 full suites, strict official corpus, benchmark and all 64 Discovery shards.
 Use bounded parallel batches, separate report paths, and release owned caches
 only after every writer exits. Never relabel or mix old-source reports.
@@ -96,7 +106,7 @@ likewise need actual caller/effect evidence.
 ## Dependent llgo contribution
 
 Branch `codex/pr40-assembly-user-regressions-20261002` is rebased onto upstream
-main `5b1c2c359`. Before creating its contribution, publish the reviewed plan9asm
+main `d98b43f90`. Before creating its contribution, publish the reviewed plan9asm
 repair head to the allowed fork and resolve its version with Go. Pin a public
 `replace` to that exact head, never a local path or invented pseudo-version.
 
