@@ -78,7 +78,9 @@ func TestTranslateX86LEARejectsFormsOutsideGo127Optab(t *testing.T) {
 		{goarch: "amd64", instruction: "LEAL 8(AX), X0"},
 		{goarch: "amd64", instruction: "LEAQ 8(AX)"},
 		{goarch: "amd64", instruction: "LEAW.Z 8(AX), BX"},
+		{goarch: "amd64", instruction: "LEAL $ret+0(FP), AX"},
 		{goarch: "386", instruction: "LEAQ 8(AX), BX"},
+		{goarch: "386", instruction: "LEAL $ret+0(FP), AX"},
 		{goarch: "386", instruction: "LEAW 8(R9), AX"},
 		{goarch: "386", instruction: "LEAL 8(AX), R8"},
 	} {

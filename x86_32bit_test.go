@@ -480,10 +480,23 @@ func Test386LoweringErrorPaths(t *testing.T) {
 	if got, err := resultCtx.evalFPToI64(4); err != nil || got == "" {
 		t.Fatalf("high-word result read = (%q, %v)", got, err)
 	}
-	ok, terminated, err := resultCtx.lowerArith("LEAL", Instr{Raw: "LEAL ret+0(FP), AX", Args: []Operand{{Kind: OpFPAddr, FPOffset: 0}, {Kind: OpReg, Reg: AX}}})
+	// LEA takes the address of a memory operand. OpFPAddr represents
+	// $ret+0(FP), an immediate address that Go does not accept as its source.
+	lea, err := Parse(ArchAMD64, "TEXT resultAddress(SB),$0-8\n\tLEAL ret+0(FP), AX\n\tRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ins := lea.Funcs[0].Instrs[1]
+	if ins.Args[0].Kind != OpFP {
+		t.Fatalf("LEAL FP source kind = %v, want memory FP operand", ins.Args[0].Kind)
+	}
+	ok, terminated, err := resultCtx.lowerArith("LEAL", ins)
 	if !ok || terminated || err != nil {
 		t.Fatalf("LEAL classic result address = (%v, %v, %v)", ok, terminated, err)
 	}
+	wantLowerError("LEAL immediate FP source", func() (bool, bool, error) {
+		return resultCtx.lowerArith("LEAL", Instr{Raw: "LEAL $ret+0(FP), AX", Args: []Operand{{Kind: OpFPAddr, FPOffset: 0}, {Kind: OpReg, Reg: AX}}})
+	})
 }
 
 func Test386FDirectiveDoesNotAllocateX87State(t *testing.T) {
