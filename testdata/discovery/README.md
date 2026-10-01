@@ -53,7 +53,13 @@ source-inapplicable or explicit skip retains its reason and pinned evidence.
 Source-inapplicable ledger details keep the affected files, targets and stable
 reason category. Full Go diagnostics remain in the shard reports because they
 can contain temporary runner paths and are unsuitable for committed records.
-This gate does not claim llgo compilation, linking, or execution.
+This gate does not claim llgo compilation, linking, or execution. Schema-10
+reports, progress schema 2 and assembly-ledger v2 preserve ordinary
+file/target/profile-ID/custom-tag scopes, shared actual Go/tool observations,
+package-role selection, CPP graphs and LLVM object consumer proofs. Old reports
+or ledgers cannot acquire these claims by relabeling their schema. Fresh reports
+are required after integration; the existing historical snapshot is not upgraded
+by these implementation changes.
 
 Continue from this checkpoint without downloading completed versions again:
 

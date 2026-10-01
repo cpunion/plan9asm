@@ -114,8 +114,11 @@ unchanged until corpus verification finishes. A separate persistent worktree
 allows development to continue. Reports under `_out/` may be written without
 changing tracked source.
 
-The aggregate requires all 64 schema-9 reports, exact candidate ownership and
-one identical source/ledger/tool provenance. Never mix revisions, dirty builds,
+The aggregate requires all 64 schema-10 reports, exact candidate ownership and
+one identical source/ledger/tool provenance. Ordinary file/target/profile-ID/
+custom-tag scopes retain actual Go/package-role, CPP and LLVM object proofs in
+progress schema 2 and assembly-ledger v2. Old reports cannot be relabeled.
+Never mix revisions, dirty builds,
 tool binaries or partial CI artifact sets. Even documentation changes alter the
 source fingerprint: old reports prove only their exact revision, not current-
 head success. See [discovery verification](discovery-verification.md).

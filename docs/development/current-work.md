@@ -56,8 +56,10 @@ it using Git, not a personal filesystem path. Its important repairs include:
 - Compile-only exact Go package checks via `go list -export`, rather than
   executable linking; explicit target CPU macros and actual Go package-role
   experiment macro registration. Source-required profile planning and offline
-  replay helpers are integrated, but production profile/CPP report closure is
-  unfinished. These helpers alone do not validate any old source N/A.
+  replay and production consumers bind source-required profiles to the same
+  Go export/vet, actual package selection, CPP graph and LLVM objects. Schema 10,
+  progress schema 2 and assembly-ledger v2 retain all four scope dimensions.
+  Fresh reports remain required; implementation alone validates no old N/A.
 - Architecture-aware asmdecl access widths: scalar broadcast reads use their
   actual memory width, and ARM MOVW is not an x86 two-byte access. Real Go
   declarations and LLVM 22 objects cover the affected forms; historical
@@ -74,7 +76,8 @@ it using Git, not a personal filesystem path. Its important repairs include:
   results and actual-driver/subtool byte and route rechecks. Ordinary production
   CPP capture binds actual assembly/header bytes and Go include search to the
   exact module ZIP, with guards around package checks and translation. Its
-  feature-profile/branch reporting closure is still unfinished.
+  feature-profile/branch proofs retain actual driver, child-tool and consumer
+  identity. Unknown includes, unconsumed profiles and missing proofs fail.
 - Raw x86 near returns retain native width and imm16 cleanup. Zero-cleanup
   forms need a stack-unobserving leaf and bounded static/typed FP accesses;
   byte-exact naked TEXT cannot silently omit Go's prologue or FP transport.
@@ -128,15 +131,14 @@ do not replace the required pinned QEMU 10.2.3 cross gate.
 
 ## Active independent work
 
-1. Discovery feature profiles: derive required finite CPU/experiment profiles
-   from actual Go registrations, observe actual driver selection, bind package
-   selection and assembler CPP roles to the same environment, and update
-   reports, aggregation, progress and ledger verification together. Old
-   schema-9 evidence cannot be relabeled. Reevaluate historical source N/A;
-   missing proof or infrastructure errors must not become a source skip.
-   Bind the actual assembler/package-role macros in the translation consumer,
-   not just the selection probe. Capture actual Go child-tool identities and
-   exact include resolution before enabling new-schema production reports.
+1. Discovery feature profiles: freeze and verify the integrated production
+   consumer before replaying all 64 shards. Actual Go registrations, driver/
+   child-tool bytes and routes, package roles, CPP graphs and LLVM outputs bind
+   each ordinary file/target/profile-ID/custom-tag scope. Old schema-9 evidence
+   cannot be relabeled. Reevaluate historical source N/A; missing proof or
+   infrastructure errors must not become a source skip. The ordinary matrix
+   is non-test and cgo-disabled: test-only and cgo-enabled roles need their own
+   explicit source/tool/consumer scopes, not an invented blanket Go exclusion.
 2. ARM native entry/returns: extend the explicit physical shim only with closed
    continuation/effect proofs. Go accepts RET register operands that are not
    ordinary caller returns; preserve actual Go/runtime counterexamples.
