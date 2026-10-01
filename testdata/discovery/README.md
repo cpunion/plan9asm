@@ -68,6 +68,9 @@ witness digest binds the complete diagnostic retained in the frozen report,
 not an error-display tail or a truncated prefix. The producer still inspects
 the complete command output for infrastructure failures; output exceeding its
 8 MiB capture limit fails explicitly instead of becoming source N/A.
+Go omits unknown columns. Explicit column fields must be positive canonical
+decimal positions, not zero, signed/overflow values or empty messages; invalid
+fields must not backtrack into a line-only source message.
 
 Continue from this checkpoint without downloading completed versions again:
 

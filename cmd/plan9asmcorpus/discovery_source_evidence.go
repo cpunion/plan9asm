@@ -56,23 +56,26 @@ func captureDiscoverySourceDiagnostic(diagnostic string) *discoverySourceDiagnos
 	for remaining := diagnostic; remaining != ""; {
 		lineText, rest, _ := strings.Cut(remaining, "\n")
 		remaining = rest
-		match := discoveryConcreteSourceDiagnostic.FindStringSubmatch(lineText)
-		if match == nil {
+		indices := discoveryConcreteSourceDiagnostic.FindStringSubmatchIndex(lineText)
+		if indices == nil {
 			continue
 		}
-		line, err := strconv.ParseUint(match[2], 10, 32)
+		line, err := strconv.ParseUint(lineText[indices[4]:indices[5]], 10, 32)
 		if err != nil {
 			return nil
 		}
 		var column uint64
-		if match[3] != "" {
-			column, err = strconv.ParseUint(match[3], 10, 32)
+		// The optional regex column must not backtrack into a line-only
+		// message for "file:line:0:", signed columns or an empty column/message.
+		// Actual Go omits unknown columns; its numeric column field is positive.
+		if tail := lineText[indices[5]:]; strings.HasPrefix(tail, ":") {
+			_, column, err = discoverySourceDiagnosticMessage(tail[1:])
 			if err != nil {
 				return nil
 			}
 		}
 		if len(seen) < 256 {
-			seen[discoverySourceDiagnosticLocation{File: match[1], Line: uint32(line), Column: uint32(column)}] = true
+			seen[discoverySourceDiagnosticLocation{File: lineText[indices[2]:indices[3]], Line: uint32(line), Column: uint32(column)}] = true
 		}
 	}
 	locations := make([]discoverySourceDiagnosticLocation, 0, len(seen))
@@ -88,6 +91,22 @@ func captureDiscoverySourceDiagnostic(diagnostic string) *discoverySourceDiagnos
 		return nil
 	}
 	return witness
+}
+
+// Go's position printer emits an optional positive canonical decimal column,
+// never an explicit unknown/zero/signed column. A whitespace-prefixed numeric
+// message is different from that field: cmd/asm prefixes messages with ": ".
+func discoverySourceDiagnosticMessage(message string) (string, uint64, error) {
+	separator := strings.IndexAny(message, ":)")
+	if separator >= 0 && strings.Trim(message[:separator], "+-0123456789") == "" {
+		field, rest := message[:separator], message[separator+1:]
+		column, err := strconv.ParseUint(field, 10, 32)
+		if err != nil || column == 0 || strconv.FormatUint(column, 10) != field || message[separator] == ':' && strings.TrimSpace(rest) == "" {
+			return "", 0, fmt.Errorf("invalid source diagnostic column or message")
+		}
+		return strings.TrimSpace(rest), column, nil
+	}
+	return strings.TrimSpace(message), 0, nil
 }
 
 func lessDiscoveryDiagnosticLocation(a, b discoverySourceDiagnosticLocation) bool {

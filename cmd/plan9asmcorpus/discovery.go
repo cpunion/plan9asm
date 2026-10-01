@@ -1439,13 +1439,9 @@ func discoveryAssemblerSourceDiagnostic(filePath, output string) bool {
 			// cmd/asm's ordinary diagnostics may carry a column, while its
 			// encoder diagnostics use "asm: file:line) instruction". A bare
 			// location, zero/overflow position or empty message is not evidence.
-			columnText, rest, found := strings.Cut(message, ":")
-			if found && columnText != "" && strings.Trim(columnText, "0123456789") == "" {
-				column, err := strconv.ParseUint(columnText, 10, 32)
-				if err != nil || column == 0 {
-					continue
-				}
-				message = strings.TrimSpace(rest)
+			message, _, err = discoverySourceDiagnosticMessage(location[end+1:])
+			if err != nil {
+				continue
 			}
 		}
 		if message != "" || encoderMessage != "" {
