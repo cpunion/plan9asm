@@ -356,8 +356,10 @@ func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUni
 			}
 			moduleFile := path.Clean(path.Join(path.Dir(unit.File), directive.Include))
 			toolFile := path.Clean(path.Join("pkg/include", directive.Include))
-			if !ordinarySelectionLocalPath(moduleFile) || !ordinarySelectionLocalPath(toolFile) ||
-				(target != "module/"+moduleFile && target != "tool/"+toolFile) {
+			// A package-local include wins before cmd/asm searches -I. Its
+			// unselected tool fallback must not reject a valid module path.
+			if !ordinarySelectionLocalPath(moduleFile) ||
+				target != "module/"+moduleFile && (!ordinarySelectionLocalPath(toolFile) || target != "tool/"+toolFile) {
 				return fmt.Errorf("CPP include binding is outside Go's fixed package/tool search")
 			}
 			includeKeys[key] = true

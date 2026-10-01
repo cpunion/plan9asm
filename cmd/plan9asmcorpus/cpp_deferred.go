@@ -37,7 +37,7 @@ func discoveryDeferredCPPUnitRegistration(inputs *discoveryCPPInputs, unit disco
 			kind, deferred := unit.DeferredIncludes[key]
 			module := path.Clean(path.Join(path.Dir(unit.File), directive.Include))
 			tool := path.Clean(path.Join("pkg/include", directive.Include))
-			if bound == deferred || !ordinarySelectionLocalPath(module) || !ordinarySelectionLocalPath(tool) {
+			if bound == deferred || !ordinarySelectionLocalPath(module) || deferred && !ordinarySelectionLocalPath(tool) {
 				return fmt.Errorf("CPP include lacks one exact bound/deferred registration")
 			}
 			edges[key] = true
@@ -50,7 +50,9 @@ func discoveryDeferredCPPUnitRegistration(inputs *discoveryCPPInputs, unit disco
 				}
 				continue
 			}
-			if target != "module/"+module && target != "tool/"+tool {
+			// Only a selected tool origin needs the tool search's path bound.
+			// Deferred edges still require both searches to be in scope above.
+			if target != "module/"+module && (!ordinarySelectionLocalPath(tool) || target != "tool/"+tool) {
 				return fmt.Errorf("deferred CPP binding differs from Go package/tool search")
 			}
 			if err := visit(target, depth+1); err != nil {
