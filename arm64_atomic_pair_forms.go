@@ -164,10 +164,7 @@ func (state *arm64ControlState) transferAtomicPair(form arm64AtomicPairForm) {
 			state.invalidateOverlappingControlCells(key, int64(2*form.spec.bits/8))
 			state.memory[key] = value
 		} else {
-			state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
-			for key, old := range state.memory {
-				state.memory[key] = arm64ControlUnion(old, arm64ControlExternal())
-			}
+			state.invalidateUnknownStore(memory, value)
 		}
 	}
 	for i, reg := range form.outputRegs() {

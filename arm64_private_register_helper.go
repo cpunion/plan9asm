@@ -224,6 +224,10 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 		}
 		copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
 		copyFn.arm64PrivateRegisterEntry = true
+		// Retain the pre-coalescing source proof. Only audited register-only
+		// helpers are appended below; their rewritten local calls must not
+		// erase the original real-symbol call's private-frame provenance.
+		copyFn.arm64PrivateUnexposedFrame = arm64CallFrameUnexposed(fn)
 		names := make([]string, 0, len(roots[fn.Sym]))
 		for name := range roots[fn.Sym] {
 			names = append(names, name)

@@ -13,9 +13,10 @@ import (
 type arm64ControlValue map[string]bool
 
 type arm64ControlState struct {
-	regs    map[Reg]arm64ControlValue
-	memory  map[string]arm64ControlValue
-	escaped arm64ControlValue
+	regs        map[Reg]arm64ControlValue
+	memory      map[string]arm64ControlValue
+	escaped     arm64ControlValue
+	unexposedSP bool // original/normalized source and fresh-entry proof, not FP
 }
 
 type arm64LocalControlPlan struct {
@@ -111,7 +112,12 @@ func arm64ControlEqual(left, right arm64ControlValue) bool {
 }
 
 func (state *arm64ControlState) clone() *arm64ControlState {
-	next := &arm64ControlState{regs: make(map[Reg]arm64ControlValue), memory: make(map[string]arm64ControlValue), escaped: state.escaped}
+	next := &arm64ControlState{
+		regs:        make(map[Reg]arm64ControlValue),
+		memory:      make(map[string]arm64ControlValue),
+		escaped:     state.escaped,
+		unexposedSP: state.unexposedSP,
+	}
 	for reg, value := range state.regs {
 		next.regs[reg] = value
 	}
@@ -123,6 +129,9 @@ func (state *arm64ControlState) clone() *arm64ControlState {
 
 func (state *arm64ControlState) merge(other *arm64ControlState) bool {
 	changed := false
+	if state.unexposedSP && !other.unexposedSP {
+		state.unexposedSP, changed = false, true
+	}
 	escaped := arm64ControlUnion(state.escaped, other.escaped)
 	if !arm64ControlEqual(state.escaped, escaped) {
 		state.escaped, changed = escaped, true
@@ -225,6 +234,9 @@ func (state *arm64ControlState) source(op Operand, post bool) arm64ControlValue 
 		return arm64ControlValue{"fpa:" + strconv.FormatInt(op.FPOffset, 10): true}
 	}
 	if key := state.memoryKey(op, post); key != "" && state.memory[key] != nil {
+		if state.unexposedSP && strings.HasPrefix(key, "sp:") && arm64ControlEscapedOnlyCode(state.escaped) {
+			return state.memory[key]
+		}
 		return arm64ControlUnion(state.memory[key], arm64ControlLabels(state.escaped))
 	}
 	if op.Kind == OpMem || op.Kind == OpFP || op.Kind == OpSym {
@@ -243,15 +255,47 @@ func (state *arm64ControlState) write(op Operand, value arm64ControlValue, post 
 		state.invalidateOverlappingControlCells(key, 8)
 		state.memory[key] = value
 	} else if op.Kind == OpMem || op.Kind == OpFP || op.Kind == OpSym {
-		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
-		for key, old := range state.memory {
-			state.memory[key] = arm64ControlUnion(old, arm64ControlExternal())
-		}
+		state.invalidateUnknownStore(op, value)
 	} else if op.Kind == OpRegList {
 		for _, reg := range op.RegList {
 			state.write(Operand{Kind: OpReg, Reg: reg}, value, false)
 		}
 	}
+}
+
+func (state *arm64ControlState) invalidateUnknownStore(destination Operand, value arm64ControlValue) {
+	state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
+	// The whole-function proof excludes forming/transporting this allocation's
+	// address. An incoming pointer or SB global therefore cannot name its SP
+	// cells. Explicit SP-relative indexing remains potentially overlapping even
+	// when the exact displacement is unknown; it must not borrow this exception.
+	preserveSP := state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped)
+	if destination.Kind == OpMem {
+		for _, reg := range []Reg{destination.Mem.Base, destination.Mem.Index} {
+			base := arm64ControlBase(reg)
+			preserveSP = preserveSP && base != SP
+			for token := range arm64ControlRead(state.regs, base) {
+				if strings.HasPrefix(token, "sp:") {
+					preserveSP = false
+				}
+			}
+		}
+	}
+	for key, old := range state.memory {
+		if preserveSP && strings.HasPrefix(key, "sp:") {
+			continue
+		}
+		state.memory[key] = arm64ControlUnion(old, arm64ControlExternal())
+	}
+}
+
+func arm64ControlEscapedOnlyCode(value arm64ControlValue) bool {
+	for token := range value {
+		if !strings.HasPrefix(token, "label:") {
+			return false
+		}
+	}
+	return true
 }
 
 func arm64ControlLabels(value arm64ControlValue) arm64ControlValue {
@@ -366,9 +410,13 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	for indices[plan.outer] != 0 || c.blocks[0].name == plan.outer {
 		plan.outer += "_"
 	}
-	entry := &arm64ControlState{regs: map[Reg]arm64ControlValue{
-		SP: {"sp:0": true}, Reg("R30"): {"label:" + plan.outer: true},
-	}, memory: make(map[string]arm64ControlValue)}
+	entry := &arm64ControlState{
+		regs: map[Reg]arm64ControlValue{
+			SP: {"sp:0": true}, Reg("R30"): {"label:" + plan.outer: true},
+		},
+		memory:      make(map[string]arm64ControlValue),
+		unexposedSP: c.unexposedCallFrame,
+	}
 	if c.sourceGoFrame.present {
 		entry.memory["sp:0"] = entry.regs[Reg("R30")]
 	}
@@ -630,6 +678,9 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		state.transferAtomicPair(form)
 		return
 	}
+	if state.transferScalarAtomicStore(ins, op) {
+		return
+	}
 	if op == "ADR" && len(ins.Args) == 2 {
 		if target, ok := arm64BranchTarget(ins.Args[0]); ok && data[target] == "" {
 			state.write(ins.Args[1], arm64ControlValue{"label:" + target: true}, false)
@@ -798,7 +849,12 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		// Only this invocation's fresh, unexposed SP object is disjoint from
 		// declared call values. Actual frame-address arguments, prior escape,
 		// unknown calls and unproved source/raw forms retain the old clobber.
-		preserveSP := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && len(state.escaped) == 0
+		// A conservative callee result may carry the caller's code address.
+		// Storing that value does not reveal this fresh allocation's address.
+		// Only the separately proven entry/source state can distinguish this
+		// case; legacy/default states keep the original any-escape clobber.
+		unexposed := len(state.escaped) == 0 || state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped)
+		preserveSP := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && unexposed
 		for key, value := range state.memory {
 			if preserveSP && strings.HasPrefix(key, "sp:") {
 				continue

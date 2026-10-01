@@ -54,7 +54,8 @@ type Func struct {
 	x86IndirectLabels        []string
 	// Set only by the closed same-file Go binding proof, never by a guessed
 	// helper FuncSig. The ABI0 root's GP/NZCV entry is otherwise unspecified.
-	arm64PrivateRegisterEntry bool
+	arm64PrivateRegisterEntry  bool
+	arm64PrivateUnexposedFrame bool // original source proof retained across audited helper coalescing
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.

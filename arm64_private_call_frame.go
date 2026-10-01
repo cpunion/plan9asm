@@ -34,7 +34,10 @@ func arm64CallFrameUnexposed(fn Func) bool {
 		case OpWORD, "DWORD", arm64RawDataOp, "ADR", "ADRP", "BLR":
 			return false
 		case "CALL", "BL":
-			if len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
+			if len(ins.Args) != 1 {
+				return false
+			}
+			if ins.Args[0].Kind != OpSym && !(fn.arm64PrivateUnexposedFrame && ins.Args[0].Kind == OpIdent) {
 				return false
 			}
 		}

@@ -51,6 +51,16 @@ Unresolved constants need context for an isolated instruction probe, but must
 fail full translation before raw decoding. Preserve resolved named stack
 addresses; never replace missing constants or malformed addresses with zero.
 
+ARM64's fresh virtual SP allocation is disjoint from incoming pointers only
+when the complete original and normalized source excludes forming or escaping
+its address and entry transport cannot replace SP. Under that bounded proof,
+ordinary pointer stores and escaped code-address values cannot corrupt saved
+SP cells. Explicit/aliased/indexed SP writes, FP contents, unknown callouts,
+raw/native effects and frame-address escape remain conservative. Audited
+same-file register helpers retain the original proof across local-call
+rewriting; a bare source-local call never acquires it. Scalar and paired atomic
+stores must account for their memory operand as well as GP outputs.
+
 For a newly discovered instruction, update all four layers before calling it
 complete: the family-specific lowerer, positive/negative Go-table form tests,
 LLVM 22 object compilation for every affected supported architecture, and the

@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -228,11 +227,11 @@ func arm64P256CheckIR(inputs int) string {
 	return ir.String()
 }
 
-// The complete real public Sqr source remains Context: a Go Ptr type alone
-// cannot prove that its outgoing store avoids the source function's saved LR.
-// A successful independent data-object Go execution is not an alias contract.
-func TestCrossLinuxRuntimeMatrixARM64PrivateP256PointerNeedsMemoryContract(t *testing.T) {
-	_, _, _, runner := arm64FPPairRuntimeTools(t)
+// The unchanged public Sqr body stores through its incoming result pointer.
+// The complete source has no way to expose this invocation's fresh virtual SP,
+// so those heap stores cannot alias its automatically saved caller link.
+func TestCrossLinuxRuntimeMatrixARM64PrivateP256PointerUnexposedFrame(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
 	data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", "crypto", "internal", "fips140", "nistec", "p256_asm_arm64.s"))
 	if err != nil {
 		t.Fatal(err)
@@ -281,22 +280,67 @@ func main() {
 }
 `, len(runner) != 0)
 	pkg := mustGoPackage(t, "test/privatep256", "package privatep256\nfunc Public(*[4]uint64,*[4]uint64,int)\n")
-	for _, target := range []string{
-		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
-		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
-		"aarch64-unknown-linux-musl",
-	} {
+	translate := func(target string) string {
 		ctx := llvm.NewContext()
+		defer ctx.Dispose()
 		tr, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
 			GOARCH: "arm64", TargetTriple: target,
 			ResolveSym: func(sym string) string { return strings.TrimPrefix(sym, "·") },
 		})
-		if tr != nil {
-			tr.Module.Dispose()
+		if err != nil {
+			t.Fatalf("%s: real public P256 Sqr's incoming pointer cannot expose fresh SP: %v", target, err)
 		}
-		ctx.Dispose()
-		if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "caller LR") {
-			t.Fatalf("%s: real public P256 Sqr still lacks a memory contract: %v", target, err)
+		defer tr.Module.Dispose()
+		return tr.Module.String()
+	}
+	for _, target := range append([]string{
+		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+		"aarch64-unknown-linux-musl",
+	}, triple) {
+		ir := translate(target)
+		compileLLVMToObject(t, llc, target, "p256-public.ll", "p256-public.o", ir)
+		if target == triple {
+			p, ok := new(big.Int).SetString("ffffffff00000001000000000000000000000000ffffffffffffffffffffffff", 16)
+			if !ok {
+				t.Fatal("invalid independent P256 modulus")
+			}
+			rinv := new(big.Int).ModInverse(new(big.Int).Lsh(big.NewInt(1), 256), p)
+			var rows strings.Builder
+			seed := uint64(0x123456789abcdef0)
+			for i := 0; i < 32; i++ {
+				x := new(big.Int)
+				for limb := 0; limb < 4; limb++ {
+					seed = seed*6364136223846793005 + 1
+					x.Or(x, new(big.Int).Lsh(new(big.Int).SetUint64(seed), uint(limb*64)))
+				}
+				x.Mod(x, p)
+				input := arm64P256Words(x)
+				n := i%4 + 1
+				for j := 0; j < n; j++ {
+					x.Mul(x, x).Mul(x, rinv).Mod(x, p)
+				}
+				output := arm64P256Words(x)
+				rows.WriteString("{")
+				for _, value := range append(input[:], output[:]...) {
+					fmt.Fprintf(&rows, "UINT64_C(0x%x),", value)
+				}
+				fmt.Fprintf(&rows, "%d},\n", n)
+			}
+			main := fmt.Sprintf(`#include <stdint.h>
+extern void Public(uint64_t *,const uint64_t *,uint64_t);
+int main(void) {
+ uint64_t rows[32][9]={%s};
+ for(int i=0;i<32;i++) {
+  uint64_t *row=rows[i],out[6]={UINT64_C(0x123456789abcdef0),0,0,0,0,UINT64_C(0xfedcba9876543210)};
+  Public(out+1,row,row[8]);
+  if(out[0]!=UINT64_C(0x123456789abcdef0)||out[5]!=UINT64_C(0xfedcba9876543210)) return 1;
+  for(int j=0;j<4;j++) if(out[j+1]!=row[j+4]) return 2;
+ }
+ return 0;
+}
+`, rows.String())
+			compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "p256_public", triple, ir, main, runner)
 		}
 	}
 }
