@@ -108,8 +108,18 @@ func captureDiscoveryGeneratedGoSources(ctx context.Context, plan *discoveryOrdi
 }
 
 func verifyDiscoveryGeneratedGoSources(plan *discoveryOrdinarySelectionPlan, root, zipPath string) error {
+	if plan == nil {
+		return fmt.Errorf("missing generated-header original source proof")
+	}
 	if len(plan.GeneratedGoSources) == 0 {
 		return nil
+	}
+	// Initial ordinary ZIP verification authenticates h1 and records all archive
+	// bytes. Imported Go files cannot weaken that boundary to selected members:
+	// even a comment-only archive change invalidates this original snapshot.
+	before, err := discoveryFeatureFileSHA256(zipPath)
+	if err != nil || !discoverySHA256Pattern.MatchString(plan.ZipSHA256) || before != plan.ZipSHA256 {
+		return fmt.Errorf("generated-header original ZIP bytes changed after initial verification")
 	}
 	archive, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -119,9 +129,14 @@ func verifyDiscoveryGeneratedGoSources(plan *discoveryOrdinarySelectionPlan, roo
 	entries := make(map[string]*zip.File)
 	prefix := plan.Module + "@" + plan.Version + "/"
 	for _, entry := range archive.File {
-		if !entry.FileInfo().IsDir() && strings.HasPrefix(entry.Name, prefix) {
-			entries[strings.TrimPrefix(entry.Name, prefix)] = entry
+		if entry.FileInfo().IsDir() {
+			continue // Legal module ZIP directory entries carry no source bytes.
 		}
+		name := strings.TrimPrefix(entry.Name, prefix)
+		if !strings.HasPrefix(entry.Name, prefix) || !ordinarySelectionLocalPath(name) || !entry.Mode().IsRegular() || entries[name] != nil {
+			return fmt.Errorf("generated-header original ZIP has an unsafe/duplicate source member")
+		}
+		entries[name] = entry
 	}
 	for file, wanted := range plan.GeneratedGoSources {
 		entry := entries[file]
@@ -138,6 +153,10 @@ func verifyDiscoveryGeneratedGoSources(plan *discoveryOrdinarySelectionPlan, roo
 		if readErr != nil || closeErr != nil || sourceErr != nil || discoveryFeatureBytesSHA256(data) != wanted || actual != wanted {
 			return fmt.Errorf("generated-header imported Go source differs from exact original ZIP/pre-load bytes")
 		}
+	}
+	after, err := discoveryFeatureFileSHA256(zipPath)
+	if err != nil || after != before {
+		return fmt.Errorf("generated-header original ZIP changed while imported Go sources were verified")
 	}
 	return nil
 }
