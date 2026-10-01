@@ -121,6 +121,66 @@ WORD $0x17b4a14d // Data that resembles a branch must not be decoded.
 RET
 `
 
+func TestARM64RawUnlabelledPoolBranchToSourceEpilogue(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, frame := range []string{"0", "32"} {
+		t.Run("frame_"+frame, func(t *testing.T) {
+			source := strings.Replace(arm64RawUnlabelledPoolSource, "$0-8", "$"+frame+"-8", 1)
+			source = strings.Replace(source, "WORD $0xd65f03c0 // RET", "WORD $0x14000004 // B +16 reaches the source RET, not the pool.", 1)
+			requireARM64GoAssemblerResult(t, source, true)
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, triple := range []string{
+				"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+				"aarch64-unknown-linux-musl", "aarch64-pc-windows-msvc",
+			} {
+				ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple,
+					Sigs: map[string]FuncSig{"rawpool": {Name: "rawpool", Args: []LLVMType{Ptr}, Ret: Void,
+						Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}}}},
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Count(ir, "private constant [12 x i8]") != 1 {
+					t.Fatal("a source-RET edge must preserve the single load-only data pool")
+				}
+				compileLLVMToObject(t, llc, triple, "pool-epilogue.ll", "pool-epilogue.o", ir)
+			}
+		})
+	}
+}
+
+func TestARM64RawUnlabelledPoolCannotInventSourceEpilogue(t *testing.T) {
+	for _, test := range []struct{ name, branch, suffix string }{
+		{"past-return", "WORD $0x14000005", "RET\n"},
+		{"into-data", "WORD $0x14000002", "RET\n"},
+		{"unknown-return", "WORD $0x14000004", "RET R9\n"},
+		{"no-return", "WORD $0x14000004", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			source := strings.Replace(arm64RawUnlabelledPoolSource, "WORD $0xd65f03c0 // RET", test.branch, 1)
+			source = strings.TrimSuffix(source, "RET\n") + test.suffix
+			requireARM64GoAssemblerResult(t, source, true)
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{
+				"rawpool": {Name: "rawpool", Args: []LLVMType{Ptr}, Ret: Void,
+					Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}}}},
+			}})
+			if err == nil {
+				t.Fatal("a branch cannot fabricate an ordinary source epilogue or classify reachable code as data")
+			}
+		})
+	}
+}
+
 func TestARM64RawUnlabelledPoolAliases(t *testing.T) {
 	requireARM64GoAssemblerResult(t, arm64RawUnlabelledPoolSource, true)
 	file, err := Parse(ArchARM64, arm64RawUnlabelledPoolSource)

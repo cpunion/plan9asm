@@ -18,6 +18,7 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 	if end > 0 && fn.Instrs[end-1].Op == OpRET {
 		end--
 	}
+	sourceReturn := end < len(fn.Instrs) && len(fn.Instrs[end].Args) == 0
 	start := end
 	for start > 0 && arm64RawLiteralWord(fn.Instrs[start-1]) {
 		start--
@@ -44,6 +45,13 @@ func identifyARM64UnlabelledPool(fn Func, points []arm64RawLayoutPoint, known ma
 		at := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
 		if visited[at] {
+			continue
+		}
+		if at == end && sourceReturn {
+			// A raw branch may cross the appended data to the ordinary
+			// source RET. Preserve its Go auto-epilogue rather than require
+			// an unsafe hardware RET before the pool. No other boundary or
+			// register-return contract is inferred here.
 			continue
 		}
 		if at < start || at >= end {
