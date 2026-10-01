@@ -5,7 +5,7 @@
 {"module":"github.com/CRossel87a/go-ethereum-sonic","version":"v0.0.0-20251210124558-bbe3b82bbbb5","status":"pending"}
 {"module":"github.com/Consensys/Gnark-crypto","version":"v0.21.0","status":"pending"}
 {"module":"github.com/Deeptiman/forgelattice/crypto","version":"v0.0.0-20260731225009-66b457180500","status":"pending"}
-{"module":"github.com/Go-zh/go/src","version":"v0.0.0-20200112173117-d4e8cec7338b","status":"pending"}
+{"module":"github.com/Go-zh/go/src","version":"v0.0.0-20200112173117-d4e8cec7338b","status":"failed"}
 {"module":"github.com/MeKo-Christian/agg_go","version":"v0.5.0","status":"pending"}
 {"module":"github.com/alexanderyastrebov/net","version":"v0.0.0-20251007181801-59706cdaa8f9","status":"pending"}
 {"module":"github.com/aliher1911/cockroach","version":"v19.2.12+incompatible","status":"pending"}
