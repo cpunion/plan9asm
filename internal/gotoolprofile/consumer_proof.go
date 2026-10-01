@@ -30,11 +30,21 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	if proof == nil || proof.Protocol != ConsumerProtocol || proof.ProfileID != input.ID || !equalDiscoveryStrings(proof.CustomTags, tags) || len(proof.Packages) == 0 {
 		return fmt.Errorf("compiler consumption differs from the source-required profile/tag scope")
 	}
+	selectedFiles, filePackages, err := validatePackageSelection(input, proof.Packages, tags)
+	if err != nil {
+		return err
+	}
+	return validateAssemblyConsumption(input, proof, selectedFiles, filePackages, requireObject, abi)
+}
+
+// Metadata-only queries reuse source selection without manufacturing CPP or
+// LLVM outputs. Their separate protocol can never satisfy ValidateSelection.
+func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tags []string) (map[string]bool, map[string]PackageProof, error) {
 	selectedFiles, seenPackages := make(map[string]bool), make(map[string]bool)
 	filePackages := make(map[string]PackageProof)
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	ctx := build.Default
 	ctx.GOOS, ctx.GOARCH = input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"]
@@ -50,28 +60,28 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 		}
 		return io.NopCloser(strings.NewReader(header)), nil
 	}
-	for _, pkg := range proof.Packages {
+	for _, pkg := range packages {
 		if err := ValidatePackageModule(input, pkg); err != nil {
-			return err
+			return nil, nil, err
 		}
 		if pkg.PackagePath != input.Module && !strings.HasPrefix(pkg.PackagePath, input.Module+"/") || seenPackages[pkg.PackagePath] {
-			return fmt.Errorf("actual selected package has a different or duplicate module role")
+			return nil, nil, fmt.Errorf("actual selected package has a different or duplicate module role")
 		}
 		seenPackages[pkg.PackagePath] = true
 		if err := ValidateOrdinaryAssemblerMacros(pkg.Macros, input.Observed, pkg.PackagePath); err != nil {
-			return err
+			return nil, nil, err
 		}
 		if len(pkg.GoFiles) == 0 || len(pkg.CompiledGoFiles) == 0 || len(pkg.SFiles) == 0 {
-			return fmt.Errorf("compiler consumption lacks actual ordinary Go/ASM selection")
+			return nil, nil, fmt.Errorf("compiler consumption lacks actual ordinary Go/ASM selection")
 		}
 		usedSources := make(map[string]string)
 		for _, files := range [][]string{pkg.GoFiles, pkg.CompiledGoFiles, pkg.SFiles} {
 			if !sort.StringsAreSorted(files) {
-				return fmt.Errorf("noncanonical actual selected source order")
+				return nil, nil, fmt.Errorf("noncanonical actual selected source order")
 			}
 			for index, file := range files {
 				if index > 0 && file == files[index-1] || input.Sources[file] == "" || input.Sources[file] != pkg.SourceSHA256[file] {
-					return fmt.Errorf("actual selected source has no exact original SHA: %s", file)
+					return nil, nil, fmt.Errorf("actual selected source has no exact original SHA: %s", file)
 				}
 				usedSources[file] = pkg.SourceSHA256[file]
 				wantedPath := input.Module
@@ -79,27 +89,31 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 					wantedPath += "/" + path.Dir(file)
 				}
 				if pkg.PackagePath != wantedPath {
-					return fmt.Errorf("actual package role differs from the original source directory: %s", file)
+					return nil, nil, fmt.Errorf("actual package role differs from the original source directory: %s", file)
 				}
 				if path.Ext(file) == ".go" || path.Ext(file) == ".s" {
 					selected, err := ctx.MatchFile(path.Dir(file), path.Base(file))
 					if err != nil || !selected || strings.HasSuffix(file, "_test.go") {
-						return fmt.Errorf("actual source selection contradicts its original feature constraints: %s: %v", file, err)
+						return nil, nil, fmt.Errorf("actual source selection contradicts its original feature constraints: %s: %v", file, err)
 					}
 				}
 			}
 		}
 		if !reflect.DeepEqual(usedSources, pkg.SourceSHA256) {
-			return fmt.Errorf("actual package source hash map has missing/extra consumption")
+			return nil, nil, fmt.Errorf("actual package source hash map has missing/extra consumption")
 		}
 		for _, file := range pkg.SFiles {
 			if selectedFiles[file] || path.Ext(file) != ".s" {
-				return fmt.Errorf("duplicate/non-ASM actual selected file")
+				return nil, nil, fmt.Errorf("duplicate/non-ASM actual selected file")
 			}
 			selectedFiles[file] = true
 			filePackages[file] = pkg
 		}
 	}
+	return selectedFiles, filePackages, nil
+}
+
+func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, selectedFiles map[string]bool, filePackages map[string]PackageProof, requireObject bool, abi map[string]bool) error {
 	consumed, outputs := make(map[string]bool), make(map[string]bool)
 	for _, cpp := range proof.CPP {
 		if consumed[cpp.File] || !selectedFiles[cpp.File] || !discoverySHA256Pattern.MatchString(cpp.ExpandedSHA256) || !discoverySHA256Pattern.MatchString(cpp.TypedExpandedSHA256) || len(cpp.Inputs) == 0 {

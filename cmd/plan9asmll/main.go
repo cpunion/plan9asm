@@ -159,6 +159,7 @@ func main() {
 		repoRoot       = flag.String("repo-root", "../..", "repo root for extracting supported instruction set")
 		featureProfile = flag.String("feature-profile", "", "explicit actual Go CPU profile and source proof (single target, ordinary external module only)")
 		featureTimeout = flag.Duration("feature-timeout", time.Hour, "deadline for the explicit feature-profile consumer")
+		metadataOnly   = flag.Bool("metadata-only", false, "private actual Go generated-header query; never translates assembly")
 	)
 	flag.Parse()
 
@@ -175,6 +176,9 @@ func main() {
 	specs, err := resolveTargets(*goos, *goarch, *targets, *allTargets)
 	if err != nil {
 		fatalf("%v", err)
+	}
+	if *metadataOnly && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets || containsTestAssembly(exactAsmFiles)) {
+		fatalf("metadata-only requires one explicit ordinary profile and cannot emit translation/list/matrix evidence")
 	}
 	ccfg, err := resolveCompileConfig(*compile, *llcPath, *keepObj, *llcOptLevel)
 	if err != nil {
@@ -196,6 +200,14 @@ func main() {
 		} else {
 			baseOut = filepath.Join("_out", "plan9asmll")
 		}
+	}
+	if *metadataOnly {
+		metadata, err := queryGeneratedHeaders(specs[0], pats, tags, exactAsmFiles, *modulePath, baseOut, ccfg)
+		if err != nil {
+			fatalf("generated-header metadata: %v", err)
+		}
+		writeReport(*reportOut, metadata)
+		return
 	}
 
 	allReports := make([]runReport, 0, len(specs))

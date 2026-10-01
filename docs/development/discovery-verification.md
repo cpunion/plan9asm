@@ -268,6 +268,18 @@ and instrumentation-only assembly is not an ordinary N/A exemption.
 Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
 legacy modules lacking authenticated declared-module metadata remain failures.
+The private `plan9asmll -metadata-only -feature-profile ... -report ...` query
+uses a separate `actual_go_cpu_profile_metadata_v1` result: it performs no
+assembly translation and cannot satisfy a translation PASS or add to counts.
+It loads selected Go source and same-profile actual dependency exports, then
+invokes the observed Go compiler with `-asmhdr`. Every definition name, value
+and presence must match the selected-types emitter, not only referenced offsets.
+The compact `actual_go_asmhdr_full_definitions_v1` witness retains package/source
+roles, language/target/profile identity, complete ImportMap and dependency source
+and export hashes, actual header/object hashes and canonical full definitions.
+Offline replay relies on frozen producer provenance; production must compare
+the actual compiler bytes and full definitions independently. This query alone
+does not resolve discovery's generated-include scope or branch coverage.
 Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
 after the actual Go assembler accepts the original source, creates a nonempty
 object, and emits an empty `-S` symbol/data listing under the same target,
