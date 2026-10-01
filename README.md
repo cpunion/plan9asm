@@ -120,6 +120,17 @@ go run -C cmd/plan9asmll . \
   -report /tmp/plan9asmll-x86.json
 ```
 
+For an ordinary external module, `-feature-profile` explicitly consumes a
+private `actual_go_cpu_profile_consumer_v1` invocation artifact. It re-observes
+the actual Go marker/environment/tool identity, loads that same environment,
+checks selected source hashes and package-role macros, and records CPP/LLVM
+output hashes. Source directories and module replacements must match the
+artifact's exact source root. Special and test-only package roles remain
+outside this mode. Without the flag, existing CLI behavior is unchanged.
+The consumer proof alone is not runtime coverage or corpus completion; the
+corpus still rejects feature requirements until profile-aware scope accounting
+is connected.
+
 ## Output behavior
 
 - Every asm file is printed with explicit status (`OK` or `FAIL`).
