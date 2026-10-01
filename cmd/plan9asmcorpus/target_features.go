@@ -530,14 +530,10 @@ func discoveryFeatureBytesSHA256(data []byte) string {
 }
 
 func discoveryFeatureProfileID(observed *discoveryTargetFeatures) string {
-	data, _ := json.Marshal(struct {
-		Target      string
-		Environment map[string]string
-		Driver      string
-		Selection   string
-		Sources     map[string]string
-		Markers     string
-	}{observed.Target, observed.Environment, observed.DriverSHA256, observed.DriverSelectionSHA256, observed.ToolSourceSHA256, observed.MarkerSourceSHA256})
+	// encoding/json orders map keys; observers also require sorted ToolTags.
+	// Bind every portable observation byte, including command/namespace proof,
+	// rather than permitting the same ID to carry a different evidence body.
+	data, _ := json.Marshal(observed)
 	return discoveryFeatureBytesSHA256(data)
 }
 

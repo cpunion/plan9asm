@@ -1,0 +1,507 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"go/build"
+	"go/build/constraint"
+	"go/parser"
+	"go/token"
+	"io"
+	"math/bits"
+	"os"
+	"path"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
+)
+
+type discoveryFeatureProfileRequest struct {
+	Target    string            `json:"target"`
+	Baseline  bool              `json:"baseline"`
+	Overrides map[string]string `json:"overrides,omitempty"`
+	Expected  map[string]bool   `json:"expected_experiments,omitempty"`
+	pairs     [][2]string
+}
+
+type discoveryFeatureProfile struct {
+	ID       string                         `json:"id"`
+	Request  discoveryFeatureProfileRequest `json:"request"`
+	Observed *discoveryTargetFeatures       `json:"observed"`
+}
+
+const discoveryFeatureProfileLimit = 64
+
+// The planning model proposes legal environment settings; it is never an
+// execution proof. Every proposal must subsequently be observed by the real
+// Go driver, including defaults and experiment dependencies. One matching
+// profile per source pair preserves feature-only inputs without claiming an
+// exhaustive enumeration of all possible toolchain experiment combinations.
+func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, baselines []*discoveryTargetFeatures) ([]discoveryFeatureProfileRequest, error) {
+	if plan == nil || len(plan.Targets) != len(baselines) {
+		return nil, fmt.Errorf("incomplete feature profile baselines")
+	}
+	var requests []discoveryFeatureProfileRequest
+	byKey := make(map[string]int)
+	contents := make(map[string][]byte)
+	for _, source := range plan.Sources {
+		if _, duplicate := contents[source.File]; duplicate {
+			return nil, fmt.Errorf("duplicate profile source %s", source.File)
+		}
+		contents[source.File] = []byte(source.Header)
+	}
+	add := func(request discoveryFeatureProfileRequest) error {
+		key := discoveryFeatureRequestKey(request)
+		if index, ok := byKey[key]; ok {
+			previous := &requests[index]
+			if previous.Expected == nil && len(request.Expected) > 0 {
+				previous.Expected = make(map[string]bool)
+			}
+			for tag, expected := range request.Expected {
+				if old, exists := previous.Expected[tag]; exists && old != expected {
+					return fmt.Errorf("conflicting experiment profile proposals for %s", tag)
+				}
+				previous.Expected[tag] = expected
+			}
+			previous.pairs = append(previous.pairs, request.pairs...)
+			return nil
+		}
+		if len(requests) >= discoveryFeatureProfileLimit {
+			return fmt.Errorf("source-required target feature profiles exceed the explicit %d-profile bound", discoveryFeatureProfileLimit)
+		}
+		byKey[key] = len(requests)
+		requests = append(requests, request)
+		return nil
+	}
+	seenTargets := make(map[string]bool)
+	for _, baseline := range baselines {
+		if baseline == nil || baseline.GoVersion != plan.GoVersion || seenTargets[baseline.Target] || !containsTargetFeature(plan.Targets, baseline.Target) {
+			return nil, fmt.Errorf("missing or conflicting actual feature baseline")
+		}
+		seenTargets[baseline.Target] = true
+		if err := add(discoveryFeatureProfileRequest{Target: baseline.Target, Baseline: true}); err != nil {
+			return nil, err
+		}
+		ctx, err := discoveryContextForFeatureProfile(baseline)
+		if err != nil {
+			return nil, err
+		}
+		ctx.OpenFile = func(file string) (io.ReadCloser, error) {
+			data, exists := contents[filepath.ToSlash(file)]
+			if !exists {
+				return nil, fmt.Errorf("uncaptured profile source %s", file)
+			}
+			return io.NopCloser(bytes.NewReader(data)), nil
+		}
+		for _, asmFile := range asmFiles {
+			if _, exists := contents[asmFile]; !exists {
+				return nil, fmt.Errorf("missing profile assembly source %s", asmFile)
+			}
+			if discoveryDirIsIgnored(path.Dir(asmFile)) || discoveryFeatureNestedSource(plan, path.Dir(asmFile)) {
+				continue
+			}
+			var goFiles []string
+			for name, data := range contents {
+				if path.Dir(name) != path.Dir(asmFile) || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || strings.HasPrefix(path.Base(name), "_") || strings.HasPrefix(path.Base(name), ".") {
+					continue
+				}
+				if _, err := parser.ParseFile(token.NewFileSet(), name, data, parser.PackageClauseOnly); err == nil {
+					goFiles = append(goFiles, name)
+				}
+			}
+			sort.Strings(goFiles)
+			for _, goFile := range goFiles {
+				request, found, err := planDiscoveryFeaturePair(ctx, baseline, asmFile, goFile)
+				if err != nil {
+					return nil, fmt.Errorf("profile for %s + %s on %s: %w", asmFile, goFile, baseline.Target, err)
+				}
+				if found {
+					request.pairs = [][2]string{{asmFile, goFile}}
+					if err := add(request); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(requests, func(i, j int) bool {
+		return discoveryFeatureRequestKey(requests[i]) < discoveryFeatureRequestKey(requests[j])
+	})
+	return requests, nil
+}
+
+func discoveryFeatureNestedSource(plan *discoveryOrdinarySelectionPlan, dir string) bool {
+	for ancestor := dir; ancestor != "."; ancestor = path.Dir(ancestor) {
+		for _, directory := range plan.Directories {
+			if directory.Directory != ancestor {
+				continue
+			}
+			for _, entry := range directory.Entries {
+				if entry.Name == "go.mod" && entry.Kind == "file" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func discoveryContextForFeatureProfile(features *discoveryTargetFeatures) (build.Context, error) {
+	ctx := build.Default
+	parts := strings.Split(features.Target, "/")
+	minor, err := discoveryGoMinor(features.GoVersion)
+	if len(parts) != 2 || err != nil {
+		return ctx, fmt.Errorf("invalid actual profile target or Go version")
+	}
+	ctx.GOOS, ctx.GOARCH, ctx.Compiler, ctx.CgoEnabled = parts[0], parts[1], "gc", false
+	ctx.BuildTags, ctx.ReleaseTags = nil, nil
+	for release := 1; release <= minor; release++ {
+		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", release))
+	}
+	ctx.ToolTags = append([]string(nil), features.ToolTags...)
+	return ctx, nil
+}
+
+func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string) (discoveryFeatureProfileRequest, bool, error) {
+	filenameContext := ctx
+	filenameContext.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil }
+	for _, file := range []string{asmFile, goFile} {
+		matches, err := filenameContext.MatchFile(filepath.FromSlash(path.Dir(file)), path.Base(file))
+		if err != nil || !matches {
+			return discoveryFeatureProfileRequest{}, false, err
+		}
+	}
+	tagsByFile := make(map[string][]string)
+	var allTags []string
+	var expressions []constraint.Expr
+	for _, file := range []string{asmFile, goFile} {
+		expr, err := discoveryFileBuildExpression(filepath.FromSlash(file), ctx.OpenFile)
+		if err != nil {
+			return discoveryFeatureProfileRequest{}, false, err
+		}
+		set := make(map[string]bool)
+		if expr != nil {
+			collectDiscoveryConstraintTags(expr, set)
+		}
+		expressions = append(expressions, expr)
+		tagsByFile[filepath.FromSlash(file)] = sortedDiscoverySet(set)
+		allTags = append(allTags, tagsByFile[filepath.FromSlash(file)]...)
+	}
+	custom := discoveryCustomTagsWithoutFeatures(allTags, []build.Context{ctx})
+	// Prune fixed-false targets, release guards and ignored generators before
+	// considering feature profiles. They are not latent feature-only input.
+	fixed := map[string]bool{"ignore": false, "cgo": false, "gc": true, "gccgo": false}
+	for _, tag := range uniqueSortedDiscoveryStrings(allTags) {
+		if containsTargetFeature(custom, tag) || tag == "boringcrypto" || strings.HasPrefix(tag, "goexperiment.") || strings.HasPrefix(tag, ctx.GOARCH+".") || tag == "race" || tag == "msan" || tag == "asan" {
+			continue
+		}
+		oneTag := ctx
+		oneTag.OpenFile = func(string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader("//go:build " + tag + "\n\npackage markers\n")), nil
+		}
+		value, err := oneTag.MatchFile(".", "marker.go")
+		if err != nil {
+			return discoveryFeatureProfileRequest{}, false, err
+		}
+		fixed[tag] = value
+	}
+	for _, expr := range expressions {
+		if !discoveryExpressionMayMatch(expr, fixed) {
+			return discoveryFeatureProfileRequest{}, false, nil
+		}
+	}
+	var experimentVars []string
+	var unsupported []string
+	cpuMentioned := false
+	for _, tag := range uniqueSortedDiscoveryStrings(allTags) {
+		if tag == "boringcrypto" {
+			tag = "goexperiment.boringcrypto"
+		}
+		if strings.HasPrefix(tag, "goexperiment.") {
+			if _, known := baseline.MarkerSelection[tag]; !known {
+				unsupported = append(unsupported, tag)
+				continue
+			}
+			experimentVars = append(experimentVars, tag)
+		} else if strings.HasPrefix(tag, ctx.GOARCH+".") {
+			if _, known := baseline.MarkerSelection[tag]; !known {
+				unsupported = append(unsupported, tag)
+				continue
+			}
+			cpuMentioned = true
+		} else if tag == "race" || tag == "msan" || tag == "asan" {
+			unsupported = append(unsupported, tag)
+		}
+	}
+	experimentVars = uniqueSortedDiscoveryStrings(experimentVars)
+	if len(experimentVars) > 8 {
+		return discoveryFeatureProfileRequest{}, false, fmt.Errorf("source pair exceeds explicit 8-experiment planning bound")
+	}
+	cpuKey := map[string]string{"386": "GO386", "amd64": "GOAMD64", "arm": "GOARM", "arm64": "GOARM64", "wasm": "GOWASM"}[ctx.GOARCH]
+	cpuValues := []string{baseline.Environment[cpuKey]}
+	if cpuMentioned {
+		if ctx.GOARCH == "wasm" {
+			cpuValues = append(cpuValues, "", "satconv", "signext", "satconv,signext")
+		}
+		for _, tag := range discoveryCPUFeatureCandidates() {
+			if strings.HasPrefix(tag, ctx.GOARCH+".") {
+				cpuValues = append(cpuValues, strings.TrimPrefix(tag, ctx.GOARCH+"."))
+			}
+		}
+	}
+	cpuValues = uniqueDiscoveryStrings(cpuValues)
+	minor, _ := discoveryGoMinor(baseline.GoVersion)
+	for _, cpuValue := range cpuValues {
+		if err := validateDiscoveryCPUEnvironment(ctx.GOARCH, cpuValue, minor); err != nil {
+			continue
+		}
+		for changes := 0; changes <= len(experimentVars); changes++ {
+			for mask := 0; mask < 1<<len(experimentVars); mask++ {
+				if bits.OnesCount(uint(mask)) != changes {
+					continue
+				}
+				model := ctx
+				model.ToolTags = discoveryModeledCPUFeatures(ctx.ToolTags, ctx.GOARCH, cpuValue, minor)
+				expected := make(map[string]bool)
+				var toggles []string
+				for index, tag := range experimentVars {
+					value := baseline.MarkerSelection[tag]
+					if mask&(1<<index) != 0 {
+						value = !value
+						name := strings.TrimPrefix(tag, "goexperiment.")
+						if !value {
+							name = "no" + name
+						}
+						toggles = append(toggles, name)
+					}
+					expected[tag] = value
+					var kept []string
+					for _, old := range model.ToolTags {
+						if old != tag {
+							kept = append(kept, old)
+						}
+					}
+					if value {
+						kept = append(kept, tag)
+					}
+					model.ToolTags = kept
+				}
+				_, matches, err := findDiscoveryBuildTags(model, filepath.FromSlash(path.Dir(asmFile)), path.Base(asmFile), []string{path.Base(goFile)}, custom, tagsByFile)
+				if err != nil {
+					return discoveryFeatureProfileRequest{}, false, err
+				}
+				if !matches {
+					continue
+				}
+				request := discoveryFeatureProfileRequest{Target: baseline.Target, Overrides: make(map[string]string), Expected: expected}
+				if cpuValue != baseline.Environment[cpuKey] {
+					request.Overrides[cpuKey] = cpuValue
+				}
+				if len(toggles) != 0 {
+					parts := append([]string{baseline.Environment["GOEXPERIMENT"]}, toggles...)
+					request.Overrides["GOEXPERIMENT"] = strings.TrimPrefix(strings.Join(parts, ","), ",")
+				}
+				request.Baseline = len(request.Overrides) == 0
+				return request, true, nil
+			}
+		}
+	}
+	if len(unsupported) != 0 {
+		return discoveryFeatureProfileRequest{}, false, fmt.Errorf("source requires an unsupported feature profile; not baseline N/A: %s", strings.Join(unsupported, ", "))
+	}
+	return discoveryFeatureProfileRequest{}, false, nil
+}
+
+func discoveryModeledCPUFeatures(tags []string, arch, value string, minor int) []string {
+	var modeled []string
+	for _, tag := range tags {
+		if !strings.HasPrefix(tag, arch+".") {
+			modeled = append(modeled, tag)
+		}
+	}
+	level := strings.Split(value, ",")[0]
+	for _, candidate := range discoveryCPUFeatureCandidates() {
+		if !strings.HasPrefix(candidate, arch+".") {
+			continue
+		}
+		selected := candidate == arch+"."+level
+		switch arch {
+		case "amd64", "arm":
+			selected = candidate <= arch+"."+level
+		case "arm64":
+			selected = value != "" && (candidate <= "arm64."+level && strings.HasPrefix(candidate, "arm64."+level[:2]))
+			if strings.HasPrefix(level, "v9.") && strings.HasPrefix(candidate, "arm64.v8.") {
+				selected = int(candidate[len(candidate)-1]-'0') <= int(level[len(level)-1]-'0')+5
+			}
+		case "wasm":
+			selected = minor >= 27 || containsTargetFeature(strings.Split(value, ","), strings.TrimPrefix(candidate, "wasm."))
+		}
+		if selected {
+			modeled = append(modeled, candidate)
+		}
+	}
+	return uniqueSortedDiscoveryStrings(modeled)
+}
+
+func discoveryFeatureRequestKey(request discoveryFeatureProfileRequest) string {
+	overrides := request.Overrides
+	if len(overrides) == 0 {
+		overrides = nil
+	}
+	data, _ := json.Marshal(struct {
+		Target    string
+		Overrides map[string]string
+	}{request.Target, overrides})
+	return string(data)
+}
+
+func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir string, env []string, plan *discoveryOrdinarySelectionPlan, asmFiles []string) ([]discoveryFeatureProfile, error) {
+	var baselines []*discoveryTargetFeatures
+	for index, target := range plan.Targets {
+		dir := filepath.Join(ownedDir, fmt.Sprintf("baseline-%03d", index))
+		if err := os.Mkdir(dir, 0700); err != nil {
+			return nil, err
+		}
+		observed, err := captureDiscoveryTargetFeatures(ctx, goBinary, dir, env, target, nil)
+		if err != nil {
+			return nil, err
+		}
+		baselines = append(baselines, observed)
+	}
+	requests, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines)
+	if err != nil {
+		return nil, err
+	}
+	var profiles []discoveryFeatureProfile
+	for index, request := range requests {
+		var observed *discoveryTargetFeatures
+		if request.Baseline {
+			for _, baseline := range baselines {
+				if baseline.Target == request.Target {
+					observed = baseline
+				}
+			}
+		} else {
+			dir := filepath.Join(ownedDir, fmt.Sprintf("profile-%03d", index))
+			if err := os.Mkdir(dir, 0700); err != nil {
+				return nil, err
+			}
+			observed, err = captureDiscoveryTargetFeatures(ctx, goBinary, dir, env, request.Target, request.Overrides)
+			if err != nil {
+				return nil, fmt.Errorf("actual driver rejected required profile %s: %w", discoveryFeatureRequestKey(request), err)
+			}
+		}
+		for tag, expected := range request.Expected {
+			if actual, recorded := observed.MarkerSelection[tag]; !recorded || actual != expected {
+				return nil, fmt.Errorf("actual driver contradicted required experiment %s=%t on %s", tag, expected, request.Target)
+			}
+		}
+		profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Request: request, Observed: observed}
+		profiles = append(profiles, profile)
+	}
+	if err := validateDiscoveryFeatureProfiles(plan, asmFiles, profiles); err != nil {
+		return nil, fmt.Errorf("actual source-required profiles: %w", err)
+	}
+	return profiles, nil
+}
+
+func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, profiles []discoveryFeatureProfile) error {
+	if plan == nil || len(profiles) == 0 || len(profiles) > discoveryFeatureProfileLimit || len(plan.Targets) == 0 {
+		return fmt.Errorf("missing or unbounded source-required actual feature profiles")
+	}
+	var baselines []*discoveryTargetFeatures
+	byRequest, byID := make(map[string]discoveryFeatureProfile), make(map[string]bool)
+	for _, profile := range profiles {
+		if err := validateDiscoveryTargetFeatures(profile.Observed); err != nil {
+			return err
+		}
+		if profile.ID != discoveryFeatureProfileID(profile.Observed) || byID[profile.ID] || profile.Request.Target != profile.Observed.Target || profile.Observed.GoVersion != plan.GoVersion {
+			return fmt.Errorf("invalid, duplicate or cross-version actual feature profile identity")
+		}
+		byID[profile.ID] = true
+		key := discoveryFeatureRequestKey(profile.Request)
+		if _, duplicate := byRequest[key]; duplicate || profile.Request.Baseline != (len(profile.Request.Overrides) == 0) {
+			return fmt.Errorf("duplicate or inconsistent feature profile request")
+		}
+		byRequest[key] = profile
+		cpuKey := map[string]string{"386": "GO386", "amd64": "GOAMD64", "arm": "GOARM", "arm64": "GOARM64", "wasm": "GOWASM"}[profile.Observed.Environment["GOARCH"]]
+		for key, value := range profile.Request.Overrides {
+			if key != cpuKey && key != "GOEXPERIMENT" || profile.Observed.Environment[key] != value {
+				return fmt.Errorf("unobserved or arbitrary custom feature override %s", key)
+			}
+		}
+		for tag, expected := range profile.Request.Expected {
+			if actual, present := profile.Observed.MarkerSelection[tag]; !present || actual != expected {
+				return fmt.Errorf("actual driver contradicted source-required experiment %s", tag)
+			}
+		}
+		if profile.Request.Baseline {
+			baselines = append(baselines, profile.Observed)
+		}
+	}
+	wanted, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines)
+	if err != nil {
+		return err
+	}
+	if len(wanted) != len(profiles) {
+		return fmt.Errorf("feature-only source scope missing or unexplained profile added")
+	}
+	identity := profiles[0].Observed
+	for _, request := range wanted {
+		profile, present := byRequest[discoveryFeatureRequestKey(request)]
+		if !present || !reflect.DeepEqual(profile.Request.Expected, request.Expected) || profile.Request.Baseline != request.Baseline {
+			return fmt.Errorf("actual profile requests do not cover exact source-required proposals")
+		}
+		observed := profile.Observed
+		if observed.DriverSHA256 != identity.DriverSHA256 || !reflect.DeepEqual(observed.ToolSourceSHA256, identity.ToolSourceSHA256) || observed.MarkerSourceSHA256 != identity.MarkerSourceSHA256 {
+			return fmt.Errorf("feature profiles used different actual driver/registration/marker inputs")
+		}
+		for _, pair := range request.pairs {
+			if err := validateDiscoveryFeatureSourcePair(plan, observed, pair); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateDiscoveryFeatureSourcePair(plan *discoveryOrdinarySelectionPlan, observed *discoveryTargetFeatures, pair [2]string) error {
+	ctx, err := discoveryContextForFeatureProfile(observed)
+	if err != nil {
+		return err
+	}
+	contents := make(map[string]string)
+	for _, input := range plan.Sources {
+		contents[input.File] = input.Header
+	}
+	ctx.OpenFile = func(file string) (io.ReadCloser, error) {
+		data, present := contents[filepath.ToSlash(file)]
+		if !present {
+			return nil, fmt.Errorf("actual profile lacks source header %s", file)
+		}
+		return io.NopCloser(strings.NewReader(data)), nil
+	}
+	tagsByFile := make(map[string][]string)
+	var allTags []string
+	for _, file := range pair {
+		expression, err := discoveryFileBuildExpression(filepath.FromSlash(file), ctx.OpenFile)
+		if err != nil {
+			return err
+		}
+		set := make(map[string]bool)
+		if expression != nil {
+			collectDiscoveryConstraintTags(expression, set)
+		}
+		tagsByFile[filepath.FromSlash(file)] = sortedDiscoverySet(set)
+		allTags = append(allTags, tagsByFile[filepath.FromSlash(file)]...)
+	}
+	custom := discoveryCustomTagsWithoutFeatures(allTags, []build.Context{ctx})
+	_, selected, err := findDiscoveryBuildTags(ctx, filepath.FromSlash(path.Dir(pair[0])), path.Base(pair[0]), []string{path.Base(pair[1])}, custom, tagsByFile)
+	if err != nil || !selected {
+		return fmt.Errorf("actual profile does not select required assembly/Go source pair %s + %s: %v", pair[0], pair[1], err)
+	}
+	return nil
+}
