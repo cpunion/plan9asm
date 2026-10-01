@@ -1733,6 +1733,9 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	// is discarded when this run returns.
 	if cfg.buildCache == "" {
 		cfg.buildCache = filepath.Join(tmpRoot, "build-cache")
+		if err := os.Mkdir(cfg.buildCache, 0700); err != nil {
+			return fmt.Errorf("create owned discovery build cache: %w", err)
+		}
 	} else {
 		if !filepath.IsAbs(cfg.buildCache) {
 			return fmt.Errorf("discovery build cache must be an absolute path: %q", cfg.buildCache)
