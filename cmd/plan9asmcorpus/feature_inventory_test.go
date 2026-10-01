@@ -89,3 +89,54 @@ func TestFeatureInventoryCanonicalIdentityAndSharing(t *testing.T) {
 		t.Fatal("accepted unresolved profile references")
 	}
 }
+
+func TestFeatureInventoryCPUOnlyProfileJSONRoundtrip(t *testing.T) {
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	baseline, err := captureDiscoveryTargetFeatures(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), "linux/amd64", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+		{File: "vector_amd64.s", Header: "//go:build amd64.v3\n\n"},
+		{File: "vector_amd64.go", Header: "//go:build amd64.v3\n\npackage vector\n"},
+	}}
+	files := []string{"vector_amd64.s"}
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), plan, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 2 {
+		t.Fatalf("actual baseline/v3 source profiles missing: %+v", profiles)
+	}
+	inventory := &discoveryFeatureInventory{}
+	references, err := registerDiscoveryFeatureProfiles(inventory, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bytes, err := json.Marshal(struct {
+		Inventory  *discoveryFeatureInventory
+		References []discoveryFeatureProfileReference
+	}{inventory, references})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay struct {
+		Inventory  *discoveryFeatureInventory
+		References []discoveryFeatureProfileReference
+	}
+	if err := json.Unmarshal(bytes, &replay); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := resolveDiscoveryFeatureProfiles(replay.Inventory, replay.References)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateDiscoveryFeatureProfiles(plan, files, resolved); err != nil {
+		t.Fatalf("actual CPU-only profile lost its proof through JSON roundtrip: %v", err)
+	}
+}

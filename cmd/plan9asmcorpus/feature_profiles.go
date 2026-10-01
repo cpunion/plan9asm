@@ -265,7 +265,10 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 				}
 				model := ctx
 				model.ToolTags = discoveryModeledCPUFeatures(ctx.ToolTags, ctx.GOARCH, cpuValue, minor)
-				expected := make(map[string]bool)
+				var expected map[string]bool
+				if len(experimentVars) > 0 {
+					expected = make(map[string]bool)
+				}
 				var toggles []string
 				for index, tag := range experimentVars {
 					value := baseline.MarkerSelection[tag]
