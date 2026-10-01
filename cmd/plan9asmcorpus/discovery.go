@@ -2556,7 +2556,11 @@ func runDiscoveryGoBuild(ctx context.Context, dir string, env []string, target s
 	if !ok || goos == "" || goarch == "" {
 		return fmt.Errorf("invalid discovery target %q", target)
 	}
-	args := []string{"build"}
+	// Compile the exact packages and their dependencies, including assembly,
+	// without requiring a main package to final-link. Library coverage belongs
+	// here; executable linking and execution have separate compatibility gates.
+	// Do not use -e or -find: compiler/assembler errors must remain failures.
+	args := []string{"list", "-export"}
 	if len(buildTags) != 0 {
 		args = append(args, "-tags="+strings.Join(buildTags, ","))
 	}

@@ -102,7 +102,10 @@ real package build rather than treating the missing layout as invalid source.
 
 For each target/tag/package group:
 
-1. Build that exact package with current Go, not `package/...`.
+1. Compile that exact package and its dependencies with current Go using
+   `go list -export`, not `package/...`. This compiles Go and assembly without
+   demanding an executable `main` entry point or running package initialization.
+   Final linking and execution belong to the separate compatibility repository.
 2. Run `go vet -asmdecl`. Only concrete argument-size/FP offset/FP width
    mismatches are ABI N/A. Generic vet errors must not hide translation.
    Equal-width whole-aggregate moves remain eligible: Go's asmdecl type-kind
