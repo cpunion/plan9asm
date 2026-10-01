@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"text/scanner"
 	"unicode"
@@ -78,6 +79,17 @@ func preprocess(src string) (string, error) {
 // The feature values come from the same GO* environment variables used to
 // select files and configure the assembler invocation.
 func GoAssemblerDefines(goos, goarch string) []string {
+	return GoAssemblerDefinesWithEnv(goos, goarch, nil)
+}
+
+// GoAssemblerDefinesWithEnv uses explicit target feature values when env is
+// non-nil. This lets a compiler pass its resolved configuration without
+// mutating the process environment; omitted entries use Go's baseline defaults.
+func GoAssemblerDefinesWithEnv(goos, goarch string, env map[string]string) []string {
+	getenv := os.Getenv
+	if env != nil {
+		getenv = func(name string) string { return env[name] }
+	}
 	defines := []string{}
 	if goos != "" {
 		defines = append(defines, "GOOS_"+goos)
@@ -87,19 +99,19 @@ func GoAssemblerDefines(goos, goarch string) []string {
 	}
 	switch goarch {
 	case "386":
-		value := os.Getenv("GO386")
+		value := getenv("GO386")
 		if value == "" {
 			value = "sse2"
 		}
 		defines = append(defines, "GO386_"+value)
 	case "amd64":
-		value := os.Getenv("GOAMD64")
+		value := getenv("GOAMD64")
 		if value == "" {
 			value = "v1"
 		}
 		defines = append(defines, "GOAMD64_"+value)
 	case "arm":
-		value := os.Getenv("GOARM")
+		value := getenv("GOARM")
 		if value == "" {
 			value = "7"
 		}
@@ -111,14 +123,36 @@ func GoAssemblerDefines(goos, goarch string) []string {
 		}
 		defines = append(defines, "GOARM_5")
 	case "arm64":
-		if lse, err := goARM64ProfileLSE(os.Getenv("GOARM64")); err == nil && lse {
+		if lse, err := goARM64ProfileLSE(getenv("GOARM64")); err == nil && lse {
 			defines = append(defines, "GOARM64_LSE")
 		}
 	}
 	return defines
 }
 
+// AssemblyPreprocessOptions supplies the real source inputs for preprocessing.
+// ReadInclude resolves an active quoted include using the caller's bounded
+// package/toolchain search. It returns a stable source identity and its bytes;
+// identities are used to diagnose include recursion. An inactive include never
+// calls the resolver, including when its operand is malformed or missing.
+type AssemblyPreprocessOptions struct {
+	FileName    string
+	Defines     []string
+	ReadInclude func(parent, name string) (fileName string, source []byte, err error)
+}
+
+// PreprocessAssemblySource expands Go assembly macros and active includes with
+// one source-order macro/conditional environment. Unlike the historical Parse
+// path, an unresolved active include is an error, never silently discarded.
+func PreprocessAssemblySource(src string, opt AssemblyPreprocessOptions) (string, error) {
+	return preprocessAssembly(src, opt.Defines, &opt)
+}
+
 func preprocessWithDefines(src string, defines []string) (string, error) {
+	return preprocessAssembly(src, defines, nil)
+}
+
+func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOptions) (string, error) {
 	macros := map[string]ppMacro{}
 	for _, name := range defines {
 		name = strings.TrimSpace(name)
@@ -145,9 +179,6 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		inElse      bool
 	}
 	isDefined := func(name string) bool {
-		// For now, only treat previously #defined macros as defined.
-		// This is enough for stdlib asm that uses GOAMD64_v* feature macros;
-		// llgo doesn't define those currently, so they default to false.
 		_, ok := macros[name]
 		return ok
 	}
@@ -207,10 +238,25 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		}
 	}
 
-	sc := bufio.NewScanner(strings.NewReader(src))
-	// The source is already in memory. Its length bounds a physical line,
-	// unlike Scanner's unrelated 64 KiB default (Go assembly has no such cap).
-	sc.Buffer(nil, len(src)+1)
+	newScanner := func(source string) *bufio.Scanner {
+		sc := bufio.NewScanner(strings.NewReader(source))
+		// An in-memory source bounds a physical line, unlike Scanner's 64 KiB
+		// default (Go assembly has no such line-length cap).
+		sc.Buffer(nil, len(source)+1)
+		return sc
+	}
+	sc := newScanner(src)
+	fileName := "<assembly>"
+	if opt != nil && opt.FileName != "" {
+		fileName = opt.FileName
+	}
+	type inputState struct {
+		scanner *bufio.Scanner
+		file    string
+		line    int
+	}
+	inputs := []inputState{}
+	activeFiles := map[string]bool{fileName: true}
 	inBlockComment := false
 	var defName string
 	var defParams []string
@@ -227,6 +273,11 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		if name == "" {
 			return fmt.Errorf("invalid #define with empty name")
 		}
+		if opt != nil {
+			if _, exists := macros[name]; exists {
+				return fmt.Errorf("redefinition of macro %s", name)
+			}
+		}
 		macros[name] = ppMacro{body: body, params: defParams}
 		refreshMacroNames()
 		defName = ""
@@ -237,7 +288,23 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 	}
 
 	lineno := 0
-	for sc.Scan() {
+	for {
+		if !sc.Scan() {
+			if err := sc.Err(); err != nil {
+				return "", fmt.Errorf("%s: %w", fileName, err)
+			}
+			if opt != nil && (defCont || inBlockComment) {
+				return "", fmt.Errorf("%s:%d: unterminated macro continuation or comment", fileName, lineno)
+			}
+			if len(inputs) == 0 {
+				break
+			}
+			delete(activeFiles, fileName)
+			parent := inputs[len(inputs)-1]
+			inputs = inputs[:len(inputs)-1]
+			sc, fileName, lineno = parent.scanner, parent.file, parent.line
+			continue
+		}
 		lineno++
 		rawLine := sc.Text()
 		// C-style preprocessing splices a physical backslash-newline before
@@ -288,8 +355,71 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		}
 
 		trim := strings.TrimSpace(line)
+		if opt != nil && strings.HasPrefix(trim, "#") {
+			// Tabs are token whitespace as well; do not recognize a directive
+			// by a substring prefix (#includeExtra is not #include).
+			fields := strings.Fields(strings.TrimSpace(trim[1:]))
+			if len(fields) == 0 {
+				return "", fmt.Errorf("%s:%d: invalid preprocessor directive", fileName, lineno)
+			}
+			directive := fields[0]
+			rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(trim[1:]), directive))
+			if !active && directive != "ifdef" && directive != "ifndef" && directive != "else" && directive != "endif" && directive != "line" {
+				continue
+			}
+			switch directive {
+			case "include", "define", "undef":
+			case "ifdef", "ifndef":
+				if !validPPIdentifier(rest) {
+					return "", fmt.Errorf("%s:%d: invalid #%s", fileName, lineno, directive)
+				}
+			case "else", "endif":
+				if rest != "" {
+					return "", fmt.Errorf("%s:%d: unexpected tokens after #%s", fileName, lineno, directive)
+				}
+			case "line":
+				if err := validatePPLine(rest); err != nil {
+					return "", fmt.Errorf("%s:%d: %w", fileName, lineno, err)
+				}
+				continue // source-position metadata, not a machine instruction
+			default:
+				return "", fmt.Errorf("%s:%d: unsupported Go assembly directive #%s", fileName, lineno, directive)
+			}
+			trim = "#" + directive
+			if rest != "" {
+				trim += " " + rest
+			}
+		}
 		if strings.HasPrefix(trim, "#include") {
-			// We do not need textflag.h values because TEXT flags are opaque.
+			if opt == nil {
+				// Preserve the historical parser behavior. Actual source readers
+				// opt into the strict API rather than inventing missing headers.
+				continue
+			}
+			if !active {
+				continue
+			}
+			rest := strings.TrimSpace(strings.TrimPrefix(trim, "#include"))
+			name, err := strconv.Unquote(rest)
+			if err != nil || !strings.HasPrefix(rest, "\"") {
+				return "", fmt.Errorf("%s:%d: invalid #include: %q", fileName, lineno, line)
+			}
+			if opt.ReadInclude == nil {
+				return "", fmt.Errorf("%s:%d: active #include %q requires a resolver", fileName, lineno, name)
+			}
+			includedName, includedSource, err := opt.ReadInclude(fileName, name)
+			if err != nil {
+				return "", fmt.Errorf("%s:%d: #include %q: %w", fileName, lineno, name, err)
+			}
+			if includedName == "" {
+				return "", fmt.Errorf("%s:%d: #include %q has no source identity", fileName, lineno, name)
+			}
+			if activeFiles[includedName] || len(inputs) >= 32 {
+				return "", fmt.Errorf("%s:%d: include cycle/depth at %s", fileName, lineno, includedName)
+			}
+			inputs = append(inputs, inputState{sc, fileName, lineno})
+			sc, fileName, lineno = newScanner(string(includedSource)), includedName, 0
+			activeFiles[fileName] = true
 			continue
 		}
 		if strings.HasPrefix(trim, "#undef") {
@@ -297,6 +427,11 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 				name := strings.TrimSpace(strings.TrimPrefix(trim, "#undef"))
 				if name == "" || strings.ContainsAny(name, " \t") {
 					return "", fmt.Errorf("line %d: invalid #undef: %q", lineno, line)
+				}
+				if opt != nil {
+					if _, exists := macros[name]; !exists || !validPPIdentifier(name) {
+						return "", fmt.Errorf("%s:%d: #undef for undefined macro %s", fileName, lineno, name)
+					}
 				}
 				delete(macros, name)
 				refreshMacroNames()
@@ -424,6 +559,12 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 	var out strings.Builder
 	for i, line := range lines {
 		trim := strings.TrimSpace(line)
+		if opt != nil && strings.HasPrefix(trim, "#") {
+			fields := strings.Fields(strings.TrimPrefix(trim, "#"))
+			if len(fields) == 0 || (fields[0] != "ifdef" && fields[0] != "ifndef" && fields[0] != "else" && fields[0] != "endif") {
+				return "", fmt.Errorf("unsupported macro-expanded preprocessor directive: %s", trim)
+			}
+		}
 		switch {
 		case strings.HasPrefix(trim, "#ifdef"):
 			name := strings.TrimSpace(strings.TrimPrefix(trim, "#ifdef"))
@@ -490,6 +631,12 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 			continue
 		}
 		if active {
+			if opt != nil && strings.HasPrefix(trim, "#") {
+				// The legacy emitter supports conditional directives in macro
+				// bodies. Other generated controls need token-stack processing;
+				// reject them rather than emitting an unconsumed include/define.
+				return "", fmt.Errorf("unsupported macro-expanded preprocessor directive: %s", trim)
+			}
 			out.WriteString(line)
 			out.WriteByte('\n')
 		}
@@ -498,6 +645,31 @@ func preprocessWithDefines(src string, defines []string) (string, error) {
 		return "", fmt.Errorf("unterminated expanded #if block: %s", strings.Join(expandedOpen, ", "))
 	}
 	return out.String(), nil
+}
+
+func validPPIdentifier(name string) bool {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(name))
+	s.Mode = scanner.ScanIdents
+	s.Error = func(*scanner.Scanner, string) {}
+	return s.Scan() == scanner.Ident && s.TokenText() == name && s.Scan() == scanner.EOF && s.ErrorCount == 0
+}
+
+func validatePPLine(rest string) error {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(rest))
+	s.Mode = scanner.ScanInts | scanner.ScanStrings
+	s.Error = func(*scanner.Scanner, string) {}
+	if s.Scan() != scanner.Int {
+		return fmt.Errorf("invalid #line number")
+	}
+	if _, err := strconv.Atoi(s.TokenText()); err != nil {
+		return fmt.Errorf("invalid #line number: %w", err)
+	}
+	if s.Scan() != scanner.String || s.Scan() != scanner.EOF || s.ErrorCount != 0 {
+		return fmt.Errorf("invalid #line filename or trailing tokens")
+	}
+	return nil
 }
 
 func expandPPLine(line string, macros map[string]ppMacro, macroNames []string, depth int) []string {
