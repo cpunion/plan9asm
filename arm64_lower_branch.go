@@ -73,6 +73,12 @@ func (c *arm64Ctx) lowerBranch(bi int, op Op, ins Instr, emitBr arm64EmitBr, emi
 			return true, term, err
 		}
 		if ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
+			if c.lowerProvenUnreachableControl(bi) {
+				return true, true, nil
+			}
+			if err := c.requireCallerSPRestored(bi, ins); err != nil {
+				return true, false, err
+			}
 			return true, true, c.tailCallAndRet(ins.Args[0])
 		}
 		tgt, ok := arm64BranchTarget(ins.Args[0])

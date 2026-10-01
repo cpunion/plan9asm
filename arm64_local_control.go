@@ -19,9 +19,11 @@ type arm64ControlState struct {
 }
 
 type arm64LocalControlPlan struct {
-	before     map[[2]int]arm64ControlValue
-	outer      string
-	autoReturn bool
+	before      map[[2]int]arm64ControlValue
+	stackBefore map[[2]int]arm64ControlValue
+	reachable   []bool
+	outer       string
+	autoReturn  bool
 }
 
 func arm64ControlExternal() arm64ControlValue { return arm64ControlValue{"": true} }
@@ -306,7 +308,10 @@ func arm64HardwareReturnAsBranch(ins Instr) Instr {
 }
 
 func (c *arm64Ctx) prepareLocalControl() error {
-	plan := &arm64LocalControlPlan{before: make(map[[2]int]arm64ControlValue)}
+	plan := &arm64LocalControlPlan{
+		before:      make(map[[2]int]arm64ControlValue),
+		stackBefore: make(map[[2]int]arm64ControlValue),
+	}
 	noFrame, leaf := c.frameSize == -8, true
 	for _, block := range c.blocks {
 		for _, ins := range block.instrs {
@@ -375,6 +380,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 			ins := arm64ControlDecode(original)
 			op := arm64ControlOp(ins)
 			post := strings.HasSuffix(string(ins.Op), ".P")
+			if op == "B" || op == "JMP" || op == OpRET {
+				plan.stackBefore[[2]int{bi, ii}] = arm64ControlRead(state.regs, SP)
+			}
 			if op == "BL" || op == "BLR" || op == "CALL" {
 				if len(ins.Args) != 1 || bi+1 >= len(c.blocks) {
 					continue // The ordinary grammar diagnoses malformed calls.
@@ -465,7 +473,37 @@ func (c *arm64Ctx) prepareLocalControl() error {
 			propagate(bi+1, state)
 		}
 	}
+	plan.reachable = make([]bool, len(before))
+	for index, state := range before {
+		plan.reachable[index] = state != nil
+	}
 	c.localControl = plan
+	return nil
+}
+
+// A dead source terminator has neither an unknown native target nor a caller
+// return. Retain its grammar validation, then terminate its LLVM block without
+// fabricating execution. Other instructions in the block are still lowered.
+func (c *arm64Ctx) lowerProvenUnreachableControl(bi int) bool {
+	if c.localControl == nil || bi < 0 || bi >= len(c.localControl.reachable) || c.localControl.reachable[bi] {
+		return false
+	}
+	c.b.WriteString("  unreachable\n")
+	return true
+}
+
+// The implicit Go frame is separate from explicit source-level SP arithmetic.
+// Go's RET epilogue pops a constant implicit frame; it does not repair a manual
+// SP delta. LLVM also restores its native frame on return, so synthesizing an
+// LLVM return is valid only when every reaching path restored the virtual SP.
+func (c *arm64Ctx) requireCallerSPRestored(bi int, ins Instr) error {
+	if c.localControl == nil {
+		return fmt.Errorf("%w: ARM64 caller return has no SP reaching-definition proof: %q", ErrProbeNeedsContext, ins.Raw)
+	}
+	value := c.localControl.stackBefore[[2]int{bi, c.currentInstruction}]
+	if len(value) != 1 || !value["sp:0"] {
+		return fmt.Errorf("%w: ARM64 caller return requires restored entry SP on every reaching path: %q", ErrProbeNeedsContext, ins.Raw)
+	}
 	return nil
 }
 

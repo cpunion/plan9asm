@@ -57,6 +57,9 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 	if err != nil {
 		return false, err
 	}
+	if c.lowerProvenUnreachableControl(bi) {
+		return true, nil
+	}
 	targets, err := c.localControlTargets(bi)
 	if err != nil {
 		return false, err
@@ -80,6 +83,9 @@ func (c *arm64Ctx) lowerRegisterControl(bi int, op Op, ins Instr) (bool, error) 
 			}
 			if op != OpRET && c.localControl.autoReturn {
 				return false, fmt.Errorf("%w: ARM64 branch through caller link has no Go frame epilogue proof: %q", ErrProbeNeedsContext, ins.Raw)
+			}
+			if err := c.requireCallerSPRestored(bi, ins); err != nil {
+				return false, err
 			}
 			fmt.Fprintf(c.b, "  br label %%%s\n", arm64LLVMBlockName(targets[0]))
 			c.recordARM64FlagFlowEdges(targets[0])

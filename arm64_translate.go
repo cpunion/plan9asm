@@ -987,6 +987,9 @@ func (c *arm64Ctx) lowerBlocks() error {
 		if terminated {
 			continue
 		}
+		if c.lowerProvenUnreachableControl(bi) {
+			continue
+		}
 		// Fallthrough to next block.
 		if bi+1 < len(c.blocks) {
 			emitBr(c.blocks[bi+1].name)
@@ -1019,6 +1022,12 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 			c.flagFlow.blocks[c.flagFlow.current].returns = true
 		}
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpSym && strings.HasSuffix(ins.Args[0].Sym, "(SB)") {
+			if c.lowerProvenUnreachableControl(bi) {
+				return true, nil
+			}
+			if err := c.requireCallerSPRestored(bi, ins); err != nil {
+				return true, err
+			}
 			return true, c.tailCallAndRet(ins.Args[0])
 		}
 		if len(ins.Args) > 1 {
@@ -1034,6 +1043,12 @@ func (c *arm64Ctx) lowerInstr(bi int, ins Instr, emitBr arm64EmitBr, emitCondBr 
 				ins.Args = []Operand{target}
 				return c.lowerRegisterControl(bi, OpRET, ins)
 			}
+		}
+		if c.lowerProvenUnreachableControl(bi) {
+			return true, nil
+		}
+		if err := c.requireCallerSPRestored(bi, ins); err != nil {
+			return true, err
 		}
 		return true, c.lowerRET()
 	case OpWORD:
