@@ -617,7 +617,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		}
 		return fmt.Errorf("parse asm: %w", err)
 	}
-	if len(file.Funcs) == 0 {
+	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
 		if ccfg.Feature != nil {
 			return fmt.Errorf("explicit feature variant did not produce translated TEXT")
 		}
