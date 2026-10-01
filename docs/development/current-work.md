@@ -1,185 +1,105 @@
 # Current work: PR 40 verification repairs
 
 Read [validation](validation.md) and
-[discovery verification](discovery-verification.md) before continuing.
-Use `git worktree list` to find persistent development and frozen evidence
-trees. Never edit a tree while its tests or corpus verification are running.
+[discovery verification](discovery-verification.md). Locate persistent worktrees
+with Git; never edit or rebase a tree with an active verification run.
 
-## Authority and promotion
+## Authority and remote state
 
-Upstream PR 40 remains Draft. Repair batches use fork Draft PR 4, targeting
-`codex/expand-ecosystem-corpus-20260913`, not fork main. Push only to `cpunion`;
-do not update the upstream-connected branch until current-head fork CI,
-review and exclusion-policy gates pass. The last inspected fork run,
-36662878534 at `3aeb6b7c`, failed discovery shard 39 and its aggregate.
-Later local repairs are not pushed. Keep funnel tables in the PR body.
+Repair batches belong in fork Draft PR 4, targeting
+`codex/expand-ecosystem-corpus-20260913`, not fork main. Push only to `cpunion`.
+Do not promote its upstream-connected head until current-head fork CI, review
+and exception-policy gates pass. Upstream PR 40 remains Draft.
 
-## Immutable historical evidence
+The last inspected fork run is `36662878534` at `3aeb6b7c`: discovery shard 39
+failed Intel's raw UMONITOR decoding, then aggregate verification failed.
+Subsequent local commits are not pushed. Keep scan/coverage funnel tables in
+the PR body, derived from validated evidence rather than console PASS lines.
 
-The imported scan has continuous ranges from `2025-10-01T00:00:00Z` through
-`2026-09-22T22:43:08Z`. This completes that bounded historical inventory,
-not the later incremental interval or the whole Module Index.
-Standalone inventory and cgo records stay outside this repository.
+## Evidence boundaries
 
-Source `754cbebb` finished all 64 discovery shards but failed five. Audited
-publisher `3c32ecc3` preserves those outcomes: complete accounting is not
-verified success. Ten exact-version download failures have a checksum-verified
-read-only proxy checkpoint. The other failure was a Go compiler/GC crash in
-spidermonkeywasm2go; one successful retry does not establish a fix.
-Keep that source, ledger, tools and reports unchanged. New source needs fresh
-reports; never copy pass flags or combine different source revisions.
+The imported Index ranges are continuous from `2025-10-01T00:00:00Z` through
+`2026-09-22T22:43:08Z`. That interval is consumed, not the whole Index or later
+incremental updates. Failed inspections remain retries. Do not rescan/import
+records while verification uses this immutable input. Standalone inventory and
+cgo records remain outside this repository.
 
-## Integrated development
+Historical source `754cbebb` completed all 64 shards with five failures;
+publisher `3c32ecc3` preserves those outcomes. Complete accounting is not
+verified success. Read-only exact-download recovery evidence does not prove
+translation, and a Go compiler crash is not source N/A.
 
-The integration branch is `codex/pr40-guarded-integration-20261001`. Locate
-it using Git, not a personal filesystem path. Its important repairs include:
+The frozen `codex/pr40-validation-20261001` tree is at `6b0c20a4`. Its full root
+run had one failing LEA fixture: the fixture constructed an immediate FP address
+despite spelling a Go non-immediate operand. The subsequent fixture repair
+parses real Go syntax and preserves Go-rejected immediate-FP negatives.
+Its five-architecture enumeration gate passed; its strict standard-library and
+benchmark gates did not. Its discovery replay also exposed proof/scope defects.
+These reports are diagnostic historical inputs, not evidence for later commits.
+Never relabel, mix revisions, or copy their passes into the current ledger.
 
-- Exact zero-size asmdecl warning filtering, frontend registration inventory,
-  strict ordinary source-selection proof and mandatory proof for every PASS.
-- Declaration-backed Go ABI0 frame bridging, private-frame alias checks,
-  source LR/SP return guards and real source RET-width semantics. Unknown
-  native branches, escaped frames and missing entry contracts fail closed.
-- One ARM64 CFG/control route for every public translation entry point;
-  compile-only form probes do not invent an ordinary caller return contract.
-- Shared typed raw ARM64 decoders: SVE, floating, integer/crypto SIMD and
-  state/memory effects. Z/V/ZA registers are not GP registers; real stores
-  taint saved continuation memory. Unknown exceptions/calls remain conservative.
-- Shared complete paired-atomic grammar/effects, including Go's physical
-  zero-offset named-SP forms. Operand probes preserve real source SP/LR or
-  explicitly terminate; they never manufacture an ordinary return proof.
-- Declaration-backed ARM64 ABIInternal aggregates, caller-save availability,
-  narrow-bit transport and all seven VMOV duplication arrangements, with
-  independent Go/LLVM runtime oracles. Hidden native registers remain explicit.
-- ARM kuser/native-continuation support and complete barrel-shift/multiply
-  flag semantics. An explicit address-only machine-entry shim captures physical
-  state and bounded source stack storage; asyncPreempt is not yet supported.
-- Compile-only exact Go package checks via `go list -export`, rather than
-  executable linking; explicit target CPU macros and actual Go package-role
-  experiment macro registration. Source-required profile planning and offline
-  replay and production consumers bind source-required profiles to the same
-  Go export/vet, actual package selection, CPP graph and LLVM objects. Schema 10,
-  progress schema 2 and assembly-ledger v2 retain all four scope dimensions.
-  Fresh reports remain required; implementation alone validates no old N/A.
-- Architecture-aware asmdecl access widths: scalar broadcast reads use their
-  actual memory width, and ARM MOVW is not an x86 two-byte access. Real Go
-  declarations and LLVM 22 objects cover the affected forms; historical
-  external-module exclusions still require an exact-source replay.
-- ABI0 TEXT metadata accepts the logical data end or its Go register-size
-  alignment, without creating FP fields in padding. Explicit x86 FP offsets
-  remain authoritative even for uniquely named results; never relocate them
-  by name. Padded float32 sqrt and stale-offset source counterexamples are
-  covered by Go/LLVM object, numeric and rejection regressions.
-  The shared x86 LEA family takes addresses of bound typed storage, not FP
-  values or invented zeros; Go-rejected immediate FP spellings stay rejected.
-- Caller-owned internal LLVM contexts for Go binding, with module-before-context
-  disposal. Concurrent feature observations use canonical keys, deep-cloned
-  results and actual-driver/subtool byte and route rechecks. Ordinary production
-  CPP capture binds actual assembly/header bytes and Go include search to the
-  exact module ZIP, with guards around package checks and translation. Its
-  feature-profile/branch proofs retain actual driver, child-tool and consumer
-  identity. Unknown includes, unconsumed profiles and missing proofs fail.
-- Raw x86 near returns retain native width and imm16 cleanup. Zero-cleanup
-  forms need a stack-unobserving leaf and bounded static/typed FP accesses;
-  byte-exact naked TEXT cannot silently omit Go's prologue or FP transport.
-  Exact slot width, signature field/type binding and nonoverlap are checked.
-  Generic partial FP writes still need a separate high-byte preservation fix.
-  Shared RIP decoders now bind read width and the complete operand shape to
-  actual materialized DATA bytes. Address escapes disable constant folding
-  without losing the independently bounded runtime-read contract.
-- Go bool FP storage is canonical i8, with explicit i1 conversions at typed
-  parameter/result and outgoing ABI0 call boundaries. LEA takes that storage's
-  address. Five-target objects and native Go/LLVM scalar, aggregate-field and
-  outgoing-call oracles cover the change; partial/wider-slot negatives remain.
-- Unbound ARM/ARM64 FP addresses fail instead of becoming zero pointers.
-  Unknown compiler diagnostics and assembler failure footers cannot establish
-  source N/A. Compact ledger source rejections retain a diagnostic digest and
-  portable source positions; old reason-only skips cannot acquire invented
-  evidence.
+## Integration and active independent work
 
-The full root run at `ac3681dc` failed 48 top-level tests after strengthened
-raw x86 return contracts. Subsequent repairs distinguish bounded static reads
-from unbound-pointer instruction-form fixtures. For the latter, the original
-Go bytes remain a required return-contract rejection; an independent UD2
-probe preserves every preceding instruction and proves only operand lowering
-and object compilation, never execution of the original function. All affected
-families have focused red/green logs. No current-head exhaustive root or fresh
-external-corpus success is claimed until its frozen gates finish.
+Development branch: `codex/pr40-guarded-integration-20261001`.
+Important completed local repairs include declaration-backed ABI0 frames, exact
+bool FP storage, raw return-width and bounded static-read contracts, ordinary
+schema-10 profile consumers, shared-file custom-tag scope closure, authenticated
+proxy metadata for legacy ZIPs, and actual data/BSS object generation.
 
-The new strict benchmark advanced past `internal/bytealg/equal_386.s` after
-the bool storage repair, but still fails at `reflect.makeFuncStub`'s dynamic
-`argframe+0(FP)` address. Its source has no fixed argument-size declaration.
-Do not invent a byte alloca or zero pointer: it needs an explicit physical
-source-frame/entry bridge. Retain the real failure while investigating.
+Ordinary noninstrumented profile planning no longer pairs an otherwise normal
+assembly file with an impossible race/msan/asan-only Go partner. Actual
+instrumentation-only assembly still needs its own driver contract.
+Macro-only files require successful same-scope Go assembly with a real object
+and empty `-S` listing, plus actual LLVM output; no-TEXT is not a silent pass.
+The default owned build cache exists before actual Go subtool-route capture.
 
-ARM source-frame companions `276e74f8`, `327df1ba` and `d2e373a8` are not yet
-integrated. Their source SP/continuation guards expose 16 real ARM top-level
-failures and a strict stdlib/benchmark failure at MD5's named local `end-4(SP)`.
-Do not relabel them as green: ARM currently lacks Go NAME_AUTO local backing,
-private outgoing ABI0 slots and the required callee/effect bridges.
+Source-order active-include preprocessing and typed complete `go_asm.h`
+generation have Go assembler/compiler oracles for all five architectures.
+Generic-alias fixtures use a separate Go 1.24 language-version file; common
+header/instruction tests still execute on Go 1.20, without missing-tool skips.
+The discovery producer/consumer/offline generated-header binding is being
+developed independently on `codex/generated-go-header-profile-proof-20261001`.
+Metadata-only header capture must never count as translation PASS.
 
-Earlier five-architecture classification gates and all 40 Go 1.20–1.27
-source-table audits passed. These are enumeration checks, not eight toolchain
-runtime runs. New source still requires fresh gates. ARM32 QEMU 7.2 diagnostic
-oracles do not replace the required pinned QEMU 10.2.3 cross gate.
+ARM64 typed prefetch/DCZID effects now retain exact native-emission proofs.
+The independent `codex/pr40-arm64-dc-zva-effects-20261001` branch additionally
+models hardware-sized ZVA stores, with complete named/raw grammar, conservative
+continuation-memory invalidation and actual Go/LLVM runtime oracles. Review its
+original/normalized private-address gates before integration; no inferred
+granule, noalias or privileged-operation exemption is permitted.
 
-## Active independent work
+## Remaining gates and contracts
 
-1. Discovery feature profiles: freeze and verify the integrated production
-   consumer before replaying all 64 shards. Actual Go registrations, driver/
-   child-tool bytes and routes, package roles, CPP graphs and LLVM outputs bind
-   each ordinary file/target/profile-ID/custom-tag scope. Old schema-9 evidence
-   cannot be relabeled. Reevaluate historical source N/A; missing proof or
-   infrastructure errors must not become a source skip. The ordinary matrix
-   is non-test and cgo-disabled: test-only and cgo-enabled roles need their own
-   explicit source/tool/consumer scopes, not an invented blanket Go exclusion.
-   Each ledger comparison independently verifies both snapshots first, then
-   compares source/target/profile/CPP/outcome semantics. Cross-host tool/object
-   hashes and LLVM 22 patch differences are not semantic coverage differences;
-   complete exact physical provenance remains mandatory within each run.
-2. ARM native entry/returns: extend the explicit physical shim only with closed
-   continuation/effect proofs. Go accepts RET register operands that are not
-   ordinary caller returns; preserve actual Go/runtime counterexamples.
-3. ARM64 private register helpers: fold only complete same-file, register-only
-   leaf call graphs into their caller CFG with a proved source continuation.
-   Memory/frame escapes, unknown entries and hidden closure/native registers
-   require separate contracts. Never guess scalar signatures from body shape.
-4. Remaining root regressions: distinguish genuinely unsafe source returns
-   from stale IR-shape assertions; fix complete typed effect families and retain
-   unsafe-source negatives. Framed tail jumps must not acquire an invented
-   epilogue. Keep genuine failures until independently demonstrated fixes pass.
-   Raw x86 near returns must retain native return-width and imm16 stack effects;
-   only a proved zero-cleanup, stack-unobserving leaf is an ordinary return.
-   Include effective-address constants and subregister views in that proof.
-   ARM framed returns must not assume their saved LR slot stayed intact, and
-   ARM64 private helpers must not virtualize hidden platform registers or
-   escape through excluded siblings and native-layout observers.
-5. llgo user regressions: the separate contribution uses a remotely resolvable
-   `go.mod` replacement pinned to the final fork plan9asm head. The actual
-   Linux/amd64 baseline passes native Go for huff0, websocket, crc32, go-hex,
-   purego and modernc/libc. llgo currently passes the first two but retains
-   getAuxv link failures, syscall15X helper metadata failure and modernc GO_ARGS
-   macro handling failure. websocket's public API uses maskGo in the tested
-   version; its direct maskAsm oracle is separate. ARM64 also needs an explicit
-   hidden closure-register bridge, not a guessed third argument. Keep all
-   remaining failures visible; compilation alone is not executed ABI proof.
+Fresh current-source exhaustive tests and all 64 reports are still required.
+Generate evidence only from clean stamped tools and frozen source/scan inputs;
+use the automatic assembly-ledger writer after its shared audit succeeds.
+Keep failed and pending candidates visible; only complete zero-failure coverage
+may become verified. Release owned caches after every writer exits.
 
-## Completion sequence
+The strict benchmark still exposes dynamic reflect FP frames and native entry/
+continuation contracts. ARM NAME_AUTO/local-frame and outgoing-call companions
+are not integrated; hidden ARM64 closure registers, private tail entries and
+runtime context-switch functions also need real caller/effect contracts.
+Never invent FP allocation sizes, signatures or constant register values, or
+turn these translation failures into source N/A.
 
-1. Finish bounded repairs with true red/green evidence, affected-target LLVM 22
-   objects and runtime oracles. Commit promptly; batch pushes.
-2. Integrate reviewed fixes, replace this checkpoint, commit and freeze source.
-3. Run official/form gates, strict stdlib and benchmark, exhaustive root/nested
-   tests, vet/build and required cross-runtime gates.
-4. Replay all 64 discovery shards using bounded parallel batches and verified
-   read-only proxies. Own and remove candidate caches; never clean global or
-   live-writer caches. Audit before publishing matching assembly evidence.
-5. Every selected version needs a tested pass or explained supported skip.
-   Pending/failed prevent completion; historical passes are not current proof.
-6. Push to fork PR 4, finish CI/review/coverage, then promote to PR 40.
+## llgo user-regression contribution
 
-Native-byte-layout/JIT exclusions remain provisional and require review.
-Final-link/runtime checks belong in the separate compatibility repository.
-Its schema-4 vendor proof is captured before Go oracles and rechecked after
-execution; local workflows are not deployed. Old schema-3 diagnostics cannot
-be promoted. llgo's old pinned plan9asm dependency still has a genuine failure;
-a local replacement is development evidence, not passing pinned CI.
+Branch `codex/pr40-user-package-e2e-20261001` uses a local replacement only for
+development. Before creating the contribution, pin `go.mod` to the remotely
+resolvable final fork plan9asm head; never commit a local path or invented version.
+Exact regressions live in the nested `test/asm` module.
+
+Actual Linux/AMD64 Go execution passes all six issue libraries. Actual llgo
+execution passes huff0, CRC32, go-hex, websocket and modernc/libc Uint128.
+Websocket's public mask uses Go in the reported version; its separately named
+private-kernel oracle executes assembly. Unavailable CRC AVX512/go-hex AVX
+branches are not claimed as executed. None of this is final pinned CI evidence.
+
+Purego still fails at `syscall15X`: its native C/g0 calls, callbacks, closure
+bridge and fixed callback-address table need a broader explicit runtime contract.
+The user has been asked whether that bridge belongs in this or a separate PR.
+The whole ARM64 llgo translator suite also retains its two R26 closure failures
+and a memmove continuation fixture failure. Do not delete symbols, skip these
+failures, or claim all reported issues fixed. Provisional native-byte-layout/JIT
+exceptions still require review before promotion.
