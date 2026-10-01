@@ -15,6 +15,17 @@ func TestARM64InstructionProbeDoesNotRequireDataToPreserveCallerState(t *testing
 		"MOVD $0x1708(RSP), RSP",
 		"MOVD $-0x10000(RSP), RSP",
 		"MOVD R2, RSP",
+		"ADD R2, RSP, RSP",
+		"ADD R2.SXTX<<1, RSP, RSP",
+		"ADDW R1<<2, R3, RSP",
+		"SUB R1<<3, RSP",
+		"MOVW $0x10001000, RSP",
+		"AND $8, R0, RSP",
+		"BIC $8, R0, RSP",
+		"EOR $8, R0, RSP",
+		"ORR $8, R0, RSP",
+		"EON $8, R0, RSP",
+		"ORN $8, R0, RSP",
 	} {
 		t.Run(instruction, func(t *testing.T) {
 			// This is a compile-only harness, never an executable success.
@@ -65,7 +76,7 @@ func TestARM64InstructionProbeDoesNotRequireDataToPreserveCallerState(t *testing
 
 func TestARM64InstructionProbeRetainsNativeControlContracts(t *testing.T) {
 	for _, instruction := range []string{
-		"BL (R2)", "CALL (R15)", "RET R9", "JMP (R29)",
+		"BL (R2)", "CALL (R15)", "RET R0", "RET R6", "RET R9", "RET R27", "JMP (R29)",
 		"WORD $0xd61f0120", "WORD $0xd65f0120",
 	} {
 		t.Run(instruction, func(t *testing.T) {
@@ -80,5 +91,20 @@ func TestARM64InstructionProbeRetainsNativeControlContracts(t *testing.T) {
 				t.Fatalf("a faulting probe exit cannot establish an unknown native target's ABI: %v", err)
 			}
 		})
+	}
+}
+
+func TestARM64InstructionProbeExitRetainsStackMemorySafety(t *testing.T) {
+	source := "TEXT unboundedStack(SB),516,$0-0\nADD R2,RSP,RSP\nMOVD (RSP),R3\nB (ZR)\n"
+	requireARM64GoAssemblerResult(t, source, true)
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{
+		"unboundedStack": {Name: "unboundedStack", Ret: Void},
+	}})
+	if err == nil || !strings.Contains(err.Error(), "cannot bound dynamic local stack access") {
+		t.Fatalf("a real dereference of unbounded local SP must remain rejected: %v", err)
 	}
 }

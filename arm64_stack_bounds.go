@@ -136,9 +136,13 @@ func (c *arm64Ctx) stackMovementRange() (minimum, maximum int64, err error) {
 			// A restored SP need not be bounded if it is never dereferenced
 			// again (for example asmcgocall's final restore before RET).
 			// Require bounds at each actual local-memory use instead.
-			call := ins.Op == "BL" || ins.Op == "CALL" || ins.Op == "BLR"
+			controlOp := normalizeInstructionOpcode(ins.Op)
+			call := controlOp == "BL" || controlOp == "CALL" || controlOp == "BLR"
+			branch := controlOp == "B" || controlOp == "JMP" || controlOp == "BR"
 			for _, arg := range ins.Args {
-				if arg.Kind != OpMem || call || !arm64StackReg(arg.Mem.Base) && arg.Mem.Base != ZR {
+				// A parenthesized branch target is a register, not a memory
+				// dereference. In BR/BLR register 31 reads XZR, not SP.
+				if arg.Kind != OpMem || call || branch || !arm64StackReg(arg.Mem.Base) && arg.Mem.Base != ZR {
 					continue
 				}
 				address := state[31]
