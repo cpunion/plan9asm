@@ -68,6 +68,61 @@ func TestCPPConditionsWitnessDoesNotEmbedSourceBodies(t *testing.T) {
 	}
 }
 
+func TestCPPConditionsRawInventoryRetainsDirectiveAtFileEOF(t *testing.T) {
+	// This is original-source registration, not proof that a translation unit
+	// is valid. cmd/asm may obtain the terminating newline from its parent
+	// tokenizer; independently observed compilation still decides acceptance.
+	for _, source := range []string{
+		"#define EMPTY", "#define VALUE 42", "#define F(x) x",
+		"#ifdef PRESENT", "#ifndef ABSENT", "#undef PRESENT",
+		"#else", "#endif", "#include \"inner.h\"", "#line 337 \"mapped.s\"",
+	} {
+		input, err := discoveryCPPConditionsFromBytes("header.h", []byte(source))
+		if err != nil || len(input.Directives) != 1 || input.SHA256 != discoveryFeatureBytesSHA256([]byte(source)) {
+			t.Errorf("complete directive at file EOF lost its original bytes/control: %q %+v %v", source, input, err)
+		}
+	}
+	for _, source := range []string{"#", "#ifdef", "#ifndef 42", "#include", "#line 337", "#unknown"} {
+		if _, err := discoveryCPPConditionsFromBytes("invalid.h", []byte(source)); err == nil {
+			t.Errorf("incomplete/unknown EOF directive accepted by raw registration: %q", source)
+		}
+	}
+}
+
+func TestCPPInputsHeaderEOFOriginalZIPAndReplay(t *testing.T) {
+	plan, root, archive := fixtureCPPInputsForTarget(t, "linux/amd64", map[string]string{
+		"pkg/sub/outer.h":    "#ifdef GOARCH_amd64\n#define ACTIVE 1\n#endif",
+		"pkg/native_amd64.s": "#include \"sub/outer.h\"\n\n#ifdef ACTIVE\nTEXT ·Probe(SB),$0-0\nRET\n#endif\n",
+	})
+	files := []string{"pkg/native_amd64.s"}
+	inputs, err := captureDiscoveryCPPInputs(plan, root, runtime.GOROOT(), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyDiscoveryCPPModuleZIP(inputs, plan, archive); err != nil {
+		t.Fatal(err)
+	}
+	directives, err := discoveryCPPUnitDirectives(inputs, inputs.Units[0], make(map[string]bool))
+	if err != nil {
+		t.Fatal(err)
+	}
+	states, err := replayDiscoveryCPPConditions(directives, []string{"GOARCH_amd64"})
+	if err != nil || !states[3].OuterActive || !states[3].Then {
+		t.Fatalf("EOF source-control replay lost the real active branch: %v %v", states, err)
+	}
+	data, err := json.Marshal(inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded discoveryCPPInputs
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateDiscoveryCPPInputs(&decoded, plan, files); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCPPConditionsReplayTracksLocalDefinitionsAndNestedPaths(t *testing.T) {
 	input, err := discoveryCPPConditionsFromBytes("entry.s", []byte("#ifdef GOAMD64_v3\n#define LOCAL 1\n#else\n#define OTHER 1\n#endif\n#ifdef LOCAL\n#ifndef OTHER\n#endif\n#endif\n#undef LOCAL\n"))
 	if err != nil {

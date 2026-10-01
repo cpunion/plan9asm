@@ -131,6 +131,13 @@ Keep regressions for test-only declarations, concrete referenced `go_asm.h`
 layouts, undeclared tail-forwarding ABI inference and exact-package asmdecl.
 Never accept arbitrary frame mismatches just to make historical modules pass.
 
+CPP inventory records original controls, not syntax acceptance of each isolated
+header. In cmd/asm, an included tokenizer's EOF resumes its parent: a final
+directive can obtain its required newline from that parent, but cannot invent
+one at translation-unit EOF. Preserve the original bytes/hashes and verify the
+actual source graph; do not append newlines, relabel capture errors as source
+N/A, or infer whole-package/runtime success from successful registration.
+
 ## Reports and provenance
 
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed

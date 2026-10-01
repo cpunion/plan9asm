@@ -123,9 +123,10 @@ func discoveryCPPConditionsFromBytes(file string, data []byte) (discoveryCPPSour
 		default:
 			return input, fmt.Errorf("CPP %s:%d: unsupported Go directive %s (not N/A)", file, directive.Line, directive.Kind)
 		}
-		if eof {
-			return input, fmt.Errorf("CPP %s:%d: directive requires a terminating newline", file, directive.Line)
-		}
+		// This records original controls, not translation-unit acceptance.
+		// cmd/asm's input stack resumes the parent tokenizer at include EOF;
+		// a directive's required newline can therefore belong to that parent.
+		// The actual assembler and active consumer must still validate syntax.
 		if len(input.Directives) >= discoveryCPPDirectiveLimit {
 			return input, fmt.Errorf("CPP directives exceed the explicit %d-item source bound", discoveryCPPDirectiveLimit)
 		}

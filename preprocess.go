@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"sort"
@@ -245,6 +246,19 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 		// An in-memory source bounds a physical line, unlike Scanner's 64 KiB
 		// default (Go assembly has no such line-length cap).
 		sc.Buffer(nil, len(source)+1)
+		if opt != nil {
+			// Keep real newline tokens. ScanLines would silently turn a final
+			// unterminated directive into a terminated one.
+			sc.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+				if end := bytes.IndexByte(data, '\n'); end >= 0 {
+					return end + 1, data[:end+1], nil
+				}
+				if atEOF && len(data) > 0 {
+					return len(data), data, nil
+				}
+				return 0, nil, nil
+			})
+		}
 		return sc
 	}
 	sc := newScanner(src)
@@ -279,6 +293,11 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 			if _, exists := macros[name]; exists {
 				return fmt.Errorf("redefinition of macro %s", name)
 			}
+			var err error
+			body, err = normalizePPMacroEscapes(body)
+			if err != nil {
+				return err
+			}
 		}
 		macros[name] = ppMacro{body: body, params: defParams}
 		refreshMacroNames()
@@ -308,17 +327,52 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 			continue
 		}
 		lineno++
+		statementFile, statementLine := fileName, lineno
 		rawLine := sc.Text()
+		terminated := opt == nil || strings.HasSuffix(rawLine, "\n")
+		rawLine = strings.TrimSuffix(rawLine, "\n")
 		// C-style preprocessing splices a physical backslash-newline before
 		// removing comments. Record it before the comment pass below can erase
 		// the slash from a continued multi-line #define.
 		physicalContinuation := strings.HasSuffix(strings.TrimRight(rawLine, " \t\r"), "\\")
 		line := stripAssemblyComments(rawLine, &inBlockComment)
 		line = strings.TrimRight(line, " \t")
+		if opt != nil && !terminated && (strings.HasPrefix(strings.TrimSpace(line), "#") || defCont) {
+			// Go's lex.Stack discards an exhausted included tokenizer, not a
+			// newline. Read the parent tokens until a real newline is found.
+			// Tokenizers stay separate: comments cannot cross file boundaries
+			// and identifiers cannot concatenate across those boundaries.
+			for !terminated && len(inputs) > 0 {
+				if inBlockComment {
+					return "", fmt.Errorf("%s:%d: unterminated comment", fileName, lineno)
+				}
+				delete(activeFiles, fileName)
+				parent := inputs[len(inputs)-1]
+				inputs = inputs[:len(inputs)-1]
+				sc, fileName, lineno = parent.scanner, parent.file, parent.line
+				if !sc.Scan() {
+					if err := sc.Err(); err != nil {
+						return "", fmt.Errorf("%s: %w", fileName, err)
+					}
+					continue
+				}
+				lineno++
+				next := sc.Text()
+				terminated = strings.HasSuffix(next, "\n")
+				next = strings.TrimSuffix(next, "\n")
+				line += " " + stripAssemblyComments(next, &inBlockComment)
+			}
+		}
 		// cmd/asm also accepts historical assembly that places a // comment
 		// after the continuation slash. In that spelling the slash only becomes
 		// the last token after comment removal (for example "MOVQ ... \\ // why").
 		physicalContinuation = physicalContinuation || strings.HasSuffix(line, "\\")
+		if opt != nil {
+			// At file EOF a following parent token can complete a backslash
+			// pair rather than an escaped newline. Decide from the merged
+			// token line, not the exhausted header's last byte alone.
+			physicalContinuation = hasPPContinuation(line)
+		}
 		// A newline within a block comment is not the end of a macro body.
 		// cmd/asm removes the entire comment before parsing #define lines, so
 		// only the newline after the closing */ can terminate the definition.
@@ -369,6 +423,15 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 			if !active && directive != "ifdef" && directive != "ifndef" && directive != "else" && directive != "endif" && directive != "line" {
 				continue
 			}
+			if !terminated {
+				// cmd/asm alone permits EOF directly after an object-like macro
+				// name. Function-like definitions and nonempty bodies require
+				// an actual newline, as do all other active controls.
+				_, params, body, err := parseMacroDefine(rest)
+				if directive != "define" || err != nil || params != nil || body != "" {
+					return "", fmt.Errorf("%s:%d: #%s requires a terminating newline", statementFile, statementLine, directive)
+				}
+			}
 			switch directive {
 			case "include", "define", "undef":
 			case "ifdef", "ifndef":
@@ -409,7 +472,7 @@ func preprocessAssembly(src string, defines []string, opt *AssemblyPreprocessOpt
 			if opt.ReadInclude == nil {
 				return "", fmt.Errorf("%s:%d: active #include %q requires a resolver", fileName, lineno, name)
 			}
-			includedName, includedSource, err := opt.ReadInclude(fileName, name)
+			includedName, includedSource, err := opt.ReadInclude(statementFile, name)
 			if err != nil {
 				return "", fmt.Errorf("%s:%d: #include %q: %w", fileName, lineno, name, err)
 			}
@@ -670,6 +733,53 @@ func validPPIdentifier(name string) bool {
 	s.IsIdentRune = ppIdentRune
 	s.Error = func(*scanner.Scanner, string) {}
 	return s.Scan() == scanner.Ident && s.TokenText() == name && s.Scan() == scanner.EOF && s.ErrorCount == 0
+}
+
+func hasPPContinuation(line string) bool {
+	line = strings.TrimRight(line, " \t\r")
+	backslashes := 0
+	for i := len(line) - 1; i >= 0 && line[i] == '\\'; i-- {
+		backslashes++
+	}
+	return backslashes%2 != 0
+}
+
+// cmd/asm escapes only a newline or another backslash in macro replacement
+// tokens. Strings/chars remain scanner tokens, so their internal escapes must
+// not be interpreted as preprocessor escapes.
+func normalizePPMacroEscapes(body string) (string, error) {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(body))
+	s.Mode = scanner.ScanChars | scanner.ScanFloats | scanner.ScanIdents | scanner.ScanInts | scanner.ScanStrings
+	s.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
+	s.IsIdentRune = ppIdentRune
+	var scanErr error
+	s.Error = func(_ *scanner.Scanner, message string) {
+		scanErr = fmt.Errorf("invalid macro replacement: %s", message)
+	}
+	var out strings.Builder
+	start := 0
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		if tok != '\\' {
+			continue
+		}
+		escape := s.Position.Offset
+		next := s.Scan()
+		if next != '\\' && next != '\n' {
+			return "", fmt.Errorf("macro replacement can only escape a backslash or newline")
+		}
+		out.WriteString(body[start:escape])
+		out.WriteRune(next)
+		start = s.Position.Offset + 1
+	}
+	if scanErr != nil {
+		return "", scanErr
+	}
+	if start == 0 {
+		return body, nil
+	}
+	out.WriteString(body[start:])
+	return out.String(), nil
 }
 
 func validatePPLine(rest string) error {
