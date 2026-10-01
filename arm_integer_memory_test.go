@@ -249,23 +249,18 @@ func TestARMIntegerMemoryAddressModelRuntime(t *testing.T) {
 					var shift string
 					var n uint
 					fmt.Sscanf(tc.offset, "R0%2s%d", &shift, &n)
+					if n == 0 {
+						shift = "<<" // Go oplook canonicalizes all non-extension zero shifts.
+					}
 					switch shift {
 					case "<<":
 						delta = value << n
 					case ">>":
-						if n != 0 {
-							delta = value >> n
-						}
+						delta = value >> n
 					case "->":
-						if n == 0 {
-							n = 31
-						}
 						delta = uint32(int32(value) >> n)
 					case "@>":
 						delta = bits.RotateLeft32(value, -int(n))
-						if n == 0 {
-							delta = value>>1 | carry<<31
-						}
 					default:
 						t.Fatalf("bad test shift %q", tc.offset)
 					}

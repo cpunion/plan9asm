@@ -205,33 +205,8 @@ func (c *armCtx) eval32(op Operand, postInc bool) (string, error) {
 }
 
 func (c *armCtx) evalShift(op Operand) (string, error) {
-	base, err := c.loadReg(op.Reg)
-	if err != nil {
-		return "", err
-	}
-	var sh string
-	if op.ShiftReg != "" {
-		sh, err = c.loadReg(op.ShiftReg)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		sh = c.imm32(op.ShiftAmount)
-	}
-	t := c.newTmp()
-	switch op.ShiftOp {
-	case ShiftLeft:
-		fmt.Fprintf(c.b, "  %%%s = shl i32 %s, %s\n", t, base, sh)
-	case ShiftRight:
-		fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, %s\n", t, base, sh)
-	case ShiftArith:
-		fmt.Fprintf(c.b, "  %%%s = ashr i32 %s, %s\n", t, base, sh)
-	case ShiftRotate:
-		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.fshr.i32(i32 %s, i32 %s, i32 %s)\n", t, base, base, sh)
-	default:
-		return "", fmt.Errorf("arm: unsupported shift op %q", op.ShiftOp)
-	}
-	return "%" + t, nil
+	value, _, err := c.evalARMShifter(op)
+	return value, err
 }
 
 func (c *armCtx) evalFPValue32(op Operand) (string, error) {

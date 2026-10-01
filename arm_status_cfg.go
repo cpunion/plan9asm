@@ -16,8 +16,31 @@ type armStatusState struct {
 // NZCV slots on every source path. Entry has no invented physical flags, and
 // an ordinary C call has no source-native flags-result contract.
 func proveARMStatusReads(fn Func, sig FuncSig) error {
-	if !armFunctionReadsStatus(fn) {
+	if !armFunctionUsesModeledFlags(fn) {
 		return nil
+	}
+	// The existing raw VFP lowerer models its flags in the NZCV slots.
+	// This requires a closed unconditional compare/VMRS pair transferring
+	// FPSCR before any source condition observes the premature modeled write.
+	// Other sequences remain ordinary hard gaps, never native-entry N/A.
+	fn.Instrs = append([]Instr(nil), fn.Instrs...)
+	for i, ins := range fn.Instrs {
+		if ins.Op != "WORD" || len(ins.Args) != 1 || ins.Args[0].Kind != OpImm {
+			continue
+		}
+		compare, ok := decodeARMRawVFPCompare(uint32(ins.Args[0].Imm))
+		if !ok {
+			continue
+		}
+		closed := compare.condition == "AL" && i+1 < len(fn.Instrs)
+		if closed {
+			next := fn.Instrs[i+1]
+			closed = next.Op == "WORD" && len(next.Args) == 1 && next.Args[0].Kind == OpImm && uint32(next.Args[0].Imm) == 0xeef1fa10
+		}
+		if !closed {
+			return fmt.Errorf("ARM raw VFP flags effect needs a closed unconditional compare/VMRS sequence: %s", ins.Raw)
+		}
+		fn.Instrs[i].Op = "CMPD" // Proof-only full NZCV writer; emitted source stays unchanged.
 	}
 	blocks := armSplitBlocks(fn)
 	preds, reachable := armSourcePredecessors(blocks)
@@ -59,6 +82,9 @@ func proveARMStatusReads(fn Func, sig FuncSig) error {
 		}
 	}
 	for i, block := range blocks {
+		if !reachable[i] {
+			continue
+		}
 		state := in[i]
 		for _, ins := range block.instrs {
 			var err error
@@ -71,13 +97,25 @@ func proveARMStatusReads(fn Func, sig FuncSig) error {
 	return nil
 }
 
-func armFunctionReadsStatus(fn Func) bool {
+func armFunctionUsesModeledFlags(fn Func) bool {
 	for _, ins := range fn.Instrs {
-		if armInstructionReadsStatus(ins) {
+		if armInstructionReadsStatus(ins) || armInstructionFlagInputs(ins) != 0 {
 			return true
 		}
 	}
 	return false
+}
+
+func armInstructionFlagInputs(ins Instr) armKernelState {
+	op, condition, _, _ := armDecodeOp(string(ins.Op))
+	if len(op) > 1 && op[0] == 'B' && armCondCodes[op[1:]] {
+		condition = op[1:]
+	}
+	inputs := armKernelConditionBits(condition)
+	if op == "ADC" || op == "SBC" || op == "RSC" {
+		inputs |= armKernelC
+	}
+	return inputs
 }
 
 func armInstructionReadsStatus(ins Instr) bool {
@@ -107,6 +145,10 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 	if check && readsStatus && !state.initialized.has(armKernelFlags) {
 		return state, fmt.Errorf("%w: ARM CPSR read in %q needs source-defined NZCV on every path or an explicit native-entry state bridge: %s", ErrProbeNeedsContext, name, ins.Raw)
 	}
+	consumesCarry := op == "ADC" || op == "SBC" || op == "RSC"
+	if check && consumesCarry && !state.initialized.has(armKernelC) {
+		return state, fmt.Errorf("%w: ARM source carry input in %q has no source definition or typed native-entry bridge: %s", ErrProbeNeedsContext, name, ins.Raw)
+	}
 	values, _ := armKernelTransfer(name, sig, state.values, ins, false)
 	if readsStatus && state.initialized.has(armKernelFlags) && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
 		mask := armKernelRegBit(ins.Args[1].Reg)
@@ -127,10 +169,7 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 		return state, nil
 	}
 	write := armKernelState(0)
-	logical := op == "TST" || op == "TEQ" || setFlags && (op == "AND" || op == "ORR" || op == "EOR" || op == "BIC" || op == "MVN")
-	if logical && len(ins.Args) != 0 && ins.Args[0].Kind == OpRegShift {
-		return state, fmt.Errorf("ARM %s flags-result shifter carry is not modeled: %s", op, ins.Raw)
-	}
+	logical := op == "TST" || op == "TEQ" || setFlags && (op == "AND" || op == "ORR" || op == "EOR" || op == "BIC" || op == "MVN" || op == "MOVW")
 	switch op {
 	case "CMP", "CMN", "CMPF", "CMPD":
 		write = armKernelFlags
@@ -142,6 +181,13 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 	case "WORD", "BYTE", "LONG":
 		keep := false
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm {
+			if decoded, carry, ok := decodeARMRawTST(uint32(ins.Args[0].Imm), ins.Raw); ok {
+				state, err := armStatusTransfer(name, sig, state, decoded, check)
+				if carry != "" {
+					state.initialized |= armKernelC
+				}
+				return state, err
+			}
 			form, ok := decodeARMRawVFPStatusTransfer(uint32(ins.Args[0].Imm))
 			keep = ok && form.toFlags && state.vfpWitness
 		}
@@ -154,7 +200,7 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 			switch op {
 			case "ADD", "SUB", "RSB", "ADC", "SBC", "RSC":
 				write = armKernelFlags
-			case "AND", "ORR", "EOR", "BIC", "MVN", "SLL", "SRL", "SRA", "MULL":
+			case "AND", "ORR", "EOR", "BIC", "MVN", "SLL", "SRL", "SRA", "MUL", "MULU", "MULA", "MULL", "MULLU", "MULAL", "MULALU":
 				write = armKernelN | armKernelZ
 			default:
 				// Do not retain older slot values across an unmodeled .S
@@ -168,7 +214,7 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 						}
 					}
 				}
-				if op == "MOVW" && len(ins.Args) == 2 && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg {
+				if op == "MOVW" && len(ins.Args) == 2 && (ins.Args[0].Kind == OpReg || ins.Args[0].Kind == OpRegShift) && ins.Args[1].Kind == OpReg {
 					write = armKernelN | armKernelZ
 				}
 				if write == 0 {
@@ -186,7 +232,10 @@ func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr
 	}
 	if predicate == 0 {
 		state.initialized |= write
-		if logical && len(ins.Args) != 0 && armLogicalImmediateCarry(op, ins.Args[0]) != "" {
+		if logical && len(ins.Args) != 0 && (armLogicalImmediateCarry(op, ins.Args[0]) != "" || armShifterDefinesCarry(ins.Args[0])) {
+			state.initialized |= armKernelC
+		}
+		if setFlags && (op == "SLL" || op == "SRL" || op == "SRA") && len(ins.Args) != 0 && ins.Args[0].Kind == OpImm && ins.Args[0].Imm != 0 && (op != "SLL" || uint32(ins.Args[0].Imm)&31 != 0) {
 			state.initialized |= armKernelC
 		}
 	}

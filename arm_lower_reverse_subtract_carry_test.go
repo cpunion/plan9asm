@@ -6,6 +6,7 @@ import (
 )
 
 const armReverseSubtractCarryForms = `TEXT reverseSubtractCarry(SB),$0-0
+	CMP R0, R0
 	RSC $255, R0, R1
 	RSC.S $255, R0, R1
 	RSC $255, R0

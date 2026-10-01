@@ -69,7 +69,7 @@ func TestARMConditionalComparePreservesSkippedNZCV(t *testing.T) {
 	}
 }
 
-func TestARMStatusReadCannotConcealUnmodeledInstructionEffects(t *testing.T) {
+func TestARMStatusReadKeepsModeledShifterAndMultiplyEffects(t *testing.T) {
 	for _, instruction := range []string{"TST R0<<1,R0", "TEQ R0>>1,R0", "AND.S R0<<1,R0", "ORR.S R0>>1,R0", "EOR.S R0->1,R0", "BIC.S R0@>1,R0", "MUL.S R0,R0"} {
 		source := "TEXT flags(SB),$0\n MOVW $0,R0\n CMP R0,R0\n " + instruction + "\n MOVW CPSR,R0\n RET\n"
 		requireARMGoAssemblerResult(t, source, true)
@@ -80,8 +80,8 @@ func TestARMStatusReadCannotConcealUnmodeledInstructionEffects(t *testing.T) {
 		_, err = Translate(file, Options{Goarch: "arm", TargetTriple: "armv7-unknown-linux-gnueabihf", Sigs: map[string]FuncSig{
 			"flags": {Name: "flags", Ret: I32},
 		}})
-		if err == nil || errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "not modeled") {
-			t.Fatalf("ordinary instruction gaps must fail, not become an initial-state context or a fake flags pass: %s: %v", instruction, err)
+		if err != nil {
+			t.Fatalf("ordinary shifter/multiply effects must now be modeled, not become source N/A: %s: %v", instruction, err)
 		}
 	}
 }

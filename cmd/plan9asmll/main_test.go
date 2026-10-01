@@ -1370,6 +1370,22 @@ func TestExtractSupportedOpsFindsPackageLevelSpecTableWithoutOpcodeName(t *testi
 var packedFamilySpecs = map[string]int{
 	"VTABLEOP": 1,
 }
+
+func TestExtractSupportedOpsFindsARMShifterAndMultiplySpecifications(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "arm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MOVW", "MVN", "AND", "ORR", "EOR", "BIC", "TST", "TEQ", "SLL", "SRL", "SRA", "MUL", "MULU", "MULA", "MULL", "MULLU", "MULAL", "MULALU"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("ARM typed family omitted supported opcode %s", op)
+		}
+	}
+}
 `), 0o600); err != nil {
 		t.Fatal(err)
 	}

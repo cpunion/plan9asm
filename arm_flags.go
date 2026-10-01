@@ -187,16 +187,16 @@ func armLogicalImmediateCarry(op string, source Operand) string {
 	return "false"
 }
 
-func (c *armCtx) setARMLogicalFlags(op, condition, result string, source Operand) error {
+func (c *armCtx) setARMLogicalFlags(condition, result, carry string) error {
 	if condition != "" && !strings.EqualFold(condition, "AL") {
 		return c.emitConditionalEffect(condition, func() error {
-			return c.setARMLogicalFlags(op, "", result, source)
+			return c.setARMLogicalFlags("", result, carry)
 		})
 	}
 	if err := c.setFlagsLogic("", result); err != nil {
 		return err
 	}
-	if carry := armLogicalImmediateCarry(op, source); carry != "" {
+	if carry != "" {
 		c.storeFlag(c.flagsCSlot, carry)
 	}
 	return nil

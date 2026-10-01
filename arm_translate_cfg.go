@@ -7,6 +7,20 @@ import (
 )
 
 func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+	for _, ins := range fn.Instrs {
+		op, _, _, _ := armDecodeOp(string(ins.Op))
+		if _, move := armIntegerMemorySpecs[op]; !move {
+			continue
+		}
+		for _, source := range ins.Args {
+			if source.Kind == OpSym && strings.HasSuffix(strings.TrimSpace(source.Sym), "(SB)") {
+				if _, err := parseARMIntegerSymbolForm(op, ins); err != nil {
+					return err // Preserve source grammar/PC failures before flags-context proof.
+				}
+				break
+			}
+		}
+	}
 	if err := proveARMStatusReads(fn, sig); err != nil {
 		return err
 	}
@@ -27,7 +41,7 @@ func translateFuncARM(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	// The source proof above establishes initialization at each flag use,
 	// including a read block emitted before its backward-edge predecessor.
 	// This boolean selects the modeled representation, not initial NZCV.
-	c.flagsWritten = armFunctionReadsStatus(fn)
+	c.flagsWritten = armFunctionUsesModeledFlags(fn)
 	if err := c.emitEntryAllocasAndArgInit(); err != nil {
 		return err
 	}

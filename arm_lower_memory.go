@@ -219,31 +219,9 @@ func (c *armCtx) integerMemoryAddress(f armIntegerMemoryForm) (address, updated 
 	if err != nil {
 		return "", "", err
 	}
-	var delta string
-	if f.offset.Kind == OpRegShift && f.offset.ShiftAmount == 0 && f.offset.ShiftOp != ShiftLeft {
-		value, loadErr := c.loadReg(f.offset.Reg)
-		if loadErr != nil {
-			return "", "", loadErr
-		}
-		switch f.offset.ShiftOp {
-		case ShiftRight:
-			delta = "0" // encoded LSR #0 means LSR #32
-		case ShiftArith:
-			tmp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = ashr i32 %s, 31\n", tmp, value)
-			delta = "%" + tmp
-		case ShiftRotate:
-			carry := c.loadFlagValue(c.flagsCSlot)
-			ext, high, low, result := c.newTmp(), c.newTmp(), c.newTmp(), c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i1 %s to i32\n  %%%s = shl i32 %%%s, 31\n", ext, carry, high, ext)
-			fmt.Fprintf(c.b, "  %%%s = lshr i32 %s, 1\n  %%%s = or i32 %%%s, %%%s\n", low, value, result, low, high)
-			delta = "%" + result // encoded ROR #0 means RRX, without updating C
-		}
-	} else {
-		delta, err = c.eval32(f.offset, false)
-		if err != nil {
-			return "", "", err
-		}
+	delta, err := c.eval32(f.offset, false)
+	if err != nil {
+		return "", "", err
 	}
 	if f.displace != 0 {
 		tmp := c.newTmp()

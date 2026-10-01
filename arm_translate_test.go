@@ -8,7 +8,8 @@ import (
 func TestTranslateARMLinearAdd(t *testing.T) {
 	file, err := Parse(ArchARM, `TEXT ·Add(SB),NOSPLIT,$0-12
 	MOVW	a+0(FP), R0
-	ADD	b+4(FP), R0
+	MOVW	b+4(FP), R1
+	ADD	R1, R0
 	MOVW	R0, ret+8(FP)
 	RET
 `)
