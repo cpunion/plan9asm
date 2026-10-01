@@ -132,6 +132,7 @@ type compileConfig struct {
 	Feature         *featureConsumer
 	FeaturePath     string
 	Context         context.Context
+	emptyAssembly   *gotoolprofile.EmptyAssemblyProof
 }
 
 func main() {
@@ -574,7 +575,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			if err != nil {
 				return err
 			}
-			cppProof = &featureCPPProof{File: name, Inputs: inputs}
+			cppProof = &featureCPPProof{File: name, Emission: "assembly", Inputs: inputs}
 			defer func() {
 				after, err := ccfg.Feature.captureCPPInputs(t.AsmFile)
 				if err == nil && !reflect.DeepEqual(inputs, after) {
@@ -609,19 +610,22 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	}
 	file, err := plan9asm.ParseWithDefines(arch, string(src), defines)
 	if err != nil {
-		if strings.Contains(err.Error(), "no TEXT directive found") {
-			if ccfg.Feature != nil {
-				return fmt.Errorf("explicit feature variant has no translated TEXT; requires separate actual Go empty-object evidence")
+		if err.Error() == "no TEXT directive found" {
+			proof, err := proveEmptyAssembly(pkg, t, goos+"/"+goarch, defines, ccfg)
+			if err != nil {
+				return err
 			}
-			return nil
+			if cppProof != nil {
+				// The CPP entry was appended before parsing; retain the
+				// separate native emptiness witness on that exact entry.
+				ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].EmptyAssembly = proof
+				ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].Emission = "symbol_free"
+			}
+			file = &plan9asm.File{Arch: arch}
+			ccfg.emptyAssembly = proof
+		} else {
+			return fmt.Errorf("parse asm: %w", err)
 		}
-		return fmt.Errorf("parse asm: %w", err)
-	}
-	if len(file.Funcs) == 0 && len(file.Data) == 0 && len(file.Globl) == 0 {
-		if ccfg.Feature != nil {
-			return fmt.Errorf("explicit feature variant did not produce translated TEXT")
-		}
-		return nil
 	}
 
 	resolve := resolveSymFunc(pkg.PkgPath)
@@ -690,15 +694,29 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 	ccfg compileConfig, resolve func(string) string, sigs map[string]plan9asm.FuncSig,
 ) error {
 	ctx := llvm.NewContext()
-	mod, err := plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
-		TargetTriple:   triple,
-		ResolveSym:     resolve,
-		Sigs:           sigs,
-		Goarch:         goarch,
-		WASMABI:        wasmABIForGoPackageTarget(goarch),
-		AnnotateSource: annotate,
-		X86TailGroups:  ccfg.X86TailGroups,
-	})
+	var mod llvm.Module
+	var err error
+	if ccfg.emptyAssembly != nil {
+		if ccfg.emptyAssembly.Protocol != gotoolprofile.EmptyAssemblyProtocol ||
+			len(file.Funcs) != 0 || len(file.Data) != 0 || len(file.Globl) != 0 {
+			ctx.Dispose()
+			return fmt.Errorf("symbol-free emission contradicts its native proof")
+		}
+		// Do not broaden the public translator's empty-file contract. Only
+		// this CLI's actual successful Go object/listing check grants this.
+		mod = ctx.NewModule("plan9asm-empty-assembly")
+		mod.SetTarget(triple)
+	} else {
+		mod, err = plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
+			TargetTriple:   triple,
+			ResolveSym:     resolve,
+			Sigs:           sigs,
+			Goarch:         goarch,
+			WASMABI:        wasmABIForGoPackageTarget(goarch),
+			AnnotateSource: annotate,
+			X86TailGroups:  ccfg.X86TailGroups,
+		})
+	}
 	if err != nil {
 		ctx.Dispose()
 		return fmt.Errorf("translate: %w", err)

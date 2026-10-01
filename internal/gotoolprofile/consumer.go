@@ -49,10 +49,28 @@ type PackageProof struct {
 }
 
 type CPPProof struct {
-	File                string            `json:"file"`
-	ExpandedSHA256      string            `json:"expanded_sha256"`
-	TypedExpandedSHA256 string            `json:"typed_expanded_sha256"`
-	Inputs              map[string]string `json:"inputs"`
+	File                string              `json:"file"`
+	Emission            string              `json:"emission"`
+	ExpandedSHA256      string              `json:"expanded_sha256"`
+	TypedExpandedSHA256 string              `json:"typed_expanded_sha256"`
+	Inputs              map[string]string   `json:"inputs"`
+	EmptyAssembly       *EmptyAssemblyProof `json:"empty_assembly,omitempty"`
+}
+
+// EmptyAssemblyProof witnesses a real Go object and an empty assembler -S
+// symbol/data listing. It is not a source exclusion: LLVM must also produce
+// a real object for this same selected CPP scope.
+type EmptyAssemblyProof struct {
+	Protocol      string `json:"protocol"`
+	File          string `json:"file"`
+	SourceSHA256  string `json:"source_sha256"`
+	PackagePath   string `json:"package_path"`
+	ProfileID     string `json:"profile_id"`
+	Target        string `json:"target"`
+	GoVersion     string `json:"go_version"`
+	AsmToolSHA256 string `json:"asm_tool_sha256"`
+	ObjectSHA256  string `json:"object_sha256"`
+	ListingSHA256 string `json:"listing_sha256"`
 }
 
 type OutputProof struct {

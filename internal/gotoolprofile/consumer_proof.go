@@ -31,6 +31,7 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 		return fmt.Errorf("compiler consumption differs from the source-required profile/tag scope")
 	}
 	selectedFiles, seenPackages := make(map[string]bool), make(map[string]bool)
+	filePackages := make(map[string]PackageProof)
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
 		return err
@@ -96,6 +97,7 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 				return fmt.Errorf("duplicate/non-ASM actual selected file")
 			}
 			selectedFiles[file] = true
+			filePackages[file] = pkg
 		}
 	}
 	consumed, outputs := make(map[string]bool), make(map[string]bool)
@@ -116,6 +118,9 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 		}
 		if cpp.Inputs["module/"+cpp.File] != input.Sources[cpp.File] {
 			return fmt.Errorf("actual CPP proof omits its assembly source")
+		}
+		if err := ValidateEmptyAssembly(input, cpp, filePackages[cpp.File]); err != nil {
+			return err
 		}
 	}
 	seenParts := make(map[string]bool)

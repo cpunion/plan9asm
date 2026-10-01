@@ -268,6 +268,14 @@ and instrumentation-only assembly is not an ordinary N/A exemption.
 Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
 legacy modules lacking authenticated declared-module metadata remain failures.
+Macro-only and inactive CPP variants may produce a symbol-free LLVM object only
+after the actual Go assembler accepts the original source, creates a nonempty
+object, and emits an empty `-S` symbol/data listing under the same target,
+package and registered CPU definitions. CPP proofs retain an explicit emission
+kind and a separate source/profile/Go/tool/object/listing witness. Invalid source,
+nonempty native listings and missing LLVM outputs fail; this is not N/A. Go's
+`nm` deliberately exits nonzero for an object with no symbols, so the proof uses
+the assembler's successful listing instead of interpreting arbitrary tool errors.
 If an exact ZIP has no `go.mod`, the ordinary producer may use Go's canonical
 proxy-generated module directive. This is separate `proxy_go_mod` evidence,
 never an added ZIP member: exact ZIP and GoMod h1 sums, metadata bytes/SHA-256,

@@ -109,7 +109,7 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 			SourceModule: candidate.Module, SourceVersion: candidate.Version, SourceRole: "module",
 			GoFiles: []string{"vector.go"}, CompiledGoFiles: []string{"vector.go"}, SFiles: candidate.AsmFiles, Macros: macros,
 			SourceSHA256: map[string]string{"vector.go": input.Sources["vector.go"], "vector_amd64.s": input.Sources["vector_amd64.s"]}}},
-		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}}},
+		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", Emission: "assembly", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}}},
 		Outputs: []gotoolprofile.OutputProof{{File: "vector_amd64.s", Part: "vector_amd64.s.ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64)}},
 	}}
 	if err := validateOrdinaryProfileResult(result, plan.Targets, plan.GoVersion); err != nil {

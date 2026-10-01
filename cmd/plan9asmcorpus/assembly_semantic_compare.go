@@ -138,6 +138,14 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			for index := range proof.Outputs {
 				proof.Outputs[index].IR, proof.Outputs[index].Object = "", ""
 			}
+			for index := range proof.CPP {
+				if empty := proof.CPP[index].EmptyAssembly; empty != nil {
+					if err := replaceID(&empty.ProfileID); err != nil {
+						return result, err
+					}
+					empty.AsmToolSHA256, empty.ObjectSHA256 = "", ""
+				}
+			}
 			if err := sortSemanticRows(proof.Packages); err != nil {
 				return result, err
 			}

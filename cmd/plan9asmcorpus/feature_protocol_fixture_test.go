@@ -122,7 +122,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		byDirectory := make(map[string][]string)
 		for _, file := range config.AsmFiles {
 			byDirectory[path.Dir(file)] = append(byDirectory[path.Dir(file)], file)
-			proof.CPP = append(proof.CPP, gotoolprofile.CPPProof{File: file,
+			proof.CPP = append(proof.CPP, gotoolprofile.CPPProof{File: file, Emission: "assembly",
 				ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64),
 				Inputs: map[string]string{"module/" + file: input.Sources[file]}})
 			proof.Outputs = append(proof.Outputs, gotoolprofile.OutputProof{
