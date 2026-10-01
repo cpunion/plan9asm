@@ -495,7 +495,16 @@ func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 		}
 		fn.Instrs = append(fn.Instrs, Instr{Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: label}}, Raw: label + ":"})
 	}
-	fn.Instrs = append(fn.Instrs, Instr{Op: OpRET, Raw: "RET"})
+	exit := Instr{Op: OpRET, Raw: "RET"}
+	if arch == ArchARM64 {
+		// Isolated data may overwrite LR or SP. A synthetic caller RET
+		// would incorrectly require that data to preserve return state.
+		// This compile-only harness ends with a real faulting zero branch;
+		// it is never executed or counted as runtime conformance. Original
+		// control instructions retain all their ABI and target checks.
+		exit = Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: ZR}}}, Raw: "B (ZR)"}
+	}
+	fn.Instrs = append(fn.Instrs, exit)
 	file := &File{Arch: arch, Funcs: []Func{fn}}
 	triple := ""
 	switch goarch {
