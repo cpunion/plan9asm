@@ -109,6 +109,69 @@ func TestOrdinarySelectionLedgerRejectsMissingProof(t *testing.T) {
 	}
 }
 
+func TestOrdinarySelectionPassedRequiresProofEveryReader(t *testing.T) {
+	for _, mutation := range []struct {
+		name  string
+		apply func(*discoveryCorpusResult)
+	}{
+		{"missing proof", func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan = nil }},
+		{"omitted eligible target while retaining pass", func(result *discoveryCorpusResult) {
+			if len(result.BuildConfigurations) > 1 {
+				configuration := result.BuildConfigurations[0]
+				result.Translations -= len(configuration.AsmFiles) * len(configuration.Targets)
+				result.BuildConfigurations = result.BuildConfigurations[1:]
+			}
+		}},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			targets := []string{"darwin/amd64", "linux/amd64", "linux/arm64"}
+			ledger, reports, source := writeDiscoveryReportFixtureWithTargets(t, targets)
+			progress, err := collectDiscoveryProgress(ledger, reports, targets, source, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := range progress.Candidates {
+				candidate := &progress.Candidates[i]
+				result := discoveryCorpusResult{OrdinarySelectionPlan: candidate.OrdinarySelectionPlan,
+					BuildConfigurations: candidate.BuildConfigurations, ApplicableAsmFiles: candidate.ApplicableAsmFiles,
+					Translations: candidate.Translations}
+				mutation.apply(&result)
+				progress.Translations += result.Translations - candidate.Translations
+				candidate.OrdinarySelectionPlan, candidate.BuildConfigurations = result.OrdinarySelectionPlan, result.BuildConfigurations
+				candidate.ApplicableAsmFiles, candidate.Translations = result.ApplicableAsmFiles, result.Translations
+			}
+			if err := validateAssemblyLedgerProgress(progress); err == nil {
+				t.Error("ledger accepted a passed ordinary result without its complete source-selection proof")
+			}
+			filenames, err := discoveryCorpusReportFiles(reports)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, filename := range filenames {
+				report, err := readDiscoveryCorpusReport(filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for i := range report.Results {
+					result := &report.Results[i]
+					before := result.Translations
+					mutation.apply(result)
+					report.Translations += result.Translations - before
+				}
+				if err := writeDiscoveryCorpusReport(filename, report); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := verifyDiscoveryCorpusReports(ledger, reports, targets, source); err == nil {
+				t.Error("aggregate accepted passed missing/omitted source-selection proof")
+			}
+			if _, err := collectDiscoveryProgress(ledger, reports, targets, source, 2); err == nil {
+				t.Error("progress accepted passed missing/omitted source-selection proof")
+			}
+		})
+	}
+}
+
 func TestOrdinarySelectionZIPBindsSourceAndDirectoryInventory(t *testing.T) {
 	sourceDir := t.TempDir()
 	writeTestFile(t, filepath.Join(sourceDir, "decl.go"), "package ordinary\n")
@@ -229,6 +292,13 @@ func TestOrdinarySelectionUnsuffixedRejectionRetainsCustomTags(t *testing.T) {
 
 func fixtureOrdinarySelection(t *testing.T, files []string, targets []string, sources map[string]string) *discoveryOrdinarySelectionPlan {
 	t.Helper()
+	return fixtureOrdinarySelectionForCandidate(t, discoveryCandidate{
+		Module: "example.com/ordinary", Version: "v1.0.0", AsmFiles: files,
+	}, targets, sources)
+}
+
+func fixtureOrdinarySelectionForCandidate(t *testing.T, candidate discoveryCandidate, targets []string, sources map[string]string) *discoveryOrdinarySelectionPlan {
+	t.Helper()
 	dir := t.TempDir()
 	for file, data := range sources {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, filepath.FromSlash(file))), 0755); err != nil {
@@ -236,14 +306,34 @@ func fixtureOrdinarySelection(t *testing.T, files []string, targets []string, so
 		}
 		writeTestFile(t, filepath.Join(dir, filepath.FromSlash(file)), data)
 	}
-	plan, err := captureOrdinarySelectionPlan(discoveryCandidate{
-		Module: "example.com/ordinary", Version: "v1.0.0", AsmFiles: files,
-	}, dir, targets)
+	plan, err := captureOrdinarySelectionPlan(candidate, dir, targets)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan.ModuleSum = "h1:" + strings.Repeat("A", 43) + "="
-	plan.ZipSHA256 = strings.Repeat("a", 64)
+	archivePath := filepath.Join(t.TempDir(), "fixture.zip")
+	archive, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(archive)
+	for file, data := range sources {
+		entry, err := writer.Create(candidate.Module + "@" + candidate.Version + "/" + file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := entry.Write([]byte(data)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyOrdinarySelectionZIP(plan, archivePath, candidate.Module, candidate.Version, ""); err != nil {
+		t.Fatal(err)
+	}
 	// Synthetic report fixtures describe the pinned external-corpus context,
 	// independently of the Go version running the repository's unit matrix.
 	plan.GoVersion = "go1.27.1"
@@ -251,11 +341,34 @@ func fixtureOrdinarySelection(t *testing.T, files []string, targets []string, so
 	for minor := 1; minor <= 27; minor++ {
 		plan.ReleaseTags = append(plan.ReleaseTags, fmt.Sprintf("go1.%d", minor))
 	}
-	plan.Decisions, _, err = replayOrdinarySelection(plan, files)
+	plan.Decisions, _, err = replayOrdinarySelection(plan, candidate.AsmFiles)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return plan
+}
+
+func fixtureOrdinaryPassedResult(t *testing.T, candidate discoveryCandidate, targets []string) discoveryCorpusResult {
+	t.Helper()
+	sources := make(map[string]string)
+	for _, file := range candidate.AsmFiles {
+		sources[file] = "TEXT ·F(SB),$0-0\nRET\n"
+		sources[filepath.ToSlash(filepath.Join(filepath.Dir(file), "decl.go"))] = "package fixture\n"
+	}
+	plan := fixtureOrdinarySelectionForCandidate(t, candidate, targets, sources)
+	result := discoveryCorpusResult{Module: candidate.Module, Version: candidate.Version,
+		Status: discoveryStatusPassed, DiscoveredAsmFiles: candidate.AsmFiles, OrdinarySelectionPlan: plan}
+	for _, decision := range plan.Decisions {
+		if decision.Kind == nativeLayoutSelected {
+			for _, target := range decision.Targets {
+				result.BuildConfigurations = append(result.BuildConfigurations, discoveryBuildConfiguration{
+					Targets: []string{target}, AsmFiles: decision.AsmFiles, BuildTags: decision.BuildTags})
+				result.Translations += len(decision.AsmFiles)
+			}
+		}
+	}
+	result.ApplicableAsmFiles = discoveryConfigurationAsmFiles(result.BuildConfigurations)
+	return result
 }
 
 func TestOrdinarySelectionRootAndPreciseExclusions(t *testing.T) {

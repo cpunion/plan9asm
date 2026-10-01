@@ -664,8 +664,8 @@ func compactOrdinarySelectionDecisions(decisions []ordinarySelectionDecision) []
 func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []string, goVersion string) error {
 	plan := result.OrdinarySelectionPlan
 	if plan == nil {
-		if result.Status == discoveryStatusNotApplicable || len(result.SourceNotApplicableItems) != 0 {
-			return fmt.Errorf("ordinary source exclusion lacks exact source-selection proof")
+		if result.Status == discoveryStatusPassed || result.Status == discoveryStatusNotApplicable || len(result.SourceNotApplicableItems) != 0 {
+			return fmt.Errorf("ordinary pass or source exclusion lacks exact source-selection proof")
 		}
 		return nil
 	}

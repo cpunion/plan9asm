@@ -2062,23 +2062,6 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
 	}
-	var ordinaryPlan *discoveryOrdinarySelectionPlan
-	if _, native := cfg.nativeLayoutSkips[candidate.exactKey()]; !native && len(candidate.AsmFiles) != 0 {
-		if _, private := cfg.privateExtensionSkips[candidate.exactKey()]; !private {
-			ordinaryPlan, err = captureOrdinarySelectionPlan(candidate, download.Dir, cfg.Targets)
-			if err != nil {
-				return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection: %w", err)
-			}
-			if err := verifyOrdinarySelectionZIP(ordinaryPlan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
-				return matrixReport{}, nil, nil, fmt.Errorf("capture exact module ZIP identity: %w", err)
-			}
-			defer func() {
-				if err := verifyOrdinarySelectionUnchanged(ordinaryPlan, download.Dir, candidate); err != nil {
-					runErr = errors.Join(runErr, fmt.Errorf("ordinary source-selection inputs changed during package checks: %w", err))
-				}
-			}()
-		}
-	}
 	var privateExtension *discoveryPrivateExtensionSkip
 	if skip, ok := cfg.privateExtensionSkips[candidate.exactKey()]; ok {
 		filtered, active, err := filterPrivateExtensionConfigurations(buildConfigurations, skip)
@@ -2123,6 +2106,23 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		}
 		buildConfigurations = filtered
 		nativeLayout = &skip
+	}
+	var ordinaryPlan *discoveryOrdinarySelectionPlan
+	// Only an active, independently verified exception has a separate proof
+	// protocol. A configured but unselected private exception remains ordinary.
+	if nativeLayout == nil && privateExtension == nil && len(candidate.AsmFiles) != 0 {
+		ordinaryPlan, err = captureOrdinarySelectionPlan(candidate, download.Dir, cfg.Targets)
+		if err != nil {
+			return matrixReport{}, nil, nil, fmt.Errorf("capture ordinary selection: %w", err)
+		}
+		if err := verifyOrdinarySelectionZIP(ordinaryPlan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
+			return matrixReport{}, nil, nil, fmt.Errorf("capture exact module ZIP identity: %w", err)
+		}
+		defer func() {
+			if err := verifyOrdinarySelectionUnchanged(ordinaryPlan, download.Dir, candidate); err != nil {
+				runErr = errors.Join(runErr, fmt.Errorf("ordinary source-selection inputs changed during package checks: %w", err))
+			}
+		}()
 	}
 	if len(buildConfigurations) == 0 {
 		return matrixReport{

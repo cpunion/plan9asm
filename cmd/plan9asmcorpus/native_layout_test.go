@@ -240,6 +240,8 @@ func TestNativeLayoutSkipSurvivesAuditedAssemblyLedger(t *testing.T) {
 			}
 			report.Results[i].Status = discoveryStatusSkippedNativeLayout
 			report.Results[i].Translations = 0
+			report.Results[i].OrdinarySelectionPlan = nil
+			report.Results[i].BuildConfigurations, report.Results[i].ApplicableAsmFiles = nil, nil
 			report.Results[i].NativeLayout = &skip
 			report.Results[i].NativeLayoutPlan = plan
 			report.Passed--

@@ -221,6 +221,8 @@ func TestPrivateExtensionSkipSurvivesAuditedAssemblyLedger(t *testing.T) {
 			}
 			report.Results[i].Status = discoveryStatusSkippedPrivateExtension
 			report.Results[i].Translations = 0
+			report.Results[i].OrdinarySelectionPlan = nil
+			report.Results[i].BuildConfigurations, report.Results[i].ApplicableAsmFiles = nil, nil
 			report.Results[i].PrivateExtension = &skip
 			report.Passed--
 			report.Translations--

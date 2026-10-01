@@ -225,6 +225,8 @@ aggregate/progress/ledger readers replay MatchFile and the custom-tag search.
 Offline readers validate frozen producer/source/tool provenance; they do not
 independently authenticate ZIP contents without obtaining that ZIP. Header
 and full-file hashes alone are not an offline cryptographic membership proof.
+Every ordinary PASS and N/A must carry this proof, even when no source rejection
+is recorded. Only an active verified exception uses its separate proof protocol.
 Every eligible scope must have an executed configuration or a concrete scoped
 source diagnostic; omissions, duplicates, changed headers and reason-only N/A
 fail. The virtual root `.` is a package directory, not a hidden-directory skip.

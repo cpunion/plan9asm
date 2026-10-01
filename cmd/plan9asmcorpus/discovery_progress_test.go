@@ -67,6 +67,7 @@ func TestDiscoveryProgressPreservesInvalidSourceSkipReasonInAssemblyLedger(t *te
 	result := &report.Results[0]
 	result.Status = discoveryStatusSkippedInvalidSource
 	result.Translations = 0
+	result.OrdinarySelectionPlan, result.BuildConfigurations, result.ApplicableAsmFiles = nil, nil, nil
 	result.InvalidSourceReason = "raw ARM64 word is invalid"
 	result.InvalidSourceEvidence = []discoveryInvalidMachineCodeEvidence{{
 		AsmFile: result.DiscoveredAsmFiles[0], SHA256: strings.Repeat("a", 64),
@@ -464,6 +465,7 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 			result := &report.Results[i]
 			result.Status = discoveryStatusNotApplicable
 			result.Translations = 0
+			result.BuildConfigurations, result.ApplicableAsmFiles = nil, nil
 			result.NotApplicableReason = "current Go rejects the exact package"
 			sources := map[string]string{"decl.go": "package ordinary\n"}
 			for _, asmFile := range result.DiscoveredAsmFiles {
@@ -521,7 +523,8 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 }
 
 func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
-	ledger, reports, source := writeDiscoveryReportFixture(t)
+	targets := []string{"darwin/amd64", "darwin/arm64", "linux/amd64", "linux/arm64"}
+	ledger, reports, source := writeDiscoveryReportFixtureWithTargets(t, targets)
 	files, err := discoveryCorpusReportFiles(reports)
 	if err != nil {
 		t.Fatal(err)
@@ -535,8 +538,10 @@ func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
 			result := &report.Results[i]
 			result.NotApplicableTranslations = 1
 			report.NotApplicableTranslations++
+			result.Translations--
+			report.Translations--
 			result.NotApplicableItems = []matrixTargetNotApplicableItem{{
-				Target: "linux/amd64",
+				Target: result.BuildConfigurations[0].Targets[0],
 				targetNotApplicableItem: targetNotApplicableItem{
 					PkgPath: result.Module,
 					AsmFile: "/tmp/private-runner/module-cache/" + result.Module + "@" + result.Version + "/" + result.DiscoveredAsmFiles[0],
@@ -550,7 +555,7 @@ func TestDiscoveryProgressKeepsTargetSkipPathsPortable(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	progress, err := collectDiscoveryProgress(ledger, reports, []string{"linux/amd64", "linux/arm64"}, source, 2)
+	progress, err := collectDiscoveryProgress(ledger, reports, targets, source, 2)
 	if err != nil {
 		t.Fatal(err)
 	}

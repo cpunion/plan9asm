@@ -106,6 +106,8 @@ func TestSupersededSkipIsAuditedAndNotCountedAsPass(t *testing.T) {
 				Reason: "new version", EvidenceURLs: []string{"https://example.com/proof"},
 			}
 			report.Passed--
+			report.Results[i].OrdinarySelectionPlan = nil
+			report.Results[i].BuildConfigurations, report.Results[i].ApplicableAsmFiles = nil, nil
 			report.Translations--
 			report.SkippedSuperseded++
 			if err := writeDiscoveryCorpusReport(path, report); err != nil {

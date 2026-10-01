@@ -123,8 +123,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				return fmt.Errorf("assembly ledger source skip %s has invalid scope or reason", key)
 			}
 		}
-		if (candidate.Status == discoveryStatusNotApplicable || candidate.Status == discoveryStatusPassed) &&
-			(candidate.OrdinarySelectionPlan != nil || candidate.Status == discoveryStatusNotApplicable || len(candidate.SourceNotApplicableItems) != 0) {
+		if candidate.Status == discoveryStatusNotApplicable || candidate.Status == discoveryStatusPassed {
 			result := discoveryCorpusResult{
 				Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
 				DiscoveredAsmFiles: candidate.DiscoveredAsmFiles, ApplicableAsmFiles: candidate.ApplicableAsmFiles,

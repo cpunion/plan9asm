@@ -453,13 +453,14 @@ func TestDiscoveryShardKeepsCallerOwnedBuildCache(t *testing.T) {
 		captureProvenance: func(discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 			return fixtureDiscoveryProvenance(t, ledger), nil
 		},
-		runCandidate: func(cfg discoveryCorpusConfig, _ discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
+		runCandidate: func(cfg discoveryCorpusConfig, candidate discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
 			if cfg.buildCache != cache {
 				t.Errorf("build cache = %q, want %q", cfg.buildCache, cache)
 			}
 			writeTestFile(t, filepath.Join(cache, "marker"), "reusable build cache")
-			return matrixReport{Success: 1, TotalTargets: 1}, nil,
-				[]discoveryBuildConfiguration{{AsmFiles: []string{"f_amd64.s"}}}, nil
+			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
+			return matrixReport{Success: result.Translations, TotalTargets: 1, OrdinarySelectionPlan: result.OrdinarySelectionPlan},
+				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
 	if err != nil {
@@ -521,7 +522,7 @@ func TestDiscoveryShardPublishesAuditableCheckpoints(t *testing.T) {
 		captureProvenance: func(discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 			return fixtureDiscoveryProvenance(t, ledger), nil
 		},
-		runCandidate: func(_ discoveryCorpusConfig, _ discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
+		runCandidate: func(cfg discoveryCorpusConfig, candidate discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
 			if calls == 0 || calls == 8 {
 				report, err := readDiscoveryCorpusReport(reportPath)
 				if err != nil {
@@ -532,8 +533,9 @@ func TestDiscoveryShardPublishesAuditableCheckpoints(t *testing.T) {
 				}
 			}
 			calls++
-			return matrixReport{Success: 1, TotalTargets: 1}, nil,
-				[]discoveryBuildConfiguration{{AsmFiles: []string{"f_amd64.s"}}}, nil
+			result := fixtureOrdinaryPassedResult(t, candidate, cfg.Targets)
+			return matrixReport{Success: result.Translations, TotalTargets: 1, OrdinarySelectionPlan: result.OrdinarySelectionPlan},
+				result.ApplicableAsmFiles, result.BuildConfigurations, nil
 		},
 	})
 	if err != nil {
@@ -1886,12 +1888,17 @@ func TestDiscoveryCorpusReportAccountsForEverySelectedCandidate(t *testing.T) {
 }
 
 func TestDiscoveryCorpusReportAccountingMatchesAuditableResults(t *testing.T) {
+	targets := []string{"linux/amd64"}
+	passed := fixtureOrdinaryPassedResult(t, discoveryCandidate{
+		Module: "example.com/a", Version: "v1.0.0", AsmFiles: []string{"a_amd64.s"},
+	}, targets)
 	report := discoveryCorpusReport{
+		Targets:      targets,
 		Selected:     2,
 		Passed:       2,
 		Translations: 3,
 		Results: []discoveryCorpusResult{
-			{Module: "example.com/a", Version: "v1.0.0", Status: discoveryStatusPassed, Translations: 1},
+			passed,
 			{Module: "example.com/b", Version: "v1.0.0", Status: discoveryStatusFailed, Translations: 2},
 		},
 	}
@@ -1908,6 +1915,11 @@ func TestDiscoveryCorpusReportAccountingMatchesAuditableResults(t *testing.T) {
 }
 
 func writeDiscoveryReportFixture(t *testing.T) (string, string, discoverySourceIdentity) {
+	t.Helper()
+	return writeDiscoveryReportFixtureWithTargets(t, []string{"linux/amd64", "linux/arm64"})
+}
+
+func writeDiscoveryReportFixtureWithTargets(t *testing.T, targets []string) (string, string, discoverySourceIdentity) {
 	t.Helper()
 	ledger := filepath.Join(t.TempDir(), "ledger")
 	records := filepath.Join(ledger, "records")
@@ -1937,7 +1949,7 @@ func writeDiscoveryReportFixture(t *testing.T) (string, string, discoverySourceI
 		report := discoveryCorpusReport{
 			SchemaVersion:      discoveryReportSchema,
 			Provenance:         provenance,
-			Targets:            []string{"linux/amd64", "linux/arm64"},
+			Targets:            targets,
 			ShardIndex:         shard,
 			ShardCount:         shardCount,
 			CandidateTotal:     len(candidates),
@@ -1946,11 +1958,9 @@ func writeDiscoveryReportFixture(t *testing.T) (string, string, discoverySourceI
 			Passed:             len(selected),
 		}
 		for _, candidate := range selected {
-			report.Results = append(report.Results, discoveryCorpusResult{
-				Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
-				DiscoveredAsmFiles: candidate.AsmFiles, Translations: 1,
-			})
-			report.Translations++
+			result := fixtureOrdinaryPassedResult(t, candidate, report.Targets)
+			report.Results = append(report.Results, result)
+			report.Translations += result.Translations
 		}
 		data, err := json.Marshal(report)
 		if err != nil {
