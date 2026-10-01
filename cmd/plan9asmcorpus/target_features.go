@@ -1,0 +1,520 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/build"
+	"go/format"
+	"go/parser"
+	"go/scanner"
+	"go/token"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+// The target-driver foundation is integrated with profile scopes separately;
+// it must not silently turn feature-only inputs into baseline exclusions.
+type discoveryTargetFeatures struct {
+	Protocol               string            `json:"protocol"`
+	Target                 string            `json:"target"`
+	Environment            map[string]string `json:"environment"`
+	GoVersion              string            `json:"go_version"`
+	DriverSHA256           string            `json:"driver_sha256"`
+	ToolSourceSHA256       map[string]string `json:"tool_source_sha256"`
+	ToolTags               []string          `json:"tool_tags"`
+	MarkerSelection        map[string]bool   `json:"marker_selection"`
+	MarkerSourceSHA256     string            `json:"marker_source_sha256"`
+	DriverSelectionSHA256  string            `json:"driver_selection_sha256"`
+	EnvStderrSHA256        string            `json:"env_stderr_sha256"`
+	EnvRecheckStderrSHA256 string            `json:"env_recheck_stderr_sha256"`
+	ListStderrSHA256       string            `json:"list_stderr_sha256"`
+}
+
+const discoveryFeatureMarkerModule = "example.invalid/plan9asm-feature-markers"
+
+var discoveryFeatureEnvKeys = []string{
+	"CGO_ENABLED", "GO386", "GOAMD64", "GOARCH", "GOARM", "GOARM64", "GOEXPERIMENT", "GOOS", "GOROOT", "GOVERSION", "GOWASM",
+}
+
+func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir string, baseEnv []string, target string, overrides map[string]string) (*discoveryTargetFeatures, error) {
+	parts := strings.Split(target, "/")
+	if len(parts) != 2 || parts[0] == "" {
+		return nil, fmt.Errorf("invalid feature target %q", target)
+	}
+	cpuKeys := map[string]string{"386": "GO386", "amd64": "GOAMD64", "arm": "GOARM", "arm64": "GOARM64", "wasm": "GOWASM"}
+	cpuKey, ok := cpuKeys[parts[1]]
+	if !ok {
+		return nil, fmt.Errorf("unsupported feature target %q", target)
+	}
+	replacements := map[string]string{
+		"GOOS": parts[0], "GOARCH": parts[1], "CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOWORK": "off", "GOFLAGS": "",
+	}
+	for key, value := range overrides {
+		if key != cpuKey && key != "GOEXPERIMENT" {
+			return nil, fmt.Errorf("feature profile cannot override %s for %s", key, target)
+		}
+		replacements[key] = value
+	}
+	if !filepath.IsAbs(goBinary) || !filepath.IsAbs(markerDir) {
+		return nil, fmt.Errorf("feature driver and owned marker directory must be absolute")
+	}
+	resolvedDir, err := filepath.EvalSymlinks(markerDir)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(resolvedDir)
+	if err != nil {
+		return nil, fmt.Errorf("read owned feature marker directory: %w", err)
+	}
+	if len(entries) != 0 {
+		return nil, fmt.Errorf("feature marker directory must exist and be empty")
+	}
+	driverHash, err := discoveryFeatureFileSHA256(goBinary)
+	if err != nil {
+		return nil, fmt.Errorf("feature driver: %w", err)
+	}
+	env := replaceEnv(baseEnv, replacements)
+	args := append([]string{"env", "-json"}, discoveryFeatureEnvKeys...)
+	output, envStderr, err := runDiscoveryMachineCommand(ctx, resolvedDir, env, goBinary, args...)
+	if err != nil {
+		return nil, fmt.Errorf("feature target environment: %w", err)
+	}
+	var actualEnv map[string]string
+	if err := json.Unmarshal(output, &actualEnv); err != nil {
+		return nil, fmt.Errorf("decode actual feature environment: %w", err)
+	}
+	if len(actualEnv) != len(discoveryFeatureEnvKeys) {
+		return nil, fmt.Errorf("incomplete actual feature environment")
+	}
+	for _, key := range discoveryFeatureEnvKeys {
+		if _, ok := actualEnv[key]; !ok {
+			return nil, fmt.Errorf("missing actual feature environment %s", key)
+		}
+	}
+	if actualEnv["GOOS"] != parts[0] || actualEnv["GOARCH"] != parts[1] || actualEnv["CGO_ENABLED"] != "0" {
+		return nil, fmt.Errorf("Go driver returned a different feature target")
+	}
+	minor, err := discoveryGoMinor(actualEnv["GOVERSION"])
+	if err != nil || minor < 20 || minor > 27 {
+		return nil, fmt.Errorf("feature registration is not audited for Go version %q", actualEnv["GOVERSION"])
+	}
+	if err := validateDiscoveryCPUEnvironment(parts[1], actualEnv[cpuKey], minor); err != nil {
+		return nil, err
+	}
+	tags, sourceHashes, err := discoveryBuiltinFeatureCandidates(actualEnv["GOROOT"])
+	if err != nil {
+		return nil, err
+	}
+	markerFiles := discoveryFeatureMarkerFiles(tags)
+	for name, data := range markerFiles {
+		file, err := os.OpenFile(filepath.Join(resolvedDir, name), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("create owned feature marker: %w", err)
+		}
+		_, writeErr := file.Write(data)
+		closeErr := file.Close()
+		if writeErr != nil || closeErr != nil {
+			return nil, fmt.Errorf("write owned feature marker: %v (close: %v)", writeErr, closeErr)
+		}
+	}
+	output, listStderr, err := runDiscoveryMachineCommand(ctx, resolvedDir, env, goBinary, "list", "-find", "-json", "-mod=readonly", ".")
+	if err != nil {
+		return nil, fmt.Errorf("feature marker selection: %w", err)
+	}
+	selection, err := decodeDiscoveryFeatureMarkers(output, resolvedDir, tags)
+	if err != nil {
+		return nil, err
+	}
+	output, recheckStderr, err := runDiscoveryMachineCommand(ctx, resolvedDir, env, goBinary, args...)
+	if err != nil {
+		return nil, fmt.Errorf("recheck actual feature environment: %w", err)
+	}
+	var afterEnv map[string]string
+	if err := json.Unmarshal(output, &afterEnv); err != nil || len(afterEnv) != len(actualEnv) {
+		return nil, fmt.Errorf("actual feature environment changed during marker selection")
+	}
+	for key, value := range actualEnv {
+		if after, exists := afterEnv[key]; !exists || after != value {
+			return nil, fmt.Errorf("actual feature environment changed during marker selection: %s", key)
+		}
+	}
+	// The observer binds the bytes consumed by both driver commands. Caller
+	// owns markerDir's lifetime; never remove cache-owned or user files here.
+	afterDriver, err := discoveryFeatureFileSHA256(goBinary)
+	if err != nil || afterDriver != driverHash {
+		return nil, fmt.Errorf("feature driver changed during capture")
+	}
+	for name, before := range sourceHashes {
+		after, err := discoveryFeatureFileSHA256(filepath.Join(actualEnv["GOROOT"], filepath.FromSlash(name)))
+		if err != nil || after != before {
+			return nil, fmt.Errorf("feature tool source changed during capture: %s", name)
+		}
+	}
+	afterEntries, err := os.ReadDir(resolvedDir)
+	if err != nil || len(afterEntries) != len(markerFiles) {
+		return nil, fmt.Errorf("feature marker files changed during capture")
+	}
+	for name, before := range markerFiles {
+		after, err := os.ReadFile(filepath.Join(resolvedDir, name))
+		if err != nil || !bytes.Equal(before, after) {
+			return nil, fmt.Errorf("feature marker bytes changed during capture: %s", name)
+		}
+	}
+	var selected []string
+	for _, tag := range tags {
+		if selection[tag] {
+			selected = append(selected, tag)
+		}
+	}
+	selectionJSON, err := json.Marshal(selection)
+	if err != nil {
+		return nil, err
+	}
+	// Do not leak machine-private source roots into portable profile evidence.
+	delete(actualEnv, "GOROOT")
+	return &discoveryTargetFeatures{
+		Protocol: "go_driver_builtin_features_v1", Target: target, Environment: actualEnv,
+		GoVersion: actualEnv["GOVERSION"], DriverSHA256: driverHash, ToolSourceSHA256: sourceHashes,
+		ToolTags: selected, MarkerSelection: selection, MarkerSourceSHA256: discoveryFeatureMarkerSHA256(markerFiles),
+		DriverSelectionSHA256: discoveryFeatureBytesSHA256(selectionJSON), EnvStderrSHA256: discoveryFeatureBytesSHA256(envStderr),
+		EnvRecheckStderrSHA256: discoveryFeatureBytesSHA256(recheckStderr),
+		ListStderrSHA256:       discoveryFeatureBytesSHA256(listStderr),
+	}, nil
+}
+
+func validateDiscoveryCPUEnvironment(arch, value string, minor int) error {
+	valid := false
+	switch arch {
+	case "386":
+		valid = value == "sse2" || value == "softfloat"
+	case "amd64":
+		valid = value == "v1" || value == "v2" || value == "v3" || value == "v4"
+	case "arm":
+		for _, version := range []string{"5", "6", "7"} {
+			valid = valid || value == version || value == version+",softfloat" || value == version+",hardfloat"
+		}
+	case "arm64":
+		valid = value == "" && minor < 23
+		level := strings.Split(value, ",")[0]
+		for _, candidate := range discoveryCPUFeatureCandidates() {
+			valid = valid || candidate == "arm64."+level
+		}
+		for _, extension := range strings.Split(value, ",")[1:] {
+			if extension != "lse" && extension != "crypto" {
+				valid = false
+			}
+		}
+	case "wasm":
+		valid = true
+		for _, feature := range strings.Split(value, ",") {
+			if feature != "" && feature != "satconv" && feature != "signext" {
+				valid = false
+			}
+		}
+	}
+	if !valid {
+		return fmt.Errorf("unrecognized actual CPU feature environment for %s: %q", arch, value)
+	}
+	return nil
+}
+
+func discoveryCPUFeatureCandidates() []string {
+	tags := []string{"386.sse2", "386.softfloat", "wasm.satconv", "wasm.signext"}
+	for level := 1; level <= 4; level++ {
+		tags = append(tags, fmt.Sprintf("amd64.v%d", level))
+	}
+	for level := 5; level <= 7; level++ {
+		tags = append(tags, fmt.Sprintf("arm.%d", level))
+	}
+	for minor := 0; minor <= 9; minor++ {
+		tags = append(tags, fmt.Sprintf("arm64.v8.%d", minor))
+	}
+	for minor := 0; minor <= 5; minor++ {
+		tags = append(tags, fmt.Sprintf("arm64.v9.%d", minor))
+	}
+	return tags
+}
+
+func discoveryBuiltinFeatureCandidates(root string) ([]string, map[string]string, error) {
+	if !filepath.IsAbs(root) {
+		return nil, nil, fmt.Errorf("actual Go driver returned non-absolute GOROOT")
+	}
+	const cfg = "src/internal/buildcfg/cfg.go"
+	const flags = "src/internal/goexperiment/flags.go"
+	cfgData, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(cfg)))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := validateDiscoveryFeatureRegistration(cfgData); err != nil {
+		return nil, nil, err
+	}
+	flagsData, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(flags)))
+	if err != nil {
+		return nil, nil, err
+	}
+	experiments, err := discoveryExperimentFeatureCandidates(flagsData)
+	if err != nil {
+		return nil, nil, err
+	}
+	tags := append(discoveryCPUFeatureCandidates(), experiments...)
+	sort.Strings(tags)
+	return tags, map[string]string{cfg: discoveryFeatureBytesSHA256(cfgData), flags: discoveryFeatureBytesSHA256(flagsData)}, nil
+}
+
+// These are normalized AST-token fingerprints of the complete registration
+// functions actually audited in Go 1.20.14, 1.21.13, 1.22.12, 1.23.12,
+// 1.24.13, 1.25.14, 1.26.8 and 1.27.1 sources. This is a finite source grammar
+// guard, not a coverage baseline. Unknown registration code must be reviewed;
+// it cannot silently invent an unobserved builtin or an arbitrary custom tag.
+var discoveryFeatureRegistrationFingerprints = map[string][]string{
+	"toolTags":       {"b4b6381704ea6e60d0d2522595df66db182ff1b58c29d2f753bea782496323a3"},
+	"experimentTags": {"f391da8e69ecb7f0383a9e342a8639489dcb7fd94c6596e7a9e483ced36476d2"},
+	"gogoarchTags": {
+		"b2dd21d5ca443f36db4fa966ed8fc3467216f88db85edb44b243a8c9ce332755", // Go 1.20–1.21
+		"ed7c2a3ec46db74c8888369284c192d2effd85b32f3c99082ceeb983a806a14c", // Go 1.22
+		"43924858e77d06c222e4dab4f21f24c8bd32207287edb370f258254a8cbf9b2f", // Go 1.23–1.24
+		"f9f731718824fba2d59ac1cb1de5743562acc6d3875f7d0677dc0dbd9806429c", // Go 1.25
+		"e51726aa195348f1455632487fd66752581ff49e055cfb8cdefe34b1908cc036", // Go 1.26–1.27
+	},
+}
+
+func validateDiscoveryFeatureRegistration(data []byte) error {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "cfg.go", data, 0)
+	if err != nil || f.Name.Name != "buildcfg" {
+		return fmt.Errorf("invalid actual feature registration source: %v", err)
+	}
+	seen := make(map[string]bool)
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		allowed, registered := discoveryFeatureRegistrationFingerprints[fn.Name.Name]
+		if !registered {
+			continue
+		}
+		if seen[fn.Name.Name] || fn.Recv != nil || fn.Body == nil {
+			return fmt.Errorf("invalid feature registration function %s", fn.Name.Name)
+		}
+		seen[fn.Name.Name] = true
+		var formatted bytes.Buffer
+		if err := format.Node(&formatted, fset, fn); err != nil {
+			return err
+		}
+		var scan scanner.Scanner
+		scan.Init(token.NewFileSet().AddFile("registration", -1, formatted.Len()), formatted.Bytes(), nil, 0)
+		var canonical bytes.Buffer
+		for {
+			_, tok, literal := scan.Scan()
+			if tok == token.EOF {
+				break
+			}
+			fmt.Fprintf(&canonical, "%s\x00%s\x00", tok, literal)
+		}
+		digest := discoveryFeatureBytesSHA256(canonical.Bytes())
+		accepted := false
+		for _, known := range allowed {
+			accepted = accepted || digest == known
+		}
+		if !accepted {
+			return fmt.Errorf("unrecognized actual feature registration function %s (%s)", fn.Name.Name, digest)
+		}
+	}
+	if len(seen) != len(discoveryFeatureRegistrationFingerprints) {
+		return fmt.Errorf("incomplete actual feature registration functions")
+	}
+	return nil
+}
+
+func discoveryExperimentFeatureCandidates(data []byte) ([]string, error) {
+	f, err := parser.ParseFile(token.NewFileSet(), "flags.go", data, 0)
+	if err != nil || f.Name.Name != "goexperiment" {
+		return nil, fmt.Errorf("invalid actual experiment flags source: %v", err)
+	}
+	var tags []string
+	seen := make(map[string]bool)
+	flagTypes := 0
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typ := spec.(*ast.TypeSpec)
+			if typ.Name.Name != "Flags" {
+				continue
+			}
+			flagTypes++
+			fields, ok := typ.Type.(*ast.StructType)
+			if !ok || typ.Assign.IsValid() {
+				return nil, fmt.Errorf("unrecognized actual experiment Flags type")
+			}
+			for _, field := range fields.Fields.List {
+				kind, ok := field.Type.(*ast.Ident)
+				if !ok || kind.Name != "bool" || len(field.Names) != 1 || field.Tag != nil {
+					return nil, fmt.Errorf("unrecognized actual experiment Flags field")
+				}
+				tag := "goexperiment." + strings.ToLower(field.Names[0].Name)
+				if seen[tag] {
+					return nil, fmt.Errorf("duplicate actual experiment flag %s", tag)
+				}
+				seen[tag] = true
+				tags = append(tags, tag)
+			}
+		}
+	}
+	if flagTypes != 1 || len(tags) == 0 {
+		return nil, fmt.Errorf("incomplete actual experiment Flags type")
+	}
+	sort.Strings(tags)
+	return tags, nil
+}
+
+func discoveryFeatureMarkerFiles(tags []string) map[string][]byte {
+	files := map[string][]byte{
+		"go.mod":  []byte("module " + discoveryFeatureMarkerModule + "\n\ngo 1.20\n"),
+		"base.go": []byte("package markers\n"),
+	}
+	for index, tag := range tags {
+		files[fmt.Sprintf("marker%03d.go", index)] = []byte("//go:build " + tag + "\n\npackage markers\n")
+	}
+	return files
+}
+
+func decodeDiscoveryFeatureMarkers(data []byte, dir string, tags []string) (map[string]bool, error) {
+	var pkg struct {
+		Dir            string
+		ImportPath     string
+		GoFiles        []string
+		IgnoredGoFiles []string
+		SFiles         []string
+		Error          *struct{ Err string }
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return nil, fmt.Errorf("decode actual feature marker selection: %w", err)
+	}
+	actualDir, err := filepath.EvalSymlinks(pkg.Dir)
+	if err != nil || actualDir != dir || pkg.ImportPath != discoveryFeatureMarkerModule || pkg.Error != nil || len(pkg.SFiles) != 0 {
+		return nil, fmt.Errorf("Go driver returned a different or invalid marker package")
+	}
+	byFile := map[string]string{"base.go": ""}
+	for index, tag := range tags {
+		byFile[fmt.Sprintf("marker%03d.go", index)] = tag
+	}
+	seen := make(map[string]bool)
+	selection := make(map[string]bool, len(tags))
+	for _, group := range []struct {
+		files []string
+		match bool
+	}{{pkg.GoFiles, true}, {pkg.IgnoredGoFiles, false}} {
+		for _, file := range group.files {
+			tag, exists := byFile[file]
+			if !exists || seen[file] || (file == "base.go" && !group.match) {
+				return nil, fmt.Errorf("invalid actual feature marker file %s", file)
+			}
+			seen[file] = true
+			if tag != "" {
+				selection[tag] = group.match
+			}
+		}
+	}
+	if len(seen) != len(byFile) {
+		return nil, fmt.Errorf("actual feature selection omitted marker files")
+	}
+	return selection, nil
+}
+
+func discoveryFeatureTagNamespace(tag string) bool {
+	if tag == "boringcrypto" || tag == "race" || tag == "msan" || tag == "asan" || strings.HasPrefix(tag, "goexperiment.") || strings.HasPrefix(tag, "go1.") {
+		return true
+	}
+	for _, arch := range []string{
+		"386", "amd64", "amd64p32", "arm", "armbe", "arm64", "arm64be", "loong64", "mips", "mipsle", "mips64", "mips64le",
+		"mips64p32", "mips64p32le", "ppc", "ppc64", "ppc64le", "riscv", "riscv64", "s390", "s390x", "sparc", "sparc64", "wasm",
+	} {
+		if strings.HasPrefix(tag, arch+".") {
+			return true
+		}
+	}
+	return false
+}
+
+func discoveryCustomTagsWithoutFeatures(tags []string, contexts []build.Context) []string {
+	var custom []string
+	for _, tag := range uniqueDiscoveryCustomTags(tags, contexts) {
+		if !discoveryFeatureTagNamespace(tag) {
+			custom = append(custom, tag)
+		}
+	}
+	return custom
+}
+
+func runDiscoveryMachineCommand(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir, cmd.Env, cmd.WaitDelay = dir, env, 2*time.Second
+	var stdout, stderr boundedDiscoveryCommandOutput
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := runDiscoveryCommand(cmd)
+	if ctx.Err() != nil {
+		return nil, nil, fmt.Errorf("%s: %w", name, ctx.Err())
+	}
+	if stdout.truncated || stderr.truncated {
+		return nil, nil, fmt.Errorf("%s: %w", name, errDiscoveryCommandOutputExceeded)
+	}
+	if err != nil {
+		output := "stdout:\n" + stdout.String() + "\nstderr:\n" + stderr.String()
+		display := output
+		if len(display) > 64<<10 {
+			display = "... output truncated ...\n" + display[len(display)-(64<<10):]
+		}
+		return stdout.Bytes(), stderr.Bytes(), &discoveryCapturedCommandError{
+			command: strings.Join(append([]string{name}, args...), " "), cause: err, output: output, display: display,
+		}
+	}
+	return stdout.Bytes(), stderr.Bytes(), nil
+}
+
+func discoveryFeatureBytesSHA256(data []byte) string {
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+func discoveryFeatureFileSHA256(name string) (string, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	_, readErr := io.Copy(h, f)
+	closeErr := f.Close()
+	if readErr != nil {
+		return "", readErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func discoveryFeatureMarkerSHA256(files map[string][]byte) string {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	h := sha256.New()
+	for _, name := range names {
+		fmt.Fprintf(h, "%s\x00%d\x00", name, len(files[name]))
+		h.Write(files[name])
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
