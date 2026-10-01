@@ -1,14 +1,50 @@
 package plan9asm
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
 type x86RawNearReturnForm struct {
 	nativeWidth bool
 	cleanup     uint16
+}
+
+// x86RawStaticRead is produced only by a source-local RIP decoder after its
+// complete encoding grammar and access width have been validated. It is not a
+// mnemonic whitelist, a general pointer contract, or permission to store.
+type x86RawStaticRead struct {
+	op     Op
+	source int
+	width  int64
+	symbol string
+	offset int64
+	object []byte
+	args   []Operand
+}
+
+// Only the normalizer's symbol relocation may change a proved operand. Keep
+// an independent snapshot so a caller's edited File cannot authorize a wider
+// vector access, a different mask, or an out-of-range proof index.
+func rebindX86RawStaticRead(ins *Instr, source int, symbol string) error {
+	if source < 0 || source >= len(ins.Args) {
+		return fmt.Errorf("%w: invalid raw static read operand", ErrProbeNeedsContext)
+	}
+	read := ins.x86RIPMemoryRead
+	if read.width != 0 {
+		if read.source != source || read.op != ins.Op || !reflect.DeepEqual(read.args, ins.Args) {
+			return fmt.Errorf("%w: changed raw static read cannot inherit decoder proof", ErrProbeNeedsContext)
+		}
+		read.args = append([]Operand(nil), read.args...)
+		read.args[source].Sym = symbol
+		read.symbol = symbol
+		ins.x86RIPMemoryRead = read
+	}
+	ins.Args[source].Sym = symbol
+	return nil
 }
 
 // C3 and C2 imm16 use the target's native return-PC width. Operand-size
@@ -54,8 +90,9 @@ func validateX86RawNearReturns(fn Func, file *File, opt Options, bindFrame bool)
 
 // This bounded contract does not infer noalias from a Go pointer type or a
 // register value. It proves only scalar MOV accesses to bound FP slots or a
-// same-file static object. Other memory forms need their own complete effects
-// and access-range proof. In particular, this is not a general store whitelist.
+// same-file static object, and shared raw decoders' exact source-local reads.
+// Other memory forms need their own complete effects and access-range proof.
+// In particular, this is not a general store whitelist.
 func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) bool {
 	name := fn.Sym
 	if opt.ResolveSym != nil {
@@ -63,6 +100,10 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 	}
 	sig := opt.Sigs[name]
 	for _, ins := range fn.Instrs {
+		read := ins.x86RIPMemoryRead
+		if read.width != 0 && (opt.Goarch == "386" || !x86RawReturnDecodedReadBound(ins, file)) {
+			return false
+		}
 		op := Op(normalizeInstructionOpcode(ins.Op))
 		if _, _, _, memory := x86StringProperties(op); memory {
 			return false
@@ -73,7 +114,7 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		if _, memory := amd64ImplicitMaskMoveSpecs[op]; memory || op == "XLAT" {
 			return false
 		}
-		for _, arg := range ins.Args {
+		for index, arg := range ins.Args {
 			switch arg.Kind {
 			case OpMem:
 				// Even a static symbol plus an index is not a bounded object.
@@ -91,9 +132,15 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 					return false
 				}
 			case OpSym:
+				if read.width != 0 && read.source == index {
+					continue // Exact source and allocated bytes were checked above.
+				}
 				symbol := strings.TrimSpace(arg.Sym)
 				if strings.HasPrefix(symbol, "$") || ins.Op == OpTEXT || ins.Op == OpLABEL {
 					continue
+				}
+				if op == "LEAW" || op == "LEAL" || op == "LEAQ" {
+					continue // Address formation, like OpMem LEA; not a read.
 				}
 				base, offset, static := parseSBRef(symbol)
 				if !static {
@@ -106,6 +153,43 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		}
 	}
 	return true
+}
+
+func x86RawReturnDecodedReadBound(ins Instr, file *File) bool {
+	read := ins.x86RIPMemoryRead
+	if file == nil || !ins.x86Encoded || !ins.x86RIPLiteral ||
+		read.op != ins.Op || read.source < 0 || read.source >= len(ins.Args) ||
+		!reflect.DeepEqual(read.args, ins.Args) ||
+		read.width <= 0 || read.offset < 0 ||
+		read.width > int64(len(read.object)) || read.offset > int64(len(read.object))-read.width {
+		return false
+	}
+	operand := ins.Args[read.source]
+	if operand.Kind != OpSym || operand.Sym != read.symbol {
+		return false
+	}
+	symbol, offset, ok := parseSBRef(operand.Sym)
+	if !ok || offset != read.offset || !x86RawReturnStaticBound(symbol, offset, read.width, file) {
+		return false
+	}
+	if len(ins.x86RIPLiteralData) != 0 &&
+		!bytes.Equal(ins.x86RIPLiteralData, read.object[read.offset:read.offset+read.width]) {
+		return false
+	}
+	// Re-normalization and bounded module partitioning retain the data. Do
+	// not use stale constant-specialization bytes after a caller changes it.
+	matched := false
+	for _, datum := range file.Data {
+		if datum.Sym != symbol {
+			continue
+		}
+		if matched || datum.Off != 0 || datum.Width != int64(len(read.object)) || datum.Addr != "" ||
+			!bytes.Equal(datum.Payload, read.object) {
+			return false
+		}
+		matched = true
+	}
+	return matched
 }
 
 func x86RawReturnScalarMoveBytes(op Op) int64 {
@@ -194,12 +278,34 @@ func x86RawReturnStaticBound(symbol string, offset, width int64, file *File) boo
 	if file == nil || offset < 0 || width <= 0 {
 		return false
 	}
+	var size int64
 	for _, object := range file.Globl {
-		if object.Sym == symbol && object.SizeRaw == "" && object.Size >= width && offset <= object.Size-width {
-			return true
+		if object.Sym != symbol {
+			continue
+		}
+		if object.SizeRaw != "" || object.Size < 0 || object.Size > maxDataGlobalSize {
+			return false
+		}
+		if object.Size > size {
+			size = object.Size
 		}
 	}
-	return false
+	// Match the actual DATA allocation consumer. DATA without a GLOBL still
+	// creates a same-file byte object; holes are initialized to zero. Reuse
+	// its existing checked extent rather than guessing a fixed object size.
+	for _, datum := range file.Data {
+		if datum.Sym != symbol {
+			continue
+		}
+		end, err := dataStmtEnd(datum)
+		if err != nil {
+			return false
+		}
+		if end > size {
+			size = end
+		}
+	}
+	return size >= width && offset <= size-width
 }
 
 func x86RawReturnLeafStackUnobserved(fn Func) bool {

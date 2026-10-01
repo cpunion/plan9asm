@@ -966,6 +966,10 @@ type Instr struct {
 	// normalizeX86RawFile. Retain its bytes for lowerers that can specialize
 	// the constant without a memory access, after source-layout validation.
 	x86RIPLiteralData []byte
+	// A shared RIP decoder proved this exact read operand and physical width.
+	// The bound source/global must still be rechecked after materialization;
+	// changed exported operands cannot inherit the old decoder proof.
+	x86RIPMemoryRead x86RawStaticRead
 	// A reachable LEA addresses an offset of a source-local raw data suffix.
 	// The suffix is shared by all such LEAs in one raw directive group.
 	x86RIPAddressData  []byte

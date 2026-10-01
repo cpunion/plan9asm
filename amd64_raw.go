@@ -50,9 +50,6 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
 		}
-		if err := validateX86RawNearReturns(fn, &normalized, opt, len(translationOptions) != 0); err != nil {
-			return nil, fmt.Errorf("%s: %w", fn.Sym, err)
-		}
 		hasLiteral := false
 		for _, ins := range fn.Instrs {
 			if ins.x86RIPLiteral {
@@ -97,7 +94,9 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 			if ins.x86RIPAddressOff != 0 {
 				address += fmt.Sprintf("+%d", ins.x86RIPAddressOff)
 			}
-			ins.Args[addressArg].Sym = address + "(SB)"
+			if err := rebindX86RawStaticRead(ins, addressArg, address+"(SB)"); err != nil {
+				return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_address_pending(SB)", ins.Args[addressArg].Sym, 1)
 		}
 		for j := range fn.Instrs {
@@ -128,10 +127,17 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 				Sym: name, Width: int64(len(ins.x86RIPLiteralData)),
 				Payload: ins.x86RIPLiteralData,
 			})
-			ins.Args[literalArg].Sym = name + "(SB)"
+			if err := rebindX86RawStaticRead(ins, literalArg, name+"(SB)"); err != nil {
+				return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[literalArg].Sym, 1)
 		}
 		normalized.Funcs[i] = fn
+		// A folded read needs the actual allocated DATA object, not the
+		// pending placeholder or only the source instruction's mnemonic.
+		if err := validateX86RawNearReturns(fn, &normalized, opt, len(translationOptions) != 0); err != nil {
+			return nil, fmt.Errorf("%s: %w", fn.Sym, err)
+		}
 	}
 	return &normalized, nil
 }
@@ -2661,11 +2667,18 @@ func decodeX86RawDirectiveGroupWithOpaque(
 					if ins.Args[arg].Kind != OpSym || ins.Args[arg].Sym != "·__plan9asm_raw_literal_pending(SB)" {
 						continue
 					}
-					ins.Args[arg].Sym = "·__plan9asm_raw_address_pending(SB)"
+					if err := rebindX86RawStaticRead(ins, arg, "·__plan9asm_raw_address_pending(SB)"); err != nil {
+						return nil, err
+					}
 					ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[arg].Sym, 1)
 					// An address escape may permit writes to this pool. Force a
 					// runtime load rather than specializing from its initial bytes.
 					ins.x86RIPLiteralData = nil
+					// Address escape forbids constant specialization, not a
+					// read of this exact allocated static object. Retain the
+					// physical read range and bind the shared whole suffix.
+					ins.x86RIPMemoryRead.offset = int64(literal.first - first)
+					ins.x86RIPMemoryRead.object = append([]byte(nil), code[first:]...)
 					ins.x86RIPAddressData = code[first:]
 					ins.x86RIPAddressOff = literal.first - first
 					ins.x86RIPAddressGroup = start
