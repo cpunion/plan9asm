@@ -48,6 +48,11 @@ func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build
 	if err := validateDiscoveryCPPFeatureNamespace(directives, ctx.GOARCH); err != nil {
 		return nil, err
 	}
+	// A generated definition is not fixed-false before actual package loading.
+	// A CPU branch nested below such a predicate can become reachable in a
+	// different selected Go layout. Observe every legal CPU proposal in this
+	// bounded case; the actual per-profile header still decides consumption.
+	deferredPresence := discoveryCPPDeferredPresenceMayAffectCPU(*unit, directives)
 	covered := make(map[string]bool)
 	cover := func(request discoveryFeatureProfileRequest) (bool, error) {
 		env := cloneDiscoveryCPPEnvironment(baseline.Environment)
@@ -112,11 +117,34 @@ func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build
 		if err != nil {
 			return nil, err
 		}
-		if added {
+		if added || deferredPresence {
 			requests = append(requests, request)
 		}
 	}
 	return requests, nil
+}
+
+func discoveryCPPDeferredPresenceMayAffectCPU(unit discoveryCPPUnit, directives []discoveryCPPDirective) bool {
+	generated := false
+	for _, kind := range unit.DeferredIncludes {
+		generated = generated || kind == "generated_go_asm"
+	}
+	if !generated {
+		return false
+	}
+	for _, directive := range directives {
+		if directive.Kind != "ifdef" && directive.Kind != "ifndef" {
+			continue
+		}
+		cpuName := false
+		for _, prefix := range []string{"GO386_", "GOAMD64_", "GOARM_", "GOARM64_", "GOWASM_"} {
+			cpuName = cpuName || strings.HasPrefix(directive.Name, prefix)
+		}
+		if !cpuName {
+			return true
+		}
+	}
+	return false
 }
 
 func discoveryCPPFeatureCPUKey(arch string) string {

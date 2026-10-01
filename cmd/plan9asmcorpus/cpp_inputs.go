@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,10 +21,12 @@ import (
 )
 
 const discoveryCPPInputsProtocol = "exact_go_cpp_sources_v1"
+const discoveryDeferredCPPInputsProtocol = "exact_go_cpp_deferred_sources_v2"
 
 type discoveryCPPUnit struct {
-	File     string            `json:"file"`
-	Includes map[string]string `json:"includes,omitempty"`
+	File             string            `json:"file"`
+	Includes         map[string]string `json:"includes,omitempty"`
+	DeferredIncludes map[string]string `json:"deferred_includes,omitempty"`
 }
 
 type discoveryCPPInputs struct {
@@ -38,6 +41,14 @@ type discoveryCPPInputs struct {
 }
 
 func captureDiscoveryCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, contexts ...context.Context) (*discoveryCPPInputs, error) {
+	return captureDiscoveryCPPInputsMode(plan, moduleDir, goRoot, files, false, contexts...)
+}
+
+func captureDiscoveryDeferredCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, contexts ...context.Context) (*discoveryCPPInputs, error) {
+	return captureDiscoveryCPPInputsMode(plan, moduleDir, goRoot, files, true, contexts...)
+}
+
+func captureDiscoveryCPPInputsMode(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, deferred bool, contexts ...context.Context) (*discoveryCPPInputs, error) {
 	if len(contexts) > 1 || len(contexts) == 1 && contexts[0] == nil {
 		return nil, fmt.Errorf("CPP source capture requires at most one live candidate context")
 	}
@@ -59,18 +70,25 @@ func captureDiscoveryCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, 
 	}
 	inputs := &discoveryCPPInputs{Protocol: discoveryCPPInputsProtocol, Module: plan.Module, Version: plan.Version, ModuleSum: plan.ModuleSum,
 		ZipSHA256: plan.ZipSHA256, Registration: registration, Sources: make(map[string]discoveryCPPSource)}
+	if deferred {
+		inputs.Protocol = discoveryDeferredCPPInputsProtocol
+	}
 	for _, file := range files {
 		if !ordinarySelectionLocalPath(file) {
 			return nil, fmt.Errorf("unsafe CPP assembly source %s", file)
 		}
-		unit := discoveryCPPUnit{File: file, Includes: make(map[string]string)}
+		unit := discoveryCPPUnit{File: file, Includes: make(map[string]string), DeferredIncludes: make(map[string]string)}
 		active := make(map[string]bool)
+		registered := make(map[string]bool)
 		var capture func(string, int) error
 		capture = func(id string, depth int) error {
 			if err := checkContext(); err != nil {
 				return err
 			}
-			if depth > 32 || active[id] {
+			if deferred && registered[id] {
+				return nil // Registration is a finite graph, not active expansion.
+			}
+			if depth > 32 || !deferred && active[id] {
 				return fmt.Errorf("CPP include nesting/cycle requires an explicit bounded expansion proof: %s", id)
 			}
 			origin, relative, err := discoveryCPPSourceIdentity(id)
@@ -112,16 +130,22 @@ func captureDiscoveryCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, 
 				inputs.Sources[id] = source
 			}
 			active[id] = true
+			registered[id] = true
 			defer delete(active, id)
 			for index, directive := range source.Directives {
 				if directive.Kind != "include" {
 					continue
 				}
-				included, err := discoveryCPPResolveInclude(moduleDir, goRoot, unit.File, directive.Include)
+				key := id + "#" + strconv.Itoa(index)
+				included, kind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, unit.File, directive.Include, deferred)
 				if err != nil {
 					return fmt.Errorf("CPP include %s:%d: %w", relative, directive.Line, err)
 				}
-				unit.Includes[id+"#"+strconv.Itoa(index)] = included
+				if kind != "" {
+					unit.DeferredIncludes[key] = kind
+					continue
+				}
+				unit.Includes[key] = included
 				if err := capture(included, depth+1); err != nil {
 					return err
 				}
@@ -141,6 +165,29 @@ func captureDiscoveryCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, 
 		return nil, err
 	}
 	return inputs, nil
+}
+
+// Raw registration never substitutes an empty generated header. Missing
+// ordinary includes remain explicit unresolved edges; active replay/actual Go
+// compilation must later discharge them, otherwise the scope fails.
+func discoveryCPPResolveRawInclude(moduleDir, goRoot, asm, include string, deferred bool) (string, string, error) {
+	if deferred && path.Clean(include) == "go_asm.h" {
+		file := path.Clean(path.Join(path.Dir(asm), include))
+		if !ordinarySelectionLocalPath(file) || strings.Contains(include, "\\") {
+			return "", "", fmt.Errorf("generated include escapes exact module scope")
+		}
+		name := filepath.Join(moduleDir, filepath.FromSlash(file))
+		if _, err := os.Stat(name); os.IsNotExist(err) {
+			return "", "generated_go_asm", nil
+		} else if err != nil {
+			return "", "", err
+		}
+	}
+	file, err := discoveryCPPResolveInclude(moduleDir, goRoot, asm, include)
+	if deferred && errors.Is(err, os.ErrNotExist) {
+		return "", "unresolved_include", nil
+	}
+	return file, "", err
 }
 
 func discoveryCPPSourceIdentity(id string) (string, string, error) {
@@ -201,7 +248,7 @@ func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (str
 }
 
 func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, files []string) error {
-	if inputs == nil || plan == nil || inputs.Protocol != discoveryCPPInputsProtocol || inputs.Module != plan.Module || inputs.Version != plan.Version ||
+	if inputs == nil || plan == nil || inputs.Protocol != discoveryCPPInputsProtocol && inputs.Protocol != discoveryDeferredCPPInputsProtocol || inputs.Module != plan.Module || inputs.Version != plan.Version ||
 		inputs.ModuleSum != plan.ModuleSum || inputs.ZipSHA256 != plan.ZipSHA256 || !discoverySHA256Pattern.MatchString(inputs.ZipSHA256) ||
 		!strings.HasPrefix(inputs.ModuleSum, "h1:") || len(inputs.Sources) == 0 || len(inputs.Sources) > 512 || len(inputs.Units) != len(files) || len(files) > 512 {
 		return fmt.Errorf("missing exact bounded CPP module/source protocol")
@@ -270,6 +317,12 @@ func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdin
 }
 
 func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUnit, used map[string]bool) ([]discoveryCPPDirective, error) {
+	if inputs.Protocol == discoveryDeferredCPPInputsProtocol {
+		return discoveryDeferredCPPUnitRegistration(inputs, unit, used)
+	}
+	if len(unit.DeferredIncludes) != 0 {
+		return nil, fmt.Errorf("legacy CPP protocol cannot contain deferred origin edges")
+	}
 	var directives []discoveryCPPDirective
 	active, includeKeys := make(map[string]bool), make(map[string]bool)
 	var expand func(string, int) error
@@ -391,7 +444,15 @@ func verifyDiscoveryCPPModuleZIP(inputs *discoveryCPPInputs, plan *discoveryOrdi
 				if directive.Kind != "include" {
 					continue
 				}
-				target, selected := unit.Includes[id+"#"+strconv.Itoa(index)]
+				key := id + "#" + strconv.Itoa(index)
+				target, selected := unit.Includes[key]
+				if kind := unit.DeferredIncludes[key]; kind != "" {
+					moduleFile := path.Clean(path.Join(path.Dir(unit.File), directive.Include))
+					if zipFiles[moduleFile] != nil {
+						return fmt.Errorf("deferred CPP include falsely omitted an original exact ZIP member")
+					}
+					continue
+				}
 				if !selected {
 					continue
 				}
@@ -449,12 +510,14 @@ func verifyDiscoveryCPPInputsUnchanged(inputs *discoveryCPPInputs, moduleDir, go
 				if directive.Kind != "include" {
 					continue
 				}
-				wanted, selected := unit.Includes[id+"#"+strconv.Itoa(index)]
-				if !selected {
+				key := id + "#" + strconv.Itoa(index)
+				wanted, selected := unit.Includes[key]
+				deferredKind := unit.DeferredIncludes[key]
+				if !selected && deferredKind == "" {
 					continue
 				}
-				actual, err := discoveryCPPResolveInclude(moduleDir, goRoot, unit.File, directive.Include)
-				if err != nil || actual != wanted {
+				actual, kind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, unit.File, directive.Include, inputs.Protocol == discoveryDeferredCPPInputsProtocol)
+				if err != nil || actual != wanted || kind != deferredKind {
 					return fmt.Errorf("CPP include search selection changed: %s:%d", id, directive.Line)
 				}
 			}
