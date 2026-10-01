@@ -32,7 +32,11 @@ func validateDiscoveryTargetFeatures(features *discoveryTargetFeatures) error {
 			}
 		}
 	}
-	if !validDiscoveryFeatureToolDirectory(features.ToolDirectory) || len(features.ToolBinarySHA256) != len(discoveryFeatureSubtools) || len(features.ToolBinaryOrigins) != len(discoveryFeatureSubtools) || !discoverySHA256Pattern.MatchString(features.ToolRoutingSHA256) || !discoverySHA256Pattern.MatchString(features.ToolDispatcherSHA256) {
+	if !validDiscoveryFeatureToolDirectory(features.ToolDirectory) ||
+		len(features.ToolBinarySHA256) != len(discoveryFeatureSubtools) ||
+		len(features.ToolBinaryOrigins) != len(discoveryFeatureSubtools) ||
+		!discoverySHA256Pattern.MatchString(features.ToolRoutingSHA256) ||
+		!discoverySHA256Pattern.MatchString(features.ToolDispatcherSHA256) {
 		return fmt.Errorf("missing actual Go subtool identity")
 	}
 	for _, name := range discoveryFeatureSubtools {

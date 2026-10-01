@@ -67,7 +67,11 @@ func verifyDiscoveryAssemblyProfileTools(profile *discoveryAsmCommandProfile, ma
 	if err != nil {
 		return fmt.Errorf("direct assembler actual subtool inspection: %w", err)
 	}
-	wantedTools := &discoveryFeatureToolState{directory: profile.Observed.ToolDirectory, digests: profile.Observed.ToolBinarySHA256, origins: profile.Observed.ToolBinaryOrigins, routing: profile.Observed.ToolRoutingSHA256, dispatcher: profile.Observed.ToolDispatcherSHA256}
+	wantedTools := &discoveryFeatureToolState{
+		directory: profile.Observed.ToolDirectory, digests: profile.Observed.ToolBinarySHA256,
+		origins: profile.Observed.ToolBinaryOrigins, routing: profile.Observed.ToolRoutingSHA256,
+		dispatcher: profile.Observed.ToolDispatcherSHA256,
+	}
 	if !equalDiscoveryFeatureToolStates(state.tools, wantedTools) {
 		return fmt.Errorf("direct assembler subtool bytes/routing/cache differ from actual profile")
 	}

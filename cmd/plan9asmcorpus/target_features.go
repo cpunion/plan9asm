@@ -168,8 +168,11 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 		return nil, fmt.Errorf("feature driver changed during capture")
 	}
 	afterTools, err := captureDiscoveryFeatureSubtools(ctx, goBinary, env, afterEnv)
-	if err != nil || !equalDiscoveryFeatureToolStates(tools, afterTools) {
-		return nil, fmt.Errorf("actual Go subtool bytes/routing/cache changed during capture: %w", err)
+	if err != nil {
+		return nil, fmt.Errorf("recheck actual Go subtools: %w", err)
+	}
+	if !equalDiscoveryFeatureToolStates(tools, afterTools) {
+		return nil, fmt.Errorf("actual Go subtool bytes/routing/cache changed during capture")
 	}
 	for name, before := range sourceHashes {
 		after, err := discoveryFeatureFileSHA256(filepath.Join(actualEnv["GOROOT"], filepath.FromSlash(name)))
@@ -204,8 +207,10 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	return &discoveryTargetFeatures{
 		Protocol: "go_driver_builtin_features_v2", Target: target, Environment: actualEnv,
 		GoVersion: actualEnv["GOVERSION"], DriverSHA256: driverHash, ToolSourceSHA256: sourceHashes,
-		ToolDirectory: tools.directory, ToolBinarySHA256: tools.digests, ToolBinaryOrigins: tools.origins, ToolRoutingSHA256: tools.routing, ToolDispatcherSHA256: tools.dispatcher,
-		ToolTags: selected, MarkerSelection: selection, MarkerSourceSHA256: discoveryFeatureMarkerSHA256(markerFiles),
+		ToolDirectory: tools.directory, ToolBinarySHA256: tools.digests,
+		ToolBinaryOrigins: tools.origins, ToolRoutingSHA256: tools.routing,
+		ToolDispatcherSHA256: tools.dispatcher,
+		ToolTags:             selected, MarkerSelection: selection, MarkerSourceSHA256: discoveryFeatureMarkerSHA256(markerFiles),
 		DriverSelectionSHA256: discoveryFeatureBytesSHA256(selectionJSON), EnvStderrSHA256: discoveryFeatureBytesSHA256(envStderr),
 		EnvRecheckStderrSHA256: discoveryFeatureBytesSHA256(recheckStderr),
 		ListStderrSHA256:       discoveryFeatureBytesSHA256(listStderr),

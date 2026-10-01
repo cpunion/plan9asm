@@ -183,7 +183,13 @@ func discoveryFeatureDriverStateKey(state *discoveryFeatureDriverState) string {
 		ToolOrigins      map[string]string
 		ToolRouting      string
 		DispatcherSHA256 string
-	}{"go_driver_feature_cache_v2", discoveryFeatureMarkerModule, state.environment, state.driverSHA256, state.sourceSHA256, state.tools.directory, state.tools.digests, state.tools.origins, state.tools.routing, state.tools.dispatcher})
+	}{
+		Protocol: "go_driver_feature_cache_v2", MarkerModule: discoveryFeatureMarkerModule,
+		Environment: state.environment, DriverSHA256: state.driverSHA256,
+		SourceSHA256: state.sourceSHA256, ToolDirectory: state.tools.directory,
+		ToolSHA256: state.tools.digests, ToolOrigins: state.tools.origins,
+		ToolRouting: state.tools.routing, DispatcherSHA256: state.tools.dispatcher,
+	})
 	return discoveryFeatureBytesSHA256(data)
 }
 
@@ -197,7 +203,15 @@ func validateDiscoveryCachedFeatures(entry discoveryCachedFeatureObservation, st
 			actualEnv[key] = value
 		}
 	}
-	if !reflect.DeepEqual(actualEnv, entry.observed.Environment) || entry.observed.DriverSHA256 != state.driverSHA256 || !reflect.DeepEqual(entry.observed.ToolSourceSHA256, state.sourceSHA256) || !equalDiscoveryFeatureToolStates(&discoveryFeatureToolState{directory: entry.observed.ToolDirectory, digests: entry.observed.ToolBinarySHA256, origins: entry.observed.ToolBinaryOrigins, routing: entry.observed.ToolRoutingSHA256, dispatcher: entry.observed.ToolDispatcherSHA256}, state.tools) {
+	recordedTools := &discoveryFeatureToolState{
+		directory: entry.observed.ToolDirectory, digests: entry.observed.ToolBinarySHA256,
+		origins: entry.observed.ToolBinaryOrigins, routing: entry.observed.ToolRoutingSHA256,
+		dispatcher: entry.observed.ToolDispatcherSHA256,
+	}
+	if !reflect.DeepEqual(actualEnv, entry.observed.Environment) ||
+		entry.observed.DriverSHA256 != state.driverSHA256 ||
+		!reflect.DeepEqual(entry.observed.ToolSourceSHA256, state.sourceSHA256) ||
+		!equalDiscoveryFeatureToolStates(recordedTools, state.tools) {
 		return fmt.Errorf("cached feature proof differs from actual driver/environment/registration")
 	}
 	var tags []string
