@@ -358,14 +358,23 @@ func discoveryFeatureRequestKey(request discoveryFeatureProfileRequest) string {
 	return string(data)
 }
 
-func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir string, env []string, plan *discoveryOrdinarySelectionPlan, asmFiles []string) ([]discoveryFeatureProfile, error) {
-	var baselines []*discoveryTargetFeatures
-	for index, target := range plan.Targets {
-		dir := filepath.Join(ownedDir, fmt.Sprintf("baseline-%03d", index))
+func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir string, env []string, plan *discoveryOrdinarySelectionPlan, asmFiles []string, caches ...*discoveryFeatureObservationCache) ([]discoveryFeatureProfile, error) {
+	if len(caches) > 1 || len(caches) == 1 && caches[0] == nil {
+		return nil, fmt.Errorf("feature profiles require one owned actual-observation cache")
+	}
+	observe := func(name, target string, overrides map[string]string) (*discoveryTargetFeatures, error) {
+		if len(caches) == 1 {
+			return caches[0].observe(ctx, goBinary, ownedDir, env, target, overrides)
+		}
+		dir := filepath.Join(ownedDir, name)
 		if err := os.Mkdir(dir, 0700); err != nil {
 			return nil, err
 		}
-		observed, err := captureDiscoveryTargetFeatures(ctx, goBinary, dir, env, target, nil)
+		return captureDiscoveryTargetFeatures(ctx, goBinary, dir, env, target, overrides)
+	}
+	var baselines []*discoveryTargetFeatures
+	for index, target := range plan.Targets {
+		observed, err := observe(fmt.Sprintf("baseline-%03d", index), target, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -385,11 +394,7 @@ func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir str
 				}
 			}
 		} else {
-			dir := filepath.Join(ownedDir, fmt.Sprintf("profile-%03d", index))
-			if err := os.Mkdir(dir, 0700); err != nil {
-				return nil, err
-			}
-			observed, err = captureDiscoveryTargetFeatures(ctx, goBinary, dir, env, request.Target, request.Overrides)
+			observed, err = observe(fmt.Sprintf("profile-%03d", index), request.Target, request.Overrides)
 			if err != nil {
 				return nil, fmt.Errorf("actual driver rejected required profile %s: %w", discoveryFeatureRequestKey(request), err)
 			}
