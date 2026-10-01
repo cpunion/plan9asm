@@ -45,6 +45,12 @@ func proveARMStatusReads(fn Func, sig FuncSig) error {
 	blocks := armSplitBlocks(fn)
 	preds, reachable := armSourcePredecessors(blocks)
 	entry := armStatusState{}
+	if sig.ARMEntry != nil {
+		// Full translation validates the entry contract before reaching this
+		// proof; its shim captures physical NZCV and every non-PC GP register.
+		entry.initialized = armKernelFlags
+		entry.values = armKernelTop &^ armKernelRegBit("R15")
+	}
 	for i, reg := range sig.ArgRegs {
 		if i < len(sig.Args) {
 			entry.values |= armKernelRegBit(reg)

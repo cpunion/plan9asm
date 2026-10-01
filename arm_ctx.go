@@ -28,6 +28,10 @@ type armCtx struct {
 	flagsVSlot   string
 	flagsWritten bool
 
+	// Only a validated physical entry shim supplies this private body input.
+	// It never changes the source entry's caller-visible arguments.
+	machineState string
+
 	exclusiveValidSlot string
 	exclusivePtrSlot   string
 	exclusiveSizeSlot  string
@@ -379,6 +383,11 @@ func (c *armCtx) scanUsedRegs() {
 		markReg(Reg(fmt.Sprintf("R%d", i)))
 	}
 	markReg(SP)
+	if c.machineState != "" && c.sig.ARMEntry.VFP {
+		for i := 0; i < 16; i++ {
+			markReg(Reg(fmt.Sprintf("F%d", i)))
+		}
+	}
 }
 
 func (c *armCtx) emitEntryAllocasAndArgInit() error {
@@ -475,6 +484,9 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 			}
 			fmt.Fprintf(c.b, "  store i32 %s, ptr %s\n", v, slot)
 		}
+	}
+	if c.machineState != "" {
+		return c.initializeMachineState()
 	}
 	return nil
 }

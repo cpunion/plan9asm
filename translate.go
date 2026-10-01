@@ -25,6 +25,12 @@ type FuncSig struct {
 	Ret   LLVMType // use Void for void-return
 	Attrs string   // optional function attributes group (e.g. "#0")
 
+	// ARMEntry explicitly selects an address-only physical ARM machine entry.
+	// Args/Frame must be empty and Ret must be Void; those fields describe the
+	// LLVM carrier, not a callable C/Go signature. The checked entry shim alone
+	// supplies its private typed machine-state body. Nil keeps ordinary lowering.
+	ARMEntry *ARMMachineEntry
+
 	// WASMContext is the physical closure-environment parameter carried in
 	// WebAssembly's CTXT pseudo-register. It precedes Args in the LLVM entry but
 	// is not part of the Go function signature, so FrameSlot.Index continues to
@@ -196,6 +202,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
 	}
+	if err := validateARMMachineEntryArchitecture(file, opt); err != nil {
+		return "", err
+	}
 	if !opt.X87Mode.valid() {
 		return "", fmt.Errorf("invalid x87 mode %d", opt.X87Mode)
 	}
@@ -306,6 +315,13 @@ func translateIRText(file *File, opt Options) (string, error) {
 		// lowerer so even straight-line functions receive the same operand-form
 		// validation; the legacy linear prototype silently accepts unknown forms.
 		if file.Arch == ArchARM {
+			if sig.ARMEntry != nil {
+				if err := translateFuncARMMachineEntry(&b, *fn, sig, resolve, opt.Sigs, opt.TargetTriple, opt.AnnotateSource); err != nil {
+					return "", fmt.Errorf("%s: %w", name, err)
+				}
+				b.WriteString("\n")
+				continue
+			}
 			if err := translateFuncARM(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}

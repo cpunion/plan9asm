@@ -151,6 +151,9 @@ func (c *armCtx) tailCallAndRet(symOp Operand) error {
 		csig = c.sig
 		csig.Name = callee
 	}
+	if csig.ARMEntry != nil {
+		return fmt.Errorf("%w: ARM machine entry %q has no ordinary typed tail-call ABI", ErrProbeNeedsContext, callee)
+	}
 	callee = funcSigSymbol(callee, csig)
 	args := make([]string, 0, len(csig.Args))
 	useLLVMArgs := len(csig.ArgRegs) == 0 && len(csig.Args) == len(c.sig.Args) && csig.Ret == c.sig.Ret
@@ -258,6 +261,9 @@ func (c *armCtx) callSym(symOp Operand) error {
 	csig, ok := c.sigs[callee]
 	if !ok {
 		csig = FuncSig{Name: callee, Ret: Void}
+	}
+	if csig.ARMEntry != nil {
+		return fmt.Errorf("%w: ARM machine entry %q requires a physical call-site bridge", ErrProbeNeedsContext, callee)
 	}
 	callee = funcSigSymbol(callee, csig)
 	args := make([]string, 0, len(csig.Args))

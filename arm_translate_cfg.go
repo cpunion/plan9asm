@@ -276,6 +276,9 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 }
 
 func (c *armCtx) lowerRET() error {
+	if c.machineState != "" {
+		return c.returnMachineState()
+	}
 	if len(c.fpResults) == 0 {
 		r0, err := c.loadReg(Reg("R0"))
 		if err != nil {

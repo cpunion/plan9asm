@@ -192,9 +192,15 @@ func (c *armCtx) eval32(op Operand, postInc bool) (string, error) {
 		t := c.newTmp()
 		switch strings.ToUpper(op.Ident) {
 		case "CPSR":
+			if c.machineState != "" {
+				return c.statusWithModeledNZCV(c.loadMachineValue(armMachineCPSROffset, I32)), nil
+			}
 			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "mrs $0, cpsr", "=r,~{memory}")
 			return c.statusWithModeledNZCV("%" + t), nil
 		case "FPCR", "FPSR":
+			if c.machineState != "" {
+				return c.loadMachineValue(armMachineFPSCROffset, I32), nil
+			}
 			fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", t, "vmrs $0, fpscr", "=r,~{memory}")
 			return "%" + t, nil
 		}
