@@ -166,12 +166,13 @@ const (
 )
 
 type discoverySourceNotApplicableItem struct {
-	BuildTags []string `json:"build_tags,omitempty"`
-	AsmFile   string   `json:"asm_file,omitempty"`
-	AsmFiles  []string `json:"asm_files,omitempty"`
-	Targets   []string `json:"targets"`
-	Kind      string   `json:"kind"`
-	Reason    string   `json:"reason"`
+	BuildTags  []string                          `json:"build_tags,omitempty"`
+	AsmFile    string                            `json:"asm_file,omitempty"`
+	AsmFiles   []string                          `json:"asm_files,omitempty"`
+	Targets    []string                          `json:"targets"`
+	Kind       string                            `json:"kind"`
+	Reason     string                            `json:"reason"`
+	Diagnostic *discoverySourceDiagnosticWitness `json:"diagnostic,omitempty"`
 }
 
 type moduleDownloadInfo struct {
@@ -185,26 +186,29 @@ type moduleDownloadInfo struct {
 }
 
 type discoveryCorpusResult struct {
-	Module                    string                                `json:"module"`
-	Version                   string                                `json:"version"`
-	Status                    string                                `json:"status"`
-	DiscoveredAsmFiles        []string                              `json:"discovered_asm_files"`
-	ApplicableAsmFiles        []string                              `json:"applicable_asm_files"`
-	BuildConfigurations       []discoveryBuildConfiguration         `json:"build_configurations,omitempty"`
-	Patterns                  []string                              `json:"patterns,omitempty"`
-	Translations              int                                   `json:"translations"`
-	NotApplicableTranslations int                                   `json:"not_applicable_translations,omitempty"`
-	NotApplicableItems        []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
-	SourceNotApplicableItems  []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
-	NotApplicableReason       string                                `json:"not_applicable_reason,omitempty"`
-	InvalidSourceReason       string                                `json:"invalid_source_reason,omitempty"`
-	InvalidSourceEvidence     []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
-	Superseded                *discoverySupersededSkip              `json:"superseded,omitempty"`
-	PrivateExtension          *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
-	NativeLayout              *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
-	NativeLayoutPlan          *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
-	OrdinarySelectionPlan     *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
-	Error                     string                                `json:"error,omitempty"`
+	// Only the ledger's internal reconstruction sets this. JSON reports cannot
+	// opt out of checking raw compiler diagnostics by supplying a field.
+	sourceDiagnosticsCompacted bool
+	Module                     string                                `json:"module"`
+	Version                    string                                `json:"version"`
+	Status                     string                                `json:"status"`
+	DiscoveredAsmFiles         []string                              `json:"discovered_asm_files"`
+	ApplicableAsmFiles         []string                              `json:"applicable_asm_files"`
+	BuildConfigurations        []discoveryBuildConfiguration         `json:"build_configurations,omitempty"`
+	Patterns                   []string                              `json:"patterns,omitempty"`
+	Translations               int                                   `json:"translations"`
+	NotApplicableTranslations  int                                   `json:"not_applicable_translations,omitempty"`
+	NotApplicableItems         []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems   []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
+	NotApplicableReason        string                                `json:"not_applicable_reason,omitempty"`
+	InvalidSourceReason        string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence      []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                 *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension           *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout               *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan           *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	OrdinarySelectionPlan      *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	Error                      string                                `json:"error,omitempty"`
 }
 
 type discoveryCorpusReport struct {
@@ -1406,7 +1410,9 @@ func discoveryAssemblerSourceDiagnostic(filePath, output string) bool {
 			return true
 		}
 	}
-	return strings.Contains(output, "asm: assembly of "+filePath+" failed") && strings.Contains(output, "asm: ")
+	// The final failure footer is emitted even when the cause is lost. It is
+	// not a source diagnostic and must not establish architecture inapplicability.
+	return false
 }
 
 func missingGoAsmHeader(message string) bool {
@@ -2038,6 +2044,11 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		}
 		if isDiscoveryGoBuildInfrastructureFailure(item.Reason) {
 			return fmt.Errorf("source not-applicable evidence contains an infrastructure failure: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)
+		}
+		if discoverySourceRejectionRequiresDiagnostic(item.Kind) {
+			if err := validateDiscoverySourceRejectionDiagnostic(item, result.sourceDiagnosticsCompacted); err != nil {
+				return fmt.Errorf("source not-applicable evidence: kind=%q files=%v targets=%v: %w", item.Kind, files, item.Targets, err)
+			}
 		}
 	}
 	return nil
@@ -2683,6 +2694,9 @@ func runDiscoveryPackageChecks(
 		results[index] = check([]string{group.Pattern})
 		if isDiscoveryInfrastructureFailure(results[index]) {
 			return nil, fmt.Errorf("package %s: %w", group.Pattern, results[index])
+		}
+		if results[index] != nil && !hasDiscoveryConcreteSourceDiagnostic(discoveryCommandDiagnostic(results[index])) {
+			return nil, fmt.Errorf("package %s lacks a concrete source rejection diagnostic (not N/A): %w", group.Pattern, results[index])
 		}
 	}
 	return results, nil

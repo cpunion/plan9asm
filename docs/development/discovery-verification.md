@@ -223,6 +223,15 @@ constraint/package-clause inputs, complete package/ancestor directory names,
 the exact module ZIP SHA-256 and Go h1 identity, and every target/tag decision.
 Related directory files (including assembly headers) also retain byte hashes;
 the producer rechecks them after package checks before releasing its workspace.
+Compiler/assembler/asmdecl source rejection requires a concrete source
+diagnostic, not merely a positive exit or an assembler failure footer. Unknown
+diagnostics remain failures for investigation. Raw reports keep the actual
+diagnostic; compact ledger summaries retain `concrete_go_source_diagnostic_v1`
+with its digest and canonical basename/line/column locations, without machine
+paths or arbitrary diagnostic text. This witness depends on frozen producer
+provenance; a digest alone does not authenticate report bytes. Old reason-only
+ledger skips cannot be promoted by inventing a witness. Selection and
+empty-object proofs remain separate from failed compiler invocations.
 New ordinary runs additionally capture compact `cpp_inputs` before their Go
 checks: exact ZIP-bound assembly/header SHA-256, registered CPP controls and
 Go's fixed package-directory/tool-include search. Go export/vet checks and
@@ -230,8 +239,9 @@ translation recheck those inputs; changed nested headers, newly preferred
 headers and source-proof errors fail, even alongside a native source error.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
-guard alone does not establish feature-profile or branch coverage. Historical
-schema-9 proof compatibility is unchanged; profile-aware reporting is separate.
+guard alone does not establish feature-profile or branch coverage. CPP proof
+compatibility retains schema 9; source-diagnostic checks separately reject
+reason-only rejections. Profile-aware reporting is still separate.
 The producer checks captured files and directory names against that ZIP;
 aggregate/progress/ledger readers replay MatchFile and the custom-tag search.
 Offline readers validate frozen producer/source/tool provenance; they do not

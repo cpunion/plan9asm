@@ -880,7 +880,7 @@ func TestDiscoveryPackageChecksBatchAndIsolateSourceFailures(t *testing.T) {
 		{Pattern: "example.com/module/second"},
 		{Pattern: "example.com/module/third"},
 	}
-	sourceFailure := errors.New("second package has invalid source")
+	sourceFailure := errors.New("second/decl.go:3:14: undefined: missingDeclaration")
 	var calls [][]string
 	check := func(patterns []string) error {
 		calls = append(calls, append([]string(nil), patterns...))
@@ -2019,8 +2019,8 @@ func TestDiscoveryCorpusReportValidatesSourceNotApplicableEvidence(t *testing.T)
 		Status:             discoveryStatusNotApplicable,
 		DiscoveredAsmFiles: []string{"pkg/a_amd64.s", "pkg/b.s", "pkg/c.s"},
 		SourceNotApplicableItems: []discoverySourceNotApplicableItem{
-			{AsmFile: "pkg/a_amd64.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableGoAssembler, Reason: "current Go assembler rejected the source"},
-			{AsmFiles: []string{"pkg/b.s"}, Targets: []string{"windows/amd64"}, Kind: discoverySourceNotApplicableGoBuild, Reason: "current Go compiler rejected the exact package"},
+			{AsmFile: "pkg/a_amd64.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableGoAssembler, Reason: "pkg/a_amd64.s:3: unrecognized instruction \"NOT_AN_OPCODE\""},
+			{AsmFiles: []string{"pkg/b.s"}, Targets: []string{"windows/amd64"}, Kind: discoverySourceNotApplicableGoBuild, Reason: "pkg/decl.go:3:14: undefined: missingDeclaration"},
 			{AsmFile: "pkg/c.s", Targets: []string{"linux/amd64"}, Kind: discoverySourceNotApplicableNoSymbols, Reason: "current Go assembler emitted no object symbols"},
 		},
 	}

@@ -449,7 +449,7 @@ func TestDiscoveryProgressRejectsContradictoryOutcomes(t *testing.T) {
 
 func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 	ledger, reports, source := writeDiscoveryReportFixture(t)
-	const rawDiagnostic = "go build failed at /tmp/ephemeral/cache/file.go: undefined name"
+	const rawDiagnostic = "/tmp/ephemeral/cache/file.go:3:14: undefined: missingDeclaration"
 	files, err := discoveryCorpusReportFiles(reports)
 	if err != nil {
 		t.Fatal(err)
@@ -519,6 +519,19 @@ func TestDiscoveryProgressCountsSourceNotApplicableSeparately(t *testing.T) {
 			strings.Contains(string(data), "/tmp/ephemeral") {
 			t.Fatalf("source skip details lost from assembly ledger: %s", data)
 		}
+		for _, item := range candidate.SourceNotApplicableItems {
+			if err := validateDiscoverySourceDiagnostic(item.Diagnostic); err != nil {
+				t.Fatal("ledger lost the concrete diagnostic witness:", err)
+			}
+		}
+	}
+	missingEvidence := restored
+	missingEvidence.Candidates = append([]discoveryCandidateProgress(nil), restored.Candidates...)
+	first := &missingEvidence.Candidates[0]
+	first.SourceNotApplicableItems = append([]discoverySourceSkipSummary(nil), first.SourceNotApplicableItems...)
+	first.SourceNotApplicableItems[0].Diagnostic = nil
+	if err := validateAssemblyLedgerProgress(missingEvidence); err == nil {
+		t.Fatal("reason-only ledger skip was accepted after its diagnostic witness was removed")
 	}
 }
 

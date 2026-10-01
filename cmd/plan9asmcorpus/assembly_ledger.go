@@ -125,7 +125,8 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		}
 		if candidate.Status == discoveryStatusNotApplicable || candidate.Status == discoveryStatusPassed {
 			result := discoveryCorpusResult{
-				Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
+				sourceDiagnosticsCompacted: true,
+				Module:                     candidate.Module, Version: candidate.Version, Status: candidate.Status,
 				DiscoveredAsmFiles: candidate.DiscoveredAsmFiles, ApplicableAsmFiles: candidate.ApplicableAsmFiles,
 				BuildConfigurations: candidate.BuildConfigurations, Translations: candidate.Translations,
 				NotApplicableTranslations: candidate.NotApplicableTranslations, NotApplicableItems: candidate.NotApplicableItems,
@@ -134,7 +135,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			for _, item := range candidate.SourceNotApplicableItems {
 				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
-					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason,
+					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
 				})
 			}
 			goVersion := ""
@@ -185,17 +186,18 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			}
 			result := discoveryCorpusResult{
 				Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
-				DiscoveredAsmFiles:  candidate.DiscoveredAsmFiles,
-				ApplicableAsmFiles:  candidate.ApplicableAsmFiles,
-				BuildConfigurations: candidate.BuildConfigurations,
-				Translations:        candidate.Translations, NotApplicableTranslations: candidate.NotApplicableTranslations,
+				DiscoveredAsmFiles:         candidate.DiscoveredAsmFiles,
+				sourceDiagnosticsCompacted: true,
+				ApplicableAsmFiles:         candidate.ApplicableAsmFiles,
+				BuildConfigurations:        candidate.BuildConfigurations,
+				Translations:               candidate.Translations, NotApplicableTranslations: candidate.NotApplicableTranslations,
 				NotApplicableItems: candidate.NotApplicableItems,
 				NativeLayout:       candidate.NativeLayout, NativeLayoutPlan: candidate.NativeLayoutPlan,
 			}
 			for _, item := range candidate.SourceNotApplicableItems {
 				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 					AsmFile: item.AsmFile, AsmFiles: item.AsmFiles, Targets: item.Targets,
-					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason,
+					BuildTags: item.BuildTags, Kind: item.Kind, Reason: item.Reason, Diagnostic: item.Diagnostic,
 				})
 			}
 			if err := validateNativeLayoutResult(result); err != nil {

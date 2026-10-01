@@ -37,12 +37,13 @@ func discoveryTargetSkipReason(item matrixTargetNotApplicableItem) string {
 // contain runner-specific cache paths and differ across otherwise equivalent
 // runs.
 type discoverySourceSkipSummary struct {
-	BuildTags []string `json:"build_tags,omitempty"`
-	AsmFile   string   `json:"asm_file,omitempty"`
-	AsmFiles  []string `json:"asm_files,omitempty"`
-	Targets   []string `json:"targets"`
-	Kind      string   `json:"kind"`
-	Reason    string   `json:"reason"`
+	BuildTags  []string                          `json:"build_tags,omitempty"`
+	AsmFile    string                            `json:"asm_file,omitempty"`
+	AsmFiles   []string                          `json:"asm_files,omitempty"`
+	Targets    []string                          `json:"targets"`
+	Kind       string                            `json:"kind"`
+	Reason     string                            `json:"reason"`
+	Diagnostic *discoverySourceDiagnosticWitness `json:"diagnostic,omitempty"`
 }
 
 func discoverySourceSkipReason(kind string) string {
@@ -70,13 +71,18 @@ func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []d
 	}
 	summaries := make([]discoverySourceSkipSummary, 0, len(items))
 	for _, item := range items {
+		var diagnostic *discoverySourceDiagnosticWitness
+		if discoverySourceRejectionRequiresDiagnostic(item.Kind) {
+			diagnostic = captureDiscoverySourceDiagnostic(item.Reason)
+		}
 		summaries = append(summaries, discoverySourceSkipSummary{
-			BuildTags: append([]string(nil), item.BuildTags...),
-			AsmFile:   item.AsmFile,
-			AsmFiles:  append([]string(nil), item.AsmFiles...),
-			Targets:   append([]string(nil), item.Targets...),
-			Kind:      item.Kind,
-			Reason:    discoverySourceSkipReason(item.Kind),
+			BuildTags:  append([]string(nil), item.BuildTags...),
+			AsmFile:    item.AsmFile,
+			AsmFiles:   append([]string(nil), item.AsmFiles...),
+			Targets:    append([]string(nil), item.Targets...),
+			Kind:       item.Kind,
+			Reason:     discoverySourceSkipReason(item.Kind),
+			Diagnostic: diagnostic,
 		})
 	}
 	return summaries

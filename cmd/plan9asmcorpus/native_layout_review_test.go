@@ -166,7 +166,7 @@ func TestNativeLayoutReviewAccountsForSourceNotApplicableRemainder(t *testing.T)
 	for _, config := range valid.BuildConfigurations {
 		valid.SourceNotApplicableItems = append(valid.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 			AsmFiles: config.AsmFiles, Targets: config.Targets, BuildTags: config.BuildTags,
-			Kind: discoverySourceNotApplicableGoBuild, Reason: "undefined: unavailableSourceDeclaration",
+			Kind: discoverySourceNotApplicableGoBuild, Reason: "decl.go:3:14: undefined: unavailableSourceDeclaration",
 		})
 	}
 	valid.BuildConfigurations, valid.ApplicableAsmFiles, valid.Translations = nil, nil, 0
