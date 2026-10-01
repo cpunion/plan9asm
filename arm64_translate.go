@@ -887,11 +887,11 @@ func emitARM64Prelude(b *strings.Builder) {
 	b.WriteString("\n")
 }
 
-func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotateSource bool) error {
+func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool) error {
 	// Validate the original complete function as well as the normalized CFG
 	// checked by the lowerer. Raw layout rewriting must not erase a private
 	// address source before granting native, hardware-sized store effects.
-	if err := validateARM64DCZVASource(fn); err != nil {
+	if err := validateARM64DCZVASource(fn, data); err != nil {
 		return err
 	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
@@ -954,6 +954,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.sourceGoFrame = sourceGoFrame
+	c.sourceData = data
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
 	if err := c.prepareLocalControl(); err != nil {

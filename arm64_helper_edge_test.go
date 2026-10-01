@@ -789,7 +789,7 @@ func TestARM64BranchAndReturnEdgeCoverage(t *testing.T) {
 		},
 	}
 	var translated strings.Builder
-	if err := translateFuncARM64(&translated, fn, FuncSig{Name: "example.edge", Ret: I64}, testResolveSym("example"), nil, true); err != nil {
+	if err := translateFuncARM64(&translated, fn, FuncSig{Name: "example.edge", Ret: I64}, testResolveSym("example"), nil, nil, true); err != nil {
 		t.Fatalf("translateFuncARM64() error = %v", err)
 	}
 	if !strings.Contains(translated.String(), "ret i64 0") || !strings.Contains(translated.String(), "; s: NOP") {

@@ -134,26 +134,35 @@ func (c *arm64Ctx) lowerARM64CacheForm(form arm64CacheForm) error {
 // This does not promise that an external address has permission or is mapped:
 // the real SYS instruction retains DZP, translation and hardware fault behavior.
 func (c *arm64Ctx) requireDCZVANoPrivateAddressSources() error {
-	return validateARM64DCZVAAddressSources(c.sourceGoFrame, c.frameSize, c.blocks)
+	return validateARM64DCZVAAddressSources(c.sourceGoFrame, c.frameSize, c.blocks, c.sourceData)
 }
 
-func validateARM64DCZVASource(fn Func) error {
+func validateARM64DCZVASource(fn Func, data []DataStmt) error {
 	for _, original := range fn.Instrs {
 		ins := arm64ControlDecode(original)
 		form, handled, err := parseARM64CacheForm(arm64ControlOp(ins), ins)
 		if handled && err == nil && form.operation == "ZVA" {
-			return validateARM64DCZVAAddressSources(arm64SourceGoFrame(fn), fn.FrameSize, arm64SplitBlocks(fn))
+			return validateARM64DCZVAAddressSources(arm64SourceGoFrame(fn), fn.FrameSize, arm64SplitBlocks(fn), data)
 		}
 	}
 	return nil
 }
 
-func validateARM64DCZVAAddressSources(frame arm64GoFrame, frameSize int64, blocks []arm64Block) error {
+func validateARM64DCZVAAddressSources(frame arm64GoFrame, frameSize int64, blocks []arm64Block, data []DataStmt) error {
 	context := func(source string) error {
-		return fmt.Errorf("%w: ARM64 DC ZVA needs a physical extent contract for private frame/code address sources at %q", ErrProbeNeedsContext, source)
+		return fmt.Errorf("%w: ARM64 DC ZVA needs a physical extent contract for private frame/code/materialized-data address sources at %q", ErrProbeNeedsContext, source)
 	}
 	if frame.present || frameSize > 0 {
 		return context("TEXT frame")
+	}
+	for _, datum := range data {
+		if datum.Addr != "" {
+			// SB loads can obtain a materialized object's address indirectly
+			// through DATA relocations, without any address-of operand in this
+			// function. Retain the complete file provenance in both gates;
+			// neither pointee extent nor down-aligned neighbours are proved.
+			return context(fmt.Sprintf("DATA %s+%d(SB)/%d,$%s", datum.Sym, datum.Off, datum.Width, datum.Addr))
+		}
 	}
 	for _, block := range blocks {
 		for _, original := range block.instrs {

@@ -26,6 +26,7 @@ type arm64Ctx struct {
 
 	rawDataGlobals map[string]string // local source label -> LLVM global
 	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
+	sourceData     []DataStmt        // complete file DATA provenance, before function normalization
 
 	usedRegs map[Reg]bool
 	regSlot  map[Reg]string // reg -> alloca name

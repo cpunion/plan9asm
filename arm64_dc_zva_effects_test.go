@@ -136,14 +136,14 @@ func TestARM64DCZVASymbolAddressesNeedNativeExtentContract(t *testing.T) {
 				t.Fatal(err)
 			}
 			fn := file.Funcs[0]
-			if !errors.Is(validateARM64DCZVASource(fn), ErrProbeNeedsContext) {
+			if !errors.Is(validateARM64DCZVASource(fn, file.Data), ErrProbeNeedsContext) {
 				t.Fatal("original source gate lost SB address-of")
 			}
 			fn, err = normalizeARM64RawPCRelative(fn)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !errors.Is(validateARM64DCZVAAddressSources(arm64SourceGoFrame(fn), fn.FrameSize, arm64SplitBlocks(fn)), ErrProbeNeedsContext) {
+			if !errors.Is(validateARM64DCZVAAddressSources(arm64SourceGoFrame(fn), fn.FrameSize, arm64SplitBlocks(fn), file.Data), ErrProbeNeedsContext) {
 				t.Fatal("normalized CFG gate lost SB address-of")
 			}
 		})
