@@ -80,6 +80,21 @@ type ordinarySelectionDecision struct {
 }
 
 func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
+	plan, err := captureOrdinarySelectionInputs(candidate, moduleDir, targets)
+	if err != nil {
+		return nil, err
+	}
+	decisions, _, err := replayOrdinarySelection(plan, candidate.AsmFiles)
+	if err != nil {
+		return nil, err
+	}
+	plan.Decisions = decisions
+	return plan, nil
+}
+
+// Capture bytes and directory inventory before selecting profiles. Source
+// stability rechecks need only these inputs, not a second host-context replay.
+func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
 	plan := &discoveryOrdinarySelectionPlan{
 		Protocol: ordinarySelectionProtocol, Module: candidate.Module, Version: candidate.Version,
 		GoVersion: runtime.Version(), Targets: uniqueSortedDiscoveryStrings(targets),
@@ -168,11 +183,6 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 		input.HeaderSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(input.Header)))
 		plan.Sources = append(plan.Sources, input)
 	}
-	decisions, _, err := replayOrdinarySelection(plan, candidate.AsmFiles)
-	if err != nil {
-		return nil, err
-	}
-	plan.Decisions = decisions
 	return plan, nil
 }
 
@@ -207,7 +217,7 @@ func ordinarySelectionLocalPath(file string) bool {
 }
 
 func verifyOrdinarySelectionUnchanged(plan *discoveryOrdinarySelectionPlan, moduleDir string, candidate discoveryCandidate) error {
-	current, err := captureOrdinarySelectionPlan(candidate, moduleDir, plan.Targets)
+	current, err := captureOrdinarySelectionInputs(candidate, moduleDir, plan.Targets)
 	if err != nil {
 		return err
 	}
@@ -421,11 +431,22 @@ func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]
 // Replay only source selection. No compiler, assembler or downloaded Go code
 // is executed. Every root and ancestor directory is explicit: the virtual "."
 // is a root package, never a dot-prefixed ignored directory.
-func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []string) ([]ordinarySelectionDecision, map[nativeLayoutPlanKey]bool, error) {
+func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []string, actualProfiles ...*discoveryTargetFeatures) ([]ordinarySelectionDecision, map[nativeLayoutPlanKey]bool, error) {
 	if plan == nil || plan.Protocol != ordinarySelectionProtocol || len(plan.Targets) == 0 ||
 		len(plan.ReleaseTags) == 0 || len(asmFiles) == 0 ||
 		!equalDiscoveryStrings(plan.Targets, uniqueSortedDiscoveryStrings(plan.Targets)) {
 		return nil, nil, fmt.Errorf("missing or invalid ordinary source-selection protocol")
+	}
+	if len(actualProfiles) > 1 {
+		return nil, nil, fmt.Errorf("single-profile ordinary replay requires one actual target environment")
+	}
+	if len(actualProfiles) == 1 {
+		if err := validateDiscoveryTargetFeatures(actualProfiles[0]); err != nil {
+			return nil, nil, err
+		}
+		if len(plan.Targets) != 1 || plan.Targets[0] != actualProfiles[0].Target || plan.GoVersion != actualProfiles[0].GoVersion {
+			return nil, nil, fmt.Errorf("ordinary replay profile target/Go version differs from source plan")
+		}
 	}
 	minor, err := discoveryGoMinor(plan.GoVersion)
 	if err != nil {
@@ -451,6 +472,12 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 		ctx := build.Default
 		ctx.GOOS, ctx.GOARCH, ctx.Compiler, ctx.CgoEnabled = goos, goarch, "gc", false
 		ctx.BuildTags, ctx.ReleaseTags, ctx.ToolTags = nil, plan.ReleaseTags, plan.ToolTags
+		if len(actualProfiles) == 1 {
+			ctx, err = discoveryContextForFeatureProfile(actualProfiles[0])
+			if err != nil {
+				return nil, nil, err
+			}
+		}
 		ctx.OpenFile = func(file string) (io.ReadCloser, error) {
 			data, ok := sources[filepath.ToSlash(file)]
 			if !ok {
@@ -553,6 +580,9 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 			allTags = append(allTags, tagsByFile[filepath.FromSlash(input)]...)
 		}
 		customTags := uniqueDiscoveryCustomTags(allTags, contexts)
+		if len(actualProfiles) == 1 {
+			customTags = discoveryCustomTagsWithoutFeatures(allTags, contexts)
+		}
 		for i, ctx := range contexts {
 			tags, selected, err := findDiscoveryBuildTags(ctx, filepath.FromSlash(dir), path.Base(file), goFiles, customTags, tagsByFile)
 			if err != nil {
