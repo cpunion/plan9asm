@@ -529,6 +529,18 @@ func discoveryFeatureBytesSHA256(data []byte) string {
 	return fmt.Sprintf("%x", sha256.Sum256(data))
 }
 
+func discoveryFeatureProfileID(observed *discoveryTargetFeatures) string {
+	data, _ := json.Marshal(struct {
+		Target      string
+		Environment map[string]string
+		Driver      string
+		Selection   string
+		Sources     map[string]string
+		Markers     string
+	}{observed.Target, observed.Environment, observed.DriverSHA256, observed.DriverSelectionSHA256, observed.ToolSourceSHA256, observed.MarkerSourceSHA256})
+	return discoveryFeatureBytesSHA256(data)
+}
+
 func discoveryFeatureFileSHA256(name string) (string, error) {
 	f, err := os.Open(name)
 	if err != nil {
