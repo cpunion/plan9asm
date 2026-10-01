@@ -20,23 +20,8 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawTLBI(word); ok {
 		return c.lowerRawTLBI(form)
 	}
-	if form, ok := decodeARM64RawStreamingModeControl(word); ok {
-		return c.lowerRawStreamingModeControl(form)
-	}
-	if mask, ok := decodeARM64RawZAZero(word); ok {
-		return c.lowerRawZAZero(mask)
-	}
-	if form, ok := decodeARM64RawSMEOuterProduct(word); ok {
-		return c.lowerRawSMEOuterProduct(form)
-	}
-	if form, ok := decodeARM64RawSMETileRead(word); ok {
-		return c.lowerRawSMETileRead(form)
-	}
-	if form, ok := decodeARM64RawSMETileWrite(word); ok {
-		return c.lowerRawSMETileWrite(form)
-	}
-	if form, ok := decodeARM64RawSMETileMemory(word); ok {
-		return c.lowerRawSMETileMemory(form)
+	if family, _, ok := decodeARM64RawStateFamily(word); ok {
+		return family.lower(c, word)
 	}
 	if family, decoded, ok := decodeARM64RawSVEFamily(word); ok {
 		return family.lower(c, decoded)
@@ -46,17 +31,11 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 			return family.lower(c, word)
 		}
 	}
-	if reg, ok := decodeARM64RawICIVAU(word); ok {
-		return c.lowerRawICIVAU(reg)
-	}
 	if _, reservedLoad := arm64RawSVEUnsignedLoadRows[word&0xffe0e000]; reservedLoad {
 		return fmt.Errorf("reserved ARM64 SVE load encoding %#08x: %q", word, ins.Raw)
 	}
 	if form, ok := decodeARM64RawSVELD1B(word); ok {
 		return c.lowerRawSVELD1B(form)
-	}
-	if form, ok := decodeARM64RawRNDR(word); ok {
-		return c.lowerRawRNDR(form)
 	}
 	if form, ok := decodeARM64RawSystemRegister(word); ok {
 		return c.lowerRawSystemRegister(form)
@@ -64,9 +43,6 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if immediate, ok := decodeARM64RawHint(word); ok {
 		c.emitARM64Hint(immediate)
 		return nil
-	}
-	if form, ok := decodeARM64RawCASP(word); ok {
-		return c.lowerRawCASP(form)
 	}
 	if family, _, ok := decodeARM64RawVectorFamily(word); ok {
 		return family.lower(c, word)

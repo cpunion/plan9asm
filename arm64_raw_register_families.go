@@ -2,47 +2,51 @@ package plan9asm
 
 import "fmt"
 
-type arm64RawRegisterControlEffects struct {
+type arm64RawContinuationEffects struct {
 	gpReads  uint32
 	gpWrites uint32
+	readsSP  bool
+	stores   bool
 }
 
-// These families are register-only. Their concrete decoder determines whether
-// a scalar register belongs to the floating/vector bank or the GP bank. There
-// are no memory operations, implicit GP clobbers or control transfers here.
-type arm64RawRegisterFamily struct {
-	effects func(uint32) (arm64RawRegisterControlEffects, bool)
+// These effects track source GP outputs and external memory stores for caller
+// continuation provenance. FP/SIMD/ZA state is a different register bank, and
+// backend scratch clobbers are not writes to source virtual GP registers.
+// Each concrete decoder retains its complete operand and reserved-bit grammar.
+type arm64RawFamily struct {
+	effects func(uint32) (arm64RawContinuationEffects, bool)
 	lower   func(*arm64Ctx, uint32) error
 }
 
-func arm64RawRegisterForm[T any](
+func arm64RawForm[T any](
 	decode func(uint32) (T, bool),
 	lower func(*arm64Ctx, T) error,
-	effects func(T) arm64RawRegisterControlEffects,
-) arm64RawRegisterFamily {
-	return arm64RawRegisterFamily{
-		effects: func(word uint32) (arm64RawRegisterControlEffects, bool) {
+	effects func(T) arm64RawContinuationEffects,
+) arm64RawFamily {
+	return arm64RawFamily{
+		effects: func(word uint32) (arm64RawContinuationEffects, bool) {
 			form, ok := decode(word)
 			if !ok {
-				return arm64RawRegisterControlEffects{}, false
+				return arm64RawContinuationEffects{}, false
 			}
 			return effects(form), true
 		},
 		lower: func(c *arm64Ctx, word uint32) error {
 			form, ok := decode(word)
 			if !ok {
-				return fmt.Errorf("ARM64 raw register family rejected its selected encoding %#08x", word)
+				return fmt.Errorf("ARM64 raw family rejected its selected encoding %#08x", word)
 			}
 			return lower(c, form)
 		},
 	}
 }
 
-// Only explicitly registered vector-only forms use this constructor.
-// GP conversions must instead supply their typed source/destination effects.
-func arm64RawVectorOnlyForm[T any](decode func(uint32) (T, bool), lower func(*arm64Ctx, T) error) arm64RawRegisterFamily {
-	return arm64RawRegisterForm(decode, lower, func(T) arm64RawRegisterControlEffects {
-		return arm64RawRegisterControlEffects{}
+// Only explicitly registered forms with no GP outputs or external memory
+// access use this constructor. Their FP/SIMD/ZA effects are still lowered;
+// GP conversions and memory forms provide typed bank/direction effects.
+func arm64RawNoGPOrMemoryForm[T any](decode func(uint32) (T, bool), lower func(*arm64Ctx, T) error) arm64RawFamily {
+	return arm64RawForm(decode, lower, func(T) arm64RawContinuationEffects {
+		return arm64RawContinuationEffects{}
 	})
 }
 
@@ -53,14 +57,17 @@ func arm64RawGPBit(index int) uint32 {
 	return 0 // Encoding 31 is WZR/XZR, not SP.
 }
 
-// Register-only families cannot store to a saved stack continuation. Unknown
-// encodings still fall through to the conservative control-effect analysis.
-func arm64RawRegisterEffects(word uint32) (arm64RawRegisterControlEffects, bool) {
+// Lowering, raw-pool writes and source continuation proof share typed decoders.
+// Unregistered encodings still fall through to conservative effect analysis.
+func arm64RawContinuationEffectsForWord(word uint32) (arm64RawContinuationEffects, bool) {
 	if _, effects, ok := decodeARM64RawFloatFamily(word); ok {
 		return effects, true
 	}
 	if _, effects, ok := decodeARM64RawVectorFamily(word); ok {
 		return effects, true
 	}
-	return arm64RawRegisterControlEffects{}, false
+	if _, effects, ok := decodeARM64RawStateFamily(word); ok {
+		return effects, true
+	}
+	return arm64RawContinuationEffects{}, false
 }

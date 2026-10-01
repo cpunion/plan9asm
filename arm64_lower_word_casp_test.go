@@ -23,7 +23,9 @@ func arm64EncodeRawCASP(bits int, acquire, release bool, expected, newValue, bas
 
 func TestTranslateARM64RawCASPCompleteArchitecturalFormats(t *testing.T) {
 	var source strings.Builder
-	source.WriteString("TEXT rawcaspforms(SB),$0-0\n")
+	// The complete pair bank includes an expected pair beginning at LR.
+	// R26 is untouched by every form below; use real source to restore LR.
+	source.WriteString("TEXT rawcaspforms(SB),$0-0\nMOVD R30,R26\n")
 	for _, bits := range []int{32, 64} {
 		for _, order := range []struct{ acquire, release bool }{
 			{}, {acquire: true}, {release: true}, {acquire: true, release: true},
@@ -39,7 +41,7 @@ func TestTranslateARM64RawCASPCompleteArchitecturalFormats(t *testing.T) {
 			}
 		}
 	}
-	source.WriteString("\tRET\n")
+	source.WriteString("\tMOVD R26,R30\n\tRET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
