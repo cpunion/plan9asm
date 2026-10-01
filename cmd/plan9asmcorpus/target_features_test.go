@@ -59,7 +59,7 @@ func TestTargetFeaturesActualDriverFiveTargets(t *testing.T) {
 				t.Fatal(err)
 			}
 			parts := strings.Split(target, "/")
-			if features.Protocol != "go_driver_builtin_features_v1" || features.Environment["GOOS"] != parts[0] || features.Environment["GOARCH"] != parts[1] {
+			if features.Protocol != "go_driver_builtin_features_v2" || features.Environment["GOOS"] != parts[0] || features.Environment["GOARCH"] != parts[1] {
 				t.Fatalf("missing actual target environment: %+v", features)
 			}
 			if features.Environment["CGO_ENABLED"] != "0" || features.Environment["GOEXPERIMENT"] != "" {

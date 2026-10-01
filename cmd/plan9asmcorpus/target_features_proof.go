@@ -10,7 +10,7 @@ import (
 // does not authenticate the Go binary or source bytes without the producer's
 // actual-driver and actual-source checks.
 func validateDiscoveryTargetFeatures(features *discoveryTargetFeatures) error {
-	if features == nil || features.Protocol != "go_driver_builtin_features_v1" {
+	if features == nil || features.Protocol != "go_driver_builtin_features_v2" {
 		return fmt.Errorf("missing actual Go driver builtin-feature protocol")
 	}
 	parts := strings.Split(features.Target, "/")
@@ -22,14 +22,31 @@ func validateDiscoveryTargetFeatures(features *discoveryTargetFeatures) error {
 	if err := validateTarget(features.Target); err != nil {
 		return err
 	}
-	if len(features.Environment) != len(discoveryFeatureEnvKeys)-1 {
+	if len(features.Environment) != len(discoveryFeatureEnvKeys)-3 {
 		return fmt.Errorf("incomplete or nonportable actual feature environment")
 	}
 	for _, key := range discoveryFeatureEnvKeys {
-		if key != "GOROOT" {
+		if key != "GOROOT" && key != "GOTOOLDIR" && key != "GOCACHE" {
 			if _, present := features.Environment[key]; !present {
 				return fmt.Errorf("missing actual feature environment key %s", key)
 			}
+		}
+	}
+	if !validDiscoveryFeatureToolDirectory(features.ToolDirectory) || len(features.ToolBinarySHA256) != len(discoveryFeatureSubtools) || len(features.ToolBinaryOrigins) != len(discoveryFeatureSubtools) || !discoverySHA256Pattern.MatchString(features.ToolRoutingSHA256) || !discoverySHA256Pattern.MatchString(features.ToolDispatcherSHA256) {
+		return fmt.Errorf("missing actual Go subtool identity")
+	}
+	for _, name := range discoveryFeatureSubtools {
+		if !discoverySHA256Pattern.MatchString(features.ToolBinarySHA256[name]) {
+			return fmt.Errorf("missing actual Go %s tool identity", name)
+		}
+		suffix := ""
+		if strings.HasPrefix(strings.TrimPrefix(features.ToolDirectory, "pkg/tool/"), "windows_") {
+			suffix = ".exe"
+		}
+		origin := features.ToolBinaryOrigins[name]
+		if origin != "goroot/"+features.ToolDirectory+"/"+name+suffix &&
+			!(minor >= 25 && (name == "nm" || name == "vet") && origin == "gocache/builtin/cmd/"+name) {
+			return fmt.Errorf("unrecognized actual Go %s tool origin", name)
 		}
 	}
 	for _, digest := range []string{features.DriverSHA256, features.MarkerSourceSHA256, features.DriverSelectionSHA256, features.EnvStderrSHA256, features.EnvRecheckStderrSHA256, features.ListStderrSHA256} {

@@ -70,7 +70,7 @@ func TestFeatureObservationCacheRejectsEnvironmentOrSourceDrift(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	for _, kind := range []string{"env", "driver", "source"} {
+	for _, kind := range []string{"env", "driver", "source", "subtool", "tool-route", "tool-cache"} {
 		t.Run(kind, func(t *testing.T) {
 			cache := &discoveryFeatureObservationCache{}
 			ownedDir := t.TempDir()
@@ -89,6 +89,12 @@ func TestFeatureObservationCacheRejectsEnvironmentOrSourceDrift(t *testing.T) {
 						state.driverSHA256 = discoveryFeatureBytesSHA256([]byte("different actual driver"))
 					case "source":
 						state.sourceSHA256["src/internal/buildcfg/cfg.go"] = discoveryFeatureBytesSHA256([]byte("different actual registration"))
+					case "subtool":
+						state.tools.digests["asm"] = discoveryFeatureBytesSHA256([]byte("different assembler"))
+					case "tool-route":
+						state.tools.routing = discoveryFeatureBytesSHA256([]byte("different builtin executable route"))
+					case "tool-cache":
+						state.environment["GOCACHE"] = filepath.Join(t.TempDir(), "different-cache")
 					}
 				}
 				return state, err
@@ -101,7 +107,7 @@ func TestFeatureObservationCacheRejectsEnvironmentOrSourceDrift(t *testing.T) {
 }
 
 func TestFeatureDriverCacheKeyIncludesRegistrationAndMarkerIdentity(t *testing.T) {
-	state := &discoveryFeatureDriverState{environment: map[string]string{"GOAMD64": "v1"}, driverSHA256: "driver", sourceSHA256: map[string]string{"cfg": "source"}}
+	state := &discoveryFeatureDriverState{environment: map[string]string{"GOAMD64": "v1"}, driverSHA256: "driver", sourceSHA256: map[string]string{"cfg": "source"}, tools: &discoveryFeatureToolState{digests: map[string]string{"asm": "tool"}, routing: "cache"}}
 	key := discoveryFeatureDriverStateKey(state)
 	clone := *state
 	clone.driverSHA256 = "changed"
@@ -112,6 +118,13 @@ func TestFeatureDriverCacheKeyIncludesRegistrationAndMarkerIdentity(t *testing.T
 	clone.sourceSHA256 = map[string]string{"cfg": "changed"}
 	if key == discoveryFeatureDriverStateKey(&clone) {
 		t.Fatal("registration bytes omitted from cache key")
+	}
+	clone = *state
+	changedTools := *state.tools
+	changedTools.digests = map[string]string{"asm": "changed"}
+	clone.tools = &changedTools
+	if key == discoveryFeatureDriverStateKey(&clone) {
+		t.Fatal("subtool bytes omitted from cache key")
 	}
 	clone = *state
 	clone.environment = map[string]string{"GOAMD64": "v3"}
@@ -195,6 +208,7 @@ func TestFeatureObservationCacheConcurrentObserversOwnDeepClones(t *testing.T) {
 			value := discoveryFeatureBytesSHA256([]byte{byte(worker)})
 			observed.Environment["GOAMD64"] = value
 			observed.ToolSourceSHA256["VERSION"] = value
+			observed.ToolBinarySHA256["asm"] = value
 			observed.MarkerSelection["amd64.v1"] = false
 			results <- result{worker: worker, observed: observed, id: id}
 		}(worker)
@@ -211,7 +225,7 @@ func TestFeatureObservationCacheConcurrentObserversOwnDeepClones(t *testing.T) {
 			id = result.id
 		}
 		value := discoveryFeatureBytesSHA256([]byte{byte(result.worker)})
-		if id != result.id || result.observed.Environment["GOAMD64"] != value || result.observed.ToolSourceSHA256["VERSION"] != value {
+		if id != result.id || result.observed.Environment["GOAMD64"] != value || result.observed.ToolSourceSHA256["VERSION"] != value || result.observed.ToolBinarySHA256["asm"] != value {
 			t.Fatal("concurrent callers shared mutable maps or different actual proofs")
 		}
 	}

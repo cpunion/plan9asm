@@ -29,6 +29,11 @@ type discoveryTargetFeatures struct {
 	Environment            map[string]string `json:"environment"`
 	GoVersion              string            `json:"go_version"`
 	DriverSHA256           string            `json:"driver_sha256"`
+	ToolDirectory          string            `json:"tool_directory"`
+	ToolBinarySHA256       map[string]string `json:"tool_binary_sha256"`
+	ToolBinaryOrigins      map[string]string `json:"tool_binary_origins"`
+	ToolRoutingSHA256      string            `json:"tool_routing_sha256"`
+	ToolDispatcherSHA256   string            `json:"tool_dispatcher_sha256"`
 	ToolSourceSHA256       map[string]string `json:"tool_source_sha256"`
 	ToolTags               []string          `json:"tool_tags"`
 	MarkerSelection        map[string]bool   `json:"marker_selection"`
@@ -42,7 +47,7 @@ type discoveryTargetFeatures struct {
 const discoveryFeatureMarkerModule = "example.invalid/plan9asm-feature-markers"
 
 var discoveryFeatureEnvKeys = []string{
-	"CGO_ENABLED", "GO386", "GOAMD64", "GOARCH", "GOARM", "GOARM64", "GOEXPERIMENT", "GOOS", "GOROOT", "GOVERSION", "GOWASM",
+	"CGO_ENABLED", "GOCACHE", "GO386", "GOAMD64", "GOARCH", "GOARM", "GOARM64", "GOEXPERIMENT", "GOOS", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOWASM",
 }
 
 func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir string, baseEnv []string, target string, overrides map[string]string) (*discoveryTargetFeatures, error) {
@@ -115,6 +120,10 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if err := validateDiscoveryCPUEnvironment(parts[1], actualEnv[cpuKey], minor); err != nil {
 		return nil, err
 	}
+	tools, err := captureDiscoveryFeatureSubtools(ctx, goBinary, env, actualEnv)
+	if err != nil {
+		return nil, err
+	}
 	tags, sourceHashes, err := discoveryBuiltinFeatureCandidates(actualEnv["GOROOT"], actualEnv["GOVERSION"])
 	if err != nil {
 		return nil, err
@@ -158,6 +167,10 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if err != nil || afterDriver != driverHash {
 		return nil, fmt.Errorf("feature driver changed during capture")
 	}
+	afterTools, err := captureDiscoveryFeatureSubtools(ctx, goBinary, env, afterEnv)
+	if err != nil || !equalDiscoveryFeatureToolStates(tools, afterTools) {
+		return nil, fmt.Errorf("actual Go subtool bytes/routing/cache changed during capture: %w", err)
+	}
 	for name, before := range sourceHashes {
 		after, err := discoveryFeatureFileSHA256(filepath.Join(actualEnv["GOROOT"], filepath.FromSlash(name)))
 		if err != nil || after != before {
@@ -186,9 +199,12 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	}
 	// Do not leak machine-private source roots into portable profile evidence.
 	delete(actualEnv, "GOROOT")
+	delete(actualEnv, "GOTOOLDIR")
+	delete(actualEnv, "GOCACHE")
 	return &discoveryTargetFeatures{
-		Protocol: "go_driver_builtin_features_v1", Target: target, Environment: actualEnv,
+		Protocol: "go_driver_builtin_features_v2", Target: target, Environment: actualEnv,
 		GoVersion: actualEnv["GOVERSION"], DriverSHA256: driverHash, ToolSourceSHA256: sourceHashes,
+		ToolDirectory: tools.directory, ToolBinarySHA256: tools.digests, ToolBinaryOrigins: tools.origins, ToolRoutingSHA256: tools.routing, ToolDispatcherSHA256: tools.dispatcher,
 		ToolTags: selected, MarkerSelection: selection, MarkerSourceSHA256: discoveryFeatureMarkerSHA256(markerFiles),
 		DriverSelectionSHA256: discoveryFeatureBytesSHA256(selectionJSON), EnvStderrSHA256: discoveryFeatureBytesSHA256(envStderr),
 		EnvRecheckStderrSHA256: discoveryFeatureBytesSHA256(recheckStderr),

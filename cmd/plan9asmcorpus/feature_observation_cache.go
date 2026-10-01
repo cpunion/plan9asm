@@ -17,6 +17,7 @@ type discoveryFeatureDriverState struct {
 	environment  map[string]string
 	driverSHA256 string
 	sourceSHA256 map[string]string
+	tools        *discoveryFeatureToolState
 }
 
 type discoveryCachedFeatureObservation struct {
@@ -163,17 +164,26 @@ func inspectDiscoveryFeatureDriver(ctx context.Context, binary string, env []str
 		}
 		sources[file] = digest
 	}
-	return &discoveryFeatureDriverState{environment: actual, driverSHA256: driverHash, sourceSHA256: sources}, nil
+	tools, err := captureDiscoveryFeatureSubtools(ctx, binary, env, actual)
+	if err != nil {
+		return nil, err
+	}
+	return &discoveryFeatureDriverState{environment: actual, driverSHA256: driverHash, sourceSHA256: sources, tools: tools}, nil
 }
 
 func discoveryFeatureDriverStateKey(state *discoveryFeatureDriverState) string {
 	data, _ := json.Marshal(struct {
-		Protocol     string
-		MarkerModule string
-		Environment  map[string]string
-		DriverSHA256 string
-		SourceSHA256 map[string]string
-	}{"go_driver_feature_cache_v1", discoveryFeatureMarkerModule, state.environment, state.driverSHA256, state.sourceSHA256})
+		Protocol         string
+		MarkerModule     string
+		Environment      map[string]string
+		DriverSHA256     string
+		SourceSHA256     map[string]string
+		ToolDirectory    string
+		ToolSHA256       map[string]string
+		ToolOrigins      map[string]string
+		ToolRouting      string
+		DispatcherSHA256 string
+	}{"go_driver_feature_cache_v2", discoveryFeatureMarkerModule, state.environment, state.driverSHA256, state.sourceSHA256, state.tools.directory, state.tools.digests, state.tools.origins, state.tools.routing, state.tools.dispatcher})
 	return discoveryFeatureBytesSHA256(data)
 }
 
@@ -183,11 +193,11 @@ func validateDiscoveryCachedFeatures(entry discoveryCachedFeatureObservation, st
 	}
 	actualEnv := make(map[string]string)
 	for key, value := range state.environment {
-		if key != "GOROOT" {
+		if key != "GOROOT" && key != "GOTOOLDIR" && key != "GOCACHE" {
 			actualEnv[key] = value
 		}
 	}
-	if !reflect.DeepEqual(actualEnv, entry.observed.Environment) || entry.observed.DriverSHA256 != state.driverSHA256 || !reflect.DeepEqual(entry.observed.ToolSourceSHA256, state.sourceSHA256) {
+	if !reflect.DeepEqual(actualEnv, entry.observed.Environment) || entry.observed.DriverSHA256 != state.driverSHA256 || !reflect.DeepEqual(entry.observed.ToolSourceSHA256, state.sourceSHA256) || !equalDiscoveryFeatureToolStates(&discoveryFeatureToolState{directory: entry.observed.ToolDirectory, digests: entry.observed.ToolBinarySHA256, origins: entry.observed.ToolBinaryOrigins, routing: entry.observed.ToolRoutingSHA256, dispatcher: entry.observed.ToolDispatcherSHA256}, state.tools) {
 		return fmt.Errorf("cached feature proof differs from actual driver/environment/registration")
 	}
 	var tags []string

@@ -33,7 +33,7 @@ type discoveryAssemblerMacros struct {
 // not a package source-selection observation: production must separately bind
 // packagePath to the actual go list package being checked under this profile.
 func captureDiscoveryAssemblerMacros(root string, observed *discoveryTargetFeatures, packagePath string) (*discoveryAssemblerMacros, error) {
-	if observed == nil || observed.Protocol != "go_driver_builtin_features_v1" || observed.GoVersion != observed.Environment["GOVERSION"] {
+	if observed == nil || observed.Protocol != "go_driver_builtin_features_v2" || observed.GoVersion != observed.Environment["GOVERSION"] {
 		return nil, fmt.Errorf("missing or inconsistent observed assembler environment")
 	}
 	if !filepath.IsAbs(root) || packagePath == "" || path.Clean(packagePath) != packagePath || strings.HasPrefix(packagePath, "/") || strings.ContainsAny(packagePath, "@ \\\t\r\n\"'") {

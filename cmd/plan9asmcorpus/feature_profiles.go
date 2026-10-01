@@ -464,8 +464,14 @@ func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmF
 			return fmt.Errorf("actual profile requests do not cover exact source-required proposals")
 		}
 		observed := profile.Observed
-		if observed.DriverSHA256 != identity.DriverSHA256 || !reflect.DeepEqual(observed.ToolSourceSHA256, identity.ToolSourceSHA256) || observed.MarkerSourceSHA256 != identity.MarkerSourceSHA256 {
+		if observed.DriverSHA256 != identity.DriverSHA256 || !reflect.DeepEqual(observed.ToolSourceSHA256, identity.ToolSourceSHA256) || observed.ToolDirectory != identity.ToolDirectory || observed.ToolDispatcherSHA256 != identity.ToolDispatcherSHA256 || observed.MarkerSourceSHA256 != identity.MarkerSourceSHA256 {
 			return fmt.Errorf("feature profiles used different actual driver/registration/marker inputs")
+		}
+		for _, tool := range discoveryFeatureSubtools {
+			origin := observed.ToolBinaryOrigins[tool]
+			if origin != identity.ToolBinaryOrigins[tool] || strings.HasPrefix(origin, "goroot/") && observed.ToolBinarySHA256[tool] != identity.ToolBinarySHA256[tool] {
+				return fmt.Errorf("feature profiles used different installed Go %s tools", tool)
+			}
 		}
 		for _, pair := range request.pairs {
 			if err := validateDiscoveryFeatureSourcePair(plan, observed, pair); err != nil {

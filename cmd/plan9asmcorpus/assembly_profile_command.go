@@ -61,6 +61,21 @@ func verifyDiscoveryAssemblyProfileTools(profile *discoveryAsmCommandProfile, ma
 	if err != nil || actual != profile.Observed.DriverSHA256 {
 		return fmt.Errorf("direct assembler driver bytes differ from actual profile")
 	}
+	env := replaceEnv(profile.Environment, profile.Observed.Environment)
+	env = replaceEnv(env, map[string]string{"GOROOT": profile.GoRoot})
+	state, err := inspectDiscoveryFeatureDriver(profile.Context, profile.GoBinary, env, profile.Observed.Target, nil)
+	if err != nil {
+		return fmt.Errorf("direct assembler actual subtool inspection: %w", err)
+	}
+	wantedTools := &discoveryFeatureToolState{directory: profile.Observed.ToolDirectory, digests: profile.Observed.ToolBinarySHA256, origins: profile.Observed.ToolBinaryOrigins, routing: profile.Observed.ToolRoutingSHA256, dispatcher: profile.Observed.ToolDispatcherSHA256}
+	if !equalDiscoveryFeatureToolStates(state.tools, wantedTools) {
+		return fmt.Errorf("direct assembler subtool bytes/routing/cache differ from actual profile")
+	}
+	for key, wanted := range profile.Observed.Environment {
+		if state.environment[key] != wanted {
+			return fmt.Errorf("direct assembler actual environment differs: %s", key)
+		}
+	}
 	for file, wanted := range profile.Observed.ToolSourceSHA256 {
 		actual, err := discoveryFeatureFileSHA256(filepath.Join(profile.GoRoot, filepath.FromSlash(file)))
 		if err != nil || actual != wanted {
