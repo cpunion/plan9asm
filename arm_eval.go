@@ -300,23 +300,10 @@ func (c *armCtx) evalFPAddr32(op Operand) (string, error) {
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i32\n", t, ptr)
 		return "%" + t, nil
 	}
-	if op.FPName == "argframe" {
-		// Dynamic reflect/callback stubs use $argframe(FP) without a statically
-		// declared argument frame. An ordinary LLVM function signature cannot
-		// recover that caller-owned address. Keep corpus/object lowering permissive,
-		// as the ARM64 lowering does, while executable ABI tests remain responsible
-		// for using only addressable, modeled slots.
-		return "0", nil
-	}
-	if strings.EqualFold(op.FPName, "sp") && op.FPOffset == -4 {
-		// runtime.vdsoCall spells the caller's stack pointer as $sp-4(FP).
-		// An ordinary LLVM function signature does not expose that caller-owned
-		// address. Match the explicit argframe context fallback above so corpus
-		// and object lowering remain possible; executable ABI coverage must not
-		// treat this placeholder as an addressable modeled frame slot.
-		return "0", nil
-	}
-	return "", fmt.Errorf("arm: unsupported FP addr slot: %s", op.String())
+	// Neither a familiar source name nor a TEXT frame declaration supplies a
+	// caller-owned FP address. Only the typed backing resolved above may be
+	// materialized; an unbound address must not become a zero placeholder.
+	return "", fmt.Errorf("%w: arm FP address %s requires bound typed frame storage", ErrProbeNeedsContext, op.String())
 }
 
 func armFrameTypeSize(typ LLVMType) int64 {

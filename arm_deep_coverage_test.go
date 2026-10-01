@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -59,8 +60,8 @@ func TestARMEvalCoverage(t *testing.T) {
 		{Kind: OpSym, Sym: "$runtime·main+4(SB)"},
 		{Kind: OpIdent, Ident: "CS"},
 	}
-	if got, err := c.evalFPAddr32(Operand{Kind: OpFPAddr, FPName: "argframe", FPOffset: 99}); err != nil || got != "0" {
-		t.Fatalf("evalFPAddr32(dynamic) = (%q, %v), want (0, nil)", got, err)
+	if got, err := c.evalFPAddr32(Operand{Kind: OpFPAddr, FPName: "argframe", FPOffset: 99}); !errors.Is(err, ErrProbeNeedsContext) || got != "" {
+		t.Fatalf("evalFPAddr32(dynamic) = (%q, %v), want unbound frame context", got, err)
 	}
 	if got, err := c.evalFPValue32(Operand{Kind: OpFP, FPName: "f_hi", FPOffset: 24}); err != nil || got == "" {
 		t.Fatalf("evalFPValue32(split i64 high) = (%q, %v)", got, err)

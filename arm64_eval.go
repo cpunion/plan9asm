@@ -456,7 +456,9 @@ func (c *arm64Ctx) evalFPAddr64(op Operand) (string, error) {
 		p, ok = c.fpParamAlloca[op.FPOffset]
 	}
 	if !ok {
-		return "0", nil
+		// The ordinary signature does not recover a caller-owned FP address.
+		// Missing typed backing is context, never a fabricated zero pointer.
+		return "", fmt.Errorf("%w: arm64 FP address %s requires bound typed frame storage", ErrProbeNeedsContext, op.String())
 	}
 	if result {
 		c.markFPResultAddrTaken(op.FPOffset)

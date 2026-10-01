@@ -1792,8 +1792,8 @@ func TestARM64EvalCoverage(t *testing.T) {
 			t.Fatalf("eval64(%s) = (%q, %v)", op.String(), got, err)
 		}
 	}
-	if got, err := c.eval64(Operand{Kind: OpFPAddr, FPOffset: 88}, false); err != nil || got != "0" {
-		t.Fatalf("eval64(missing fpaddr) = (%q, %v)", got, err)
+	if got, err := c.eval64(Operand{Kind: OpFPAddr, FPOffset: 88}, false); !errors.Is(err, ErrProbeNeedsContext) || got != "" {
+		t.Fatalf("eval64(missing fpaddr) = (%q, %v), want unbound frame context", got, err)
 	}
 	if _, err := c.eval64(Operand{Kind: OpRegShift, Reg: "R1", ShiftOp: ShiftRotate, ShiftReg: "R2"}, false); err == nil {
 		t.Fatalf("eval64(register shift) unexpectedly succeeded")
