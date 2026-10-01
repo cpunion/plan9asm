@@ -11,7 +11,7 @@
 {"module":"github.com/dessaya/iota.go","version":"v1.0.0","status":"pending"}
 {"module":"github.com/devicehive/gatt","version":"v0.0.0-20160304123721-478fd0a937cd","status":"pending"}
 {"module":"github.com/filosottile/go/src/cmd","version":"v0.0.0-20250127143042-c190aef6e432","status":"pending"}
-{"module":"github.com/google/gVisor","version":"v0.0.0-20260922014844-164b166ce347","status":"pending"}
+{"module":"github.com/google/gVisor","version":"v0.0.0-20260922014844-164b166ce347","status":"failed"}
 {"module":"github.com/gracefulearth/image","version":"v0.0.0-20260120042349-d3b5e916691e","status":"pending"}
 {"module":"github.com/kiloe/arla10k","version":"v0.0.0-20160512220601-cf1fe93ffc93","status":"pending"}
 {"module":"github.com/mandukhai-alimaa/arrow-go/v18","version":"v18.0.0-20260810175812-4f42a9e05d17","status":"pending"}

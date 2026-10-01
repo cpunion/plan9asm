@@ -6,7 +6,7 @@
 {"module":"github.com/au11n/cryptotls","version":"v0.1.1","status":"pending"}
 {"module":"github.com/bondaraval/gvisor","version":"v0.0.0-20250915152807-20b7e9b2d7e2","status":"pending"}
 {"module":"github.com/bytebase/tidb","version":"v1.0.9","status":"pending"}
-{"module":"github.com/deatil/lakego-admin/pkg/lakego-pkg/go-cryptobin","version":"v0.0.0-20251117035958-8bb5eb61ee28","status":"pending"}
+{"module":"github.com/deatil/lakego-admin/pkg/lakego-pkg/go-cryptobin","version":"v0.0.0-20251117035958-8bb5eb61ee28","status":"failed"}
 {"module":"github.com/drk3/aries-framework-go","version":"v0.0.0-20221028142827-a755fd87d699","status":"pending"}
 {"module":"github.com/go-simd/hex","version":"v0.0.0-20260908181127-412603e19f22","status":"pending"}
 {"module":"github.com/mahsanet/gomobile","version":"v0.0.0-20260524100338-9902ac1f2255","status":"pending"}

@@ -14,7 +14,7 @@
 {"module":"github.com/data-bet/simdjson-go","version":"v0.4.5","status":"pending"}
 {"module":"github.com/dhebp/derohe","version":"v0.0.0-20260825055105-895ec697499f","status":"pending"}
 {"module":"github.com/dop251/spgz","version":"v1.2.1","status":"pending"}
-{"module":"github.com/hummingbirddb/arrow-go/v18","version":"v18.0.0-20260904202957-6542b630f84d","status":"pending"}
+{"module":"github.com/hummingbirddb/arrow-go/v18","version":"v18.0.0-20260904202957-6542b630f84d","status":"failed"}
 {"module":"github.com/lab47/isle","version":"v0.17.1","status":"pending"}
 {"module":"github.com/reF1nd/sing-tun","version":"v0.9.3","status":"pending"}
 {"module":"github.com/remyoudompheng/go","version":"v0.0.0-20190907224014-2711fababd21","status":"pending"}

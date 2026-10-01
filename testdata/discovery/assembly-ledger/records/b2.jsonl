@@ -18,6 +18,6 @@
 {"module":"github.com/qitmeer/go-ethereum","version":"v1.10.12","status":"pending"}
 {"module":"github.com/seiflotfy/tipping","version":"v0.0.0-20260815060628-8d24f518f9ba","status":"pending"}
 {"module":"github.com/tencentcodedog/mac-go-1.12.6","version":"v0.0.0-20241115082514-acdc0169f8ea","status":"pending"}
-{"module":"github.com/thesyncim/goav1","version":"v0.0.0-20260719234633-5e26122d69ac","status":"pending"}
+{"module":"github.com/thesyncim/goav1","version":"v0.0.0-20260719234633-5e26122d69ac","status":"failed"}
 {"module":"github.com/x3speed/Xray-core","version":"v1.260327.0","status":"pending"}
 {"module":"gitproxy.zycloud.tk/ava-labs/libevm","version":"v1.16.2","status":"pending"}
