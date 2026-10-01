@@ -111,7 +111,7 @@ func GoAssemblerDefines(goos, goarch string) []string {
 		}
 		defines = append(defines, "GOARM_5")
 	case "arm64":
-		if strings.Contains(os.Getenv("GOARM64"), ",lse") {
+		if lse, err := goARM64ProfileLSE(os.Getenv("GOARM64")); err == nil && lse {
 			defines = append(defines, "GOARM64_LSE")
 		}
 	}

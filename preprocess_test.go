@@ -311,3 +311,14 @@ func TestGoAssemblerDefinesMatchToolchainFeatureRules(t *testing.T) {
 		t.Fatalf("arm64 defines = %q", got)
 	}
 }
+
+func TestGoAssemblerDefinesImplicitARM64LSE(t *testing.T) {
+	for _, value := range []string{"v8.1", "v8.9,crypto", "v9.0", "v9.5,crypto"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("GOARM64", value)
+			if got := strings.Join(GoAssemblerDefines("linux", "arm64"), ","); got != "GOOS_linux,GOARCH_arm64,GOARM64_LSE" {
+				t.Fatalf("GOARM64=%s defines = %q; cmd/go enables mandatory LSE", value, got)
+			}
+		})
+	}
+}
