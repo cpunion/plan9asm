@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -11,6 +12,7 @@ import (
 // path used by the real package compilation. Package path must come from that
 // compilation's source-selection observation, not from a special-path guess.
 type discoveryAsmCommandProfile struct {
+	Context     context.Context
 	Observed    *discoveryTargetFeatures
 	GoBinary    string
 	GoRoot      string
@@ -21,6 +23,9 @@ type discoveryAsmCommandProfile struct {
 func discoveryAssemblyProfileCommand(profile *discoveryAsmCommandProfile, goos, goarch, goRoot string) (string, []string, []string, map[string]string, error) {
 	if profile == nil || profile.GoRoot != goRoot || !filepath.IsAbs(profile.GoRoot) || !filepath.IsAbs(profile.GoBinary) {
 		return "", nil, nil, nil, fmt.Errorf("missing or inconsistent actual assembly driver/root")
+	}
+	if profile.Context != nil && profile.Context.Err() != nil {
+		return "", nil, nil, nil, fmt.Errorf("actual assembly profile context: %w", profile.Context.Err())
 	}
 	if err := validateDiscoveryTargetFeatures(profile.Observed); err != nil {
 		return "", nil, nil, nil, err

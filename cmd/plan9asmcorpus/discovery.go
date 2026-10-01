@@ -1064,6 +1064,9 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string, profiles
 	if len(profiles) > 1 {
 		return false, fmt.Errorf("direct assembler symbol check requires one actual profile")
 	}
+	if len(profiles) == 1 && (profiles[0] == nil || profiles[0].Context == nil) {
+		return false, fmt.Errorf("direct assembler symbol check requires candidate context")
+	}
 	declaresSymbols, err := discoverySourceMentionsSymbolDirective(filePath)
 	if err != nil {
 		return false, err
@@ -1112,9 +1115,18 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string, profiles
 		"-I", filepath.Join(goRoot, "pkg", "include"),
 		"-o", object, filePath,
 	}...)
-	asm := exec.Command(goBinary, asmArgs...)
-	asm.Env = targetEnv
-	if output, err := asm.CombinedOutput(); err != nil {
+	run := func(args ...string) ([]byte, error) {
+		if len(profiles) == 1 {
+			return runCapturedCommandOutput(profiles[0].Context, "", targetEnv, goBinary, args...)
+		}
+		command := exec.Command(goBinary, args...)
+		command.Env = targetEnv
+		return command.CombinedOutput()
+	}
+	if output, err := run(asmArgs...); err != nil {
+		if len(profiles) == 1 && profiles[0].Context.Err() != nil {
+			return false, fmt.Errorf("direct assembler symbol probe: %w", profiles[0].Context.Err())
+		}
 		if len(profiles) == 1 && (isDiscoveryGoBuildInfrastructureFailure(string(output)) || !discoveryAssemblerSourceDiagnostic(filePath, string(output))) {
 			return false, fmt.Errorf("direct assembler symbol probe: %w: %s", err, output)
 		}
@@ -1122,9 +1134,7 @@ func discoveryAssemblyObjectHasNoSymbols(filePath, goos, goarch string, profiles
 		// and build checks retain any Go-assembler failure as a real outcome.
 		return false, nil
 	}
-	nm := exec.Command(goBinary, "tool", "nm", object)
-	nm.Env = targetEnv
-	output, err := nm.CombinedOutput()
+	output, err := run("tool", "nm", object)
 	lines := strings.TrimSpace(string(output))
 	if strings.HasSuffix(lines, ": no symbols") {
 		return true, nil
