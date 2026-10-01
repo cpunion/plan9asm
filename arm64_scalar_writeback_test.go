@@ -29,7 +29,11 @@ func TestARM64ScalarWritebackCompleteGoForms(t *testing.T) {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	var source strings.Builder
-	source.WriteString("TEXT scalarWritebackForms(SB),$0-0\n")
+	// The Cartesian product changes SP by a nonzero net amount. Preserve the
+	// real entry SP in a register that none of these forms writes, then restore
+	// it before the caller RET. This is an object-form oracle, not execution of
+	// deliberately unaligned SP accesses or unknown-pointer R1 accesses.
+	source.WriteString("TEXT scalarWritebackForms(SB),$0-0\nMOVD RSP,R20\n")
 	for _, form := range arm64ScalarWritebackOps {
 		for _, suffix := range []string{".P", ".W"} {
 			for _, off := range []int{-256, -1, 0, 1, 255} {
@@ -42,7 +46,7 @@ func TestARM64ScalarWritebackCompleteGoForms(t *testing.T) {
 			}
 		}
 	}
-	source.WriteString("RET\n")
+	source.WriteString("MOVD R20,RSP\nRET\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	file, err := Parse(ArchARM64, source.String())
 	if err != nil {
