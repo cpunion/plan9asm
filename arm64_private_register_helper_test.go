@@ -121,6 +121,7 @@ func main() {
 			for _, target := range []string{
 				"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
 				"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+				"aarch64-unknown-linux-musl",
 			} {
 				compileLLVMToObject(t, llc, target, "private-gp.ll", "private-gp.o", translate(target))
 			}
@@ -187,6 +188,7 @@ func TestARM64PrivateRegisterHelperNeedsCompleteContext(t *testing.T) {
 			for _, target := range []string{
 				"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
 				"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+				"aarch64-unknown-linux-musl",
 			} {
 				ctx := llvm.NewContext()
 				tr, err := translateGoModuleInContext(ctx, pkg, []byte(test.source), GoModuleOptions{

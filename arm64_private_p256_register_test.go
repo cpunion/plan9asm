@@ -176,6 +176,7 @@ func TestCrossLinuxRuntimeMatrixARM64PrivateP256RegisterHelpers(t *testing.T) {
 			for _, target := range []string{
 				"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
 				"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+				"aarch64-unknown-linux-musl",
 			} {
 				compileLLVMToObject(t, llc, target, "p256-private.ll", "p256-private.o", translate(target))
 			}
@@ -283,6 +284,7 @@ func main() {
 	for _, target := range []string{
 		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
 		"aarch64-unknown-freebsd", "aarch64-pc-windows-msvc",
+		"aarch64-unknown-linux-musl",
 	} {
 		ctx := llvm.NewContext()
 		tr, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
