@@ -139,6 +139,9 @@ func prepareARMKernelHelpers(file *File, opt Options) (*File, error) {
 				uses[base]++
 			}
 		}
+		if err := proveARMKernelContinuation(copyFn); err != nil {
+			return nil, err
+		}
 		if err := proveARMKernelInputs(copyFn, opt.Sigs[resolve(fn.Sym)]); err != nil {
 			return nil, err
 		}
