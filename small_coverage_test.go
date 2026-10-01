@@ -40,16 +40,6 @@ func TestNeedCFGHelpers(t *testing.T) {
 		t.Fatalf("funcNeedsAMD64CFG(straight-line) = true")
 	}
 
-	if !funcNeedsARM64CFG(Func{Instrs: []Instr{{Op: "MOVD.P"}}}) {
-		t.Fatalf("funcNeedsARM64CFG(dot suffix) = false")
-	}
-	if !funcNeedsARM64CFG(Func{Instrs: []Instr{{Op: "B"}}}) {
-		t.Fatalf("funcNeedsARM64CFG(branch) = false")
-	}
-	if funcNeedsARM64CFG(Func{Instrs: []Instr{{Op: OpTEXT}, {Op: OpMRS}, {Op: OpMOVD, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: "R0"}}}, {Op: OpRET}}}) {
-		t.Fatalf("funcNeedsARM64CFG(linear subset) = true")
-	}
-
 	if !funcNeedsARMCFG(Func{Instrs: []Instr{{Op: "ADD.EQ"}}}) {
 		t.Fatalf("funcNeedsARMCFG(cond exec) = false")
 	}

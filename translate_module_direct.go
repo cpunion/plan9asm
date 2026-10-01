@@ -91,7 +91,7 @@ func translateModuleDirectInContext(ctx llvm.Context, file *File, opt Options) (
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm CFG lowering required for %s", name)
 		}
-		if file.Arch == ArchARM64 && funcNeedsARM64CFG(*fn) {
+		if file.Arch == ArchARM64 {
 			mod.Dispose()
 			return llvm.Module{}, directUnsupportedf("arm64 CFG lowering required for %s", name)
 		}

@@ -304,7 +304,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 			b.WriteString("\n")
 			continue
 		}
-		if file.Arch == ArchARM64 && funcNeedsARM64CFG(*fn) {
+		// Even a tiny MOVD/RET body can replace the caller LR. Every ARM64
+		// function needs the same source-frame and reaching-definition proof;
+		// an opcode whitelist must not select an unchecked prototype.
+		if file.Arch == ArchARM64 {
 			if err := translateFuncARM64(&b, *fn, sig, resolve, opt.Sigs, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}

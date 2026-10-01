@@ -327,3 +327,10 @@ func (c *arm64Ctx) condValue(cond string) (string, error) {
 		return "", fmt.Errorf("arm64: unsupported condition %q", cond)
 	}
 }
+
+type arm64Flags struct {
+	kind  string // "cmp" or "res"
+	dst   string // i64 SSA or constant
+	src   string // i64 SSA or constant (for cmp)
+	width LLVMType
+}

@@ -409,13 +409,20 @@ func TestTranslateModuleDirectAndFallbackCoverage(t *testing.T) {
 			},
 		}},
 	}
-	armMod, err := translateModuleDirect(arm64File, Options{
+	armOptions := Options{
 		ResolveSym: resolve,
 		Goarch:     "arm64",
 		Sigs:       map[string]FuncSig{"example.arm64m": {Name: "example.arm64m", Ret: I64}},
-	})
+	}
+	if direct, err := translateModuleDirect(arm64File, armOptions); err == nil {
+		direct.Dispose()
+		t.Fatal("ARM64 direct prototype bypassed architecture-aware proof")
+	} else if !errors.Is(err, errDirectModuleUnsupported) {
+		t.Fatalf("ARM64 direct path must request checked fallback: %v", err)
+	}
+	armMod, err := TranslateModule(arm64File, armOptions)
 	if err != nil {
-		t.Fatalf("translateModuleDirect(arm64) error = %v", err)
+		t.Fatalf("TranslateModule(arm64 checked fallback) error = %v", err)
 	}
 	defer armMod.Dispose()
 	if !strings.Contains(armMod.String(), `@example.arm64m`) {
