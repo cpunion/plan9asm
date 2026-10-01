@@ -30,6 +30,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/discoverymeta"
 	"github.com/xgo-dev/plan9asm/internal/gotoolchain"
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
@@ -95,6 +96,7 @@ type discoveryExecutionPlan struct {
 }
 
 type discoveryBuildConfiguration struct {
+	ProfileID string   `json:"profile_id,omitempty"`
 	BuildTags []string `json:"build_tags,omitempty"`
 	Targets   []string `json:"targets"`
 	AsmFiles  []string `json:"asm_files"`
@@ -166,6 +168,7 @@ const (
 )
 
 type discoverySourceNotApplicableItem struct {
+	ProfileID  string                            `json:"profile_id,omitempty"`
 	BuildTags  []string                          `json:"build_tags,omitempty"`
 	AsmFile    string                            `json:"asm_file,omitempty"`
 	AsmFiles   []string                          `json:"asm_files,omitempty"`
@@ -189,6 +192,7 @@ type discoveryCorpusResult struct {
 	// Only the ledger's internal reconstruction sets this. JSON reports cannot
 	// opt out of checking raw compiler diagnostics by supplying a field.
 	sourceDiagnosticsCompacted bool
+	featureInventory           *discoveryFeatureInventory
 	Module                     string                                `json:"module"`
 	Version                    string                                `json:"version"`
 	Status                     string                                `json:"status"`
@@ -208,30 +212,33 @@ type discoveryCorpusResult struct {
 	NativeLayout               *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
 	NativeLayoutPlan           *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
 	OrdinarySelectionPlan      *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	FeatureProfiles            []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
+	FeatureConsumption         []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
 	Error                      string                                `json:"error,omitempty"`
 }
 
 type discoveryCorpusReport struct {
-	SchemaVersion             int                       `json:"schema_version"`
-	Partial                   bool                      `json:"partial,omitempty"`
-	Provenance                discoveryCorpusProvenance `json:"provenance"`
-	Targets                   []string                  `json:"targets,omitempty"`
-	TargetFiltered            bool                      `json:"target_filtered,omitempty"`
-	ShardIndex                int                       `json:"shard_index"`
-	ShardCount                int                       `json:"shard_count"`
-	CandidateTotal            int                       `json:"candidate_total"`
-	EligibleCandidates        int                       `json:"eligible_candidates"`
-	Selected                  int                       `json:"selected"`
-	Passed                    int                       `json:"passed"`
-	Failed                    int                       `json:"failed"`
-	NotApplicable             int                       `json:"not_applicable"`
-	SkippedInvalidSource      int                       `json:"skipped_invalid_source"`
-	SkippedSuperseded         int                       `json:"skipped_superseded"`
-	SkippedPrivateExtension   int                       `json:"skipped_private_extension"`
-	SkippedNativeLayout       int                       `json:"skipped_native_layout"`
-	Translations              int                       `json:"translations"`
-	NotApplicableTranslations int                       `json:"not_applicable_translations"`
-	Results                   []discoveryCorpusResult   `json:"results"`
+	SchemaVersion             int                        `json:"schema_version"`
+	Partial                   bool                       `json:"partial,omitempty"`
+	Provenance                discoveryCorpusProvenance  `json:"provenance"`
+	Targets                   []string                   `json:"targets,omitempty"`
+	TargetFiltered            bool                       `json:"target_filtered,omitempty"`
+	ShardIndex                int                        `json:"shard_index"`
+	ShardCount                int                        `json:"shard_count"`
+	CandidateTotal            int                        `json:"candidate_total"`
+	EligibleCandidates        int                        `json:"eligible_candidates"`
+	Selected                  int                        `json:"selected"`
+	Passed                    int                        `json:"passed"`
+	Failed                    int                        `json:"failed"`
+	NotApplicable             int                        `json:"not_applicable"`
+	SkippedInvalidSource      int                        `json:"skipped_invalid_source"`
+	SkippedSuperseded         int                        `json:"skipped_superseded"`
+	SkippedPrivateExtension   int                        `json:"skipped_private_extension"`
+	SkippedNativeLayout       int                        `json:"skipped_native_layout"`
+	Translations              int                        `json:"translations"`
+	NotApplicableTranslations int                        `json:"not_applicable_translations"`
+	Results                   []discoveryCorpusResult    `json:"results"`
+	FeatureInventory          *discoveryFeatureInventory `json:"feature_inventory,omitempty"`
 }
 
 func loadDiscoveryCandidates(root string) ([]discoveryCandidate, error) {
@@ -1902,6 +1909,22 @@ func resolveDiscoveryExecutable(name string) (string, error) {
 }
 
 func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
+	if report.SchemaVersion == 9 {
+		if report.FeatureInventory != nil {
+			return fmt.Errorf("schema 9 cannot claim profile-aware source/CPP/compiler coverage")
+		}
+		for _, result := range report.Results {
+			if len(result.FeatureProfiles) != 0 || len(result.FeatureConsumption) != 0 ||
+				result.OrdinarySelectionPlan != nil && len(result.OrdinarySelectionPlan.ProfileDecisions) != 0 {
+				return fmt.Errorf("schema 9 cannot relabel profile-aware evidence")
+			}
+			for _, config := range result.BuildConfigurations {
+				if config.ProfileID != "" {
+					return fmt.Errorf("schema 9 cannot collapse the profile scope dimension")
+				}
+			}
+		}
+	}
 	for _, count := range []int{
 		report.CandidateTotal, report.EligibleCandidates, report.Selected,
 		report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource,

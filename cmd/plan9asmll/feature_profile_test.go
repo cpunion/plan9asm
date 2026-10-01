@@ -94,6 +94,44 @@ func TestFeatureConsumerProductionSelectsGoAndCPPUnderSameV3Environment(t *testi
 		t.Fatalf("actual profile consumer report = %#v", report)
 	}
 	proof := report.FeatureSelection
+	if err := gotoolprofile.ValidateSelection(input, proof, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := json.Marshal(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*gotoolprofile.SelectionProof){
+		"profile ID":        func(proof *gotoolprofile.SelectionProof) { proof.ProfileID = "" },
+		"custom CPU tag":    func(proof *gotoolprofile.SelectionProof) { proof.CustomTags = []string{"amd64.v3"} },
+		"package role":      func(proof *gotoolprofile.SelectionProof) { proof.Packages[0].Macros.PackageRole = "allow_asm_abi_path" },
+		"macro environment": func(proof *gotoolprofile.SelectionProof) { proof.Packages[0].Macros.Defines = []string{"GOAMD64_v1"} },
+		"source SHA": func(proof *gotoolprofile.SelectionProof) {
+			proof.Packages[0].SourceSHA256["selected.go"] = strings.Repeat("0", 64)
+		},
+		"unselected Go source": func(proof *gotoolprofile.SelectionProof) {
+			proof.Packages[0].GoFiles, proof.Packages[0].CompiledGoFiles = []string{"fallback.go"}, []string{"fallback.go"}
+			delete(proof.Packages[0].SourceSHA256, "selected.go")
+			proof.Packages[0].SourceSHA256["fallback.go"] = input.Sources["fallback.go"]
+		},
+		"CPP origin": func(proof *gotoolprofile.SelectionProof) {
+			proof.CPP[0].Inputs["module/probe_amd64.s"] = strings.Repeat("0", 64)
+		},
+		"omitted CPP":    func(proof *gotoolprofile.SelectionProof) { proof.CPP = nil },
+		"omitted LLVM":   func(proof *gotoolprofile.SelectionProof) { proof.Outputs = nil },
+		"omitted object": func(proof *gotoolprofile.SelectionProof) { proof.Outputs[0].Object = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed gotoolprofile.SelectionProof
+			if err := json.Unmarshal(canonical, &changed); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&changed)
+			if err := gotoolprofile.ValidateSelection(input, &changed, nil, true); err == nil {
+				t.Fatal("mutated or legacy compiler-consumption proof was accepted")
+			}
+		})
+	}
 	if len(proof.Packages) != 1 || len(proof.Packages[0].CompiledGoFiles) != 1 || proof.Packages[0].CompiledGoFiles[0] != "selected.go" || proof.Packages[0].Macros.PackageRole != "ordinary_path" {
 		t.Fatalf("actual Go source/package role selection = %#v", proof.Packages)
 	}
@@ -304,13 +342,16 @@ func featureConsumerFixture(t *testing.T) (*featureInput, string) {
 		"fallback.go":   "//go:build !amd64.v3\n\npackage cpu\nfunc v3Probe()\nfunc baselineProbe()\n",
 		"probe_amd64.s": "#ifdef GOAMD64_v3\nTEXT ·v3Probe(SB),$0-0\nRET\n#else\nTEXT ·baselineProbe(SB),$0-0\nRET\n#endif\n",
 	}
-	input := &featureInput{Protocol: featureInputProtocol, Module: "example.invalid/cpu", SourceRoot: dir, Sources: make(map[string]string), Directories: make(map[string][]string), AsmFiles: []string{"probe_amd64.s"}}
+	input := &featureInput{Protocol: featureInputProtocol, Module: "example.invalid/cpu", SourceRoot: dir, Sources: make(map[string]string), Headers: make(map[string]string), Directories: make(map[string][]string), AsmFiles: []string{"probe_amd64.s"}}
 	var names []string
 	for name, source := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}
 		input.Sources[name] = featureBytesSHA256([]byte(source))
+		if strings.HasSuffix(name, ".go") {
+			input.Headers[name] = source
+		}
 		names = append(names, name)
 	}
 	sort.Strings(names)

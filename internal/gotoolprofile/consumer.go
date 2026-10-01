@@ -12,6 +12,7 @@ type ConsumerInput struct {
 	Module      string              `json:"module"`
 	SourceRoot  string              `json:"source_root"`
 	Sources     map[string]string   `json:"sources"`
+	Headers     map[string]string   `json:"selection_headers"`
 	ToolSources map[string]string   `json:"tool_sources,omitempty"`
 	Directories map[string][]string `json:"directories"`
 	AsmFiles    []string            `json:"asm_files"`

@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 type corpusManifest struct {
@@ -59,6 +61,8 @@ type matrixReport struct {
 	NativeLayout             *discoveryNativeLayoutSkip         `json:"-"`
 	NativeLayoutPlan         *discoveryNativeLayoutPlan         `json:"-"`
 	OrdinarySelectionPlan    *discoveryOrdinarySelectionPlan    `json:"-"`
+	FeatureProfiles          []discoveryFeatureProfile          `json:"-"`
+	FeatureConsumption       []*gotoolprofile.SelectionProof    `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"
@@ -74,21 +78,24 @@ type targetNotApplicableItem struct {
 }
 
 type matrixTargetNotApplicableItem struct {
-	Target string `json:"target"`
+	Target    string   `json:"target"`
+	ProfileID string   `json:"profile_id,omitempty"`
+	BuildTags []string `json:"build_tags,omitempty"`
 	targetNotApplicableItem
 }
 
 type targetReport struct {
-	Goos               string                    `json:"goos"`
-	Goarch             string                    `json:"goarch"`
-	TotalPkgs          int                       `json:"total_pkgs"`
-	AsmPackages        []string                  `json:"asm_packages"`
-	AsmFiles           []string                  `json:"asm_files"`
-	TotalAsm           int                       `json:"total_asm"`
-	Success            int                       `json:"success"`
-	NotApplicable      int                       `json:"not_applicable"`
-	Failed             int                       `json:"failed"`
-	NotApplicableItems []targetNotApplicableItem `json:"not_applicable_items,omitempty"`
+	Goos               string                        `json:"goos"`
+	Goarch             string                        `json:"goarch"`
+	TotalPkgs          int                           `json:"total_pkgs"`
+	AsmPackages        []string                      `json:"asm_packages"`
+	AsmFiles           []string                      `json:"asm_files"`
+	TotalAsm           int                           `json:"total_asm"`
+	Success            int                           `json:"success"`
+	NotApplicable      int                           `json:"not_applicable"`
+	Failed             int                           `json:"failed"`
+	NotApplicableItems []targetNotApplicableItem     `json:"not_applicable_items,omitempty"`
+	FeatureSelection   *gotoolprofile.SelectionProof `json:"feature_selection,omitempty"`
 }
 
 var (
