@@ -129,7 +129,8 @@ func (c *arm64Ctx) lowerARM64CacheForm(form arm64CacheForm) error {
 // ZVA stores to a hardware-sized, downward-aligned granule. Virtual frame
 // allocas cannot stand in for that physical extent. Until a stronger memory
 // contract exists, scan the complete source/decoded CFG (even dead blocks),
-// excluding every way to obtain translator-owned frame or code addresses.
+// rejecting known syntactic sources of private frame/code/materialized-data
+// addresses. This is bounded source proof, not a complete native-layout model.
 // This does not promise that an external address has permission or is mapped:
 // the real SYS instruction retains DZP, translation and hardware fault behavior.
 func (c *arm64Ctx) requireDCZVANoPrivateAddressSources() error {
@@ -169,7 +170,14 @@ func validateARM64DCZVAAddressSources(frame arm64GoFrame, frameSize int64, block
 				registers := []Reg{operand.Reg, operand.Mem.Base, operand.Mem.Index, operand.ShiftReg}
 				registers = append(registers, operand.RegList...)
 				if operand.Kind == OpSym {
-					if memory, ok := parseMem(strings.TrimPrefix(operand.Sym, "$")); ok {
+					symbol := strings.TrimSpace(operand.Sym)
+					if strings.HasPrefix(symbol, "$") && strings.Contains(symbol, "(SB)") {
+						// A separately laid-out LLVM object's down-aligned zero
+						// granule and neighbours lack a native-layout proof.
+						// Ordinary SB reads/writes do not take this address.
+						return context(original.Raw)
+					}
+					if memory, ok := parseMem(strings.TrimPrefix(symbol, "$")); ok {
 						registers = append(registers, memory.Base, memory.Index)
 					}
 				}

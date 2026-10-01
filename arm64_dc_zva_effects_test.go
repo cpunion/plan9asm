@@ -85,18 +85,19 @@ func TestARM64DCZVACompleteGrammarObjects(t *testing.T) {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, target := range arm64TypedNativeTargets {
-		ctx := llvm.NewContext()
-		module, err := TranslateModuleInContext(ctx, file, Options{
-			Goarch: "arm64", TargetTriple: target,
-			Sigs: map[string]FuncSig{"cachemaintenanceforms": {Name: "cachemaintenanceforms", Ret: Void}},
+		t.Run(target, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, Options{
+				Goarch: "arm64", TargetTriple: target,
+				Sigs: map[string]FuncSig{"cachemaintenanceforms": {Name: "cachemaintenanceforms", Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer module.Dispose()
+			compileLLVMToObject(t, llc, target, "dc-family.ll", "dc-family.o", module.String())
 		})
-		if err != nil {
-			ctx.Dispose()
-			t.Fatal(err)
-		}
-		compileLLVMToObject(t, llc, target, "dc-family.ll", "dc-family.o", module.String())
-		module.Dispose()
-		ctx.Dispose()
 	}
 }
 
@@ -113,6 +114,38 @@ func TestARM64DCZVAOtherCacheOperationsRemainContext(t *testing.T) {
 			source := arm64TypedNativeSource("DC " + operation + ",R0")
 			arm64TypedNativeGoObject(t, source)
 			arm64DCZVARequireContextAllAPIs(t, source)
+		})
+	}
+}
+
+func TestARM64DCZVASymbolAddressesNeedNativeExtentContract(t *testing.T) {
+	for _, address := range []string{
+		"MOVD $payload<>(SB)", "MOVD $payload<>+1(SB)", "MOVD $payload<>+4096(SB)", "MOVD $external(SB)",
+		"MOVWU $payload<>(SB)",
+	} {
+		t.Run(address, func(t *testing.T) {
+			source := arm64TypedNativeSource(address+",R0\nDC ZVA,R0") +
+				"DATA payload<>+0(SB)/8,$7\nGLOBL payload<>(SB),16,$8\n"
+			// A real Go relocation is valid grammar, not proof that the
+			// separately materialized LLVM object's hardware zero granule
+			// has the same extent/alignment/neighbours as the Go symbol.
+			arm64TypedNativeGoObject(t, source)
+			arm64DCZVARequireContextAllAPIs(t, source)
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fn := file.Funcs[0]
+			if !errors.Is(validateARM64DCZVASource(fn), ErrProbeNeedsContext) {
+				t.Fatal("original source gate lost SB address-of")
+			}
+			fn, err = normalizeARM64RawPCRelative(fn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !errors.Is(validateARM64DCZVAAddressSources(arm64SourceGoFrame(fn), fn.FrameSize, arm64SplitBlocks(fn)), ErrProbeNeedsContext) {
+				t.Fatal("normalized CFG gate lost SB address-of")
+			}
 		})
 	}
 }

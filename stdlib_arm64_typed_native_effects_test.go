@@ -93,17 +93,17 @@ func TestStdlibARM64TypedNativeEffectsMemclrCompleteSource(t *testing.T) {
 		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, target := range arm64TypedNativeTargets {
-		ctx := llvm.NewContext()
-		tr, err := translateGoModuleInContext(ctx, pkg, source, GoModuleOptions{
-			GOARCH: "arm64", GOOS: "linux", TargetTriple: target, ResolveSym: testResolveSym("runtime"),
+		t.Run(target, func(t *testing.T) {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			tr, err := translateGoModuleInContext(ctx, pkg, source, GoModuleOptions{
+				GOARCH: "arm64", GOOS: "linux", TargetTriple: target, ResolveSym: testResolveSym("runtime"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tr.Module.Dispose()
+			compileLLVMToObject(t, llc, target, "memclr-arm64.ll", "memclr-arm64.o", tr.Module.String())
 		})
-		if err != nil {
-			ctx.Dispose()
-			t.Errorf("%s: complete unchanged memclr source: %v", target, err)
-			continue
-		}
-		compileLLVMToObject(t, llc, target, "memclr-arm64.ll", "memclr-arm64.o", tr.Module.String())
-		tr.Module.Dispose()
-		ctx.Dispose()
 	}
 }
