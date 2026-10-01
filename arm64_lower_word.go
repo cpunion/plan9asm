@@ -68,92 +68,14 @@ func (c *arm64Ctx) lowerRawWord(ins Instr) error {
 	if form, ok := decodeARM64RawCASP(word); ok {
 		return c.lowerRawCASP(form)
 	}
-	if form, ok := decodeARM64RawAES(word); ok {
-		return c.lowerRawAES(form)
-	}
-	if form, ok := decodeARM64RawSM4(word); ok {
-		return c.lowerRawSM4(form)
-	}
-	if form, ok := decodeARM64RawRDMA(word); ok {
-		return c.lowerRawRDMA(form)
-	}
-	if form, ok := decodeARM64RawScalarADDP(word); ok {
-		return c.lowerRawScalarADDP(form)
-	}
-	if form, ok := decodeARM64RawDotProduct(word); ok {
-		return c.lowerRawDotProduct(form)
-	}
-	if form, ok := decodeARM64RawMatrixMultiply(word); ok {
-		return c.lowerRawMatrixMultiply(form)
-	}
-	if form, ok := decodeARM64RawTableLookup(word); ok {
-		return c.lowerRawTableLookup(form)
-	}
-	if form, ok := decodeARM64RawSQRDMULH(word); ok {
-		return c.lowerRawSQRDMULH(form)
-	}
-	if form, ok := decodeARM64RawMixedSaturatingAdd(word); ok {
-		return c.lowerRawMixedSaturatingAdd(form)
-	}
-	if form, ok := decodeARM64RawSQDMULH(word); ok {
-		return c.lowerRawSQDMULH(form)
-	}
-	if form, ok := decodeARM64RawMUL(word); ok {
-		return c.lowerRawMUL(form)
-	}
-	if form, ok := decodeARM64RawHalvingAddSub(word); ok {
-		return c.lowerRawHalvingAddSub(form)
-	}
-	if form, ok := decodeARM64RawIntegerCompare(word); ok {
-		return c.lowerRawIntegerCompare(form)
-	}
-	if form, ok := decodeARM64RawMLS(word); ok {
-		return c.lowerRawMLS(form)
-	}
-	if form, ok := decodeARM64RawPairwiseAddLong(word); ok {
-		return c.lowerRawPairwiseAddLong(form)
-	}
-	if form, ok := decodeARM64RawUMULL(word); ok {
-		return c.lowerRawUMULL(form)
-	}
-	if form, ok := decodeARM64RawAddHighNarrow(word); ok {
-		return c.lowerRawAddHighNarrow(form)
-	}
-	if form, ok := decodeARM64RawUZP(word); ok {
-		return c.lowerRawUZP(form)
-	}
-	if form, ok := decodeARM64RawSaturatingShiftNarrow(word); ok {
-		return c.lowerRawSaturatingShiftNarrow(form)
-	}
-	if form, ok := decodeARM64RawSQSHLU(word); ok {
-		return c.lowerRawSQSHLU(form)
-	}
-	if form, ok := decodeARM64RawUSHLL(word); ok {
-		return c.lowerRawUSHLL(form)
+	if family, _, ok := decodeARM64RawVectorFamily(word); ok {
+		return family.lower(c, word)
 	}
 	if form, ok := decodeARM64RawStructureLane(word); ok {
 		return c.lowerRawStructureLane(form)
 	}
 	if form, ok := decodeARM64RawLDnR(word); ok {
 		return c.lowerRawLDnR(form)
-	}
-	if form, ok := decodeARM64RawUMLAL(word); ok {
-		return c.lowerRawUMLAL(form)
-	}
-	if form, ok := decodeARM64RawDUPElement(word); ok {
-		return c.lowerRawDUPElement(form)
-	}
-	if form, ok := decodeARM64RawMLA(word); ok {
-		return c.lowerRawMLA(form)
-	}
-	if form, ok := decodeARM64RawSHA3(word); ok {
-		return c.lowerRawSHA3(form)
-	}
-	if form, ok := decodeARM64RawLogical(word); ok {
-		return c.lowerRawLogical(form)
-	}
-	if form, ok := decodeARM64RawModifiedImmediate(word); ok {
-		return c.lowerRawModifiedImmediate(form)
 	}
 	if form, ok := decodeARM64RawMoveWide(word); ok {
 		return c.lowerRawMoveWide(form)

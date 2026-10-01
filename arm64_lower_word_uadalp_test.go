@@ -109,3 +109,13 @@ func TestARM64RawUADALPDecoderRejectsAdjacentSADALPEncoding(t *testing.T) {
 		t.Fatal("UADALP decoder claimed adjacent SADALP encoding")
 	}
 }
+
+// The historical instruction-specific probe is test-only. Production uses
+// the complete four-operation pairwise-long family and its shared effects.
+func decodeARM64RawUADALP(word uint32) (arm64RawPairwiseAddLong, bool) {
+	form, ok := decodeARM64RawPairwiseAddLong(word)
+	if !ok || form.signed || !form.accumulate {
+		return arm64RawPairwiseAddLong{}, false
+	}
+	return form, true
+}

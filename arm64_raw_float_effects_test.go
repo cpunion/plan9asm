@@ -63,7 +63,7 @@ func TestARM64RawFloatDecodersHaveSharedEffectsAndLowering(t *testing.T) {
 
 func TestARM64RawFloatGPEffectsAllRegisterBanksAndDirections(t *testing.T) {
 	var lines []string
-	var wants []arm64RawFloatControlEffects
+	var wants []arm64RawRegisterControlEffects
 	for register := 0; register < 32; register++ {
 		x, w := fmt.Sprintf("x%d", register), fmt.Sprintf("w%d", register)
 		bit := uint32(1) << uint(register)
@@ -84,9 +84,9 @@ func TestARM64RawFloatGPEffectsAllRegisterBanksAndDirections(t *testing.T) {
 			{"scvtf s31, %s, #32", w, false}, {"ucvtf d31, %s, #64", x, false},
 		} {
 			lines = append(lines, fmt.Sprintf(test.format, test.gp))
-			effects := arm64RawFloatControlEffects{gpReads: bit}
+			effects := arm64RawRegisterControlEffects{gpReads: bit}
 			if test.writes {
-				effects = arm64RawFloatControlEffects{gpWrites: bit}
+				effects = arm64RawRegisterControlEffects{gpWrites: bit}
 			}
 			wants = append(wants, effects)
 		}
