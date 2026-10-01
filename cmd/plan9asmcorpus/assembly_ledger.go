@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -373,7 +374,7 @@ func writeAssemblyLedger(outputDir string, progress discoveryProgress, semanticS
 		if err := json.Unmarshal(data, &existing); err != nil {
 			return fmt.Errorf("refuse to replace invalid assembly ledger: %w", err)
 		}
-		if _, err := readAssemblyLedger(outputDir, existing.Progress.LedgerSHA256, existing.SemanticSourceSHA256); err != nil {
+		if _, err := readAssemblyLedgerSnapshot(outputDir, existing.Progress.LedgerSHA256, existing.SemanticSourceSHA256, true); err != nil {
 			return fmt.Errorf("refuse to replace invalid assembly ledger: %w", err)
 		}
 	} else if !os.IsNotExist(err) {
@@ -453,6 +454,13 @@ func writeAssemblyLedger(outputDir string, progress discoveryProgress, semanticS
 }
 
 func readAssemblyLedger(outputDir, scanSHA, semanticSourceSHA string) (discoveryProgress, error) {
+	return readAssemblyLedgerSnapshot(outputDir, scanSHA, semanticSourceSHA, false)
+}
+
+// Replacement alone may recognize the intact legacy pending queue. Its records
+// are never upgraded or copied: writeAssemblyLedger publishes only newly
+// audited progress. Ordinary status/comparison readers still require v2.
+func readAssemblyLedgerSnapshot(outputDir, scanSHA, semanticSourceSHA string, allowLegacyPending bool) (discoveryProgress, error) {
 	rootEntries, err := os.ReadDir(outputDir)
 	if err != nil {
 		return discoveryProgress{}, err
@@ -466,13 +474,18 @@ func readAssemblyLedger(outputDir, scanSHA, semanticSourceSHA string) (discovery
 		return discoveryProgress{}, err
 	}
 	var manifest assemblyLedgerManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
+	if err := decodeAssemblyLedgerJSON(data, &manifest); err != nil {
 		return discoveryProgress{}, err
 	}
-	if manifest.Format != assemblyLedgerFormat ||
+	legacy := allowLegacyPending && manifest.Format == "module-hashed-assembly-ledger-v1" && manifest.Progress.SchemaVersion == 1
+	if manifest.Format != assemblyLedgerFormat && !legacy ||
 		manifest.Progress.LedgerSHA256 != scanSHA ||
 		manifest.SemanticSourceSHA256 != semanticSourceSHA {
 		return discoveryProgress{}, fmt.Errorf("assembly ledger format or source/scan provenance is stale")
+	}
+	if legacy && (manifest.Progress.ReportedShards != 0 || manifest.Progress.Provenance != nil ||
+		manifest.Progress.FeatureInventory != nil || len(manifest.Progress.Candidates) != 0) {
+		return discoveryProgress{}, fmt.Errorf("legacy replacement requires an unreported pending queue without evidence")
 	}
 	entries, err := os.ReadDir(filepath.Join(outputDir, "records"))
 	if err != nil {
@@ -505,8 +518,15 @@ func readAssemblyLedger(outputDir, scanSHA, semanticSourceSHA string) (discovery
 		var previous discoveryCandidateProgress
 		for scanner.Scan() {
 			var candidate discoveryCandidateProgress
-			if err := json.Unmarshal(scanner.Bytes(), &candidate); err != nil {
+			if err := decodeAssemblyLedgerJSON(scanner.Bytes(), &candidate); err != nil {
 				return discoveryProgress{}, err
+			}
+			if legacy {
+				wanted, _ := json.Marshal(discoveryCandidateProgress{Module: candidate.Module, Version: candidate.Version, Status: "pending"})
+				actual, _ := json.Marshal(candidate)
+				if !bytes.Equal(actual, wanted) {
+					return discoveryProgress{}, fmt.Errorf("legacy replacement cannot consume an outcome or source/profile evidence")
+				}
 			}
 			hash := sha256.Sum256([]byte(candidate.Module))
 			if hash[0] != number || count > 0 && compareAssemblyLedgerCandidate(previous, candidate) >= 0 {
@@ -523,8 +543,25 @@ func readAssemblyLedger(outputDir, scanSHA, semanticSourceSHA string) (discovery
 			return discoveryProgress{}, fmt.Errorf("assembly ledger shard %s count mismatch", shard.Name)
 		}
 	}
-	if err := validateAssemblyLedgerProgress(progress); err != nil {
+	validation := progress
+	if legacy {
+		validation.SchemaVersion = discoveryProgressSchema
+		validation.FeatureInventory = newDiscoveryFeatureInventory()
+	}
+	if err := validateAssemblyLedgerProgress(validation); err != nil {
 		return discoveryProgress{}, err
 	}
 	return progress, nil
+}
+
+func decodeAssemblyLedgerJSON(data []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("assembly ledger JSON has trailing input")
+	}
+	return nil
 }
