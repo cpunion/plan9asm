@@ -239,13 +239,26 @@ func arm64SM3Fixture(name string, word uint32) string {
 	for register := 0; register < 32; register++ {
 		fmt.Fprintf(&source, "VLD1.P 16(R0),[V%d.S4]\n", register)
 	}
-	source.WriteString("CMP $0,R0\n")
+	// Independent 64-bit input words seed arithmetic NZCV states. The vector
+	// operation must preserve every flag, not only one conditional sentinel.
+	source.WriteString("MOVD -512(R0),R2\nMOVD -504(R0),R3\nADDS R3,R2,R2\n")
 	fmt.Fprintf(&source, "WORD $%#08x\n", word)
 	for register := 0; register < 32; register++ {
 		fmt.Fprintf(&source, "VST1.P [V%d.S4],16(R1)\n", register)
 	}
-	source.WriteString("CSET NE,R2\nMOVD R2,(R1)\nRET\n")
+	source.WriteString("CSET MI,R2\nCSET EQ,R3\nORR R3<<1,R2,R2\n")
+	source.WriteString("CSET CS,R3\nORR R3<<2,R2,R2\nCSET VS,R3\nORR R3<<3,R2,R2\n")
+	source.WriteString("MOVD R2,(R1)\nRET\n")
 	return source.String()
+}
+
+func TestARM64RawSM3FixtureObservesEveryNZCVFlag(t *testing.T) {
+	source := arm64SM3Fixture("sm3flags", 0xce63c004)
+	for _, instruction := range []string{"CSET MI,R2", "CSET EQ,R3", "CSET CS,R3", "CSET VS,R3"} {
+		if !strings.Contains(source, instruction) {
+			t.Errorf("runtime fixture does not observe %s", instruction)
+		}
+	}
 }
 
 func TestARM64RawSM3OriginalAndCompleteFamily(t *testing.T) {

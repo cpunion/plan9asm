@@ -130,6 +130,7 @@ func check(fn func(*[128]uint32,*[132]uint32),kind,d,n,m,a,lane int) {
  var input [128]uint32
  var got,want [132]uint32
  seed:=uint32(0x12345678)
+ var seenZero,seenOne uint32
  for trial:=0;trial<256;trial++ {
   for i:=range input {
    seed=seed*1664525+1013904223
@@ -142,10 +143,18 @@ func check(fn func(*[128]uint32,*[132]uint32),kind,d,n,m,a,lane int) {
   copy(want[:128],input[:])
   vector:=func(r int)(v [4]uint32){copy(v[:],input[r*4:r*4+4]);return}
   out:=reference(kind,lane,vector(d),vector(n),vector(m),vector(a))
-  copy(want[d*4:d*4+4],out[:]);want[128]=1;want[129]=0
+  copy(want[d*4:d*4+4],out[:])
+  left:=uint64(input[0])|uint64(input[1])<<32
+  right:=uint64(input[2])|uint64(input[3])<<32
+  sum,carry:=bits.Add64(left,right,0)
+  flags:=uint32(sum>>63)|uint32(carry)<<2|uint32(((left^sum)&(right^sum))>>63)<<3
+  if sum==0 {flags|=2}
+  want[128]=flags;want[129]=0
+  seenZero|=(^flags)&15;seenOne|=flags
   fn(&input,&got)
   if got!=want {println(kind,d,n,m,a,lane,trial);panic("Go SM3 raw result/source/NZCV/canary mismatch")}
  }
+ if seenZero!=15||seenOne!=15 {panic("SM3 oracle did not exercise both values of every NZCV flag")}
 }
 `
 
@@ -180,6 +189,7 @@ static void reference(uint32_t out[4],int kind,int lane,const uint32_t d[4],
 }
 static int check(void(*fn)(const uint32_t *,uint32_t *),int kind,int d,int n,int m,int a,int lane) {
  uint32_t input[128],got[132],want[132],out[4],seed=0x12345678;
+ uint32_t seen_zero=0,seen_one=0;
  for(unsigned trial=0;trial<256;trial++) {
   for(unsigned i=0;i<128;i++) {
    seed=seed*1664525U+1013904223U;
@@ -191,13 +201,21 @@ static int check(void(*fn)(const uint32_t *,uint32_t *),int kind,int d,int n,int
   for(unsigned i=0;i<132;i++) got[i]=want[i]=UINT32_C(0xa5a5a5a5);
   memcpy(want,input,sizeof(input));
   reference(out,kind,lane,input+4*d,input+4*n,input+4*m,input+4*a);
-  memcpy(want+4*d,out,sizeof(out));want[128]=1;want[129]=0;
+  memcpy(want+4*d,out,sizeof(out));
+  uint64_t left=(uint64_t)input[0]|(uint64_t)input[1]<<32;
+  uint64_t right=(uint64_t)input[2]|(uint64_t)input[3]<<32;
+  uint64_t sum=left+right;
+  uint32_t flags=(uint32_t)(sum>>63)|((uint32_t)(sum==0)<<1)|
+                 ((uint32_t)(sum<left)<<2)|((uint32_t)(((left^sum)&(right^sum))>>63)<<3);
+  want[128]=flags;want[129]=0;
+  seen_zero|=(~flags)&15;seen_one|=flags;
   fn(input,got);
   if(memcmp(got,want,sizeof(got))) {
    fprintf(stderr,"SM3 kind=%d d=%d n=%d m=%d a=%d lane=%d trial=%u\n",kind,d,n,m,a,lane,trial);
    return 1;
   }
  }
+ if(seen_zero!=15||seen_one!=15){fprintf(stderr,"SM3 NZCV inputs lack flag coverage\n");return 1;}
  return 0;
 }
 `
