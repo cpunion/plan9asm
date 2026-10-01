@@ -28,7 +28,7 @@ type wasmControlFrame struct {
 // LLVM SSA. The direct ABI maps FP operands through FuncSig.Frame. The Go ABI
 // instead recreates the official compiler's linear-memory stack, register
 // globals, resumable calls, and unwind return protocol.
-func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI, annotateSource bool) (err error) {
+func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI, annotateSource bool) (err error) {
 	// LLVM's WebAssembly backend cannot lower blockaddress. Keep this as a
 	// lowering invariant so future control-flow or code-pointer work fails here
 	// instead of producing IR that only breaks later in llc.
@@ -396,6 +396,29 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 				return wasmValue{}, fmt.Errorf("unsupported wasm symbol address %s", arg)
 			}
 			base = strings.TrimPrefix(base, "$")
+			if isAddress {
+				name, function, packed, addressErr := wasmFunctionAddress(file, base, offset, resolve, sigs, wasmABI)
+				if addressErr != nil {
+					return wasmValue{}, addressErr
+				}
+				if function {
+					v, err = cast(wasmValue{typ: Ptr, val: llvmGlobal(name)}, I64, false)
+					if err != nil {
+						return wasmValue{}, err
+					}
+					if packed {
+						tmp := newTmp()
+						fmt.Fprintf(b, "  %%%s = shl i64 %s, 16\n", tmp, v.val)
+						v = wasmValue{typ: I64, val: "%" + tmp}
+					}
+					if offset != 0 {
+						tmp := newTmp()
+						fmt.Fprintf(b, "  %%%s = add i64 %s, %d\n", tmp, v.val, offset)
+						v = wasmValue{typ: I64, val: "%" + tmp}
+					}
+					break
+				}
+			}
 			if !strings.ContainsAny(base, "·/.") {
 				base = "·" + base
 			}
@@ -1288,14 +1311,30 @@ func translateFuncWASM(b *strings.Builder, fn Func, sig FuncSig, resolve func(st
 			if op == "TEE" {
 				push(v)
 			}
-		case "MOVB", "MOVW", "MOVD":
+		case "MOVB", "MOVH", "MOVW", "MOVD":
 			if len(ins.Args) != 2 {
 				return fmt.Errorf("%s expects source and destination", ins.Op)
 			}
-			width := map[string]LLVMType{"MOVB": I8, "MOVW": I32, "MOVD": I64}[op]
-			v, err := loadOperand(ins.Args[0], width)
+			width := wasmMoveTypes[op]
+			loadWidth := width
+			if ins.Args[0].Kind == OpReg || ins.Args[0].Kind == OpImm || ins.Args[0].Kind == OpFPAddr ||
+				ins.Args[0].Kind == OpSym && strings.HasPrefix(strings.TrimSpace(ins.Args[0].Sym), "$") {
+				// Go MOV widths select memory access size. Register,
+				// immediate and address values retain all 64 bits.
+				loadWidth = I64
+			}
+			v, err := loadOperand(ins.Args[0], loadWidth)
 			if err != nil {
 				return err
+			}
+			if ins.Args[1].Kind != OpReg {
+				v, err = cast(v, width, false)
+				if err != nil {
+					return err
+				}
+			}
+			if ins.Args[1].Kind == OpSym && strings.HasPrefix(strings.TrimSpace(ins.Args[1].Sym), "$") {
+				return fmt.Errorf("%s cannot store into an immediate symbol address", ins.Op)
 			}
 			if err := storeOperand(ins.Args[1], v); err != nil {
 				return err
@@ -1654,9 +1693,10 @@ func wasmNeedsIncomingContext(fn Func) bool {
 	initialized := false
 	for _, ins := range fn.Instrs {
 		op := strings.ToUpper(string(ins.Op))
+		_, move := wasmMoveTypes[op]
 		for i, arg := range ins.Args {
 			writes := (op == "SET" || op == "TEE") && i == 0 && arg.Kind == OpReg ||
-				(op == "MOVB" || op == "MOVW" || op == "MOVD") && i == 1 && arg.Kind == OpReg
+				move && i == 1 && arg.Kind == OpReg
 			if writes && arg.Reg == Reg("CTXT") {
 				initialized = true
 				continue

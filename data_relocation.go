@@ -143,16 +143,27 @@ func emitWASMDataRelocations(b *strings.Builder, file *File, name string, buffer
 			if err != nil {
 				return err
 			}
-			function := dataAddressIsFunction(file, base, resolve, sigs)
-			if function && abi == WASMABIGo {
-				return fmt.Errorf("%w: wasm Go DATA function address %s requires a packed resume-PC contract, not a direct LLVM table index", ErrProbeNeedsContext, base)
+			name, function, packed, err := wasmFunctionAddress(file, base, addend, resolve, sigs, abi)
+			if err != nil {
+				return err
+			}
+			if packed {
+				// The wasm32 table index occupies PC bits 16..47. Place its
+				// real I32 relocation at byte 2 of the eight-byte Go slot.
+				// This is fully initialized by the linker, even before any
+				// host/function entry, and needs no runtime constructor.
+				emit(fmt.Sprintf(".int16 %d", addend))
+				emit(".int32 " + strconv.Quote(name))
+				emit(".int16 0")
+				offset += relocation.Width
+				continue
 			}
 			if function && addend != 0 {
 				// TABLE_INDEX_I64 has no addend. LLVM MC accepts f+1 but
 				// silently drops +1; accepting that would change the source.
 				return fmt.Errorf("%w: wasm DATA function address %s has an unrepresentable table-index addend %d", ErrProbeNeedsContext, base, addend)
 			}
-			value := strconv.Quote(resolveDataAddressSymbol(file, base, resolve, sigs))
+			value := strconv.Quote(name)
 			if addend != 0 {
 				value += fmt.Sprintf("%+d", addend)
 			}

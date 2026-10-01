@@ -353,7 +353,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 			continue
 		}
 		if file.Arch == ArchWASM {
-			if err := translateFuncWASM(&b, *fn, sig, resolve, opt.Sigs, opt.WASMABI, opt.AnnotateSource); err != nil {
+			if err := translateFuncWASM(&b, file, *fn, sig, resolve, opt.Sigs, opt.WASMABI, opt.AnnotateSource); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

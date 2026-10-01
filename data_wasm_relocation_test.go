@@ -376,7 +376,10 @@ func TestWASMDataFunctionAddressesRespectPhysicalABI(t *testing.T) {
 					label = "direct_linear_data_address"
 				}
 				if abi == WASMABIGo {
-					label = "Go_packed_resume_PC_requires_context"
+					label = "Go_packed_resume_PC"
+					if binding == "declared_function_alias" {
+						label = "unbound_Go_logical_PC_requires_context"
+					}
 					if binding == "source_DATA" {
 						label = "Go_linear_data_address"
 					}
@@ -404,9 +407,9 @@ func TestWASMDataFunctionAddressesRespectPhysicalABI(t *testing.T) {
 									mod.Dispose()
 								}
 							}
-							if abi == WASMABIGo && binding != "source_DATA" {
-								// Go's function address is a packed function/resume PC,
-								// not the unshifted LLVM function-table index.
+							if abi == WASMABIGo && binding == "declared_function_alias" {
+								// A physical signature alone does not establish the
+								// unknown external function's logical-PC role.
 								if !errors.Is(err, ErrProbeNeedsContext) {
 									t.Fatalf("Go function DATA cannot impersonate a direct table index, got %v", err)
 								}
@@ -427,6 +430,8 @@ func TestWASMDataFunctionAddressesRespectPhysicalABI(t *testing.T) {
 							expected, wrong := "R_WASM_TABLE_INDEX_I64", "R_WASM_MEMORY_ADDR_I64"
 							if binding == "source_DATA" {
 								expected, wrong = wrong, expected
+							} else if abi == WASMABIGo {
+								expected = "R_WASM_TABLE_INDEX_I32"
 							}
 							if !strings.Contains(relocations, expected+" "+name) || strings.Contains(relocations, wrong+" "+name) {
 								t.Fatalf("typed data/code target was not retained in its proper address space:\n%s", relocations)

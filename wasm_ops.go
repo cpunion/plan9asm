@@ -1,5 +1,14 @@
 package plan9asm
 
+// Go's wasm MOVB/H/W/D names select unsigned memory widths. The operand
+// values themselves are 64-bit; no signed/U move variants exist in its table.
+var wasmMoveTypes = map[string]LLVMType{
+	"MOVB": I8,
+	"MOVH": I16,
+	"MOVW": I32,
+	"MOVD": I64,
+}
+
 type wasmIntegerOp struct {
 	typ LLVMType
 	op  string

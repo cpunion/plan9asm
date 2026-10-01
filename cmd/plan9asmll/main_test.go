@@ -1723,6 +1723,22 @@ func TestExtractSupportedOpsFindsCompleteWasmFloatUnaryFamily(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteWasmMoveFamily(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported, err := extractSupportedOps(repoRoot, "wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"MOVB", "MOVH", "MOVW", "MOVD"} {
+		if _, ok := supported[op]; !ok {
+			t.Errorf("supported opcode extraction omitted %s", op)
+		}
+	}
+}
+
 func TestAsmFilesOfPkgSkipsCommentOnlyAssembly(t *testing.T) {
 	dir := t.TempDir()
 	comments := filepath.Join(dir, "comments.s")
