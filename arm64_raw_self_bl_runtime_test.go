@@ -139,16 +139,42 @@ const arm64RawSelfBLOracleC = `#include <stdint.h>
 
 extern void terminal(const unsigned char *, unsigned char *);
 
-static uint64_t readG(void) {
-  uint64_t value;
-  __asm__ volatile("mov %0,x28" : "=r"(value));
-  return value;
-}
+#ifdef __APPLE__
+#define TERMINAL_SYMBOL "_terminal"
+#define OS18_CLOBBER
+#else
+#define TERMINAL_SYMBOL "terminal"
+#define OS18_CLOBBER "x18",
+#endif
 
-static uint64_t readOS18(void) {
-  uint64_t value;
-  __asm__ volatile("mov %0,x18" : "=r"(value));
-  return value;
+static int checkedTerminal(const unsigned char *input, unsigned char *output) {
+  register const unsigned char *arg0 __asm__("x0") = input;
+  register unsigned char *arg1 __asm__("x1") = output;
+  uint64_t beforeG, beforeOS18, afterG, afterOS18;
+
+  // A single asm boundary prevents the C register allocator from writing
+  // x28 between its snapshots (for example to hold the x18 snapshot).
+  // The four early-clobber outputs cannot alias the fixed registers or args;
+  // ordinary AAPCS64 caller-clobbered GP/FP registers and LR are explicit.
+  __asm__ volatile(
+      "mov %0,x28\n"
+      "mov %1,x18\n"
+      "bl " TERMINAL_SYMBOL "\n"
+      "mov %2,x28\n"
+      "mov %3,x18\n"
+      "mov x28,%0\n"
+      "mov x18,%1\n"
+      : "=&r"(beforeG), "=&r"(beforeOS18), "=&r"(afterG), "=&r"(afterOS18),
+        "+r"(arg0), "+r"(arg1)
+      :
+      : "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9",
+        "x10", "x11", "x12", "x13", "x14", "x15", "x16", "x17",
+        OS18_CLOBBER "x28", "x30", "v0", "v1", "v2", "v3", "v4", "v5",
+        "v6", "v7", "v16", "v17", "v18", "v19", "v20", "v21",
+        "v22", "v23", "v24", "v25", "v26", "v27", "v28", "v29",
+        "v30", "v31", "memory", "cc");
+
+  return beforeG != afterG || beforeOS18 != afterOS18;
 }
 
 int main(void) {
@@ -174,10 +200,12 @@ int main(void) {
       memcpy(input + off, &value, 8);
       memcpy(want + off, &value, 8);
       memcpy(snapshot, input, sizeof(input));
-      uint64_t beforeG = readG(), beforeOS18 = readOS18();
-      terminal(input + off, output + off);
-      if (beforeG != readG() || beforeOS18 != readOS18() ||
-          memcmp(input, snapshot, sizeof(input)) || memcmp(output, want, sizeof(output))) {
+      int fixedDiff = checkedTerminal(input + off, output + off);
+      int inputDiff = memcmp(input, snapshot, sizeof(input));
+      int outputDiff = memcmp(output, want, sizeof(output));
+      if (fixedDiff || inputDiff || outputDiff) {
+        fprintf(stderr, "trial=%u off=%u fixed=%d input=%d output=%d\n",
+                trial, off, fixedDiff, inputDiff, outputDiff);
         return 1;
       }
     }
