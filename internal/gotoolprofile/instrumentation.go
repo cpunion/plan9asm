@@ -220,6 +220,13 @@ func ClassifyInstrumentationEarlyResult(rules *InstrumentationSourceRules, targe
 		if commandErr != nil {
 			return "", fmt.Errorf("eligible instrumentation target driver failed: %w", commandErr)
 		}
+		// The zero-dependency early marker protocol has no registered
+		// informational stderr. Do not let successful JSON hide a warning,
+		// mixed error, or tool failure; a future allowance needs its own
+		// actual-driver observation and exact diagnostic registration.
+		if len(stderr) != 0 {
+			return "", fmt.Errorf("eligible instrumentation target emitted unregistered stderr")
+		}
 		var pkg struct {
 			Dir, ImportPath string
 			GoFiles         []string

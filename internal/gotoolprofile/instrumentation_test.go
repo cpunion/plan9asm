@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +82,15 @@ func TestInstrumentationRulesReadActualGoRegistration(t *testing.T) {
 	if _, err := rules.EffectiveBuildMode("darwin/arm64", InstrumentationMSan); err == nil {
 		t.Fatal("rejected target received an effective PIE claim")
 	}
-	for _, version := range []string{"go1.19.13", "go1.28.0", "go1.27.0"} {
+	minor, err := goMinor(runtime.Version())
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongMinor := 20
+	if minor == wrongMinor {
+		wrongMinor++
+	}
+	for _, version := range []string{"go1.19.13", "go1.28.0", fmt.Sprintf("go1.%d.0", wrongMinor)} {
 		if _, err := CaptureInstrumentationSourceRules(runtime.GOROOT(), version); err == nil {
 			t.Fatalf("accepted wrong or unaudited version %s", version)
 		}
@@ -285,6 +294,46 @@ func TestInstrumentationEarlyRejectionRequiresExactCompleteActualExit(t *testing
 		if _, err := ClassifyInstrumentationEarlyResult(rules, "darwin/arm64", "race", stdout, nil, nil); err == nil {
 			t.Fatal("empty, malformed, or failed package output became actual selection")
 		}
+	}
+}
+
+func TestInstrumentationAcceptedEarlyResultRejectsUnknownStderr(t *testing.T) {
+	rules, err := CaptureInstrumentationSourceRules(runtime.GOROOT(), runtime.Version())
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := instrumentationMarkerDirectory(t)
+	for name, data := range MarkerFiles([]string{"asan", "msan", "race"}) {
+		writeInstrumentationFixture(t, directory, name, data)
+	}
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, commandErr := instrumentationActualCommand(t, directory, instrumentationActualEnv("darwin/arm64", "0"), goBinary, "list", "-find", "-json", "-race", ".")
+	if commandErr != nil || len(stderr) != 0 {
+		t.Fatalf("zero-dependency actual marker emitted unexpected diagnostics: %s: %v", stderr, commandErr)
+	}
+	if status, err := ClassifyInstrumentationEarlyResult(rules, "darwin/arm64", InstrumentationRace, stdout, stderr, nil); err != nil || status != InstrumentationEarlyRuleAccepted {
+		t.Fatalf("complete actual marker was rejected: %s: %v", status, err)
+	}
+	for _, diagnostics := range []string{
+		"unknown tool warning\n", "go: downloading unregistered/module v1.0.0\n",
+		"go: network unavailable\n", "-race is not supported on darwin/arm64\n",
+		"actual informational message\ncompiler error\n", " ",
+	} {
+		if _, err := ClassifyInstrumentationEarlyResult(rules, "darwin/arm64", InstrumentationRace, stdout, []byte(diagnostics), nil); err == nil {
+			t.Fatalf("accepted unregistered stderr alongside successful actual selection: %q", diagnostics)
+		}
+	}
+	env := replaceEnv(instrumentationActualEnv("darwin/arm64", "0"), map[string]string{"GODEBUG": "cpu.plan9asm_unregistered=off"})
+	stdout, stderr, commandErr = instrumentationActualCommand(t, directory, env, goBinary, "list", "-find", "-json", "-race", ".")
+	if commandErr != nil || !strings.Contains(string(stderr), "unknown cpu feature \"plan9asm_unregistered\"") {
+		t.Fatalf("actual successful driver warning was not reproduced: %s: %v", stderr, commandErr)
+	}
+	t.Logf("actual exit-0 driver warning: %q", stderr)
+	if _, err := ClassifyInstrumentationEarlyResult(rules, "darwin/arm64", InstrumentationRace, stdout, stderr, commandErr); err == nil {
+		t.Fatal("actual exit-0 unknown CPU warning became accepted instrumentation selection")
 	}
 }
 
