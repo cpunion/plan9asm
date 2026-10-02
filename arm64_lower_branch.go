@@ -377,6 +377,15 @@ func (c *arm64Ctx) storeABI0CallResult(callee string, sig FuncSig, result string
 	return nil
 }
 
+// This finite lowering contract is not a general native-call effect proof.
+// LLGo's syscall bridge elides these scheduler hooks entirely. Its source BL
+// still produces the Go continuation/prologue, but no emitted call can observe
+// the virtual frame or change its GP/FP contents. Control and availability
+// analysis must use the same boundary as callSym, not an unknown native call.
+func arm64ElidesSchedulerHook(callee string) bool {
+	return callee == "runtime.entersyscall" || callee == "runtime.exitsyscall"
+}
+
 func (c *arm64Ctx) callSym(symOp Operand) error {
 	if symOp.Kind != OpSym {
 		return fmt.Errorf("arm64 call expects sym operand, got %s", symOp.String())
@@ -390,8 +399,7 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 	callee := c.resolve(s)
 	// Syscall stubs invoke runtime entersyscall/exitsyscall around SVC.
 	// llgo runtime does not require these scheduler hooks at this layer.
-	if callee == "runtime.entersyscall" || callee == "runtime.exitsyscall" {
-		c.recordMachineCall(nil)
+	if arm64ElidesSchedulerHook(callee) {
 		return nil
 	}
 	csig, ok := c.sigs[callee]

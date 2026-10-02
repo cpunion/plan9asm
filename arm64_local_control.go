@@ -493,6 +493,11 @@ func (c *arm64Ctx) prepareLocalControl() error {
 			ins := arm64ControlDecode(original)
 			op := arm64ControlOp(ins)
 			post := strings.HasSuffix(string(ins.Op), ".P")
+			if op == "SVC" {
+				if err := c.requireSyscallCallerFrameDisjoint(state, ins); err != nil {
+					return err
+				}
+			}
 			if op == "B" || op == "JMP" || op == OpRET {
 				plan.stackBefore[[2]int{bi, ii}] = arm64ControlRead(state.regs, SP)
 				link := arm64ControlRead(state.regs, Reg("R30"))
@@ -605,6 +610,27 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	return nil
 }
 
+// Eliding a scheduler hook does not make the intervening syscall memory-neutral.
+// The emitted syscall bridge transports GP arguments, not the virtual SP root.
+// Preserve an automatic frame's saved caller LR only under the existing complete
+// fresh/non-escaping source proof and with no reaching frame/code-derived input.
+// R8 and R16 cover both number-register alternatives in lowerSyscall. This is a
+// disjointness guard, not a contract for arbitrary native exception effects or
+// an assertion that the syscall's result/NZCV mapping is complete.
+func (c *arm64Ctx) requireSyscallCallerFrameDisjoint(state *arm64ControlState, ins Instr) error {
+	if !c.sourceGoFrame.present {
+		return nil
+	}
+	exposed := state.escaped
+	for _, reg := range []Reg{"R0", "R1", "R2", "R3", "R4", "R5", "R8", "R16"} {
+		exposed = arm64ControlUnion(exposed, arm64ControlAddressTaint(arm64ControlRead(state.regs, reg)))
+	}
+	if !c.unexposedCallFrame || !state.unexposedSP || !arm64ControlEscapedOnlyCode(exposed) {
+		return fmt.Errorf("%w: ARM64 syscall has no disjoint saved caller-frame memory proof: %q", ErrProbeNeedsContext, ins.Raw)
+	}
+	return nil
+}
+
 // A dead source terminator has neither an unknown native target nor a caller
 // return. Retain its grammar validation, then terminate its LLVM block without
 // fabricating execution. Other instructions in the block are still lowered.
@@ -685,6 +711,18 @@ func arm64IsConditionalBranch(op Op) bool {
 }
 
 func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[string]string) {
+	if op == "SVC" {
+		// The existing typed syscall bridge writes R0 and R1, including for
+		// the zero-operand SVC spelling. Its results cannot retain a pure old
+		// caller/local continuation. Keep input PC taint conservatively, as
+		// for other native results, rather than inventing a known destination.
+		result := arm64ControlExternal()
+		for _, reg := range []Reg{"R0", "R1", "R2", "R3", "R4", "R5", "R8", "R16"} {
+			result = arm64ControlUnion(result, arm64ControlLabels(arm64ControlRead(state.regs, reg)))
+		}
+		state.regs[Reg("R0")], state.regs[Reg("R1")] = result, result
+		return
+	}
 	if len(ins.Args) == 0 {
 		return
 	}
@@ -852,6 +890,9 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 
 func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operand Operand) {
 	name := c.resolve(strings.TrimSuffix(operand.Sym, "(SB)"))
+	if operand.Kind == OpSym && strings.HasSuffix(operand.Sym, "(SB)") && arm64ElidesSchedulerHook(name) {
+		return
+	}
 	sig, known := c.sigs[name]
 	possibleCode := arm64ControlLabels(state.escaped)
 	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
