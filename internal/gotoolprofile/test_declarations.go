@@ -79,7 +79,7 @@ func ValidateSignatureSources(input *ConsumerInput, proof *SelectionProof, tags 
 			return fmt.Errorf("legacy selection cannot acquire supplemental declaration evidence")
 		}
 		for _, cpp := range proof.CPP {
-			if len(cpp.Signatures) != 0 {
+			if len(cpp.Signatures) != 0 || cpp.DataOnlyAssembly != nil {
 				return fmt.Errorf("legacy selection cannot acquire signature-source evidence")
 			}
 		}
@@ -112,7 +112,11 @@ func ValidateSignatureSources(input *ConsumerInput, proof *SelectionProof, tags 
 	used, entries := make(map[string]bool), make(map[string]bool)
 	bound := make(map[string]SignatureSource)
 	for _, cpp := range proof.CPP {
-		if cpp.Emission != "symbol_free" && len(cpp.Signatures) == 0 {
+		if cpp.Emission == "data_only" {
+			if cpp.DataOnlyAssembly == nil || len(cpp.Signatures) != 0 {
+				return fmt.Errorf("data-only assembly requires a native witness and no function signatures")
+			}
+		} else if cpp.Emission != "symbol_free" && len(cpp.Signatures) == 0 {
 			return fmt.Errorf("current assembly consumption lacks signature-source inventory")
 		}
 		for index, source := range cpp.Signatures {

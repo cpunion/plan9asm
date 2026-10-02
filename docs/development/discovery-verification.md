@@ -427,6 +427,18 @@ kind and a separate source/profile/Go/tool/object/listing witness. Invalid sourc
 nonempty native listings and missing LLVM outputs fail; this is not N/A. Go's
 `nm` deliberately exits nonzero for an object with no symbols, so the proof uses
 the assembler's successful listing instead of interpreting arbitrary tool errors.
+Selected DATA/GLOBL-only sources are distinct from both TEXT and symbol-free
+sources. Under the current signature protocol they require an explicit
+`data_only` emission and `actual_go_data_only_symbol_listing_v1` witness.
+The original same-profile Go assembler must produce a nonempty object and a
+complete listing containing only recognized data/BSS/TLS symbol kinds, data
+bytes and relocations. Its complete global names, static roles and sizes must
+match the parsed translated GLOBL inventory. The compact native symbol
+inventory and original listing/object hashes retain exact source, package,
+profile and tool identity; frozen producer provenance remains mandatory.
+No TEXT signature is invented, no source is marked N/A, and every scope still
+requires its normal LLVM object. Missing proofs, TEXT or unknown native records,
+changed global roles and signature-protocol downgrades fail closed.
 If an exact ZIP has no `go.mod`, the ordinary producer may use Go's canonical
 proxy-generated module directive. This is separate `proxy_go_mod` evidence,
 never an added ZIP member: exact ZIP and GoMod h1 sums, metadata bytes/SHA-256,

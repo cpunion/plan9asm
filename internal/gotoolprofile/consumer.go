@@ -66,13 +66,14 @@ type PackageProof struct {
 }
 
 type CPPProof struct {
-	File                string              `json:"file"`
-	Emission            string              `json:"emission"`
-	ExpandedSHA256      string              `json:"expanded_sha256"`
-	TypedExpandedSHA256 string              `json:"typed_expanded_sha256"`
-	Inputs              map[string]string   `json:"inputs"`
-	EmptyAssembly       *EmptyAssemblyProof `json:"empty_assembly,omitempty"`
-	Signatures          []SignatureSource   `json:"signature_sources,omitempty"`
+	File                string                 `json:"file"`
+	Emission            string                 `json:"emission"`
+	ExpandedSHA256      string                 `json:"expanded_sha256"`
+	TypedExpandedSHA256 string                 `json:"typed_expanded_sha256"`
+	Inputs              map[string]string      `json:"inputs"`
+	EmptyAssembly       *EmptyAssemblyProof    `json:"empty_assembly,omitempty"`
+	DataOnlyAssembly    *DataOnlyAssemblyProof `json:"data_only_assembly,omitempty"`
+	Signatures          []SignatureSource      `json:"signature_sources,omitempty"`
 }
 
 // EmptyAssemblyProof witnesses a real Go object and an empty assembler -S

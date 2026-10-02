@@ -18,6 +18,17 @@ import (
 // particular, macros, conditional definitions and invalid source still need
 // the actual assembler and its exact package/CPU definitions.
 func proveEmptyAssembly(pkg *packages.Package, task asmTask, target string, defines []string, cfg compileConfig) (_ *gotoolprofile.EmptyAssemblyProof, proofErr error) {
+	return proveAssemblyListing(pkg, task, target, defines, cfg, func(listing []byte) error {
+		if len(listing) != 0 {
+			return fmt.Errorf("actual Go assembler did not emit an empty symbol/data listing\n%s", listing)
+		}
+		return nil
+	})
+}
+
+// Both empty and data-only proofs require an independently accepted original
+// Go object. Their listing predicates differ; neither replaces LLVM output.
+func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, defines []string, cfg compileConfig, accept func([]byte) error) (_ *gotoolprofile.EmptyAssemblyProof, proofErr error) {
 	ctx := cfg.Context
 	if ctx == nil {
 		ctx = context.Background()
@@ -116,8 +127,11 @@ func proveEmptyAssembly(pkg *packages.Package, task asmTask, target string, defi
 	if err != nil {
 		return nil, fmt.Errorf("actual Go empty-object assembly: %w", err)
 	}
-	if len(listing) != 0 || len(stderr) != 0 {
-		return nil, fmt.Errorf("actual Go assembler did not emit an empty symbol/data listing\nstdout:\n%s\nstderr:\n%s", listing, stderr)
+	if len(stderr) != 0 {
+		return nil, fmt.Errorf("actual Go assembler emitted unexpected diagnostics: %s", stderr)
+	}
+	if err := accept(listing); err != nil {
+		return nil, err
 	}
 	if info, err := os.Stat(object); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 		return nil, fmt.Errorf("actual Go did not generate a nonempty object: %v", err)

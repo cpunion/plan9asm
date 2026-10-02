@@ -6,9 +6,12 @@ const EmptyAssemblyProtocol = "actual_go_symbol_free_listing_v1"
 
 func ValidateEmptyAssembly(input *ConsumerInput, cpp CPPProof, pkg PackageProof) error {
 	proof := cpp.EmptyAssembly
-	if cpp.Emission != "assembly" && cpp.Emission != "symbol_free" ||
+	if cpp.Emission != "assembly" && cpp.Emission != "symbol_free" && cpp.Emission != "data_only" ||
 		(cpp.Emission == "symbol_free") != (proof != nil) {
 		return fmt.Errorf("empty assembly requires an explicit same-scope native witness")
+	}
+	if err := ValidateDataOnlyAssembly(input, cpp, pkg); err != nil {
+		return err
 	}
 	if proof == nil {
 		return nil // Normal TEXT and data modules use the ordinary output proof.

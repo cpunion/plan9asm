@@ -98,6 +98,22 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 		}
 		return nil
 	}
+	projectNativeAssembly := func(cpp *gotoolprofile.CPPProof) error {
+		witness := cpp.EmptyAssembly
+		if cpp.DataOnlyAssembly != nil {
+			witness = &cpp.DataOnlyAssembly.Native
+		}
+		if witness == nil {
+			return nil
+		}
+		if err := replaceID(&witness.ProfileID); err != nil {
+			return err
+		}
+		// Both originals passed strict validation before this private view.
+		// Keep source, native listing and complete data-symbol semantics.
+		witness.AsmToolSHA256, witness.ObjectSHA256 = "", ""
+		return nil
+	}
 	projectTestDependencies := func(dependency *gotoolprofile.TestDependencyProof) error {
 		if dependency == nil {
 			return nil
@@ -115,11 +131,8 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			return err
 		}
 		for index := range selection.CPP {
-			if empty := selection.CPP[index].EmptyAssembly; empty != nil {
-				if err := replaceID(&empty.ProfileID); err != nil {
-					return err
-				}
-				empty.AsmToolSHA256, empty.ObjectSHA256 = "", ""
+			if err := projectNativeAssembly(&selection.CPP[index]); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -275,11 +288,8 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 						source.TestProofSHA256 = projected
 					}
 				}
-				if empty := proof.CPP[index].EmptyAssembly; empty != nil {
-					if err := replaceID(&empty.ProfileID); err != nil {
-						return result, err
-					}
-					empty.AsmToolSHA256, empty.ObjectSHA256 = "", ""
+				if err := projectNativeAssembly(&proof.CPP[index]); err != nil {
+					return result, err
 				}
 			}
 			if err := sortSemanticRows(proof.Packages); err != nil {
