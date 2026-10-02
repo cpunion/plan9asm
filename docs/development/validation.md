@@ -40,6 +40,11 @@ can exceed twenty minutes on a busy development host. Use the CI root suite's
 the disjoint partitions cover the complete list. Keep any earlier timeout
 failure as evidence; do not count it as a successful run.
 
+The [exhaustive root runner](../../cmd/plan9asmtest/README.md) implements this
+partition option, retaining actual per-root/subtest outcomes and merging
+checked root coverage profiles. It is Unix-only and does not replace the other
+root-module packages, nested CLIs, benchmarks or corpus gates.
+
 ```sh
 go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)

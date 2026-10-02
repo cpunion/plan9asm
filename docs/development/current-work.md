@@ -18,8 +18,13 @@ This is historical evidence, not success for subsequent source revisions.
 Skipped downstream root, standard-library and benchmark jobs did not pass.
 Preserve the failure-first scheduling and all 64 required shards.
 
-Development branch: `codex/pr40-sm3-profile-integration-20261002`, inheriting
-`codex/pr40-guarded-integration-20261001`. Freeze a clean final batch before
+Published repair source `47ea649d` has a new fork run `36942816488`; its policy
+preflight passed and priority corpus shards are running. It is not a full CI
+pass. Its assembly ledger was automatically reset to pending because old
+reports have different source provenance; the original reports remain evidence.
+
+Development branch: `codex/pr40-raw-frame-integration-20261002`, inheriting
+`codex/pr40-sm3-profile-integration-20261002`. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
 also change the source fingerprint. Put progress/funnel tables in the PR body,
 not here; derive them with the shared report readers.
@@ -76,7 +81,19 @@ object coverage. Dynamic reflect FP frames, native runtime entries/context
 switches and private ABI transport remain real contracts to implement.
 Provisional native-byte-layout/JIT exceptions require review before promotion.
 Raw private-SP frames in go-krypto are a separate bounded-proof investigation,
-not permission to accept arbitrary raw stack effects.
+not permission to accept arbitrary raw stack effects. The reviewed next batch
+adds the physical-SP/R29/private-pointer-spill proof and complete raw scalar,
+GP/FP-pair memory forms, including LDPSW writeback. Frozen family and original
+Go/LLVM runtime oracles passed at `a1314b75`; the complete original library replay
+and integrated-source validation remain required.
+
+The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
+hash-partitions every current root test, example and fuzz seed into fresh serial
+processes. Existing skips are counted separately. It does not cover other
+packages, nested CLI modules or corpus gates. Frozen `47ea649d` root verification
+is running with tool `c8054cd4`; no full-suite pass is claimed. The tool's Linux
+cold-fixture timeout was corrected and genuinely rerun at `2259cf73`, without
+changing the production suite deadline or discarding the earlier failure.
 
 ARM64 closure entries require an explicit immutable `{code pointer, uint64
 capture}` carrier and the real hidden register ABI. The default API remains
@@ -88,9 +105,10 @@ register the translator contract.
 
 Fork Draft [PR 259](https://github.com/cpunion/llgo/pull/259) is rebased onto
 upstream main `d98b43f90`. Its public `go.mod replace` resolves published
-plan9asm head `0dad3b63`; no local path or invented pseudo-version is committed.
-Publish the reviewed next plan9asm batch before updating that pin, then rerun
-the actual public-pinned compiler.
+plan9asm head `0dad3b63` in published llgo source `033a81c0`. The local next batch
+resolves the actual public `47ea649d` version and passes module checksum checks;
+no local path or invented pseudo-version is committed. Rerun the actual
+public-pinned compiler after the reviewed bridge and guard commits are integrated.
 
 The nested `test/asm` module has exact CRC32, huff0, go-hex, websocket,
 modernc/libc Uint128 and purego regressions. Dedicated Linux and Darwin jobs
@@ -105,6 +123,14 @@ public-pin evidence. Purego needs a native C/g0/callback/address-table contract,
 not an invented Go declaration or suppressed standard-library assembly.
 
 The next llgo batch repairs the cold replacement installer lookup, formatting
-and unnecessarily patch-specific fixture module minima. Windows include-path
-diagnostics preserve the failing directory/stage without weakening symlink
-guards; the actual missing-directory cause remains to be established from CI.
+and unnecessarily patch-specific fixture module minima. Those repairs are
+published; current Mac/self-host/Windows-ARM64-cross failures still expose the
+R26 contract. The reviewed local bridge has original-source and typed-carrier
+oracles, but its provenance, bounded-process and global-name collision guards
+must complete fresh public-pinned validation before publication.
+
+Windows include-path diagnostics preserve the failing directory/stage without
+weakening symlink guards. Valid quoted Windows include fixtures are corrected;
+the actual GOROOT canonicalization/header failure remains unresolved. A small
+native Windows source-path probe runs separately in the allowed fork without
+canceling the active full CI. Purego's native contract remains unfinished.
