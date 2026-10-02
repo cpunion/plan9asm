@@ -46,6 +46,7 @@ type discoveryOrdinarySelectionPlan struct {
 	Targets            []string                        `json:"targets"`
 	ReleaseTags        []string                        `json:"release_tags"`
 	ToolTags           []string                        `json:"tool_tags"`
+	TestedAsmFiles     []string                        `json:"tested_asm_files,omitempty"`
 	Sources            []ordinarySelectionSource       `json:"sources"`
 	Directories        []ordinarySelectionDirectory    `json:"directories"`
 	Decisions          []ordinarySelectionDecision     `json:"decisions"`
@@ -93,7 +94,11 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 	if err != nil {
 		return nil, err
 	}
-	decisions, _, err := replayOrdinarySelection(plan, candidate.AsmFiles)
+	scope, err := ordinarySelectionTestedAssembly(plan, candidate.AsmFiles)
+	if err != nil {
+		return nil, err
+	}
+	decisions, _, err := replayOrdinarySelection(plan, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +110,7 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 // stability rechecks need only these inputs, not a second host-context replay.
 func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
 	plan := &discoveryOrdinarySelectionPlan{
-		Protocol: ordinarySelectionProtocol, Module: candidate.Module, Version: candidate.Version,
+		Protocol: ordinarySelectionScopeProtocol, Module: candidate.Module, Version: candidate.Version,
 		GoVersion: runtime.Version(), Targets: uniqueSortedDiscoveryStrings(targets),
 		ReleaseTags: append([]string(nil), build.Default.ReleaseTags...),
 		ToolTags:    append([]string(nil), build.Default.ToolTags...),
@@ -196,6 +201,11 @@ func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir stri
 		input.HeaderSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(input.Header)))
 		plan.Sources = append(plan.Sources, input)
 	}
+	scope, err := deriveOrdinaryAssemblyScope(plan, candidate.AsmFiles)
+	if err != nil {
+		return nil, err
+	}
+	plan.TestedAsmFiles = scope
 	return plan, nil
 }
 
@@ -452,7 +462,7 @@ func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]
 // is executed. Every root and ancestor directory is explicit: the virtual "."
 // is a root package, never a dot-prefixed ignored directory.
 func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []string, actualProfiles ...*discoveryTargetFeatures) ([]ordinarySelectionDecision, map[nativeLayoutPlanKey]bool, error) {
-	if plan == nil || plan.Protocol != ordinarySelectionProtocol || len(plan.Targets) == 0 ||
+	if plan == nil || (plan.Protocol != ordinarySelectionProtocol && plan.Protocol != ordinarySelectionScopeProtocol) || len(plan.Targets) == 0 ||
 		len(plan.ReleaseTags) == 0 || len(asmFiles) == 0 ||
 		!equalDiscoveryStrings(plan.Targets, uniqueSortedDiscoveryStrings(plan.Targets)) {
 		return nil, nil, fmt.Errorf("missing or invalid ordinary source-selection protocol")
@@ -749,7 +759,11 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 		!discoverySHA256Pattern.MatchString(plan.ZipSHA256) {
 		return fmt.Errorf("ordinary source-selection proof lacks exact module ZIP/sum identity")
 	}
-	decisions, eligible, err := replayOrdinarySelection(plan, result.DiscoveredAsmFiles)
+	scope, err := discoveryResultAssemblyScope(result)
+	if err != nil {
+		return err
+	}
+	decisions, eligible, err := replayOrdinarySelection(plan, scope)
 	if err != nil {
 		return err
 	}
@@ -771,7 +785,7 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 		return fmt.Errorf("ordinary source-selection decisions disagree with exact source replay")
 	}
 	files, targetSet := make(map[string]bool), make(map[string]bool)
-	for _, file := range result.DiscoveredAsmFiles {
+	for _, file := range scope {
 		files[file] = true
 	}
 	for _, target := range targets {
@@ -829,7 +843,7 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 		!equalDiscoveryStrings(result.ApplicableAsmFiles, discoveryConfigurationAsmFiles(result.BuildConfigurations)) {
 		return fmt.Errorf("ordinary execution counts/file union disagree with source-selection proof")
 	}
-	targetNA, err := summarizeDiscoveryTargetSkips(discoveryCandidate{AsmFiles: result.DiscoveredAsmFiles}, result.NotApplicableItems)
+	targetNA, err := summarizeDiscoveryTargetSkips(discoveryCandidate{AsmFiles: scope}, result.NotApplicableItems)
 	if err != nil {
 		return err
 	}

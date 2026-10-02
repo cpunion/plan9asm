@@ -979,15 +979,28 @@ func collectAsmTasks(pkgs []*packages.Package, outDir string, exactAsmFiles []st
 			continue
 		}
 		seenPkg[p.PkgPath] = true
-		files := asmFilesOfPkg(p)
-		if len(allow) != 0 {
-			filtered := files[:0]
-			for _, file := range files {
-				if rel, ok := moduleRelativeAsmPath(p, file); ok && allow[rel] {
-					filtered = append(filtered, file)
+		var files []string
+		if len(allow) == 0 {
+			files = asmFilesOfPkg(p)
+		} else {
+			// An explicit profile scope must consume selected nonzero original
+			// files even when their only content is whitespace or comments.
+			// Only Go's actual selected OtherFiles can become tasks; the
+			// subsequent profile match and object proof remain mandatory.
+			for _, file := range p.OtherFiles {
+				if !isAsmFile(file) {
+					continue
+				}
+				rel, ok := moduleRelativeAsmPath(p, file)
+				if !ok || !allow[rel] {
+					continue
+				}
+				data, err := os.ReadFile(file)
+				if err != nil || len(data) != 0 {
+					files = append(files, file)
 				}
 			}
-			files = filtered
+			sort.Strings(files)
 		}
 		if len(files) == 0 {
 			continue

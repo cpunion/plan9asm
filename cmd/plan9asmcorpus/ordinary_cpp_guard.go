@@ -29,7 +29,11 @@ func captureDiscoveryOrdinaryCPP(ctx context.Context, candidate discoveryCandida
 	if err := verifyOrdinarySelectionZIP(plan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
 		return nil, "", err
 	}
-	_, eligible, err := replayOrdinarySelection(plan, candidate.AsmFiles)
+	scope, err := ordinarySelectionTestedAssembly(plan, candidate.AsmFiles)
+	if err != nil {
+		return nil, "", err
+	}
+	_, eligible, err := replayOrdinarySelection(plan, scope)
 	if err != nil {
 		return nil, "", err
 	}
@@ -53,7 +57,7 @@ func captureDiscoveryOrdinaryCPP(ctx context.Context, candidate discoveryCandida
 		return nil, "", err
 	}
 	plan.CPPInputs = inputs
-	if err := rejectDiscoveryUnconsumedCPPProfiles(ctx, plan, candidate.AsmFiles, dir, env); err != nil {
+	if err := rejectDiscoveryUnconsumedCPPProfiles(ctx, plan, scope, dir, env); err != nil {
 		return nil, "", err
 	}
 	return plan, actual["GOROOT"], nil

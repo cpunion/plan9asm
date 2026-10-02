@@ -30,6 +30,10 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err := verifyOrdinarySelectionZIP(plan, download.Zip, download.Path, download.Version, download.Sum); err != nil {
 		return nil, nil, nil, nil, "", err
 	}
+	scope, err := ordinarySelectionTestedAssembly(plan, candidate.AsmFiles)
+	if err != nil {
+		return nil, nil, nil, nil, "", err
+	}
 	binary, err := exec.LookPath("go")
 	if err != nil {
 		return nil, nil, nil, nil, "", err
@@ -45,11 +49,11 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	} else if err := os.Mkdir(markers, 0700); err != nil {
 		return nil, nil, nil, nil, "", err
 	}
-	profiles, err := captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, candidate.AsmFiles, cache)
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, scope, cache)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
-	_, eligible, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+	_, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
@@ -83,11 +87,11 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			if err := verifyDiscoveryCPPModuleZIP(plan.CPPInputs, plan, download.Zip); err != nil {
 				return nil, nil, nil, nil, "", err
 			}
-			profiles, err = captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, candidate.AsmFiles, cache)
+			profiles, err = captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, scope, cache)
 			if err != nil {
 				return nil, nil, nil, nil, "", err
 			}
-			_, selected, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+			_, selected, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 			if err != nil {
 				return nil, nil, nil, nil, "", err
 			}
@@ -104,7 +108,7 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			return nil, nil, nil, nil, "", fmt.Errorf("source/CPP/profile registration did not reach its bounded fixed point (not N/A)")
 		}
 	}
-	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}

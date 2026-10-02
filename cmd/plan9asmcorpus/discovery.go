@@ -559,7 +559,13 @@ func auditDiscoveryCorpusReports(
 					return fmt.Errorf("%s: result %s native-layout skip differs from the pinned manifest", filePath, key)
 				}
 			}
-			targetSkips, err := summarizeDiscoveryTargetSkips(candidate, result.NotApplicableItems)
+			scope, err := discoveryResultAssemblyScope(result)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filePath, err)
+			}
+			testedCandidate := candidate
+			testedCandidate.AsmFiles = scope
+			targetSkips, err := summarizeDiscoveryTargetSkips(testedCandidate, result.NotApplicableItems)
 			if err != nil {
 				return fmt.Errorf("%s: %w", filePath, err)
 			}
@@ -2095,8 +2101,12 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 }
 
 func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) error {
-	discovered := make(map[string]bool, len(result.DiscoveredAsmFiles))
-	for _, asmFile := range result.DiscoveredAsmFiles {
+	scope, err := discoveryResultAssemblyScope(result)
+	if err != nil {
+		return err
+	}
+	discovered := make(map[string]bool, len(scope))
+	for _, asmFile := range scope {
 		discovered[asmFile] = true
 	}
 	allowedKinds := map[string]bool{
@@ -2316,6 +2326,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			FeatureProfiles:          ordinaryProfiles,
 		}, nil, buildConfigurations, nil
 	}
+	testedCandidate := candidate
+	if ordinaryPlan != nil {
+		testedCandidate.AsmFiles, err = ordinarySelectionTestedAssembly(ordinaryPlan, candidate.AsmFiles)
+		if err != nil {
+			return matrixReport{}, nil, buildConfigurations, err
+		}
+	}
 	embeddedAlias, hasEmbeddedAlias := cfg.embeddedAliases[candidate.exactKey()]
 	if hasEmbeddedAlias {
 		if err := prepareDiscoveryEmbeddedAlias(workDir, download, embeddedAlias); err != nil {
@@ -2427,7 +2444,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					validAsmFiles := append([]string(nil), group.AsmFiles...)
 					if err := vetErrors[index]; err != nil {
 						packageAsmFiles, packageErr := discoveryAsmDeclPackageFiles(
-							candidate, group, download.Dir, target, buildConfiguration.BuildTags,
+							testedCandidate, group, download.Dir, target, buildConfiguration.BuildTags,
 							profileObservation(activeProfile),
 						)
 						if packageErr != nil {
@@ -2436,7 +2453,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 						}
 						rejected, classifyErr := classifyDiscoveryAsmDeclFailure(packageAsmFiles, err)
 						foreignOnly := classifyErr != nil && discoveryAsmDeclOnlyForeignCandidateABI(
-							candidate.AsmFiles, packageAsmFiles, err,
+							testedCandidate.AsmFiles, packageAsmFiles, err,
 						)
 						if classifyErr != nil && !foreignOnly {
 							return fmt.Errorf("verify current Go asmdecl for %s on %s: %w", group.Pattern, target, classifyErr)

@@ -231,8 +231,20 @@ Duplicate, omitted or added scopes and forged empty remainder counts fail.
 The audited assembly ledger retains and revalidates the same proof; old native
 reports without it cannot be promoted.
 
-Ordinary source exclusions require `ordinary_selection_plan` with protocol
-`exact_source_matchfile_v1`. It captures de-duplicated source SHA-256 and actual
+Ordinary source exclusions require `ordinary_selection_plan`. Current runs use
+`exact_source_matchfile_v2`, whose `tested_asm_files` closes the immutable
+Discovery inventory over all nonzero-byte `.s` siblings in those exact package
+directories. Readers independently derive this canonical union from complete
+ZIP-bound directory/source hashes before replaying target/profile/tag selection.
+They never add unrelated packages or change `discovered_asm_files`. Zero-byte
+siblings remain actual Go-selection inputs without gaining translation counts;
+nonempty comments, whitespace and macro-empty sources require their own CPP,
+actual Go symbol-free object/listing and LLVM object proofs. Explicit translator
+file scopes cannot inject a file absent from Go's actual selected source set.
+Historical `exact_source_matchfile_v1` retains its original inventory-only scope;
+it cannot claim or be relabeled as v2 sibling coverage.
+
+The plan captures de-duplicated source SHA-256 and actual
 constraint/package-clause inputs, complete package/ancestor directory names,
 the exact module ZIP SHA-256 and Go h1 identity, and every target/tag decision.
 Related directory files (including assembly headers) also retain byte hashes;

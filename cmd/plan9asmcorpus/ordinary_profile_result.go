@@ -31,7 +31,11 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err != nil {
 		return err
 	}
-	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, result.DiscoveredAsmFiles, profiles)
+	scope, err := discoveryResultAssemblyScope(result)
+	if err != nil {
+		return err
+	}
+	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
 		return err
 	}
@@ -98,7 +102,7 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		}
 	}
 	abi := make(map[discoveryProfileScope]bool)
-	targetItems, err := summarizeDiscoveryTargetSkips(discoveryCandidate{Module: result.Module, AsmFiles: result.DiscoveredAsmFiles}, result.NotApplicableItems)
+	targetItems, err := summarizeDiscoveryTargetSkips(discoveryCandidate{Module: result.Module, AsmFiles: scope}, result.NotApplicableItems)
 	if err != nil {
 		return err
 	}
