@@ -355,6 +355,11 @@ files, missing authentication or noncanonical synthesized directives fail.
 Checksum metadata reads are bounded and read-only (or fetched in memory from
 the official service), with no cache mutation. Cross-host comparison first
 authenticates both checkpoints and retains their exact record/metadata identity.
+An explicitly configured local `file://` module proxy may also supply cached
+SumDB lookups and tiles. Cache hits remain untrusted until the public signature
+and exact Merkle inclusion are checked. Malformed cache entries fail instead of
+being hidden by another cache or network fallback. Each candidate owns its
+`GOPATH` as well as module/build caches, including SumDB checkpoint writes.
 `no_current_go_package` describes ordinary non-test source pairing only; it
 does not prove that `go list -test` could not select a test-only package.
 The producer checks captured files and directory names against that ZIP;

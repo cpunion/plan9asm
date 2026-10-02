@@ -2693,6 +2693,7 @@ func isolatedDiscoveryModuleEnvironment(base []string, workDir, sharedCache, ups
 		}
 	}
 	return replaceEnv(base, map[string]string{
+		"GOPATH":      filepath.Join(workDir, "gopath"),
 		"GOMODCACHE":  filepath.Join(workDir, "module-cache"),
 		"GOCACHE":     filepath.Join(workDir, "build-cache"),
 		"GOCACHEPROG": "",

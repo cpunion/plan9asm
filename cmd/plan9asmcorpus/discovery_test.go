@@ -336,7 +336,7 @@ func TestDiscoveryOperationReportsItsOwnTimeout(t *testing.T) {
 func TestDiscoveryCandidateModuleCacheIsPrivateWithReadOnlySharedProxy(t *testing.T) {
 	work := filepath.Join(t.TempDir(), "candidate")
 	shared := filepath.Join(t.TempDir(), "shared cache")
-	env := isolatedDiscoveryModuleEnvironment([]string{"KEEP=yes", "GOMODCACHE=wrong", "GOPROXY=wrong"}, work, shared, "https://proxy.golang.org,direct")
+	env := isolatedDiscoveryModuleEnvironment([]string{"KEEP=yes", "GOMODCACHE=wrong", "GOPATH=borrowed-user-gopath", "GOPROXY=wrong"}, work, shared, "https://proxy.golang.org,direct")
 	values := map[string]string{}
 	for _, entry := range env {
 		key, value, _ := strings.Cut(entry, "=")
@@ -344,6 +344,9 @@ func TestDiscoveryCandidateModuleCacheIsPrivateWithReadOnlySharedProxy(t *testin
 	}
 	if values["GOMODCACHE"] != filepath.Join(work, "module-cache") {
 		t.Fatalf("shared writable cache: %v", env)
+	}
+	if values["GOPATH"] != filepath.Join(work, "gopath") {
+		t.Fatalf("SumDB checkpoint is outside owned workspace: %v", env)
 	}
 	if values["GOCACHE"] != filepath.Join(work, "build-cache") || values["GOCACHEPROG"] != "" {
 		t.Fatalf("shared writable build cache: %v", env)

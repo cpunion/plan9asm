@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,12 +25,12 @@ func captureDiscoveryProxyGoMod(ctx context.Context, plan *discoveryOrdinarySele
 	if download.Path != plan.Module || download.Version != plan.Version || download.GoModSum == "" || !filepath.IsAbs(download.GoMod) {
 		return fmt.Errorf("legacy proxy metadata lacks exact Go download identity and GoModSum")
 	}
-	output, _, err := runDiscoveryMachineCommand(ctx, dir, env, "go", "env", "-json", "GOMODCACHE")
+	output, _, err := runDiscoveryMachineCommand(ctx, dir, env, "go", "env", "-json", "GOMODCACHE", "GOPROXY")
 	if err != nil {
 		return err
 	}
 	var actual map[string]string
-	if err := json.Unmarshal(output, &actual); err != nil || len(actual) != 1 || !filepath.IsAbs(actual["GOMODCACHE"]) {
+	if err := json.Unmarshal(output, &actual); err != nil || len(actual) != 2 || !filepath.IsAbs(actual["GOMODCACHE"]) {
 		return fmt.Errorf("invalid actual metadata cache observation")
 	}
 	escapedModule, err := module.EscapePath(plan.Module)
@@ -57,7 +58,10 @@ func captureDiscoveryProxyGoMod(ctx context.Context, plan *discoveryOrdinarySele
 	if err != nil {
 		return fmt.Errorf("read independent proxy go.mod: %w", err)
 	}
-	reader := &discoverySumDBReader{Context: ctx, Cache: filepath.Join(cache, "sumdb", "sum.golang.org")}
+	reader, err := newDiscoverySumDBReader(ctx, actual["GOMODCACHE"], actual["GOPROXY"])
+	if err != nil {
+		return err
+	}
 	lookup, err := reader.read("lookup/"+escapedModule+"@"+escapedVersion, 16<<10)
 	if err != nil {
 		return err
@@ -117,8 +121,52 @@ func validateDiscoveryProxyGoMod(plan *discoveryOrdinarySelectionPlan) error {
 // Cache reads are read-only; fetched bytes stay in memory and are authenticated
 // before being recorded. No user/global cache is written or cleaned.
 type discoverySumDBReader struct {
-	Context context.Context
-	Cache   string
+	Context        context.Context
+	Cache          string
+	Client         *http.Client
+	readonlyCaches []string
+}
+
+func newDiscoverySumDBReader(ctx context.Context, moduleCache, proxy string) (*discoverySumDBReader, error) {
+	if !filepath.IsAbs(moduleCache) || len(proxy) > 64<<10 {
+		return nil, fmt.Errorf("invalid actual checksum cache configuration")
+	}
+	reader := &discoverySumDBReader{
+		Context: ctx,
+		Cache:   filepath.Join(moduleCache, "cache", "download", "sumdb", "sum.golang.org"),
+	}
+	seen := map[string]bool{reader.Cache: true}
+	for _, item := range strings.FieldsFunc(proxy, func(char rune) bool { return char == ',' || char == '|' }) {
+		location, err := url.Parse(item)
+		if err != nil {
+			return nil, fmt.Errorf("invalid actual module proxy: %w", err)
+		}
+		if location.Scheme != "file" {
+			continue
+		}
+		if location.Host != "" || location.User != nil || location.RawQuery != "" || location.Fragment != "" || location.Opaque != "" {
+			return nil, fmt.Errorf("checksum reuse requires an absolute local file proxy")
+		}
+		cachePath := filepath.FromSlash(location.Path)
+		// file:///C:/... is Go's local Windows file-proxy spelling. Keep
+		// native drive/UNC handling in filepath rather than accepting hosts.
+		if filepath.Separator == '\\' && len(cachePath) >= 3 && cachePath[0] == '\\' && cachePath[2] == ':' {
+			cachePath = cachePath[1:]
+		}
+		if !filepath.IsAbs(cachePath) {
+			return nil, fmt.Errorf("checksum reuse requires an absolute local file proxy")
+		}
+		cache := filepath.Join(cachePath, "sumdb", "sum.golang.org")
+		if seen[cache] {
+			continue
+		}
+		seen[cache] = true
+		reader.readonlyCaches = append(reader.readonlyCaches, cache)
+		if len(reader.readonlyCaches) > 8 {
+			return nil, fmt.Errorf("checksum cache roots exceed their explicit bound")
+		}
+	}
+	return reader, nil
 }
 
 func (reader *discoverySumDBReader) Height() int                     { return 8 }
@@ -136,11 +184,11 @@ func (reader *discoverySumDBReader) ReadTiles(tiles []tlog.Tile) ([][]byte, erro
 		if reader.Context == nil || reader.Context.Err() != nil {
 			return nil, fmt.Errorf("checksum tile request has no live context")
 		}
-		data, err := readDiscoveryChecksumFile(filepath.Join(reader.Cache, filepath.FromSlash(tile.Path())), tile.W*tlog.HashSize)
+		data, err := reader.readCache(tile.Path(), tile.W*tlog.HashSize)
 		if os.IsNotExist(err) && tile.W < 256 {
 			full := tile
 			full.W = 256
-			data, err = readDiscoveryChecksumFile(filepath.Join(reader.Cache, filepath.FromSlash(full.Path())), 256*tlog.HashSize)
+			data, err = reader.readCache(full.Path(), 256*tlog.HashSize)
 			if err == nil && len(data) == 256*tlog.HashSize {
 				data = data[:tile.W*tlog.HashSize]
 			}
@@ -163,7 +211,7 @@ func (reader *discoverySumDBReader) read(name string, limit int) ([]byte, error)
 	if reader.Context == nil || reader.Context.Err() != nil || strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
 		return nil, fmt.Errorf("invalid bounded checksum source read")
 	}
-	data, err := readDiscoveryChecksumFile(filepath.Join(reader.Cache, filepath.FromSlash(name)), limit)
+	data, err := reader.readCache(name, limit)
 	if err == nil {
 		return data, nil
 	}
@@ -174,7 +222,11 @@ func (reader *discoverySumDBReader) read(name string, limit int) ([]byte, error)
 	if err != nil {
 		return nil, err
 	}
-	response, err := http.DefaultClient.Do(request)
+	client := reader.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	response, err := client.Do(request)
 	if err != nil {
 		return nil, fmt.Errorf("read signed checksum source: %w", err)
 	}
@@ -192,7 +244,26 @@ func (reader *discoverySumDBReader) read(name string, limit int) ([]byte, error)
 	return data, nil
 }
 
+func (reader *discoverySumDBReader) readCache(name string, limit int) ([]byte, error) {
+	var missing error
+	for _, cache := range append([]string{reader.Cache}, reader.readonlyCaches...) {
+		data, err := readDiscoveryChecksumFile(filepath.Join(cache, filepath.FromSlash(name)), limit)
+		if !os.IsNotExist(err) {
+			return data, err // Bad cache bytes or access errors must not be hidden.
+		}
+		missing = err
+	}
+	return nil, missing
+}
+
 func readDiscoveryChecksumFile(name string, limit int) ([]byte, error) {
+	info, err := os.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > int64(limit) {
+		return nil, fmt.Errorf("checksum cache source is not a bounded regular file")
+	}
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
