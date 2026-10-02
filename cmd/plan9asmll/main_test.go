@@ -1510,7 +1510,7 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		"VSMAXV", "VSMINV", "VUMAXV", "VUMINV",
 		"VFMAXV", "VFMINV", "VFMAXNMV", "VFMINNMV",
 		"VLD1", "VLD2", "VLD3", "VLD4", "VLD1R", "VLD2R", "VLD3R", "VLD4R", "VST1", "VST2", "VST3", "VST4",
-		"VMOVS", "VMOVD", "VMOVQ", "VDUP", "VADD", "VSUB",
+		"VMOV", "VMOVS", "VMOVD", "VMOVQ", "VDUP", "VADD", "VSUB",
 		"VCLS", "VCLZ",
 		"VEXT",
 		"VEOR3", "VBCAX", "VRAX1", "VXAR",

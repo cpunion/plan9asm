@@ -43,6 +43,9 @@ func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 // Vector/NEON lowering for a small subset used by stdlib asm.
 // We model V0..V31 as <16 x i8>.
 func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerARM64VectorMove(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerARM64SignedLaneExtract(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -273,137 +276,6 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 			elems[i] = fmt.Sprintf("i8 %d", value)
 		}
 		return true, false, c.storeVReg(ins.Args[1].Reg, "<"+strings.Join(elems, ", ")+">")
-
-	case "VMOV":
-		if strings.ToUpper(string(ins.Op)) != "VMOV" {
-			return true, false, fmt.Errorf("arm64 VMOV has no opcode suffix: %q", ins.Raw)
-		}
-		// Patterns used by stdlib:
-		// - VMOV Rn, Vm.B16      (broadcast low byte)
-		// - VMOV Vm.D[0], Rn     (extract low 64-bit)
-		if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("arm64 VMOV expects reg, reg: %q", ins.Raw)
-		}
-		src, dst := ins.Args[0].Reg, ins.Args[1].Reg
-
-		if idx, ok := arm64ParseVReg(dst); ok {
-			_ = idx
-			// GPR -> V (broadcast).
-			if _, ok2 := arm64ParseVReg(src); ok2 {
-				// V -> V copy.
-				v, err := c.loadVReg(src)
-				if err != nil {
-					return true, false, err
-				}
-				return true, false, c.storeVReg(dst, v)
-			}
-			if k, lane, laneOK := arm64ParseVRegLane(dst); laneOK {
-				// GPR -> V lane insert.
-				rv, err := c.loadRegisterWidth(src, map[byte]int{'B': 8, 'H': 16, 'S': 32, 'D': 64}[k])
-				if err != nil {
-					return true, false, err
-				}
-				v, err := c.loadVReg(dst)
-				if err != nil {
-					return true, false, err
-				}
-				switch k {
-				case 'D':
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", bc, v)
-					insv := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> %%%s, i64 %s, i32 %d\n", insv, bc, rv, lane)
-					out := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", out, insv)
-					return true, false, c.storeVReg(dst, "%"+out)
-				case 'S':
-					w := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", w, rv)
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", bc, v)
-					insv := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i32> %%%s, i32 %%%s, i32 %d\n", insv, bc, w, lane)
-					out := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", out, insv)
-					return true, false, c.storeVReg(dst, "%"+out)
-				case 'H':
-					h := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i16\n", h, rv)
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <8 x i16>\n", bc, v)
-					insv := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = insertelement <8 x i16> %%%s, i16 %%%s, i32 %d\n", insv, bc, h, lane)
-					out := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i16> %%%s to <16 x i8>\n", out, insv)
-					return true, false, c.storeVReg(dst, "%"+out)
-				case 'B':
-					b := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i8\n", b, rv)
-					insv := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = insertelement <16 x i8> %s, i8 %%%s, i32 %d\n", insv, v, b, lane)
-					return true, false, c.storeVReg(dst, "%"+insv)
-				}
-			}
-			arrangement, ok := parseARM64VectorArrangement(dst)
-			if !ok || !arm64VDUPArrangementAllowed(arrangement) || !isARM64GeneralOrZeroReg(src) {
-				return true, false, fmt.Errorf("arm64 VMOV requires a Go case-82 arranged vector destination: %q", ins.Raw)
-			}
-			return true, false, c.lowerARM64GPVectorDuplicate(src, dst, arrangement)
-		}
-
-		// V -> GPR (lane extract).
-		if _, ok := arm64ParseVReg(src); ok {
-			if k, lane, laneOK := arm64ParseVRegLane(src); laneOK {
-				v, err := c.loadVReg(src)
-				if err != nil {
-					return true, false, err
-				}
-				switch k {
-				case 'D':
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", bc, v)
-					e := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i32 %d\n", e, bc, lane)
-					return true, false, c.storeReg(dst, "%"+e)
-				case 'S':
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", bc, v)
-					e := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = extractelement <4 x i32> %%%s, i32 %d\n", e, bc, lane)
-					z := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, e)
-					return true, false, c.storeReg(dst, "%"+z)
-				case 'H':
-					bc := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <8 x i16>\n", bc, v)
-					e := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = extractelement <8 x i16> %%%s, i32 %d\n", e, bc, lane)
-					z := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = zext i16 %%%s to i64\n", z, e)
-					return true, false, c.storeReg(dst, "%"+z)
-				case 'B':
-					e := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = extractelement <16 x i8> %s, i32 %d\n", e, v, lane)
-					z := c.newTmp()
-					fmt.Fprintf(c.b, "  %%%s = zext i8 %%%s to i64\n", z, e)
-					return true, false, c.storeReg(dst, "%"+z)
-				}
-			}
-			// VMOV Vn, Rm: use low 64-bit lane by default.
-			if !strings.Contains(strings.ToUpper(string(src)), ".") {
-				v, err := c.loadVReg(src)
-				if err != nil {
-					return true, false, err
-				}
-				bc := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", bc, v)
-				e := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = extractelement <2 x i64> %%%s, i32 0\n", e, bc)
-				return true, false, c.storeReg(dst, "%"+e)
-			}
-			return true, false, fmt.Errorf("arm64 VMOV unsupported vreg lane: %q", ins.Raw)
-		}
-		return true, false, fmt.Errorf("arm64 VMOV unsupported: %q", ins.Raw)
 
 	case "VEOR":
 		// VEOR Va, Vb, Vd
