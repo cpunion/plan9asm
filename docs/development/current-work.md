@@ -19,12 +19,13 @@ Skipped downstream root, standard-library and benchmark jobs did not pass.
 Preserve the failure-first scheduling and all 64 required shards.
 
 Published repair source `47ea649d` has a new fork run `36942816488`; its policy
-preflight passed and priority corpus shards are running. It is not a full CI
-pass. Its assembly ledger was automatically reset to pending because old
+preflight passed, but all six priority corpus shards and their aggregate failed.
+The run is complete; downstream jobs were skipped, not passed. Its assembly
+ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-raw-frame-integration-20261002`, inheriting
-`codex/pr40-sm3-profile-integration-20261002`. Freeze a clean final batch before
+Development branch: `codex/pr40-family-scope-integration-20261002`. Integrated
+repairs are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
 also change the source fingerprint. Put progress/funnel tables in the PR body,
 not here; derive them with the shared report readers.
@@ -55,6 +56,14 @@ binding; actual ordinary-package roles for test-named assembly; and ZIP-bound
 zero-byte selected siblings. Nonempty, whitespace/comment and macro-empty
 assembly still requires its normal Go/CPP/LLVM proof.
 
+The local batch also preserves complete declaration-backed code-address roles
+through source aliases, x86 ID-flag state and operand-width POPF semantics, and
+typed ARM64 call/result transport across the independent GP and FP banks. Live
+private affine scratch that is neither an argument nor a result no longer
+requires an artificial physical clear; unknown/escaping transport stays strict.
+Focused original-Go, LLVM-object and runtime oracles exist, but do not substitute
+for full current-head corpus and CI validation.
+
 The complete raw ARM64 SM3 family has exhaustive decoding, independent LLVM-MC
 encodings, alias/target object tests and independent Go/LLVM runtime oracles.
 The original gmsm candidate passed its default-target production replay at
@@ -80,18 +89,23 @@ The official opcode classification gate is not complete standard-library
 object coverage. Dynamic reflect FP frames, native runtime entries/context
 switches and private ABI transport remain real contracts to implement.
 Provisional native-byte-layout/JIT exceptions require review before promotion.
-Raw private-SP frames in go-krypto are a separate bounded-proof investigation,
-not permission to accept arbitrary raw stack effects. The reviewed next batch
-adds the physical-SP/R29/private-pointer-spill proof and complete raw scalar,
-GP/FP-pair memory forms, including LDPSW writeback. Frozen family and original
-Go/LLVM runtime oracles passed at `a1314b75`; the complete original library replay
-and integrated-source validation remain required.
+The physical-SP/R29/private-pointer-spill proof and complete raw scalar,
+GP/FP-pair memory forms, including LDPSW writeback, are integrated. Frozen family
+and original Go/LLVM runtime oracles are separate evidence; complete original
+library replays and integrated-source validation remain required. Never accept
+arbitrary raw stack effects based on a private-frame name or package whitelist.
+
+The remaining Snappy ARM64 work proves ordinary indexed private table bounds,
+counted clear loops and typed continuation stores at each instruction. It must
+preserve saved LR/SP0, mixed-origin and escaping-address guards. Diagnostic
+objects or programs from an uncommitted proof are not a frozen corpus pass.
 
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
 processes. Existing skips are counted separately. It does not cover other
-packages, nested CLI modules or corpus gates. Frozen `47ea649d` root verification
-is running with tool `c8054cd4`; no full-suite pass is claimed. The tool's Linux
+packages, nested CLI modules or corpus gates. Historical `47ea649d` root
+verification is not proof of this development branch; require a fresh complete
+report. The tool's Linux
 cold-fixture timeout was corrected and genuinely rerun at `2259cf73`, without
 changing the production suite deadline or discarding the earlier failure.
 
@@ -107,8 +121,11 @@ Fork Draft [PR 259](https://github.com/cpunion/llgo/pull/259) is rebased onto
 upstream main `d98b43f90`. Its public `go.mod replace` resolves published
 plan9asm head `0dad3b63` in published llgo source `033a81c0`. The local next batch
 resolves the actual public `47ea649d` version and passes module checksum checks;
-no local path or invented pseudo-version is committed. Rerun the actual
-public-pinned compiler after the reviewed bridge and guard commits are integrated.
+no local path or invented pseudo-version is committed. Local llgo `fafa83bf6`
+and newer plan9asm APIs have been tested through ignored diagnostic modfiles.
+They are not the published compiler. Publish and verify the allowed plan9asm
+fork head before updating llgo's exact public pin; never commit a local path or
+claim a stale public pin builds the new API.
 
 The nested `test/asm` module has exact CRC32, huff0, go-hex, websocket,
 modernc/libc Uint128 and purego regressions. Dedicated Linux and Darwin jobs
@@ -130,7 +147,25 @@ oracles, but its provenance, bounded-process and global-name collision guards
 must complete fresh public-pinned validation before publication.
 
 Windows include-path diagnostics preserve the failing directory/stage without
-weakening symlink guards. Valid quoted Windows include fixtures are corrected;
-the actual GOROOT canonicalization/header failure remains unresolved. A small
-native Windows source-path probe runs separately in the allowed fork without
-canceling the active full CI. Purego's native contract remains unfinished.
+weakening symlink guards. Valid quoted Windows include fixtures are corrected.
+The independent native Windows canonical-source probe passed; it does not
+prove the full compiler CI or other targets. Purego's native contract remains
+unfinished.
+
+## Independent runtime batch work
+
+The separate assembly compatibility repository owns public API calls,
+original-Go baselines, final-link symbols and execution. Its exact per-case
+workspaces avoid central-module MVS upgrades. Reviewed family bindings reuse
+independent references without duplicating probe bodies; bounded workers and
+one collector retain sibling failures and exact source/tool provenance.
+Authenticated legacy ZIPs use official proxy metadata plus the complete original
+entry map, never an invented source `go.mod`.
+
+Broad runtime tests still need an appropriate native ISA environment. An
+independent original-Go MULX carry-preservation failure in Docker/Rosetta is
+execution-environment evidence, not an ordinary instruction skip or permission
+to change BN curve expectations. Keep masked/QEMU diagnostics separate.
+Remove unused declared-module downloads using actual selected package/test
+closures, not weaker source guards. These runtime results do not promote the
+plan9asm instruction/object ledger or prove every assembly file in a module.
