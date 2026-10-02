@@ -40,6 +40,11 @@ type NativeOptions struct {
 	GOOS, GOARCH string
 	PackagePath  string
 	Imports      map[string]string
+	// CodeEntries binds source-native, bare TEXT address tokens to distinct
+	// object symbols. It is not a Go/C signature. Only explicit zero-frame,
+	// NOFRAME native import tail stubs qualify; all other bare TEXT stays on
+	// the declaration-driven path. The default does not bind any entry.
+	CodeEntries map[string]string
 }
 
 // SupportsNativeTarget reports implemented instruction/object-format pairs.
@@ -60,7 +65,11 @@ func TranslateNativeSource(src []byte, opts NativeOptions) (string, []NativeData
 		if err := e.functionLabels(fn, i); err != nil {
 			return "", nil, err
 		}
-		fmt.Fprintf(&out, ".text\n.p2align 2\n%s:\n", e.funcs[fn.Sym])
+		out.WriteString(".text\n.p2align 2\n")
+		if _, bound := opts.CodeEntries[fn.Sym]; bound {
+			fmt.Fprintf(&out, ".globl %s\n", e.funcs[fn.Sym])
+		}
+		fmt.Fprintf(&out, "%s:\n", e.funcs[fn.Sym])
 		if opts.GOOS == "linux" {
 			fmt.Fprintf(&out, ".type %s, @function\n", e.funcs[fn.Sym])
 		}
@@ -134,6 +143,9 @@ func prepareNativeSource(src []byte, opts NativeOptions) (*File, *nativeEmitter,
 	if len(f.Funcs) == 0 {
 		return nil, nil, nil, fmt.Errorf("native assembly requires TEXT")
 	}
+	if err := validateNativeCodeBindings(f, opts); err != nil {
+		return nil, nil, nil, err
+	}
 	e := nativeEmitter{target: opts, funcs: map[string]string{}, globals: map[string]string{}, imports: imports}
 	for name, alias := range imports {
 		if !nativeName.MatchString(name) || !nativeName.MatchString(alias) {
@@ -142,13 +154,22 @@ func prepareNativeSource(src []byte, opts NativeOptions) (*File, *nativeEmitter,
 	}
 	for i, fn := range f.Funcs {
 		name := strings.TrimSuffix(fn.Sym, "<>")
-		if name == fn.Sym || !nativeName.MatchString(name) {
+		object, bound := opts.CodeEntries[fn.Sym]
+		if !bound && (name == fn.Sym || !nativeName.MatchString(name)) {
 			return nil, nil, nil, fmt.Errorf("native TEXT must be file-local: %s", fn.Sym)
+		}
+		if bound {
+			if err := validateNativeCodeEntry(fn, opts); err != nil {
+				return nil, nil, nil, err
+			}
 		}
 		if _, ok := e.funcs[fn.Sym]; ok {
 			return nil, nil, nil, fmt.Errorf("duplicate native TEXT %s", fn.Sym)
 		}
 		e.funcs[fn.Sym] = fmt.Sprintf("Lnative_func_%d", i)
+		if bound {
+			e.funcs[fn.Sym] = strconv.Quote(e.prefix() + object)
+		}
 		parts := strings.Split(fn.Instrs[0].Raw, ",")
 		if len(parts) != 3 || (strings.TrimSpace(parts[2]) != "$0" && strings.TrimSpace(parts[2]) != "$0-0") {
 			return nil, nil, nil, fmt.Errorf("native TEXT requires zero Go frame and arguments: %s", fn.Sym)
