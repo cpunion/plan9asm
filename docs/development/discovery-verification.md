@@ -305,6 +305,16 @@ Shared headers outside selected Go package directories retain their separate
 ZIP-bound CPP resource hashes. Their bytes may be consumed without inventing
 Go package membership; actual selected Go/assembly sources still require that
 membership proof, and conflicting resource/source snapshots fail closed.
+Relative tool includes follow that same fixed search: for example,
+`../../src/runtime/go_tls.h` from `GOROOT/pkg/include` has canonical
+`tool/src/runtime/go_tls.h` identity. An escaping preferred package candidate
+must have the structural `actual_go_fixed_include_search_miss_v1` witness,
+derived from its original literal operand and rechecked as absent before and
+after compiler phases. An existing, redirected or inaccessible outside-module
+candidate fails; it is never read or silently replaced. The canonical tool
+source remains regular, within actual GOROOT and byte-bound. Producer, CPP
+consumer and portable readers retain the exact search witness, not a reason
+string or an expanded include root.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical

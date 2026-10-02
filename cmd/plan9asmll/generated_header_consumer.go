@@ -58,6 +58,14 @@ func (consumer *featureConsumer) captureGeneratedMetadata(pkgs []*packages.Packa
 // Only active source-order includes enter this consumption graph. Raw branch
 // registration remains a separate producer obligation.
 func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines []string) ([]byte, map[string]string, error) {
+	if err := gotoolprofile.ValidateCPPIncludeSearch(consumer.Input, nil); err != nil {
+		return nil, nil, err
+	}
+	for _, miss := range consumer.Input.CPPIncludeSearchMisses {
+		if err := gotoolprofile.VerifyCPPPackageSearchMiss(miss, consumer.Dir, consumer.Root); err != nil {
+			return nil, nil, err
+		}
+	}
 	inputs := make(map[string]string)
 	bytesRead := 0
 	read := func(file string, generated bool) (string, []byte, error) {
@@ -102,8 +110,11 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 			}
 			name, err = filepath.Rel(consumer.Root, resolved)
 			name = filepath.ToSlash(name)
-			if err != nil || !strings.HasPrefix(name, "pkg/include/") {
+			if err != nil || !gotoolprofile.CPPLocalSource(name) {
 				return "", nil, fmt.Errorf("active CPP include lacks original module/tool provenance")
+			}
+			if _, err := gotoolprofile.CPPRegularSource(consumer.Root, name); err != nil {
+				return "", nil, err
 			}
 			id, wanted = "tool/"+name, consumer.Input.ToolSources[name]
 		}

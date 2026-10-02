@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 	"golang.org/x/mod/sumdb/dirhash"
 )
 
@@ -24,9 +25,10 @@ const discoveryCPPInputsProtocol = "exact_go_cpp_sources_v1"
 const discoveryDeferredCPPInputsProtocol = "exact_go_cpp_deferred_sources_v2"
 
 type discoveryCPPUnit struct {
-	File             string            `json:"file"`
-	Includes         map[string]string `json:"includes,omitempty"`
-	DeferredIncludes map[string]string `json:"deferred_includes,omitempty"`
+	File                string                                        `json:"file"`
+	Includes            map[string]string                             `json:"includes,omitempty"`
+	DeferredIncludes    map[string]string                             `json:"deferred_includes,omitempty"`
+	PackageSearchMisses map[string]gotoolprofile.CPPPackageSearchMiss `json:"package_search_misses,omitempty"`
 }
 
 type discoveryCPPInputs struct {
@@ -146,6 +148,19 @@ func captureDiscoveryCPPInputsMode(plan *discoveryOrdinarySelectionPlan, moduleD
 					continue
 				}
 				unit.Includes[key] = included
+				module, tool, candidateErr := gotoolprofile.CPPIncludeCandidates(unit.File, directive.Include)
+				if candidateErr != nil {
+					return candidateErr
+				}
+				if !gotoolprofile.CPPLocalSource(module) {
+					if unit.PackageSearchMisses == nil {
+						unit.PackageSearchMisses = make(map[string]gotoolprofile.CPPPackageSearchMiss)
+					}
+					unit.PackageSearchMisses[key] = gotoolprofile.CPPPackageSearchMiss{
+						Protocol: gotoolprofile.CPPPackageSearchMissProtocol, Assembly: unit.File,
+						Source: id, Include: directive.Include, PackageCandidate: module, ToolSource: tool,
+					}
+				}
 				if err := capture(included, depth+1); err != nil {
 					return err
 				}
@@ -219,17 +234,17 @@ func discoveryCPPRegularSource(root, name string) error {
 }
 
 func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (string, error) {
-	if filepath.IsAbs(include) || strings.Contains(include, "\\") {
-		return "", fmt.Errorf("CPP include is outside the explicitly bound module/tool namespace")
+	moduleFile, toolFile, err := gotoolprofile.CPPIncludeCandidates(asmFile, include)
+	if err != nil {
+		return "", err
 	}
 	// cmd/asm checks CWD, then its fixed top-level source Dir and -I list.
 	// cmd/go runs in the package Dir. Nested headers never change that Dir.
-	moduleFile := path.Clean(path.Join(path.Dir(asmFile), include))
-	if !ordinarySelectionLocalPath(moduleFile) {
-		return "", fmt.Errorf("CPP include escapes exact module source")
-	}
 	modulePath := filepath.Join(moduleDir, filepath.FromSlash(moduleFile))
-	if _, err := os.Stat(modulePath); err == nil {
+	if _, err := os.Lstat(modulePath); err == nil {
+		if !gotoolprofile.CPPLocalSource(moduleFile) {
+			return "", fmt.Errorf("preferred CPP include exists outside exact module source")
+		}
 		if err := discoveryCPPRegularSource(moduleDir, modulePath); err != nil {
 			return "", err
 		}
@@ -237,11 +252,13 @@ func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (str
 	} else if !os.IsNotExist(err) {
 		return "", err
 	}
-	toolFile := path.Clean(path.Join("pkg/include", include))
-	if !ordinarySelectionLocalPath(toolFile) {
+	if !gotoolprofile.CPPLocalSource(toolFile) {
 		return "", fmt.Errorf("CPP include escapes exact Go source")
 	}
-	if err := discoveryCPPRegularSource(goRoot, filepath.Join(goRoot, filepath.FromSlash(toolFile))); err != nil {
+	if _, err := gotoolprofile.CPPRegularSource(goRoot, toolFile); err != nil {
+		if !gotoolprofile.CPPLocalSource(moduleFile) {
+			return "", fmt.Errorf("outside-package include requires an existing bound Go source: %v", err)
+		}
 		return "", fmt.Errorf("unbound CPP/generated include %q (not N/A): %w", include, err)
 	}
 	return "tool/" + toolFile, nil
@@ -314,6 +331,9 @@ func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdin
 		}
 		roots[unit.File] = true
 		delete(wanted, unit.File)
+		if err := discoveryCPPValidateSearchMisses(inputs, unit); err != nil {
+			return err
+		}
 		if _, err := discoveryCPPUnitDirectives(inputs, unit, used); err != nil {
 			return err
 		}
@@ -354,12 +374,12 @@ func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUni
 			if !exists {
 				return fmt.Errorf("CPP include has no source-binding proof")
 			}
-			moduleFile := path.Clean(path.Join(path.Dir(unit.File), directive.Include))
-			toolFile := path.Clean(path.Join("pkg/include", directive.Include))
+			moduleFile, toolFile, candidateErr := gotoolprofile.CPPIncludeCandidates(unit.File, directive.Include)
 			// A package-local include wins before cmd/asm searches -I. Its
 			// unselected tool fallback must not reject a valid module path.
-			if !ordinarySelectionLocalPath(moduleFile) ||
-				target != "module/"+moduleFile && (!ordinarySelectionLocalPath(toolFile) || target != "tool/"+toolFile) {
+			if candidateErr != nil ||
+				(!gotoolprofile.CPPLocalSource(moduleFile) || target != "module/"+moduleFile) &&
+					(!gotoolprofile.CPPLocalSource(toolFile) || target != "tool/"+toolFile) {
 				return fmt.Errorf("CPP include binding is outside Go's fixed package/tool search")
 			}
 			includeKeys[key] = true
@@ -376,6 +396,41 @@ func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUni
 		return nil, fmt.Errorf("unexplained CPP include binding")
 	}
 	return directives, nil
+}
+
+func discoveryCPPValidateSearchMisses(inputs *discoveryCPPInputs, unit discoveryCPPUnit) error {
+	expected := make(map[string]gotoolprofile.CPPPackageSearchMiss)
+	for id, source := range inputs.Sources {
+		for index, directive := range source.Directives {
+			if directive.Kind != "include" {
+				continue
+			}
+			key := id + "#" + strconv.Itoa(index)
+			if unit.Includes[key] == "" {
+				continue
+			}
+			module, tool, err := gotoolprofile.CPPIncludeCandidates(unit.File, directive.Include)
+			if err != nil {
+				return err
+			}
+			if gotoolprofile.CPPLocalSource(module) {
+				continue
+			}
+			expected[key] = gotoolprofile.CPPPackageSearchMiss{
+				Protocol: gotoolprofile.CPPPackageSearchMissProtocol, Assembly: unit.File,
+				Source: id, Include: directive.Include, PackageCandidate: module, ToolSource: tool,
+			}
+		}
+	}
+	if len(expected) != len(unit.PackageSearchMisses) {
+		return fmt.Errorf("CPP unit lacks its complete fixed-search absence witness")
+	}
+	for key, miss := range expected {
+		if unit.PackageSearchMisses[key] != miss || unit.Includes[key] != "tool/"+miss.ToolSource {
+			return fmt.Errorf("CPP unit search absence differs from the exact source operand")
+		}
+	}
+	return nil
 }
 
 // The producer compares real exact ZIP bytes to both full SHA and compact
@@ -466,12 +521,12 @@ func verifyDiscoveryCPPModuleZIP(inputs *discoveryCPPInputs, plan *discoveryOrdi
 				if !selected {
 					continue
 				}
-				moduleFile := path.Clean(path.Join(path.Dir(unit.File), directive.Include))
-				if !ordinarySelectionLocalPath(moduleFile) {
-					return fmt.Errorf("CPP ZIP include escapes module")
+				moduleFile, toolFile, err := gotoolprofile.CPPIncludeCandidates(unit.File, directive.Include)
+				if err != nil {
+					return err
 				}
-				wanted := "tool/" + path.Clean(path.Join("pkg/include", directive.Include))
-				if zipFiles[moduleFile] != nil {
+				wanted := "tool/" + toolFile
+				if gotoolprofile.CPPLocalSource(moduleFile) && zipFiles[moduleFile] != nil {
 					wanted = "module/" + moduleFile
 				}
 				if target != wanted {
@@ -515,6 +570,11 @@ func verifyDiscoveryCPPInputsUnchanged(inputs *discoveryCPPInputs, moduleDir, go
 	// changing the old tool-header bytes. Recheck the entire resolution map,
 	// not only hashes of files which existed at the earlier snapshot.
 	for _, unit := range inputs.Units {
+		for _, miss := range unit.PackageSearchMisses {
+			if err := gotoolprofile.VerifyCPPPackageSearchMiss(miss, moduleDir, goRoot); err != nil {
+				return err
+			}
+		}
 		for id, source := range inputs.Sources {
 			for index, directive := range source.Directives {
 				if directive.Kind != "include" {

@@ -349,6 +349,17 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		input.TestDependencies = dependency
 	}
 	if plan.CPPInputs != nil {
+		seenMisses := make(map[string]bool)
+		for _, unit := range plan.CPPInputs.Units {
+			for _, miss := range unit.PackageSearchMisses {
+				key := miss.Assembly + "\x00" + miss.Source + "\x00" + miss.Include
+				if !seenMisses[key] {
+					seenMisses[key] = true
+					input.CPPIncludeSearchMisses = append(input.CPPIncludeSearchMisses, miss)
+				}
+			}
+		}
+		gotoolprofile.SortCPPIncludeSearch(input.CPPIncludeSearchMisses)
 		for id, source := range plan.CPPInputs.Sources {
 			if file, tool := strings.CutPrefix(id, "tool/"); tool {
 				input.ToolSources[file] = source.SHA256

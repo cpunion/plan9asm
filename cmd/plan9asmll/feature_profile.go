@@ -104,6 +104,7 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 			TestDependencySourceProtocol: input.TestDependencySourceProtocol,
 			CustomTags:                   append([]string(nil), tags...),
 			RegisteredAsmFiles:           append([]string(nil), input.RegisteredAsmFiles...),
+			CPPIncludeSearchMisses:       append([]gotoolprofile.CPPPackageSearchMiss(nil), input.CPPIncludeSearchMisses...),
 		},
 	}
 	if err := consumer.verifySources(); err != nil {
@@ -243,11 +244,20 @@ func (consumer *featureConsumer) verifySources() error {
 		}
 	}
 	if consumer.Root != "" {
-		for file, expected := range consumer.Input.ToolSources {
-			if !strings.HasPrefix(file, "pkg/include/") || filepath.ToSlash(filepath.Clean(file)) != file {
-				return fmt.Errorf("unsafe feature tool source identity %q", file)
+		if err := gotoolprofile.ValidateCPPIncludeSearch(consumer.Input, nil); err != nil {
+			return err
+		}
+		for _, miss := range consumer.Input.CPPIncludeSearchMisses {
+			if err := gotoolprofile.VerifyCPPPackageSearchMiss(miss, consumer.Dir, consumer.Root); err != nil {
+				return err
 			}
-			actual, err := gotoolprofile.FileSHA256(filepath.Join(consumer.Root, filepath.FromSlash(file)))
+		}
+		for file, expected := range consumer.Input.ToolSources {
+			name, err := gotoolprofile.CPPRegularSource(consumer.Root, file)
+			if err != nil {
+				return err
+			}
+			actual, err := gotoolprofile.FileSHA256(name)
 			if err != nil || actual != expected {
 				return fmt.Errorf("feature tool header differs from its pre-load proof: %s", file)
 			}

@@ -33,6 +33,9 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	if !reflect.DeepEqual(input.RegisteredAsmFiles, proof.RegisteredAsmFiles) {
 		return fmt.Errorf("actual package registration differs from the complete selected assembly scope")
 	}
+	if err := ValidateCPPIncludeSearch(input, proof); err != nil {
+		return err
+	}
 	selectedFiles, filePackages, err := validatePackageSelection(input, proof.Packages, tags)
 	if err != nil {
 		return err
@@ -204,6 +207,9 @@ func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, se
 // Preflight reuses only the source/CPP portion. It never manufactures an LLVM
 // output or satisfies the separate translation consumption gate.
 func validateCPPConsumption(input *ConsumerInput, proof *SelectionProof, selectedFiles map[string]bool, filePackages map[string]PackageProof) (map[string]bool, error) {
+	if err := ValidateCPPIncludeSearch(input, proof); err != nil {
+		return nil, err
+	}
 	consumed := make(map[string]bool)
 	for _, cpp := range proof.CPP {
 		if consumed[cpp.File] || !selectedFiles[cpp.File] || !discoverySHA256Pattern.MatchString(cpp.ExpandedSHA256) || !discoverySHA256Pattern.MatchString(cpp.TypedExpandedSHA256) || len(cpp.Inputs) == 0 {

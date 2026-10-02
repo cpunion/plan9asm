@@ -6,21 +6,22 @@ const ConsumerProtocol = "actual_go_cpu_profile_consumer_v1"
 // source root binds an actual replacement/module directory; all selected bytes
 // must match the producer's pre-load hashes. Only SelectionProof is published.
 type ConsumerInput struct {
-	Protocol                     string              `json:"protocol"`
-	SignatureSourceProtocol      string              `json:"signature_source_protocol,omitempty"`
-	TestDependencySourceProtocol string              `json:"test_dependency_source_protocol,omitempty"`
-	ID                           string              `json:"id"`
-	Observed                     *Observation        `json:"observed"`
-	Module                       string              `json:"module"`
-	Version                      string              `json:"version"`
-	SourceModule                 string              `json:"source_module,omitempty"`
-	SourceRoot                   string              `json:"source_root"`
-	Sources                      map[string]string   `json:"sources"`
-	Headers                      map[string]string   `json:"selection_headers"`
-	ToolSources                  map[string]string   `json:"tool_sources,omitempty"`
-	Directories                  map[string][]string `json:"directories"`
-	OrdinaryAsmPackages          []string            `json:"ordinary_asm_packages,omitempty"`
-	AsmFiles                     []string            `json:"asm_files"`
+	Protocol                     string                 `json:"protocol"`
+	SignatureSourceProtocol      string                 `json:"signature_source_protocol,omitempty"`
+	TestDependencySourceProtocol string                 `json:"test_dependency_source_protocol,omitempty"`
+	ID                           string                 `json:"id"`
+	Observed                     *Observation           `json:"observed"`
+	Module                       string                 `json:"module"`
+	Version                      string                 `json:"version"`
+	SourceModule                 string                 `json:"source_module,omitempty"`
+	SourceRoot                   string                 `json:"source_root"`
+	Sources                      map[string]string      `json:"sources"`
+	Headers                      map[string]string      `json:"selection_headers"`
+	ToolSources                  map[string]string      `json:"tool_sources,omitempty"`
+	CPPIncludeSearchMisses       []CPPPackageSearchMiss `json:"cpp_include_search_misses,omitempty"`
+	Directories                  map[string][]string    `json:"directories"`
+	OrdinaryAsmPackages          []string               `json:"ordinary_asm_packages,omitempty"`
+	AsmFiles                     []string               `json:"asm_files"`
 	// RegisteredAsmFiles is the complete selected nonempty assembly in the
 	// loaded packages when a concrete source exclusion narrows AsmFiles.
 	// Registration is source-role evidence, never an IR/object or exclusion.
@@ -40,6 +41,7 @@ type SelectionProof struct {
 	CustomTags                   []string               `json:"custom_tags,omitempty"`
 	Packages                     []PackageProof         `json:"packages"`
 	RegisteredAsmFiles           []string               `json:"registered_asm_files,omitempty"`
+	CPPIncludeSearchMisses       []CPPPackageSearchMiss `json:"cpp_include_search_misses,omitempty"`
 	CPP                          []CPPProof             `json:"cpp"`
 	Outputs                      []OutputProof          `json:"outputs"`
 	GeneratedHeaders             *MetadataProof         `json:"generated_headers,omitempty"`
