@@ -43,3 +43,18 @@ test('cheap CI policy checks pass before expensive corpus or test jobs start', (
   assert.ok(workflow.indexOf('\n  ci_policy:\n') <
     workflow.indexOf('\n  discovered_library_priority:\n'));
 });
+
+test('aggregate verification installs LLVM 22 before building its Go readers', () => {
+  const aggregate = jobSection('discovered_library_corpus_verify');
+  const install = aggregate.indexOf('run: bash scripts/install-ci-llvm22-ubuntu.sh');
+  assert.ok(install >= 0, 'aggregate Go readers link plan9asm and require LLVM 22');
+  for (const command of [
+    'run: bash scripts/discovery-status.sh',
+    'run: scripts/verify-discovered-library-corpus.sh',
+  ]) {
+    assert.ok(aggregate.indexOf(command) > install,
+      `LLVM 22 must be available before ${command}`);
+  }
+  assert.match(aggregate, /^    if: \$\{\{ !cancelled\(\) \}\}$/m);
+  assert.doesNotMatch(aggregate, /continue-on-error:|CGO_ENABLED:.*0/);
+});

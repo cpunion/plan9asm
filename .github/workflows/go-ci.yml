@@ -350,11 +350,16 @@ jobs:
     name: discovered-corpus aggregate verification
     needs: [discovered_library_priority, discovered_library_corpus]
     if: ${{ !cancelled() }}
-    # Keep the final artifact-only gate on the stable public-hosted image.
+    # The readers do not translate candidates here, but their Go binaries
+    # link plan9asm's LLVM library and still require the exact LLVM 22 setup.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
 
       - name: Setup Go
         uses: ./.github/actions/setup-go
