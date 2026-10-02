@@ -80,6 +80,17 @@ unregistered effects cannot borrow this proof. Go's physical autosize is not
 the LLVM private-allocation size. Runtime oracles must execute original raw
 Go objects as well as LLVM objects with independent references and canaries.
 
+An x86 raw-return caller-region producer is a separate, bounded source proof,
+not a pointer-type or `noescape` nonalias promise. It requires the same actual
+selected Go/ASM inventory, typed syntax and source bytes, closes every use of
+an unexported bodyless ABI0 entry, and accepts only direct slice-data inputs
+and independent numerical result/length locals. Missing sources, indirect or
+assembly callers, linknames and local-address escape remain Context. A region
+witness alone never admits raw RET: the complete source stack/CFG/effect proof
+must separately consume the exact slots and write envelope. Compiler loaders
+must supply the actual complete selection; an AST subset or self-reported hash
+is not authenticated package-selection evidence.
+
 ARM32's specialized raw-data lowerers and NZCV source proof share one typed
 registration. Only those decoded data forms preserve source-defined APSR
 flags; conditional forms still require their predicate on every CFG path.
