@@ -95,10 +95,13 @@ and original Go/LLVM runtime oracles are separate evidence; complete original
 library replays and integrated-source validation remain required. Never accept
 arbitrary raw stack effects based on a private-frame name or package whitelist.
 
-The remaining Snappy ARM64 work proves ordinary indexed private table bounds,
-counted clear loops and typed continuation stores at each instruction. It must
-preserve saved LR/SP0, mixed-origin and escaping-address guards. Diagnostic
-objects or programs from an uncommitted proof are not a frozen corpus pass.
+The indexed Snappy ARM64 proof is integrated locally. Ordinary indexed tables
+and counted clear loops now require a private-DATA byte envelope for each
+instruction; saved LR/SP0, mixed-origin, stale-compare and escaping-address
+guards remain strict. Go-accepted scalar/GP/FP-pair memory forms have object and
+initialized numerical/full-canary counterparts. Frozen agent family evidence
+does not prove the later integrated source or replace its complete library,
+root-suite and corpus reruns.
 
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
@@ -166,6 +169,11 @@ Broad runtime tests still need an appropriate native ISA environment. An
 independent original-Go MULX carry-preservation failure in Docker/Rosetta is
 execution-environment evidence, not an ordinary instruction skip or permission
 to change BN curve expectations. Keep masked/QEMU diagnostics separate.
-Remove unused declared-module downloads using actual selected package/test
-closures, not weaker source guards. These runtime results do not promote the
-plan9asm instruction/object ledger or prove every assembly file in a module.
+Generated probes now authenticate only actual Go-selected package/test module
+sources, not unused ZIPs from the whole declared graph. Repeated selection and
+whole-byte source guards bind the exact case, target checksums and invocation
+module; missing/late dependencies and old proofs fail. BN candidates use typed
+API, curve and representation preflight before independently authenticated
+source and real oracles. A candidate is not a pass. These runtime results do
+not promote the plan9asm instruction/object ledger or prove every assembly
+file in a module.
