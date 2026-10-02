@@ -95,10 +95,23 @@ mandatory anti-downgrade fields and exact supplemental consumption.
 
 The reviewed x86 private caller-region producer and scalar consumer require
 complete original typed callers and bounded, initialized per-access regions.
-The actual CLI-load producer and vector-memory consumers remain separate work;
-scalar fixtures cannot establish original Weaviate or native AMD64 runtime
-success. Unknown native calls, mixed control flow and dynamic caller frames
-remain failures without their own complete contracts.
+The actual CLI-load producer is integrated and retains its private unchanged
+package selection and source/expansion guards through object compilation.
+Vector-memory consumers remain unfinished; scalar fixtures cannot establish
+original Weaviate or native AMD64 runtime success. Legacy MOVSD memory loads
+now clear the upper XMM half, unlike register copies; independent complete-byte
+Go/LLVM oracles retain the real pre-fix failure. Unknown native calls, mixed
+control flow and dynamic caller frames remain failures without their own
+complete contracts.
+
+CPP fallback uses Go's actual fixed package-CWD and GOROOT include search.
+Canonical physical origins, original literal operands and exact outside-module
+ENOENT witnesses are rechecked by producers, portable readers and active
+consumers. Validate bound regular source identities before reading. Ordinary
+missing inactive/generated headers retain their typed ENOENT error chain.
+Do not accept arbitrary external include roots or borrow a pkg/include allowance
+when the actual source requires its own search-miss witness. The included-header
+EOF operand witness still needs its separate positive/negative replay.
 
 ## Required next work
 
