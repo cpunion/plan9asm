@@ -1511,10 +1511,18 @@ func fallbackSigForAsmFunc(fn plan9asm.Func, resolved, goarch string) plan9asm.F
 			if a.Kind != plan9asm.OpFP && a.Kind != plan9asm.OpFPAddr {
 				continue
 			}
+			offsets := paramOff
 			if isLikelyResultSlot(op, i, len(ins.Args), a.FPName) {
-				retOff[a.FPOffset] = struct{}{}
-			} else {
-				paramOff[a.FPOffset] = struct{}{}
+				offsets = retOff
+			}
+			offsets[a.FPOffset] = struct{}{}
+			if goarch == "arm64" {
+				// Wide source accesses consume all of their words. This only
+				// supplies the assembly-only fallback; actual Go declarations
+				// retain their exact scalar fields and unaddressable padding.
+				for byteOffset := int64(8); byteOffset < plan9asm.ARM64FPAccessBytes(ins, i); byteOffset += 8 {
+					offsets[a.FPOffset+byteOffset] = struct{}{}
+				}
 			}
 		}
 	}

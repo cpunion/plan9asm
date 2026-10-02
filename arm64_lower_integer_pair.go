@@ -5,10 +5,23 @@ import (
 	"strings"
 )
 
+type arm64IntegerPairSpec struct {
+	elementBytes int
+	load         bool
+	signed       bool
+}
+
+var arm64IntegerPairSpecs = map[Op]arm64IntegerPairSpec{
+	"LDP":   {elementBytes: 8, load: true},
+	"LDPW":  {elementBytes: 4, load: true},
+	"LDPSW": {elementBytes: 4, load: true, signed: true},
+	"STP":   {elementBytes: 8},
+	"STPW":  {elementBytes: 4},
+}
+
 func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "LDP", "LDPW", "LDPSW", "STP", "STPW":
-	default:
+	spec, recognized := arm64IntegerPairSpecs[op]
+	if !recognized {
 		return false, false, nil
 	}
 	rawOp := strings.ToUpper(string(ins.Op))
@@ -25,7 +38,7 @@ func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated 
 	if len(ins.Args) != 2 {
 		return true, false, fmt.Errorf("arm64 %s expects exactly 2 operands: %q", op, ins.Raw)
 	}
-	load := strings.HasPrefix(string(op), "LDP")
+	load := spec.load
 	memory, pair := ins.Args[0], ins.Args[1]
 	if !load {
 		pair, memory = ins.Args[0], ins.Args[1]
@@ -41,10 +54,7 @@ func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated 
 	if load && pair.RegList[0] == pair.RegList[1] {
 		return true, false, fmt.Errorf("arm64 %s requires distinct destination registers: %q", op, ins.Raw)
 	}
-	elementBytes := 8
-	if op == "LDPW" || op == "LDPSW" || op == "STPW" {
-		elementBytes = 4
-	}
+	elementBytes := spec.elementBytes
 	if memory.Kind == OpFP {
 		if preIndex || postIndex {
 			return true, false, fmt.Errorf("arm64 %s does not support this FP-relative pair form: %q", op, ins.Raw)
@@ -59,7 +69,7 @@ func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated 
 				if err != nil {
 					return true, false, err
 				}
-				if op == "LDPSW" {
+				if spec.signed {
 					value = c.arm64ExtendNarrow(value, 32, true)
 				}
 				if err := c.storeReg(reg, value); err != nil {
@@ -89,7 +99,7 @@ func (c *arm64Ctx) lowerARM64IntegerPair(op Op, ins Instr) (ok bool, terminated 
 			elementPtr = "%" + next
 		}
 		if load {
-			if err := c.loadARM64IntegerPairElement(reg, elementPtr, elementBytes, op == "LDPSW"); err != nil {
+			if err := c.loadARM64IntegerPairElement(reg, elementPtr, elementBytes, spec.signed); err != nil {
 				return true, false, err
 			}
 		} else if err := c.storeARM64IntegerPairElement(reg, elementPtr, elementBytes); err != nil {
