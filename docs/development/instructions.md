@@ -200,6 +200,8 @@ helpers and actual dead source retain the existing bounds and guards; only an
 empty block-splitter continuation after a final self BL has no source to check.
 Floating immediates never acquire an integer GP MOV overwrite witness, including
 through the legacy MOVD transfer fallback.
+The seven scalar GP MOV lowerers also reject Go's distinct floating-constant
+class before register, memory, symbol or writeback dispatch; FMOV is unchanged.
 
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
