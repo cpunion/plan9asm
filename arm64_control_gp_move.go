@@ -29,7 +29,7 @@ func (state *arm64ControlState) transferGPRegisterMove(ins Instr) bool {
 		state.write(ins.Args[1], value, false)
 		return true
 	}
-	if source.Kind == OpImm && source.ImmRaw == "" &&
+	if source.Kind == OpImm && source.ImmRaw == "" && !source.ImmIsFloat &&
 		(op == "MOVD" || op == "MOVW" || source.Imm == 0) {
 		// The seven zero aliases are rewritten to ZR by Go's progedit;
 		// Other narrow spellings do not have a valid literal encoder.

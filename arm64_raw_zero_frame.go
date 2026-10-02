@@ -261,6 +261,20 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 					if !local || !exists || !arm64IsLocalBranchLink(ins) {
 						return false
 					}
+					if target == point.block && arm64RawZeroSelfBLSink(blocks[point.block]) {
+						// Exact same-PC raw BL writes LR and branches to itself
+						// forever. There is no return edge or continuation proof.
+						// Every prefix effect/join was checked before reaching it.
+						if point.block+2 == len(blocks) && len(blocks[point.block+1].instrs) == 0 &&
+							len(normalized.Instrs) != 0 && normalized.Instrs[len(normalized.Instrs)-1].arm64RawLocalCall {
+							// SplitBlocks creates an empty PC+4 continuation when
+							// the final source instruction is a call. This sink
+							// cannot reach it, and it contains no source to check.
+							visited[point.block+1] = true
+						}
+						terminated = true
+						break
+					}
 					context := point.context + "/" + strconv.Itoa(point.block+1)
 					contexts[context] = append(append([]arm64RawZeroCall(nil), calls...), arm64RawZeroCall{block: point.block + 1, sp: state.addresses.sp})
 					state.control.regs["R30"] = arm64ControlValue{"label:" + blocks[point.block+1].name: true}
@@ -296,6 +310,17 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 		queue = queue[:0]
 	}
 	return true
+}
+
+// Only the decoder's exact raw-PC boundary witness may identify this sink.
+// A block containing any additional effect remains an ordinary bounded call.
+func arm64RawZeroSelfBLSink(block arm64Block) bool {
+	if len(block.instrs) != 1 {
+		return false
+	}
+	ins := block.instrs[0]
+	return (ins.Op == "BL" || ins.Op == "CALL") && ins.arm64RawLocalCall && len(ins.Args) == 1 &&
+		ins.Args[0].Kind == OpIdent && ins.Args[0].Ident == block.name
 }
 
 func arm64RawZeroReturn(original Instr) bool {

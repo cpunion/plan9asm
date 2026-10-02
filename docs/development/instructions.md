@@ -192,6 +192,15 @@ effect or exhausted bound. Ordinary/native/unproved functions keep the coarse
 control analysis. Runtime fixtures must execute both helper pointer contexts,
 not just compile a synthetic return dispatcher.
 
+An authenticated current-PC raw BL in a single-instruction block is a terminal
+sink: LLVM still writes its continuation to LR and branches to itself. The
+source proof checks all preceding effects, joins and other returns, and emits
+no return certificate for the sink. Ordinary recursion, multi-instruction
+helpers and actual dead source retain the existing bounds and guards; only an
+empty block-splitter continuation after a final self BL has no source to check.
+Floating immediates never acquire an integer GP MOV overwrite witness, including
+through the legacy MOVD transfer fallback.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore
