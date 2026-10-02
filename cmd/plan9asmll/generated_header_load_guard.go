@@ -58,7 +58,9 @@ func captureTypedSourceLoadGuard(ctx context.Context, pkgs []*packages.Package, 
 			return false // Go's builtin singleton has no source or export file.
 		}
 		if pkg.ID == "" || len(guard.Packages) >= 4096 || len(pkg.EmbedFiles) != 0 || len(pkg.EmbedPatterns) != 0 || isTestVariantPackage(pkg) && !allowedTests[pkg.ID] {
-			captureErr = fmt.Errorf("generated-header query has an unbound embed/test role or exceeds its package bound")
+			captureErr = fmt.Errorf("generated-header query has an unbound embed/test role or exceeds its package bound: package_id=%q package_path=%q for_test=%q test_variant=%t allowed_test=%t embed_files=%d embed_patterns=%d used_packages=%d package_bound=4096",
+				pkg.ID, pkg.PkgPath, pkg.ForTest, isTestVariantPackage(pkg), allowedTests[pkg.ID],
+				len(pkg.EmbedFiles), len(pkg.EmbedPatterns), len(guard.Packages))
 			return false
 		}
 		canonical := func(files []string) []string {
