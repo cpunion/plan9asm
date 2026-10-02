@@ -36,8 +36,16 @@ func TestOrdinarySelectionCompactHeaderPreservesGoMatchFile(t *testing.T) {
 	for _, header := range []string{
 		"// License/documentation payload\n// +build feature\n\npackage ordinary\n",
 		"// License/documentation payload\n// +build feature\npackage ordinary\n",
+		"// License/documentation payload\n//+build feature,!ignore\n\npackage ordinary\n",
+		"// License/documentation payload\r\n//\t+build feature ignore\r\n\r\npackage ordinary\r\n",
+		"// License/documentation payload\n//   +build feature\n//+build !ignore\n\npackage ordinary\n",
+		"//+build feature\n//go:build ignore\n\npackage ordinary\n",
+		"//+buildx ignore\n\npackage ordinary\n",
+		"// go:build ignore\n\npackage ordinary\n",
 		"// License/documentation payload\n//go:build feature && !ignore\n\npackage ordinary\n",
+		"// License/documentation payload\r\n//go:build\tfeature && !ignore\r\n\r\npackage ordinary\r\n",
 		"/* block with apparent directive\n//go:build ignore\n*/\n\npackage ordinary\n",
+		"/* block with apparent directive\n//+build ignore\n*/\n\npackage ordinary\n",
 	} {
 		compact := compactOrdinarySelectionHeader(header)
 		for _, tags := range [][]string{nil, {"feature"}, {"ignore"}, {"feature", "ignore"}} {

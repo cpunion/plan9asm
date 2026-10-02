@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/build"
+	"go/build/constraint"
 	"go/parser"
 	"go/token"
 	"io"
@@ -227,8 +228,8 @@ func compactOrdinarySelectionHeader(header string) string {
 			inBlock = !strings.Contains(trimmed, "*/")
 			continue
 		}
-		if strings.HasPrefix(trimmed, "//") && !strings.HasPrefix(trimmed, "//go:build") &&
-			!strings.HasPrefix(trimmed, "// +build") && !strings.HasPrefix(trimmed, "//line ") {
+		if strings.HasPrefix(trimmed, "//") && !constraint.IsGoBuild(trimmed) &&
+			!constraint.IsPlusBuild(trimmed) && !strings.HasPrefix(trimmed, "//line ") {
 			lines[i] = line[:strings.Index(line, "//")] + "//"
 		}
 	}

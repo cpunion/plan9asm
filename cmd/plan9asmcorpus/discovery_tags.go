@@ -312,15 +312,15 @@ func discoveryFileBuildExpression(filePath string, openers ...func(string) (io.R
 		if !strings.HasPrefix(line, "//") {
 			break
 		}
-		if !strings.HasPrefix(line, "//go:build ") &&
-			!strings.HasPrefix(line, "// +build ") {
+		goBuildLine := constraint.IsGoBuild(line)
+		if !goBuildLine && !constraint.IsPlusBuild(line) {
 			continue
 		}
 		parsed, err := constraint.Parse(line)
 		if err != nil {
 			return nil, fmt.Errorf("parse build constraint %s: %w", filePath, err)
 		}
-		if strings.HasPrefix(line, "//go:build ") {
+		if goBuildLine {
 			goBuild = parsed
 		} else if legacy == nil {
 			legacy = parsed
