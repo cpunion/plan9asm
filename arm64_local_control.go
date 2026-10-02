@@ -40,7 +40,7 @@ func arm64SourceGoFrame(fn Func) arm64GoFrame {
 	noFrame, leaf := fn.FrameSize == -8, true
 	for _, ins := range fn.Instrs {
 		op := arm64ControlOp(ins)
-		if op == "BL" || op == "CALL" {
+		if (op == "BL" || op == "CALL") && !ins.arm64RawLocalCall {
 			leaf = false
 		}
 		if op != OpTEXT {

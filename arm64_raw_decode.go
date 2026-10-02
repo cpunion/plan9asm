@@ -68,6 +68,7 @@ func decodeARM64RawWordInstructionTarget(ins Instr, target string) (Instr, error
 		}
 	}
 	result.Raw = fmt.Sprintf("%s /* decoded from %s */", result.Raw, ins.Raw)
+	result.arm64RawLocalCall = decoded.Op == arm64asm.BL && pcRelative == 1 && target != ""
 	return result, nil
 }
 

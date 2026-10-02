@@ -943,6 +943,9 @@ type Instr struct {
 	Op   Op
 	Args []Operand
 	Raw  string
+	// Set only after a raw BL's exact same-source PC target is established.
+	// It remains a physical leaf call for Go's pre-WORD prologue selection.
+	arm64RawLocalCall bool
 	// Set only after validating a closed, source-local Linux native helper.
 	armKernelCall *armKernelCall
 	// Set only by a validated machine-code decoder. Physical operands need
