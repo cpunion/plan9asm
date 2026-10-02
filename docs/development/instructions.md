@@ -177,6 +177,12 @@ returns. Go optab rows do not automatically establish frontend spellings:
 single-operand NEG is rejected by stock Go, and a cross-bank W bitfield
 accepted by its alias encoder is not an overwrite proof.
 
+Scalar GP moves likewise distinguish their source from the write-only Rd.
+Narrow register copies retain derived code-address bits; resolved MOVW/MOVD
+literals and the seven literal-zero aliases do not read old Rd. MOVK remains
+read-modify-write. Go's inherited nonzero MOVWU literal rows can emit zero
+machine words; stock syntax acceptance alone grants no overwrite witness.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore

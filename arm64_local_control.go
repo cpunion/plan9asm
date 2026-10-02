@@ -757,6 +757,9 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		state.write(ins.Args[1], value, false)
 		return
 	}
+	if state.transferGPRegisterMove(ins) {
+		return
+	}
 	if op == "MOVD" && len(ins.Args) == 2 {
 		value := state.source(ins.Args[0], post)
 		state.write(ins.Args[1], value, post)
