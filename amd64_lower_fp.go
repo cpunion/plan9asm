@@ -7,6 +7,11 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if spec, recognized := amd64ScalarVectorMoveSpecs[op]; recognized && spec.legacy {
+		if _, _, err := amd64ScalarVectorMoveProperties(ins, c.goarch); err != nil {
+			return true, false, err
+		}
+	}
 	if ok, term, err := c.lowerApproximateMath(op, ins); ok {
 		return ok, term, err
 	}

@@ -20,13 +20,10 @@ func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
 	src, dst := ins.Args[0], ins.Args[1]
 	srcK := amd64IsKOperand(src)
 	dstK := amd64IsKOperand(dst)
-	srcGP := amd64IsYrlOperand(src, c.goarch)
 	dstGP := amd64IsYrlOperand(dst, c.goarch)
-	srcMem := isAMD64MemoryOperand(src)
 	dstMem := isAMD64MemoryOperand(dst)
 
-	valid := (srcK && (dstMem || dstGP || dstK)) || ((srcMem || srcGP) && dstK)
-	if !valid {
+	if !amd64MaskMoveOperandsValid(ins, c.goarch) {
 		return fmt.Errorf("amd64 %s operands are outside Go 1.27's _ykmovb table: %q", op, ins.Raw)
 	}
 
@@ -47,6 +44,16 @@ func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
 	default:
 		return fmt.Errorf("amd64 %s has unsupported destination: %q", op, ins.Raw)
 	}
+}
+
+func amd64MaskMoveOperandsValid(ins Instr, goarch string) bool {
+	if _, recognized := amd64MaskMoveSpecs[ins.Op]; !recognized || len(ins.Args) != 2 {
+		return false
+	}
+	src, dst := ins.Args[0], ins.Args[1]
+	sourceK, destinationK := amd64IsKOperand(src), amd64IsKOperand(dst)
+	return sourceK && (destinationK || amd64IsYrlOperand(dst, goarch) || isAMD64MemoryOperand(dst)) ||
+		(amd64IsYrlOperand(src, goarch) || isAMD64MemoryOperand(src)) && destinationK
 }
 
 func amd64IsKOperand(operand Operand) bool {

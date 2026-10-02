@@ -11,56 +11,29 @@ import (
 func (c *amd64Ctx) lowerVectorScalarMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
-	suffix := ""
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+		baseOp = rawOp[:dot]
 	}
-	elemBits := 0
-	switch baseOp {
-	case "VMOVSD":
-		elemBits = 64
-	case "VMOVSS":
-		elemBits = 32
-	case "VMOVSH":
-		if !ins.x86Encoded {
-			return true, false, fmt.Errorf("amd64 %s is not in Go's named assembler; use an encoded raw instruction: %q", baseOp, ins.Raw)
-		}
-		elemBits = 16
-	default:
+	spec, recognized := amd64ScalarVectorMoveSpecs[Op(baseOp)]
+	if !recognized || spec.legacy {
 		return false, false, nil
 	}
-	if c.goarch == "386" && len(ins.Args) > 3 && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s exceeds Go's three-operand frontend limit: %q", baseOp, ins.Raw)
+	form, _, err := amd64ScalarVectorMoveProperties(ins, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	if suffix != "" && suffix != "Z" {
-		return true, false, fmt.Errorf("amd64 %s suffix is absent from Go 1.27's _yvmovsd table: %q", baseOp, ins.Raw)
+	if form.upper >= 0 {
+		mask := Operand{}
+		if form.mask >= 0 {
+			mask = ins.Args[form.mask]
+		}
+		return c.lowerVectorScalarMoveRegisterMerge(spec.bits, ins.Args[form.low], ins.Args[form.upper], mask,
+			ins.Args[form.destination], form.zeroing)
 	}
-	zeroing := suffix == "Z"
-	switch len(ins.Args) {
-	case 2:
-		if zeroing {
-			return true, false, fmt.Errorf("amd64 %s zeroing requires a K1-K7 mask and register destination: %q", baseOp, ins.Raw)
-		}
-		return c.lowerVectorScalarMoveTwoOperand(baseOp, elemBits, ins)
-	case 3:
-		if amd64ScalarXOperand(ins.Args[0]) && amd64ScalarXOperand(ins.Args[1]) && amd64ScalarXOperand(ins.Args[2]) {
-			if zeroing {
-				return true, false, fmt.Errorf("amd64 %s zeroing requires a K1-K7 mask: %q", baseOp, ins.Raw)
-			}
-			return c.lowerVectorScalarMoveRegisterMerge(elemBits, ins.Args[0], ins.Args[1], Operand{}, ins.Args[2], false)
-		}
-		return c.lowerVectorScalarMoveMaskedMemory(baseOp, elemBits, zeroing, ins)
-	case 4:
-		if !amd64ScalarXOperand(ins.Args[0]) || !amd64ScalarXOperand(ins.Args[1]) || !amd64ScalarXOperand(ins.Args[3]) {
-			return true, false, fmt.Errorf("amd64 %s four-operand form expects X, X, K1-K7, X: %q", baseOp, ins.Raw)
-		}
-		if !amd64NonzeroKOperand(ins.Args[2]) {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		return c.lowerVectorScalarMoveRegisterMerge(elemBits, ins.Args[0], ins.Args[1], ins.Args[2], ins.Args[3], zeroing)
-	default:
-		return true, false, fmt.Errorf("amd64 %s operand list is absent from Go 1.27's _yvmovsd table: %q", baseOp, ins.Raw)
+	if form.mask >= 0 {
+		return c.lowerVectorScalarMoveMaskedMemory(baseOp, spec.bits, form.zeroing, ins)
 	}
+	return c.lowerVectorScalarMoveTwoOperand(baseOp, spec.bits, ins)
 }
 
 func (c *amd64Ctx) lowerVectorScalarMoveTwoOperand(baseOp string, elemBits int, ins Instr) (bool, bool, error) {

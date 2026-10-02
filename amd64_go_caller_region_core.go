@@ -204,38 +204,50 @@ func x86CallerMemoryStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 				x86CallerRecordMemory(ins, index, width, false)
 				continue
 			}
-			memory := operand.Mem
-			if len(ins.Args) != 2 || memory.Sym != "" || memory.Segment != "" || ins.x86AddressBits != 0 ||
-				memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
+			if len(ins.Args) != 2 || !x86CallerOrdinaryMemoryStep(ins, index, state, proof, width, index == 1) {
 				return false
 			}
-			base, valid := x86CallerGP(memory.Base)
-			pointer, known := state.callers[base]
-			if !valid || base != memory.Base || !known || pointer.argument < 0 || pointer.argument >= len(proof.arguments) {
-				return false
-			}
-			region := proof.arguments[pointer.argument]
-			write := index == 1
-			if memory.Index != "" {
-				if write || region.kind != x86CallerSliceInput ||
-					memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
-					!x86CallerNumericRead(Operand{Kind: OpReg, Reg: memory.Index}, 8, state) {
-					return false
-				}
-			}
-			offset := pointer.offset + memory.Off
-			if write {
-				if region.kind != x86CallerFreshResult || offset < 0 || offset > region.width || width > region.width-offset {
-					return false
-				}
-			} else if region.kind != x86CallerSliceInput {
-				if offset < 0 || offset > region.width || width > region.width-offset {
-					return false
-				}
-			}
-			x86CallerRecordMemory(ins, index, width, write)
 		}
 	}
+	return true
+}
+
+func x86CallerOrdinaryMemoryStep(ins *Instr, index int, state *x86SourceStackState, proof *x86GoCallerRegionProof, width int64, write bool) bool {
+	if index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpMem || width <= 0 {
+		return false
+	}
+	if _, parameter := ins.x86SourceStackFP[index]; parameter {
+		return false // Only the scalar GP import above can consume pointer slots.
+	}
+	memory := ins.Args[index].Mem
+	if memory.Sym != "" || memory.Segment != "" || ins.x86AddressBits != 0 ||
+		memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
+		return false
+	}
+	base, valid := x86CallerGP(memory.Base)
+	pointer, known := state.callers[base]
+	if !valid || base != memory.Base || !known || pointer.argument < 0 || pointer.argument >= len(proof.arguments) {
+		return false
+	}
+	region := proof.arguments[pointer.argument]
+	if memory.Index != "" {
+		if write || region.kind != x86CallerSliceInput ||
+			memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
+			!x86CallerNumericRead(Operand{Kind: OpReg, Reg: memory.Index}, 8, state) {
+			return false
+		}
+	}
+	offset := pointer.offset + memory.Off
+	if write {
+		if region.kind != x86CallerFreshResult || offset < 0 || offset > region.width || width > region.width-offset {
+			return false
+		}
+	} else if region.kind != x86CallerSliceInput {
+		if offset < 0 || offset > region.width || width > region.width-offset {
+			return false
+		}
+	}
+	x86CallerRecordMemory(ins, index, width, write)
 	return true
 }
 
@@ -372,7 +384,7 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 
 func x86CallerMemoryCertified(ins Instr, index int) bool {
 	access, found := ins.x86CallerMemory[index]
-	return found && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
-		access.width == x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(ins.Op))) && access.width > 0 &&
-		len(ins.Args) == 2 && access.write == (index == 1)
+	width, write, valid := x86CallerMoveMemoryShape(ins, index)
+	return found && valid && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
+		access.width == width && width > 0 && access.write == write
 }

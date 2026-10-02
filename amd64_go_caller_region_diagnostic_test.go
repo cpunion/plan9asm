@@ -11,8 +11,8 @@ func TestX86GoCallerRegionRejectedEffectsRetainInstructionDiagnostic(t *testing.
 		name, replacement, diagnostic string
 	}{
 		{
-			name: "vector move", replacement: "VMOVSS (DI),X0\nVMOVSS X0,(DX)",
-			diagnostic: "unregistered source-stack effect: VMOVSS",
+			name: "vector arithmetic", replacement: "VFMADD231SS (DI),X0,X1\nVMOVSS X1,(DX)",
+			diagnostic: "unregistered source-stack effect: VFMADD231SS",
 		},
 		{
 			name: "pointer as scalar data", replacement: "MOVL DI,(DX)",

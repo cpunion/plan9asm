@@ -48,6 +48,8 @@ type x86SourceStackState struct {
 	numericFlags bool
 	callers      map[Reg]x86CallerPointerValue
 	known        map[Reg]uint8
+	vectors      map[Reg]uint64
+	masks        map[Reg]bool
 }
 
 const x86SourceStackLimit = int64(1 << 20)
@@ -122,10 +124,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			labels[ins.Args[0].Sym] = len(instructions)
 			continue
 		}
-		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) {
+		vectorMove := caller && x86CallerVectorMoveKnown(ins)
+		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) && !vectorMove {
 			return reject(index, "unregistered source-stack effect: "+string(ins.Op))
 		}
-		if caller && !x86CallerScalarOperands(ins) {
+		if caller && !vectorMove && !x86CallerScalarOperands(ins) {
 			return reject(index, "unregistered caller-region operand bank: "+string(ins.Op))
 		}
 		if _, stack := amd64StackWidthSpecs[op]; stack && ins.x86SourceRaw != nil &&
@@ -179,6 +182,8 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			bp:      x86SourceStackAddress{original: true},
 			callers: make(map[Reg]x86CallerPointerValue),
 			known:   make(map[Reg]uint8),
+			vectors: make(map[Reg]uint64),
+			masks:   make(map[Reg]bool),
 		}
 	}
 	returned := false
@@ -193,6 +198,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		if caller {
 			state.callers = x86CloneCallerPointers(state.callers)
 			state.known = x86CloneCallerKnown(state.known)
+			state.vectors, state.masks = x86CloneCallerVectorState(state.vectors, state.masks)
 		}
 		ins := &copyFn.Instrs[instructions[pc]]
 		op := Op(normalizeInstructionOpcode(ins.Op))
@@ -266,7 +272,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		pointerFlags := false
 		if caller {
 			var valid bool
-			pointerFlags, valid = x86CallerScalarStep(ins, &state, sig.x86CallerRegions)
+			if x86CallerVectorMoveKnown(*ins) {
+				valid = x86CallerVectorMoveStep(ins, &state, sig.x86CallerRegions)
+			} else {
+				pointerFlags, valid = x86CallerScalarStep(ins, &state, sig.x86CallerRegions)
+			}
 			if !valid {
 				return reject(instructions[pc], "unproved caller-region effect: "+string(ins.Op))
 			}

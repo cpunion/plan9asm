@@ -92,13 +92,18 @@ must separately consume the exact slots and write envelope. Compiler loaders
 must supply the actual complete selection; an AST subset or self-reported hash
 is not authenticated package-selection evidence.
 
-The initial AMD64 caller-region consumer covers scalar MOVB/W/L/Q only. It
-tracks exact full-word pointer imports/copies, constant affine offsets and
-numerically initialized register bytes. Inputs and local lengths are read-only;
+The bounded AMD64 caller-region consumer covers scalar MOVB/W/L/Q and the
+Go-table MOVSS/SD, VMOVSS/SD and KMOVB/W/D/Q move forms. It tracks exact
+full-word pointer imports/copies, constant affine offsets and numerically
+initialized GP/SIMD bytes. Mask values must be source-defined, not pointer bits;
+legacy lane preservation and VEX/EVEX merge/zero rules remain distinct.
+Floating-literal frontend rewrites, raw FP16, packed moves and arithmetic need
+separate complete effect families and do not inherit this permission.
+Inputs and local lengths are read-only;
 only the independently fresh scalar result has a bounded write envelope.
 Instruction-local memory certificates bind the entire operands, direction and
 native width. Every source return must still restore SP/BP, and unknown joins,
-private-stack escape, g-register use, vector/native effects and stale source or
+private-stack escape, g-register use, unregistered vector/native effects and stale source or
 signature metadata remain Context. Rosetta fixture execution is diagnostic,
 not evidence that an external AVX/AVX512 library ran on native AMD64 hardware.
 
