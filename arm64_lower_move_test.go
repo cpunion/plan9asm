@@ -233,10 +233,36 @@ func TestARM64VMOVNativeGoRuntime(t *testing.T) {
 	}
 	cases := arm64VMOVCases()
 	var main strings.Builder
-	main.WriteString("package main\nimport (\"bytes\";\"encoding/hex\";\"fmt\")\nfunc vmovfamily(src,dst,out *byte,value uint64)\nfunc main() {\n")
+	main.WriteString(`package main
+
+import (
+    "bytes"
+    "encoding/hex"
+    "fmt"
+)
+
+func vmovfamily(src, dst, out *byte, value uint64)
+
+func main() {
+`)
 	for iteration := 0; iteration < 4; iteration++ {
 		src, dst, value := arm64VMOVInputs(iteration)
-		fmt.Fprintf(&main, "{src,_:=hex.DecodeString(%q);dst,_:=hex.DecodeString(%q);want,_:=hex.DecodeString(%q);got:=make([]byte,len(want));vmovfamily(&src[0],&dst[0],&got[0],%d);if !bytes.Equal(got,want){for i:=range want{if got[i]!=want[i]{panic(fmt.Sprintf(\"iteration %d case %%d byte %%d got %%02x want %%02x\",i/16,i%%16,got[i],want[i]))}}}}\n", hex.EncodeToString(src), hex.EncodeToString(dst), hex.EncodeToString(arm64VMOVExpected(cases, src, dst, value)), value, iteration)
+		fmt.Fprintf(&main, `{
+    src, _ := hex.DecodeString(%q)
+    dst, _ := hex.DecodeString(%q)
+    want, _ := hex.DecodeString(%q)
+    got := make([]byte, len(want))
+    vmovfamily(&src[0], &dst[0], &got[0], %d)
+    if !bytes.Equal(got, want) {
+        for i := range want {
+            if got[i] != want[i] {
+                panic(fmt.Sprintf("iteration %d case %%d byte %%d got %%02x want %%02x",
+                    i/16, i%%16, got[i], want[i]))
+            }
+        }
+    }
+}
+`, hex.EncodeToString(src), hex.EncodeToString(dst), hex.EncodeToString(arm64VMOVExpected(cases, src, dst, value)), value, iteration)
 	}
 	main.WriteString("}\n")
 	dir := t.TempDir()
@@ -274,7 +300,14 @@ func TestARM64VMOVLLVMRuntime(t *testing.T) {
 	if runtime.GOOS == "darwin" {
 		symbol = "_" + symbol
 	}
-	fmt.Fprintf(&main, "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\nextern void vmovfamily(const uint8_t*,const uint8_t*,uint8_t*,uint64_t) __asm__(%q);\nint main(void) {\n", symbol)
+	fmt.Fprintf(&main, `#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
+extern void vmovfamily(const uint8_t*, const uint8_t*, uint8_t*, uint64_t) __asm__(%q);
+
+int main(void) {
+`, symbol)
 	for iteration := 0; iteration < 4; iteration++ {
 		src, dst, value := arm64VMOVInputs(iteration)
 		for _, array := range []struct {
@@ -290,9 +323,19 @@ func TestARM64VMOVLLVMRuntime(t *testing.T) {
 			}
 			main.WriteString("};\n")
 		}
-		fmt.Fprintf(&main, "uint8_t got[sizeof(want)]={0};vmovfamily(src,dst,got,UINT64_C(%d));for(unsigned i=0;i<sizeof(want);i++){if(got[i]!=want[i]){fprintf(stderr,\"iteration %d case %%u byte %%u got %%02x want %%02x\\n\",i/16,i%%16,got[i],want[i]);return 1;}}}\n", value, iteration)
+		fmt.Fprintf(&main, `uint8_t got[sizeof(want)] = {0};
+    vmovfamily(src, dst, got, UINT64_C(%d));
+    for (unsigned i = 0; i < sizeof(want); i++) {
+        if (got[i] != want[i]) {
+            fprintf(stderr, "iteration %d case %%u byte %%u got %%02x want %%02x\n",
+                i/16, i%%16, got[i], want[i]);
+            return 1;
+        }
+    }
+}
+`, value, iteration)
 	}
-	main.WriteString("return 0;}\n")
+	main.WriteString("    return 0;\n}\n")
 	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "arm64_vmov", triple, arm64VMOVIR(t, triple, cases), main.String(), nil)
 }

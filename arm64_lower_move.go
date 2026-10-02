@@ -12,7 +12,8 @@ func (c *arm64Ctx) lowerARM64VectorMove(op Op, ins Instr) (ok bool, terminated b
 	if op != "VMOV" {
 		return false, false, nil
 	}
-	if strings.ToUpper(string(ins.Op)) != "VMOV" || len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
+	if strings.ToUpper(string(ins.Op)) != "VMOV" || len(ins.Args) != 2 ||
+		ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
 		return true, false, fmt.Errorf("arm64 VMOV expects two registers and no opcode suffix: %q", ins.Raw)
 	}
 	src, dst := ins.Args[0].Reg, ins.Args[1].Reg
@@ -90,7 +91,9 @@ func (c *arm64Ctx) lowerARM64VectorMove(op Op, ins Instr) (ok bool, terminated b
 	// clears the high 64 bits; a full load/store would wrongly preserve them.
 	sourceArrangement, sourceArranged := parseARM64VectorArrangement(src)
 	destinationArrangement, destinationArranged := parseARM64VectorArrangement(dst)
-	if !sourceVector || !destinationVector || !sourceArranged || !destinationArranged || sourceArrangement != destinationArrangement || sourceArrangement.elementBits != 8 || (sourceArrangement.lanes != 8 && sourceArrangement.lanes != 16) {
+	if !sourceVector || !destinationVector || !sourceArranged || !destinationArranged ||
+		sourceArrangement != destinationArrangement || sourceArrangement.elementBits != 8 ||
+		(sourceArrangement.lanes != 8 && sourceArrangement.lanes != 16) {
 		return true, false, fmt.Errorf("arm64 VMOV vector copy requires matching B8 or B16 arrangements: %q", ins.Raw)
 	}
 	value, err := c.loadARM64VectorInteger(src, sourceArrangement)
