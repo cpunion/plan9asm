@@ -25,7 +25,7 @@
     {
       "module": "gitee.com/zhaochuninhefei/gmgo",
       "version": "v0.1.1",
-      "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
+      "reason": "ARM64 SM3 and SM4 assembly writes byte-swapped raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; all three source witnesses are pinned by SHA-256.",
       "evidence": [
         {
           "asm_file": "sm4/asm_arm64.s",
@@ -39,6 +39,13 @@
           "sha256": "62ffa0a70de1bf435c9dddd22aea9c0add4326a2e355edc44faa40de1abe7fcd",
           "source_expression": "WORD $0x6086c0ce",
           "word": "0x6086c0ce",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "sm3/sm3blockni_arm64.s",
+          "sha256": "b22e4380d11a11777021d72bb1688283850d52c3ce3f9b36d31cb60802951d77",
+          "source_expression": "WORD $0x05254bce",
+          "word": "0x05254bce",
           "architecture": "arm64"
         }
       ]
@@ -92,7 +99,7 @@
     {
       "module": "github.com/initLijing/gmsm",
       "version": "v0.15.6",
-      "reason": "ARM64 assembly writes two raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; the source version is pinned by SHA-256.",
+      "reason": "ARM64 SM3 and SM4 assembly writes byte-swapped raw WORD values that LLVM 22 independently rejects as invalid instruction encodings; all three source witnesses are pinned by SHA-256.",
       "evidence": [
         {
           "asm_file": "sm4/asm_arm64.s",
@@ -106,6 +113,13 @@
           "sha256": "cbe77320c45781dc83283556edaf8a5d4cfb5f5f8fb465d858d92f5375d3bd18",
           "source_expression": "WORD $0x6086c0ce",
           "word": "0x6086c0ce",
+          "architecture": "arm64"
+        },
+        {
+          "asm_file": "sm3/sm3blockni_arm64.s",
+          "sha256": "4f4a7ff92198391b93b6addcffb90735eba4fd8d3b5fa4d5d904874eacca0538",
+          "source_expression": "WORD $0x05254bce",
+          "word": "0x05254bce",
           "architecture": "arm64"
         }
       ]
