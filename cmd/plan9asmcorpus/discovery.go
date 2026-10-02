@@ -2110,12 +2110,13 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		discovered[asmFile] = true
 	}
 	allowedKinds := map[string]bool{
-		discoverySourceNotApplicableGoAssembler: true,
-		discoverySourceNotApplicableNoGoPackage: true,
-		discoverySourceNotApplicableGoBuild:     true,
-		discoverySourceNotApplicableAsmDecl:     true,
-		discoverySourceNotApplicableNoSymbols:   true,
-		nativeLayoutGoAssemblerTarget:           true,
+		discoverySourceNotApplicableGoAssembler:   true,
+		discoverySourceNotApplicableNoGoPackage:   true,
+		discoverySourceNotApplicableGoBuild:       true,
+		discoverySourceNotApplicableAsmDecl:       true,
+		discoverySourceNotApplicableNoSymbols:     true,
+		discoverySourceNotApplicableFortranLoader: true,
+		nativeLayoutGoAssemblerTarget:             true,
 	}
 	for _, item := range result.SourceNotApplicableItems {
 		files := append([]string(nil), item.AsmFiles...)
@@ -2133,6 +2134,11 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		}
 		if !valid {
 			return fmt.Errorf("invalid source not-applicable evidence: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)
+		}
+		if item.Kind == discoverySourceNotApplicableFortranLoader &&
+			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
+				len(result.OrdinarySelectionPlan.FortranRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
+			return fmt.Errorf("Fortran loader source exclusion lacks its independent typed original-source proof")
 		}
 		if isDiscoveryGoBuildInfrastructureFailure(item.Reason) {
 			return fmt.Errorf("source not-applicable evidence contains an infrastructure failure: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)
@@ -2407,10 +2413,28 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				}
 				var targetAsmFiles []string
 				var eligibleGroups []discoveryPackageGroup
-				buildErrors, err := runDiscoveryPackageChecks(packageGroups, func(patterns []string) error {
+				fortranProofs := make(map[string]discoveryFortranLoaderRejection)
+				buildErrors, err := runDiscoveryPackageChecksWithProof(packageGroups, func(patterns []string) error {
 					return guard(func() error {
 						return runDiscoveryGoBuild(ctx, workDir, operationEnv, target, buildConfiguration.BuildTags, patterns...)
 					})
+				}, func(group discoveryPackageGroup, failure error) (bool, error) {
+					if activeProfile == nil || !isPotentialFortranLoaderFailure(group.Pattern, failure) {
+						return false, nil
+					}
+					var proof discoveryFortranLoaderRejection
+					err := guard(func() error {
+						var err error
+						proof, err = captureFortranLoaderRejection(ctx, ordinaryPlan, *activeProfile, download.Dir, workDir,
+							cppGoRoot, operationEnv, group, buildConfiguration.BuildTags, failure)
+						return err
+					})
+					if err != nil {
+						return false, err
+					}
+					ordinaryPlan.FortranRejections = append(ordinaryPlan.FortranRejections, proof)
+					fortranProofs[group.Pattern] = proof
+					return true, nil
 				})
 				if err != nil {
 					return fmt.Errorf("verify current Go packages for %s with build tags %v: %w",
@@ -2419,6 +2443,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var buildableGroups []discoveryPackageGroup
 				for index, group := range packageGroups {
 					if err := buildErrors[index]; err != nil {
+						if proof, found := fortranProofs[group.Pattern]; found {
+							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+								ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: proof.AsmFiles,
+								Targets: []string{proof.Target}, Kind: discoverySourceNotApplicableFortranLoader, Reason: proof.Stderr,
+							})
+							continue
+						}
 						aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 							ProfileID: buildConfiguration.ProfileID,
 							BuildTags: append([]string(nil), buildConfiguration.BuildTags...),
@@ -2885,6 +2916,17 @@ func runDiscoveryPackageChecks(
 	groups []discoveryPackageGroup,
 	check func([]string) error,
 ) ([]error, error) {
+	return runDiscoveryPackageChecksWithProof(groups, check, nil)
+}
+
+// A typed source-role proof may discharge its one exact package failure.
+// Infrastructure/source-guard failures still take precedence, and every other
+// no-position diagnostic retains the original hard failure behavior.
+func runDiscoveryPackageChecksWithProof(
+	groups []discoveryPackageGroup,
+	check func([]string) error,
+	prove func(discoveryPackageGroup, error) (bool, error),
+) ([]error, error) {
 	results := make([]error, len(groups))
 	if len(groups) == 0 {
 		return results, nil
@@ -2904,6 +2946,15 @@ func runDiscoveryPackageChecks(
 		results[index] = check([]string{group.Pattern})
 		if isDiscoveryInfrastructureFailure(results[index]) {
 			return nil, fmt.Errorf("package %s: %w", group.Pattern, results[index])
+		}
+		if results[index] != nil && prove != nil {
+			accepted, err := prove(group, results[index])
+			if err != nil {
+				return nil, fmt.Errorf("package %s source-role proof: %w", group.Pattern, err)
+			}
+			if accepted {
+				continue
+			}
 		}
 		if results[index] != nil && !hasDiscoveryConcreteSourceDiagnostic(discoveryCommandDiagnostic(results[index])) {
 			return nil, fmt.Errorf("package %s lacks a concrete source rejection diagnostic (not N/A): %w", group.Pattern, results[index])

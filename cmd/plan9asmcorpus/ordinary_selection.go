@@ -38,25 +38,26 @@ const (
 // package. Ignored directories and nested modules are recursive corpus-walk
 // boundaries. Constraints and source diagnostics are separate decisions.
 type discoveryOrdinarySelectionPlan struct {
-	Protocol           string                          `json:"protocol"`
-	Module             string                          `json:"module"`
-	Version            string                          `json:"version"`
-	ModuleSum          string                          `json:"module_sum"`
-	ZipSHA256          string                          `json:"zip_sha256"`
-	GoVersion          string                          `json:"go_version"`
-	Targets            []string                        `json:"targets"`
-	ReleaseTags        []string                        `json:"release_tags"`
-	ToolTags           []string                        `json:"tool_tags"`
-	TestedAsmFiles     []string                        `json:"tested_asm_files,omitempty"`
-	Sources            []ordinarySelectionSource       `json:"sources"`
-	Directories        []ordinarySelectionDirectory    `json:"directories"`
-	Decisions          []ordinarySelectionDecision     `json:"decisions"`
-	CPPInputs          *discoveryCPPInputs             `json:"cpp_inputs,omitempty"`
-	ProfileDecisions   []ordinaryProfileDecision       `json:"profile_decisions,omitempty"`
-	ProxyGoMod         *gotoolprofile.ProxyGoModProof  `json:"proxy_go_mod,omitempty"`
-	GeneratedHeaders   []discoveryGeneratedHeaderQuery `json:"generated_headers,omitempty"`
-	GeneratedGoSources map[string]string               `json:"generated_go_sources,omitempty"`
-	PreCPPRejections   []discoveryPreCPPRejection      `json:"pre_cpp_rejections,omitempty"`
+	Protocol           string                            `json:"protocol"`
+	Module             string                            `json:"module"`
+	Version            string                            `json:"version"`
+	ModuleSum          string                            `json:"module_sum"`
+	ZipSHA256          string                            `json:"zip_sha256"`
+	GoVersion          string                            `json:"go_version"`
+	Targets            []string                          `json:"targets"`
+	ReleaseTags        []string                          `json:"release_tags"`
+	ToolTags           []string                          `json:"tool_tags"`
+	TestedAsmFiles     []string                          `json:"tested_asm_files,omitempty"`
+	Sources            []ordinarySelectionSource         `json:"sources"`
+	Directories        []ordinarySelectionDirectory      `json:"directories"`
+	Decisions          []ordinarySelectionDecision       `json:"decisions"`
+	CPPInputs          *discoveryCPPInputs               `json:"cpp_inputs,omitempty"`
+	ProfileDecisions   []ordinaryProfileDecision         `json:"profile_decisions,omitempty"`
+	ProxyGoMod         *gotoolprofile.ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
+	GeneratedHeaders   []discoveryGeneratedHeaderQuery   `json:"generated_headers,omitempty"`
+	GeneratedGoSources map[string]string                 `json:"generated_go_sources,omitempty"`
+	PreCPPRejections   []discoveryPreCPPRejection        `json:"pre_cpp_rejections,omitempty"`
+	FortranRejections  []discoveryFortranLoaderRejection `json:"fortran_loader_rejections,omitempty"`
 	proxyGoModPath     string
 }
 
@@ -747,6 +748,9 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 			return fmt.Errorf("ordinary pass or source exclusion lacks exact source-selection proof")
 		}
 		return nil
+	}
+	if len(plan.FortranRejections) != 0 {
+		return fmt.Errorf("Fortran loader source proof requires current profile-aware report replay")
 	}
 	if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 		return err

@@ -295,6 +295,19 @@ includes, conditionals, definitions, lexical errors, missing generated constants
 and infrastructure failures cannot use this route. Other eligible files still
 require their normal CPP and compiler/object evidence. This is target-scoped
 source rejection, not translation success or a module-wide exception.
+An ordinary package rejected by Go's CGO=0 Fortran loader has a separate
+`original_cgo0_fortran_loader_rejection_v1` proof, not a guessed source position.
+It binds the complete original directory and every Go-recognized FF resource
+(`.f`, `.F`, `.for`, `.f90`), selection headers, actual package Go/assembly roles,
+current target/profile/custom tags, CGO=0 with no cgo/SWIG or dependency errors,
+and the complete unique non-`-e` export rejection (exit 1 and empty stdout).
+Readers independently replay FF filename/constraint selection and the exact
+excluded scope set; the pinned Go 1.27.1 loader/build source registrations are
+also checked. Missing proofs, mixed diagnostics and infrastructure failures
+remain failures. Original ZIP/resource/header/tool guards run before and after
+each phase. This route does not erase pre-CPP rejection attribution or bypass
+unknown CPP, headers, other packages or normal eligible object scopes. Older
+non-profile reports cannot use the new proof, and source N/A is never a pass.
 Every package-local custom-tag configuration also includes its shared assembly
 files selected by Go MatchFile. A file tested with baseline declarations is not
 evidence for declarations selected by another tag configuration. Do not spread

@@ -47,6 +47,10 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		return err
 	}
 	remaining := preCPPRemainingScopes(eligible, preRejected)
+	fortranRejected, err := validateDiscoveryFortranRejections(plan, profiles, remaining)
+	if err != nil {
+		return err
+	}
 	if err := validateDiscoveryGeneratedHeaderQueries(plan, profiles, eligible); err != nil {
 		return err
 	}
@@ -109,8 +113,22 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 						}
 					}
 				}
+				if proof, found := fortranRejected[key]; found {
+					if item.Kind != discoverySourceNotApplicableFortranLoader ||
+						!result.sourceDiagnosticsCompacted && item.Reason != proof.Stderr ||
+						result.sourceDiagnosticsCompacted && item.Reason != discoverySourceSkipReason(item.Kind) {
+						return fmt.Errorf("Fortran loader scope was relabeled or lost its exact original diagnostic")
+					}
+				} else if item.Kind == discoverySourceNotApplicableFortranLoader {
+					return fmt.Errorf("Fortran loader source exclusion lacks its exact package/profile proof")
+				}
 				rejected[key] = true
 			}
+		}
+	}
+	for key := range fortranRejected {
+		if !rejected[key] || executed[key] {
+			return fmt.Errorf("Fortran loader proof omitted its exact unexecuted source exclusion")
 		}
 	}
 	for key := range eligible {

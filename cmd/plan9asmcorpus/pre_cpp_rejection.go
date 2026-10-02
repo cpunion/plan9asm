@@ -364,18 +364,48 @@ func sortedPreCPPScopes(scopes map[discoveryProfileScope]bool) []discoveryProfil
 
 func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile,
 	dir string, env []string, rejection discoveryPreCPPRejection) (gotoolprofile.PackageProof, error) {
+	proof, _, err := captureRejectedOrdinaryPackage(ctx, plan, profile, dir, env, rejection)
+	return proof, err
+}
+
+// Ordinary loader and pre-CPP rejections share the same actual Go selection,
+// authenticated source-module role and complete Go/assembly source binding.
+// Extra loader fields are retained separately, never inferred from stderr.
+type discoveryRejectedPackage struct {
+	ImportPath, Dir, Name             string
+	GoFiles, SFiles, FFiles           []string
+	CgoFiles, SwigFiles, SwigCXXFiles []string
+	Error                             *discoveryRejectedPackageError
+	DepsErrors                        []discoveryRejectedPackageError
+	Module                            *discoveryRejectedModule
+}
+
+type discoveryRejectedPackageError struct {
+	ImportStack []string
+	Pos, Err    string
+}
+
+type discoveryRejectedModule struct {
+	Path, Version, Dir, GoMod, Sum string
+	Main                           bool
+	Replace                        *struct{ Path, Version, GoMod, Sum string }
+}
+
+func captureRejectedOrdinaryPackage(ctx context.Context, plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile,
+	dir string, env []string, rejection discoveryPreCPPRejection) (gotoolprofile.PackageProof, discoveryRejectedPackage, error) {
 	var proof gotoolprofile.PackageProof
+	var pkg discoveryRejectedPackage
 	declared, err := ordinaryProfileDeclaredModule(plan)
 	if err != nil {
-		return proof, err
+		return proof, pkg, err
 	}
 	candidate := discoveryCandidate{Module: plan.Module, Version: plan.Version, AsmFiles: []string{rejection.File}}
 	execution, err := makeDiscoveryExecutionPlan(candidate, declared)
 	if err != nil {
-		return proof, err
+		return proof, pkg, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(execution.GoMod), 0600); err != nil {
-		return proof, err
+		return proof, pkg, err
 	}
 	args := []string{"list", "-e", "-json", "-mod=mod"}
 	if len(rejection.BuildTags) != 0 {
@@ -385,22 +415,11 @@ func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionP
 	selectionEnv := replaceEnv(ordinaryProfileEnvironment(env, profile.Observed), map[string]string{"CGO_ENABLED": "0"})
 	output, stderr, err := runDiscoveryMachineCommand(ctx, dir, selectionEnv, "go", args...)
 	if err != nil || isDiscoveryGoBuildInfrastructureFailure(string(stderr)) {
-		return proof, fmt.Errorf("actual pre-CPP package source selection: %v: %s", err, stderr)
-	}
-	var pkg struct {
-		ImportPath, Dir string
-		GoFiles, SFiles []string
-		Error           *struct{ Err string }
-		DepsErrors      []struct{ Err string }
-		Module          *struct {
-			Path, Version, Dir, GoMod, Sum string
-			Main                           bool
-			Replace                        *struct{ Path, Version, GoMod, Sum string }
-		}
+		return proof, pkg, fmt.Errorf("actual rejected-package source selection: %v: %s", err, stderr)
 	}
 	if err := json.Unmarshal(output, &pkg); err != nil || pkg.Module == nil || pkg.Module.Main ||
 		len(pkg.DepsErrors) != 0 || pkg.Error != nil && isDiscoveryGoBuildInfrastructureFailure(pkg.Error.Err) {
-		return proof, fmt.Errorf("actual pre-CPP package role is missing or contains tool/dependency failure: %v", err)
+		return proof, pkg, fmt.Errorf("actual rejected-package role is missing or contains tool/dependency failure: %v", err)
 	}
 	proof = gotoolprofile.PackageProof{PackagePath: pkg.ImportPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
 		SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module", SourceSHA256: make(map[string]string)}
@@ -410,12 +429,12 @@ func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionP
 		sum, goMod = replacement.Sum, replacement.GoMod
 	}
 	if sum != plan.ModuleSum {
-		return proof, fmt.Errorf("actual pre-CPP package source differs from original ZIP h1")
+		return proof, pkg, fmt.Errorf("actual rejected-package source differs from original ZIP h1")
 	}
 	if metadata := plan.ProxyGoMod; metadata != nil {
 		actual, err := discoveryFeatureFileSHA256(goMod)
 		if err != nil || actual != metadata.SHA256 {
-			return proof, fmt.Errorf("actual pre-CPP package used different authenticated proxy metadata")
+			return proof, pkg, fmt.Errorf("actual rejected-package used different authenticated proxy metadata")
 		}
 		proof.GoModOrigin, proof.GoModSHA256, proof.GoModSum = metadata.Protocol, metadata.SHA256, metadata.GoModSum
 	}
@@ -423,16 +442,16 @@ func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionP
 		for _, file := range files {
 			filename := filepath.Join(pkg.Dir, file)
 			if err := discoveryCPPRegularSource(pkg.Module.Dir, filename); err != nil {
-				return proof, err
+				return proof, pkg, err
 			}
 			relative, err := filepath.Rel(pkg.Module.Dir, filename)
 			relative = filepath.ToSlash(relative)
 			if err != nil || !ordinarySelectionLocalPath(relative) {
-				return proof, fmt.Errorf("actual pre-CPP package selected an escaping source")
+				return proof, pkg, fmt.Errorf("actual rejected-package selected an escaping source")
 			}
 			proof.SourceSHA256[relative], err = discoveryFeatureFileSHA256(filename)
 			if err != nil {
-				return proof, err
+				return proof, pkg, err
 			}
 			if strings.HasSuffix(relative, ".go") {
 				proof.GoFiles = append(proof.GoFiles, relative)
@@ -445,11 +464,11 @@ func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionP
 	sort.Strings(proof.SFiles)
 	rootOutput, _, err := runDiscoveryMachineCommand(ctx, dir, ordinaryProfileEnvironment(env, profile.Observed), "go", "env", "GOROOT")
 	if err != nil {
-		return proof, err
+		return proof, pkg, err
 	}
 	proof.Macros, err = captureDiscoveryAssemblerMacros(strings.TrimSpace(string(rootOutput)), profile.Observed, proof.PackagePath)
 	if err != nil {
-		return proof, err
+		return proof, pkg, err
 	}
-	return proof, validatePreCPPPackage(plan, profile, discoveryPreCPPRejection{File: rejection.File, BuildTags: rejection.BuildTags, Package: proof})
+	return proof, pkg, validatePreCPPPackage(plan, profile, discoveryPreCPPRejection{File: rejection.File, BuildTags: rejection.BuildTags, Package: proof})
 }
