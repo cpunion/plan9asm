@@ -184,11 +184,18 @@ RET
 	}
 }
 
-func runARM64LocalRegisterGoOracle(t *testing.T, source, main string, cross bool) {
+func runARM64LocalRegisterGoOracle(t *testing.T, source, main string, cross bool, minimumVersions ...string) {
 	t.Helper()
+	minimum := "1.27"
+	if len(minimumVersions) > 1 {
+		t.Fatal("native Go oracle requires at most one module Go minimum")
+	}
+	if len(minimumVersions) == 1 {
+		minimum = minimumVersions[0]
+	}
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":  "module localregisteroracle\n\ngo 1.27\n",
+		"go.mod":  "module localregisteroracle\n\ngo " + minimum + "\n",
 		"main.go": main, "oracle_arm64.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

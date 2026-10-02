@@ -65,10 +65,23 @@ func arm64SourceGoFrame(fn Func) arm64GoFrame {
 func arm64ControlExternal() arm64ControlValue { return arm64ControlValue{"": true} }
 
 func arm64ControlRead(values map[Reg]arm64ControlValue, reg Reg) arm64ControlValue {
-	if value := values[reg]; value != nil {
-		return value
+	reg = arm64ControlBase(reg)
+	value := values[reg]
+	// F, V lanes and SVE Z views share physical storage. Provenance cannot
+	// disappear merely because the next typed read uses another view. Retain
+	// all alias witnesses conservatively; this is not a partial-write proof.
+	root := arm64MachineRegister(reg)
+	if strings.HasPrefix(root, "V") {
+		for alias, witness := range values {
+			if arm64MachineRegister(alias) == root {
+				value = arm64ControlUnion(value, witness)
+			}
+		}
 	}
-	return arm64ControlExternal()
+	if value == nil {
+		return arm64ControlExternal()
+	}
+	return value
 }
 
 func arm64ControlUnion(left, right arm64ControlValue) arm64ControlValue {
@@ -795,65 +808,36 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operand Operand) {
 	name := c.resolve(strings.TrimSuffix(operand.Sym, "(SB)"))
 	sig, known := c.sigs[name]
-	// A native/Go callee has no virtual-GP preservation contract. In
-	// particular, even a scalar result may return the call's link address.
 	possibleCode := arm64ControlLabels(state.escaped)
-	for _, value := range state.regs {
-		possibleCode = arm64ControlUnion(possibleCode, arm64ControlLabels(value))
-	}
 	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
 	mayWriteFrame := !known || len(state.escaped) != 0
-	callTransportKnown := known && operand.Kind == OpSym
 	internal := strings.HasSuffix(strings.TrimSuffix(operand.Sym, "(SB)"), "<ABIInternal>")
-	if internal && sig.ARM64GoRegisterABI != nil {
-		// The classic ABI0 Frame is not the location of an explicit
-		// ABIInternal call's values. Inspect every typed scalar register leaf,
-		// including pointers nested within aggregates. This only invalidates
-		// possible aliases; it asserts no ownership or register preservation.
-		if err := arm64ValidateGoRegisterABI(sig); err != nil {
-			mayWriteFrame = true
-			callTransportKnown = false
-		} else {
-			for _, param := range sig.ARM64GoRegisterABI.Params {
-				value := arm64ControlRead(state.regs, param.Register)
-				state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
-				returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
-				mayWriteFrame = mayWriteFrame || param.Type == Ptr
-				for token := range value {
-					if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
-						mayWriteFrame = true
-					}
-				}
-			}
-		}
-	}
-	for index := range sig.Args {
-		if internal && sig.ARM64GoRegisterABI != nil {
-			break
-		}
-		var value arm64ControlValue
-		if len(sig.Frame.Params) != 0 && len(sig.ArgRegs) == 0 {
-			for _, param := range sig.Frame.Params {
-				if param.Index == index {
-					value = arm64ControlUnion(value, state.source(Operand{Kind: OpMem, Mem: MemRef{Base: SP, Off: param.Offset + 8}}, false))
-				}
-			}
-		} else {
-			reg := Reg(fmt.Sprintf("R%d", index))
-			if index < len(sig.ArgRegs) {
-				reg = sig.ArgRegs[index]
-			}
-			value = arm64ControlRead(state.regs, reg)
-		}
+	inputs, transport := arm64ControlCallInputs(state, sig, internal)
+	callTransportKnown := known && operand.Kind == OpSym && transport
+	mayWriteFrame = mayWriteFrame || !callTransportKnown
+	for _, value := range inputs {
 		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
 		returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
-		if arm64CallTypeMayContainPointer(sig.Args[index]) {
-			mayWriteFrame = true
-		}
 		for token := range value {
 			if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
 				mayWriteFrame = true
 			}
+		}
+	}
+	for _, typ := range sig.Args {
+		mayWriteFrame = mayWriteFrame || arm64CallTypeMayContainPointer(typ)
+	}
+	// The typed LLVM call transports only the inputs above, not virtual GP
+	// allocas or the automatic R30 continuation blockaddress. This distinction
+	// requires the whole-function fresh/non-escaping SP proof. Unknown ABI,
+	// hidden context and exposed frames retain the conservative all-GP model.
+	// Actual transported/escaped source PC taint remains in returnValue; old
+	// GP witnesses are still retained below, without caller-save preservation.
+	privateInputs := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && state.unexposedSP &&
+		(len(state.escaped) == 0 || arm64ControlEscapedOnlyCode(state.escaped))
+	if !privateInputs {
+		for _, value := range state.regs {
+			returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
 		}
 	}
 	for index := 0; index < 31; index++ {
@@ -883,25 +867,51 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	if !known {
 		return
 	}
+	arm64ControlWriteCallResults(state, sig, internal, returnValue)
+}
+
+func arm64ControlWriteCallResults(state *arm64ControlState, sig FuncSig, internal bool, value arm64ControlValue) {
 	if internal && sig.ARM64GoRegisterABI != nil {
 		for _, result := range sig.ARM64GoRegisterABI.Results {
-			if !isARM64ABIFloatingType(result.Type) {
-				state.regs[result.Register] = returnValue
+			state.regs[result.Register] = value
+		}
+		return
+	}
+	if !internal && len(sig.ArgRegs) == 0 && len(sig.Frame.Results) != 0 {
+		for _, result := range sig.Frame.Results {
+			if result.Offset > 1<<63-1-8 {
+				continue // The ordinary ABI0 result lowerer rejects this offset.
+			}
+			key := state.memoryKey(Operand{Kind: OpMem, Mem: MemRef{Base: SP, Off: result.Offset + 8}}, false)
+			if key != "" {
+				written := value
+				if arm64MachineScalarWidth(result.Type) < 64 {
+					// Partial results cannot erase code bits in an overlapping
+					// cell which a later full-width read could observe.
+					old := arm64ControlCallFrameRead(state, result.Offset+8, 64)
+					written = arm64ControlUnion(written, arm64ControlLabels(old))
+				}
+				state.memory[key] = written
 			}
 		}
 		return
 	}
-	if len(sig.Frame.Results) == 0 {
-		if sig.Ret != Void {
-			state.regs[Reg("R0")] = returnValue
-		}
+	if sig.Ret == Void {
 		return
 	}
-	for _, result := range sig.Frame.Results {
-		key := state.memoryKey(Operand{Kind: OpMem, Mem: MemRef{Base: SP, Off: result.Offset + 8}}, false)
-		if key != "" {
-			state.memory[key] = returnValue
+	fields, aggregate := parseLiteralStructFields(sig.Ret)
+	if !aggregate {
+		fields = []LLVMType{sig.Ret}
+	}
+	// Match storeABIRegisterResult, including floating results and mixed
+	// aggregate GP/FP banks. A floating value can carry source PC bits.
+	var cursor arm64ABIRegisterCursor
+	for _, field := range fields {
+		reg, err := cursor.next(field)
+		if err != nil {
+			return // The ordinary typed result lowerer rejects this shape.
 		}
+		state.regs[reg] = value
 	}
 }
 
