@@ -283,7 +283,7 @@ func TestARM64ArithmeticCoverage(t *testing.T) {
 		{Op: "CMPW", Args: []Operand{arm64RegOp("R1"), arm64RegOp("R2")}, Raw: "CMPW R1, R2"},
 		{Op: "CMN", Args: []Operand{arm64RegOp("R2"), arm64RegOp("R3")}, Raw: "CMN R2, R3"},
 		{Op: "NEG", Args: []Operand{arm64RegOp("R3"), arm64RegOp("R4")}, Raw: "NEG R3, R4"},
-		{Op: "MUL", Args: []Operand{arm64ImmOp(2), arm64RegOp("R4"), arm64RegOp("R5")}, Raw: "MUL $2, R4, R5"},
+		{Op: "MUL", Args: []Operand{arm64RegOp("R2"), arm64RegOp("R4"), arm64RegOp("R5")}, Raw: "MUL R2, R4, R5"},
 		{Op: "UMULH", Args: []Operand{arm64RegOp("R5"), arm64RegOp("R6"), arm64RegOp("R7")}, Raw: "UMULH R5, R6, R7"},
 		{Op: "MADD", Args: []Operand{arm64RegOp("R0"), arm64RegOp("R1"), arm64RegOp("R2"), arm64RegOp("R3")}, Raw: "MADD R0, R1, R2, R3"},
 		{Op: "MSUB", Args: []Operand{arm64RegOp("R3"), arm64RegOp("R4"), arm64RegOp("R5"), arm64RegOp("R6")}, Raw: "MSUB R3, R4, R5, R6"},
@@ -301,6 +301,12 @@ func TestARM64ArithmeticCoverage(t *testing.T) {
 	} {
 		ok, _, err := c.lowerArith(tc.Op, tc)
 		mustLowerARM64(t, "lowerArith", tc, ok, err)
+	}
+
+	const invalidMultiply = "TEXT immediateMultiply(SB),516,$0-0\nMUL $2,R4,R5\nRET\n"
+	requireARM64GoAssemblerResult(t, invalidMultiply, false)
+	if _, _, err := c.lowerArith("MUL", Instr{Op: "MUL", Args: []Operand{arm64ImmOp(2), arm64RegOp("R4"), arm64RegOp("R5")}, Raw: "MUL $2,R4,R5"}); err == nil {
+		t.Fatal("Go-rejected immediate multiply unexpectedly succeeded")
 	}
 
 	if _, _, err := c.lowerArith("UBFX", Instr{Op: "UBFX", Args: []Operand{arm64ImmOp(63), arm64RegOp("R0"), arm64ImmOp(2), arm64RegOp("R1")}, Raw: "UBFX $63, R0, $2, R1"}); err == nil {

@@ -419,6 +419,12 @@ func arm64RawPrivateMemory(ins Instr) (arm64RawPrivateMemoryForm, bool) {
 	if !form.store && len(form.registers) == 2 && form.registers[0] == form.registers[1] {
 		return form, false
 	}
+	// $offset(base) and $symbol(SB) materialize an address, not memory
+	// contents. Their own typed grammar must retain source provenance and
+	// Go's implicit R27 literal scratch effect before any memory transfer.
+	if form.memory.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(form.memory.Sym), "$") {
+		return form, false
+	}
 	if form.pre || form.post {
 		if form.memory.Kind != OpMem || form.memory.Mem.Index != "" || form.memory.Mem.OffRaw != "" {
 			return form, false
