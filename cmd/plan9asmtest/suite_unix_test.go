@@ -73,7 +73,10 @@ func BenchmarkNotRun(b *testing.B) { b.Fatal("benchmarks must not run in ordinar
 		t.Fatal(err)
 	}
 	out := filepath.Join(t.TempDir(), "artifacts")
-	err := runSuite(context.Background(), config{Go: "go", Dir: dir, Package: ".", Out: out, Shards: 5, Timeout: 90 * time.Second, Flags: []string{"-race", "-covermode=atomic", "-coverprofile=actual.cover", "-tags=runnerfixture", "-p=1"}})
+	// Cold race-instrumented standard-library compilation under the required
+	// Linux diagnostic emulator is distinct from execution. Keep it bounded,
+	// but do not confuse a short fixture build budget with a broken decoder.
+	err := runSuite(context.Background(), config{Go: "go", Dir: dir, Package: ".", Out: out, Shards: 5, Timeout: 4 * time.Minute, Flags: []string{"-race", "-covermode=atomic", "-coverprofile=actual.cover", "-tags=runnerfixture", "-p=1"}})
 	if err != nil {
 		listing, _ := os.ReadFile(filepath.Join(out, "inventory.stdout"))
 		t.Fatalf("actual instrumented suite: %v\n%s", err, listing)
@@ -110,13 +113,28 @@ func TestActualGoTimeoutCannotPassAndRetainsPlan(t *testing.T) {
 	t.Setenv("GOFLAGS", "")
 	dir := fixture(t, "package fixture\nimport \"testing\"\nfunc TestHang(t *testing.T) { select {} }\n")
 	out := filepath.Join(t.TempDir(), "artifacts")
-	err := runSuite(context.Background(), config{Go: "go", Dir: dir, Package: ".", Out: out, Shards: 1, Timeout: 3 * time.Second})
+	// Both commands have the same real wall deadline. Allow the actual Go
+	// inventory to compile/link before proving the hung test is canceled.
+	err := runSuite(context.Background(), config{Go: "go", Dir: dir, Package: ".", Out: out, Shards: 1, Timeout: 30 * time.Second})
 	if err == nil {
 		t.Fatal("timed out Go child was promoted")
 	}
 	report := readReport(t, out)
-	if len(report.Names) != 1 || report.Names[0] != "TestHang" || report.Status != "failed" || report.Shards[0].Status != "failed" {
+	if len(report.Names) != 1 || report.Names[0] != "TestHang" || report.Status != "failed" || report.Shards[0].Status != "failed" || report.Shards[0].Outcomes["TestHang"] != "run" || !strings.Contains(report.Error, "deadline exceeded") {
 		t.Fatalf("timeout lost original plan: %+v", report)
+	}
+}
+
+func TestExpiredDeadlineCannotInventAnInventory(t *testing.T) {
+	t.Setenv("GOFLAGS", "")
+	out := filepath.Join(t.TempDir(), "artifacts")
+	err := runSuite(context.Background(), config{Go: "go", Dir: t.TempDir(), Package: ".", Out: out, Shards: 1, Timeout: time.Nanosecond})
+	if err == nil {
+		t.Fatal("expired command was promoted")
+	}
+	report := readReport(t, out)
+	if report.Status != "failed" || len(report.Names) != 0 || len(report.Shards) != 0 || !strings.Contains(report.Error, "deadline exceeded") {
+		t.Fatalf("expired command invented coverage: %+v", report)
 	}
 }
 
