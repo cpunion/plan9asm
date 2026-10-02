@@ -116,6 +116,9 @@ func armFunctionUsesModeledFlags(fn Func) bool {
 }
 
 func armInstructionFlagInputs(ins Instr) armKernelState {
+	if form, ok := decodeARMRawDataForm(ins); ok {
+		return armKernelConditionBits(form.condition)
+	}
 	if form, matched, err := parseARMStatusMove(ins); matched && err == nil {
 		return armKernelConditionBits(form.condition)
 	}
@@ -145,6 +148,18 @@ func armInstructionReadsStatus(ins Instr) bool {
 }
 
 func armStatusTransfer(name string, sig FuncSig, state armStatusState, ins Instr, check bool) (armStatusState, error) {
+	if form, ok := decodeARMRawDataForm(ins); ok {
+		predicate := armKernelConditionBits(form.condition)
+		if check && predicate != 0 && !state.initialized.has(predicate) {
+			return state, fmt.Errorf("%w: ARM raw %s in %q has no initialized %s predicate: %s", ErrProbeNeedsContext, form.family, name, form.condition, ins.Raw)
+		}
+		// These exact typed data forms leave APSR unchanged. GP outputs cannot
+		// acquire a source-value witness from zero-initialized vector slots or
+		// an unproved memory read. FPSCR changes never revive a VMRS witness.
+		state.values &^= form.gpWrites
+		state.vfpWitness = false
+		return state, nil
+	}
 	if form, matched, err := parseARMStatusMove(ins); matched {
 		if err != nil {
 			return state, err

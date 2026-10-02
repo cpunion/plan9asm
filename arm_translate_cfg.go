@@ -142,105 +142,12 @@ func (c *armCtx) lowerInstr(bi int, ins Instr, emitBr armEmitBr, emitCondBr armE
 		}
 		return false, fmt.Errorf("arm: unsupported instruction %s", ins.Op)
 	case string(OpWORD):
+		if form, ok := decodeARMRawDataForm(ins); ok {
+			return false, form.lower(c)
+		}
 		if len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
-			if form, ok := decodeARMRawNEONStructureFourMultiple(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONStructureFourMultiple(form)
-			}
-			if form, ok := decodeARMRawNEONModifiedImmediate(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONModifiedImmediate(form)
-			}
-			if form, ok := decodeARMRawNEONCoreLaneMove(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONCoreLaneMove(form)
-			}
-			if form, ok := decodeARMRawNEONStructureOneLane(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONStructureLane(form, 1)
-			}
-			if form, ok := decodeARMRawNEONStructureFourLane(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONStructureFourLane(form)
-			}
-			if form, ok := decodeARMRawNEONTranspose(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONTranspose(form)
-			}
-			if form, ok := decodeARMRawNEONShiftRightNarrow(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONShiftRightNarrow(form)
-			}
-			if form, ok := decodeARMRawNEONBitClearImmediate(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONBitClearImmediate(form)
-			}
-			if form, ok := decodeARMRawNEONExtract(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONExtract(form)
-			}
-			if form, ok := decodeARMRawNEONMoveNarrow(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMoveNarrow(form)
-			}
-			if form, ok := decodeARMRawNEONShiftInsert(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONShiftInsert(form)
-			}
-			if form, ok := decodeARMRawNEONShiftRightImmediate(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONShiftRightImmediate(form)
-			}
-			if form, ok := decodeARMRawNEONReverse(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONReverse(form)
-			}
-			if form, ok := decodeARMRawNEONMultiplyLongLane(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMultiplyLongLane(form)
-			}
-			if form, ok := decodeARMRawNEONMultiplyLongVector(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMultiplyLongVector(form)
-			}
-			if form, ok := decodeARMRawNEONAddSub(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONAddSub(form)
-			}
-			if form, ok := decodeARMRawVFPLoadStore(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawVFPLoadStore(form)
-			}
-			if form, ok := decodeARMRawNEONShiftImmediate(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONShiftImmediate(form)
-			}
-			if form, ok := decodeARMRawVFPMove(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawVFPMove(form)
-			}
-			if form, ok := decodeARMRawNEONPairwiseMinMax(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONPairwiseMinMax(form)
-			}
-			if form, ok := decodeARMRawNEONMinMax(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMinMax(form)
-			}
 			if form, ok := decodeARMRawVFPStatusTransfer(uint32(ins.Args[0].Imm)); ok {
 				return false, c.lowerRawVFPStatusTransfer(form)
-			}
-			if form, ok := decodeARMRawVFPScalarArithmetic(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawVFPScalarArithmetic(form)
-			}
-			if form, ok := decodeARMRawNEONMultiplyLane(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMultiplyLane(form)
-			}
-			if form, ok := decodeARMRawNEONConvertFloat32(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONConvertFloat32(form)
-			}
-			if form, ok := decodeARMRawNEONMoveLong(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONMoveLong(form)
-			}
-			if form, ok := decodeARMRawNEONWideningAddSub(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONWideningAddSub(form)
-			}
-			if form, ok := decodeARMRawNEONDup(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONDup(form)
-			}
-			if form, ok := decodeARMRawNEONStructureOne(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONStructureOne(form)
-			}
-			if form, ok := decodeARMRawNEONBitwise(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawNEONBitwise(form)
-			}
-			if form, ok := decodeARMRawSXTB(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawSXTB(form)
-			}
-			if form, ok := decodeARMRawVMOVPair(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawVMOVPair(form)
-			}
-			if form, ok := decodeARMRawVFPMultiple(uint32(ins.Args[0].Imm)); ok {
-				return false, c.lowerRawVFPMultiple(form)
 			}
 		}
 		if handled, err := c.lowerRawWord(ins); handled {

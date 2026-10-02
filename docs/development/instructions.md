@@ -77,6 +77,14 @@ unregistered effects cannot borrow this proof. Go's physical autosize is not
 the LLVM private-allocation size. Runtime oracles must execute original raw
 Go objects as well as LLVM objects with independent references and canaries.
 
+ARM32's specialized raw-data lowerers and NZCV source proof share one typed
+registration. Only those decoded data forms preserve source-defined APSR
+flags; conditional forms still require their predicate on every CFG path.
+Their GP outputs conservatively kill source-value witnesses, including memory
+writeback. Unknown WORDs, calls and unproved FPSCR-to-APSR transfers do not
+retain flags. Check every registered family and condition against LLVM-MC,
+Go objects and the required ARM Go-WORD/LLVM four-flag execution oracle.
+
 For a newly discovered instruction, update all four layers before calling it
 complete: the family-specific lowerer, positive/negative Go-table form tests,
 LLVM 22 object compilation for every affected supported architecture, and the
