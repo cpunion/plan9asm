@@ -205,7 +205,11 @@ func cppLiteralInclude(data []byte, wanted string) bool {
 			continue
 		}
 		literal, err := strconv.Unquote(scan.TokenText())
-		if scan.Scan() == '\n' && err == nil && literal == wanted && !invalid {
+		terminator := scan.Scan()
+		// This binds an original literal, not a complete input-stack directive.
+		// Included EOF may resume a parent's newline; Go and active CPP still
+		// require that newline and reject translation-unit EOF independently.
+		if (terminator == '\n' || terminator == scanner.EOF) && err == nil && literal == wanted && !invalid {
 			return true
 		}
 	}

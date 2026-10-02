@@ -321,6 +321,10 @@ consumption independently derives the required miss from its real include
 parent and operand, even if the canonical fallback retains `pkg/include/`.
 Unconsumed source literals cannot substitute for that parent. Validate the
 exact module/tool origin and regular path before opening or reading bytes.
+Literal authentication retains a final quoted operand at included-file EOF;
+it does not supply a newline or accept directive syntax. Actual Go and active
+CPP input stacks must independently accept the original graph. Translation-unit
+EOF without the required newline remains rejected, with original bytes intact.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical
