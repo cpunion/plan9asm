@@ -147,10 +147,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 				return true, false, fmt.Errorf("amd64 MOVSS expects X-reg destination: %q", ins.Raw)
 			}
-			if ins.Args[0].Kind == OpReg {
-				return true, false, c.storeXLowF32(ins.Args[1].Reg, v)
-			}
-			return true, false, c.storeXLowF32ClearingUpper(ins.Args[1].Reg, v)
+			return true, false, c.storeLegacyScalarMoveRegister(ins.Args[1].Reg, v, 32, ins.Args[0].Kind == OpReg)
 		case OpFP:
 			return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("float"), v)
 		case OpMem:
@@ -375,10 +372,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 				return true, false, fmt.Errorf("amd64 MOVSD expects X-reg destination: %q", ins.Raw)
 			}
-			if ins.Args[0].Kind == OpReg {
-				return true, false, c.storeXLowF64(ins.Args[1].Reg, v)
-			}
-			return true, false, c.storeXLowF64ClearingUpper(ins.Args[1].Reg, v)
+			return true, false, c.storeLegacyScalarMoveRegister(ins.Args[1].Reg, v, 64, ins.Args[0].Kind == OpReg)
 		case OpFP:
 			return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("double"), v)
 		case OpMem:
@@ -797,6 +791,35 @@ func (c *amd64Ctx) storeXLowF64(r Reg, v string) error {
 	t := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", t, v)
 	return c.storeXLowI64(r, "%"+t)
+}
+
+// Legacy scalar moves preserve bits above 127 in every physical alias. The
+// source class separately determines whether the upper XMM lanes survive.
+// Do not use this helper for VEX/EVEX writes, which zero their wider views.
+func (c *amd64Ctx) storeLegacyScalarMoveRegister(r Reg, value string, bits int, preserve bool) error {
+	var store func(Reg, string) error
+	switch bits {
+	case 32:
+		store = c.storeXLowF32ClearingUpper
+		if preserve {
+			store = c.storeXLowF32
+		}
+	case 64:
+		store = c.storeXLowF64ClearingUpper
+		if preserve {
+			store = c.storeXLowF64
+		}
+	default:
+		return fmt.Errorf("invalid legacy scalar move width %d", bits)
+	}
+	if err := store(r, value); err != nil {
+		return err
+	}
+	xmm, err := c.loadX(r)
+	if err != nil {
+		return err
+	}
+	return c.storeLegacyXViews(r, xmm)
 }
 
 func (c *amd64Ctx) storeXLowF64ClearingUpper(r Reg, v string) error {
