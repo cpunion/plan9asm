@@ -97,12 +97,31 @@ The reviewed x86 private caller-region producer and scalar consumer require
 complete original typed callers and bounded, initialized per-access regions.
 The actual CLI-load producer is integrated and retains its private unchanged
 package selection and source/expansion guards through object compilation.
-Vector-memory consumers remain unfinished; scalar fixtures cannot establish
-original Weaviate or native AMD64 runtime success. Legacy MOVSD memory loads
-now clear the upper XMM half, unlike register copies; independent complete-byte
-Go/LLVM oracles retain the real pre-fix failure. Unknown native calls, mixed
-control flow and dynamic caller frames remain failures without their own
-complete contracts.
+The scalar SIMD memory family and KMOV caller-region consumers are integrated,
+including coherent X/Y/Z views and initialized, bounded writes. The complete
+MOVSS/MOVSD/VMOVSS/VMOVSD floating-literal family follows Go's actual rewrite,
+rounding and constant-pool choices before certifying caller effects. Legacy
+MOVSD memory loads clear the upper XMM half, unlike register copies; independent
+complete-byte Go/LLVM oracles retain the real pre-fix failures. Packed-vector,
+FMA and mixed-control-flow caller contracts remain separate unfinished work.
+These fixtures do not establish original Weaviate or native AMD64 runtime
+success. Unknown native calls and dynamic caller frames remain failures without
+their own complete contracts.
+
+Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
+proof, complete native object/source identity and exact parsed symbol/size
+agreement. They do not acquire fictitious TEXT signatures or symbol-free
+status. Actual LLVM objects remain necessary for a pass. The test-declaration
+query/consumer intersection with DATA-only siblings still needs its own
+original-Go production replay; never relax their metadata equality to hide it.
+
+Always-documentation directories require complete original Go inventories and
+same-profile actual typed Go NoGoError witnesses before CPP exclusion. Ordinary
+test-only packages, mixed/bad source and tool/dependency errors cannot supply
+that role. Already inventoried pure-Go test-dependency ancestors now receive
+their missing ZIP-bound selection headers without duplicating their directory
+or ordinary package roles. Recheck all three mechanisms together in the current
+integrated corpus, not just their separate frozen repair witnesses.
 
 CPP fallback uses Go's actual fixed package-CWD and GOROOT include search.
 Canonical physical origins, original literal operands and exact outside-module
@@ -116,10 +135,15 @@ Go and the active CPP input stack still independently reject translation-unit
 EOF without a required newline. Whole original-library tests remain necessary.
 
 The instrumentation rule foundation binds complete actual Go driver and platform
-source registrations and exact early diagnostics. Early rule acceptance is not
-export, object, runtime or source-exclusion evidence. Race/msan/asan observations
-and mode-consistent planner/export/header/consumer integration remain unfinished.
-Never synthesize feature tags or turn CGO, SDK or dependency failures into N/A.
+source registrations and exact early diagnostics. Standalone early observation
+and same-mode pure-Go marker exports have independent source/tool and complete
+trace/archive/symbol proofs, including actual codegen/buildmode routing. Early
+rule acceptance is not export evidence, and marker export is not original-library
+CPP/LLVM consumer, C/SDK, sanitizer-runtime or final-link evidence. Mode-aware
+planner/export integration is next; full header/consumer integration remains
+unfinished. Never synthesize feature tags or turn CGO, SDK or dependency failures
+into N/A. Instrumented scopes must not masquerade as the ordinary protocol or
+be erased from its required coverage denominator.
 
 ## Required next work
 
