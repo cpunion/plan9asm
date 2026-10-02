@@ -287,7 +287,11 @@ func x86RejectAssemblyCallers(selected GoSourceSelection, target Func, localName
 			}
 			for _, ins := range decoded.Instrs {
 				for _, argument := range ins.Args {
-					symbol := strings.TrimPrefix(strings.TrimSpace(argument.Sym), "$")
+					symbol := argument.Sym
+					if argument.Kind == OpMem {
+						symbol = argument.Mem.Sym
+					}
+					symbol = strings.TrimPrefix(strings.TrimSpace(symbol), "$")
 					base, _, reference := parseSBRef(symbol)
 					if reference && (base == target.Sym || base == "·"+localName || base == resolvedName) && ins.Op != OpTEXT {
 						return fmt.Errorf("selected assembly calls or exposes the Go entry")
@@ -296,9 +300,15 @@ func x86RejectAssemblyCallers(selected GoSourceSelection, target Func, localName
 				if ins.Op == OpCALL {
 					return fmt.Errorf("unknown assembly call cannot close package-local callers")
 				}
-				if ins.Op == OpJMP && (len(ins.Args) != 1 || ins.Args[0].Kind == OpReg ||
-					ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Base != PC) {
-					return fmt.Errorf("indirect assembly branch prevents caller closure")
+				if ins.Op == OpJMP {
+					if len(ins.Args) != 1 {
+						return fmt.Errorf("incomplete assembly branch prevents caller closure")
+					}
+					argument := ins.Args[0]
+					if argument.Kind != OpLabel && argument.Kind != OpIdent &&
+						!(argument.Kind == OpMem && argument.Mem.Base == PC && argument.Mem.Index == "" && argument.Mem.Sym == "") {
+						return fmt.Errorf("indirect or external assembly branch prevents caller closure")
+					}
 				}
 			}
 		}

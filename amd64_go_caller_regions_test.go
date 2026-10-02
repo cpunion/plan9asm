@@ -217,6 +217,7 @@ func TestX86GoCallerRegionsRejectAssemblyCallersAndAddressTaking(t *testing.T) {
 		"CALL ·kernel(SB)",
 		"MOVQ $·kernel(SB),AX",
 		"JMP ·kernel(SB)",
+		"JMP external·unknown(SB)",
 		"BYTE $0xe8\nLONG $0",
 		"JMP AX",
 	} {
@@ -230,6 +231,23 @@ func TestX86GoCallerRegionsRejectAssemblyCallersAndAddressTaking(t *testing.T) {
 		if proof, err := deriveX86GoCallerRegions(pkg, selected, fn, sig, "amd64"); err == nil || proof != nil {
 			t.Fatalf("unregistered assembly caller got a certificate: %s: %+v, %v", body, proof, err)
 		}
+	}
+}
+
+func TestX86GoCallerRegionsRejectAssemblyMemorySymbolExposure(t *testing.T) {
+	pkg, selected, fn, sig := x86CallerFixture(t, x86CallerFixtureSource)
+	sibling, err := Parse(ArchAMD64, "TEXT ·Sibling(SB),4,$0-0\nMOVQ (AX),BX\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The actual parser usually spells SB references as OpSym. A compiler's
+	// selected File may also carry a symbolic memory operand; closure must
+	// inspect that representation rather than silently treating it as numeric.
+	sibling.Funcs[0].Instrs[1].Args[0].Mem.Sym = "·kernel(SB)"
+	selected.SelectedAssemblyFiles = append(selected.SelectedAssemblyFiles, "sibling_amd64.s")
+	selected.Assembly["sibling_amd64.s"] = sibling
+	if proof, err := deriveX86GoCallerRegions(pkg, selected, fn, sig, "amd64"); err == nil || proof != nil {
+		t.Fatalf("assembly memory exposed entry without closing its callers: %+v, %v", proof, err)
 	}
 }
 
