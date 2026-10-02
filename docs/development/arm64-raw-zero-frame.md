@@ -37,3 +37,10 @@ its stale value unless an explicit source aliases it. Every actual PC input
 retains derived-code taint. The 28-form original-Go/LLVM oracle compares
 independent low/high, signed, long and accumulate arithmetic, all four NZCV
 sentinels, unaligned full canaries and real LR-returning callers.
+
+Continuation memory uses the same typed scalar/GP/FP-pair grammar as private
+frame ownership. Each store invalidates only its actual byte range; partial
+loads and floating code bits never restore an exact caller pointer. Unknown
+indexes, malformed writeback and transformed code remain conservative. The
+96-form original-Go/LLVM runtime oracle keeps physical SP aligned and checks
+offset, pre/post and raw-local-call paths adjacent to saved LR/BP cells.

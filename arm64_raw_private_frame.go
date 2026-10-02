@@ -360,10 +360,15 @@ func arm64RawPrivateMemory(ins Instr) (arm64RawPrivateMemoryForm, bool) {
 		if ins.Args[1].Kind == OpMem || ins.Args[1].Kind == OpFP || ins.Args[1].Kind == OpSym {
 			value, form.memory, form.store = ins.Args[0], ins.Args[1], true
 		}
+		form.gp = !strings.HasPrefix(string(op), "F")
+		// Go obj7.progedit's complete zrReplace MOVB/H/W/D family maps
+		// a resolved literal $0 source to ZR, including its unsigned aliases.
+		if form.store && form.gp && value.Kind == OpImm && value.Imm == 0 && value.ImmRaw == "" {
+			value = Operand{Kind: OpReg, Reg: ZR}
+		}
 		if value.Kind != OpReg {
 			return form, false
 		}
-		form.gp = !strings.HasPrefix(string(op), "F")
 		if form.gp && !isARM64GeneralOrZeroReg(value.Reg) {
 			return form, false
 		}

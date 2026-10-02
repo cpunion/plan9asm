@@ -726,6 +726,9 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 	if state.transferScalarAtomicStore(ins, op) {
 		return
 	}
+	if state.transferTypedMemory(ins) {
+		return
+	}
 	if inputs, destination, valid := arm64ScalarMultiplyInputs(op, ins); valid {
 		value := arm64ControlExternal()
 		for _, input := range inputs {
