@@ -243,6 +243,9 @@ func amd64StackLLVMType(bits int) LLVMType {
 }
 
 func (c *amd64Ctx) pushStackWidth(bits int, value string) error {
+	if c.sourceStack != nil {
+		return c.pushSourceStackValue(amd64StackLLVMType(bits), int64(bits/8), value)
+	}
 	if c.goarch == "386" {
 		switch bits {
 		case 16:
@@ -262,6 +265,9 @@ func (c *amd64Ctx) pushStackWidth(bits int, value string) error {
 }
 
 func (c *amd64Ctx) popStackWidth(bits int) (string, error) {
+	if c.sourceStack != nil {
+		return c.popSourceStackValue(amd64StackLLVMType(bits), int64(bits/8))
+	}
 	if c.goarch == "386" {
 		switch bits {
 		case 16:

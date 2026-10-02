@@ -592,6 +592,12 @@ func (c *amd64Ctx) lowerBlocks() error {
 }
 
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
+	if c.sourceStack != nil && len(ins.x86SourceStackFP) != 0 {
+		ins.Args = append([]Operand(nil), ins.Args...)
+		for index, offset := range ins.x86SourceStackFP {
+			ins.Args[index] = Operand{Kind: OpFP, FPOffset: offset}
+		}
+	}
 	c.allowSPWrite = models386SPWrite(ins)
 	defer func() { c.allowSPWrite = false }()
 	// Go's assembler uses the explicit FP displacement, not the descriptive

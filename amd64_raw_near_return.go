@@ -79,7 +79,7 @@ func validateX86RawNearReturns(fn Func, file *File, opt Options, bindFrame bool)
 	// stack-unobserving leaf has the same return-PC location as its caller.
 	// All other cases need a native frame/continuation contract, not a guessed
 	// epilogue or an inline RET inside LLVM's independently allocated frame.
-	if fn.FrameSize != 0 || !x86RawReturnLeafStackUnobserved(fn) {
+	if fn.FrameSize != 0 || (!x86RawReturnLeafStackUnobserved(fn) && fn.x86SourceStack == nil) {
 		return fmt.Errorf("%w: raw near RET requires a proved source stack/continuation; Go's TEXT frame epilogue is not encoded in raw bytes", ErrProbeNeedsContext)
 	}
 	if !x86RawReturnMemoryBound(fn, file, opt, bindFrame) {
@@ -117,6 +117,13 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		for index, arg := range ins.Args {
 			switch arg.Kind {
 			case OpMem:
+				if offset, proved := ins.x86SourceStackFP[index]; bindFrame && fn.x86SourceStack != nil && proved &&
+					x86RawReturnFPBound(offset, x86RawReturnScalarMoveBytes(op), sig, opt.Goarch) {
+					continue // Instruction-local, freshly recomputed physical-SP slot proof.
+				}
+				if !bindFrame && fn.x86SourceStack != nil && x86RawReturnStackMemory(arg.Mem) && x86RawReturnScalarMoveBytes(op) != 0 {
+					continue // Pure preparation; final normalization binds the exact slot for lowering.
+				}
 				// Even a static symbol plus an index is not a bounded object.
 				// Address-only register expressions have no dereference, but
 				// their later uses still have to satisfy this same contract.

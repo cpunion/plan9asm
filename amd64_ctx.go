@@ -67,6 +67,7 @@ type amd64Ctx struct {
 	vstackSlot     string // [64 x i64] virtual stack for PUSHQ/POPQ
 	vspSlot        string // i64 virtual stack pointer (next free slot)
 	localStackSlot string // byte-addressable backing storage for x86 SP references
+	sourceStack    *x86SourceStackProof
 	frameSize      int64  // local bytes below the Go assembler's implicit amd64 BP
 	classicFrame   string // contiguous classic Go ABI frame used by 386 FP addressing
 	classicSize    int64
@@ -95,6 +96,7 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		sigs:           sigs,
 		annotate:       annotate,
 		frameSize:      fn.FrameSize,
+		sourceStack:    fn.x86SourceStack,
 		indirectABI0:   inferX86ABI0Forwarder(fn, sig, goarch),
 		blocks:         amd64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
@@ -383,6 +385,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 func (c *amd64Ctx) emitEntryAllocas() error {
 	c.scanUsedRegs()
+	if c.sourceStack != nil {
+		c.usedRegs[SP] = true
+	}
 
 	regs := make([]string, 0, len(c.usedRegs))
 	for r := range c.usedRegs {
@@ -403,6 +408,9 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	}
 	if spSlot, ok := c.regSlot[SP]; ok {
 		minOff, maxOff := c.stackOffsetRange()
+		if c.sourceStack != nil && c.sourceStack.minimum < minOff {
+			minOff = c.sourceStack.minimum
+		}
 		var movement int64
 		if c.goarch == "386" {
 			var err error
@@ -415,12 +423,22 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		maxOff += movement
 		const guard = int64(64)
 		bias := guard - minOff
+		if c.sourceStack != nil {
+			// A native Go entry SP is word-aligned. Preserve that same
+			// congruence so proved AND alignment has identical byte offsets.
+			word := c.sourceStack.word
+			bias = (bias + word - 1) & -word
+		}
 		size := bias + maxOff + guard
 		if size < 256 {
 			size = 256
 		}
 		c.localStackSlot = "%local_stack"
-		fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
+		if c.sourceStack != nil {
+			fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align %d\n", c.localStackSlot, size, c.sourceStack.word)
+		} else {
+			fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
+		}
 		base := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
 		addr := c.newTmp()

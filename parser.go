@@ -52,6 +52,7 @@ type Func struct {
 
 	x86ContinuationAddresses map[string]x86Continuation
 	x86IndirectLabels        []string
+	x86SourceStack           *x86SourceStackProof // recomputed final source ABI0 stack proof
 	// Set only by the closed same-file Go binding proof, never by a guessed
 	// helper FuncSig. The ABI0 root's GP/NZCV entry is otherwise unspecified.
 	arm64PrivateRegisterEntry  bool

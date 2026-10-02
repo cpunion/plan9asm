@@ -1,0 +1,543 @@
+package plan9asm
+
+import (
+	"fmt"
+	"reflect"
+	"strings"
+)
+
+// This is a source ABI0 stack, not LLVM's physical stack or an incoming native
+// pointer. It is enabled only after all returns and all stack uses are proved.
+// Ordinary pointers, nonzero TEXT frames, calls and address escape cannot use it.
+type x86SourceStackProof struct {
+	minimum int64
+	word    int64
+}
+
+// Bind raw stack producer identity before consulting Go's named PUSH/POP
+// deltasp rules. Edited normalized instructions cannot borrow that origin.
+type x86SourceRawInstruction struct {
+	op   Op
+	args []Operand
+}
+
+type x86SourceStackAddress struct {
+	// original distinguishes the caller's opaque BP from an entry-SP offset.
+	original bool
+	offset   int64
+}
+
+type x86SourceStackCell struct {
+	offset       int64
+	width        int64
+	bp           *x86SourceStackAddress
+	flags        bool
+	numericFlags bool
+}
+
+type x86SourceStackState struct {
+	sp           int64
+	bp           x86SourceStackAddress
+	cells        []x86SourceStackCell
+	numericFlags bool
+}
+
+const x86SourceStackLimit = int64(1 << 20)
+
+// Recompute the proof on every final normalization. No caller-supplied signature,
+// changed source, or prepartition result inherits a cached admission flag.
+func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func {
+	fn.x86SourceStack = nil
+	if fn.FrameSize != 0 || strings.Contains(fn.Sym, "<ABIInternal>") || x86RawReturnLeafStackUnobserved(fn) {
+		return fn
+	}
+	hasRawReturn := false
+	for _, ins := range fn.Instrs {
+		if form := ins.x86RawNearReturn; form != nil {
+			if !form.nativeWidth || form.cleanup != 0 {
+				return fn
+			}
+			hasRawReturn = true
+		}
+	}
+	if !hasRawReturn {
+		return fn
+	}
+	word, nativeMove, nativeSuffix := int64(8), Op("MOVQ"), "Q"
+	if opt.Goarch == "386" {
+		word, nativeMove, nativeSuffix = 4, "MOVL", "L"
+	}
+	name := fn.Sym
+	if opt.ResolveSym != nil {
+		name = opt.ResolveSym(name)
+	}
+	sig, hasSig := opt.Sigs[name]
+	if bindFrame && (!hasSig || !x86SourceStackScalarABI0(sig, fn.ArgSize, opt.Goarch)) {
+		return fn
+	}
+
+	// Validate the complete source, including dead instructions. A dead CALL
+	// still changes Go's source prologue; unknown stack effects stay Context.
+	labels := map[string]int{}
+	var instructions []int
+	goDeltas := map[int]int64{}
+	var goDelta int64
+	hasText := false
+	for index, ins := range fn.Instrs {
+		op := Op(normalizeInstructionOpcode(ins.Op))
+		if op == OpTEXT {
+			if hasText || !x86RawReturnLeafStackUnobserved(Func{Instrs: []Instr{ins}}) {
+				return fn
+			}
+			hasText = true
+		}
+		if op == OpLABEL {
+			if len(ins.Args) != 1 || ins.Args[0].Kind != OpLabel {
+				return fn
+			}
+			if _, duplicate := labels[ins.Args[0].Sym]; duplicate {
+				return fn
+			}
+			labels[ins.Args[0].Sym] = len(instructions)
+			continue
+		}
+		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) {
+			return fn
+		}
+		if _, stack := amd64StackWidthSpecs[op]; stack && ins.x86SourceRaw != nil &&
+			(ins.x86SourceRaw.op != op || !reflect.DeepEqual(ins.x86SourceRaw.args, ins.Args)) {
+			return fn
+		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFPAddr || (operand.Kind == OpFP && operand.FPOffset < 0) {
+				return fn
+			}
+			if operand.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(operand.Sym), "$") {
+				// Address-of is not an ordinary numeric immediate, regardless of
+				// the register spelling or whether its later value is overwritten.
+				return fn
+			}
+		}
+		instructions = append(instructions, index)
+		goDeltas[index] = goDelta
+		// cmd/internal/obj/x86 preprocess adjusts named FP operands using
+		// its linear deltasp. BYTE/WORD pushes are opaque to that pass.
+		if spec, stack := amd64StackWidthSpecs[op]; stack && ins.x86SourceRaw == nil {
+			width := int64(spec.bits / 8)
+			if spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags {
+				goDelta += width
+			} else {
+				goDelta -= width
+			}
+			if goDelta < -x86SourceStackLimit || goDelta > x86SourceStackLimit {
+				return fn
+			}
+		}
+	}
+	if !hasText || len(instructions) == 0 {
+		return fn
+	}
+
+	copyFn := fn
+	copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
+	for index := range copyFn.Instrs {
+		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
+		copyFn.Instrs[index].x86SourceStackFP = nil
+	}
+	states := map[int]x86SourceStackState{}
+	work := []int{0}
+	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}}
+	proof := &x86SourceStackProof{word: word}
+	returned := false
+	for budget := 0; len(work) != 0; budget++ {
+		if budget >= 8192 {
+			return fn
+		}
+		pc := work[0]
+		work = work[1:]
+		state := states[pc]
+		state.cells = append([]x86SourceStackCell(nil), state.cells...)
+		ins := &copyFn.Instrs[instructions[pc]]
+		op := Op(normalizeInstructionOpcode(ins.Op))
+		if op == OpRET {
+			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
+				return fn
+			}
+			returned = true
+			continue
+		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFP && state.sp+goDeltas[instructions[pc]] != 0 {
+				return fn // The native FP operand would not address this typed slot.
+			}
+		}
+
+		if spec, stack := amd64StackWidthSpecs[op]; stack {
+			if !x86SourceStackStep(spec, ins, &state, word) {
+				return fn
+			}
+		} else if !x86SourceStackAddressStep(ins, &state, nativeMove, nativeSuffix, word) {
+			return fn
+		}
+		if !x86SourceStackFlagsStep(*ins, &state) {
+			return fn
+		}
+		if state.sp < -x86SourceStackLimit || state.sp > 0 {
+			return fn
+		}
+		if state.sp < proof.minimum {
+			proof.minimum = state.sp
+		}
+		for operandIndex, operand := range ins.Args {
+			if operand.Kind != OpMem || !x86RawReturnStackMemory(operand.Mem) {
+				continue
+			}
+			if op == Op("LEA"+nativeSuffix) {
+				continue // The address step proved its destination and range.
+			}
+			width := x86RawReturnScalarMoveBytes(op)
+			memory := operand.Mem
+			if width == 0 || memory.Sym != "" || memory.Index != "" || memory.Segment != "" ||
+				ins.x86AddressBits != 0 {
+				return fn
+			}
+			base := state.sp
+			if memory.Base == BP {
+				if state.bp.original {
+					return fn
+				}
+				base = state.bp.offset
+			} else if memory.Base != SP {
+				return fn
+			}
+			// Source entry SP[0:word] is the return PC. Only declaration-backed
+			// data at entry SP+word can be mapped to FP shadow storage.
+			if memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
+				return fn
+			}
+			offset := base + memory.Off - word
+			if offset < 0 || offset > fn.ArgSize || width > fn.ArgSize-offset {
+				return fn
+			}
+			if bindFrame {
+				if !x86RawReturnFPBound(offset, width, sig, opt.Goarch) {
+					return fn
+				}
+				if ins.x86SourceStackFP == nil {
+					ins.x86SourceStackFP = map[int]int64{}
+				}
+				ins.x86SourceStackFP[operandIndex] = offset
+			}
+		}
+
+		successors := []int{pc + 1}
+		if op == OpJMP || isAMD64ConditionalBranch(op) {
+			if len(ins.Args) != 1 {
+				return fn
+			}
+			operand := ins.Args[0]
+			label := operand.Sym
+			if operand.Kind == OpIdent {
+				label = operand.Ident
+			}
+			target, known := labels[label]
+			if operand.Kind == OpMem && operand.Mem.Base == PC && operand.Mem.Index == "" &&
+				operand.Mem.Sym == "" && operand.Mem.Off >= -int64(len(instructions)) && operand.Mem.Off <= int64(len(instructions)) {
+				target, known = pc+int(operand.Mem.Off), true
+			} else if operand.Kind != OpLabel && operand.Kind != OpIdent {
+				return fn
+			}
+			if !known {
+				return fn
+			}
+			if op == OpJMP {
+				successors = []int{target}
+			} else {
+				successors = append(successors, target)
+			}
+		}
+		for _, next := range successors {
+			if next < 0 || next >= len(instructions) {
+				return fn // Fallthrough cannot invent a source continuation.
+			}
+			if old, visited := states[next]; visited {
+				if !reflect.DeepEqual(old, state) {
+					return fn // Different SP/BP/save-cell joins stay unproved.
+				}
+				continue
+			}
+			states[next] = state
+			work = append(work, next)
+		}
+	}
+	if !returned {
+		return fn
+	}
+	copyFn.x86SourceStack = proof
+	return copyFn
+}
+
+func x86SourceStackScalarABI0(sig FuncSig, argSize int64, arch string) bool {
+	if len(sig.ArgRegs) != 0 || argSize <= 0 || argSize > x86SourceStackLimit || len(sig.Frame.Results) != 1 ||
+		len(sig.Frame.Params) != len(sig.Args) || len(sig.Args) == 0 {
+		return false
+	}
+	seen := map[int]bool{}
+	for _, slot := range sig.Frame.Params {
+		width := x86FrameScalarBytes(slot.Type, arch)
+		if !x86SourceStackScalarType(slot.Type) || len(frameSlotFields(slot)) != 0 ||
+			slot.Index < 0 || slot.Index >= len(sig.Args) || slot.Type != sig.Args[slot.Index] ||
+			width == 0 || !x86RawReturnFPBound(slot.Offset, width, sig, arch) ||
+			slot.Offset > argSize || width > argSize-slot.Offset || seen[slot.Index] {
+			return false
+		}
+		seen[slot.Index] = true
+	}
+	slot := sig.Frame.Results[0]
+	width := x86FrameScalarBytes(slot.Type, arch)
+	return x86SourceStackScalarType(slot.Type) && slot.Type == sig.Ret && width != 0 &&
+		x86RawReturnFPBound(slot.Offset, width, sig, arch) && slot.Offset <= argSize && width <= argSize-slot.Offset
+}
+
+func x86SourceStackScalarType(typ LLVMType) bool {
+	switch typ {
+	case I1, I8, I16, I32, I64:
+		return true
+	default:
+		return false
+	}
+}
+
+func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch string) bool {
+	op := Op(normalizeInstructionOpcode(ins.Op))
+	if op == OpTEXT || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
+		return true
+	}
+	if spec, stack := amd64StackWidthSpecs[op]; stack {
+		return string(ins.Op) == string(op) && (spec.bits == 16 || (spec.bits == 32 && arch == "386") || (spec.bits == 64 && arch == "amd64"))
+	}
+	if op == nativeMove || op == Op("LEA"+suffix) || x86RawReturnScalarMoveBytes(op) != 0 {
+		return true
+	}
+	// This bounded numerical contract does not infer effects for opaque raw,
+	// native/system calls, aggregate/vector memory, or instructions with hidden
+	// stack inputs. These remain Context, not unsupported decoder forms.
+	for _, base := range []string{"ADD", "SUB", "ADC", "SBB", "AND", "OR", "XOR", "CMP", "TEST", "INC", "DEC", "NEG", "NOT", "SHL", "SHR", "SAR"} {
+		for _, width := range []string{"B", "W", "L", "Q"} {
+			if op == Op(base+width) && (width != "Q" || arch == "amd64") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceStackState, word int64) bool {
+	width := int64(spec.bits / 8)
+	push := spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags
+	flags := spec.mode == amd64StackPushFlags || spec.mode == amd64StackPopFlags
+	if flags && len(ins.Args) != 0 || !flags && len(ins.Args) != 1 {
+		return false
+	}
+	cell := x86SourceStackCell{width: width, flags: flags, numericFlags: state.numericFlags}
+	if !flags {
+		operand := ins.Args[0]
+		if operand.Kind != OpReg && (!push || operand.Kind != OpImm) {
+			return false // Memory/segment stack transfers need a separate contract.
+		}
+		if operand.Kind == OpReg {
+			if x86SegmentRegisterOperand(operand) || operand.Reg == SP {
+				return false
+			}
+			if x86RawReturnStackRegister(operand.Reg) {
+				if operand.Reg != BP || width != word {
+					return false
+				}
+				value := state.bp
+				cell.bp = &value
+			}
+		}
+	}
+	if push {
+		state.sp -= width
+		cell.offset = state.sp
+		// A new store replaces the covered old cell, never reuses stale data.
+		for len(state.cells) != 0 && state.cells[len(state.cells)-1].offset <= state.sp {
+			state.cells = state.cells[:len(state.cells)-1]
+		}
+		state.cells = append(state.cells, cell)
+		return true
+	}
+	if len(state.cells) == 0 {
+		return false
+	}
+	// Restoring a saved SP may discard lower private cells. The next POP must
+	// still read a complete initialized source PUSH of the same physical width.
+	for len(state.cells) != 0 && state.cells[len(state.cells)-1].offset < state.sp {
+		state.cells = state.cells[:len(state.cells)-1]
+	}
+	if len(state.cells) == 0 {
+		return false
+	}
+	saved := state.cells[len(state.cells)-1]
+	if saved.offset != state.sp || saved.width != width {
+		return false
+	}
+	if flags != saved.flags {
+		return false // Scalar bytes and complete hardware FLAGS are not interchangeable.
+	}
+	if flags {
+		state.numericFlags = saved.numericFlags
+	}
+	if saved.bp != nil {
+		if flags || ins.Args[0].Reg != BP {
+			return false // A saved frame pointer cannot become numeric output.
+		}
+		state.bp = *saved.bp
+	} else if !flags && ins.Args[0].Reg == BP {
+		return false
+	}
+	state.cells = state.cells[:len(state.cells)-1]
+	state.sp += width
+	return true
+}
+
+// Source SP arithmetic operates on a Go stack address, not our LLVM private
+// allocation's address. Its flags cannot be assumed equivalent. This bounded
+// proof permits numerical redefinitions and matching FLAGS save/restore, but
+// never exposes incomplete FLAGS as scalar data or invents incoming flags.
+func x86SourceStackFlagsStep(ins Instr, state *x86SourceStackState) bool {
+	op := Op(normalizeInstructionOpcode(ins.Op))
+	if isAMD64ConditionalBranch(op) {
+		return isAMD64CounterZeroBranch(op) || state.numericFlags
+	}
+	name := string(op)
+	if len(name) < 2 {
+		return true
+	}
+	base := name[:len(name)-1]
+	switch base {
+	case "ADC", "SBB":
+		return state.numericFlags
+	case "ADD", "SUB", "AND", "OR", "XOR", "CMP", "TEST", "NEG":
+		state.numericFlags = true
+		for _, operand := range ins.Args {
+			if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
+				state.numericFlags = false
+			}
+		}
+	case "SHL", "SHR", "SAR":
+		// Masked zero counts preserve prior flags; OF is undefined for larger
+		// counts. They need a per-bit contract before serving as a new witness.
+		state.numericFlags = false
+	}
+	return true
+}
+
+func x86SourceStackAddressStep(ins *Instr, state *x86SourceStackState, nativeMove Op, suffix string, word int64) bool {
+	op := Op(normalizeInstructionOpcode(ins.Op))
+	if len(ins.Args) == 2 && op == nativeMove && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg &&
+		x86RawReturnStackRegister(ins.Args[0].Reg) && x86RawReturnStackRegister(ins.Args[1].Reg) {
+		source, destination := ins.Args[0].Reg, ins.Args[1].Reg
+		if source != SP && source != BP || destination != SP && destination != BP {
+			return false
+		}
+		value := state.bp
+		if source == SP {
+			value = x86SourceStackAddress{offset: state.sp}
+		}
+		if destination == BP {
+			state.bp = value
+			return true
+		}
+		if value.original {
+			return false
+		}
+		state.sp = value.offset
+		return true
+	}
+	if len(ins.Args) == 2 && ins.Args[1].Kind == OpReg && ins.Args[1].Reg == SP {
+		if ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
+			value := int64(ins.Args[0].Imm)
+			if word == 4 {
+				value = int64(int32(value)) // Raw 386 immediates retain unsigned bits.
+			}
+			if value < -x86SourceStackLimit || value > x86SourceStackLimit {
+				return false
+			}
+			switch op {
+			case Op("ADD" + suffix):
+				state.sp += value
+				return true
+			case Op("SUB" + suffix):
+				state.sp -= value
+				return true
+			case Op("AND" + suffix):
+				alignment := -value
+				if alignment < 1 || alignment > word || alignment&(alignment-1) != 0 {
+					return false // The Go entry contract proves native-word alignment only.
+				}
+				state.sp &= value
+				return true
+			}
+		}
+		if op == Op("LEA"+suffix) && ins.Args[0].Kind == OpMem {
+			memory := ins.Args[0].Mem
+			if memory.Index != "" || memory.Sym != "" || memory.Segment != "" ||
+				memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit || ins.x86AddressBits != 0 {
+				return false
+			}
+			base := state.sp
+			if memory.Base == BP && !state.bp.original {
+				base = state.bp.offset
+			} else if memory.Base != SP {
+				return false
+			}
+			state.sp = base + memory.Off
+			return true
+		}
+	}
+	for _, operand := range ins.Args {
+		if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
+			return false // No implicit narrowing, arithmetic, or address escape.
+		}
+		if op == Op("LEA"+suffix) && operand.Kind == OpMem && x86RawReturnStackMemory(operand.Mem) {
+			return false // An owned stack address may not escape into an ordinary GP.
+		}
+	}
+	return true
+}
+
+// Source pushes and pops must use the same byte-addressable SP as MOV/LEA/
+// alignment. The legacy amd64 virtual value stack is intentionally unchanged
+// for sources without this complete source-stack proof.
+func (c *amd64Ctx) pushSourceStackValue(typ LLVMType, width int64, value string) error {
+	sp, err := c.loadReg(SP)
+	if err != nil {
+		return err
+	}
+	next := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = sub i64 %s, %d\n", next, sp, width)
+	if err := c.storeRegUnchecked(SP, "%"+next); err != nil {
+		return err
+	}
+	ptr := c.ptrFromAddrI64("%" + next)
+	fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", typ, value, ptr)
+	return nil
+}
+
+func (c *amd64Ctx) popSourceStackValue(typ LLVMType, width int64) (string, error) {
+	sp, err := c.loadReg(SP)
+	if err != nil {
+		return "", err
+	}
+	ptr := c.ptrFromAddrI64(sp)
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = load %s, ptr %s, align 1\n", value, typ, ptr)
+	next := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = add i64 %s, %d\n", next, sp, width)
+	if err := c.storeRegUnchecked(SP, "%"+next); err != nil {
+		return "", err
+	}
+	return "%" + value, nil
+}
