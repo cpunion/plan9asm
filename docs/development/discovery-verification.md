@@ -351,6 +351,12 @@ is recorded. Only an active verified exception uses its separate proof protocol.
 Every eligible scope must have an executed configuration or a concrete scoped
 source diagnostic; omissions, duplicates, changed headers and reason-only N/A
 fail. The virtual root `.` is a package directory, not a hidden-directory skip.
+When a concrete per-file asmdecl rejection leaves valid siblings, the consumer
+retains the complete actual Go-selected package assembly registration separately
+from its translated files. That registration is replayed from original hashes,
+headers and the same profile/custom tags and must match actual package selection;
+it never replaces an output or source diagnostic. Partial-package proofs without
+this explicit registration, hidden siblings or missing diagnostics fail closed.
 Reasons distinguish filename targets, disabled-cgo selection, constraints,
 package-clause absence, source diagnostics and explicit target ABI evidence.
 `no_current_go_package` describes the ordinary non-test Go/ASM pairing scope;

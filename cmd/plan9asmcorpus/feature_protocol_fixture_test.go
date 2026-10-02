@@ -112,8 +112,11 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		if err != nil {
 			t.Fatal(err)
 		}
-		input := ordinaryProfileConsumerInput(plan, profile, module, "", config.AsmFiles)
-		proof := &gotoolprofile.SelectionProof{Protocol: gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags}
+		input := ordinaryProfileConsumerInput(plan, profile, module, "", config.AsmFiles, config.BuildTags)
+		proof := &gotoolprofile.SelectionProof{
+			Protocol: gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
+			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
+		}
 		ctx, err := discoveryContextForFeatureProfile(profile.Observed)
 		if err != nil {
 			t.Fatal(err)
@@ -130,6 +133,14 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 			})
 		}
 		for _, dir := range sortedFixtureDirectories(byDirectory) {
+			if input.RegisteredAsmFiles != nil {
+				byDirectory[dir] = nil
+				for _, file := range input.RegisteredAsmFiles {
+					if path.Dir(file) == dir {
+						byDirectory[dir] = append(byDirectory[dir], file)
+					}
+				}
+			}
 			pkgPath := module
 			if dir != "." {
 				pkgPath += "/" + dir

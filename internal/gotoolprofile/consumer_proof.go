@@ -30,6 +30,9 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	if proof == nil || proof.Protocol != ConsumerProtocol || proof.ProfileID != input.ID || !equalDiscoveryStrings(proof.CustomTags, tags) || len(proof.Packages) == 0 {
 		return fmt.Errorf("compiler consumption differs from the source-required profile/tag scope")
 	}
+	if !reflect.DeepEqual(input.RegisteredAsmFiles, proof.RegisteredAsmFiles) {
+		return fmt.Errorf("actual package registration differs from the complete selected assembly scope")
+	}
 	selectedFiles, filePackages, err := validatePackageSelection(input, proof.Packages, tags)
 	if err != nil {
 		return err
@@ -45,6 +48,21 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 	return validateAssemblyConsumption(input, proof, selectedFiles, filePackages, requireObject, abi)
 }
 
+// ValidatePackageSelection checks actual package selection before CPP or LLVM
+// emission. It establishes no translation outcome: the report reader must
+// separately discharge every source-required scope with an output or a concrete
+// same-scope source diagnostic.
+func ValidatePackageSelection(input *ConsumerInput, packages []PackageProof, tags []string) error {
+	if input == nil || input.Protocol != ConsumerProtocol || input.Observed == nil || input.ID != ProfileID(input.Observed) || len(packages) == 0 {
+		return fmt.Errorf("missing canonical actual package-selection input")
+	}
+	if err := Validate(input.Observed); err != nil {
+		return err
+	}
+	_, _, err := validatePackageSelection(input, packages, tags)
+	return err
+}
+
 // Metadata-only queries reuse source selection without manufacturing CPP or
 // LLVM outputs. Their separate protocol can never satisfy ValidateSelection.
 func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tags []string) (map[string]bool, map[string]PackageProof, error) {
@@ -53,6 +71,24 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 	requiredAssembly := make(map[string]bool)
 	for _, file := range input.AsmFiles {
 		requiredAssembly[file] = true
+	}
+	if input.RegisteredAsmFiles != nil {
+		if len(input.RegisteredAsmFiles) == 0 || !sort.StringsAreSorted(input.RegisteredAsmFiles) {
+			return nil, nil, fmt.Errorf("noncanonical complete package assembly registration")
+		}
+		requiredAssembly = make(map[string]bool)
+		for _, file := range input.RegisteredAsmFiles {
+			if requiredAssembly[file] || path.Ext(file) != ".s" || input.Sources[file] == "" ||
+				input.Sources[file] == bytesSHA256(nil) {
+				return nil, nil, fmt.Errorf("duplicate, empty or unhashed package assembly registration: %s", file)
+			}
+			requiredAssembly[file] = true
+		}
+		for _, file := range input.AsmFiles {
+			if !requiredAssembly[file] {
+				return nil, nil, fmt.Errorf("translation file lies outside the complete package registration: %s", file)
+			}
+		}
 	}
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
@@ -127,6 +163,11 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 			}
 			selectedFiles[file] = true
 			filePackages[file] = pkg
+		}
+	}
+	for file := range requiredAssembly {
+		if !selectedFiles[file] {
+			return nil, nil, fmt.Errorf("registered assembly lacks actual same-profile package selection: %s", file)
 		}
 	}
 	return selectedFiles, filePackages, nil

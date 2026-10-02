@@ -96,7 +96,11 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 	consumer := &featureConsumer{
 		ID: input.ID, Observed: input.Observed, Context: ctx,
 		Input: &input, Dir: dir, WorkDir: workDir,
-		Proof: &featureSelectionProof{Protocol: featureInputProtocol, ProfileID: input.ID, CustomTags: append([]string(nil), tags...)},
+		Proof: &featureSelectionProof{
+			Protocol: featureInputProtocol, ProfileID: input.ID,
+			CustomTags:         append([]string(nil), tags...),
+			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
+		},
 	}
 	if err := consumer.verifySources(); err != nil {
 		return nil, err
@@ -343,6 +347,11 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 			return fmt.Errorf("ordinary CPU profile requires actual non-test Go selection")
 		}
 		consumer.Proof.Packages = append(consumer.Proof.Packages, proof)
+	}
+	if consumer.Input.RegisteredAsmFiles != nil {
+		if err := gotoolprofile.ValidatePackageSelection(consumer.Input, consumer.Proof.Packages, consumer.Proof.CustomTags); err != nil {
+			return fmt.Errorf("actual complete package assembly registration: %w", err)
+		}
 	}
 	return consumer.verifySources()
 }

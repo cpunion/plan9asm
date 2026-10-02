@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 
@@ -257,6 +258,10 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 	if len(customTags) == 1 {
 		tags = customTags[0]
 	}
+	registered := ordinaryProfilePackageAssembly(plan, profile, files, tags)
+	if !equalDiscoveryStrings(registered, files) {
+		input.RegisteredAsmFiles = registered
+	}
 	if metadata, err := ordinaryGeneratedMetadata(plan, profile.ID, files, tags); err == nil {
 		input.GeneratedHeaders = metadata
 	}
@@ -268,6 +273,31 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		}
 	}
 	return input
+}
+
+// The immutable pre-check decisions include ABI-rejected siblings. Actual Go
+// still selects these in the package; only translation's per-file scope shrinks.
+// Offline replay first verifies all these decisions against original headers,
+// then independently requires an output or concrete diagnostic for every scope.
+func ordinaryProfilePackageAssembly(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, files, tags []string) []string {
+	directories := make(map[string]bool)
+	for _, file := range files {
+		directories[path.Dir(file)] = true
+	}
+	registered := make(map[string]bool)
+	for _, decision := range plan.ProfileDecisions {
+		if decision.ProfileID != profile.ID || decision.Kind != nativeLayoutSelected ||
+			!equalDiscoveryStrings(decision.Targets, []string{profile.Observed.Target}) ||
+			!equalDiscoveryStrings(decision.BuildTags, tags) {
+			continue
+		}
+		for _, file := range decision.AsmFiles {
+			if directories[path.Dir(file)] {
+				registered[file] = true
+			}
+		}
+	}
+	return sortedDiscoverySet(registered)
 }
 
 func ordinaryProfileDeclaredModule(plan *discoveryOrdinarySelectionPlan) (string, error) {
