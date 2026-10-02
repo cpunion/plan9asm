@@ -179,6 +179,15 @@ func arm64ControlBase(reg Reg) Reg {
 }
 
 func arm64ControlOffset(value arm64ControlValue, off int64) arm64ControlValue {
+	if off != 0 {
+		for token := range value {
+			if strings.HasPrefix(token, "label:") || token == "code-derived:" {
+				// A native-PC transform is not a pure escaped code pointer.
+				// Retain this fact even when a CFG join already has unknown data.
+				return arm64ControlValue{"": true, "code-derived:": true}
+			}
+		}
+	}
 	if len(value) != 1 {
 		return arm64ControlExternal()
 	}
@@ -302,7 +311,7 @@ func arm64ControlEscapedOnlyCode(value arm64ControlValue) bool {
 func arm64ControlLabels(value arm64ControlValue) arm64ControlValue {
 	labels := make(arm64ControlValue)
 	for token := range value {
-		if strings.HasPrefix(token, "label:") {
+		if strings.HasPrefix(token, "label:") || token == "code-derived:" {
 			labels[token] = true
 		}
 	}
@@ -759,6 +768,14 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 			}
 		}
 		destination := ins.Args[len(ins.Args)-1]
+		if destination.Kind == OpReg && len(value) > 1 {
+			for token := range value {
+				if strings.HasPrefix(token, "label:") {
+					value["code-derived:"] = true
+					break
+				}
+			}
+		}
 		if key := state.memoryKey(destination, post); key != "" {
 			state.invalidateOverlappingControlCells(key, 64)
 			value = arm64ControlUnion(value, arm64ControlLabels(state.memory[key]))

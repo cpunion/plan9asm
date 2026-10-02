@@ -58,8 +58,11 @@ affine GP temporaries used only for bounded, non-writeback local reads and
 fully overwritten before calls or returns. Mixed/different-offset joins keep
 may-frame taint; unknown effects, indexing, address stores and live call/result
 transport cannot wash it away. Under that bounded proof,
-ordinary pointer stores and escaped code-address values cannot corrupt saved
-SP cells. Explicit/aliased/indexed SP writes, FP contents, unknown callouts,
+ordinary pointer stores and pure escaped code-address values cannot corrupt
+saved SP cells. Actual source arithmetic/transforms on a code address must
+retain derived-code taint even after unknown CFG joins; filtering ordinary
+data cannot turn a computed native PC into a pure-code alias proof.
+Explicit/aliased/indexed SP writes, FP contents, unknown callouts,
 raw/native effects and frame-address escape remain conservative. Audited
 same-file register helpers retain the original proof across local-call
 rewriting; a bare source-local call never acquires it. Scalar and paired atomic
