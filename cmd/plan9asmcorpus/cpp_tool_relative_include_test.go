@@ -158,3 +158,24 @@ func TestCPPToolSearchCandidateFamilyRemainsBounded(t *testing.T) {
 		t.Fatal("redirected tool source became an authenticated header")
 	}
 }
+
+func TestCPPToolLegacyPrefixFallbackRetainsMandatorySearchMiss(t *testing.T) {
+	plan, root, archive := fixtureCPPInputsForTarget(t, "linux/amd64", map[string]string{
+		"pkg/native_amd64.s": "#include \"../../pkg/include/textflag.h\"\nTEXT ·Probe(SB),NOSPLIT,$0-0\nRET\n",
+	})
+	files := []string{"pkg/native_amd64.s"}
+	inputs, err := captureDiscoveryDeferredCPPInputs(plan, root, runtime.GOROOT(), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyDiscoveryCPPModuleZIP(inputs, plan, archive); err != nil {
+		t.Fatal(err)
+	}
+	if len(inputs.Units[0].PackageSearchMisses) != 1 {
+		t.Fatal("legacy tool prefix erased the original outside-package search")
+	}
+	inputs.Units[0].PackageSearchMisses = nil
+	if err := validateDiscoveryCPPInputs(inputs, plan, files); err == nil {
+		t.Fatal("plan reader accepted deleting an outside-package miss with a legacy tool prefix")
+	}
+}

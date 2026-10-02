@@ -63,7 +63,11 @@ func VerifyCPPPackageSearchMiss(miss CPPPackageSearchMiss, moduleRoot, goRoot st
 	if err := ValidateCPPPackageSearchMiss(miss); err != nil {
 		return err
 	}
-	if _, err := os.Lstat(filepath.Join(moduleRoot, filepath.FromSlash(miss.PackageCandidate))); err == nil {
+	preferred, err := CPPPreferredPackageInclude(moduleRoot, miss.Assembly, miss.Include)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Lstat(preferred); err == nil {
 		return fmt.Errorf("outside-module preferred CPP candidate exists")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("outside-module preferred CPP candidate has no ENOENT proof: %w", err)
@@ -85,6 +89,45 @@ func VerifyCPPPackageSearchMiss(miss CPPPackageSearchMiss, moduleRoot, goRoot st
 		return fmt.Errorf("CPP search absence has no original literal source operand")
 	}
 	return nil
+}
+
+func CPPPreferredPackageInclude(moduleRoot, assembly, include string) (string, error) {
+	if _, _, err := CPPIncludeCandidates(assembly, include); err != nil {
+		return "", err
+	}
+	root, err := filepath.EvalSymlinks(moduleRoot)
+	if err != nil || !filepath.IsAbs(root) {
+		return "", fmt.Errorf("CPP search has no actual canonical module origin")
+	}
+	packageDir := filepath.Join(root, filepath.FromSlash(path.Dir(assembly)))
+	physicalDir, err := filepath.EvalSymlinks(packageDir)
+	if err != nil || physicalDir != packageDir {
+		return "", fmt.Errorf("CPP package directory is missing or redirected")
+	}
+	return filepath.Join(physicalDir, filepath.FromSlash(include)), nil
+}
+
+// Active consumption derives this from the actual including source, even
+// when the fallback still has the historical pkg/include prefix. A caller
+// cannot delete the witness and borrow that older tool-header allowance.
+func RequireCPPPackageSearchMiss(input *ConsumerInput, assembly, source, include string) error {
+	module, tool, err := CPPIncludeCandidates(assembly, include)
+	if err != nil {
+		return err
+	}
+	if CPPLocalSource(module) {
+		return nil
+	}
+	expected := CPPPackageSearchMiss{
+		Protocol: CPPPackageSearchMissProtocol, Assembly: assembly, Source: source,
+		Include: include, PackageCandidate: module, ToolSource: tool,
+	}
+	for _, miss := range input.CPPIncludeSearchMisses {
+		if miss == expected {
+			return nil
+		}
+	}
+	return fmt.Errorf("active outside-package CPP include lacks its original fixed-search absence")
 }
 
 func ValidateCPPIncludeSearch(input *ConsumerInput, proof *SelectionProof) error {
@@ -133,8 +176,11 @@ func CPPRegularSource(root, file string) (string, error) {
 	}
 	name := filepath.Join(resolvedRoot, filepath.FromSlash(file))
 	resolved, err := filepath.EvalSymlinks(name)
-	if err != nil || resolved != name {
-		return "", fmt.Errorf("CPP source is missing or redirected: %s", file)
+	if err != nil {
+		return "", fmt.Errorf("CPP source is missing: %s: %w", file, err)
+	}
+	if resolved != name {
+		return "", fmt.Errorf("CPP source is redirected: %s", file)
 	}
 	info, err := os.Lstat(name)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 64<<20 {

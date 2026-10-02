@@ -91,16 +91,6 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 			}
 			return "", nil, fmt.Errorf("active generated include has no selected package origin")
 		}
-		reader, err := os.Open(file)
-		if err != nil {
-			return "", nil, err
-		}
-		data, readErr := io.ReadAll(io.LimitReader(reader, 64<<20+1))
-		closeErr := reader.Close()
-		bytesRead += len(data)
-		if readErr != nil || closeErr != nil || bytesRead > 64<<20 {
-			return "", nil, fmt.Errorf("active CPP source exceeds bounded read contract: %v (close: %v)", readErr, closeErr)
-		}
 		name, sourceErr := consumer.moduleSourceName(file)
 		id, wanted := "module/"+name, consumer.Input.Sources[name]
 		if sourceErr != nil {
@@ -117,6 +107,21 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 				return "", nil, err
 			}
 			id, wanted = "tool/"+name, consumer.Input.ToolSources[name]
+		} else if _, err := gotoolprofile.CPPRegularSource(consumer.Dir, name); err != nil {
+			return "", nil, err
+		}
+		if wanted == "" {
+			return "", nil, fmt.Errorf("active CPP source has no original bound bytes: %s", id)
+		}
+		reader, err := os.Open(file)
+		if err != nil {
+			return "", nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(reader, 64<<20+1))
+		closeErr := reader.Close()
+		bytesRead += len(data)
+		if readErr != nil || closeErr != nil || bytesRead > 64<<20 {
+			return "", nil, fmt.Errorf("active CPP source exceeds bounded read contract: %v (close: %v)", readErr, closeErr)
 		}
 		actual := featureBytesSHA256(data)
 		if wanted == "" || wanted != actual {
@@ -129,14 +134,20 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 	if err != nil {
 		return nil, nil, err
 	}
-	packageDir := filepath.Dir(asm)
+	assembly := strings.TrimPrefix(file, "module/")
 	expanded, err := plan9asm.PreprocessAssemblySource(string(source), plan9asm.AssemblyPreprocessOptions{
 		FileName: file, Defines: defines,
 		ReadInclude: func(parent, name string) (string, []byte, error) {
 			if name == "" || filepath.IsAbs(name) || strings.ContainsAny(name, "\\\x00") {
 				return "", nil, fmt.Errorf("unsafe active CPP include: %s", name)
 			}
-			candidate := filepath.Join(packageDir, filepath.FromSlash(name))
+			if err := gotoolprofile.RequireCPPPackageSearchMiss(consumer.Input, assembly, parent, name); err != nil {
+				return "", nil, err
+			}
+			candidate, err := gotoolprofile.CPPPreferredPackageInclude(consumer.Dir, assembly, name)
+			if err != nil {
+				return "", nil, err
+			}
 			if _, err := os.Lstat(candidate); err == nil {
 				return read(candidate, false)
 			} else if !os.IsNotExist(err) {

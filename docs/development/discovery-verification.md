@@ -315,6 +315,12 @@ candidate fails; it is never read or silently replaced. The canonical tool
 source remains regular, within actual GOROOT and byte-bound. Producer, CPP
 consumer and portable readers retain the exact search witness, not a reason
 string or an expanded include root.
+Canonicalize the actual module/package CWD before a parent-relative search;
+lexical parents of a symlink root do not describe Go's physical CWD. Active
+consumption independently derives the required miss from its real include
+parent and operand, even if the canonical fallback retains `pkg/include/`.
+Unconsumed source literals cannot substitute for that parent. Validate the
+exact module/tool origin and regular path before opening or reading bytes.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical

@@ -240,7 +240,10 @@ func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (str
 	}
 	// cmd/asm checks CWD, then its fixed top-level source Dir and -I list.
 	// cmd/go runs in the package Dir. Nested headers never change that Dir.
-	modulePath := filepath.Join(moduleDir, filepath.FromSlash(moduleFile))
+	modulePath, err := gotoolprofile.CPPPreferredPackageInclude(moduleDir, asmFile, include)
+	if err != nil {
+		return "", err
+	}
 	if _, err := os.Lstat(modulePath); err == nil {
 		if !gotoolprofile.CPPLocalSource(moduleFile) {
 			return "", fmt.Errorf("preferred CPP include exists outside exact module source")
