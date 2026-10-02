@@ -82,7 +82,8 @@ Go objects as well as LLVM objects with independent references and canaries.
 
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
-selected Go/ASM inventory, typed syntax and source bytes, closes every use of
+selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and
+source bytes, closes every use of
 an unexported bodyless ABI0 entry, and accepts only direct slice-data inputs
 and independent numerical result/length locals. Missing sources, indirect or
 assembly callers, linknames and local-address escape remain Context. A region
@@ -90,6 +91,16 @@ witness alone never admits raw RET: the complete source stack/CFG/effect proof
 must separately consume the exact slots and write envelope. Compiler loaders
 must supply the actual complete selection; an AST subset or self-reported hash
 is not authenticated package-selection evidence.
+
+The initial AMD64 caller-region consumer covers scalar MOVB/W/L/Q only. It
+tracks exact full-word pointer imports/copies, constant affine offsets and
+numerically initialized register bytes. Inputs and local lengths are read-only;
+only the independently fresh scalar result has a bounded write envelope.
+Instruction-local memory certificates bind the entire operands, direction and
+native width. Every source return must still restore SP/BP, and unknown joins,
+private-stack escape, g-register use, vector/native effects and stale source or
+signature metadata remain Context. Rosetta fixture execution is diagnostic,
+not evidence that an external AVX/AVX512 library ran on native AMD64 hardware.
 
 ARM32's specialized raw-data lowerers and NZCV source proof share one typed
 registration. Only those decoded data forms preserve source-defined APSR

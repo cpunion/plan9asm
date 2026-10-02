@@ -132,7 +132,7 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[literalArg].Sym, 1)
 		}
-		fn = normalizeX86RawReturnSourceStack(fn, opt, len(translationOptions) != 0)
+		fn = normalizeX86RawReturnSourceStack(fn, opt, len(translationOptions) != 0, normalized.Funcs[i])
 		normalized.Funcs[i] = fn
 		// A folded read needs the actual allocated DATA object, not the
 		// pending placeholder or only the source instruction's mnemonic.

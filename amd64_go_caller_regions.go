@@ -22,6 +22,7 @@ import (
 type GoSourceSelection struct {
 	Fset                  *token.FileSet
 	TypesInfo             *types.Info
+	Sizes                 types.Sizes
 	SelectedGoFiles       []string
 	GoSources             map[string][]byte
 	SelectedAssemblyFiles []string
@@ -56,11 +57,32 @@ type x86GoCallerRegionProof struct {
 	source    [32]byte
 }
 
+func x86GoCallerRegionCandidate(fn Func, sig FuncSig) bool {
+	if sig.Ret != Void || len(sig.Args) == 0 {
+		return false
+	}
+	for _, argument := range sig.Args {
+		if argument != Ptr {
+			return false
+		}
+	}
+	decoded, err := decodeX86RawDirectives(fn, "amd64")
+	if err != nil {
+		return false // The normal decoder still reports the actual failure.
+	}
+	for _, ins := range decoded.Instrs {
+		if ins.x86RawNearReturn != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func deriveX86GoCallerRegions(pkg GoPackage, selected GoSourceSelection, fn Func, sig FuncSig, arch string) (*x86GoCallerRegionProof, error) {
 	fail := func(reason string) (*x86GoCallerRegionProof, error) {
 		return nil, fmt.Errorf("%w: bounded raw-return caller source: %s", ErrProbeNeedsContext, reason)
 	}
-	if arch != "amd64" || pkg.Types == nil || selected.Fset == nil || selected.TypesInfo == nil ||
+	if arch != "amd64" || pkg.Types == nil || selected.Fset == nil || selected.TypesInfo == nil || !x86CallerTargetSizesValid(selected.Sizes) ||
 		len(sig.ArgRegs) != 0 || sig.Ret != Void || len(sig.Frame.Results) != 0 ||
 		sig.ARMEntry != nil || sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.WASMNative || sig.WASMContext != "" ||
 		fn.FrameSize != 0 || strings.Contains(fn.Sym, "<") || len(sig.Args) == 0 || len(sig.Args) > 16 {
@@ -193,6 +215,22 @@ func deriveX86GoCallerRegions(pkg GoPackage, selected GoSourceSelection, fn Func
 		return fail("entry has a non-direct, nested or unregistered caller")
 	}
 	return proof, nil
+}
+
+func x86CallerTargetSizesValid(sizes types.Sizes) bool {
+	if sizes == nil || sizes.Sizeof(types.Typ[types.UnsafePointer]) != 8 {
+		return false
+	}
+	for _, kind := range []types.BasicKind{
+		types.Int8, types.Uint8, types.Int16, types.Uint16, types.Int32, types.Uint32,
+		types.Int64, types.Uint64, types.Int, types.Uint, types.Float32, types.Float64,
+	} {
+		object := types.NewVar(token.NoPos, nil, "", types.Typ[kind])
+		if sizes.Sizeof(object.Type()) != x86CallerNumericWidth(object) {
+			return false
+		}
+	}
+	return true
 }
 
 func x86ValidateCallerSelection(pkg GoPackage, selected GoSourceSelection) error {

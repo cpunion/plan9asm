@@ -8,10 +8,14 @@ import (
 
 // This is a source ABI0 stack, not LLVM's physical stack or an incoming native
 // pointer. It is enabled only after all returns and all stack uses are proved.
-// Ordinary pointers, nonzero TEXT frames, calls and address escape cannot use it.
+// Ordinary pointers need a separately consumed complete Go caller proof.
+// Nonzero TEXT frames, calls and private-stack address escape cannot use it.
 type x86SourceStackProof struct {
 	minimum int64
 	word    int64
+	caller  *x86GoCallerRegionProof
+	// Exact public normalized source bytes, excluding private certificates.
+	normalized [32]byte
 }
 
 // Bind raw stack producer identity before consulting Go's named PUSH/POP
@@ -33,6 +37,8 @@ type x86SourceStackCell struct {
 	bp           *x86SourceStackAddress
 	flags        bool
 	numericFlags bool
+	caller       *x86CallerPointerValue
+	known        uint8
 }
 
 type x86SourceStackState struct {
@@ -40,15 +46,21 @@ type x86SourceStackState struct {
 	bp           x86SourceStackAddress
 	cells        []x86SourceStackCell
 	numericFlags bool
+	callers      map[Reg]x86CallerPointerValue
+	known        map[Reg]uint8
 }
 
 const x86SourceStackLimit = int64(1 << 20)
 
 // Recompute the proof on every final normalization. No caller-supplied signature,
 // changed source, or prepartition result inherits a cached admission flag.
-func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func {
+func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, original ...Func) Func {
+	input := fn
+	if len(original) != 0 {
+		input = original[0]
+	}
 	fn.x86SourceStack = nil
-	if fn.FrameSize != 0 || strings.Contains(fn.Sym, "<ABIInternal>") || x86RawReturnLeafStackUnobserved(fn) {
+	if fn.FrameSize != 0 || strings.Contains(fn.Sym, "<ABIInternal>") {
 		return fn
 	}
 	hasRawReturn := false
@@ -72,7 +84,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 		name = opt.ResolveSym(name)
 	}
 	sig, hasSig := opt.Sigs[name]
-	if bindFrame && (!hasSig || !x86SourceStackScalarABI0(sig, fn.ArgSize, opt.Goarch)) {
+	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
+	if !caller && x86RawReturnLeafStackUnobserved(fn) {
+		return fn
+	}
+	if bindFrame && (!hasSig || !caller && !x86SourceStackScalarABI0(sig, fn.ArgSize, opt.Goarch)) {
 		return fn
 	}
 
@@ -102,6 +118,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 			continue
 		}
 		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) {
+			return fn
+		}
+		if caller && !x86CallerScalarOperands(ins) {
 			return fn
 		}
 		if _, stack := amd64StackWidthSpecs[op]; stack && ins.x86SourceRaw != nil &&
@@ -143,11 +162,20 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 	for index := range copyFn.Instrs {
 		copyFn.Instrs[index].Args = append([]Operand(nil), fn.Instrs[index].Args...)
 		copyFn.Instrs[index].x86SourceStackFP = nil
+		copyFn.Instrs[index].x86CallerMemory = nil
 	}
 	states := map[int]x86SourceStackState{}
 	work := []int{0}
 	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}}
 	proof := &x86SourceStackProof{word: word}
+	if caller {
+		proof.caller = sig.x86CallerRegions
+		states[0] = x86SourceStackState{
+			bp:      x86SourceStackAddress{original: true},
+			callers: make(map[Reg]x86CallerPointerValue),
+			known:   make(map[Reg]uint8),
+		}
+	}
 	returned := false
 	for budget := 0; len(work) != 0; budget++ {
 		if budget >= 8192 {
@@ -157,6 +185,10 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 		work = work[1:]
 		state := states[pc]
 		state.cells = append([]x86SourceStackCell(nil), state.cells...)
+		if caller {
+			state.callers = x86CloneCallerPointers(state.callers)
+			state.known = x86CloneCallerKnown(state.known)
+		}
 		ins := &copyFn.Instrs[instructions[pc]]
 		op := Op(normalizeInstructionOpcode(ins.Op))
 		if op == OpRET {
@@ -177,9 +209,6 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 				return fn
 			}
 		} else if !x86SourceStackAddressStep(ins, &state, nativeMove, nativeSuffix, word) {
-			return fn
-		}
-		if !x86SourceStackFlagsStep(*ins, &state) {
 			return fn
 		}
 		if state.sp < -x86SourceStackLimit || state.sp > 0 {
@@ -229,6 +258,20 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 				ins.x86SourceStackFP[operandIndex] = offset
 			}
 		}
+		pointerFlags := false
+		if caller {
+			var valid bool
+			pointerFlags, valid = x86CallerScalarStep(ins, &state, sig.x86CallerRegions)
+			if !valid {
+				return fn
+			}
+		}
+		if !x86SourceStackFlagsStep(*ins, &state) {
+			return fn
+		}
+		if pointerFlags {
+			state.numericFlags = false
+		}
 
 		successors := []int{pc + 1}
 		if op == OpJMP || isAMD64ConditionalBranch(op) {
@@ -272,6 +315,13 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool) Func
 	}
 	if !returned {
 		return fn
+	}
+	if caller {
+		var err error
+		proof.normalized, err = x86CallerSourceFingerprint(copyFn)
+		if err != nil {
+			return fn
+		}
 	}
 	copyFn.x86SourceStack = proof
 	return copyFn
@@ -356,6 +406,20 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 				value := state.bp
 				cell.bp = &value
 			}
+			if state.callers != nil && operand.Reg != BP {
+				root, valid := x86CallerGP(operand.Reg)
+				if !valid {
+					return false
+				}
+				if pointer, present := state.callers[root]; present {
+					if width != word || operand.Reg != root {
+						return false
+					}
+					value := pointer
+					cell.caller = &value
+				}
+				cell.known = state.known[root]
+			}
 		}
 	}
 	if push {
@@ -396,6 +460,28 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 		state.bp = *saved.bp
 	} else if !flags && ins.Args[0].Reg == BP {
 		return false
+	}
+	if state.callers != nil && !flags && ins.Args[0].Reg != BP {
+		root, valid := x86CallerGP(ins.Args[0].Reg)
+		if !valid {
+			return false
+		}
+		if _, pointer := state.callers[root]; pointer && width != word {
+			return false
+		}
+		delete(state.callers, root)
+		if saved.caller != nil {
+			if width != word || ins.Args[0].Reg != root {
+				return false
+			}
+			state.callers[root] = *saved.caller
+		}
+		if width == word {
+			state.known[root] = saved.known
+		} else {
+			mask := x86CallerByteMask(ins.Args[0].Reg, width)
+			state.known[root] = state.known[root]&^mask | saved.known&mask
+		}
 	}
 	state.cells = state.cells[:len(state.cells)-1]
 	state.sp += width

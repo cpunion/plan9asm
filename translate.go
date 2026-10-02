@@ -72,6 +72,10 @@ type FuncSig struct {
 	// This is intentionally limited to the classic Go assembler convention used
 	// by stdlib .s files (e.g. internal/cpu/cpu_x86.s).
 	Frame FrameLayout
+
+	// Produced from complete actual typed Go callers, never from pointer types
+	// or a manual noalias option. Final normalization independently consumes it.
+	x86CallerRegions *x86GoCallerRegionProof
 }
 
 // WASMABI selects the physical ABI used for WebAssembly Plan 9 assembly.

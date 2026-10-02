@@ -961,6 +961,9 @@ type Instr struct {
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64
+	// Recomputed only after the complete source-stack CFG consumes an actual
+	// typed caller-region proof; never a general incoming-pointer permission.
+	x86CallerMemory map[int]x86CallerMemoryAccess
 	// A decoded near return is a physical C2/C3 instruction, not a Go RET
 	// pseudo-instruction with an automatically generated frame epilogue.
 	x86RawNearReturn *x86RawNearReturnForm

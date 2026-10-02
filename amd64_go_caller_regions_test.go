@@ -86,6 +86,7 @@ func x86CallerFixture(t *testing.T, source string) (GoPackage, GoSourceSelection
 	selected := GoSourceSelection{
 		Fset:                  fset,
 		TypesInfo:             info,
+		Sizes:                 types.SizesFor("gc", "amd64"),
 		SelectedGoFiles:       []string{"caller.go"},
 		GoSources:             map[string][]byte{"caller.go": []byte(source)},
 		SelectedAssemblyFiles: []string{"kernel_amd64.s"},
@@ -151,7 +152,7 @@ func TestX86GoCallerRegionsBindNumericalResultWidthsAndEveryCaller(t *testing.T)
 func TestX86GoCallerRegionsRejectIncompleteAndChangedSelection(t *testing.T) {
 	for _, change := range []string{
 		"missing types", "missing type info", "missing Go bytes", "missing Go AST", "changed Go bytes",
-		"extra Go bytes", "missing ASM", "extra ASM", "changed signature", "wrong parameter index", "custom registers", "wrong architecture",
+		"extra Go bytes", "missing ASM", "extra ASM", "changed signature", "wrong parameter index", "custom registers", "wrong architecture", "missing sizes", "wrong actual sizes",
 	} {
 		t.Run(change, func(t *testing.T) {
 			pkg, selected, fn, sig := x86CallerFixture(t, x86CallerFixtureSource)
@@ -181,6 +182,10 @@ func TestX86GoCallerRegionsRejectIncompleteAndChangedSelection(t *testing.T) {
 				sig.ArgRegs = []Reg{AX, BX, CX, DX}
 			case "wrong architecture":
 				arch = "arm64"
+			case "missing sizes":
+				selected.Sizes = nil
+			case "wrong actual sizes":
+				selected.Sizes = types.SizesFor("gc", "386")
 			}
 			if proof, err := deriveX86GoCallerRegions(pkg, selected, fn, sig, arch); err == nil || proof != nil {
 				t.Fatalf("incomplete/changed actual source got a caller certificate: %+v, %v", proof, err)

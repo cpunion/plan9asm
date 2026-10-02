@@ -99,6 +99,10 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		name = opt.ResolveSym(name)
 	}
 	sig := opt.Sigs[name]
+	caller := bindFrame && x86CallerNormalizedSourceMatches(fn, sig)
+	if fn.x86SourceStack != nil && fn.x86SourceStack.caller != nil && !caller {
+		return false
+	}
 	for _, ins := range fn.Instrs {
 		read := ins.x86RIPMemoryRead
 		if read.width != 0 && (opt.Goarch == "386" || !x86RawReturnDecodedReadBound(ins, file)) {
@@ -117,6 +121,15 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		for index, arg := range ins.Args {
 			switch arg.Kind {
 			case OpMem:
+				if caller {
+					if !x86CallerMemoryCertified(ins, index) && op != "LEAW" && op != "LEAL" && op != "LEAQ" {
+						return false
+					}
+					// Caller pointers require their own exact access certificate,
+					// including physical-SP imports. The old numerical FP proof
+					// is not an alternative permission after that certificate is lost.
+					continue
+				}
 				if offset, proved := ins.x86SourceStackFP[index]; bindFrame && fn.x86SourceStack != nil && proved &&
 					x86RawReturnFPBound(offset, x86RawReturnScalarMoveBytes(op), sig, opt.Goarch) {
 					continue // Instruction-local, freshly recomputed physical-SP slot proof.
@@ -131,6 +144,12 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 					return false
 				}
 			case OpFP:
+				if caller {
+					if !x86CallerMemoryCertified(ins, index) {
+						return false
+					}
+					continue
+				}
 				if !bindFrame {
 					continue // Pure prepartition normalization retains metadata.
 				}

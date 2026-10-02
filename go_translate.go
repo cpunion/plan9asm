@@ -21,6 +21,11 @@ type GoPackage struct {
 	Types   *types.Package
 	Imports map[string]*types.Package
 	Syntax  []*ast.File
+
+	// SourceSelection is the compiler's complete same-profile typed selection.
+	// Nil keeps the existing conservative raw-return pointer contract. Supplying
+	// source data does not itself certify a stack, memory effect or continuation.
+	SourceSelection *GoSourceSelection
 }
 
 // GoModuleOptions configures TranslateGoModule.
@@ -316,6 +321,24 @@ func goSigsForAsmFile(pkg GoPackage, file *File, resolve func(sym string) string
 				return nil, arm64GoABIContext("missing signature for file-local assembly %q; supply an explicit entry or closed source continuation contract", resolved)
 			}
 			return nil, fmt.Errorf("missing signature for file-local assembly %q; supply ManualSig or use the native backend", resolved)
+		}
+	}
+	if pkg.SourceSelection != nil && goarch == "amd64" {
+		for _, fn := range file.Funcs {
+			name := resolve(goTextSymbolForResolution(fn.Sym))
+			sig := b.sigs[name]
+			if !x86GoCallerRegionCandidate(fn, sig) {
+				continue
+			}
+			if !x86CallerTargetSizesValid(sz) {
+				return nil, fmt.Errorf("%w: bounded raw-return callers need the actual AMD64 numerical/pointer data layout", ErrProbeNeedsContext)
+			}
+			proof, err := deriveX86GoCallerRegions(pkg, *pkg.SourceSelection, fn, sig, goarch)
+			if err != nil {
+				return nil, err
+			}
+			sig.x86CallerRegions = proof
+			b.sigs[name] = sig
 		}
 	}
 	return b.sigs, nil
