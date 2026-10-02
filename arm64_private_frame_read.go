@@ -269,6 +269,17 @@ func (state arm64PrivateFrameAddresses) transfer(ins Instr, frameSize int64) boo
 			return true
 		}
 	}
+	if form, handled, err := parseARM64GPDataForm(op, ins); handled {
+		if err != nil {
+			return false
+		}
+		for _, reg := range arm64GPDataInputRegisters(form) {
+			if _, frame := state.address(reg); frame {
+				return false
+			}
+		}
+		return state.assign(form.destination.Reg, arm64PrivateFrameAddress{}, false)
+	}
 	// Unknown effects cannot wash a tainted register clean. Source-relative SP
 	// memory itself is not address transport and remains subject to the separate
 	// continuation-cell overlap proof; aliases/indexes do not get that exemption.

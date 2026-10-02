@@ -167,6 +167,16 @@ indexed and offset/pre/post forms, LLVM objects and initialized runtime
 canaries. An old fixture with undefined data establishes only its explicit
 object contract; never report it as successful runtime coverage.
 
+For ARM64 GP data-processing proof, use the lowerer's typed operand grammar:
+explicit Rd is a full overwrite, but two-operand arithmetic/shift forms and
+BFI/BFXIL read it. W results clear the upper GP half; extracts and extensions
+still consume their actual source. Unknown, aliased or joined frame inputs
+cannot be washed away. Preserve transformed code-address taint and require
+independent exact LR/SP/BP/g/OS-register restoration, even for typed void
+returns. Go optab rows do not automatically establish frontend spellings:
+single-operand NEG is rejected by stock Go, and a cross-bank W bitfield
+accepted by its alias encoder is not an overwrite proof.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore

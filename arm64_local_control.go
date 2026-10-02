@@ -801,6 +801,8 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 			value = arm64ControlUnion(arm64ControlOffset(value, off), arm64ControlLabels(value))
 		}
 		state.write(dst, value, false)
+	} else if state.transferGPData(ins) {
+		return
 	} else {
 		switch op {
 		case "CMP", "CMPW", "CMN", "CMNW", "TST", "TSTW", "CCMP", "CCMPW", "CCMN", "CCMNW", "PCDATA", "FUNCDATA":

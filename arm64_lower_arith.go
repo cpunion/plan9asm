@@ -6,6 +6,9 @@ import (
 )
 
 func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, handled, err := parseARM64GPDataForm(op, ins); handled && err != nil {
+		return true, false, err
+	}
 	if ok, terminated, err := c.lowerARM64DivideRemainder(op, ins); ok {
 		return ok, terminated, err
 	}

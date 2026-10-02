@@ -268,6 +268,17 @@ func (s *arm64RawPrivateFrameState) transfer(original, ins Instr, frameSize int6
 		}
 		return s.assign(ins.Args[len(ins.Args)-1].Reg, value, present)
 	}
+	if form, handled, err := parseARM64GPDataForm(op, ins); handled {
+		if err != nil {
+			return false
+		}
+		for _, reg := range arm64GPDataInputRegisters(form) {
+			if _, frame := s.address(reg); frame {
+				return false
+			}
+		}
+		return s.assign(form.destination.Reg, arm64PrivateFrameAddress{}, false)
+	}
 	// No unrecognized transform can kill a may-frame register. Its explicit
 	// operands must not consume an address; native/implicit-effect forms are
 	// excluded even when no temporary happens to be live.
