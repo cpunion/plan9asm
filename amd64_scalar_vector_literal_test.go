@@ -54,7 +54,7 @@ func x86ScalarLiteralGoListing(t *testing.T, arch, source string) (string, error
 
 func TestX86ScalarLiteralActualGoRewriteInventory(t *testing.T) {
 	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
-		return // Go 1.20 checks the implementation, not the current Go tables.
+		t.Skip("current Go 1.27 optab inventory; historical lane checks the implementation separately")
 	}
 	for _, arch := range []string{"amd64", "386"} {
 		for _, op := range []string{"MOVSS", "MOVSD", "VMOVSS", "VMOVSD"} {
