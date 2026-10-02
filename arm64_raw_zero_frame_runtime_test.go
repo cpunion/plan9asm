@@ -78,9 +78,10 @@ MOVD salt+16(FP),R2
 WORD $0xa9bf7bfd
 MOVD (R0),R4
 MOVD $17,R5
+WORD $0x94000006
 WORD $0x94000005
-WORD $0x94000004
 MOVD R4,(R1)
+MOVD RSP,R9
 WORD $0xa8c17bfd
 WORD $0xd65f03c0
 WORD $%#08x
@@ -161,5 +162,5 @@ int main(void){
 }
 `
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "raw_zero_numeric", triple, ir, cOracle, runner)
-	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, full canaries/caller LR")
+	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, dead private GP at typed void return, full canaries/caller LR")
 }

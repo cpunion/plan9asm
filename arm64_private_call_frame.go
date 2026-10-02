@@ -27,7 +27,7 @@ func arm64CallFrameUnexposedTyped(fn Func, sig FuncSig, resolve func(string) str
 
 func arm64CallFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
 	if !arm64SourceGoFrame(fn).present {
-		return arm64RawZeroFrameUnexposed(fn)
+		return arm64RawZeroFrameUnexposedForTransport(fn, transport)
 	}
 	if arm64HasRawFrameCode(fn) {
 		return arm64RawPrivateFrameUnexposed(fn)

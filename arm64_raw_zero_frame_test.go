@@ -80,6 +80,10 @@ func TestARM64RawZeroFrameEscapesAndCallerStateFailClosed(t *testing.T) {
 				t.Fatal("whole-source zero-frame proof erased an escape, overlap or unknown effect")
 			}
 			sig := arm64RawZeroFrameSig()
+			if body == "MOVD RSP,R0" || body == "MOVD RSP,R9" {
+				// Unknown/result transport cannot discard these live addresses.
+				sig.Ret = I64
+			}
 			_, err = Translate(file, Options{Goarch: "arm64", TargetTriple: arm64LinuxGNUTriple, Sigs: map[string]FuncSig{sig.Name: sig}})
 			if err == nil {
 				t.Fatal("unsafe source borrowed another translation path")
@@ -189,5 +193,76 @@ func TestARM64RawZeroFrameCallerDisjointStore(t *testing.T) {
 				t.Fatal("typed raw zero-frame root was not emitted")
 			}
 		})
+	}
+}
+
+func TestARM64RawZeroFrameTypedVoidDiscardsOnlyDeadVirtualGP(t *testing.T) {
+	for _, body := range []string{
+		"MOVD RSP,R9",
+		"MOVD RSP,R0",
+		"MOVD RSP,R9\nMOVD R9,R10",
+		"CBZ R0,other\nMOVD RSP,R9\nB joined\nother:\nMOVD R0,R9\njoined:",
+	} {
+		t.Run(body, func(t *testing.T) {
+			source := arm64RawZeroFrameFixture(516, false, body+"\nMOVD R4,(R1)\n")
+			requireARM64GoAssemblerResult(t, source, true)
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if arm64RawZeroFrameUnexposed(file.Funcs[0]) {
+				t.Fatal("source-only proof cannot guess the caller's return transport")
+			}
+			sig := arm64RawZeroFrameSig()
+			_, err = Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{sig.Name: sig}})
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestARM64RawZeroFrameTypedVoidRequiresCompleteABI0(t *testing.T) {
+	file, err := Parse(ArchARM64, arm64RawZeroFrameFixture(516, false, "MOVD RSP,R9\nMOVD R4,(R1)\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(*Func, *FuncSig)
+	}{
+		{"result", func(_ *Func, sig *FuncSig) { sig.Ret = I64 }},
+		{"result_slot", func(_ *Func, sig *FuncSig) { sig.Frame.Results = []FrameSlot{{Type: I64}} }},
+		{"custom_regs", func(_ *Func, sig *FuncSig) { sig.ArgRegs = []Reg{"R0", "R1"} }},
+		{"register_abi", func(_ *Func, sig *FuncSig) { sig.ARM64GoRegisterABI = &ARM64GoRegisterABI{} }},
+		{"closure", func(_ *Func, sig *FuncSig) { sig.ARM64ClosureABI = &ARM64ClosureABI{} }},
+		{"machine_entry", func(_ *Func, sig *FuncSig) { sig.ARMEntry = &ARMMachineEntry{} }},
+		{"context", func(_ *Func, sig *FuncSig) { sig.WASMContext = Ptr }},
+		{"native", func(_ *Func, sig *FuncSig) { sig.WASMNative = true }},
+		{"missing_slot", func(_ *Func, sig *FuncSig) { sig.Frame.Params = sig.Frame.Params[:1] }},
+		{"aggregate", func(_ *Func, sig *FuncSig) { sig.Args[0] = "{ ptr, i64 }" }},
+		{"narrow", func(_ *Func, sig *FuncSig) { sig.Args[0] = I32; sig.Frame.Params[0].Type = I32 }},
+		{"slot_type", func(_ *Func, sig *FuncSig) { sig.Frame.Params[0].Type = I64 }},
+		{"slot_offset", func(_ *Func, sig *FuncSig) { sig.Frame.Params[0].Offset = 8 }},
+		{"slot_index", func(_ *Func, sig *FuncSig) { sig.Frame.Params[0].Index = 1 }},
+		{"slot_field", func(_ *Func, sig *FuncSig) { sig.Frame.Params[0].Field = 0 }},
+		{"slot_fields", func(_ *Func, sig *FuncSig) { sig.Frame.Params[0].Fields = []int{0} }},
+		{"arg_size", func(fn *Func, _ *FuncSig) { fn.ArgSize++ }},
+		{"internal", func(fn *Func, _ *FuncSig) { fn.Sym += "<ABIInternal>" }},
+		{"helper", func(fn *Func, _ *FuncSig) { fn.arm64PrivateRegisterEntry = true }},
+		{"hidden_context", func(fn *Func, _ *FuncSig) { fn.Instrs[0].Raw = "TEXT rawZero(SB),NOSPLIT|NOFRAME|NEEDCTXT,$0-16" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fn, sig := file.Funcs[0], arm64RawZeroFrameSig()
+			fn.Instrs = append([]Instr(nil), fn.Instrs...)
+			tc.edit(&fn, &sig)
+			transport := &arm64PrivateFrameTransport{entry: sig}
+			if arm64RawZeroVoidTransport(fn, transport) || arm64RawZeroFrameUnexposedForTransport(fn, transport) {
+				t.Fatal("incomplete/nonordinary caller transport discarded a live frame address")
+			}
+		})
+	}
+	if arm64RawZeroFrameUnexposedForTransport(file.Funcs[0], nil) {
+		t.Fatal("absent caller contract inherited void transport")
 	}
 }

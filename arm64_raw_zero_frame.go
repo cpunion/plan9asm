@@ -55,6 +55,53 @@ type arm64RawZeroPoint struct {
 }
 
 func arm64RawZeroFrameUnexposed(fn Func) bool {
+	return arm64RawZeroFrameUnexposedForTransport(fn, nil)
+}
+
+// Only a complete ordinary ABI0 void declaration establishes that temporary
+// virtual GP values are dead at the root return. This is not permission to
+// expose them before returning, or to consume an unknown native register ABI.
+func arm64RawZeroVoidTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
+	if transport == nil || fn.arm64PrivateRegisterEntry || strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+		return false
+	}
+	sig := transport.entry
+	if sig.Ret != Void || len(sig.Frame.Results) != 0 || len(sig.ArgRegs) != 0 ||
+		sig.ARM64GoRegisterABI != nil || sig.ARM64ClosureABI != nil || sig.ARMEntry != nil ||
+		sig.WASMContext != "" || sig.WASMNative || len(sig.Frame.Params) != len(sig.Args) ||
+		fn.ArgSize != int64(len(sig.Args))*8 {
+		return false
+	}
+	for index, typ := range sig.Args {
+		slot := sig.Frame.Params[index]
+		if (typ != Ptr && typ != I64) || slot.Type != typ || slot.Offset != int64(index)*8 ||
+			slot.Index != index || slot.Field != -1 || len(slot.Fields) != 0 {
+			return false
+		}
+	}
+	for _, ins := range fn.Instrs {
+		if ins.Op != OpTEXT {
+			continue
+		}
+		_, rest := splitOpcode(ins.Raw)
+		parts := strings.Split(rest, ",")
+		if len(parts) == 3 {
+			expression := globlFlagName.ReplaceAllStringFunc(parts[1], func(name string) string {
+				if value, ok := goTextFlagValues[name]; ok {
+					return value
+				}
+				return name
+			})
+			flags, known := parseImmExpr(expression)
+			if !known || flags&64 != 0 { // NEEDCTXT is hidden transport.
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
 	if fn.FrameSize != 0 || arm64SourceGoFrame(fn).present || !arm64SourceFrameFlagsKnown(fn) || !arm64HasRawFrameCode(fn) {
 		return false
 	}
@@ -67,6 +114,7 @@ func arm64RawZeroFrameUnexposed(fn Func) bool {
 	if text != 1 {
 		return false
 	}
+	voidTransport := arm64RawZeroVoidTransport(fn, transport)
 	// The exact raw PC boundary checker supplies only same-source labels.
 	// Run it on the original too: later normalization cannot erase an escape.
 	normalized, blobs, err := prepareARM64RawPCRelative(fn)
@@ -144,7 +192,7 @@ func arm64RawZeroFrameUnexposed(fn Func) bool {
 							return false
 						}
 						delete(state.addresses.regs, "R29")
-						if len(state.addresses.regs) != 0 {
+						if len(state.addresses.regs) != 0 && !voidTransport {
 							return false
 						}
 					} else {
