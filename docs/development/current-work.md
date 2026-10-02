@@ -112,8 +112,12 @@ Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
 agreement. They do not acquire fictitious TEXT signatures or symbol-free
 status. Actual LLVM objects remain necessary for a pass. The test-declaration
-query/consumer intersection with DATA-only siblings still needs its own
-original-Go production replay; never relax their metadata equality to hide it.
+query/consumer intersection with DATA-only siblings now preserves the complete
+native symbol/object/listing proof before query-only return. The final consumer
+requires that same proof and unchanged normalized CPP. The mixed TEXT/test-
+declaration/DATA regression produced real LLVM objects across five architectures.
+The original Sneller version passed its default-target replay at frozen
+`97e54f30`; require a new replay after later integrations, with equality intact.
 
 Always-documentation directories require complete original Go inventories and
 same-profile actual typed Go NoGoError witnesses before CPP exclusion. Ordinary
@@ -137,11 +141,15 @@ EOF without a required newline. Whole original-library tests remain necessary.
 The instrumentation rule foundation binds complete actual Go driver and platform
 source registrations and exact early diagnostics. Standalone early observation
 and same-mode pure-Go marker exports have independent source/tool and complete
-trace/archive/symbol proofs, including actual codegen/buildmode routing. Early
-rule acceptance is not export evidence, and marker export is not original-library
-CPP/LLVM consumer, C/SDK, sanitizer-runtime or final-link evidence. Mode-aware
-planner/export integration is next; full header/consumer integration remains
-unfinished. Never synthesize feature tags or turn CGO, SDK or dependency failures
+trace/archive/symbol proofs, including actual codegen/buildmode routing. Separate
+original-package planning/export foundations retain complete Go/ASM bytes,
+actual import-C roles and the full mode/CGO/custom-tag denominator. Their bounded
+actual same-mode export/asmdecl currently admits only import-free source and
+remains explicitly `consumer_pending`; it does not hook into ordinary reports.
+Early rule acceptance is not export evidence, and neither marker nor original
+export is CPP/LLVM consumer, C/SDK, sanitizer-runtime or final-link evidence.
+Dependency/header/consumer integration remains unfinished. Never synthesize
+feature tags or turn CGO, SDK or dependency failures
 into N/A. Instrumented scopes must not masquerade as the ordinary protocol or
 be erased from its required coverage denominator.
 
@@ -176,7 +184,12 @@ hash-partitions every current root test, example and fuzz seed into fresh serial
 processes. Existing skips are counted separately. It does not cover other
 packages, nested CLI modules or corpus gates. Historical `47ea649d` root
 verification is not proof of this development branch; require a fresh complete
-report. The tool's Linux
+report. Frozen `cd5438b7` finished every root partition but exposed two KMOV
+helper regressions: internal dispatch supplied the opcode while the synthetic
+instruction omitted it. The complete KMOV family now binds a local opcode copy,
+rejects conflicting/unknown identities before emission and preserves strict
+source/caller validation. Focused Go 1.27 race and Go 1.20 checks passed; require
+a fresh complete integrated-root report after this repair. The tool's Linux
 cold-fixture timeout was corrected and genuinely rerun at `2259cf73`, without
 changing the production suite deadline or discarding the earlier failure.
 
