@@ -72,6 +72,14 @@ func decodeARM64RawWordInstructionTarget(ins Instr, target string) (Instr, error
 }
 
 func decodedARM64GoSyntax(inst arm64asm.Inst) string {
+	// LDPSW has the same typed pair/address grammar as LDP. x/arch's
+	// generic printer reverses its two destinations and drops .W/.P, so
+	// borrow the complete LDP printer, preserving the original opcode.
+	if inst.Op == arm64asm.LDPSW {
+		inst.Op = arm64asm.LDP
+		syntax := arm64asm.GoSyntax(inst, 0, nil, nil)
+		return "LDPSW" + strings.TrimPrefix(syntax, "LDP")
+	}
 	// Branch-register encodings read register 31 as XZR, never SP.
 	// x/arch's older BR printer spells it R31, which is not a Go GP
 	// register. Keep this complete BR/BLR/RET field on the zero path.
@@ -157,16 +165,6 @@ func decodedARM64GoSyntax(inst arm64asm.Inst) string {
 	if op == "VFMAXV" || op == "VFMINV" || op == "VFMAXNMV" || op == "VFMINNMV" {
 		if separator := strings.LastIndex(rest, ", F"); separator >= 0 {
 			rest = rest[:separator] + ", V" + rest[separator+3:]
-		}
-	}
-	// The x/arch printer emits LDPSW's two destinations as separate operands,
-	// unlike the pair operand accepted by Go's assembler and our pair lowerer.
-	if inst.Op == arm64asm.LDPSW {
-		operands := strings.Split(rest, ", ")
-		if len(operands) == 3 {
-			// The printer also reverses Rt and Rt2 in this three-operand
-			// spelling. The pair lowerer consumes them in memory order.
-			rest = operands[0] + ", (" + operands[2] + ", " + operands[1] + ")"
 		}
 	}
 	if rest == "" {

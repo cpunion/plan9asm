@@ -65,6 +65,18 @@ same-file register helpers retain the original proof across local-call
 rewriting; a bare source-local call never acquires it. Scalar and paired atomic
 stores must account for their memory operand as well as GP outputs.
 
+Raw-containing framed ARM64 source-leaf functions have a separate bounded
+physical-SP proof, checked on both original and normalized CFGs. Constant SP
+movement must balance on every source RET; different-delta joins fail. R29 and
+the automatic saved-FP cell start as unknown may-frame values. Known scalar and
+GP/FP pair memory forms preserve private eight-byte pointer spills and reject
+partial overlap, unknown indexing/writeback and SIMD pointer transport. Only
+the actual Go framed-leaf RET epilogue consumes R29; continuation/LR checks stay
+independent. External stores, live result aliases, calls, hardware RETs and
+unregistered effects cannot borrow this proof. Go's physical autosize is not
+the LLVM private-allocation size. Runtime oracles must execute original raw
+Go objects as well as LLVM objects with independent references and canaries.
+
 For a newly discovered instruction, update all four layers before calling it
 complete: the family-specific lowerer, positive/negative Go-table form tests,
 LLVM 22 object compilation for every affected supported architecture, and the

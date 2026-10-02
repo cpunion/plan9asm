@@ -15,6 +15,9 @@ func arm64CallFrameUnexposed(fn Func) bool {
 	if !arm64SourceGoFrame(fn).present {
 		return false
 	}
+	if arm64HasRawFrameCode(fn) {
+		return arm64RawPrivateFrameUnexposed(fn)
+	}
 	text, affine := false, false
 	for _, original := range fn.Instrs {
 		if original.Op == OpTEXT {
