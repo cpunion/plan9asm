@@ -111,7 +111,15 @@ consumers. Validate bound regular source identities before reading. Ordinary
 missing inactive/generated headers retain their typed ENOENT error chain.
 Do not accept arbitrary external include roots or borrow a pkg/include allowance
 when the actual source requires its own search-miss witness. The included-header
-EOF operand witness still needs its separate positive/negative replay.
+EOF operand witness is integrated: it authenticates only the original literal;
+Go and the active CPP input stack still independently reject translation-unit
+EOF without a required newline. Whole original-library tests remain necessary.
+
+The instrumentation rule foundation binds complete actual Go driver and platform
+source registrations and exact early diagnostics. Early rule acceptance is not
+export, object, runtime or source-exclusion evidence. Race/msan/asan observations
+and mode-consistent planner/export/header/consumer integration remain unfinished.
+Never synthesize feature tags or turn CGO, SDK or dependency failures into N/A.
 
 ## Required next work
 
