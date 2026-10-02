@@ -17,6 +17,7 @@ type arm64Ctx struct {
 
 	privateRegisterEntry bool
 	unexposedCallFrame   bool // source/normalized proof for this fresh SP object only
+	privateDataStores    map[[2]int]arm64PrivateDataSpan
 
 	tmp int
 
@@ -96,6 +97,9 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 	}
 	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
 	c.unexposedCallFrame = arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
+	if c.unexposedCallFrame {
+		c.privateDataStores, _ = arm64PrivateDataProof(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+	}
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s
 	}

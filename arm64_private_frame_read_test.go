@@ -178,13 +178,19 @@ func TestARM64PrivateFrameLocalReadEscapesAndUnknownEffectsRejected(t *testing.T
 			}
 			for _, target := range arm64TypedNativeTargets {
 				_, err := Translate(file, arm64PrivateCallCopyOptions(target))
-				if effect == "ADD $8,RSP,R9\nVLD1 (R9),[V0.B16]" {
+				switch effect {
+				case "ADD $8,RSP,R9\nVLD1 (R9),[V0.B16]",
+					"ADD $8,RSP,R9\nMOVD.W 8(R9),R11\nMOVD $0,R9",
+					"ADD $8,RSP,R9\nMOVD R11,(R9)\nMOVD $0,R9":
 					// Preserve the original source-only negative above. The
 					// explicit typed LLVM call does not consume this unused GP
-					// address. This is an object contract, not an execution
-					// claim for the fixture's unrelated undefined R11 data.
+					// address. Every certified store/read/writeback lies in
+					// private DATA, not sp0. This is object coverage, not an
+					// execution claim for this fixture's undefined R11 data;
+					// PrivateDataMemoryFamily supplies initialized numerical
+					// and full-canary runtime counterparts.
 					if err != nil {
-						t.Fatalf("%s typed untransported scratch: %v", target, err)
+						t.Fatalf("%s typed bounded data/scratch: %v", target, err)
 					}
 					continue
 				}

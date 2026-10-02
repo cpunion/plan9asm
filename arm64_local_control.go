@@ -13,10 +13,11 @@ import (
 type arm64ControlValue map[string]bool
 
 type arm64ControlState struct {
-	regs        map[Reg]arm64ControlValue
-	memory      map[string]arm64ControlValue
-	escaped     arm64ControlValue
-	unexposedSP bool // original/normalized source and fresh-entry proof, not FP
+	regs         map[Reg]arm64ControlValue
+	memory       map[string]arm64ControlValue
+	escaped      arm64ControlValue
+	unexposedSP  bool                  // original/normalized source and fresh-entry proof, not FP
+	privateStore *arm64PrivateDataSpan // only the instruction currently being transferred
 }
 
 type arm64LocalControlPlan struct {
@@ -296,15 +297,30 @@ func (state *arm64ControlState) invalidateUnknownStore(destination Operand, valu
 	if destination.Kind == OpMem {
 		for _, reg := range []Reg{destination.Mem.Base, destination.Mem.Index} {
 			base := arm64ControlBase(reg)
-			preserveSP = preserveSP && base != SP
+			if state.privateStore == nil {
+				preserveSP = preserveSP && base != SP
+			}
 			for token := range arm64ControlRead(state.regs, base) {
-				if strings.HasPrefix(token, "sp:") {
+				if token == "code-derived:" || state.privateStore == nil && strings.HasPrefix(token, "sp:") {
 					preserveSP = false
 				}
 			}
 		}
 	}
 	for key, old := range state.memory {
+		if state.privateStore != nil && strings.HasPrefix(key, "sp:") {
+			start, err := strconv.ParseInt(key[3:], 10, 64)
+			if err == nil && start >= 0 && start <= int64(1<<63-1)-8 {
+				if start+8 <= state.privateStore.low || start >= state.privateStore.end {
+					if preserveSP {
+						continue
+					}
+				} else {
+					state.memory[key] = arm64ControlUnion(arm64ControlUnion(old, value), arm64ControlExternal())
+					continue
+				}
+			}
+		}
 		if preserveSP && strings.HasPrefix(key, "sp:") {
 			continue
 		}
@@ -565,7 +581,13 @@ func (c *arm64Ctx) prepareLocalControl() error {
 				terminated = true
 				break
 			}
+			if c.unexposedCallFrame {
+				if span, bounded := c.privateDataStores[[2]int{bi, ii}]; bounded {
+					state.privateStore = &span
+				}
+			}
 			state.transfer(ins, op, post, c.rawDataGlobals)
+			state.privateStore = nil
 		}
 		if !terminated {
 			propagate(bi+1, state)

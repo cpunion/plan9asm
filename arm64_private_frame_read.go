@@ -76,6 +76,14 @@ func arm64PrivateFrameReadProof(fn Func) bool {
 }
 
 func arm64PrivateFrameReadProofForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
+	if arm64PrivateFrameReadExactProof(fn, transport) {
+		return true
+	}
+	_, bounded := arm64PrivateDataProof(fn, transport)
+	return bounded
+}
+
+func arm64PrivateFrameReadExactProof(fn Func, transport *arm64PrivateFrameTransport) bool {
 	blocks := arm64SplitBlocks(fn)
 	indices := make(map[string]int, len(blocks))
 	for index, block := range blocks {

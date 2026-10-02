@@ -115,6 +115,21 @@ func TestARM64PrivateFrameUnknownSPIndexAndPartialStoresRemainRejected(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
+		if instruction == "MOVD $8(RSP),R9\nMOVB R10,(R9)" {
+			// Keep this exact byte source as a source-only negative. With
+			// typed call transport, its byte store is now proved wholly in
+			// private DATA [8,9), not the saved caller link. This is only
+			// object coverage: the original R10 is not initialized. The
+			// separate PrivateDataMemoryFamily runtime initializes data
+			// and checks complete output canaries for every scalar width.
+			if arm64CallFrameUnexposed(file.Funcs[0]) {
+				t.Fatal("nil transport acquired a private data store proof")
+			}
+			if _, err := Translate(file, arm64PrivateCallCopyOptions(arm64LinuxGNUTriple)); err != nil {
+				t.Errorf("explicit typed private DATA byte: %v", err)
+			}
+			continue
+		}
 		if _, err := Translate(file, arm64PrivateCallCopyOptions(arm64LinuxGNUTriple)); !errors.Is(err, ErrProbeNeedsContext) {
 			t.Errorf("explicit/moving/partial/escaped SP write must stay unproved: %q: %v", instruction, err)
 		}
