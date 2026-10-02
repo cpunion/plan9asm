@@ -70,24 +70,31 @@ func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameFamily(t *testing.T) {
 
 func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameRepeatedNumericHelper(t *testing.T) {
 	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
-	words := assembleARM64LLVMWords(t, []string{"add x4,x4,x2", "eor x4,x4,x5"}, "")
+	words := assembleARM64LLVMWords(t, []string{
+		"add x4,x4,x2", "eor x4,x4,x5", "stp x28,x18,[sp,#-16]!",
+		"add x28,sp,#0", "add x18,sp,#0", "ldp x28,x18,[sp],#16",
+	}, "")
 	source := fmt.Sprintf(`TEXT rawZeroNumeric(SB),516,$0-24
 MOVD in+0(FP),R0
 MOVD out+8(FP),R1
 MOVD salt+16(FP),R2
 WORD $0xa9bf7bfd
+WORD $%#08x
+WORD $%#08x
+WORD $%#08x
 MOVD (R0),R4
 MOVD $17,R5
+WORD $0x94000007
 WORD $0x94000006
-WORD $0x94000005
 MOVD R4,(R1)
 MOVD RSP,R9
+WORD $%#08x
 WORD $0xa8c17bfd
 WORD $0xd65f03c0
 WORD $%#08x
 WORD $%#08x
 WORD $0xd65f03c0
-`, words[0], words[1])
+`, words[2], words[3], words[4], words[5], words[0], words[1])
 	requireARM64GoAssemblerResult(t, source, true)
 	file, err := Parse(ArchARM64, source)
 	if err != nil {
@@ -104,6 +111,7 @@ WORD $0xd65f03c0
 	const goOracle = `package main
 import "encoding/binary"
 func rawZeroNumeric(*byte,*byte,uint64)
+func readGoG() uintptr
 func main(){
  var input,output,want [96]byte
  seed:=uint64(0x0123456789abcdef)
@@ -115,15 +123,16 @@ func main(){
   x=(x+salt)^17;x=(x+salt)^17
   binary.LittleEndian.PutUint64(want[off:],x)
   snapshot:=input
-  rawZeroNumeric(&input[off],&output[off],salt)
-  if input!=snapshot || output!=want {panic("raw repeated helper math/canary/caller mismatch")}
+  beforeG:=readGoG();rawZeroNumeric(&input[off],&output[off],salt);afterG:=readGoG()
+  if beforeG==0 || beforeG!=afterG || input!=snapshot || output!=want {panic("raw repeated helper math/canary/caller/g mismatch")}
  }}
 }
 `
 	for name, body := range map[string]string{
-		"go.mod":         "module rawzeronumericoracle\n\ngo 1.27\n",
-		"main.go":        goOracle,
-		"oracle_arm64.s": strings.Replace(source, "TEXT rawZeroNumeric", "TEXT ·rawZeroNumeric", 1),
+		"go.mod":  "module rawzeronumericoracle\n\ngo 1.27\n",
+		"main.go": goOracle,
+		"oracle_arm64.s": strings.Replace(source, "TEXT rawZeroNumeric", "TEXT ·rawZeroNumeric", 1) +
+			"\nTEXT ·readGoG(SB),516,$0-8\nMOVD g,R0\nMOVD R0,ret+0(FP)\nRET\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
 			t.Fatal(err)
@@ -147,6 +156,8 @@ func main(){
 	const cOracle = `#include <stdint.h>
 #include <string.h>
 extern void rawZeroNumeric(const unsigned char*,unsigned char*,uint64_t);
+static uint64_t readG(void){uint64_t v;__asm__ volatile("mov %0,x28":"=r"(v));return v;}
+static uint64_t readOS18(void){uint64_t v;__asm__ volatile("mov %0,x18":"=r"(v));return v;}
 int main(void){
  unsigned char input[96],output[96],want[96],snapshot[96];
  const unsigned offsets[]={0,1,3,7,17};uint64_t seed=UINT64_C(0x0123456789abcdef);
@@ -156,11 +167,11 @@ int main(void){
   if(trial<64){uint64_t v=UINT64_C(1)<<trial;memcpy(input+off,&v,8);}
   if(trial==64){uint64_t v=UINT64_MAX;memcpy(input+off,&v,8);}
   uint64_t x;memcpy(&x,input+off,8);x=(x+seed)^17;x=(x+seed)^17;memcpy(want+off,&x,8);memcpy(snapshot,input,96);
-  rawZeroNumeric(input+off,output+off,seed);
-  if(memcmp(input,snapshot,96)||memcmp(output,want,96))return 1;
+  uint64_t beforeG=readG(),beforeOS18=readOS18();rawZeroNumeric(input+off,output+off,seed);
+  if(beforeG!=readG()||beforeOS18!=readOS18()||memcmp(input,snapshot,96)||memcmp(output,want,96))return 1;
  }return 0;
 }
 `
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "raw_zero_numeric", triple, ir, cOracle, runner)
-	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, dead private GP at typed void return, full canaries/caller LR")
+	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, dead private GP at typed void return, original raw g/OS18 spill restoration, actual Go g and native caller fixed-register snapshots, full canaries/caller LR")
 }

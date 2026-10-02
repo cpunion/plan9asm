@@ -12,12 +12,15 @@ SP joins, partial pointer spills, unknown indexing and address escapes fail.
 Dead components are checked too. Existing framed-source and continuation guards
 remain independent. Proof registration is not an object or runtime pass.
 
-After exact root SP/BP/LR restoration, an explicit ordinary ABI0 void signature
+After exact root SP/BP/LR/g and OS-reserved R18 restoration, an explicit ordinary ABI0 void signature
 can discard dead virtual GP scratch. It requires complete direct eight-byte
 pointer/integer FP parameters, exact TEXT argument size, no results, register
 ABI, custom assignment, native entry or hidden context. Source-only proofs
 cannot guess this contract. Earlier stores, escapes and calls remain checked;
 void transport is not an all-instruction or frame-address exemption.
+Raw WORDs can name g/R18 even when Go's textual parser cannot. Their complete
+entry identity is checked independently of address taint: partial spill writes,
+constant overwrites, mixed joins and unknown effects cannot inherit restoration.
 
 `TestARM64RawZeroFrame*` retains original Go-accepted minimum RED cases, explicit
 escape/overlap/call-context negatives, and physical-leaf source-origin checks.

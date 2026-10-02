@@ -17,6 +17,20 @@ type arm64RawZeroState struct {
 	control   *arm64ControlState
 }
 
+// Go 1.27 abi-internal.md's ARM64 special-purpose table also applies to ABI0:
+// R18 is OS-reserved; R28 carries g; R29 is BP. Their return meaning is Same,
+// unlike ordinary scratch or the closure-context register R26. Raw WORD can
+// touch registers excluded by Go's textual parser, so track their full entry
+// identity independently of void-result transport and may-frame addresses.
+var arm64RawZeroFixedEntry = [...]struct {
+	reg   Reg
+	token string
+}{
+	{reg: "R18", token: "entry-os18:"},
+	{reg: "R28", token: "entry-g:"},
+	{reg: "R29", token: "entry-bp:"},
+}
+
 func (s *arm64RawZeroState) clone() *arm64RawZeroState {
 	return &arm64RawZeroState{addresses: s.addresses.clone(), control: s.control.clone()}
 }
@@ -157,15 +171,18 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 		}
 		entry := &arm64RawZeroState{
 			addresses: &arm64RawPrivateFrameState{
-				regs:   arm64PrivateFrameAddresses{"R29": {}},
+				regs:   arm64PrivateFrameAddresses{"R18": {}, "R28": {}, "R29": {}},
 				spills: make(map[int64]arm64PrivateFrameAddress),
 			},
 			control: &arm64ControlState{
 				regs: map[Reg]arm64ControlValue{
-					SP: {"sp:0": true}, "R29": {"entry-bp:": true}, "R30": {"label:__entry_lr": true},
+					SP: {"sp:0": true}, "R30": {"label:__entry_lr": true},
 				},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
+		}
+		for _, fixed := range arm64RawZeroFixedEntry {
+			entry.control.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
 		}
 		if !propagate(arm64RawZeroPoint{block: seed}, entry) {
 			return false
@@ -187,11 +204,16 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 				if arm64RawZeroReturn(original) {
 					link := arm64ControlRead(state.control.regs, "R30")
 					if len(calls) == 0 {
-						bp := arm64ControlRead(state.control.regs, "R29")
-						if state.addresses.sp != 0 || len(link) != 1 || !link["label:__entry_lr"] || len(bp) != 1 || !bp["entry-bp:"] {
+						if state.addresses.sp != 0 || len(link) != 1 || !link["label:__entry_lr"] {
 							return false
 						}
-						delete(state.addresses.regs, "R29")
+						for _, fixed := range arm64RawZeroFixedEntry {
+							value := arm64ControlRead(state.control.regs, fixed.reg)
+							if len(value) != 1 || !value[fixed.token] {
+								return false
+							}
+							delete(state.addresses.regs, fixed.reg)
+						}
 						if len(state.addresses.regs) != 0 && !voidTransport {
 							return false
 						}
