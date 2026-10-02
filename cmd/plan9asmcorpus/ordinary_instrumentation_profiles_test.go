@@ -44,6 +44,7 @@ func TestOrdinaryFeatureProfilesDoNotPairInstrumentationOnlyGo(t *testing.T) {
 			} {
 				t.Run(test.name, func(t *testing.T) {
 					plan := &discoveryOrdinarySelectionPlan{
+						Module:    "example.invalid/features",
 						GoVersion: baseline.GoVersion, Targets: []string{baseline.Target},
 						Sources: []ordinarySelectionSource{
 							{File: "probe_amd64.s", Header: ordinaryProfileTestHeader(test.asm, "")},

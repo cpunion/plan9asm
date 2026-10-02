@@ -154,10 +154,12 @@ func TestFeatureProfileCaptureSharesOwnedObservationCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-		{File: "vector_amd64.s", Header: "//go:build amd64.v3\n\n"},
-		{File: "vector_amd64.go", Header: "//go:build amd64.v3\n\npackage vector\n"},
-	}}
+	plan := &discoveryOrdinarySelectionPlan{
+		Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+		Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+			{File: "vector_amd64.s", Header: "//go:build amd64.v3\n\n"},
+			{File: "vector_amd64.go", Header: "//go:build amd64.v3\n\npackage vector\n"},
+		}}
 	files := []string{"vector_amd64.s"}
 	first, err := captureDiscoveryFeatureProfiles(ctx, goBinary, ownedDir, targetFeatureTestEnv(), plan, files, cache)
 	if err != nil {

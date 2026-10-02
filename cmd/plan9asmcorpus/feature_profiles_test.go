@@ -23,10 +23,12 @@ func TestFeatureProfilesRetainFeatureOnlyAssembly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-		{File: "vector_amd64.s", Header: "//go:build amd64.v3 && !amd64.v4\n\n"},
-		{File: "vector_amd64.go", Header: "//go:build amd64.v3 && !amd64.v4\n\npackage vector\n"},
-	}}
+	plan := &discoveryOrdinarySelectionPlan{
+		Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+		Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+			{File: "vector_amd64.s", Header: "//go:build amd64.v3 && !amd64.v4\n\n"},
+			{File: "vector_amd64.go", Header: "//go:build amd64.v3 && !amd64.v4\n\npackage vector\n"},
+		}}
 	requests, err := planDiscoveryFeatureProfiles(plan, []string{"vector_amd64.s"}, []*discoveryTargetFeatures{baseline})
 	if err != nil {
 		t.Fatal(err)
@@ -50,10 +52,12 @@ func TestFeatureProfilesProofRejectsMissingAndRelabeledObservations(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-		{File: "vector_amd64.s", Header: "//go:build amd64.v3 && goexperiment.fieldtrack\n\n"},
-		{File: "vector_amd64.go", Header: "//go:build amd64.v3 && goexperiment.fieldtrack\n\npackage vector\n"},
-	}}
+	plan := &discoveryOrdinarySelectionPlan{
+		Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+		Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+			{File: "vector_amd64.s", Header: "//go:build amd64.v3 && goexperiment.fieldtrack\n\n"},
+			{File: "vector_amd64.go", Header: "//go:build amd64.v3 && goexperiment.fieldtrack\n\npackage vector\n"},
+		}}
 	files := []string{"vector_amd64.s"}
 	profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), plan, files)
 	if err != nil {
@@ -105,10 +109,12 @@ func TestFeatureProfilesActualDriverConfirmsSourceRequiredCPUAndExperiment(t *te
 			if err != nil {
 				t.Fatal(err)
 			}
-			plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-				{File: "vector_amd64.s", Header: "//go:build " + requirements + "\n\n"},
-				{File: "vector_amd64.go", Header: "//go:build " + requirements + "\n\npackage vector\n"},
-			}}
+			plan := &discoveryOrdinarySelectionPlan{
+				Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+				Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+					{File: "vector_amd64.s", Header: "//go:build " + requirements + "\n\n"},
+					{File: "vector_amd64.go", Header: "//go:build " + requirements + "\n\npackage vector\n"},
+				}}
 			profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), plan, []string{"vector_amd64.s"})
 			if err != nil {
 				t.Fatal(err)
@@ -167,20 +173,24 @@ func TestFeatureProfilesDoNotEnableFeatureNamespacesAsCustom(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, requirement := range []string{"amd64.v99", "goexperiment.unknown", "race"} {
-		plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-			{File: "vector_amd64.s", Header: "//go:build " + requirement + "\n\n"},
-			{File: "vector_amd64.go", Header: "package vector\n"},
-		}}
+		plan := &discoveryOrdinarySelectionPlan{
+			Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+			Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+				{File: "vector_amd64.s", Header: "//go:build " + requirement + "\n\n"},
+				{File: "vector_amd64.go", Header: "package vector\n"},
+			}}
 		if _, err := planDiscoveryFeatureProfiles(plan, []string{"vector_amd64.s"}, []*discoveryTargetFeatures{baseline}); err == nil {
 			t.Fatalf("unsupported feature requirement became custom or empty baseline exclusion: %s", requirement)
 		}
 	}
 	// Future release tags cannot be enabled as custom -tags either. Their
 	// fixed current-Go truth value is independently replayed by MatchFile.
-	plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-		{File: "vector_amd64.s", Header: "//go:build go1.99\n\n"},
-		{File: "vector_amd64.go", Header: "package vector\n"},
-	}}
+	plan := &discoveryOrdinarySelectionPlan{
+		Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+		Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+			{File: "vector_amd64.s", Header: "//go:build go1.99\n\n"},
+			{File: "vector_amd64.go", Header: "package vector\n"},
+		}}
 	requests, err := planDiscoveryFeatureProfiles(plan, []string{"vector_amd64.s"}, []*discoveryTargetFeatures{baseline})
 	if err != nil || len(requests) != 1 || !requests[0].Baseline {
 		t.Fatalf("future release namespace was incorrectly enabled: %+v %v", requests, err)
@@ -232,9 +242,11 @@ func TestFeatureProfilesBaselineRequestsAreDeduplicated(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, header := range []string{"package vector\n", "//go:build !goexperiment.fieldtrack\n\npackage vector\n", "//go:build ignore && goexperiment.unregistered\n\npackage vector\n"} {
-		plan := &discoveryOrdinarySelectionPlan{GoVersion: baseline.GoVersion, Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
-			{File: "vector_amd64.s", Header: ""}, {File: "vector_amd64.go", Header: header},
-		}}
+		plan := &discoveryOrdinarySelectionPlan{
+			Module: "example.invalid/features", GoVersion: baseline.GoVersion,
+			Targets: []string{baseline.Target}, Sources: []ordinarySelectionSource{
+				{File: "vector_amd64.s", Header: ""}, {File: "vector_amd64.go", Header: header},
+			}}
 		requests, err := planDiscoveryFeatureProfiles(plan, []string{"vector_amd64.s"}, []*discoveryTargetFeatures{baseline})
 		if err != nil || len(requests) != 1 || !requests[0].Baseline {
 			t.Fatalf("baseline duplicated or ignored generator created a required profile: %+v %v", requests, err)
