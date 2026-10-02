@@ -898,7 +898,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		return err
 	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
-	unexposedCallFrame := arm64CallFrameUnexposed(fn)
+	unexposedCallFrame := arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
 	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 		if sig.ARM64GoRegisterABI != nil {
 			if err := arm64ValidateGoRegisterABI(sig); err != nil {

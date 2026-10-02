@@ -72,6 +72,10 @@ func arm64PrivateFrameOffset(value arm64PrivateFrameAddress, off int64) (arm64Pr
 // guess a callee's transport. Audited register-only helper rewrites are checked
 // before and after coalescing; they cannot form an address from an absent one.
 func arm64PrivateFrameReadProof(fn Func) bool {
+	return arm64PrivateFrameReadProofForTransport(fn, nil)
+}
+
+func arm64PrivateFrameReadProofForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
 	blocks := arm64SplitBlocks(fn)
 	indices := make(map[string]int, len(blocks))
 	for index, block := range blocks {
@@ -105,13 +109,18 @@ func arm64PrivateFrameReadProof(fn Func) bool {
 			index := queue[next]
 			queued[index] = false
 			state := before[index].clone()
+			if transport != nil && !state.bounded(fn.FrameSize) {
+				return false
+			}
 			terminated := false
 			for _, original := range blocks[index].instrs {
 				ins := arm64StackInstruction(original)
 				op := arm64ControlOp(ins)
 				if op == "CALL" || op == "BL" || op == OpRET {
 					if len(state) != 0 {
-						return false
+						if transport == nil || !transport.consume(ins, state, strings.HasSuffix(fn.Sym, "<ABIInternal>")) {
+							return false
+						}
 					}
 					if op != OpRET {
 						propagate(index+1, state)
@@ -120,6 +129,9 @@ func arm64PrivateFrameReadProof(fn Func) bool {
 					break
 				}
 				if !state.transfer(ins, fn.FrameSize) {
+					return false
+				}
+				if transport != nil && !state.bounded(fn.FrameSize) {
 					return false
 				}
 				if op == "B" || op == "JMP" || arm64IsConditionalBranch(op) {
@@ -142,6 +154,22 @@ func arm64PrivateFrameReadProof(fn Func) bool {
 			}
 		}
 		queue = queue[:0]
+	}
+	return true
+}
+
+// The extended transport proof rejects forming a known out-of-allocation
+// temporary. Mixed joins retain may-frame taint: they cannot authorize a
+// memory access or result/argument transport, but an unused temporary need
+// not be zeroed solely for a terminator.
+func (state arm64PrivateFrameAddresses) bounded(frameSize int64) bool {
+	if frameSize < 0 || frameSize > int64(1<<63-1)-8 {
+		return len(state) == 0
+	}
+	for _, value := range state {
+		if value.exact && (value.offset < 0 || value.offset > frameSize+8) {
+			return false
+		}
 	}
 	return true
 }

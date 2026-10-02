@@ -177,7 +177,18 @@ func TestARM64PrivateFrameLocalReadEscapesAndUnknownEffectsRejected(t *testing.T
 				t.Fatal("unproved/escaped frame address obtained a no-escape proof")
 			}
 			for _, target := range arm64TypedNativeTargets {
-				if _, err := Translate(file, arm64PrivateCallCopyOptions(target)); !errors.Is(err, ErrProbeNeedsContext) {
+				_, err := Translate(file, arm64PrivateCallCopyOptions(target))
+				if effect == "ADD $8,RSP,R9\nVLD1 (R9),[V0.B16]" {
+					// Preserve the original source-only negative above. The
+					// explicit typed LLVM call does not consume this unused GP
+					// address. This is an object contract, not an execution
+					// claim for the fixture's unrelated undefined R11 data.
+					if err != nil {
+						t.Fatalf("%s typed untransported scratch: %v", target, err)
+					}
+					continue
+				}
+				if !errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatalf("%s unproved local frame use did not remain context-required: %v", target, err)
 				}
 			}

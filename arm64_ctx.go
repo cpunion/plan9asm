@@ -95,7 +95,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		fpResAddrTaken: map[int]bool{},
 	}
 	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
-	c.unexposedCallFrame = arm64CallFrameUnexposed(fn) && arm64CallFrameFreshEntry(sig)
+	c.unexposedCallFrame = arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s
 	}

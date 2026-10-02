@@ -12,6 +12,20 @@ import "strings"
 // Dead escapes and unknown effects still disable the complete source proof.
 // It does not establish ownership of incoming pointers or the separate FP slots.
 func arm64CallFrameUnexposed(fn Func) bool {
+	return arm64CallFrameUnexposedForTransport(fn, nil)
+}
+
+func arm64CallFrameUnexposedTyped(fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig) bool {
+	if !arm64CallFrameFreshEntry(sig) || sig.ARM64ClosureABI != nil {
+		return false
+	}
+	if sig.ARM64GoRegisterABI != nil && arm64ValidateGoRegisterABI(sig) != nil {
+		return false
+	}
+	return arm64CallFrameUnexposedForTransport(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+}
+
+func arm64CallFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
 	if !arm64SourceGoFrame(fn).present {
 		return false
 	}
@@ -72,7 +86,7 @@ func arm64CallFrameUnexposed(fn Func) bool {
 			}
 		}
 	}
-	return text && (!affine || arm64PrivateFrameReadProof(fn))
+	return text && (!affine || arm64PrivateFrameReadProofForTransport(fn, transport))
 }
 
 // Entry transport is emitted after the fresh SP initialization. A custom
