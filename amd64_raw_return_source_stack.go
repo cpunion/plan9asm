@@ -60,6 +60,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		input = original[0]
 	}
 	fn.x86SourceStack = nil
+	fn.x86SourceStackFailure = ""
+	reject := func(index int, reason string) Func {
+		fn.x86SourceStackFailure = fmt.Sprintf("normalized instruction %d: %s", index, reason)
+		return fn
+	}
 	if fn.FrameSize != 0 || strings.Contains(fn.Sym, "<ABIInternal>") {
 		return fn
 	}
@@ -118,10 +123,10 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			continue
 		}
 		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) {
-			return fn
+			return reject(index, "unregistered source-stack effect: "+string(ins.Op))
 		}
 		if caller && !x86CallerScalarOperands(ins) {
-			return fn
+			return reject(index, "unregistered caller-region operand bank: "+string(ins.Op))
 		}
 		if _, stack := amd64StackWidthSpecs[op]; stack && ins.x86SourceRaw != nil &&
 			(ins.x86SourceRaw.op != op || !reflect.DeepEqual(ins.x86SourceRaw.args, ins.Args)) {
@@ -263,7 +268,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			var valid bool
 			pointerFlags, valid = x86CallerScalarStep(ins, &state, sig.x86CallerRegions)
 			if !valid {
-				return fn
+				return reject(instructions[pc], "unproved caller-region effect: "+string(ins.Op))
 			}
 		}
 		if !x86SourceStackFlagsStep(*ins, &state) {
@@ -305,7 +310,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			}
 			if old, visited := states[next]; visited {
 				if !reflect.DeepEqual(old, state) {
-					return fn // Different SP/BP/save-cell joins stay unproved.
+					return reject(instructions[next], "different source-stack or caller-region states at join")
 				}
 				continue
 			}

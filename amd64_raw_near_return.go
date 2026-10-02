@@ -80,7 +80,11 @@ func validateX86RawNearReturns(fn Func, file *File, opt Options, bindFrame bool)
 	// All other cases need a native frame/continuation contract, not a guessed
 	// epilogue or an inline RET inside LLVM's independently allocated frame.
 	if fn.FrameSize != 0 || (!x86RawReturnLeafStackUnobserved(fn) && fn.x86SourceStack == nil) {
-		return fmt.Errorf("%w: raw near RET requires a proved source stack/continuation; Go's TEXT frame epilogue is not encoded in raw bytes", ErrProbeNeedsContext)
+		diagnostic := ""
+		if fn.x86SourceStackFailure != "" {
+			diagnostic = "; " + fn.x86SourceStackFailure
+		}
+		return fmt.Errorf("%w: raw near RET requires a proved source stack/continuation; Go's TEXT frame epilogue is not encoded in raw bytes%s", ErrProbeNeedsContext, diagnostic)
 	}
 	if !x86RawReturnMemoryBound(fn, file, opt, bindFrame) {
 		return fmt.Errorf("%w: raw near RET needs bounded typed FP/static memory; ordinary pointers have no native return-PC nonalias contract", ErrProbeNeedsContext)

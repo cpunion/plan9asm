@@ -1,0 +1,37 @@
+package plan9asm
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestX86GoCallerRegionRejectedEffectsRetainInstructionDiagnostic(t *testing.T) {
+	for _, example := range []struct {
+		name, replacement, diagnostic string
+	}{
+		{
+			name: "vector move", replacement: "VMOVSS (DI),X0\nVMOVSS X0,(DX)",
+			diagnostic: "unregistered source-stack effect: VMOVSS",
+		},
+		{
+			name: "pointer as scalar data", replacement: "MOVL DI,(DX)",
+			diagnostic: "unproved caller-region effect: MOVL",
+		},
+		{
+			name:        "different input offsets",
+			replacement: "CMPQ AX,$0\nJE joined\nADDQ $4,DI\nCMPQ AX,$0\njoined:\nMOVL AX,(DX)",
+			diagnostic:  "different source-stack or caller-region states at join",
+		},
+	} {
+		t.Run(example.name, func(t *testing.T) {
+			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", example.replacement, 1)
+			requireX86GoAssemblerResult(t, "amd64", assembly, true)
+			pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
+			err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
+			if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), example.diagnostic) {
+				t.Fatalf("source rejection lost its actual instruction/state cause: %v", err)
+			}
+		})
+	}
+}
