@@ -2545,6 +2545,15 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							AsmFiles: append([]string(nil), unit.AsmFiles...), Metadata: metadata,
 						})
 					}
+					if activeProfile != nil {
+						if err := guard(func() error {
+							return captureDiscoveryTestDeclarationQuery(ctx, ordinaryPlan, download, *activeProfile,
+								buildConfiguration.BuildTags, discoveryPackageGroup{Pattern: unit.Patterns[0], AsmFiles: unit.AsmFiles},
+								workDir, operationEnv, cfg.Translator, invocationIndex)
+						}); err != nil {
+							return fmt.Errorf("actual missing test declaration pre-load source role: %w", err)
+						}
+					}
 					patternSet[unit.Patterns[0]] = true
 					reportPath := filepath.Join(workDir, fmt.Sprintf("matrix-report-%04d.json", invocationIndex))
 					outputIndex := invocationIndex

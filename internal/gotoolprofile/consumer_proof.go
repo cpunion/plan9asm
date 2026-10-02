@@ -177,32 +177,11 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 }
 
 func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, selectedFiles map[string]bool, filePackages map[string]PackageProof, requireObject bool, abi map[string]bool) error {
-	consumed, outputs := make(map[string]bool), make(map[string]bool)
-	for _, cpp := range proof.CPP {
-		if consumed[cpp.File] || !selectedFiles[cpp.File] || !discoverySHA256Pattern.MatchString(cpp.ExpandedSHA256) || !discoverySHA256Pattern.MatchString(cpp.TypedExpandedSHA256) || len(cpp.Inputs) == 0 {
-			return fmt.Errorf("missing, duplicate or unselected actual CPP consumption")
-		}
-		consumed[cpp.File] = true
-		for id, digest := range cpp.Inputs {
-			origin, file, present := strings.Cut(id, "/")
-			wanted := input.Sources[file]
-			if origin == "tool" {
-				wanted = input.ToolSources[file]
-			}
-			if origin == "generated" {
-				wanted = generatedCPPSourceSHA(proof.GeneratedHeaders, filePackages[cpp.File].PackagePath, file)
-			}
-			if !present || origin != "module" && origin != "tool" && origin != "generated" || wanted == "" || digest != wanted {
-				return fmt.Errorf("actual CPP source differs from exact original input: %s", id)
-			}
-		}
-		if cpp.Inputs["module/"+cpp.File] != input.Sources[cpp.File] {
-			return fmt.Errorf("actual CPP proof omits its assembly source")
-		}
-		if err := ValidateEmptyAssembly(input, cpp, filePackages[cpp.File]); err != nil {
-			return err
-		}
+	consumed, err := validateCPPConsumption(input, proof, selectedFiles, filePackages)
+	if err != nil {
+		return err
 	}
+	outputs := make(map[string]bool)
 	seenParts := make(map[string]bool)
 	for _, output := range proof.Outputs {
 		key := output.File + "\x00" + output.Part
@@ -220,6 +199,46 @@ func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, se
 		return fmt.Errorf("compiler consumption differs from the exact file/profile scope")
 	}
 	return nil
+}
+
+// Preflight reuses only the source/CPP portion. It never manufactures an LLVM
+// output or satisfies the separate translation consumption gate.
+func validateCPPConsumption(input *ConsumerInput, proof *SelectionProof, selectedFiles map[string]bool, filePackages map[string]PackageProof) (map[string]bool, error) {
+	consumed := make(map[string]bool)
+	for _, cpp := range proof.CPP {
+		if consumed[cpp.File] || !selectedFiles[cpp.File] || !discoverySHA256Pattern.MatchString(cpp.ExpandedSHA256) || !discoverySHA256Pattern.MatchString(cpp.TypedExpandedSHA256) || len(cpp.Inputs) == 0 {
+			return nil, fmt.Errorf("missing, duplicate or unselected actual CPP consumption")
+		}
+		consumed[cpp.File] = true
+		for id, digest := range cpp.Inputs {
+			origin, file, present := strings.Cut(id, "/")
+			wanted := input.Sources[file]
+			if origin == "tool" {
+				wanted = input.ToolSources[file]
+			}
+			if origin == "generated" {
+				wanted = generatedCPPSourceSHA(proof.GeneratedHeaders, filePackages[cpp.File].PackagePath, file)
+			}
+			if !present || origin != "module" && origin != "tool" && origin != "generated" || wanted == "" || digest != wanted {
+				return nil, fmt.Errorf("actual CPP source differs from exact original input: %s", id)
+			}
+		}
+		if cpp.Inputs["module/"+cpp.File] != input.Sources[cpp.File] {
+			return nil, fmt.Errorf("actual CPP proof omits its assembly source")
+		}
+		if err := ValidateEmptyAssembly(input, cpp, filePackages[cpp.File]); err != nil {
+			return nil, err
+		}
+	}
+	for _, file := range input.AsmFiles {
+		if !selectedFiles[file] || !consumed[file] {
+			return nil, fmt.Errorf("source-required file lacks actual package/CPP consumption: %s", file)
+		}
+	}
+	if len(consumed) != len(input.AsmFiles) {
+		return nil, fmt.Errorf("CPP consumption differs from the exact file/profile scope")
+	}
+	return consumed, nil
 }
 
 func ValidatePackageModule(input *ConsumerInput, pkg PackageProof) error {

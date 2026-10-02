@@ -100,9 +100,10 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 		Input: &input, Dir: dir, WorkDir: workDir,
 		Proof: &featureSelectionProof{
 			Protocol: featureInputProtocol, ProfileID: input.ID,
-			SignatureSourceProtocol: input.SignatureSourceProtocol,
-			CustomTags:              append([]string(nil), tags...),
-			RegisteredAsmFiles:      append([]string(nil), input.RegisteredAsmFiles...),
+			SignatureSourceProtocol:      input.SignatureSourceProtocol,
+			TestDependencySourceProtocol: input.TestDependencySourceProtocol,
+			CustomTags:                   append([]string(nil), tags...),
+			RegisteredAsmFiles:           append([]string(nil), input.RegisteredAsmFiles...),
 		},
 	}
 	if err := consumer.verifySources(); err != nil {

@@ -1,6 +1,7 @@
 package gotoolprofile
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/build"
@@ -52,6 +53,7 @@ type SignatureSource struct {
 	Symbol          string `json:"symbol"`
 	Role            string `json:"role"`
 	Callee          bool   `json:"callee,omitempty"`
+	ABIInternal     bool   `json:"abi_internal,omitempty"`
 	LayoutSHA256    string `json:"layout_sha256"`
 	TestProofSHA256 string `json:"test_proof_sha256,omitempty"`
 }
@@ -59,6 +61,16 @@ type SignatureSource struct {
 func TestDeclarationSHA256(proof TestDeclarationProof) string {
 	data, _ := json.Marshal(proof)
 	return bytesSHA256(data)
+}
+
+// A pretty-printed report may indent RawMessage layout bytes. Hash the same
+// canonical token stream used by the typed producer, not JSON presentation.
+func SignatureLayoutSHA256(layout json.RawMessage) string {
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, layout); err != nil {
+		return ""
+	}
+	return bytesSHA256(compact.Bytes())
 }
 
 func ValidateSignatureSources(input *ConsumerInput, proof *SelectionProof, tags []string) error {
@@ -75,6 +87,9 @@ func ValidateSignatureSources(input *ConsumerInput, proof *SelectionProof, tags 
 	}
 	if input.SignatureSourceProtocol != SignatureSourceProtocol || proof.SignatureSourceProtocol != SignatureSourceProtocol {
 		return fmt.Errorf("missing or changed current signature-source protocol")
+	}
+	if err := ValidateTestDependencies(input, proof, tags); err != nil {
+		return err
 	}
 	byDigest := make(map[string]TestDeclarationProof)
 	declared := make(map[string]TestDeclaration)
@@ -132,7 +147,7 @@ func ValidateSignatureSources(input *ConsumerInput, proof *SelectionProof, tags 
 				if path.Dir(cpp.File) != "." {
 					want += "/" + path.Dir(cpp.File)
 				}
-				if !found || !present || test.PackagePath != want || bytesSHA256(decl.Layout) != source.LayoutSHA256 {
+				if !found || !present || test.PackagePath != want || SignatureLayoutSHA256(decl.Layout) != source.LayoutSHA256 {
 					return fmt.Errorf("consumed signature differs from its exact test declaration/type/layout")
 				}
 				used[source.Symbol] = true

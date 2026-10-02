@@ -30,48 +30,9 @@ func (consumer *featureConsumer) bindSignatureSources(pkg *packages.Package, fil
 	if consumer.Input.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol {
 		return nil, fmt.Errorf("unknown signature-source protocol")
 	}
-	// Entry and direct-callee requests come from this exact parsed CPP output.
-	// Do not register the complete test scope or follow dynamic/offset aliases.
-	type request struct {
-		original string
-		callee   bool
-	}
-	requests := make(map[string]request)
-	for _, fn := range file.Funcs {
-		symbol := resolve(stripABISuffix(fn.Sym))
-		requests[symbol] = request{original: fn.Sym}
-	}
-	for _, fn := range file.Funcs {
-		for _, ins := range fn.Instrs {
-			switch strings.ToUpper(string(ins.Op)) {
-			case "CALL", "BL", "JMP", "B", "WASMCALL", "CALLNORESUME":
-			default:
-				continue
-			}
-			if len(ins.Args) != 1 || ins.Args[0].Kind != plan9asm.OpSym {
-				continue
-			}
-			target := strings.TrimSpace(ins.Args[0].Sym)
-			if !strings.HasSuffix(target, "(SB)") {
-				continue
-			}
-			base, offset := splitSymPlusOff(strings.TrimSuffix(target, "(SB)"))
-			if offset != 0 || strings.Contains(base, "<>") {
-				continue
-			}
-			symbol := resolve(stripABISuffix(base))
-			name := strings.TrimPrefix(symbol, pkg.PkgPath+".")
-			if !strings.HasPrefix(symbol, pkg.PkgPath+".") || !token.IsIdentifier(name) {
-				continue
-			}
-			if previous, exists := requests[symbol]; exists {
-				if strings.HasSuffix(previous.original, "<ABIInternal>") != strings.HasSuffix(base, "<ABIInternal>") {
-					return nil, fmt.Errorf("test declaration has conflicting source ABI selectors: %s", symbol)
-				}
-				continue
-			}
-			requests[symbol] = request{original: base, callee: true}
-		}
+	requests, err := assemblySignatureRequests(pkg.PkgPath, file, resolve)
+	if err != nil {
+		return nil, err
 	}
 	roles, known := make(map[string]string), make(map[string]bool)
 	for symbol, requested := range requests {
@@ -130,11 +91,59 @@ func (consumer *featureConsumer) bindSignatureSources(pkg *packages.Package, fil
 			return nil, err
 		}
 		sources = append(sources, gotoolprofile.SignatureSource{
-			Symbol: symbol, Role: role, Callee: requests[symbol].callee, LayoutSHA256: featureBytesSHA256(layout),
+			Symbol: symbol, Role: role, Callee: requests[symbol].callee, ABIInternal: strings.HasSuffix(requests[symbol].original, "<ABIInternal>"), LayoutSHA256: gotoolprofile.SignatureLayoutSHA256(layout),
 		})
 	}
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Symbol < sources[j].Symbol })
 	return sources, nil
+}
+
+type assemblySignatureRequest struct {
+	original string
+	callee   bool
+}
+
+// Both preflight and final consumption derive requests from the same parsed
+// CPP. Neither follows dynamic, foreign, private or offset/alias targets.
+func assemblySignatureRequests(packagePath string, file *plan9asm.File, resolve func(string) string) (map[string]assemblySignatureRequest, error) {
+	requests := make(map[string]assemblySignatureRequest)
+	for _, fn := range file.Funcs {
+		symbol := resolve(stripABISuffix(fn.Sym))
+		requests[symbol] = assemblySignatureRequest{original: fn.Sym}
+	}
+	for _, fn := range file.Funcs {
+		for _, ins := range fn.Instrs {
+			switch strings.ToUpper(string(ins.Op)) {
+			case "CALL", "BL", "JMP", "B", "WASMCALL", "CALLNORESUME":
+			default:
+				continue
+			}
+			if len(ins.Args) != 1 || ins.Args[0].Kind != plan9asm.OpSym {
+				continue
+			}
+			target := strings.TrimSpace(ins.Args[0].Sym)
+			if !strings.HasSuffix(target, "(SB)") {
+				continue
+			}
+			base, offset := splitSymPlusOff(strings.TrimSuffix(target, "(SB)"))
+			if offset != 0 || strings.Contains(base, "<>") {
+				continue
+			}
+			symbol := resolve(stripABISuffix(base))
+			name := strings.TrimPrefix(symbol, packagePath+".")
+			if !strings.HasPrefix(symbol, packagePath+".") || !token.IsIdentifier(name) {
+				continue
+			}
+			if previous, exists := requests[symbol]; exists {
+				if strings.HasSuffix(previous.original, "<ABIInternal>") != strings.HasSuffix(base, "<ABIInternal>") {
+					return nil, fmt.Errorf("test declaration has conflicting source ABI selectors: %s", symbol)
+				}
+				continue
+			}
+			requests[symbol] = assemblySignatureRequest{original: base, callee: true}
+		}
+	}
+	return requests, nil
 }
 
 // Parsing here decides only whether an authenticated selected test file has
@@ -237,6 +246,9 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 	if err != nil {
 		return nil, err
 	}
+	if err := consumer.bindActualTestDependencies(ordinary, pre); err != nil {
+		return nil, err
+	}
 	allowed := map[string]bool{variantID: true}
 	guard, err := captureTypedSourceLoadGuard(consumer.Context, []*packages.Package{pre}, allowed)
 	if err != nil {
@@ -279,6 +291,9 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 	}
 	selected, err := selectVariant(loaded)
 	if err != nil {
+		return nil, err
+	}
+	if err := consumer.bindActualTestDependencies(ordinary, selected); err != nil {
 		return nil, err
 	}
 	after, err := captureTypedSourceLoadGuard(consumer.Context, []*packages.Package{selected}, allowed)

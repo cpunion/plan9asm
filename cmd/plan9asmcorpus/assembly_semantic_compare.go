@@ -26,9 +26,10 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	}
 	result.Source.Revision = ""
 	result.Provenance = &discoveryCorpusProvenance{
-		SignatureSourceProtocol: original.Provenance.SignatureSourceProtocol,
-		GoVersion:               original.Provenance.GoVersion,
-		TranslatorGo:            original.Provenance.TranslatorGo,
+		SignatureSourceProtocol:      original.Provenance.SignatureSourceProtocol,
+		TestDependencySourceProtocol: original.Provenance.TestDependencySourceProtocol,
+		GoVersion:                    original.Provenance.GoVersion,
+		TranslatorGo:                 original.Provenance.TranslatorGo,
 		// Each original already matched the anchored LLVM 22.x.y identity
 		// rule. Only the cross-host contract discards patch differences.
 		LLVMVersion: "22",
@@ -97,6 +98,32 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 		}
 		return nil
 	}
+	projectTestDependencies := func(dependency *gotoolprofile.TestDependencyProof) error {
+		if dependency == nil {
+			return nil
+		}
+		selection := dependency.Query.Selection
+		if err := replaceID(&selection.ProfileID); err != nil {
+			return err
+		}
+		for index := range selection.Packages {
+			if err := replaceID(&selection.Packages[index].Macros.FeatureID); err != nil {
+				return err
+			}
+		}
+		if err := projectMetadata(selection.GeneratedHeaders); err != nil {
+			return err
+		}
+		for index := range selection.CPP {
+			if empty := selection.CPP[index].EmptyAssembly; empty != nil {
+				if err := replaceID(&empty.ProfileID); err != nil {
+					return err
+				}
+				empty.AsmToolSHA256, empty.ObjectSHA256 = "", ""
+			}
+		}
+		return nil
+	}
 	for index := range result.Candidates {
 		candidate := &result.Candidates[index]
 		for index := range candidate.FeatureProfiles {
@@ -134,6 +161,18 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 				proof.DriverSHA256, proof.AsmToolSHA256 = "", ""
 			}
 			if err := sortSemanticRows(plan.PreCPPRejections); err != nil {
+				return result, err
+			}
+			for index := range plan.TestDeclarationQueries {
+				query := &plan.TestDeclarationQueries[index]
+				if err := replaceID(&query.ProfileID); err != nil {
+					return result, err
+				}
+				if err := projectTestDependencies(query.Dependency); err != nil {
+					return result, err
+				}
+			}
+			if err := sortSemanticRows(plan.TestDeclarationQueries); err != nil {
 				return result, err
 			}
 			for index := range plan.GeneratedHeaders {
@@ -195,6 +234,9 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		for _, proof := range candidate.FeatureConsumption {
+			if err := projectTestDependencies(proof.TestDependencies); err != nil {
+				return result, err
+			}
 			testDigests := make(map[string]string)
 			for index := range proof.TestDeclarations {
 				test := &proof.TestDeclarations[index]

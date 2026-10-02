@@ -133,6 +133,7 @@ type compileConfig struct {
 	FeaturePath     string
 	Context         context.Context
 	emptyAssembly   *gotoolprofile.EmptyAssemblyProof
+	SignatureQuery  *gotoolprofile.SignatureQueryProof
 }
 
 func main() {
@@ -160,6 +161,7 @@ func main() {
 		featureProfile = flag.String("feature-profile", "", "explicit actual Go CPU profile and source proof (single target, ordinary external module only)")
 		featureTimeout = flag.Duration("feature-timeout", time.Hour, "deadline for the explicit feature-profile consumer")
 		metadataOnly   = flag.Bool("metadata-only", false, "private actual Go generated-header query; never translates assembly")
+		signatureQuery = flag.Bool("signature-source-query", false, "private ordinary-type/CPP missing-reference query; never emits LLVM")
 	)
 	flag.Parse()
 
@@ -177,7 +179,7 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
-	if *metadataOnly && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets) {
+	if (*metadataOnly || *signatureQuery) && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets || *metadataOnly && *signatureQuery) {
 		fatalf("metadata-only requires one explicit ordinary profile and cannot emit translation/list/matrix evidence")
 	}
 	ccfg, err := resolveCompileConfig(*compile, *llcPath, *keepObj, *llcOptLevel)
@@ -207,6 +209,15 @@ func main() {
 			fatalf("generated-header metadata: %v", err)
 		}
 		writeReport(*reportOut, metadata)
+		return
+	}
+	if *signatureQuery {
+		ccfg.SignatureQuery = &gotoolprofile.SignatureQueryProof{Protocol: gotoolprofile.SignatureQueryProtocol}
+		report, _, err := runOneTarget(specs[0], pats, tags, exactAsmFiles, *modulePath, baseOut, false, 0, false, false, true, *repoRoot, ccfg)
+		if err != nil || report.Failed != 0 {
+			fatalf("missing-signature preflight: %v (failed=%d)", err, report.Failed)
+		}
+		writeReport(*reportOut, ccfg.SignatureQuery)
 		return
 	}
 
@@ -477,6 +488,9 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	}
 	if ccfg.Feature != nil {
 		rep.FeatureSelection = ccfg.Feature.Proof
+		if ccfg.SignatureQuery != nil {
+			ccfg.SignatureQuery.Selection = ccfg.Feature.Proof
+		}
 	}
 	for _, task := range tasks {
 		rep.AsmFiles = append(rep.AsmFiles, task.AsmFile)
@@ -551,8 +565,12 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 			}
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "[%d/%d] OK   %s\n", idx, len(tasks), t.AsmFile)
-		rep.Success++
+		if ccfg.SignatureQuery == nil {
+			fmt.Fprintf(os.Stderr, "[%d/%d] OK   %s\n", idx, len(tasks), t.AsmFile)
+			rep.Success++
+		} else {
+			fmt.Fprintf(os.Stderr, "[%d/%d] QUERY %s (no LLVM output)\n", idx, len(tasks), t.AsmFile)
+		}
 	}
 
 	rep.Duration = time.Since(start).String()
@@ -568,6 +586,15 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 		}
 		if err := ccfg.Feature.reobserve(binary, outDir); err != nil {
 			return rep, nil, err
+		}
+		if ccfg.SignatureQuery != nil {
+			sort.Slice(ccfg.SignatureQuery.Requests, func(i, j int) bool {
+				a, b := ccfg.SignatureQuery.Requests[i], ccfg.SignatureQuery.Requests[j]
+				return a.File+"\x00"+a.Symbol < b.File+"\x00"+b.Symbol
+			})
+			if err := gotoolprofile.ValidateSignatureQuery(ccfg.Feature.Input, ccfg.SignatureQuery, buildTags); err != nil {
+				return rep, nil, err
+			}
 		}
 	}
 	if rep.Failed != 0 {
@@ -667,6 +694,14 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		return fmt.Errorf("infer signatures: %w", err)
 	}
 	if cppProof != nil {
+		if ccfg.SignatureQuery != nil {
+			requests, err := ccfg.Feature.queryMissingSignatureSources(pkg, file, t.AsmFile, resolve, goarch)
+			if err != nil {
+				return err
+			}
+			ccfg.SignatureQuery.Requests = append(ccfg.SignatureQuery.Requests, requests...)
+			return nil
+		}
 		sources, err := ccfg.Feature.bindSignatureSources(pkg, file, t.AsmFile, resolve, goarch, sigs, declaredArgSizes)
 		if err != nil {
 			return fmt.Errorf("authenticate signature sources: %w", err)

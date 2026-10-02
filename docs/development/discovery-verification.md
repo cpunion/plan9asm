@@ -165,6 +165,24 @@ reader requires exact supplemental consumption and rejects deleting either
 protocol or evidence to fall back to legacy rules. Historical source snapshots
 retain their old claims and cannot be promoted to this contract.
 
+Current snapshots also stamp `actual_go_test_declaration_source_closure_v1`.
+A cheap selected-test bodyless-syntax predicate may request the private
+`-signature-source-query`; only actual ordinary types and parsed CPP decide
+which entry/callee references remain missing. This distinct query emits no
+LLVM IR/object and cannot satisfy a translation scope. An adequate ordinary
+declaration does not load unrelated test exports or their dependencies.
+For genuinely missing references, same-profile stock-Go test dependency
+selection binds the complete ImportMap and exact module/version/source roles
+before typechecking. Newly required pure-Go directories remain separate
+`test_declaration_go_sources` and directory inputs, verified against the
+original whole ZIP and guarded through final objects. Existing assembly
+dependencies retain their original tested inventory; source-only metadata
+cannot introduce another assembly scope. The final consumer independently
+reloads the actual test selection/export, while report, progress and ledger
+readers require the exact query/source closure and consumed typed signatures.
+Truncated, replaced, cross-profile or unconsumed closure metadata fails; no
+test source becomes ordinary input or a generated-header witness.
+
 ## Reports and provenance
 
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed

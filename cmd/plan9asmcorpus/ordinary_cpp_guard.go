@@ -148,6 +148,9 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 			return &discoverySourceProofError{fmt.Errorf("generated-header original imported Go source changed: %s: %v", file, err)}
 		}
 	}
+	if err := verifyDiscoveryTestDependencySnapshot(plan, moduleDir); err != nil {
+		return &discoverySourceProofError{err}
+	}
 	return nil
 }
 

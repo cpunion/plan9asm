@@ -111,7 +111,13 @@ func verifyDiscoveryGeneratedGoSources(plan *discoveryOrdinarySelectionPlan, roo
 	if plan == nil {
 		return fmt.Errorf("missing generated-header original source proof")
 	}
-	if len(plan.GeneratedGoSources) == 0 {
+	return verifyDiscoveryOriginalSourceMap(plan, root, zipPath, plan.GeneratedGoSources)
+}
+
+// Shared original ZIP membership boundary; source roles remain separately
+// recorded by their callers instead of impersonating generated header inputs.
+func verifyDiscoveryOriginalSourceMap(plan *discoveryOrdinarySelectionPlan, root, zipPath string, sources map[string]string) error {
+	if len(sources) == 0 {
 		return nil
 	}
 	// Initial ordinary ZIP verification authenticates h1 and records all archive
@@ -138,7 +144,7 @@ func verifyDiscoveryGeneratedGoSources(plan *discoveryOrdinarySelectionPlan, roo
 		}
 		entries[name] = entry
 	}
-	for file, wanted := range plan.GeneratedGoSources {
+	for file, wanted := range sources {
 		entry := entries[file]
 		if entry == nil || entry.UncompressedSize64 > 64<<20 {
 			return fmt.Errorf("generated-header imported Go source is not an exact ZIP member")

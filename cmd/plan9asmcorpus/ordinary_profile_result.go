@@ -13,7 +13,7 @@ import (
 
 func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []string, goVersion string) error {
 	plan := result.OrdinarySelectionPlan
-	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol {
+	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || plan.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol {
 		return fmt.Errorf("current ordinary profile lacks its mandatory signature-source protocol")
 	}
 	if plan == nil || plan.Module != result.Module || plan.Version != result.Version || plan.GoVersion != goVersion ||
@@ -57,6 +57,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err := validateDiscoveryGeneratedHeaderQueries(plan, profiles, eligible); err != nil {
 		return err
 	}
+	if err := validateDiscoveryTestDeclarationQueries(plan, profiles, eligible); err != nil {
+		return err
+	}
 	if len(remaining) != 0 && plan.CPPInputs == nil {
 		return fmt.Errorf("selected ordinary profile lacks original CPP source/registration inputs")
 	}
@@ -74,6 +77,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		return err
 	}
 	if err := validateDiscoveryGeneratedHeaderExecution(plan, executed); err != nil {
+		return err
+	}
+	if err := validateDiscoveryTestDeclarationExecution(plan, executed); err != nil {
 		return err
 	}
 	noPackage := make(map[discoveryProfileScope]bool)
@@ -276,8 +282,9 @@ func ordinaryProfileConfigurationKeys(configs []discoveryBuildConfiguration, eli
 
 func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, module, sourceRoot string, files []string, customTags ...[]string) *gotoolprofile.ConsumerInput {
 	input := &gotoolprofile.ConsumerInput{
-		SignatureSourceProtocol: plan.SignatureSourceProtocol,
-		Protocol:                gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
+		SignatureSourceProtocol:      plan.SignatureSourceProtocol,
+		TestDependencySourceProtocol: plan.TestDependencySourceProtocol,
+		Protocol:                     gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
 		Module: module, Version: plan.Version, SourceModule: plan.Module,
 		SourceRoot: sourceRoot, AsmFiles: append([]string(nil), files...),
 		Sources: make(map[string]string), Headers: make(map[string]string),
@@ -292,7 +299,32 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 			}
 		}
 	}
+	packageDirs := make(map[string]bool)
+	for _, file := range plan.TestedAsmFiles {
+		packageDirs[path.Dir(file)] = true
+	}
+	input.OrdinaryAsmPackages = sortedDiscoverySet(packageDirs)
 	for _, source := range plan.Sources {
+		input.Headers[source.File] = source.Header
+	}
+	for _, directory := range plan.TestDeclarationDirectories {
+		if _, duplicate := input.Directories[directory.Directory]; duplicate {
+			input.Directories[directory.Directory] = nil
+			continue
+		}
+		for _, entry := range directory.Entries {
+			input.Directories[directory.Directory] = append(input.Directories[directory.Directory], entry.Name)
+			if entry.Kind == "file" {
+				file := path.Join(directory.Directory, entry.Name)
+				if before := input.Sources[file]; before != "" && before != entry.SHA256 {
+					input.Sources[file] = ""
+				} else {
+					input.Sources[file] = entry.SHA256
+				}
+			}
+		}
+	}
+	for _, source := range plan.TestDeclarationSources {
 		input.Headers[source.File] = source.Header
 	}
 	for file, digest := range plan.GeneratedGoSources {
@@ -312,6 +344,9 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 	}
 	if metadata, err := ordinaryGeneratedMetadata(plan, profile.ID, files, tags); err == nil {
 		input.GeneratedHeaders = metadata
+	}
+	if dependency, err := ordinaryTestDependencies(plan, profile.ID, files, tags); err == nil {
+		input.TestDependencies = dependency
 	}
 	if plan.CPPInputs != nil {
 		for id, source := range plan.CPPInputs.Sources {

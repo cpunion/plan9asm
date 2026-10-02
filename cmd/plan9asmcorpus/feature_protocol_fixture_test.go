@@ -114,8 +114,9 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		}
 		input := ordinaryProfileConsumerInput(plan, profile, module, "", config.AsmFiles, config.BuildTags)
 		proof := &gotoolprofile.SelectionProof{
-			SignatureSourceProtocol: gotoolprofile.SignatureSourceProtocol,
-			Protocol:                gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
+			SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
+			TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
+			Protocol:                     gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
 			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
 		}
 		ctx, err := discoveryContextForFeatureProfile(profile.Observed)

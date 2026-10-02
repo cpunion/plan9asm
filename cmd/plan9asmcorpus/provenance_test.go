@@ -20,9 +20,10 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 		t.Fatal(err)
 	}
 	return discoveryCorpusProvenance{
-		SignatureSourceProtocol: gotoolprofile.SignatureSourceProtocol,
-		Source:                  discoverySourceIdentity{Revision: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)},
-		LedgerSHA256:            sha, TranslatorSHA256: strings.Repeat("c", 64), TranslatorRevision: strings.Repeat("a", 40),
+		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
+		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
+		Source:                       discoverySourceIdentity{Revision: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)},
+		LedgerSHA256:                 sha, TranslatorSHA256: strings.Repeat("c", 64), TranslatorRevision: strings.Repeat("a", 40),
 		TranslatorGo: "go1.27.1", GoVersion: "go1.27.1", LLVMVersion: "22.1.8", LLCBinarySHA256: strings.Repeat("d", 64),
 	}
 }
@@ -88,7 +89,8 @@ func TestDiscoveryProvenanceAcceptsEquivalentPRMergeTree(t *testing.T) {
 
 func TestVerifyDiscoveryCorpusReportsRejectsMixedOrStaleProvenance(t *testing.T) {
 	for name, mutate := range map[string]func(*discoveryCorpusProvenance){
-		"missing signature protocol": func(p *discoveryCorpusProvenance) { p.SignatureSourceProtocol = "" },
+		"missing signature protocol":       func(p *discoveryCorpusProvenance) { p.SignatureSourceProtocol = "" },
+		"missing test dependency protocol": func(p *discoveryCorpusProvenance) { p.TestDependencySourceProtocol = "" },
 		"source revision": func(p *discoveryCorpusProvenance) {
 			p.Source.Revision = strings.Repeat("d", 40)
 			p.TranslatorRevision = p.Source.Revision
