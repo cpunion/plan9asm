@@ -458,6 +458,11 @@ profile and tool identity; frozen producer provenance remains mandatory.
 No TEXT signature is invented, no source is marked N/A, and every scope still
 requires its normal LLVM object. Missing proofs, TEXT or unknown native records,
 changed global roles and signature-protocol downgrades fail closed.
+Missing-signature preflight preserves that same native source role for every
+DATA-only sibling before returning query metadata. Its Go object/listing witness
+is not an LLVM output or a translation count. Final test-declaration consumption
+requires unchanged normalized CPP and the same complete native data/symbol-free
+identity as the query, including object/listing hashes and symbol inventory.
 If an exact ZIP has no `go.mod`, the ordinary producer may use Go's canonical
 proxy-generated module directive. This is separate `proxy_go_mod` evidence,
 never an added ZIP member: exact ZIP and GoMod h1 sums, metadata bytes/SHA-256,

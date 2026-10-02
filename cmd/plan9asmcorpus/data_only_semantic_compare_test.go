@@ -23,6 +23,16 @@ func TestDataOnlySemanticProjectionRebindsPhysicalNativeIdentity(t *testing.T) {
 		},
 		Symbols: []gotoolprofile.DataOnlySymbol{{Name: "pkg.data", Kind: "SDATA", Size: 8}},
 	}
+	selection.TestDependencies = &gotoolprofile.TestDependencyProof{
+		Protocol: gotoolprofile.TestDependencyProtocol,
+		Query: &gotoolprofile.SignatureQueryProof{
+			Protocol: gotoolprofile.SignatureQueryProtocol,
+			Selection: &gotoolprofile.SelectionProof{
+				ProfileID: selection.ProfileID,
+				CPP:       []gotoolprofile.CPPProof{*cpp},
+			},
+		},
+	}
 	before, _ := json.Marshal(progress)
 	projected, err := semanticAssemblyLedgerProgress(progress)
 	if err != nil {
@@ -39,5 +49,11 @@ func TestDataOnlySemanticProjectionRebindsPhysicalNativeIdentity(t *testing.T) {
 	if witness.Native.SourceSHA256 != cpp.DataOnlyAssembly.Native.SourceSHA256 ||
 		witness.Native.ListingSHA256 != cpp.DataOnlyAssembly.Native.ListingSHA256 || witness.Symbols[0] != cpp.DataOnlyAssembly.Symbols[0] {
 		t.Fatal("comparison discarded data source, listing or symbol semantics")
+	}
+	queryWitness := projected.Candidates[0].FeatureConsumption[0].TestDependencies.Query.Selection.CPP[0].DataOnlyAssembly
+	if queryWitness.Native.ProfileID != witness.Native.ProfileID || queryWitness.Native.AsmToolSHA256 != "" ||
+		queryWitness.Native.ObjectSHA256 != "" || queryWitness.Native.ListingSHA256 != witness.Native.ListingSHA256 ||
+		queryWitness.Symbols[0] != witness.Symbols[0] {
+		t.Fatal("query and final data-only identities were projected differently")
 	}
 }

@@ -151,6 +151,10 @@ func ValidateTestDependencies(input *ConsumerInput, proof *SelectionProof, tags 
 			!reflect.DeepEqual(previous.Inputs, cpp.Inputs) || previous.Emission != cpp.Emission {
 			return fmt.Errorf("test signature preflight differs from actual normalized CPP consumption")
 		}
+		if !reflect.DeepEqual(previous.EmptyAssembly, cpp.EmptyAssembly) ||
+			!reflect.DeepEqual(previous.DataOnlyAssembly, cpp.DataOnlyAssembly) {
+			return fmt.Errorf("test signature preflight differs from actual native assembly evidence")
+		}
 		for _, source := range cpp.Signatures {
 			if source.Role == "inpackage_test_decl" {
 				key := cpp.File + "\x00" + source.Symbol

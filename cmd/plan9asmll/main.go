@@ -696,6 +696,17 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		return fmt.Errorf("infer signatures: %w", err)
 	}
 	if cppProof != nil {
+		// A missing-signature query shares the exact parsed source role with
+		// final consumption. Authenticate native data symbols before returning
+		// query metadata, but never emit or count an LLVM output for a query.
+		if len(file.Funcs) == 0 && ccfg.emptyAssembly == nil && ccfg.Feature.Input.SignatureSourceProtocol == gotoolprofile.SignatureSourceProtocol {
+			dataOnly, err := proveDataOnlyAssembly(pkg, t, file, goos+"/"+goarch, defines, ccfg)
+			if err != nil {
+				return fmt.Errorf("authenticate data-only assembly: %w", err)
+			}
+			cpp := &ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1]
+			cpp.Emission, cpp.DataOnlyAssembly = "data_only", dataOnly
+		}
 		if ccfg.SignatureQuery != nil {
 			requests, err := ccfg.Feature.queryMissingSignatureSources(pkg, file, t.AsmFile, resolve, goarch)
 			if err != nil {
@@ -709,14 +720,6 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			return fmt.Errorf("authenticate signature sources: %w", err)
 		}
 		ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].Signatures = sources
-		if len(file.Funcs) == 0 && ccfg.emptyAssembly == nil && ccfg.Feature.Input.SignatureSourceProtocol == gotoolprofile.SignatureSourceProtocol {
-			dataOnly, err := proveDataOnlyAssembly(pkg, t, file, goos+"/"+goarch, defines, ccfg)
-			if err != nil {
-				return fmt.Errorf("authenticate data-only assembly: %w", err)
-			}
-			cpp := &ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1]
-			cpp.Emission, cpp.DataOnlyAssembly = "data_only", dataOnly
-		}
 		ccfg.Feature.refreshTestDeclarationReferences()
 	}
 	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -41,6 +42,7 @@ func TestDataOnlyAssemblyCurrentSignatureProtocolAcrossTargets(t *testing.T) {
 			input.Sources["tables.s"], input.Headers["tables.s"] = featureBytesSHA256([]byte(source)), source
 			input.AsmFiles = []string{"tables.s"}
 			input.SignatureSourceProtocol = gotoolprofile.SignatureSourceProtocol
+			input.TestDependencySourceProtocol = gotoolprofile.TestDependencyProtocol
 			input.Directories["."] = []string{"fallback.go", "go.mod", "selected.go", "tables.s"}
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
@@ -60,12 +62,34 @@ func TestDataOnlyAssemblyCurrentSignatureProtocolAcrossTargets(t *testing.T) {
 			}
 			output := t.TempDir()
 			t.Chdir(dir)
+			query := &gotoolprofile.SignatureQueryProof{Protocol: gotoolprofile.SignatureQueryProtocol}
+			queryConfig := config
+			queryConfig.Enabled, queryConfig.SignatureQuery = false, query
+			queryReport, _, err := runOneTarget(spec, []string{"."}, nil, input.AsmFiles, input.Module,
+				t.TempDir(), false, 0, false, false, true, repo, queryConfig)
+			if err != nil || queryReport.Failed != 0 || queryReport.Success != 0 || query.Selection == nil ||
+				len(query.Selection.Outputs) != 0 || len(query.Selection.TestDeclarations) != 0 || len(query.Requests) != 0 {
+				t.Fatalf("data-only query acquired a final signature or LLVM outcome: report=%+v err=%v", queryReport, err)
+			}
+			if len(query.Selection.CPP) != 1 || query.Selection.CPP[0].Emission != "data_only" ||
+				query.Selection.CPP[0].DataOnlyAssembly == nil {
+				t.Fatal("query omitted the actual data-only source/native role")
+			}
+			if err := gotoolprofile.ValidateSignatureQuery(input, query, nil); err != nil {
+				t.Fatalf("actual data-only metadata query was rejected: %v", err)
+			}
+			if err := gotoolprofile.ValidateSelection(input, query.Selection, nil, true); err == nil {
+				t.Fatal("data-only native query was accepted as an LLVM object outcome")
+			}
 			report, _, err := runOneTarget(spec, []string{"."}, nil, input.AsmFiles, input.Module, output, false, 0, true, false, true, repo, config)
 			if err != nil || report.Success != 1 || report.Failed != 0 {
 				t.Fatalf("legitimate globals-only assembly must compile: report=%+v err=%v", report, err)
 			}
 			if err := gotoolprofile.ValidateSelection(input, report.FeatureSelection, nil, true); err != nil {
 				t.Fatalf("globals-only object was rejected by the current signature protocol: %v", err)
+			}
+			if !reflect.DeepEqual(query.Selection.CPP[0].DataOnlyAssembly, report.FeatureSelection.CPP[0].DataOnlyAssembly) {
+				t.Fatal("query and final data-only native identities differ")
 			}
 			checkDataOnlyAssemblyProofMutants(t, input, report.FeatureSelection)
 			object := filepath.Join(output, filepath.FromSlash(input.Module), "tables.s.o")
