@@ -374,10 +374,12 @@ func capturePreCPPPackage(ctx context.Context, plan *discoveryOrdinarySelectionP
 type discoveryRejectedPackage struct {
 	ImportPath, Dir, Name             string
 	GoFiles, SFiles, FFiles           []string
+	IgnoredGoFiles                    []string
 	CgoFiles, SwigFiles, SwigCXXFiles []string
 	Error                             *discoveryRejectedPackageError
 	DepsErrors                        []discoveryRejectedPackageError
 	Module                            *discoveryRejectedModule
+	selectionStderr                   string
 }
 
 type discoveryRejectedPackageError struct {
@@ -392,6 +394,17 @@ type discoveryRejectedModule struct {
 }
 
 func captureRejectedOrdinaryPackage(ctx context.Context, plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile,
+	dir string, env []string, rejection discoveryPreCPPRejection) (gotoolprofile.PackageProof, discoveryRejectedPackage, error) {
+	proof, pkg, err := captureRejectedPackageMetadata(ctx, plan, profile, dir, env, rejection)
+	if err != nil {
+		return proof, pkg, err
+	}
+	return proof, pkg, validatePreCPPPackage(plan, profile, discoveryPreCPPRejection{File: rejection.File, BuildTags: rejection.BuildTags, Package: proof})
+}
+
+// Capture actual module/driver metadata without assigning an ordinary-package
+// role. Each role-specific consumer must validate the complete selection.
+func captureRejectedPackageMetadata(ctx context.Context, plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile,
 	dir string, env []string, rejection discoveryPreCPPRejection) (gotoolprofile.PackageProof, discoveryRejectedPackage, error) {
 	var proof gotoolprofile.PackageProof
 	var pkg discoveryRejectedPackage
@@ -421,6 +434,7 @@ func captureRejectedOrdinaryPackage(ctx context.Context, plan *discoveryOrdinary
 		len(pkg.DepsErrors) != 0 || pkg.Error != nil && isDiscoveryGoBuildInfrastructureFailure(pkg.Error.Err) {
 		return proof, pkg, fmt.Errorf("actual rejected-package role is missing or contains tool/dependency failure: %v", err)
 	}
+	pkg.selectionStderr = string(stderr)
 	proof = gotoolprofile.PackageProof{PackagePath: pkg.ImportPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
 		SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module", SourceSHA256: make(map[string]string)}
 	sum, goMod := pkg.Module.Sum, pkg.Module.GoMod
@@ -470,5 +484,5 @@ func captureRejectedOrdinaryPackage(ctx context.Context, plan *discoveryOrdinary
 	if err != nil {
 		return proof, pkg, err
 	}
-	return proof, pkg, validatePreCPPPackage(plan, profile, discoveryPreCPPRejection{File: rejection.File, BuildTags: rejection.BuildTags, Package: proof})
+	return proof, pkg, nil
 }

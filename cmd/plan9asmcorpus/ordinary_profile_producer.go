@@ -54,18 +54,19 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
-	_, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
+	initialDecisions, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
 	files := ordinaryProfileEligibleCPPFiles(eligible)
-	if len(files) != 0 {
+	documentationRequired := len(documentationRequiredPackages(initialDecisions)) != 0
+	if len(files) != 0 || documentationRequired {
 		if err := captureDiscoveryProxyGoMod(ctx, plan, download, dir, env); err != nil {
 			return nil, nil, nil, nil, "", err
 		}
 	}
 	var goRoot string
-	if len(files) != 0 {
+	if len(files) != 0 || documentationRequired {
 		output, _, err := runDiscoveryMachineCommand(ctx, dir, env, binary, "env", "-json", "GOROOT", "GOVERSION")
 		if err != nil {
 			return nil, nil, nil, nil, "", err
@@ -75,6 +76,13 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			return nil, nil, nil, nil, "", fmt.Errorf("actual CPP root/Go version differs from the source producer")
 		}
 		goRoot = actual["GOROOT"]
+		if documentationRequired {
+			if err := captureDiscoveryDocumentationPackages(ctx, plan, profiles, initialDecisions, dir, goRoot, env, markers, cache); err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+		}
+	}
+	if len(files) != 0 {
 		// Registration and profile selection reach a bounded fixed point
 		// before any Go rejection or translation can close a scope. Generated
 		// headers contain only object-like definitions, not new include edges;
@@ -120,8 +128,11 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			if err != nil {
 				return nil, nil, nil, nil, "", err
 			}
-			_, selected, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
+			selectedDecisions, selected, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			if err := captureDiscoveryDocumentationPackages(ctx, plan, profiles, selectedDecisions, dir, goRoot, env, markers, cache); err != nil {
 				return nil, nil, nil, nil, "", err
 			}
 			eligible = selected
@@ -146,6 +157,9 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
+	if err := validateDiscoveryDocumentationPackages(plan, profiles, decisions); err != nil {
+		return nil, nil, nil, nil, "", err
+	}
 	preRejected, err := validateDiscoveryPreCPPRejections(plan, profiles, eligible)
 	if err != nil {
 		return nil, nil, nil, nil, "", err
@@ -168,7 +182,7 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 		})
 	}
 	for _, decision := range decisions {
-		if decision.Kind == discoverySourceNotApplicableNoGoPackage {
+		if decision.Kind == discoverySourceNotApplicableNoGoPackage || decision.Kind == discoveryDocumentationKind {
 			rejected = append(rejected, discoverySourceNotApplicableItem{
 				ProfileID: decision.ProfileID, BuildTags: decision.BuildTags,
 				AsmFiles: decision.AsmFiles, Targets: decision.Targets,

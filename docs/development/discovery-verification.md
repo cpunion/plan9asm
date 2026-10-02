@@ -342,6 +342,22 @@ inventory. Missing scope dimensions or consumer proofs fail closed. Unknown
 CPU macros and experiment predicates
 without an actual package-role binding fail closed. Reachable predicate sides
 do not by themselves prove complete operand-form or runtime coverage.
+Current producers stamp `original_always_documentation_role_v1` in both the
+source plan and provenance. A documentation-only directory is excluded before
+CPP registration only when its complete original inventory contains at least
+one nonhidden, non-test Go file and every such file has a valid
+`package documentation` clause. Actual same-driver/target/profile/custom-tag
+queries must have empty GoFiles/CgoFiles, complete IgnoredGoFiles and real
+SFiles, and only the registered typed Go NoGoError. Selected ordinary test
+files, bad source, dependency errors, infrastructure failures and missing tools
+cannot supply this witness. Both stock Go ignore paths and their header/index
+and NoGoError conversion source files are bound and rechecked. Readers derive
+all required scopes and selection lists from the shared ZIP-bound inventory;
+missing/replaced sources, rule bytes, scopes or protocol fields fail closed.
+This is scoped no-current-package evidence with zero assembly objects, not an
+invalid-assembly pass or a module-wide exception. Unstamped historical
+source-only replay retains its original semantics.
+
 An unknown first CPP control may be excluded only when the current Go assembler
 rejects that same original file, physical line and directive under every selected
 target/profile/custom-tag scope. `pre_cpp_rejections` retains the bounded original

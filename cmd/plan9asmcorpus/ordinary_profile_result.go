@@ -13,7 +13,8 @@ import (
 
 func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []string, goVersion string) error {
 	plan := result.OrdinarySelectionPlan
-	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || plan.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol {
+	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || plan.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol ||
+		plan.DocumentationSourceProtocol != discoveryDocumentationProtocol {
 		return fmt.Errorf("current ordinary profile lacks its mandatory signature-source protocol")
 	}
 	if plan == nil || plan.Module != result.Module || plan.Version != result.Version || plan.GoVersion != goVersion ||
@@ -40,6 +41,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	}
 	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
+		return err
+	}
+	if err := validateDiscoveryDocumentationPackages(plan, profiles, decisions); err != nil {
 		return err
 	}
 	if !equalOrdinaryProfileDecisions(decisions, plan.ProfileDecisions) {
@@ -82,12 +86,12 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err := validateDiscoveryTestDeclarationExecution(plan, executed); err != nil {
 		return err
 	}
-	noPackage := make(map[discoveryProfileScope]bool)
+	noPackage := make(map[discoveryProfileScope]string)
 	for _, decision := range decisions {
-		if decision.Kind == discoverySourceNotApplicableNoGoPackage {
+		if decision.Kind == discoverySourceNotApplicableNoGoPackage || decision.Kind == discoveryDocumentationKind {
 			for _, file := range decision.AsmFiles {
 				for _, target := range decision.Targets {
-					noPackage[discoveryProfileScope{File: file, Target: target, ProfileID: decision.ProfileID, Tags: strings.Join(decision.BuildTags, "\x00")}] = true
+					noPackage[discoveryProfileScope{File: file, Target: target, ProfileID: decision.ProfileID, Tags: strings.Join(decision.BuildTags, "\x00")}] = decision.Kind
 				}
 			}
 		}
@@ -101,7 +105,13 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 			}
 			for _, target := range item.Targets {
 				key := discoveryProfileScope{File: file, Target: target, ProfileID: item.ProfileID, Tags: strings.Join(item.BuildTags, "\x00")}
-				valid := eligible[key] && item.Kind != discoverySourceNotApplicableNoGoPackage || noPackage[key] && item.Kind == discoverySourceNotApplicableNoGoPackage
+				noPackageKind := item.Kind == discoverySourceNotApplicableNoGoPackage || item.Kind == discoveryDocumentationKind
+				valid := eligible[key] && !noPackageKind || noPackage[key] == item.Kind && noPackageKind
+				if item.Kind == discoveryDocumentationKind && (plan.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
+					!result.sourceDiagnosticsCompacted && item.Reason != discoveryDocumentationReason ||
+					result.sourceDiagnosticsCompacted && item.Reason != discoverySourceSkipReason(item.Kind)) {
+					return fmt.Errorf("documentation role lacks its current typed original-source exclusion")
+				}
 				if !valid || rejected[key] || executed[key] {
 					return fmt.Errorf("ordinary source diagnostic claims a missing/duplicate/executed profile scope: %v", key)
 				}

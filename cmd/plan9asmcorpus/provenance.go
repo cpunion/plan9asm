@@ -24,6 +24,7 @@ type discoverySourceIdentity struct {
 // Keep this value comparable: every shard must describe the same inputs,
 // including the actual translator binary, not merely the same candidate set.
 type discoveryCorpusProvenance struct {
+	DocumentationSourceProtocol  string                  `json:"documentation_source_protocol,omitempty"`
 	SignatureSourceProtocol      string                  `json:"signature_source_protocol,omitempty"`
 	TestDependencySourceProtocol string                  `json:"test_dependency_source_protocol,omitempty"`
 	Source                       discoverySourceIdentity `json:"source"`
@@ -208,6 +209,7 @@ func discoveryBinaryFingerprint(path string) (string, error) {
 func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 	var p discoveryCorpusProvenance
 	p.SignatureSourceProtocol = gotoolprofile.SignatureSourceProtocol
+	p.DocumentationSourceProtocol = discoveryDocumentationProtocol
 	p.TestDependencySourceProtocol = gotoolprofile.TestDependencyProtocol
 	var err error
 	p.Source, err = collectDiscoverySource(cfg.RepoRoot)
@@ -283,6 +285,7 @@ func readDiscoveryGoVersion() (string, error) {
 
 func validateDiscoveryProvenance(p discoveryCorpusProvenance, source discoverySourceIdentity, ledgerSHA string) error {
 	if p.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || p.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol ||
+		p.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
 		!discoveryRevisionPattern.MatchString(p.Source.Revision) || !discoverySHA256Pattern.MatchString(p.Source.SHA256) ||
 		!discoverySHA256Pattern.MatchString(p.LedgerSHA256) || !discoverySHA256Pattern.MatchString(p.TranslatorSHA256) ||
 		!discoverySHA256Pattern.MatchString(p.LLCBinarySHA256) ||

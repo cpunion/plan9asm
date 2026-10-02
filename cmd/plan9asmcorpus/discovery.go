@@ -2112,6 +2112,7 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 	allowedKinds := map[string]bool{
 		discoverySourceNotApplicableGoAssembler:   true,
 		discoverySourceNotApplicableNoGoPackage:   true,
+		discoveryDocumentationKind:                true,
 		discoverySourceNotApplicableGoBuild:       true,
 		discoverySourceNotApplicableAsmDecl:       true,
 		discoverySourceNotApplicableNoSymbols:     true,
@@ -2139,6 +2140,11 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
 				len(result.OrdinarySelectionPlan.FortranRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
 			return fmt.Errorf("Fortran loader source exclusion lacks its independent typed original-source proof")
+		}
+		if item.Kind == discoveryDocumentationKind &&
+			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
+				len(result.OrdinarySelectionPlan.DocumentationPackages) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
+			return fmt.Errorf("documentation source exclusion lacks its independent typed original-source proof")
 		}
 		if isDiscoveryGoBuildInfrastructureFailure(item.Reason) {
 			return fmt.Errorf("source not-applicable evidence contains an infrastructure failure: kind=%q files=%v targets=%v", item.Kind, files, item.Targets)

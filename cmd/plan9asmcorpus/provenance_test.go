@@ -20,6 +20,7 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 		t.Fatal(err)
 	}
 	return discoveryCorpusProvenance{
+		DocumentationSourceProtocol:  discoveryDocumentationProtocol,
 		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
 		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
 		Source:                       discoverySourceIdentity{Revision: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)},
@@ -91,6 +92,7 @@ func TestVerifyDiscoveryCorpusReportsRejectsMixedOrStaleProvenance(t *testing.T)
 	for name, mutate := range map[string]func(*discoveryCorpusProvenance){
 		"missing signature protocol":       func(p *discoveryCorpusProvenance) { p.SignatureSourceProtocol = "" },
 		"missing test dependency protocol": func(p *discoveryCorpusProvenance) { p.TestDependencySourceProtocol = "" },
+		"missing documentation protocol":   func(p *discoveryCorpusProvenance) { p.DocumentationSourceProtocol = "" },
 		"source revision": func(p *discoveryCorpusProvenance) {
 			p.Source.Revision = strings.Repeat("d", 40)
 			p.TranslatorRevision = p.Source.Revision

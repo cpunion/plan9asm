@@ -38,6 +38,9 @@ const (
 // package. Ignored directories and nested modules are recursive corpus-walk
 // boundaries. Constraints and source diagnostics are separate decisions.
 type discoveryOrdinarySelectionPlan struct {
+	DocumentationSourceProtocol  string                            `json:"documentation_source_protocol,omitempty"`
+	DocumentationRules           *discoveryDocumentationRules      `json:"documentation_rules,omitempty"`
+	DocumentationPackages        []discoveryDocumentationPackage   `json:"documentation_packages,omitempty"`
 	SignatureSourceProtocol      string                            `json:"signature_source_protocol,omitempty"`
 	TestDependencySourceProtocol string                            `json:"test_dependency_source_protocol,omitempty"`
 	Protocol                     string                            `json:"protocol"`
@@ -118,6 +121,7 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 // stability rechecks need only these inputs, not a second host-context replay.
 func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
 	plan := &discoveryOrdinarySelectionPlan{
+		DocumentationSourceProtocol:  discoveryDocumentationProtocol,
 		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
 		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
 		Protocol:                     ordinarySelectionScopeProtocol, Module: candidate.Module, Version: candidate.Version,
@@ -613,6 +617,8 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 		}
 		sort.Strings(goFiles)
 		sort.Strings(rejected)
+		alwaysDocumentation := len(actualProfiles) == 1 && plan.DocumentationSourceProtocol == discoveryDocumentationProtocol &&
+			alwaysDocumentationDirectory(dir, sources, dirs[dir])
 		if len(goFiles) == 0 {
 			diagnostic := "directory has no non-test, non-hidden Go file with a valid package clause"
 			if len(rejected) != 0 {
@@ -646,7 +652,9 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 				return nil, nil, err
 			}
 			kind, diagnostic := nativeLayoutBuildConstraints, "Go MatchFile/custom-tag search selects no assembly/non-test-Go pair with compiler=gc and CGO_ENABLED=0"
-			if selected {
+			if alwaysDocumentation {
+				kind, diagnostic = discoveryDocumentationKind, discoveryDocumentationReason
+			} else if selected {
 				kind, diagnostic = nativeLayoutSelected, "Go MatchFile/custom-tag search selects this assembly/non-test-Go pair; compiler/assembler acceptance is checked separately"
 				eligible[nativeLayoutKey(file, plan.Targets[i], tags)] = true
 			} else {
@@ -758,6 +766,9 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 	}
 	if len(plan.FortranRejections) != 0 {
 		return fmt.Errorf("Fortran loader source proof requires current profile-aware report replay")
+	}
+	if len(plan.DocumentationPackages) != 0 || plan.DocumentationRules != nil {
+		return fmt.Errorf("documentation source proof requires current profile-aware report replay")
 	}
 	if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 		return err
@@ -913,7 +924,7 @@ func ordinarySelectionReason(plan *discoveryOrdinarySelectionPlan, evidence []di
 		}
 	}
 	for _, item := range evidence {
-		if item.Kind == discoverySourceNotApplicableNoGoPackage {
+		if item.Kind == discoverySourceNotApplicableNoGoPackage || item.Kind == discoveryDocumentationKind {
 			continue // Already represented by the pre-build source decision.
 		}
 		files := append(append([]string(nil), item.AsmFiles...), item.AsmFile)

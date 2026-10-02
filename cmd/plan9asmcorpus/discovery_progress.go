@@ -57,6 +57,8 @@ func discoverySourceSkipReason(kind string) string {
 		return "Go 1.27 assembler rejected this source on all supported targets"
 	case discoverySourceNotApplicableNoGoPackage:
 		return "no current Go package selects this assembly source"
+	case discoveryDocumentationKind:
+		return discoveryDocumentationReason
 	case discoverySourceNotApplicableGoBuild:
 		return "Go 1.27 package build rejected this target"
 	case discoverySourceNotApplicableAsmDecl:

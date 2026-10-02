@@ -38,6 +38,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		t.Fatal(err)
 	}
 	plan := result.OrdinarySelectionPlan
+	plan.DocumentationSourceProtocol = discoveryDocumentationProtocol
 	var profiles []discoveryFeatureProfile
 	byTarget := make(map[string]discoveryFeatureProfile)
 	for _, target := range plan.Targets {

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"go/build"
+	"path"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
@@ -14,6 +15,17 @@ import (
 // Only reachable branch sides require profiles; inactive outer conditions do
 // not create a claim of branch execution or full instruction-form coverage.
 func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest) ([]discoveryFeatureProfileRequest, error) {
+	if plan.DocumentationSourceProtocol == discoveryDocumentationProtocol && possibleDocumentationDirectory(plan, path.Dir(asmFile)) {
+		sources, directories, err := ordinarySelectionBytes(plan)
+		if err != nil {
+			return nil, err
+		}
+		if alwaysDocumentationDirectory(path.Dir(asmFile), sources, directories[path.Dir(asmFile)]) {
+			// No CPP proposal from a directory that cannot have a Go package.
+			// The final source exclusion still requires actual typed queries.
+			return nil, nil
+		}
+	}
 	for _, rejection := range plan.PreCPPRejections {
 		if rejection.File == asmFile {
 			// An unknown first control is unconditional and rejects before

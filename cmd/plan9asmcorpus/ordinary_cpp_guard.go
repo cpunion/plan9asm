@@ -134,6 +134,9 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 	if err := verifyDiscoveryFortranOriginalSources(plan, moduleDir, goRoot); err != nil {
 		return &discoverySourceProofError{err}
 	}
+	if err := verifyDiscoveryDocumentationSources(plan, goRoot); err != nil {
+		return &discoverySourceProofError{err}
+	}
 	if plan.CPPInputs != nil {
 		if err := verifyDiscoveryCPPInputsUnchanged(plan.CPPInputs, moduleDir, goRoot); err != nil {
 			return &discoverySourceProofError{err}
