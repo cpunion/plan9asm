@@ -34,13 +34,24 @@ func validateDiscoveryTestDeclarationQueries(plan *discoveryOrdinarySelectionPla
 		return fmt.Errorf("test declaration pre-load inventory exceeds explicit bounds")
 	}
 	copyPlan := *plan
-	copyPlan.Sources, copyPlan.Directories = plan.TestDeclarationSources, plan.TestDeclarationDirectories
+	copyPlan.Sources = plan.TestDeclarationSources
+	copyPlan.Directories = append(append([]ordinarySelectionDirectory(nil), plan.Directories...), plan.TestDeclarationDirectories...)
 	if _, _, err := ordinarySelectionBytes(&copyPlan); err != nil {
 		return fmt.Errorf("test declaration source-only inventory: %w", err)
 	}
 	ordinaryDirs := make(map[string]bool)
+	headers := make(map[string]bool)
 	for _, dir := range plan.Directories {
 		ordinaryDirs[dir.Directory] = true
+	}
+	for _, source := range plan.Sources {
+		headers[source.File] = true
+	}
+	for _, source := range plan.TestDeclarationSources {
+		if headers[source.File] || !strings.HasSuffix(source.File, ".go") && !strings.HasSuffix(source.File, ".s") {
+			return fmt.Errorf("test source-only header impersonates ordinary or non-selection source")
+		}
+		headers[source.File] = true
 	}
 	usedDirs := make(map[string]bool)
 	seen := make(map[discoveryProfileScope]bool)
@@ -89,14 +100,20 @@ func validateDiscoveryTestDeclarationQueries(plan *discoveryOrdinarySelectionPla
 		if ordinaryDirs[dir.Directory] || !usedDirs[dir.Directory] {
 			return fmt.Errorf("test source-only inventory impersonates ordinary or unrelated directory")
 		}
+	}
+	for _, source := range plan.TestDeclarationSources {
+		if !usedDirs[path.Dir(source.File)] {
+			return fmt.Errorf("test source-only header belongs to an unrelated directory")
+		}
+	}
+	for _, dir := range copyPlan.Directories {
+		if !usedDirs[dir.Directory] {
+			continue
+		}
 		for _, entry := range dir.Entries {
 			file := path.Join(dir.Directory, entry.Name)
 			if entry.Kind == "file" && (strings.HasSuffix(file, ".go") || strings.HasSuffix(file, ".s")) {
-				found := false
-				for _, source := range plan.TestDeclarationSources {
-					found = found || source.File == file
-				}
-				if !found {
+				if !headers[file] {
 					return fmt.Errorf("test source-only inventory omits a directory selection header")
 				}
 			}

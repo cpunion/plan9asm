@@ -177,7 +177,10 @@ before typechecking. Newly required pure-Go directories remain separate
 `test_declaration_go_sources` and directory inputs, verified against the
 original whole ZIP and guarded through final objects. Existing assembly
 dependencies retain their original tested inventory; source-only metadata
-cannot introduce another assembly scope. The final consumer independently
+cannot introduce another assembly scope. An already inventoried pure-Go ancestor
+also needs all its Go/ASM selection headers: the producer rechecks its existing
+directory entries and file hashes, then adds only missing supplemental headers,
+never a duplicate directory or ordinary package role. The final consumer independently
 reloads the actual test selection/export, while report, progress and ledger
 readers require the exact query/source closure and consumed typed signatures.
 Truncated, replaced, cross-profile or unconsumed closure metadata fails; no

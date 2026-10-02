@@ -308,11 +308,6 @@ func captureDiscoveryTestSourceDirectory(plan *discoveryOrdinarySelectionPlan, r
 	if err != nil || name != "." && !ordinarySelectionLocalPath(name) {
 		return fmt.Errorf("test dependency directory lies outside the original ZIP")
 	}
-	for _, dir := range append(append([]ordinarySelectionDirectory(nil), plan.Directories...), plan.TestDeclarationDirectories...) {
-		if dir.Directory == name {
-			return nil // The existing complete original inventory remains authoritative.
-		}
-	}
 	if name != "." {
 		if err := captureDiscoveryTestSourceDirectory(plan, root, filepath.Dir(directory)); err != nil {
 			return err
@@ -323,6 +318,7 @@ func captureDiscoveryTestSourceDirectory(plan *discoveryOrdinarySelectionPlan, r
 		return err
 	}
 	captured := ordinarySelectionDirectory{Directory: name, Entries: []ordinarySelectionEntry{}}
+	var sources []ordinarySelectionSource
 	for _, entry := range entries {
 		kind, digest := "directory", ""
 		if !entry.IsDir() {
@@ -338,7 +334,7 @@ func captureDiscoveryTestSourceDirectory(plan *discoveryOrdinarySelectionPlan, r
 			file := path.Join(name, entry.Name())
 			if strings.HasSuffix(file, ".go") || strings.HasSuffix(file, ".s") {
 				data, err := os.ReadFile(filename)
-				if err != nil || len(data) > 64<<20 || len(plan.TestDeclarationSources) >= 32768 {
+				if err != nil || len(data) > 64<<20 || len(sources) >= 32768 {
 					return fmt.Errorf("test dependency source exceeds its bounded inventory: %v", err)
 				}
 				original, err := nativeLayoutSourceInputFromBytes(file, data)
@@ -346,14 +342,50 @@ func captureDiscoveryTestSourceDirectory(plan *discoveryOrdinarySelectionPlan, r
 					return err
 				}
 				header := compactOrdinarySelectionHeader(original.Header)
-				plan.TestDeclarationSources = append(plan.TestDeclarationSources, ordinarySelectionSource{
+				sources = append(sources, ordinarySelectionSource{
 					File: file, SHA256: digest, Header: header, HeaderSHA256: discoveryFeatureBytesSHA256([]byte(header)),
 				})
 			}
 		}
 		captured.Entries = append(captured.Entries, ordinarySelectionEntry{Name: entry.Name(), Kind: kind, SHA256: digest})
 	}
-	plan.TestDeclarationDirectories = append(plan.TestDeclarationDirectories, captured)
+	// An ordinary ancestor already has a complete directory/SHA witness, but
+	// may not have any Go selection headers: it need not contain assembly.
+	// Recheck that witness and supplement headers without duplicating or
+	// replacing its ordinary directory/source role.
+	found := false
+	for _, existing := range append(append([]ordinarySelectionDirectory(nil), plan.Directories...), plan.TestDeclarationDirectories...) {
+		if existing.Directory == name {
+			if found || !reflect.DeepEqual(existing, captured) {
+				return fmt.Errorf("test dependency original directory membership/bytes changed")
+			}
+			found = true
+		}
+	}
+	knownSources := make(map[string]ordinarySelectionSource)
+	for _, source := range append(append([]ordinarySelectionSource(nil), plan.Sources...), plan.TestDeclarationSources...) {
+		if _, duplicate := knownSources[source.File]; duplicate {
+			return fmt.Errorf("test dependency has duplicate original source roles")
+		}
+		knownSources[source.File] = source
+	}
+	var added []ordinarySelectionSource
+	for _, source := range sources {
+		if existing, exists := knownSources[source.File]; exists {
+			if existing != source {
+				return fmt.Errorf("test dependency original source/header changed")
+			}
+		} else {
+			added = append(added, source)
+		}
+	}
+	if len(plan.TestDeclarationSources)+len(added) > 32768 || !found && len(plan.TestDeclarationDirectories) >= 4096 {
+		return fmt.Errorf("test dependency source/directory exceeds its bounded inventory")
+	}
+	if !found {
+		plan.TestDeclarationDirectories = append(plan.TestDeclarationDirectories, captured)
+	}
+	plan.TestDeclarationSources = append(plan.TestDeclarationSources, added...)
 	sort.Slice(plan.TestDeclarationDirectories, func(i, j int) bool {
 		return plan.TestDeclarationDirectories[i].Directory < plan.TestDeclarationDirectories[j].Directory
 	})
@@ -366,7 +398,8 @@ func verifyDiscoveryTestDependencySources(plan *discoveryOrdinarySelectionPlan, 
 		return err
 	}
 	copyPlan := *plan
-	copyPlan.Sources, copyPlan.Directories = plan.TestDeclarationSources, plan.TestDeclarationDirectories
+	copyPlan.Sources = plan.TestDeclarationSources
+	copyPlan.Directories = append(append([]ordinarySelectionDirectory(nil), plan.Directories...), plan.TestDeclarationDirectories...)
 	before, err := discoveryFeatureFileSHA256(zipPath)
 	if err != nil || before != plan.ZipSHA256 {
 		return fmt.Errorf("test dependency original ZIP changed before source membership verification")
@@ -382,7 +415,20 @@ func verifyDiscoveryTestDependencySources(plan *discoveryOrdinarySelectionPlan, 
 }
 
 func verifyDiscoveryTestDependencySnapshot(plan *discoveryOrdinarySelectionPlan, root string) error {
+	// Ordinary selection already guards its original inputs separately. Only
+	// recheck directories contributing this supplemental closure here, rather
+	// than hashing every unrelated assembly package again for each command.
+	relevant := make(map[string]bool)
+	for _, source := range plan.TestDeclarationSources {
+		relevant[path.Dir(source.File)] = true
+	}
 	for _, dir := range plan.TestDeclarationDirectories {
+		relevant[dir.Directory] = true
+	}
+	for _, dir := range append(append([]ordinarySelectionDirectory(nil), plan.Directories...), plan.TestDeclarationDirectories...) {
+		if !relevant[dir.Directory] {
+			continue
+		}
 		entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir.Directory)))
 		if err != nil || len(entries) != len(dir.Entries) {
 			return fmt.Errorf("test dependency original directory membership changed: %v", err)
