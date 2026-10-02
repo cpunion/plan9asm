@@ -57,14 +57,12 @@ var instrumentationRuleSources = []string{
 // 1.20 and 1.27 actual-source oracles verify the same audited registration.
 const instrumentationInitRegistration = "d1a0e667707a7a0016ce864f7ace726eed14227d666385fcb7aa6bc7beb3c708"
 
+const instrumentationRegistrationByteLimit = 2 << 20
+
 func CaptureInstrumentationSourceRules(root, version string) (*InstrumentationSourceRules, error) {
 	minor, err := goMinor(version)
 	if err != nil || minor < 20 || minor > 27 || !filepath.IsAbs(root) {
 		return nil, fmt.Errorf("instrumentation registration requires an absolute Go 1.20–1.27 source root")
-	}
-	rules := &InstrumentationSourceRules{
-		root: root, version: version, sources: make(map[string]string),
-		registration: make(map[string]string), targets: make(map[InstrumentationMode]map[string]bool),
 	}
 	contents := make(map[string][]byte)
 	for _, name := range instrumentationRuleSources {
@@ -72,7 +70,20 @@ func CaptureInstrumentationSourceRules(root, version string) (*InstrumentationSo
 		if err != nil {
 			return nil, fmt.Errorf("instrumentation source %s: %w", name, err)
 		}
-		contents[name], rules.sources[name] = data, bytesSHA256(data)
+		contents[name] = data
+	}
+	return replayInstrumentationRuleSources(root, version, contents)
+}
+
+// A portable replay has no physical root and cannot satisfy Recheck. Both
+// paths parse exactly the same complete registrations from original bytes.
+func replayInstrumentationRuleSources(root, version string, contents map[string][]byte) (*InstrumentationSourceRules, error) {
+	rules := &InstrumentationSourceRules{
+		root: root, version: version, sources: make(map[string]string),
+		registration: make(map[string]string), targets: make(map[InstrumentationMode]map[string]bool),
+	}
+	for _, name := range instrumentationRuleSources {
+		rules.sources[name] = bytesSHA256(contents[name])
 	}
 	if strings.Split(strings.TrimSpace(string(contents["VERSION"])), "\n")[0] != version {
 		return nil, fmt.Errorf("instrumentation source VERSION differs from actual driver")
@@ -116,17 +127,16 @@ func CaptureInstrumentationSourceRules(root, version string) (*InstrumentationSo
 }
 
 func readInstrumentationRegistration(name string) ([]byte, error) {
-	const limit = 2 << 20
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
 	}
-	data, readErr := io.ReadAll(io.LimitReader(file, limit+1))
+	data, readErr := io.ReadAll(io.LimitReader(file, instrumentationRegistrationByteLimit+1))
 	closeErr := file.Close()
 	if readErr != nil || closeErr != nil {
 		return nil, errors.Join(readErr, closeErr)
 	}
-	if len(data) > limit {
+	if len(data) > instrumentationRegistrationByteLimit {
 		return nil, fmt.Errorf("instrumentation registration exceeds its byte bound")
 	}
 	return data, nil
