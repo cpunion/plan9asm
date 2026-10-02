@@ -1,6 +1,9 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // amd64MaskMoveSpecs is the complete Go 1.27 x86 mask-register move family.
 // All four instructions share _ykmovb and its K->memory, K->GP,
@@ -13,10 +16,20 @@ var amd64MaskMoveSpecs = map[Op]int{
 }
 
 func (c *amd64Ctx) lowerMaskMove(op Op, ins Instr) error {
+	bits, recognized := amd64MaskMoveSpecs[op]
+	if !recognized {
+		return fmt.Errorf("amd64 unknown mask-move opcode %q", op)
+	}
+	if ins.Op != "" && Op(strings.ToUpper(string(ins.Op))) != op {
+		return fmt.Errorf("amd64 mask-move dispatch %q disagrees with instruction %q", op, ins.Op)
+	}
+	// The internal dispatcher owns the opcode argument, including for helper
+	// callers without Instr.Op. Bind a local copy before the shared validator;
+	// source/caller proofs still require their original complete instruction.
+	ins.Op = op
 	if len(ins.Args) != 2 {
 		return fmt.Errorf("amd64 %s expects two operands from Go 1.27's _ykmovb table: %q", op, ins.Raw)
 	}
-	bits := amd64MaskMoveSpecs[op]
 	src, dst := ins.Args[0], ins.Args[1]
 	srcK := amd64IsKOperand(src)
 	dstK := amd64IsKOperand(dst)
