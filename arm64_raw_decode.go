@@ -21,10 +21,20 @@ func decodeARM64RawWordInstruction(ins Instr) (Instr, error) {
 // label established by normalizeARM64RawPCRelative. Keeping the layout proof
 // out of this context-free decoder prevents guessed control-flow edges.
 func decodeARM64RawWordInstructionTarget(ins Instr, target string) (Instr, error) {
-	if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+	if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 		return Instr{}, fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", ins.Raw)
 	}
 	word := uint32(ins.Args[0].Imm)
+	// A64 UDF has a fixed zero high half and the complete unsigned imm16
+	// field. x/arch predates this decode; do not classify these deliberate
+	// exception encodings as arbitrary unknown words or discard the immediate.
+	if word&0xffff0000 == 0 {
+		return Instr{
+			Op:                         "UNDEF",
+			Raw:                        fmt.Sprintf("UNDEF /* decoded from %s */", ins.Raw),
+			arm64RawUndefinedImmediate: uint16(word),
+		}, nil
+	}
 	var code [4]byte
 	binary.LittleEndian.PutUint32(code[:], word)
 	decoded, err := arm64asm.Decode(code[:])

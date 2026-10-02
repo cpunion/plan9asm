@@ -1480,6 +1480,8 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 	}
 	for _, op := range []string{
 		"B", "JMP", "BL", "BLR", "CALL", "RET",
+		// A64 UDF encodings reuse Go's operand-free UNDEF semantics.
+		"UNDEF",
 		// NEON SM3/SM4 are WORD-only; the named SM4 forms below are SVE.
 		"WORD",
 		"MADD", "MSUB", "MADDW", "MSUBW", "SMADDL", "SMSUBL", "UMADDL", "UMSUBL",

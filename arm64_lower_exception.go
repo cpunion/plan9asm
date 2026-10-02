@@ -43,7 +43,7 @@ func (c *arm64Ctx) lowerARM64Exception(op Op, ins Instr) (ok bool, terminated bo
 		}
 		var immediate uint16
 		if len(ins.Args) == 1 {
-			if ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+			if ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 				return true, false, fmt.Errorf("arm64 %s operand must be a constant: %q", op, ins.Raw)
 			}
 			immediate = uint16(ins.Args[0].Imm)
@@ -61,7 +61,7 @@ func (c *arm64Ctx) lowerARM64Exception(op Op, ins Instr) (ok bool, terminated bo
 		}
 		var immediate uint64
 		if len(ins.Args) == 1 {
-			if ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+			if ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 				return true, false, fmt.Errorf("arm64 BRK operand must be a constant: %q", ins.Raw)
 			}
 			immediate = uint64(ins.Args[0].Imm) & 0xffff
@@ -81,7 +81,7 @@ func (c *arm64Ctx) lowerARM64Exception(op Op, ins Instr) (ok bool, terminated bo
 		if strings.ToUpper(string(ins.Op)) != "UNDEF" || len(ins.Args) != 0 {
 			return true, false, fmt.Errorf("arm64 UNDEF takes no operands or suffix: %q", ins.Raw)
 		}
-		c.b.WriteString("  call void asm sideeffect \"udf #0\", \"~{memory}\"()\n")
+		c.emitARM64Exception("udf", ins.arm64RawUndefinedImmediate)
 		c.b.WriteString("  unreachable\n")
 		return true, true, nil
 	default:

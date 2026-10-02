@@ -946,6 +946,9 @@ type Instr struct {
 	// Set only after a raw BL's exact same-source PC target is established.
 	// It remains a physical leaf call for Go's pre-WORD prologue selection.
 	arm64RawLocalCall bool
+	// A decoded A64 UDF keeps its encoded imm16 while reusing UNDEF's
+	// terminating semantics. Textual Go UNDEF remains operand-free/#0.
+	arm64RawUndefinedImmediate uint16
 	// Set only after validating a closed, source-local Linux native helper.
 	armKernelCall *armKernelCall
 	// Set only by a validated machine-code decoder. Physical operands need

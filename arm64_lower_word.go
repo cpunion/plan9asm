@@ -6,7 +6,7 @@ import "fmt"
 // are known. Silently emitting nothing for an unknown machine instruction
 // would report success while changing program semantics.
 func (c *arm64Ctx) lowerRawWord(ins Instr) error {
-	if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+	if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 		return fmt.Errorf("arm64 WORD expects exactly one resolved integer constant: %q", ins.Raw)
 	}
 
