@@ -12,11 +12,12 @@ import (
 // Predecessors include every reachable edge. A conditional edge can narrow a
 // value only when its exact comparison and flag provenance are established.
 type arm64RawPoolValues struct {
-	words       []uint32
-	before      [][]int
-	cache       map[arm64RawPoolValue]uint64
-	active      map[arm64RawPoolValue]bool
-	vectorBytes int64
+	words        []uint32
+	before       [][]int
+	cache        map[arm64RawPoolValue]uint64
+	active       map[arm64RawPoolValue]bool
+	vectorBytes  int64
+	gpWriteCache map[uint32]arm64RawPoolGPEffects
 
 	affineCache    map[arm64PoolAffineQuery]arm64PoolInterval
 	affineActive   map[arm64PoolAffineQuery]bool
@@ -39,6 +40,11 @@ type arm64RawPoolValue struct {
 
 type arm64RawPoolEdge struct {
 	from, to int
+}
+
+type arm64RawPoolGPEffects struct {
+	writes uint32
+	known  bool
 }
 
 func newARM64RawPoolValues(instructions []Instr, start, end int, reachable map[int]bool) *arm64RawPoolValues {
@@ -86,6 +92,21 @@ func arm64RawPoolGP(reg arm64asm.Reg) (int, bool) {
 		return int(reg - arm64asm.X0), true
 	}
 	return 0, false
+}
+
+func (flow *arm64RawPoolValues) gpWrites(word uint32) (uint32, bool) {
+	if effects, found := flow.gpWriteCache[word]; found {
+		return effects.writes, effects.known
+	}
+	writes, known := arm64RawPoolGPWrites(word)
+	if flow.gpWriteCache == nil {
+		flow.gpWriteCache = make(map[uint32]arm64RawPoolGPEffects)
+	}
+	// Only context-free architectural effects are memoized, by the complete
+	// machine word. Unknown remains unknown; no value/edge/interval fact is
+	// cached here. The map belongs to this analysis, never a global decoder.
+	flow.gpWriteCache[word] = arm64RawPoolGPEffects{writes: writes, known: known}
+	return writes, known
 }
 
 // Walk backwards through unchanged-register edges, unioning all reaching
@@ -147,7 +168,7 @@ func (flow *arm64RawPoolValues) upper(at int, reg arm64asm.Reg) uint64 {
 		}
 		visited[previous] = true
 		word := flow.words[previous]
-		writes, known := arm64RawPoolGPWrites(word)
+		writes, known := flow.gpWrites(word)
 		if !known {
 			return limit
 		}

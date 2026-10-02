@@ -36,7 +36,7 @@ func (flow *arm64RawPoolValues) valueDefinition(point arm64PoolValuePoint) (arm6
 			break
 		}
 		word := flow.words[previous]
-		writes, known := arm64RawPoolGPWrites(word)
+		writes, known := flow.gpWrites(word)
 		if !known {
 			break
 		}

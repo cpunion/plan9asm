@@ -21,7 +21,7 @@ func (flow *arm64RawPoolValues) proveRelationalOneIterationLoop(latch int) {
 		return
 	}
 	for at := after - 2; at >= head; at-- {
-		writes, _ := arm64RawPoolGPWrites(flow.words[at])
+		writes, _ := flow.gpWrites(flow.words[at])
 		if affected := writes & expression.registerMask(); affected != 0 {
 			destination, value, valid := flow.affineDefinition(flow.words[at])
 			if !valid || affected != 1<<uint(destination) || !expression.substitute(destination, value) {

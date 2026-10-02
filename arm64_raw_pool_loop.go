@@ -210,7 +210,7 @@ func (flow *arm64RawPoolValues) counterLoopUpdate(head, latch, register int) (in
 	var delta uint64
 	for at := head; at < latch; at++ {
 		current := flow.words[at]
-		writes, _ := arm64RawPoolGPWrites(current)
+		writes, _ := flow.gpWrites(current)
 		if writes&(1<<uint(register)) == 0 {
 			continue
 		}
@@ -243,7 +243,7 @@ func (flow *arm64RawPoolValues) straightLineLoopBody(head, latch int) bool {
 			word&0xfe000000 == 0xd6000000 {
 			return false
 		}
-		if _, known := arm64RawPoolGPWrites(word); !known {
+		if _, known := flow.gpWrites(word); !known {
 			return false
 		}
 	}
@@ -299,7 +299,7 @@ func (flow *arm64RawPoolValues) opaquePreserves(at int, expression arm64PoolAffi
 			return false
 		}
 		flow.affineWork++
-		writes, known := arm64RawPoolGPWrites(flow.words[instruction])
+		writes, known := flow.gpWrites(flow.words[instruction])
 		if !known || writes&expression.registerMask() != 0 {
 			return false
 		}

@@ -115,7 +115,7 @@ func (flow *arm64RawPoolValues) rewindStackLoad(at int, query arm64PoolAffine) (
 		visited[at] = true
 		word := flow.words[at]
 		ins, decoded := arm64PoolDecodeWord(word)
-		writes, known := arm64RawPoolGPWrites(word)
+		writes, known := flow.gpWrites(word)
 		if !decoded || !known || writes&remainder.registerMask() != 0 {
 			return 0, query, false
 		}

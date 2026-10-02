@@ -70,7 +70,7 @@ func (flow *arm64RawPoolValues) invariantIntervalProof(at int, expression arm64P
 				return arm64PoolUnknownInterval
 			}
 			word := flow.words[previous]
-			writes, known := arm64RawPoolGPWrites(word)
+			writes, known := flow.gpWrites(word)
 			if !known {
 				return arm64PoolUnknownInterval
 			}

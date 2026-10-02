@@ -56,7 +56,7 @@ func (flow *arm64RawPoolValues) proveOrderedCounterLoop(latch int) {
 		}
 		unchanged := true
 		for at := head; at < latch; at++ {
-			writes, known := arm64RawPoolGPWrites(flow.words[at])
+			writes, known := flow.gpWrites(flow.words[at])
 			unchanged = unchanged && known && writes&(1<<uint(limit)) == 0
 		}
 		if !unchanged {

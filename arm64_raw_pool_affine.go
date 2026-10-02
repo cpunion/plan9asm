@@ -333,7 +333,7 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				}
 			}
 			word := flow.words[previous]
-			writes, known := arm64RawPoolGPWrites(word)
+			writes, known := flow.gpWrites(word)
 			if !known {
 				addResult(bound)
 				continue

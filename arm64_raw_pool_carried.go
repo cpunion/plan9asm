@@ -42,7 +42,7 @@ func (flow *arm64RawPoolValues) loopExpressionDelta(head, latch int, expression 
 	next := expression
 	for at := latch - 1; at >= head; at-- {
 		word := flow.words[at]
-		writes, known := arm64RawPoolGPWrites(word)
+		writes, known := flow.gpWrites(word)
 		if !known {
 			return 0, false
 		}

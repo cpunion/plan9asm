@@ -84,7 +84,7 @@ func (flow *arm64RawPoolValues) multipleOfPowerOfTwo(at int, expression arm64Poo
 				return false
 			}
 			word := flow.words[previous]
-			writes, known := arm64RawPoolGPWrites(word)
+			writes, known := flow.gpWrites(word)
 			if !known {
 				return false
 			}

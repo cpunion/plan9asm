@@ -42,7 +42,7 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 		if arm64RawPoolSVEPreservesNZCV(word) {
 			// x/arch does not decode these SVE families. Reuse their typed
 			// grammar, but keep flag effects separate from GP write effects.
-			writes, known := arm64RawPoolGPWrites(word)
+			writes, known := flow.gpWrites(word)
 			if !known {
 				return 0, 0, 0, false
 			}
@@ -62,7 +62,7 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 			}
 			return word, clobbered, at + 1, true
 		}
-		writes, known := arm64RawPoolGPWrites(word)
+		writes, known := flow.gpWrites(word)
 		if !known || !arm64RawPoolPreservesNZCV(ins.Op) {
 			return 0, 0, 0, false
 		}
