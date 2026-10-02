@@ -44,11 +44,11 @@ func x86SourceStackRuntimeCases(arch string) []x86SourceStackRuntimeCase {
 		x86SourceStackRuntimeCase{name: "BalancedRaw", width: word * 8,
 			body: start + "BYTE $0x55\n" + rawMove + "\n" + rawAlign + "\n" + rawRestore + "\nBYTE $0x5d\n" + finish},
 		x86SourceStackRuntimeCase{name: "BalancedNamed", width: word * 8,
-			body: start + "PUSH" + suffix + " BP\nMOV" + suffix + " SP,BP\nPUSH" + suffix + " AX\nPOP" + suffix + " AX\nMOV" + suffix + " BP,SP\nPOP" + suffix + " BP\n" + finish},
+			body: start + "PUSH" + suffix + " BP\nMOV" + suffix + " SP,BP\nPUSH" + suffix + " AX\nMOV" + suffix + " $0,AX\nPOP" + suffix + " AX\nMOV" + suffix + " BP,SP\nPOP" + suffix + " BP\n" + finish},
 		x86SourceStackRuntimeCase{name: "WordData", width: word * 8,
-			body: start + "PUSHW AX\nPOPW CX\n" + finish},
+			body: start + "PUSHW AX\nMOVW $0,AX\nPOPW AX\n" + finish},
 		x86SourceStackRuntimeCase{name: "WordImmediate", width: word * 8,
-			body: start + "PUSHW $65530\nPOPW CX\n" + finish},
+			body: start + "PUSHW $65530\nPOPW AX\n" + finish},
 		x86SourceStackRuntimeCase{name: "Branch", width: word * 8,
 			body: start + "CMP" + suffix + " AX,$1\nJE done\nADD" + suffix + " $0,BX\ndone:\n" + finish},
 		x86SourceStackRuntimeCase{name: "FlagsStack", width: word * 8, flags: true,
@@ -111,6 +111,9 @@ func x86SourceStackActualGoNumerical(t *testing.T, arch string, runner []string)
 		if test.flags {
 			goSource.WriteString("\t\t\tif input == 0 { want++ }\n")
 		}
+		if test.name == "WordImmediate" {
+			fmt.Fprintf(&goSource, "\t\t\twant = ((input & ^uint%d(65535)) | 65530) + 7\n", test.width)
+		}
 		fmt.Fprintf(&goSource, `
 			canary := [4]uint64{11, 23, 37, 41}
 			if got := %s(input); got != want || canary != [4]uint64{11, 23, 37, 41} {
@@ -163,6 +166,9 @@ func x86SourceStackCOracle(arch string) string {
 `, test.width, test.width, test.width, test.width)
 		if test.flags {
 			source.WriteString("\t\t\tif (input == 0) want++;\n")
+		}
+		if test.name == "WordImmediate" {
+			fmt.Fprintf(&source, "\t\t\twant = (input & ~(uint%d_t)65535) | 65530;\n\t\t\twant += 7;\n", test.width)
 		}
 		fmt.Fprintf(&source, `
 			volatile uint64_t canary = UINT64_C(0x123456789abcdef0);
