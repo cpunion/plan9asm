@@ -18,7 +18,7 @@ func TestTranslateX86SystemControlLRETRawAndWAIT(t *testing.T) {
 		{
 			name:   "lret",
 			source: "TEXT lret(SB),NOSPLIT,$0-0\n\tBYTE $0x48; BYTE $0xcb\n",
-			want:   `asm sideeffect "lretq"`,
+			want:   `asm sideeffect ".byte 0x48, 0xcb"`,
 		},
 		{
 			name:   "wait",

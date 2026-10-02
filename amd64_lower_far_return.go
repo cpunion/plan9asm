@@ -67,7 +67,8 @@ func (c *amd64Ctx) parseFarReturnForm(op string, spec amd64FarReturnSpec, ins In
 	if len(ins.Args) == 0 {
 		return form, nil
 	}
-	if !spec.allowImmediate || len(ins.Args) != 1 || ins.Args[0].Kind != OpImm {
+	if !spec.allowImmediate || len(ins.Args) != 1 || ins.Args[0].Kind != OpImm ||
+		ins.Args[0].ImmIsFloat || ins.Args[0].ImmRaw != "" {
 		return form, fmt.Errorf("%s %s expects no operands or one Go 1.27 Yi32 immediate: %q", c.goarch, op, ins.Raw)
 	}
 	value := ins.Args[0].Imm

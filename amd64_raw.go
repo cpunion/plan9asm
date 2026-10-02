@@ -10185,6 +10185,9 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		}
 		break
 	}
+	if syntax, recognized, err := decodedX86FarReturn(inst); recognized {
+		return syntax, err
+	}
 	syntax := x86asm.GoSyntax(inst, 0, nil)
 	replaceOp := func(op string) {
 		if space := strings.IndexByte(syntax, ' '); space >= 0 {

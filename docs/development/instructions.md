@@ -123,6 +123,14 @@ corpus diagnostics recognize it. Semantic fixtures live under
 `testdata/conformance/<arch>` and must be checked against both native Go and the
 LLVM runtime oracle where supported.
 
+Raw x86 far/interrupt returns must select the existing `IRETW/L/Q` and
+`RETFW/L/Q` grammar from the decoder's actual mode and operand size. A bare
+`CB` remains a 32-bit far return even in amd64 mode; widthless `LRET` is not
+a source-level Go opcode or evidence for a 64-bit return. Preserve encoded
+imm16 operands, reject unregistered prefixes, and compare original Go and
+LLVM object bytes for all five supported x86 targets. Those object checks
+do not prove a privileged kernel's far-return stack or runtime behavior.
+
 The main implementation entry points are:
 
 - x86/386/amd64: `amd64_blocks.go`, `amd64_needed.go`, `amd64_translate.go`,

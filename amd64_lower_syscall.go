@@ -7,15 +7,6 @@ import (
 
 func (c *amd64Ctx) lowerSyscall(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	switch op {
-	case "LRET":
-		if len(ins.Args) != 0 {
-			return true, false, fmt.Errorf("x86 LRET expects no operands: %q", ins.Raw)
-		}
-		// The raw decoder uses the Go spelling LRET for the 64-bit far return
-		// byte sequence. LLVM's x86 assembler names the same instruction LRETQ.
-		c.b.WriteString("  call void asm sideeffect \"lretq\", \"~{memory}\"()\n")
-		c.b.WriteString("  unreachable\n")
-		return true, true, nil
 	case "WAIT":
 		if len(ins.Args) != 0 {
 			return true, false, fmt.Errorf("x86 WAIT expects no operands: %q", ins.Raw)
