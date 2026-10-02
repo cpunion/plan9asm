@@ -1,0 +1,122 @@
+package gotoolprofile
+
+import (
+	"fmt"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+)
+
+// This is a deliberately finite, no-import Go 1.27 marker build trace, not a
+// parser that treats arbitrary -x stderr as commands. A changed driver trace,
+// an additional package/command or any warning fails closed. Original package
+// exporters must retain their own dependency/source observations separately.
+var instrumentationActionID = regexp.MustCompile(` -buildid ([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+) `)
+var instrumentationThreads = regexp.MustCompile(` -c=([0-9]+) `)
+
+type InstrumentationExportRouting struct {
+	Protocol            string   `json:"protocol"`
+	CanonicalTrace      string   `json:"canonical_trace"`
+	TraceSHA256         string   `json:"trace_sha256"`
+	CompilerConcurrency int      `json:"compiler_concurrency"`
+	AssemblerDefines    []string `json:"assembler_defines"`
+}
+
+func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive string, tools *InstrumentationToolState, plan *InstrumentationBuildPlan, defines []string) (*InstrumentationExportRouting, error) {
+	if len(trace) == 0 || len(trace) > commandOutputLimit || !strings.HasSuffix(string(trace), "\n") || strings.ContainsAny(string(trace), "\x00\r") {
+		return nil, fmt.Errorf("missing, malformed or over-bound actual export command trace")
+	}
+	lines := strings.Split(strings.TrimSuffix(string(trace), "\n"), "\n")
+	if !strings.HasPrefix(lines[0], "WORK=") || !filepath.IsAbs(strings.TrimPrefix(lines[0], "WORK=")) {
+		return nil, fmt.Errorf("export trace lacks its actual stock Go work directory")
+	}
+	lines[0] = "WORK=@work"
+	canonical := strings.Join(lines, "\n") + "\n"
+	for _, item := range []struct{ physical, portable string }{
+		{filepath.Join(root, filepath.FromSlash(tools.Directory), "compile"), "@compile"},
+		{filepath.Join(root, filepath.FromSlash(tools.Directory), "asm"), "@asm"},
+		{filepath.Join(root, "pkg", "include"), "@include"},
+		{markerDir, "@marker"}, {archive, "@export"},
+	} {
+		canonical = strings.ReplaceAll(canonical, item.physical, item.portable)
+	}
+	ids := instrumentationActionID.FindAllStringSubmatch(canonical, -1)
+	if len(ids) != 1 || ids[0][1] != ids[0][2] {
+		return nil, fmt.Errorf("actual export compiler trace has missing or inconsistent action identity")
+	}
+	canonical = instrumentationActionID.ReplaceAllString(canonical, " -buildid @action/@action ")
+	concurrency := 1
+	threads := instrumentationThreads.FindAllStringSubmatch(canonical, -1)
+	if len(threads) > 1 {
+		return nil, fmt.Errorf("duplicated export compiler concurrency")
+	}
+	if len(threads) == 1 {
+		var err error
+		concurrency, err = strconv.Atoi(threads[0][1])
+		if err != nil || concurrency < 2 || concurrency > 256 {
+			return nil, fmt.Errorf("invalid actual export compiler concurrency")
+		}
+	}
+	proof := &InstrumentationExportRouting{
+		Protocol: "actual_go_instrumentation_marker_export_routing_v1", CanonicalTrace: canonical,
+		TraceSHA256: bytesSHA256([]byte(canonical)), CompilerConcurrency: concurrency,
+		AssemblerDefines: append([]string(nil), defines...),
+	}
+	if err := validateInstrumentationExportRouting(proof, plan, defines); err != nil {
+		return nil, err
+	}
+	return proof, nil
+}
+
+func validateInstrumentationExportRouting(proof *InstrumentationExportRouting, plan *InstrumentationBuildPlan, defines []string) error {
+	if proof == nil || proof.Protocol != "actual_go_instrumentation_marker_export_routing_v1" || plan == nil ||
+		len(defines) < 2 ||
+		len(proof.CanonicalTrace) > commandOutputLimit || proof.CompilerConcurrency < 1 || proof.CompilerConcurrency > 256 ||
+		!equalDiscoveryStrings(proof.AssemblerDefines, defines) || proof.TraceSHA256 != bytesSHA256([]byte(proof.CanonicalTrace)) {
+		return fmt.Errorf("incomplete actual instrumentation export routing evidence")
+	}
+	if proof.CanonicalTrace != instrumentationExpectedExportTrace(plan, defines, proof.CompilerConcurrency) {
+		return fmt.Errorf("actual export did not execute the complete expected same-mode compiler/assembler routing")
+	}
+	return nil
+}
+
+func instrumentationExpectedExportTrace(plan *InstrumentationBuildPlan, defines []string, concurrency int) string {
+	mode := string(plan.Mode)
+	base := "@asm -p " + instrumentationExportModule + ` -trimpath "$WORK/b001=>" -I $WORK/b001/ -I @include`
+	// asmArgs emits OS/architecture first, then build-mode flags, then
+	// architecture-level CPU definitions. Shared AMD64 must not silently
+	// normalize a different order into the same observed command.
+	for _, define := range defines[:2] {
+		base += " -D " + define
+	}
+	for _, flag := range plan.CodegenFlags {
+		base += " " + flag
+	}
+	for _, define := range defines[2:] {
+		base += " -D " + define
+	}
+	installSuffix := mode
+	if plan.InstrumentAdjustedBuildMode == "pie" && len(plan.CodegenFlags) == 1 {
+		installSuffix += "_" + strings.TrimPrefix(plan.CodegenFlags[0], "-")
+	}
+	compile := `@compile -o $WORK/b001/_pkg_.a -trimpath "$WORK/b001=>" -p ` + instrumentationExportModule +
+		" -lang=go1.20 -installsuffix " + installSuffix + " -buildid @action/@action -goversion " + plan.GoVersion +
+		" -symabis $WORK/b001/symabis"
+	if concurrency > 1 {
+		compile += " -c=" + strconv.Itoa(concurrency)
+	}
+	for _, flag := range plan.CodegenFlags {
+		compile += " " + flag
+	}
+	compile += " -" + mode + " -nolocalimports -importcfg $WORK/b001/importcfg -pack -asmhdr $WORK/b001/go_asm.h ./base.go ./mode_" + mode + ".go"
+	return strings.Join([]string{
+		"WORK=@work", "mkdir -p $WORK/b001/", "echo -n > $WORK/b001/go_asm.h # internal", "cd @marker",
+		base + " -gensymabis -o $WORK/b001/symabis ./mode_" + mode + ".s",
+		"echo '# import config' > $WORK/b001/importcfg # internal", compile,
+		base + " -o $WORK/b001/mode_" + mode + ".o ./mode_" + mode + ".s",
+		"go tool pack r $WORK/b001/_pkg_.a $WORK/b001/mode_" + mode + ".o # internal",
+		"go tool buildid -w $WORK/b001/_pkg_.a # internal", "cp $WORK/b001/_pkg_.a @export # internal",
+	}, "\n") + "\n"
+}
