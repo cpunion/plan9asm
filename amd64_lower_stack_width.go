@@ -100,7 +100,7 @@ func (c *amd64Ctx) lowerStackWidth(op Op, ins Instr) (ok bool, terminated bool, 
 			fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", extended, amd64StackLLVMType(spec.bits), value)
 			value = "%" + extended
 		}
-		c.unpackX86Flags(value)
+		c.unpackX86Flags(value, spec.bits)
 		return true, false, nil
 	case amd64StackPushValue, amd64StackPopValue:
 		if len(ins.Args) != 1 {

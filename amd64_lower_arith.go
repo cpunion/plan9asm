@@ -92,8 +92,13 @@ func (c *amd64Ctx) packX86Flags() string {
 	return packed
 }
 
-func (c *amd64Ctx) unpackX86Flags(packed string) {
+func (c *amd64Ctx) unpackX86Flags(packed string, operandBits int) {
 	for _, flag := range c.x86FlagSlots() {
+		// A word pop replaces FLAGS, not the upper EFLAGS/RFLAGS bits.
+		// In particular, the ID bit remains unchanged by POPFW.
+		if flag.bit >= uint(operandBits) {
+			continue
+		}
 		shifted := packed
 		if flag.bit != 0 {
 			shift := c.newTmp()

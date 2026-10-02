@@ -59,7 +59,7 @@ type amd64Ctx struct {
 	flagsCFSlot    string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
 	flagsPFSlot    string // parity bit for J{P,PE,PS,NP,PO,PC}-like checks
 	flagsOFSlot    string // overflow-style bit used by ADOX carry chain modeling
-	flagsIDSlot    string // CPUID availability bit preserved by PUSHFL/POPFL
+	flagsIDSlot    string // CPUID ID bit preserved by native-width flags stack forms
 	flagsWritten   bool
 	allowSPWrite   bool   // current instruction has an explicitly modeled 386 SP destination
 	directionSlot  string // x86 DF, used by MOVS/STOS/SCAS instructions
@@ -506,9 +506,7 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	c.flagsPFSlot = "%flags_pf"
 	c.flagsOFSlot = "%flags_of"
 	c.directionSlot = "%direction_backward"
-	if c.goarch == "386" {
-		c.flagsIDSlot = "%flags_id"
-	}
+	c.flagsIDSlot = "%flags_id"
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsZSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsZSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsSltSlot)
