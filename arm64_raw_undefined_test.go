@@ -235,6 +235,37 @@ func TestARM64RawUndefinedDecoderRejectsAdjacentEncodings(t *testing.T) {
 	}
 }
 
+func TestARM64RawReachableUndefinedWordDoesNotBecomeData(t *testing.T) {
+	const source = `TEXT rawReachableUndefined(SB),4,$0-0
+	WORD $0xd503201f // NOP falls through into the trap.
+reachable:
+	WORD $0x00000002 // Allocated UDF #2, not a trailing constant pool.
+	RET
+`
+	requireARM64GoAssemblerResult(t, source, true)
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{
+		Goarch: "arm64", TargetTriple: "aarch64-unknown-linux-gnu",
+		Sigs: map[string]FuncSig{
+			"rawReachableUndefined": {Name: "rawReachableUndefined", Ret: Void},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, `asm sideeffect "udf #2"`) || strings.Contains(ir, ".raw_data") {
+		t.Fatalf("reachable UDF became data or lost its immediate:\n%s", ir)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	compileLLVMToObject(t, llc, "aarch64-unknown-linux-gnu", "reachable-udf.ll", "reachable-udf.o", ir)
+}
+
 func TestARM64RawUndefinedDecoderCompleteImmediateField(t *testing.T) {
 	for word := uint32(0); word <= 0xffff; word++ {
 		ins := Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}}

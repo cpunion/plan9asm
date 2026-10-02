@@ -459,9 +459,10 @@ func TestARM64RawReachableInvalidWordDoesNotBecomeData(t *testing.T) {
 	const source = `TEXT rawReachableInvalid(SB), $0-0
 	WORD $0xd503201f // NOP falls through
 reachable:
-	WORD $0x00000002
+	WORD $0xffffffff // Unknown, unlike the allocated UDF imm16 family.
 	RET
 `
+	requireARM64GoAssemblerResult(t, source, true)
 	file, err := Parse(ArchARM64, source)
 	if err != nil {
 		t.Fatal(err)
