@@ -283,7 +283,7 @@ func validateInstrumentationExportNM(output string, mode InstrumentationMode) er
 			return fmt.Errorf("actual nm output contains an unrelated object or diagnostic")
 		}
 		fields := strings.Fields(body)
-		if len(fields) == 1 && fields[0] == "U" || len(fields) >= 2 && fields[0] == "U" {
+		if len(fields) == 1 && fields[0] == "U" || len(fields) == 2 && fields[0] == "U" {
 			continue
 		}
 		if len(fields) != 3 || len(fields[1]) != 1 || !strings.Contains("TtRrDdBb?", fields[1]) {
