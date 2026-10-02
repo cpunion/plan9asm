@@ -14,3 +14,9 @@ remain independent. Proof registration is not an object or runtime pass.
 
 `TestARM64RawZeroFrame*` retains original Go-accepted minimum RED cases, explicit
 escape/overlap/call-context negatives, and physical-leaf source-origin checks.
+The shared MC matrix adds 132 raw scalar/GP-pair/FP-pair width/sign/offset and
+writeback/local-call variants plus 48 actual Go memory spellings. Required
+ARM64 native/cross runtime tests compare original Go WORD objects and LLVM22
+against independent numeric/full-canary oracles, including two arithmetic
+helper calls whose effects must actually execute. These fixtures do not prove
+that an entire external module translates.
