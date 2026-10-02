@@ -449,6 +449,10 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	for indices[plan.outer] != 0 || c.blocks[0].name == plan.outer {
 		plan.outer += "_"
 	}
+	if precise := c.rawZeroContextControlPlan(plan.outer); precise != nil {
+		c.localControl = precise
+		return nil
+	}
 	entry := &arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
 			SP: {"sp:0": true}, Reg("R30"): {"label:" + plan.outer: true},

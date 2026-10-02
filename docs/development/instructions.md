@@ -183,6 +183,15 @@ literals and the seven literal-zero aliases do not read old Rd. MOVK remains
 read-modify-write. Go's inherited nonzero MOVWU literal rows can emit zero
 machine words; stock syntax acceptance alone grants no overwrite witness.
 
+The bounded raw zero-frame proof may also produce the local-control plan,
+but only after every original and exact normalized source context passes.
+Different helper invocations retain separate incoming/private pointer states;
+their return labels are combined only after exact SP/LR/fixed-register and
+escape checks. No partial certificate survives a failed component, unknown
+effect or exhausted bound. Ordinary/native/unproved functions keep the coarse
+control analysis. Runtime fixtures must execute both helper pointer contexts,
+not just compile a synthetic return dispatcher.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore

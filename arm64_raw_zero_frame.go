@@ -116,6 +116,10 @@ func arm64RawZeroVoidTransport(fn Func, transport *arm64PrivateFrameTransport) b
 }
 
 func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
+	return arm64RawZeroFrameProof(fn, transport, nil)
+}
+
+func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, control *arm64LocalControlPlan) bool {
 	if fn.FrameSize != 0 || arm64SourceGoFrame(fn).present || !arm64SourceFrameFlagsKnown(fn) || !arm64HasRawFrameCode(fn) {
 		return false
 	}
@@ -135,11 +139,22 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 	if err != nil || len(blobs) != 0 {
 		return false
 	}
+	if control != nil && !reflect.DeepEqual(fn.Instrs, normalized.Instrs) {
+		return false // A plan cannot describe an earlier or differently normalized CFG.
+	}
 	blocks := arm64SplitBlocks(normalized)
 	indices := make(map[string]int, len(blocks))
 	for index, block := range blocks {
 		indices[block.name] = index
 	}
+	entryLabel := "__entry_lr"
+	for {
+		if _, exists := indices[entryLabel]; !exists {
+			break
+		}
+		entryLabel += "_"
+	}
+	entryLink := "label:" + entryLabel
 	before := make(map[arm64RawZeroPoint]*arm64RawZeroState)
 	contexts := map[string][]arm64RawZeroCall{"": nil}
 	visited := make([]bool, len(blocks))
@@ -176,7 +191,7 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 			},
 			control: &arm64ControlState{
 				regs: map[Reg]arm64ControlValue{
-					SP: {"sp:0": true}, "R30": {"label:__entry_lr": true},
+					SP: {"sp:0": true}, "R30": {entryLink: true},
 				},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
@@ -191,10 +206,13 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 			point := queue[next]
 			queued[point] = false
 			visited[point.block] = true
+			if control != nil && seed == 0 {
+				control.reachable[point.block] = true
+			}
 			state := before[point].clone()
 			calls := contexts[point.context]
 			terminated := false
-			for _, original := range blocks[point.block].instrs {
+			for instructionIndex, original := range blocks[point.block].instrs {
 				operations++
 				if operations > 1<<24 {
 					return false
@@ -204,7 +222,7 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 				if arm64RawZeroReturn(original) {
 					link := arm64ControlRead(state.control.regs, "R30")
 					if len(calls) == 0 {
-						if state.addresses.sp != 0 || len(link) != 1 || !link["label:__entry_lr"] {
+						if state.addresses.sp != 0 || len(link) != 1 || !link[entryLink] {
 							return false
 						}
 						for _, fixed := range arm64RawZeroFixedEntry {
@@ -227,6 +245,9 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 						if !propagate(arm64RawZeroPoint{block: caller.block, context: parent}, state) {
 							return false
 						}
+					}
+					if control != nil && seed == 0 {
+						control.recordRawZeroReturn(point.block, instructionIndex, state.control, entryLink)
 					}
 					terminated = true
 					break

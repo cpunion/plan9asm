@@ -22,6 +22,7 @@ type arm64Ctx struct {
 	tmp int
 
 	blocks              []arm64Block
+	normalizedSource    Func // exact source consumed by the bounded raw-context proof
 	localControl        *arm64LocalControlPlan
 	currentInstruction  int
 	machineAvailability *arm64MachineAvailability
@@ -70,30 +71,31 @@ type arm64Ctx struct {
 
 func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *arm64Ctx {
 	c := &arm64Ctx{
-		b:              b,
-		sig:            sig,
-		resolve:        resolve,
-		sigs:           sigs,
-		annotate:       annotate,
-		frameSize:      fn.FrameSize,
-		sourceGoFrame:  arm64SourceGoFrame(fn),
-		blocks:         arm64SplitBlocks(fn),
-		usedRegs:       map[Reg]bool{},
-		regSlot:        map[Reg]string{},
-		usedVRegs:      map[int]bool{},
-		vRegSlot:       map[int]string{},
-		usedZRegs:      map[int]bool{},
-		zRegSlot:       map[int]string{},
-		usedPRegs:      map[int]bool{},
-		pRegSlot:       map[int]string{},
-		usedPNRegs:     map[int]bool{},
-		pnRegSlot:      map[int]string{},
-		fpParams:       map[int64]FrameSlot{},
-		fpParamAlloca:  map[int64]string{},
-		fpResAllocaOff: map[int64]string{},
-		fpResAllocaIdx: map[int]string{},
-		fpResWritten:   map[int]bool{},
-		fpResAddrTaken: map[int]bool{},
+		b:                b,
+		sig:              sig,
+		resolve:          resolve,
+		sigs:             sigs,
+		annotate:         annotate,
+		frameSize:        fn.FrameSize,
+		sourceGoFrame:    arm64SourceGoFrame(fn),
+		blocks:           arm64SplitBlocks(fn),
+		normalizedSource: fn,
+		usedRegs:         map[Reg]bool{},
+		regSlot:          map[Reg]string{},
+		usedVRegs:        map[int]bool{},
+		vRegSlot:         map[int]string{},
+		usedZRegs:        map[int]bool{},
+		zRegSlot:         map[int]string{},
+		usedPRegs:        map[int]bool{},
+		pRegSlot:         map[int]string{},
+		usedPNRegs:       map[int]bool{},
+		pnRegSlot:        map[int]string{},
+		fpParams:         map[int64]FrameSlot{},
+		fpParamAlloca:    map[int64]string{},
+		fpResAllocaOff:   map[int64]string{},
+		fpResAllocaIdx:   map[int]string{},
+		fpResWritten:     map[int]bool{},
+		fpResAddrTaken:   map[int]bool{},
 	}
 	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
 	c.unexposedCallFrame = arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
