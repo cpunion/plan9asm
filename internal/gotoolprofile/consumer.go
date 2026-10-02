@@ -6,18 +6,19 @@ const ConsumerProtocol = "actual_go_cpu_profile_consumer_v1"
 // source root binds an actual replacement/module directory; all selected bytes
 // must match the producer's pre-load hashes. Only SelectionProof is published.
 type ConsumerInput struct {
-	Protocol     string              `json:"protocol"`
-	ID           string              `json:"id"`
-	Observed     *Observation        `json:"observed"`
-	Module       string              `json:"module"`
-	Version      string              `json:"version"`
-	SourceModule string              `json:"source_module,omitempty"`
-	SourceRoot   string              `json:"source_root"`
-	Sources      map[string]string   `json:"sources"`
-	Headers      map[string]string   `json:"selection_headers"`
-	ToolSources  map[string]string   `json:"tool_sources,omitempty"`
-	Directories  map[string][]string `json:"directories"`
-	AsmFiles     []string            `json:"asm_files"`
+	Protocol                string              `json:"protocol"`
+	SignatureSourceProtocol string              `json:"signature_source_protocol,omitempty"`
+	ID                      string              `json:"id"`
+	Observed                *Observation        `json:"observed"`
+	Module                  string              `json:"module"`
+	Version                 string              `json:"version"`
+	SourceModule            string              `json:"source_module,omitempty"`
+	SourceRoot              string              `json:"source_root"`
+	Sources                 map[string]string   `json:"sources"`
+	Headers                 map[string]string   `json:"selection_headers"`
+	ToolSources             map[string]string   `json:"tool_sources,omitempty"`
+	Directories             map[string][]string `json:"directories"`
+	AsmFiles                []string            `json:"asm_files"`
 	// RegisteredAsmFiles is the complete selected nonempty assembly in the
 	// loaded packages when a concrete source exclusion narrows AsmFiles.
 	// Registration is source-role evidence, never an IR/object or exclusion.
@@ -28,14 +29,16 @@ type ConsumerInput struct {
 }
 
 type SelectionProof struct {
-	Protocol           string         `json:"protocol"`
-	ProfileID          string         `json:"profile_id"`
-	CustomTags         []string       `json:"custom_tags,omitempty"`
-	Packages           []PackageProof `json:"packages"`
-	RegisteredAsmFiles []string       `json:"registered_asm_files,omitempty"`
-	CPP                []CPPProof     `json:"cpp"`
-	Outputs            []OutputProof  `json:"outputs"`
-	GeneratedHeaders   *MetadataProof `json:"generated_headers,omitempty"`
+	Protocol                string                 `json:"protocol"`
+	SignatureSourceProtocol string                 `json:"signature_source_protocol,omitempty"`
+	TestDeclarations        []TestDeclarationProof `json:"test_declarations,omitempty"`
+	ProfileID               string                 `json:"profile_id"`
+	CustomTags              []string               `json:"custom_tags,omitempty"`
+	Packages                []PackageProof         `json:"packages"`
+	RegisteredAsmFiles      []string               `json:"registered_asm_files,omitempty"`
+	CPP                     []CPPProof             `json:"cpp"`
+	Outputs                 []OutputProof          `json:"outputs"`
+	GeneratedHeaders        *MetadataProof         `json:"generated_headers,omitempty"`
 }
 
 type PackageProof struct {
@@ -62,6 +65,7 @@ type CPPProof struct {
 	TypedExpandedSHA256 string              `json:"typed_expanded_sha256"`
 	Inputs              map[string]string   `json:"inputs"`
 	EmptyAssembly       *EmptyAssemblyProof `json:"empty_assembly,omitempty"`
+	Signatures          []SignatureSource   `json:"signature_sources,omitempty"`
 }
 
 // EmptyAssemblyProof witnesses a real Go object and an empty assembler -S

@@ -145,6 +145,26 @@ and prove their actual source/module/package roles; do not reject or admit a
 role from the assembly basename. The unprofiled CLI's separate test-declaration
 lookup remains available, but cannot supply ordinary profile evidence.
 
+Current producers separately bind `actual_go_signature_sources_v1` in their
+stamped provenance, ordinary plan and compiler consumer. Every translated TEXT
+records its actual declaration/fallback source and canonical typed layout.
+When ordinary types lack a function whose original selected test source has a
+bodyless declaration, the consumer independently loads the stock-Go in-package
+test variant under the same target/profile/custom tags. Its original Go/ASM
+selection, complete typechecked source/dependency exports, actual compiler
+identity and consumed symbol/layout are retained in a shared supplemental
+proof. These test Go files never become ordinary package/header inputs. A
+direct same-package CALL/JMP target may reuse the same witness, but only when
+that normalized, zero-offset symbol is actually consumed by the current CPP
+source. Entry and callee uses are distinct; repeated uses share one declaration
+and must agree on its source ABI selector, type and layout. Dynamic, file-local,
+cross-package and offset/alias targets do not acquire a supplemental test role.
+A foreign test package, function body, source/type/export mutation, unknown tool
+or poison test fails; existing ordinary declarations do not load tests. The
+reader requires exact supplemental consumption and rejects deleting either
+protocol or evidence to fall back to legacy rules. Historical source snapshots
+retain their old claims and cannot be promoted to this contract.
+
 ## Reports and provenance
 
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed

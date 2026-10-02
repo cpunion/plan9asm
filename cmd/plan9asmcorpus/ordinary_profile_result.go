@@ -13,6 +13,9 @@ import (
 
 func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []string, goVersion string) error {
 	plan := result.OrdinarySelectionPlan
+	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol {
+		return fmt.Errorf("current ordinary profile lacks its mandatory signature-source protocol")
+	}
 	if plan == nil || plan.Module != result.Module || plan.Version != result.Version || plan.GoVersion != goVersion ||
 		!equalDiscoveryStrings(plan.Targets, uniqueSortedDiscoveryStrings(targets)) {
 		return fmt.Errorf("profile-aware ordinary result lacks exact source/module/target/Go inputs")
@@ -273,7 +276,8 @@ func ordinaryProfileConfigurationKeys(configs []discoveryBuildConfiguration, eli
 
 func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, module, sourceRoot string, files []string, customTags ...[]string) *gotoolprofile.ConsumerInput {
 	input := &gotoolprofile.ConsumerInput{
-		Protocol: gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
+		SignatureSourceProtocol: plan.SignatureSourceProtocol,
+		Protocol:                gotoolprofile.ConsumerProtocol, ID: profile.ID, Observed: profile.Observed,
 		Module: module, Version: plan.Version, SourceModule: plan.Module,
 		SourceRoot: sourceRoot, AsmFiles: append([]string(nil), files...),
 		Sources: make(map[string]string), Headers: make(map[string]string),

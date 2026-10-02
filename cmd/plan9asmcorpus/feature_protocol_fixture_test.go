@@ -114,7 +114,8 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		}
 		input := ordinaryProfileConsumerInput(plan, profile, module, "", config.AsmFiles, config.BuildTags)
 		proof := &gotoolprofile.SelectionProof{
-			Protocol: gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
+			SignatureSourceProtocol: gotoolprofile.SignatureSourceProtocol,
+			Protocol:                gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
 			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
 		}
 		ctx, err := discoveryContextForFeatureProfile(profile.Observed)
@@ -124,10 +125,14 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		ctx.BuildTags = config.BuildTags
 		byDirectory := make(map[string][]string)
 		for _, file := range config.AsmFiles {
+			signature := gotoolprofile.SignatureSource{
+				Symbol: module + ".accounting_" + discoveryFeatureBytesSHA256([]byte(file))[:16],
+				Role:   "asm_fallback", LayoutSHA256: strings.Repeat("5", 64),
+			}
 			byDirectory[path.Dir(file)] = append(byDirectory[path.Dir(file)], file)
 			proof.CPP = append(proof.CPP, gotoolprofile.CPPProof{File: file, Emission: "assembly",
 				ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64),
-				Inputs: map[string]string{"module/" + file: input.Sources[file]}})
+				Inputs: map[string]string{"module/" + file: input.Sources[file]}, Signatures: []gotoolprofile.SignatureSource{signature}})
 			proof.Outputs = append(proof.Outputs, gotoolprofile.OutputProof{
 				File: file, Part: path.Base(file) + ".ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64),
 			})

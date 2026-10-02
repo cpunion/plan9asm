@@ -38,27 +38,28 @@ const (
 // package. Ignored directories and nested modules are recursive corpus-walk
 // boundaries. Constraints and source diagnostics are separate decisions.
 type discoveryOrdinarySelectionPlan struct {
-	Protocol           string                            `json:"protocol"`
-	Module             string                            `json:"module"`
-	Version            string                            `json:"version"`
-	ModuleSum          string                            `json:"module_sum"`
-	ZipSHA256          string                            `json:"zip_sha256"`
-	GoVersion          string                            `json:"go_version"`
-	Targets            []string                          `json:"targets"`
-	ReleaseTags        []string                          `json:"release_tags"`
-	ToolTags           []string                          `json:"tool_tags"`
-	TestedAsmFiles     []string                          `json:"tested_asm_files,omitempty"`
-	Sources            []ordinarySelectionSource         `json:"sources"`
-	Directories        []ordinarySelectionDirectory      `json:"directories"`
-	Decisions          []ordinarySelectionDecision       `json:"decisions"`
-	CPPInputs          *discoveryCPPInputs               `json:"cpp_inputs,omitempty"`
-	ProfileDecisions   []ordinaryProfileDecision         `json:"profile_decisions,omitempty"`
-	ProxyGoMod         *gotoolprofile.ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
-	GeneratedHeaders   []discoveryGeneratedHeaderQuery   `json:"generated_headers,omitempty"`
-	GeneratedGoSources map[string]string                 `json:"generated_go_sources,omitempty"`
-	PreCPPRejections   []discoveryPreCPPRejection        `json:"pre_cpp_rejections,omitempty"`
-	FortranRejections  []discoveryFortranLoaderRejection `json:"fortran_loader_rejections,omitempty"`
-	proxyGoModPath     string
+	SignatureSourceProtocol string                            `json:"signature_source_protocol,omitempty"`
+	Protocol                string                            `json:"protocol"`
+	Module                  string                            `json:"module"`
+	Version                 string                            `json:"version"`
+	ModuleSum               string                            `json:"module_sum"`
+	ZipSHA256               string                            `json:"zip_sha256"`
+	GoVersion               string                            `json:"go_version"`
+	Targets                 []string                          `json:"targets"`
+	ReleaseTags             []string                          `json:"release_tags"`
+	ToolTags                []string                          `json:"tool_tags"`
+	TestedAsmFiles          []string                          `json:"tested_asm_files,omitempty"`
+	Sources                 []ordinarySelectionSource         `json:"sources"`
+	Directories             []ordinarySelectionDirectory      `json:"directories"`
+	Decisions               []ordinarySelectionDecision       `json:"decisions"`
+	CPPInputs               *discoveryCPPInputs               `json:"cpp_inputs,omitempty"`
+	ProfileDecisions        []ordinaryProfileDecision         `json:"profile_decisions,omitempty"`
+	ProxyGoMod              *gotoolprofile.ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
+	GeneratedHeaders        []discoveryGeneratedHeaderQuery   `json:"generated_headers,omitempty"`
+	GeneratedGoSources      map[string]string                 `json:"generated_go_sources,omitempty"`
+	PreCPPRejections        []discoveryPreCPPRejection        `json:"pre_cpp_rejections,omitempty"`
+	FortranRejections       []discoveryFortranLoaderRejection `json:"fortran_loader_rejections,omitempty"`
+	proxyGoModPath          string
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The
@@ -113,7 +114,8 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 // stability rechecks need only these inputs, not a second host-context replay.
 func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
 	plan := &discoveryOrdinarySelectionPlan{
-		Protocol: ordinarySelectionScopeProtocol, Module: candidate.Module, Version: candidate.Version,
+		SignatureSourceProtocol: gotoolprofile.SignatureSourceProtocol,
+		Protocol:                ordinarySelectionScopeProtocol, Module: candidate.Module, Version: candidate.Version,
 		GoVersion: runtime.Version(), Targets: uniqueSortedDiscoveryStrings(targets),
 		ReleaseTags: append([]string(nil), build.Default.ReleaseTags...),
 		ToolTags:    append([]string(nil), build.Default.ToolTags...),

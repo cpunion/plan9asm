@@ -30,6 +30,12 @@ type generatedHeaderLoadSelection struct {
 }
 
 func captureGeneratedHeaderLoadGuard(ctx context.Context, pkgs []*packages.Package) (*generatedHeaderLoadGuard, error) {
+	return captureTypedSourceLoadGuard(ctx, pkgs, nil)
+}
+
+// The sole optional test identity is an explicitly requested same-package
+// variant. Generated-header callers continue rejecting every test role.
+func captureTypedSourceLoadGuard(ctx context.Context, pkgs []*packages.Package, allowedTests map[string]bool) (*generatedHeaderLoadGuard, error) {
 	guard := &generatedHeaderLoadGuard{Packages: make(map[string]string), Sources: make(map[string]string)}
 	var captureErr error
 	packages.Visit(pkgs, func(pkg *packages.Package) bool {
@@ -51,7 +57,7 @@ func captureGeneratedHeaderLoadGuard(ctx context.Context, pkgs []*packages.Packa
 		if pkg.PkgPath == "unsafe" {
 			return false // Go's builtin singleton has no source or export file.
 		}
-		if pkg.ID == "" || len(guard.Packages) >= 4096 || len(pkg.EmbedFiles) != 0 || len(pkg.EmbedPatterns) != 0 || isTestVariantPackage(pkg) {
+		if pkg.ID == "" || len(guard.Packages) >= 4096 || len(pkg.EmbedFiles) != 0 || len(pkg.EmbedPatterns) != 0 || isTestVariantPackage(pkg) && !allowedTests[pkg.ID] {
 			captureErr = fmt.Errorf("generated-header query has an unbound embed/test role or exceeds its package bound")
 			return false
 		}

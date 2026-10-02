@@ -26,8 +26,9 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	}
 	result.Source.Revision = ""
 	result.Provenance = &discoveryCorpusProvenance{
-		GoVersion:    original.Provenance.GoVersion,
-		TranslatorGo: original.Provenance.TranslatorGo,
+		SignatureSourceProtocol: original.Provenance.SignatureSourceProtocol,
+		GoVersion:               original.Provenance.GoVersion,
+		TranslatorGo:            original.Provenance.TranslatorGo,
 		// Each original already matched the anchored LLVM 22.x.y identity
 		// rule. Only the cross-host contract discards patch differences.
 		LLVMVersion: "22",
@@ -194,6 +195,19 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		for _, proof := range candidate.FeatureConsumption {
+			testDigests := make(map[string]string)
+			for index := range proof.TestDeclarations {
+				test := &proof.TestDeclarations[index]
+				originalDigest := gotoolprofile.TestDeclarationSHA256(*test)
+				if err := replaceID(&test.ProfileID); err != nil {
+					return result, err
+				}
+				test.DriverSHA256, test.CompileToolSHA256, test.ExportSHA256 = "", "", ""
+				for imported := range test.Imports {
+					test.Imports[imported].ExportSHA256 = ""
+				}
+				testDigests[originalDigest] = gotoolprofile.TestDeclarationSHA256(*test)
+			}
 			if err := projectMetadata(proof.GeneratedHeaders); err != nil {
 				return result, err
 			}
@@ -209,6 +223,16 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 				proof.Outputs[index].IR, proof.Outputs[index].Object = "", ""
 			}
 			for index := range proof.CPP {
+				for signature := range proof.CPP[index].Signatures {
+					source := &proof.CPP[index].Signatures[signature]
+					if source.TestProofSHA256 != "" {
+						projected, found := testDigests[source.TestProofSHA256]
+						if !found {
+							return result, fmt.Errorf("semantic test declaration has an unbound physical witness")
+						}
+						source.TestProofSHA256 = projected
+					}
+				}
 				if empty := proof.CPP[index].EmptyAssembly; empty != nil {
 					if err := replaceID(&empty.ProfileID); err != nil {
 						return result, err

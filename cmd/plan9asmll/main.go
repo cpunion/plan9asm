@@ -666,6 +666,14 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if err != nil {
 		return fmt.Errorf("infer signatures: %w", err)
 	}
+	if cppProof != nil {
+		sources, err := ccfg.Feature.bindSignatureSources(pkg, file, t.AsmFile, resolve, goarch, sigs, declaredArgSizes)
+		if err != nil {
+			return fmt.Errorf("authenticate signature sources: %w", err)
+		}
+		ccfg.Feature.Proof.CPP[len(ccfg.Feature.Proof.CPP)-1].Signatures = sources
+		ccfg.Feature.refreshTestDeclarationReferences()
+	}
 	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {
 		return fmt.Errorf("target applicability: %w", err)
 	}

@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 type discoverySourceIdentity struct {
@@ -22,16 +24,17 @@ type discoverySourceIdentity struct {
 // Keep this value comparable: every shard must describe the same inputs,
 // including the actual translator binary, not merely the same candidate set.
 type discoveryCorpusProvenance struct {
-	Source             discoverySourceIdentity `json:"source"`
-	LedgerSHA256       string                  `json:"ledger_sha256"`
-	TranslatorSHA256   string                  `json:"translator_sha256"`
-	TranslatorRevision string                  `json:"translator_revision"`
-	TranslatorModified bool                    `json:"translator_modified"`
-	TranslatorGo       string                  `json:"translator_go_version"`
-	GoVersion          string                  `json:"go_version"`
-	LLVMVersion        string                  `json:"llvm_version"`
-	LLCBinarySHA256    string                  `json:"llc_binary_sha256"`
-	Invalidated        string                  `json:"invalidated,omitempty"`
+	SignatureSourceProtocol string                  `json:"signature_source_protocol,omitempty"`
+	Source                  discoverySourceIdentity `json:"source"`
+	LedgerSHA256            string                  `json:"ledger_sha256"`
+	TranslatorSHA256        string                  `json:"translator_sha256"`
+	TranslatorRevision      string                  `json:"translator_revision"`
+	TranslatorModified      bool                    `json:"translator_modified"`
+	TranslatorGo            string                  `json:"translator_go_version"`
+	GoVersion               string                  `json:"go_version"`
+	LLVMVersion             string                  `json:"llvm_version"`
+	LLCBinarySHA256         string                  `json:"llc_binary_sha256"`
+	Invalidated             string                  `json:"invalidated,omitempty"`
 }
 
 var (
@@ -203,6 +206,7 @@ func discoveryBinaryFingerprint(path string) (string, error) {
 
 func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 	var p discoveryCorpusProvenance
+	p.SignatureSourceProtocol = gotoolprofile.SignatureSourceProtocol
 	var err error
 	p.Source, err = collectDiscoverySource(cfg.RepoRoot)
 	if err != nil {
@@ -276,7 +280,8 @@ func readDiscoveryGoVersion() (string, error) {
 }
 
 func validateDiscoveryProvenance(p discoveryCorpusProvenance, source discoverySourceIdentity, ledgerSHA string) error {
-	if !discoveryRevisionPattern.MatchString(p.Source.Revision) || !discoverySHA256Pattern.MatchString(p.Source.SHA256) ||
+	if p.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol ||
+		!discoveryRevisionPattern.MatchString(p.Source.Revision) || !discoverySHA256Pattern.MatchString(p.Source.SHA256) ||
 		!discoverySHA256Pattern.MatchString(p.LedgerSHA256) || !discoverySHA256Pattern.MatchString(p.TranslatorSHA256) ||
 		!discoverySHA256Pattern.MatchString(p.LLCBinarySHA256) ||
 		p.TranslatorRevision != p.Source.Revision || !discoveryGoVersionPattern.MatchString(p.GoVersion) ||

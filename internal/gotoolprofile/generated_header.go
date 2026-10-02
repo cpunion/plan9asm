@@ -193,33 +193,42 @@ func ValidateGeneratedHeader(input *ConsumerInput, proof GeneratedHeaderProof, p
 			return fmt.Errorf("generated-header export differs from the actual ImportMap")
 		}
 		usedImports[imported.ImportPath] = imported.PackagePath
-		packageDir := strings.TrimPrefix(imported.PackagePath, imported.ModulePath)
-		packageDir = strings.TrimPrefix(packageDir, "/")
-		if packageDir == "" {
-			packageDir = "."
-		}
-		if imported.SourceRole == "stdlib" {
-			if imported.ModulePath != "" || imported.Version != "" || imported.SourceModule != "" || imported.SourceVersion != "" || strings.Contains(strings.Split(imported.PackagePath, "/")[0], ".") {
-				return fmt.Errorf("stdlib dependency was relabeled as an external module")
-			}
-		} else {
-			if imported.ModulePath == "" || imported.SourceModule == "" ||
-				imported.PackagePath != imported.ModulePath && !strings.HasPrefix(imported.PackagePath, imported.ModulePath+"/") ||
-				(imported.SourceRole != "module" && imported.SourceRole != "main" && imported.SourceRole != "owned_local_replace" && imported.SourceRole != "version_replace") {
-				return fmt.Errorf("dependency export lacks its actual module/source role")
-			}
-		}
-		for file, digest := range imported.GoSHA256 {
-			if path.Clean(file) != file || file == "." || path.IsAbs(file) || strings.HasPrefix(file, "../") || strings.Contains(file, "\\") || path.Dir(file) != packageDir || !discoverySHA256Pattern.MatchString(digest) {
-				return fmt.Errorf("dependency export has an unsafe or missing source digest")
-			}
-			if imported.ModulePath == input.Module && (imported.Version != input.Version || imported.SourceModule != pkg.SourceModule || imported.SourceVersion != pkg.SourceVersion || imported.SourceRole != pkg.SourceRole || digest != input.Sources[file]) {
-				return fmt.Errorf("same-module dependency export differs from exact pre-load source inputs")
-			}
+		if err := validateImportedSource(input, pkg, imported); err != nil {
+			return err
 		}
 	}
 	if len(usedImports) != len(proof.ImportMap) {
 		return fmt.Errorf("generated header omits actual dependency exports")
+	}
+	return nil
+}
+
+// Generated headers and supplemental test declarations authenticate the same
+// concrete compiler dependency exports and source/module roles.
+func validateImportedSource(input *ConsumerInput, pkg PackageProof, imported ImportExport) error {
+	packageDir := strings.TrimPrefix(imported.PackagePath, imported.ModulePath)
+	packageDir = strings.TrimPrefix(packageDir, "/")
+	if packageDir == "" {
+		packageDir = "."
+	}
+	if imported.SourceRole == "stdlib" {
+		if imported.ModulePath != "" || imported.Version != "" || imported.SourceModule != "" || imported.SourceVersion != "" || strings.Contains(strings.Split(imported.PackagePath, "/")[0], ".") {
+			return fmt.Errorf("stdlib dependency was relabeled as an external module")
+		}
+	} else {
+		if imported.ModulePath == "" || imported.SourceModule == "" ||
+			imported.PackagePath != imported.ModulePath && !strings.HasPrefix(imported.PackagePath, imported.ModulePath+"/") ||
+			(imported.SourceRole != "module" && imported.SourceRole != "main" && imported.SourceRole != "owned_local_replace" && imported.SourceRole != "version_replace") {
+			return fmt.Errorf("dependency export lacks its actual module/source role")
+		}
+	}
+	for file, digest := range imported.GoSHA256 {
+		if path.Clean(file) != file || file == "." || path.IsAbs(file) || strings.HasPrefix(file, "../") || strings.Contains(file, "\\") || path.Dir(file) != packageDir || !discoverySHA256Pattern.MatchString(digest) {
+			return fmt.Errorf("dependency export has an unsafe or missing source digest")
+		}
+		if imported.ModulePath == input.Module && (imported.Version != input.Version || imported.SourceModule != pkg.SourceModule || imported.SourceVersion != pkg.SourceVersion || imported.SourceRole != pkg.SourceRole || digest != input.Sources[file]) {
+			return fmt.Errorf("same-module dependency export differs from exact pre-load source inputs")
+		}
 	}
 	return nil
 }

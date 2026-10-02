@@ -45,6 +45,9 @@ func ValidateSelectionWithABI(input *ConsumerInput, proof *SelectionProof, tags 
 			return fmt.Errorf("actual generated header was compiled from a different package selection")
 		}
 	}
+	if err := ValidateSignatureSources(input, proof, tags); err != nil {
+		return err
+	}
 	return validateAssemblyConsumption(input, proof, selectedFiles, filePackages, requireObject, abi)
 }
 

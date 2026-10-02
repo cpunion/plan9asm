@@ -104,12 +104,13 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 	// Synthetic object hashes exercise offline accounting, not LLVM/runtime
 	// semantics; the separate actual compiler fixture covers real Go/LLVM objects.
 	result.FeatureConsumption = []*gotoolprofile.SelectionProof{{
-		Protocol: gotoolprofile.ConsumerProtocol, ProfileID: selected.ID,
+		SignatureSourceProtocol: gotoolprofile.SignatureSourceProtocol,
+		Protocol:                gotoolprofile.ConsumerProtocol, ProfileID: selected.ID,
 		Packages: []gotoolprofile.PackageProof{{PackagePath: candidate.Module, ModulePath: candidate.Module, ModuleVersion: candidate.Version,
 			SourceModule: candidate.Module, SourceVersion: candidate.Version, SourceRole: "module",
 			GoFiles: []string{"vector.go"}, CompiledGoFiles: []string{"vector.go"}, SFiles: candidate.AsmFiles, Macros: macros,
 			SourceSHA256: map[string]string{"vector.go": input.Sources["vector.go"], "vector_amd64.s": input.Sources["vector_amd64.s"]}}},
-		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", Emission: "assembly", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}}},
+		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", Emission: "assembly", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}, Signatures: []gotoolprofile.SignatureSource{{Symbol: candidate.Module + ".probe", Role: "ordinary_decl", LayoutSHA256: strings.Repeat("5", 64)}}}},
 		Outputs: []gotoolprofile.OutputProof{{File: "vector_amd64.s", Part: "vector_amd64.s.ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64)}},
 	}}
 	if err := validateOrdinaryProfileResult(result, plan.Targets, plan.GoVersion); err != nil {
@@ -123,6 +124,9 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 		t.Fatal("schema 9 was allowed to relabel profile-aware compiler evidence")
 	}
 	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"missing source protocol":      func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.SignatureSourceProtocol = "" },
+		"missing consumer protocol":    func(result *discoveryCorpusResult) { result.FeatureConsumption[0].SignatureSourceProtocol = "" },
+		"missing consumed signatures":  func(result *discoveryCorpusResult) { result.FeatureConsumption[0].CPP[0].Signatures = nil },
 		"old relabel missing profiles": func(result *discoveryCorpusResult) { result.FeatureProfiles = nil },
 		"missing shared inventory":     func(result *discoveryCorpusResult) { result.featureInventory = nil },
 		"omitted execution":            func(result *discoveryCorpusResult) { result.BuildConfigurations = nil },

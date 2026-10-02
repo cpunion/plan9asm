@@ -24,16 +24,18 @@ type featureInput = gotoolprofile.ConsumerInput
 // A consumer is populated only after reobserving the actual driver and its
 // finite marker package. Supplying JSON alone does not create this proof.
 type featureConsumer struct {
-	ID             string
-	Observed       *gotoolprofile.Observation
-	Root           string
-	Env            []string
-	Context        context.Context
-	Input          *featureInput
-	Dir            string
-	WorkDir        string
-	Proof          *featureSelectionProof
-	GeneratedGuard map[string]string
+	ID                        string
+	Observed                  *gotoolprofile.Observation
+	Root                      string
+	Env                       []string
+	Context                   context.Context
+	Input                     *featureInput
+	Dir                       string
+	WorkDir                   string
+	Proof                     *featureSelectionProof
+	GeneratedGuard            map[string]string
+	TestDeclarationPackages   map[string]*packages.Package
+	TestDeclarationCandidates map[string]map[string]error
 }
 
 type featureSelectionProof = gotoolprofile.SelectionProof
@@ -98,8 +100,9 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 		Input: &input, Dir: dir, WorkDir: workDir,
 		Proof: &featureSelectionProof{
 			Protocol: featureInputProtocol, ProfileID: input.ID,
-			CustomTags:         append([]string(nil), tags...),
-			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
+			SignatureSourceProtocol: input.SignatureSourceProtocol,
+			CustomTags:              append([]string(nil), tags...),
+			RegisteredAsmFiles:      append([]string(nil), input.RegisteredAsmFiles...),
 		},
 	}
 	if err := consumer.verifySources(); err != nil {
