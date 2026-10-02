@@ -157,9 +157,12 @@ func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir stri
 		}
 		input := ordinarySelectionSource{File: file, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
 		if strings.HasSuffix(file, ".go") {
-			parsed, err := parser.ParseFile(token.NewFileSet(), file, data, parser.PackageClauseOnly)
+			_, err := parser.ParseFile(token.NewFileSet(), file, data, parser.PackageClauseOnly)
 			if err == nil {
-				input.Header = string(data[:int(parsed.Name.End())-1]) + "\n"
+				input.Header, err = discoveryGoSelectionHeader(file, data)
+				if err != nil {
+					return nil, err
+				}
 			} else {
 				// Invalid package clauses fail before declarations. Retain a
 				// bounded actual prefix and independently replay that rejection.

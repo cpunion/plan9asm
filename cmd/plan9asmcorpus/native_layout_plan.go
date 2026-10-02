@@ -82,11 +82,11 @@ func nativeLayoutSourceInputFromBytes(file string, data []byte) (nativeLayoutSou
 	digest := sha256.Sum256(data)
 	input := nativeLayoutSourceInput{File: file, SHA256: hex.EncodeToString(digest[:])}
 	if strings.HasSuffix(file, ".go") {
-		parsed, err := parser.ParseFile(token.NewFileSet(), file, data, parser.PackageClauseOnly)
+		header, err := discoveryGoSelectionHeader(file, data)
 		if err != nil {
 			return input, err
 		}
-		input.Header = string(data[:int(parsed.Name.End())-1]) + "\n"
+		input.Header = header
 	} else if strings.HasSuffix(file, ".s") {
 		// Preserve the original leading comments and blank-line placement, not
 		// just extracted expressions: Go's legacy +build rules depend on both.

@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"go/build"
 	"go/build/constraint"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -34,6 +37,67 @@ func discoveryPairTags(asmTags, goTags, customTags []string) []string {
 	return tags
 }
 
+// MatchFile checks filenames and directives, but unlike ImportDir it does not
+// exclude a Go file's implicit cgo requirement. Use original imports for that
+// last check, including when OpenFile replays captured source offline.
+func discoveryGoFileMatches(ctx build.Context, dir, goFile string) (bool, error) {
+	matches, err := ctx.MatchFile(dir, goFile)
+	if err != nil || !matches || ctx.CgoEnabled {
+		return matches, err
+	}
+	file := filepath.Join(dir, goFile)
+	open := func(name string) (io.ReadCloser, error) { return os.Open(name) }
+	if ctx.OpenFile != nil {
+		open = ctx.OpenFile
+	}
+	reader, err := open(file)
+	if err != nil {
+		return false, err
+	}
+	const maxGoSelectionBytes = 8 << 20
+	data, readErr := io.ReadAll(io.LimitReader(reader, maxGoSelectionBytes+1))
+	closeErr := reader.Close()
+	if readErr != nil {
+		return false, readErr
+	}
+	if closeErr != nil {
+		return false, closeErr
+	}
+	if len(data) > maxGoSelectionBytes {
+		return false, fmt.Errorf("Go import-selection input exceeds %d bytes: %s", maxGoSelectionBytes, file)
+	}
+	parsed, err := parser.ParseFile(token.NewFileSet(), file, data, parser.ImportsOnly)
+	if err != nil {
+		return false, fmt.Errorf("parse original Go imports %s: %w", file, err)
+	}
+	for _, spec := range parsed.Imports {
+		importPath, err := strconv.Unquote(spec.Path.Value)
+		if err != nil {
+			return false, fmt.Errorf("invalid original Go import %s: %w", file, err)
+		}
+		if importPath == "C" {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// Preserve the original prefix through its last complete import declaration.
+// A package-only witness cannot replay ImportDir's implicit cgo exclusion.
+func discoveryGoSelectionHeader(file string, data []byte) (string, error) {
+	parsed, err := parser.ParseFile(token.NewFileSet(), file, data, parser.ImportsOnly)
+	if err != nil {
+		return "", fmt.Errorf("capture original Go import selection %s: %w", file, err)
+	}
+	end := parsed.Name.End()
+	for _, declaration := range parsed.Decls {
+		if declaration.End() > end {
+			end = declaration.End()
+		}
+	}
+	return string(data[:int(end)-1]) + "\n", nil
+}
+
 func discoveryTagSetMatches(ctx build.Context, dir, asmFile, goFile string, tags []string) (bool, error) {
 	ctx.BuildTags = tags
 	asmMatches, err := ctx.MatchFile(dir, asmFile)
@@ -43,7 +107,7 @@ func discoveryTagSetMatches(ctx build.Context, dir, asmFile, goFile string, tags
 	if !asmMatches {
 		return false, nil
 	}
-	goMatches, err := ctx.MatchFile(dir, goFile)
+	goMatches, err := discoveryGoFileMatches(ctx, dir, goFile)
 	if err != nil {
 		return false, fmt.Errorf("match Go file %s for %s/%s with tags %v: %w", goFile, ctx.GOOS, ctx.GOARCH, tags, err)
 	}
@@ -71,7 +135,7 @@ func findDiscoveryBuildTags(
 	}
 	if asmMatches {
 		for _, goFile := range goFiles {
-			matches, err := ctx.MatchFile(dir, goFile)
+			matches, err := discoveryGoFileMatches(ctx, dir, goFile)
 			if err != nil {
 				return nil, false, fmt.Errorf("match Go file %s for %s/%s without custom tags: %w", goFile, ctx.GOOS, ctx.GOARCH, err)
 			}
