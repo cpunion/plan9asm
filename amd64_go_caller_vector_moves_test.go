@@ -95,8 +95,9 @@ func TestX86GoCallerVectorMovesDoNotWashPointersOrInventInitializedBytes(t *test
 		{"unknown input base", "VMOVSS (BX),X0\nVMOVSS X0,(DX)", "float32"},
 		{"mask input write", "KMOVW AX,K1\nKMOVW K1,(DI)", "uint16"},
 		{"mask wide result", "KMOVQ AX,K1\nKMOVQ K1,(DX)", "uint32"},
-		{"unverified legacy literal", "MOVSS $1.25,X0\nMOVSS X0,(DX)", "float32"},
-		{"unverified vector literal", "VMOVSS $1.25,X0\nVMOVSS X0,(DX)", "float32"},
+		{"literal result one byte overlap", "MOVSS $1.25,X0\nMOVSS X0,1(DX)", "float32"},
+		{"literal unknown mask", "VMOVSS.Z $1.25,K1,X0\nVMOVSS X0,(DX)", "float32"},
+		{"literal mask from pointer", "KMOVW DI,K1\nVMOVSS.Z $1.25,K1,X0\nVMOVSS X0,(DX)", "float32"},
 	} {
 		t.Run(example.name, func(t *testing.T) {
 			source := strings.ReplaceAll(x86CallerFixtureSource, "float32", example.result)
@@ -134,7 +135,7 @@ func TestX86GoCallerVectorMemoryCertificatesBindMaskWidthAndEveryOperand(t *test
 					continue
 				}
 				found = true
-				for _, change := range []string{"opcode", "source", "address", "width", "direction", "mask"} {
+				for _, change := range []string{"opcode", "source", "address", "address-bits", "width", "direction", "mask"} {
 					mutated := instruction
 					mutated.Args = append([]Operand(nil), instruction.Args...)
 					mutated.x86CallerMemory = map[int]x86CallerMemoryAccess{index: access}
@@ -145,6 +146,8 @@ func TestX86GoCallerVectorMemoryCertificatesBindMaskWidthAndEveryOperand(t *test
 						mutated.Args[0].Reg = "X3"
 					case "address":
 						mutated.Args[index].Mem.Off++
+					case "address-bits":
+						mutated.x86AddressBits = 32
 					case "width":
 						access.width++
 						mutated.x86CallerMemory[index] = access

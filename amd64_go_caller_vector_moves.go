@@ -10,7 +10,7 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	// The shared lowerer also models raw-only FP16 moves. Their caller-bank
 	// permission needs its own complete source/runtime family, not inheritance
 	// from the reviewed Go-named single/double-precision forms.
-	return recognized && err == nil && !form.spec.rawOnly && !form.literal
+	return recognized && err == nil && !form.spec.rawOnly
 }
 
 func x86CloneCallerVectorState(vectors map[Reg]uint64, masks map[Reg]bool) (map[Reg]uint64, map[Reg]bool) {
@@ -45,7 +45,7 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 		return x86CallerMaskMoveStep(ins, state, proof)
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(*ins, "amd64")
-	if !recognized || err != nil || form.spec.rawOnly || form.literal || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
+	if !recognized || err != nil || form.spec.rawOnly || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false
 	}
 	width := int64(form.spec.bits / 8)
@@ -61,8 +61,8 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
 	old := state.vectors[destination]
-	if form.spec.legacy {
-		if form.memory >= 0 {
+	if form.spec.legacy || form.legacyZero {
+		if form.memory >= 0 || form.literal {
 			// A legacy memory load zeroes the rest of XMM but preserves the
 			// upper Y/Z aliases. Register copies preserve the old upper XMM.
 			state.vectors[destination] = old | x86CallerVectorByteMask(16)
@@ -73,7 +73,7 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 		return true
 	}
 	known := ^uint64(0)
-	if form.memory < 0 {
+	if form.memory < 0 && !form.literal {
 		low := state.vectors[x86CallerVectorRoot(ins.Args[form.low].Reg)] & lowMask
 		upperMask := x86CallerVectorByteMask(16) &^ lowMask
 		upper := state.vectors[x86CallerVectorRoot(ins.Args[form.upper].Reg)] & upperMask

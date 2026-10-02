@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -1232,6 +1233,13 @@ func (c *amd64Ctx) evalF32(op Operand) (string, error) {
 		return c.loadXLowF32(op.Reg)
 	case OpImm:
 		bits := c.newTmp()
+		if op.ImmIsFloat {
+			// The parser retains the original float64 constant. Go's
+			// Float32Sym rounds its numeric value, not its low 32 bits.
+			rounded := math.Float32bits(float32(math.Float64frombits(uint64(op.Imm))))
+			fmt.Fprintf(c.b, "  %%%s = bitcast i32 %d to float\n", bits, rounded)
+			return "%" + bits, nil
+		}
 		fmt.Fprintf(c.b, "  %%%s = trunc i64 %d to i32\n", bits, op.Imm)
 		value := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %%%s to float\n", value, bits)

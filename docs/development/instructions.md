@@ -97,8 +97,12 @@ Go-table MOVSS/SD, VMOVSS/SD and KMOVB/W/D/Q move forms. It tracks exact
 full-word pointer imports/copies, constant affine offsets and numerically
 initialized GP/SIMD bytes. Mask values must be source-defined, not pointer bits;
 legacy lane preservation and VEX/EVEX merge/zero rules remain distinct.
-Floating-literal frontend rewrites, raw FP16, packed moves and arithmetic need
-separate complete effect families and do not inherit this permission.
+Floating literals follow the actual Go frontend rewrite: original positive
+zero in X0-X15 becomes legacy XORPS, preserving wider aliases; negative zero,
+float32 rounding/underflow and high-register constants follow their pool-memory
+encoding. Integer/unresolved literals and invalid mask/merge forms remain
+rejected. Raw FP16, packed moves and arithmetic need separate complete effect
+families and do not inherit this permission.
 Inputs and local lengths are read-only;
 only the independently fresh scalar result has a bounded write envelope.
 Instruction-local memory certificates bind the entire operands, direction and

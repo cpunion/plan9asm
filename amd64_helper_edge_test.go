@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -1186,7 +1187,7 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		{Op: "ANDNPD", Args: []Operand{{Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X0"}}, Raw: "ANDNPD X1, X0"},
 		{Op: "ORPD", Args: []Operand{{Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X0"}}, Raw: "ORPD X1, X0"},
 		{Op: "XORPS", Args: []Operand{{Kind: OpReg, Reg: "X1"}, {Kind: OpReg, Reg: "X0"}}, Raw: "XORPS X1, X0"},
-		{Op: "MOVSD", Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpReg, Reg: "X0"}}, Raw: "MOVSD $7, X0"},
+		{Op: "MOVSD", Args: []Operand{{Kind: OpImm, Imm: int64(math.Float64bits(7)), ImmIsFloat: true}, {Kind: OpReg, Reg: "X0"}}, Raw: "MOVSD $7.0, X0"},
 		{Op: "MOVSD", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 16}}}, Raw: "MOVSD X0, 16(BX)"},
 		{Op: "MOVSD", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpSym, Sym: "example.f64(SB)"}}, Raw: "MOVSD X0, example.f64(SB)"},
 		{Op: "MOVSD", Args: []Operand{{Kind: OpReg, Reg: "X0"}, {Kind: OpFP, FPOffset: 40}}, Raw: "MOVSD X0, ret+40(FP)"},

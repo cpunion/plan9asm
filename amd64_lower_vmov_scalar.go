@@ -2,6 +2,8 @@ package plan9asm
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -21,6 +23,35 @@ func (c *amd64Ctx) lowerVectorScalarMove(op Op, ins Instr) (ok bool, terminated 
 	form, _, err := amd64ScalarVectorMoveProperties(ins, c.goarch)
 	if err != nil {
 		return true, false, err
+	}
+	if form.literal {
+		if form.legacyZero {
+			// The actual Go encoder emits legacy XORPS, even for a VMOV
+			// spelling. Do not zero the wider Y/Z views as VEX would.
+			var value string
+			if spec.bits == 32 {
+				value, err = c.evalF32(ins.Args[0])
+			} else {
+				value, err = c.evalF64(ins.Args[0])
+			}
+			if err != nil {
+				return true, false, err
+			}
+			return true, false, c.storeLegacyScalarMoveRegister(ins.Args[form.destination].Reg, value, spec.bits, false)
+		}
+		bits := uint64(ins.Args[0].Imm)
+		if spec.bits == 32 {
+			bits = uint64(math.Float32bits(float32(math.Float64frombits(bits))))
+		}
+		mask := ""
+		if form.mask >= 0 {
+			mask, err = c.loadK(ins.Args[form.mask].Reg)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		return true, false, c.storeScalarMoveRegister(ins.Args[form.destination].Reg, spec.bits,
+			strconv.FormatUint(bits, 10), "zeroinitializer", mask, form.zeroing)
 	}
 	if form.upper >= 0 {
 		mask := Operand{}

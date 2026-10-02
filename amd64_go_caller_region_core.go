@@ -385,6 +385,8 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 func x86CallerMemoryCertified(ins Instr, index int) bool {
 	access, found := ins.x86CallerMemory[index]
 	width, write, valid := x86CallerMoveMemoryShape(ins, index)
-	return found && valid && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
+	// Producer memory proofs admit only native/default addressing. A later
+	// address-size override cannot reuse even otherwise identical operands.
+	return found && valid && ins.x86AddressBits == 0 && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
 		access.width == width && width > 0 && access.write == write
 }

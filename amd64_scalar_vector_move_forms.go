@@ -28,7 +28,8 @@ type amd64ScalarVectorMoveForm struct {
 	memory      int // -1 for register-to-register forms
 	memoryWrite bool
 	zeroing     bool
-	literal     bool // existing legacy frontend constant-pool rewrite, not a memory operand
+	literal     bool // frontend constant-pool rewrite, not a user memory operand
+	legacyZero  bool // obj6.progedit rewrites positive zero in X0-X15 to XORPS
 }
 
 // This is operand grammar only. It grants no memory bounds, initialized data,
@@ -62,16 +63,37 @@ func amd64ScalarVectorMoveProperties(ins Instr, goarch string) (amd64ScalarVecto
 		index, _ := amd64ParseXReg(operand.Reg)
 		return index < 16 && (goarch != "386" || index < 8)
 	}
+	if len(ins.Args) >= 2 && ins.Args[0].Kind == OpImm {
+		literal := ins.Args[0]
+		if spec.rawOnly || !literal.ImmIsFloat || literal.ImmRaw != "" || !vector(ins.Args[form.destination]) {
+			return fail()
+		}
+		index, _ := amd64ParseXReg(ins.Args[form.destination].Reg)
+		form.literal, form.legacyZero = true, literal.Imm == 0 && index < 16
+		if goarch == "386" && form.legacyZero && index >= 8 {
+			return fail() // the final legacy XORPS cannot address X8-X15 in mode32
+		}
+		switch len(ins.Args) {
+		case 2:
+			if suffix != "" {
+				return fail()
+			}
+		case 3:
+			// A pool memory source has no register upper-merge source. The
+			// positive-zero rewrite retains RestArgs/Scond, which makes a
+			// masked low-register XORPS invalid in Go's final optab.
+			if spec.legacy || form.legacyZero || !amd64NonzeroKOperand(ins.Args[1]) {
+				return fail()
+			}
+			form.mask = 1
+		default:
+			return fail()
+		}
+		return form, true, nil
+	}
 	if spec.legacy {
 		if suffix != "" || len(ins.Args) != 2 {
 			return fail()
-		}
-		if ins.Args[0].Kind == OpImm && ins.Args[0].ImmIsFloat && ins.Args[0].ImmRaw == "" && vector(ins.Args[1]) {
-			// obj6.progedit rewrites floating constants before yxmov matching.
-			// Preserve the existing lowerer entry; caller permission remains
-			// closed until the separate literal-rewrite family is proved.
-			form.literal = true
-			return form, true, nil
 		}
 		if vector(ins.Args[0]) && (vector(ins.Args[1]) || isAMD64MemoryOperand(ins.Args[1])) {
 			if isAMD64MemoryOperand(ins.Args[1]) {
