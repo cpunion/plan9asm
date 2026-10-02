@@ -25,6 +25,18 @@ type discoveryCPPBranchState struct{ OuterActive, Then bool }
 
 const discoveryCPPDirectiveLimit = 1024
 
+// Only an unknown first control can take the narrow original-source assembler
+// rejection route. Includes, conditional branches, expansion and resource
+// errors retain their existing hard-failure behavior.
+type discoveryUnsupportedCPPError struct {
+	File, SHA256, Directive string
+	Line                    int
+}
+
+func (err *discoveryUnsupportedCPPError) Error() string {
+	return fmt.Sprintf("CPP %s:%d: unsupported Go directive %s (not N/A)", err.File, err.Line, err.Directive)
+}
+
 func discoveryCPPConditionsFromBytes(file string, data []byte) (discoveryCPPSource, error) {
 	input := discoveryCPPSource{File: file, SHA256: discoveryFeatureBytesSHA256(data), Directives: []discoveryCPPDirective{}}
 	if len(data) > 64<<20 {
@@ -121,6 +133,9 @@ func discoveryCPPConditionsFromBytes(file string, data []byte) (discoveryCPPSour
 				return input, fmt.Errorf("CPP %s:%d: unknown line registration", file, directive.Line)
 			}
 		default:
+			if len(input.Directives) == 0 && scanErr == nil {
+				return input, &discoveryUnsupportedCPPError{File: file, SHA256: input.SHA256, Directive: directive.Kind, Line: directive.Line}
+			}
 			return input, fmt.Errorf("CPP %s:%d: unsupported Go directive %s (not N/A)", file, directive.Line, directive.Kind)
 		}
 		// This records original controls, not translation-unit acceptance.

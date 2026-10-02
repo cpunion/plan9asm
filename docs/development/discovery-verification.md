@@ -284,6 +284,17 @@ inventory. Missing scope dimensions or consumer proofs fail closed. Unknown
 CPU macros and experiment predicates
 without an actual package-role binding fail closed. Reachable predicate sides
 do not by themselves prove complete operand-form or runtime coverage.
+An unknown first CPP control may be excluded only when the current Go assembler
+rejects that same original file, physical line and directive under every selected
+target/profile/custom-tag scope. `pre_cpp_rejections` retains the bounded original
+control prefix (64 KiB), complete actual package Go/assembly source roles, CPU
+definitions, observed tool identity and exact assembler invocation/diagnostic.
+Readers replay the prefix and the complete excluded-scope set; producers also
+bind its bytes to the original ZIP and guard them through final checks. Earlier
+includes, conditionals, definitions, lexical errors, missing generated constants
+and infrastructure failures cannot use this route. Other eligible files still
+require their normal CPP and compiler/object evidence. This is target-scoped
+source rejection, not translation success or a module-wide exception.
 Every package-local custom-tag configuration also includes its shared assembly
 files selected by Go MatchFile. A file tested with baseline declarations is not
 evidence for declarations selected by another tag configuration. Do not spread

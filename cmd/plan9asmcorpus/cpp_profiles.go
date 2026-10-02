@@ -14,6 +14,14 @@ import (
 // Only reachable branch sides require profiles; inactive outer conditions do
 // not create a claim of branch execution or full instruction-form coverage.
 func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest) ([]discoveryFeatureProfileRequest, error) {
+	for _, rejection := range plan.PreCPPRejections {
+		if rejection.File == asmFile {
+			// An unknown first control is unconditional and rejects before
+			// any CPP feature branch. All final selected scopes still need
+			// their own actual assembler and package-role proof.
+			return nil, nil
+		}
+	}
 	if plan.CPPInputs == nil {
 		return nil, nil
 	}

@@ -42,22 +42,27 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if !equalOrdinaryProfileDecisions(decisions, plan.ProfileDecisions) {
 		return fmt.Errorf("source-required actual profile decisions differ from original headers")
 	}
+	preRejected, err := validateDiscoveryPreCPPRejections(plan, profiles, eligible)
+	if err != nil {
+		return err
+	}
+	remaining := preCPPRemainingScopes(eligible, preRejected)
 	if err := validateDiscoveryGeneratedHeaderQueries(plan, profiles, eligible); err != nil {
 		return err
 	}
-	if len(eligible) != 0 && plan.CPPInputs == nil {
+	if len(remaining) != 0 && plan.CPPInputs == nil {
 		return fmt.Errorf("selected ordinary profile lacks original CPP source/registration inputs")
 	}
 	if plan.CPPInputs != nil {
 		files := make(map[string]bool)
-		for scope := range eligible {
+		for scope := range remaining {
 			files[scope.File] = true
 		}
 		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, sortedDiscoverySet(files)); err != nil {
 			return err
 		}
 	}
-	executed, err := ordinaryProfileConfigurationKeys(result.BuildConfigurations, eligible)
+	executed, err := ordinaryProfileConfigurationKeys(result.BuildConfigurations, remaining)
 	if err != nil {
 		return err
 	}
@@ -86,6 +91,23 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 				valid := eligible[key] && item.Kind != discoverySourceNotApplicableNoGoPackage || noPackage[key] && item.Kind == discoverySourceNotApplicableNoGoPackage
 				if !valid || rejected[key] || executed[key] {
 					return fmt.Errorf("ordinary source diagnostic claims a missing/duplicate/executed profile scope: %v", key)
+				}
+				if preRejected[key] {
+					for _, proof := range plan.PreCPPRejections {
+						if proof.scope() != key {
+							continue
+						}
+						if item.Kind != nativeLayoutGoAssemblerTarget {
+							return fmt.Errorf("pre-CPP scope was relabeled as a different source exclusion")
+						}
+						if result.sourceDiagnosticsCompacted {
+							if !reflect.DeepEqual(item.Diagnostic, captureDiscoverySourceDiagnostic(proof.Reason)) {
+								return fmt.Errorf("compact pre-CPP diagnostic differs from actual rejected source")
+							}
+						} else if item.Reason != proof.Reason {
+							return fmt.Errorf("pre-CPP scope diagnostic differs from actual assembler proof")
+						}
+					}
 				}
 				rejected[key] = true
 			}

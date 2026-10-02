@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -80,9 +81,37 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 		// unknown presence conservatively retains legal CPU proposals here.
 		stable := false
 		for iteration := 0; iteration < 8; iteration++ {
-			plan.CPPInputs, err = captureDiscoveryDeferredCPPInputs(plan, download.Dir, goRoot, files, ctx)
+			preRejected, err := captureDiscoveryPreCPPRejections(ctx, plan, profiles, eligible, download, dir, goRoot, binary, env)
 			if err != nil {
 				return nil, nil, nil, nil, "", err
+			}
+			files = ordinaryProfileEligibleCPPFiles(preCPPRemainingScopes(eligible, preRejected))
+			if len(files) == 0 {
+				plan.CPPInputs, stable = nil, true
+				break
+			}
+			for attempt := 0; ; attempt++ {
+				plan.CPPInputs, err = captureDiscoveryDeferredCPPInputs(plan, download.Dir, goRoot, files, ctx)
+				if err == nil {
+					break
+				}
+				var unsupported *discoveryUnsupportedCPPError
+				if attempt >= 512 || !errors.As(err, &unsupported) || !containsTargetFeature(files, unsupported.File) {
+					return nil, nil, nil, nil, "", err
+				}
+				preRejected, err = captureDiscoveryPreCPPRejections(ctx, plan, profiles, eligible, download, dir, goRoot, binary, env, unsupported.File)
+				if err != nil {
+					return nil, nil, nil, nil, "", err
+				}
+				files = ordinaryProfileEligibleCPPFiles(preCPPRemainingScopes(eligible, preRejected))
+				if len(files) == 0 {
+					plan.CPPInputs = nil
+					break
+				}
+			}
+			if plan.CPPInputs == nil {
+				stable = true
+				break
 			}
 			if err := verifyDiscoveryCPPModuleZIP(plan.CPPInputs, plan, download.Zip); err != nil {
 				return nil, nil, nil, nil, "", err
@@ -95,7 +124,12 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			if err != nil {
 				return nil, nil, nil, nil, "", err
 			}
-			next := ordinaryProfileEligibleCPPFiles(selected)
+			eligible = selected
+			preRejected, err = captureDiscoveryPreCPPRejections(ctx, plan, profiles, eligible, download, dir, goRoot, binary, env)
+			if err != nil {
+				return nil, nil, nil, nil, "", err
+			}
+			next := ordinaryProfileEligibleCPPFiles(preCPPRemainingScopes(selected, preRejected))
 			files, stable, err = ordinaryProfileCPPRegistrationUnion(files, next)
 			if err != nil {
 				return nil, nil, nil, nil, "", err
@@ -112,16 +146,27 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err != nil {
 		return nil, nil, nil, nil, "", err
 	}
+	preRejected, err := validateDiscoveryPreCPPRejections(plan, profiles, eligible)
+	if err != nil {
+		return nil, nil, nil, nil, "", err
+	}
+	remaining := preCPPRemainingScopes(eligible, preRejected)
 	if plan.CPPInputs != nil {
-		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, ordinaryProfileEligibleCPPFiles(eligible)); err != nil {
+		if err := validateDiscoveryCPPInputs(plan.CPPInputs, plan, ordinaryProfileEligibleCPPFiles(remaining)); err != nil {
 			return nil, nil, nil, nil, "", err
 		}
-	} else if len(eligible) != 0 {
+	} else if len(remaining) != 0 {
 		return nil, nil, nil, nil, "", fmt.Errorf("eligible assembly lacks its complete raw CPP registration")
 	}
 	plan.ProfileDecisions = decisions
-	configs := ordinaryProfileConfigurations(eligible)
+	configs := ordinaryProfileConfigurations(remaining)
 	var rejected []discoverySourceNotApplicableItem
+	for _, proof := range plan.PreCPPRejections {
+		rejected = append(rejected, discoverySourceNotApplicableItem{
+			ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: []string{proof.File},
+			Targets: []string{proof.Target}, Kind: nativeLayoutGoAssemblerTarget, Reason: proof.Reason,
+		})
+	}
 	for _, decision := range decisions {
 		if decision.Kind == discoverySourceNotApplicableNoGoPackage {
 			rejected = append(rejected, discoverySourceNotApplicableItem{

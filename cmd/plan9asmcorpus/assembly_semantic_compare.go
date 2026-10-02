@@ -109,6 +109,19 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		if plan := candidate.OrdinarySelectionPlan; plan != nil {
+			for index := range plan.PreCPPRejections {
+				proof := &plan.PreCPPRejections[index]
+				if err := replaceID(&proof.ProfileID); err != nil {
+					return result, err
+				}
+				if err := replaceID(&proof.Package.Macros.FeatureID); err != nil {
+					return result, err
+				}
+				proof.DriverSHA256, proof.AsmToolSHA256 = "", ""
+			}
+			if err := sortSemanticRows(plan.PreCPPRejections); err != nil {
+				return result, err
+			}
 			for index := range plan.GeneratedHeaders {
 				query := &plan.GeneratedHeaders[index]
 				if err := replaceID(&query.ProfileID); err != nil {

@@ -56,6 +56,7 @@ type discoveryOrdinarySelectionPlan struct {
 	ProxyGoMod         *gotoolprofile.ProxyGoModProof  `json:"proxy_go_mod,omitempty"`
 	GeneratedHeaders   []discoveryGeneratedHeaderQuery `json:"generated_headers,omitempty"`
 	GeneratedGoSources map[string]string               `json:"generated_go_sources,omitempty"`
+	PreCPPRejections   []discoveryPreCPPRejection      `json:"pre_cpp_rejections,omitempty"`
 	proxyGoModPath     string
 }
 
