@@ -48,18 +48,42 @@ func (c *arm64Ctx) lowerARM64ScalarMultiply(op Op, ins Instr) (ok bool, terminat
 }
 
 func (c *arm64Ctx) arm64ScalarMultiplyOperands(op Op, ins Instr) (Operand, Operand, Reg, error) {
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
+	inputs, destination, valid := arm64ScalarMultiplyInputs(op, ins)
+	if !valid || len(inputs) != 2 {
 		return Operand{}, Operand{}, "", fmt.Errorf("arm64 %s expects two or three C_ZREG operands: %q", op, ins.Raw)
+	}
+	return inputs[0], inputs[1], destination.Reg, nil
+}
+
+// The complete Go AMUL and AMADD C_ZREG rows. Only the two-operand
+// shorthand reads Rd; three/four-operand forms overwrite it unless an
+// explicit source aliases Rd. Continuation analysis consumes this same
+// grammar, rather than reading every operand of a write-only destination.
+func arm64ScalarMultiplyInputs(op Op, ins Instr) ([]Operand, Operand, bool) {
+	count := 0
+	if _, found := arm64MultiplyAccumulateOps[op]; found {
+		count = 4
+	} else {
+		switch op {
+		case "MUL", "MULW", "MNEG", "MNEGW", "SMULL", "UMULL", "SMNEGL", "UMNEGL", "SMULH", "UMULH":
+			if len(ins.Args) == 2 || len(ins.Args) == 3 {
+				count = len(ins.Args)
+			}
+		}
+	}
+	if count == 0 || len(ins.Args) != count || strings.ToUpper(string(ins.Op)) != string(op) {
+		return nil, Operand{}, false
 	}
 	for _, operand := range ins.Args {
 		if !arm64ScalarMultiplyRegister(operand) {
-			return Operand{}, Operand{}, "", fmt.Errorf("arm64 %s expects two or three C_ZREG operands: %q", op, ins.Raw)
+			return nil, Operand{}, false
 		}
 	}
-	if len(ins.Args) == 2 {
-		return ins.Args[0], ins.Args[1], ins.Args[1].Reg, nil
+	inputs := ins.Args[:count-1]
+	if count == 2 {
+		inputs = ins.Args // The destination is the implicit second multiplicand.
 	}
-	return ins.Args[0], ins.Args[1], ins.Args[2].Reg, nil
+	return inputs, ins.Args[count-1], true
 }
 
 func arm64ScalarMultiplyRegister(operand Operand) bool {

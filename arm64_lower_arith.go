@@ -735,8 +735,8 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, c.storeReg(ins.Args[1].Reg, "%"+t)
 
 	case "MULW":
-		if len(ins.Args) != 2 && len(ins.Args) != 3 {
-			return true, false, fmt.Errorf("arm64 MULW expects 2 or 3 operands: %q", ins.Raw)
+		if _, _, valid := arm64ScalarMultiplyInputs(op, ins); !valid {
+			return true, false, fmt.Errorf("arm64 MULW expects two or three C_ZREG operands: %q", ins.Raw)
 		}
 		a, err := c.eval32(ins.Args[0])
 		if err != nil {
@@ -768,8 +768,8 @@ func (c *arm64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 
 	case "MUL":
 		// MUL a, dst or MUL a, b, dst
-		if len(ins.Args) != 2 && len(ins.Args) != 3 {
-			return true, false, fmt.Errorf("arm64 MUL expects 2 or 3 operands: %q", ins.Raw)
+		if _, _, valid := arm64ScalarMultiplyInputs(op, ins); !valid {
+			return true, false, fmt.Errorf("arm64 MUL expects two or three C_ZREG operands: %q", ins.Raw)
 		}
 		var a, bval string
 		var dst Reg

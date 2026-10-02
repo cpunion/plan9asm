@@ -726,6 +726,17 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 	if state.transferScalarAtomicStore(ins, op) {
 		return
 	}
+	if inputs, destination, valid := arm64ScalarMultiplyInputs(op, ins); valid {
+		value := arm64ControlExternal()
+		for _, input := range inputs {
+			value = arm64ControlUnion(value, arm64ControlLabels(state.source(input, false)))
+		}
+		if len(arm64ControlLabels(value)) != 0 {
+			value["code-derived:"] = true // Multiplication is not a pure PC copy.
+		}
+		state.write(destination, value, false)
+		return
+	}
 	if op == "ADR" && len(ins.Args) == 2 {
 		if target, ok := arm64BranchTarget(ins.Args[0]); ok && data[target] == "" {
 			state.write(ins.Args[1], arm64ControlValue{"label:" + target: true}, false)

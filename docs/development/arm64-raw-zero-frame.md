@@ -27,3 +27,10 @@ ARM64 native/cross runtime tests compare original Go WORD objects and LLVM22
 against independent numeric/full-canary oracles, including two arithmetic
 helper calls whose effects must actually execute. These fixtures do not prove
 that an entire external module translates.
+
+The complete scalar AMUL/AMADD rows share a typed input selector with control
+analysis. Two operands read the destination; three/four operands do not read
+its stale value unless an explicit source aliases it. Every actual PC input
+retains derived-code taint. The 28-form original-Go/LLVM oracle compares
+independent low/high, signed, long and accumulate arithmetic, all four NZCV
+sentinels, unaligned full canaries and real LR-returning callers.
