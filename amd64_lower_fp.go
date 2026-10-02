@@ -375,7 +375,10 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
 				return true, false, fmt.Errorf("amd64 MOVSD expects X-reg destination: %q", ins.Raw)
 			}
-			return true, false, c.storeXLowF64(ins.Args[1].Reg, v)
+			if ins.Args[0].Kind == OpReg {
+				return true, false, c.storeXLowF64(ins.Args[1].Reg, v)
+			}
+			return true, false, c.storeXLowF64ClearingUpper(ins.Args[1].Reg, v)
 		case OpFP:
 			return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("double"), v)
 		case OpMem:
@@ -794,6 +797,16 @@ func (c *amd64Ctx) storeXLowF64(r Reg, v string) error {
 	t := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", t, v)
 	return c.storeXLowI64(r, "%"+t)
+}
+
+func (c *amd64Ctx) storeXLowF64ClearingUpper(r Reg, v string) error {
+	bits := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast double %s to i64\n", bits, v)
+	inserted := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = insertelement <2 x i64> zeroinitializer, i64 %%%s, i32 0\n", inserted, bits)
+	back := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", back, inserted)
+	return c.storeX(r, "%"+back)
 }
 
 func (c *amd64Ctx) storeXLowF32(r Reg, v string) error {
