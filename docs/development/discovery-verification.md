@@ -363,6 +363,11 @@ package-clause absence, source diagnostics and explicit target ABI evidence.
 it does not prove that `go list -test` cannot select a test-only assembly package.
 Ignored directories and nested modules explicitly identify recursive corpus
 walk boundaries, not a claim that Go cannot build an explicitly named package.
+`go_invalid_package_import_path` separately records Go's `CheckImportPath`
+rejection of an exact module-relative directory, such as a bundled
+`pkg/mod/example.com/library@v1.2.3` cache. Its ZIP-bound directory inventory
+and diagnostic are replayed by the readers. Valid sibling packages remain
+eligible; this does not relax source diagnostics or exclude instructions.
 Raw diagnostics remain in reports; the ledger keeps stable source-skip categories
 and compact selection inputs, never compressed third-party source archives.
 

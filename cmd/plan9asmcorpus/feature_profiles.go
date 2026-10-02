@@ -46,6 +46,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	if plan == nil || len(plan.Targets) != len(baselines) {
 		return nil, fmt.Errorf("incomplete feature profile baselines")
 	}
+	if err := ordinarySelectionPackagePathError(plan.Module, "."); err != nil {
+		return nil, fmt.Errorf("feature profiles require a valid module import path: %w", err)
+	}
 	var requests []discoveryFeatureProfileRequest
 	byKey := make(map[string]int)
 	contents := make(map[string][]byte)
@@ -102,7 +105,8 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			if _, exists := contents[asmFile]; !exists {
 				return nil, fmt.Errorf("missing profile assembly source %s", asmFile)
 			}
-			if discoveryDirIsIgnored(path.Dir(asmFile)) || discoveryFeatureNestedSource(plan, path.Dir(asmFile)) {
+			if discoveryDirIsIgnored(path.Dir(asmFile)) || discoveryFeatureNestedSource(plan, path.Dir(asmFile)) ||
+				ordinarySelectionPackagePathError(plan.Module, path.Dir(asmFile)) != nil {
 				continue
 			}
 			var goFiles []string

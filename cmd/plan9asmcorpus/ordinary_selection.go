@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
 )
 
@@ -29,6 +30,7 @@ const (
 	ordinarySelectionFilename        = "go_filename_target"
 	ordinarySelectionIgnoredFilename = "go_ignored_filename"
 	ordinarySelectionCgoDisabled     = "go_cgo_disabled"
+	ordinarySelectionInvalidPath     = "go_invalid_package_import_path"
 )
 
 // A source-selection proof is not a claim that Go rejects an explicitly named
@@ -389,6 +391,13 @@ func ordinarySelectionIgnoredBoundary(dir string) string {
 	return ""
 }
 
+func ordinarySelectionPackagePathError(modulePath, dir string) error {
+	if dir != "." {
+		modulePath += "/" + dir
+	}
+	return module.CheckImportPath(modulePath)
+}
+
 func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]byte, map[string]map[string]string, error) {
 	sources := make(map[string][]byte)
 	dirs := make(map[string]map[string]string)
@@ -469,6 +478,9 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 	}
 	if !equalDiscoveryStrings(plan.ReleaseTags, releaseTags) {
 		return nil, nil, fmt.Errorf("ordinary release tags differ from Go selection version")
+	}
+	if err := module.CheckImportPath(plan.Module); err != nil {
+		return nil, nil, fmt.Errorf("ordinary selection requires a valid module import path: %w", err)
 	}
 	sources, dirs, err := ordinarySelectionBytes(plan)
 	if err != nil {
@@ -551,6 +563,19 @@ func replayOrdinarySelection(plan *discoveryOrdinarySelectionPlan, asmFiles []st
 		}
 		if boundary != "" {
 			decisions = append(decisions, ordinarySelectionDecision{AsmFiles: []string{file}, Targets: plan.Targets, Kind: kind, Boundary: boundary, Diagnostic: diagnostic})
+			continue
+		}
+		// MatchFile checks filenames and constraints, not importability. Go's
+		// module loader validates the whole import path before package lookup;
+		// archives sometimes contain a nested pkg/mod cache with @version in
+		// its directory names. Replay the same check from ZIP-bound inputs.
+		// Do not weaken concrete diagnostics for real package build failures.
+		if err := ordinarySelectionPackagePathError(plan.Module, dir); err != nil {
+			decisions = append(decisions, ordinarySelectionDecision{
+				AsmFiles: []string{file}, Targets: plan.Targets,
+				Kind: ordinarySelectionInvalidPath, Boundary: dir,
+				Diagnostic: "Go module loader rejects this package import path before compilation: " + err.Error(),
+			})
 			continue
 		}
 		var goFiles []string
