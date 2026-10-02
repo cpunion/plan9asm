@@ -221,6 +221,16 @@ Go-accepted selected-family case to remain lowerable.
 
 ## Semantic and raw-encoding checks
 
+Go's original `reflect.makeFuncStub` and `methodValueCall` have empty source
+declarations but physical dynamic callers; their native TEXT retains
+`ArgsSizeUnknown`. Local outgoing-call storage, the argument-only `argLen`,
+and the GC pointer bitmap cannot bound the complete argument/result frame.
+Keep these failures explicit. A real producer would need the actual function
+type/layout, closure-context register and entry identity, caller/result
+transport, lifetime, and the runtime's dynamic stack maps/`retValid` protocol.
+A manual LLVM carrier fixture or ordinary `func()` signature is not that
+producer and cannot make the default benchmark pass.
+
 The Advanced SIMD SM3 family is WORD-only in Go 1.27. Its exact seven forms
 follow [Arm DDI 0602](https://documentation-service.arm.com/static/67e40f3398aa3c3b6eea6a85)
 and LLVM 22's crypto encoder: PARTW1/PARTW2, SS1 and TT1A/B/TT2A/B, with

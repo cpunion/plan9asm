@@ -111,6 +111,10 @@ func TestReflectDynamicStubNativeObjectsRetainContext(t *testing.T) {
 			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || errors.As(err, &sourceNA) {
 				t.Fatalf("whole original reflect source must retain its real translation failure, not source N/A: %v", err)
 			}
+			if !strings.Contains(err.Error(), "empty Go declaration does not bind a dynamic caller frame") ||
+				!strings.Contains(err.Error(), "TEXT argument size is unspecified") {
+				t.Fatalf("actual-source failure lost its dynamic-entry diagnostic: %v", err)
+			}
 			if _, err := os.Stat(out); !os.IsNotExist(err) {
 				t.Fatalf("failed whole-source translation published an IR artifact: %v", err)
 			}
@@ -123,7 +127,9 @@ func TestReflectDynamicStubNativeObjectsRetainContext(t *testing.T) {
 				false, 0, true, false, true, repoRoot, cfg)
 			if err != nil || report.TotalAsm != 1 || report.Success != 0 || report.NotApplicable != 0 || report.Failed != 1 ||
 				len(report.AsmFiles) != 1 || report.AsmFiles[0] != sourcePath || len(report.Fails) != 1 ||
-				!strings.Contains(report.Fails[0].Err, "bound typed frame storage") || len(report.UnsupportedOps) != 0 {
+				!strings.Contains(report.Fails[0].Err, "bound typed frame storage") ||
+				!strings.Contains(report.Fails[0].Err, "empty Go declaration does not bind a dynamic caller frame") ||
+				len(report.UnsupportedOps) != 0 {
 				t.Fatalf("original dynamic-entry failure must remain a failed file: report=%+v err=%v", report, err)
 			}
 			t.Logf("actual whole-file report linux/%s: total=1 success=0 failed=1 source-N/A=0; error=%s", goarch, report.Fails[0].Err)

@@ -714,13 +714,15 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 				partTask.OutLL = fmt.Sprintf("%s.part-%04d.ll", stem, chunk)
 			}
 			if err := translateAndCompileModule(&part, triple, goarch, partTask, annotate, ccfg, resolve, sigs); err != nil {
+				err = annotateUnboundCallerFrame(&part, resolve, sigs, declaredArgSizes, err)
 				return fmt.Errorf("functions %d-%d/%d: %w", first+1, last, len(file.Funcs), err)
 			}
 			first = last
 		}
 		return nil
 	}
-	return translateAndCompileModule(file, triple, goarch, t, annotate, ccfg, resolve, sigs)
+	err = translateAndCompileModule(file, triple, goarch, t, annotate, ccfg, resolve, sigs)
+	return annotateUnboundCallerFrame(file, resolve, sigs, declaredArgSizes, err)
 }
 
 func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asmTask, annotate bool,
