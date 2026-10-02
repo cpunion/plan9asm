@@ -251,6 +251,10 @@ checks: exact ZIP-bound assembly/header SHA-256, registered CPP controls and
 Go's fixed package-directory/tool-include search. Go export/vet checks and
 translation recheck those inputs; changed nested headers, newly preferred
 headers and source-proof errors fail, even alongside a native source error.
+Shared headers outside selected Go package directories retain their separate
+ZIP-bound CPP resource hashes. Their bytes may be consumed without inventing
+Go package membership; actual selected Go/assembly sources still require that
+membership proof, and conflicting resource/source snapshots fail closed.
 Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical

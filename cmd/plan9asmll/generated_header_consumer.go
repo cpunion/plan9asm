@@ -93,7 +93,7 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 		if readErr != nil || closeErr != nil || bytesRead > 64<<20 {
 			return "", nil, fmt.Errorf("active CPP source exceeds bounded read contract: %v (close: %v)", readErr, closeErr)
 		}
-		name, sourceErr := consumer.sourceName(file)
+		name, sourceErr := consumer.moduleSourceName(file)
 		id, wanted := "module/"+name, consumer.Input.Sources[name]
 		if sourceErr != nil {
 			resolved, err := filepath.EvalSymlinks(file)

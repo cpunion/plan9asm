@@ -113,6 +113,45 @@ func TestCPPInputsResolveIncludesFromGoFixedPackageDirectory(t *testing.T) {
 	}
 }
 
+func TestOrdinaryConsumerRetainsCPPResourceOutsidePackageMembership(t *testing.T) {
+	plan, root, archive := fixtureCPPInputsForTarget(t, "linux/amd64", map[string]string{
+		"pkg/native_amd64.s": "#include \"../shared/choice.h\"\nTEXT ·Probe(SB),$0-0\nRET\n",
+		"shared/choice.h":    "#define CHOICE 41\n",
+	})
+	files := []string{"pkg/native_amd64.s"}
+	inputs, err := captureDiscoveryCPPInputs(plan, root, runtime.GOROOT(), files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyDiscoveryCPPModuleZIP(inputs, plan, archive); err != nil {
+		t.Fatal(err)
+	}
+	plan.CPPInputs = inputs
+	profile := discoveryFeatureProfile{Observed: &discoveryTargetFeatures{Target: "linux/amd64", GoVersion: runtime.Version()}}
+	input := ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
+	if input.Sources["shared/choice.h"] != inputs.Sources["module/shared/choice.h"].SHA256 {
+		t.Fatal("registered exact CPP resource disappeared from the production consumer input")
+	}
+	if _, found := input.Directories["shared"]; found {
+		t.Fatal("CPP resource invented Go package-directory membership")
+	}
+	conflict := inputs.Sources["module/pkg/native_amd64.s"]
+	originalSHA256 := conflict.SHA256
+	conflict.SHA256 = strings.Repeat("0", 64)
+	inputs.Sources["module/pkg/native_amd64.s"] = conflict
+	input = ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
+	if input.Sources["pkg/native_amd64.s"] != "" {
+		t.Fatal("CPP registration overwrote conflicting original source bytes")
+	}
+	conflict.SHA256 = originalSHA256
+	inputs.Sources["module/pkg/native_amd64.s"] = conflict
+	plan.GeneratedGoSources = map[string]string{"pkg/native_amd64.s": strings.Repeat("0", 64)}
+	input = ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
+	if input.Sources["pkg/native_amd64.s"] != "" {
+		t.Fatal("CPP registration revived an earlier conflicting source snapshot")
+	}
+}
+
 func TestCPPInputsActualZIPCrosscheckRejectsForgedPredicateWithUnchangedHashes(t *testing.T) {
 	plan, root, archive := fixtureCPPInputs(t)
 	inputs, err := captureDiscoveryCPPInputs(plan, root, runtime.GOROOT(), []string{"pkg/native_amd64.s"})

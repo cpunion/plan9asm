@@ -357,6 +357,20 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 }
 
 func (consumer *featureConsumer) sourceName(filename string) (string, error) {
+	name, err := consumer.moduleSourceName(filename)
+	if err != nil {
+		return "", err
+	}
+	if _, present := consumer.Input.Directories[filepath.ToSlash(filepath.Dir(name))]; !present {
+		return "", fmt.Errorf("actual selected source lacks complete directory membership proof: %s", name)
+	}
+	return name, nil
+}
+
+// CPP resources have exact registered byte/origin proofs, but a shared header
+// directory need not be a selected Go package or its ancestor. Go package
+// capture still uses sourceName and retains its separate membership check.
+func (consumer *featureConsumer) moduleSourceName(filename string) (string, error) {
 	filename, err := filepath.EvalSymlinks(filename)
 	if err != nil {
 		return "", err
@@ -365,9 +379,6 @@ func (consumer *featureConsumer) sourceName(filename string) (string, error) {
 	name = filepath.ToSlash(name)
 	if err != nil || strings.HasPrefix(name, "../") || consumer.Input.Sources[name] == "" {
 		return "", fmt.Errorf("actual selected source has no pre-load proof: %s", filename)
-	}
-	if _, present := consumer.Input.Directories[filepath.ToSlash(filepath.Dir(name))]; !present {
-		return "", fmt.Errorf("actual selected source lacks complete directory membership proof: %s", name)
 	}
 	return name, nil
 }
@@ -419,7 +430,7 @@ func (consumer *featureConsumer) captureCPPInputs(asm string) (map[string]string
 		if readErr != nil || closeErr != nil || len(data) > 64<<20 {
 			return fmt.Errorf("read bounded actual feature CPP source: %s: %v (close: %v)", file, readErr, closeErr)
 		}
-		id, err := consumer.sourceName(file)
+		id, err := consumer.moduleSourceName(file)
 		var expected string
 		if err == nil {
 			expected = consumer.Input.Sources[id]

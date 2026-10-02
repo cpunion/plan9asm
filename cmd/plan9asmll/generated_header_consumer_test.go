@@ -241,6 +241,99 @@ func TestFeatureCPPSourceOrderUsesPackageCWDAndOnlyActiveIncludes(t *testing.T) 
 	}
 }
 
+func TestFeatureCPPRegisteredHeaderOutsidePackageDirectory(t *testing.T) {
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, dir := generatedHeaderFixture(t, "linux/amd64")
+	files := map[string]string{
+		"pkg/deep/probe_amd64.s": "#include \"../../shared/choice.h\"\nTEXT ·Probe(SB),$0-0\nMOVQ $CHOICE,AX\nRET\n",
+		"pkg/deep/decl.go":       "package deep\nfunc Probe()\n",
+		"shared/choice.h":        "#define CHOICE 41\n",
+	}
+	for name, source := range files {
+		file := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		input.Sources[name] = featureBytesSHA256([]byte(source))
+		if strings.HasSuffix(name, ".s") || strings.HasSuffix(name, ".go") {
+			input.Headers[name] = source
+		}
+	}
+	input.Directories["."] = append(input.Directories["."], "pkg", "shared")
+	sort.Strings(input.Directories["."])
+	input.Directories["pkg"] = []string{"deep"}
+	input.Directories["pkg/deep"] = []string{"decl.go", "probe_amd64.s"}
+	// The producer inventories Go package/ancestor membership separately
+	// from exact CPP resources. This registered header is not a Go package.
+	input.AsmFiles = []string{"pkg/deep/probe_amd64.s"}
+	canonicalDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	consumer := &featureConsumer{Input: input, Context: ctx, Dir: canonicalDir, Root: runtime.GOROOT()}
+	if err := consumer.verifySources(); err != nil {
+		t.Fatal(err)
+	}
+	asm := filepath.Join(dir, input.AsmFiles[0])
+	expanded, sources, err := consumer.preprocessCPP(asm, input.Module+"/pkg/deep", nil)
+	if err != nil || !strings.Contains(string(expanded), "$41") || sources["module/shared/choice.h"] != input.Sources["shared/choice.h"] {
+		t.Fatalf("registered module header was confused with Go package membership: %s %v: %v", expanded, sources, err)
+	}
+	if _, err := consumer.sourceName(filepath.Join(dir, "shared/choice.h")); err == nil {
+		t.Fatal("CPP resource acquired an unproved Go package source role")
+	}
+	legacy, err := consumer.captureCPPInputs(asm)
+	if err != nil || legacy["module/shared/choice.h"] != input.Sources["shared/choice.h"] {
+		t.Fatalf("legacy CPP reader lost the same exact module origin: %v: %v", legacy, err)
+	}
+	// Missing registration and changed bytes must still fail CPP consumption.
+	digest := input.Sources["shared/choice.h"]
+	delete(input.Sources, "shared/choice.h")
+	if _, _, err := consumer.preprocessCPP(asm, input.Module+"/pkg/deep", nil); err == nil {
+		t.Fatal("unregistered header was accepted")
+	}
+	input.Sources["shared/choice.h"] = digest
+	if err := os.WriteFile(filepath.Join(dir, "shared/choice.h"), []byte("#define CHOICE 99\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := consumer.preprocessCPP(asm, input.Module+"/pkg/deep", nil); err == nil {
+		t.Fatal("changed header bytes were accepted")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shared/choice.h"), []byte(files["shared/choice.h"]), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Actual stock Go must accept the untouched selected package too.
+	t.Chdir(dir)
+	spec := targetSpec{Goos: "linux", Goarch: "amd64"}
+	input.GeneratedHeaders, err = queryGeneratedHeaders(spec, []string{"./pkg/deep"}, nil, input.AsmFiles, input.Module, t.TempDir(), compileConfig{FeaturePath: writeFeatureInput(t, input), Context: ctx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := resolveCompileConfig(true, "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.FeaturePath, config.Context = writeFeatureInput(t, input), ctx
+	report, _, err := runOneTarget(spec, []string{"./pkg/deep"}, nil, input.AsmFiles, input.Module, t.TempDir(), false, 0, true, false, true, repo, config)
+	if err != nil || report.Success != 1 || report.Failed != 0 {
+		t.Fatalf("registered shared header lacked a real CPP/LLVM object: %#v: %v", report, err)
+	}
+	if len(report.FeatureSelection.CPP) != 1 || report.FeatureSelection.CPP[0].Inputs["module/shared/choice.h"] != digest {
+		t.Fatalf("LLVM consumer lost original shared-header bytes: %#v", report.FeatureSelection)
+	}
+	if err := gotoolprofile.ValidateSelection(input, report.FeatureSelection, nil, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGeneratedHeaderConsumerRetainsDependencyGuardUntilFinalObject(t *testing.T) {
 	input, dir := generatedHeaderFixture(t, "linux/amd64")
 	dep := t.TempDir()

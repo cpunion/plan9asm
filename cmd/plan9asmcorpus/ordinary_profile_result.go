@@ -269,6 +269,12 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		for id, source := range plan.CPPInputs.Sources {
 			if file, tool := strings.CutPrefix(id, "tool/"); tool {
 				input.ToolSources[file] = source.SHA256
+			} else if file, original := strings.CutPrefix(id, "module/"); original {
+				if prior, registered := input.Sources[file]; registered && prior != source.SHA256 {
+					input.Sources[file] = "" // Reject conflicting original/CPP bytes.
+				} else {
+					input.Sources[file] = source.SHA256
+				}
 			}
 		}
 	}
