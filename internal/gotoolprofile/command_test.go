@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -67,5 +68,31 @@ func TestCaptureRejectsMissingCommandLifetime(t *testing.T) {
 	}
 	if _, err := Capture(context.Background(), "", "", nil, "linux/amd64", nil, nil); err == nil {
 		t.Fatal("nil command runner was accepted")
+	}
+}
+
+func TestBoundedMachineActualGoToolRoutes(t *testing.T) {
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range [][2]string{{"darwin", "amd64"}, {"linux", "386"}} {
+		env := append(os.Environ(), "GOOS="+target[0], "GOARCH="+target[1], "CGO_ENABLED=0", "GOTOOLCHAIN=local")
+		for _, tool := range []string{"vet", "nm"} {
+			t.Run(target[0]+"-"+target[1]+"/"+tool, func(t *testing.T) {
+				for repeat := 0; repeat < 16; repeat++ {
+					ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+					stdout, stderr, err := RunBounded(ctx, "", env, goBinary, "tool", "-n", tool)
+					cancel()
+					path := strings.TrimSpace(string(stdout))
+					if err != nil || len(stderr) != 0 || !filepath.IsAbs(path) || strings.Contains(path, "\n") {
+						t.Fatalf("actual route %d: stdout=%q stderr=%q err=%v", repeat, stdout, stderr, err)
+					}
+					if _, err := os.Stat(path); err != nil {
+						t.Fatalf("actual subtool route is absent: %v", err)
+					}
+				}
+			})
+		}
 	}
 }

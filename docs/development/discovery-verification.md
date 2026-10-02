@@ -490,7 +490,14 @@ to retry, never proof that assembly is inapplicable.
 Git automatic maintenance stays in the foreground. On Unix, each captured
 command owns a process group; cancellation and ordinary parent exit terminate
 remaining descendants before workspace removal. Output-pipe waits are bounded
-and failures remain infrastructure errors. Directory-not-empty cleanup races
+and failures remain infrastructure errors. Darwin can return `EPERM` for a
+zombie-only group: only after the owned parent is actually waited may a bounded,
+independent `/bin/ps` kernel snapshot prove that group absent or entirely zombie.
+Its fixed `unix2003 -x -g <owned-group> -p <Go-observer>` selection includes all
+group UIDs and no-TTY members and requires the live observer's PID witness.
+Live, inaccessible, malformed or unknown owned membership still fails; a
+cancellation before Wait never suppresses a permission error.
+Directory-not-empty cleanup races
 receive at most 20 attempts over two seconds; persistent errors fail the
 candidate rather than claiming successful cleanup.
 
