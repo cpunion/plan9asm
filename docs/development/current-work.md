@@ -24,7 +24,7 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-family-scope-integration-20261002`. Integrated
+Development branch: `codex/pr40-proof-family-batch-integration-20261003`. Integrated
 repairs are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
 also change the source fingerprint. Put progress/funnel tables in the PR body,
@@ -76,6 +76,29 @@ a canonical sample of 256 distinct positions. Sampling does not stop checks
 for late infrastructure errors or invalid source positions. The original avo
 candidate passed its default-target replay at frozen `ff488337`; source-excluded
 scopes are not LLVM objects or runtime passes.
+
+The next local batch includes complete ARM64 raw UDF decoding and explicit
+integer source-class checks. An old unknown-WORD negative was a valid UDF;
+preserve that failed report and its corrected negative/reachable-trap tests.
+Per-analysis raw GP-effect reuse memoizes only complete-word, context-independent
+effects. Its bounded performance improvement does not establish a passing
+standard-library benchmark.
+
+Ordinary proof handling now retains separate original pre-CPP and CGO-disabled
+Fortran-loader refusals. Their exact source, tool, profile and affected-scope
+witnesses never replace eligible object proofs. Actual test-only declarations
+and missing direct callees use a separate typed signature source and pure-Go
+test dependency closure; query-only metadata is not translation evidence.
+The original gensimd failure and independently passing fixed-source replay are
+preserved. Recheck these protocols together after merging, including their
+mandatory anti-downgrade fields and exact supplemental consumption.
+
+The reviewed x86 private caller-region producer and scalar consumer require
+complete original typed callers and bounded, initialized per-access regions.
+The actual CLI-load producer and vector-memory consumers remain separate work;
+scalar fixtures cannot establish original Weaviate or native AMD64 runtime
+success. Unknown native calls, mixed control flow and dynamic caller frames
+remain failures without their own complete contracts.
 
 ## Required next work
 
