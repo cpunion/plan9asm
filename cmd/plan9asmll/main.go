@@ -127,13 +127,14 @@ type compileConfig struct {
 	// MaxInstructions also bounds generated-source-heavy modules whose few
 	// functions each contain thousands of assembly instructions. A single
 	// oversized function stays intact and is checked on its own.
-	MaxInstructions int
-	X86TailGroups   []plan9asm.X86TailGroup
-	Feature         *featureConsumer
-	FeaturePath     string
-	Context         context.Context
-	emptyAssembly   *gotoolprofile.EmptyAssemblyProof
-	SignatureQuery  *gotoolprofile.SignatureQueryProof
+	MaxInstructions     int
+	X86TailGroups       []plan9asm.X86TailGroup
+	Feature             *featureConsumer
+	FeaturePath         string
+	Context             context.Context
+	emptyAssembly       *gotoolprofile.EmptyAssemblyProof
+	SignatureQuery      *gotoolprofile.SignatureQueryProof
+	x86CallerSelections map[*packages.Package]*x86CallerPackageSelection
 }
 
 func main() {
@@ -438,6 +439,7 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	if err != nil {
 		return runReport{}, nil, fmt.Errorf("load packages: %w", err)
 	}
+	ccfg.x86CallerSelections = captureX86CallerSelections(pkgs, spec.Goos+"/"+spec.Goarch, ccfg.Feature)
 	if ccfg.Feature != nil {
 		if err := ccfg.Feature.capturePackages(pkgs); err != nil {
 			return runReport{}, nil, err
@@ -712,6 +714,19 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if err := validateDeclaredTextArgSizes(file, resolve, declaredArgSizes, goarch); err != nil {
 		return fmt.Errorf("target applicability: %w", err)
 	}
+	sigs, callerSource, err := bindX86CallerRegions(pkg, file, goos+"/"+goarch, goarch, t.AsmFile, defines, ccfg, resolve, sigs)
+	if err != nil {
+		return fmt.Errorf("prove actual Go raw-return callers: %w", err)
+	}
+	if callerSource != nil {
+		defer func() {
+			ctx := ccfg.Context
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			compileErr = errors.Join(compileErr, callerSource.verify(ctx, defines, ccfg.Feature))
+		}()
+	}
 	ccfg.X86TailGroups, err = inferX86TailGroups(pkg, file, t.AsmFile, goarch, resolve, sigs)
 	if err != nil {
 		return fmt.Errorf("prove private continuation entries: %w", err)
@@ -923,6 +938,7 @@ func loadPkgsForFeature(goos, goarch string, patterns, buildTags []string, modul
 	cfg := &packages.Config{
 		Mode: packages.NeedName |
 			packages.NeedFiles |
+			packages.NeedCompiledGoFiles |
 			packages.NeedModule |
 			packages.NeedDeps |
 			packages.NeedImports |

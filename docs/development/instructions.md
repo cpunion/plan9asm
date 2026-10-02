@@ -102,6 +102,15 @@ private-stack escape, g-register use, vector/native effects and stale source or
 signature metadata remain Context. Rosetta fixture execution is diagnostic,
 not evidence that an external AVX/AVX512 library ran on native AMD64 hardware.
 
+The CLI captures a private inventory at its actual package-load boundary and
+rechecks complete compiled Go sources with that load's dependency types and
+target sizes only for raw-return candidates. All selected assembly and CPP
+inputs are included, with source/expansion checks through the final object.
+Effective overlays, generated/cgo mappings and external package drivers require
+their actual compiled-source mapping; original files cannot impersonate them.
+This private load snapshot cannot be restored from JSON or supplied by an old
+standalone `compileOne` caller. Candidate detection is only a cost predicate.
+
 ARM32's specialized raw-data lowerers and NZCV source proof share one typed
 registration. Only those decoded data forms preserve source-defined APSR
 flags; conditional forms still require their predicate on every CFG path.
