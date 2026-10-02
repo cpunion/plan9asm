@@ -75,6 +75,10 @@ func TestX86GoCallerRegionCoreDoesNotCertifyBadStackOrWrites(t *testing.T) {
 		"return PC":                 "MOVQ AX,8(BP)",
 		"saved BP":                  "MOVB AX,0(BP)",
 		"SP escape":                 "MOVQ SP,AX\nMOVL AX,(DX)",
+		"input pointer to SP":       "MOVQ DI,SP\nMOVL AX,(DX)",
+		"input pointer to BP":       "MOVQ DI,BP\nMOVL AX,(DX)",
+		"input address to SP":       "LEAQ 0(DI),SP\nMOVL AX,(DX)",
+		"input address to BP":       "LEAQ 0(DI),BP\nMOVL AX,(DX)",
 		"g use":                     "MOVQ R14,AX\nMOVL AX,(DX)",
 		"g overwrite":               "MOVQ $0,R14\nMOVL AX,(DX)",
 		"pointer FP store":          "MOVQ AX,res+16(FP)\nMOVL AX,(DX)",
@@ -104,6 +108,18 @@ func TestX86GoCallerRegionCoreDoesNotCertifyBadStackOrWrites(t *testing.T) {
 	pkg.SourceSelection = nil
 	if err := x86CallerCoreTranslate(t, pkg, x86CallerFixtureAssembly, "x86_64-unknown-linux-gnu"); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatalf("missing caller selection acquired pointer-store proof: %v", err)
+	}
+}
+
+func TestX86GoCallerRegionCoreDoesNotStoreInputPointerAsFullWidthData(t *testing.T) {
+	source := strings.NewReplacer(
+		"var res float32", "var res uint64", ") float32 {", ") uint64 {",
+	).Replace(x86CallerFixtureSource)
+	assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", "MOVQ DI,(DX)", 1)
+	requireX86GoAssemblerResult(t, "amd64", assembly, true)
+	pkg, _ := x86CallerCoreFixture(t, source, assembly)
+	if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("input pointer escaped through a correctly sized fresh result: %v", err)
 	}
 }
 
