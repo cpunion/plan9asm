@@ -109,23 +109,42 @@ WORD $0xd65f03c0
 	}
 	dir := t.TempDir()
 	const goOracle = `package main
+
 import "encoding/binary"
-func rawZeroNumeric(*byte,*byte,uint64)
+
+func rawZeroNumeric(*byte, *byte, uint64)
 func readGoG() uintptr
-func main(){
- var input,output,want [96]byte
- seed:=uint64(0x0123456789abcdef)
- for trial:=0;trial<256;trial++ {for _,off:=range []int{0,1,3,7,17} {
-  for i:=range input {seed=seed*6364136223846793005+1;input[i]=byte(seed>>56);output[i]=0xa5;want[i]=0xa5}
-  if trial<64 {binary.LittleEndian.PutUint64(input[off:],uint64(1)<<trial)}
-  if trial==64 {binary.LittleEndian.PutUint64(input[off:],^uint64(0))}
-  x:=binary.LittleEndian.Uint64(input[off:]);salt:=seed
-  x=(x+salt)^17;x=(x+salt)^17
-  binary.LittleEndian.PutUint64(want[off:],x)
-  snapshot:=input
-  beforeG:=readGoG();rawZeroNumeric(&input[off],&output[off],salt);afterG:=readGoG()
-  if beforeG==0 || beforeG!=afterG || input!=snapshot || output!=want {panic("raw repeated helper math/canary/caller/g mismatch")}
- }}
+func main() {
+	var input, output, want [96]byte
+	seed := uint64(0x0123456789abcdef)
+	for trial := 0; trial < 256; trial++ {
+		for _, off := range []int{0, 1, 3, 7, 17} {
+			for i := range input {
+				seed = seed*6364136223846793005 + 1
+				input[i] = byte(seed >> 56)
+				output[i] = 0xa5
+				want[i] = 0xa5
+			}
+			if trial < 64 {
+				binary.LittleEndian.PutUint64(input[off:], uint64(1)<<trial)
+			}
+			if trial == 64 {
+				binary.LittleEndian.PutUint64(input[off:], ^uint64(0))
+			}
+			x := binary.LittleEndian.Uint64(input[off:])
+			salt := seed
+			x = (x + salt) ^ 17
+			x = (x + salt) ^ 17
+			binary.LittleEndian.PutUint64(want[off:], x)
+			snapshot := input
+			beforeG := readGoG()
+			rawZeroNumeric(&input[off], &output[off], salt)
+			afterG := readGoG()
+			if beforeG == 0 || beforeG != afterG || input != snapshot || output != want {
+				panic("raw repeated helper math/canary/caller/g mismatch")
+			}
+		}
+	}
 }
 `
 	for name, body := range map[string]string{
@@ -155,21 +174,51 @@ func main(){
 	}
 	const cOracle = `#include <stdint.h>
 #include <string.h>
-extern void rawZeroNumeric(const unsigned char*,unsigned char*,uint64_t);
-static uint64_t readG(void){uint64_t v;__asm__ volatile("mov %0,x28":"=r"(v));return v;}
-static uint64_t readOS18(void){uint64_t v;__asm__ volatile("mov %0,x18":"=r"(v));return v;}
-int main(void){
- unsigned char input[96],output[96],want[96],snapshot[96];
- const unsigned offsets[]={0,1,3,7,17};uint64_t seed=UINT64_C(0x0123456789abcdef);
- for(unsigned trial=0;trial<256;trial++)for(unsigned o=0;o<5;o++){
-  unsigned off=offsets[o];
-  for(unsigned i=0;i<96;i++){seed=seed*UINT64_C(6364136223846793005)+1;input[i]=(unsigned char)(seed>>56);output[i]=0xa5;want[i]=0xa5;}
-  if(trial<64){uint64_t v=UINT64_C(1)<<trial;memcpy(input+off,&v,8);}
-  if(trial==64){uint64_t v=UINT64_MAX;memcpy(input+off,&v,8);}
-  uint64_t x;memcpy(&x,input+off,8);x=(x+seed)^17;x=(x+seed)^17;memcpy(want+off,&x,8);memcpy(snapshot,input,96);
-  uint64_t beforeG=readG(),beforeOS18=readOS18();rawZeroNumeric(input+off,output+off,seed);
-  if(beforeG!=readG()||beforeOS18!=readOS18()||memcmp(input,snapshot,96)||memcmp(output,want,96))return 1;
- }return 0;
+extern void rawZeroNumeric(const unsigned char *, unsigned char *, uint64_t);
+static uint64_t readG(void) {
+  uint64_t v;
+  __asm__ volatile("mov %0,x28" : "=r"(v));
+  return v;
+}
+static uint64_t readOS18(void) {
+  uint64_t v;
+  __asm__ volatile("mov %0,x18" : "=r"(v));
+  return v;
+}
+int main(void) {
+  unsigned char input[96], output[96], want[96], snapshot[96];
+  const unsigned offsets[] = {0, 1, 3, 7, 17};
+  uint64_t seed = UINT64_C(0x0123456789abcdef);
+  for (unsigned trial = 0; trial < 256; trial++)
+    for (unsigned o = 0; o < 5; o++) {
+      unsigned off = offsets[o];
+      for (unsigned i = 0; i < 96; i++) {
+        seed = seed * UINT64_C(6364136223846793005) + 1;
+        input[i] = (unsigned char)(seed >> 56);
+        output[i] = 0xa5;
+        want[i] = 0xa5;
+      }
+      if (trial < 64) {
+        uint64_t v = UINT64_C(1) << trial;
+        memcpy(input + off, &v, 8);
+      }
+      if (trial == 64) {
+        uint64_t v = UINT64_MAX;
+        memcpy(input + off, &v, 8);
+      }
+      uint64_t x;
+      memcpy(&x, input + off, 8);
+      x = (x + seed) ^ 17;
+      x = (x + seed) ^ 17;
+      memcpy(want + off, &x, 8);
+      memcpy(snapshot, input, 96);
+      uint64_t beforeG = readG(), beforeOS18 = readOS18();
+      rawZeroNumeric(input + off, output + off, seed);
+      if (beforeG != readG() || beforeOS18 != readOS18() ||
+          memcmp(input, snapshot, 96) || memcmp(output, want, 96))
+        return 1;
+    }
+  return 0;
 }
 `
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "raw_zero_numeric", triple, ir, cOracle, runner)

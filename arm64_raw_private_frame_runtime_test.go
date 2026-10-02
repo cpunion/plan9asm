@@ -77,32 +77,60 @@ func TestCrossLinuxRuntimeMatrixARM64RawPrivateFrameFamily(t *testing.T) {
 }
 
 const arm64RawPrivateFrameOracleGo = `package main
+
 import "encoding/binary"
-func check(fn func(*byte,*byte),width,count,signBits,floating int) {
- var input [96]byte
- var output,want [96]byte
- seed:=uint32(0x12345678)
- for trial:=0;trial<256;trial++ { for _,offset:=range []int{0,1,3,7,17} {
-  for i:=range input {
-   seed=seed*1664525+1013904223
-   input[i]=byte(seed>>24)
-   if trial==0 {input[i]=0}
-   if trial==1 {input[i]=255}
-   if trial>=2&&trial<34 {input[i]=0;if i==offset+(trial-2)/8 {input[i]=1<<uint((trial-2)%8)}}
-  }
-  snapshot:=input
-  for i:=range output {output[i]=0xa5;want[i]=0xa5}
-  for i:=0;i<count;i++ {
-   if floating!=0 {copy(want[offset+i*width:offset+(i+1)*width],input[offset+i*16:offset+i*16+width]);continue}
-   var value uint64
-   for j:=0;j<width;j++ {value|=uint64(input[offset+i*8+j])<<uint(8*j)}
-   if signBits!=0 && width<8 && value>>(uint(width*8)-1)!=0 {value|=^uint64(0)<<uint(width*8)}
-   if signBits==32 {value=uint64(uint32(value))}
-   binary.LittleEndian.PutUint64(want[offset+i*8:],value)
-  }
-  fn(&input[offset],&output[offset])
-  if input!=snapshot || output!=want {println(width,count,signBits,floating,trial,offset);panic("Go raw frame/caller/memory/canary mismatch")}
- } }
+
+func check(fn func(*byte, *byte), width, count, signBits, floating int) {
+	var input [96]byte
+	var output, want [96]byte
+	seed := uint32(0x12345678)
+	for trial := 0; trial < 256; trial++ {
+		for _, offset := range []int{0, 1, 3, 7, 17} {
+			for i := range input {
+				seed = seed*1664525 + 1013904223
+				input[i] = byte(seed >> 24)
+				if trial == 0 {
+					input[i] = 0
+				}
+				if trial == 1 {
+					input[i] = 255
+				}
+				if trial >= 2 && trial < 34 {
+					input[i] = 0
+					if i == offset+(trial-2)/8 {
+						input[i] = 1 << uint((trial-2)%8)
+					}
+				}
+			}
+			snapshot := input
+			for i := range output {
+				output[i] = 0xa5
+				want[i] = 0xa5
+			}
+			for i := 0; i < count; i++ {
+				if floating != 0 {
+					copy(want[offset+i*width:offset+(i+1)*width], input[offset+i*16:offset+i*16+width])
+					continue
+				}
+				var value uint64
+				for j := 0; j < width; j++ {
+					value |= uint64(input[offset+i*8+j]) << uint(8*j)
+				}
+				if signBits != 0 && width < 8 && value>>(uint(width*8)-1) != 0 {
+					value |= ^uint64(0) << uint(width*8)
+				}
+				if signBits == 32 {
+					value = uint64(uint32(value))
+				}
+				binary.LittleEndian.PutUint64(want[offset+i*8:], value)
+			}
+			fn(&input[offset], &output[offset])
+			if input != snapshot || output != want {
+				println(width, count, signBits, floating, trial, offset)
+				panic("Go raw frame/caller/memory/canary mismatch")
+			}
+		}
+	}
 }
 `
 
@@ -110,34 +138,52 @@ const arm64RawPrivateFrameOracleC = `
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-static int check(void(*fn)(const unsigned char *,unsigned char *),unsigned width,unsigned count,unsigned sign_bits,int floating) {
- unsigned char input[96],snapshot[96],output[96],want[96];
- uint32_t seed=UINT32_C(0x12345678);
- const unsigned offsets[]={0,1,3,7,17};
- for(unsigned trial=0;trial<256;trial++) for(unsigned o=0;o<5;o++) {
-  unsigned offset=offsets[o];
-  for(unsigned i=0;i<96;i++) {
-   seed=seed*UINT32_C(1664525)+UINT32_C(1013904223);
-   input[i]=(unsigned char)(seed>>24);
-   if(trial==0) input[i]=0;
-   if(trial==1) input[i]=255;
-   if(trial>=2&&trial<34) input[i]=i==offset+(trial-2)/8 ? (unsigned char)(1U<<((trial-2)%8)) : 0;
-  }
-  memcpy(snapshot,input,96);memset(output,0xa5,96);memset(want,0xa5,96);
-  for(unsigned i=0;i<count;i++) {
-   if(floating) {memcpy(want+offset+i*width,input+offset+i*16,width);continue;}
-   uint64_t value=0;
-   for(unsigned j=0;j<width;j++) value|=(uint64_t)input[offset+i*8+j]<<(8*j);
-   if(sign_bits && width<8 && (value>>(width*8-1))) value|=UINT64_MAX<<(width*8);
-   if(sign_bits==32) value=(uint32_t)value;
-   for(unsigned j=0;j<8;j++) want[offset+i*8+j]=(unsigned char)(value>>(8*j));
-  }
-  fn(input+offset,output+offset);
-  if(memcmp(input,snapshot,96) || memcmp(output,want,96)) {
-   fprintf(stderr,"raw frame width/count/sign/FP/trial/offset %u/%u/%u/%d/%u/%u\n",width,count,sign_bits,floating,trial,offset);
-   return 1;
-  }
- }
- return 0;
+static int check(void (*fn)(const unsigned char *, unsigned char *), unsigned width,
+                 unsigned count, unsigned sign_bits, int floating) {
+  unsigned char input[96], snapshot[96], output[96], want[96];
+  uint32_t seed = UINT32_C(0x12345678);
+  const unsigned offsets[] = {0, 1, 3, 7, 17};
+  for (unsigned trial = 0; trial < 256; trial++)
+    for (unsigned o = 0; o < 5; o++) {
+      unsigned offset = offsets[o];
+      for (unsigned i = 0; i < 96; i++) {
+        seed = seed * UINT32_C(1664525) + UINT32_C(1013904223);
+        input[i] = (unsigned char)(seed >> 24);
+        if (trial == 0)
+          input[i] = 0;
+        if (trial == 1)
+          input[i] = 255;
+        if (trial >= 2 && trial < 34)
+          input[i] = i == offset + (trial - 2) / 8
+                         ? (unsigned char)(1U << ((trial - 2) % 8))
+                         : 0;
+      }
+      memcpy(snapshot, input, 96);
+      memset(output, 0xa5, 96);
+      memset(want, 0xa5, 96);
+      for (unsigned i = 0; i < count; i++) {
+        if (floating) {
+          memcpy(want + offset + i * width, input + offset + i * 16, width);
+          continue;
+        }
+        uint64_t value = 0;
+        for (unsigned j = 0; j < width; j++)
+          value |= (uint64_t)input[offset + i * 8 + j] << (8 * j);
+        if (sign_bits && width < 8 && (value >> (width * 8 - 1)))
+          value |= UINT64_MAX << (width * 8);
+        if (sign_bits == 32)
+          value = (uint32_t)value;
+        for (unsigned j = 0; j < 8; j++)
+          want[offset + i * 8 + j] = (unsigned char)(value >> (8 * j));
+      }
+      fn(input + offset, output + offset);
+      if (memcmp(input, snapshot, 96) || memcmp(output, want, 96)) {
+        fprintf(stderr,
+                "raw frame width/count/sign/FP/trial/offset %u/%u/%u/%d/%u/%u\n", width,
+                count, sign_bits, floating, trial, offset);
+        return 1;
+      }
+    }
+  return 0;
 }
 `
