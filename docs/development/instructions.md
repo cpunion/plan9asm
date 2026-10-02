@@ -152,6 +152,21 @@ Do not add an `unsupported_forms` skip for a supported target. Context-dependent
 forms may be classified separately only when translation genuinely requires
 information unavailable to the scanner.
 
+For named ARM64 private data tables, the explicit typed-call transport and
+fresh-frame proof may authorize bounded indexed accesses and counted-loop
+writeback. Track numeric bounds separately from may-frame provenance: joins,
+stale comparisons, unknown transforms and hardware-masked shift counts must
+never restore an erased address or narrow an unknown index incorrectly.
+Certify each store's complete byte envelope within private DATA `[8, frame+8)`;
+the saved caller link at SP+0 and overlapping cells remain protected. This is
+an instruction-local certificate, not a function-wide unknown-store exemption.
+Reject address escape through calls, results, FP, memory or vector banks, raw
+effects, mixed origins and exhausted proof budgets. Exercise the shared scalar
+and GP/FP pair grammar with Go-accepted widths, signed loads, zero aliases,
+indexed and offset/pre/post forms, LLVM objects and initialized runtime
+canaries. An old fixture with undefined data establishes only its explicit
+object contract; never report it as successful runtime coverage.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore
