@@ -37,6 +37,21 @@ func arm64ScalarMemoryBits(op Op) (int, bool) {
 	return 0, false
 }
 
+func arm64ScalarMoveOperandClassError(op Op, ins Instr) error {
+	if bits, _ := arm64ScalarMemoryBits(op); bits == 0 {
+		return nil
+	}
+	// TYPE_FCONST is Go's distinct C_FCON class, not an integer zero or
+	// bit-pattern constant. Every scalar move consumer uses this same rule;
+	// FMOV retains its separate floating-point grammar.
+	for _, operand := range ins.Args {
+		if operand.Kind == OpImm && operand.ImmIsFloat {
+			return fmt.Errorf("arm64 %s cannot use a floating immediate: %q", op, ins.Raw)
+		}
+	}
+	return nil
+}
+
 func parseARM64ScalarMemoryForm(op Op, ins Instr) (f arm64ScalarMemoryForm, handled bool, err error) {
 	f.bits, f.signed = arm64ScalarMemoryBits(op)
 	if f.bits == 0 || len(ins.Args) != 2 {
@@ -53,6 +68,9 @@ func parseARM64ScalarMemoryForm(op Op, ins Instr) (f arm64ScalarMemoryForm, hand
 	}
 	if !isMemory(f.memory) {
 		return f, false, nil
+	}
+	if err := arm64ScalarMoveOperandClassError(op, ins); err != nil {
+		return f, true, err
 	}
 	invalid := func() (arm64ScalarMemoryForm, bool, error) {
 		return f, true, fmt.Errorf("arm64 %s memory operands are outside its Go scalar rows: %q", op, ins.Raw)

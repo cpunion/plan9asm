@@ -6,16 +6,8 @@ import (
 )
 
 func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "MOVB", "MOVBU", "MOVH", "MOVHU", "MOVW", "MOVWU", "MOVD":
-		// Go classifies TYPE_FCONST as C_FCON, never an integer zero or
-		// bit-pattern constant. Check before memory/symbol helpers as well
-		// as the generic integer evaluator; FMOV keeps its separate grammar.
-		for _, operand := range ins.Args {
-			if operand.Kind == OpImm && operand.ImmIsFloat {
-				return true, false, fmt.Errorf("arm64 %s cannot use a floating immediate: %q", op, ins.Raw)
-			}
-		}
+	if err := arm64ScalarMoveOperandClassError(op, ins); err != nil {
+		return true, false, err
 	}
 	if ok, terminated, err := c.lowerARM64RegisterAddress(op, ins); ok {
 		return ok, terminated, err

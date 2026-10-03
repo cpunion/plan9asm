@@ -838,19 +838,28 @@ func TestARM64BranchAndReturnEdgeCoverage(t *testing.T) {
 			},
 		},
 	}, nil)
-	if ok, _, err := cAgg.lowerData("MOVD", false, Instr{
-		Op:   "MOVD",
-		Args: []Operand{arm64ImmOp(21), arm64FPOp(8)},
-		Raw:  "MOVD $21, ret+8(FP)",
-	}); !ok || err != nil {
-		t.Fatalf("lowerData(MOVD ret+8) = (%v, %v)", ok, err)
+	// Nonzero immediate-to-memory MOV is not a Go assembler row. Preserve
+	// the same aggregate values using actual register-to-frame stores.
+	for _, invalid := range []string{"MOVD $21, ret+8(FP)", "MOVW $7, ret+16(FP)"} {
+		requireARM64GoAssemblerResult(t, "TEXT retagg(SB),516,$0-24\n"+invalid+"\nRET\n", false)
 	}
-	if ok, _, err := cAgg.lowerData("MOVW", false, Instr{
-		Op:   "MOVW",
-		Args: []Operand{arm64ImmOp(7), arm64FPOp(16)},
-		Raw:  "MOVW $7, ret+16(FP)",
-	}); !ok || err != nil {
-		t.Fatalf("lowerData(MOVW ret+16) = (%v, %v)", ok, err)
+	aggregateSource := `TEXT retagg(SB),516,$0-24
+MOVD $21,R0
+MOVD R0,ret+8(FP)
+MOVW $7,R1
+MOVW R1,ret+16(FP)
+RET
+`
+	requireARM64GoAssemblerResult(t, aggregateSource, true)
+	for _, ins := range []Instr{
+		{Op: "MOVD", Args: []Operand{arm64ImmOp(21), arm64RegOp("R0")}, Raw: "MOVD $21,R0"},
+		{Op: "MOVD", Args: []Operand{arm64RegOp("R0"), arm64FPOp(8)}, Raw: "MOVD R0,ret+8(FP)"},
+		{Op: "MOVW", Args: []Operand{arm64ImmOp(7), arm64RegOp("R1")}, Raw: "MOVW $7,R1"},
+		{Op: "MOVW", Args: []Operand{arm64RegOp("R1"), arm64FPOp(16)}, Raw: "MOVW R1,ret+16(FP)"},
+	} {
+		if ok, _, err := cAgg.lowerData(ins.Op, false, ins); !ok || err != nil {
+			t.Fatalf("lowerData(%s) = (%v, %v)", ins.Raw, ok, err)
+		}
 	}
 	if err := cAgg.lowerRET(); err != nil {
 		t.Fatalf("lowerRET(aggregate) error = %v", err)
