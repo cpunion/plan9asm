@@ -121,6 +121,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_fp_padding_runtime_test.go",
 		"amd64_mov_extension_caller_test.go",
 		"amd64_mov_extension_runtime_test.go",
+		"amd64_raw_movsxd_runtime_test.go",
 		"arm64_scalar_writeback_test.go",
 		"arm64_barrier_encoding_go127_test.go",
 	} {

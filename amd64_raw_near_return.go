@@ -108,6 +108,9 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 		return false
 	}
 	for _, ins := range fn.Instrs {
+		if ins.x86RawMOVSXDNeedsCaller && !caller {
+			return false // A native width is not an initialized GP-input proof.
+		}
 		read := ins.x86RIPMemoryRead
 		if read.width != 0 && (opt.Goarch == "386" || !x86RawReturnDecodedReadBound(ins, file)) {
 			return false
@@ -191,9 +194,9 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 	return true
 }
 
-func x86RawReturnDecodedReadBound(ins Instr, file *File) bool {
+func x86RawReturnDecodedReadIdentity(ins Instr) bool {
 	read := ins.x86RIPMemoryRead
-	if file == nil || !ins.x86Encoded || !ins.x86RIPLiteral ||
+	if !ins.x86Encoded || !ins.x86RIPLiteral ||
 		read.op != ins.Op || read.source < 0 || read.source >= len(ins.Args) ||
 		!reflect.DeepEqual(read.args, ins.Args) ||
 		read.width <= 0 || read.offset < 0 ||
@@ -204,12 +207,20 @@ func x86RawReturnDecodedReadBound(ins Instr, file *File) bool {
 	if operand.Kind != OpSym || operand.Sym != read.symbol {
 		return false
 	}
-	symbol, offset, ok := parseSBRef(operand.Sym)
-	if !ok || offset != read.offset || !x86RawReturnStaticBound(symbol, offset, read.width, file) {
-		return false
-	}
 	if len(ins.x86RIPLiteralData) != 0 &&
 		!bytes.Equal(ins.x86RIPLiteralData, read.object[read.offset:read.offset+read.width]) {
+		return false
+	}
+	return true
+}
+
+func x86RawReturnDecodedReadBound(ins Instr, file *File) bool {
+	if file == nil || !x86RawReturnDecodedReadIdentity(ins) {
+		return false
+	}
+	read := ins.x86RIPMemoryRead
+	symbol, offset, ok := parseSBRef(ins.Args[read.source].Sym)
+	if !ok || offset != read.offset || !x86RawReturnStaticBound(symbol, offset, read.width, file) {
 		return false
 	}
 	// Re-normalization and bounded module partitioning retain the data. Do

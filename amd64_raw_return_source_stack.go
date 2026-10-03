@@ -96,7 +96,10 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
 	if !caller {
 		for index, instruction := range fn.Instrs {
-			if _, extension := amd64ScalarExtensionMoveSpecs[instruction.Op]; extension {
+			if _, extension := amd64ScalarExtensionMoveSpecs[instruction.Op]; extension || instruction.x86RawMOVSXDNeedsCaller {
+				if x86RawMOVSXDLiteralInput(instruction) {
+					continue
+				}
 				// The old scalar slot contract proves frame bounds, not GP
 				// input availability. It cannot authorize a new extension read
 				// of unknown or partially initialized native entry registers.

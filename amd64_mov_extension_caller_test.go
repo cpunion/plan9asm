@@ -258,7 +258,9 @@ func TestX86ExtensionActualGoRejectedFormats(t *testing.T) {
 }
 
 func TestX86ExtensionRawMOVSXDRequiresKnownNativeWidth(t *testing.T) {
-	for _, encoding := range []string{"WORD $0xc363", "BYTE $0x66\nWORD $0xc363"} {
+	// Register and default-32 memory widths have independent native contracts.
+	// The 66 memory footprint still differs across vendor descriptions.
+	for _, encoding := range []string{"BYTE $0x66\nWORD $0x0763", "BYTE $0x66\nWORD $0x0f63"} {
 		assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", "MOVQ $0x80000000,BX\n"+encoding+"\nMOVL AX,(DX)", 1)
 		requireX86GoAssemblerResult(t, "amd64", assembly, true)
 		pkg, file := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)

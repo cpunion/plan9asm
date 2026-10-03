@@ -964,6 +964,10 @@ type Instr struct {
 	// does not relax Go operand grammar. Go's prologue pass cannot see a raw
 	// PUSH/POP when adjusting a later named FP operand.
 	x86SourceRaw *x86SourceRawInstruction
+	// Decoder-only native 63/r scalar copies require actual initialized input
+	// provenance before a raw return. Their MOVL/MOVW spellings do not grant
+	// the older generic scalar frame proof new entry-register permissions.
+	x86RawMOVSXDNeedsCaller bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64

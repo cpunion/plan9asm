@@ -2602,6 +2602,11 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
 			}
+			if inst.Op == x86asm.MOVSXD && inst.DataSize != 64 {
+				for i := range instrs {
+					instrs[i].x86RawMOVSXDNeedsCaller = true
+				}
+			}
 			if inst.Op == x86asm.RET {
 				form := x86RawNearReturnEncoding(code[offset : offset+inst.Len])
 				for i := range instrs {
@@ -10303,11 +10308,7 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		// semantic instruction is the operand-free Plan 9 NOP.
 		return "NOP", nil
 	case x86asm.MOVSXD:
-		destination, register := inst.Args[0].(x86asm.Reg)
-		if !register || decodedX86RegisterBits(destination) != 64 {
-			return "", fmt.Errorf("%w: raw MOVSXD without a 64-bit destination needs an independently proved native width contract", ErrProbeNeedsContext)
-		}
-		replaceOp("MOVLQSX")
+		return decodedX86MOVSXD(inst, encoding)
 	case x86asm.MOVD:
 		// Intel MOVD transfers 32 bits. Go's MOVD spelling instead aliases
 		// AMOVQ and transfers 64 bits for XMM/memory forms.
