@@ -202,7 +202,7 @@ func verifyDiscoveryForeignTestSnapshots(ctx context.Context, dependency *gotool
 			return fmt.Errorf("test dependency source-root inventory changed")
 		}
 		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, capture.Root, capture.Download.Zip); err != nil {
-			return err
+			return fmt.Errorf("final test dependency source root %s: %w", source.ID(), err)
 		}
 		for filename, wanted := range capture.Exports {
 			actual, err := discoveryFeatureFileSHA256(filename)

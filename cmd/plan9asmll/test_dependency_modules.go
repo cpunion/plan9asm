@@ -210,7 +210,7 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 		}
 	}
 	if err := gotoolprofile.VerifyTestModuleSource(consumer.Context, source, root, guard.ZIP); err != nil {
-		return err
+		return fmt.Errorf("actual test dependency source root %s: %w", source.ID(), err)
 	}
 	consumer.TestModuleGuards[source.ID()] = guard
 	return nil
@@ -219,7 +219,7 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 func (consumer *featureConsumer) verifyTestModuleSources() error {
 	for _, guard := range consumer.TestModuleGuards {
 		if err := gotoolprofile.VerifyTestModuleSource(consumer.Context, guard.Source, guard.Root, guard.ZIP); err != nil {
-			return err
+			return fmt.Errorf("final test dependency source root %s: %w", guard.Source.ID(), err)
 		}
 	}
 	return nil

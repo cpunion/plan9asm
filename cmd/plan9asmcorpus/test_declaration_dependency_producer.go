@@ -294,7 +294,7 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 			return nil, err
 		}
 		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, module.Root, module.Download.Zip); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("actual test dependency source root %s: %w", source.ID(), err)
 		}
 		dependency.SourceModules = append(dependency.SourceModules, source)
 	}
