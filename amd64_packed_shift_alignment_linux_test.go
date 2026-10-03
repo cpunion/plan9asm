@@ -33,52 +33,9 @@ func x86PackedShiftLinuxExecution(t *testing.T) []string {
 	return []string{qemu, "-L", "/usr/x86_64-linux-gnu"}
 }
 
-func x86PackedShiftLegacyMemoryAssembly() (string, map[string]FuncSig) {
-	var source strings.Builder
-	sigs := map[string]FuncSig{}
-	for i, operation := range x86LegacyShiftMemoryOpcodes {
-		name := fmt.Sprintf("legacycount%d", i)
-		fmt.Fprintf(&source, `TEXT %s(SB),4,$0-32
-MOVQ out+0(FP),AX
-MOVQ data+8(FP),BX
-MOVQ count+16(FP),CX
-MOVQ seed+24(FP),DX
-MOVOU (BX),X0
-CMPQ DX,$0
-JE carry
-CMPQ DX,$1
-JE overflow
-MOVQ $1,DX
-CMPQ DX,$0
-JMP shifted
-carry:
-MOVQ $-1,DX
-ADDQ $1,DX
-JMP shifted
-overflow:
-MOVQ $0x7fffffffffffffff,DX
-ADDQ $1,DX
-shifted:
-%s (CX),X0
-MOVOU X0,(AX)
-SETCS 16(AX)
-SETOS 17(AX)
-SETEQ 18(AX)
-SETMI 19(AX)
-SETPS 20(AX)
-RET
-`, name, operation.name)
-		sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr, Ptr, I64}, Ret: Void,
-			Frame: FrameLayout{Params: []FrameSlot{
-				{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1},
-				{Offset: 16, Type: Ptr, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1},
-			}}}
-	}
-	return source.String(), sigs
-}
-
 const x86PackedShiftLegacyMemoryGoDriver = `package main
 import (
+ "fmt"
  "os"
  "strconv"
  "unsafe"
@@ -132,9 +89,17 @@ func main() {
   data[i]=byte(i*71+13)
   count[i]=byte(i*31+7)
  }
+ for i:=range out { out[i]=0xc3 }
  start:=uintptr(unsafe.Pointer(&count[0]))
  offset:=(16-start%16)%16+1
+ beforeData,beforeCount:=data,count
+ fmt.Printf("original Go count mod16=%d\n",uintptr(unsafe.Pointer(&count[offset]))%16)
  functions[index](unsafe.Pointer(&out[1]),unsafe.Pointer(&data[1]),unsafe.Pointer(&count[offset]),0)
+ if out[0]!=0xc3 || out[22]!=0xc3 || data!=beforeData || count!=beforeCount { panic("canary/input mutation") }
+ flags:=[5]byte{1,0,1,0,1}
+ for i:=0;i<5;i++ { if out[17+i]!=flags[i] { panic("flags") } }
+ /* The initialized low count qword exceeds every lane width. */
+ for i:=1;i<=16;i++ { if out[i]!=0 { panic("numeric") } }
  os.Exit(90)
 }
 `
@@ -142,6 +107,11 @@ func main() {
 func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T) {
 	prefix := x86PackedShiftLinuxExecution(t)
 	x86PackedShiftVerifyGuestArguments(t, prefix)
+	_, clang, ok := findLlcAndClang(t)
+	if !ok {
+		t.Fatal("LLVM22 tools required")
+	}
+	observer := x86PackedShiftBuildOriginalCountObserver(t, x86PackedShiftLinuxCCompiler(t, clang))
 	assembly, _ := x86PackedShiftLegacyMemoryAssembly()
 	var declarations strings.Builder
 	for i := range x86LegacyShiftMemoryOpcodes {
@@ -177,18 +147,35 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T)
 	}
 	for i := range x86LegacyShiftMemoryOpcodes {
 		ctx, cancel = runtimeOracleStageContext(t)
+		argv = x86PackedShiftGuestExecution(prefix, observer, strconv.Itoa(i))
+		command = exec.CommandContext(ctx, argv[0], argv[1:]...)
+		reference, referenceErr := runtimeOracleCombinedOutput(ctx, command)
+		cancel()
+		status := strings.TrimSpace(string(reference))
+		if referenceErr != nil || status != "normal" && status != "fault" {
+			t.Fatalf("original native opcode observer %d: %v\n%s", i, referenceErr, reference)
+		}
+		ctx, cancel = runtimeOracleStageContext(t)
 		argv := x86PackedShiftGuestExecution(prefix, executable, strconv.Itoa(i))
 		command = exec.CommandContext(ctx, argv[0], argv[1:]...)
 		output, err = runtimeOracleCombinedOutput(ctx, command)
 		cancel()
 		var exit *exec.ExitError
 		text := string(output)
-		if !errors.As(err, &exit) || exit.ExitCode() != 2 || !strings.Contains(text, "main.legacycount") ||
-			(!strings.Contains(text, "unexpected fault address") && !strings.Contains(text, "invalid memory address")) {
-			t.Fatalf("original Go unaligned m128 count %d: %v\n%s", i, err, output)
+		if !strings.Contains(text, "original Go count mod16=1") || !errors.As(err, &exit) {
+			t.Fatalf("original Go unaligned m128 count identity %d: %v\n%s", i, err, output)
 		}
+		if status == "normal" {
+			if exit.ExitCode() != 90 {
+				t.Fatalf("original Go differs from normal native opcode %d: %v\n%s", i, err, output)
+			}
+		} else if exit.ExitCode() != 2 || !strings.Contains(text, "main.legacycount") ||
+			(!strings.Contains(text, "unexpected fault address") && !strings.Contains(text, "invalid memory address")) {
+			t.Fatalf("original Go differs from native opcode memory fault %d: %v\n%s", i, err, output)
+		}
+		t.Logf("original Go/native opcode %s mod16=1 status=%s", x86LegacyShiftMemoryOpcodes[i].name, status)
 	}
-	t.Log("6 original Go m128 kernels ×48 numeric/flags/canary inputs and 6 unaligned faults")
+	t.Log("6 original Go m128 kernels ×48 numeric/flags/canary inputs and 6 independent native opcode unaligned status comparisons")
 }
 
 func x86PackedShiftVerifyGuestArguments(t *testing.T, prefix []string) {
@@ -253,7 +240,7 @@ func main() { fmt.Printf("%q\n", os.Args) }
 	}
 }
 
-func TestCrossLinuxRuntimeMatrixX86PackedShiftLLVMAlignedMemory(t *testing.T) {
+func TestCrossLinuxRuntimeMatrixX86PackedShiftLLVMNativeCount(t *testing.T) {
 	prefix := x86PackedShiftLinuxExecution(t)
 	llc, clang, ok := findLlcAndClang(t)
 	if !ok {
@@ -270,14 +257,10 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftLLVMAlignedMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var registrations strings.Builder
-	for i := range x86LegacyShiftMemoryOpcodes {
-		fmt.Fprintf(&registrations, "extern void legacycount%d(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);\n", i)
-	}
-	registrations.WriteString("static legacy_fn kernels[]={legacycount0,legacycount1,legacycount2,legacycount3,legacycount4,legacycount5};\n")
-	driver := x86PackedShiftLegacyCountCHeader + registrations.String() + x86PackedShiftLegacyCountCMain
+	driver := x86PackedShiftLegacyCountCHeader + x86PackedShiftLegacyCountDeclarations() + x86PackedShiftOriginalCountC() +
+		x86PackedShiftCountCChecks + x86PackedShiftLegacyNativeCountCMain
 	compileAndRunRuntimeTestWithCompiler(t, llc, x86PackedShiftLinuxCCompiler(t, clang), "legacy_count_contract", triple, ir, driver, prefix)
-	t.Log("6 LLVM m128 kernels ×48 numeric/flags/canary inputs, 6 alignment and 6 guard-page faults")
+	t.Log("6 original opcode/LLVM m128 kernels ×48 numeric/flags/canary inputs, 90 unaligned status comparisons and 6 original/LLVM full128 guard-page faults")
 }
 
 func x86PackedShiftLinuxCCompiler(t *testing.T, clang string) []string {
@@ -333,61 +316,3 @@ int main(void) {
 		"complete_packed_shift", triple, ir, driver.String(), prefix)
 	t.Logf("%d exact LLVM programs ×192 independent whole-byte/flags/canary inputs", len(cases))
 }
-
-const x86PackedShiftLegacyCountCHeader = `
-#include <stdint.h>
-#include <string.h>
-#include <stdio.h>
-#include <sys/mman.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <signal.h>
-typedef void (*legacy_fn)(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);
-`
-
-const x86PackedShiftLegacyCountCMain = `
-static uint64_t read_le(const uint8_t *p,int bytes) {
- uint64_t value=0;
- for(int i=0;i<bytes;i++) value|=(uint64_t)p[i]<<(8*i);
- return value;
-}
-int main(void) {
- const uint64_t counts[]={0,1,7,15,16,17,31,32,33,63,64,65,255,256,UINT64_C(1)<<32,UINT64_MAX};
- const uint8_t flags[3][5]={{1,0,1,0,1},{0,1,0,1,1},{0,0,0,0,0}};
- for(int k=0;k<6;k++) for(int round=0;round<16;round++) for(int seed=0;seed<3;seed++) {
-  uint8_t data[18],out[23],beforeData[18],beforeCount[32];
-  _Alignas(16) uint8_t count[32];
-  for(int i=0;i<18;i++) data[i]=(uint8_t)(i*71+round*97+13);
-  for(int i=0;i<32;i++) count[i]=(uint8_t)(i*31+7);
-  for(int i=0;i<8;i++) count[i]=(uint8_t)(counts[round]>>(8*i));
-  memcpy(beforeData,data,18); memcpy(beforeCount,count,32); memset(out,0xc3,23);
-  kernels[k](out+1,data+1,count,seed);
-  if(out[0]!=0xc3 || out[22]!=0xc3 || memcmp(data,beforeData,18) || memcmp(count,beforeCount,32) || memcmp(out+17,flags[seed],5)) return 10+k;
-  int bytes=(int[]){2,4,8,2,4,8}[k];
-  for(int i=0;i<16;i+=bytes) {
-   uint64_t value=read_le(data+i+1,bytes),want=0;
-   if(counts[round]<(uint64_t)(bytes*8)) want=k<3?value<<counts[round]:value>>counts[round];
-   for(int b=0;b<bytes;b++) if(out[i+b+1]!=(uint8_t)(want>>(8*b))) return 20+k;
-  }
- }
- size_t page=(size_t)sysconf(_SC_PAGESIZE);
- for(int k=0;k<6;k++) for(int edge=0;edge<2;edge++) {
-  uint8_t *area=mmap(0,page*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
-  if(area==MAP_FAILED || mprotect(area+page,page,PROT_NONE)) return 30;
-  memset(area,7,page);
-  pid_t child=fork(); if(child<0) return 31;
-  if(!child) {
-   uint8_t data[18],out[23]; memset(data,13,18); memset(out,0xc3,23);
-   kernels[k](out+1,data+1,edge?area+page-8:area+33,0);
-   _exit(90);
-  }
-  int status=0;
-  if(waitpid(child,&status,0)!=child || munmap(area,page*2)) return 32;
-  if(!WIFSIGNALED(status) || WTERMSIG(status)!=SIGSEGV) {
-   fprintf(stderr,"legacy kernel=%d edge=%d expected SIGSEGV, actual=%x\n",k,edge,status);
-   return 40+k;
-  }
- }
- return 0;
-}
-`

@@ -33,7 +33,7 @@ func (c *amd64Ctx) lowerPackedLogicalShift(op Op, ins Instr) (ok bool, terminate
 	return c.lowerX86PackedShift(op, ins)
 }
 
-func (c *amd64Ctx) loadPackedUniformLogicalShiftCount(count Operand, mmx, legacy bool) (string, error) {
+func (c *amd64Ctx) loadPackedUniformLogicalShiftCount(count Operand, mmx bool) (string, error) {
 	if count.Kind == OpImm {
 		return fmt.Sprintf("%d", uint8(count.Imm)), nil
 	}
@@ -51,13 +51,7 @@ func (c *amd64Ctx) loadPackedUniformLogicalShiftCount(count Operand, mmx, legacy
 	}
 	// The ignored upper count qword still belongs to the complete native
 	// m128 read, even when a zero mask or saturated result is optimized.
-	var countBytes string
-	var err error
-	if legacy && (count.Kind == OpMem || count.Kind == OpSym) {
-		countBytes, err = c.loadX86PackedShiftAlignedCount(count)
-	} else {
-		countBytes, err = c.loadX86PackedShiftBytes(count, 16, true)
-	}
+	countBytes, err := c.loadX86PackedShiftBytes(count, 16, true)
 	if err != nil {
 		return "", err
 	}

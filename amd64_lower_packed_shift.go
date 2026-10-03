@@ -7,8 +7,8 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 	if !recognized || err != nil {
 		return recognized, false, err
 	}
-	if x86PackedShiftHasAlignedCount(form) && ins.Args[form.count].Kind == OpFP {
-		return true, false, fmt.Errorf("legacy m128 count needs actual aligned FP backing: %w", ErrProbeNeedsContext)
+	if x86PackedShiftHasNativeCount(form) && ins.Args[form.count].Kind == OpFP {
+		return true, false, fmt.Errorf("legacy m128 count needs actual native FP backing: %w", ErrProbeNeedsContext)
 	}
 	if form.memory >= 0 && ins.Args[form.memory].Kind == OpFP {
 		if err := c.validateX86PackedShiftFPSpan(ins.Args[form.memory].FPOffset, form.memoryBytes); err != nil {
@@ -65,8 +65,13 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 				operation = "shl"
 			}
 			result = c.emitPerLaneVariableShift(amd64PerLaneVariableShiftSpec{laneBits: form.laneBits, operation: operation}, lanes, counts, data)
+		} else if x86PackedShiftHasNativeCount(form) {
+			result, err = c.emitX86PackedShiftNativeCount(form, ins.Args[form.count], data)
+			if err != nil {
+				return true, false, err
+			}
 		} else {
-			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx, form.legacy)
+			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx)
 			if err != nil {
 				return true, false, err
 			}

@@ -56,7 +56,7 @@ func TestX86PackedShiftLegacyMemoryActualGoEncoding(t *testing.T) {
 	}
 }
 
-func TestX86PackedShiftAlignedReadThreeAPIsFiveO2Objects(t *testing.T) {
+func TestX86PackedShiftNativeCountThreeAPIsFiveO2Objects(t *testing.T) {
 	llc, disassembler := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
 	if llc == "" || disassembler == "" {
 		t.Fatal("LLVM22 llc and llvm-objdump required")
@@ -64,7 +64,9 @@ func TestX86PackedShiftAlignedReadThreeAPIsFiveO2Objects(t *testing.T) {
 	var source strings.Builder
 	source.WriteString("TEXT shifts(SB),4,$0-0\n")
 	for _, operation := range x86LegacyShiftMemoryOpcodes {
-		fmt.Fprintf(&source, "%s (AX),X0\n", operation.name)
+		for _, memory := range []string{"(AX)", "8(AX)(FS)", "8(AX)(GS)"} {
+			fmt.Fprintf(&source, "%s %s,X0\n", operation.name, memory)
+		}
 	}
 	source.WriteString("RET\n")
 	file, err := Parse(ArchAMD64, source.String())
@@ -75,6 +77,7 @@ func TestX86PackedShiftAlignedReadThreeAPIsFiveO2Objects(t *testing.T) {
 		{"amd64", "x86_64-apple-darwin"}, {"amd64", "x86_64-unknown-linux-gnu"}, {"amd64", "x86_64-pc-windows-msvc"},
 		{"386", "i386-unknown-linux-gnu"}, {"386", "i686-pc-windows-msvc"},
 	} {
+		requireX86GoAssemblerResult(t, target.arch, source.String(), true)
 		options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"shifts": {Name: "shifts", Ret: Void}}}
 		ir, err := Translate(file, options)
 		if err != nil {
@@ -99,11 +102,18 @@ func TestX86PackedShiftAlignedReadThreeAPIsFiveO2Objects(t *testing.T) {
 				t.Fatal(err)
 			}
 			for api, body := range []string{ir, module.String(), result.Module.String()} {
-				if strings.Count(body, `asm sideeffect "movdqa ($1), $0", "=x,r,~{memory}"`) != 6 {
-					t.Fatalf("%s API%d lost complete aligned native count reads", target.triple, api)
+				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
+					for _, segment := range []string{"", "%fs:", "%gs:"} {
+						if strings.Count(body, `asm sideeffect "`+mnemonic+` `+segment+`($2), $0", "=x,0,r,~{memory}"`) != 1 {
+							t.Fatalf("%s API%d lost original %s %s m128 count operation", target.triple, api, mnemonic, segment)
+						}
+					}
+				}
+				if strings.Contains(body, `asm sideeffect "movdqa`) {
+					t.Fatal("count access was replaced by a stronger MOVDQA access")
 				}
 				dir := t.TempDir()
-				input, object := filepath.Join(dir, "aligned.ll"), filepath.Join(dir, "aligned.o")
+				input, object := filepath.Join(dir, "native-count.ll"), filepath.Join(dir, "native-count.o")
 				if err := os.WriteFile(input, []byte(body), 0600); err != nil {
 					t.Fatal(err)
 				}
@@ -118,15 +128,26 @@ func TestX86PackedShiftAlignedReadThreeAPIsFiveO2Objects(t *testing.T) {
 				command = exec.CommandContext(stage, disassembler, "-d", object)
 				output, err = runtimeOracleCombinedOutput(stage, command)
 				cancel()
-				if err != nil || strings.Count(string(output), "movdqa") < 6 {
-					t.Fatalf("O2 actual aligned machine reads %s API%d: %v\n%s", target.triple, api, err, output)
+				if err != nil {
+					t.Fatalf("O2 disassembly %s API%d: %v\n%s", target.triple, api, err, output)
+				}
+				for _, mnemonic := range []string{"psllw", "pslld", "psllq", "psrlw", "psrld", "psrlq"} {
+					pattern := regexp.MustCompile(`(?m)\b` + mnemonic + `\s+[^\n]*\([^\n]*\)`)
+					if len(pattern.FindAll(output, -1)) != 3 {
+						t.Fatalf("O2 actual original %s m128 count %s API%d:\n%s", mnemonic, target.triple, api, output)
+					}
+				}
+				for _, segment := range []string{"%fs:", "%gs:"} {
+					if strings.Count(string(output), segment) != 6 {
+						t.Fatalf("O2 lost six native %s count overrides %s API%d:\n%s", segment, target.triple, api, output)
+					}
 				}
 			}
 		}()
 	}
 }
 
-func TestX86PackedShiftLegacyFPAlignmentAndCallerPermissionsRemainContext(t *testing.T) {
+func TestX86PackedShiftLegacyNativeBackingAndCallerPermissionsRemainContext(t *testing.T) {
 	for _, operation := range x86LegacyShiftMemoryOpcodes {
 		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+operation.name+" count+0(FP),X0\nRET\n")
 		if err != nil {
@@ -136,10 +157,10 @@ func TestX86PackedShiftLegacyFPAlignmentAndCallerPermissionsRemainContext(t *tes
 		ctx, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], FuncSig{Ret: Void}, nil)
 		before := output.Len()
 		if _, _, err := ctx.lowerX86PackedShift(ins.Op, ins); !errors.Is(err, ErrProbeNeedsContext) || output.Len() != before {
-			t.Fatalf("unproved FP alignment emitted IR: %s %v", operation.name, err)
+			t.Fatalf("unproved native FP backing emitted IR: %s %v", operation.name, err)
 		}
 	}
-	// Initialized vectors do not supply alignment or memory permission.
+	// Initialized vectors do not supply native backing or memory permission.
 	for _, operation := range x86LegacyShiftMemoryOpcodes {
 		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+operation.name+" (CX),X0\nRET\n")
 		if err != nil {
@@ -152,7 +173,7 @@ func TestX86PackedShiftLegacyFPAlignmentAndCallerPermissionsRemainContext(t *tes
 		}
 		state := x86SourceStackState{vectors: map[Reg]uint64{"Z0": ^uint64(0)}}
 		if x86CallerPackedShiftStep(&ins, form, &state, nil) {
-			t.Fatal("initialized vector granted legacy memory alignment")
+			t.Fatal("initialized vector granted legacy native-memory permission")
 		}
 	}
 }

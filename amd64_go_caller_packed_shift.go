@@ -7,8 +7,9 @@ func x86CallerPackedShiftStep(ins *Instr, form x86PackedShiftForm, state *x86Sou
 		return false
 	}
 	if form.memory >= 0 {
-		// Legacy XMM uniform count loads require native alignment, absent
-		// from the slice-region contract. VEX/EVEX are unaligned accesses.
+		// Legacy XMM uniform count loads still need an independently bound
+		// native-address/fault contract. A slice identity alone does not
+		// establish it; the original opcode, not MOVDQA, governs faults.
 		if form.legacy || !x86CallerOrdinaryMemoryStep(ins, form.memory, state, proof, int64(form.memoryBytes), false) {
 			return false
 		}

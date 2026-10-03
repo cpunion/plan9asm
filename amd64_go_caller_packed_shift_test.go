@@ -145,7 +145,7 @@ func TestX86GoCallerPackedShiftMemoryShapesAndTargets(t *testing.T) {
 			err = x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
 			if form.legacy && form.memory >= 0 {
 				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatalf("unproved alignment passed %s: %v", row, err)
+					t.Fatalf("unproved legacy native-memory contract passed %s: %v", row, err)
 				}
 			} else if err != nil {
 				t.Fatalf("%s: %v", row, err)

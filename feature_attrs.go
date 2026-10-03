@@ -91,7 +91,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					}
 				}
 			}
-			if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, goarch); recognized && err == nil && x86PackedShiftHasAlignedCount(form) {
+			if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, goarch); recognized && err == nil && x86PackedShiftHasNativeCount(form) {
 				add("+sse2")
 			}
 			switch {
