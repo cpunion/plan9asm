@@ -301,6 +301,14 @@ initialized, create a padding slot, or authorize any address or write. Preserve
 the source MOV width, encoder scratch effects and PC identity. Manual sparse
 frames and changed type layouts retain their original missing-slot failure.
 
+The framed raw-leaf proof registers PC-relative WORD branches through the same
+exact source-boundary checker as translation. It independently checks both
+original and normalized CFGs, including dead components; named normalized
+edges must not reclassify skipped executable WORDs as anonymous data. Unknown
+widths, native address/data islands, calls, escapes and unbalanced/fixed-register
+returns remain rejected. This CFG registration supplies neither a callee ABI
+nor permission to clobber Go's reserved R18/g entry identities.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore

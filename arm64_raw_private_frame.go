@@ -83,7 +83,39 @@ func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateF
 	if !text {
 		return false
 	}
-	blocks := arm64SplitBlocks(fn)
+	// Register raw PC edges through the exact source-boundary checker. Once
+	// these edges are named, use that CFG directly: reclassifying skipped WORDs
+	// as anonymous data would change the original executable source role.
+	// Unknown words and every dead component still pass the guards below.
+	prepared := fn
+	rawBranch := false
+	for _, ins := range fn.Instrs {
+		_, _, relative, err := arm64RawPCRelativeDisplacement(ins)
+		if err != nil {
+			return false
+		}
+		if relative {
+			// Decode only the control role here. The placeholder is never
+			// emitted or trusted as a target; prepare below proves that target.
+			decoded, err := decodeARM64RawWordInstructionTarget(ins, "checked_branch_role")
+			op := arm64ControlOp(decoded)
+			if err != nil || op != "B" && op != OpJMP && !arm64IsConditionalBranch(op) {
+				// In particular BAL/BNV, BL and native address producers cannot
+				// be mistaken for ordinary fallthrough or known frame branches.
+				return false
+			}
+			rawBranch = true
+		}
+	}
+	if rawBranch {
+		var blobs []arm64RawDataBlob
+		var err error
+		prepared, blobs, err = prepareARM64RawPCRelative(fn)
+		if err != nil || len(blobs) != 0 {
+			return false
+		}
+	}
+	blocks := arm64SplitBlocks(prepared)
 	indices := make(map[string]int, len(blocks))
 	for index, block := range blocks {
 		indices[block.name] = index
@@ -201,7 +233,8 @@ func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateF
 					terminated = true
 					break
 				}
-				if op == "CALL" || op == "BL" || op == "BLR" || op == "ADR" || op == "ADRP" || op == arm64RawDataOp {
+				switch op {
+				case "CALL", "BL", "BLR", "ADR", "ADRP", "BAL", "BNV", arm64RawDataOp:
 					return false
 				}
 				if !state.transfer(original, ins, fn.FrameSize) {
