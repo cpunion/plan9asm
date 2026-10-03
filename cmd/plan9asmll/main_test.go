@@ -1485,6 +1485,9 @@ func TestExtractSupportedOpsFindsCompleteARM64AddedFamilies(t *testing.T) {
 		// NEON SM3/SM4 are WORD-only; the named SM4 forms below are SVE.
 		"WORD",
 		"MADD", "MSUB", "MADDW", "MSUBW", "SMADDL", "SMSUBL", "UMADDL", "UMSUBL",
+		// Scalar division and Go's R27/MSUB remainder share a typed grammar.
+		"SDIV", "SDIVW", "UDIV", "UDIVW",
+		"REM", "REMW", "UREM", "UREMW",
 		"FABSS", "FABSD", "FNEGS", "FNEGD", "FSQRTS", "FSQRTD", "FMOVS", "FMOVD",
 		"FCVTSD", "FCVTDS", "FCVTSH", "FCVTHS", "FCVTDH", "FCVTHD",
 		"FRINTNS", "FRINTND", "FRINTPS", "FRINTPD", "FRINTMS", "FRINTMD",
