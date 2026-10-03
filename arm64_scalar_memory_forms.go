@@ -126,9 +126,11 @@ func parseARM64ScalarMemoryForm(op Op, ins Instr) (f arm64ScalarMemoryForm, hand
 			// Go regoff narrows to int32 before matching the signed-nine-bit
 			// field. This is a source encoding rule, not a wide update.
 			offset = int64(int32(offset))
-			if mem.Index != "" || offset < -256 || offset > 255 ||
-				!arm64StackReg(f.memory.Mem.Base) && mem.Base == f.data {
+			if mem.Index != "" || offset < -256 || offset > 255 {
 				return invalid()
+			}
+			if !arm64StackReg(f.memory.Mem.Base) && mem.Base == f.data {
+				return f, true, fmt.Errorf("arm64 %s writeback has base/data register overlap: %q", op, ins.Raw)
 			}
 			f.memory.Mem.Off = offset
 			return f, true, nil

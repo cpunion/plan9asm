@@ -163,14 +163,19 @@ func TestARM64StackMovementControlFlow(t *testing.T) {
 		{"aligned-sp-and", "AND $-16,RSP,R3\nMOVD R3,RSP\nRET\n", -15, 0, false},
 		{"saved-sp-join", "MOVD RSP,R3\nCBZ R0,small\nSUB $512,R3\nB done\nsmall:\nSUB $192,R3\ndone:\nMOVD R3,RSP\nRET\n", -512, 0, false},
 		{"dynamic-alias", "MOVD RSP,R3\nSUB R0,R3\nMOVD R3,RSP\nMOVD R1,(RSP)\nRET\n", 0, 0, true},
-		{"external-sp", "MOVD (R0),RSP\nSUB R1,RSP\nRET\n", 0, 0, false},
+		{"external-sp", "MOVD (R0),R3\nMOVD R3,RSP\nSUB R1,RSP\nRET\n", 0, 0, false},
 		{"unused-stack-restore", "SUB $16,RSP\nMOVD 8(RSP),R2\nMOVD R2,RSP\nRET\n", -16, 56, false},
-		{"unproved-stack-reload", "MOVD RSP,R3\nMOVD R3,(RSP)\nMOVD (RSP),RSP\nMOVD R0,(RSP)\nRET\n", 0, 0, true},
+		{"unproved-stack-reload", "MOVD RSP,R3\nMOVD R3,(RSP)\nMOVD (RSP),R4\nMOVD R4,RSP\nMOVD R0,(RSP)\nRET\n", 0, 0, true},
 		{"alias-clobber", "MOVD RSP,R3\nMUL R0,R3\nMOVD R3,RSP\nMOVD R1,(RSP)\nRET\n", 0, 0, true},
 		{"excessive", "SUB $2097152,RSP\nMOVD R1,(RSP)\nRET\n", 0, 0, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := "TEXT stack_bounds(SB),$0-0\n" + test.body
+			if test.name == "external-sp" || test.name == "unproved-stack-reload" {
+				// Memory-to-RSP is not a Go row. Keep the unknown-SP range
+				// and failed bounded-write proof using legal GP transfers.
+				requireARM64GoAssemblerResult(t, source, true)
+			}
 			file, err := Parse(ArchARM64, source)
 			if err != nil {
 				t.Fatal(err)
