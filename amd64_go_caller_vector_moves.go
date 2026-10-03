@@ -15,6 +15,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
 		return err == nil && !(f.mask >= 0 && f.memoryWrite)
 	}
+	if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, "amd64"); recognized {
+		return err == nil && !form.mmx
+	}
 	if _, recognized, err := x86HorizontalFloatProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
@@ -82,6 +85,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if f, recognized, err := x86InsertExtractProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerInsertExtractStep(ins, f, state, proof)
+	}
+	if form, recognized, err := x86PackedShiftProperties(ins.Op, *ins, "amd64"); recognized {
+		return err == nil && x86CallerPackedShiftStep(ins, form, state, proof)
 	}
 	if form, recognized, err := x86HorizontalFloatProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerHorizontalFloatStep(ins, form, state, proof)
@@ -188,6 +194,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 	}
 	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
 		return int64(f.spec.chunk), f.memoryWrite, err == nil && f.memory == index && !(f.mask >= 0 && f.memoryWrite)
+	}
+	if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, "amd64"); recognized {
+		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if form, recognized, err := x86HorizontalFloatProperties(ins, "amd64"); recognized {
 		return int64(form.byteWidth), false, err == nil && form.spec.vector && form.memory == index

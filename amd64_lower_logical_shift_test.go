@@ -26,16 +26,18 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 			var source strings.Builder
 			source.WriteString("TEXT packedlogicalshiftforms(SB),NOSPLIT,$0-0\n")
 			for _, op := range []string{"PSLLW", "PSLLL", "PSLLQ", "PSRLW", "PSRLL", "PSRLQ"} {
-				fmt.Fprintf(&source, "\t%s $-1, M1\n", op)
-				fmt.Fprintf(&source, "\t%s M0, M1\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), M1\n", op)
+				if target.goarch == "amd64" {
+					fmt.Fprintf(&source, "\t%s $-1, M1\n", op)
+					fmt.Fprintf(&source, "\t%s M0, M1\n", op)
+					fmt.Fprintf(&source, "\t%s 8(AX), M1\n", op)
+				}
 				fmt.Fprintf(&source, "\t%s $3, X%d\n", op, legacyLast)
 				fmt.Fprintf(&source, "\t%s X0, X%d\n", op, legacyLast)
 				fmt.Fprintf(&source, "\t%s 8(AX), X%d\n", op, legacyLast)
 			}
 			for _, op := range []string{"VPSLLW", "VPSLLD", "VPSLLQ", "VPSRLW", "VPSRLD", "VPSRLQ"} {
 				for _, width := range []string{"X", "Y"} {
-					fmt.Fprintf(&source, "\t%s $-1, %s20, %s21\n", op, width, width)
+					fmt.Fprintf(&source, "\t%s $-1, %s0, %s1\n", op, width, width)
 					fmt.Fprintf(&source, "\t%s $255, 8(AX), %s21\n", op, width)
 					fmt.Fprintf(&source, "\t%s X0, %s20, %s21\n", op, width, width)
 					fmt.Fprintf(&source, "\t%s 8(AX), %s20, %s21\n", op, width, width)
@@ -62,6 +64,7 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
+			requireX86GoAssemblerResult(t, target.goarch, strings.ReplaceAll(source.String(), "NOSPLIT", "4"), true)
 
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {

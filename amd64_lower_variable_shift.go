@@ -30,6 +30,9 @@ var amd64PerLaneVariableShiftSpecs = map[string]amd64PerLaneVariableShiftSpec{
 // lowerPerLaneVariableShift implements the full Go 1.27 per-lane packed
 // variable-shift family. The first Plan 9 source supplies one count per lane.
 func (c *amd64Ctx) lowerPerLaneVariableShift(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, recognized, _ := x86PackedShiftProperties(op, ins, c.goarch); recognized {
+		return c.lowerX86PackedShift(op, ins)
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {

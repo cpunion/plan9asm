@@ -1,0 +1,161 @@
+package plan9asm
+
+import "fmt"
+
+func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
+	form, recognized, err := x86PackedShiftProperties(op, ins, c.goarch)
+	if !recognized || err != nil {
+		return recognized, false, err
+	}
+	var mask string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	dataArg := ins.Args[form.data]
+	var data string
+	if form.mmx {
+		bits, err := c.loadReg(dataArg.Reg)
+		if err != nil {
+			return true, false, err
+		}
+		data = c.bitcastI64ToIntegerLanes(64/form.laneBits, form.laneBits, bits)
+	} else if form.countMode == x86PackedShiftBytes {
+		data, err = c.loadX86PackedShiftBytes(dataArg, form.byteWidth, true)
+	} else {
+		dataMask := ""
+		if form.faultSuppressed && form.memory == form.data {
+			dataMask = mask
+		}
+		if form.memory == form.data && !form.faultSuppressed {
+			bytes, loadErr := c.loadX86PackedShiftBytes(dataArg, form.byteWidth, true)
+			err = loadErr
+			if err == nil {
+				data = c.bitcastVectorBytesToIntegerLanes(form.byteWidth, form.byteWidth*8/form.laneBits, form.laneBits, bytes)
+			}
+		} else {
+			data, err = c.loadX86PackedShiftLanes(dataArg, form.byteWidth, form.laneBits, form.broadcast && form.memory == form.data, dataMask)
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
+	lanes := form.byteWidth * 8 / form.laneBits
+	var result string
+	if form.countMode == x86PackedShiftBytes {
+		result = c.emitPackedByteShift(form.byteWidth, data, uint8(ins.Args[form.count].Imm), form.left)
+	} else {
+		if form.countMode == x86PackedShiftPerLane {
+			counts, err := c.loadX86PackedShiftLanes(ins.Args[form.count], form.byteWidth, form.laneBits, form.broadcast, mask)
+			if err != nil {
+				return true, false, err
+			}
+			operation := "lshr"
+			if form.left {
+				operation = "shl"
+			}
+			result = c.emitPerLaneVariableShift(amd64PerLaneVariableShiftSpec{laneBits: form.laneBits, operation: operation}, lanes, counts, data)
+		} else {
+			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx)
+			if err != nil {
+				return true, false, err
+			}
+			result = c.emitPackedLogicalShift(amd64PackedLogicalShiftSpec{laneBits: form.laneBits, left: form.left}, lanes, data, count)
+		}
+		if form.mask >= 0 {
+			old, err := c.loadPackedCompareLanes(ins.Args[form.destination], form.byteWidth, form.laneBits, false)
+			if err != nil {
+				return true, false, err
+			}
+			result = amd64ApplyIntegerLaneMask(c, lanes, form.laneBits, result, old, mask, form.zeroing)
+		}
+		out := c.newTmp()
+		if form.mmx {
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, form.laneBits, result)
+			return true, false, c.storeReg(ins.Args[form.destination].Reg, "%"+out)
+		}
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, form.laneBits, result, form.byteWidth)
+		result = "%" + out
+	}
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(ins.Args[form.destination], result)
+	}
+	return true, false, c.storePackedMoveOperand(ins.Args[form.destination], form.byteWidth, result)
+}
+
+// Native reads remain observable even when the shift result is a known zero.
+// Only actual EVEX mask bits can suppress the corresponding memory accesses;
+// LLVM dead-value elimination is not a native fault-suppression contract.
+func (c *amd64Ctx) loadX86PackedShiftLanes(source Operand, width, bits int, broadcast bool, mask string) (string, error) {
+	if source.Kind != OpMem && source.Kind != OpSym {
+		return c.loadMaskedPackedCompareLanes(source, width, bits, broadcast, mask)
+	}
+	lanes := width * 8 / bits
+	if mask == "" {
+		bytes := width
+		if broadcast {
+			bytes = bits / 8
+		}
+		value, err := c.loadX86PackedShiftBytes(source, bytes, true)
+		if err != nil {
+			return "", err
+		}
+		if !broadcast {
+			return c.bitcastVectorBytesToIntegerLanes(width, lanes, bits, value), nil
+		}
+		scalar := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", scalar, bytes, value, bits)
+		return amd64SplatInteger(c, lanes, bits, "%"+scalar), nil
+	}
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", err
+	}
+	load := func(offset int) func() (string, error) {
+		return func() (string, error) {
+			at, value := c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 %d\n", at, pointerType, pointer, offset)
+			fmt.Fprintf(c.b, "  %%%s = load volatile i%d, %s %%%s, align 1\n", value, bits, pointerType, at)
+			return "%" + value, nil
+		}
+	}
+	if broadcast {
+		relevant, active := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", relevant, mask, uint64(1)<<uint(lanes)-1)
+		fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", active, relevant)
+		value, err := c.loadX86ScalarIf(bits, "%"+active, load(0))
+		if err != nil {
+			return "", err
+		}
+		return amd64SplatInteger(c, lanes, bits, value), nil
+	}
+	result := "zeroinitializer"
+	for lane := 0; lane < lanes; lane++ {
+		selected, active := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %d\n", selected, mask, uint64(1)<<uint(lane))
+		fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %%%s, 0\n", active, selected)
+		value, err := c.loadX86ScalarIf(bits, "%"+active, load(lane*bits/8))
+		if err != nil {
+			return "", err
+		}
+		inserted := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %s, i%d %s, i32 %d\n", inserted, lanes, bits, result, bits, value, lane)
+		result = "%" + inserted
+	}
+	return result, nil
+}
+
+func (c *amd64Ctx) loadX86PackedShiftBytes(source Operand, width int, observable bool) (string, error) {
+	if !observable || source.Kind != OpMem && source.Kind != OpSym {
+		return c.loadPackedCompareBytes(source, width)
+	}
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = load volatile <%d x i8>, %s %s, align 1\n", value, width, pointerType, pointer)
+	return "%" + value, nil
+}
