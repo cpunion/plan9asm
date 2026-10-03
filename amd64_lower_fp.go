@@ -8,6 +8,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
+		return ok, term, err
+	}
 	if spec, recognized := amd64ScalarVectorMoveSpecs[op]; recognized && spec.legacy {
 		if _, _, err := amd64ScalarVectorMoveProperties(ins, c.goarch); err != nil {
 			return true, false, err
@@ -93,13 +96,13 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 	}
 	switch op {
 	case "MOVSS", "MOVSD", "MOVAPD", "MOVUPD",
-		"ADDSS", "SUBSS", "MULSS", "DIVSS", "MAXSS", "MINSS", "SQRTSS",
-		"ADDPS", "SUBPS", "MULPS", "DIVPS", "MAXPS", "MINPS",
-		"ADDPD", "SUBPD", "MULPD", "DIVPD", "MAXPD", "MINPD",
+		"MULSS", "DIVSS", "MAXSS", "MINSS", "SQRTSS",
+		"MULPS", "DIVPS", "MAXPS", "MINPS",
+		"MULPD", "DIVPD", "MAXPD", "MINPD",
 		"SQRTPS", "SQRTPD",
 		"MOVLHPS", "MOVHLPS", "MOVLPS", "MOVHPS", "MOVLPD", "MOVHPD",
 		"VMOVLPS", "VMOVHPS", "VMOVLPD", "VMOVHPD", "SHUFPD", "UNPCKLPS", "UNPCKHPD",
-		"ADDSD", "SUBSD", "MULSD", "DIVSD", "MAXSD", "MINSD", "SQRTSD",
+		"MULSD", "DIVSD", "MAXSD", "MINSD", "SQRTSD",
 		"COMISS", "UCOMISS", "COMISD", "UCOMISD", "CMPSD",
 		"CVTSS2SD", "VCVTSS2SD", "CVTSD2SS", "VCVTSD2SS", "CVTSL2SD", "CVTSQ2SD":
 		// handled below
@@ -174,7 +177,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			return true, false, fmt.Errorf("amd64 MOVSS unsupported destination: %q", ins.Raw)
 		}
 
-	case "ADDSS", "SUBSS", "MULSS", "DIVSS", "MAXSS", "MINSS":
+	case "MULSS", "DIVSS", "MAXSS", "MINSS":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
 		}
@@ -191,10 +194,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		}
 		value := c.newTmp()
 		switch op {
-		case "ADDSS":
-			fmt.Fprintf(c.b, "  %%%s = fadd float %s, %s\n", value, dst, src)
-		case "SUBSS":
-			fmt.Fprintf(c.b, "  %%%s = fsub float %s, %s\n", value, dst, src)
 		case "MULSS":
 			fmt.Fprintf(c.b, "  %%%s = fmul float %s, %s\n", value, dst, src)
 		case "DIVSS":
@@ -225,8 +224,8 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		fmt.Fprintf(c.b, "  %%%s = call float @llvm.sqrt.f32(float %s)\n", value, src)
 		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+value)
 
-	case "ADDPS", "SUBPS", "MULPS", "DIVPS", "MAXPS", "MINPS",
-		"ADDPD", "SUBPD", "MULPD", "DIVPD", "MAXPD", "MINPD":
+	case "MULPS", "DIVPS", "MAXPS", "MINPS",
+		"MULPD", "DIVPD", "MAXPD", "MINPD":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
 		}
@@ -247,10 +246,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		}
 		value := c.newTmp()
 		switch {
-		case strings.HasPrefix(string(op), "ADD"):
-			fmt.Fprintf(c.b, "  %%%s = fadd %s %s, %s\n", value, vectorType, dst, src)
-		case strings.HasPrefix(string(op), "SUB"):
-			fmt.Fprintf(c.b, "  %%%s = fsub %s %s, %s\n", value, vectorType, dst, src)
 		case strings.HasPrefix(string(op), "MUL"):
 			fmt.Fprintf(c.b, "  %%%s = fmul %s %s, %s\n", value, vectorType, dst, src)
 		case strings.HasPrefix(string(op), "DIV"):
@@ -400,7 +395,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			return true, false, fmt.Errorf("amd64 MOVSD unsupported destination: %q", ins.Raw)
 		}
 
-	case "ADDSD", "SUBSD", "MULSD", "DIVSD", "MAXSD", "MINSD":
+	case "MULSD", "DIVSD", "MAXSD", "MINSD":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects src, Xdst: %q", op, ins.Raw)
 		}
@@ -417,10 +412,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		}
 		t := c.newTmp()
 		switch op {
-		case "ADDSD":
-			fmt.Fprintf(c.b, "  %%%s = fadd double %s, %s\n", t, dst, src)
-		case "SUBSD":
-			fmt.Fprintf(c.b, "  %%%s = fsub double %s, %s\n", t, dst, src)
 		case "MULSD":
 			fmt.Fprintf(c.b, "  %%%s = fmul double %s, %s\n", t, dst, src)
 		case "DIVSD":

@@ -1430,6 +1430,34 @@ func TestExtractSupportedOpsFindsCompleteADXSpecTable(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteFloatAddSubSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_float_add_sub_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_float_add_sub_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, opcode := range []string{
+			"ADDPS", "ADDPD", "ADDSS", "ADDSD", "SUBPS", "SUBPD", "SUBSS", "SUBSD",
+			"VADDPS", "VADDPD", "VADDSS", "VADDSD", "VSUBPS", "VSUBPD", "VSUBSS", "VSUBSD",
+		} {
+			if _, ok := supported[opcode]; !ok {
+				t.Errorf("%s typed add/sub extraction omitted %s", arch, opcode)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsDoesNotAdvertiseSystemRegistersAsOpcodes(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

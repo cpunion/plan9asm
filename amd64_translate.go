@@ -137,6 +137,10 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 		for _, signature := range []string{
 			"float @llvm.experimental.constrained.%s.f32(float, float, metadata, metadata)",
 			"double @llvm.experimental.constrained.%s.f64(double, double, metadata, metadata)",
+			"<4 x float> @llvm.experimental.constrained.%s.v4f32(<4 x float>, <4 x float>, metadata, metadata)",
+			"<8 x float> @llvm.experimental.constrained.%s.v8f32(<8 x float>, <8 x float>, metadata, metadata)",
+			"<2 x double> @llvm.experimental.constrained.%s.v2f64(<2 x double>, <2 x double>, metadata, metadata)",
+			"<4 x double> @llvm.experimental.constrained.%s.v4f64(<4 x double>, <4 x double>, metadata, metadata)",
 			"<16 x float> @llvm.experimental.constrained.%s.v16f32(<16 x float>, <16 x float>, metadata, metadata)",
 			"<8 x double> @llvm.experimental.constrained.%s.v8f64(<8 x double>, <8 x double>, metadata, metadata)",
 			"<32 x half> @llvm.experimental.constrained.%s.v32f16(<32 x half>, <32 x half>, metadata, metadata)",

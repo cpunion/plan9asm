@@ -1280,8 +1280,9 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 
 	out := b.String()
 	for _, want := range []string{
-		"fadd double",
-		"fsub double",
+		"call double @llvm.experimental.constrained.fadd.f64",
+		"call double @__plan9asm_add_sub_special_f64",
+		"call double @llvm.experimental.constrained.fsub.f64",
 		"fmul double",
 		"fdiv double",
 		"fneg double",
@@ -1788,7 +1789,7 @@ func TestAMD64FPExtraCoverage(t *testing.T) {
 	if _, _, err := c.lowerFP("MOVSD", Instr{Raw: "MOVSD X0, label", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpIdent, Ident: "label"}}}); err == nil {
 		t.Fatalf("MOVSD bad dst unexpectedly succeeded")
 	}
-	if ok, term, err := c.lowerFP("ADDSD", Instr{Raw: "ADDSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); ok || term || err != nil {
+	if ok, term, err := c.lowerFP("ADDSD", Instr{Raw: "ADDSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("ADDSD non-X dst = (%v, %v, %v)", ok, term, err)
 	}
 	if ok, term, err := c.lowerFP("SQRTSD", Instr{Raw: "SQRTSD X0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: AX}}}); ok || term || err != nil {
@@ -1820,7 +1821,8 @@ func TestAMD64FPExtraCoverage(t *testing.T) {
 		"fcmp uno double",
 		"fcmp une double",
 		"fcmp ugt double",
-		"fadd double",
+		"call double @llvm.experimental.constrained.fadd.f64",
+		"call double @__plan9asm_add_sub_special_f64",
 		"call double @llvm.fma.f64",
 		"fneg double",
 	} {

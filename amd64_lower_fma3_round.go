@@ -85,21 +85,37 @@ func (e *amd64FMA3IntegerEmitter) align(magnitude, exponent, unit string) string
 
 func emitAMD64FMA3RoundingHelpers(b *strings.Builder, file *File, goarch string) {
 	needed := make(map[int]bool)
+	addSubNeeded := make(map[int]bool)
+	addSubSpecial := make(map[int]bool)
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
+			if form, known, err := x86FloatAddSubProperties(ins, goarch); known && err == nil {
+				addSubSpecial[form.spec.bits] = true
+				if form.rounding != "" {
+					needed[form.spec.bits], addSubNeeded[form.spec.bits] = true, true
+				}
+			}
 			form, known, err := amd64FMA3Properties(ins, goarch)
 			if known && err == nil && form.suffix.rounding != "" && !form.spec.rawOnly {
 				needed[form.spec.laneBits] = true
 			}
 		}
 	}
-	if len(needed) == 0 {
+	if len(needed) == 0 && len(addSubSpecial) == 0 {
 		return
 	}
-	b.WriteString("declare i128 @llvm.ctlz.i128(i128, i1)\n")
+	if len(needed) > 0 {
+		b.WriteString("declare i128 @llvm.ctlz.i128(i128, i1)\n")
+	}
 	for _, bits := range []int{32, 64} {
+		if addSubSpecial[bits] {
+			emitX86FloatAddSubSpecialHelper(b, bits)
+		}
 		if needed[bits] {
 			emitAMD64FMA3RoundingHelper(b, bits)
+			if addSubNeeded[bits] {
+				emitX86FloatAddSubRoundingHelper(b, bits)
+			}
 		}
 	}
 }

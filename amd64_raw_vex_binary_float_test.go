@@ -63,7 +63,7 @@ func TestTranslateRawVEXBinaryFloatWeaviateRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "fsub float") {
+	if !strings.Contains(ir, "@llvm.experimental.constrained.fsub.f32(") || !strings.Contains(ir, "@__plan9asm_add_sub_special_f32(") {
 		t.Fatalf("raw VSUBSS lowering omitted scalar subtraction:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")
@@ -185,7 +185,7 @@ func TestTranslateRawEVEXBinaryFloatWeaviateRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "fsub <16 x float>") {
+	if !strings.Contains(ir, "@llvm.experimental.constrained.fsub.v16f32(") || !strings.Contains(ir, "@__plan9asm_add_sub_special_f32(") {
 		t.Fatalf("raw EVEX VSUBPS lowering omitted packed subtraction:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")
