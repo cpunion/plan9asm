@@ -144,6 +144,28 @@ never fabricated constants for CPU-ID reads. Keep text/direct-module/CFG/raw
 paths observable and require the Linux MRS runtime oracle: only the kernel's
 HWCAP_CPUID-advertised ID-register space is safe for unprivileged execution.
 
+The seven ARM64 scalar GP memory moves share `parseARM64ScalarMemoryForm`:
+signed/unsigned widths, direct/indexed addressing, pre/post writeback, AUTO/FP
+and SB roles. Go's long-offset expansion reads the old effective address,
+materializes R27, then reads the possibly aliased transfer register. Lowering,
+caller-link/code provenance, private-frame bounds, availability and raw-PC width
+must consume that same ordered model. Only actual WORD decoding supplies a
+physical-instruction identity. AUTO/FP classes require the complete source TEXT;
+LLVM shadow slots are not native SP or linked-page identity. Differing old/new
+Go encoders require source context when their scratch value is observed, never
+a guess from the translator's build version. Preserve the independent Go-table,
+byte/state, initialized numerical/canary and complete target-object tests in
+`arm64_scalar_memory_*_test.go`.
+
+Compiler/executable/emulator subprocesses in native root oracles should use
+`runtimeOracleCombinedOutput` with their actual `CommandContext` and deadline.
+The helper retains output and failures, bounds pipe waits and cleans its owned
+Unix process group after cancellation or ordinary parent exit. Non-Unix owns
+only the direct child. Extend the lifecycle AST regression when adding a new
+consumer; do not introduce another direct `CombinedOutput` call that bypasses
+the helper. Release LLVM modules before their contexts and before each fixture's
+temporary files are removed.
+
 A typical x86 investigation starts with the Go 1.27 tables and an assembler
 probe:
 

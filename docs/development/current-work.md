@@ -246,6 +246,24 @@ the translator's build Go version. Retain its old/new byte/state and raw-PC
 failure oracles; run `TestARM64GPImmediate` and
 `TestCrossLinuxRuntimeMatrixARM64GPImmediate` before broader validation.
 
+The scalar GP memory family is now integrated locally. Its shared typed grammar
+models Go's ordered R27 expansion across lowering and every source-state proof.
+Physical WORD identity, AUTO/FP source-frame classes and encoder-dependent or
+linked-page scratch remain distinct; unknown observable scratch is Context,
+not source N/A. New and existing private-frame positive/escape-negative guards
+must run together. Separate clean family gates do not establish later integrated
+or whole-library success.
+
+Native oracle commands now use a bounded owned lifecycle in the repaired
+consumers, including the new scalar-memory Go assembler audit. Keep its AST
+consumer inventory current. Dependency-free fixture minima have actual Go 1.20
+oracles; the executed repeated raw helper uses ordinary R22/R23 instead of
+temporarily writing g/R18. Separate old reserved-register object proofs are not
+executed-runtime coverage. The self-BL observation repair is separately reviewed:
+startup, a full post-marker window and successful cancellation are independent
+conditions. Its caller readiness marker is not an independent ASM-PC witness.
+Require fresh combined-source host and pinned Linux/QEMU gates before promotion.
+
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
 processes. Existing skips are counted separately. It does not cover other
