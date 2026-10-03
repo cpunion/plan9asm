@@ -940,6 +940,8 @@ TEXT ·packedFloatMoveVEXSemantics(SB), NOSPLIT, $0-16
 // merge/zero loads, register moves, and masked memory stores at X/Y/Z widths.
 // It is assembled by the native oracle but executed only after LLVM lowering,
 // because the original mask forms require AVX-512.
+// Memory stores use merging masks: EVEX.z=1 stores raise #UD and are checked
+// separately by the complete expected-fault Go/LLVM runtime oracle.
 TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	MOVQ out+0(FP), AX
 	MOVQ src+8(FP), BX
@@ -959,7 +961,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVUPS (CX), X0
 	VMOVUPS X0, 48(AX)
 	VMOVUPS (BX), X1
-	VMOVAPS.Z X1, K1, 48(AX)
+	VMOVAPS X1, K1, 48(AX)
 
 	VMOVUPD (CX), X0
 	VMOVUPD (BX), K1, X0
@@ -969,7 +971,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVUPD (CX), X0
 	VMOVUPD X0, 96(AX)
 	VMOVUPD (BX), X1
-	VMOVAPD.Z X1, K1, 96(AX)
+	VMOVAPD X1, K1, 96(AX)
 
 	VMOVAPS (CX), Y0
 	VMOVAPS (BX), K1, Y0
@@ -979,7 +981,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVUPS (CX), Y0
 	VMOVUPS Y0, 176(AX)
 	VMOVUPS (BX), Y1
-	VMOVUPS.Z Y1, K1, 176(AX)
+	VMOVUPS Y1, K1, 176(AX)
 
 	VMOVAPD (CX), Y0
 	VMOVAPD (BX), K1, Y0
@@ -989,7 +991,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVUPD (CX), Y0
 	VMOVUPD Y0, 272(AX)
 	VMOVUPD (BX), Y1
-	VMOVUPD.Z Y1, K1, 272(AX)
+	VMOVUPD Y1, K1, 272(AX)
 
 	VMOVUPS (CX), Z0
 	VMOVUPS (BX), K1, Z0
@@ -999,7 +1001,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVAPS (CX), Z0
 	VMOVAPS Z0, 432(AX)
 	VMOVAPS (BX), Z1
-	VMOVAPS.Z Z1, K1, 432(AX)
+	VMOVAPS Z1, K1, 432(AX)
 
 	VMOVUPD (CX), Z0
 	VMOVUPD (BX), K1, Z0
@@ -1009,7 +1011,7 @@ TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24
 	VMOVAPD (CX), Z0
 	VMOVAPD Z0, 624(AX)
 	VMOVAPD (BX), Z1
-	VMOVAPD.Z Z1, K1, 624(AX)
+	VMOVAPD Z1, K1, 624(AX)
 	VZEROUPPER
 	RET
 

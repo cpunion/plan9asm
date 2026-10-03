@@ -511,6 +511,12 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Numeric fixtures must return normally. Go-accepted EVEX zeroing memory
+	// stores raise #UD and belong in the separate exhaustive fault oracle,
+	// not in a fixture whose C driver expects an arithmetic result.
+	if strings.Contains(ll, `asm sideeffect "ud2"`) {
+		t.Fatal("numeric conformance fixture contains an architectural trap; preserve it in the separate expected-fault oracle")
+	}
 	mainC := `
 #include <stdint.h>
 extern void byteMemory(uint8_t *p, uint8_t value);
