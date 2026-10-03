@@ -197,6 +197,15 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 // A non-nil selection is a source-predicate model only. The corpus mode
 // protocol independently binds its actual exclusive driver flags later.
 func planDiscoveryFeaturePairWithMode(ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, selection *discoveryInstrumentationSelectionModel) (discoveryFeatureProfileRequest, bool, error) {
+	return planDiscoveryFeaturePairWithExpressions(ctx, baseline, asmFile, goFile, selection, func(file string) (constraint.Expr, error) {
+		return discoveryFileBuildExpression(file, ctx.OpenFile)
+	})
+}
+
+// Ordinary callers retain their original parser. Only instrumentation's
+// per-call source index supplies a memoized expression reader; stock filename
+// and final MatchFile selection still read the exact original source.
+func planDiscoveryFeaturePairWithExpressions(ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, selection *discoveryInstrumentationSelectionModel, expression func(string) (constraint.Expr, error)) (discoveryFeatureProfileRequest, bool, error) {
 	if selection != nil {
 		ctx.CgoEnabled = selection.CGO
 		if selection.Mode != "" {
@@ -215,7 +224,7 @@ func planDiscoveryFeaturePairWithMode(ctx build.Context, baseline *discoveryTarg
 	var allTags []string
 	var expressions []constraint.Expr
 	for _, file := range []string{asmFile, goFile} {
-		expr, err := discoveryFileBuildExpression(filepath.FromSlash(file), ctx.OpenFile)
+		expr, err := expression(filepath.FromSlash(file))
 		if err != nil {
 			return discoveryFeatureProfileRequest{}, false, err
 		}

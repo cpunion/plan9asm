@@ -1,18 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/build"
-	"go/parser"
-	"go/token"
-	"io"
 	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
@@ -111,13 +106,14 @@ func planDiscoveryInstrumentationRequirements(plan *discoveryOrdinarySelectionPl
 	if plan == nil || len(baselines) != len(plan.Targets) {
 		return nil, fmt.Errorf("mode planning requires every actual target baseline")
 	}
-	contents := make(map[string][]byte)
-	for _, source := range plan.Sources {
-		if _, duplicate := contents[source.File]; duplicate {
-			return nil, fmt.Errorf("duplicate mode selection source")
-		}
-		contents[source.File] = []byte(source.Header)
+	index, err := newDiscoveryInstrumentationSourceIndex(plan, files)
+	if err != nil {
+		return nil, err
 	}
+	return planDiscoveryInstrumentationRequirementsIndexed(plan, files, baselines, index)
+}
+
+func planDiscoveryInstrumentationRequirementsIndexed(plan *discoveryOrdinarySelectionPlan, files []string, baselines []*discoveryTargetFeatures, index *discoveryInstrumentationSourceIndex) ([]discoveryInstrumentationRequirement, error) {
 	byKey := make(map[string]*discoveryInstrumentationRequirement)
 	seenTargets := make(map[string]bool)
 	for _, baseline := range baselines {
@@ -129,23 +125,17 @@ func planDiscoveryInstrumentationRequirements(plan *discoveryOrdinarySelectionPl
 		if err != nil {
 			return nil, err
 		}
-		ctx.OpenFile = func(file string) (io.ReadCloser, error) {
-			data, found := contents[filepath.ToSlash(file)]
-			if !found {
-				return nil, fmt.Errorf("uncaptured original mode source: %s", file)
-			}
-			return io.NopCloser(bytes.NewReader(data)), nil
-		}
+		ctx.OpenFile = index.open
 		for _, asmFile := range files {
-			if _, found := contents[asmFile]; !found {
+			if _, found := index.contents[asmFile]; !found {
 				return nil, fmt.Errorf("missing original mode assembly source")
 			}
 			dir := path.Dir(asmFile)
-			if discoveryDirIsIgnored(dir) || discoveryFeatureNestedSource(plan, dir) || ordinarySelectionPackagePathError(plan.Module, dir) != nil {
+			if !index.directoryEligible(plan.Module, dir) {
 				continue
 			}
-			for _, goFile := range sortedModeGoPartners(contents, dir) {
-				mentioned, cgoMentioned, err := discoveryInstrumentationPairTags(ctx, asmFile, goFile)
+			for _, goFile := range index.goPartners(dir) {
+				mentioned, cgoMentioned, err := index.pairTags(asmFile, goFile)
 				if err != nil {
 					return nil, err
 				}
@@ -158,7 +148,7 @@ func planDiscoveryInstrumentationRequirements(plan *discoveryOrdinarySelectionPl
 						cgovalues = append(cgovalues, false)
 					}
 					for _, cgo := range cgovalues {
-						request, found, err := planDiscoveryFeaturePairWithMode(ctx, baseline, asmFile, goFile, &discoveryInstrumentationSelectionModel{Mode: mode, CGO: cgo})
+						request, found, err := planDiscoveryFeaturePairWithExpressions(ctx, baseline, asmFile, goFile, &discoveryInstrumentationSelectionModel{Mode: mode, CGO: cgo}, index.expression)
 						if err != nil {
 							return nil, fmt.Errorf("mode source pair %s + %s on %s/%s: %w", asmFile, goFile, baseline.Target, mode, err)
 						}
@@ -216,34 +206,6 @@ func planDiscoveryInstrumentationRequirements(plan *discoveryOrdinarySelectionPl
 		result = append(result, r)
 	}
 	return result, nil
-}
-
-func sortedModeGoPartners(contents map[string][]byte, dir string) []string {
-	var files []string
-	for name, source := range contents {
-		if path.Dir(name) != dir || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") || strings.HasPrefix(path.Base(name), ".") || strings.HasPrefix(path.Base(name), "_") {
-			continue
-		}
-		if _, err := parser.ParseFile(token.NewFileSet(), name, source, parser.PackageClauseOnly); err == nil {
-			files = append(files, name)
-		}
-	}
-	sort.Strings(files)
-	return files
-}
-
-func discoveryInstrumentationPairTags(ctx build.Context, files ...string) (map[string]bool, bool, error) {
-	all := make(map[string]bool)
-	for _, file := range files {
-		expr, err := discoveryFileBuildExpression(filepath.FromSlash(file), ctx.OpenFile)
-		if err != nil {
-			return nil, false, err
-		}
-		if expr != nil {
-			collectDiscoveryConstraintTags(expr, all)
-		}
-	}
-	return all, all["cgo"], nil
 }
 
 func discoveryInstrumentationPairRequired(ctx build.Context, baseline *discoveryTargetFeatures, request discoveryFeatureProfileRequest, asm, goFile string, cgo bool) (bool, error) {
