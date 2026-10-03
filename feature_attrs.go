@@ -79,6 +79,14 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+sse2")
 					}
 				}
+				// Only actually validated native legacy m128 forms need an
+				// XMM constraint for their exact original SSE opcode bridge.
+				switch x86LegacyPackedFloatingNativeMemoryBits(ins, goarch) {
+				case 32:
+					add("+sse")
+				case 64:
+					add("+sse2")
+				}
 				// Default i386 floating legalization otherwise uses x87, whose
 				// control/status state is not the source instruction's MXCSR.
 				// Only validated dynamic MUL/DIV forms get this private SSE

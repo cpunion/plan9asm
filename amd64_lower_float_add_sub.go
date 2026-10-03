@@ -27,6 +27,9 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 // its arithmetic emitter, so a common shape grants no numerical behavior.
 func (c *amd64Ctx) lowerFloatBinaryOperands(ins Instr, form x86FloatBinaryForm, emit func(int, string, string, string) string) (bool, bool, error) {
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && !form.scalar && form.memory >= 0 {
+		return true, false, c.lowerLegacyPackedFloatingMemory(ins, form)
+	}
 	if first.Kind == OpFP {
 		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
 			return true, false, err

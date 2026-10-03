@@ -57,10 +57,11 @@ func testX86FloatMulDivPhysicalSemantics(t *testing.T, fixed bool) {
 		}
 		opcode := strings.Split(strings.Fields(row)[0], ".")[0]
 		independentDivide := strings.Contains(opcode, "DIV")
+		aligned := form.legacy && !form.scalar && form.memory >= 0
 		fmt.Fprintf(&checks, `
  for(int round=0;round<4;round++) for(int m=0;m<4;m++) for(int control=0;control<6;control++) for(int ambient=0;ambient<4;ambient++) {
-  uint8_t aStorage[66],bStorage[68],out[67];uint8_t *a=aStorage+1,*b=bStorage+3;
-  memset(aStorage,0xa7,66);memset(bStorage,0xb9,68);memset(out,0xc3,67);
+  uint8_t aStorage[96] __attribute__((aligned(16))),bStorage[68],out[67];uint8_t *a=aStorage+(%[13]d?16:1),*b=bStorage+3;
+  memset(aStorage,0xa7,96);memset(bStorage,0xb9,68);memset(out,0xc3,67);
   for(int i=0;i<64/%[2]d;i++) { uint64_t av=%[3]d==32?UINT64_C(0x3f000001)+i*0x12345+round*0x10000:UINT64_C(0x3fe0000000000001)+i*0x123456789;
    uint64_t bv=%[3]d==32?UINT64_C(0xbf800001)+i*0x12345:UINT64_C(0xbff0000000000001)+i*0x2345678;
    if(round==1){av=%[3]d==32?UINT64_C(0x7fc12345)+i:UINT64_C(0x7ff8123456789abc)+i;bv=%[3]d==32?UINT64_C(0xffc45678)+i:UINT64_C(0xfff8fedcba987654)+i;}
@@ -80,9 +81,9 @@ func testX86FloatMulDivPhysicalSemantics(t *testing.T, fixed bool) {
    if(got!=want){fprintf(stderr,"%[1]s lane=%%d got=%%llx want=%%llx\n",i,(unsigned long long)got,(unsigned long long)want);return %[11]d;}
   }
   if(observed!=(csr|expectedFlags)){fprintf(stderr,"%[1]s sticky observed=%%x expected=%%x\n",observed,csr|expectedFlags);return 3;}
-  if(out[0]!=0xc3 || out[65]!=1 || out[66]!=0xc3 || aStorage[0]!=0xa7 || aStorage[65]!=0xa7 || bStorage[2]!=0xb9 || bStorage[67]!=0xb9)return 2;
+  if(out[0]!=0xc3 || out[65]!=1 || out[66]!=0xc3 || a[-1]!=0xa7 || a[64]!=0xa7 || bStorage[2]!=0xb9 || bStorage[67]!=0xb9)return 2;
  }
-`, name, form.spec.bits/8, form.spec.bits, x86FloatAddSubBoolInt(form.broadcast), form.mask, arithmeticBytes, x86FloatAddSubBoolInt(independentDivide), x86FloatAddSubBoolInt(form.zeroing), x86FloatAddSubBoolInt(form.spec.legacy), x86FloatAddSubBoolInt(form.spec.scalar), count+10, fixedMode)
+`, name, form.spec.bits/8, form.spec.bits, x86FloatAddSubBoolInt(form.broadcast), form.mask, arithmeticBytes, x86FloatAddSubBoolInt(independentDivide), x86FloatAddSubBoolInt(form.zeroing), x86FloatAddSubBoolInt(form.spec.legacy), x86FloatAddSubBoolInt(form.spec.scalar), count+10, fixedMode, x86FloatAddSubBoolInt(aligned))
 	}
 	requireX86GoAssemblerResult(t, "amd64", source.String(), true)
 	file, err := Parse(ArchAMD64, source.String())
