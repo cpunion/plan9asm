@@ -1,12 +1,16 @@
 package plan9asm
 
 func x86CallerFloatAddSubStep(ins *Instr, form x86FloatAddSubForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	return x86CallerFloatBinaryStep(ins, form.x86FloatBinaryForm, state, proof)
+}
+
+func x86CallerFloatBinaryStep(ins *Instr, form x86FloatBinaryForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false
 	}
 	width := int64(form.byteWidth)
-	if form.spec.scalar {
-		width = int64(form.spec.bits / 8)
+	if form.scalar {
+		width = int64(form.bits / 8)
 	}
 	required := x86CallerVectorByteMask(width)
 	if form.memory >= 0 && !x86CallerOrdinaryMemoryStep(ins, form.memory, state, proof, int64(form.memoryBytes), false) {
@@ -25,9 +29,9 @@ func x86CallerFloatAddSubStep(ins *Instr, form x86FloatAddSubForm, state *x86Sou
 		return false
 	}
 	known := ^uint64(0)
-	if form.spec.legacy {
+	if form.legacy {
 		known = old | required
-	} else if form.spec.scalar {
+	} else if form.scalar {
 		upperX := x86CallerVectorByteMask(16) &^ required
 		second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)]
 		known = ^x86CallerVectorByteMask(16) | required | second&upperX

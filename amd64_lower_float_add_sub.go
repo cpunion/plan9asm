@@ -18,6 +18,14 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 	if err != nil || !recognized {
 		return recognized, false, err
 	}
+	return c.lowerFloatBinaryOperands(ins, form.x86FloatBinaryForm, func(lanes int, left, right, mask string) string {
+		return c.emitFloatAddSub(form, lanes, left, right, mask)
+	})
+}
+
+// Shared yxm/VEX/EVEX source loading and alias writes. Each family supplies
+// its arithmetic emitter, so a common shape grants no numerical behavior.
+func (c *amd64Ctx) lowerFloatBinaryOperands(ins Instr, form x86FloatBinaryForm, emit func(int, string, string, string) string) (bool, bool, error) {
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
 	if first.Kind == OpFP {
 		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
@@ -25,14 +33,15 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 		}
 	}
 	var mask string
+	var err error
 	if form.mask >= 0 {
 		mask, err = c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
 	}
-	bits := form.spec.bits
-	if form.spec.scalar {
+	bits := form.bits
+	if form.scalar {
 		a, err := c.loadFMA3Scalar(first, bits, mask)
 		if err != nil {
 			return true, false, err
@@ -41,7 +50,7 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 		if err != nil {
 			return true, false, err
 		}
-		value := c.emitFloatAddSub(form, 1, b, a, mask)
+		value := emit(1, b, a, mask)
 		integer := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", integer, amd64FMA3LLVMType(1, bits), value, bits)
 		upper, err := c.loadX(second.Reg)
@@ -50,7 +59,7 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 		}
 		lanes := 128 / bits
 		base := c.bitcastVectorBytesToIntegerLanes(16, lanes, bits, upper)
-		if !form.spec.legacy {
+		if !form.legacy {
 			return true, false, c.storeScalarMoveRegister(destination.Reg, bits, "%"+integer, base, mask, form.zeroing)
 		}
 		merged := c.newTmp()
@@ -72,7 +81,7 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 	aFloat, bFloat := c.newTmp(), c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to %s\n", aFloat, lanes, bits, a, floatType)
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to %s\n", bFloat, lanes, bits, b, floatType)
-	value := c.emitFloatAddSub(form, lanes, "%"+bFloat, "%"+aFloat, mask)
+	value := emit(lanes, "%"+bFloat, "%"+aFloat, mask)
 	result := c.bitcastFloatingToIntegerLanes(floatType, lanes, bits, value)
 	if form.mask >= 0 {
 		old, err := c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
@@ -83,7 +92,7 @@ func (c *amd64Ctx) lowerFloatAddSub(op Op, ins Instr) (bool, bool, error) {
 	}
 	bytes := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", bytes, lanes, bits, result, form.byteWidth)
-	if form.spec.legacy {
+	if form.legacy {
 		return true, false, c.storeLegacyPackedLogical(destination, "%"+bytes)
 	}
 	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+bytes)
