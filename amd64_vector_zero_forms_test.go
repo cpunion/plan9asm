@@ -2,9 +2,106 @@ package plan9asm
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+func TestX86VectorZeroEveryGoOpcodeAttribute(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/avx_optabs.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables := string(data)
+	start := strings.Index(tables, "var _yvzeroall = []ytab{")
+	if start < 0 {
+		t.Fatal("actual Go zero-operand family disappeared")
+	}
+	table := strings.SplitN(tables[start:], "\n}", 2)[0]
+	if strings.Count(table, "zcase:") != 1 || !strings.Contains(table, "{zcase: Zvex, zoffset: 2, args: argList{}},") {
+		t.Fatalf("complete actual Go vector-zero operand table changed: %s", table)
+	}
+	if len(x86VectorZeroSpecs) != 2 || strings.Count(tables, "ytab: _yvzeroall,") != 2 {
+		t.Fatal("incomplete vector-zero family")
+	}
+	for _, row := range []struct {
+		op    Op
+		width string
+		first int
+		bytes string
+	}{
+		{"VZEROUPPER", "vex128", 16, "c5 f8 77"},
+		{"VZEROALL", "vex256", 0, "c5 fc 77"},
+	} {
+		start := strings.Index(tables, "{as: A"+string(row.op)+",")
+		if start < 0 {
+			t.Fatalf("actual Go omitted %s", row.op)
+		}
+		entry := strings.SplitN(tables[start:], "\n\t}},", 2)[0]
+		if strings.Count(entry, "avxEscape") != 1 || !strings.Contains(entry, "ytab: _yvzeroall, prefix: Pavx,") || !strings.Contains(entry, "avxEscape | "+row.width+" | vex0F | vexW0, 0x77,") {
+			t.Fatalf("complete actual Go zero attributes changed: %s", entry)
+		}
+		if x86VectorZeroSpecs[row.op].firstByte != row.first {
+			t.Fatalf("%s implicit byte range differs", row.op)
+		}
+		for _, arch := range []string{"amd64", "386"} {
+			listing, err := x86ExtensionGoListing(t, arch, string(row.op))
+			if err != nil || !strings.Contains(listing, row.bytes) {
+				t.Fatalf("actual Go %s/%s byte identity: %v\n%s", arch, row.op, err, listing)
+			}
+		}
+	}
+}
+
+func TestX86VectorZeroDispatchAndImplicitModeRangeBeforeEmission(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, opcode := range []Op{"VZEROUPPER", "VZEROALL"} {
+			for _, identity := range []Op{"", opcode, Op(strings.ToLower(string(opcode))), "UNKNOWN", "VZEROALL.Z"} {
+				var output strings.Builder
+				ctx := &amd64Ctx{b: &output, goarch: arch, xRegSlot: map[int]string{}, yRegSlot: map[int]string{}, zRegSlot: map[int]string{}}
+				for register := 0; register < 32; register++ {
+					ctx.xRegSlot[register] = fmt.Sprintf("%%x%d", register)
+					ctx.yRegSlot[register] = fmt.Sprintf("%%y%d", register)
+					ctx.zRegSlot[register] = fmt.Sprintf("%%z%d", register)
+				}
+				ins := Instr{Op: identity}
+				original := ins
+				known, term, err := ctx.lowerVec(opcode, ins)
+				conflict := identity == "UNKNOWN" || identity == "VZEROALL.Z"
+				if !known || term || (err != nil) != conflict || conflict && output.Len() != 0 || !reflect.DeepEqual(ins, original) {
+					t.Fatalf("dispatch identity %s/%s/%s: %t/%t/%v", arch, opcode, identity, known, term, err)
+				}
+				if conflict {
+					continue
+				}
+				last, views := 16, 3
+				if arch == "386" {
+					last = 8
+				}
+				if opcode == "VZEROUPPER" {
+					views = 2
+				}
+				if strings.Count(output.String(), "  store ") != last*views {
+					t.Fatalf("%s/%s wrong implicit bank writes:\n%s", arch, opcode, output.String())
+				}
+				for register := last; register < 32; register++ {
+					for _, bank := range []string{"x", "y", "z"} {
+						if strings.Contains(output.String(), fmt.Sprintf("ptr %%%s%d\n", bank, register)) || strings.Contains(output.String(), fmt.Sprintf("ptr %%%s%d,", bank, register)) {
+							t.Fatalf("%s touched excluded %s%d", opcode, bank, register)
+						}
+					}
+				}
+			}
+			known, _, err := (&amd64Ctx{b: &strings.Builder{}, goarch: arch}).lowerVec(Op(string(opcode)+".Z"), Instr{})
+			if !known || err == nil {
+				t.Fatal("empty helper identity washed away a suffix")
+			}
+		}
+	}
+}
 
 func TestX86VectorZeroCompleteGoFormsFiveObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
@@ -92,5 +189,51 @@ func TestX86VectorZeroReservedRawFormsFailClosed(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestX86VectorZeroAllRawVEXFieldsAndModeDisambiguation(t *testing.T) {
+	accepted := 0
+	for _, mode := range []int{32, 64} {
+		for _, vex3 := range []bool{false, true} {
+			extensions := 1
+			if vex3 {
+				extensions = 8
+			}
+			for extension := 0; extension < extensions; extension++ {
+				for payload := 0; payload < 256; payload++ {
+					code := []byte{0xc5, byte(payload), 0x77}
+					if vex3 {
+						code = []byte{0xc4, byte(extension<<5) | 1, byte(payload), 0x77}
+					}
+					ins, length, known, err := decodedX86VectorZeroInstruction(code, mode)
+					legacy := mode == 32 && code[1]&0xc0 != 0xc0
+					valid := !legacy && payload&3 == 0 && payload&0x78 == 0x78
+					if legacy {
+						if known || err != nil {
+							t.Fatalf("%x mode32 LES/LDS was claimed as VEX zero: %t/%v", code, known, err)
+						}
+						continue
+					}
+					if !known || (err == nil) != valid {
+						t.Fatalf("%x mode%d validity: %t/%v want %t", code, mode, known, err, valid)
+					}
+					if !valid {
+						continue
+					}
+					want := Op("VZEROUPPER")
+					if payload&4 != 0 {
+						want = "VZEROALL"
+					}
+					if ins.Op != want || len(ins.Args) != 0 || length != len(code) {
+						t.Fatalf("%x mode%d changed zero-operation/length: %+v/%d", code, mode, ins, length)
+					}
+					accepted++
+				}
+			}
+		}
+	}
+	if accepted != 46 {
+		t.Fatalf("complete implicit VEX field axis accepted %d, want 46", accepted)
 	}
 }

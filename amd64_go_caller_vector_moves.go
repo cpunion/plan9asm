@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, recognized, err := x86VectorZeroProperties(ins, "amd64"); recognized {
+		return err == nil
+	}
 	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
 		return err == nil && !(f.mask >= 0 && f.memoryWrite)
 	}
@@ -62,6 +65,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, recognized, err := x86VectorZeroProperties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerVectorZeroStep(form, state)
+	}
 	if f, recognized, err := x86InsertExtractProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerInsertExtractStep(ins, f, state, proof)
 	}

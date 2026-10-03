@@ -381,3 +381,12 @@ X7/Y7/Z7 need a real physical mode32 binding; keep their actual Go encodings
 and Context regressions rather than interpreting them as ordinary virtual
 registers. Consult the [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
 and preserve zero-mask/guard-page and complete-byte runtime oracles.
+
+The zero-operand VZEROUPPER/VZEROALL family has implicit SIMD writes, not no-op
+semantics. Its shared grammar/lowerer/caller effect uses registers 0-15 on
+amd64 and 0-7 on 386, preserves registers 16-31, and distinguishes preserved
+low X bytes from known-zero wider bytes. Raw VEX.L selects the two operations;
+reserved pp/vvvv and forbidden prefix combinations must not inherit the pinned
+decoder's incorrect VZEROUPPER spelling. Keep full-bank alias, flags, MXCSR and
+mask canaries. See Intel SDM Vol. 2C VZEROALL/VZEROUPPER in the linked manual;
+portable LLVM execution does not prove native AVX execution.

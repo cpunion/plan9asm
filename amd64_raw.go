@@ -527,6 +527,18 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += named.length
 				continue
 			}
+			if instruction, length, ok, err := decodedX86VectorZeroInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 vector zero at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, literal, ok, err := decodeX86RawADX(code, offset, mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 ADX at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -10184,7 +10196,7 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		// Family-specific decoders above must handle those encodings; never
 		// let generic fallback turn a missing family into valid but wrong IR.
 		switch inst.Op {
-		case x86asm.VMOVDQA, x86asm.VMOVDQU, x86asm.VMOVNTDQ, x86asm.VMOVNTDQA, x86asm.VZEROUPPER:
+		case x86asm.VMOVDQA, x86asm.VMOVDQU, x86asm.VMOVNTDQ, x86asm.VMOVNTDQA:
 		default:
 			return "", fmt.Errorf("unrecognized VEX instruction decoded as legacy %s", inst.Op)
 		}

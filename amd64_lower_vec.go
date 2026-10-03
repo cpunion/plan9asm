@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerVectorZero(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, term, err := c.lowerInsertExtractFamily(op, ins); ok {
 		return ok, term, err
 	}
@@ -269,14 +272,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", bc, tvec)
 			return true, false, c.storeX(ins.Args[1].Reg, "%"+bc)
 		}
-	}
-
-	if op == "VZEROUPPER" {
-		// No-op in LLVM IR. Kept for completeness.
-		return true, false, nil
-	}
-	if op == "VZEROALL" {
-		return true, false, nil
 	}
 
 	if op == "VMOVDQA" {
