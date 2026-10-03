@@ -32,6 +32,11 @@ func testSnapshotGuardCapture(t testing.TB, payloadBytes int) (*discoveryTestMod
 		t.Fatal(err)
 	}
 	writer := zip.NewWriter(file)
+	t.Cleanup(func() {
+		// Fatal setup paths must finalize the ZIP before releasing its file.
+		_ = writer.Close()
+		_ = file.Close()
+	})
 	for name, contents := range files {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(contents), 0600); err != nil {
 			t.Fatal(err)
