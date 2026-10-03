@@ -341,42 +341,69 @@ func discoveryFileBuildExpression(filePath string, openers ...func(string) (io.R
 	}
 	defer file.Close()
 
-	var goBuild, legacy constraint.Expr
+	var goBuild constraint.Expr
+	var legacyLines []string
+	legacyEnd := 0
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 64<<10), 4<<20)
 	inBlockComment := false
+	ended := false
+	firstLine := true
+Header:
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if inBlockComment {
-			if strings.Contains(line, "*/") {
-				inBlockComment = false
-			}
-			continue
+		line := scanner.Text()
+		if firstLine {
+			// go/build's import reader strips only an initial UTF-8 BOM,
+			// before its comment/header parser sees the source.
+			line = strings.TrimPrefix(line, "\ufeff")
+			firstLine = false
 		}
-		if line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "/*") {
-			inBlockComment = !strings.Contains(line, "*/")
+		line = strings.TrimSpace(line)
+		if line == "" && !ended {
+			// Go's legacy directives stop at the last blank line before
+			// the first non-// line, not at the package clause itself.
+			legacyEnd = len(legacyLines)
 			continue
 		}
 		if !strings.HasPrefix(line, "//") {
-			break
+			ended = true
 		}
-		goBuildLine := constraint.IsGoBuild(line)
-		if !goBuildLine && !constraint.IsPlusBuild(line) {
-			continue
+		if !ended && constraint.IsPlusBuild(line) {
+			legacyLines = append(legacyLines, line)
 		}
-		parsed, err := constraint.Parse(line)
-		if err != nil {
-			return nil, fmt.Errorf("parse build constraint %s: %w", filePath, err)
-		}
-		if goBuildLine {
+		if !inBlockComment && constraint.IsGoBuild(line) {
+			if goBuild != nil {
+				return nil, fmt.Errorf("parse build constraints %s: multiple //go:build comments", filePath)
+			}
+			parsed, err := constraint.Parse(line)
+			if err != nil {
+				return nil, fmt.Errorf("parse build constraint %s: %w", filePath, err)
+			}
 			goBuild = parsed
-		} else if legacy == nil {
-			legacy = parsed
-		} else {
-			legacy = &constraint.AndExpr{X: legacy, Y: parsed}
+		}
+
+		// Match go/build's header boundary through consecutive block
+		// comments. Code after */ ends the header on that same line;
+		// a following line cannot invent another build constraint.
+		for line != "" {
+			if inBlockComment {
+				end := strings.Index(line, "*/")
+				if end < 0 {
+					continue Header
+				}
+				inBlockComment = false
+				line = strings.TrimSpace(line[end+2:])
+				continue
+			}
+			if strings.HasPrefix(line, "//") {
+				continue Header
+			}
+			if strings.HasPrefix(line, "/*") {
+				inBlockComment = true
+				line = strings.TrimSpace(line[2:])
+				continue
+			}
+			break Header
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -384,6 +411,20 @@ func discoveryFileBuildExpression(filePath string, openers ...func(string) (io.R
 	}
 	if goBuild != nil {
 		return goBuild, nil
+	}
+	var legacy constraint.Expr
+	for _, line := range legacyLines[:legacyEnd] {
+		parsed, err := constraint.Parse(line)
+		if err != nil {
+			// Like go/build.shouldBuild, malformed legacy comments do
+			// not reject the source or override a modern directive.
+			continue
+		}
+		if legacy == nil {
+			legacy = parsed
+		} else {
+			legacy = &constraint.AndExpr{X: legacy, Y: parsed}
+		}
 	}
 	return legacy, nil
 }

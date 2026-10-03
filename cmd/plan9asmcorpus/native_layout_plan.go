@@ -93,10 +93,16 @@ func nativeLayoutSourceInputFromBytes(file string, data []byte) (nativeLayoutSou
 		scanner := bufio.NewScanner(bytes.NewReader(data))
 		scanner.Buffer(make([]byte, 64<<10), 4<<20)
 		inBlock := false
+		firstLine := true
 		var header strings.Builder
 		for scanner.Scan() {
 			line := scanner.Text()
-			trimmed := strings.TrimSpace(line)
+			selectionLine := line
+			if firstLine {
+				selectionLine = strings.TrimPrefix(selectionLine, "\ufeff")
+				firstLine = false
+			}
+			trimmed := strings.TrimSpace(selectionLine)
 			if !inBlock && trimmed != "" && !strings.HasPrefix(trimmed, "//") && !strings.HasPrefix(trimmed, "/*") {
 				break
 			}
