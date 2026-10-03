@@ -23,7 +23,7 @@ func arm64MemoryAuditGoCommand(t *testing.T, goos string, args ...string) ([]byt
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", args...)
 	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=arm64")
-	output, err := command.CombinedOutput()
+	output, err := runtimeOracleCombinedOutput(ctx, command)
 	if ctx.Err() != nil {
 		t.Fatalf("actual Go command deadline: %v", ctx.Err())
 	}
