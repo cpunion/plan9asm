@@ -1025,6 +1025,13 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	case "LEAW", "LEAL", "LEAQ":
 		// All three widths use Go 1.27's sole ym_rl row: an addressable
 		// memory expression and an in-range general-register destination.
+		if ins.Op != "" && Op(strings.ToUpper(string(ins.Op))) != op {
+			return true, false, fmt.Errorf("%s LEA dispatch %q disagrees with instruction %q", c.goarch, op, ins.Op)
+		}
+		// Internal helpers may omit Instr.Op. Bind only this local copy so
+		// grammar validation and destination emission use one identity; the
+		// original source/caller instruction remains independently required.
+		ins.Op = op
 		if _, err := x86LEAOperandWidth(ins, c.goarch); err != nil {
 			return true, false, err
 		}
