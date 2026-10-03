@@ -1530,8 +1530,8 @@ func TestTranslateAMD64PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 			fmt.Fprintf(&src, "\t%s %s1, K2, (AX)\n", op, width)
 			fmt.Fprintf(&src, "\t%s (AX), K3, %s2\n", op, width)
 			fmt.Fprintf(&src, "\t%s.Z %s1, K4, %s2\n", op, width, width)
-			// The Go assembler accepts .Z on masked memory stores. The EVEX
-			// zeroing bit has no effect on inactive memory lanes.
+			// Go accepts .Z memory stores, but their native EVEX.z encoding
+			// raises #UD. Independent-entry and fault oracles cover that effect.
 			fmt.Fprintf(&src, "\t%s.Z %s1, K5, (AX)\n", op, width)
 			fmt.Fprintf(&src, "\t%s.Z (AX), K6, %s2\n", op, width)
 		}

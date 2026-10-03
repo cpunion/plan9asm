@@ -6,6 +6,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if amd64MaskMoveOperandsValid(ins, "amd64") {
 		return true
 	}
+	if form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64"); recognized {
+		return err == nil && !form.undefinedOpcode()
+	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, "amd64")
 	// The shared lowerer also models raw-only FP16 moves. Their caller-bank
 	// permission needs its own complete source/runtime family, not inheritance
@@ -43,6 +46,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if amd64MaskMoveOperandsValid(*ins, "amd64") {
 		return x86CallerMaskMoveStep(ins, state, proof)
+	}
+	if form, recognized, err := amd64PackedVectorMoveProperties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerPackedVectorMoveStep(ins, form, state, proof)
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(*ins, "amd64")
 	if !recognized || err != nil || form.spec.rawOnly || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
@@ -126,9 +132,42 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 	if amd64MaskMoveOperandsValid(ins, "amd64") {
 		return int64(amd64MaskMoveSpecs[ins.Op] / 8), index == 1, true
 	}
+	if form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64"); recognized {
+		return int64(form.byteWidth), form.memoryWrite, err == nil && !form.undefinedOpcode() && form.memory == index
+	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, "amd64")
 	if !recognized || err != nil || form.memory != index {
 		return 0, false, false
 	}
 	return int64(form.spec.bits / 8), form.memoryWrite, true
+}
+
+func x86CallerPackedVectorMoveStep(ins *Instr, form amd64PackedVectorMoveForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form.undefinedOpcode() || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
+		return false
+	}
+	widthMask := x86CallerVectorByteMask(int64(form.byteWidth))
+	var known uint64
+	if form.memory >= 0 {
+		// A slice-data/nonalias witness is not a SIMD alignment promise.
+		// Aligned register copies are valid, but aligned memory requires a
+		// separate actual-address proof before borrowing this continuation.
+		if form.spec.aligned || !x86CallerOrdinaryMemoryStep(ins, form.memory, state, proof, int64(form.byteWidth), form.memoryWrite) {
+			return false
+		}
+		if form.memoryWrite {
+			return state.vectors[x86CallerVectorRoot(ins.Args[0].Reg)]&widthMask == widthMask
+		}
+		known = widthMask
+	} else {
+		known = state.vectors[x86CallerVectorRoot(ins.Args[0].Reg)] & widthMask
+	}
+	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
+	if form.mask >= 0 && !form.zeroing {
+		// No initialized mask is assumed all-one. Each byte must be numeric
+		// in both the incoming and retained old lanes for an unknown mask.
+		known &= state.vectors[destination]
+	}
+	state.vectors[destination] = ^widthMask | known
+	return true
 }

@@ -10,106 +10,44 @@ import (
 // VMOVDQU8/DQU16/DQU32/DQU64 share _yvmovdqa32. All have bit-preserving move
 // semantics; the element width only controls the granularity of an EVEX mask.
 func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	elemBits := 0
-	switch baseOp {
-	case "VMOVAPD", "VMOVUPD":
-		elemBits = 64
-	case "VMOVAPS", "VMOVUPS":
-		elemBits = 32
-	case "VMOVDQA32", "VMOVDQU32":
-		elemBits = 32
-	case "VMOVDQA64", "VMOVDQU64":
-		elemBits = 64
-	case "VMOVDQU8":
-		elemBits = 8
-	case "VMOVDQU16":
-		elemBits = 16
-	case "VMOVDQA", "VMOVDQU":
-		elemBits = 8
-	default:
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, recognized := amd64PackedVectorMoveSpecs[Op(base)]; !recognized {
 		return false, false, nil
 	}
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("%s %s %s suffix is absent from its Go 1.27 packed-move encodings: %q", c.goarch, baseOp, suffix, ins.Raw)
+	// Legacy helper calls may omit ins.Op. Never replace a conflicting source
+	// identity when binding the dispatch argument for the shared grammar.
+	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != strings.ToUpper(string(op)) {
+		return true, false, fmt.Errorf("packed move dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("%s %s expects source, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
+	ins.Op = op
+	form, recognized, err := amd64PackedVectorMoveProperties(ins, c.goarch)
+	if !recognized || err != nil {
+		return recognized, false, err
 	}
-	masked := len(ins.Args) == 3
-	vex := baseOp == "VMOVDQA" || baseOp == "VMOVDQU"
-	if vex && (masked || zeroing) {
-		return true, false, fmt.Errorf("%s %s VEX form has no mask or zeroing suffix: %q", c.goarch, baseOp, ins.Raw)
+	if form.undefinedOpcode() {
+		// Invalid encoding faults before any mask, vector or address access.
+		// An ordinary masked store would silently change the native semantics.
+		return c.lowerSyscall("UD2", Instr{Op: "UD2"})
 	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("%s %s masked form expects K1-K7 in the middle: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	src := ins.Args[0]
-	dst := ins.Args[len(ins.Args)-1]
-	byteWidth := 0
-	switch {
-	case src.Kind == OpReg:
-		byteWidth = amd64VectorByteWidth(src.Reg)
-		if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(src, byteWidth) {
-			return true, false, fmt.Errorf("%s %s source must be an in-range X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if vex && !amd64VEXVectorRegister(src, byteWidth) {
-			return true, false, fmt.Errorf("%s %s requires an X0-X15 or Y0-Y15 source: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if dst.Kind == OpReg {
-			if !c.isGoPackedVectorMoveRegister(dst, byteWidth) {
-				return true, false, fmt.Errorf("%s %s register widths must match: %q", c.goarch, baseOp, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(dst) {
-			return true, false, fmt.Errorf("%s %s register source requires a matching vector or memory destination: %q", c.goarch, baseOp, ins.Raw)
-		}
-	case isAMD64MemoryOperand(src):
-		if dst.Kind != OpReg {
-			return true, false, fmt.Errorf("%s %s memory source requires a vector destination: %q", c.goarch, baseOp, ins.Raw)
-		}
-		byteWidth = amd64VectorByteWidth(dst.Reg)
-		if byteWidth == 0 || !c.isGoPackedVectorMoveRegister(dst, byteWidth) {
-			return true, false, fmt.Errorf("%s %s destination must be an in-range X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
-		}
-	default:
-		return true, false, fmt.Errorf("%s %s source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if vex {
-		if byteWidth == 64 || (dst.Kind == OpReg && !amd64VEXVectorRegister(dst, byteWidth)) {
-			return true, false, fmt.Errorf("%s %s requires matching X/Y registers in range: %q", c.goarch, baseOp, ins.Raw)
-		}
-	}
+	src, dst := ins.Args[0], ins.Args[form.destination]
+	byteWidth, elemBits := form.byteWidth, form.spec.elementBits
 	for _, operand := range []Operand{src, dst} {
 		if operand.Kind != OpFP {
 			continue
 		}
 		if err := c.validateFPVectorSpan(operand.FPOffset, byteWidth); err != nil {
-			return true, false, fmt.Errorf("%s %s: %w: %q", c.goarch, baseOp, err, ins.Raw)
+			return true, false, fmt.Errorf("%s %s: %w: %q", c.goarch, op, err, ins.Raw)
 		}
 	}
 
-	if !masked {
+	if form.mask < 0 {
 		value, err := c.loadPackedCompareBytes(src, byteWidth)
 		if err != nil {
 			return true, false, err
 		}
 		return true, false, c.storePackedMoveOperand(dst, byteWidth, value)
 	}
-	mask, err := c.loadK(ins.Args[1].Reg)
+	mask, err := c.loadK(ins.Args[form.mask].Reg)
 	if err != nil {
 		return true, false, err
 	}
@@ -117,7 +55,7 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 	// native memory: each parameter/result can have its own alloca. Retain the
 	// per-slot loads, mask selection and stores below for those operands.
 	if (isAMD64MemoryOperand(src) && src.Kind != OpFP) || (isAMD64MemoryOperand(dst) && dst.Kind != OpFP) {
-		return true, false, c.lowerMaskedPackedMoveMemory(src, dst, byteWidth, elemBits, mask, zeroing)
+		return true, false, c.lowerMaskedPackedMoveMemory(src, dst, byteWidth, elemBits, mask, form.zeroing)
 	}
 	value, err := c.loadPackedCompareBytes(src, byteWidth)
 	if err != nil {
@@ -130,9 +68,9 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 	lanes := byteWidth * 8 / elemBits
 	computed := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, elemBits, value)
 	old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, elemBits, oldBytes)
-	// Go accepts .Z for a masked FP/memory store, but inactive memory lanes
-	// remain unchanged. Only register destinations have zeroing semantics.
-	result := amd64ApplyIntegerLaneMask(c, lanes, elemBits, computed, old, mask, zeroing && dst.Kind == OpReg)
+	// The invalid .Z memory-destination encoding was handled before evaluating
+	// any operand. Valid zeroing forms always have a register destination.
+	result := amd64ApplyIntegerLaneMask(c, lanes, elemBits, computed, old, mask, form.zeroing && dst.Kind == OpReg)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, elemBits, result, byteWidth)
 	return true, false, c.storePackedMoveOperand(dst, byteWidth, "%"+out)
@@ -176,6 +114,12 @@ func (c *amd64Ctx) storePackedMoveOperand(dst Operand, byteWidth int, value stri
 	return nil
 }
 
+// Other EVEX families use this architecture/register axis without acquiring
+// packed-move effects or caller-memory permissions.
+func (c *amd64Ctx) isGoPackedVectorMoveRegister(arg Operand, byteWidth int) bool {
+	return amd64GoPackedVectorMoveRegister(arg, byteWidth, c.goarch)
+}
+
 // Share the architectural lane mask across floating and integer moves. A
 // select after an eager full-width load/store cannot suppress memory faults
 // and must not be used for masked memory destinations (including write-only
@@ -215,15 +159,4 @@ func (c *amd64Ctx) lowerMaskedPackedMoveMemory(src, dst Operand, byteWidth, elem
 	}
 	fmt.Fprintf(c.b, "  call void @llvm.masked.store.v%di%d%s(%s %s, %s align 1 %s, <%d x i1> %s)\n", lanes, elemBits, suffix, vectorType, value, pointerType, pointer, lanes, predicate)
 	return nil
-}
-
-func (c *amd64Ctx) isGoPackedVectorMoveRegister(arg Operand, byteWidth int) bool {
-	if !amd64EVEXVectorRegister(arg, byteWidth) {
-		return false
-	}
-	if c.goarch == "386" && byteWidth == 64 {
-		index, _ := amd64VectorRegisterIndex(arg.Reg, byteWidth)
-		return index < 8
-	}
-	return true
 }
