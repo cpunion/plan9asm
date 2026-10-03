@@ -186,12 +186,10 @@ func arm64MemoryAuditForms() []arm64MemoryAuditForm {
 	return forms
 }
 
-func TestARM64ScalarMemoryAuditRejectedGoFormats(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "rejected.s")
-	count := 0
+func arm64MemoryAuditRejectedForms() []string {
+	var rejected []string
 	for _, op := range arm64MemoryScratchAuditMoves {
-		for _, instruction := range []string{
+		rejected = append(rejected, []string{
 			op + " -8192(R27),R1",
 			op + " R27,-8192(R0)", op + " R1,-8192(R27)",
 			op + ".P 256(R0),R1", op + ".W R1,-257(R0)",
@@ -204,20 +202,27 @@ func TestARM64ScalarMemoryAuditRejectedGoFormats(t *testing.T) {
 			op + " (R31),R1", op + " (R0),W1",
 			op + " R27,payload(SB)", op + " (F0),R1",
 			op + " (R0),F1", op + ".P.W (R0),R1",
-		} {
-			source := "TEXT rejected(SB),4,$0-0\n" + instruction + "\nRET\n"
-			if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-				t.Fatal(err)
-			}
-			output, err := arm64MemoryAuditGoCommand(t, "linux", "tool", "asm", "-o", filepath.Join(dir, "rejected.o"), path)
-			if err == nil {
-				t.Errorf("actual Go accepted expected rejected format: %s", instruction)
-			}
-			t.Logf("Go rejected %s: %s", instruction, strings.TrimSpace(string(output)))
-			count++
-		}
+		}...)
 	}
-	t.Logf("actual Go %d rejected scalar GP memory formats", count)
+	return rejected
+}
+
+func TestARM64ScalarMemoryAuditRejectedGoFormats(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rejected.s")
+	rejected := arm64MemoryAuditRejectedForms()
+	for _, instruction := range rejected {
+		source := "TEXT rejected(SB),4,$0-0\n" + instruction + "\nRET\n"
+		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		output, err := arm64MemoryAuditGoCommand(t, "linux", "tool", "asm", "-o", filepath.Join(dir, "rejected.o"), path)
+		if err == nil {
+			t.Errorf("actual Go accepted expected rejected format: %s", instruction)
+		}
+		t.Logf("Go rejected %s: %s", instruction, strings.TrimSpace(string(output)))
+	}
+	t.Logf("actual Go %d rejected scalar GP memory formats", len(rejected))
 }
 
 func TestARM64ScalarMemoryAuditPoolDestinationR27VersionBoundary(t *testing.T) {

@@ -258,6 +258,9 @@ func (c *arm64Ctx) scanUsedRegs() {
 
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			if form, handled, err := parseARM64ScalarMemoryForm(arm64ControlOp(ins), ins); handled && err == nil && form.scratch {
+				markReg("R27")
+			}
 			for _, op := range ins.Args {
 				markOp(op)
 			}

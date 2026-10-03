@@ -20,6 +20,9 @@ func (c *arm64Ctx) lowerData(op Op, postInc bool, ins Instr) (ok bool, terminate
 	if ok, terminated, err := c.lowerARM64RegisterAddress(op, ins); ok {
 		return ok, terminated, err
 	}
+	if ok, terminated, err := c.lowerARM64ScalarMemory(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerARM64ScalarMemoryWriteback(op, ins); ok {
 		return ok, terminated, err
 	}

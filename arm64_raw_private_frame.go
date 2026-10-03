@@ -392,6 +392,7 @@ type arm64RawPrivateMemoryForm struct {
 	elementBytes int64
 	store, gp    bool
 	pre, post    bool
+	scratch      *arm64ScalarMemoryForm
 }
 
 func arm64RawPrivateScalarBytes(op Op) int64 {
@@ -425,6 +426,18 @@ func arm64RawPrivatePairBytes(op Op) int64 {
 func arm64RawPrivateMemory(ins Instr) (arm64RawPrivateMemoryForm, bool) {
 	op := arm64ControlOp(ins)
 	form := arm64RawPrivateMemoryForm{}
+	if scalar, handled, err := parseARM64ScalarMemoryForm(op, ins); handled {
+		if err != nil {
+			return form, false
+		}
+		form.memory, form.registers = scalar.memory, []Reg{scalar.data}
+		form.elementBytes, form.store, form.gp = int64(scalar.bits/8), scalar.store, true
+		form.pre, form.post = scalar.pre, scalar.post
+		if scalar.scratch {
+			form.scratch = &scalar
+		}
+		return form, true
+	}
 	suffix := strings.TrimPrefix(string(ins.Op), string(op))
 	if suffix != "" && suffix != ".W" && suffix != ".P" || len(ins.Args) != 2 {
 		return form, false
@@ -537,6 +550,12 @@ func (s *arm64RawPrivateFrameState) memory(form arm64RawPrivateMemoryForm, frame
 			if !ok || low < -arm64MaxLocalStackSpan || address.offset < low || address.offset > frameSize+8-width {
 				return false
 			}
+		}
+	}
+	if form.scratch != nil {
+		value, frame := s.regs.scalarMemoryScratch(*form.scratch)
+		if !s.assign("R27", value, frame) {
+			return false
 		}
 	}
 	for index, reg := range form.registers {

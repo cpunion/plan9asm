@@ -946,6 +946,9 @@ type Instr struct {
 	// Set only by an ARM64 machine-code decoder. A physical data instruction
 	// does not acquire Go's named immediate expansion or implicit R27 scratch.
 	arm64Encoded bool
+	// Recomputed from the complete source TEXT's Go frame, never from public
+	// input metadata. FP shadow storage does not thereby become physical SP.
+	arm64ScalarMemoryFrameOffset *int64
 	// Set only after a raw BL's exact same-source PC target is established.
 	// It remains a physical leaf call for Go's pre-WORD prologue selection.
 	arm64RawLocalCall bool

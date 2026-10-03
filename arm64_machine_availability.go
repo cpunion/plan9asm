@@ -9,14 +9,15 @@ import (
 // transfer only declared argument/result leaves, not a hidden native machine
 // state. Record real lowering reads/writes instead of guessing opcode effects.
 type arm64MachineEffect struct {
-	register string
-	copyFrom string
-	width    int
-	write    bool
-	call     *ARM64GoRegisterABI
-	opaque   bool
-	store    bool
-	source   string
+	register    string
+	copyFrom    string
+	width       int
+	write       bool
+	call        *ARM64GoRegisterABI
+	opaque      bool
+	store       bool
+	source      string
+	unavailable bool // Original source encoding/layout did not supply these bits.
 }
 
 type arm64MachineBlock struct {
@@ -26,17 +27,18 @@ type arm64MachineBlock struct {
 }
 
 type arm64MachineAvailability struct {
-	blocks     []arm64MachineBlock
-	current    int
-	suspended  int
-	skipReads  bool
-	source     string
-	entry      *ARM64GoRegisterABI
-	closure    *ARM64ClosureABI
-	entryError error
-	sourceR20  bool
-	used       bool
-	nativeIR   map[int]arm64MachineNativeProof
+	blocks        []arm64MachineBlock
+	current       int
+	suspended     int
+	skipReads     bool
+	source        string
+	entry         *ARM64GoRegisterABI
+	closure       *ARM64ClosureABI
+	entryError    error
+	sourceR20     bool
+	used          bool
+	nativeIR      map[int]arm64MachineNativeProof
+	sourceScratch bool
 }
 
 type arm64MachineNativeProof struct {
@@ -75,9 +77,13 @@ const arm64WholeScalableRegister = 1 << 20
 
 func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 	needed := c.goRegisterEntry || c.privateRegisterEntry || c.checkedR20Entry
+	sourceScratch := false
 	for _, block := range c.blocks {
 		for _, instruction := range block.instrs {
 			ins := arm64ControlDecode(instruction)
+			if form, handled, err := parseARM64ScalarMemoryForm(arm64ControlOp(ins), ins); handled && err == nil && form.scratch && !form.scratchKnown {
+				sourceScratch = true
+			}
 			op := arm64ControlOp(ins)
 			if (op != "CALL" && op != "BL") || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 				continue
@@ -88,10 +94,11 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 			}
 		}
 	}
-	if !needed {
+	if !needed && !sourceScratch {
 		return nil
 	}
 	flow := &arm64MachineAvailability{blocks: make([]arm64MachineBlock, len(c.blocks)+1)}
+	flow.sourceScratch = sourceScratch
 	for i, block := range c.blocks {
 		flow.blocks[i].name = block.name
 	}
@@ -120,6 +127,13 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 		}
 	}
 	return flow
+}
+
+func (c *arm64Ctx) recordMachineUnavailable(reg Reg) {
+	if flow := c.machineAvailability; flow != nil {
+		flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects,
+			arm64MachineEffect{register: arm64MachineRegister(reg), unavailable: true, source: flow.source})
+	}
 }
 
 func arm64MachineRegister(reg Reg) string {
@@ -267,7 +281,13 @@ func (state *arm64MachineState) merge(other arm64MachineState) bool {
 }
 
 func (flow *arm64MachineAvailability) validate() error {
-	if flow == nil || !flow.used {
+	if flow == nil {
+		return nil
+	}
+	if err := flow.validateSourceScratch(); err != nil {
+		return err
+	}
+	if !flow.used {
 		return nil
 	}
 	if flow.entryError != nil {
@@ -302,6 +322,10 @@ func (flow *arm64MachineAvailability) validate() error {
 				continue
 			}
 			if !state.active {
+				continue
+			}
+			if effect.unavailable {
+				state.values[effect.register] = 0
 				continue
 			}
 			if effect.opaque {
@@ -347,6 +371,80 @@ func (flow *arm64MachineAvailability) validate() error {
 			}
 			if changed && !queued[i] {
 				queue, queued[i] = append(queue, i), true
+			}
+		}
+	}
+	return nil
+}
+
+// This independent may-unavailable analysis does not invent a typed entry
+// for an ordinary object-only probe. Only bits actually overwritten by an
+// unbound source expansion are unavailable; complete reaching writes restore
+// them, and joins retain every possible missing value. The ordinary typed ABI
+// must-defined analysis above still runs unchanged when its contract is active.
+func (flow *arm64MachineAvailability) validateSourceScratch() error {
+	if !flow.sourceScratch {
+		return nil
+	}
+	indices := make(map[string]int, len(flow.blocks))
+	for i, block := range flow.blocks {
+		indices[block.name] = i
+	}
+	before := make([]map[string]bool, len(flow.blocks))
+	before[0] = make(map[string]bool)
+	queue, queued := []int{0}, make([]bool, len(flow.blocks))
+	queued[0] = true
+	for next := 0; next < len(queue); next++ {
+		at := queue[next]
+		queued[at] = false
+		missing := make(map[string]bool)
+		for reg := range before[at] {
+			missing[reg] = true
+		}
+		for _, effect := range flow.blocks[at].effects {
+			switch {
+			case effect.unavailable:
+				missing[effect.register] = true
+			case effect.call != nil:
+				// Arguments have already been read by the typed lowerer. The
+				// opaque callee does not make an unbound caller scratch known.
+				for _, result := range effect.call.Results {
+					delete(missing, arm64MachineRegister(result.Register))
+				}
+			case effect.opaque:
+				if len(missing) != 0 {
+					return arm64GoABIContext("native effects can observe an unbound original Go memory scratch at %q", effect.source)
+				}
+			case effect.copyFrom != "":
+				if missing[effect.copyFrom] {
+					missing[effect.register] = true
+				} else {
+					delete(missing, effect.register)
+				}
+			case effect.write:
+				if effect.width >= 64 {
+					delete(missing, effect.register)
+				}
+			case missing[effect.register]:
+				return arm64GoABIContext("%s consumes an unbound original Go memory scratch at %q", effect.register, effect.source)
+			}
+		}
+		for _, target := range flow.blocks[at].successors {
+			index, ok := indices[target]
+			if !ok {
+				return arm64GoABIContext("source scratch CFG has an unknown successor %q", target)
+			}
+			changed := before[index] == nil
+			if changed {
+				before[index] = make(map[string]bool)
+			}
+			for reg := range missing {
+				if !before[index][reg] {
+					before[index][reg], changed = true, true
+				}
+			}
+			if changed && !queued[index] {
+				queue, queued[index] = append(queue, index), true
 			}
 		}
 	}

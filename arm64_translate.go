@@ -888,6 +888,11 @@ func emitARM64Prelude(b *strings.Builder) {
 }
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool) error {
+	var err error
+	fn, err = normalizeARM64ScalarMemoryFrame(fn)
+	if err != nil {
+		return err
+	}
 	if err := validateARM64ClosureSource(fn, sig); err != nil {
 		return err
 	}
@@ -923,7 +928,6 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 			return arm64GoABIContext("entry %q needs a complete typed register contract", sig.Name)
 		}
 	}
-	var err error
 	fn, err = normalizeARM64AtomicPairNamedMemory(fn)
 	if err != nil {
 		return err

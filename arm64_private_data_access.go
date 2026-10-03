@@ -82,6 +82,26 @@ func (state *arm64PrivateDataState) memory(op Op, form arm64RawPrivateMemoryForm
 			span = &arm64PrivateDataSpan{int64(address.interval.low), int64(address.interval.high) + width}
 		}
 	}
+	if form.scratch != nil {
+		f := *form.scratch
+		value := arm64PrivateDataUnknown
+		if f.scratchAddress && f.scratchBase != "" {
+			value = state.value(f.scratchBase)
+			if f.scratchKnown && !value.mixed && f.scratchOffset >= 0 &&
+				value.interval.high <= math.MaxUint64-uint64(f.scratchOffset) {
+				value.interval.low += uint64(f.scratchOffset)
+				value.interval.high += uint64(f.scratchOffset)
+			} else {
+				value.interval = arm64PoolUnknownInterval
+				value.mixed = value.frame
+			}
+		} else if f.scratchKnown {
+			value = arm64PrivateDataNumber(arm64PoolInterval{uint64(f.scratchOffset), uint64(f.scratchOffset)})
+		}
+		if !state.assign("R27", value) {
+			return nil, false
+		}
+	}
 	for index, reg := range form.registers {
 		if form.store {
 			if state.value(reg).frame {

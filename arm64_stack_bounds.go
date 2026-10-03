@@ -241,6 +241,43 @@ func arm64StackStep(state *arm64StackState, original, ins Instr) error {
 		}
 		return value
 	}
+	if form, handled, err := parseARM64ScalarMemoryForm(arm64ControlOp(ins), ins); handled {
+		if err != nil {
+			return err
+		}
+		address := arm64StackRange{}
+		if form.memory.Kind == OpMem {
+			address = state.value(form.memory.Mem.Base)
+			if state.value(form.memory.Mem.Index).local {
+				address.local, address.unknown = true, true
+			}
+		}
+		if form.scratch {
+			value := arm64StackRange{}
+			if form.scratchAddress && form.scratchBase != "" {
+				value = state.value(form.scratchBase)
+				if form.scratchKnown {
+					value = adjust(value, form.scratchOffset)
+				} else {
+					value.unknown = value.local
+				}
+			}
+			(*state)[27] = value
+		}
+		if !form.store && form.data != ZR {
+			if index, gp := arm64StackIndex(form.data); gp {
+				// An owned-stack load may recover a previously spilled private
+				// address. Its bounds are not an invented interval for the data.
+				(*state)[index] = arm64StackRange{local: address.local, unknown: address.local}
+			}
+		}
+		if form.pre || form.post {
+			if index, gp := arm64StackIndex(form.memory.Mem.Base); gp {
+				(*state)[index] = adjust(address, form.memory.Mem.Off)
+			}
+		}
+		return nil
+	}
 	if len(ins.Args) != 0 {
 		destination := ins.Args[len(ins.Args)-1]
 		index, register := arm64StackIndex(destination.Reg)

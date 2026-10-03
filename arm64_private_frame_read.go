@@ -192,6 +192,9 @@ func (state arm64PrivateFrameAddresses) transfer(ins Instr, frameSize int64) boo
 			return false
 		}
 	}
+	if form, handled, err := parseARM64ScalarMemoryForm(op, ins); handled {
+		return err == nil && state.scalarMemory(form, frameSize)
+	}
 	switch op {
 	case "SVC", "HVC", "SMC", "BRK", "HLT", "DCPS1", "DCPS2", "DCPS3", "DRPS", "ERET", "UNDEF":
 		// Exception/syscall transport is not an ordinary typed Go call. It
@@ -309,6 +312,66 @@ func (state arm64PrivateFrameAddresses) transfer(ins Instr, frameSize int64) boo
 		}
 	}
 	return true
+}
+
+func (state arm64PrivateFrameAddresses) scalarMemory(form arm64ScalarMemoryForm, frameSize int64) bool {
+	// Validate the old address before changing R27; the store's transfer
+	// operand is read after that change, including a base/data R27 overlap.
+	if form.memory.Kind == OpMem {
+		mem := form.memory.Mem
+		if _, indexed := state.address(mem.Index); indexed {
+			return false
+		}
+		value, frame := state.address(mem.Base)
+		if frame {
+			if mem.Index != "" || form.pre || form.post {
+				return false
+			}
+			if form.store {
+				// Preserve the source-relative SP exemption from the coarse
+				// proof: its stores still undergo continuation-cell checks.
+				// A derived GP address needs the separate per-instruction
+				// DATA extent and complete typed transport proof.
+				if !arm64StackReg(mem.Base) {
+					return false
+				}
+			} else {
+				var ok bool
+				value, ok = arm64PrivateFrameOffset(value, mem.Off)
+				if !ok || !value.exact || value.offset < 0 || frameSize < 0 ||
+					frameSize > int64(1<<63-1)-8 || value.offset > frameSize+8-int64(form.bits/8) {
+					return false
+				}
+			}
+		}
+	}
+	if form.scratch {
+		scratch, private := state.scalarMemoryScratch(form)
+		if !state.assign("R27", scratch, private) {
+			return false
+		}
+	}
+	if form.store {
+		_, private := state.address(form.data)
+		return !private
+	}
+	return state.assign(form.data, arm64PrivateFrameAddress{}, false)
+}
+
+func (state arm64PrivateFrameAddresses) scalarMemoryScratch(form arm64ScalarMemoryForm) (arm64PrivateFrameAddress, bool) {
+	if !form.scratchAddress || form.scratchBase == "" {
+		return arm64PrivateFrameAddress{}, false
+	}
+	value, frame := state.address(form.scratchBase)
+	if frame {
+		if form.scratchKnown {
+			if next, ok := arm64PrivateFrameOffset(value, form.scratchOffset); ok {
+				return next, true
+			}
+		}
+		return arm64PrivateFrameAddress{}, true // Preserve may-frame; lose bounds.
+	}
+	return value, false
 }
 
 // The accepted subset is read-only, non-writeback, with a literal displacement

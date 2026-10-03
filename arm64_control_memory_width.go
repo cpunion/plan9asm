@@ -17,10 +17,36 @@ func (state *arm64ControlState) transferTypedMemory(ins Instr) bool {
 	if form.post && memory.Kind == OpMem {
 		memory.Mem.Off = 0
 	}
+	// Read the address/old contents before materialization, but a store's R27
+	// transfer input after it. Keep the original base until the memory effect
+	// has been recorded, including when that original base itself is R27.
+	scratch := arm64ControlExternal()
+	if form.scratch != nil {
+		f := *form.scratch
+		if f.scratchAddress && f.memory.Kind == OpFP {
+			scratch = arm64ControlValue{"fpa:" + strconv.FormatInt(f.memory.FPOffset, 10): true}
+		} else if f.scratchAddress && f.scratchBase != "" {
+			base := arm64ControlRead(state.regs, arm64ControlBase(f.scratchBase))
+			if f.scratchKnown {
+				scratch = arm64ControlOffset(base, f.scratchOffset)
+			} else {
+				// Different encoders can produce an address or a literal.
+				// Never retain its old exact LR/private-cell identity.
+				scratch = arm64ControlUnion(arm64ControlExternal(), arm64ControlAddressTaint(base))
+			}
+			if len(arm64ControlLabels(base)) != 0 {
+				scratch = arm64ControlUnion(scratch, arm64ControlLabels(base))
+				scratch["code-derived:"] = true
+			}
+		}
+	}
 	var values [2]arm64ControlValue
 	for index, reg := range form.registers {
 		if form.store {
 			values[index] = state.source(Operand{Kind: OpReg, Reg: reg}, false)
+			if form.scratch != nil && reg == "R27" {
+				values[index] = scratch
+			}
 		} else {
 			cell := arm64ControlElement(memory, int64(index)*form.elementBytes)
 			values[index] = state.readMemoryWidth(cell, form.elementBytes, form.gp)
@@ -33,6 +59,9 @@ func (state *arm64ControlState) transferTypedMemory(ins Instr) bool {
 		} else {
 			state.write(Operand{Kind: OpReg, Reg: reg}, values[index], false)
 		}
+	}
+	if form.scratch != nil && (form.store || form.registers[0] != "R27") {
+		state.regs["R27"] = scratch
 	}
 	if form.pre || form.post {
 		base := arm64ControlBase(form.memory.Mem.Base)

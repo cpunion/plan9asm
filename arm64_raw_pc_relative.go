@@ -475,6 +475,35 @@ func arm64RawKnownSourceWidth(fn Func, ins Instr) (int64, bool) {
 	if ins.arm64Encoded {
 		return 4, true // Only the actual one-WORD decoder can set this origin.
 	}
+	if bits, _ := arm64ScalarMemoryBits(arm64ControlOp(ins)); bits != 0 && len(ins.Args) == 2 {
+		// Width can be queried before the complete source normalizer. Bind
+		// its class offset to the same source TEXT/prologue, never the LLVM
+		// shadow slot's offset or an arbitrary caller-provided marker.
+		needsFrame := false
+		for _, operand := range ins.Args {
+			needsFrame = needsFrame || operand.Kind == OpFP || operand.Kind == OpMem && arm64NamedStackOffset(operand.Mem)
+		}
+		if needsFrame {
+			if !arm64SourceFrameFlagsKnown(fn) || fn.FrameSize < -8 || fn.FrameSize > (1<<31)-25 || fn.FrameSize&7 != 0 {
+				return 0, false
+			}
+			logical, autosize := int64(0), int64(0)
+			if arm64SourceGoFrame(fn).present {
+				logical, autosize = fn.FrameSize+8, arm64SourceFrameAutosize(fn.FrameSize)
+			}
+			var err error
+			ins, _, err = normalizeARM64ScalarMemoryInstruction(ins, logical, autosize)
+			if err != nil {
+				return 0, false
+			}
+		}
+	}
+	if form, handled, err := parseARM64ScalarMemoryForm(arm64ControlOp(ins), ins); handled {
+		if err == nil && !form.scratch {
+			return 4, true
+		}
+		return 0, false
+	}
 	if arm64RawFixedWidthLogical(ins) {
 		return 4, true
 	}

@@ -266,6 +266,19 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarMemoryOriginalGoEncoderState(t *testi
 	if !address && first&0xff00001f != 0x5800001b {
 		t.Fatalf("unknown actual original Go pool expansion: %x", negative)
 	}
+	unaligned := arm64ImmediateOriginalGoBytes(t, "TEXT encoder(SB),4,$0-0\nMOVD 32769(R0),R1\nRET\n", goos)
+	if len(unaligned) < 12 {
+		t.Fatal("missing unaligned original Go expansion")
+	}
+	first = binary.LittleEndian.Uint32(unaligned)
+	unalignedAddress := first == 0x9100241b // ADD $9,R0,R27.
+	if !unalignedAddress && first&0xff00001f != 0x1800001b {
+		t.Fatalf("unknown actual original Go unaligned expansion: %x", unaligned)
+	}
+	literal := arm64ImmediateOriginalGoBytes(t, "TEXT encoder(SB),4,$0-0\nMOVD 65537(R0),R1\nRET\n", goos)
+	if len(literal) < 12 || binary.LittleEndian.Uint32(literal)&0xff00001f != 0x1800001b {
+		t.Fatalf("65537 is not the independently accepted literal expansion: %x", literal)
+	}
 	source := `TEXT ·EncoderState(SB),4,$0-16
 MOVD input+0(FP),R0
 MOVD output+8(FP),R11
@@ -285,6 +298,12 @@ MOVD $107,R27
 MOVD -8192(R0),R1
 MOVD R27,32(R11)
 MOVD R1,40(R11)
+MOVD 32769(R0),R1
+MOVD R27,48(R11)
+MOVD R1,56(R11)
+MOVD 65537(R0),R1
+MOVD R27,64(R11)
+MOVD R1,72(R11)
 CSET MI,R2
 CSET EQ,R3
 CSET HS,R4
@@ -295,27 +314,30 @@ LSL $3,R5
 ORR R3,R2
 ORR R4,R2
 ORR R5,R2
-MOVD R2,48(R11)
+MOVD R2,80(R11)
 RET
 `
 	program := fmt.Sprintf(`package main
 import "unsafe"
-func EncoderState(input *[131072]byte, output *[7]uint64)
+func EncoderState(input *[131072]byte, output *[11]uint64)
 func pattern(index int) byte { return byte(index*73+128) }
 func main() {
     storage := new([262144]byte)
     for index := range storage { storage[index] = pattern(index) }
     input := (*[131072]byte)(unsafe.Pointer(&storage[65536]))
-    output := struct { left uint64; values [7]uint64; right uint64 }{left:0x1234,right:0x5678}
+    output := struct { left uint64; values [11]uint64; right uint64 }{left:0x1234,right:0x5678}
     EncoderState(input,&output.values)
     if output.left != 0x1234 || output.right != 0x5678 { panic("Go encoder output canary") }
-    if output.values[0] != %d || output.values[4] != uint64(0xffffffffffffe000) || output.values[6] != 4 {
+    if output.values[0] != %d || output.values[4] != uint64(0xffffffffffffe000) || output.values[8] != 65537 || output.values[10] != 4 {
         panic("Go encoder R27 high/pool/NZCV")
     }
     wantNegative := uint64(0xfffffffffffffeff)
     if %v { wantNegative = uint64(uintptr(unsafe.Pointer(input))) - 257 }
     if output.values[2] != wantNegative { panic("Go encoder negative R27 category") }
-    offsets := [...]int{32768,-257,-8192}
+    wantUnaligned := uint64(32769)
+    if %v { wantUnaligned = uint64(uintptr(unsafe.Pointer(input))) + 9 }
+    if output.values[6] != wantUnaligned { panic("Go encoder unaligned R27 category") }
+    offsets := [...]int{32768,-257,-8192,32769,65537}
     for index, offset := range offsets {
         value := uint64(0)
         for byteIndex := 0; byteIndex < 8; byteIndex++ {
@@ -327,7 +349,7 @@ func main() {
         if value != pattern(index) { panic("Go encoder input canary/data changed") }
     }
 }
-`, high, address)
+`, high, address, unalignedAddress)
 	runARM64LocalRegisterGoOracle(t, source, program, len(runner) != 0, "1.20")
-	t.Logf("actual original Go bytes/state: 32768 R27=base+%d (%x); -257 is address=%v (%x); -8192 R27=exact signed offset; initialized data/NZCV/canaries passed", high, positive, address, negative)
+	t.Logf("actual original Go bytes/state: 32768 R27=base+%d (%x); -257 address=%v (%x); 32769 address=%v (%x); 65537 literal (%x); -8192 exact signed offset; initialized data/NZCV/canaries passed", high, positive, address, negative, unalignedAddress, unaligned, literal)
 }
