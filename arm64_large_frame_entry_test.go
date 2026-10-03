@@ -166,13 +166,16 @@ func TestARM64LargeFrameTEXTContractIsNotInferred(t *testing.T) {
 }
 
 func TestARM64LargeFrameProducerDoesNotBorrowABIInternal(t *testing.T) {
-	pkg := mustGoPackage(t, "largeframe", "package largeframe\nfunc Value() uint64\n")
-	const source = `TEXT ·Value<ABIInternal>(SB),4,$496-8
+	// Bind the same explicit runtime identity in all three translation APIs.
+	// The shared selector oracle queries the actual assembler flags: Go 1.20
+	// also requires the stock driver's -compiling-runtime, unlike current Go.
+	pkg := mustGoPackage(t, "runtime", "package runtime\nfunc Value() uint64\n")
+	const source = `TEXT runtime·Value<ABIInternal>(SB),4,$496-8
 MOVD $7,R20
 MOVD R20,R0
 RET
 `
-	requireARM64GoABIInternalObject(t, source)
+	requireARM64TypedCallGoSelectorObject(t, source)
 	for _, ir := range arm64LargeFrameCheckAPIs(t, source, pkg, nil, false, true) {
 		sp := regexp.MustCompile(`store i64 (%t[0-9]+), ptr %reg_SP`).FindStringSubmatch(ir)
 		if len(sp) == 2 && strings.Contains(ir, "store i64 "+sp[1]+", ptr %reg_R20") {
@@ -182,6 +185,6 @@ RET
 	// A complete ABIInternal signature defines its actual parameter/result
 	// leaves, not an unmodelled prologue scratch value.
 	read := strings.Replace(source, "MOVD $7,R20\nMOVD R20,R0", "MOVD 32(R20),R0", 1)
-	requireARM64GoABIInternalObject(t, read)
+	requireARM64TypedCallGoSelectorObject(t, read)
 	arm64LargeFrameCheckAPIs(t, read, pkg, nil, true, false)
 }
