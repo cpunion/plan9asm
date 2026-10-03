@@ -48,7 +48,7 @@ func TestCrossLinuxRuntimeMatrixX86FloatMulDivConstantMXCSR(t *testing.T) {
 		fmt.Fprintf(&assembly, "TEXT %s(SB),4,$0-4\nMOVL $0x%x,AX\nMOVD AX,X0\nMOVL $0x%x,AX\nMOVD AX,X1\n%s\nMOVSS %s,ret+0(FP)\nRET\n", name, left, right, row, destination)
 		sigs[name] = FuncSig{Name: name, Ret: I32, Frame: FrameLayout{Results: []FrameSlot{{Offset: 0, Type: I32, Field: -1}}}}
 		fmt.Fprintf(&declarations, "extern uint32_t %s(void);\n", name)
-		fmt.Fprintf(&checks, "if(check(%s,0x%x,0x%x,%d,%q))return 1;\n", name, left, right, x86FloatAddSubBoolInt(strings.Contains(opcode, "DIV")), opcode)
+		fmt.Fprintf(&checks, "failed|=check(%s,0x%x,0x%x,%d,%q);\n", name, left, right, x86FloatAddSubBoolInt(strings.Contains(opcode, "DIV")), opcode)
 	}
 	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
 	file, err := Parse(ArchAMD64, assembly.String())
@@ -84,7 +84,7 @@ static int check(binary_constant fn,uint32_t left,uint32_t right,int divide,cons
  __asm__ volatile("ldmxcsr %0"::"m"(saved));return failed;
 }
 `
-	main := oracle + declarations.String() + "int main(void){\n" + checks.String() + "return 0;}\n"
+	main := oracle + declarations.String() + "int main(void){int failed=0;\n" + checks.String() + "return failed;}\n"
 	t.Run("original-ir", func(t *testing.T) {
 		compileAndRunRuntimeTestForTarget(t, llc, clang, "mul-div-constant-mxcsr", triple, ir, main, prefix)
 	})
