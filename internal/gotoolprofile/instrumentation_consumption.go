@@ -201,7 +201,7 @@ func validateInstrumentationPackageDeclarations(input *InstrumentationConsumerIn
 			return err
 		}
 	}
-	return nil
+	return replayInstrumentationDeclarationLayouts(input, pkg, declarations)
 }
 
 func replayInstrumentationCPP(input *InstrumentationConsumerInput, pkg PackageProof, metadata *InstrumentationMetadataProof, file InstrumentationAssemblyFile) error {

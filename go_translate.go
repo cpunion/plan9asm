@@ -643,6 +643,20 @@ func goDeclNameForSymbol(sym string, linknames map[string]string) (string, error
 	return declName, nil
 }
 
+// DeriveGoFuncABI0Signature derives the complete ordinary signature and classic
+// FP layout from an actual typed Go declaration. It supplies no native entry,
+// hidden register, caller-memory or closure contract. Source authentication and
+// source ABI selection remain the caller's separate obligations.
+func DeriveGoFuncABI0Signature(name string, fn *types.Func, goarch string, sz types.Sizes) (FuncSig, error) {
+	if name == "" || fn == nil {
+		return FuncSig{}, fmt.Errorf("missing actual Go declaration for ABI0 layout")
+	}
+	if signature, ok := fn.Type().(*types.Signature); !ok || signature == nil {
+		return FuncSig{}, fmt.Errorf("missing actual typed Go signature for ABI0 layout")
+	}
+	return goFuncSigForDeclaredFunc(name, fn, goarch, sz, sz, true)
+}
+
 func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, frameSz types.Sizes, withFrame bool) (FuncSig, error) {
 	if sz == nil {
 		sz = types.SizesFor("gc", goarch)
