@@ -10,6 +10,17 @@ import (
 // immediate-compare family: legacy CMP{PD,PS,SD,SS}, the VEX vector-result
 // forms, and the EVEX K-result forms of VCMP{PD,PS,SD,SS}.
 func (c *amd64Ctx) lowerFloatingCompare(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := x86FloatCompareSpecs[Op(base)]; !known {
+		return false, false, nil
+	}
+	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return true, false, fmt.Errorf("floating compare dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	}
+	ins.Op = op
+	if _, known, err := x86FloatCompareProperties(ins, c.goarch); known && err != nil {
+		return true, false, err
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	suffix := ""
