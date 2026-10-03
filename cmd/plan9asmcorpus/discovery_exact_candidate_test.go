@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -174,9 +173,9 @@ func TestDiscoveryExactCandidateFlagAndRealCLIModes(t *testing.T) {
 			if option != "curated-without-ledger" {
 				args = append(args, "-discovery-ledger=unused", option)
 			}
-			command := exec.Command(os.Args[0], append([]string{"-test.run=^TestDiscoveryExactCandidateCLIHelper$", "--"}, args...)...)
-			command.Env = replaceEnv(os.Environ(), map[string]string{"PLAN9ASM_EXACT_CLI_HELPER": "1"})
-			out, err := command.CombinedOutput()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			out, err := runDiscoveryExactCandidateTestCLI(ctx, t.TempDir(), "1", args...)
 			if err == nil || !strings.Contains(string(out), "requires unfiltered discovery production") {
 				t.Fatalf("real CLI mode was not rejected: %v %s", err, out)
 			}
@@ -184,7 +183,28 @@ func TestDiscoveryExactCandidateFlagAndRealCLIModes(t *testing.T) {
 	}
 }
 
+func runDiscoveryExactCandidateTestCLI(ctx context.Context, dir, mode string, args ...string) ([]byte, error) {
+	env := replaceEnv(os.Environ(), map[string]string{"PLAN9ASM_EXACT_CLI_HELPER": mode})
+	return runCapturedCommandOutput(ctx, dir, env, os.Args[0],
+		append([]string{"-test.run=^TestDiscoveryExactCandidateCLIHelper$", "--"}, args...)...)
+}
+
+func TestDiscoveryExactCandidateCLIDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+	out, err := runDiscoveryExactCandidateTestCLI(ctx, t.TempDir(), "wait-for-deadline")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("CLI deadline was not preserved: error=%v output=%q", err, out)
+	}
+}
+
 func TestDiscoveryExactCandidateCLIHelper(t *testing.T) {
+	if os.Getenv("PLAN9ASM_EXACT_CLI_HELPER") == "wait-for-deadline" {
+		// Finite even before the caller's deadline is enforced. This proves
+		// the subprocess boundary without launching a real discovery request.
+		time.Sleep(3 * time.Second)
+		return
+	}
 	if os.Getenv("PLAN9ASM_EXACT_CLI_HELPER") != "1" {
 		return
 	}
