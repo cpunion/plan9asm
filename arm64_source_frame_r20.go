@@ -7,10 +7,7 @@ import "strings"
 // private SP root, not an arbitrary incoming pointer or the native caller SP.
 // Keep this producer tied to the complete source TEXT contract.
 func arm64SourceFrameR20(fn Func) bool {
-	frame := arm64SourceGoFrame(fn)
-	if !frame.present || frame.restoresLink || !arm64SourceFrameFlagsKnown(fn) ||
-		fn.FrameSize <= 0 || fn.FrameSize > arm64MaxLocalStackSpan || fn.FrameSize&7 != 0 ||
-		arm64SourceFrameAutosize(fn.FrameSize) <= 0xf0 {
+	if !arm64SourceFrameR20Candidate(fn) {
 		return false
 	}
 	texts := 0
@@ -38,26 +35,35 @@ func arm64SourceFrameR20(fn Func) bool {
 	return texts == 1
 }
 
-// A named scalar, GP/FP pair or structure access must not bypass the same
-// implicit-entry contract used by raw memory. Even write-only R20 use takes
-// this path: a full overwrite can be established by the shared source proof.
+// Only a large source-leaf frame may require the separate R20 producer. A
+// software definition in an ordinary small function must not replace its
+// existing stack/control proof with the framed raw-leaf proof.
+//
+// Keep malformed or incomplete large TEXT metadata on this checked path:
+// arm64SourceFrameR20 must independently establish the complete producer before
+// R20 becomes available. An omitted argument suffix cannot turn that read into
+// an unchecked, zero-initialized virtual register.
 func arm64SourceFrameR20Required(fn Func) bool {
-	if !arm64SourceGoFrame(fn).present {
-		returns := false
-		for _, original := range fn.Instrs {
-			ins := arm64ControlDecode(original)
-			returns = returns || ins.Op == OpRET
-			if (ins.Op == "B" || ins.Op == "JMP") && len(ins.Args) == 1 {
-				arg := ins.Args[0]
-				returns = returns || arg.Kind == OpReg && arg.Reg == "R30" ||
-					arg.Kind == OpMem && arg.Mem.Base == "R30"
-			}
-		}
-		if !returns {
-			return false // A format-only trap/sink does not claim caller-return semantics.
-		}
-	}
-	return arm64SourceUsesR20(fn)
+	return arm64SourceFrameR20Candidate(fn) && arm64SourceUsesR20(fn)
+}
+
+// This is only a cost/routing predicate, not permission to initialize R20.
+// Larger dynamic allocations, ordinary nonleaf calls and existing source-local
+// register helpers keep their own stack and entry contracts.
+func arm64SourceFrameR20Candidate(fn Func) bool {
+	frame := arm64SourceGoFrame(fn)
+	return frame.present && !frame.restoresLink && arm64SourceFrameFlagsKnown(fn) &&
+		fn.FrameSize > 0 && fn.FrameSize <= arm64MaxLocalStackSpan && fn.FrameSize&7 == 0 &&
+		arm64SourceFrameAutosize(fn.FrameSize) > 0xf0
+}
+
+// The bounded scalar-word transport requires reaching definitions even when
+// software overwrites R20. Other existing entry contracts retain their own
+// availability checks; legacy format-only signatures acquire no new contract.
+func arm64SourceFrameR20Checked(fn Func, sig FuncSig, resolve func(string) string) bool {
+	return arm64SourceUsesR20(fn) && (arm64SourceFrameR20Required(fn) ||
+		(len(sig.Frame.Params) != 0 || len(sig.Frame.Results) != 0) &&
+			arm64SourceFrameR20Transport(fn, &arm64PrivateFrameTransport{entry: sig, resolve: resolve}))
 }
 
 func arm64SourceUsesR20(fn Func) bool {
