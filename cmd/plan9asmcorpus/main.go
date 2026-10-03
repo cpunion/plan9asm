@@ -127,6 +127,8 @@ func main() {
 	discoveryTargets := flag.String("discovery-targets", "", "comma-separated target subset for replaying matching discovery records")
 	discoveryShardIndex := flag.Int("discovery-shard-index", 0, "zero-based discovery candidate shard")
 	discoveryShardCount := flag.Int("discovery-shard-count", 1, "number of stable discovery candidate shards")
+	var discoveryExactCandidates discoveryExactCandidateFlags
+	flag.Var(&discoveryExactCandidates, "discovery-exact-candidate", "execute only this exact module@version in its full shard (repeatable; other candidates remain pending)")
 	discoveryTimeout := flag.Duration("candidate-timeout", defaultDiscoveryCandidateTimeout, "timeout for discovery setup and each target configuration")
 	discoveryReport := flag.String("discovery-report", "", "write the discovery shard result as JSON")
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
@@ -137,6 +139,10 @@ func main() {
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
 	requireVerifiedAssembly := flag.Bool("require-verified-assembly-ledger", false, "require every assembly candidate to be passed or explicitly skipped by complete reports")
 	flag.Parse()
+	check(validateDiscoveryExactCandidateMode(discoveryExactCandidates, *discoveryLedger, *discoveryTargets != "",
+		*list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
+			*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" ||
+			*assemblyLedgerStatusPath != "" || *requireVerifiedAssembly))
 	if *verifyDiscoveryReports != "" && *discoveryProgressReports != "" {
 		check(errors.New("-verify-discovery-reports and -discovery-progress are mutually exclusive"))
 	}
@@ -251,6 +257,7 @@ func main() {
 			FilterTargets:    filterTargets,
 			ShardIndex:       *discoveryShardIndex,
 			ShardCount:       *discoveryShardCount,
+			ExactCandidates:  discoveryExactCandidates,
 			CandidateTimeout: *discoveryTimeout,
 			ReportPath:       *discoveryReport,
 			buildCache:       *discoveryBuildCache,

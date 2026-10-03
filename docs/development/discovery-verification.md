@@ -228,6 +228,18 @@ PLAN9ASM_DISCOVERY_PARALLELISM=4 \
 scripts/verify-discovered-library-corpus.sh _out/discovered-library-corpus
 ```
 
+To replay particular exact ledger candidates, invoke `plan9asmcorpus` with
+repeatable `-discovery-exact-candidate=module@version`, the normal
+`-discovery-shard-count=64` and their matching `-discovery-shard-index`. Keep a
+fresh report directory and pass the usual manifest, ledger, repository,
+translator, LLVM and report paths. Requests must be unique current ledger
+matches in that shard; reader modes and target filters reject this option.
+All targets and the full candidate denominator remain unchanged. Unrequested
+candidates and their partial shard stay pending; a successful focused request
+is not complete or verified coverage. Candidates sharing a shard must be
+requested together for one report, not combined by editing old JSON. The `all`
+scheduler is unchanged; never relabel old reports with another shard count.
+
 The `all` command replaces stale canonical reports; save evidence elsewhere
 under `_out/` first when needed. Download, applicability and each target
 translation/compile operation each have a 60-minute deadline. Diagnostic

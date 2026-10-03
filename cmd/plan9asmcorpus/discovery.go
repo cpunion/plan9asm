@@ -77,6 +77,7 @@ type discoveryCorpusConfig struct {
 	FilterTargets    bool
 	ShardIndex       int
 	ShardCount       int
+	ExactCandidates  []string
 	CandidateTimeout time.Duration
 	ReportPath       string
 	// Defaults to a shard-owned cache. A caller may provide an existing shared
@@ -1703,6 +1704,13 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	if err != nil {
 		return err
 	}
+	// Bind requests before workspace setup, without reducing the ledger or
+	// complete shard that readers independently reconstruct.
+	fullShard := selectDiscoveryShard(allCandidates, cfg.ShardIndex, cfg.ShardCount)
+	selected, err := selectDiscoveryExactCandidates(cfg, allCandidates, fullShard)
+	if err != nil {
+		return err
+	}
 	invalidSourceSkips, err := loadInvalidMachineCodeSkips(cfg.RepoRoot)
 	if err != nil {
 		return err
@@ -1732,8 +1740,9 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		if err != nil {
 			return err
 		}
+		fullShard = selectDiscoveryShard(candidates, cfg.ShardIndex, cfg.ShardCount)
+		selected = fullShard
 	}
-	selected := selectDiscoveryShard(candidates, cfg.ShardIndex, cfg.ShardCount)
 	report := discoveryCorpusReport{
 		SchemaVersion:      discoveryReportSchema,
 		Provenance:         provenance,
@@ -1743,7 +1752,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		ShardCount:         cfg.ShardCount,
 		CandidateTotal:     len(allCandidates),
 		EligibleCandidates: len(candidates),
-		Partial:            len(selected) > 0,
+		Partial:            len(fullShard) > 0,
 		Results:            make([]discoveryCorpusResult, 0, len(selected)),
 		FeatureInventory:   newDiscoveryFeatureInventory(),
 	}
@@ -1921,7 +1930,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			return err
 		}
 	}
-	report.Partial = false
+	report.Partial = len(report.Results) < len(fullShard)
 	if err := validateDiscoveryCorpusAccounting(report); err != nil {
 		return err
 	}
@@ -1937,6 +1946,10 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	}
 	if report.Failed != 0 {
 		return fmt.Errorf("discovery shard %d/%d failed: passed=%d failed=%d selected=%d", cfg.ShardIndex, cfg.ShardCount, report.Passed, report.Failed, report.Selected)
+	}
+	if report.Partial {
+		fmt.Printf("exact discovery request completed: %d/%d candidates in shard %d/%d; unreported candidates remain pending\n",
+			report.Selected, len(fullShard), cfg.ShardIndex, cfg.ShardCount)
 	}
 	fmt.Printf(
 		"discovery shard %d/%d completed: passed=%d not_applicable=%d "+
