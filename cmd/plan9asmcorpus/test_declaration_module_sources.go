@@ -135,6 +135,20 @@ func captureDiscoveryForeignTestDirectory(ctx context.Context, captures map[stri
 	if err := captureDiscoveryTestSourceDirectory(capture.Plan, root, actual.Dir); err != nil {
 		return "", "", err
 	}
+	if err := captureDiscoveryTestModuleGoMod(ctx, capture, dir, env); err != nil {
+		return "", "", err
+	}
+	if pkg.SourceRole != "stdlib" {
+		metadata := actual.Module.GoMod
+		if actual.Module.Replace != nil {
+			metadata = actual.Module.Replace.GoMod
+		}
+		digest, err := discoveryFeatureFileSHA256(metadata)
+		if err != nil || digest != capture.Metadata[capture.Download.GoMod] {
+			return "", "", fmt.Errorf("test dependency actual metadata changed or disappeared during capture")
+		}
+		capture.Metadata[metadata] = digest
+	}
 	if actual.ImportPath == "unsafe" {
 		if actual.Name != "unsafe" || actual.Module != nil || actual.Export != "" || len(actual.CompiledGoFiles) != 0 ||
 			len(actual.SFiles) != 0 || len(actual.Imports) != 0 || len(actual.GoFiles) != 1 || actual.GoFiles[0] != "unsafe.go" ||
@@ -180,6 +194,11 @@ func discoveryTestModuleSnapshot(capture *discoveryTestModuleCapture) (gotoolpro
 	} else {
 		result.ModuleSum, result.GoModSum = capture.Download.Sum, capture.Download.GoModSum
 		result.GoModSHA256 = result.Sources["go.mod"]
+		result.GoModOrigin = gotoolprofile.TestModuleOriginalGoModOrigin
+		if proxy := capture.Plan.ProxyGoMod; proxy != nil {
+			result.GoModOrigin, result.GoModSHA256 = proxy.Protocol, proxy.SHA256
+			result.ProxyGoMod = proxy
+		}
 		var err error
 		result.ZipSHA256, err = discoveryFeatureFileSHA256(capture.Download.Zip)
 		if err != nil {
@@ -203,6 +222,17 @@ func verifyDiscoveryForeignTestSnapshots(ctx context.Context, dependency *gotool
 		}
 		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, capture.Root, capture.Download.Zip); err != nil {
 			return fmt.Errorf("final test dependency source root %s: %w", source.ID(), err)
+		}
+		proxyPlan := discoveryTestModuleProxyPlan(capture)
+		if err := verifyDiscoveryProxyGoMod(&proxyPlan); err != nil {
+			return fmt.Errorf("final test dependency metadata %s: %w", source.ID(), err)
+		}
+		if source.SourceModule != "" {
+			for filename := range capture.Metadata {
+				if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, capture.Root, filename, capture.Download.GoMod); err != nil {
+					return fmt.Errorf("final test dependency metadata %s: %w", source.ID(), err)
+				}
+			}
 		}
 		for filename, wanted := range capture.Exports {
 			actual, err := discoveryFeatureFileSHA256(filename)

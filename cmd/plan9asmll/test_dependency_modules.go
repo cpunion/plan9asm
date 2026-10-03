@@ -15,9 +15,11 @@ import (
 )
 
 type testDependencyModuleGuard struct {
-	Source gotoolprofile.TestModuleSource
-	Root   string
-	ZIP    string
+	Source      gotoolprofile.TestModuleSource
+	Root        string
+	ZIP         string
+	GoMod       string
+	ModuleGoMod string
 }
 
 func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Package) (gotoolprofile.TestSourcePackage, error) {
@@ -74,6 +76,10 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 	}
 	if err := consumer.bindTestModuleSource(*source, root, goMod); err != nil {
 		return gotoolprofile.TestSourcePackage{}, err
+	}
+	if source.SourceModule != "" {
+		proof.GoModOrigin = source.GoModOrigin
+		proof.GoModSHA256, proof.GoModSum = source.GoModSHA256, source.GoModSum
 	}
 	capture := func(files []string, assemblyOnly bool) ([]string, error) {
 		var names []string
@@ -157,11 +163,12 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 		if prior.Root != root || !reflect.DeepEqual(prior.Source, source) {
 			return fmt.Errorf("actual dependency source root/identity changed during loading")
 		}
-		if metadata != "" {
-			actual, err := gotoolprofile.FileSHA256(metadata)
-			if err != nil || actual != source.GoModSHA256 {
-				return fmt.Errorf("actual dependency GoMod metadata changed during loading")
+		if source.SourceModule != "" {
+			if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, root, metadata, prior.GoMod); err != nil {
+				return err
 			}
+		} else if metadata != "" {
+			return fmt.Errorf("stdlib dependency acquired unexpected module metadata")
 		}
 		return nil // The complete roots/ZIPs are rechecked at each final guard.
 	}
@@ -188,10 +195,8 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 		if err != nil || actualRoot != root {
 			return fmt.Errorf("actual foreign dependency download has a different module directory")
 		}
-		actualMod, err := gotoolprofile.FileSHA256(metadata)
-		proxyMod, proxyErr := gotoolprofile.FileSHA256(download.GoMod)
-		if err != nil || proxyErr != nil || actualMod != source.GoModSHA256 || proxyMod != source.GoModSHA256 {
-			return fmt.Errorf("actual foreign dependency GoMod differs from original ZIP and proxy metadata")
+		if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, root, metadata, download.GoMod); err != nil {
+			return err
 		}
 		if consumer.GeneratedGuard == nil {
 			consumer.GeneratedGuard = make(map[string]string)
@@ -203,6 +208,8 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 			consumer.GeneratedGuard[filename] = source.GoModSHA256
 		}
 		guard.ZIP = download.Zip
+		guard.GoMod = download.GoMod
+		guard.ModuleGoMod = metadata
 	} else {
 		actualRoot, err := filepath.EvalSymlinks(filepath.Join(consumer.Root, "src"))
 		if err != nil || actualRoot != root || source.GoVersion != consumer.Observed.GoVersion {
@@ -220,6 +227,11 @@ func (consumer *featureConsumer) verifyTestModuleSources() error {
 	for _, guard := range consumer.TestModuleGuards {
 		if err := gotoolprofile.VerifyTestModuleSource(consumer.Context, guard.Source, guard.Root, guard.ZIP); err != nil {
 			return fmt.Errorf("final test dependency source root %s: %w", guard.Source.ID(), err)
+		}
+		if guard.Source.SourceModule != "" {
+			if err := gotoolprofile.VerifyTestModuleGoModMetadata(guard.Source, guard.Root, guard.ModuleGoMod, guard.GoMod); err != nil {
+				return fmt.Errorf("final test dependency metadata %s: %w", guard.Source.ID(), err)
+			}
 		}
 	}
 	return nil

@@ -21,7 +21,9 @@ import (
 	"golang.org/x/mod/sumdb/dirhash"
 )
 
-const TestDependencyModuleProtocol = "actual_go_test_dependency_module_sources_v1"
+const TestDependencyModuleProtocol = "actual_go_test_dependency_module_sources_v2"
+
+const TestModuleOriginalGoModOrigin = "original_zip_go_mod"
 
 // TestModuleSource is portable source evidence, not an authorization to load
 // arbitrary paths. The producer authenticates the Go download separately;
@@ -37,6 +39,8 @@ type TestModuleSource struct {
 	ZipSHA256     string                       `json:"zip_sha256,omitempty"`
 	GoModSum      string                       `json:"go_mod_sum,omitempty"`
 	GoModSHA256   string                       `json:"go_mod_sha256,omitempty"`
+	GoModOrigin   string                       `json:"go_mod_origin,omitempty"`
+	ProxyGoMod    *ProxyGoModProof             `json:"proxy_go_mod,omitempty"`
 	Sources       map[string]string            `json:"sources"`
 	Headers       map[string]string            `json:"selection_headers"`
 	Directories   map[string][]TestSourceEntry `json:"directories"`
@@ -70,14 +74,17 @@ func ValidateTestModuleSource(source TestModuleSource) error {
 	}
 	if source.SourceModule == "" {
 		if _, err := goMinor(source.GoVersion); err != nil || source.SourceVersion != "" || source.ModuleSum != "" ||
-			source.ZipSHA256 != "" || source.GoModSum != "" || source.GoModSHA256 != "" {
+			source.ZipSHA256 != "" || source.GoModSum != "" || source.GoModSHA256 != "" ||
+			source.GoModOrigin != "" || source.ProxyGoMod != nil {
 			return fmt.Errorf("stdlib dependency has a different source/tool role")
 		}
 	} else if module.Check(source.SourceModule, source.SourceVersion) != nil || source.GoVersion != "" ||
 		!testDependencyH1(source.ModuleSum) || !testDependencyH1(source.GoModSum) ||
-		!discoverySHA256Pattern.MatchString(source.ZipSHA256) || !discoverySHA256Pattern.MatchString(source.GoModSHA256) ||
-		source.Sources["go.mod"] != source.GoModSHA256 {
+		!discoverySHA256Pattern.MatchString(source.ZipSHA256) || !discoverySHA256Pattern.MatchString(source.GoModSHA256) {
 		return fmt.Errorf("external dependency lacks exact ZIP/module/mod source identity")
+	}
+	if err := validateTestModuleGoModOrigin(source); err != nil {
+		return err
 	}
 	if source.Directories["."] == nil {
 		return fmt.Errorf("test dependency omits its actual source-root directory")
@@ -340,6 +347,9 @@ func verifyTestModuleZIP(ctx context.Context, source TestModuleSource, archive s
 		if files[name] != nil {
 			return fmt.Errorf("test dependency ZIP member has conflicting source roles")
 		}
+	}
+	if source.GoModOrigin == ProxyGoModProtocol && (files["go.mod"] != nil || optionalDirs["go.mod"]) {
+		return fmt.Errorf("authenticated proxy metadata conflicts with an original ZIP go.mod member")
 	}
 	for dir, entries := range source.Directories {
 		seen := make(map[string]bool)

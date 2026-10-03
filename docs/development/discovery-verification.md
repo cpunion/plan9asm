@@ -191,9 +191,9 @@ whose paths share the candidate's prefix. Ownership comes from actual Go
 Module/Dir/Replace and ImportMap, not that prefix. Separate module roots retain
 exact ZIP/module h1/go.mod h1, related directory membership and original minimal
 Go/ASM selection headers; the consumer independently matches its actual Go
-download, source roots and pre/post exports. Local or unknown replacements and
-external ZIPs lacking original `go.mod` remain failures until their separate
-authenticated metadata role is supported. External ASM is source-only evidence,
+download, source roots and pre/post exports. Local or unknown replacements remain
+failures; legacy archives require the separate authenticated metadata origin
+described below. External ASM is source-only evidence,
 not another candidate translation or object. Standard-library roots must derive
 from the reobserved driver's actual GOROOT. `unsafe` retains its builtin role and
 original documentation source rather than inventing a compiled export or dropping
@@ -495,6 +495,16 @@ SumDB lookups and tiles. Cache hits remain untrusted until the public signature
 and exact Merkle inclusion are checked. Malformed cache entries fail instead of
 being hidden by another cache or network fallback. Each candidate owns its
 `GOPATH` as well as module/build caches, including SumDB checkpoint writes.
+Foreign test dependencies use the same authenticated metadata contract under
+`actual_go_test_dependency_module_sources_v2`. Each module root and actual
+source-only package retains its mandatory `go_mod_origin`: original ZIP bytes
+or the separately signed legacy proxy role. The latter requires the complete
+actual archive to lack `go.mod` and binds actual `Module.GoMod` to the exact
+download metadata outside the source tree, with byte/path checks before and
+after consumption. Neither origin adds external assembly objects. Missing or
+unknown roles, deleted signatures and invented ZIP members fail; offline replay
+retains frozen producer provenance rather than authenticating source membership
+from hashes alone. Older source-root protocols cannot be relabeled.
 `no_current_go_package` describes ordinary non-test source pairing only; it
 does not prove that `go list -test` could not select a test-only package.
 The producer checks captured files and directory names against that ZIP;

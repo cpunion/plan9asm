@@ -32,7 +32,8 @@ func testDependencyModuleFixture(t *testing.T) (TestModuleSource, string, string
 	}
 	source := TestModuleSource{
 		Protocol: TestDependencyModuleProtocol, SourceModule: "example.invalid/boundary/loader", SourceVersion: "v1.0.0",
-		Sources: make(map[string]string), Headers: make(map[string]string), Directories: make(map[string][]TestSourceEntry),
+		GoModOrigin: TestModuleOriginalGoModOrigin,
+		Sources:     make(map[string]string), Headers: make(map[string]string), Directories: make(map[string][]TestSourceEntry),
 	}
 	var buffer bytes.Buffer
 	writer := zip.NewWriter(&buffer)
@@ -257,6 +258,7 @@ func TestTestDependencyModuleSourceStdlibAndCanonicalOrdering(t *testing.T) {
 	source, root, _ := testDependencyModuleFixture(t)
 	source.SourceModule, source.SourceVersion, source.ModuleSum, source.ZipSHA256 = "", "", "", ""
 	source.GoModSum, source.GoModSHA256, source.GoVersion = "", "", "go1.27.1"
+	source.GoModOrigin = ""
 	if err := VerifyTestModuleSource(context.Background(), source, root, ""); err != nil {
 		t.Fatal(err)
 	}

@@ -125,6 +125,13 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			// stays exact during the cross-host semantic comparison.
 			dependency.ExternalPackages[index].ExportSHA256 = ""
 		}
+		for index := range dependency.SourceModules {
+			if metadata := dependency.SourceModules[index].ProxyGoMod; metadata != nil {
+				// Each original signature and inclusion was independently
+				// verified. Preserve exact record, metadata and ZIP identities.
+				metadata.SignedTree, metadata.Inclusion = "", nil
+			}
+		}
 		selection := dependency.Query.Selection
 		if err := replaceID(&selection.ProfileID); err != nil {
 			return err

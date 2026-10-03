@@ -296,9 +296,19 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, module.Root, module.Download.Zip); err != nil {
 			return nil, fmt.Errorf("actual test dependency source root %s: %w", source.ID(), err)
 		}
+		if source.SourceModule != "" {
+			for metadata := range module.Metadata {
+				if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, module.Root, metadata, module.Download.GoMod); err != nil {
+					return nil, fmt.Errorf("actual test dependency metadata %s: %w", source.ID(), err)
+				}
+			}
+		}
 		dependency.SourceModules = append(dependency.SourceModules, source)
 	}
 	gotoolprofile.SortTestModuleSources(dependency.SourceModules)
+	if err := bindDiscoveryTestModuleMetadataPackages(dependency); err != nil {
+		return nil, err
+	}
 	if plan.testDependencyModuleCaptures == nil {
 		plan.testDependencyModuleCaptures = make(map[*gotoolprofile.TestDependencyProof]map[string]*discoveryTestModuleCapture)
 	}

@@ -46,17 +46,19 @@ func testDependencyPackageInput(input *ConsumerInput, source TestSourcePackage, 
 	if !found || !builtin && !discoverySHA256Pattern.MatchString(source.ExportSHA256) || pkg.PackagePath == "unsafe" && !builtin {
 		return nil, fmt.Errorf("test dependency lacks its actual foreign module/source/export boundary")
 	}
-	if pkg.GoModOrigin != "" || pkg.GoModSHA256 != "" || pkg.GoModSum != "" || pkg.ModulePath == input.Module {
-		return nil, fmt.Errorf("foreign dependency impersonates original candidate or unsupported proxy metadata")
+	if pkg.ModulePath == input.Module {
+		return nil, fmt.Errorf("foreign dependency impersonates original candidate")
 	}
 	if pkg.SourceRole == "stdlib" {
 		if root.SourceModule != "" || pkg.ModulePath != "" || pkg.ModuleVersion != "" || pkg.SourceModule != "" || pkg.SourceVersion != "" ||
+			pkg.GoModOrigin != "" || pkg.GoModSHA256 != "" || pkg.GoModSum != "" ||
 			strings.Contains(strings.Split(pkg.PackagePath, "/")[0], ".") {
 			return nil, fmt.Errorf("test dependency changed actual stdlib source/tool role")
 		}
 	} else if module.Check(pkg.ModulePath, pkg.ModuleVersion) != nil ||
 		pkg.PackagePath != pkg.ModulePath && !strings.HasPrefix(pkg.PackagePath, pkg.ModulePath+"/") ||
 		pkg.SourceModule != root.SourceModule || pkg.SourceVersion != root.SourceVersion ||
+		pkg.GoModOrigin != root.GoModOrigin || pkg.GoModSHA256 != root.GoModSHA256 || pkg.GoModSum != root.GoModSum ||
 		pkg.SourceRole != "module" && pkg.SourceRole != "version_replace" ||
 		pkg.SourceRole == "module" && (pkg.SourceModule != pkg.ModulePath || pkg.SourceVersion != pkg.ModuleVersion) {
 		return nil, fmt.Errorf("test dependency changed actual Module/Replace source identity")

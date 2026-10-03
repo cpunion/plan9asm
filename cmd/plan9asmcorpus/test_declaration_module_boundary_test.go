@@ -124,6 +124,27 @@ func TestTestDeclarationDependencyProducerNestedModuleBoundary(t *testing.T) {
 	}
 	assertTestModuleSemanticProjection(t, replay, inventory)
 	for name, mutate := range map[string]func(*gotoolprofile.TestDependencyProof){
+		"old source root protocol": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.SourceModules {
+				d.SourceModules[i].Protocol = "actual_go_test_dependency_module_sources_v1"
+			}
+		},
+		"paired metadata origin deletion": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.SourceModules {
+				d.SourceModules[i].GoModOrigin, d.SourceModules[i].ProxyGoMod = "", nil
+			}
+			for i := range d.ExternalPackages {
+				pkg := &d.ExternalPackages[i].Package
+				pkg.GoModOrigin, pkg.GoModSHA256, pkg.GoModSum = "", "", ""
+			}
+		},
+		"unknown metadata origin": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.SourceModules {
+				if d.SourceModules[i].SourceModule != "" {
+					d.SourceModules[i].GoModOrigin = "local_metadata"
+				}
+			}
+		},
 		"missing boundary roots":    func(d *gotoolprofile.TestDependencyProof) { d.SourceModules = nil },
 		"missing external packages": func(d *gotoolprofile.TestDependencyProof) { d.ExternalPackages = nil },
 		"missing transitive external node": func(d *gotoolprofile.TestDependencyProof) {
@@ -144,6 +165,13 @@ func TestTestDeclarationDependencyProducerNestedModuleBoundary(t *testing.T) {
 		},
 		"unbound export bytes":     func(d *gotoolprofile.TestDependencyProof) { d.ExternalPackages[0].ExportSHA256 = "" },
 		"different source version": func(d *gotoolprofile.TestDependencyProof) { d.ExternalPackages[0].Package.SourceVersion = "v1.0.1" },
+		"different package metadata role": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.ExternalPackages {
+				if d.ExternalPackages[i].Package.SourceModule != "" {
+					d.ExternalPackages[i].Package.GoModOrigin = gotoolprofile.ProxyGoModProtocol
+				}
+			}
+		},
 		"unknown import boundary": func(d *gotoolprofile.TestDependencyProof) {
 			d.Packages[0].ImportMap[external.Module] = "other.invalid/unbound"
 		},
