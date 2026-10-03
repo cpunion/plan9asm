@@ -480,6 +480,13 @@ func ProbeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 
 func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 	fn := Func{Sym: "plan9asm.probe", Instrs: append([]Instr(nil), instrs...)}
+	if arch == ArchARM64 {
+		var err error
+		fn, err = arm64InstructionProbeFunc(instrs)
+		if err != nil {
+			return err
+		}
+	}
 	labels := map[string]struct{}{}
 	definedLabels := map[string]struct{}{}
 	sigs := map[string]FuncSig{

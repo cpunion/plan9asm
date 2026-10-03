@@ -157,6 +157,12 @@ a guess from the translator's build version. Preserve the independent Go-table,
 byte/state, initialized numerical/canary and complete target-object tests in
 `arm64_scalar_memory_*_test.go`.
 
+Isolated ARM64 coverage probes parse their own explicit zero-frame NOFRAME
+TEXT fixture and retain a real faulting exit. This validates concrete AUTO
+forms without borrowing the original function's frame or encoder identity.
+Foreign TEXT, unbound FP, unresolved offsets and unsafe continuations remain
+rejected; a compile-only probe is never executable semantic coverage.
+
 Compiler/executable/emulator subprocesses in native root oracles should use
 `runtimeOracleCombinedOutput` with their actual `CommandContext` and deadline.
 The helper retains output and failures, bounds pipe waits and cleans its owned
