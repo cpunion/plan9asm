@@ -68,13 +68,16 @@ func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameFamily(t *testing.T) {
 	t.Logf("actual Go raw WORD and LLVM22/independent C: %d variants x 256 patterns x 5 unaligned offsets; full input/output canaries and real LR-returning callers", len(cases))
 }
 
-func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameRepeatedNumericHelper(t *testing.T) {
-	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+func arm64RawZeroRepeatedNumericSource(t *testing.T) string {
+	t.Helper()
+	// Use ordinary callee-saved temporaries for an executed Go fixture.
+	// Temporarily pointing g/OS18 at SP is not safe for asynchronous observers,
+	// even when the separate source/object proof verifies their restoration.
 	words := assembleARM64LLVMWords(t, []string{
-		"add x4,x4,x2", "eor x4,x4,x5", "stp x28,x18,[sp,#-16]!",
-		"add x28,sp,#0", "add x18,sp,#0", "ldp x28,x18,[sp],#16",
+		"add x4,x4,x2", "eor x4,x4,x5", "stp x22,x23,[sp,#-16]!",
+		"add x22,sp,#0", "add x23,sp,#0", "ldp x22,x23,[sp],#16",
 	}, "")
-	source := fmt.Sprintf(`TEXT rawZeroNumeric(SB),516,$0-24
+	return fmt.Sprintf(`TEXT rawZeroNumeric(SB),516,$0-24
 MOVD in+0(FP),R0
 MOVD out+8(FP),R1
 MOVD salt+16(FP),R2
@@ -95,6 +98,14 @@ WORD $%#08x
 WORD $%#08x
 WORD $0xd65f03c0
 `, words[2], words[3], words[4], words[5], words[0], words[1])
+}
+
+func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameRepeatedNumericHelper(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+	source := arm64RawZeroRepeatedNumericSource(t)
+	if err := arm64RawZeroRuntimeRegisterSafety(source); err != nil {
+		t.Fatal(err)
+	}
 	requireARM64GoAssemblerResult(t, source, true)
 	file, err := Parse(ArchARM64, source)
 	if err != nil {
@@ -148,7 +159,7 @@ func main() {
 }
 `
 	for name, body := range map[string]string{
-		"go.mod":  "module rawzeronumericoracle\n\ngo 1.27\n",
+		"go.mod":  "module rawzeronumericoracle\n\ngo 1.20\n",
 		"main.go": goOracle,
 		"oracle_arm64.s": strings.Replace(source, "TEXT rawZeroNumeric", "TEXT ·rawZeroNumeric", 1) +
 			"\nTEXT ·readGoG(SB),516,$0-8\nMOVD g,R0\nMOVD R0,ret+0(FP)\nRET\n",
@@ -222,5 +233,5 @@ int main(void) {
 }
 `
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "raw_zero_numeric", triple, ir, cOracle, runner)
-	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, dead private GP at typed void return, original raw g/OS18 spill restoration, actual Go g and native caller fixed-register snapshots, full canaries/caller LR")
+	t.Log("actual Go raw BL and LLVM22/C: 1280 independent overflow/bit-pattern cases, two executed arithmetic helper calls, dead private GP at typed void return, ordinary R22/R23 spill restoration, unchanged actual Go g and native caller g/OS18 snapshots, full canaries/caller LR")
 }
