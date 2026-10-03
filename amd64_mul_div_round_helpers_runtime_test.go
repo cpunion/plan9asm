@@ -17,13 +17,11 @@ func x86MulDivRoundHelperFixtureIR() string {
 	var ir strings.Builder
 	ir.WriteString("declare i128 @llvm.ctlz.i128(i128, i1)\n")
 	for _, bits := range []int{32, 64} {
-		typ := amd64FMA3LLVMType(1, bits)
 		emitX86FloatMulDivRoundingHelper(&ir, bits)
 		fmt.Fprintf(&ir, "define i%d @mul_div%d(i%d %%a, i%d %%b, i32 %%divide, i32 %%mode, i32 %%mxcsr) {\n", bits, bits, bits, bits)
-		fmt.Fprintf(&ir, "  %%a_float = bitcast i%d %%a to %s\n  %%b_float = bitcast i%d %%b to %s\n", bits, typ, bits, typ)
 		ir.WriteString("  %is_divide = icmp ne i32 %divide, 0\n")
-		fmt.Fprintf(&ir, "  %%value = call %s @__plan9asm_mul_div_round_f%d(%s %%a_float, %s %%b_float, i1 %%is_divide, i32 %%mode, i32 %%mxcsr)\n", typ, bits, typ, typ)
-		fmt.Fprintf(&ir, "  %%result = bitcast %s %%value to i%d\n  ret i%d %%result\n}\n", typ, bits, bits)
+		fmt.Fprintf(&ir, "  %%value = call i%d @__plan9asm_mul_div_round_f%d(i%d %%a, i%d %%b, i1 %%is_divide, i32 %%mode, i32 %%mxcsr)\n", bits, bits, bits, bits)
+		fmt.Fprintf(&ir, "  ret i%d %%value\n}\n", bits)
 	}
 	return ir.String()
 }
@@ -113,8 +111,10 @@ func TestX86FloatMulDivIntegerRoundingFiveLLVM22Targets(t *testing.T) {
 	}
 	for _, optimized := range []bool{false, true} {
 		ir := x86MulDivRoundHelperFixtureIR()
+		backendLevel := "-O0"
 		if optimized {
 			ir = x86MulDivRoundOptimize(t, ir)
+			backendLevel = "-O2"
 		}
 		for _, triple := range []string{
 			"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc",
@@ -123,11 +123,12 @@ func TestX86FloatMulDivIntegerRoundingFiveLLVM22Targets(t *testing.T) {
 			t.Run(fmt.Sprintf("O2-%t/%s", optimized, triple), func(t *testing.T) {
 				dir := t.TempDir()
 				source, object := filepath.Join(dir, "integer-round.ll"), filepath.Join(dir, "integer-round.o")
+				assembly := filepath.Join(dir, "integer-round.s")
 				if err := os.WriteFile(source, []byte(ir), 0600); err != nil {
 					t.Fatal(err)
 				}
 				ctx, cancel := runtimeOracleStageContext(t)
-				out, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, llc, "-mtriple="+triple, "-filetype=obj", source, "-o", object))
+				out, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, llc, backendLevel, "-mtriple="+triple, "-filetype=obj", source, "-o", object))
 				cancel()
 				if err != nil {
 					t.Fatalf("LLVM22 object: %v\n%s", err, out)
@@ -152,6 +153,22 @@ func TestX86FloatMulDivIntegerRoundingFiveLLVM22Targets(t *testing.T) {
 					if !strings.Contains(triple, "windows") || len(fields) != 2 || fields[0] != "U" || fields[1] != marker {
 						t.Fatalf("integer helper has unresolved arithmetic dependency: %s", line)
 					}
+				}
+				ctx, cancel = runtimeOracleStageContext(t)
+				out, err = runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, llc, backendLevel, "-mtriple="+triple, "-filetype=asm", source, "-o", assembly))
+				cancel()
+				if err != nil {
+					t.Fatalf("LLVM22 machine assembly: %v\n%s", err, out)
+				}
+				machine, err := os.ReadFile(assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				// Includes every helper and its actual call sites. An integer
+				// IR body alone does not close a float-return x87 C ABI.
+				floating := regexp.MustCompile(`(?m)^[\t ]+(f[a-z]+|v?(add|sub|mul|div|sqrt|comi|ucomi)(ss|sd|ps|pd))(\s|$)`)
+				if instruction := floating.Find(machine); instruction != nil {
+					t.Fatalf("SAE bit carrier emits floating instruction %q", instruction)
 				}
 			})
 		}

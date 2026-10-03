@@ -10,6 +10,8 @@ import (
 // cannot undo a hardware exception. All arithmetic below is integer-only.
 // A finite product is exact in 106 bits. Division generates p+3 quotient bits
 // by bounded restoring division and jams the remaining exact remainder.
+// The private ABI carries raw i32/i64 bits, never float/double. Otherwise an
+// un-inlined mode32 C return would use x87 and could change exception state.
 func emitX86FloatMulDivRoundingHelper(b *strings.Builder, bits int) {
 	fractionBits, bias := 23, 127
 	if bits == 64 {
@@ -20,11 +22,13 @@ func emitX86FloatMulDivRoundingHelper(b *strings.Builder, bits int) {
 	signBit := uint64(1) << (bits - 1)
 	quietBit := uint64(1) << (fractionBits - 1)
 
-	fmt.Fprintf(b, "define internal %s @__plan9asm_mul_div_round_f%d(%s %%left, %s %%right, i1 %%divide, i32 %%mode, i32 %%mxcsr) {\nentry:\n", typ, bits, typ, typ)
+	fmt.Fprintf(b, "define internal i%d @__plan9asm_mul_div_round_f%d(i%d %%left, i%d %%right, i1 %%divide, i32 %%mode, i32 %%mxcsr) {\nentry:\n", bits, bits, bits, bits)
 	e := amd64FMA3IntegerEmitter{b: b}
 	daz := e.value("and i32 %%mxcsr, 64")
 	daz = e.value("icmp ne i32 %s, 0", daz)
-	left, right := e.input(bits, "%left", daz), e.input(bits, "%right", daz)
+	leftValue := e.value("bitcast i%d %%left to %s", bits, typ)
+	rightValue := e.value("bitcast i%d %%right to %s", bits, typ)
+	left, right := e.input(bits, leftValue, daz), e.input(bits, rightValue, daz)
 
 	// NaNs retain source priority and payload; invalid non-NaN operations
 	// produce the architecture's negative quiet indefinite value.
@@ -61,8 +65,7 @@ func emitX86FloatMulDivRoundingHelper(b *strings.Builder, bits int) {
 	encoded = e.value("select i1 %s, i%d %d, i%d %s", invalid, bits, signBit|infBits|quietBit, bits, encoded)
 	encoded = e.value("select i1 %s, i%d %s, i%d %s", anyNaN, bits, selectedNaN, bits, encoded)
 	fmt.Fprintf(b, "  br i1 %s, label %%special, label %%finite\nspecial:\n", special)
-	result := e.value("bitcast i%d %s to %s", bits, encoded, typ)
-	fmt.Fprintf(b, "  ret %s %s\nfinite:\n  br i1 %%divide, label %%division_prepare, label %%multiply\nmultiply:\n", typ, result)
+	fmt.Fprintf(b, "  ret i%d %s\nfinite:\n  br i1 %%divide, label %%division_prepare, label %%multiply\nmultiply:\n", bits, encoded)
 	product := e.value("mul i128 %s, %s", left.magnitude, right.magnitude)
 	productUnit := e.value("add i32 %s, %s", left.exponent, right.exponent)
 
@@ -215,9 +218,7 @@ func emitX86FloatMulDivRoundPack(e *amd64FMA3IntegerEmitter, bits int, magnitude
 	encoded = e.value("select i1 %s, i%d 0, i%d %s", flush, bits, bits, encoded)
 	sign := e.value("select i1 %s, i%d %d, i%d 0", negative, bits, uint64(1)<<(bits-1), bits)
 	encoded = e.value("or i%d %s, %s", bits, encoded, sign)
-	typ := amd64FMA3LLVMType(1, bits)
-	result := e.value("bitcast i%d %s to %s", bits, encoded, typ)
-	fmt.Fprintf(e.b, "  ret %s %s\n}\n\n", typ, result)
+	fmt.Fprintf(e.b, "  ret i%d %s\n}\n\n", bits, encoded)
 }
 
 func emitX86FloatMulDivUnboundedTiny(e *amd64FMA3IntegerEmitter, fractionBits, bias int, magnitude, shift, highest, unit, isNearest, awayFromZero string) string {
