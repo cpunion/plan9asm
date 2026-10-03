@@ -479,48 +479,15 @@ func (c *arm64Ctx) lowerARM64VectorFloatUnary(op Op, ins Instr) (ok bool, termin
 }
 
 func (c *arm64Ctx) lowerARM64VectorShiftRight(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	type shiftRightSpec struct {
-		signed     bool
-		rounding   bool
-		accumulate bool
-	}
-	spec, handled := map[Op]shiftRightSpec{
-		"VSSHR":  {signed: true},
-		"VSSRA":  {signed: true, accumulate: true},
-		"VSRSHR": {signed: true, rounding: true},
-		"VSRSRA": {signed: true, rounding: true, accumulate: true},
-		"VUSHR":  {},
-		"VUSRA":  {accumulate: true},
-		"VURSHR": {rounding: true},
-		"VURSRA": {rounding: true, accumulate: true},
-	}[op]
+	spec, handled := arm64VectorShiftRightSpecs[op]
 	if !handled {
 		return false, false, nil
 	}
-	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
-		return true, false, fmt.Errorf("arm64 %s expects $shift, Vsrc.<T>, Vdst.<T> and no suffix: %q", op, ins.Raw)
+	form, err := parseARM64VectorShift(op, ins)
+	if err != nil {
+		return true, false, err
 	}
-	scalar := !strings.Contains(string(ins.Args[1].Reg), ".") && !strings.Contains(string(ins.Args[2].Reg), ".")
-	sourceArrangement, sourceValid := parseARM64VectorArrangement(ins.Args[1].Reg)
-	destinationArrangement, destinationValid := parseARM64VectorArrangement(ins.Args[2].Reg)
-	if scalar {
-		_, sourceValid = arm64ParseVReg(ins.Args[1].Reg)
-		_, destinationValid = arm64ParseVReg(ins.Args[2].Reg)
-		sourceArrangement = arm64VectorArrangement{elementBits: 64, lanes: 1}
-		destinationArrangement = sourceArrangement
-	}
-	allowed := func(a arm64VectorArrangement) bool {
-		return (a.elementBits == 8 && (a.lanes == 8 || a.lanes == 16)) ||
-			(a.elementBits == 16 && (a.lanes == 4 || a.lanes == 8)) ||
-			(a.elementBits == 32 && (a.lanes == 2 || a.lanes == 4)) ||
-			(a.elementBits == 64 && a.lanes == 2)
-	}
-	if !sourceValid || !destinationValid || sourceArrangement != destinationArrangement || !scalar && !allowed(sourceArrangement) {
-		return true, false, fmt.Errorf("arm64 %s requires a matching bare scalar D form or B8/B16/H4/H8/S2/S4/D2 vector arrangements: %q", op, ins.Raw)
-	}
-	if ins.Args[0].Imm < 1 || ins.Args[0].Imm > int64(sourceArrangement.elementBits) {
-		return true, false, fmt.Errorf("arm64 %s shift must be in [1,%d]: %q", op, sourceArrangement.elementBits, ins.Raw)
-	}
+	sourceArrangement, destinationArrangement, scalar := form.arrangement, form.arrangement, form.scalar
 	source, err := c.loadARM64VectorInteger(ins.Args[1].Reg, sourceArrangement)
 	if err != nil {
 		return true, false, err

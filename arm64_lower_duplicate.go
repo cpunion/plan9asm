@@ -12,6 +12,9 @@ func (c *arm64Ctx) lowerARM64VectorDuplicate(op Op, ins Instr) (ok bool, termina
 	if op != "VDUP" {
 		return false, false, nil
 	}
+	if _, err := parseARM64VectorTransfer(op, ins); err != nil {
+		return true, false, err
+	}
 	if strings.ToUpper(string(ins.Op)) != "VDUP" || len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
 		return true, false, fmt.Errorf("arm64 VDUP expects a vector lane or R/ZR source and a vector destination, with no suffix: %q", ins.Raw)
 	}

@@ -12,6 +12,9 @@ func (c *arm64Ctx) lowerARM64VectorMove(op Op, ins Instr) (ok bool, terminated b
 	if op != "VMOV" {
 		return false, false, nil
 	}
+	if _, err := parseARM64VectorTransfer(op, ins); err != nil {
+		return true, false, err
+	}
 	if strings.ToUpper(string(ins.Op)) != "VMOV" || len(ins.Args) != 2 ||
 		ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
 		return true, false, fmt.Errorf("arm64 VMOV expects two registers and no opcode suffix: %q", ins.Raw)
