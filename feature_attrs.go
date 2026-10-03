@@ -91,6 +91,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					}
 				}
 			}
+			if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, goarch); recognized && err == nil && x86PackedShiftHasAlignedCount(form) {
+				add("+sse2")
+			}
 			switch {
 			case isAMD64RawFP16Op(op):
 				add("+avx512fp16")

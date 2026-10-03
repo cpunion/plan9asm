@@ -37,7 +37,7 @@ func TestTranslateX86PackedByteShiftCompleteGoAssemblerForms(t *testing.T) {
 				source.WriteString("\t" + op + " $255, Y0, Y1\n")
 				source.WriteString("\t" + op + " $1, 8(AX), X2\n")
 				source.WriteString("\t" + op + " $2, 16(AX), Y2\n")
-				source.WriteString("\t" + op + " $3, X16, X31\n")
+				fmt.Fprintf(&source, "\t%s $3, X%d, X%d\n", op, zSource, zDestination)
 				fmt.Fprintf(&source, "\t%s $4, Z%d, Z%d\n", op, zSource, zDestination)
 			}
 			source.WriteString("\tRET\n")

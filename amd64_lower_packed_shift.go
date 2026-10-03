@@ -7,6 +7,14 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 	if !recognized || err != nil {
 		return recognized, false, err
 	}
+	if x86PackedShiftHasAlignedCount(form) && ins.Args[form.count].Kind == OpFP {
+		return true, false, fmt.Errorf("legacy m128 count needs actual aligned FP backing: %w", ErrProbeNeedsContext)
+	}
+	if form.memory >= 0 && ins.Args[form.memory].Kind == OpFP {
+		if err := c.validateX86PackedShiftFPSpan(ins.Args[form.memory].FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
 	var mask string
 	if form.mask >= 0 {
 		mask, err = c.loadK(ins.Args[form.mask].Reg)
@@ -58,7 +66,7 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 			}
 			result = c.emitPerLaneVariableShift(amd64PerLaneVariableShiftSpec{laneBits: form.laneBits, operation: operation}, lanes, counts, data)
 		} else {
-			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx)
+			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx, form.legacy)
 			if err != nil {
 				return true, false, err
 			}
@@ -89,7 +97,7 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 // Only actual EVEX mask bits can suppress the corresponding memory accesses;
 // LLVM dead-value elimination is not a native fault-suppression contract.
 func (c *amd64Ctx) loadX86PackedShiftLanes(source Operand, width, bits int, broadcast bool, mask string) (string, error) {
-	if source.Kind != OpMem && source.Kind != OpSym {
+	if source.Kind != OpMem && source.Kind != OpSym && source.Kind != OpFP {
 		return c.loadMaskedPackedCompareLanes(source, width, bits, broadcast, mask)
 	}
 	lanes := width * 8 / bits
@@ -109,12 +117,23 @@ func (c *amd64Ctx) loadX86PackedShiftLanes(source Operand, width, bits int, broa
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", scalar, bytes, value, bits)
 		return amd64SplatInteger(c, lanes, bits, "%"+scalar), nil
 	}
-	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
-	if err != nil {
-		return "", err
-	}
 	load := func(offset int) func() (string, error) {
 		return func() (string, error) {
+			operand := source
+			if operand.Kind == OpFP {
+				operand.FPOffset += int64(offset)
+				bytes, err := c.loadX86PackedShiftBytes(operand, bits/8, true)
+				if err != nil {
+					return "", err
+				}
+				value := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", value, bits/8, bytes, bits)
+				return "%" + value, nil
+			}
+			pointer, pointerType, _, err := c.packedVectorMemoryPointer(operand)
+			if err != nil {
+				return "", err
+			}
 			at, value := c.newTmp(), c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 %d\n", at, pointerType, pointer, offset)
 			fmt.Fprintf(c.b, "  %%%s = load volatile i%d, %s %%%s, align 1\n", value, bits, pointerType, at)
@@ -148,6 +167,20 @@ func (c *amd64Ctx) loadX86PackedShiftLanes(source Operand, width, bits int, broa
 }
 
 func (c *amd64Ctx) loadX86PackedShiftBytes(source Operand, width int, observable bool) (string, error) {
+	if source.Kind == OpFP {
+		if err := c.validateX86PackedShiftFPSpan(source.FPOffset, width); err != nil {
+			return "", err
+		}
+		if c.classicFrame == "" {
+			// Every native ABI0 byte is bound; preserve its little-endian
+			// value without pretending independent allocas are contiguous.
+			return c.loadFPVectorBytes(source.FPOffset, width)
+		}
+		value := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load volatile <%d x i8>, ptr %s, align 1\n",
+			value, width, c.classicFramePtr(source.FPOffset))
+		return "%" + value, nil
+	}
 	if !observable || source.Kind != OpMem && source.Kind != OpSym {
 		return c.loadPackedCompareBytes(source, width)
 	}

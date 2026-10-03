@@ -22,9 +22,9 @@ func TestTranslateX86PerLaneVariableShiftCompleteGoAssemblerForms(t *testing.T) 
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			lastZ := 20
+			lastZ, dataReg, dstReg := 20, 20, 21
 			if target.goarch == "386" {
-				lastZ = 7
+				lastZ, dataReg, dstReg = 7, 6, 7
 			}
 			var source strings.Builder
 			source.WriteString("TEXT perlanevariableshiftforms(SB),NOSPLIT,$0-0\n")
@@ -33,8 +33,8 @@ func TestTranslateX86PerLaneVariableShiftCompleteGoAssemblerForms(t *testing.T) 
 				"VPSRLVW", "VPSRLVD", "VPSRLVQ",
 				"VPSRAVW", "VPSRAVD", "VPSRAVQ",
 			} {
-				fmt.Fprintf(&source, "\t%s X1, X20, X21\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), Y20, Y21\n", op)
+				fmt.Fprintf(&source, "\t%s X1, X%d, X%d\n", op, dataReg, dstReg)
+				fmt.Fprintf(&source, "\t%s 8(AX), Y%d, Y%d\n", op, dataReg, dstReg)
 				fmt.Fprintf(&source, "\t%s Z1, Z2, Z%d\n", op, lastZ)
 				if target.goarch == "amd64" {
 					fmt.Fprintf(&source, "\t%s X1, X20, K1, X21\n", op)
@@ -42,8 +42,8 @@ func TestTranslateX86PerLaneVariableShiftCompleteGoAssemblerForms(t *testing.T) 
 					fmt.Fprintf(&source, "\t%s.Z 40(AX), Z20, K3, Z21\n", op)
 				}
 				if strings.HasSuffix(op, "D") || strings.HasSuffix(op, "Q") {
-					fmt.Fprintf(&source, "\t%s.BCST 104(AX), X20, X21\n", op)
-					fmt.Fprintf(&source, "\t%s.BCST 112(AX), Y20, Y21\n", op)
+					fmt.Fprintf(&source, "\t%s.BCST 104(AX), X%d, X%d\n", op, dataReg, dstReg)
+					fmt.Fprintf(&source, "\t%s.BCST 112(AX), Y%d, Y%d\n", op, dataReg, dstReg)
 					fmt.Fprintf(&source, "\t%s.BCST 120(AX), Z2, Z%d\n", op, lastZ)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s.BCST.Z 128(AX), Z20, K4, Z21\n", op)

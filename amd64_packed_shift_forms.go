@@ -142,6 +142,14 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 	if f.memory >= 0 && !x86PackedShiftMemoryValid(ins.Args[f.memory], goarch) {
 		return fail()
 	}
+	if goarch == "386" {
+		for _, operand := range ins.Args {
+			width := amd64VectorByteWidth(operand.Reg)
+			if index, valid := amd64VectorRegisterIndex(operand.Reg, width); operand.Kind == OpReg && valid && index >= 8 {
+				return f, true, fmt.Errorf("mode32 packed shift has no physical SIMD register %s: %w", operand.Reg, ErrProbeNeedsContext)
+			}
+		}
+	}
 	return f, true, nil
 }
 

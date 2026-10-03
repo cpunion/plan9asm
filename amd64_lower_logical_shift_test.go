@@ -19,9 +19,9 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			legacyLast, zLast := 15, 22
+			legacyLast, zLast, dataReg, dstReg := 15, 22, 20, 21
 			if target.goarch == "386" {
-				legacyLast, zLast = 7, 7
+				legacyLast, zLast, dataReg, dstReg = 7, 7, 6, 7
 			}
 			var source strings.Builder
 			source.WriteString("TEXT packedlogicalshiftforms(SB),NOSPLIT,$0-0\n")
@@ -38,9 +38,9 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 			for _, op := range []string{"VPSLLW", "VPSLLD", "VPSLLQ", "VPSRLW", "VPSRLD", "VPSRLQ"} {
 				for _, width := range []string{"X", "Y"} {
 					fmt.Fprintf(&source, "\t%s $-1, %s0, %s1\n", op, width, width)
-					fmt.Fprintf(&source, "\t%s $255, 8(AX), %s21\n", op, width)
-					fmt.Fprintf(&source, "\t%s X0, %s20, %s21\n", op, width, width)
-					fmt.Fprintf(&source, "\t%s 8(AX), %s20, %s21\n", op, width, width)
+					fmt.Fprintf(&source, "\t%s $255, 8(AX), %s%d\n", op, width, dstReg)
+					fmt.Fprintf(&source, "\t%s X0, %s%d, %s%d\n", op, width, dataReg, width, dstReg)
+					fmt.Fprintf(&source, "\t%s 8(AX), %s%d, %s%d\n", op, width, dataReg, width, dstReg)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s $3, %s20, K1, %s22\n", op, width, width)
 						fmt.Fprintf(&source, "\t%s.Z X0, %s20, K7, %s22\n", op, width, width)
@@ -55,8 +55,8 @@ func TestTranslateX86PackedLogicalShiftCompleteGoAssemblerForms(t *testing.T) {
 					fmt.Fprintf(&source, "\t%s.Z 8(AX), Z20, K6, Z22\n", op)
 				}
 				if strings.HasSuffix(op, "D") || strings.HasSuffix(op, "Q") {
-					fmt.Fprintf(&source, "\t%s.BCST $3, 8(AX), X21\n", op)
-					fmt.Fprintf(&source, "\t%s.BCST $3, 8(AX), Y21\n", op)
+					fmt.Fprintf(&source, "\t%s.BCST $3, 8(AX), X%d\n", op, dstReg)
+					fmt.Fprintf(&source, "\t%s.BCST $3, 8(AX), Y%d\n", op, dstReg)
 					fmt.Fprintf(&source, "\t%s.BCST $3, 8(AX), Z%d\n", op, zLast)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s.BCST.Z $3, 8(AX), K5, Z22\n", op)
