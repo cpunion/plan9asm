@@ -234,6 +234,18 @@ Independent original-Go bytes, initialized numerical/NZCV/canary oracles,
 three LLVM APIs, all affected object targets and native Linux execution retain
 the real pre-fix failures. Opcode extraction includes all eight scalar forms.
 
+The typed ARM64 immediate arithmetic/logical/compare family now derives R27
+materialization from Go's full constant and register classes. Scratch writes
+precede alias reads and invalidate stale link, code, frame and range witnesses.
+Only actual WORD decoding supplies the private physical-instruction marker;
+named pseudo instructions cannot borrow its four-byte width. Actual Go UDF
+fallthroughs retain fault semantics, not numerical pass claims. The precise
+X BITCON-to-ZR subset with non-equivalent old/new constant encoders remains
+Context: a future producer needs the actual source encoder identity, never
+the translator's build Go version. Retain its old/new byte/state and raw-PC
+failure oracles; run `TestARM64GPImmediate` and
+`TestCrossLinuxRuntimeMatrixARM64GPImmediate` before broader validation.
+
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
 processes. Existing skips are counted separately. It does not cover other

@@ -231,6 +231,14 @@ literals and the seven literal-zero aliases do not read old Rd. MOVK remains
 read-modify-write. Go's inherited nonzero MOVWU literal rows can emit zero
 machine words; stock syntax acceptance alone grants no overwrite witness.
 
+For ARM64 immediate arithmetic, logical and compare forms, follow the complete
+Go constant classes (including MBCON), register classes and reserved row size.
+R27 may be written before an aliased source is read; direct/split forms need
+not write it. Raw decoded instructions must not acquire source-pseudo effects.
+Go-accepted fixed-width expansion can contain a reachable UDF, and different
+Go encoders can produce non-equivalent fallthrough. Preserve exact byte/fault
+oracles and require source-encoder Context when that identity is unavailable.
+
 The bounded raw zero-frame proof may also produce the local-control plan,
 but only after every original and exact normalized source context passes.
 Different helper invocations retain separate incoming/private pointer states;
