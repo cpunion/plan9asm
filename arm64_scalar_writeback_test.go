@@ -1,12 +1,14 @@
 package plan9asm
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 var arm64ScalarWritebackOps = []struct {
@@ -204,9 +206,11 @@ func arm64ScalarWritebackGoOracle(t *testing.T, source, main string, cross bool)
 		args = []string{"run", "-p=2", "-exec=qemu-aarch64", "."}
 		env = append(env, "GOOS=linux")
 	}
-	cmd := exec.Command("go", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir, cmd.Env = dir, env
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("native Go scalar writeback oracle: %v\n%s", err, out)
 	}
 }

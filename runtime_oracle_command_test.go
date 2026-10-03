@@ -82,6 +82,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_sm3_runtime_test.go",
 		"arm64_raw_self_bl_runtime_test.go",
 		"arm64_scalar_memory_encoding_audit_test.go",
+		"arm64_scalar_writeback_test.go",
 	} {
 		t.Run(name, func(t *testing.T) {
 			file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
