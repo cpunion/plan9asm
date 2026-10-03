@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,19 +76,21 @@ func TestCrossLinuxRuntimeMatrixARM64RawSelfBLTerminal(t *testing.T) {
 			if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 				t.Fatalf("numeric/canary/fixed-register/return oracle: %v\n%s", err, output)
 			}
-			// Run the already-built ELF/Mach-O directly. No go-run parent or
-			// descendant can survive the bounded process cancellation.
-			sinkCtx, stop := context.WithTimeout(ctx, time.Second)
-			defer stop()
-			command = exec.CommandContext(sinkCtx, args[0], args[1:]...)
-			command.Env = append(os.Environ(), "SELF_BL_SINK=1")
-			output, err := runtimeOracleCombinedOutput(sinkCtx, command)
-			if err == nil || !errors.Is(sinkCtx.Err(), context.DeadlineExceeded) || string(output) != "entered\n" {
-				t.Fatalf("self-BL returned/trapped or was never entered: err=%v deadline=%v output=%q", err, sinkCtx.Err(), output)
+			// Execute the already-built ELF/Mach-O with an owned lifecycle.
+			// Cold Go/QEMU startup must not consume any of the full second
+			// observed after caller readiness, not an independently observed
+			// ASM PC. The original total bound stays.
+			output, err := runtimeOracleObserveSink(ctx, func(sinkCtx context.Context) *exec.Cmd {
+				command := exec.CommandContext(sinkCtx, args[0], args[1:]...)
+				command.Env = append(os.Environ(), "SELF_BL_SINK=1")
+				return command
+			}, 10*time.Second, time.Second)
+			if err != nil {
+				t.Fatalf("self-BL returned/trapped or was never entered: %v output=%q", err, output)
 			}
 		})
 	}
-	t.Log("original Go/LLVM22: 640 independent nonzero numeric/canary/g/LR cases each; entered zero-input sink remained nonreturning until bounded direct-child cancellation")
+	t.Log("original Go/LLVM22: 640 independent nonzero numeric/canary/g/LR cases each; caller-ready zero-input sink remained nonreturning until acknowledged direct-child cancellation")
 }
 
 const arm64RawSelfBLOracleGo = `package main
