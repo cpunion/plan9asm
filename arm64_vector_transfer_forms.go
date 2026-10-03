@@ -25,7 +25,7 @@ func parseARM64VectorTransfer(op Op, ins Instr) (arm64VectorTransferForm, error)
 	invalid := func() (arm64VectorTransferForm, error) {
 		return f, fmt.Errorf("arm64 %s operands are outside the complete Go vector transfer rows: %q", op, ins.Raw)
 	}
-	if (op != "VMOV" && op != "VDUP") || ins.Op != op || len(ins.Args) != 2 ||
+	if (op != "VMOV" && op != "VDUP") || !strings.EqualFold(string(ins.Op), string(op)) || len(ins.Args) != 2 ||
 		ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
 		return invalid()
 	}

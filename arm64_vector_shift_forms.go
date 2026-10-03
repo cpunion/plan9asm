@@ -26,7 +26,7 @@ type arm64VectorShiftForm struct {
 func parseARM64VectorShift(op Op, ins Instr) (arm64VectorShiftForm, error) {
 	f := arm64VectorShiftForm{}
 	_, right := arm64VectorShiftRightSpecs[op]
-	if (op != "VSHL" && !right) || ins.Op != op || len(ins.Args) != 3 ||
+	if (op != "VSHL" && !right) || !strings.EqualFold(string(ins.Op), string(op)) || len(ins.Args) != 3 ||
 		ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat ||
 		ins.Args[1].Kind != OpReg || ins.Args[2].Kind != OpReg {
 		return f, fmt.Errorf("arm64 %s expects a resolved integer shift and matching vector operands: %q", op, ins.Raw)
