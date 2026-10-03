@@ -7693,21 +7693,26 @@ func TestTranslateX86HorizontalFloatingCompleteGo127Forms(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
+			second, destination := 14, 15
+			if target.goarch == "386" {
+				second, destination = 6, 7
+			}
 			var src strings.Builder
-			src.WriteString("TEXT horizontal_floating_complete_forms(SB),NOSPLIT,$0-0\n")
+			src.WriteString("TEXT horizontal_floating_complete_forms(SB),4,$0-0\n")
 			for _, operation := range []string{"HADD", "HSUB"} {
 				for _, element := range []string{"PS", "PD"} {
 					op := operation + element
 					fmt.Fprintf(&src, "\t%s X0, X1\n", op)
-					fmt.Fprintf(&src, "\t%s 8(BX), X15\n", op)
+					fmt.Fprintf(&src, "\t%s 8(BX), X%d\n", op, destination)
 					vop := "V" + op
 					fmt.Fprintf(&src, "\t%s X0, X1, X2\n", vop)
-					fmt.Fprintf(&src, "\t%s 16(BX), X14, X15\n", vop)
+					fmt.Fprintf(&src, "\t%s 16(BX), X%d, X%d\n", vop, second, destination)
 					fmt.Fprintf(&src, "\t%s Y0, Y1, Y2\n", vop)
-					fmt.Fprintf(&src, "\t%s 32(BX), Y14, Y15\n", vop)
+					fmt.Fprintf(&src, "\t%s 32(BX), Y%d, Y%d\n", vop, second, destination)
 				}
 			}
 			src.WriteString("\tRET\n")
+			goAssemblerOracleOutput(t, target.goarch, src.String(), "", true)
 			file, err := Parse(ArchAMD64, src.String())
 			if err != nil {
 				t.Fatal(err)

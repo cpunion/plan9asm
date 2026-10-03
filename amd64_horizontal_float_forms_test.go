@@ -144,6 +144,35 @@ func TestX86HorizontalFloatGoFormatsFiveLLVMTargets(t *testing.T) {
 	}
 }
 
+func TestX86HorizontalFloatLegacyMode32ClassesMatchGo(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		// NOSPLIT is a CPP macro, not an assembler constant without its header.
+		goAssemblerOracleOutput(t, arch,
+			"TEXT horizontal_floating_complete_forms(SB),NOSPLIT,$0-0\nHADDPS X0,X1\nRET\n", "", false)
+	}
+	// Keep the former complete-form fixture's rejected source, rather than
+	// treating mode32 X15 as a translator-supported ordinary register.
+	for _, opcode := range []string{"HADDPS", "HADDPD", "HSUBPS", "HSUBPD"} {
+		for _, instruction := range []string{opcode + " X15,X1", opcode + " 8(BX),X15"} {
+			t.Run(strings.ReplaceAll(instruction, " ", "_"), func(t *testing.T) {
+				source := "TEXT f(SB),4,$0-0\n" + instruction + "\nRET\n"
+				goAssemblerOracleOutput(t, "386", source, "", false)
+				goAssemblerOracleOutput(t, "amd64", source, "", true)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(file, Options{
+					Goarch: "386", TargetTriple: "i386-unknown-linux-gnu",
+					Sigs: map[string]FuncSig{"f": {Name: "f", Ret: Void}},
+				}); err == nil {
+					t.Fatal("translator accepted the original Go-rejected legacy X15 form")
+				}
+			})
+		}
+	}
+}
+
 func TestX86HorizontalFloat386VEXHighRegistersKeepPhysicalContext(t *testing.T) {
 	// Execute each compatibility Go assembler rather than trusting the current
 	// optab-only oracle. Actual objects are syntax evidence, not mode32 runtime.
