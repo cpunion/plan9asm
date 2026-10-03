@@ -72,47 +72,42 @@ func ValidatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 // Metadata-only queries reuse source selection without manufacturing CPP or
 // LLVM outputs. Their separate protocol can never satisfy ValidateSelection.
 func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tags []string) (map[string]bool, map[string]PackageProof, error) {
+	ctx, err := ordinaryPackageSelectionContext(input, tags)
+	if err != nil {
+		return nil, nil, err
+	}
+	macros := func(pkg PackageProof) error {
+		return ValidateOrdinaryAssemblerMacros(pkg.Macros, input.Observed, pkg.PackagePath)
+	}
+	return validatePackageSelectionContext(input, packages, input.AsmFiles, input.RegisteredAsmFiles, ctx, macros)
+}
+
+// Both public protocol readers retain their own validated scope/context. This
+// common replay does not choose a mode or turn an ordinary observation into one.
+func validatePackageSelectionContext(input *ConsumerInput, packages []PackageProof, assembly, registered []string, ctx build.Context, validateMacros func(PackageProof) error) (map[string]bool, map[string]PackageProof, error) {
 	selectedFiles, seenPackages := make(map[string]bool), make(map[string]bool)
 	filePackages := make(map[string]PackageProof)
 	requiredAssembly := make(map[string]bool)
-	for _, file := range input.AsmFiles {
+	for _, file := range assembly {
 		requiredAssembly[file] = true
 	}
-	if input.RegisteredAsmFiles != nil {
-		if len(input.RegisteredAsmFiles) == 0 || !sort.StringsAreSorted(input.RegisteredAsmFiles) {
+	if registered != nil {
+		if len(registered) == 0 || !sort.StringsAreSorted(registered) {
 			return nil, nil, fmt.Errorf("noncanonical complete package assembly registration")
 		}
 		requiredAssembly = make(map[string]bool)
-		for _, file := range input.RegisteredAsmFiles {
+		for _, file := range registered {
 			if requiredAssembly[file] || path.Ext(file) != ".s" || input.Sources[file] == "" ||
 				input.Sources[file] == bytesSHA256(nil) {
 				return nil, nil, fmt.Errorf("duplicate, empty or unhashed package assembly registration: %s", file)
 			}
 			requiredAssembly[file] = true
 		}
-		for _, file := range input.AsmFiles {
+		for _, file := range assembly {
 			if !requiredAssembly[file] {
 				return nil, nil, fmt.Errorf("translation file lies outside the complete package registration: %s", file)
 			}
 		}
-	}
-	minor, err := goMinor(input.Observed.GoVersion)
-	if err != nil {
-		return nil, nil, err
-	}
-	ctx := build.Default
-	ctx.GOOS, ctx.GOARCH = input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"]
-	ctx.Compiler, ctx.CgoEnabled, ctx.BuildTags = "gc", false, tags
-	ctx.ToolTags, ctx.ReleaseTags = input.Observed.ToolTags, nil
-	for version := 1; version <= minor; version++ {
-		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
-	}
-	ctx.OpenFile = func(name string) (io.ReadCloser, error) {
-		header, found := input.Headers[filepath.ToSlash(name)]
-		if !found {
-			return nil, fmt.Errorf("actual Go file has no original selection header: %s", name)
-		}
-		return io.NopCloser(strings.NewReader(header)), nil
 	}
 	for _, pkg := range packages {
 		if err := ValidatePackageModule(input, pkg); err != nil {
@@ -122,7 +117,7 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 			return nil, nil, fmt.Errorf("actual selected package has a different or duplicate module role")
 		}
 		seenPackages[pkg.PackagePath] = true
-		if err := ValidateOrdinaryAssemblerMacros(pkg.Macros, input.Observed, pkg.PackagePath); err != nil {
+		if err := validateMacros(pkg); err != nil {
 			return nil, nil, err
 		}
 		if len(pkg.GoFiles) == 0 || len(pkg.CompiledGoFiles) == 0 || len(pkg.SFiles) == 0 {
@@ -160,10 +155,7 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 			if selectedFiles[file] || path.Ext(file) != ".s" {
 				return nil, nil, fmt.Errorf("duplicate/non-ASM actual selected file")
 			}
-			// Discovery does not inventory zero-byte assembly files, but Go
-			// still selects and compiles them with their ordinary package.
-			// Only those exact empty bytes may supplement the tested scope:
-			// comments, whitespace and macro-empty files are not zero bytes.
+			// Go-selected zero-byte siblings have no translation count.
 			if !requiredAssembly[file] && (input.Sources[file] != bytesSHA256(nil) || input.Headers[file] != "") {
 				return nil, nil, fmt.Errorf("nonempty Go-selected assembly lies outside the tested scope: %s", file)
 			}
@@ -177,6 +169,28 @@ func validatePackageSelection(input *ConsumerInput, packages []PackageProof, tag
 		}
 	}
 	return selectedFiles, filePackages, nil
+}
+
+func ordinaryPackageSelectionContext(input *ConsumerInput, tags []string) (build.Context, error) {
+	minor, err := goMinor(input.Observed.GoVersion)
+	if err != nil {
+		return build.Context{}, err
+	}
+	ctx := build.Default
+	ctx.GOOS, ctx.GOARCH = input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"]
+	ctx.Compiler, ctx.CgoEnabled, ctx.BuildTags = "gc", false, tags
+	ctx.ToolTags, ctx.ReleaseTags = input.Observed.ToolTags, nil
+	for version := 1; version <= minor; version++ {
+		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
+	}
+	ctx.OpenFile = func(name string) (io.ReadCloser, error) {
+		header, found := input.Headers[filepath.ToSlash(name)]
+		if !found {
+			return nil, fmt.Errorf("actual Go file has no original selection header: %s", name)
+		}
+		return io.NopCloser(strings.NewReader(header)), nil
+	}
+	return ctx, nil
 }
 
 func validateAssemblyConsumption(input *ConsumerInput, proof *SelectionProof, selectedFiles map[string]bool, filePackages map[string]PackageProof, requireObject bool, abi map[string]bool) error {
