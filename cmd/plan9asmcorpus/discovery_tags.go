@@ -124,6 +124,23 @@ func discoveryTagsLexicallyBefore(left, right []string) bool {
 	return false
 }
 
+// Ask stock Go only about filenames, using harmless header bytes rather than
+// approximating its GOOS/GOARCH suffixes, aliases or UseAllFiles behavior. All
+// possible search tags overapproximate the positive filename predicates; a
+// rejected name cannot become selectable in any subset. This does not accept
+// the original header, imports or cgo role, which every surviving search still
+// checks with the original OpenFile.
+func discoveryFilenameMayMatch(ctx build.Context, dir, file string, tags []string) (bool, error) {
+	ctx.BuildTags = tags
+	ctx.OpenFile = func(string) (io.ReadCloser, error) {
+		if strings.HasSuffix(file, ".go") {
+			return io.NopCloser(strings.NewReader("package p\n")), nil
+		}
+		return io.NopCloser(strings.NewReader("")), nil
+	}
+	return ctx.MatchFile(dir, file)
+}
+
 func findDiscoveryBuildTags(
 	ctx build.Context, dir, asmFile string, goFiles, customTags []string,
 	constraintTagsByFile map[string][]string,
@@ -133,6 +150,21 @@ func findDiscoveryBuildTags(
 	if err != nil {
 		return nil, false, fmt.Errorf("match assembly for %s/%s without custom tags: %w", ctx.GOOS, ctx.GOARCH, err)
 	}
+	filenameMatches, err := discoveryFilenameMayMatch(ctx, dir, asmFile, customTags)
+	if err != nil || !filenameMatches {
+		return nil, false, err
+	}
+	var possibleGoFiles []string
+	for _, goFile := range goFiles {
+		matches, err := discoveryFilenameMayMatch(ctx, dir, goFile, customTags)
+		if err != nil {
+			return nil, false, err
+		}
+		if matches {
+			possibleGoFiles = append(possibleGoFiles, goFile)
+		}
+	}
+	goFiles = possibleGoFiles
 	if asmMatches {
 		for _, goFile := range goFiles {
 			matches, err := discoveryGoFileMatches(ctx, dir, goFile)
@@ -157,7 +189,7 @@ func findDiscoveryBuildTags(
 		if len(best) != 0 && len(best) < maxCount {
 			maxCount = len(best)
 		}
-		candidate, ok, err := solveDiscoveryPairTags(
+		candidate, ok, err := solveDiscoveryPairTagsAfterAssemblyMatch(
 			ctx, dir, asmFile, goFile, pairTags, maxCount,
 		)
 		if err != nil {
@@ -178,6 +210,19 @@ func solveDiscoveryPairTags(
 	ctx build.Context, dir, asmFile, goFile string,
 	tags []string, maxCount int,
 ) ([]string, bool, error) {
+	// Direct callers have not performed findDiscoveryBuildTags' original
+	// assembly check. Preserve its error even when the Go name is impossible.
+	ctx.BuildTags = nil
+	if _, err := ctx.MatchFile(dir, asmFile); err != nil {
+		return nil, false, fmt.Errorf("match assembly for %s/%s without custom tags: %w", ctx.GOOS, ctx.GOARCH, err)
+	}
+	return solveDiscoveryPairTagsAfterAssemblyMatch(ctx, dir, asmFile, goFile, tags, maxCount)
+}
+
+func solveDiscoveryPairTagsAfterAssemblyMatch(
+	ctx build.Context, dir, asmFile, goFile string,
+	tags []string, maxCount int,
+) ([]string, bool, error) {
 	var asmExpr, goExpr constraint.Expr
 	if len(tags) > 16 {
 		var err error
@@ -187,6 +232,12 @@ func solveDiscoveryPairTags(
 		}
 		goExpr, err = discoveryFileBuildExpression(filepath.Join(dir, goFile), ctx.OpenFile)
 		if err != nil {
+			return nil, false, err
+		}
+	}
+	for _, file := range []string{asmFile, goFile} {
+		matches, err := discoveryFilenameMayMatch(ctx, dir, file, tags)
+		if err != nil || !matches {
 			return nil, false, err
 		}
 	}

@@ -91,6 +91,13 @@ Probe unsuffixed architecture-specific assembly with the current Go assembler.
 Future-target queries conservatively retain unsuffixed/custom-suffixed paths
 before reevaluating source constraints.
 
+Custom-tag replay may prune filename-impossible partners with stock MatchFile
+and harmless dummy headers, never an approximate suffix or header parser.
+The original assembly baseline check precedes that pruning; all surviving
+configurations retain original-byte MatchFile/import/cgo checks and exact
+minimum-cardinality/lexical tag selection. This local optimization neither
+changes the captured source inventory nor authorizes a selection proof.
+
 Architecture probes have bounded output, a one-minute deadline and owned
 process-group cleanup. Only a positive assembler exit with an actual source
 diagnostic can exclude a target. Missing tools, killed/crashed processes,
