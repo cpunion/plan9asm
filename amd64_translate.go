@@ -227,6 +227,7 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 	b.WriteString("\n")
 	b.WriteString("\n")
 	emitX86StringHelpers(b, file)
+	emitAMD64FMA3RoundingHelpers(b, file, goarch)
 }
 
 func emitX86StringHelpers(b *strings.Builder, file *File) {

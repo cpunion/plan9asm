@@ -95,6 +95,11 @@ func TestDecodedX86VEXFMA3CompleteRegisterFamily(t *testing.T) {
 				if width256 {
 					prefix = "Y"
 				}
+				var registers [16]Reg
+				for index := range registers {
+					registers[index] = Reg(fmt.Sprintf("%s%d", prefix, index))
+				}
+				wantOp := spec.op(width64)
 				for destination := 0; destination < 16; destination++ {
 					for source1 := 0; source1 < 16; source1++ {
 						for source2 := 0; source2 < 16; source2++ {
@@ -103,10 +108,11 @@ func TestDecodedX86VEXFMA3CompleteRegisterFamily(t *testing.T) {
 							if err != nil || !ok || length != len(code) {
 								t.Fatalf("decode %x returned %+v, length=%d, ok=%v, err=%v", code, got, length, ok, err)
 							}
-							wantOp := spec.op(width64)
-							wantArgs := []string{fmt.Sprintf("%s%d", prefix, source2), fmt.Sprintf("%s%d", prefix, source1), fmt.Sprintf("%s%d", prefix, destination)}
-							if got.Op != wantOp || len(got.Args) != 3 || got.Args[0].String() != wantArgs[0] || got.Args[1].String() != wantArgs[1] || got.Args[2].String() != wantArgs[2] {
-								t.Fatalf("decode %x = %+v, want %s %s", code, got, wantOp, strings.Join(wantArgs, ", "))
+							if got.Op != wantOp || len(got.Args) != 3 ||
+								got.Args[0].Kind != OpReg || got.Args[0].Reg != registers[source2] ||
+								got.Args[1].Kind != OpReg || got.Args[1].Reg != registers[source1] ||
+								got.Args[2].Kind != OpReg || got.Args[2].Reg != registers[destination] {
+								t.Fatalf("decode %x = %+v, want %s %s,%s,%s", code, got, wantOp, registers[source2], registers[source1], registers[destination])
 							}
 							count++
 						}
@@ -118,6 +124,7 @@ func TestDecodedX86VEXFMA3CompleteRegisterFamily(t *testing.T) {
 	if count != 393216 {
 		t.Fatalf("covered %d VEX FMA3 register encodings, want 393216", count)
 	}
+	t.Logf("exhaustively checked %d VEX FMA3 register encodings", count)
 }
 
 func TestDecodedX86EVEXFMA3CompleteRegisterFamily(t *testing.T) {
@@ -130,6 +137,11 @@ func TestDecodedX86EVEXFMA3CompleteRegisterFamily(t *testing.T) {
 				if spec.scalar {
 					prefix = "X"
 				}
+				var registers [32]Reg
+				for index := range registers {
+					registers[index] = Reg(fmt.Sprintf("%s%d", prefix, index))
+				}
+				wantOp := spec.op(width64)
 				for destination := 0; destination < 32; destination++ {
 					for source1 := 0; source1 < 32; source1++ {
 						for source2 := 0; source2 < 32; source2++ {
@@ -138,10 +150,12 @@ func TestDecodedX86EVEXFMA3CompleteRegisterFamily(t *testing.T) {
 							if err != nil || !ok || length != len(code) {
 								t.Fatalf("decode %x returned %+v, length=%d, ok=%v, err=%v", code, got, length, ok, err)
 							}
-							wantOp := spec.op(width64)
-							wantArgs := []string{fmt.Sprintf("%s%d", prefix, source2), fmt.Sprintf("%s%d", prefix, source1), "K1", fmt.Sprintf("%s%d", prefix, destination)}
-							if got.Op != wantOp || len(got.Args) != 4 || got.Args[0].String() != wantArgs[0] || got.Args[1].String() != wantArgs[1] || got.Args[2].String() != wantArgs[2] || got.Args[3].String() != wantArgs[3] {
-								t.Fatalf("decode %x = %+v, want %s %s", code, got, wantOp, strings.Join(wantArgs, ", "))
+							if got.Op != wantOp || len(got.Args) != 4 ||
+								got.Args[0].Kind != OpReg || got.Args[0].Reg != registers[source2] ||
+								got.Args[1].Kind != OpReg || got.Args[1].Reg != registers[source1] ||
+								got.Args[2].Kind != OpReg || got.Args[2].Reg != "K1" ||
+								got.Args[3].Kind != OpReg || got.Args[3].Reg != registers[destination] {
+								t.Fatalf("decode %x = %+v, want %s %s,%s,K1,%s", code, got, wantOp, registers[source2], registers[source1], registers[destination])
 							}
 							count++
 						}
@@ -153,6 +167,7 @@ func TestDecodedX86EVEXFMA3CompleteRegisterFamily(t *testing.T) {
 	if count != 5898240 {
 		t.Fatalf("covered %d EVEX FMA3 register encodings, want 5898240", count)
 	}
+	t.Logf("exhaustively checked %d EVEX FMA3 register encodings", count)
 }
 
 func TestDecodedX86EVEXFMA3ModifiersAndMemory(t *testing.T) {

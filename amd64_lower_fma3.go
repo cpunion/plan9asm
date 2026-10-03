@@ -146,74 +146,26 @@ func parseAMD64FMA3Suffix(suffix string) (amd64FMA3Suffix, bool) {
 }
 
 func (c *amd64Ctx) lowerFMA3(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	spec, recognized := amd64FMA3Specs[Op(baseOp)]
-	if !recognized {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, recognized := amd64FMA3Specs[Op(base)]; !recognized {
 		return false, false, nil
 	}
-	if spec.rawOnly && !ins.x86Encoded {
-		return true, false, fmt.Errorf("%s is absent from Go's named assembler table; raw encoding required", baseOp)
+	// Bind only a local copy for legacy helpers. A dispatch/source conflict
+	// must be rejected before reading a register or emitting any LLVM IR.
+	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != strings.ToUpper(string(op)) {
+		return true, false, fmt.Errorf("FMA3 dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	properties, validSuffix := parseAMD64FMA3Suffix(suffix)
-	if !validSuffix {
-		return true, false, fmt.Errorf("%s %s has a suffix absent from Go 1.27's FMA3 optab: %q", c.goarch, baseOp, ins.Raw)
+	ins.Op = op
+	form, recognized, err := amd64FMA3Properties(ins, c.goarch)
+	if !recognized || err != nil {
+		return recognized, false, err
 	}
-	if spec.scalar && properties.broadcast {
-		return true, false, fmt.Errorf("%s %s scalar forms do not support broadcast: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects src1, src2, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s mask forms exceed Go 1.27's assembler operand limit: %q", baseOp, ins.Raw)
-	}
-	if properties.zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	dstArg := ins.Args[len(ins.Args)-1]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be a vector register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dstArg.Reg)
-	if spec.scalar {
-		if byteWidth != 16 {
-			return true, false, fmt.Errorf("%s %s scalar destination must be an X register: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 {
-		return true, false, fmt.Errorf("%s %s packed destination must be an X, Y, or Z register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !c.isGoEVEXVectorRegister(dstArg, byteWidth) || !c.isGoEVEXVectorRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s second source and destination must be same-width Go 1.27 EVEX registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if properties.rounding != "" && !spec.scalar && byteWidth != 64 {
-		return true, false, fmt.Errorf("%s %s packed rounding is available only for Z registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if properties.broadcast {
-		if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("%s %s.BCST requires a memory first source: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if ins.Args[0].Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(ins.Args[0], byteWidth) {
-			return true, false, fmt.Errorf("%s %s first source must match the destination width and register class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if properties.rounding != "" {
-		return true, false, fmt.Errorf("%s %s explicit rounding requires a register first source: %q", c.goarch, baseOp, ins.Raw)
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s first source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
+	spec, properties := form.spec, form.suffix
+	dstArg, byteWidth := ins.Args[form.destination], form.byteWidth
 
 	var mask string
-	if masked {
-		if !amd64NonzeroKOperand(ins.Args[2]) {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		loadedMask, loadErr := c.loadK(ins.Args[2].Reg)
+	if form.mask >= 0 {
+		loadedMask, loadErr := c.loadK(ins.Args[form.mask].Reg)
 		if loadErr != nil {
 			return true, false, loadErr
 		}
@@ -356,6 +308,9 @@ func (c *amd64Ctx) emitFMA3(spec amd64FMA3Spec, llvmType string, lanes int, firs
 		addend = "%" + negated
 	case amd64FMA3AddSub, amd64FMA3SubAdd:
 		addend = c.alternateFMA3Addend(llvmType, lanes, addend, spec.mode == amd64FMA3AddSub)
+	}
+	if rounding != "" && !spec.rawOnly {
+		return c.emitRoundedFMA3(lanes, spec.laneBits, a, b, addend, rounding)
 	}
 	result := c.newTmp()
 	intrinsic := amd64FMA3IntrinsicName(lanes, spec.laneBits, rounding != "")

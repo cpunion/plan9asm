@@ -174,7 +174,9 @@ type Options struct {
 	// Sigs maps resolved symbol name -> signature.
 	Sigs map[string]FuncSig
 
-	// Goarch is used for a few arch-specific translations (e.g. x86 CPUID).
+	// Goarch selects Go architecture rules independently of TargetTriple.
+	// An empty value retains the historical amd64 default for ArchAMD64;
+	// 32-bit Go assembly must explicitly select 386.
 	Goarch string
 
 	// WASMABI selects the WebAssembly physical ABI. Its zero value preserves
@@ -208,6 +210,9 @@ func Translate(file *File, opt Options) (string, error) {
 func translateIRText(file *File, opt Options) (string, error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
+	}
+	if file.Arch == ArchAMD64 && opt.Goarch == "" {
+		opt.Goarch = "amd64"
 	}
 	if err := validateARMMachineEntryArchitecture(file, opt); err != nil {
 		return "", err

@@ -9,6 +9,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64"); recognized {
 		return err == nil && !form.undefinedOpcode()
 	}
+	if form, recognized, err := amd64FMA3Properties(ins, "amd64"); recognized {
+		return err == nil && !form.spec.rawOnly
+	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, "amd64")
 	// The shared lowerer also models raw-only FP16 moves. Their caller-bank
 	// permission needs its own complete source/runtime family, not inheritance
@@ -49,6 +52,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, recognized, err := amd64PackedVectorMoveProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerPackedVectorMoveStep(ins, form, state, proof)
+	}
+	if form, recognized, err := amd64FMA3Properties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerFMA3Step(ins, form, state, proof)
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(*ins, "amd64")
 	if !recognized || err != nil || form.spec.rawOnly || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
@@ -134,6 +140,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 	}
 	if form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64"); recognized {
 		return int64(form.byteWidth), form.memoryWrite, err == nil && !form.undefinedOpcode() && form.memory == index
+	}
+	if form, recognized, err := amd64FMA3Properties(ins, "amd64"); recognized {
+		return int64(form.memoryBytes), false, err == nil && !form.spec.rawOnly && form.memory == index
 	}
 	form, recognized, err := amd64ScalarVectorMoveProperties(ins, "amd64")
 	if !recognized || err != nil || form.memory != index {
