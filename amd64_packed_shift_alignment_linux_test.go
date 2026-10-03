@@ -141,6 +141,7 @@ func main() {
 
 func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T) {
 	prefix := x86PackedShiftLinuxExecution(t)
+	x86PackedShiftVerifyGuestArguments(t, prefix)
 	assembly, _ := x86PackedShiftLegacyMemoryAssembly()
 	var declarations strings.Builder
 	for i := range x86LegacyShiftMemoryOpcodes {
@@ -157,31 +158,26 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T)
 		}
 	}
 	env := append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local")
+	executable := filepath.Join(dir, "original")
 	ctx, cancel := runtimeOracleStageContext(t)
-	arguments := []string{"run", "-p=2"}
-	if len(prefix) != 0 {
-		arguments = append(arguments, "-exec="+strings.Join(prefix, " "))
-	}
-	arguments = append(arguments, ".", "numeric")
-	command := exec.CommandContext(ctx, "go", arguments...)
+	command := exec.CommandContext(ctx, "go", "build", "-p=2", "-o", executable, ".")
 	command.Dir, command.Env = dir, env
 	output, err := runtimeOracleCombinedOutput(ctx, command)
 	cancel()
 	if err != nil {
-		t.Fatalf("original Go aligned numeric/flags: %v\n%s", err, output)
+		t.Fatalf("original Go body/link: %v\n%s", err, output)
 	}
-	executable := filepath.Join(dir, "original")
 	ctx, cancel = runtimeOracleStageContext(t)
-	command = exec.CommandContext(ctx, "go", "build", "-p=2", "-o", executable, ".")
-	command.Dir, command.Env = dir, env
+	argv := x86PackedShiftGuestExecution(prefix, executable, "numeric")
+	command = exec.CommandContext(ctx, argv[0], argv[1:]...)
 	output, err = runtimeOracleCombinedOutput(ctx, command)
 	cancel()
 	if err != nil {
-		t.Fatalf("original Go body/link: %v\n%s", err, output)
+		t.Fatalf("original Go aligned numeric/flags: %v\n%s", err, output)
 	}
 	for i := range x86LegacyShiftMemoryOpcodes {
 		ctx, cancel = runtimeOracleStageContext(t)
-		argv := append(append([]string(nil), prefix...), executable, strconv.Itoa(i))
+		argv := x86PackedShiftGuestExecution(prefix, executable, strconv.Itoa(i))
 		command = exec.CommandContext(ctx, argv[0], argv[1:]...)
 		output, err = runtimeOracleCombinedOutput(ctx, command)
 		cancel()
@@ -193,6 +189,68 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T)
 		}
 	}
 	t.Log("6 original Go m128 kernels ×48 numeric/flags/canary inputs and 6 unaligned faults")
+}
+
+func x86PackedShiftVerifyGuestArguments(t *testing.T, prefix []string) {
+	t.Helper()
+	dir := t.TempDir()
+	const source = `package main
+import (
+ "fmt"
+ "os"
+)
+func main() { fmt.Printf("%q\n", os.Args) }
+`
+	for name, contents := range map[string]string{
+		"go.mod": "module argumenttransport\n\ngo 1.20\n", "main.go": source,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	executable := filepath.Join(dir, "argument-transport")
+	ctx, cancel := runtimeOracleStageContext(t)
+	command := exec.CommandContext(ctx, "go", "build", "-p=2", "-o", executable, ".")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0",
+		"GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	cancel()
+	if err != nil {
+		t.Fatalf("original Go argument witness body/link: %v\n%s", err, output)
+	}
+	ctx, cancel = runtimeOracleStageContext(t)
+	argv := append(append([]string(nil), prefix...), executable)
+	command = exec.CommandContext(ctx, argv[0], argv[1:]...)
+	output, err = runtimeOracleCombinedOutput(ctx, command)
+	cancel()
+	if err != nil || string(output) != fmt.Sprintf("%q\n", []string{executable}) {
+		t.Fatalf("guest no-argument witness: %v\n%s", err, output)
+	}
+	t.Logf("guest no-argument witness: %s", strings.TrimSpace(string(output)))
+	arguments := []string{"first", "with space"}
+	for _, repaired := range []bool{false, true} {
+		argv := append(append([]string(nil), prefix...), executable)
+		argv = append(argv, arguments...)
+		want := append([]string{executable}, arguments...)
+		if len(prefix) != 0 && !repaired {
+			// The authenticated binfmt release treats the first argument as
+			// original argv[0] even for ordinary explicit execution.
+			want = arguments
+		}
+		if repaired {
+			argv = x86PackedShiftGuestExecution(prefix, executable, arguments...)
+		}
+		ctx, cancel := runtimeOracleStageContext(t)
+		command := exec.CommandContext(ctx, argv[0], argv[1:]...)
+		output, err := runtimeOracleCombinedOutput(ctx, command)
+		cancel()
+		if err != nil || string(output) != fmt.Sprintf("%q\n", want) {
+			t.Fatalf("guest argument witness repaired=%t command=%q: %v\n%s; want %q",
+				repaired, argv, err, output, fmt.Sprintf("%q\n", want))
+		}
+		t.Logf("guest argument witness repaired=%t: %s", repaired, strings.TrimSpace(string(output)))
+	}
 }
 
 func TestCrossLinuxRuntimeMatrixX86PackedShiftLLVMAlignedMemory(t *testing.T) {
