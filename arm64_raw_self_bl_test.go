@@ -115,24 +115,30 @@ func TestARM64RawSelfBLTerminalHasNoReturnCertificate(t *testing.T) {
 	}
 }
 
-func TestARM64RawSelfBLSinkCannotBypassWholeSourceGuards(t *testing.T) {
-	source := arm64RawSelfBLFixture()
-	sig := arm64RawZeroFrameSig()
-	sig.Name = "terminal"
-	for _, tc := range []struct{ name, old, replacement string }{
+func arm64RawSelfBLGuardMutations() []struct{ name, old, replacement string } {
+	return []struct{ name, old, replacement string }{
 		{"ordinary_recursion", "WORD $0x94000000", "BL spin"},
 		{"other_target", "WORD $0x94000000", "WORD $0x94000001"},
 		{"multiline_helper", "spin:\nWORD $0x94000000", "spin:\nWORD $0xd503201f\nWORD $0x97ffffff"},
 		{"changing_sp_loop", "spin:\nWORD $0x94000000", "spin:\nWORD $0xd10043ff\nWORD $0x97ffffff"},
-		{"escaping_loop", "spin:\nWORD $0x94000000", "spin:\nMOVD RSP,(R1)\nWORD $0x97ffffff"},
-		{"prefix_escape", "CBZ R4,spin", "MOVD RSP,(R1)\nCBZ R4,spin"},
+		// SP cannot be a Go MOVD store source. Copy it to a GP first;
+		// the independent Go object oracle authenticates the raw BL PC.
+		{"escaping_loop", "spin:\nWORD $0x94000000", "spin:\nMOVD RSP,R9\nMOVD R9,(R1)\nWORD $0x97fffffe"},
+		{"prefix_escape", "CBZ R4,spin", "MOVD RSP,R9\nMOVD R9,(R1)\nCBZ R4,spin"},
 		{"prefix_hidden_escape", "CBZ R4,spin", "MOVD R29,(R1)\nCBZ R4,spin"},
 		{"return_lr", "WORD $0xa8c17bfd", "MOVD R1,R30\nWORD $0xa8c117e4"},
 		{"return_sp", "WORD $0xa8c17bfd", "WORD $0xa8c27bfd"},
 		{"return_g", "MOVD R4,(R1)", "MOVD R4,(R1)\nMOVD $0,g"},
 		{"dead_unknown", "spin:\n", "dead:\nWORD $0xffffffff\nWORD $0xd65f03c0\nspin:\n"},
 		{"different_sp_join", "CBZ R4,spin", "CBZ R4,left\nSUB $16,RSP\nB spin\nleft:\nB spin"},
-	} {
+	}
+}
+
+func TestARM64RawSelfBLSinkCannotBypassWholeSourceGuards(t *testing.T) {
+	source := arm64RawSelfBLFixture()
+	sig := arm64RawZeroFrameSig()
+	sig.Name = "terminal"
+	for _, tc := range arm64RawSelfBLGuardMutations() {
 		t.Run(tc.name, func(t *testing.T) {
 			changed := strings.Replace(source, tc.old, tc.replacement, 1)
 			c := arm64RawContextLowerer(t, changed, sig)
