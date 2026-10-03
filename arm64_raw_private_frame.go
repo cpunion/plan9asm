@@ -252,6 +252,14 @@ func arm64RawPrivateSourceRET(ins Instr) bool {
 
 func (s *arm64RawPrivateFrameState) transfer(original, ins Instr, frameSize int64) bool {
 	op := arm64ControlOp(ins)
+	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
+		if err != nil {
+			return false
+		}
+		if immediate.scratch && !s.assign("R27", arm64PrivateFrameAddress{}, false) {
+			return false
+		}
+	}
 	for _, arg := range ins.Args {
 		if arg.Kind == OpFPAddr {
 			return false

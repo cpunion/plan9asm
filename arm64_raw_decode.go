@@ -65,6 +65,7 @@ func decodeARM64RawWordInstructionTarget(ins Instr, target string) (Instr, error
 		return Instr{}, fmt.Errorf("decoded ARM64 WORD %#08x produced an invalid instruction sequence %q", word, syntax)
 	}
 	result := file.Funcs[0].Instrs[1]
+	result.arm64Encoded = true
 	if pcRelative != 0 {
 		replaced := 0
 		for i := range result.Args {

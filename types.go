@@ -943,6 +943,9 @@ type Instr struct {
 	Op   Op
 	Args []Operand
 	Raw  string
+	// Set only by an ARM64 machine-code decoder. A physical data instruction
+	// does not acquire Go's named immediate expansion or implicit R27 scratch.
+	arm64Encoded bool
 	// Set only after a raw BL's exact same-source PC target is established.
 	// It remains a physical leaf call for Go's pre-WORD prologue selection.
 	arm64RawLocalCall bool

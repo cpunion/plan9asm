@@ -9,6 +9,7 @@ type arm64GPDataForm struct {
 	inputs      []Operand
 	destination Operand
 	implicit    []Reg
+	scratch     *Operand
 }
 
 // The Go ADD, AND/ANDS, NEG, MVN, LSL, SXTB and BFI rows have a
@@ -17,6 +18,24 @@ type arm64GPDataForm struct {
 // lowering, continuation values and both may-frame address proofs; an opcode
 // name or a raw GP-write mask alone is never a known overwrite.
 func parseARM64GPDataForm(op Op, ins Instr) (form arm64GPDataForm, handled bool, err error) {
+	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
+		if err != nil {
+			return form, true, err
+		}
+		form.inputs = []Operand{ins.Args[0], immediate.left}
+		form.destination = immediate.destination
+		if immediate.scratch {
+			constant := Operand{Kind: OpImm, Imm: int64(immediate.value)}
+			form.scratch = &constant
+			if immediate.left.Reg == "R27" {
+				form.inputs[1] = constant
+			}
+			if immediate.destination.Reg != "R27" {
+				form.implicit = []Reg{"R27"}
+			}
+		}
+		return form, true, nil
+	}
 	family := ""
 	word := strings.HasSuffix(string(op), "W")
 	switch op {
@@ -145,13 +164,20 @@ func arm64GPDataInputRegisters(form arm64GPDataForm) []Reg {
 }
 
 func arm64GPDataOutputRegisters(form arm64GPDataForm) []Reg {
-	return append([]Reg{form.destination.Reg}, form.implicit...)
+	var outputs []Reg
+	if form.destination.Kind == OpReg {
+		outputs = append(outputs, form.destination.Reg)
+	}
+	return append(outputs, form.implicit...)
 }
 
 func (state *arm64ControlState) transferGPData(ins Instr) bool {
 	form, handled, err := parseARM64GPDataForm(arm64ControlOp(ins), ins)
 	if !handled || err != nil {
 		return false
+	}
+	if form.scratch != nil {
+		state.regs["R27"] = arm64ControlExternal()
 	}
 	value := arm64ControlExternal()
 	for _, reg := range arm64GPDataInputRegisters(form) {
@@ -161,6 +187,9 @@ func (state *arm64ControlState) transferGPData(ins Instr) bool {
 		value["code-derived:"] = true
 	}
 	for _, reg := range arm64GPDataOutputRegisters(form) {
+		if form.scratch != nil && reg == "R27" && form.destination.Reg != "R27" {
+			continue
+		}
 		state.write(Operand{Kind: OpReg, Reg: reg}, value, false)
 	}
 	return true

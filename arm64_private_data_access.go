@@ -139,6 +139,14 @@ func (state *arm64PrivateDataState) memory(op Op, form arm64RawPrivateMemoryForm
 
 func (state *arm64PrivateDataState) transfer(ins Instr, at int, frameSize int64) (*arm64PrivateDataSpan, bool) {
 	op := arm64ControlOp(ins)
+	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
+		if err != nil {
+			return nil, false
+		}
+		if immediate.scratch && !state.assign("R27", arm64PrivateDataNumber(arm64PoolInterval{immediate.value, immediate.value})) {
+			return nil, false
+		}
+	}
 	if op == OpTEXT || op == "NOP" {
 		return nil, true
 	}
@@ -207,6 +215,9 @@ func (state *arm64PrivateDataState) transfer(ins Instr, at int, frameSize int64)
 			return nil, false
 		}
 		for _, reg := range arm64GPDataOutputRegisters(form) {
+			if form.scratch != nil && reg == "R27" && form.destination.Reg != "R27" {
+				continue
+			}
 			if !state.assign(reg, arm64PrivateDataUnknown) {
 				return nil, false
 			}

@@ -184,6 +184,14 @@ func (state arm64PrivateFrameAddresses) bounded(frameSize int64) bool {
 
 func (state arm64PrivateFrameAddresses) transfer(ins Instr, frameSize int64) bool {
 	op := arm64ControlOp(ins)
+	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
+		if err != nil {
+			return false
+		}
+		if immediate.scratch && !state.assign("R27", arm64PrivateFrameAddress{}, false) {
+			return false
+		}
+	}
 	switch op {
 	case "SVC", "HVC", "SMC", "BRK", "HLT", "DCPS1", "DCPS2", "DCPS3", "DRPS", "ERET", "UNDEF":
 		// Exception/syscall transport is not an ordinary typed Go call. It

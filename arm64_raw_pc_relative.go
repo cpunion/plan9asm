@@ -472,6 +472,9 @@ func arm64RawPCRelativeDisplacement(ins Instr) (displacement int64, op string, p
 }
 
 func arm64RawKnownSourceWidth(fn Func, ins Instr) (int64, bool) {
+	if ins.arm64Encoded {
+		return 4, true // Only the actual one-WORD decoder can set this origin.
+	}
 	if arm64RawFixedWidthLogical(ins) {
 		return 4, true
 	}
@@ -530,6 +533,9 @@ func arm64RawKnownSourceWidth(fn Func, ins Instr) (int64, bool) {
 // bitmask; guessing the width of the other forms would misplace raw ADR/branch
 // targets. The same AND optab covers this complete alias family and W forms.
 func arm64RawFixedWidthLogical(ins Instr) bool {
+	if form, handled, err := parseARM64GPImmediateForm(ins.Op, ins); handled && (err != nil || form.scratch) {
+		return false // A bitmask alone does not prove the destination's Go row.
+	}
 	op := strings.ToUpper(string(ins.Op))
 	switch op {
 	case "AND", "ORR", "EOR", "ANDS", "BIC", "ORN", "EON", "BICS", "TST",

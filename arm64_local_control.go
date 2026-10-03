@@ -716,6 +716,9 @@ func arm64IsConditionalBranch(op Op) bool {
 }
 
 func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[string]string) {
+	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled && err == nil && immediate.scratch {
+		state.regs["R27"] = arm64ControlExternal()
+	}
 	if state.transferStructureMemory(ins) {
 		return
 	}
