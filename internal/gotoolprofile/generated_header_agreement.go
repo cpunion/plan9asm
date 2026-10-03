@@ -11,8 +11,9 @@ import (
 // compiler formatting/hash remains in GeneratedHeaderProof; every definition,
 // including unused names and presence, is retained in this deterministic text.
 func CanonicalGeneratedHeader(definitions map[string]string) ([]byte, error) {
-	if definitions == nil || len(definitions) > 4096 {
-		return nil, fmt.Errorf("missing or unbounded generated definitions")
+	size, err := generatedHeaderDefinitionsSize(definitions)
+	if err != nil {
+		return nil, err
 	}
 	names := make([]string, 0, len(definitions))
 	for name := range definitions {
@@ -20,6 +21,7 @@ func CanonicalGeneratedHeader(definitions map[string]string) ([]byte, error) {
 	}
 	sort.Strings(names)
 	var text strings.Builder
+	text.Grow(size)
 	for _, name := range names {
 		fmt.Fprintf(&text, "#define %s %s\n", name, definitions[name])
 	}

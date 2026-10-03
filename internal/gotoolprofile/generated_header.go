@@ -7,10 +7,15 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 const GeneratedHeaderProtocol = "actual_go_asmhdr_full_definitions_v1"
 const MetadataProtocol = "actual_go_cpu_profile_metadata_v1"
+
+// A compiler package can legitimately emit more than 4096 definitions. Bound
+// its full textual input and canonical output by bytes, not declaration count.
+const generatedHeaderByteLimit = 64 << 20
 
 // MetadataProof is deliberately not a SelectionProof. It proves generated
 // layout inputs, not successful assembly translation or LLVM object emission.
@@ -58,27 +63,81 @@ type ImportExport struct {
 // by cmd/compile and the selected-types emitter. Unknown controls, duplicate
 // names and continuations fail instead of inventing values or presence.
 func HeaderDefinitions(header []byte) (map[string]string, error) {
-	if len(header) > 64<<20 || strings.ContainsRune(string(header), '\x00') {
+	if len(header) > generatedHeaderByteLimit {
+		return nil, fmt.Errorf("generated header exceeds its bounded textual contract")
+	}
+	text := string(header)
+	if strings.ContainsRune(text, '\x00') {
 		return nil, fmt.Errorf("generated header exceeds its bounded textual contract")
 	}
 	definitions := make(map[string]string)
-	for _, line := range strings.Split(string(header), "\n") {
+	canonicalBytes := 0
+	for text != "" {
+		var line string
+		line, text, _ = strings.Cut(text, "\n")
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) < 3 || fields[0] != "#define" || !token.IsIdentifier(fields[1]) {
+		directive, remainder := generatedHeaderToken(line)
+		name, value := generatedHeaderToken(remainder)
+		if directive != "#define" || !token.IsIdentifier(name) {
 			return nil, fmt.Errorf("unrecognized generated header definition: %s", line)
 		}
-		name := fields[1]
-		value := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(strings.TrimPrefix(line, "#define")), name))
-		if _, exists := definitions[name]; exists || value == "" || strings.HasSuffix(value, "\\") || len(definitions) >= 4096 {
-			return nil, fmt.Errorf("ambiguous or unbounded generated header definition: %s", name)
+		if _, exists := definitions[name]; exists {
+			return nil, fmt.Errorf("duplicate generated header definition: %s", name)
 		}
+		size, err := generatedHeaderDefinitionSize(name, value)
+		if err != nil || size > generatedHeaderByteLimit-canonicalBytes {
+			return nil, fmt.Errorf("invalid or unbounded generated header definition: %s", name)
+		}
+		canonicalBytes += size
 		definitions[name] = value
 	}
 	return definitions, nil
+}
+
+func generatedHeaderToken(text string) (string, string) {
+	index := strings.IndexFunc(text, unicode.IsSpace)
+	if index < 0 {
+		return text, ""
+	}
+	return text[:index], strings.TrimSpace(text[index:])
+}
+
+func generatedHeaderDefinitionSize(name, value string) (int, error) {
+	// Check lengths before scanning values or allocating canonical output. Both
+	// component bounds also keep this addition safe on the supported 32-bit Go.
+	if len(name) > generatedHeaderByteLimit || len(value) > generatedHeaderByteLimit {
+		return 0, fmt.Errorf("unbounded generated header definition")
+	}
+	size := len("#define ") + len(name) + 1 + len(value) + 1
+	if size > generatedHeaderByteLimit {
+		return 0, fmt.Errorf("unbounded generated header definition")
+	}
+	if !token.IsIdentifier(name) || value == "" || strings.TrimSpace(value) != value ||
+		strings.ContainsAny(value, "\r\n\x00") || strings.HasSuffix(value, "\\") {
+		return 0, fmt.Errorf("noncanonical generated header definition")
+	}
+	return size, nil
+}
+
+func generatedHeaderDefinitionsSize(definitions map[string]string) (int, error) {
+	if definitions == nil {
+		return 0, fmt.Errorf("missing generated header definitions")
+	}
+	total := 0
+	for name, value := range definitions {
+		size, err := generatedHeaderDefinitionSize(name, value)
+		if err != nil {
+			return 0, err
+		}
+		if size > generatedHeaderByteLimit-total {
+			return 0, fmt.Errorf("generated header exceeds its canonical byte bound")
+		}
+		total += size
+	}
+	return total, nil
 }
 
 func HeaderDefinitionSHA256(definitions map[string]string) string {
@@ -159,8 +218,14 @@ func validateGeneratedHeaderContext(input *ConsumerInput, proof GeneratedHeaderP
 		proof.Target != context.observed.Target || proof.GoVersion != context.observed.GoVersion ||
 		proof.CompileToolSHA256 != context.observed.ToolBinarySHA256["compile"] ||
 		!discoverySHA256Pattern.MatchString(proof.HeaderSHA256) || !discoverySHA256Pattern.MatchString(proof.ObjectSHA256) ||
-		proof.Definitions == nil || proof.DefinitionsSHA256 != HeaderDefinitionSHA256(proof.Definitions) {
+		proof.Definitions == nil {
 		return fmt.Errorf("generated header differs from its actual compiler/package/profile scope")
+	}
+	if _, err := generatedHeaderDefinitionsSize(proof.Definitions); err != nil {
+		return err
+	}
+	if proof.DefinitionsSHA256 != HeaderDefinitionSHA256(proof.Definitions) {
+		return fmt.Errorf("generated header differs from its complete definition digest")
 	}
 	if err := ValidatePackageModule(input, pkg); err != nil {
 		return err
@@ -184,13 +249,8 @@ func validateGeneratedHeaderContext(input *ConsumerInput, proof GeneratedHeaderP
 			return fmt.Errorf("generated header has different selected Go bytes")
 		}
 	}
-	for name, value := range proof.Definitions {
-		if !token.IsIdentifier(name) || value == "" || strings.TrimSpace(value) != value || strings.ContainsAny(value, "\r\n\x00") || strings.HasSuffix(value, "\\") {
-			return fmt.Errorf("noncanonical generated header definition")
-		}
-	}
-	if len(proof.Definitions) > 4096 || len(proof.Imports) > 4096 || !sort.SliceIsSorted(proof.Imports, func(i, j int) bool { return proof.Imports[i].ImportPath < proof.Imports[j].ImportPath }) {
-		return fmt.Errorf("generated header exceeds canonical import/definition bounds")
+	if len(proof.Imports) > 4096 || !sort.SliceIsSorted(proof.Imports, func(i, j int) bool { return proof.Imports[i].ImportPath < proof.Imports[j].ImportPath }) {
+		return fmt.Errorf("generated header exceeds canonical import bounds")
 	}
 	if proof.ImportMap == nil || len(proof.ImportMap) > 4096 {
 		return fmt.Errorf("generated header lacks its complete same-load ImportMap")

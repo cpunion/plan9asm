@@ -138,6 +138,13 @@ Keep regressions for test-only declarations, concrete referenced `go_asm.h`
 layouts, undeclared tail-forwarding ABI inference and exact-package asmdecl.
 Never accept arbitrary frame mismatches just to make historical modules pass.
 
+Generated-header parsing, canonical emission and offline validation share a
+64 MiB full-text/canonical-output byte budget, not a declaration-count cap.
+Retain every constant, struct size and nonblank field offset from actual Go
+and selected types. Duplicate names, unknown controls, continuations and
+invalid values fail; a bounded large header is not source N/A. Import/package
+graph bounds and independent source/tool/layout agreement remain unchanged.
+
 CPP inventory records original controls, not syntax acceptance of each isolated
 header. In cmd/asm, an included tokenizer's EOF resumes its parent: a final
 directive can obtain its required newline from that parent, but cannot invent
