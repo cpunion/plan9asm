@@ -37,7 +37,7 @@ func TestTranslateRawVEXHorizontalFloatWeaviateRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "fadd float") {
+	if !strings.Contains(ir, "@llvm.experimental.constrained.fadd.v8f32") {
 		t.Fatalf("raw VHADDPS lowering omitted horizontal addition:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")
