@@ -54,16 +54,17 @@ func x86CallerNormalizedSourceMatches(fn Func, sig FuncSig) bool {
 }
 
 func x86CallerGP(reg Reg) (Reg, bool) {
+	// This class includes R14, not numerical knowledge of incoming g. The
+	// complete source-stack proof separately requires its opaque identity at
+	// every return; only actual source definitions add numerical/pointer bits.
 	root, valid := amd64FullRegBase(reg)
 	if !valid {
 		return "", false
 	}
 	switch root {
-	case AX, BX, CX, DX, DI, SI, SP, BP, "R8", "R9", "R10", "R11", "R12", "R13", "R15":
+	case AX, BX, CX, DX, DI, SI, SP, BP, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15":
 		return root, true
 	default:
-		// R14 is Go's g carrier, independent of numerical/address provenance.
-		// A separate full save/restore identity proof is required before use.
 		return "", false
 	}
 }

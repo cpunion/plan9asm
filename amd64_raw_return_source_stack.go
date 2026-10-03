@@ -39,6 +39,7 @@ type x86SourceStackCell struct {
 	numericFlags bool
 	caller       *x86CallerPointerValue
 	known        uint8
+	gOriginal    bool
 }
 
 type x86SourceStackState struct {
@@ -50,6 +51,7 @@ type x86SourceStackState struct {
 	known        map[Reg]uint8
 	vectors      map[Reg]uint64
 	masks        map[Reg]bool
+	gOriginal    bool
 }
 
 const x86SourceStackLimit = int64(1 << 20)
@@ -144,6 +146,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			// must-defined transfer can authorize these additional widths.
 			return reject(index, "non-native-width LEA requires actual numerical caller source")
 		}
+		if opt.Goarch == "amd64" && !caller && x86SourceGOperand(ins) {
+			if _, stack := amd64StackWidthSpecs[op]; !stack {
+				return reject(index, "g numerical/address use requires actual caller source")
+			}
+		}
 		if caller && !vectorMove && !x86CallerScalarOperands(ins) {
 			return reject(index, "unregistered caller-region operand bank: "+string(ins.Op))
 		}
@@ -190,16 +197,17 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	}
 	states := map[int]x86SourceStackState{}
 	work := []int{0}
-	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}}
+	states[0] = x86SourceStackState{bp: x86SourceStackAddress{original: true}, gOriginal: true}
 	proof := &x86SourceStackProof{word: word}
 	if caller {
 		proof.caller = sig.x86CallerRegions
 		states[0] = x86SourceStackState{
-			bp:      x86SourceStackAddress{original: true},
-			callers: make(map[Reg]x86CallerPointerValue),
-			known:   make(map[Reg]uint8),
-			vectors: make(map[Reg]uint64),
-			masks:   make(map[Reg]bool),
+			bp:        x86SourceStackAddress{original: true},
+			callers:   make(map[Reg]x86CallerPointerValue),
+			known:     make(map[Reg]uint8),
+			vectors:   make(map[Reg]uint64),
+			masks:     make(map[Reg]bool),
+			gOriginal: true,
 		}
 	}
 	returned := false
@@ -219,6 +227,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		ins := &copyFn.Instrs[instructions[pc]]
 		op := Op(normalizeInstructionOpcode(ins.Op))
 		if op == OpRET {
+			if word == 8 && !state.gOriginal {
+				return reject(instructions[pc], "unrestored original g identity at source return")
+			}
 			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
 				return fn
 			}
@@ -296,6 +307,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			if !valid {
 				return reject(instructions[pc], "unproved caller-region effect: "+string(ins.Op))
 			}
+			x86CallerGDefinition(*ins, &state)
 		}
 		if !x86SourceStackFlagsStep(*ins, &state) {
 			return fn
@@ -440,6 +452,12 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 				value := state.bp
 				cell.bp = &value
 			}
+			if x86SourceGRegister(operand.Reg) && state.gOriginal && push {
+				if word != 8 || width != word || operand.Reg != "R14" {
+					return false // A partial token cannot preserve the opaque g identity.
+				}
+				cell.gOriginal = true
+			}
 			if state.callers != nil && operand.Reg != BP {
 				root, valid := x86CallerGP(operand.Reg)
 				if !valid {
@@ -495,6 +513,16 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 	} else if !flags && ins.Args[0].Reg == BP {
 		return false
 	}
+	if saved.gOriginal {
+		if flags || word != 8 || width != word || ins.Args[0].Reg != "R14" {
+			return false // The saved opaque g never becomes an ordinary GP value.
+		}
+		state.gOriginal = true
+		delete(state.callers, "R14")
+		delete(state.known, "R14")
+	} else if !flags && x86SourceGRegister(ins.Args[0].Reg) {
+		state.gOriginal = false
+	}
 	if state.callers != nil && !flags && ins.Args[0].Reg != BP {
 		root, valid := x86CallerGP(ins.Args[0].Reg)
 		if !valid {
@@ -510,7 +538,9 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 			}
 			state.callers[root] = *saved.caller
 		}
-		if width == word {
+		if saved.gOriginal {
+			delete(state.known, root)
+		} else if width == word {
 			state.known[root] = saved.known
 		} else {
 			mask := x86CallerByteMask(ins.Args[0].Reg, width)

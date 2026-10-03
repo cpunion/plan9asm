@@ -95,6 +95,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"runtime_exec_test.go",
 		"amd64_go_caller_lea_test.go",
 		"amd64_go_caller_lea_runtime_test.go",
+		"amd64_go_caller_saved_g_runtime_test.go",
 		"arm64_local_register_branch_test.go",
 		"arm64_gp_data_runtime_test.go",
 		"arm64_gp_immediate_encoding_test.go",

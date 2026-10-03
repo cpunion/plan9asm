@@ -367,6 +367,12 @@ func x86RawReturnLeafStackUnobserved(fn Func) bool {
 			}
 			continue
 		}
+		if x86SourceGOperand(ins) {
+			// Stack-unobserving does not mean native-context-unobserving.
+			// Incoming g is opaque; numerical use or clobber needs the same
+			// complete caller and exact saved-identity proof as a framed leaf.
+			return false
+		}
 		op := strings.ToUpper(string(ins.Op))
 		if strings.HasPrefix(op, "PUSH") || strings.HasPrefix(op, "POP") ||
 			strings.HasPrefix(op, "IRET") || strings.HasPrefix(op, "RETF") {
