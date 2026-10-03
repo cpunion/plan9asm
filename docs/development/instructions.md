@@ -298,6 +298,14 @@ unsupported, not a missing valid Go format. The independent
 assemblers' rejection; `check-arm64-plan9-corpus.sh` separately requires every
 Go-accepted selected-family case to remain lowerable.
 
+The decoder also prints reserved ADD/SUB extended-register shifts of five to
+seven. `TestARM64DecoderExtendedShiftBoundariesMatchGo` checks every W/X and
+flags alias, all eight extensions and shifts zero through seven against the
+actual invoked Go assembler, including the older compatibility toolchain.
+Only shifts zero through four are accepted. Native register CALL/JMP forms
+retain function-context classification: a decoder entry supplies neither a
+callee ABI nor its native frame, continuation and result transport.
+
 ## Semantic and raw-encoding checks
 
 Go's original `reflect.makeFuncStub` and `methodValueCall` have empty source
