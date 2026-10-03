@@ -414,6 +414,10 @@ SHA-256 and an empty selection header; it does not add a CPP translation or
 LLVM output. Whitespace, comments and macro-empty nonzero files remain required
 translation scopes and cannot use this allowance. Missing hashes, changed
 original bytes and unregistered nonempty selected assembly fail closed.
+Source-only test imports retain that exact-zero selection role outside ordinary
+assembly package directories: every SFile must have the original directory
+member, two matching empty-byte hashes and a present empty header. Their actual
+Go selection is preserved; no LLVM object or pass count is added.
 Ordinary profiles are noninstrumented: Go partner constraints impossible with
 `race`, `msan` and `asan` false do not propose profiles for otherwise ordinary
 assembly. Boolean/custom/CPU alternatives and negations remain selectable.

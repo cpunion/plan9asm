@@ -223,6 +223,25 @@ func containsString(values []string, wanted string) bool {
 	return false
 }
 
+func testSourceOnlyZeroAssembly(view *ConsumerInput, pkg PackageProof, dir string) bool {
+	if len(pkg.SFiles) == 0 {
+		return false
+	}
+	empty := bytesSHA256(nil)
+	for _, file := range pkg.SFiles {
+		header, present := view.Headers[file]
+		if path.Dir(file) != dir || !containsString(view.Directories[dir], path.Base(file)) ||
+			view.Sources[file] != empty || pkg.SourceSHA256[file] != empty ||
+			!present || header != "" {
+			return false
+		}
+	}
+	// Zero bytes cannot replace an instruction/object scope. Keep the full
+	// actual SFiles list: MatchFile, source membership and the independent
+	// consumer still verify it below. Nonzero symbol-free units are not zero.
+	return true
+}
+
 func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyProof, roots map[string]bool, tags []string) error {
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
@@ -281,7 +300,8 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 		if dir == "" {
 			dir = "."
 		}
-		if source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 && !containsString(input.OrdinaryAsmPackages, dir) {
+		if source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 &&
+			!containsString(input.OrdinaryAsmPackages, dir) && !testSourceOnlyZeroAssembly(view, pkg, dir) {
 			return fmt.Errorf("source-only test dependency cannot replace another assembly translation scope: "+
 				"package=%s module=%s@%s source_root=%q directory=%s selected_asm=%q ordinary_asm_packages=%q target=%s profile=%s tags=%q",
 				pkg.PackagePath, pkg.ModulePath, pkg.ModuleVersion, source.SourceRootID, dir,
