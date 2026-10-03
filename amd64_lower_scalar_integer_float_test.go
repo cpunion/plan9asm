@@ -43,10 +43,14 @@ func TestTranslateX86ScalarIntegerFloatCompleteGo127Forms(t *testing.T) {
 			for _, spec := range go127X86ScalarIntegerFloatSpecs() {
 				fmt.Fprintf(&source, "\t%s AX, X0, X1\n", spec.op)
 				fmt.Fprintf(&source, "\t%s 8(BX), X2, X3\n", spec.op)
-				fmt.Fprintf(&source, "\t%s CX, X29, X30\n", spec.op)
+				upper, destination := "X29", "X30"
+				if target.goarch == "386" {
+					upper, destination = "X5", "X6"
+				}
+				fmt.Fprintf(&source, "\t%s CX, %s, %s\n", spec.op, upper, destination)
 				if spec.rounding {
 					for _, rounding := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
-						fmt.Fprintf(&source, "\t%s.%s DX, X30, X31\n", spec.op, rounding)
+						fmt.Fprintf(&source, "\t%s.%s DX, %s, %s\n", spec.op, rounding, destination, destination)
 					}
 				}
 			}

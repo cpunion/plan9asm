@@ -68,6 +68,18 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		op := strings.ToUpper(string(ins.Op))
 		switch arch {
 		case ArchAMD64:
+			if goarch == "386" {
+				// The signed default-rounding scalar bridge must use MXCSR,
+				// rather than LLVM's default i386 x87 conversion. Admit only
+				// its validated source form and private SSE result register.
+				if form, known, err := x86SignedIntegerFloatProperties(ins, goarch); known && err == nil && form.rounding == "" {
+					if form.spec.resultBits == 32 {
+						add("+sse")
+					} else {
+						add("+sse2")
+					}
+				}
+			}
 			switch {
 			case isAMD64RawFP16Op(op):
 				add("+avx512fp16")

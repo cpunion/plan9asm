@@ -178,6 +178,14 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 	b.WriteString("declare <8 x i32> @llvm.x86.avx.cvt.ps2dq.256(<8 x float>)\n")
 	b.WriteString("declare <8 x i32> @llvm.x86.avx.cvtt.ps2dq.256(<8 x float>)\n")
 	b.WriteString("declare <16 x float> @llvm.experimental.constrained.sitofp.v16f32.v16i32(<16 x i32>, metadata, metadata)\n")
+	for _, result := range []struct {
+		bits int
+		typ  string
+	}{{32, "float"}, {64, "double"}} {
+		for _, bits := range []int{32, 64} {
+			fmt.Fprintf(b, "declare %s @llvm.experimental.constrained.sitofp.f%d.i%d(i%d, metadata, metadata)\n", result.typ, result.bits, bits, bits)
+		}
+	}
 	b.WriteString("declare <8 x float> @llvm.experimental.constrained.fptrunc.v8f32.v8f64(<8 x double>, metadata, metadata)\n")
 	for _, lanes := range []int{4, 8, 16} {
 		fmt.Fprintf(b, "declare <%d x half> @llvm.experimental.constrained.fptrunc.v%df16.v%df32(<%d x float>, metadata, metadata)\n", lanes, lanes, lanes, lanes)

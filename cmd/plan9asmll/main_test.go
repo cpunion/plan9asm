@@ -1851,6 +1851,24 @@ func TestExtractSupportedOpsFindsCompleteARMAddedFamilies(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteSignedScalarIntegerFloatFamily(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(repoRoot, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, op := range []string{"CVTSL2SS", "CVTSL2SD", "CVTSQ2SS", "CVTSQ2SD", "VCVTSI2SSL", "VCVTSI2SDL", "VCVTSI2SSQ", "VCVTSI2SDQ"} {
+			if _, found := supported[op]; !found {
+				t.Errorf("%s extraction omitted signed conversion %s", arch, op)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteWasmFloatUnaryFamily(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

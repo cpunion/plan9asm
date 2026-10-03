@@ -68,7 +68,7 @@ func TestTranslateRawVEXScalarIntegerFloatWeaviateRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(ir, "sitofp i32") != 2 {
+	if strings.Count(ir, "call float @llvm.experimental.constrained.sitofp.f32.i32") != 2 {
 		t.Fatalf("raw VCVTSI2SSL lowering omitted signed conversions:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")

@@ -1290,8 +1290,8 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"fcmp ord double",
 		"call double @llvm.sqrt.f64",
 		"call double @llvm.rint.f64",
-		"sitofp i64",
-		"sitofp i32",
+		"@llvm.experimental.constrained.sitofp.f64.i64",
+		"@llvm.experimental.constrained.sitofp.f64.i32",
 		"fptosi double",
 		"select i1",
 		"bitcast i64",
@@ -1804,10 +1804,10 @@ func TestAMD64FPExtraCoverage(t *testing.T) {
 	if _, _, err := c.lowerFP("CMPSD", Instr{Raw: "CMPSD X0, X1, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}, {Kind: OpReg, Reg: AX}}}); err == nil {
 		t.Fatalf("CMPSD reg predicate unexpectedly succeeded")
 	}
-	if ok, term, err := c.lowerFP("CVTSQ2SD", Instr{Raw: "CVTSQ2SD AX, AX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: AX}}}); ok || term || err != nil {
+	if ok, term, err := c.lowerFP("CVTSQ2SD", Instr{Raw: "CVTSQ2SD AX, AX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("CVTSQ2SD non-X dst = (%v, %v, %v)", ok, term, err)
 	}
-	if ok, term, err := c.lowerFP("CVTSL2SD", Instr{Raw: "CVTSL2SD AX, AX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: AX}}}); ok || term || err != nil {
+	if ok, term, err := c.lowerFP("CVTSL2SD", Instr{Raw: "CVTSL2SD AX, AX", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: AX}}}); !ok || term || err == nil {
 		t.Fatalf("CVTSL2SD non-X dst = (%v, %v, %v)", ok, term, err)
 	}
 

@@ -8,6 +8,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerSignedIntegerScalarFloat(op, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
 		return ok, term, err
 	}
@@ -553,38 +556,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		converted := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = fptrunc double %s to float\n", converted, src)
 		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+converted)
-
-	case "CVTSQ2SD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 CVTSQ2SD expects src, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sitofp i64 %s to double\n", t, src)
-		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
-
-	case "CVTSL2SD":
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 CVTSL2SD expects srcReg, Xdst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-			return false, false, nil
-		}
-		src, err := c.evalI64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		i32v := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", i32v, src)
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = sitofp i32 %%%s to double\n", t, i32v)
-		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
 
 	}
 	return false, false, nil

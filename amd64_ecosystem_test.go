@@ -2085,7 +2085,7 @@ TEXT integerfloatconversions(SB),NOSPLIT,$0-0
 	CVTPL2PD M1, X7
 	RET
 `, "integerfloatconversions")
-	for _, want := range []string{"sitofp i32", "sitofp i64", "sitofp <4 x i32>", "sitofp <2 x i32>"} {
+	for _, want := range []string{"@llvm.experimental.constrained.sitofp.f32.i32", "@llvm.experimental.constrained.sitofp.f64.i64", "sitofp <4 x i32>", "sitofp <2 x i32>"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in integer-to-float conversion IR:\n%s", want, ll)
 		}

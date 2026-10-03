@@ -27,6 +27,9 @@ var amd64ScalarIntegerFloatOps = map[string]amd64ScalarIntegerFloatSpec{
 }
 
 func (c *amd64Ctx) lowerScalarIntegerToFloat(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerSignedIntegerScalarFloat(op, ins); ok {
+		return ok, term, err
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp, suffix := rawOp, ""
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {

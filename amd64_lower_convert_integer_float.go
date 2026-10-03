@@ -28,39 +28,7 @@ func (c *amd64Ctx) lowerLegacyIntegerToFloat(op Op, ins Instr) (ok bool, termina
 }
 
 func (c *amd64Ctx) lowerLegacyScalarIntegerToFloat(op string, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !isAMD64XReg(ins.Args[1].Reg) {
-		return true, false, fmt.Errorf("%s %s expects GP-or-memory source and X destination: %q", c.goarch, op, ins.Raw)
-	}
-	source := ins.Args[0]
-	if source.Kind == OpReg {
-		if !c.isGoYrlRegister(source) {
-			return true, false, fmt.Errorf("%s %s expects GP-or-memory source: %q", c.goarch, op, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s expects GP-or-memory source: %q", c.goarch, op, ins.Raw)
-	}
-	bits := 32
-	if strings.Contains(op, "Q2") {
-		bits = 64
-		if c.goarch == "386" {
-			return true, false, fmt.Errorf("386 %s is an illegal 64-bit form: %q", op, ins.Raw)
-		}
-	}
-	integerType := amd64IntegerTypeForBits(bits)
-	value, err := c.evalIntSized(source, integerType)
-	if err != nil {
-		return true, false, err
-	}
-	floatType := LLVMType("float")
-	if strings.HasSuffix(op, "SD") {
-		floatType = LLVMType("double")
-	}
-	converted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to %s\n", converted, integerType, value, floatType)
-	if floatType == LLVMType("float") {
-		return true, false, c.storeXLowF32(ins.Args[1].Reg, "%"+converted)
-	}
-	return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+converted)
+	return c.lowerSignedIntegerScalarFloat(Op(op), ins)
 }
 
 func (c *amd64Ctx) lowerLegacyPackedIntegerToFloat(op string, ins Instr) (bool, bool, error) {
