@@ -1,10 +1,12 @@
 package plan9asm
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -81,6 +83,11 @@ func TestARM64FPPaddingOriginalGoRandomizedBytes(t *testing.T) {
 	if runtime.GOARCH != "arm64" {
 		t.Skip("original Go runtime requires an ARM64 host; objects are tested independently")
 	}
+	arm64FPPaddingOriginalGoRandomizedBytes(t, nil)
+}
+
+func arm64FPPaddingOriginalGoRandomizedBytes(t *testing.T, runner []string) {
+	t.Helper()
 	cases := arm64PaddingCases()
 	source, declarations := arm64PaddingSource(cases)
 	declarations = strings.Replace(declarations, "package padbits", "package main", 1)
@@ -130,9 +137,22 @@ func TestARM64FPPaddingOriginalGoRandomizedBytes(t *testing.T) {
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "run", ".")
+	args := []string{"run", "-p=1"}
+	if len(runner) != 0 {
+		// Go's -exec parses a quoted argument list, not a shell command.
+		// Retain the exact required runner's executable and sysroot arguments.
+		quoted, err := arm64PaddingGoExecArguments(runner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		args = append(args, "-exec="+quoted)
+	}
+	command := exec.CommandContext(ctx, "go", append(args, ".")...)
 	command.Dir = dir
-	command.Env = append(os.Environ(), "CGO_ENABLED=0")
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOARCH=arm64", "GOTOOLCHAIN=local")
+	if len(runner) != 0 {
+		command.Env = append(command.Env, "GOOS=linux")
+	}
 	out, err := runtimeOracleCombinedOutput(ctx, command)
 	if err != nil || string(out) != fmt.Sprintf("padding %d\n", count) {
 		t.Fatalf("original Go random padding, adjacent stack/g/OS18/LR/SP canaries: %v\n%s", err, out)
@@ -148,10 +168,15 @@ func TestARM64FPPaddingLLVMIndependentNumericalAndCanaries(t *testing.T) {
 	if !ok {
 		t.Fatal("LLVM22 llc/clang required")
 	}
+	arm64FPPaddingLLVMIndependentNumericalAndCanaries(t, llc,
+		testTargetTriple(runtime.GOOS, runtime.GOARCH), []string{clang}, nil)
+}
+
+func arm64FPPaddingLLVMIndependentNumericalAndCanaries(t *testing.T, llc, triple string, compiler, runner []string) {
+	t.Helper()
 	cases := arm64PaddingCases()
 	source, declarations := arm64PaddingSource(cases)
 	pkg := mustGoPackage(t, "padbits", declarations)
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
 	translated, err := TranslateGoModule(pkg, []byte(source), GoModuleOptions{GOOS: runtime.GOOS, GOARCH: "arm64", TargetTriple: triple, ResolveSym: testResolveSym(pkg.Path)})
 	if err != nil {
 		t.Fatal(err)
@@ -182,6 +207,109 @@ func TestARM64FPPaddingLLVMIndependentNumericalAndCanaries(t *testing.T) {
 		}
 	}
 	driver.WriteString("    return 0;\n}\n")
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "arm64_fp_padding", triple, translated.Module.String(), driver.String(), nil)
+	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "arm64_fp_padding", triple, translated.Module.String(), driver.String(), runner)
 	t.Logf("%d LLVM/C independent numerical cases; no assertion that native padding was initialized", len(cases)*len(arm64PaddingRuntimeInputs()))
+}
+
+func TestCrossLinuxRuntimeMatrixARM64FPPadding(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+	// The required matrix consumes exactly the existing 46 forms, 76 inputs
+	// and four independent native padding values, including all old canaries.
+	arm64FPPaddingOriginalGoRandomizedBytes(t, runner)
+	arm64FPPaddingLLVMIndependentNumericalAndCanaries(t, llc, triple, compiler, runner)
+}
+
+func arm64PaddingGoExecArguments(args []string) (string, error) {
+	// cmd/internal/quoted.Split in both Go 1.20 and 1.27 treats quoted
+	// contents literally: backslashes are not escapes. Follow quoted.Join's
+	// choice of quote, but explicitly quote empty arguments so they survive.
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		single := strings.ContainsRune(arg, '\'')
+		double := strings.ContainsRune(arg, '"')
+		switch {
+		case single && double:
+			return "", fmt.Errorf("Go -exec argument %q contains both quote kinds", arg)
+		case arg != "" && !single && !double && !strings.ContainsAny(arg, " \t\n\r"):
+			quoted[i] = arg
+		case !single:
+			quoted[i] = "'" + arg + "'"
+		default:
+			quoted[i] = "\"" + arg + "\""
+		}
+	}
+	return strings.Join(quoted, " "), nil
+}
+
+func TestARM64FPPaddingGoExecArgumentsActualGo(t *testing.T) {
+	dir := t.TempDir()
+	for name, source := range map[string]string{
+		"go.mod":  "module paddingexecargv\n\ngo 1.20\n",
+		"main.go": "package main\n\nfunc main() {}\n",
+		"runner/main.go": `package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+)
+
+func main() {
+    if len(os.Args) < 2 {
+        panic("go -exec did not append the compiled executable")
+    }
+    if _, err := os.Stat(os.Args[len(os.Args)-1]); err != nil {
+        panic(err)
+    }
+    encoded, err := json.Marshal(os.Args[1:len(os.Args)-1])
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(encoded))
+}
+`,
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	runner := filepath.Join(dir, "exec runner")
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "build", "-p=1", "-o", runner, "./runner")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH)
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
+		t.Fatalf("compile actual Go argv observer: %v\n%s", err, output)
+	}
+
+	want := []string{"plain", "with space", `back\slash`, "with\ttab", "with\nnewline", "with\rcarriage", "", "single'quote", `double"quote`}
+	encoded, err := arm64PaddingGoExecArguments(append([]string{runner}, want...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	command = exec.CommandContext(ctx, "go", "run", "-p=1", "-exec="+encoded, ".")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH)
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if err != nil {
+		t.Fatalf("actual Go -exec argv observer: %v\n%s", err, output)
+	}
+	var got []string
+	if err := json.Unmarshal(output, &got); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("actual Go -exec changed argv: got %q, want %q, decode %v", got, want, err)
+	}
+}
+
+func TestARM64FPPaddingGoExecArgumentsRejectBothQuotes(t *testing.T) {
+	for _, arg := range []string{`both'"quotes`, "'double with space\"", "'\t\""} {
+		if encoded, err := arm64PaddingGoExecArguments([]string{"runner", arg}); err == nil || encoded != "" {
+			t.Fatalf("unrepresentable argument %q accepted as %q: %v", arg, encoded, err)
+		}
+	}
 }
