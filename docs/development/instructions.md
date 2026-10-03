@@ -163,8 +163,11 @@ The helper retains output and failures, bounds pipe waits and cleans its owned
 Unix process group after cancellation or ordinary parent exit. Non-Unix owns
 only the direct child. Extend the lifecycle AST regression when adding a new
 consumer; do not introduce another direct `CombinedOutput` call that bypasses
-the helper. Release LLVM modules before their contexts and before each fixture's
-temporary files are removed.
+the helper. The reusable LLVM compile, C link and executable-run stages each
+receive a fresh five-minute budget, limited by the existing test deadline minus
+three seconds for cleanup; this is not a five-minute whole-suite budget. An
+exhausted budget fails without launching another command. Release LLVM modules
+before their contexts and before each fixture's temporary files are removed.
 
 A typical x86 investigation starts with the Go 1.27 tables and an assembler
 probe:
