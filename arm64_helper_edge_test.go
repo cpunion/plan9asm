@@ -471,7 +471,7 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{"VMOV", false, Instr{Op: "VMOV", Args: []Operand{arm64RegOp("V1.B16"), arm64RegOp("V3.B16")}, Raw: "VMOV V1.B16, V3.B16"}, "vec"},
 		{"VEOR", false, Instr{Op: "VEOR", Args: []Operand{arm64RegOp("V0.B16"), arm64RegOp("V1.B16"), arm64RegOp("V4.B16")}, Raw: "VEOR V0.B16, V1.B16, V4.B16"}, "vec"},
 		{"VORR", false, Instr{Op: "VORR", Args: []Operand{arm64RegOp("V1.B16"), arm64RegOp("V2.B16"), arm64RegOp("V5.B16")}, Raw: "VORR V1.B16, V2.B16, V5.B16"}, "vec"},
-		{"VLD1", true, Instr{Op: "VLD1.P", Args: []Operand{arm64MemOp("R21", 0), arm64RegOp("V4.B[3]")}, Raw: "VLD1.P (R21), V4.B[3]"}, "vec"},
+		{"VLD1", true, Instr{Op: "VLD1.P", Args: []Operand{arm64MemOp("R21", 1), arm64RegOp("V4.B[3]")}, Raw: "VLD1.P 1(R21), V4.B[3]"}, "vec"},
 		{"VLD1", true, Instr{Op: "VLD1.P", Args: []Operand{arm64MemOp("R21", 0), arm64RegListOp("V4.B16", "V5.B16", "V6.B16", "V7.B16")}, Raw: "VLD1.P (R21), [V4.B16, V5.B16, V6.B16, V7.B16]"}, "vec"},
 		{"VST1", true, Instr{Op: "VST1.P", Args: []Operand{arm64RegListOp("V4.B16", "V5.B16"), arm64MemOp("R21", 0)}, Raw: "VST1.P [V4.B16, V5.B16], (R21)"}, "vec"},
 		{"VCMEQ", false, Instr{Op: "VCMEQ", Args: []Operand{arm64RegOp("V4.B16"), arm64RegOp("V5.B16"), arm64RegOp("V6.B16")}, Raw: "VCMEQ V4.B16, V5.B16, V6.B16"}, "vec"},
@@ -1327,9 +1327,9 @@ func TestARM64VectorEdgeCoverage(t *testing.T) {
 	check("VMOV", false, Instr{Op: "VMOV", Raw: "VMOV V1.H[4], R4", Args: []Operand{arm64RegOp("V1.H[4]"), arm64RegOp("R4")}})
 	check("VMOV", false, Instr{Op: "VMOV", Raw: "VMOV V2.B[7], R5", Args: []Operand{arm64RegOp("V2.B[7]"), arm64RegOp("R5")}})
 	check("VMOV", false, Instr{Op: "VMOV", Raw: "VMOV V2.D[0], R0", Args: []Operand{arm64RegOp("V2.D[0]"), arm64RegOp("R0")}})
-	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P (R20), V3.D[1]", Args: []Operand{arm64MemOp("R20", 0), arm64RegOp("V3.D[1]")}})
-	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P (R20), V4.S[1]", Args: []Operand{arm64MemOp("R20", 0), arm64RegOp("V4.S[1]")}})
-	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P (R20), V5.H[3]", Args: []Operand{arm64MemOp("R20", 0), arm64RegOp("V5.H[3]")}})
+	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P 8(R20), V3.D[1]", Args: []Operand{arm64MemOp("R20", 8), arm64RegOp("V3.D[1]")}})
+	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P 4(R20), V4.S[1]", Args: []Operand{arm64MemOp("R20", 4), arm64RegOp("V4.S[1]")}})
+	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P 2(R20), V5.H[3]", Args: []Operand{arm64MemOp("R20", 2), arm64RegOp("V5.H[3]")}})
 	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P (R20), [V6.B16]", Args: []Operand{arm64MemOp("R20", 0), arm64RegListOp("V6.B16")}})
 	check("VLD1", true, Instr{Op: "VLD1.P", Raw: "VLD1.P (R20), [V7.B16, V8.B16, V9.B16]", Args: []Operand{arm64MemOp("R20", 0), arm64RegListOp("V7.B16", "V8.B16", "V9.B16")}})
 	check("VST1", true, Instr{Op: "VST1.P", Raw: "VST1.P [V0.B16], (R20)", Args: []Operand{arm64RegListOp("V0.B16"), arm64MemOp("R20", 0)}})

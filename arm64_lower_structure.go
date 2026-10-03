@@ -20,6 +20,27 @@ var arm64StructureLoadStoreCounts = map[Op]int{
 }
 
 func (c *arm64Ctx) lowerARM64StructureLoadStore(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	_, dispatched := arm64StructureLoadStoreCounts[op]
+	_, sourceFamily := arm64StructureLoadStoreCounts[arm64ControlOp(ins)]
+	if !dispatched {
+		if sourceFamily {
+			return true, false, fmt.Errorf("arm64 structure opcode dispatch %s disagrees with source %s: %q", op, ins.Op, ins.Raw)
+		}
+		return false, false, nil
+	}
+
+	expected := op
+	if postInc {
+		expected += ".P"
+	}
+	if ins.Op == "" {
+		// Legacy helpers supply the opcode separately. Normalize a local
+		// value copy; the original instruction and operands remain intact.
+		ins.Op = expected
+	} else if ins.Op != expected {
+		return true, false, fmt.Errorf("arm64 structure dispatch %s disagrees with source %s: %q", expected, ins.Op, ins.Raw)
+	}
+
 	form, handled, err := parseARM64StructureMemory(ins)
 	if !handled {
 		return false, false, nil
@@ -55,7 +76,7 @@ func (c *arm64Ctx) lowerARM64StructureLoadStore(op Op, postInc bool, ins Instr) 
 		for registerIndex, reg := range registers {
 			value := "poison"
 			for lane := 0; lane < arrangement.lanes; lane++ {
-				elementOffset := arm64StructureElementOffset(op, arrangement, registerCount, registerIndex, lane)
+				elementOffset := arm64StructureElementOffset(form.op, arrangement, registerCount, registerIndex, lane)
 				element, err := c.arm64LoadStructureElement(addr, elementOffset, arrangement.elementBits)
 				if err != nil {
 					return true, false, err
@@ -81,7 +102,7 @@ func (c *arm64Ctx) lowerARM64StructureLoadStore(op Op, postInc bool, ins Instr) 
 			for registerIndex := range registers {
 				element := c.newTmp()
 				fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n", element, arrangement.lanes, arrangement.elementBits, values[registerIndex], lane)
-				elementOffset := arm64StructureElementOffset(op, arrangement, registerCount, registerIndex, lane)
+				elementOffset := arm64StructureElementOffset(form.op, arrangement, registerCount, registerIndex, lane)
 				if err := c.arm64StoreStructureElement(addr, elementOffset, arrangement.elementBits, "%"+element); err != nil {
 					return true, false, err
 				}

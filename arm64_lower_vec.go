@@ -43,6 +43,11 @@ func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 // Vector/NEON lowering for a small subset used by stdlib asm.
 // We model V0..V31 as <16 x i8>.
 func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated bool, err error) {
+	// Validate source/dispatcher agreement before any other vector helper
+	// can emit IR for a conflicting opcode.
+	if ok, terminated, err := c.lowerARM64StructureLoadStore(op, postInc, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerARM64VectorMove(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -74,9 +79,6 @@ func (c *arm64Ctx) lowerVec(op Op, postInc bool, ins Instr) (ok bool, terminated
 		return ok, terminated, err
 	}
 	if ok, terminated, err := c.lowerARM64FloatPair(op, ins); ok {
-		return ok, terminated, err
-	}
-	if ok, terminated, err := c.lowerARM64StructureLoadStore(op, postInc, ins); ok {
 		return ok, terminated, err
 	}
 	if ok, terminated, err := c.lowerARM64VectorBitReverse(op, ins); ok {
