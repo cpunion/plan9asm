@@ -99,6 +99,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_go_caller_logical_runtime_test.go",
 		"amd64_float_add_sub_go_oracle_test.go",
 		"amd64_signed_integer_scalar_float_go_oracle_test.go",
+		"amd64_float_binary_fp_span_test.go",
 		"amd64_horizontal_float_go_oracle_test.go",
 		"amd64_packed_unpack_go_oracle_test.go",
 		"amd64_insert_extract_go_oracle_test.go",
