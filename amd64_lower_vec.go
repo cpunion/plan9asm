@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerPackedLogicalFamily(op, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerFourSource(op, ins); ok {
 		return ok, term, err
 	}
@@ -131,12 +134,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	}
 	if _, ok := amd64PackedRotateSpecs[op]; ok {
 		return c.lowerPackedRotate(rawOp, ins)
-	}
-	if _, ok := amd64EVEXPackedLogicalSpecs[op]; ok {
-		return c.lowerEVEXPackedLogical(rawOp, ins)
-	}
-	if _, ok := amd64PackedFloatingLogicalSpecs[op]; ok {
-		return c.lowerPackedFloatingLogical(rawOp, ins)
 	}
 	if _, ok := amd64FMA3Specs[op]; ok {
 		return c.lowerFMA3(rawOp, ins)
@@ -640,7 +637,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		fmt.Fprintf(c.b, "  %%%s = shufflevector <8 x i8> %%%s, <8 x i8> %%%s, <64 x i32> %s\n", out, chunk, chunk, llvmRepeatI8Mask(8, 64))
 		return true, false, c.storeZ(ins.Args[1].Reg, "%"+out)
 
-	case "VPXOR", "VPOR", "VPADDD", "VPADDQ", "VPSUBB":
+	case "VPADDD", "VPADDQ", "VPSUBB":
 		// V* three-operand op; support both X and Y destinations.
 		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
 			return true, false, fmt.Errorf("amd64 %s expects src1, src2, dstReg: %q", op, ins.Raw)
@@ -656,10 +653,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			}
 			t := c.newTmp()
 			switch op {
-			case "VPXOR":
-				fmt.Fprintf(c.b, "  %%%s = xor <32 x i8> %s, %s\n", t, a, b)
-			case "VPOR":
-				fmt.Fprintf(c.b, "  %%%s = or <32 x i8> %s, %s\n", t, a, b)
 			case "VPADDD":
 				ab := c.newTmp()
 				fmt.Fprintf(c.b, "  %%%s = bitcast <32 x i8> %s to <8 x i32>\n", ab, a)
@@ -692,10 +685,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			}
 			t := c.newTmp()
 			switch op {
-			case "VPXOR":
-				fmt.Fprintf(c.b, "  %%%s = xor <16 x i8> %s, %s\n", t, a, b)
-			case "VPOR":
-				fmt.Fprintf(c.b, "  %%%s = or <16 x i8> %s, %s\n", t, a, b)
 			case "VPADDD":
 				ab := c.newTmp()
 				fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", ab, a)
@@ -1176,53 +1165,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 
 	case "PTEST", "VPTEST", "VTESTPD", "VTESTPS":
 		return c.lowerVectorTest(rawOp, ins)
-
-	case "VPAND":
-		// VPAND src1, src2, dst supports both XMM and YMM widths.
-		if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 VPAND expects src1, src2, dst: %q", ins.Raw)
-		}
-		if _, ok := amd64ParseYReg(ins.Args[2].Reg); ok {
-			for _, arg := range ins.Args[:2] {
-				if arg.Kind == OpReg {
-					if _, ok := amd64ParseYReg(arg.Reg); !ok {
-						return false, false, nil
-					}
-				}
-			}
-			a, err := c.loadYVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			b, err := c.loadYVecOperand(ins.Args[1])
-			if err != nil {
-				return true, false, err
-			}
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = and <32 x i8> %s, %s\n", t, a, b)
-			return true, false, c.storeY(ins.Args[2].Reg, "%"+t)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[2].Reg); ok {
-			for _, arg := range ins.Args[:2] {
-				if arg.Kind == OpReg {
-					if _, ok := amd64ParseXReg(arg.Reg); !ok {
-						return false, false, nil
-					}
-				}
-			}
-			a, err := c.loadXVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			b, err := c.loadXVecOperand(ins.Args[1])
-			if err != nil {
-				return true, false, err
-			}
-			t := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = and <16 x i8> %s, %s\n", t, a, b)
-			return true, false, c.storeX(ins.Args[2].Reg, "%"+t)
-		}
-		return false, false, nil
 
 	case "VPBLENDD":
 		// VPBLENDD $imm, Ysrc1, Ysrc2, Ydst
@@ -2090,73 +2032,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, fmt.Errorf("amd64 %s unsupported dst %s: %w", op, ins.Args[1].String(), err)
 		}
 		return true, false, nil
-
-	case "PXOR", "POR", "PAND":
-		if rawOp != op {
-			return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, op, ins.Raw)
-		}
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-			return true, false, fmt.Errorf("%s %s expects MMX/m64, MMX or X/m128, X: %q", c.goarch, op, ins.Raw)
-		}
-		if _, ok := amd64ParseMReg(ins.Args[1].Reg); ok {
-			if c.goarch == "386" {
-				return true, false, fmt.Errorf("386 %s MMX forms are illegal in 32-bit mode: %q", op, ins.Raw)
-			}
-			var src string
-			var err error
-			if ins.Args[0].Kind == OpReg {
-				if _, ok := amd64ParseMReg(ins.Args[0].Reg); !ok {
-					return true, false, fmt.Errorf("amd64 %s MMX form requires an MMX source: %q", op, ins.Raw)
-				}
-				src, err = c.loadReg(ins.Args[0].Reg)
-			} else if isAMD64MemoryOperand(ins.Args[0]) {
-				src, err = c.evalIntSized(ins.Args[0], I64)
-			} else {
-				return true, false, fmt.Errorf("amd64 %s MMX form requires MMX or memory source: %q", op, ins.Raw)
-			}
-			if err != nil {
-				return true, false, err
-			}
-			dst, err := c.loadReg(ins.Args[1].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			result := c.newTmp()
-			llvmOp := "and"
-			if op == "POR" {
-				llvmOp = "or"
-			} else if op == "PXOR" {
-				llvmOp = "xor"
-			}
-			fmt.Fprintf(c.b, "  %%%s = %s i64 %s, %s\n", result, llvmOp, dst, src)
-			return true, false, c.storeReg(ins.Args[1].Reg, "%"+result)
-		}
-		if !c.isGoLegacyXReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("%s %s destination must be an in-range MMX or X register: %q", c.goarch, op, ins.Raw)
-		}
-		if ins.Args[0].Kind == OpReg && !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("%s %s XMM form requires an in-range X source: %q", c.goarch, op, ins.Raw)
-		}
-		if ins.Args[0].Kind == OpMem && !x86MemoryRegistersValidForArch(ins.Args[0].Mem, c.goarch) {
-			return true, false, fmt.Errorf("%s %s source uses an out-of-range address register: %q", c.goarch, op, ins.Raw)
-		}
-		src, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dstv, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		t := c.newTmp()
-		if op == "PXOR" {
-			fmt.Fprintf(c.b, "  %%%s = xor <16 x i8> %s, %s\n", t, dstv, src)
-		} else if op == "POR" {
-			fmt.Fprintf(c.b, "  %%%s = or <16 x i8> %s, %s\n", t, dstv, src)
-		} else {
-			fmt.Fprintf(c.b, "  %%%s = and <16 x i8> %s, %s\n", t, dstv, src)
-		}
-		return true, false, c.storeX(ins.Args[1].Reg, "%"+t)
 
 	case "PADDB", "PADDL", "PADDD", "PADDQ", "PSUBB", "PSUBL", "PMULLW":
 		// Two-operand packed arithmetic: dst = dst (+|-) src.

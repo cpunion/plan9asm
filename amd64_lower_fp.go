@@ -78,7 +78,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		if dot := strings.IndexByte(raw, '.'); dot >= 0 {
 			base = raw[:dot]
 		}
-		if _, recognized := amd64PackedFloatingLogicalSpecs[Op(base)]; recognized {
+		if _, recognized := x86PackedLogicalSpecs[Op(base)]; recognized {
 			return c.lowerPackedFloatingLogical(op, ins)
 		}
 	}

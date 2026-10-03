@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if form, recognized, err := x86PackedLogicalProperties(ins, "amd64"); recognized {
+		return err == nil && !form.mmx
+	}
 	if amd64MaskMoveOperandsValid(ins, "amd64") {
 		return true
 	}
@@ -47,6 +50,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, recognized, err := x86PackedLogicalProperties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerPackedLogicalStep(ins, form, state, proof)
+	}
 	if amd64MaskMoveOperandsValid(*ins, "amd64") {
 		return x86CallerMaskMoveStep(ins, state, proof)
 	}
@@ -131,6 +137,9 @@ func x86CallerMaskMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoC
 func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid bool) {
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
+	}
+	if form, recognized, err := x86PackedLogicalProperties(ins, "amd64"); recognized {
+		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if width = x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(ins.Op))); width != 0 && len(ins.Args) == 2 {
 		return width, index == 1, true
