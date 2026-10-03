@@ -1025,11 +1025,8 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	case "LEAW", "LEAL", "LEAQ":
 		// All three widths use Go 1.27's sole ym_rl row: an addressable
 		// memory expression and an in-range general-register destination.
-		if op == "LEAQ" && c.goarch == "386" {
-			return true, false, fmt.Errorf("386 LEAQ is illegal in 32-bit mode: %q", ins.Raw)
-		}
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[1].Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s expects Ym address and Yrl destination: %q", c.goarch, op, ins.Raw)
+		if _, err := x86LEAOperandWidth(ins, c.goarch); err != nil {
+			return true, false, err
 		}
 		dst := ins.Args[1].Reg
 		storeLEA := func(addr string) error {
@@ -1048,9 +1045,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 		switch ins.Args[0].Kind {
 		case OpMem:
-			if !x86MemoryRegistersValidForArch(ins.Args[0].Mem, c.goarch) {
-				return true, false, fmt.Errorf("%s %s source uses an out-of-range address register: %q", c.goarch, op, ins.Raw)
-			}
 			addr, err := c.addrFromMem(ins.Args[0].Mem)
 			if err != nil {
 				return true, false, err

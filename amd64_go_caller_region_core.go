@@ -309,24 +309,8 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 		}
 		return false, destination.Kind == OpMem
 	}
-	if op == "LEAQ" && len(ins.Args) == 2 && ins.Args[0].Kind == OpMem && ins.Args[1].Kind == OpReg {
-		memory := ins.Args[0].Mem
-		destination, full := x86CallerGP(ins.Args[1].Reg)
-		if !full || destination != ins.Args[1].Reg || memory.Sym != "" || memory.Segment != "" || ins.x86AddressBits != 0 {
-			return false, false
-		}
-		base, _ := x86CallerGP(memory.Base)
-		pointer, present := state.callers[base]
-		if !present || memory.Index != "" || memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
-			return false, false
-		}
-		pointer.offset += memory.Off
-		if pointer.offset < -x86SourceStackLimit || pointer.offset > x86SourceStackLimit {
-			return false, false
-		}
-		state.callers[destination] = pointer
-		delete(state.known, destination)
-		return false, true
+	if x86LEAWidth(ins.Op, "amd64") != 0 {
+		return false, x86CallerLEAStep(ins, state)
 	}
 	name := string(op)
 	if len(name) < 2 {

@@ -128,6 +128,12 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		if !x86SourceStackInstructionKnown(ins, nativeMove, nativeSuffix, opt.Goarch) && !vectorMove {
 			return reject(index, "unregistered source-stack effect: "+string(ins.Op))
 		}
+		if x86LEAWidth(ins.Op, opt.Goarch) != 0 && ins.Op != Op("LEA"+nativeSuffix) && !caller {
+			// The older scalar stack proof establishes a continuation, not
+			// numerical GP initialization. Only the actual caller's complete
+			// must-defined transfer can authorize these additional widths.
+			return reject(index, "non-native-width LEA requires actual numerical caller source")
+		}
 		if caller && !vectorMove && !x86CallerScalarOperands(ins) {
 			return reject(index, "unregistered caller-region operand bank: "+string(ins.Op))
 		}
@@ -232,7 +238,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			if operand.Kind != OpMem || !x86RawReturnStackMemory(operand.Mem) {
 				continue
 			}
-			if op == Op("LEA"+nativeSuffix) {
+			if x86LEAWidth(ins.Op, opt.Goarch) != 0 {
 				continue // The address step proved its destination and range.
 			}
 			width := x86RawReturnScalarMoveBytes(op)
@@ -381,7 +387,7 @@ func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch strin
 	if spec, stack := amd64StackWidthSpecs[op]; stack {
 		return string(ins.Op) == string(op) && (spec.bits == 16 || (spec.bits == 32 && arch == "386") || (spec.bits == 64 && arch == "amd64"))
 	}
-	if op == nativeMove || op == Op("LEA"+suffix) || x86RawReturnScalarMoveBytes(op) != 0 {
+	if op == nativeMove || x86LEAWidth(ins.Op, arch) != 0 || x86RawReturnScalarMoveBytes(op) != 0 {
 		return true
 	}
 	// This bounded numerical contract does not infer effects for opaque raw,
@@ -537,6 +543,16 @@ func x86SourceStackFlagsStep(ins Instr, state *x86SourceStackState) bool {
 
 func x86SourceStackAddressStep(ins *Instr, state *x86SourceStackState, nativeMove Op, suffix string, word int64) bool {
 	op := Op(normalizeInstructionOpcode(ins.Op))
+	arch := "amd64"
+	if word == 4 {
+		arch = "386"
+	}
+	lea := x86LEAWidth(ins.Op, arch) != 0
+	if lea {
+		if _, err := x86LEAOperandWidth(*ins, arch); err != nil {
+			return false
+		}
+	}
 	if len(ins.Args) == 2 && op == nativeMove && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg &&
 		x86RawReturnStackRegister(ins.Args[0].Reg) && x86RawReturnStackRegister(ins.Args[1].Reg) {
 		source, destination := ins.Args[0].Reg, ins.Args[1].Reg
@@ -602,7 +618,7 @@ func x86SourceStackAddressStep(ins *Instr, state *x86SourceStackState, nativeMov
 		if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
 			return false // No implicit narrowing, arithmetic, or address escape.
 		}
-		if op == Op("LEA"+suffix) && operand.Kind == OpMem && x86RawReturnStackMemory(operand.Mem) {
+		if lea && operand.Kind == OpMem && x86RawReturnStackMemory(operand.Mem) {
 			return false // An owned stack address may not escape into an ordinary GP.
 		}
 	}
