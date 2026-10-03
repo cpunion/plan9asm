@@ -2628,7 +2628,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 					if activeProfile != nil {
 						input := ordinaryProfileConsumerInput(ordinaryPlan, *activeProfile, declaredModule, download.Dir, unit.AsmFiles, buildConfiguration.BuildTags)
 						inputPath := filepath.Join(workDir, fmt.Sprintf("feature-input-%04d.json", invocationIndex))
-						data, err := json.Marshal(input)
+						data, err := gotoolprofile.MarshalConsumerInput(input)
 						if err != nil {
 							return err
 						}

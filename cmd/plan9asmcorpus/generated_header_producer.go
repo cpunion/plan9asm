@@ -183,7 +183,7 @@ func captureDiscoveryGeneratedHeaderQuery(ctx context.Context, plan *discoveryOr
 	}
 	input := ordinaryProfileConsumerInput(plan, profile, module, download.Dir, group.AsmFiles, tags)
 	input.GeneratedHeaders = nil // Producer query, never recursive consumption.
-	data, err := json.Marshal(input)
+	data, err := gotoolprofile.MarshalConsumerInput(input)
 	if err != nil {
 		return nil, err
 	}

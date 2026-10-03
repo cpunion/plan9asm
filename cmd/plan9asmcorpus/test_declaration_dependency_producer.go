@@ -71,7 +71,7 @@ func captureDiscoveryTestDeclarationQuery(ctx context.Context, plan *discoveryOr
 	inputPath := filepath.Join(dir, fmt.Sprintf("test-signature-input-%04d.json", index))
 	reportPath := filepath.Join(dir, fmt.Sprintf("test-signature-query-%04d.json", index))
 	output := filepath.Join(dir, fmt.Sprintf("test-signature-oracle-%04d", index))
-	data, err := json.Marshal(input)
+	data, err := gotoolprofile.MarshalConsumerInput(input)
 	if err != nil {
 		return err
 	}

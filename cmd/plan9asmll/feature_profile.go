@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -53,14 +52,9 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 		return nil, err
 	}
 	defer reader.Close()
-	decoder := json.NewDecoder(io.LimitReader(reader, 4<<20+1))
-	decoder.DisallowUnknownFields()
-	var input featureInput
-	if err := decoder.Decode(&input); err != nil {
-		return nil, fmt.Errorf("decode explicit feature profile: %w", err)
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return nil, fmt.Errorf("explicit feature profile contains trailing input")
+	input, err := gotoolprofile.DecodeConsumerInput(reader)
+	if err != nil {
+		return nil, err
 	}
 	if input.Protocol != featureInputProtocol || module == "" || input.Module != module || input.Observed == nil || input.Observed.Target != target || gotoolprofile.ProfileID(input.Observed) != input.ID {
 		return nil, fmt.Errorf("explicit feature input identity differs from target/module")
@@ -98,7 +92,7 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 	}
 	consumer := &featureConsumer{
 		ID: input.ID, Observed: input.Observed, Context: ctx,
-		Input: &input, Dir: dir, WorkDir: workDir,
+		Input: input, Dir: dir, WorkDir: workDir,
 		Proof: &featureSelectionProof{
 			Protocol: featureInputProtocol, ProfileID: input.ID,
 			SignatureSourceProtocol:      input.SignatureSourceProtocol,
