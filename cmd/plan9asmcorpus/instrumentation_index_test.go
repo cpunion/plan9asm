@@ -448,13 +448,33 @@ func BenchmarkInstrumentationDenominatorSameInput(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			b.ReportAllocs()
-			b.ResetTimer()
-			for index := 0; index < b.N; index++ {
-				actual, err := planDiscoveryInstrumentationRequirements(plan, files, baselines)
-				if err != nil || !reflect.DeepEqual(actual, reference) {
-					b.Fatalf("same-input denominator differs: %v", err)
-				}
+			for _, implementation := range []struct {
+				name string
+				plan func() ([]discoveryInstrumentationRequirement, error)
+			}{
+				{
+					name: "baseline",
+					plan: func() ([]discoveryInstrumentationRequirement, error) {
+						return legacyInstrumentationRequirements(plan, files, baselines, &legacyInstrumentationWork{})
+					},
+				},
+				{
+					name: "indexed",
+					plan: func() ([]discoveryInstrumentationRequirement, error) {
+						return planDiscoveryInstrumentationRequirements(plan, files, baselines)
+					},
+				},
+			} {
+				b.Run(implementation.name, func(b *testing.B) {
+					b.ReportAllocs()
+					b.ResetTimer()
+					for index := 0; index < b.N; index++ {
+						actual, err := implementation.plan()
+						if err != nil || !reflect.DeepEqual(actual, reference) {
+							b.Fatalf("same-input denominator differs: %v", err)
+						}
+					}
+				})
 			}
 		})
 	}
