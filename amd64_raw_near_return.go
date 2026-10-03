@@ -113,6 +113,12 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 			return false
 		}
 		op := Op(normalizeInstructionOpcode(ins.Op))
+		if _, extension := amd64ScalarExtensionMoveSpecs[op]; extension && !caller && !ins.x86Encoded {
+			// A named extension gains new source-frame effects only through
+			// actual typed caller input availability. Keep the old separately
+			// bound physical/RIP decoder contract distinct from that producer.
+			return false
+		}
 		if _, _, _, memory := x86StringProperties(op); memory {
 			return false
 		}
@@ -135,10 +141,10 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 					continue
 				}
 				if offset, proved := ins.x86SourceStackFP[index]; bindFrame && fn.x86SourceStack != nil && proved &&
-					x86RawReturnFPBound(offset, x86RawReturnScalarMoveBytes(op), sig, opt.Goarch) {
+					x86RawReturnFPBound(offset, x86ScalarMoveMemoryBytes(ins, index, opt.Goarch), sig, opt.Goarch) {
 					continue // Instruction-local, freshly recomputed physical-SP slot proof.
 				}
-				if !bindFrame && fn.x86SourceStack != nil && x86RawReturnStackMemory(arg.Mem) && x86RawReturnScalarMoveBytes(op) != 0 {
+				if !bindFrame && fn.x86SourceStack != nil && x86RawReturnStackMemory(arg.Mem) && x86ScalarMoveMemoryBytes(ins, index, opt.Goarch) != 0 {
 					continue // Pure preparation; final normalization binds the exact slot for lowering.
 				}
 				// Even a static symbol plus an index is not a bounded object.
@@ -157,7 +163,7 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 				if !bindFrame {
 					continue // Pure prepartition normalization retains metadata.
 				}
-				width := x86RawReturnScalarMoveBytes(op)
+				width := x86ScalarMoveMemoryBytes(ins, index, opt.Goarch)
 				if width == 0 || !x86RawReturnFPBound(arg.FPOffset, width, sig, opt.Goarch) {
 					return false
 				}
@@ -176,7 +182,7 @@ func x86RawReturnMemoryBound(fn Func, file *File, opt Options, bindFrame bool) b
 				if !static {
 					continue // Non-memory control operands retain their own checks.
 				}
-				if !x86RawReturnStaticBound(base, offset, x86RawReturnScalarMoveBytes(op), file) {
+				if !x86RawReturnStaticBound(base, offset, x86ScalarMoveMemoryBytes(ins, index, opt.Goarch), file) {
 					return false
 				}
 			}

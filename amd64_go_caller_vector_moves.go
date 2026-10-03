@@ -135,6 +135,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 	if width = x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(ins.Op))); width != 0 && len(ins.Args) == 2 {
 		return width, index == 1, true
 	}
+	if form, recognized, err := x86ScalarExtensionProperties(ins.Op, ins, "amd64"); recognized {
+		return int64(form.spec.sourceBits / 8), false, err == nil && index == 0
+	}
 	if amd64MaskMoveOperandsValid(ins, "amd64") {
 		return int64(amd64MaskMoveSpecs[ins.Op] / 8), index == 1, true
 	}

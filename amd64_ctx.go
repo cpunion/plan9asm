@@ -330,6 +330,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 			for _, arg := range ins.Args {
 				markOp(arg)
 			}
+			if form, recognized, err := x86ScalarExtensionProperties(Op(op), ins, c.goarch); recognized && err == nil && form.source.Kind == OpReg {
+				markReg(form.source.Reg)
+			}
 			if _, fourSource := amd64FourSourceSpecs[Op(op)]; fourSource && len(ins.Args) >= 2 && ins.Args[1].Kind == OpRegList && len(ins.Args[1].RegList) != 0 {
 				first := ins.Args[1].RegList[0]
 				if index, ok := amd64ParseXReg(first); ok {

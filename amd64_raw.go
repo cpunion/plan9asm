@@ -10303,6 +10303,10 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		// semantic instruction is the operand-free Plan 9 NOP.
 		return "NOP", nil
 	case x86asm.MOVSXD:
+		destination, register := inst.Args[0].(x86asm.Reg)
+		if !register || decodedX86RegisterBits(destination) != 64 {
+			return "", fmt.Errorf("%w: raw MOVSXD without a 64-bit destination needs an independently proved native width contract", ErrProbeNeedsContext)
+		}
 		replaceOp("MOVLQSX")
 	case x86asm.MOVD:
 		// Intel MOVD transfers 32 bits. Go's MOVD spelling instead aliases
@@ -10500,7 +10504,15 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		if inst.Op == x86asm.MOVZX {
 			extension = "ZX"
 		}
-		replaceOp("MOV" + sourceLetter + destinationLetter + extension)
+		if sourceBits == 16 && destinationBits == 16 {
+			name := "MOVSWW"
+			if inst.Op == x86asm.MOVZX {
+				name = "MOVZWW"
+			}
+			replaceOp(name)
+		} else {
+			replaceOp("MOV" + sourceLetter + destinationLetter + extension)
+		}
 	}
 	normalizeDecodedX86GoOpcode(inst, &syntax, replaceOp)
 	syntax = normalizeDecodedX86SegmentMemorySyntax(syntax)

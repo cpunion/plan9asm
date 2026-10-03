@@ -267,6 +267,9 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 			return false, true // Only the preceding exact address step admits this.
 		}
 	}
+	if recognized, valid := x86CallerExtensionStep(ins, state, proof); recognized {
+		return false, valid
+	}
 	width := x86RawReturnScalarMoveBytes(op)
 	if width != 0 {
 		if len(ins.Args) != 2 || !x86CallerMemoryStep(ins, state, proof, width) {

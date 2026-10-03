@@ -92,6 +92,16 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	}
 	sig, hasSig := opt.Sigs[name]
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
+	if !caller {
+		for index, instruction := range fn.Instrs {
+			if _, extension := amd64ScalarExtensionMoveSpecs[instruction.Op]; extension {
+				// The old scalar slot contract proves frame bounds, not GP
+				// input availability. It cannot authorize a new extension read
+				// of unknown or partially initialized native entry registers.
+				return reject(index, "scalar extension needs a complete typed caller input proof")
+			}
+		}
+	}
 	if !caller && x86RawReturnLeafStackUnobserved(fn) {
 		return fn
 	}
@@ -241,7 +251,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			if x86LEAWidth(ins.Op, opt.Goarch) != 0 {
 				continue // The address step proved its destination and range.
 			}
-			width := x86RawReturnScalarMoveBytes(op)
+			width := x86ScalarMoveMemoryBytes(*ins, operandIndex, opt.Goarch)
 			memory := operand.Mem
 			if width == 0 || memory.Sym != "" || memory.Index != "" || memory.Segment != "" ||
 				ins.x86AddressBits != 0 {
@@ -389,6 +399,9 @@ func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch strin
 	}
 	if op == nativeMove || x86LEAWidth(ins.Op, arch) != 0 || x86RawReturnScalarMoveBytes(op) != 0 {
 		return true
+	}
+	if _, recognized, err := x86ScalarExtensionProperties(op, ins, arch); recognized {
+		return err == nil
 	}
 	// This bounded numerical contract does not infer effects for opaque raw,
 	// native/system calls, aggregate/vector memory, or instructions with hidden
@@ -550,6 +563,12 @@ func x86SourceStackAddressStep(ins *Instr, state *x86SourceStackState, nativeMov
 	lea := x86LEAWidth(ins.Op, arch) != 0
 	if lea {
 		if _, err := x86LEAOperandWidth(*ins, arch); err != nil {
+			return false
+		}
+	}
+	if form, recognized, err := x86ScalarExtensionProperties(op, *ins, arch); recognized {
+		if err != nil || x86RawReturnStackRegister(form.result) ||
+			form.source.Kind == OpReg && x86RawReturnStackRegister(form.source.Reg) {
 			return false
 		}
 	}
