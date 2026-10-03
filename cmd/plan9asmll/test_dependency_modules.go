@@ -15,11 +15,11 @@ import (
 )
 
 type testDependencyModuleGuard struct {
-	Source      gotoolprofile.TestModuleSource
-	Root        string
-	ZIP         string
-	GoMod       string
-	ModuleGoMod string
+	Source        gotoolprofile.TestModuleSource
+	Root          string
+	ZIP           string
+	GoMod         string
+	MetadataPaths map[string]string // Each actual path -> its pre-load canonical path.
 }
 
 func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Package) (gotoolprofile.TestSourcePackage, error) {
@@ -164,9 +164,10 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 			return fmt.Errorf("actual dependency source root/identity changed during loading")
 		}
 		if source.SourceModule != "" {
-			if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, root, metadata, prior.GoMod); err != nil {
+			if err := consumer.bindTestModuleMetadata(&prior, metadata); err != nil {
 				return err
 			}
+			consumer.TestModuleGuards[source.ID()] = prior
 		} else if metadata != "" {
 			return fmt.Errorf("stdlib dependency acquired unexpected module metadata")
 		}
@@ -195,21 +196,11 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 		if err != nil || actualRoot != root {
 			return fmt.Errorf("actual foreign dependency download has a different module directory")
 		}
-		if err := gotoolprofile.VerifyTestModuleGoModMetadata(source, root, metadata, download.GoMod); err != nil {
-			return err
-		}
-		if consumer.GeneratedGuard == nil {
-			consumer.GeneratedGuard = make(map[string]string)
-		}
-		for _, filename := range []string{metadata, download.GoMod} {
-			if prior, exists := consumer.GeneratedGuard[filename]; exists && prior != source.GoModSHA256 {
-				return fmt.Errorf("actual foreign dependency metadata conflicts with earlier source identity")
-			}
-			consumer.GeneratedGuard[filename] = source.GoModSHA256
-		}
 		guard.ZIP = download.Zip
 		guard.GoMod = download.GoMod
-		guard.ModuleGoMod = metadata
+		if err := consumer.bindTestModuleMetadata(&guard, metadata); err != nil {
+			return err
+		}
 	} else {
 		actualRoot, err := filepath.EvalSymlinks(filepath.Join(consumer.Root, "src"))
 		if err != nil || actualRoot != root || source.GoVersion != consumer.Observed.GoVersion {
@@ -223,14 +214,61 @@ func (consumer *featureConsumer) bindTestModuleSource(source gotoolprofile.TestM
 	return nil
 }
 
+func (consumer *featureConsumer) bindTestModuleMetadata(guard *testDependencyModuleGuard, metadata string) error {
+	if err := gotoolprofile.VerifyTestModuleGoModMetadata(guard.Source, guard.Root, metadata, guard.GoMod); err != nil {
+		return err
+	}
+	paths := []string{metadata, guard.GoMod}
+	canonical := make([]string, len(paths))
+	for index, filename := range paths {
+		resolved, err := filepath.EvalSymlinks(filename)
+		if err != nil {
+			return fmt.Errorf("actual foreign dependency metadata path is inaccessible: %w", err)
+		}
+		if prior, exists := guard.MetadataPaths[filename]; exists && prior != resolved {
+			return fmt.Errorf("actual foreign dependency metadata path changed during loading")
+		}
+		if prior, exists := consumer.GeneratedGuard[filename]; exists && prior != guard.Source.GoModSHA256 {
+			return fmt.Errorf("actual foreign dependency metadata conflicts with earlier source identity")
+		}
+		canonical[index] = resolved
+	}
+	if guard.MetadataPaths == nil {
+		guard.MetadataPaths = make(map[string]string)
+	}
+	if consumer.GeneratedGuard == nil {
+		consumer.GeneratedGuard = make(map[string]string)
+	}
+	// An original ZIP go.mod may legitimately be copied by an actual Go load.
+	// Retain every observed copy, not just the first Module.GoMod path. Legacy
+	// proxy metadata still requires the exact download path in the verifier.
+	for index, filename := range paths {
+		guard.MetadataPaths[filename] = canonical[index]
+		consumer.GeneratedGuard[filename] = guard.Source.GoModSHA256
+	}
+	return nil
+}
+
 func (consumer *featureConsumer) verifyTestModuleSources() error {
 	for _, guard := range consumer.TestModuleGuards {
 		if err := gotoolprofile.VerifyTestModuleSource(consumer.Context, guard.Source, guard.Root, guard.ZIP); err != nil {
 			return fmt.Errorf("final test dependency source root %s: %w", guard.Source.ID(), err)
 		}
 		if guard.Source.SourceModule != "" {
-			if err := gotoolprofile.VerifyTestModuleGoModMetadata(guard.Source, guard.Root, guard.ModuleGoMod, guard.GoMod); err != nil {
-				return fmt.Errorf("final test dependency metadata %s: %w", guard.Source.ID(), err)
+			if len(guard.MetadataPaths) == 0 {
+				return fmt.Errorf("final test dependency lacks its actual metadata path guards")
+			}
+			for filename, canonical := range guard.MetadataPaths {
+				if err := consumer.Context.Err(); err != nil {
+					return err
+				}
+				resolved, err := filepath.EvalSymlinks(filename)
+				if err != nil || resolved != canonical {
+					return fmt.Errorf("final test dependency metadata path changed: %s", guard.Source.ID())
+				}
+				if err := gotoolprofile.VerifyTestModuleGoModMetadata(guard.Source, guard.Root, filename, guard.GoMod); err != nil {
+					return fmt.Errorf("final test dependency metadata %s: %w", guard.Source.ID(), err)
+				}
 			}
 		}
 	}

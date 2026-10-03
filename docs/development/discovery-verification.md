@@ -501,8 +501,10 @@ source-only package retains its mandatory `go_mod_origin`: original ZIP bytes
 or the separately signed legacy proxy role. The latter requires the complete
 actual archive to lack `go.mod` and binds actual `Module.GoMod` to the exact
 download metadata outside the source tree, with byte/path checks before and
-after consumption. Neither origin adds external assembly objects. Missing or
-unknown roles, deleted signatures and invented ZIP members fail; offline replay
+after consumption. Every observed original-metadata copy retains its own
+canonical-path and byte guard through final objects. Neither origin adds
+external assembly objects. Missing or unknown roles, deleted signatures and
+invented ZIP members fail; offline replay
 retains frozen producer provenance rather than authenticating source membership
 from hashes alone. Older source-root protocols cannot be relabeled.
 `no_current_go_package` describes ordinary non-test source pairing only; it

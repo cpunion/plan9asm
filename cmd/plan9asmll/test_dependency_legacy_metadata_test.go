@@ -40,7 +40,7 @@ func TestTestModuleConsumerCachedLegacyMetadataCannotDisappear(t *testing.T) {
 	// This models only an already-bound private guard's repeat transition,
 	// not authenticating the fixture as that public module's original ZIP.
 	consumer := &featureConsumer{TestModuleGuards: map[string]testDependencyModuleGuard{
-		source.ID(): {Source: source, Root: root, GoMod: metadata, ModuleGoMod: metadata},
+		source.ID(): {Source: source, Root: root, GoMod: metadata},
 	}}
 	if err := consumer.bindTestModuleSource(source, root, metadata); err != nil {
 		t.Fatal(err)
