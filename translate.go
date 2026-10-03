@@ -246,6 +246,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if err := validateARM64ClosureFile(file, opt, resolve); err != nil {
 		return "", err
 	}
+	arm64SourceCalls := captureARM64SourceNoopCalls(file, resolve, opt.Sigs)
 	if !opt.WASMABI.valid() {
 		return "", fmt.Errorf("invalid wasm ABI %d", opt.WASMABI)
 	}
@@ -350,7 +351,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 		// function needs the same source-frame and reaching-definition proof;
 		// an opcode whitelist must not select an unchecked prototype.
 		if file.Arch == ArchARM64 {
-			if err := translateFuncARM64(&b, *fn, sig, resolve, opt.Sigs, file.Data, opt.AnnotateSource); err != nil {
+			if err := translateFuncARM64WithSourceCalls(&b, *fn, sig, resolve, opt.Sigs, file.Data, opt.AnnotateSource, arm64SourceCalls); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

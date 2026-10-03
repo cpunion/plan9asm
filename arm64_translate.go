@@ -888,6 +888,10 @@ func emitARM64Prelude(b *strings.Builder) {
 }
 
 func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool) error {
+	return translateFuncARM64WithSourceCalls(b, fn, sig, resolve, sigs, data, annotateSource, nil)
+}
+
+func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall) error {
 	var err error
 	fn, err = normalizeARM64ScalarMemoryFrame(fn)
 	if err != nil {
@@ -944,6 +948,9 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	if err := validateARM64ClosureSource(fn, sig); err != nil {
 		return err
 	}
+	if proof, present := sourceCalls[fn.Sym]; present && !proof.matchesNormalized(fn, sig) {
+		return arm64GoABIContext("normalized callee %q lost its complete original no-scratch-observer source", fn.Sym)
+	}
 	rawDataGlobals := make(map[string]string, len(rawData))
 	rawDataOffsets := make(map[string]int64)
 	for _, data := range rawData {
@@ -989,6 +996,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		return fmt.Errorf("%w: ARM64 normalized framed structure source lost its complete physical-stack/source-escape proof", ErrProbeNeedsContext)
 	}
 	c.sourceData = data
+	c.sourceNoopCalls = sourceCalls
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets
 	if err := c.prepareLocalControl(); err != nil {

@@ -27,9 +27,10 @@ type arm64Ctx struct {
 	currentInstruction  int
 	machineAvailability *arm64MachineAvailability
 
-	rawDataGlobals map[string]string // local source label -> LLVM global
-	rawDataOffsets map[string]int64  // byte offsets for aliases into one pool
-	sourceData     []DataStmt        // complete file DATA provenance, before function normalization
+	rawDataGlobals  map[string]string              // local source label -> LLVM global
+	rawDataOffsets  map[string]int64               // byte offsets for aliases into one pool
+	sourceData      []DataStmt                     // complete file DATA provenance, before function normalization
+	sourceNoopCalls map[string]arm64SourceNoopCall // complete same-file source, never a public call option
 
 	usedRegs map[Reg]bool
 	regSlot  map[Reg]string // reg -> alloca name

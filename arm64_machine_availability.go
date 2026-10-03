@@ -9,15 +9,16 @@ import (
 // transfer only declared argument/result leaves, not a hidden native machine
 // state. Record real lowering reads/writes instead of guessing opcode effects.
 type arm64MachineEffect struct {
-	register    string
-	copyFrom    string
-	width       int
-	write       bool
-	call        *ARM64GoRegisterABI
-	opaque      bool
-	store       bool
-	source      string
-	unavailable bool // Original source encoding/layout did not supply these bits.
+	register          string
+	copyFrom          string
+	width             int
+	write             bool
+	call              *ARM64GoRegisterABI
+	opaque            bool
+	store             bool
+	source            string
+	unavailable       bool // Original source encoding/layout did not supply these bits.
+	noScratchObserver bool // Complete original and normalized same-file RET-only call source.
 }
 
 type arm64MachineBlock struct {
@@ -162,10 +163,13 @@ func (c *arm64Ctx) recordMachineRegister(reg Reg, width int, write bool) {
 	})
 }
 
-func (c *arm64Ctx) recordMachineCall(abi *ARM64GoRegisterABI) {
+func (c *arm64Ctx) recordMachineCall(abi *ARM64GoRegisterABI, sourceSymbol string) {
 	if flow := c.machineAvailability; flow != nil {
 		if abi == nil {
-			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{opaque: true, source: flow.source})
+			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
+				opaque: true, source: flow.source,
+				noScratchObserver: c.sourceCallDoesNotObserveScratch(sourceSymbol),
+			})
 		} else {
 			flow.used = true
 			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{call: abi, source: flow.source})
@@ -412,7 +416,7 @@ func (flow *arm64MachineAvailability) validateSourceScratch() error {
 					delete(missing, arm64MachineRegister(result.Register))
 				}
 			case effect.opaque:
-				if len(missing) != 0 {
+				if len(missing) != 0 && !effect.noScratchObserver {
 					return arm64GoABIContext("native effects can observe an unbound original Go memory scratch at %q", effect.source)
 				}
 			case effect.copyFrom != "":

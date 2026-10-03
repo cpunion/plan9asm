@@ -444,9 +444,9 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 	if csig.Ret == Void {
 		fmt.Fprintf(c.b, "  call void %s(%s)\n", llvmGlobal(callee), strings.Join(args, ", "))
 		if internalABI {
-			c.recordMachineCall(csig.ARM64GoRegisterABI)
+			c.recordMachineCall(csig.ARM64GoRegisterABI, s)
 		} else {
-			c.recordMachineCall(nil)
+			c.recordMachineCall(nil, s)
 		}
 		return nil
 	}
@@ -456,20 +456,20 @@ func (c *arm64Ctx) callSym(symOp Operand) error {
 		if err := c.storeGoABIRegisterResult(csig, "%"+t); err != nil {
 			return err
 		}
-		c.recordMachineCall(csig.ARM64GoRegisterABI)
+		c.recordMachineCall(csig.ARM64GoRegisterABI, s)
 		return nil
 	}
 	if !internalABI && len(csig.ArgRegs) == 0 && len(csig.Frame.Results) != 0 {
 		if err := c.storeABI0CallResult(callee, csig, "%"+t); err != nil {
 			return err
 		}
-		c.recordMachineCall(nil)
+		c.recordMachineCall(nil, s)
 		return nil
 	}
 	if err := c.storeABIRegisterResult(callee, csig.Ret, "%"+t); err != nil {
 		return err
 	}
-	c.recordMachineCall(nil)
+	c.recordMachineCall(nil, s)
 	return nil
 }
 
