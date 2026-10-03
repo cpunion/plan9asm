@@ -98,6 +98,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_gp_immediate_encoding_test.go",
 		"arm64_lower_permute_test.go",
 		"amd64_go_assembler_test.go",
+		"go_assembler_oracle_test.go",
 		"go_assembler_oracle_infrastructure_go127_unix_test.go",
 		"arm64_private_structure_runtime_test.go",
 		"arm64_large_frame_runtime_test.go",
@@ -126,9 +127,12 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 				if !ok {
 					return true
 				}
-				if function, ok := call.Fun.(*ast.Ident); ok && function.Name == "runtimeOracleCombinedOutput" {
-					consumers++
-					return true
+				if function, ok := call.Fun.(*ast.Ident); ok {
+					switch function.Name {
+					case "runtimeOracleCombinedOutput", "goAssemblerOracleOutput":
+						consumers++
+						return true
+					}
 				}
 				method, ok := call.Fun.(*ast.SelectorExpr)
 				if !ok {

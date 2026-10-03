@@ -1,9 +1,6 @@
 package plan9asm
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -100,23 +97,7 @@ func requireARM64GoAssemblerResultWithExperiment(t *testing.T, src string, wantS
 	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
 		return
 	}
-	dir := t.TempDir()
-	asm := filepath.Join(dir, "forms.s")
-	if err := os.WriteFile(asm, []byte(src), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("go", "tool", "asm", "-p", "example.com/forms", "-o", filepath.Join(dir, "forms.o"), asm)
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64")
-	if experiment != "" {
-		cmd.Env = append(cmd.Env, "GOEXPERIMENT="+experiment)
-	}
-	out, err := cmd.CombinedOutput()
-	if wantSuccess && err != nil {
-		t.Fatalf("Go 1.27 assembler rejected accepted forms: %v\n%s", err, out)
-	}
-	if !wantSuccess && err == nil {
-		t.Fatalf("Go 1.27 assembler accepted a form expected outside the optab:\n%s", src)
-	}
+	goAssemblerOracleOutput(t, "arm64", src, experiment, wantSuccess)
 }
 
 func goToolchainAtLeast(version string, wantMajor, wantMinor int) bool {
