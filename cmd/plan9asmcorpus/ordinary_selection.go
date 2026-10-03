@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -67,6 +68,8 @@ type discoveryOrdinarySelectionPlan struct {
 	TestDeclarationDirectories   []ordinarySelectionDirectory      `json:"test_declaration_directories,omitempty"`
 	TestDeclarationQueries       []discoveryTestDeclarationQuery   `json:"test_declaration_queries,omitempty"`
 	proxyGoModPath               string
+	testDependencyContext        context.Context
+	testDependencyModuleCaptures map[*gotoolprofile.TestDependencyProof]map[string]*discoveryTestModuleCapture
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The

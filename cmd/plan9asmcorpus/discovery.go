@@ -2251,7 +2251,15 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		}
 	}
 	defer func() {
-		if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+		// Target operations have already waited and cancelled their contexts.
+		// Final source verification has its own bounded operation, before the
+		// owned candidate workspace is released; no cancelled context is reused.
+		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			if ordinaryPlan != nil {
+				ordinaryPlan.testDependencyContext = ctx
+			}
+			return verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate)
+		}); err != nil {
 			runErr = errors.Join(runErr, err)
 		}
 	}()
@@ -2406,6 +2414,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		packageGroups := discoveryPackageGroupsForModule(applicableCandidate, plan.ModulePath)
 		for _, target := range buildConfiguration.Targets {
 			err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+				if ordinaryPlan != nil {
+					ordinaryPlan.testDependencyContext = ctx
+				}
 				guard := func(run func() error) (operationErr error) {
 					if activeProfile != nil {
 						if err := verifyDiscoveryProfileCurrent(ctx, profileMarkers, env, *activeProfile, profileCache); err != nil {

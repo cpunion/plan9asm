@@ -165,7 +165,7 @@ reader requires exact supplemental consumption and rejects deleting either
 protocol or evidence to fall back to legacy rules. Historical source snapshots
 retain their old claims and cannot be promoted to this contract.
 
-Current snapshots also stamp `actual_go_test_declaration_source_closure_v1`.
+Current snapshots also stamp `actual_go_test_declaration_source_closure_v2`.
 A cheap selected-test bodyless-syntax predicate may request the private
 `-signature-source-query`; only actual ordinary types and parsed CPP decide
 which entry/callee references remain missing. This distinct query emits no
@@ -185,6 +185,23 @@ reloads the actual test selection/export, while report, progress and ledger
 readers require the exact query/source closure and consumed typed signatures.
 Truncated, replaced, cross-profile or unconsumed closure metadata fails; no
 test source becomes ordinary input or a generated-header witness.
+
+Version 2 closes every actual import edge, including independent nested modules
+whose paths share the candidate's prefix. Ownership comes from actual Go
+Module/Dir/Replace and ImportMap, not that prefix. Separate module roots retain
+exact ZIP/module h1/go.mod h1, related directory membership and original minimal
+Go/ASM selection headers; the consumer independently matches its actual Go
+download, source roots and pre/post exports. Local or unknown replacements and
+external ZIPs lacking original `go.mod` remain failures until their separate
+authenticated metadata role is supported. External ASM is source-only evidence,
+not another candidate translation or object. Standard-library roots must derive
+from the reobserved driver's actual GOROOT. `unsafe` retains its builtin role and
+original documentation source rather than inventing a compiled export or dropping
+the edge. Roots, source bytes, proxy metadata and exports stay guarded through
+final objects. Offline replay checks this frozen producer/consumer evidence;
+compact headers and full-file SHA alone do not independently authenticate ZIP
+content without the actual ZIP-byte comparison. Current provenance rejects
+deleting the new boundary evidence or relabeling an old version-1 report.
 
 ## Reports and provenance
 

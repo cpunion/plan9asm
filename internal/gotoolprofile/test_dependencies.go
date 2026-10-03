@@ -14,7 +14,7 @@ import (
 )
 
 const SignatureQueryProtocol = "actual_go_missing_signature_query_v1"
-const TestDependencyProtocol = "actual_go_test_declaration_source_closure_v1"
+const TestDependencyProtocol = "actual_go_test_declaration_source_closure_v2"
 
 // A query binds only ordinary types and parsed CPP references. No test export,
 // signature layout, LLVM output or translation outcome is asserted here.
@@ -37,12 +37,19 @@ type TestSourcePackage struct {
 	Package   PackageProof      `json:"package"`
 	VariantID string            `json:"variant_id"`
 	ImportMap map[string]string `json:"import_map"`
+	// Empty only for this candidate's authenticated original module. Foreign
+	// roots are classified by actual Go Module/Replace, never import prefixes.
+	SourceRootID string `json:"source_root_id,omitempty"`
+	ExportSHA256 string `json:"export_sha256,omitempty"`
+	Builtin      string `json:"builtin,omitempty"`
 }
 
 type TestDependencyProof struct {
-	Protocol string               `json:"protocol"`
-	Query    *SignatureQueryProof `json:"query"`
-	Packages []TestSourcePackage  `json:"source_packages"`
+	Protocol         string               `json:"protocol"`
+	Query            *SignatureQueryProof `json:"query"`
+	Packages         []TestSourcePackage  `json:"source_packages"`
+	ExternalPackages []TestSourcePackage  `json:"external_source_packages,omitempty"`
+	SourceModules    []TestModuleSource   `json:"dependency_source_roots,omitempty"`
 }
 
 // This authenticates source-only preload metadata, never a type/layout,
@@ -63,7 +70,7 @@ func ValidateTestDependencyPreload(input *ConsumerInput, dependency *TestDepende
 			}
 		}
 	}
-	return validateTestSourceClosure(input, dependency.Packages, roots, tags)
+	return validateTestSourceClosure(input, dependency, roots, tags)
 }
 
 func ValidateSignatureQuery(input *ConsumerInput, query *SignatureQueryProof, tags []string) error {
@@ -182,13 +189,11 @@ func ValidateTestDependencies(input *ConsumerInput, proof *SelectionProof, tags 
 			return fmt.Errorf("actual test export differs from its complete pre-load source/ImportMap role")
 		}
 		for _, imported := range test.Imports {
-			if imported.ModulePath != input.Module {
-				continue
-			}
 			var selected *TestSourcePackage
-			for index := range dependency.Packages {
-				if dependency.Packages[index].Package.PackagePath == imported.PackagePath {
-					selected = &dependency.Packages[index]
+			all := append(append([]TestSourcePackage(nil), dependency.Packages...), dependency.ExternalPackages...)
+			for index := range all {
+				if all[index].Package.PackagePath == imported.PackagePath {
+					selected = &all[index]
 				}
 			}
 			wanted := make(map[string]string)
@@ -197,8 +202,12 @@ func ValidateTestDependencies(input *ConsumerInput, proof *SelectionProof, tags 
 					wanted[file] = selected.Package.SourceSHA256[file]
 				}
 			}
-			if selected == nil || !reflect.DeepEqual(wanted, imported.GoSHA256) {
-				return fmt.Errorf("same-module test export dependency differs from pre-load closure")
+			if selected == nil || !reflect.DeepEqual(wanted, imported.GoSHA256) ||
+				selected.Package.ModulePath != imported.ModulePath || selected.Package.ModuleVersion != imported.Version ||
+				selected.Package.SourceModule != imported.SourceModule || selected.Package.SourceVersion != imported.SourceVersion ||
+				selected.Package.SourceRole != imported.SourceRole ||
+				selected.SourceRootID != "" && selected.ExportSHA256 != imported.ExportSHA256 {
+				return fmt.Errorf("actual test export dependency differs from its complete source/module/export closure")
 			}
 		}
 	}
@@ -214,7 +223,7 @@ func containsString(values []string, wanted string) bool {
 	return false
 }
 
-func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackage, roots map[string]bool, tags []string) error {
+func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyProof, roots map[string]bool, tags []string) error {
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
 		return err
@@ -225,24 +234,40 @@ func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackag
 	for version := 1; version <= minor; version++ {
 		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
 	}
-	ctx.OpenFile = func(name string) (io.ReadCloser, error) {
-		header, found := input.Headers[name]
-		if !found {
-			return nil, fmt.Errorf("test dependency source lacks its original selection/import header")
-		}
-		return io.NopCloser(strings.NewReader(header)), nil
+	modules, err := testDependencySourceModules(input, dependency)
+	if err != nil {
+		return err
+	}
+	packages := append(append([]TestSourcePackage(nil), dependency.Packages...), dependency.ExternalPackages...)
+	if len(packages) > 4096 {
+		return fmt.Errorf("test dependency package closure exceeds its bounded scope")
 	}
 	byPath := make(map[string]TestSourcePackage)
+	usedModules := make(map[string]map[string]bool)
 	for index, source := range packages {
 		pkg := source.Package
-		if pkg.PackagePath != input.Module && !strings.HasPrefix(pkg.PackagePath, input.Module+"/") {
-			return fmt.Errorf("test dependency has a different actual module package identity")
+		if (index < len(dependency.Packages)) != (source.SourceRootID == "") {
+			return fmt.Errorf("test dependency changed original versus external package source roles")
 		}
-		if err := ValidatePackageModule(input, pkg); err != nil {
+		view, err := testDependencyPackageInput(input, source, modules)
+		if err != nil {
 			return err
 		}
-		if index > 0 && pkg.PackagePath <= packages[index-1].Package.PackagePath || pkg.Macros != nil || source.ImportMap == nil ||
-			!reflect.DeepEqual(pkg.GoFiles, pkg.CompiledGoFiles) || len(pkg.GoFiles) == 0 || !sort.StringsAreSorted(pkg.GoFiles) {
+		ctx.OpenFile = func(name string) (io.ReadCloser, error) {
+			header, found := view.Headers[name]
+			if !found {
+				return nil, fmt.Errorf("test dependency source lacks its original selection/import header")
+			}
+			return io.NopCloser(strings.NewReader(header)), nil
+		}
+		start := 0
+		if index >= len(dependency.Packages) {
+			start = len(dependency.Packages)
+		}
+		builtin := source.Builtin == "go_typechecker_unsafe_v1"
+		if index > start && pkg.PackagePath <= packages[index-1].Package.PackagePath || byPath[pkg.PackagePath].VariantID != "" ||
+			pkg.Macros != nil || source.ImportMap == nil ||
+			!builtin && !reflect.DeepEqual(pkg.GoFiles, pkg.CompiledGoFiles) || len(pkg.GoFiles) == 0 || !sort.StringsAreSorted(pkg.GoFiles) {
 			return fmt.Errorf("noncanonical actual test source-only package")
 		}
 		wantedID := pkg.PackagePath
@@ -252,23 +277,34 @@ func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackag
 		if source.VariantID != wantedID {
 			return fmt.Errorf("test dependency has a different actual package/test-variant identity")
 		}
-		dir := strings.TrimPrefix(strings.TrimPrefix(pkg.PackagePath, input.Module), "/")
+		dir := strings.TrimPrefix(strings.TrimPrefix(pkg.PackagePath, pkg.ModulePath), "/")
 		if dir == "" {
 			dir = "."
 		}
-		if !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 && !containsString(input.OrdinaryAsmPackages, dir) {
+		if source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 && !containsString(input.OrdinaryAsmPackages, dir) {
 			return fmt.Errorf("source-only test dependency cannot replace another assembly translation scope")
 		}
-		if input.Directories[dir] == nil {
+		if view.Directories[dir] == nil {
 			return fmt.Errorf("test dependency lacks a complete original source directory")
 		}
-		clause, err := parser.ParseFile(token.NewFileSet(), pkg.GoFiles[0], input.Headers[pkg.GoFiles[0]], parser.PackageClauseOnly)
+		if source.SourceRootID != "" {
+			if usedModules[source.SourceRootID] == nil {
+				usedModules[source.SourceRootID] = make(map[string]bool)
+			}
+			for ancestor := dir; ; ancestor = path.Dir(ancestor) {
+				usedModules[source.SourceRootID][ancestor] = true
+				if ancestor == "." {
+					break
+				}
+			}
+		}
+		clause, err := parser.ParseFile(token.NewFileSet(), pkg.GoFiles[0], view.Headers[pkg.GoFiles[0]], parser.PackageClauseOnly)
 		if err != nil {
 			return fmt.Errorf("test dependency lacks a bound package clause")
 		}
 		var wantedGo, wantedAsm []string
 		imports := make(map[string]bool)
-		for _, name := range input.Directories[dir] {
+		for _, name := range view.Directories[dir] {
 			file := path.Join(dir, name)
 			if path.Ext(name) != ".go" && path.Ext(name) != ".s" || strings.HasSuffix(name, "_test.go") && !roots[pkg.PackagePath] {
 				continue
@@ -284,7 +320,7 @@ func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackag
 				wantedAsm = append(wantedAsm, file)
 				continue
 			}
-			syntax, err := parser.ParseFile(token.NewFileSet(), file, input.Headers[file], parser.ImportsOnly)
+			syntax, err := parser.ParseFile(token.NewFileSet(), file, view.Headers[file], parser.ImportsOnly)
 			if err != nil {
 				return fmt.Errorf("test dependency has an unbound source/import header")
 			}
@@ -319,16 +355,26 @@ func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackag
 		used := make(map[string]string)
 		for _, files := range [][]string{pkg.GoFiles, pkg.SFiles} {
 			for n, file := range files {
-				if n > 0 && file <= files[n-1] || path.Dir(file) != dir || input.Sources[file] == "" || input.Sources[file] != pkg.SourceSHA256[file] {
+				if n > 0 && file <= files[n-1] || path.Dir(file) != dir || view.Sources[file] == "" || view.Sources[file] != pkg.SourceSHA256[file] {
 					return fmt.Errorf("test dependency source differs from exact pre-load bytes")
 				}
-				used[file] = input.Sources[file]
+				used[file] = view.Sources[file]
 			}
 		}
 		if !reflect.DeepEqual(used, pkg.SourceSHA256) {
 			return fmt.Errorf("test dependency omitted/added source consumption")
 		}
 		byPath[pkg.PackagePath] = source
+	}
+	if len(usedModules) != len(modules) {
+		return fmt.Errorf("test dependency contains an unrelated source-module root")
+	}
+	for id, module := range modules {
+		for dir := range module.Directories {
+			if !usedModules[id][dir] {
+				return fmt.Errorf("test dependency contains an unrelated source-module directory")
+			}
+		}
 	}
 	visited := make(map[string]bool)
 	var visit func(string) error
@@ -338,17 +384,15 @@ func validateTestSourceClosure(input *ConsumerInput, packages []TestSourcePackag
 		}
 		source, found := byPath[name]
 		if !found {
-			return fmt.Errorf("same-module test dependency closure is truncated: %s", name)
+			return fmt.Errorf("actual test dependency module/import closure is truncated: %s", name)
 		}
 		visited[name] = true
 		for spelling, destination := range source.ImportMap {
 			if spelling == "" || destination == "" {
 				return fmt.Errorf("test dependency has an incomplete actual ImportMap")
 			}
-			if destination == input.Module || strings.HasPrefix(destination, input.Module+"/") {
-				if err := visit(destination); err != nil {
-					return err
-				}
+			if err := visit(destination); err != nil {
+				return err
 			}
 		}
 		return nil

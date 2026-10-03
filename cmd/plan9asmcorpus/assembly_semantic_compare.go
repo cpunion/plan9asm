@@ -119,6 +119,12 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 		if dependency == nil {
 			return nil
 		}
+		for index := range dependency.ExternalPackages {
+			// Each side already binds these physical export bytes to its actual
+			// pre/post producer and consumer. Source/module/ImportMap selection
+			// stays exact during the cross-host semantic comparison.
+			dependency.ExternalPackages[index].ExportSHA256 = ""
+		}
 		selection := dependency.Query.Selection
 		if err := replaceID(&selection.ProfileID); err != nil {
 			return err

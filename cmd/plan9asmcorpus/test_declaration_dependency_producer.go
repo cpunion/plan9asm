@@ -128,7 +128,7 @@ func captureDiscoveryTestDeclarationQuery(ctx context.Context, plan *discoveryOr
 func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryOrdinarySelectionPlan, download moduleDownloadInfo,
 	input *gotoolprofile.ConsumerInput, query *gotoolprofile.SignatureQueryProof, dir string, env, tags []string, pattern string,
 ) (*gotoolprofile.TestDependencyProof, error) {
-	args := []string{"list", "-deps", "-test", "-compiled", "-e", "-json", "-mod=mod"}
+	args := []string{"list", "-deps", "-test", "-compiled", "-export", "-e", "-json", "-mod=mod"}
 	if len(tags) != 0 {
 		args = append(args, "-tags="+strings.Join(tags, ","))
 	}
@@ -141,21 +141,10 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 	if err != nil {
 		return nil, err
 	}
-	type selectedPackage struct {
-		ImportPath, Name, ForTest, Dir            string
-		GoFiles, CompiledGoFiles, SFiles, Imports []string
-		ImportMap                                 map[string]string
-		Module                                    *struct {
-			Path, Version, Dir string
-			Replace            *struct{ Path, Version, Dir string }
-		}
-		Error      *struct{ Err string }
-		DepsErrors []struct{ Err string }
-	}
-	selected := make(map[string]selectedPackage)
+	selected := make(map[string]discoverySelectedTestPackage)
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	for count := 0; ; count++ {
-		var pkg selectedPackage
+		var pkg discoverySelectedTestPackage
 		if err := decoder.Decode(&pkg); err == io.EOF {
 			break
 		} else if err != nil {
@@ -164,37 +153,21 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		if count >= 4096 || ctx.Err() != nil || pkg.Error != nil || len(pkg.DepsErrors) != 0 {
 			return nil, fmt.Errorf("actual test dependency selection failed or exceeded its bounded scope: %s: %#v %#v", pkg.ImportPath, pkg.Error, pkg.DepsErrors)
 		}
-		if pkg.Module == nil || pkg.Module.Dir == "" {
-			continue
-		}
-		root, err := filepath.EvalSymlinks(pkg.Module.Dir)
-		if err != nil {
-			return nil, err
-		}
-		if root != canonicalRoot {
-			continue
-		}
-		if pkg.Module.Path != input.Module || pkg.Module.Version != input.Version {
-			return nil, fmt.Errorf("test dependency uses different actual module/version/replacement source: %s: %#v", pkg.ImportPath, pkg.Module)
-		}
-		original := query.Selection.Packages[0]
-		if replacement := pkg.Module.Replace; replacement != nil {
-			if original.SourceRole != "version_replace" || replacement.Path != original.SourceModule || replacement.Version != original.SourceVersion {
-				return nil, fmt.Errorf("test dependency changed the exact original replacement role")
-			}
-			replacedRoot, err := filepath.EvalSymlinks(replacement.Dir)
-			if err != nil || replacedRoot != canonicalRoot {
-				return nil, fmt.Errorf("test dependency replacement does not use the authenticated original ZIP root: %v", err)
-			}
-		} else if original.SourceRole != "module" || original.SourceModule != pkg.Module.Path || original.SourceVersion != pkg.Module.Version {
-			return nil, fmt.Errorf("test dependency changed the actual exact-module source role")
-		}
 		if _, duplicate := selected[pkg.ImportPath]; duplicate {
 			return nil, fmt.Errorf("actual Go repeated a test dependency package identity")
 		}
 		selected[pkg.ImportPath] = pkg
 	}
 	dependency := &gotoolprofile.TestDependencyProof{Protocol: gotoolprofile.TestDependencyProtocol, Query: query}
+	modules := make(map[string]*discoveryTestModuleCapture)
+	goRootOutput, _, err := runDiscoveryMachineCommand(ctx, dir, env, "go", "env", "GOROOT")
+	if err != nil {
+		return nil, err
+	}
+	goRoot, err := filepath.EvalSymlinks(strings.TrimSpace(string(goRootOutput)))
+	if err != nil || !filepath.IsAbs(goRoot) {
+		return nil, fmt.Errorf("test dependency lacks its actual Go source/tool root: %v", err)
+	}
 	roots := make(map[string]bool)
 	for _, request := range query.Requests {
 		for _, pkg := range query.Selection.Packages {
@@ -215,16 +188,24 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		}
 		actual, found := selected[id]
 		if !found || test && actual.ForTest != packagePath || !test && actual.ForTest != "" {
-			return fmt.Errorf("actual Go omitted the required same-module test dependency: %s", id)
+			return fmt.Errorf("actual Go omitted the required test dependency: %s", id)
 		}
 		visited[packagePath] = true
-		if err := captureDiscoveryTestSourceDirectory(plan, canonicalRoot, actual.Dir); err != nil {
+		pkg, sourceRoot, err := discoveryTestPackageSourceRole(actual, input, query.Selection.Packages[0], canonicalRoot, goRoot)
+		if err != nil {
 			return err
 		}
-		// Source roles come from the ordinary package whose actual Go replacement
-		// identity was independently captured in preflight, not invented metadata.
-		pkg := query.Selection.Packages[0]
-		pkg.PackagePath, pkg.Macros, pkg.SourceSHA256 = packagePath, nil, make(map[string]string)
+		var sourceRootID, exportSHA string
+		if sourceRoot == canonicalRoot {
+			if err := captureDiscoveryTestSourceDirectory(plan, sourceRoot, actual.Dir); err != nil {
+				return err
+			}
+		} else {
+			sourceRootID, exportSHA, err = captureDiscoveryForeignTestDirectory(ctx, modules, actual, pkg, sourceRoot, input.Observed.GoVersion, dir, env)
+			if err != nil {
+				return err
+			}
+		}
 		capture := func(files []string) ([]string, error) {
 			var result []string
 			for _, filename := range files {
@@ -235,10 +216,10 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 				if err != nil {
 					return nil, err
 				}
-				if err := discoveryCPPRegularSource(canonicalRoot, filename); err != nil {
+				if err := discoveryCPPRegularSource(sourceRoot, filename); err != nil {
 					return nil, err
 				}
-				name, err := filepath.Rel(canonicalRoot, filename)
+				name, err := filepath.Rel(sourceRoot, filename)
 				name = filepath.ToSlash(name)
 				if err != nil || !ordinarySelectionLocalPath(name) {
 					return nil, fmt.Errorf("test dependency selected an unbound original source")
@@ -253,7 +234,6 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 			sort.Strings(result)
 			return result, nil
 		}
-		var err error
 		if pkg.GoFiles, err = capture(actual.GoFiles); err != nil {
 			return err
 		}
@@ -263,7 +243,11 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		if pkg.SFiles, err = capture(actual.SFiles); err != nil {
 			return err
 		}
-		if !reflect.DeepEqual(pkg.GoFiles, pkg.CompiledGoFiles) {
+		builtin := ""
+		if packagePath == "unsafe" {
+			builtin = "go_typechecker_unsafe_v1"
+		}
+		if builtin == "" && !reflect.DeepEqual(pkg.GoFiles, pkg.CompiledGoFiles) {
 			return fmt.Errorf("test dependency generated or replaced original Go source")
 		}
 		imports := make(map[string]string)
@@ -278,13 +262,19 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 			if !matched {
 				imports[destination] = destination
 			}
-			if destination == input.Module || strings.HasPrefix(destination, input.Module+"/") {
-				if err := visit(destination, false); err != nil {
-					return err
-				}
+			if err := visit(destination, false); err != nil {
+				return err
 			}
 		}
-		dependency.Packages = append(dependency.Packages, gotoolprofile.TestSourcePackage{Package: pkg, VariantID: id, ImportMap: imports})
+		source := gotoolprofile.TestSourcePackage{
+			Package: pkg, VariantID: id, ImportMap: imports, SourceRootID: sourceRootID, ExportSHA256: exportSHA,
+			Builtin: builtin,
+		}
+		if sourceRootID == "" {
+			dependency.Packages = append(dependency.Packages, source)
+		} else {
+			dependency.ExternalPackages = append(dependency.ExternalPackages, source)
+		}
 		return nil
 	}
 	for root := range roots {
@@ -295,6 +285,25 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 	sort.Slice(dependency.Packages, func(i, j int) bool {
 		return dependency.Packages[i].Package.PackagePath < dependency.Packages[j].Package.PackagePath
 	})
+	sort.Slice(dependency.ExternalPackages, func(i, j int) bool {
+		return dependency.ExternalPackages[i].Package.PackagePath < dependency.ExternalPackages[j].Package.PackagePath
+	})
+	for _, module := range modules {
+		source, err := discoveryTestModuleSnapshot(module)
+		if err != nil {
+			return nil, err
+		}
+		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, module.Root, module.Download.Zip); err != nil {
+			return nil, err
+		}
+		dependency.SourceModules = append(dependency.SourceModules, source)
+	}
+	gotoolprofile.SortTestModuleSources(dependency.SourceModules)
+	if plan.testDependencyModuleCaptures == nil {
+		plan.testDependencyModuleCaptures = make(map[*gotoolprofile.TestDependencyProof]map[string]*discoveryTestModuleCapture)
+	}
+	plan.testDependencyContext = ctx
+	plan.testDependencyModuleCaptures[dependency] = modules
 	return dependency, nil
 }
 
@@ -415,6 +424,11 @@ func verifyDiscoveryTestDependencySources(plan *discoveryOrdinarySelectionPlan, 
 }
 
 func verifyDiscoveryTestDependencySnapshot(plan *discoveryOrdinarySelectionPlan, root string) error {
+	for dependency, captures := range plan.testDependencyModuleCaptures {
+		if err := verifyDiscoveryForeignTestSnapshots(plan.testDependencyContext, dependency, captures); err != nil {
+			return err
+		}
+	}
 	// Ordinary selection already guards its original inputs separately. Only
 	// recheck directories contributing this supplemental closure here, rather
 	// than hashing every unrelated assembly package again for each command.

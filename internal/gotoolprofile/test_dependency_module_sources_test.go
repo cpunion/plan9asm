@@ -113,13 +113,23 @@ func TestTestDependencyModuleSourceActualZIPAndSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, mutate := range map[string]func(*TestModuleSource){
-		"old protocol":             func(p *TestModuleSource) { p.Protocol = "" },
-		"different module":         func(p *TestModuleSource) { p.SourceModule += "/other" },
-		"different version":        func(p *TestModuleSource) { p.SourceVersion = "v1.0.1" },
-		"changed h1":               func(p *TestModuleSource) { p.ModuleSum = "h1:" + strings.Repeat("A", 43) + "=" },
-		"changed proxy mod h1":     func(p *TestModuleSource) { p.GoModSum = "h1:" + strings.Repeat("B", 43) + "=" },
-		"changed ZIP":              func(p *TestModuleSource) { p.ZipSHA256 = strings.Repeat("0", 64) },
-		"missing root directory":   func(p *TestModuleSource) { delete(p.Directories, ".") },
+		"old protocol":           func(p *TestModuleSource) { p.Protocol = "" },
+		"different module":       func(p *TestModuleSource) { p.SourceModule += "/other" },
+		"different version":      func(p *TestModuleSource) { p.SourceVersion = "v1.0.1" },
+		"changed h1":             func(p *TestModuleSource) { p.ModuleSum = "h1:" + strings.Repeat("A", 43) + "=" },
+		"changed proxy mod h1":   func(p *TestModuleSource) { p.GoModSum = "h1:" + strings.Repeat("B", 43) + "=" },
+		"changed ZIP":            func(p *TestModuleSource) { p.ZipSHA256 = strings.Repeat("0", 64) },
+		"missing root directory": func(p *TestModuleSource) { delete(p.Directories, ".") },
+		"ZIP without original go.mod cannot invent proxy role": func(p *TestModuleSource) {
+			delete(p.Sources, "go.mod")
+			for i, entry := range p.Directories["."] {
+				if entry.Name == "go.mod" {
+					p.Directories["."] = append(p.Directories["."][:i], p.Directories["."][i+1:]...)
+					break
+				}
+			}
+			p.GoModSHA256 = ""
+		},
 		"missing ancestor":         func(p *TestModuleSource) { delete(p.Directories, "internal") },
 		"missing selection header": func(p *TestModuleSource) { delete(p.Headers, "loader.go") },
 		"arbitrary header unchanged full SHA and h1": func(p *TestModuleSource) {

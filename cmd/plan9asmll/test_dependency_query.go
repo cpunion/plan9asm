@@ -27,12 +27,19 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 		return err
 	}
 	var actual []gotoolprofile.TestSourcePackage
+	var foreign []gotoolprofile.TestSourcePackage
 	var captureErr error
 	packages.Visit([]*packages.Package{selected}, func(pkg *packages.Package) bool {
 		if captureErr != nil {
 			return false
 		}
 		if pkg.Module == nil || pkg.Module.Path != consumer.Input.Module {
+			source, err := consumer.foreignTestSourcePackage(pkg)
+			if err != nil {
+				captureErr = err
+				return false
+			}
+			foreign = append(foreign, source)
 			return true
 		}
 		if !reflect.DeepEqual(pkg.Module, ordinary.Module) || pkg.PkgPath != consumer.Input.Module && !strings.HasPrefix(pkg.PkgPath, consumer.Input.Module+"/") {
@@ -82,7 +89,9 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 		return captureErr
 	}
 	sort.Slice(actual, func(i, j int) bool { return actual[i].Package.PackagePath < actual[j].Package.PackagePath })
-	if !reflect.DeepEqual(actual, dependency.Packages) {
+	sort.Slice(foreign, func(i, j int) bool { return foreign[i].Package.PackagePath < foreign[j].Package.PackagePath })
+	if !reflect.DeepEqual(actual, dependency.Packages) || !reflect.DeepEqual(foreign, dependency.ExternalPackages) ||
+		len(consumer.TestModuleGuards) != len(dependency.SourceModules) {
 		return fmt.Errorf("actual same-profile test dependency selection differs from complete pre-load inventory")
 	}
 	consumer.Proof.TestDependencies = dependency

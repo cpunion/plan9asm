@@ -237,7 +237,7 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 		return selected, nil
 	}
 	preConfig := *config
-	preConfig.Mode &^= packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedExportFile
+	preConfig.Mode &^= packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedSyntax
 	before, err := packages.Load(&preConfig, ordinary.PkgPath)
 	if err != nil {
 		return nil, err

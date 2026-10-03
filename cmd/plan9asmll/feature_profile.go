@@ -36,6 +36,7 @@ type featureConsumer struct {
 	GeneratedGuard            map[string]string
 	TestDeclarationPackages   map[string]*packages.Package
 	TestDeclarationCandidates map[string]map[string]error
+	TestModuleGuards          map[string]testDependencyModuleGuard
 }
 
 type featureSelectionProof = gotoolprofile.SelectionProof
@@ -272,7 +273,7 @@ func (consumer *featureConsumer) verifySources() error {
 			return fmt.Errorf("generated-header dependency/export changed before final object proof")
 		}
 	}
-	return nil
+	return consumer.verifyTestModuleSources()
 }
 
 func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error {
