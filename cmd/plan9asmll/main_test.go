@@ -1512,6 +1512,36 @@ func TestExtractSupportedOpsFindsCompleteTypedUnpackSpecTable(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteInsertExtractSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_insert_extract_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_insert_extract_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, opcode := range []string{
+			"VEXTRACTF128", "VEXTRACTI128", "VEXTRACTF32X4", "VEXTRACTI32X4", "VEXTRACTF64X2", "VEXTRACTI64X2",
+			"VEXTRACTF32X8", "VEXTRACTI32X8", "VEXTRACTF64X4", "VEXTRACTI64X4", "VEXTRACTPS",
+			"VINSERTF128", "VINSERTI128", "VINSERTF32X4", "VINSERTI32X4", "VINSERTF64X2", "VINSERTI64X2",
+			"VINSERTF32X8", "VINSERTI32X8", "VINSERTF64X4", "VINSERTI64X4", "VINSERTPS",
+		} {
+			if _, ok := supported[opcode]; !ok {
+				t.Errorf("%s typed insert/extract extraction omitted %s", arch, opcode)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsDoesNotAdvertiseSystemRegistersAsOpcodes(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

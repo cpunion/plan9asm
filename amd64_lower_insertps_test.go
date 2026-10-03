@@ -30,12 +30,29 @@ func TestTranslateX86InsertPSCompleteGoAssemblerForms(t *testing.T) {
 			src := fmt.Sprintf(`TEXT insertpsforms(SB),NOSPLIT,$0-0
 	INSERTPS $0, X0, X1
 	INSERTPS $255, 4(AX), X%d
+`, legacyLast)
+			vex := `
 	VINSERTPS $0, X0, X1, X2
 	VINSERTPS $255, 8(AX), X14, X15
 	VINSERTPS $16, X20, X21, X22
 	VINSERTPS $32, 12(AX), X30, X31
-	RET
-`, legacyLast)
+`
+			if target.goarch == "386" {
+				// Preserve the previous mixed positive verbatim as an actual
+				// Go rejection: the 386 frontend cannot take four operands.
+				goAssemblerOracleOutput(t, "386", strings.Replace(src+vex+"RET\n", "NOSPLIT", "4", 1), "", false)
+				original, err := Parse(ArchAMD64, src+vex+"RET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(original, Options{Goarch: "386", TargetTriple: target.triple, Sigs: map[string]FuncSig{"insertpsforms": {Ret: Void}}}); err == nil {
+					t.Fatal("original Go-rejected mixed 386 fixture translated")
+				}
+			} else {
+				src += vex
+			}
+			src += "RET\n"
+			goAssemblerOracleOutput(t, target.goarch, strings.Replace(src, "NOSPLIT", "4", 1), "", true)
 			file, err := Parse(ArchAMD64, src)
 			if err != nil {
 				t.Fatal(err)

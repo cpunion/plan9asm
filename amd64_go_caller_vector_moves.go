@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
+		return err == nil && !(f.mask >= 0 && f.memoryWrite)
+	}
 	if _, recognized, err := x86HorizontalFloatProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
@@ -59,6 +62,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if f, recognized, err := x86InsertExtractProperties(*ins, "amd64"); recognized {
+		return err == nil && x86CallerInsertExtractStep(ins, f, state, proof)
+	}
 	if form, recognized, err := x86HorizontalFloatProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerHorizontalFloatStep(ins, form, state, proof)
 	}
@@ -155,6 +161,9 @@ func x86CallerMaskMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoC
 func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid bool) {
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
+	}
+	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
+		return int64(f.spec.chunk), f.memoryWrite, err == nil && f.memory == index && !(f.mask >= 0 && f.memoryWrite)
 	}
 	if form, recognized, err := x86HorizontalFloatProperties(ins, "amd64"); recognized {
 		return int64(form.byteWidth), false, err == nil && form.spec.vector && form.memory == index

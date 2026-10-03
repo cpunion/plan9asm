@@ -17,6 +17,13 @@ func (c *amd64Ctx) lowerInsertPackedSingle(op Op, ins Instr) (ok bool, terminate
 	if baseOp != "INSERTPS" && baseOp != "VINSERTPS" {
 		return false, false, nil
 	}
+	if baseOp == "VINSERTPS" {
+		var err error
+		ins, _, _, err = c.bindInsertExtractForm(op, ins)
+		if err != nil {
+			return true, false, err
+		}
+	}
 	if rawOp != baseOp {
 		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
 	}
@@ -63,16 +70,27 @@ func (c *amd64Ctx) lowerInsertPackedSingle(op Op, ins Instr) (ok bool, terminate
 		selected := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <4 x i32> %%%s, i32 %d\n", selected, sourceLanes, (ins.Args[0].Imm>>6)&3)
 		inserted = "%" + selected
-	} else {
-		if !isAMD64MemoryOperand(source) {
-			return true, false, fmt.Errorf("amd64 %s expects an X register or memory source: %q", baseOp, ins.Raw)
-		}
-		value, err := c.evalF32(source)
+	} else if source.Kind == OpFP && baseOp == "VINSERTPS" {
+		// An original m32 FP span can comprise four independent ABI0
+		// shadow fields. It is not a contiguous load from the first alloca.
+		value, err := c.loadFPVectorBytes(source.FPOffset, 4)
 		if err != nil {
 			return true, false, err
 		}
 		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast float %s to i32\n", bits, value)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i8> %s to i32\n", bits, value)
+		inserted = "%" + bits
+	} else {
+		if !isAMD64MemoryOperand(source) {
+			return true, false, fmt.Errorf("amd64 %s expects an X register or memory source: %q", baseOp, ins.Raw)
+		}
+		pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+		if err != nil {
+			return true, false, err
+		}
+		bits := c.newTmp()
+		// INSERTPS always reads m32, even when imm8 subsequently clears it.
+		fmt.Fprintf(c.b, "  %%%s = load volatile i32, %s %s, align 1\n", bits, pointerType, pointer)
 		inserted = "%" + bits
 	}
 
@@ -95,5 +113,8 @@ func (c *amd64Ctx) lowerInsertPackedSingle(op Op, ins Instr) (ok bool, terminate
 	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %s to <16 x i8>\n", out, result)
-	return true, false, c.storeX(destination.Reg, "%"+out)
+	if baseOp == "VINSERTPS" {
+		return true, false, c.storePackedMoveOperand(destination, 16, "%"+out)
+	}
+	return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
 }

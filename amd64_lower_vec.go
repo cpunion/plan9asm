@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerInsertExtractFamily(op, ins); ok {
+		return ok, term, err
+	}
 	if ok, term, err := c.lowerFloatAddSub(op, ins); ok {
 		return ok, term, err
 	}

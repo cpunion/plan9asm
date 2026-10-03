@@ -865,7 +865,7 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ok, term, err := c.lowerPackedVectorMove(Op(op), ins); ok {
 		return term, err
 	}
-	if ok, term, err := c.lowerPackedVectorInsert(Op(op), ins); ok {
+	if ok, term, err := c.lowerInsertExtractFamily(Op(op), ins); ok {
 		return term, err
 	}
 	if ok, term, err := c.lowerInsertPackedSingle(Op(op), ins); ok {
