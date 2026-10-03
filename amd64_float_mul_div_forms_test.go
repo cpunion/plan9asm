@@ -1,12 +1,19 @@
 package plan9asm
 
 import (
+	"bytes"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func x86FloatMulDivOpcodes() []string {
@@ -30,6 +37,20 @@ func x86FloatMulDivFormats(arch string) []string {
 }
 
 func TestX86FloatMulDivEveryGoOpcodeAttribute(t *testing.T) {
+	if len(x86FloatMulDivSpecs) != 16 {
+		t.Fatal("incomplete floating MUL/DIV family")
+	}
+	for _, opcode := range x86FloatMulDivOpcodes() {
+		bits := 32
+		if strings.HasSuffix(opcode, "PD") || strings.HasSuffix(opcode, "SD") {
+			bits = 64
+		}
+		want := x86FloatMulDivSpec{bits, !strings.HasPrefix(opcode, "V"),
+			strings.HasSuffix(opcode, "SS") || strings.HasSuffix(opcode, "SD"), strings.Contains(opcode, "DIV")}
+		if got, found := x86FloatMulDivSpecs[Op(opcode)]; !found || got != want {
+			t.Fatalf("%s typed specification differs from independent mnemonic: %+v/%+v", opcode, got, want)
+		}
+	}
 	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
 		return // The current-toolchain gate owns encoder-table completeness.
 	}
@@ -94,10 +115,22 @@ func TestX86FloatMulDivCompleteGoGrammarAndFiveLLVMTargets(t *testing.T) {
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		var source strings.Builder
+		var declarations strings.Builder
+		declarations.WriteString("package shapes\n")
 		sigs := map[string]FuncSig{}
 		for index, row := range x86FloatMulDivFormats(arch) {
 			name := fmt.Sprintf("muldiv%d", index)
-			fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
+			entry := fmt.Sprintf("TEXT %s(SB),4,$0-0\n%s\nRET\n", name, row)
+			file, err := Parse(ArchAMD64, entry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			form, recognized, err := x86FloatMulDivProperties(file.Funcs[0].Instrs[1], arch)
+			if !recognized || err != nil || form.bits == 0 || form.byteWidth == 0 {
+				t.Fatalf("%s/%s: %v", arch, row, err)
+			}
+			source.WriteString(entry)
+			fmt.Fprintf(&declarations, "func %s()\n", name)
 			sigs[name] = FuncSig{Name: name, Ret: Void}
 		}
 		goAssemblerOracleOutput(t, arch, source.String(), "", true)
@@ -110,14 +143,52 @@ func TestX86FloatMulDivCompleteGoGrammarAndFiveLLVMTargets(t *testing.T) {
 			triples = []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"}
 		}
 		for _, triple := range triples {
-			ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple, Sigs: sigs})
+			options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs}
+			ir, err := Translate(file, options)
 			if err != nil {
 				t.Fatal(err)
 			}
-			compileLLVMToObject(t, llc, triple, "muldiv-formats.ll", "muldiv-formats.o", ir)
+			func() {
+				context := llvm.NewContext()
+				defer context.Dispose()
+				module, err := TranslateModuleInContext(context, file, options)
+				if !module.IsNil() {
+					defer module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				goSource := strings.ReplaceAll(source.String(), "TEXT muldiv", "TEXT ·muldiv")
+				result, err := translateGoModuleInContext(context, x86FloatMulDivShapesPackage(t, declarations.String(), arch),
+					[]byte(goSource), GoModuleOptions{GOARCH: arch, TargetTriple: triple})
+				if result != nil && !result.Module.IsNil() {
+					defer result.Module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				for api, body := range []string{ir, module.String(), result.Module.String()} {
+					name := fmt.Sprintf("muldiv-formats-api%d", api)
+					compileLLVMToObject(t, llc, triple, name+".ll", name+".o", body)
+				}
+			}()
 		}
 		t.Logf("%s: %d independent Go MUL/DIV formats", arch, len(sigs))
 	}
+}
+
+func x86FloatMulDivShapesPackage(t *testing.T, source, arch string) GoPackage {
+	t.Helper()
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, "shapes.go", source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := (&types.Config{Sizes: types.SizesFor("gc", arch)}).Check("shapes", set, []*ast.File{file}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return GoPackage{Path: pkg.Path(), Types: pkg, Syntax: []*ast.File{file}}
 }
 
 func TestX86FloatMulDivRejectsMalformedBeforeEmission(t *testing.T) {
@@ -130,7 +201,23 @@ func TestX86FloatMulDivRejectsMalformedBeforeEmission(t *testing.T) {
 		"VMULPS $data(SB),X1,X2", "VDIVSS (AX)(SP*2),X1,X2", "VMULPD 2147483648(AX),X1,X2",
 	} {
 		t.Run(row, func(t *testing.T) {
-			goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+			source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
+			oldReservedZeroing := row == "VMULPS.Z X0,X1,X2" && !goToolchainAtLeast(runtime.Version(), 1, 27)
+			goAssemblerOracleOutput(t, "amd64", source, "", oldReservedZeroing)
+			if oldReservedZeroing {
+				listing := x86InsertExtractGoListing(t, "amd64", source)
+				var code []byte
+				for _, line := range strings.Split(string(listing), "\n") {
+					code = append(code, x86InsertExtractListedBytes(line)...)
+				}
+				if !bytes.Equal(code, []byte{0x62, 0xf1, 0x74, 0x88, 0x59, 0xd0, 0xc3}) {
+					t.Fatalf("old Go reserved EVEX.z/aaa=0 observation changed: %x", code)
+				}
+				if _, _, known, err := decodedX86EVEXBinaryFloatInstruction(code, 0, 64, "", false); !known || err == nil {
+					t.Fatal("old Go reserved zeroing bytes acquired valid raw semantics")
+				}
+				t.Log("old Go accepted reserved EVEX.z/aaa=0; both named and raw validators still reject it")
+			}
 			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
 			if err != nil {
 				return // Parser rejection also occurs before IR emission.

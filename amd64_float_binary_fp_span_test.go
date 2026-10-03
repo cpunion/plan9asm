@@ -168,6 +168,7 @@ func TestCrossLinuxRuntimeMatrixX86FloatBinaryFPByteFields(t *testing.T) {
  }
 `, fixture.bits, fixture.name, oracle, x86FloatAddSubBoolInt(secondOperation), flags)
 	}
+	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
 	file, err := Parse(ArchAMD64, assembly.String())
 	if err != nil {
 		t.Fatal(err)

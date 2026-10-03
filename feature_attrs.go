@@ -79,6 +79,17 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 						add("+sse2")
 					}
 				}
+				// Default i386 floating legalization otherwise uses x87, whose
+				// control/status state is not the source instruction's MXCSR.
+				// Only validated dynamic MUL/DIV forms get this private SSE
+				// baseline; software ER, malformed and high-bank forms do not.
+				if form, known, err := x86FloatMulDivProperties(ins, goarch); known && err == nil && form.rounding == "" {
+					if form.bits == 32 {
+						add("+sse")
+					} else {
+						add("+sse2")
+					}
+				}
 			}
 			switch {
 			case isAMD64RawFP16Op(op):

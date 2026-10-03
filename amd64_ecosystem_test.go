@@ -7490,6 +7490,7 @@ func TestTranslateX86BinaryFloatingCompleteGo127Forms(t *testing.T) {
 			var src strings.Builder
 			src.WriteString("TEXT binary_floating_complete_forms(SB),NOSPLIT,$0-0\n")
 			for _, op := range go127BinaryFloatingOps(false) {
+				mode32MulDiv := target.goarch == "386" && (strings.HasPrefix(op, "VMUL") || strings.HasPrefix(op, "VDIV"))
 				for _, width := range []string{"X", "Y", "Z"} {
 					fmt.Fprintf(&src, "\t%s %s0, %s1, %s2\n", op, width, width, width)
 					fmt.Fprintf(&src, "\t%s 8(BX), %s3, %s4\n", op, width, width)
@@ -7500,8 +7501,15 @@ func TestTranslateX86BinaryFloatingCompleteGo127Forms(t *testing.T) {
 						fmt.Fprintf(&src, "\t%s.BCST.Z 32(BX), %s12, K3, %s13\n", op, width, width)
 					}
 				}
-				fmt.Fprintf(&src, "\t%s X29, X30, X31\n", op)
-				fmt.Fprintf(&src, "\t%s Y29, Y30, Y31\n", op)
+				if mode32MulDiv {
+					// Named high banks have no physical IA32 register identity.
+					// Their Go acceptance/Context is tested separately below.
+					fmt.Fprintf(&src, "\t%s X5, X6, X7\n", op)
+					fmt.Fprintf(&src, "\t%s Y5, Y6, Y7\n", op)
+				} else {
+					fmt.Fprintf(&src, "\t%s X29, X30, X31\n", op)
+					fmt.Fprintf(&src, "\t%s Y29, Y30, Y31\n", op)
+				}
 				if target.goarch == "amd64" {
 					fmt.Fprintf(&src, "\t%s Z29, Z30, Z31\n", op)
 				} else {
@@ -7522,9 +7530,14 @@ func TestTranslateX86BinaryFloatingCompleteGo127Forms(t *testing.T) {
 				}
 			}
 			for _, op := range go127BinaryFloatingOps(true) {
+				mode32MulDiv := target.goarch == "386" && (strings.HasPrefix(op, "VMUL") || strings.HasPrefix(op, "VDIV"))
 				fmt.Fprintf(&src, "\t%s X0, X1, X2\n", op)
 				fmt.Fprintf(&src, "\t%s 8(BX), X3, X4\n", op)
-				fmt.Fprintf(&src, "\t%s X29, X30, X31\n", op)
+				if mode32MulDiv {
+					fmt.Fprintf(&src, "\t%s X5, X6, X7\n", op)
+				} else {
+					fmt.Fprintf(&src, "\t%s X29, X30, X31\n", op)
+				}
 				if target.goarch == "amd64" {
 					fmt.Fprintf(&src, "\t%s X5, X6, K1, X7\n", op)
 					fmt.Fprintf(&src, "\t%s.Z 16(BX), X8, K2, X9\n", op)
@@ -7536,7 +7549,11 @@ func TestTranslateX86BinaryFloatingCompleteGo127Forms(t *testing.T) {
 					}
 				} else {
 					for _, rounding := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
-						fmt.Fprintf(&src, "\t%s.%s X10, X11, X12\n", op, rounding)
+						if mode32MulDiv {
+							fmt.Fprintf(&src, "\t%s.%s X2, X3, X4\n", op, rounding)
+						} else {
+							fmt.Fprintf(&src, "\t%s.%s X10, X11, X12\n", op, rounding)
+						}
 						if target.goarch == "amd64" {
 							fmt.Fprintf(&src, "\t%s.%s.Z X13, X14, K3, X15\n", op, rounding)
 						}

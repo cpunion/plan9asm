@@ -42,7 +42,7 @@ func (c *amd64Ctx) lowerFloatBinaryOperands(ins Instr, form x86FloatBinaryForm, 
 	}
 	bits := form.bits
 	if form.scalar {
-		a, err := c.loadFMA3Scalar(first, bits, mask)
+		a, err := c.loadFloatBinaryScalar(first, bits, mask)
 		if err != nil {
 			return true, false, err
 		}
@@ -69,7 +69,7 @@ func (c *amd64Ctx) lowerFloatBinaryOperands(ins Instr, form x86FloatBinaryForm, 
 		return true, false, c.storeLegacyPackedLogical(destination, "%"+bytes)
 	}
 	lanes := form.byteWidth * 8 / bits
-	a, err := c.loadMaskedPackedCompareLanes(first, form.byteWidth, bits, form.broadcast, mask)
+	a, err := c.loadFloatBinaryPacked(first, form.byteWidth, bits, form.broadcast, mask)
 	if err != nil {
 		return true, false, err
 	}
@@ -108,11 +108,20 @@ func (c *amd64Ctx) emitFloatAddSub(form x86FloatAddSubForm, lanes int, left, rig
 	if form.spec.subtract {
 		operation = "fsub"
 	}
-	typ := amd64FMA3LLVMType(lanes, form.spec.bits)
+	return c.emitStrictFloatBinary(form.x86FloatBinaryForm, operation, lanes, left, right, mask, func(lanes int, left, right, value string) string {
+		return c.emitFloatAddSubSpecial(form.spec.bits, lanes, left, right, form.spec.subtract, value)
+	})
+}
+
+// Strict operations must remain observable under middle-end optimization.
+// The correction callback handles each family's native NaN result priority
+// without replacing the actual hardware rounding or exception side effects.
+func (c *amd64Ctx) emitStrictFloatBinary(form x86FloatBinaryForm, operation string, lanes int, left, right, mask string, correct func(int, string, string, string) string) string {
+	typ := amd64FMA3LLVMType(lanes, form.bits)
 	if mask != "" {
 		// EVEX suppresses arithmetic exceptions as well as memory faults for
 		// inactive lanes. Selecting after an eager strict fadd is not enough.
-		scalarType := amd64FMA3LLVMType(1, form.spec.bits)
+		scalarType := amd64FMA3LLVMType(1, form.bits)
 		result := "poison"
 		for lane := 0; lane < lanes; lane++ {
 			values := []string{left, right}
@@ -124,15 +133,15 @@ func (c *amd64Ctx) emitFloatAddSub(form x86FloatAddSubForm, lanes int, left, rig
 				}
 			}
 			active := amd64MaskBitI1(c, mask, lane)
-			integer, _ := c.loadX86ScalarIf(form.spec.bits, active, func() (string, error) {
+			integer, _ := c.loadX86ScalarIf(form.bits, active, func() (string, error) {
 				value, bits := c.newTmp(), c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = call %s @llvm.experimental.constrained.%s.f%d(%s %s, %s %s, metadata !\"round.dynamic\", metadata !\"fpexcept.strict\")\n", value, scalarType, operation, form.spec.bits, scalarType, values[0], scalarType, values[1])
-				corrected := c.emitFloatAddSubSpecial(form.spec.bits, 1, values[0], values[1], form.spec.subtract, "%"+value)
-				fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", bits, scalarType, corrected, form.spec.bits)
+				fmt.Fprintf(c.b, "  %%%s = call %s @llvm.experimental.constrained.%s.f%d(%s %s, %s %s, metadata !\"round.dynamic\", metadata !\"fpexcept.strict\")\n", value, scalarType, operation, form.bits, scalarType, values[0], scalarType, values[1])
+				corrected := correct(1, values[0], values[1], "%"+value)
+				fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to i%d\n", bits, scalarType, corrected, form.bits)
 				return "%" + bits, nil
 			})
 			value := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast i%d %s to %s\n", value, form.spec.bits, integer, scalarType)
+			fmt.Fprintf(c.b, "  %%%s = bitcast i%d %s to %s\n", value, form.bits, integer, scalarType)
 			if lanes == 1 {
 				return "%" + value
 			}
@@ -143,8 +152,8 @@ func (c *amd64Ctx) emitFloatAddSub(form x86FloatAddSubForm, lanes int, left, rig
 		return result
 	}
 	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.experimental.constrained.%s.%s(%s %s, %s %s, metadata !\"round.dynamic\", metadata !\"fpexcept.strict\")\n", result, typ, operation, amd64BinaryFloatingIntrinsicSuffix(lanes, form.spec.bits), typ, left, typ, right)
-	return c.emitFloatAddSubSpecial(form.spec.bits, lanes, left, right, form.spec.subtract, "%"+result)
+	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.experimental.constrained.%s.%s(%s %s, %s %s, metadata !\"round.dynamic\", metadata !\"fpexcept.strict\")\n", result, typ, operation, amd64BinaryFloatingIntrinsicSuffix(lanes, form.bits), typ, left, typ, right)
+	return correct(lanes, left, right, "%"+result)
 }
 
 // LLVM's commutative add legalization can swap NaN operands even for a

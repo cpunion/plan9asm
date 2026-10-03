@@ -1869,6 +1869,27 @@ func TestExtractSupportedOpsFindsCompleteSignedScalarIntegerFloatFamily(t *testi
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteFloatMulDivFamily(t *testing.T) {
+	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(repoRoot, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, opcode := range []string{
+			"MULPS", "MULPD", "MULSS", "MULSD", "DIVPS", "DIVPD", "DIVSS", "DIVSD",
+			"VMULPS", "VMULPD", "VMULSS", "VMULSD", "VDIVPS", "VDIVPD", "VDIVSS", "VDIVSD",
+		} {
+			if _, found := supported[opcode]; !found {
+				t.Errorf("%s extraction omitted floating MUL/DIV %s", arch, opcode)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteWasmFloatUnaryFamily(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
