@@ -351,6 +351,13 @@ func recheckInstrumentationOriginalSources(input *ConsumerInput) error {
 }
 
 func captureInstrumentationInvocationConfig(directory string) (map[string]string, error) {
+	return CaptureInstrumentationInvocationConfig(directory)
+}
+
+// CaptureInstrumentationInvocationConfig snapshots only an existing owned
+// caller's module configuration. It never edits metadata, chooses versions or
+// supplies source authentication. Recheck it after every consumer stage.
+func CaptureInstrumentationInvocationConfig(directory string) (map[string]string, error) {
 	config := make(map[string]string)
 	for _, name := range []string{"go.mod", "go.sum"} {
 		file := filepath.Join(directory, name)

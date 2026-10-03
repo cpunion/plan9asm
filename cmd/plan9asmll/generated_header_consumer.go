@@ -58,6 +58,22 @@ func (consumer *featureConsumer) captureGeneratedMetadata(pkgs []*packages.Packa
 // Only active source-order includes enter this consumption graph. Raw branch
 // registration remains a separate producer obligation.
 func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines []string) ([]byte, map[string]string, error) {
+	return consumer.preprocessCPPWithHeader(asm, packagePath, defines, func() ([]byte, error) {
+		if consumer.Proof == nil || consumer.Proof.GeneratedHeaders == nil {
+			return nil, fmt.Errorf("active generated include lacks actual compiler metadata")
+		}
+		for _, header := range consumer.Proof.GeneratedHeaders.Headers {
+			if header.PackagePath == packagePath {
+				return gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
+			}
+		}
+		return nil, fmt.Errorf("active generated include has no selected package origin")
+	})
+}
+
+// A mode caller supplies a separately validated native header. This shared
+// source-order search/read path never assigns that header an ordinary role.
+func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error)) ([]byte, map[string]string, error) {
 	if err := gotoolprofile.ValidateCPPIncludeSearch(consumer.Input, nil); err != nil {
 		return nil, nil, err
 	}
@@ -76,20 +92,15 @@ func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines 
 			return "", nil, fmt.Errorf("active CPP source inventory exceeds its bound")
 		}
 		if generated {
-			if consumer.Proof == nil || consumer.Proof.GeneratedHeaders == nil {
+			if generatedHeader == nil {
 				return "", nil, fmt.Errorf("active generated include lacks actual compiler metadata")
 			}
-			for _, header := range consumer.Proof.GeneratedHeaders.Headers {
-				if header.PackagePath == packagePath {
-					data, err := gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
-					id := "generated/" + packagePath + "/go_asm.h"
-					if err == nil {
-						inputs[id] = featureBytesSHA256(data)
-					}
-					return id, data, err
-				}
+			data, err := generatedHeader()
+			id := "generated/" + packagePath + "/go_asm.h"
+			if err == nil {
+				inputs[id] = featureBytesSHA256(data)
 			}
-			return "", nil, fmt.Errorf("active generated include has no selected package origin")
+			return id, data, err
 		}
 		name, sourceErr := consumer.moduleSourceName(file)
 		id, wanted := "module/"+name, consumer.Input.Sources[name]

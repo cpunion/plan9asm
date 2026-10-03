@@ -284,82 +284,11 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 		return fmt.Errorf("feature consumer has no actual package observation")
 	}
 	for _, pkg := range pkgs {
-		if pkg == nil || pkg.Module == nil || pkg.Module.Path != consumer.Input.Module || pkg.Module.Version != consumer.Input.Version || isTestVariantPackage(pkg) {
-			return fmt.Errorf("actual package role/module differs from the explicit ordinary scope")
-		}
-		moduleDir, err := filepath.EvalSymlinks(pkg.Module.Dir)
-		if err != nil || moduleDir != consumer.Dir {
-			return fmt.Errorf("actual package module directory differs from the explicit source proof")
-		}
-		if pkg.Module.Replace != nil {
-			replacement, err := filepath.EvalSymlinks(pkg.Module.Replace.Dir)
-			if err != nil || replacement != consumer.Dir {
-				return fmt.Errorf("actual Go module replacement differs from the exact owned source root")
-			}
-		}
-		macros, err := gotoolprofile.CaptureAssemblerMacros(consumer.Root, consumer.Observed, pkg.PkgPath)
+		proof, err := consumer.captureSourcePackage(pkg, func(packagePath string) (*gotoolprofile.AssemblerMacros, error) {
+			return gotoolprofile.CaptureAssemblerMacros(consumer.Root, consumer.Observed, packagePath)
+		})
 		if err != nil {
 			return err
-		}
-		if macros.PackageRole == "allow_asm_abi_path" {
-			return fmt.Errorf("ordinary CPU profile cannot consume a special assembler package role")
-		}
-		proof := featurePackageProof{
-			PackagePath: pkg.PkgPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
-			SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module",
-			Macros: macros, SourceSHA256: make(map[string]string),
-		}
-		if metadata := consumer.Input.ProxyGoMod; metadata != nil {
-			used := pkg.Module.GoMod
-			if pkg.Module.Replace != nil {
-				used = pkg.Module.Replace.GoMod
-			}
-			resolved, err := filepath.EvalSymlinks(used)
-			if err != nil || resolved != consumer.Input.ProxyGoModPath {
-				return fmt.Errorf("actual package used different proxy go.mod metadata")
-			}
-			proof.GoModOrigin, proof.GoModSHA256, proof.GoModSum = metadata.Protocol, metadata.SHA256, metadata.GoModSum
-		}
-		if pkg.Module.Main {
-			proof.SourceRole = "main"
-		}
-		if replacement := pkg.Module.Replace; replacement != nil {
-			proof.SourceRole = "owned_local_replace"
-			if replacement.Version != "" {
-				proof.SourceModule, proof.SourceVersion = replacement.Path, replacement.Version
-				proof.SourceRole = "version_replace"
-			}
-		}
-		if err := gotoolprofile.ValidatePackageModule(consumer.Input, proof); err != nil {
-			return err
-		}
-		capture := func(files []string, assemblyOnly bool) ([]string, error) {
-			var names []string
-			for _, filename := range files {
-				if assemblyOnly && filepath.Ext(filename) != ".s" {
-					continue
-				}
-				name, err := consumer.sourceName(filename)
-				if err != nil {
-					return nil, err
-				}
-				proof.SourceSHA256[name] = consumer.Input.Sources[name]
-				names = append(names, name)
-			}
-			sort.Strings(names)
-			return names, nil
-		}
-		if proof.GoFiles, err = capture(pkg.GoFiles, false); err != nil {
-			return err
-		}
-		if proof.CompiledGoFiles, err = capture(pkg.CompiledGoFiles, false); err != nil {
-			return err
-		}
-		if proof.SFiles, err = capture(pkg.OtherFiles, true); err != nil {
-			return err
-		}
-		if len(proof.GoFiles) == 0 || len(proof.CompiledGoFiles) == 0 {
-			return fmt.Errorf("ordinary CPU profile requires actual non-test Go selection")
 		}
 		consumer.Proof.Packages = append(consumer.Proof.Packages, proof)
 	}
@@ -369,6 +298,91 @@ func (consumer *featureConsumer) capturePackages(pkgs []*packages.Package) error
 		}
 	}
 	return consumer.verifySources()
+}
+
+// Source capture shares exact native Module/Dir/Replace and original byte
+// boundaries, never profile identity. Callers provide their separately
+// validated assembler registration; no result becomes an ordinary proof here.
+func (consumer *featureConsumer) captureSourcePackage(pkg *packages.Package, captureMacros func(string) (*gotoolprofile.AssemblerMacros, error)) (featurePackageProof, error) {
+	var proof featurePackageProof
+	if pkg == nil || pkg.Module == nil || pkg.Module.Path != consumer.Input.Module || pkg.Module.Version != consumer.Input.Version || isTestVariantPackage(pkg) || captureMacros == nil {
+		return proof, fmt.Errorf("actual package role/module differs from the explicit source scope")
+	}
+	moduleDir, err := filepath.EvalSymlinks(pkg.Module.Dir)
+	if err != nil || moduleDir != consumer.Dir {
+		return proof, fmt.Errorf("actual package module directory differs from the explicit source proof")
+	}
+	if pkg.Module.Replace != nil {
+		replacement, err := filepath.EvalSymlinks(pkg.Module.Replace.Dir)
+		if err != nil || replacement != consumer.Dir {
+			return proof, fmt.Errorf("actual Go module replacement differs from the exact owned source root")
+		}
+	}
+	macros, err := captureMacros(pkg.PkgPath)
+	if err != nil {
+		return proof, err
+	}
+	if macros == nil || macros.PackageRole == "allow_asm_abi_path" {
+		return proof, fmt.Errorf("source consumer cannot consume an unproved special assembler package role")
+	}
+	proof = featurePackageProof{
+		PackagePath: pkg.PkgPath, ModulePath: pkg.Module.Path, ModuleVersion: pkg.Module.Version,
+		SourceModule: pkg.Module.Path, SourceVersion: pkg.Module.Version, SourceRole: "module",
+		Macros: macros, SourceSHA256: make(map[string]string),
+	}
+	if metadata := consumer.Input.ProxyGoMod; metadata != nil {
+		used := pkg.Module.GoMod
+		if pkg.Module.Replace != nil {
+			used = pkg.Module.Replace.GoMod
+		}
+		resolved, err := filepath.EvalSymlinks(used)
+		if err != nil || resolved != consumer.Input.ProxyGoModPath {
+			return proof, fmt.Errorf("actual package used different proxy go.mod metadata")
+		}
+		proof.GoModOrigin, proof.GoModSHA256, proof.GoModSum = metadata.Protocol, metadata.SHA256, metadata.GoModSum
+	}
+	if pkg.Module.Main {
+		proof.SourceRole = "main"
+	}
+	if replacement := pkg.Module.Replace; replacement != nil {
+		proof.SourceRole = "owned_local_replace"
+		if replacement.Version != "" {
+			proof.SourceModule, proof.SourceVersion = replacement.Path, replacement.Version
+			proof.SourceRole = "version_replace"
+		}
+	}
+	if err := gotoolprofile.ValidatePackageModule(consumer.Input, proof); err != nil {
+		return proof, err
+	}
+	capture := func(files []string, assemblyOnly bool) ([]string, error) {
+		var names []string
+		for _, filename := range files {
+			if assemblyOnly && filepath.Ext(filename) != ".s" {
+				continue
+			}
+			name, err := consumer.sourceName(filename)
+			if err != nil {
+				return nil, err
+			}
+			proof.SourceSHA256[name] = consumer.Input.Sources[name]
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		return names, nil
+	}
+	if proof.GoFiles, err = capture(pkg.GoFiles, false); err != nil {
+		return proof, err
+	}
+	if proof.CompiledGoFiles, err = capture(pkg.CompiledGoFiles, false); err != nil {
+		return proof, err
+	}
+	if proof.SFiles, err = capture(pkg.OtherFiles, true); err != nil {
+		return proof, err
+	}
+	if len(proof.GoFiles) == 0 || len(proof.CompiledGoFiles) == 0 {
+		return proof, fmt.Errorf("source consumer requires actual non-test Go selection")
+	}
+	return proof, nil
 }
 
 func (consumer *featureConsumer) sourceName(filename string) (string, error) {

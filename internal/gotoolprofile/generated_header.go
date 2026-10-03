@@ -134,10 +134,30 @@ func ValidateMetadata(input *ConsumerInput, proof *MetadataProof, tags []string)
 }
 
 func ValidateGeneratedHeader(input *ConsumerInput, proof GeneratedHeaderProof, pkg PackageProof) error {
-	if input == nil || input.Observed == nil || proof.Protocol != GeneratedHeaderProtocol ||
-		proof.PackagePath != pkg.PackagePath || proof.ProfileID != input.ID ||
-		proof.Target != input.Observed.Target || proof.GoVersion != input.Observed.GoVersion ||
-		proof.CompileToolSHA256 != input.Observed.ToolBinarySHA256["compile"] ||
+	if input == nil || input.Observed == nil {
+		return fmt.Errorf("missing generated-header source context")
+	}
+	return validateGeneratedHeaderContext(input, proof, pkg, generatedHeaderValidationContext{
+		protocol: GeneratedHeaderProtocol, id: input.ID, observed: input.Observed,
+		validateMacros: func() error { return ValidateOrdinaryAssemblerMacros(pkg.Macros, input.Observed, pkg.PackagePath) },
+	})
+}
+
+// Different source/profile protocols share layout and import validation, not
+// their identity. The public ordinary entry point always supplies its own
+// original protocol, observation and ordinary assembler registration.
+type generatedHeaderValidationContext struct {
+	protocol       string
+	id             string
+	observed       *Observation
+	validateMacros func() error
+}
+
+func validateGeneratedHeaderContext(input *ConsumerInput, proof GeneratedHeaderProof, pkg PackageProof, context generatedHeaderValidationContext) error {
+	if input == nil || context.observed == nil || context.validateMacros == nil || proof.Protocol != context.protocol ||
+		proof.PackagePath != pkg.PackagePath || proof.ProfileID != context.id ||
+		proof.Target != context.observed.Target || proof.GoVersion != context.observed.GoVersion ||
+		proof.CompileToolSHA256 != context.observed.ToolBinarySHA256["compile"] ||
 		!discoverySHA256Pattern.MatchString(proof.HeaderSHA256) || !discoverySHA256Pattern.MatchString(proof.ObjectSHA256) ||
 		proof.Definitions == nil || proof.DefinitionsSHA256 != HeaderDefinitionSHA256(proof.Definitions) {
 		return fmt.Errorf("generated header differs from its actual compiler/package/profile scope")
@@ -145,14 +165,14 @@ func ValidateGeneratedHeader(input *ConsumerInput, proof GeneratedHeaderProof, p
 	if err := ValidatePackageModule(input, pkg); err != nil {
 		return err
 	}
-	if err := ValidateOrdinaryAssemblerMacros(pkg.Macros, input.Observed, pkg.PackagePath); err != nil {
+	if err := context.validateMacros(); err != nil {
 		return err
 	}
 	languageMinor, languageErr := goMinor(proof.LanguageVersion)
 	if proof.LanguageVersion == "go1" {
 		languageMinor, languageErr = 0, nil
 	}
-	toolMinor, toolErr := goMinor(input.Observed.GoVersion)
+	toolMinor, toolErr := goMinor(context.observed.GoVersion)
 	if languageErr != nil || toolErr != nil || languageMinor > toolMinor || strings.Count(proof.LanguageVersion, ".") > 1 {
 		return fmt.Errorf("generated header lacks its actual supported module language version")
 	}

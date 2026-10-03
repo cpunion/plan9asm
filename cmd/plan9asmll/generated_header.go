@@ -76,6 +76,13 @@ func loadGeneratedHeaderPackagesWithLoader(consumer *featureConsumer, patterns, 
 	if len(tags) != 0 {
 		config.BuildFlags = append(config.BuildFlags, "-tags="+strings.Join(tags, ","))
 	}
+	return loadGeneratedHeaderPackagesConfigured(consumer, config, patterns, load)
+}
+
+// Config is private, constructed only by the ordinary entry above or an
+// independently validated actual instrumentation source context. Both paths
+// retain identical pre/post source/type/export guards and concrete errors.
+func loadGeneratedHeaderPackagesConfigured(consumer *featureConsumer, config *packages.Config, patterns []string, load func(*packages.Config, ...string) ([]*packages.Package, error)) ([]*packages.Package, error) {
 	// Discover the actual dependency source set without compiling exports,
 	// then pin it before the source/type/export load. Root hashes alone do
 	// not guard stdlib or other dependency modules during that load.
@@ -128,8 +135,24 @@ func loadGeneratedHeaderPackagesWithLoader(consumer *featureConsumer, patterns, 
 }
 
 func captureGeneratedHeader(consumer *featureConsumer, pkg *packages.Package, selected gotoolprofile.PackageProof, output string) (gotoolprofile.GeneratedHeaderProof, error) {
+	return captureGeneratedHeaderConfigured(consumer, pkg, selected, output, generatedHeaderCaptureContext{
+		protocol: gotoolprofile.GeneratedHeaderProtocol, id: consumer.ID,
+		validate: func(proof gotoolprofile.GeneratedHeaderProof) error {
+			return gotoolprofile.ValidateGeneratedHeader(consumer.Input, proof, selected)
+		},
+	})
+}
+
+type generatedHeaderCaptureContext struct {
+	protocol      string
+	id            string
+	compilerFlags []string
+	validate      func(gotoolprofile.GeneratedHeaderProof) error
+}
+
+func captureGeneratedHeaderConfigured(consumer *featureConsumer, pkg *packages.Package, selected gotoolprofile.PackageProof, output string, context generatedHeaderCaptureContext) (gotoolprofile.GeneratedHeaderProof, error) {
 	var proof gotoolprofile.GeneratedHeaderProof
-	if pkg == nil || isTestVariantPackage(pkg) || pkg.Types == nil || len(pkg.EmbedFiles) != 0 || len(pkg.EmbedPatterns) != 0 {
+	if context.validate == nil || pkg == nil || isTestVariantPackage(pkg) || pkg.Types == nil || len(pkg.EmbedFiles) != 0 || len(pkg.EmbedPatterns) != 0 {
 		return proof, fmt.Errorf("generated-header metadata requires an ordinary typed package without unbound embed/test roles")
 	}
 	if err := consumer.verifySources(); err != nil {
@@ -176,6 +199,7 @@ func captureGeneratedHeader(consumer *featureConsumer, pkg *packages.Package, se
 	}
 	args := []string{"tool", "compile", "-p", pkg.PkgPath, "-lang=" + lang,
 		"-importcfg", configFile, "-asmhdr", headerFile, "-o", objectFile}
+	args = append(args, context.compilerFlags...)
 	args = append(args, pkg.CompiledGoFiles...)
 	if _, _, err := gotoolprofile.RunBounded(consumer.Context, consumer.WorkDir, consumer.Env, binary, args...); err != nil {
 		return proof, fmt.Errorf("actual Go compiler -asmhdr: %w", err)
@@ -227,8 +251,8 @@ func captureGeneratedHeader(consumer *featureConsumer, pkg *packages.Package, se
 		return proof, err
 	}
 	proof = gotoolprofile.GeneratedHeaderProof{
-		Protocol: gotoolprofile.GeneratedHeaderProtocol, PackagePath: pkg.PkgPath,
-		ProfileID: consumer.ID, Target: consumer.Observed.Target, GoVersion: consumer.Observed.GoVersion,
+		Protocol: context.protocol, PackagePath: pkg.PkgPath,
+		ProfileID: context.id, Target: consumer.Observed.Target, GoVersion: consumer.Observed.GoVersion,
 		LanguageVersion:   lang,
 		CompileToolSHA256: consumer.Observed.ToolBinarySHA256["compile"],
 		HeaderSHA256:      featureBytesSHA256(data), ObjectSHA256: objectSHA,
@@ -241,7 +265,7 @@ func captureGeneratedHeader(consumer *featureConsumer, pkg *packages.Package, se
 	for _, file := range selected.CompiledGoFiles {
 		proof.CompiledGoSHA256[file] = selected.SourceSHA256[file]
 	}
-	return proof, gotoolprofile.ValidateGeneratedHeader(consumer.Input, proof, selected)
+	return proof, context.validate(proof)
 }
 
 func verifyGeneratedHeaderCompiler(consumer *featureConsumer, binary string) error {
