@@ -127,8 +127,12 @@ func TestARM64SpeculationBarrierMatchesGoAndLLVMEncoding(t *testing.T) {
 			}
 			arm64BarrierAuditOutput(t, llc, []string{"-O0", "-mtriple=" + triple, "-filetype=obj", llPath, "-o", object}, "", os.Environ())
 			text := arm64BarrierObjectText(t, object, triple)
-			if bytes.Count(text, want) != 1 || bytes.Contains(text, []byte{0xff, 0x20, 0x03, 0xd5}) {
-				t.Fatalf("LLVM SB object = %x, must contain exact SB once and never substitute HINT #7", text)
+			// LLVM may independently use XPACLRI (the HINT #7 encoding)
+			// when implementing llvm.returnaddress in the entry harness.
+			// Bind the source operation to its IR and the real SB word,
+			// rather than banning that unrelated compiler-generated effect.
+			if bytes.Count(text, want) != 1 || strings.Contains(ir, `asm sideeffect "hint #7"`) {
+				t.Fatalf("LLVM SB object = %x, source must emit exact SB once, not substitute HINT #7", text)
 			}
 		})
 	}

@@ -57,7 +57,7 @@ func TestTranslateARM64BarrierCompleteGoAssemblerForms(t *testing.T) {
 				`asm sideeffect "isb #0"`,
 				`asm sideeffect "isb #1"`,
 				`asm sideeffect "isb #15"`,
-				`asm sideeffect "hint #7"`,
+				`asm sideeffect ".inst 0xd50330ff"`,
 			} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("ARM64 barrier lowering for %s omitted %q:\n%s", triple, want, ll)
