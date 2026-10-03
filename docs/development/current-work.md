@@ -102,7 +102,11 @@ including coherent X/Y/Z views and initialized, bounded writes. The complete
 MOVSS/MOVSD/VMOVSS/VMOVSD floating-literal family follows Go's actual rewrite,
 rounding and constant-pool choices before certifying caller effects. Legacy
 MOVSD memory loads clear the upper XMM half, unlike register copies; independent
-complete-byte Go/LLVM oracles retain the real pre-fix failures. Packed-vector,
+complete-byte Go/LLVM oracles retain the real pre-fix failures. The complete
+packed-vector move family now shares one typed grammar with the lowerer and
+caller consumer; independent entries cover every format, and Go-accepted `.Z`
+memory stores retain their native invalid-opcode exception before operand reads.
+Numerical/byte-canary LLVM oracles do not establish native AVX512 execution.
 FMA and mixed-control-flow caller contracts remain separate unfinished work.
 These fixtures do not establish original Weaviate or native AMD64 runtime
 success. Unknown native calls and dynamic caller frames remain failures without
@@ -179,6 +183,15 @@ initialized numerical/full-canary counterparts. Frozen agent family evidence
 does not prove the later integrated source or replace its complete library,
 root-suite and corpus reruns.
 
+The LD/ST1-4 whole/replicate/lane memory effects now share their complete typed
+native extents and writeback with lowering, private-frame analysis and control
+flow. Actual Go encodings retain reserved lane-displacement/D1 refusals; R18,
+g/R28, saved LR and unmodelled large-frame R20 cannot acquire fresh-frame
+permission. Original Go plus independent LLVM/C initialized-data/canary
+oracles run on Darwin and native Linux ARM64. Opcode/post-index dispatch is
+checked before IR emission, including legacy helpers. Original Arrow failures
+remain failures, not whole-library passes inferred from these family oracles.
+
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
 processes. Existing skips are counted separately. It does not cover other
@@ -188,8 +201,10 @@ report. Frozen `cd5438b7` finished every root partition but exposed two KMOV
 helper regressions: internal dispatch supplied the opcode while the synthetic
 instruction omitted it. The complete KMOV family now binds a local opcode copy,
 rejects conflicting/unknown identities before emission and preserves strict
-source/caller validation. Focused Go 1.27 race and Go 1.20 checks passed; require
-a fresh complete integrated-root report after this repair. The tool's Linux
+source/caller validation. Focused Go 1.27 race and Go 1.20 checks passed. Frozen
+`b57d293b` subsequently passed every root partition, full non-root and nested-CLI
+race suites, vet/build and five-architecture classification; later integrations
+need their own fresh complete reports. The tool's Linux
 cold-fixture timeout was corrected and genuinely rerun at `2259cf73`, without
 changing the production suite deadline or discarding the earlier failure.
 
