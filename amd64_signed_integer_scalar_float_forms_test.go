@@ -60,18 +60,24 @@ func TestX86SignedIntegerScalarFloatCompleteGoTablesAndObjects(t *testing.T) {
 				if api == "Translate" {
 					ir, err = Translate(file, opt)
 				} else {
-					var module llvm.Module
-					ctx := llvm.NewContext()
-					if api == "TranslateModule" {
-						module, err = TranslateModule(file, opt)
-					} else {
-						module, err = TranslateModuleInContext(ctx, file, opt)
-					}
-					if err == nil {
-						ir = module.String()
-						module.Dispose()
-					}
-					ctx.Dispose()
+					ir, err = func() (string, error) {
+						ctx := llvm.NewContext()
+						defer ctx.Dispose()
+						var module llvm.Module
+						var moduleErr error
+						if api == "TranslateModule" {
+							module, moduleErr = TranslateModule(file, opt)
+						} else {
+							module, moduleErr = TranslateModuleInContext(ctx, file, opt)
+						}
+						if !module.IsNil() {
+							defer module.Dispose()
+						}
+						if moduleErr != nil {
+							return "", moduleErr
+						}
+						return module.String(), nil
+					}()
 				}
 				if err != nil {
 					t.Fatalf("%s: %v", api, err)

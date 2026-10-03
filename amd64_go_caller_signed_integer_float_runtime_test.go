@@ -35,10 +35,12 @@ func TestCrossLinuxRuntimeMatrixX86SignedIntegerScalarFloatActualCaller(t *testi
 				FileName: "kernel_amd64.s", GOARCH: "amd64", TargetTriple: triple,
 				ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", "caller.", 1) },
 			})
+			if translation != nil && !translation.Module.IsNil() {
+				defer translation.Module.Dispose()
+			}
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer translation.Module.Dispose()
 			main := x86SignedIntegerFloatSSEOracle + fmt.Sprintf(`
 #if defined(__APPLE__)
 #define LABEL(name) "_" name

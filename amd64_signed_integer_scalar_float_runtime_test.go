@@ -14,10 +14,12 @@ func x86SignedIntegerFloatOptimize(t *testing.T, ir string) string {
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
 	module, err := parseIRModuleInContext(ctx, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer module.Dispose()
 	options := llvm.NewPassBuilderOptions()
 	defer options.Dispose()
 	if err := module.RunPasses("default<O2>", llvm.TargetMachine{}, options); err != nil {
