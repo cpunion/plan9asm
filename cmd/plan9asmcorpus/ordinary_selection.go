@@ -44,6 +44,7 @@ type discoveryOrdinarySelectionPlan struct {
 	DocumentationPackages        []discoveryDocumentationPackage   `json:"documentation_packages,omitempty"`
 	SignatureSourceProtocol      string                            `json:"signature_source_protocol,omitempty"`
 	TestDependencySourceProtocol string                            `json:"test_dependency_source_protocol,omitempty"`
+	InstrumentationPlan          *discoveryInstrumentationPlan     `json:"instrumentation_plan,omitempty"`
 	Protocol                     string                            `json:"protocol"`
 	Module                       string                            `json:"module"`
 	Version                      string                            `json:"version"`
@@ -68,6 +69,7 @@ type discoveryOrdinarySelectionPlan struct {
 	TestDeclarationDirectories   []ordinarySelectionDirectory      `json:"test_declaration_directories,omitempty"`
 	TestDeclarationQueries       []discoveryTestDeclarationQuery   `json:"test_declaration_queries,omitempty"`
 	proxyGoModPath               string
+	instrumentationGoRoot        string
 	testDependencyContext        context.Context
 	testDependencyModuleCaptures map[*gotoolprofile.TestDependencyProof]map[string]*discoveryTestModuleCapture
 }

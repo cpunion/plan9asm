@@ -59,6 +59,13 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		t.Fatal(err)
 	}
 	result.featureInventory = inventory
+	var baselines []*discoveryTargetFeatures
+	for _, profile := range profiles {
+		baselines = append(baselines, profile.Observed)
+	}
+	if err := captureDiscoveryInstrumentationDenominator(plan, result.DiscoveredAsmFiles, baselines); err != nil {
+		t.Fatal(err)
+	}
 	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, result.DiscoveredAsmFiles, profiles)
 	if err != nil {
 		t.Fatal(err)

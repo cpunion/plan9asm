@@ -194,30 +194,31 @@ type moduleDownloadInfo struct {
 type discoveryCorpusResult struct {
 	// Only the ledger's internal reconstruction sets this. JSON reports cannot
 	// opt out of checking raw compiler diagnostics by supplying a field.
-	sourceDiagnosticsCompacted bool
-	featureInventory           *discoveryFeatureInventory
-	Module                     string                                `json:"module"`
-	Version                    string                                `json:"version"`
-	Status                     string                                `json:"status"`
-	DiscoveredAsmFiles         []string                              `json:"discovered_asm_files"`
-	ApplicableAsmFiles         []string                              `json:"applicable_asm_files"`
-	BuildConfigurations        []discoveryBuildConfiguration         `json:"build_configurations,omitempty"`
-	Patterns                   []string                              `json:"patterns,omitempty"`
-	Translations               int                                   `json:"translations"`
-	NotApplicableTranslations  int                                   `json:"not_applicable_translations,omitempty"`
-	NotApplicableItems         []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
-	SourceNotApplicableItems   []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
-	NotApplicableReason        string                                `json:"not_applicable_reason,omitempty"`
-	InvalidSourceReason        string                                `json:"invalid_source_reason,omitempty"`
-	InvalidSourceEvidence      []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
-	Superseded                 *discoverySupersededSkip              `json:"superseded,omitempty"`
-	PrivateExtension           *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
-	NativeLayout               *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
-	NativeLayoutPlan           *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
-	OrdinarySelectionPlan      *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
-	FeatureProfiles            []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
-	FeatureConsumption         []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
-	Error                      string                                `json:"error,omitempty"`
+	sourceDiagnosticsCompacted  bool
+	featureInventory            *discoveryFeatureInventory
+	Module                      string                                `json:"module"`
+	Version                     string                                `json:"version"`
+	Status                      string                                `json:"status"`
+	DiscoveredAsmFiles          []string                              `json:"discovered_asm_files"`
+	ApplicableAsmFiles          []string                              `json:"applicable_asm_files"`
+	BuildConfigurations         []discoveryBuildConfiguration         `json:"build_configurations,omitempty"`
+	Patterns                    []string                              `json:"patterns,omitempty"`
+	Translations                int                                   `json:"translations"`
+	InstrumentationTranslations int                                   `json:"instrumentation_translations,omitempty"`
+	NotApplicableTranslations   int                                   `json:"not_applicable_translations,omitempty"`
+	NotApplicableItems          []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems    []discoverySourceNotApplicableItem    `json:"source_not_applicable_items,omitempty"`
+	NotApplicableReason         string                                `json:"not_applicable_reason,omitempty"`
+	InvalidSourceReason         string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence       []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                  *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension            *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout                *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan            *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	OrdinarySelectionPlan       *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	FeatureProfiles             []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
+	FeatureConsumption          []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
+	Error                       string                                `json:"error,omitempty"`
 }
 
 type discoveryCorpusReport struct {
@@ -239,6 +240,7 @@ type discoveryCorpusReport struct {
 	SkippedPrivateExtension   int                        `json:"skipped_private_extension"`
 	SkippedNativeLayout       int                        `json:"skipped_native_layout"`
 	Translations              int                        `json:"translations"`
+	ModeTranslations          int                        `json:"instrumentation_translations,omitempty"`
 	NotApplicableTranslations int                        `json:"not_applicable_translations"`
 	Results                   []discoveryCorpusResult    `json:"results"`
 	FeatureInventory          *discoveryFeatureInventory `json:"feature_inventory,omitempty"`
@@ -454,7 +456,7 @@ func auditDiscoveryCorpusReports(
 		if err := mergeDiscoveryFeatureInventory(progress.FeatureInventory, report.FeatureInventory); err != nil {
 			return fmt.Errorf("%s: merge actual feature inventory: %w", filePath, err)
 		}
-		if len(report.Results) == 0 && (report.Translations != 0 || report.NotApplicableTranslations != 0) {
+		if len(report.Results) == 0 && (report.Translations != 0 || report.NotApplicableTranslations != 0 || report.ModeTranslations != 0) {
 			return fmt.Errorf("%s: empty shard has nonzero translation counts", filePath)
 		}
 		if report.TargetFiltered {
@@ -572,20 +574,21 @@ func auditDiscoveryCorpusReports(
 			seenCandidates[key] = filePath
 			outcomes[key] = discoveryCandidateProgress{
 				Module: result.Module, Version: result.Version, Status: result.Status,
-				Translations:              result.Translations,
-				NotApplicableTranslations: result.NotApplicableTranslations,
-				NotApplicableItems:        targetSkips,
-				SourceNotApplicableItems:  summarizeDiscoverySourceSkips(result.SourceNotApplicableItems),
-				NotApplicableReason:       result.NotApplicableReason,
-				InvalidSourceReason:       result.InvalidSourceReason,
-				InvalidSourceEvidence:     append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
-				Superseded:                result.Superseded,
-				PrivateExtension:          result.PrivateExtension,
-				NativeLayout:              result.NativeLayout,
-				NativeLayoutPlan:          result.NativeLayoutPlan,
-				OrdinarySelectionPlan:     result.OrdinarySelectionPlan,
-				FeatureProfiles:           result.FeatureProfiles,
-				FeatureConsumption:        result.FeatureConsumption,
+				Translations:                result.Translations,
+				NotApplicableTranslations:   result.NotApplicableTranslations,
+				NotApplicableItems:          targetSkips,
+				SourceNotApplicableItems:    summarizeDiscoverySourceSkips(result.SourceNotApplicableItems),
+				NotApplicableReason:         result.NotApplicableReason,
+				InvalidSourceReason:         result.InvalidSourceReason,
+				InvalidSourceEvidence:       append([]discoveryInvalidMachineCodeEvidence(nil), result.InvalidSourceEvidence...),
+				Superseded:                  result.Superseded,
+				PrivateExtension:            result.PrivateExtension,
+				NativeLayout:                result.NativeLayout,
+				NativeLayoutPlan:            result.NativeLayoutPlan,
+				OrdinarySelectionPlan:       result.OrdinarySelectionPlan,
+				FeatureProfiles:             result.FeatureProfiles,
+				FeatureConsumption:          result.FeatureConsumption,
+				InstrumentationTranslations: result.InstrumentationTranslations,
 			}
 			if result.NativeLayoutPlan != nil || result.OrdinarySelectionPlan != nil {
 				outcome := outcomes[key]
@@ -612,6 +615,7 @@ func auditDiscoveryCorpusReports(
 		progress.SkippedPrivateExtension += report.SkippedPrivateExtension
 		progress.SkippedNativeLayout += report.SkippedNativeLayout
 		progress.Translations += report.Translations
+		progress.ModeTranslations += report.ModeTranslations
 		progress.NotApplicableTranslations += report.NotApplicableTranslations
 	}
 	progress.ShardCount = shardCount
@@ -1844,6 +1848,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		}
 		matrix, patterns, buildConfigurations, runErr := runCandidate(cfg, candidate, candidateDir)
 		applicableAsmFiles := discoveryConfigurationAsmFiles(buildConfigurations)
+		applicableAsmFiles = uniqueSortedDiscoveryStrings(append(applicableAsmFiles, discoveryInstrumentationExecutedFiles(matrix.OrdinarySelectionPlan)...))
 		result.Patterns = patterns
 		result.ApplicableAsmFiles = applicableAsmFiles
 		result.BuildConfigurations = buildConfigurations
@@ -1851,6 +1856,8 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, matrix.SourceNotApplicableItems...)
 		result.OrdinarySelectionPlan = matrix.OrdinarySelectionPlan
 		result.FeatureConsumption = matrix.FeatureConsumption
+		result.InstrumentationTranslations = matrix.InstrumentationTranslations
+		report.ModeTranslations += matrix.InstrumentationTranslations
 		if len(matrix.FeatureProfiles) != 0 {
 			result.FeatureProfiles, err = registerDiscoveryFeatureProfiles(report.FeatureInventory, matrix.FeatureProfiles)
 			if err != nil {
@@ -1935,12 +1942,12 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		"discovery shard %d/%d completed: passed=%d not_applicable=%d "+
 			"skipped_invalid_source=%d skipped_superseded=%d "+
 			"skipped_private_extension=%d skipped_native_layout=%d "+
-			"translations=%d not_applicable_translations=%d\n",
+			"translations=%d not_applicable_translations=%d instrumentation_translations=%d\n",
 		cfg.ShardIndex, cfg.ShardCount,
 		report.Passed, report.NotApplicable,
 		report.SkippedInvalidSource, report.SkippedSuperseded,
 		report.SkippedPrivateExtension, report.SkippedNativeLayout,
-		report.Translations, report.NotApplicableTranslations,
+		report.Translations, report.NotApplicableTranslations, report.ModeTranslations,
 	)
 	return nil
 }
@@ -1962,17 +1969,21 @@ func resolveDiscoveryExecutable(name string) (string, error) {
 }
 
 func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
+	if len(report.Results) == 0 && report.ModeTranslations != 0 {
+		return fmt.Errorf("empty report cannot claim mode LLVM objects")
+	}
 	if report.SchemaVersion == discoveryReportSchema {
 		if err := validateDiscoveryFeatureInventory(report.FeatureInventory); err != nil {
 			return err
 		}
 	}
 	if report.SchemaVersion == 9 {
-		if report.FeatureInventory != nil {
+		if report.FeatureInventory != nil || report.ModeTranslations != 0 {
 			return fmt.Errorf("schema 9 cannot claim profile-aware source/CPP/compiler coverage")
 		}
 		for _, result := range report.Results {
-			if len(result.FeatureProfiles) != 0 || len(result.FeatureConsumption) != 0 ||
+			if len(result.FeatureProfiles) != 0 || len(result.FeatureConsumption) != 0 || result.InstrumentationTranslations != 0 ||
+				result.OrdinarySelectionPlan != nil && result.OrdinarySelectionPlan.InstrumentationPlan != nil ||
 				result.OrdinarySelectionPlan != nil && len(result.OrdinarySelectionPlan.ProfileDecisions) != 0 {
 				return fmt.Errorf("schema 9 cannot relabel profile-aware evidence")
 			}
@@ -1988,7 +1999,7 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		report.Passed, report.Failed, report.NotApplicable, report.SkippedInvalidSource,
 		report.SkippedSuperseded, report.SkippedPrivateExtension,
 		report.SkippedNativeLayout,
-		report.Translations, report.NotApplicableTranslations,
+		report.Translations, report.NotApplicableTranslations, report.ModeTranslations,
 	} {
 		if count < 0 {
 			return fmt.Errorf("discovery report contains a negative count")
@@ -2008,9 +2019,9 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 	}
 	var passed, failed, notApplicable int
 	var skippedInvalidSource, skippedSuperseded, skippedPrivateExtension, skippedNativeLayout int
-	var translations, notApplicableTranslations int
+	var translations, notApplicableTranslations, modeTranslations int
 	for _, result := range report.Results {
-		if result.Translations < 0 || result.NotApplicableTranslations < 0 {
+		if result.Translations < 0 || result.NotApplicableTranslations < 0 || result.InstrumentationTranslations < 0 {
 			return fmt.Errorf("%s@%s: negative translation counts", result.Module, result.Version)
 		}
 		switch result.Status {
@@ -2066,6 +2077,7 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			return fmt.Errorf("non-native result carries native-layout plan")
 		}
 		translations += result.Translations
+		modeTranslations += result.InstrumentationTranslations
 		notApplicableTranslations += result.NotApplicableTranslations
 		if err := validateDiscoverySourceNotApplicableEvidence(result); err != nil {
 			return fmt.Errorf("%s@%s: %w", result.Module, result.Version, err)
@@ -2084,6 +2096,12 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 		} else if result.OrdinarySelectionPlan != nil && result.Status != discoveryStatusFailed {
 			return fmt.Errorf("non-ordinary result carries ordinary source-selection proof")
 		}
+		if err := validateDiscoveryInstrumentationFailure(result, report.FeatureInventory); err != nil {
+			return err
+		}
+		if err := validateDiscoveryInstrumentationToolProvenance(result, report.Provenance); err != nil {
+			return err
+		}
 	}
 	if len(report.Results) != 0 &&
 		(passed != report.Passed || failed != report.Failed ||
@@ -2094,7 +2112,7 @@ func validateDiscoveryCorpusAccounting(report discoveryCorpusReport) error {
 			skippedNativeLayout != report.SkippedNativeLayout) {
 		return fmt.Errorf("discovery report result status counts differ from summary")
 	}
-	if len(report.Results) != 0 && (translations != report.Translations || notApplicableTranslations != report.NotApplicableTranslations) {
+	if len(report.Results) != 0 && (translations != report.Translations || notApplicableTranslations != report.NotApplicableTranslations || modeTranslations != report.ModeTranslations) {
 		return fmt.Errorf("discovery report result translation counts are translations=%d not_applicable=%d, summary is translations=%d not_applicable=%d", translations, notApplicableTranslations, report.Translations, report.NotApplicableTranslations)
 	}
 	return nil
@@ -2337,14 +2355,22 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		sourceNotApplicable = ordinarySourceItems
 	}
 	if len(buildConfigurations) == 0 {
-		return matrixReport{
+		aggregate := matrixReport{
 			SourceNotApplicableItems: sourceNotApplicable,
 			PrivateExtension:         privateExtension,
 			NativeLayout:             nativeLayout,
 			NativeLayoutPlan:         nativePlan,
 			OrdinarySelectionPlan:    ordinaryPlan,
 			FeatureProfiles:          ordinaryProfiles,
-		}, nil, buildConfigurations, nil
+		}
+		if ordinaryPlan != nil {
+			modeObjects, err := runDiscoveryInstrumentation(cfg, candidate, download, ordinaryPlan, ordinaryProfiles, workDir, env)
+			aggregate.Success, aggregate.InstrumentationTranslations = modeObjects, modeObjects
+			aggregate.TotalAsm = modeObjects
+			aggregate.TotalTargets = len(discoveryInstrumentationExecutedTargets(ordinaryPlan))
+			return aggregate, nil, buildConfigurations, err
+		}
+		return aggregate, nil, buildConfigurations, nil
 	}
 	testedCandidate := candidate
 	if ordinaryPlan != nil {
@@ -2680,6 +2706,19 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		}
 	}
 	aggregate.TotalTargets = len(runTargets)
+	if ordinaryPlan != nil {
+		modeObjects, err := runDiscoveryInstrumentation(cfg, candidate, download, ordinaryPlan, ordinaryProfiles, workDir, env)
+		aggregate.InstrumentationTranslations = modeObjects
+		aggregate.Success += modeObjects
+		aggregate.TotalAsm += modeObjects
+		for _, target := range discoveryInstrumentationExecutedTargets(ordinaryPlan) {
+			runTargets[target] = true
+		}
+		aggregate.TotalTargets = len(runTargets)
+		if err != nil {
+			return aggregate, sortedDiscoverySet(patternSet), executedBuildConfigurations, err
+		}
+	}
 	return aggregate, sortedDiscoverySet(patternSet), executedBuildConfigurations, nil
 }
 

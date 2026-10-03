@@ -70,6 +70,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 	counts := map[string]int{}
 	seen := map[string]bool{}
 	translations := 0
+	modeTranslations := 0
 	notApplicableTranslations := 0
 	for _, candidate := range progress.Candidates {
 		if candidate.Module == "" || !semver.IsValid(candidate.Version) {
@@ -89,7 +90,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 		default:
 			return fmt.Errorf("assembly ledger candidate %s has invalid status %q", key, candidate.Status)
 		}
-		if candidate.Translations < 0 || candidate.NotApplicableTranslations < 0 {
+		if candidate.Translations < 0 || candidate.NotApplicableTranslations < 0 || candidate.InstrumentationTranslations < 0 {
 			return fmt.Errorf("assembly ledger candidate %s has negative translation counts", key)
 		}
 		if candidate.NotApplicableTranslations != len(candidate.NotApplicableItems) {
@@ -108,6 +109,7 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			}
 		}
 		translations += candidate.Translations
+		modeTranslations += candidate.InstrumentationTranslations
 		notApplicableTranslations += candidate.NotApplicableTranslations
 		if candidate.Status == discoveryStatusPassed && candidate.Translations == 0 {
 			return fmt.Errorf("assembly ledger pass %s lacks compiled translations", key)
@@ -135,7 +137,8 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 				NotApplicableTranslations: candidate.NotApplicableTranslations, NotApplicableItems: candidate.NotApplicableItems,
 				OrdinarySelectionPlan: candidate.OrdinarySelectionPlan,
 				FeatureProfiles:       candidate.FeatureProfiles, FeatureConsumption: candidate.FeatureConsumption,
-				featureInventory: progress.FeatureInventory,
+				InstrumentationTranslations: candidate.InstrumentationTranslations,
+				featureInventory:            progress.FeatureInventory,
 			}
 			for _, item := range candidate.SourceNotApplicableItems {
 				result.SourceNotApplicableItems = append(result.SourceNotApplicableItems, discoverySourceNotApplicableItem{
@@ -150,6 +153,22 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 			if err := validateOrdinaryProfileResult(result, progress.Targets, goVersion); err != nil {
 				return fmt.Errorf("assembly ledger ordinary selection %s: %w", key, err)
 			}
+		}
+		modeResult := discoveryCorpusResult{
+			Module: candidate.Module, Version: candidate.Version, Status: candidate.Status,
+			DiscoveredAsmFiles: candidate.DiscoveredAsmFiles, ApplicableAsmFiles: candidate.ApplicableAsmFiles,
+			OrdinarySelectionPlan: candidate.OrdinarySelectionPlan, FeatureProfiles: candidate.FeatureProfiles,
+			InstrumentationTranslations: candidate.InstrumentationTranslations,
+		}
+		if err := validateDiscoveryInstrumentationFailure(modeResult, progress.FeatureInventory); err != nil {
+			return fmt.Errorf("assembly ledger %s: %w", key, err)
+		}
+		if progress.Provenance != nil {
+			if err := validateDiscoveryInstrumentationToolProvenance(modeResult, *progress.Provenance); err != nil {
+				return fmt.Errorf("assembly ledger %s: %w", key, err)
+			}
+		} else if candidate.InstrumentationTranslations != 0 {
+			return fmt.Errorf("assembly ledger mode objects lack actual tool provenance")
 		}
 		if candidate.OrdinarySelectionPlan != nil && candidate.Status != discoveryStatusPassed &&
 			candidate.Status != discoveryStatusNotApplicable && candidate.Status != discoveryStatusFailed {
@@ -231,6 +250,9 @@ func validateAssemblyLedgerProgress(progress discoveryProgress) error {
 	}
 	if translations != progress.Translations {
 		return fmt.Errorf("assembly ledger candidate translations do not match summary")
+	}
+	if modeTranslations != progress.ModeTranslations {
+		return fmt.Errorf("assembly ledger mode object scopes do not match summary")
 	}
 	if notApplicableTranslations != progress.NotApplicableTranslations {
 		return fmt.Errorf("assembly ledger candidate inapplicable translations do not match summary")

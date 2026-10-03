@@ -1,0 +1,372 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+)
+
+// Instrumented packages have their own actual driver/export/metadata/CPP/LLVM
+// consumers. Nothing here translates an instrumentation tag into custom tags,
+// reuses an ordinary export, or turns a tool/source failure into source N/A.
+func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo, plan *discoveryOrdinarySelectionPlan, profiles []discoveryFeatureProfile, workDir string, env []string) (objects int, runErr error) {
+	if plan == nil || plan.InstrumentationPlan == nil {
+		return 0, fmt.Errorf("mode execution lacks its independently required denominator")
+	}
+	proof := plan.InstrumentationPlan
+	if len(proof.Requirements) == 0 {
+		return 0, nil
+	}
+	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil {
+		return 0, fmt.Errorf("mode execution requires a fresh owned result, not another run's proof")
+	}
+	proof.Sources = make(map[string]*gotoolprofile.InstrumentationOriginalSourceInventory)
+	proof.Observations = make(map[string]*gotoolprofile.InstrumentationExportObservation)
+	proof.Outcomes = make([]discoveryInstrumentationOutcome, len(proof.Requirements))
+	for index, requirement := range proof.Requirements {
+		proof.Outcomes[index] = discoveryInstrumentationOutcome{
+			RequirementID: requirement.ID, Status: "failed", Stage: "environment",
+		}
+	}
+	defer func() {
+		if runErr != nil {
+			for index := range proof.Outcomes {
+				outcome := &proof.Outcomes[index]
+				if outcome.Status != "llvm_objects_only" && outcome.Error == "" {
+					outcome.Error = runErr.Error()
+				}
+			}
+		}
+	}()
+	modeRoot := filepath.Join(workDir, "instrumentation")
+	if err := os.Mkdir(modeRoot, 0700); err != nil {
+		return 0, err
+	}
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		return 0, err
+	}
+	binary, err = filepath.Abs(binary)
+	if err != nil {
+		return 0, err
+	}
+	var goRoot string
+	observedRequests := make(map[string]string)
+	selected := make(map[string]bool)
+	for index, requirement := range proof.Requirements {
+		outcome := &proof.Outcomes[index]
+		outcome.RequirementID, outcome.Status = requirement.ID, "failed"
+		outcome.Stage = "environment"
+		stageErr := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			output, stderr, err := gotoolprofile.RunBounded(ctx, workDir, env, binary, "env", "GOROOT")
+			if err != nil || len(stderr) != 0 || !filepath.IsAbs(strings.TrimSpace(string(output))) {
+				return fmt.Errorf("actual mode GOROOT: %v; %s", err, stderr)
+			}
+			actualRoot := strings.TrimSpace(string(output))
+			if goRoot != "" && goRoot != actualRoot {
+				return fmt.Errorf("mode source root changed")
+			}
+			goRoot = actualRoot
+			plan.instrumentationGoRoot = actualRoot
+			markerKey, err := json.Marshal(struct {
+				Target, CGO string
+				Mode        gotoolprofile.InstrumentationMode
+				Overrides   map[string]string
+			}{requirement.Target, requirement.CGO, requirement.Mode, requirement.Overrides})
+			if err != nil {
+				return err
+			}
+			id := observedRequests[string(markerKey)]
+			if id == "" {
+				outcome.Stage = "early_rules"
+				earlyDir := filepath.Join(modeRoot, fmt.Sprintf("early-%04d", index))
+				if err := os.Mkdir(earlyDir, 0700); err != nil {
+					return err
+				}
+				early, err := gotoolprofile.CaptureInstrumentationEarlyObservation(ctx, binary, earlyDir, env, requirement.Target, requirement.Mode, requirement.CGO, requirement.Overrides, gotoolprofile.RunBounded)
+				if err != nil {
+					return err
+				}
+				if early.Status != gotoolprofile.InstrumentationEarlyRuleAccepted {
+					outcome.Early, outcome.Status = early, "early_target_rejected"
+					return fmt.Errorf("stock Go's exact early rule rejects %s/%s/CGO=%s; not ordinary N/A", requirement.Target, requirement.Mode, requirement.CGO)
+				}
+				markerDir := filepath.Join(modeRoot, fmt.Sprintf("marker-%04d", index))
+				outcome.Stage = "marker_export"
+				if err := os.Mkdir(markerDir, 0700); err != nil {
+					return err
+				}
+				observation, err := gotoolprofile.CaptureInstrumentationExportObservation(ctx, binary, markerDir, env, requirement.Target, requirement.Mode, requirement.CGO, requirement.Overrides, gotoolprofile.RunBounded)
+				if err != nil {
+					return err
+				}
+				id = gotoolprofile.InstrumentationEarlyProfileID(observation.Early)
+				if _, duplicate := proof.Observations[id]; duplicate {
+					return fmt.Errorf("conflicting actual mode observation identity")
+				}
+				proof.Observations[id] = observation
+				observedRequests[string(markerKey)] = id
+			}
+			outcome.ObservationID = id
+			observation := proof.Observations[id]
+			if err := validateDiscoveryInstrumentationObservation(requirement, profiles, observation); err != nil {
+				return err
+			}
+			input := discoveryInstrumentationOriginalInput(plan, observation, download.Dir, nil)
+			inventory := proof.Sources[requirement.Directory]
+			outcome.Stage = "original_sources"
+			if inventory == nil {
+				inventory, err = gotoolprofile.CaptureInstrumentationOriginalSourceInventory(input, requirement.Directory)
+				if err != nil {
+					return err
+				}
+				proof.Sources[requirement.Directory] = inventory
+			}
+			outcome.Stage = "original_selection"
+			packagePlan, err := gotoolprofile.PlanInstrumentationOriginalPackage(input, inventory, observation.Early, requirement.Directory, requirement.Tags)
+			if err != nil {
+				return err
+			}
+			for _, file := range packagePlan.SFiles {
+				selected[file] = true
+			}
+			return nil
+		})
+		if stageErr != nil {
+			outcome.Error = stageErr.Error()
+			runErr = errors.Join(runErr, stageErr)
+		}
+	}
+	if len(selected) != 0 {
+		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			var err error
+			proof.CPPInputs, err = captureDiscoveryDeferredCPPInputs(plan, download.Dir, goRoot, sortedDiscoverySet(selected), ctx)
+			if err != nil {
+				return err
+			}
+			if err := verifyDiscoveryCPPModuleZIP(proof.CPPInputs, plan, download.Zip); err != nil {
+				return err
+			}
+			return validateDiscoveryInstrumentationCPPFeatures(proof.CPPInputs)
+		}); err != nil {
+			for index := range proof.Outcomes {
+				if proof.Outcomes[index].Error == "" {
+					proof.Outcomes[index].Stage, proof.Outcomes[index].Error = "cpp_registration", err.Error()
+				}
+			}
+			return 0, errors.Join(runErr, err)
+		}
+	}
+	for index, requirement := range proof.Requirements {
+		outcome := &proof.Outcomes[index]
+		if outcome.Error != "" {
+			continue
+		}
+		stageErr := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			observation := proof.Observations[outcome.ObservationID]
+			outcome.Stage = "original_selection"
+			input := discoveryInstrumentationOriginalInput(plan, observation, download.Dir, nil)
+			inventory := proof.Sources[requirement.Directory]
+			packagePlan, err := gotoolprofile.PlanInstrumentationOriginalPackage(input, inventory, observation.Early, requirement.Directory, requirement.Tags)
+			if err != nil {
+				return err
+			}
+			input.AsmFiles = append([]string(nil), packagePlan.SFiles...)
+			// The complete selected assembly is part of the original input SHA;
+			// derive again instead of editing the recorded planning identity.
+			packagePlan, err = gotoolprofile.PlanInstrumentationOriginalPackage(input, inventory, observation.Early, requirement.Directory, requirement.Tags)
+			if err != nil {
+				return err
+			}
+			outcome.PackagePlan = packagePlan
+			wrapped, err := gotoolprofile.NewInstrumentationConsumerInput(input, inventory, observation, packagePlan)
+			if err != nil {
+				return err
+			}
+			dir := filepath.Join(modeRoot, fmt.Sprintf("consume-%04d", index))
+			outcome.Stage = "original_graph"
+			if err := os.Mkdir(dir, 0700); err != nil {
+				return err
+			}
+			execution, err := makeDiscoveryExecutionPlan(candidate, candidate.Module)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(execution.GoMod), 0600); err != nil {
+				return err
+			}
+			modeEnv := ordinaryProfileEnvironment(env, observation.Early.BaselineFeatures)
+			modeEnv = replaceEnv(modeEnv, observation.Early.Environment)
+			args := append([]string{"list", "-mod=mod", "-p=1"}, packagePlan.BuildFlags...)
+			if len(packagePlan.CustomTags) != 0 {
+				args = append(args, "-tags="+strings.Join(packagePlan.CustomTags, ","))
+			}
+			args = append(args, "-export", packagePlan.PackagePath)
+			stdout, stderr, err := gotoolprofile.RunBounded(ctx, dir, modeEnv, binary, args...)
+			if err != nil || len(stderr) != 0 || strings.TrimSpace(string(stdout)) != packagePlan.PackagePath {
+				return fmt.Errorf("prepare actual same-mode original package graph failed: %v; %s; %s", err, stdout, stderr)
+			}
+			inputPath := filepath.Join(dir, "input.json")
+			data, err := json.Marshal(wrapped)
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(inputPath, data, 0600); err != nil {
+				return err
+			}
+			queryPath, objectPath := filepath.Join(dir, "query.json"), filepath.Join(dir, "objects.json")
+			goos, goarch, _ := strings.Cut(requirement.Target, "/")
+			common := []string{
+				"-instrumentation-profile=" + inputPath, "-instrumentation-package-dir=" + requirement.Directory,
+				"-goos=" + goos, "-goarch=" + goarch, "-module-path=" + candidate.Module,
+				"-patterns=" + packagePlan.PackagePath, "-asm-files=" + strings.Join(packagePlan.SFiles, ","),
+				"-strict-load=true", "-keep-going=false", "-feature-timeout=" + cfg.CandidateTimeout.String(),
+			}
+			if len(requirement.Tags) != 0 {
+				common = append(common, "-tags="+strings.Join(requirement.Tags, ","))
+			}
+			queryArgs := append(append([]string(nil), common...), "-metadata-only", "-out="+filepath.Join(dir, "query"), "-report="+queryPath)
+			outcome.Stage = "metadata_query"
+			if err := runCapturedCommand(ctx, dir, modeEnv, cfg.Translator, queryArgs...); err != nil {
+				return fmt.Errorf("actual same-mode metadata/header/declaration query: %w", err)
+			}
+			outcome.Query, err = readDiscoveryInstrumentationInvocation(queryPath, wrapped, gotoolprofile.InstrumentationMetadataQuery, nil, nil)
+			if err != nil {
+				return err
+			}
+			objectArgs := append(append([]string(nil), common...), "-instrumentation-metadata="+queryPath,
+				"-compile", "-keep-obj", "-llc-opt-level=0", "-out="+filepath.Join(dir, "objects"), "-report="+objectPath)
+			outcome.Stage = "llvm_objects"
+			if err := runCapturedCommand(ctx, dir, modeEnv, cfg.Translator, objectArgs...); err != nil {
+				return fmt.Errorf("actual same-mode CPP/LLVM objects: %w", err)
+			}
+			llvmVersion, stderr, err := gotoolprofile.RunBounded(ctx, dir, modeEnv, cfg.LLC, "--version")
+			if err != nil || len(stderr) != 0 {
+				return fmt.Errorf("actual LLVM22 tool identity: %v; %s", err, stderr)
+			}
+			llvmSHA, err := gotoolprofile.FileSHA256(cfg.LLC)
+			if err != nil {
+				return err
+			}
+			// The target triple is independently recomputed by the strict shared
+			// reader. Only the actual executed tool's version/SHA is supplied.
+			var raw gotoolprofile.InstrumentationInvocationProof
+			data, err = os.ReadFile(objectPath)
+			if err != nil || json.Unmarshal(data, &raw) != nil || raw.LLVM == nil {
+				return fmt.Errorf("mode objects lack a structured actual LLVM result")
+			}
+			llvm := &gotoolprofile.InstrumentationLLVMTool{Version: string(llvmVersion), SHA256: llvmSHA, Triple: raw.LLVM.Triple}
+			outcome.Objects, err = readDiscoveryInstrumentationInvocation(objectPath, wrapped, gotoolprofile.InstrumentationObjectCompile, outcome.Query.Metadata, llvm)
+			if err != nil {
+				return err
+			}
+			if err := verifyDiscoveryCPPInputsUnchanged(proof.CPPInputs, download.Dir, goRoot); err != nil {
+				return err
+			}
+			outcome.Stage = "physical_readback"
+			if err := verifyDiscoveryInstrumentationPhysicalOutputs(filepath.Join(dir, "objects"), outcome.Objects); err != nil {
+				return err
+			}
+			outcome.Status = "llvm_objects_only"
+			outcome.Stage = "complete"
+			objects += outcome.Objects.ObjectCount
+			return nil
+		})
+		if stageErr != nil {
+			outcome.Error = stageErr.Error()
+			runErr = errors.Join(runErr, stageErr)
+		}
+	}
+	return objects, runErr
+}
+
+func discoveryInstrumentationOriginalInput(plan *discoveryOrdinarySelectionPlan, observation *gotoolprofile.InstrumentationExportObservation, root string, files []string) *gotoolprofile.ConsumerInput {
+	profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observation.Early.BaselineFeatures), Observed: observation.Early.BaselineFeatures}
+	input := ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
+	// Original source protocols remain intact; a separate complete raw CPP
+	// graph supplies mode resources, never an ordinary header or export.
+	if cpp := plan.InstrumentationPlan.CPPInputs; cpp != nil {
+		for id, source := range cpp.Sources {
+			if name, tool := strings.CutPrefix(id, "tool/"); tool {
+				input.ToolSources[name] = source.SHA256
+			} else if name, original := strings.CutPrefix(id, "module/"); original {
+				if old := input.Sources[name]; old != "" && old != source.SHA256 {
+					input.Sources[name] = ""
+				} else {
+					input.Sources[name] = source.SHA256
+				}
+			}
+		}
+		for _, unit := range cpp.Units {
+			for _, miss := range unit.PackageSearchMisses {
+				if !containsInstrumentationSearchMiss(input.CPPIncludeSearchMisses, miss) {
+					input.CPPIncludeSearchMisses = append(input.CPPIncludeSearchMisses, miss)
+				}
+			}
+		}
+		gotoolprofile.SortCPPIncludeSearch(input.CPPIncludeSearchMisses)
+	}
+	return input
+}
+
+func containsInstrumentationSearchMiss(all []gotoolprofile.CPPPackageSearchMiss, miss gotoolprofile.CPPPackageSearchMiss) bool {
+	for _, old := range all {
+		if reflect.DeepEqual(old, miss) {
+			return true
+		}
+	}
+	return false
+}
+
+func readDiscoveryInstrumentationInvocation(file string, input *gotoolprofile.InstrumentationConsumerInput, phase gotoolprofile.InstrumentationInvocationPhase, producer *gotoolprofile.InstrumentationMetadataProof, llvm *gotoolprofile.InstrumentationLLVMTool) (*gotoolprofile.InstrumentationInvocationProof, error) {
+	reader, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	proof, readErr := gotoolprofile.DecodeInstrumentationInvocation(reader, input, phase, producer, llvm)
+	return proof, errors.Join(readErr, reader.Close())
+}
+
+func verifyDiscoveryInstrumentationPhysicalOutputs(root string, proof *gotoolprofile.InstrumentationInvocationProof) error {
+	for index, file := range proof.Consumption.Files {
+		part := fmt.Sprintf("instrumented-%04d.ll", index)
+		if file.Output.Part != part {
+			return fmt.Errorf("mode object changed its exact output ordinal")
+		}
+		for name, expected := range map[string]string{part: file.Output.IR, strings.TrimSuffix(part, ".ll") + ".o": file.Output.Object} {
+			physical, err := gotoolprofile.CPPRegularSource(root, name)
+			if err != nil {
+				return err
+			}
+			digest, err := gotoolprofile.FileSHA256(physical)
+			if err != nil || digest != expected {
+				return fmt.Errorf("mode physical LLVM IR/object is missing or differs from its strict result: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+// CPU/experiment branches in mode-only CPP need an additional independently
+// required profile union. Until that union is closed they remain a hard
+// preparation failure, not a guessed baseline success or source exclusion.
+func validateDiscoveryInstrumentationCPPFeatures(inputs *discoveryCPPInputs) error {
+	for _, unit := range inputs.Units {
+		directives, err := discoveryCPPUnitDirectives(inputs, unit, make(map[string]bool))
+		if err != nil {
+			return err
+		}
+		if discoveryCPPHasFeatureConditions(directives) {
+			return fmt.Errorf("mode-only CPP CPU/experiment branch profile union is not yet independently closed: %s", unit.File)
+		}
+	}
+	return nil
+}

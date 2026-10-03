@@ -39,6 +39,10 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err != nil {
 		return err
 	}
+	modeObjects, modeFiles, err := validateDiscoveryInstrumentationResult(result, profiles, scope)
+	if err != nil {
+		return err
+	}
 	decisions, eligible, err := replayOrdinarySelectionForProfiles(plan, scope, profiles)
 	if err != nil {
 		return err
@@ -211,8 +215,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 			return err
 		}
 	}
-	if len(consumed) != len(executed) || result.Translations+result.NotApplicableTranslations != len(executed) ||
-		result.NotApplicableTranslations != len(abi) || !equalDiscoveryStrings(result.ApplicableAsmFiles, discoveryConfigurationAsmFiles(result.BuildConfigurations)) {
+	actualFiles := uniqueSortedDiscoveryStrings(append(discoveryConfigurationAsmFiles(result.BuildConfigurations), modeFiles...))
+	if len(consumed) != len(executed) || result.Translations+result.NotApplicableTranslations != len(executed)+modeObjects ||
+		result.NotApplicableTranslations != len(abi) || !equalDiscoveryStrings(result.ApplicableAsmFiles, actualFiles) {
 		return fmt.Errorf("ordinary profile consumption/count/file union differs from its four-part scope denominator")
 	}
 	return nil

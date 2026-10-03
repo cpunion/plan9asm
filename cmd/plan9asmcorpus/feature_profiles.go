@@ -22,11 +22,12 @@ import (
 )
 
 type discoveryFeatureProfileRequest struct {
-	Target    string            `json:"target"`
-	Baseline  bool              `json:"baseline"`
-	Overrides map[string]string `json:"overrides,omitempty"`
-	Expected  map[string]bool   `json:"expected_experiments,omitempty"`
-	pairs     [][2]string
+	Target     string            `json:"target"`
+	Baseline   bool              `json:"baseline"`
+	Overrides  map[string]string `json:"overrides,omitempty"`
+	Expected   map[string]bool   `json:"expected_experiments,omitempty"`
+	pairs      [][2]string
+	customTags []string
 }
 
 type discoveryFeatureProfile struct {
@@ -48,6 +49,11 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	}
 	if err := ordinarySelectionPackagePathError(plan.Module, "."); err != nil {
 		return nil, fmt.Errorf("feature profiles require a valid module import path: %w", err)
+	}
+	if plan.InstrumentationPlan != nil {
+		if err := validateDiscoveryInstrumentationDenominator(plan, asmFiles, baselines); err != nil {
+			return nil, err
+		}
 	}
 	var requests []discoveryFeatureProfileRequest
 	byKey := make(map[string]int)
@@ -120,7 +126,11 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			}
 			sort.Strings(goFiles)
 			for _, goFile := range goFiles {
-				request, found, err := planDiscoveryFeaturePair(ctx, baseline, asmFile, goFile)
+				var selection *discoveryInstrumentationSelectionModel
+				if discoveryInstrumentationAssemblyRequired(plan, asmFile, baseline.Target) {
+					selection = &discoveryInstrumentationSelectionModel{}
+				}
+				request, found, err := planDiscoveryFeaturePairWithMode(ctx, baseline, asmFile, goFile, selection)
 				if err != nil {
 					return nil, fmt.Errorf("profile for %s + %s on %s: %w", asmFile, goFile, baseline.Target, err)
 				}
@@ -181,6 +191,18 @@ func discoveryContextForFeatureProfile(features *discoveryTargetFeatures) (build
 }
 
 func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string) (discoveryFeatureProfileRequest, bool, error) {
+	return planDiscoveryFeaturePairWithMode(ctx, baseline, asmFile, goFile, nil)
+}
+
+// A non-nil selection is a source-predicate model only. The corpus mode
+// protocol independently binds its actual exclusive driver flags later.
+func planDiscoveryFeaturePairWithMode(ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, selection *discoveryInstrumentationSelectionModel) (discoveryFeatureProfileRequest, bool, error) {
+	if selection != nil {
+		ctx.CgoEnabled = selection.CGO
+		if selection.Mode != "" {
+			ctx.ToolTags = append(append([]string(nil), ctx.ToolTags...), string(selection.Mode))
+		}
+	}
 	filenameContext := ctx
 	filenameContext.OpenFile = func(string) (io.ReadCloser, error) { return io.NopCloser(strings.NewReader("")), nil }
 	for _, file := range []string{asmFile, goFile} {
@@ -209,6 +231,12 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 	// Prune fixed-false targets, release guards and ignored generators before
 	// considering feature profiles. They are not latent feature-only input.
 	fixed := map[string]bool{"ignore": false, "cgo": false, "gc": true, "gccgo": false}
+	if selection != nil {
+		fixed["cgo"] = selection.CGO
+		for _, mode := range []string{"race", "msan", "asan"} {
+			fixed[mode] = mode == string(selection.Mode)
+		}
+	}
 	for _, tag := range uniqueSortedDiscoveryStrings(allTags) {
 		if containsTargetFeature(custom, tag) || tag == "boringcrypto" || strings.HasPrefix(tag, "goexperiment.") || strings.HasPrefix(tag, ctx.GOARCH+".") || tag == "race" || tag == "msan" || tag == "asan" {
 			continue
@@ -228,7 +256,7 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 			return discoveryFeatureProfileRequest{}, false, nil
 		}
 	}
-	if ordinaryInstrumentationGoPartnerMayMatch(expressions[0]) && !ordinaryInstrumentationGoPartnerMayMatch(expressions[1]) {
+	if selection == nil && ordinaryInstrumentationGoPartnerMayMatch(expressions[0]) && !ordinaryInstrumentationGoPartnerMayMatch(expressions[1]) {
 		return discoveryFeatureProfileRequest{}, false, nil
 	}
 	var experimentVars []string
@@ -251,7 +279,9 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 			}
 			cpuMentioned = true
 		} else if tag == "race" || tag == "msan" || tag == "asan" {
-			unsupported = append(unsupported, tag)
+			if selection == nil {
+				unsupported = append(unsupported, tag)
+			}
 		}
 	}
 	experimentVars = uniqueSortedDiscoveryStrings(experimentVars)
@@ -310,7 +340,7 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 					}
 					model.ToolTags = kept
 				}
-				_, matches, err := findDiscoveryBuildTags(model, filepath.FromSlash(path.Dir(asmFile)), path.Base(asmFile), []string{path.Base(goFile)}, custom, tagsByFile)
+				tags, matches, err := findDiscoveryBuildTags(model, filepath.FromSlash(path.Dir(asmFile)), path.Base(asmFile), []string{path.Base(goFile)}, custom, tagsByFile)
 				if err != nil {
 					return discoveryFeatureProfileRequest{}, false, err
 				}
@@ -318,6 +348,7 @@ func planDiscoveryFeaturePair(ctx build.Context, baseline *discoveryTargetFeatur
 					continue
 				}
 				request := discoveryFeatureProfileRequest{Target: baseline.Target, Overrides: make(map[string]string), Expected: expected}
+				request.customTags = append([]string(nil), tags...)
 				if cpuValue != baseline.Environment[cpuKey] {
 					request.Overrides[cpuKey] = cpuValue
 				}
@@ -373,6 +404,9 @@ func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir str
 			return nil, err
 		}
 		baselines = append(baselines, observed)
+	}
+	if err := captureDiscoveryInstrumentationDenominator(plan, asmFiles, baselines); err != nil {
+		return nil, err
 	}
 	requests, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines)
 	if err != nil {

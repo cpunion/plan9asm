@@ -309,6 +309,28 @@ file scopes cannot inject a file absent from Go's actual selected source set.
 Historical `exact_source_matchfile_v1` retains its original inventory-only scope;
 it cannot claim or be relabeled as v2 sibling coverage.
 
+Current ordinary plans also require `instrumentation_plan` with protocol
+`exact_source_instrumentation_denominator_v1`, including `requirements: []`
+when independently replayed Go/assembly constraints require no mode. Readers
+derive every race/msan/asan scope from the original source pairs, target,
+custom tags and CPU/experiment request. CGO=1 is the default scope; constraints
+that explicitly admit CGO=0 retain a separate scope. Mode flags are real Go
+compiler flags, never custom build tags. Missing plans, null/shortened scopes,
+or paired deletion of plans and outcomes fail instead of becoming ordinary N/A.
+
+Each required mode has its own actual tool/source/environment observation,
+full original compiled-Go source inventory, metadata/header query, raw CPP
+registration and LLVM22 object consumer. These shared inventories are not
+ordinary export evidence. Registered early target rejection, missing CGO/SDK,
+source/export errors and unclosed native/generated-source contexts remain
+explicit nonpass outcomes. Queries or markers alone cannot satisfy a scope.
+Mode-only CPP CPU/experiment branch unions remain hard failures until their
+independent consumer coverage is closed. Reports, progress and ledger readers
+revalidate this same denominator and count completed mode object scopes in
+`instrumentation_translations`, separately from ordinary scopes; successful
+candidate totals include both. The proof establishes objects, not final
+sanitizer linkage or runtime. Old reports cannot acquire it by schema relabeling.
+
 The plan captures de-duplicated source SHA-256 and actual
 constraint/package-clause inputs, complete package/ancestor directory names,
 the exact module ZIP SHA-256 and Go h1 identity, and every target/tag decision.

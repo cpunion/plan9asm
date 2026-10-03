@@ -142,6 +142,15 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 			return &discoverySourceProofError{err}
 		}
 	}
+	if plan.InstrumentationPlan != nil && plan.InstrumentationPlan.CPPInputs != nil {
+		root := goRoot
+		if root == "" {
+			root = plan.instrumentationGoRoot
+		}
+		if err := verifyDiscoveryCPPInputsUnchanged(plan.InstrumentationPlan.CPPInputs, moduleDir, root); err != nil {
+			return &discoverySourceProofError{err}
+		}
+	}
 	for file, before := range plan.GeneratedGoSources {
 		if err := discoveryCPPRegularSource(moduleDir, filepath.Join(moduleDir, filepath.FromSlash(file))); err != nil {
 			return &discoverySourceProofError{err}

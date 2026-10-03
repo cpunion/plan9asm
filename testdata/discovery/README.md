@@ -61,6 +61,15 @@ or ledgers cannot acquire these claims by relabeling their schema. Fresh reports
 are required after integration; the existing historical snapshot is not upgraded
 by these implementation changes.
 
+Current ordinary reports additionally require the source-derived
+`exact_source_instrumentation_denominator_v1` plan, even for its explicit empty
+`requirements: []` set. Actual race/msan/asan exports, queries, CPP and LLVM
+objects have separate mode/CGO scopes and independent readers. Their completed
+object count is retained as `instrumentation_translations`; early target
+rejection and CGO/SDK/source/consumer failures remain nonpass, not ordinary N/A.
+Deleting the plan and outcomes together cannot downgrade a mode-required source.
+These objects do not claim sanitizer final linkage or runtime execution.
+
 Concrete source-rejection witnesses sample at most the first 256 distinct
 source positions, then sort that sample canonically. This is a compact evidence
 bound, not a limit on valid Go diagnostics or their repeated occurrences. The
