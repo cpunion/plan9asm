@@ -250,7 +250,7 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 		return nil, err
 	}
 	allowed := map[string]bool{variantID: true}
-	guard, err := captureTypedSourceLoadGuard(consumer.Context, []*packages.Package{pre}, allowed)
+	guard, err := consumer.captureTestSourceLoadGuard(consumer.Context, []*packages.Package{pre}, allowed)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +296,7 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 	if err := consumer.bindActualTestDependencies(ordinary, selected); err != nil {
 		return nil, err
 	}
-	after, err := captureTypedSourceLoadGuard(consumer.Context, []*packages.Package{selected}, allowed)
+	after, err := consumer.captureTestSourceLoadGuard(consumer.Context, []*packages.Package{selected}, allowed)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +345,7 @@ func (consumer *featureConsumer) loadTestDeclarationPackage(ordinary *packages.P
 	if proof.SFiles, err = capture(selected.OtherFiles, true); err != nil {
 		return nil, err
 	}
-	imports, exports, _, sourceGuard, err := generatedHeaderImports(consumer, selected)
+	imports, exports, _, sourceGuard, err := generatedHeaderImportsForRole(consumer, selected, true)
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 )
 
 const SignatureQueryProtocol = "actual_go_missing_signature_query_v1"
-const TestDependencyProtocol = "actual_go_test_declaration_source_closure_v2"
+const TestDependencyProtocol = "actual_go_test_declaration_source_closure_v3"
 
 // A query binds only ordinary types and parsed CPP references. No test export,
 // signature layout, LLVM output or translation outcome is asserted here.
@@ -39,9 +39,10 @@ type TestSourcePackage struct {
 	ImportMap map[string]string `json:"import_map"`
 	// Empty only for this candidate's authenticated original module. Foreign
 	// roots are classified by actual Go Module/Replace, never import prefixes.
-	SourceRootID string `json:"source_root_id,omitempty"`
-	ExportSHA256 string `json:"export_sha256,omitempty"`
-	Builtin      string `json:"builtin,omitempty"`
+	SourceRootID string              `json:"source_root_id,omitempty"`
+	ExportSHA256 string              `json:"export_sha256,omitempty"`
+	Builtin      string              `json:"builtin,omitempty"`
+	Embed        *TestEmbedSelection `json:"embed_selection"`
 }
 
 type TestDependencyProof struct {
@@ -310,6 +311,10 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 		if view.Directories[dir] == nil {
 			return fmt.Errorf("test dependency lacks a complete original source directory")
 		}
+		embedDirectories, err := ValidateTestEmbedSelection(pkg, source.Embed, view)
+		if err != nil {
+			return err
+		}
 		if source.SourceRootID != "" {
 			if usedModules[source.SourceRootID] == nil {
 				usedModules[source.SourceRootID] = make(map[string]bool)
@@ -319,6 +324,9 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 				if ancestor == "." {
 					break
 				}
+			}
+			for directory := range embedDirectories {
+				usedModules[source.SourceRootID][directory] = true
 			}
 		}
 		clause, err := parser.ParseFile(token.NewFileSet(), pkg.GoFiles[0], view.Headers[pkg.GoFiles[0]], parser.PackageClauseOnly)

@@ -34,9 +34,10 @@ func TestTestDeclarationDependencyProducerNestedModuleBoundary(t *testing.T) {
 
 	external := discoveryCandidate{Module: candidate.Module + "/loader", Version: "v1.0.0"}
 	externalSources := map[string]string{
-		"go.mod":                  "module example.invalid/testboundary/loader\n\ngo 1.20\n",
-		"layout.go":               "package loader\nimport \"example.invalid/testboundary/loader/internal/layout\"\ntype Float = layout.Float\n",
-		"internal/layout/type.go": "package layout\nimport \"math\"\nconst Pi = math.Pi\ntype Float = float32\n",
+		"go.mod":                              "module example.invalid/testboundary/loader\n\ngo 1.20\n",
+		"layout.go":                           "package loader\nimport \"example.invalid/testboundary/loader/internal/layout\"\ntype Float = layout.Float\n",
+		"internal/layout/type.go":             "package layout\nimport \"math\"\nimport _ \"embed\"\n//go:embed assets\nvar Data []byte\nconst Pi = math.Pi\ntype Float = float32\n",
+		"internal/layout/assets/defaults.bin": "exact original embedded bytes",
 	}
 	externalDownload := fixtureProfileModuleDownload(t, external, externalSources)
 	proxy := strings.TrimPrefix(os.Getenv("GOPROXY"), "file://")
@@ -92,7 +93,10 @@ func TestTestDeclarationDependencyProducerNestedModuleBoundary(t *testing.T) {
 	var loader, layout, mathPackage bool
 	for _, source := range dependency.ExternalPackages {
 		loader = loader || source.Package.PackagePath == external.Module && source.Package.ModulePath == external.Module
-		layout = layout || source.Package.PackagePath == external.Module+"/internal/layout" && source.Package.ModulePath == external.Module
+		if source.Package.PackagePath == external.Module+"/internal/layout" && source.Package.ModulePath == external.Module {
+			layout = source.Embed != nil && reflect.DeepEqual(source.Embed.Patterns, []string{"assets"}) &&
+				source.Embed.Files["internal/layout/assets/defaults.bin"] == discoveryFeatureBytesSHA256([]byte(externalSources["internal/layout/assets/defaults.bin"]))
+		}
 		mathPackage = mathPackage || source.Package.PackagePath == "math" && source.Package.SourceRole == "stdlib"
 	}
 	if !loader || !layout || !mathPackage {
@@ -124,6 +128,28 @@ func TestTestDeclarationDependencyProducerNestedModuleBoundary(t *testing.T) {
 	}
 	assertTestModuleSemanticProjection(t, replay, inventory)
 	for name, mutate := range map[string]func(*gotoolprofile.TestDependencyProof){
+		"paired embed role deletion": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.ExternalPackages {
+				d.ExternalPackages[i].Embed = nil
+			}
+		},
+		"paired old source v2": func(d *gotoolprofile.TestDependencyProof) {
+			d.Protocol = "actual_go_test_declaration_source_closure_v2"
+		},
+		"changed embed patterns": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.ExternalPackages {
+				if len(d.ExternalPackages[i].Embed.Patterns) != 0 {
+					d.ExternalPackages[i].Embed.Patterns = []string{"different"}
+				}
+			}
+		},
+		"changed embed bytes": func(d *gotoolprofile.TestDependencyProof) {
+			for i := range d.ExternalPackages {
+				for file := range d.ExternalPackages[i].Embed.Files {
+					d.ExternalPackages[i].Embed.Files[file] = strings.Repeat("a", 64)
+				}
+			}
+		},
 		"old source root protocol": func(d *gotoolprofile.TestDependencyProof) {
 			for i := range d.SourceModules {
 				d.SourceModules[i].Protocol = "actual_go_test_dependency_module_sources_v1"

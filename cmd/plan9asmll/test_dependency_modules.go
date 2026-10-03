@@ -149,9 +149,14 @@ func (consumer *featureConsumer) foreignTestSourcePackage(actual *packages.Packa
 	for spelling, imported := range actual.Imports {
 		imports[spelling] = imported.PkgPath
 	}
+	embed, err := captureTestPackageEmbedSelection(proof, root, actual)
+	if err != nil {
+		return gotoolprofile.TestSourcePackage{}, err
+	}
 	return gotoolprofile.TestSourcePackage{
 		Package: proof, VariantID: actual.ID, ImportMap: imports, SourceRootID: id, ExportSHA256: export,
 		Builtin: builtin,
+		Embed:   embed,
 	}, nil
 }
 

@@ -55,6 +55,12 @@ func testDependencyAssemblyScopeFixture() (*ConsumerInput, *TestDependencyProof)
 	}
 	input.Headers["probe_amd64.s"] = ""
 	input.Directories["."] = []string{"helper", "probe_amd64.s", "root.go", "root_test.go"}
+	for _, selected := range []*TestSourcePackage{&root, &source} {
+		selected.Embed = &TestEmbedSelection{Protocol: TestEmbedProtocol, Directives: make(map[string]string), Files: make(map[string]string)}
+		for _, file := range selected.Package.GoFiles {
+			selected.Embed.Directives[file] = ""
+		}
+	}
 	return input, &TestDependencyProof{Packages: []TestSourcePackage{root, source}}
 }
 

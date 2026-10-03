@@ -250,6 +250,26 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		if builtin == "" && !reflect.DeepEqual(pkg.GoFiles, pkg.CompiledGoFiles) {
 			return fmt.Errorf("test dependency generated or replaced original Go source")
 		}
+		embedFiles := make([]string, 0, len(actual.EmbedFiles))
+		for _, file := range actual.EmbedFiles {
+			if !filepath.IsAbs(file) {
+				file = filepath.Join(actual.Dir, file)
+			}
+			embedFiles = append(embedFiles, file)
+		}
+		embed, err := gotoolprofile.CaptureTestEmbedSelection(pkg, sourceRoot, actual.EmbedPatterns, embedFiles)
+		if err != nil {
+			return err
+		}
+		if len(embed.Patterns) != 0 {
+			embedPlan := plan
+			if sourceRootID != "" {
+				embedPlan = modules[sourceRootID].Plan
+			}
+			if err := captureDiscoveryEmbedDirectories(ctx, embedPlan, sourceRoot, actual.Dir); err != nil {
+				return err
+			}
+		}
 		imports := make(map[string]string)
 		for _, destination := range actual.Imports {
 			matched := false
@@ -269,6 +289,7 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 		source := gotoolprofile.TestSourcePackage{
 			Package: pkg, VariantID: id, ImportMap: imports, SourceRootID: sourceRootID, ExportSHA256: exportSHA,
 			Builtin: builtin,
+			Embed:   embed,
 		}
 		if sourceRootID == "" {
 			dependency.Packages = append(dependency.Packages, source)
@@ -315,6 +336,30 @@ func captureDiscoveryTestDependencySources(ctx context.Context, plan *discoveryO
 	plan.testDependencyContext = ctx
 	plan.testDependencyModuleCaptures[dependency] = modules
 	return dependency, nil
+}
+
+// An embed pattern may select any descendant. Retain complete bounded
+// membership before resolving it, not just the driver's positive file list.
+// The normal ZIP/source snapshot independently authenticates every member.
+func captureDiscoveryEmbedDirectories(ctx context.Context, plan *discoveryOrdinarySelectionPlan, root, directory string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := captureDiscoveryTestSourceDirectory(plan, root, directory); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			if err := captureDiscoveryEmbedDirectories(ctx, plan, root, filepath.Join(directory, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func captureDiscoveryTestSourceDirectory(plan *discoveryOrdinarySelectionPlan, root, directory string) error {

@@ -36,6 +36,7 @@ type featureConsumer struct {
 	TestDeclarationPackages   map[string]*packages.Package
 	TestDeclarationCandidates map[string]map[string]error
 	TestModuleGuards          map[string]testDependencyModuleGuard
+	TestEmbedGuards           map[string]testDependencyEmbedGuard
 }
 
 type featureSelectionProof = gotoolprofile.SelectionProof

@@ -179,7 +179,7 @@ reader requires exact supplemental consumption and rejects deleting either
 protocol or evidence to fall back to legacy rules. Historical source snapshots
 retain their old claims and cannot be promoted to this contract.
 
-Current snapshots also stamp `actual_go_test_declaration_source_closure_v2`.
+Current snapshots also stamp `actual_go_test_declaration_source_closure_v3`.
 A cheap selected-test bodyless-syntax predicate may request the private
 `-signature-source-query`; only actual ordinary types and parsed CPP decide
 which entry/callee references remain missing. This distinct query emits no
@@ -215,7 +215,19 @@ the edge. Roots, source bytes, proxy metadata and exports stay guarded through
 final objects. Offline replay checks this frozen producer/consumer evidence;
 compact headers and full-file SHA alone do not independently authenticate ZIP
 content without the actual ZIP-byte comparison. Current provenance rejects
-deleting the new boundary evidence or relabeling an old version-1 report.
+deleting the new boundary evidence or relabeling an old report.
+
+Version 3 additionally requires an embed-source witness for every selected
+package, including packages with no directives. Selected original Go bytes
+bind the compact `go:embed` directives; stock Go parses their patterns, and
+complete original directory membership replays the exact selected asset hashes.
+The consumer independently captures the actual same-profile patterns/files
+before and after typechecking and guards assets through final objects. Only the
+qualified test-dependency closure may supply this role: ordinary generated-header
+loads still reject unbound embeds. Unsupported generated, cgo, symlink or
+unregistered asset roles remain failures, never source N/A or extra LLVM objects.
+Offline replay checks frozen producer/consumer witnesses, not standalone proof
+that an arbitrary compact directive is authenticated by its recorded full SHA.
 
 ## Reports and provenance
 

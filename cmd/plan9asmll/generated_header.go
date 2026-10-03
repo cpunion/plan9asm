@@ -285,6 +285,10 @@ func verifyGeneratedHeaderCompiler(consumer *featureConsumer, binary string) err
 }
 
 func generatedHeaderImports(consumer *featureConsumer, pkg *packages.Package) ([]gotoolprofile.ImportExport, map[string]string, string, map[string]string, error) {
+	return generatedHeaderImportsForRole(consumer, pkg, false)
+}
+
+func generatedHeaderImportsForRole(consumer *featureConsumer, pkg *packages.Package, boundTestEmbeds bool) ([]gotoolprofile.ImportExport, map[string]string, string, map[string]string, error) {
 	var imports []gotoolprofile.ImportExport
 	var config strings.Builder
 	exports, sources := make(map[string]string), make(map[string]string)
@@ -297,8 +301,23 @@ func generatedHeaderImports(consumer *featureConsumer, pkg *packages.Package) ([
 	sort.Strings(names)
 	for _, name := range names {
 		dep := pkg.Imports[name]
-		if dep == nil || dep.ExportFile == "" || strings.ContainsAny(dep.ExportFile, "\r\n") || isTestVariantPackage(dep) || len(dep.CompiledGoFiles) == 0 || len(dep.EmbedFiles) != 0 || len(dep.EmbedPatterns) != 0 || strings.ContainsAny(name+dep.PkgPath, "\r\n=\\") {
+		if dep == nil || dep.ExportFile == "" || strings.ContainsAny(dep.ExportFile, "\r\n") || isTestVariantPackage(dep) || len(dep.CompiledGoFiles) == 0 || strings.ContainsAny(name+dep.PkgPath, "\r\n=\\") {
 			return nil, nil, "", nil, fmt.Errorf("generated header requires actual ordinary same-profile dependency exports")
+		}
+		if len(dep.EmbedFiles) != 0 || len(dep.EmbedPatterns) != 0 {
+			if !boundTestEmbeds {
+				return nil, nil, "", nil, fmt.Errorf("generated header requires a bound embed source role")
+			}
+			if err := consumer.verifyTestEmbedPackage(dep); err != nil {
+				return nil, nil, "", nil, err
+			}
+			for _, file := range dep.EmbedFiles {
+				digest, err := gotoolprofile.FileSHA256(file)
+				if err != nil {
+					return nil, nil, "", nil, err
+				}
+				sources[file] = digest
+			}
 		}
 		digest, err := gotoolprofile.FileSHA256(dep.ExportFile)
 		if err != nil {

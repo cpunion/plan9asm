@@ -23,6 +23,7 @@ type discoverySelectedTestPackage struct {
 	ImportPath, Name, ForTest, Dir, Export    string
 	Standard                                  bool
 	GoFiles, CompiledGoFiles, SFiles, Imports []string
+	EmbedFiles, EmbedPatterns                 []string
 	ImportMap                                 map[string]string
 	Module                                    *discoverySelectedTestModule
 	Error                                     *struct{ Err string }

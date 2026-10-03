@@ -29,6 +29,7 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 	var actual []gotoolprofile.TestSourcePackage
 	var foreign []gotoolprofile.TestSourcePackage
 	var captureErr error
+	boundEmbeds := make(map[string]testDependencyEmbedGuard)
 	packages.Visit([]*packages.Package{selected}, func(pkg *packages.Package) bool {
 		if captureErr != nil {
 			return false
@@ -40,6 +41,7 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 				return false
 			}
 			foreign = append(foreign, source)
+			boundEmbeds[pkg.ID] = testDependencyEmbedGuard{Source: source, Root: consumer.TestModuleGuards[source.SourceRootID].Root}
 			return true
 		}
 		if !reflect.DeepEqual(pkg.Module, ordinary.Module) || pkg.PkgPath != consumer.Input.Module && !strings.HasPrefix(pkg.PkgPath, consumer.Input.Module+"/") {
@@ -82,7 +84,14 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 		for spelling, imported := range pkg.Imports {
 			imports[spelling] = imported.PkgPath
 		}
-		actual = append(actual, gotoolprofile.TestSourcePackage{Package: proof, VariantID: pkg.ID, ImportMap: imports})
+		embed, err := captureTestPackageEmbedSelection(proof, consumer.Dir, pkg)
+		if err != nil {
+			captureErr = err
+			return false
+		}
+		source := gotoolprofile.TestSourcePackage{Package: proof, VariantID: pkg.ID, ImportMap: imports, Embed: embed}
+		actual = append(actual, source)
+		boundEmbeds[pkg.ID] = testDependencyEmbedGuard{Source: source, Root: consumer.Dir}
 		return true
 	}, nil)
 	if captureErr != nil {
@@ -92,9 +101,22 @@ func (consumer *featureConsumer) bindActualTestDependencies(ordinary, selected *
 	sort.Slice(foreign, func(i, j int) bool { return foreign[i].Package.PackagePath < foreign[j].Package.PackagePath })
 	if !reflect.DeepEqual(actual, dependency.Packages) || !reflect.DeepEqual(foreign, dependency.ExternalPackages) ||
 		len(consumer.TestModuleGuards) != len(dependency.SourceModules) {
+		for _, pair := range []struct {
+			actual, expected []gotoolprofile.TestSourcePackage
+		}{
+			{actual: actual, expected: dependency.Packages},
+			{actual: foreign, expected: dependency.ExternalPackages},
+		} {
+			for index, source := range pair.actual {
+				if index < len(pair.expected) && !reflect.DeepEqual(source.Embed, pair.expected[index].Embed) {
+					return fmt.Errorf("actual same-profile embed inventory differs: package=%s actual=%+v expected=%+v", source.Package.PackagePath, source.Embed, pair.expected[index].Embed)
+				}
+			}
+		}
 		return fmt.Errorf("actual same-profile test dependency selection differs from complete pre-load inventory")
 	}
 	consumer.Proof.TestDependencies = dependency
+	consumer.TestEmbedGuards = boundEmbeds
 	return consumer.verifySources()
 }
 
