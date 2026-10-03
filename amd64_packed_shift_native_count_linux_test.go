@@ -22,8 +22,10 @@ int main(int argc,char **argv) {
  const uint8_t *count=storage+1;
  if((uintptr_t)count%16!=1) return 99;
  int status=observe_count(originals[kernel],kernel,0,0,count,0);
- if(WIFEXITED(status) && WEXITSTATUS(status)==0) puts("normal");
- else if(WIFSIGNALED(status) && WTERMSIG(status)==SIGSEGV) puts("fault");
+ if(WIFEXITED(status) && WEXITSTATUS(status)==0)
+  printf("COUNT_NATIVE_STATUS kernel=%d mod16=%llu wait=%d outcome=normal\n",kernel,(unsigned long long)((uintptr_t)count%16),status);
+ else if(WIFSIGNALED(status) && WTERMSIG(status)==SIGSEGV)
+  printf("COUNT_NATIVE_STATUS kernel=%d mod16=%llu wait=%d outcome=fault\n",kernel,(unsigned long long)((uintptr_t)count%16),status);
  else { fprintf(stderr,"original count status=%x\n",status); return 100; }
  return 0;
 }

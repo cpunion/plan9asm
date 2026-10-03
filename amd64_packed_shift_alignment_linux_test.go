@@ -3,7 +3,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -151,18 +150,18 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftOriginalLegacyMemory(t *testing.T)
 		command = exec.CommandContext(ctx, argv[0], argv[1:]...)
 		reference, referenceErr := runtimeOracleCombinedOutput(ctx, command)
 		cancel()
-		status := strings.TrimSpace(string(reference))
-		if referenceErr != nil || status != "normal" && status != "fault" {
-			t.Fatalf("original native opcode observer %d: %v\n%s", i, referenceErr, reference)
+		status, observationErr := x86PackedShiftCountObservation(i, reference, referenceErr)
+		if observationErr != nil {
+			t.Fatalf("original native opcode observer %d: %v\n%s", i, observationErr, reference)
 		}
 		ctx, cancel = runtimeOracleStageContext(t)
 		argv := x86PackedShiftGuestExecution(prefix, executable, strconv.Itoa(i))
 		command = exec.CommandContext(ctx, argv[0], argv[1:]...)
 		output, err = runtimeOracleCombinedOutput(ctx, command)
 		cancel()
-		var exit *exec.ExitError
+		exit, pureExit := err.(*exec.ExitError)
 		text := string(output)
-		if !strings.Contains(text, "original Go count mod16=1") || !errors.As(err, &exit) {
+		if !strings.Contains(text, "original Go count mod16=1") || !pureExit {
 			t.Fatalf("original Go unaligned m128 count identity %d: %v\n%s", i, err, output)
 		}
 		if status == "normal" {
