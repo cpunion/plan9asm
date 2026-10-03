@@ -68,7 +68,7 @@ func TestCrossLinuxRuntimeMatrixARM64LargeFrameMemoryFamily(t *testing.T) {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go R20 numerical family: %v\n%s", err, output)
 	}
 	llvmCtx := llvm.NewContext()
@@ -126,7 +126,7 @@ func main() {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go scalar R20 entry oracle: %v\n%s", err, output)
 	}
 	ir := arm64LargeFrameScalarIRs(t, source, triple)[0]
@@ -191,7 +191,7 @@ func main() {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go known R20 values: %v\n%s", err, output)
 	}
 	llvmCtx := llvm.NewContext()

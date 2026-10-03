@@ -39,7 +39,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameFamily(t *testing.T) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "main", "-o", filepath.Join(dir, "oracle.o"), filepath.Join(dir, "oracle_arm64.s"))
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local")
-	listing, err := cmd.CombinedOutput()
+	listing, err := runtimeOracleCombinedOutput(ctx, cmd)
 	if err != nil {
 		t.Fatalf("actual Go zero/raw leaf object: %v\n%s", err, listing)
 	}
@@ -56,7 +56,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawZeroFrameFamily(t *testing.T) {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go raw zero-frame LR/SP/BP caller oracle: %v\n%s", err, output)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})
@@ -169,7 +169,7 @@ func main() {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go repeated raw BL math/LR oracle: %v\n%s", err, output)
 	}
 	const cOracle = `#include <stdint.h>

@@ -44,7 +44,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawPrivateFrameFamily(t *testing.T) {
 	// R30. Therefore the explicit raw LR spill/reload remains mandatory.
 	cmd := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "main", "-o", filepath.Join(dir, "oracle.o"), filepath.Join(dir, "oracle_arm64.s"))
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local")
-	listing, err := cmd.CombinedOutput()
+	listing, err := runtimeOracleCombinedOutput(ctx, cmd)
 	if err != nil {
 		t.Fatalf("actual Go framed raw source object: %v\n%s", err, listing)
 	}
@@ -63,7 +63,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawPrivateFrameFamily(t *testing.T) {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go raw private-frame caller oracle: %v\n%s", err, output)
 	}
 	t.Logf("actual Go original raw frame/leaf epilogue: %d variants x 256 patterns x 5 unaligned offsets, full input/output canaries", len(cases))

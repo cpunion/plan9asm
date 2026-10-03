@@ -194,7 +194,7 @@ func TestCrossLinuxRuntimeMatrixARM64GPDataInputs(t *testing.T) {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go GP data/g/LR/NZCV/canary oracle: %v\n%s", err, output)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})

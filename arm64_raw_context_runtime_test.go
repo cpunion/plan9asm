@@ -120,7 +120,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawContextMemoryFamily(t *testing.T) {
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "main", "-o", filepath.Join(dir, "oracle.o"), filepath.Join(dir, "oracle_arm64.s"))
 	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "GOTOOLCHAIN=local")
-	listing, err := command.CombinedOutput()
+	listing, err := runtimeOracleCombinedOutput(ctx, command)
 	if err != nil || !strings.Contains(string(listing), "LEAF|NOFRAME, $0-16") || strings.Contains(string(listing), "MOVD.W\tR30,") {
 		t.Fatalf("actual Go raw helper object/prologue: %v\n%s", err, listing)
 	}
@@ -134,7 +134,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawContextMemoryFamily(t *testing.T) {
 	if len(runner) != 0 {
 		command.Env = append(command.Env, "GOOS=linux")
 	}
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("original Go raw mixed-context helper numeric/canary/caller oracle: %v\n%s", err, output)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})

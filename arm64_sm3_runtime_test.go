@@ -86,7 +86,7 @@ func TestCrossLinuxRuntimeMatrixARM64SM3(t *testing.T) {
 	cmd := exec.CommandContext(ctx, "go", "run", "-p=1", "-exec=qemu-aarch64", ".")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local")
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("actual Go SM3 raw WORD / independent Go scalar oracle: %v\n%s", err, output)
 	}
 	t.Log("actual Go raw WORD / independent Go scalar: 105 alias/lane cases x 256 inputs, all vectors/NZCV/canaries")

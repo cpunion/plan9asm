@@ -212,7 +212,7 @@ func runARM64LocalRegisterGoOracle(t *testing.T, source, main string, cross bool
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir, cmd.Env = dir, env
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("native Go local register-branch oracle: %v\n%s", err, out)
 	}
 	t.Log("native Go local register-branch oracle passed")

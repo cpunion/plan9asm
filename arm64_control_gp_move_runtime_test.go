@@ -104,7 +104,7 @@ func TestCrossLinuxRuntimeMatrixARM64GPMoveSourceInputs(t *testing.T) {
 	if len(runner) != 0 {
 		command.Env = append(command.Env, "GOOS=linux")
 	}
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual Go scalar MOV/LR/canary oracle: %v\n%s", err, output)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})

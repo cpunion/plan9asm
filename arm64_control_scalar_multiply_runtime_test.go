@@ -175,7 +175,7 @@ func check(call func(*byte, *byte), op string) {
 	if len(runner) != 0 {
 		cmd.Env = append(cmd.Env, "GOOS=linux")
 	}
-	if output, err := cmd.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("original Go scalar-multiply/LR caller oracle: %v\n%s", err, output)
 	}
 	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})

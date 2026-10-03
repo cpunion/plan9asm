@@ -46,17 +46,17 @@ func TestCrossLinuxRuntimeMatrixARM64RawSelfBLTerminal(t *testing.T) {
 	if len(runner) != 0 {
 		command.Env = append(command.Env, "GOOS=linux")
 	}
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("build original Go raw self-BL caller: %v\n%s", err, output)
 	}
 	obj := filepath.Join(dir, "oracle.o")
 	command = exec.CommandContext(ctx, llc, "-O0", "-mtriple="+triple, "-filetype=obj", filepath.Join(dir, "oracle.ll"), "-o", obj)
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("LLVM22 self-BL object: %v\n%s", err, output)
 	}
 	args := append(append([]string(nil), compiler[1:]...), obj, filepath.Join(dir, "main.c"), "-O2", "-o", llvmPath)
 	command = exec.CommandContext(ctx, compiler[0], args...)
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("link independent self-BL caller: %v\n%s", err, output)
 	}
 	goRunner := runner
@@ -74,7 +74,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawSelfBLTerminal(t *testing.T) {
 			args := append(append([]string(nil), tc.runner...), tc.path)
 			command := exec.CommandContext(ctx, args[0], args[1:]...)
 			command.Env = append(os.Environ(), "SELF_BL_SINK=0")
-			if output, err := command.CombinedOutput(); err != nil {
+			if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 				t.Fatalf("numeric/canary/fixed-register/return oracle: %v\n%s", err, output)
 			}
 			// Run the already-built ELF/Mach-O directly. No go-run parent or
@@ -83,7 +83,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawSelfBLTerminal(t *testing.T) {
 			defer stop()
 			command = exec.CommandContext(sinkCtx, args[0], args[1:]...)
 			command.Env = append(os.Environ(), "SELF_BL_SINK=1")
-			output, err := command.CombinedOutput()
+			output, err := runtimeOracleCombinedOutput(sinkCtx, command)
 			if err == nil || !errors.Is(sinkCtx.Err(), context.DeadlineExceeded) || string(output) != "entered\n" {
 				t.Fatalf("self-BL returned/trapped or was never entered: err=%v deadline=%v output=%q", err, sinkCtx.Err(), output)
 			}
