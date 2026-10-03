@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"reflect"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
@@ -170,6 +169,12 @@ func captureDiscoveryForeignTestDirectory(ctx context.Context, captures map[stri
 }
 
 func discoveryTestModuleSnapshot(capture *discoveryTestModuleCapture) (gotoolprofile.TestModuleSource, error) {
+	return discoveryTestModuleSnapshotWithZIPHash(capture, discoveryFeatureFileSHA256)
+}
+
+func discoveryTestModuleSnapshotWithZIPHash(capture *discoveryTestModuleCapture,
+	zipHash func(string) (string, error),
+) (gotoolprofile.TestModuleSource, error) {
 	result := gotoolprofile.TestModuleSource{
 		Protocol:     gotoolprofile.TestDependencyModuleProtocol,
 		SourceModule: capture.Plan.Module, SourceVersion: capture.Plan.Version,
@@ -201,7 +206,7 @@ func discoveryTestModuleSnapshot(capture *discoveryTestModuleCapture) (gotoolpro
 			result.ProxyGoMod = proxy
 		}
 		var err error
-		result.ZipSHA256, err = discoveryFeatureFileSHA256(capture.Download.Zip)
+		result.ZipSHA256, err = zipHash(capture.Download.Zip)
 		if err != nil {
 			return result, err
 		}
@@ -212,17 +217,19 @@ func discoveryTestModuleSnapshot(capture *discoveryTestModuleCapture) (gotoolpro
 func verifyDiscoveryForeignTestSnapshots(ctx context.Context, dependency *gotoolprofile.TestDependencyProof,
 	captures map[string]*discoveryTestModuleCapture,
 ) error {
+	return verifyDiscoveryForeignTestSnapshotsWithGuard(ctx, dependency, captures, newDiscoveryTestSnapshotGuard())
+}
+
+func verifyDiscoveryForeignTestSnapshotsWithGuard(ctx context.Context, dependency *gotoolprofile.TestDependencyProof,
+	captures map[string]*discoveryTestModuleCapture, guard *discoveryTestSnapshotGuard,
+) error {
 	for _, source := range dependency.SourceModules {
 		capture := captures[source.ID()]
 		if capture == nil {
 			return fmt.Errorf("test dependency source-root inventory was not actually captured")
 		}
-		current, err := discoveryTestModuleSnapshot(capture)
-		if err != nil || !reflect.DeepEqual(source, current) {
-			return fmt.Errorf("test dependency source-root inventory changed")
-		}
-		if err := gotoolprofile.VerifyTestModuleSource(ctx, source, capture.Root, capture.Download.Zip); err != nil {
-			return fmt.Errorf("final test dependency source root %s: %w", source.ID(), err)
+		if err := guard.verify(ctx, source, capture); err != nil {
+			return err
 		}
 		proxyPlan := discoveryTestModuleProxyPlan(capture)
 		if err := verifyDiscoveryProxyGoMod(&proxyPlan); err != nil {

@@ -479,8 +479,14 @@ func verifyDiscoveryTestDependencySources(plan *discoveryOrdinarySelectionPlan, 
 }
 
 func verifyDiscoveryTestDependencySnapshot(plan *discoveryOrdinarySelectionPlan, root string) error {
+	return verifyDiscoveryTestDependencySnapshotWithGuard(plan, root, newDiscoveryTestSnapshotGuard())
+}
+
+func verifyDiscoveryTestDependencySnapshotWithGuard(plan *discoveryOrdinarySelectionPlan, root string,
+	guard *discoveryTestSnapshotGuard,
+) error {
 	for dependency, captures := range plan.testDependencyModuleCaptures {
-		if err := verifyDiscoveryForeignTestSnapshots(plan.testDependencyContext, dependency, captures); err != nil {
+		if err := verifyDiscoveryForeignTestSnapshotsWithGuard(plan.testDependencyContext, dependency, captures, guard); err != nil {
 			return err
 		}
 	}

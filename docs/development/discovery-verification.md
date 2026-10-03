@@ -229,6 +229,13 @@ unregistered asset roles remain failures, never source N/A or extra LLVM objects
 Offline replay checks frozen producer/consumer witnesses, not standalone proof
 that an arbitrary compact directive is authenticated by its recorded full SHA.
 
+One synchronous pre/post-object guard may share identical original-root checks
+across test queries only when actual root/ZIP paths and the complete source,
+header, directory and metadata-origin snapshots match exactly. Every proof
+still checks its own exports, actual metadata copies and origin path. Each new
+guard starts empty and rechecks original bytes; differing roots or tokens cannot
+reuse a result. This local work reduction is not cross-phase source evidence.
+
 ## Reports and provenance
 
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed
