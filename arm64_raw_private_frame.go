@@ -13,12 +13,16 @@ type arm64RawPrivateFrameState struct {
 	sp     int64
 	regs   arm64PrivateFrameAddresses
 	spills map[int64]arm64PrivateFrameAddress // eight-byte address-bearing cells
+	fixed  *arm64ControlState                 // independent R18/g entry identities and saved cells
 }
 
 func (s *arm64RawPrivateFrameState) clone() *arm64RawPrivateFrameState {
 	next := &arm64RawPrivateFrameState{sp: s.sp, regs: s.regs.clone(), spills: make(map[int64]arm64PrivateFrameAddress)}
 	for offset, value := range s.spills {
 		next.spills[offset] = value
+	}
+	if s.fixed != nil {
+		next.fixed = s.fixed.clone()
 	}
 	return next
 }
@@ -112,6 +116,7 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 			if !reflect.DeepEqual(old.spills, spillUnion) {
 				old.spills, changed = spillUnion, true
 			}
+			changed = old.fixed.merge(state.fixed) || changed
 		}
 		if changed && !queued[index] {
 			queue, queued[index] = append(queue, index), true
@@ -124,11 +129,25 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 			continue
 		}
 		entry := &arm64RawPrivateFrameState{
-			regs: arm64PrivateFrameAddresses{"R29": {}},
+			regs: arm64PrivateFrameAddresses{"R18": {}, "R28": {}, "R29": {}},
 			// The Go prologue itself saves the incoming frame pointer here.
 			// Reading it must not silently turn its unknown may-frame value
 			// into an ordinary external scalar.
 			spills: map[int64]arm64PrivateFrameAddress{-8: {}},
+			fixed: &arm64ControlState{
+				regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
+				memory: make(map[string]arm64ControlValue), unexposedSP: true,
+			},
+		}
+		for _, fixed := range arm64RawZeroFixedEntry[:2] {
+			entry.fixed.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
+		}
+		if arm64SourceFrameAutosize(fn.FrameSize) > 0xf0 {
+			// Go's large-frame prologue computes the new SP in R20 before
+			// entering the source body. The generic virtual entry currently
+			// does not transport this implicit value. Keep it may-frame, not
+			// zero/external: no source read or escape can borrow this proof.
+			entry.regs["R20"] = arm64PrivateFrameAddress{}
 		}
 		if !propagate(seed, entry) {
 			return false
@@ -148,6 +167,13 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 						return false
 					}
 					delete(state.regs, "R29")
+					for _, fixed := range arm64RawZeroFixedEntry[:2] {
+						value := arm64ControlRead(state.fixed.regs, fixed.reg)
+						if len(value) != 1 || !value[fixed.token] {
+							return false
+						}
+						delete(state.regs, fixed.reg)
+					}
 					if len(state.regs) != 0 {
 						return false
 					}
@@ -159,6 +185,9 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 				}
 				if !state.transfer(original, ins, fn.FrameSize) {
 					return false
+				}
+				if !state.fixed.transferStructureMemory(original) {
+					state.fixed.transfer(ins, op, strings.HasSuffix(string(ins.Op), ".P"), nil)
 				}
 				if op == "B" || op == "JMP" || arm64IsConditionalBranch(op) {
 					if len(ins.Args) == 0 {
@@ -206,6 +235,9 @@ func (s *arm64RawPrivateFrameState) transfer(original, ins Instr, frameSize int6
 		if arg.Kind == OpFPAddr {
 			return false
 		}
+	}
+	if form, handled, err := parseARM64StructureMemory(original); handled {
+		return err == nil && s.structureMemory(form, frameSize)
 	}
 	if op == OpWORD {
 		if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {

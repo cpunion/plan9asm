@@ -336,6 +336,16 @@ func (s *arm64RawZeroState) transfer(original, ins Instr) bool {
 		len(original.Args) == 1 && original.Args[0].Kind == OpImm && original.Args[0].ImmRaw == "" && original.Args[0].Imm == 0xd503201f) {
 		return true // Exact architectural NOP, not the wider system/hint class.
 	}
+	if form, handled, err := parseARM64StructureMemory(original); handled {
+		if err != nil {
+			return false
+		}
+		if address, private := s.addresses.address(form.memory.Mem.Base); private {
+			if !address.exact || address.offset < s.addresses.sp || address.offset > -form.width() {
+				return false // No implicit Go cell exists in a zero-source frame.
+			}
+		}
+	}
 	if form, known := arm64RawPrivateMemory(ins); known && form.memory.Kind == OpMem {
 		mem := form.memory.Mem
 		if address, private := s.addresses.address(mem.Base); private {
@@ -357,6 +367,8 @@ func (s *arm64RawZeroState) transfer(original, ins Instr) bool {
 	if !s.addresses.transfer(original, ins, -8) {
 		return false
 	}
-	s.control.transfer(ins, arm64ControlOp(ins), strings.HasSuffix(string(ins.Op), ".P"), nil)
+	if !s.control.transferStructureMemory(original) {
+		s.control.transfer(ins, arm64ControlOp(ins), strings.HasSuffix(string(ins.Op), ".P"), nil)
+	}
 	return true
 }

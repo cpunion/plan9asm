@@ -595,7 +595,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 					state.privateStore = &span
 				}
 			}
-			state.transfer(ins, op, post, c.rawDataGlobals)
+			if !state.transferStructureMemory(original) {
+				state.transfer(ins, op, post, c.rawDataGlobals)
+			}
 			state.privateStore = nil
 		}
 		if !terminated {
@@ -711,6 +713,9 @@ func arm64IsConditionalBranch(op Op) bool {
 }
 
 func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[string]string) {
+	if state.transferStructureMemory(ins) {
+		return
+	}
 	if op == "SVC" {
 		// The existing typed syscall bridge writes R0 and R1, including for
 		// the zero-operand SVC spelling. Its results cannot retain a pure old

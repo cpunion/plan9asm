@@ -40,12 +40,7 @@ func arm64SourceReturnWidth(fn Func, ins Instr) (int64, bool) {
 	if !frame.present {
 		return 4, fn.FrameSize <= 0
 	}
-	autosize := fn.FrameSize + 8
-	if autosize&15 == 8 {
-		autosize += 8
-	} else {
-		autosize += 16
-	}
+	autosize := arm64SourceFrameAutosize(fn.FrameSize)
 	if !frame.restoresLink {
 		// Leaf epilogue: ADD $(autosize-8),SP,FP; ADD $autosize,SP;
 		// RET or symbol B. Large ADD constants may expand to several words.
@@ -59,6 +54,18 @@ func arm64SourceReturnWidth(fn Func, ins Instr) (int64, bool) {
 	// Large nonleaf: LDP FP/LR; MOVD $autosize,R27; ADD R27,SP;
 	// RET or symbol B. Positive int32 constants require at most two MOV words.
 	return 12 + arm64PositiveFrameMoveWidth(autosize), true
+}
+
+// Call only after checking the source's framed, aligned int32 Go contract.
+// obj7 reserves the LR and pads the top of this native frame for the old BP.
+func arm64SourceFrameAutosize(frameSize int64) int64 {
+	autosize := frameSize + 8
+	if autosize&15 == 8 {
+		autosize += 8
+	} else {
+		autosize += 16
+	}
+	return autosize
 }
 
 func arm64SourceFrameFlagsKnown(fn Func) bool {

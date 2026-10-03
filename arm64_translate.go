@@ -898,7 +898,11 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 		return err
 	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
+	structureFrameProofRequired := arm64RawStructureFrameProofRequired(fn)
 	unexposedCallFrame := arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
+	if err := requireARM64RawStructureFrameProof(fn, unexposedCallFrame); err != nil {
+		return err
+	}
 	if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 		if sig.ARM64GoRegisterABI != nil {
 			if err := arm64ValidateGoRegisterABI(sig); err != nil {
@@ -965,6 +969,9 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.sourceGoFrame = sourceGoFrame
 	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
+	if structureFrameProofRequired && !c.unexposedCallFrame {
+		return fmt.Errorf("%w: ARM64 normalized framed structure source lost its complete physical-stack/source-escape proof", ErrProbeNeedsContext)
+	}
 	c.sourceData = data
 	c.rawDataGlobals = rawDataGlobals
 	c.rawDataOffsets = rawDataOffsets

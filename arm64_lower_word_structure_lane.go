@@ -76,25 +76,22 @@ func decodeARM64RawStructureLane(word uint32) (arm64RawStructureLane, bool) {
 }
 
 func (c *arm64Ctx) lowerRawStructureLane(form arm64RawStructureLane) error {
-	base := Reg(fmt.Sprintf("R%d", form.base))
-	if form.base == 31 {
-		base = SP
-	}
-	addr, err := c.loadReg(base)
+	return c.lowerStructureLane(form.memoryForm())
+}
+
+func (c *arm64Ctx) lowerStructureLane(form arm64StructureMemoryForm) error {
+	addr, increment, err := c.structureAddress(form)
 	if err != nil {
 		return err
 	}
-	arrangement := arm64VectorArrangement{
-		elementBits: form.elementBits,
-		lanes:       128 / form.elementBits,
-	}
-	elementBytes := form.elementBits / 8
+	arrangement := form.arrangement
+	elementBits := arrangement.elementBits
+	elementBytes := elementBits / 8
 
-	for registerOffset := 0; registerOffset < form.count; registerOffset++ {
-		reg := Reg(fmt.Sprintf("V%d", (form.firstRegister+registerOffset)%32))
+	for registerOffset, reg := range form.registers {
 		offset := int64(registerOffset * elementBytes)
 		if form.load {
-			element, err := c.arm64LoadStructureElement(addr, offset, form.elementBits)
+			element, err := c.arm64LoadStructureElement(addr, offset, elementBits)
 			if err != nil {
 				return err
 			}
@@ -104,8 +101,8 @@ func (c *arm64Ctx) lowerRawStructureLane(form arm64RawStructureLane) error {
 			}
 			inserted := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %s, i%d %s, i32 %d\n",
-				inserted, arrangement.lanes, form.elementBits, vector,
-				form.elementBits, element, form.lane)
+				inserted, arrangement.lanes, elementBits, vector,
+				elementBits, element, form.lane)
 			if err := c.storeARM64VectorInteger(reg, arrangement, "%"+inserted); err != nil {
 				return err
 			}
@@ -118,8 +115,8 @@ func (c *arm64Ctx) lowerRawStructureLane(form arm64RawStructureLane) error {
 		}
 		element := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %s, i32 %d\n",
-			element, arrangement.lanes, form.elementBits, vector, form.lane)
-		if err := c.arm64StoreStructureElement(addr, offset, form.elementBits, "%"+element); err != nil {
+			element, arrangement.lanes, elementBits, vector, form.lane)
+		if err := c.arm64StoreStructureElement(addr, offset, elementBits, "%"+element); err != nil {
 			return err
 		}
 	}
@@ -127,12 +124,5 @@ func (c *arm64Ctx) lowerRawStructureLane(form arm64RawStructureLane) error {
 	if !form.post {
 		return nil
 	}
-	increment := c.imm64(int64(form.count * elementBytes))
-	if form.postRegister != 31 {
-		increment, err = c.loadReg(Reg(fmt.Sprintf("R%d", form.postRegister)))
-		if err != nil {
-			return err
-		}
-	}
-	return c.arm64UpdatePostIncrement(base, increment)
+	return c.arm64UpdatePostIncrement(form.memory.Mem.Base, increment)
 }
