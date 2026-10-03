@@ -33,6 +33,30 @@ func runtimeOracleCombinedOutput(ctx context.Context, command *exec.Cmd) ([]byte
 	return output.Bytes(), err
 }
 
+const (
+	runtimeOracleStageTimeout        = 5 * time.Minute
+	runtimeOracleStageCleanupReserve = 3 * time.Second
+)
+
+func runtimeOracleStageContext(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	deadline, hasDeadline := t.Deadline()
+	return context.WithDeadline(context.Background(), runtimeOracleStageDeadline(time.Now(), deadline, hasDeadline))
+}
+
+func runtimeOracleStageDeadline(now, testDeadline time.Time, hasTestDeadline bool) time.Time {
+	deadline := now.Add(runtimeOracleStageTimeout)
+	if hasTestDeadline {
+		// Reserve the existing bounded pipe/group cleanup before testing's
+		// overall deadline. An exhausted budget stays expired: do not launch.
+		latest := testDeadline.Add(-runtimeOracleStageCleanupReserve)
+		if latest.Before(deadline) {
+			deadline = latest
+		}
+	}
+	return deadline
+}
+
 func TestRuntimeOracleCommandRequiresBoundContextAndOutput(t *testing.T) {
 	ctx := context.Background()
 	command := exec.CommandContext(ctx, os.Args[0])
@@ -68,6 +92,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 	// Every Go compiler/executable/emulator command in these native oracles
 	// must use the same bounded lifecycle. Do not just fix the discovering case.
 	for _, name := range []string{
+		"runtime_exec_test.go",
 		"arm64_local_register_branch_test.go",
 		"arm64_gp_data_runtime_test.go",
 		"arm64_private_structure_runtime_test.go",

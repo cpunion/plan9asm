@@ -356,11 +356,14 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		t.Fatal(err)
 	}
 
-	llcCmd := exec.Command(llc, "-mtriple="+triple, "-filetype=obj", llPath, "-o", objPath)
-	if out, err := llcCmd.CombinedOutput(); err != nil {
+	ctx, cancel := runtimeOracleStageContext(t)
+	llcCmd := exec.CommandContext(ctx, llc, "-mtriple="+triple, "-filetype=obj", llPath, "-o", objPath)
+	out, err := runtimeOracleCombinedOutput(ctx, llcCmd)
+	cancel()
+	if err != nil {
 		s := string(out)
 		if llcUnsupportedTarget(s) {
-			t.Fatalf("llc does not support triple %q: %s", triple, strings.TrimSpace(s))
+			t.Fatalf("llc does not support triple %q: %v\n%s", triple, err, strings.TrimSpace(s))
 		}
 		t.Fatalf("llc failed: %v\n%s", err, s)
 	}
@@ -373,14 +376,20 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		// ELF linkers require an explicit libm dependency.
 		compilerArgs = append(compilerArgs, "-lm")
 	}
-	compilerCmd := exec.Command(compiler[0], compilerArgs...)
-	if out, err := compilerCmd.CombinedOutput(); err != nil {
+	ctx, cancel = runtimeOracleStageContext(t)
+	compilerCmd := exec.CommandContext(ctx, compiler[0], compilerArgs...)
+	out, err = runtimeOracleCombinedOutput(ctx, compilerCmd)
+	cancel()
+	if err != nil {
 		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
 	}
 
 	runArgs := append(append([]string(nil), runPrefix...), exePath)
-	runCmd := exec.Command(runArgs[0], runArgs[1:]...)
-	if out, err := runCmd.CombinedOutput(); err != nil {
+	ctx, cancel = runtimeOracleStageContext(t)
+	runCmd := exec.CommandContext(ctx, runArgs[0], runArgs[1:]...)
+	out, err = runtimeOracleCombinedOutput(ctx, runCmd)
+	cancel()
+	if err != nil {
 		t.Fatalf("run failed: %v\n%s", err, string(out))
 	}
 }
