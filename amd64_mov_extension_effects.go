@@ -39,6 +39,7 @@ type x86ScalarExtensionForm struct {
 }
 
 func x86ScalarExtensionProperties(op Op, ins Instr, arch string) (x86ScalarExtensionForm, bool, error) {
+	op = Op(strings.ToUpper(string(op)))
 	spec, recognized := amd64ScalarExtensionMoveSpecs[op]
 	if !recognized {
 		return x86ScalarExtensionForm{}, false, nil
@@ -46,7 +47,7 @@ func x86ScalarExtensionProperties(op Op, ins Instr, arch string) (x86ScalarExten
 	fail := func(reason string) (x86ScalarExtensionForm, bool, error) {
 		return x86ScalarExtensionForm{}, true, fmt.Errorf("%s %s %s: %q", arch, op, reason, ins.Raw)
 	}
-	if ins.Op != "" && ins.Op != op || len(ins.Args) != 2 {
+	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) || len(ins.Args) != 2 {
 		return fail("requires matching opcode and two operands")
 	}
 	if arch == "386" && spec.rejectedOn386 {

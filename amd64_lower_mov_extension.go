@@ -3,9 +3,12 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerScalarExtensionMove(op Op, ins Instr) error {
-	form, _, err := x86ScalarExtensionProperties(op, ins, c.goarch)
+	form, recognized, err := x86ScalarExtensionProperties(op, ins, c.goarch)
 	if err != nil {
 		return err
+	}
+	if !recognized {
+		return fmt.Errorf("unrecognized scalar extension opcode %s: %q", op, ins.Raw)
 	}
 	spec := form.spec
 	sourceType := amd64IntegerTypeForBits(spec.sourceBits)
