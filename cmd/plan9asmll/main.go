@@ -1755,6 +1755,18 @@ func tryDeclSig(scope *types.Scope, sym, resolved string, linknames map[string]s
 		if err != nil {
 			return plan9asm.FuncSig{}, 0, false, err
 		}
+	} else if goarch == "arm64" {
+		// The common actual-declaration builder also retains its private FP
+		// bit-use input, but only for an identical existing CLI transport. In
+		// particular the CLI's omitted zero-size inputs remain unclosed; this
+		// read-only proof cannot silently add an argument or change its index.
+		actual, err := plan9asm.DeriveGoFuncABI0Signature(resolved, fn, goarch, sz)
+		if err != nil {
+			return plan9asm.FuncSig{}, 0, false, err
+		}
+		if reflect.DeepEqual(fs.Args, actual.Args) && fs.Ret == actual.Ret && reflect.DeepEqual(fs.Frame, actual.Frame) {
+			fs = actual
+		}
 	}
 	return fs, argSize, true, nil
 }

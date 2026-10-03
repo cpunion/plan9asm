@@ -893,6 +893,7 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 
 func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall) error {
 	var err error
+	paddingSource := fn
 	fn, err = normalizeARM64ScalarMemoryFrame(fn)
 	if err != nil {
 		return err
@@ -951,6 +952,10 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 	if proof, present := sourceCalls[fn.Sym]; present && !proof.matchesNormalized(fn, sig) {
 		return arm64GoABIContext("normalized callee %q lost its complete original no-scratch-observer source", fn.Sym)
 	}
+	paddingReads, err := arm64FPPaddingReadProof(paddingSource, fn, sig)
+	if err != nil {
+		return err
+	}
 	rawDataGlobals := make(map[string]string, len(rawData))
 	rawDataOffsets := make(map[string]int64)
 	for _, data := range rawData {
@@ -982,6 +987,7 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 	b.WriteString(" {\n")
 
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
+	c.fpPaddingReads = paddingReads
 	c.sourceGoFrame = sourceGoFrame
 	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
 	if r20FrameProofRequired && !c.unexposedCallFrame {
@@ -1043,6 +1049,7 @@ func (c *arm64Ctx) lowerBlocks() error {
 	}
 
 	for bi := 0; bi < len(c.blocks); bi++ {
+		c.currentBlock = bi
 		blk := c.blocks[bi]
 		c.flagFlow.current = bi
 		c.flagsWritten = false

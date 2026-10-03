@@ -684,7 +684,11 @@ func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, fr
 		if err != nil {
 			return FuncSig{}, fmt.Errorf("%s: %w", fn.FullName(), err)
 		}
-		return FuncSig{Name: name, Args: args, Ret: goTupleRetType(retTys), Frame: FrameLayout{Params: frameParams, Results: frameResults}}, nil
+		result := FuncSig{Name: name, Args: args, Ret: goTupleRetType(retTys), Frame: FrameLayout{Params: frameParams, Results: frameResults}}
+		if goarch == "arm64" {
+			result.arm64FPReadDeclaration = arm64FPReadDeclarationForGo(result, sig, sz, frameSz)
+		}
+		return result, nil
 	}
 	args, _, _, err := goLLVMArgsAndFrameSlotsForTuple(sig.Params(), goarch, sz, frameSz, 0, false)
 	if err != nil {

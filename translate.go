@@ -76,6 +76,10 @@ type FuncSig struct {
 	// Produced from complete actual typed Go callers, never from pointer types
 	// or a manual noalias option. Final normalization independently consumes it.
 	x86CallerRegions *x86GoCallerRegionProof
+
+	// A typed declaration snapshot, not permission to address padding. The
+	// complete original/normalized bit-use proof must independently consume it.
+	arm64FPReadDeclaration *arm64FPReadDeclaration
 }
 
 // WASMABI selects the physical ABI used for WebAssembly Plan 9 assembly.

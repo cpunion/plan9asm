@@ -290,6 +290,17 @@ through the legacy MOVD transfer fallback.
 The seven scalar GP MOV lowerers also reject Go's distinct floating-constant
 class before register, memory, symbol or writeback dispatch; FMOV is unchanged.
 
+An ARM64 ABI0 native-width read may overlap the alignment gap after the final
+direct narrow integer parameter only with a complete actual typed declaration
+and independent original/normalized whole-source bit-use proofs. Every use of
+the unspecified bits must remain unobservable across GP and SIMD aliases, CFG
+joins, comparisons, addresses, stores and results. The bounded first contract
+is call-free and rejects unknown effects. A proved read may choose an explicit
+representative for those dead bits; it does not assert that native padding was
+initialized, create a padding slot, or authorize any address or write. Preserve
+the source MOV width, encoder scratch effects and PC identity. Manual sparse
+frames and changed type layouts retain their original missing-slot failure.
+
 The x/arch decoder corpus is not a Go-accepted instruction list. Its
 `MOVHU.P 107(R13), R13` and `MOVHU.W 192(R2), R2` encodings violate Go's
 base/data writeback-overlap check. The mixed MOVHU decoder form is therefore

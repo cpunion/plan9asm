@@ -25,6 +25,7 @@ type arm64Ctx struct {
 	normalizedSource    Func // exact source consumed by the bounded raw-context proof
 	localControl        *arm64LocalControlPlan
 	currentInstruction  int
+	currentBlock        int
 	machineAvailability *arm64MachineAvailability
 
 	rawDataGlobals  map[string]string              // local source label -> LLVM global
@@ -70,6 +71,7 @@ type arm64Ctx struct {
 	fpResAllocaIdx map[int]string      // result index -> alloca
 	fpResWritten   map[int]bool        // result index -> direct writes to fp slot
 	fpResAddrTaken map[int]bool        // result index -> fp result slot address escaped
+	fpPaddingReads map[[2]int]arm64FPPaddingRead
 }
 
 func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *arm64Ctx {

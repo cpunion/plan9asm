@@ -1,6 +1,9 @@
 package plan9asm
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 type arm64FPFramePart struct {
 	slot   FrameSlot
@@ -75,11 +78,30 @@ func arm64FPRangeType(size int64) string {
 
 // loadFPFrameBits packs scalar fragments in ARM64's little-endian byte order.
 // Sub-word and cross-field accesses read only declared frame bytes; padding or
-// missing neighboring slots are errors, never zero-filled substitutes.
+// missing neighboring slots remain errors, unless a complete typed source
+// bit-use certificate proves a parameter/result gap cannot be observed.
 func (c *arm64Ctx) loadFPFrameBits(off, size int64) (string, error) {
 	parts, err := c.fpFrameParts(off, size)
 	if err != nil {
-		return "", err
+		read, certified := c.fpPaddingReads[[2]int{c.currentBlock, c.currentInstruction}]
+		decl := c.sig.arm64FPReadDeclaration
+		if !certified || !decl.matches(c.sig) || read.offset != off || read.bytes != size ||
+			read.declared <= 0 || read.declared >= size || c.currentBlock < 0 || c.currentInstruction < 0 ||
+			c.currentBlock >= len(c.blocks) || c.currentInstruction >= len(c.blocks[c.currentBlock].instrs) ||
+			!reflect.DeepEqual(read.instruction, c.blocks[c.currentBlock].instrs[c.currentInstruction]) {
+			return "", err
+		}
+		want, candidate := arm64FPPaddingCandidate(c.blocks[c.currentBlock].instrs[c.currentInstruction], decl)
+		if !candidate || !reflect.DeepEqual(read, want) {
+			return "", err
+		}
+		// Zero is only an explicit representative of the unobservable bits.
+		// The original source still performs its real native-width MOV and
+		// implicit scratch effects; no padding slot/address/write is created.
+		parts, err = c.fpFrameParts(off, read.declared)
+		if err != nil {
+			return "", err
+		}
 	}
 	ty := arm64FPRangeType(size)
 	packed := "0"
