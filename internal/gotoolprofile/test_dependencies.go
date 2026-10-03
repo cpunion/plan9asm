@@ -282,7 +282,10 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 			dir = "."
 		}
 		if source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 && !containsString(input.OrdinaryAsmPackages, dir) {
-			return fmt.Errorf("source-only test dependency cannot replace another assembly translation scope")
+			return fmt.Errorf("source-only test dependency cannot replace another assembly translation scope: "+
+				"package=%s module=%s@%s source_root=%q directory=%s selected_asm=%q ordinary_asm_packages=%q target=%s profile=%s tags=%q",
+				pkg.PackagePath, pkg.ModulePath, pkg.ModuleVersion, source.SourceRootID, dir,
+				pkg.SFiles, input.OrdinaryAsmPackages, input.Observed.Target, input.ID, tags)
 		}
 		if view.Directories[dir] == nil {
 			return fmt.Errorf("test dependency lacks a complete original source directory")
