@@ -164,6 +164,9 @@ func main() {
 		metadataOnly   = flag.Bool("metadata-only", false, "private actual Go generated-header query; never translates assembly")
 		signatureQuery = flag.Bool("signature-source-query", false, "private ordinary-type/CPP missing-reference query; never emits LLVM")
 	)
+	instrumentationProfile := flag.String("instrumentation-profile", "", "private actual Go instrumentation source context; cannot supply ordinary profile evidence")
+	instrumentationDirectory := flag.String("instrumentation-package-dir", ".", "exact module-relative original instrumentation package directory")
+	instrumentationMetadata := flag.String("instrumentation-metadata", "", "independently captured same-mode metadata required for instrumentation object consumption")
 	flag.Parse()
 
 	pats := splitCSV(*patterns)
@@ -179,6 +182,26 @@ func main() {
 	specs, err := resolveTargets(*goos, *goarch, *targets, *allTargets)
 	if err != nil {
 		fatalf("%v", err)
+	}
+	if requestedInstrumentationCLI(flag.CommandLine) {
+		if *featureTimeout <= 0 || *reportOut == "" {
+			fatalf("instrumentation consumption requires a positive deadline and its separate report")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *featureTimeout)
+		defer cancel()
+		result, err := runInstrumentationCLI(ctx, instrumentationCLIOptions{
+			Profile: *instrumentationProfile, Directory: *instrumentationDirectory, Metadata: *instrumentationMetadata,
+			OrdinaryProfile: *featureProfile, Targets: specs, Patterns: pats, Tags: tags, AsmFiles: exactAsmFiles,
+			Module: *modulePath, Output: *outDir, MetadataOnly: *metadataOnly, SignatureQuery: *signatureQuery,
+			Compile: *compile, KeepObject: *keepObj, OptLevel: *llcOptLevel, LLC: *llcPath,
+			AllTargets: *allTargets, ExplicitTargets: *targets != "", ListOnly: *listOnly, Limit: *limit,
+			StrictLoad: *strictLoad, KeepGoing: *keepGoing, Annotate: *annotate,
+		})
+		if err != nil {
+			fatalf("instrumentation consumer: %v", err)
+		}
+		writeReport(*reportOut, result)
+		return
 	}
 	if (*metadataOnly || *signatureQuery) && (*featureProfile == "" || *reportOut == "" || len(specs) != 1 || *compile || *listOnly || *limit != 0 || *allTargets || *metadataOnly && *signatureQuery) {
 		fatalf("metadata-only requires one explicit ordinary profile and cannot emit translation/list/matrix evidence")

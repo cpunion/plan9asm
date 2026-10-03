@@ -1,6 +1,7 @@
 package gotoolprofile
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"go/ast"
@@ -65,16 +66,27 @@ func ValidateInstrumentationMetadataAgreement(input *InstrumentationConsumerInpu
 			return err
 		}
 	}
-	normalize := func(proof *InstrumentationMetadataProof) *InstrumentationMetadataProof {
-		copy := *proof
+	normalize := func(proof *InstrumentationMetadataProof) (*InstrumentationMetadataProof, error) {
+		copy, err := compactInstrumentationMetadataLayouts(proof)
+		if err != nil {
+			return nil, err
+		}
 		copy.Headers = append([]InstrumentationGeneratedHeader(nil), proof.Headers...)
 		for index := range copy.Headers {
 			copy.Headers[index].Header.HeaderSHA256 = ""
 			copy.Headers[index].Header.ObjectSHA256 = ""
 		}
-		return &copy
+		return copy, nil
 	}
-	if !reflect.DeepEqual(normalize(expected), normalize(actual)) {
+	wanted, err := normalize(expected)
+	if err != nil {
+		return err
+	}
+	observed, err := normalize(actual)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(wanted, observed) {
 		return fmt.Errorf("independent same-mode metadata selected different source/exports/full definitions or routing")
 	}
 	return nil
@@ -148,6 +160,9 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 		if err != nil || len(parsed.Funcs) == 0 || len(parsed.Data)+len(parsed.Globl) != 0 || len(file.Declarations) != len(parsed.Funcs) {
 			return fmt.Errorf("mode typed source requires complete ordinary Go function declarations: %v", err)
 		}
+		if err := replayInstrumentationDeclarationLayouts(input, pkg, file.Declarations); err != nil {
+			return err
+		}
 		for ordinal, fn := range parsed.Funcs {
 			symbol := instrumentationResolvedSymbol(pkg.PackagePath, fn.Sym)
 			if err := validateInstrumentationDeclaration(input, pkg, symbol, file.Declarations[ordinal]); err != nil {
@@ -156,7 +171,15 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 			found := false
 			for _, expected := range proof.Metadata.Declarations {
 				if expected.Symbol == symbol {
-					found = reflect.DeepEqual(expected, file.Declarations[ordinal])
+					wanted, err := compactInstrumentationDeclarationLayout(expected)
+					if err != nil {
+						return err
+					}
+					actual, err := compactInstrumentationDeclarationLayout(file.Declarations[ordinal])
+					if err != nil {
+						return err
+					}
+					found = reflect.DeepEqual(wanted, actual)
 				}
 			}
 			if !found {
@@ -170,6 +193,31 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 		}
 	}
 	return nil
+}
+
+// Callers first strictly decode the complete layout and replay the independent
+// original Go declaration. Only JSON whitespace is normalized: every ABI token
+// and all other declaration fields still participate in the exact comparison.
+func compactInstrumentationDeclarationLayout(proof InstrumentationDeclarationProof) (InstrumentationDeclarationProof, error) {
+	var layout bytes.Buffer
+	if err := json.Compact(&layout, proof.Layout); err != nil {
+		return InstrumentationDeclarationProof{}, err
+	}
+	proof.Layout = layout.Bytes()
+	return proof, nil
+}
+
+func compactInstrumentationMetadataLayouts(proof *InstrumentationMetadataProof) (*InstrumentationMetadataProof, error) {
+	copy := *proof
+	copy.Declarations = append([]InstrumentationDeclarationProof(nil), proof.Declarations...)
+	for index := range copy.Declarations {
+		declaration, err := compactInstrumentationDeclarationLayout(copy.Declarations[index])
+		if err != nil {
+			return nil, err
+		}
+		copy.Declarations[index] = declaration
+	}
+	return &copy, nil
 }
 
 func validateInstrumentationPackageDeclarations(input *InstrumentationConsumerInput, pkg PackageProof, declarations []InstrumentationDeclarationProof) error {
