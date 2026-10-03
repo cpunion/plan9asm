@@ -168,14 +168,22 @@ same-mode metadata and physical CPP/LLVM object consumers retain independent
 compiled Go sources, dependency exports, header bytes and complete typed ABI0
 replay. Local types, aliases, constants and zero-sized fields are rechecked from
 original syntax, not trusted layout JSON. Unsupported imported/generic type
-closures fail. This mechanism remains separate from the ordinary report hook
-and explicitly `consumer_pending`; physical objects alone are not corpus passes.
-Early rule acceptance is not export evidence, and neither marker nor original
-export is CPP/LLVM consumer, C/SDK, sanitizer-runtime or final-link evidence.
-The actual CLI/report/ledger integration remains unfinished. Never synthesize
-feature tags or turn CGO, SDK or dependency failures
-into N/A. Instrumented scopes must not masquerade as the ordinary protocol or
-be erased from its required coverage denominator.
+closures fail. The separate CLI and corpus/report/progress/ledger consumers are
+integrated locally. They require an independently replayed instrumentation
+denominator, including the explicit empty requirements array, and actual
+same-mode exports, metadata/header queries, CPP and LLVM objects. Paired proof
+deletion or ordinary-protocol downgrade fails. Early rule acceptance is not
+export evidence; neither markers nor queries are compiled-object, C/SDK,
+sanitizer-runtime or final-link evidence. Frozen mechanism tests passed on
+Darwin and native Linux ARM64, but establish no new external-library passes.
+Never synthesize feature tags or turn CGO, SDK or dependency failures into N/A.
+Mode-only CPP CPU/experiment unions remain explicit unfinished failures.
+
+Source selection follows Go's actual legacy last-blank/block boundaries and
+first-byte BOM behavior. Stored original headers and source hashes are never
+rewritten. Stock-Go filename pruning removes impossible partners before custom
+tag search, not final original-source checks. These repairs passed combined
+full corpus race verification; later source changes need fresh reports.
 
 ## Required next work
 
@@ -217,6 +225,14 @@ Original Go plus independent LLVM/C initialized-data/canary
 oracles run on Darwin and native Linux ARM64. Opcode/post-index dispatch is
 checked before IR emission, including legacy helpers. Original Arrow failures
 remain failures, not whole-library passes inferred from these family oracles.
+
+The complete typed scalar division/remainder family now follows Go's actual
+REM expansion: division writes R27 before MSUB rereads its possibly aliased
+sources. W results zero-extend. Shared explicit/implicit outputs invalidate old
+caller-link, code-address, private-frame and numerical-range witnesses.
+Independent original-Go bytes, initialized numerical/NZCV/canary oracles,
+three LLVM APIs, all affected object targets and native Linux execution retain
+the real pre-fix failures. Opcode extraction includes all eight scalar forms.
 
 The [exhaustive root runner](../../cmd/plan9asmtest/README.md) discovers and
 hash-partitions every current root test, example and fuzz seed into fresh serial
