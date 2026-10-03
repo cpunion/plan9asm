@@ -107,7 +107,15 @@ packed-vector move family now shares one typed grammar with the lowerer and
 caller consumer; independent entries cover every format, and Go-accepted `.Z`
 memory stores retain their native invalid-opcode exception before operand reads.
 Numerical/byte-canary LLVM oracles do not establish native AVX512 execution.
-FMA and mixed-control-flow caller contracts remain separate unfinished work.
+The FMA3 lowerer and caller consumer now share the complete named Go grammar:
+register/memory, widths, initialized masks, merge/zero, broadcast and fixed
+rounding. All arithmetic inputs must be initialized, including the old
+destination in zeroing forms; scalar upper-byte knowledge remains distinct.
+Fixed-rounding finite float32/float64 arithmetic uses an exact integer helper
+because the actual LLVM 22 constrained-libcall path reproduced an ambient-
+rounding error. Independent edge/cancellation/DAZ/FTZ/fenv tests do not establish
+new NaN-payload semantics, raw FP16 fixed rounding or native AVX512 execution.
+Mixed-control-flow caller contracts remain separate unfinished work.
 These fixtures do not establish original Weaviate or native AMD64 runtime
 success. Unknown native calls and dynamic caller frames remain failures without
 their own complete contracts.
@@ -131,6 +139,14 @@ their missing ZIP-bound selection headers without duplicating their directory
 or ordinary package roles. Recheck all three mechanisms together in the current
 integrated corpus, not just their separate frozen repair witnesses.
 
+Foreign pure-Go test dependencies now use actual module/version/ZIP boundaries,
+including nested module roots. A legacy proxy-generated `go.mod` outside the
+original ZIP is a separate signed-checksum origin, never fabricated source.
+Its public checksum record, inclusion proof, archive inventory and actual Go
+metadata bytes remain bound through final objects. Every observed equal-byte
+metadata copy retains its own canonical-path and post-object guard. Missing,
+changed or redirected metadata fails; reader consistency is not a library pass.
+
 CPP fallback uses Go's actual fixed package-CWD and GOROOT include search.
 Canonical physical origins, original literal operands and exact outside-module
 ENOENT witnesses are rechecked by producers, portable readers and active
@@ -147,12 +163,16 @@ source registrations and exact early diagnostics. Standalone early observation
 and same-mode pure-Go marker exports have independent source/tool and complete
 trace/archive/symbol proofs, including actual codegen/buildmode routing. Separate
 original-package planning/export foundations retain complete Go/ASM bytes,
-actual import-C roles and the full mode/CGO/custom-tag denominator. Their bounded
-actual same-mode export/asmdecl currently admits only import-free source and
-remains explicitly `consumer_pending`; it does not hook into ordinary reports.
+actual import-C roles and the full mode/CGO/custom-tag denominator. Separate
+same-mode metadata and physical CPP/LLVM object consumers retain independent
+compiled Go sources, dependency exports, header bytes and complete typed ABI0
+replay. Local types, aliases, constants and zero-sized fields are rechecked from
+original syntax, not trusted layout JSON. Unsupported imported/generic type
+closures fail. This mechanism remains separate from the ordinary report hook
+and explicitly `consumer_pending`; physical objects alone are not corpus passes.
 Early rule acceptance is not export evidence, and neither marker nor original
 export is CPP/LLVM consumer, C/SDK, sanitizer-runtime or final-link evidence.
-Dependency/header/consumer integration remains unfinished. Never synthesize
+The actual CLI/report/ledger integration remains unfinished. Never synthesize
 feature tags or turn CGO, SDK or dependency failures
 into N/A. Instrumented scopes must not masquerade as the ordinary protocol or
 be erased from its required coverage denominator.
@@ -186,8 +206,14 @@ root-suite and corpus reruns.
 The LD/ST1-4 whole/replicate/lane memory effects now share their complete typed
 native extents and writeback with lowering, private-frame analysis and control
 flow. Actual Go encodings retain reserved lane-displacement/D1 refusals; R18,
-g/R28, saved LR and unmodelled large-frame R20 cannot acquire fresh-frame
-permission. Original Go plus independent LLVM/C initialized-data/canary
+g/R28 and saved LR cannot acquire fresh-frame permission. Go's large-frame R20
+producer now has a separate original-and-normalized source/CFG proof: only an
+explicit complete ABI0 scalar frame may transport the actual prologue's new
+private SP. Small/NOFRAME entries do not borrow it, and ABIInternal software
+values remain distinct. All GP/FP reads need real source definitions; unknown
+inputs, mixed joins, escapes and saved-link corruption fail. Scalar/pair and
+structure memory consume the same bounds and continuation proof.
+Original Go plus independent LLVM/C initialized-data/canary
 oracles run on Darwin and native Linux ARM64. Opcode/post-index dispatch is
 checked before IR emission, including legacy helpers. Original Arrow failures
 remain failures, not whole-library passes inferred from these family oracles.
