@@ -17,6 +17,10 @@ type amd64PackedExtendMove struct {
 // _yvcvtdq2pd; ratio-four and ratio-eight forms use _yvbroadcastss.
 func (c *amd64Ctx) lowerPackedExtendMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
+	base, _, _ := strings.Cut(rawOp, ".")
+	if _, recognized := x86PackedZeroExtendSpecs[Op(base)]; recognized {
+		return c.lowerPackedZeroExtendMove(op, ins)
+	}
 	baseOp := rawOp
 	suffix := ""
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {

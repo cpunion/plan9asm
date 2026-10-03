@@ -216,12 +216,16 @@ func TestDecodedX86PackedExtendCompressedMemoryAndInvalidForms(t *testing.T) {
 		"truncated":        {0xc4, 0xe2},
 		"wrong map":        {0xc4, 0xe1, 0x79, 0x32, 0xc0},
 		"wrong pp":         {0xc4, 0xe2, 0x78, 0x32, 0xc0},
-		"wrong W":          {0xc4, 0xe2, 0xf9, 0x32, 0xc0},
 		"unrelated opcode": {0xc4, 0xe2, 0x79, 0x2f, 0xc0},
 	} {
 		if instruction, _, matched, decodeErr := decodedX86PackedExtendInstruction(code, 64); matched || decodeErr != nil {
 			t.Fatalf("%s encoding %x decoded as %+v, ok=%v, err=%v", name, code, instruction, matched, decodeErr)
 		}
+	}
+	// This family's VEX.W is ignored. It must not be confused with EVEX
+	// dword-to-qword W0, or rejected merely because Go emits canonical W0.
+	if ins, _, matched, err := decodedX86PackedExtendInstruction([]byte{0xc4, 0xe2, 0xf9, 0x32, 0xc0}, 64); !matched || err != nil || ins.Op != "VPMOVZXBQ" {
+		t.Fatalf("legal VEX.WIG form rejected: %+v/%v", ins, err)
 	}
 	if _, _, matched, decodeErr := decodedX86PackedExtendInstruction(invalidVVVV, 64); !matched || decodeErr == nil {
 		t.Fatalf("non-reserved VEX.vvvv encoding %x returned ok=%v err=%v", invalidVVVV, matched, decodeErr)

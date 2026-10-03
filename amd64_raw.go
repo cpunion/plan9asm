@@ -7796,7 +7796,9 @@ vectorPrefix:
 	}
 	vex0, vex1 := code[i+1], code[i+2]
 	properties, recognized := decodedX86PackedExtendOpcode(code[i+3])
-	if !recognized || vex1&3 != 1 || vex1&0x80 != 0 {
+	// Intel SDM PMOVSX/PMOVZX: VEX.W is ignored for all six ratios.
+	// Go chooses W0, but raw W1 is not an invalid instruction.
+	if !recognized || vex1&3 != 1 {
 		return Instr{}, 0, false, nil
 	}
 	ok = true
@@ -7847,6 +7849,11 @@ func decodedX86EVEXPackedExtendInstruction(code []byte, i, mode int, segment Reg
 		return Instr{}, 0, false, nil
 	}
 	ok = true
+	// The EVEX DQ forms alone require W0; the other five ratios are WIG.
+	// Keep this physical constraint distinct from Go's W0 encoder choice.
+	if properties.inputBits == 32 && p1&0x80 != 0 {
+		return Instr{}, 0, true, fmt.Errorf("EVEX packed dword-to-qword extension requires W0")
+	}
 	if p1&0x78 != 0x78 || p2&0x08 == 0 {
 		return Instr{}, 0, true, fmt.Errorf("EVEX.vvvv must be reserved")
 	}

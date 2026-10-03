@@ -390,3 +390,16 @@ reserved pp/vvvv and forbidden prefix combinations must not inherit the pinned
 decoder's incorrect VZEROUPPER spelling. Keep full-bank alias, flags, MXCSR and
 mask canaries. See Intel SDM Vol. 2C VZEROALL/VZEROUPPER in the linked manual;
 portable LLVM execution does not prove native AVX execution.
+
+The six unsigned packed widening ratios have a separate PMOVZX/VPMOVZX typed
+grammar and caller byte effect; their existence does not authorize signed
+PMOVSX callers. Bind legacy `yxm_q4` and both complete AVX operand tables, the
+shrinking source tuple, K1-K7 and `.Z`; low-bank masked 386 forms are accepted
+by Go, while high named X/Y registers still need a physical mode32 contract.
+Read independent FP fields byte by byte, rejecting any missing byte before
+emission. Legacy writes preserve coherent wider aliases; VEX/EVEX writes zero
+above the destination width. Intel SDM PMOVSX/PMOVZX distinguishes VEX WIG
+from EVEX's DQ-only W0 requirement. Keep complete-byte, NULL/guard-page and
+flags/MXCSR oracles: E5 inactive lanes suppress source reads, but a known mask
+does not itself grant caller memory bounds. Original legacy execution and
+portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.

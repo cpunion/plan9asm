@@ -225,6 +225,7 @@ func emitAMD64Prelude(b *strings.Builder, goarch string, file *File) {
 	// SSE2 helpers used by stdlib asm (e.g. internal/bytealg).
 	b.WriteString("declare i32 @llvm.x86.sse2.pmovmskb.128(<16 x i8>)\n")
 	for _, shape := range []struct{ lanes, bits int }{
+		{2, 8}, {4, 8}, {2, 16}, {4, 16}, {2, 32}, // Packed widening source lanes.
 		{8, 8}, // Legacy MMX MASKMOVQ.
 		{16, 8}, {32, 8}, {64, 8}, {8, 16}, {16, 16}, {32, 16},
 		{4, 32}, {8, 32}, {16, 32}, {2, 64}, {4, 64}, {8, 64},

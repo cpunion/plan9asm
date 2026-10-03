@@ -1,9 +1,14 @@
 package plan9asm
 
 import (
-	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func TestTranslateX86PackedZeroExtendMoveCompleteGoAssemblerForms(t *testing.T) {
@@ -19,37 +24,17 @@ func TestTranslateX86PackedZeroExtendMoveCompleteGoAssemblerForms(t *testing.T) 
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			legacyLast, zLast := 15, 21
-			if target.goarch == "386" {
-				legacyLast, zLast = 7, 7
-			}
 			var source strings.Builder
-			source.WriteString("TEXT packedzeroextendmoveforms(SB),NOSPLIT,$0-0\n")
-			for _, op := range []string{"PMOVZXBW", "PMOVZXBD", "PMOVZXBQ", "PMOVZXWD", "PMOVZXWQ", "PMOVZXDQ"} {
-				fmt.Fprintf(&source, "\t%s X0, X%d\n", op, legacyLast)
-				fmt.Fprintf(&source, "\t%s 8(AX), X%d\n", op, legacyLast)
-			}
-			for _, op := range []string{"VPMOVZXBW", "VPMOVZXWD", "VPMOVZXDQ"} {
-				fmt.Fprintf(&source, "\t%s X0, X1\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), X21\n", op)
-				fmt.Fprintf(&source, "\t%s X20, Y21\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), Y21\n", op)
-				fmt.Fprintf(&source, "\t%s Y20, Z%d\n", op, zLast)
-				fmt.Fprintf(&source, "\t%s 8(AX), Z%d\n", op, zLast)
-				fmt.Fprintf(&source, "\t%s X20, K1, X21\n", op)
-				fmt.Fprintf(&source, "\t%s.Z 8(AX), K2, Y21\n", op)
-				fmt.Fprintf(&source, "\t%s.Z Y20, K7, Z%d\n", op, zLast)
-			}
-			for _, op := range []string{"VPMOVZXBD", "VPMOVZXBQ", "VPMOVZXWQ"} {
-				for _, width := range []string{"X", "Y"} {
-					fmt.Fprintf(&source, "\t%s X20, %s21\n", op, width)
-					fmt.Fprintf(&source, "\t%s 8(AX), %s21\n", op, width)
-					fmt.Fprintf(&source, "\t%s.Z X20, K3, %s21\n", op, width)
+			source.WriteString("TEXT packedzeroextendmoveforms(SB),4,$0-0\n")
+			for _, ratio := range x86ZeroExtendTestRatios {
+				for _, prefix := range []string{"P", "VP"} {
+					for _, row := range x86ZeroExtendAcceptedForms(prefix+"MOVZX"+ratio.suffix, target.goarch) {
+						source.WriteString(row + "\n")
+					}
 				}
-				fmt.Fprintf(&source, "\t%s X20, Z%d\n", op, zLast)
-				fmt.Fprintf(&source, "\t%s.Z 8(AX), K4, Z%d\n", op, zLast)
 			}
 			source.WriteString("\tRET\n")
+			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)
 
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
@@ -70,6 +55,37 @@ func TestTranslateX86PackedZeroExtendMoveCompleteGoAssemblerForms(t *testing.T) 
 				t.Fatal("LLVM 22 llc not found")
 			}
 			compileLLVMToObject(t, llc, target.triple, "packed-zero-extend-move-"+target.name+".ll", "packed-zero-extend-move-"+target.name+".o", ll)
+
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, Options{
+				TargetTriple: target.triple,
+				Goarch:       target.goarch,
+				Sigs:         map[string]FuncSig{"packedzeroextendmoveforms": {Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer module.Dispose()
+			compileLLVMToObject(t, llc, target.triple, "zero-context.ll", "zero-context.o", module.String())
+
+			fset := token.NewFileSet()
+			declaration, err := parser.ParseFile(fset, "forms.go", "package forms\nfunc packedzeroextendmoveforms()\n", 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			typed, err := (&types.Config{Sizes: types.SizesFor("gc", target.goarch)}).Check("forms", fset, []*ast.File{declaration}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bound, err := translateGoModuleInContext(ctx, GoPackage{Path: "forms", Types: typed, Syntax: []*ast.File{declaration}}, []byte(source.String()), GoModuleOptions{
+				GOARCH: target.goarch, TargetTriple: target.triple, FileName: "forms.s",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer bound.Module.Dispose()
+			compileLLVMToObject(t, llc, target.triple, "zero-go-module.ll", "zero-go-module.o", bound.Module.String())
 		})
 	}
 }
