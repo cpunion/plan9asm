@@ -6,7 +6,12 @@ import (
 	"testing"
 )
 
-func arm64FPPairFamilyRuntime(t *testing.T, triple string) (string, string) {
+func arm64FPPairFamilyRuntime(t *testing.T, triple string) (string, string, string, string) {
+	t.Helper()
+	return arm64FPPairFamilyRuntimeWithObservation(t, triple, false)
+}
+
+func arm64FPPairFamilyRuntimeWithObservation(t *testing.T, triple string, originalWideObservation bool) (string, string, string, string) {
 	t.Helper()
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
@@ -70,9 +75,23 @@ func arm64FPPairFamilyRuntime(t *testing.T, triple string) (string, string) {
 				}
 			} else {
 				fmt.Fprintf(&source, "%s (R3, R4), frame+%d(FP)\n", op, shape.offset)
-				move := "MOVD"
-				if slotBytes == 4 {
+				var move string
+				switch slotBytes {
+				case 1:
+					move = "MOVBU"
+				case 2:
+					move = "MOVHU"
+				case 4:
 					move = "MOVWU"
+				case 8:
+					move = "MOVD"
+				default:
+					t.Fatalf("unregistered FP scalar observation width %d", slotBytes)
+				}
+				// Retain the original source for the real-Go stale-reference
+				// regression; it is not the canonical numerical fixture.
+				if originalWideObservation && slotBytes < 4 {
+					move = "MOVD"
 				}
 				for i := 0; i < shape.count; i++ {
 					fmt.Fprintf(&source, "%s frame+%d(FP), R5\nMOVD R5, %d(R10)\n", move, int64(i)*slotBytes, i*8)
@@ -257,13 +276,50 @@ static const uint64_t samples[8] = {0, 1, UINT64_MAX, UINT64_C(0x800000000000000
 	UINT64_C(0x7fffffff80000000), UINT64_C(0x800000007fffffff),
 	UINT64_C(0x0123456789abcdef), UINT64_C(0xfedcba9876543210)};
 ` + declarations.String() + resultsOracle + vectorOracle + "int main(void) {\n" + checks.String() + "  if (check_results()) return 90;\n  return check_vectors();\n}\n"
-	return ir, main
+	var goDeclarations strings.Builder
+	goTypes := map[LLVMType]string{
+		I8: "uint8", I16: "uint16", I32: "uint32", I64: "uint64",
+		Ptr: "*byte", LLVMType("float"): "float32",
+	}
+	for _, function := range file.Funcs {
+		sig, found := sigs[function.Sym]
+		if !found {
+			t.Fatalf("missing first-party fixture signature for %q", function.Sym)
+		}
+		fmt.Fprintf(&goDeclarations, "func %s(", function.Sym)
+		for i, arg := range sig.Args {
+			goType, found := goTypes[arg]
+			if !found {
+				t.Fatalf("unregistered first-party fixture Go input type %q", arg)
+			}
+			if i != 0 {
+				goDeclarations.WriteString(", ")
+			}
+			fmt.Fprintf(&goDeclarations, "a%d %s", i, goType)
+		}
+		goDeclarations.WriteString(")")
+		switch sig.Ret {
+		case Void:
+		case I64:
+			goDeclarations.WriteString(" uint64")
+		case LLVMType("{ i64, i64 }"):
+			goDeclarations.WriteString(" (uint64, uint64)")
+		default:
+			t.Fatalf("unregistered first-party fixture Go result type %q", sig.Ret)
+		}
+		goDeclarations.WriteByte('\n')
+	}
+	return ir, main, source.String(), goDeclarations.String()
 }
 
 func TestCrossLinuxRuntimeMatrixARM64FPPairFamily(t *testing.T) {
 	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
-	ir, main := arm64FPPairFamilyRuntime(t, triple)
+	ir, main, source, declarations := arm64FPPairFamilyRuntime(t, triple)
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "fp_pair_family", triple, ir, main, runner)
+	for api, apiIR := range arm64ScalarMemoryIRs(t, source, declarations, triple) {
+		compileAndRunRuntimeTestWithCompiler(t, llc, compiler, fmt.Sprintf("fp_pair_api_%d", api), triple, apiIR, main, runner)
+	}
+	t.Log("unchanged 25 pair/width/partial shapes, four result and three vector cases; initialized C reference through manual transport and all three typed APIs")
 }
 
 func TestARM64FPPairFamilyLLVM22Objects(t *testing.T) {
@@ -271,13 +327,13 @@ func TestARM64FPPairFamilyLLVM22Objects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	for _, triple := range []string{
-		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
-		"aarch64-unknown-linux-musl", "aarch64-pc-windows-msvc",
-	} {
+	for _, triple := range append(append([]string(nil), arm64TypedNativeTargets...), "aarch64-w64-windows-gnu") {
 		t.Run(triple, func(t *testing.T) {
-			ir, _ := arm64FPPairFamilyRuntime(t, triple)
+			ir, _, source, declarations := arm64FPPairFamilyRuntime(t, triple)
 			compileLLVMToObject(t, llc, triple, "fp-pair-family.ll", "fp-pair-family.o", ir)
+			for api, apiIR := range arm64ScalarMemoryIRs(t, source, declarations, triple) {
+				compileLLVMToObject(t, llc, triple, fmt.Sprintf("fp-pair-api-%d.ll", api), fmt.Sprintf("fp-pair-api-%d.o", api), apiIR)
+			}
 		})
 	}
 }
