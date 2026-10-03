@@ -2,24 +2,34 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 	"testing"
 )
 
 func TestCrossLinuxRuntimeMatrixX86InsertExtractIndependentFPFields(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	const source = "TEXT fields(SB),4,$0-8\nPXOR X0,X0\nVINSERTPS $0,a+0(FP),X0,X1\nVEXTRACTPS $0,X1,result+4(FP)\nRET\n" +
-		"TEXT stores(SB),4,$0-8\nMOVL $0x87654321,CX\nMOVD CX,X1\nVEXTRACTPS $0,X1,a+0(FP)\nMOVBLZX a+0(FP),AX\nMOVBLZX b+1(FP),BX\nSHLL $8,BX\nORL BX,AX\nMOVBLZX c+2(FP),BX\nSHLL $16,BX\nORL BX,AX\nMOVBLZX d+3(FP),BX\nSHLL $24,BX\nORL BX,AX\nMOVL AX,result+4(FP)\nRET\n"
+	const source = "TEXT fields(SB),4,$0-12\nPXOR X0,X0\nVINSERTPS $0,a+0(FP),X0,X1\nVEXTRACTPS $0,X1,ret+8(FP)\nRET\n" +
+		"TEXT stores(SB),4,$0-12\nMOVL $0x87654321,CX\nMOVD CX,X1\nVEXTRACTPS $0,X1,a+0(FP)\nMOVBLZX a+0(FP),AX\nMOVBLZX b+1(FP),BX\nSHLL $8,BX\nORL BX,AX\nMOVBLZX c+2(FP),BX\nSHLL $16,BX\nORL BX,AX\nMOVBLZX d+3(FP),BX\nSHLL $24,BX\nORL BX,AX\nMOVL AX,ret+8(FP)\nRET\n"
 	goAssemblerOracleOutput(t, "amd64", source, "", true)
-	sig := FuncSig{Args: []LLVMType{I8, I8, I8, I8}, Ret: I32, Frame: FrameLayout{
-		Params:  []FrameSlot{{Offset: 0, Type: I8, Index: 0, Field: -1}, {Offset: 1, Type: I8, Index: 1, Field: -1}, {Offset: 2, Type: I8, Index: 2, Field: -1}, {Offset: 3, Type: I8, Index: 3, Field: -1}},
-		Results: []FrameSlot{{Offset: 4, Type: I32, Field: -1}},
-	}}
+	pkg := mustGoPackage(t, "oracle", "package oracle\nfunc fields(a,b,c,d byte) uint32\nfunc stores(a,b,c,d byte) uint32\n")
+	sigs := map[string]FuncSig{}
+	for _, name := range []string{"fields", "stores"} {
+		decl := pkg.Types.Scope().Lookup(name).(*types.Func)
+		sig, err := DeriveGoFuncABI0Signature(name, decl, "amd64", types.SizesFor("gc", "amd64"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sig.Frame.Params) != 4 || len(sig.Frame.Results) != 1 || sig.Frame.Results[0].Offset != 8 {
+			t.Fatalf("actual AMD64 ABI0 four-byte fields/result layout changed: %+v", sig.Frame)
+		}
+		sigs[name] = sig
+	}
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: map[string]FuncSig{"fields": sig, "stores": sig}})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
