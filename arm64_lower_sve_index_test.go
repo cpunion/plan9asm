@@ -75,7 +75,13 @@ func TestTranslateARM64SVEIndexRejectsFormsOutsideGo127Table(t *testing.T) {
 	} {
 		t.Run(strings.NewReplacer(" ", "_", ".", "_").Replace(instruction), func(t *testing.T) {
 			source := "TEXT badsveindex(SB),$0-0\n\t" + instruction + "\n\tRET\n"
-			requireARM64SVEGoAssemblerResult(t, source, false)
+			// The malformed NEON destination panics in Go's SVE classifier.
+			// Keep its translator regression, but do not call that crash a
+			// successful Go form rejection. The actual tool defect is observed
+			// independently by TestGoAssemblerKnownMalformedInputDefects.
+			if instruction != "ZINDEX R0, R1, V0.D" {
+				requireARM64SVEGoAssemblerResult(t, source, false)
+			}
 			file, err := Parse(ArchARM64, source)
 			if err != nil {
 				return

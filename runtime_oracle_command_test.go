@@ -105,6 +105,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_go_assembler_test.go",
 		"go_assembler_oracle_test.go",
 		"go_assembler_oracle_listing_test.go",
+		"go_assembler_defect_go127_test.go",
 		"go_assembler_oracle_infrastructure_go127_unix_test.go",
 		"arm64_private_structure_runtime_test.go",
 		"arm64_large_frame_runtime_test.go",

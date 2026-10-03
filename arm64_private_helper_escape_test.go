@@ -81,7 +81,8 @@ func TestARM64PrivateHelperEscapeSourceAudit(t *testing.T) {
 		goRejected   bool
 	}{
 		{"pc-escape", "TEXT ·Escape(SB),4,$0-0\nADR -3(PC),R0\nRET\n", false},
-		// A named cross-TEXT branch is rejected by Go; ADR below is not.
+		// Go diagnoses and then panics for this out-of-TEXT branch. Its
+		// separate defect observation is not a source-rejection proof.
 		{"pc-branch", "TEXT ·Escape(SB),4,$0-0\nB -3(PC)\n", true},
 		{"raw-layout", "TEXT ·Escape(SB),4,$0-0\nWORD $0x17ffffff\nRET\n", false},
 		{"raw-doubleword-layout", "TEXT ·Escape(SB),4,$0-0\nDWORD $0x17ffffff\nRET\n", false},
@@ -100,7 +101,9 @@ func TestARM64PrivateHelperEscapeSourceAudit(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := base + test.suffix
-			requireARM64GoAssemblerResult(t, source, !test.goRejected)
+			if test.name != "pc-branch" {
+				requireARM64GoAssemblerResult(t, source, !test.goRejected)
+			}
 			requireARM64PrivateHelperContext(t, source, func(text, _ string) bool {
 				return text == "·Run" || text == "mix<>"
 			})

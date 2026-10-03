@@ -109,19 +109,24 @@ func TestARM64NamedPCBranchCompleteGoForms(t *testing.T) {
 }
 
 func TestARM64NamedPCBranchRejectsUnresolvedTargets(t *testing.T) {
+	// Out-of-TEXT targets exercise plan9asm's own input-safety boundary.
+	// Stock Go panics after its range diagnostic for every fixture below;
+	// TestGoAssemblerKnownMalformedInputDefects records those tool defects
+	// separately, without granting them ordinary Go rejection evidence.
 	for _, op := range arm64NamedPCBranchOps {
 		for _, target := range []string{"999(PC)", "-999(PC)", "9223372036854775807(PC)", "-9223372036854775808(PC)"} {
-			source := "TEXT pcInvalid(SB),$0-24\n" + arm64NamedPCBranchInstruction(op, target) + "\nRET\n"
-			requireARM64GoAssemblerResult(t, source, false)
-			file, err := Parse(ArchARM64, source)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sig := arm64NamedPCBranchSig("pcInvalid")
-			_, err = Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{sig.Name: sig}})
-			if err == nil || !strings.Contains(err.Error(), "outside TEXT") {
-				t.Fatalf("%s %s was not rejected precisely: %v", op, target, err)
-			}
+			t.Run(op+"/"+target, func(t *testing.T) {
+				source := "TEXT pcInvalid(SB),$0-24\n" + arm64NamedPCBranchInstruction(op, target) + "\nRET\n"
+				file, err := Parse(ArchARM64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sig := arm64NamedPCBranchSig("pcInvalid")
+				_, err = Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{sig.Name: sig}})
+				if err == nil || !strings.Contains(err.Error(), "outside TEXT") {
+					t.Fatalf("%s %s was not rejected precisely: %v", op, target, err)
+				}
+			})
 		}
 	}
 	for _, op := range []string{"TBZ", "TBNZ"} {

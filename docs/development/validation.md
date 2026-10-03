@@ -94,6 +94,20 @@ When the container's temporary directory is tmpfs-backed, enable execution
 
 ## Official coverage and benchmark
 
+The ordinary Go assembler oracle accepts a rejected form only after an actual
+exit 1 with a concrete, fixture-bound diagnostic. Positionless backend errors
+must bind their exact operand or frame values; a footer, panic, unknown exit,
+missing tool, signal, timeout or cleanup error is not rejection evidence.
+
+Some malformed Go 1.27 inputs instead expose assembler bugs (a missing VMOVQ
+operand, a NEON register used by ZINDEX, or an out-of-TEXT PC branch). Keep the
+unchanged inputs as translator rejection regressions. The separately named
+`TestGoAssemblerKnownMalformedInputDefects` observes their actual known panic
+and stack, or a future concrete source diagnostic; accepted objects and unknown
+failures fail that test. Its explicit `GO_ASSEMBLER_DEFECT_OBSERVATION` output
+is not a Go form-rejection or compilation certificate and never feeds a library
+pass or source-N/A decision. The ordinary oracle remains strict.
+
 The official gate checks classifications, parse errors and versioned form
 fingerprints. Inspect form-level differences before changing
 `testdata/coverage/go-asm-baseline.json`; never bless a fingerprint just to

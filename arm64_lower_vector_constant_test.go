@@ -63,7 +63,13 @@ func TestTranslateARM64VectorConstantRejectsFormsOutsideGoAssemblerTable(t *test
 	} {
 		t.Run(strings.NewReplacer(" ", "_", ",", "", ".", "_").Replace(instruction), func(t *testing.T) {
 			source := "TEXT badvectorconstant(SB),$0-0\n\t" + instruction + "\n\tRET\n"
-			requireARM64GoAssemblerResult(t, source, false)
+			// Go dereferences a missing third operand for this malformed
+			// arity. It is a translator input-safety regression, not a Go
+			// rejection certificate; the separate defect test retains its
+			// original source and observes the actual assembler outcome.
+			if instruction != "VMOVQ $1, V1" {
+				requireARM64GoAssemblerResult(t, source, false)
+			}
 			file, err := Parse(ArchARM64, source)
 			if err != nil {
 				return
