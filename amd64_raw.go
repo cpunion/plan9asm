@@ -5543,9 +5543,9 @@ encoding:
 	firstNumber := int(modRM&7) + evexBExt*8 + evexXExt*16
 	secondNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + evexRExt*8 + rHighExt*16
-	if mode == 32 && vectorName == "Z" {
+	if mode == 32 {
 		if modRM>>6 == 3 && firstNumber >= 8 || secondNumber >= 8 || destinationNumber >= 8 {
-			return Instr{}, 0, true, fmt.Errorf("high Z register is unavailable in 32-bit mode")
+			return Instr{}, 0, true, fmt.Errorf("%w: EVEX floating unpack high register has no proved physical mode32 binding", ErrProbeNeedsContext)
 		}
 	}
 	first, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, evexBExt, evexXExt, segment, vectorName, disp8Scale)

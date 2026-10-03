@@ -1483,6 +1483,35 @@ func TestExtractSupportedOpsFindsCompleteHorizontalFloatSpecTable(t *testing.T) 
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteTypedUnpackSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_packed_unpack_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_packed_unpack_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, opcode := range []string{
+			"PUNPCKLBW", "PUNPCKHBW", "PUNPCKLWL", "PUNPCKHWL", "PUNPCKLLQ", "PUNPCKHLQ", "PUNPCKLQDQ", "PUNPCKHQDQ",
+			"VPUNPCKLBW", "VPUNPCKHBW", "VPUNPCKLWD", "VPUNPCKHWD", "VPUNPCKLDQ", "VPUNPCKHDQ", "VPUNPCKLQDQ", "VPUNPCKHQDQ",
+			"UNPCKLPS", "UNPCKHPS", "UNPCKLPD", "UNPCKHPD", "VUNPCKLPS", "VUNPCKHPS", "VUNPCKLPD", "VUNPCKHPD",
+		} {
+			if _, ok := supported[opcode]; !ok {
+				t.Errorf("%s typed interleave extraction omitted %s", arch, opcode)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsDoesNotAdvertiseSystemRegistersAsOpcodes(t *testing.T) {
 	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {

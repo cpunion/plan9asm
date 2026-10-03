@@ -56,10 +56,10 @@ func decodedX86EVEXPackedUnpackInstruction(code []byte, mode int) (Instr, int, b
 		return fail("broadcast requires an enabled scalar-memory row")
 	}
 	destinationNumber := int(modRM>>3&7) + p.r*8
-	if mode == 32 && p.vectorLength == 2 &&
+	if mode == 32 &&
 		(destinationNumber >= 8 || p.upper >= 8 ||
 			modRM>>6 == 3 && int(modRM&7)+p.b*8+p.x*16 >= 8) {
-		return fail("386 Z-register exceeds the Go assembler frontend's register class")
+		return Instr{}, 0, true, fmt.Errorf("%w: EVEX unpack high register has no proved physical mode32 binding", ErrProbeNeedsContext)
 	}
 	vector := [...]string{"X", "Y", "Z"}[p.vectorLength]
 	disp8Scale := 16 << p.vectorLength

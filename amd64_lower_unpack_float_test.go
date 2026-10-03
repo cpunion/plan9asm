@@ -19,9 +19,10 @@ func TestTranslateX86FloatingUnpackCompleteGoAssemblerForms(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			legacyLast, zLast := 15, 22
+			legacyLast, zLast, second, destination := 15, 22, 20, 21
 			if target.goarch == "386" {
 				legacyLast, zLast = 7, 7
+				second, destination = 6, 7
 			}
 			var source strings.Builder
 			source.WriteString("TEXT floatingunpackforms(SB),NOSPLIT,$0-0\n")
@@ -31,8 +32,8 @@ func TestTranslateX86FloatingUnpackCompleteGoAssemblerForms(t *testing.T) {
 				vector := "V" + op
 				for _, width := range []string{"X", "Y"} {
 					fmt.Fprintf(&source, "\t%s %s0, %s1, %s2\n", vector, width, width, width)
-					fmt.Fprintf(&source, "\t%s 8(AX), %s20, %s21\n", vector, width, width)
-					fmt.Fprintf(&source, "\t%s.BCST 8(AX), %s20, %s21\n", vector, width, width)
+					fmt.Fprintf(&source, "\t%s 8(AX), %s%d, %s%d\n", vector, width, second, width, destination)
+					fmt.Fprintf(&source, "\t%s.BCST 8(AX), %s%d, %s%d\n", vector, width, second, width, destination)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s %s20, %s21, K1, %s22\n", vector, width, width, width)
 						fmt.Fprintf(&source, "\t%s.BCST.Z 8(AX), %s21, K7, %s22\n", vector, width, width)

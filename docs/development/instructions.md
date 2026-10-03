@@ -369,3 +369,15 @@ execution is not evidence that the host implements FEAT_SM3.
 Use independent-axis tests for shared operand grammars rather than repeating
 the same huge Cartesian product for every mnemonic. See
 [validation](validation.md) for the required gates.
+
+The packed unpack and logical families share only their binary operand grammar;
+operation effects remain separate. Unpack interleaves bits, including floating
+NaN payloads, within each 128-bit lane and keeps legacy upper aliases distinct
+from VEX/EVEX upper-zeroing. Intel SDM Vol. 2A Tables 2-44/45 classify EVEX
+unpack memory as E4NF: even a zero mask retains the complete native access.
+MMX low unpack reads four bytes; MMX high unpack reads eight. FP spans must
+cover all independent fields before emission. Go-accepted 386 names above
+X7/Y7/Z7 need a real physical mode32 binding; keep their actual Go encodings
+and Context regressions rather than interpreting them as ordinary virtual
+registers. Consult the [Intel SDM](https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html)
+and preserve zero-mask/guard-page and complete-byte runtime oracles.

@@ -62,7 +62,19 @@ var x86PackedLogicalSpecs = map[Op]x86PackedLogicalSpec{
 }
 
 type x86PackedLogicalForm struct {
-	spec                                  x86PackedLogicalSpec
+	x86PackedBinaryForm
+	spec x86PackedLogicalSpec
+}
+
+// These fields describe only an operand grammar. Arithmetic, interleave and
+// bitwise effects remain in their own typed operation specs and consumers.
+type x86PackedBinarySpec struct {
+	encoding       x86PackedLogicalEncoding
+	broadcastBytes int
+	zeroing        bool
+}
+
+type x86PackedBinaryForm struct {
 	byteWidth, first, second, destination int
 	mask, memory, memoryBytes             int
 	legacy, mmx, broadcast, zeroing       bool
@@ -71,14 +83,22 @@ type x86PackedLogicalForm struct {
 // This grammar supplies no initialized values, address bounds or caller
 // privileges. The emitter and the private source/CFG proof share only forms.
 func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm, bool, error) {
-	base, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	spec, recognized := x86PackedLogicalSpecs[Op(base)]
 	if !recognized {
 		return x86PackedLogicalForm{}, false, nil
 	}
-	form := x86PackedLogicalForm{spec: spec, first: 0, second: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
-	fail := func() (x86PackedLogicalForm, bool, error) {
-		return form, true, fmt.Errorf("%s %s operands/suffix outside Go packed logical grammar: %q", goarch, ins.Op, ins.Raw)
+	form, err := x86PackedBinaryProperties(ins, goarch, x86PackedBinarySpec{
+		encoding: spec.encoding, broadcastBytes: spec.broadcastBytes, zeroing: spec.zeroing,
+	})
+	return x86PackedLogicalForm{x86PackedBinaryForm: form, spec: spec}, true, err
+}
+
+func x86PackedBinaryProperties(ins Instr, goarch string, spec x86PackedBinarySpec) (x86PackedBinaryForm, error) {
+	_, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	form := x86PackedBinaryForm{first: 0, second: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1}
+	fail := func() (x86PackedBinaryForm, error) {
+		return form, fmt.Errorf("%s %s operands/suffix outside Go packed binary grammar: %q", goarch, ins.Op, ins.Raw)
 	}
 	if goarch != "386" && goarch != "amd64" {
 		return fail()
@@ -171,5 +191,5 @@ func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm,
 	} else if form.broadcast || !register(first) {
 		return fail()
 	}
-	return form, true, nil
+	return form, nil
 }

@@ -1263,7 +1263,9 @@ func TestTranslate386PackedUnpackCompleteGoAssemblerForms(t *testing.T) {
 	} {
 		fmt.Fprintf(&src, "\t%s X0, X1, X2\n", op)
 		fmt.Fprintf(&src, "\t%s (AX), Y1, Y2\n", op)
-		fmt.Fprintf(&src, "\t%s X8, X9, X10\n", op)
+		// Named high-register mode32 acceptance is retained by the separate
+		// actual-Go/physical-Context oracle, not fabricated LLVM registers.
+		fmt.Fprintf(&src, "\t%s X5, X6, X7\n", op)
 		fmt.Fprintf(&src, "\t%s Z0, Z1, Z2\n", op)
 		if strings.Contains(op, "DQ") {
 			fmt.Fprintf(&src, "\t%s.BCST (AX), Y1, Y2\n", op)
