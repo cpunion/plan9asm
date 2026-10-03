@@ -42,7 +42,11 @@ func x86CallerInsertExtractStep(ins *Instr, f x86InsertExtractForm, state *x86So
 				known |= uint64(15) << uint(lane*4)
 			}
 		}
-		state.vectors[x86CallerVectorRoot(ins.Args[f.destination].Reg)] = ^outputMask | known&outputMask
+		upper := ^outputMask
+		if f.spec.legacy {
+			upper &= state.vectors[x86CallerVectorRoot(ins.Args[f.destination].Reg)]
+		}
+		state.vectors[x86CallerVectorRoot(ins.Args[f.destination].Reg)] = upper | known&outputMask
 		return true
 	}
 	if f.memory < 0 && source&low != low {

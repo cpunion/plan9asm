@@ -6,12 +6,14 @@ import (
 )
 
 type x86InsertExtractSpec struct {
-	insert, scalar, vex bool
-	chunk, laneBits     int
-	allowY, allowZ      bool
+	insert, scalar, vex, legacy bool
+	chunk, laneBits             int
+	allowY, allowZ              bool
 }
 
 var x86InsertExtractSpecs = map[Op]x86InsertExtractSpec{
+	"EXTRACTPS":     {scalar: true, legacy: true, chunk: 4, laneBits: 32},
+	"INSERTPS":      {insert: true, scalar: true, legacy: true, chunk: 4, laneBits: 32},
 	"VEXTRACTF128":  {vex: true, chunk: 16, laneBits: 8, allowY: true},
 	"VEXTRACTI128":  {vex: true, chunk: 16, laneBits: 8, allowY: true},
 	"VEXTRACTF32X4": {chunk: 16, laneBits: 32, allowY: true, allowZ: true},
@@ -57,8 +59,11 @@ func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm,
 	count := 3
 	if spec.insert {
 		count, f.base = 4, 2
+		if spec.legacy {
+			count = 3
+		}
 	}
-	if goarch != "amd64" && goarch != "386" || spec.insert && goarch == "386" || len(ins.Args) != count && len(ins.Args) != count+1 ||
+	if goarch != "amd64" && goarch != "386" || spec.insert && !spec.legacy && goarch == "386" || len(ins.Args) != count && len(ins.Args) != count+1 ||
 		len(ins.Args) == count+1 && (spec.vex || spec.scalar) || dotted && (suffix != "Z" || spec.vex || spec.scalar) ||
 		ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 		return fail()
@@ -80,13 +85,17 @@ func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm,
 	if !spec.insert && spec.vex {
 		minimum = -128
 	}
-	if spec.scalar && !spec.insert {
+	if spec.scalar && !spec.insert && !spec.legacy {
 		index, valid := amd64VectorRegisterIndex(ins.Args[1].Reg, 16)
 		if valid && index < 16 {
 			minimum = -128
 		}
 	}
-	if ins.Args[0].Imm < minimum || ins.Args[0].Imm > 255 {
+	maximum := int64(255)
+	if spec.legacy && !spec.insert {
+		maximum = 3
+	}
+	if ins.Args[0].Imm < minimum || ins.Args[0].Imm > maximum {
 		return fail()
 	}
 	f.immediate = byte(ins.Args[0].Imm)
@@ -111,8 +120,11 @@ func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm,
 	register := func(arg Operand, width int) bool {
 		index, valid := amd64VectorRegisterIndex(arg.Reg, width)
 		limit := 32
-		if spec.vex {
+		if spec.vex || spec.legacy {
 			limit = 16
+		}
+		if goarch == "386" && spec.legacy {
+			limit = 8
 		}
 		if arg.Kind != OpReg || !valid || index >= limit {
 			return false

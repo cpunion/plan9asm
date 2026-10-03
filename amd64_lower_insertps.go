@@ -17,12 +17,10 @@ func (c *amd64Ctx) lowerInsertPackedSingle(op Op, ins Instr) (ok bool, terminate
 	if baseOp != "INSERTPS" && baseOp != "VINSERTPS" {
 		return false, false, nil
 	}
-	if baseOp == "VINSERTPS" {
-		var err error
-		ins, _, _, err = c.bindInsertExtractForm(op, ins)
-		if err != nil {
-			return true, false, err
-		}
+	var bindingErr error
+	ins, _, _, bindingErr = c.bindInsertExtractForm(op, ins)
+	if bindingErr != nil {
+		return true, false, bindingErr
 	}
 	if rawOp != baseOp {
 		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
@@ -70,7 +68,7 @@ func (c *amd64Ctx) lowerInsertPackedSingle(op Op, ins Instr) (ok bool, terminate
 		selected := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = extractelement <4 x i32> %%%s, i32 %d\n", selected, sourceLanes, (ins.Args[0].Imm>>6)&3)
 		inserted = "%" + selected
-	} else if source.Kind == OpFP && baseOp == "VINSERTPS" {
+	} else if source.Kind == OpFP {
 		// An original m32 FP span can comprise four independent ABI0
 		// shadow fields. It is not a contiguous load from the first alloca.
 		value, err := c.loadFPVectorBytes(source.FPOffset, 4)

@@ -53,11 +53,12 @@ func x86InsertExtractFormats() []string {
 			}
 		}
 	}
-	return append(rows, "VEXTRACTPS $255,X1,AX", "VEXTRACTPS $255,X1,(BX)", "VINSERTPS $255,X0,X1,X2", "VINSERTPS $255,(BX),X1,X2")
+	return append(rows, "VEXTRACTPS $255,X1,AX", "VEXTRACTPS $255,X1,(BX)", "VINSERTPS $255,X0,X1,X2", "VINSERTPS $255,(BX),X1,X2",
+		"EXTRACTPS $3,X1,AX", "EXTRACTPS $3,X1,(BX)", "INSERTPS $255,X0,X1", "INSERTPS $255,(BX),X1")
 }
 
 func TestX86InsertExtractEveryGoOpcodeAttribute(t *testing.T) {
-	if len(x86InsertExtractSpecs) != 22 {
+	if len(x86InsertExtractSpecs) != 24 {
 		t.Fatal("incomplete family")
 	}
 	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
@@ -107,6 +108,20 @@ func TestX86InsertExtractEveryGoOpcodeAttribute(t *testing.T) {
 	sort.Strings(observed)
 	if len(observed) != 22 {
 		t.Fatalf("actual Go family: %v", observed)
+	}
+	legacy, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []string{
+		"{AEXTRACTPS, yextractps, Pq, opBytes{0x3a, 0x17, 0}}",
+		"{AINSERTPS, yxshuf, Pq, opBytes{0x3a, 0x21, 0}}",
+		"var yextractps = []ytab{\n\t{Zibr_m, 2, argList{Yu2, Yxr, Yml}}",
+		"var yxshuf = []ytab{\n\t{Zibm_r, 2, argList{Yu8, Yxm, Yxr}}",
+	} {
+		if !strings.Contains(string(legacy), row) {
+			t.Fatalf("actual Go legacy PS row changed: %s", row)
+		}
 	}
 }
 
@@ -183,6 +198,8 @@ func TestX86InsertExtractDispatchIdentityAndGrammarBeforeEmission(t *testing.T) 
 		"VINSERTPS $0,(AX)(SP*2),X0,X1", "VINSERTPS $0,2147483648(AX),X0,X1",
 		"VEXTRACTF32X4 $0,Z0,$data(SB)",
 		"VEXTRACTF128 $selector,Y0,X1", "VINSERTPS $1.5,X0,X1,X2",
+		"INSERTPS $selector,X0,X1", "EXTRACTPS $1.5,X0,AX", "EXTRACTPS $4,X0,AX",
+		"INSERTPS $0,X16,X0", "EXTRACTPS $0,X16,AX", "INSERTPS.Z $0,X0,X1",
 	} {
 		source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
 		// Go 1.20 emitted the reserved EVEX.z=1/aaa=0 combination for

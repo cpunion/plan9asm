@@ -62,7 +62,12 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 	}
 	for _, imm := range []int{0, 16, 32, 48, 64, 128, 192, 1, 2, 4, 8, 15, 255} {
 		rows = append(rows, fmt.Sprintf("VINSERTPS $%d,X0,X1,X2", imm), fmt.Sprintf("VINSERTPS $%d,(BX),X1,X1", imm), fmt.Sprintf("VEXTRACTPS $%d,X1,R8", imm))
+		rows = append(rows, fmt.Sprintf("INSERTPS $%d,X0,X1", imm), fmt.Sprintf("INSERTPS $%d,(BX),X1", imm))
 	}
+	for lane := 0; lane < 4; lane++ {
+		rows = append(rows, fmt.Sprintf("EXTRACTPS $%d,X1,R8", lane))
+	}
+	rows = append(rows, "INSERTPS $128,X1,X1", "INSERTPS $192,X1,X0", "INSERTPS $64,X0,X0")
 	for index, row := range rows {
 		file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
 		if err != nil {
@@ -70,7 +75,7 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 		}
 		ins := file.Funcs[0].Instrs[1]
 		op := strings.Fields(row)[0]
-		insert, scalar, memory, masked := strings.HasPrefix(op, "VINSERT"), strings.HasSuffix(op, "PS"), strings.Contains(row, "(BX)"), strings.Contains(row, "K1")
+		insert, scalar, memory, masked := strings.Contains(op, "INSERT"), strings.HasSuffix(op, "PS"), strings.Contains(row, "(BX)"), strings.Contains(row, "K1")
 		if !insert && memory && masked {
 			continue // physical native E6NF objects are checked separately; AVX512 execution is not available here
 		}
@@ -106,9 +111,10 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 			{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}, {Offset: 16, Type: Ptr, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1},
 		}}}
 		fmt.Fprintf(&declarations, "extern void %s(void*,const void*,const void*,uint64_t);\n", name)
-		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d))return %d;\n", name,
+		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d))return %d;\n", name,
 			x86FloatAddSubBoolInt(insert), x86FloatAddSubBoolInt(scalar), chunk, width, laneBytes, int(ins.Args[0].Imm),
-			x86FloatAddSubBoolInt(memory), x86FloatAddSubBoolInt(masked), x86FloatAddSubBoolInt(strings.Contains(op, ".Z")), x86FloatAddSubBoolInt(destination.Kind == OpReg), index+1)
+			x86FloatAddSubBoolInt(memory), x86FloatAddSubBoolInt(masked), x86FloatAddSubBoolInt(strings.Contains(op, ".Z")), x86FloatAddSubBoolInt(destination.Kind == OpReg), x86FloatAddSubBoolInt(!strings.HasPrefix(op, "V")),
+			x86FloatAddSubBoolInt(ins.Args[1].Reg == "X1"), x86FloatAddSubBoolInt(!strings.HasPrefix(op, "V") && destination.Reg == "X0"), index+1)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	file, err := Parse(ArchAMD64, source.String())
@@ -123,19 +129,21 @@ func TestCrossLinuxRuntimeMatrixX86InsertExtractByteSemantics(t *testing.T) {
 #include <string.h>
 #include <stdio.h>
 typedef void(*transfer)(void*,const void*,const void*,uint64_t);
-__attribute__((noinline)) static int check(transfer fn,int insert,int scalar,int chunk,int width,int laneBytes,unsigned imm,int memory,int masked,int zero,int reg) {
+__attribute__((noinline)) static int check(transfer fn,int insert,int scalar,int chunk,int width,int laneBytes,unsigned imm,int memory,int masked,int zero,int reg,int legacy,int sourceB,int baseA) {
  const uint64_t masks[]={0,1,UINT64_C(0xaaaaaaaaaaaaaaaa),UINT64_C(0xffffffffffffffff),UINT64_C(0xffff000000000000)};
  for(unsigned vector=0;vector<8;vector++)for(unsigned m=0;m<5;m++) {
   uint8_t as[67],bs[67],out[67],want[64],aCopy[67],bCopy[67];uint8_t *a=as+1,*b=bs+1;
   memset(as,0xa7,67);memset(bs,0xb9,67);memset(out,0xc3,67);
   for(unsigned i=0;i<64;i++){a[i]=(i*31+vector*17)^0x81;b[i]=(i*13+vector*29)^0x27;}
   memcpy(aCopy,as,67);memcpy(bCopy,bs,67);memset(want,reg&&!(scalar&&!insert)?0:0xc3,64);
+  const uint8_t *base=baseA?a:b,*insertSource=sourceB?b:a;
+  if(legacy&&insert)memcpy(want,base,64);
   unsigned offset=(imm&(width/chunk-1))*chunk;
   if(insert) {
-   memcpy(want,b,width);
-   if(scalar){offset=((imm>>4)&3)*4;memcpy(want+offset,a+(memory?0:((imm>>6)&3)*4),4);
+   memcpy(want,base,width);
+   if(scalar){offset=((imm>>4)&3)*4;memcpy(want+offset,insertSource+(memory?0:((imm>>6)&3)*4),4);
     for(unsigned lane=0;lane<4;lane++)if(imm&(1u<<lane))memset(want+lane*4,0,4);
-   } else memcpy(want+offset,a,chunk);
+   } else memcpy(want+offset,insertSource,chunk);
   } else {memcpy(want,b+offset,chunk);if(scalar&&reg)memset(want+4,0,4);}
   unsigned result=insert?width:chunk;
   if(masked)for(unsigned lane=0;lane<result/laneBytes;lane++)if(!(masks[m]&(UINT64_C(1)<<lane))) {
@@ -159,13 +167,13 @@ func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T)
 	var source, declarations, calls strings.Builder
 	sigs := map[string]FuncSig{}
 	for index, row := range []string{
-		"VINSERTF32X4.Z $1,(BX),Y1,K1,Y2", "VINSERTI64X4.Z $1,(BX),Z1,K1,Z2", "VINSERTPS $15,(BX),X1,X2",
+		"VINSERTF32X4.Z $1,(BX),Y1,K1,Y2", "VINSERTI64X4.Z $1,(BX),Z1,K1,Z2", "VINSERTPS $15,(BX),X1,X2", "INSERTPS $15,(BX),X2",
 	} {
 		name := fmt.Sprintf("fault%d", index)
 		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ input+8(FP),BX\nMOVQ $0,CX\nKMOVQ CX,K1\nVPXORD Z1,Z1,Z1\n%s\nVMOVUPS Z2,(AX)\nRET\n", name, row)
 		sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, Ptr}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: Ptr, Index: 1, Field: -1}}}}
 		fmt.Fprintf(&declarations, "extern void %s(void*,const void*);\n", name)
-		fmt.Fprintf(&calls, "if(fault(%s,0,%d)||fault(%s,page+size-%d,%d))return %d;\n", name, []int{16, 32, 4}[index], name, []int{8, 16, 2}[index], []int{16, 32, 4}[index], index+1)
+		fmt.Fprintf(&calls, "if(fault(%s,0,%d)||fault(%s,page+size-%d,%d))return %d;\n", name, []int{16, 32, 4, 4}[index], name, []int{8, 16, 2, 2}[index], []int{16, 32, 4, 4}[index], index+1)
 	}
 	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
 	file, err := Parse(ArchAMD64, source.String())

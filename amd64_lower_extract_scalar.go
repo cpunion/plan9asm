@@ -43,7 +43,7 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 	if !recognized {
 		return false, false, nil
 	}
-	if baseOp == "VEXTRACTPS" {
+	if baseOp == "VEXTRACTPS" || baseOp == "EXTRACTPS" {
 		var err error
 		ins, _, _, err = c.bindInsertExtractForm(op, ins)
 		if err != nil {
@@ -122,7 +122,7 @@ func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminat
 		}
 		return true, false, c.storeRegSized(destinationReg, amd64IntegerTypeForBits(spec.bits), value)
 	}
-	if baseOp == "VEXTRACTPS" && destination.Kind == OpFP {
+	if (baseOp == "VEXTRACTPS" || baseOp == "EXTRACTPS") && destination.Kind == OpFP {
 		bytes := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to <4 x i8>\n", bytes, value)
 		return true, false, c.storeFPVectorBytes(destination.FPOffset, 4, "%"+bytes, "")

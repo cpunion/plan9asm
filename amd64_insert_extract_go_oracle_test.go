@@ -233,6 +233,18 @@ func TestOriginalPSBits(t *testing.T) {
 		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-16\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),BX\nMOVUPS (BX),X0\nEXTRACTPS $%d,X0,CX\nMOVQ CX,(AX)\nRET\n", name, lane)
 		fmt.Fprintf(&checks, "{var out [8]byte;%s(&out,&a);if binary.LittleEndian.Uint64(out[:])!=uint64(a[%d]){t.Fatalf(%q,out)}}\n", name, lane, name+" zero-extension got=%x")
 	}
+	declarations.WriteString("func fpFields(a,b,c,d byte) uint32\nfunc fpStores(a,b,c,d byte) uint32\n")
+	// ABI0 aligns the result area to the AMD64 stack word independently of
+	// the four byte parameters; the actual Go wrapper reads ret+8(FP).
+	assembly.WriteString("TEXT ·fpFields(SB),4,$0-12\nPXOR X0,X0\nINSERTPS $0,a+0(FP),X0\nEXTRACTPS $0,X0,ret+8(FP)\nRET\n" +
+		"TEXT ·fpStores(SB),4,$0-12\nMOVL $0x87654321,CX\nMOVD CX,X1\nEXTRACTPS $0,X1,a+0(FP)\nMOVBLZX a+0(FP),AX\nMOVBLZX b+1(FP),BX\nSHLL $8,BX\nORL BX,AX\nMOVBLZX c+2(FP),BX\nSHLL $16,BX\nORL BX,AX\nMOVBLZX d+3(FP),BX\nSHLL $24,BX\nORL BX,AX\nMOVL AX,ret+8(FP)\nRET\n")
+	checks.WriteString(`for i:=0;i<256;i++ {
+ a,b,c,d:=byte(i),byte(i*37),byte(i*59),byte(i*71)
+ want:=uint32(a)|uint32(b)<<8|uint32(c)<<16|uint32(d)<<24
+ if got:=fpFields(a,b,c,d);got!=want{t.Fatalf("original Go FP fields got=%x want=%x",got,want)}
+ if got:=fpStores(a,b,c,d);got!=0x87654321{t.Fatalf("original Go FP stores got=%x",got)}
+}
+`)
 	checks.WriteString("}\n")
 	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
 	dir := t.TempDir()
@@ -243,7 +255,7 @@ func TestOriginalPSBits(t *testing.T) {
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "test", "-p=2", "-vet=off", "-count=1", ".")
+	command := exec.CommandContext(ctx, "go", "test", "-p=2", "-vet=asmdecl", "-count=1", ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
