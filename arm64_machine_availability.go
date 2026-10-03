@@ -34,6 +34,7 @@ type arm64MachineAvailability struct {
 	entry      *ARM64GoRegisterABI
 	closure    *ARM64ClosureABI
 	entryError error
+	sourceR20  bool
 	used       bool
 	nativeIR   map[int]arm64MachineNativeProof
 }
@@ -73,7 +74,7 @@ func (c *arm64Ctx) emitMachineNativeIR(store bool, format string, args ...any) {
 const arm64WholeScalableRegister = 1 << 20
 
 func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
-	needed := c.goRegisterEntry || c.privateRegisterEntry
+	needed := c.goRegisterEntry || c.privateRegisterEntry || c.checkedR20Entry
 	for _, block := range c.blocks {
 		for _, instruction := range block.instrs {
 			ins := arm64ControlDecode(instruction)
@@ -98,10 +99,11 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 	if c.goRegisterEntry {
 		flow.entry, flow.used = c.sig.ARM64GoRegisterABI, true
 		flow.closure = c.sig.ARM64ClosureABI
-	} else if c.privateRegisterEntry {
+	} else if c.privateRegisterEntry || c.checkedR20Entry {
 		// Explicit empty presence: only SP and the real caller LR are
 		// available at an ABI0 entry. FP loads define the data registers.
 		flow.entry, flow.used = &ARM64GoRegisterABI{}, true
+		flow.sourceR20 = c.sourceFrameR20
 		if len(c.sig.ArgRegs) != 0 {
 			// Retain custom ArgRegs' scalar len/type contract, rather than
 			// applying standard Go recursive ABIInternal assignment to it.
@@ -281,6 +283,9 @@ func (flow *arm64MachineAvailability) validate() error {
 	}
 	if flow.closure != nil {
 		entry.values[string(flow.closure.ContextRegister)] = 64
+	}
+	if flow.sourceR20 {
+		entry.values["R20"] = 64
 	}
 	before := make([]*arm64MachineState, len(flow.blocks))
 	before[0] = &entry

@@ -146,8 +146,13 @@ func TestARM64PrivateStructureNumericalFamilyObjects(t *testing.T) {
 }
 
 func TestCrossLinuxRuntimeMatrixARM64PrivateStructureFamily(t *testing.T) {
-	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
 	source, pkg, cases := arm64PrivateStructureFixture(t)
+	arm64RunPrivateStructureFixture(t, source, pkg, cases)
+}
+
+func arm64RunPrivateStructureFixture(t *testing.T, source string, pkg GoPackage, cases []arm64PrivateStructureCase) {
+	t.Helper()
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
 	var declarations, checks, cDeclarations, cChecks strings.Builder
 	for _, tc := range cases {
 		fmt.Fprintf(&declarations, "func %s(*byte,*byte)\n", tc.name)

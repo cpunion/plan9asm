@@ -29,8 +29,8 @@ func arm64CallFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTr
 	if !arm64SourceGoFrame(fn).present {
 		return arm64RawZeroFrameUnexposedForTransport(fn, transport)
 	}
-	if arm64HasRawFrameCode(fn) {
-		return arm64RawPrivateFrameUnexposed(fn)
+	if arm64HasRawFrameCode(fn) || arm64SourceFrameR20Required(fn) {
+		return arm64RawPrivateFrameUnexposedForTransport(fn, transport)
 	}
 	text, affine := false, false
 	for _, original := range fn.Instrs {

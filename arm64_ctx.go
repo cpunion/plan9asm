@@ -34,19 +34,21 @@ type arm64Ctx struct {
 	usedRegs map[Reg]bool
 	regSlot  map[Reg]string // reg -> alloca name
 
-	usedVRegs      map[int]bool
-	vRegSlot       map[int]string // vreg index -> alloca name (<16 x i8>)
-	usedZRegs      map[int]bool
-	zRegSlot       map[int]string // SVE zreg index -> alloca name (<vscale x 16 x i8>)
-	usedPRegs      map[int]bool
-	pRegSlot       map[int]string // SVE preg index -> alloca name (<vscale x 16 x i1>)
-	usedPNRegs     map[int]bool
-	pnRegSlot      map[int]string // SVE predicate-as-counter index -> alloca name (target("aarch64.svcount"))
-	localStackSlot string
-	localStackSize int64
-	frameSize      int64 // TEXT local storage, including accesses through SP aliases
-	sourceGoFrame  arm64GoFrame
-	dynamicStack   *arm64DynamicStackPlan
+	usedVRegs       map[int]bool
+	vRegSlot        map[int]string // vreg index -> alloca name (<16 x i8>)
+	usedZRegs       map[int]bool
+	zRegSlot        map[int]string // SVE zreg index -> alloca name (<vscale x 16 x i8>)
+	usedPRegs       map[int]bool
+	pRegSlot        map[int]string // SVE preg index -> alloca name (<vscale x 16 x i1>)
+	usedPNRegs      map[int]bool
+	pnRegSlot       map[int]string // SVE predicate-as-counter index -> alloca name (target("aarch64.svcount"))
+	localStackSlot  string
+	localStackSize  int64
+	frameSize       int64 // TEXT local storage, including accesses through SP aliases
+	sourceGoFrame   arm64GoFrame
+	sourceFrameR20  bool // original + normalized typed Go large-frame producer
+	checkedR20Entry bool // all typed GP/FP reads need a genuine entry/CFG definition
+	dynamicStack    *arm64DynamicStackPlan
 
 	flagsNSlot   string
 	flagsZSlot   string
@@ -1180,6 +1182,11 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 		addr := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
 		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+		if c.sourceFrameR20 {
+			// The physical Go prologue leaves R20 equal to the new body SP.
+			// Only the complete typed, non-escaping source proof enables it.
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, c.regSlot[Reg("R20")])
+		}
 		if c.sourceGoFrame.present {
 			// Go saves the incoming LR at the bottom of every implicit frame,
 			// including a framed leaf. Explicit source loads/stores can observe

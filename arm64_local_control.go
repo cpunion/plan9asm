@@ -463,6 +463,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	if c.sourceGoFrame.present {
 		entry.memory["sp:0"] = entry.regs[Reg("R30")]
 	}
+	if c.sourceFrameR20 {
+		entry.regs["R20"] = arm64ControlValue{"sp:0": true}
+	}
 	for _, reg := range c.sig.ArgRegs {
 		entry.regs[reg] = arm64ControlExternal()
 	}

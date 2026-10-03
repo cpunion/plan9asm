@@ -6,7 +6,7 @@ import (
 )
 
 // This additive proof is only for framed source-leaf functions containing raw
-// encodings. Unlike the older read-only affine proof it tracks physical SP
+// encodings or checked R20 uses. Unlike the older affine proof it tracks physical SP
 // movement and privately spilled frame-address values. Neither decoding a WORD
 // nor a generic GP-write mask supplies permission to expose or erase an address.
 type arm64RawPrivateFrameState struct {
@@ -56,6 +56,10 @@ func arm64HasRawFrameCode(fn Func) bool {
 }
 
 func arm64RawPrivateFrameUnexposed(fn Func) bool {
+	return arm64RawPrivateFrameUnexposedForTransport(fn, nil)
+}
+
+func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {
 	frame := arm64SourceGoFrame(fn)
 	if !frame.present || frame.restoresLink || !arm64SourceFrameFlagsKnown(fn) || fn.FrameSize < 0 || fn.FrameSize > arm64MaxLocalStackSpan || fn.FrameSize&7 != 0 {
 		return false
@@ -142,12 +146,19 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 		for _, fixed := range arm64RawZeroFixedEntry[:2] {
 			entry.fixed.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
 		}
-		if arm64SourceFrameAutosize(fn.FrameSize) > 0xf0 {
-			// Go's large-frame prologue computes the new SP in R20 before
-			// entering the source body. The generic virtual entry currently
-			// does not transport this implicit value. Keep it may-frame, not
-			// zero/external: no source read or escape can borrow this proof.
+		if arm64SourceUsesR20(fn) {
 			entry.regs["R20"] = arm64PrivateFrameAddress{}
+		}
+		r20Transport := arm64SourceFrameR20(fn) && arm64SourceFrameR20Transport(fn, transport)
+		if arm64SourceFrameAutosize(fn.FrameSize) > 0xf0 {
+			entry.regs["R20"] = arm64PrivateFrameAddress{
+				exact: r20Transport,
+			}
+			if entry.regs["R20"].exact {
+				entry.fixed.regs["R20"] = arm64ControlValue{"sp:0": true}
+				entry.fixed.regs["R30"] = arm64ControlValue{"label:entry-lr": true}
+				entry.fixed.memory["sp:0"] = entry.fixed.regs["R30"]
+			}
 		}
 		if !propagate(seed, entry) {
 			return false
@@ -167,6 +178,15 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 						return false
 					}
 					delete(state.regs, "R29")
+					if r20Transport {
+						// A source leaf RET uses R30, but Go's traceback still
+						// owns the automatic saved-link cell. Its exact identity
+						// cannot be discarded merely because LLVM returns natively.
+						link := state.fixed.source(Operand{Kind: OpMem, Mem: MemRef{Base: SP}}, false)
+						if len(link) != 1 || !link["label:entry-lr"] {
+							return false
+						}
+					}
 					for _, fixed := range arm64RawZeroFixedEntry[:2] {
 						value := arm64ControlRead(state.fixed.regs, fixed.reg)
 						if len(value) != 1 || !value[fixed.token] {
@@ -174,7 +194,8 @@ func arm64RawPrivateFrameUnexposed(fn Func) bool {
 						}
 						delete(state.regs, fixed.reg)
 					}
-					if len(state.regs) != 0 {
+					if len(state.regs) != 0 && (!r20Transport || !state.regs.bounded(fn.FrameSize) ||
+						!transport.consume(original, state.regs, false)) {
 						return false
 					}
 					terminated = true

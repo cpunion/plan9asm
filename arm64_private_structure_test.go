@@ -249,7 +249,7 @@ func TestARM64PrivateStructureControlWidthsAndVectorAliases(t *testing.T) {
 	}
 }
 
-func TestARM64PrivateStructureUnmodelledLargeFrameR20RemainsContext(t *testing.T) {
+func TestARM64PrivateStructureLargeFrameR20RequiresTypedEntry(t *testing.T) {
 	source := strings.Replace(arm64PrivateStructureSource(`ADD $16,RSP,R9
 MOVD R4,(R9)
 ADD $16,R20,R10
@@ -258,7 +258,19 @@ VST1 [V0.B16],(R1)
 MOVD $0,R10
 MOVD $0,R20`), "$120-16", "$232-16", 1)
 	requireARM64GoAssemblerResult(t, source, true)
-	arm64PrivateStructureAPIs(t, source, true, false)
+	arm64PrivateStructureAPIs(t, source, false, true)
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Preserve the original source-only/unbound negative: a fallback signature
+	// does not supply the entry/result transport for its implicit R20 value.
+	_, err = Translate(file, Options{Goarch: "arm64", TargetTriple: arm64LinuxGNUTriple,
+		Sigs: map[string]FuncSig{"·Structure": {Name: "·Structure", Ret: I64}},
+	})
+	if !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("uncontracted original R20 source: %v", err)
+	}
 }
 
 func TestARM64PrivateStructureNamedLaneDisplacementIsNotRewritten(t *testing.T) {

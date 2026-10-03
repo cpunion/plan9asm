@@ -899,7 +899,18 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	}
 	sourceGoFrame := arm64SourceGoFrame(fn)
 	structureFrameProofRequired := arm64RawStructureFrameProofRequired(fn)
+	r20FrameProofRequired := arm64SourceFrameR20Required(fn)
+	// Existing closed register helpers and explicit ABIInternal entries already
+	// check every lowered GP read against their actual entry/CFG availability.
+	// They do not acquire the separate large-frame implicit R20 producer here.
+	if fn.FrameSize <= 224 && (fn.arm64PrivateRegisterEntry ||
+		strings.HasSuffix(fn.Sym, "<ABIInternal>") && sig.ARM64GoRegisterABI != nil && arm64ValidateGoRegisterABI(sig) == nil) {
+		r20FrameProofRequired = false
+	}
 	unexposedCallFrame := arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
+	if r20FrameProofRequired && !unexposedCallFrame {
+		return fmt.Errorf("%w: ARM64 implicit R20 entry needs the complete typed source-frame/escape proof", ErrProbeNeedsContext)
+	}
 	if err := requireARM64RawStructureFrameProof(fn, unexposedCallFrame); err != nil {
 		return err
 	}
@@ -969,6 +980,12 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
 	c.sourceGoFrame = sourceGoFrame
 	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
+	if r20FrameProofRequired && !c.unexposedCallFrame {
+		return fmt.Errorf("%w: ARM64 normalized source lost its implicit R20 entry proof", ErrProbeNeedsContext)
+	}
+	c.sourceFrameR20 = r20FrameProofRequired && arm64SourceFrameR20(fn) &&
+		arm64SourceFrameR20Transport(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+	c.checkedR20Entry = r20FrameProofRequired
 	if structureFrameProofRequired && !c.unexposedCallFrame {
 		return fmt.Errorf("%w: ARM64 normalized framed structure source lost its complete physical-stack/source-escape proof", ErrProbeNeedsContext)
 	}

@@ -120,7 +120,8 @@ func arm64RawZeroFrameUnexposedForTransport(fn Func, transport *arm64PrivateFram
 }
 
 func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, control *arm64LocalControlPlan) bool {
-	if fn.FrameSize != 0 || arm64SourceGoFrame(fn).present || !arm64SourceFrameFlagsKnown(fn) || !arm64HasRawFrameCode(fn) {
+	if fn.FrameSize != 0 || arm64SourceGoFrame(fn).present || !arm64SourceFrameFlagsKnown(fn) ||
+		(!arm64HasRawFrameCode(fn) && !arm64SourceUsesR20(fn)) {
 		return false
 	}
 	text := 0
@@ -195,6 +196,9 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 				},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
+		}
+		if arm64SourceUsesR20(fn) {
+			entry.addresses.regs["R20"] = arm64PrivateFrameAddress{}
 		}
 		for _, fixed := range arm64RawZeroFixedEntry {
 			entry.control.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
