@@ -74,7 +74,7 @@ func TestCrossLinuxRuntimeMatrixARM64SM3(t *testing.T) {
 	file, sigs, source, goMain, cMain := arm64SM3RuntimeFixture(t)
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"go.mod": "module sm3raworacle\n\ngo 1.27\n", "main.go": goMain,
+		"go.mod": "module sm3raworacle\n\ngo 1.20\n", "main.go": goMain,
 		"oracle_arm64.s": strings.ReplaceAll(source, "TEXT sm3case", "TEXT ·sm3case"),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {

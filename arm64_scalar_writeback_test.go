@@ -190,7 +190,7 @@ func arm64ScalarWritebackGoOracle(t *testing.T, source, main string, cross bool)
 	t.Helper()
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":         "module scalarwritebackoracle\n\ngo 1.27\n",
+		"go.mod":         "module scalarwritebackoracle\n\ngo 1.20\n",
 		"main.go":        main,
 		"oracle_arm64.s": strings.ReplaceAll(source, "TEXT scalar_wb_", "TEXT ·scalar_wb_"),
 	} {

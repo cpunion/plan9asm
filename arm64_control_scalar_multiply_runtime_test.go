@@ -155,7 +155,7 @@ func check(call func(*byte, *byte), op string) {
 `
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"go.mod":         "module multiplycalleroracle\n\ngo 1.27\n",
+		"go.mod":         "module multiplycalleroracle\n\ngo 1.20\n",
 		"main.go":        goOracle + goDecls.String() + "func main(){\n" + goChecks.String() + "}\n",
 		"oracle_arm64.s": strings.ReplaceAll(source.String(), "TEXT multiplyCaller", "TEXT ·multiplyCaller"),
 	} {

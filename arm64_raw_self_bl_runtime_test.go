@@ -26,7 +26,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawSelfBLTerminal(t *testing.T) {
 	}
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"go.mod":  "module rawselfbloracle\n\ngo 1.27\n",
+		"go.mod":  "module rawselfbloracle\n\ngo 1.20\n",
 		"main.go": arm64RawSelfBLOracleGo,
 		"oracle_arm64.s": strings.Replace(source, "TEXT terminal", "TEXT ·terminal", 1) +
 			"\nTEXT ·readGoG(SB),516,$0-8\nMOVD g,R0\nMOVD R0,ret+0(FP)\nRET\n",

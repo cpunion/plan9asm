@@ -107,7 +107,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawContextMemoryFamily(t *testing.T) {
 	}
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"go.mod":  "module rawcontextmemoryoracle\n\ngo 1.27\n",
+		"go.mod":  "module rawcontextmemoryoracle\n\ngo 1.20\n",
 		"main.go": arm64RawContextOracleGo + goDecls.String() + "func main() {\n" + goChecks.String() + "}\n",
 		"oracle_arm64.s": strings.ReplaceAll(source, "TEXT contextMemory", "TEXT ·contextMemory") +
 			"\nTEXT ·readGoG(SB),516,$0-8\nMOVD g,R0\nMOVD R0,ret+0(FP)\nRET\n",

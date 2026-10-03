@@ -27,7 +27,7 @@ func TestCrossLinuxRuntimeMatrixARM64ControlMemoryAdjacent(t *testing.T) {
 	}
 	dir := t.TempDir()
 	for name, body := range map[string]string{
-		"go.mod": "module adjacentcalleroracle\n\ngo 1.27\n",
+		"go.mod": "module adjacentcalleroracle\n\ngo 1.20\n",
 		"main.go": arm64RawPrivateFrameOracleGo + goDeclarations.String() +
 			"func main(){\n" + goChecks.String() + "}\n",
 		"oracle_arm64.s": strings.ReplaceAll(source, "TEXT adjacent_", "TEXT ·adjacent_"),
