@@ -8,6 +8,7 @@ import (
 type arm64GPDataForm struct {
 	inputs      []Operand
 	destination Operand
+	implicit    []Reg
 }
 
 // The Go ADD, AND/ANDS, NEG, MVN, LSL, SXTB and BFI rows have a
@@ -32,7 +33,17 @@ func parseARM64GPDataForm(op Op, ins Instr) (form arm64GPDataForm, handled bool,
 	case "BFI", "BFIW", "BFXIL", "BFXILW", "SBFIZ", "SBFIZW", "SBFX", "SBFXW", "UBFIZ", "UBFIZW", "UBFX", "UBFXW":
 		family = "bitfield"
 	default:
-		if _, ok := arm64ScalarExtendSpecs[op]; ok {
+		if divide, handled, err := parseARM64DivideRemainderForm(op, ins); handled {
+			if err != nil {
+				return form, true, err
+			}
+			form.inputs = []Operand{divide.divisor, divide.dividend}
+			form.destination = divide.destination
+			if divide.remainder && divide.destination.Reg != "R27" {
+				form.implicit = []Reg{"R27"}
+			}
+			return form, true, nil
+		} else if _, ok := arm64ScalarExtendSpecs[op]; ok {
 			family = "extend"
 		} else if inputs, destination, valid := arm64ScalarMultiplyInputs(op, ins); valid {
 			return arm64GPDataForm{inputs: inputs, destination: destination}, true, nil
@@ -133,6 +144,10 @@ func arm64GPDataInputRegisters(form arm64GPDataForm) []Reg {
 	return registers
 }
 
+func arm64GPDataOutputRegisters(form arm64GPDataForm) []Reg {
+	return append([]Reg{form.destination.Reg}, form.implicit...)
+}
+
 func (state *arm64ControlState) transferGPData(ins Instr) bool {
 	form, handled, err := parseARM64GPDataForm(arm64ControlOp(ins), ins)
 	if !handled || err != nil {
@@ -145,6 +160,8 @@ func (state *arm64ControlState) transferGPData(ins Instr) bool {
 	if len(arm64ControlLabels(value)) != 0 {
 		value["code-derived:"] = true
 	}
-	state.write(form.destination, value, false)
+	for _, reg := range arm64GPDataOutputRegisters(form) {
+		state.write(Operand{Kind: OpReg, Reg: reg}, value, false)
+	}
 	return true
 }

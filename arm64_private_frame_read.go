@@ -278,7 +278,12 @@ func (state arm64PrivateFrameAddresses) transfer(ins Instr, frameSize int64) boo
 				return false
 			}
 		}
-		return state.assign(form.destination.Reg, arm64PrivateFrameAddress{}, false)
+		for _, reg := range arm64GPDataOutputRegisters(form) {
+			if !state.assign(reg, arm64PrivateFrameAddress{}, false) {
+				return false
+			}
+		}
+		return true
 	}
 	// Unknown effects cannot wash a tainted register clean. Source-relative SP
 	// memory itself is not address transport and remains subject to the separate

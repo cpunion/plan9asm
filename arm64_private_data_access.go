@@ -202,6 +202,17 @@ func (state *arm64PrivateDataState) transfer(ins Instr, at int, frameSize int64)
 		return nil, false
 	}
 	state.comparison = arm64PrivateDataCompare{}
+	if form, handled, err := parseARM64GPDataForm(op, ins); handled {
+		if err != nil {
+			return nil, false
+		}
+		for _, reg := range arm64GPDataOutputRegisters(form) {
+			if !state.assign(reg, arm64PrivateDataUnknown) {
+				return nil, false
+			}
+		}
+		return nil, true
+	}
 	if len(ins.Args) != 0 {
 		dst := ins.Args[len(ins.Args)-1]
 		if dst.Kind == OpReg && isARM64GeneralOrZeroReg(dst.Reg) {

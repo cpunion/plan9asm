@@ -46,7 +46,9 @@ func TestTranslateARM64DivideRemainderCompleteGoAssemblerForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"sdiv i64", "sdiv i32", "udiv i64", "udiv i32", "srem i64", "srem i32", "urem i64", "urem i32"} {
+			// Go REM lowers to division through R27 and wrapping multiply-
+			// subtract. Architectural srem/urem loses that observable state.
+			for _, want := range []string{"sdiv i64", "sdiv i32", "udiv i64", "udiv i32", "mul i64", "mul i32", "sub i64", "sub i32"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("divide/remainder family for %s omitted %q:\n%s", triple, want, ir)
 				}
