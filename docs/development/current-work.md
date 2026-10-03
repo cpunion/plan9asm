@@ -254,6 +254,24 @@ not source N/A. New and existing private-frame positive/escape-negative guards
 must run together. Separate clean family gates do not establish later integrated
 or whole-library success.
 
+Isolated ARM64 AUTO probes now own an explicit zero-frame NOFRAME TEXT; they
+do not supply another function's frame, native continuation or encoder identity.
+Same-file RET-only callees have a separate private original/normalized source
+witness that narrows only scratch observation. Unknown scratch stays unknown;
+typed call, escape, SP/LR, result and native-effect checks remain independent.
+Run `TestARM64ScalarAUTOProbe` and `TestARM64SourceNoopCall` with the complete
+scalar-memory and counted-table families after changing these boundaries.
+
+The barrier family preserves exact machine-neutral effects and Go integer
+operand classes. SB is `d50330ff`, independently checked with original Go,
+LLVM-MC and all ARM64 object targets; HINT #7 is not SB. Integer scalar moves
+retain distinct floating-class and writeback-overlap rejection. Self-BL escape
+negatives use Go-legal SP-to-GP-to-memory transfers and original-Go branch
+bytes. FP-pair numerical fixtures observe each scalar slot at its declared
+width; the old MOVD source and its independently witnessed stale-reference
+failure remain separate regression evidence. Do not change expected numbers
+or borrow a narrower load's source-encoder effects for a wider original load.
+
 Native oracle commands now use a bounded owned lifecycle in the repaired
 consumers, including the new scalar-memory Go assembler audit. Keep its AST
 consumer inventory current. Dependency-free fixture minima have actual Go 1.20
