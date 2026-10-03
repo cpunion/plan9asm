@@ -71,7 +71,7 @@ func arm64ImmediateOriginalGoBytes(t *testing.T, source, goos string) []byte {
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-o", filepath.Join(dir, "original.o"), path)
 	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=arm64")
-	listing, err := command.CombinedOutput()
+	listing, err := runtimeOracleCombinedOutput(ctx, command)
 	if err != nil {
 		t.Fatalf("original Go %s object: %v\n%s", goos, err, listing)
 	}
@@ -182,7 +182,7 @@ func TestCrossLinuxRuntimeMatrixARM64GPImmediateFault(t *testing.T) {
 	if len(runner) != 0 {
 		build.Env = append(build.Env, "GOOS=linux")
 	}
-	if output, err := build.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, build); err != nil {
 		t.Fatalf("original Go fault build: %v\n%s", err, output)
 	}
 	for index := range arm64ImmediateFaultCases() {
@@ -192,7 +192,7 @@ func TestCrossLinuxRuntimeMatrixARM64GPImmediateFault(t *testing.T) {
 		}
 		command := exec.CommandContext(ctx, args[0], args[1:]...)
 		command.Env = append(os.Environ(), "GOTRACEBACK=single")
-		output, err := command.CombinedOutput()
+		output, err := runtimeOracleCombinedOutput(ctx, command)
 		exit, ok := err.(*exec.ExitError)
 		if !ok || exit.ExitCode() != 2 || !strings.Contains(string(output), "SIGILL: illegal instruction") {
 			t.Fatalf("original Go %s did not deliver SIGILL: %v\n%s", arm64ImmediateFaultCases()[index].text, err, output)
