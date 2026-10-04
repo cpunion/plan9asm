@@ -3,9 +3,6 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -38,18 +35,11 @@ func TestARM64DeclaredGoABIInternalNeedsRegisterContract(t *testing.T) {
 
 func requireARM64GoABIInternalObject(t *testing.T, source string) {
 	t.Helper()
-	dir := t.TempDir()
-	asm := filepath.Join(dir, "internal.s")
-	if err := os.WriteFile(asm, []byte(source), 0600); err != nil {
-		t.Fatal(err)
-	}
 	// Go reserves explicit selectors for package runtime. This validates the
 	// actual selector grammar, not an ordinary-package rejection or execution.
-	cmd := exec.Command("go", "tool", "asm", "-p", "runtime", "-o", filepath.Join(dir, "internal.o"), asm)
-	cmd.Env = append(os.Environ(), "GOARCH=arm64", "GOOS=linux")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("Go ABIInternal selector object: %v\n%s", err, out)
-	}
+	// The shared oracle observes the selected assembler's flags: Go 1.20 also
+	// needs -compiling-runtime, while current Go derives permission from -p.
+	requireARM64TypedCallGoSelectorObject(t, source)
 }
 
 func TestCrossLinuxRuntimeMatrixARM64ExplicitRegisterContract(t *testing.T) {
