@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -157,15 +156,11 @@ func assertX86PackedDoubleDwordRejected(t *testing.T, goarch, triple, instructio
 }
 
 func TestAMD64PackedDoubleDwordRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	source := `
+	amd64PackedDoubleDwordRuntime(t, x86FloatCompareRuntimeTools(t, x86FloatCompareSSE), false)
+}
+
+func x86PackedDoubleDwordOriginalAssembly() string {
+	return `
 TEXT packeddoubledword(SB),NOSPLIT,$0-40
 	MOVQ out+0(FP), AX
 	MOVQ doubles+8(FP), BX
@@ -191,6 +186,36 @@ TEXT packeddoubledword(SB),NOSPLIT,$0-40
 	VZEROUPPER
 	RET
 `
+}
+
+func x86PackedDoubleDwordRawAssembly(source string) string {
+	return strings.NewReplacer(
+		"TEXT packeddoubledword(SB),NOSPLIT,$0-40", "TEXT packeddoubledword(SB),4,$0-40",
+		"VCVTDQ2PD (CX), K1, Z1", "BYTE $0x62; BYTE $0xf1; BYTE $0x7e; BYTE $0x49; BYTE $0xe6; BYTE $0x09",
+		"VCVTTPD2DQY (BX), X2", "BYTE $0xc5; BYTE $0xfd; BYTE $0xe6; BYTE $0x13",
+		"VCVTPD2DQ.RD_SAE.Z Z0, K1, Y3", "BYTE $0x62; BYTE $0xf1; BYTE $0xff; BYTE $0xb9; BYTE $0xe6; BYTE $0xd8",
+		"CVTPD2PL X4, M0", "BYTE $0x66; BYTE $0x0f; BYTE $0x2d; BYTE $0xc4",
+	).Replace(source)
+}
+
+func x86PackedDoubleDwordSSEAssembly(t *testing.T) string {
+	t.Helper()
+	source := x86PackedDoubleDwordOriginalAssembly()
+	preamble := strings.Index(source, "\tKMOVQ SI, K1")
+	legacy := strings.Index(source, "\tMOVOU (BX), X4")
+	wideExit := strings.Index(source, "\tVZEROUPPER")
+	if preamble < 0 || legacy <= preamble || wideExit <= legacy {
+		t.Fatal("original complete double/dword fixture lost its explicit SSE block")
+	}
+	return source[:preamble] + source[legacy:wideExit] + "\tRET\n"
+}
+
+func amd64PackedDoubleDwordRuntime(t *testing.T, execution x86FloatCompareExecution, nativeWide bool) {
+	t.Helper()
+	source := x86PackedDoubleDwordOriginalAssembly()
+	if !nativeWide {
+		source = x86PackedDoubleDwordSSEAssembly(t)
+	}
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
@@ -202,12 +227,7 @@ TEXT packeddoubledword(SB),NOSPLIT,$0-40
 		{Offset: 24, Type: Ptr, Index: 3, Field: -1},
 		{Offset: 32, Type: I64, Index: 4, Field: -1},
 	}}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	translationOptions := Options{
 		TargetTriple: triple,
 		Goarch:       "amd64",
@@ -221,7 +241,21 @@ TEXT packeddoubledword(SB),NOSPLIT,$0-40
 	if err != nil {
 		t.Fatal(err)
 	}
-	mainC := `
+	// The entire original named and raw functions still reach Go and LLVM
+	// objects in the portable lane. Only their execution requires native ISA.
+	for _, complete := range []string{x86PackedDoubleDwordOriginalAssembly(), x86PackedDoubleDwordRawAssembly(x86PackedDoubleDwordOriginalAssembly())} {
+		goAssemblerOracleOutput(t, "amd64", x86PackedDoubleDwordGoAssemblerSource(complete), "", true)
+		parsed, err := Parse(ArchAMD64, complete)
+		if err != nil {
+			t.Fatal(err)
+		}
+		objectIR, err := Translate(parsed, translationOptions)
+		if err != nil {
+			t.Fatal(err)
+		}
+		compileLLVMToObject(t, execution.llc, triple, "complete-double-dword.ll", "complete-double-dword.o", objectIR)
+	}
+	mainC := fmt.Sprintf("#define NATIVE_WIDE %d\n", x86FloatAddSubBoolInt(nativeWide)) + `
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
@@ -235,6 +269,7 @@ int main(void) {
   uint8_t out[120]; memset(out, 0xcc, sizeof(out));
   packeddoubledword(out, doubles, dwords, old, mask);
 
+#if NATIVE_WIDE
   const double *widened = (const double *)(out+0);
   for (int i = 0; i < 8; i++) {
     double want = (mask >> i) & 1 ? (double)dwords[i] : old[i];
@@ -247,22 +282,17 @@ int main(void) {
   const int32_t *roundedDown = (const int32_t *)(out+80);
   const int32_t wantRoundedDown[8] = {1, 0, INT32_MIN, 0, 0, INT32_MIN, 0, 0};
   for (int i = 0; i < 8; i++) if (roundedDown[i] != wantRoundedDown[i]) return 50+i;
+#endif
 
   const int32_t *legacy = (const int32_t *)(out+112);
   if (legacy[0] != 2 || legacy[1] != -3) return 70;
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_double_dword", triple, ll, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "packed_double_dword", ll, mainC, "-O2")
 
-	rawSource := strings.NewReplacer(
-		"TEXT packeddoubledword(SB),NOSPLIT,$0-40", "TEXT packeddoubledword(SB),4,$0-40",
-		"VCVTDQ2PD (CX), K1, Z1", "BYTE $0x62; BYTE $0xf1; BYTE $0x7e; BYTE $0x49; BYTE $0xe6; BYTE $0x09",
-		"VCVTTPD2DQY (BX), X2", "BYTE $0xc5; BYTE $0xfd; BYTE $0xe6; BYTE $0x13",
-		"VCVTPD2DQ.RD_SAE.Z Z0, K1, Y3", "BYTE $0x62; BYTE $0xf1; BYTE $0xff; BYTE $0xb9; BYTE $0xe6; BYTE $0xd8",
-		"CVTPD2PL X4, M0", "BYTE $0x66; BYTE $0x0f; BYTE $0x2d; BYTE $0xc4",
-	).Replace(source)
-	requireX86GoAssemblerResult(t, "amd64", rawSource, true)
+	rawSource := x86PackedDoubleDwordRawAssembly(source)
+	goAssemblerOracleOutput(t, "amd64", x86PackedDoubleDwordGoAssemblerSource(rawSource), "", true)
 	rawFile, err := Parse(ArchAMD64, rawSource)
 	if err != nil {
 		t.Fatal(err)
@@ -271,5 +301,6 @@ int main(void) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "raw_packed_double_dword", triple, rawIR, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "raw_packed_double_dword", rawIR, mainC, "-O2")
+	t.Logf("complete named/raw objects; SSE legacy output executed; full 120-byte native-wide assertions=%v", nativeWide)
 }

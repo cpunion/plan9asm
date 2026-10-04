@@ -213,7 +213,7 @@ func x86FloatCompareIndependentRuntime(t *testing.T, axis x86FloatCompareRuntime
 				t.Fatal(err)
 			}
 			main := x86FloatCompareOracleMain(cases, false)
-			execution.compileAndRunLLVM(t, "compare-ieee", ir, main, "-O0")
+			execution.compileAndRunLLVM(t, "compare-ieee", ir, main, "-O2")
 			t.Logf("%s ISA-axis=%d: %d independently enumerated programs ×432 IEEE/DAZ/full-MXCSR/mask/upper-alias/canary inputs; extended NaN+denormal priority is not covered; actual transport=%v", opcode, axis, len(cases), execution.prefix)
 		})
 	}

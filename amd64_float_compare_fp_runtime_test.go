@@ -172,6 +172,6 @@ static int check(compare_fp call,unsigned bits,unsigned predicate,unsigned mask_
 }
 `
 	main := x86FloatCompareIndependentC + declarations.String() + check + "int main(void){\n" + checks.String() + "return 0;}\n"
-	execution.compileAndRunLLVM(t, "compare-fp-scalar-bytes", ir+wrappers.String(), main, "-O0")
+	execution.compileAndRunLLVM(t, "compare-fp-scalar-bytes", ir+wrappers.String(), main, "-O2")
 	t.Logf("%d scalar compare programs ISA-axis=%d, independently allocated 4/8 FP byte fields ×1944 inputs; actual transport=%v", len(fixtures), axis, execution.prefix)
 }

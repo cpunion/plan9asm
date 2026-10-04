@@ -174,7 +174,7 @@ func x86InsertExtractMaskedMemoryRuntime(t *testing.T) {
 		fmt.Fprintf(&declarations, "extern void masked%d(void*,const void*,const void*,uint64_t);\n", index)
 		fmt.Fprintf(&calls, "    if (check(masked%d,%d,%d,%d)) return %d;\n", index, chunk, width, lane, index+1)
 	}
-	execution.compileAndRunLLVM(t, "masked-native-extract", ir, x86InsertExtractMaskedMemoryC+declarations.String()+"int main(void) {\n"+calls.String()+"    return 0;\n}\n", "-O0")
+	execution.compileAndRunLLVM(t, "masked-native-extract", ir, x86InsertExtractMaskedMemoryC+declarations.String()+"int main(void) {\n"+calls.String()+"    return 0;\n}\n", "-O2")
 	t.Log("all 12 native masked-memory extract programs x40 byte/MXCSR/CF/input-output-canary cases executed by original Go and translated LLVM")
 }
 

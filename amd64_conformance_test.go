@@ -1615,7 +1615,7 @@ int main(void) {
 	return 0;
 }
 `
-	execution.compileAndRunLLVM(t, "amd64_conformance", ll, mainC, "-O0")
+	execution.compileAndRunLLVM(t, "amd64_conformance", ll, mainC, "-O2")
 	t.Logf("complete original assembly object; native-wide runtime=%v, actual transport=%v", nativeWide, execution.prefix)
 }
 

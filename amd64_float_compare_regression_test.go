@@ -71,5 +71,5 @@ func TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases(t *testing.
 		t.Fatal(err)
 	}
 	main := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + "int main(void){\n" + checks.String() + "return 0;}\n"
-	execution.compileAndRunLLVM(t, "floating-compare-legacy-alias", ir, main, "-O0")
+	execution.compileAndRunLLVM(t, "floating-compare-legacy-alias", ir, main, "-O2")
 }

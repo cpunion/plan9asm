@@ -7,9 +7,59 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func TestX86FloatingCompareRuntimeRetainsOptimizationLevels(t *testing.T) {
+	// The old shared helper omitted -O, whose llc default is O2. Explicit
+	// transport must preserve that level, rather than weaken the numerical gate.
+	for _, fixture := range []struct{ file, program string }{
+		{"amd64_conformance_test.go", "amd64_conformance"},
+		{"amd64_float_compare_numerical_test.go", "compare-ieee"},
+		{"amd64_float_compare_fp_runtime_test.go", "compare-fp-scalar-bytes"},
+		{"amd64_float_compare_regression_test.go", "floating-compare-legacy-alias"},
+		{"amd64_lower_convert_double_dword_test.go", "packed_double_dword"},
+		{"amd64_lower_convert_double_dword_test.go", "raw_packed_double_dword"},
+		{"amd64_insert_extract_native_runtime_test.go", "masked-native-extract"},
+	} {
+		t.Run(fixture.program, func(t *testing.T) {
+			file, err := parser.ParseFile(token.NewFileSet(), fixture.file, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			matches := 0
+			ast.Inspect(file, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok || len(call.Args) != 5 {
+					return true
+				}
+				callee, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || callee.Sel.Name != "compileAndRunLLVM" {
+					return true
+				}
+				name, ok := call.Args[1].(*ast.BasicLit)
+				if !ok || name.Kind != token.STRING {
+					return true
+				}
+				program, err := strconv.Unquote(name.Value)
+				if err != nil || program != fixture.program {
+					return true
+				}
+				matches++
+				level, ok := call.Args[4].(*ast.BasicLit)
+				if !ok || level.Kind != token.STRING || level.Value != `"-O2"` {
+					t.Error("ordinary numerical runtime must retain explicit llc O2")
+				}
+				return true
+			})
+			if matches != 1 {
+				t.Fatalf("expected one actual numerical consumer, found %d", matches)
+			}
+		})
+	}
+}
 
 func TestX86FloatingCompareRuntimeRequiresExplicitISAAxes(t *testing.T) {
 	for _, fixture := range []struct{ file, root, helper, axis string }{
@@ -56,7 +106,7 @@ func TestX86FloatingCompareRuntimeRequiresExplicitISAAxes(t *testing.T) {
 
 func TestX86FloatingCompareRequiredLinuxBuildSelection(t *testing.T) {
 	for _, target := range []struct{ os, arch string }{{"linux", "amd64"}, {"linux", "arm64"}, {"darwin", "arm64"}, {"windows", "amd64"}} {
-		for _, file := range []string{"amd64_float_compare_runtime_linux_test.go", "amd64_float_compare_runtime_linux_amd64_test.go", "amd64_insert_extract_native_runtime_linux_amd64_test.go"} {
+		for _, file := range []string{"amd64_float_compare_runtime_linux_test.go", "amd64_float_compare_runtime_linux_amd64_test.go", "amd64_insert_extract_native_runtime_linux_amd64_test.go", "amd64_packed_double_dword_native_linux_amd64_test.go"} {
 			ctx := build.Default
 			ctx.GOOS, ctx.GOARCH = target.os, target.arch
 			actual, err := ctx.MatchFile(".", file)
@@ -98,6 +148,9 @@ func TestX86FloatingCompareRequiredLinuxBuildSelection(t *testing.T) {
 	}
 	if !selector.MatchString("TestCrossLinuxRuntimeMatrixX86InsertExtractMaskedNativeMemory") {
 		t.Fatal("required Linux CI does not select all masked native memory extract cases")
+	}
+	if !selector.MatchString("TestCrossLinuxRuntimeMatrixAMD64PackedDoubleDwordNativeAVX512") {
+		t.Fatal("required Linux CI does not select complete named/raw original-Go/LLVM double/dword conversions")
 	}
 }
 
