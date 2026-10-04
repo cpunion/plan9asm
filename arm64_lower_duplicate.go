@@ -27,8 +27,8 @@ func (c *arm64Ctx) lowerARM64VectorDuplicate(op Op, ins Instr) (ok bool, termina
 		return true, false, fmt.Errorf("arm64 VDUP destination arrangement is outside Go's optab: %q", ins.Raw)
 	}
 
-	_, lane, laneSource := arm64ParseVRegLane(src)
-	if laneSource {
+	if !form.sourceGP {
+		lane := form.sourceLane
 		if arrangedDst {
 			// Go's case 79 encoder intentionally derives the source element width
 			// from the destination arrangement, not from the source's spelling.
@@ -50,8 +50,7 @@ func (c *arm64Ctx) lowerARM64VectorDuplicate(op Op, ins Instr) (ok bool, termina
 		if _, valid := arm64ParseVReg(dst); !valid {
 			return true, false, fmt.Errorf("arm64 VDUP lane destination must be a bare V register: %q", ins.Raw)
 		}
-		kind, _, _ := arm64ParseVRegLane(src)
-		bits := map[byte]int{'B': 8, 'H': 16, 'S': 32, 'D': 64}[kind]
+		bits := form.bits
 		element, err := c.arm64VDUPExtractLane(src, bits, lane)
 		if err != nil {
 			return true, false, err

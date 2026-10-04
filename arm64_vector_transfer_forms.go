@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -49,6 +50,11 @@ func parseARM64VectorTransfer(op Op, ins Instr) (arm64VectorTransferForm, error)
 		return 0
 	}
 	if op == "VDUP" {
+		if arranged {
+			// Go case79 checks the index against the destination's physical
+			// width. The source suffix is an ELEM class, not its lane bound.
+			sourceLane, sourceElement = arm64VDUPPhysicalLaneIndex(f.source)
+		}
 		if sourceElement && sourceVector {
 			f.bits, f.sourceLane = bits(sourceKind), sourceLane
 			if arranged && arm64VDUPArrangementAllowed(destination) {
@@ -101,4 +107,23 @@ func parseARM64VectorTransfer(op Op, ins Instr) (arm64VectorTransferForm, error)
 		return f, nil
 	}
 	return invalid()
+}
+
+// This syntax-only element parser is restricted to VDUP's arranged case79.
+// VMOV and scalar VDUP retain their own suffix-selected lane bounds.
+func arm64VDUPPhysicalLaneIndex(reg Reg) (int, bool) {
+	if _, valid := arm64ParseVReg(reg); !valid {
+		return 0, false
+	}
+	text := strings.ToUpper(strings.TrimSpace(string(reg)))
+	dot := strings.IndexByte(text, '.')
+	if dot < 0 {
+		return 0, false
+	}
+	suffix := text[dot+1:]
+	if len(suffix) < 4 || !strings.ContainsRune("BHSD", rune(suffix[0])) || suffix[1] != '[' || suffix[len(suffix)-1] != ']' {
+		return 0, false
+	}
+	index, err := strconv.Atoi(suffix[2 : len(suffix)-1])
+	return index, err == nil && index >= 0 && index < 16
 }

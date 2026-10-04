@@ -87,6 +87,9 @@ unknown remainder, and a full vector consumer still needs all of its bits.
 Scalar/arranged non-preserving transfers clear their architectural inactive
 bits. Typed calls and source scratch invalidation revoke prior lane definitions.
 This is numerical definedness, not caller, pointer or private-frame permission.
+VDUP's arranged case79 derives both source width and index bounds from its
+destination; the source suffix identifies only the ELEM class. VMOV and scalar
+VDUP retain their separate suffix-selected bounds.
 
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
