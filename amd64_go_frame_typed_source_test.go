@@ -120,9 +120,33 @@ func TestGoAMD64FrameTypedSourceActualLayoutMatrix(t *testing.T) {
 
 func goAMD64FrameTypedSelection(t *testing.T, pkg GoPackage, request GoAMD64FrameCaptureRequest) *GoAMD64FrameSource {
 	t.Helper()
+	// The production capture entry resolves the source root before binding
+	// selection paths. This internal fixture must exercise that same contract,
+	// including temporary-directory aliases supplied by the host OS.
+	canonical, err := filepath.EvalSymlinks(request.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Directory = canonical
 	return &GoAMD64FrameSource{
 		request: request, inputs: make(map[string][32]byte),
 		selection: goAMD64FrameSelection{GoFiles: []string{"value.go"}, CompiledGoFiles: []string{filepath.Join(request.Directory, "value.go")}},
+	}
+}
+
+func TestGoAMD64FrameTypedSelectionCanonicalSourceRoot(t *testing.T) {
+	pkg, request := goAMD64FrameTypedFixture(t, "func Value(a *uint64) uint64", "TEXT ·Value(SB),4,$160-16\nRET\n")
+	canonical, err := filepath.EvalSymlinks(request.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := goAMD64FrameTypedSelection(t, pkg, request)
+	if source.request.Directory != canonical || len(source.selection.CompiledGoFiles) != 1 ||
+		source.selection.CompiledGoFiles[0] != filepath.Join(canonical, "value.go") {
+		t.Fatal("typed fixture did not bind the production entry's canonical source root")
+	}
+	if _, err := source.typedDeclarations(pkg, false); err != nil {
+		t.Fatalf("canonical source must reach the independent language check: %v", err)
 	}
 }
 
@@ -175,8 +199,12 @@ func TestGoAMD64FrameTypedSourceUnsupportedRolesRemainContext(t *testing.T) {
 		t.Run(declaration, func(t *testing.T) {
 			pkg, request := goAMD64FrameTypedFixture(t, declaration, "TEXT ·Value(SB),4,$160-16\nRET\n")
 			guard := goAMD64FrameTypedSelection(t, pkg, request)
-			if _, err := guard.typedDeclarations(pkg, false); !errors.Is(err, ErrProbeNeedsContext) {
+			_, err := guard.typedDeclarations(pkg, false)
+			if !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatalf("unknown/GC/aggregate role did not retain Context: %v", err)
+			}
+			if strings.Contains(err.Error(), "input path is redirected or inaccessible") {
+				t.Fatalf("path rejection cannot prove an unsupported language role: %v", err)
 			}
 		})
 	}
