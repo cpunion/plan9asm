@@ -48,10 +48,8 @@ func TestCrossLinuxRuntimeMatrixARM64RawPrivateFrameFamily(t *testing.T) {
 	if err != nil {
 		t.Fatalf("actual Go framed raw source object: %v\n%s", err, listing)
 	}
-	for _, contract := range []string{"MOVD.W\tR30, -144(RSP)", "MOVD\tR29, -8(RSP)", "ADD\t$136, RSP, R29", "ADD\t$144, RSP"} {
-		if !strings.Contains(string(listing), contract) {
-			t.Fatalf("actual Go framed-leaf object lacks epilogue contract %q", contract)
-		}
+	if err := checkARM64RawPrivateFrameGoListing(filepath.Join(dir, "oracle_arm64.s"), goSource, string(listing)); err != nil {
+		t.Fatalf("actual Go framed-leaf source/object contract: %v\n%s", err, listing)
 	}
 	args := []string{"run", "-p=1", "."}
 	if len(runner) != 0 {
