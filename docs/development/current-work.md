@@ -24,8 +24,9 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-proof-family-batch-integration-20261003`. Integrated
-repairs are local, not yet the published fork head. Freeze a clean final batch before
+Development branch: `codex/pr40-reviewed-producer-literal-batch-20261004`. Earlier
+verification snapshots remain frozen in separate worktrees. Integrated repairs
+are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
 also change the source fingerprint. Put progress/funnel tables in the PR body,
 not here; derive them with the shared report readers.
@@ -100,7 +101,9 @@ package selection and source/expansion guards through object compilation.
 The scalar SIMD memory family and KMOV caller-region consumers are integrated,
 including coherent X/Y/Z views and initialized, bounded writes. The complete
 MOVSS/MOVSD/VMOVSS/VMOVSD floating-literal family follows Go's actual rewrite,
-rounding and constant-pool choices before certifying caller effects. Legacy
+rounding and constant-pool choices before certifying caller effects. Scalar
+ADDSS/ADDSD/SUBSS/SUBSD literals now retain their distinct finite conversion,
+constant-pool and initialized-destination contracts. Legacy
 MOVSD memory loads clear the upper XMM half, unlike register copies; independent
 complete-byte Go/LLVM oracles retain the real pre-fix failures. The complete
 packed-vector move family now shares one typed grammar with the lowerer and
@@ -144,6 +147,13 @@ independently observed unit exits remain mandatory; unknown, partial and cleanup
 failures cannot become source exclusions. Logical directory aliases retain
 their physical identity checks. Do not promote cached nil results or historical
 reports as evidence for this source revision; fresh library reports are required.
+
+Successful source/CPP guards retain the actual completed analyzer receipt;
+failed guards retain both errors and cannot supply a source exclusion. Exact
+successful module resolver notices are checked by stage, module and version,
+not accepted as arbitrary stderr. Direct analyzer tools retain their complete
+canonical experiment suffixes and independently bound SDK Flags/source bytes.
+Unknown, changed or inconsistent tool identities remain failures.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
@@ -192,8 +202,13 @@ actual import-C roles and the full mode/CGO/custom-tag denominator. Separate
 same-mode metadata and physical CPP/LLVM object consumers retain independent
 compiled Go sources, dependency exports, header bytes and complete typed ABI0
 replay. Local types, aliases, constants and zero-sized fields are rechecked from
-original syntax, not trusted layout JSON. Unsupported imported/generic type
-closures fail. The separate CLI and corpus/report/progress/ledger consumers are
+original syntax, not trusted layout JSON. Imported selectors from the stdlib
+or exact same module need the separate original type-source capture, actual
+same-mode pre/post graph and independent consumer recapture. Complete needed
+Go bytes bind the exact import-spelling sets; paired exports/layout metadata
+cannot invent an edge or replace that source anchor. Foreign, generated, cgo,
+embed and generic type closures remain unsupported. The separate CLI and
+corpus/report/progress/ledger consumers are
 integrated locally. They require an independently replayed instrumentation
 denominator, including the explicit empty requirements array, and actual
 same-mode exports, metadata/header queries, CPP and LLVM objects. Paired proof
