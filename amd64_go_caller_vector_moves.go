@@ -6,6 +6,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if _, recognized, err := x86FloatCompareProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
+	if form, known, err := x86WordMultiplyAddProperties(ins, "amd64"); known {
+		return err == nil && !form.mmx
+	}
 	if _, recognized, err := x86FloatMulDivProperties(ins, "amd64"); recognized {
 		return err == nil
 	}
@@ -82,6 +85,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form, recognized, err := x86FloatCompareProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerFloatCompareStep(ins, form, state, proof)
+	}
+	if form, known, err := x86WordMultiplyAddProperties(*ins, "amd64"); known {
+		return err == nil && x86CallerWordMultiplyAddStep(ins, form, state, proof)
 	}
 	if form, recognized, err := x86FloatMulDivProperties(*ins, "amd64"); recognized {
 		return err == nil && x86CallerFloatBinaryStep(ins, form.x86FloatBinaryForm, state, proof)
@@ -197,6 +203,9 @@ func x86CallerMaskMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoC
 func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid bool) {
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
+	}
+	if form, known, err := x86WordMultiplyAddProperties(ins, "amd64"); known {
+		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if form, recognized, err := x86PackedZeroExtendProperties(ins, "amd64"); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index

@@ -86,6 +86,9 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if form, known, err := x86WordMultiplyAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse2")
+			}
 			if goarch == "386" {
 				// The signed default-rounding scalar bridge must use MXCSR,
 				// rather than LLVM's default i386 x87 conversion. Admit only

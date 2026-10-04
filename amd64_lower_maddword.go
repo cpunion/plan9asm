@@ -15,12 +15,10 @@ func (c *amd64Ctx) lowerPackedWordMultiplyAdd(op Op, ins Instr) (ok bool, termin
 		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
 	}
 	switch baseOp {
-	case "PMADDWL":
-		return c.lowerLegacyPackedWordMultiplyAdd(suffix, ins)
+	case "PMADDWL", "VPMADDWD":
+		return c.lowerWordMultiplyAddFamily(op, ins)
 	case "PMADDUBSW":
 		return c.lowerLegacyPackedUnsignedSignedByteMultiplyAdd(suffix, ins)
-	case "VPMADDWD":
-		return c.lowerVectorPackedMultiplyAdd(baseOp, suffix, ins, false)
 	case "VPMADDUBSW":
 		return c.lowerVectorPackedMultiplyAdd(baseOp, suffix, ins, true)
 	default:
@@ -58,60 +56,6 @@ func (c *amd64Ctx) lowerLegacyPackedUnsignedSignedByteMultiplyAdd(suffix string,
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i16> %s to <16 x i8>\n", out, result)
 	return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
-}
-
-func (c *amd64Ctx) lowerLegacyPackedWordMultiplyAdd(suffix string, ins Instr) (bool, bool, error) {
-	if suffix != "" {
-		return true, false, fmt.Errorf("%s PMADDWL does not accept instruction suffixes: %q", c.goarch, ins.Raw)
-	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("%s PMADDWL expects MMX/m64, MMX or X/m128, X: %q", c.goarch, ins.Raw)
-	}
-	destination := ins.Args[1].Reg
-	if _, mmx := amd64ParseMReg(destination); mmx {
-		if c.goarch == "386" {
-			return true, false, fmt.Errorf("386 PMADDWL MMX form is illegal in 32-bit mode: %q", ins.Raw)
-		}
-		firstBits, err := c.loadLegacyMMXPackedSource(ins.Args[0])
-		if err != nil {
-			return true, false, fmt.Errorf("amd64 PMADDWL MMX source: %w", err)
-		}
-		secondBits, err := c.loadReg(destination)
-		if err != nil {
-			return true, false, err
-		}
-		first := c.bitcastI64ToIntegerLanes(4, 16, firstBits)
-		second := c.bitcastI64ToIntegerLanes(4, 16, secondBits)
-		result := c.emitPackedWordMultiplyAdd(4, first, second)
-		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i32> %s to i64\n", bits, result)
-		return true, false, c.storeReg(destination, "%"+bits)
-	}
-
-	if !c.isGoLegacyXReg(destination) {
-		return true, false, fmt.Errorf("%s PMADDWL destination is outside Go 1.27's legacy X class: %q", c.goarch, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("%s PMADDWL source is outside Go 1.27's legacy X class: %q", c.goarch, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s PMADDWL source must be X or memory: %q", c.goarch, ins.Raw)
-	}
-	firstBytes, err := c.loadPackedCompareBytes(ins.Args[0], 16)
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadX(destination)
-	if err != nil {
-		return true, false, err
-	}
-	first := c.bitcastVectorBytesToIntegerLanes(16, 8, 16, firstBytes)
-	second := c.bitcastVectorBytesToIntegerLanes(16, 8, 16, secondBytes)
-	result := c.emitPackedWordMultiplyAdd(8, first, second)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %s to <16 x i8>\n", out, result)
-	return true, false, c.storeX(destination, "%"+out)
 }
 
 func (c *amd64Ctx) lowerVectorPackedMultiplyAdd(baseOp, suffix string, ins Instr, unsignedSignedBytes bool) (bool, bool, error) {

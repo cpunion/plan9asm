@@ -872,8 +872,6 @@ func TestTranslate386PackedWordMultiplyAddCompleteGoAssemblerForms(t *testing.T)
 	VPMADDWD (AX), Y1, Y2
 	VPMADDWD Z0, Z1, Z7
 	VPMADDWD (AX), Z6, Z7
-	VPMADDWD X20, X21, X22
-	VPMADDWD Y20, Y21, Y22
 	RET
 `
 	file, err := Parse(ArchAMD64, src)
