@@ -137,8 +137,13 @@ outer failures and incomplete testless retries cannot supply a source exclusion.
 Retry copies preserve exact replacement versions, relative origins and current
 checksum inputs; their diagnostics retain an unambiguous original-file binding
 after cleanup. Stock Go's dependency-facts vet cache can omit asmdecl analysis.
-The uncached official-analyzer producer is in development: do not promote cached
-nil results or historical reports as evidence for its new source revision.
+The local producer now uses actual Go-selected ordinary/test variant exports
+and invokes the same SDK's official analyzer directly, with facts-only and
+typecheck-success disabled. Complete source/tool/config/export guards and
+independently observed unit exits remain mandatory; unknown, partial and cleanup
+failures cannot become source exclusions. Logical directory aliases retain
+their physical identity checks. Do not promote cached nil results or historical
+reports as evidence for this source revision; fresh library reports are required.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size

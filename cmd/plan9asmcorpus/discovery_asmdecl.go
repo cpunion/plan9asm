@@ -59,22 +59,27 @@ var discoveryAsmDeclPackageHeading = regexp.MustCompile(
 // analysis. Unknown diagnostics and real unwritten results are not warnings
 // that this path can dismiss.
 func discoveryAsmDeclOnlyKnownNonABIWarnings(err error) bool {
-	failure, observed := discoveryAsmDeclObservedFailure(err)
+	failures, observed := discoveryAsmDeclObservedFailures(err)
 	if !observed || isDiscoveryInfrastructureFailure(err) {
 		return false
 	}
-	count := 0
-	for _, line := range strings.Split(failure.output, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
-			continue
+	for _, failure := range failures {
+		count := 0
+		for _, line := range strings.Split(failure.output, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+				continue
+			}
+			if !discoveryAsmDeclKnownNonABIWarning(line) {
+				return false
+			}
+			count++
 		}
-		if !discoveryAsmDeclKnownNonABIWarning(line) {
+		if count == 0 {
 			return false
 		}
-		count++
 	}
-	return count > 0
+	return true
 }
 
 func discoveryAsmDeclObservedFailure(err error) (*discoveryCapturedCommandError, bool) {
@@ -84,6 +89,73 @@ func discoveryAsmDeclObservedFailure(err error) (*discoveryCapturedCommandError,
 	}
 	exit, observed := failure.cause.(*exec.ExitError)
 	return failure, observed && exit.ExitCode() == 1
+}
+
+// A batch retains the actual independent Wait receipts. It is created only
+// after every selected unit and the final input guards finish, never from a
+// report, an arbitrary errors.Join, or the first failing unit's exit status.
+type discoveryAsmDeclAnalysisError struct {
+	failures  []*discoveryCapturedCommandError
+	completed int
+	expected  int
+}
+
+func (batch *discoveryAsmDeclAnalysisError) Error() string {
+	var messages []string
+	for _, failure := range batch.failures {
+		messages = append(messages, failure.Error())
+	}
+	return strings.Join(messages, "\n")
+}
+
+func (batch *discoveryAsmDeclAnalysisError) Unwrap() []error {
+	failures := make([]error, len(batch.failures))
+	for index, failure := range batch.failures {
+		failures[index] = failure
+	}
+	return failures
+}
+
+func combineDiscoveryAsmDeclAnalysisFailures(failures []error, completed, expected int) error {
+	if expected <= 0 || completed != expected || len(failures) > completed {
+		return errors.Join(append(failures, fmt.Errorf("%w: incomplete official analysis batch (%d/%d units)", errDiscoveryAsmDeclSourceProof, completed, expected))...)
+	}
+	if len(failures) == 0 {
+		return nil
+	}
+	if len(failures) == 1 {
+		return failures[0]
+	}
+	batch := &discoveryAsmDeclAnalysisError{completed: completed, expected: expected}
+	seen := make(map[*discoveryCapturedCommandError]bool, len(failures))
+	for _, err := range failures {
+		failure, observed := discoveryAsmDeclObservedFailure(err)
+		if !observed || isDiscoveryInfrastructureFailure(err) || seen[failure] {
+			return errors.Join(failures...)
+		}
+		seen[failure] = true
+		batch.failures = append(batch.failures, failure)
+	}
+	return batch
+}
+
+func discoveryAsmDeclObservedFailures(err error) ([]*discoveryCapturedCommandError, bool) {
+	if failure, observed := discoveryAsmDeclObservedFailure(err); observed {
+		return []*discoveryCapturedCommandError{failure}, true
+	}
+	batch, direct := err.(*discoveryAsmDeclAnalysisError)
+	if !direct || batch == nil || batch.expected <= 0 || batch.completed != batch.expected ||
+		len(batch.failures) < 2 || len(batch.failures) > batch.completed {
+		return nil, false
+	}
+	seen := make(map[*discoveryCapturedCommandError]bool, len(batch.failures))
+	for _, failure := range batch.failures {
+		if _, observed := discoveryAsmDeclObservedFailure(failure); !observed || isDiscoveryInfrastructureFailure(failure) || seen[failure] {
+			return nil, false
+		}
+		seen[failure] = true
+	}
+	return batch.failures, true
 }
 
 func discoveryAsmDeclPosition(line string) []string {
@@ -145,38 +217,66 @@ func discoveryAsmDeclConcreteABIWarning(line string) bool {
 // attributable ABI line must never swallow another file's RET/typecheck or
 // unknown diagnostic, nor an unexplained outer/capture failure.
 func discoveryAsmDeclCompleteABIDiagnostics(candidateFiles []string, err error) ([]string, bool) {
-	failure, observed := discoveryAsmDeclObservedFailure(err)
+	failures, observed := discoveryAsmDeclObservedFailures(err)
 	if !observed || isDiscoveryInfrastructureFailure(err) {
 		return nil, false
 	}
 	var abiLines []string
-	for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
-			continue
-		}
-		matched := false
-		for _, file := range candidateFiles {
-			if discoveryAsmDeclLineNamesFile(line, file) {
-				matched = true
-				break
+	for _, failure := range failures {
+		count := 0
+		for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+				continue
 			}
+			matched := false
+			for _, file := range candidateFiles {
+				if discoveryAsmDeclLineNamesFile(line, file) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return nil, false
+			}
+			count++
+			if discoveryAsmDeclKnownNonABIWarning(line) {
+				continue
+			}
+			if !discoveryAsmDeclConcreteABIWarning(line) {
+				return nil, false
+			}
+			abiLines = append(abiLines, line)
 		}
-		if !matched {
+		if count == 0 {
 			return nil, false
 		}
-		if discoveryAsmDeclKnownNonABIWarning(line) {
-			continue
-		}
-		if !discoveryAsmDeclConcreteABIWarning(line) {
-			return nil, false
-		}
-		abiLines = append(abiLines, line)
 	}
 	return abiLines, len(abiLines) > 0
 }
 
 func discoveryAsmDeclOriginalDiagnosticFile(line string, err error) string {
+	if failures, observed := discoveryAsmDeclObservedFailures(err); observed && len(failures) > 1 {
+		var original string
+		for _, failure := range failures {
+			contains := false
+			for _, outputLine := range strings.Split(filepath.ToSlash(failure.output), "\n") {
+				if strings.TrimSpace(outputLine) == strings.TrimSpace(line) {
+					contains = true
+					break
+				}
+			}
+			if !contains {
+				continue
+			}
+			physical := discoveryAsmDeclOriginalDiagnosticFile(line, failure)
+			if physical == "" || original != "" && original != physical {
+				return ""
+			}
+			original = physical
+		}
+		return original
+	}
 	failure, observed := discoveryAsmDeclObservedFailure(err)
 	position := discoveryAsmDeclPosition(line)
 	if !observed || position == nil || !filepath.IsAbs(failure.directory) {
@@ -262,24 +362,26 @@ func discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file string, err e
 }
 
 func discoveryAsmDeclLocationsBelongToCandidate(moduleDir string, candidateFiles []string, err error) bool {
-	failure, observed := discoveryAsmDeclObservedFailure(err)
+	failures, observed := discoveryAsmDeclObservedFailures(err)
 	if !observed {
 		return false
 	}
-	for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
-			continue
-		}
-		matched := false
-		for _, file := range candidateFiles {
-			if discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file, err) {
-				matched = true
-				break
+	for _, failure := range failures {
+		for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+				continue
 			}
-		}
-		if !matched {
-			return false
+			matched := false
+			for _, file := range candidateFiles {
+				if discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file, err) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return false
+			}
 		}
 	}
 	return true
@@ -301,6 +403,17 @@ func filterDiscoveryAsmDeclTextMetadata(
 ) error {
 	if err == nil || isDiscoveryInfrastructureFailure(err) {
 		return err
+	}
+	if failures, observed := discoveryAsmDeclObservedFailures(err); observed && len(failures) > 1 {
+		var retained []error
+		for _, failure := range failures {
+			filtered := filterDiscoveryAsmDeclTextMetadata(ctx, dir, env, buildTags, patterns, modfilePath, failure)
+			if filtered != nil {
+				retained = append(retained, filtered)
+			}
+		}
+		batch := err.(*discoveryAsmDeclAnalysisError)
+		return combineDiscoveryAsmDeclAnalysisFailures(retained, batch.completed, batch.expected)
 	}
 	var failure *discoveryCapturedCommandError
 	if !errors.As(err, &failure) {

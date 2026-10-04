@@ -2789,6 +2789,7 @@ func discoveryCommandEnvironment(base []string) []string {
 		"GIT_CONFIG_VALUE_1":  "false",
 		"GIT_TERMINAL_PROMPT": "0",
 		"GOFLAGS":             "-mod=mod",
+		"GOENV":               "off",
 		"GOTOOLCHAIN":         "local",
 		"GOWORK":              "off",
 	})
@@ -3174,17 +3175,13 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if !ok || goos == "" || goarch == "" {
 		return fmt.Errorf("invalid discovery target %q", target)
 	}
-	args := []string{"vet", "-asmdecl", "-mod=mod"}
-	if len(buildTags) != 0 {
-		args = append(args, "-tags="+strings.Join(buildTags, ","))
-	}
-	args = append(args, patterns...)
 	targetEnv := replaceEnv(env, map[string]string{
 		"CGO_ENABLED": "0",
+		"GOENV":       "off",
 		"GOOS":        goos,
 		"GOARCH":      goarch,
 	})
-	_, err := runCapturedCommandOutput(ctx, dir, targetEnv, "go", args...)
+	err := runDiscoveryAsmDeclDirect(ctx, dir, targetEnv, buildTags, patterns, "")
 	if err == nil {
 		return nil
 	}
@@ -3198,7 +3195,7 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if ctx.Err() != nil {
 		return err
 	}
-	if _, observed := discoveryAsmDeclObservedFailure(err); !observed {
+	if _, observed := discoveryAsmDeclObservedFailures(err); !observed {
 		return errors.Join(err, fmt.Errorf("%w: asmdecl analysis did not finish with plain exit 1", errDiscoveryAsmDeclSourceProof))
 	}
 	err = filterDiscoveryAsmDeclTextMetadata(ctx, dir, targetEnv, buildTags, patterns, "", err)
@@ -3211,7 +3208,7 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	// temporary module copies with only *_test.go files emptied so unrelated
 	// diagnostics cannot hide this package's assembly ABI result.
 	// Go forbids overlays beneath GOMODCACHE, hence the explicit module copies.
-	retryErr := runDiscoveryAsmDeclWithTestlessModuleCopies(ctx, dir, targetEnv, args, buildTags, patterns)
+	retryErr := runDiscoveryAsmDeclWithTestlessModuleCopies(ctx, dir, targetEnv, nil, buildTags, patterns)
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		if retryErr != nil {
 			return retryErr
@@ -3255,7 +3252,12 @@ type discoveryGoListPackage struct {
 	}
 }
 
-func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string, env, vetArgs, buildTags, patterns []string) error {
+func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string, env, _ []string, buildTags, patterns []string) (result error) {
+	dir, err := directAsmDeclPhysicalDirectory(dir)
+	if err != nil {
+		return err
+	}
+	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	listArgs := []string{"list", "-json"}
 	if len(buildTags) != 0 {
 		listArgs = append(listArgs, "-tags="+strings.Join(buildTags, ","))
@@ -3305,7 +3307,24 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 			if err != nil {
 				return err
 			}
-			defer os.RemoveAll(stage)
+			stage, err = filepath.EvalSymlinks(stage)
+			if err != nil {
+				return err
+			}
+			stageInfo, err := os.Lstat(stage)
+			if err != nil || !stageInfo.IsDir() {
+				return fmt.Errorf("testless asmdecl stage has no physical directory identity: %v", err)
+			}
+			defer func(stage string, expected os.FileInfo) {
+				current, err := os.Lstat(stage)
+				if err != nil || !current.IsDir() || !os.SameFile(current, expected) {
+					result = errors.Join(result, fmt.Errorf("%w: testless asmdecl directory changed; not removed: %v", errDiscoveryCommandCleanup, err))
+					return
+				}
+				if err := os.RemoveAll(stage); err != nil {
+					result = errors.Join(result, fmt.Errorf("%w: remove testless asmdecl directory: %v", errDiscoveryCommandCleanup, err))
+				}
+			}(stage, stageInfo)
 			if err := copyDiscoveryModuleTree(pkg.Module.Dir, stage); err != nil {
 				return err
 			}
@@ -3406,19 +3425,21 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 	if err := os.WriteFile(sumfilePath, goSum, 0644); err != nil {
 		return err
 	}
-	args := append([]string{"vet", "-modfile=" + modfilePath}, vetArgs[1:]...)
-	_, err = runCapturedCommandOutput(ctx, commandDir, env, "go", args...)
+	err = runDiscoveryAsmDeclDirect(ctx, commandDir, env, buildTags, patterns, modfilePath)
 	// Inspect staged sources before their owning temporary modules are removed.
 	err = filterDiscoveryAsmDeclTextMetadata(ctx, commandDir, env, buildTags, patterns, modfilePath, err)
-	if failure, direct := err.(*discoveryCapturedCommandError); direct {
-		failure.asmdeclOrigins = make(map[string]string, len(stages))
+	if failures, observed := discoveryAsmDeclObservedFailures(err); observed {
+		origins := make(map[string]string, len(stages))
 		for original, stage := range stages {
 			physicalOriginal, originalErr := filepath.EvalSymlinks(original)
 			physicalStage, stageErr := filepath.EvalSymlinks(stage)
 			if originalErr != nil || stageErr != nil {
 				return errors.Join(err, fmt.Errorf("%w: bind original testless source origins", errDiscoveryAsmDeclSourceProof))
 			}
-			failure.asmdeclOrigins[physicalStage] = physicalOriginal
+			origins[physicalStage] = physicalOriginal
+		}
+		for _, failure := range failures {
+			failure.asmdeclOrigins = origins
 		}
 	}
 	return err
@@ -3714,19 +3735,48 @@ func (failure *discoveryCapturedCommandError) Unwrap() error {
 }
 
 func discoveryCommandDiagnostic(err error) string {
+	return discoveryCommandDiagnosticDepth(err, 0)
+}
+
+func discoveryCommandDiagnosticDepth(err error, depth int) string {
 	if err == nil {
 		return ""
 	}
-	var failure *discoveryCapturedCommandError
-	if errors.As(err, &failure) {
+	if failure, direct := err.(*discoveryCapturedCommandError); direct {
 		// Replace the compact display, rather than appending the full output.
 		// A tail-only display can start inside an asmdecl error and invent an
 		// unattributable ABI diagnostic even though its complete line names
 		// an exact file. Preserve surrounding context from wrapped errors.
-		complete := fmt.Sprintf("%s: %v\n%s", failure.command, failure.cause, failure.output)
-		return strings.Replace(err.Error(), failure.Error(), complete, 1)
+		return fmt.Sprintf("%s: %v\n%s", failure.command, failure.cause, failure.output)
 	}
-	return err.Error()
+	message := err.Error()
+	if depth >= 64 {
+		return message
+	}
+	var children []error
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children = joined.Unwrap()
+	} else if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		children = []error{wrapped.Unwrap()}
+	}
+	var completeChildren []string
+	for _, child := range children {
+		if child != nil {
+			complete := discoveryCommandDiagnosticDepth(child, depth+1)
+			completeChildren = append(completeChildren, complete)
+			message = strings.Replace(message, child.Error(), complete, 1)
+		}
+	}
+	// Opaque wrappers need not include their child's Error string. A later
+	// replacement can also collide with an earlier complete output. Repair
+	// every missing whole child only after all replacements, without granting
+	// the arbitrary wrapper any completed-analysis permission.
+	for _, complete := range completeChildren {
+		if !strings.Contains(message, complete) {
+			message += "\n" + complete
+		}
+	}
+	return message
 }
 
 // Candidate tools can emit arbitrarily large diagnostics. Bound the capture

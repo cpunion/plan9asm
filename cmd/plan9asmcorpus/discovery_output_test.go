@@ -110,7 +110,9 @@ func main() {
 			}
 			t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-			err := runDiscoveryAsmDecl(context.Background(), dir, os.Environ(), "linux/amd64", nil, []string{"example.com/pkg"})
+			// This synthetic executable tests bounded capture/display transport,
+			// not an official analyzer or a complete source/SDK certificate.
+			_, err := runCapturedCommandOutput(context.Background(), dir, os.Environ(), "go", "vet", "-asmdecl", "example.com/pkg")
 			if err == nil {
 				t.Fatal("early diagnostic disappeared after display truncation")
 			}
@@ -132,6 +134,13 @@ func main() {
 				}
 			} else if !isDiscoveryInfrastructureFailure(err) {
 				t.Fatal("early resource failure was classified as source incompatibility")
+			}
+			unregistered := runDiscoveryAsmDecl(context.Background(), dir, os.Environ(), "linux/amd64", nil, []string{"example.com/pkg"})
+			if unregistered == nil {
+				t.Fatal("synthetic executable supplied a fictitious official SDK certificate")
+			}
+			if _, observed := discoveryAsmDeclObservedFailures(unregistered); observed {
+				t.Fatal("unregistered SDK acquired completed asmdecl analysis permission")
 			}
 		})
 	}
