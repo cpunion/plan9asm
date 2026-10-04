@@ -713,6 +713,13 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		}
 	}
 
+	// Use the Go-module frontend's complete-file continuation proof before
+	// signature queries or bounded modules can discard a helper or its uses.
+	file, err = plan9asm.CoalesceARM64PrivateRegisterHelpers(file)
+	if err != nil {
+		return fmt.Errorf("prove ARM64 private source continuations: %w", err)
+	}
+
 	resolve := resolveSymFunc(pkg.PkgPath)
 	sigs, declaredArgSizes, err := sigsForAsmFile(pkg, file, resolve, goarch)
 	if err != nil {

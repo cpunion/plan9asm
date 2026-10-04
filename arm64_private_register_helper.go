@@ -95,6 +95,19 @@ func arm64PrivateSymbolRef(sym string) (string, int64, bool) {
 	return parseSBRef(strings.TrimPrefix(sym, "$"))
 }
 
+// CoalesceARM64PrivateRegisterHelpers validates complete source continuations
+// and folds closed ARM64 register-only helpers into their callers. It does not
+// infer a callable signature or grant native-frame or memory permissions.
+// Call this before filtering or splitting a file: an excluded sibling or DATA
+// initializer must not hide address-taking or alternate native helper uses.
+// Other architectures are returned unchanged. The input is not modified.
+func CoalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
+	if file == nil {
+		return nil, fmt.Errorf("nil assembly file")
+	}
+	return coalesceARM64PrivateRegisterHelpers(file)
+}
+
 // Run before KeepFunc: an excluded sibling or DATA initializer must not hide
 // address-taking or an alternate native use of a helper we fold into a root.
 func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
