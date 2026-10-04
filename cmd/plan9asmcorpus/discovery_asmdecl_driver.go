@@ -1150,7 +1150,8 @@ func directAsmDeclCommandJSON(ctx context.Context, dir string, env []string, bin
 		message := string(stderr.Bytes()) + string(stdout.Bytes())
 		return nil, &discoveryCapturedCommandError{command: strings.Join(append([]string{binary}, args...), " "), cause: err, output: message, display: message, directory: physical}
 	}
-	// Successful cmd/go JSON may have ordinary download notices on stderr.
+	// Successful cmd/go JSON may have ordinary module resolver/download
+	// notices on stderr. They are not analysis output or analysis authority.
 	// They are not JSON and must not be discarded as arbitrary warnings.
 	// Only the registered modfetch formatting is allowed; local toolchain
 	// routing cannot legitimately produce a toolchain-download notice.
@@ -1166,11 +1167,27 @@ func directAsmDeclValidateSuccessfulStderr(args []string, stderr string) error {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(args) == 0 || args[0] != "list" || len(fields) != 4 || fields[0] != "go:" || fields[1] != "downloading" || fields[2] == "golang.org/toolchain" || line != strings.Join(fields, " ") {
+		if len(args) == 0 || args[0] != "list" || len(fields) == 0 || fields[0] != "go:" || line != strings.Join(fields, " ") {
 			return fmt.Errorf("direct asmdecl command returned unregistered successful stderr: %s", stderr)
 		}
-		if err := module.Check(fields[2], fields[3]); err != nil {
-			return fmt.Errorf("direct asmdecl download notice has invalid identity: %w", err)
+		switch {
+		case len(fields) == 4 && fields[1] == "downloading":
+			if fields[2] == "golang.org/toolchain" || module.Check(fields[2], fields[3]) != nil {
+				return fmt.Errorf("direct asmdecl download notice has invalid identity: %s", line)
+			}
+		case len(fields) == 6 && strings.Join(fields[1:5], " ") == "finding module for package":
+			if fields[5] == "golang.org/toolchain" || module.CheckImportPath(fields[5]) != nil {
+				return fmt.Errorf("direct asmdecl resolver notice has invalid package identity: %s", line)
+			}
+		case len(fields) == 6 && fields[1] == "found" && fields[3] == "in":
+			packagePath, modulePath, version := fields[2], fields[4], fields[5]
+			if modulePath == "golang.org/toolchain" || module.CheckImportPath(packagePath) != nil ||
+				module.Check(modulePath, version) != nil ||
+				packagePath != modulePath && !strings.HasPrefix(packagePath, modulePath+"/") {
+				return fmt.Errorf("direct asmdecl resolved package/module/version identity is invalid: %s", line)
+			}
+		default:
+			return fmt.Errorf("direct asmdecl command returned unregistered successful stderr: %s", stderr)
 		}
 	}
 	return nil
