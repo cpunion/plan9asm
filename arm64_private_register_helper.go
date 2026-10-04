@@ -2,9 +2,12 @@ package plan9asm
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
+
+// Limit added source instructions before allocating per-call continuations.
+// The later CFG convergence budgets cannot bound this Cartesian expansion.
+const arm64PrivateRegisterExpansionBudget = 1 << 16
 
 // This is a source continuation contract, not a guessed callable signature.
 // Only a closed, straight-line, zero-frame register leaf can share its caller's
@@ -217,6 +220,16 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 			return nil, arm64GoABIContext("private helper %q has no closed source caller", helper)
 		}
 	}
+	remaining := arm64PrivateRegisterExpansionBudget
+	for name, helper := range helpers {
+		// LABEL and B (R30) replace TEXT and RET, so each continuation adds
+		// exactly the original leaf's length. Divide before multiplying to
+		// keep the file-wide preflight checked even for hostile source sizes.
+		if uses[name] > remaining/len(helper.Instrs) {
+			return nil, arm64GoABIContext("private helper source exceeds its expansion budget of %d instructions", arm64PrivateRegisterExpansionBudget)
+		}
+		remaining -= uses[name] * len(helper.Instrs)
+	}
 	result := *file
 	result.Funcs = make([]Func, 0, len(file.Funcs)-len(helpers))
 	for _, fn := range file.Funcs {
@@ -241,24 +254,21 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 		// helpers are appended below; their rewritten local calls must not
 		// erase the original real-symbol call's private-frame provenance.
 		copyFn.arm64PrivateUnexposedFrame = arm64CallFrameUnexposed(fn)
-		names := make([]string, 0, len(roots[fn.Sym]))
-		for name := range roots[fn.Sym] {
-			names = append(names, name)
+		// Each static CALL needs its own helper continuation. Sharing a body
+		// also shares its indirect RET edges, falsely joining an earlier call's
+		// register state into a later caller continuation. The closed leaf has
+		// no observable address/PC or LR use, so cloning its source preserves
+		// the real CALL/LR transport without weakening must-defined joins.
+		type sourceContinuation struct {
+			label  string
+			helper Func
 		}
-		sort.Strings(names)
-		labels := map[string]string{}
+		var continuations []sourceContinuation
 		occupied := map[string]bool{"entry": true}
 		for _, ins := range fn.Instrs {
 			if ins.Op == OpLABEL && len(ins.Args) == 1 {
 				occupied[ins.Args[0].Sym] = true
 			}
-		}
-		for i, name := range names {
-			label := fmt.Sprintf("__arm64_private_%d", i)
-			for occupied[label] {
-				label += "_"
-			}
-			occupied[label], labels[name] = true, label
 		}
 		for i, ins := range copyFn.Instrs {
 			if ins.Op == OpWORD || ins.Op == "ADR" || ins.Op == "ADRP" || ins.Op == "PCALIGN" {
@@ -271,7 +281,13 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 			}
 			if (ins.Op == "CALL" || ins.Op == "BL") && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
 				name, _, _ := arm64PrivateSymbolRef(ins.Args[0].Sym)
-				if label := labels[name]; label != "" {
+				if helper, present := helpers[name]; present {
+					label := fmt.Sprintf("__arm64_private_%d", len(continuations))
+					for occupied[label] {
+						label += "_"
+					}
+					occupied[label] = true
+					continuations = append(continuations, sourceContinuation{label: label, helper: helper})
 					copyFn.Instrs[i].Args = []Operand{{Kind: OpIdent, Ident: label}}
 				}
 			}
@@ -281,9 +297,9 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, name := range names {
-			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: labels[name]}}})
-			helper := helpers[name]
+		for _, continuation := range continuations {
+			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: continuation.label}}})
+			helper := continuation.helper
 			copyFn.Instrs = append(copyFn.Instrs, helper.Instrs[1:len(helper.Instrs)-1]...)
 			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: "R30"}}}, Raw: "B (R30)"})
 		}
