@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/format"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,8 +32,8 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopOriginalInitializedValues(
 			}
 			assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
 			fmt.Fprintf(&calls, `
- if got:=Call%s(x[:length],y); got!=want || x!=originalX || y!=originalY ||
-  canary!=[4]uint64{11,17,29,53} {
+ if got:=Call%s(x.data[:length],y.data[:]); got!=want ||
+  snapshot(&x)!=originalX || snapshot(&y)!=originalY {
   t.Fatalf("%s length=%%d got=%%#x want=%%#x",length,got,want)
  }
 `, name, name)
@@ -40,17 +41,34 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopOriginalInitializedValues(
 	}
 	goTest := `package caller
 import "testing"
+
+type guardedInput struct {
+ before [4]uint32
+ data [16]uint32
+ after [4]uint32
+}
+
+//go:noinline
+func snapshot(input *guardedInput) guardedInput { return *input }
+
 func TestOriginalInitializedCountedValues(t *testing.T) {
  for repeat:=0; repeat<4; repeat++ {
   for _, value:=range []uint32{0,1,7,0x80000000,0xffffffff,0x12345678} {
    for length:=0; length<16; length++ {
-    x := [16]uint32{value,value^0xaabbccdd,19,23,29,31,37,41,43,47,53,59,61,67,71,73}
-    y := [16]uint32{31,37,value,43,47,53,59,61,67,71,73,79,83,89,97,101}
-    originalX,originalY:=x,y
-    canary:=[4]uint64{11,17,29,53}
+    x := guardedInput{
+     before: [4]uint32{11,17,29,53},
+     data: [16]uint32{value,value^0xaabbccdd,19,23,29,31,37,41,43,47,53,59,61,67,71,73},
+     after: [4]uint32{0xaabbccdd,0x12345678,0x87654321,0xffffffff},
+    }
+    y := guardedInput{
+     before: x.after,
+     data: [16]uint32{31,37,value,43,47,53,59,61,67,71,73,79,83,89,97,101},
+     after: x.before,
+    }
+    originalX,originalY:=snapshot(&x),snapshot(&y)
     var want uint32
-    for index:=0;index<length&3;index++ { want+=x[index]+y[index] }
-` + strings.ReplaceAll(calls.String(), ",y)", ",y[:])") + `
+    for index:=0;index<length&3;index++ { want+=x.data[index]+y.data[index] }
+` + calls.String() + `
    }
   }
  }
@@ -61,7 +79,15 @@ func TestOriginalInitializedCountedValues(t *testing.T) {
 		"go.mod": "module caller\n\ngo 1.20\n", "value.go": source.String(),
 		"value_amd64.s": assembly.String(), "value_test.go": goTest,
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+		bytes := []byte(content)
+		if strings.HasSuffix(name, ".go") {
+			var err error
+			bytes, err = format.Source(bytes)
+			if err != nil {
+				t.Fatalf("format generated %s: %v", name, err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), bytes, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -73,5 +99,5 @@ func TestOriginalInitializedCountedValues(t *testing.T) {
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("first-party original Go counted integer/canary oracle: %v\n%s", err, output)
 	}
-	t.Log("original Go scalar oracle: 1536 initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits, input/stack canaries; Darwin/Rosetta is diagnostic, not Intel hardware evidence")
+	t.Log("original Go scalar oracle: 1536 initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits; noinline full-memory snapshots compare both data buffers and adjacent canaries, not a physical source-stack witness; Darwin/Rosetta is diagnostic, not Intel hardware evidence")
 }
