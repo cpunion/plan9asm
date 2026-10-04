@@ -80,6 +80,14 @@ unregistered effects cannot borrow this proof. Go's physical autosize is not
 the LLVM private-allocation size. Runtime oracles must execute original raw
 Go objects as well as LLVM objects with independent references and canaries.
 
+ARM64 VMOV/VDUP availability records the validated source lane span separately
+from implementation loads that merely preserve other destination bytes. Lane
+insertion defines only the written bits; F/V aliases and CFG joins retain the
+unknown remainder, and a full vector consumer still needs all of its bits.
+Scalar/arranged non-preserving transfers clear their architectural inactive
+bits. Typed calls and source scratch invalidation revoke prior lane definitions.
+This is numerical definedness, not caller, pointer or private-frame permission.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and

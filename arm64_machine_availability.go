@@ -12,6 +12,8 @@ type arm64MachineEffect struct {
 	register          string
 	copyFrom          string
 	width             int
+	vectorOffset      int
+	vectorSpan        bool
 	write             bool
 	call              *ARM64GoRegisterABI
 	opaque            bool
@@ -244,8 +246,9 @@ func arm64MachineZeroInputs(ins Instr) bool {
 }
 
 type arm64MachineState struct {
-	active bool
-	values map[string]int
+	active  bool
+	values  map[string]int
+	vectors map[string]arm64MachineVectorDefinition
 }
 
 func arm64MachineBoundary(slots []ARM64GoRegisterValue) arm64MachineState {
@@ -261,11 +264,17 @@ func (state arm64MachineState) clone() arm64MachineState {
 	for reg, width := range state.values {
 		out.values[reg] = width
 	}
+	if state.vectors != nil {
+		out.vectors = make(map[string]arm64MachineVectorDefinition, len(state.vectors))
+		for reg, definition := range state.vectors {
+			out.vectors[reg] = definition
+		}
+	}
 	return out
 }
 
-// Join uses the minimum defined width on every incoming active path. A path
-// without a typed entry/call restriction does not provide an extra promise.
+// Join intersects the defined vector bits and takes the minimum GP prefix
+// width on every incoming active path. An unrestricted path adds no promise.
 func (state *arm64MachineState) merge(other arm64MachineState) bool {
 	if !other.active {
 		return false
@@ -276,6 +285,18 @@ func (state *arm64MachineState) merge(other arm64MachineState) bool {
 	}
 	changed := false
 	for reg, width := range state.values {
+		if _, vector := arm64ParseVReg(Reg(reg)); vector {
+			before := state.vectorDefinition(reg)
+			next := other.vectorDefinition(reg)
+			next.low &= before.low
+			next.high &= before.high
+			next.scalable = next.scalable && before.scalable
+			if next != before {
+				state.setVectorDefinition(reg, next)
+				changed = true
+			}
+			continue
+		}
 		if next := other.values[reg]; next < width {
 			state.values[reg] = next
 			changed = true
@@ -330,6 +351,7 @@ func (flow *arm64MachineAvailability) validate() error {
 			}
 			if effect.unavailable {
 				state.values[effect.register] = 0
+				delete(state.vectors, effect.register)
 				continue
 			}
 			if effect.opaque {
@@ -339,6 +361,12 @@ func (flow *arm64MachineAvailability) validate() error {
 				// The source continuation analysis, not GP availability, owns
 				// memory/return-link provenance. This effect is explicit so a
 				// validated store cannot silently acquire a neutral proof.
+				continue
+			}
+			if effect.vectorSpan {
+				if err := state.applyVectorSpan(effect); err != nil {
+					return err
+				}
 				continue
 			}
 			if effect.copyFrom != "" {
@@ -354,9 +382,11 @@ func (flow *arm64MachineAvailability) validate() error {
 						width = effect.width
 					}
 					state.values[effect.register] = width
+					delete(state.vectors, effect.register)
 				}
 			} else if effect.write {
 				state.values[effect.register] = effect.width
+				delete(state.vectors, effect.register)
 			} else if state.values[effect.register] < effect.width {
 				return arm64GoABIContext("%s read (%d bits) is not supplied by entry, call results or a reaching write at %q", effect.register, effect.width, effect.source)
 			}
