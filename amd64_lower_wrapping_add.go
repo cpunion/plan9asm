@@ -1,0 +1,122 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := x86PackedWrappingAddSpecs[Op(base)]; !known {
+		return false, false, nil
+	}
+	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != strings.ToUpper(string(op)) {
+		return true, false, fmt.Errorf("packed add dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	}
+	ins.Op = op
+	form, known, err := x86PackedWrappingAddProperties(ins, c.goarch)
+	if err != nil || !known {
+		return known, false, err
+	}
+	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && !form.mmx && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+		}
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy packed add m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
+		}
+	}
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
+	bits := form.spec.laneBits
+	lanes := form.byteWidth * 8 / bits
+	if form.mmx {
+		var a string
+		if first.Kind == OpReg {
+			a, err = c.loadReg(first.Reg)
+		} else {
+			a, err = c.loadPackedUnpackMMXSource(first, 8)
+		}
+		if err != nil {
+			return true, false, err
+		}
+		b, err := c.loadReg(second.Reg)
+		if err != nil {
+			return true, false, err
+		}
+		value := c.emitPackedIntegerAdd(lanes, bits, c.bitcastI64ToIntegerLanes(lanes, bits, a), c.bitcastI64ToIntegerLanes(lanes, bits, b), amd64PackedAddWrap)
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, bits, value)
+		return true, false, c.storeReg(destination.Reg, "%"+out)
+	}
+	b, err := c.loadPackedCompareLanes(second, form.byteWidth, bits, false)
+	if err != nil {
+		return true, false, err
+	}
+	var mask, value string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	if form.legacy && form.memory >= 0 {
+		value, err = c.emitPackedAddNativeMemory(first, bits, b)
+	} else {
+		// PADD's EVEX E4/E4.nb suppresses inactive native source lanes,
+		// unlike PMADDWD's E4NF. Virtual FP still needs its complete span.
+		// This shared bit reader keeps native active-lane accesses volatile
+		// even when outputs are dead, while suppressing exactly inactive E4
+		// lanes. It also reads broadcasts across independent checked FP bytes.
+		// The shift family's count/arithmetic effects are not reused.
+		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
+		err = loadErr
+		if err == nil {
+			value = c.emitPackedIntegerAdd(lanes, bits, a, b, amd64PackedAddWrap)
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
+	if form.mask >= 0 {
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
+	}
+	out := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+	}
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
+}
+
+func (c *amd64Ctx) emitPackedAddNativeMemory(source Operand, bits int, data string) (string, error) {
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", err
+	}
+	segment := ""
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
+	}
+	carrier, result := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <4 x i32>\n", carrier, 128/bits, bits, data)
+	name := map[int]string{8: "paddb", 16: "paddw", 32: "paddd", 64: "paddq"}[bits]
+	fmt.Fprintf(c.b, "  %%%s = call <4 x i32> asm sideeffect %q, %q(<4 x i32> %%%s, %s %s)\n", result, name+" "+segment+"($2), $0", "=x,0,r,~{memory}", carrier, pointerType, pointer)
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <%d x i%d>\n", value, result, 128/bits, bits)
+	return "%" + value, nil
+}

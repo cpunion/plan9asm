@@ -19,16 +19,15 @@ func TestX86GoCallerWordMultiplyAddOriginalRawEffect(t *testing.T) {
 	}
 }
 
-func TestX86GoCallerWordMultiplyAddKeepsOriginalFollowingEffectFailure(t *testing.T) {
-	// Consecutive unchanged LONGs from dot_byte_avx256.s: the family repair
-	// must not authorize the next independently unregistered VPADDD effect.
+func TestX86GoCallerWordMultiplyAddOriginalFollowingAddEffect(t *testing.T) {
+	// Consecutive unchanged LONGs from dot_byte_avx256.s. Each arithmetic
+	// family now has its separate complete typed caller effect.
 	body := "VMOVDQU (DI),Y2\nVMOVDQU (SI),Y4\nVPXOR Y0,Y0,Y0\nLONG $0xd4f5edc5\nLONG $0xc0feedc5\nVMOVSS X0,(DX)"
 	assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
 	requireX86GoAssemblerResult(t, "amd64", assembly, true)
 	pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
-	err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
-	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "unregistered source-stack effect: VPADDD") {
-		t.Fatalf("original following effect was hidden or family fix did not reach it: %v", err)
+	if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -60,6 +60,9 @@ var amd64PackedAddSpecs = map[Op]amd64PackedAddSpec{
 // lowerPackedIntegerAdd implements the complete Go 1.27 packed-integer add
 // family: the legacy ymm/yxm tables and the _yvandnpd VEX/EVEX table.
 func (c *amd64Ctx) lowerPackedIntegerAdd(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, term, err := c.lowerPackedWrappingAdd(op, ins); ok {
+		return ok, term, err
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	suffix := ""
