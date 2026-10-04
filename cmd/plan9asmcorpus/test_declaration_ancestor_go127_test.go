@@ -1,3 +1,5 @@
+//go:build go1.27
+
 package main
 
 import (
@@ -12,9 +14,7 @@ import (
 )
 
 func TestTestDeclarationDependencyProducerPureGoAncestors(t *testing.T) {
-	if runtimeGoMinorForProfileTest(t) < 27 {
-		t.Skip("actual production driver requires Go 1.27; source-proof tests remain portable")
-	}
+
 	compilerEnv := os.Environ()
 	candidate := discoveryCandidate{
 		Module: "example.invalid/testancestor", Version: "v1.0.0",

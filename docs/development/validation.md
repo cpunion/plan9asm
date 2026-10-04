@@ -71,6 +71,11 @@ Run race tests for changed concurrent code and focused Go 1.20 compatibility
 checks for root-module code. Do not expand external-module tests into the
 whole compatibility matrix.
 
+Actual external-producer fixtures have an explicit `go1.27` build role, not
+runtime `Skip` guards on older SDKs. Their shared helpers and portable proof
+checks remain untagged. Validate each SDK's actual listed tests; current Go must
+execute every producer fixture, while historical lanes verify the framework.
+
 ```sh
 go test . -run '^(TestAMD64ConformanceNativeGo|TestAMD64ConformanceLLVMRuntime)$' -count=1 -v
 PLAN9ASM_CROSS_EXEC=1 go test . \
