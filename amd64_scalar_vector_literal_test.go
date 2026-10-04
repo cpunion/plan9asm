@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -35,27 +34,32 @@ var x86ScalarLiteralValues = []x86ScalarLiteralValue{
 
 func x86ScalarLiteralGoListing(t *testing.T, arch, source string) (string, error) {
 	t.Helper()
+	return x86ScalarLiteralExpectedGoListing(t, arch, source, true)
+}
+
+func x86ScalarLiteralExpectedGoListing(t *testing.T, arch, source string, wantSuccess bool) (string, error) {
+	t.Helper()
 	dir := t.TempDir()
 	asm := filepath.Join(dir, "literal.s")
 	if err := os.WriteFile(asm, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	stage, cancelStage := runtimeOracleStageContext(t)
+	defer cancelStage()
+	ctx, cancel := context.WithTimeout(stage, 30*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "literal", "-o", filepath.Join(dir, "literal.o"), asm)
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH="+arch)
-	command.WaitDelay = 2 * time.Second
-	listing, err := command.CombinedOutput()
-	if ctx.Err() != nil {
-		t.Fatalf("actual Go literal assembler timeout: %v", ctx.Err())
+	listing, err := runtimeOracleCombinedOutput(ctx, command)
+	if failure := goAssemblerOracleOutcome(asm, filepath.Join(dir, "literal.o"), listing, err, ctx.Err(), wantSuccess, arch); failure != nil {
+		t.Fatalf("%v\n%s", failure, listing)
 	}
 	return string(listing), err
 }
 
 func TestX86ScalarLiteralActualGoRewriteInventory(t *testing.T) {
-	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
-		t.Skip("current Go 1.27 optab inventory; historical lane checks the implementation separately")
-	}
+	vectorLiterals := x86ScalarLiteralActualGoRewriteSet(t)
+	acceptedObjects, concreteRejections := 0, 0
 	for _, arch := range []string{"amd64", "386"} {
 		for _, op := range []string{"MOVSS", "MOVSD", "VMOVSS", "VMOVSD"} {
 			legacy := !strings.HasPrefix(op, "V")
@@ -76,13 +80,22 @@ func TestX86ScalarLiteralActualGoRewriteInventory(t *testing.T) {
 					if !recognized || (err == nil) != accepted || accepted && (!form.literal || form.legacyZero != zeroRewrite) {
 						t.Fatalf("%s %s literal rewrite axes = %+v / %v", arch, instruction, form, err)
 					}
-					listing, err := x86ScalarLiteralGoListing(t, arch, source)
-					if (err == nil) != accepted {
-						t.Fatalf("%s %s expected accepted=%t: %v\n%s", arch, instruction, accepted, err, listing)
+					// The translator retains the current Go grammar above. The
+					// stock assembler below is independently checked against its
+					// own inspected progedit; older Go has no V literal rewrite.
+					actualAccepted := accepted && (legacy || vectorLiterals)
+					listing, err := x86ScalarLiteralExpectedGoListing(t, arch, source, actualAccepted)
+					if (err == nil) != actualAccepted {
+						t.Fatalf("%s %s actual Go expected accepted=%t: %v\n%s", arch, instruction, actualAccepted, err, listing)
 					}
-					if !accepted {
+					if !actualAccepted {
+						if !legacy && !vectorLiterals && !strings.Contains(listing, "invalid instruction:") {
+							t.Fatalf("historical V literal lacks a concrete invalid-instruction diagnostic: %s", listing)
+						}
+						concreteRejections++
 						continue
 					}
+					acceptedObjects++
 					// The same actual Go object establishes the generation that
 					// owns upper-lane semantics; a VMOV spelling alone is not it.
 					var prefix byte
@@ -119,6 +132,14 @@ func TestX86ScalarLiteralActualGoRewriteInventory(t *testing.T) {
 			}
 		}
 	}
+	wantObjects := 84
+	if vectorLiterals {
+		wantObjects = 248
+	}
+	if acceptedObjects != wantObjects || acceptedObjects+concreteRejections != 336 {
+		t.Fatalf("actual literal inventory cardinality changed: objects=%d rejections=%d", acceptedObjects, concreteRejections)
+	}
+	t.Logf("actual stock Go vector-literal rewrite=%t: %d physical objects, %d concrete source rejections across 336 formats", vectorLiterals, acceptedObjects, concreteRejections)
 }
 
 func TestX86ScalarLiteralGoOperandGrammar(t *testing.T) {
