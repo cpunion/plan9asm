@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -24,11 +25,11 @@ func TestWASMPackedGoRuntimeHelperUsesPortableNodeCommand(t *testing.T) {
 			}
 			node := filepath.Join(root, "Node Program Files", "node.exe")
 			wasm := filepath.Join(root, "Go Program Files", "oracle.wasm")
-			cmd, err := wasmPackedGoRuntimeCommand(root, node, wasm)
+			cmd, err := wasmPackedGoRuntimeCommand(context.Background(), root, node, wasm)
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := []string{node, "--stack-size=8192", filepath.Join(dir, "wasm_exec_node.js"), wasm}
+			want := []string{node, "--stack-size=8192", "-e", wasmPackedNodeBootstrap, filepath.Join(dir, "wasm_exec_node.js"), wasm}
 			if cmd.Path != node || !reflect.DeepEqual(cmd.Args, want) {
 				t.Fatalf("must invoke Node directly with separate arguments, got path=%q args=%q", cmd.Path, cmd.Args)
 			}
@@ -58,9 +59,15 @@ func TestWASMPackedGoRuntimeHelperRequiresCompleteRegularFiles(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if cmd, err := wasmPackedGoRuntimeCommand(root, "node.exe", "oracle.wasm"); err == nil || cmd != nil {
+			if cmd, err := wasmPackedGoRuntimeCommand(context.Background(), root, "node.exe", "oracle.wasm"); err == nil || cmd != nil {
 				t.Fatalf("incomplete runtime must fail without a fake command: cmd=%v err=%v", cmd, err)
 			}
 		})
+	}
+}
+
+func TestWASMPackedGoRuntimeHelperRequiresCommandContext(t *testing.T) {
+	if command, err := wasmPackedGoRuntimeCommand(nil, t.TempDir(), "node", "oracle.wasm"); err == nil || command != nil {
+		t.Fatalf("unbounded runtime command accepted: %v / %v", command, err)
 	}
 }
