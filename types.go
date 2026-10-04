@@ -486,6 +486,12 @@ func parseImmFloatExpr(v string) (float64, bool) {
 	if exprText == "" {
 		return 0, false
 	}
+	// cmd/asm treats each unary sign as a separate token. Go source parsing
+	// instead tokenizes adjacent ++/-- as increment/decrement, so preserve
+	// the actual assembly FLOAT-leaf grammar before the legacy evaluator.
+	if value, valid := parseGoFloatLiteral(exprText); valid {
+		return value, true
+	}
 	expr, err := parser.ParseExpr(exprText)
 	if err != nil {
 		return 0, false

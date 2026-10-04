@@ -34,7 +34,8 @@ func x86FloatMulDivProperties(ins Instr, goarch string) (x86FloatMulDivForm, boo
 	if !recognized {
 		return x86FloatMulDivForm{}, false, nil
 	}
-	shape, err := x86FloatBinaryOperandProperties(ins, goarch, spec.bits, spec.legacy, spec.scalar, false, "mul/div")
+	literal := x86FloatArithmeticLiteral(ins, spec.legacy, spec.scalar)
+	shape, err := x86FloatBinaryOperandProperties(ins, goarch, spec.bits, spec.legacy, spec.scalar, literal, "mul/div")
 	form := x86FloatMulDivForm{spec: spec, x86FloatBinaryForm: shape}
 	if err != nil {
 		return form, true, err

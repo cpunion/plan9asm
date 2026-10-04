@@ -102,8 +102,10 @@ The scalar SIMD memory family and KMOV caller-region consumers are integrated,
 including coherent X/Y/Z views and initialized, bounded writes. The complete
 MOVSS/MOVSD/VMOVSS/VMOVSD floating-literal family follows Go's actual rewrite,
 rounding and constant-pool choices before certifying caller effects. Scalar
-ADDSS/ADDSD/SUBSS/SUBSD literals now retain their distinct finite conversion,
-constant-pool and initialized-destination contracts. Legacy
+ADDSS/ADDSD/SUBSS/SUBSD and MULSS/MULSD/DIVSS/DIVSD literals retain their
+distinct finite conversion, signed-zero constant-pool and initialized-destination
+contracts. Unary FLOAT token parsing follows the assembler without broadening
+integer, unresolved or binary-expression authorization. Legacy
 MOVSD memory loads clear the upper XMM half, unlike register copies; independent
 complete-byte Go/LLVM oracles retain the real pre-fix failures. The complete
 packed-vector move family now shares one typed grammar with the lowerer and

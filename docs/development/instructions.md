@@ -115,7 +115,12 @@ Floating literals follow the actual Go frontend rewrite: original positive
 zero in X0-X15 becomes legacy XORPS, preserving wider aliases; negative zero,
 float32 rounding/underflow and high-register constants follow their pool-memory
 encoding. Integer/unresolved literals and invalid mask/merge forms remain
-rejected. Raw FP16, packed moves and arithmetic need separate complete effect
+rejected. Legacy scalar ADDSS/ADDSD/SUBSS/SUBSD and MULSS/MULSD/DIVSS/DIVSD
+use their own finite FLOAT constant-pool rewrite, including both signs of zero;
+they do not inherit MOV's positive-zero XORPS rewrite. Their FLOAT leaf may
+have unary signs and parentheses, but not integer or binary-expression source
+syntax. The destination's low scalar bytes must already be numerically defined.
+Raw FP16, packed moves and arithmetic need separate complete effect
 families and do not inherit this permission.
 Inputs and local lengths are read-only;
 only the independently fresh scalar result has a bounded write envelope.
