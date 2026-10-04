@@ -632,6 +632,35 @@ func TestBuildReportAndJSONShape(t *testing.T) {
 	}
 }
 
+func TestBuildReportStableFamilyExampleSelection(t *testing.T) {
+	ops := []string{"ADDQ", "ANDQ", "CMPQ", "DIVQ", "IDIVQ", "ORQ", "SUBQ", "XORQ"}
+	want := append([]string(nil), ops[:6]...)
+	var previous []byte
+	for rotation := 0; rotation < 32; rotation++ {
+		inventory := make(map[string]*opStat, len(ops))
+		for i := range ops {
+			index := (i + rotation) % len(ops)
+			inventory[ops[index]] = &opStat{Count: index + 1,
+				Files: map[string]int{"fixture.s": index + 1},
+				Pkgs:  map[string]int{"fixture": index + 1}}
+		}
+		rep := buildReport("std", "go1.test", "linux", "amd64", 1, 1, 1,
+			inventory, nil, nil, nil, nil, nil, nil)
+		if len(rep.FamilyStats) != 1 || rep.FamilyStats[0].UniqueOps != len(ops) ||
+			rep.FamilyStats[0].Hits != 36 || !reflect.DeepEqual(rep.FamilyStats[0].Examples, want) {
+			t.Fatalf("rotation %d: unstable family sample: %+v; want %v", rotation, rep.FamilyStats, want)
+		}
+		encoded, err := json.Marshal(rep)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if previous != nil && string(encoded) != string(previous) {
+			t.Fatalf("rotation %d: unchanged input produced different JSON", rotation)
+		}
+		previous = encoded
+	}
+}
+
 func TestClusterAndFamilyCoverageMore(t *testing.T) {
 	clusterCases := []struct {
 		goarch string
