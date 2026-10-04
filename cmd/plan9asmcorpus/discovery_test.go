@@ -865,8 +865,20 @@ func TestDiscoveryBatchChecksRealGoPackagesAndIsolatesInvalidSource(t *testing.T
 	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
 		"package second\n\nfunc f(x int)\n")
 	results, err := runDiscoveryPackageChecks(groups, vet)
+	if err != nil || len(results) != 2 || results[0] != nil || results[1] != nil {
+		t.Fatalf("unspecified TEXT arguments are not an actual ABI access error: results=%v error=%v", results, err)
+	}
+	// The historical literal -0 source above ignores its argument. Use an
+	// explicit nonzero mismatch, not that metadata-only warning, to establish
+	// real per-package ABI rejection and isolate the unaffected sibling.
+	writeTestFile(t, filepath.Join(dir, "second", "decl_amd64.s"),
+		"TEXT ·f(SB), $0-16\nRET\n")
+	results, err = runDiscoveryPackageChecks(groups, vet)
 	if err != nil || len(results) != 2 || results[0] != nil || results[1] == nil {
 		t.Fatalf("invalid second package ABI: results=%v error=%v", results, err)
+	}
+	if !strings.Contains(discoveryCommandDiagnostic(results[1]), "wrong argument size 16; expected $...-8") {
+		t.Fatalf("batch isolation lost the actual nonzero ABI diagnostic: %v", results[1])
 	}
 
 	writeTestFile(t, filepath.Join(dir, "second", "decl.go"),
