@@ -38,17 +38,32 @@ type GoAMD64FrameCaptureRequest struct {
 // GoAMD64FrameSource is a sealed actual-object observation. It does not grant
 // a native backing, caller region, memory access or return certificate.
 type GoAMD64FrameSource struct {
-	mu        sync.Mutex
-	ready     bool
-	request   GoAMD64FrameCaptureRequest
-	selection goAMD64FrameSelection
-	env       map[string]string
-	inputs    map[string][32]byte
-	entries   []string
-	owned     string
-	ownedInfo os.FileInfo
-	functions map[string]goAMD64FrameFunction
-	origins   map[string]int
+	mu           sync.Mutex
+	ready        bool
+	request      GoAMD64FrameCaptureRequest
+	selection    goAMD64FrameSelection
+	env          map[string]string
+	inputs       map[string][32]byte
+	entries      []string
+	owned        string
+	ownedInfo    os.FileInfo
+	functions    map[string]goAMD64FrameFunction
+	declarations map[string]goAMD64FrameDeclaration
+	origins      map[string]int
+}
+
+// Transport is an observation role, never a memory or alias permission.
+type goAMD64FrameTransport uint8
+
+const (
+	goAMD64FrameNumericTransport goAMD64FrameTransport = iota + 1
+	goAMD64FrameCompositeTransport
+)
+
+type goAMD64FrameDeclaration struct {
+	signature    FuncSig
+	transport    goAMD64FrameTransport
+	languageType string // go/types model identity, not a native pointee extent
 }
 
 type goAMD64FrameFunction struct {
@@ -57,6 +72,8 @@ type goAMD64FrameFunction struct {
 	code                        []byte
 	positions                   map[int]string
 	signature                   FuncSig
+	transport                   goAMD64FrameTransport
+	languageType                string
 }
 
 // This is decoded only from the actual driver stdout, never from a proof file.
@@ -152,7 +169,8 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if selected.Module.GoMod != filepath.Join(request.Directory, "go.mod") {
 		return nil, goAMD64FrameContext("actual module metadata is outside the original source directory")
 	}
-	if err := source.numericDeclarations(pkg); err != nil {
+	source.declarations, err = source.typedDeclarations(pkg, false)
+	if err != nil {
 		return nil, err
 	}
 	source.owned, err = os.MkdirTemp(provided["TMPDIR"], "plan9asm-go-frame-object-")
@@ -220,6 +238,11 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			if _, duplicate := source.functions[symbol]; duplicate {
 				return nil, goAMD64FrameContext("duplicate original TEXT symbol")
 			}
+			declaration, exists := source.declarations[symbol]
+			if !exists || !reflect.DeepEqual(fn.signature, declaration.signature) {
+				return nil, goAMD64FrameContext("object lacks its independently checked declaration/layout")
+			}
+			fn.transport, fn.languageType = declaration.transport, declaration.languageType
 			source.functions[symbol] = fn
 		}
 	}
@@ -481,6 +504,13 @@ func (source *GoAMD64FrameSource) load(ctx context.Context) (goAMD64FrameSelecti
 }
 
 func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
+	_, err := source.typedDeclarations(pkg, true)
+	return err
+}
+
+// The numeric-only wrapper is retained for fixed-local consumers. Expanding
+// capture's observation domain must not expand that consumer's admission.
+func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly bool) (map[string]goAMD64FrameDeclaration, error) {
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
@@ -488,16 +518,30 @@ func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
 		filename := filepath.Join(source.request.Directory, name)
 		data, err := source.read(filename)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		file, err := parser.ParseFile(fset, filename, data, parser.ParseComments)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, declaration := range file.Decls {
-			fn, ok := declaration.(*ast.FuncDecl)
-			if !ok || fn.Body != nil || fn.Recv != nil {
-				return goAMD64FrameContext("initial declaration must be a bodyless numeric function")
+			switch declaration := declaration.(type) {
+			case *ast.FuncDecl:
+				if declaration.Body != nil || declaration.Recv != nil {
+					return nil, goAMD64FrameContext("declaration must be an ordinary bodyless function")
+				}
+			case *ast.GenDecl:
+				if declaration.Tok != token.TYPE {
+					return nil, goAMD64FrameContext("capture excludes imports, values and source bodies")
+				}
+				for _, spec := range declaration.Specs {
+					typ, ok := spec.(*ast.TypeSpec)
+					if !ok || typ.TypeParams != nil && len(typ.TypeParams.List) != 0 {
+						return nil, goAMD64FrameContext("generic or unknown local type declaration")
+					}
+				}
+			default:
+				return nil, goAMD64FrameContext("unknown original declaration role")
 			}
 		}
 		syntax = append(syntax, file)
@@ -512,43 +556,273 @@ func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
 	}
 	sort.Strings(actual)
 	if !reflect.DeepEqual(compiled, actual) {
-		return goAMD64FrameContext("effective/generated compiled source mapping is unbound")
+		return nil, goAMD64FrameContext("effective/generated compiled source mapping is unbound")
 	}
 	sizes := types.SizesFor("gc", "amd64")
 	typed, err := (&types.Config{Sizes: sizes}).Check(pkg.Path, fset, syntax, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !reflect.DeepEqual(typed.Scope().Names(), pkg.Types.Scope().Names()) {
-		return goAMD64FrameContext("actual selected declarations differ from supplied types")
+		return nil, goAMD64FrameContext("actual selected declarations differ from supplied types")
 	}
+	declarations := make(map[string]goAMD64FrameDeclaration)
 	for _, name := range typed.Scope().Names() {
+		if named, ok := typed.Scope().Lookup(name).(*types.TypeName); ok {
+			previous, supplied := pkg.Types.Scope().Lookup(name).(*types.TypeName)
+			actual, err := goAMD64FrameLanguageType(named.Type(), sizes)
+			prior, priorErr := "", error(nil)
+			if supplied {
+				prior, priorErr = goAMD64FrameLanguageType(previous.Type(), sizes)
+			}
+			if !supplied || named.IsAlias() != previous.IsAlias() || err != nil || priorErr != nil || actual != prior {
+				return nil, goAMD64FrameContext("actual local type declaration differs: %s", name)
+			}
+			continue
+		}
 		fn, ok := typed.Scope().Lookup(name).(*types.Func)
 		previous, supplied := pkg.Types.Scope().Lookup(name).(*types.Func)
-		if !ok || !supplied || !types.Identical(fn.Type(), previous.Type()) {
-			return goAMD64FrameContext("missing actual numeric declaration")
+		if !ok || !supplied {
+			return nil, goAMD64FrameContext("missing actual typed declaration")
 		}
 		signature := fn.Type().(*types.Signature)
+		priorSignature, valid := previous.Type().(*types.Signature)
+		if !valid || priorSignature == nil || signature.Recv() != nil || signature.Variadic() || signature.TypeParams().Len() != 0 ||
+			priorSignature.Recv() != nil || priorSignature.Variadic() || priorSignature.TypeParams().Len() != 0 {
+			return nil, goAMD64FrameContext("custom, generic or variadic declaration transport")
+		}
+		role := goAMD64FrameNumericTransport
+		var language strings.Builder
 		for _, tuple := range []*types.Tuple{signature.Params(), signature.Results()} {
+			if tuple.Len() > 4096 {
+				return nil, goAMD64FrameContext("declaration tuple bound")
+			}
+			language.WriteString("[")
 			for i := 0; i < tuple.Len(); i++ {
-				basic, ok := tuple.At(i).Type().(*types.Basic)
-				if !ok || basic.Info()&types.IsInteger == 0 {
-					return goAMD64FrameContext("initial transport needs declared integer scalars")
+				typ := tuple.At(i).Type()
+				switch underlying := typ.Underlying().(type) {
+				case *types.Basic:
+					if underlying.Info()&types.IsInteger == 0 {
+						return nil, goAMD64FrameContext("observation excludes noninteger scalar transport")
+					}
+				case *types.Pointer, *types.Slice:
+					role = goAMD64FrameCompositeTransport
+				default:
+					return nil, goAMD64FrameContext("by-value aggregate transport needs a separate observation contract")
+				}
+				identity, err := goAMD64FrameLanguageType(typ, sizes)
+				if err != nil {
+					return nil, err
+				}
+				fmt.Fprintf(&language, "%q:%s;", tuple.At(i).Name(), identity)
+				if language.Len() > 64<<10 {
+					return nil, goAMD64FrameContext("declaration language byte bound")
 				}
 			}
+			language.WriteString("]")
+		}
+		if numericOnly && role != goAMD64FrameNumericTransport {
+			return nil, goAMD64FrameContext("fixed-local consumer requires numeric transport, not pointer/slice observation")
+		}
+		// Named types from two independent typechecks have different object
+		// identities. Compare their complete language/layout trees, not Ptr or
+		// qualified spelling alone; underlying and pointee changes must fail.
+		priorLanguage := strings.Builder{}
+		for _, tuple := range []*types.Tuple{priorSignature.Params(), priorSignature.Results()} {
+			if tuple.Len() > 4096 {
+				return nil, goAMD64FrameContext("supplied declaration tuple bound")
+			}
+			priorLanguage.WriteString("[")
+			for i := 0; i < tuple.Len(); i++ {
+				identity, err := goAMD64FrameLanguageType(tuple.At(i).Type(), sizes)
+				if err != nil {
+					return nil, err
+				}
+				fmt.Fprintf(&priorLanguage, "%q:%s;", tuple.At(i).Name(), identity)
+				if priorLanguage.Len() > 64<<10 {
+					return nil, goAMD64FrameContext("supplied declaration language byte bound")
+				}
+			}
+			priorLanguage.WriteString("]")
+		}
+		if language.String() != priorLanguage.String() {
+			return nil, goAMD64FrameContext("actual language type/pointee/field identity mismatch: %s", name)
 		}
 		actual, err := DeriveGoFuncABI0Signature(pkg.Path+"."+name, fn, "amd64", sizes)
 		prior, priorErr := DeriveGoFuncABI0Signature(pkg.Path+"."+name, previous, "amd64", sizes)
 		if err != nil || priorErr != nil || !reflect.DeepEqual(actual, prior) {
-			return goAMD64FrameContext("actual numeric declaration/layout mismatch: %s", name)
+			return nil, goAMD64FrameContext("actual typed declaration/layout mismatch: %s", name)
 		}
-		for _, ty := range append(append([]LLVMType(nil), actual.Args...), actual.Ret) {
-			if ty != I8 && ty != I16 && ty != I32 && ty != I64 && ty != Void {
-				return goAMD64FrameContext("initial frame transport excludes pointers/aggregates/floats")
+		declarations[actual.Name] = goAMD64FrameDeclaration{signature: actual, transport: role, languageType: language.String()}
+	}
+	return declarations, nil
+}
+
+// A bounded semantic language tree distinguishes equal-sized LLVM pointers,
+// named-underlying changes and aggregate element/field models. Sizes belongs
+// to the independent go/types model, not an observation of native pointee
+// padding (Go1.20 StdSizes differs from its compiler). Only pointer/slice ABI0
+// slots are bound to the actual object. No pointee extent, alias or GC grant.
+func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error) {
+	if sizes == nil {
+		return "", goAMD64FrameContext("missing target language layout")
+	}
+	var output strings.Builder
+	active := make(map[types.Type]bool)
+	nodes := 0
+	var appendType func(types.Type, int) error
+	appendType = func(typ types.Type, depth int) error {
+		nodes++
+		if typ == nil || depth > 32 || nodes > 4096 || active[typ] || output.Len() > 64<<10 {
+			return goAMD64FrameContext("recursive or unbounded language type")
+		}
+		active[typ] = true
+		defer delete(active, typ)
+		// Check the language role before invoking Sizes: gc Sizes may panic
+		// for type parameters. An unknown or generic role is not a layout.
+		switch concrete := typ.(type) {
+		case *types.Basic:
+			if concrete.Info()&types.IsInteger == 0 || concrete.Info()&types.IsUntyped != 0 {
+				return goAMD64FrameContext("unsupported noninteger or untyped language type")
+			}
+		case *types.Named:
+			if concrete.TypeParams().Len() != 0 {
+				return goAMD64FrameContext("generic language type")
+			}
+		case *types.Pointer, *types.Slice, *types.Array, *types.Struct:
+		default:
+			if !goAMD64FrameIsAlias(typ) {
+				return goAMD64FrameContext("unknown language type role")
+			}
+			if method := reflect.ValueOf(typ).MethodByName("TypeParams"); method.IsValid() {
+				parameters, ok := method.Call(nil)[0].Interface().(*types.TypeParamList)
+				if !ok || parameters.Len() != 0 {
+					return goAMD64FrameContext("generic alias language type")
+				}
 			}
 		}
+		// Composite identity is written below one node at a time. Asking
+		// TypeString to expand an anonymous DAG defeats the node/byte bound.
+		spelling := ""
+		switch typ.(type) {
+		case *types.Basic, *types.Named:
+			spelling = types.TypeString(typ, func(pkg *types.Package) string { return pkg.Path() })
+		default:
+			if goAMD64FrameIsAlias(typ) {
+				spelling = types.TypeString(typ, func(pkg *types.Package) string { return pkg.Path() })
+			}
+		}
+		fmt.Fprintf(&output, "(%q:", spelling)
+		switch typ := typ.(type) {
+		case *types.Basic:
+			if typ.Info()&types.IsInteger == 0 {
+				return goAMD64FrameContext("unsupported noninteger pointee/element")
+			}
+			fmt.Fprintf(&output, "integer%d", typ.Kind())
+		case *types.Named:
+			if typ.TypeParams().Len() != 0 {
+				return goAMD64FrameContext("generic language type")
+			}
+			output.WriteString("named:")
+			if err := appendType(typ.Underlying(), depth+1); err != nil {
+				return err
+			}
+		case *types.Pointer:
+			output.WriteString("pointer:")
+			if err := appendType(typ.Elem(), depth+1); err != nil {
+				return err
+			}
+		case *types.Slice:
+			output.WriteString("slice:")
+			if err := appendType(typ.Elem(), depth+1); err != nil {
+				return err
+			}
+		case *types.Array:
+			fmt.Fprintf(&output, "array%d:", typ.Len())
+			if err := appendType(typ.Elem(), depth+1); err != nil {
+				return err
+			}
+			// Go1.20's Sizes can wrap a large array to zero. Its recorded
+			// result is not evidence of a representable concrete layout.
+			element, alignment := sizes.Sizeof(typ.Elem()), sizes.Alignof(typ.Elem())
+			const maxLayout = int64(1<<63 - 1)
+			if typ.Len() < 0 || element < 0 || alignment <= 0 || element > maxLayout-(alignment-1) {
+				return goAMD64FrameContext("array element layout is unrepresentable")
+			}
+			stride := (element + alignment - 1) / alignment * alignment
+			if typ.Len() > 0 && stride != 0 && typ.Len()-1 > (maxLayout-element)/stride {
+				return goAMD64FrameContext("array language layout overflow")
+			}
+		case *types.Struct:
+			if typ.NumFields() > 4096-nodes {
+				return goAMD64FrameContext("language field bound")
+			}
+			fields := make([]*types.Var, typ.NumFields())
+			for i := range fields {
+				fields[i] = typ.Field(i)
+			}
+			// Validate every descendant before Sizes traverses the aggregate:
+			// generic/incomplete elements are not a concrete layout.
+			for _, field := range fields {
+				if err := appendType(field.Type(), depth+1); err != nil {
+					return err
+				}
+			}
+			offsets := sizes.Offsetsof(fields)
+			output.WriteString("struct:")
+			for i, field := range fields {
+				pkg := ""
+				if field.Pkg() != nil {
+					pkg = field.Pkg().Path()
+				}
+				width := sizes.Sizeof(field.Type())
+				if offsets[i] < 0 || width < 0 || offsets[i] > (1<<63-1)-width {
+					return goAMD64FrameContext("struct language layout overflow")
+				}
+				fmt.Fprintf(&output, "%q/%q/%q/%t/%d:", pkg, field.Name(), typ.Tag(i), field.Embedded(), offsets[i])
+				if output.Len() > 64<<10 {
+					return goAMD64FrameContext("language field metadata byte bound")
+				}
+			}
+		default:
+			// Alias is newer than Go1.20. Its actual spelling and the local
+			// TypeName.IsAlias role are retained alongside the complete RHS.
+			// Underlying alone would lose a named RHS's language identity.
+			if !goAMD64FrameIsAlias(typ) {
+				return goAMD64FrameContext("unknown language type role")
+			}
+			method := reflect.ValueOf(typ).MethodByName("Rhs")
+			if !method.IsValid() || method.Type().NumIn() != 0 || method.Type().NumOut() != 1 {
+				return goAMD64FrameContext("unknown alias RHS contract")
+			}
+			rhs, ok := method.Call(nil)[0].Interface().(types.Type)
+			if !ok {
+				return goAMD64FrameContext("missing alias RHS language type")
+			}
+			output.WriteString("alias:")
+			if err := appendType(rhs, depth+1); err != nil {
+				return err
+			}
+		}
+		size, align := sizes.Sizeof(typ), sizes.Alignof(typ)
+		if size < 0 || align <= 0 {
+			return goAMD64FrameContext("language type lacks a concrete target layout")
+		}
+		fmt.Fprintf(&output, ";model_size=%d,model_align=%d)", size, align)
+		return nil
 	}
-	return nil
+	if err := appendType(typ, 0); err != nil {
+		return "", err
+	}
+	if output.Len() > 64<<10 {
+		return "", goAMD64FrameContext("language type byte bound")
+	}
+	return output.String(), nil
+}
+
+func goAMD64FrameIsAlias(typ types.Type) bool {
+	kind := reflect.TypeOf(typ)
+	return kind != nil && kind.Kind() == reflect.Pointer && kind.Elem().PkgPath() == "go/types" && kind.Elem().Name() == "Alias"
 }
 
 func (source *GoAMD64FrameSource) preprocess(name string, original []byte) (string, error) {

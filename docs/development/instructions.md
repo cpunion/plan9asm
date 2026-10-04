@@ -419,7 +419,8 @@ portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.
 
 `CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
 permission. It independently selects and exports a flat, dependency-free main
-module with bodyless integer declarations, then binds all selected ASM, headers,
+module with bodyless integer, finite pointer and slice declarations, then binds
+all selected ASM, headers,
 actual Go tool/source routes, original object bytes and complete source positions.
 The caller selects the trusted stock-Go installation and explicit private command
 caches; a public selection record, manual signature or JSON cannot recreate its
@@ -429,6 +430,13 @@ roles remain Context, including current Windows auxiliary SEH records. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
 after commands; failure or Close revokes the token. This stage has no Binder,
 allocator, caller certificate, native-memory grant or compiler adapter.
+Pointer/slice observations retain the independent language type/model and
+object-bound ABI0 data/len/cap slots, including pointee, element, named/alias RHS
+and field identity. A go/types pointee model is not an observed native extent:
+Go1.20 StdSizes omits compiler tail padding/zero-tail storage in some structs.
+These observations grant no input extent, alias or GC contract. The numeric-only
+fixed-local consumer still rejects composite transport. By-value aggregates,
+recursive/generic types, noninteger elements and nonordinary roles remain Context.
 Factory artifacts use the request's effective explicit TMPDIR, not the parent's
 temporary environment. Verify and Close check the created directory identity;
 replaced or redirected directories are never recursively cleaned. The package
