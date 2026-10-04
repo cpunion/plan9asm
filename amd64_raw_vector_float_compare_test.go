@@ -58,7 +58,7 @@ func TestTranslateRawEVEXVectorFloatCompareWeaviateRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(ir, "fcmp") {
+	if !strings.Contains(ir, `asm sideeffect "vcmpps $$12,`) {
 		t.Fatalf("raw EVEX VCMPPS lowering omitted floating compare:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")

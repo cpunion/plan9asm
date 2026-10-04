@@ -6456,9 +6456,6 @@ prefix:
 		return Instr{}, 0, false, nil
 	}
 	ok = true
-	if mode == 32 {
-		return Instr{}, 0, true, fmt.Errorf("vector floating compare is absent from Go's 386 table")
-	}
 	if vexLength == 3 && vexBits&0x80 != 0 {
 		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
 	}
@@ -6482,6 +6479,9 @@ prefix:
 	}
 	secondSourceNumber := int(^vexBits>>3) & 15
 	destinationNumber := int(modRM>>3&7) + rExt*8
+	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("%w: raw mode32 VEX compare high-bank identity", ErrProbeNeedsContext)
+	}
 	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
@@ -6495,7 +6495,7 @@ prefix:
 	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, secondSourceNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
 	args := []Operand{immediate, firstSource, secondSource, destination}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s, %s, %s, %s", op, immediate.String(), firstSource.String(), secondSource.String(), destination.String())}, immediateIndex + 1, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s, %s, %s, %s", op, immediate.String(), firstSource.String(), secondSource.String(), destination.String()), x86Encoded: true}, immediateIndex + 1, true, nil
 }
 
 func decodedX86EVEXVectorFloatCompareInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
@@ -6507,9 +6507,6 @@ func decodedX86EVEXVectorFloatCompareInstruction(code []byte, i, mode int, segme
 		return Instr{}, 0, false, nil
 	}
 	ok = true
-	if mode == 32 {
-		return Instr{}, 0, true, fmt.Errorf("vector floating compare is absent from Go's 386 table")
-	}
 	if p1&0x04 == 0 {
 		return Instr{}, 0, true, fmt.Errorf("invalid EVEX prefix")
 	}
@@ -6584,6 +6581,9 @@ func decodedX86EVEXVectorFloatCompareInstruction(code []byte, i, mode int, segme
 	}
 	immediate := Operand{Kind: OpImm, Imm: int64(code[immediateIndex])}
 	secondSourceNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
+	if mode == 32 && (xExt != 0 || bExt != 0 || secondSourceNumber >= 8) {
+		return Instr{}, 0, true, fmt.Errorf("%w: raw mode32 EVEX compare high-bank identity", ErrProbeNeedsContext)
+	}
 	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, secondSourceNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("K%d", modRM>>3&7))}
 	args := []Operand{immediate, firstSource, secondSource}
@@ -6595,7 +6595,7 @@ func decodedX86EVEXVectorFloatCompareInstruction(code []byte, i, mode int, segme
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", "))}, immediateIndex + 1, true, nil
+	return Instr{Op: op, Args: args, Raw: fmt.Sprintf("%s %s", op, strings.Join(rawArgs, ", ")), x86Encoded: true}, immediateIndex + 1, true, nil
 }
 
 func vectorFloatCompareRawOperation(pp byte) Op {

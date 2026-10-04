@@ -68,6 +68,24 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		op := strings.ToUpper(string(ins.Op))
 		switch arch {
 		case ArchAMD64:
+			// Only the validated native compare form gets its private ISA.
+			// This grants no caller memory or physical register permission.
+			if form, known, err := x86FloatCompareProperties(ins, goarch); known && err == nil {
+				if form.legacy {
+					if form.bits == 32 {
+						add("+sse")
+					} else {
+						add("+sse2")
+					}
+				} else if form.maskResult {
+					add("+avx512f")
+					if !form.scalar && form.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				} else {
+					add("+avx")
+				}
+			}
 			if goarch == "386" {
 				// The signed default-rounding scalar bridge must use MXCSR,
 				// rather than LLVM's default i386 x87 conversion. Admit only
