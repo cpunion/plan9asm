@@ -1039,7 +1039,13 @@ func buildReport(
 
 	all := []opReport{}
 	unsupported := []opReport{}
-	for op, st := range ops {
+	opNames := make([]string, 0, len(ops))
+	for op := range ops {
+		opNames = append(opNames, op)
+	}
+	sort.Strings(opNames)
+	for _, op := range opNames {
+		st := ops[op]
 		cl := clusterOf(goarch, op)
 		files := topFiles(st.Files, 4)
 		item := opReport{
