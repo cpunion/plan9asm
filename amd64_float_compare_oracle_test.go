@@ -137,7 +137,7 @@ func x86FloatCompareCaptureCommand(t *testing.T, command *exec.Cmd) []byte {
 }
 
 func TestCrossLinuxRuntimeMatrixX86FloatingCompareOriginalLegacyPredicates(t *testing.T) {
-	_, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	execution := x86FloatCompareExecutionTools(t)
 	dir := t.TempDir()
 	var assembly, declarations strings.Builder
 	assembly.WriteString("#include \"textflag.h\"\n")
@@ -193,8 +193,7 @@ func main(){
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH=amd64", "CGO_ENABLED=0", "GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local")
 	x86FloatCompareCaptureCommand(t, command)
-	argv := append(append([]string(nil), prefix...), goExecutable)
-	actualGo := x86FloatCompareCaptureCommand(t, exec.Command(argv[0], argv[1:]...))
+	actualGo := execution.run(t, goExecutable)
 	const main = `
 int main(void){
  uint64_t hash=UINT64_C(1469598103934665603);
@@ -221,11 +220,10 @@ int main(void){
 	if err := os.WriteFile(cSource, []byte(x86FloatCompareOriginalC()+main), 0600); err != nil {
 		t.Fatal(err)
 	}
-	x86FloatCompareCaptureCommand(t, exec.Command(clang, "-O2", "-target", triple, cSource, "-o", cExecutable))
-	argv = append(append([]string(nil), prefix...), cExecutable)
-	actualC := x86FloatCompareCaptureCommand(t, exec.Command(argv[0], argv[1:]...))
+	execution.compileC(t, cSource, cExecutable)
+	actualC := execution.run(t, cExecutable)
 	if string(actualGo) != string(actualC) || len(actualC) != 17 {
 		t.Fatalf("actual Go/native SSE original mismatch Go=%q C=%q", actualGo, actualC)
 	}
-	t.Logf("32 actual Go legacy programs ×1944 input/control pairs; independent original SSE, bit truth and complete same-predicate scalar CMP MXCSR agree: %s transport=%v", strings.TrimSpace(string(actualC)), prefix)
+	t.Logf("32 actual Go legacy programs ×1944 input/control pairs; independent original SSE, bit truth and complete same-predicate scalar CMP MXCSR agree: %s transport=%v", strings.TrimSpace(string(actualC)), execution.prefix)
 }
