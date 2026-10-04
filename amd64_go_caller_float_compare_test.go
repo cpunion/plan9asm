@@ -120,8 +120,11 @@ func TestX86GoCallerFloatingCompareRejectsUnprovedInputAndEnvelope(t *testing.T)
 		"read output":           "VMOVUPS (SI),X1\nCMPPS (DX),X1,$0\nVMOVSS X1,(DX)",
 		"write source":          "VMOVUPS (DI),X0\nVMOVUPS (SI),X1\nCMPPS X0,X1,$0\nVMOVSS X1,(DI)",
 		"wide output":           "VMOVUPS (DI),X0\nVMOVUPS (SI),X1\nCMPPS X0,X1,$0\nVMOVUPS X1,(DX)",
-		"unknown upper reused":  "VMOVSS (DI),X0\nVMOVSS (SI),X1\nVCMPSS $0,X0,X1,X2\nVCMPPS $0,X2,X2,X3\nVMOVSS X3,(DX)",
-		"mixed CFG":             "CMPQ AX,$0\nJE joined\nVMOVUPS (DI),X0\njoined:\nVMOVUPS (SI),X1\nCMPPS X0,X1,$0\nVMOVSS X1,(DX)",
+		// A VEX memory load defines zero upper bytes. Legacy register MOVSS
+		// preserves X1's unknown upper bytes, which scalar VCMP copies and
+		// the following packed VCMP genuinely reads.
+		"unknown upper reused": "VMOVSS (DI),X0\nMOVSS X0,X1\nVCMPSS $0,X0,X1,X2\nVCMPPS $0,X2,X2,X3\nVMOVSS X3,(DX)",
+		"mixed CFG":            "CMPQ AX,$0\nJE joined\nVMOVUPS (DI),X0\njoined:\nVMOVUPS (SI),X1\nCMPPS X0,X1,$0\nVMOVSS X1,(DX)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
