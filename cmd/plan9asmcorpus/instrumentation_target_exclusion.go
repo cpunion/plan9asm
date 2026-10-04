@@ -13,7 +13,7 @@ import (
 func validateDiscoveryInstrumentationTargetExclusion(plan *discoveryOrdinarySelectionPlan, requirement discoveryInstrumentationRequirement, outcome discoveryInstrumentationOutcome, profiles []discoveryFeatureProfile) error {
 	if plan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol || outcome.Status != discoveryInstrumentationExcludedStatus ||
 		outcome.Stage != "early_rules" || outcome.Error != "" || outcome.Early != nil ||
-		outcome.ObservationID != "" || outcome.PackagePlan != nil || outcome.Query != nil || outcome.Objects != nil {
+		outcome.ObservationID != "" || outcome.PackagePlan != nil || outcome.TypeSources != nil || outcome.Query != nil || outcome.Objects != nil {
 		return fmt.Errorf("official target exclusion cannot carry failure/export/LLVM completion or a legacy protocol")
 	}
 	if err := gotoolprofile.ValidateInstrumentationTargetExclusion(outcome.TargetExclusion, requirement.Tags); err != nil {

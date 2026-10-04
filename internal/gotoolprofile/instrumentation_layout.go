@@ -16,9 +16,8 @@ import (
 // supplied original compiled source, not a type parsed from metadata strings.
 // Original AST nodes, including complete const groups and iota positions, are
 // retained. No Go arguments or return slots are invented from assembly.
-// Imported type/constant selectors need their own authenticated type-source
-// closure and deliberately fail here; even identical paired metadata cannot
-// supply that missing source authority.
+// Imported selectors additionally require the independently captured original
+// type-source input; paired metadata alone cannot supply that authority.
 type instrumentationDeclarationReplay struct {
 	files     []*ast.File
 	functions map[string]*ast.FuncDecl
@@ -26,6 +25,7 @@ type instrumentationDeclarationReplay struct {
 	constants map[string]*ast.GenDecl
 	other     map[string]bool
 	needed    map[ast.Node]bool
+	selector  func(*ast.SelectorExpr) error
 }
 
 func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput, pkg PackageProof, declarations []InstrumentationDeclarationProof) error {
@@ -45,6 +45,10 @@ func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput
 			return err
 		}
 	}
+	imports, err := newInstrumentationTypeReplay(input, set, replay)
+	if err != nil {
+		return err
+	}
 	for _, declaration := range declarations {
 		name := strings.TrimPrefix(declaration.Symbol, pkg.PackagePath+".")
 		function := replay.functions[name]
@@ -59,32 +63,7 @@ func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput
 	if len(declarations) == 0 {
 		return nil
 	}
-	var selected []*ast.File
-	for _, original := range replay.files {
-		copy := *original
-		copy.Decls, copy.Imports = nil, nil
-		for _, declaration := range original.Decls {
-			if replay.needed[declaration] {
-				copy.Decls = append(copy.Decls, declaration)
-				continue
-			}
-			group, ok := declaration.(*ast.GenDecl)
-			if !ok || group.Tok != token.TYPE {
-				continue
-			}
-			filtered := *group
-			filtered.Specs = nil
-			for _, spec := range group.Specs {
-				if replay.needed[spec] {
-					filtered.Specs = append(filtered.Specs, spec)
-				}
-			}
-			if len(filtered.Specs) != 0 {
-				copy.Decls = append(copy.Decls, &filtered)
-			}
-		}
-		selected = append(selected, &copy)
-	}
+	selected := replay.selectedFiles()
 	_, arch, _ := strings.Cut(input.Plan.Target, "/")
 	sizes := types.SizesFor("gc", arch)
 	if sizes == nil {
@@ -97,6 +76,9 @@ func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput
 	// Config.GoVersion is a language version. Go 1.20 panics for a patch
 	// release string; the exact driver patch remains independently observed.
 	config := &types.Config{Sizes: sizes, IgnoreFuncBodies: true, GoVersion: fmt.Sprintf("go1.%d", minor)}
+	if imports != nil {
+		config.Importer = instrumentationTypeImporter{graph: imports, importMap: imports.proof.RootImportMap}
+	}
 	typed, err := config.Check(pkg.PackagePath, set, selected, nil)
 	if err != nil {
 		return fmt.Errorf("original Go declaration type/constant closure is not independently closed: %w", err)
@@ -130,6 +112,39 @@ func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput
 		}
 	}
 	return nil
+}
+
+func (replay *instrumentationDeclarationReplay) selectedFiles() []*ast.File {
+	var selected []*ast.File
+	for _, original := range replay.files {
+		copy := *original
+		copy.Decls, copy.Imports = nil, nil
+		for _, declaration := range original.Decls {
+			if replay.needed[declaration] {
+				copy.Decls = append(copy.Decls, declaration)
+				continue
+			}
+			group, ok := declaration.(*ast.GenDecl)
+			if !ok || group.Tok != token.TYPE && group.Tok != token.IMPORT {
+				continue
+			}
+			filtered := *group
+			filtered.Specs = nil
+			for _, spec := range group.Specs {
+				if replay.needed[spec] {
+					filtered.Specs = append(filtered.Specs, spec)
+					if imported, ok := spec.(*ast.ImportSpec); ok {
+						copy.Imports = append(copy.Imports, imported)
+					}
+				}
+			}
+			if len(filtered.Specs) != 0 {
+				copy.Decls = append(copy.Decls, &filtered)
+			}
+		}
+		selected = append(selected, &copy)
+	}
+	return selected
 }
 
 // Bound aggregate expansion before the shared ABI0 builder allocates slots.
@@ -302,7 +317,11 @@ func (replay *instrumentationDeclarationReplay) requireExpression(expression ast
 		}
 		switch node := node.(type) {
 		case *ast.SelectorExpr:
-			failed = fmt.Errorf("original declaration needs an authenticated imported type/constant closure")
+			if replay.selector == nil {
+				failed = fmt.Errorf("original declaration needs an authenticated imported type/constant closure")
+			} else {
+				failed = replay.selector(node)
+			}
 			return false
 		case *ast.Ident:
 			failed = replay.requireName(node.Name)
@@ -357,7 +376,10 @@ func (replay *instrumentationDeclarationReplay) requireType(expression ast.Expr)
 	case *ast.ChanType:
 		return replay.requireType(expression.Value)
 	case *ast.SelectorExpr:
-		return fmt.Errorf("original declaration needs an authenticated imported type/constant closure")
+		if replay.selector == nil {
+			return fmt.Errorf("original declaration needs an authenticated imported type/constant closure")
+		}
+		return replay.selector(expression)
 	default:
 		return fmt.Errorf("original declaration has an unclosed type expression %T", expression)
 	}

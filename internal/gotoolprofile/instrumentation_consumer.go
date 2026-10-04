@@ -23,6 +23,7 @@ type InstrumentationConsumerInput struct {
 	Sources     *InstrumentationOriginalSourceInventory `json:"original_source_inventory"`
 	Observation *InstrumentationExportObservation       `json:"actual_mode_observation"`
 	Plan        *InstrumentationOriginalPackagePlan     `json:"original_package_plan"`
+	TypeSources *InstrumentationTypeSourceProof         `json:"original_type_sources,omitempty"`
 }
 
 // InstrumentationPackageSelectionProof reuses concrete original package/source
@@ -62,7 +63,13 @@ func ValidateInstrumentationConsumerInput(input *InstrumentationConsumerInput, d
 	if input.ID != InstrumentationEarlyProfileID(input.Observation.Early) || input.ID == input.Original.ID {
 		return fmt.Errorf("instrumentation context has a changed or ordinary profile identity")
 	}
-	return ValidateInstrumentationOriginalPackagePlan(input.Original, input.Sources, input.Observation.Early, directory, tags, input.Plan)
+	if err := ValidateInstrumentationOriginalPackagePlan(input.Original, input.Sources, input.Observation.Early, directory, tags, input.Plan); err != nil {
+		return err
+	}
+	if input.TypeSources != nil {
+		return ValidateInstrumentationTypeSources(input, input.TypeSources)
+	}
+	return nil
 }
 
 func DecodeInstrumentationConsumerInput(reader io.Reader, directory string, tags []string) (*InstrumentationConsumerInput, error) {

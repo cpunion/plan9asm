@@ -36,6 +36,7 @@ type discoveryInstrumentationOutcome struct {
 	Early           *gotoolprofile.InstrumentationEarlyObservation    `json:"early_rejection,omitempty"`
 	TargetExclusion *gotoolprofile.InstrumentationTargetExclusion     `json:"official_target_exclusion,omitempty"`
 	PackagePlan     *gotoolprofile.InstrumentationOriginalPackagePlan `json:"original_package_plan,omitempty"`
+	TypeSources     *gotoolprofile.InstrumentationTypeSourceProof     `json:"original_type_sources,omitempty"`
 	Query           *gotoolprofile.InstrumentationInvocationProof     `json:"metadata_query,omitempty"`
 	Objects         *gotoolprofile.InstrumentationInvocationProof     `json:"llvm_objects,omitempty"`
 	Status          string                                            `json:"status"`

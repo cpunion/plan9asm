@@ -131,6 +131,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		if err != nil {
 			return 0, nil, err
 		}
+		wrapped.TypeSources = outcome.TypeSources
 		if err := gotoolprofile.ValidateInstrumentationInvocation(wrapped, gotoolprofile.InstrumentationMetadataQuery, nil, nil, outcome.Query); err != nil {
 			return 0, nil, err
 		}
@@ -191,7 +192,7 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 		if plan.InstrumentationPlan.Protocol != discoveryInstrumentationLegacyProtocol {
 			return fmt.Errorf("v2 cannot relabel an untagged v1 early observation as an official scope exclusion")
 		}
-		if outcome.Status != "early_target_rejected" || outcome.Stage != "early_rules" || outcome.ObservationID != "" || outcome.Query != nil || outcome.Objects != nil || outcome.PackagePlan != nil {
+		if outcome.Status != "early_target_rejected" || outcome.Stage != "early_rules" || outcome.ObservationID != "" || outcome.Query != nil || outcome.Objects != nil || outcome.PackagePlan != nil || outcome.TypeSources != nil {
 			return fmt.Errorf("early target rejection was combined with export/LLVM completion")
 		}
 		if err := gotoolprofile.ValidateInstrumentationEarlyObservation(outcome.Early); err != nil {
@@ -209,7 +210,7 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 		return fmt.Errorf("early target rejection lacks actual registered source/driver evidence")
 	}
 	if outcome.ObservationID == "" {
-		if outcome.PackagePlan != nil || outcome.Query != nil || outcome.Objects != nil || outcome.Stage != "environment" && outcome.Stage != "early_rules" && outcome.Stage != "marker_export" {
+		if outcome.PackagePlan != nil || outcome.TypeSources != nil || outcome.Query != nil || outcome.Objects != nil || outcome.Stage != "environment" && outcome.Stage != "early_rules" && outcome.Stage != "marker_export" {
 			return fmt.Errorf("mode failure relabeled an unobserved marker as source/export/objects")
 		}
 		return nil
@@ -225,7 +226,7 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 	observations[outcome.ObservationID] = true
 	inventory := proof.Sources[requirement.Directory]
 	if inventory == nil {
-		if outcome.Stage != "original_sources" || outcome.PackagePlan != nil || outcome.Query != nil || outcome.Objects != nil {
+		if outcome.Stage != "original_sources" || outcome.PackagePlan != nil || outcome.TypeSources != nil || outcome.Query != nil || outcome.Objects != nil {
 			return fmt.Errorf("mode failure lost required complete original source bytes")
 		}
 		return nil
@@ -237,7 +238,7 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 	packages[requirement.Directory] = true
 	packagePlan, err := gotoolprofile.PlanInstrumentationOriginalPackage(input, inventory, observed.Early, requirement.Directory, requirement.Tags)
 	if err != nil {
-		if outcome.Stage != "original_selection" || outcome.PackagePlan != nil || outcome.Query != nil || outcome.Objects != nil {
+		if outcome.Stage != "original_selection" || outcome.PackagePlan != nil || outcome.TypeSources != nil || outcome.Query != nil || outcome.Objects != nil {
 			return fmt.Errorf("mode source failure was relabeled as export/LLVM completion")
 		}
 		return nil
@@ -262,11 +263,24 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 	if outcome.Stage == "physical_readback" && outcome.Objects == nil {
 		return fmt.Errorf("mode physical readback failure erased its actual object proof")
 	}
+	if outcome.TypeSources != nil {
+		if outcome.PackagePlan == nil || outcome.Stage != "original_graph" && outcome.Stage != "metadata_query" && outcome.Stage != "llvm_objects" && outcome.Stage != "physical_readback" {
+			return fmt.Errorf("mode failure carries imported type sources before actual original graph capture")
+		}
+		wrapped, err := gotoolprofile.NewInstrumentationConsumerInput(input, inventory, observed, packagePlan)
+		if err != nil {
+			return err
+		}
+		if err := gotoolprofile.ValidateInstrumentationTypeSources(wrapped, outcome.TypeSources); err != nil {
+			return err
+		}
+	}
 	if outcome.Query != nil {
 		wrapped, err := gotoolprofile.NewInstrumentationConsumerInput(input, inventory, observed, packagePlan)
 		if err != nil {
 			return err
 		}
+		wrapped.TypeSources = outcome.TypeSources
 		if err := gotoolprofile.ValidateInstrumentationInvocation(wrapped, gotoolprofile.InstrumentationMetadataQuery, nil, nil, outcome.Query); err != nil {
 			return err
 		}

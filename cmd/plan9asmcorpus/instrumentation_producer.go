@@ -235,6 +235,17 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			if err != nil || len(stderr) != 0 || strings.TrimSpace(string(stdout)) != packagePlan.PackagePath {
 				return fmt.Errorf("prepare actual same-mode original package graph failed: %v; %s; %s", err, stdout, stderr)
 			}
+			needed, err := gotoolprofile.InstrumentationRequiresTypeSources(wrapped)
+			if err != nil {
+				return err
+			}
+			if needed {
+				wrapped.TypeSources, err = gotoolprofile.CaptureInstrumentationTypeSources(ctx, binary, dir, modeEnv, wrapped, gotoolprofile.RunBounded)
+				if err != nil {
+					return err
+				}
+				outcome.TypeSources = wrapped.TypeSources
+			}
 			inputPath := filepath.Join(dir, "input.json")
 			data, err := json.Marshal(wrapped)
 			if err != nil {

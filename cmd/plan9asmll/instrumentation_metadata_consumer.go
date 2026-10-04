@@ -67,6 +67,12 @@ func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.In
 	if err != nil {
 		return nil, err
 	}
+	if input.TypeSources != nil {
+		actual, err := gotoolprofile.CaptureInstrumentationTypeSources(ctx, binary, invocation, modeEnv, input, gotoolprofile.RunBounded)
+		if err != nil || !reflect.DeepEqual(actual, input.TypeSources) {
+			return nil, fmt.Errorf("original imported type source input differs from independent actual consumption: %v", err)
+		}
+	}
 	root, stderr, err := gotoolprofile.RunBounded(ctx, invocation, modeEnv, binary, "env", "GOROOT")
 	if err != nil || len(stderr) != 0 || !filepath.IsAbs(strings.TrimSpace(string(root))) {
 		return nil, fmt.Errorf("actual mode source root: %v; %s", err, stderr)

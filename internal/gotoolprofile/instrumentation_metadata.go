@@ -110,6 +110,9 @@ func ValidateInstrumentationMetadata(input *InstrumentationConsumerInput, direct
 	if err := ValidateInstrumentationGeneratedHeader(input, proof.Headers[0], pkg); err != nil {
 		return err
 	}
+	if err := validateInstrumentationTypeSourceAgreement(input, proof.Headers[0].Header, proof.Dependencies); err != nil {
+		return err
+	}
 	return validateInstrumentationMetadataDependencies(input, pkg, proof.Headers[0].Header, proof.Dependencies)
 }
 

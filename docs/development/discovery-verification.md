@@ -249,6 +249,18 @@ This display-only compaction must not change source/export/object witnesses or
 turn a failure into a pass or source exclusion. Ledger readers and writers
 reject uncompacted failed-command text; never hand-edit a report to remove paths.
 
+Instrumentation ABI0 declarations that reference imported types/constants need
+the separate `actual_go_instrumentation_type_sources_v1` original input capture.
+Stock Go independently selects the complete same-mode import graph before and
+after export, binding actual ImportMap edges, SDK source/tool identity and exact
+same-module ZIP source bytes. Metadata and object consumers recapture that graph;
+portable replay retains the required packages' complete compiled Go bytes,
+file-local import aliases and whole const groups, including iota positions.
+Deleting this input cannot turn a selector into a local declaration. Foreign
+modules, generated/cgo/embed roles and unauthenticated source roots remain
+failures. The capture itself supplies neither LLVM objects nor new caller,
+pointer, native-frame or runtime permissions.
+
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed
 ledger files. Parallel shards read one frozen ledger and write distinct reports:
 
