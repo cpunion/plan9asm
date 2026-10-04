@@ -420,7 +420,8 @@ func TestGoAMD64FrameSourceConcurrentVerifyClose(t *testing.T) {
 func TestGoAMD64FrameSourceFailedSiblingCleansOnlyOwnedObjects(t *testing.T) {
 	pkg, request := goAMD64FrameSourceFixture(t)
 	temporary := t.TempDir()
-	t.Setenv("TMPDIR", temporary)
+	t.Setenv("TMPDIR", t.TempDir())
+	request.Environment = append(request.Environment, "TMPDIR="+temporary, "GOTMPDIR="+temporary)
 	// The first object succeeds. The later selected sibling cannot be bound
 	// to any actual declaration; its failure must not leak the earlier object.
 	sibling := filepath.Join(request.Directory, "z_sibling_amd64.s")

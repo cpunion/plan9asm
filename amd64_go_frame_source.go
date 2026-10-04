@@ -46,6 +46,7 @@ type GoAMD64FrameSource struct {
 	inputs    map[string][32]byte
 	entries   []string
 	owned     string
+	ownedInfo os.FileInfo
 	functions map[string]goAMD64FrameFunction
 	origins   map[string]int
 }
@@ -154,7 +155,7 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err := source.numericDeclarations(pkg); err != nil {
 		return nil, err
 	}
-	source.owned, err = os.MkdirTemp("", "plan9asm-go-frame-object-")
+	source.owned, err = os.MkdirTemp(provided["TMPDIR"], "plan9asm-go-frame-object-")
 	if err != nil {
 		return nil, err
 	}
@@ -163,11 +164,18 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			captureErr = errors.Join(captureErr, source.Close())
 		}
 	}()
+	source.ownedInfo, err = os.Lstat(source.owned)
+	if err != nil {
+		return nil, err
+	}
 	canonicalOwned, err := filepath.EvalSymlinks(source.owned)
 	if err != nil {
 		return nil, err
 	}
 	source.owned = canonicalOwned
+	if err := source.verifyOwned(); err != nil {
+		return nil, err
+	}
 	source.functions = make(map[string]goAMD64FrameFunction)
 	found := false
 	for _, name := range selected.SFiles {
@@ -262,6 +270,9 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 }
 
 func (source *GoAMD64FrameSource) verifyInputs() error {
+	if err := source.verifyOwned(); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(source.request.Directory)
 	if err != nil {
 		return err
@@ -282,6 +293,14 @@ func (source *GoAMD64FrameSource) verifyInputs() error {
 	return nil
 }
 
+func (source *GoAMD64FrameSource) verifyOwned() error {
+	info, err := os.Lstat(source.owned)
+	if err != nil || source.ownedInfo == nil || !info.IsDir() || !os.SameFile(source.ownedInfo, info) {
+		return goAMD64FrameContext("factory artifact directory identity changed or is inaccessible: %v", err)
+	}
+	return nil
+}
+
 // Close invalidates the token before removing only its factory-owned artifacts.
 // Calling it again is harmless; no source, tool or cache-owned file is removed.
 func (source *GoAMD64FrameSource) Close() error {
@@ -294,9 +313,13 @@ func (source *GoAMD64FrameSource) Close() error {
 	if source.owned == "" {
 		return nil
 	}
+	if err := source.verifyOwned(); err != nil {
+		return err
+	}
 	err := os.RemoveAll(source.owned)
 	if err == nil {
 		source.owned = ""
+		source.ownedInfo = nil
 	}
 	return err
 }

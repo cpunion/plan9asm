@@ -429,3 +429,9 @@ roles remain Context, including current Windows auxiliary SEH records. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
 after commands; failure or Close revokes the token. This stage has no Binder,
 allocator, caller certificate, native-memory grant or compiler adapter.
+Factory artifacts use the request's effective explicit TMPDIR, not the parent's
+temporary environment. Verify and Close check the created directory identity;
+replaced or redirected directories are never recursively cleaned. The package
+root is fixed to its resolved canonical source at capture: a later change to
+the caller's original alias does not change that source. Explicit cache roots
+remain caller-owned; capture does not authenticate ownership or delete them.
