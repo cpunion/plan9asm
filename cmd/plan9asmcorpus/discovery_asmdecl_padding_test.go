@@ -42,7 +42,7 @@ func TestDiscoveryAsmDeclPaddedArgsRequiresExactSelectedMetadata(t *testing.T) {
 			writeTestFile(t, file, test.source+"\nRET\n")
 			warning := fmt.Sprintf("%s: [%s] Sqrt: wrong argument size %s; expected $...-%s",
 				test.filename, test.arch, test.declared, test.expected)
-			got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning}, packages)
+			got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning}, packages, "")
 			if (len(got) == 0) != test.ignored {
 				t.Fatalf("remaining=%v, want ignored=%t", got, test.ignored)
 			}
@@ -56,18 +56,18 @@ func TestDiscoveryAsmDeclPaddedArgsRequiresExactSelectedMetadata(t *testing.T) {
 		"sqrt.s:3: [amd64] Sqrt: invalid MOVSD of r+8(FP); float32 is 4-byte value",
 		"go: unknown failure after inspecting TEXT metadata",
 	} {
-		if got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning, diagnostic}, packages); !reflect.DeepEqual(got, []string{diagnostic}) {
+		if got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning, diagnostic}, packages, ""); !reflect.DeepEqual(got, []string{diagnostic}) {
 			t.Fatalf("padding exception hid another error: %v", got)
 		}
 	}
 	foreign := []string{"# example.com/foreign", warning}
-	if got := filterDiscoveryAsmDeclTextMetadataLines(foreign, packages); !reflect.DeepEqual(got, foreign) {
+	if got := filterDiscoveryAsmDeclTextMetadataLines(foreign, packages, ""); !reflect.DeepEqual(got, foreign) {
 		t.Fatalf("foreign warning removed: %v", got)
 	}
 	other := t.TempDir()
 	writeTestFile(t, filepath.Join(other, "sqrt.s"), "TEXT ·Sqrt(SB),$0-16\nRET\n")
 	ambiguous := append(packages, discoveryGoListPackage{ImportPath: "example.com/other", Dir: other, SFiles: []string{"sqrt.s"}})
-	if got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning}, ambiguous); !reflect.DeepEqual(got, []string{warning}) {
+	if got := filterDiscoveryAsmDeclTextMetadataLines([]string{warning}, ambiguous, ""); !reflect.DeepEqual(got, []string{warning}) {
 		t.Fatalf("ambiguous basename removed: %v", got)
 	}
 }

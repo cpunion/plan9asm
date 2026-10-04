@@ -85,7 +85,23 @@ func filterDiscoveryAsmDeclTextMetadata(
 		}
 		packages = append(packages, pkg)
 	}
-	filtered := filterDiscoveryAsmDeclTextMetadataLines(lines, packages)
+	commandDir, pathErr := filepath.Abs(dir)
+	if pathErr == nil {
+		commandDir, pathErr = filepath.EvalSymlinks(commandDir)
+	}
+	if pathErr != nil {
+		return errors.Join(err, fmt.Errorf("%w: resolve command directory: %w", errDiscoveryAsmDeclSourceProof, pathErr))
+	}
+	for index := range packages {
+		if !filepath.IsAbs(packages[index].Dir) {
+			return errors.Join(err, fmt.Errorf("%w: selected package directory is not absolute", errDiscoveryAsmDeclSourceProof))
+		}
+		packages[index].Dir, pathErr = filepath.EvalSymlinks(packages[index].Dir)
+		if pathErr != nil {
+			return errors.Join(err, fmt.Errorf("%w: resolve selected package directory: %w", errDiscoveryAsmDeclSourceProof, pathErr))
+		}
+	}
+	filtered := filterDiscoveryAsmDeclTextMetadataLines(lines, packages, commandDir)
 	if strings.Join(filtered, "\n") == failure.output {
 		return err
 	}
@@ -108,7 +124,7 @@ func filterDiscoveryAsmDeclTextMetadata(
 	return &copy
 }
 
-func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discoveryGoListPackage) []string {
+func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discoveryGoListPackage, commandDir string) []string {
 	retained := make([]string, 0, len(lines))
 	packagePath := ""
 	for _, line := range lines {
@@ -118,11 +134,11 @@ func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discover
 			packagePath = strings.Trim(packagePath, "[]")
 		}
 		match := discoveryAsmDeclZeroArgs.FindStringSubmatch(strings.TrimSpace(line))
-		if match != nil && discoveryAsmDeclHasLiteralUnspecifiedArgs(match, packagePath, packages) {
+		if match != nil && discoveryAsmDeclHasLiteralUnspecifiedArgs(match, packagePath, packages, commandDir) {
 			continue
 		}
 		match = discoveryAsmDeclPaddedArgs.FindStringSubmatch(strings.TrimSpace(line))
-		if match != nil && discoveryAsmDeclHasLiteralPaddedArgs(match, packagePath, packages) {
+		if match != nil && discoveryAsmDeclHasLiteralPaddedArgs(match, packagePath, packages, commandDir) {
 			continue
 		}
 		retained = append(retained, line)
@@ -130,8 +146,8 @@ func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discover
 	return retained
 }
 
-func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath string, packages []discoveryGoListPackage) bool {
-	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages)
+func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath string, packages []discoveryGoListPackage, commandDir string) bool {
+	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages, commandDir)
 	if text == nil {
 		return false
 	}
@@ -148,8 +164,8 @@ func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath strin
 	return symbol == match[4]
 }
 
-func discoveryAsmDeclHasLiteralPaddedArgs(match []string, packagePath string, packages []discoveryGoListPackage) bool {
-	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages)
+func discoveryAsmDeclHasLiteralPaddedArgs(match []string, packagePath string, packages []discoveryGoListPackage, commandDir string) bool {
+	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages, commandDir)
 	if text == nil || text[3] == "" || strings.Contains(text[1], "<ABIInternal>") {
 		return false
 	}
@@ -161,8 +177,22 @@ func discoveryAsmDeclHasLiteralPaddedArgs(match []string, packagePath string, pa
 		actual == declared && goabi.MatchesABI0TextSize(match[3], declared, expected)
 }
 
-func discoveryAsmDeclSelectedText(filename, reportedLine, packagePath string, packages []discoveryGoListPackage) []string {
+func discoveryAsmDeclSelectedText(filename, reportedLine, packagePath string, packages []discoveryGoListPackage, commandDir string) []string {
 	reported := filepath.Clean(filepath.FromSlash(filename))
+	commandRelative := ""
+	if commandDir != "" {
+		if filepath.IsAbs(reported) {
+			// Go may retain a logical PWD spelling for a selected package.
+			// Resolve its directory, not a final file symlink or its basename.
+			if physical, err := filepath.EvalSymlinks(filepath.Dir(reported)); err == nil {
+				reported = filepath.Join(physical, filepath.Base(reported))
+			}
+		} else {
+			// Vet positions are relative to its working directory, not the
+			// selected package directory. Bind the complete reported path.
+			commandRelative = filepath.Join(commandDir, reported)
+		}
+	}
 	var selected string
 	for _, pkg := range packages {
 		if packagePath != "" && pkg.ImportPath != packagePath {
@@ -170,7 +200,8 @@ func discoveryAsmDeclSelectedText(filename, reportedLine, packagePath string, pa
 		}
 		for _, name := range pkg.SFiles {
 			file := filepath.Join(pkg.Dir, name)
-			if reported != file && reported != name {
+			unboundBasename := commandDir == "" && reported == name
+			if reported != file && !unboundBasename && commandRelative != file {
 				continue
 			}
 			if selected != "" && selected != file {

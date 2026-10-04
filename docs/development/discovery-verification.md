@@ -122,7 +122,11 @@ For each target/tag/package group:
    A zero-size warning is not conclusive when the selected source's exact
    TEXT line uses omitted arguments or the historical literal `-0` form.
    Check its selected package, physical line and symbol before filtering just
-   that warning. Preserve other ABI diagnostics; unknown source metadata fails.
+   that warning. Resolve relative diagnostic paths from the actual command's
+   physical working directory and require the complete path to match an actual
+   selected assembly file; matching a suffix is not source evidence. Apply the
+   same binding to ABI0 tail-padding warnings. Preserve other ABI diagnostics;
+   unknown source metadata fails.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and
