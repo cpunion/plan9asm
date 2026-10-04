@@ -497,6 +497,9 @@ func (b *goSigBuilder) addReferencedFuncSigs(file *File) error {
 				}
 			}
 			if tailJump && hasCallerSig {
+				if b.goarch == "arm64" && arm64PrivateTailSymbol(base+"(SB)") {
+					return arm64GoABIContext("private tail %q has no declaration or explicit register transport; caller Frame cannot supply it", base)
+				}
 				// Best-effort fallback for helper<> tail-jumps where the callee is an
 				// internal asm label with no Go declaration. Callers can override this
 				// via ManualSig when the inferred signature is not identical.
