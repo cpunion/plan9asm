@@ -2614,6 +2614,20 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
 			}
+			if inst.AddrSize != mode {
+				goarch := ""
+				switch mode {
+				case 32:
+					goarch = "386"
+				case 64:
+					goarch = "amd64"
+				}
+				for i := range instrs {
+					if x86LegacyPackedFloatingNativeMemoryBits(instrs[i], goarch) != 0 {
+						instrs[i].x86AddressBits = inst.AddrSize
+					}
+				}
+			}
 			if inst.Op == x86asm.MOVSXD && inst.DataSize != 64 {
 				for i := range instrs {
 					instrs[i].x86RawMOVSXDNeedsCaller = true

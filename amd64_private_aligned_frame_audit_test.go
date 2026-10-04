@@ -81,9 +81,17 @@ func x86PrivateAlignedFrameAuditAPIs(t *testing.T, source string, sig FuncSig, p
 	resolve := func(symbol string) string {
 		return strings.Replace(symbol, "·", "frameaudit.", 1)
 	}
+	sigs := map[string]FuncSig{sig.Name: sig}
+	if declaration, ok := pkg.Types.Scope().Lookup("callee").(*types.Func); ok {
+		callee, err := DeriveGoFuncABI0Signature("frameaudit.callee", declaration, "amd64", types.SizesFor("gc", "amd64"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sigs[callee.Name] = callee
+	}
 	opt := Options{
 		Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
-		ResolveSym: resolve, Sigs: map[string]FuncSig{sig.Name: sig},
+		ResolveSym: resolve, Sigs: sigs,
 	}
 	t.Run("Translate", func(t *testing.T) {
 		_, err := Translate(file, opt)
@@ -131,11 +139,11 @@ func TestX86PrivateAlignedFrameAuditOriginalGoM128Source(t *testing.T) {
 			source, _, _ := x86PrivateAlignedFrameAuditFixture(t, operation)
 			listing := string(x86InsertExtractGoListing(t, "amd64", source))
 			for _, required := range []string{
-				"locals=0xa8", "PUSHQ\tBP", "SUBQ\t$160, SP",
+				"locals=0xa8",
 				"MOVQ\ta+176(FP), AX", "MOVQ\tb+184(FP), CX",
 				"MOVQ\tc+192(FP), DX", "MOVQ\td+200(FP), BX", "MOVQ\tAX, ret+208(FP)",
 				"ANDQ\tR9, SP", "ADDQ\t$32, SP", "MOVQ\tR11, SP",
-				"ADDQ\t$160, SP", "POPQ\tBP", "RET",
+				"RET",
 			} {
 				if !strings.Contains(listing, required) {
 					t.Fatalf("actual Go source frame/prologue/restoration missing %q:\n%s", required, listing)
@@ -148,11 +156,47 @@ func TestX86PrivateAlignedFrameAuditOriginalGoM128Source(t *testing.T) {
 			if len(code) == 0 {
 				t.Fatal("original Go listing lacks physical instruction bytes")
 			}
-			if !bytes.HasPrefix(code, []byte{0x55, 0x48, 0x89, 0xe5, 0x48, 0x81, 0xec, 0xa0, 0, 0, 0}) ||
-				!bytes.HasSuffix(code, []byte{0x48, 0x81, 0xc4, 0xa0, 0, 0, 0, 0x5d, 0xc3}) {
-				t.Fatalf("actual Go physical prologue/epilogue differs: %x", code)
+			// Identify complete observed machine sequences, never a version
+			// string or autosize alone. Older Go saves BP in the 160(SP)
+			// slot; current Go pushes BP. Both reserve 168 bytes, but their
+			// producer and restoration instructions are not interchangeable.
+			physicalForm := ""
+			for _, form := range []struct {
+				name           string
+				prefix, suffix []byte
+				instructions   []string
+			}{
+				{
+					name:   "pushed_BP",
+					prefix: []byte{0x55, 0x48, 0x89, 0xe5, 0x48, 0x81, 0xec, 0xa0, 0, 0, 0},
+					suffix: []byte{0x48, 0x81, 0xc4, 0xa0, 0, 0, 0, 0x5d, 0xc3},
+					instructions: []string{
+						"PUSHQ\tBP", "MOVQ\tSP, BP", "SUBQ\t$160, SP", "ADDQ\t$160, SP", "POPQ\tBP",
+					},
+				},
+				{
+					name:   "slot_saved_BP",
+					prefix: []byte{0x48, 0x81, 0xec, 0xa8, 0, 0, 0, 0x48, 0x89, 0xac, 0x24, 0xa0, 0, 0, 0, 0x48, 0x8d, 0xac, 0x24, 0xa0, 0, 0, 0},
+					suffix: []byte{0x48, 0x8b, 0xac, 0x24, 0xa0, 0, 0, 0, 0x48, 0x81, 0xc4, 0xa8, 0, 0, 0, 0xc3},
+					instructions: []string{
+						"SUBQ\t$168, SP", "MOVQ\tBP, 160(SP)", "LEAQ\t160(SP), BP", "MOVQ\t160(SP), BP", "ADDQ\t$168, SP",
+					},
+				},
+			} {
+				if !bytes.HasPrefix(code, form.prefix) || !bytes.HasSuffix(code, form.suffix) {
+					continue
+				}
+				for _, instruction := range form.instructions {
+					if !strings.Contains(listing, instruction) {
+						t.Fatalf("actual %s object lacks its paired listing instruction %q", form.name, instruction)
+					}
+				}
+				physicalForm = form.name
 			}
-			t.Logf("actual Go original accepted; TEXT160 + savedBP8; operation=%s sourceSHA=%x codeSHA=%x code=%x", operation, sha256.Sum256([]byte(source)), sha256.Sum256(code), code)
+			if physicalForm == "" {
+				t.Fatalf("actual Go physical prologue/epilogue lacks an observed complete pairing: %x", code)
+			}
+			t.Logf("actual Go original accepted; TEXT160 + savedBP8; physicalForm=%s operation=%s sourceSHA=%x codeSHA=%x code=%x", physicalForm, operation, sha256.Sum256([]byte(source)), sha256.Sum256(code), code)
 			if strings.HasPrefix(operation, "PADDB ") {
 				t.Logf("independent original Go frame/slot listing:\n%s", listing)
 			}
