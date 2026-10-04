@@ -113,6 +113,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_packed_zero_extend_runtime_test.go",
 		"amd64_packed_zero_extend_raw_axes_test.go",
 		"amd64_signed_packed_integer_float_runtime_test.go",
+		"amd64_signed_packed_integer_float_resource_unix_test.go",
 		"amd64_signed_packed_integer_float_raw_test.go",
 		"amd64_insert_extract_go_oracle_test.go",
 		"amd64_go_caller_vector_zero_test.go",

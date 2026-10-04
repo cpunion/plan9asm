@@ -103,16 +103,40 @@ func runX86SignedPackedIntegerFloatNativeReadAndPrecisionFaults(t *testing.T) {
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "signed-packed-native-fault", triple, ir, x86SignedPackedFloatFaultOracle, prefix)
 }
 
-// The original native memory instruction, not a preloaded vector, is the
-// independent fault/read-extent oracle. Each child returns its whole 16-byte
-// result and guards, or a concrete signal. A dead result must still trap.
-const x86SignedPackedFloatFaultOracle = `#include <stdint.h>
+// Both the native-fault oracle and its non-faulting resource test execute
+// this same child branch. The latter does not need an x86 instruction.
+const x86SignedPackedFloatChildOracle = `#include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <signal.h>
+typedef void (*childfn)(void*,const void*,unsigned);
+
+static int fault_child(childfn fn, const void *input, unsigned csr, const unsigned char *expected) {
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+        unsigned char out[18];
+        memset(out,0xc3,sizeof(out));
+        fn(out+1,input,csr);
+        if (out[0]!=0xc3 || out[17]!=0xc3 || expected && memcmp(out+1,expected,16)) _exit(91);
+        _exit(0);
+    }
+    int status;
+    if (waitpid(pid,&status,0)!=pid) return -2;
+    if (WIFSIGNALED(status)) return 128+WTERMSIG(status);
+    if (WIFEXITED(status)) return WEXITSTATUS(status);
+    return -3;
+}
+`
+
+// The original native memory instruction, not a preloaded vector, is the
+// independent fault/read-extent oracle. Each child returns its whole 16-byte
+// result and guards, or a concrete signal. A dead result must still trap.
+const x86SignedPackedFloatFaultOracle = x86SignedPackedFloatChildOracle + `
+#include <sys/mman.h>
 typedef void (*memoryfn)(void*,const void*);
 extern void packedPS(void*,const void*);
 extern void packedPD(void*,const void*);
@@ -133,22 +157,20 @@ static void originalDeadPS(void *out, const void *input) {
     __asm__ volatile("cvtdq2ps (%0),%%xmm0" :: "r"(input) : "xmm0", "memory");
 }
 
+struct conversion_request {
+    memoryfn fn;
+    const void *input;
+};
+
+static void invoke_conversion(void *out, const void *opaque, unsigned csr) {
+    const struct conversion_request *request = opaque;
+    __asm__ volatile("ldmxcsr %0" :: "m"(csr) : "memory");
+    request->fn(out,request->input);
+}
+
 static int child(memoryfn fn, const void *input, unsigned csr, const unsigned char *expected) {
-    pid_t pid = fork();
-    if (pid < 0) return -1;
-    if (pid == 0) {
-        unsigned char out[18];
-        memset(out,0xc3,sizeof(out));
-        __asm__ volatile("ldmxcsr %0" :: "m"(csr) : "memory");
-        fn(out+1,input);
-        if (out[0]!=0xc3 || out[17]!=0xc3 || expected && memcmp(out+1,expected,16)) _exit(91);
-        _exit(0);
-    }
-    int status;
-    if (waitpid(pid,&status,0)!=pid) return -2;
-    if (WIFSIGNALED(status)) return 128+WTERMSIG(status);
-    if (WIFEXITED(status)) return WEXITSTATUS(status);
-    return -3;
+    const struct conversion_request request = {fn,input};
+    return fault_child(invoke_conversion,&request,csr,expected);
 }
 
 static int compare(memoryfn reference, memoryfn translated, const void *input,
