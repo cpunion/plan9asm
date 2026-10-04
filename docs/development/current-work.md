@@ -78,7 +78,7 @@ for late infrastructure errors or invalid source positions. The original avo
 candidate passed its default-target replay at frozen `ff488337`; source-excluded
 scopes are not LLVM objects or runtime passes.
 
-The next local batch includes complete ARM64 raw UDF decoding and explicit
+The local batch includes complete ARM64 raw UDF decoding and explicit
 integer source-class checks. An old unknown-WORD negative was a valid UDF;
 preserve that failed report and its corrected negative/reachable-trap tests.
 Per-analysis raw GP-effect reuse memoizes only complete-word, context-independent
@@ -154,6 +154,43 @@ successful module resolver notices are checked by stage, module and version,
 not accepted as arbitrary stderr. Direct analyzer tools retain their complete
 canonical experiment suffixes and independently bound SDK Flags/source bytes.
 Unknown, changed or inconsistent tool identities remain failures.
+
+The x86 named-address grammar now models ordered FP/SP/SB operand groups and
+Go's complete register spellings independently of source permissions. Indexed
+FP/AUTO accesses and offset/indexed native control transfers still need their
+own backing and continuation contracts; syntax acceptance does not grant them.
+All Go 1.20–1.27 official form rows were compared before updating the baseline:
+only the reviewed x86 changes were accepted, with every source instruction
+retained. Historical Go 1.20's unmasked `VADDPD.Z` remains an explicit unsupported
+form, not a newly certified instruction. Classification is not object/runtime
+coverage or exhaustive encoder-table coverage.
+
+ARM64 vector knowledge now tracks initialized bytes independently of SVE state
+and intersects them at joins. VMOV/VDUP consume the same actual source/destination
+spans as lowering; destination physical lane bounds remain strict. The shared
+lane-token grammar follows Go's unsigned decimal tokenizer, accepting bound
+CPP decimal tokens and whitespace but rejecting signed/hexadecimal expressions.
+Independent Go and LLVM numerical/canary oracles retain the original failures.
+
+Dependency-free ARM64 native-oracle programs now declare a Go 1.20 minimum and
+all actual bodyless callees needed by the historical linker. Current Go P256
+SDK-source fixtures and register-specific RET aliases have explicit `go1.27`
+source roles, not old-SDK runtime skips. A separate actual-Go object/runtime
+witness observes historical RET's R30 rewrite versus current explicit-register
+RET; it does not claim equivalence between these source encoders. The portable
+control-flow oracle uses identical physical RET words on both SDKs. Run the
+complete listed caller family on each SDK, including the separate current-only
+tests; do not silently omit a failed or unavailable oracle.
+
+The typed x86 ABI0 result filter binds the actual completed asmdecl unit,
+original CPP sources and independently typechecked export/signature layout.
+Every reachable RET needs complete initialized scalar result bytes. Unknown
+effects, native backing, calls and escapes remain failures; this proof grants
+neither caller transport nor return-continuation permission. Complete corpus
+mechanism tests passed in a separate frozen leaf, but final integrated-head
+library reports are still required. Newly reproduced explicit-CPP-flag and
+test-only void-width downgrade failures require a companion guard before that
+final freeze; retain the original diagnostics and object-byte witnesses.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
