@@ -416,3 +416,16 @@ from EVEX's DQ-only W0 requirement. Keep complete-byte, NULL/guard-page and
 flags/MXCSR oracles: E5 inactive lanes suppress source reads, but a known mask
 does not itself grant caller memory bounds. Original legacy execution and
 portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.
+
+`CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
+permission. It independently selects and exports a flat, dependency-free main
+module with bodyless integer declarations, then binds all selected ASM, headers,
+actual Go tool/source routes, original object bytes and complete source positions.
+The caller selects the trusted stock-Go installation and explicit private command
+caches; a public selection record, manual signature or JSON cannot recreate its
+token. Both conventional BP producers are recognized from actual machine bytes,
+not from a Go version guess. Unknown generated/foreign/test/conditional/unwind
+roles remain Context, including current Windows auxiliary SEH records. Every
+Verify rechecks bytes, complete inventory and actual export/selection before and
+after commands; failure or Close revokes the token. This stage has no Binder,
+allocator, caller certificate, native-memory grant or compiler adapter.
