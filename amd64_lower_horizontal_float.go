@@ -96,6 +96,9 @@ func (c *amd64Ctx) emitHorizontalFloating(spec amd64HorizontalFloatingSpec, byte
 	// Project each independent 128-bit block without additional arithmetic.
 	// One constrained vector operation retains joint exception semantics;
 	// the reviewed integer-only binary helper preserves pair NaN priority.
-	form := x86FloatAddSubForm{spec: x86FloatAddSubSpec{bits: spec.laneBits, subtract: spec.subtract}}
+	form := x86FloatAddSubForm{
+		spec:               x86FloatAddSubSpec{bits: spec.laneBits, subtract: spec.subtract},
+		x86FloatBinaryForm: x86FloatBinaryForm{bits: spec.laneBits},
+	}
 	return c.emitFloatAddSub(form, lanes, "%"+left, "%"+right, "")
 }
