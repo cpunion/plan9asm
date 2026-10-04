@@ -16,6 +16,8 @@ type x86SourceStackProof struct {
 	caller  *x86GoCallerRegionProof
 	// Exact public normalized source bytes, excluding private certificates.
 	normalized [32]byte
+	// Diagnostic-only finite replay counts, never used as permission inputs.
+	countedIterations [4]int
 }
 
 // Bind raw stack producer identity before consulting Go's named PUSH/POP
@@ -213,8 +215,135 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			gOriginal: true,
 		}
 	}
+	transfer := func(pc int, ins *Instr, state *x86SourceStackState) (bool, string) {
+		op := Op(normalizeInstructionOpcode(ins.Op))
+		if op == OpRET {
+			if word == 8 && !state.gOriginal {
+				return false, "unrestored original g identity at source return"
+			}
+			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			return true, ""
+		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFP && state.sp+goDeltas[instructions[pc]] != 0 {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+		}
+
+		if spec, stack := amd64StackWidthSpecs[op]; stack {
+			if !x86SourceStackStep(spec, ins, state, word) {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+		} else if !x86SourceStackAddressStep(ins, state, nativeMove, nativeSuffix, word) {
+			return false, "unproved source-stack or ABI0 continuation effect"
+		}
+		if state.sp < -x86SourceStackLimit || state.sp > 0 {
+			return false, "unproved source-stack or ABI0 continuation effect"
+		}
+		if state.sp < proof.minimum {
+			proof.minimum = state.sp
+		}
+		for operandIndex, operand := range ins.Args {
+			if operand.Kind != OpMem || !x86RawReturnStackMemory(operand.Mem) {
+				continue
+			}
+			if x86LEAWidth(ins.Op, opt.Goarch) != 0 {
+				continue // The address step proved its destination and range.
+			}
+			width := x86ScalarMoveMemoryBytes(*ins, operandIndex, opt.Goarch)
+			memory := operand.Mem
+			if width == 0 || memory.Sym != "" || memory.Index != "" || memory.Segment != "" ||
+				ins.x86AddressBits != 0 {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			base := state.sp
+			if memory.Base == BP {
+				if state.bp.original {
+					return false, "unproved source-stack or ABI0 continuation effect"
+				}
+				base = state.bp.offset
+			} else if memory.Base != SP {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			// Source entry SP[0:word] is the return PC. Only declaration-backed
+			// data at entry SP+word can be mapped to FP shadow storage.
+			if memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			offset := base + memory.Off - word
+			if offset < 0 || offset > fn.ArgSize || width > fn.ArgSize-offset {
+				return false, "unproved source-stack or ABI0 continuation effect"
+			}
+			if bindFrame {
+				if !x86RawReturnFPBound(offset, width, sig, opt.Goarch) {
+					return false, "unproved source-stack or ABI0 continuation effect"
+				}
+				if ins.x86SourceStackFP == nil {
+					ins.x86SourceStackFP = map[int]int64{}
+				}
+				ins.x86SourceStackFP[operandIndex] = offset
+			}
+		}
+		pointerFlags := false
+		if caller {
+			var valid bool
+			if x86CallerVectorMoveKnown(*ins) {
+				valid = x86CallerVectorMoveStep(ins, state, sig.x86CallerRegions)
+			} else {
+				pointerFlags, valid = x86CallerScalarStep(ins, state, sig.x86CallerRegions)
+			}
+			if !valid {
+				return false, "unproved caller-region effect: " + string(ins.Op)
+			}
+			x86CallerGDefinition(*ins, state)
+		}
+		if !x86SourceStackFlagsStep(*ins, state) {
+			return false, "unproved source-stack or ABI0 continuation effect"
+		}
+		if pointerFlags {
+			state.numericFlags = false
+		}
+
+		return false, ""
+	}
 	returned := false
 	acyclic := caller && x86CallerReachableAcyclic(copyFn, instructions, labels)
+	if caller && !acyclic {
+		if plan := deriveX86CallerCountedPlan(input, copyFn, instructions, labels); plan != nil {
+			first, reason := replayX86CallerCountedPlan(plan, &copyFn, instructions, states[0], proof.caller, transfer)
+			if reason != "" {
+				return reject(0, reason)
+			}
+			minimum := proof.minimum
+			proof.minimum = 0
+			for index := range copyFn.Instrs {
+				copyFn.Instrs[index].x86CallerMemory = nil
+				copyFn.Instrs[index].x86SourceStackFP = nil
+			}
+			finalPlan := deriveX86CallerCountedPlan(input, copyFn, instructions, labels)
+			if !reflect.DeepEqual(plan, finalPlan) {
+				return reject(0, "counted-loop plan changed during independent replay")
+			}
+			second, reason := replayX86CallerCountedPlan(finalPlan, &copyFn, instructions, states[0], proof.caller, transfer)
+			if reason != "" || minimum != proof.minimum || !reflect.DeepEqual(first, second) {
+				return reject(0, "counted-loop final access/state replay changed: "+reason)
+			}
+			for _, visit := range second {
+				if visit.pc == finalPlan.header {
+					proof.countedIterations[visit.residue]++
+				}
+			}
+			var err error
+			proof.normalized, err = x86CallerSourceFingerprint(copyFn)
+			if err != nil {
+				return fn
+			}
+			copyFn.x86SourceStack = proof
+			return copyFn
+		}
+	}
 	final := false
 	for budget := 0; ; budget++ {
 		if len(work) == 0 {
@@ -248,96 +377,14 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		ins.x86CallerMemory = nil
 		ins.x86SourceStackFP = nil
 		op := Op(normalizeInstructionOpcode(ins.Op))
-		if op == OpRET {
-			if word == 8 && !state.gOriginal {
-				return reject(instructions[pc], "unrestored original g identity at source return")
-			}
-			if len(ins.Args) != 0 || state.sp != 0 || !state.bp.original || goDeltas[instructions[pc]] != 0 {
-				return fn
-			}
+		isReturn, reason := transfer(pc, ins, &state)
+		if reason != "" {
+			return reject(instructions[pc], reason)
+		}
+		if isReturn {
 			returned = true
 			continue
 		}
-		for _, operand := range ins.Args {
-			if operand.Kind == OpFP && state.sp+goDeltas[instructions[pc]] != 0 {
-				return fn // The native FP operand would not address this typed slot.
-			}
-		}
-
-		if spec, stack := amd64StackWidthSpecs[op]; stack {
-			if !x86SourceStackStep(spec, ins, &state, word) {
-				return fn
-			}
-		} else if !x86SourceStackAddressStep(ins, &state, nativeMove, nativeSuffix, word) {
-			return fn
-		}
-		if state.sp < -x86SourceStackLimit || state.sp > 0 {
-			return fn
-		}
-		if state.sp < proof.minimum {
-			proof.minimum = state.sp
-		}
-		for operandIndex, operand := range ins.Args {
-			if operand.Kind != OpMem || !x86RawReturnStackMemory(operand.Mem) {
-				continue
-			}
-			if x86LEAWidth(ins.Op, opt.Goarch) != 0 {
-				continue // The address step proved its destination and range.
-			}
-			width := x86ScalarMoveMemoryBytes(*ins, operandIndex, opt.Goarch)
-			memory := operand.Mem
-			if width == 0 || memory.Sym != "" || memory.Index != "" || memory.Segment != "" ||
-				ins.x86AddressBits != 0 {
-				return fn
-			}
-			base := state.sp
-			if memory.Base == BP {
-				if state.bp.original {
-					return fn
-				}
-				base = state.bp.offset
-			} else if memory.Base != SP {
-				return fn
-			}
-			// Source entry SP[0:word] is the return PC. Only declaration-backed
-			// data at entry SP+word can be mapped to FP shadow storage.
-			if memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
-				return fn
-			}
-			offset := base + memory.Off - word
-			if offset < 0 || offset > fn.ArgSize || width > fn.ArgSize-offset {
-				return fn
-			}
-			if bindFrame {
-				if !x86RawReturnFPBound(offset, width, sig, opt.Goarch) {
-					return fn
-				}
-				if ins.x86SourceStackFP == nil {
-					ins.x86SourceStackFP = map[int]int64{}
-				}
-				ins.x86SourceStackFP[operandIndex] = offset
-			}
-		}
-		pointerFlags := false
-		if caller {
-			var valid bool
-			if x86CallerVectorMoveKnown(*ins) {
-				valid = x86CallerVectorMoveStep(ins, &state, sig.x86CallerRegions)
-			} else {
-				pointerFlags, valid = x86CallerScalarStep(ins, &state, sig.x86CallerRegions)
-			}
-			if !valid {
-				return reject(instructions[pc], "unproved caller-region effect: "+string(ins.Op))
-			}
-			x86CallerGDefinition(*ins, &state)
-		}
-		if !x86SourceStackFlagsStep(*ins, &state) {
-			return fn
-		}
-		if pointerFlags {
-			state.numericFlags = false
-		}
-
 		successors := []int{pc + 1}
 		if op == OpJMP || isAMD64ConditionalBranch(op) {
 			if len(ins.Args) != 1 {

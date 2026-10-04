@@ -33,10 +33,11 @@ func TestX86GoCallerAcyclicJoinActualSourceInputs(t *testing.T) {
 	}
 }
 
-func TestX86GoCallerAcyclicJoinKeepsOriginalCountedBackedgeContext(t *testing.T) {
+func TestX86GoCallerCountedLoopOriginalBackedgeNeedsFiniteProof(t *testing.T) {
 	// These are unchanged consecutive original directives and the actual
-	// backedge in Weaviate dot_avx256_amd64.s. No loop certificate is supplied
-	// by an acyclic merge, even though the low two count bits bound this loop.
+	// backedge in Weaviate dot_avx256_amd64.s. The acyclic mechanism still cannot
+	// prove them; the new private finite replay proves only this bounded region,
+	// not the complete external function or its later unbounded loops.
 	body := `MOVQ (CX),R9
 LONG $0xff418d45
 LONG $0x03c1f641
@@ -59,9 +60,35 @@ MOVL AX,(DX)`
 	assembly := x86CallerAcyclicJoinAssembly(body)
 	requireX86GoAssemblerResult(t, "amd64", assembly, true)
 	pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
-	err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
-	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "states at join") {
-		t.Fatalf("acyclic admission became an original loop proof: %v", err)
+	file, err := Parse(ArchAMD64, assembly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeX86RawDirectives(file.Funcs[0], "amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var instructions []int
+	labels := map[string]int{}
+	for index, ins := range decoded.Instrs {
+		if ins.Op == OpLABEL {
+			labels[ins.Args[0].Sym] = len(instructions)
+		} else {
+			instructions = append(instructions, index)
+		}
+	}
+	if x86CallerReachableAcyclic(decoded, instructions, labels) {
+		t.Fatal("a natural backedge acquired DAG admission")
+	}
+	if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
+		t.Fatalf("source-bound finite replay of only the first region: %v", err)
+	}
+	// Preserve the bounded but outside-budget variant as a real source Context,
+	// without hiding its original directives or adding a wrapper length check.
+	outsideBudget := strings.Replace(assembly, "WORD $0xe083; BYTE $0x03", "WORD $0xe083; BYTE $0x07", 1)
+	unsafePkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, outsideBudget)
+	if err := x86CallerCoreTranslate(t, unsafePkg, outsideBudget, "x86_64-unknown-linux-gnu"); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("bound outside finite mechanism admitted: %v", err)
 	}
 }
 

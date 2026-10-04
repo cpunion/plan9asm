@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopOriginalInitializedValues(t *testing.T) {
@@ -100,4 +102,91 @@ func TestOriginalInitializedCountedValues(t *testing.T) {
 		t.Fatalf("first-party original Go counted integer/canary oracle: %v\n%s", err, output)
 	}
 	t.Log("original Go scalar oracle: 1536 initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits; noinline full-memory snapshots compare both data buffers and adjacent canaries, not a physical source-stack witness; Darwin/Rosetta is diagnostic, not Intel hardware evidence")
+}
+
+func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t *testing.T) {
+	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
+	if runtime.GOARCH != "amd64" && !crossRosetta {
+		t.Skip("requires the separately required Linux/amd64 caller runtime counterpart")
+	}
+	llc, clang, found := findLlcAndClang(t)
+	if !found {
+		t.Fatal("LLVM 22 llc/clang not found")
+	}
+	var source, assembly, oracle strings.Builder
+	source.WriteString("package caller\nimport \"unsafe\"\n")
+	oracle.WriteString(`#include <stdint.h>
+#include <string.h>
+#if defined(__APPLE__)
+#define LABEL(name) "_" name
+#else
+#define LABEL(name) name
+#endif
+`)
+	var calls strings.Builder
+	for _, raw := range []bool{false, true} {
+		for _, separateExit := range []bool{false, true} {
+			name := fmt.Sprintf("counted%t%t", raw, separateExit)
+			declaration := x86CallerCountedLoopScalarSource()
+			declaration = declaration[strings.Index(declaration, "//go:noescape"):]
+			declaration = strings.ReplaceAll(declaration, "kernel", name)
+			source.WriteString(strings.Replace(declaration, "func Call(", "func Call"+name+"(", 1))
+			machine := x86CallerCountedLoopScalarAssembly(raw)
+			if separateExit {
+				machine = x86CallerCountedLoopSeparateExitAssembly(raw)
+			}
+			assembly.WriteString(strings.ReplaceAll(machine, "·kernel", "·"+name))
+			fmt.Fprintf(&oracle, "extern void %s(void*,void*,void*,void*) __asm__(LABEL(\"caller.%s\"));\n", name, name)
+			fmt.Fprintf(&calls, `
+    memset(output,0xc9,sizeof(output));memcpy(expected,output,sizeof(output));
+    memcpy(expected+5,&want,sizeof(want));
+    %s(a+1,b+3,output+5,&length);
+    if (memcmp(output,expected,sizeof(output)) || memcmp(a,original_a,sizeof(a)) ||
+        memcmp(b,original_b,sizeof(b)) || length!=original_length) return 1;
+    calls++;
+`, name)
+		}
+	}
+	oracle.WriteString(`int main(void) {
+ const uint32_t values[]={0,1,7,0x80000000u,0xffffffffu,0x12345678u};
+ unsigned calls=0;
+ for (unsigned repeat=0;repeat<4;repeat++) {
+  for (unsigned value=0;value<sizeof(values)/sizeof(values[0]);value++) {
+   for (uint64_t length=0;length<16;length++) {
+    uint32_t x[16]={values[value],values[value]^0xaabbccddu,19,23,29,31,37,41,43,47,53,59,61,67,71,73};
+    uint32_t y[16]={31,37,values[value],43,47,53,59,61,67,71,73,79,83,89,97,101};
+    uint8_t a[97],b[99],original_a[97],original_b[99],output[29],expected[29];
+    memset(a,0xa3,sizeof(a));memset(b,0xb7,sizeof(b));
+    memcpy(a+1,x,sizeof(x));memcpy(b+3,y,sizeof(y));
+    memcpy(original_a,a,sizeof(a));memcpy(original_b,b,sizeof(b));
+    const uint64_t original_length=length;
+    uint32_t want=0;
+    for (unsigned index=0;index<(length&3);index++) want+=x[index]+y[index];
+`)
+	oracle.WriteString(calls.String())
+	oracle.WriteString("   }\n  }\n }\n return calls==1536?0:2;\n}\n")
+	goSource, err := format.Source([]byte(source.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := x86CallerRuntimePackage(t, string(goSource), assembly.String())
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	triple := testTargetTriple(runtime.GOOS, "amd64")
+	translation, err := translateGoModuleInContext(ctx, pkg, []byte(assembly.String()), GoModuleOptions{
+		FileName: "value_amd64.s", GOARCH: "amd64", TargetTriple: triple,
+		ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", "caller.", 1) },
+	})
+	if translation != nil && !translation.Module.IsNil() {
+		defer translation.Module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var runner []string
+	if crossRosetta {
+		runner = []string{"/usr/bin/arch", "-x86_64"}
+	}
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "caller_counted_loop", triple, translation.Module.String(), oracle.String(), runner)
+	t.Log("1536 independent unsigned mathematical results; both input buffers and all output/adjacent guard bytes unchanged, length immutable; Rosetta is diagnostic only")
 }
