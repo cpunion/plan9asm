@@ -1,7 +1,9 @@
 package plan9asm
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -106,7 +108,7 @@ console.log(JSON.stringify({
 			}
 			output, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, node, args...))
 			if tc.refused {
-				if err == nil || strings.Contains(string(output), `"companion":"same-sdk"`) {
+				if !wasmPackedNodeBindingRefused(ctx, output, err) {
 					t.Fatalf("immutable binding must fail before a fake runtime pass: %v\n%s", err, output)
 				}
 				return
@@ -125,6 +127,64 @@ console.log(JSON.stringify({
 			if !reflect.DeepEqual(result.Args, []string{wasm}) || result.Initial != tc.initial ||
 				!result.Preserved || result.Provider != "go-runtime" || result.Companion != "same-sdk" {
 				t.Fatalf("original provider, Go argv or same-SDK module resolution changed: %+v", result)
+			}
+		})
+	}
+}
+
+const wasmPackedImmutableBindingDiagnostic = "Error: Go wasm helper cannot initialize a nonconfigurable read-only crypto binding"
+
+func wasmPackedNodeBindingRefused(ctx context.Context, output []byte, err error) bool {
+	// A wrapped/joined exit may contain cancellation or owned cleanup errors.
+	// Only the actual plain Node exit and its exact bootstrap error line can
+	// establish this refusal, before the selected helper starts executing.
+	exit, ok := err.(*exec.ExitError)
+	return ctx != nil && ctx.Err() == nil && ok && exit.ExitCode() == 1 &&
+		strings.Count(string(output), "\n"+wasmPackedImmutableBindingDiagnostic+"\n") == 1 &&
+		!strings.Contains(string(output), `"companion":"same-sdk"`)
+}
+
+func TestWASMPackedGoRuntimeHelperRejectsUnknownNodeFailures(t *testing.T) {
+	node := wasmPackedNode(t)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	_, exitOne := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, node, "-e", "process.exit(1)"))
+	_, exitTwo := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, node, "-e", "process.exit(2)"))
+	for code, observed := range map[int]error{1: exitOne, 2: exitTwo} {
+		exit, ok := observed.(*exec.ExitError)
+		if !ok || exit.ExitCode() != code {
+			t.Fatalf("Node fixture did not provide its actual plain exit %d: %v", code, observed)
+		}
+	}
+
+	expired, expire := context.WithCancel(context.Background())
+	expire()
+	diagnostic := []byte("\n" + wasmPackedImmutableBindingDiagnostic + "\n")
+	for _, tc := range []struct {
+		name     string
+		ctx      context.Context
+		output   []byte
+		err      error
+		accepted bool
+	}{
+		{"known_plain_exit", ctx, diagnostic, exitOne, true},
+		{"no_context", nil, diagnostic, exitOne, false},
+		{"canceled_context", expired, diagnostic, exitOne, false},
+		{"joined_cleanup", ctx, diagnostic, errors.Join(exitOne, errors.New("owned cleanup failure")), false},
+		{"wrapped_exit", ctx, diagnostic, &os.PathError{Op: "start", Path: "node", Err: exitOne}, false},
+		{"deadline", ctx, diagnostic, context.DeadlineExceeded, false},
+		{"missing_program", ctx, diagnostic, exec.ErrNotFound, false},
+		{"wrong_status", ctx, diagnostic, exitTwo, false},
+		{"successful_status", ctx, diagnostic, nil, false},
+		{"missing_diagnostic", ctx, nil, exitOne, false},
+		{"unrelated_diagnostic", ctx, []byte("Error: Cannot find module\n"), exitOne, false},
+		{"quoted_diagnostic", ctx, []byte("throw new Error(\"" + wasmPackedImmutableBindingDiagnostic + "\");\n"), exitOne, false},
+		{"duplicate_diagnostic", ctx, append(append([]byte{}, diagnostic...), diagnostic...), exitOne, false},
+		{"runtime_already_executed", ctx, append(append([]byte{}, diagnostic...), []byte(`{"companion":"same-sdk"}`)...), exitOne, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wasmPackedNodeBindingRefused(tc.ctx, tc.output, tc.err); got != tc.accepted {
+				t.Fatalf("Node binding refusal=%v, want=%v: %v\n%s", got, tc.accepted, tc.err, tc.output)
 			}
 		})
 	}
