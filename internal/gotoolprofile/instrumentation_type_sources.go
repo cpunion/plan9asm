@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/mod/module"
 )
 
 const instrumentationTypeSourcesProtocol = "actual_go_instrumentation_type_sources_v1"
@@ -78,6 +80,12 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 		proof.RootImportMap == nil || len(proof.RootImportMap) > 4096 || proof.Dependencies == nil || len(proof.Dependencies) > 4096 {
 		return fmt.Errorf("original imported type source lost its independent input/scope identity")
 	}
+	if input.Sources == nil {
+		return fmt.Errorf("original import graph lacks complete selected Go source")
+	}
+	if err := validateInstrumentationOriginalImportSpellings(input.Plan.GoFiles, input.Sources.Contents, proof.RootImportMap); err != nil {
+		return err
+	}
 	dependencies := make([]InstrumentationDependencyExport, 0, len(proof.Dependencies))
 	header := GeneratedHeaderProof{ImportMap: proof.RootImportMap}
 	byPath := make(map[string]InstrumentationDependencyExport)
@@ -106,6 +114,15 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 		if pkg.Contents != nil && len(pkg.Contents) != len(dep.Source.GoSHA256) {
 			return fmt.Errorf("imported declaration package lacks complete actual compiled source bytes")
 		}
+		if pkg.Contents != nil {
+			names := make([]string, 0, len(dep.Source.GoSHA256))
+			for name := range dep.Source.GoSHA256 {
+				names = append(names, name)
+			}
+			if err := validateInstrumentationOriginalImportSpellings(names, pkg.Contents, dep.ImportMap); err != nil {
+				return err
+			}
+		}
 		dependencies = append(dependencies, dep)
 		byPath[dep.Source.PackagePath] = dep
 	}
@@ -130,6 +147,43 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 		}
 	}
 	return validateInstrumentationMetadataDependencies(input, pkg, header, dependencies)
+}
+
+// The physical capture supplies each ImportMap's targets. Independently bound
+// source bytes supply its exact spelling set, including imports used only by
+// bodies, blank imports and repeated spellings across selected files. A paired
+// metadata mutation cannot invent an unused edge to an already present export.
+func validateInstrumentationOriginalImportSpellings(names []string, contents map[string]string, importMap map[string]string) error {
+	if len(names) == 0 {
+		return fmt.Errorf("original import graph has no selected compiler Go files")
+	}
+	imports := make(map[string]bool)
+	for _, name := range names {
+		source, present := contents[name]
+		if !present {
+			return fmt.Errorf("original import graph lost selected Go source: %s", name)
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), name, source, parser.ImportsOnly)
+		if err != nil {
+			return fmt.Errorf("original import syntax changed: %w", err)
+		}
+		for _, spec := range file.Imports {
+			spelling, err := strconv.Unquote(spec.Path.Value)
+			if err != nil || module.CheckImportPath(spelling) != nil {
+				return fmt.Errorf("original source has a noncanonical import spelling")
+			}
+			imports[spelling] = true
+		}
+	}
+	if len(imports) != len(importMap) {
+		return fmt.Errorf("original source/import-map spelling sets differ")
+	}
+	for spelling := range importMap {
+		if !imports[spelling] {
+			return fmt.Errorf("original import-map spelling is absent from selected Go bytes: %s", spelling)
+		}
+	}
+	return nil
 }
 
 type instrumentationTypeReplay struct {
