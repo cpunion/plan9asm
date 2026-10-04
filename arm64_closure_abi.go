@@ -71,6 +71,9 @@ func validateARM64ClosureSource(fn Func, sig FuncSig) error {
 	if sig.ARM64ClosureABI == nil {
 		return nil
 	}
+	if fn.arm64PrivateTailSource != nil {
+		return validateARM64PrivateTailClosureSource(fn, sig)
+	}
 	if !strings.HasSuffix(fn.Sym, "<ABIInternal>") {
 		return arm64GoABIContext("%q required closure entry needs a source ABIInternal selector", sig.Name)
 	}

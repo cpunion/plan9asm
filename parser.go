@@ -59,7 +59,9 @@ type Func struct {
 	// Set only by the closed same-file Go binding proof, never by a guessed
 	// helper FuncSig. The ABI0 root's GP/NZCV entry is otherwise unspecified.
 	arm64PrivateRegisterEntry  bool
-	arm64PrivateUnexposedFrame bool // original source proof retained across audited helper coalescing
+	arm64PrivateUnexposedFrame bool                    // original source proof retained across audited helper coalescing
+	arm64PrivateTailSource     *arm64PrivateTailSource // complete, immutable zero-frame continuation source
+	arm64PrivateSourceAdded    int                     // resource accounting only, never a machine-state permission
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.

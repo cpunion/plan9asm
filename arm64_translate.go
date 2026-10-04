@@ -893,6 +893,9 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 
 func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall) error {
 	var err error
+	if err := validateARM64PrivateTailSource(fn, sig); err != nil {
+		return err
+	}
 	paddingSource := fn
 	fn, err = normalizeARM64ScalarMemoryFrame(fn)
 	if err != nil {

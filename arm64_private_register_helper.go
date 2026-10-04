@@ -98,9 +98,11 @@ func arm64PrivateSymbolRef(sym string) (string, int64, bool) {
 	return parseSBRef(strings.TrimPrefix(sym, "$"))
 }
 
-// CoalesceARM64PrivateRegisterHelpers validates complete source continuations
-// and folds closed ARM64 register-only helpers into their callers. It does not
-// infer a callable signature or grant native-frame or memory permissions.
+// CoalesceARM64PrivateRegisterHelpers folds closed ARM64 source continuations:
+// register leaves at CALL sites, and zero-frame data/CFG leaves at ABIInternal
+// tail sites. Tail roots still require their complete typed Go register ABI at
+// final lowering. Neither family infers a callable helper signature or grants
+// native-frame, hidden-register or pointer-ownership permissions.
 // Call this before filtering or splitting a file: an excluded sibling or DATA
 // initializer must not hide address-taking or alternate native helper uses.
 // Other architectures are returned unchanged. The input is not modified.
@@ -114,6 +116,27 @@ func CoalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 // Run before KeepFunc: an excluded sibling or DATA initializer must not hide
 // address-taking or an alternate native use of a helper we fold into a root.
 func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
+	if file.Arch != ArchARM64 {
+		return file, nil
+	}
+	remaining := arm64PrivateRegisterExpansionBudget
+	// Public preparation and final preparation can run separately. Retain each
+	// root's actual earlier additions so appending another original root cannot
+	// reset the single checked allowance. This count authorizes no source effect.
+	for _, fn := range file.Funcs {
+		if fn.arm64PrivateSourceAdded < 0 || fn.arm64PrivateSourceAdded > remaining {
+			return nil, arm64GoABIContext("private source exceeds its cumulative expansion budget")
+		}
+		remaining -= fn.arm64PrivateSourceAdded
+	}
+	prepared, err := coalesceARM64PrivateCallRegisterHelpers(file, &remaining)
+	if err != nil {
+		return nil, err
+	}
+	return coalesceARM64PrivateTailHelpers(prepared, &remaining)
+}
+
+func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File, error) {
 	if file.Arch != ArchARM64 {
 		return file, nil
 	}
@@ -220,15 +243,14 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 			return nil, arm64GoABIContext("private helper %q has no closed source caller", helper)
 		}
 	}
-	remaining := arm64PrivateRegisterExpansionBudget
 	for name, helper := range helpers {
 		// LABEL and B (R30) replace TEXT and RET, so each continuation adds
 		// exactly the original leaf's length. Divide before multiplying to
 		// keep the file-wide preflight checked even for hostile source sizes.
-		if uses[name] > remaining/len(helper.Instrs) {
+		if uses[name] > *remaining/len(helper.Instrs) {
 			return nil, arm64GoABIContext("private helper source exceeds its expansion budget of %d instructions", arm64PrivateRegisterExpansionBudget)
 		}
-		remaining -= uses[name] * len(helper.Instrs)
+		*remaining -= uses[name] * len(helper.Instrs)
 	}
 	result := *file
 	result.Funcs = make([]Func, 0, len(file.Funcs)-len(helpers))
@@ -302,6 +324,7 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 			helper := continuation.helper
 			copyFn.Instrs = append(copyFn.Instrs, helper.Instrs[1:len(helper.Instrs)-1]...)
 			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: "R30"}}}, Raw: "B (R30)"})
+			copyFn.arm64PrivateSourceAdded += len(helper.Instrs)
 		}
 		result.Funcs = append(result.Funcs, copyFn)
 	}
