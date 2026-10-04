@@ -60,7 +60,7 @@ func TestCrossLinuxRuntimeMatrixARMRawDataStatus(t *testing.T) {
 `)
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":       "module armrawstatusoracle\n\ngo 1.27\n",
+		"go.mod":       "module armrawstatusoracle\n\ngo 1.20\n",
 		"main.go":      goMain.String(),
 		"oracle_arm.s": strings.ReplaceAll(source.String(), "TEXT rawstatus_", "TEXT ·rawstatus_"),
 	} {

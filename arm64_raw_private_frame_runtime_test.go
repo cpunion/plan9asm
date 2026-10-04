@@ -28,7 +28,7 @@ func TestCrossLinuxRuntimeMatrixARM64RawPrivateFrameFamily(t *testing.T) {
 	dir := t.TempDir()
 	goSource := strings.ReplaceAll(source, "TEXT rawFrame_", "TEXT ·rawFrame_")
 	for name, body := range map[string]string{
-		"go.mod": "module rawframeoracle\n\ngo 1.27\n",
+		"go.mod": "module rawframeoracle\n\ngo 1.20\n",
 		"main.go": arm64RawPrivateFrameOracleGo + goDeclarations.String() +
 			"func main(){\n" + goChecks.String() + "}\n",
 		"oracle_arm64.s": goSource,

@@ -208,7 +208,7 @@ func TestCrossLinuxRuntimeMatrixARMSymbolMemory(t *testing.T) {
 	dir := t.TempDir()
 	source = strings.ReplaceAll(source, "TEXT symbol_", "TEXT ·symbol_")
 	for name, contents := range map[string]string{
-		"go.mod": "module armsymboloracle\n\ngo 1.27\n", "main.go": goMain, "oracle_arm.s": source,
+		"go.mod": "module armsymboloracle\n\ngo 1.20\n", "main.go": goMain, "oracle_arm.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
 			t.Fatal(err)

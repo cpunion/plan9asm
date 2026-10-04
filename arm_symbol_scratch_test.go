@@ -140,7 +140,7 @@ func TestCrossLinuxRuntimeMatrixARMSymbolScratch(t *testing.T) {
 	ir, source, main, goMain := translateARMSymbolScratchFixture(t, triple)
 	dir := t.TempDir()
 	for name, contents := range map[string]string{
-		"go.mod": "module armscratchoracle\n\ngo 1.27\n", "main.go": goMain, "oracle_arm.s": source,
+		"go.mod": "module armscratchoracle\n\ngo 1.20\n", "main.go": goMain, "oracle_arm.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
 			t.Fatal(err)

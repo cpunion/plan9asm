@@ -146,7 +146,7 @@ report:
 `
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":  "module armcontinuationoracle\n\ngo 1.27\n",
+		"go.mod":  "module armcontinuationoracle\n\ngo 1.20\n",
 		"main.go": main, "oracle_arm.s": assembly,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

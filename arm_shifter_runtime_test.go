@@ -35,7 +35,7 @@ func runARMGoSourceOracle(t *testing.T, source, main string) {
 	t.Helper()
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod": "module armshifteroracle\n\ngo 1.27\n", "main.go": main,
+		"go.mod": "module armshifteroracle\n\ngo 1.20\n", "main.go": main,
 		"oracle_arm.s": strings.ReplaceAll(source, "TEXT oracle(", "TEXT ·oracle("),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

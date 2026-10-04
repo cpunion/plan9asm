@@ -58,7 +58,7 @@ func main() {
 `
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod": "module armpredicateoracle\n\ngo 1.27\n", "main.go": main,
+		"go.mod": "module armpredicateoracle\n\ngo 1.20\n", "main.go": main,
 		"oracle_arm.s": strings.Replace(source.String(), "TEXT conditional(", "TEXT ·conditional(", 1),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

@@ -20,14 +20,18 @@ func runARM64GoInternalOracle(t *testing.T, source, main string, cross bool) {
 	t.Helper()
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod":  "module internalregisteroracle\n\ngo 1.27\n",
+		"go.mod":  "module internalregisteroracle\n\ngo 1.20\n",
 		"main.go": main, "oracle_arm64.s": strings.ReplaceAll(source, "·", "main·"),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	args := []string{"run", "-p=2", "-asmflags=internalregisteroracle=-p=runtime"}
+	// Reuse the selected assembler's actual trusted-runtime flags. Go 1.20
+	// requires -compiling-runtime even when -p=runtime is supplied; newer Go
+	// derives ABI-selector permission from -p and removed the separate flag.
+	asmFlags := strings.Join(arm64ClosureGoAsmArgs(t)[2:], " ")
+	args := []string{"run", "-p=2", "-asmflags=internalregisteroracle=" + asmFlags}
 	env := append(os.Environ(), "GOARCH=arm64", "CGO_ENABLED=0")
 	if cross {
 		args = append(args, "-exec=qemu-aarch64")

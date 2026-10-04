@@ -329,7 +329,7 @@ func main() {
 `
 	dir := t.TempDir()
 	for name, data := range map[string]string{
-		"go.mod": "module armkerneloracle\n\ngo 1.27\n", "main.go": goMain,
+		"go.mod": "module armkerneloracle\n\ngo 1.20\n", "main.go": goMain,
 		"oracle_arm.s": "#include \"textflag.h\"\n" + strings.NewReplacer("TEXT oracle(", "TEXT ·oracle(", "TEXT conditional(", "TEXT ·conditional(", "TEXT tail(", "TEXT ·tail(", "TEXT status(", "TEXT ·status(").Replace(source),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {

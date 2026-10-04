@@ -190,7 +190,7 @@ func TestCrossLinuxRuntimeMatrixARMRegisterAddress(t *testing.T) {
 	dir := t.TempDir()
 	source = strings.ReplaceAll(source, "TEXT register_", "TEXT ·register_")
 	for name, data := range map[string]string{
-		"go.mod":  "module armregisteraddressoracle\n\ngo 1.27\n",
+		"go.mod":  "module armregisteraddressoracle\n\ngo 1.20\n",
 		"main.go": goMain, "oracle_arm.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
