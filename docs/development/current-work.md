@@ -188,9 +188,11 @@ Every reachable RET needs complete initialized scalar result bytes. Unknown
 effects, native backing, calls and escapes remain failures; this proof grants
 neither caller transport nor return-continuation permission. Complete corpus
 mechanism tests passed in a separate frozen leaf, but final integrated-head
-library reports are still required. Newly reproduced explicit-CPP-flag and
-test-only void-width downgrade failures require a companion guard before that
-final freeze; retain the original diagnostics and object-byte witnesses.
+library reports are still required. The companion guard preserves completed
+concrete ABI mismatches before a testless retry removes their declarations.
+Nonempty observed GOFLAGS/GOEXPERIMENT and unclosed or standard-package roles
+cannot borrow the ordinary CPP result proof. Retain the reproduced explicit
+CPP-flag machine-code and test-only void-width failure witnesses.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
