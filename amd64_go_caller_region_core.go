@@ -7,6 +7,7 @@ import "reflect"
 type x86CallerPointerValue struct {
 	argument int
 	offset   int64
+	span     int64
 }
 
 // Instruction-local access, not a function-wide memory exemption. The final
@@ -231,6 +232,9 @@ func x86CallerOrdinaryMemoryStep(ins *Instr, index int, state *x86SourceStackSta
 		return false
 	}
 	region := proof.arguments[pointer.argument]
+	if _, valid := x86CallerPointerEnd(pointer); !valid || pointer.span != 0 && region.kind != x86CallerSliceInput {
+		return false
+	}
 	if memory.Index != "" {
 		if write || region.kind != x86CallerSliceInput ||
 			memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
@@ -347,8 +351,9 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 			if op == "SUBQ" {
 				delta = -delta
 			}
-			pointer.offset += delta
-			if pointer.offset < -x86SourceStackLimit || pointer.offset > x86SourceStackLimit {
+			var valid bool
+			pointer, valid = x86CallerPointerShift(pointer, delta)
+			if !valid {
 				return false, false
 			}
 			state.callers[root] = pointer

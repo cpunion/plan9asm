@@ -214,20 +214,39 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 		}
 	}
 	returned := false
-	for budget := 0; len(work) != 0; budget++ {
+	acyclic := caller && x86CallerReachableAcyclic(copyFn, instructions, labels)
+	final := false
+	for budget := 0; ; budget++ {
+		if len(work) == 0 {
+			if !acyclic || final {
+				break
+			}
+			// Discard every provisional certificate. Independently replay all
+			// final reachable inputs, once, after the finite merge fixed point.
+			final = true
+			budget = 0
+			for pc, index := range instructions {
+				copyFn.Instrs[index].x86CallerMemory = nil
+				copyFn.Instrs[index].x86SourceStackFP = nil
+				if _, reachable := states[pc]; reachable {
+					work = append(work, pc)
+				}
+			}
+		}
 		if budget >= 8192 {
 			return fn
 		}
 		pc := work[0]
 		work = work[1:]
 		state := states[pc]
-		state.cells = append([]x86SourceStackCell(nil), state.cells...)
 		if caller {
-			state.callers = x86CloneCallerPointers(state.callers)
-			state.known = x86CloneCallerKnown(state.known)
-			state.vectors, state.masks = x86CloneCallerVectorState(state.vectors, state.masks)
+			state = x86CloneCallerState(state)
+		} else {
+			state.cells = append([]x86SourceStackCell(nil), state.cells...)
 		}
 		ins := &copyFn.Instrs[instructions[pc]]
+		ins.x86CallerMemory = nil
+		ins.x86SourceStackFP = nil
 		op := Op(normalizeInstructionOpcode(ins.Op))
 		if op == OpRET {
 			if word == 8 && !state.gOriginal {
@@ -351,9 +370,26 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			}
 			if old, visited := states[next]; visited {
 				if !reflect.DeepEqual(old, state) {
-					return reject(instructions[next], "different source-stack or caller-region states at join")
+					if !acyclic {
+						return reject(instructions[next], "different source-stack or caller-region states at join")
+					}
+					merged, valid := x86CallerAcyclicMerge(old, state, sig.x86CallerRegions)
+					if !valid {
+						return reject(instructions[next], "different source-stack or caller-region states at join")
+					}
+					if reflect.DeepEqual(old, merged) {
+						continue
+					}
+					if final {
+						return reject(instructions[next], "caller-region changed during final certificate replay")
+					}
+					states[next] = merged
+					work = append(work, next)
 				}
 				continue
+			}
+			if final {
+				return reject(instructions[next], "new caller-region state during final certificate replay")
 			}
 			states[next] = state
 			work = append(work, next)

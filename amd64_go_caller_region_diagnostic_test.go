@@ -19,8 +19,8 @@ func TestX86GoCallerRegionRejectedEffectsRetainInstructionDiagnostic(t *testing.
 			diagnostic: "unproved caller-region effect: MOVL",
 		},
 		{
-			name:        "different input offsets",
-			replacement: "CMPQ AX,$0\nJE joined\nADDQ $4,DI\nCMPQ AX,$0\njoined:\nMOVL AX,(DX)",
+			name:        "different input origins",
+			replacement: "CMPQ AX,$0\nJE joined\nMOVQ SI,DI\nCMPQ AX,$0\njoined:\nMOVL AX,(DX)",
 			diagnostic:  "different source-stack or caller-region states at join",
 		},
 	} {

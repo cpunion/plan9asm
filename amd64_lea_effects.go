@@ -81,8 +81,9 @@ func x86CallerLEAStep(ins *Instr, state *x86SourceStackState) bool {
 			memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
 			return false
 		}
-		pointer.offset += memory.Off
-		if pointer.offset < -x86SourceStackLimit || pointer.offset > x86SourceStackLimit {
+		var valid bool
+		pointer, valid = x86CallerPointerShift(pointer, memory.Off)
+		if !valid {
 			return false
 		}
 		state.callers[destination] = pointer
