@@ -303,8 +303,8 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 		if module.Replace != nil {
 			metadata = module.Replace.GoMod
 		}
-		if err := graph.retain(metadata); err != nil || graph.hashes[metadata] != input.Original.Sources["go.mod"] {
-			return entry, fmt.Errorf("original type graph module metadata is not its original ZIP member: %v", err)
+		if err := graph.retainModuleMetadata(input.Original, entry.Dependency.Source, metadata, resolved); err != nil {
+			return entry, err
 		}
 	}
 	root, err := filepath.EvalSymlinks(root)
@@ -372,6 +372,47 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 		entry.Dependency.Source.ExportSHA256 = graph.hashes[pkg.Export]
 	}
 	return entry, nil
+}
+
+// Metadata outside a legacy archive has a separate signed origin. It never
+// becomes a ZIP member or authorizes a namespace alias. Retain both actual Go's
+// path and the exact download path so every graph/post-export guard checks them.
+func (graph *instrumentationTypeGraph) retainModuleMetadata(input *ConsumerInput, source ImportExport, metadata, root string) error {
+	expected := input.Sources["go.mod"]
+	if proof := input.ProxyGoMod; proof != nil {
+		observed := PackageProof{
+			ModulePath: source.ModulePath, ModuleVersion: source.Version,
+			SourceModule: source.SourceModule, SourceVersion: source.SourceVersion, SourceRole: source.SourceRole,
+			GoModOrigin: proof.Protocol, GoModSHA256: proof.SHA256, GoModSum: proof.GoModSum,
+		}
+		if err := ValidatePackageModule(input, observed); err != nil {
+			return fmt.Errorf("original type graph has an unauthenticated legacy metadata origin: %w", err)
+		}
+		if _, present := input.Sources["go.mod"]; present || containsString(input.Directories["."], "go.mod") {
+			return fmt.Errorf("legacy type metadata cannot impersonate an original ZIP member")
+		}
+		for _, filename := range []string{metadata, input.ProxyGoModPath} {
+			info, err := os.Lstat(filename)
+			if err != nil || !filepath.IsAbs(filename) || !info.Mode().IsRegular() {
+				return fmt.Errorf("original type proxy metadata lacks a regular absolute observed path")
+			}
+			if err := graph.retain(filename); err != nil {
+				return fmt.Errorf("original type proxy metadata path changed: %w", err)
+			}
+		}
+		if graph.paths[metadata] != graph.paths[input.ProxyGoModPath] {
+			return fmt.Errorf("original type proxy metadata differs from its exact download path")
+		}
+		relative, err := filepath.Rel(root, graph.paths[metadata])
+		if err != nil || relative == "." || filepath.IsLocal(relative) {
+			return fmt.Errorf("original type proxy metadata must remain outside the original ZIP root")
+		}
+		expected = proof.SHA256
+	}
+	if err := graph.retain(metadata); err != nil || expected == "" || graph.hashes[metadata] != expected {
+		return fmt.Errorf("original type graph module metadata differs from its authenticated origin: %v", err)
+	}
+	return nil
 }
 
 func (graph *instrumentationTypeGraph) retain(name string) error {
