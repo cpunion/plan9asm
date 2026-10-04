@@ -47,6 +47,9 @@ func x86FloatCompareProperties(ins Instr, goarch string) (x86FloatCompareForm, b
 		if dotted || len(ins.Args) != 3 {
 			return fail()
 		}
+		if ins.Args[2].Kind == OpImm && (ins.Args[2].ImmIsFloat || ins.Args[2].ImmRaw != "") {
+			return fail()
+		}
 		immediate, valid := amd64LegacyFloatingCompareImmediate(ins.Args[2])
 		if !valid || immediate < -128 || immediate > 127 {
 			return fail()
@@ -55,7 +58,7 @@ func x86FloatCompareProperties(ins Instr, goarch string) (x86FloatCompareForm, b
 		form.first, form.second, form.destination, form.byteWidth = 0, 1, 1, 16
 	} else {
 		if goarch == "386" && !ins.x86Encoded || len(ins.Args) != 4 && len(ins.Args) != 5 ||
-			dotted && suffix != "BCST" && suffix != "SAE" || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
+			dotted && suffix != "BCST" && suffix != "SAE" || ins.Args[0].Kind != OpImm || ins.Args[0].ImmIsFloat || ins.Args[0].ImmRaw != "" || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
 			return fail()
 		}
 		form.immediate = uint8(ins.Args[0].Imm) & 31
