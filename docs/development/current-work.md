@@ -115,10 +115,19 @@ Fixed-rounding finite float32/float64 arithmetic uses an exact integer helper
 because the actual LLVM 22 constrained-libcall path reproduced an ambient-
 rounding error. Independent edge/cancellation/DAZ/FTZ/fenv tests do not establish
 new NaN-payload semantics, raw FP16 fixed rounding or native AVX512 execution.
-Mixed-control-flow caller contracts remain separate unfinished work.
-These fixtures do not establish original Weaviate or native AMD64 runtime
-success. Unknown native calls and dynamic caller frames remain failures without
-their own complete contracts.
+Caller control flow now admits finite acyclic joins and a unique source-bound
+unit-stride loop whose original low-bit length gives at most three visits.
+Both retain all-path initialized/native-width access proofs and independent
+final replay; neither infers allocation extents from native input offsets.
+Multiple, nested and unbounded loops remain unfinished. These fixtures do not
+establish original Weaviate or native AMD64 runtime success.
+
+The sealed stock-Go frame-source foundation captures actual object/selection
+bytes and supports Verify/Close with explicit temporary-directory identity.
+It is only an observation: no Binder, allocator or native-memory permission is
+provided. Genuine private SP/BP accesses still require an original backing
+contract, not the virtual FP shadow. Unknown native calls and dynamic caller
+frames remain failures without their own complete contracts.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
