@@ -2,10 +2,14 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -104,6 +108,80 @@ func TestX86FloatingCompareOriginalVectorAssemblerPrograms(t *testing.T) {
 	}
 }
 
+// Exercise the generated first-party driver with ordinary Go callees before
+// requiring an ISA. This is a buffer-lifetime/reset contract, not a comparison
+// oracle: the original-opcode Go/C test independently checks those results.
+func TestX86FloatingCompareOriginalVectorBufferLifetime(t *testing.T) {
+	file, err := parser.ParseFile(token.NewFileSet(), "amd64_float_compare_original_vector_test.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var driver string
+	ast.Inspect(file, func(node ast.Node) bool {
+		declaration, ok := node.(*ast.ValueSpec)
+		if !ok || len(declaration.Names) != 1 || declaration.Names[0].Name != "goDriver" {
+			return true
+		}
+		literal, ok := declaration.Values[0].(*ast.BasicLit)
+		if !ok || literal.Kind != token.STRING {
+			t.Fatal("original Go driver must retain its literal source")
+		}
+		driver, err = strconv.Unquote(literal.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return false
+	})
+	if driver == "" {
+		t.Fatal("missing original Go vector driver")
+	}
+	_, _, functions, descriptors := x86FloatCompareOriginalVectorSources()
+	var callees strings.Builder
+	for index, fixture := range x86FloatCompareOriginalVectors() {
+		for predicate := 0; predicate < 32; predicate++ {
+			fmt.Fprintf(&callees, "func vector%d_%d(out,a,b *[40]byte,csr uint32){check(%d,%d,%d,out,a,b,csr)}\n",
+				index, predicate, index*32+predicate, fixture.bits, fixture.width)
+		}
+	}
+	const check = `
+var seen [192][3]*[40]byte
+var calls int
+func check(index,bits,width int,out,a,b *[40]byte,csr uint32){
+ const perFunction=18*18*6
+ if index!=calls/perFunction{panic("sample/function matrix order")}
+ if calls%perFunction==0{seen[index]=[3]*[40]byte{out,a,b}}
+ if seen[index]!=[3]*[40]byte{out,a,b}{panic("buffers allocated per sample")}
+ for _,v:=range out{if v!=0xc3{panic("output was not fully reset")}}
+ for i:=width;i<40;i++{if a[i]!=0||b[i]!=0{panic("input tail was not fully reset")}}
+ for lane:=bits/8;lane<width;lane++{
+  if a[lane]!=a[lane%(bits/8)]||b[lane]!=b[lane%(bits/8)]{panic("input lanes were not initialized")}
+ }
+ for i:=0;i<width+4;i++{out[i]=byte(calls+i)}
+ out[width+4]=1
+ calls++
+}
+`
+	source := strings.NewReplacer("FUNCTIONS", functions, "DESCRIPTORS", descriptors).Replace(driver)
+	source = strings.Replace(source, "fmt.Printf(\"%016x\\n\",hash)",
+		"if calls!=192*18*18*6{panic(\"incomplete sample matrix\")};fmt.Printf(\"%016x\\n\",hash)", 1)
+	dir := t.TempDir()
+	for name, contents := range map[string]string{
+		"go.mod": "module vectorbufferlifetime\n\ngo 1.20\n", "main.go": source + callees.String() + check,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	command := exec.Command("go", "run", "-p=2", ".")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOWORK=off", "GOENV=off", "GOTOOLCHAIN=local")
+	output := x86FloatCompareCaptureCommand(t, command)
+	if len(output) != 17 {
+		t.Fatalf("buffer-lifetime oracle output: %q", output)
+	}
+	t.Log("192 functions ×1944 samples reuse independent input/output buffers with complete reset/canary checks")
+}
+
 func x86FloatCompareOriginalVectorRuntime(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
 	execution.requireAVX(t)
@@ -121,11 +199,13 @@ func main(){
  hash:=uint64(1469598103934665603)
  for index,fn:=range functions{
   bits,width:=descriptors[index][0],descriptors[index][1]
-  bytes,edges:=bits/8,edges32
+ bytes,edges:=bits/8,edges32
   if bits==64{edges=edges64}
+  var a,b [40]byte
+  var output struct{before byte;data [40]byte;after byte}
   for _,av:=range edges{for _,bv:=range edges{for _,csr:=range controls{
-   var a,b [40]byte
-   output:=struct{before byte;data [40]byte;after byte}{before:0xa7,after:0xb9}
+   a,b=[40]byte{},[40]byte{}
+   output=struct{before byte;data [40]byte;after byte}{before:0xa7,after:0xb9}
    for i:=range output.data{output.data[i]=0xc3}
    for i:=0;i<width;i+=bytes{
     if bits==32{
