@@ -68,6 +68,7 @@ type amd64Ctx struct {
 	vspSlot        string // i64 virtual stack pointer (next free slot)
 	localStackSlot string // byte-addressable backing storage for x86 SP references
 	sourceStack    *x86SourceStackProof
+	fixedLocal     *x86FixedLocalProof
 	frameSize      int64  // local bytes below the Go assembler's implicit amd64 BP
 	classicFrame   string // contiguous classic Go ABI frame used by 386 FP addressing
 	classicSize    int64
@@ -97,6 +98,7 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		annotate:       annotate,
 		frameSize:      fn.FrameSize,
 		sourceStack:    fn.x86SourceStack,
+		fixedLocal:     fn.x86FixedLocal,
 		indirectABI0:   inferX86ABI0Forwarder(fn, sig, goarch),
 		blocks:         amd64SplitBlocks(fn),
 		usedRegs:       map[Reg]bool{},
@@ -387,8 +389,12 @@ func (c *amd64Ctx) scanUsedRegs() {
 }
 
 func (c *amd64Ctx) emitEntryAllocas() error {
+	if c.fixedLocal != nil && (c.fixedLocal.binding == nil || c.fixedLocal.binding != c.sig.x86FixedLocal ||
+		c.goarch != "amd64" || c.targetTriple != c.fixedLocal.binding.target || c.frameSize != c.fixedLocal.frame) {
+		return goAMD64FrameContext("fixed local storage consumer lost its sealed source identity")
+	}
 	c.scanUsedRegs()
-	if c.sourceStack != nil {
+	if c.sourceStack != nil || c.fixedLocal != nil {
 		c.usedRegs[SP] = true
 	}
 
@@ -410,49 +416,65 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", name)
 	}
 	if spSlot, ok := c.regSlot[SP]; ok {
-		minOff, maxOff := c.stackOffsetRange()
-		if c.sourceStack != nil && c.sourceStack.minimum < minOff {
-			minOff = c.sourceStack.minimum
-		}
-		var movement int64
-		if c.goarch == "386" {
-			var err error
-			movement, err = c.stackMovementBudget()
-			if err != nil {
-				return err
-			}
-		}
-		minOff -= movement
-		maxOff += movement
-		const guard = int64(64)
-		bias := guard - minOff
-		if c.sourceStack != nil {
-			// A native Go entry SP is word-aligned. Preserve that same
-			// congruence so proved AND alignment has identical byte offsets.
-			word := c.sourceStack.word
-			bias = (bias + word - 1) & -word
-		}
-		size := bias + maxOff + guard
-		if size < 256 {
-			size = 256
-		}
-		c.localStackSlot = "%local_stack"
-		if c.sourceStack != nil {
-			fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align %d\n", c.localStackSlot, size, c.sourceStack.word)
+		if c.fixedLocal != nil {
+			// The complete proof excludes saved BP/return/incoming FP bytes,
+			// proves every observed word-aligned SP residue, and prevents local
+			// addresses escaping or being compared numerically. A word-aligned
+			// physical buffer preserves that residue domain, not a stronger
+			// SIMD-aligned shadow capable of repairing an uncertain source.
+			size := c.fixedLocal.frame + 64
+			c.localStackSlot = "%fixed_local_native"
+			fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align 8\n", c.localStackSlot, size)
+			base := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 32\n", base, size, c.localStackSlot)
+			address := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", address, base)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", address, spSlot)
 		} else {
-			fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
-		}
-		base := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
-		addr := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
-		fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
-		if bpSlot, ok := c.regSlot[BP]; ok && c.goarch != "386" && c.frameSize > 0 {
-			// Go saves BP before reserving TEXT's local frame. Thus a source
-			// -8(BP) aliases FrameSize-8(SP), including across outgoing calls.
-			bp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = add i64 %%%s, %d\n", bp, addr, c.frameSize)
-			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", bp, bpSlot)
+			minOff, maxOff := c.stackOffsetRange()
+			if c.sourceStack != nil && c.sourceStack.minimum < minOff {
+				minOff = c.sourceStack.minimum
+			}
+			var movement int64
+			if c.goarch == "386" {
+				var err error
+				movement, err = c.stackMovementBudget()
+				if err != nil {
+					return err
+				}
+			}
+			minOff -= movement
+			maxOff += movement
+			const guard = int64(64)
+			bias := guard - minOff
+			if c.sourceStack != nil {
+				// A native Go entry SP is word-aligned. Preserve that same
+				// congruence so proved AND alignment has identical byte offsets.
+				word := c.sourceStack.word
+				bias = (bias + word - 1) & -word
+			}
+			size := bias + maxOff + guard
+			if size < 256 {
+				size = 256
+			}
+			c.localStackSlot = "%local_stack"
+			if c.sourceStack != nil {
+				fmt.Fprintf(c.b, "  %s = alloca [%d x i8], align %d\n", c.localStackSlot, size, c.sourceStack.word)
+			} else {
+				fmt.Fprintf(c.b, "  %s = alloca [%d x i8]\n", c.localStackSlot, size)
+			}
+			base := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = getelementptr inbounds [%d x i8], ptr %s, i32 0, i64 %d\n", base, size, c.localStackSlot, bias)
+			addr := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %%%s to i64\n", addr, base)
+			fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", addr, spSlot)
+			if bpSlot, ok := c.regSlot[BP]; ok && c.goarch != "386" && c.frameSize > 0 {
+				// Go saves BP before reserving TEXT's local frame. Thus a source
+				// -8(BP) aliases FrameSize-8(SP), including across outgoing calls.
+				bp := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = add i64 %%%s, %d\n", bp, addr, c.frameSize)
+				fmt.Fprintf(c.b, "  store i64 %%%s, ptr %s\n", bp, bpSlot)
+			}
 		}
 	}
 

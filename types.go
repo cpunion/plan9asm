@@ -979,6 +979,9 @@ type Instr struct {
 	// Recomputed only after the complete source-stack CFG consumes an actual
 	// typed caller-region proof; never a general incoming-pointer permission.
 	x86CallerMemory map[int]x86CallerMemoryAccess
+	// Recomputed only from a live actual-object binding and complete local CFG.
+	// JSON/source spelling and caller-region certificates cannot create it.
+	x86FixedLocalMemory map[int]x86FixedLocalAccess
 	// A decoded near return is a physical C2/C3 instruction, not a Go RET
 	// pseudo-instruction with an automatically generated frame epilogue.
 	x86RawNearReturn *x86RawNearReturnForm

@@ -606,6 +606,13 @@ func (c *amd64Ctx) lowerBlocks() error {
 }
 
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
+	if c.fixedLocal != nil {
+		for index, operand := range ins.Args {
+			if operand.Kind == OpMem && !c.fixedLocalMemoryCertified(ins, index) {
+				return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
+			}
+		}
+	}
 	if c.sourceStack != nil && len(ins.x86SourceStackFP) != 0 {
 		ins.Args = append([]Operand(nil), ins.Args...)
 		for index, offset := range ins.x86SourceStackFP {

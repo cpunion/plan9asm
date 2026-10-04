@@ -18,7 +18,28 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // TranslateModuleInContext builds the module in a caller-owned LLVM context.
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
-func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (llvm.Module, error) {
+func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
+	bindings, err := verifyX86FixedLocalBindings(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	file, err = freezeX86FixedLocalFile(file, bindings)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	opt, err = freezeX86FixedLocalOptions(opt, bindings)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	defer func() {
+		if err := finishX86FixedLocalBindings(bindings); err != nil {
+			if !result.IsNil() {
+				result.Dispose()
+			}
+			result = llvm.Module{}
+			resultErr = errors.Join(resultErr, err)
+		}
+	}()
 	if err := validateARMMachineEntryArchitecture(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
@@ -32,7 +53,7 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (llvm.M
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return llvm.Module{}, err
 	}
-	file, err := normalizeX86RawFile(file, opt.Goarch, opt)
+	file, err = normalizeX86RawFile(file, opt.Goarch, opt)
 	if err != nil {
 		return llvm.Module{}, err
 	}

@@ -1,0 +1,274 @@
+package plan9asm
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"reflect"
+	"strings"
+)
+
+// The public value transports only a private live observer binding. Neither
+// a declaration, a frame size nor a JSON round trip can construct this proof.
+type x86FixedLocalBinding struct {
+	source     *GoAMD64FrameSource
+	context    context.Context
+	file       [32]byte
+	assembly   string
+	target     string
+	inputs     map[string][32]byte
+	signatures map[string]FuncSig
+	symbols    map[string]string
+}
+
+// BindFixedLocal binds a complete original numeric ABI0 file to its actual Go
+// object observation. It does not support dynamic incoming frames, pointers,
+// imported declarations, native entries or arbitrary local-memory effects.
+// The returned Options are independent copies; their private signatures may
+// also be transported by GoModuleOptions.ManualSig. The capture context must
+// remain live through translation. Close or any failed Verify revokes them.
+func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
+	if err := source.Verify(ctx); err != nil {
+		return Options{}, err
+	}
+	if file == nil || options.ResolveSym == nil {
+		return Options{}, goAMD64FrameContext("fixed local binding needs complete source and symbol resolution")
+	}
+	// Never execute a caller callback while holding the observer lock. Freeze
+	// its answers before the locked full-source/declaration comparison; that
+	// comparison rejects any mutation made while resolving these names.
+	resolved := make(map[string]string, len(file.Funcs))
+	for _, fn := range file.Funcs {
+		resolved[fn.Sym] = options.ResolveSym(fn.Sym)
+	}
+	options.ResolveSym = func(symbol string) string { return resolved[symbol] }
+	source.mu.Lock()
+	bound, err := source.bindFixedLocalLocked(ctx, pkg, file, options)
+	source.mu.Unlock()
+	if err != nil {
+		return Options{}, err
+	}
+	if err := source.Verify(ctx); err != nil {
+		return Options{}, err
+	}
+	return bound, nil
+}
+
+func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
+	if !source.ready || ctx == nil || ctx.Err() != nil || file == nil || file.Arch != ArchAMD64 ||
+		options.Goarch != "amd64" || pkg.Types == nil || pkg.Path != source.selection.ImportPath || pkg.Types.Path() != pkg.Path {
+		return Options{}, goAMD64FrameContext("fixed local binding has no matching live package/target")
+	}
+	targets := map[string]string{
+		"x86_64-unknown-linux-gnu": "linux/amd64",
+		"x86_64-apple-darwin":      "darwin/amd64",
+		"x86_64-pc-windows-msvc":   "windows/amd64",
+	}
+	if targets[options.TargetTriple] != source.request.Target || options.WASMABI != WASMABIDirect ||
+		len(file.Data)+len(file.Globl)+len(file.UnlinkedPrelude)+len(options.X86TailGroups) != 0 {
+		return Options{}, goAMD64FrameContext("fixed local binding target or complete source roles disagree")
+	}
+	if err := source.numericDeclarations(pkg); err != nil {
+		return Options{}, err
+	}
+	original, err := goAMD64FrameRead(filepath.Join(source.request.Directory, source.request.AssemblyFile))
+	if err != nil {
+		return Options{}, err
+	}
+	expanded, err := source.preprocess(source.request.AssemblyFile, original)
+	if err != nil {
+		return Options{}, err
+	}
+	actual, err := ParseWithDefines(ArchAMD64, expanded, nil)
+	if err != nil {
+		return Options{}, err
+	}
+	fingerprint, err := x86CallerSourceFingerprint(actual)
+	if err != nil {
+		return Options{}, err
+	}
+	provided, err := x86CallerSourceFingerprint(file)
+	if err != nil || provided != fingerprint || len(options.Sigs) != len(actual.Funcs) {
+		return Options{}, goAMD64FrameContext("fixed local binding requires the exact full original parsed file")
+	}
+	resolve := options.ResolveSym
+	if resolve == nil {
+		return Options{}, goAMD64FrameContext("fixed local binding needs actual package symbol resolution")
+	}
+	binding := &x86FixedLocalBinding{
+		source: source, context: ctx, file: fingerprint, assembly: expanded, target: options.TargetTriple,
+		inputs: make(map[string][32]byte, len(source.inputs)), signatures: make(map[string]FuncSig), symbols: make(map[string]string),
+	}
+	for name, sum := range source.inputs {
+		binding.inputs[name] = sum
+	}
+	options.Sigs, err = cloneFixedLocalSigs(options.Sigs)
+	if err != nil {
+		return Options{}, err
+	}
+	actualSignatures, err := cloneFixedLocalSigs(options.Sigs)
+	if err != nil {
+		return Options{}, err
+	}
+	for _, fn := range actual.Funcs {
+		name := resolve(fn.Sym)
+		observed, found := source.functions[name]
+		expectedName := pkg.Path + "." + strings.TrimPrefix(fn.Sym, "·")
+		sig, supplied := options.Sigs[name]
+		if !found || !supplied || name != expectedName || len(observed.code) == 0 ||
+			observed.locals != fn.FrameSize+8 || observed.args != fn.ArgSize ||
+			!reflect.DeepEqual(sig, observed.signature) {
+			return Options{}, goAMD64FrameContext("fixed local actual declaration/object/symbol mismatch: %s", fn.Sym)
+		}
+		if _, err := proveX86FixedLocal(fn, sig); err != nil {
+			return Options{}, err
+		}
+		binding.signatures[name] = actualSignatures[name]
+		binding.symbols[fn.Sym] = name
+		sig.x86FixedLocal = binding
+		options.Sigs[name] = sig
+	}
+	return options, nil
+}
+
+// After validating mutable public input, consume only independent immutable
+// copies. A stateful resolver or a mutation of the caller's Options map cannot
+// change the declaration or function name between normalization and emission.
+func freezeX86FixedLocalOptions(options Options, bindings []*x86FixedLocalBinding) (Options, error) {
+	if len(bindings) == 0 {
+		return options, nil
+	}
+	symbols := make(map[string]string)
+	options.Sigs = make(map[string]FuncSig)
+	for _, binding := range bindings {
+		for symbol, name := range binding.symbols {
+			symbols[symbol] = name
+		}
+		signatures, err := cloneFixedLocalSigs(binding.signatures)
+		if err != nil {
+			return Options{}, err
+		}
+		for name, sig := range signatures {
+			sig.x86FixedLocal = binding
+			options.Sigs[name] = sig
+		}
+	}
+	options.ResolveSym = func(symbol string) string {
+		if name, found := symbols[symbol]; found {
+			return name
+		}
+		return symbol // No source contract admits external calls or addresses.
+	}
+	return options, nil
+}
+
+func freezeX86FixedLocalFile(file *File, bindings []*x86FixedLocalBinding) (*File, error) {
+	if len(bindings) == 0 {
+		return file, nil
+	}
+	if len(bindings) != 1 {
+		return nil, goAMD64FrameContext("fixed local complete file has multiple source owners")
+	}
+	binding := bindings[0]
+	fingerprint, err := x86CallerSourceFingerprint(file)
+	if err != nil || fingerprint != binding.file {
+		return nil, goAMD64FrameContext("fixed local resolver changed the original source during validation")
+	}
+	// Parsing the guarded observer's immutable expanded bytes gives the
+	// consumer independent Func/Instr/Operand slices with no caller aliases
+	// or pre-existing private certificates.
+	actual, err := ParseWithDefines(ArchAMD64, binding.assembly, nil)
+	if err != nil {
+		return nil, err
+	}
+	fingerprint, err = x86CallerSourceFingerprint(actual)
+	if err != nil || fingerprint != binding.file {
+		return nil, goAMD64FrameContext("fixed local sealed source snapshot changed")
+	}
+	return actual, nil
+}
+
+func cloneFixedLocalSigs(input map[string]FuncSig) (map[string]FuncSig, error) {
+	// The source signatures are JSON-encodable public ABI metadata. Reusing
+	// neither caller slices nor nested FrameSlot fields prevents mutation leaks.
+	encoded, err := json.Marshal(input)
+	if err != nil {
+		return nil, goAMD64FrameContext("fixed local declaration cannot be independently copied: %v", err)
+	}
+	var result map[string]FuncSig
+	if err := json.Unmarshal(encoded, &result); err != nil {
+		return nil, goAMD64FrameContext("fixed local declaration copy cannot be decoded: %v", err)
+	}
+	return result, nil
+}
+
+func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalBinding, error) {
+	var bindings []*x86FixedLocalBinding
+	seen := make(map[*x86FixedLocalBinding]bool)
+	for _, sig := range options.Sigs {
+		binding := sig.x86FixedLocal
+		if binding == nil || seen[binding] {
+			continue
+		}
+		seen[binding] = true
+		if file == nil || file.Arch != ArchAMD64 || options.Goarch != "amd64" || options.TargetTriple != binding.target ||
+			options.ResolveSym == nil || options.WASMABI != WASMABIDirect || len(options.X86TailGroups) != 0 {
+			return nil, goAMD64FrameContext("fixed local consumer target or resolver changed")
+		}
+		if err := binding.verify(); err != nil {
+			return nil, err
+		}
+		fingerprint, err := x86CallerSourceFingerprint(file)
+		if err != nil || fingerprint != binding.file || len(options.Sigs) != len(binding.signatures) {
+			return nil, goAMD64FrameContext("fixed local consumer original/normalized source changed")
+		}
+		for _, fn := range file.Funcs {
+			name := options.ResolveSym(fn.Sym)
+			actual, found := options.Sigs[name]
+			expected, declared := binding.signatures[name]
+			actual.x86FixedLocal = nil
+			if !found || !declared || name != binding.symbols[fn.Sym] || !reflect.DeepEqual(actual, expected) ||
+				options.Sigs[name].x86FixedLocal != binding {
+				return nil, goAMD64FrameContext("fixed local consumer declaration or unique symbol binding changed")
+			}
+		}
+		bindings = append(bindings, binding)
+	}
+	return bindings, nil
+}
+
+func (binding *x86FixedLocalBinding) verify() error {
+	if binding == nil || binding.source == nil {
+		return goAMD64FrameContext("missing or expired fixed local observer binding")
+	}
+	if err := binding.source.Verify(binding.context); err != nil {
+		return err
+	}
+	binding.source.mu.Lock()
+	defer binding.source.mu.Unlock()
+	if !binding.source.ready || !reflect.DeepEqual(binding.inputs, binding.source.inputs) {
+		return goAMD64FrameContext("fixed local observer identity changed or was revoked")
+	}
+	return nil
+}
+
+func finishX86FixedLocalBindings(bindings []*x86FixedLocalBinding) error {
+	for _, binding := range bindings {
+		if err := binding.verify(); err != nil {
+			return fmt.Errorf("fixed local post-consumption verification: %w", err)
+		}
+	}
+	return nil
+}
+
+// Use a digest of the complete public instruction shape; private certificates
+// are not serialized and cannot self-authenticate a modified instruction.
+func fixedLocalInstructionDigest(ins Instr) ([32]byte, error) {
+	encoded, err := json.Marshal(ins)
+	if err != nil {
+		return [32]byte{}, goAMD64FrameContext("fixed local instruction cannot be bound: %v", err)
+	}
+	return sha256.Sum256(encoded), nil
+}

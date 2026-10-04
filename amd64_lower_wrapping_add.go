@@ -21,7 +21,7 @@ func (c *amd64Ctx) lowerPackedWrappingAdd(op Op, ins Instr) (bool, bool, error) 
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
 	if form.legacy && !form.mmx && form.memory >= 0 {
 		virtual := first.Kind == OpFP
-		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) {
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
 			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
 		}
 		if virtual {
