@@ -6,6 +6,24 @@ import (
 	"strings"
 )
 
+// Go's registerExtension reads one scanner.Int, then ParseInt(base 10, 16).
+// Whitespace is lexical; signs, expressions, nondecimal literals and unresolved
+// names are not lane indices. Instruction families still enforce their own
+// suffix/destination-selected physical bounds after this shared token check.
+func arm64ParseLaneDecimalToken(source string) (int, bool) {
+	text := strings.TrimSpace(source)
+	if text == "" {
+		return 0, false
+	}
+	for i := range text {
+		if text[i] < '0' || text[i] > '9' {
+			return 0, false
+		}
+	}
+	index, err := strconv.ParseInt(text, 10, 16)
+	return int(index), err == nil
+}
+
 func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 	s := strings.ToUpper(strings.TrimSpace(string(r)))
 	dot := strings.IndexByte(s, '.')
@@ -17,8 +35,8 @@ func arm64ParseVRegLane(r Reg) (kind byte, lane int, ok bool) {
 		return 0, 0, false
 	}
 	k := rest[0]
-	n, err := strconv.Atoi(rest[2 : len(rest)-1])
-	if err != nil {
+	n, valid := arm64ParseLaneDecimalToken(rest[2 : len(rest)-1])
+	if !valid {
 		return 0, 0, false
 	}
 	max := -1

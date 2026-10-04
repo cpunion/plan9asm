@@ -90,6 +90,9 @@ This is numerical definedness, not caller, pointer or private-frame permission.
 VDUP's arranged case79 derives both source width and index bounds from its
 destination; the source suffix identifies only the ELEM class. VMOV and scalar
 VDUP retain their separate suffix-selected bounds.
+Lane syntax shares Go's single decimal-token rule after CPP expansion: trim
+lexical whitespace, reject signs/expressions/nondecimal or unresolved tokens,
+and retain every instruction's independent physical width/index bound.
 
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual

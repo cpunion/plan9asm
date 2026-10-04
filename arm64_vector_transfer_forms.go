@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -124,6 +123,6 @@ func arm64VDUPPhysicalLaneIndex(reg Reg) (int, bool) {
 	if len(suffix) < 4 || !strings.ContainsRune("BHSD", rune(suffix[0])) || suffix[1] != '[' || suffix[len(suffix)-1] != ']' {
 		return 0, false
 	}
-	index, err := strconv.Atoi(suffix[2 : len(suffix)-1])
-	return index, err == nil && index >= 0 && index < 16
+	index, valid := arm64ParseLaneDecimalToken(suffix[2 : len(suffix)-1])
+	return index, valid && index < 16
 }
