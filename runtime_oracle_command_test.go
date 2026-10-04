@@ -92,6 +92,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 	// Every Go compiler/executable/emulator command in these native oracles
 	// must use the same bounded lifecycle. Do not just fix the discovering case.
 	for _, name := range []string{
+		"stdlib_arm64_test_helpers_test.go",
+		"llvm_object_lifecycle_unix_test.go",
 		"runtime_exec_test.go",
 		"runtime_oracle_fault_core_unix_test.go",
 		"amd64_go_caller_lea_test.go",
