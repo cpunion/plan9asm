@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -108,15 +107,8 @@ func TestX86RawLegacyFloatingCompareRejectsMalformedPredicate(t *testing.T) {
 	}
 }
 
-func TestX86RawLegacyFloatingCompareRuntime(t *testing.T) {
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("execution requires amd64 or Rosetta; five-target object coverage is required separately")
-	}
+func TestCrossLinuxRuntimeMatrixX86RawLegacyFloatingCompareRuntime(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
 	var source, declarations, functions, originals, originalFunctions, goOpcodes strings.Builder
 	goOpcodes.WriteString("TEXT originalopcodes(SB),4,$0-0\n")
 	var expectedOpcodes []byte
@@ -162,12 +154,7 @@ func TestX86RawLegacyFloatingCompareRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple, runPrefix = "x86_64-apple-macosx", []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,8 +320,8 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "raw_compare_float", triple, ir, mainC, runPrefix)
-	t.Logf("2048 exact original imm8 opcodes ×49 inputs: full X bytes, canaries and MXCSR agree; only 0..7 have independent IEEE truth; transport=%v", runPrefix)
+	execution.compileAndRunLLVM(t, "raw_compare_float", ir, mainC, "-O2")
+	t.Logf("2048 exact original imm8 opcodes ×49 inputs: full X bytes, canaries and MXCSR agree; only 0..7 have independent IEEE truth; transport=%v", execution.prefix)
 }
 
 func x86RawLegacyFloatingCompareOriginalKernel(name string, code []byte) string {

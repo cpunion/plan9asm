@@ -87,6 +87,41 @@ func (execution x86FloatCompareExecution) run(t *testing.T, executable string, a
 	return x86FloatCompareCaptureCommand(t, exec.Command(command[0], command[1:]...))
 }
 
+// Keep the authenticated guest argv transport through the final executable,
+// not merely through the original-Go preflight. Each external stage has its
+// own bounded lifecycle; no LLVM module or context survives between fixtures.
+func (execution x86FloatCompareExecution) compileAndRunLLVM(t *testing.T, name, ir, main, level string) []byte {
+	t.Helper()
+	if execution.llc == "" || len(execution.compiler) == 0 {
+		t.Fatal("comparison runtime requires its actual LLVM22 and C compiler")
+	}
+	if level != "-O0" && level != "-O2" {
+		t.Fatalf("unsupported comparison optimization level %q", level)
+	}
+	dir := t.TempDir()
+	input := filepath.Join(dir, name+".ll")
+	object := filepath.Join(dir, name+".o")
+	source := filepath.Join(dir, "main.c")
+	executable := filepath.Join(dir, "comparison")
+	if strings.Contains(execution.triple, "windows") {
+		main = "int _fltused = 0;\n" + main
+	}
+	for path, contents := range map[string]string{input: ir, source: main} {
+		if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	x86FloatCompareCaptureCommand(t, exec.Command(execution.llc, level,
+		"-mtriple="+execution.triple, "-filetype=obj", input, "-o", object))
+	compiler := append([]string(nil), execution.compiler...)
+	compiler = append(compiler, object, source, "-O2", "-o", executable)
+	if !strings.Contains(execution.triple, "windows") {
+		compiler = append(compiler, "-lm")
+	}
+	x86FloatCompareCaptureCommand(t, exec.Command(compiler[0], compiler[1:]...))
+	return execution.run(t, executable)
+}
+
 func (execution x86FloatCompareExecution) requireAVX(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
