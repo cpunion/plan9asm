@@ -49,14 +49,90 @@ func TestARM64RawSourceRETWidthMatchesGoObjects(t *testing.T) {
 		}
 	}
 	source.WriteString("TEXT anchor(SB),4,$0-0\nRET\n")
+	positions := arm64RETObjectPositions(t, "ret-width", source.String())
+	type crossing struct {
+		fn                     Func
+		branchLine, markerLine int
+		displacement           int64
+		bound                  bool
+	}
+	var crossSource strings.Builder
+	var crossings []crossing
+	line = 1
+	bound, unbound := 0, 0
+	for _, fixture := range fixtures {
+		start, startOK := positions[fixture.retLine]
+		end, endOK := positions[fixture.markerLine]
+		if !startOK || !endOK || end <= start {
+			t.Fatalf("missing RET object span for %s: %d..%d", fixture.name, start, end)
+		}
+		got, known := arm64RawKnownSourceWidth(fixture.fn, fixture.ret)
+		wantBound := fixture.fn.FrameSize <= 240
+		if known != wantBound || known && got != end-start {
+			t.Errorf("%s %s: unbound-source width=(%d,%v), common-domain bound=%v, actual Go object=%d bytes", fixture.fn.Instrs[0].Raw, fixture.ret.Raw, got, known, wantBound, end-start)
+		}
+		if wantBound {
+			bound++
+		} else {
+			unbound++
+		}
+
+		// A second actual Go source puts a literal branch immediately before
+		// RET. Its displacement comes only from the independently measured
+		// object above, not from the translator's unbound width estimate.
+		displacement := end - start + 4
+		word := uint32(0x14000000) | uint32(displacement/4)
+		var body strings.Builder
+		branchLine := 0
+		for index, ins := range fixture.fn.Instrs {
+			if index == len(fixture.fn.Instrs)-2 {
+				branchLine = line + strings.Count(body.String(), "\n")
+				fmt.Fprintf(&body, "WORD $0x%08x\n", word)
+			}
+			fmt.Fprintln(&body, ins.Raw)
+		}
+		file, err := Parse(ArchARM64, body.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		crossings = append(crossings, crossing{file.Funcs[0], branchLine, branchLine + 2, displacement, wantBound})
+		crossSource.WriteString(body.String())
+		line += strings.Count(body.String(), "\n")
+	}
+	if len(fixtures) != 330 || bound != 180 || unbound != 150 {
+		t.Fatalf("RET matrix denominator changed: total=%d bound=%d unbound=%d", len(fixtures), bound, unbound)
+	}
+	crossSource.WriteString("TEXT anchor(SB),4,$0-0\nRET\n")
+	crossPositions := arm64RETObjectPositions(t, "ret-crossing", crossSource.String())
+	for _, cross := range crossings {
+		start, startOK := crossPositions[cross.branchLine]
+		end, endOK := crossPositions[cross.markerLine]
+		if !startOK || !endOK || end-start != cross.displacement {
+			t.Fatalf("actual cross-RET branch is not bound to its object marker: %s %d..%d, displacement=%d", cross.fn.Sym, start, end, cross.displacement)
+		}
+		_, err := normalizeARM64RawPCRelative(cross.fn)
+		if cross.bound && err != nil {
+			t.Errorf("common-domain source branch lost its proven boundary: %s: %v", cross.fn.Sym, err)
+		}
+		if !cross.bound && (err == nil || !strings.Contains(err.Error(), "proven instruction boundary")) {
+			t.Errorf("unbound source RET encoder admitted an actual cross-RET branch: %s: %v", cross.fn.Sym, err)
+		}
+	}
+	t.Logf("all %d actual object RET spans measured; %d common-domain widths/crossings match, %d unbound actual source crossings reject; RET R0 width does not certify its SDK-specific target semantics", len(fixtures), bound, unbound)
+}
+
+func arm64RETObjectPositions(t *testing.T, name, source string) map[int]int64 {
+	t.Helper()
 	dir := t.TempDir()
-	asm := filepath.Join(dir, "ret-width.s")
-	if err := os.WriteFile(asm, []byte(source.String()), 0600); err != nil {
+	asm := filepath.Join(dir, name+".s")
+	if err := os.WriteFile(asm, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command("go", "tool", "asm", "-S", "-o", filepath.Join(dir, "ret-width.o"), asm)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-o", filepath.Join(dir, name+".o"), asm)
 	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64")
-	listing, err := cmd.CombinedOutput()
+	listing, err := runtimeOracleCombinedOutput(ctx, cmd)
 	if err != nil {
 		t.Fatalf("Go assembler RET object oracle: %v\n%s", err, listing)
 	}
@@ -75,18 +151,7 @@ func TestARM64RawSourceRETWidthMatchesGoObjects(t *testing.T) {
 			positions[line] = pc
 		}
 	}
-	for _, fixture := range fixtures {
-		start, startOK := positions[fixture.retLine]
-		end, endOK := positions[fixture.markerLine]
-		if !startOK || !endOK || end <= start {
-			t.Fatalf("missing RET object span for %s: %d..%d", fixture.name, start, end)
-		}
-		got, known := arm64RawKnownSourceWidth(fixture.fn, fixture.ret)
-		if !known || got != end-start {
-			t.Errorf("%s %s: source RET width=(%d,%v), Go object=%d bytes", fixture.fn.Instrs[0].Raw, fixture.ret.Raw, got, known, end-start)
-		}
-	}
-	t.Logf("%d source RET spans independently measured from Go objects: frame/NOFRAME, Go BL/CALL vs raw BL/BLR, default/register/symbol returns", len(fixtures))
+	return positions
 }
 
 func TestARM64RawSourceRETWidthFailsClosed(t *testing.T) {

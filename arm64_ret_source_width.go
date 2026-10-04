@@ -41,19 +41,17 @@ func arm64SourceReturnWidth(fn Func, ins Instr) (int64, bool) {
 		return 4, fn.FrameSize <= 0
 	}
 	autosize := arm64SourceFrameAutosize(fn.FrameSize)
-	if !frame.restoresLink {
-		// Leaf epilogue: ADD $(autosize-8),SP,FP; ADD $autosize,SP;
-		// RET or symbol B. Large ADD constants may expand to several words.
-		return arm64PositiveFrameAddWidth(autosize-8) + arm64PositiveFrameAddWidth(autosize) + 4, true
+	if autosize <= 0 || autosize >= 1<<12 {
+		// Large source epilogues differ across supported Go encoders. A
+		// parsed Func has no sealed original SDK identity, so neither a host
+		// version nor a current obj7 expansion can establish their width.
+		return 0, false
 	}
-	if autosize < 1<<12 {
-		// MOVD FP + MOVD.P LR/SP for small frames; LDP FP/LR + ADD SP
-		// above 0xf0. Both sequences are two words before the branch.
-		return 12, true
-	}
-	// Large nonleaf: LDP FP/LR; MOVD $autosize,R27; ADD R27,SP;
-	// RET or symbol B. Positive int32 constants require at most two MOV words.
-	return 12 + arm64PositiveFrameMoveWidth(autosize), true
+	// In the common Go 1.20–1.27 small-frame domain, both the leaf and
+	// nonleaf expansions are two one-word frame operations plus a one-word
+	// branch. Their order and return-register semantics are not certified by
+	// this width proof. It grants only a raw source-layout boundary.
+	return 12, true
 }
 
 // Call only after checking the source's framed, aligned int32 Go contract.
@@ -96,23 +94,4 @@ func arm64SourceFrameFlagsKnown(fn Func) bool {
 		return true
 	}
 	return false
-}
-
-func arm64PositiveFrameMoveWidth(value int64) int64 {
-	if value&0xffff == 0 || value>>16 == 0 || arm64LogicalBitmaskImmediate(uint64(value)) {
-		return 4
-	}
-	return 8
-}
-
-func arm64PositiveFrameAddWidth(value int64) int64 {
-	// asm7 C_ADDCON, C_MOVCON/C_BITCON, C_ADDCON2 and C_MOVCON2
-	// are the complete positive int32 ADD constant classes used here.
-	if value <= 0xfff || value&0xfff == 0 && value>>12 <= 0xfff {
-		return 4
-	}
-	if arm64PositiveFrameMoveWidth(value) == 4 || value <= 0xffffff {
-		return 8
-	}
-	return 12
 }
