@@ -30,14 +30,20 @@ func TestTranslateX86SameWidthPackedConversionCompleteGoAssemblerForms(t *testin
 			var src strings.Builder
 			src.WriteString("TEXT samewidthpackedconversionforms(SB),NOSPLIT,$0-0\n")
 			for _, op := range []string{"VCVTDQ2PS", "VCVTPS2DQ", "VCVTTPS2DQ", "VSQRTPD", "VSQRTPS"} {
+				high := 20
+				if op == "VCVTDQ2PS" && target.goarch == "386" {
+					// The exact native conversion cannot borrow the wider
+					// software bank used by the other conversion families.
+					high = 4
+				}
 				for _, width := range []string{"X", "Y"} {
 					fmt.Fprintf(&src, "\t%s %s0, %s1\n", op, width, width)
 					fmt.Fprintf(&src, "\t%s (AX), %s2\n", op, width)
-					fmt.Fprintf(&src, "\t%s %s20, %s21\n", op, width, width)
-					fmt.Fprintf(&src, "\t%s %s20, K1, %s21\n", op, width, width)
-					fmt.Fprintf(&src, "\t%s.Z (AX), K2, %s22\n", op, width)
-					fmt.Fprintf(&src, "\t%s.BCST 8(AX), %s22\n", op, width)
-					fmt.Fprintf(&src, "\t%s.BCST.Z 8(AX), K3, %s23\n", op, width)
+					fmt.Fprintf(&src, "\t%s %s%d, %s%d\n", op, width, high, width, high+1)
+					fmt.Fprintf(&src, "\t%s %s%d, K1, %s%d\n", op, width, high, width, high+1)
+					fmt.Fprintf(&src, "\t%s.Z (AX), K2, %s%d\n", op, width, high+2)
+					fmt.Fprintf(&src, "\t%s.BCST 8(AX), %s%d\n", op, width, high+2)
+					fmt.Fprintf(&src, "\t%s.BCST.Z 8(AX), K3, %s%d\n", op, width, high+3)
 				}
 				fmt.Fprintf(&src, "\t%s Z0, Z%d\n", op, zLast)
 				fmt.Fprintf(&src, "\t%s (AX), Z%d\n", op, zLast)

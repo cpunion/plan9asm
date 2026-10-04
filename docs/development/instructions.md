@@ -111,6 +111,19 @@ private-stack escape, g-register use, unregistered vector/native effects and sta
 signature metadata remain Context. Rosetta fixture execution is diagnostic,
 not evidence that an external AVX/AVX512 library ran on native AMD64 hardware.
 
+Signed packed dword-to-float conversion uses one validated whole native
+CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,
+masking and embedded rounding. Its caller effects require every potential
+input byte and merge byte; masks do not authorize a missing memory envelope.
+Packed FP fields and virtual SP/BP lack original native backing and remain
+Context. Mode32 high banks likewise cannot borrow a software register view.
+Go's MMX-to-X forms (including GP spellings admitted to Ymm) remain Context:
+no current producer closes physical MMX identity, x87 Tag/TOS, pending
+exceptions and observations by the caller after RET. They are Go-object and
+format coverage, not successful LLVM objects. The native Linux AMD64 fault
+oracle is a required cross-runtime root; SSE numerical Rosetta observations
+and five-target AVX512 object compilation do not replace it or AVX512 execution.
+
 The CLI captures a private inventory at its actual package-load boundary and
 rechecks complete compiled Go sources with that load's dependency types and
 target sizes only for raw-return candidates. All selected assembly and CPP

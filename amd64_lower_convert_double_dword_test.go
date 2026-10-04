@@ -21,9 +21,11 @@ func TestTranslateX86PackedDoubleDwordCompleteGoAssemblerForms(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			high := 20
+			conversionHigh, conversionBroadcast := 20, 9
 			zBroadcast, zRound, zRoundMask := 8, 9, 11
 			if target.goarch == "386" {
 				zBroadcast, zRound, zRoundMask = 0, 1, 3
+				conversionHigh, conversionBroadcast = 4, 6
 			}
 			source := fmt.Sprintf(`
 TEXT packeddoubledwordforms(SB),$0-0
@@ -37,7 +39,7 @@ TEXT packeddoubledwordforms(SB),$0-0
 	VCVTDQ2PD X%d, K1, X%d
 	VCVTDQ2PD.Z 64(AX), K2, Y7
 	VCVTDQ2PD.BCST 80(AX), Z%d
-	VCVTDQ2PD.BCST.Z 84(AX), K3, X9
+	VCVTDQ2PD.BCST.Z 84(AX), K3, X%d
 	VCVTPD2DQX X0, X1
 	VCVTPD2DQX 88(AX), X2
 	VCVTPD2DQX X%d, K1, X%d
@@ -81,7 +83,7 @@ TEXT packeddoubledwordforms(SB),$0-0
 	VCVTTPD2DQ.SAE Z%d, Y10
 	VCVTTPD2DQ.SAE.Z Z%d, K3, Y12
 	RET
-`, high, high+1, zBroadcast,
+`, conversionHigh, conversionHigh+1, zBroadcast, conversionBroadcast,
 				high, high+1, high, high+1, zRound, zRoundMask, zRound, zRoundMask,
 				high, high+1, high, high+1, zRound, zRoundMask)
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
@@ -99,7 +101,7 @@ TEXT packeddoubledwordforms(SB),$0-0
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"sitofp <", "fptosi.sat.i32.f64", "select i1"} {
+			for _, want := range []string{"asm sideeffect \"vcvtdq2pd", "fptosi.sat.i32.f64", "select i1"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("packed double/dword IR is missing %q:\n%s", want, ll)
 				}

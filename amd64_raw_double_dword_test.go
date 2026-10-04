@@ -133,7 +133,16 @@ func TestX86RawPackedDoubleDwordEncodingAxes(t *testing.T) {
 		{0x62, 0xa1, 0x7e, 0x08, 0xe6, 0xc1}, // X17 -> X16.
 		{0x62, 0xa1, 0xff, 0x28, 0xe6, 0xc1}, // Y17 -> X16.
 	} {
-		if got, _, recognized, err := decodedX86PackedDoubleDwordInstruction(code, 32); !recognized || err != nil || len(got.Args) != 2 {
+		got, _, recognized, err := decodedX86PackedDoubleDwordInstruction(code, 32)
+		if code[2] == 0x7e {
+			// Go accepts the spelling, but its mode32 high bank does not
+			// provide the original physical input for our native bridge.
+			if !recognized || err == nil {
+				t.Fatal("mode32 native conversion fabricated a high physical bank", got, err)
+			}
+			continue
+		}
+		if !recognized || err != nil || len(got.Args) != 2 {
 			t.Fatalf("386 EVEX high X/Y register %#x = %+v, %v, %v", code, got, recognized, err)
 		}
 	}
@@ -202,8 +211,10 @@ func TestX86RawPackedDoubleDwordCompilesEveryBaseForm(t *testing.T) {
 				[]byte{0x62, 0xf1, 0x7e, 0x99, 0xe6, 0x00},       // Dword broadcast, mask, zero.
 				[]byte{0x62, 0xf1, 0xff, 0xb9, 0xe6, 0xd8},       // Double embedded rounding.
 				[]byte{0x62, 0xf1, 0xff, 0x38, 0xe6, 0x40, 0x02}, // Double broadcast disp8.
-				[]byte{0x62, 0xa1, 0x7e, 0x08, 0xe6, 0xc1},       // EVEX high X in 386/amd64.
 			)
+			if target.goarch == "amd64" {
+				encodings = append(encodings, []byte{0x62, 0xa1, 0x7e, 0x08, 0xe6, 0xc1}) // Physical high X.
+			}
 			for _, code := range encodings {
 				for _, value := range code {
 					fmt.Fprintf(&source, "\tBYTE $%d\n", value)

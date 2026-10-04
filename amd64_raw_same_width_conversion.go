@@ -78,7 +78,9 @@ vectorPrefix:
 		return Instr{}, 0, false, nil
 	}
 	ok = true
-	if vexLength == 3 && vexBits&0x80 != 0 {
+	// CVTDQ2PS is VEX.WIG in both machine modes (Intel Vol.2 3-269).
+	// Keep the other families' existing W policy independent.
+	if vexLength == 3 && vexBits&0x80 != 0 && properties.op != "VCVTDQ2PS" {
 		return Instr{}, 0, true, fmt.Errorf("VEX.W must be zero")
 	}
 	if vexBits&0x78 != 0x78 {
@@ -180,7 +182,7 @@ func decodedX86EVEXSameWidthConversionInstruction(code []byte, i, mode int, segm
 	xExt := int(^p0>>6) & 1
 	bExt := int(^p0>>5) & 1
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	if mode == 32 && (maskNumber != 0 && !half || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
+	if mode == 32 && (maskNumber != 0 && !half && properties.op != "VCVTDQ2PS" || destinationNumber >= 8 || modRM>>6 == 3 && int(modRM&7)+bExt*8+xExt*16 >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register or mask in 32-bit mode")
 	}
 	source, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)

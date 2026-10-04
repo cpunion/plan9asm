@@ -86,6 +86,23 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if f, known, err := x86SignedPackedFloatProperties(ins, goarch); known && err == nil {
+				if f.spec.legacy {
+					if f.mmx {
+						add("+mmx", "+sse")
+					}
+					if !f.mmx || f.spec.bits == 64 {
+						add("+sse2")
+					}
+				} else if f.evex {
+					add("+avx512f")
+					if f.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				} else {
+					add("+avx")
+				}
+			}
 			if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 			}

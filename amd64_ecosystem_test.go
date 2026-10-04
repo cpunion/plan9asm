@@ -2077,16 +2077,21 @@ TEXT integerfloatconversions(SB),NOSPLIT,$0-0
 	CVTSQ2SD 24(BX), X7
 	CVTPL2PS X0, X1
 	CVTPL2PS 32(BX), X2
-	CVTPL2PS M0, X3
 	CVTPL2PD X4, X5
 	CVTPL2PD 48(BX), X6
-	CVTPL2PD M1, X7
 	RET
 `, "integerfloatconversions")
-	for _, want := range []string{"@llvm.experimental.constrained.sitofp.f32.i32", "@llvm.experimental.constrained.sitofp.f64.i64", "sitofp <4 x i32>", "sitofp <2 x i32>"} {
+	for _, want := range []string{"@llvm.experimental.constrained.sitofp.f32.i32", "@llvm.experimental.constrained.sitofp.f64.i64", "cvtdq2ps", "cvtdq2pd"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("missing %q in integer-to-float conversion IR:\n%s", want, ll)
 		}
+	}
+	if strings.Count(ll, "asm sideeffect") != 4 || strings.Contains(ll, " = sitofp <") {
+		t.Fatal("packed native conversions lost whole-opcode side effects")
+	}
+	ll = x86SignedIntegerFloatOptimize(t, ll)
+	if strings.Count(ll, "asm sideeffect") != 4 {
+		t.Fatal("O2 dropped a native packed conversion")
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -2247,10 +2252,8 @@ TEXT discoveredx86forms386(SB),NOSPLIT,$0-0
 	CVTSL2SD 8(BX), X3
 	CVTPL2PS X0, X1
 	CVTPL2PS 16(BX), X2
-	CVTPL2PS M0, X3
 	CVTPL2PD X4, X5
 	CVTPL2PD 24(BX), X6
-	CVTPL2PD M1, X7
 	VBROADCASTSS X0, X1
 	VBROADCASTSS 4(AX), Y1
 	VBROADCASTSS 8(AX), Z1

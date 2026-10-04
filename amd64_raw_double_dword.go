@@ -42,6 +42,9 @@ func decodedX86PackedDoubleDwordInstruction(code []byte, mode int) (Instr, int, 
 	}
 	registerSource := code[p.modRM]>>6 == 3
 	if mode == 32 {
+		if p.pp == 2 && (p.r != 0 || registerSource && (p.b != 0 || p.x != 0)) {
+			return fail("signed dword-to-double has no extended physical vector register in 32-bit mode")
+		}
 		if !p.evex && (p.r != 0 || p.b != 0 || p.x != 0) {
 			return fail("extended VEX register in 32-bit mode")
 		}

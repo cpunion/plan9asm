@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -59,11 +60,28 @@ func TestX86RawLegacyPackedConversionCompilesEveryForm(t *testing.T) {
 			sigs := make(map[string]FuncSig, len(x86LegacyPackedConversionForms))
 			for index, form := range x86LegacyPackedConversionForms {
 				name := fmt.Sprintf("rawlegacyconversion%d", index)
-				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n", name)
+				var one strings.Builder
+				fmt.Fprintf(&one, "TEXT %s(SB),4,$0-0\n", name)
 				for _, value := range form.code {
-					fmt.Fprintf(&source, "\tBYTE $%d\n", value)
+					fmt.Fprintf(&one, "\tBYTE $%d\n", value)
 				}
-				source.WriteString("\tRET\n")
+				one.WriteString("\tRET\n")
+				if form.name == "dword-to-single-M" || form.name == "dword-to-double-M" {
+					// Decode and actual Go objects remain covered. A raw MMX
+					// transport does not certify the physical x87/MMX state.
+					goAssemblerOracleOutput(t, target.goarch, one.String(), "", true)
+					file, err := Parse(ArchAMD64, one.String())
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple,
+						Sigs: map[string]FuncSig{name: {Name: name, Ret: Void}}})
+					if !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("unknown raw MMX state got a native numerical-only contract", err)
+					}
+					continue
+				}
+				source.WriteString(one.String())
 				sigs[name] = FuncSig{Name: name, Ret: Void}
 			}
 			requireX86GoAssemblerResult(t, target.goarch, source.String(), true)

@@ -2619,6 +2619,11 @@ func decodeX86RawDirectiveGroupWithOpaque(
 					instrs[i].x86RawMOVSXDNeedsCaller = true
 				}
 			}
+			if inst.Op == x86asm.CVTPI2PS || inst.Op == x86asm.CVTPI2PD {
+				for i := range instrs {
+					instrs[i].x86MMXSourceConversion = true
+				}
+			}
 			if inst.Op == x86asm.RET {
 				form := x86RawNearReturnEncoding(code[offset : offset+inst.Len])
 				for i := range instrs {

@@ -968,6 +968,11 @@ type Instr struct {
 	// provenance before a raw return. Their MOVL/MOVW spellings do not grant
 	// the older generic scalar frame proof new entry-register permissions.
 	x86RawMOVSXDNeedsCaller bool
+	// Decoder-only CVTPI2PS/PD provenance. Its normalized Go name is shared
+	// with an SSE conversion, but the original instruction reads m64/MMX
+	// and changes physical x87/MMX state. This is a restriction, not an
+	// authorization to use native MMX scratch registers.
+	x86MMXSourceConversion bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64

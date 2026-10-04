@@ -103,8 +103,12 @@ func TestTranslateRawVEXPackedExtendWeaviateBlockRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(ir, "zext i8") < 4 || strings.Count(ir, "sitofp <8 x i32>") < 4 {
+	if strings.Count(ir, "zext i8") < 4 || strings.Count(ir, "asm sideeffect \"vcvtdq2ps") != 4 {
 		t.Fatalf("raw VPMOVZXBD/VCVTDQ2PS block omitted conversions:\n%s", ir)
+	}
+	ir = x86SignedIntegerFloatOptimize(t, ir)
+	if strings.Count(ir, "asm sideeffect \"vcvtdq2ps") != 4 {
+		t.Fatal("O2 dropped raw VCVTDQ2PS side effects")
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {

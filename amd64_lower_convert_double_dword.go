@@ -83,6 +83,9 @@ func parseAMD64PackedDoubleDwordSuffix(rawOp, baseOp string) (amd64PackedDoubleD
 // destinations; the VEX/EVEX rows cover masks, zeroing, scalar broadcast,
 // embedded rounding, and SAE.
 func (c *amd64Ctx) lowerPackedDoubleDword(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, known, _ := x86SignedPackedFloatProperties(ins, c.goarch); known {
+		return c.lowerSignedPackedIntegerFloat(op, ins)
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
@@ -135,80 +138,12 @@ func (c *amd64Ctx) lowerLegacyPackedDoubleToDword(baseOp string, spec amd64Packe
 	return true, false, c.storePackedDwordConversionResult(destination.Reg, spec.destBytes, spec.resultLanes, result)
 }
 
-func (c *amd64Ctx) lowerVectorPackedDwordToDouble(baseOp string, ins Instr, suffixes amd64PackedDoubleDwordSuffix) (bool, bool, error) {
-	if suffixes.rounding != "" || suffixes.sae {
-		return true, false, fmt.Errorf("amd64 %s does not enable rounding or SAE suffixes: %q", baseOp, ins.Raw)
+func (c *amd64Ctx) lowerVectorPackedDwordToDouble(baseOp string, ins Instr, _ amd64PackedDoubleDwordSuffix) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
+	if !strings.EqualFold(baseOp, base) {
+		return true, false, fmt.Errorf("signed packed conversion opcode identity mismatch")
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("amd64 %s expects source, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 3
-	if suffixes.zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z requires K1-K7: %q", baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[1]) {
-		return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s destination must be X, Y, or Z: %q", baseOp, ins.Raw)
-	}
-	destBytes := amd64VectorByteWidth(destination.Reg)
-	if (destBytes != 16 && destBytes != 32 && destBytes != 64) || !c.isGoEVEXVectorRegister(destination, destBytes) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's vector class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	resultLanes := destBytes / 8
-	sourceRegisterBytes := 16
-	if destBytes == 64 {
-		sourceRegisterBytes = 32
-	}
-	source := ins.Args[0]
-	if suffixes.broadcast {
-		if !isAMD64MemoryOperand(source) {
-			return true, false, fmt.Errorf("amd64 %s.BCST requires a scalar memory source: %q", baseOp, ins.Raw)
-		}
-	} else if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, sourceRegisterBytes) {
-			return true, false, fmt.Errorf("amd64 %s source width does not match its destination: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("amd64 %s source must be a matching vector register or memory: %q", baseOp, ins.Raw)
-	}
-
-	var integers string
-	if suffixes.broadcast {
-		scalar, err := c.evalIntSized(source, I32)
-		if err != nil {
-			return true, false, err
-		}
-		integers = amd64SplatInteger(c, resultLanes, 32, scalar)
-	} else {
-		loaded, err := c.loadPackedExtendInputs(source, sourceRegisterBytes, resultLanes, 32)
-		if err != nil {
-			return true, false, err
-		}
-		integers = loaded
-	}
-	converted := c.newTmp()
-	floats := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = sitofp <%d x i32> %s to <%d x double>\n", converted, resultLanes, integers, resultLanes)
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x double> %%%s to <%d x i64>\n", floats, resultLanes, converted, resultLanes)
-	result := "%" + floats
-	if masked {
-		mask, err := c.loadK(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		oldBytes, err := c.loadPackedCompareBytes(destination, destBytes)
-		if err != nil {
-			return true, false, err
-		}
-		old := c.bitcastVectorBytesToIntegerLanes(destBytes, resultLanes, 64, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, resultLanes, 64, result, old, mask, suffixes.zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", out, resultLanes, result, destBytes)
-	return true, false, c.storeVectorBytes(destination.Reg, destBytes, "%"+out)
+	return c.lowerSignedPackedIntegerFloat(ins.Op, ins)
 }
 
 func (c *amd64Ctx) lowerVectorPackedDoubleToDword(baseOp string, spec amd64PackedDoubleDwordSpec, ins Instr, suffixes amd64PackedDoubleDwordSuffix) (bool, bool, error) {

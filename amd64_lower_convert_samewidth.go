@@ -34,6 +34,9 @@ var amd64SameWidthConversionSpecs = map[Op]amd64SameWidthConversionSpec{
 // 1.27's _yvcvtdq2ps table. Although the table is shared, VCVTTPS2DQ enables
 // SAE while the other four opcodes enable explicit rounding on Z forms.
 func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if _, known, _ := x86SignedPackedFloatProperties(ins, c.goarch); known {
+		return c.lowerSignedPackedIntegerFloat(op, ins)
+	}
 	rawOp := strings.ToUpper(string(op))
 	baseOp, suffix := rawOp, ""
 	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
@@ -42,6 +45,9 @@ func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, te
 	spec, recognized := amd64SameWidthConversionSpecs[Op(baseOp)]
 	if !recognized {
 		return false, false, nil
+	}
+	if spec.mode == amd64SameWidthIntToFloat {
+		return c.lowerSignedPackedIntegerFloat(op, ins)
 	}
 	if spec.rawOnly && !ins.x86Encoded {
 		return true, false, fmt.Errorf("%s is absent from Go's named assembler table; raw encoding required", baseOp)
@@ -125,17 +131,6 @@ func (c *amd64Ctx) emitSameWidthPackedConversion(spec amd64SameWidthConversionSp
 	integerType := fmt.Sprintf("<%d x i%d>", lanes, spec.laneBits)
 	floatType := amd64FMA3LLVMType(lanes, spec.laneBits)
 	switch spec.mode {
-	case amd64SameWidthIntToFloat:
-		converted := c.newTmp()
-		if properties.rounding != "" {
-			fmt.Fprintf(c.b, "  %%%s = call <16 x float> @llvm.experimental.constrained.sitofp.v16f32.v16i32(<16 x i32> %s, metadata !\"%s\", metadata !\"fpexcept.ignore\")\n", converted, sourceBits, amd64FMA3RoundingMetadata(properties.rounding))
-		} else {
-			fmt.Fprintf(c.b, "  %%%s = sitofp %s %s to %s\n", converted, integerType, sourceBits, floatType)
-		}
-		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to %s\n", bits, floatType, converted, integerType)
-		return "%" + bits
-
 	case amd64SameWidthFloatToInt, amd64SameWidthFloatToIntTruncate:
 		floating := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to %s\n", floating, integerType, sourceBits, floatType)
