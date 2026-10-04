@@ -26,7 +26,7 @@ func proveDataOnlyAssembly(pkg *packages.Package, task asmTask, file *plan9asm.F
 	for _, global := range file.Globl {
 		name := strings.TrimSuffix(global.Sym, "<>")
 		if strings.HasPrefix(name, "·") {
-			name = pkg.PkgPath + name
+			name = nativeGoPackagePrefix(pkg.PkgPath) + name
 		}
 		name = strings.ReplaceAll(strings.ReplaceAll(name, "·", "."), "∕", "/")
 		if strings.HasSuffix(global.Sym, "<>") {
@@ -48,4 +48,25 @@ func proveDataOnlyAssembly(pkg *packages.Package, task asmTask, file *plan9asm.F
 	}
 	native.Protocol = gotoolprofile.DataOnlyAssemblyProtocol
 	return &gotoolprofile.DataOnlyAssemblyProof{Native: *native, Symbols: symbols}, nil
+}
+
+// cmd/asm qualifies local symbols with objabi.PathToPrefix, not the logical
+// import path used by LLVM. Keep the original native listing spelling intact.
+// This is Go's byte-level rule; URL escaping changes different characters.
+func nativeGoPackagePrefix(packagePath string) string {
+	lastSlash := strings.LastIndexByte(packagePath, '/')
+	const hex = "0123456789abcdef"
+	var prefix strings.Builder
+	for index := 0; index < len(packagePath); index++ {
+		value := packagePath[index]
+		if value <= ' ' || value == '.' && index > lastSlash ||
+			value == '%' || value == '"' || value >= 0x7f {
+			prefix.WriteByte('%')
+			prefix.WriteByte(hex[value>>4])
+			prefix.WriteByte(hex[value&0xf])
+		} else {
+			prefix.WriteByte(value)
+		}
+	}
+	return prefix.String()
 }
