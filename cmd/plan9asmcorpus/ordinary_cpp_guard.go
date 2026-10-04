@@ -171,7 +171,11 @@ func runDiscoveryOrdinaryGuarded(plan *discoveryOrdinarySelectionPlan, moduleDir
 		return err
 	}
 	defer func() {
-		runErr = errors.Join(runErr, verifyDiscoveryOrdinaryCPP(plan, moduleDir, goRoot, candidate))
+		// A successful guard must retain the actual completed command receipt.
+		// errors.Join(runErr, nil) would introduce an unexplained outer error.
+		if err := verifyDiscoveryOrdinaryCPP(plan, moduleDir, goRoot, candidate); err != nil {
+			runErr = errors.Join(runErr, err)
+		}
 	}()
 	return run()
 }

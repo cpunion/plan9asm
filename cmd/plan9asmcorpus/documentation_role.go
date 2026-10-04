@@ -338,10 +338,14 @@ func captureDiscoveryDocumentationPackages(ctx context.Context, plan *discoveryO
 	defer func() {
 		for _, profile := range profiles {
 			if usedProfiles[profile.ID] {
-				operationErr = errors.Join(operationErr, verifyDiscoveryProfileCurrent(ctx, markers, env, profile, cache))
+				if err := verifyDiscoveryProfileCurrent(ctx, markers, env, profile, cache); err != nil {
+					operationErr = errors.Join(operationErr, err)
+				}
 			}
 		}
-		operationErr = errors.Join(operationErr, verifyDiscoveryDocumentationSources(plan, root))
+		if err := verifyDiscoveryDocumentationSources(plan, root); err != nil {
+			operationErr = errors.Join(operationErr, err)
+		}
 	}()
 	for index := range plan.DocumentationPackages {
 		proof := &plan.DocumentationPackages[index]

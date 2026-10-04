@@ -2486,7 +2486,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							return err
 						}
 						defer func() {
-							operationErr = errors.Join(operationErr, verifyDiscoveryProfileCurrent(ctx, profileMarkers, env, *activeProfile, profileCache))
+							if err := verifyDiscoveryProfileCurrent(ctx, profileMarkers, env, *activeProfile, profileCache); err != nil {
+								operationErr = errors.Join(operationErr, err)
+							}
 						}()
 					}
 					return runDiscoveryOrdinaryGuarded(ordinaryPlan, download.Dir, cppGoRoot, candidate, run)
