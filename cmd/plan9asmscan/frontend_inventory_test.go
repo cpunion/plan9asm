@@ -284,12 +284,10 @@ func TestFrontendInventoryRejectsUnmodeledArrayAndPseudoChanges(t *testing.T) {
 	}
 }
 
-func TestFrontendInventoryActualGo127(t *testing.T) {
-	if !strings.HasPrefix(runtime.Version(), "go1.27.") {
-		return
-	}
-	for arch, count := range map[string]int{"386": 1658, "amd64": 1658, "arm": 158, "arm64": 1362, "wasm": 502} {
+func TestFrontendInventoryActualGoSourceNamespaces(t *testing.T) {
+	for _, arch := range namespaceArchitectures {
 		t.Run(arch, func(t *testing.T) {
+			count := actualGoNamespaceCounts(t, arch).frontend
 			inventory, err := loadFrontendInventory(runtime.GOROOT(), arch)
 			if err != nil {
 				t.Fatal(err)

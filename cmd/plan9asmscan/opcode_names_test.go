@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -102,12 +101,10 @@ func TestOfficialOpcodeNamesFailClosedForMalformedNamespace(t *testing.T) {
 	}
 }
 
-func TestOfficialOpcodeNamesMatchAuditedGo127Namespaces(t *testing.T) {
-	if !strings.HasPrefix(runtime.Version(), "go1.27.") {
-		return // Other supported releases have different, separately baselined namespaces.
-	}
-	for goarch, want := range map[string]int{"386": 1600, "amd64": 1600, "arm": 137, "arm64": 1342, "wasm": 463} {
+func TestOfficialOpcodeNamesMatchAuditedGoSourceNamespaces(t *testing.T) {
+	for _, goarch := range namespaceArchitectures {
 		t.Run(goarch, func(t *testing.T) {
+			want := actualGoNamespaceCounts(t, goarch).official
 			arch, err := toPlan9Arch(goarch)
 			if err != nil {
 				t.Fatal(err)
@@ -117,7 +114,7 @@ func TestOfficialOpcodeNamesMatchAuditedGo127Namespaces(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(catalog) != want {
-				t.Fatalf("Go 1.27 %s opcode namespace = %d, want audited Anames entries %d", goarch, len(catalog), want)
+				t.Fatalf("%s %s opcode namespace = %d, want audited Anames entries %d", runtime.Version(), goarch, len(catalog), want)
 			}
 			for _, item := range catalog {
 				if item.Opcode == "REG" || item.Opcode == "ADDR" || item.Opcode == "TEXTSIZE" || item.Opcode == "NCLASS" {
