@@ -3,8 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -367,6 +370,18 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 
 func testInstrumentationCorpusTransportTargets(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {
 	t.Helper()
+	// Failed-command display text is not source or object authority. Keep a
+	// private-path tripwire in the raw report to exercise portable collection.
+	for index := range result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
+		outcome := &result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[index]
+		if outcome.Status == "failed" && outcome.Error != "" {
+			outcome.Error += "\nprivate diagnostic: /private/runner-only/build-cache/input.go"
+		}
+	}
+	originalBytes, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
 	ledger := filepath.Join(t.TempDir(), "scan")
 	if err := os.MkdirAll(filepath.Join(ledger, "records"), 0700); err != nil {
 		t.Fatal(err)
@@ -418,6 +433,27 @@ func testInstrumentationCorpusTransportTargets(t *testing.T, result discoveryCor
 		progress.Translations != result.Translations || progress.Verified != (result.Status == discoveryStatusPassed) {
 		t.Fatalf("mode evidence was relabeled/lost during collection: %+v", progress)
 	}
+	for index, original := range result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
+		if original.Status != "failed" || original.Error == "" {
+			continue
+		}
+		projected := progress.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan.Outcomes[index]
+		digest := sha256.Sum256([]byte(original.Error))
+		if strings.Contains(projected.Error, "/private/runner-only/") || !strings.Contains(projected.Error, fmt.Sprintf("%x", digest)) ||
+			projected.Status != original.Status || projected.Stage != original.Stage {
+			t.Fatalf("failed instrumentation diagnostic was not compacted without changing its outcome: %s", projected.Error)
+		}
+		rawProgress := progress
+		rawProgress.Candidates = append([]discoveryCandidateProgress(nil), progress.Candidates...)
+		rawProgress.Candidates[0].OrdinarySelectionPlan = result.OrdinarySelectionPlan
+		if err := writeAssemblyLedger(filepath.Join(t.TempDir(), "assembly-ledger"), rawProgress, strings.Repeat("a", 64)); err == nil {
+			t.Fatal("writer bypassed portable collection and persisted raw failed-command diagnostics")
+		}
+	}
+	afterBytes, err := json.Marshal(result)
+	if err != nil || !bytes.Equal(afterBytes, originalBytes) {
+		t.Fatal("collecting portable progress mutated the original report evidence")
+	}
 	if result.InstrumentationTargetExclusions != 0 {
 		view, err := semanticAssemblyLedgerProgress(progress)
 		if err != nil {
@@ -453,6 +489,9 @@ func testInstrumentationCorpusTransportTargets(t *testing.T, result discoveryCor
 	serialized, err := json.Marshal(replayed)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if bytes.Contains(serialized, []byte("/private/runner-only/")) {
+		t.Fatal("private failed-command diagnostic entered the persisted ledger")
 	}
 	for index, mutate := range []func(*discoveryProgress){
 		func(p *discoveryProgress) { p.Targets = append(p.Targets, "js/wasm") },

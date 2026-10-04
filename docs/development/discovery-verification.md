@@ -242,6 +242,13 @@ reuse a result. This local work reduction is not cross-phase source evidence.
 
 ## Reports and provenance
 
+Raw failed instrumentation diagnostics stay in the frozen shard reports under
+`_out/`. The automatic progress collector retains only their failure stage,
+status and complete raw diagnostic SHA-256 in the committed assembly ledger.
+This display-only compaction must not change source/export/object witnesses or
+turn a failure into a pass or source exclusion. Ledger readers and writers
+reject uncompacted failed-command text; never hand-edit a report to remove paths.
+
 Corpus sharding is `sha256(module@version) % 64`, independent of module-hashed
 ledger files. Parallel shards read one frozen ledger and write distinct reports:
 

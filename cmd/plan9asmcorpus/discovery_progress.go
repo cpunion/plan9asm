@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -8,6 +9,51 @@ import (
 )
 
 const discoveryProgressSchema = 3
+
+// A failed command's display text can contain private runner and cache paths.
+// Keep its exact digest and stage in progress; the frozen report retains the
+// original diagnostic. Neither display form supplies source/object authority.
+// Copy only the edited nodes so collecting progress cannot alter raw evidence.
+func summarizeDiscoverySelectionFailures(plan *discoveryOrdinarySelectionPlan) *discoveryOrdinarySelectionPlan {
+	if plan == nil || plan.InstrumentationPlan == nil {
+		return plan
+	}
+	result := *plan
+	proof := *plan.InstrumentationPlan
+	proof.Outcomes = append([]discoveryInstrumentationOutcome(nil), proof.Outcomes...)
+	for index := range proof.Outcomes {
+		outcome := &proof.Outcomes[index]
+		if outcome.Error != "" && (outcome.Status == "failed" || outcome.Status == "early_target_rejected") {
+			digest := sha256.Sum256([]byte(outcome.Error))
+			outcome.Error = discoveryInstrumentationFailurePrefix(*outcome) + fmt.Sprintf("%x", digest)
+		}
+	}
+	result.InstrumentationPlan = &proof
+	return &result
+}
+
+func discoveryInstrumentationFailurePrefix(outcome discoveryInstrumentationOutcome) string {
+	return outcome.Stage + " " + outcome.Status + "; raw_diagnostic_sha256="
+}
+
+// The ledger is a portable committed view, not a second raw log. Reject an
+// uncompact failure instead of allowing a caller to bypass the collector.
+func validateDiscoverySelectionFailureSummaries(plan *discoveryOrdinarySelectionPlan) error {
+	if plan == nil || plan.InstrumentationPlan == nil {
+		return nil
+	}
+	for _, outcome := range plan.InstrumentationPlan.Outcomes {
+		if outcome.Error == "" {
+			continue // The independent outcome validator rejects missing diagnostics.
+		}
+		prefix := discoveryInstrumentationFailurePrefix(outcome)
+		if outcome.Status != "failed" && outcome.Status != "early_target_rejected" ||
+			!strings.HasPrefix(outcome.Error, prefix) || !discoverySHA256Pattern.MatchString(strings.TrimPrefix(outcome.Error, prefix)) {
+			return fmt.Errorf("assembly ledger instrumentation failure lacks a portable stage/diagnostic summary")
+		}
+	}
+	return nil
+}
 
 // Raw matrix reports use absolute paths into their disposable module cache.
 // Persist the matching scan-inventory path, never the runner's cache prefix.

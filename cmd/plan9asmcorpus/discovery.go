@@ -588,7 +588,7 @@ func auditDiscoveryCorpusReports(
 				PrivateExtension:                result.PrivateExtension,
 				NativeLayout:                    result.NativeLayout,
 				NativeLayoutPlan:                result.NativeLayoutPlan,
-				OrdinarySelectionPlan:           result.OrdinarySelectionPlan,
+				OrdinarySelectionPlan:           summarizeDiscoverySelectionFailures(result.OrdinarySelectionPlan),
 				FeatureProfiles:                 result.FeatureProfiles,
 				FeatureConsumption:              result.FeatureConsumption,
 				InstrumentationTranslations:     result.InstrumentationTranslations,
