@@ -45,7 +45,17 @@ func (c *amd64Ctx) lowerFloatBinaryOperands(ins Instr, form x86FloatBinaryForm, 
 	}
 	bits := form.bits
 	if form.scalar {
-		a, err := c.loadFloatBinaryScalar(first, bits, mask)
+		var a string
+		var err error
+		if form.literal {
+			if bits == 32 {
+				a, err = c.evalF32(first)
+			} else {
+				a, err = c.evalF64(first)
+			}
+		} else {
+			a, err = c.loadFloatBinaryScalar(first, bits, mask)
+		}
 		if err != nil {
 			return true, false, err
 		}

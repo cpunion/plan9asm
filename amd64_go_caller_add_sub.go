@@ -17,6 +17,9 @@ func x86CallerFloatBinaryStep(ins *Instr, form x86FloatBinaryForm, state *x86Sou
 		return false
 	}
 	for _, index := range []int{form.first, form.second} {
+		if form.literal && index == form.first {
+			continue
+		}
 		if index != form.memory && state.vectors[x86CallerVectorRoot(ins.Args[index].Reg)]&required != required {
 			return false
 		}

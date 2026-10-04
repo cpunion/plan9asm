@@ -31,6 +31,7 @@ func x86FloatAddSubProperties(ins Instr, goarch string) (x86FloatAddSubForm, boo
 	if !recognized {
 		return x86FloatAddSubForm{}, false, nil
 	}
-	form, err := x86FloatBinaryOperandProperties(ins, goarch, spec.bits, spec.legacy, spec.scalar, "add/sub")
+	literal := x86FloatAddSubLiteral(ins, spec)
+	form, err := x86FloatBinaryOperandProperties(ins, goarch, spec.bits, spec.legacy, spec.scalar, literal, "add/sub")
 	return x86FloatAddSubForm{spec: spec, x86FloatBinaryForm: form}, true, err
 }

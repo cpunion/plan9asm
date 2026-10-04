@@ -13,15 +13,16 @@ type x86FloatBinaryForm struct {
 	first, second, destination, mask, memory int
 	byteWidth, memoryBytes                   int
 	broadcast, zeroing                       bool
+	literal                                  bool // family-authorized Go constant-pool rewrite
 	rounding                                 string
 }
 
 // Parse only shared operand axes. The registered family supplies precision
 // and encoding generation; its lowerer retains operation-specific semantics.
-func x86FloatBinaryOperandProperties(ins Instr, goarch string, bits int, legacy, scalar bool, family string) (x86FloatBinaryForm, error) {
+func x86FloatBinaryOperandProperties(ins Instr, goarch string, bits int, legacy, scalar, literal bool, family string) (x86FloatBinaryForm, error) {
 	_, suffix, dotted := strings.Cut(strings.ToUpper(string(ins.Op)), ".")
 	form := x86FloatBinaryForm{
-		bits: bits, legacy: legacy, scalar: scalar,
+		bits: bits, legacy: legacy, scalar: scalar, literal: literal,
 		first: 0, second: 1, destination: len(ins.Args) - 1, mask: -1, memory: -1,
 	}
 	fail := func() (x86FloatBinaryForm, error) {
@@ -65,7 +66,11 @@ func x86FloatBinaryOperandProperties(ins Instr, goarch string, bits int, legacy,
 		return fail()
 	}
 	first := ins.Args[form.first]
-	if isAMD64MemoryOperand(first) {
+	if literal {
+		if !legacy || !scalar || first.Kind != OpImm || !first.ImmIsFloat || first.ImmRaw != "" {
+			return fail()
+		}
+	} else if isAMD64MemoryOperand(first) {
 		if form.rounding != "" {
 			return fail()
 		}
