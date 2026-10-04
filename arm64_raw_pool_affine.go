@@ -201,8 +201,10 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 		delete(flow.affineActive, query)
 		flow.affineCache[query] = answer
 	}()
-	queue := []arm64PoolAffineState{{at: at, expression: expression, bound: arm64PoolUnknownInterval}}
-	visited := make(map[arm64PoolAffineState]bool)
+	var sets arm64PoolAffineStateSets
+	initial := arm64PoolAffineState{at: at, expression: expression, bound: arm64PoolUnknownInterval}
+	queue := []arm64PoolAffineStateKey{sets.compact(&initial)}
+	visited := make(map[arm64PoolAffineStateKey]bool)
 	result, found := arm64PoolInterval{math.MaxUint64, 0}, false
 	addResult := func(value arm64PoolInterval) {
 		if value.low < result.low {
@@ -218,12 +220,13 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 			return arm64PoolUnknownInterval
 		}
 		flow.affineWork++
-		state := queue[len(queue)-1]
+		key := queue[len(queue)-1]
 		queue = queue[:len(queue)-1]
-		if visited[state] {
+		if visited[key] {
 			continue
 		}
-		visited[state] = true
+		visited[key] = true
+		state := sets.expand(key)
 		invariantLatch, invariantLoop := flow.rewindInvariantLoop(&state)
 		if constraint, ok := flow.loopBounds[state.at]; ok && !invariantLoop {
 			value, bounded := flow.affineConstraintBound(state.at, state.expression, constraint)
@@ -343,9 +346,10 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 					// The proof rebases all queried values, not all predicates.
 					// Forget historical path facts rather than applying them to
 					// unrelated register values at the earlier save.
-					queue = append(queue, arm64PoolAffineState{
+					savedState := arm64PoolAffineState{
 						at: savedAt, expression: saved, bound: next.bound,
-					})
+					}
+					queue = append(queue, sets.compact(&savedState))
 					continue
 				}
 			}
@@ -465,7 +469,7 @@ func (flow *arm64RawPoolValues) affineIntervalProof(at int, expression arm64Pool
 				}
 				next.count = count
 			}
-			queue = append(queue, next)
+			queue = append(queue, sets.compact(&next))
 		}
 	}
 	if !found {
