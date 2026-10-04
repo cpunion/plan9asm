@@ -54,14 +54,14 @@ func x86FloatCompareProperties(ins Instr, goarch string) (x86FloatCompareForm, b
 		if !valid || immediate < -128 || immediate > 127 {
 			return fail()
 		}
-		form.immediate = uint8(immediate) & 7
+		form.immediate = uint8(immediate)
 		form.first, form.second, form.destination, form.byteWidth = 0, 1, 1, 16
 	} else {
 		if goarch == "386" && !ins.x86Encoded || len(ins.Args) != 4 && len(ins.Args) != 5 ||
 			dotted && suffix != "BCST" && suffix != "SAE" || ins.Args[0].Kind != OpImm || ins.Args[0].ImmIsFloat || ins.Args[0].ImmRaw != "" || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
 			return fail()
 		}
-		form.immediate = uint8(ins.Args[0].Imm) & 31
+		form.immediate = uint8(ins.Args[0].Imm)
 		form.first, form.second, form.destination = 1, 2, len(ins.Args)-1
 		form.broadcast, form.sae = suffix == "BCST", suffix == "SAE"
 		form.maskResult = amd64IsKOperand(ins.Args[form.destination])

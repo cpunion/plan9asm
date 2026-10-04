@@ -52,11 +52,7 @@ func (c *amd64Ctx) emitNativeFloatingCompare(ins Instr, f x86FloatCompareForm) e
 		firstConstraint = "x"
 	}
 	mnemonic := strings.ToLower(strings.Split(string(ins.Op), ".")[0])
-	immediate := uint8(ins.Args[0].Imm)
-	if f.legacy {
-		value, _ := amd64LegacyFloatingCompareImmediate(ins.Args[2])
-		immediate = uint8(value)
-	}
+	immediate := f.immediate
 	result := c.newTmp()
 	clobbers := "~{memory},~{fpsr}"
 
