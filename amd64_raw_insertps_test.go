@@ -115,7 +115,6 @@ func TestDecodedX86RawINSERTPSMemoryAndInvalidForms(t *testing.T) {
 	validVEX := encodeX86RawVEXINSERTPS(7, 7, 7, 1)
 	validEVEX := encodeX86RawEVEXINSERTPS(31, 31, 31, 1)
 	for name, invalid := range map[string][]byte{
-		"vex W":                    {validVEX[0], validVEX[1], validVEX[2] | 0x80, validVEX[3], validVEX[4], validVEX[5]},
 		"vex vector length":        {validVEX[0], validVEX[1], validVEX[2] | 0x04, validVEX[3], validVEX[4], validVEX[5]},
 		"evex W":                   {validEVEX[0], validEVEX[1], validEVEX[2] | 0x80, validEVEX[3], validEVEX[4], validEVEX[5], validEVEX[6]},
 		"evex mask":                {validEVEX[0], validEVEX[1], validEVEX[2], validEVEX[3] | 1, validEVEX[4], validEVEX[5], validEVEX[6]},

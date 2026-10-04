@@ -4303,8 +4303,9 @@ encoding:
 			return Instr{}, 0, true, fmt.Errorf("address-size override is not source-layout safe")
 		}
 		p0, p1 := code[i+1], code[i+2]
-		if p1&0x87 != 0x01 {
-			return Instr{}, 0, true, fmt.Errorf("VINSERTPS requires VEX.W0.L0.66")
+		// The physical VEX form is WIG, independently of Go's W0 encoder.
+		if p1&0x07 != 0x01 {
+			return Instr{}, 0, true, fmt.Errorf("VINSERTPS requires VEX.L0.66")
 		}
 		modRMIndex := i + 4
 		modRM := code[modRMIndex]
@@ -4328,9 +4329,10 @@ encoding:
 		base := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", baseNumber))}
 		destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", destinationNumber))}
 		return Instr{
-			Op:   "VINSERTPS",
-			Args: []Operand{immediate, source, base, destination},
-			Raw:  fmt.Sprintf("VINSERTPS %s, %s, %s, %s", immediate.String(), source.String(), base.String(), destination.String()),
+			Op:         "VINSERTPS",
+			Args:       []Operand{immediate, source, base, destination},
+			Raw:        fmt.Sprintf("VINSERTPS %s, %s, %s, %s", immediate.String(), source.String(), base.String(), destination.String()),
+			x86Encoded: true,
 		}, immediateIndex + 1, true, nil
 	}
 

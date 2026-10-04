@@ -1985,7 +1985,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"VPSHUFD", Instr{Raw: "VPSHUFD $1, X0, Y0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("Y0")}}}, "wrong src class", true},
 		{"VPSLLD", Instr{Raw: "VPSLLD Y0, Y1", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}}}, "short form", true},
 		{"VPERM2I128", Instr{Raw: "VPERM2I128 $1, Y0, Y1, X0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("Y1")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong dst", true},
-		{"VINSERTI128", Instr{Raw: "VINSERTI128 $1, X0, Y0, X1", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "wrong dst", false},
+		{"VINSERTI128", Instr{Raw: "VINSERTI128 $1, X0, Y0, X1", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "wrong dst", true},
 		{"VMOVNTDQ", Instr{Raw: "VMOVNTDQ Y0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: AX}}}, "bad dst", true},
 		{"AESKEYGENASSIST", Instr{Raw: "AESKEYGENASSIST X0, X1", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "missing imm", true},
 		{"VPTEST", Instr{Raw: "VPTEST X0, Y0", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("Y0")}}}, "wrong src class", true},
@@ -2005,7 +2005,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"PCMPEQL", Instr{Raw: "PCMPEQL Y0, X0", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong src class", false},
 		{"VPCLMULQDQ", Instr{Raw: "VPCLMULQDQ $1, Z0, Z1, X0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: Reg("Z1")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong dst class", true},
 		{"VPTERNLOGD", Instr{Raw: "VPTERNLOGD $0x100, Z0, Z1, Z2", Args: []Operand{{Kind: OpImm, Imm: 0x100}, {Kind: OpReg, Reg: Reg("Z0")}, {Kind: OpReg, Reg: Reg("Z1")}, {Kind: OpReg, Reg: Reg("Z2")}}}, "out-of-range imm", true},
-		{"VEXTRACTF32X4", Instr{Raw: "VEXTRACTF32X4 $1, X0, X1", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "wrong src class", false},
+		{"VEXTRACTF32X4", Instr{Raw: "VEXTRACTF32X4 $1, X0, X1", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "wrong src class", true},
 		{"PCLMULQDQ", Instr{Raw: "PCLMULQDQ AX, X0, X1", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}}, "missing imm", true},
 		{"PCMPEQB", Instr{Raw: "PCMPEQB Y0, X0", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: Reg("X0")}}}, "wrong src class", false},
 		{"PMOVMSKB", Instr{Raw: "PMOVMSKB Y0, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("Y0")}, {Kind: OpReg, Reg: AX}}}, "wrong src class", false},
@@ -2021,7 +2021,14 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		{"PSRLQ", Instr{Raw: "PSRLQ AX, X0", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}}}, "non-imm shift", true},
 		{"PEXTRD", Instr{Raw: "PEXTRD $1, X0, label", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}, {Kind: OpIdent, Ident: "label"}}}, "bad dst kind", true},
 	} {
+		before := b.String()
 		ok, term, err := c.lowerVec(tc.op, tc.ins)
+		if _, typed := x86InsertExtractSpecs[tc.op]; typed {
+			goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\n"+tc.ins.Raw+"\nRET\n", "", false)
+			if !ok || term || err == nil || b.String() != before {
+				t.Fatalf("typed insert/extract rejection emitted IR: %s: (%v, %v, %v)", tc.ins.Raw, ok, term, err)
+			}
+		}
 		if tc.wantHandled {
 			if !ok || err == nil {
 				t.Fatalf("%s %s = (%v, %v, %v), want handled error", tc.op, tc.want, ok, term, err)

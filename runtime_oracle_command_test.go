@@ -153,6 +153,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_mov_extension_runtime_test.go",
 		"amd64_raw_movsxd_runtime_test.go",
 		"amd64_float_compare_native_test.go",
+		"amd64_raw_insertps_mode32_test.go",
 		"arm64_scalar_writeback_test.go",
 		"arm64_barrier_encoding_go127_test.go",
 	} {

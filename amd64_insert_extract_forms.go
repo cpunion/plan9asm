@@ -63,7 +63,11 @@ func x86InsertExtractProperties(ins Instr, goarch string) (x86InsertExtractForm,
 			count = 3
 		}
 	}
-	if goarch != "amd64" && goarch != "386" || spec.insert && !spec.legacy && goarch == "386" || len(ins.Args) != count && len(ins.Args) != count+1 ||
+	// Go's 386 frontend cannot represent a four-operand named insertion.
+	// A validated physical VINSERTPS has its independent mode32 register and
+	// encoding checks; a textual Raw annotation cannot create that identity.
+	physicalScalarInsert := spec.insert && spec.scalar && ins.x86Encoded
+	if goarch != "amd64" && goarch != "386" || spec.insert && !spec.legacy && goarch == "386" && !physicalScalarInsert || len(ins.Args) != count && len(ins.Args) != count+1 ||
 		len(ins.Args) == count+1 && (spec.vex || spec.scalar) || dotted && (suffix != "Z" || spec.vex || spec.scalar) ||
 		ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" || ins.Args[0].ImmIsFloat {
 		return fail()
