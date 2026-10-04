@@ -16,6 +16,7 @@ type x86FloatCompareFPOracle struct {
 	name, declaration, row string
 	bits, predicate        int
 	mask                   bool
+	axis                   x86FloatCompareRuntimeISA
 	sig                    FuncSig
 }
 
@@ -30,6 +31,7 @@ func x86FloatCompareFPOracles(t *testing.T) []x86FloatCompareFPOracle {
 				fixture := x86FloatCompareFPOracle{
 					name: fmt.Sprintf("fp%d%s%d", bits, spelling, predicate),
 					bits: bits, predicate: predicate, mask: spelling == "evex",
+					axis: map[string]x86FloatCompareRuntimeISA{"legacy": x86FloatCompareSSE, "vex": x86FloatCompareVEX, "evex": x86FloatCompareEVEX}[spelling],
 				}
 				fixture.declaration = fmt.Sprintf("func %s(out *[20]byte,source [%d]byte,left uint%d)\n", fixture.name, bits/8, bits)
 				declarations.WriteString(fixture.declaration)
@@ -71,15 +73,18 @@ func x86FloatCompareFPOracles(t *testing.T) []x86FloatCompareFPOracle {
 }
 
 func TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	var assembly, wrappers, declarations, checks strings.Builder
+	x86FloatCompareFPScalarByteSpansRuntime(t, x86FloatCompareSSE)
+}
+
+func x86FloatCompareFPAssembly(fixtures []x86FloatCompareFPOracle) (string, map[string]FuncSig) {
+	var assembly strings.Builder
 	sigs := map[string]FuncSig{}
-	for _, fixture := range x86FloatCompareFPOracles(t) {
+	for _, fixture := range fixtures {
 		move, destination := "MOVSS", "X0"
 		if fixture.bits == 64 {
 			move = "MOVSD"
 		}
-		if strings.Contains(fixture.name, "vex") {
+		if fixture.axis == x86FloatCompareVEX {
 			destination = "X2"
 		}
 		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-%d\nMOVQ out+0(FP),AX\n%s left+%d(FP),X0\nMOVQ $1,DX\nKMOVQ DX,K1\n%s\n",
@@ -91,6 +96,25 @@ func TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans(t *testing.T
 		}
 		assembly.WriteString("STMXCSR 16(AX)\nRET\n")
 		sigs[fixture.name] = fixture.sig
+	}
+	return assembly.String(), sigs
+}
+
+func x86FloatCompareFPScalarByteSpansRuntime(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, axis)
+	var fixtures []x86FloatCompareFPOracle
+	for _, fixture := range x86FloatCompareFPOracles(t) {
+		if fixture.axis == axis {
+			fixtures = append(fixtures, fixture)
+		}
+	}
+	if len(fixtures) != 16 {
+		t.Fatal("incomplete scalar FP-byte-field execution axis", axis, len(fixtures))
+	}
+	assembly, sigs := x86FloatCompareFPAssembly(fixtures)
+	var wrappers, declarations, checks strings.Builder
+	for index, fixture := range fixtures {
 
 		// A C bit carrier is converted into the precise LLVM array value. C's
 		// aggregate calling convention is not assumed to match Go's signature.
@@ -109,14 +133,14 @@ func TestCrossLinuxRuntimeMatrixX86FloatingCompareFPScalarByteSpans(t *testing.T
 		fmt.Fprintf(&wrappers, " call void @%s(ptr %%out,[%d x i8] %s,i%d %s)\n ret void\n}\n", fixture.name, fixture.bits/8, packed, fixture.bits, left)
 		fmt.Fprintf(&declarations, "extern void check_%s(void*,uint64_t,uint64_t);\n", fixture.name)
 		fmt.Fprintf(&checks, "if(check(check_%s,%d,%d,%d))return %d;\n", fixture.name, fixture.bits, fixture.predicate,
-			x86FloatAddSubBoolInt(fixture.mask), len(sigs))
+			x86FloatAddSubBoolInt(fixture.mask), index+1)
 	}
-	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
-	file, err := Parse(ArchAMD64, assembly.String())
+	goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+	file, err := Parse(ArchAMD64, assembly)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs,
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs,
 		ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
 	})
 	if err != nil {
@@ -148,6 +172,6 @@ static int check(compare_fp call,unsigned bits,unsigned predicate,unsigned mask_
 }
 `
 	main := x86FloatCompareIndependentC + declarations.String() + check + "int main(void){\n" + checks.String() + "return 0;}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "compare-fp-scalar-bytes", triple, ir+wrappers.String(), main, prefix)
-	t.Logf("48 scalar compare programs, independently allocated 4/8 FP byte fields ×1944 inputs; transport=%v, not native EVEX execution", prefix)
+	execution.compileAndRunLLVM(t, "compare-fp-scalar-bytes", ir+wrappers.String(), main, "-O0")
+	t.Logf("%d scalar compare programs ISA-axis=%d, independently allocated 4/8 FP byte fields ×1944 inputs; actual transport=%v", len(fixtures), axis, execution.prefix)
 }

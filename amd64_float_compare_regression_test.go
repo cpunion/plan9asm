@@ -25,7 +25,7 @@ func TestX86GoCallerFloatingCompareOriginalSourceReachesObjects(t *testing.T) {
 }
 
 func TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
 	var assembly, declarations, checks strings.Builder
 	sigs := map[string]FuncSig{}
 	for index, opcode := range []string{"CMPPS", "CMPPD", "CMPSS", "CMPSD"} {
@@ -66,10 +66,10 @@ func TestCrossLinuxRuntimeMatrixX86FloatingCompareLegacyUpperAliases(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
 	main := "#include <stdint.h>\n#include <stdio.h>\n#include <string.h>\n" + declarations.String() + "int main(void){\n" + checks.String() + "return 0;}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "floating-compare-legacy-alias", triple, ir, main, prefix)
+	execution.compileAndRunLLVM(t, "floating-compare-legacy-alias", ir, main, "-O0")
 }

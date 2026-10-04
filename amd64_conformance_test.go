@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,14 +24,11 @@ func TestAMD64ConformanceNativeGo(t *testing.T) {
 }
 
 func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("llc/clang not found")
-	}
+	amd64ConformanceLLVMRuntime(t, x86FloatCompareRuntimeTools(t, x86FloatCompareSSE), false)
+}
+
+func amd64ConformanceLLVMRuntime(t *testing.T, execution x86FloatCompareExecution, nativeWide bool) {
+	t.Helper()
 
 	src, err := os.ReadFile(filepath.Join("testdata", "conformance", "amd64", "conformance_amd64.s"))
 	if err != nil {
@@ -45,12 +43,7 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 		{Offset: 0, Type: Ptr, Index: 0, Field: -1},
 		{Offset: 8, Type: Ptr, Index: 1, Field: -1},
 	}}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	ll, err := Translate(file, Options{
 		TargetTriple: triple,
 		ResolveSym:   resolve,
@@ -517,7 +510,10 @@ func TestAMD64ConformanceLLVMRuntime(t *testing.T) {
 	if strings.Contains(ll, `asm sideeffect "ud2"`) {
 		t.Fatal("numeric conformance fixture contains an architectural trap; preserve it in the separate expected-fault oracle")
 	}
-	mainC := `
+	// All original assembly still reaches the LLVM object. Only execution of
+	// the native Z conversion is split; its full original assertions are run
+	// by the required native AVX512 counterpart, alongside original Go.
+	mainC := fmt.Sprintf("#define PLAN9ASM_CONFORMANCE_NATIVE_WIDE %d\n", x86FloatAddSubBoolInt(nativeWide)) + `
 #include <stdint.h>
 extern void byteMemory(uint8_t *p, uint8_t value);
 extern void byteFlags(uint8_t *p, uint8_t *flags);
@@ -1473,6 +1469,7 @@ int main(void) {
 	packedFloatToDwordModes(conversion_out, conversion_src);
 	for (int i = 0; i < 20; i++)
 		if (conversion_out[i] != conversion_want[i]) return 130 + i;
+#if PLAN9ASM_CONFORMANCE_NATIVE_WIDE
 	int32_t same_width_ints[16];
 	float same_width_floats[16] = {
 		1.5f, -1.5f, 2.75f, -2.75f, 0.5f, -0.5f, 3.25f, -3.25f,
@@ -1503,6 +1500,7 @@ int main(void) {
 	}
 	for (int i = 0; i < 8; i++)
 		if (loadf64(same_width_out + 256 + 8*i) != (double)(i + 1)) return 920 + i;
+#endif
 	double widening_out[4] = {0};
 	double widening_want[4] = {1.5, -1.5, 2.75, -2.75};
 	packedSingleToDouble(widening_out, conversion_src);
@@ -1617,7 +1615,8 @@ int main(void) {
 	return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "amd64_conformance", triple, ll, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "amd64_conformance", ll, mainC, "-O0")
+	t.Logf("complete original assembly object; native-wide runtime=%v, actual transport=%v", nativeWide, execution.prefix)
 }
 
 func rosettaAvailable() bool {

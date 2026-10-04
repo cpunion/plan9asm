@@ -2,9 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -187,51 +184,58 @@ int main(void){
 
 // Keep optimized-away results separate: a compare still has MXCSR/trap and
 // memory effects. Both optimization levels execute the same independent C.
-func x86FloatCompareRunOptimization(t *testing.T, llc, clang, triple string, prefix []string, ir, main, level string) {
+func x86FloatCompareRunOptimization(t *testing.T, execution x86FloatCompareExecution, ir, main, level string) {
 	t.Helper()
-	dir := t.TempDir()
-	input, object, driver, executable := filepath.Join(dir, "compare.ll"), filepath.Join(dir, "compare.o"), filepath.Join(dir, "main.c"), filepath.Join(dir, "compare")
-	for path, source := range map[string]string{input: ir, driver: main} {
-		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	x86FloatCompareCaptureCommand(t, exec.Command(llc, level, "-mtriple="+triple, "-filetype=obj", input, "-o", object))
-	x86FloatCompareCaptureCommand(t, exec.Command(clang, "-O2", "-target", triple, object, driver, "-o", executable))
-	argv := append(append([]string(nil), prefix...), executable)
-	x86FloatCompareCaptureCommand(t, exec.Command(argv[0], argv[1:]...))
+	execution.compileAndRunLLVM(t, "compare-effects", ir, main, level)
 }
 
 func TestCrossLinuxRuntimeMatrixX86FloatingCompareIndependentIEEEAndMXCSR(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	x86FloatCompareIndependentRuntime(t, x86FloatCompareSSE)
+}
+
+func x86FloatCompareIndependentRuntime(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, axis)
 	for _, opcode := range []string{"CMPPS", "CMPPD", "CMPSS", "CMPSD", "VCMPPS", "VCMPPD", "VCMPSS", "VCMPSD"} {
+		cases := x86FloatCompareRuntimeCases(opcode, axis)
+		if len(cases) == 0 {
+			continue
+		}
 		t.Run(opcode, func(t *testing.T) {
-			cases := x86FloatCompareOracleCases(opcode)
 			assembly, sigs := x86FloatCompareOracleAssembly(cases, false)
 			goAssemblerOracleOutput(t, "amd64", assembly, "", true)
 			file, err := Parse(ArchAMD64, assembly)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 			if err != nil {
 				t.Fatal(err)
 			}
 			main := x86FloatCompareOracleMain(cases, false)
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "compare-ieee", triple, ir, main, prefix)
-			t.Logf("%s: %d independently enumerated programs ×432 IEEE/DAZ/full-MXCSR/mask/upper-alias/canary inputs; extended NaN+denormal priority is not covered; transport=%v (not native AVX512 execution)", opcode, len(cases), prefix)
+			execution.compileAndRunLLVM(t, "compare-ieee", ir, main, "-O0")
+			t.Logf("%s ISA-axis=%d: %d independently enumerated programs ×432 IEEE/DAZ/full-MXCSR/mask/upper-alias/canary inputs; extended NaN+denormal priority is not covered; actual transport=%v", opcode, axis, len(cases), execution.prefix)
 		})
 	}
 }
 
 func TestCrossLinuxRuntimeMatrixX86FloatingCompareDeadResultEffects(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	x86FloatCompareDeadResultRuntime(t, x86FloatCompareSSE)
+}
+
+func x86FloatCompareDeadPredicate(predicate int) bool {
+	return predicate == 0 || predicate == 1 || predicate == 11 || predicate == 15 || predicate == 27 || predicate == 31
+}
+
+func x86FloatCompareDeadResultRuntime(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, axis)
 	for _, level := range []string{"-O0", "-O2"} {
 		t.Run(level, func(t *testing.T) {
 			var cases []x86FloatCompareOracleCase
 			for _, opcode := range []string{"CMPPS", "CMPPD", "CMPSS", "CMPSD", "VCMPPS", "VCMPPD", "VCMPSS", "VCMPSD"} {
-				for _, c := range x86FloatCompareOracleCases(opcode) {
-					if c.predicate == 0 || c.predicate == 1 || c.predicate == 11 || c.predicate == 15 || c.predicate == 27 || c.predicate == 31 {
+				for _, c := range x86FloatCompareRuntimeCases(opcode, axis) {
+					if x86FloatCompareDeadPredicate(c.predicate) {
 						cases = append(cases, c)
 					}
 				}
@@ -242,11 +246,12 @@ func TestCrossLinuxRuntimeMatrixX86FloatingCompareDeadResultEffects(t *testing.T
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+			ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 			if err != nil {
 				t.Fatal(err)
 			}
-			x86FloatCompareRunOptimization(t, llc, clang, triple, prefix, ir, x86FloatCompareOracleMain(cases, true), level)
+			x86FloatCompareRunOptimization(t, execution, ir, x86FloatCompareOracleMain(cases, true), level)
+			t.Logf("dead-result ISA-axis=%d: %d complete programs ×432 inputs, %s, actual transport=%v", axis, len(cases), level, execution.prefix)
 		})
 	}
 }
