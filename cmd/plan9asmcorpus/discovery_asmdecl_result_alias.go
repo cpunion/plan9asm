@@ -41,6 +41,27 @@ func discoveryAsmDeclHasUnprovedResultWarning(err error) bool {
 	return false
 }
 
+// Preserve a completed typed ABI obligation before testless retry can remove
+// its declaration. Metadata padding/name warnings have already been filtered
+// by the caller. This cannot turn a diagnostic into success or source N/A.
+func discoveryAsmDeclHasCompletedABIObligation(err error) bool {
+	failures, observed := discoveryAsmDeclObservedFailures(err)
+	if !observed {
+		return false
+	}
+	for _, failure := range failures {
+		for _, line := range strings.Split(failure.output, "\n") {
+			line = strings.TrimSpace(line)
+			position := discoveryAsmDeclPosition(line)
+			if position != nil && (discoveryAsmDeclUnwrittenResult.MatchString(position[6]) ||
+				discoveryAsmDeclConcreteABIWarning(line)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // This is a private, per-actual-unit diagnostic filter, not a portable proof,
 // analyzer success receipt or translation permission. Only the precise RET
 // warning is removed. The original observed failure remains in the plan's raw
@@ -58,6 +79,24 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 		}
 	}
 	if !sealedUnit {
+		return original
+	}
+	// This CPP reconstruction closes only the observed ordinary builtin
+	// target/CPU defines and original package/SDK includes. Explicit flags can
+	// change -D, -I, trimpath or build-mode routing; do not guess which are
+	// harmless. Experiment/package-special assembler contexts stay unclosed.
+	flags, flagsObserved := plan.SDK["GOFLAGS"]
+	experiments, experimentsObserved := plan.SDK["GOEXPERIMENT"]
+	ordinary := false
+	packageMatches := 0
+	for _, pkg := range plan.Packages {
+		if pkg.ImportPath == unit.PackageID {
+			packageMatches++
+			ordinary = !pkg.Standard && pkg.Module != nil
+		}
+	}
+	if !flagsObserved || flags != "" || !experimentsObserved || experiments != "" ||
+		packageMatches != 1 || !ordinary {
 		return original
 	}
 	lines := strings.Split(failure.output, "\n")

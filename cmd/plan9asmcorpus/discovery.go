@@ -3205,9 +3205,10 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 		return err
 	}
 	// Completed actual analysis of a selected test variant must not lose a
-	// result-write obligation when the retry removes its Go declaration.
-	// Only the independent typed/source result proof may remove this warning.
-	if discoveryAsmDeclHasUnprovedResultWarning(err) {
+	// concrete ABI/result-write obligation when the retry removes its Go
+	// declaration. Only the independent typed/source result proof may remove
+	// the precise alias RET warning; real typed mismatches remain unchanged.
+	if discoveryAsmDeclHasCompletedABIObligation(err) {
 		return err
 	}
 	// go vet type-checks package tests before running asmdecl. Old modules can

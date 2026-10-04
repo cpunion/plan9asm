@@ -17,7 +17,11 @@ func discoveryAsmDeclResultAliasFixture(t *testing.T, declaration, assembly stri
 	writeTestFile(t, filepath.Join(root, "go.mod"), "module example.invalid/result-alias\n\ngo 1.20\n")
 	writeTestFile(t, filepath.Join(root, "decl.go"), "package alias\n"+declaration+"\n")
 	writeTestFile(t, filepath.Join(root, "decl_amd64.s"), assembly)
-	return root, discoveryAsmDeclDirectFixtureEnv(t, root)
+	// This proof deliberately does not parse GOFLAGS. Keep its ordinary CPP
+	// fixture context explicit; process concurrency is bounded by the caller.
+	return root, replaceEnv(discoveryAsmDeclDirectFixtureEnv(t, root), map[string]string{
+		"GOFLAGS": "", "GOEXPERIMENT": "",
+	})
 }
 
 func TestDiscoveryAsmDeclResultAliasActualOriginalGo(t *testing.T) {

@@ -131,9 +131,11 @@ For each target/tag/package group:
    actual unit's independently typed ABI0 layout, bound original CPP inputs,
    and complete all-path initialized-result-byte proof. Unknown effects,
    native memory, calls and uninitialized reads remain failures. A remaining
-   completed RET warning cannot be cleared by removing test declarations in
-   a testless retry. This narrow filter proves neither return-continuation
-   safety nor translation or object success.
+   completed concrete ABI mismatch or RET warning cannot be cleared by removing
+   test declarations in a testless retry. The alias filter does not close
+   nonempty actual GOFLAGS/GOEXPERIMENT or standard-package assembler contexts;
+   those keep their original failures. This narrow filter proves neither
+   return-continuation safety nor translation or object success.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and
