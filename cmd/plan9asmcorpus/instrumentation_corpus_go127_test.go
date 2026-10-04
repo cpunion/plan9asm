@@ -47,12 +47,17 @@ func TestInstrumentationCorpusOriginalModeAssemblyReachesStrictObjects(t *testin
 	}
 }
 
-func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard, cgo, target string, wantObjects bool) {
+func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard, cgo, target string, wantObjects bool, archive ...string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	candidate := discoveryCandidate{
 		Module: "example.invalid/instrumented", Version: "v1.0.0", AsmFiles: []string{"probe_arm64.s"},
+	}
+	if len(archive) == 1 {
+		candidate.Module = archive[0]
+	} else if len(archive) != 0 {
+		t.Fatal("fixture permits exactly one archive alias")
 	}
 	sources := map[string]string{
 		"go.mod":        "module example.invalid/instrumented\n\ngo 1.20\n",
@@ -188,6 +193,25 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 		OrdinarySelectionPlan: matrix.OrdinarySelectionPlan, FeatureProfiles: refs,
 		FeatureConsumption: matrix.FeatureConsumption,
 	}
+	if len(archive) == 1 {
+		mode := result.OrdinarySelectionPlan.InstrumentationPlan
+		if mode.ModuleMetadata != sources["go.mod"] || mode.Sources["."].ModuleMetadata != sources["go.mod"] {
+			t.Fatal("mode lost complete original alias metadata")
+		}
+		outcome := mode.Outcomes[0]
+		if outcome.PackagePlan.PackagePath != "example.invalid/instrumented" || outcome.Objects.ObjectCount != 1 {
+			t.Fatal("mode namespace or object count changed")
+		}
+		for _, metadata := range []*gotoolprofile.InstrumentationMetadataProof{
+			outcome.Query.Metadata, outcome.Objects.Metadata, outcome.Objects.Consumption.Metadata,
+		} {
+			selected := metadata.Selection.Packages[0]
+			if selected.ModulePath != "example.invalid/instrumented" || selected.SourceModule != candidate.Module ||
+				selected.ModuleVersion != candidate.Version || selected.SourceVersion != candidate.Version || selected.SourceRole != "version_replace" {
+				t.Fatal("actual producer/consumer substituted a main/local or different version archive role")
+			}
+		}
+	}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -260,6 +284,48 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 				d.Layout = []byte(strings.ReplaceAll(string(d.Layout), "i64", "i32"))
 			}
 		}},
+	}
+	if len(archive) == 1 {
+		tests = append(tests, []struct {
+			name   string
+			mutate func(*discoveryCorpusResult)
+		}{
+			{"alias metadata deleted", func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.InstrumentationPlan.ModuleMetadata = "" }},
+			{"alias metadata changed", func(r *discoveryCorpusResult) {
+				r.OrdinarySelectionPlan.InstrumentationPlan.ModuleMetadata += "// changed\n"
+			}},
+			{"inventory alias metadata deleted", func(r *discoveryCorpusResult) {
+				r.OrdinarySelectionPlan.InstrumentationPlan.Sources["."].ModuleMetadata = ""
+			}},
+			{"paired metadata deleted", func(r *discoveryCorpusResult) {
+				mode := r.OrdinarySelectionPlan.InstrumentationPlan
+				mode.ModuleMetadata, mode.Sources["."].ModuleMetadata = "", ""
+				mode.Sources["."].Module = r.Module
+			}},
+			{"paired archive replaced", func(r *discoveryCorpusResult) {
+				r.Module, r.OrdinarySelectionPlan.Module = "example.invalid/other-archive", "example.invalid/other-archive"
+			}},
+			{"paired namespace and source rewritten", func(r *discoveryCorpusResult) {
+				mode := r.OrdinarySelectionPlan.InstrumentationPlan
+				mode.ModuleMetadata = strings.ReplaceAll(mode.ModuleMetadata, "example.invalid/instrumented", "example.invalid/forged")
+				mode.Sources["."].ModuleMetadata = mode.ModuleMetadata
+				mode.Sources["."].Module = "example.invalid/forged"
+				for index := range r.OrdinarySelectionPlan.Directories {
+					for entry := range r.OrdinarySelectionPlan.Directories[index].Entries {
+						member := &r.OrdinarySelectionPlan.Directories[index].Entries[entry]
+						if member.Name == "go.mod" {
+							member.SHA256 = discoveryFeatureBytesSHA256([]byte(mode.ModuleMetadata))
+						}
+					}
+				}
+			}},
+			{"paired replacement role rewritten", func(r *discoveryCorpusResult) {
+				o := r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0]
+				for _, metadata := range []*gotoolprofile.InstrumentationMetadataProof{o.Query.Metadata, o.Objects.Metadata, o.Objects.Consumption.Metadata} {
+					metadata.Selection.Packages[0].SourceRole = "module"
+				}
+			}},
+		}...)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

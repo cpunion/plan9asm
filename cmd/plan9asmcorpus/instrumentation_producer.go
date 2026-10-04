@@ -25,7 +25,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 	if len(proof.Requirements) == 0 {
 		return 0, nil
 	}
-	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil {
+	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" {
 		return 0, fmt.Errorf("mode execution requires a fresh owned result, not another run's proof")
 	}
 	proof.Sources = make(map[string]*gotoolprofile.InstrumentationOriginalSourceInventory)
@@ -46,6 +46,13 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			}
 		}
 	}()
+	if err := captureDiscoveryInstrumentationNamespace(plan, download.Dir); err != nil {
+		return 0, err
+	}
+	modulePath, err := discoveryInstrumentationModulePath(plan)
+	if err != nil {
+		return 0, err
+	}
 	modeRoot := filepath.Join(workDir, "instrumentation")
 	if err := os.Mkdir(modeRoot, 0700); err != nil {
 		return 0, err
@@ -210,7 +217,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			if err := os.Mkdir(dir, 0700); err != nil {
 				return err
 			}
-			execution, err := makeDiscoveryExecutionPlan(candidate, candidate.Module)
+			execution, err := makeDiscoveryExecutionPlan(candidate, modulePath)
 			if err != nil {
 				return err
 			}
@@ -240,7 +247,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			goos, goarch, _ := strings.Cut(requirement.Target, "/")
 			common := []string{
 				"-instrumentation-profile=" + inputPath, "-instrumentation-package-dir=" + requirement.Directory,
-				"-goos=" + goos, "-goarch=" + goarch, "-module-path=" + candidate.Module,
+				"-goos=" + goos, "-goarch=" + goarch, "-module-path=" + modulePath,
 				"-patterns=" + packagePlan.PackagePath, "-asm-files=" + strings.Join(packagePlan.SFiles, ","),
 				"-strict-load=true", "-keep-going=false", "-feature-timeout=" + cfg.CandidateTimeout.String(),
 			}
@@ -311,7 +318,10 @@ func discoveryInstrumentationOriginalInput(plan *discoveryOrdinarySelectionPlan,
 
 func discoveryInstrumentationBaselineInput(plan *discoveryOrdinarySelectionPlan, baseline *discoveryTargetFeatures, root string, files []string) *gotoolprofile.ConsumerInput {
 	profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(baseline), Observed: baseline}
-	input := ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
+	modulePath, _ := discoveryInstrumentationModulePath(plan)
+	// Invalid metadata produces an invalid input; actual and portable callers
+	// report the specific namespace error before consuming this construction.
+	input := ordinaryProfileConsumerInput(plan, profile, modulePath, root, files)
 	// Original source protocols remain intact; a separate complete raw CPP
 	// graph supplies mode resources, never an ordinary header or export.
 	if cpp := plan.InstrumentationPlan.CPPInputs; cpp != nil {

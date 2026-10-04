@@ -68,8 +68,11 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, err
 	}
 	proof := plan.InstrumentationPlan
+	if _, err := discoveryInstrumentationModulePath(plan); err != nil {
+		return 0, nil, err
+	}
 	if len(proof.Requirements) == 0 {
-		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
+		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
 			return 0, nil, fmt.Errorf("empty instrumentation denominator carries unexplained mode evidence/counts")
 		}
 		return 0, nil, nil

@@ -21,12 +21,13 @@ const discoveryInstrumentationExcludedStatus = "official_target_excluded"
 // observations are shared by all scopes of the same original package/mode.
 // No requirement, marker, or early target rejection supplies a PASS.
 type discoveryInstrumentationPlan struct {
-	Protocol     string                                                           `json:"protocol"`
-	Requirements []discoveryInstrumentationRequirement                            `json:"requirements"`
-	Sources      map[string]*gotoolprofile.InstrumentationOriginalSourceInventory `json:"package_sources,omitempty"`
-	Observations map[string]*gotoolprofile.InstrumentationExportObservation       `json:"actual_mode_observations,omitempty"`
-	Outcomes     []discoveryInstrumentationOutcome                                `json:"outcomes,omitempty"`
-	CPPInputs    *discoveryCPPInputs                                              `json:"cpp_inputs,omitempty"`
+	Protocol       string                                                           `json:"protocol"`
+	Requirements   []discoveryInstrumentationRequirement                            `json:"requirements"`
+	Sources        map[string]*gotoolprofile.InstrumentationOriginalSourceInventory `json:"package_sources,omitempty"`
+	Observations   map[string]*gotoolprofile.InstrumentationExportObservation       `json:"actual_mode_observations,omitempty"`
+	Outcomes       []discoveryInstrumentationOutcome                                `json:"outcomes,omitempty"`
+	CPPInputs      *discoveryCPPInputs                                              `json:"cpp_inputs,omitempty"`
+	ModuleMetadata string                                                           `json:"original_module_metadata,omitempty"`
 }
 
 type discoveryInstrumentationOutcome struct {

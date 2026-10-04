@@ -25,6 +25,9 @@ type InstrumentationOriginalSourceInventory struct {
 	Version   string            `json:"version"`
 	Directory string            `json:"directory"`
 	Contents  map[string]string `json:"contents"`
+	// Present only for a version-replaced archive with a different declared
+	// namespace. This is complete original go.mod, never proxy metadata.
+	ModuleMetadata string `json:"original_module_metadata,omitempty"`
 }
 
 func CaptureInstrumentationOriginalSourceInventory(input *ConsumerInput, directory string) (*InstrumentationOriginalSourceInventory, error) {
@@ -40,6 +43,22 @@ func CaptureInstrumentationOriginalSourceInventory(input *ConsumerInput, directo
 		Directory: directory, Contents: make(map[string]string),
 	}
 	total := 0
+	if input.SourceModule != "" && input.SourceModule != input.Module {
+		physical, err := CPPRegularSource(input.SourceRoot, "go.mod")
+		if err != nil {
+			return nil, err
+		}
+		opened, err := os.Open(physical)
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(opened, instrumentationOriginalFileLimit+1))
+		if err := errors.Join(readErr, opened.Close()); err != nil {
+			return nil, err
+		}
+		inventory.ModuleMetadata = string(data)
+		total += len(data)
+	}
 	for _, name := range names {
 		if path.Ext(name) != ".go" && path.Ext(name) != ".s" {
 			continue
@@ -78,12 +97,15 @@ func ValidateInstrumentationOriginalSourceInventory(input *ConsumerInput, direct
 		directory != "." && !CPPLocalSource(directory) {
 		return fmt.Errorf("missing exact original full-source inventory identity")
 	}
+	if err := validateInstrumentationModuleNamespace(input, inventory.ModuleMetadata); err != nil {
+		return err
+	}
 	names, present := input.Directories[directory]
 	if !present || len(names) == 0 || len(names) > 65536 {
 		return fmt.Errorf("full-source inventory lacks its original complete directory")
 	}
 	wanted := make(map[string]string)
-	total := 0
+	total := len(inventory.ModuleMetadata)
 	for _, name := range names {
 		if path.Ext(name) != ".go" && path.Ext(name) != ".s" {
 			continue

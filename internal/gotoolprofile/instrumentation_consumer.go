@@ -110,6 +110,9 @@ func ValidateInstrumentationPackageSelection(input *InstrumentationConsumerInput
 		return fmt.Errorf("mode package selection differs from its complete independent context")
 	}
 	plan, pkg := input.Plan, proof.Packages[0]
+	if input.Original.SourceModule != "" && input.Original.SourceModule != input.Original.Module && pkg.SourceRole != "version_replace" {
+		return fmt.Errorf("mode namespace alias lacks its actual exact-version replacement role")
+	}
 	if len(plan.CgoFiles) != 0 || pkg.PackagePath != plan.PackagePath || !equalDiscoveryStrings(pkg.GoFiles, plan.GoFiles) ||
 		!equalDiscoveryStrings(pkg.CompiledGoFiles, plan.GoFiles) || !equalDiscoveryStrings(pkg.SFiles, plan.SFiles) {
 		return fmt.Errorf("mode package has changed original selection or an unproved generated/cgo source role")

@@ -64,10 +64,6 @@ func PlanInstrumentationOriginalPackage(input *ConsumerInput, sources *Instrumen
 		module.CheckPath(input.Module) != nil || input.SourceRoot == "" || !filepath.IsAbs(input.SourceRoot) {
 		return nil, fmt.Errorf("missing complete original source/module input")
 	}
-	if input.SourceModule == "" && input.Version != "" || input.SourceModule != "" &&
-		(input.SourceModule != input.Module || module.Check(input.Module, input.Version) != nil) {
-		return nil, fmt.Errorf("original source role lacks an exact external identity or genuine versionless main module")
-	}
 	if err := ValidateInstrumentationEarlyObservation(early); err != nil {
 		return nil, err
 	}

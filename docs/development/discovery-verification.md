@@ -377,6 +377,13 @@ contexts remain failures. All eligible scopes still require the complete
 query/CPP/object chain. All-excluded zero-object candidates remain failed;
 no scope-only success policy is authorized. Queries or markers alone cannot
 satisfy a scope.
+Mode consumers retain a different declared namespace only from complete
+original ZIP `go.mod`
+bytes bound to its registered member SHA. The actual version replacement,
+archive path/version and canonical package namespace must agree in graph,
+metadata, CPP and object consumers. Missing/changed alias metadata and proxy
+metadata pretending to be that ZIP member fail; this grants no source exclusion.
+
 Mode-only CPP CPU/experiment branch unions remain hard failures until their
 independent consumer coverage is closed. Reports, progress and ledger readers
 revalidate this same denominator and count completed mode object scopes in
