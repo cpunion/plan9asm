@@ -428,14 +428,17 @@ token. Both conventional BP producers are recognized from actual machine bytes,
 not from a Go version guess. Unknown generated/foreign/test/conditional/unwind
 roles remain Context, including current Windows auxiliary SEH records. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
-after commands; failure or Close revokes the token. This stage has no Binder,
+after commands; failure or Close revokes the token. The observer alone has no
 allocator, caller certificate, native-memory grant or compiler adapter.
 Pointer/slice observations retain the independent language type/model and
 object-bound ABI0 data/len/cap slots, including pointee, element, named/alias RHS
 and field identity. A go/types pointee model is not an observed native extent:
 Go1.20 StdSizes omits compiler tail padding/zero-tail storage in some structs.
 These observations grant no input extent, alias or GC contract. The numeric-only
-fixed-local consumer still rejects composite transport. By-value aggregates,
+fixed-local consumer still rejects composite transport. Its separate Binder
+re-typechecks the complete original numeric declaration and retains that
+language identity; each consumer checks it against the live factory declaration
+and object role/signature before and after translation. By-value aggregates,
 recursive/generic types, noninteger elements and nonordinary roles remain Context.
 Factory artifacts use the request's effective explicit TMPDIR, not the parent's
 temporary environment. Verify and Close check the created directory identity;

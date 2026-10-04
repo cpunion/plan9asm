@@ -13,14 +13,15 @@ import (
 // The public value transports only a private live observer binding. Neither
 // a declaration, a frame size nor a JSON round trip can construct this proof.
 type x86FixedLocalBinding struct {
-	source     *GoAMD64FrameSource
-	context    context.Context
-	file       [32]byte
-	assembly   string
-	target     string
-	inputs     map[string][32]byte
-	signatures map[string]FuncSig
-	symbols    map[string]string
+	source       *GoAMD64FrameSource
+	context      context.Context
+	file         [32]byte
+	assembly     string
+	target       string
+	inputs       map[string][32]byte
+	signatures   map[string]FuncSig
+	symbols      map[string]string
+	declarations map[string]goAMD64FrameDeclaration
 }
 
 // BindFixedLocal binds a complete original numeric ABI0 file to its actual Go
@@ -70,7 +71,8 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		len(file.Data)+len(file.Globl)+len(file.UnlinkedPrelude)+len(options.X86TailGroups) != 0 {
 		return Options{}, goAMD64FrameContext("fixed local binding target or complete source roles disagree")
 	}
-	if err := source.numericDeclarations(pkg); err != nil {
+	declarations, err := source.typedDeclarations(pkg, true)
+	if err != nil {
 		return Options{}, err
 	}
 	original, err := goAMD64FrameRead(filepath.Join(source.request.Directory, source.request.AssemblyFile))
@@ -98,8 +100,15 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		return Options{}, goAMD64FrameContext("fixed local binding needs actual package symbol resolution")
 	}
 	binding := &x86FixedLocalBinding{
-		source: source, context: ctx, file: fingerprint, assembly: expanded, target: options.TargetTriple,
-		inputs: make(map[string][32]byte, len(source.inputs)), signatures: make(map[string]FuncSig), symbols: make(map[string]string),
+		source:       source,
+		context:      ctx,
+		file:         fingerprint,
+		assembly:     expanded,
+		target:       options.TargetTriple,
+		inputs:       make(map[string][32]byte, len(source.inputs)),
+		signatures:   make(map[string]FuncSig),
+		symbols:      make(map[string]string),
+		declarations: make(map[string]goAMD64FrameDeclaration),
 	}
 	for name, sum := range source.inputs {
 		binding.inputs[name] = sum
@@ -115,17 +124,24 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 	for _, fn := range actual.Funcs {
 		name := resolve(fn.Sym)
 		observed, found := source.functions[name]
+		declaration, declared := declarations[name]
 		expectedName := pkg.Path + "." + strings.TrimPrefix(fn.Sym, "·")
 		sig, supplied := options.Sigs[name]
 		if !found || !supplied || name != expectedName || len(observed.code) == 0 ||
 			observed.locals != fn.FrameSize+8 || observed.args != fn.ArgSize ||
-			!reflect.DeepEqual(sig, observed.signature) {
+			!reflect.DeepEqual(sig, observed.signature) || !declared ||
+			!source.matchesFixedLocalDeclaration(name, declaration) {
 			return Options{}, goAMD64FrameContext("fixed local actual declaration/object/symbol mismatch: %s", fn.Sym)
 		}
 		if _, err := proveX86FixedLocal(fn, sig); err != nil {
 			return Options{}, err
 		}
 		binding.signatures[name] = actualSignatures[name]
+		// Preserve the independently re-typechecked language identity, not
+		// merely the collapsed LLVM signature. Neither observation-only
+		// composite roles nor stale private metadata can replace this witness.
+		declaration.signature = actualSignatures[name]
+		binding.declarations[name] = declaration
 		binding.symbols[fn.Sym] = name
 		sig.x86FixedLocal = binding
 		options.Sigs[name] = sig
@@ -251,7 +267,30 @@ func (binding *x86FixedLocalBinding) verify() error {
 	if !binding.source.ready || !reflect.DeepEqual(binding.inputs, binding.source.inputs) {
 		return goAMD64FrameContext("fixed local observer identity changed or was revoked")
 	}
+	if len(binding.declarations) != len(binding.signatures) {
+		return goAMD64FrameContext("fixed local numeric language witnesses are incomplete")
+	}
+	for name, signature := range binding.signatures {
+		declaration, found := binding.declarations[name]
+		if !found || !reflect.DeepEqual(signature, declaration.signature) ||
+			!binding.source.matchesFixedLocalDeclaration(name, declaration) {
+			return goAMD64FrameContext("fixed local numeric language/object identity changed: %s", name)
+		}
+	}
 	return nil
+}
+
+// Called only while source.mu is held. The expected declaration comes from
+// an independent original-source typecheck at Bind, then a private deep copy
+// retained by that binding. A factory observation alone grants no permission.
+func (source *GoAMD64FrameSource) matchesFixedLocalDeclaration(name string, expected goAMD64FrameDeclaration) bool {
+	observed, found := source.functions[name]
+	original, declared := source.declarations[name]
+	return found && declared && expected.transport == goAMD64FrameNumericTransport &&
+		observed.transport == expected.transport && original.transport == expected.transport &&
+		expected.languageType != "" && observed.languageType == expected.languageType &&
+		original.languageType == expected.languageType &&
+		reflect.DeepEqual(observed.signature, expected.signature) && reflect.DeepEqual(original.signature, expected.signature)
 }
 
 func finishX86FixedLocalBindings(bindings []*x86FixedLocalBinding) error {
