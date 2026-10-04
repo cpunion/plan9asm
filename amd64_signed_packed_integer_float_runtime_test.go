@@ -118,6 +118,8 @@ static int fault_child(childfn fn, const void *input, unsigned csr, const unsign
     pid_t pid = fork();
     if (pid < 0) return -1;
     if (pid == 0) {
+        struct rlimit core = {0,0};
+        if (setrlimit(RLIMIT_CORE,&core) != 0) _exit(90);
         unsigned char out[18];
         memset(out,0xc3,sizeof(out));
         fn(out+1,input,csr);

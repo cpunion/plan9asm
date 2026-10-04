@@ -3,6 +3,8 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"go/scanner"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -111,38 +113,129 @@ func TestX86SignedPackedIntegerFloatCompleteGoTables(t *testing.T) {
 			}
 		}
 	}
-	for _, name := range []string{"VCVTDQ2PS", "VCVTDQ2PD"} {
-		start := strings.Index(string(avx), "{as: A"+name+",")
-		if start < 0 {
-			t.Fatal(name)
-		}
-		body := strings.SplitN(string(avx)[start:], "\n\t}},", 2)[0]
-		if strings.Count(body, "avxEscape | vex") != 2 || strings.Count(body, "avxEscape | evex") != 3 || strings.Contains(body, "evexSaeEnabled") {
-			t.Fatalf("actual encoding rows/SAE changed: %s", body)
-		}
-		for _, line := range strings.Split(body, "\n") {
-			if !strings.Contains(line, "avxEscape | evex") {
-				continue
-			}
-			width := 16
-			if strings.Contains(line, "evex256") {
-				width = 32
-			}
-			if strings.Contains(line, "evex512") {
-				width = 64
-			}
-			tuple := width
-			if name == "VCVTDQ2PD" {
-				tuple /= 2
-			}
-			if !strings.Contains(line, fmt.Sprintf("evexN%d | evexBcstN4", tuple)) || !strings.Contains(line, "evexZeroingEnabled") ||
-				strings.Contains(line, "evexRoundingEnabled") != (name == "VCVTDQ2PS" && width == 64) {
-				t.Fatalf("actual tuple/ER changed: %s", line)
-			}
+	for name, expected := range x86SignedPackedFloatGoOpcodeRows {
+		if err := x86SignedPackedFloatValidateGoOpcodeRows(string(avx), name, expected); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if len(x86SignedPackedFloatSpecs) != 4 {
 		t.Fatal("signed dword family namespace incomplete")
+	}
+}
+
+// Independent full Go encoder rows: tuple agreement alone cannot establish
+// W, pp, opcode map, opcode byte or the absence of extra SAE/ER attributes.
+// Order is significant because the ytab's zoffset selects these byte groups.
+var x86SignedPackedFloatGoOpcodeRows = map[string]string{
+	"VCVTDQ2PD": `{as: AVCVTDQ2PD, ytab: _yvcvtdq2pd, prefix: Pavx, op: opBytes{
+		avxEscape | vex128 | vexF3 | vex0F | vexW0, 0xE6,
+		avxEscape | vex256 | vexF3 | vex0F | vexW0, 0xE6,
+		avxEscape | evex128 | evexF3 | evex0F | evexW0, evexN8 | evexBcstN4 | evexZeroingEnabled, 0xE6,
+		avxEscape | evex256 | evexF3 | evex0F | evexW0, evexN16 | evexBcstN4 | evexZeroingEnabled, 0xE6,
+		avxEscape | evex512 | evexF3 | evex0F | evexW0, evexN32 | evexBcstN4 | evexZeroingEnabled, 0xE6,
+	}},`,
+	"VCVTDQ2PS": `{as: AVCVTDQ2PS, ytab: _yvcvtdq2ps, prefix: Pavx, op: opBytes{
+		avxEscape | vex128 | vex0F | vexW0, 0x5B,
+		avxEscape | vex256 | vex0F | vexW0, 0x5B,
+		avxEscape | evex512 | evex0F | evexW0, evexN64 | evexBcstN4 | evexRoundingEnabled | evexZeroingEnabled, 0x5B,
+		avxEscape | evex128 | evex0F | evexW0, evexN16 | evexBcstN4 | evexZeroingEnabled, 0x5B,
+		avxEscape | evex256 | evex0F | evexW0, evexN32 | evexBcstN4 | evexZeroingEnabled, 0x5B,
+	}},`,
+}
+
+func x86SignedPackedFloatValidateGoOpcodeRows(source, name, expected string) error {
+	marker := "{as: A" + name + ","
+	if strings.Count(source, marker) != 1 {
+		return fmt.Errorf("actual Go %s opcode entry missing or duplicated", name)
+	}
+	start := strings.Index(source, marker)
+	const end = "\n\t}},"
+	length := strings.Index(source[start:], end)
+	if length < 0 {
+		return fmt.Errorf("actual Go %s opcode entry unterminated", name)
+	}
+	actual := source[start : start+length+len(end)]
+	actualTokens, err := x86SignedPackedFloatGoOpcodeTokens(actual)
+	if err != nil {
+		return err
+	}
+	expectedTokens, err := x86SignedPackedFloatGoOpcodeTokens(expected)
+	if err != nil {
+		return err
+	}
+	if strings.Join(actualTokens, "\x00") != strings.Join(expectedTokens, "\x00") {
+		return fmt.Errorf("actual Go %s complete encoding rows changed:\n%s", name, actual)
+	}
+	return nil
+}
+
+func x86SignedPackedFloatGoOpcodeTokens(source string) ([]string, error) {
+	var lexer scanner.Scanner
+	var scanError error
+	file := token.NewFileSet().AddFile("opcode-rows", -1, len(source))
+	lexer.Init(file, []byte(source), func(position token.Position, message string) {
+		scanError = fmt.Errorf("Go opcode row %s: %s", position, message)
+	}, 0)
+	var tokens []string
+	for {
+		_, kind, literal := lexer.Scan()
+		if kind == token.EOF {
+			break
+		}
+		if literal == "" {
+			literal = kind.String()
+		}
+		tokens = append(tokens, literal)
+	}
+	return tokens, scanError
+}
+
+func TestX86SignedPackedIntegerFloatGoOpcodeAttributesCannotChange(t *testing.T) {
+	for name, expected := range x86SignedPackedFloatGoOpcodeRows {
+		t.Run(name, func(t *testing.T) {
+			if err := x86SignedPackedFloatValidateGoOpcodeRows(expected, name, expected); err != nil {
+				t.Fatal(err)
+			}
+			type rowMutation struct{ name, old, replacement string }
+			mutations := []rowMutation{
+				{"VEX W", "vexW0", "vexW1"},
+				{"EVEX W", "evexW0", "evexW1"},
+				{"VEX map", "vex0F", "vex0F38"},
+				{"EVEX map", "evex0F", "evex0F38"},
+				{"VEX pp", "vex128 |", "vex128 | vex66 |"},
+				{"EVEX pp", "evex128 |", "evex128 | evex66 |"},
+				{"tuple", "evexN16", "evexN8"},
+				{"broadcast", "evexBcstN4", "evexBcstN8"},
+				{"zero", " | evexZeroingEnabled", ""},
+				{"SAE", "evexZeroingEnabled", "evexZeroingEnabled | evexSaeEnabled"},
+				{"duplicate entry", expected, expected + "\n" + expected},
+			}
+			if name == "VCVTDQ2PS" {
+				mutations = append(mutations,
+					rowMutation{"opcode", "0x5B", "0x5A"},
+					rowMutation{"ER", " | evexRoundingEnabled", ""})
+			} else {
+				mutations = append(mutations,
+					rowMutation{"opcode", "0xE6", "0xE7"},
+					rowMutation{"ER", "evexZeroingEnabled", "evexZeroingEnabled | evexRoundingEnabled"})
+			}
+			lines := strings.Split(expected, "\n")
+			mutations = append(mutations,
+				rowMutation{"missing row", lines[1] + "\n", ""},
+				rowMutation{"extra row", lines[1], lines[1] + "\n" + lines[1]},
+				rowMutation{"row order", lines[1] + "\n" + lines[2], lines[2] + "\n" + lines[1]})
+			for _, mutation := range mutations {
+				t.Run(mutation.name, func(t *testing.T) {
+					source := strings.Replace(expected, mutation.old, mutation.replacement, 1)
+					if source == expected {
+						t.Fatal("mutation did not change the original row")
+					}
+					if err := x86SignedPackedFloatValidateGoOpcodeRows(source, name, expected); err == nil {
+						t.Fatal("encoding mutation passed the complete Go row contract")
+					}
+				})
+			}
+		})
 	}
 }
 
