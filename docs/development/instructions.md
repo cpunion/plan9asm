@@ -440,6 +440,12 @@ re-typechecks the complete original numeric declaration and retains that
 language identity; each consumer checks it against the live factory declaration
 and object role/signature before and after translation. By-value aggregates,
 recursive/generic types, noninteger elements and nonordinary roles remain Context.
+That fixed-local contract accepts either one initialized numeric result or a
+typed void return with no result slots. Void does not exempt any original or
+normalized DAG, local-byte initialization, native alignment, SP restoration,
+BP/g, escape or source-lifetime check, and cannot authorize an FP input store.
+Compile-only void object tests establish no numerical return or external-library
+runtime coverage; pointer/slice observations still have no local-memory permission.
 Factory artifacts use the request's effective explicit TMPDIR, not the parent's
 temporary environment. Verify and Close check the created directory identity;
 replaced or redirected directories are never recursively cleaned. The package

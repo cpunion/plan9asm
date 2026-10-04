@@ -61,10 +61,12 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 }
 
 func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
+	voidReturn := sig.Ret == Void && len(sig.Frame.Results) == 0
+	valueReturn := sig.Ret != "" && sig.Ret != Void && len(sig.Frame.Results) == 1
 	if fn.FrameSize <= 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 ||
 		len(fn.Instrs) == 0 || len(fn.Instrs) > 8192 || fn.FrameSize > (1<<20)/int64(len(fn.Instrs)) ||
 		len(fn.X86RawText) != 0 || len(sig.ArgRegs) != 0 || sig.ARMEntry != nil ||
-		sig.ARM64GoRegisterABI != nil || sig.x86CallerRegions != nil || len(sig.Frame.Results) != 1 {
+		sig.ARM64GoRegisterABI != nil || sig.x86CallerRegions != nil || !voidReturn && !valueReturn {
 		return fn, goAMD64FrameContext("fixed local source has an unbound frame or entry contract")
 	}
 	copyFn := fn
@@ -397,7 +399,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	}
 	if ins.Op == OpRET {
 		sp, found := state.pointers[SP]
-		if len(ins.Args) != 0 || !found || sp != 0 || !state.results[0] {
+		if len(ins.Args) != 0 || !found || sp != 0 || sig.Ret != Void && !state.results[0] {
 			return fail()
 		}
 		return nil
