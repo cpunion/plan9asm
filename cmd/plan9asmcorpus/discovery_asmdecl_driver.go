@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 	"golang.org/x/mod/module"
 )
 
@@ -951,6 +952,9 @@ func (plan *directAsmDeclPlan) bindSDK() error {
 	if expectedGo != plan.GoBinary {
 		return fmt.Errorf("actual Go executable does not belong to observed GOROOT")
 	}
+	if _, _, err := gotoolprofile.BuiltinCandidates(root, plan.SDK["GOVERSION"]); err != nil {
+		return fmt.Errorf("direct asmdecl actual SDK experiment registration: %w", err)
+	}
 	toolDir, err := directAsmDeclPhysicalDirectory(plan.SDK["GOTOOLDIR"])
 	if err != nil {
 		return err
@@ -1013,6 +1017,9 @@ func (plan *directAsmDeclPlan) bindSDK() error {
 		return fmt.Errorf("actual asmdecl factless analyzer registration is unclosed")
 	}
 	files := []string{plan.GoBinary, filepath.Join(root, "VERSION"), unitSource, asmSource}
+	for _, relative := range []string{"internal/buildcfg/cfg.go", "internal/buildcfg/exp.go", "internal/goexperiment/flags.go", "cmd/internal/objabi/flag.go"} {
+		files = append(files, filepath.Join(root, "src", filepath.FromSlash(relative)))
+	}
 	for _, name := range []string{"vet", "compile", "asm"} {
 		if runtime.GOOS == "windows" {
 			name += ".exe"
@@ -1032,14 +1039,25 @@ func (plan *directAsmDeclPlan) bindSDK() error {
 
 func (plan *directAsmDeclPlan) observeToolVersions(ctx context.Context) (map[string]string, error) {
 	versions := make(map[string]string)
+	names, err := directAsmDeclExperimentOrder(filepath.Join(plan.SDK["GOROOT"], "src", "internal", "goexperiment", "flags.go"))
+	if err != nil {
+		return nil, err
+	}
+	var actualExperiments string
 	for _, tool := range []string{"vet", "compile", "asm"} {
 		output, err := directAsmDeclCommandJSON(ctx, plan.Dir, plan.Env, plan.GoBinary, "tool", tool, "-V=full")
 		if err != nil {
 			return nil, err
 		}
 		version := strings.TrimSpace(string(output))
-		if version != tool+" version "+plan.SDK["GOVERSION"] {
-			return nil, fmt.Errorf("direct asmdecl actual %s version is not the selected SDK: %q", tool, version)
+		experiments, err := directAsmDeclToolVersionExperiments(version, tool, plan.SDK["GOVERSION"], names)
+		if err != nil {
+			return nil, err
+		}
+		if tool == "vet" {
+			actualExperiments = experiments
+		} else if experiments != actualExperiments {
+			return nil, fmt.Errorf("direct asmdecl actual SDK tools have different experiment identities")
 		}
 		versions[tool] = version
 	}
