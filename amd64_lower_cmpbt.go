@@ -109,7 +109,7 @@ func (c *amd64Ctx) setTestFlagsSized(ty LLVMType, a, b string) {
 }
 
 func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
-	if err := unresolvedSymbolicImmediateError(op); err != nil {
+	if err := unresolvedSymbolicImmediateErrorForArch(op, ArchAMD64); err != nil {
 		return "", err
 	}
 	switch op.Kind {
@@ -150,6 +150,18 @@ func (c *amd64Ctx) evalIntSized(op Operand, ty LLVMType) (string, error) {
 		s := strings.TrimSpace(op.Sym)
 		if strings.HasPrefix(s, "$") {
 			address := strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if memory, matched, err := parseX86SymbolIndexedMemory(address); matched {
+				if err != nil {
+					return "", err
+				}
+				wide, err := c.addrFromSymbolIndexedAddress(memory)
+				if err != nil || ty == I64 {
+					return wide, err
+				}
+				value := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to %s\n", value, wide, ty)
+				return "%" + value, nil
+			}
 			if strings.HasSuffix(address, "(SB)") {
 				p, err := c.ptrFromSB(address)
 				if err != nil {

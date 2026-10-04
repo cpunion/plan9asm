@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -493,6 +494,31 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 					return parsed, nil
 				}
 			}
+		}
+	}
+	if arch == ArchAMD64 {
+		x86Operand := strings.TrimSpace(s)
+		address := strings.HasPrefix(x86Operand, "$")
+		body := strings.TrimSpace(strings.TrimPrefix(x86Operand, "$"))
+		if memory, matched, err := parseX86SymbolIndexedMemory(body); matched {
+			if err != nil {
+				// Preserve the old shared parser's g index spelling, but do
+				// not normalize a new unscaled Reg or address-immediate g
+				// annotation into a Go-valid ignored 386 register.
+				normalized := normalizeGoGRegister(arch, body)
+				if !address && errors.Is(err, ErrProbeNeedsContext) && normalized != body && x86SymbolGIndex.MatchString(body) {
+					if legacy, ok := parseMem(normalized); ok &&
+						strings.HasSuffix(legacy.Sym, "(SB)") && legacy.Base == "" && legacy.Index == "R14" {
+						return Operand{Kind: OpMem, Mem: legacy}, nil
+					}
+				}
+				return Operand{}, err
+			}
+			operand := Operand{Kind: OpMem, Mem: memory}
+			if address {
+				return Operand{Kind: OpSym, Sym: "$" + operand.String()}, nil
+			}
+			return operand, nil
 		}
 	}
 	s = normalizeGoGRegister(arch, s)

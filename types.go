@@ -296,7 +296,7 @@ type Operand struct {
 
 type MemRef struct {
 	Base     Reg
-	Sym      string // optional symbol-based address, including the (SB) suffix
+	Sym      string // optional named address role, including (SB), (FP), or (SP)
 	Off      int64
 	OffRaw   string   // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
 	Index    Reg      // optional; empty if not present
@@ -346,10 +346,17 @@ func (o Operand) String() string {
 			segment = fmt.Sprintf("(%s)", o.Mem.Segment)
 		}
 		if o.Mem.Sym != "" {
-			if o.Mem.Scale == 0 {
-				return fmt.Sprintf("%s(%s)%s", o.Mem.Sym, o.Mem.Index, segment)
+			symbol := o.Mem.Sym
+			if o.Mem.Base != "" {
+				symbol += fmt.Sprintf("(%s)", o.Mem.Base)
 			}
-			return fmt.Sprintf("%s(%s*%d)%s", o.Mem.Sym, o.Mem.Index, o.Mem.Scale, segment)
+			if o.Mem.Index == "" {
+				return symbol + segment
+			}
+			if o.Mem.Scale == 0 {
+				return fmt.Sprintf("%s(%s)%s", symbol, o.Mem.Index, segment)
+			}
+			return fmt.Sprintf("%s(%s*%d)%s", symbol, o.Mem.Index, o.Mem.Scale, segment)
 		}
 		offset := fmt.Sprintf("%d", o.Mem.Off)
 		if o.Mem.OffRaw != "" {

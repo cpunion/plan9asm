@@ -2127,6 +2127,9 @@ func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
 }
 
 func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
+	if err := x86SymbolIndexedMemoryError(mem, c.goarch); err != nil {
+		return "", err
+	}
 	var cur string
 	if mem.Sym != "" {
 		base, err := c.ptrFromSB(mem.Sym)

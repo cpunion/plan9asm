@@ -226,6 +226,26 @@ imm16 operands, reject unregistered prefixes, and compare original Go and
 LLVM object bytes for all five supported x86 targets. Those object checks
 do not prove a privileged kernel's far-return stack or runtime behavior.
 
+Named x86 addresses retain the pseudo-base role separately from subsequent
+physical register groups: `slot(FP)(SI*1)` supplies an index, while
+`slot(FP)(SI)` supplies Reg, which Go rejects on amd64 and ignores on 386.
+Scale spellings are Go's single decimal tokens 1/2/4/8, not arbitrary constant
+expressions. A parsed indexed FP/AUTO operand does not establish a contiguous
+frame, dynamic bounds, or address provenance and remains Context without those
+contracts. Ordinary amd64 SB memory cannot combine RIP with a base/index.
+For 386 SB memory/LEA, Reg is ignored but Index is used; a non-shared relocated
+SB address immediate ignores both. Keep these effects and the decoder's
+physical SP operands distinct. Alternate pseudo-role overwrite forms remain
+explicit Context rather than being misclassified as Go-rejected syntax.
+The complete Go x86 register-name inventory is checked before discarding
+unused 386 SB annotations; this never grants a segment/SIMD register input.
+TLS memory progedit and segment Index operands remain Context without their
+native address/source-encoder contracts. In particular TYPE_ADDR segment Index
+prefixes differ in the actual Go 1.20 and 1.27 encoders; no build-version guess
+selects their meaning.
+Grouped SB CALL/JMP/RET operands have Go's TYPE_BRANCH role, not a native
+indexed read; they remain Context without a bound branch/entry contract.
+
 The main implementation entry points are:
 
 - x86/386/amd64: `amd64_blocks.go`, `amd64_needed.go`, `amd64_translate.go`,

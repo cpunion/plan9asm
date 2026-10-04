@@ -33,6 +33,12 @@ func x86LEAOperandWidth(ins Instr, arch string) (int64, error) {
 	switch ins.Args[0].Kind {
 	case OpMem:
 		memory := ins.Args[0].Mem
+		if err := x86SymbolIndexedMemoryError(memory, arch); err != nil {
+			return 0, err
+		}
+		if arch == "386" && strings.HasSuffix(memory.Sym, "(SB)") {
+			memory.Base = "" // Go's named-memory encoder discards Reg.
+		}
 		if !x86MemoryRegistersValidForArch(memory, arch) {
 			return 0, fmt.Errorf("%s %s source uses an out-of-range address register: %q", arch, ins.Op, ins.Raw)
 		}

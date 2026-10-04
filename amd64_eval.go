@@ -6,7 +6,7 @@ import (
 )
 
 func (c *amd64Ctx) evalI64(op Operand) (string, error) {
-	if err := unresolvedSymbolicImmediateError(op); err != nil {
+	if err := unresolvedSymbolicImmediateErrorForArch(op, ArchAMD64); err != nil {
 		return "", err
 	}
 	switch op.Kind {
@@ -29,6 +29,12 @@ func (c *amd64Ctx) evalI64(op Operand) (string, error) {
 		addrOnly := strings.HasPrefix(s, "$")
 		if addrOnly {
 			s = strings.TrimSpace(strings.TrimPrefix(s, "$"))
+			if mem, matched, err := parseX86SymbolIndexedMemory(s); matched {
+				if err != nil {
+					return "", err
+				}
+				return c.addrFromSymbolIndexedAddress(mem)
+			}
 			if mem, ok := parseMem(s); ok {
 				return c.addrFromMem(mem)
 			}

@@ -395,8 +395,13 @@ func translateIRText(file *File, opt Options) (string, error) {
 
 func validateResolvedImmediates(arch Arch, fn Func) error {
 	for _, ins := range fn.Instrs {
+		if arch == ArchAMD64 {
+			if err := x86SymbolIndexedControlError(ins); err != nil {
+				return err
+			}
+		}
 		for _, arg := range ins.Args {
-			if err := unresolvedSymbolicImmediateError(arg); err != nil {
+			if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 				return err
 			}
 			if arch == ArchWASM && arg.Kind == OpMem && arg.Mem.OffRaw != "" {
@@ -436,10 +441,32 @@ func unresolvedSymbolicImmediateError(op Operand) error {
 	if _, _, ok := parseFPAddr(op.Sym); ok {
 		return nil
 	}
+	if memory, matched, err := parseX86SymbolIndexedMemory(address); matched {
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(memory.Sym, "(FP)") || strings.HasSuffix(memory.Sym, "(SP)") {
+			return fmt.Errorf("%w: indexed FP/AUTO address needs original frame provenance", ErrProbeNeedsContext)
+		}
+		if _, legacyMemory := parseMem(address); legacyMemory {
+			return nil
+		}
+		return fmt.Errorf("%w: indexed symbol address needs an x86 operand consumer", ErrProbeNeedsContext)
+	}
 	if _, ok := parseMem(address); ok {
 		return nil
 	}
 	return fmt.Errorf("unresolved symbolic immediate %q", op.Sym)
+}
+
+func unresolvedSymbolicImmediateErrorForArch(op Operand, arch Arch) error {
+	if arch == ArchAMD64 && op.Kind == OpSym && strings.HasPrefix(op.Sym, "$") {
+		address := strings.TrimSpace(strings.TrimPrefix(op.Sym, "$"))
+		if memory, matched, err := parseX86SymbolIndexedMemory(address); matched && err == nil && strings.HasSuffix(memory.Sym, "(SB)") {
+			return nil // The final x86 consumer still validates native shape.
+		}
+	}
+	return unresolvedSymbolicImmediateError(op)
 }
 
 func emitExternFuncDecls(b *strings.Builder, file *File, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI) {

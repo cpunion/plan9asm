@@ -423,7 +423,7 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		}
 	}
 	for _, arg := range ins.Args {
-		if err := unresolvedSymbolicImmediateError(arg); err != nil {
+		if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 			return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
 		}
 		switch arg.Kind {
@@ -494,7 +494,7 @@ func probeInstructionSequence(arch Arch, goarch string, instrs []Instr) error {
 	}
 	for _, ins := range instrs {
 		for _, arg := range ins.Args {
-			if err := unresolvedSymbolicImmediateError(arg); err != nil {
+			if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 				return fmt.Errorf("%w: %s needs resolved assembler constants: %v", ErrProbeNeedsContext, ins.Raw, err)
 			}
 			if arg.Kind == OpLabel {
