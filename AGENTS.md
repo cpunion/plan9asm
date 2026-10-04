@@ -66,10 +66,14 @@ tests establish the relevant runtime semantics.
   while tests are running; use a separate persistent worktree for development.
 - Keep reports/binaries under ignored `_out/`. Never commit caches, ZIPs,
   compressed discovery results or obsolete per-run ledgers, even in history.
-- Ordinary profile coverage uses report schema 10, progress schema 2 and
-  assembly-ledger v2: preserve file/target/profile-ID/custom-tag scopes, actual
+- Ordinary profile coverage uses report schema 11, progress schema 3 and
+  assembly-ledger v3: preserve file/target/profile-ID/custom-tag scopes, actual
   Go/tool/package-role and CPP/LLVM consumer proofs. Do not relabel old reports
   or treat feature-only files, unknown diagnostics or unconsumed variants as N/A.
+  Exact official instrumentation target exclusions are separate zero-object
+  scopes; every eligible scope still needs its normal compiler/object proofs.
+  Read old reports with their frozen historical tools; never copy old passes
+  or overwrite a v2 ledger as a v3 migration.
 - Commit verified development promptly. Keep PR 40 draft until current-head
   tests, CI, review and coverage meet the completion gates.
 - Stage PR 40 repairs in a separate branch and Draft PR inside `cpunion`.
