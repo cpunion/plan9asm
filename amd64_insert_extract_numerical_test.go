@@ -198,6 +198,7 @@ func TestCrossLinuxRuntimeMatrixX86InsertInactiveMemoryStillFaults(t *testing.T)
 #include <signal.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <stdio.h>
 typedef void(*transfer)(void*,const void*);
@@ -205,7 +206,18 @@ static int fault(transfer fn,const void *input,unsigned width){
  int statuses[2];
  for(unsigned oracle=0;oracle<2;oracle++){
   pid_t child=fork();if(child<0)return 1;
-  if(child==0){uint8_t out[64];if(oracle){volatile const uint8_t *p=input;volatile uint8_t sink=0;for(unsigned i=0;i<width;i++)sink^=p[i];}else fn(out,input);_exit(0);}
+  if(child==0){
+   struct rlimit no_core={0,0};
+   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+
+   uint8_t out[64];
+   if(oracle){
+    volatile const uint8_t *p=input;
+    volatile uint8_t sink=0;
+    for(unsigned i=0;i<width;i++)sink^=p[i];
+   }else fn(out,input);
+   _exit(0);
+  }
   if(waitpid(child,&statuses[oracle],0)!=child)return 1;
  }
  int expected=WIFSIGNALED(statuses[1])?WTERMSIG(statuses[1]):0;

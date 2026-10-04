@@ -55,6 +55,7 @@ func TestCrossLinuxRuntimeMatrixX86PackedShiftNativeReadFaults(t *testing.T) {
 #include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
@@ -67,6 +68,9 @@ static int check_fault(fault_fn fn,int should_fault,int accessible,size_t page) 
  memset(area+page-8,0,8);
  pid_t child=fork(); if(child<0) return 2;
  if(!child) {
+  struct rlimit no_core={0,0};
+  if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+
   const uint8_t *address=should_fault?area+page-accessible:area+page;
   fn(out+1,data,address);
   if(out[0]!=0xa7 || out[33]!=0xa7) _exit(3);

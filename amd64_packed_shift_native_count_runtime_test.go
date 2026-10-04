@@ -96,6 +96,7 @@ const x86PackedShiftLegacyCountCHeader = `
 #include <string.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
@@ -170,6 +171,9 @@ static int observe_count(legacy_fn fn,int kernel,int round,int seed,const uint8_
  pid_t child=fork();
  if(child<0) return -1;
  if(!child) {
+  struct rlimit no_core={0,0};
+  if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+
   if(guard) {
    uint8_t data[18],out[23];
    memset(data,13,18); memset(out,0xc3,23);

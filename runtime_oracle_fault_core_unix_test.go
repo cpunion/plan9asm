@@ -44,7 +44,10 @@ func runtimeOracleFaultC(t *testing.T, name string) string {
 
 func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 	child := regexp.MustCompile(`if\s*\(\s*(?:child\s*==\s*0|!child)\s*\)\s*\{`)
-	policy := regexp.MustCompile(`^\s*struct\s+rlimit\s+no_core\s*=\s*\{\s*0\s*,\s*0\s*\}\s*;\s*if\s*\(\s*setrlimit\s*\(\s*RLIMIT_CORE\s*,\s*&no_core\s*\)\s*\)\s*_exit\s*\(\s*120\s*\)\s*;`)
+	policy := regexp.MustCompile(
+		`^\s*struct\s+rlimit\s+no_core\s*=\s*\{\s*0\s*,\s*0\s*\}\s*;` +
+			`\s*if\s*\(\s*setrlimit\s*\(\s*RLIMIT_CORE\s*,\s*&no_core\s*\)\s*\)` +
+			`\s*\)\s*_exit\s*\(\s*120\s*\)\s*;`)
 	for _, name := range []string{
 		"amd64_signed_integer_scalar_float_runtime_test.go",
 		"amd64_packed_shift_fault_test.go",

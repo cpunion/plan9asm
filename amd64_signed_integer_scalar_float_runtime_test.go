@@ -189,13 +189,18 @@ func x86SignedIntegerScalarFloatFaultFixture(t *testing.T, requireTrap bool) {
 #include <signal.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 typedef void(*readfn)(const void*);
 static int check(readfn fn,const void*input,int width,int bits,unsigned csr){
  int statuses[2];
  for(unsigned original=0;original<2;original++){
   pid_t child=fork();if(child<0)return 1;
-  if(child==0){__asm__ volatile("ldmxcsr %0"::"m"(csr):"memory");
+  if(child==0){
+   struct rlimit no_core={0,0};
+   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+
+   __asm__ volatile("ldmxcsr %0"::"m"(csr):"memory");
    if(!original)fn(input);
    else if(bits==32){
     if(width==4)__asm__ volatile("cvtsi2ssl (%0),%%xmm0"::"r"(input):"xmm0","memory");
