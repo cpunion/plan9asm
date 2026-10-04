@@ -1896,10 +1896,13 @@ func TestDiscoveryCorpusReportAccountingMatchesAuditableResults(t *testing.T) {
 		Module: "example.com/a", Version: "v1.0.0", AsmFiles: []string{"a_amd64.s"},
 	}, targets)
 	report := discoveryCorpusReport{
-		Targets:      targets,
-		Selected:     2,
-		Passed:       2,
-		Translations: 3,
+		SchemaVersion:    discoveryReportSchema,
+		Provenance:       discoveryCorpusProvenance{InstrumentationScopeProtocol: discoveryInstrumentationPlanProtocol, GoVersion: passed.OrdinarySelectionPlan.GoVersion},
+		FeatureInventory: passed.featureInventory,
+		Targets:          targets,
+		Selected:         2,
+		Passed:           2,
+		Translations:     3,
 		Results: []discoveryCorpusResult{
 			passed,
 			{Module: "example.com/b", Version: "v1.0.0", Status: discoveryStatusFailed, Translations: 2},

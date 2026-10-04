@@ -18,7 +18,7 @@ import (
 // consumers. Nothing here translates an instrumentation tag into custom tags,
 // reuses an ordinary export, or turns a tool/source failure into source N/A.
 func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo, plan *discoveryOrdinarySelectionPlan, profiles []discoveryFeatureProfile, workDir string, env []string) (objects int, runErr error) {
-	if plan == nil || plan.InstrumentationPlan == nil {
+	if plan == nil || plan.InstrumentationPlan == nil || plan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol {
 		return 0, fmt.Errorf("mode execution lacks its independently required denominator")
 	}
 	proof := plan.InstrumentationPlan
@@ -40,7 +40,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 		if runErr != nil {
 			for index := range proof.Outcomes {
 				outcome := &proof.Outcomes[index]
-				if outcome.Status != "llvm_objects_only" && outcome.Error == "" {
+				if outcome.Status != "llvm_objects_only" && outcome.Status != discoveryInstrumentationExcludedStatus && outcome.Error == "" {
 					outcome.Error = runErr.Error()
 				}
 			}
@@ -91,13 +91,27 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 				if err := os.Mkdir(earlyDir, 0700); err != nil {
 					return err
 				}
-				early, err := gotoolprofile.CaptureInstrumentationEarlyObservation(ctx, binary, earlyDir, env, requirement.Target, requirement.Mode, requirement.CGO, requirement.Overrides, gotoolprofile.RunBounded)
+				early, excluded, err := gotoolprofile.CaptureInstrumentationScopeObservation(ctx, binary, earlyDir, env, requirement.Target, requirement.Mode, requirement.CGO, requirement.Overrides, requirement.Tags, gotoolprofile.RunBounded)
 				if err != nil {
 					return err
 				}
 				if early.Status != gotoolprofile.InstrumentationEarlyRuleAccepted {
-					outcome.Early, outcome.Status = early, "early_target_rejected"
-					return fmt.Errorf("stock Go's exact early rule rejects %s/%s/CGO=%s; not ordinary N/A", requirement.Target, requirement.Mode, requirement.CGO)
+					inventory := proof.Sources[requirement.Directory]
+					if inventory == nil {
+						input := discoveryInstrumentationBaselineInput(plan, early.BaselineFeatures, download.Dir, nil)
+						inventory, err = gotoolprofile.CaptureInstrumentationOriginalSourceInventory(input, requirement.Directory)
+						if err != nil {
+							return fmt.Errorf("official rule original source binding: %w", err)
+						}
+						proof.Sources[requirement.Directory] = inventory
+					}
+					candidate := *outcome
+					candidate.TargetExclusion, candidate.Status = excluded, discoveryInstrumentationExcludedStatus
+					if err := validateDiscoveryInstrumentationTargetExclusion(plan, requirement, candidate, profiles); err != nil {
+						return err
+					}
+					*outcome = candidate
+					return nil
 				}
 				markerDir := filepath.Join(modeRoot, fmt.Sprintf("marker-%04d", index))
 				outcome.Stage = "marker_export"
@@ -158,7 +172,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			return validateDiscoveryInstrumentationCPPFeatures(proof.CPPInputs)
 		}); err != nil {
 			for index := range proof.Outcomes {
-				if proof.Outcomes[index].Error == "" {
+				if proof.Outcomes[index].Error == "" && proof.Outcomes[index].Status != discoveryInstrumentationExcludedStatus {
 					proof.Outcomes[index].Stage, proof.Outcomes[index].Error = "cpp_registration", err.Error()
 				}
 			}
@@ -167,7 +181,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 	}
 	for index, requirement := range proof.Requirements {
 		outcome := &proof.Outcomes[index]
-		if outcome.Error != "" {
+		if outcome.Error != "" || outcome.Status == discoveryInstrumentationExcludedStatus {
 			continue
 		}
 		stageErr := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
@@ -285,11 +299,18 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			runErr = errors.Join(runErr, stageErr)
 		}
 	}
+	if discoveryInstrumentationTargetExclusions(plan) == len(proof.Requirements) {
+		runErr = errors.Join(runErr, fmt.Errorf("all required instrumentation modes are officially target-excluded; no compiled candidate objects"))
+	}
 	return objects, runErr
 }
 
 func discoveryInstrumentationOriginalInput(plan *discoveryOrdinarySelectionPlan, observation *gotoolprofile.InstrumentationExportObservation, root string, files []string) *gotoolprofile.ConsumerInput {
-	profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observation.Early.BaselineFeatures), Observed: observation.Early.BaselineFeatures}
+	return discoveryInstrumentationBaselineInput(plan, observation.Early.BaselineFeatures, root, files)
+}
+
+func discoveryInstrumentationBaselineInput(plan *discoveryOrdinarySelectionPlan, baseline *discoveryTargetFeatures, root string, files []string) *gotoolprofile.ConsumerInput {
+	profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(baseline), Observed: baseline}
 	input := ordinaryProfileConsumerInput(plan, profile, plan.Module, root, files)
 	// Original source protocols remain intact; a separate complete raw CPP
 	// graph supplies mode resources, never an ordinary header or export.

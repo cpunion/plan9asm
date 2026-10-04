@@ -8,7 +8,7 @@ import (
 )
 
 func TestProfileProtocolEntryPointsUseStrictCurrentReaders(t *testing.T) {
-	if discoveryReportSchema != 10 || discoveryProgressSchema != 2 || assemblyLedgerFormat != "module-hashed-assembly-ledger-v2" {
+	if discoveryReportSchema != 11 || discoveryProgressSchema != 3 || assemblyLedgerFormat != "module-hashed-assembly-ledger-v3" {
 		t.Fatal("profile-aware producer, progress and ledger protocols must advance together")
 	}
 	root := filepath.Join("..", "..")
@@ -46,7 +46,7 @@ func TestProfileProtocolEntryPointsUseStrictCurrentReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(guide), "all 64 schema-10 reports") || strings.Contains(string(guide), "all 64 schema-9 reports") {
+	if !strings.Contains(string(guide), "all 64 schema-11 reports") || strings.Contains(string(guide), "all 64 schema-10 reports") {
 		t.Fatal("frozen validation guide requires an obsolete discovery protocol")
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -123,6 +124,7 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 		result := discoveryCorpusResult{
 			Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusFailed, Error: err.Error(),
 			DiscoveredAsmFiles: candidate.AsmFiles, OrdinarySelectionPlan: matrix.OrdinarySelectionPlan, FeatureProfiles: refs,
+			InstrumentationTargetExclusions: matrix.InstrumentationTargetExclusions,
 		}
 		if err := validateDiscoveryInstrumentationFailure(result, inventory); err != nil {
 			t.Fatalf("independent early rejection readback: %v", err)
@@ -132,7 +134,7 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 			if outcome.Status != "failed" || outcome.Early != nil {
 				t.Fatal("supported target's missing CGO was relabeled as official target rejection")
 			}
-		} else if outcome.Status != "early_target_rejected" || outcome.Early == nil {
+		} else if outcome.Status != discoveryInstrumentationExcludedStatus || outcome.TargetExclusion == nil {
 			t.Fatal("official target rejection lost its actual source/driver evidence")
 		}
 		testInstrumentationCorpusTransport(t, result, inventory, target)
@@ -144,10 +146,10 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 			func(p *discoveryInstrumentationPlan) { p.Outcomes[0].Stage = "complete" },
 			func(p *discoveryInstrumentationPlan) { p.Outcomes[0].Status = "llvm_objects_only" },
 		}
-		if outcome.Early != nil {
+		if outcome.TargetExclusion != nil {
 			mutations = append(mutations,
-				func(p *discoveryInstrumentationPlan) { p.Outcomes[0].Early = nil },
-				func(p *discoveryInstrumentationPlan) { p.Outcomes[0].Early.CGOEnabled = "0" })
+				func(p *discoveryInstrumentationPlan) { p.Outcomes[0].TargetExclusion = nil },
+				func(p *discoveryInstrumentationPlan) { p.Outcomes[0].TargetExclusion.Early.CGOEnabled = "0" })
 		}
 		for _, mutate := range mutations {
 			body, err := json.Marshal(result)
@@ -294,6 +296,11 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 
 func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, target string) {
 	t.Helper()
+	testInstrumentationCorpusTransportTargets(t, result, inventory, []string{target})
+}
+
+func testInstrumentationCorpusTransportTargets(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {
+	t.Helper()
 	ledger := filepath.Join(t.TempDir(), "scan")
 	if err := os.MkdirAll(filepath.Join(ledger, "records"), 0700); err != nil {
 		t.Fatal(err)
@@ -318,10 +325,11 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 		}
 	}
 	report := discoveryCorpusReport{
-		SchemaVersion: discoveryReportSchema, Provenance: provenance, Targets: []string{target},
+		SchemaVersion: discoveryReportSchema, Provenance: provenance, Targets: targets,
 		ShardCount: 1, CandidateTotal: 1, EligibleCandidates: 1, Selected: 1,
 		Translations: result.Translations, ModeTranslations: result.InstrumentationTranslations,
-		FeatureInventory: inventory, Results: []discoveryCorpusResult{result},
+		ModeTargetExclusions: result.InstrumentationTargetExclusions,
+		FeatureInventory:     inventory, Results: []discoveryCorpusResult{result},
 	}
 	if result.Status == discoveryStatusPassed {
 		report.Passed = 1
@@ -335,13 +343,34 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 	if err := writeDiscoveryCorpusReport(filepath.Join(reports, "shard-0.json"), report); err != nil {
 		t.Fatal(err)
 	}
-	progress, err := collectDiscoveryProgress(ledger, reports, []string{target}, provenance.Source, 1)
+	progress, err := collectDiscoveryProgress(ledger, reports, targets, provenance.Source, 1)
 	if err != nil {
 		t.Fatalf("complete mode progress readback: %v", err)
 	}
 	if progress.ModeTranslations != result.InstrumentationTranslations ||
+		progress.ModeTargetExclusions != result.InstrumentationTargetExclusions ||
 		progress.Translations != result.Translations || progress.Verified != (result.Status == discoveryStatusPassed) {
 		t.Fatalf("mode evidence was relabeled/lost during collection: %+v", progress)
+	}
+	if result.InstrumentationTargetExclusions != 0 {
+		view, err := semanticAssemblyLedgerProgress(progress)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if view.Provenance.InstrumentationScopeProtocol != discoveryInstrumentationPlanProtocol || view.ModeTargetExclusions != progress.ModeTargetExclusions ||
+			view.Candidates[0].InstrumentationTargetExclusions != result.InstrumentationTargetExclusions {
+			t.Fatal("private semantic comparison dropped exact scope protocol/counts")
+		}
+		for index, original := range result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
+			if original.TargetExclusion == nil {
+				continue
+			}
+			projected := view.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan.Outcomes[index]
+			if !reflect.DeepEqual(projected.TargetExclusion.CommandArgs, original.TargetExclusion.CommandArgs) || projected.TargetExclusion.Stderr != original.TargetExclusion.Stderr ||
+				projected.Status != original.Status || projected.TargetExclusion.Early.SourceRules.RegistrationSHA256["instrumentInit"] != original.TargetExclusion.Early.SourceRules.RegistrationSHA256["instrumentInit"] {
+				t.Fatal("semantic projection erased actual rule/source/argv")
+			}
+		}
 	}
 	output := filepath.Join(t.TempDir(), "assembly-ledger")
 	if err := writeAssemblyLedger(output, progress, strings.Repeat("a", 64)); err != nil {
@@ -351,7 +380,7 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 	if err != nil {
 		t.Fatalf("complete mode ledger independent readback: %v", err)
 	}
-	if replayed.ModeTranslations != progress.ModeTranslations || replayed.Verified != progress.Verified ||
+	if replayed.ModeTranslations != progress.ModeTranslations || replayed.ModeTargetExclusions != progress.ModeTargetExclusions || replayed.Verified != progress.Verified ||
 		replayed.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan == nil {
 		t.Fatal("ledger silently downgraded complete mode scopes")
 	}
@@ -360,6 +389,21 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 		t.Fatal(err)
 	}
 	for index, mutate := range []func(*discoveryProgress){
+		func(p *discoveryProgress) { p.Targets = append(p.Targets, "js/wasm") },
+		func(p *discoveryProgress) { p.SchemaVersion = 2 },
+		func(p *discoveryProgress) {
+			p.Provenance.InstrumentationScopeProtocol = ""
+			p.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan.Protocol = discoveryInstrumentationLegacyProtocol
+		},
+		func(p *discoveryProgress) { p.ModeTargetExclusions++ },
+		func(p *discoveryProgress) { p.Candidates[0].InstrumentationTargetExclusions++ },
+		func(p *discoveryProgress) { p.Provenance.InstrumentationScopeProtocol = "" },
+		func(p *discoveryProgress) {
+			p.Provenance.InstrumentationScopeProtocol = discoveryInstrumentationLegacyProtocol
+		},
+		func(p *discoveryProgress) {
+			p.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan.Protocol = discoveryInstrumentationLegacyProtocol
+		},
 		func(p *discoveryProgress) { p.ModeTranslations++ },
 		func(p *discoveryProgress) { p.Candidates[0].InstrumentationTranslations++ },
 		func(p *discoveryProgress) { p.Candidates[0].OrdinarySelectionPlan.InstrumentationPlan = nil },
@@ -384,6 +428,30 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 	if err := validateDiscoveryCorpusAccounting(changed); err == nil {
 		t.Fatal("report mode count disagreed with actual per-case objects")
 	}
+	reportBytes, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*discoveryCorpusReport){
+		"delete marker": func(r *discoveryCorpusReport) { r.Provenance.InstrumentationScopeProtocol = "" },
+		"delete and downgrade": func(r *discoveryCorpusReport) {
+			r.Provenance.InstrumentationScopeProtocol = ""
+			r.Results[0].OrdinarySelectionPlan.InstrumentationPlan.Protocol = discoveryInstrumentationLegacyProtocol
+		},
+		"historical schema": func(r *discoveryCorpusReport) { r.SchemaVersion = 10 },
+		"scope counter":     func(r *discoveryCorpusReport) { r.ModeTargetExclusions++ },
+		"actual Go version": func(r *discoveryCorpusReport) { r.Provenance.GoVersion = "go1.27.999" },
+		"extra target":      func(r *discoveryCorpusReport) { r.Targets = append(r.Targets, "js/wasm") },
+	} {
+		var mutated discoveryCorpusReport
+		if err := json.Unmarshal(reportBytes, &mutated); err != nil {
+			t.Fatal(err)
+		}
+		mutate(&mutated)
+		if err := validateDiscoveryCorpusAccounting(mutated); err == nil {
+			t.Fatalf("report mutation %s accepted", name)
+		}
+	}
 	if result.InstrumentationTranslations != 0 {
 		changed = report
 		changed.Provenance.LLCBinarySHA256 = strings.Repeat("f", 64)
@@ -391,5 +459,5 @@ func testInstrumentationCorpusTransport(t *testing.T, result discoveryCorpusResu
 			t.Fatal("report substituted the actual LLVM tool")
 		}
 	}
-	t.Logf("%s CGO scopes: independent report/progress/ledger readback; status=%s objects=%d", target, result.Status, result.InstrumentationTranslations)
+	t.Logf("%v CGO scopes: independent report/progress/ledger readback; status=%s objects=%d excluded=%d", targets, result.Status, result.InstrumentationTranslations, result.InstrumentationTargetExclusions)
 }

@@ -55,6 +55,9 @@ func validateDiscoveryInstrumentationEarlyBinding(requirement discoveryInstrumen
 // private physical roots are deliberately absent from the shared input SHA.
 func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profiles []discoveryFeatureProfile, scope []string) (int, []string, error) {
 	plan := result.OrdinarySelectionPlan
+	if plan == nil || plan.Module != result.Module || plan.Version != result.Version {
+		return 0, nil, fmt.Errorf("mode denominator changed its exact original module/version")
+	}
 	var baselines []*discoveryTargetFeatures
 	for _, profile := range profiles {
 		if profile.Request.Baseline {
@@ -66,7 +69,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 	}
 	proof := plan.InstrumentationPlan
 	if len(proof.Requirements) == 0 {
-		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || result.InstrumentationTranslations != 0 {
+		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
 			return 0, nil, fmt.Errorf("empty instrumentation denominator carries unexplained mode evidence/counts")
 		}
 		return 0, nil, nil
@@ -76,11 +79,22 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, fmt.Errorf("source-required mode scopes lost their separate outcomes/CPP graph")
 	}
 	seenObservations, seenPackages, selected := make(map[string]bool), make(map[string]bool), make(map[string]bool)
-	objects := 0
+	objects, exclusions := 0, 0
 	for index, requirement := range proof.Requirements {
 		outcome := proof.Outcomes[index]
 		if outcome.RequirementID != requirement.ID {
 			return 0, nil, fmt.Errorf("mode outcome differs from its independent source requirement")
+		}
+		if outcome.Status == discoveryInstrumentationExcludedStatus {
+			if err := validateDiscoveryInstrumentationTargetExclusion(plan, requirement, outcome, profiles); err != nil {
+				return 0, nil, err
+			}
+			exclusions++
+			seenPackages[requirement.Directory] = true
+			continue
+		}
+		if outcome.TargetExclusion != nil {
+			return 0, nil, fmt.Errorf("nonexcluded mode carries official target-exclusion evidence")
 		}
 		if allowNonpass && outcome.Status != "llvm_objects_only" {
 			if err := validateDiscoveryInstrumentationNonpass(plan, requirement, outcome, profiles, seenObservations, seenPackages, selected); err != nil {
@@ -152,6 +166,12 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 	if result.InstrumentationTranslations != objects {
 		return 0, nil, fmt.Errorf("mode object count differs from the independently required consumed scopes")
 	}
+	if result.InstrumentationTargetExclusions != exclusions {
+		return 0, nil, fmt.Errorf("mode target-exclusion count differs from independently replayed scopes")
+	}
+	if exclusions == len(proof.Requirements) && !allowNonpass {
+		return 0, nil, fmt.Errorf("all required instrumentation modes are excluded; no scope-only candidate pass is authorized")
+	}
 	return objects, sortedDiscoverySet(selected), nil
 }
 
@@ -165,6 +185,9 @@ func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPla
 		return fmt.Errorf("mode nonpass has an unregistered execution stage")
 	}
 	if outcome.Early != nil {
+		if plan.InstrumentationPlan.Protocol != discoveryInstrumentationLegacyProtocol {
+			return fmt.Errorf("v2 cannot relabel an untagged v1 early observation as an official scope exclusion")
+		}
 		if outcome.Status != "early_target_rejected" || outcome.Stage != "early_rules" || outcome.ObservationID != "" || outcome.Query != nil || outcome.Objects != nil || outcome.PackagePlan != nil {
 			return fmt.Errorf("early target rejection was combined with export/LLVM completion")
 		}
@@ -302,10 +325,20 @@ func validateDiscoveryInstrumentationFailure(result discoveryCorpusResult, inven
 
 func validateDiscoveryInstrumentationToolProvenance(result discoveryCorpusResult, provenance discoveryCorpusProvenance) error {
 	if result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.InstrumentationPlan == nil {
-		if result.InstrumentationTranslations != 0 {
+		if result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
 			return fmt.Errorf("mode object count has no independently required mode protocol")
 		}
 		return nil
+	}
+	if provenance.InstrumentationScopeProtocol == discoveryInstrumentationPlanProtocol &&
+		result.OrdinarySelectionPlan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol {
+		return fmt.Errorf("current stamped producer cannot downgrade its instrumentation denominator")
+	}
+	if provenance.InstrumentationScopeProtocol == discoveryInstrumentationPlanProtocol && result.OrdinarySelectionPlan.GoVersion != provenance.GoVersion {
+		return fmt.Errorf("current mode scope used another actual Go source/tool version")
+	}
+	if provenance.InstrumentationScopeProtocol == "" && result.InstrumentationTargetExclusions != 0 {
+		return fmt.Errorf("historical producer cannot claim official mode-target exclusions")
 	}
 	for _, outcome := range result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
 		if outcome.Objects == nil {

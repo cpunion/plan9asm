@@ -26,6 +26,7 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	}
 	result.Source.Revision = ""
 	result.Provenance = &discoveryCorpusProvenance{
+		InstrumentationScopeProtocol: original.Provenance.InstrumentationScopeProtocol,
 		DocumentationSourceProtocol:  original.Provenance.DocumentationSourceProtocol,
 		SignatureSourceProtocol:      original.Provenance.SignatureSourceProtocol,
 		TestDependencySourceProtocol: original.Provenance.TestDependencySourceProtocol,
@@ -38,11 +39,14 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	identities := make(map[string]string)
 	inventory := newDiscoveryFeatureInventory()
 	inventory.Protocol = "semantic_go_feature_comparison_v1"
-	for physicalID, observed := range result.FeatureInventory.Observations {
+	projectFeature := func(observed *discoveryTargetFeatures) {
 		observed.DriverSHA256 = ""
 		observed.ToolDirectory, observed.ToolRoutingSHA256 = "", ""
 		observed.ToolBinarySHA256, observed.ToolBinaryOrigins = nil, nil
 		observed.EnvStderrSHA256, observed.EnvRecheckStderrSHA256, observed.ListStderrSHA256 = "", "", ""
+	}
+	for physicalID, observed := range result.FeatureInventory.Observations {
+		projectFeature(observed)
 		// Target environment, version, registered sources/dispatcher, marker
 		// bytes and selected builtin tags remain part of this semantic identity.
 		semanticID := discoveryFeatureProfileID(observed)
@@ -164,6 +168,43 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			}
 		}
 		if plan := candidate.OrdinarySelectionPlan; plan != nil {
+			if modes := plan.InstrumentationPlan; modes != nil {
+				requirementIDs := make(map[string]string)
+				for index := range modes.Requirements {
+					requirement := &modes.Requirements[index]
+					physicalID := requirement.ID
+					if err := replaceID(&requirement.BaselineID); err != nil {
+						return result, err
+					}
+					requirement.ID = ""
+					data, err := json.Marshal(requirement)
+					if err != nil {
+						return result, err
+					}
+					requirement.ID = discoveryFeatureBytesSHA256(data)
+					requirementIDs[physicalID] = requirement.ID
+				}
+				for index := range modes.Outcomes {
+					outcome := &modes.Outcomes[index]
+					id, found := requirementIDs[outcome.RequirementID]
+					if !found {
+						return result, fmt.Errorf("mode comparison has an unbound source requirement")
+					}
+					outcome.RequirementID = id
+					if excluded := outcome.TargetExclusion; excluded != nil {
+						projectFeature(excluded.Early.BaselineFeatures)
+						excluded.Early.ModeTools.Directory = ""
+						excluded.Early.ModeTools.BinarySHA256 = nil
+						excluded.Early.ModeTools.BinaryOrigins = nil
+						excluded.Early.ModeTools.RoutingSHA256 = ""
+						// Exact source rules, target/CGO/overrides, custom tags,
+						// both command argv, Exit2/stdout/stderr and all counts stay.
+					}
+				}
+				// Existing eligible-mode export/input/object identities remain
+				// exact. This deliberately conservative comparison does not
+				// grant cross-host equivalence to unprojected physical proofs.
+			}
 			for index := range plan.DocumentationPackages {
 				proof := &plan.DocumentationPackages[index]
 				if err := replaceID(&proof.ProfileID); err != nil {

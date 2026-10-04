@@ -12,7 +12,9 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-const discoveryInstrumentationPlanProtocol = "exact_source_instrumentation_denominator_v1"
+const discoveryInstrumentationPlanProtocol = "exact_source_instrumentation_denominator_v2"
+const discoveryInstrumentationLegacyProtocol = "exact_source_instrumentation_denominator_v1"
+const discoveryInstrumentationExcludedStatus = "official_target_excluded"
 
 // This is a separate mandatory denominator for current ordinary reports,
 // including a canonical empty requirements array. Source bytes and actual
@@ -28,15 +30,16 @@ type discoveryInstrumentationPlan struct {
 }
 
 type discoveryInstrumentationOutcome struct {
-	RequirementID string                                            `json:"requirement_id"`
-	ObservationID string                                            `json:"observation_id,omitempty"`
-	Early         *gotoolprofile.InstrumentationEarlyObservation    `json:"early_rejection,omitempty"`
-	PackagePlan   *gotoolprofile.InstrumentationOriginalPackagePlan `json:"original_package_plan,omitempty"`
-	Query         *gotoolprofile.InstrumentationInvocationProof     `json:"metadata_query,omitempty"`
-	Objects       *gotoolprofile.InstrumentationInvocationProof     `json:"llvm_objects,omitempty"`
-	Status        string                                            `json:"status"`
-	Stage         string                                            `json:"stage"`
-	Error         string                                            `json:"error,omitempty"`
+	RequirementID   string                                            `json:"requirement_id"`
+	ObservationID   string                                            `json:"observation_id,omitempty"`
+	Early           *gotoolprofile.InstrumentationEarlyObservation    `json:"early_rejection,omitempty"`
+	TargetExclusion *gotoolprofile.InstrumentationTargetExclusion     `json:"official_target_exclusion,omitempty"`
+	PackagePlan     *gotoolprofile.InstrumentationOriginalPackagePlan `json:"original_package_plan,omitempty"`
+	Query           *gotoolprofile.InstrumentationInvocationProof     `json:"metadata_query,omitempty"`
+	Objects         *gotoolprofile.InstrumentationInvocationProof     `json:"llvm_objects,omitempty"`
+	Status          string                                            `json:"status"`
+	Stage           string                                            `json:"stage"`
+	Error           string                                            `json:"error,omitempty"`
 }
 
 type discoveryInstrumentationRequirement struct {
@@ -73,7 +76,9 @@ func captureDiscoveryInstrumentationDenominator(plan *discoveryOrdinarySelection
 }
 
 func validateDiscoveryInstrumentationDenominator(plan *discoveryOrdinarySelectionPlan, files []string, baselines []*discoveryTargetFeatures) error {
-	if plan == nil || plan.InstrumentationPlan == nil || plan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol || plan.InstrumentationPlan.Requirements == nil {
+	if plan == nil || plan.InstrumentationPlan == nil ||
+		plan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol && plan.InstrumentationPlan.Protocol != discoveryInstrumentationLegacyProtocol ||
+		plan.InstrumentationPlan.Requirements == nil {
 		return fmt.Errorf("current ordinary source lacks its complete instrumentation denominator (including the empty set)")
 	}
 	wanted, err := planDiscoveryInstrumentationRequirements(plan, files, baselines)

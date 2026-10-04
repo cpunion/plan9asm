@@ -348,7 +348,7 @@ Historical `exact_source_matchfile_v1` retains its original inventory-only scope
 it cannot claim or be relabeled as v2 sibling coverage.
 
 Current ordinary plans also require `instrumentation_plan` with protocol
-`exact_source_instrumentation_denominator_v1`, including `requirements: []`
+`exact_source_instrumentation_denominator_v2`, including `requirements: []`
 when independently replayed Go/assembly constraints require no mode. Readers
 derive every race/msan/asan scope from the original source pairs, target,
 custom tags and CPU/experiment request. CGO=1 is the default scope; constraints
@@ -359,15 +359,40 @@ or paired deletion of plans and outcomes fail instead of becoming ordinary N/A.
 Each required mode has its own actual tool/source/environment observation,
 full original compiled-Go source inventory, metadata/header query, raw CPP
 registration and LLVM22 object consumer. These shared inventories are not
-ordinary export evidence. Registered early target rejection, missing CGO/SDK,
-source/export errors and unclosed native/generated-source contexts remain
-explicit nonpass outcomes. Queries or markers alone cannot satisfy a scope.
+ordinary export evidence. An `official_target_excluded` scope requires the
+separate `actual_go_instrumentation_tagged_target_exclusion_v1` witness: complete
+stock-Go source registrations and actual driver/subtool bytes, target, mode,
+CGO and overrides, exact canonical custom-tag argv, exit 2, empty stdout and
+the unique independently replayed early diagnostic. Full original Go/ASM bytes
+bind the same ZIP, directory, source-pair and tag requirement; collecting these
+bytes is not Go package selection, an export, a query or an LLVM object.
+`instrumentation_target_exclusions` counts these scopes separately, without
+adding ordinary N/A, skip or translation credit. Missing CGO/SDK, mixed or
+unknown diagnostics, source/export errors and unclosed native/generated-source
+contexts remain failures. All eligible scopes still require the complete
+query/CPP/object chain. All-excluded zero-object candidates remain failed;
+no scope-only success policy is authorized. Queries or markers alone cannot
+satisfy a scope.
 Mode-only CPP CPU/experiment branch unions remain hard failures until their
 independent consumer coverage is closed. Reports, progress and ledger readers
 revalidate this same denominator and count completed mode object scopes in
 `instrumentation_translations`, separately from ordinary scopes; successful
 candidate totals include both. The proof establishes objects, not final
-sanitizer linkage or runtime. Old reports cannot acquire it by schema relabeling.
+sanitizer linkage or runtime. Current provenance also requires the v2
+instrumentation scope marker: deleting it or reverting the plan cannot
+downgrade a stamped producer. Historical v1 early refusals remain failures and
+old reports cannot acquire exclusions by schema relabeling.
+
+Schema-10 reports and ledger-v2 snapshots remain historical evidence. Current
+verify/status/comparison entrypoints reject them as stale protocols; that
+rejection is not a reclassification of any old candidate. Query historical
+status with the reader source/tool version bound to that snapshot's original
+provenance and semantic source fingerprint, using a separate read-only source
+checkout. Do not mix historical and current reports or use the historical
+reader to assert current-head completion. The v3 writer requires a fresh
+destination rather than silently replacing a v2 evidence directory. Retain
+the old snapshot before deliberately publishing a new, independently audited
+one; no historical result or object is copied into the new denominator.
 
 The plan captures de-duplicated source SHA-256 and actual
 constraint/package-clause inputs, complete package/ancestor directory names,
@@ -416,15 +441,15 @@ Unbound generated includes, unsupported control expansion, include cycles and
 explicit inventory bounds remain failures, not empty-object N/A. This source
 guard alone does not establish feature-profile or branch coverage. Historical
 schema-9 reports remain historical evidence and cannot be relabeled as
-schema-10 profile-aware reporting; source-diagnostic checks separately reject
+schema-11 profile-aware reporting; source-diagnostic checks separately reject
 reason-only rejections. CPP-only CPU predicates propose legal profiles
 and require actual Go-driver observations; exclusive assembler macros are not
 cumulative build tags. The producer first observes source-tag profiles and
 captures their selected CPP file union, then observes CPP-required profiles.
 Each ordinary `(file, target, profile ID, custom tags)` scope must have either a
 concrete source diagnostic or same-profile Go export/vet, actual package-role
-selection, exact CPP graph and LLVM object consumption. Progress schema 2 and
-assembly-ledger v2 preserve these scopes and a canonical shared observation
+selection, exact CPP graph and LLVM object consumption. Progress schema 3 and
+assembly-ledger v3 preserve these scopes and a canonical shared observation
 inventory. Missing scope dimensions or consumer proofs fail closed. Unknown
 CPU macros and experiment predicates
 without an actual package-role binding fail closed. Reachable predicate sides

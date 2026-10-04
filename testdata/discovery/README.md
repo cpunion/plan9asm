@@ -53,8 +53,8 @@ source-inapplicable or explicit skip retains its reason and pinned evidence.
 Source-inapplicable ledger details keep the affected files, targets and stable
 reason category. Full Go diagnostics remain in the shard reports because they
 can contain temporary runner paths and are unsuitable for committed records.
-This gate does not claim llgo compilation, linking, or execution. Schema-10
-reports, progress schema 2 and assembly-ledger v2 preserve ordinary
+This gate does not claim llgo compilation, linking, or execution. Schema-11
+reports, progress schema 3 and assembly-ledger v3 preserve ordinary
 file/target/profile-ID/custom-tag scopes, shared actual Go/tool observations,
 package-role selection, CPP graphs and LLVM object consumer proofs. Old reports
 or ledgers cannot acquire these claims by relabeling their schema. Fresh reports
@@ -62,11 +62,14 @@ are required after integration; the existing historical snapshot is not upgraded
 by these implementation changes.
 
 Current ordinary reports additionally require the source-derived
-`exact_source_instrumentation_denominator_v1` plan, even for its explicit empty
+`exact_source_instrumentation_denominator_v2` plan, even for its explicit empty
 `requirements: []` set. Actual race/msan/asan exports, queries, CPP and LLVM
 objects have separate mode/CGO scopes and independent readers. Their completed
-object count is retained as `instrumentation_translations`; early target
-rejection and CGO/SDK/source/consumer failures remain nonpass, not ordinary N/A.
+object count is retained as `instrumentation_translations`. Exact registered
+early target exclusions retain a separate actual tag-aware command and full
+original source witness, counted only in `instrumentation_target_exclusions`.
+CGO/SDK/source/consumer failures and all-excluded zero-object candidates remain
+failed, not ordinary N/A or skips. Historical v1 refusals stay failed.
 Deleting the plan and outcomes together cannot downgrade a mode-required source.
 These objects do not claim sanitizer final linkage or runtime execution.
 

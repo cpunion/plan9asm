@@ -49,21 +49,22 @@ type commandInvocation struct {
 }
 
 type matrixReport struct {
-	Targets                     []targetReport                     `json:"targets"`
-	TotalTargets                int                                `json:"total_targets"`
-	TotalAsm                    int                                `json:"total_asm"`
-	Success                     int                                `json:"success"`
-	NotApplicable               int                                `json:"not_applicable"`
-	Failed                      int                                `json:"failed"`
-	NotApplicableItems          []matrixTargetNotApplicableItem    `json:"not_applicable_items,omitempty"`
-	SourceNotApplicableItems    []discoverySourceNotApplicableItem `json:"source_not_applicable_items,omitempty"`
-	PrivateExtension            *discoveryPrivateExtensionSkip     `json:"-"`
-	NativeLayout                *discoveryNativeLayoutSkip         `json:"-"`
-	NativeLayoutPlan            *discoveryNativeLayoutPlan         `json:"-"`
-	OrdinarySelectionPlan       *discoveryOrdinarySelectionPlan    `json:"-"`
-	FeatureProfiles             []discoveryFeatureProfile          `json:"-"`
-	FeatureConsumption          []*gotoolprofile.SelectionProof    `json:"-"`
-	InstrumentationTranslations int                                `json:"-"`
+	Targets                         []targetReport                     `json:"targets"`
+	TotalTargets                    int                                `json:"total_targets"`
+	TotalAsm                        int                                `json:"total_asm"`
+	Success                         int                                `json:"success"`
+	NotApplicable                   int                                `json:"not_applicable"`
+	Failed                          int                                `json:"failed"`
+	NotApplicableItems              []matrixTargetNotApplicableItem    `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems        []discoverySourceNotApplicableItem `json:"source_not_applicable_items,omitempty"`
+	PrivateExtension                *discoveryPrivateExtensionSkip     `json:"-"`
+	NativeLayout                    *discoveryNativeLayoutSkip         `json:"-"`
+	NativeLayoutPlan                *discoveryNativeLayoutPlan         `json:"-"`
+	OrdinarySelectionPlan           *discoveryOrdinarySelectionPlan    `json:"-"`
+	FeatureProfiles                 []discoveryFeatureProfile          `json:"-"`
+	FeatureConsumption              []*gotoolprofile.SelectionProof    `json:"-"`
+	InstrumentationTranslations     int                                `json:"-"`
+	InstrumentationTargetExclusions int                                `json:"-"`
 }
 
 const targetNotApplicableGoTextArgSize = "go_text_arg_size_mismatch"

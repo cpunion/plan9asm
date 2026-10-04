@@ -7,7 +7,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-const discoveryProgressSchema = 2
+const discoveryProgressSchema = 3
 
 // Raw matrix reports use absolute paths into their disposable module cache.
 // Persist the matching scan-inventory path, never the runner's cache prefix.
@@ -99,24 +99,25 @@ func summarizeDiscoverySourceSkips(items []discoverySourceNotApplicableItem) []d
 }
 
 type discoveryCandidateProgress struct {
-	Module                      string                                `json:"module"`
-	Version                     string                                `json:"version"`
-	Status                      string                                `json:"status"`
-	Translations                int                                   `json:"translations,omitempty"`
-	InstrumentationTranslations int                                   `json:"instrumentation_translations,omitempty"`
-	NotApplicableTranslations   int                                   `json:"not_applicable_translations,omitempty"`
-	NotApplicableItems          []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
-	SourceNotApplicableItems    []discoverySourceSkipSummary          `json:"source_not_applicable_items,omitempty"`
-	NotApplicableReason         string                                `json:"not_applicable_reason,omitempty"`
-	InvalidSourceReason         string                                `json:"invalid_source_reason,omitempty"`
-	InvalidSourceEvidence       []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
-	Superseded                  *discoverySupersededSkip              `json:"superseded,omitempty"`
-	PrivateExtension            *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
-	NativeLayout                *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
-	NativeLayoutPlan            *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
-	OrdinarySelectionPlan       *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
-	FeatureProfiles             []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
-	FeatureConsumption          []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
+	Module                          string                                `json:"module"`
+	Version                         string                                `json:"version"`
+	Status                          string                                `json:"status"`
+	Translations                    int                                   `json:"translations,omitempty"`
+	InstrumentationTranslations     int                                   `json:"instrumentation_translations,omitempty"`
+	InstrumentationTargetExclusions int                                   `json:"instrumentation_target_exclusions,omitempty"`
+	NotApplicableTranslations       int                                   `json:"not_applicable_translations,omitempty"`
+	NotApplicableItems              []matrixTargetNotApplicableItem       `json:"not_applicable_items,omitempty"`
+	SourceNotApplicableItems        []discoverySourceSkipSummary          `json:"source_not_applicable_items,omitempty"`
+	NotApplicableReason             string                                `json:"not_applicable_reason,omitempty"`
+	InvalidSourceReason             string                                `json:"invalid_source_reason,omitempty"`
+	InvalidSourceEvidence           []discoveryInvalidMachineCodeEvidence `json:"invalid_source_evidence,omitempty"`
+	Superseded                      *discoverySupersededSkip              `json:"superseded,omitempty"`
+	PrivateExtension                *discoveryPrivateExtensionSkip        `json:"private_extension,omitempty"`
+	NativeLayout                    *discoveryNativeLayoutSkip            `json:"native_layout,omitempty"`
+	NativeLayoutPlan                *discoveryNativeLayoutPlan            `json:"native_layout_plan,omitempty"`
+	OrdinarySelectionPlan           *discoveryOrdinarySelectionPlan       `json:"ordinary_selection_plan,omitempty"`
+	FeatureProfiles                 []discoveryFeatureProfileReference    `json:"feature_profiles,omitempty"`
+	FeatureConsumption              []*gotoolprofile.SelectionProof       `json:"feature_consumption,omitempty"`
 	// Source-selection proofs persist their exact scopes for ledger replay.
 	DiscoveredAsmFiles  []string                      `json:"discovered_asm_files,omitempty"`
 	ApplicableAsmFiles  []string                      `json:"applicable_asm_files,omitempty"`
@@ -151,6 +152,7 @@ type discoveryProgress struct {
 	DiscoveredAsmFiles        int                          `json:"discovered_asm_files"`
 	Translations              int                          `json:"translations"`
 	ModeTranslations          int                          `json:"instrumentation_translations,omitempty"`
+	ModeTargetExclusions      int                          `json:"instrumentation_target_exclusions,omitempty"`
 	NotApplicableTranslations int                          `json:"not_applicable_translations"`
 	Complete                  bool                         `json:"complete"`
 	Verified                  bool                         `json:"verified"`

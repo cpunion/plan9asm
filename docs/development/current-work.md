@@ -48,7 +48,7 @@ the completion gate. Never hand-edit status flags or report schemas.
 
 The batch preserves declaration-backed ABI0 frames, bounded stack/static-read
 contracts, exact data relocations, wasm logical-PC contracts without
-`blockaddress`, and schema-10 ordinary profile proofs.
+`blockaddress`, and schema-11 ordinary profile proofs.
 
 Recent repairs cover ARM64 private-SP stores and bounded affine frame reads;
 the typed ARM status-register family; source-order CPP EOF and relative-include
