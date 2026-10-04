@@ -3204,6 +3204,12 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if err == nil || errors.Is(err, errDiscoveryAsmDeclSourceProof) {
 		return err
 	}
+	// Completed actual analysis of a selected test variant must not lose a
+	// result-write obligation when the retry removes its Go declaration.
+	// Only the independent typed/source result proof may remove this warning.
+	if discoveryAsmDeclHasUnprovedResultWarning(err) {
+		return err
+	}
 	// go vet type-checks package tests before running asmdecl. Old modules can
 	// have tests that no longer compile or import another package with an ABI
 	// mismatch even though their production package builds. Retry against

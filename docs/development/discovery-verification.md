@@ -127,6 +127,13 @@ For each target/tag/package group:
    selected assembly file; matching a suffix is not source evidence. Apply the
    same binding to ABI0 tail-padding warnings. Preserve other ABI diagnostics;
    unknown source metadata fails.
+   A textual RET warning for a result alias may be filtered only by the
+   actual unit's independently typed ABI0 layout, bound original CPP inputs,
+   and complete all-path initialized-result-byte proof. Unknown effects,
+   native memory, calls and uninitialized reads remain failures. A remaining
+   completed RET warning cannot be cleared by removing test declarations in
+   a testless retry. This narrow filter proves neither return-continuation
+   safety nor translation or object success.
 3. Translate every applicable saved `.s` file and compile every result with
    LLVM 22 at `-O0`. IR is verified before `llc`, and an object must be
    generated; optimization is unnecessary for this compile-only corpus and

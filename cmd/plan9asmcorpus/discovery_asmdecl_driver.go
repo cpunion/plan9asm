@@ -116,6 +116,7 @@ type directAsmDeclPlan struct {
 	directoryInfo          map[string]os.FileInfo
 	directoryAliases       map[string]string
 	totalBytes             int64
+	resultAliasRawFailures []*discoveryCapturedCommandError
 }
 
 func captureDiscoveryAsmDeclDirect(ctx context.Context, dir string, env, buildTags, patterns []string, modfilePath string) (_ *directAsmDeclPlan, result error) {
@@ -248,7 +249,10 @@ func (plan *directAsmDeclPlan) run(ctx context.Context) error {
 		output, err := runCapturedCommandOutput(stage, plan.Dir, plan.Env, plan.GoBinary, "tool", "vet", "-asmdecl", unit.Filename)
 		cancel()
 		if err != nil {
-			failures = append(failures, err)
+			err = plan.filterResultAliasWarnings(unit, err)
+			if err != nil {
+				failures = append(failures, err)
+			}
 		} else if len(bytes.TrimSpace(output)) != 0 {
 			failures = append(failures, fmt.Errorf("direct asmdecl returned unexplained successful output: %s", output))
 		}
@@ -1025,6 +1029,9 @@ func (plan *directAsmDeclPlan) bindSDK() error {
 			name += ".exe"
 		}
 		files = append(files, filepath.Join(toolDir, name))
+	}
+	for _, name := range []string{"textflag.h", "funcdata.h", "asm_amd64.h"} {
+		files = append(files, filepath.Join(root, "pkg", "include", name))
 	}
 	for _, relative := range []string{"cmd/go/internal/work/exec.go", "cmd/go/internal/work/action.go", "cmd/go/internal/list/list.go", "cmd/go/internal/load/test.go", "cmd/go/internal/load/pkg.go", "cmd/go/internal/modfetch/fetch.go", "cmd/vet/main.go", "go/internal/gcimporter/gcimporter.go"} {
 		files = append(files, filepath.Join(root, "src", filepath.FromSlash(relative)))
