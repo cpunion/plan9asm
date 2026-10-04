@@ -85,7 +85,8 @@ func TestDiscoveryAsmDeclUnspecifiedArgsSourceLookupFailureCannotBecomeNA(t *tes
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/empty\n\ngo 1.20\n")
 	failure := &discoveryCapturedCommandError{
-		command: "go vet -asmdecl", cause: errors.New("exit status 1"),
+		directory: dir,
+		command:   "go vet -asmdecl", cause: discoveryAsmDeclObservedExitOne(t),
 		output: "decl_amd64.s:1:1: [amd64] Value: wrong argument size 0; expected $...-1\n",
 	}
 	env := replaceEnv(os.Environ(), map[string]string{"GOFLAGS": "-mod=mod", "GOWORK": "off", "GOPROXY": "off"})

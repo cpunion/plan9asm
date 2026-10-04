@@ -81,6 +81,7 @@ func TestDiscoveryAsmDeclRetainsEarlyABIErrorInLargeDiagnostic(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeTestFile(t, filepath.Join(dir, "go.mod"), "module example.com/pkg\n\ngo 1.20\n")
+			writeTestFile(t, filepath.Join(dir, "source_amd64.s"), "// Synthetic diagnostic attribution fixture, not a Go assembly proof.\n")
 			toolDir := t.TempDir()
 			source := filepath.Join(toolDir, "go.go")
 			program := `package main
@@ -126,7 +127,7 @@ func main() {
 				if len(rejected) != 1 || rejected[0] != "source_amd64.s" {
 					t.Fatalf("ABI rejection affected wrong files: %v", rejected)
 				}
-				if evidence := discoveryAsmDeclRejectionEvidence(err, rejected); !strings.Contains(evidence, test.diagnostic) {
+				if evidence := discoveryAsmDeclRejectionEvidence(dir, err, rejected); !strings.Contains(evidence, test.diagnostic) {
 					t.Fatalf("persisted ABI evidence lost the early mismatch: %q", evidence)
 				}
 			} else if !isDiscoveryInfrastructureFailure(err) {
@@ -140,17 +141,31 @@ func TestDiscoveryAsmDeclTruncatedDisplayDoesNotInventForeignABIError(t *testing
 	const foreign = "base/simd_amd64.s:17:1: [amd64] simd: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value"
 	const local = "p0/arith_amd64.s:19:1: [amd64] mul: wrong argument size 4; expected $...-24"
 	files := []string{"base/simd_amd64.s", "p0/arith_amd64.s"}
+	exitOne := discoveryAsmDeclObservedExitOne(t)
+	dir := t.TempDir()
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Join(dir, filepath.Dir(file)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(dir, file), "// Unit diagnostic attribution fixture, not an external object proof.\n")
+	}
 	for _, wrapped := range []bool{false, true} {
 		for _, hasLocal := range []bool{false, true} {
 			t.Run(fmt.Sprintf("wrapped=%t/local=%t", wrapped, hasLocal), func(t *testing.T) {
-				output := foreign + "\n" + strings.Repeat("padding\n", 10<<10)
+				// Large, completely classified warnings exercise full-output
+				// attribution. Arbitrary padding is an unknown failure, not a
+				// completed analysis that may exclude source files.
+				output := foreign + "\n" + strings.Repeat(
+					"p0/arith_amd64.s:20:1: [amd64] helper: function helper missing Go declaration\n", 10<<10,
+				)
 				if hasLocal {
 					output += local + "\n"
 				}
 				failure := &discoveryCapturedCommandError{
-					command: "go vet -asmdecl example.com/asm/p0",
-					cause:   errors.New("exit status 1"),
-					output:  output,
+					directory: dir,
+					command:   "go vet -asmdecl example.com/asm/p0",
+					cause:     exitOne,
+					output:    output,
 					// A tail-only display can begin inside an ABI diagnostic,
 					// losing the source path that is present in the full output.
 					display: "... output truncated ...\nq: invalid MOVQ of a+0(FP); [2]uint64 is 16-byte value\n",
@@ -159,13 +174,17 @@ func TestDiscoveryAsmDeclTruncatedDisplayDoesNotInventForeignABIError(t *testing
 				if wrapped {
 					err = fmt.Errorf("testless retry found no selected tests; original: %w", err)
 				}
-				if got := discoveryAsmDeclOnlyForeignCandidateABI(files, files[1:], err); got == hasLocal {
-					t.Fatalf("foreign-only = %t, want %t", got, !hasLocal)
+				if got, want := discoveryAsmDeclOnlyForeignCandidateABI(dir, files, files[1:], err), !hasLocal && !wrapped; got != want {
+					t.Fatalf("foreign-only = %t, want %t", got, want)
 				}
 				if hasLocal {
-					rejected, err := classifyDiscoveryAsmDeclFailure(files[1:], err)
-					if err != nil || len(rejected) != 1 || rejected[0] != files[1] {
-						t.Fatalf("local ABI failure lost: rejected=%v error=%v", rejected, err)
+					rejected, classifiedErr := classifyDiscoveryAsmDeclFailure(dir, files[1:], files, err)
+					if wrapped {
+						if classifiedErr == nil || len(rejected) != 0 || !strings.Contains(discoveryCommandDiagnostic(classifiedErr), local) {
+							t.Fatalf("unexplained wrapper erased the real local failure: rejected=%v error=%v", rejected, classifiedErr)
+						}
+					} else if classifiedErr != nil || len(rejected) != 1 || rejected[0] != files[1] {
+						t.Fatalf("local ABI failure lost: rejected=%v error=%v", rejected, classifiedErr)
 					}
 				}
 			})

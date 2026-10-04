@@ -2562,9 +2562,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 							return fmt.Errorf("enumerate Go-selected assembly for %s on %s: %w",
 								group.Pattern, target, packageErr)
 						}
-						rejected, classifyErr := classifyDiscoveryAsmDeclFailure(packageAsmFiles, err)
+						rejected, classifyErr := classifyDiscoveryAsmDeclFailure(download.Dir, packageAsmFiles, testedCandidate.AsmFiles, err)
 						foreignOnly := classifyErr != nil && discoveryAsmDeclOnlyForeignCandidateABI(
-							testedCandidate.AsmFiles, packageAsmFiles, err,
+							download.Dir, testedCandidate.AsmFiles, packageAsmFiles, err,
 						)
 						if classifyErr != nil && !foreignOnly {
 							return fmt.Errorf("verify current Go asmdecl for %s on %s: %w", group.Pattern, target, classifyErr)
@@ -2576,7 +2576,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 								AsmFiles:  append([]string(nil), rejected...),
 								Targets:   []string{target},
 								Kind:      discoverySourceNotApplicableAsmDecl,
-								Reason:    discoveryAsmDeclRejectionEvidence(err, rejected),
+								Reason:    discoveryAsmDeclRejectionEvidence(download.Dir, err, rejected),
 							})
 							validAsmFiles = subtractDiscoveryStrings(validAsmFiles, rejected)
 						}
@@ -3198,6 +3198,9 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if ctx.Err() != nil {
 		return err
 	}
+	if _, observed := discoveryAsmDeclObservedFailure(err); !observed {
+		return errors.Join(err, fmt.Errorf("%w: asmdecl analysis did not finish with plain exit 1", errDiscoveryAsmDeclSourceProof))
+	}
 	err = filterDiscoveryAsmDeclTextMetadata(ctx, dir, targetEnv, buildTags, patterns, "", err)
 	if err == nil || errors.Is(err, errDiscoveryAsmDeclSourceProof) {
 		return err
@@ -3221,9 +3224,19 @@ func runDiscoveryAsmDecl(ctx context.Context, dir string, env []string, target s
 	if isDiscoveryInfrastructureFailure(retryErr) {
 		return retryErr
 	}
-	if retryErr != nil &&
-		(isDiscoveryInfrastructureFailure(err) || isDiscoveryAsmDeclABIMismatch(discoveryCommandDiagnostic(err))) {
-		return fmt.Errorf("testless go vet did not clear the original failure: %v; original: %w", retryErr, err)
+	if retryErr != nil {
+		if discoveryAsmDeclOnlyKnownNonABIWarnings(retryErr) {
+			return nil
+		}
+		if errors.Is(retryErr, errDiscoveryAsmDeclNoSelectedTests) {
+			if discoveryAsmDeclOnlyKnownNonABIWarnings(err) {
+				return nil
+			}
+			// No retry ran. Preserve the original source/ABI failure without
+			// mislabeling a genuine per-package mismatch as infrastructure.
+			return err
+		}
+		return errors.Join(err, fmt.Errorf("%w: testless go vet did not clear the original failure: %w", errDiscoveryAsmDeclSourceProof, retryErr))
 	}
 	return nil
 }
@@ -3235,9 +3248,10 @@ type discoveryGoListPackage struct {
 	TestGoFiles  []string
 	XTestGoFiles []string
 	Module       *struct {
-		Path  string
-		Dir   string
-		GoMod string
+		Path    string
+		Version string
+		Dir     string
+		GoMod   string
 	}
 }
 
@@ -3307,7 +3321,7 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 			} else if err != nil {
 				return err
 			}
-			if err := parsedGoMod.AddReplace(pkg.Module.Path, "", stage, ""); err != nil {
+			if err := parsedGoMod.AddReplace(pkg.Module.Path, pkg.Module.Version, stage, ""); err != nil {
 				return err
 			}
 			stages[pkg.Module.Dir] = stage
@@ -3328,20 +3342,86 @@ func runDiscoveryAsmDeclWithTestlessModuleCopies(ctx context.Context, dir string
 		}
 	}
 	if !hasTests {
-		return errors.New("testless asmdecl retry found no selected test files")
+		return errDiscoveryAsmDeclNoSelectedTests
+	}
+	// AddReplace removes superseded version-specific entries by clearing
+	// their syntax. Remove those tombstones before rebasing local origins.
+	parsedGoMod.Cleanup()
+	commandDir := dir
+	for _, pkg := range packages {
+		if pkg.Module != nil && parsedGoMod.Module != nil && pkg.Module.Path == parsedGoMod.Module.Mod.Path {
+			if stage := stages[pkg.Module.Dir]; stage != "" {
+				// A replace directive cannot replace the main module itself.
+				// Run against its actual testless copy; preserve original
+				// relative dependency-replacement origins when moving CWD.
+				commandDir = stage
+				for _, replacement := range parsedGoMod.Replace {
+					if replacement.New.Version == "" && !filepath.IsAbs(replacement.New.Path) {
+						origin, err := filepath.Abs(filepath.Join(dir, replacement.New.Path))
+						if err != nil {
+							return err
+						}
+						// AddReplace with a wildcard old version removes exact
+						// overrides. Rebase this syntax token in place instead,
+						// retaining every original old-version selection scope.
+						if replacement.Syntax == nil {
+							return fmt.Errorf("local replacement has no original syntax")
+						}
+						arrow := -1
+						for index, token := range replacement.Syntax.Token {
+							if token == "=>" {
+								if arrow >= 0 {
+									return fmt.Errorf("local replacement has ambiguous syntax")
+								}
+								arrow = index
+							}
+						}
+						if arrow < 0 || arrow+2 != len(replacement.Syntax.Token) {
+							return fmt.Errorf("local replacement has incomplete syntax")
+						}
+						replacement.New.Path = origin
+						replacement.Syntax.Token[arrow+1] = modfile.AutoQuote(origin)
+					}
+				}
+				break
+			}
+		}
 	}
 	formattedGoMod, err := parsedGoMod.Format()
 	if err != nil {
 		return err
 	}
-	modfilePath := filepath.Join(dir, ".plan9asm-vet.mod")
+	modfilePath := filepath.Join(commandDir, ".plan9asm-vet.mod")
 	if err := os.WriteFile(modfilePath, formattedGoMod, 0644); err != nil {
 		return err
 	}
+	// Go uses the alternate modfile's own .sum, not the original go.sum.
+	// Seed it from this invocation's original input, replacing stale retry
+	// state without changing the real module's checksum file.
+	goSum, err := os.ReadFile(filepath.Join(dir, "go.sum"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	sumfilePath := strings.TrimSuffix(modfilePath, ".mod") + ".sum"
+	if err := os.WriteFile(sumfilePath, goSum, 0644); err != nil {
+		return err
+	}
 	args := append([]string{"vet", "-modfile=" + modfilePath}, vetArgs[1:]...)
-	_, err = runCapturedCommandOutput(ctx, dir, env, "go", args...)
+	_, err = runCapturedCommandOutput(ctx, commandDir, env, "go", args...)
 	// Inspect staged sources before their owning temporary modules are removed.
-	return filterDiscoveryAsmDeclTextMetadata(ctx, dir, env, buildTags, patterns, modfilePath, err)
+	err = filterDiscoveryAsmDeclTextMetadata(ctx, commandDir, env, buildTags, patterns, modfilePath, err)
+	if failure, direct := err.(*discoveryCapturedCommandError); direct {
+		failure.asmdeclOrigins = make(map[string]string, len(stages))
+		for original, stage := range stages {
+			physicalOriginal, originalErr := filepath.EvalSymlinks(original)
+			physicalStage, stageErr := filepath.EvalSymlinks(stage)
+			if originalErr != nil || stageErr != nil {
+				return errors.Join(err, fmt.Errorf("%w: bind original testless source origins", errDiscoveryAsmDeclSourceProof))
+			}
+			failure.asmdeclOrigins[physicalStage] = physicalOriginal
+		}
+	}
+	return err
 }
 
 func copyDiscoveryModuleTree(source, destination string) error {
@@ -3469,18 +3549,26 @@ func discoveryAsmDeclPackageFiles(
 	return sortedDiscoverySet(selected), nil
 }
 
-func classifyDiscoveryAsmDeclFailure(asmFiles []string, err error) ([]string, error) {
+func classifyDiscoveryAsmDeclFailure(moduleDir string, asmFiles, candidateFiles []string, err error) ([]string, error) {
 	if err == nil {
 		return nil, nil
 	}
 	if isDiscoveryInfrastructureFailure(err) {
 		return nil, err
 	}
-	diagnostic := discoveryCommandDiagnostic(err)
-	if !isDiscoveryAsmDeclABIMismatch(diagnostic) {
-		return nil, fmt.Errorf("go vet failed without a concrete ABI mismatch: %w", err)
+	lines, complete := discoveryAsmDeclCompleteABIDiagnostics(candidateFiles, err)
+	if !complete || !discoveryAsmDeclLocationsBelongToCandidate(moduleDir, candidateFiles, err) {
+		return nil, fmt.Errorf("go vet failed without a complete attributable ABI-only analysis: %w", err)
 	}
-	rejected := discoveryAsmDeclRejectedFiles(asmFiles, diagnostic)
+	rejectedSet := make(map[string]bool)
+	for _, line := range lines {
+		for _, file := range asmFiles {
+			if discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file, err) {
+				rejectedSet[file] = true
+			}
+		}
+	}
+	rejected := sortedDiscoverySet(rejectedSet)
 	if len(rejected) == 0 {
 		return nil, fmt.Errorf("go vet ABI mismatch does not identify an applicable assembly file: %w", err)
 	}
@@ -3492,35 +3580,22 @@ func classifyDiscoveryAsmDeclFailure(asmFiles []string, err error) ([]string, er
 // verification; do not assign its mismatch to the package under inspection.
 // Unknown files and infrastructure failures still stop the candidate.
 func discoveryAsmDeclOnlyForeignCandidateABI(
+	moduleDir string,
 	candidateFiles, packageFiles []string,
 	err error,
 ) bool {
-	if err == nil || isDiscoveryInfrastructureFailure(err) {
+	lines, complete := discoveryAsmDeclCompleteABIDiagnostics(candidateFiles, err)
+	if !complete || !discoveryAsmDeclLocationsBelongToCandidate(moduleDir, candidateFiles, err) {
 		return false
 	}
-	foreign := false
-	for _, line := range strings.Split(filepath.ToSlash(discoveryCommandDiagnostic(err)), "\n") {
-		if !isDiscoveryAsmDeclABIMismatch(line) {
-			continue
-		}
+	for _, line := range lines {
 		for _, file := range packageFiles {
-			if discoveryAsmDeclLineNamesFile(line, file) {
+			if discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file, err) {
 				return false
 			}
 		}
-		matched := false
-		for _, file := range candidateFiles {
-			if discoveryAsmDeclLineNamesFile(line, file) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-		foreign = true
 	}
-	return foreign
+	return true
 }
 
 func discoveryAsmDeclLineNamesFile(line, asmFile string) bool {
@@ -3536,25 +3611,25 @@ func discoveryAsmDeclLineNamesFile(line, asmFile string) bool {
 	return reported == path.Base(asmFile)
 }
 
-func discoveryAsmDeclRejectionEvidence(err error, rejected []string) string {
+func discoveryAsmDeclRejectionEvidence(moduleDir string, err error, rejected []string) string {
 	if err == nil {
 		return ""
 	}
 	var proof []string
 	seen := make(map[string]bool, len(rejected))
 	for _, line := range strings.Split(filepath.ToSlash(discoveryCommandDiagnostic(err)), "\n") {
-		if !isDiscoveryAsmDeclABIMismatch(line) {
+		if !discoveryAsmDeclConcreteABIWarning(strings.TrimSpace(line)) {
 			continue
 		}
 		for _, asmFile := range rejected {
-			if !seen[asmFile] && discoveryAsmDeclLineNamesFile(line, asmFile) {
+			if !seen[asmFile] && discoveryAsmDeclLineMatchesOriginalFile(moduleDir, strings.TrimSpace(line), asmFile, err) {
 				proof = append(proof, line)
 				seen[asmFile] = true
 			}
 		}
 	}
 	if len(proof) == 0 {
-		return limitDiscoveryEvidence(err.Error(), 8192)
+		return "asmdecl failed without physically attributable rejection evidence"
 	}
 	return limitDiscoveryEvidence(strings.Join(proof, "\n"), 8192)
 }
@@ -3621,6 +3696,10 @@ type discoveryCapturedCommandError struct {
 	cause   error
 	output  string
 	display string
+	// Physical command identity and producer-owned testless aliases are not
+	// portable status flags. They prevent basename/suffix-only attribution.
+	directory      string
+	asmdeclOrigins map[string]string
 }
 
 func (failure *discoveryCapturedCommandError) Error() string {
@@ -3684,6 +3763,26 @@ func (output *boundedDiscoveryCommandOutput) Write(data []byte) (int, error) {
 }
 
 func runCapturedCommandOutput(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
+	directory, err := filepath.Abs(dir)
+	if err == nil {
+		directory, err = filepath.EvalSymlinks(directory)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s: resolve command directory: %w", name, err)
+	}
+	// On Unix, os.Getwd (and therefore Go's diagnostic shortening) may
+	// retain PWD only when it identifies this exact physical directory.
+	if runtime.GOOS != "windows" {
+		physical, statErr := os.Stat(directory)
+		for _, item := range env {
+			if pwd, found := strings.CutPrefix(item, "PWD="); found && filepath.IsAbs(pwd) && statErr == nil {
+				logical, logicalErr := os.Stat(pwd)
+				if logicalErr == nil && os.SameFile(physical, logical) {
+					directory = filepath.Clean(pwd)
+				}
+			}
+		}
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Env = env
@@ -3693,7 +3792,7 @@ func runCapturedCommandOutput(ctx context.Context, dir string, env []string, nam
 	// Do not wait indefinitely when an escaped descendant retains an output
 	// pipe. ErrWaitDelay is infrastructure failure, never source N/A.
 	cmd.WaitDelay = 2 * time.Second
-	err := runDiscoveryCommand(cmd)
+	err = runDiscoveryCommand(cmd)
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("%s: %w", strings.Join(append([]string{name}, args...), " "), ctx.Err())
 	}
@@ -3714,10 +3813,11 @@ func runCapturedCommandOutput(ctx context.Context, dir string, env []string, nam
 		return output.Bytes(), nil
 	}
 	failure := &discoveryCapturedCommandError{
-		command: strings.Join(append([]string{name}, args...), " "),
-		cause:   err,
-		output:  output.String(),
-		display: message,
+		command:   strings.Join(append([]string{name}, args...), " "),
+		cause:     err,
+		output:    output.String(),
+		display:   message,
+		directory: directory,
 	}
 	return output.Bytes(), failure
 }

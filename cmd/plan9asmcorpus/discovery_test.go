@@ -1176,7 +1176,20 @@ func TestDiscoveryAsmDeclRejectsOnlyFilesWithConcreteABIErrors(t *testing.T) {
 	if got := discoveryAsmDeclRejectedFiles(files, diagnostic); !reflect.DeepEqual(got, files[:1]) {
 		t.Fatalf("ABI-rejected files = %v, want %v", got, files[:1])
 	}
-	evidence := discoveryAsmDeclRejectionEvidence(errors.New(diagnostic), files[:1])
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "pkg"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		writeTestFile(t, filepath.Join(dir, file), "// Synthetic diagnostic attribution fixture, not a Go assembly proof.\n")
+	}
+	failure := &discoveryCapturedCommandError{
+		command:   "unit diagnostic fixture",
+		cause:     discoveryAsmDeclObservedExitOne(t),
+		output:    diagnostic,
+		directory: dir,
+	}
+	evidence := discoveryAsmDeclRejectionEvidence(dir, failure, files[:1])
 	if !strings.Contains(evidence, "first_amd64.s:3:1") || strings.Contains(evidence, "second_amd64.s") {
 		t.Fatalf("ABI evidence does not identify only the rejected file: %q", evidence)
 	}
@@ -1189,12 +1202,12 @@ func TestDiscoveryAsmDeclInfrastructureCannotBecomeSourceNotApplicable(t *testin
 		output:  "go: write build cache: no space left on device\n" + strings.Repeat("x", 70<<10),
 		display: strings.Repeat("x", 64<<10),
 	}
-	rejected, err := classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, failure)
+	rejected, err := classifyDiscoveryAsmDeclFailure(t.TempDir(), []string{"source_amd64.s"}, []string{"source_amd64.s"}, failure)
 	if err == nil || len(rejected) != 0 {
 		t.Fatalf("infrastructure failure became source N/A: rejected=%v error=%v", rejected, err)
 	}
 	unknownFile := errors.New("other_amd64.s:1:1: [amd64] other: wrong argument size 16; expected $...-8")
-	rejected, err = classifyDiscoveryAsmDeclFailure([]string{"source_amd64.s"}, unknownFile)
+	rejected, err = classifyDiscoveryAsmDeclFailure(t.TempDir(), []string{"source_amd64.s"}, []string{"source_amd64.s"}, unknownFile)
 	if err == nil || len(rejected) != 0 {
 		t.Fatalf("unmapped ABI failure became source N/A: rejected=%v error=%v", rejected, err)
 	}
@@ -1229,8 +1242,13 @@ func TestDiscoveryAsmDeclAttributesCoSelectedFileWithoutRetranslatingIt(t *testi
 	if !reflect.DeepEqual(files, want) {
 		t.Fatalf("Go-selected asmdecl files = %v, want %v", files, want)
 	}
-	diagnostic := errors.New("pkg/common_amd64.s:12:1: [amd64] common: invalid MOVL of idx+16(FP); int is 8-byte value")
-	rejected, err := classifyDiscoveryAsmDeclFailure(files, diagnostic)
+	exitOne := discoveryAsmDeclObservedExitOne(t)
+	diagnostic := &discoveryCapturedCommandError{
+		directory: dir,
+		command:   "go vet -asmdecl", cause: exitOne,
+		output: "pkg/common_amd64.s:12:1: [amd64] common: invalid MOVL of idx+16(FP); int is 8-byte value",
+	}
+	rejected, err := classifyDiscoveryAsmDeclFailure(dir, files, candidate.AsmFiles, diagnostic)
 	if err != nil || !reflect.DeepEqual(rejected, want[:1]) {
 		t.Fatalf("classified ABI files = %v, error = %v", rejected, err)
 	}
@@ -1238,7 +1256,7 @@ func TestDiscoveryAsmDeclAttributesCoSelectedFileWithoutRetranslatingIt(t *testi
 		t.Fatalf("ABI error in co-selected source hid selected translation: %v", remaining)
 	}
 	unknown := errors.New("other/common_amd64.s:12:1: [amd64] other: invalid MOVL of idx+16(FP); int is 8-byte value")
-	if rejected, err := classifyDiscoveryAsmDeclFailure(files, unknown); err == nil || len(rejected) != 0 {
+	if rejected, err := classifyDiscoveryAsmDeclFailure(dir, files, files, unknown); err == nil || len(rejected) != 0 {
 		t.Fatalf("another package's ABI error became source N/A: rejected=%v error=%v", rejected, err)
 	}
 }
@@ -1249,11 +1267,23 @@ func TestDiscoveryAsmDeclForeignCandidateABIRequiresExactOtherFile(t *testing.T)
 		"p503/arith_amd64.s",
 	}
 	packageFiles := files[1:]
-	foreign := errors.New("module-cache/example.com/asm@v1.0.0/internal/utils/cpuid_amd64.s:5:1: " +
-		"[amd64] cpuid: wrong argument size 4; expected $...-24\n" +
-		"module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:695:1: " +
-		"[amd64] mul: use of unnamed argument 0(FP)")
-	if !discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, foreign) {
+	dir := t.TempDir()
+	moduleDir := filepath.Join(dir, "module-cache", "example.com", "asm@v1.0.0")
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Join(moduleDir, filepath.Dir(file)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(moduleDir, file), "// Unit path-attribution fixture, not an external object proof.\n")
+	}
+	foreign := &discoveryCapturedCommandError{
+		directory: dir,
+		command:   "go vet -asmdecl", cause: discoveryAsmDeclObservedExitOne(t),
+		output: "module-cache/example.com/asm@v1.0.0/internal/utils/cpuid_amd64.s:5:1: " +
+			"[amd64] cpuid: wrong argument size 4; expected $...-24\n" +
+			"module-cache/example.com/asm@v1.0.0/p503/arith_amd64.s:695:1: " +
+			"[amd64] mul: use of unnamed argument 0(FP); offset 0 is x+0(FP)",
+	}
+	if !discoveryAsmDeclOnlyForeignCandidateABI(moduleDir, files, packageFiles, foreign) {
 		t.Fatal("exactly attributed other-package ABI error was not recognized")
 	}
 	for _, err := range []error{
@@ -1263,7 +1293,7 @@ func TestDiscoveryAsmDeclForeignCandidateABIRequiresExactOtherFile(t *testing.T)
 			"[amd64] cpuid: wrong argument size 4; expected $...-24"),
 		errors.New("go vet: no space left on device\n" + foreign.Error()),
 	} {
-		if discoveryAsmDeclOnlyForeignCandidateABI(files, packageFiles, err) {
+		if discoveryAsmDeclOnlyForeignCandidateABI(moduleDir, files, packageFiles, err) {
 			t.Fatalf("unattributed or infrastructure error became ignorable: %v", err)
 		}
 	}

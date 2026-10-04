@@ -124,10 +124,21 @@ establish original Weaviate or native AMD64 runtime success.
 
 The sealed stock-Go frame-source foundation captures actual object/selection
 bytes and supports Verify/Close with explicit temporary-directory identity.
-It is only an observation: no Binder, allocator or native-memory permission is
-provided. Genuine private SP/BP accesses still require an original backing
-contract, not the virtual FP shadow. Unknown native calls and dynamic caller
-frames remain failures without their own complete contracts.
+Its separate fixed-local binder accepts complete numeric-only declarations,
+including typed void returns, only after the original source, native-byte
+initialization and normalized control-flow contracts close. Pointer/slice
+observations do not supply local-memory permission. Genuine private SP/BP
+accesses still require original backing, not the virtual FP shadow. Unknown
+native calls and dynamic caller frames need their own complete contracts.
+
+Assembly rejection requires a plain observed analyzer exit, complete known
+diagnostics and actual physical source attribution. Same basenames, unknown
+outer failures and incomplete testless retries cannot supply a source exclusion.
+Retry copies preserve exact replacement versions, relative origins and current
+checksum inputs; their diagnostics retain an unambiguous original-file binding
+after cleanup. Stock Go's dependency-facts vet cache can omit asmdecl analysis.
+The uncached official-analyzer producer is in development: do not promote cached
+nil results or historical reports as evidence for its new source revision.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size

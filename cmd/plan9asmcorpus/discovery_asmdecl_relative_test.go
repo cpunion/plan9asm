@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +10,7 @@ import (
 )
 
 func TestDiscoveryAsmDeclRelativeDiagnosticsBindCommandDirectory(t *testing.T) {
+	exitOne := discoveryAsmDeclObservedExitOne(t)
 	for _, test := range []struct {
 		name, reported, heading string
 		removeMetadata          bool
@@ -38,7 +38,8 @@ func TestDiscoveryAsmDeclRelativeDiagnosticsBindCommandDirectory(t *testing.T) {
 			metadata := test.reported + ":1:1: [amd64] Value: wrong argument size 0; expected $...-1"
 			realFailure := "selected/decl_amd64.s:2:1: [amd64] Value: invalid offset ret+4(FP); expected ret+0(FP)"
 			original := &discoveryCapturedCommandError{
-				command: "go vet -asmdecl", cause: errors.New("exit status 1"),
+				directory: root,
+				command:   "go vet -asmdecl", cause: exitOne,
 				output: "# " + test.heading + "\n" + metadata + "\n" + realFailure + "\n",
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -62,6 +63,7 @@ func TestDiscoveryAsmDeclRelativeDiagnosticsBindCommandDirectory(t *testing.T) {
 }
 
 func TestDiscoveryAsmDeclRelativeStagedModuleBinding(t *testing.T) {
+	exitOne := discoveryAsmDeclObservedExitOne(t)
 	root := t.TempDir()
 	working := filepath.Join(root, "work")
 	staged := filepath.Join(root, "staged")
@@ -76,7 +78,8 @@ func TestDiscoveryAsmDeclRelativeStagedModuleBinding(t *testing.T) {
 	writeTestFile(t, filepath.Join(staged, "decl_amd64.s"), "TEXT ·Value(SB),$0\nRET\n")
 	metadata := "../staged/decl_amd64.s:1:1: [amd64] Value: wrong argument size 0; expected $...-1\n"
 	original := &discoveryCapturedCommandError{
-		command: "go vet -asmdecl", cause: errors.New("exit status 1"),
+		directory: working,
+		command:   "go vet -asmdecl", cause: exitOne,
 		output: "# example.invalid/staged\n" + metadata,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -99,6 +102,7 @@ func TestDiscoveryAsmDeclRelativeStagedModuleBinding(t *testing.T) {
 }
 
 func TestDiscoveryAsmDeclRelativePaddedArgsRetainsOtherDiagnostics(t *testing.T) {
+	exitOne := discoveryAsmDeclObservedExitOne(t)
 	root := t.TempDir()
 	dir := filepath.Join(root, "selected")
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -110,7 +114,8 @@ func TestDiscoveryAsmDeclRelativePaddedArgsRetainsOtherDiagnostics(t *testing.T)
 	metadata := "selected/sqrt_amd64.s:1:1: [amd64] Sqrt: wrong argument size 16; expected $...-12"
 	realFailure := "selected/sqrt_amd64.s:2:1: [amd64] Sqrt: invalid offset r+12(FP); expected r+8(FP)"
 	original := &discoveryCapturedCommandError{
-		command: "go vet -asmdecl", cause: errors.New("exit status 1"),
+		directory: root,
+		command:   "go vet -asmdecl", cause: exitOne,
 		output: "# example.invalid/padded/selected\n" + metadata + "\n" + realFailure + "\n",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -129,6 +134,7 @@ func TestDiscoveryAsmDeclRelativePaddedArgsRetainsOtherDiagnostics(t *testing.T)
 }
 
 func TestDiscoveryAsmDeclRelativeLogicalWorkingDirectory(t *testing.T) {
+	exitOne := discoveryAsmDeclObservedExitOne(t)
 	root := t.TempDir()
 	working := filepath.Join(root, "physical")
 	selected := filepath.Join(working, "selected")
@@ -152,7 +158,8 @@ func TestDiscoveryAsmDeclRelativeLogicalWorkingDirectory(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			original := &discoveryCapturedCommandError{
-				command: "go vet -asmdecl", cause: errors.New("exit status 1"),
+				directory: linked,
+				command:   "go vet -asmdecl", cause: exitOne,
 				output: "# example.invalid/logical/selected\n" + test.reported +
 					":1:1: [amd64] Value: wrong argument size 0; expected $...-1\n",
 			}

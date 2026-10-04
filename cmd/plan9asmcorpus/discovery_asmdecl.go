@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 )
 
 var discoveryAsmDeclZeroArgs = regexp.MustCompile(
-	`^(.+\.s):([0-9]+)(?::[0-9]+)?: \[([^]]+)\] ([^:]+): wrong argument size 0; expected \$\.\.\.-[1-9][0-9]*$`,
+	`^(.+\.s):([0-9]+)(?::[0-9]+)?: \[([^]]+)\] ([^:]+): wrong argument size 0; expected \$\.\.\.-([1-9][0-9]*)$`,
 )
 
 var discoveryAsmDeclPaddedArgs = regexp.MustCompile(
@@ -26,6 +27,263 @@ var discoveryAsmDeclPaddedArgs = regexp.MustCompile(
 )
 
 var errDiscoveryAsmDeclSourceProof = errors.New("cannot verify asmdecl source metadata")
+
+var errDiscoveryAsmDeclNoSelectedTests = errors.New("testless asmdecl retry found no selected test files")
+
+var discoveryAsmDeclWarningPosition = regexp.MustCompile(
+	`^(.+\.s):([1-9][0-9]*)(?::([1-9][0-9]*))?: \[(386|amd64|arm|arm64|wasm)\] ([^ :]+): (.+)$`,
+)
+
+var discoveryAsmDeclArgumentSizeWarning = regexp.MustCompile(
+	`^wrong argument size ([0-9]+); expected \$\.\.\.-([0-9]+)$`,
+)
+
+var discoveryAsmDeclOffsetWarning = regexp.MustCompile(
+	`^invalid offset [^ +();]+\+-?[0-9]+\(FP\); expected [^ +();]+\+-?[0-9]+\(FP\)(?:,? (?:or )?[^ +();]+\+-?[0-9]+\(FP\))*$`,
+)
+
+var discoveryAsmDeclResolvedNameWarning = regexp.MustCompile(
+	`^(?:unknown variable [^ ;]+|use of unnamed argument [^;]+); offset ([0-9]+) is [^ +()]+\+([0-9]+)\(FP\)$`,
+)
+
+var discoveryAsmDeclCompleteWidthWarning = regexp.MustCompile(
+	`^invalid [A-Za-z0-9.]+ of [^;]+\(FP\); .+ is [0-9]+-byte value(?: containing(?:,? (?:and )?[^ +(),]+\+[0-9]+\(FP\))+)?$`,
+)
+
+var discoveryAsmDeclPackageHeading = regexp.MustCompile(
+	`^# [^ \t\r\n]+(?: \[[^ \t\r\n]+\])?$`,
+)
+
+// These warnings are not an assembler, type/layout or object certificate.
+// They may reach the independent translator only after a completed actual
+// analysis. Unknown diagnostics and real unwritten results are not warnings
+// that this path can dismiss.
+func discoveryAsmDeclOnlyKnownNonABIWarnings(err error) bool {
+	failure, observed := discoveryAsmDeclObservedFailure(err)
+	if !observed || isDiscoveryInfrastructureFailure(err) {
+		return false
+	}
+	count := 0
+	for _, line := range strings.Split(failure.output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+			continue
+		}
+		if !discoveryAsmDeclKnownNonABIWarning(line) {
+			return false
+		}
+		count++
+	}
+	return count > 0
+}
+
+func discoveryAsmDeclObservedFailure(err error) (*discoveryCapturedCommandError, bool) {
+	failure, direct := err.(*discoveryCapturedCommandError)
+	if !direct || failure == nil {
+		return nil, false
+	}
+	exit, observed := failure.cause.(*exec.ExitError)
+	return failure, observed && exit.ExitCode() == 1
+}
+
+func discoveryAsmDeclPosition(line string) []string {
+	position := discoveryAsmDeclWarningPosition.FindStringSubmatch(line)
+	if position == nil {
+		return nil
+	}
+	for _, value := range position[2:4] {
+		if value != "" {
+			if _, err := strconv.ParseUint(value, 10, 32); err != nil {
+				return nil
+			}
+		}
+	}
+	// Stock asmdecl chooses an explicit filename architecture before build
+	// tags. Such a source cannot borrow another architecture's width rules.
+	for _, arch := range []string{"386", "amd64", "arm", "arm64", "wasm"} {
+		if strings.HasSuffix(position[1], "_"+arch+".s") && position[4] != arch {
+			return nil
+		}
+	}
+	return position
+}
+
+func discoveryAsmDeclKnownNonABIWarning(line string) bool {
+	position := discoveryAsmDeclPosition(line)
+	if position == nil {
+		return false
+	}
+	diagnostic := position[6]
+	if diagnostic == "function "+position[5]+" missing Go declaration" {
+		return true
+	}
+	if alias := discoveryAsmDeclResolvedNameWarning.FindStringSubmatch(diagnostic); alias != nil {
+		actual, actualErr := strconv.ParseInt(alias[1], 10, 64)
+		expected, expectedErr := strconv.ParseInt(alias[2], 10, 64)
+		return actualErr == nil && expectedErr == nil && actual == expected
+	}
+	return discoveryAsmDeclCompleteWidthWarning.MatchString(diagnostic) &&
+		isDiscoveryAsmDeclEqualWidthMove(strings.ToLower(line))
+}
+
+func discoveryAsmDeclConcreteABIWarning(line string) bool {
+	position := discoveryAsmDeclPosition(line)
+	if position == nil || !isDiscoveryAsmDeclABIMismatch(line) {
+		return false
+	}
+	diagnostic := position[6]
+	if size := discoveryAsmDeclArgumentSizeWarning.FindStringSubmatch(diagnostic); size != nil {
+		actual, actualErr := strconv.ParseInt(size[1], 10, 64)
+		expected, expectedErr := strconv.ParseInt(size[2], 10, 64)
+		return actualErr == nil && expectedErr == nil && actual != expected
+	}
+	return discoveryAsmDeclOffsetWarning.MatchString(diagnostic) ||
+		discoveryAsmDeclCompleteWidthWarning.MatchString(diagnostic)
+}
+
+// Validate the entire completed analysis before excluding any source. One
+// attributable ABI line must never swallow another file's RET/typecheck or
+// unknown diagnostic, nor an unexplained outer/capture failure.
+func discoveryAsmDeclCompleteABIDiagnostics(candidateFiles []string, err error) ([]string, bool) {
+	failure, observed := discoveryAsmDeclObservedFailure(err)
+	if !observed || isDiscoveryInfrastructureFailure(err) {
+		return nil, false
+	}
+	var abiLines []string
+	for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+			continue
+		}
+		matched := false
+		for _, file := range candidateFiles {
+			if discoveryAsmDeclLineNamesFile(line, file) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, false
+		}
+		if discoveryAsmDeclKnownNonABIWarning(line) {
+			continue
+		}
+		if !discoveryAsmDeclConcreteABIWarning(line) {
+			return nil, false
+		}
+		abiLines = append(abiLines, line)
+	}
+	return abiLines, len(abiLines) > 0
+}
+
+func discoveryAsmDeclOriginalDiagnosticFile(line string, err error) string {
+	failure, observed := discoveryAsmDeclObservedFailure(err)
+	position := discoveryAsmDeclPosition(line)
+	if !observed || position == nil || !filepath.IsAbs(failure.directory) {
+		return ""
+	}
+	// An absolute diagnostic cannot borrow an unobserved/nonexistent CWD.
+	// A removed owned retry stage may resolve only through its one exact
+	// producer binding to an original directory that still exists.
+	directory, bound := discoveryAsmDeclOriginalPath(failure, failure.directory)
+	if !bound {
+		return ""
+	}
+	directoryInfo, directoryErr := os.Stat(directory)
+	if directoryErr != nil || !directoryInfo.IsDir() {
+		return ""
+	}
+	reported := filepath.FromSlash(position[1])
+	if !filepath.IsAbs(reported) {
+		reported = filepath.Join(failure.directory, reported)
+	}
+	physical, bound := discoveryAsmDeclOriginalPath(failure, reported)
+	if !bound {
+		return ""
+	}
+	info, statErr := os.Stat(physical)
+	if statErr != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return physical
+}
+
+func discoveryAsmDeclOriginalPath(failure *discoveryCapturedCommandError, filename string) (string, bool) {
+	if !filepath.IsAbs(filename) {
+		return "", false
+	}
+	for stage, original := range failure.asmdeclOrigins {
+		if !filepath.IsAbs(stage) || stage != filepath.Clean(stage) ||
+			!filepath.IsAbs(original) || original != filepath.Clean(original) || stage == original {
+			return "", false
+		}
+		// Reject overlapping maps before looking up a path. Otherwise map
+		// iteration order could assign one original file to different modules.
+		for other := range failure.asmdeclOrigins {
+			if other != stage {
+				if _, nested := discoveryAsmDeclRelativeUnder(stage, other); nested {
+					return "", false
+				}
+			}
+		}
+	}
+	for stage, original := range failure.asmdeclOrigins {
+		if relative, inside := discoveryAsmDeclRelativeUnder(stage, filename); inside {
+			filename = filepath.Join(original, relative)
+			break
+		}
+	}
+	physical, pathErr := filepath.EvalSymlinks(filename)
+	return physical, pathErr == nil
+}
+
+func discoveryAsmDeclRelativeUnder(directory, filename string) (string, bool) {
+	relative, err := filepath.Rel(directory, filename)
+	return relative, err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file string, err error) bool {
+	if !filepath.IsAbs(moduleDir) || filepath.IsAbs(file) {
+		return false
+	}
+	relative := filepath.Clean(filepath.FromSlash(file))
+	if relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return false
+	}
+	physicalRoot, rootErr := filepath.EvalSymlinks(moduleDir)
+	expected, pathErr := filepath.EvalSymlinks(filepath.Join(moduleDir, relative))
+	if rootErr != nil || pathErr != nil {
+		return false
+	}
+	if _, inside := discoveryAsmDeclRelativeUnder(physicalRoot, expected); !inside {
+		return false
+	}
+	return discoveryAsmDeclOriginalDiagnosticFile(line, err) == expected
+}
+
+func discoveryAsmDeclLocationsBelongToCandidate(moduleDir string, candidateFiles []string, err error) bool {
+	failure, observed := discoveryAsmDeclObservedFailure(err)
+	if !observed {
+		return false
+	}
+	for _, line := range strings.Split(filepath.ToSlash(failure.output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || discoveryAsmDeclPackageHeading.MatchString(line) {
+			continue
+		}
+		matched := false
+		for _, file := range candidateFiles {
+			if discoveryAsmDeclLineMatchesOriginalFile(moduleDir, line, file, err) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
 
 // Only literal TEXT declarations are conclusive here. A macro/expression,
 // different symbol, stale line number or unselected source must not turn an
@@ -59,6 +317,28 @@ func filterDiscoveryAsmDeclTextMetadata(
 	}
 	if !hasMetadataWarning {
 		return err
+	}
+	// A diagnostic-shaped string does not establish a completed vet analysis.
+	// Capture supplies a direct Wait result on an ordinary failure; wrappers,
+	// joined failures and any other exit must remain visible for retry instead
+	// of acquiring the narrow metadata-only filtering permission.
+	exit, observed := failure.cause.(*exec.ExitError)
+	if err != failure || !observed || exit.ExitCode() != 1 {
+		return errors.Join(err, fmt.Errorf("%w: metadata filtering requires an observed plain exit 1", errDiscoveryAsmDeclSourceProof))
+	}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "# ") && !discoveryAsmDeclPackageHeading.MatchString(trimmed) {
+			return err
+		}
+	}
+	requestedDirectory, directoryErr := filepath.Abs(dir)
+	if directoryErr == nil {
+		requestedDirectory, directoryErr = filepath.EvalSymlinks(requestedDirectory)
+	}
+	observedDirectory, observedErr := filepath.EvalSymlinks(failure.directory)
+	if directoryErr != nil || observedErr != nil || !filepath.IsAbs(failure.directory) || requestedDirectory != observedDirectory {
+		return errors.Join(err, fmt.Errorf("%w: metadata lookup differs from the observed command directory", errDiscoveryAsmDeclSourceProof))
 	}
 
 	args := []string{"list", "-json"}
@@ -110,7 +390,7 @@ func filterDiscoveryAsmDeclTextMetadata(
 	onlyHeadings := true
 	for _, line := range filtered {
 		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "# ") {
+		if line != "" && !discoveryAsmDeclPackageHeading.MatchString(line) {
 			onlyHeadings = false
 			break
 		}
@@ -133,11 +413,16 @@ func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discover
 			// Vet prints both '# package' and '# [package]' headings.
 			packagePath = strings.Trim(packagePath, "[]")
 		}
-		match := discoveryAsmDeclZeroArgs.FindStringSubmatch(strings.TrimSpace(line))
+		trimmed := strings.TrimSpace(line)
+		if discoveryAsmDeclPosition(trimmed) == nil {
+			retained = append(retained, line)
+			continue
+		}
+		match := discoveryAsmDeclZeroArgs.FindStringSubmatch(trimmed)
 		if match != nil && discoveryAsmDeclHasLiteralUnspecifiedArgs(match, packagePath, packages, commandDir) {
 			continue
 		}
-		match = discoveryAsmDeclPaddedArgs.FindStringSubmatch(strings.TrimSpace(line))
+		match = discoveryAsmDeclPaddedArgs.FindStringSubmatch(trimmed)
 		if match != nil && discoveryAsmDeclHasLiteralPaddedArgs(match, packagePath, packages, commandDir) {
 			continue
 		}
@@ -147,6 +432,9 @@ func filterDiscoveryAsmDeclTextMetadataLines(lines []string, packages []discover
 }
 
 func discoveryAsmDeclHasLiteralUnspecifiedArgs(match []string, packagePath string, packages []discoveryGoListPackage, commandDir string) bool {
+	if _, err := strconv.ParseInt(match[5], 10, 64); err != nil {
+		return false
+	}
 	text := discoveryAsmDeclSelectedText(match[1], match[2], packagePath, packages, commandDir)
 	if text == nil {
 		return false
