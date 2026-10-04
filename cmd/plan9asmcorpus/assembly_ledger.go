@@ -490,7 +490,7 @@ func readAssemblyLedger(outputDir, scanSHA, semanticSourceSHA string) (discovery
 
 // Replacement alone may recognize the intact legacy pending queue. Its records
 // are never upgraded or copied: writeAssemblyLedger publishes only newly
-// audited progress. Ordinary status/comparison readers still require v2.
+// audited progress. Ordinary status/comparison readers require the current protocol.
 func readAssemblyLedgerSnapshot(outputDir, scanSHA, semanticSourceSHA string, allowLegacyPending bool) (discoveryProgress, error) {
 	rootEntries, err := os.ReadDir(outputDir)
 	if err != nil {

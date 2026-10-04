@@ -193,7 +193,10 @@ func TestCrossLinuxRuntimeMatrixGoAMD64FixedLocalNativeBackingMathAndBuffers(t *
 		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
 	}
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "fixed-local-native", options.TargetTriple, ir, main, runPrefix)
-	t.Log("LLVM/C: exact SSE opcode results+complete MXCSR compared for 4 RC ×4 DAZ/FTZ ×3 sticky seeds ×128 inputs ×7 operations; volatile whole input/canary memory reread; Darwin/Rosetta diagnostic, not native Intel fault/trap proof")
+	t.Log("LLVM/C: exact SSE opcode results+complete MXCSR compared for 4 RC ×4 DAZ/FTZ ×3 sticky seeds ×128 inputs ×7 operations; volatile whole input/canary memory reread")
+	if crossRosetta {
+		t.Log("Darwin/Rosetta diagnostic, not native Intel fault/trap proof")
+	}
 }
 
 func fixedLocalCOracle(declarations string) string {
