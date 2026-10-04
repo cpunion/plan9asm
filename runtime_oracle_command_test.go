@@ -111,6 +111,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_float_compare_original_vector_test.go",
 		"amd64_float_compare_vex_numerical_test.go",
 		"amd64_float_compare_transport_test.go",
+		"amd64_float_compare_preflight_portability_test.go",
 		"amd64_conformance_native_test.go",
 		"amd64_insert_extract_native_runtime_test.go",
 		"amd64_packed_double_dword_native_test.go",

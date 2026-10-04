@@ -66,7 +66,9 @@ func x86FloatCompareRuntimeTools(t *testing.T, axis x86FloatCompareRuntimeISA) x
 const x86FloatCompareOpcodePreflightC = `#include <stdint.h>
 #include <stdio.h>
 #include <cpuid.h>
+#if !defined(_WIN32)
 #include <sys/resource.h>
+#endif
 
 static int required_state(unsigned axis, unsigned sse2, unsigned avx,
                           unsigned osxsave, unsigned f, unsigned vl, uint64_t xcr0) {
@@ -99,8 +101,10 @@ __attribute__((target("avx512f,avx512vl"))) static int original_evex(void) {
 }
 
 int main(void) {
+#if !defined(_WIN32)
     struct rlimit no_core={0,0};
     if (setrlimit(RLIMIT_CORE,&no_core)) return 77;
+#endif
     unsigned a,b,c,d,sse2=0,avx=0,osxsave=0,f=0,vl=0;
     uint64_t xcr0=0;
     if (__get_cpuid(1,&a,&b,&c,&d)) {
