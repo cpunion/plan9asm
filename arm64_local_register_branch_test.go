@@ -186,7 +186,9 @@ RET
 
 func runARM64LocalRegisterGoOracle(t *testing.T, source, main string, cross bool, minimumVersions ...string) {
 	t.Helper()
-	minimum := "1.27"
+	// These first-party fixtures also exercise the Go 1.20 compatibility lane.
+	// A caller needing newer language semantics must request them explicitly.
+	minimum := "1.20"
 	if len(minimumVersions) > 1 {
 		t.Fatal("native Go oracle requires at most one module Go minimum")
 	}

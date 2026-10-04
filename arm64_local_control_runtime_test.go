@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"testing"
@@ -174,16 +175,16 @@ helper:
 ADD $5,R0
 RET
 `, 1, 7},
-		{"noFrameRETAlias", "516", "0", `
+		{"noFrameHardwareRETAlias", "516", "0", `
 MOVD R30,R19
 CALL helper
 ADD $2,R0
 MOVD R0,ret+8(FP)
-RET R19
+WORD $0xd65f0260
 helper:
 ADD $5,R0
 MOVD R30,R20
-RET 8(R20)
+WORD $0xd65f0280
 `, 1, 7},
 		{"rawBLRBR", "516", "0", `
 MOVD R30,R19
@@ -268,6 +269,7 @@ ADD $9,R0
 MOVD R0,ret+8(FP)
 RET
 `)
+	goDecl.WriteString("func localAnchor(uint64) uint64\n")
 	sigs["localAnchor"] = arm64LocalRegisterBranchSig("localAnchor")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	runARM64LocalRegisterGoOracle(t, source.String(), "package main\n"+goDecl.String()+"func main(){\n"+goChecks.String()+"}\n", len(runner) != 0)
@@ -285,4 +287,51 @@ RET
 	main := "#include <stdint.h>\n#include <stdio.h>\n" + cDecl.String() + "int main(void){ uint64_t inputs[]={0,1,123,UINT64_C(0x8000000000000000),UINT64_MAX};\n" + cChecks.String() + "return 0;}\n"
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "local_control", triple, ir, main, runner)
 	t.Logf("%d local-call/return fixtures × 5 independent unsigned inputs passed native Go and LLVM 22", len(fixtures))
+}
+
+func TestCrossLinuxRuntimeMatrixARM64SelectedGoRETRegisterIdentity(t *testing.T) {
+	_, _, _, runner := arm64FPPairRuntimeTools(t)
+	probe := arm64ImmediateOriginalGoBytes(t, "TEXT retRegisterProbe(SB),516,$0-0\nRET R19\n", "linux")
+	if len(probe) < 4 {
+		t.Fatal("actual Go return-register object is absent")
+	}
+	word := binary.LittleEndian.Uint32(probe)
+	if word & ^uint32(31<<5) != 0xd65f0000 {
+		t.Fatalf("actual Go emitted an unknown RET encoding: %#08x", word)
+	}
+	register := (word >> 5) & 31
+	want := 1
+	if register == 19 {
+		want = 2
+	} else if register != 30 {
+		t.Fatalf("actual Go RET R19 targets unexpected register R%d", register)
+	}
+	// Both continuations are safe, so the legacy encoder's ignored operand is
+	// measured without running a program that would loop forever. This is an
+	// actual selected-Go observation, not an LLVM or native-caller permission.
+	const source = `TEXT ·ReturnTarget(SB),516,$0-8
+MOVD R30,R20
+ADR operandTarget,R19
+MOVD $1,R0
+MOVD R0,ret+0(FP)
+RET R19
+operandTarget:
+MOVD $2,R0
+MOVD R0,ret+0(FP)
+MOVD R20,R30
+RET
+`
+	main := fmt.Sprintf(`package main
+func ReturnTarget() uint64
+func main() {
+    for i := 0; i < 5; i++ {
+        if got := ReturnTarget(); got != %d {
+            println(got)
+            panic("selected Go RET register differs from its real object")
+        }
+    }
+}
+`, want)
+	runARM64LocalRegisterGoOracle(t, source, main, len(runner) != 0, "1.20")
+	t.Logf("actual Go RET R19 encodes R%d and its safe runtime witness returned %d; this does not claim legacy/current source equivalence", register, want)
 }

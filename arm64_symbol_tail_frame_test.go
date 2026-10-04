@@ -142,6 +142,7 @@ TEXT ·%s(SB),4,$%d-0
 %s
 `, measure, name, name, frame, body)
 		fmt.Fprintf(&decl, "func %s() int64\n", measure)
+		fmt.Fprintf(&decl, "func %s()\n", name)
 		fmt.Fprintf(&checks, "if got := %s(); got != %d { println(%q,got); panic(\"Go frame delta mismatch\") }\n", measure, want, name)
 	}
 	for _, frame := range []struct{ declared, allocated int }{{0, 0}, {8, 32}, {32, 48}, {240, 256}} {
@@ -170,6 +171,7 @@ TEXT ·%s(SB),4,$%d-0
 	add(32, "MOVD R30,R22\nADR redirected,R30\nRET\nredirected:\nMOVD R22,R30\nMOVD $123,R25\nB ·goFrameAnchor(SB)", 123)
 	add(32, "CALL ·goFrameAnchor(SB)\nMOVD (RSP),R22\nADR redirected,R0\nMOVD R0,(RSP)\nRET\nredirected:\nMOVD R22,R30\nMOVD $123,R25\nB ·goFrameAnchor(SB)", 123)
 	source.WriteString("TEXT ·goFrameAnchor(SB),4,$0-0\nRET\n")
+	decl.WriteString("func goFrameAnchor()\n")
 	requireARM64GoAssemblerResult(t, source.String(), true)
 	dir := t.TempDir()
 	asm := filepath.Join(dir, "frame.s")

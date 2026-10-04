@@ -44,6 +44,8 @@ RET
 ` + arm64StackTailOriginalSource() + arm64StackTailTargetSource()
 	runARM64LocalRegisterGoOracle(t, source, `package main
 func Measure() (int64,uint64)
+func arm64ABI0StackTail()
+func arm64ABI0TailTarget(uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64,uint64) uint64
 func main() {
   for i:=0;i<5;i++ {
     delta,sum:=Measure()
