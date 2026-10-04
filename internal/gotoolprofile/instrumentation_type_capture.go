@@ -204,9 +204,12 @@ func captureInstrumentationTypeGraph(ctx context.Context, binary, directory stri
 			SFiles  []string
 		}{Package: key, Origin: pkg.Module, Dir: pkg.Dir, SFiles: pkg.SFiles})
 		if pkg.ImportPath == input.Plan.PackagePath {
-			if rootSeen || pkg.Name != input.Plan.PackageName || !equalDiscoveryStrings(instrumentationTypeNames(pkg.GoFiles, pkg.Dir, input.Original.SourceRoot), input.Plan.GoFiles) ||
-				!equalDiscoveryStrings(instrumentationTypeNames(pkg.CompiledGoFiles, pkg.Dir, input.Original.SourceRoot), input.Plan.GoFiles) ||
-				!equalDiscoveryStrings(instrumentationTypeNames(pkg.SFiles, pkg.Dir, input.Original.SourceRoot), input.Plan.SFiles) {
+			goFiles := instrumentationTypeNames(pkg.GoFiles, pkg.Dir, input.Original.SourceRoot)
+			compiledGoFiles := instrumentationTypeNames(pkg.CompiledGoFiles, pkg.Dir, input.Original.SourceRoot)
+			asmFiles := instrumentationTypeNames(pkg.SFiles, pkg.Dir, input.Original.SourceRoot)
+			if rootSeen || pkg.Name != input.Plan.PackageName || goFiles == nil || compiledGoFiles == nil || asmFiles == nil ||
+				!equalDiscoveryStrings(goFiles, input.Plan.GoFiles) || !equalDiscoveryStrings(compiledGoFiles, input.Plan.GoFiles) ||
+				!equalDiscoveryStrings(asmFiles, input.Plan.SFiles) {
 				return nil, fmt.Errorf("actual original type graph changed the planned root selection")
 			}
 			rootSeen, graph.proof.RootImportMap = true, entry.Dependency.ImportMap
@@ -224,16 +227,43 @@ func captureInstrumentationTypeGraph(ctx context.Context, binary, directory stri
 }
 
 func instrumentationTypeNames(names []string, directory, root string) []string {
-	var result []string
+	if !filepath.IsAbs(root) || !filepath.IsAbs(directory) {
+		return nil
+	}
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil
+	}
+	directory, err = filepath.EvalSymlinks(directory)
+	if err != nil {
+		return nil
+	}
+	info, err := os.Stat(directory)
+	relative, relErr := filepath.Rel(root, directory)
+	if err != nil || !info.IsDir() || relErr != nil || !filepath.IsLocal(relative) {
+		return nil
+	}
+	// A valid empty selection differs from failure. Compare actual physical
+	// origins, not /var versus /private/var (or another root directory alias).
+	result := make([]string, 0, len(names))
 	for _, name := range names {
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(directory, name)
 		}
+		parent, err := filepath.EvalSymlinks(filepath.Dir(name))
+		if err != nil {
+			return nil
+		}
+		name = filepath.Join(parent, filepath.Base(name))
 		rel, err := filepath.Rel(root, name)
 		if err != nil || !filepath.IsLocal(rel) {
 			return nil
 		}
-		result = append(result, filepath.ToSlash(rel))
+		file := filepath.ToSlash(rel)
+		if _, err := CPPRegularSource(root, file); err != nil {
+			return nil
+		}
+		result = append(result, file)
 	}
 	sort.Strings(result)
 	return result
@@ -289,7 +319,12 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 	if err != nil || directory != filepath.Join(root, filepath.FromSlash(packageDirectory)) || len(pkg.CompiledGoFiles) == 0 {
 		return entry, fmt.Errorf("actual imported package is not in its stock SDK or exact original module root")
 	}
-	if len(pkg.GoFiles) > 32768 || len(pkg.CompiledGoFiles) > 32768 || !reflect.DeepEqual(instrumentationTypeNames(pkg.GoFiles, directory, root), instrumentationTypeNames(pkg.CompiledGoFiles, directory, root)) {
+	if len(pkg.GoFiles) > 32768 || len(pkg.CompiledGoFiles) > 32768 {
+		return entry, fmt.Errorf("original type graph has an unregistered generated compiler source")
+	}
+	goFiles := instrumentationTypeNames(pkg.GoFiles, directory, root)
+	compiledGoFiles := instrumentationTypeNames(pkg.CompiledGoFiles, directory, root)
+	if goFiles == nil || compiledGoFiles == nil || !reflect.DeepEqual(goFiles, compiledGoFiles) {
 		return entry, fmt.Errorf("original type graph has an unregistered generated compiler source")
 	}
 	for _, name := range pkg.CompiledGoFiles {
