@@ -430,6 +430,7 @@ func ordinarySelectionPackagePathError(modulePath, dir string) error {
 func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]byte, map[string]map[string]string, error) {
 	sources := make(map[string][]byte)
 	dirs := make(map[string]map[string]string)
+	entryHashes := make(map[string]string)
 	for _, dir := range plan.Directories {
 		if !ordinarySelectionLocalPath(dir.Directory) || dirs[dir.Directory] != nil {
 			return nil, nil, fmt.Errorf("invalid or duplicate ordinary package directory")
@@ -445,6 +446,9 @@ func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]
 				return nil, nil, fmt.Errorf("ordinary directory entry lacks exact input hash")
 			}
 			entries[entry.Name], previous = entry.Kind, entry.Name
+			if entry.Kind == "file" {
+				entryHashes[path.Join(dir.Directory, entry.Name)] = entry.SHA256
+			}
 		}
 		dirs[dir.Directory] = entries
 	}
@@ -454,14 +458,8 @@ func ordinarySelectionBytes(plan *discoveryOrdinarySelectionPlan) (map[string][]
 			dirs[path.Dir(input.File)][path.Base(input.File)] != "file" {
 			return nil, nil, fmt.Errorf("invalid ordinary selection source %s", input.File)
 		}
-		for _, dir := range plan.Directories {
-			if dir.Directory == path.Dir(input.File) {
-				for _, entry := range dir.Entries {
-					if entry.Name == path.Base(input.File) && entry.SHA256 != input.SHA256 {
-						return nil, nil, fmt.Errorf("ordinary selection source SHA disagrees with directory witness")
-					}
-				}
-			}
+		if entryHashes[input.File] != input.SHA256 {
+			return nil, nil, fmt.Errorf("ordinary selection source SHA disagrees with directory witness")
 		}
 		if strings.HasSuffix(input.File, ".go") {
 			_, parseErr := parser.ParseFile(token.NewFileSet(), input.File, input.Header, parser.PackageClauseOnly)
