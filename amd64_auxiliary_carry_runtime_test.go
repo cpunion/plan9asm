@@ -13,39 +13,116 @@ import (
 // The reference computes carry/borrow using widened arithmetic, including the
 // low nibble for AF; it does not repeat the lowerer's XOR-bit implementation.
 const x86AuxiliaryGoReference = `package auxiliary
-import ("encoding/binary"; "math/bits"; "testing")
-type kernel struct { fn func(*[64]byte,uint64,uint64,uint64); op string; width,form int }
-func expected(op string,width,form int,a,b,seed uint64) uint64 {
- if width==0 {return seed&0x8d5}
- mask:=uint64(^uint64(0)); if width<64 {mask=(uint64(1)<<width)-1}; a&=mask;b&=mask
- if form==3 {b=1}
- carry:=uint64(0); if op=="ADC"||op=="SBB" {carry=seed&1}
- add:=op=="ADD"||op=="ADC"||op=="INC"||op=="XADD"
- switch op {case "INC","DEC":b=1;case "NEG":b=a;a=0;case "CMPXCHG":a,b=b,a}
- result:=a-b-carry;cf:=a<b||a==b&&carry!=0;af:=(a&15)<(b&15)+carry
- if add {var c uint64;result,c=bits.Add64(a,b,carry);cf=c!=0||width<64&&result>mask;af=(a&15)+(b&15)+carry>15}
- result&=mask; sign:=uint64(1)<<(width-1)
- overflow:=((a^b)&(a^result)&sign)!=0
- if add {overflow=((^(a^b))&(a^result)&sign)!=0}
- if op=="INC"||op=="DEC" {cf=seed&1!=0}
- f:=uint64(0);if cf {f|=1};if bits.OnesCount8(uint8(result))%2==0 {f|=4};if af {f|=16}
- if result==0 {f|=64};if result&sign!=0 {f|=128};if overflow {f|=2048};return f
+
+import (
+ "encoding/binary"
+ "math/bits"
+ "testing"
+)
+
+type kernel struct {
+ fn func(*[64]byte, uint64, uint64, uint64)
+ op string
+ width, form int
 }
-func check(t *testing.T,k kernel,a,b,seed uint64) {
- t.Helper();var out [64]byte;for i:=range out {out[i]=0xa7};k.fn(&out,a,b,seed)
- want:=expected(k.op,k.width,k.form,a,b,seed)
- got:=binary.LittleEndian.Uint64(out[24:32])&0x8d5
- if got!=want||out[32]!=byte(want)|2 {t.Fatalf("%s width=%d form=%d a=%x b=%x seed=%x flags=%x LAHF=%x want=%x",k.op,k.width,k.form,a,b,seed,got,out[32],want)}
- flags:=[]uint64{want&1,(want>>2)&1,(want>>6)&1,(want>>7)&1,(want>>11)&1,((want>>7)^(want>>11))&1}
- for i,v:=range flags {if out[33+i]!=byte(v) {t.Fatalf("%s SETcc %d got=%d want=%d",k.op,i,out[33+i],v)}}
- for i,v:=range out {if i>=16&&i<24||i>=39 {if v!=0xa7 {t.Fatalf("%s byte canary %d",k.op,i)}}}
+
+func expected(op string, width, form int, a, b, seed uint64) uint64 {
+ if width == 0 || (op == "CMPS" || op == "SCAS") && form != 0 {
+  return seed & 0x8d5
+ }
+ mask := ^uint64(0)
+ if width < 64 {
+  mask = (uint64(1) << width) - 1
+ }
+ a &= mask
+ b &= mask
+ if form == 3 {
+  b = 1
+ }
+ carry := uint64(0)
+ if op == "ADC" || op == "SBB" {
+  carry = seed & 1
+ }
+ add := op == "ADD" || op == "ADC" || op == "INC" || op == "XADD"
+ switch op {
+ case "INC", "DEC":
+  b = 1
+ case "NEG":
+  b, a = a, 0
+ case "CMPXCHG":
+  a, b = b, a
+ }
+
+ result := a - b - carry
+ cf := a < b || a == b && carry != 0
+ af := (a & 15) < (b & 15) + carry
+ if add {
+  var c uint64
+  result, c = bits.Add64(a, b, carry)
+  cf = c != 0 || width < 64 && result > mask
+  af = (a & 15) + (b & 15) + carry > 15
+ }
+ result &= mask
+ sign := uint64(1) << (width - 1)
+ overflow := ((a ^ b) & (a ^ result) & sign) != 0
+ if add {
+  overflow = ((^(a ^ b)) & (a ^ result) & sign) != 0
+ }
+ if op == "INC" || op == "DEC" {
+  cf = seed & 1 != 0
+ }
+
+ f := uint64(0)
+ if cf { f |= 1 }
+ if bits.OnesCount8(uint8(result)) % 2 == 0 { f |= 4 }
+ if af { f |= 16 }
+ if result == 0 { f |= 64 }
+ if result & sign != 0 { f |= 128 }
+ if overflow { f |= 2048 }
+ return f
 }
+
+func check(t *testing.T, k kernel, a, b, seed uint64) {
+ t.Helper()
+ var out [64]byte
+ for i := range out {
+  out[i] = 0xa7
+ }
+ k.fn(&out, a, b, seed)
+ want := expected(k.op, k.width, k.form, a, b, seed)
+ got := binary.LittleEndian.Uint64(out[24:32]) & 0x8d5
+ if got != want || out[32] != byte(want) | 2 {
+  t.Fatalf("%s width=%d form=%d a=%x b=%x seed=%x flags=%x LAHF=%x want=%x", k.op, k.width, k.form, a, b, seed, got, out[32], want)
+ }
+ flags := []uint64{want & 1, (want >> 2) & 1, (want >> 6) & 1, (want >> 7) & 1, (want >> 11) & 1, ((want >> 7) ^ (want >> 11)) & 1}
+ for i, v := range flags {
+  if out[33+i] != byte(v) {
+   t.Fatalf("%s SETcc %d got=%d want=%d", k.op, i, out[33+i], v)
+  }
+ }
+ for i, v := range out {
+  if (i >= 16 && i < 24 || i >= 39) && v != 0xa7 {
+   t.Fatalf("%s byte canary %d", k.op, i)
+  }
+ }
+}
+
 func TestOriginalArithmeticStatus(t *testing.T) {
- edges:=[]uint64{0,1,15,16,17,127,128,255,256,32767,32768,65535,0x7fffffff,0x80000000,0xffffffff,0x7fffffffffffffff,0x8000000000000000,^uint64(0)}
- for _,k:=range kernels {for _,seed:=range []uint64{0,0x8d5} {
-  for a:=uint64(0);a<16;a++ {for b:=uint64(0);b<16;b++ {check(t,k,a,b,seed)}}
-  for i,a:=range edges {for _,b:=range []uint64{edges[(i+1)%len(edges)],edges[(i+7)%len(edges)]} {check(t,k,a,b,seed)}}
- }}
+ edges := []uint64{0, 1, 15, 16, 17, 127, 128, 255, 256, 32767, 32768, 65535, 0x7fffffff, 0x80000000, 0xffffffff, 0x7fffffffffffffff, 0x8000000000000000, ^uint64(0)}
+ for _, k := range kernels {
+  for _, seed := range []uint64{0, 0x8d5} {
+   for a := uint64(0); a < 16; a++ {
+    for b := uint64(0); b < 16; b++ {
+     check(t, k, a, b, seed)
+    }
+   }
+   for i, a := range edges {
+    for _, b := range []uint64{edges[(i+1)%len(edges)], edges[(i+7)%len(edges)]} {
+     check(t, k, a, b, seed)
+    }
+   }
+  }
+ }
 }
 `
 
@@ -112,7 +189,7 @@ typedef void (*kernel)(uint8_t *,uint64_t,uint64_t,uint64_t);
 static int check(kernel fn,const char *op,int width,int form,uint64_t a,uint64_t b,uint64_t seed) {
  _Alignas(8) uint8_t out[64];memset(out,0xa7,sizeof(out));fn(out,a,b,seed);
  uint64_t want=seed&0x8d5;
- if(width) {
+ if(width && !((!strcmp(op,"CMPS") || !strcmp(op,"SCAS")) && form)) {
   uint64_t mask=width==64?UINT64_MAX:(UINT64_C(1)<<width)-1;a&=mask;b&=mask;
   if(form==3)b=1;
   unsigned carry=!strcmp(op,"ADC")||!strcmp(op,"SBB")?seed&1:0;

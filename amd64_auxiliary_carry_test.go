@@ -28,7 +28,7 @@ func x86AuxiliaryCases(arch string) []x86AuxiliaryCase {
 		case "INC", "DEC", "NEG", "XADD", "CMPXCHG":
 			forms = 2
 		case "CMPS", "SCAS":
-			forms = 1
+			forms = 3 // Single comparison; zero-count REP and REPN with NULL inputs.
 		}
 		for _, bits := range widths {
 			for form := 0; form < forms; form++ {
@@ -68,6 +68,14 @@ func x86AuxiliaryAssembly(arch string, cases []x86AuxiliaryCase) string {
 		case "SAHF":
 			source.WriteString("SAHF\n")
 		case "CMPS", "SCAS":
+			if row.form != 0 {
+				fmt.Fprintf(&source, "MOV%s $0,CX\nMOV%s $0,SI\nMOV%s $0,DI\n", move, move, move)
+				prefix := "REP"
+				if row.form == 2 {
+					prefix = "REPN"
+				}
+				fmt.Fprintf(&source, "%s\n", prefix)
+			}
 			fmt.Fprintf(&source, "%s\nMOV%s BP,DI\n", opcode, move)
 		case "INC", "DEC", "NEG":
 			destination := "BX"
