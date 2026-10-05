@@ -43,6 +43,17 @@ func arm64PrivateCallDataRegister(reg Reg) bool {
 	return arm64PrivateDataGP(reg)
 }
 
+// CALL roots and their complete helpers independently reject every explicit
+// R27 operand. Registered immediate rows may therefore materialize a constant
+// in that unobserved scratch register. Reuse the exact ordered encoder grammar:
+// no guessed opcode mask, arbitrary implicit effect or faulting expansion is
+// admitted. Lowering and whole-root availability still record the real write.
+func arm64PrivateCallImmediateScratch(op Op, ins Instr, form arm64GPDataForm) bool {
+	immediate, handled, err := parseARM64GPImmediateForm(op, ins)
+	return handled && err == nil && immediate.scratch && !immediate.trailingUDF &&
+		form.scratch != nil && len(form.implicit) == 1 && form.implicit[0] == "R27"
+}
+
 // Check every original component, not only entry-reachable blocks. The bounded
 // CALL family admits a DAG, including multiple RETs and lexical backward edges
 // that do not form a cycle; recursion and loops need separate contracts.
