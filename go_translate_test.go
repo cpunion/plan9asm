@@ -1,10 +1,14 @@
 package plan9asm
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -143,7 +147,9 @@ func Consume(value int, data []byte) int
 	}
 }
 
-func TestTranslateGoModule_UsesManualSigForPlainLocalHelper(t *testing.T) {
+// A manual signature resolves a name and type. It does not provide the
+// original Go declaration/caller evidence required by an ABI0 tail.
+func TestTranslateGoModule_ManualSigCannotInventABI0TailDeclaration(t *testing.T) {
 	pkg := mustGoPackage(t, "test/pkg", `package testpkg
 func IndexByte(b []byte, c byte) int
 `)
@@ -169,15 +175,100 @@ TEXT indexbytebody<>(SB),NOSPLIT,$0
 			return FuncSig{Name: resolved, Args: []LLVMType{"{ ptr, i64, i64 }", "i8"}, Ret: I64}, true
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if tr != nil {
+		tr.Module.Dispose()
 	}
-	defer tr.Module.Dispose()
+	if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "actual selected bodyless declaration") {
+		t.Fatalf("manual signature supplied an unbound ABI0 tail: %v", err)
+	}
 	if !manualCalled {
 		t.Fatalf("manual signature callback was not used")
 	}
-	if _, ok := tr.Signatures["test/pkg.indexbytebody"]; !ok {
-		t.Fatalf("missing manual helper signature")
+}
+
+func TestTranslateGoModule_UsesManualSigForPlainLocalHelper(t *testing.T) {
+	pkg := mustGoPackage(t, "test/pkg", `package testpkg
+func Call()
+`)
+	// This fixture isolates signature resolution with an ordinary no-argument
+	// call. It does not invent slice transport or a result stored only in R0.
+	asm := []byte(`TEXT ·Call(SB),4,$0-0
+	CALL localbody(SB)
+	RET
+
+TEXT localbody(SB),4,$0-0
+	MOVD $0, R0
+	RET
+`)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc required")
+	}
+	for _, triple := range []string{
+		"aarch64-unknown-linux-gnu", "aarch64-apple-darwin", "aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			requireManualHelperGoObject(t, triple, asm)
+			manualCalled := false
+			tr, err := TranslateGoModule(pkg, asm, GoModuleOptions{
+				FileName:     "call_arm64.s",
+				GOARCH:       "arm64",
+				TargetTriple: triple,
+				ResolveSym:   testResolveSym("test/pkg"),
+				ManualSig: func(resolved string) (FuncSig, bool) {
+					if resolved != "test/pkg.localbody" {
+						return FuncSig{}, false
+					}
+					manualCalled = true
+					return FuncSig{Name: resolved, Ret: Void}, true
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tr.Module.Dispose()
+			if !manualCalled {
+				t.Fatal("manual signature callback was not used")
+			}
+			sig, ok := tr.Signatures["test/pkg.localbody"]
+			if !ok || len(sig.Args) != 0 || sig.Ret != Void {
+				t.Fatalf("manual helper signature = %+v, present = %v", sig, ok)
+			}
+			compileLLVMToObject(t, llc, triple, "manual-helper.ll", "manual-helper.o", tr.Module.String())
+		})
+	}
+}
+
+func requireManualHelperGoObject(t *testing.T, triple string, source []byte) {
+	t.Helper()
+	goos := "linux"
+	if strings.Contains(triple, "apple") {
+		goos = "darwin"
+	} else if strings.Contains(triple, "windows") {
+		goos = "windows"
+	}
+	dir := t.TempDir()
+	input := filepath.Join(dir, "call_arm64.s")
+	object := filepath.Join(dir, "call.o")
+	if err := os.WriteFile(input, source, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "test/pkg", "-o", object, input)
+	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off")
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
+		t.Fatalf("original Go local helper object: %v\n%s", err, output)
+	} else if len(output) != 0 {
+		t.Fatalf("unexpected original Go object diagnostic: %s", output)
+	}
+	info, err := os.Lstat(object)
+	if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+		t.Fatalf("missing regular original Go object: %v", err)
+	}
+	data, err := os.ReadFile(object)
+	if err != nil || !strings.HasPrefix(string(data), "go object "+goos+" arm64 ") {
+		t.Fatalf("original Go object target mismatch: %v", err)
 	}
 }
 

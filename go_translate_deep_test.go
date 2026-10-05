@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"go/ast"
 	"go/constant"
 	"go/parser"
@@ -260,27 +261,56 @@ func cmp(a, b int) int { return a }
 	file := &File{
 		Arch: ArchARM64,
 		Funcs: []Func{
-			{Sym: "·Plain", Instrs: []Instr{{Op: OpTEXT}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}}, {Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}}, {Op: OpRET}}},
-			{Sym: "localhelper<>", Instrs: []Instr{{Op: OpTEXT}, {Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}}, {Op: OpRET}}},
+			{
+				Sym: "·Plain",
+				Instrs: []Instr{
+					{Op: OpTEXT},
+					{Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "runtime·cmp(SB)"}}},
+					{Op: "CALL", Args: []Operand{{Kind: OpSym, Sym: "undeclared_call(SB)"}}},
+					{Op: "B", Args: []Operand{{Kind: OpSym, Sym: "localtarget<>(SB)"}}},
+					{Op: OpRET},
+				},
+			},
+			{
+				Sym: "localhelper<>",
+				Instrs: []Instr{
+					{Op: OpTEXT},
+					{Op: "B", Args: []Operand{{Kind: OpSym, Sym: "helper<>(SB)"}}},
+					{Op: OpRET},
+				},
+			},
 			{Sym: "localtarget<>"},
 		},
 	}
-	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, func(resolved string) (FuncSig, bool) {
+	manual := func(resolved string) (FuncSig, bool) {
 		if resolved == "test/pkg.localhelper" {
 			return FuncSig{Name: resolved, Args: []LLVMType{I64}, Ret: I64}, true
 		}
 		return FuncSig{}, false
-	})
+	}
+	if _, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, manual); !errors.Is(err, ErrProbeNeedsContext) ||
+		!strings.Contains(err.Error(), "no declaration or explicit register transport") {
+		t.Fatalf("unbound private tail inherited its caller's signature: %v", err)
+	}
+
+	// Ordinary unresolved calls remain untyped. Changing the query fixture's
+	// edge does not supply a declaration, register ABI or executable contract.
+	file.Funcs[0].Instrs[3].Op = "CALL"
+	file.Funcs = file.Funcs[:2]
+	sigs, err := goSigsForAsmFile(pkg, file, testResolveSym("test/pkg"), "arm64", nil, nil, manual)
 	if err != nil {
 		t.Fatalf("goSigsForAsmFile() error = %v", err)
 	}
-	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper", "test/pkg.localtarget"} {
+	for _, want := range []string{"test/pkg.Plain", "runtime.cmp", "test/pkg.localhelper"} {
 		if _, ok := sigs[want]; !ok {
 			t.Fatalf("missing signature %q", want)
 		}
 	}
 	if _, ok := sigs["test/pkg.undeclared_call"]; ok {
 		t.Fatalf("ordinary unresolved CALL unexpectedly received a synthesized signature")
+	}
+	if _, ok := sigs["test/pkg.localtarget"]; ok {
+		t.Fatal("unresolved local helper CALL unexpectedly received a synthesized signature")
 	}
 
 	builder := goSigBuilder{
