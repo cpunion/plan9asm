@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"text/scanner"
 )
 
@@ -141,10 +140,7 @@ func (input *ppGoInput) define() error {
 					return input.errorf("macro replacement can only escape a backslash or newline: %s", name)
 				}
 			}
-			// cmd/asm's recorded replacement identifiers use its canonical
-			// dot/slash spelling. Preserve original text for re-tokenization.
-			token.value = strings.ReplaceAll(strings.ReplaceAll(token.value, "·", "."), "∕", "/")
-			macro.body = append(macro.body, token)
+			macro.body = append(macro.body, ppGoRecordedToken(token))
 			token, err = input.raw()
 			if err != nil {
 				return err

@@ -2,9 +2,12 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/build/constraint"
 	"strings"
 	"text/scanner"
 )
+
+const ppGoBuildComment rune = -2001
 
 // CPP operates on tokens, not on independent physical lines. A replacement
 // can open a conditional which its parent closes, or define a macro used by a
@@ -33,7 +36,7 @@ func newPPGoReader(file, source string) *ppGoReader {
 	lexical.Filename = file
 	lexical.Whitespace = 1<<'\t' | 1<<'\r' | 1<<' '
 	lexical.Mode = scanner.ScanChars | scanner.ScanFloats | scanner.ScanIdents |
-		scanner.ScanInts | scanner.ScanStrings | scanner.ScanComments | scanner.SkipComments
+		scanner.ScanInts | scanner.ScanStrings | scanner.ScanComments
 	lexical.IsIdentRune = ppIdentRune
 	lexical.Error = func(scan *scanner.Scanner, message string) {
 		if reader.err == nil {
@@ -56,7 +59,19 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 		token.file, token.line, token.endCol = reader.file, reader.line, reader.index
 		return token, nil
 	}
-	kind := reader.scanner.Scan()
+	var kind rune
+	for {
+		kind = reader.scanner.Scan()
+		if kind != scanner.Comment {
+			break
+		}
+		// Go preserves build comments for the assembly parser to check their
+		// position. Ordinary comments disappear without inventing newline tokens.
+		if constraint.IsGoBuild(reader.scanner.TokenText()) {
+			kind = ppGoBuildComment
+			break
+		}
+	}
 	text := reader.scanner.TokenText()
 	if reader.err != nil {
 		return ppGoToken{}, reader.err
@@ -76,6 +91,14 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 	}, nil
 }
 
+// cmd/asm's lex.Make canonicalizes recorded replacement, argument and -D
+// tokens, not physical source tokens. Keep text separately so emitting an
+// identifier containing a dot/slash can retain its original lexical boundary.
+func ppGoRecordedToken(token ppGoToken) ppGoToken {
+	token.value = strings.ReplaceAll(strings.ReplaceAll(token.value, "·", "."), "∕", "/")
+	return token
+}
+
 type ppGoMacro struct {
 	parameters []string
 	body       []ppGoToken
@@ -87,6 +110,7 @@ type ppGoInput struct {
 	macros     map[string]ppGoMacro
 	conditions []bool
 	bol        bool
+	sawCode    bool
 	includes   int
 	last       ppGoToken
 }
@@ -161,6 +185,9 @@ func (input *ppGoInput) next() (ppGoToken, error) {
 			if err != nil {
 				return ppGoToken{}, err
 			}
+			// Go returns a '#' wisp even for disabled controls. Its parser
+			// uses this to distinguish a header build comment from a late one.
+			input.sawCode = true
 			continue
 		}
 		if token.kind == scanner.Ident {
@@ -239,7 +266,7 @@ func (input *ppGoInput) arguments(name string, parameters []string) (map[string]
 		} else if token.kind == ')' {
 			nesting--
 		}
-		argument = append(argument, token)
+		argument = append(argument, ppGoRecordedToken(token))
 	}
 	if len(parameters) == 0 && len(arguments) == 1 && arguments[0] == nil {
 		arguments = nil

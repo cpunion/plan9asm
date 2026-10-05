@@ -33,20 +33,38 @@ func preprocessGoAssembly(src string, options AssemblyPreprocessOptions) (string
 			if token.kind == scanner.EOF {
 				break
 			}
-			macro.body = append(macro.body, token)
+			macro.body = append(macro.body, ppGoRecordedToken(token))
 		}
 		input.macros[name] = macro
 	}
 	var output strings.Builder
 	var previous ppGoToken
 	statementTokens := 0
+	parserPositionInitialized := false
 	for {
 		token, err := input.next()
 		if err != nil {
 			return "", err
 		}
 		if token.kind == scanner.EOF {
+			if statementTokens != 0 {
+				return "", input.errorf("unexpected instruction EOF: missing newline or semicolon")
+			}
 			break
+		}
+		if token.kind == ppGoBuildComment {
+			// Before the parser observes its first non-control token, Go's
+			// diagnostic line is still zero and its errorf suppresses that
+			// first-line CPP/build-comment diagnostic. Preserve this observed
+			// acceptance instead of rejecting every comment after a control.
+			if input.sawCode && parserPositionInitialized {
+				return "", input.errorf("misplaced //go:build comment")
+			}
+			continue
+		}
+		parserPositionInitialized = true
+		if token.kind != '\n' {
+			input.sawCode = true
 		}
 		if token.kind == '\n' {
 			if statementTokens != 0 {
@@ -66,9 +84,6 @@ func preprocessGoAssembly(src string, options AssemblyPreprocessOptions) (string
 			statementTokens = 0
 		}
 	}
-	if statementTokens != 0 {
-		output.WriteByte('\n')
-	}
 	return output.String(), nil
 }
 
@@ -77,6 +92,9 @@ func ppGoTokenNeedsSpace(left, right ppGoToken) bool {
 		return kind == scanner.Ident || kind == scanner.Int || kind == scanner.Float
 	}
 	if word(left.kind) && word(right.kind) {
+		return true
+	}
+	if left.text == "/" && (right.text == "*" || right.text == "/") {
 		return true
 	}
 	// Removing whitespace must not turn separate source tokens into one
