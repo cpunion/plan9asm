@@ -23,6 +23,7 @@ func TestX86FPAccessBytesOrderedForms(t *testing.T) {
 		{"MOVL a+0(FP),AX", 0, 4, false}, {"MOVQ $7,a+0(FP)", 1, 8, true},
 		{"MOVB $7,a+0(FP)", 1, 1, true}, {"MOVSS a+0(FP),X0", 0, 4, false},
 		{"MOVSD X0,a+0(FP)", 1, 8, true}, {"MOVBQSX a+0(FP),AX", 0, 1, false},
+		{"VMOVSS.Z a+0(FP),K1,X0", 0, 4, false},
 		{"MOVWQZX a+0(FP),AX", 0, 2, false}, {"MOVLQSX a+0(FP),AX", 0, 4, false},
 		{"VPSRLW a+0(FP),Y0,Y1", 0, 16, false},
 		{"VPSRLVD.BCST a+0(FP),Z0,Z1", 0, 4, false},

@@ -1,5 +1,7 @@
 package plan9asm
 
+import "strings"
+
 // X86FPAccessBytes observes a registered instruction's full native FP access
 // width. It is not a source, initialization, alignment, caller or translation
 // certificate. Unknown forms return no width; no opcode-suffix inference is
@@ -7,6 +9,11 @@ package plan9asm
 // diagnostic consumer's independent obligations.
 func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, known bool) {
 	if arch != "amd64" && arch != "386" || index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpFP {
+		return 0, false, false
+	}
+	// Actual Parse/CPP output uses canonical source opcodes. The observation
+	// does not promote a constructed case-folded identity to original source.
+	if name := string(ins.Op); name != strings.ToUpper(name) || name != strings.TrimSpace(name) {
 		return 0, false, false
 	}
 	// Generic source-stack diagnostics normalize suffixes, but that fallback
