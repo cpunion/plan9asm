@@ -54,6 +54,51 @@ func TestDiscoveryAsmDeclFPAliasActualNamedOffsets(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAsmDeclFPAliasActualParameterComponents(t *testing.T) {
+	for _, fixture := range []struct {
+		name, declaration, read, result, args string
+	}{
+		{"scalar no RET alias", "func Value(x, y uint64) uint64", "MOVQ x+8(FP),AX", "16", "24"},
+		{"slice", "func Value(x []uint64) uint64", "MOVQ x+8(FP),AX", "24", "32"},
+		{"slice component", "func Value(x []uint64) uint64", "MOVQ x_base+8(FP),AX", "24", "32"},
+		{"string", "func Value(x string) uint64", "MOVQ x+8(FP),AX", "16", "24"},
+		{"struct", "type S struct { A, B uint64 }; func Value(x S) uint64", "MOVQ x_A+8(FP),AX", "16", "24"},
+		{"array", "func Value(x [2]uint64) uint64", "MOVQ x_0+8(FP),AX", "16", "24"},
+		{"interface", "func Value(x interface{}) uint64", "MOVQ x_type+8(FP),AX", "16", "24"},
+		{"complex", "func Value(x complex128) uint64", "MOVQ x_real+8(FP),AX", "16", "24"},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			assembly := "TEXT ·Value(SB),4,$0-" + fixture.args + "\n" + fixture.read + "\nMOVQ AX,ret+" + fixture.result + "(FP)\nRET\n"
+			root, env := discoveryAsmDeclResultAliasFixture(t, fixture.declaration, assembly)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			plan, err := captureDiscoveryAsmDeclDirect(ctx, root, env, nil, []string{"."}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := plan.close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			unit := plan.Units[0]
+			_, original := runCapturedCommandOutput(ctx, plan.Dir, plan.Env, plan.GoBinary, "tool", "vet", "-asmdecl", unit.Filename)
+			if _, observed := discoveryAsmDeclObservedFailure(original); !observed ||
+				!strings.Contains(discoveryCommandDiagnostic(original), "invalid offset") ||
+				strings.Contains(discoveryCommandDiagnostic(original), "RET without writing") {
+				t.Fatalf("actual standalone parameter alias diagnostic missing: %v", original)
+			}
+			t.Logf("ORIGINAL_COMPONENT_NAME_DIAGNOSTIC: %v", original)
+			if err := plan.filterResultAliasWarnings(unit, original); err != nil {
+				t.Fatalf("physical typed component should not require a calculation/RET proof: %v", err)
+			}
+			if err := runDiscoveryAsmDecl(ctx, root, env, "linux/amd64", nil, []string{"."}); err != nil {
+				t.Fatalf("full producer rejected exact component width: %v", err)
+			}
+		})
+	}
+}
+
 func TestDiscoveryAsmDeclFPAliasActualObjectAndCaller(t *testing.T) {
 	declaration := "func Value(x, y uint64) uint64"
 	alias := "TEXT ·Value(SB),4,$0-24\nMOVQ x+8(FP),AX\nMOVQ AX,y+16(FP)\nRET\n"
