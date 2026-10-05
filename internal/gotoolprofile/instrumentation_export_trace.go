@@ -16,14 +16,20 @@ var instrumentationActionID = regexp.MustCompile(` -buildid ([A-Za-z0-9_-]+)/([A
 var instrumentationThreads = regexp.MustCompile(` -c=([0-9]+) `)
 
 type InstrumentationExportRouting struct {
-	Protocol            string   `json:"protocol"`
-	CanonicalTrace      string   `json:"canonical_trace"`
-	TraceSHA256         string   `json:"trace_sha256"`
-	CompilerConcurrency int      `json:"compiler_concurrency"`
-	AssemblerDefines    []string `json:"assembler_defines"`
+	Protocol            string                            `json:"protocol"`
+	CanonicalTrace      string                            `json:"canonical_trace"`
+	TraceSHA256         string                            `json:"trace_sha256"`
+	CompilerConcurrency int                               `json:"compiler_concurrency"`
+	AssemblerDefines    []string                          `json:"assembler_defines"`
+	CommandEnvironment  []string                          `json:"command_environment"`
+	EnvironmentSource   *InstrumentationExportEnvironment `json:"environment_source"`
 }
 
-func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive string, tools *InstrumentationToolState, plan *InstrumentationBuildPlan, defines []string) (*InstrumentationExportRouting, error) {
+func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive string, tools *InstrumentationToolState, plan *InstrumentationBuildPlan, defines []string, environment *InstrumentationExportEnvironment, actual map[string]string) (*InstrumentationExportRouting, error) {
+	commandEnvironment, err := instrumentationExportCommandEnvironment(environment, actual, plan)
+	if err != nil {
+		return nil, err
+	}
 	if len(trace) == 0 || len(trace) > commandOutputLimit || !strings.HasSuffix(string(trace), "\n") || strings.ContainsAny(string(trace), "\x00\r") {
 		return nil, fmt.Errorf("missing, malformed or over-bound actual export command trace")
 	}
@@ -59,32 +65,38 @@ func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive 
 		}
 	}
 	proof := &InstrumentationExportRouting{
-		Protocol: "actual_go_instrumentation_marker_export_routing_v1", CanonicalTrace: canonical,
+		Protocol: "actual_go_instrumentation_marker_export_routing_v2", CanonicalTrace: canonical,
 		TraceSHA256: bytesSHA256([]byte(canonical)), CompilerConcurrency: concurrency,
-		AssemblerDefines: append([]string(nil), defines...),
+		AssemblerDefines:   append([]string(nil), defines...),
+		CommandEnvironment: commandEnvironment, EnvironmentSource: environment,
 	}
-	if err := validateInstrumentationExportRouting(proof, plan, defines); err != nil {
+	if err := validateInstrumentationExportRouting(proof, plan, defines, actual); err != nil {
 		return nil, err
 	}
 	return proof, nil
 }
 
-func validateInstrumentationExportRouting(proof *InstrumentationExportRouting, plan *InstrumentationBuildPlan, defines []string) error {
-	if proof == nil || proof.Protocol != "actual_go_instrumentation_marker_export_routing_v1" || plan == nil ||
+func validateInstrumentationExportRouting(proof *InstrumentationExportRouting, plan *InstrumentationBuildPlan, defines []string, actual map[string]string) error {
+	if proof == nil || proof.Protocol != "actual_go_instrumentation_marker_export_routing_v2" || plan == nil ||
 		len(defines) < 2 ||
 		len(proof.CanonicalTrace) > commandOutputLimit || proof.CompilerConcurrency < 1 || proof.CompilerConcurrency > 256 ||
 		!equalDiscoveryStrings(proof.AssemblerDefines, defines) || proof.TraceSHA256 != bytesSHA256([]byte(proof.CanonicalTrace)) {
 		return fmt.Errorf("incomplete actual instrumentation export routing evidence")
 	}
-	if proof.CanonicalTrace != instrumentationExpectedExportTrace(plan, defines, proof.CompilerConcurrency) {
+	environment, err := instrumentationExportCommandEnvironment(proof.EnvironmentSource, actual, plan)
+	if err != nil || !equalDiscoveryStrings(proof.CommandEnvironment, environment) {
+		return fmt.Errorf("marker export command environment is not bound to its actual SDK/target: %v", err)
+	}
+	if proof.CanonicalTrace != instrumentationExpectedExportTrace(plan, defines, proof.CompilerConcurrency, environment) {
 		return fmt.Errorf("actual export did not execute the complete expected same-mode compiler/assembler routing")
 	}
 	return nil
 }
 
-func instrumentationExpectedExportTrace(plan *InstrumentationBuildPlan, defines []string, concurrency int) string {
+func instrumentationExpectedExportTrace(plan *InstrumentationBuildPlan, defines []string, concurrency int, environment []string) string {
 	mode := string(plan.Mode)
-	base := "@asm -p " + instrumentationExportModule + ` -trimpath "$WORK/b001=>" -I $WORK/b001/ -I @include`
+	prefix := instrumentationExportCommandPrefix(environment)
+	base := prefix + "@asm -p " + instrumentationExportModule + ` -trimpath "$WORK/b001=>" -I $WORK/b001/ -I @include`
 	// asmArgs emits OS/architecture first, then build-mode flags, then
 	// architecture-level CPU definitions. Shared AMD64 must not silently
 	// normalize a different order into the same observed command.
@@ -101,7 +113,7 @@ func instrumentationExpectedExportTrace(plan *InstrumentationBuildPlan, defines 
 	if plan.InstrumentAdjustedBuildMode == "pie" && len(plan.CodegenFlags) == 1 {
 		installSuffix += "_" + strings.TrimPrefix(plan.CodegenFlags[0], "-")
 	}
-	compile := `@compile -o $WORK/b001/_pkg_.a -trimpath "$WORK/b001=>" -p ` + instrumentationExportModule +
+	compile := prefix + `@compile -o $WORK/b001/_pkg_.a -trimpath "$WORK/b001=>" -p ` + instrumentationExportModule +
 		" -lang=go1.20 -installsuffix " + installSuffix + " -buildid @action/@action -goversion " + plan.GoVersion +
 		" -symabis $WORK/b001/symabis"
 	if concurrency > 1 {

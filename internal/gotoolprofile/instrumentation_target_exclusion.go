@@ -38,6 +38,7 @@ func CaptureInstrumentationScopeObservation(ctx context.Context, binary, ownedDi
 	}
 	dir := filepath.Join(ownedDir, "mode")
 	replacements := copyInstrumentationHashes(early.BaselineFeatures.Environment)
+	replacements["GOENV"] = "off"
 	delete(replacements, "GOVERSION")
 	replacements["CGO_ENABLED"], replacements["GOTOOLCHAIN"] = cgo, "local"
 	replacements["GOWORK"], replacements["GOFLAGS"], replacements["GOPACKAGESDRIVER"] = "off", "", "off"

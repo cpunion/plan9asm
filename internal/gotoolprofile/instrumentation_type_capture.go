@@ -23,6 +23,7 @@ import (
 // again at the end. No import prefix, export digest or portable JSON authorizes
 // a physical root. Foreign modules and generated/native/embed roles stay closed.
 func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory string, env []string, input *InstrumentationConsumerInput, run Runner) (*InstrumentationTypeSourceProof, error) {
+	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	if ctx == nil || ctx.Err() != nil || run == nil || !filepath.IsAbs(binary) || !filepath.IsAbs(directory) || input == nil || input.Plan == nil {
 		return nil, fmt.Errorf("original type source capture needs a live bounded actual Go invocation")
 	}

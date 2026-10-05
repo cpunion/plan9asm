@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const instrumentationEarlyObservationProtocol = "actual_go_instrumentation_early_observation_v1"
+const instrumentationEarlyObservationProtocol = "actual_go_instrumentation_early_observation_v2"
 
 // InstrumentationEarlyObservation proves only stock Go's early target rule
 // and finite marker selection under one real mode. It is deliberately not an
@@ -67,6 +67,9 @@ func CaptureInstrumentationEarlyObservation(ctx context.Context, binary, ownedDi
 	if cgo != "0" && cgo != "1" {
 		return nil, fmt.Errorf("instrumentation observer requires explicit CGO=0 or CGO=1")
 	}
+	// An actual mode observation owns its configuration. Do not silently
+	// read a private user go/env file, even when every CPU override is empty.
+	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	if !filepath.IsAbs(binary) || !filepath.IsAbs(ownedDir) {
 		return nil, fmt.Errorf("instrumentation driver and owned directory must be absolute")
 	}
@@ -197,7 +200,7 @@ func CaptureInstrumentationEarlyObservation(ctx context.Context, binary, ownedDi
 }
 
 func instrumentationObserverEnvironment(ctx context.Context, binary, dir string, env []string, run Runner) (map[string]string, map[string]string, error) {
-	keys := append(append([]string(nil), discoveryFeatureEnvKeys...), "CC", "CXX", "GOFLAGS", "GODEBUG")
+	keys := append(append([]string(nil), discoveryFeatureEnvKeys...), "CC", "CXX", "GOFLAGS", "GODEBUG", "GOENV")
 	args := append([]string{"env", "-json"}, keys...)
 	stdout, stderr, err := run(ctx, dir, env, binary, args...)
 	if err != nil || len(stderr) != 0 {
@@ -208,7 +211,7 @@ func instrumentationObserverEnvironment(ctx context.Context, binary, dir string,
 		return nil, nil, fmt.Errorf("incomplete actual instrumentation environment query")
 	}
 	commandContext := make(map[string]string)
-	for _, key := range []string{"CC", "CXX", "GOFLAGS", "GODEBUG"} {
+	for _, key := range []string{"CC", "CXX", "GOFLAGS", "GODEBUG", "GOENV"} {
 		value, present := actual[key]
 		if !present {
 			return nil, nil, fmt.Errorf("missing actual instrumentation command context %s", key)
@@ -250,10 +253,11 @@ func ValidateInstrumentationEarlyObservation(observed *InstrumentationEarlyObser
 			return fmt.Errorf("mode observer differs from its CPU foundation: %s", key)
 		}
 	}
-	if len(observed.CommandContext) != 4 || observed.CommandContext["GOFLAGS"] != "" {
+	// Stock Go reports an empty configuration filename for explicit GOENV=off.
+	if len(observed.CommandContext) != 5 || observed.CommandContext["GOFLAGS"] != "" || observed.CommandContext["GOENV"] != "" {
 		return fmt.Errorf("missing or arbitrary instrumentation command context")
 	}
-	for _, key := range []string{"CC", "CXX", "GOFLAGS", "GODEBUG"} {
+	for _, key := range []string{"CC", "CXX", "GOFLAGS", "GODEBUG", "GOENV"} {
 		if _, present := observed.CommandContext[key]; !present {
 			return fmt.Errorf("missing actual instrumentation command context %s", key)
 		}

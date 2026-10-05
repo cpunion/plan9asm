@@ -147,3 +147,68 @@ func TestInstrumentationExportActualGoModeAndTargetFamily(t *testing.T) {
 		})
 	}
 }
+
+func TestInstrumentationExportActualGoAMD64CPUFamily(t *testing.T) {
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, level := range []string{"v1", "v2", "v3", "v4"} {
+		t.Run(level, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			var actualTrace []byte
+			runner := func(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, []byte, error) {
+				stdout, stderr, err := RunBounded(ctx, dir, env, name, args...)
+				if len(args) > 2 && args[0] == "list" && args[1] == "-a" && args[2] == "-x" {
+					actualTrace = append([]byte(nil), stderr...)
+				}
+				return stdout, stderr, err
+			}
+			proof, err := CaptureInstrumentationExportObservation(ctx, binary, instrumentationMarkerDirectory(t),
+				os.Environ(), "darwin/amd64", InstrumentationRace, "0", map[string]string{"GOAMD64": level}, runner)
+			if err != nil {
+				t.Fatalf("actual same-mode CPU %s export routing: %v\n%s", level, err, actualTrace)
+			}
+			if proof.Early.Environment["GOAMD64"] != level || proof.Routing == nil ||
+				!strings.Contains(proof.Routing.CanonicalTrace, " -D GOAMD64_"+level+" ") {
+				t.Fatal("actual CPU level was lost or replaced by cumulative build tags")
+			}
+			encoded, err := json.Marshal(proof)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var replay InstrumentationExportObservation
+			if err := json.Unmarshal(encoded, &replay); err != nil {
+				t.Fatal(err)
+			}
+			if err := ValidateInstrumentationExportObservation(&replay); err != nil {
+				t.Fatalf("independent CPU mode export replay: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstrumentationExportActualGoARM64CPUFamily(t *testing.T) {
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, level := range []string{"v8.0", "v8.0,lse", "v8.1", "v8.2", "v8.4", "v9.0", "v9.1", "v9.5"} {
+		t.Run(level, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+			proof, err := CaptureInstrumentationExportObservation(ctx, binary, instrumentationMarkerDirectory(t),
+				os.Environ(), "darwin/arm64", InstrumentationRace, "0", map[string]string{"GOARM64": level}, RunBounded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if proof.Early.Environment["GOARM64"] != level {
+				t.Fatal("actual ARM64 CPU was replaced by a different assembler feature profile")
+			}
+			if err := ValidateInstrumentationExportObservation(proof); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

@@ -24,7 +24,8 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-typed-mechanisms-integration-20261005`. Earlier
+Development branch: `codex/pr40-instrumentation-cpp-union-20261005`, based on
+the reviewed source-budget and SDK Count integration. Earlier
 verification snapshots remain frozen in separate worktrees. Integrated repairs
 are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
@@ -279,7 +280,15 @@ export evidence; neither markers nor queries are compiled-object, C/SDK,
 sanitizer-runtime or final-link evidence. Frozen mechanism tests passed on
 Darwin and native Linux ARM64, but establish no new external-library passes.
 Never synthesize feature tags or turn CGO, SDK or dependency failures into N/A.
-Mode-only CPP CPU/experiment unions remain explicit unfinished failures.
+The local mode-only CPP CPU union now derives separate additional requirements
+from the complete original graph, using the same five-architecture grammar as
+ordinary CPU planning with real mode/CGO selection. Actual AMD64 v1-v4 exports,
+four LLVM objects and report/progress/ledger replay passed a focused fixture.
+Complete driver-source/default/SDK-config proofs retain Go's exact changed-CPU
+command prefixes. All mode consumers explicitly disable user configuration;
+unknown CPU macros and unbound experiment roles still fail. Final clean-head
+full suites and original-library replay remain required, not implied by the
+focused four-object proof.
 
 Source selection follows Go's actual legacy last-blank/block boundaries and
 first-byte BOM behavior. Stored original headers and source hashes are never

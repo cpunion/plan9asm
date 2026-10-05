@@ -70,6 +70,7 @@ func runInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 	input *ConsumerInput, plan *InstrumentationOriginalPackagePlan, selected *PackageProof,
 	exports map[string]string, run Runner, remove func(string) error,
 ) (result error) {
+	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	if ctx == nil || ctx.Err() != nil || run == nil || remove == nil || input == nil || plan == nil || selected == nil ||
 		!filepath.IsAbs(binary) || !filepath.IsAbs(invocation) || len(exports) == 0 || len(exports) > 4096 ||
 		plan.PackagePath == "" || selected.PackagePath != plan.PackagePath {

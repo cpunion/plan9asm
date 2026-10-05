@@ -57,6 +57,7 @@ func CaptureInstrumentationOriginalExport(ctx context.Context, binary, invocatio
 	replacements := copyInstrumentationHashes(marker.Early.Environment)
 	delete(replacements, "GOVERSION")
 	replacements["GOTOOLCHAIN"], replacements["GOWORK"], replacements["GOFLAGS"], replacements["GOPACKAGESDRIVER"] = "local", "off", "", "off"
+	replacements["GOENV"] = "off"
 	modeEnv := replaceEnv(env, replacements)
 	actual, commandContext, err := instrumentationObserverEnvironment(ctx, binary, invocationDir, modeEnv, run)
 	if err != nil {

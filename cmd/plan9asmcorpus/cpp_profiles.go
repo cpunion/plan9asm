@@ -15,6 +15,10 @@ import (
 // Only reachable branch sides require profiles; inactive outer conditions do
 // not create a claim of branch execution or full instruction-form coverage.
 func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest) ([]discoveryFeatureProfileRequest, error) {
+	return planDiscoveryCPPFeaturePairWithMode(plan, ctx, baseline, asmFile, goFile, initial, nil)
+}
+
+func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel) ([]discoveryFeatureProfileRequest, error) {
 	if plan.DocumentationSourceProtocol == discoveryDocumentationProtocol && possibleDocumentationDirectory(plan, path.Dir(asmFile)) {
 		sources, directories, err := ordinarySelectionBytes(plan)
 		if err != nil {
@@ -115,7 +119,7 @@ func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build
 		model.ToolTags = discoveryModeledCPUFeatures(baseline.ToolTags, ctx.GOARCH, value, minor)
 		modeledContext := ctx
 		modeledContext.ToolTags = model.ToolTags
-		request, found, err := planDiscoveryFeaturePair(modeledContext, &model, asmFile, goFile)
+		request, found, err := planDiscoveryFeaturePairWithMode(modeledContext, &model, asmFile, goFile, mode)
 		if err != nil {
 			return nil, err
 		}

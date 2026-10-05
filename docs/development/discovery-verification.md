@@ -380,7 +380,7 @@ Historical `exact_source_matchfile_v1` retains its original inventory-only scope
 it cannot claim or be relabeled as v2 sibling coverage.
 
 Current ordinary plans also require `instrumentation_plan` with protocol
-`exact_source_instrumentation_denominator_v2`, including `requirements: []`
+`exact_source_instrumentation_denominator_v3`, including `requirements: []`
 when independently replayed Go/assembly constraints require no mode. Readers
 derive every race/msan/asan scope from the original source pairs, target,
 custom tags and CPU/experiment request. CGO=1 is the default scope; constraints
@@ -412,15 +412,34 @@ archive path/version and canonical package namespace must agree in graph,
 metadata, CPP and object consumers. Missing/changed alias metadata and proxy
 metadata pretending to be that ZIP member fail; this grants no source exclusion.
 
-Mode-only CPP CPU/experiment branch unions remain hard failures until their
-independent consumer coverage is closed. Reports, progress and ledger readers
+The mode's complete ZIP-bound CPP graph separately derives
+`cpp_feature_requirements`. Its finite assembler-CPU branch-side grammar is
+shared with ordinary planning, but source selection retains the real mode and
+CGO setting. Each additional CPU request needs its own actual same-mode
+export, query and LLVM objects; the combined denominator is bounded to 256
+scopes. Readers independently rederive the union and reject deleting a branch
+along with its outcome and translation count. Unbound experiment package roles
+and unknown CPU macros still fail, never become fixed-false baseline coverage.
+
+Marker exports use `actual_go_instrumentation_marker_export_v2` and routing
+v2. Their exact full command trace includes source-derived changed-CPU prefixes
+on all three compiler/assembler commands. Four audited whole Go 1.27.1 driver
+digests and ten complete AST projections bind the routing model; actual
+bootstrap defaults and SDK `go.env` bytes/presence are rechecked before and
+after export. The same hash-addressed observation is shared across scopes.
+No arbitrary environment prefix or diagnostic is stripped. Early observation
+v2 binds explicit `GOENV=off` to the actual empty configuration-file query;
+original exports and all mode metadata/header/analyzer/object consumers retain
+that policy. SDK `go.env` remains active and is not confused with user config.
+
+Reports, progress and ledger readers
 revalidate this same denominator and count completed mode object scopes in
 `instrumentation_translations`, separately from ordinary scopes; successful
 candidate totals include both. The proof establishes objects, not final
-sanitizer linkage or runtime. Current provenance also requires the v2
+sanitizer linkage or runtime. Current provenance also requires the v3
 instrumentation scope marker: deleting it or reverting the plan cannot
 downgrade a stamped producer. Historical v1 early refusals remain failures and
-old reports cannot acquire exclusions by schema relabeling.
+old v1/v2 reports cannot acquire exclusions or CPU coverage by relabeling.
 
 Schema-10 reports and ledger-v2 snapshots remain historical evidence. Current
 verify/status/comparison entrypoints reject them as stale protocols; that

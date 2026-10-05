@@ -48,7 +48,14 @@ func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.In
 	if err != nil {
 		return nil, err
 	}
-	modeEnv := featureEnvironment(env, input.Observation.Early.Environment)
+	modeActual := make(map[string]string, len(input.Observation.Early.Environment)+1)
+	for key, value := range input.Observation.Early.Environment {
+		modeActual[key] = value
+	}
+	// The independently observed mode disables user go/env. Every metadata,
+	// header, analyzer and object consumer must execute under that same policy.
+	modeActual["GOENV"] = "off"
+	modeEnv := featureEnvironment(env, modeActual)
 	source := &featureConsumer{
 		ID: input.Original.ID, Observed: input.Original.Observed, Input: input.Original,
 		Context: ctx, Dir: dir, WorkDir: invocation, Env: modeEnv,

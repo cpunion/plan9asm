@@ -72,18 +72,19 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, err
 	}
 	if len(proof.Requirements) == 0 {
-		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
+		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
 			return 0, nil, fmt.Errorf("empty instrumentation denominator carries unexplained mode evidence/counts")
 		}
 		return 0, nil, nil
 	}
 	allowNonpass := result.Status == discoveryStatusFailed
-	if len(proof.Outcomes) != len(proof.Requirements) || !allowNonpass && proof.CPPInputs == nil {
+	requirements := discoveryInstrumentationAllRequirements(proof)
+	if len(proof.Outcomes) != len(requirements) || !allowNonpass && proof.CPPInputs == nil {
 		return 0, nil, fmt.Errorf("source-required mode scopes lost their separate outcomes/CPP graph")
 	}
 	seenObservations, seenPackages, selected := make(map[string]bool), make(map[string]bool), make(map[string]bool)
 	objects, exclusions := 0, 0
-	for index, requirement := range proof.Requirements {
+	for index, requirement := range requirements {
 		outcome := proof.Outcomes[index]
 		if outcome.RequirementID != requirement.ID {
 			return 0, nil, fmt.Errorf("mode outcome differs from its independent source requirement")
@@ -160,12 +161,16 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 			if len(proof.CPPInputs.Units) != len(selected) {
 				return 0, nil, fmt.Errorf("mode raw CPP has an unexplained selected root")
 			}
-			if err := validateDiscoveryInstrumentationCPPFeatures(proof.CPPInputs); err != nil {
+		}
+		if proof.CPPRequirements != nil || !allowNonpass || objects != 0 {
+			if err := validateDiscoveryInstrumentationCPPUnion(plan, baselines, scope); err != nil {
 				return 0, nil, err
 			}
 		}
 	} else if len(selected) != 0 && objects != 0 {
 		return 0, nil, fmt.Errorf("consumed mode scope has no original CPP registration")
+	} else if proof.CPPRequirements != nil {
+		return 0, nil, fmt.Errorf("mode CPU union lost its original CPP registration")
 	}
 	if result.InstrumentationTranslations != objects {
 		return 0, nil, fmt.Errorf("mode object count differs from the independently required consumed scopes")
@@ -173,7 +178,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 	if result.InstrumentationTargetExclusions != exclusions {
 		return 0, nil, fmt.Errorf("mode target-exclusion count differs from independently replayed scopes")
 	}
-	if exclusions == len(proof.Requirements) && !allowNonpass {
+	if exclusions == len(requirements) && !allowNonpass {
 		return 0, nil, fmt.Errorf("all required instrumentation modes are excluded; no scope-only candidate pass is authorized")
 	}
 	return objects, sortedDiscoverySet(selected), nil

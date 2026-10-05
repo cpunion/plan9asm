@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -80,17 +79,6 @@ func TestInstrumentationDenominatorReplaysCompleteModeCGOAndOriginalPairs(t *tes
 				t.Fatal("null denominator treated as independently proven empty set")
 			}
 		})
-	}
-}
-
-func TestInstrumentationCPPFeatureUnionRemainsUnclosed(t *testing.T) {
-	plan, root, _ := fixtureCPPInputs(t)
-	inputs, err := captureDiscoveryCPPInputs(plan, root, runtime.GOROOT(), []string{"pkg/native_amd64.s"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := validateDiscoveryInstrumentationCPPFeatures(inputs); err == nil {
-		t.Fatal("mode-only CPP CPU branch gained guessed baseline coverage")
 	}
 }
 

@@ -152,4 +152,42 @@ RET
 	if len(seen) != 4 {
 		t.Fatalf("mode CPU denominator is incomplete: %v", seen)
 	}
+	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"baseline-only scopes": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.CPPRequirements = nil
+			p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes = p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[:1]
+			p.Translations, p.InstrumentationTranslations = 1, 1
+		},
+		"missing CPP branch scope": func(p *discoveryCorpusResult) {
+			proof := p.OrdinarySelectionPlan.InstrumentationPlan
+			proof.CPPRequirements = proof.CPPRequirements[:len(proof.CPPRequirements)-1]
+			proof.Outcomes = proof.Outcomes[:len(proof.Outcomes)-1]
+			p.Translations--
+			p.InstrumentationTranslations--
+		},
+		"lost original CPP": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.CPPInputs = nil
+		},
+		"changed same-mode CPU": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.CPPRequirements[0].Overrides["GOAMD64"] = "v1"
+		},
+		"old denominator protocol": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.Protocol = "exact_source_instrumentation_denominator_v2"
+		},
+		"missing compiler object": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[1].Objects = nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed discoveryCorpusResult
+			if err := json.Unmarshal(encoded, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.featureInventory = inventory
+			mutate(&changed)
+			if err := validateOrdinaryProfileResult(changed, []string{"darwin/amd64"}, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatal("incomplete or downgraded CPU union gained candidate pass credit")
+			}
+		})
+	}
 }

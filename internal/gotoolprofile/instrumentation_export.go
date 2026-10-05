@@ -55,6 +55,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if err != nil {
 		return nil, err
 	}
+	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	entries, err := os.ReadDir(ownedDir)
 	if err != nil || len(entries) != 0 {
 		return nil, fmt.Errorf("export observation requires an existing empty owned directory")
@@ -92,6 +93,13 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if err != nil || !instrumentationExportToolsMatch(before, early.ModeTools) {
 		return nil, fmt.Errorf("mode tool state changed before actual export: %v", err)
 	}
+	environment, err := captureInstrumentationExportEnvironment(actual["GOROOT"], actual["GOVERSION"])
+	if err != nil {
+		return nil, err
+	}
+	if environment.SourceSHA256["src/cmd/go/internal/work/init.go"] != early.SourceRules.SourceSHA256["src/cmd/go/internal/work/init.go"] {
+		return nil, fmt.Errorf("marker changed-environment source differs from its actual early build plan")
+	}
 	files := instrumentationExportFixture()
 	for name, data := range files {
 		file, err := os.OpenFile(filepath.Join(markerDir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
@@ -105,7 +113,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 		}
 	}
 	proof := &InstrumentationExportObservation{
-		Protocol: "actual_go_instrumentation_marker_export_v1", Early: early, BuildPlan: plan,
+		Protocol: "actual_go_instrumentation_marker_export_v2", Early: early, BuildPlan: plan,
 		FixtureSHA256: instrumentationExportFixtureHashes(files),
 		ExportArgs:    instrumentationExportArgs(mode), VetArgs: instrumentationVetArgs(mode),
 	}
@@ -126,7 +134,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if err != nil {
 		return nil, err
 	}
-	proof.Routing, err = captureInstrumentationExportRouting(stderr, actual["GOROOT"], markerDir, archive, early.ModeTools, plan, defines)
+	proof.Routing, err = captureInstrumentationExportRouting(stderr, actual["GOROOT"], markerDir, archive, early.ModeTools, plan, defines, environment, actual)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +151,9 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 	if err := recheckInstrumentationExportInputs(ctx, binary, markerDir, modeEnv, actual, commandContext, early, files, archive, proof.ArchiveSHA256, before, run); err != nil {
 		return nil, err
 	}
+	if err := recheckInstrumentationExportEnvironmentSources(actual["GOROOT"], actual["GOVERSION"], environment); err != nil {
+		return nil, err
+	}
 	if err := ValidateInstrumentationExportObservation(proof); err != nil {
 		return nil, err
 	}
@@ -150,7 +161,7 @@ func CaptureInstrumentationExportObservation(ctx context.Context, binary, ownedD
 }
 
 func ValidateInstrumentationExportObservation(proof *InstrumentationExportObservation) error {
-	if proof == nil || proof.Protocol != "actual_go_instrumentation_marker_export_v1" {
+	if proof == nil || proof.Protocol != "actual_go_instrumentation_marker_export_v2" {
 		return fmt.Errorf("missing actual same-mode marker export protocol")
 	}
 	if err := ValidateInstrumentationEarlyObservation(proof.Early); err != nil {
@@ -170,8 +181,11 @@ func ValidateInstrumentationExportObservation(proof *InstrumentationExportObserv
 	if err != nil {
 		return err
 	}
-	if err := validateInstrumentationExportRouting(proof.Routing, proof.BuildPlan, defines); err != nil {
+	if err := validateInstrumentationExportRouting(proof.Routing, proof.BuildPlan, defines, proof.Early.Environment); err != nil {
 		return err
+	}
+	if proof.Routing.EnvironmentSource.SourceSHA256["src/cmd/go/internal/work/init.go"] != proof.Early.SourceRules.SourceSHA256["src/cmd/go/internal/work/init.go"] {
+		return fmt.Errorf("marker environment and early build-plan sources differ")
 	}
 	if !reflect.DeepEqual(proof.Selection, instrumentationExpectedExportSelection(proof.Early.Mode)) ||
 		!reflect.DeepEqual(proof.FixtureSHA256, instrumentationExportFixtureHashes(instrumentationExportFixture())) ||

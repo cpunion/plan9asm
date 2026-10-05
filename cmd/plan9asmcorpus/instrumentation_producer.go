@@ -25,7 +25,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 	if len(proof.Requirements) == 0 {
 		return 0, nil
 	}
-	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" {
+	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil {
 		return 0, fmt.Errorf("mode execution requires a fresh owned result, not another run's proof")
 	}
 	proof.Sources = make(map[string]*gotoolprofile.InstrumentationOriginalSourceInventory)
@@ -68,7 +68,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 	var goRoot string
 	observedRequests := make(map[string]string)
 	selected := make(map[string]bool)
-	for index, requirement := range proof.Requirements {
+	prepareRequirement := func(index int, requirement discoveryInstrumentationRequirement) {
 		outcome := &proof.Outcomes[index]
 		outcome.RequirementID, outcome.Status = requirement.ID, "failed"
 		outcome.Stage = "environment"
@@ -166,6 +166,9 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			runErr = errors.Join(runErr, stageErr)
 		}
 	}
+	for index, requirement := range proof.Requirements {
+		prepareRequirement(index, requirement)
+	}
 	if len(selected) != 0 {
 		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
 			var err error
@@ -176,7 +179,8 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			if err := verifyDiscoveryCPPModuleZIP(proof.CPPInputs, plan, download.Zip); err != nil {
 				return err
 			}
-			return validateDiscoveryInstrumentationCPPFeatures(proof.CPPInputs)
+			proof.CPPRequirements, err = planDiscoveryInstrumentationCPPRequirements(plan, discoveryInstrumentationBaselines(profiles), candidate.AsmFiles)
+			return err
 		}); err != nil {
 			for index := range proof.Outcomes {
 				if proof.Outcomes[index].Error == "" && proof.Outcomes[index].Status != discoveryInstrumentationExcludedStatus {
@@ -186,7 +190,18 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			return 0, errors.Join(runErr, err)
 		}
 	}
-	for index, requirement := range proof.Requirements {
+	registeredFiles := sortedDiscoverySet(selected)
+	for _, requirement := range proof.CPPRequirements {
+		index := len(proof.Outcomes)
+		proof.Outcomes = append(proof.Outcomes, discoveryInstrumentationOutcome{
+			RequirementID: requirement.ID, Status: "failed", Stage: "environment",
+		})
+		prepareRequirement(index, requirement)
+	}
+	if !equalDiscoveryStrings(registeredFiles, sortedDiscoverySet(selected)) {
+		return 0, errors.Join(runErr, fmt.Errorf("mode CPU selection introduced an unregistered original CPP root"))
+	}
+	for index, requirement := range discoveryInstrumentationAllRequirements(proof) {
 		outcome := &proof.Outcomes[index]
 		if outcome.Error != "" || outcome.Status == discoveryInstrumentationExcludedStatus {
 			continue
@@ -226,6 +241,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			}
 			modeEnv := ordinaryProfileEnvironment(env, observation.Early.BaselineFeatures)
 			modeEnv = replaceEnv(modeEnv, observation.Early.Environment)
+			modeEnv = replaceEnv(modeEnv, map[string]string{"GOENV": "off"})
 			args := append([]string{"list", "-mod=mod", "-p=1"}, packagePlan.BuildFlags...)
 			if len(packagePlan.CustomTags) != 0 {
 				args = append(args, "-tags="+strings.Join(packagePlan.CustomTags, ","))
@@ -317,7 +333,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			runErr = errors.Join(runErr, stageErr)
 		}
 	}
-	if discoveryInstrumentationTargetExclusions(plan) == len(proof.Requirements) {
+	if discoveryInstrumentationTargetExclusions(plan) == len(discoveryInstrumentationAllRequirements(proof)) {
 		runErr = errors.Join(runErr, fmt.Errorf("all required instrumentation modes are officially target-excluded; no compiled candidate objects"))
 	}
 	return objects, runErr
@@ -392,22 +408,6 @@ func verifyDiscoveryInstrumentationPhysicalOutputs(root string, proof *gotoolpro
 			if err != nil || digest != expected {
 				return fmt.Errorf("mode physical LLVM IR/object is missing or differs from its strict result: %v", err)
 			}
-		}
-	}
-	return nil
-}
-
-// CPU/experiment branches in mode-only CPP need an additional independently
-// required profile union. Until that union is closed they remain a hard
-// preparation failure, not a guessed baseline success or source exclusion.
-func validateDiscoveryInstrumentationCPPFeatures(inputs *discoveryCPPInputs) error {
-	for _, unit := range inputs.Units {
-		directives, err := discoveryCPPUnitDirectives(inputs, unit, make(map[string]bool))
-		if err != nil {
-			return err
-		}
-		if discoveryCPPHasFeatureConditions(directives) {
-			return fmt.Errorf("mode-only CPP CPU/experiment branch profile union is not yet independently closed: %s", unit.File)
 		}
 	}
 	return nil
