@@ -727,9 +727,10 @@ func (c *amd64Ctx) setX87CompareFlags(lhs, rhs string) {
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", equal, c.flagsZSlot)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", less, c.flagsCFSlot)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", unordered, c.flagsPFSlot)
-	// FCOMI/FUCOMI clear OF, SF, and AF. flagsSltSlot models SF xor OF.
+	// FCOMI/FUCOMI clear OF, SF, and AF. flagsSltSlot is architectural SF.
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsAFSlot)
 }
 
 func (c *amd64Ctx) setX87CompareStatus(lhs, rhs string) {
