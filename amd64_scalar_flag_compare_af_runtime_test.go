@@ -118,23 +118,58 @@ const x86ScalarCompareAFCReference = `
 #include <math.h>
 typedef void (*kernel)(uint8_t*,uint8_t*,uint8_t*,uint64_t);
 
-static int check(kernel fn,unsigned width,unsigned n,unsigned alias,double a,double b,uint64_t seed) {
- uint8_t left[16],right[16],out[96],oldLeft[16],oldRight[16];
- for(unsigned i=0;i<16;i++){left[i]=0x41+i;right[i]=0xb1+i;}
- if(width==32){float l=a,r=b;memcpy(left,&l,4);memcpy(right,&r,4);}
- else {memcpy(left,&a,8);memcpy(right,&b,8);}
- memcpy(oldLeft,left,16);memcpy(oldRight,right,16);memset(out,0xa7,96);
- fn(out,left,right,seed);
- double comparedRight=alias?a:b;
- uint64_t want=isnan(a)||isnan(comparedRight)?0x45:a==comparedRight?0x40:a<comparedRight?1:0,got;
- memcpy(&got,out,8);got&=0x8d5;
- if(got!=want||out[8]!=(want|2)){
-  fprintf(stderr,"scalar status kernel%u width%u a=%g b=%g seed=%llx flags=%llx lahf=%x want=%llx\n",n,width,a,b,(unsigned long long)seed,(unsigned long long)got,out[8],(unsigned long long)want);return 1;
+static int check(kernel fn, unsigned width, unsigned n, unsigned alias,
+                 double a, double b, uint64_t seed) {
+ uint8_t left[16], right[16], out[96], oldLeft[16], oldRight[16];
+ for(unsigned i=0; i<16; i++) {
+  left[i] = 0x41+i;
+  right[i] = 0xb1+i;
  }
- const uint8_t cc[]={want&1,(want>>2)&1,(want>>6)&1,0,0,0};
- for(unsigned i=0;i<6;i++)if(out[9+i]!=cc[i]){fprintf(stderr,"SETcc%u\n",i);return 1;}
- if(memcmp(out+32,left,16)||memcmp(out+48,alias?left:right,16)||memcmp(left,oldLeft,16)||memcmp(right,oldRight,16)){fprintf(stderr,"vector/input canary\n");return 1;}
- for(unsigned i=0;i<96;i++)if(((i>=15&&i<32)||i>=64)&&out[i]!=0xa7){fprintf(stderr,"output canary%u\n",i);return 1;}
+ if(width == 32) {
+  float l=a, r=b;
+  memcpy(left, &l, 4);
+  memcpy(right, &r, 4);
+ } else {
+  memcpy(left, &a, 8);
+  memcpy(right, &b, 8);
+ }
+ memcpy(oldLeft, left, 16);
+ memcpy(oldRight, right, 16);
+ memset(out, 0xa7, 96);
+
+ fn(out, left, right, seed);
+
+ double comparedRight = alias ? a : b;
+ uint64_t want = isnan(a)||isnan(comparedRight) ? 0x45 :
+                 a==comparedRight ? 0x40 : a<comparedRight ? 1 : 0, got;
+ memcpy(&got, out, 8);
+ got &= 0x8d5;
+ if(got != want || out[8] != (want|2)) {
+  fprintf(stderr, "scalar status kernel%u width%u a=%g b=%g seed=%llx flags=%llx lahf=%x want=%llx\n",
+          n, width, a, b, (unsigned long long)seed, (unsigned long long)got,
+          out[8], (unsigned long long)want);
+  return 1;
+ }
+
+ const uint8_t cc[] = {want&1, (want>>2)&1, (want>>6)&1, 0, 0, 0};
+ for(unsigned i=0; i<6; i++) {
+  if(out[9+i] != cc[i]) {
+   fprintf(stderr, "SETcc%u\n", i);
+   return 1;
+  }
+ }
+
+ if(memcmp(out+32, left, 16) || memcmp(out+48, alias ? left : right, 16) ||
+    memcmp(left, oldLeft, 16) || memcmp(right, oldRight, 16)) {
+  fprintf(stderr, "vector/input canary\n");
+  return 1;
+ }
+ for(unsigned i=0; i<96; i++) {
+  if(((i>=15 && i<32) || i>=64) && out[i] != 0xa7) {
+   fprintf(stderr, "output canary%u\n", i);
+   return 1;
+  }
+ }
  return 0;
 }
 `
@@ -153,14 +188,17 @@ func TestCrossLinuxRuntimeMatrixX86ScalarCompareAFLLVM(t *testing.T) {
 		if row.dst == row.src {
 			alias = 1
 		}
-		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,a,b,seed))return 1;\n", row.name, row.bits, i, alias)
+		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,a,b,seed)) {\n return 1;\n}\n", row.name, row.bits, i, alias)
 	}
 	main := x86ScalarCompareAFCReference + declarations.String() + `
 int main(void) {
- const double values[]={-INFINITY,-2,-1,-0.0,0,1,2,INFINITY,NAN};
- for(unsigned i=0;i<9;i++)for(unsigned j=0;j<9;j++)for(unsigned s=0;s<2;s++) {
-  double a=values[i],b=values[j];uint64_t seed=s?0x8d5:0;
-` + checks.String() + "}\nreturn 0;\n}\n"
+ const double values[] = {-INFINITY, -2, -1, -0.0, 0, 1, 2, INFINITY, NAN};
+ for(unsigned i=0; i<9; i++) {
+  for(unsigned j=0; j<9; j++) {
+   for(unsigned s=0; s<2; s++) {
+    double a=values[i], b=values[j];
+    uint64_t seed = s ? 0x8d5 : 0;
+` + checks.String() + "   }\n  }\n }\n return 0;\n}\n"
 	for _, optimized := range []bool{false, true} {
 		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
 			ir, err := Translate(file, x86ScalarCompareAFOptions("amd64", triple, cases))
