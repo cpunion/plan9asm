@@ -108,8 +108,18 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	for _, replaced := range []bool{false, true} {
-		t.Run(fmt.Sprintf("version_replacement_%t", replaced), func(t *testing.T) {
+	for _, fixture := range []struct {
+		name               string
+		replaced, bodyOnly bool
+		blankUnsafeImport  bool
+	}{
+		{name: "version_replacement_false"},
+		{name: "version_replacement_true", replaced: true},
+		{name: "ordinary_body_only", bodyOnly: true},
+		{name: "ordinary_body_blank_import", bodyOnly: true, blankUnsafeImport: true},
+	} {
+		replaced := fixture.replaced
+		t.Run(fixture.name, func(t *testing.T) {
 			proxy := instrumentationMarkerDirectory(t)
 			cache := instrumentationMarkerDirectory(t)
 			t.Cleanup(func() {
@@ -130,8 +140,12 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 				archive = "example.invalid/layout-archive"
 				mod += "replace example.invalid/layoutdep v1.0.0 => " + archive + " v1.0.0\n"
 			}
-			instrumentationForeignFixtureProxy(t, proxy, archive, "v1.0.0",
-				"package model\nconst Words=2\ntype Header struct { Lo uint32; Pad [Words]byte; Hi uint16 }\n")
+			foreignSource := "package model\n"
+			if fixture.blankUnsafeImport {
+				foreignSource += "import _ \"unsafe\"\n"
+			}
+			foreignSource += "const Words=2\ntype Header struct { Lo uint32; Pad [Words]byte; Hi uint16 }\n"
+			instrumentationForeignFixtureProxy(t, proxy, archive, "v1.0.0", foreignSource)
 			env := replaceEnv(os.Environ(), map[string]string{
 				"GOPROXY": "file://" + proxy, "GOSUMDB": "off", "GONOSUMDB": "", "GOPRIVATE": "",
 				"GOMODCACHE": cache, "GOPATH": instrumentationMarkerDirectory(t),
@@ -142,9 +156,13 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 				t.Fatal(err)
 			}
 			original := instrumentationOriginalFixture(t, marker.Early)
+			rootSource := "package markers\nimport shape \"example.invalid/layoutdep/model\"\nfunc marker(value shape.Header) uint64\n"
+			if fixture.bodyOnly {
+				rootSource = "package markers\nimport shape \"example.invalid/layoutdep/model\"\nfunc marker(value uint64) uint64\nfunc ordinary() shape.Header { return shape.Header{} }\n"
+			}
 			for name, source := range map[string]string{
 				"go.mod":      mod,
-				"base.go":     "package markers\nimport shape \"example.invalid/layoutdep/model\"\nfunc marker(value shape.Header) uint64\n",
+				"base.go":     rootSource,
 				"mode_race.s": "//go:build race\n\n#include \"textflag.h\"\nTEXT ·marker(SB),NOSPLIT,$0-16\nMOVD $0,R0\nMOVD R0,ret+8(FP)\nRET\n",
 			} {
 				writeInstrumentationFixture(t, original.SourceRoot, name, []byte(source))
@@ -237,6 +255,52 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 			encoded, err := json.Marshal(input)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if fixture.bodyOnly {
+				if proof.Dependencies[0].Contents != nil {
+					t.Fatal("ordinary body import unexpectedly obtained a declaration-AST role")
+				}
+				if err := ValidateInstrumentationTypeSources(input, proof); err != nil {
+					t.Fatalf("actual body-only original graph failed portable replay: %v", err)
+				}
+				mutations := map[string]func(*InstrumentationConsumerInput){}
+				if fixture.blankUnsafeImport {
+					mutations["deleted actual blank import"] = func(p *InstrumentationConsumerInput) {
+						p.TypeSources.Dependencies[0].Dependency.ImportMap = map[string]string{}
+						p.TypeSources.UnsafeSHA256 = ""
+					}
+					mutations["redirected actual blank spelling"] = func(p *InstrumentationConsumerInput) {
+						p.TypeSources.Dependencies[0].Dependency.ImportMap = map[string]string{"example.invalid/not-in-original": "unsafe"}
+					}
+				} else {
+					root, stderr, err := RunBounded(ctx, original.SourceRoot, env, binary, "env", "GOROOT")
+					if err != nil || len(stderr) != 0 {
+						t.Fatalf("actual SDK unsafe-source origin: %v; %s", err, stderr)
+					}
+					unsafeSHA, err := FileSHA256(filepath.Join(strings.TrimSpace(string(root)), "src", "unsafe", "unsafe.go"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					mutations["invented unsafe import"] = func(p *InstrumentationConsumerInput) {
+						p.TypeSources.Dependencies[0].Dependency.ImportMap["unsafe"] = "unsafe"
+						p.TypeSources.UnsafeSHA256 = unsafeSHA
+					}
+				}
+				for name, mutate := range mutations {
+					t.Run(name, func(t *testing.T) {
+						var changed InstrumentationConsumerInput
+						if err := json.Unmarshal(encoded, &changed); err != nil {
+							t.Fatal(err)
+						}
+						mutate(&changed)
+						// Only the claimed topology changes; actual Go selection,
+						// source/header/ZIP bytes and export/tool receipts stay fixed.
+						if err := ValidateInstrumentationTypeSources(&changed, changed.TypeSources); err == nil {
+							t.Fatal("portable reader accepted changed ImportMap without declaration Contents")
+						}
+					})
+				}
+				return
 			}
 			for name, mutate := range map[string]func(*InstrumentationConsumerInput){
 				"inventory deleted": func(p *InstrumentationConsumerInput) { p.TypeSources.SourceModules = nil },
