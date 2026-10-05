@@ -212,3 +212,27 @@ func BenchmarkARM64ControlRepeatedCellMerge(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkARM64ControlRepeatedSubsetMerge(b *testing.B) {
+	for _, size := range []struct{ targets, cells int }{{512, 1}, {512, 128}, {1024, 1}, {1024, 256}} {
+		b.Run(fmt.Sprintf("targets_%d_cells_%d", size.targets, size.cells), func(b *testing.B) {
+			left, extra := arm64ControlMergeRepeatedOperands(size.targets)
+			// Keep equal common keys physically independent, so the complete
+			// successful subset traversal is not hidden by node identity.
+			rightEntries := arm64ControlFrozenUnion(arm64ControlMap(left), arm64ControlMap(extra))
+			right := arm64ControlFromMap(rightEntries)
+			before, incoming := arm64ControlMergeRepeatedState(left, size.cells), arm64ControlMergeRepeatedState(right, size.cells)
+			b.ReportAllocs()
+			b.ResetTimer()
+			var result *arm64ControlState
+			for iteration := 0; iteration < b.N; iteration++ {
+				result = before.clone()
+				if !result.merge(incoming) {
+					b.Fatal("lost larger complete original RET set")
+				}
+			}
+			b.StopTimer()
+			arm64ControlMergeCheckComplete(b, result, left, right, size.cells)
+		})
+	}
+}

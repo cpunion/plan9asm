@@ -103,24 +103,25 @@ func (state *arm64ControlState) clone() *arm64ControlState {
 
 func (state *arm64ControlState) merge(other *arm64ControlState) bool {
 	changed := false
+	var operations arm64ControlMergeOperations
 	if state.unexposedSP && !other.unexposedSP {
 		state.unexposedSP, changed = false, true
 	}
-	escaped := arm64ControlUnion(state.escaped, other.escaped)
-	if !arm64ControlEqual(state.escaped, escaped) {
-		state.escaped, changed = escaped, true
+	escaped := operations.union(state.escaped, state.escaped, other.escaped)
+	if escaped.changed {
+		state.escaped, changed = escaped.value, true
 	}
 	for reg, value := range other.regs {
-		merged := arm64ControlUnion(arm64ControlRead(state.regs, reg), value)
-		if !arm64ControlEqual(state.regs[reg], merged) {
-			state.regs[reg], changed = merged, true
+		merged := operations.union(state.regs[reg], arm64ControlRead(state.regs, reg), value)
+		if merged.changed {
+			state.regs[reg], changed = merged.value, true
 		}
 	}
 	for reg, value := range state.regs {
 		if other.regs[reg] == nil {
-			merged := arm64ControlUnion(value, arm64ControlExternal())
-			if !arm64ControlEqual(value, merged) {
-				state.regs[reg], changed = merged, true
+			merged := operations.union(value, value, arm64ControlExternal())
+			if merged.changed {
+				state.regs[reg], changed = merged.value, true
 			}
 		}
 	}
@@ -129,16 +130,16 @@ func (state *arm64ControlState) merge(other *arm64ControlState) bool {
 		if old == nil {
 			old = arm64ControlExternal()
 		}
-		merged := arm64ControlUnion(old, value)
-		if !arm64ControlEqual(state.memory[key], merged) {
-			state.memory[key], changed = merged, true
+		merged := operations.union(state.memory[key], old, value)
+		if merged.changed {
+			state.memory[key], changed = merged.value, true
 		}
 	}
 	for key, value := range state.memory {
 		if other.memory[key] == nil {
-			merged := arm64ControlUnion(value, arm64ControlExternal())
-			if !arm64ControlEqual(value, merged) {
-				state.memory[key], changed = merged, true
+			merged := operations.union(value, value, arm64ControlExternal())
+			if merged.changed {
+				state.memory[key], changed = merged.value, true
 			}
 		}
 	}
