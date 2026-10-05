@@ -118,6 +118,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_packed_double_dword_native_test.go",
 		"amd64_maddword_go_oracle_test.go",
 		"amd64_packed_add_go_oracle_test.go",
+		"amd64_packed_subtract_go_oracle_test.go",
 		"amd64_go_caller_maddword_runtime_test.go",
 		"amd64_signed_integer_scalar_float_go_oracle_test.go",
 		"amd64_float_binary_fp_span_test.go",

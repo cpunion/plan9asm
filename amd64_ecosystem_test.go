@@ -2972,9 +2972,9 @@ func TestTranslateAMD64PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.
 }
 
 func TestTranslate386PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.T) {
-	// In 386 mode the legacy encoder limits X registers to X0-X7. VEX and
-	// unmasked EVEX X/Y rows remain available (including X/Y16-X/Y31), while
-	// the assembler frontend rejects Z width and the four-operand mask rows.
+	// In 386 mode only the low eight registers have proved physical bindings.
+	// Go-accepted high-bank EVEX spellings require separate Context tests:
+	// frontend acceptance alone is not a mode32 physical register identity.
 	var src strings.Builder
 	src.WriteString("TEXT packedintegersubtractforms386(SB),NOSPLIT,$0-0\n")
 	for _, op := range []string{"PSUBB", "PSUBL", "PSUBQ", "PSUBSB", "PSUBSW", "PSUBUSB", "PSUBUSW", "PSUBW"} {
@@ -2986,14 +2986,14 @@ func TestTranslate386PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.T)
 		"VPSUBSW", "VPSUBUSB", "VPSUBUSW", "VPSUBW",
 	} {
 		for _, form := range []string{
-			"X1, X2, X3", "(AX), X2, X3", "X20, X21, X22",
-			"Y1, Y2, Y3", "(AX), Y2, Y3", "Y20, Y21, Y22",
+			"X1, X2, X7", "(AX), X2, X7",
+			"Y1, Y2, Y7", "(AX), Y2, Y7",
 		} {
 			fmt.Fprintf(&src, "\t%s %s\n", op, form)
 		}
 		if op == "VPSUBD" || op == "VPSUBQ" {
-			fmt.Fprintf(&src, "\t%s.BCST (AX), X21, X22\n", op)
-			fmt.Fprintf(&src, "\t%s.BCST (AX), Y21, Y22\n", op)
+			fmt.Fprintf(&src, "\t%s.BCST (AX), X2, X7\n", op)
+			fmt.Fprintf(&src, "\t%s.BCST (AX), Y2, Y7\n", op)
 		}
 	}
 	src.WriteString("\tRET\n")

@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedAddSpec struct {
 	x86PackedBinarySpec
@@ -37,13 +34,8 @@ func x86PackedWrappingAddProperties(ins Instr, goarch string) (x86PackedAddForm,
 		return x86PackedAddForm{}, false, nil
 	}
 	form, err := x86PackedBinaryProperties(ins, goarch, spec.x86PackedBinarySpec)
-	if err == nil && goarch == "386" && !form.legacy {
-		for _, operand := range ins.Args {
-			index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
-			if operand.Kind == OpReg && valid && index >= 8 {
-				return x86PackedAddForm{form, spec}, true, fmt.Errorf("%w: 386 packed add register %s has no proved physical mode32 binding", ErrProbeNeedsContext, operand.Reg)
-			}
-		}
+	if err == nil {
+		err = form.arithmeticMode32RegisterContext(ins, goarch)
 	}
 	return x86PackedAddForm{form, spec}, true, err
 }

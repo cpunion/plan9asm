@@ -80,6 +80,22 @@ type x86PackedBinaryForm struct {
 	legacy, mmx, broadcast, zeroing       bool
 }
 
+// The named frontend accepts some EVEX high-bank spellings in mode32, but
+// these arithmetic families' raw encodings do not prove their physical
+// registers there. A typed operand grammar must not grant that identity.
+func (form x86PackedBinaryForm) arithmeticMode32RegisterContext(ins Instr, goarch string) error {
+	if goarch != "386" || form.legacy {
+		return nil
+	}
+	for _, operand := range ins.Args {
+		index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
+		if operand.Kind == OpReg && valid && index >= 8 {
+			return fmt.Errorf("%w: 386 %s register %s has no proved physical mode32 binding", ErrProbeNeedsContext, ins.Op, operand.Reg)
+		}
+	}
+	return nil
+}
+
 // This grammar supplies no initialized values, address bounds or caller
 // privileges. The emitter and the private source/CFG proof share only forms.
 func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm, bool, error) {
