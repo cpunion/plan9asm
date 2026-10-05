@@ -159,6 +159,25 @@ func TestCrossLinuxRuntimeMatrixX87DirectFlagCompareOriginalGo(t *testing.T) {
 
 func x87DirectFlagCompareOriginalGo(t *testing.T, arch string, runner []string) {
 	t.Helper()
+	dir := x87FlagCompareOriginalDirectory(t, arch)
+	args := []string{"test", "-p=2", "-vet=off", "-count=1"}
+	if len(runner) != 0 {
+		args = append(args, "-exec", strings.Join(runner, " "))
+	}
+	args = append(args, ".")
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", args...)
+	command.Dir = dir
+	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH="+arch, "CGO_ENABLED=0", "GOMAXPROCS=2")
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
+		t.Fatalf("original Go full x87 status: %v\n%s", err, output)
+	}
+	t.Log("32 initialized original Go kernels, 121 IEEE value pairs, both AF seeds, all six status flags, LAHF, SETcc and byte canaries")
+}
+
+func x87FlagCompareOriginalDirectory(t *testing.T, arch string) string {
+	t.Helper()
 	var declarations, kernels strings.Builder
 	kernels.WriteString("var kernels = []kernel{\n")
 	for _, row := range x87FlagCompareCases() {
@@ -177,20 +196,7 @@ func x87DirectFlagCompareOriginalGo(t *testing.T, arch string, runner []string) 
 			t.Fatal(err)
 		}
 	}
-	args := []string{"test", "-p=2", "-vet=off", "-count=1"}
-	if len(runner) != 0 {
-		args = append(args, "-exec", strings.Join(runner, " "))
-	}
-	args = append(args, ".")
-	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
-	command := exec.CommandContext(ctx, "go", args...)
-	command.Dir = dir
-	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH="+arch, "CGO_ENABLED=0", "GOMAXPROCS=2")
-	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
-		t.Fatalf("original Go full x87 status: %v\n%s", err, output)
-	}
-	t.Log("32 initialized original Go kernels, 121 IEEE value pairs, both AF seeds, all six status flags, LAHF, SETcc and byte canaries")
+	return dir
 }
 
 const x87FlagCompareCReference = `
