@@ -384,7 +384,7 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		t.Fatalf("compile/link with %s failed: %v\n%s", compiler[0], err, string(out))
 	}
 
-	runArgs := append(append([]string(nil), runPrefix...), exePath)
+	runArgs := runtimeOracleGuestArguments(t, runPrefix, exePath)
 	ctx, cancel = runtimeOracleStageContext(t)
 	runCmd := exec.CommandContext(ctx, runArgs[0], runArgs[1:]...)
 	out, err = runtimeOracleCombinedOutput(ctx, runCmd)

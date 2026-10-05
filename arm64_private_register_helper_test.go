@@ -156,7 +156,7 @@ func TestARM64PrivateRegisterHelperNeedsCompleteContext(t *testing.T) {
 	}{
 		{"unknown-gp-input", strings.Replace(base, "ADC $0,R9,R20", "ADD R8,R9,R20", 1)},
 		{"unknown-flags-input", strings.Replace(base, "ADDS $1,R19,R9", "ADD $1,R19,R9", 1)},
-		{"helper-memory", strings.Replace(base, "ADC $0,R9,R20", "MOVD R0,(R19)\nADC $0,R9,R20", 1)},
+		{"helper-unknown-memory-base", strings.Replace(base, "ADC $0,R9,R20", "MOVD R0,(R8)\nADC $0,R9,R20", 1)},
 		{"helper-fp", strings.Replace(base, "ADC $0,R9,R20", "MOVD x+0(FP),R20", 1)},
 		{"helper-sp", strings.Replace(base, "ADC $0,R9,R20", "MOVD RSP,R20", 1)},
 		{"helper-lr", strings.Replace(base, "ADC $0,R9,R20", "MOVD R30,R20", 1)},

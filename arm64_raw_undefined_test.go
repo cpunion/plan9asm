@@ -162,23 +162,24 @@ func TestCrossLinuxRuntimeMatrixARM64RawUndefinedFaultOracles(t *testing.T) {
 		}
 	}
 	executable := filepath.Join(dir, "original-udf")
-	build := exec.Command("go", "build", "-o", executable, ".")
+	ctx, cancel := runtimeOracleStageContext(t)
+	build := exec.CommandContext(ctx, "go", "build", "-p=2", "-o", executable, ".")
 	build.Dir, build.Env = dir, append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "CGO_ENABLED=0", "GOARCH=arm64")
 	if len(runner) != 0 {
 		build.Env = append(build.Env, "GOOS=linux")
 	}
-	if output, err := build.CombinedOutput(); err != nil {
+	output, err := runtimeOracleCombinedOutput(ctx, build)
+	cancel()
+	if err != nil {
 		t.Fatalf("original Go UDF build: %v\n%s", err, output)
 	}
 	for _, immediate := range arm64UndefinedImmediateCases {
-		args := []string{executable, fmt.Sprint(immediate)}
-		if len(runner) != 0 {
-			// Go's statically linked executable needs no cross libc sysroot.
-			args = append([]string{runner[0]}, args...)
-		}
-		command := exec.Command(args[0], args[1:]...)
+		args := runtimeOracleGuestArguments(t, runner, executable, fmt.Sprint(immediate))
+		ctx, cancel = runtimeOracleStageContext(t)
+		command := exec.CommandContext(ctx, args[0], args[1:]...)
 		command.Env = append(os.Environ(), "GOTRACEBACK=single")
-		output, err := command.CombinedOutput()
+		output, err := runtimeOracleCombinedOutput(ctx, command)
+		cancel()
 		exit, ok := err.(*exec.ExitError)
 		if !ok || exit.ExitCode() != 2 || !strings.Contains(string(output), "SIGILL: illegal instruction") {
 			t.Fatalf("original Go UDF #%d did not deliver the expected SIGILL: %v\n%s", immediate, err, output)
