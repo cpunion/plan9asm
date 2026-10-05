@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if _, known, err := x86PackedSADProperties(ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86PackedSubtractProperties(ins, "amd64"); known {
 		return err == nil && !form.mmx
 	}
@@ -92,6 +95,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86PackedSADProperties(*ins, "amd64"); known {
+		return err == nil && x86CallerSADStep(ins, form, state, proof)
+	}
 	if form, known, err := x86PackedSubtractProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, form.laneBits, state, proof)
 	}
@@ -221,6 +227,9 @@ func x86CallerMaskMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoC
 func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid bool) {
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
+	}
+	if form, known, err := x86PackedSADProperties(ins, "amd64"); known {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
 	if form, known, err := x86PackedSubtractProperties(ins, "amd64"); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index

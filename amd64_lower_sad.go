@@ -40,142 +40,108 @@ var amd64PackedSADSpecs = map[Op]amd64PackedSADSpec{
 	"VDBPSADBW": {kind: amd64PackedSADDoubleBlock, form: amd64PackedSADEVEXXYZ},
 }
 
-// lowerPackedSumAbsoluteDifferences implements Go 1.27's complete byte-SAD
-// family. Only VDBPSADBW has masking and a suffix form.
-func (c *amd64Ctx) lowerPackedSumAbsoluteDifferences(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	spec, recognized := amd64PackedSADSpecs[Op(baseOp)]
-	if !recognized {
+// One ordered grammar governs both lowering and original-source effects.
+func (c *amd64Ctx) lowerPackedSumAbsoluteDifferences(op Op, ins Instr) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := amd64PackedSADSpecs[Op(base)]; !known {
 		return false, false, nil
 	}
-	if spec.kind == amd64PackedSADDoubleBlock {
-		return c.lowerDoubleBlockSumAbsoluteDifferences(baseOp, rawOp, ins)
+	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return true, false, fmt.Errorf("packed SAD dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
+	ins.Op = op
+	form, _, err := x86PackedSADProperties(ins, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	if spec.kind == amd64PackedSADMultiple {
-		return c.lowerMultipleSumAbsoluteDifferences(baseOp, spec, ins)
+	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+		}
+		if virtual {
+			return true, false, fmt.Errorf("%w: %s m128 needs original native storage, not virtual FP/SP/BP", ErrProbeNeedsContext, ins.Op)
+		}
 	}
-	if spec.form == amd64PackedSADLegacyX {
-		if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !c.isGoLegacyXReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("%s PSADBW expects X/m source and an in-range X destination: %q", c.goarch, ins.Raw)
-		}
-		if ins.Args[0].Kind == OpReg && !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("%s PSADBW register source must be an in-range X register: %q", c.goarch, ins.Raw)
-		}
-		if ins.Args[0].Kind == OpMem && !x86MemoryRegistersValidForArch(ins.Args[0].Mem, c.goarch) {
-			return true, false, fmt.Errorf("%s PSADBW source uses an out-of-range address register: %q", c.goarch, ins.Raw)
-		}
-		first, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
 			return true, false, err
 		}
-		second, err := c.loadX(ins.Args[1].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		result := c.emitPackedSumAbsoluteByteDifferences(16, first, second)
-		return true, false, c.storeX(ins.Args[1].Reg, result)
 	}
-
-	if len(ins.Args) != 3 || ins.Args[2].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 VPSADBW expects src1, src2, destination: %q", ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(ins.Args[2].Reg)
-	if byteWidth == 0 {
-		return true, false, fmt.Errorf("amd64 VPSADBW destination must be X, Y, or Z: %q", ins.Raw)
-	}
-	if !amd64VectorRegisterHasWidth(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("amd64 VPSADBW second source must match its destination width: %q", ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg && !amd64VectorRegisterHasWidth(ins.Args[0], byteWidth) {
-		return true, false, fmt.Errorf("amd64 VPSADBW first source must match its destination width: %q", ins.Raw)
-	}
-	first, err := c.loadPackedCompareBytes(ins.Args[0], byteWidth)
+	b, err := c.loadPackedCompareBytes(second, form.byteWidth)
 	if err != nil {
 		return true, false, err
 	}
-	second, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	result := c.emitPackedSumAbsoluteByteDifferences(byteWidth, first, second)
-	return true, false, c.storeVectorBytes(ins.Args[2].Reg, byteWidth, result)
-}
-
-// lowerDoubleBlockSumAbsoluteDifferences implements the EVEX VDBPSADBW table.
-// Go's Plan 9 order is imm8, SRC2, SRC1, [K,] destination. The shared x86
-// encoder table exists on 386, but cmd/asm cannot represent its four- and
-// five-operand forms there.
-func (c *amd64Ctx) lowerDoubleBlockSumAbsoluteDifferences(baseOp, rawOp string, ins Instr) (bool, bool, error) {
-	zeroing := rawOp == baseOp+".Z"
-	if rawOp != baseOp && !zeroing {
-		return true, false, fmt.Errorf("amd64 %s accepts only the optional .Z suffix: %q", baseOp, ins.Raw)
-	}
-	if c.goarch == "386" && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s is outside Go 1.27's accepted instruction forms: %q", baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 5
-	if len(ins.Args) != 4 && !masked || !amd64UnsignedImmediate(ins.Args[0], 8) {
-		return true, false, fmt.Errorf("amd64 %s expects $imm8, X|Y|Z/mem, X|Y|Z, [K,] X|Y|Z: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s.Z requires K1-K7: %q", baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if destination.Kind != OpReg || byteWidth != 16 && byteWidth != 32 && byteWidth != 64 || !c.isGoEVEXVectorRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's X/Y/Z register classes: %q", baseOp, ins.Raw)
-	}
-	source2, source1 := ins.Args[1], ins.Args[2]
-	if source2.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source2, byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s SRC2 register must match its destination width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source2) {
-		return true, false, fmt.Errorf("amd64 %s SRC2 must be a matching vector register or memory: %q", baseOp, ins.Raw)
-	}
-	if !c.isGoEVEXVectorRegister(source1, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s SRC1 must match its destination width: %q", baseOp, ins.Raw)
-	}
-	maskValue := ""
-	if masked {
-		mask := ins.Args[3]
-		if !amd64NonzeroKOperand(mask) {
-			return true, false, fmt.Errorf("amd64 %s masked form requires K1-K7: %q", baseOp, ins.Raw)
-		}
-		loaded, err := c.loadK(mask.Reg)
-		if err != nil {
-			return true, false, err
-		}
-		maskValue = loaded
-	}
-	source2Bytes, err := c.loadPackedCompareBytes(source2, byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	source1Bytes, err := c.loadPackedCompareBytes(source1, byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	lanes := byteWidth / 2
-	result := c.emitDoubleBlockSumAbsoluteDifferences(byteWidth, source1Bytes, source2Bytes, uint8(ins.Args[0].Imm))
-	if masked {
-		oldBytes, loadErr := c.loadPackedCompareBytes(destination, byteWidth)
+	var result string
+	if form.legacy && form.memory >= 0 {
+		// Keep the precise legacy opcode/read/fault behavior. A separately
+		// synthesized align-1 or MOVDQA load is not an equivalent contract.
+		result, err = c.emitPackedSADNativeMemory(first, b, form)
+	} else {
+		a, loadErr := c.loadPackedUnpackSource(first, x86PackedUnpackForm{
+			x86PackedBinaryForm: form.x86PackedBinaryForm, spec: x86PackedUnpackSpec{laneBits: 8},
+		})
 		if loadErr != nil {
 			return true, false, loadErr
 		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, 16, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, lanes, 16, result, old, maskValue, zeroing)
+		switch form.spec.kind {
+		case amd64PackedSADBlockSum:
+			result = c.emitPackedSumAbsoluteByteDifferences(form.byteWidth, a, b)
+		case amd64PackedSADMultiple:
+			result = c.emitMultipleSumAbsoluteDifferences(form.byteWidth, a, b, form.immediate)
+		case amd64PackedSADDoubleBlock:
+			words := c.emitDoubleBlockSumAbsoluteDifferences(form.byteWidth, b, a, form.immediate)
+			if form.mask >= 0 {
+				mask, loadErr := c.loadK(ins.Args[form.mask].Reg)
+				if loadErr != nil {
+					return true, false, loadErr
+				}
+				old := "zeroinitializer"
+				if !form.zeroing {
+					old, loadErr = c.loadPackedCompareLanes(destination, form.byteWidth, 16, false)
+					if loadErr != nil {
+						return true, false, loadErr
+					}
+				}
+				words = amd64ApplyIntegerLaneMask(c, form.byteWidth/2, 16, words, old, mask, form.zeroing)
+			}
+			bytes := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x i8>\n", bytes, form.byteWidth/2, words, form.byteWidth)
+			result = "%" + bytes
+		}
 	}
-	bytesValue := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x i8>\n", bytesValue, lanes, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+bytesValue)
+	if err != nil {
+		return true, false, err
+	}
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, result)
+	}
+	return true, false, c.storeVectorBytes(destination.Reg, form.byteWidth, result)
+}
+
+func (c *amd64Ctx) emitPackedSADNativeMemory(source Operand, data string, form x86PackedSADForm) (string, error) {
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return "", err
+	}
+	segment := ""
+	switch pointerType {
+	case "ptr addrspace(256)":
+		segment = "%gs:"
+	case "ptr addrspace(257)":
+		segment = "%fs:"
+	}
+	opcode := "psadbw "
+	if form.spec.kind == amd64PackedSADMultiple {
+		opcode = fmt.Sprintf("mpsadbw $$%d, ", form.immediate)
+	}
+	carrier, value, bytes := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", carrier, data)
+	fmt.Fprintf(c.b, "  %%%s = call <4 x i32> asm sideeffect %q, %q(<4 x i32> %%%s, %s %s)\n",
+		value, opcode+segment+"($2), $0", "=x,0,r,~{memory}", carrier, pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", bytes, value)
+	return "%" + bytes, nil
 }
 
 func (c *amd64Ctx) emitDoubleBlockSumAbsoluteDifferences(byteWidth int, source1, source2 string, immediate uint8) string {
@@ -231,61 +197,6 @@ func (c *amd64Ctx) emitDoubleBlockSumAbsoluteDifferences(byteWidth int, source1,
 		}
 	}
 	return result
-}
-
-func (c *amd64Ctx) lowerMultipleSumAbsoluteDifferences(baseOp string, spec amd64PackedSADSpec, ins Instr) (bool, bool, error) {
-	if len(ins.Args) == 0 || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
-		return true, false, fmt.Errorf("%s %s expects a Yu8 immediate: %q", c.goarch, baseOp, ins.Raw)
-	}
-	immediate := uint8(ins.Args[0].Imm)
-	if spec.form == amd64PackedSADLegacyX {
-		if len(ins.Args) != 3 || !c.isGoVEXVectorRegister(ins.Args[2], 16, false) {
-			return true, false, fmt.Errorf("%s %s expects imm8, X/m128, X: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if !c.isGoVEXVectorRegister(ins.Args[1], 16, true) {
-			return true, false, fmt.Errorf("%s %s source must be X/m128: %q", c.goarch, baseOp, ins.Raw)
-		}
-		if ins.Args[1].Kind == OpMem && !x86MemoryRegistersValidForArch(ins.Args[1].Mem, c.goarch) {
-			return true, false, fmt.Errorf("%s %s source uses an out-of-range address register: %q", c.goarch, baseOp, ins.Raw)
-		}
-		first, err := c.loadPackedCompareBytes(ins.Args[1], 16)
-		if err != nil {
-			return true, false, err
-		}
-		second, err := c.loadPackedCompareBytes(ins.Args[2], 16)
-		if err != nil {
-			return true, false, err
-		}
-		result := c.emitMultipleSumAbsoluteDifferences(16, first, second, immediate)
-		return true, false, c.storeX(ins.Args[2].Reg, result)
-	}
-
-	if c.goarch == "386" && !ins.x86Encoded {
-		return true, false, fmt.Errorf("386 %s exceeds the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 4 || ins.Args[3].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects imm8, source1, source2, destination: %q", baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(ins.Args[3].Reg)
-	if byteWidth != 16 && byteWidth != 32 {
-		return true, false, fmt.Errorf("amd64 %s destination must be a VEX X or Y register: %q", baseOp, ins.Raw)
-	}
-	if !c.isGoVEXVectorRegister(ins.Args[3], byteWidth, false) || !c.isGoVEXVectorRegister(ins.Args[2], byteWidth, false) {
-		return true, false, fmt.Errorf("amd64 %s second source and destination must be matching VEX registers: %q", baseOp, ins.Raw)
-	}
-	if !c.isGoVEXVectorRegister(ins.Args[1], byteWidth, true) {
-		return true, false, fmt.Errorf("amd64 %s first source must be a matching VEX register or memory: %q", baseOp, ins.Raw)
-	}
-	first, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	second, err := c.loadPackedCompareBytes(ins.Args[2], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	result := c.emitMultipleSumAbsoluteDifferences(byteWidth, first, second, immediate)
-	return true, false, c.storeVectorBytes(ins.Args[3].Reg, byteWidth, result)
 }
 
 func (c *amd64Ctx) emitMultipleSumAbsoluteDifferences(byteWidth int, first, second string, immediate uint8) string {
