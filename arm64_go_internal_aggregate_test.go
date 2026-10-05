@@ -1,8 +1,17 @@
 package plan9asm
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +20,124 @@ import (
 	"testing"
 	"time"
 )
+
+// Keep the complete stock-Go selected declaration bytes and actual export
+// graph. A copied func signature cannot supply the ABI0 source Binder input.
+func arm64BytealgCountSDKPackage(t *testing.T) GoPackage {
+	t.Helper()
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "list", "-p=2", "-compiled", "-export", "-deps", "-json", "internal/bytealg")
+	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if err != nil {
+		t.Fatalf("actual SDK Count selection/export: %v\n%s", err, output)
+	}
+	type selectedPackage struct {
+		Dir, ImportPath, Name, Export string
+		Standard                      bool
+		GoFiles, CompiledGoFiles      []string
+		CgoFiles, SFiles              []string
+		ImportMap                     map[string]string
+		Error                         *struct{ Err string }
+		DepsErrors                    []struct{ Err string }
+	}
+	decoder := json.NewDecoder(bytes.NewReader(output))
+	exports := make(map[string]string)
+	var root *selectedPackage
+	for {
+		var selected selectedPackage
+		if err := decoder.Decode(&selected); err == io.EOF {
+			break
+		} else if err != nil {
+			t.Fatalf("actual SDK selection JSON: %v", err)
+		}
+		if selected.Error != nil || len(selected.DepsErrors) != 0 || !selected.Standard || len(selected.CgoFiles) != 0 {
+			t.Fatalf("unclosed SDK selection: %s: %+v", selected.ImportPath, selected.Error)
+		}
+		if _, duplicate := exports[selected.ImportPath]; duplicate {
+			t.Fatalf("duplicate actual SDK package: %s", selected.ImportPath)
+		}
+		exports[selected.ImportPath] = selected.Export
+		if selected.ImportPath == "internal/bytealg" {
+			copy := selected
+			root = &copy
+		}
+	}
+	canonical, err := filepath.EvalSymlinks(filepath.Join(runtime.GOROOT(), "src", "internal", "bytealg"))
+	if err != nil || root == nil || root.Name != "bytealg" || len(root.CompiledGoFiles) == 0 || len(root.CompiledGoFiles) > 256 {
+		t.Fatalf("missing actual SDK Count root: %v", err)
+	}
+	actual, err := filepath.EvalSymlinks(root.Dir)
+	if err != nil || actual != canonical {
+		t.Fatalf("SDK Count selection changed its original root: %s: %v", root.Dir, err)
+	}
+	selectedASM := false
+	for _, name := range root.SFiles {
+		selectedASM = selectedASM || name == "count_arm64.s"
+	}
+	if !selectedASM {
+		t.Fatal("original Count assembly absent from actual SDK selection")
+	}
+	fset := token.NewFileSet()
+	info := &types.Info{Defs: make(map[*ast.Ident]types.Object), Uses: make(map[*ast.Ident]types.Object), Types: make(map[ast.Expr]types.TypeAndValue)}
+	sizes := types.SizesFor("gc", "arm64")
+	selection := &GoSourceSelection{Fset: fset, TypesInfo: info, Sizes: sizes, GoSources: make(map[string][]byte)}
+	var syntax []*ast.File
+	guard := make(map[string][32]byte)
+	for _, name := range root.CompiledGoFiles {
+		filename := name
+		if !filepath.IsAbs(filename) {
+			filename = filepath.Join(canonical, filename)
+		}
+		physical, err := filepath.EvalSymlinks(filename)
+		if err != nil || filepath.Dir(physical) != canonical || selection.GoSources[physical] != nil {
+			t.Fatalf("unbound SDK Count selected source: %s: %v", name, err)
+		}
+		source, err := os.ReadFile(physical)
+		if err != nil {
+			t.Fatal(err)
+		}
+		file, err := parser.ParseFile(fset, physical, source, parser.ParseComments)
+		if err != nil || file.Name.Name != root.Name {
+			t.Fatalf("actual SDK Count declaration parse: %s: %v", name, err)
+		}
+		syntax = append(syntax, file)
+		selection.SelectedGoFiles = append(selection.SelectedGoFiles, physical)
+		selection.GoSources[physical] = source
+		guard[physical] = sha256.Sum256(source)
+	}
+	lookup := func(path string) (io.ReadCloser, error) {
+		if mapped := root.ImportMap[path]; mapped != "" {
+			path = mapped
+		}
+		filename := exports[path]
+		if filename == "" {
+			return nil, fmt.Errorf("missing actual SDK dependency export: %s", path)
+		}
+		data, err := os.ReadFile(filename)
+		if err != nil {
+			return nil, err
+		}
+		guard[filename] = sha256.Sum256(data)
+		return io.NopCloser(bytes.NewReader(data)), nil
+	}
+	config := types.Config{Sizes: sizes, Importer: importer.ForCompiler(fset, "gc", lookup)}
+	typed, err := config.Check(root.ImportPath, fset, syntax, info)
+	if err != nil {
+		t.Fatalf("actual SDK Count type/source recheck: %v", err)
+	}
+	t.Cleanup(func() {
+		for filename, before := range guard {
+			data, err := os.ReadFile(filename)
+			if err != nil || sha256.Sum256(data) != before {
+				t.Errorf("actual SDK Count source/export changed: %s: %v", filename, err)
+			}
+		}
+	})
+	t.Logf("actual SDK Count selection: %s, %d original Go files, %d package export records", root.ImportPath, len(syntax), len(exports))
+	return GoPackage{Path: typed.Path(), Types: typed, Syntax: syntax, SourceSelection: selection}
+}
 
 // Go permits explicit ABI selectors only to its trusted runtime assembly.
 // Use a private package and fully qualified main symbols with the assembler's
@@ -290,7 +417,6 @@ func TestCrossLinuxRuntimeMatrixARM64GoInternalBytealgCount(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const decl = "func Count([]byte,byte) int\nfunc CountString(string,byte) int\n"
 	const goMain = `package main
 import "bytes"
 func Count([]byte,byte) int
@@ -298,19 +424,21 @@ func CountString(string,byte) int
 func main() {
   var data [641]byte
   for i:=range data { data[i]=byte(i%19) }
+  original:=data
   for _,n:=range []int{0,1,15,16,17,31,32,33,255,256,257,640} {
     for _,offset:=range []int{0,1} {
       b:=data[offset:offset+n]
       for _,c:=range []byte{0,7,18,255} {
         want:=bytes.Count(b,[]byte{c})
         if Count(b,c)!=want || CountString(string(b),c)!=want { panic("actual bytealg count register contract mismatch") }
+        if data!=original { panic("actual bytealg count input/canary mutation") }
       }
     }
   }
 }
 `
 	runARM64GoInternalOracle(t, string(source), goMain, len(runner) != 0)
-	pkg := mustGoPackage(t, "test/bytealgcount", "package bytealgcount\n"+decl)
+	pkg := arm64BytealgCountSDKPackage(t)
 	const shim = `define i64 @invokeCount(ptr %p, i64 %n, i8 %c) {
   %b0 = insertvalue { ptr, i64, i64 } undef, ptr %p, 0
   %b1 = insertvalue { ptr, i64, i64 } %b0, i64 %n, 1
@@ -330,15 +458,17 @@ define i64 @invokeCountString(ptr %p, i64 %n, i8 %c) {
 			GOARCH: "arm64", TargetTriple: target,
 			ResolveSym: func(sym string) string { return strings.TrimPrefix(goStripABISuffix(sym), "·") },
 		})
+		if tr != nil && !tr.Module.IsNil() {
+			defer tr.Module.Dispose()
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer tr.Module.Dispose()
 		return tr.Module.String() + "\n" + shim
 	}
 	for _, target := range []string{
 		"aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl",
-		"aarch64-apple-darwin", "aarch64-pc-windows-msvc",
+		"aarch64-apple-darwin", "aarch64-pc-windows-msvc", "aarch64-unknown-freebsd",
 	} {
 		compileLLVMToObject(t, llc, target, "bytealg-count.ll", "bytealg-count.o", translate(target))
 	}
@@ -355,10 +485,12 @@ int main(void) {
       for(unsigned i=0;i<sizes[j];i++) want+=data[off+i]==search[k];
       if (invokeCount(data+off,sizes[j],search[k])!=want) return 1;
       if (invokeCountString(data+off,sizes[j],search[k])!=want) return 2;
+      for (unsigned i=0;i<641;i++) if (data[i]!=i%19) return 3;
     }
   }
   return 0;
 }
 `
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "go_internal_count", triple, translate(triple), main, runner)
+	t.Log("Count and CountString: 96 samples each, original Go and LLVM/C numerical/input-canary oracles; five target objects")
 }
