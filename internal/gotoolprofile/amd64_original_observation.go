@@ -33,6 +33,7 @@ type AMD64OriginalPackageObservation struct {
 	request    AMD64OriginalObservationRequest
 	run        Runner
 	state      *amd64OriginalObservationState
+	fixedLocal []*AMD64OriginalFixedLocalBinding
 }
 
 type amd64OriginalObservationState struct {
@@ -88,13 +89,19 @@ func (observed *AMD64OriginalPackageObservation) Verify(ctx context.Context) err
 		err = fmt.Errorf("original package source/selection/export/profile changed")
 	}
 	observed.mu.Lock()
-	defer observed.mu.Unlock()
 	if !observed.ready || generation != observed.generation {
+		observed.mu.Unlock()
 		return fmt.Errorf("original package observation was revoked during verification")
 	}
+	var revoked []*AMD64OriginalFixedLocalBinding
 	if err != nil {
 		observed.ready = false
 		observed.generation++
+		revoked, observed.fixedLocal = observed.fixedLocal, nil
+	}
+	observed.mu.Unlock()
+	if closeErr := closeAMD64OriginalFixedLocal(revoked); closeErr != nil {
+		err = errors.Join(err, closeErr)
 	}
 	return err
 }
@@ -104,10 +111,12 @@ func (observed *AMD64OriginalPackageObservation) Close() error {
 		return nil
 	}
 	observed.mu.Lock()
-	defer observed.mu.Unlock()
 	observed.ready = false
 	observed.generation++
-	return nil
+	bindings := observed.fixedLocal
+	observed.fixedLocal = nil
+	observed.mu.Unlock()
+	return closeAMD64OriginalFixedLocal(bindings)
 }
 
 func validateAMD64OriginalObservationRequest(ctx context.Context, request AMD64OriginalObservationRequest, run Runner) error {

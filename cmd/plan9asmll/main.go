@@ -210,6 +210,14 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
+	if *featureProfile == "" {
+		if *featureTimeout <= 0 {
+			fatalf("ordinary source consumption requires a positive deadline")
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), *featureTimeout)
+		defer cancel()
+		ccfg.Context = ctx
+	}
 	if *featureProfile != "" {
 		if len(specs) != 1 || *featureTimeout <= 0 {
 			fatalf("explicit feature profile requires one target and a positive deadline")
@@ -789,6 +797,21 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	if err != nil {
 		return fmt.Errorf("prove private continuation entries: %w", err)
 	}
+	sigs, fixedLocalSource, err := prepareAMD64FixedLocalSource(pkg, file, t.AsmFile, goos+"/"+goarch,
+		triple, goarch, ccfg, resolve, sigs)
+	if err != nil {
+		return fmt.Errorf("prove original fixed local backing: %w", err)
+	}
+	if fixedLocalSource != nil {
+		defer func() {
+			if err := fixedLocalSource.verify(ccfg.Context); err != nil {
+				compileErr = errors.Join(compileErr, err)
+			}
+			if err := fixedLocalSource.close(); err != nil {
+				compileErr = errors.Join(compileErr, err)
+			}
+		}()
+	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {
 		maxFunctions = 128
@@ -803,7 +826,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	}
 	// A continuation and the initializer taking its block address must remain
 	// in one LLVM module, just as an oversized ordinary function stays intact.
-	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 &&
+	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil &&
 		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.

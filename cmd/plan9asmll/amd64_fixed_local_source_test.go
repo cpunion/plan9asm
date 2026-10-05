@@ -1,0 +1,324 @@
+package main
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"golang.org/x/tools/go/packages"
+)
+
+// The original numeric ABI0 fixture has a real automatic Go frame, explicit
+// complete initialization and restoration. Its local addresses are neither
+// incoming slice extents nor contiguous virtual FP shadow storage.
+func amd64FixedLocalCLIAssembly(operation string) string {
+	return fmt.Sprintf(`#include "textflag.h"
+TEXT ·Value(SB),NOSPLIT,$160-40
+MOVQ a+0(FP),AX
+MOVQ b+8(FP),CX
+MOVQ c+16(FP),DX
+MOVQ d+24(FP),BX
+MOVQ SP,R11
+MOVQ $31,R9
+NOTQ R9
+ANDQ R9,SP
+ADDQ $32,SP
+MOVQ R11,96(SP)
+MOVQ AX,16(SP)
+MOVQ CX,24(SP)
+MOVQ DX,48(SP)
+MOVQ BX,56(SP)
+MOVOU 48(SP),X0
+%s
+MOVQ X0,AX
+MOVQ 96(SP),R11
+MOVQ R11,SP
+MOVQ AX,ret+32(FP)
+RET
+`, operation)
+}
+
+func amd64FixedLocalCLIFixture(t *testing.T, operation string) (*packages.Package, string, compileConfig) {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, source := range map[string]string{
+		"go.mod":        "module example.invalid/fixedlocal\n\ngo 1.20\n",
+		"value.go":      "package fixedlocal\nfunc Value(a, b, c, d uint64) uint64\n",
+		"value_amd64.s": amd64FixedLocalCLIAssembly(operation),
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOENV", "off")
+	t.Setenv("GOWORK", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+	t.Setenv("CGO_ENABLED", "0")
+	t.Setenv("GOFLAGS", "")
+	t.Setenv("GOEXPERIMENT", "")
+	t.Setenv("GOAMD64", "v1")
+	t.Setenv("GOPACKAGESDRIVER", "off")
+	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "TMPDIR", "GOTMPDIR"} {
+		if !filepath.IsAbs(os.Getenv(key)) {
+			path, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(key, path)
+		}
+	}
+	ctx := arm64PrivateCLIContext(t)
+	env := append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
+	pkgs, err := packages.Load(&packages.Config{
+		Context: ctx, Dir: dir, Env: env,
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+			packages.NeedModule | packages.NeedDeps | packages.NeedImports |
+			packages.NeedTypes | packages.NeedTypesSizes,
+	}, ".")
+	if err != nil || len(pkgs) != 1 || len(pkgs[0].Errors) != 0 {
+		t.Fatalf("actual original selection: %v; %+v", err, pkgs)
+	}
+	config, err := resolveCompileConfig(true, "", true, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Context = ctx
+	config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", nil)
+	config.x86CallerSelections[pkgs[0]].env = env
+	input := filepath.Join(dir, "value_amd64.s")
+	// Bind the independent actual Go prologue/object before asserting the CLI.
+	stdout, stderr, err := gotoolprofile.RunBounded(ctx, dir, env, "go",
+		"list", "-export", "-compiled", "-mod=readonly", "-json", ".")
+	if err != nil || len(stderr) != 0 {
+		t.Fatalf("actual original export: %v\n%s%s", err, stdout, stderr)
+	}
+	t.Logf("original source SHA=%x; actual Go export:\n%s", sha256.Sum256([]byte(amd64FixedLocalCLIAssembly(operation))), stdout)
+	return pkgs[0], input, config
+}
+
+func TestCompileOneAMD64FixedLocalOriginalSource(t *testing.T) {
+	for _, operation := range []string{
+		"PADDB 16(SP),X0", "PADDW 16(SP),X0", "PADDL 16(SP),X0", "PADDQ 16(SP),X0",
+		"PMADDWL 16(SP),X0", "CMPPS 16(SP),X0,$0", "CMPPD 16(SP),X0,$0",
+	} {
+		t.Run(strings.Fields(operation)[0], func(t *testing.T) {
+			pkg, input, config := amd64FixedLocalCLIFixture(t, operation)
+			output := filepath.Join(t.TempDir(), "local.ll")
+			if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatalf("complete original numeric local frame has no CLI consumer: %v", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(ir), "fixed_local_native") || !strings.Contains(string(ir), "asm sideeffect") {
+				t.Fatalf("original local source was not consumed by sealed native storage: %v", err)
+			}
+			if info, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				t.Fatalf("LLVM22 original-source object missing: %v", err)
+			}
+		})
+	}
+}
+
+func TestCompileOneAMD64FixedLocalDoesNotHijackOrdinaryNativeSources(t *testing.T) {
+	for _, variant := range []string{"static-data", "incoming-native"} {
+		t.Run(variant, func(t *testing.T) {
+			_, input, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+			directory := filepath.Dir(input)
+			declaration := "package fixedlocal\nfunc Value(p *[4]uint32) uint64\n"
+			assembly := "#include \"textflag.h\"\nTEXT ·Value(SB),NOSPLIT,$16-16\n" +
+				"MOVQ p+0(FP),AX\nPXOR X0,X0\nPADDL (AX),X0\nMOVQ X0,AX\nMOVQ AX,ret+8(FP)\nRET\n"
+			if variant == "static-data" {
+				declaration = "package fixedlocal\nfunc Value(p uint64) uint64\n"
+				assembly = strings.Replace(assembly, "PADDL (AX),X0", "PADDL constant<>(SB),X0", 1)
+				assembly += "DATA constant<>+0(SB)/8,$1\nDATA constant<>+8(SB)/8,$2\nGLOBL constant<>(SB),RODATA|NOPTR,$16\n"
+			}
+			for name, contents := range map[string]string{"value.go": declaration, "value_amd64.s": assembly} {
+				if err := os.WriteFile(filepath.Join(directory, name), []byte(contents), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			env := append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
+			stdout, stderr, err := gotoolprofile.RunBounded(config.Context, directory, env, "go",
+				"list", "-export", "-compiled", "-mod=readonly", "-json", ".")
+			if err != nil || len(stderr) != 0 {
+				t.Fatalf("actual ordinary source/export: %v\n%s%s", err, stdout, stderr)
+			}
+			pkgs, err := packages.Load(&packages.Config{Context: config.Context, Dir: directory, Env: env,
+				Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles | packages.NeedModule |
+					packages.NeedDeps | packages.NeedImports | packages.NeedTypes | packages.NeedTypesSizes}, ".")
+			if err != nil || len(pkgs) != 1 || len(pkgs[0].Errors) != 0 {
+				t.Fatalf("actual ordinary selected package: %v; %+v", err, pkgs)
+			}
+			config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", nil)
+			output := filepath.Join(t.TempDir(), "ordinary.ll")
+			if err := compileOne(pkgs[0], plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkgs[0].PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatalf("ordinary native operand was hijacked by narrow local source factory: %v", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || strings.Contains(string(ir), "fixed_local_native") {
+				t.Fatalf("unrelated operand acquired local backing: %v", err)
+			}
+			if info, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || info.Size() == 0 {
+				t.Fatalf("ordinary LLVM22 object absent: %v", err)
+			}
+		})
+	}
+}
+
+func TestAMD64FixedLocalActualOrdinaryCLIEntry(t *testing.T) {
+	_, input, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+	output := t.TempDir()
+	report := filepath.Join(t.TempDir(), "report.json")
+	args := []string{"-targets=linux/amd64", "-patterns=.", "-module-path=example.invalid/fixedlocal",
+		"-compile", "-keep-obj", "-out=" + output, "-report=" + report}
+	encoded, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := append(os.Environ(), "PLAN9ASM_CPUCLI_ARGS="+string(encoded))
+	stdout, stderr, err := gotoolprofile.RunBounded(config.Context, filepath.Dir(input), env,
+		os.Args[0], "-test.run=^TestFeatureConsumerCLIChild$")
+	if err != nil {
+		t.Fatalf("actual ordinary CLI entry did not consume original backing: %v\n%s%s", err, stdout, stderr)
+	}
+	data, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded matrixReport
+	if err := json.Unmarshal(data, &decoded); err != nil || decoded.Success != 1 || decoded.Failed != 0 ||
+		decoded.NotApplicable != 0 || decoded.TotalAsm != 1 || decoded.TotalTargets != 1 {
+		t.Fatalf("actual complete ordinary CLI result differs: %v\n%s", err, data)
+	}
+}
+
+func TestAMD64FixedLocalOrdinaryCLIDeadlineCannotMintObjects(t *testing.T) {
+	for _, timeout := range []string{"0", "1ns"} {
+		t.Run(timeout, func(t *testing.T) {
+			_, input, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+			output := t.TempDir()
+			args := []string{"-targets=linux/amd64", "-patterns=.", "-module-path=example.invalid/fixedlocal",
+				"-compile", "-keep-obj", "-out=" + output, "-feature-timeout=" + timeout}
+			encoded, err := json.Marshal(args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			env := append(os.Environ(), "PLAN9ASM_CPUCLI_ARGS="+string(encoded))
+			stdout, stderr, err := gotoolprofile.RunBounded(config.Context, filepath.Dir(input), env,
+				os.Args[0], "-test.run=^TestFeatureConsumerCLIChild$")
+			if err == nil {
+				t.Fatalf("expired/unbounded ordinary source context minted an object:\n%s%s", stdout, stderr)
+			}
+			if err := filepath.WalkDir(output, func(path string, entry os.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if !entry.IsDir() && (filepath.Ext(path) == ".ll" || filepath.Ext(path) == ".o") {
+					return fmt.Errorf("invalid context emitted %s", path)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestCompileOneAMD64FixedLocalSourceRejectsUnprovedInputs(t *testing.T) {
+	for _, axis := range []string{"missing-selection", "wrong-target", "changed-selection", "flags", "experiment", "CGO", "expired", "nil-context", "unbounded-context",
+		"missing-byte", "unknown-call", "loop", "result-address", "composite"} {
+		t.Run(axis, func(t *testing.T) {
+			pkg, input, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+			selected := config.x86CallerSelections[pkg]
+			source := amd64FixedLocalCLIAssembly("PADDL 16(SP),X0")
+			switch axis {
+			case "missing-selection":
+				config.x86CallerSelections = nil
+			case "wrong-target":
+				selected.target = "darwin/amd64"
+			case "changed-selection":
+				pkg.Name = "changed"
+			case "flags":
+				selected.env = append(selected.env, "GOFLAGS=-tags=unclosed")
+			case "experiment":
+				selected.env = append(selected.env, "GOEXPERIMENT=arenas")
+			case "CGO":
+				selected.env = append(selected.env, "CGO_ENABLED=1")
+			case "expired":
+				ctx, cancel := context.WithCancel(config.Context)
+				cancel()
+				config.Context = ctx
+			case "nil-context":
+				config.Context = nil
+			case "unbounded-context":
+				config.Context = context.Background()
+			case "missing-byte":
+				source = strings.Replace(source, "MOVQ CX,24(SP)\n", "", 1)
+			case "unknown-call":
+				source = strings.Replace(source, "PADDL 16(SP),X0", "CALL runtime·Gosched(SB)\nPADDL 16(SP),X0", 1)
+			case "loop":
+				source = strings.Replace(source, "PADDL 16(SP),X0", "again:\nPADDL 16(SP),X0\nJMP again", 1)
+			case "result-address":
+				source = strings.Replace(source, "MOVQ X0,AX", "MOVQ SP,AX", 1)
+			case "composite":
+				// The old selected integer types remain deliberately stale.
+				// Actual independent declaration capture must reject the change.
+				if err := os.WriteFile(filepath.Join(filepath.Dir(input), "value.go"), []byte("package fixedlocal\nfunc Value(a *uint64,b,c,d uint64) uint64\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(input, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			output := filepath.Join(t.TempDir(), "unbound.ll")
+			err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config)
+			if err == nil {
+				t.Fatal("unproved numeric/source/native contract emitted an object")
+			}
+			// Infra/context failures are both strict nonpass; source-mutated
+			// caller capabilities must never be recovered from frame size.
+			if axis == "missing-byte" || axis == "result-address" || axis == "composite" {
+				if !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+					t.Fatalf("expected sealed source Context, got %v", err)
+				}
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatalf("rejected source emitted LLVM: %v", err)
+			}
+		})
+	}
+}
+
+func TestCompileOneAMD64FixedLocalWholeFileCannotSplitCertificate(t *testing.T) {
+	pkg, input, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
+	config.KeepObj = false
+	config.MaxFunctions, config.MaxInstructions = 1, 1
+	output := filepath.Join(t.TempDir(), "complete.ll")
+	if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+		asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(output)
+	if err != nil || !strings.Contains(string(data), "fixed_local_native") {
+		t.Fatalf("complete bound source disappeared: %v", err)
+	}
+	if files, err := filepath.Glob(strings.TrimSuffix(output, ".ll") + ".part-*.ll"); err != nil || len(files) != 0 {
+		t.Fatalf("complete-file source was split: %v %v", files, err)
+	}
+	if _, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o"); !os.IsNotExist(err) {
+		t.Fatalf("owned validation object was not released: %v", err)
+	}
+}
