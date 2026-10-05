@@ -6,18 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/xgo-dev/llvm"
 )
 
-func x86LEAActualTargetGoObject(t *testing.T, arch, triple, source string) {
+func x86LEAActualTargetGoObject(t *testing.T, arch, triple, source string) *x86LEAGoObjectReceipt {
 	t.Helper()
-	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
-		return // Historical matrix still executes every LLVM/API check below.
-	}
 	goos := "linux"
 	if strings.Contains(triple, "apple") {
 		goos = "darwin"
@@ -31,11 +27,13 @@ func x86LEAActualTargetGoObject(t *testing.T, arch, triple, source string) {
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "tool", "asm", "-p", "sourceframe", "-o", filepath.Join(dir, "lea.o"), path)
+	driver, driverHash := x86LEAActualSDKDriver(t)
+	command := exec.CommandContext(ctx, driver, "tool", "asm", "-p", "sourceframe", "-o", filepath.Join(dir, "lea.o"), path)
 	command.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+arch, "CGO_ENABLED=0", "GOTOOLCHAIN=local", "GOENV=off", "GOWORK=off")
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual Go %s/%s LEA object: %v\n%s", goos, arch, err, output)
 	}
+	return x86LEAReadObjectReceipt(t, arch, goos, source, path, driver, driverHash, filepath.Join(dir, "lea.o"))
 }
 
 // These raw LEAL instructions are the original forms in Weaviate's
@@ -51,7 +49,7 @@ func TestX86GoCallerLEANumericalLengthOriginalRawForms(t *testing.T) {
 		t.Run(form.name, func(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL $7,AX",
 				"MOVQ (CX),R9\n"+form.instructions, 1)
-			requireX86GoAssemblerResult(t, "amd64", assembly, true)
+			requireLEANativeGoObject(t, "amd64", assembly, true)
 			pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
 			if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
 				t.Fatal(err)
@@ -74,7 +72,7 @@ func TestX86GoCallerLEACompleteNumericalWidthsAndAddressForms(t *testing.T) {
 				t.Run(width.suffix+"/"+address+"/"+triple, func(t *testing.T) {
 					body := "MOVQ (CX),R9\nMOVQ $19,BX\nLEA" + width.suffix + " " + address + ",R8\n" + width.copy + " R8,AX\nMOVL AX,(DX)"
 					assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
-					requireX86GoAssemblerResult(t, "amd64", assembly, true)
+					requireLEANativeGoObject(t, "amd64", assembly, true)
 					pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
 					if err := x86CallerCoreTranslate(t, pkg, assembly, triple); err != nil {
 						t.Fatal(err)
@@ -130,7 +128,7 @@ func TestX86GoCallerLEADefinedBytesAndPointerTaint(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
 			// SP is not an encodable SIB index. All other negative cases are
 			// actual Go inputs rejected for missing semantic provenance.
-			requireX86GoAssemblerResult(t, "amd64", assembly, test.name != "long-stack-index")
+			requireLEANativeGoObject(t, "amd64", assembly, test.name != "long-stack-index")
 			pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
 			err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu")
 			if test.name == "raw-RIP-code-address" {
@@ -278,7 +276,7 @@ func TestX86LEADisplacementEncodingUsesActualGoRules(t *testing.T) {
 					accepted := width != 0 && (displacement == int64(int32(displacement)) ||
 						target.arch == "amd64" && suffix == "L" || target.arch == "386" && displacement == int64(uint32(displacement)))
 					source := fmt.Sprintf("TEXT Value(SB),4,$0-0\nMOVL $9,AX\nLEA%s %d(AX),BX\nRET\n", suffix, displacement)
-					requireX86GoAssemblerResult(t, target.arch, source, accepted)
+					requireLEANativeGoObject(t, target.arch, source, accepted)
 					file, err := Parse(ArchAMD64, source)
 					if err != nil {
 						t.Fatal(err)
@@ -310,7 +308,7 @@ func TestX86LEASharedGrammarRejectsGoInvalidSIBFields(t *testing.T) {
 		for _, address := range []string{"8(AX)(BX*0)", "8(AX)(BX*3)", "8(AX)(BX*16)", "8(AX)(SP*1)", "outsider", "$outsider(SB)"} {
 			t.Run(arch+"/"+address, func(t *testing.T) {
 				source := "TEXT Value(SB),4,$0-0\nLEAL " + address + ",CX\nRET\n"
-				requireX86GoAssemblerResult(t, arch, source, false)
+				requireLEANativeGoObject(t, arch, source, false)
 				file, err := Parse(ArchAMD64, source)
 				if err != nil {
 					return

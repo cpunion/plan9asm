@@ -46,7 +46,7 @@ func TestTranslateX86LEACompleteGo127FormsAcrossTargets(t *testing.T) {
 	} {
 		t.Run(target.name, func(t *testing.T) {
 			source := x86LEACompleteFormsSource(target.goarch)
-			requireX86GoAssemblerResult(t, target.goarch, source, true)
+			requireLEANativeGoObject(t, target.goarch, source, true)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
@@ -86,7 +86,7 @@ func TestTranslateX86LEARejectsFormsOutsideGo127Optab(t *testing.T) {
 	} {
 		t.Run(test.goarch+"/"+strings.NewReplacer(" ", "_", ",", "").Replace(test.instruction), func(t *testing.T) {
 			source := "TEXT bad(SB),$0-0\n\t" + test.instruction + "\n\tRET\n"
-			requireX86GoAssemblerResult(t, test.goarch, source, false)
+			requireLEANativeGoObject(t, test.goarch, source, false)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				return
