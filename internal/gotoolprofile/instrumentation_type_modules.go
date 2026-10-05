@@ -300,7 +300,9 @@ func validateInstrumentationForeignSelection(input *InstrumentationConsumerInput
 	if !reflect.DeepEqual(goFiles, claimed) || !reflect.DeepEqual(assembly, pkg.SFiles) {
 		return fmt.Errorf("foreign source-only selection differs from complete original directory/profile/tags")
 	}
-	return nil
+	// Body-only dependencies deliberately have no declaration-AST Contents.
+	// Their complete original selection headers still bind every import spelling.
+	return validateInstrumentationOriginalImportSpellings(goFiles, resource.Headers, pkg.Dependency.ImportMap)
 }
 
 func instrumentationForeignDependencyBound(input *InstrumentationConsumerInput, source ImportExport) bool {
