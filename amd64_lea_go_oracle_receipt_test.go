@@ -47,7 +47,7 @@ func x86LEAActualSDKDriver(t *testing.T) (string, [sha256.Size]byte) {
 		t.Fatal(err)
 	}
 	root, err := filepath.EvalSymlinks(runtime.GOROOT())
-	if err != nil || driver != filepath.Join(root, "bin", "go") {
+	if err != nil || driver != x86LEASDKDriverPath(root, runtime.GOOS) {
 		t.Fatalf("LEA oracle must invoke this SDK's driver: %s: %v", driver, err)
 	}
 	driverBytes, err := os.ReadFile(driver)
@@ -55,6 +55,33 @@ func x86LEAActualSDKDriver(t *testing.T) (string, [sha256.Size]byte) {
 		t.Fatal(err)
 	}
 	return driver, sha256.Sum256(driverBytes)
+}
+
+func x86LEASDKDriverPath(root, hostGOOS string) string {
+	filename := "go"
+	if hostGOOS == "windows" {
+		filename = "go.exe"
+	}
+	return filepath.Join(root, "bin", filename)
+}
+
+func TestX86LEAActualSDKDriverPathUsesHostToolSuffix(t *testing.T) {
+	root := filepath.Join("selected-sdk", "root")
+	for _, test := range []struct {
+		goos, filename string
+	}{
+		{"windows", "go.exe"},
+		{"darwin", "go"},
+		{"linux", "go"},
+	} {
+		t.Run(test.goos, func(t *testing.T) {
+			got := x86LEASDKDriverPath(root, test.goos)
+			want := filepath.Join(root, "bin", test.filename)
+			if got != want {
+				t.Fatalf("actual SDK driver for host %s = %q, want %q", test.goos, got, want)
+			}
+		})
+	}
 }
 
 func x86LEAReadObjectReceipt(t *testing.T, arch, goos, source, input, driver string, driverHash [sha256.Size]byte, object string) *x86LEAGoObjectReceipt {
