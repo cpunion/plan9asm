@@ -174,25 +174,25 @@ func TestCrossLinuxRuntimeMatrixARM64GPImmediateFault(t *testing.T) {
 		}
 	}
 	executable := filepath.Join(dir, "original-go")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	build := exec.CommandContext(ctx, "go", "build", "-o", executable, ".")
+	ctx, cancel := runtimeOracleStageContext(t)
+	build := exec.CommandContext(ctx, "go", "build", "-p=2", "-o", executable, ".")
 	build.Dir = dir
 	build.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "CGO_ENABLED=0", "GOARCH=arm64")
 	if len(runner) != 0 {
 		build.Env = append(build.Env, "GOOS=linux")
 	}
-	if output, err := runtimeOracleCombinedOutput(ctx, build); err != nil {
+	output, err := runtimeOracleCombinedOutput(ctx, build)
+	cancel()
+	if err != nil {
 		t.Fatalf("original Go fault build: %v\n%s", err, output)
 	}
 	for index := range arm64ImmediateFaultCases() {
-		args := []string{executable, fmt.Sprint(index)}
-		if len(runner) != 0 {
-			args = append([]string{runner[0]}, args...)
-		}
+		args := runtimeOracleGuestArguments(t, runner, executable, fmt.Sprint(index))
+		ctx, cancel = runtimeOracleStageContext(t)
 		command := exec.CommandContext(ctx, args[0], args[1:]...)
 		command.Env = append(os.Environ(), "GOTRACEBACK=single")
 		output, err := runtimeOracleCombinedOutput(ctx, command)
+		cancel()
 		exit, ok := err.(*exec.ExitError)
 		if !ok || exit.ExitCode() != 2 || !strings.Contains(string(output), "SIGILL: illegal instruction") {
 			t.Fatalf("original Go %s did not deliver SIGILL: %v\n%s", arm64ImmediateFaultCases()[index].text, err, output)
