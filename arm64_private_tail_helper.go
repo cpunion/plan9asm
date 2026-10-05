@@ -19,6 +19,7 @@ type arm64PrivateTailSource struct {
 func arm64PrivateTailSnapshot(fn Func) Func {
 	fn.arm64PrivateTailSource = nil
 	fn.arm64ABI0TailSource = nil
+	fn.arm64PrivateCallSource = nil
 	fn.Instrs = append([]Instr(nil), fn.Instrs...)
 	for i := range fn.Instrs {
 		if offset := fn.Instrs[i].arm64ScalarMemoryFrameOffset; offset != nil {
@@ -148,6 +149,13 @@ func arm64PrivateTailBody(fn Func) error {
 	if err := arm64PrivateTailZeroFrame(fn, false); err != nil {
 		return err
 	}
+	return arm64PrivateContinuationBody(fn, arm64PrivateTailDataRegister)
+}
+
+// Operand purity is shared by CALL and tail continuations, but their entry and
+// return contracts remain separate. This grammar grants neither initialized
+// inputs nor pointer bounds: the complete root's independent proofs own those.
+func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool) error {
 	labels := map[string]bool{}
 	for _, ins := range fn.Instrs[1:] {
 		if ins.Op == OpLABEL {
@@ -196,21 +204,21 @@ func arm64PrivateTailBody(fn Func) error {
 					return arm64GoABIContext("private tail %q has an unresolved/pool operand", fn.Sym)
 				}
 			case OpReg, OpRegShift, OpRegExtend:
-				if !arm64PrivateTailDataRegister(arg.Reg) || arg.ShiftReg != "" && !arm64PrivateTailDataRegister(arg.ShiftReg) {
+				if !dataRegister(arg.Reg) || arg.ShiftReg != "" && !dataRegister(arg.ShiftReg) {
 					return arm64GoABIContext("private tail %q touches hidden/stack/scratch state at %q", fn.Sym, ins.Raw)
 				}
 				data = true
 			case OpRegList:
 				for _, reg := range arg.RegList {
-					if !arm64PrivateTailDataRegister(reg) {
+					if !dataRegister(reg) {
 						return arm64GoABIContext("private tail %q has an unproved register list", fn.Sym)
 					}
 				}
 				data = true
 			case OpMem:
 				m := arg.Mem
-				if m.Sym != "" || m.Segment != "" || m.OffRaw != "" || !arm64PrivateDataGP(m.Base) || m.Base == ZR || m.Base == "R26" ||
-					m.Index != "" && (!arm64PrivateDataGP(m.Index) || m.Index == "R26") ||
+				if m.Sym != "" || m.Segment != "" || m.OffRaw != "" || !arm64PrivateDataGP(m.Base) || m.Base == ZR || !dataRegister(m.Base) ||
+					m.Index != "" && (!arm64PrivateDataGP(m.Index) || !dataRegister(m.Index)) ||
 					pairBytes != 0 && (m.Index != "" || m.Off%pairBytes != 0 || m.Off < -64*pairBytes || m.Off > 63*pairBytes) {
 					return arm64GoABIContext("private tail %q has non-data or materialized memory at %q", fn.Sym, ins.Raw)
 				}

@@ -49,7 +49,7 @@ func TestARM64PrivateSourceAPIOriginalFileImmutable(t *testing.T) {
 func TestARM64PrivateSourceAPIKeepsContextRejections(t *testing.T) {
 	base := arm64PrivateRegisterHelperSource("4,$0-0", "CALL mix<>(SB)")
 	for _, test := range []struct{ name, source string }{
-		{"memory_helper", strings.Replace(base, "ADC $0,R9,R20", "MOVD (R9),R20", 1)},
+		{"native_frame_memory_helper", strings.Replace(base, "ADC $0,R9,R20", "MOVD (RSP),R20", 1)},
 		{"reserved_register", strings.Replace(base, "ADC $0,R9,R20", "MOVD R27,R20", 1)},
 		{"framed_helper", strings.Replace(base, "TEXT mix<>(SB),4,$0-0", "TEXT mix<>(SB),4,$16-0", 1)},
 		{"native_address", base + "TEXT ·Escape(SB),4,$0-0\nMOVD $mix<>(SB),R0\nRET\n"},

@@ -10,8 +10,8 @@ import (
 const arm64PrivateRegisterExpansionBudget = 1 << 16
 
 // This is a source continuation contract, not a guessed callable signature.
-// Only a closed, straight-line, zero-frame register leaf can share its caller's
-// typed GP/NZCV state. Purity here restricts operand classes; real lowering still
+// Only a closed, acyclic, zero-frame data leaf can share its caller's
+// typed machine state. Purity here restricts operand classes; real lowering still
 // validates every opcode/form and records actual register/flag effects. Native
 // asm/callouts are rejected by the machine-availability proof.
 func arm64PrivateRegisterLeaf(fn Func) error {
@@ -21,41 +21,20 @@ func arm64PrivateRegisterLeaf(fn Func) error {
 	if len(fn.Instrs) < 2 || fn.Instrs[0].Op != OpTEXT {
 		return arm64GoABIContext("private helper %q has no complete source body", fn.Sym)
 	}
-	if len(arm64SplitBlocks(fn)) != 1 {
-		return arm64GoABIContext("private helper %q is not a straight-line register leaf", fn.Sym)
+	if !arm64SourceFrameFlagsKnown(fn) {
+		return arm64GoABIContext("private helper %q has unbound source frame flags", fn.Sym)
 	}
-	last := fn.Instrs[len(fn.Instrs)-1]
-	if last.Op != OpRET || len(last.Args) != 0 {
-		return arm64GoABIContext("private helper %q needs a zero-frame source RET", fn.Sym)
+	_, text := splitOpcode(fn.Instrs[0].Raw)
+	parts := strings.Split(text, ",")
+	name, offset, valid := parseSBRef(strings.TrimSpace(parts[0]))
+	frame, args, err := parseTEXTFrame(parts)
+	if !valid || offset != 0 || name != fn.Sym || err != nil || frame != fn.FrameSize || args != fn.ArgSize {
+		return arm64GoABIContext("private helper %q changed its complete TEXT identity", fn.Sym)
 	}
-	for _, ins := range fn.Instrs[1 : len(fn.Instrs)-1] {
-		gp := false
-		for _, arg := range ins.Args {
-			switch arg.Kind {
-			case OpImm:
-				if arg.ImmRaw != "" {
-					return unresolvedSymbolicImmediateError(arg)
-				}
-			case OpReg, OpRegShift, OpRegExtend:
-				if !arm64PrivateDataGP(arg.Reg) || arg.ShiftReg != "" && !arm64PrivateDataGP(arg.ShiftReg) {
-					return arm64GoABIContext("private helper %q touches a non-data register at %q", fn.Sym, ins.Raw)
-				}
-				gp = true
-			case OpIdent:
-				// Conditional integer operations have a named NZCV condition,
-				// never an address, system register or hidden source label.
-				if !armCondCodes[arg.Ident] {
-					return arm64GoABIContext("private helper %q has a non-register operand at %q", fn.Sym, ins.Raw)
-				}
-			default:
-				return arm64GoABIContext("private helper %q has memory/control operands at %q", fn.Sym, ins.Raw)
-			}
-		}
-		if !gp {
-			return arm64GoABIContext("private helper %q has unproved non-GP effects at %q", fn.Sym, ins.Raw)
-		}
+	if err := arm64PrivateContinuationBody(fn, arm64PrivateCallDataRegister); err != nil {
+		return err
 	}
-	return nil
+	return arm64PrivateCallAcyclic(fn)
 }
 
 func arm64PrivateDataGP(reg Reg) bool {
@@ -99,7 +78,7 @@ func arm64PrivateSymbolRef(sym string) (string, int64, bool) {
 }
 
 // CoalesceARM64PrivateRegisterHelpers folds closed ARM64 source continuations:
-// register leaves at CALL sites, and zero-frame data/CFG leaves at ABIInternal
+// acyclic data leaves at CALL sites, and zero-frame data/CFG leaves at ABIInternal
 // tail sites. Tail roots still require their complete typed Go register ABI at
 // final lowering. Neither family infers a callable helper signature or grants
 // native-frame, hidden-register or pointer-ownership permissions.
@@ -124,6 +103,9 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 	// root's actual earlier additions so appending another original root cannot
 	// reset the single checked allowance. This count authorizes no source effect.
 	for _, fn := range file.Funcs {
+		if err := validateARM64PrivateCallSource(fn); err != nil {
+			return nil, err
+		}
 		if fn.arm64PrivateSourceAdded < 0 || fn.arm64PrivateSourceAdded > remaining {
 			return nil, arm64GoABIContext("private source exceeds its cumulative expansion budget")
 		}
@@ -272,7 +254,7 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 		}
 		copyFn.Instrs = append([]Instr(nil), fn.Instrs...)
 		copyFn.arm64PrivateRegisterEntry = true
-		// Retain the pre-coalescing source proof. Only audited register-only
+		// Retain the pre-coalescing source proof. Only audited data-only
 		// helpers are appended below; their rewritten local calls must not
 		// erase the original real-symbol call's private-frame provenance.
 		copyFn.arm64PrivateUnexposedFrame = arm64CallFrameUnexposed(fn)
@@ -286,11 +268,17 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 			helper Func
 		}
 		var continuations []sourceContinuation
-		occupied := map[string]bool{"entry": true}
-		for _, ins := range fn.Instrs {
-			if ins.Op == OpLABEL && len(ins.Args) == 1 {
-				occupied[ins.Args[0].Sym] = true
+		occupied := map[string]bool{"entry": true, "ret": true}
+		for _, block := range arm64SplitBlocks(fn) {
+			occupied[arm64LLVMBlockName(block.name)] = true
+		}
+		fresh := func() string {
+			label := fmt.Sprintf("__arm64_private_%d", len(occupied))
+			for occupied[arm64LLVMBlockName(label)] {
+				label += "_"
 			}
+			occupied[arm64LLVMBlockName(label)] = true
+			return label
 		}
 		for i, ins := range copyFn.Instrs {
 			if ins.Op == OpWORD || ins.Op == "ADR" || ins.Op == "ADRP" || ins.Op == "PCALIGN" {
@@ -304,11 +292,7 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 			if (ins.Op == "CALL" || ins.Op == "BL") && len(ins.Args) == 1 && ins.Args[0].Kind == OpSym {
 				name, _, _ := arm64PrivateSymbolRef(ins.Args[0].Sym)
 				if helper, present := helpers[name]; present {
-					label := fmt.Sprintf("__arm64_private_%d", len(continuations))
-					for occupied[label] {
-						label += "_"
-					}
-					occupied[label] = true
+					label := fresh()
 					continuations = append(continuations, sourceContinuation{label: label, helper: helper})
 					copyFn.Instrs[i].Args = []Operand{{Kind: OpIdent, Ident: label}}
 				}
@@ -319,12 +303,40 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 		if err != nil {
 			return nil, err
 		}
+		var helperSources []Func
 		for _, continuation := range continuations {
 			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: continuation.label}}})
 			helper := continuation.helper
-			copyFn.Instrs = append(copyFn.Instrs, helper.Instrs[1:len(helper.Instrs)-1]...)
-			copyFn.Instrs = append(copyFn.Instrs, Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: "R30"}}}, Raw: "B (R30)"})
+			helperSources = append(helperSources, arm64PrivateTailSnapshot(helper))
+			labels := make(map[string]string)
+			for _, ins := range helper.Instrs[1:] {
+				if ins.Op == OpLABEL {
+					labels[ins.Args[0].Sym] = fresh()
+				}
+			}
+			for _, ins := range helper.Instrs[1:] {
+				cloned := ins
+				switch {
+				case ins.Op == OpRET:
+					cloned = Instr{Op: "B", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: "R30"}}}, Raw: "B (R30)"}
+				case ins.Op == OpLABEL:
+					cloned.Args = []Operand{{Kind: OpLabel, Sym: labels[ins.Args[0].Sym]}}
+				case ins.Op == "B" || ins.Op == "JMP" || arm64IsConditionalBranch(ins.Op):
+					cloned.Args = append([]Operand(nil), ins.Args...)
+					last := len(cloned.Args) - 1
+					cloned.Args[last] = Operand{Kind: OpIdent, Ident: labels[ins.Args[last].Ident]}
+				}
+				copyFn.Instrs = append(copyFn.Instrs, cloned)
+			}
 			copyFn.arm64PrivateSourceAdded += len(helper.Instrs)
+		}
+		copyFn, err = normalizeARM64ScalarMemoryFrame(copyFn)
+		if err != nil {
+			return nil, err
+		}
+		copyFn.arm64PrivateCallSource = &arm64PrivateCallSource{
+			original: arm64PrivateTailSnapshot(fn), helpers: helperSources,
+			prepared: arm64PrivateTailSnapshot(copyFn),
 		}
 		result.Funcs = append(result.Funcs, copyFn)
 	}

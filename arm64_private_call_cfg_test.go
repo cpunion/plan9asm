@@ -1,9 +1,13 @@
 package plan9asm
 
 import (
+	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 const arm64PrivateCallCFGCopySource = `TEXT ·Copy(SB),4,$0-24
@@ -98,6 +102,143 @@ RET`, 1)
 			if err != nil || !reflect.DeepEqual(prepared, repeated) {
 				t.Fatalf("repeated continuation preparation changed its source: %v", err)
 			}
+		})
+	}
+}
+
+func TestARM64PrivateCallCFGRejectsUnclosedSource(t *testing.T) {
+	for _, test := range []struct {
+		name, source string
+	}{
+		{"cycle", strings.Replace(arm64PrivateCallCFGCopySource, "copy0:\nRET", "copy0:\nB copy0", 1)},
+		{"dead_cycle", arm64PrivateCallCFGCopySource + "dead:\nB dead\n"},
+		{"unbound_target", strings.Replace(arm64PrivateCallCFGCopySource, "CBZ R3,copy0", "CBZ R3,missing", 1)},
+		{"hidden_stack", strings.Replace(arm64PrivateCallCFGCopySource, "LDP (R1)", "LDP (RSP)", 1)},
+		{"saved_link", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD R8,R3,R30", 1)},
+		{"scratch", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD R8,R3,R27", 1)},
+		{"native_expansion", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD $0x12345678,R8,R26", 1)},
+		{"callout", strings.Replace(arm64PrivateCallCFGCopySource, "copy0:\nRET", "copy0:\nCALL foreign(SB)\nRET", 1)},
+		{"address_escape", arm64PrivateCallCFGCopySource + "TEXT observer<>(SB),516,$0\nMOVD $copy<>(SB),R0\nRET\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			file, err := Parse(ArchARM64, test.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result, err := CoalesceARM64PrivateRegisterHelpers(file); result != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("unclosed source gained a private CALL continuation: %v", err)
+			}
+		})
+	}
+}
+
+func TestARM64PrivateCallCFGPreparedSourceCannotBeChanged(t *testing.T) {
+	for _, mutation := range []string{"instruction", "argument", "frame", "symbol", "entry", "source_accounting"} {
+		t.Run(mutation, func(t *testing.T) {
+			file, err := Parse(ArchARM64, arm64PrivateCallCFGCopySource)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepared, err := CoalesceARM64PrivateRegisterHelpers(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := &prepared.Funcs[0]
+			switch mutation {
+			case "instruction":
+				root.Instrs[1].Op = "MOVW"
+			case "argument":
+				root.Instrs[1].Args[1].Reg = "R30"
+			case "frame":
+				root.FrameSize++
+			case "symbol":
+				root.Sym = "another"
+			case "entry":
+				root.arm64PrivateRegisterEntry = false
+			case "source_accounting":
+				root.arm64PrivateSourceAdded--
+			}
+			if _, err := CoalesceARM64PrivateRegisterHelpers(prepared); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("changed prepared source kept its original admission: %v", err)
+			}
+		})
+	}
+}
+
+func TestCrossLinuxRuntimeMatrixARM64PrivateCallCFGCopy(t *testing.T) {
+	llc, triple, compiler, runner := arm64FPPairRuntimeTools(t)
+	pkg := mustGoPackage(t, "test/privatecopy", "package privatecopy\nfunc Copy(dst,src *[32]byte,n uint64)\n")
+	for _, calls := range []int{1, 2} {
+		source := arm64PrivateCallCFGCopySource
+		if calls == 2 {
+			source = strings.Replace(source, "CALL copy<>(SB)", "CALL copy<>(SB)\nCALL copy<>(SB)", 1)
+		}
+		t.Run(strconv.Itoa(calls)+"_calls", func(t *testing.T) {
+			goProgram := `package main
+import "unsafe"
+func Copy(dst,src *[32]byte,n uint64)
+func main() {
+    for _,d := range []int{0,1,7,16,32} {
+        for _,s := range []int{0,1,7,16,32} {
+            for _,n := range []uint64{0,1,2,3,4,7,8,15,16,17,23,31,32,33,64,^uint64(0)} {
+                var data,want [128]byte
+                for i := range data { data[i] = byte(i*37+d*11+s*7+int(n)); want[i] = data[i] }
+                q := n
+                if q > 32 { q = 32 }
+                for pass := 0; pass < REPEATS; pass++ {
+                    var snapshot [32]byte
+                    for i := uint64(0); i < q; i++ { snapshot[i] = want[s+int(i)] }
+                    for i := uint64(0); i < q; i++ { want[d+int(i)] = snapshot[i] }
+                }
+                Copy((*[32]byte)(unsafe.Pointer(&data[d])), (*[32]byte)(unsafe.Pointer(&data[s])), n)
+                if data != want { panic("original Go private CFG copy/full-canary mismatch") }
+            }
+        }
+    }
+    Copy(nil,nil,0)
+}
+`
+			goProgram = strings.ReplaceAll(goProgram, "REPEATS", strconv.Itoa(calls))
+			runARM64LocalRegisterGoOracle(t, source, goProgram, len(runner) != 0)
+			translate := func(target string) string {
+				context := llvm.NewContext()
+				defer context.Dispose()
+				result, err := translateGoModuleInContext(context, pkg, []byte(source), GoModuleOptions{
+					GOARCH: "arm64", TargetTriple: target,
+					ResolveSym: func(name string) string { return strings.TrimPrefix(name, "·") },
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer result.Module.Dispose()
+				if len(result.Signatures) != 1 || len(result.Functions) != 1 {
+					t.Fatal("private continuation acquired an independent function ABI")
+				}
+				return result.Module.String()
+			}
+			for _, target := range arm64TypedNativeTargets {
+				compileLLVMToObject(t, llc, target, "private-call-cfg.ll", "private-call-cfg.o", translate(target))
+			}
+			cProgram := `#include <stdint.h>
+#include <string.h>
+extern void Copy(void *,const void *,uint64_t);
+int main(void) {
+    const int offsets[] = {0,1,7,16,32};
+    const uint64_t sizes[] = {0,1,2,3,4,7,8,15,16,17,23,31,32,33,64,UINT64_MAX};
+    for (unsigned d=0; d<5; d++) for (unsigned s=0; s<5; s++) for (unsigned z=0; z<16; z++) {
+        unsigned char data[128],want[128];
+        uint64_t n=sizes[z],q=n>32?32:n;
+        for (unsigned i=0; i<128; i++) data[i]=want[i]=(unsigned char)(i*37+offsets[d]*11+offsets[s]*7+n);
+        for (int pass=0; pass<REPEATS; pass++) memmove(want+offsets[d],want+offsets[s],q);
+        Copy(data+offsets[d],data+offsets[s],n);
+        if (memcmp(data,want,128)) return 1;
+    }
+    Copy(0,0,0);
+    return 0;
+}
+`
+			cProgram = strings.ReplaceAll(cProgram, "REPEATS", strconv.Itoa(calls))
+			compileAndRunRuntimeTestWithCompiler(t, llc, compiler, "private-call-cfg", triple, translate(triple), cProgram, runner)
 		})
 	}
 }

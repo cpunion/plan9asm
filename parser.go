@@ -61,6 +61,7 @@ type Func struct {
 	arm64PrivateRegisterEntry  bool
 	arm64PrivateUnexposedFrame bool                    // original source proof retained across audited helper coalescing
 	arm64PrivateTailSource     *arm64PrivateTailSource // complete, immutable zero-frame continuation source
+	arm64PrivateCallSource     *arm64PrivateCallSource // sealed original CALL bodies and exact prepared CFG
 	arm64ABI0TailSource        *arm64ABI0TailSource
 	arm64PrivateSourceAdded    int // resource accounting only, never a machine-state permission
 }

@@ -899,6 +899,9 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 // mutation of a declaration-backed source signature. Validate its exact input
 // fields and emit the separately computed group without granting ABI rights.
 func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall, emissionAttrs string) error {
+	if err := validateARM64PrivateCallSource(fn); err != nil {
+		return err
+	}
 	if err := validateARM64ABI0TailSource(fn, sig); err != nil {
 		return err
 	}
