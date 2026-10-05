@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -164,8 +165,14 @@ func TestTranslateX86RawEVEXPackedLogicalTargets(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
+			first, second, destination := 29, 30, 31
+			if target.goarch == "386" {
+				// Only the physical low bank belongs to this object fixture.
+				// The original high-bank bytes remain a separate Context case.
+				first, second, destination = 5, 6, 7
+			}
 			code := [][]byte{
-				encodeX86RawEVEXPackedLogical("VPXORD", 1, 0, false, false, 29, 30, 31),
+				encodeX86RawEVEXPackedLogical("VPXORD", 1, 0, false, false, first, second, destination),
 			}
 			if target.goarch == "amd64" {
 				code = append(code,
@@ -194,5 +201,42 @@ func TestTranslateX86RawEVEXPackedLogicalTargets(t *testing.T) {
 			}
 			compileLLVMToObject(t, llc, target.triple, "raw-evex-packed-logical-"+target.name+".ll", "raw-evex-packed-logical-"+target.name+".o", ir)
 		})
+	}
+}
+
+func TestX86RawEVEXPackedLogicalMode32HighRegistersNeedContext(t *testing.T) {
+	checked := 0
+	for _, op := range []Op{"VPANDD", "VPANDQ", "VPANDND", "VPANDNQ", "VPORD", "VPORQ", "VPXORD", "VPXORQ"} {
+		for _, vectorBits := range []byte{0, 1} {
+			for _, position := range []int{0, 1, 2} {
+				for _, high := range []int{8, 15, 16, 31} {
+					registers := [3]int{0, 1, 2}
+					registers[position] = high
+					code := encodeX86RawEVEXPackedLogical(op, vectorBits, 0, false, false, registers[0], registers[1], registers[2])
+					var source strings.Builder
+					source.WriteString("TEXT raw_mode32_high(SB),4,$0-0\n")
+					for _, value := range code {
+						fmt.Fprintf(&source, "BYTE $%#02x\n", value)
+					}
+					source.WriteString("RET\n")
+					requireX86GoAssemblerResult(t, "386", source.String(), true)
+					file, err := Parse(ArchAMD64, source.String())
+					if err != nil {
+						t.Fatal(err)
+					}
+					ir, err := Translate(file, Options{
+						Goarch: "386", TargetTriple: "i386-unknown-linux-gnu",
+						Sigs: map[string]FuncSig{"raw_mode32_high": {Name: "raw_mode32_high", Ret: Void}},
+					})
+					if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+						t.Fatalf("raw mode32 high-bank bytes %x acquired an unproved physical binding: %v", code, err)
+					}
+					checked++
+				}
+			}
+		}
+	}
+	if checked != 192 {
+		t.Fatalf("checked %d raw mode32 high-bank cases, want 192", checked)
 	}
 }
