@@ -32,7 +32,10 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 		owned[offset] = true
 	}
 	for _, slot := range sig.Frame.Params {
-		bytes := x86ResultScalarBytes(slot.Type, goarch)
+		// Actual gc layout includes pointer storage even when no numeric
+		// instruction consumes it. Occupancy prevents overlap, but pointer
+		// bytes are deliberately not a numerical input or pointee witness.
+		bytes := x86FrameScalarBytes(slot.Type, goarch)
 		if bytes == 0 || slot.Offset < 0 || slot.Offset > int64(frame)-bytes || slot.Offset+bytes > result.Offset {
 			return fail("parameter bytes or result boundary are not closed")
 		}
@@ -40,7 +43,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 			if owned[offset] {
 				return fail("overlapping typed frame slots")
 			}
-			owned[offset], initial.fp[offset] = true, true
+			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
 		}
 	}
 	if fn.ArgSize != 0 && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
@@ -71,7 +74,9 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	// proved below only for reachable paths; dead instructions must not hide
 	// unknown effects, malformed branches or external entry requirements.
 	top := initial.clone()
-	copy(top.fp, owned)
+	for offset := range top.fp {
+		top.fp[offset] = initial.fp[offset] || int64(offset) >= result.Offset
+	}
 	for index := range top.gp {
 		top.gp[index], top.xmm[index] = 0xff, 0xffff
 	}
@@ -199,7 +204,10 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 
 func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 	root, valid := x86CallerGP(reg)
-	if !valid || root == SP || root == BP || root == "R14" || width == 8 && arch == "386" {
+	// This observer admits only ABI0. Its R14 entry bytes are undefined,
+	// unlike ABIInternal's opaque g identity; only explicit source writes can
+	// initialize them. No caller/source-stack/native permissions are changed.
+	if !valid || root == SP || root == BP || width == 8 && arch == "386" {
 		return 0, 0, false
 	}
 	if width != 1 && root != reg || width == 1 && !isGoYmbRegisterForArch(reg, arch) {
@@ -267,6 +275,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	}
 	if ins.Op == "NOP" {
 		return len(ins.Args) == 0
+	}
+	if form, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
+		return err == nil && state.flags && x86ResultStore(form.destination, 1, state, owned, resultOffset, arch)
 	}
 	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 {
 		return !(width == 8 && arch == "386") && len(ins.Args) == 2 && !(ins.Args[0].Kind == OpFP && ins.Args[1].Kind == OpFP) &&

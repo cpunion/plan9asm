@@ -98,6 +98,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
 	if !caller {
 		for index, instruction := range fn.Instrs {
+			if _, conditionalSet, _ := x86ConditionalSetProperties(instruction.Op, instruction, opt.Goarch); conditionalSet {
+				return reject(index, "conditional byte output needs a complete typed caller input proof")
+			}
 			if _, extension := amd64ScalarExtensionMoveSpecs[instruction.Op]; extension || instruction.x86RawMOVSXDNeedsCaller {
 				if x86RawMOVSXDLiteralInput(instruction) {
 					continue
@@ -489,6 +492,9 @@ func x86SourceStackScalarType(typ LLVMType) bool {
 
 func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch string) bool {
 	op := Op(normalizeInstructionOpcode(ins.Op))
+	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
+		return err == nil
+	}
 	if op == OpTEXT || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return true
 	}
@@ -644,6 +650,9 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 // never exposes incomplete FLAGS as scalar data or invents incoming flags.
 func x86SourceStackFlagsStep(ins Instr, state *x86SourceStackState) bool {
 	op := Op(normalizeInstructionOpcode(ins.Op))
+	if _, conditionalSet := x86ConditionalSetConditions[op]; conditionalSet {
+		return state.numericFlags // SETcc consumes but does not change flags.
+	}
 	if isAMD64ConditionalBranch(op) {
 		return isAMD64CounterZeroBranch(op) || state.numericFlags
 	}
