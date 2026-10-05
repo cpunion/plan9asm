@@ -27,6 +27,11 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	}
 	frame := int(result.Offset + width)
 	initial := x86ResultState{fp: make([]bool, frame)}
+	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
+	if autoErr != nil {
+		return autoErr
+	}
+	initial.auto = make([]bool, autoExtent)
 	owned := make([]bool, frame)
 	for offset := int(result.Offset); offset < frame; offset++ {
 		owned[offset] = true
@@ -70,12 +75,23 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
+	// One bounded byte-work envelope includes both logical domains. AUTO
+	// states do not obtain a second independent frame or iteration budget.
+	byteState := len(initial.fp) + len(initial.auto) + 64
+	const byteWorkLimit = 64 << 20
+	byteWork := len(instructions) * byteState
+	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
+		return fail("combined FP/AUTO source-CFG byte budget exhausted")
+	}
 	// Validate effects and all static successors source-wide. Definedness is
 	// proved below only for reachable paths; dead instructions must not hide
 	// unknown effects, malformed branches or external entry requirements.
 	top := initial.clone()
 	for offset := range top.fp {
 		top.fp[offset] = initial.fp[offset] || int64(offset) >= result.Offset
+	}
+	for offset := range top.auto {
+		top.auto[offset] = true
 	}
 	for index := range top.gp {
 		top.gp[index], top.xmm[index] = 0xff, 0xffff
@@ -126,6 +142,12 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	for visits := 0; len(queue) != 0; visits++ {
 		if visits >= 16384 {
 			return fail("must-defined fixed-point budget exhausted")
+		}
+		if autoExtent != 0 {
+			byteWork += 8 * byteState // conservative bound for copies and joins
+			if byteWork > byteWorkLimit {
+				return fail("combined FP/AUTO must-defined byte budget exhausted")
+			}
 		}
 		pc := queue[0]
 		queue = queue[1:]
@@ -179,6 +201,7 @@ func x86ResultScalarBytes(typ LLVMType, arch string) int64 {
 
 type x86ResultState struct {
 	fp    []bool
+	auto  []bool
 	gp    [16]uint8
 	xmm   [16]uint16
 	flags bool
@@ -186,6 +209,7 @@ type x86ResultState struct {
 
 func (state x86ResultState) clone() x86ResultState {
 	state.fp = append([]bool(nil), state.fp...)
+	state.auto = append([]bool(nil), state.auto...)
 	return state
 }
 
@@ -193,6 +217,9 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	merged := state.clone()
 	for index := range merged.fp {
 		merged.fp[index] = merged.fp[index] && other.fp[index]
+	}
+	for index := range merged.auto {
+		merged.auto[index] = merged.auto[index] && other.auto[index]
 	}
 	for index := range merged.gp {
 		merged.gp[index] &= other.gp[index]
@@ -239,11 +266,32 @@ func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool
 			}
 		}
 		return true
+	case OpMem:
+		offset, valid := x86ResultAUTOOffset(arg, width, len(state.auto))
+		if !valid {
+			return false
+		}
+		for index := offset; index < offset+int(width); index++ {
+			if !state.auto[index] {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
 
 func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if arg.Kind == OpMem {
+		offset, valid := x86ResultAUTOOffset(arg, width, len(state.auto))
+		if !valid {
+			return false
+		}
+		for index := offset; index < offset+int(width); index++ {
+			state.auto[index] = true
+		}
+		return true
+	}
 	if arg.Kind == OpReg {
 		index, mask, valid := x86ResultGP(arg.Reg, width, arch)
 		if valid {
@@ -304,7 +352,7 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		}
 		if destination, valid := xreg(last); valid {
 			state.xmm[destination] |= mask
-			if first.Kind == OpFP || form.legacyZero {
+			if form.memory == 0 || form.legacyZero {
 				state.xmm[destination] = 0xffff
 			}
 			return true
