@@ -83,6 +83,25 @@ func TestX86FPAccessBytesUnknownDoesNotInferPermission(t *testing.T) {
 	}
 }
 
+func TestX86FPAccessBytesScalarIdentityClosed(t *testing.T) {
+	// Actual original assembler rejection is distinct from constructed API
+	// mutations. Neither can borrow the generic source-stack suffix fallback.
+	goAssemblerOracleOutput(t, "amd64", "TEXT ·probe(SB),4,$0-8\nMOVQ.Z a+0(FP),AX\nRET\n", "", false)
+	file, err := Parse(ArchAMD64, "TEXT ·probe(SB),4,$0-8\nMOVQ a+0(FP),AX\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, opcode := range []Op{"MOVQ.Z", "movq", " MOVQ"} {
+		ins := file.Funcs[0].Instrs[1]
+		ins.Op = opcode
+		ins.Args = append([]Operand(nil), ins.Args...)
+		ins.Args[1].Reg = "BAD"
+		if width, _, known := X86FPAccessBytes(ins, 0, "amd64"); known || width != 0 {
+			t.Fatalf("constructed scalar identity %q inferred width %d/%v", opcode, width, known)
+		}
+	}
+}
+
 func TestX86FPAliasThreeAPIsFiveObjects(t *testing.T) {
 	for _, target := range []struct{ arch, triple, op, typ string }{
 		{"amd64", "x86_64-apple-darwin", "MOVQ", "uint64"},

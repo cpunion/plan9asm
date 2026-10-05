@@ -9,6 +9,11 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 	if arch != "amd64" && arch != "386" || index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpFP {
 		return 0, false, false
 	}
+	// Generic source-stack diagnostics normalize suffixes, but that fallback
+	// cannot certify a constructed scalar opcode which bypassed this grammar.
+	if op := Op(normalizeInstructionOpcode(ins.Op)); x86RawReturnScalarMoveBytes(op) != 0 && ins.Op != op {
+		return 0, false, false
+	}
 	if ins.Op == "MOVB" || ins.Op == "MOVW" || ins.Op == "MOVL" || ins.Op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false
