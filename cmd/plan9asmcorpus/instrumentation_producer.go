@@ -16,7 +16,7 @@ import (
 
 // Instrumented packages have their own actual driver/export/metadata/CPP/LLVM
 // consumers. Nothing here translates an instrumentation tag into custom tags,
-// reuses an ordinary export, or turns a tool/source failure into source N/A.
+// reuses an ordinary export, or turns an unproved failure into source N/A.
 func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo, plan *discoveryOrdinarySelectionPlan, profiles []discoveryFeatureProfile, workDir string, env []string) (objects int, runErr error) {
 	if plan == nil || plan.InstrumentationPlan == nil || plan.InstrumentationPlan.Protocol != discoveryInstrumentationPlanProtocol {
 		return 0, fmt.Errorf("mode execution lacks its independently required denominator")
@@ -40,7 +40,8 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 		if runErr != nil {
 			for index := range proof.Outcomes {
 				outcome := &proof.Outcomes[index]
-				if outcome.Status != "llvm_objects_only" && outcome.Status != discoveryInstrumentationExcludedStatus && outcome.Error == "" {
+				if outcome.Status != "llvm_objects_only" && outcome.Status != discoveryInstrumentationExcludedStatus &&
+					outcome.Status != discoveryInstrumentationSourceRejectedStatus && outcome.Error == "" {
 					outcome.Error = runErr.Error()
 				}
 			}
@@ -223,10 +224,6 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 				return err
 			}
 			outcome.PackagePlan = packagePlan
-			wrapped, err := gotoolprofile.NewInstrumentationConsumerInput(input, inventory, observation, packagePlan)
-			if err != nil {
-				return err
-			}
 			dir := filepath.Join(modeRoot, fmt.Sprintf("consume-%04d", index))
 			outcome.Stage = "original_graph"
 			if err := os.Mkdir(dir, 0700); err != nil {
@@ -242,9 +239,32 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			modeEnv := ordinaryProfileEnvironment(env, observation.Early.BaselineFeatures)
 			modeEnv = replaceEnv(modeEnv, observation.Early.Environment)
 			modeEnv = replaceEnv(modeEnv, map[string]string{"GOENV": "off"})
+			rejectOriginalSource := func(cause error) error {
+				// A layout-parser error alone cannot exclude a mode. Only the
+				// same SDK's actual compiler and independently replayed original
+				// declarations can establish this separate zero-object outcome.
+				if err := prepareDiscoveryInstrumentationRejectedModule(ctx, binary, dir, modeEnv, modulePath, download); err != nil {
+					return fmt.Errorf("original mode declaration: %w; exact invocation setup: %v", cause, err)
+				}
+				rejection, rejectionErr := gotoolprofile.CaptureInstrumentationSourceRejection(ctx, binary, dir, modeEnv,
+					input, inventory, observation, packagePlan, gotoolprofile.RunBounded)
+				if rejectionErr != nil {
+					return fmt.Errorf("original mode declaration: %w; no independently proved source refusal: %v", cause, rejectionErr)
+				}
+				if err := verifyDiscoveryCPPInputsUnchanged(proof.CPPInputs, download.Dir, goRoot); err != nil {
+					return err
+				}
+				outcome.SourceRejection = rejection
+				outcome.Status, outcome.Stage = discoveryInstrumentationSourceRejectedStatus, "original_source_rejection"
+				return nil
+			}
+			wrapped, err := gotoolprofile.NewInstrumentationConsumerInput(input, inventory, observation, packagePlan)
+			if err != nil {
+				return rejectOriginalSource(err)
+			}
 			needed, err := gotoolprofile.InstrumentationRequiresTypeSources(wrapped)
 			if err != nil {
-				return err
+				return rejectOriginalSource(err)
 			}
 			modules, err := captureDiscoveryInstrumentationTypeModules(ctx, binary, dir, modeEnv, wrapped)
 			if err != nil {

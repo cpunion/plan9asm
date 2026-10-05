@@ -398,7 +398,7 @@ Historical `exact_source_matchfile_v1` retains its original inventory-only scope
 it cannot claim or be relabeled as v2 sibling coverage.
 
 Current ordinary plans also require `instrumentation_plan` with protocol
-`exact_source_instrumentation_denominator_v3`, including `requirements: []`
+`exact_source_instrumentation_denominator_v4`, including `requirements: []`
 when independently replayed Go/assembly constraints require no mode. Readers
 derive every race/msan/asan scope from the original source pairs, target,
 custom tags and CPU/experiment request. CGO=1 is the default scope; constraints
@@ -423,6 +423,26 @@ contexts remain failures. All eligible scopes still require the complete
 query/CPP/object chain. All-excluded zero-object candidates remain failed;
 no scope-only success policy is authorized. Queries or markers alone cannot
 satisfy a scope.
+
+A v4 `original_source_rejected` outcome is limited to complete, independently
+replayed package-scope Go redeclarations. Its
+`original_instrumented_package_redeclaration_v1` proof binds every selected
+original source and physical declaration position to the same-mode original
+compiler's plain exit 1, complete selected-package JSON and complete diagnostic.
+Const, var, type and non-method function names share the package namespace;
+blank names, init functions, methods and locals do not. Line directives,
+additional diagnostics, missing dependencies, transport errors and timeouts
+cannot satisfy this proof. Exact module setup precedes the unchanged guard;
+the invocation uses its canonical owned CWD. Source roots, metadata, configs,
+tools and source registrations are checked after the actual command.
+This outcome grants no export, query, LLVM object or runtime credit. Its source
+remains registered in the mode CPP inventory, but is not counted as a compiled
+file. Every other eligible scope still requires its normal object proof. A
+candidate with only rejected source and no compiled object remains failed,
+including the zero-ordinary-configuration entry point and portable report,
+progress and ledger readers. Earlier denominator protocols require their
+frozen readers; do not relabel their evidence or copy their statuses into v4.
+
 Mode LLVM object consumption uses `actual_go_instrumentation_llvm_objects_v3`
 with mandatory `generated_artifacts` and explicit source-emission role records.
 TEXT (including TEXT+DATA), DATA/GLOBL-only, and symbol-free selected siblings

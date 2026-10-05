@@ -83,7 +83,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, fmt.Errorf("source-required mode scopes lost their separate outcomes/CPP graph")
 	}
 	seenObservations, seenPackages, selected := make(map[string]bool), make(map[string]bool), make(map[string]bool)
-	objects, exclusions := 0, 0
+	objects, exclusions, sourceRejections := 0, 0, 0
 	for index, requirement := range requirements {
 		outcome := proof.Outcomes[index]
 		if outcome.RequirementID != requirement.ID {
@@ -99,6 +99,24 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		}
 		if outcome.TargetExclusion != nil {
 			return 0, nil, fmt.Errorf("nonexcluded mode carries official target-exclusion evidence")
+		}
+		if outcome.Status == discoveryInstrumentationSourceRejectedStatus {
+			packagePlan, err := validateDiscoveryInstrumentationSourceRejection(plan, requirement, outcome, profiles)
+			if err != nil {
+				return 0, nil, err
+			}
+			seenObservations[outcome.ObservationID], seenPackages[requirement.Directory] = true, true
+			sourceRejections++
+			for _, file := range packagePlan.SFiles {
+				if !containsTargetFeature(scope, file) || path.Dir(file) != requirement.Directory {
+					return 0, nil, fmt.Errorf("rejected mode claims a foreign or undiscovered assembly source")
+				}
+				selected[file] = true // Original CPP registration, never an executed object.
+			}
+			continue
+		}
+		if outcome.SourceRejection != nil {
+			return 0, nil, fmt.Errorf("nonrejected mode carries original source-exclusion evidence")
 		}
 		if allowNonpass && outcome.Status != "llvm_objects_only" {
 			if err := validateDiscoveryInstrumentationNonpass(plan, requirement, outcome, profiles, seenObservations, seenPackages, selected); err != nil {
@@ -181,11 +199,16 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 	if exclusions == len(requirements) && !allowNonpass {
 		return 0, nil, fmt.Errorf("all required instrumentation modes are excluded; no scope-only candidate pass is authorized")
 	}
-	return objects, sortedDiscoverySet(selected), nil
+	if sourceRejections != 0 && !allowNonpass && (result.Translations == 0 || result.Translations < objects) {
+		return 0, nil, fmt.Errorf("source-refused mode cannot authorize a candidate without independently compiled objects")
+	}
+	// Registered CPP roots include source-refused packages. The public file
+	// union counts only physically compiled objects, not those zero-object roots.
+	return objects, discoveryInstrumentationExecutedFiles(plan), nil
 }
 
 func validateDiscoveryInstrumentationNonpass(plan *discoveryOrdinarySelectionPlan, requirement discoveryInstrumentationRequirement, outcome discoveryInstrumentationOutcome, profiles []discoveryFeatureProfile, observations, packages, selected map[string]bool) error {
-	if outcome.Error == "" || outcome.Status != "failed" && outcome.Status != "early_target_rejected" {
+	if outcome.SourceRejection != nil || outcome.Error == "" || outcome.Status != "failed" && outcome.Status != "early_target_rejected" {
 		return fmt.Errorf("mode nonpass lacks its exact stage/diagnostic or claims an unknown successful status")
 	}
 	switch outcome.Stage {

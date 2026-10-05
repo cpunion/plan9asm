@@ -113,7 +113,7 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 	if err != nil {
 		t.Fatal("required LLVM 22 llc: ", err)
 	}
-	matrix, _, _, err := runDiscoveryCandidate(discoveryCorpusConfig{
+	matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
 		RepoRoot: root, Translator: translator, LLC: llc,
 		Targets: []string{target}, CandidateTimeout: 2 * time.Minute,
 	}, candidate, filepath.Join(t.TempDir(), "candidate"))
@@ -133,5 +133,114 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 	encoded, err := json.Marshal(outcomes[0])
 	if err != nil || !strings.Contains(string(encoded), "original_source_rejection") {
 		t.Fatal("portable mode result omitted its typed compiler/source proof: ", err)
+	}
+	inventory := newDiscoveryFeatureInventory()
+	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := discoveryCorpusResult{
+		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
+		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: discoveryConfigurationAsmFiles(configs),
+		Translations: matrix.Success, BuildConfigurations: configs,
+		SourceNotApplicableItems: matrix.SourceNotApplicableItems,
+		OrdinarySelectionPlan:    matrix.OrdinarySelectionPlan, FeatureProfiles: refs,
+		FeatureConsumption: matrix.FeatureConsumption, featureInventory: inventory,
+	}
+	if err := validateOrdinaryProfileResult(result, []string{target}, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
+		t.Fatalf("complete source-refusal report failed strict replay: %v", err)
+	}
+	testInstrumentationCorpusTransport(t, result, inventory, target)
+	encoded, err = json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"source proof deleted": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].SourceRejection = nil
+		},
+		"partial redeclarations": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].SourceRejection.Redeclarations = nil
+		},
+		"another mode": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].SourceRejection.Plan.Mode = "asan"
+		},
+		"manufactured object": func(r *discoveryCorpusResult) {
+			r.InstrumentationTranslations = 1
+		},
+		"source-refused file called compiled": func(r *discoveryCorpusResult) {
+			r.ApplicableAsmFiles = append(r.ApplicableAsmFiles, badAssembly)
+		},
+		"historical denominator": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.InstrumentationPlan.Protocol = "exact_source_instrumentation_denominator_v3"
+		},
+		"zero-object pass": func(r *discoveryCorpusResult) {
+			r.Translations = 0
+		},
+		"zero-object NA": func(r *discoveryCorpusResult) {
+			r.Status, r.Translations = discoveryStatusNotApplicable, 0
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed discoveryCorpusResult
+			if err := json.Unmarshal(encoded, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.featureInventory = inventory
+			mutate(&changed)
+			if err := validateOrdinaryProfileResult(changed, []string{target}, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatal("deleted proof, changed scope or false object completion was accepted")
+			}
+		})
+	}
+
+	// Exercise the zero-ordinary-configuration entry point with the same
+	// original rejected package, not just a mutation of a passing report.
+	badCandidate := discoveryCandidate{
+		Module: "example.invalid/only-mode-source-rejection", Version: "v1.0.0",
+		AsmFiles: []string{badAssembly},
+	}
+	badSources := make(map[string]string)
+	for name, contents := range sources {
+		if !strings.HasPrefix(name, "good/") {
+			badSources[name] = strings.ReplaceAll(contents, candidate.Module, badCandidate.Module)
+		}
+	}
+	badDownload := fixtureProfileModuleDownload(t, badCandidate, badSources)
+	configurePreCPPFixtureProxy(t, badCandidate, badDownload, badSources["go.mod"])
+	badMatrix, _, badConfigs, badErr := runDiscoveryCandidate(discoveryCorpusConfig{
+		RepoRoot: root, Translator: translator, LLC: llc,
+		Targets: []string{target}, CandidateTimeout: 2 * time.Minute,
+	}, badCandidate, filepath.Join(t.TempDir(), "bad-candidate"))
+	if badErr == nil || badMatrix.Success != 0 || len(badConfigs) != 0 ||
+		!strings.Contains(badErr.Error(), "no eligible candidate LLVM objects") ||
+		discoveryInstrumentationSourceRejections(badMatrix.OrdinarySelectionPlan) != 1 {
+		t.Fatalf("all-rejected zero-object candidate did not fail with retained scoped evidence: success=%d configs=%d error=%v",
+			badMatrix.Success, len(badConfigs), badErr)
+	}
+	badInventory := newDiscoveryFeatureInventory()
+	badRefs, err := registerDiscoveryFeatureProfiles(badInventory, badMatrix.FeatureProfiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badResult := discoveryCorpusResult{
+		Module: badCandidate.Module, Version: badCandidate.Version, Status: discoveryStatusFailed,
+		Error: badErr.Error(), DiscoveredAsmFiles: badCandidate.AsmFiles,
+		SourceNotApplicableItems: badMatrix.SourceNotApplicableItems,
+		OrdinarySelectionPlan:    badMatrix.OrdinarySelectionPlan, FeatureProfiles: badRefs,
+	}
+	if err := validateDiscoveryInstrumentationFailure(badResult, badInventory); err != nil {
+		t.Fatalf("genuine zero-object failure lost its mode proof: %v", err)
+	}
+	testInstrumentationCorpusTransport(t, badResult, badInventory, target)
+	resolved, err := resolveDiscoveryFeatureProfiles(badInventory, badRefs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, status := range []string{discoveryStatusPassed, discoveryStatusNotApplicable} {
+		badResult.Status, badResult.Error = status, ""
+		if _, _, err := validateDiscoveryInstrumentationResult(badResult, resolved, badCandidate.AsmFiles); err == nil {
+			t.Fatalf("zero-object source rejection was relabeled %s", status)
+		}
 	}
 }

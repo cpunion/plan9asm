@@ -2411,6 +2411,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			aggregate.InstrumentationTargetExclusions = discoveryInstrumentationTargetExclusions(ordinaryPlan)
 			aggregate.TotalAsm = modeObjects
 			aggregate.TotalTargets = len(discoveryInstrumentationExecutedTargets(ordinaryPlan))
+			if err == nil && modeObjects == 0 && discoveryInstrumentationSourceRejections(ordinaryPlan) != 0 {
+				err = fmt.Errorf("original mode sources were rejected and no eligible candidate LLVM objects were compiled")
+			}
 			return aggregate, nil, buildConfigurations, err
 		}
 		return aggregate, nil, buildConfigurations, nil
@@ -2789,6 +2792,10 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		aggregate.TotalTargets = len(runTargets)
 		if err != nil {
 			return aggregate, sortedDiscoverySet(patternSet), executedBuildConfigurations, err
+		}
+		if aggregate.Success == 0 && discoveryInstrumentationSourceRejections(ordinaryPlan) != 0 {
+			return aggregate, sortedDiscoverySet(patternSet), executedBuildConfigurations,
+				fmt.Errorf("original mode sources were rejected and no eligible candidate LLVM objects were compiled")
 		}
 	}
 	return aggregate, sortedDiscoverySet(patternSet), executedBuildConfigurations, nil

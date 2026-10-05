@@ -109,6 +109,15 @@ for late infrastructure errors or invalid source positions. The original avo
 candidate passed its default-target replay at frozen `ff488337`; source-excluded
 scopes are not LLVM objects or runtime passes.
 
+The v4 mode denominator retains a separate original-source refusal for complete
+package-scope redeclarations selected by the current Go SDK. Actual same-mode
+compiler selection and physical diagnostics must match all original declarations;
+unknown source/tool failures remain failures. Valid sibling objects retain their
+normal proofs, while rejected packages receive no object or runtime credit.
+Zero-object candidates stay failed in both producer paths and every portable
+reader. See the discovery guide for the protocol, unchanged guards and historical
+reader boundary; do not import old statuses as v4 evidence.
+
 The local batch includes complete ARM64 raw UDF decoding and explicit
 integer source-class checks. An old unknown-WORD negative was a valid UDF;
 preserve that failed report and its corrected negative/reachable-trap tests.

@@ -12,9 +12,10 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-const discoveryInstrumentationPlanProtocol = "exact_source_instrumentation_denominator_v3"
+const discoveryInstrumentationPlanProtocol = "exact_source_instrumentation_denominator_v4"
 const discoveryInstrumentationLegacyProtocol = "exact_source_instrumentation_denominator_v1"
 const discoveryInstrumentationExcludedStatus = "official_target_excluded"
+const discoveryInstrumentationSourceRejectedStatus = "original_source_rejected"
 
 // This is a separate mandatory denominator for current ordinary reports,
 // including a canonical empty requirements array. Source bytes and actual
@@ -36,6 +37,7 @@ type discoveryInstrumentationOutcome struct {
 	ObservationID   string                                            `json:"observation_id,omitempty"`
 	Early           *gotoolprofile.InstrumentationEarlyObservation    `json:"early_rejection,omitempty"`
 	TargetExclusion *gotoolprofile.InstrumentationTargetExclusion     `json:"official_target_exclusion,omitempty"`
+	SourceRejection *gotoolprofile.InstrumentationSourceRejection     `json:"original_source_rejection,omitempty"`
 	PackagePlan     *gotoolprofile.InstrumentationOriginalPackagePlan `json:"original_package_plan,omitempty"`
 	TypeSources     *gotoolprofile.InstrumentationTypeSourceProof     `json:"original_type_sources,omitempty"`
 	Query           *gotoolprofile.InstrumentationInvocationProof     `json:"metadata_query,omitempty"`
