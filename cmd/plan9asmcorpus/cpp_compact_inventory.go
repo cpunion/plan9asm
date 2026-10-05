@@ -143,6 +143,12 @@ func compactCPPGeneratedNames(macro *plan9asm.AssemblyCPPMacroDefinition, names 
 		if formal[name.Text] {
 			return fmt.Errorf("generated CPP macro name needs an exact invocation proof")
 		}
+		// Generated Slice tokens have sequential positions, not their original
+		// physical whitespace. A following '(' can introduce a new formal
+		// scope whose invocations manufacture names this raw query cannot close.
+		if index+3 < len(macro.Replacement) && macro.Replacement[index+3].Kind == "(" {
+			return fmt.Errorf("generated CPP function macro needs an exact invocation proof")
+		}
 		names[name.RecordedValue] = true
 	}
 	return nil

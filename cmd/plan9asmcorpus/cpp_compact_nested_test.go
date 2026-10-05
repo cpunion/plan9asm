@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 func TestCompactCPPInventoryGeneratedFunctionNamesRequireContext(t *testing.T) {
@@ -81,5 +83,33 @@ func TestCompactCPPInventoryGeneratedFunctionNamesRequireContext(t *testing.T) {
 				t.Fatalf("generated function formal silently omitted later NEW invocation: %+v", inventory)
 			}
 		})
+	}
+}
+
+func TestCompactCPPInventoryGeneratedFunctionScopesRemainUnclosed(t *testing.T) {
+	for _, definition := range []string{
+		"#define INNER(NAME) NAME",
+		"#define INNER (NAME) NAME",
+		"#define INNER() RET",
+		"#define INNER () RET",
+		"#define INNER/* gap */(NAME) NAME",
+	} {
+		t.Run(definition, func(t *testing.T) {
+			source := "#define OUTER \\\n" + definition + "\nOUTER\nINNER(NEW)\nNEW\n"
+			physical, err := plan9asm.InspectAssemblyCPPSource(source, "original.s", nil)
+			if err != nil || len(physical.Records) == 0 || physical.Records[0].Text != "#define OUTER \\\n"+definition+"\n" {
+				t.Fatalf("raw generated definition was not retained: %+v %v", physical, err)
+			}
+			inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)})
+			if inventory != nil || err == nil || !strings.Contains(err.Error(), "generated CPP function macro needs an exact invocation proof") {
+				t.Fatalf("unclosed generated function scope was accepted: %+v %v", inventory, err)
+			}
+		})
+	}
+
+	source := "#define USE(NAME) NAME\nUSE(RET)\n"
+	inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)})
+	if err != nil || inventory == nil || len(inventory.InvocationNames) != 1 || inventory.InvocationNames[0] != "USE" {
+		t.Fatalf("ordinary physical function macro was changed: %+v %v", inventory, err)
 	}
 }
