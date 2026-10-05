@@ -395,7 +395,8 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	}
 	entry := &arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
-			SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), Reg("R30"): arm64ControlFromMap(map[string]bool{"label:" + plan.outer: true}),
+			SP:         arm64ControlFromMap(map[string]bool{"sp:0": true}),
+			Reg("R30"): arm64ControlFromMap(map[string]bool{"label:" + plan.outer: true}),
 		},
 		memory:      make(map[string]arm64ControlValue),
 		unexposedSP: c.unexposedCallFrame,

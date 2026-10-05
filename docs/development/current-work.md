@@ -118,6 +118,14 @@ Zero-object candidates stay failed in both producer paths and every portable
 reader. See the discovery guide for the protocol, unchanged guards and historical
 reader boundary; do not import old statuses as v4 evidence.
 
+ARM64 control values use immutable exact token sets with structural sharing.
+Hash collisions retain complete strings and bool values; per-value projection
+guards do not cache source validity or grant permissions. Original map-reference
+and complete CFG/IR comparisons remain separate frozen evidence. This repair
+preserves all targets, unknown/native contexts and work budgets. The original
+large external candidate still needs a fresh complete replay under the combined
+source; allocation measurements alone cannot close its compilation failure.
+
 The local batch includes complete ARM64 raw UDF decoding and explicit
 integer source-class checks. An old unknown-WORD negative was a valid UDF;
 preserve that failed report and its corrected negative/reachable-trap tests.

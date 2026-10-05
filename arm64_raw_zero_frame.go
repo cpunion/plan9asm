@@ -192,7 +192,8 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 			},
 			control: &arm64ControlState{
 				regs: map[Reg]arm64ControlValue{
-					SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{entryLink: true}),
+					SP:    arm64ControlFromMap(map[string]bool{"sp:0": true}),
+					"R30": arm64ControlFromMap(map[string]bool{entryLink: true}),
 				},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
