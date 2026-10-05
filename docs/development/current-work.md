@@ -24,10 +24,25 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-type-source-lea-integration-20261005`, based on
+Development branch: `codex/pr40-source-repairs-integration-20261005`, based on
 the reviewed source-budget, SDK Count, CPU/environment and numeric fixed-local
 integration. It also combines the LEA oracle repair, host-derived export-command
 rendering and independently authenticated foreign instrumentation type sources.
+It additionally keeps manual-signature fixtures inside their actual ABI
+contracts, separates mode32 scalar-literal source acceptance from physically
+bound object controls, and preserves raw x86 disp32 and LEA address-size
+semantics. Original failing fixtures and their replacement proofs remain in
+separate frozen snapshots. Required Linux runtime counterparts are not implied
+by cross-object or Darwin/Rosetta results.
+
+Two independent follow-ups are being verified before the next final batch:
+generated instrumentation LLVM outputs need bounded artifact roles, separate
+from original Go/CPP source budgets; generic raw address-size overrides must
+retain their physical width and cannot borrow default-address caller or stack
+certificates. Neither an observed byte count nor an opcode alone grants a
+source, typed-memory or compiled-object permission. Do not alter a running
+leaf or promote a library while its whole original denominator is incomplete.
+
 Earlier
 verification snapshots remain frozen in separate worktrees. Integrated repairs
 are local, not yet the published fork head. Freeze a clean final batch before
