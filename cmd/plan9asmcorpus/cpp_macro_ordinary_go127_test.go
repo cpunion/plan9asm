@@ -1,0 +1,135 @@
+//go:build go1.27
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// This first-party module runs through the original ordinary producer, not a
+// reconstructed CPP-only source. Its file proxy is not external authentication.
+func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T) {
+	compilerEnvironment := os.Environ()
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
+	defer cancel()
+
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	translator := filepath.Join(t.TempDir(), "plan9asmll")
+	if output, _, err := runDiscoveryMachineCommand(ctx, filepath.Join(root, "cmd", "plan9asmll"),
+		compilerEnvironment, "go", "build", "-p=2", "-o", translator, "."); err != nil {
+		t.Fatalf("build actual translator: %v\n%s", err, output)
+	}
+	llc, err := exec.LookPath("llc")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	candidate := discoveryCandidate{
+		Module: "example.invalid/ordinary-directive-macros", Version: "v1.0.0",
+		AsmFiles: []string{"probe.s"},
+	}
+	sources := map[string]string{
+		"go.mod":   "module example.invalid/ordinary-directive-macros\n\ngo 1.20\n",
+		"probe.go": "package fixture\nfunc Probe()\n",
+		"probe.s": "#include \"macros.h\"\n" +
+			"TEXT ·Probe(SB),4,$0-0\nRET\n" +
+			"OBJECT_ALIAS\nAPPLY(GOARCH_amd64)\nINCLUDE_CHOICE\n",
+		"macros.h": "#define OBJECT \\\n" +
+			"#ifdef GOARCH_arm64 \\\n" +
+			"GLOBL ·armMarker(SB),$8 \\\n" +
+			"#endif \\\n\n" +
+			"#define OBJECT_ALIAS OBJECT\n" +
+			"#define SELECT(P) \\\n" +
+			"#ifdef P \\\n" +
+			"GLOBL ·amdMarker(SB),$8 \\\n" +
+			"#endif \\\n\n" +
+			"#define APPLY(P) SELECT(P)\n" +
+			"#define INCLUDE_CHOICE \\\n" +
+			"#include \"choice.h\" \\\n\n",
+		"choice.h": "GLOBL ·includeMarker(SB),$8\n",
+	}
+	download := fixtureProfileModuleDownload(t, candidate, sources)
+	configurePreCPPFixtureProxy(t, candidate, download, sources["go.mod"])
+	targets, err := parseDiscoveryTargets("darwin/amd64,darwin/arm64,linux/386,linux/amd64,linux/arm,linux/arm64,windows/386,windows/amd64,windows/arm64,js/wasm,wasip1/wasm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 11 {
+		t.Fatalf("original complete target denominator changed: %v", targets)
+	}
+	for _, target := range targets {
+		goos, goarch, _ := strings.Cut(target, "/")
+		env := replaceEnv(os.Environ(), map[string]string{
+			"GOOS": goos, "GOARCH": goarch, "CGO_ENABLED": "0",
+		})
+		output, stderr, err := runDiscoveryMachineCommand(ctx, download.Dir, env,
+			"go", "list", "-p=2", "-mod=readonly", "-export", "-json", ".")
+		if err != nil || len(stderr) != 0 {
+			t.Fatalf("original %s selection/export: %v\n%s\n%s", target, err, output, stderr)
+		}
+		var selected struct {
+			GoFiles []string
+			SFiles  []string
+			Export  string
+		}
+		if err := json.Unmarshal(output, &selected); err != nil ||
+			!equalDiscoveryStrings(selected.GoFiles, []string{"probe.go"}) ||
+			!equalDiscoveryStrings(selected.SFiles, candidate.AsmFiles) || selected.Export == "" {
+			t.Fatalf("original %s selected a different source/export: %+v %v", target, selected, err)
+		}
+		digest, err := discoveryFeatureFileSHA256(selected.Export)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("original Go accepted %s source_sha=%s export_sha=%s zip_sha=%s h1=%s",
+			target, discoveryFeatureBytesSHA256([]byte(sources["probe.s"])), digest,
+			discoveryFeatureBytesSHA256(mustReadOrdinaryCPPFixture(t, download.Zip)), download.Sum)
+	}
+
+	matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
+		RepoRoot: root, Translator: translator, LLC: llc, Targets: targets,
+		CandidateTimeout: 3 * time.Minute,
+	}, candidate, filepath.Join(t.TempDir(), "candidate"))
+	if err != nil {
+		t.Fatalf("Go-accepted original ordinary CPP macros failed production: %v", err)
+	}
+	if matrix.Success < len(targets) || matrix.NotApplicable != 0 || len(matrix.FeatureConsumption) != len(configs) {
+		t.Fatalf("original complete scopes lost: objects=%d N/A=%d configurations=%d consumers=%d",
+			matrix.Success, matrix.NotApplicable, len(configs), len(matrix.FeatureConsumption))
+	}
+	inventory := newDiscoveryFeatureInventory()
+	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := discoveryCorpusResult{
+		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
+		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: discoveryConfigurationAsmFiles(configs),
+		BuildConfigurations: configs, Translations: matrix.Success,
+		OrdinarySelectionPlan: matrix.OrdinarySelectionPlan, FeatureProfiles: refs,
+		FeatureConsumption: matrix.FeatureConsumption, featureInventory: inventory,
+	}
+	if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
+		t.Fatal(err)
+	}
+	checkSelectedSiblingReportReaders(t, candidate, result, targets, inventory)
+}
+
+func mustReadOrdinaryCPPFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
