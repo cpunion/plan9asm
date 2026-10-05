@@ -24,8 +24,11 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-instrumentation-cpp-union-20261005`, based on
-the reviewed source-budget and SDK Count integration. Earlier
+Development branch: `codex/pr40-type-source-lea-integration-20261005`, based on
+the reviewed source-budget, SDK Count, CPU/environment and numeric fixed-local
+integration. It also combines the LEA oracle repair, host-derived export-command
+rendering and independently authenticated foreign instrumentation type sources.
+Earlier
 verification snapshots remain frozen in separate worktrees. Integrated repairs
 are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
@@ -269,8 +272,11 @@ original syntax, not trusted layout JSON. Imported selectors from the stdlib
 or exact same module need the separate original type-source capture, actual
 same-mode pre/post graph and independent consumer recapture. Complete needed
 Go bytes bind the exact import-spelling sets; paired exports/layout metadata
-cannot invent an edge or replace that source anchor. Foreign, generated, cgo,
-embed and generic type closures remain unsupported. The separate CLI and
+cannot invent an edge or replace that source anchor. Generated, cgo, embed and
+generic type closures remain unsupported. Exact foreign versioned modules need
+their independent authenticated archive, actual selected sources and complete
+original import-spelling set. Local or unclosed replacements remain failures.
+The separate CLI and
 corpus/report/progress/ledger consumers are
 integrated locally. They require an independently replayed instrumentation
 denominator, including the explicit empty requirements array, and actual
