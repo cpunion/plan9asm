@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -8,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -178,7 +180,11 @@ func TestX86PackedSADDispatchMalformedAndPhysicalBounds(t *testing.T) {
 	}
 	for _, row := range []string{"PSADBW M0,M1", "PSADBW Y0,Y1", "PSADBW $1,X0", "VPSADBW X0,Y1,Y2", "VPSADBW X0,X1,K1,X2", "VPSADBW.Z X0,X1,X2", "VPSADBW.BCST (AX),Z0,Z1", "MPSADBW $-1,X0,X1", "MPSADBW $256,X0,X1", "VMPSADBW $1,Z0,Z1,Z2", "VMPSADBW $1,Y16,Y1,Y2", "VDBPSADBW $1,X0,X1,K0,X2", "VDBPSADBW.Z $1,X0,X1,X2", "VDBPSADBW.BCST $1,(AX),X0,X1", "PSADBW (AX)(SP*2),X0", "VPSADBW 2147483648(AX),Z0,Z1", "MPSADBW $1,$data(SB),X0"} {
 		source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
-		goAssemblerOracleOutput(t, "amd64", source, "", false)
+		if row == "VDBPSADBW.Z $1,X0,X1,X2" {
+			x86SADReservedZeroMaskGoObservation(t, source)
+		} else {
+			goAssemblerOracleOutput(t, "amd64", source, "", false)
+		}
 		file, err := Parse(ArchAMD64, source)
 		if err != nil {
 			continue
@@ -199,6 +205,41 @@ func TestX86PackedSADDispatchMalformedAndPhysicalBounds(t *testing.T) {
 			t.Fatalf("386 accepted spelling acquired physical register %s: %v", row, err)
 		}
 	}
+}
+
+func x86SADReservedZeroMaskGoObservation(t *testing.T, source string) {
+	t.Helper()
+	dir := t.TempDir()
+	asm, object := filepath.Join(dir, "reserved.s"), filepath.Join(dir, "reserved.o")
+	if err := os.WriteFile(asm, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "sad", "-o", object, asm)
+	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=amd64")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if failure := goAssemblerOracleOutcome(asm, object, output, err, ctx.Err(), err == nil, "amd64"); failure != nil {
+		t.Fatalf("actual reserved zero-mask observation: %v\n%s", failure, output)
+	}
+	if err != nil {
+		if !bytes.Contains(output, []byte("mask register must be specified for .Z instructions")) {
+			t.Fatalf("unexpected original-Go diagnostic: %s", output)
+		}
+		t.Log("actual Go rejected unchanged source without its nonzero mask")
+		return
+	}
+	// Intel SDM Vol. 2A Table 2-40 defines EVEX.z=1/aaa=0 as #UD.
+	// Older Go accepts this source and emits precisely that reserved pattern;
+	// acceptance is an observation, not authorization to execute or translate it.
+	if !bytes.Contains(output, []byte("62 f3 75 88 42 d0 01 c3")) {
+		t.Fatalf("actual Go accepted reserved-body bytes changed: %s", output)
+	}
+	code := []byte{0x62, 0xf3, 0x75, 0x88, 0x42, 0xd0, 0x01}
+	if _, _, known, err := decodedX86RawPackedSADInstruction(code, 64); !known || err == nil {
+		t.Fatal("actual reserved bytes acquired valid raw semantics")
+	}
+	t.Log("actual Go accepted reserved EVEX.z/aaa=0 bytes; named and raw validators still reject them")
 }
 
 func TestX86PackedSADFPSpanAndNativeMemoryBoundary(t *testing.T) {
