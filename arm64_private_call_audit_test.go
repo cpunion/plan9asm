@@ -40,7 +40,9 @@ func TestARM64PrivateCallCFGLeafCannotCallOutOrWidenRegisterDomain(t *testing.T)
 			t.Run(name, func(t *testing.T) {
 				source := strings.Split(arm64PrivateCallCFGCopySource, "TEXT copy<>")[0] +
 					"TEXT copy<>(SB),516,$0-0\n" + body
-				requireARM64GoAssemblerResult(t, source, true)
+				// BLR is accepted by the parsed IR API, not Go's spelling table.
+				// Keep that distinction explicit while guarding both surfaces.
+				requireARM64GoAssemblerResult(t, source, !strings.HasPrefix(instruction, "BLR"))
 				file, err := Parse(ArchARM64, source)
 				if err != nil {
 					t.Fatal(err)
