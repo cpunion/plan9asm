@@ -33,7 +33,7 @@ test "$suite_status" -eq 0
 ```
 
 Use the same race/coverage/build flags for those other packages when required.
-The tool does not change workflows, and its coverage profile is root-package
+Ordinary mode's coverage profile is root-package
 coverage only, not a replacement for the original module-wide profile.
 
 Build/instrumentation flags follow `--`, for example:
@@ -92,3 +92,71 @@ descendant-cleanup proof exists; it does not pretend Windows execution passed.
 Freeze source, environment and tools throughout a real suite run. Reports
 describe the invoked Go tests, not assembly-ledger or external-module coverage.
 The runner never deletes caller caches or modifies baseline/scan inputs.
+
+## Selected cross-runtime CI owners
+
+The required cross-runtime job uses a separate
+`actual_go_selected_ci_partitions_v1` protocol. Its original complete five-prefix
+selector is applied to the complete actual `-list=.` inventory and checked
+against a second actual Go `-list=<selector>` observation with identical build
+flags. Nonselected roots remain in the full inventory; benchmarks remain listed,
+not executed. Ordinary schema-1 reports and full-root behavior are unchanged.
+
+Sixteen jobs own the selected roots exhaustively and disjointly. The exact
+`TestCrossLinuxRuntimeMatrix` root alone belongs to owner zero; the first eight
+SHA-256 bytes of every other selected name, big-endian modulo fifteen plus one,
+assign owners one through fifteen. There is no concurrency cap or fail-fast
+matrix cancellation. Each owned root runs in a fresh bounded child with the
+existing **20-minute** deadline and `-count=1`. Failures stay sticky while later
+roots are attempted. Empty owners are explicitly receipted, not credited as
+executing semantics. This mechanism does not prove the giant root itself fits
+its unchanged deadline.
+
+For example, with the required SDK/LLVM/cross tools already installed:
+
+```sh
+GOFLAGS= GOENV=off GOWORK=off GOTOOLCHAIN=local PLAN9ASM_CROSS_EXEC=1 \
+  go run ./cmd/plan9asmtest -out _out/cross-runtime-owner \
+  -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
+  -ci-isolate-root TestCrossLinuxRuntimeMatrix -ci-owner 0 -shards 16 -timeout 20m
+```
+
+All sixteen artifacts are required by `-verify-ci-partitions <directory>`, with
+the identical selector/isolate/shard/timeout/build configuration. It independently
+recaptures both actual inventories and source/SDK/tool/environment scope,
+recomputes ownership, and reads every root's bounded raw Go JSON and actual exit.
+Missing, duplicated, foreign, incomplete, failed or skipped roots/subtests/seeds
+fail completion. Paired plan/receipt deletion cannot shrink the denominator.
+It also checks raw inventory/environment/version/tool-origin observations and
+before/after guards. The required native tool names and bytes are retained;
+cache and workspace spelling are not cross-job source identity. Inherited
+`GOFLAGS`, user `GOENV`, workspace switching and toolchain fallback are forbidden.
+
+The environment scope retains **every actual `go env -json` field**, including
+unknown future fields and the complete compiler flags. Only explicitly named
+SDK/source/storage roots and the Go-generated prefix-map temporary nonce are
+normalized. That nonce must be a direct `go-build<decimal>` child of the observed
+temporary root mapped to exactly `/tmp/go-build`; all other flag bytes, ordering
+and quote spelling stay exact. Raw physical observations remain in artifacts
+and the aggregate reconstructs this comparison independently. Lazy SDK tools
+are resolved with the selected driver's actual `go tool -n`, not guessed paths.
+
+Process controls are a separate explicit boundary: all `PLAN9ASM_*` and
+`QEMU_*` variables, `SELF_BL_SINK`, LLVM/tool search, Go runtime, compiler include,
+loader and sanitizer controls are retained. This does not claim complete ambient
+machine/ISA/sysroot/library identity or copy unrelated CI credentials. Required
+original/native preflights and runtime comparisons still determine those
+semantics; hosted-runner labels are not ISA certificates.
+
+Worker artifacts retain physical paths, failures and logs; matching source and
+SDK content hashes permit separate checkout locations, not different source or
+compiler versions. Test completion is not an assembly-ledger, external-library
+runtime, or unexecuted architecture claim. Coverage-profile merging remains an
+ordinary full-root feature rather than a selected-CI waiver.
+External compiler-input flags (`-overlay`, `-modfile`, `-gcflags`, `-asmflags`,
+`-ldflags`) are not registered in this initial CI protocol: its source guard
+cannot silently authenticate files supplied outside the checkout. Ordinary
+mode keeps its existing support for those flags.
+External cache/package drivers and compound compiler-wrapper commands likewise
+remain unregistered. The native scope binds the actual `CC`, `CXX`, `AR` and
+`PKG_CONFIG` executable bytes as well as the required LLVM/cross/QEMU tools.
