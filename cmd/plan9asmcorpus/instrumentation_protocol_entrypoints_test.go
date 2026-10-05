@@ -9,7 +9,7 @@ import (
 )
 
 func TestInstrumentationProtocolFullReportEntryPointsRejectDowngradeAndMixedHistory(t *testing.T) {
-	for _, mutation := range []string{"schema10 sibling", "delete stamp", "downgrade both", "delete both"} {
+	for _, mutation := range []string{"schema10 sibling", "delete stamp", "downgrade both", "delete both", "delete type marker", "v1 type marker", "paired type deletion"} {
 		t.Run(mutation, func(t *testing.T) {
 			ledger, reports, source := writeDiscoveryReportFixture(t)
 			name := filepath.Join(reports, "shard-0.json")
@@ -35,6 +35,17 @@ func TestInstrumentationProtocolFullReportEntryPointsRejectDowngradeAndMixedHist
 				report.Provenance.InstrumentationScopeProtocol = ""
 				for index := range report.Results {
 					report.Results[index].OrdinarySelectionPlan.InstrumentationPlan = nil
+				}
+			case "delete type marker":
+				report.Provenance.InstrumentationTypeSourceProtocol = ""
+			case "v1 type marker":
+				report.Provenance.InstrumentationTypeSourceProtocol = "actual_go_instrumentation_type_sources_v1"
+			case "paired type deletion":
+				report.Provenance.InstrumentationTypeSourceProtocol = ""
+				for index := range report.Results {
+					for outcome := range report.Results[index].OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
+						report.Results[index].OrdinarySelectionPlan.InstrumentationPlan.Outcomes[outcome].TypeSources = nil
+					}
 				}
 			}
 			changed, err := json.Marshal(report)

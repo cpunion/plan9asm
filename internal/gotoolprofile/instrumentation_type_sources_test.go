@@ -45,6 +45,7 @@ type Row struct { First byte; Payload [Length]Alias; Last uintptr }
 	}
 	input.TypeSources = &InstrumentationTypeSourceProof{
 		Protocol: instrumentationTypeSourcesProtocol, InputSHA256: instrumentationTypeSourceInputSHA(input),
+		SourceModules: []TestModuleSource{},
 		RootImportMap: map[string]string{packagePath + "/dep": packagePath + "/dep"},
 		Dependencies: []InstrumentationTypeSourcePackage{{
 			Name: "dependency", Contents: map[string]string{"dep/types.go": dependency},

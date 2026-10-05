@@ -154,7 +154,7 @@ func validateInstrumentationMetadataDependencies(input *InstrumentationConsumerI
 			len(source.GoSHA256) == 0 || len(source.GoSHA256) > 32768 || dep.ImportMap == nil || len(dep.ImportMap) > 4096 {
 			return fmt.Errorf("mode dependency lacks a unique actual export/source/import closure")
 		}
-		if source.ModulePath != "" && source.ModulePath != input.Original.Module {
+		if source.ModulePath != "" && source.ModulePath != input.Original.Module && !instrumentationForeignDependencyBound(input, source) {
 			return fmt.Errorf("mode foreign dependency needs its independent authenticated original source closure")
 		}
 		if err := validateImportedSource(input.Original, pkg, source); err != nil {

@@ -14,7 +14,8 @@ import (
 	"golang.org/x/mod/module"
 )
 
-const instrumentationTypeSourcesProtocol = "actual_go_instrumentation_type_sources_v1"
+const InstrumentationTypeSourcesProtocol = "actual_go_instrumentation_type_sources_v2"
+const instrumentationTypeSourcesProtocol = InstrumentationTypeSourcesProtocol
 
 // This input is captured before metadata and independently recaptured by its
 // actual consumer. Digests alone, or two agreeing metadata records, cannot
@@ -27,12 +28,15 @@ type InstrumentationTypeSourceProof struct {
 	UnsafeSHA256  string                             `json:"builtin_unsafe_source_sha256,omitempty"`
 	RootImportMap map[string]string                  `json:"root_import_map"`
 	Dependencies  []InstrumentationTypeSourcePackage `json:"dependencies"`
+	SourceModules []TestModuleSource                 `json:"source_only_modules"`
 }
 
 type InstrumentationTypeSourcePackage struct {
-	Name       string                          `json:"package_name"`
-	Dependency InstrumentationDependencyExport `json:"dependency"`
-	Contents   map[string]string               `json:"contents,omitempty"`
+	Name         string                          `json:"package_name"`
+	Dependency   InstrumentationDependencyExport `json:"dependency"`
+	Contents     map[string]string               `json:"contents,omitempty"`
+	SourceRootID string                          `json:"source_root_id,omitempty"`
+	SFiles       []string                        `json:"selected_source_only_assembly"`
 }
 
 func instrumentationTypeSourceInputSHA(input *InstrumentationConsumerInput) string {
@@ -83,6 +87,9 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 	if input.Sources == nil {
 		return fmt.Errorf("original import graph lacks complete selected Go source")
 	}
+	if err := validateInstrumentationTypeModuleCoverage(input, proof); err != nil {
+		return err
+	}
 	if err := validateInstrumentationOriginalImportSpellings(input.Plan.GoFiles, input.Sources.Contents, proof.RootImportMap); err != nil {
 		return err
 	}
@@ -90,6 +97,11 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 	header := GeneratedHeaderProof{ImportMap: proof.RootImportMap}
 	byPath := make(map[string]InstrumentationDependencyExport)
 	total := 0
+	for _, module := range proof.SourceModules {
+		for _, header := range module.Headers {
+			total += len(header)
+		}
+	}
 	unsafeNeeded := proof.RootImportMap["unsafe"] == "unsafe"
 	if !sort.SliceIsSorted(proof.Dependencies, func(i, j int) bool {
 		return proof.Dependencies[i].Dependency.Source.PackagePath < proof.Dependencies[j].Dependency.Source.PackagePath
@@ -146,7 +158,9 @@ func ValidateInstrumentationTypeSources(input *InstrumentationConsumerInput, pro
 			pkg.SourceRole = "version_replace"
 		}
 	}
-	return validateInstrumentationMetadataDependencies(input, pkg, header, dependencies)
+	copy := *input
+	copy.TypeSources = proof
+	return validateInstrumentationMetadataDependencies(&copy, pkg, header, dependencies)
 }
 
 // The physical capture supplies each ImportMap's targets. Independently bound

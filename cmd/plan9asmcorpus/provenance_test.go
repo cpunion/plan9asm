@@ -20,12 +20,13 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 		t.Fatal(err)
 	}
 	return discoveryCorpusProvenance{
-		InstrumentationScopeProtocol: discoveryInstrumentationPlanProtocol,
-		DocumentationSourceProtocol:  discoveryDocumentationProtocol,
-		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
-		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
-		Source:                       discoverySourceIdentity{Revision: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)},
-		LedgerSHA256:                 sha, TranslatorSHA256: strings.Repeat("c", 64), TranslatorRevision: strings.Repeat("a", 40),
+		InstrumentationScopeProtocol:      discoveryInstrumentationPlanProtocol,
+		InstrumentationTypeSourceProtocol: gotoolprofile.InstrumentationTypeSourcesProtocol,
+		DocumentationSourceProtocol:       discoveryDocumentationProtocol,
+		SignatureSourceProtocol:           gotoolprofile.SignatureSourceProtocol,
+		TestDependencySourceProtocol:      gotoolprofile.TestDependencyProtocol,
+		Source:                            discoverySourceIdentity{Revision: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)},
+		LedgerSHA256:                      sha, TranslatorSHA256: strings.Repeat("c", 64), TranslatorRevision: strings.Repeat("a", 40),
 		TranslatorGo: "go1.27.1", GoVersion: "go1.27.1", LLVMVersion: "22.1.8", LLCBinarySHA256: strings.Repeat("d", 64),
 	}
 }
@@ -91,6 +92,10 @@ func TestDiscoveryProvenanceAcceptsEquivalentPRMergeTree(t *testing.T) {
 
 func TestVerifyDiscoveryCorpusReportsRejectsMixedOrStaleProvenance(t *testing.T) {
 	for name, mutate := range map[string]func(*discoveryCorpusProvenance){
+		"missing instrumentation type-source protocol": func(p *discoveryCorpusProvenance) { p.InstrumentationTypeSourceProtocol = "" },
+		"historical instrumentation type-source protocol": func(p *discoveryCorpusProvenance) {
+			p.InstrumentationTypeSourceProtocol = "actual_go_instrumentation_type_sources_v1"
+		},
 		"missing instrumentation scope": func(p *discoveryCorpusProvenance) { p.InstrumentationScopeProtocol = "" },
 		"old instrumentation scope": func(p *discoveryCorpusProvenance) {
 			p.InstrumentationScopeProtocol = discoveryInstrumentationLegacyProtocol

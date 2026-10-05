@@ -21,8 +21,19 @@ import (
 // Go selects the whole graph twice under the registered mode, before and after
 // export compilation; source roots, bytes, exports and tool routing are checked
 // again at the end. No import prefix, export digest or portable JSON authorizes
-// a physical root. Foreign modules and generated/native/embed roles stay closed.
+// a physical root. Foreign modules require their independent v2 source resource;
+// generated/native/embed roles stay closed.
 func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory string, env []string, input *InstrumentationConsumerInput, run Runner) (*InstrumentationTypeSourceProof, error) {
+	modules := []TestModuleSource{}
+	if input != nil && input.TypeSources != nil {
+		modules = input.TypeSources.SourceModules
+	}
+	return CaptureInstrumentationTypeSourcesWithModules(ctx, binary, directory, env, input, modules, run)
+}
+
+func CaptureInstrumentationTypeSourcesWithModules(ctx context.Context, binary, directory string, env []string,
+	input *InstrumentationConsumerInput, modules []TestModuleSource, run Runner,
+) (*InstrumentationTypeSourceProof, error) {
 	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	if ctx == nil || ctx.Err() != nil || run == nil || !filepath.IsAbs(binary) || !filepath.IsAbs(directory) || input == nil || input.Plan == nil {
 		return nil, fmt.Errorf("original type source capture needs a live bounded actual Go invocation")
@@ -31,6 +42,10 @@ func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory st
 		return nil, err
 	}
 	if err := recheckInstrumentationOriginalSources(input.Original); err != nil {
+		return nil, err
+	}
+	moduleGuard, err := BindInstrumentationTypeModuleSources(ctx, binary, directory, env, modules, run)
+	if err != nil {
 		return nil, err
 	}
 	configuration, err := captureInstrumentationInvocationConfig(directory)
@@ -49,11 +64,11 @@ func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory st
 	if err != nil || !instrumentationExportToolsMatch(tools, early.ModeTools) {
 		return nil, fmt.Errorf("original type capture tool routing differs from the registered mode: %v", err)
 	}
-	before, err := captureInstrumentationTypeGraph(ctx, binary, directory, env, input, actual, false, run)
+	before, err := captureInstrumentationTypeGraph(ctx, binary, directory, env, input, actual, false, moduleGuard, run)
 	if err != nil {
 		return nil, err
 	}
-	after, err := captureInstrumentationTypeGraph(ctx, binary, directory, env, input, actual, true, run)
+	after, err := captureInstrumentationTypeGraph(ctx, binary, directory, env, input, actual, true, moduleGuard, run)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +129,9 @@ func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory st
 			return nil, fmt.Errorf("actual original type source/export changed during AST capture")
 		}
 	}
+	if err := moduleGuard.Verify(ctx); err != nil {
+		return nil, err
+	}
 	return proof, ValidateInstrumentationTypeSources(input, proof)
 }
 
@@ -142,9 +160,10 @@ type instrumentationTypeGraph struct {
 	paths     map[string]string
 	files     map[string]map[string]string
 	bytes     int
+	modules   *InstrumentationTypeModuleGuard
 }
 
-func captureInstrumentationTypeGraph(ctx context.Context, binary, directory string, env []string, input *InstrumentationConsumerInput, actual map[string]string, export bool, run Runner) (*instrumentationTypeGraph, error) {
+func captureInstrumentationTypeGraph(ctx context.Context, binary, directory string, env []string, input *InstrumentationConsumerInput, actual map[string]string, export bool, modules *InstrumentationTypeModuleGuard, run Runner) (*instrumentationTypeGraph, error) {
 	flags, err := InstrumentationPackageLoadFlags(input)
 	if err != nil {
 		return nil, err
@@ -159,9 +178,14 @@ func captureInstrumentationTypeGraph(ctx context.Context, binary, directory stri
 		return nil, fmt.Errorf("actual same-mode original type graph failed (not source N/A): %v; %s", err, stderr)
 	}
 	graph := &instrumentationTypeGraph{
-		proof:     &InstrumentationTypeSourceProof{Protocol: instrumentationTypeSourcesProtocol, InputSHA256: instrumentationTypeSourceInputSHA(input), Dependencies: []InstrumentationTypeSourcePackage{}},
+		proof:     &InstrumentationTypeSourceProof{Protocol: instrumentationTypeSourcesProtocol, InputSHA256: instrumentationTypeSourceInputSHA(input), Dependencies: []InstrumentationTypeSourcePackage{}, SourceModules: []TestModuleSource{}},
 		selection: make(map[string]string), hashes: make(map[string]string), paths: make(map[string]string), files: make(map[string]map[string]string),
+		modules: modules,
 	}
+	for _, binding := range modules.bindings {
+		graph.proof.SourceModules = append(graph.proof.SourceModules, binding.source)
+	}
+	SortTestModuleSources(graph.proof.SourceModules)
 	decoder := json.NewDecoder(bytes.NewReader(stdout))
 	seen, rootSeen := make(map[string]bool), false
 	for {
@@ -274,38 +298,52 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 	entry := InstrumentationTypeSourcePackage{Name: pkg.Name, Dependency: InstrumentationDependencyExport{
 		Source: ImportExport{ImportPath: pkg.ImportPath, PackagePath: pkg.ImportPath, SourceRole: "stdlib", GoSHA256: make(map[string]string)}, ImportMap: make(map[string]string)}}
 	root := filepath.Join(actual["GOROOT"], "src")
+	var foreign *instrumentationTypeModuleBinding
 	if pkg.Module != nil {
 		module := pkg.Module
 		if module.Path != input.Original.Module || module.Version != input.Original.Version || module.Main != (input.Original.SourceModule == "") {
-			return entry, fmt.Errorf("original type graph needs an authenticated foreign module source closure")
-		}
-		root = module.Dir
-		source := &entry.Dependency.Source
-		source.ModulePath, source.Version, source.SourceModule, source.SourceVersion, source.SourceRole = module.Path, module.Version, module.Path, module.Version, "module"
-		if module.Main {
-			source.SourceRole = "main"
-		}
-		if module.Replace != nil {
-			replacement := module.Replace
-			if replacement.Path != input.Original.SourceModule || replacement.Version != input.Original.Version || replacement.Replace != nil || replacement.Main || replacement.Version == "" {
-				return entry, fmt.Errorf("original type graph has an unknown/local replacement")
+			var err error
+			foreign, entry.Dependency.Source, err = graph.modules.bindPackage(pkg)
+			if err != nil {
+				return entry, err
 			}
-			root = replacement.Dir
-			source.SourceModule, source.SourceVersion, source.SourceRole = replacement.Path, replacement.Version, "version_replace"
-		} else if input.Original.SourceModule != "" && input.Original.SourceModule != module.Path {
-			return entry, fmt.Errorf("original type graph lost its exact archive namespace replacement")
-		}
-		resolved, err := filepath.EvalSymlinks(root)
-		original, originalErr := filepath.EvalSymlinks(input.Original.SourceRoot)
-		if err != nil || originalErr != nil || resolved != original {
-			return entry, fmt.Errorf("actual imported module root differs from the authenticated original source")
-		}
-		metadata := module.GoMod
-		if module.Replace != nil {
-			metadata = module.Replace.GoMod
-		}
-		if err := graph.retainModuleMetadata(input.Original, entry.Dependency.Source, metadata, resolved); err != nil {
-			return entry, err
+			root, entry.SourceRootID = foreign.root, foreign.source.ID()
+			metadata := module.GoMod
+			if module.Replace != nil {
+				metadata = module.Replace.GoMod
+			}
+			if err := graph.retain(metadata); err != nil {
+				return entry, err
+			}
+		} else {
+			root = module.Dir
+			source := &entry.Dependency.Source
+			source.ModulePath, source.Version, source.SourceModule, source.SourceVersion, source.SourceRole = module.Path, module.Version, module.Path, module.Version, "module"
+			if module.Main {
+				source.SourceRole = "main"
+			}
+			if module.Replace != nil {
+				replacement := module.Replace
+				if replacement.Path != input.Original.SourceModule || replacement.Version != input.Original.Version || replacement.Replace != nil || replacement.Main || replacement.Version == "" {
+					return entry, fmt.Errorf("original type graph has an unknown/local replacement")
+				}
+				root = replacement.Dir
+				source.SourceModule, source.SourceVersion, source.SourceRole = replacement.Path, replacement.Version, "version_replace"
+			} else if input.Original.SourceModule != "" && input.Original.SourceModule != module.Path {
+				return entry, fmt.Errorf("original type graph lost its exact archive namespace replacement")
+			}
+			resolved, err := filepath.EvalSymlinks(root)
+			original, originalErr := filepath.EvalSymlinks(input.Original.SourceRoot)
+			if err != nil || originalErr != nil || resolved != original {
+				return entry, fmt.Errorf("actual imported module root differs from the authenticated original source")
+			}
+			metadata := module.GoMod
+			if module.Replace != nil {
+				metadata = module.Replace.GoMod
+			}
+			if err := graph.retainModuleMetadata(input.Original, entry.Dependency.Source, metadata, resolved); err != nil {
+				return entry, err
+			}
 		}
 	}
 	root, err := filepath.EvalSymlinks(root)
@@ -328,6 +366,23 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 	if goFiles == nil || compiledGoFiles == nil || !reflect.DeepEqual(goFiles, compiledGoFiles) {
 		return entry, fmt.Errorf("original type graph has an unregistered generated compiler source")
 	}
+	if foreign != nil {
+		entry.SFiles = instrumentationTypeNames(pkg.SFiles, directory, root)
+		if entry.SFiles == nil {
+			return entry, fmt.Errorf("foreign assembly lost its actual original source selection")
+		}
+		for _, file := range entry.SFiles {
+			if foreign.source.Sources[file] == "" {
+				return entry, fmt.Errorf("foreign assembly is absent from its original ZIP source inventory")
+			}
+			if err := graph.retain(filepath.Join(root, filepath.FromSlash(file))); err != nil {
+				return entry, err
+			}
+			if graph.hashes[filepath.Join(root, filepath.FromSlash(file))] != foreign.source.Sources[file] {
+				return entry, fmt.Errorf("foreign selected assembly bytes changed")
+			}
+		}
+	}
 	for _, name := range pkg.CompiledGoFiles {
 		if !filepath.IsAbs(name) {
 			name = filepath.Join(directory, name)
@@ -340,7 +395,10 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 			return entry, fmt.Errorf("original imported Go bytes have an unbound source role")
 		}
 		key := filepath.ToSlash(rel)
-		if pkg.Module != nil && input.Original.Sources[key] != graph.hashes[name] {
+		if foreign != nil && foreign.source.Sources[key] != graph.hashes[name] {
+			return entry, fmt.Errorf("foreign Go bytes differ from their independent original ZIP inventory")
+		}
+		if pkg.Module != nil && foreign == nil && input.Original.Sources[key] != graph.hashes[name] {
 			return entry, fmt.Errorf("imported same-module Go bytes differ from the original ZIP inventory")
 		}
 		info, err := os.Stat(name)
@@ -440,6 +498,11 @@ func (graph *instrumentationTypeGraph) retain(name string) error {
 }
 
 func retainInstrumentationRequiredTypeSources(input *InstrumentationConsumerInput, proof *InstrumentationTypeSourceProof, captured *instrumentationTypeGraph) error {
+	for _, module := range proof.SourceModules {
+		for _, header := range module.Headers {
+			captured.bytes += len(header)
+		}
+	}
 	copy := *input
 	copy.TypeSources = proof
 	set := token.NewFileSet()

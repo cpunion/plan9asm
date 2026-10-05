@@ -242,21 +242,21 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			modeEnv := ordinaryProfileEnvironment(env, observation.Early.BaselineFeatures)
 			modeEnv = replaceEnv(modeEnv, observation.Early.Environment)
 			modeEnv = replaceEnv(modeEnv, map[string]string{"GOENV": "off"})
-			args := append([]string{"list", "-mod=mod", "-p=1"}, packagePlan.BuildFlags...)
-			if len(packagePlan.CustomTags) != 0 {
-				args = append(args, "-tags="+strings.Join(packagePlan.CustomTags, ","))
-			}
-			args = append(args, "-export", packagePlan.PackagePath)
-			stdout, stderr, err := gotoolprofile.RunBounded(ctx, dir, modeEnv, binary, args...)
-			if err != nil || len(stderr) != 0 || strings.TrimSpace(string(stdout)) != packagePlan.PackagePath {
-				return fmt.Errorf("prepare actual same-mode original package graph failed: %v; %s; %s", err, stdout, stderr)
-			}
 			needed, err := gotoolprofile.InstrumentationRequiresTypeSources(wrapped)
 			if err != nil {
 				return err
 			}
-			if needed {
-				wrapped.TypeSources, err = gotoolprofile.CaptureInstrumentationTypeSources(ctx, binary, dir, modeEnv, wrapped, gotoolprofile.RunBounded)
+			modules, err := captureDiscoveryInstrumentationTypeModules(ctx, binary, dir, modeEnv, wrapped)
+			if err != nil {
+				return err
+			}
+			var foreignGuard *gotoolprofile.InstrumentationTypeModuleGuard
+			if needed || len(modules) != 0 {
+				foreignGuard, err = gotoolprofile.BindInstrumentationTypeModuleSources(ctx, binary, dir, modeEnv, modules, gotoolprofile.RunBounded)
+				if err != nil {
+					return err
+				}
+				wrapped.TypeSources, err = gotoolprofile.CaptureInstrumentationTypeSourcesWithModules(ctx, binary, dir, modeEnv, wrapped, modules, gotoolprofile.RunBounded)
 				if err != nil {
 					return err
 				}
@@ -320,6 +320,11 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 				return err
 			}
 			outcome.Stage = "physical_readback"
+			if foreignGuard != nil {
+				if err := foreignGuard.Verify(ctx); err != nil {
+					return err
+				}
+			}
 			if err := verifyDiscoveryInstrumentationPhysicalOutputs(filepath.Join(dir, "objects"), outcome.Objects); err != nil {
 				return err
 			}

@@ -24,20 +24,21 @@ type discoverySourceIdentity struct {
 // Keep this value comparable: every shard must describe the same inputs,
 // including the actual translator binary, not merely the same candidate set.
 type discoveryCorpusProvenance struct {
-	InstrumentationScopeProtocol string                  `json:"instrumentation_scope_protocol,omitempty"`
-	DocumentationSourceProtocol  string                  `json:"documentation_source_protocol,omitempty"`
-	SignatureSourceProtocol      string                  `json:"signature_source_protocol,omitempty"`
-	TestDependencySourceProtocol string                  `json:"test_dependency_source_protocol,omitempty"`
-	Source                       discoverySourceIdentity `json:"source"`
-	LedgerSHA256                 string                  `json:"ledger_sha256"`
-	TranslatorSHA256             string                  `json:"translator_sha256"`
-	TranslatorRevision           string                  `json:"translator_revision"`
-	TranslatorModified           bool                    `json:"translator_modified"`
-	TranslatorGo                 string                  `json:"translator_go_version"`
-	GoVersion                    string                  `json:"go_version"`
-	LLVMVersion                  string                  `json:"llvm_version"`
-	LLCBinarySHA256              string                  `json:"llc_binary_sha256"`
-	Invalidated                  string                  `json:"invalidated,omitempty"`
+	InstrumentationScopeProtocol      string                  `json:"instrumentation_scope_protocol,omitempty"`
+	InstrumentationTypeSourceProtocol string                  `json:"instrumentation_type_source_protocol,omitempty"`
+	DocumentationSourceProtocol       string                  `json:"documentation_source_protocol,omitempty"`
+	SignatureSourceProtocol           string                  `json:"signature_source_protocol,omitempty"`
+	TestDependencySourceProtocol      string                  `json:"test_dependency_source_protocol,omitempty"`
+	Source                            discoverySourceIdentity `json:"source"`
+	LedgerSHA256                      string                  `json:"ledger_sha256"`
+	TranslatorSHA256                  string                  `json:"translator_sha256"`
+	TranslatorRevision                string                  `json:"translator_revision"`
+	TranslatorModified                bool                    `json:"translator_modified"`
+	TranslatorGo                      string                  `json:"translator_go_version"`
+	GoVersion                         string                  `json:"go_version"`
+	LLVMVersion                       string                  `json:"llvm_version"`
+	LLCBinarySHA256                   string                  `json:"llc_binary_sha256"`
+	Invalidated                       string                  `json:"invalidated,omitempty"`
 }
 
 var (
@@ -210,6 +211,7 @@ func discoveryBinaryFingerprint(path string) (string, error) {
 func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
 	var p discoveryCorpusProvenance
 	p.InstrumentationScopeProtocol = discoveryInstrumentationPlanProtocol
+	p.InstrumentationTypeSourceProtocol = gotoolprofile.InstrumentationTypeSourcesProtocol
 	p.SignatureSourceProtocol = gotoolprofile.SignatureSourceProtocol
 	p.DocumentationSourceProtocol = discoveryDocumentationProtocol
 	p.TestDependencySourceProtocol = gotoolprofile.TestDependencyProtocol
@@ -287,6 +289,7 @@ func readDiscoveryGoVersion() (string, error) {
 
 func validateDiscoveryProvenance(p discoveryCorpusProvenance, source discoverySourceIdentity, ledgerSHA string) error {
 	if p.InstrumentationScopeProtocol != discoveryInstrumentationPlanProtocol ||
+		p.InstrumentationTypeSourceProtocol != gotoolprofile.InstrumentationTypeSourcesProtocol ||
 		p.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || p.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol ||
 		p.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
 		!discoveryRevisionPattern.MatchString(p.Source.Revision) || !discoverySHA256Pattern.MatchString(p.Source.SHA256) ||

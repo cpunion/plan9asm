@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -53,6 +54,51 @@ func instrumentationForeignFixtureProxy(t *testing.T, root, module, version, dec
 	} {
 		writeInstrumentationFixture(t, directory, version+suffix, contents)
 	}
+}
+
+func instrumentationForeignFixtureResource(t *testing.T, data []byte) TestModuleSource {
+	t.Helper()
+	var download struct{ Path, Version, Dir, Zip, Sum, GoModSum string }
+	if err := json.Unmarshal(data, &download); err != nil {
+		t.Fatal(err)
+	}
+	resource := TestModuleSource{Protocol: TestDependencyModuleProtocol, SourceModule: download.Path, SourceVersion: download.Version,
+		ModuleSum: download.Sum, GoModSum: download.GoModSum, GoModOrigin: TestModuleOriginalGoModOrigin,
+		Sources: make(map[string]string), Headers: make(map[string]string), Directories: make(map[string][]TestSourceEntry)}
+	for _, directory := range []string{".", "model"} {
+		entries, err := os.ReadDir(filepath.Join(download.Dir, directory))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resource.Directories[directory] = []TestSourceEntry{}
+		for _, entry := range entries {
+			member := TestSourceEntry{Name: entry.Name(), Kind: "directory"}
+			if !entry.IsDir() {
+				member.Kind = "file"
+				name := filepath.ToSlash(filepath.Join(directory, entry.Name()))
+				contents, err := os.ReadFile(filepath.Join(download.Dir, filepath.FromSlash(name)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				member.SHA256 = bytesSHA256(contents)
+				resource.Sources[name] = member.SHA256
+				if strings.HasSuffix(name, ".go") || strings.HasSuffix(name, ".s") {
+					resource.Headers[name], err = TestSelectionHeader(name, contents)
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			resource.Directories[directory] = append(resource.Directories[directory], member)
+		}
+	}
+	resource.GoModSHA256 = resource.Sources["go.mod"]
+	var err error
+	resource.ZipSHA256, err = FileSHA256(download.Zip)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resource
 }
 
 func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
@@ -173,7 +219,8 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 			}
 			t.Logf("actual tool=%s sha256=%s graph_sha256=%s argv=%q; first-party file proxy is not a SumDB certificate",
 				binary, marker.Early.BaselineFeatures.DriverSHA256, bytesSHA256(stdout), args)
-			proof, err := CaptureInstrumentationTypeSources(ctx, binary, original.SourceRoot, env, input, RunBounded)
+			resource := instrumentationForeignFixtureResource(t, download)
+			proof, err := CaptureInstrumentationTypeSourcesWithModules(ctx, binary, original.SourceRoot, env, input, []TestModuleSource{resource}, RunBounded)
 			if err != nil {
 				if !strings.Contains(err.Error(), "authenticated foreign module source closure") {
 					t.Fatalf("unexpected actual graph failure: %v", err)
@@ -182,6 +229,87 @@ func TestInstrumentationForeignTypeSourceActualDualModule(t *testing.T) {
 			}
 			if proof == nil {
 				t.Fatal("capture returned no independent source proof")
+			}
+			if len(proof.SourceModules) != 1 || len(proof.Dependencies) != 1 || proof.Dependencies[0].SourceRootID != archive+"@v1.0.0" {
+				t.Fatal("v2 capture omitted the exact source-only foreign resource")
+			}
+			input.TypeSources = proof
+			encoded, err := json.Marshal(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, mutate := range map[string]func(*InstrumentationConsumerInput){
+				"inventory deleted": func(p *InstrumentationConsumerInput) { p.TypeSources.SourceModules = nil },
+				"inventory emptied": func(p *InstrumentationConsumerInput) { p.TypeSources.SourceModules = []TestModuleSource{} },
+				"v1 downgrade": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.Protocol = "actual_go_instrumentation_type_sources_v1"
+				},
+				"resource identity":      func(p *InstrumentationConsumerInput) { p.TypeSources.Dependencies[0].SourceRootID += "-changed" },
+				"foreign source version": func(p *InstrumentationConsumerInput) { p.TypeSources.SourceModules[0].SourceVersion = "v1.0.1" },
+				"Go source removed": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.Dependencies[0].Dependency.Source.GoSHA256 = map[string]string{}
+				},
+				"assembly added": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.Dependencies[0].SFiles = []string{"model/unbound.s"}
+				},
+				"directory truncated": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.SourceModules[0].Directories["model"] = []TestSourceEntry{}
+				},
+				"header deleted": func(p *InstrumentationConsumerInput) {
+					delete(p.TypeSources.SourceModules[0].Headers, "model/layout.go")
+				},
+				"ZIP hash": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.SourceModules[0].ZipSHA256 = strings.Repeat("0", 64)
+				},
+				"module h1": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.SourceModules[0].ModuleSum = "h1:" + strings.Repeat("A", 43) + "="
+				},
+				"metadata h1": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.SourceModules[0].GoModSum = "h1:" + strings.Repeat("A", 43) + "="
+				},
+				"ordinary role": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.Dependencies[0].Dependency.Source.SourceRole = "main"
+				},
+				"actual export": func(p *InstrumentationConsumerInput) {
+					p.TypeSources.Dependencies[0].Dependency.Source.ExportSHA256 = strings.Repeat("0", 64)
+				},
+			} {
+				t.Run(name, func(t *testing.T) {
+					var changed InstrumentationConsumerInput
+					if err := json.Unmarshal(encoded, &changed); err != nil {
+						t.Fatal(err)
+					}
+					mutate(&changed)
+					actual, err := CaptureInstrumentationTypeSources(ctx, binary, original.SourceRoot, env, &changed, RunBounded)
+					if err == nil && reflect.DeepEqual(actual, changed.TypeSources) {
+						t.Fatal("changed foreign resources acquired an independent actual consumer proof")
+					}
+				})
+			}
+			guard, err := BindInstrumentationTypeModuleSources(ctx, binary, original.SourceRoot, env, proof.SourceModules, RunBounded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var downloaded struct{ Dir string }
+			if err := json.Unmarshal(download, &downloaded); err != nil {
+				t.Fatal(err)
+			}
+			foreignFile := filepath.Join(downloaded.Dir, "model", "layout.go")
+			originalBytes, err := os.ReadFile(foreignFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(foreignFile, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(foreignFile, append(originalBytes, []byte("\n// actual post-load mutation\n")...), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := guard.Verify(ctx); err == nil {
+				t.Fatal("live final foreign source guard ignored actual original byte mutation")
+			}
+			if err := os.WriteFile(foreignFile, originalBytes, 0600); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

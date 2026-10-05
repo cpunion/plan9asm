@@ -26,12 +26,13 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	}
 	result.Source.Revision = ""
 	result.Provenance = &discoveryCorpusProvenance{
-		InstrumentationScopeProtocol: original.Provenance.InstrumentationScopeProtocol,
-		DocumentationSourceProtocol:  original.Provenance.DocumentationSourceProtocol,
-		SignatureSourceProtocol:      original.Provenance.SignatureSourceProtocol,
-		TestDependencySourceProtocol: original.Provenance.TestDependencySourceProtocol,
-		GoVersion:                    original.Provenance.GoVersion,
-		TranslatorGo:                 original.Provenance.TranslatorGo,
+		InstrumentationScopeProtocol:      original.Provenance.InstrumentationScopeProtocol,
+		InstrumentationTypeSourceProtocol: original.Provenance.InstrumentationTypeSourceProtocol,
+		DocumentationSourceProtocol:       original.Provenance.DocumentationSourceProtocol,
+		SignatureSourceProtocol:           original.Provenance.SignatureSourceProtocol,
+		TestDependencySourceProtocol:      original.Provenance.TestDependencySourceProtocol,
+		GoVersion:                         original.Provenance.GoVersion,
+		TranslatorGo:                      original.Provenance.TranslatorGo,
 		// Each original already matched the anchored LLVM 22.x.y identity
 		// rule. Only the cross-host contract discards patch differences.
 		LLVMVersion: "22",

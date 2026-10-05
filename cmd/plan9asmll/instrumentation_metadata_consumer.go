@@ -23,6 +23,7 @@ type instrumentationMetadataConsumer struct {
 	Packages         []*packages.Package
 	Metadata         *gotoolprofile.InstrumentationMetadataProof
 	InvocationConfig map[string]string
+	ForeignSources   *gotoolprofile.InstrumentationTypeModuleGuard
 }
 
 func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.InstrumentationConsumerInput, invocation string, env []string, output string, load func(*packages.Config, ...string) ([]*packages.Package, error)) (*instrumentationMetadataConsumer, error) {
@@ -75,6 +76,10 @@ func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.In
 		return nil, err
 	}
 	if input.TypeSources != nil {
+		consumer.ForeignSources, err = gotoolprofile.BindInstrumentationTypeModuleSources(ctx, binary, invocation, modeEnv, input.TypeSources.SourceModules, gotoolprofile.RunBounded)
+		if err != nil {
+			return nil, err
+		}
 		actual, err := gotoolprofile.CaptureInstrumentationTypeSources(ctx, binary, invocation, modeEnv, input, gotoolprofile.RunBounded)
 		if err != nil || !reflect.DeepEqual(actual, input.TypeSources) {
 			return nil, fmt.Errorf("original imported type source input differs from independent actual consumption: %v", err)
@@ -199,6 +204,11 @@ func (consumer *instrumentationMetadataConsumer) reobserve(output string) error 
 func (consumer *instrumentationMetadataConsumer) verifySources() error {
 	if err := consumer.Source.verifySources(); err != nil {
 		return err
+	}
+	if consumer.ForeignSources != nil {
+		if err := consumer.ForeignSources.Verify(consumer.Source.Context); err != nil {
+			return err
+		}
 	}
 	actual, err := gotoolprofile.CaptureInstrumentationInvocationConfig(consumer.Source.WorkDir)
 	if err != nil || !reflect.DeepEqual(actual, consumer.InvocationConfig) {
