@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 const DataOnlyAssemblyProtocol = "actual_go_data_only_symbol_listing_v1"
@@ -98,6 +100,61 @@ func validateDataOnlySymbols(symbols []DataOnlySymbol) error {
 		}
 	}
 	return nil
+}
+
+// ValidateDataOnlySourceSymbols compares the complete parsed source's global
+// identities and sizes with the actual original assembler listing inventory.
+// It neither supplies bytes nor grants a source, object or native-memory role.
+func ValidateDataOnlySourceSymbols(file *plan9asm.File, packagePath string, symbols []DataOnlySymbol) error {
+	if file == nil || len(file.Funcs) != 0 || len(file.Globl) == 0 {
+		return fmt.Errorf("data-only source requires global declarations and no TEXT")
+	}
+	if err := validateDataOnlySymbols(symbols); err != nil {
+		return err
+	}
+	wanted := make(map[string]int64)
+	for _, global := range file.Globl {
+		name := strings.TrimSuffix(global.Sym, "<>")
+		if strings.HasPrefix(name, "·") {
+			name = NativeGoPackagePrefix(packagePath) + name
+		}
+		name = strings.ReplaceAll(strings.ReplaceAll(name, "·", "."), "∕", "/")
+		if strings.HasSuffix(global.Sym, "<>") {
+			name += "<>"
+		}
+		if _, duplicate := wanted[name]; duplicate || global.SizeRaw != "" {
+			return fmt.Errorf("data-only source has duplicate or unresolved GLOBL")
+		}
+		wanted[name] = global.Size
+	}
+	if len(wanted) != len(symbols) {
+		return fmt.Errorf("Go native data symbols differ from translated global declarations")
+	}
+	for _, symbol := range symbols {
+		if size, present := wanted[symbol.Key()]; !present || size != symbol.Size {
+			return fmt.Errorf("Go native data symbol name/size differs from translated GLOBL")
+		}
+	}
+	return nil
+}
+
+// NativeGoPackagePrefix is cmd/asm's byte-level objabi.PathToPrefix spelling,
+// not the LLVM logical symbol namespace and not URL escaping.
+func NativeGoPackagePrefix(packagePath string) string {
+	lastSlash := strings.LastIndexByte(packagePath, '/')
+	const hex = "0123456789abcdef"
+	var prefix strings.Builder
+	for index := 0; index < len(packagePath); index++ {
+		value := packagePath[index]
+		if value <= ' ' || value == '.' && index > lastSlash || value == '%' || value == '"' || value >= 0x7f {
+			prefix.WriteByte('%')
+			prefix.WriteByte(hex[value>>4])
+			prefix.WriteByte(hex[value&0xf])
+		} else {
+			prefix.WriteByte(value)
+		}
+	}
+	return prefix.String()
 }
 
 func ValidateDataOnlyAssembly(input *ConsumerInput, cpp CPPProof, pkg PackageProof) error {

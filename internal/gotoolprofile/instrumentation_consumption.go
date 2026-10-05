@@ -17,7 +17,7 @@ import (
 	"github.com/xgo-dev/plan9asm"
 )
 
-const InstrumentationConsumptionProtocol = "actual_go_instrumentation_llvm_objects_v2"
+const InstrumentationConsumptionProtocol = "actual_go_instrumentation_llvm_objects_v3"
 
 // This standalone proof establishes only the original assembly's LLVM objects.
 // There is no corpus/report hook, candidate PASS, sanitizer runtime or link
@@ -132,7 +132,7 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 	for index, file := range proof.Files {
 		cpp := file.CPP
 		bytes += len(file.ExpandedSource) + len(file.TypedSource)
-		if cpp.File != input.Plan.SFiles[index] || cpp.Emission != "assembly" || cpp.EmptyAssembly != nil || cpp.DataOnlyAssembly != nil || len(cpp.Signatures) != 0 ||
+		if cpp.File != input.Plan.SFiles[index] || len(cpp.Signatures) != 0 ||
 			len(file.ExpandedSource) > AssemblySourceByteLimit || len(file.TypedSource) > AssemblySourceByteLimit || bytes > instrumentationOriginalInventoryLimit ||
 			cpp.ExpandedSHA256 != bytesSHA256([]byte(file.ExpandedSource)) || cpp.TypedExpandedSHA256 != bytesSHA256([]byte(file.TypedSource)) ||
 			cpp.Inputs["module/"+cpp.File] != input.Original.Sources[cpp.File] {
@@ -158,9 +158,9 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 				return fmt.Errorf("mode CPP read an unbound original/header resource")
 			}
 		}
-		parsed, err := plan9asm.ParseWithDefines(arch, file.TypedSource, pkg.Macros.Defines)
-		if err != nil || len(parsed.Funcs) == 0 || len(parsed.Data)+len(parsed.Globl) != 0 || len(file.Declarations) != len(parsed.Funcs) {
-			return fmt.Errorf("mode typed source requires complete ordinary Go function declarations: %v", err)
+		parsed, err := validateInstrumentationAssemblyEmission(input, pkg, file, arch)
+		if err != nil {
+			return err
 		}
 		if err := replayInstrumentationDeclarationLayouts(input, pkg, file.Declarations); err != nil {
 			return err

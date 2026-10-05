@@ -423,16 +423,25 @@ contexts remain failures. All eligible scopes still require the complete
 query/CPP/object chain. All-excluded zero-object candidates remain failed;
 no scope-only success policy is authorized. Queries or markers alone cannot
 satisfy a scope.
-Mode LLVM object consumption uses `actual_go_instrumentation_llvm_objects_v2`
-with mandatory `generated_artifacts` role records. Generated IR and object
+Mode LLVM object consumption uses `actual_go_instrumentation_llvm_objects_v3`
+with mandatory `generated_artifacts` and explicit source-emission role records.
+TEXT (including TEXT+DATA), DATA/GLOBL-only, and symbol-free selected siblings
+are distinct roles. Symbol-free includes an actually selected zero-byte source;
+it is not a zero-byte allowance or a source exclusion. The same-mode original
+assembler must produce a nonempty object and an empty listing for symbol-free,
+or a complete non-TEXT data-symbol listing matching every translated global
+for data-only. These witnesses bind the original source, target, mode profile,
+package, actual Go version and assembler bytes; ordinary observations cannot
+substitute. Every selected eligible sibling still needs its own LLVM object.
+Generated IR and object
 outputs have distinct finite limits: 256 MiB per IR, 64 MiB per object and
 1 GiB across one invocation. Canonical regular files are streamed and guarded
 by exact ordinal, role, byte count and SHA-256 before final physical readback.
 These are output-artifact budgets, not enlarged Go/CPP/module-source limits.
 Source/type/export/CPP and actual LLVM22 compilation proofs remain mandatory;
 queries or uncompiled files receive no object credit. Deleting the role pair
-or restoring the older consumption protocol fails. Historical v1 evidence
-must use its frozen reader and cannot acquire the new artifact contract.
+or restoring the older consumption protocol fails. Historical v1/v2 evidence
+must use its frozen reader and cannot acquire the new source-role contract.
 
 Mode consumers retain a different declared namespace only from complete
 original ZIP `go.mod`
