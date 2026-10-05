@@ -184,7 +184,7 @@ func (state *arm64ControlState) transferGPData(ins Instr) bool {
 		value = arm64ControlUnion(value, arm64ControlLabels(arm64ControlRead(state.regs, arm64ControlBase(reg))))
 	}
 	if len(arm64ControlLabels(value)) != 0 {
-		value["code-derived:"] = true
+		value = arm64ControlWithToken(value, "code-derived:")
 	}
 	for _, reg := range arm64GPDataOutputRegisters(form) {
 		if form.scratch != nil && reg == "R27" && form.destination.Reg != "R27" {

@@ -36,7 +36,7 @@ func (state *arm64ControlState) transferTypedMemory(ins Instr) bool {
 			}
 			if len(arm64ControlLabels(base)) != 0 {
 				scratch = arm64ControlUnion(scratch, arm64ControlLabels(base))
-				scratch["code-derived:"] = true
+				scratch = arm64ControlWithToken(scratch, "code-derived:")
 			}
 		}
 	}
@@ -86,7 +86,7 @@ func (state *arm64ControlState) readMemoryWidth(memory Operand, width int64, gp 
 		}
 	}
 	if len(arm64ControlLabels(value)) != 0 {
-		value["code-derived:"] = true
+		value = arm64ControlWithToken(value, "code-derived:")
 	}
 	return value
 }
@@ -107,7 +107,7 @@ func (state *arm64ControlState) writeMemoryWidth(memory Operand, value arm64Cont
 	taint := arm64ControlLabels(value)
 	if len(taint) != 0 {
 		taint = arm64ControlUnion(taint, arm64ControlExternal())
-		taint["code-derived:"] = true
+		taint = arm64ControlWithToken(taint, "code-derived:")
 		for offset := int64(0); offset < width; offset += 8 {
 			cell := arm64ControlElement(memory, offset)
 			part := state.memoryKey(cell, false)

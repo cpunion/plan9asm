@@ -10,6 +10,9 @@ import (
 // Local code addresses stay opaque LLVM blockaddresses. A reaching-definition proof,
 // not an address comparison, distinguishes local control flow from native calls.
 // Memory provenance is retained only for exactly identified owned frame cells.
+// Values are immutable after publication into a state. Clones and unions may
+// share their token maps; a transform must use arm64ControlWithToken rather
+// than changing a map obtained from another reaching definition.
 type arm64ControlValue map[string]bool
 
 type arm64ControlState struct {
@@ -86,6 +89,15 @@ func arm64ControlRead(values map[Reg]arm64ControlValue, reg Reg) arm64ControlVal
 }
 
 func arm64ControlUnion(left, right arm64ControlValue) arm64ControlValue {
+	// A stable CFG predecessor is common, especially at a helper reached by
+	// many local continuations. Reuse an exact superset instead of copying its
+	// complete target map into every unchanged register and frame cell.
+	if len(left) >= len(right) && arm64ControlSubset(right, left) && arm64ControlCanonical(left) {
+		return left
+	}
+	if len(right) >= len(left) && arm64ControlSubset(left, right) && arm64ControlCanonical(right) {
+		return right
+	}
 	value := make(arm64ControlValue, len(left)+len(right))
 	for token := range left {
 		value[token] = true
@@ -111,6 +123,49 @@ func arm64ControlUnion(left, right arm64ControlValue) arm64ControlValue {
 		}
 	}
 	return value
+}
+
+func arm64ControlSubset(subset, superset arm64ControlValue) bool {
+	for token := range subset {
+		if !superset[token] {
+			return false
+		}
+	}
+	return true
+}
+
+// The old union normalizes false map entries and conflicting affine frame
+// identities even when its two inputs are equal. Such values cannot be reused.
+// A nil input also needs the old non-nil empty-map result.
+func arm64ControlCanonical(value arm64ControlValue) bool {
+	if value == nil {
+		return false
+	}
+	frame := ""
+	for token, present := range value {
+		if !present {
+			return false
+		}
+		if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") {
+			if frame != "" && frame != token {
+				return false
+			}
+			frame = token
+		}
+	}
+	return true
+}
+
+func arm64ControlWithToken(value arm64ControlValue, token string) arm64ControlValue {
+	if value[token] {
+		return value
+	}
+	next := make(arm64ControlValue, len(value)+1)
+	for existing, present := range value {
+		next[existing] = present
+	}
+	next[token] = true
+	return next
 }
 
 func arm64ControlEqual(left, right arm64ControlValue) bool {
@@ -788,7 +843,7 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 			value = arm64ControlUnion(value, arm64ControlLabels(state.source(input, false)))
 		}
 		if len(arm64ControlLabels(value)) != 0 {
-			value["code-derived:"] = true // Multiplication is not a pure PC copy.
+			value = arm64ControlWithToken(value, "code-derived:") // Multiplication is not a pure PC copy.
 		}
 		state.write(destination, value, false)
 		return
@@ -878,7 +933,7 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		if destination.Kind == OpReg && len(value) > 1 {
 			for token := range value {
 				if strings.HasPrefix(token, "label:") {
-					value["code-derived:"] = true
+					value = arm64ControlWithToken(value, "code-derived:")
 					break
 				}
 			}

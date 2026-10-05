@@ -73,6 +73,84 @@ func TestARM64ControlStableMergeDoesNotCopyTargetSets(t *testing.T) {
 	}
 }
 
+func TestARM64ControlSharedUnionMatchesCompleteReference(t *testing.T) {
+	tokens := []string{"", "label:caller", "label:local", "code-derived:", "sp:0", "fp:8"}
+	values := []arm64ControlValue{nil, {}}
+	for mask := 0; mask < 1<<len(tokens); mask++ {
+		value := make(arm64ControlValue)
+		for index, token := range tokens {
+			if mask&(1<<index) != 0 {
+				value[token] = true
+			}
+		}
+		values = append(values, value)
+	}
+	values = append(values,
+		arm64ControlValue{"label:local": false},
+		arm64ControlValue{"sp:0": false, "fp:8": true},
+	)
+	for leftIndex, left := range values {
+		for rightIndex, right := range values {
+			beforeLeft := arm64ControlCopyForTest(left)
+			beforeRight := arm64ControlCopyForTest(right)
+			got := arm64ControlUnion(left, right)
+			want := arm64ControlUnionReference(left, right)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("complete union %d/%d differs: got %v, want %v", leftIndex, rightIndex, got, want)
+			}
+			if !reflect.DeepEqual(left, beforeLeft) || !reflect.DeepEqual(right, beforeRight) {
+				t.Fatalf("union %d/%d changed a predecessor", leftIndex, rightIndex)
+			}
+			derived := arm64ControlWithToken(got, "new-derived-witness")
+			if !derived["new-derived-witness"] || got["new-derived-witness"] ||
+				!reflect.DeepEqual(left, beforeLeft) || !reflect.DeepEqual(right, beforeRight) {
+				t.Fatalf("copy-on-write %d/%d modified a published witness", leftIndex, rightIndex)
+			}
+		}
+	}
+}
+
+func arm64ControlCopyForTest(value arm64ControlValue) arm64ControlValue {
+	if value == nil {
+		return nil
+	}
+	copy := make(arm64ControlValue, len(value))
+	for token, present := range value {
+		copy[token] = present
+	}
+	return copy
+}
+
+func TestARM64ControlSharedValuesDoNotMutatePredecessors(t *testing.T) {
+	caller := arm64ControlValue{"label:caller": true}
+	original := &arm64ControlState{
+		regs: map[Reg]arm64ControlValue{
+			SP: {"sp:0": true}, "R10": caller, "F0": caller,
+		},
+		memory: map[string]arm64ControlValue{"sp:0": caller},
+	}
+	for _, instruction := range []string{
+		"MOVW R10,R11", "MUL R10,R10,R11", "EOR R10,R10,R11",
+		"MOVW (RSP),R11", "VLD1 (RSP),[V0.B16]",
+		"VST1 [V0.B16],16(RSP)",
+	} {
+		t.Run(instruction, func(t *testing.T) {
+			file, err := Parse(ArchARM64, "TEXT sharing(SB),4,$32-0\n"+instruction+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			before := arm64ControlCopyForTest(caller)
+			state := original.clone()
+			ins := file.Funcs[0].Instrs[1]
+			state.transfer(ins, arm64ControlOp(ins), false, nil)
+			if !reflect.DeepEqual(caller, before) || original.regs["R10"]["code-derived:"] ||
+				original.regs["F0"]["code-derived:"] || original.memory["sp:0"]["code-derived:"] {
+				t.Fatalf("instruction %q mutated an original reaching definition: %v", instruction, original)
+			}
+		})
+	}
+}
+
 func arm64ControlSharingCFG(calls int) (Func, error) {
 	var source strings.Builder
 	source.WriteString("TEXT controlFanout(SB),516,$0-0\nMOVD R30,R19\n")
@@ -118,6 +196,40 @@ func TestARM64ControlSharingFirstPartyCFGCompleteTargets(t *testing.T) {
 		if !reachable {
 			t.Fatalf("first-party block %d disappeared from the CFG", index)
 		}
+	}
+}
+
+func TestARM64ControlSharingOriginalGoAndLLVMObjects(t *testing.T) {
+	fn, err := arm64ControlSharingCFG(32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var source strings.Builder
+	for _, instruction := range fn.Instrs {
+		source.WriteString(instruction.Raw + "\n")
+	}
+	// These common scalar/control forms deliberately consume the actual
+	// selected SDK on both lanes, not a current-table-only early-return helper.
+	goAssemblerOracleOutput(t, "arm64", source.String(), "", true)
+	t.Logf("actual Go source-object witness %x", sha256.Sum256([]byte(source.String())))
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, triple := range []string{
+		"aarch64-apple-darwin", "aarch64-unknown-linux-gnu",
+		"aarch64-unknown-linux-musl", "aarch64-pc-windows-msvc",
+	} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(&File{Arch: ArchARM64, Funcs: []Func{fn}}, Options{
+				Goarch: "arm64", TargetTriple: triple,
+				Sigs: map[string]FuncSig{"controlFanout": {Name: "controlFanout", Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "control-sharing.ll", "control-sharing.o", ir)
+		})
 	}
 }
 
