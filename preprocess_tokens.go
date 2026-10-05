@@ -7,7 +7,10 @@ import (
 	"text/scanner"
 )
 
-const ppGoBuildComment rune = -2001
+const (
+	ppGoBuildComment rune = -2001
+	ppGoMacroName    rune = -2002
+)
 
 // CPP operates on tokens, not on independent physical lines. A replacement
 // can open a conditional which its parent closes, or define a macro used by a
@@ -113,6 +116,8 @@ type ppGoInput struct {
 	sawCode    bool
 	includes   int
 	last       ppGoToken
+	text       string
+	peek       *ppGoToken
 }
 
 func (input *ppGoInput) raw() (ppGoToken, error) {
@@ -172,6 +177,15 @@ func (input *ppGoInput) newline(directive string) error {
 }
 
 func (input *ppGoInput) next() (ppGoToken, error) {
+	if input.peek != nil {
+		// Go returns a cached lookahead directly, without macro dispatch,
+		// enabled filtering, or a beginning-of-line update. Its text is the
+		// previous publicly returned token's text, not the raw lookahead's.
+		token := *input.peek
+		input.peek = nil
+		input.text = token.text
+		return token, nil
+	}
 	for nesting := 0; nesting < 100; {
 		token, err := input.raw()
 		if err != nil {
@@ -188,7 +202,8 @@ func (input *ppGoInput) next() (ppGoToken, error) {
 			// Go returns a '#' wisp even for disabled controls. Its parser
 			// uses this to distinguish a header build comment from a late one.
 			input.sawCode = true
-			continue
+			input.text = "#"
+			return token, nil
 		}
 		if token.kind == scanner.Ident {
 			if macro, exists := input.macros[token.value]; exists {
@@ -207,6 +222,7 @@ func (input *ppGoInput) next() (ppGoToken, error) {
 		}
 		input.bol = token.kind == '\n'
 		if input.enabled() {
+			input.text = token.text
 			return token, nil
 		}
 	}
@@ -221,8 +237,12 @@ func (input *ppGoInput) invoke(invocation ppGoToken, macro ppGoMacro) (bool, err
 			return false, err
 		}
 		if opening.kind != '(' {
-			return false, input.push(&ppGoReader{
-				file: opening.file, line: opening.line, tokens: []ppGoToken{opening},
+			opening.text, opening.value = input.text, input.text
+			input.peek = &opening
+			name := ppGoRecordedToken(invocation)
+			name.kind = ppGoMacroName
+			return true, input.push(&ppGoReader{
+				file: opening.file, line: opening.line, tokens: []ppGoToken{name},
 			})
 		}
 		actuals, err := input.arguments(invocation.value, macro.parameters)

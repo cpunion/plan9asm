@@ -52,6 +52,17 @@ func preprocessGoAssembly(src string, options AssemblyPreprocessOptions) (string
 			}
 			break
 		}
+		if token.kind == '#' {
+			// Preserve Input.Next's control-wisp boundary before asking for
+			// another token; cached function-macro lookahead may follow it.
+			continue
+		}
+		if token.kind == ppGoMacroName {
+			// A bare function-like macro is a private Go token, not an
+			// identifier. Relexing its spelling would accept invalid opcodes
+			// and operands which the original assembler rejects.
+			return "", input.errorf("function-like macro %q requires arguments", token.text)
+		}
 		if token.kind == ppGoBuildComment {
 			// Before the parser observes its first non-control token, Go's
 			// diagnostic line is still zero and its errorf suppresses that
