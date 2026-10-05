@@ -38,9 +38,9 @@ by cross-object or Darwin/Rosetta results.
 The bounded generated-artifact protocol and ARM64 opaque incoming save-slot
 oracles are integrated. The independently passing ReedSolomon replay proves its
 own artifact-protocol snapshot, not a later combined source or runtime success.
-The generic raw address-size repair has closed dual-SDK gates and must be
-integrated before final verification; it refuses unbound explicit and implicit
-addresses without granting caller or stack permissions.
+The generic raw address-size repair is integrated after closed dual-SDK gates.
+It refuses unbound explicit and implicit addresses without granting caller or
+stack permissions. Fresh combined-source verification is still required.
 
 Upstream main `e2164ac0` is synchronized locally. Its useful widest X/Y/Z storage
 fix closes a reproduced legacy MOVOU alias failure. Encoding-specific typed
