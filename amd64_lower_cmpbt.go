@@ -72,6 +72,7 @@ func (c *amd64Ctx) setCmpFlagsSized(ty LLVMType, a, b string) {
 	// comparison order: CMP a,b sets flags for a-b.
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = sub %s %s, %s\n", result, ty, a, b)
+	c.setAuxiliaryCarryFlag(ty, a, b, "%"+result)
 	zt := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = icmp eq %s %s, %s\n", zt, ty, a, b)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zt, c.flagsZSlot)

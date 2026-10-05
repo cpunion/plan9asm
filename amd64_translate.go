@@ -327,7 +327,8 @@ exit:
 }
 
 func emitX86SCASHelper(b *strings.Builder, name, typ string, width int) {
-	fmt.Fprintf(b, "define internal { i64, i64, i1 } @%s(i64 %%addr, %s %%needle, i64 %%count, i1 %%backward, i1 %%while_equal) {\n", name, typ)
+	resultType := fmt.Sprintf("{ i64, i64, %s, i1 }", typ)
+	fmt.Fprintf(b, "define internal %s @%s(i64 %%addr, %s %%needle, i64 %%count, i1 %%backward, i1 %%while_equal) {\n", resultType, name, typ)
 	b.WriteString(`entry:
   %step = select i1 %backward, i64 `)
 	fmt.Fprintf(b, "-%d, i64 %d\n", width, width)
@@ -350,18 +351,18 @@ scan:
   %continue = and i1 %repeat_condition, %more
   br i1 %continue, label %loop, label %done
 done:
-  %done0 = insertvalue { i64, i64, i1 } undef, i64 %scan_next, 0
-  %done1 = insertvalue { i64, i64, i1 } %done0, i64 %scan_remaining, 1
-  %done2 = insertvalue { i64, i64, i1 } %done1, i1 %equal, 2
-  ret { i64, i64, i1 } %done2
-empty_exit:
-  %empty0 = insertvalue { i64, i64, i1 } undef, i64 %cur, 0
-  %empty1 = insertvalue { i64, i64, i1 } %empty0, i64 %left, 1
-  %empty2 = insertvalue { i64, i64, i1 } %empty1, i1 false, 2
-  ret { i64, i64, i1 } %empty2
-}
-
 `)
+	fmt.Fprintf(b, "  %%done0 = insertvalue %s undef, i64 %%scan_next, 0\n", resultType)
+	fmt.Fprintf(b, "  %%done1 = insertvalue %s %%done0, i64 %%scan_remaining, 1\n", resultType)
+	fmt.Fprintf(b, "  %%done2 = insertvalue %s %%done1, %s %%value, 2\n", resultType, typ)
+	fmt.Fprintf(b, "  %%done3 = insertvalue %s %%done2, i1 true, 3\n", resultType)
+	fmt.Fprintf(b, "  ret %s %%done3\n", resultType)
+	b.WriteString("empty_exit:\n")
+	fmt.Fprintf(b, "  %%empty0 = insertvalue %s undef, i64 %%cur, 0\n", resultType)
+	fmt.Fprintf(b, "  %%empty1 = insertvalue %s %%empty0, i64 %%left, 1\n", resultType)
+	fmt.Fprintf(b, "  %%empty2 = insertvalue %s %%empty1, %s 0, 2\n", resultType, typ)
+	fmt.Fprintf(b, "  %%empty3 = insertvalue %s %%empty2, i1 false, 3\n", resultType)
+	fmt.Fprintf(b, "  ret %s %%empty3\n}\n\n", resultType)
 }
 
 func emitX86CMPSHelper(b *strings.Builder, name, typ string, width int) {
@@ -706,12 +707,11 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		}
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(0), c.flagsCFSlot)
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(2), c.flagsPFSlot)
+		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(4), c.flagsAFSlot)
 		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(6), c.flagsZSlot)
-		sign := flagBit(7)
-		overflow := c.loadFlag(c.flagsOFSlot)
-		signedLess := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = xor i1 %s, %s\n", signedLess, sign, overflow)
-		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", signedLess, c.flagsSltSlot)
+		// flagsSltSlot represents SF, not the signed condition SF XOR OF.
+		// SAHF changes SF directly and leaves OF untouched.
+		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", flagBit(7), c.flagsSltSlot)
 		return false, nil
 	case "CLC", "STC", "CMC":
 		if len(ins.Args) != 0 {

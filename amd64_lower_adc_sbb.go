@@ -123,6 +123,7 @@ func amd64UnsignedMaximum(bits int) string {
 }
 
 func (c *amd64Ctx) setScalarADCSBBFlags(typ LLVMType, add bool, destination, source, result, carry string) {
+	c.setAuxiliaryCarryFlag(typ, destination, source, result)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", carry, c.flagsCFSlot)
 
 	xorOperands := c.newTmp()

@@ -56,21 +56,41 @@ type x86FlagSlot struct {
 	bit  uint
 }
 
-func (c *amd64Ctx) x86FlagSlots() []x86FlagSlot {
-	flags := []x86FlagSlot{
+func (c *amd64Ctx) x86StatusFlagSlots() []x86FlagSlot {
+	return []x86FlagSlot{
 		{c.flagsCFSlot, 0},
 		{c.flagsPFSlot, 2},
+		{c.flagsAFSlot, 4},
 		{c.flagsZSlot, 6},
 		{c.flagsSltSlot, 7},
+		{c.flagsOFSlot, 11},
 	}
+}
+
+func (c *amd64Ctx) x86FlagSlots() []x86FlagSlot {
+	flags := c.x86StatusFlagSlots()
 	if c.directionSlot != "" {
 		flags = append(flags, x86FlagSlot{c.directionSlot, 10})
 	}
-	flags = append(flags, x86FlagSlot{c.flagsOFSlot, 11})
 	if c.flagsIDSlot != "" {
 		flags = append(flags, x86FlagSlot{c.flagsIDSlot, 21})
 	}
 	return flags
+}
+
+// The carry/borrow into bit 4 equals bit 4 of a XOR b XOR result. The final
+// result includes any ADC/SBB carry input, so the same width-independent rule
+// covers binary arithmetic, comparison, unary increment/decrement and exchange.
+func (c *amd64Ctx) setAuxiliaryCarryFlag(typ LLVMType, a, b, result string) {
+	xorOperands := c.newTmp()
+	xorResult := c.newTmp()
+	bit := c.newTmp()
+	flag := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = xor %s %s, %s\n", xorOperands, typ, a, b)
+	fmt.Fprintf(c.b, "  %%%s = xor %s %%%s, %s\n", xorResult, typ, xorOperands, result)
+	fmt.Fprintf(c.b, "  %%%s = and %s %%%s, 16\n", bit, typ, xorResult)
+	fmt.Fprintf(c.b, "  %%%s = icmp ne %s %%%s, 0\n", flag, typ, bit)
+	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", flag, c.flagsAFSlot)
 }
 
 func (c *amd64Ctx) packX86Flags() string {

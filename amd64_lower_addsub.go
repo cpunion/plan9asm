@@ -157,6 +157,7 @@ func amd64ScalarAddSubImmediateInt64(immediate int64, bits int) int64 {
 }
 
 func (c *amd64Ctx) setScalarAddSubFlags(typ LLVMType, add bool, destination, source, result string) {
+	c.setAuxiliaryCarryFlag(typ, destination, source, result)
 	carry := c.newTmp()
 	if add {
 		fmt.Fprintf(c.b, "  %%%s = icmp ult %s %s, %s\n", carry, typ, result, destination)

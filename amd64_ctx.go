@@ -55,9 +55,10 @@ type amd64Ctx struct {
 	x87Mode           X87Mode
 
 	flagsZSlot     string
-	flagsSltSlot   string // signed negative-style bit for J{L,LE,G,GE}-like checks
+	flagsSltSlot   string // architectural SF; signed conditions combine it with OF
 	flagsCFSlot    string // carry/borrow style bit for J{B,BE,A,AE,NC,C}-like checks
 	flagsPFSlot    string // parity bit for J{P,PE,PS,NP,PO,PC}-like checks
+	flagsAFSlot    string // auxiliary carry/borrow from bit 3, exposed by LAHF/PUSHF
 	flagsOFSlot    string // overflow-style bit used by ADOX carry chain modeling
 	flagsIDSlot    string // CPUID ID bit preserved by native-width flags stack forms
 	flagsWritten   bool
@@ -549,6 +550,7 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	c.flagsSltSlot = "%flags_slt"
 	c.flagsCFSlot = "%flags_cf"
 	c.flagsPFSlot = "%flags_pf"
+	c.flagsAFSlot = "%flags_af"
 	c.flagsOFSlot = "%flags_of"
 	c.directionSlot = "%direction_backward"
 	c.flagsIDSlot = "%flags_id"
@@ -560,6 +562,8 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsPFSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
+	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsAFSlot)
+	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsAFSlot)
 	fmt.Fprintf(c.b, "  %s = alloca i1\n", c.flagsOFSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
 	if c.flagsIDSlot != "" {

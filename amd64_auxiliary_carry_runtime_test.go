@@ -185,37 +185,82 @@ const x86AuxiliaryCReference = `
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-typedef void (*kernel)(uint8_t *,uint64_t,uint64_t,uint64_t);
-static int check(kernel fn,const char *op,int width,int form,uint64_t a,uint64_t b,uint64_t seed) {
- _Alignas(8) uint8_t out[64];memset(out,0xa7,sizeof(out));fn(out,a,b,seed);
- uint64_t want=seed&0x8d5;
- if(width && !((!strcmp(op,"CMPS") || !strcmp(op,"SCAS")) && form)) {
-  uint64_t mask=width==64?UINT64_MAX:(UINT64_C(1)<<width)-1;a&=mask;b&=mask;
-  if(form==3)b=1;
-  unsigned carry=!strcmp(op,"ADC")||!strcmp(op,"SBB")?seed&1:0;
-  int add=!strcmp(op,"ADD")||!strcmp(op,"ADC")||!strcmp(op,"INC")||!strcmp(op,"XADD");
-  if(!strcmp(op,"INC")||!strcmp(op,"DEC"))b=1;
-  if(!strcmp(op,"NEG")){b=a;a=0;}
-  if(!strcmp(op,"CMPXCHG")){uint64_t swap=a;a=b;b=swap;}
-  __uint128_t wide=add?(__uint128_t)a+b+carry:(__uint128_t)a-b-carry;
-  uint64_t result=(uint64_t)wide&mask;
-  unsigned cf=add?wide>mask:(__uint128_t)a<(__uint128_t)b+carry;
-  unsigned af=add?(a&15)+(b&15)+carry>15:(a&15)<(b&15)+carry;
-  uint64_t sign=UINT64_C(1)<<(width-1);
-  unsigned of=(add?(~(a^b)&(a^result)):(a^b)&(a^result))&sign?1:0;
-  if(!strcmp(op,"INC")||!strcmp(op,"DEC"))cf=seed&1;
-  unsigned ones=0;for(unsigned i=0;i<8;i++)ones+=(result>>i)&1;
-  want=cf|((ones%2==0)<<2)|(af<<4)|((result==0)<<6)|((!!(result&sign))<<7)|(of<<11);
+typedef void (*kernel)(uint8_t *, uint64_t, uint64_t, uint64_t);
+
+static int check(kernel fn, const char *op, int width, int form,
+                 uint64_t a, uint64_t b, uint64_t seed) {
+ _Alignas(8) uint8_t out[64];
+ memset(out, 0xa7, sizeof(out));
+ fn(out, a, b, seed);
+
+ uint64_t want = seed & 0x8d5;
+ if (width && !((!strcmp(op, "CMPS") || !strcmp(op, "SCAS")) && form)) {
+  uint64_t mask = width == 64 ? UINT64_MAX : (UINT64_C(1) << width) - 1;
+  a &= mask;
+  b &= mask;
+  if (form == 3) {
+   b = 1;
+  }
+  unsigned carry = !strcmp(op, "ADC") || !strcmp(op, "SBB") ? seed & 1 : 0;
+  int add = !strcmp(op, "ADD") || !strcmp(op, "ADC") ||
+            !strcmp(op, "INC") || !strcmp(op, "XADD");
+  if (!strcmp(op, "INC") || !strcmp(op, "DEC")) {
+   b = 1;
+  }
+  if (!strcmp(op, "NEG")) {
+   b = a;
+   a = 0;
+  }
+  if (!strcmp(op, "CMPXCHG")) {
+   uint64_t swap = a;
+   a = b;
+   b = swap;
+  }
+
+  __uint128_t wide = add ? (__uint128_t)a + b + carry : (__uint128_t)a - b - carry;
+  uint64_t result = (uint64_t)wide & mask;
+  unsigned cf = add ? wide > mask : (__uint128_t)a < (__uint128_t)b + carry;
+  unsigned af = add ? (a & 15) + (b & 15) + carry > 15 : (a & 15) < (b & 15) + carry;
+  uint64_t sign = UINT64_C(1) << (width - 1);
+  unsigned of = (add ? (~(a ^ b) & (a ^ result)) : (a ^ b) & (a ^ result)) & sign ? 1 : 0;
+  if (!strcmp(op, "INC") || !strcmp(op, "DEC")) {
+   cf = seed & 1;
+  }
+  unsigned ones = 0;
+  for (unsigned i = 0; i < 8; i++) {
+   ones += (result >> i) & 1;
+  }
+  want = cf | ((ones % 2 == 0) << 2) | (af << 4) | ((result == 0) << 6) |
+         ((!!(result & sign)) << 7) | (of << 11);
  }
- uint64_t flags;memcpy(&flags,out+24,8);flags&=0x8d5;
- if(flags!=want||out[32]!=((want&255)|2)) {
-  fprintf(stderr,"%s width=%d form=%d flags=%llx lahf=%x want=%llx\n",op,width,form,(unsigned long long)flags,out[32],(unsigned long long)want);return 1;
+
+ uint64_t flags;
+ memcpy(&flags, out + 24, 8);
+ flags &= 0x8d5;
+ if (flags != want || out[32] != ((want & 255) | 2)) {
+  fprintf(stderr, "%s width=%d form=%d flags=%llx lahf=%x want=%llx\n",
+          op, width, form, (unsigned long long)flags, out[32], (unsigned long long)want);
+  return 1;
  }
- unsigned bits[]={0,2,6,7,11};
- for(unsigned i=0;i<5;i++)if(out[33+i]!=((want>>bits[i])&1))return 2;
- if(out[38]!=(((want>>7)^(want>>11))&1))return 3;
- for(unsigned i=16;i<24;i++)if(out[i]!=0xa7)return 4;
- for(unsigned i=39;i<64;i++)if(out[i]!=0xa7)return 5;
+ unsigned bits[] = {0, 2, 6, 7, 11};
+ for (unsigned i = 0; i < 5; i++) {
+  if (out[33+i] != ((want >> bits[i]) & 1)) {
+   return 2;
+  }
+ }
+ if (out[38] != (((want >> 7) ^ (want >> 11)) & 1)) {
+  return 3;
+ }
+ for (unsigned i = 16; i < 24; i++) {
+  if (out[i] != 0xa7) {
+   return 4;
+  }
+ }
+ for (unsigned i = 39; i < 64; i++) {
+  if (out[i] != 0xa7) {
+   return 5;
+  }
+ }
  return 0;
 }
 `
@@ -234,11 +279,22 @@ func TestCrossLinuxRuntimeMatrixX86AuxiliaryCarryLLVM(t *testing.T) {
 	}
 	main := x86AuxiliaryCReference + declarations.String() + `
 int main(void) {
- const uint64_t edges[]={0,1,15,16,17,127,128,255,256,32767,32768,65535,0x7fffffff,0x80000000,0xffffffff,0x7fffffffffffffff,0x8000000000000000,UINT64_MAX};
- for(unsigned s=0;s<2;s++)for(unsigned i=0;i<292;i++) {
-  uint64_t seed=s?0x8d5:0,a,b;
-  if(i<256){a=i/16;b=i%16;}else{a=edges[(i-256)/2];b=edges[((i-256)/2+(i%2?7:1))%18];}
-` + checks.String() + "}\nreturn 0;\n}\n"
+ const uint64_t edges[] = {
+  0, 1, 15, 16, 17, 127, 128, 255, 256, 32767, 32768, 65535,
+  0x7fffffff, 0x80000000, 0xffffffff, 0x7fffffffffffffff,
+  0x8000000000000000, UINT64_MAX
+ };
+ for (unsigned s = 0; s < 2; s++) {
+  for (unsigned i = 0; i < 292; i++) {
+   uint64_t seed = s ? 0x8d5 : 0, a, b;
+   if (i < 256) {
+    a = i / 16;
+    b = i % 16;
+   } else {
+    a = edges[(i-256)/2];
+    b = edges[((i-256)/2 + (i%2 ? 7 : 1))%18];
+   }
+` + checks.String() + "  }\n }\n return 0;\n}\n"
 	for _, optimized := range []bool{false, true} {
 		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
 			ir, err := Translate(file, x86AuxiliaryOptions("amd64", triple, cases))
