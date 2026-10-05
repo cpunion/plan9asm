@@ -134,14 +134,15 @@ func TestInstrumentationAssemblyEmissionRolesActualObjects(t *testing.T) {
 			}
 			if test.emission != "assembly" {
 				for name, mutate := range map[string]func(*gotoolprofile.EmptyAssemblyProof){
-					"source":                func(p *gotoolprofile.EmptyAssemblyProof) { p.SourceSHA256 = strings.Repeat("0", 64) },
-					"file":                  func(p *gotoolprofile.EmptyAssemblyProof) { p.File = "unknown.s" },
-					"package":               func(p *gotoolprofile.EmptyAssemblyProof) { p.PackagePath += "/foreign" },
-					"ordinary profile":      func(p *gotoolprofile.EmptyAssemblyProof) { p.ProfileID = input.Original.ID },
-					"target":                func(p *gotoolprofile.EmptyAssemblyProof) { p.Target = "linux/amd64" },
-					"Go version":            func(p *gotoolprofile.EmptyAssemblyProof) { p.GoVersion = "go1.27.999" },
-					"asm tool":              func(p *gotoolprofile.EmptyAssemblyProof) { p.AsmToolSHA256 = strings.Repeat("0", 64) },
-					"missing native object": func(p *gotoolprofile.EmptyAssemblyProof) { p.ObjectSHA256 = "" },
+					"source":                    func(p *gotoolprofile.EmptyAssemblyProof) { p.SourceSHA256 = strings.Repeat("0", 64) },
+					"file":                      func(p *gotoolprofile.EmptyAssemblyProof) { p.File = "unknown.s" },
+					"package":                   func(p *gotoolprofile.EmptyAssemblyProof) { p.PackagePath += "/foreign" },
+					"ordinary profile":          func(p *gotoolprofile.EmptyAssemblyProof) { p.ProfileID = input.Original.ID },
+					"target":                    func(p *gotoolprofile.EmptyAssemblyProof) { p.Target = "linux/amd64" },
+					"Go version":                func(p *gotoolprofile.EmptyAssemblyProof) { p.GoVersion = "go1.27.999" },
+					"asm tool":                  func(p *gotoolprofile.EmptyAssemblyProof) { p.AsmToolSHA256 = strings.Repeat("0", 64) },
+					"missing native object":     func(p *gotoolprofile.EmptyAssemblyProof) { p.ObjectSHA256 = "" },
+					"known empty native object": func(p *gotoolprofile.EmptyAssemblyProof) { p.ObjectSHA256 = featureBytesSHA256(nil) },
 					"contradictory listing": func(p *gotoolprofile.EmptyAssemblyProof) {
 						if test.emission == "symbol_free" {
 							p.ListingSHA256 = strings.Repeat("0", 64)

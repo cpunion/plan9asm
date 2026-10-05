@@ -22,6 +22,7 @@ func ValidateEmptyAssembly(input *ConsumerInput, cpp CPPProof, pkg PackageProof)
 		proof.Target != input.Observed.Target || proof.GoVersion != input.Observed.GoVersion ||
 		proof.AsmToolSHA256 != input.Observed.ToolBinarySHA256["asm"] ||
 		!discoverySHA256Pattern.MatchString(proof.ObjectSHA256) ||
+		proof.ObjectSHA256 == bytesSHA256(nil) ||
 		proof.ListingSHA256 != bytesSHA256(nil) {
 		return fmt.Errorf("empty assembly evidence differs from its actual Go/source/package/profile scope")
 	}

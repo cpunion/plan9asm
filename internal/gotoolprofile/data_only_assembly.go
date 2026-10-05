@@ -173,6 +173,7 @@ func ValidateDataOnlyAssembly(input *ConsumerInput, cpp CPPProof, pkg PackagePro
 		native.Target != input.Observed.Target || native.GoVersion != input.Observed.GoVersion ||
 		native.AsmToolSHA256 != input.Observed.ToolBinarySHA256["asm"] ||
 		!discoverySHA256Pattern.MatchString(native.ObjectSHA256) ||
+		native.ObjectSHA256 == bytesSHA256(nil) ||
 		!discoverySHA256Pattern.MatchString(native.ListingSHA256) || native.ListingSHA256 == bytesSHA256(nil) {
 		return fmt.Errorf("data-only evidence differs from its actual Go/source/package/profile scope")
 	}
