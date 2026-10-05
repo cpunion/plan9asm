@@ -173,6 +173,26 @@ func TestPreprocessAssemblyInstructionEOFActualGo(t *testing.T) {
 	})
 }
 
+func TestPreprocessAssemblyFunctionMacroLookaheadActualGo(t *testing.T) {
+	const program = "TEXT ·Probe(SB),$0-0\nRET\n"
+	for _, test := range []struct {
+		name, source string
+		accepted     bool
+	}{
+		{"bare-opcode", "#define RET(x) x\n" + program, false},
+		{"bare-register", "#define AX(x) x\nTEXT ·Probe(SB),$0-0\nMOVQ $42, AX\nRET\n", false},
+		{"inactive-newline", "#define F(x) x\n#ifdef ABSENT\nF\n#endif\n" + program, false},
+		{"inactive-punctuation", "#define F(x) x\n#ifdef ABSENT\nF +\n#endif\n" + program, false},
+		{"invoked-control", "#define EMIT(x) x\nTEXT ·Probe(SB),$0-0\nEMIT(RET)\n", true},
+		{"inactive-invoked-control", "#define F() RET\n#ifdef ABSENT\nF()\n#endif\n" + program, true},
+		{"ordinary-identifier-control", "#define F(x) x\n" + program, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ppSemanticCompareAcceptance(t, test.source, test.accepted)
+		})
+	}
+}
+
 func TestPreprocessAssemblyCanonicalIncludeActualGo(t *testing.T) {
 	const marker = "DATA ·value(SB)/4,$VALUE\nGLOBL ·value(SB),8,$4\n"
 	for _, spelling := range []string{"x·h", "x∕h"} {
