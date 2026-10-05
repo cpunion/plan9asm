@@ -423,6 +423,17 @@ contexts remain failures. All eligible scopes still require the complete
 query/CPP/object chain. All-excluded zero-object candidates remain failed;
 no scope-only success policy is authorized. Queries or markers alone cannot
 satisfy a scope.
+Mode LLVM object consumption uses `actual_go_instrumentation_llvm_objects_v2`
+with mandatory `generated_artifacts` role records. Generated IR and object
+outputs have distinct finite limits: 256 MiB per IR, 64 MiB per object and
+1 GiB across one invocation. Canonical regular files are streamed and guarded
+by exact ordinal, role, byte count and SHA-256 before final physical readback.
+These are output-artifact budgets, not enlarged Go/CPP/module-source limits.
+Source/type/export/CPP and actual LLVM22 compilation proofs remain mandatory;
+queries or uncompiled files receive no object credit. Deleting the role pair
+or restoring the older consumption protocol fails. Historical v1 evidence
+must use its frozen reader and cannot acquire the new artifact contract.
+
 Mode consumers retain a different declared namespace only from complete
 original ZIP `go.mod`
 bytes bound to its registered member SHA. The actual version replacement,

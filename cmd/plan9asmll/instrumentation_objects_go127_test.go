@@ -43,6 +43,16 @@ func TestInstrumentationObjectsRequireIndependentModeMetadataAndActualLLVM(t *te
 		t.Fatal("mode object proof was accepted by an ordinary translation reader")
 	}
 	for name, mutate := range map[string]func(*gotoolprofile.InstrumentationConsumptionProof){
+		"old artifact consumer": func(p *gotoolprofile.InstrumentationConsumptionProof) {
+			p.Protocol = "actual_go_instrumentation_llvm_objects_v1"
+		},
+		"deleted artifact role": func(p *gotoolprofile.InstrumentationConsumptionProof) { p.Files[0].Artifacts = nil },
+		"paired role downgrade": func(p *gotoolprofile.InstrumentationConsumptionProof) {
+			p.Protocol = "actual_go_instrumentation_llvm_objects_v1"
+			p.Files[0].Artifacts = nil
+		},
+		"source artifact role":      func(p *gotoolprofile.InstrumentationConsumptionProof) { p.Files[0].Artifacts.IR.Role = "module_source" },
+		"changed artifact bytes":    func(p *gotoolprofile.InstrumentationConsumptionProof) { p.Files[0].Artifacts.IR.Bytes = 0 },
 		"foreign target triple":     func(p *gotoolprofile.InstrumentationConsumptionProof) { p.LLVM.Triple = "aarch64-unknown-linux-gnu" },
 		"ordinary protocol":         func(p *gotoolprofile.InstrumentationConsumptionProof) { p.Protocol = gotoolprofile.ConsumerProtocol },
 		"ordinary ID":               func(p *gotoolprofile.InstrumentationConsumptionProof) { p.ModeProfileID = input.Original.ID },

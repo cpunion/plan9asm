@@ -68,6 +68,8 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 	}
 	pkg, selected := consumer.Packages[0], consumer.Metadata.Selection.Packages[0]
 	resolve := resolveSymFunc(pkg.PkgPath)
+	artifactBudget := &gotoolprofile.InstrumentationLLVMArtifactBudget{}
+	consumer.ArtifactRoot = output
 	for index, name := range plan.SFiles {
 		if err := consumer.verifySources(); err != nil {
 			return nil, nil, err
@@ -111,21 +113,17 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 		if err := translateAndCompileModule(file, triple, goarch, task, false, cfg, resolve, sigs); err != nil {
 			return nil, nil, err
 		}
-		irSHA, err := gotoolprofile.FileSHA256(ll)
+		artifacts, err := gotoolprofile.CaptureInstrumentationLLVMArtifacts(output, index, artifactBudget)
 		if err != nil {
 			return nil, nil, err
 		}
-		objectSHA, err := gotoolprofile.FileSHA256(strings.TrimSuffix(ll, ".ll") + ".o")
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := consumer.Source.retainGeneratedGuard(map[string]string{ll: irSHA, strings.TrimSuffix(ll, ".ll") + ".o": objectSHA}); err != nil {
-			return nil, nil, err
-		}
+		irSHA, objectSHA := artifacts.IR.SHA256, artifacts.Object.SHA256
+		consumer.Artifacts = append(consumer.Artifacts, *artifacts)
 		proof.Files = append(proof.Files, gotoolprofile.InstrumentationAssemblyFile{
 			CPP:            gotoolprofile.CPPProof{File: name, Emission: "assembly", Inputs: inputs, ExpandedSHA256: featureBytesSHA256(expanded), TypedExpandedSHA256: featureBytesSHA256(typed)},
 			ExpandedSource: string(expanded), TypedSource: string(typed), InputContents: contents, Declarations: decls,
-			Output: gotoolprofile.OutputProof{File: name, Part: filepath.Base(ll), IR: irSHA, Object: objectSHA},
+			Output:    gotoolprofile.OutputProof{File: name, Part: filepath.Base(ll), IR: irSHA, Object: objectSHA},
+			Artifacts: artifacts,
 		})
 		after, afterInputs, err := consumer.Source.preprocessCPPWithHeader(asm, pkg.PkgPath, selected.Macros.Defines, func() ([]byte, error) {
 			return gotoolprofile.CanonicalGeneratedHeader(consumer.Metadata.Headers[0].Header.Definitions)

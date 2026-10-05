@@ -399,20 +399,18 @@ func readDiscoveryInstrumentationInvocation(file string, input *gotoolprofile.In
 }
 
 func verifyDiscoveryInstrumentationPhysicalOutputs(root string, proof *gotoolprofile.InstrumentationInvocationProof) error {
+	if proof == nil || proof.Consumption == nil || proof.Consumption.Protocol != gotoolprofile.InstrumentationConsumptionProtocol {
+		return fmt.Errorf("mode physical readback lacks its independent object proof")
+	}
+	budget := &gotoolprofile.InstrumentationLLVMArtifactBudget{}
 	for index, file := range proof.Consumption.Files {
-		part := fmt.Sprintf("instrumented-%04d.ll", index)
-		if file.Output.Part != part {
-			return fmt.Errorf("mode object changed its exact output ordinal")
+		actual, err := gotoolprofile.CaptureInstrumentationLLVMArtifacts(root, index, budget)
+		if err != nil {
+			return err
 		}
-		for name, expected := range map[string]string{part: file.Output.IR, strings.TrimSuffix(part, ".ll") + ".o": file.Output.Object} {
-			physical, err := gotoolprofile.CPPRegularSource(root, name)
-			if err != nil {
-				return err
-			}
-			digest, err := gotoolprofile.FileSHA256(physical)
-			if err != nil || digest != expected {
-				return fmt.Errorf("mode physical LLVM IR/object is missing or differs from its strict result: %v", err)
-			}
+		if !reflect.DeepEqual(actual, file.Artifacts) || file.Output.IR != actual.IR.SHA256 ||
+			file.Output.Object != actual.Object.SHA256 || file.Output.Part != actual.IR.Name {
+			return fmt.Errorf("mode physical LLVM artifacts differ from their exact role/result")
 		}
 	}
 	return nil

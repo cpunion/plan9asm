@@ -17,7 +17,7 @@ import (
 	"github.com/xgo-dev/plan9asm"
 )
 
-const InstrumentationConsumptionProtocol = "actual_go_instrumentation_llvm_objects_v1"
+const InstrumentationConsumptionProtocol = "actual_go_instrumentation_llvm_objects_v2"
 
 // This standalone proof establishes only the original assembly's LLVM objects.
 // There is no corpus/report hook, candidate PASS, sanitizer runtime or link
@@ -46,6 +46,7 @@ type InstrumentationAssemblyFile struct {
 	Declarations   []InstrumentationDeclarationProof `json:"actual_go_declarations"`
 	InputContents  map[string]string                 `json:"active_cpp_input_contents"`
 	Output         OutputProof                       `json:"output"`
+	Artifacts      *InstrumentationLLVMArtifacts     `json:"generated_artifacts"`
 }
 
 type InstrumentationDeclarationProof struct {
@@ -127,6 +128,7 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 		return err
 	}
 	bytes := 0
+	artifactBudget := &InstrumentationLLVMArtifactBudget{}
 	for index, file := range proof.Files {
 		cpp := file.CPP
 		bytes += len(file.ExpandedSource) + len(file.TypedSource)
@@ -190,6 +192,9 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 		if output.File != cpp.File || path.Base(output.Part) != output.Part || !strings.HasSuffix(output.Part, ".ll") ||
 			!discoverySHA256Pattern.MatchString(output.IR) || !discoverySHA256Pattern.MatchString(output.Object) {
 			return fmt.Errorf("mode consumption lacks its actual same-file LLVM IR/object")
+		}
+		if err := ValidateInstrumentationLLVMArtifacts(index, output, file.Artifacts, artifactBudget); err != nil {
+			return err
 		}
 	}
 	return nil

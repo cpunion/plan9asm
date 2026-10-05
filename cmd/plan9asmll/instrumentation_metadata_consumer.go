@@ -24,6 +24,8 @@ type instrumentationMetadataConsumer struct {
 	Metadata         *gotoolprofile.InstrumentationMetadataProof
 	InvocationConfig map[string]string
 	ForeignSources   *gotoolprofile.InstrumentationTypeModuleGuard
+	ArtifactRoot     string
+	Artifacts        []gotoolprofile.InstrumentationLLVMArtifacts
 }
 
 func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.InstrumentationConsumerInput, invocation string, env []string, output string, load func(*packages.Config, ...string) ([]*packages.Package, error)) (*instrumentationMetadataConsumer, error) {
@@ -208,6 +210,16 @@ func (consumer *instrumentationMetadataConsumer) verifySources() error {
 	if consumer.ForeignSources != nil {
 		if err := consumer.ForeignSources.Verify(consumer.Source.Context); err != nil {
 			return err
+		}
+	}
+	budget := &gotoolprofile.InstrumentationLLVMArtifactBudget{}
+	for index := range consumer.Artifacts {
+		if err := consumer.Source.Context.Err(); err != nil {
+			return err
+		}
+		actual, err := gotoolprofile.CaptureInstrumentationLLVMArtifacts(consumer.ArtifactRoot, index, budget)
+		if err != nil || !reflect.DeepEqual(actual, &consumer.Artifacts[index]) {
+			return fmt.Errorf("mode generated LLVM artifact changed before final consumption: %v", err)
 		}
 	}
 	actual, err := gotoolprofile.CaptureInstrumentationInvocationConfig(consumer.Source.WorkDir)
