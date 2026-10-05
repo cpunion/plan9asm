@@ -17,23 +17,81 @@ const (
 // subtract family: legacy yxm XMM forms and the shared _yvandnpd VEX/EVEX
 // forms, including the 386 frontend's narrower EVEX surface.
 func (c *amd64Ctx) lowerPackedIntegerSubtract(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	laneBits, mode, vector, recognized := amd64PackedSubtractProperties(baseOp)
-	if !recognized {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, _, _, known := amd64PackedSubtractProperties(base); !known {
 		return false, false, nil
 	}
-	if !vector {
-		if suffix != "" {
-			return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
-		}
-		return c.lowerLegacyPackedIntegerSubtract(baseOp, laneBits, mode, ins)
+	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != strings.ToUpper(string(op)) {
+		return true, false, fmt.Errorf("packed subtract dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	return c.lowerVectorPackedIntegerSubtract(baseOp, suffix, laneBits, mode, ins)
+	ins.Op = op
+	form, known, err := x86PackedSubtractProperties(ins, c.goarch)
+	if err != nil || !known {
+		return known, false, err
+	}
+	first := ins.Args[form.first]
+	if form.legacy && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+		}
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy packed subtract needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
+		}
+	}
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
+	bits := form.laneBits
+	lanes := form.byteWidth * 8 / bits
+	second, err := c.loadPackedCompareLanes(ins.Args[form.second], form.byteWidth, bits, false)
+	if err != nil {
+		return true, false, err
+	}
+	var mask, value string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	if form.legacy && form.memory >= 0 {
+		mnemonic := strings.ToLower(base)
+		if base == "PSUBL" {
+			mnemonic = "psubd"
+		}
+		value, err = c.emitPackedBinaryNativeMemory(first, bits, second, mnemonic)
+	} else {
+		// Go's EVEX subtract rows are E4, not E4NF. Preserve every active
+		// source access even for dead outputs, and suppress inactive lanes.
+		input, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, form.broadcast, mask)
+		err = loadErr
+		if err == nil {
+			value = c.emitPackedIntegerSubtract(lanes, bits, input, second, form.mode)
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
+	destination := ins.Args[form.destination]
+	if form.mask >= 0 {
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
+	}
+	out := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+	}
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func amd64PackedSubtractProperties(op string) (laneBits int, mode amd64PackedSubtractMode, vector, ok bool) {
@@ -73,136 +131,6 @@ func amd64PackedSubtractProperties(op string) (laneBits int, mode amd64PackedSub
 	default:
 		return 0, 0, false, false
 	}
-}
-
-func (c *amd64Ctx) lowerLegacyPackedIntegerSubtract(baseOp string, laneBits int, mode amd64PackedSubtractMode, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !c.isGoLegacyXReg(ins.Args[1].Reg) {
-		return true, false, fmt.Errorf("%s %s expects X/m128, X: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("%s %s register source is outside the legacy X class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s source must be X or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	firstBytes, err := c.loadPackedCompareBytes(ins.Args[0], 16)
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadX(ins.Args[1].Reg)
-	if err != nil {
-		return true, false, err
-	}
-	lanes := 128 / laneBits
-	first := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, firstBytes)
-	second := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, secondBytes)
-	result := c.emitPackedIntegerSubtract(lanes, laneBits, first, second, mode)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", out, lanes, laneBits, result)
-	return true, false, c.storeX(ins.Args[1].Reg, "%"+out)
-}
-
-func (c *amd64Ctx) lowerVectorPackedIntegerSubtract(baseOp, suffix string, laneBits int, mode amd64PackedSubtractMode, ins Instr) (bool, bool, error) {
-	broadcast, zeroing := false, false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	case "BCST":
-		broadcast = true
-	case "BCST.Z":
-		broadcast, zeroing = true, true
-	default:
-		return true, false, fmt.Errorf("%s %s has a suffix absent from its Go 1.27 optab: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if broadcast && baseOp != "VPSUBD" && baseOp != "VPSUBQ" {
-		return true, false, fmt.Errorf("%s %s does not enable EVEX broadcast: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects src1, src2, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	dstArg := ins.Args[len(ins.Args)-1]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s expects a vector-register destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dstArg.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 {
-		return true, false, fmt.Errorf("%s %s expects an X, Y, or Z destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if c.goarch == "386" && byteWidth == 64 {
-		return true, false, fmt.Errorf("386 %s has no Z-width form in Go 1.27's assembler frontend: %q", baseOp, ins.Raw)
-	}
-	if !amd64EVEXVectorRegister(dstArg, byteWidth) || !amd64EVEXVectorRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s second source and destination must be same-width vector registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if broadcast {
-		if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("%s %s.BCST requires a memory first source: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if ins.Args[0].Kind == OpReg {
-		if !amd64EVEXVectorRegister(ins.Args[0], byteWidth) {
-			return true, false, fmt.Errorf("%s %s first source must match its destination width: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s first source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	var mask string
-	if masked {
-		maskArg := ins.Args[2]
-		if !amd64NonzeroKOperand(maskArg) {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		var err error
-		mask, err = c.loadK(maskArg.Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-
-	lanes := byteWidth * 8 / laneBits
-	var first string
-	var err error
-	if broadcast {
-		first, err = c.evalIntSized(ins.Args[0], amd64IntegerTypeForBits(laneBits))
-		if err == nil {
-			first = amd64SplatInteger(c, lanes, laneBits, first)
-		}
-	} else {
-		var firstBytes string
-		firstBytes, err = c.loadPackedCompareBytes(ins.Args[0], byteWidth)
-		if err == nil {
-			first = c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, firstBytes)
-		}
-	}
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	second := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, secondBytes)
-	result := c.emitPackedIntegerSubtract(lanes, laneBits, first, second, mode)
-	if masked {
-		oldBytes, err := c.loadPackedCompareBytes(dstArg, byteWidth)
-		if err != nil {
-			return true, false, err
-		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, lanes, laneBits, result, old, mask, zeroing)
-	}
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, "%"+out)
 }
 
 // emitPackedIntegerSubtract computes second-first, matching Go assembler's

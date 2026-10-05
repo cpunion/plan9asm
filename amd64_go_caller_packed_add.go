@@ -1,6 +1,12 @@
 package plan9asm
 
 func x86CallerPackedWrappingAddStep(ins *Instr, form x86PackedAddForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	return x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, form.spec.laneBits, state, proof)
+}
+
+// Each complete input lane determines one output lane for wrapping or
+// saturating integer add/subtract. Form sharing grants no address permission.
+func x86CallerPackedLaneArithmeticStep(ins *Instr, form x86PackedBinaryForm, bits int, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form.mmx || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false
 	}
@@ -16,7 +22,7 @@ func x86CallerPackedWrappingAddStep(ins *Instr, form x86PackedAddForm, state *x8
 	}
 	second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)] & width
 	var known uint64
-	step := form.spec.laneBits / 8
+	step := bits / 8
 	for index := 0; index < form.byteWidth; index += step {
 		lane := x86CallerVectorByteMask(int64(step)) << uint(index)
 		if first&lane == lane && second&lane == lane {

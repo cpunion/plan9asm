@@ -162,6 +162,7 @@ func TestX86GoCallerPackedAddUnknownBoundariesRemainContext(t *testing.T) {
 				t.Fatalf("missing full possible source extent for %s", row)
 			}
 			for _, mutation := range []string{"opcode", "width", "direction", "address"} {
+				changedAccess := access
 				changed := ins
 				changed.Args = append([]Operand(nil), ins.Args...)
 				changed.x86CallerMemory = map[int]x86CallerMemoryAccess{form.memory: access}
@@ -169,11 +170,11 @@ func TestX86GoCallerPackedAddUnknownBoundariesRemainContext(t *testing.T) {
 				case "opcode":
 					changed.Op = "VPSUBQ"
 				case "width":
-					access.width--
-					changed.x86CallerMemory[form.memory] = access
+					changedAccess.width--
+					changed.x86CallerMemory[form.memory] = changedAccess
 				case "direction":
-					access.write = true
-					changed.x86CallerMemory[form.memory] = access
+					changedAccess.write = true
+					changed.x86CallerMemory[form.memory] = changedAccess
 				case "address":
 					changed.Args[form.memory].Mem.Off++
 				}
