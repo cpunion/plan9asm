@@ -148,7 +148,7 @@ type AssemblyPreprocessOptions struct {
 // one source-order macro/conditional environment. Unlike the historical Parse
 // path, an unresolved active include is an error, never silently discarded.
 func PreprocessAssemblySource(src string, opt AssemblyPreprocessOptions) (string, error) {
-	return preprocessAssembly(src, opt.Defines, &opt)
+	return preprocessGoAssembly(src, opt)
 }
 
 func preprocessWithDefines(src string, defines []string) (string, error) {

@@ -60,7 +60,7 @@ func TestPreprocessAssemblyIncludeFailures(t *testing.T) {
 		{"undefined-undef", "#undef A\n", "undefined macro"},
 		{"invalid-ifdef", "#ifdef A garbage\n#endif\n", "invalid #ifdef"},
 		{"unknown-control", "#if A\n#endif\n", "unsupported Go assembly directive"},
-		{"expanded-include", "#define HEADER #include \"h\"\nHEADER\n", "macro-expanded"},
+		{"expanded-include", "#define HEADER #include \"h\"\nHEADER\n", "missing header"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := AssemblyPreprocessOptions{FileName: "main.s"}

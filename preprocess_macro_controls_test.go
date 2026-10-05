@@ -2,12 +2,14 @@ package plan9asm
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"text/scanner"
 )
 
 type ppMacroControlFixture struct {
@@ -128,4 +130,63 @@ func ppMacroControlGoObject(t *testing.T, target, source string, headers map[str
 		t.Fatalf("%s original-source Go object %s: %v\n%s\nsource:\n%s", stage, target, err, listing, source)
 	}
 	return listing
+}
+
+func TestPreprocessAssemblyTokenBoundaries(t *testing.T) {
+	for _, source := range []string{
+		"MOVQ $1 << 2, AX\n",
+		"MOVQ $1 < < 2, AX\n",
+		"MOVD R1 @ > 2, R0\n",
+		"MOVD R1 - > 2, R0\n",
+		"DATA ·value(SB)/8,$0 .5\n",
+		"DATA ·value(SB)/8,$1 . 0\n",
+		"TEXT ·Probe(SB),$0-0\nloop: MOVQ AX, BX; RET\n",
+		"MOVW R0, R1:R2\n",
+		"DATA ·value(SB)/8,$\"a // b /* c */\"\n",
+	} {
+		expanded, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		original := ppMacroControlTokens(t, source)
+		normalized := ppMacroControlTokens(t, expanded)
+		if strings.Join(original, "\n") != strings.Join(normalized, "\n") {
+			t.Fatalf("normalization manufactured or removed lexical tokens:\n%q\n%q\n%v\n%v", source, expanded, original, normalized)
+		}
+	}
+}
+
+func ppMacroControlTokens(t *testing.T, source string) []string {
+	t.Helper()
+	reader := newPPGoReader("entry.s", source)
+	var tokens []string
+	for {
+		token, err := reader.next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if token.kind == scanner.EOF {
+			return tokens
+		}
+		if token.kind != '\n' {
+			tokens = append(tokens, fmt.Sprintf("%d:%s", token.kind, token.value))
+		}
+	}
+}
+
+func TestPreprocessAssemblyGeneratedIncludeRetainsErrorChain(t *testing.T) {
+	witness := fmt.Errorf("exact include error: %w", os.ErrNotExist)
+	const source = "#define INCLUDE #include \"missing.h\" \\\n\nINCLUDE\n"
+	_, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{
+		FileName: "original.s",
+		ReadInclude: func(parent, name string) (string, []byte, error) {
+			if parent != "original.s" || name != "missing.h" {
+				t.Fatalf("unbound generated include origin: %q %q", parent, name)
+			}
+			return "", nil, witness
+		},
+	})
+	if !errors.Is(err, os.ErrNotExist) || !strings.Contains(err.Error(), "original.s:3") {
+		t.Fatalf("generated include lost its original error or physical invocation: %v", err)
+	}
 }
