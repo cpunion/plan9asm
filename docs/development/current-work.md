@@ -265,6 +265,21 @@ Nonempty observed GOFLAGS/GOEXPERIMENT and unclosed or standard-package roles
 cannot borrow the ordinary CPP result proof. Retain the reproduced explicit
 CPP-flag machine-code and test-only void-width failure witnesses.
 
+The local result observer now shares the complete sixteen-condition SETcc
+grammar and native-width FP observations. Typed pointer slots reserve their
+actual frame bytes without granting numerical or pointee permissions. ABI0
+R14 starts undefined and can become numerical only through explicit source
+writes; this changes no ABIInternal, g or native-caller contract.
+
+Named logical AUTO slots now retain byte initialization across aliases and
+all-path CFG joins. Their complete original TEXT and operands are reparsed;
+negative offsets, native widths and the combined FP/AUTO work budget remain
+bounded. Entry bytes are undefined. Raw/indexed SP, address escapes, native
+backing and unknown calls remain Context. Original Go and LLVM scalar/canary
+oracles passed in an isolated leaf, but its fresh original gensimd replay still
+failed: do not infer a whole-library pass or update ledger status from these
+mechanism tests. Integrated-source and required Linux runtime gates remain due.
+
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
 agreement. They do not acquire fictitious TEXT signatures or symbol-free
