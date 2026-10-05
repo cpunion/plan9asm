@@ -225,70 +225,74 @@ func x86CallerMaskMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoC
 }
 
 func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid bool) {
+	return x86InstructionMemoryShape(ins, index, "amd64")
+}
+
+func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
 	}
-	if form, known, err := x86PackedSADProperties(ins, "amd64"); known {
+	if form, known, err := x86PackedSADProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if form, known, err := x86PackedSubtractProperties(ins, "amd64"); known {
+	if form, known, err := x86PackedSubtractProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if form, known, err := x86PackedWrappingAddProperties(ins, "amd64"); known {
+	if form, known, err := x86PackedWrappingAddProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
-	if form, known, err := x86WordMultiplyAddProperties(ins, "amd64"); known {
+	if form, known, err := x86WordMultiplyAddProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
-	if f, known, err := x86SignedPackedFloatProperties(ins, "amd64"); known {
+	if f, known, err := x86SignedPackedFloatProperties(ins, arch); known {
 		return int64(f.memoryBytes), false, err == nil && !f.mmx && f.memory == index
 	}
-	if form, recognized, err := x86PackedZeroExtendProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86PackedZeroExtendProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if form, recognized, err := x86FloatCompareProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86FloatCompareProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if f, recognized, err := x86SignedIntegerFloatProperties(ins, "amd64"); recognized {
+	if f, recognized, err := x86SignedIntegerFloatProperties(ins, arch); recognized {
 		return int64(f.sourceBits / 8), false, err == nil && f.memory == index
 	}
-	if form, recognized, err := x86FloatMulDivProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86FloatMulDivProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if f, recognized, err := x86InsertExtractProperties(ins, "amd64"); recognized {
+	if f, recognized, err := x86InsertExtractProperties(ins, arch); recognized {
 		return int64(f.spec.chunk), f.memoryWrite, err == nil && f.memory == index && !(f.mask >= 0 && f.memoryWrite)
 	}
-	if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, "amd64"); recognized {
+	if form, recognized, err := x86PackedShiftProperties(ins.Op, ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
-	if form, recognized, err := x86HorizontalFloatProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86HorizontalFloatProperties(ins, arch); recognized {
 		return int64(form.byteWidth), false, err == nil && form.spec.vector && form.memory == index
 	}
-	if form, recognized, err := x86PackedUnpackProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86PackedUnpackProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && !form.legacy && form.memory == index
 	}
-	if form, recognized, err := x86FloatAddSubProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86FloatAddSubProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}
-	if form, recognized, err := x86PackedLogicalProperties(ins, "amd64"); recognized {
+	if form, recognized, err := x86PackedLogicalProperties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if width = x86RawReturnScalarMoveBytes(Op(normalizeInstructionOpcode(ins.Op))); width != 0 && len(ins.Args) == 2 {
 		return width, index == 1, true
 	}
-	if form, recognized, err := x86ScalarExtensionProperties(ins.Op, ins, "amd64"); recognized {
+	if form, recognized, err := x86ScalarExtensionProperties(ins.Op, ins, arch); recognized {
 		return int64(form.spec.sourceBits / 8), false, err == nil && index == 0
 	}
-	if amd64MaskMoveOperandsValid(ins, "amd64") {
+	if amd64MaskMoveOperandsValid(ins, arch) {
 		return int64(amd64MaskMoveSpecs[ins.Op] / 8), index == 1, true
 	}
-	if form, recognized, err := amd64PackedVectorMoveProperties(ins, "amd64"); recognized {
+	if form, recognized, err := amd64PackedVectorMoveProperties(ins, arch); recognized {
 		return int64(form.byteWidth), form.memoryWrite, err == nil && !form.undefinedOpcode() && form.memory == index
 	}
-	if form, recognized, err := amd64FMA3Properties(ins, "amd64"); recognized {
+	if form, recognized, err := amd64FMA3Properties(ins, arch); recognized {
 		return int64(form.memoryBytes), false, err == nil && !form.spec.rawOnly && form.memory == index
 	}
-	form, recognized, err := amd64ScalarVectorMoveProperties(ins, "amd64")
+	form, recognized, err := amd64ScalarVectorMoveProperties(ins, arch)
 	if !recognized || err != nil || form.memory != index {
 		return 0, false, false
 	}

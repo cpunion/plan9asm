@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/importer"
@@ -63,8 +64,9 @@ func discoveryAsmDeclHasCompletedABIObligation(err error) bool {
 }
 
 // This is a private, per-actual-unit diagnostic filter, not a portable proof,
-// analyzer success receipt or translation permission. Only the precise RET
-// warning is removed. The original observed failure remains in the plan's raw
+// analyzer success receipt or translation permission. Precise FP-name warnings
+// use declaration/native-width evidence; RET warnings additionally require the
+// whole result-byte proof. The observed failure remains in the plan's raw
 // receipt inventory; every other diagnostic and the real Wait result survive.
 func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit, original error) error {
 	failure, observed := discoveryAsmDeclObservedFailure(original)
@@ -100,14 +102,14 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 		return original
 	}
 	lines := strings.Split(failure.output, "\n")
-	hasRET := false
+	hasAlias := false
 	for _, line := range lines {
 		if position := discoveryAsmDeclWarningPosition.FindStringSubmatch(strings.TrimSpace(line)); position != nil &&
-			discoveryAsmDeclUnwrittenResult.MatchString(position[6]) {
-			hasRET = true
+			(discoveryAsmDeclUnwrittenResult.MatchString(position[6]) || discoveryAsmDeclNamedOffset.MatchString(position[6]) || discoveryAsmDeclUnknownFPName.MatchString(position[6])) {
+			hasAlias = true
 		}
 	}
-	if !hasRET || plan.SDK["GOARCH"] != "amd64" && plan.SDK["GOARCH"] != "386" || plan.verifyUnitBytes(unit) != nil {
+	if !hasAlias || plan.SDK["GOARCH"] != "amd64" && plan.SDK["GOARCH"] != "386" || plan.verifyUnitBytes(unit) != nil {
 		return original
 	}
 	declarations, err := plan.resultAliasDeclarations(unit)
@@ -119,6 +121,18 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 		return original
 	}
 	proved := make(map[string]bool)
+	literalMatches := make(map[string]bool)
+	parsedSources := make(map[string]*plan9asm.File)
+	componentMaps := make(map[string]map[string]*asmDeclFPComponent)
+	componentCount := 0
+	unclosedAlias := false
+	unwrittenFunctions := make(map[string]bool)
+	for _, line := range lines {
+		if position := discoveryAsmDeclPosition(strings.TrimSpace(line)); position != nil &&
+			discoveryAsmDeclUnwrittenResult.MatchString(position[6]) {
+			unwrittenFunctions[position[5]] = true
+		}
+	}
 	retained := make([]string, 0, len(lines))
 	for _, line := range lines {
 		position := discoveryAsmDeclWarningPosition.FindStringSubmatch(strings.TrimSpace(line))
@@ -127,51 +141,103 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 			continue
 		}
 		warning := discoveryAsmDeclUnwrittenResult.FindStringSubmatch(position[6])
-		sig, declared := declarations[position[5]]
-		if warning == nil || !declared || len(sig.Frame.Results) != 1 {
+		declaration, declared := declarations[position[5]]
+		if !declared {
 			retained = append(retained, line)
 			continue
 		}
-		offset, offsetErr := strconv.ParseInt(warning[2], 10, 64)
-		width, widthErr := strconv.ParseInt(warning[1], 10, 64)
-		result := sig.Frame.Results[0]
-		if offsetErr != nil || widthErr != nil || result.Offset != offset || !resultAliasWarningWidth(sig.Ret, width) {
-			retained = append(retained, line)
-			continue
-		}
+		sig := declaration.sig
 		file, source := plan.resultAliasSource(unit, position[1])
-		if file == "" || !resultAliasOriginalRET(source, position[2], position[5]) {
+		if file == "" {
 			retained = append(retained, line)
+			continue
+		}
+		parsed, parsedBefore := parsedSources[file]
+		if !parsedBefore {
+			parsed, _ = plan.resultAliasCPP(unit, file, source, defines)
+			parsedSources[file] = parsed
+		}
+		var function *plan9asm.Func
+		if parsed != nil {
+			for index := range parsed.Funcs {
+				if parsed.Funcs[index].Sym == "·"+position[5] {
+					if function != nil {
+						function = nil
+						break
+					}
+					function = &parsed.Funcs[index]
+				}
+			}
+		}
+		needsResult := true
+		components, componentsChecked := componentMaps[position[5]]
+		if warning == nil && !componentsChecked {
+			components, _ = asmDeclFPComponents(declaration)
+			if len(components) > 16384-componentCount {
+				components = nil
+			}
+			componentCount += len(components)
+			componentMaps[position[5]] = components
+		}
+		if warning != nil {
+			if function == nil || len(sig.Frame.Results) != 1 {
+				retained = append(retained, line)
+				continue
+			}
+			offset, offsetErr := strconv.ParseInt(warning[2], 10, 64)
+			width, widthErr := strconv.ParseInt(warning[1], 10, 64)
+			result := sig.Frame.Results[0]
+			if offsetErr != nil || widthErr != nil || result.Offset != offset || !resultAliasWarningWidth(sig.Ret, width) ||
+				!resultAliasOriginalRET(source, position[2], position[5]) {
+				retained = append(retained, line)
+				continue
+			}
+		} else {
+			matched, required, boundComponent := resultAliasOriginalFP(source, position[2], position[5], position[6], plan.SDK["GOARCH"], components)
+			// An existing real RET obligation already prevents source exclusion
+			// and testless retry. Keep that original failure's identity when an
+			// unknown-result name cannot close its byte proof. A name-only
+			// warning must instead carry explicit failure-only Context.
+			needsContext := discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]]
+			key := file + "\x00" + position[5]
+			literalMatch, checked := literalMatches[key]
+			if !checked && function != nil {
+				literalMatch = resultAliasLiteralCPPFunction(source, *function)
+				literalMatches[key] = literalMatch
+			}
+			if !matched || function == nil || !literalMatch {
+				unclosedAlias = unclosedAlias || boundComponent && needsContext
+				retained = append(retained, line)
+				continue
+			}
+			needsResult = required
+		}
+		if !needsResult {
 			continue
 		}
 		key := file + "\x00" + position[5]
 		if _, checked := proved[key]; !checked {
-			parsed, parseErr := plan.resultAliasCPP(unit, file, source, defines)
-			var function *plan9asm.Func
-			if parseErr == nil {
-				for index := range parsed.Funcs {
-					if parsed.Funcs[index].Sym == "·"+position[5] {
-						if function != nil {
-							parseErr = fmt.Errorf("duplicate source TEXT")
-							break
-						}
-						function = &parsed.Funcs[index]
-					}
-				}
-			}
-			proved[key] = parseErr == nil && function != nil &&
-				plan9asm.CheckX86ABI0ResultInitialization(*function, sig, plan.SDK["GOARCH"]) == nil
+			proved[key] = plan9asm.CheckX86ABI0ResultInitialization(*function, sig, plan.SDK["GOARCH"]) == nil
 		}
 		if !proved[key] {
+			unclosedAlias = unclosedAlias || warning == nil && (discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]])
 			retained = append(retained, line)
 		}
+	}
+	if unclosedAlias {
+		// The actual declaration and literal locate a physical component, but
+		// cannot certify this access/CPP/result obligation. Keep the entire
+		// original receipt (including mixed diagnostics) as failure, not source
+		// exclusion or a warning eligible for testless retry.
+		return errors.Join(original, fmt.Errorf("%w: %w: original FP alias has an unclosed native byte/CPP/result obligation", errDiscoveryAsmDeclSourceProof, plan9asm.ErrProbeNeedsContext))
 	}
 	if len(retained) == len(lines) {
 		return original
 	}
 	plan.resultAliasRawFailures = append(plan.resultAliasRawFailures, failure)
 	for _, line := range retained {
-		if strings.TrimSpace(line) != "" && !discoveryAsmDeclPackageHeading.MatchString(strings.TrimSpace(line)) {
+		trim := strings.TrimSpace(line)
+		if trim != "" && trim != "# "+unit.PackageID && trim != "# "+unit.Config.ImportPath {
 			copy := *failure
 			copy.output = strings.Join(retained, "\n")
 			copy.display = limitDiscoveryEvidence(copy.output, 64<<10)
@@ -193,7 +259,7 @@ type resultAliasImporter func(string) (*types.Package, error)
 
 func (load resultAliasImporter) Import(path string) (*types.Package, error) { return load(path) }
 
-func (plan *directAsmDeclPlan) resultAliasDeclarations(unit directAsmDeclUnit) (map[string]plan9asm.FuncSig, error) {
+func (plan *directAsmDeclPlan) resultAliasDeclarations(unit directAsmDeclUnit) (map[string]resultAliasDeclaration, error) {
 	fset := token.NewFileSet()
 	var files []*ast.File
 	bodyless := make(map[string]bool)
@@ -236,7 +302,7 @@ func (plan *directAsmDeclPlan) resultAliasDeclarations(unit directAsmDeclUnit) (
 	if err != nil {
 		return nil, err
 	}
-	declarations := make(map[string]plan9asm.FuncSig)
+	declarations := make(map[string]resultAliasDeclaration)
 	for name := range bodyless {
 		fn, ok := pkg.Scope().Lookup(name).(*types.Func)
 		if !ok {
@@ -244,7 +310,7 @@ func (plan *directAsmDeclPlan) resultAliasDeclarations(unit directAsmDeclUnit) (
 		}
 		sig, err := plan9asm.DeriveGoFuncABI0Signature(pkg.Path()+"."+name, fn, plan.SDK["GOARCH"], sizes)
 		if err == nil {
-			declarations[name] = sig
+			declarations[name] = resultAliasDeclaration{sig: sig, fn: fn, sizes: sizes}
 		}
 	}
 	return declarations, nil
