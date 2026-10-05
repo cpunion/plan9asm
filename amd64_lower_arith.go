@@ -1056,6 +1056,19 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			if err != nil {
 				return true, false, err
 			}
+			if bits := ins.x86AddressBits; bits != 0 {
+				// Address size is independent of the result register width.
+				// Narrow the complete sum first, then zero-extend that effective
+				// offset before W/L/Q destination preservation/extension.
+				typ := I32
+				if bits == 16 {
+					typ = I16
+				}
+				low := c.truncI64(addr, typ)
+				wide := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", wide, typ, low)
+				addr = "%" + wide
+			}
 			return true, false, storeLEA(addr)
 		case OpFP:
 			v, err := c.boundFPAddress(ins.Args[0].FPOffset)

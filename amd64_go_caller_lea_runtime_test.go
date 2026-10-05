@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"os/exec"
@@ -141,6 +142,15 @@ BYTE $0xc3
 }
 
 func TestCrossLinuxRuntimeMatrixX86GoCallerLEAModuloAndCanaries(t *testing.T) {
+	testX86CallerLEAModuloAndCanaries(t, false)
+}
+
+func TestCrossLinuxRuntimeMatrixX86RawLEADisplacementModuloAndCanaries(t *testing.T) {
+	testX86CallerLEAModuloAndCanaries(t, true)
+}
+
+func testX86CallerLEAModuloAndCanaries(t *testing.T, raw bool) {
+	t.Helper()
 	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
 	if runtime.GOARCH != "amd64" && !crossRosetta {
 		t.Skip("LEA execution requires the Linux/amd64 runtime counterpart")
@@ -150,6 +160,25 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerLEAModuloAndCanaries(t *testing.T) {
 		t.Fatal("LLVM 22 llc/clang not found")
 	}
 	goSource, assembly, goTest, cOracle := x86CallerLEARuntimeSources()
+	if raw {
+		for _, form := range x86CallerLEARuntimeForms() {
+			rex := byte(0x41) // numerical R9 base; destination AX, index BX.
+			var encoding []byte
+			if form.bits == 16 {
+				encoding = append(encoding, 0x66)
+			} else if form.bits == 64 {
+				rex |= 8
+			}
+			scale := map[int]byte{1: 0, 2: 1, 4: 2, 8: 3}[form.scale]
+			encoding = append(encoding, rex, 0x8d, 0x84, scale<<6|3<<3|1)
+			encoding = binary.LittleEndian.AppendUint32(encoding, 0xfffffff9)
+			named := fmt.Sprintf("LEA%s -7(R9)(BX*%d),AX", form.suffix, form.scale)
+			if strings.Count(assembly, named) != 1 {
+				t.Fatalf("raw LEA fixture lost its independent named form: %s", named)
+			}
+			assembly = strings.Replace(assembly, named, x86RawDisplacementDirectives(encoding), 1)
+		}
+	}
 	dir := t.TempDir()
 	for name, source := range map[string]string{
 		"go.mod": "module caller\n\ngo 1.20\n", "value.go": goSource,

@@ -2624,6 +2624,15 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
 			}
+			if inst.Op == x86asm.LEA && len(instrs) == 1 && len(instrs[0].Args) == 2 {
+				// Bare absolute SIB/no-base addresses print as numbers, but
+				// the Go parser treats those as symbols. Retain the actual
+				// typed decoder memory operand, not a fabricated SB name.
+				physical := normalizeDecodedX86LEASegments(normalizeDecodedX86MemoryDisplacements(inst))
+				if memory, ok := physical.Args[1].(x86asm.Mem); ok && memory.Base == 0 && memory.Index == 0 && memory.Segment == 0 {
+					instrs[0].Args[0] = Operand{Kind: OpMem, Mem: MemRef{Off: memory.Disp}}
+				}
+			}
 			if inst.AddrSize != mode {
 				goarch := ""
 				switch mode {
@@ -2633,7 +2642,7 @@ func decodeX86RawDirectiveGroupWithOpaque(
 					goarch = "amd64"
 				}
 				for i := range instrs {
-					if x86LegacyPackedFloatingNativeMemoryBits(instrs[i], goarch) != 0 {
+					if inst.Op == x86asm.LEA || x86LegacyPackedFloatingNativeMemoryBits(instrs[i], goarch) != 0 {
 						instrs[i].x86AddressBits = inst.AddrSize
 					}
 				}
@@ -10227,6 +10236,16 @@ var x86RawX87ControlAliases = map[x86asm.Op]Op{
 }
 
 func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
+	for _, argument := range inst.Args {
+		if memory, ok := argument.(x86asm.Mem); ok && memory.Base == x86asm.EIP {
+			// The pinned decoder leaves PCRel unset for 67-prefixed EIP
+			// addressing. Its wrapped native instruction address is not a
+			// numerical GP input or a proved source-group RIP relocation.
+			return "", fmt.Errorf("%w: raw x86 EIP-relative memory requires its native instruction address", ErrProbeNeedsContext)
+		}
+	}
+	inst = normalizeDecodedX86MemoryDisplacements(inst)
+	inst = normalizeDecodedX86LEASegments(inst)
 	for _, prefix := range inst.Prefix {
 		if !prefix.IsVEX() {
 			continue
@@ -10571,6 +10590,57 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 	normalizeDecodedX86GoOpcode(inst, &syntax, replaceOp)
 	syntax = normalizeDecodedX86SegmentMemorySyntax(syntax)
 	return syntax, nil
+}
+
+// The pinned x/arch decoder retains ModR/M/SIB disp32 as an unsigned
+// magnitude. Rendering that value as a named Go address changes 64-bit
+// arithmetic and violates Go's signed-displacement checks. Preserve the
+// physical field's sign before every opcode-specific rendering path.
+// MOV A0-A3 instead contains a full absolute moffs address: it must never
+// be narrowed or sign-extended as though it were a ModR/M displacement.
+func normalizeDecodedX86MemoryDisplacements(inst x86asm.Inst) x86asm.Inst {
+	if inst.AddrSize != 32 && inst.AddrSize != 64 {
+		return inst
+	}
+	if opcode := byte(inst.Opcode >> 24); opcode >= 0xa0 && opcode <= 0xa3 {
+		return inst
+	}
+	for index, argument := range inst.Args {
+		if memory, ok := argument.(x86asm.Mem); ok {
+			memory.Disp = int64(int32(memory.Disp))
+			inst.Args[index] = memory
+		}
+	}
+	return inst
+}
+
+// LEA computes only the effective offset. All six segment override prefixes
+// are architecturally irrelevant to it, unlike an actual memory load/store.
+func normalizeDecodedX86LEASegments(inst x86asm.Inst) x86asm.Inst {
+	if inst.Op != x86asm.LEA {
+		return inst
+	}
+	for index, argument := range inst.Args {
+		if memory, ok := argument.(x86asm.Mem); ok {
+			memory.Segment = 0
+			inst.Args[index] = memory
+		}
+	}
+	var prefixes x86asm.Prefixes
+	next := 0
+	for _, prefix := range inst.Prefix {
+		if prefix == 0 {
+			break
+		}
+		switch byte(prefix) {
+		case 0x26, 0x2e, 0x36, 0x3e, 0x64, 0x65:
+			continue
+		}
+		prefixes[next] = prefix
+		next++
+	}
+	inst.Prefix = prefixes
+	return inst
 }
 
 // x/arch prints a raw segment override as GS:0x30 or GS:0x30(AX). The

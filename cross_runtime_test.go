@@ -35,6 +35,9 @@ func TestCrossLinuxRuntimeMatrix(t *testing.T) {
 		compileAndRunRuntimeTestWithCompiler(t, llc, []string{"i686-linux-gnu-gcc", "-no-pie"},
 			"continuation386", "i386-unknown-linux-gnu", ir, main, []string{"qemu-i386", "-L", "/usr/i686-linux-gnu"})
 	})
+	t.Run("386_raw_lea_address_width_and_aliases", func(t *testing.T) {
+		testX86RawLEAAddressRuntime(t, "386")
+	})
 	t.Run("amd64_integer_broadcast_views", func(t *testing.T) {
 		clang := findLLVM22Tool("clang")
 		if clang == "" {

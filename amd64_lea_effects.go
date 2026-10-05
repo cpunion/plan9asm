@@ -30,6 +30,10 @@ func x86LEAOperandWidth(ins Instr, arch string) (int64, error) {
 	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg || !isX86YrlRegisterForArch(ins.Args[1].Reg, arch) {
 		return 0, fmt.Errorf("%s %s expects Ym address and Yrl destination: %q", arch, ins.Op, ins.Raw)
 	}
+	if bits := ins.x86AddressBits; bits != 0 && (ins.Args[0].Kind != OpMem ||
+		!(arch == "386" && bits == 16 || arch != "386" && bits == 32)) {
+		return 0, fmt.Errorf("%w: %s %s has an unbound physical address size %d", ErrProbeNeedsContext, arch, ins.Op, bits)
+	}
 	switch ins.Args[0].Kind {
 	case OpMem:
 		memory := ins.Args[0].Mem
