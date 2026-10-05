@@ -47,6 +47,13 @@ func TestInstrumentationEmissionPortableRoleGrammar(t *testing.T) {
 					t.Fatal(err)
 				}
 				for name, change := range map[string]func(*InstrumentationAssemblyFile){
+					"known empty object": func(f *InstrumentationAssemblyFile) {
+						if f.CPP.EmptyAssembly != nil {
+							f.CPP.EmptyAssembly.ObjectSHA256 = bytesSHA256(nil)
+						} else {
+							f.CPP.DataOnlyAssembly.Native.ObjectSHA256 = bytesSHA256(nil)
+						}
+					},
 					"missing role": func(f *InstrumentationAssemblyFile) { f.CPP.Emission = "" },
 					"paired missing native": func(f *InstrumentationAssemblyFile) {
 						f.CPP.Emission = "assembly"
