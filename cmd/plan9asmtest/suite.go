@@ -21,6 +21,9 @@ type config struct {
 	Shards                int
 	Timeout               time.Duration
 	Flags                 []string
+	CISelector, CIIsolate string
+	CIOwner               int
+	CIVerify              string
 }
 
 type shardResult struct {

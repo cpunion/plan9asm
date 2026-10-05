@@ -479,6 +479,19 @@ jobs:
     needs: discovered_library_priority
     name: cross compile, link, and run (Linux)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
+    strategy:
+      # Every selected root is owned exactly once; owner zero isolates the
+      # giant matrix root. A failure must not cancel other owners.
+      fail-fast: false
+      matrix:
+        owner: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
 
     steps:
       - name: Checkout
@@ -502,9 +515,73 @@ jobs:
           cache: true
 
       - name: Cross transpile, compile, link, and run
-        env:
-          PLAN9ASM_CROSS_EXEC: '1'
-        run: go test . -run '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' -count=1 -timeout=20m -v
+        run: |
+          mkdir -p _out
+          go run ./cmd/plan9asmtest -out _out/cross-runtime-owner \
+            -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
+            -ci-isolate-root TestCrossLinuxRuntimeMatrix \
+            -ci-owner ${{ matrix.owner }} -shards 16 -timeout 20m
+
+      - name: Retain every owner receipt, including failures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cross-runtime-owner-${{ matrix.owner }}
+          path: _out/cross-runtime-owner
+          if-no-files-found: error
+
+  cross-runtime-verify:
+    name: cross-runtime exhaustive completion
+    needs: cross-runtime
+    if: ${{ !cancelled() }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
+    env:
+      GOFLAGS: ''
+      GOENV: 'off'
+      GOWORK: 'off'
+      GOTOOLCHAIN: local
+      PLAN9ASM_CROSS_EXEC: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install LLVM and cross compilers
+        timeout-minutes: 14
+        run: >-
+          bash scripts/install-ci-llvm22-ubuntu.sh
+          gcc-i686-linux-gnu gcc-arm-linux-gnueabihf
+          gcc-aarch64-linux-gnu
+
+      - name: Install pinned QEMU user-mode emulators
+        timeout-minutes: 5
+        run: bash scripts/install-ci-qemu.sh
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: '1.27.x'
+          cache: true
+
+      - name: Download all owner evidence
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cross-runtime-owner-*
+          path: _out/cross-runtime-partitions
+
+      - name: Verify the fresh complete five-prefix inventory
+        run: |
+          go run ./cmd/plan9asmtest -out _out/cross-runtime-aggregate \
+            -verify-ci-partitions _out/cross-runtime-partitions \
+            -ci-selector '^(TestCrossLinuxRuntimeMatrix|TestARM64Conformance|TestARM64RawSQSHLURuntimeSemantics|TestARMIntegerMemoryRuntimeCross|TestARMRawSaturationRuntimeCross)' \
+            -ci-isolate-root TestCrossLinuxRuntimeMatrix -shards 16 -timeout 20m
+
+      - name: Retain completion evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: cross-runtime-completion
+          path: _out/cross-runtime-aggregate
+          if-no-files-found: error
 
   test:
     needs: discovered_library_priority
