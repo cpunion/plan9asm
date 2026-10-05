@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-const arm64PrivateCallCopySource = `TEXT ·Copy(SB),4,$0-24
+const arm64PrivateCallCFGCopySource = `TEXT ·Copy(SB),4,$0-24
 MOVD dst+0(FP),R8
 MOVD src+8(FP),R1
 MOVD n+16(FP),R3
@@ -71,10 +71,10 @@ RET`, 1)
 		name, source string
 	}{
 		{"register_multiple_returns", register},
-		{"typed_scalar_pair_copy", arm64PrivateCallCopySource},
-		{"two_static_calls", strings.Replace(arm64PrivateCallCopySource,
+		{"typed_scalar_pair_copy", arm64PrivateCallCFGCopySource},
+		{"two_static_calls", strings.Replace(arm64PrivateCallCFGCopySource,
 			"CALL copy<>(SB)", "CALL copy<>(SB)\nCALL copy<>(SB)", 1)},
-		{"caller_label_collision", strings.Replace(arm64PrivateCallCopySource,
+		{"caller_label_collision", strings.Replace(arm64PrivateCallCFGCopySource,
 			"CALL copy<>(SB)", "__arm64_private_0:\ncopy0:\nCALL copy<>(SB)", 1)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
