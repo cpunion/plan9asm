@@ -111,5 +111,6 @@ func (d *arm64FPReadDeclaration) matches(sig FuncSig) bool {
 		return false
 	}
 	sig.arm64FPReadDeclaration = nil
+	sig.arm64ABI0Declaration, sig.arm64ABI0TailDeclaration = nil, nil
 	return reflect.DeepEqual(d.signature, sig)
 }

@@ -80,7 +80,9 @@ type FuncSig struct {
 
 	// A typed declaration snapshot, not permission to address padding. The
 	// complete original/normalized bit-use proof must independently consume it.
-	arm64FPReadDeclaration *arm64FPReadDeclaration
+	arm64FPReadDeclaration   *arm64FPReadDeclaration
+	arm64ABI0Declaration     *arm64ABI0Declaration
+	arm64ABI0TailDeclaration *arm64ABI0TailDeclaration
 }
 
 // WASMABI selects the physical ABI used for WebAssembly Plan 9 assembly.
@@ -332,6 +334,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 		}
+		sourceSig := sig
 		if sig.Attrs == "" {
 			sig.Attrs = attrRegistry.ref(inferFuncTargetFeaturesForGOARCH(file.Arch, opt.Goarch, *fn))
 		}
@@ -356,7 +359,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 		// function needs the same source-frame and reaching-definition proof;
 		// an opcode whitelist must not select an unchecked prototype.
 		if file.Arch == ArchARM64 {
-			if err := translateFuncARM64WithSourceCalls(&b, *fn, sig, resolve, opt.Sigs, file.Data, opt.AnnotateSource, arm64SourceCalls); err != nil {
+			if err := translateFuncARM64WithSourceCallsAndAttrs(&b, *fn, sourceSig, resolve, opt.Sigs, file.Data, opt.AnnotateSource, arm64SourceCalls, sig.Attrs); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

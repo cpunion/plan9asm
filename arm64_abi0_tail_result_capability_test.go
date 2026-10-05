@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"go/types"
 	"reflect"
 	"strings"
@@ -40,7 +43,22 @@ RET
 
 func arm64ABI0TailResultSignature(t *testing.T, declaration string) (GoPackage, FuncSig) {
 	t.Helper()
-	pkg := mustGoPackage(t, "test/abi0result", "package abi0result\n"+declaration+"\n")
+	source := []byte("package abi0result\n" + declaration + "\n")
+	fset := token.NewFileSet()
+	syntax, err := parser.ParseFile(fset, "pkg.go", source, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := &types.Info{Defs: make(map[*ast.Ident]types.Object), Uses: make(map[*ast.Ident]types.Object)}
+	sizes := types.SizesFor("gc", "arm64")
+	config := types.Config{Sizes: sizes}
+	typed, err := config.Check("test/abi0result", fset, []*ast.File{syntax}, info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := GoPackage{Path: typed.Path(), Types: typed, Syntax: []*ast.File{syntax},
+		SourceSelection: &GoSourceSelection{Fset: fset, TypesInfo: info, Sizes: sizes,
+			SelectedGoFiles: []string{"pkg.go"}, GoSources: map[string][]byte{"pkg.go": source}}}
 	fn, ok := pkg.Types.Scope().Lookup("Slots").(*types.Func)
 	if !ok {
 		t.Fatal("missing actual typechecked first-party declaration")
@@ -71,6 +89,12 @@ func arm64ABI0TailResultTranslate(t *testing.T, source, declaration, target, api
 	options := Options{
 		Goarch: "arm64", TargetTriple: target, ResolveSym: resolve,
 		Sigs: map[string]FuncSig{"Slots": sig},
+	}
+	if api != "GoModule" {
+		options.Sigs, err = BindGoARM64ABI0TailDeclarations(pkg, file, resolve, options.Sigs)
+		if err != nil {
+			return "", err
+		}
 	}
 	var text string
 	switch api {
@@ -105,8 +129,8 @@ func arm64ABI0TailResultTranslate(t *testing.T, source, declaration, target, api
 	return text, err
 }
 
-// This is the next capability's RED, not a passing LLVM/runtime certificate.
 // The unmodified original source must first assemble with the selected SDK.
+// These objects do not replace the separately initialized numerical oracles.
 func TestARM64ABI0TailResultDeclaredContinuationObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -249,8 +273,7 @@ func TestARM64ABI0TailResultOriginalSourceCannotBeChanged(t *testing.T) {
 	}
 }
 
-// These are future proof-consumer negatives. In the current source they are
-// conservatively stopped earlier by the unproved private-tail contract.
+// Each path must produce every byte from actual initialized machine values.
 func TestARM64ABI0TailResultAllPathsAndEmptyEntryAreMandatory(t *testing.T) {
 	declaration, source := arm64ABI0TailResultFixture(true, "B")
 	for name, replacement := range map[string]string{

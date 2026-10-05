@@ -715,15 +715,32 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 
 	// Use the Go-module frontend's complete-file continuation proof before
 	// signature queries or bounded modules can discard a helper or its uses.
-	file, err = plan9asm.CoalesceARM64PrivateRegisterHelpers(file)
+	resolve := resolveSymFunc(pkg.PkgPath)
+	file, tailSource, tailSigs, err := prepareARM64ABI0TailSource(pkg, file, t.AsmFile, src,
+		goos+"/"+goarch, defines, ccfg, resolve)
 	if err != nil {
 		return fmt.Errorf("prove ARM64 private source continuations: %w", err)
 	}
+	if tailSource != nil {
+		defer func() {
+			ctx := ccfg.Context
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			compileErr = errors.Join(compileErr, tailSource.verify(ctx, defines, ccfg.Feature))
+		}()
+	}
 
-	resolve := resolveSymFunc(pkg.PkgPath)
-	sigs, declaredArgSizes, err := sigsForAsmFile(pkg, file, resolve, goarch)
+	signaturePackage := pkg
+	if tailSource != nil {
+		signaturePackage = tailSource.actual
+	}
+	sigs, declaredArgSizes, err := sigsForAsmFile(signaturePackage, file, resolve, goarch)
 	if err != nil {
 		return fmt.Errorf("infer signatures: %w", err)
+	}
+	if err := rebindARM64ABI0TailSignatures(sigs, tailSigs); err != nil {
+		return err
 	}
 	if cppProof != nil {
 		// A missing-signature query shares the exact parsed source role with

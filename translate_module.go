@@ -53,7 +53,7 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return llvm.Module{}, err
 	}
-	file, err = coalesceARM64PrivateRegisterHelpers(file)
+	file, err = PrepareGoARM64ABI0TailContinuations(file, opt.Sigs, resolve)
 	if err != nil {
 		return llvm.Module{}, err
 	}

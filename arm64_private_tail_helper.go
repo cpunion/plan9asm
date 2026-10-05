@@ -18,8 +18,13 @@ type arm64PrivateTailSource struct {
 
 func arm64PrivateTailSnapshot(fn Func) Func {
 	fn.arm64PrivateTailSource = nil
+	fn.arm64ABI0TailSource = nil
 	fn.Instrs = append([]Instr(nil), fn.Instrs...)
 	for i := range fn.Instrs {
+		if offset := fn.Instrs[i].arm64ScalarMemoryFrameOffset; offset != nil {
+			copyOffset := *offset
+			fn.Instrs[i].arm64ScalarMemoryFrameOffset = &copyOffset
+		}
 		fn.Instrs[i].Args = append([]Operand(nil), fn.Instrs[i].Args...)
 		for j := range fn.Instrs[i].Args {
 			a := &fn.Instrs[i].Args[j]
@@ -235,12 +240,17 @@ func arm64PrivateTailBody(fn Func) error {
 }
 
 func coalesceARM64PrivateTailHelpers(file *File, remaining *int) (*File, error) {
+	return coalesceARM64PrivateTailHelpersWithABI0(file, remaining, nil, nil)
+}
+
+func coalesceARM64PrivateTailHelpersWithABI0(file *File, remaining *int, sigs map[string]FuncSig, resolve func(string) string) (*File, error) {
 	if file.Arch != ArchARM64 {
 		return file, nil
 	}
 	requested := map[string]bool{}
 	for _, fn := range file.Funcs {
-		if !strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+		declaredABI0 := resolve != nil && sigs[resolve(goTextSymbolForResolution(fn.Sym))].arm64ABI0TailDeclaration != nil
+		if !strings.HasSuffix(fn.Sym, "<ABIInternal>") && !declaredABI0 {
 			continue // Preserve existing explicit ABI0/private callable contracts.
 		}
 		for _, ins := range fn.Instrs {
@@ -324,7 +334,15 @@ func coalesceARM64PrivateTailHelpers(file *File, remaining *int) (*File, error) 
 				if target, ok := arm64PrivateTailTarget(ins); !ok || target != base {
 					return nil, arm64GoABIContext("private tail %q has another address/native use", base)
 				}
-				if err := arm64PrivateTailZeroFrame(fn, true); err != nil {
+				var err error
+				if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+					err = arm64PrivateTailZeroFrame(fn, true)
+				} else if resolve != nil {
+					err = arm64ABI0TailRoot(fn, sigs[resolve(goTextSymbolForResolution(fn.Sym))])
+				} else {
+					err = arm64GoABIContext("private tail has no root source contract")
+				}
+				if err != nil {
 					return nil, err
 				}
 				uses[base]++
@@ -400,9 +418,28 @@ func coalesceARM64PrivateTailHelpers(file *File, remaining *int) (*File, error) 
 			}
 			copyFn.Instrs = append(copyFn.Instrs, added...)
 			copyFn.arm64PrivateSourceAdded += len(added)
-			copyFn.arm64PrivateTailSource = &arm64PrivateTailSource{
-				original: arm64PrivateTailSnapshot(fn), helpers: helperSources,
-				prepared: arm64PrivateTailSnapshot(copyFn),
+			if strings.HasSuffix(fn.Sym, "<ABIInternal>") {
+				copyFn.arm64PrivateTailSource = &arm64PrivateTailSource{
+					original: arm64PrivateTailSnapshot(fn), helpers: helperSources,
+					prepared: arm64PrivateTailSnapshot(copyFn),
+				}
+			} else {
+				sig := sigs[resolve(goTextSymbolForResolution(fn.Sym))]
+				// Bind the actual FP normalization before sealing the prepared
+				// source. Final consumers may not drop its physical-offset marker
+				// or accept arbitrary changes as a normalization projection.
+				var err error
+				copyFn, err = normalizeARM64ScalarMemoryFrame(copyFn)
+				if err != nil {
+					return nil, err
+				}
+				copyFn.arm64ABI0TailSource = &arm64ABI0TailSource{
+					declaration: sig.arm64ABI0TailDeclaration, original: arm64PrivateTailSnapshot(fn),
+					helpers: helperSources, prepared: arm64PrivateTailSnapshot(copyFn),
+				}
+				if err := validateARM64ABI0TailSource(copyFn, sig); err != nil {
+					return nil, err
+				}
 			}
 		}
 		result.Funcs = append(result.Funcs, copyFn)

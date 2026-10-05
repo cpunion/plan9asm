@@ -50,6 +50,7 @@ type arm64Ctx struct {
 	sourceGoFrame   arm64GoFrame
 	sourceFrameR20  bool // original + normalized typed Go large-frame producer
 	checkedR20Entry bool // all typed GP/FP reads need a genuine entry/CFG definition
+	checkedABI0Tail bool // declaration-backed result slots; no implicit GP argument bank
 	dynamicStack    *arm64DynamicStackPlan
 
 	flagsNSlot   string
@@ -103,6 +104,7 @@ func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) 
 		fpResAddrTaken:   map[int]bool{},
 	}
 	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
+	c.checkedABI0Tail = fn.arm64ABI0TailSource != nil
 	c.unexposedCallFrame = arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
 	if c.unexposedCallFrame {
 		c.privateDataStores, _ = arm64PrivateDataProof(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
@@ -1320,6 +1322,9 @@ func (c *arm64Ctx) emitEntryAllocasAndArgInit() error {
 
 	// Map args -> the independent integer and floating-point ABIInternal banks,
 	// or to an explicit helper register assignment.
+	if c.checkedABI0Tail {
+		return nil // ABI0 arguments exist only in their actually loaded FP slots.
+	}
 	if c.sig.ARM64ClosureABI != nil {
 		if err := c.storeABIRegisterValue(c.sig.ARM64ClosureABI.ContextRegister, Ptr, "%closure"); err != nil {
 			return err

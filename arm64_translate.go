@@ -892,6 +892,16 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 }
 
 func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall) error {
+	return translateFuncARM64WithSourceCallsAndAttrs(b, fn, sig, resolve, sigs, data, annotateSource, sourceCalls, sig.Attrs)
+}
+
+// Inferred target-feature attribute groups are an emission projection, not a
+// mutation of a declaration-backed source signature. Validate its exact input
+// fields and emit the separately computed group without granting ABI rights.
+func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall, emissionAttrs string) error {
+	if err := validateARM64ABI0TailSource(fn, sig); err != nil {
+		return err
+	}
 	var err error
 	if err := validateARM64PrivateTailSource(fn, sig); err != nil {
 		return err
@@ -959,6 +969,9 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 	if err != nil {
 		return err
 	}
+	if err := validateARM64ABI0TailSource(fn, sig); err != nil {
+		return err
+	}
 	rawDataGlobals := make(map[string]string, len(rawData))
 	rawDataOffsets := make(map[string]int64)
 	for _, data := range rawData {
@@ -984,8 +997,8 @@ func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig,
 		fmt.Fprintf(b, "%s %%arg%d", t, i)
 	}
 	b.WriteString(")")
-	if sig.Attrs != "" {
-		b.WriteString(" " + sig.Attrs)
+	if emissionAttrs != "" {
+		b.WriteString(" " + emissionAttrs)
 	}
 	b.WriteString(" {\n")
 
@@ -1638,7 +1651,7 @@ func (c *arm64Ctx) lowerRET() error {
 		slot := c.fpResults[0]
 		var v string
 		var err error
-		if c.fpResWritten[slot.Index] || c.fpResAddrTaken[slot.Index] {
+		if c.checkedABI0Tail || c.fpResWritten[slot.Index] || c.fpResAddrTaken[slot.Index] {
 			v, err = c.loadFPResult(slot)
 		} else {
 			v, err = c.loadRetSlotFallback(slot)
@@ -1656,7 +1669,7 @@ func (c *arm64Ctx) lowerRET() error {
 	for _, slot := range c.fpResults {
 		var v string
 		var err error
-		if c.fpResWritten[slot.Index] || c.fpResAddrTaken[slot.Index] {
+		if c.checkedABI0Tail || c.fpResWritten[slot.Index] || c.fpResAddrTaken[slot.Index] {
 			v, err = c.loadFPResult(slot)
 		} else {
 			v, err = c.loadRetSlotFallback(slot)

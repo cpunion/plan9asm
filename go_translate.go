@@ -122,7 +122,11 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 	closureSource := *file
 	closureSource.Funcs = append([]Func(nil), file.Funcs...)
-	file, err = coalesceARM64PrivateRegisterHelpers(file)
+	tailSigs, err := goBindARM64ABI0TailDeclarations(pkg, file, resolve, opt)
+	if err != nil {
+		return nil, err
+	}
+	file, err = PrepareGoARM64ABI0TailContinuations(file, tailSigs, resolve)
 	if err != nil {
 		return nil, fmt.Errorf("%s: private source contract %s: %w", pkgPath, asmName, err)
 	}
@@ -140,6 +144,18 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	sigs, err := goSigsForAsmFile(pkg, file, resolve, opt.GOARCH, opt.Sizes, opt.FrameSizes, opt.ManualSig)
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
+	}
+	for name, sourceSig := range tailSigs {
+		if sourceSig.arm64ABI0TailDeclaration != nil {
+			sig, present := sigs[name]
+			if !present {
+				continue // Whole-file audit ran before dropping this unused root.
+			}
+			if !reflect.DeepEqual(arm64ABI0SignatureSnapshot(sig), arm64ABI0SignatureSnapshot(sourceSig)) {
+				return nil, arm64GoABIContext("ABI0 tail changed its declaration during signature inference")
+			}
+			sigs[name] = sourceSig
+		}
 	}
 	if err := bindGoARM64ClosureABIs(pkg, &closureSource, sigs, opt, resolve); err != nil {
 		return nil, err
@@ -690,6 +706,7 @@ func goFuncSigForDeclaredFunc(name string, fn *types.Func, goarch string, sz, fr
 		result := FuncSig{Name: name, Args: args, Ret: goTupleRetType(retTys), Frame: FrameLayout{Params: frameParams, Results: frameResults}}
 		if goarch == "arm64" {
 			result.arm64FPReadDeclaration = arm64FPReadDeclarationForGo(result, sig, sz, frameSz)
+			result.arm64ABI0Declaration = arm64ABI0DeclarationForGo(result, fn, sz, frameSz)
 		}
 		return result, nil
 	}

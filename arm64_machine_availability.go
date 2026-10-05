@@ -79,7 +79,7 @@ func (c *arm64Ctx) emitMachineNativeIR(store bool, format string, args ...any) {
 const arm64WholeScalableRegister = 1 << 20
 
 func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
-	needed := c.goRegisterEntry || c.privateRegisterEntry || c.checkedR20Entry
+	needed := c.goRegisterEntry || c.privateRegisterEntry || c.checkedR20Entry || c.checkedABI0Tail
 	sourceScratch := false
 	for _, block := range c.blocks {
 		for _, instruction := range block.instrs {
@@ -109,7 +109,7 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 	if c.goRegisterEntry {
 		flow.entry, flow.used = c.sig.ARM64GoRegisterABI, true
 		flow.closure = c.sig.ARM64ClosureABI
-	} else if c.privateRegisterEntry || c.checkedR20Entry {
+	} else if c.privateRegisterEntry || c.checkedR20Entry || c.checkedABI0Tail {
 		// Explicit empty presence: only SP and the real caller LR are
 		// available at an ABI0 entry. FP loads define the data registers.
 		flow.entry, flow.used = &ARM64GoRegisterABI{}, true
