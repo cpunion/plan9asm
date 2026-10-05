@@ -292,7 +292,7 @@ func goBindARM64ABI0TailDeclarations(pkg GoPackage, file *File, resolve func(str
 		resolve: resolve, goarch: "arm64", manualSig: opt.ManualSig,
 	}
 	if err := builder.addDeclaredFuncSigs(file); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: ABI0 tail declaration binding: %w", ErrProbeNeedsContext, err)
 	}
 	return BindGoARM64ABI0TailDeclarations(pkg, file, resolve, builder.sigs)
 }
