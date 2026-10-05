@@ -97,9 +97,9 @@ func CaptureInstrumentationOriginalExport(ctx context.Context, binary, invocatio
 	if err != nil {
 		return nil, err
 	}
-	stdout, stderr, commandErr = run(ctx, invocationDir, modeEnv, binary, proof.VetArgs...)
-	if commandErr != nil || len(stdout) != 0 || len(stderr) != 0 {
-		return nil, fmt.Errorf("original same-mode asmdecl failed or emitted unregistered diagnostics (not source N/A): %v; %s", commandErr, stderr)
+	if err := RunInstrumentationOrdinaryAsmdecl(ctx, binary, invocationDir, modeEnv, input, plan, pkg,
+		map[string]string{pkg.PackagePath: proof.ArchiveSHA256}, run); err != nil {
+		return nil, err
 	}
 	if err := recheckInstrumentationOriginalSources(input); err != nil {
 		return nil, err
@@ -190,7 +190,7 @@ func ValidateInstrumentationOriginalExport(input *ConsumerInput, inventory *Inst
 func instrumentationOriginalCommand(plan *InstrumentationOriginalPackagePlan, vet bool) []string {
 	args := []string{"list", "-export", "-compiled", "-json", "-mod=readonly", "-p=1"}
 	if vet {
-		args = []string{"vet", "-asmdecl", "-mod=readonly", "-p=1"}
+		return instrumentationOrdinaryAsmdeclArgs()
 	}
 	args = append(args, plan.BuildFlags...)
 	if len(plan.CustomTags) != 0 {

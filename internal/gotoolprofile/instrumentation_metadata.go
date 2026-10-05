@@ -136,12 +136,10 @@ func InstrumentationPackageVetArgs(input *InstrumentationConsumerInput) []string
 	if input == nil || input.Plan == nil {
 		return nil
 	}
-	flags, err := InstrumentationPackageLoadFlags(input)
-	if err != nil {
+	if _, err := InstrumentationPackageLoadFlags(input); err != nil {
 		return nil
 	}
-	args := append([]string{"vet", "-asmdecl"}, flags...)
-	return append(args, input.Plan.PackagePath)
+	return instrumentationOrdinaryAsmdeclArgs()
 }
 
 func validateInstrumentationMetadataDependencies(input *InstrumentationConsumerInput, pkg PackageProof, header GeneratedHeaderProof, dependencies []InstrumentationDependencyExport) error {

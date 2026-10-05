@@ -167,6 +167,56 @@ func TestSupplementalTestDeclarationsRejectUnprovedSourceRole(t *testing.T) {
 	}
 }
 
+func TestSupplementalTestDeclarationsRejectMissingActualTestDependency(t *testing.T) {
+	repo, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, dir := testDeclarationRoleFixture(t, "linux/amd64")
+	module, err := os.ReadFile(filepath.Join(dir, "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"go.mod": string(module) + "\nrequire example.invalid/testonly v0.0.0\n" +
+			"replace example.invalid/testonly => ./test-dependency-missing\n",
+		"poison_test.go": "package header\nimport _ \"example.invalid/testonly\"\n",
+	}
+	for name, source := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+		input.Sources[name] = featureBytesSHA256([]byte(source))
+		if strings.HasSuffix(name, ".go") {
+			input.Headers[name] = source
+		}
+	}
+	input.Directories["."] = append(input.Directories["."], "poison_test.go")
+	sort.Strings(input.Directories["."])
+	t.Chdir(dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	env := featureEnvironment(os.Environ(), input.Observed.Environment)
+	if _, stderr, err := gotoolprofile.RunBounded(ctx, dir, env, "go", "list", "-export", "-json", "."); err != nil {
+		t.Fatalf("ordinary stock Go package unexpectedly required tests: %v; %s", err, stderr)
+	}
+	_, stderr, err := gotoolprofile.RunBounded(ctx, dir, env, "go", "list", "-test", "-export", "-json", ".")
+	if err == nil || !strings.Contains(string(stderr), "test-dependency-missing") {
+		t.Fatalf("actual test dependency failure was not reproduced: %v; %s", err, stderr)
+	}
+	config, err := resolveCompileConfig(true, "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.FeaturePath, config.Context = writeFeatureInput(t, input), ctx
+	report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"}, []string{"."}, nil,
+		input.AsmFiles, input.Module, t.TempDir(), false, 0, true, false, true, repo, config)
+	if report.Failed != 1 || report.Success != 0 || report.NotApplicable != 0 ||
+		len(report.Fails) != 1 || !strings.Contains(report.Fails[0].Err, "test-dependency-missing") {
+		t.Fatalf("required test declaration became success/N/A or lost its actual missing dependency: %#v; %v", report, err)
+	}
+}
+
 func testDeclarationRoleFixture(t *testing.T, target string) (*featureInput, string) {
 	t.Helper()
 	input, dir := generatedHeaderFixture(t, target)

@@ -109,7 +109,7 @@ func TestInstrumentationOriginalExportActualSameModeAndReadback(t *testing.T) {
 					}
 					return out, stderr, err
 				}
-				if len(args) > 0 && args[0] == "vet" && phase == "vet" {
+				if len(args) > 1 && args[0] == "tool" && args[1] == "vet" && phase == "vet" {
 					return nil, []byte("missing vet tool\n"), exec.ErrNotFound
 				}
 				return RunBounded(ctx, dir, env, name, args...)

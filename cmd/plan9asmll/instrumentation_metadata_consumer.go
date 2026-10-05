@@ -138,9 +138,13 @@ func captureInstrumentationMetadata(ctx context.Context, input *gotoolprofile.In
 		return nil, err
 	}
 	vetArgs := gotoolprofile.InstrumentationPackageVetArgs(input)
-	stdout, stderr, err := gotoolprofile.RunBounded(ctx, invocation, modeEnv, binary, vetArgs...)
-	if err != nil || len(stdout) != 0 || len(stderr) != 0 {
-		return nil, fmt.Errorf("original same-mode asmdecl failed or emitted unknown diagnostics: %v; %s; %s", err, stdout, stderr)
+	exports := map[string]string{selected.PackagePath: exportSHA}
+	for _, dependency := range dependencies {
+		exports[dependency.Source.PackagePath] = dependency.Source.ExportSHA256
+	}
+	if err := gotoolprofile.RunInstrumentationOrdinaryAsmdecl(ctx, binary, invocation, modeEnv, input.Original,
+		plan, &selected, exports, gotoolprofile.RunBounded); err != nil {
+		return nil, err
 	}
 	proof := &gotoolprofile.InstrumentationMetadataProof{
 		Protocol: gotoolprofile.InstrumentationMetadataProtocol, ModeProfileID: input.ID,
