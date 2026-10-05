@@ -62,6 +62,15 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err != nil {
 		return err
 	}
+	mixedPackageRejected, err := validateDiscoveryMixedPackageRejections(plan, profiles, remaining)
+	if err != nil {
+		return err
+	}
+	for key := range mixedPackageRejected {
+		if _, duplicate := fortranRejected[key]; duplicate {
+			return fmt.Errorf("source/profile scope has conflicting typed loader exclusions")
+		}
+	}
 	if err := validateDiscoveryGeneratedHeaderQueries(plan, profiles, eligible); err != nil {
 		return err
 	}
@@ -145,6 +154,15 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 				} else if item.Kind == discoverySourceNotApplicableFortranLoader {
 					return fmt.Errorf("Fortran loader source exclusion lacks its exact package/profile proof")
 				}
+				if proof, found := mixedPackageRejected[key]; found {
+					if item.Kind != discoverySourceNotApplicableMixedPackage ||
+						!result.sourceDiagnosticsCompacted && item.Reason != proof.Stderr ||
+						result.sourceDiagnosticsCompacted && item.Reason != discoverySourceSkipReason(item.Kind) {
+						return fmt.Errorf("mixed-package scope was relabeled or lost its original typed diagnostic")
+					}
+				} else if item.Kind == discoverySourceNotApplicableMixedPackage {
+					return fmt.Errorf("mixed-package source exclusion lacks its exact package/profile proof")
+				}
 				rejected[key] = true
 			}
 		}
@@ -152,6 +170,11 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	for key := range fortranRejected {
 		if !rejected[key] || executed[key] {
 			return fmt.Errorf("Fortran loader proof omitted its exact unexecuted source exclusion")
+		}
+	}
+	for key := range mixedPackageRejected {
+		if !rejected[key] || executed[key] {
+			return fmt.Errorf("mixed-package proof omitted its exact unexecuted source exclusion")
 		}
 	}
 	for key := range eligible {

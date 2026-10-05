@@ -64,12 +64,14 @@ var discoveryFortranRuleSources = map[string]string{
 	"src/cmd/go/internal/load/pkg.go": "d6e1adb610ec55f2e8bc0afd361eedd6e38689684bca122b02873da1d0ed1584",
 }
 
-type discoveryFortranLoaderRules struct {
+type discoveryGoLoaderRules struct {
 	Protocol      string            `json:"protocol"`
 	GoVersion     string            `json:"go_version"`
 	VersionSHA256 string            `json:"version_sha256"`
 	SourceSHA256  map[string]string `json:"source_sha256"`
 }
+
+type discoveryFortranLoaderRules = discoveryGoLoaderRules
 
 func captureFortranLoaderRules(root string, observed *discoveryTargetFeatures) (discoveryFortranLoaderRules, error) {
 	proof := discoveryFortranLoaderRules{Protocol: "registered_go1271_fortran_loader_sources_v1",
@@ -296,24 +298,28 @@ func validateFortranLoaderRejection(plan *discoveryOrdinarySelectionPlan, profil
 }
 
 func validateFortranCPPBindings(plan *discoveryOrdinarySelectionPlan, proof discoveryFortranLoaderRejection) error {
+	return validateRejectedPackageCPPBindings(plan, proof.AsmFiles, proof.Package.Macros.Defines)
+}
+
+func validateRejectedPackageCPPBindings(plan *discoveryOrdinarySelectionPlan, asmFiles, defines []string) error {
 	if plan.CPPInputs == nil {
-		return fmt.Errorf("Fortran loader exclusion lacks its independently registered original CPP graph")
+		return fmt.Errorf("loader exclusion lacks its independently registered original CPP graph")
 	}
 	units := make(map[string]discoveryCPPUnit)
 	for _, unit := range plan.CPPInputs.Units {
 		units[unit.File] = unit
 	}
-	for _, file := range proof.AsmFiles {
+	for _, file := range asmFiles {
 		unit, present := units[file]
 		if !present {
-			return fmt.Errorf("Fortran loader scope lacks its original CPP registration: %s", file)
+			return fmt.Errorf("loader scope lacks its original CPP registration: %s", file)
 		}
 		if plan.CPPInputs.Protocol == discoveryDeferredCPPInputsProtocol {
 			// A loader refusal cannot provide compiler-generated definitions.
 			// Replay with the actual ordinary CPU macros and no invented header:
 			// active missing/generated includes fail, inactive edges stay inactive.
-			if _, err := discoveryDeferredCPPConsumption(plan.CPPInputs, unit, nil, proof.Package.Macros.Defines); err != nil {
-				return fmt.Errorf("Fortran loader cannot hide an unproved active CPP binding: %s: %w", file, err)
+			if _, err := discoveryDeferredCPPConsumption(plan.CPPInputs, unit, nil, defines); err != nil {
+				return fmt.Errorf("loader cannot hide an unproved active CPP binding: %s: %w", file, err)
 			}
 		}
 	}

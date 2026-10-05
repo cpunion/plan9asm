@@ -831,6 +831,18 @@ each original snapshot. The projection never repairs missing metadata.
 
 ## Traffic and cleanup
 
+Positionless mixed-package loader errors use a distinct typed source proof,
+not a fabricated line diagnostic or an assembly pass. The producer binds the
+complete original non-e export error to the actual downloaded directory,
+then stores module-relative names. Readers replay sorted complete directory
+entries, original import-selection headers and Go/Test/XTest/Ignored/Invalid/S
+roles against the observed target/profile/custom tags. Both Go's indexed
+module-cache loader and fallback source rules are registered. An incomplete
+proof, unmodeled cgo role, malformed header, dependency or infrastructure error
+remains a failure. Every valid sibling still requires its usual Go/CPP/LLVM
+consumer and object evidence; compact progress/ledger readers preserve the
+same complete scopes and typed facts.
+
 Inspection reads ZIP metadata/ranges and candidate sources; only matched
 versions are materialized for corpus tests. Successful exact versions avoid
 repeat ZIP inspection. ZIPs up to 64 KiB are fetched whole; larger ZIPs start

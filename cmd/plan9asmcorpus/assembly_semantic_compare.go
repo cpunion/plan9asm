@@ -232,6 +232,22 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			if err := sortSemanticRows(plan.FortranRejections); err != nil {
 				return result, err
 			}
+			for index := range plan.MixedPackageRejections {
+				proof := &plan.MixedPackageRejections[index]
+				if err := replaceID(&proof.ProfileID); err != nil {
+					return result, err
+				}
+				if err := replaceID(&proof.Package.Macros.FeatureID); err != nil {
+					return result, err
+				}
+				// Each original independently validates this physical receipt.
+				// Portable names/directory, complete source rules, command,
+				// source roles, exit and diagnostics remain exact.
+				proof.DriverSHA256, proof.OriginalDiagnosticSHA256 = "", ""
+			}
+			if err := sortSemanticRows(plan.MixedPackageRejections); err != nil {
+				return result, err
+			}
 			for index := range plan.PreCPPRejections {
 				proof := &plan.PreCPPRejections[index]
 				if err := replaceID(&proof.ProfileID); err != nil {

@@ -375,6 +375,8 @@ type discoveryRejectedPackage struct {
 	ImportPath, Dir, Name             string
 	GoFiles, SFiles, FFiles           []string
 	IgnoredGoFiles                    []string
+	TestGoFiles, XTestGoFiles         []string
+	InvalidGoFiles                    []string
 	CgoFiles, SwigFiles, SwigCXXFiles []string
 	Error                             *discoveryRejectedPackageError
 	DepsErrors                        []discoveryRejectedPackageError

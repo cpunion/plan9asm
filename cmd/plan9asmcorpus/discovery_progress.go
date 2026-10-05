@@ -113,6 +113,8 @@ func discoverySourceSkipReason(kind string) string {
 		return "Go 1.27 assembler emitted no symbols for this source"
 	case discoverySourceNotApplicableFortranLoader:
 		return "Go 1.27 CGO=0 loader rejected the original package's selected Fortran resources"
+	case discoverySourceNotApplicableMixedPackage:
+		return "Go 1.27 loader rejected conflicting original selected Go package clauses"
 	case nativeLayoutGoAssemblerTarget:
 		return "Go 1.27 assembler rejected this source for this target"
 	default:

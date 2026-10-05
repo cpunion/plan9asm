@@ -65,6 +65,7 @@ type discoveryOrdinarySelectionPlan struct {
 	GeneratedGoSources           map[string]string                 `json:"generated_go_sources,omitempty"`
 	PreCPPRejections             []discoveryPreCPPRejection        `json:"pre_cpp_rejections,omitempty"`
 	FortranRejections            []discoveryFortranLoaderRejection `json:"fortran_loader_rejections,omitempty"`
+	MixedPackageRejections       []discoveryMixedPackageRejection  `json:"mixed_package_rejections,omitempty"`
 	TestDeclarationSources       []ordinarySelectionSource         `json:"test_declaration_go_sources,omitempty"`
 	TestDeclarationDirectories   []ordinarySelectionDirectory      `json:"test_declaration_directories,omitempty"`
 	TestDeclarationQueries       []discoveryTestDeclarationQuery   `json:"test_declaration_queries,omitempty"`
@@ -767,8 +768,8 @@ func validateOrdinarySelectionResult(result discoveryCorpusResult, targets []str
 		}
 		return nil
 	}
-	if len(plan.FortranRejections) != 0 {
-		return fmt.Errorf("Fortran loader source proof requires current profile-aware report replay")
+	if len(plan.FortranRejections) != 0 || len(plan.MixedPackageRejections) != 0 {
+		return fmt.Errorf("typed loader source proof requires current profile-aware report replay")
 	}
 	if len(plan.DocumentationPackages) != 0 || plan.DocumentationRules != nil {
 		return fmt.Errorf("documentation source proof requires current profile-aware report replay")

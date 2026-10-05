@@ -2171,6 +2171,7 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		discoverySourceNotApplicableAsmDecl:       true,
 		discoverySourceNotApplicableNoSymbols:     true,
 		discoverySourceNotApplicableFortranLoader: true,
+		discoverySourceNotApplicableMixedPackage:  true,
 		nativeLayoutGoAssemblerTarget:             true,
 	}
 	for _, item := range result.SourceNotApplicableItems {
@@ -2194,6 +2195,11 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
 				len(result.OrdinarySelectionPlan.FortranRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
 			return fmt.Errorf("Fortran loader source exclusion lacks its independent typed original-source proof")
+		}
+		if item.Kind == discoverySourceNotApplicableMixedPackage &&
+			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
+				len(result.OrdinarySelectionPlan.MixedPackageRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
+			return fmt.Errorf("mixed-package source exclusion lacks its independent typed original-source proof")
 		}
 		if item.Kind == discoveryDocumentationKind &&
 			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
@@ -2496,12 +2502,31 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var targetAsmFiles []string
 				var eligibleGroups []discoveryPackageGroup
 				fortranProofs := make(map[string]discoveryFortranLoaderRejection)
+				mixedPackageProofs := make(map[string]discoveryMixedPackageRejection)
 				buildErrors, err := runDiscoveryPackageChecksWithProof(packageGroups, func(patterns []string) error {
 					return guard(func() error {
 						return runDiscoveryGoBuild(ctx, workDir, operationEnv, target, buildConfiguration.BuildTags, patterns...)
 					})
 				}, func(group discoveryPackageGroup, failure error) (bool, error) {
-					if activeProfile == nil || !isPotentialFortranLoaderFailure(group.Pattern, failure) {
+					if activeProfile == nil {
+						return false, nil
+					}
+					if isPotentialMixedPackageFailure(failure) {
+						var proof discoveryMixedPackageRejection
+						err := guard(func() error {
+							var err error
+							proof, err = captureMixedPackageRejection(ctx, ordinaryPlan, *activeProfile, download.Dir, workDir,
+								cppGoRoot, operationEnv, group, buildConfiguration.BuildTags, failure)
+							return err
+						})
+						if err != nil {
+							return false, err
+						}
+						ordinaryPlan.MixedPackageRejections = append(ordinaryPlan.MixedPackageRejections, proof)
+						mixedPackageProofs[group.Pattern] = proof
+						return true, nil
+					}
+					if !isPotentialFortranLoaderFailure(group.Pattern, failure) {
 						return false, nil
 					}
 					var proof discoveryFortranLoaderRejection
@@ -2525,6 +2550,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var buildableGroups []discoveryPackageGroup
 				for index, group := range packageGroups {
 					if err := buildErrors[index]; err != nil {
+						if proof, found := mixedPackageProofs[group.Pattern]; found {
+							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+								ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: proof.AsmFiles,
+								Targets: []string{proof.Target}, Kind: discoverySourceNotApplicableMixedPackage, Reason: proof.Stderr,
+							})
+							continue
+						}
 						if proof, found := fortranProofs[group.Pattern]; found {
 							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 								ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: proof.AsmFiles,

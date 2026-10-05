@@ -87,8 +87,91 @@ func TestOrdinaryMixedPackagesProducerKeepsEligibleObjects(t *testing.T) {
 	if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
 		t.Fatalf("original source conflict and actual LLVM object proof do not replay together: %v", err)
 	}
+	if err := validateOrdinarySelectionResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+		t.Fatal("legacy reader accepted a current typed mixed-package proof")
+	}
+	compact := result
+	compact.sourceDiagnosticsCompacted = true
+	compact.SourceNotApplicableItems = append([]discoverySourceNotApplicableItem(nil), result.SourceNotApplicableItems...)
+	for index := range compact.SourceNotApplicableItems {
+		compact.SourceNotApplicableItems[index].Reason = discoverySourceSkipReason(compact.SourceNotApplicableItems[index].Kind)
+	}
+	if err := validateOrdinaryProfileResult(compact, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
+		t.Fatalf("compact progress/ledger lost typed loader evidence: %v", err)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"missing proof":       func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.MixedPackageRejections = nil },
+		"missing source item": func(r *discoveryCorpusResult) { r.SourceNotApplicableItems = r.SourceNotApplicableItems[1:] },
+		"paired deletion": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections = r.OrdinarySelectionPlan.MixedPackageRejections[1:]
+			r.SourceNotApplicableItems = r.SourceNotApplicableItems[1:]
+		},
+		"duplicate proof": func(r *discoveryCorpusResult) {
+			p := r.OrdinarySelectionPlan
+			p.MixedPackageRejections = append(p.MixedPackageRejections, p.MixedPackageRejections[0])
+		},
+		"missing test roles":    func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.MixedPackageRejections[0].TestGoFiles = nil },
+		"missing invalid roles": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.MixedPackageRejections[0].InvalidGoFiles = nil },
+		"foreign package": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].Package.PackagePath = "other.invalid/probe"
+		},
+		"foreign version": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].Package.SourceVersion = "v1.0.1"
+		},
+		"foreign profile": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].ProfileID = strings.Repeat("a", 64)
+		},
+		"foreign directory": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.MixedPackageRejections[0].Directory = "good" },
+		"foreign selected filename": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].ConflictFiles[1] = "unselected.go"
+		},
+		"foreign loader rules": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].Rules.SourceSHA256["src/cmd/go/internal/modindex/read.go"] = strings.Repeat("a", 64)
+		},
+		"missing raw receipt": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].OriginalDiagnosticSHA256 = ""
+		},
+		"mixed stderr": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].Stderr += "other.go:3: undefined: x\n"
+		},
+		"nonempty stdout": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].Stdout = "partial export"
+		},
+		"signal exit": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.MixedPackageRejections[0].ExitCode = -1 },
+		"fake position": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].LoaderError.Pos = "probe.go:1"
+		},
+		"foreign import stack": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].LoaderError.ImportStack = []string{"other.invalid/probe"}
+		},
+		"ordinary relabel": func(r *discoveryCorpusResult) {
+			r.SourceNotApplicableItems[0].Kind = discoverySourceNotApplicableGoBuild
+		},
+		"cross-sibling exclusion": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.MixedPackageRejections[0].AsmFiles = append(r.OrdinarySelectionPlan.MixedPackageRejections[0].AsmFiles, "good/probe_amd64.s")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed discoveryCorpusResult
+			if err := json.Unmarshal(raw, &changed); err != nil {
+				t.Fatal(err)
+			}
+			changed.featureInventory = inventory
+			mutate(&changed)
+			if validateOrdinaryProfileResult(changed, targets, matrix.OrdinarySelectionPlan.GoVersion) == nil {
+				t.Fatal("incomplete, foreign or relabeled loader proof accepted")
+			}
+		})
+	}
 	encoded, err := json.Marshal(matrix.OrdinarySelectionPlan)
 	if err != nil || !strings.Contains(string(encoded), "mixed_package_rejections") {
 		t.Fatal("portable report omitted the independently replayable package-clause proof: ", err)
+	}
+	if strings.Contains(string(encoded), download.Dir) || strings.Contains(string(encoded), "/Users/") {
+		t.Fatal("portable plan retained a private physical download path")
 	}
 }
