@@ -121,27 +121,23 @@ func (c *amd64Ctx) lowerString(op Op, ins Instr) (ok bool, terminated bool, err 
 			return true, false, err
 		}
 		whileEqual := prefix == "REP"
+		resultType := fmt.Sprintf("{ i64, i64, %s, i1 }", typ)
 		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call { i64, i64, i1 } @%s(i64 %s, %s %s, i64 %s, i1 %s, i1 %t)\n", call, x86StringHelperName(kind, width), di, typ, needle, count, direction, whileEqual)
+		fmt.Fprintf(c.b, "  %%%s = call %s @%s(i64 %s, %s %s, i64 %s, i1 %s, i1 %t)\n", call, resultType, x86StringHelperName(kind, width), di, typ, needle, count, direction, whileEqual)
 		next := c.newTmp()
 		remaining := c.newTmp()
-		equal := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i64, i1 } %%%s, 0\n", next, call)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i64, i1 } %%%s, 1\n", remaining, call)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { i64, i64, i1 } %%%s, 2\n", equal, call)
+		lastValue := c.newTmp()
+		executed := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, 0\n", next, resultType, call)
+		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, 1\n", remaining, resultType, call)
+		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, 2\n", lastValue, resultType, call)
+		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, 3\n", executed, resultType, call)
 		if err := c.storeReg(DI, "%"+next); err != nil {
 			return true, false, err
 		}
-		zf := "%" + equal
-		if prefix != "" {
-			oldZF := c.loadFlag(c.flagsZSlot)
-			executed := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = icmp ne i64 %s, 0\n", executed, count)
-			preserved := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %%%s, i1 %s\n", preserved, executed, equal, oldZF)
-			zf = "%" + preserved
-		}
-		fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", zf, c.flagsZSlot)
+		// SCAS sets all six status flags from accumulator minus the last
+		// element read, not just the equality flag used to control repetition.
+		c.setStringCompareFlags(typ, needle, "%"+lastValue, "%"+executed, prefix != "")
 		if prefix != "" {
 			if err := c.storeStringCount("%" + remaining); err != nil {
 				return true, false, err
@@ -184,22 +180,7 @@ func (c *amd64Ctx) lowerString(op Op, ins Instr) (ok bool, terminated bool, err 
 				return true, false, err
 			}
 		}
-		flagSlots := []string{c.flagsCFSlot, c.flagsZSlot, c.flagsSltSlot, c.flagsPFSlot, c.flagsOFSlot}
-		oldFlags := make([]string, len(flagSlots))
-		if prefix != "" {
-			for index, slot := range flagSlots {
-				oldFlags[index] = c.loadFlag(slot)
-			}
-		}
-		c.setCmpFlagsSized(typ, "%"+left, "%"+right)
-		if prefix != "" {
-			for index, slot := range flagSlots {
-				current := c.loadFlag(slot)
-				selected := c.newTmp()
-				fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %s, i1 %s\n", selected, executed, current, oldFlags[index])
-				fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", selected, slot)
-			}
-		}
+		c.setStringCompareFlags(typ, "%"+left, "%"+right, "%"+executed, prefix != "")
 
 	case "lods":
 		si, err := c.loadReg(SI)
@@ -252,6 +233,27 @@ func x86StringHelperName(kind string, width int) string {
 		return "__plan9asm_movs" + suffix
 	}
 	return "__plan9asm_rep_" + kind + suffix
+}
+
+func (c *amd64Ctx) setStringCompareFlags(typ LLVMType, left, right, executed string, preserveEmpty bool) {
+	flags := c.x86StatusFlagSlots()
+	old := make([]string, len(flags))
+	if preserveEmpty {
+		for index, flag := range flags {
+			old[index] = c.loadFlag(flag.slot)
+		}
+	}
+	c.setCmpFlagsSized(typ, left, right)
+	if preserveEmpty {
+		// REP/REPN with a zero initial count performs no comparison and
+		// preserves all six status flags. The helper also performs no load.
+		for index, flag := range flags {
+			current := c.loadFlag(flag.slot)
+			selected := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = select i1 %s, i1 %s, i1 %s\n", selected, executed, current, old[index])
+			fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", selected, flag.slot)
+		}
+	}
 }
 
 func (c *amd64Ctx) storeStringCount(value string) error {

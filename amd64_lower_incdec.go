@@ -7,7 +7,7 @@ import (
 
 // lowerScalarIncDec implements the complete Go 1.27 INCB/W/L/Q and
 // DECB/W/L/Q tables. INC and DEC preserve CF while updating the modeled
-// ZF/SF/PF/OF flags.
+// ZF/SF/AF/PF/OF flags.
 func (c *amd64Ctx) lowerScalarIncDec(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
@@ -72,6 +72,7 @@ func (c *amd64Ctx) lowerScalarIncDec(op Op, ins Instr) (ok bool, terminated bool
 	fmt.Fprintf(c.b, "  %%%s = icmp slt %s %s, 0\n", sign, ty, value)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", sign, c.flagsSltSlot)
 	c.setParityFlagSized(ty, value)
+	c.setAuxiliaryCarryFlag(ty, old, "1", value)
 
 	overflowInput := int64(1) << (bits - 1)
 	if baseOp[:3] == "INC" {
