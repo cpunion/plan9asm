@@ -149,13 +149,13 @@ func arm64PrivateTailBody(fn Func) error {
 	if err := arm64PrivateTailZeroFrame(fn, false); err != nil {
 		return err
 	}
-	return arm64PrivateContinuationBody(fn, arm64PrivateTailDataRegister)
+	return arm64PrivateContinuationBody(fn, arm64PrivateTailDataRegister, nil)
 }
 
 // Operand purity is shared by CALL and tail continuations, but their entry and
 // return contracts remain separate. This grammar grants neither initialized
 // inputs nor pointer bounds: the complete root's independent proofs own those.
-func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool) error {
+func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool, scratchContract func(Op, Instr, arm64GPDataForm) bool) error {
 	labels := map[string]bool{}
 	for _, ins := range fn.Instrs[1:] {
 		if ins.Op == OpLABEL {
@@ -187,8 +187,11 @@ func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool) error {
 			}
 		}
 		op := arm64ControlOp(ins)
-		if f, handled, err := parseARM64GPDataForm(op, ins); handled && (err != nil || f.scratch != nil || len(f.implicit) != 0) {
-			return arm64GoABIContext("private tail %q has unproved source scratch at %q", fn.Sym, ins.Raw)
+		if f, handled, err := parseARM64GPDataForm(op, ins); handled {
+			if err != nil || (f.scratch != nil || len(f.implicit) != 0) &&
+				(scratchContract == nil || !scratchContract(op, ins, f)) {
+				return arm64GoABIContext("private continuation %q has unproved source scratch at %q", fn.Sym, ins.Raw)
+			}
 		}
 		if f, handled, err := parseARM64ScalarMemoryForm(op, ins); handled && (err != nil || f.scratch) {
 			return arm64GoABIContext("private tail %q has unproved memory scratch at %q", fn.Sym, ins.Raw)

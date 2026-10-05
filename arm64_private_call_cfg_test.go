@@ -118,7 +118,7 @@ func TestARM64PrivateCallCFGRejectsUnclosedSource(t *testing.T) {
 		{"hidden_stack", strings.Replace(arm64PrivateCallCFGCopySource, "LDP (R1)", "LDP (RSP)", 1)},
 		{"saved_link", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD R8,R3,R30", 1)},
 		{"scratch", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD R8,R3,R27", 1)},
-		{"native_expansion", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "ADD $0x12345678,R8,R26", 1)},
+		{"faulting_expansion", strings.Replace(arm64PrivateCallCFGCopySource, "ADD R8,R3,R26", "CMP $1,ZR", 1)},
 		{"callout", strings.Replace(arm64PrivateCallCFGCopySource, "copy0:\nRET", "copy0:\nCALL foreign(SB)\nRET", 1)},
 		{"address_escape", arm64PrivateCallCFGCopySource + "TEXT observer<>(SB),516,$0\nMOVD $copy<>(SB),R0\nRET\n"},
 	} {

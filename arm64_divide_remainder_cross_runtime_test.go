@@ -305,6 +305,12 @@ func OriginalDivideRem(input *[7]uint64, output *[14]uint64)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Audit the complete original file before deriving callable declarations.
+	// Source-only continuations must not acquire independent helper signatures.
+	file, err = CoalesceARM64PrivateRegisterHelpers(file)
+	if err != nil {
+		t.Fatal(err)
+	}
 	resolve := func(sym string) string { return strings.TrimPrefix(sym, "·") }
 	sizes := types.SizesFor("gc", "arm64")
 	sigs, err := goSigsForAsmFile(pkg, file, resolve, "arm64", sizes, sizes, nil)

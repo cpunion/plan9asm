@@ -1,10 +1,28 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestARM64PrivateCallImmediateCannotObserveHiddenScratch(t *testing.T) {
+	base := arm64PrivateCallImmediateSource([]arm64ImmediateOracleCase{{op: "ADDS", value: -1, left: "R0", dest: "R1"}})
+	for _, source := range []string{
+		strings.Replace(base, "CALL immediate0<>(SB)", "CALL immediate0<>(SB)\nMOVD R27,R20", 1),
+		strings.Replace(base, "ADDS $-1,R0,R1", "ADDS $-1,R0,R1\nMOVD R27,R20", 1),
+	} {
+		requireARM64GoAssemblerResult(t, source, true)
+		file, err := Parse(ArchARM64, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := CoalesceARM64PrivateRegisterHelpers(file); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatalf("registered scratch became observable hidden data: %v", err)
+		}
+	}
+}
 
 func arm64PrivateCallImmediateCases() []arm64ImmediateOracleCase {
 	var cases []arm64ImmediateOracleCase
