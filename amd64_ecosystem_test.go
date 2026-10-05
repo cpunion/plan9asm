@@ -1546,8 +1546,8 @@ func TestTranslateAMD64PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 }
 
 func TestTranslate386PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
-	// The 386 encoder exposes X/Y registers 0-31, Z registers 0-7, and all
-	// three-operand mask rows (unlike EVEX families that need four operands).
+	// Go accepts high X/Y spellings and all three-operand mask rows. Observe
+	// their Context separately; actual mode32 objects use the physical low bank.
 	var src strings.Builder
 	src.WriteString("TEXT packedfloatmoveforms386(SB),NOSPLIT,$0-0\n")
 	for _, op := range []string{"VMOVAPD", "VMOVAPS", "VMOVUPD", "VMOVUPS"} {
@@ -1568,7 +1568,7 @@ func TestTranslate386PackedFloatMoveCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s.Z (AX), K3, Z7\n", op)
 	}
 	src.WriteString("\tRET\n")
-	file, err := Parse(ArchAMD64, src.String())
+	file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), "386"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1690,7 +1690,7 @@ func TestTranslateX86EVEXPackedIntegerMoveCompleteGoAssemblerForms(t *testing.T)
 				fmt.Fprintf(&src, "\t%s.Z (AX), K3, Z%d\n", op, target.zregs[1])
 			}
 			src.WriteString("\tRET\n")
-			file, err := Parse(ArchAMD64, src.String())
+			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -7032,7 +7032,7 @@ func TestTranslateX86EVEXPackedLogicalCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 			requireX86GoAssemblerResult(t, target.goarch, strings.Replace(src.String(), ",NOSPLIT", "", 1), true)
-			file, err := Parse(ArchAMD64, src.String())
+			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -7164,7 +7164,7 @@ func TestTranslateX86PackedFloatingLogicalCompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
+			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -7334,7 +7334,7 @@ func TestTranslateX86FMA3CompleteGo127Forms(t *testing.T) {
 			}
 			src.WriteString("\tRET\n")
 
-			file, err := Parse(ArchAMD64, src.String())
+			file, err := Parse(ArchAMD64, x86PhysicalMode32ObjectSource(t, src.String(), target.goarch))
 			if err != nil {
 				t.Fatal(err)
 			}

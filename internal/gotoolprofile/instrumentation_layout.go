@@ -1,6 +1,7 @@
 package gotoolprofile
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -107,7 +108,19 @@ func replayInstrumentationDeclarationLayouts(input *InstrumentationConsumerInput
 		if err := decodeInstrumentationOriginalJSON(strings.NewReader(string(declaration.Layout)), 1<<20, &claimed); err != nil {
 			return err
 		}
-		if declaration.GoType != actualType || !reflect.DeepEqual(claimed, layout) {
+		// The producer serializes a public layout observation. Independently
+		// derived signatures may also hold private live declaration inputs,
+		// which JSON cannot recreate and metadata must never authorize. Compare
+		// exactly the same public fields; retain the actual source/type replay.
+		encoded, err := json.Marshal(layout)
+		if err != nil {
+			return err
+		}
+		var observed plan9asm.FuncSig
+		if err := decodeInstrumentationOriginalJSON(strings.NewReader(string(encoded)), 1<<20, &observed); err != nil {
+			return err
+		}
+		if declaration.GoType != actualType || !reflect.DeepEqual(claimed, observed) {
 			return fmt.Errorf("mode Go type/complete ABI0 layout differs from independent original AST replay: %s", declaration.Symbol)
 		}
 	}
