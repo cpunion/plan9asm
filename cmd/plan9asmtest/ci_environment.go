@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -191,13 +192,19 @@ func normalizeCIGCCFlags(flags, tempRoot string) (string, error) {
 		from, to, found := strings.Cut(mapped, "=")
 		base := filepath.Base(from)
 		digits := strings.TrimPrefix(base, "go-build")
-		if count != 1 || !found || to != "/tmp/go-build" || from != filepath.Join(tempRoot, base) || digits == "" || digits == base {
+		if count != 1 || !found || to != "/tmp/go-build" || from != filepath.Join(tempRoot, base) || len(digits) < 1 || len(digits) > 10 || digits == base {
 			return "", fmt.Errorf("unregistered actual GOGCCFLAGS prefix-map")
 		}
 		for _, digit := range digits {
 			if digit < '0' || digit > '9' {
 				return "", fmt.Errorf("actual Go temporary nonce is not decimal")
 			}
+		}
+		// Both selected SDKs derive MkdirTemp's suffix from uint32 and emit
+		// canonical base-10 text (os.nextRandom), not arbitrary decimal input.
+		nonce, err := strconv.ParseUint(digits, 10, 32)
+		if err != nil || strconv.FormatUint(nonce, 10) != digits {
+			return "", fmt.Errorf("actual Go temporary nonce is not canonical uint32")
 		}
 		normalized.WriteString(flags[start:payloadStart])
 		normalized.WriteString(prefix + "<tmp>/go-build<decimal>=/tmp/go-build")

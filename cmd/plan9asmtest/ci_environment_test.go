@@ -102,6 +102,9 @@ func TestCIGCCFlagsOnlyDirectDecimalTemporaryNonce(t *testing.T) {
 		"-ffile-prefix-map=/tmp/go-build123/child=/tmp/go-build",
 		"-ffile-prefix-map=/tmp/go-build=/tmp/go-build",
 		"-ffile-prefix-map=/tmp/go-build123x=/tmp/go-build",
+		"-ffile-prefix-map=/tmp/go-build12345678901=/tmp/go-build",
+		"-ffile-prefix-map=/tmp/go-build4294967296=/tmp/go-build",
+		"-ffile-prefix-map=/tmp/go-build000123=/tmp/go-build",
 		"-ffile-prefix-map=/tmp/go-build123=/other",
 		"-ffile-prefix-map=/tmp/go-build123=/tmp/go-build=extra",
 		"-ffile-prefix-map=/tmp/go-build123=/tmp/go-build -fdebug-prefix-map=/tmp/go-build456=/tmp/go-build",
@@ -115,6 +118,11 @@ func TestCIGCCFlagsOnlyDirectDecimalTemporaryNonce(t *testing.T) {
 	unchanged := "-m64  -pthread\t-fno-common"
 	if actual, err := normalizeCIGCCFlags(unchanged, "/tmp"); err != nil || actual != unchanged {
 		t.Fatal("non-nonce flags or whitespace changed", actual, err)
+	}
+	for _, nonce := range []string{"0", "4294967295"} {
+		if _, err := normalizeCIGCCFlags("-ffile-prefix-map=/tmp/go-build"+nonce+"=/tmp/go-build", "/tmp"); err != nil {
+			t.Fatal("actual uint32 nonce boundary", nonce, err)
+		}
 	}
 }
 
