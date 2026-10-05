@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -30,11 +31,13 @@ type instrumentationAsmdeclPackage struct {
 	Standard, Incomplete             bool
 	Error                            json.RawMessage
 	DepsErrors                       []json.RawMessage
-	Module                           *struct {
-		Path, Version, GoMod, GoVersion string
-		Main                            bool
-		Replace                         json.RawMessage
-	}
+	Module                           *instrumentationAsmdeclModule
+}
+
+type instrumentationAsmdeclModule struct {
+	Path, Version, Dir, GoMod, GoVersion string
+	Main                                 bool
+	Replace                              *instrumentationAsmdeclModule
 }
 
 // This is cmd/go's native vet configuration protocol. In particular, neither
@@ -57,7 +60,17 @@ func RunInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 	input *ConsumerInput, plan *InstrumentationOriginalPackagePlan, selected *PackageProof,
 	exports map[string]string, run Runner,
 ) error {
-	if ctx == nil || ctx.Err() != nil || run == nil || input == nil || plan == nil || selected == nil ||
+	return runInstrumentationOrdinaryAsmdecl(ctx, binary, invocation, env, input, plan, selected, exports, run, os.RemoveAll)
+}
+
+// The public producer always uses os.RemoveAll. This private per-call seam
+// makes cleanup-error propagation testable without a global hook or analyzer
+// failure, including when privileged root can remove mode-000 directories.
+func runInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation string, env []string,
+	input *ConsumerInput, plan *InstrumentationOriginalPackagePlan, selected *PackageProof,
+	exports map[string]string, run Runner, remove func(string) error,
+) (result error) {
+	if ctx == nil || ctx.Err() != nil || run == nil || remove == nil || input == nil || plan == nil || selected == nil ||
 		!filepath.IsAbs(binary) || !filepath.IsAbs(invocation) || len(exports) == 0 || len(exports) > 4096 ||
 		plan.PackagePath == "" || selected.PackagePath != plan.PackagePath {
 		return fmt.Errorf("ordinary asmdecl requires actual bounded source/export identities")
@@ -72,7 +85,8 @@ func RunInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 		ID: plan.PackagePath, Compiler: "gc", ImportPath: plan.PackagePath,
 		ImportMap: make(map[string]string), PackageFile: make(map[string]string), Standard: make(map[string]bool),
 	}
-	guards, seen := make(map[string]string), make(map[string]bool)
+	guards := &instrumentationTypeGraph{hashes: make(map[string]string), paths: make(map[string]string)}
+	seen := make(map[string]bool)
 	decoder := json.NewDecoder(bytes.NewReader(stdout))
 	var root *instrumentationAsmdeclPackage
 	for {
@@ -95,11 +109,10 @@ func RunInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 		if !filepath.IsAbs(pkg.Export) || exports[pkg.ImportPath] == "" {
 			return fmt.Errorf("ordinary asmdecl export lacks independent identity: %s", pkg.ImportPath)
 		}
-		hash, err := FileSHA256(pkg.Export)
-		if err != nil || hash != exports[pkg.ImportPath] {
+		if err := guards.retain(pkg.Export); err != nil || guards.hashes[pkg.Export] != exports[pkg.ImportPath] {
 			return fmt.Errorf("ordinary asmdecl export differs from independent consumption: %s", pkg.ImportPath)
 		}
-		guards[pkg.Export], config.PackageFile[pkg.ImportPath] = hash, pkg.Export
+		config.PackageFile[pkg.ImportPath] = pkg.Export
 		if pkg.ImportPath == plan.PackagePath {
 			root = &pkg
 		}
@@ -125,15 +138,23 @@ func RunInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 	if err != nil {
 		return err
 	}
-	identity, err := os.Stat(owned)
+	identity, err := os.Lstat(owned)
 	if err != nil {
-		return err
+		return fmt.Errorf("ordinary asmdecl created directory identity unavailable: %w", err)
 	}
+	workspace := &instrumentationAsmdeclWorkspace{name: owned, identity: identity}
+	workspace.physical, err = filepath.EvalSymlinks(owned)
 	defer func() {
-		if actual, err := os.Lstat(owned); err == nil && os.SameFile(identity, actual) {
-			_ = os.RemoveAll(owned)
+		if cleanupErr := workspace.close(remove); cleanupErr != nil {
+			result = errors.Join(result, cleanupErr)
 		}
 	}()
+	if err != nil {
+		return fmt.Errorf("ordinary asmdecl created directory is not physical: %w", err)
+	}
+	if err := workspace.verify(); err != nil {
+		return err
+	}
 	config.VetxOutput = filepath.Join(owned, "ordinary.vetx")
 	encoded, err := json.Marshal(config)
 	if err != nil {
@@ -143,20 +164,31 @@ func RunInstrumentationOrdinaryAsmdecl(ctx context.Context, binary, invocation s
 	if err := os.WriteFile(filename, encoded, 0600); err != nil {
 		return err
 	}
-	guards[filename] = bytesSHA256(encoded)
+	if err := guards.retain(filename); err != nil || guards.hashes[filename] != bytesSHA256(encoded) {
+		return fmt.Errorf("ordinary asmdecl written configuration differs: %v", err)
+	}
+	if err := workspace.verifyConfig(); err != nil {
+		return err
+	}
 	if err := recheckInstrumentationAsmdeclGuards(guards); err != nil {
 		return err
 	}
 	stdout, stderr, err = run(ctx, owned, env, binary, instrumentationOrdinaryAsmdeclArgs()...)
 	if err != nil || len(stdout) != 0 || len(stderr) != 0 {
-		return fmt.Errorf("original ordinary same-mode asmdecl failed or emitted unknown diagnostics (not source N/A): %v; %s; %s", err, stdout, stderr)
+		return errors.Join(fmt.Errorf("original ordinary same-mode asmdecl failed or emitted unknown diagnostics (not source N/A): %v; %s; %s", err, stdout, stderr), workspace.verifyConfig())
+	}
+	if err := workspace.verifyConfig(); err != nil {
+		return err
 	}
 	return recheckInstrumentationAsmdeclGuards(guards)
 }
 
 func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *InstrumentationOriginalPackagePlan, selected *PackageProof,
-	pkg *instrumentationAsmdeclPackage, config *instrumentationAsmdeclConfig, guards map[string]string,
+	pkg *instrumentationAsmdeclPackage, config *instrumentationAsmdeclConfig, guards *instrumentationTypeGraph,
 ) error {
+	if err := ValidatePackageModule(input, *selected); err != nil {
+		return err
+	}
 	expectedDir := filepath.Join(input.SourceRoot, filepath.FromSlash(plan.PackageDirectory))
 	expectedDir, err := filepath.EvalSymlinks(expectedDir)
 	if err != nil {
@@ -164,23 +196,45 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 	}
 	actualDir, err := filepath.EvalSymlinks(pkg.Dir)
 	if err != nil || actualDir != expectedDir || pkg.Module == nil || pkg.Module.Path != selected.ModulePath ||
-		pkg.Module.Version != selected.ModuleVersion || pkg.Module.Main != (selected.SourceRole == "main") ||
-		len(pkg.Module.Replace) != 0 && string(pkg.Module.Replace) != "null" {
+		pkg.Module.Version != selected.ModuleVersion || pkg.Module.Main != (selected.SourceRole == "main") {
 		return fmt.Errorf("ordinary asmdecl package/module identity changed")
+	}
+	module := pkg.Module
+	if selected.SourceRole == "version_replace" {
+		replacement := module.Replace
+		if replacement == nil || replacement.Path != selected.SourceModule || replacement.Version != selected.SourceVersion ||
+			replacement.Version == "" || replacement.Main || replacement.Replace != nil {
+			return fmt.Errorf("ordinary asmdecl exact archive replacement identity changed")
+		}
+		module = replacement
+	} else if module.Replace != nil || selected.SourceRole != "main" && selected.SourceRole != "module" {
+		return fmt.Errorf("ordinary asmdecl has an unknown or local replacement role")
+	}
+	expectedRoot, err := filepath.EvalSymlinks(input.SourceRoot)
+	if err != nil {
+		return fmt.Errorf("ordinary asmdecl original module root is unavailable: %w", err)
+	}
+	for _, root := range []string{pkg.Module.Dir, module.Dir} {
+		physical, err := filepath.EvalSymlinks(root)
+		if err != nil || physical != expectedRoot {
+			return fmt.Errorf("ordinary asmdecl actual module root differs from original source")
+		}
 	}
 	config.Dir = actualDir
 	config.GoVersion = "go" + pkg.Module.GoVersion
 	if pkg.Module.GoVersion == "" {
 		config.GoVersion = "go1.16"
 	}
-	metadataHash := input.Sources["go.mod"]
-	if input.ProxyGoMod != nil {
-		metadataHash = input.ProxyGoMod.SHA256
+	source := ImportExport{ModulePath: selected.ModulePath, Version: selected.ModuleVersion,
+		SourceModule: selected.SourceModule, SourceVersion: selected.SourceVersion, SourceRole: selected.SourceRole}
+	if err := guards.retainModuleMetadata(input, source, module.GoMod, expectedRoot); err != nil {
+		return fmt.Errorf("ordinary asmdecl original module metadata changed: %w", err)
 	}
-	if hash, err := FileSHA256(pkg.Module.GoMod); err != nil || hash != metadataHash || metadataHash == "" {
-		return fmt.Errorf("ordinary asmdecl original module metadata changed")
+	if pkg.Module.GoMod != module.GoMod {
+		if err := guards.retainModuleMetadata(input, source, pkg.Module.GoMod, expectedRoot); err != nil {
+			return fmt.Errorf("ordinary asmdecl actual namespace metadata changed: %w", err)
+		}
 	}
-	guards[pkg.Module.GoMod] = metadataHash
 	for index, names := range [][]string{pkg.GoFiles, pkg.CompiledGoFiles, pkg.SFiles} {
 		var logical, actual []string
 		for _, name := range names {
@@ -195,7 +249,9 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 				return fmt.Errorf("ordinary asmdecl source differs from independently selected original bytes")
 			}
 			filename := filepath.Join(actualDir, name)
-			guards[filename] = selected.SourceSHA256[source]
+			if err := guards.retain(filename); err != nil || guards.hashes[filename] != selected.SourceSHA256[source] {
+				return fmt.Errorf("ordinary asmdecl source bytes changed: %s", source)
+			}
 			logical, actual = append(logical, source), append(actual, filename)
 		}
 		sort.Strings(logical)
@@ -212,8 +268,12 @@ func bindInstrumentationAsmdeclSource(input *ConsumerInput, plan *Instrumentatio
 	return nil
 }
 
-func recheckInstrumentationAsmdeclGuards(guards map[string]string) error {
-	for filename, expected := range guards {
+func recheckInstrumentationAsmdeclGuards(guards *instrumentationTypeGraph) error {
+	for filename, expected := range guards.hashes {
+		physical, err := filepath.EvalSymlinks(filename)
+		if err != nil || physical != guards.paths[filename] {
+			return fmt.Errorf("ordinary asmdecl source/configuration/export path changed: %s", filename)
+		}
 		if actual, err := FileSHA256(filename); err != nil || actual != expected {
 			return fmt.Errorf("ordinary asmdecl source/configuration/export changed: %s", filename)
 		}
