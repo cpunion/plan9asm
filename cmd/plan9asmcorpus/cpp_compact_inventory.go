@@ -11,11 +11,13 @@ import (
 const discoveryCompactCPPInventoryProtocol = "query_only_original_cpp_inventory_v1"
 
 // This query result is not a report/consumer protocol. Only independently
-// supplied original bytes can validate it; it grants no source or CPP authority.
+// supplied original bytes and ordered driver inputs can validate it; it grants
+// no source or CPP authority.
 type discoveryCompactCPPInventory struct {
-	Protocol        string                               `json:"protocol"`
-	InvocationNames []string                             `json:"invocation_names"`
-	Sources         map[string]discoveryCompactCPPSource `json:"sources"`
+	Protocol          string                                 `json:"protocol"`
+	DriverDefinitions []plan9asm.AssemblyCPPDriverDefinition `json:"driver_definitions"`
+	InvocationNames   []string                               `json:"invocation_names"`
+	Sources           map[string]discoveryCompactCPPSource   `json:"sources"`
 }
 
 type discoveryCompactCPPSource struct {
@@ -42,9 +44,23 @@ type discoveryCompactCPPMacro struct {
 	Formals  []string `json:"formals"`
 }
 
-func captureDiscoveryCompactCPPInventory(sources map[string][]byte) (*discoveryCompactCPPInventory, error) {
+func captureDiscoveryCompactCPPInventory(sources map[string][]byte, defines []string) (*discoveryCompactCPPInventory, error) {
 	if len(sources) == 0 || len(sources) > 512 {
 		return nil, fmt.Errorf("compact CPP query requires bounded original source bytes")
+	}
+	seeds, err := plan9asm.InspectAssemblyCPPDriverDefinitions(defines)
+	if err != nil {
+		return nil, err
+	}
+	names := make(map[string]bool)
+	for _, seed := range seeds {
+		names[seed.Definition.Name] = true
+		if err := compactCPPGeneratedNames(&seed.Definition, names); err != nil {
+			return nil, fmt.Errorf("driver CPP definition %q: %w", seed.Definition.Name, err)
+		}
+		if len(names) > 4096 {
+			return nil, fmt.Errorf("compact CPP query exceeds its macro-name bound")
+		}
 	}
 	ids := make([]string, 0, len(sources))
 	for id := range sources {
@@ -54,7 +70,6 @@ func captureDiscoveryCompactCPPInventory(sources map[string][]byte) (*discoveryC
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	names := make(map[string]bool)
 	totalBytes := 0
 	for _, id := range ids {
 		data := sources[id]
@@ -80,9 +95,10 @@ func captureDiscoveryCompactCPPInventory(sources map[string][]byte) (*discoveryC
 		}
 	}
 	result := &discoveryCompactCPPInventory{
-		Protocol:        discoveryCompactCPPInventoryProtocol,
-		InvocationNames: sortedCompactCPPMacroNames(names),
-		Sources:         make(map[string]discoveryCompactCPPSource, len(ids)),
+		Protocol:          discoveryCompactCPPInventoryProtocol,
+		DriverDefinitions: seeds,
+		InvocationNames:   sortedCompactCPPMacroNames(names),
+		Sources:           make(map[string]discoveryCompactCPPSource, len(ids)),
 	}
 	for _, id := range ids {
 		data := sources[id]
@@ -155,9 +171,11 @@ func compactCPPGeneratedNames(macro *plan9asm.AssemblyCPPMacroDefinition, names 
 }
 
 // Full-source recapture, not a JSON self-consistency check. Authenticating the
-// supplied source/ZIP/tool bytes remains the caller's separate responsibility.
-func verifyDiscoveryCompactCPPInventory(inventory *discoveryCompactCPPInventory, sources map[string][]byte) error {
-	actual, err := captureDiscoveryCompactCPPInventory(sources)
+// supplied source/ZIP/tool bytes and exact ordered actual driver definitions
+// remains the caller's separate responsibility. The required definitions must
+// come from that independent input, never from the inventory being checked.
+func verifyDiscoveryCompactCPPInventory(inventory *discoveryCompactCPPInventory, sources map[string][]byte, defines []string) error {
+	actual, err := captureDiscoveryCompactCPPInventory(sources, defines)
 	if err != nil {
 		return err
 	}

@@ -79,7 +79,7 @@ func TestCompactCPPInventoryGeneratedFunctionNamesRequireContext(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Logf("COMPACT_NESTED_ACTUAL_GO_RECEIPT %s", receipt)
-			if inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)}); err == nil {
+			if inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)}, nil); err == nil {
 				t.Fatalf("generated function formal silently omitted later NEW invocation: %+v", inventory)
 			}
 		})
@@ -100,7 +100,7 @@ func TestCompactCPPInventoryGeneratedFunctionScopesRemainUnclosed(t *testing.T) 
 			if err != nil || len(physical.Records) == 0 || physical.Records[0].Text != "#define OUTER \\\n"+definition+"\n" {
 				t.Fatalf("raw generated definition was not retained: %+v %v", physical, err)
 			}
-			inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)})
+			inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)}, nil)
 			if inventory != nil || err == nil || !strings.Contains(err.Error(), "generated CPP function macro needs an exact invocation proof") {
 				t.Fatalf("unclosed generated function scope was accepted: %+v %v", inventory, err)
 			}
@@ -108,7 +108,7 @@ func TestCompactCPPInventoryGeneratedFunctionScopesRemainUnclosed(t *testing.T) 
 	}
 
 	source := "#define USE(NAME) NAME\nUSE(RET)\n"
-	inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)})
+	inventory, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)}, nil)
 	if err != nil || inventory == nil || len(inventory.InvocationNames) != 1 || inventory.InvocationNames[0] != "USE" {
 		t.Fatalf("ordinary physical function macro was changed: %+v %v", inventory, err)
 	}

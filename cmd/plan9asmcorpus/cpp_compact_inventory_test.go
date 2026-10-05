@@ -13,7 +13,7 @@ func TestCompactCPPInventoryRetainsCrossHeaderRawSourceOrder(t *testing.T) {
 		"module/pkg/defs.h":     []byte("#ifdef NEVER\n#define USE SELECT\n#endif\n#define SELECT() \\\n#ifdef GOAMD64_v4 \\\n#line 27 \"logical.s\" \\\n#include \"choice.h\" \\\n#endif \\\n\n#define MAKE(P) \\\n#define NEW 17 \\\n#ifdef P \\\n#undef NEW \\\n#endif \\\n\n"),
 		"module/pkg/choice.h":   []byte("#define CHOSEN 1"),
 	}
-	got, err := captureDiscoveryCompactCPPInventory(sources)
+	got, err := captureDiscoveryCompactCPPInventory(sources, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +46,14 @@ func TestCompactCPPInventoryRetainsCrossHeaderRawSourceOrder(t *testing.T) {
 		!reflect.DeepEqual(header.Records[4].Definition.Formals, []string{"P"}) {
 		t.Fatal("object/function/zero-formal/control payload changed")
 	}
-	if err := verifyDiscoveryCompactCPPInventory(got, sources); err != nil {
+	if err := verifyDiscoveryCompactCPPInventory(got, sources, nil); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestCompactCPPInventoryOrdinaryInstructionBodiesStayCompact(t *testing.T) {
 	source := "#ifdef GOAMD64_v3\n" + strings.Repeat("MOVQ $123456789, R0\n", 100000) + "#else\nRET\n#endif\n"
-	got, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)})
+	got, err := captureDiscoveryCompactCPPInventory(map[string][]byte{"module/original.s": []byte(source)}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,14 +66,14 @@ func TestCompactCPPInventoryOrdinaryInstructionBodiesStayCompact(t *testing.T) {
 		t.Fatal("compact empty name set/full source identity changed")
 	}
 	changed := strings.Replace(source, "123456789", "123456788", 1)
-	if err := verifyDiscoveryCompactCPPInventory(got, map[string][]byte{"module/original.s": []byte(changed)}); err == nil {
+	if err := verifyDiscoveryCompactCPPInventory(got, map[string][]byte{"module/original.s": []byte(changed)}, nil); err == nil {
 		t.Fatal("an omitted ordinary instruction mutation borrowed the old full-source binding")
 	}
 }
 
 func TestCompactCPPInventoryRequiresIndependentFullSourceRecapture(t *testing.T) {
 	sources := map[string][]byte{"module/source.s": []byte("#define F() x·h\nF()\n#line 17 \"logical.s\"\n//go:build ignored\nRET")}
-	got, err := captureDiscoveryCompactCPPInventory(sources)
+	got, err := captureDiscoveryCompactCPPInventory(sources, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestCompactCPPInventoryRequiresIndependentFullSourceRecapture(t *testing.T)
 				t.Fatal(err)
 			}
 			mutate(&copy)
-			if err := verifyDiscoveryCompactCPPInventory(&copy, sources); err == nil {
+			if err := verifyDiscoveryCompactCPPInventory(&copy, sources, nil); err == nil {
 				t.Fatal("mutated compact JSON borrowed full-source authority")
 			}
 		})
@@ -144,7 +144,7 @@ func TestCompactCPPInventoryUnclosedAndInvalidSourcesFail(t *testing.T) {
 	}
 	for index, sources := range cases {
 		t.Run(string(rune('a'+index)), func(t *testing.T) {
-			if _, err := captureDiscoveryCompactCPPInventory(sources); err == nil {
+			if _, err := captureDiscoveryCompactCPPInventory(sources, nil); err == nil {
 				t.Fatal("unclosed or unbounded compact source inventory accepted")
 			}
 		})
