@@ -20,9 +20,11 @@ import (
 func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing.T) {
 	compilerEnvironment := os.Environ()
 	target := runtime.GOOS + "/" + runtime.GOARCH
-	move := "MOVQ"
-	if runtime.GOARCH == "arm64" {
-		move = "MOVD"
+	storeResult := func(value string) string {
+		if runtime.GOARCH == "arm64" {
+			return "MOVD $" + value + ",R0\nMOVD R0,ret+0(FP)\n"
+		}
+		return "MOVQ $" + value + ",ret+0(FP)\n"
 	}
 	badAssembly := "bad/probe_" + runtime.GOARCH + ".s"
 	goodAssembly := "good/probe_" + runtime.GOARCH + ".s"
@@ -36,10 +38,10 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 		"bad/constants_go125.go": "//go:build race && go1.25\n\npackage bad\nconst answer = 41\n",
 		"bad/constants_go126.go": "//go:build race && go1.26\n\npackage bad\nconst answer = 42\n",
 		badAssembly: "//go:build race\n\n#include \"textflag.h\"\n" +
-			"TEXT ·Probe(SB),NOSPLIT,$0-8\n" + move + " $41,ret+0(FP)\nRET\n",
+			"TEXT ·Probe(SB),NOSPLIT,$0-8\n" + storeResult("41") + "RET\n",
 		"good/probe.go": "package good\nfunc Probe() uint64\n",
 		goodAssembly: "#include \"textflag.h\"\nTEXT ·Probe(SB),NOSPLIT,$0-8\n" +
-			move + " $7,ret+0(FP)\nRET\n",
+			storeResult("7") + "RET\n",
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
 	configurePreCPPFixtureProxy(t, candidate, download, sources["go.mod"])
@@ -85,6 +87,17 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 		t.Fatalf("original refusal is not the complete source-bound compiler diagnostic:\n%s", exit.Stderr)
 	}
 	t.Logf("actual %s %s duplicate-source compiler exit1: %s", runtime.Version(), target, exit.Stderr)
+	good := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"),
+		"list", "-p=1", "-mod=readonly", "-export", "-compiled", "-json", ".")
+	good.Dir = filepath.Join(download.Dir, "good")
+	good.Env = replaceEnv(original.Env, map[string]string{"CGO_ENABLED": "0"})
+	if output, err := good.Output(); err != nil {
+		var diagnostic []byte
+		if exit, ok := err.(*exec.ExitError); ok {
+			diagnostic = exit.Stderr
+		}
+		t.Fatalf("original compiler did not accept the unchanged eligible sibling: %v\n%s\n%s", err, output, diagnostic)
+	}
 
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -109,8 +122,8 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 	}
 	if matrix.Success != 1 || matrix.Failed != 0 || matrix.InstrumentationTranslations != 0 ||
 		matrix.OrdinarySelectionPlan == nil || matrix.OrdinarySelectionPlan.InstrumentationPlan == nil {
-		t.Fatalf("rejected source removed the eligible object or manufactured mode success: success=%d failed=%d mode_objects=%d",
-			matrix.Success, matrix.Failed, matrix.InstrumentationTranslations)
+		t.Fatalf("rejected source removed the eligible object or manufactured mode success: success=%d failed=%d mode_objects=%d source=%+v target=%+v",
+			matrix.Success, matrix.Failed, matrix.InstrumentationTranslations, matrix.SourceNotApplicableItems, matrix.NotApplicableItems)
 	}
 	outcomes := matrix.OrdinarySelectionPlan.InstrumentationPlan.Outcomes
 	if len(outcomes) != 1 || outcomes[0].Status != "original_source_rejected" || outcomes[0].PackagePlan == nil ||
