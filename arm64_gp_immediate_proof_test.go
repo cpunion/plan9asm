@@ -96,14 +96,14 @@ func TestARM64GPImmediateScratchIndependentProvenance(t *testing.T) {
 			}
 			ins := arm64ImmediateTestInstruction(t, text)
 			control := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R0": {"label:actual_code": true}, "R27": {"label:entry_lr": true}},
+				regs:   map[Reg]arm64ControlValue{"R0": arm64ControlFromMap(map[string]bool{"label:actual_code": true}), "R27": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 				memory: make(map[string]arm64ControlValue),
 			}
 			control.transfer(ins, ins.Op, false, nil)
-			if len(arm64ControlLabels(control.regs["R27"])) != 0 {
+			if arm64ControlCount(arm64ControlLabels(control.regs["R27"])) != 0 {
 				t.Fatalf("%s scratch inherited source/old-R27 code provenance", text)
 			}
-			if strings.HasSuffix(text, ",R1") && len(arm64ControlLabels(control.regs["R1"])) == 0 {
+			if strings.HasSuffix(text, ",R1") && arm64ControlCount(arm64ControlLabels(control.regs["R1"])) == 0 {
 				t.Fatalf("%s actual result lost its code-derived source", text)
 			}
 			address := arm64PrivateFrameAddress{offset: 16, exact: true}
@@ -135,9 +135,9 @@ func TestARM64GPImmediateScratchIndependentProvenance(t *testing.T) {
 	}
 	for _, text := range []string{"ADD $1,R27,R1", "ADD $0x123456,R27,R1", "AND $255,R27,R1"} {
 		ins := arm64ImmediateTestInstruction(t, text)
-		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R27": {"label:entry_lr": true}}, memory: make(map[string]arm64ControlValue)}
+		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R27": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})}, memory: make(map[string]arm64ControlValue)}
 		state.transfer(ins, ins.Op, false, nil)
-		if len(arm64ControlLabels(state.regs["R27"])) == 0 || len(arm64ControlLabels(state.regs["R1"])) == 0 {
+		if arm64ControlCount(arm64ControlLabels(state.regs["R27"])) == 0 || arm64ControlCount(arm64ControlLabels(state.regs["R1"])) == 0 {
 			t.Fatalf("non-TMP encoding killed a genuine source witness: %s", text)
 		}
 	}

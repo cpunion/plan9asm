@@ -11,7 +11,7 @@ import (
 func arm64ControlGrowthValue(targets int) arm64ControlValue {
 	value := arm64ControlExternal()
 	for index := 0; index < targets; index++ {
-		next := arm64ControlValue{fmt.Sprintf("label:continuation_%d", index): true}
+		next := arm64ControlFromMap(map[string]bool{fmt.Sprintf("label:continuation_%d", index): true})
 		value = arm64ControlUnion(value, next)
 	}
 	return value
@@ -19,11 +19,11 @@ func arm64ControlGrowthValue(targets int) arm64ControlValue {
 
 func arm64ControlGrowthCheckValue(tb testing.TB, value arm64ControlValue, targets int) {
 	tb.Helper()
-	if len(value) != targets+1 || !value[""] {
-		tb.Fatalf("wrong complete target set: %d entries, want %d", len(value), targets+1)
+	if arm64ControlCount(value) != targets+1 || !arm64ControlHas(value, "") {
+		tb.Fatalf("wrong complete target set: %d entries, want %d", arm64ControlCount(value), targets+1)
 	}
 	for index := 0; index < targets; index++ {
-		if !value[fmt.Sprintf("label:continuation_%d", index)] {
+		if !arm64ControlHas(value, fmt.Sprintf("label:continuation_%d", index)) {
 			tb.Fatalf("missing original continuation %d", index)
 		}
 	}
@@ -78,9 +78,9 @@ func arm64ControlGrowthCheckPlan(tb testing.TB, ctx *arm64Ctx, calls int) {
 			}
 		}
 	}
-	expected := arm64ControlValue{"": true, "label:" + plan.outer: true, "label:done": true}
+	expected := arm64ControlFromMap(map[string]bool{"": true, "label:" + plan.outer: true, "label:done": true})
 	for call := 1; call < calls; call++ {
-		expected[fmt.Sprintf("label:call_%d", call)] = true
+		expected = arm64ControlSetToken(expected, fmt.Sprintf("label:call_%d", call), true)
 	}
 	if !arm64ControlEqual(value, expected) {
 		tb.Fatalf("changed original complete return targets: got %v, want %v", value, expected)

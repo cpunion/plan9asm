@@ -12,36 +12,14 @@ import (
 // This is the frozen, pre-sharing set operation, not a second source proof.
 // Tests compare complete token maps, including unknown and affine identities.
 func arm64ControlUnionReference(left, right arm64ControlValue) arm64ControlValue {
-	value := make(arm64ControlValue, len(left)+len(right))
-	for token := range left {
-		value[token] = true
-	}
-	for token := range right {
-		value[token] = true
-	}
-	frame := ""
-	for token := range value {
-		if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") {
-			if frame != "" && frame != token {
-				for candidate := range value {
-					if strings.HasPrefix(candidate, "sp:") || strings.HasPrefix(candidate, "fp:") {
-						delete(value, candidate)
-					}
-				}
-				value[""] = true
-				break
-			}
-			frame = token
-		}
-	}
-	return value
+	return arm64ControlFromMap(arm64ControlFrozenUnion(arm64ControlMap(left), arm64ControlMap(right)))
 }
 
 func arm64ControlSharingState(targets int) *arm64ControlState {
-	value := make(arm64ControlValue, targets+1)
-	value[""] = true
+	value := arm64ControlFromMap(make(map[string]bool, targets+1))
+	value = arm64ControlSetToken(value, "", true)
 	for index := 0; index < targets; index++ {
-		value[fmt.Sprintf("label:continuation_%d", index)] = true
+		value = arm64ControlSetToken(value, fmt.Sprintf("label:continuation_%d", index), true)
 	}
 	state := &arm64ControlState{
 		regs:    make(map[Reg]arm64ControlValue),
@@ -51,7 +29,7 @@ func arm64ControlSharingState(targets int) *arm64ControlState {
 	for index := 0; index < 31; index++ {
 		state.regs[Reg(fmt.Sprintf("R%d", index))] = value
 	}
-	state.regs[SP] = arm64ControlValue{"sp:0": true}
+	state.regs[SP] = arm64ControlFromMap(map[string]bool{"sp:0": true})
 	state.memory["sp:0"] = value
 	return state
 }
@@ -77,33 +55,30 @@ func TestARM64ControlSharedUnionMatchesCompleteReference(t *testing.T) {
 	tokens := []string{"", "label:caller", "label:local", "code-derived:", "sp:0", "fp:8"}
 	values := []arm64ControlValue{nil, {}}
 	for mask := 0; mask < 1<<len(tokens); mask++ {
-		value := make(arm64ControlValue)
+		value := arm64ControlFromMap(make(map[string]bool))
 		for index, token := range tokens {
 			if mask&(1<<index) != 0 {
-				value[token] = true
+				value = arm64ControlSetToken(value, token, true)
 			}
 		}
 		values = append(values, value)
 	}
-	values = append(values,
-		arm64ControlValue{"label:local": false},
-		arm64ControlValue{"sp:0": false, "fp:8": true},
-	)
+	values = append(values, arm64ControlFromMap(map[string]bool{"label:local": false}), arm64ControlFromMap(map[string]bool{"sp:0": false, "fp:8": true}))
 	for leftIndex, left := range values {
 		for rightIndex, right := range values {
 			beforeLeft := arm64ControlCopyForTest(left)
 			beforeRight := arm64ControlCopyForTest(right)
 			got := arm64ControlUnion(left, right)
 			want := arm64ControlUnionReference(left, right)
-			if !reflect.DeepEqual(got, want) {
+			if !reflect.DeepEqual(arm64ControlMap(got), arm64ControlMap(want)) {
 				t.Fatalf("complete union %d/%d differs: got %v, want %v", leftIndex, rightIndex, got, want)
 			}
-			if !reflect.DeepEqual(left, beforeLeft) || !reflect.DeepEqual(right, beforeRight) {
+			if !reflect.DeepEqual(arm64ControlMap(left), arm64ControlMap(beforeLeft)) || !reflect.DeepEqual(arm64ControlMap(right), arm64ControlMap(beforeRight)) {
 				t.Fatalf("union %d/%d changed a predecessor", leftIndex, rightIndex)
 			}
 			derived := arm64ControlWithToken(got, "new-derived-witness")
-			if !derived["new-derived-witness"] || got["new-derived-witness"] ||
-				!reflect.DeepEqual(left, beforeLeft) || !reflect.DeepEqual(right, beforeRight) {
+			if !arm64ControlHas(derived, "new-derived-witness") || arm64ControlHas(got, "new-derived-witness") ||
+				!reflect.DeepEqual(arm64ControlMap(left), arm64ControlMap(beforeLeft)) || !reflect.DeepEqual(arm64ControlMap(right), arm64ControlMap(beforeRight)) {
 				t.Fatalf("copy-on-write %d/%d modified a published witness", leftIndex, rightIndex)
 			}
 		}
@@ -111,21 +86,14 @@ func TestARM64ControlSharedUnionMatchesCompleteReference(t *testing.T) {
 }
 
 func arm64ControlCopyForTest(value arm64ControlValue) arm64ControlValue {
-	if value == nil {
-		return nil
-	}
-	copy := make(arm64ControlValue, len(value))
-	for token, present := range value {
-		copy[token] = present
-	}
-	return copy
+	return arm64ControlFromMap(arm64ControlMap(value))
 }
 
 func TestARM64ControlSharedValuesDoNotMutatePredecessors(t *testing.T) {
-	caller := arm64ControlValue{"label:caller": true}
+	caller := arm64ControlFromMap(map[string]bool{"label:caller": true})
 	original := &arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
-			SP: {"sp:0": true}, "R10": caller, "F0": caller,
+			SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R10": caller, "F0": caller,
 		},
 		memory: map[string]arm64ControlValue{"sp:0": caller},
 	}
@@ -143,8 +111,7 @@ func TestARM64ControlSharedValuesDoNotMutatePredecessors(t *testing.T) {
 			state := original.clone()
 			ins := file.Funcs[0].Instrs[1]
 			state.transfer(ins, arm64ControlOp(ins), false, nil)
-			if !reflect.DeepEqual(caller, before) || original.regs["R10"]["code-derived:"] ||
-				original.regs["F0"]["code-derived:"] || original.memory["sp:0"]["code-derived:"] {
+			if !reflect.DeepEqual(arm64ControlMap(caller), arm64ControlMap(before)) || arm64ControlHas(original.regs["R10"], "code-derived:") || arm64ControlHas(original.regs["F0"], "code-derived:") || arm64ControlHas(original.memory["sp:0"], "code-derived:") {
 				t.Fatalf("instruction %q mutated an original reaching definition: %v", instruction, original)
 			}
 		})

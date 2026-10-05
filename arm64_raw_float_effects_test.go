@@ -147,16 +147,16 @@ func TestARM64RawFloatControlEffectsDistinguishGPAndVectorBanks(t *testing.T) {
 			if writes, known := arm64RawPoolGPWrites(word); !known || writes != test.writes {
 				t.Errorf("GP writes=%#x, known=%v; want %#x", writes, known, test.writes)
 			}
-			caller := arm64ControlValue{"return:outer": true}
+			caller := arm64ControlFromMap(map[string]bool{"return:outer": true})
 			state := &arm64ControlState{
 				regs:   map[Reg]arm64ControlValue{"R30": caller},
 				memory: map[string]arm64ControlValue{"sp:0": caller},
 			}
 			state.transfer(Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}}, OpWORD, false, nil)
-			if unknown := state.regs["R30"][""]; unknown != (test.writes&(1<<30) != 0) {
+			if unknown := arm64ControlHas(state.regs["R30"], ""); unknown != (test.writes&(1<<30) != 0) {
 				t.Errorf("caller LR unknown=%v; GP writes=%#x", unknown, test.writes)
 			}
-			if state.memory["sp:0"][""] {
+			if arm64ControlHas(state.memory["sp:0"], "") {
 				t.Error("a register-only floating instruction cannot write a saved continuation")
 			}
 		})

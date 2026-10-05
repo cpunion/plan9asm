@@ -171,12 +171,12 @@ func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateF
 			// into an ordinary external scalar.
 			spills: map[int64]arm64PrivateFrameAddress{-8: {}},
 			fixed: &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
+				regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
 		}
 		for _, fixed := range arm64RawZeroFixedEntry[:2] {
-			entry.fixed.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
+			entry.fixed.regs[fixed.reg] = arm64ControlFromMap(map[string]bool{fixed.token: true})
 		}
 		if arm64SourceUsesR20(fn) {
 			entry.regs["R20"] = arm64PrivateFrameAddress{}
@@ -187,8 +187,8 @@ func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateF
 				exact: r20Transport,
 			}
 			if entry.regs["R20"].exact {
-				entry.fixed.regs["R20"] = arm64ControlValue{"sp:0": true}
-				entry.fixed.regs["R30"] = arm64ControlValue{"label:entry-lr": true}
+				entry.fixed.regs["R20"] = arm64ControlFromMap(map[string]bool{"sp:0": true})
+				entry.fixed.regs["R30"] = arm64ControlFromMap(map[string]bool{"label:entry-lr": true})
 				entry.fixed.memory["sp:0"] = entry.fixed.regs["R30"]
 			}
 		}
@@ -215,13 +215,13 @@ func arm64RawPrivateFrameUnexposedForTransport(fn Func, transport *arm64PrivateF
 						// owns the automatic saved-link cell. Its exact identity
 						// cannot be discarded merely because LLVM returns natively.
 						link := state.fixed.source(Operand{Kind: OpMem, Mem: MemRef{Base: SP}}, false)
-						if len(link) != 1 || !link["label:entry-lr"] {
+						if arm64ControlCount(link) != 1 || !arm64ControlHas(link, "label:entry-lr") {
 							return false
 						}
 					}
 					for _, fixed := range arm64RawZeroFixedEntry[:2] {
 						value := arm64ControlRead(state.fixed.regs, fixed.reg)
-						if len(value) != 1 || !value[fixed.token] {
+						if arm64ControlCount(value) != 1 || !arm64ControlHas(value, fixed.token) {
 							return false
 						}
 						delete(state.regs, fixed.reg)

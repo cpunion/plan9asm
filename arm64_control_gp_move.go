@@ -22,7 +22,7 @@ func (state *arm64ControlState) transferGPRegisterMove(ins Instr) bool {
 		value := state.source(source, false)
 		if op != "MOVD" {
 			value = arm64ControlUnion(arm64ControlExternal(), arm64ControlLabels(value))
-			if len(arm64ControlLabels(value)) != 0 {
+			if arm64ControlCount(arm64ControlLabels(value)) != 0 {
 				value = arm64ControlWithToken(value, "code-derived:")
 			}
 		}

@@ -224,8 +224,8 @@ func TestARM64PrivateStructureControlWidthsAndVectorAliases(t *testing.T) {
 		}
 		for _, offset := range []int64{-8, -1, 0, tc.width - 1, tc.width} {
 			state := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R9": {"sp:0": true}, "F0": {"label:vectorPC": true}},
-				memory: map[string]arm64ControlValue{fmt.Sprintf("sp:%d", offset): {"label:caller": true}},
+				regs:   map[Reg]arm64ControlValue{"R9": arm64ControlFromMap(map[string]bool{"sp:0": true}), "F0": arm64ControlFromMap(map[string]bool{"label:vectorPC": true})},
+				memory: map[string]arm64ControlValue{fmt.Sprintf("sp:%d", offset): arm64ControlFromMap(map[string]bool{"label:caller": true})},
 			}
 			if !state.transferStructureMemory(file.Funcs[0].Instrs[1]) {
 				t.Fatal("validated memory effect was not consumed")
@@ -233,15 +233,15 @@ func TestARM64PrivateStructureControlWidthsAndVectorAliases(t *testing.T) {
 			overlap := offset+8 > 0 && offset < tc.width
 			if form.load {
 				value := arm64ControlRead(state.regs, form.registers[0])
-				if value["label:caller"] != overlap {
+				if arm64ControlHas(value, "label:caller") != overlap {
 					t.Fatalf("%s offset %d: source PC overlap washed/laundered: %v", tc.syntax, offset, value)
 				}
 			} else {
 				value := state.memory[fmt.Sprintf("sp:%d", offset)]
-				if value[""] != overlap {
+				if arm64ControlHas(value, "") != overlap {
 					t.Fatalf("%s offset %d: store extent lost: %v", tc.syntax, offset, value)
 				}
-				if !state.escaped["label:vectorPC"] && len(arm64ControlLabels(state.memory["sp:0"])) == 0 {
+				if !arm64ControlHas(state.escaped, "label:vectorPC") && arm64ControlCount(arm64ControlLabels(state.memory["sp:0"])) == 0 {
 					t.Fatal("F/V physical alias lost stored code bits")
 				}
 			}

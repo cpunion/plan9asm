@@ -36,15 +36,15 @@ func TestARM64TypedCallCodeProvenanceComesFromTransport(t *testing.T) {
 			state := &arm64ControlState{
 				unexposedSP: tc.proof,
 				regs: map[Reg]arm64ControlValue{
-					SP: {"sp:0": true}, "R30": {"label:continuation": true},
-					"R19": {"label:source_witness": true},
+					SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{"label:continuation": true}),
+					"R19": arm64ControlFromMap(map[string]bool{"label:source_witness": true}),
 				},
 				memory: map[string]arm64ControlValue{
-					"sp:0": {"label:caller": true}, "sp:8": {tc.argument: true}, "fp:0": arm64ControlExternal(),
+					"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true}), "sp:8": arm64ControlFromMap(map[string]bool{tc.argument: true}), "fp:0": arm64ControlExternal(),
 				},
 			}
 			if tc.escaped != "" {
-				state.escaped = arm64ControlValue{tc.escaped: true}
+				state.escaped = arm64ControlFromMap(map[string]bool{tc.escaped: true})
 			}
 			ctx := &arm64Ctx{resolve: func(s string) string { return strings.TrimSuffix(s, "(SB)") },
 				sigs: map[string]FuncSig{}, sourceGoFrame: arm64GoFrame{present: tc.frame}, unexposedCallFrame: tc.proof,
@@ -54,20 +54,20 @@ func TestARM64TypedCallCodeProvenanceComesFromTransport(t *testing.T) {
 			}
 			ctx.invalidateControlCallResults(state, Operand{Kind: OpSym, Sym: "callee(SB)"})
 			for name, value := range map[string]arm64ControlValue{"result": state.regs["R0"], "fp": state.memory["fp:0"]} {
-				if value["label:continuation"] != tc.wantContinuation {
+				if arm64ControlHas(value, "label:continuation") != tc.wantContinuation {
 					t.Errorf("%s inherited an untransported automatic link: %v", name, value)
 				}
-				if !tc.wantContinuation && value["label:source_witness"] {
+				if !tc.wantContinuation && arm64ControlHas(value, "label:source_witness") {
 					t.Errorf("%s inherited an untransported virtual GP: %v", name, value)
 				}
-				if tc.argument != "" && !value[tc.argument] || tc.escaped != "" && strings.HasPrefix(tc.escaped, "label:") && !value[tc.escaped] {
+				if tc.argument != "" && !arm64ControlHas(value, tc.argument) || tc.escaped != "" && strings.HasPrefix(tc.escaped, "label:") && !arm64ControlHas(value, tc.escaped) {
 					t.Errorf("%s lost genuinely observable source code: %v", name, value)
 				}
 			}
-			if !state.regs["R19"]["label:source_witness"] || !state.regs["R19"][""] {
+			if !arm64ControlHas(state.regs["R19"], "label:source_witness") || !arm64ControlHas(state.regs["R19"], "") {
 				t.Fatal("typed transport cannot prove caller-save GP preservation or erase its old code witness")
 			}
-			if !state.memory["fp:0"][""] {
+			if !arm64ControlHas(state.memory["fp:0"], "") {
 				t.Fatal("fresh private SP does not protect potentially aliased caller FP contents")
 			}
 		})
@@ -121,13 +121,13 @@ func TestARM64TypedCallFPViewsRetainActualSourcePC(t *testing.T) {
 func TestARM64TypedCallInputsMatchEmittedTransports(t *testing.T) {
 	state := &arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
-			SP: {"sp:0": true}, "R0": {"label:r0": true}, "R1": {"label:r1": true},
-			"R2": {"label:r2": true}, "R30": {"label:link": true},
-			"F0": {"label:f0": true}, "V0.D[0]": {"label:v0": true}, "Z0.D": {"label:z0": true},
-			"F1": {"label:f1": true},
+			SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R0": arm64ControlFromMap(map[string]bool{"label:r0": true}), "R1": arm64ControlFromMap(map[string]bool{"label:r1": true}),
+			"R2": arm64ControlFromMap(map[string]bool{"label:r2": true}), "R30": arm64ControlFromMap(map[string]bool{"label:link": true}),
+			"F0": arm64ControlFromMap(map[string]bool{"label:f0": true}), "V0.D[0]": arm64ControlFromMap(map[string]bool{"label:v0": true}), "Z0.D": arm64ControlFromMap(map[string]bool{"label:z0": true}),
+			"F1": arm64ControlFromMap(map[string]bool{"label:f1": true}),
 		},
 		memory: map[string]arm64ControlValue{
-			"sp:0": {"label:caller": true}, "sp:8": {"label:slot0": true}, "sp:16": {"label:slot1": true},
+			"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true}), "sp:8": arm64ControlFromMap(map[string]bool{"label:slot0": true}), "sp:16": arm64ControlFromMap(map[string]bool{"label:slot1": true}),
 		},
 	}
 	registerSig := FuncSig{Args: []LLVMType{"double", I64, "{ i64, double }", Ptr}, Ret: Void}
@@ -161,13 +161,13 @@ func TestARM64TypedCallInputsMatchEmittedTransports(t *testing.T) {
 				t.Fatalf("emitted typed transport not recognized: known=%t inputs=%v", known, inputs)
 			}
 			for index, token := range tc.want {
-				if !inputs[index][token] {
+				if !arm64ControlHas(inputs[index], token) {
 					t.Errorf("transport leaf %d lost %s: %v", index, token, inputs[index])
 				}
 			}
 			if len(inputs) != 0 && isARM64ABIFloatingType(tc.sig.Args[0]) {
 				for _, alias := range []string{"label:v0", "label:z0"} {
-					if !inputs[0][alias] {
+					if !arm64ControlHas(inputs[0], alias) {
 						t.Errorf("physical FP/V/Z input alias lost %s: %v", alias, inputs[0])
 					}
 				}
@@ -177,7 +177,7 @@ func TestARM64TypedCallInputsMatchEmittedTransports(t *testing.T) {
 	// A covering scalar write is not permission to forget another physical
 	// view's code witness: this proof does not model every partial SIMD write.
 	state.write(Operand{Kind: OpReg, Reg: "F0"}, arm64ControlExternal(), false)
-	if value := arm64ControlRead(state.regs, "F0"); !value["label:v0"] || !value["label:z0"] {
+	if value := arm64ControlRead(state.regs, "F0"); !arm64ControlHas(value, "label:v0") || !arm64ControlHas(value, "label:z0") {
 		t.Fatalf("covering write silently discarded aliases: %v", value)
 	}
 	for _, tc := range []struct {
@@ -316,12 +316,12 @@ func requireARM64TypedCallGoSelectorObject(t *testing.T, source string) {
 
 func TestARM64TypedCallPartialResultRetainsOverlappingPC(t *testing.T) {
 	state := &arm64ControlState{
-		regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
-		memory: map[string]arm64ControlValue{"sp:12": {"label:source_witness": true}},
+		regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
+		memory: map[string]arm64ControlValue{"sp:12": arm64ControlFromMap(map[string]bool{"label:source_witness": true})},
 	}
 	sig := FuncSig{Ret: I32, Frame: FrameLayout{Results: []FrameSlot{{Offset: 8, Type: I32, Index: 0, Field: -1}}}}
 	arm64ControlWriteCallResults(state, sig, false, arm64ControlExternal())
-	if !state.memory["sp:16"]["label:source_witness"] {
+	if !arm64ControlHas(state.memory["sp:16"], "label:source_witness") {
 		t.Fatal("narrow result washed out code bits from an overlapping control cell")
 	}
 }

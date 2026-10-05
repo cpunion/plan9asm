@@ -26,14 +26,14 @@ func TestARM64ControlMemoryWidthsPreserveAdjacentCallerCells(t *testing.T) {
 					t.Fatal(err)
 				}
 				state := &arm64ControlState{
-					regs: map[Reg]arm64ControlValue{SP: {"sp:0": true}},
+					regs: map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
 					memory: map[string]arm64ControlValue{
-						"sp:0": {"label:entry_lr": true},
+						"sp:0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true}),
 					},
 				}
 				ins := file.Funcs[0].Instrs[1]
 				state.transfer(ins, ins.Op, false, nil)
-				if !arm64ControlEqual(state.memory["sp:0"], arm64ControlValue{"label:entry_lr": true}) {
+				if !arm64ControlEqual(state.memory["sp:0"], arm64ControlFromMap(map[string]bool{"label:entry_lr": true})) {
 					t.Fatalf("adjacent %d-byte store at %d corrupted saved caller: %v", tc.width, offset, state.memory)
 				}
 			}
@@ -56,12 +56,12 @@ func TestARM64ControlMemoryLiteralZeroAliasWidths(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := &arm64ControlState{
-			regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
-			memory: map[string]arm64ControlValue{"sp:0": {"label:entry_lr": true}},
+			regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
+			memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 		}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, ins.Op, false, nil)
-		if !arm64ControlEqual(state.memory["sp:0"], arm64ControlValue{"label:entry_lr": true}) {
+		if !arm64ControlEqual(state.memory["sp:0"], arm64ControlFromMap(map[string]bool{"label:entry_lr": true})) {
 			t.Errorf("Go literal-zero alias used unknown-width store: %s: %v", tc.op, state.memory)
 		}
 	}
@@ -79,8 +79,8 @@ func TestARM64ControlMemoryPartialLoadsAndUnknownStoresStayClosed(t *testing.T) 
 			t.Fatal(err)
 		}
 		state := &arm64ControlState{
-			regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
-			memory: map[string]arm64ControlValue{"sp:0": {"label:entry_lr": true}},
+			regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
+			memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 		}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, ins.Op, false, nil)
@@ -89,7 +89,7 @@ func TestARM64ControlMemoryPartialLoadsAndUnknownStoresStayClosed(t *testing.T) 
 			dst = ins.Args[1].RegList[0]
 		}
 		value := arm64ControlRead(state.regs, dst)
-		if !value["code-derived:"] || !value[""] {
+		if !arm64ControlHas(value, "code-derived:") || !arm64ControlHas(value, "") {
 			t.Fatalf("partial/floating load restored exact pointer identity: %s: %v", text, value)
 		}
 	}
@@ -99,12 +99,12 @@ func TestARM64ControlMemoryPartialLoadsAndUnknownStoresStayClosed(t *testing.T) 
 			t.Fatal(err)
 		}
 		state := &arm64ControlState{
-			regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R9": {"sp:0": true}},
-			memory: map[string]arm64ControlValue{"sp:0": {"label:entry_lr": true}},
+			regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R9": arm64ControlFromMap(map[string]bool{"sp:0": true})},
+			memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 		}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, ins.Op, false, nil)
-		if !state.memory["sp:0"][""] {
+		if !arm64ControlHas(state.memory["sp:0"], "") {
 			t.Fatalf("unknown/overlapping store lost caller taint: %s: %v", text, state.memory)
 		}
 	}
@@ -115,13 +115,13 @@ func TestARM64ControlMemoryPartialLoadsAndUnknownStoresStayClosed(t *testing.T) 
 		t.Fatal(err)
 	}
 	state := &arm64ControlState{
-		regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}, "F0": {"label:entry_lr": true}},
+		regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "F0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 		memory: make(map[string]arm64ControlValue),
 	}
 	for _, ins := range file.Funcs[0].Instrs[1:3] {
 		state.transfer(ins, ins.Op, false, nil)
 	}
-	if !arm64ControlRead(state.regs, "R4")["code-derived:"] {
+	if !arm64ControlHas(arm64ControlRead(state.regs, "R4"), "code-derived:") {
 		t.Fatal("upper-half floating store washed away transformed code bits")
 	}
 }
@@ -171,12 +171,12 @@ func TestARM64ControlMemoryFixedCallerCellBoundaries(t *testing.T) {
 				t.Fatal(err)
 			}
 			state := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
-				memory: map[string]arm64ControlValue{"sp:0": {token: true}},
+				regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
+				memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{token: true})},
 			}
 			ins := file.Funcs[0].Instrs[1]
 			state.transfer(ins, ins.Op, false, nil)
-			if state.memory["sp:0"][""] != (offset == -31) {
+			if arm64ControlHas(state.memory["sp:0"], "") != (offset == -31) {
 				t.Fatalf("fixed caller cell %s adjacent/one-byte boundary at %d: %v", token, offset, state.memory)
 			}
 		}
@@ -284,14 +284,14 @@ func TestARM64ControlMemoryOneByteOverlapRemainsTainted(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := &arm64ControlState{
-			regs: map[Reg]arm64ControlValue{SP: {"sp:0": true}},
+			regs: map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
 			memory: map[string]arm64ControlValue{
-				"sp:0": {"label:entry_lr": true},
+				"sp:0": arm64ControlFromMap(map[string]bool{"label:entry_lr": true}),
 			},
 		}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, ins.Op, false, nil)
-		if !state.memory["sp:0"][""] {
+		if !arm64ControlHas(state.memory["sp:0"], "") {
 			t.Fatalf("one-byte-overlap lost caller-cell taint: %s: %v", source, state.memory)
 		}
 	}

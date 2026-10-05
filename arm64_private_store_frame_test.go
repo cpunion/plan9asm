@@ -46,31 +46,31 @@ func TestARM64PrivateFrameUnknownStoreProofIsSPOnly(t *testing.T) {
 			state := &arm64ControlState{
 				unexposedSP: tc.proof,
 				regs: map[Reg]arm64ControlValue{
-					SP: {"sp:0": true}, "R6": {tc.baseToken: true},
+					SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R6": arm64ControlFromMap(map[string]bool{tc.baseToken: true}),
 				},
 				memory: map[string]arm64ControlValue{
-					"sp:0": {"label:caller": true}, "fp:0": {"label:local": true},
+					"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true}), "fp:0": arm64ControlFromMap(map[string]bool{"label:local": true}),
 				},
 			}
 			if tc.escaped != "" {
-				state.escaped = arm64ControlValue{tc.escaped: true}
+				state.escaped = arm64ControlFromMap(map[string]bool{tc.escaped: true})
 			}
 			if tc.name == "collapsed_frame_escape" {
-				state.escaped = arm64ControlUnion(arm64ControlValue{"sp:8": true}, arm64ControlValue{"sp:16": true})
+				state.escaped = arm64ControlUnion(arm64ControlFromMap(map[string]bool{"sp:8": true}), arm64ControlFromMap(map[string]bool{"sp:16": true}))
 			}
 			if tc.name == "sp_index_alias" {
-				state.regs["R7"] = arm64ControlValue{"sp:0": true}
+				state.regs["R7"] = arm64ControlFromMap(map[string]bool{"sp:0": true})
 			}
 			// An indexed store has no exact cell even if its base is a known SP alias.
 			state.write(Operand{Kind: OpMem, Mem: MemRef{Base: "R6", Index: "R7"}}, arm64ControlExternal(), false)
-			if state.memory["sp:0"][""] == tc.intact {
+			if arm64ControlHas(state.memory["sp:0"], "") == tc.intact {
 				t.Errorf("private-SP preservation mismatch: %v", state.memory["sp:0"])
 			}
-			if !state.memory["fp:0"][""] {
+			if !arm64ControlHas(state.memory["fp:0"], "") {
 				t.Fatal("incoming FP contents can alias this store and must remain clobbered")
 			}
 			value := state.source(Operand{Kind: OpMem, Mem: MemRef{Base: SP}}, false)
-			if tc.intact && !arm64ControlEqual(value, arm64ControlValue{"label:caller": true}) {
+			if tc.intact && !arm64ControlEqual(value, arm64ControlFromMap(map[string]bool{"label:caller": true})) {
 				t.Errorf("unknown heap/code stores contaminated the proven private SP read: %v", value)
 			}
 			cloned := state.clone()

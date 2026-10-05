@@ -164,14 +164,14 @@ func TestARM64ControlGPMoveRejectsFloatingImmediate(t *testing.T) {
 				t.Fatalf("float literal did not exercise typed immediate flag: %+v", ins.Args[0])
 			}
 			state := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R30": {"label:caller": true}},
+				regs:   map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:caller": true})},
 				memory: make(map[string]arm64ControlValue),
 			}
 			if state.transferGPRegisterMove(ins) {
 				t.Fatalf("floating operand acquired an integer overwrite witness: %s", ins.Raw)
 			}
 			state.transfer(ins, ins.Op, false, nil)
-			if !arm64ControlRead(state.regs, "R30")["label:caller"] {
+			if !arm64ControlHas(arm64ControlRead(state.regs, "R30"), "label:caller") {
 				t.Fatalf("fallback washed invalid floating MOV destination provenance: %s", ins.Raw)
 			}
 		}

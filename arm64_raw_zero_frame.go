@@ -192,7 +192,7 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 			},
 			control: &arm64ControlState{
 				regs: map[Reg]arm64ControlValue{
-					SP: {"sp:0": true}, "R30": {entryLink: true},
+					SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{entryLink: true}),
 				},
 				memory: make(map[string]arm64ControlValue), unexposedSP: true,
 			},
@@ -201,7 +201,7 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 			entry.addresses.regs["R20"] = arm64PrivateFrameAddress{}
 		}
 		for _, fixed := range arm64RawZeroFixedEntry {
-			entry.control.regs[fixed.reg] = arm64ControlValue{fixed.token: true}
+			entry.control.regs[fixed.reg] = arm64ControlFromMap(map[string]bool{fixed.token: true})
 		}
 		if !propagate(arm64RawZeroPoint{block: seed}, entry) {
 			return false
@@ -226,12 +226,12 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 				if arm64RawZeroReturn(original) {
 					link := arm64ControlRead(state.control.regs, "R30")
 					if len(calls) == 0 {
-						if state.addresses.sp != 0 || len(link) != 1 || !link[entryLink] {
+						if state.addresses.sp != 0 || arm64ControlCount(link) != 1 || !arm64ControlHas(link, entryLink) {
 							return false
 						}
 						for _, fixed := range arm64RawZeroFixedEntry {
 							value := arm64ControlRead(state.control.regs, fixed.reg)
-							if len(value) != 1 || !value[fixed.token] {
+							if arm64ControlCount(value) != 1 || !arm64ControlHas(value, fixed.token) {
 								return false
 							}
 							delete(state.addresses.regs, fixed.reg)
@@ -242,7 +242,7 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 					} else {
 						caller := calls[len(calls)-1]
 						label := "label:" + blocks[caller.block].name
-						if state.addresses.sp != caller.sp || len(link) != 1 || !link[label] {
+						if state.addresses.sp != caller.sp || arm64ControlCount(link) != 1 || !arm64ControlHas(link, label) {
 							return false
 						}
 						parent := point.context[:strings.LastIndex(point.context, "/")]
@@ -281,7 +281,7 @@ func arm64RawZeroFrameProof(fn Func, transport *arm64PrivateFrameTransport, cont
 					}
 					context := point.context + "/" + strconv.Itoa(point.block+1)
 					contexts[context] = append(append([]arm64RawZeroCall(nil), calls...), arm64RawZeroCall{block: point.block + 1, sp: state.addresses.sp})
-					state.control.regs["R30"] = arm64ControlValue{"label:" + blocks[point.block+1].name: true}
+					state.control.regs["R30"] = arm64ControlFromMap(map[string]bool{"label:" + blocks[point.block+1].name: true})
 					if !propagate(arm64RawZeroPoint{block: target, context: context}, state) {
 						return false
 					}

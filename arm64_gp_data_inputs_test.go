@@ -90,12 +90,12 @@ func TestARM64GPDataTrueInputsAndFullOverwrite(t *testing.T) {
 				}
 			}
 			control := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R9": {"label:entry_lr": true}},
+				regs:   map[Reg]arm64ControlValue{"R9": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})},
 				memory: make(map[string]arm64ControlValue),
 			}
 			control.transfer(ins, ins.Op, false, nil)
 			value := arm64ControlRead(control.regs, "R9")
-			if len(arm64ControlLabels(value)) != 0 != reads {
+			if arm64ControlCount(arm64ControlLabels(value)) != 0 != reads {
 				t.Fatalf("continuation input direction mismatch: %v", value)
 			}
 		})

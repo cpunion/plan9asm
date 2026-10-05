@@ -80,16 +80,16 @@ func TestARM64PrivateFrameUnknownStoreRetainsMixedCodeUncertainty(t *testing.T) 
 		preserve bool
 	}{
 		{"ordinary_data", arm64ControlExternal(), true},
-		{"pure_code", arm64ControlValue{"label:outer": true}, true},
-		{"conservative_callee_code", arm64ControlValue{"label:outer": true, "": true}, true},
-		{"source_derived_code", arm64ControlValue{"code-derived:": true, "": true}, false},
-		{"escaped_frame", arm64ControlValue{"sp:8": true}, false},
+		{"pure_code", arm64ControlFromMap(map[string]bool{"label:outer": true}), true},
+		{"conservative_callee_code", arm64ControlFromMap(map[string]bool{"label:outer": true, "": true}), true},
+		{"source_derived_code", arm64ControlFromMap(map[string]bool{"code-derived:": true, "": true}), false},
+		{"escaped_frame", arm64ControlFromMap(map[string]bool{"sp:8": true}), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			caller := arm64ControlValue{"label:outer": true}
+			caller := arm64ControlFromMap(map[string]bool{"label:outer": true})
 			state := &arm64ControlState{
 				unexposedSP: true,
-				regs:        map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R9": arm64ControlExternal()},
+				regs:        map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R9": arm64ControlExternal()},
 				memory:      map[string]arm64ControlValue{"sp:0": caller, "fp:0": arm64ControlExternal()},
 			}
 			state.write(Operand{Kind: OpMem, Mem: MemRef{Base: "R9"}}, tc.value, false)

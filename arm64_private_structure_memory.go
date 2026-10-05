@@ -78,7 +78,7 @@ func (state *arm64ControlState) transferStructureMemory(ins Instr) bool {
 		} else {
 			value = arm64ControlUnion(arm64ControlExternal(), arm64ControlLabels(value))
 			value = arm64ControlUnion(value, arm64ControlLabels(arm64ControlRead(state.regs, form.index)))
-			if len(arm64ControlLabels(value)) != 0 {
+			if arm64ControlCount(arm64ControlLabels(value)) != 0 {
 				value = arm64ControlWithToken(value, "code-derived:")
 			}
 		}

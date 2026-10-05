@@ -164,16 +164,16 @@ func TestARM64RawSVETypedControlEffects(t *testing.T) {
 			if writes, known := arm64RawPoolGPWrites(word); !known || writes != test.writes {
 				t.Errorf("GP writes = %#x, known=%v; want %#x", writes, known, test.writes)
 			}
-			continuation := arm64ControlValue{"return:outer": true}
+			continuation := arm64ControlFromMap(map[string]bool{"return:outer": true})
 			state := &arm64ControlState{
 				regs:   map[Reg]arm64ControlValue{"R30": continuation},
 				memory: map[string]arm64ControlValue{"sp:0": continuation},
 			}
 			state.transfer(Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}}, OpWORD, false, nil)
-			if got := state.regs["R30"][""]; got != (test.writes&(1<<30) != 0) {
+			if got := arm64ControlHas(state.regs["R30"], ""); got != (test.writes&(1<<30) != 0) {
 				t.Errorf("X30 became unknown=%v, writes=%#x", got, test.writes)
 			}
-			if got := state.memory["sp:0"][""]; got != test.stores {
+			if got := arm64ControlHas(state.memory["sp:0"], ""); got != test.stores {
 				t.Errorf("saved continuation became unknown=%v, memory store=%v", got, test.stores)
 			}
 		})
@@ -182,13 +182,13 @@ func TestARM64RawSVETypedControlEffects(t *testing.T) {
 
 func TestARM64RawUnknownControlEffectsRemainConservative(t *testing.T) {
 	for _, word := range []uint32{0xffffffff, 0x05304010, 0x25208a00, 0xd63f0000} {
-		continuation := arm64ControlValue{"return:outer": true}
+		continuation := arm64ControlFromMap(map[string]bool{"return:outer": true})
 		state := &arm64ControlState{
 			regs:   map[Reg]arm64ControlValue{"R30": continuation},
 			memory: map[string]arm64ControlValue{"sp:0": continuation},
 		}
 		state.transfer(Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}}, OpWORD, false, nil)
-		if !state.regs["R30"][""] || !state.memory["sp:0"][""] {
+		if !arm64ControlHas(state.regs["R30"], "") || !arm64ControlHas(state.memory["sp:0"], "") {
 			t.Errorf("unmodeled/call word %#08x silently preserved continuation", word)
 		}
 	}

@@ -24,7 +24,7 @@ func (state *arm64ControlState) transferTypedMemory(ins Instr) bool {
 	if form.scratch != nil {
 		f := *form.scratch
 		if f.scratchAddress && f.memory.Kind == OpFP {
-			scratch = arm64ControlValue{"fpa:" + strconv.FormatInt(f.memory.FPOffset, 10): true}
+			scratch = arm64ControlFromMap(map[string]bool{"fpa:" + strconv.FormatInt(f.memory.FPOffset, 10): true})
 		} else if f.scratchAddress && f.scratchBase != "" {
 			base := arm64ControlRead(state.regs, arm64ControlBase(f.scratchBase))
 			if f.scratchKnown {
@@ -34,7 +34,7 @@ func (state *arm64ControlState) transferTypedMemory(ins Instr) bool {
 				// Never retain its old exact LR/private-cell identity.
 				scratch = arm64ControlUnion(arm64ControlExternal(), arm64ControlAddressTaint(base))
 			}
-			if len(arm64ControlLabels(base)) != 0 {
+			if arm64ControlCount(arm64ControlLabels(base)) != 0 {
 				scratch = arm64ControlUnion(scratch, arm64ControlLabels(base))
 				scratch = arm64ControlWithToken(scratch, "code-derived:")
 			}
@@ -85,7 +85,7 @@ func (state *arm64ControlState) readMemoryWidth(memory Operand, width int64, gp 
 			}
 		}
 	}
-	if len(arm64ControlLabels(value)) != 0 {
+	if arm64ControlCount(arm64ControlLabels(value)) != 0 {
 		value = arm64ControlWithToken(value, "code-derived:")
 	}
 	return value
@@ -105,7 +105,7 @@ func (state *arm64ControlState) writeMemoryWidth(memory Operand, value arm64Cont
 	// Retain transformed code bits without inventing an exact pointer cell.
 	// Unknown ordinary data need not create a new tracked continuation cell.
 	taint := arm64ControlLabels(value)
-	if len(taint) != 0 {
+	if arm64ControlCount(taint) != 0 {
 		taint = arm64ControlUnion(taint, arm64ControlExternal())
 		taint = arm64ControlWithToken(taint, "code-derived:")
 		for offset := int64(0); offset < width; offset += 8 {

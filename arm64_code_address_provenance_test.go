@@ -10,9 +10,9 @@ func TestARM64CodeAddressTransformsRetainSourceDerivedProvenance(t *testing.T) {
 		name  string
 		value arm64ControlValue
 	}{
-		{"pure", arm64ControlValue{"label:caller": true}},
-		{"joined_unknown", arm64ControlValue{"label:caller": true, "": true}},
-		{"already_derived", arm64ControlValue{"label:caller": true, "code-derived:": true, "": true}},
+		{"pure", arm64ControlFromMap(map[string]bool{"label:caller": true})},
+		{"joined_unknown", arm64ControlFromMap(map[string]bool{"label:caller": true, "": true})},
+		{"already_derived", arm64ControlFromMap(map[string]bool{"label:caller": true, "code-derived:": true, "": true})},
 	}
 	for _, form := range []struct {
 		name, instruction string
@@ -51,19 +51,19 @@ func TestARM64CodeAddressTransformsRetainSourceDerivedProvenance(t *testing.T) {
 			ins := file.Funcs[0].Instrs[1]
 			for _, input := range inputs {
 				t.Run(input.name, func(t *testing.T) {
-					caller := arm64ControlValue{"label:caller": true}
+					caller := arm64ControlFromMap(map[string]bool{"label:caller": true})
 					state := &arm64ControlState{
 						unexposedSP: true,
 						regs: map[Reg]arm64ControlValue{
-							SP: {"sp:0": true}, "R9": arm64ControlExternal(),
+							SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R9": arm64ControlExternal(),
 							"R10": input.value, "R12": arm64ControlExternal(),
 						},
 						memory: map[string]arm64ControlValue{"sp:0": caller},
 					}
 					state.transfer(ins, arm64ControlOp(ins), false, nil)
 					value := state.regs["R11"]
-					derived := form.transforms || input.value["code-derived:"]
-					if value["code-derived:"] != derived || !value["label:caller"] {
+					derived := form.transforms || arm64ControlHas(input.value, "code-derived:")
+					if arm64ControlHas(value, "code-derived:") != derived || !arm64ControlHas(value, "label:caller") {
 						t.Fatalf("source transform lost code provenance: instruction=%q, input=%v, output=%v", form.instruction, input.value, value)
 					}
 					state.write(Operand{Kind: OpMem, Mem: MemRef{Base: "R9"}}, value, false)
@@ -79,14 +79,14 @@ func TestARM64CodeAddressTransformsRetainSourceDerivedProvenance(t *testing.T) {
 
 func TestARM64CodeAddressOffsetRetainsProvenanceAcrossUnknownJoins(t *testing.T) {
 	for _, input := range []arm64ControlValue{
-		{"label:caller": true},
-		{"label:caller": true, "": true},
-		{"code-derived:": true, "": true},
+		arm64ControlFromMap(map[string]bool{"label:caller": true}),
+		arm64ControlFromMap(map[string]bool{"label:caller": true, "": true}),
+		arm64ControlFromMap(map[string]bool{"code-derived:": true, "": true}),
 	} {
 		for _, offset := range []int64{-1 << 63, -4, 4, 1<<63 - 1} {
 			t.Run(fmt.Sprintf("%v/%d", input, offset), func(t *testing.T) {
 				value := arm64ControlOffset(input, offset)
-				if !value["code-derived:"] || !value[""] {
+				if !arm64ControlHas(value, "code-derived:") || !arm64ControlHas(value, "") {
 					t.Fatalf("native-PC offset became ordinary unknown data: %v", value)
 				}
 				state := &arm64ControlState{
@@ -100,7 +100,7 @@ func TestARM64CodeAddressOffsetRetainsProvenanceAcrossUnknownJoins(t *testing.T)
 				for location, joined := range map[string]arm64ControlValue{
 					"register": state.regs["R10"], "memory": state.memory["fp:0"],
 				} {
-					if !arm64ControlLabels(joined)["code-derived:"] || !arm64ControlAddressTaint(joined)["code-derived:"] {
+					if !arm64ControlHas(arm64ControlLabels(joined), "code-derived:") || !arm64ControlHas(arm64ControlAddressTaint(joined), "code-derived:") {
 						t.Errorf("%s filtering washed away a source-derived PC: %v", location, joined)
 					}
 				}

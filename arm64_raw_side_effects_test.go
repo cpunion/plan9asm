@@ -33,7 +33,7 @@ func TestARM64RawStateFamiliesHavePreciseGPAndSavedMemoryEffects(t *testing.T) {
 			if writes, known := arm64RawPoolGPWrites(test.word); !known || writes != test.writes {
 				t.Errorf("GP writes=%#x, known=%v; want %#x", writes, known, test.writes)
 			}
-			caller := arm64ControlValue{"return:outer": true}
+			caller := arm64ControlFromMap(map[string]bool{"return:outer": true})
 			state := &arm64ControlState{
 				regs:   map[Reg]arm64ControlValue{"R30": caller, "R2": caller, "R3": caller},
 				memory: map[string]arm64ControlValue{"sp:0": caller},
@@ -43,11 +43,11 @@ func TestARM64RawStateFamiliesHavePreciseGPAndSavedMemoryEffects(t *testing.T) {
 				name Reg
 				bit  uint32
 			}{{"R30", 1 << 30}, {"R2", 1 << 2}, {"R3", 1 << 3}} {
-				if state.regs[register.name][""] != (test.writes&register.bit != 0) {
+				if arm64ControlHas(state.regs[register.name], "") != (test.writes&register.bit != 0) {
 					t.Errorf("%s provenance did not follow its exact GP output", register.name)
 				}
 			}
-			if state.memory["sp:0"][""] != test.stores {
+			if arm64ControlHas(state.memory["sp:0"], "") != test.stores {
 				t.Errorf("saved continuation clobber must match a real memory store, want %v", test.stores)
 			}
 		})

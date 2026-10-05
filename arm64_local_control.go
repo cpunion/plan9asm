@@ -10,11 +10,8 @@ import (
 // Local code addresses stay opaque LLVM blockaddresses. A reaching-definition proof,
 // not an address comparison, distinguishes local control flow from native calls.
 // Memory provenance is retained only for exactly identified owned frame cells.
-// Values are immutable after publication into a state. Clones and unions may
-// share their token maps; a transform must use arm64ControlWithToken rather
-// than changing a map obtained from another reaching definition.
-type arm64ControlValue map[string]bool
-
+// Values are immutable after publication. Clones share exact set roots;
+// transforms replace roots instead of mutating a reaching definition.
 type arm64ControlState struct {
 	regs         map[Reg]arm64ControlValue
 	memory       map[string]arm64ControlValue
@@ -66,7 +63,7 @@ func arm64SourceGoFrame(fn Func) arm64GoFrame {
 	return arm64GoFrame{present: present, restoresLink: present && !leaf}
 }
 
-func arm64ControlExternal() arm64ControlValue { return arm64ControlValue{"": true} }
+func arm64ControlExternal() arm64ControlValue { return arm64ControlFromMap(map[string]bool{"": true}) }
 
 func arm64ControlRead(values map[Reg]arm64ControlValue, reg Reg) arm64ControlValue {
 	reg = arm64ControlBase(reg)
@@ -86,98 +83,6 @@ func arm64ControlRead(values map[Reg]arm64ControlValue, reg Reg) arm64ControlVal
 		return arm64ControlExternal()
 	}
 	return value
-}
-
-func arm64ControlUnion(left, right arm64ControlValue) arm64ControlValue {
-	// A stable CFG predecessor is common, especially at a helper reached by
-	// many local continuations. Reuse an exact superset instead of copying its
-	// complete target map into every unchanged register and frame cell.
-	if len(left) >= len(right) && arm64ControlSubset(right, left) && arm64ControlCanonical(left) {
-		return left
-	}
-	if len(right) >= len(left) && arm64ControlSubset(left, right) && arm64ControlCanonical(right) {
-		return right
-	}
-	value := make(arm64ControlValue, len(left)+len(right))
-	for token := range left {
-		value[token] = true
-	}
-	for token := range right {
-		value[token] = true
-	}
-	// Disagreeing affine frame addresses become unknown, so moving-SP loops
-	// cannot create an unbounded offset lattice.
-	frame := ""
-	for token := range value {
-		if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") {
-			if frame != "" && frame != token {
-				for candidate := range value {
-					if strings.HasPrefix(candidate, "sp:") || strings.HasPrefix(candidate, "fp:") {
-						delete(value, candidate)
-					}
-				}
-				value[""] = true
-				break
-			}
-			frame = token
-		}
-	}
-	return value
-}
-
-func arm64ControlSubset(subset, superset arm64ControlValue) bool {
-	for token := range subset {
-		if !superset[token] {
-			return false
-		}
-	}
-	return true
-}
-
-// The old union normalizes false map entries and conflicting affine frame
-// identities even when its two inputs are equal. Such values cannot be reused.
-// A nil input also needs the old non-nil empty-map result.
-func arm64ControlCanonical(value arm64ControlValue) bool {
-	if value == nil {
-		return false
-	}
-	frame := ""
-	for token, present := range value {
-		if !present {
-			return false
-		}
-		if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") {
-			if frame != "" && frame != token {
-				return false
-			}
-			frame = token
-		}
-	}
-	return true
-}
-
-func arm64ControlWithToken(value arm64ControlValue, token string) arm64ControlValue {
-	if value[token] {
-		return value
-	}
-	next := make(arm64ControlValue, len(value)+1)
-	for existing, present := range value {
-		next[existing] = present
-	}
-	next[token] = true
-	return next
-}
-
-func arm64ControlEqual(left, right arm64ControlValue) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for token := range left {
-		if !right[token] {
-			return false
-		}
-	}
-	return true
 }
 
 func (state *arm64ControlState) clone() *arm64ControlState {
@@ -249,18 +154,18 @@ func arm64ControlBase(reg Reg) Reg {
 
 func arm64ControlOffset(value arm64ControlValue, off int64) arm64ControlValue {
 	if off != 0 {
-		for token := range value {
+		for _, token := range arm64ControlKeys(value) {
 			if strings.HasPrefix(token, "label:") || token == "code-derived:" {
 				// A native-PC transform is not a pure escaped code pointer.
 				// Retain this fact even when a CFG join already has unknown data.
-				return arm64ControlValue{"": true, "code-derived:": true}
+				return arm64ControlFromMap(map[string]bool{"": true, "code-derived:": true})
 			}
 		}
 	}
-	if len(value) != 1 {
+	if arm64ControlCount(value) != 1 {
 		return arm64ControlExternal()
 	}
-	for token := range value {
+	for _, token := range arm64ControlKeys(value) {
 		if strings.HasPrefix(token, "fpa:") {
 			if off == 0 {
 				return value
@@ -276,7 +181,7 @@ func arm64ControlOffset(value arm64ControlValue, off int64) arm64ControlValue {
 		if err != nil || (off > 0 && base > int64(1<<63-1)-off) || (off < 0 && base < int64(-1<<63)-off) {
 			return arm64ControlExternal()
 		}
-		return arm64ControlValue{token[:3] + strconv.FormatInt(base+off, 10): true}
+		return arm64ControlFromMap(map[string]bool{token[:3] + strconv.FormatInt(base+off, 10): true})
 	}
 	return arm64ControlExternal()
 }
@@ -293,8 +198,8 @@ func (state *arm64ControlState) memoryKey(op Operand, post bool) string {
 		off = 0
 	}
 	value := arm64ControlOffset(arm64ControlRead(state.regs, arm64ControlBase(op.Mem.Base)), off)
-	if len(value) == 1 {
-		for token := range value {
+	if arm64ControlCount(value) == 1 {
+		for _, token := range arm64ControlKeys(value) {
 			if strings.HasPrefix(token, "fpa:") {
 				return "fp:" + token[4:]
 			}
@@ -309,7 +214,7 @@ func (state *arm64ControlState) source(op Operand, post bool) arm64ControlValue 
 		return arm64ControlRead(state.regs, arm64ControlBase(op.Reg))
 	}
 	if op.Kind == OpFPAddr {
-		return arm64ControlValue{"fpa:" + strconv.FormatInt(op.FPOffset, 10): true}
+		return arm64ControlFromMap(map[string]bool{"fpa:" + strconv.FormatInt(op.FPOffset, 10): true})
 	}
 	if key := state.memoryKey(op, post); key != "" && state.memory[key] != nil {
 		if state.unexposedSP && strings.HasPrefix(key, "sp:") && arm64ControlEscapedOnlyCode(state.escaped) {
@@ -355,7 +260,7 @@ func (state *arm64ControlState) invalidateUnknownStore(destination Operand, valu
 			if state.privateStore == nil {
 				preserveSP = preserveSP && base != SP
 			}
-			for token := range arm64ControlRead(state.regs, base) {
+			for _, token := range arm64ControlKeys(arm64ControlRead(state.regs, base)) {
 				if token == "code-derived:" || state.privateStore == nil && strings.HasPrefix(token, "sp:") {
 					preserveSP = false
 				}
@@ -384,32 +289,12 @@ func (state *arm64ControlState) invalidateUnknownStore(destination Operand, valu
 }
 
 func arm64ControlEscapedOnlyCode(value arm64ControlValue) bool {
-	for token := range value {
+	for _, token := range arm64ControlKeys(value) {
 		if !strings.HasPrefix(token, "label:") {
 			return false
 		}
 	}
 	return true
-}
-
-func arm64ControlLabels(value arm64ControlValue) arm64ControlValue {
-	labels := make(arm64ControlValue)
-	for token := range value {
-		if strings.HasPrefix(token, "label:") || token == "code-derived:" {
-			labels[token] = true
-		}
-	}
-	return labels
-}
-
-func arm64ControlAddressTaint(value arm64ControlValue) arm64ControlValue {
-	taint := make(arm64ControlValue)
-	for token := range value {
-		if token != "" {
-			taint[token] = true
-		}
-	}
-	return taint
 }
 
 func (state *arm64ControlState) invalidateOverlappingControlCells(key string, width int64) {
@@ -510,7 +395,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 	}
 	entry := &arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
-			SP: {"sp:0": true}, Reg("R30"): {"label:" + plan.outer: true},
+			SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), Reg("R30"): arm64ControlFromMap(map[string]bool{"label:" + plan.outer: true}),
 		},
 		memory:      make(map[string]arm64ControlValue),
 		unexposedSP: c.unexposedCallFrame,
@@ -519,7 +404,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 		entry.memory["sp:0"] = entry.regs[Reg("R30")]
 	}
 	if c.sourceFrameR20 {
-		entry.regs["R20"] = arm64ControlValue{"sp:0": true}
+		entry.regs["R20"] = arm64ControlFromMap(map[string]bool{"sp:0": true})
 	}
 	for _, reg := range c.sig.ArgRegs {
 		entry.regs[reg] = arm64ControlExternal()
@@ -571,8 +456,8 @@ func (c *arm64Ctx) prepareLocalControl() error {
 				if ins.Args[0].Kind == OpReg || (ins.Args[0].Kind == OpMem && ins.Args[0].Mem.Base != PC) {
 					value := state.branchValue(ins.Args[0])
 					plan.before[[2]int{bi, ii}] = value
-					state.regs[Reg("R30")] = arm64ControlValue{"label:" + c.blocks[bi+1].name: true}
-					for token := range value {
+					state.regs[Reg("R30")] = arm64ControlFromMap(map[string]bool{"label:" + c.blocks[bi+1].name: true})
+					for _, token := range arm64ControlKeys(value) {
 						if strings.HasPrefix(token, "label:") {
 							if target, ok := indices[token[6:]]; ok {
 								propagate(target, state)
@@ -586,7 +471,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 					terminated = true
 					break
 				}
-				state.regs[Reg("R30")] = arm64ControlValue{"label:" + c.blocks[bi+1].name: true}
+				state.regs[Reg("R30")] = arm64ControlFromMap(map[string]bool{"label:" + c.blocks[bi+1].name: true})
 				if arm64IsLocalBranchLink(ins) {
 					if name, ok := arm64BranchTarget(ins.Args[0]); ok {
 						if target, ok := indices[name]; ok {
@@ -605,7 +490,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 					if ins.Args[0].Kind == OpReg || ins.Args[0].Kind == OpMem {
 						value := state.branchValue(ins.Args[0])
 						plan.before[[2]int{bi, ii}] = value
-						for token := range value {
+						for _, token := range arm64ControlKeys(value) {
 							if strings.HasPrefix(token, "label:") {
 								if target, ok := indices[token[6:]]; ok {
 									propagate(target, state)
@@ -625,7 +510,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 				if target, register := arm64RegisterReturnTarget(ins, plan.autoFrame); register {
 					value := state.branchValue(target)
 					plan.before[[2]int{bi, ii}] = value
-					for token := range value {
+					for _, token := range arm64ControlKeys(value) {
 						if strings.HasPrefix(token, "label:") {
 							if target, ok := indices[token[6:]]; ok {
 								propagate(target, state)
@@ -711,7 +596,7 @@ func (c *arm64Ctx) requireCallerSPRestored(bi int, ins Instr) error {
 		return fmt.Errorf("%w: ARM64 caller return has no SP reaching-definition proof: %q", ErrProbeNeedsContext, ins.Raw)
 	}
 	value := c.localControl.stackBefore[[2]int{bi, c.currentInstruction}]
-	if len(value) != 1 || !value["sp:0"] {
+	if arm64ControlCount(value) != 1 || !arm64ControlHas(value, "sp:0") {
 		return fmt.Errorf("%w: ARM64 caller return requires restored entry SP on every reaching path: %q", ErrProbeNeedsContext, ins.Raw)
 	}
 	return nil
@@ -722,7 +607,7 @@ func (c *arm64Ctx) requireCallerLinkRestored(bi int, ins Instr) error {
 		return fmt.Errorf("%w: ARM64 caller return has no LR reaching-definition proof: %q", ErrProbeNeedsContext, ins.Raw)
 	}
 	value := c.localControl.linkBefore[[2]int{bi, c.currentInstruction}]
-	if len(value) != 1 || !value["label:"+c.localControl.outer] {
+	if arm64ControlCount(value) != 1 || !arm64ControlHas(value, "label:"+c.localControl.outer) {
 		return fmt.Errorf("%w: ARM64 caller return requires the caller LR on every reaching path: %q", ErrProbeNeedsContext, ins.Raw)
 	}
 	return nil
@@ -842,7 +727,7 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		for _, input := range inputs {
 			value = arm64ControlUnion(value, arm64ControlLabels(state.source(input, false)))
 		}
-		if len(arm64ControlLabels(value)) != 0 {
+		if arm64ControlCount(arm64ControlLabels(value)) != 0 {
 			value = arm64ControlWithToken(value, "code-derived:") // Multiplication is not a pure PC copy.
 		}
 		state.write(destination, value, false)
@@ -850,7 +735,7 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 	}
 	if op == "ADR" && len(ins.Args) == 2 {
 		if target, ok := arm64BranchTarget(ins.Args[0]); ok && data[target] == "" {
-			state.write(ins.Args[1], arm64ControlValue{"label:" + target: true}, false)
+			state.write(ins.Args[1], arm64ControlFromMap(map[string]bool{"label:" + target: true}), false)
 			return
 		}
 	}
@@ -930,8 +815,8 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 			}
 		}
 		destination := ins.Args[len(ins.Args)-1]
-		if destination.Kind == OpReg && len(value) > 1 {
-			for token := range value {
+		if destination.Kind == OpReg && arm64ControlCount(value) > 1 {
+			for _, token := range arm64ControlKeys(value) {
 				if strings.HasPrefix(token, "label:") {
 					value = arm64ControlWithToken(value, "code-derived:")
 					break
@@ -962,7 +847,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	sig, known := c.sigs[name]
 	possibleCode := arm64ControlLabels(state.escaped)
 	returnValue := arm64ControlUnion(arm64ControlExternal(), possibleCode)
-	mayWriteFrame := !known || len(state.escaped) != 0
+	mayWriteFrame := !known || arm64ControlCount(state.escaped) != 0
 	internal := strings.HasSuffix(strings.TrimSuffix(operand.Sym, "(SB)"), "<ABIInternal>")
 	inputs, transport := arm64ControlCallInputs(state, sig, internal)
 	callTransportKnown := known && operand.Kind == OpSym && transport
@@ -970,7 +855,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	for _, value := range inputs {
 		state.escaped = arm64ControlUnion(state.escaped, arm64ControlAddressTaint(value))
 		returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
-		for token := range value {
+		for _, token := range arm64ControlKeys(value) {
 			if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
 				mayWriteFrame = true
 			}
@@ -986,7 +871,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 	// Actual transported/escaped source PC taint remains in returnValue; old
 	// GP witnesses are still retained below, without caller-save preservation.
 	privateInputs := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && state.unexposedSP &&
-		(len(state.escaped) == 0 || arm64ControlEscapedOnlyCode(state.escaped))
+		(arm64ControlCount(state.escaped) == 0 || arm64ControlEscapedOnlyCode(state.escaped))
 	if !privateInputs {
 		for _, value := range state.regs {
 			returnValue = arm64ControlUnion(returnValue, arm64ControlLabels(value))
@@ -1007,7 +892,7 @@ func (c *arm64Ctx) invalidateControlCallResults(state *arm64ControlState, operan
 		// Storing that value does not reveal this fresh allocation's address.
 		// Only the separately proven entry/source state can distinguish this
 		// case; legacy/default states keep the original any-escape clobber.
-		unexposed := len(state.escaped) == 0 || state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped)
+		unexposed := arm64ControlCount(state.escaped) == 0 || state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped)
 		preserveSP := callTransportKnown && c.sourceGoFrame.present && c.unexposedCallFrame && unexposed
 		for key, value := range state.memory {
 			if preserveSP && strings.HasPrefix(key, "sp:") {
@@ -1074,7 +959,7 @@ func (c *arm64Ctx) localControlTargets(bi int) ([]string, error) {
 	value := c.localControl.before[[2]int{bi, c.currentInstruction}]
 	var targets []string
 	external := false
-	for token := range value {
+	for _, token := range arm64ControlKeys(value) {
 		if strings.HasPrefix(token, "label:") {
 			targets = append(targets, token[6:])
 		} else {
@@ -1084,7 +969,7 @@ func (c *arm64Ctx) localControlTargets(bi int) ([]string, error) {
 	if len(targets) != 0 && external {
 		return nil, fmt.Errorf("%w: ARM64 register branch has mixed local-code and external/unknown reaching definitions", ErrProbeNeedsContext)
 	}
-	if len(targets) > 1 && value["label:"+c.localControl.outer] {
+	if len(targets) > 1 && arm64ControlHas(value, "label:"+c.localControl.outer) {
 		return nil, fmt.Errorf("%w: ARM64 register branch mixes a native caller link with local blockaddresses", ErrProbeNeedsContext)
 	}
 	sort.Strings(targets)

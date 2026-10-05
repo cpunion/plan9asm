@@ -57,12 +57,12 @@ func TestARM64DivideRemainderTypedImplicitEffects(t *testing.T) {
 			}
 			for _, input := range arm64GPDataInputRegisters(form) {
 				state := &arm64ControlState{
-					regs:   map[Reg]arm64ControlValue{input: {"label:caller": true}},
+					regs:   map[Reg]arm64ControlValue{input: arm64ControlFromMap(map[string]bool{"label:caller": true})},
 					memory: make(map[string]arm64ControlValue),
 				}
 				state.transfer(ins, Op(op), false, nil)
 				for _, output := range outputs {
-					if !arm64ControlRead(state.regs, output)["code-derived:"] {
+					if !arm64ControlHas(arm64ControlRead(state.regs, output), "code-derived:") {
 						t.Fatalf("%s %s -> %s lost code provenance", text, input, output)
 					}
 				}

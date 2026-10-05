@@ -58,16 +58,16 @@ func TestARM64ScalarMemoryScratchOrderedProvenance(t *testing.T) {
 			}
 			ins := arm64ImmediateTestInstruction(t, text)
 			state := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R0": {"label:actual_pc": true}, "R27": {"label:old_lr": true}},
+				regs:   map[Reg]arm64ControlValue{"R0": arm64ControlFromMap(map[string]bool{"label:actual_pc": true}), "R27": arm64ControlFromMap(map[string]bool{"label:old_lr": true})},
 				memory: make(map[string]arm64ControlValue),
 			}
 			state.transfer(ins, ins.Op, false, nil)
-			if state.regs["R27"]["label:old_lr"] || !state.regs["R27"]["code-derived:"] || !state.regs["R27"]["label:actual_pc"] {
+			if arm64ControlHas(state.regs["R27"], "label:old_lr") || !arm64ControlHas(state.regs["R27"], "code-derived:") || !arm64ControlHas(state.regs["R27"], "label:actual_pc") {
 				t.Fatalf("%s lost address-PC provenance or retained old LR: %+v", text, state.regs["R27"])
 			}
 			literal := arm64ImmediateTestInstruction(t, op+" -8192(R0),R1")
 			state.transfer(literal, literal.Op, false, nil)
-			if len(arm64ControlLabels(state.regs["R27"])) != 0 {
+			if arm64ControlCount(arm64ControlLabels(state.regs["R27"])) != 0 {
 				t.Fatalf("%s literal scratch inherited base/old-R27 code", literal.Raw)
 			}
 		}
@@ -76,11 +76,11 @@ func TestARM64ScalarMemoryScratchOrderedProvenance(t *testing.T) {
 	// data R27 is read afterwards. This is not a register-independent store.
 	ins := arm64ImmediateTestInstruction(t, "MOVD R27,65536(R27)")
 	state := &arm64ControlState{
-		regs:   map[Reg]arm64ControlValue{"R27": {"sp:16": true}},
+		regs:   map[Reg]arm64ControlValue{"R27": arm64ControlFromMap(map[string]bool{"sp:16": true})},
 		memory: make(map[string]arm64ControlValue),
 	}
 	state.transfer(ins, ins.Op, false, nil)
-	if !state.memory["sp:65552"]["sp:65552"] || !state.regs["R27"]["sp:65552"] {
+	if !arm64ControlHas(state.memory["sp:65552"], "sp:65552") || !arm64ControlHas(state.regs["R27"], "sp:65552") {
 		t.Fatalf("base/data alias lost ordered address or data: %+v", state)
 	}
 }

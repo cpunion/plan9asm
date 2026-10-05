@@ -96,9 +96,9 @@ func TestARM64PrivateCallFrameAggregatePointersInvalidateFP(t *testing.T) {
 				Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
 			}}
 			state := &arm64ControlState{
-				regs: map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R30": {"label:continuation": true}},
+				regs: map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{"label:continuation": true})},
 				memory: map[string]arm64ControlValue{
-					"sp:0": {"label:outer": true}, "sp:8": {"": true}, "fp:0": {"fpa:0": true},
+					"sp:0": arm64ControlFromMap(map[string]bool{"label:outer": true}), "sp:8": arm64ControlFromMap(map[string]bool{"": true}), "fp:0": arm64ControlFromMap(map[string]bool{"fpa:0": true}),
 				},
 			}
 			for _, proof := range []bool{false, true} {
@@ -107,7 +107,7 @@ func TestARM64PrivateCallFrameAggregatePointersInvalidateFP(t *testing.T) {
 					unexposedCallFrame: proof, sourceGoFrame: arm64GoFrame{present: true},
 				}
 				ctx.invalidateControlCallResults(copy, Operand{Kind: OpSym, Sym: "callee(SB)"})
-				if !copy.memory["fp:0"][""] || copy.memory["sp:0"][""] == proof {
+				if !arm64ControlHas(copy.memory["fp:0"], "") || arm64ControlHas(copy.memory["sp:0"], "") == proof {
 					t.Fatalf("pointer-containing/unknown transport lost the separate SP/FP contract (proof=%t): %v", proof, copy.memory)
 				}
 			}
@@ -154,14 +154,14 @@ func TestARM64PrivateCallFrameProofIsZeroDefaultAndSPOnly(t *testing.T) {
 				Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}},
 			}}
 			state := &arm64ControlState{
-				regs: map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R30": {"label:continuation": true}},
+				regs: map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{"label:continuation": true})},
 				memory: map[string]arm64ControlValue{
-					"sp:0": {"label:outer": true}, "sp:8": {tc.argument: true},
-					"sp:16": {"": true}, "fp:0": {"label:local": true},
+					"sp:0": arm64ControlFromMap(map[string]bool{"label:outer": true}), "sp:8": arm64ControlFromMap(map[string]bool{tc.argument: true}),
+					"sp:16": arm64ControlFromMap(map[string]bool{"": true}), "fp:0": arm64ControlFromMap(map[string]bool{"label:local": true}),
 				},
 			}
 			if tc.escaped != "" {
-				state.escaped = arm64ControlValue{tc.escaped: true}
+				state.escaped = arm64ControlFromMap(map[string]bool{tc.escaped: true})
 			}
 			ctx := &arm64Ctx{resolve: func(s string) string { return s }, sigs: map[string]FuncSig{},
 				unexposedCallFrame: tc.proof, sourceGoFrame: arm64GoFrame{present: tc.frame},
@@ -170,13 +170,13 @@ func TestARM64PrivateCallFrameProofIsZeroDefaultAndSPOnly(t *testing.T) {
 				ctx.sigs["callee"] = sig
 			}
 			ctx.invalidateControlCallResults(state, Operand{Kind: OpSym, Sym: "callee(SB)"})
-			if state.memory["sp:0"][""] == tc.intact {
+			if arm64ControlHas(state.memory["sp:0"], "") == tc.intact {
 				t.Errorf("SP preservation mismatch: %v", state.memory["sp:0"])
 			}
-			if !state.memory["fp:0"][""] {
+			if !arm64ControlHas(state.memory["fp:0"], "") {
 				t.Error("a private-SP proof must never retain an FP content category across a pointer call")
 			}
-			if !state.memory["sp:16"][""] || !state.regs["R9"][""] {
+			if !arm64ControlHas(state.memory["sp:16"], "") || !arm64ControlHas(state.regs["R9"], "") {
 				t.Error("private-SP proof restored unknown memory or caller-save GP")
 			}
 		})

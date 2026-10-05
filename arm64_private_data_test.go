@@ -178,19 +178,19 @@ func TestARM64PrivateDataUnknownStoresPreserveOnlyDisjointCells(t *testing.T) {
 		state := &arm64ControlState{
 			unexposedSP:  true,
 			privateStore: &arm64PrivateDataSpan{8, 24},
-			regs:         map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R17": {"sp:8": true}},
+			regs:         map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R17": arm64ControlFromMap(map[string]bool{"sp:8": true})},
 			memory: map[string]arm64ControlValue{
-				"sp:0": {"label:caller": true}, "sp:8": arm64ControlExternal(), "sp:24": {"label:untouched": true}, "fp:0": {"label:fp": true},
+				"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true}), "sp:8": arm64ControlExternal(), "sp:24": arm64ControlFromMap(map[string]bool{"label:untouched": true}), "fp:0": arm64ControlFromMap(map[string]bool{"label:fp": true}),
 			},
 		}
 		if derived {
-			state.regs["R11"] = arm64ControlValue{"code-derived:": true}
+			state.regs["R11"] = arm64ControlFromMap(map[string]bool{"code-derived:": true})
 		}
-		state.invalidateUnknownStore(Operand{Kind: OpMem, Mem: MemRef{Base: "R17", Index: "R11"}}, arm64ControlValue{"label:stored": true})
-		if state.memory["sp:0"][""] != derived || state.memory["sp:24"][""] != derived {
+		state.invalidateUnknownStore(Operand{Kind: OpMem, Mem: MemRef{Base: "R17", Index: "R11"}}, arm64ControlFromMap(map[string]bool{"label:stored": true}))
+		if arm64ControlHas(state.memory["sp:0"], "") != derived || arm64ControlHas(state.memory["sp:24"], "") != derived {
 			t.Fatal("per-instruction data extent erased the caller/code-derived boundary")
 		}
-		if !state.memory["sp:8"]["label:stored"] || !state.memory["sp:8"][""] || !state.memory["fp:0"][""] {
+		if !arm64ControlHas(state.memory["sp:8"], "label:stored") || !arm64ControlHas(state.memory["sp:8"], "") || !arm64ControlHas(state.memory["fp:0"], "") {
 			t.Fatal("overlap/FP cells retained stale contents or lost stored code provenance")
 		}
 	}

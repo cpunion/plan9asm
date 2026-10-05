@@ -165,13 +165,13 @@ func TestARM64RawVectorRegisterFamiliesPreserveGPAndSavedLink(t *testing.T) {
 			if writes, known := arm64RawPoolGPWrites(word); !known || writes != 0 {
 				t.Errorf("register-only SIMD family has unknown GP effects: writes=%#x, known=%v", writes, known)
 			}
-			caller := arm64ControlValue{"return:outer": true}
+			caller := arm64ControlFromMap(map[string]bool{"return:outer": true})
 			state := &arm64ControlState{
 				regs:   map[Reg]arm64ControlValue{"R30": caller},
 				memory: map[string]arm64ControlValue{"sp:0": caller},
 			}
 			state.transfer(Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: int64(word)}}}, OpWORD, false, nil)
-			if state.regs["R30"][""] || state.memory["sp:0"][""] {
+			if arm64ControlHas(state.regs["R30"], "") || arm64ControlHas(state.memory["sp:0"], "") {
 				t.Error("vector register 30 must not clobber GP LR or memory")
 			}
 		})

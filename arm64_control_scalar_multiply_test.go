@@ -75,14 +75,14 @@ func TestARM64ControlScalarMultiplyInputOutputDirection(t *testing.T) {
 			}
 			ins := file.Funcs[0].Instrs[1]
 			requireARM64GoAssemblerResult(t, "TEXT multiply(SB),$0-0\n"+text+"\nRET\n", true)
-			state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": {"label:entry_lr": true}}, memory: make(map[string]arm64ControlValue)}
+			state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:entry_lr": true})}, memory: make(map[string]arm64ControlValue)}
 			state.transfer(ins, ins.Op, false, nil)
 			value := arm64ControlRead(state.regs, "R30")
 			if len(ins.Args) == 2 {
-				if !value["code-derived:"] {
+				if !arm64ControlHas(value, "code-derived:") {
 					t.Fatal("two-operand multiply lost its destination input")
 				}
-			} else if len(arm64ControlLabels(value)) != 0 {
+			} else if arm64ControlCount(arm64ControlLabels(value)) != 0 {
 				t.Fatalf("write-only multiply destination read its stale LR: %v", value)
 			}
 			// Every explicit source, including an alias of Rd, remains tainted.
@@ -90,9 +90,9 @@ func TestARM64ControlScalarMultiplyInputOutputDirection(t *testing.T) {
 				alias := ins
 				alias.Args = append([]Operand(nil), ins.Args...)
 				alias.Args[index].Reg = "R30"
-				state.regs["R30"] = arm64ControlValue{"label:entry_lr": true}
+				state.regs["R30"] = arm64ControlFromMap(map[string]bool{"label:entry_lr": true})
 				state.transfer(alias, alias.Op, false, nil)
-				if !arm64ControlRead(state.regs, "R30")["code-derived:"] {
+				if !arm64ControlHas(arm64ControlRead(state.regs, "R30"), "code-derived:") {
 					t.Fatalf("source %d alias washed away transformed caller PC", index)
 				}
 			}

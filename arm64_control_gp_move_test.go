@@ -75,12 +75,12 @@ func TestARM64ControlGPMoveReadsSourceNotOldDestination(t *testing.T) {
 				t.Fatal(err)
 			}
 			state := &arm64ControlState{
-				regs:   map[Reg]arm64ControlValue{"R30": {"label:caller": true}},
+				regs:   map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:caller": true})},
 				memory: make(map[string]arm64ControlValue),
 			}
 			ins := file.Funcs[0].Instrs[1]
 			state.transfer(ins, ins.Op, false, nil)
-			if value := arm64ControlRead(state.regs, "R30"); len(value) != 1 || !value[""] {
+			if value := arm64ControlRead(state.regs, "R30"); arm64ControlCount(value) != 1 || !arm64ControlHas(value, "") {
 				t.Errorf("write-only destination kept old caller code: %s: %v", text, value)
 			}
 		}
@@ -93,10 +93,10 @@ func TestARM64ControlGPMoveReadsSourceNotOldDestination(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": {"label:caller": true}}, memory: make(map[string]arm64ControlValue)}
+			state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:caller": true})}, memory: make(map[string]arm64ControlValue)}
 			ins := file.Funcs[0].Instrs[1]
 			state.transfer(ins, ins.Op, false, nil)
-			if labels := arm64ControlLabels(arm64ControlRead(state.regs, "R30")); len(labels) != 0 {
+			if labels := arm64ControlLabels(arm64ControlRead(state.regs, "R30")); arm64ControlCount(labels) != 0 {
 				t.Errorf("literal overwrote LR but retained its code bits: %s: %v", text, labels)
 			}
 		}
@@ -135,11 +135,11 @@ FMOVQ F22,(R1)
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": {"label:caller": true}}, memory: make(map[string]arm64ControlValue)}
+		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:caller": true})}, memory: make(map[string]arm64ControlValue)}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, ins.Op, false, nil)
 		value := arm64ControlRead(state.regs, "R4")
-		if !value["label:caller"] || op != "MOVD" && !value["code-derived:"] {
+		if !arm64ControlHas(value, "label:caller") || op != "MOVD" && !arm64ControlHas(value, "code-derived:") {
 			t.Errorf("actual narrow/copy source washed caller code: %s: %v", text, value)
 		}
 	}
@@ -148,10 +148,10 @@ FMOVQ F22,(R1)
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": {"label:caller": true}}, memory: make(map[string]arm64ControlValue)}
+		state := &arm64ControlState{regs: map[Reg]arm64ControlValue{"R30": arm64ControlFromMap(map[string]bool{"label:caller": true})}, memory: make(map[string]arm64ControlValue)}
 		ins := file.Funcs[0].Instrs[1]
 		state.transfer(ins, arm64ControlOp(ins), false, nil)
-		if !arm64ControlRead(state.regs, "R30")["label:caller"] {
+		if !arm64ControlHas(arm64ControlRead(state.regs, "R30"), "label:caller") {
 			t.Errorf("RMW/unknown move got full overwrite witness: %s", text)
 		}
 	}

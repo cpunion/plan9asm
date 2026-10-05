@@ -77,8 +77,8 @@ func arm64ControlExactReferenceMap(value arm64ControlValue) map[string]bool {
 	if value == nil {
 		return nil
 	}
-	result := make(map[string]bool, len(value))
-	for token, present := range value {
+	result := make(map[string]bool, arm64ControlCount(value))
+	for token, present := range arm64ControlMap(value) {
 		result[token] = present
 	}
 	return result
@@ -88,9 +88,9 @@ func arm64ControlExactReferenceValue(value map[string]bool) arm64ControlValue {
 	if value == nil {
 		return nil
 	}
-	result := make(arm64ControlValue, len(value))
+	result := arm64ControlFromMap(make(map[string]bool, len(value)))
 	for token, present := range value {
-		result[token] = present
+		result = arm64ControlSetToken(result, token, present)
 	}
 	return result
 }

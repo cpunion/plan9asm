@@ -34,12 +34,12 @@ func (c *arm64Ctx) rawZeroContextControlPlan(outer string) *arm64LocalControlPla
 
 func (plan *arm64LocalControlPlan) recordRawZeroReturn(block, instruction int, state *arm64ControlState, entryLink string) {
 	point := [2]int{block, instruction}
-	link := make(arm64ControlValue)
-	for token := range arm64ControlRead(state.regs, "R30") {
+	link := arm64ControlFromMap(make(map[string]bool))
+	for _, token := range arm64ControlKeys(arm64ControlRead(state.regs, "R30")) {
 		if token == entryLink {
 			token = "label:" + plan.outer
 		}
-		link[token] = true
+		link = arm64ControlSetToken(link, token, true)
 	}
 	plan.before[point] = arm64ControlUnion(plan.before[point], link)
 	plan.linkBefore[point] = arm64ControlUnion(plan.linkBefore[point], link)

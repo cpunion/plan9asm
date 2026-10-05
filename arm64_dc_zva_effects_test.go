@@ -23,11 +23,11 @@ func TestARM64DCZVAControlIsAnUnknownExtentStore(t *testing.T) {
 	}
 	state := arm64ControlState{
 		regs: map[Reg]arm64ControlValue{
-			"R0": {"label:data": true}, "R30": {"label:caller": true},
+			"R0": arm64ControlFromMap(map[string]bool{"label:data": true}), "R30": arm64ControlFromMap(map[string]bool{"label:caller": true}),
 		},
 		memory: map[string]arm64ControlValue{
-			"sp:0": {"label:caller": true}, "sp:4096": {"label:far": true},
-			"fp:8": {"fpa:24": true},
+			"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true}), "sp:4096": arm64ControlFromMap(map[string]bool{"label:far": true}),
+			"fp:8": arm64ControlFromMap(map[string]bool{"fpa:24": true}),
 		},
 	}
 	before := state.clone()
@@ -37,11 +37,11 @@ func TestARM64DCZVAControlIsAnUnknownExtentStore(t *testing.T) {
 		t.Fatal("DC ZVA reads its address; it must not define a GP destination")
 	}
 	for key, value := range state.memory {
-		if !value[""] {
+		if !arm64ControlHas(value, "") {
 			t.Errorf("unknown hardware granule left %s falsely known: %v", key, value)
 		}
-		for token := range before.memory[key] {
-			if !value[token] {
+		for _, token := range arm64ControlKeys(before.memory[key]) {
+			if !arm64ControlHas(value, token) {
 				t.Errorf("possible old contents/aliases were discarded at %s: %v", key, value)
 			}
 		}

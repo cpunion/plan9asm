@@ -30,19 +30,19 @@ func TestARM64AtomicPairNamedEffectsMatchRealOutputBankAndMemory(t *testing.T) {
 				}
 				state := &arm64ControlState{
 					regs: map[Reg]arm64ControlValue{
-						SP: {"sp:0": true}, "R30": {"label:caller": true},
+						SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{"label:caller": true}),
 					},
-					memory: map[string]arm64ControlValue{"sp:0": {"label:caller": true}},
+					memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{"label:caller": true})},
 				}
 				ins := file.Funcs[0].Instrs[1]
 				state.transfer(ins, Op(op), false, nil)
-				if !arm64ControlEqual(state.regs[SP], arm64ControlValue{"sp:0": true}) {
+				if !arm64ControlEqual(state.regs[SP], arm64ControlFromMap(map[string]bool{"sp:0": true})) {
 					t.Errorf("data-pair RSP encodes ZR, not a stack-pointer write: %+v", state.regs[SP])
 				}
-				if tainted := state.regs["R30"][""]; tainted != family.lr {
+				if tainted := arm64ControlHas(state.regs["R30"], ""); tainted != family.lr {
 					t.Errorf("caller LR output taint=%v, want %v; state=%+v", tainted, family.lr, state.regs["R30"])
 				}
-				if tainted := state.memory["sp:0"][""]; tainted != family.store {
+				if tainted := arm64ControlHas(state.memory["sp:0"], ""); tainted != family.store {
 					t.Errorf("saved-memory store taint=%v, want %v", tainted, family.store)
 				}
 			})

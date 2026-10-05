@@ -15,7 +15,7 @@ type arm64PrivateFrameTransport struct {
 
 func (transport *arm64PrivateFrameTransport) consume(ins Instr, addresses arm64PrivateFrameAddresses, entryInternal bool) bool {
 	state := &arm64ControlState{
-		regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}},
+		regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true})},
 		memory: make(map[string]arm64ControlValue),
 	}
 	for reg, address := range addresses {
@@ -23,7 +23,7 @@ func (transport *arm64PrivateFrameTransport) consume(ins Instr, addresses arm64P
 		if address.exact {
 			offset = strconv.FormatInt(address.offset, 10)
 		}
-		state.regs[reg] = arm64ControlValue{"sp:" + offset: true}
+		state.regs[reg] = arm64ControlFromMap(map[string]bool{"sp:" + offset: true})
 	}
 	if arm64ControlOp(ins) == OpRET {
 		if len(ins.Args) != 0 {
@@ -66,7 +66,7 @@ func (transport *arm64PrivateFrameTransport) consume(ins Instr, addresses arm64P
 		return false
 	}
 	for _, input := range inputs {
-		for token := range input {
+		for _, token := range arm64ControlKeys(input) {
 			if strings.HasPrefix(token, "sp:") || strings.HasPrefix(token, "fp:") || strings.HasPrefix(token, "fpa:") {
 				return false
 			}
@@ -79,7 +79,7 @@ func (transport *arm64PrivateFrameTransport) consume(ins Instr, addresses arm64P
 	for reg := range addresses {
 		value := arm64ControlRead(state.regs, reg)
 		frame := false
-		for token := range value {
+		for _, token := range arm64ControlKeys(value) {
 			frame = frame || strings.HasPrefix(token, "sp:")
 		}
 		if !frame {

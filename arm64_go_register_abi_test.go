@@ -114,15 +114,15 @@ func TestARM64GoRegisterABIControlEffectsUseTypedRegisterLeaves(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := &arm64ControlState{
-			regs:   map[Reg]arm64ControlValue{SP: {"sp:0": true}, "R0": {"sp:0": true}, "R30": {"label:continuation": true}},
-			memory: map[string]arm64ControlValue{"sp:0": {"label:outer": true}, "sp:8": {"": true}},
+			regs:   map[Reg]arm64ControlValue{SP: arm64ControlFromMap(map[string]bool{"sp:0": true}), "R0": arm64ControlFromMap(map[string]bool{"sp:0": true}), "R30": arm64ControlFromMap(map[string]bool{"label:continuation": true})},
+			memory: map[string]arm64ControlValue{"sp:0": arm64ControlFromMap(map[string]bool{"label:outer": true}), "sp:8": arm64ControlFromMap(map[string]bool{"": true})},
 		}
 		ctx := &arm64Ctx{resolve: func(s string) string { return goStripABISuffix(strings.TrimPrefix(s, "·")) }, sigs: map[string]FuncSig{"callee": sig}}
 		ctx.invalidateControlCallResults(state, Operand{Kind: OpSym, Sym: "·callee<ABIInternal>(SB)"})
-		if pointer && !state.memory["sp:0"][""] {
+		if pointer && !arm64ControlHas(state.memory["sp:0"], "") {
 			t.Fatal("nested Ptr register argument failed to invalidate saved-link memory")
 		}
-		if !pointer && state.memory["sp:8"]["label:continuation"] {
+		if !pointer && arm64ControlHas(state.memory["sp:8"], "label:continuation") {
 			t.Fatal("register result was incorrectly stored in the classic ABI0 frame")
 		}
 	}
