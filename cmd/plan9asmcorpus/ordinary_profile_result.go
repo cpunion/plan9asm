@@ -14,7 +14,7 @@ import (
 func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []string, goVersion string) error {
 	plan := result.OrdinarySelectionPlan
 	if plan == nil || plan.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || plan.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol ||
-		plan.DocumentationSourceProtocol != discoveryDocumentationProtocol {
+		plan.DocumentationSourceProtocol != discoveryDocumentationProtocol || plan.CPPSourceProtocol != discoveryReplayCPPInputsProtocol {
 		return fmt.Errorf("current ordinary profile lacks its mandatory signature-source protocol")
 	}
 	if plan == nil || plan.Module != result.Module || plan.Version != result.Version || plan.GoVersion != goVersion ||
@@ -81,6 +81,9 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 		return fmt.Errorf("selected ordinary profile lacks original CPP source/registration inputs")
 	}
 	if plan.CPPInputs != nil {
+		if plan.CPPInputs.Protocol != plan.CPPSourceProtocol {
+			return fmt.Errorf("ordinary CPP source protocol was downgraded or substituted")
+		}
 		files := make(map[string]bool)
 		for scope := range remaining {
 			files[scope.File] = true
@@ -259,7 +262,7 @@ func validateOrdinaryProfileCPPConsumption(plan *discoveryOrdinarySelectionPlan,
 		if !found {
 			return fmt.Errorf("actual CPP source has no original graph: %s", cpp.File)
 		}
-		if plan.CPPInputs.Protocol == discoveryDeferredCPPInputsProtocol {
+		if plan.CPPInputs.Protocol == discoveryDeferredCPPInputsProtocol || plan.CPPInputs.Protocol == discoveryReplayCPPInputsProtocol {
 			var selected *gotoolprofile.PackageProof
 			for index := range proof.Packages {
 				if containsTargetFeature(proof.Packages[index].SFiles, cpp.File) {
@@ -276,6 +279,12 @@ func validateOrdinaryProfileCPPConsumption(plan *discoveryOrdinarySelectionPlan,
 						header = &proof.GeneratedHeaders.Headers[index]
 					}
 				}
+			}
+			if plan.CPPInputs.Protocol == discoveryReplayCPPInputsProtocol {
+				if err := validateDiscoveryOriginalCPPConsumption(plan.CPPInputs, unit, header, selected.Macros.Defines, cpp); err != nil {
+					return err
+				}
+				continue
 			}
 			wanted, err := discoveryDeferredCPPConsumption(plan.CPPInputs, unit, header, selected.Macros.Defines)
 			if err != nil || !reflect.DeepEqual(wanted, cpp.Inputs) {

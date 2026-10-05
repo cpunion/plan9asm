@@ -85,7 +85,7 @@ func TestCPPConditionsDirectiveGeneratingMacrosMatchActualGo(t *testing.T) {
 						discoveryFeatureBytesSHA256([]byte(source)), discoveryFeatureBytesSHA256(nm),
 					)
 
-					input, err := discoveryCPPConditionsFromBytes("probe.s", []byte(source))
+					input, err := discoveryReplayCPPSource("probe.s", []byte(source))
 					if err != nil {
 						t.Fatalf("Go-accepted directive macro has no source registration: %v", err)
 					}

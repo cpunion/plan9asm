@@ -20,6 +20,7 @@ func fixtureDiscoveryProvenance(t *testing.T, ledger string) discoveryCorpusProv
 		t.Fatal(err)
 	}
 	return discoveryCorpusProvenance{
+		CPPSourceProtocol:                 discoveryReplayCPPInputsProtocol,
 		InstrumentationScopeProtocol:      discoveryInstrumentationPlanProtocol,
 		InstrumentationTypeSourceProtocol: gotoolprofile.InstrumentationTypeSourcesProtocol,
 		DocumentationSourceProtocol:       discoveryDocumentationProtocol,

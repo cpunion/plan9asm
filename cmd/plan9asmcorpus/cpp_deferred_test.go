@@ -19,7 +19,7 @@ func TestDeferredCPPRawRegistrationKeepsGeneratedAndInactiveIncludes(t *testing.
 		t.Fatal(err)
 	}
 	unit := inputs.Units[0]
-	if inputs.Protocol != discoveryDeferredCPPInputsProtocol || len(unit.DeferredIncludes) != 3 || len(inputs.Sources) != 1 || len(unit.Includes) != 0 {
+	if inputs.Protocol != discoveryReplayCPPInputsProtocol || len(unit.DeferredIncludes) != 3 || len(inputs.Sources) != 1 || len(unit.Includes) != 0 {
 		t.Fatalf("raw inventory erased an unresolved/generated registration or invented source: %#v", inputs)
 	}
 	if err := validateDiscoveryCPPInputs(inputs, plan, []string{"pkg/native_amd64.s"}); err != nil {

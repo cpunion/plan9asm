@@ -39,6 +39,7 @@ const (
 // package. Ignored directories and nested modules are recursive corpus-walk
 // boundaries. Constraints and source diagnostics are separate decisions.
 type discoveryOrdinarySelectionPlan struct {
+	CPPSourceProtocol            string                            `json:"cpp_source_protocol"`
 	DocumentationSourceProtocol  string                            `json:"documentation_source_protocol,omitempty"`
 	DocumentationRules           *discoveryDocumentationRules      `json:"documentation_rules,omitempty"`
 	DocumentationPackages        []discoveryDocumentationPackage   `json:"documentation_packages,omitempty"`
@@ -127,6 +128,7 @@ func captureOrdinarySelectionPlan(candidate discoveryCandidate, moduleDir string
 // stability rechecks need only these inputs, not a second host-context replay.
 func captureOrdinarySelectionInputs(candidate discoveryCandidate, moduleDir string, targets []string) (*discoveryOrdinarySelectionPlan, error) {
 	plan := &discoveryOrdinarySelectionPlan{
+		CPPSourceProtocol:            discoveryReplayCPPInputsProtocol,
 		DocumentationSourceProtocol:  discoveryDocumentationProtocol,
 		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
 		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,

@@ -26,6 +26,7 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 	}
 	result.Source.Revision = ""
 	result.Provenance = &discoveryCorpusProvenance{
+		CPPSourceProtocol:                 original.Provenance.CPPSourceProtocol,
 		InstrumentationScopeProtocol:      original.Provenance.InstrumentationScopeProtocol,
 		InstrumentationTypeSourceProtocol: original.Provenance.InstrumentationTypeSourceProtocol,
 		DocumentationSourceProtocol:       original.Provenance.DocumentationSourceProtocol,

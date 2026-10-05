@@ -51,6 +51,11 @@ func captureDiscoveryDeferredCPPInputs(plan *discoveryOrdinarySelectionPlan, mod
 }
 
 func captureDiscoveryCPPInputsMode(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, deferred bool, contexts ...context.Context) (*discoveryCPPInputs, error) {
+	return captureDiscoveryReplayCPPInputs(plan, moduleDir, goRoot, files, deferred, contexts...)
+}
+
+// Historical capture remains separate from the full-source replay contract.
+func captureDiscoveryLegacyCPPInputsMode(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, deferred bool, contexts ...context.Context) (*discoveryCPPInputs, error) {
 	if len(contexts) > 1 || len(contexts) == 1 && contexts[0] == nil {
 		return nil, fmt.Errorf("CPP source capture requires at most one live candidate context")
 	}
@@ -268,7 +273,14 @@ func discoveryCPPResolveInclude(moduleDir, goRoot, asmFile, include string) (str
 }
 
 func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, files []string) error {
-	if inputs == nil || plan == nil || inputs.Protocol != discoveryCPPInputsProtocol && inputs.Protocol != discoveryDeferredCPPInputsProtocol || inputs.Module != plan.Module || inputs.Version != plan.Version ||
+	if inputs != nil && inputs.Protocol == discoveryReplayCPPInputsProtocol {
+		return validateDiscoveryReplayCPPInputs(inputs, plan, files)
+	}
+	return validateDiscoveryCPPInputStructure(inputs, plan, files)
+}
+
+func validateDiscoveryCPPInputStructure(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, files []string) error {
+	if inputs == nil || plan == nil || inputs.Protocol != discoveryCPPInputsProtocol && inputs.Protocol != discoveryDeferredCPPInputsProtocol && inputs.Protocol != discoveryReplayCPPInputsProtocol || inputs.Module != plan.Module || inputs.Version != plan.Version ||
 		inputs.ModuleSum != plan.ModuleSum || inputs.ZipSHA256 != plan.ZipSHA256 || !discoverySHA256Pattern.MatchString(inputs.ZipSHA256) ||
 		!strings.HasPrefix(inputs.ModuleSum, "h1:") || len(inputs.Sources) == 0 || len(inputs.Sources) > 512 || len(inputs.Units) < len(files) || len(inputs.Units) > 512 || len(files) > 512 {
 		return fmt.Errorf("missing exact bounded CPP module/source protocol")
@@ -300,7 +312,10 @@ func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdin
 		}
 		lastLine := 0
 		for _, directive := range source.Directives {
-			if directive.Line <= lastLine {
+			if directive.Generated && inputs.Protocol != discoveryReplayCPPInputsProtocol {
+				return fmt.Errorf("historical CPP control proof cannot authenticate generated controls")
+			}
+			if directive.Line <= 0 || directive.Line < lastLine || directive.Line == lastLine && inputs.Protocol != discoveryReplayCPPInputsProtocol {
 				return fmt.Errorf("CPP control inventory is not in source order")
 			}
 			lastLine = directive.Line
@@ -348,6 +363,9 @@ func validateDiscoveryCPPInputs(inputs *discoveryCPPInputs, plan *discoveryOrdin
 }
 
 func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUnit, used map[string]bool) ([]discoveryCPPDirective, error) {
+	if inputs.Protocol == discoveryReplayCPPInputsProtocol {
+		return discoveryReplayCPPUnitRegistration(inputs, unit, used)
+	}
 	if inputs.Protocol == discoveryDeferredCPPInputsProtocol {
 		return discoveryDeferredCPPUnitRegistration(inputs, unit, used)
 	}
@@ -440,6 +458,9 @@ func discoveryCPPValidateSearchMisses(inputs *discoveryCPPInputs, unit discovery
 // controls. Offline replay is frozen source/tool-provenance evidence, not an
 // independently authenticated ZIP witness without reading those bytes again.
 func verifyDiscoveryCPPModuleZIP(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, zipPath string) error {
+	if inputs != nil && inputs.Protocol == discoveryReplayCPPInputsProtocol {
+		return verifyDiscoveryReplayCPPZIP(inputs, plan, zipPath)
+	}
 	if inputs == nil {
 		return fmt.Errorf("missing exact CPP source proof")
 	}
@@ -589,7 +610,7 @@ func verifyDiscoveryCPPInputsUnchanged(inputs *discoveryCPPInputs, moduleDir, go
 				if !selected && deferredKind == "" {
 					continue
 				}
-				actual, kind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, unit.File, directive.Include, inputs.Protocol == discoveryDeferredCPPInputsProtocol)
+				actual, kind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, unit.File, directive.Include, inputs.Protocol != discoveryCPPInputsProtocol)
 				if err != nil || actual != wanted || kind != deferredKind {
 					return fmt.Errorf("CPP include search selection changed: %s:%d", id, directive.Line)
 				}

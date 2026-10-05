@@ -172,6 +172,9 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, fmt.Errorf("mode inventory has unexplained observations or original packages")
 	}
 	if proof.CPPInputs != nil {
+		if proof.CPPInputs.Protocol != plan.CPPSourceProtocol {
+			return 0, nil, fmt.Errorf("mode original CPP source protocol was downgraded or substituted")
+		}
 		if err := validateDiscoveryCPPInputs(proof.CPPInputs, plan, sortedDiscoverySet(selected)); err != nil {
 			return 0, nil, err
 		}

@@ -73,6 +73,10 @@ func discoveryDeferredCPPUnitRegistration(inputs *discoveryCPPInputs, unit disco
 // controls. Instruction bytes/expanded hashes still depend on the independently
 // observed compiler consumer; this does not manufacture translation evidence.
 func discoveryDeferredCPPConsumption(inputs *discoveryCPPInputs, unit discoveryCPPUnit, header *gotoolprofile.GeneratedHeaderProof, defines []string) (map[string]string, error) {
+	if inputs.Protocol == discoveryReplayCPPInputsProtocol {
+		_, consumed, err := replayDiscoveryOriginalCPP(inputs, unit, header, defines)
+		return consumed, err
+	}
 	macros, consumed := make(map[string]bool), make(map[string]string)
 	for _, name := range defines {
 		macros[name] = true

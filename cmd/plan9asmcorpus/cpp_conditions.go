@@ -9,16 +9,18 @@ import (
 )
 
 type discoveryCPPDirective struct {
-	Line    int    `json:"line"`
-	Kind    string `json:"kind"`
-	Name    string `json:"name,omitempty"`
-	Include string `json:"include,omitempty"`
+	Line      int    `json:"line"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name,omitempty"`
+	Include   string `json:"include,omitempty"`
+	Generated bool   `json:"generated_from_macro_body,omitempty"`
 }
 
 type discoveryCPPSource struct {
 	File       string                  `json:"file"`
 	SHA256     string                  `json:"sha256"`
 	Directives []discoveryCPPDirective `json:"directives"`
+	Original   *string                 `json:"original_source,omitempty"`
 }
 
 type discoveryCPPBranchState struct{ OuterActive, Then bool }

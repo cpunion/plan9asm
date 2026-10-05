@@ -55,7 +55,8 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	if err != nil {
 		return nil, err
 	}
-	if !discoveryCPPHasFeatureConditions(directives) {
+	fullReplay := plan.CPPInputs.Protocol == discoveryReplayCPPInputsProtocol
+	if !fullReplay && !discoveryCPPHasFeatureConditions(directives) {
 		return nil, nil
 	}
 	for _, directive := range directives {
@@ -87,16 +88,39 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 		if err != nil {
 			return false, err
 		}
-		states, err := replayDiscoveryCPPConditions(directives, defines)
-		if err != nil {
-			return false, fmt.Errorf("bounded CPP replay requires concrete source diagnosis: %w", err)
+		var keys map[string]bool
+		if fullReplay {
+			observation, _, err := replayDiscoveryOriginalCPP(plan.CPPInputs, *unit, nil, defines)
+			if err != nil {
+				// No fabricated native header is a planning input. Every legal
+				// CPU proposal is retained when actual header presence is needed;
+				// its actual package/header/consumer must still close later.
+				for _, kind := range unit.DeferredIncludes {
+					if kind == "generated_go_asm" {
+						deferredPresence = true
+						return false, nil
+					}
+				}
+				return false, fmt.Errorf("full original CPP planning replay: %w", err)
+			}
+			keys, err = discoveryCPPBranchCoverage(observation)
+			if err != nil {
+				return false, err
+			}
+		} else {
+			states, err := replayDiscoveryCPPConditions(directives, defines)
+			if err != nil {
+				return false, fmt.Errorf("bounded CPP replay requires concrete source diagnosis: %w", err)
+			}
+			keys = make(map[string]bool)
+			for index, state := range states {
+				if state.OuterActive {
+					keys[fmt.Sprintf("%d/%t", index, state.Then)] = true
+				}
+			}
 		}
 		added := false
-		for index, state := range states {
-			if !state.OuterActive {
-				continue
-			}
-			key := fmt.Sprintf("%d/%t", index, state.Then)
+		for key := range keys {
 			if !covered[key] {
 				covered[key], added = true, true
 			}

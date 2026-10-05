@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/mod/sumdb/dirhash"
 )
 
 // This first-party module runs through the original ordinary producer, not a
@@ -41,6 +43,7 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 	sources := map[string]string{
 		"go.mod":   "module example.invalid/ordinary-directive-macros\n\ngo 1.20\n",
 		"probe.go": "package fixture\nfunc Probe()\n",
+		"cpu.s":    "// Original nonempty selected assembly sibling.\n",
 		"probe.s": "#include \"macros.h\"\n" +
 			"TEXT ·Probe(SB),4,$0-0\nRET\n" +
 			"OBJECT_ALIAS\nAPPLY(GOARCH_amd64)\nINCLUDE_CHOICE\n",
@@ -67,6 +70,10 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 	if len(targets) != 11 {
 		t.Fatalf("original complete target denominator changed: %v", targets)
 	}
+	archiveSum, err := dirhash.HashZip(download.Zip, dirhash.Hash1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, target := range targets {
 		goos, goarch, _ := strings.Cut(target, "/")
 		env := replaceEnv(os.Environ(), map[string]string{
@@ -84,7 +91,7 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 		}
 		if err := json.Unmarshal(output, &selected); err != nil ||
 			!equalDiscoveryStrings(selected.GoFiles, []string{"probe.go"}) ||
-			!equalDiscoveryStrings(selected.SFiles, candidate.AsmFiles) || selected.Export == "" {
+			!equalDiscoveryStrings(selected.SFiles, []string{"cpu.s", "probe.s"}) || selected.Export == "" {
 			t.Fatalf("original %s selected a different source/export: %+v %v", target, selected, err)
 		}
 		digest, err := discoveryFeatureFileSHA256(selected.Export)
@@ -93,7 +100,7 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 		}
 		t.Logf("original Go accepted %s source_sha=%s export_sha=%s zip_sha=%s h1=%s",
 			target, discoveryFeatureBytesSHA256([]byte(sources["probe.s"])), digest,
-			discoveryFeatureBytesSHA256(mustReadOrdinaryCPPFixture(t, download.Zip)), download.Sum)
+			discoveryFeatureBytesSHA256(mustReadOrdinaryCPPFixture(t, download.Zip)), archiveSum)
 	}
 
 	matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
@@ -123,6 +130,60 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 		t.Fatal(err)
 	}
 	checkSelectedSiblingReportReaders(t, candidate, result, targets, inventory)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalBytes := 0
+	for _, source := range result.OrdinarySelectionPlan.CPPInputs.Sources {
+		originalBytes += len(*source.Original)
+	}
+	t.Logf("actual ordinary full11 objects=%d profiles=%d deduplicated_original_bytes=%d result_json_bytes=%d",
+		result.Translations, len(result.FeatureProfiles), originalBytes, len(encoded))
+	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"delete_protocol_and_graph": func(copy *discoveryCorpusResult) {
+			copy.OrdinarySelectionPlan.CPPSourceProtocol = ""
+			copy.OrdinarySelectionPlan.CPPInputs = nil
+		},
+		"paired_legacy_downgrade": func(copy *discoveryCorpusResult) {
+			copy.OrdinarySelectionPlan.CPPSourceProtocol = discoveryDeferredCPPInputsProtocol
+			copy.OrdinarySelectionPlan.CPPInputs.Protocol = discoveryDeferredCPPInputsProtocol
+		},
+		"delete_original_only": func(copy *discoveryCorpusResult) {
+			input := copy.OrdinarySelectionPlan.CPPInputs.Sources["module/macros.h"]
+			input.Original = nil
+			copy.OrdinarySelectionPlan.CPPInputs.Sources["module/macros.h"] = input
+		},
+		"change_macro_body": func(copy *discoveryCorpusResult) {
+			input := copy.OrdinarySelectionPlan.CPPInputs.Sources["module/macros.h"]
+			changed := strings.Replace(*input.Original, "amdMarker", "forgedMarker", 1)
+			if changed == *input.Original {
+				t.Fatal("macro mutation did not change original bytes")
+			}
+			input.Original = &changed
+			copy.OrdinarySelectionPlan.CPPInputs.Sources["module/macros.h"] = input
+		},
+		"paired_output_and_input_delete": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				for index := range proof.CPP {
+					delete(proof.CPP[index].Inputs, "module/choice.h")
+					proof.CPP[index].ExpandedSHA256 = strings.Repeat("a", 64)
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var copy discoveryCorpusResult
+			if err := json.Unmarshal(encoded, &copy); err != nil {
+				t.Fatal(err)
+			}
+			copy.featureInventory = inventory
+			mutate(&copy)
+			if err := validateOrdinaryProfileResult(copy, targets, result.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatal("mutated ordinary original source/consumer proof was accepted")
+			}
+		})
+	}
 }
 
 func mustReadOrdinaryCPPFixture(t *testing.T, name string) []byte {

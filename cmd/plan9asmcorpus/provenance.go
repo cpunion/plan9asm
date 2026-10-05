@@ -24,6 +24,7 @@ type discoverySourceIdentity struct {
 // Keep this value comparable: every shard must describe the same inputs,
 // including the actual translator binary, not merely the same candidate set.
 type discoveryCorpusProvenance struct {
+	CPPSourceProtocol                 string                  `json:"cpp_source_protocol"`
 	InstrumentationScopeProtocol      string                  `json:"instrumentation_scope_protocol,omitempty"`
 	InstrumentationTypeSourceProtocol string                  `json:"instrumentation_type_source_protocol,omitempty"`
 	DocumentationSourceProtocol       string                  `json:"documentation_source_protocol,omitempty"`
@@ -215,6 +216,7 @@ func collectDiscoveryProvenance(cfg discoveryCorpusConfig) (discoveryCorpusProve
 	p.SignatureSourceProtocol = gotoolprofile.SignatureSourceProtocol
 	p.DocumentationSourceProtocol = discoveryDocumentationProtocol
 	p.TestDependencySourceProtocol = gotoolprofile.TestDependencyProtocol
+	p.CPPSourceProtocol = discoveryReplayCPPInputsProtocol
 	var err error
 	p.Source, err = collectDiscoverySource(cfg.RepoRoot)
 	if err != nil {
@@ -289,6 +291,7 @@ func readDiscoveryGoVersion() (string, error) {
 
 func validateDiscoveryProvenance(p discoveryCorpusProvenance, source discoverySourceIdentity, ledgerSHA string) error {
 	if p.InstrumentationScopeProtocol != discoveryInstrumentationPlanProtocol ||
+		p.CPPSourceProtocol != discoveryReplayCPPInputsProtocol ||
 		p.InstrumentationTypeSourceProtocol != gotoolprofile.InstrumentationTypeSourcesProtocol ||
 		p.SignatureSourceProtocol != gotoolprofile.SignatureSourceProtocol || p.TestDependencySourceProtocol != gotoolprofile.TestDependencyProtocol ||
 		p.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
