@@ -60,6 +60,30 @@ func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, de
 			return nil, err
 		}
 	}
+	if mode := cfg.nativeListingMode; mode != nil {
+		if cfg.Feature != nil || mode.Input == nil || mode.Metadata == nil || mode.Source == nil ||
+			mode.Input.Plan.Target != target || mode.Input.Plan.PackagePath != pkg.PkgPath {
+			return nil, fmt.Errorf("native assembly listing has a mixed or missing actual mode scope")
+		}
+		if err := gotoolprofile.ValidateInstrumentationMetadata(mode.Input, mode.Input.Plan.PackageDirectory, mode.Input.Plan.CustomTags, mode.Metadata); err != nil {
+			return nil, err
+		}
+		if err := mode.verifySources(); err != nil {
+			return nil, err
+		}
+		defer func() { proofErr = errors.Join(proofErr, mode.verifySources()) }()
+		env, root = mode.Source.Env, mode.Source.Root
+		proof.ProfileID = mode.Input.ID
+		proof.GoVersion = mode.Input.Observation.Early.BaselineFeatures.GoVersion
+		proof.AsmToolSHA256 = mode.Input.Observation.Early.ModeTools.BinarySHA256["asm"]
+		name, err = mode.Source.sourceName(task.AsmFile)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := gotoolprofile.CPPRegularSource(mode.Source.Dir, name); err != nil {
+			return nil, err
+		}
+	}
 	if root == "" {
 		output, _, err := gotoolprofile.RunBounded(ctx, "", env, binary, "env", "GOROOT")
 		if err != nil {
@@ -74,6 +98,9 @@ func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, de
 	proof.SourceSHA256, err = gotoolprofile.FileSHA256(task.AsmFile)
 	if err != nil {
 		return nil, err
+	}
+	if mode := cfg.nativeListingMode; mode != nil && proof.SourceSHA256 != mode.Input.Original.Sources[name] {
+		return nil, fmt.Errorf("native assembly listing lost the actual original mode source")
 	}
 	defer func() {
 		after, err := gotoolprofile.FileSHA256(task.AsmFile)
@@ -90,13 +117,21 @@ func proveAssemblyListing(pkg *packages.Package, task asmTask, target string, de
 	object := filepath.Join(owned, "source.o")
 	dir := filepath.Dir(task.AsmFile)
 	args := []string{"tool", "asm", "-S", "-p", pkg.PkgPath, "-I", dir}
+	var definitions map[string]string
+	needsHeader := false
 	if cfg.Feature != nil && cfg.Feature.Proof != nil && cfg.Feature.Proof.GeneratedHeaders != nil {
-		var definitions map[string]string
+		needsHeader = true
 		for _, header := range cfg.Feature.Proof.GeneratedHeaders.Headers {
 			if header.PackagePath == pkg.PkgPath {
 				definitions = header.Definitions
 			}
 		}
+	}
+	if mode := cfg.nativeListingMode; mode != nil {
+		definitions = mode.Metadata.Headers[0].Header.Definitions
+		needsHeader = true
+	}
+	if needsHeader {
 		data, err := gotoolprofile.CanonicalGeneratedHeader(definitions)
 		if err != nil {
 			return nil, fmt.Errorf("native empty-object generated header lacks actual selected package origin: %w", err)

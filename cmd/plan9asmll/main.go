@@ -133,6 +133,7 @@ type compileConfig struct {
 	FeaturePath         string
 	Context             context.Context
 	emptyAssembly       *gotoolprofile.EmptyAssemblyProof
+	nativeListingMode   *instrumentationMetadataConsumer
 	SignatureQuery      *gotoolprofile.SignatureQueryProof
 	x86CallerSelections map[*packages.Package]*x86CallerPackageSelection
 }

@@ -52,6 +52,11 @@ func TestInstrumentationCorpusOriginalModeAssemblyReachesStrictObjects(t *testin
 
 func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard, cgo, target string, wantObjects bool, archive ...string) {
 	t.Helper()
+	testInstrumentationCorpusOriginalSource(t, root, translator, guard, cgo, target, wantObjects, "", archive...)
+}
+
+func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, guard, cgo, target string, wantObjects bool, assembly string, archive ...string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	candidate := discoveryCandidate{
@@ -66,6 +71,9 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 		"go.mod":        "module example.invalid/instrumented\n\ngo 1.20\n",
 		"probe.go":      "//go:build " + guard + "\n\npackage instrumented\nconst answer = 41\nfunc Probe(x uint64) uint64\n",
 		"probe_arm64.s": "//go:build " + guard + "\n\n#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-16\nMOVD x+0(FP), R0\nADD $const_answer, R0\nMOVD R0, ret+8(FP)\nRET\n",
+	}
+	if assembly != "" {
+		sources["probe_arm64.s"] = "//go:build " + guard + "\n\n" + assembly
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
 	configurePreCPPFixtureProxy(t, candidate, download, sources["go.mod"])
@@ -215,6 +223,19 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 			}
 		}
 	}
+	if assembly != "" {
+		file := result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Files[0]
+		wanted := "symbol_free"
+		if strings.Contains(assembly, "GLOBL") {
+			wanted = "data_only"
+		}
+		if strings.Contains(assembly, "TEXT ·") {
+			wanted = "assembly"
+		}
+		if file.CPP.Emission != wanted || file.Output.Object == "" {
+			t.Fatalf("mode source role lost its actual object: %+v", file)
+		}
+	}
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -232,6 +253,15 @@ func testInstrumentationCorpusOriginalMode(t *testing.T, root, translator, guard
 		name   string
 		mutate func(*discoveryCorpusResult)
 	}{
+		{"previous consumption protocol", func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Protocol = "actual_go_instrumentation_llvm_objects_v2"
+		}},
+		{"paired native role downgrade", func(r *discoveryCorpusResult) {
+			p := r.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption
+			p.Protocol = "actual_go_instrumentation_llvm_objects_v2"
+			p.Files[0].CPP.Emission = "assembly"
+			p.Files[0].CPP.EmptyAssembly, p.Files[0].CPP.DataOnlyAssembly = nil, nil
+		}},
 		{"plan deleted", func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.InstrumentationPlan = nil }},
 		{"paired entire mode erased", func(r *discoveryCorpusResult) {
 			r.OrdinarySelectionPlan.InstrumentationPlan = nil

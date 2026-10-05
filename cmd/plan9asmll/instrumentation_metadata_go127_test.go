@@ -48,6 +48,12 @@ func instrumentationMetadataFixture(t *testing.T, target string, mode gotoolprof
 		"dep/value_mode.go":  "//go:build race || msan || asan\n\npackage dep\nconst Value = 40\n",
 		"probe_arm64.s":      "//go:build race || msan || asan\n\n#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-8\nMOVD $const_Imported, R0\nMOVD R0, ret+0(FP)\nRET\n",
 	}
+	assembly := "probe_arm64.s"
+	if strings.HasSuffix(target, "/amd64") {
+		assembly = "probe_amd64.s"
+		delete(files, "probe_arm64.s")
+		files[assembly] = "//go:build race || msan || asan\n\n#include \"go_asm.h\"\nTEXT ·Probe(SB),$0-8\nMOVQ $const_Imported, AX\nMOVQ AX, ret+0(FP)\nRET\n"
+	}
 	for name, source := range files {
 		file := filepath.Join(dir, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
@@ -71,7 +77,7 @@ func instrumentationMetadataFixture(t *testing.T, target string, mode gotoolprof
 		}
 		sort.Strings(input.Directories[folder])
 	}
-	input.AsmFiles = []string{"probe_arm64.s"}
+	input.AsmFiles = []string{assembly}
 	sources, err := gotoolprofile.CaptureInstrumentationOriginalSourceInventory(input, ".")
 	if err != nil {
 		t.Fatal(err)

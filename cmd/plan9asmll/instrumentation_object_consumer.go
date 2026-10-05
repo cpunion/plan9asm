@@ -70,6 +70,7 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 	resolve := resolveSymFunc(pkg.PkgPath)
 	artifactBudget := &gotoolprofile.InstrumentationLLVMArtifactBudget{}
 	consumer.ArtifactRoot = output
+	cfg.nativeListingMode = consumer
 	for index, name := range plan.SFiles {
 		if err := consumer.verifySources(); err != nil {
 			return nil, nil, err
@@ -89,9 +90,29 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 		if string(typed) != string(expanded) {
 			return nil, nil, fmt.Errorf("mode consumer requires native full-header expansion, not an unproved typed fallback")
 		}
+		ll := filepath.Join(output, fmt.Sprintf("instrumented-%04d.ll", index))
+		task := asmTask{AsmFile: asm, OutLL: ll}
+		fileCfg := cfg
+		cpp := gotoolprofile.CPPProof{File: name, Emission: "assembly", Inputs: inputs,
+			ExpandedSHA256: featureBytesSHA256(expanded), TypedExpandedSHA256: featureBytesSHA256(typed)}
 		file, err := plan9asm.ParseWithDefines(arch, string(typed), selected.Macros.Defines)
-		if err != nil || len(file.Funcs) == 0 || len(file.Data)+len(file.Globl) != 0 {
-			return nil, nil, fmt.Errorf("mode assembly needs its separate native/data/empty source contract: %v", err)
+		if err != nil {
+			if err.Error() != "no TEXT directive found" {
+				return nil, nil, err
+			}
+			cpp.EmptyAssembly, err = proveEmptyAssembly(pkg, task, plan.Target, selected.Macros.Defines, fileCfg)
+			if err != nil {
+				return nil, nil, err
+			}
+			cpp.Emission = "symbol_free"
+			fileCfg.emptyAssembly = cpp.EmptyAssembly
+			file = &plan9asm.File{Arch: arch}
+		} else if len(file.Funcs) == 0 {
+			cpp.DataOnlyAssembly, err = proveDataOnlyAssembly(pkg, task, file, plan.Target, selected.Macros.Defines, fileCfg)
+			if err != nil {
+				return nil, nil, err
+			}
+			cpp.Emission = "data_only"
 		}
 		sigs, sizes, err := sigsForAsmFile(pkg, file, resolve, goarch)
 		if err != nil {
@@ -108,9 +129,7 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 		if err != nil {
 			return nil, nil, err
 		}
-		ll := filepath.Join(output, fmt.Sprintf("instrumented-%04d.ll", index))
-		task := asmTask{AsmFile: asm, OutLL: ll}
-		if err := translateAndCompileModule(file, triple, goarch, task, false, cfg, resolve, sigs); err != nil {
+		if err := translateAndCompileModule(file, triple, goarch, task, false, fileCfg, resolve, sigs); err != nil {
 			return nil, nil, err
 		}
 		artifacts, err := gotoolprofile.CaptureInstrumentationLLVMArtifacts(output, index, artifactBudget)
@@ -120,7 +139,7 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 		irSHA, objectSHA := artifacts.IR.SHA256, artifacts.Object.SHA256
 		consumer.Artifacts = append(consumer.Artifacts, *artifacts)
 		proof.Files = append(proof.Files, gotoolprofile.InstrumentationAssemblyFile{
-			CPP:            gotoolprofile.CPPProof{File: name, Emission: "assembly", Inputs: inputs, ExpandedSHA256: featureBytesSHA256(expanded), TypedExpandedSHA256: featureBytesSHA256(typed)},
+			CPP:            cpp,
 			ExpandedSource: string(expanded), TypedSource: string(typed), InputContents: contents, Declarations: decls,
 			Output:    gotoolprofile.OutputProof{File: name, Part: filepath.Base(ll), IR: irSHA, Object: objectSHA},
 			Artifacts: artifacts,
