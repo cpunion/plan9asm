@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 func TestInstrumentationOriginalGeneratedAssemblyByteBudget(t *testing.T) {
@@ -63,6 +65,49 @@ func TestInstrumentationOriginalGeneratedAssemblyByteBudget(t *testing.T) {
 					t.Fatal("large-source allowance erased original byte binding")
 				}
 				break
+			}
+		})
+	}
+}
+
+func TestInstrumentationCPPGeneratedAssemblyByteBudget(t *testing.T) {
+	const file = "probe.s"
+	source := strings.Repeat("NOP\n", 3<<18)
+	expanded, err := plan9asm.PreprocessAssemblySource(source, plan9asm.AssemblyPreprocessOptions{FileName: "module/" + file})
+	if err != nil || len(expanded) <= 2<<20 {
+		t.Fatalf("fixture lost its large expanded source: %d bytes: %v", len(expanded), err)
+	}
+	digest := bytesSHA256([]byte(source))
+	input := &InstrumentationConsumerInput{
+		Original: &ConsumerInput{Sources: map[string]string{file: digest}},
+		Sources:  &InstrumentationOriginalSourceInventory{Contents: map[string]string{file: source}},
+	}
+	proof := InstrumentationAssemblyFile{
+		CPP:            CPPProof{File: file, Inputs: map[string]string{"module/" + file: digest}},
+		ExpandedSource: expanded, TypedSource: expanded,
+		InputContents: map[string]string{"module/" + file: source},
+	}
+	// This is only bounded CPP replay, not a package/export/object certificate.
+	if err := replayInstrumentationCPP(input, PackageProof{}, nil, proof); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name string
+		id   string
+		size int
+	}{
+		{"assembly over bound", "module/probe.s", 8<<20 + 1},
+		{"module header keeps old bound", "module/include.h", 2<<20 + 1},
+		{"tool header keeps old bound", "tool/textflag.h", 2<<20 + 1},
+		{"generated header keeps old bound", "generated/example.invalid/pkg/go_asm.h", 2<<20 + 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			text := strings.Repeat(" ", test.size)
+			changed := proof
+			changed.InputContents = map[string]string{test.id: text}
+			changed.CPP.Inputs = map[string]string{test.id: bytesSHA256([]byte(text))}
+			if err := replayInstrumentationCPP(input, PackageProof{}, nil, changed); err == nil || !strings.Contains(err.Error(), "bound") {
+				t.Fatalf("CPP input escaped its byte bound: %v", err)
 			}
 		})
 	}
