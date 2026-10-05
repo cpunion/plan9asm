@@ -130,6 +130,72 @@ func TestOriginal(t *testing.T) {
 	t.Logf("actual original SSE %d kernels x 32 initialized samples; full status flags and unchanged input canaries", strings.Count(declarations.String(), "func "))
 }
 
+func TestCrossLinuxRuntimeMatrixX86PackedSADOriginalVEXUpperAliases(t *testing.T) {
+	x86FloatAddSubRuntimeTools(t)
+	var declarations, assembly, tests strings.Builder
+	declarations.WriteString("package sad\n")
+	tests.WriteString(`package sad
+import("testing";"encoding/binary")
+func TestOriginal(t *testing.T) {
+ var a,b,old [64]byte
+ for sample:=0;sample<32;sample++ {
+  for i:=range a {a[i]=byte(i*17+sample*31);b[i]=byte(i*73-sample*19);old[i]=byte(0x91+i*11)}
+`)
+	kernels := 0
+	for _, op := range []string{"PSADBW", "MPSADBW", "VPSADBW", "VMPSADBW"} {
+		controls := []int{0}
+		if strings.Contains(op, "MPS") {
+			controls = []int{0, 1, 2, 3, 4, 5, 6, 7, 27, 37, 85, 170, 228, 255}
+		}
+		for _, imm := range controls {
+			for _, memory := range []bool{false, true} {
+				name := fmt.Sprintf("alias%d", kernels)
+				kernels++
+				row := x86SADNumericCase{op: op, bank: "X", width: 16, imm: imm, memory: memory}
+				fmt.Fprintf(&declarations, "func %s(out *[48]byte,a,b,old *[64]byte,flags uint64)\n", name)
+				fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-40\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVUPS (CX),X0\nMOVUPS (DX),X1\nVMOVUPS (R8),Y2\n", name)
+				legacy := !strings.HasPrefix(op, "V")
+				if legacy {
+					assembly.WriteString("MOVUPS (DX),X2\n")
+				}
+				fmt.Fprintf(&assembly, "PUSHQ flags+32(FP)\nPOPFQ\n%s\nVMOVUPS Y2,(AX)\nPUSHFQ\nPOPQ R10\nMOVQ R10,32(AX)\nRET\n", row.instruction())
+				fmt.Fprintf(&tests, "{\n var out,want [48]byte\n for i:=range out {out[i]=0xc3;want[i]=0xc3}\n beforeA,beforeB,beforeOld:=a,b,old\n flags:=uint64(2)\n if sample&1!=0 {flags|=0x8d5}\n %s(&out,&a,&b,&old,flags)\n sums:=[8]uint16{}\n", name)
+				if strings.Contains(op, "MPS") {
+					fmt.Fprintf(&tests, "for word:=0;word<8;word++ {for i:=0;i<4;i++ {d:=int(a[%d+i])-int(b[%d+word+i]);if d<0 {d=-d};sums[word]+=uint16(d)}}\n", (imm&3)*4, (imm>>2&1)*4)
+				} else {
+					tests.WriteString("for i:=0;i<16;i++ {d:=int(a[i])-int(b[i]);if d<0 {d=-d};sums[i/8*4]+=uint16(d)}\n")
+				}
+				tests.WriteString("for i,w:=range sums {binary.LittleEndian.PutUint16(want[2*i:],w)}\n")
+				if legacy {
+					tests.WriteString("copy(want[16:32],old[16:32])\n")
+				} else {
+					tests.WriteString("for i:=16;i<32;i++ {want[i]=0}\n")
+				}
+				tests.WriteString("observed:=binary.LittleEndian.Uint64(out[32:40])\n binary.LittleEndian.PutUint64(want[32:40],observed)\n")
+				fmt.Fprintf(&tests, "if out!=want || observed&0x8d5!=flags&0x8d5 || a!=beforeA || b!=beforeB || old!=beforeOld {t.Fatalf(\"%s sample%%d actual%%x want%%x flags%%x\",sample,out,want,observed)}\n}\n", name)
+			}
+		}
+	}
+	tests.WriteString("}\n}\n")
+	goAssemblerOracleOutput(t, "amd64", assembly.String(), "", true)
+	dir := t.TempDir()
+	for name, source := range map[string]string{"go.mod": "module sad\n\ngo 1.20\n", "sad.go": declarations.String(), "sad_amd64.s": assembly.String(), "sad_test.go": tests.String()} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "test", "-p=2", "-vet=off", "-count=1", ".")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if err != nil {
+		t.Fatalf("actual original SSE/VEX upper-alias oracle: %v\n%s", err, output)
+	}
+	t.Logf("actual original SSE/VEX %d kernels x 32 initialized samples; all 32 output bytes, six status flags and canaries; no EVEX instruction executed", kernels)
+}
+
 func TestCrossLinuxRuntimeMatrixX86PackedSADIndependentWholeBytes(t *testing.T) {
 	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
 	x86SADOriginalLegacyOracle(t)
