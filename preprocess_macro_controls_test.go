@@ -190,3 +190,96 @@ func TestPreprocessAssemblyGeneratedIncludeRetainsErrorChain(t *testing.T) {
 		t.Fatalf("generated include lost its original error or physical invocation: %v", err)
 	}
 }
+
+func TestPreprocessAssemblyGeneratedControlLLVMObjectsFiveArchitectures(t *testing.T) {
+	llc, optimizer := findLLVM22Tool("llc"), findLLVM22Tool("opt")
+	if llc == "" || optimizer == "" {
+		t.Fatal("LLVM 22 llc and opt are required")
+	}
+	fixture := ppMacroControlFixture{
+		name: "complete-controls", prefix: "#define LEAK 1\n",
+		replacement: "#include \"choice.h\"\n#undef LEAK\n#ifndef LEAK\n" +
+			"#define VALUE P\n#else\n#define VALUE 13\n#endif\n#line 337 \"logical source.s\"\n",
+		argument: "42", suffix: "DATA ·value(SB)/4,$VALUE\n",
+	}
+	headers := map[string]string{"choice.h": "#ifndef CHOSEN\n#define CHOSEN 1\n#endif\n"}
+	source := ppMacroControlSource(fixture, "function")
+	for _, target := range []struct {
+		arch                 Arch
+		goos, goarch, triple string
+	}{
+		{ArchAMD64, "linux", "386", "i386-unknown-linux-gnu"},
+		{ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu"},
+		{ArchARM, "linux", "arm", "armv7-unknown-linux-gnueabihf"},
+		{ArchARM64, "linux", "arm64", "aarch64-unknown-linux-gnu"},
+		{ArchWASM, "js", "wasm", "wasm32-unknown-unknown"},
+	} {
+		t.Run(target.goarch, func(t *testing.T) {
+			platform := target.goos + "/" + target.goarch
+			original := ppMacroControlGoObject(t, platform, source, headers, "original")
+			if !strings.Contains(string(original), "2a 00 00 00") {
+				t.Fatalf("original source marker differs: %s", original)
+			}
+			expanded, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{
+				FileName: "entry.s",
+				ReadInclude: func(parent, name string) (string, []byte, error) {
+					body, ok := headers[name]
+					if !ok || parent != "entry.s" {
+						return "", nil, fmt.Errorf("missing exact generated include %s from %s", name, parent)
+					}
+					return name, []byte(body), nil
+				},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			normalized := ppMacroControlGoObject(t, platform, expanded, nil, "expanded")
+			if !strings.Contains(string(normalized), "2a 00 00 00") {
+				t.Fatalf("normalized source marker differs: %s", normalized)
+			}
+			parsed, err := Parse(target.arch, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ir, err := Translate(parsed, Options{
+				Goarch: target.goarch, TargetTriple: target.triple,
+				ResolveSym: testResolveSym("macrooracle"),
+				Sigs:       map[string]FuncSig{"macrooracle.Probe": {Ret: Void}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if target.goarch == "wasm" && strings.Contains(ir, "blockaddress") {
+				t.Fatal("macro preprocessing introduced a native code address into wasm")
+			}
+			directory := t.TempDir()
+			ll := filepath.Join(directory, "generated.ll")
+			optimized := filepath.Join(directory, "generated-o2.ll")
+			object := filepath.Join(directory, "generated.o")
+			if err := os.WriteFile(ll, []byte(ir), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, command := range []struct {
+				name string
+				args []string
+			}{
+				{optimizer, []string{"-S", "-passes=default<O2>", ll, "-o", optimized}},
+				{llc, []string{"-mtriple=" + target.triple, "-filetype=obj", optimized, "-o", object}},
+			} {
+				ctx, cancel := runtimeOracleStageContext(t)
+				process := exec.CommandContext(ctx, command.name, command.args...)
+				output, err := runtimeOracleCombinedOutput(ctx, process)
+				cancel()
+				if err != nil {
+					t.Fatalf("LLVM 22 generated-control pipeline: %v\n%s", err, output)
+				}
+			}
+			info, err := os.Stat(object)
+			if err != nil || info.Size() == 0 {
+				t.Fatalf("LLVM 22 object absent or empty: %v", err)
+			}
+			t.Logf("original Go, normalized Go, Parse/Translate/O2/LLVM22 object: %s source_sha=%x",
+				platform, sha256.Sum256([]byte(source)))
+		})
+	}
+}
