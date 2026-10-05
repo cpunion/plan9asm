@@ -44,16 +44,19 @@ var instrumentationExportEnvironmentSourceRegistration = map[string]string{
 }
 
 var instrumentationExportEnvironmentRegistrations = map[string]string{
-	"src/cmd/go/internal/cfg/cfg.go#EnvOrAndChanged":     "496696c1fba2c248d479f6a60125bdd1e349a2fc0f6936aa50c17da5ef4f416a",
-	"src/cmd/go/internal/cfg/cfg.go#GOAMD64":             "802d8ea0ab395ea9620f0b9ce1d5e07cc08c5d947238d95d54286d7a04af53ab",
-	"src/cmd/go/internal/cfg/cfg.go#GOARM64":             "5699ca3bb24f5c90ba510c5d95233e2e74858490766f7252d22574f48c667a03",
-	"src/cmd/go/internal/cfg/cfg.go#GetArchEnv":          "554cc40b196a2240051eb791af577ac2bc392178053cf24467a9a99bcaf60812",
-	"src/cmd/go/internal/cfg/cfg.go#initEnvCache":        "14d9ec4cde6592bef7e3b5f7974d11fa47d1fb5a994dce6edf4972b33ba192de",
-	"src/cmd/go/internal/cfg/cfg.go#readEnvFile":         "3f62cec3d5f6853a4035a71195610afa3ddfb223f2d35d45e2d6c3ccb485bbb0",
-	"src/cmd/go/internal/work/gc.go#asm":                 "1c61898cd98e26c4187d29b46b763e6822b0df8b44f2807a7dbe4013cdf67a20",
-	"src/cmd/go/internal/work/gc.go#gc":                  "471dec7ded9c8b4d6adb0a4e2de4230c15b18fd85cdc3d210b46aae500c68dbb",
-	"src/cmd/go/internal/work/init.go#makeCfgChangedEnv": "fe8772618100851a770d2dcf4c66f7bdd0edf4e8800702356a6072b3322fd82e",
-	"src/cmd/go/internal/work/shell.go#runOut":           "0fd749215e983f2f31d3d0499ee765d43c36392ecffad81d16cea517dfdceb00",
+	"src/cmd/go/internal/cfg/cfg.go#EnvOrAndChanged":      "496696c1fba2c248d479f6a60125bdd1e349a2fc0f6936aa50c17da5ef4f416a",
+	"src/cmd/go/internal/cfg/cfg.go#GOAMD64":              "802d8ea0ab395ea9620f0b9ce1d5e07cc08c5d947238d95d54286d7a04af53ab",
+	"src/cmd/go/internal/cfg/cfg.go#GOARM64":              "5699ca3bb24f5c90ba510c5d95233e2e74858490766f7252d22574f48c667a03",
+	"src/cmd/go/internal/cfg/cfg.go#GetArchEnv":           "554cc40b196a2240051eb791af577ac2bc392178053cf24467a9a99bcaf60812",
+	"src/cmd/go/internal/cfg/cfg.go#initEnvCache":         "14d9ec4cde6592bef7e3b5f7974d11fa47d1fb5a994dce6edf4972b33ba192de",
+	"src/cmd/go/internal/cfg/cfg.go#readEnvFile":          "3f62cec3d5f6853a4035a71195610afa3ddfb223f2d35d45e2d6c3ccb485bbb0",
+	"src/cmd/go/internal/work/gc.go#asm":                  "1c61898cd98e26c4187d29b46b763e6822b0df8b44f2807a7dbe4013cdf67a20",
+	"src/cmd/go/internal/work/gc.go#gc":                   "471dec7ded9c8b4d6adb0a4e2de4230c15b18fd85cdc3d210b46aae500c68dbb",
+	"src/cmd/go/internal/work/init.go#makeCfgChangedEnv":  "fe8772618100851a770d2dcf4c66f7bdd0edf4e8800702356a6072b3322fd82e",
+	"src/cmd/go/internal/work/shell.go#runOut":            "0fd749215e983f2f31d3d0499ee765d43c36392ecffad81d16cea517dfdceb00",
+	"src/cmd/go/internal/work/shell.go#joinUnambiguously": "c91dbacb9686e257fda39fd6c12cdef6cc9482376dda3afa2b7f9faec5d1408f",
+	"src/cmd/go/internal/work/shell.go#fmtCmd":            "acfa7656780c7e4133d04f15ab17ffda57b130f7fad7890938c29268989cb117",
+	"src/cmd/go/internal/work/shell.go#ShowCmd":           "a716a83e6144f79faebfb38918bb63c156c0ad99e45f908e27acf7afa47138bd",
 }
 
 func captureInstrumentationExportEnvironment(root, version string) (*InstrumentationExportEnvironment, error) {

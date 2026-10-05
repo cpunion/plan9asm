@@ -2,7 +2,6 @@ package gotoolprofile
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -30,30 +29,28 @@ func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive 
 	if err != nil {
 		return nil, err
 	}
+	if len(defines) < 2 {
+		return nil, fmt.Errorf("export trace lacks complete actual OS/architecture definitions")
+	}
 	if len(trace) == 0 || len(trace) > commandOutputLimit || !strings.HasSuffix(string(trace), "\n") || strings.ContainsAny(string(trace), "\x00\r") {
 		return nil, fmt.Errorf("missing, malformed or over-bound actual export command trace")
 	}
 	lines := strings.Split(strings.TrimSuffix(string(trace), "\n"), "\n")
-	if !strings.HasPrefix(lines[0], "WORK=") || !filepath.IsAbs(strings.TrimPrefix(lines[0], "WORK=")) {
+	if !strings.HasPrefix(lines[0], "WORK=") {
 		return nil, fmt.Errorf("export trace lacks its actual stock Go work directory")
 	}
-	lines[0] = "WORK=@work"
-	canonical := strings.Join(lines, "\n") + "\n"
-	for _, item := range []struct{ physical, portable string }{
-		{filepath.Join(root, filepath.FromSlash(tools.Directory), "compile"), "@compile"},
-		{filepath.Join(root, filepath.FromSlash(tools.Directory), "asm"), "@asm"},
-		{filepath.Join(root, "pkg", "include"), "@include"},
-		{markerDir, "@marker"}, {archive, "@export"},
-	} {
-		canonical = strings.ReplaceAll(canonical, item.physical, item.portable)
+	paths, err := instrumentationExportPhysicalTracePaths(strings.TrimPrefix(lines[0], "WORK="), root, markerDir, archive, tools)
+	if err != nil {
+		return nil, err
 	}
-	ids := instrumentationActionID.FindAllStringSubmatch(canonical, -1)
+	observed := string(trace)
+	ids := instrumentationActionID.FindAllStringSubmatch(observed, -1)
 	if len(ids) != 1 || ids[0][1] != ids[0][2] {
 		return nil, fmt.Errorf("actual export compiler trace has missing or inconsistent action identity")
 	}
-	canonical = instrumentationActionID.ReplaceAllString(canonical, " -buildid @action/@action ")
+	observed = instrumentationActionID.ReplaceAllString(observed, " -buildid @action/@action ")
 	concurrency := 1
-	threads := instrumentationThreads.FindAllStringSubmatch(canonical, -1)
+	threads := instrumentationThreads.FindAllStringSubmatch(observed, -1)
 	if len(threads) > 1 {
 		return nil, fmt.Errorf("duplicated export compiler concurrency")
 	}
@@ -64,6 +61,10 @@ func captureInstrumentationExportRouting(trace []byte, root, markerDir, archive 
 			return nil, fmt.Errorf("invalid actual export compiler concurrency")
 		}
 	}
+	if observed != instrumentationRenderedExportTrace(plan, defines, concurrency, commandEnvironment, paths) {
+		return nil, fmt.Errorf("actual export did not execute the exact source-bound host command display/routing")
+	}
+	canonical := instrumentationExpectedExportTrace(plan, defines, concurrency, commandEnvironment)
 	proof := &InstrumentationExportRouting{
 		Protocol: "actual_go_instrumentation_marker_export_routing_v2", CanonicalTrace: canonical,
 		TraceSHA256: bytesSHA256([]byte(canonical)), CompilerConcurrency: concurrency,
