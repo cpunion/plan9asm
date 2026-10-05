@@ -69,8 +69,10 @@ func TestRuntimeTargetTriplesRejectUnknownCombinations(t *testing.T) {
 	} {
 		t.Run(target[0]+"/"+target[1], func(t *testing.T) {
 			defer func() {
-				if failure := recover(); failure == nil {
-					t.Error("unknown test target must fail before invoking a host-default LLVM backend")
+				failure, ok := recover().(string)
+				want := "unsupported test target " + target[0] + "/" + target[1]
+				if !ok || failure != want {
+					t.Errorf("unknown test target did not explicitly fail before invoking LLVM: %q", failure)
 				}
 			}()
 			_ = testTargetTriple(target[0], target[1])
