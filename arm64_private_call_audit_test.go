@@ -114,3 +114,46 @@ func TestARM64PrivateCallCFGPreparedFileCannotRecoverRemovedNativeIdentity(t *te
 		}
 	}
 }
+
+func TestARM64PrivateContinuationPreparedTailFileRetainsWholeAudit(t *testing.T) {
+	for _, family := range []string{"ABIInternal", "ABI0"} {
+		for _, observer := range []string{
+			"DATA saved<>+0(SB)/8,$HELPER(SB)\nGLOBL saved<>(SB),8,$8\n",
+			"TEXT observer<>(SB),516,$0-0\nMOVD $HELPER(SB),R0\nRET\n",
+			"TEXT HELPER(SB),516,$0-0\nRET\n",
+			"WORD $0xd503201f\n",
+		} {
+			t.Run(family+"/"+strings.Split(observer, "\n")[0], func(t *testing.T) {
+				resolve := func(symbol string) string { return strings.TrimPrefix(goTextSymbolForResolution(symbol), "·") }
+				var file *File
+				var sigs map[string]FuncSig
+				helper := "copy<>"
+				if family == "ABI0" {
+					_, file, sigs = arm64ABI0BoundFixture(t)
+					helper = "resultbody<>"
+				} else {
+					var err error
+					file, err = Parse(ArchARM64, "TEXT ·Copy<ABIInternal>(SB),516,$0-0\nB copy<>(SB)\nTEXT copy<>(SB),516,$0-0\nRET\n")
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				prepared, err := PrepareGoARM64ABI0TailContinuations(file, sigs, resolve)
+				if err != nil || len(prepared.Funcs) != 1 {
+					t.Fatalf("original complete tail fixture did not prepare: %v", err)
+				}
+				added, err := Parse(ArchARM64, strings.ReplaceAll(observer, "HELPER", helper))
+				if err != nil {
+					t.Fatal(err)
+				}
+				prepared.Funcs = append(prepared.Funcs, added.Funcs...)
+				prepared.Data = append(prepared.Data, added.Data...)
+				prepared.Globl = append(prepared.Globl, added.Globl...)
+				prepared.UnlinkedPrelude = append(prepared.UnlinkedPrelude, added.UnlinkedPrelude...)
+				if _, err := PrepareGoARM64ABI0TailContinuations(prepared, sigs, resolve); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("prepared tail recovered its removed helper native identity: %v", err)
+				}
+			})
+		}
+	}
+}
