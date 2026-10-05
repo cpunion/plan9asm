@@ -117,7 +117,7 @@ func (c *amd64Ctx) lowerPackedSumAbsoluteDifferences(op Op, ins Instr) (bool, bo
 	if form.legacy {
 		return true, false, c.storeLegacyPackedLogical(destination, result)
 	}
-	return true, false, c.storeVectorBytes(destination.Reg, form.byteWidth, result)
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, result)
 }
 
 func (c *amd64Ctx) emitPackedSADNativeMemory(source Operand, data string, form x86PackedSADForm) (string, error) {
