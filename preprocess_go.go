@@ -7,13 +7,22 @@ import (
 )
 
 func preprocessGoAssembly(src string, options AssemblyPreprocessOptions) (string, error) {
+	return preprocessGoAssemblyObserved(src, options, nil)
+}
+
+func preprocessGoAssemblyObserved(src string, options AssemblyPreprocessOptions, observer *ppGoObservation) (string, error) {
 	file := options.FileName
 	if file == "" {
 		file = "<assembly>"
 	}
 	input := ppGoInput{
 		options: options, readers: []*ppGoReader{newPPGoReader(file, src)},
-		macros: make(map[string]ppGoMacro), bol: true,
+		macros: make(map[string]ppGoMacro), bol: true, observer: observer,
+	}
+	if observer != nil {
+		if err := observer.source(file, src); err != nil {
+			return "", err
+		}
 	}
 	for _, definition := range options.Defines {
 		name, value, assigned := strings.Cut(definition, "=")
@@ -34,6 +43,21 @@ func preprocessGoAssembly(src string, options AssemblyPreprocessOptions) (string
 				break
 			}
 			macro.body = append(macro.body, ppGoRecordedToken(token))
+		}
+		if observer != nil {
+			index, err := input.beginObservation("predefine", ppGoToken{file: "<predefined>", line: 1})
+			if err != nil {
+				return "", err
+			}
+			event := input.observedEvent()
+			event.Name, event.Executed = name, true
+			for _, token := range macro.body {
+				if err := observer.capture(token); err != nil {
+					return "", err
+				}
+			}
+			macro.definition = index + 1
+			input.finishObservation(index)
 		}
 		input.macros[name] = macro
 	}

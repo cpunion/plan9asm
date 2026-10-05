@@ -9,6 +9,15 @@ import (
 // The Go assembly frontend has exactly these eight controls. Generated and
 // physical controls use the same dispatcher and the same live macro state.
 func (input *ppGoInput) control(origin ppGoToken) (bool, error) {
+	index, err := input.beginObservation("control", origin)
+	if err != nil {
+		return false, err
+	}
+	defer input.finishObservation(index)
+	return input.executeControl(origin)
+}
+
+func (input *ppGoInput) executeControl(origin ppGoToken) (bool, error) {
 	token, err := input.raw()
 	if err != nil {
 		return false, err
@@ -17,11 +26,17 @@ func (input *ppGoInput) control(origin ppGoToken) (bool, error) {
 		return false, input.errorf("invalid preprocessor directive after '#'")
 	}
 	directive := token.value
+	if event := input.observedEvent(); event != nil {
+		event.Directive = directive
+	}
 	if !input.enabled() && directive != "else" && directive != "endif" &&
 		directive != "ifdef" && directive != "ifndef" && directive != "line" {
 		// Go skips only the control's name here. Macro tokens in the remaining
 		// disabled input still go through Next, including nested controls.
 		return false, nil
+	}
+	if event := input.observedEvent(); event != nil {
+		event.Executed = true
 	}
 	switch directive {
 	case "define":
@@ -150,6 +165,11 @@ func (input *ppGoInput) define() error {
 	if _, exists := input.macros[name]; exists {
 		return input.errorf("redefinition of macro: %s", name)
 	}
+	if event := input.observedEvent(); event != nil {
+		event.Function = macro.parameters != nil
+		event.Parameters = ppGoCopyParameters(macro.parameters)
+		macro.definition = event.Ordinal
+	}
 	input.macros[name] = macro
 	return nil
 }
@@ -191,8 +211,19 @@ func (input *ppGoInput) include(origin ppGoToken) error {
 	if file == "" {
 		return input.errorf("active #include %q has no source identity", name)
 	}
-	reader := newPPGoReader(file, string(source))
+	// Hash and tokenize the same immutable snapshot of the resolver's bytes.
+	sourceText := string(source)
+	if input.observer != nil {
+		if err := input.observer.source(file, sourceText); err != nil {
+			return err
+		}
+	}
+	reader := newPPGoReader(file, sourceText)
 	reader.include = true
+	if event := input.observedEvent(); event != nil {
+		event.Included = file
+		reader.includeEvent = event.Ordinal
+	}
 	if err := input.push(reader); err != nil {
 		return err
 	}

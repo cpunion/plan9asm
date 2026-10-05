@@ -119,16 +119,23 @@ func ppMacroControlGoObject(t *testing.T, target, source string, headers map[str
 		t.Fatal(err)
 	}
 	parts := strings.Split(target, "/")
+	object := filepath.Join(directory, stage+".o")
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "macrooracle", "-I", directory,
-		"-o", filepath.Join(directory, stage+".o"), file)
+		"-o", object, file)
 	command.Dir = directory
 	command.Env = append(os.Environ(), "GOOS="+parts[0], "GOARCH="+parts[1], "GOENV=off", "GOTOOLCHAIN=local")
 	listing, err := runtimeOracleCombinedOutput(ctx, command)
 	if err != nil {
 		t.Fatalf("%s original-source Go object %s: %v\n%s\nsource:\n%s", stage, target, err, listing, source)
 	}
+	objectBytes, err := os.ReadFile(object)
+	if err != nil || len(objectBytes) == 0 {
+		t.Fatalf("%s Go object %s missing or empty: %v", stage, target, err)
+	}
+	t.Logf("CPP_GO_OBJECT_RECEIPT target=%s stage=%s source_sha=%x object_sha=%x listing_sha=%x",
+		target, stage, sha256.Sum256([]byte(source)), sha256.Sum256(objectBytes), sha256.Sum256(listing))
 	return listing
 }
 

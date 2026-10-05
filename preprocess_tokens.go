@@ -16,20 +16,22 @@ const (
 // can open a conditional which its parent closes, or define a macro used by a
 // later original instruction. Keep lexical origins separate from #line names.
 type ppGoToken struct {
-	kind         rune
-	text, value  string
-	file         string
-	line, endCol int
+	kind                    rune
+	text, value             string
+	file                    string
+	line, endCol            int
+	expansion, includeEvent int
 }
 
 type ppGoReader struct {
-	file    string
-	scanner *scanner.Scanner
-	err     error
-	tokens  []ppGoToken
-	index   int
-	line    int
-	include bool
+	file                    string
+	scanner                 *scanner.Scanner
+	err                     error
+	tokens                  []ppGoToken
+	index                   int
+	line                    int
+	include                 bool
+	expansion, includeEvent int
 }
 
 func newPPGoReader(file, source string) *ppGoReader {
@@ -60,6 +62,7 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 		// Go's lex.Slice reports sequential positions even when a generated
 		// #define originally contained a space before its parenthesis.
 		token.file, token.line, token.endCol = reader.file, reader.line, reader.index
+		token.expansion, token.includeEvent = reader.expansion, reader.includeEvent
 		return token, nil
 	}
 	var kind rune
@@ -91,6 +94,7 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 	return ppGoToken{
 		kind: kind, text: text, value: text, file: reader.file,
 		line: reader.scanner.Position.Line, endCol: reader.scanner.Pos().Column,
+		includeEvent: reader.includeEvent,
 	}, nil
 }
 
@@ -105,6 +109,7 @@ func ppGoRecordedToken(token ppGoToken) ppGoToken {
 type ppGoMacro struct {
 	parameters []string
 	body       []ppGoToken
+	definition int
 }
 
 type ppGoInput struct {
@@ -118,6 +123,7 @@ type ppGoInput struct {
 	last       ppGoToken
 	text       string
 	peek       *ppGoToken
+	observer   *ppGoObservation
 }
 
 func (input *ppGoInput) raw() (ppGoToken, error) {
@@ -129,6 +135,11 @@ func (input *ppGoInput) raw() (ppGoToken, error) {
 		}
 		if token.kind != scanner.EOF || len(input.readers) == 1 {
 			input.last = token
+			if input.observer != nil {
+				if err := input.observer.capture(token); err != nil {
+					return ppGoToken{}, err
+				}
+			}
 			return token, nil
 		}
 		if reader.include {
@@ -162,6 +173,12 @@ func (input *ppGoInput) name() (string, error) {
 	if token.kind != scanner.Ident {
 		return "", input.errorf("invalid CPP macro name: %q", token.text)
 	}
+	if event := input.observedEvent(); event != nil {
+		event.Name = token.value
+		if macro, exists := input.macros[token.value]; exists {
+			event.Definition = macro.definition
+		}
+	}
 	return token.value, nil
 }
 
@@ -182,6 +199,17 @@ func (input *ppGoInput) next() (ppGoToken, error) {
 		// enabled filtering, or a beginning-of-line update. Its text is the
 		// previous publicly returned token's text, not the raw lookahead's.
 		token := *input.peek
+		if input.observer != nil {
+			index, err := input.beginObservation("peek", token)
+			if err != nil {
+				return ppGoToken{}, err
+			}
+			if err := input.observer.capture(token); err != nil {
+				return ppGoToken{}, err
+			}
+			input.observedEvent().Executed = true
+			input.finishObservation(index)
+		}
 		input.peek = nil
 		input.text = token.text
 		return token, nil
@@ -230,6 +258,17 @@ func (input *ppGoInput) next() (ppGoToken, error) {
 }
 
 func (input *ppGoInput) invoke(invocation ppGoToken, macro ppGoMacro) (bool, error) {
+	index, err := input.beginObservation("invoke", invocation)
+	if err != nil {
+		return false, err
+	}
+	defer input.finishObservation(index)
+	if event := input.observedEvent(); event != nil {
+		event.Name, event.Definition = invocation.value, macro.definition
+		event.Function = macro.parameters != nil
+		event.Parameters = ppGoCopyParameters(macro.parameters)
+		event.Invoked, event.Executed = true, true
+	}
 	body := macro.body
 	if macro.parameters != nil {
 		opening, err := input.raw()
@@ -237,12 +276,17 @@ func (input *ppGoInput) invoke(invocation ppGoToken, macro ppGoMacro) (bool, err
 			return false, err
 		}
 		if opening.kind != '(' {
+			if event := input.observedEvent(); event != nil {
+				event.Invoked = false
+			}
 			opening.text, opening.value = input.text, input.text
+			opening.expansion = index + 1
 			input.peek = &opening
 			name := ppGoRecordedToken(invocation)
 			name.kind = ppGoMacroName
 			return true, input.push(&ppGoReader{
 				file: opening.file, line: opening.line, tokens: []ppGoToken{name},
+				expansion: index + 1, includeEvent: invocation.includeEvent,
 			})
 		}
 		actuals, err := input.arguments(invocation.value, macro.parameters)
@@ -258,7 +302,10 @@ func (input *ppGoInput) invoke(invocation ppGoToken, macro ppGoMacro) (bool, err
 			}
 		}
 	}
-	return true, input.push(&ppGoReader{file: invocation.file, line: invocation.line, tokens: body})
+	return true, input.push(&ppGoReader{
+		file: invocation.file, line: invocation.line, tokens: body,
+		expansion: index + 1, includeEvent: invocation.includeEvent,
+	})
 }
 
 func (input *ppGoInput) arguments(name string, parameters []string) (map[string][]ppGoToken, error) {
