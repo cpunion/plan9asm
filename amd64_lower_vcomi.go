@@ -68,7 +68,7 @@ func (c *amd64Ctx) lowerVectorScalarFlagCompare(op Op, ins Instr) (ok bool, term
 }
 
 // setScalarFloatCompareFlags models the EFLAGS values written by COMIS*/
-// UCOMIS*: ZF/PF/CF describe equal/unordered/below and OF/SF are cleared.
+// UCOMIS*: ZF/PF/CF describe equal/unordered/below and OF/SF/AF are cleared.
 func (c *amd64Ctx) setScalarFloatCompareFlags(elemType LLVMType, destination, source string) {
 	z := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = fcmp ueq %s %s, %s\n", z, elemType, destination, source)
@@ -81,4 +81,5 @@ func (c *amd64Ctx) setScalarFloatCompareFlags(elemType LLVMType, destination, so
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", pf, c.flagsPFSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
 	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsAFSlot)
 }
