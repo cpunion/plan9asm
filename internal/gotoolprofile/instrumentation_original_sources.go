@@ -64,6 +64,7 @@ func CaptureInstrumentationOriginalSourceInventory(input *ConsumerInput, directo
 			continue
 		}
 		file := path.Join(directory, name)
+		limit := instrumentationOriginalSourceByteLimit(file)
 		physical, err := CPPRegularSource(input.SourceRoot, file)
 		if err != nil {
 			return nil, err
@@ -72,12 +73,12 @@ func CaptureInstrumentationOriginalSourceInventory(input *ConsumerInput, directo
 		if err != nil {
 			return nil, err
 		}
-		data, readErr := io.ReadAll(io.LimitReader(opened, instrumentationOriginalFileLimit+1))
+		data, readErr := io.ReadAll(io.LimitReader(opened, int64(limit)+1))
 		if err := errors.Join(readErr, opened.Close()); err != nil {
 			return nil, err
 		}
 		total += len(data)
-		if len(data) > instrumentationOriginalFileLimit || total > instrumentationOriginalInventoryLimit || bytesSHA256(data) != input.Sources[file] {
+		if len(data) > limit || total > instrumentationOriginalInventoryLimit || bytesSHA256(data) != input.Sources[file] {
 			return nil, fmt.Errorf("original source changed or exceeds the bounded full-source inventory: %s", file)
 		}
 		inventory.Contents[file] = string(data)
@@ -113,7 +114,7 @@ func ValidateInstrumentationOriginalSourceInventory(input *ConsumerInput, direct
 		file := path.Join(directory, name)
 		contents, found := inventory.Contents[file]
 		total += len(contents)
-		if !found || len(contents) > instrumentationOriginalFileLimit || total > instrumentationOriginalInventoryLimit ||
+		if !found || len(contents) > instrumentationOriginalSourceByteLimit(file) || total > instrumentationOriginalInventoryLimit ||
 			!CPPLocalSource(file) || bytesSHA256([]byte(contents)) != input.Sources[file] || strings.ContainsRune(contents, '\x00') {
 			return fmt.Errorf("original full-source inventory is missing, changed or over-bound: %s", file)
 		}

@@ -235,6 +235,7 @@ func captureInstrumentationCPPContents(consumer *instrumentationMetadataConsumer
 	total := 0
 	for id, digest := range inputs {
 		origin, name, _ := strings.Cut(id, "/")
+		limit := gotoolprofile.InstrumentationCPPInputByteLimit(id)
 		var data []byte
 		var err error
 		if origin == "generated" {
@@ -252,14 +253,14 @@ func captureInstrumentationCPPContents(consumer *instrumentationMetadataConsumer
 			if openErr != nil {
 				return nil, openErr
 			}
-			data, err = io.ReadAll(io.LimitReader(opened, 2<<20+1))
+			data, err = io.ReadAll(io.LimitReader(opened, int64(limit)+1))
 			closeErr := opened.Close()
 			if err == nil {
 				err = closeErr
 			}
 		}
 		total += len(data)
-		if err != nil || len(data) > 2<<20 || total > 16<<20 || featureBytesSHA256(data) != digest {
+		if err != nil || len(data) > limit || total > 16<<20 || featureBytesSHA256(data) != digest {
 			return nil, fmt.Errorf("mode active CPP bytes changed or exceeded their bounded proof: %v", err)
 		}
 		result[id] = string(data)

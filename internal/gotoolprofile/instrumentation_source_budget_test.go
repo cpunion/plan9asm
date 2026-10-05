@@ -87,8 +87,9 @@ func TestInstrumentationCPPGeneratedAssemblyByteBudget(t *testing.T) {
 		ExpandedSource: expanded, TypedSource: expanded,
 		InputContents: map[string]string{"module/" + file: source},
 	}
+	pkg := PackageProof{Macros: &AssemblerMacros{}}
 	// This is only bounded CPP replay, not a package/export/object certificate.
-	if err := replayInstrumentationCPP(input, PackageProof{}, nil, proof); err != nil {
+	if err := replayInstrumentationCPP(input, pkg, nil, proof); err != nil {
 		t.Fatal(err)
 	}
 	for _, test := range []struct {
@@ -106,9 +107,23 @@ func TestInstrumentationCPPGeneratedAssemblyByteBudget(t *testing.T) {
 			changed := proof
 			changed.InputContents = map[string]string{test.id: text}
 			changed.CPP.Inputs = map[string]string{test.id: bytesSHA256([]byte(text))}
-			if err := replayInstrumentationCPP(input, PackageProof{}, nil, changed); err == nil || !strings.Contains(err.Error(), "bound") {
+			if err := replayInstrumentationCPP(input, pkg, nil, changed); err == nil || !strings.Contains(err.Error(), "bound") {
 				t.Fatalf("CPP input escaped its byte bound: %v", err)
 			}
 		})
 	}
+	t.Run("complete CPP inventory keeps total bound", func(t *testing.T) {
+		large := strings.Repeat(" ", 8<<20)
+		largeSHA := bytesSHA256([]byte(large))
+		changed := proof
+		changed.InputContents = map[string]string{
+			"module/" + file: source, "module/second.s": large, "module/third.s": large,
+		}
+		changed.CPP.Inputs = map[string]string{
+			"module/" + file: digest, "module/second.s": largeSHA, "module/third.s": largeSHA,
+		}
+		if err := replayInstrumentationCPP(input, pkg, nil, changed); err == nil || !strings.Contains(err.Error(), "bound") {
+			t.Fatalf("large-source allowance erased the complete CPP byte bound: %v", err)
+		}
+	})
 }

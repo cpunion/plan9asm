@@ -1,7 +1,9 @@
 package gotoolprofile
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -44,8 +46,15 @@ func captureAMD64OriginalCPP(pkg amd64OriginalListPackage, root, goRoot string, 
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(source)
-		if err != nil || len(data) > 2<<20 {
+		opened, err := os.Open(source)
+		if err != nil {
+			return err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(opened, AssemblySourceByteLimit+1))
+		if err := errors.Join(readErr, opened.Close()); err != nil {
+			return fmt.Errorf("read bounded original CPP assembly: %w", err)
+		}
+		if len(data) > AssemblySourceByteLimit {
 			return fmt.Errorf("original CPP assembly is missing or exceeds its byte bound")
 		}
 		used, bytes := []string{source}, len(data)

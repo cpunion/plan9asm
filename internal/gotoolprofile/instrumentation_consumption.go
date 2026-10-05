@@ -131,7 +131,7 @@ func ValidateInstrumentationConsumption(input *InstrumentationConsumerInput, pro
 		cpp := file.CPP
 		bytes += len(file.ExpandedSource) + len(file.TypedSource)
 		if cpp.File != input.Plan.SFiles[index] || cpp.Emission != "assembly" || cpp.EmptyAssembly != nil || cpp.DataOnlyAssembly != nil || len(cpp.Signatures) != 0 ||
-			len(file.ExpandedSource) > 2<<20 || len(file.TypedSource) > 2<<20 || bytes > 16<<20 ||
+			len(file.ExpandedSource) > AssemblySourceByteLimit || len(file.TypedSource) > AssemblySourceByteLimit || bytes > instrumentationOriginalInventoryLimit ||
 			cpp.ExpandedSHA256 != bytesSHA256([]byte(file.ExpandedSource)) || cpp.TypedExpandedSHA256 != bytesSHA256([]byte(file.TypedSource)) ||
 			cpp.Inputs["module/"+cpp.File] != input.Original.Sources[cpp.File] {
 			return fmt.Errorf("mode CPP differs from its original scope/actual source or has an unproved role")
@@ -259,13 +259,13 @@ func replayInstrumentationCPP(input *InstrumentationConsumerInput, pkg PackagePr
 	total := 0
 	for id, text := range file.InputContents {
 		total += len(text)
-		if len(text) > 2<<20 || total > 16<<20 || bytesSHA256([]byte(text)) != file.CPP.Inputs[id] {
+		if len(text) > InstrumentationCPPInputByteLimit(id) || total > instrumentationOriginalInventoryLimit || bytesSHA256([]byte(text)) != file.CPP.Inputs[id] {
 			return fmt.Errorf("mode CPP contents are changed or exceed the total byte bound")
 		}
 	}
 	read := func(id string) ([]byte, error) {
 		text, found := file.InputContents[id]
-		if !found || len(text) > 2<<20 || bytesSHA256([]byte(text)) != file.CPP.Inputs[id] {
+		if !found || len(text) > InstrumentationCPPInputByteLimit(id) || bytesSHA256([]byte(text)) != file.CPP.Inputs[id] {
 			return nil, fmt.Errorf("mode CPP input contents differ from their original byte binding")
 		}
 		return []byte(text), nil
