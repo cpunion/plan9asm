@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedUnpackSpec struct {
 	laneBits int
@@ -58,14 +55,8 @@ func x86PackedUnpackProperties(ins Instr, goarch string) (x86PackedUnpackForm, b
 	if err == nil && form.mmx && form.memory >= 0 && !spec.high {
 		form.memoryBytes = 4
 	}
-	if err == nil && goarch == "386" && !form.legacy {
-		for _, operand := range ins.Args {
-			index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
-			if operand.Kind == OpReg && valid && index >= 8 {
-				return x86PackedUnpackForm{x86PackedBinaryForm: form, spec: spec}, true,
-					fmt.Errorf("%w: 386 unpack register %s has no proved physical mode32 binding", ErrProbeNeedsContext, operand.Reg)
-			}
-		}
+	if err == nil {
+		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
 	return x86PackedUnpackForm{x86PackedBinaryForm: form, spec: spec}, true, err
 }

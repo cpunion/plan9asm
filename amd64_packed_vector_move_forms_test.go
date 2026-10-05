@@ -104,7 +104,10 @@ func TestX86PackedMoveGrammarAxesAndFiveLLVM22Targets(t *testing.T) {
 				width, high := 16<<index, 31
 				if spec.encoding == amd64PackedMoveVEX {
 					high = 15
-				} else if arch == "386" && bank == "Z" {
+				}
+				if arch == "386" {
+					// Go-accepted high X/Y rows have independent Context
+					// regressions; actual objects use the physical low bank.
 					high = 7
 				}
 				register := fmt.Sprintf("%s%d", bank, high)

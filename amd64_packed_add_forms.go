@@ -35,7 +35,7 @@ func x86PackedWrappingAddProperties(ins Instr, goarch string) (x86PackedAddForm,
 	}
 	form, err := x86PackedBinaryProperties(ins, goarch, spec.x86PackedBinarySpec)
 	if err == nil {
-		err = form.arithmeticMode32RegisterContext(ins, goarch)
+		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
 	return x86PackedAddForm{form, spec}, true, err
 }

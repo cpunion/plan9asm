@@ -31,7 +31,7 @@ func x86PackedSubtractProperties(ins Instr, goarch string) (x86PackedSubtractFor
 		err = fmt.Errorf("386 %s has no Z-width form in Go's assembler frontend: %q", ins.Op, ins.Raw)
 	}
 	if err == nil {
-		err = form.arithmeticMode32RegisterContext(ins, goarch)
+		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
 	return x86PackedSubtractForm{form, bits, mode}, true, err
 }

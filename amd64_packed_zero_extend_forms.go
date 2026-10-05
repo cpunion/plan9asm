@@ -111,13 +111,5 @@ func x86PackedZeroExtendProperties(ins Instr, goarch string) (x86PackedZeroExten
 	} else {
 		return fail()
 	}
-	if spec.vector && goarch == "386" {
-		for _, operand := range []Operand{source, destination} {
-			index, valid := amd64VectorRegisterIndex(operand.Reg, amd64VectorByteWidth(operand.Reg))
-			if operand.Kind == OpReg && valid && index >= 8 {
-				return form, true, fmt.Errorf("%w: 386 packed zero-extension register %s lacks a physical mode32 binding", ErrProbeNeedsContext, operand.Reg)
-			}
-		}
-	}
-	return form, true, nil
+	return form, true, x86Mode32VectorRegisterContext(ins, goarch)
 }

@@ -80,15 +80,15 @@ type x86PackedBinaryForm struct {
 	legacy, mmx, broadcast, zeroing       bool
 }
 
-// The named frontend accepts some EVEX high-bank spellings in mode32, but
-// these arithmetic families' raw encodings do not prove their physical
-// registers there. A typed operand grammar must not grant that identity.
-func (form x86PackedBinaryForm) arithmeticMode32RegisterContext(ins Instr, goarch string) error {
-	if goarch != "386" || form.legacy {
+// Go accepts some X/Y high-bank spellings in mode32 without proving their
+// physical register identity. Apply this only after the family's syntax has
+// been validated; it grants no initialized values, ABI or memory permissions.
+func x86Mode32VectorRegisterContext(ins Instr, goarch string) error {
+	if goarch != "386" {
 		return nil
 	}
 	for _, operand := range ins.Args {
-		index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
+		index, valid := amd64VectorRegisterIndex(operand.Reg, amd64VectorByteWidth(operand.Reg))
 		if operand.Kind == OpReg && valid && index >= 8 {
 			return fmt.Errorf("%w: 386 %s register %s has no proved physical mode32 binding", ErrProbeNeedsContext, ins.Op, operand.Reg)
 		}
@@ -107,6 +107,9 @@ func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm,
 	form, err := x86PackedBinaryProperties(ins, goarch, x86PackedBinarySpec{
 		encoding: spec.encoding, broadcastBytes: spec.broadcastBytes, zeroing: spec.zeroing,
 	})
+	if err == nil {
+		err = x86Mode32VectorRegisterContext(ins, goarch)
+	}
 	return x86PackedLogicalForm{x86PackedBinaryForm: form, spec: spec}, true, err
 }
 

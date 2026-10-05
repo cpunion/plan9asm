@@ -73,5 +73,5 @@ func amd64FMA3Properties(ins Instr, goarch string) (amd64FMA3Form, bool, error) 
 			form.memoryBytes = spec.laneBits / 8
 		}
 	}
-	return form, true, nil
+	return form, true, x86Mode32VectorRegisterContext(ins, goarch)
 }

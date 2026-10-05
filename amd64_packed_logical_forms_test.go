@@ -145,10 +145,17 @@ func TestX86PackedLogicalCompleteGoRowsAndLLVMObjects(t *testing.T) {
 		{"386", "i386-unknown-linux-gnu"}, {"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			var source strings.Builder
+			var source, goSource strings.Builder
 			source.WriteString("TEXT logicalforms(SB),$0-0\n")
+			goSource.WriteString("TEXT logicalforms(SB),$0-0\n")
 			for _, op := range x86LogicalOpcodeNames() {
 				for _, row := range x86LogicalAcceptedForms(op, target.arch) {
+					fmt.Fprintln(&goSource, row)
+					if target.arch == "386" {
+						// Preserve Go's full source grammar independently. LLVM
+						// object generation requires physically bound registers.
+						row = strings.NewReplacer("X31", "X7", "Y31", "Y7", "X15", "X7", "Y15", "Y7").Replace(row)
+					}
 					fmt.Fprintln(&source, row)
 					parsed, err := Parse(ArchAMD64, "TEXT one(SB),$0-0\n"+row+"\nRET\n")
 					if err != nil {
@@ -160,6 +167,8 @@ func TestX86PackedLogicalCompleteGoRowsAndLLVMObjects(t *testing.T) {
 				}
 			}
 			source.WriteString("RET\n")
+			goSource.WriteString("RET\n")
+			requireX86GoAssemblerResult(t, target.arch, goSource.String(), true)
 			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {

@@ -18,7 +18,7 @@ func x86WordMultiplyAddProperties(ins Instr, goarch string) (x86PackedBinaryForm
 	}
 	form, err := x86PackedBinaryProperties(ins, goarch, spec)
 	if err == nil {
-		err = form.arithmeticMode32RegisterContext(ins, goarch)
+		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
 	return form, true, err
 }

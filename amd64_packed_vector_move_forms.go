@@ -112,7 +112,7 @@ func amd64PackedVectorMoveProperties(ins Instr, goarch string) (amd64PackedVecto
 	default:
 		return fail()
 	}
-	return form, true, nil
+	return form, true, x86Mode32VectorRegisterContext(ins, goarch)
 }
 
 func amd64GoPackedVectorMoveRegister(operand Operand, width int, goarch string) bool {

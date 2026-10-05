@@ -88,6 +88,7 @@ func mode32VectorFamilyCases() []mode32VectorFamilyCase {
 }
 
 func TestX86Mode32VectorFamiliesRequirePhysicalBindings(t *testing.T) {
+	checked := 0
 	for _, family := range mode32VectorFamilyCases() {
 		for _, row := range family.rows {
 			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
@@ -104,6 +105,7 @@ func TestX86Mode32VectorFamiliesRequirePhysicalBindings(t *testing.T) {
 			if !high {
 				continue
 			}
+			checked++
 			t.Run(family.name+"/"+strings.ReplaceAll(row, " ", "_"), func(t *testing.T) {
 				requireX86GoAssemblerResult(t, "386", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", true)
 				if recognized, err := family.properties(instruction, "386"); !recognized || !errors.Is(err, ErrProbeNeedsContext) {
@@ -117,6 +119,40 @@ func TestX86Mode32VectorFamiliesRequirePhysicalBindings(t *testing.T) {
 					t.Fatalf("unproved high-bank source emitted IR: recognized=%v err=%v", recognized, err)
 				}
 			})
+		}
+	}
+	if checked != 664 {
+		t.Fatalf("Go-accepted high-bank inventory changed: checked %d rows, want 664", checked)
+	}
+}
+
+// This checks only the shared identity predicate. Family grammar tests above
+// independently prove source acceptance, and the object tests retain low-bank
+// success; this helper cannot manufacture a supported source operand.
+func TestX86Mode32VectorRegisterContextBindsEveryOperand(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, bank := range []string{"X", "Y", "Z"} {
+			for _, index := range []int{0, 7, 8, 15, 16, 31} {
+				for position := 0; position < 4; position++ {
+					name := fmt.Sprintf("%s/%s%d/operand%d", arch, bank, index, position)
+					t.Run(name, func(t *testing.T) {
+						args := make([]Operand, 4)
+						for i := range args {
+							args[i] = Operand{Kind: OpReg, Reg: Reg(bank + "0")}
+						}
+						args[position].Reg = Reg(fmt.Sprintf("%s%d", bank, index))
+						instruction := Instr{Op: "VECTOR_IDENTITY", Args: args}
+						err := x86Mode32VectorRegisterContext(instruction, arch)
+						if arch == "386" && index >= 8 {
+							if !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatalf("unproved physical identity accepted: %v", err)
+							}
+						} else if err != nil {
+							t.Fatalf("physical register bank rejected: %v", err)
+						}
+					})
+				}
+			}
 		}
 	}
 }
