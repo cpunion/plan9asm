@@ -24,7 +24,7 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-reviewed-producer-literal-batch-20261004`. Earlier
+Development branch: `codex/pr40-typed-mechanisms-integration-20261005`. Earlier
 verification snapshots remain frozen in separate worktrees. Integrated repairs
 are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
@@ -149,6 +149,27 @@ independently observed unit exits remain mandatory; unknown, partial and cleanup
 failures cannot become source exclusions. Logical directory aliases retain
 their physical identity checks. Do not promote cached nil results or historical
 reports as evidence for this source revision; fresh library reports are required.
+
+The ordinary analyzer now owns an inode-bound temporary workspace, verifies
+its physical path and regular configuration before and after the actual tool,
+and propagates cleanup failures. Exact versioned archive aliases retain both
+namespace and replacement metadata; local replacements remain unproved. The
+separate AMD64 original-package observer is query-only: complete source, export
+and include observations supply no native local-frame or caller capability.
+
+The declaration-backed ARM64 ABI0 zero-frame tail mechanism binds complete
+original Go declarations, type layouts and all private source helpers. Scalar
+result slots require full-width initialized stores on every reachable return.
+Unknown pointer effects, reserved registers, escapes and ordinary argument
+registers remain strict. SDK Count now has a passing original object witness
+on the older SDK, but whole standard-library replay still fails at the separate
+R26 closure entry; object translation alone is not executed-runtime evidence.
+
+Eight x86 typed families share the physical mode32 vector-register predicate.
+Go-accepted high X/Y spellings remain observed source forms requiring Context,
+not unsupported syntax or fabricated virtual-register bindings. Original Go
+source acceptance and physical low-bank LLVM objects are tested separately.
+The pure predicate supplies no initialized bytes, ABI or address permissions.
 
 Successful source/CPP guards retain the actual completed analyzer receipt;
 failed guards retain both errors and cannot supply a source exclusion. Exact
