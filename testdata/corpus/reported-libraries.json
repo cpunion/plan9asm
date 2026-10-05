@@ -360,10 +360,10 @@
       "id": "pierrec-lz4-v4",
       "origin": "ecosystem-scan",
       "module": "github.com/pierrec/lz4/v4",
-      "version": "v4.1.31",
+      "version": "v4.1.33",
       "inventory": {
         "darwin/amd64": {
-          "asm_files": 2,
+          "asm_files": 3,
           "packages": [
             "github.com/pierrec/lz4/v4/internal/lz4block",
             "github.com/pierrec/lz4/v4/internal/xxh32"
@@ -377,7 +377,7 @@
           ]
         },
         "linux/amd64": {
-          "asm_files": 2,
+          "asm_files": 3,
           "packages": [
             "github.com/pierrec/lz4/v4/internal/lz4block",
             "github.com/pierrec/lz4/v4/internal/xxh32"
@@ -398,7 +398,7 @@
           ]
         },
         "windows/amd64": {
-          "asm_files": 2,
+          "asm_files": 3,
           "packages": [
             "github.com/pierrec/lz4/v4/internal/lz4block",
             "github.com/pierrec/lz4/v4/internal/xxh32"

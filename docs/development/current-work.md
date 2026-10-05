@@ -35,16 +35,28 @@ semantics. Original failing fixtures and their replacement proofs remain in
 separate frozen snapshots. Required Linux runtime counterparts are not implied
 by cross-object or Darwin/Rosetta results.
 
-Two independent follow-ups are being verified before the next final batch:
-generated instrumentation LLVM outputs need bounded artifact roles, separate
-from original Go/CPP source budgets; generic raw address-size overrides must
-retain their physical width and cannot borrow default-address caller or stack
-certificates. Neither an observed byte count nor an opcode alone grants a
-source, typed-memory or compiled-object permission. Do not alter a running
-leaf or promote a library while its whole original denominator is incomplete.
+The bounded generated-artifact protocol and ARM64 opaque incoming save-slot
+oracles are integrated. The independently passing ReedSolomon replay proves its
+own artifact-protocol snapshot, not a later combined source or runtime success.
+The generic raw address-size repair has closed dual-SDK gates and must be
+integrated before final verification; it refuses unbound explicit and implicit
+addresses without granting caller or stack permissions.
 
-Earlier
-verification snapshots remain frozen in separate worktrees. Integrated repairs
+Upstream main `e2164ac0` is synchronized locally. Its useful widest X/Y/Z storage
+fix closes a reproduced legacy MOVOU alias failure. Encoding-specific typed
+writers remain authoritative: a V-prefixed positive-zero source can encode as
+legacy SSE. Preserve the existing mode-aware VZERO and complete ARM64 FP-pair
+families, and the additional upstream FSTPQ conformance cases. Only the two
+executed FSTPQ manifest forms alter runtime coverage counts; no classification
+fingerprint is blessed or unsupported form hidden.
+
+The strict default benchmark at the earlier combined snapshot still fails
+on `reflect.makeFuncStub`'s dynamic native caller frame. Its empty Go declaration
+and argument-length/GC metadata do not provide the missing entry, argument/result
+storage or lifetime contract. Keep that failure visible; a manually supplied
+frame or llgo's different libffi provider cannot close it.
+
+Earlier verification snapshots remain frozen in separate worktrees. Integrated repairs
 are local, not yet the published fork head. Freeze a clean final batch before
 rebuilding stamped tools and collecting new reports. Documentation changes
 also change the source fingerprint. Put progress/funnel tables in the PR body,

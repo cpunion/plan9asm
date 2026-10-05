@@ -478,40 +478,42 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 		}
 	}
 
-	xIdx := make([]int, 0, len(c.usedXRegs))
+	// Keep all live X/Y/Z views on one physical byte bank. Encoding-specific
+	// writers still decide whether to preserve or clear the upper bytes;
+	// source mnemonic prefixes cannot select that effect (Go rewrites some
+	// V-prefixed scalar literals into legacy SSE instructions).
+	widths := make(map[int]int)
 	for i := range c.usedXRegs {
-		xIdx = append(xIdx, i)
+		widths[i] = 16
 	}
-	sort.Ints(xIdx)
-	for _, i := range xIdx {
-		name := c.xSlotName(i)
-		c.xRegSlot[i] = name
-		fmt.Fprintf(c.b, "  %s = alloca <16 x i8>\n", name)
-		fmt.Fprintf(c.b, "  store <16 x i8> zeroinitializer, ptr %s\n", name)
-	}
-
-	yIdx := make([]int, 0, len(c.usedYRegs))
 	for i := range c.usedYRegs {
-		yIdx = append(yIdx, i)
+		widths[i] = 32
 	}
-	sort.Ints(yIdx)
-	for _, i := range yIdx {
-		name := fmt.Sprintf("%%y%d", i)
-		c.yRegSlot[i] = name
-		fmt.Fprintf(c.b, "  %s = alloca <32 x i8>\n", name)
-		fmt.Fprintf(c.b, "  store <32 x i8> zeroinitializer, ptr %s\n", name)
-	}
-
-	zIdx := make([]int, 0, len(c.usedZRegs))
 	for i := range c.usedZRegs {
-		zIdx = append(zIdx, i)
+		widths[i] = 64
 	}
-	sort.Ints(zIdx)
-	for _, i := range zIdx {
-		name := fmt.Sprintf("%%z%d", i)
-		c.zRegSlot[i] = name
-		fmt.Fprintf(c.b, "  %s = alloca <64 x i8>\n", name)
-		fmt.Fprintf(c.b, "  store <64 x i8> zeroinitializer, ptr %s\n", name)
+	indices := make([]int, 0, len(widths))
+	for i := range widths {
+		indices = append(indices, i)
+	}
+	sort.Ints(indices)
+	for _, i := range indices {
+		width := widths[i]
+		name := c.xSlotName(i)
+		if width == 32 {
+			name = fmt.Sprintf("%%y%d", i)
+		} else if width == 64 {
+			name = fmt.Sprintf("%%z%d", i)
+		}
+		c.xRegSlot[i] = name
+		if width >= 32 {
+			c.yRegSlot[i] = name
+		}
+		if width == 64 {
+			c.zRegSlot[i] = name
+		}
+		fmt.Fprintf(c.b, "  %s = alloca <%d x i8>\n", name, width)
+		fmt.Fprintf(c.b, "  store <%d x i8> zeroinitializer, ptr %s\n", width, name)
 	}
 
 	kIdx := make([]int, 0, len(c.usedKRegs))

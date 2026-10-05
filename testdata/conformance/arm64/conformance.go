@@ -19,3 +19,7 @@ func scalarExtendSemantics(out *[10]uint64, value uint64)
 func vectorCountBitsSemantics(out *[32]byte, source *[16]byte)
 
 func unsignedWideningAddSemantics(out *[96]byte, narrow *[16]byte, addend *[16]byte)
+
+func pairStores(out *[20]uint64, data *[8]uint64)
+
+var pairStoreData [10]uint64
