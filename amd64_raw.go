@@ -2634,16 +2634,25 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				}
 			}
 			if inst.AddrSize != mode {
-				goarch := ""
-				switch mode {
-				case 32:
-					goarch = "386"
-				case 64:
-					goarch = "amd64"
+				physicalMemory := false
+				for _, operand := range inst.Args {
+					if _, ok := operand.(x86asm.Mem); ok {
+						physicalMemory = true
+					}
+				}
+				switch inst.Op {
+				case x86asm.MASKMOVQ, x86asm.MASKMOVDQU, x86asm.MONITOR:
+					// These decoded forms address DI/AX implicitly. x/arch
+					// exposes only register (or no) operands, not a Mem.
+					physicalMemory = true
 				}
 				for i := range instrs {
-					if inst.Op == x86asm.LEA || x86LegacyPackedFloatingNativeMemoryBits(instrs[i], goarch) != 0 {
+					if physicalMemory {
 						instrs[i].x86AddressBits = inst.AddrSize
+						// Generic Go syntax erases address-size prefixes. Only
+						// LEA's complete typed form consumes that width here;
+						// ordinary memory must not borrow a full-width address.
+						instrs[i].x86UnboundAddressOverride = inst.Op != x86asm.LEA
 					}
 				}
 			}

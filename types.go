@@ -1001,6 +1001,10 @@ type Instr struct {
 	// Effective address width for a raw address-size override; zero means
 	// the target's ordinary pointer width.
 	x86AddressBits int
+	// Restriction from the generic decoder: the physical memory address-size
+	// prefix has no width-consuming ordinary lowerer. This is not a positive
+	// certificate. Dedicated typed decoders bind their own address semantics.
+	x86UnboundAddressOverride bool
 	// Segment override on a raw instruction with an implicit register address.
 	x86SegmentPrefix byte
 	// Decoded vector length, separate from register storage width. Narrowing

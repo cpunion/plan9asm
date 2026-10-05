@@ -222,7 +222,7 @@ func x86CallerOrdinaryMemoryStep(ins *Instr, index int, state *x86SourceStackSta
 		return false // Only the scalar GP import above can consume pointer slots.
 	}
 	memory := ins.Args[index].Mem
-	if memory.Sym != "" || memory.Segment != "" || ins.x86AddressBits != 0 ||
+	if memory.Sym != "" || memory.Segment != "" || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
 		memory.Off < -x86SourceStackLimit || memory.Off > x86SourceStackLimit {
 		return false
 	}
@@ -380,6 +380,6 @@ func x86CallerMemoryCertified(ins Instr, index int) bool {
 	width, write, valid := x86CallerMoveMemoryShape(ins, index)
 	// Producer memory proofs admit only native/default addressing. A later
 	// address-size override cannot reuse even otherwise identical operands.
-	return found && valid && ins.x86AddressBits == 0 && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
+	return found && valid && ins.x86AddressBits == 0 && !ins.x86UnboundAddressOverride && access.op == ins.Op && reflect.DeepEqual(access.args, ins.Args) &&
 		access.width == width && width > 0 && access.write == write
 }
