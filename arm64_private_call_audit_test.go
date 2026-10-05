@@ -66,7 +66,7 @@ func TestARM64PrivateCallCFGPreparedFileCannotRecoverRemovedNativeIdentity(t *te
 		{"global", "GLOBL copy<>(SB),8,$8\n"},
 		{"redefined_helper", "TEXT copy<>(SB),516,$0-0\nRET\n"},
 		{"native_layout", "TEXT observer<>(SB),516,$0-0\nWORD $0xd503201f\nRET\n"},
-		{"prelude", "MOVD $copy<>(SB),R0\n"},
+		{"prelude", "MOVD $copy<>(SB),R0\nTEXT observer<>(SB),516,$0-0\nRET\n"},
 	} {
 		for _, api := range []string{"coalesce", "Go_preparation", "text", "module"} {
 			t.Run(observer.name+"/"+api, func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestARM64PrivateContinuationPreparedTailFileRetainsWholeAudit(t *testing.T)
 			"DATA saved<>+0(SB)/8,$HELPER(SB)\nGLOBL saved<>(SB),8,$8\n",
 			"TEXT observer<>(SB),516,$0-0\nMOVD $HELPER(SB),R0\nRET\n",
 			"TEXT HELPER(SB),516,$0-0\nRET\n",
-			"WORD $0xd503201f\n",
+			"WORD $0xd503201f\nTEXT observer<>(SB),516,$0-0\nRET\n",
 		} {
 			t.Run(family+"/"+strings.Split(observer, "\n")[0], func(t *testing.T) {
 				resolve := func(symbol string) string { return strings.TrimPrefix(goTextSymbolForResolution(symbol), "·") }
@@ -155,5 +155,31 @@ func TestARM64PrivateContinuationPreparedTailFileRetainsWholeAudit(t *testing.T)
 				}
 			})
 		}
+	}
+}
+
+func TestARM64PrivateCallCFGCopyCannotBorrowPointerPermissionForCallerFrame(t *testing.T) {
+	pkg := mustGoPackage(t, "test/privatecopy", "package privatecopy\nfunc Copy(dst,src *[32]byte,n uint64)\n")
+	for _, destination := range []string{
+		"MOVD RSP,R8", "ADD $7,RSP,R8", "MOVD $dst+0(FP),R8",
+	} {
+		t.Run(destination, func(t *testing.T) {
+			source := strings.Replace(arm64PrivateCallCFGCopySource, "MOVD dst+0(FP),R8", destination, 1)
+			requireARM64GoAssemblerResult(t, source, true)
+			for _, target := range arm64TypedNativeTargets {
+				context := llvm.NewContext()
+				result, err := translateGoModuleInContext(context, pkg, []byte(source), GoModuleOptions{
+					GOARCH: "arm64", TargetTriple: target,
+					ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
+				})
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				context.Dispose()
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("%s private caller-frame destination gained external-pointer permission: %v", target, err)
+				}
+			}
+		})
 	}
 }

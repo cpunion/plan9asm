@@ -164,7 +164,7 @@ func TestARM64PrivateRegisterHelperNeedsCompleteContext(t *testing.T) {
 		{"helper-call", strings.Replace(base, "ADC $0,R9,R20", "CALL foreign(SB)\nADC $0,R9,R20", 1)},
 		{"helper-raw", strings.Replace(base, "ADC $0,R9,R20", "WORD $0x91000414", 1)},
 		{"helper-system", strings.Replace(base, "ADC $0,R9,R20", "SVC $0", 1)},
-		{"helper-unknown-vector", strings.Replace(base, "ADC $0,R9,R20", "VADD V0.B16,V1.B16,V0.B16\nADC $0,R9,R20", 1)},
+		{"helper-vector", strings.Replace(base, "ADC $0,R9,R20", "VEOR V0.B16,V0.B16,V0.B16\nADC $0,R9,R20", 1)},
 		{"helper-address-taken", strings.Replace(base, "CALL mix<>(SB)", "MOVD $mix<>(SB),R1\nCALL mix<>(SB)", 1)},
 		{"helper-offset-call", strings.Replace(base, "CALL mix<>(SB)", "CALL mix<>+4(SB)", 1)},
 		{"helper-tail-branch-use", strings.Replace(base, "CALL mix<>(SB)", "CALL mix<>(SB)\nB mix<>(SB)", 1)},

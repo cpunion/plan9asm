@@ -75,6 +75,8 @@ RET`, 1)
 		name, source string
 	}{
 		{"register_multiple_returns", register},
+		{"lexical_backward_acyclic_edge", strings.Replace(register,
+			"CBZ R19,zero\nADC", "B forward\nbackward:\nRET\nforward:\nCBZ R19,backward\nADC", 1)},
 		{"typed_scalar_pair_copy", arm64PrivateCallCFGCopySource},
 		{"two_static_calls", strings.Replace(arm64PrivateCallCFGCopySource,
 			"CALL copy<>(SB)", "CALL copy<>(SB)\nCALL copy<>(SB)", 1)},

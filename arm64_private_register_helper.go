@@ -13,7 +13,8 @@ const arm64PrivateRegisterExpansionBudget = 1 << 16
 // Only a closed, acyclic, zero-frame data leaf can share its caller's
 // typed machine state. Purity here restricts operand classes; real lowering still
 // validates every opcode/form and records actual register/flag effects. Native
-// asm/callouts are rejected by the machine-availability proof.
+// callouts are rejected here; native effects are also rejected by the later
+// machine-availability proof.
 func arm64PrivateRegisterLeaf(fn Func) error {
 	if fn.FrameSize != 0 && fn.FrameSize != -8 || fn.ArgSize != 0 || arm64SourceGoFrame(fn).present {
 		return arm64GoABIContext("private helper %q has an unproved native frame", fn.Sym)
@@ -111,6 +112,9 @@ func coalesceARM64PrivateRegisterHelpers(file *File) (*File, error) {
 		}
 		remaining -= fn.arm64PrivateSourceAdded
 	}
+	if err := validateARM64PrivateContinuationFile(file); err != nil {
+		return nil, err
+	}
 	prepared, err := coalesceARM64PrivateCallRegisterHelpers(file, &remaining)
 	if err != nil {
 		return nil, err
@@ -160,6 +164,9 @@ func coalesceARM64PrivateCallRegisterHelpers(file *File, remaining *int) (*File,
 	}
 	if len(helpers) == 0 {
 		return file, nil
+	}
+	if len(file.UnlinkedPrelude) != 0 {
+		return nil, arm64GoABIContext("private call file has an unbound native prelude")
 	}
 	for _, data := range file.Data {
 		for _, symbol := range []string{data.Sym, data.Addr} {

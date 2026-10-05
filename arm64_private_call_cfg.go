@@ -38,7 +38,9 @@ func validateARM64PrivateCallSource(fn Func) error {
 func arm64PrivateCallDataRegister(reg Reg) bool {
 	// R26 is ordinary explicitly initialized data here, not an implicit closure
 	// input. The independent root closure/availability proofs still apply.
-	return arm64PrivateDataGP(reg) || arm64PrivateTailDataRegister(reg)
+	// Floating/vector CALL continuations need their own initialized-input and
+	// runtime contracts. Do not inherit the independently tested tail domain.
+	return arm64PrivateDataGP(reg)
 }
 
 // Check every original component, not only entry-reachable blocks. The bounded

@@ -167,6 +167,9 @@ func arm64PrivateContinuationBody(fn Func, dataRegister func(Reg) bool) error {
 	}
 	returns := 0
 	for _, ins := range fn.Instrs[1:] {
+		if ins.Op == OpTEXT || ins.Op == "CALL" || ins.Op == "BL" || ins.Op == "BLR" {
+			return arm64GoABIContext("private continuation %q is not a call-free complete source at %q", fn.Sym, ins.Raw)
+		}
 		if ins.Op == OpLABEL {
 			continue
 		}
