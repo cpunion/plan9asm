@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"os/exec"
@@ -48,11 +49,20 @@ func x86ScalarLiteralExpectedGoListing(t *testing.T, arch, source string, wantSu
 	defer cancelStage()
 	ctx, cancel := context.WithTimeout(stage, 30*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "literal", "-o", filepath.Join(dir, "literal.o"), asm)
+	object := filepath.Join(dir, "literal.o")
+	command := exec.CommandContext(ctx, "go", "tool", "asm", "-S", "-p", "literal", "-o", object, asm)
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH="+arch)
 	listing, err := runtimeOracleCombinedOutput(ctx, command)
-	if failure := goAssemblerOracleOutcome(asm, filepath.Join(dir, "literal.o"), listing, err, ctx.Err(), wantSuccess, arch); failure != nil {
+	if failure := goAssemblerOracleOutcome(asm, object, listing, err, ctx.Err(), wantSuccess, arch); failure != nil {
 		t.Fatalf("%v\n%s", failure, listing)
+	}
+	if wantSuccess {
+		bytes, readErr := os.ReadFile(object)
+		if readErr != nil || len(bytes) == 0 {
+			t.Fatalf("actual literal object receipt: %v", readErr)
+		}
+		t.Logf("ACTUAL_LITERAL_OBJECT arch=%s sourceSHA=%x objectSHA=%x bytes=%d listingSHA=%x", arch,
+			sha256.Sum256([]byte(source)), sha256.Sum256(bytes), len(bytes), sha256.Sum256(listing))
 	}
 	return string(listing), err
 }

@@ -65,17 +65,43 @@ func (form x86ScalarLiteralForm) bits() uint64 {
 	return form.value.bits64
 }
 
+func x86ScalarLiteralTargetForms(wide int, arch string) []x86ScalarLiteralForm {
+	forms := x86ScalarLiteralForms(wide == 64)
+	if arch != "386" {
+		return forms
+	}
+	var physical []x86ScalarLiteralForm
+	for _, form := range forms {
+		if form.register >= 8 {
+			// These are low physical-bank object controls, not a binding for
+			// Go-accepted high-bank encodings. Keep the original high forms in
+			// the separate actual-source/Context regression.
+			form.register = 7
+			if form.value.zero && form.masked {
+				// The frontend rewrites positive zero in X0-X15 to XORPS,
+				// whose retained mask makes this original source Go-invalid.
+				continue
+			}
+		}
+		physical = append(physical, form)
+	}
+	return physical
+}
+
 func x86ScalarLiteralAssembly(wide int, arch string) string {
+	return x86ScalarLiteralAssemblyForForms(wide, arch, x86ScalarLiteralTargetForms(wide, arch))
+}
+
+func x86ScalarLiteralAssemblyForForms(wide int, arch string, forms []x86ScalarLiteralForm) string {
 	var source strings.Builder
 	word, pointerMove := 8, "MOVQ"
 	if arch == "386" {
 		word, pointerMove = 4, "MOVL"
 	}
-	for _, form := range x86ScalarLiteralForms(wide == 64) {
+	for _, form := range forms {
 		view := fmt.Sprintf("Y%d", form.register)
-		// Go's mode32 compatibility rows accept X31/Y31 scalar uses, but
-		// not the separate packed Z31 moves. Keep that fixture distinction
-		// without dropping the accepted high-X literal/mask forms.
+		// Retain the original high-bank source shape in its negative test;
+		// ordinary object controls use physical low banks on mode32.
 		zView := wide == 64 && (arch != "386" || form.register < 16)
 		if zView {
 			view = fmt.Sprintf("Z%d", form.register)
@@ -121,7 +147,7 @@ func x86ScalarLiteralIR(t *testing.T, wide int, arch, triple string) string {
 		word = 4
 	}
 	sigs := make(map[string]FuncSig)
-	for _, form := range x86ScalarLiteralForms(wide == 64) {
+	for _, form := range x86ScalarLiteralTargetForms(wide, arch) {
 		symbol := "literal." + form.name
 		sigs[symbol] = FuncSig{
 			Name: symbol, Args: []LLVMType{Ptr, Ptr}, Ret: Void,
@@ -209,13 +235,14 @@ func x86ScalarLiteralActualGoOracle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	stage, cancelStage := runtimeOracleStageContext(t)
+	defer cancelStage()
+	ctx, cancel := context.WithTimeout(stage, 2*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, "go", "test", "-p=2", "-vet=off", "-count=1", ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
-	command.WaitDelay = 2 * time.Second
-	if output, err := command.CombinedOutput(); err != nil {
+	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual Go floating-literal full-byte oracle: %v\n%s", err, output)
 	}
 }
