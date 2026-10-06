@@ -333,6 +333,36 @@ func TestDiscoveryOperationReportsItsOwnTimeout(t *testing.T) {
 	}
 }
 
+func TestDiscoveryOperationCannotHideExpiredDeadline(t *testing.T) {
+	sourceErr := errors.New("independent original-source diagnostic")
+	for _, fixture := range []struct {
+		name   string
+		result error
+	}{
+		{"nil_result", nil},
+		{"source_error", sourceErr},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			err := runDiscoveryOperation(time.Millisecond, func(ctx context.Context) error {
+				<-ctx.Done()
+				return fixture.result
+			})
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("expired discovery operation hid its own deadline: %v", err)
+			}
+			if fixture.result != nil && !errors.Is(err, fixture.result) {
+				t.Fatalf("deadline discarded the independent operation error: %v", err)
+			}
+		})
+	}
+	t.Run("unexpired_source_error", func(t *testing.T) {
+		err := runDiscoveryOperation(time.Minute, func(context.Context) error { return sourceErr })
+		if err != sourceErr || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			t.Fatalf("unexpired operation gained a fabricated deadline/cancellation: %v", err)
+		}
+	})
+}
+
 func TestDiscoveryCandidateModuleCacheIsPrivateWithReadOnlySharedProxy(t *testing.T) {
 	work := filepath.Join(t.TempDir(), "candidate")
 	shared := filepath.Join(t.TempDir(), "shared cache")
