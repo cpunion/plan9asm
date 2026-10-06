@@ -49,9 +49,18 @@ func runtimeOracleFaultCorePolicy(source string) error {
 		`^\s*struct\s+rlimit\s+no_core\s*=\s*\{\s*0\s*,\s*0\s*\}\s*;` +
 			`\s*if\s*\(\s*setrlimit\s*\(\s*RLIMIT_CORE\s*,\s*&no_core\s*\)` +
 			`\s*\)\s*_exit\s*\(\s*120\s*\)\s*;`)
-	branch := child.FindStringIndex(source)
-	if branch == nil || !policy.MatchString(source[branch[1]:]) {
-		return fmt.Errorf("actual fault child must first set both core limits to zero and check failure before invoking its oracle")
+	branches := child.FindAllStringIndex(source, -1)
+	// This is a bounded check for the actual C fixture templates, not a C
+	// parser. An unregistered child predicate must not hide another fork.
+	fork := regexp.MustCompile(`\bfork\s*\(\s*\)`)
+	forks := fork.FindAllStringIndex(source, -1)
+	if len(branches) == 0 || len(branches) != len(forks) {
+		return fmt.Errorf("each actual fork needs one registered child branch: forks=%d branches=%d", len(forks), len(branches))
+	}
+	for index, branch := range branches {
+		if !policy.MatchString(source[branch[1]:]) {
+			return fmt.Errorf("fault child %d must first set both core limits to zero and check failure before invoking its oracle", index+1)
+		}
 	}
 	return nil
 }
