@@ -2817,7 +2817,11 @@ func removeDiscoveryTargetOutput(workDir string, index int) error {
 func runDiscoveryOperation(timeout time.Duration, run func(context.Context) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	return run(ctx)
+	err := run(ctx)
+	if contextErr := ctx.Err(); contextErr != nil {
+		return errors.Join(err, contextErr)
+	}
+	return err
 }
 
 func discoveryCommandEnvironment(base []string) []string {
