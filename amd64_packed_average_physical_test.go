@@ -3,11 +3,15 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 var x86AverageNames = []string{"PAVGB", "PAVGW", "VPAVGB", "VPAVGW"}
@@ -36,6 +40,118 @@ func x86AveragePhysicalRows(arch string) []string {
 		}
 	}
 	return rows
+}
+
+func TestX86PackedAverageThreeAPIsFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			arch := "amd64"
+			if strings.HasPrefix(triple, "i") {
+				arch = "386"
+			}
+			var source, declarations strings.Builder
+			declarations.WriteString("package oracle\n")
+			for index, row := range x86AveragePhysicalRows(arch) {
+				fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
+				fmt.Fprintf(&declarations, "func F%d()\n", index)
+			}
+			goAssemblerOracleOutput(t, arch, source.String(), "", true)
+			pkg := mustGoPackage(t, "oracle", declarations.String())
+			file, err := Parse(ArchAMD64, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			sigs := make(map[string]FuncSig)
+			for _, fn := range file.Funcs {
+				name := strings.TrimPrefix(fn.Sym, "·")
+				sig, err := DeriveGoFuncABI0Signature(name, pkg.Types.Scope().Lookup(name).(*types.Func), arch, types.SizesFor("gc", arch))
+				if err != nil {
+					t.Fatal(err)
+				}
+				sigs[name] = sig
+			}
+			options := Options{Goarch: arch, TargetTriple: triple, Sigs: sigs,
+				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
+			ir, err := Translate(file, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			x86ResultInitializationObject(t, llc, triple, ir, "average-text")
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, options)
+			if !module.IsNil() {
+				defer module.Dispose()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			x86ResultInitializationObject(t, llc, triple, module.String(), "average-module")
+			translated, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{
+				GOARCH: arch, TargetTriple: triple, ResolveSym: options.ResolveSym})
+			if translated != nil && !translated.Module.IsNil() {
+				defer translated.Module.Dispose()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			x86ResultInitializationObject(t, llc, triple, translated.Module.String(), "average-go")
+			x86ResultInitializationObject(t, llc, triple, x86MulDivRoundOptimize(t, ir), "average-O2")
+		})
+	}
+}
+
+func TestX86PackedAverageShapesEffectsDoNotGrantCallerPermissions(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, row := range append(x86AveragePhysicalRows(arch), "VPAVGB.Z value+0(FP),X1,K1,X2", "VPAVGW value+0(FP),Z1,Z2") {
+			file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-64\n"+row+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			ins := file.Funcs[0].Instrs[1]
+			before := fmt.Sprintf("%#v", ins)
+			form, known, err := x86PackedAverageProperties(ins.Op, ins, arch)
+			if arch == "386" && strings.Contains(row, "K1") {
+				if err == nil {
+					t.Fatal("named mode32 mask became a physical encoding")
+				}
+				continue
+			}
+			if !known || err != nil || before != fmt.Sprintf("%#v", ins) || x86CallerVectorMoveKnown(ins) {
+				t.Fatalf("shape changed input or acquired caller permission: %s: %v", row, err)
+			}
+			for index := range ins.Args {
+				width, write, valid := x86InstructionMemoryShape(ins, index, arch)
+				if valid != (index == form.memory) || valid && (width != int64(form.memoryBytes) || write) {
+					t.Fatal("memory read shape differs from native width", row, width, write, valid)
+				}
+			}
+			effect, observed, err := x86TypedInstructionByteEffect(ins.Op, ins, arch)
+			if form.legacy && (!observed || err != nil || len(effect.operands) != 2 ||
+				effect.flagsDefined != 0 || effect.flagsKilled != 0 ||
+				!effect.operands[0].read || effect.operands[0].write ||
+				!effect.operands[1].read || !effect.operands[1].write ||
+				effect.operands[0].width != int64(form.byteWidth) || effect.operands[1].width != int64(form.byteWidth)) {
+				t.Fatal("legacy full input/output byte effect changed", row, effect, err)
+			}
+			// All three dispatch identities are equivalent, but a contradictory
+			// source never emits IR. Keep the existing empty direct-helper API.
+			for _, identity := range []Op{"", ins.Op, Op(strings.ToLower(string(ins.Op))), "PADDW"} {
+				local := ins
+				local.Op = identity
+				copy := local
+				_, _, err := x86PackedAverageProperties(ins.Op, local, arch)
+				bad := identity == "PADDW"
+				if (err != nil) != bad || !reflect.DeepEqual(copy, local) {
+					t.Fatal("dispatch identity mismatch", ins.Op, identity, err)
+				}
+			}
+		}
+	}
 }
 
 func TestX86PackedAverageActualGoCompleteTables(t *testing.T) {
@@ -83,13 +199,52 @@ func TestX86PackedAverageActualGoCompleteTables(t *testing.T) {
 	if start < 0 {
 		t.Fatal("missing actual ytab")
 	}
-	table := strings.SplitN(string(avx)[start:], "\n}", 2)[0]
-	for _, classes := range []string{"Yxm, Yxr, Yxr", "Yym, Yyr, Yyr",
-		"YxmEvex, YxrEvex, YxrEvex", "YxmEvex, YxrEvex, Yknot0, YxrEvex",
-		"YymEvex, YyrEvex, YyrEvex", "YymEvex, YyrEvex, Yknot0, YyrEvex",
-		"Yzm, Yzr, Yzr", "Yzm, Yzr, Yknot0, Yzr"} {
-		if strings.Count(table, "argList{") != 8 || !strings.Contains(table, "argList{"+classes+"}") {
-			t.Fatal("complete actual Go ytab changed", classes)
+	table := strings.SplitN(string(avx)[start:], "\n}", 2)[0] + "\n}"
+	if err := x86AverageValidateGoYtab(table); err != nil {
+		t.Fatal(err)
+	}
+}
+
+const x86AverageGoYtab = `var _yvandnpd = []ytab{
+ {zcase: Zvex_rm_v_r, zoffset: 2, args: argList{Yxm, Yxr, Yxr}},
+ {zcase: Zvex_rm_v_r, zoffset: 2, args: argList{Yym, Yyr, Yyr}},
+ {zcase: Zevex_rm_v_r, zoffset: 0, args: argList{YxmEvex, YxrEvex, YxrEvex}},
+ {zcase: Zevex_rm_v_k_r, zoffset: 3, args: argList{YxmEvex, YxrEvex, Yknot0, YxrEvex}},
+ {zcase: Zevex_rm_v_r, zoffset: 0, args: argList{YymEvex, YyrEvex, YyrEvex}},
+ {zcase: Zevex_rm_v_k_r, zoffset: 3, args: argList{YymEvex, YyrEvex, Yknot0, YyrEvex}},
+ {zcase: Zevex_rm_v_r, zoffset: 0, args: argList{Yzm, Yzr, Yzr}},
+ {zcase: Zevex_rm_v_k_r, zoffset: 3, args: argList{Yzm, Yzr, Yknot0, Yzr}},
+}`
+
+func x86AverageValidateGoYtab(table string) error {
+	actual, err := x86SignedPackedFloatGoOpcodeTokens(table)
+	if err != nil {
+		return err
+	}
+	expected, err := x86SignedPackedFloatGoOpcodeTokens(x86AverageGoYtab)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(actual, expected) {
+		return fmt.Errorf("complete actual Go packed-average selector table changed:\n%s", table)
+	}
+	return nil
+}
+
+func TestX86PackedAverageGoSelectorMutationsAreDetected(t *testing.T) {
+	if err := x86AverageValidateGoYtab(x86AverageGoYtab); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []struct{ old, replacement string }{
+		{"zoffset: 2", "zoffset: 3"},
+		{"Zvex_rm_v_r", "Zevex_rm_v_r"},
+		{"Yknot0", "Yk"},
+		{"YxmEvex", "YymEvex"},
+		{"{zcase: Zvex_rm_v_r, zoffset: 2, args: argList{Yxm, Yxr, Yxr}},", ""},
+	} {
+		changed := strings.Replace(x86AverageGoYtab, mutation.old, mutation.replacement, 1)
+		if err := x86AverageValidateGoYtab(changed); err == nil {
+			t.Fatalf("selector mutation retained source authority: %#v", mutation)
 		}
 	}
 }

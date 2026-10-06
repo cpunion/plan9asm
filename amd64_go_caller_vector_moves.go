@@ -253,6 +253,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
+	if form, known, err := x86PackedAverageProperties(ins.Op, ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	}
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		return 1, true, err == nil && index == 0
 	}

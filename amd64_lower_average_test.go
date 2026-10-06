@@ -24,16 +24,18 @@ func TestTranslateX86PackedUnsignedAverageCompleteGoAssemblerForms(t *testing.T)
 				legacyLast, zLast = 7, 7
 			}
 			var source strings.Builder
-			source.WriteString("TEXT packedunsignedaverageforms(SB),NOSPLIT,$0-0\n")
+			source.WriteString("TEXT packedunsignedaverageforms(SB),4,$0-0\n")
 			for _, stem := range []string{"PAVGB", "PAVGW"} {
-				fmt.Fprintf(&source, "\t%s M0, M1\n", stem)
-				fmt.Fprintf(&source, "\t%s 8(AX), M2\n", stem)
+				if target.goarch == "amd64" {
+					fmt.Fprintf(&source, "\t%s M0, M1\n", stem)
+					fmt.Fprintf(&source, "\t%s 8(AX), M2\n", stem)
+				}
 				fmt.Fprintf(&source, "\t%s X0, X%d\n", stem, legacyLast)
 				fmt.Fprintf(&source, "\t%s 8(AX), X%d\n", stem, legacyLast)
 				vector := "V" + stem
 				for _, width := range []string{"X", "Y"} {
 					fmt.Fprintf(&source, "\t%s %s0, %s1, %s2\n", vector, width, width, width)
-					fmt.Fprintf(&source, "\t%s 8(AX), %s20, %s21\n", vector, width, width)
+					fmt.Fprintf(&source, "\t%s 8(AX), %s6, %s7\n", vector, width, width)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s %s20, %s21, K1, %s22\n", vector, width, width, width)
 						fmt.Fprintf(&source, "\t%s.Z 8(AX), %s21, K7, %s22\n", vector, width, width)
@@ -52,6 +54,7 @@ func TestTranslateX86PackedUnsignedAverageCompleteGoAssemblerForms(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
+			goAssemblerOracleOutput(t, target.goarch, source.String(), "", true)
 			ll, err := Translate(file, Options{
 				TargetTriple: target.triple,
 				Goarch:       target.goarch,

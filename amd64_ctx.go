@@ -355,6 +355,9 @@ func (c *amd64Ctx) scanUsedRegs() {
 			for _, arg := range ins.Args {
 				markOp(arg)
 			}
+			if form, known, err := x86PackedAverageProperties(ins.Op, ins, c.goarch); known && err == nil {
+				markOp(form.source)
+			}
 			if form, recognized, err := x86ScalarExtensionProperties(Op(op), ins, c.goarch); recognized && err == nil && form.source.Kind == OpReg {
 				markReg(form.source.Reg)
 			}

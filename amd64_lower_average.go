@@ -1,172 +1,100 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-// lowerPackedUnsignedAverage implements Go 1.27's complete PAVG/VPAVG family.
-// Each unsigned B/W lane computes (a+b+1)>>1. Legacy forms use the ymm table
-// (MMX and XMM); VEX/EVEX forms use _yvandnpd without broadcast.
-func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+func (c *amd64Ctx) lowerPackedUnsignedAverage(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86PackedAverageProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	laneBits, vector, recognized := amd64PackedUnsignedAverageProperties(baseOp)
-	if !recognized {
-		return false, false, nil
+	ins.Op = op
+	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
+		return true, false, err
 	}
-	if !vector {
-		if suffix != "" {
-			return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && !form.mmx && form.memory >= 0 {
+		// A virtual FP/SP/BP view is not the source's native aligned m128.
+		// This family does not add a caller or fixed-local backing permission.
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
 		}
-		return c.lowerLegacyPackedUnsignedAverage(baseOp, laneBits, ins)
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy packed average m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
+		}
 	}
-	return c.lowerVectorPackedUnsignedAverage(baseOp, suffix, laneBits, ins)
-}
-
-func amd64PackedUnsignedAverageProperties(op string) (laneBits int, vector, ok bool) {
-	switch op {
-	case "PAVGB":
-		return 8, false, true
-	case "PAVGW":
-		return 16, false, true
-	case "VPAVGB":
-		return 8, true, true
-	case "VPAVGW":
-		return 16, true, true
-	default:
-		return 0, false, false
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateX86PackedShiftFPSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
 	}
-}
-
-func (c *amd64Ctx) lowerLegacyPackedUnsignedAverage(baseOp string, laneBits int, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s expects MMX/m64, MMX or X/m128, X: %q", c.goarch, baseOp, ins.Raw)
+	bits := form.spec.laneBits
+	lanes := form.byteWidth * 8 / bits
+	if form.mmx {
+		var a string
+		if first.Kind == OpReg {
+			a, err = c.loadReg(first.Reg)
+		} else {
+			// Exact m64 bytes, including independent logical FP fields. Native
+			// reads stay observable without inventing an x87/tag-state bridge.
+			a, err = c.loadPackedUnpackMMXSource(first, 8)
+		}
+		if err != nil {
+			return true, false, err
+		}
+		b, err := c.loadReg(second.Reg)
+		if err != nil {
+			return true, false, err
+		}
+		value := c.emitPackedUnsignedAverage(lanes, bits, c.bitcastI64ToIntegerLanes(lanes, bits, a), c.bitcastI64ToIntegerLanes(lanes, bits, b))
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, lanes, bits, value)
+		return true, false, c.storeReg(destination.Reg, "%"+out)
 	}
-	destination := ins.Args[1].Reg
-	if _, mmx := amd64ParseMReg(destination); mmx {
-		if ins.Args[0].Kind == OpReg {
-			if _, ok := amd64ParseMReg(ins.Args[0].Reg); !ok {
-				return true, false, fmt.Errorf("%s %s MMX form requires an MMX source: %q", c.goarch, baseOp, ins.Raw)
+	b, err := c.loadPackedCompareLanes(second, form.byteWidth, bits, false)
+	if err != nil {
+		return true, false, err
+	}
+	var mask, value string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	if form.legacy && form.memory >= 0 {
+		mnemonic := map[int]string{8: "pavgb", 16: "pavgw"}[bits]
+		// Keep the original single native m128 instruction, alignment fault
+		// and segment. Portable arithmetic must not erase these effects.
+		value, err = c.emitPackedBinaryNativeMemory(first, bits, b, mnemonic)
+	} else {
+		// E4.nb memory suppresses inactive byte/word faults. Active loads stay
+		// volatile if the result is dead; virtual FP needs its full span first.
+		a, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, bits, false, mask)
+		err = loadErr
+		if err == nil {
+			value = c.emitPackedUnsignedAverage(lanes, bits, a, b)
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
+	if form.mask >= 0 {
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, bits, false)
+			if err != nil {
+				return true, false, err
 			}
-		} else if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("%s %s MMX form requires MMX or memory source: %q", c.goarch, baseOp, ins.Raw)
 		}
-		firstBits, err := c.loadLegacyMMXPackedSource(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		secondBits, err := c.loadReg(destination)
-		if err != nil {
-			return true, false, err
-		}
-		lanes := 64 / laneBits
-		first := c.bitcastI64ToIntegerLanes(lanes, laneBits, firstBits)
-		second := c.bitcastI64ToIntegerLanes(lanes, laneBits, secondBits)
-		result := c.emitPackedUnsignedAverage(lanes, laneBits, first, second)
-		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", bits, lanes, laneBits, result)
-		return true, false, c.storeReg(destination, "%"+bits)
-	}
-
-	if !c.isGoLegacyXReg(destination) {
-		return true, false, fmt.Errorf("%s %s destination must be an in-range MMX or X register: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg && !c.isGoLegacyXReg(ins.Args[0].Reg) {
-		return true, false, fmt.Errorf("%s %s XMM form requires an in-range X source: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind != OpReg && !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s XMM form requires X or memory source: %q", c.goarch, baseOp, ins.Raw)
-	}
-	firstBytes, err := c.loadXVecOperand(ins.Args[0])
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadX(destination)
-	if err != nil {
-		return true, false, err
-	}
-	lanes := 128 / laneBits
-	first := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, firstBytes)
-	second := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, secondBytes)
-	result := c.emitPackedUnsignedAverage(lanes, laneBits, first, second)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", out, lanes, laneBits, result)
-	return true, false, c.storeX(destination, "%"+out)
-}
-
-func (c *amd64Ctx) lowerVectorPackedUnsignedAverage(baseOp, suffix string, laneBits int, ins Instr) (bool, bool, error) {
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's _yvandnpd table: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("%s %s expects source2, source1, [K mask,] destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("%s %s zeroing requires a K1-K7 mask: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if masked && !amd64NonzeroKOperand(ins.Args[2]) {
-		return true, false, fmt.Errorf("%s %s masked form expects K1-K7 as its third operand: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	if destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s destination must be X, Y, or Z: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 ||
-		!c.isGoPackedVectorMoveRegister(destination, byteWidth) ||
-		!c.isGoPackedVectorMoveRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s source1 and destination must be matching Go vector registers: %q", c.goarch, baseOp, ins.Raw)
-	}
-	firstArg := ins.Args[0]
-	if firstArg.Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(firstArg, byteWidth) {
-			return true, false, fmt.Errorf("%s %s source2 register must match the destination width: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(firstArg) {
-		return true, false, fmt.Errorf("%s %s source2 must be a matching vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	firstBytes, err := c.loadPackedCompareBytes(firstArg, byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	secondBytes, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	lanes := byteWidth * 8 / laneBits
-	first := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, firstBytes)
-	second := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, secondBytes)
-	result := c.emitPackedUnsignedAverage(lanes, laneBits, first, second)
-	if masked {
-		mask, err := c.loadK(ins.Args[2].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		oldBytes, err := c.loadPackedCompareBytes(destination, byteWidth)
-		if err != nil {
-			return true, false, err
-		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, lanes, laneBits, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, lanes, laneBits, result, old, mask, zeroing)
+		value = amd64ApplyIntegerLaneMask(c, lanes, bits, value, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, "%"+out)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, bits, value, form.byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+	}
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitPackedUnsignedAverage(lanes, laneBits int, first, second string) string {

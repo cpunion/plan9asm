@@ -114,56 +114,86 @@ const x86AverageIndependentC = `#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <xmmintrin.h>
-typedef void (*Kernel)(void*,const void*,const void*,uint64_t,uint64_t);
-static unsigned lane(const uint8_t *p,int bytes) {
- unsigned value=p[0];
- if(bytes==2) value|=(unsigned)p[1]<<8;
- return value;
+typedef void (*Kernel)(void *, const void *, const void *, uint64_t, uint64_t);
+static unsigned lane(const uint8_t *p, int bytes) {
+  unsigned value = p[0];
+  if (bytes == 2) {
+    value |= (unsigned)p[1] << 8;
+  }
+  return value;
 }
-static const uint64_t masks[]={0,1,UINT64_C(0xaaaaaaaa55555555),UINT64_MAX};
+static const uint64_t masks[] = {0, 1, UINT64_C(0xaaaaaaaa55555555), UINT64_MAX};
 `
 
 const x86AverageCheckC = `int main(void) {
- for(unsigned row=0;row<sizeof(cases)/sizeof(cases[0]);row++) {
-  for(int sample=0;sample<257;sample++) for(int status=0;status<2;status++) for(int m=0;m<4;m++) {
-   _Alignas(64) uint8_t a[192],b[192],out[192];
-   memset(a,0xa7,sizeof(a));memset(b,0xb9,sizeof(b));memset(out,0xc3,sizeof(out));
-   for(int i=0;i<64;i++) {
-    a[64+i]=(uint8_t)(sample*71+i*37);
-    b[64+i]=(uint8_t)(sample*19-i*13);
-    if(sample<4) {
-     a[64+i]=(uint8_t[]){255,0,128,255}[sample];
-     b[64+i]=(uint8_t[]){255,1,128,0}[sample];
+  for (unsigned row = 0; row < sizeof(cases) / sizeof(cases[0]); row++) {
+    for (int sample = 0; sample < 257; sample++) {
+      for (int status = 0; status < 2; status++) {
+        for (int m = 0; m < 4; m++) {
+          _Alignas(64) uint8_t a[192], b[192], out[192];
+          memset(a, 0xa7, sizeof(a));
+          memset(b, 0xb9, sizeof(b));
+          memset(out, 0xc3, sizeof(out));
+
+          for (int i = 0; i < 64; i++) {
+            a[64 + i] = (uint8_t)(sample * 71 + i * 37);
+            b[64 + i] = (uint8_t)(sample * 19 - i * 13);
+            if (sample < 4) {
+              a[64 + i] = (uint8_t[]){255, 0, 128, 255}[sample];
+              b[64 + i] = (uint8_t[]){255, 1, 128, 0}[sample];
+            }
+          }
+          uint8_t beforeA[192], beforeB[192];
+          memcpy(beforeA, a, sizeof(a));
+          memcpy(beforeB, b, sizeof(b));
+
+          uint32_t saved = _mm_getcsr(),
+                   profile = (uint32_t)(0x1f80 | ((sample % 4) << 13) | (sample % 64));
+          _mm_setcsr(profile);
+          uint64_t seed = status ? UINT64_C(0x8d5) : 0;
+          cases[row].run(out + 64, a + 64, b + 64, masks[m], seed);
+          uint32_t after = _mm_getcsr();
+          _mm_setcsr(saved);
+          uint64_t flags;
+          memcpy(&flags, out + 128, 8);
+          if (after != profile || (flags & UINT64_C(0x8d5)) != seed ||
+              memcmp(a, beforeA, sizeof(a)) || memcmp(b, beforeB, sizeof(b))) {
+            fprintf(stderr, "row%u sample%d CSR/flags/input\n", row, sample);
+            return 1;
+          }
+
+          for (int i = 0; i < 64; i++) {
+            int start = i / cases[row].bytes * cases[row].bytes;
+            unsigned value = (lane(a + 64 + start, cases[row].bytes) +
+                              lane(b + 64 + start, cases[row].bytes) + 1) /
+                             2;
+            int active =
+                !cases[row].masking || ((masks[m] >> (i / cases[row].bytes)) & 1);
+            uint8_t old = cases[row].destination == 1 ? a[64 + i] : b[64 + i];
+            uint8_t want =
+                i < cases[row].width
+                    ? (active ? (uint8_t)(value >> (8 * (i % cases[row].bytes)))
+                       : cases[row].masking == 2 ? 0
+                                                 : old)
+                : cases[row].legacy ? b[64 + i]
+                                    : 0;
+            if (out[64 + i] != want) {
+              fprintf(stderr, "row%u sample%d mask%llx byte%d got%x want%x\n", row,
+                      sample, (unsigned long long)masks[m], i, out[64 + i], want);
+              return 2;
+            }
+          }
+          for (int i = 0; i < 192; i++) {
+            if ((i < 64 || i >= 136) && out[i] != 0xc3) {
+              return 3;
+            }
+          }
+        }
+      }
     }
-   }
-   uint8_t beforeA[192],beforeB[192];
-   memcpy(beforeA,a,sizeof(a));memcpy(beforeB,b,sizeof(b));
-   uint32_t saved=_mm_getcsr(),profile=(uint32_t)(0x1f80|((sample%4)<<13)|(sample%64));
-   _mm_setcsr(profile);
-   uint64_t seed=status?UINT64_C(0x8d5):0;
-   cases[row].run(out+64,a+64,b+64,masks[m],seed);
-   uint32_t after=_mm_getcsr();
-   _mm_setcsr(saved);
-   uint64_t flags;
-   memcpy(&flags,out+128,8);
-   if(after!=profile||(flags&UINT64_C(0x8d5))!=seed||memcmp(a,beforeA,sizeof(a))||memcmp(b,beforeB,sizeof(b))) {
-    fprintf(stderr,"row%u sample%d CSR/flags/input\n",row,sample);return 1;
-   }
-   for(int i=0;i<64;i++) {
-    int start=i/cases[row].bytes*cases[row].bytes;
-    unsigned value=(lane(a+64+start,cases[row].bytes)+lane(b+64+start,cases[row].bytes)+1)/2;
-    int active=!cases[row].masking||((masks[m]>>(i/cases[row].bytes))&1);
-    uint8_t old=cases[row].destination==1?a[64+i]:b[64+i];
-    uint8_t want=i<cases[row].width?(active?(uint8_t)(value>>(8*(i%cases[row].bytes))):cases[row].masking==2?0:old):cases[row].legacy?b[64+i]:0;
-    if(out[64+i]!=want) {
-     fprintf(stderr,"row%u sample%d mask%llx byte%d got%x want%x\n",row,sample,(unsigned long long)masks[m],i,out[64+i],want);return 2;
-    }
-   }
-   for(int i=0;i<192;i++) if((i<64||i>=136)&&out[i]!=0xc3) return 3;
   }
- }
- puts("complete average bytes/flags/MXCSR/input/output canaries");
- return 0;
+  puts("complete average bytes/flags/MXCSR/input/output canaries");
+  return 0;
 }
 `
 
@@ -205,32 +235,56 @@ func TestCrossLinuxRuntimeMatrixX86PackedAverageInactiveMemory(t *testing.T) {
 #include <sys/resource.h>
 #include <unistd.h>
 int main(void) {
- struct rlimit core={0,0};
- if(setrlimit(RLIMIT_CORE,&core)) return 9;
- long size=sysconf(_SC_PAGESIZE);
- if(size<=0) return 10;
- uint8_t *page=mmap(0,(size_t)size*2,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANON,-1,0);
- if(page==MAP_FAILED||mprotect(page+size,(size_t)size,PROT_NONE)) return 11;
- _Alignas(64) uint8_t b[64],out[80];
- memset(b,0x91,64);
- for(unsigned row=0;row<sizeof(cases)/sizeof(cases[0]);row++) {
-  for(int active=0;active<2;active++) {
-   memset(out,0xc3,80);
-   uint8_t *a=page+size-(active?cases[row].bytes:0);
-   if(active) memset(a,0xff,(size_t)cases[row].bytes);
-   cases[row].run(out+1,a,b,(uint64_t)active,0);
-   for(int i=0;i<64;i++) {
-    unsigned value=(cases[row].bytes==1?255:65535)+(cases[row].bytes==1?0x91:0x9191)+1;
-    value/=2;
-    uint8_t want=i<cases[row].width?(active&&i<cases[row].bytes?(uint8_t)(value>>(8*(i%cases[row].bytes))):cases[row].masking==2?0:b[i]):0;
-    if(out[i+1]!=want) return 12;
-   }
-   for(int i=0;i<80;i++) if((i==0||i>=73)&&out[i]!=0xc3) return 13;
+  struct rlimit core = {0, 0};
+  if (setrlimit(RLIMIT_CORE, &core)) {
+    return 9;
   }
- }
- if(munmap(page,(size_t)size*2)) return 14;
- puts("inactive guard-page reads suppressed");
- return 0;
+  long size = sysconf(_SC_PAGESIZE);
+  if (size <= 0) {
+    return 10;
+  }
+  uint8_t *page =
+      mmap(0, (size_t)size * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+  if (page == MAP_FAILED || mprotect(page + size, (size_t)size, PROT_NONE)) {
+    return 11;
+  }
+
+  _Alignas(64) uint8_t b[64], out[80];
+  memset(b, 0x91, 64);
+  for (unsigned row = 0; row < sizeof(cases) / sizeof(cases[0]); row++) {
+    for (int active = 0; active < 2; active++) {
+      memset(out, 0xc3, 80);
+      uint8_t *a = page + size - (active ? cases[row].bytes : 0);
+      if (active) {
+        memset(a, 0xff, (size_t)cases[row].bytes);
+      }
+      cases[row].run(out + 1, a, b, (uint64_t)active, 0);
+      for (int i = 0; i < 64; i++) {
+        unsigned value = (cases[row].bytes == 1 ? 255 : 65535) +
+                         (cases[row].bytes == 1 ? 0x91 : 0x9191) + 1;
+        value /= 2;
+        uint8_t want = i < cases[row].width
+                           ? (active && i < cases[row].bytes
+                                  ? (uint8_t)(value >> (8 * (i % cases[row].bytes)))
+                              : cases[row].masking == 2 ? 0
+                                                        : b[i])
+                           : 0;
+        if (out[i + 1] != want) {
+          return 12;
+        }
+      }
+      for (int i = 0; i < 80; i++) {
+        if ((i == 0 || i >= 73) && out[i] != 0xc3) {
+          return 13;
+        }
+      }
+    }
+  }
+  if (munmap(page, (size_t)size * 2)) {
+    return 14;
+  }
+  puts("inactive guard-page reads suppressed");
+  return 0;
 }
 `
 	for _, level := range []string{"-O0", "-O2"} {
