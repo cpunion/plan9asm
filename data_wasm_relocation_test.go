@@ -80,20 +80,6 @@ func wasmDataTool(t *testing.T, name string) string {
 	if path := findLLVM22Tool(name); path != "" {
 		return path
 	}
-	// LLD is a separate package on some hosts, outside LLVM_CONFIG's bindir.
-	// An explicit version check still rejects every non-22 candidate.
-	if name == "wasm-ld" {
-		for _, candidate := range []string{name + "-22", name} {
-			path, err := exec.LookPath(candidate)
-			if err != nil {
-				continue
-			}
-			out, err := exec.Command(path, "--version").CombinedOutput()
-			if err == nil && llvm22ToolVersionRE.Match(out) {
-				return path
-			}
-		}
-	}
 	t.Fatalf("required LLVM 22 %s is unavailable", name)
 	return ""
 }
