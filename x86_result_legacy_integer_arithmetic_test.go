@@ -92,6 +92,27 @@ func TestX86LegacyIntegerArithmeticCompleteOriginalGoRows(t *testing.T) {
 	if got := strings.Join(inventory, ","); got != "APADDB:ymm,APADDL:ymm,APADDQ:yxm,APADDSB:ymm,APADDSW:ymm,APADDUSB:ymm,APADDUSW:ymm,APADDW:ymm,APSUBB:yxm,APSUBL:yxm,APSUBQ:yxm,APSUBSB:yxm,APSUBSW:yxm,APSUBUSB:yxm,APSUBUSW:yxm,APSUBW:yxm" {
 		t.Fatal("complete SDK legacy add/sub table changed", got)
 	}
+	for table, expected := range map[string]string{
+		"ymm": "Zm_r_xm:1:Ymm, Ymr;Zm_r_xm:2:Yxm, Yxr",
+		"yxm": "Zm_r_xm:1:Yxm, Yxr",
+	} {
+		body := regexp.MustCompile(`(?s)var ` + table + ` = \[\]ytab\{(.*?)\n\}`).FindStringSubmatch(string(data))
+		if len(body) != 2 {
+			t.Fatal("missing complete SDK operand table", table)
+		}
+		var actual []string
+		for _, row := range regexp.MustCompile(`\{(\w+), (\d+), argList\{([^}]+)\}\}`).FindAllStringSubmatch(body[1], -1) {
+			actual = append(actual, row[1]+":"+row[2]+":"+row[3])
+		}
+		if strings.Join(actual, ";") != expected {
+			t.Fatal("complete SDK operand rows changed", table, actual)
+		}
+	}
+	for _, class := range []string{"Yax", "Ycx", "Yrx", "Yrl", "Yrl32", "Ym", "Ymr"} {
+		if !strings.Contains(string(data), "ycover["+class+"*Ymax+Ymm] = 1") {
+			t.Fatal("Go physical MMX compatibility class changed", class)
+		}
+	}
 	aliases, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src", "cmd", "asm", "internal", "arch", "arch.go"))
 	if err != nil || !strings.Contains(string(aliases), `instructions["PADDD"] = x86.APADDL`) {
 		t.Fatal("actual Go PADDD alias changed", err)

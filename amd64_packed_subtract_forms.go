@@ -19,6 +19,10 @@ func x86PackedSubtractProperties(ins Instr, goarch string) (x86PackedSubtractFor
 	if !known {
 		return x86PackedSubtractForm{}, false, nil
 	}
+	if !vector {
+		form, _, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, goarch)
+		return x86PackedSubtractForm{form.x86PackedBinaryForm, bits, mode}, true, err
+	}
 	spec := x86PackedBinarySpec{encoding: x86PackedLogicalLegacyFP}
 	if vector {
 		spec.encoding, spec.zeroing = x86PackedLogicalVEXOrEVEX, true

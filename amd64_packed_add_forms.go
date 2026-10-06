@@ -33,6 +33,13 @@ func x86PackedWrappingAddProperties(ins Instr, goarch string) (x86PackedAddForm,
 	if !known {
 		return x86PackedAddForm{}, false, nil
 	}
+	if spec.encoding == x86PackedLogicalLegacyInteger || spec.encoding == x86PackedLogicalLegacyFP {
+		form, _, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, goarch)
+		if err == nil {
+			err = x86LegacyIntegerArithmeticEmitterContext(form, ins)
+		}
+		return x86PackedAddForm{form.x86PackedBinaryForm, spec}, true, err
+	}
 	form, err := x86PackedBinaryProperties(ins, goarch, spec.x86PackedBinarySpec)
 	if err == nil {
 		err = x86Mode32VectorRegisterContext(ins, goarch)

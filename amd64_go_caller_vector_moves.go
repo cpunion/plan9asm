@@ -232,6 +232,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if form, recognized, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch); recognized {
 		return 16, form.memoryWrite, err == nil && x86Mode32VectorRegisterContext(ins, arch) == nil && form.memory == index
 	}
+	if form, recognized, err := x86LegacyIntegerArithmeticProperties(ins.Op, ins, arch); recognized {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	}
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
 	}

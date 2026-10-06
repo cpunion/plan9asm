@@ -1033,6 +1033,8 @@ func TestExtractSupportedOpsFindsCompleteAddedInstructionFamilies(t *testing.T) 
 		t.Fatal(err)
 	}
 	want := []string{
+		"PADDB", "PADDW", "PADDL", "PADDD", "PADDQ", "PADDSB", "PADDSW", "PADDUSB", "PADDUSW",
+		"PSUBB", "PSUBW", "PSUBL", "PSUBQ", "PSUBSB", "PSUBSW", "PSUBUSB", "PSUBUSW",
 		"MOVOU", "MOVOA", "MOVO", "MOVUPS", "MOVAPS", "MOVUPD", "MOVAPD",
 		"ANDPS", "ANDPD", "ANDNPS", "ANDNPD", "ORPS", "ORPD", "XORPS", "XORPD",
 		"VANDPS", "VANDPD", "VANDNPS", "VANDNPD", "VORPS", "VORPD", "VXORPS", "VXORPD",
