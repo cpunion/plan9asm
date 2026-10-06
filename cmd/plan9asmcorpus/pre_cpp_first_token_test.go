@@ -13,10 +13,10 @@ import (
 )
 
 func TestPreCPPFirstStatementTokenMatchesGoParserGrammar(t *testing.T) {
-	for _, token := range []string{".", ":", ";", "(", ")", "[", "]", "$", "%", "?", "42", "1.5", "\"text\"", "'x'"} {
+	for _, token := range []string{".", ":", "(", ")", "[", "]", "$", "%", "?", "42", "1.5", "\"text\"", "'x'"} {
 		t.Run(token, func(t *testing.T) {
 			source := "// Original foreign dialect sample.\n/* license */\n" + token + " operand\n"
-			_, err := discoveryCPPConditionsFromBytes("foreign.s", []byte(source))
+			err := preCPPSourceSyntax("foreign.s", []byte(source))
 			var unsupported *discoveryUnsupportedCPPError
 			if !errors.As(err, &unsupported) || unsupported.File != "foreign.s" || unsupported.Line != 3 ||
 				unsupported.SHA256 != discoveryFeatureBytesSHA256([]byte(source)) || unsupported.Directive != token {
@@ -37,10 +37,10 @@ func TestPreCPPFirstTokenNeverClaimsPriorControlsOrLexicalErrors(t *testing.T) {
 		"#include \"unbound.h\"\n.section .text\n",
 		"#line 90 \"other.s\"\n.section .text\n",
 		"TEXT ·Probe(SB),4,$0-0\n.section .text\n",
-		". \"unterminated\n",
+		"\"unterminated\n",
 		"/* unterminated\n.section .text\n",
 	} {
-		_, err := discoveryCPPConditionsFromBytes("foreign.s", []byte(source))
+		err := preCPPSourceSyntax("foreign.s", []byte(source))
 		var unsupported *discoveryUnsupportedCPPError
 		if errors.As(err, &unsupported) {
 			t.Fatalf("prior CPP/code or lexical failure acquired a first-token proof: %q: %v", source, err)
@@ -50,9 +50,10 @@ func TestPreCPPFirstTokenNeverClaimsPriorControlsOrLexicalErrors(t *testing.T) {
 		"// .section is only a comment\nTEXT ·Probe(SB),4,$0-0\nRET\n",
 		"/* .section\n.text */\nTEXT ·Probe(SB),4,$0-0\nRET\n",
 		"\n\tTEXT ·Probe(SB),4,$0-0\nRET\n",
+		";\n;\tTEXT ·Probe(SB),4,$0-0\nRET\n",
 		"// Empty original assembly sibling.\n",
 	} {
-		if _, err := discoveryCPPConditionsFromBytes("valid.s", []byte(source)); err != nil {
+		if err := preCPPSourceSyntax("valid.s", []byte(source)); err != nil {
 			t.Fatalf("ordinary/empty source changed meaning: %v", err)
 		}
 	}
@@ -72,7 +73,7 @@ func TestPreCPPFirstTokenActualGoAssemblerAllArchitectures(t *testing.T) {
 				isDiscoveryGoBuildInfrastructureFailure(string(stderr)) {
 				t.Fatalf("actual Go source rejection missing on %s: %v\n%s\n%s", arch, err, stdout, stderr)
 			}
-			_, err = discoveryCPPConditionsFromBytes("foreign.s", []byte(source))
+			err = preCPPSourceSyntax("foreign.s", []byte(source))
 			var unsupported *discoveryUnsupportedCPPError
 			if !errors.As(err, &unsupported) || unsupported.Line != 1 || unsupported.Directive != "." {
 				t.Fatalf("actual first-token Go rejection was lost before CPP planning: %v", err)
