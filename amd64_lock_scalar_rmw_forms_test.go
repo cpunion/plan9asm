@@ -61,6 +61,9 @@ func TestX86LockScalarRMWCompleteGoTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := x86LockScalarEncoderCarrier(data); err != nil {
+		t.Fatal(err)
+	}
 	rows := regexp.MustCompile(`(?m)^\s*\{A((?:ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]),\s*(\w+),`).FindAllStringSubmatch(string(data), -1)
 	if len(rows) != 53 {
 		t.Fatalf("complete scalar LOCK opcode inventory changed: %d", len(rows))

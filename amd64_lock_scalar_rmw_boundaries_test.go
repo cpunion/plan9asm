@@ -53,7 +53,7 @@ func TestX86LockScalarRMWTypedRolesAgreeWithoutMemoryPermission(t *testing.T) {
 					effect.dynamicMemory != bitRegister {
 					t.Fatal("defined/preserved/killed flags or full bit-string memory role changed", effect)
 				}
-				for _, address := range []string{"p+0(FP)", "local-16(SP)"} {
+				for _, address := range []string{"p+0(FP)", "local-16(SP)", "0(SP)", "0(BP)", "1(SI)(BP*1)"} {
 					body := strings.Replace(row.text, "1(SI)", address, 1)
 					source := strings.Replace(x86NamedLockOracleSource(arch, "CLC\nLOCK\n"+body), "$0-", "$32-", 1)
 					x86LockScalarOriginalInstruction(t, arch, source)
@@ -64,6 +64,45 @@ func TestX86LockScalarRMWTypedRolesAgreeWithoutMemoryPermission(t *testing.T) {
 							t.Fatal("pure effect borrowed virtual FP/AUTO native backing", api, address, err)
 						}
 					}
+				}
+			})
+		}
+	}
+}
+
+func TestX86LockScalarRMWNativeBoundaryCannotBorrowVirtualOrMixedProof(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range x86LockScalarOracleForms(arch) {
+			t.Run(arch+"/"+row.text, func(t *testing.T) {
+				file, err := Parse(ArchAMD64, "TEXT ·f(SB),4,$32-0\n"+row.text+"\nRET\n")
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch)
+				if err != nil || !known {
+					t.Fatal(err)
+				}
+				// These are consumer-input mutations, not additional Go syntax
+				// acceptance claims. In particular, SP as an index is invalid.
+				for _, memory := range []MemRef{
+					{Base: SP}, {Base: BP}, {Base: SI, Index: SP, Scale: 1},
+					{Base: SI, Index: BP, Scale: 1}, {Base: SP, Sym: "local", Off: -16},
+				} {
+					changed := form
+					changed.destination = Operand{Kind: OpMem, Mem: memory}
+					if err := x86LockScalarNativeMemoryBound(changed, ins, arch); !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("native form boundary borrowed virtual frame backing", memory, err)
+					}
+				}
+				ins.x86UnboundAddressOverride = true
+				ctx, output := newAMD64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+				ctx.goarch, ctx.namedAtomicLock, ctx.lockScalarNS = arch, true, "__bound_"
+				before, temporary := output.String(), ctx.tmp
+				known, terminated, err := ctx.lowerLockScalarRMW(ins.Op, ins)
+				if !known || terminated || !errors.Is(err, ErrProbeNeedsContext) ||
+					before != output.String() || temporary != ctx.tmp {
+					t.Fatal("mixed unbound native marker borrowed another form's bridge", err)
 				}
 			})
 		}
