@@ -112,6 +112,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if form, known, err := x86WordMultiplyAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 			}
+			if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse2")
+				if form.spec.mode == amd64PackedWordMultiplyRoundedSignedHigh {
+					add("+ssse3")
+				}
+			}
 			if goarch == "386" {
 				// The signed default-rounding scalar bridge must use MXCSR,
 				// rather than LLVM's default i386 x87 conversion. Admit only

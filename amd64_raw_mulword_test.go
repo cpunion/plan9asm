@@ -241,16 +241,17 @@ func TestTranslateRawPackedWordMultiplyLLVM22Targets(t *testing.T) {
 					}
 				}
 				for vectorBits := 0; vectorBits < 3; vectorBits++ {
-					if target.goarch == "386" && vectorBits == 2 {
-						continue
-					}
 					mask := 3
 					zeroing := true
 					if target.goarch == "386" {
 						mask = 0
 						zeroing = false
 					}
-					appendBytes(encodeX86EVEXPackedWordMultiply(row.mapID, row.opcode, vectorBits, mask, false, zeroing, 21, 20, 22))
+					destination, second, first := 21, 20, 22
+					if target.goarch == "386" {
+						destination, second, first = 2, 1, 0
+					}
+					appendBytes(encodeX86EVEXPackedWordMultiply(row.mapID, row.opcode, vectorBits, mask, false, zeroing, destination, second, first))
 				}
 			}
 			source.WriteString("\tRET\n")

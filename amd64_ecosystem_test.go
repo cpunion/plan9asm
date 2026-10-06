@@ -745,7 +745,8 @@ func TestTranslate386PackedWordMultiplyCompleteGoAssemblerForms(t *testing.T) {
 		fmt.Fprintf(&src, "\t%s (AX), X1, X2\n", op)
 		fmt.Fprintf(&src, "\t%s Y0, Y1, Y2\n", op)
 		fmt.Fprintf(&src, "\t%s (AX), Y1, Y2\n", op)
-		fmt.Fprintf(&src, "\t%s X20, X21, X22\n", op)
+		fmt.Fprintf(&src, "\t%s Z0, Z1, Z2\n", op)
+		fmt.Fprintf(&src, "\t%s (AX), Z1, Z2\n", op)
 	}
 	src.WriteString("\tRET\n")
 	file, err := Parse(ArchAMD64, src.String())
@@ -807,7 +808,7 @@ func TestTranslate386PackedWordMultiplyRejectsArchitectureRestrictedForms(t *tes
 		"PMULHW (AX), M1",
 		"PMULHUW X8, X0",
 		"PMULHRSW X0, X8",
-		"VPMULLW Z0, Z1, Z2",
+		"VPMULLW Z8, Z1, Z2",
 		"VPMULHW X0, X1, K1, X2",
 		"VPMULHUW.Z X0, X1, K1, X2",
 	} {

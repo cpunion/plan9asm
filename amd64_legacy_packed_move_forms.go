@@ -89,6 +89,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, recognized, err := x86TypedLegacyIntegerArithmeticByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
+	if effect, recognized, err := x86TypedPackedWordMultiplyByteEffect(op, ins, arch); recognized {
+		return effect, recognized, err
+	}
 	return x86TypedLegacyPackedMoveByteEffect(op, ins, arch)
 }
 
