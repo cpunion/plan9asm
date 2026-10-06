@@ -93,6 +93,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 	// must use the same bounded lifecycle. Do not just fix the discovering case.
 	for _, name := range []string{
 		"toolchain_test.go",
+		"arm64_abi0_byte_region_witness_test.go",
 		"arm64_closed_tail_stdlib_test.go",
 		"stdlib_arm64_test_helpers_test.go",
 		"llvm_object_lifecycle_unix_test.go",
