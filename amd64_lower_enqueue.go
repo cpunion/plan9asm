@@ -73,8 +73,6 @@ func (c *amd64Ctx) lowerEnqueue(op Op, ins Instr) (bool, bool, error) {
 		status, strings.ToLower(base)+" "+assemblySource+", $2; sete $0",
 		"=q,*m,r,~{memory},~{dirflag},~{fpsr},~{flags}", ptrType, ptr, wordType, destination)
 	c.storeSegmentQueryZF("%" + status)
-	for _, slot := range []string{c.flagsCFSlot, c.flagsOFSlot, c.flagsSltSlot, c.flagsPFSlot} {
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", slot)
-	}
+	c.clearX86StatusFlags(x86StatusAll &^ x86StatusZF)
 	return true, false, nil
 }

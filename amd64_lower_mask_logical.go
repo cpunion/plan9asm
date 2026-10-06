@@ -136,14 +136,12 @@ func (c *amd64Ctx) lowerMaskLogicalFlags(spec amd64MaskLogicalSpec, first, secon
 		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %%%s\n", andNot, first, notSecond)
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %%%s, 0\n", carry, andNot)
 	} else {
-		and := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = and i64 %s, %s\n", and, first, second)
-		fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %%%s, %s\n", carry, and, amd64MaskWidthLiteral(spec.bits))
+		// KORTEST observes the same OR result for both flags: zero for ZF,
+		// all width-selected bits set for CF. KTEST's AND-NOT stays separate.
+		fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %%%s, %s\n", carry, combined, amd64MaskWidthLiteral(spec.bits))
 	}
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carry, c.flagsCFSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+	c.clearX86StatusFlags(x86StatusAll &^ (x86StatusCF | x86StatusZF))
 	return nil
 }
 

@@ -14,7 +14,7 @@ type amd64PackedStringCompareSpec struct {
 // amd64PackedStringCompareSpecs models Go 1.27's complete SSE4.2 packed-string
 // grammar as three independent axes: explicit/implicit lengths, index/mask
 // result, and legacy/VEX encoding. Every spelling shares the same imm8 and
-// X/m128 operand grammar and the same five architectural flag results.
+// X/m128 operand grammar and the same six architectural flag results.
 var amd64PackedStringCompareSpecs = map[Op]amd64PackedStringCompareSpec{
 	"PCMPESTRI":  {explicitLength: true},
 	"PCMPESTRM":  {explicitLength: true, maskResult: true},
@@ -107,12 +107,12 @@ func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminat
 	overflow := c.emitPackedStringCompareFlag(stem+"strio128", left, right, lengthLeft, lengthRight, imm)
 	sign := c.emitPackedStringCompareFlag(stem+"stris128", left, right, lengthLeft, lengthRight, imm)
 	zero := c.emitPackedStringCompareFlag(stem+"striz128", left, right, lengthLeft, lengthRight, imm)
-	signedLess := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = xor i1 %s, %s\n", signedLess, sign, overflow)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", carry, c.flagsCFSlot)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", zero, c.flagsZSlot)
-	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", signedLess, c.flagsSltSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
+	// This slot stores architectural SF. Signed conditions apply SF XOR OF
+	// when observing it; precomputing that condition would corrupt PUSHF/LAHF.
+	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", sign, c.flagsSltSlot)
+	c.clearX86StatusFlags(x86StatusPF | x86StatusAF)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", overflow, c.flagsOFSlot)
 	return true, false, nil
 }

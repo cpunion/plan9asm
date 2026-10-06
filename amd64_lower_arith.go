@@ -56,6 +56,18 @@ type x86FlagSlot struct {
 	bit  uint
 }
 
+type x86StatusFlagMask uint16
+
+const (
+	x86StatusCF  x86StatusFlagMask = 1 << 0
+	x86StatusPF  x86StatusFlagMask = 1 << 2
+	x86StatusAF  x86StatusFlagMask = 1 << 4
+	x86StatusZF  x86StatusFlagMask = 1 << 6
+	x86StatusSF  x86StatusFlagMask = 1 << 7
+	x86StatusOF  x86StatusFlagMask = 1 << 11
+	x86StatusAll                   = x86StatusCF | x86StatusPF | x86StatusAF | x86StatusZF | x86StatusSF | x86StatusOF
+)
+
 func (c *amd64Ctx) x86StatusFlagSlots() []x86FlagSlot {
 	return []x86FlagSlot{
 		{c.flagsCFSlot, 0},
@@ -76,6 +88,16 @@ func (c *amd64Ctx) x86FlagSlots() []x86FlagSlot {
 		flags = append(flags, x86FlagSlot{c.flagsIDSlot, 21})
 	}
 	return flags
+}
+
+// Clear exactly the ISA-defined status bits. Reusing the complete slot model
+// prevents a consumer's hand-written subset from silently omitting AF.
+func (c *amd64Ctx) clearX86StatusFlags(mask x86StatusFlagMask) {
+	for _, flag := range c.x86StatusFlagSlots() {
+		if mask&(1<<flag.bit) != 0 {
+			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", flag.slot)
+		}
+	}
 }
 
 // The carry/borrow into bit 4 equals bit 4 of a XOR b XOR result. The final
@@ -1061,10 +1083,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		zero := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i%d %s, 0\n", zero, bits, srcv)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zero, c.flagsZSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		c.clearX86StatusFlags(x86StatusAll &^ x86StatusZF)
 		return true, false, c.storeRegSized(ins.Args[1].Reg, typ, "%"+call)
 
 	case "TZCNTW", "TZCNTL", "TZCNTQ":

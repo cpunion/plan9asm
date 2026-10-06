@@ -162,10 +162,7 @@ func (c *amd64Ctx) emitRTM(bi int, ii int, op string, spec amd64RTMSpec, form am
 		zero := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = icmp eq i32 %%%s, 0\n", zero, active)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", zero, c.flagsZSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsCFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+		c.clearX86StatusFlags(x86StatusAll &^ x86StatusZF)
 	default:
 		panic("unknown amd64 RTM kind")
 	}

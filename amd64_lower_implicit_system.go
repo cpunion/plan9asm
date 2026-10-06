@@ -178,9 +178,7 @@ func (c *amd64Ctx) emitImplicitSystem(op string, spec amd64ImplicitSystemSpec, f
 		fmt.Fprintf(c.b, "  %%%s = trunc i8 %%%s to i1\n", carry, call)
 		fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carry, c.flagsCFSlot)
 		// WAITPKG defines CF and clears the other arithmetic flags (Intel SDM).
-		for _, slot := range []string{c.flagsZSlot, c.flagsSltSlot, c.flagsPFSlot, c.flagsOFSlot} {
-			fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", slot)
-		}
+		c.clearX86StatusFlags(x86StatusAll &^ x86StatusCF)
 		return true, false, nil
 	}
 	if spec.outputs == amd64ImplicitAX|amd64ImplicitDX {

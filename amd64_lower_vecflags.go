@@ -99,10 +99,8 @@ func (c *amd64Ctx) lowerVectorTest(op Op, ins Instr) (ok bool, terminated bool, 
 
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", zero, c.flagsZSlot)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", carry, c.flagsCFSlot)
-	// Intel defines OF, SF, and PF as cleared for all four instructions.
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsSltSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsPFSlot)
-	fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", c.flagsOFSlot)
+	// All four instructions compute CF/ZF and clear AF/OF/SF/PF.
+	c.clearX86StatusFlags(x86StatusAll &^ (x86StatusCF | x86StatusZF))
 	return true, false, nil
 }
 

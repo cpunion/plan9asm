@@ -7,8 +7,7 @@ import (
 
 // lowerHardwareRandom implements every Go 1.27 yrdrand form for both the
 // RDRAND and RDSEED instruction families. Both instructions return success in
-// CF and architecturally clear OF, SF, ZF, AF, and PF; AF is not otherwise
-// modeled by the translator.
+// CF and architecturally clear OF, SF, ZF, AF, and PF.
 func (c *amd64Ctx) lowerHardwareRandom(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	rawOp := strings.ToUpper(string(op))
 	baseOp := rawOp
@@ -71,8 +70,6 @@ func (c *amd64Ctx) lowerHardwareRandom(op Op, ins Instr) (ok bool, terminated bo
 	carry := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = icmp ne i32 %%%s, 0\n", carry, status)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", carry, c.flagsCFSlot)
-	for _, slot := range []string{c.flagsOFSlot, c.flagsSltSlot, c.flagsZSlot, c.flagsPFSlot} {
-		fmt.Fprintf(c.b, "  store i1 false, ptr %s\n", slot)
-	}
+	c.clearX86StatusFlags(x86StatusAll &^ x86StatusCF)
 	return true, false, nil
 }
