@@ -54,9 +54,72 @@ func TestX86CPUQueryTypedGrammarAndDispatchBoundaries(t *testing.T) {
 	}
 }
 
+func TestX86CPUQueryConstructedFileConsumersRetainParserGrammar(t *testing.T) {
+	pkg := mustGoPackage(t, "cpuquery", "package cpuquery\nfunc query()\n")
+	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
+	for _, arch := range []string{"386", "amd64"} {
+		for _, op := range []Op{OpCPUID, OpXGETBV} {
+			for _, operand := range []string{"AX", "(AX)", "$1", "AX,DX"} {
+				t.Run(arch+"/"+string(op)+"/"+operand, func(t *testing.T) {
+					file, err := Parse(ArchAMD64, "TEXT ·query(SB),4,$0-0\n"+string(op)+"\nRET\n")
+					if err != nil {
+						t.Fatal(err)
+					}
+					signatures, err := goSigsForAsmFile(pkg, file, resolve, arch, nil, nil, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					file.Funcs[0].Instrs[1].Args, err = parseOperandsCSV(ArchAMD64, op, operand)
+					if err != nil {
+						t.Fatal(err)
+					}
+					before := fmt.Sprintf("%#v", file.Funcs[0])
+					options := Options{Goarch: arch, ResolveSym: resolve, Sigs: signatures}
+					if ir, err := Translate(file, options); err == nil || ir != "" {
+						t.Fatal("constructed text consumer bypassed Go's zero-operand grammar", err)
+					}
+					ctx := llvm.NewContext()
+					defer ctx.Dispose()
+					module, err := TranslateModuleInContext(ctx, file, options)
+					if !module.IsNil() {
+						defer module.Dispose()
+						t.Fatal("constructed module consumer returned an invalid query module", err)
+					}
+					if err == nil || before != fmt.Sprintf("%#v", file.Funcs[0]) {
+						t.Fatal("constructed module grammar changed its source or silently accepted it", err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86CPUQueryDescriptorCannotSupplyCallerOrStackPermission(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		move, suffix := OpMOVQ, "Q"
+		if arch == "386" {
+			move, suffix = OpMOVL, "L"
+		}
+		for _, op := range []Op{OpCPUID, OpXGETBV} {
+			instruction := Instr{Op: op, Raw: string(op)}
+			if _, known, err := x86CPUQueryProperties(op, instruction, arch); !known || err != nil {
+				t.Fatal("valid CPU-query grammar is not bound", op, err)
+			}
+			if x86SourceStackInstructionKnown(instruction, move, suffix, arch) {
+				t.Fatal("implicit-register descriptor granted a native caller/stack contract", op)
+			}
+		}
+	}
+}
+
 func x86CPUQueryIR(t *testing.T, source, arch, triple, api string) string {
 	t.Helper()
-	pkg := mustGoPackage(t, "cpuquery", "package cpuquery\nfunc query()\n")
+	return x86CPUQueryIRFromDeclaration(t, source, "func query()\n", arch, triple, api)
+}
+
+func x86CPUQueryIRFromDeclaration(t *testing.T, source, declarations, arch, triple, api string) string {
+	t.Helper()
+	pkg := mustGoPackage(t, "cpuquery", "package cpuquery\n"+declarations)
 	resolve := func(symbol string) string { return strings.TrimPrefix(symbol, "·") }
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()

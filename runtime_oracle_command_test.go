@@ -132,6 +132,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_timestamp_runtime_test.go",
 		"amd64_cpu_query_consumers_test.go",
 		"amd64_cpu_query_runtime_unix_test.go",
+		"amd64_cpu_query_native_reference_test.go",
+		"amd64_cpu_query_linux_amd64_test.go",
 		"amd64_timestamp_linux_amd64_test.go",
 		"amd64_timestamp_rule_consumers_test.go",
 		"amd64_undefined_trap_consumers_test.go",
