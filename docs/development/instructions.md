@@ -274,6 +274,10 @@ those derived LEAs and ordinary physical memory must reject unencodable SIB
 indexes/scales. Audited TYPE_CONST rows instead ignore Reg/Index annotations.
 Do not apply the ordinary SIB guard to named, segment/TLS, branch or decoded
 physical roles, or let source normalization repair an original CFG certificate.
+Unnamed address-immediate register groups retain the source `g` spelling until
+the actual source mode is known. Go registers this alias only for amd64; 386
+still accepts explicit `R14` annotations that its TYPE_CONST rows ignore.
+Qualifying the alias grants neither a register input nor a native address.
 
 The main implementation entry points are:
 

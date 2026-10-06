@@ -525,6 +525,22 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 			return operand, nil
 		}
 	}
+	if arch == ArchAMD64 && strings.HasPrefix(strings.TrimSpace(s), "$") {
+		original := strings.TrimSpace(s)
+		normalized := normalizeGoGRegister(arch, original)
+		if normalized != original {
+			body := strings.TrimSpace(strings.TrimPrefix(normalized, "$"))
+			if _, matched, err := parseX86SourceRegisterMemory(body); matched {
+				if err != nil {
+					return Operand{}, err
+				}
+				// This parser also serves 386. Preserve the original g token
+				// until the source row knows its actual architecture; an
+				// ignored R14 annotation is legal in 386 constant classes.
+				return Operand{Kind: OpSym, Sym: original}, nil
+			}
+		}
+	}
 	s = normalizeGoGRegister(arch, s)
 	if arch == ArchARM || arch == ArchARM64 {
 		s = normalizeARMParenthesizedRegisters(arch, s)
@@ -587,7 +603,8 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 // Go's frontend assigns a different physical register to g on each ISA.
 // Normalize only register positions, including an
 // address immediate or indirect branch. A symbol such as g(SB) stays intact.
-// The shared x86 parser also serves 386; its operand validators reject R14.
+// The shared x86 parser also serves 386. Unnamed address immediates retain
+// their original g spelling for mode qualification before constant rewriting.
 func normalizeGoGRegister(arch Arch, source string) string {
 	if !strings.Contains(source, "g") {
 		return source

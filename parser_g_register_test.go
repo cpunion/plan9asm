@@ -19,7 +19,7 @@ func TestParseAMD64GRegisterAlias(t *testing.T) {
 		{"*(g)", Operand{Kind: OpMem, Mem: MemRef{Base: "R14"}}},
 		{"8(BX)(g*4)", Operand{Kind: OpMem, Mem: MemRef{Base: BX, Index: "R14", Scale: 4, Off: 8}}},
 		{"g<>(SB)(g*8)", Operand{Kind: OpMem, Mem: MemRef{Sym: "g<>(SB)", Index: "R14", Scale: 8}}},
-		{"$8(g)", Operand{Kind: OpSym, Sym: "$8(R14)"}},
+		{"$8(g)", Operand{Kind: OpSym, Sym: "$8(g)"}},
 		{"g(SB)", Operand{Kind: OpSym, Sym: "g(SB)"}},
 		{"$g(SB)", Operand{Kind: OpSym, Sym: "$g(SB)"}},
 	} {

@@ -25,6 +25,22 @@ func x86UnnamedSourceAddress(operand Operand) (memory MemRef, matched bool, err 
 	return memory, true, nil
 }
 
+func x86UnnamedSourceAddressInMode(operand Operand, arch string) (MemRef, bool, error) {
+	if operand.Kind != OpSym || !strings.HasPrefix(strings.TrimSpace(operand.Sym), "$") {
+		return x86UnnamedSourceAddress(operand)
+	}
+	normalized := operand
+	normalized.Sym = normalizeGoGRegister(ArchAMD64, operand.Sym)
+	memory, matched, err := x86UnnamedSourceAddress(normalized)
+	if err != nil || !matched || normalized.Sym == operand.Sym {
+		return memory, matched, err
+	}
+	if arch != "amd64" {
+		return MemRef{}, true, fmt.Errorf("x86 source g register annotation is not registered in %s mode: %q", arch, operand.Sym)
+	}
+	return memory, true, nil
+}
+
 // registerIndirect leaves a missing second-group multiplier at zero. This is
 // valid parser metadata, not an encodable SIB scale. TYPE_CONST may ignore it;
 // physical memory and MOVL/Q's derived LEA must validate it independently.
@@ -139,7 +155,7 @@ func normalizeX86SourceIntegerAddress(ins Instr, arch string) (Instr, bool, erro
 	var index = -1
 	var memory MemRef
 	for position, operand := range ins.Args {
-		address, matched, err := x86UnnamedSourceAddress(operand)
+		address, matched, err := x86UnnamedSourceAddressInMode(operand, arch)
 		if err != nil {
 			return ins, false, err
 		}
