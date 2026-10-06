@@ -2,9 +2,9 @@
 
 Read [validation](validation.md), [instruction families](instructions.md), and
 [discovery verification](discovery-verification.md). Locate persistent worktrees
-with Git. Never edit a running frozen source, tool or ledger snapshot.
+with Git. Never edit a running source, tool or ledger snapshot.
 
-## Contribution and published CI
+## Contribution boundary
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
 targeting `codex/expand-ecosystem-corpus-20260913`, not fork main. Push only to
@@ -14,118 +14,107 @@ remains Draft.
 
 Published fork source `47ea649d` failed all six priority discovery shards and
 the aggregate in completed run `36942816488`. Policy preflight passed;
-downstream skipped jobs did not pass. Historical reports remain evidence,
-not success for local repairs. Preserve failure-first scheduling and all
-64 required shards.
+downstream skipped jobs did not pass. Preserve failure-first scheduling and
+all 64 required shards. The read-only upstream main check still resolves to
+`e2164ac0`; inspect again before final publication.
 
-## Current local integration
+## Current integration
 
-Use branch `codex/pr40-complete-go-rule-families-20261006`.
-Its reviewed parent `688267e8` integrates the earlier `82bccde5` mechanism
-repairs, complete query-only CPP fixture transport and packed unsigned averages.
-The branch additionally integrates the bounded exhaustive worker implementation,
-shared x86 address/memory roles, complete packed integer comparison grammar/
-effects, and the complete named scalar LOCK RMW family. Conflict resolution
-preserves the unsigned-average consumers as well as comparison consumers.
-Main is the sole assembly-ledger writer.
+Use branch `codex/pr40-rule-and-module-integration-20261007`.
+Its `8125c3dd` checkpoint contains the reviewed complete comparison/LOCK and
+memory-role rules, grouped symbol/PUSH source roles, FP observation fixtures,
+scalar self-XOR byte effects, ABI0 byte-region boundary fixtures, and exhaustive
+main-module CI ownership with real LLVM/Node/wasm dependency observations.
 
-The full-root replay found the direct MRS arity fixture still used AMD64.
-Its test-only repair now binds every case to its explicit architecture and
-owns/disposes its LLVM context. The ARM64 result-tail audit is also integrated;
-it deliberately grants no padding or caller permission. Fresh combined gates
-are required for these later commits.
+The shared self-XOR effect recognizes only identical validated register
+operands, preserves exact written bytes and flags, and no longer consumes
+undefined input for a true zero idiom. It grants no caller or memory authority.
+The ABI0 fixtures retain observable native result tails; they do not authorize
+discarding them. The module runner exhaustively owns root, corpus and all other
+main-module packages; nested CLIs and required native jobs remain separate.
+Its portable verifier uses captured byte identities without requiring the
+producer's filesystem to remain mounted at aggregation time.
 
-The underlying repairs preserve exact original source, actual SDK/tool/config
-roles, native backing, ABI0 declarations, initialized bytes, code-address
-continuations, and profile-scoped Go/CPP/LLVM provenance. Typed grammars and
-effect consumers share complete forms without granting new source permissions.
-Raw decoding keeps encoder identity and architecture-specific effects separate.
-Wasm never receives `blockaddress`. LLVM 22 is mandatory.
+Reviewed leaf evidence is revision-specific, not combined success:
 
-Closed evidence at exact earlier snapshots:
+- `927e6d6e`: complete first-party corpus-driver race suite, 32 partitions,
+  548 roots / 1,904 children, no failures/skips/missing terminals. This is not
+  discovered external-library compilation.
+- `0c020fc1`: complete grouped-symbol/PUSH gates passed both SDKs. All five
+  official architecture scans closed on Go 1.27 and complete Go 1.20; the
+  historical maskless EVEX zeroing exception remains explicit.
+- `197a3976`: complete FP-width observation gates passed both SDKs,
+  eight roots / 288 children; the stale unknown-width assertion was corrected.
+- `85213ffd`: scalar self-XOR narrow and complete affected-family gates passed
+  both SDKs; the complete gate has 64 roots / 6,079 children, no failures/skips.
+- `b820b331`: ABI0 byte-region and actual Windows executable-naming fixtures
+  passed both SDKs; 573 children per SDK. Linux test selection and Windows PE
+  build observations do not certify execution on those platforms.
+- `07c0e088` and `51a7369b`: exhaustive module and dependency mechanisms passed
+  both SDKs, 45 runner roots / 81 children plus seven policy roots per SDK,
+  full module vet/build and independent frozen readbacks. The corrected
+  ignored auditor rejects unknown compiler build diagnostics. Cold-download,
+  missing-runtime and retired-producer-origin failures remain retained.
 
-- `82bccde5`: current SDK 93 roots / 1,186 children; historical SDK 92 roots /
-  1,186 children. No failures, skips or missing terminals.
-- `688267e8`: current SDK 133 roots / 1,903 children and historical SDK
-  132 roots / 1,903 children passed complete focused race, module vet and build
-  guards. Both closed runs were independently read twice.
-- Worker leaf `005018f6`: both current and official historical SDKs passed
-  the complete runner package, 30 roots / 44 children each, with race, full
-  module vet/build and closed process ownership. Actual CLI tests prove bounded
-  concurrency, exhaustive execution, failure continuation and coverage merging.
-- `927e6d6e`: the complete corpus-driver package passed all 32 race partitions,
-  548 roots / 1,904 children, no Skip or missing outcomes, in 41m49.664s.
-- `879feae6`: both SDKs passed seven address/memory-role roots / 2,461 children.
-  Real failures exposed shared classification, direct symbolic pointer sinks,
-  and x87 integer-load bypasses; all legitimate memory object controls remain.
-- Comparison leaf `9d7755fc`: both SDKs passed 85 roots / 8,739 children;
-  main independently rechecked the frozen receipts before integration.
-- LOCK leaf `b68e4d97`: both SDKs passed 101 roots / 5,612 children, no Skip;
-  main's separate physical collector rechecked all 24 closed command stages.
-  The leaf's before/after tool guard covers 33 selected inputs, not the full
-  SDK. The new integrated replay must supply full SDK guards independently.
+Ignored `_out/` artifacts retain actual inventories, raw JSON, command exits,
+source/SDK/tool manifests, effective environments and closed process ownership.
+A transient late PID probe failed during main's independent dependency review;
+the original failure is retained and a fresh complete readback closed.
+Do not kill a process merely because its numeric PID matches an old receipt.
 
-These are revision-specific mechanism/package gates, not full current-head
-module, native Linux, external-library or ledger passes. Ignored `_out/`
-artifacts retain raw JSON, original failures, complete source/SDK/tool manifests,
-actual environments, command receipts and independent reader results.
-
-## Parallel family work
+## Remaining family work
 
 Existing agents own separate persistent leaves:
 
-- Unnamed x86 TYPE_ADDR: bind the actual frontend before encoding. Go's
-  MOVL/Q progedit can rewrite to LEA, while narrow/other immediate roles differ;
-  literal normalization must not grant memory or caller permissions.
-- Module-wide exhaustive CI: preserve the actual package and test inventories,
-  original flags/deadlines and complete package coverage; avoid replacing the
-  corpus timeout with an overlong single job.
-- Remaining strict standard-library contracts: reproduce the actual complete
-  five-target failures, then repair only source-backed mechanisms. Caller,
-  closure-register, runtime-entry and result-padding permissions remain strict.
+- Complete unnamed x86 TYPE_ADDR and ordinary grouped-address grammar:
+  preserve Go's absent-star Index/Scale0 role instead of coercing it to Scale1.
+  Real MOVL/Q and LEA counterexamples require the whole source grammar repair.
+  ARM/ARM64 parsing and named SB/FP/AUTO permissions must not be widened.
+- Scalar FP byte views: MOVSS/SD and VMOVSS/SD must use exact declared byte
+  spans across integer/floating fields and suboffsets, preserving bit patterns,
+  initialized result bytes, input permissions and holes.
+- ARM64 snappy source CFG: reproduce the exact large-frame encodeBlock LR
+  failure and compare original Go prologue/epilogue and all reaching paths.
+  Official instruction tables alone do not prove continuation preservation.
 
-Review each entire final diff and independently recheck its frozen evidence
-before integration. Do not cherry-pick a still-running source or infer combined
-success from separate leaves. Required Linux native original-Go/LLVM mathematical
-and fault counterparts remain distinct from Darwin/Rosetta diagnostics.
+Review each complete final diff and independently recheck its frozen evidence
+before integration. Do not cherry-pick live sources or infer combined success
+from separate leaves. Main is the sole assembly-ledger writer.
 
-## Full-suite failures and required work
+## Whole-suite and native boundaries
 
-Original frozen source `7a9e69ac` completed 32 root partitions with 4,634 listed
-roots: 4,583 passed, 11 failed, 40 skipped. The failed architecture fixtures,
-mode32 vector forms, CPU IR assertions and missing separate LLVM 22 wasm linker
-have dedicated repairs. Preserve the original failed report.
+The original full-root run at `29cdea5f` closed all 32 partitions with
+4,718 actual roots: 4,677 passed, two failed, 39 host-inapplicable skipped;
+55,712 children passed. Both failures have later focused repairs above, but
+the unchanged original report remains failed. A fresh complete integration
+replay, every other main-module package and both nested CLIs are still required.
 
-Its unpartitioned corpus-driver race package expired at 45 minutes. Its separate
-547-root partition replay retained a real CPP fixture failure. The repaired
-927 snapshot's complete 548-root race replay passed; that does not promote
-either old failed run or certify a later combined source.
-Use the reviewed ordinary runner's bounded `-workers` option for fresh suites,
-retaining identical flags, complete actual inventory and original deadlines.
+The strict five-target benchmark at `0c020fc1` attempted all 184 files:
+172 compiled and 12 failed, no skipped or unattempted files. Remaining contracts
+include dynamic reflect callers, native runtime/context-switch entry state,
+closure registers, syscall/TLS continuation/backing and ARM64 observable
+result tails. Do not invent frames/padding or borrow llgo's different provider.
+The `fa88a9ca` source/object audit reproduces both Or32 and And32 on all three
+APIs and five ARM64 targets; 30 blocked translations are not LLVM objects.
 
-The strict five-target benchmark at `7a9e69ac` attempted all 184 files:
-170 passed and 14 failed. Remaining contracts include dynamic reflect caller
-frames, native runtime/context-switch entry state, reserved closure registers,
-syscall continuation/backing, and observable ARM64 result padding. They cannot
-be fixed by inventing frames, granting padding, or borrowing llgo's different
-runtime provider. LOCK repairs require fresh benchmark replay.
-
-Before publication, freeze the complete batch and run root and every other
-module package, both nested CLIs, race/coverage, all five official gates,
-strict standard-library/benchmark, all 64 discovery shards and required native
-runtime jobs. Keep prior timeout/failure evidence. Classification coverage is
-not complete encoder-form, object, native-runtime or library coverage.
+Before publication freeze the complete batch and run root and all other module
+packages, both nested CLIs, race/coverage, official/stdlib/benchmark gates,
+all 64 discovery shards and required native runtime owners. Required Linux
+original-Go/LLVM mathematical and fault counterparts remain distinct from
+Darwin/Rosetta or emulated Linux diagnostics. Wasm must never use blockaddress.
 
 ## Inventory and ledger
 
-The committed continuous Index interval is `2025-10-01T00:00:00Z` through
-`2026-09-22T22:43:08Z`. It is not the whole Index or later updates.
-Standalone inventory has newer unsynchronized records; cgo remains outside
-this repository. Do not import or resume scans into a ledger used by a live gate.
+Committed Index continuity is `2025-10-01T00:00:00Z` through
+`2026-09-22T22:43:08Z`, not the entire Index or later updates. Standalone
+inventory has unsynchronized newer records; cgo remains outside this repository.
+Do not import/resume scans into a ledger used by a live gate.
 
-Use the automatic writer only on independently validated fresh reports with
-matching source/ledger/tool provenance, then independently read its result.
-Missing shards remain pending, genuine failures remain failed, reviewed skips
-retain exact reasons, and inspection failures remain retries. Never copy old
-passes into a new revision. Keep funnel tables in the PR body, not this guide.
-Remove owned package/build caches only after every writer and descendant exits.
+The older external 64-shard owner at `6ed5be69` is still live. Preserve its
+cache and reports; its progress cannot certify the current integration.
+Use the automatic ledger writer only on independently validated fresh reports
+with matching source/ledger/tool provenance, then independently read the result.
+Missing coverage remains pending, genuine failures remain failed, reviewed skips
+retain exact reasons and inspection failures remain retries. Keep scan/coverage
+funnel tables in the PR body, not this guide. Remove only owned caches after
+every writer and descendant has ended.

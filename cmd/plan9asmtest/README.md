@@ -92,9 +92,10 @@ GOFLAGS= go run ./cmd/plan9asmtest \
 
 This runs the corpus driver's Go tests, not the discovered-library corpus.
 
-This covers **only the root package**, not root `./...`, the nested CLI
-modules, strict stdlib/object gates or cross-runtime jobs. Those still require
-their existing complete commands. To run every other root-module package
+Ordinary single-package mode covers **only its selected package**, not root
+`./...`, the nested CLI modules, strict stdlib/object gates or cross-runtime
+jobs. Module mode covers all main-module packages, but the other independent
+gates remain required. Without module mode, run every other main-module package
 without repeating the root:
 
 ```sh
