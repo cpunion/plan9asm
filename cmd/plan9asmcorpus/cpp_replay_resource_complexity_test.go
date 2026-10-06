@@ -1,11 +1,95 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestCPPOriginalConsumerReusesParsedSourceResources(t *testing.T) {
+	parsed := cppResourceComplexityFixture(t, 16)
+	data, err := json.Marshal(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored discoveryCPPInputs
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	want, err := discoveryCPPOriginalConsumerInput(&restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := discoveryCPPOriginalConsumerInput(parsed)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("parsed and portable originals produce different consumers: %v", err)
+	}
+	measure := func(inputs *discoveryCPPInputs) float64 {
+		return testing.AllocsPerRun(1, func() {
+			if _, err := discoveryCPPOriginalConsumerInput(inputs); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	warm, cold := measure(parsed), measure(&restored)
+	t.Logf("query allocations: parsed=%g; restored=%g", warm, cold)
+	// Restored JSON has no private lexer index and must parse the complete
+	// originals. A captured source must not pay that cost for each profile.
+	if cold == 0 || warm > cold/8 {
+		t.Fatalf("captured originals are lexed again for every query: %g > %g / 8", warm, cold)
+	}
+}
+
+func TestCPPParsedSourceResourcesRemainFreshAndOwned(t *testing.T) {
+	text := "#include \"literal.h\"\nDATA ·name(SB)/8,$\"candidate.h\"\n"
+	source, err := discoveryReplayCPPSource("pkg/native.s", []byte(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := &discoveryCPPInputs{Protocol: discoveryReplayCPPInputsProtocol}
+	for _, fixture := range []struct {
+		name   string
+		mutate func(*discoveryCPPSource)
+	}{
+		{"unchanged", func(*discoveryCPPSource) {}},
+		{"file", func(s *discoveryCPPSource) { s.File = "other/native.s" }},
+		{"hash", func(s *discoveryCPPSource) { s.SHA256 = strings.Repeat("0", 64) }},
+		{"original", func(s *discoveryCPPSource) {
+			changed := *s.Original + "DATA ·other(SB)/8,$\"new.h\"\n"
+			s.Original = &changed
+		}},
+		{"directives", func(s *discoveryCPPSource) { s.Directives[0].Include = "candidate.h" }},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			changed := source
+			changed.Directives = append([]discoveryCPPDirective(nil), source.Directives...)
+			fixture.mutate(&changed)
+			data, err := json.Marshal(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var restored discoveryCPPSource
+			if err := json.Unmarshal(data, &restored); err != nil {
+				t.Fatal(err)
+			}
+			want, err := discoveryCPPRegisteredResources(inputs, restored)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := discoveryCPPRegisteredResources(inputs, changed)
+			if err != nil || !reflect.DeepEqual(got, want) || len(got) == 0 {
+				t.Fatalf("query reused stale source resources: got=%+v want=%+v error=%v", got, want, err)
+			}
+			got[0].directive.Include = "forged.h"
+			again, err := discoveryCPPRegisteredResources(inputs, changed)
+			if err != nil || !reflect.DeepEqual(again, want) {
+				t.Fatalf("returned resources alias the private source index: %v", err)
+			}
+		})
+	}
+}
 
 // This fixture measures query-graph construction, not source authentication or
 // assembly coverage. Increasing independent units must not multiply the lexer
