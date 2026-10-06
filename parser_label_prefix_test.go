@@ -64,7 +64,7 @@ func TestParseLabelPrefixFamilyOriginalGoAndLLVMObjects(t *testing.T) {
 						}
 						ir, err := Translate(file, Options{
 							Goarch: target.goarch, TargetTriple: target.triple,
-							Sigs: map[string]FuncSig{"·Probe": {Name: "Probe", Ret: Void}},
+							Sigs: map[string]FuncSig{"·Probe": {Name: "·Probe", Ret: Void}},
 						})
 						if err != nil {
 							t.Fatal(err)
@@ -73,6 +73,54 @@ func TestParseLabelPrefixFamilyOriginalGoAndLLVMObjects(t *testing.T) {
 					}
 				})
 			}
+		})
+	}
+}
+
+func TestParseLabelPrefixOptionalSuffixAndFunctionScopeLikeGo(t *testing.T) {
+	for _, target := range []struct {
+		goarch string
+		arch   Arch
+	}{
+		{"386", ArchAMD64}, {"amd64", ArchAMD64}, {"arm", ArchARM}, {"arm64", ArchARM64}, {"wasm", ArchWASM},
+	} {
+		t.Run(target.goarch, func(t *testing.T) {
+			t.Run("suffix", func(t *testing.T) {
+				// cmd/asm consumes suffix tokens before a colon, then retains
+				// only the original word as the pending label, not its suffix.
+				const source = "TEXT Probe(SB),4,$0-0\nfirst.EQ.S: NOP\nRET\n"
+				accepted := target.arch != ArchWASM
+				goAssemblerOracleOutput(t, target.goarch, source, "", accepted)
+				file, err := Parse(target.arch, source)
+				if err != nil {
+					if accepted {
+						t.Fatal(err)
+					}
+					return
+				}
+				var labels []string
+				for _, instruction := range file.Funcs[0].Instrs {
+					if instruction.Op == OpLABEL {
+						labels = append(labels, instruction.Args[0].Sym)
+					}
+				}
+				if accepted && !reflect.DeepEqual(labels, []string{"first"}) || !accepted && len(labels) != 0 {
+					t.Fatalf("label suffix differs from original Go grammar: accepted=%t labels=%v", accepted, labels)
+				}
+			})
+			t.Run("function_scope", func(t *testing.T) {
+				const source = "TEXT First(SB),4,$0-0\nlocal: NOP\nRET\nTEXT Second(SB),4,$0-0\nlocal: NOP\nRET\n"
+				goAssemblerOracleOutput(t, target.goarch, source, "", true)
+				file, err := Parse(target.arch, source)
+				if err != nil || len(file.Funcs) != 2 {
+					t.Fatalf("function-local labels were lost: %v", err)
+				}
+				for _, function := range file.Funcs {
+					if function.Instrs[1].Op != OpLABEL || function.Instrs[1].Args[0].Sym != "local" {
+						t.Fatalf("label escaped its original TEXT: %+v", function.Instrs)
+					}
+				}
+			})
 		})
 	}
 }
