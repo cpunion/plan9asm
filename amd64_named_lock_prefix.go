@@ -72,5 +72,5 @@ func (c *amd64Ctx) verifyNamedLockPrefixes() error {
 			}
 		}
 	}
-	return nil
+	return c.verifyNamedLockCarry()
 }

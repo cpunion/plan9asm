@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -36,5 +37,76 @@ func TestX86LockScalarRMWUnknownIncomingCarryNeedsContext(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		suffix, counter := "Q", "JCXZQ"
+		if arch == "386" {
+			suffix, counter = "L", "JCXZL"
+		}
+		for _, control := range []struct {
+			name, body string
+			known      bool
+		}{
+			{"CLC", "CLC", true},
+			{"STC CMC", "STC\nCMC", true},
+			{"initialized CMP", "CMPL AX,$0", true},
+			{"undefined CMC", "CMC", false},
+			{"undefined compare", "CMPL BP,$0", false},
+			{"empty POPF", "POPF" + suffix, false},
+			{"explicit stack seed", "PUSH" + suffix + " DX\nPOPF" + suffix, true},
+			{"unknown stack seed", "PUSH" + suffix + " BP\nPOPF" + suffix, false},
+			{"unseeded join", counter + " join\nCLC\njoin:", false},
+			{"seeded join", "STC\n" + counter + " join\nCLC\njoin:", true},
+			{"call clobber", "STC\nCALL ·other(SB)", false},
+			{"undefined divide flags", "STC\nDIVL CX", false},
+			{"loop retains seed", "STC\nloop:\nNOP\nLOOP loop", true},
+		} {
+			t.Run(arch+"/"+control.name, func(t *testing.T) {
+				source := x86NamedLockOracleSource(arch,
+					control.body+"\nLOCK\nADCL CX,(SI)")
+				x86LockScalarOriginalInstruction(t, arch, source)
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86OrderingHintTranslateAPI(t, api, source,
+							"package ordering\nfunc locked(p *[16]byte)\nfunc other()\n", arch, "")
+						if control.known {
+							if err != nil || !strings.Contains(ir, "lock; adcl") {
+								t.Fatal("independent defined carry was not retained", err)
+							}
+						} else if !errors.Is(err, ErrProbeNeedsContext) || ir != "" || !strings.Contains(err.Error(), "carry") {
+							t.Fatal("unclosed carry acquired a numerical value", err)
+						}
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestX86LockScalarRMWCarryBudgetAndInputsRemainUnchanged(t *testing.T) {
+	file, err := Parse(ArchAMD64, x86NamedLockOracleSource("amd64", "CLC\nLOCK\nADCL CX,(SI)"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], FuncSig{Ret: Void}, nil)
+	before, temporary := output.String(), ctx.tmp
+	source := fmt.Sprintf("%#v", file)
+	for count := 0; count != 2; count++ {
+		if err := ctx.verifyNamedLockCarry(); err != nil || before != output.String() || temporary != ctx.tmp || source != fmt.Sprintf("%#v", file) {
+			t.Fatal("CF proof modified IR, temporary state or input source", err)
+		}
+	}
+	ctx.blocks = make([]amd64Block, 4097)
+	ctx.blocks[0].instrs = []Instr{{Op: "LOCK"}, {Op: "ADCL", Args: []Operand{{Kind: OpReg, Reg: CX}, {Kind: OpMem, Mem: MemRef{Base: SI}}}}}
+	if err := ctx.verifyNamedLockCarry(); !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "bounded") {
+		t.Fatal("oversized CF domain did not fail closed", err)
+	}
+	ctx.blocks = nil
+	state := x86LockCarryState{carry: true, stack: []x86LockCarryCell{{bits: 16, known: true}}}
+	if state = ctx.lockCarryTransfer(Instr{Op: "POPFQ"}, state); state.carry {
+		t.Fatal("synthetic mismatched-width stack cell supplied carry")
 	}
 }
