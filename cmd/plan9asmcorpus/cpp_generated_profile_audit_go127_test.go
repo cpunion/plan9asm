@@ -11,11 +11,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 func TestCPPGeneratedHeaderFullDefaultProfileProjection(t *testing.T) {
@@ -142,6 +146,73 @@ func TestCPPGeneratedHeaderFullDefaultProfileProjection(t *testing.T) {
 				for _, key := range keys {
 					projection[baseline.Target] = append(projection[baseline.Target], byKey[key])
 				}
+				input, err := discoveryCPPOriginalConsumerInput(plan.CPPInputs)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var firstBranches map[string]bool
+				var firstDefinitions map[string]string
+				for _, key := range keys {
+					request := byKey[key]
+					environment := cloneDiscoveryCPPEnvironment(baseline.Environment)
+					for name, value := range request.Overrides {
+						environment[name] = value
+					}
+					defines, err := plan9asm.GoAssemblerDefinesForEnvironment(model.GOOS, model.GOARCH, environment)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var nativeHeader []byte
+					if role == "active_header" {
+						out := t.TempDir()
+						header, object := filepath.Join(out, "native.h"), filepath.Join(out, "native.o")
+						args := []string{"tool", "compile", "-p", candidate.Module, "-lang", "go1.20",
+							"-goversion", baseline.GoVersion, "-asmhdr", header, "-o", object, "probe.go"}
+						stdout, stderr, err := runDiscoveryMachineCommand(ctx, download.Dir,
+							replaceEnv(os.Environ(), environment), goBinary, args...)
+						if err != nil || len(stdout) != 0 || len(stderr) != 0 {
+							t.Fatalf("actual original compiler header %s: %v\n%s\n%s", key, err, stdout, stderr)
+						}
+						nativeHeader, err = os.ReadFile(header)
+						if err != nil {
+							t.Fatal(err)
+						}
+						definitions, err := gotoolprofile.HeaderDefinitions(nativeHeader)
+						if err != nil || definitions["Record__size"] != "8" || definitions["Record_Value"] != "0" {
+							t.Fatalf("actual Record native header: %v %v", definitions, err)
+						}
+						if firstDefinitions == nil {
+							firstDefinitions = definitions
+						} else if !reflect.DeepEqual(firstDefinitions, definitions) {
+							t.Fatal("actual native-header definitions vary across proposed CPU environments")
+						}
+						objectSHA, err := discoveryFeatureFileSHA256(object)
+						if err != nil {
+							t.Fatal(err)
+						}
+						t.Logf("GENERATED_PROFILE_ACTUAL_HEADER key=%s header_sha=%s object_sha=%s definitions=%v",
+							key, discoveryFeatureBytesSHA256(nativeHeader), objectSHA, definitions)
+					}
+					observation, used, _, err := gotoolprofile.ReplayCPPOriginal(input, "probe.s", candidate.Module, defines, nativeHeader)
+					if err != nil {
+						t.Fatalf("actual original header/candidate replay %s: %v", key, err)
+					}
+					_, activeHeader := used["generated/"+candidate.Module+"/go_asm.h"]
+					if activeHeader != (role == "active_header") {
+						t.Fatalf("candidate vs active native header: %v", used)
+					}
+					branches, err := discoveryCPPBranchCoverage(observation)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if firstBranches == nil {
+						firstBranches = branches
+					} else if !reflect.DeepEqual(firstBranches, branches) {
+						t.Fatal("actual same-source branch coverage varies across proposed CPU environments")
+					}
+				}
+				t.Logf("GENERATED_PROFILE_ACTUAL_REPLAY_EQUIVALENCE target=%s proposals=%d branches=%d active_header=%t",
+					baseline.Target, len(keys), len(firstBranches), role == "active_header")
 			}
 			data, err := json.Marshal(struct {
 				Role, SourceSHA, GoVersion string
