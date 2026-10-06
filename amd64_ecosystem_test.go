@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -4006,7 +4007,7 @@ func TestTranslate386ScalarAddSubRejectsArchitectureRestrictedForms(t *testing.T
 	}
 }
 
-func TestTranslateAMD64CompareExchangeCompleteGoAssemblerForms(t *testing.T) {
+func TestTranslateAMD64CompareExchangeOriginalSyntaxContextCatalogue(t *testing.T) {
 	src := `
 DATA cmpxchgdata+0(SB)/8, $0
 DATA cmpxchgdata+8(SB)/8, $0
@@ -4047,6 +4048,7 @@ TEXT cmpxchgforms(SB),NOSPLIT,$0-16
 	CMPXCHG16B value+0(FP)
 	RET
 `
+	x86CMPXCHGMixedOriginalCatalogue(t, "amd64", src)
 	file, err := Parse(ArchAMD64, src)
 	if err != nil {
 		t.Fatal(err)
@@ -4065,17 +4067,15 @@ TEXT cmpxchgforms(SB),NOSPLIT,$0-16
 			},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	// This unchanged syntax catalogue contains Go-accepted physical high-byte
+	// rewrites, non-memory pair #UD and an unbound 16B FP shadow. It is not a
+	// numerical native-positive. Closed memory forms have independent objects.
+	if !errors.Is(err, ErrProbeNeedsContext) || ll != "" {
+		t.Fatalf("mixed original native-identity gaps acquired a numerical object: %v", err)
 	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "cmpxchg-forms.ll", "cmpxchg-forms.o", ll)
 }
 
-func TestTranslate386CompareExchangeCompleteGoAssemblerForms(t *testing.T) {
+func TestTranslate386CompareExchangeOriginalSyntaxContextCatalogue(t *testing.T) {
 	src := `
 DATA cmpxchgdata386+0(SB)/8, $0
 GLOBL cmpxchgdata386(SB), NOPTR, $8
@@ -4106,6 +4106,7 @@ TEXT cmpxchgforms386(SB),NOSPLIT,$0-8
 	CMPXCHG8B value+0(FP)
 	RET
 `
+	x86CMPXCHGMixedOriginalCatalogue(t, "386", src)
 	file, err := Parse(ArchAMD64, src)
 	if err != nil {
 		t.Fatal(err)
@@ -4124,14 +4125,9 @@ TEXT cmpxchgforms386(SB),NOSPLIT,$0-8
 			},
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
+	if !errors.Is(err, ErrProbeNeedsContext) || ll != "" {
+		t.Fatalf("mixed original byte expansion/pair #UD acquired a numerical object: %v", err)
 	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "cmpxchg-386-forms.ll", "cmpxchg-386-forms.o", ll)
 }
 
 func TestTranslateAMD64CompareExchangeRejectsFormsOutsideGoAssemblerTables(t *testing.T) {

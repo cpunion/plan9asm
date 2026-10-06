@@ -1,78 +1,46 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // lowerCompareExchange implements every operand row in Go 1.27's yrb_mb,
 // yrl_ml, and yscond tables for the CMPXCHG family.
 func (c *amd64Ctx) lowerCompareExchange(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	kind, bits, recognized := amd64CompareExchangeProperties(baseOp)
+	form, recognized, err := x86CompareExchangeProperties(op, ins, c.goarch)
 	if !recognized {
 		return false, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if c.goarch == "386" && (bits == 64 && kind == "scalar" || bits == 128) {
-		return true, false, fmt.Errorf("386 %s is illegal in 32-bit mode: %q", baseOp, ins.Raw)
+	if form.spec.pair {
+		return c.lowerPairCompareExchange(string(op), form.spec.bits, ins)
 	}
-
-	switch kind {
-	case "scalar":
-		return c.lowerScalarCompareExchange(baseOp, bits, ins)
-	case "pair":
-		return c.lowerPairCompareExchange(baseOp, bits, ins)
-	default:
-		return true, false, fmt.Errorf("internal error: unknown CMPXCHG kind %q", kind)
-	}
+	return c.lowerScalarCompareExchange(string(op), form.spec.bits, ins)
 }
 
 func amd64CompareExchangeProperties(op string) (kind string, bits int, ok bool) {
-	switch op {
-	case "CMPXCHGB":
-		return "scalar", 8, true
-	case "CMPXCHGW":
-		return "scalar", 16, true
-	case "CMPXCHGL":
-		return "scalar", 32, true
-	case "CMPXCHGQ":
-		return "scalar", 64, true
-	case "CMPXCHG8B":
-		return "pair", 64, true
-	case "CMPXCHG16B":
-		return "pair", 128, true
-	default:
+	spec, recognized := x86CompareExchangeSpecs[Op(op)]
+	if !recognized {
 		return "", 0, false
 	}
+	kind = "scalar"
+	if spec.pair {
+		kind = "pair"
+	}
+	return kind, spec.bits, true
 }
 
 func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects register source and register/memory destination: %q", c.goarch, baseOp, ins.Raw)
+	form, recognized, err := x86CompareExchangeProperties(Op(baseOp), ins, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	registerAllowed := func(reg Reg) bool {
-		if bits == 8 {
-			return isGoYmbRegisterForArch(reg, c.goarch)
-		}
-		return isX86YrlRegisterForArch(reg, c.goarch)
+	if !recognized || form.spec.pair || form.spec.bits != bits {
+		return true, false, fmt.Errorf("%s %s has no matching scalar compare-exchange width", c.goarch, baseOp)
 	}
-	source, destination := ins.Args[0], ins.Args[1]
-	if source.Kind != OpReg || !registerAllowed(source.Reg) {
-		return true, false, fmt.Errorf("%s %s source is outside Go 1.27's Yrb/Yrl class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if destination.Kind == OpReg {
-		if !registerAllowed(destination.Reg) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Ymb/Yml class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Ymb/Yml class: %q", c.goarch, baseOp, ins.Raw)
+	source, destination := form.source, form.destination
+	if err := c.validateCompareExchangeFP(destination, bits); err != nil {
+		return true, false, err
 	}
 
 	typ := amd64IntegerTypeForBits(bits)
@@ -108,14 +76,7 @@ func (c *amd64Ctx) lowerScalarCompareExchange(baseOp string, bits int, ins Instr
 		if err != nil {
 			return true, false, err
 		}
-		align := bits / 8
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = cmpxchg %s %s, %s %s, %s %s seq_cst seq_cst, align %d\n", result, ptrType, ptr, typ, expected, typ, desired, align)
-		oldName := c.newTmp()
-		successName := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { %s, i1 } %%%s, 0\n", oldName, typ, result)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { %s, i1 } %%%s, 1\n", successName, typ, result)
-		old, success = "%"+oldName, "%"+successName
+		old, success = c.emitScalarCompareExchangeNative(bits, destination, ptr, ptrType, expected, desired)
 	}
 
 	// On failure the accumulator receives the destination. On success it is not
@@ -157,16 +118,16 @@ func amd64CompareExchangeDestinationIsAccumulator(reg Reg, bits int) bool {
 }
 
 func (c *amd64Ctx) lowerPairCompareExchange(baseOp string, bits int, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 1 {
-		return true, false, fmt.Errorf("%s %s expects one Ymb register/memory operand: %q", c.goarch, baseOp, ins.Raw)
+	form, recognized, err := x86CompareExchangeProperties(Op(baseOp), ins, c.goarch)
+	if err != nil {
+		return true, false, err
 	}
-	destination := ins.Args[0]
-	if destination.Kind == OpReg {
-		if !isGoYmbRegisterForArch(destination.Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s operand is outside Go 1.27's Ymb class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("%s %s operand is outside Go 1.27's Ymb class: %q", c.goarch, baseOp, ins.Raw)
+	if !recognized || !form.spec.pair || form.spec.bits != bits {
+		return true, false, fmt.Errorf("%s %s has no matching pair compare-exchange width", c.goarch, baseOp)
+	}
+	destination := form.destination
+	if err := c.validateCompareExchangeFP(destination, bits); err != nil {
+		return true, false, err
 	}
 
 	ax, err := c.loadReg(AX)
@@ -185,55 +146,11 @@ func (c *amd64Ctx) lowerPairCompareExchange(baseOp string, bits int, ins Instr) 
 	if err != nil {
 		return true, false, err
 	}
-	expected := c.compareExchangeJoinPair(ax, dx, bits)
-	desired := c.compareExchangeJoinPair(bx, cx, bits)
-	pairType := LLVMType("i64")
-	align := 8
-	if bits == 128 {
-		pairType = LLVMType("i128")
-		align = 16
+	ptr, ptrType, err := c.compareExchangePointer(destination)
+	if err != nil {
+		return true, false, err
 	}
-
-	var old, success string
-	if destination.Kind == OpReg {
-		base, _, _ := amd64ByteRegBase(destination.Reg)
-		old64, err := c.loadReg(base)
-		if err != nil {
-			return true, false, err
-		}
-		old = old64
-		if bits == 128 {
-			widened := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i64 %s to i128\n", widened, old64)
-			old = "%" + widened
-		}
-		equal := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = icmp eq %s %s, %s\n", equal, pairType, expected, old)
-		success = "%" + equal
-		selected := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", selected, success, pairType, desired, pairType, old)
-		selected64 := "%" + selected
-		if bits == 128 {
-			truncated := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i128 %%%s to i64\n", truncated, selected)
-			selected64 = "%" + truncated
-		}
-		if err := c.storeReg(base, selected64); err != nil {
-			return true, false, err
-		}
-	} else {
-		ptr, ptrType, err := c.compareExchangePointer(destination)
-		if err != nil {
-			return true, false, err
-		}
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = cmpxchg %s %s, %s %s, %s %s seq_cst seq_cst, align %d\n", result, ptrType, ptr, pairType, expected, pairType, desired, align)
-		oldName := c.newTmp()
-		successName := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { %s, i1 } %%%s, 0\n", oldName, pairType, result)
-		fmt.Fprintf(c.b, "  %%%s = extractvalue { %s, i1 } %%%s, 1\n", successName, pairType, result)
-		old, success = "%"+oldName, "%"+successName
-	}
+	old, success := c.emitPairCompareExchangeNative(bits, destination, ptr, ptrType, ax, dx, bx, cx)
 
 	oldLow, oldHigh := c.compareExchangeSplitPair(old, bits)
 	if err := c.storeCompareExchangePairAccumulator(AX, ax, oldLow, success, bits); err != nil {
@@ -244,6 +161,30 @@ func (c *amd64Ctx) lowerPairCompareExchange(baseOp string, bits int, ins Instr) 
 	}
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", success, c.flagsZSlot)
 	return true, false, nil
+}
+
+func (c *amd64Ctx) validateCompareExchangeFP(destination Operand, bits int) error {
+	if destination.Kind != OpFP {
+		return nil
+	}
+	context := func(reason string) error {
+		return fmt.Errorf("%w: %s CMPXCHG FP native write at +%d(FP): %s", ErrProbeNeedsContext, c.goarch, destination.FPOffset, reason)
+	}
+	if bits == 128 {
+		return context("logical FP storage has no original CMPXCHG16B native address/alignment identity")
+	}
+	width := bits / 8
+	if err := c.validateFPVectorSpan(destination.FPOffset, width); err != nil {
+		return context(err.Error())
+	}
+	if c.classicFrame != "" {
+		return nil
+	}
+	slot, _, ok := c.fpVectorSlot(destination.FPOffset)
+	if !ok || slot.Offset != destination.FPOffset || x86FrameTypeSize(slot.Type) < int64(width) {
+		return context("native access is not an existing complete contiguous shadow slot")
+	}
+	return nil
 }
 
 func (c *amd64Ctx) compareExchangeJoinPair(low, high string, bits int) string {

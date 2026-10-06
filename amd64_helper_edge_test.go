@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -372,8 +373,13 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	c.blockBase = []int{0, 1, 2}
 	c.blockByIdx = map[int]int{0: 0, 1: 1, 2: 2}
 
-	if ok, term, err := c.lowerAtomic("LOCK", Instr{Raw: "LOCK"}); !ok || term || err != nil {
+	beforeStandaloneLock := b.Len()
+	beforeLockTemporary, beforeLockPrefix := c.tmp, c.namedAtomicLock
+	if ok, term, err := c.lowerAtomic("LOCK", Instr{Raw: "LOCK"}); !ok || term || !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatalf("lowerAtomic(LOCK) = (%v, %v, %v)", ok, term, err)
+	}
+	if b.Len() != beforeStandaloneLock || c.tmp != beforeLockTemporary || c.namedAtomicLock != beforeLockPrefix {
+		t.Fatal("standalone LOCK changed IR or temporary state without a complete adjacent source operation")
 	}
 	if ok, _, err := c.lowerAtomic("CMPXCHGL", Instr{
 		Raw: "CMPXCHGL CX, 8(BX)",
@@ -540,8 +546,11 @@ func TestAMD64AtomicAndBranchEdges(t *testing.T) {
 	}
 
 	out := b.String()
+	if strings.Contains(out, "cmpxchg ptr") {
+		t.Fatal("native CMPXCHGL silently acquired software atomic alignment or LOCK semantics")
+	}
 	for _, want := range []string{
-		"cmpxchg ptr",
+		"asm sideeffect \"cmpxchgl $3, $2; sete $1\"",
 		"asm sideeffect \"lock; xadd",
 		"asm sideeffect \"xchg",
 		"atomicrmw and ptr",

@@ -11,9 +11,12 @@ func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err 
 	}
 	switch op {
 	case "LOCK":
-		// LOCK is a prefix in Plan 9 syntax. Our lowering emits atomic IR for
-		// the following memory RMW instruction, so the prefix itself is a no-op.
-		return true, false, nil
+		if len(ins.Args) != 0 {
+			return true, false, fmt.Errorf("%w: LOCK operands cannot substitute for a complete following atomic instruction: %q", ErrProbeNeedsContext, ins.Raw)
+		}
+		// Only the whole-source consumer can bind this prefix to an adjacent
+		// complete native operation. An isolated helper has no such body.
+		return true, false, fmt.Errorf("%w: standalone LOCK has no source-adjacent complete atomic operation", ErrProbeNeedsContext)
 
 	case "ORB", "ANDB", "ORL", "ANDL", "ORQ", "ANDQ":
 		if len(ins.Args) != 2 || ins.Args[1].Kind != OpMem {

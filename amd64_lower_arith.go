@@ -219,6 +219,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 	if ok, terminated, err := c.lowerX86CPUQuery(op, ins); ok {
 		return ok, terminated, err
 	}
+	if ok, terminated, err := c.lowerX86OrderingHint(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerStackWidth(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -315,11 +318,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			if err := c.storeRegSized(r, I32, v); err != nil {
 				return true, false, err
 			}
-		}
-		return true, false, nil
-	case "LFENCE", "MFENCE", "SFENCE", "PAUSE":
-		if c.goarch == "386" {
-			fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q()\n", strings.ToLower(string(op)), "~{memory}")
 		}
 		return true, false, nil
 	case "PREFETCHNTA", "PREFETCHT0", "PREFETCHT1", "PREFETCHT2",

@@ -258,8 +258,8 @@ func TestX86RawMOVSXDUnregisteredPrefixesStayContext(t *testing.T) {
 		}
 	}
 	if inst, err := x86asm.Decode([]byte{0xf0, 0x63, 0xc3}, 64); err == nil && inst.Op == x86asm.MOVSXD {
-		if _, err := decodedX86GoSyntax(inst, []byte{0xf0, 0x63, 0xc3}); !errors.Is(err, ErrProbeNeedsContext) {
-			t.Fatal("LOCK MOVSXD was accepted")
+		if _, err := decodedX86GoSyntax(inst, []byte{0xf0, 0x63, 0xc3}); err == nil || errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("machine-invalid LOCK MOVSXD was accepted or misclassified as missing context", err)
 		}
 	}
 }

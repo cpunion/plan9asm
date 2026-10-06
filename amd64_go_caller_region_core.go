@@ -260,6 +260,9 @@ func x86CallerOrdinaryMemoryStep(ins *Instr, index int, state *x86SourceStackSta
 // returns. This additional transfer tracks only actual caller pointer regions
 // and numerical byte initialization; it grants no unknown instruction effects.
 func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) (pointerFlags, valid bool) {
+	if _, known, err := x86OrderingHintProperties(ins.Op, *ins, "amd64"); known {
+		return false, err == nil
+	}
 	op := Op(normalizeInstructionOpcode(ins.Op))
 	if op == OpTEXT || op == OpLABEL || op == OpRET || op == OpJMP || isAMD64ConditionalBranch(op) {
 		return false, !isAMD64CounterZeroBranch(op) || x86CallerNumericRead(Operand{Kind: OpReg, Reg: CX}, 8, state)

@@ -562,6 +562,9 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 }
 
 func (c *amd64Ctx) lowerBlocks() error {
+	if err := c.verifyNamedLockPrefixes(); err != nil {
+		return err
+	}
 	emitBr := func(target string) {
 		fmt.Fprintf(c.b, "  br label %%%s\n", amd64LLVMBlockName(target))
 	}
@@ -607,6 +610,9 @@ func (c *amd64Ctx) lowerBlocks() error {
 }
 
 func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emitCondBr amd64EmitCondBr) (terminated bool, err error) {
+	c.namedAtomicLock = bi >= 0 && bi < len(c.blocks) && ii > 0 && ii <= len(c.blocks[bi].instrs) &&
+		strings.EqualFold(string(c.blocks[bi].instrs[ii-1].Op), "LOCK")
+	defer func() { c.namedAtomicLock = false }()
 	if ins.x86UnboundAddressOverride {
 		return false, fmt.Errorf("%w: %s physical address-size %d memory override has no bound ordinary consumer: %q", ErrProbeNeedsContext, c.goarch, ins.x86AddressBits, ins.Raw)
 	}
@@ -644,6 +650,8 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		return false, nil
 	}
 	switch Op(op) {
+	case "LOCK":
+		return false, c.namedLockPrefixBinding(bi, ii, ins)
 	case OpTEXT:
 		return false, nil
 	case OpBYTE, OpWORD, "LONG", "QUAD":

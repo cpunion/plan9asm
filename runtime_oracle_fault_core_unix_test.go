@@ -73,6 +73,7 @@ func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 		"amd64_insert_extract_numerical_test.go",
 		"amd64_undefined_trap_runtime_unix_test.go",
 		"amd64_cpu_query_runtime_unix_test.go",
+		"amd64_cmpxchg_fault_runtime_test.go",
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := runtimeOracleFaultC(t, name)

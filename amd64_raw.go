@@ -643,6 +643,15 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
+			if instruction, length, ok := decodedX86OrderingFenceInstruction(code[offset:], mode); ok {
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Op, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, ok, err := decodedX86CacheLineWritebackInstruction(code[offset:], mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 cache-line writeback at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -10246,6 +10255,9 @@ var x86RawX87ControlAliases = map[x86asm.Op]Op{
 }
 
 func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
+	if err := decodedX86PrefixError(inst); err != nil {
+		return "", err
+	}
 	for _, argument := range inst.Args {
 		if memory, ok := argument.(x86asm.Mem); ok && memory.Base == x86asm.EIP {
 			// The pinned decoder leaves PCRel unset for 67-prefixed EIP

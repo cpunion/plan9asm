@@ -491,6 +491,9 @@ func x86SourceStackScalarType(typ LLVMType) bool {
 }
 
 func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch string) bool {
+	if _, known, err := x86OrderingHintProperties(ins.Op, ins, arch); known {
+		return err == nil
+	}
 	op := Op(normalizeInstructionOpcode(ins.Op))
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		return err == nil

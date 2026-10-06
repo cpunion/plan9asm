@@ -83,6 +83,9 @@ func x86TypedLegacyPackedMoveByteEffect(op Op, ins Instr, arch string) (x86Typed
 }
 
 func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
+	if _, known, err := x86OrderingHintProperties(op, ins, arch); known {
+		return x86TypedByteEffect{}, true, err
+	}
 	if effect, recognized, err := x86TypedGPByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
