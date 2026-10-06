@@ -157,3 +157,64 @@ func TestParseLabelPrefixRejectsOriginalNonIdentifierAndDuplicateNames(t *testin
 		})
 	}
 }
+
+func TestParseLabelPrefixPendingInstructionBoundariesLikeGo(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, target := range []struct {
+		goarch, triple string
+		arch           Arch
+	}{
+		{"386", "i386-unknown-linux-gnu", ArchAMD64},
+		{"amd64", "x86_64-unknown-linux-gnu", ArchAMD64},
+		{"arm", "armv7-unknown-linux-gnueabihf", ArchARM},
+		{"arm64", "aarch64-unknown-linux-gnu", ArchARM64},
+		{"wasm", "wasm32-unknown-unknown", ArchWASM},
+	} {
+		t.Run(target.goarch, func(t *testing.T) {
+			const data = "DATA ·table(SB)/1,$1\nGLOBL ·table(SB),8,$1\n"
+			for _, test := range []struct {
+				name, source string
+				labels       [][]string
+			}{
+				{"text_entry", "entry:\nTEXT Probe(SB),4,$0-0\nNOP\nRET\n", [][]string{{"entry"}}},
+				{"unused_eof", "TEXT Probe(SB),4,$0-0\nNOP\nRET\nunused: unused:\n", [][]string{nil}},
+				{"data_keeps_pending", "TEXT Probe(SB),4,$0-0\nentry:\n" + data + "NOP\nRET\n", [][]string{{"entry"}}},
+				{"text_owns_pending", "TEXT First(SB),4,$0-0\nNOP\nRET\nentry:\n" + data + "TEXT Second(SB),4,$0-0\nNOP\nRET\n", [][]string{nil, {"entry"}}},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					goAssemblerOracleOutput(t, target.goarch, test.source, "", true)
+					file, err := Parse(target.arch, test.source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var labels [][]string
+					signatures := make(map[string]FuncSig)
+					for _, function := range file.Funcs {
+						var names []string
+						for _, instruction := range function.Instrs {
+							if instruction.Op == OpLABEL {
+								names = append(names, instruction.Args[0].Sym)
+							}
+							if instruction.Op != OpTEXT && instruction.Op != OpLABEL && instruction.Op != "NOP" && instruction.Op != OpRET {
+								t.Fatalf("label or data became an instruction: %+v", instruction)
+							}
+						}
+						labels = append(labels, names)
+						signatures[function.Sym] = FuncSig{Name: function.Sym, Ret: Void}
+					}
+					if !reflect.DeepEqual(labels, test.labels) {
+						t.Fatalf("pending label ownership differs from Go: actual=%v expected=%v", labels, test.labels)
+					}
+					ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, Sigs: signatures})
+					if err != nil {
+						t.Fatal(err)
+					}
+					compileLLVMToObject(t, llc, target.triple, "pending.ll", "pending.o", ir)
+				})
+			}
+		})
+	}
+}
