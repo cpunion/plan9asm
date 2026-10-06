@@ -63,6 +63,10 @@ if [[ "$goarch" == 386 ]]; then
     incomplete) success=1 ;;
     source_na) success=1; na=1 ;;
     empty) total=0; success=0 ;;
+    negative_counts) success=-1; failed=3 ;;
+    excessive_counts) success=3 ;;
+    wrong_target) goarch=arm64 ;;
+    target_budget) sleep 2 ;;
     malformed)
       printf '{invalid report\n' > "$report"
       exit 17
@@ -72,6 +76,11 @@ if [[ "$goarch" == 386 ]]; then
 fi
 printf '{"goos":"%s","goarch":"%s","total_asm":%s,"success":%s,"failed":%s,"not_applicable":%s,"duration":"1ms"}\n' \
   "$goos" "$goarch" "$total" "$success" "$failed" "$na" > "$report"
+if [[ "$goarch" == 386 && "$PLAN9ASM_BENCH_TEST_MODE" == stale_failures ]]; then
+  jq '.fails = [{pkg_path:"fixture", asm_file:"one.s", err:"retained failure"}]' \
+    "$report" > "$report.changed"
+  mv "$report.changed" "$report"
+fi
 exit "$code"
 `
 
@@ -128,6 +137,9 @@ func newCompileBenchmarkScriptFixture(t *testing.T, mode string) compileBenchmar
 		"PLAN9ASM_BENCHMARK_MAX_TOTAL_SECONDS=900",
 		"GITHUB_ACTIONS=true", "GITHUB_STEP_SUMMARY=",
 	)
+	if mode == "target_budget" {
+		fixture.environment = append(fixture.environment, "PLAN9ASM_BENCHMARK_MAX_TARGET_SECONDS=1")
+	}
 	return fixture
 }
 
@@ -170,6 +182,7 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 	for _, mode := range []string{
 		"success", "command_failure", "failed_counts", "nonzero_success_counts",
 		"incomplete", "source_na", "empty", "malformed", "missing",
+		"negative_counts", "excessive_counts", "wrong_target", "target_budget", "stale_failures",
 	} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := newCompileBenchmarkScriptFixture(t, mode)
@@ -185,6 +198,7 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 					Target      string `json:"target"`
 					Status      string `json:"status"`
 					CommandExit int    `json:"command_exit"`
+					ReportValid bool   `json:"report_valid"`
 					Unattempted *int   `json:"unattempted"`
 				} `json:"targets"`
 			}
@@ -212,6 +226,12 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 			}
 			if mode == "incomplete" && (summary.Targets[0].Unattempted == nil || *summary.Targets[0].Unattempted != 1) {
 				t.Fatalf("unattempted file was hidden: %s", data)
+			}
+			switch mode {
+			case "negative_counts", "excessive_counts", "wrong_target", "empty", "malformed", "missing", "stale_failures":
+				if summary.Targets[0].ReportValid || summary.Targets[0].Unattempted != nil {
+					t.Fatalf("invalid evidence supplied known counts or a valid report: %s", data)
+				}
 			}
 		})
 	}
