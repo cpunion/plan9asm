@@ -77,7 +77,10 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	// A CPU branch nested below such a predicate can become reachable in a
 	// different selected Go layout. Observe every legal CPU proposal in this
 	// bounded case; the actual per-profile header still decides consumption.
-	deferredPresence := discoveryCPPDeferredPresenceMayAffectCPU(*unit, directives)
+	// Historical directive replay cannot observe whether a registered header
+	// is opened. Full-source replay can: a raw String candidate is not an
+	// active generated input when every concrete replay succeeds without it.
+	deferredPresence := !fullReplay && discoveryCPPDeferredPresenceMayAffectCPU(*unit, directives)
 	covered := make(map[string]bool)
 	cover := func(request discoveryFeatureProfileRequest) (bool, error) {
 		env := cloneDiscoveryCPPEnvironment(baseline.Environment)

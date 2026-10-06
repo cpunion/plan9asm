@@ -224,6 +224,17 @@ func TestCPPGeneratedHeaderFullDefaultProfileProjection(t *testing.T) {
 			}
 			t.Logf("GENERATED_PROFILE_PROPOSAL_PROJECTION %s", data)
 			requests, err := planDiscoveryFeatureProfiles(plan, candidate.AsmFiles, baselines)
+			if role == "active_header" {
+				// This independently measured header equality is not a portable
+				// planning authority. Until a source-bound actual-header producer
+				// is integrated, retain the original full11 failure unchanged.
+				if len(unique) != 123 || len(requests) != 0 || err == nil ||
+					err.Error() != "source-required target feature profiles exceed the explicit 64-profile bound" {
+					t.Fatalf("unbound active header acquired a fabricated reduced scope: proposals=%d requests=%d err=%v", len(unique), len(requests), err)
+				}
+				t.Logf("GENERATED_PROFILE_UNRESOLVED_ACTIVE_HEADER %v", err)
+				return
+			}
 			if err != nil || len(requests) != len(targets) {
 				t.Fatalf("CPU-independent original full11 scope must not expand to every CPU: unique_proposals=%d complete_planner_profiles=%d err=%v", len(unique), len(requests), err)
 			}
