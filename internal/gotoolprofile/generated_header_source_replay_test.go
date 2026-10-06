@@ -104,7 +104,6 @@ func TestGeneratedHeaderSourceReplayMatchesOriginalNativeObjects(t *testing.T) {
 
 func TestGeneratedHeaderSourceReplayRejectsUnclosedInputs(t *testing.T) {
 	for _, source := range []string{
-		"package header\nimport \"unsafe\"\nconst Size = unsafe.Sizeof(uintptr(0))\n",
 		"package header\ntype Record[T any] struct { Value T }\n",
 		"package header\ntype Record struct { Value [1<<62]uint64 }\n",
 		"package header\ntype Record struct { Self Record }\n",

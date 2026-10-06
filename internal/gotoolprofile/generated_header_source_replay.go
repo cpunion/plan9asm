@@ -37,16 +37,61 @@ func NativeHeaderSourceDomainUnsupported(err error) bool {
 // independently match actual selected compiler sources and the stock SDK; it
 // grants neither source authentication nor ABI/native-memory permission.
 func ReplayNativeGeneratedHeader(packagePath, target, language string, sources map[string]string) (map[string]string, error) {
+	return replayNativeGeneratedHeader(packagePath, target, language, sources, nil, false)
+}
+
+// ReplayNativeGeneratedHeaderWithImportMap also requires the actual compiler's
+// complete import map to match the original source imports. The only imported
+// property domain registered here is the builtin unsafe package, which has no
+// dependency export. This remains a property query, not compiler acceptance.
+func ReplayNativeGeneratedHeaderWithImportMap(packagePath, target, language string, sources map[string]string,
+	importMap map[string]string) (map[string]string, error) {
+	return replayNativeGeneratedHeader(packagePath, target, language, sources, importMap, true)
+}
+
+func replayNativeGeneratedHeader(packagePath, target, language string, sources map[string]string,
+	importMap map[string]string, requireImportMap bool) (map[string]string, error) {
 	set, files, word, err := parseNativeHeaderSources(packagePath, target, language, sources)
 	if err != nil {
 		return nil, err
 	}
+	if requireImportMap {
+		imports := make(map[string]string)
+		for _, file := range files {
+			for _, spec := range file.Imports {
+				spelling, err := strconv.Unquote(spec.Path.Value)
+				if err != nil {
+					return nil, fmt.Errorf("native header original import path is invalid: %w", err)
+				}
+				imports[spelling] = spelling // Parsing registered only builtin unsafe.
+			}
+		}
+		if importMap == nil || len(importMap) != len(imports) {
+			return nil, fmt.Errorf("native header actual import map differs from complete original source imports")
+		}
+		for spelling, target := range imports {
+			if importMap[spelling] != target {
+				return nil, fmt.Errorf("native header actual import map changes a builtin source import")
+			}
+		}
+	}
+
 	sizes := &nativeHeaderGCSizes{word: word, cache: make(map[types.Type]nativeHeaderLayout), active: make(map[types.Type]bool)}
-	pkg, err := (&types.Config{GoVersion: language, Sizes: sizes, IgnoreFuncBodies: true}).Check(packagePath, set, files, nil)
+	pkg, err := (&types.Config{GoVersion: language, Sizes: sizes, IgnoreFuncBodies: true,
+		Importer: nativeHeaderBuiltinImporter{}}).Check(packagePath, set, files, nil)
 	if err != nil || sizes.err != nil {
 		return nil, fmt.Errorf("native header original declaration typecheck failed: %v %v", err, sizes.err)
 	}
 	return nativeGeneratedHeaderDefinitions(pkg, sizes)
+}
+
+type nativeHeaderBuiltinImporter struct{}
+
+func (nativeHeaderBuiltinImporter) Import(packagePath string) (*types.Package, error) {
+	if packagePath == "unsafe" {
+		return types.Unsafe, nil
+	}
+	return nil, fmt.Errorf("native header importer has no registered original dependency: %s", packagePath)
 }
 
 // Both ordinary and same-mode imported queries use this one native property
@@ -153,10 +198,16 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 		total += len(text)
 		file, err := parser.ParseFile(set, name, text, parser.ParseComments)
 		if err != nil {
-			return nil, nil, 0, fmt.Errorf("native header source is not closed import-free Go: %v", err)
+			return nil, nil, 0, fmt.Errorf("native header original source is not valid Go: %v", err)
 		}
-		if len(file.Imports) != 0 {
-			return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source query has unclosed imports"}
+		for _, spec := range file.Imports {
+			spelling, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				return nil, nil, 0, fmt.Errorf("native header original import path is invalid: %w", err)
+			}
+			if spelling != "unsafe" {
+				return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source query has unclosed imports"}
+			}
 		}
 		closed := true
 		ast.Inspect(file, func(node ast.Node) bool {

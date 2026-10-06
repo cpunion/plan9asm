@@ -119,8 +119,8 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 	if err != nil || header.LanguageVersion != language {
 		return nil, fmt.Errorf("planning query language differs from original module metadata: %v", err)
 	}
-	if len(header.ImportMap) != 0 || len(header.Imports) != 0 {
-		return nil, fmt.Errorf("native header source replay requires its closed import-free domain")
+	if len(header.Imports) != 0 {
+		return nil, fmt.Errorf("native header source replay has an unclosed dependency-export domain")
 	}
 	wantedPackage := module
 	if directory := path.Dir(assembly); directory != "." {
@@ -137,7 +137,8 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 		}
 		sources[name] = text
 	}
-	definitions, err := gotoolprofile.ReplayNativeGeneratedHeader(header.PackagePath, header.Target, header.LanguageVersion, sources)
+	definitions, err := gotoolprofile.ReplayNativeGeneratedHeaderWithImportMap(header.PackagePath, header.Target,
+		header.LanguageVersion, sources, header.ImportMap)
 	if err != nil {
 		return nil, fmt.Errorf("independent original native header source replay: %w", err)
 	}

@@ -35,6 +35,8 @@ const Word = unsafe.Sizeof(uintptr(0))
 			`import "unsafe"`, `import u "unsafe"`, 1), "unsafe.", "u.")},
 		{name: "dot", source: strings.ReplaceAll(strings.Replace(original,
 			`import "unsafe"`, `import . "unsafe"`, 1), "unsafe.", "")},
+		{name: "escaped path", source: strings.Replace(original, `import "unsafe"`, `import "\u0075nsafe"`, 1)},
+		{name: "raw path", source: strings.Replace(original, `import "unsafe"`, "import `unsafe`", 1)},
 		{name: "blank", source: "package header\nimport _ \"unsafe\"\ntype Values struct { Bytes []byte }\n"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -50,5 +52,43 @@ const Word = unsafe.Sizeof(uintptr(0))
 				})
 			}
 		})
+	}
+}
+
+func TestGeneratedHeaderBuiltinImportMapRetainsCompleteOriginalScope(t *testing.T) {
+	const source = "package header\nimport \"unsafe\"\nconst Word = unsafe.Sizeof(uintptr(0))\n"
+	sources := map[string]string{"header.go": source}
+	definitions, err := ReplayNativeGeneratedHeaderWithImportMap("example.invalid/header", "linux/amd64", "go1.20",
+		sources, map[string]string{"unsafe": "unsafe"})
+	if err != nil || definitions["const_Word"] != "8" {
+		t.Fatalf("complete original builtin property query failed: %v %v", definitions, err)
+	}
+	for _, test := range []struct {
+		name    string
+		imports map[string]string
+	}{
+		{name: "absent"},
+		{name: "deleted", imports: map[string]string{}},
+		{name: "rewritten", imports: map[string]string{"unsafe": "example.invalid/unsafe"}},
+		{name: "empty edge", imports: map[string]string{"unsafe": ""}},
+		{name: "extra", imports: map[string]string{"unsafe": "unsafe", "fmt": "fmt"}},
+		{name: "foreign", imports: map[string]string{"example.invalid/unsafe": "unsafe"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definitions, err := ReplayNativeGeneratedHeaderWithImportMap("example.invalid/header", "linux/amd64", "go1.20",
+				sources, test.imports)
+			if definitions != nil || err == nil || NativeHeaderSourceDomainUnsupported(err) {
+				t.Fatalf("changed actual import map was accepted or hidden by unsupported fallback: %v %v", definitions, err)
+			}
+		})
+	}
+	plain := map[string]string{"header.go": "package header\nconst Word = 8\n"}
+	if definitions, err := ReplayNativeGeneratedHeaderWithImportMap("example.invalid/header", "linux/amd64", "go1.20",
+		plain, map[string]string{"unsafe": "unsafe"}); definitions != nil || err == nil || NativeHeaderSourceDomainUnsupported(err) {
+		t.Fatalf("unused builtin edge was borrowed from unrelated source: %v %v", definitions, err)
+	}
+	if definitions, err := ReplayNativeGeneratedHeaderWithImportMap("example.invalid/header", "linux/amd64", "go1.20",
+		plain, map[string]string{}); err != nil || definitions["const_Word"] != "8" {
+		t.Fatalf("complete empty original import map changed: %v %v", definitions, err)
 	}
 }

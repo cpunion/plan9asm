@@ -98,6 +98,17 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 		"planning is not execution":              func(r *discoveryCorpusResult) { r.FeatureConsumption = nil; r.Translations = 0 },
 		"planning cannot replace executed query": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.GeneratedHeaders = nil },
 	}
+	if plan.HeaderPlanning.Queries[0].Metadata.Headers[0].ImportMap["unsafe"] == "unsafe" {
+		mutations["builtin import paired deletion"] = func(r *discoveryCorpusResult) {
+			delete(r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].ImportMap, "unsafe")
+		}
+		mutations["builtin import rewrite"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].ImportMap["unsafe"] = "example.invalid/unsafe"
+		}
+		mutations["builtin import extra unconsumed edge"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].ImportMap["fmt"] = "fmt"
+		}
+	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
 			var changed discoveryCorpusResult

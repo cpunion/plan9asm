@@ -140,7 +140,7 @@ func TestGeneratedHeaderNativeLayoutIsNotPublicTypeModelAuthority(t *testing.T) 
 	}
 }
 
-func TestGeneratedHeaderNativeImportQueriesRemainSeparateObservations(t *testing.T) {
+func TestGeneratedHeaderNativeBuiltinImportPropertiesMatchSourceReplay(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		source string
@@ -165,7 +165,12 @@ func TestGeneratedHeaderNativeImportQueriesRemainSeparateObservations(t *testing
 					if !reflect.DeepEqual(actual, wanted) {
 						t.Fatalf("unclosed-source native observation changed: actual=%v wanted=%v", actual, wanted)
 					}
-					t.Log("UNSUPPORTED_PLANNING_AUTHORITY: actual header acceptance does not close imported source replay")
+					replayed, err := ReplayNativeGeneratedHeaderWithImportMap("example.invalid/header", target, "go1.20",
+						map[string]string{"header.go": test.source}, map[string]string{"unsafe": "unsafe"})
+					if err != nil || !reflect.DeepEqual(actual, replayed) {
+						t.Fatalf("actual builtin-import header differs from original property replay: actual=%v replay=%v error=%v",
+							actual, replayed, err)
+					}
 				})
 			}
 		})

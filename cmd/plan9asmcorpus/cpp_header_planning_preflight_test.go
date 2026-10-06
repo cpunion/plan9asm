@@ -28,10 +28,12 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 	profile := discoveryFeatureProfile{Observed: fixture.Observed["linux/amd64"],
 		Request: discoveryFeatureProfileRequest{Target: "linux/amd64", Baseline: true}}
 	profile.ID = discoveryFeatureProfileID(profile.Observed)
-	for _, axis := range []string{"closed", "imports", "generic", "directive", "source", "archive", "selection", "language", "profile"} {
+	for _, axis := range []string{"closed", "builtin unsafe", "imports", "generic", "directive", "source", "archive", "selection", "language", "profile"} {
 		t.Run(axis, func(t *testing.T) {
 			source := "package header\nconst Value = 7\nfunc probe() uint64\n"
 			switch axis {
+			case "builtin unsafe":
+				source = "package header\nimport \"unsafe\"\nconst Value = unsafe.Sizeof(uintptr(0))\nfunc probe() uint64\n"
 			case "imports":
 				source = "package header\nimport \"fmt\"\nvar _ = fmt.Sprintf\nfunc probe() uint64\n"
 			case "generic":
@@ -80,7 +82,7 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 			}
 			err = preflightDiscoveryHeaderQuery(plan, selected, download, "probe.s", nil)
 			unsupported := gotoolprofile.NativeHeaderSourceDomainUnsupported(err)
-			if axis == "closed" {
+			if axis == "closed" || axis == "builtin unsafe" {
 				if err != nil || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("unmodified preflight must not create query authority: %v", err)
 				}
