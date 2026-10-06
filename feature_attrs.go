@@ -109,8 +109,11 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 			}
-			if form, known, err := x86WordMultiplyAddProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+			if form, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
+				if form.spec.inputBits == 8 {
+					add("+ssse3")
+				}
 			}
 			if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")

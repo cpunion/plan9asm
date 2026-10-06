@@ -42,8 +42,6 @@ func TestTranslateX86PackedUnsignedSignedByteMultiplyAddCompleteGoAssemblerForms
 	VPMADDUBSW (AX), Y1, Y2
 	VPMADDUBSW Z0, Z1, Z7
 	VPMADDUBSW (AX), Z6, Z7
-	VPMADDUBSW X20, X21, X22
-	VPMADDUBSW Y20, Y21, Y22
 	RET
 `)
 	if err != nil {

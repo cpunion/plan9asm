@@ -20,6 +20,10 @@ func TestCrossLinuxRuntimeMatrixX86WordMultiplyAddNativeMemoryStatus(t *testing.
 		{"VPMADDWD.Z (BX),X0,K1,X1", 16},
 		{"VPMADDWD.Z (BX),Y0,K1,Y1", 32},
 		{"VPMADDWD.Z (BX),Z0,K1,Z1", 64},
+		{"PMADDUBSW (BX),X0", 16},
+		{"VPMADDUBSW.Z (BX),X0,K1,X1", 16},
+		{"VPMADDUBSW.Z (BX),Y0,K1,Y1", 32},
+		{"VPMADDUBSW.Z (BX),Z0,K1,Z1", 64},
 	} {
 		name := fmt.Sprintf("wordmaddfault%d", i)
 		// Deliberately discard the computed result. Sideeffect/volatile reads
@@ -32,6 +36,8 @@ func TestCrossLinuxRuntimeMatrixX86WordMultiplyAddNativeMemoryStatus(t *testing.
 		reference := fmt.Sprintf("read%d", row.width)
 		if i == 0 {
 			reference = "originalPMADDWD"
+		} else if i == 4 {
+			reference = "originalPMADDUBSW"
 		}
 		fmt.Fprintf(&checks, "for(int offset=0;offset<16;++offset) if(compareStatus(%s,%s,memory+offset)) return 1;\n", reference, name)
 		fmt.Fprintf(&checks, "if(compareStatus(%s,%s,0) || compareStatus(%s,%s,boundary-%d+1) || compareStatus(%s,%s,boundary-%d)) return 1;\n", reference, name, reference, name, row.width, reference, name, row.width)
@@ -58,6 +64,11 @@ __attribute__((noinline)) static void originalPMADDWD(const uint8_t *p) {
  V carrier={0,0,0,0};
  // This is the original PMADDWD memory opcode, not MOVDQA plus PMADDWD.
  __asm__ volatile("pmaddwd (%1),%0" : "+x"(carrier) : "r"(p) : "memory");
+}
+__attribute__((noinline)) static void originalPMADDUBSW(const uint8_t *p) {
+ typedef int32_t V __attribute__((vector_size(16)));
+ V carrier={0,0,0,0};
+ __asm__ volatile("pmaddubsw (%1),%0" : "+x"(carrier) : "r"(p) : "memory");
 }
 __attribute__((noinline)) static void read16(const uint8_t *p) {for(int i=0;i<16;++i) (void)((const volatile uint8_t*)p)[i];}
 __attribute__((noinline)) static void read32(const uint8_t *p) {for(int i=0;i<32;++i) (void)((const volatile uint8_t*)p)[i];}

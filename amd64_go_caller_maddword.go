@@ -1,6 +1,6 @@
 package plan9asm
 
-func x86CallerWordMultiplyAddStep(ins *Instr, form x86PackedBinaryForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+func x86CallerWordMultiplyAddStep(ins *Instr, form x86PackedMultiplyAddForm, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form.mmx || form.mask >= 0 && !state.masks[ins.Args[form.mask].Reg] {
 		return false
 	}
@@ -17,8 +17,9 @@ func x86CallerWordMultiplyAddStep(ins *Instr, form x86PackedBinaryForm, state *x
 	}
 	second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)] & width
 	var known uint64
-	for byteIndex := 0; byteIndex < form.byteWidth; byteIndex += 4 {
-		pair := uint64(15) << uint(byteIndex)
+	groupBytes := form.spec.outputBits / 8
+	for byteIndex := 0; byteIndex < form.byteWidth; byteIndex += groupBytes {
+		pair := (uint64(1)<<uint(groupBytes) - 1) << uint(byteIndex)
 		if first&pair == pair && second&pair == pair {
 			known |= pair
 		}

@@ -55,7 +55,7 @@ func TestX86MADDTypedPhysicalWIGCompleteOperands(t *testing.T) {
 								continue
 							}
 							arch := map[int]string{32: "386", 64: "amd64"}[mode]
-							if form, known, err := x86WordMultiplyAddProperties(instruction, arch); err != nil || !known || form.mask != 2 {
+							if form, known, err := x86PackedMultiplyAddProperties(instruction.Op, instruction, arch); err != nil || !known || form.mask != 2 {
 								t.Errorf("physical MADD missing complete typed grammar: %+v %t/%v", form, known, err)
 							}
 							if width, write, valid := x86InstructionMemoryShape(instruction, 0, arch); source[0] == '1' &&
@@ -74,9 +74,16 @@ func TestX86MADDTypedPhysicalWIGCompleteOperands(t *testing.T) {
 }
 
 func TestX86MADDTypedCallerByteFamily(t *testing.T) {
-	for _, row := range []string{"PMADDUBSW X0,X1", "PMADDUBSW (DI),X1",
-		"VPMADDUBSW X0,X1,X2", "VPMADDUBSW Y0,Y1,Y2", "VPMADDUBSW Z0,Z1,K1,Z2",
-		"VPMADDUBSW.Z (DI),Z1,K1,Z2"} {
+	rows := []string{"PMADDUBSW X0,X1", "PMADDUBSW X1,X1", "PMADDUBSW (DI),X1"}
+	for _, bank := range []string{"X", "Y", "Z"} {
+		for _, first := range []string{bank + "0", "(DI)"} {
+			rows = append(rows,
+				"VPMADDUBSW "+first+","+bank+"1,"+bank+"2",
+				"VPMADDUBSW "+first+","+bank+"1,K1,"+bank+"2",
+				"VPMADDUBSW.Z "+first+","+bank+"1,K1,"+bank+"2")
+		}
+	}
+	for _, row := range rows {
 		t.Run(row, func(t *testing.T) {
 			result := "X2"
 			if strings.HasPrefix(row, "PMADD") {
@@ -86,8 +93,10 @@ func TestX86MADDTypedCallerByteFamily(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
 			goAssemblerOracleOutput(t, "amd64", assembly, "", true)
 			pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
-			if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
-				t.Fatal("Go-accepted byte-MADD is missing caller effects", err)
+			for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"} {
+				if err := x86CallerCoreTranslate(t, pkg, assembly, triple); err != nil {
+					t.Fatal("Go-accepted byte-MADD is missing caller effects", triple, err)
+				}
 			}
 		})
 	}

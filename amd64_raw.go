@@ -6022,9 +6022,10 @@ vex:
 	secondSource := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, secondSourceNumber))}
 	destination := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, destinationNumber))}
 	instruction = Instr{
-		Op:   op,
-		Args: []Operand{firstSource, secondSource, destination},
-		Raw:  fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
+		Op:         op,
+		Args:       []Operand{firstSource, secondSource, destination},
+		Raw:        fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
+		x86Encoded: true,
 	}
 	return instruction, modRMIndex + consumed, true, nil
 }

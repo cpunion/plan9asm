@@ -89,9 +89,9 @@ func TestX86GoCallerWordMultiplyAddRetainsUnknownSourceFailures(t *testing.T) {
 }
 
 func TestX86GoCallerWordMultiplyAddMemoryCertificatesRetainExactFullRead(t *testing.T) {
-	for _, row := range []string{"PMADDWL (DI),X0", "VPMADDWD.Z (DI),Z0,K1,Z2"} {
+	for _, row := range []string{"PMADDWL (DI),X0", "VPMADDWD.Z (DI),Z0,K1,Z2", "PMADDUBSW (DI),X0", "VPMADDUBSW.Z (DI),Z0,K1,Z2"} {
 		body := "VMOVUPS (SI),Z0\nMOVL $0,AX\nKMOVQ AX,K1\n" + row + "\nVMOVSS X2,(DX)"
-		if strings.HasPrefix(row, "PMADDWL") {
+		if strings.HasPrefix(row, "PMADD") {
 			body = strings.Replace(body, "VMOVSS X2", "VMOVSS X0", 1)
 		}
 		assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
@@ -107,7 +107,7 @@ func TestX86GoCallerWordMultiplyAddMemoryCertificatesRetainExactFullRead(t *test
 		}
 		found := false
 		for _, ins := range normalized.Funcs[0].Instrs {
-			form, recognized, err := x86WordMultiplyAddProperties(ins, "amd64")
+			form, recognized, err := x86PackedMultiplyAddProperties(ins.Op, ins, "amd64")
 			if !recognized || err != nil || form.memory < 0 {
 				continue
 			}
@@ -124,6 +124,9 @@ func TestX86GoCallerWordMultiplyAddMemoryCertificatesRetainExactFullRead(t *test
 				switch change {
 				case "opcode":
 					mutated.Op = "VPMADDUBSW"
+					if strings.Contains(row, "UBSW") {
+						mutated.Op = "VPMADDWD"
+					}
 				case "width":
 					access.width--
 					mutated.x86CallerMemory[index] = access
