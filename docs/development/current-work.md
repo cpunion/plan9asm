@@ -19,7 +19,7 @@ The aggregate still requires all 64 fresh reports.
 
 ## Current integration
 
-Continue on `codex/pr40-go-rule-final-validation-20261007`.
+Continue on `codex/pr40-verification-checkpoint-20261007`.
 Main owns integration and is the only assembly-ledger writer. Earlier separate
 agents are not active; inspect process ownership before taking over an artifact.
 
@@ -28,7 +28,7 @@ source/memory roles, pointer identity without pointee permission, scalar FP
 bit views, complete 32-register vector masks and bounded CFG payload. Private
 scalar views do not inherit the public pointer-input domain.
 
-This successor adds ARM64 scratch-call closure from actual unchanged Go source,
+The integration adds ARM64 scratch-call closure from actual unchanged Go source,
 package selection, ABI declarations, compiler-produced objects and SDK bodies.
 Source-wide native GP/NZCV/R27 CFG checks reject hidden incoming state.
 Same-package stack bytes and generated frame restores remain independently
@@ -42,10 +42,21 @@ Main reviewed the complete ARM64 aggregate and retained original false-admission
 and false-rejection regressions. Integration preserves the parent's x86 source
 normalizer and all runtime-oracle lifecycle consumers.
 
-CPP consumption now lexes each complete original once per graph construction,
-using an invocation-local resource index across all units. No persistent cache,
-unit/resource exclusion or new source permission is introduced. Every new
-consumer still independently validates its complete original source hashes.
+Exact native Go package prefixes now join the selected package, symabis and all
+compiler/assembler archive bodies. Dots in the last package-path component use
+Go's byte-wise percent grammar; normalization never decodes unknown packages,
+function names or ABI selectors.
+
+CPP consumption registers each source once per graph construction. Captured
+sources also retain a private immutable parser-built String-resource index;
+file, hash, full original and directive mutations invalidate it. Restored JSON
+uses the lexer. Consumers retain independent maps and complete source-hash
+validation. This introduces no portable authority or excluded unit/resource.
+
+Expired operations now retain their deadline even if a callback returns nil or
+an unrelated source error. Ordinary/mode CPU planning receives invocation-local
+contexts, checks loops and source reads, and preserves deterministic offline
+replay. Never retain setup contexts in plans reused by later target budgets.
 
 ## Closed evidence and live work
 
@@ -54,27 +65,45 @@ These results belong only to the named frozen snapshots, not this successor:
 - `e98a7342`: both current Go 1.27.1 and official Go 1.20.14 passed 195 affected
   root/corpus tests and 5,733 children, race, full root-module vet/build and
   independent physical source/tool/environment/process checks. No Fail or Skip.
-- ARM64 `1b0934c9`: both SDKs passed all 21 affected root tests and 317 children
-  with race, full module vet/build and independently checked frozen receipts.
-  Native host tests executed unchanged Go and LLVM O0/O2 mathematical/full-X27
-  canary controls. This is not the required native Linux counterpart or an
-  external-library pass.
+- ARM64 `f8ff1d9f`: both SDKs passed all 24 affected tests and 871 children,
+  including the shared package-prefix byte grammar, race, module vet/build and
+  independent frozen-input checks. Native host tests executed unchanged Go and
+  LLVM O0/O2 mathematical/full-X27 controls, not the native Linux counterpart or
+  a complete external-library version.
 - Original merged x86 domain/budget failures and old-SDK symabis failures remain
   under ignored artifacts in their own frozen leaves.
-- CPP `94c662b1` independently reproduced quadratic allocations on both SDKs.
-  Repair `2f4d82da` passed the two independent complexity/freshness tests on both.
-  Its 16-unit query-only benchmark reduced current-SDK time from 73.29 ms to
-  5.22 ms and allocations from about 1.05 million to 65,862. Historical SDK
-  time fell from 91.49 ms to 6.41 ms. These are microbenchmark observations,
-  not external-package, whole-job or ledger passes.
+- CPP `b66692de`: all CPP tests passed with race and independent checks:
+  current SDK 49 tests/208 children; historical SDK 47/181. Both gates bind all
+  eight root/nested dependency source directories, selected SDK and LLVM inputs.
+  Query-only current-SDK allocations fell from about 65,900 to 182 and focused
+  benchmark time from 4.82 ms to 0.58 ms. Earlier quadratic RED `94c662b1` and
+  repeated-source RED `e2738630` remain independently checked. Microbenchmarks
+  do not certify external versions, full jobs or ledger passes.
+- Deadline RED `4dedd225` and repair `8f9099f9`: both SDKs independently checked
+  all three tests/three children, preserving actual expired-callback failures.
+- Planning-read RED `c012be23` and repair `e9b99c7b`: both SDKs independently
+  checked 12 tests/27 children. The RED continued five source reads after
+  cancellation on all five architectures; the repair stops further reads.
+- Combined `f547724d` root/corpus producers terminated successfully, but do not
+  promote them: the current-SDK corpus guard omitted four nested dependency
+  directories and the combined independent readback remains incomplete. Run a
+  fresh combined gate with all eight directories bound before and after.
 - A separate frozen `e98a7342` four-candidate shard-5 replay is still running.
   Its controlling agent exited while its actual runner remained alive. Inspect
   PID/PGID, raw reports and closure evidence; a console PASS or missing owner
   receipt cannot be promoted into a ledger pass.
 
-Arrow's sampled older runner repeatedly lexed the entire CPP source graph inside
-per-unit/profile replay. Run a fresh complete-target candidate replay with the
-repair, preserving the older evidence. Do not mutate the running older replay.
+Separate frozen `f547724d` and `b66692de` four-candidate shard-5 replays also
+remain live under ignored `shard5-priority-replay` and
+`shard5-source-index-replay` outputs. Controllers retain their actual exit
+receipts; inspect them before taking over. Keep all 11 default targets, exact
+candidate membership and complete-shard pending denominator. A console PASS
+or initial partial checkpoint cannot update the assembly ledger.
+
+Arrow's newest CPU sample moved from repeated String lexing to complete-source
+hashing and original CPP replay. Optimize that rule-class cost without omitting
+sources, profile pairs, consumer checks or source/tool provenance. Preserve
+older samples; do not mutate or borrow caches from live replays.
 
 ## Required completion gates
 
@@ -91,6 +120,12 @@ entry/continuation state and observable ARM64 result padding: never invent
 backing, initialization or padding. Official opcode classification is distinct
 from encoder-form, object, native-runtime and external-library coverage.
 LLVM 22 is mandatory; wasm must never receive `blockaddress`.
+
+The latest strict benchmark on `f8ff1d9f` failed: 184 attempted, 172 passed and
+12 failed, no N/A or unattempted files. Wasm passed 19/19. The same snapshot's
+five official classification gates passed with zero unsupported/parser errors;
+Context classifications are not ordinary lowering or runtime passes. These
+gates must still be fixed and rerun on the complete successor.
 
 ## Inventory and ledger
 
