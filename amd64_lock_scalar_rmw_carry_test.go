@@ -109,7 +109,7 @@ func TestX86LockScalarRMWCarryBudgetAndInputsRemainUnchanged(t *testing.T) {
 	if state := ctx.lockCarryTransfer(Instr{Op: "POPFQ"}, x86LockCarryState{carry: true}); state.carry {
 		t.Fatal("synthetic empty stack supplied carry")
 	}
-	state := x86LockCarryState{carry: true, stack: []x86LockCarryCell{{bits: 16, known: true}}}
+	state := x86LockCarryState{carry: true, stack: []x86LockCarryCell{{bits: 16, valueKnown: true, carryKnown: true}}}
 	if state = ctx.lockCarryTransfer(Instr{Op: "POPFQ"}, state); state.carry {
 		t.Fatal("synthetic mismatched-width stack cell supplied carry")
 	}

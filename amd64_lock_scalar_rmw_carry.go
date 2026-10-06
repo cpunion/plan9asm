@@ -17,8 +17,9 @@ type x86LockCarryState struct {
 }
 
 type x86LockCarryCell struct {
-	bits  int
-	known bool
+	bits       int
+	valueKnown bool
+	carryKnown bool
 }
 
 func (state x86LockCarryState) clone() x86LockCarryState {
@@ -40,7 +41,8 @@ func (state x86LockCarryState) intersect(other x86LockCarryState) x86LockCarrySt
 				state.stack = nil
 				break
 			}
-			state.stack[index].known = state.stack[index].known && other.stack[index].known
+			state.stack[index].valueKnown = state.stack[index].valueKnown && other.stack[index].valueKnown
+			state.stack[index].carryKnown = state.stack[index].carryKnown && other.stack[index].carryKnown
 		}
 	}
 	return state
@@ -116,23 +118,29 @@ func (c *amd64Ctx) lockCarryTransfer(ins Instr, state x86LockCarryState) x86Lock
 			if len(state.stack) >= 64 {
 				return x86LockCarryState{}
 			}
-			known := state.carry
+			cell := x86LockCarryCell{bits: spec.bits, carryKnown: state.carry}
 			if spec.mode == amd64StackPushValue {
-				known = c.lockCarryRead(ins.Args[0], int64(spec.bits/8), state)
+				cell.valueKnown = c.lockCarryRead(ins.Args[0], int64(spec.bits/8), state)
+				cell.carryKnown = cell.valueKnown
 			}
-			state.stack = append(state.stack, x86LockCarryCell{spec.bits, known})
+			// PUSHF captures a flags word, but this domain proves only its CF.
+			// POP into GP must not promote unknown OF or other bits to numeric
+			// byte facts. A direct POPF may independently consume known CF.
+			state.stack = append(state.stack, cell)
 			return state
 		}
-		known := false
+		cell := x86LockCarryCell{}
 		if len(state.stack) != 0 {
-			cell := state.stack[len(state.stack)-1]
+			cell = state.stack[len(state.stack)-1]
 			state.stack = state.stack[:len(state.stack)-1]
-			known = cell.bits == spec.bits && cell.known
+			if cell.bits != spec.bits {
+				cell = x86LockCarryCell{}
+			}
 		}
 		if spec.mode == amd64StackPopFlags {
-			state.carry = known
+			state.carry = cell.carryKnown
 		} else {
-			c.lockCarryWrite(ins.Args[0], int64(spec.bits/8), known, &state)
+			c.lockCarryWrite(ins.Args[0], int64(spec.bits/8), cell.valueKnown, &state)
 		}
 		return state
 	}
