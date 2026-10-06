@@ -74,11 +74,21 @@ if [[ "$goarch" == 386 ]]; then
     missing) exit 17 ;;
   esac
 fi
-printf '{"goos":"%s","goarch":"%s","total_asm":%s,"success":%s,"failed":%s,"not_applicable":%s,"duration":"1ms"}\n' \
+printf '{"goos":"%s","goarch":"%s","asm_files":["one.s","two.s"],"total_asm":%s,"success":%s,"failed":%s,"not_applicable":%s,"duration":"1ms"}\n' \
   "$goos" "$goarch" "$total" "$success" "$failed" "$na" > "$report"
+if (( failed > 0 )); then
+  jq --argjson count "$failed" '
+    .fails = [range(0; $count) | {pkg_path:"fixture", asm_file:"one.s", err:"protocol failure"}]
+  ' "$report" > "$report.changed"
+  mv "$report.changed" "$report"
+fi
 if [[ "$goarch" == 386 && "$PLAN9ASM_BENCH_TEST_MODE" == stale_failures ]]; then
   jq '.fails = [{pkg_path:"fixture", asm_file:"one.s", err:"retained failure"}]' \
     "$report" > "$report.changed"
+  mv "$report.changed" "$report"
+fi
+if [[ "$goarch" == 386 && "$PLAN9ASM_BENCH_TEST_MODE" == duplicate_files ]]; then
+  jq '.asm_files = ["one.s", "one.s"]' "$report" > "$report.changed"
   mv "$report.changed" "$report"
 fi
 exit "$code"
@@ -182,7 +192,7 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 	for _, mode := range []string{
 		"success", "command_failure", "failed_counts", "nonzero_success_counts",
 		"incomplete", "source_na", "empty", "malformed", "missing",
-		"negative_counts", "excessive_counts", "wrong_target", "target_budget", "stale_failures",
+		"negative_counts", "excessive_counts", "wrong_target", "target_budget", "stale_failures", "duplicate_files",
 	} {
 		t.Run(mode, func(t *testing.T) {
 			fixture := newCompileBenchmarkScriptFixture(t, mode)
@@ -200,6 +210,8 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 					CommandExit int    `json:"command_exit"`
 					ReportValid bool   `json:"report_valid"`
 					Unattempted *int   `json:"unattempted"`
+					Success     *int   `json:"success"`
+					Failed      *int   `json:"failed"`
 				} `json:"targets"`
 			}
 			if err := json.Unmarshal(data, &summary); err != nil {
@@ -227,8 +239,14 @@ func TestCompileBenchmarkSummaryNeverHidesFailures(t *testing.T) {
 			if mode == "incomplete" && (summary.Targets[0].Unattempted == nil || *summary.Targets[0].Unattempted != 1) {
 				t.Fatalf("unattempted file was hidden: %s", data)
 			}
+			if mode == "command_failure" || mode == "failed_counts" {
+				first := summary.Targets[0]
+				if !first.ReportValid || first.Success == nil || *first.Success != 1 || first.Failed == nil || *first.Failed != 1 {
+					t.Fatalf("valid failure evidence lost its actual counters: %s", data)
+				}
+			}
 			switch mode {
-			case "negative_counts", "excessive_counts", "wrong_target", "empty", "malformed", "missing", "stale_failures":
+			case "negative_counts", "excessive_counts", "wrong_target", "empty", "malformed", "missing", "stale_failures", "duplicate_files":
 				if summary.Targets[0].ReportValid || summary.Targets[0].Unattempted != nil {
 					t.Fatalf("invalid evidence supplied known counts or a valid report: %s", data)
 				}

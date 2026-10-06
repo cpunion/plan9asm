@@ -124,6 +124,10 @@ The strict benchmark compiles standard-library assembly for
 `linux/{386,amd64,arm,arm64}` and `js/wasm`. Every applicable file must translate
 and compile: failures, skips and N/A fail the job. Reports live under
 `_out/compile-benchmark/`; CI detail logs use collapsible groups.
+Failed files do not stop the remaining files or targets. Schema-2 summaries
+retain command exits, failed and unattempted counts; absent or invalid reports
+have unknown counts and fail. Existing reports are never overwritten: select
+a fresh `PLAN9ASM_BENCHMARK_REPORT_DIR` when repeating a run.
 
 Default budgets are 300 seconds per target and 900 seconds total. Diagnostic
 overrides are `PLAN9ASM_BENCHMARK_TARGETS`,
