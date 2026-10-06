@@ -20,11 +20,13 @@ not success for local repairs. Preserve failure-first scheduling and all
 
 ## Current local integration
 
-Use branch `codex/pr40-complete-family-review-integration-20261006`.
+Use branch `codex/pr40-complete-go-rule-families-20261006`.
 Its reviewed parent `688267e8` integrates the earlier `82bccde5` mechanism
 repairs, complete query-only CPP fixture transport and packed unsigned averages.
-The branch additionally integrates the bounded exhaustive worker implementation
-and its separate true-RED regression. Main is the sole assembly-ledger writer.
+The branch additionally integrates the bounded exhaustive worker implementation,
+shared x86 address/memory roles, and the complete packed integer comparison
+grammar/effects. Conflict resolution preserves the unsigned-average consumers
+as well as comparison consumers. Main is the sole assembly-ledger writer.
 
 The full-root replay found the direct MRS arity fixture still used AMD64.
 Its test-only repair now binds every case to its explicit architecture and
@@ -50,6 +52,13 @@ Closed evidence at exact earlier snapshots:
   the complete runner package, 30 roots / 44 children each, with race, full
   module vet/build and closed process ownership. Actual CLI tests prove bounded
   concurrency, exhaustive execution, failure continuation and coverage merging.
+- `927e6d6e`: the complete corpus-driver package passed all 32 race partitions,
+  548 roots / 1,904 children, no Skip or missing outcomes, in 41m49.664s.
+- `879feae6`: both SDKs passed seven address/memory-role roots / 2,461 children.
+  Real failures exposed shared classification, direct symbolic pointer sinks,
+  and x87 integer-load bypasses; all legitimate memory object controls remain.
+- Comparison leaf `9d7755fc`: both SDKs passed 85 roots / 8,739 children;
+  main independently rechecked the frozen receipts before integration.
 
 These are revision-specific mechanism/package gates, not full current-head
 module, native Linux, external-library or ledger passes. Ignored `_out/`
@@ -60,14 +69,15 @@ actual environments, command receipts and independent reader results.
 
 Existing agents own separate persistent leaves:
 
-- Sixteen x86 packed integer comparison opcodes: complete Go encoder rows,
-  physical mode32 banks, dispatch identity, memory faults and whole-byte effects.
 - Complete LOCK scalar RMW: native flag capture, carry initialization,
   namespace/segment identity and REX byte-bank aliases. A source spelling such
   as AH must not silently become the REX-selected SP byte.
-- ARM64 ABI0 result-tail audit: Go rounds the allocation to its register width,
-  but observable padding is not automatically a valid typed slot or backing
-  permission. A test-only audit must preserve the missing public caller contract.
+- Unnamed x86 TYPE_ADDR: bind the actual frontend before encoding. Go's
+  MOVL/Q progedit can rewrite to LEA, while narrow/other immediate roles differ;
+  literal normalization must not grant memory or caller permissions.
+- Module-wide exhaustive CI: preserve the actual package and test inventories,
+  original flags/deadlines and complete package coverage; avoid replacing the
+  corpus timeout with an overlong single job.
 
 Review each entire final diff and independently recheck its frozen evidence
 before integration. Do not cherry-pick a still-running source or infer combined
@@ -81,9 +91,10 @@ roots: 4,583 passed, 11 failed, 40 skipped. The failed architecture fixtures,
 mode32 vector forms, CPU IR assertions and missing separate LLVM 22 wasm linker
 have dedicated repairs. Preserve the original failed report.
 
-Its unpartitioned corpus-driver race package expired at 45 minutes. The actual
-complete 547-root inventory is being independently checked in 32 partitions;
-partial results and the known CPP fixture failure are not a package pass.
+Its unpartitioned corpus-driver race package expired at 45 minutes. Its separate
+547-root partition replay retained a real CPP fixture failure. The repaired
+927 snapshot's complete 548-root race replay passed; that does not promote
+either old failed run or certify a later combined source.
 Use the reviewed ordinary runner's bounded `-workers` option for fresh suites,
 retaining identical flags, complete actual inventory and original deadlines.
 
