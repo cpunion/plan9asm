@@ -24,7 +24,7 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-auto-result-family-integration-20261006`, based on
+Development branch: `codex/pr40-official-rule-family-integration-20261006`, based on
 the reviewed source-budget, SDK Count, CPU/environment and numeric fixed-local
 integration. It also combines the LEA oracle repair, host-derived export-command
 rendering and independently authenticated foreign instrumentation type sources.
@@ -34,6 +34,18 @@ bound object controls, and preserves raw x86 disp32 and LEA address-size
 semantics. Original failing fixtures and their replacement proofs remain in
 separate frozen snapshots. Required Linux runtime counterparts are not implied
 by cross-object or Darwin/Rosetta results.
+
+The next local batch integrates complete CPU-query, undefined-trap, ordering,
+decoded-prefix and native CMPXCHG effects; defined-zero status writers share a
+physical flag mask. Same-mode header planning retains its independent query
+role, bounded recapture diagnostics and complete consumer guards. Conflict
+resolution preserves the existing timestamp and every-child resource policies.
+These independently verified leaves still require fresh combined-source gates.
+Required Linux native mathematical/fault roots retain their unchanged strict
+references. Local original-Go/C observation agreement is diagnostic evidence,
+not native ISA success. VEX packed-string implicit-output upper-lane effects
+are being repaired separately through an independent whole-family regression.
+Do not promote any of these local results into the external-library ledger.
 
 The bounded generated-artifact protocol and ARM64 opaque incoming save-slot
 oracles are integrated. The independently passing ReedSolomon replay proves its
