@@ -763,7 +763,7 @@ func isX87F0(op Operand) bool {
 }
 
 func isX87MemoryOperand(op Operand) bool {
-	return op.Kind == OpMem || op.Kind == OpSym || op.Kind == OpFP
+	return isAMD64MemoryOperand(op)
 }
 
 func (c *amd64Ctx) loadX87MoveValue(op Op, src Operand) (string, error) {
