@@ -51,7 +51,10 @@ func discoveryReplayCPPSource(file string, data []byte) (discoveryCPPSource, err
 				directive.Name = tokens[index+2].Text
 			case "include":
 				if index+2 >= len(tokens) || tokens[index+2].Kind != "string" {
-					return result, fmt.Errorf("CPP original %s:%d: generated include operand needs execution binding", file, directive.Line)
+					// Keep the unresolved physical control. A macro formal may
+					// supply a String only during the original input-stack replay.
+					// This is not C-style prescan of a physical include operand.
+					break
 				}
 				literal := tokens[index+2].Text
 				if record.Definition != nil && index != 0 {
@@ -152,12 +155,13 @@ func captureDiscoveryReplayCPPInputs(plan *discoveryOrdinarySelectionPlan, modul
 				inputs.Sources[id] = source
 			}
 			seen[id] = true
-			for index, directive := range source.Directives {
-				if directive.Kind != "include" {
-					continue
-				}
-				key := id + "#" + strconv.Itoa(index)
-				target, deferredKind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, assembly, directive.Include, deferred)
+			resources, err := discoveryCPPRegisteredResources(inputs, source)
+			if err != nil {
+				return err
+			}
+			for _, resource := range resources {
+				directive, key := resource.directive, id+resource.key
+				target, deferredKind, err := discoveryCPPResolveOriginalResource(moduleDir, goRoot, assembly, resource, deferred)
 				if err != nil {
 					return err
 				}
@@ -290,17 +294,21 @@ func verifyDiscoveryReplayCPPZIP(inputs *discoveryCPPInputs, plan *discoveryOrdi
 	}
 	for _, unit := range inputs.Units {
 		for id, source := range inputs.Sources {
-			for index, directive := range source.Directives {
-				if directive.Kind != "include" {
-					continue
-				}
-				key := id + "#" + strconv.Itoa(index)
+			resources, err := discoveryCPPRegisteredResources(inputs, source)
+			if err != nil {
+				return err
+			}
+			for _, resource := range resources {
+				directive, key := resource.directive, id+resource.key
 				target, bound := unit.Includes[key]
 				deferred := unit.DeferredIncludes[key]
 				if !bound && deferred == "" {
 					continue
 				}
 				module, tool, err := gotoolprofile.CPPIncludeCandidates(unit.File, directive.Include)
+				if resource.candidate && deferred == "unresolved_candidate" && err != nil {
+					continue // Unsafe raw Strings do not become an input permission.
+				}
 				if err != nil {
 					return err
 				}

@@ -11,9 +11,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) {
+	checkOrdinaryCPPFormalIncludes(t,
+		"darwin/amd64,darwin/arm64,linux/386,linux/amd64,linux/arm,linux/arm64,windows/386,windows/amd64,windows/arm64,js/wasm,wasip1/wasm", false)
+}
+
+func TestOrdinaryCPPFormalGeneratedHeaderUsesActualNativeProducer(t *testing.T) {
+	// This additional first-party header scope is not full-default coverage.
+	// A full11 header proposal exceeds the unchanged 64-profile budget; its
+	// actual failure is retained separately, not relabeled as passing evidence.
+	checkOrdinaryCPPFormalIncludes(t, "linux/amd64", true)
+}
+
+func checkOrdinaryCPPFormalIncludes(t *testing.T, targetList string, generatedHeader bool) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 	repo, err := filepath.Abs("../..")
@@ -49,11 +64,16 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 		"nested.h": "GLOBL ·nestedMarker(SB),$8\n",
 		"alias.h":  "GLOBL ·aliasMarker(SB),$8\n",
 	}
+	if generatedHeader {
+		sources["probe.go"] = "package fixture\ntype Record struct { Value uint64 }\nfunc Probe()\n"
+		sources["probe.s"] = strings.Replace(sources["probe.s"], "#include \"macros.h\"\n",
+			"#include \"macros.h\"\nINCLUDE(\"go_asm.h\")\nGLOBL ·recordMarker(SB),$Record__size\n", 1)
+	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
 	configurePreCPPFixtureProxy(t, candidate, download, sources["go.mod"])
-	targets, err := parseDiscoveryTargets("darwin/amd64,darwin/arm64,linux/386,linux/amd64,linux/arm,linux/arm64,windows/386,windows/amd64,windows/arm64,js/wasm,wasip1/wasm")
-	if err != nil || len(targets) != 11 {
-		t.Fatalf("original full target denominator: %v %v", targets, err)
+	targets, err := parseDiscoveryTargets(targetList)
+	if err != nil || len(targets) != len(strings.Split(targetList, ",")) {
+		t.Fatalf("original target denominator: %v %v", targets, err)
 	}
 	for _, target := range targets {
 		goos, goarch, _ := strings.Cut(target, "/")
@@ -114,4 +134,62 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 	}
 	t.Logf("FORMAL_ORDINARY_CLOSED objects=%d configs=%d source_bytes=%d result_bytes=%d",
 		matrix.Success, len(configs), originalBytes, len(encoded))
+	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"delete_candidate_and_original": func(copy *discoveryCorpusResult) {
+			delete(copy.OrdinarySelectionPlan.CPPInputs.Sources, "module/formal.h")
+			for index := range copy.OrdinarySelectionPlan.CPPInputs.Units {
+				for key, target := range copy.OrdinarySelectionPlan.CPPInputs.Units[index].Includes {
+					if target == "module/formal.h" {
+						delete(copy.OrdinarySelectionPlan.CPPInputs.Units[index].Includes, key)
+					}
+				}
+			}
+		},
+		"delete_original_protocol_and_graph": func(copy *discoveryCorpusResult) {
+			copy.OrdinarySelectionPlan.CPPSourceProtocol = ""
+			copy.OrdinarySelectionPlan.CPPInputs = nil
+		},
+		"paired_output_input_deletion": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				for index := range proof.CPP {
+					delete(proof.CPP[index].Inputs, "module/formal.h")
+					proof.CPP[index].ExpandedSHA256 = strings.Repeat("a", 64)
+				}
+			}
+		},
+		"paired_active_receipt_deletion": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				proof.CPPIncludeSearchMisses = nil
+				for index := range proof.CPP {
+					proof.CPP[index].ExpandedSearchMisses = nil
+				}
+			}
+		},
+		"paired_active_receipt_downgrade": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				for index := range proof.CPPIncludeSearchMisses {
+					proof.CPPIncludeSearchMisses[index].Protocol = gotoolprofile.CPPPackageSearchMissProtocol
+					proof.CPPIncludeSearchMisses[index].Source = "module/macros.h"
+				}
+				for index := range proof.CPP {
+					for receipt := range proof.CPP[index].ExpandedSearchMisses {
+						proof.CPP[index].ExpandedSearchMisses[receipt].Protocol = gotoolprofile.CPPPackageSearchMissProtocol
+						proof.CPP[index].ExpandedSearchMisses[receipt].Source = "module/macros.h"
+					}
+				}
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var copy discoveryCorpusResult
+			if err := json.Unmarshal(encoded, &copy); err != nil {
+				t.Fatal(err)
+			}
+			copy.featureInventory = inventory
+			mutate(&copy)
+			if err := validateOrdinaryProfileResult(copy, targets, result.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatal("deleted, downgraded or forged formal-include result was accepted")
+			}
+		})
+	}
 }

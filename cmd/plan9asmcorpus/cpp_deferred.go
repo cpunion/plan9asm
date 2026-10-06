@@ -12,6 +12,9 @@ import (
 // and every include edge is registered once, including inactive controls and
 // guarded cycles. Active source-order replay must be proved separately.
 func discoveryDeferredCPPUnitRegistration(inputs *discoveryCPPInputs, unit discoveryCPPUnit, used map[string]bool) ([]discoveryCPPDirective, error) {
+	if inputs.Protocol == discoveryReplayCPPInputsProtocol {
+		return discoveryOriginalCPPUnitRegistration(inputs, unit, used)
+	}
 	var directives []discoveryCPPDirective
 	visited, edges := make(map[string]bool), make(map[string]bool)
 	var visit func(string, int) error

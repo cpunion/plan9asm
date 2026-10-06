@@ -19,7 +19,7 @@ func TestCPPOriginalFormalIncludeOperandsFiveActualArchitectures(t *testing.T) {
 	}
 	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
 		t.Run(target, func(t *testing.T) {
-			for _, style := range []string{"formal_string", "nested_formal", "alias_formal"} {
+			for _, style := range []string{"formal_string", "nested_formal", "alias_formal", "ordered_driver_alias", "recorded_string"} {
 				t.Run(style, func(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 					defer cancel()
@@ -31,12 +31,18 @@ func TestCPPOriginalFormalIncludeOperandsFiveActualArchitectures(t *testing.T) {
 					} else if style == "alias_formal" {
 						prefix += "#define APPLY INCLUDE\n"
 						invocation = "APPLY(\"choice.h\")\n"
+					} else if style == "ordered_driver_alias" {
+						invocation = "APPLY(\"choice.h\")\n"
+					} else if style == "recorded_string" {
+						invocation = "INCLUDE(\"folder∕choice.h\")\n"
 					}
 					source := prefix + invocation + "TEXT ·Probe(SB),4,$0-0\nRET\n"
 					parts := strings.Split(target, "/")
 					file := "pkg/native_" + parts[1] + ".s"
 					plan, root, archive := fixtureCPPInputsForTarget(t, target, map[string]string{
 						file: source, "pkg/choice.h": "GLOBL ·chosen(SB),$8\n",
+						"pkg/folder/choice.h": "GLOBL ·chosen(SB),$8\n",
+						"pkg/folder∕choice.h": "GLOBL ·unchosen(SB),$8\n",
 					})
 					observed, err := captureDiscoveryTargetFeatures(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), target, nil)
 					if err != nil {
@@ -49,6 +55,11 @@ func TestCPPOriginalFormalIncludeOperandsFiveActualArchitectures(t *testing.T) {
 					binary, args, env, _, err := discoveryAssemblyProfileCommand(profile, parts[0], parts[1], runtime.GOROOT())
 					if err != nil {
 						t.Fatal(err)
+					}
+					// These arbitrary first-party -D inputs are original-Go/replay
+					// comparisons only, not permission to add custom CLI defines.
+					if style == "ordered_driver_alias" {
+						args = append(args, "-D", "APPLY=IGNORED", "-D", "APPLY=INCLUDE")
 					}
 					defines := []string{}
 					for index := 0; index+1 < len(args); index++ {
@@ -88,6 +99,9 @@ func TestCPPOriginalFormalIncludeOperandsFiveActualArchitectures(t *testing.T) {
 					observation, used, err := replayDiscoveryOriginalCPP(inputs, inputs.Units[0], nil, defines)
 					if err != nil || len(used) != 2 || !strings.Contains(observation.Output, "chosen") {
 						t.Fatalf("formal String original replay: %v %v\n%s", err, used, observation.Output)
+					}
+					if style == "recorded_string" && strings.Contains(observation.Output, "unchosen") {
+						t.Fatal("recorded argument String was treated as the physical spelling")
 					}
 				})
 			}

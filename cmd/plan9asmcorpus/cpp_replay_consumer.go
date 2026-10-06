@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
@@ -42,11 +41,12 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 		input.AsmFiles = append(input.AsmFiles, unit.File)
 		registered := gotoolprofile.CPPOriginalUnit{Includes: make(map[string]string)}
 		for id, source := range inputs.Sources {
-			for index, directive := range source.Directives {
-				if directive.Kind != "include" {
-					continue
-				}
-				key := id + "#" + strconv.Itoa(index)
+			resources, err := discoveryCPPRegisteredResources(inputs, source)
+			if err != nil {
+				return nil, err
+			}
+			for _, resource := range resources {
+				directive, key := resource.directive, id+resource.key
 				if target := unit.Includes[key]; target != "" {
 					if previous := registered.Includes[directive.Include]; previous != "" && previous != target {
 						return nil, fmt.Errorf("CPP fixed include origins conflict between raw controls")

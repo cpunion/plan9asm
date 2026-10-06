@@ -325,7 +325,7 @@ func validateDiscoveryCPPInputStructure(inputs *discoveryCPPInputs, plan *discov
 					return fmt.Errorf("missing exact CPP macro name")
 				}
 			case "include":
-				if directive.Include == "" || directive.Name != "" || filepath.IsAbs(directive.Include) || strings.ContainsAny(directive.Include, "\\\r\n") {
+				if (directive.Include == "" && inputs.Protocol != discoveryReplayCPPInputsProtocol) || directive.Name != "" || filepath.IsAbs(directive.Include) || strings.ContainsAny(directive.Include, "\\\r\n") {
 					return fmt.Errorf("missing exact CPP include")
 				}
 			case "else", "endif", "line":
@@ -422,11 +422,12 @@ func discoveryCPPUnitDirectives(inputs *discoveryCPPInputs, unit discoveryCPPUni
 func discoveryCPPValidateSearchMisses(inputs *discoveryCPPInputs, unit discoveryCPPUnit) error {
 	expected := make(map[string]gotoolprofile.CPPPackageSearchMiss)
 	for id, source := range inputs.Sources {
-		for index, directive := range source.Directives {
-			if directive.Kind != "include" {
-				continue
-			}
-			key := id + "#" + strconv.Itoa(index)
+		resources, err := discoveryCPPRegisteredResources(inputs, source)
+		if err != nil {
+			return err
+		}
+		for _, resource := range resources {
+			directive, key := resource.directive, id+resource.key
 			if unit.Includes[key] == "" {
 				continue
 			}
@@ -605,17 +606,18 @@ func verifyDiscoveryCPPInputsUnchanged(inputs *discoveryCPPInputs, moduleDir, go
 			}
 		}
 		for id, source := range inputs.Sources {
-			for index, directive := range source.Directives {
-				if directive.Kind != "include" {
-					continue
-				}
-				key := id + "#" + strconv.Itoa(index)
+			resources, err := discoveryCPPRegisteredResources(inputs, source)
+			if err != nil {
+				return err
+			}
+			for _, resource := range resources {
+				directive, key := resource.directive, id+resource.key
 				wanted, selected := unit.Includes[key]
 				deferredKind := unit.DeferredIncludes[key]
 				if !selected && deferredKind == "" {
 					continue
 				}
-				actual, kind, err := discoveryCPPResolveRawInclude(moduleDir, goRoot, unit.File, directive.Include, inputs.Protocol != discoveryCPPInputsProtocol)
+				actual, kind, err := discoveryCPPResolveOriginalResource(moduleDir, goRoot, unit.File, resource, inputs.Protocol != discoveryCPPInputsProtocol)
 				if err != nil || actual != wanted || kind != deferredKind {
 					return fmt.Errorf("CPP include search selection changed: %s:%d", id, directive.Line)
 				}
