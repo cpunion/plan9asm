@@ -366,6 +366,15 @@ initialized, create a padding slot, or authorize any address or write. Preserve
 the source MOV width, encoder scratch effects and PC identity. Manual sparse
 frames and changed type layouts retain their original missing-slot failure.
 
+A native-width store beyond a narrow declared result is different: its tail
+bytes are observable by an assembly caller after RET. A callee declaration,
+call-free body, or typed numerical oracle cannot authorize discarding them.
+Dropping that caller with `KeepFunc` does not close the original boundary;
+code-address and DATA references likewise grant no typed-entry permission.
+Keep the missing-slot failure until a real caller/backing contract closes the
+complete native effect. Check the independent nine-width native observer and
+all three translation APIs when changing this boundary.
+
 The framed raw-leaf proof registers PC-relative WORD branches through the same
 exact source-boundary checker as translation. It independently checks both
 original and normalized CFGs, including dead components; named normalized
