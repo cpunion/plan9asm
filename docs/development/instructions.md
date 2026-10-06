@@ -19,6 +19,19 @@ workflow, not a list of already completed instruction families.
 
 ## Instruction-family workflow
 
+Treat an external-library failure as a counterexample to the systematic
+coverage mechanism, not only as a package-specific regression. Identify where
+the independent Go rules, typed grammar, lowering/effect consumers or executed
+tests diverged; then enumerate and repair the entire affected rule class.
+Add a regression that still finds the defect without that external library.
+Rerun both the complete affected class and the original discovering sample.
+
+Keep the Go-table oracle independent of the implementation spec. Retain each
+encoding row's prefix, zcase, byte offset and opcode-specific attributes as well
+as its operand classes. A shared ytab or a name/row count is not a complete
+format check. Concrete syntax witnesses do not prove which overlapping encoder
+row Go selected, LLVM object success, runtime semantics or an ABI contract.
+
 Use test-driven development for every instruction change:
 
 1. Reproduce the unsupported instruction or incorrect operand-form behavior in

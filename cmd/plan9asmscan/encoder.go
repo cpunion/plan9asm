@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
 
 // encoderFormReport is an architecture encoder-table row, expressed with the
@@ -18,11 +20,12 @@ import (
 // rows enumerate the accepted operand-class surface even when no concrete
 // positive test happens to exercise it.
 type encoderFormReport struct {
-	Opcode         string   `json:"opcode"`
-	OperandClasses []string `json:"operand_classes"`
-	Form           string   `json:"form"`
-	Tables         []string `json:"tables"`
-	AliasedFrom    string   `json:"aliased_from,omitempty"`
+	Opcode         string                  `json:"opcode"`
+	OperandClasses []string                `json:"operand_classes"`
+	Form           string                  `json:"form"`
+	Tables         []string                `json:"tables"`
+	AliasedFrom    string                  `json:"aliased_from,omitempty"`
+	EncodingRules  []goasmrules.X86AVXRule `json:"encoding_rules,omitempty"`
 }
 
 type encoderFormSet struct {
@@ -126,6 +129,26 @@ func loadEncoderForms(goroot, goarch string) ([]encoderFormReport, error) {
 	switch goarch {
 	case "386", "amd64":
 		scanX86EncoderTables(files, forms)
+		for _, source := range files {
+			if compositeVars(source.file)["avxOptab"] == nil {
+				continue
+			}
+			rules, err := goasmrules.X86AVXRules(source.file)
+			if err != nil {
+				return nil, fmt.Errorf("read complete AVX rules in %s: %w", source.name, err)
+			}
+			for _, rule := range rules {
+				key := rule.Opcode
+				if len(rule.Classes) > 0 {
+					key += " " + strings.Join(rule.Classes, ",")
+				}
+				item := forms.forms[key]
+				if item == nil {
+					return nil, fmt.Errorf("complete AVX rule %s has no operand-class inventory", key)
+				}
+				item.EncodingRules = append(item.EncodingRules, rule)
+			}
+		}
 	case "arm":
 		scanFixedEncoderTable(files, forms, "optab", []string{"from", "reg", "to"})
 		expandEncoderAliases(files, forms, "opset")

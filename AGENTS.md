@@ -38,6 +38,9 @@ tests establish the relevant runtime semantics.
   Never generate LLVM `blockaddress` for wasm.
 - Use TDD and implement complete instruction families and Go operand formats,
   not just an observed spelling. Consult full Go tables before implementation.
+- For each external-library failure, explain why systematic Go-rule coverage
+  missed it, repair its entire rule class and add an independent regression
+  that detects it without the discovering library.
 - Never disguise unsupported instructions, translation/LLVM failures, missing
   tools or infrastructure errors as success or source N/A.
 - An exact external module version may be `skipped_invalid_source` only when

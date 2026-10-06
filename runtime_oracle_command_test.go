@@ -185,6 +185,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_private_sp_helper_test.go",
 		"preprocess_macro_controls_test.go",
 		"preprocess_semantic_oracle_test.go",
+		"x86_official_binary_witness_test.go",
 	} {
 		t.Run(name, func(t *testing.T) {
 			file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
