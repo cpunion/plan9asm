@@ -24,9 +24,10 @@ Use branch `codex/pr40-complete-go-rule-families-20261006`.
 Its reviewed parent `688267e8` integrates the earlier `82bccde5` mechanism
 repairs, complete query-only CPP fixture transport and packed unsigned averages.
 The branch additionally integrates the bounded exhaustive worker implementation,
-shared x86 address/memory roles, and the complete packed integer comparison
-grammar/effects. Conflict resolution preserves the unsigned-average consumers
-as well as comparison consumers. Main is the sole assembly-ledger writer.
+shared x86 address/memory roles, complete packed integer comparison grammar/
+effects, and the complete named scalar LOCK RMW family. Conflict resolution
+preserves the unsigned-average consumers as well as comparison consumers.
+Main is the sole assembly-ledger writer.
 
 The full-root replay found the direct MRS arity fixture still used AMD64.
 Its test-only repair now binds every case to its explicit architecture and
@@ -59,6 +60,10 @@ Closed evidence at exact earlier snapshots:
   and x87 integer-load bypasses; all legitimate memory object controls remain.
 - Comparison leaf `9d7755fc`: both SDKs passed 85 roots / 8,739 children;
   main independently rechecked the frozen receipts before integration.
+- LOCK leaf `b68e4d97`: both SDKs passed 101 roots / 5,612 children, no Skip;
+  main's separate physical collector rechecked all 24 closed command stages.
+  The leaf's before/after tool guard covers 33 selected inputs, not the full
+  SDK. The new integrated replay must supply full SDK guards independently.
 
 These are revision-specific mechanism/package gates, not full current-head
 module, native Linux, external-library or ledger passes. Ignored `_out/`
@@ -69,15 +74,15 @@ actual environments, command receipts and independent reader results.
 
 Existing agents own separate persistent leaves:
 
-- Complete LOCK scalar RMW: native flag capture, carry initialization,
-  namespace/segment identity and REX byte-bank aliases. A source spelling such
-  as AH must not silently become the REX-selected SP byte.
 - Unnamed x86 TYPE_ADDR: bind the actual frontend before encoding. Go's
   MOVL/Q progedit can rewrite to LEA, while narrow/other immediate roles differ;
   literal normalization must not grant memory or caller permissions.
 - Module-wide exhaustive CI: preserve the actual package and test inventories,
   original flags/deadlines and complete package coverage; avoid replacing the
   corpus timeout with an overlong single job.
+- Remaining strict standard-library contracts: reproduce the actual complete
+  five-target failures, then repair only source-backed mechanisms. Caller,
+  closure-register, runtime-entry and result-padding permissions remain strict.
 
 Review each entire final diff and independently recheck its frozen evidence
 before integration. Do not cherry-pick a still-running source or infer combined
