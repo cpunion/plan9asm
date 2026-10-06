@@ -11,8 +11,9 @@ import (
 	"testing"
 )
 
-// This independent directory is the complete legacy yxmov family, including
-// cmd/asm's MOVOA alias. It does not infer VEX/EVEX writes from an X operand.
+// This directory is the complete whole-128-bit legacy subset of yxmov,
+// including MOVOA. The same ytab also serves distinct scalar/half moves; the
+// table inventory below retains those names without borrowing their effects.
 var x86LegacyPackedMoveTestNames = []string{"MOVOU", "MOVOA", "MOVO", "MOVUPS", "MOVAPS", "MOVUPD", "MOVAPD"}
 
 func TestX86ABI0ResultLegacyPackedMoveCompleteDeclaredBytes(t *testing.T) {
@@ -80,7 +81,7 @@ func TestX86LegacyPackedMoveCompleteActualGoRows(t *testing.T) {
 	for _, row := range rows {
 		names = append(names, row[1])
 	}
-	if strings.Join(names, ",") != "AMOVAPD,AMOVAPS,AMOVO,AMOVOU,AMOVUPD,AMOVUPS" {
+	if strings.Join(names, ",") != "AMOVAPD,AMOVAPS,AMOVO,AMOVOU,AMOVHPD,AMOVHPS,AMOVLPD,AMOVLPS,AMOVSD,AMOVSS,AMOVUPD,AMOVUPS" {
 		t.Fatalf("complete current SDK yxmov rows changed: %v", names)
 	}
 	for _, row := range []string{"{Zm_r_xm, 1, argList{Yxm, Yxr}}", "{Zr_m_xm, 1, argList{Yxr, Yxm}}"} {
