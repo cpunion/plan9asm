@@ -158,6 +158,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_x87_flag_compare_test.go",
 		"amd64_x87_native_ia32_test.go",
 		"amd64_packed_subtract_go_oracle_test.go",
+		"amd64_packed_integer_compare_go_oracle_test.go",
+		"amd64_packed_integer_compare_linux_amd64_test.go",
 		"amd64_go_caller_maddword_runtime_test.go",
 		"amd64_packed_sad_runtime_test.go",
 		"amd64_conditional_set_runtime_test.go",
