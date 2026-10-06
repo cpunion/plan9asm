@@ -17,7 +17,8 @@ func TestPreCPPControlPrefixPreservesExactPhysicalBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		proof := discoveryPreCPPRejection{File: "source.s", Line: unsupported.Line, Directive: unsupported.Directive, ControlPrefix: prefix}
+		proof := discoveryPreCPPRejection{Protocol: discoveryPreCPPRejectionProtocol, File: "source.s",
+			Line: unsupported.Line, Directive: unsupported.Directive, ControlPrefix: prefix}
 		if err := validatePreCPPControlPrefix(proof); err != nil {
 			t.Fatal(err)
 		}

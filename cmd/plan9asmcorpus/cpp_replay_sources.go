@@ -155,6 +155,11 @@ func captureDiscoveryReplayCPPInputs(plan *discoveryOrdinarySelectionPlan, modul
 			if readErr != nil || closeErr != nil {
 				return fmt.Errorf("read original CPP: %v (close: %v)", readErr, closeErr)
 			}
+			if depth == 0 {
+				if rejection := preCPPFirstTokenRejection(relative, data); rejection != nil {
+					return rejection
+				}
+			}
 			source, err := discoveryReplayCPPSource(relative, data)
 			if err != nil {
 				return err

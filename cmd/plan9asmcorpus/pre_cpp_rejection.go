@@ -19,6 +19,7 @@ import (
 )
 
 const discoveryPreCPPRejectionProtocol = "original_first_cpp_control_asm_rejection_v1"
+const discoveryPreCPPFirstTokenProtocol = "original_first_asm_token_rejection_v1"
 
 const discoveryPreCPPControlPrefixLimit = 64 << 10
 
@@ -32,6 +33,7 @@ type discoveryPreCPPRejection struct {
 	SHA256        string                     `json:"sha256"`
 	Line          int                        `json:"line"`
 	Directive     string                     `json:"directive"`
+	FirstToken    string                     `json:"first_token,omitempty"`
 	ControlPrefix string                     `json:"control_prefix"`
 	ProfileID     string                     `json:"profile_id"`
 	Target        string                     `json:"target"`
@@ -71,6 +73,9 @@ func preCPPExactSourceDiagnostic(proof discoveryPreCPPRejection) bool {
 		return false
 	}
 	wanted := proof.File + ":" + strconv.Itoa(proof.Line) + ": unexpected token after '#': " + proof.Directive
+	if proof.Protocol == discoveryPreCPPFirstTokenProtocol {
+		wanted = fmt.Sprintf("%s:%d: expected identifier, found %q", proof.File, proof.Line, proof.FirstToken)
+	}
 	for _, line := range strings.Split(proof.Reason, "\n") {
 		if strings.TrimSpace(line) == wanted {
 			return true
@@ -112,12 +117,21 @@ func validatePreCPPControlPrefix(proof discoveryPreCPPRejection) error {
 	if err != nil || prefix != proof.ControlPrefix {
 		return fmt.Errorf("pre-CPP rejection lacks its exact bounded original control prefix")
 	}
-	_, syntaxErr := discoveryCPPConditionsFromBytes(proof.File, []byte(prefix))
+	syntaxErr := preCPPSourceSyntax(proof.File, []byte(prefix))
 	var unsupported *discoveryUnsupportedCPPError
-	if !errors.As(syntaxErr, &unsupported) || unsupported.Line != proof.Line || unsupported.Directive != proof.Directive {
+	if !errors.As(syntaxErr, &unsupported) || unsupported.Line != proof.Line || !preCPPRejectionMatchesToken(proof, unsupported) {
 		return fmt.Errorf("pre-CPP original prefix does not prove its first unconditional unknown control")
 	}
 	return nil
+}
+
+func preCPPRejectionMatchesToken(proof discoveryPreCPPRejection, source *discoveryUnsupportedCPPError) bool {
+	if source.FirstToken {
+		return proof.Protocol == discoveryPreCPPFirstTokenProtocol && proof.Directive == "" &&
+			proof.FirstToken != "" && proof.FirstToken == source.Directive
+	}
+	return proof.Protocol == discoveryPreCPPRejectionProtocol && proof.FirstToken == "" &&
+		proof.Directive == source.Directive && preCPPUnsupportedDirective(proof.Directive)
 }
 
 func validatePreCPPPackage(plan *discoveryOrdinarySelectionPlan, profile discoveryFeatureProfile, proof discoveryPreCPPRejection) error {
@@ -201,8 +215,7 @@ func validateDiscoveryPreCPPRejections(plan *discoveryOrdinarySelectionPlan, pro
 	for _, proof := range plan.PreCPPRejections {
 		key := proof.scope()
 		profile, present := byProfile[proof.ProfileID]
-		if proof.Protocol != discoveryPreCPPRejectionProtocol || !present || !eligible[key] || rejected[key] ||
-			proof.Line <= 0 || !preCPPUnsupportedDirective(proof.Directive) ||
+		if !present || !eligible[key] || rejected[key] || proof.Line <= 0 ||
 			!equalDiscoveryStrings(proof.BuildTags, uniqueSortedDiscoveryStrings(proof.BuildTags)) ||
 			proof.Target != profile.Observed.Target || proof.DriverSHA256 != profile.Observed.DriverSHA256 ||
 			proof.AsmToolSHA256 != profile.Observed.ToolBinarySHA256["asm"] || !preCPPExactSourceDiagnostic(proof) {
@@ -256,10 +269,10 @@ func verifyDiscoveryPreCPPOriginalSources(plan *discoveryOrdinarySelectionPlan, 
 		if err != nil {
 			return err
 		}
-		_, syntaxErr := discoveryCPPConditionsFromBytes(proof.File, data)
+		syntaxErr := preCPPSourceSyntax(proof.File, data)
 		var unsupported *discoveryUnsupportedCPPError
 		if !errors.As(syntaxErr, &unsupported) || unsupported.SHA256 != proof.SHA256 ||
-			unsupported.File != proof.File || unsupported.Line != proof.Line || unsupported.Directive != proof.Directive {
+			unsupported.File != proof.File || unsupported.Line != proof.Line || !preCPPRejectionMatchesToken(proof, unsupported) {
 			return fmt.Errorf("pre-CPP original source/control differs from actual ZIP-bound syntax: %s", proof.File)
 		}
 		prefix, err := preCPPControlPrefix(data, proof.Line)
@@ -292,7 +305,7 @@ func captureDiscoveryPreCPPRejections(ctx context.Context, plan *discoveryOrdina
 		if err != nil {
 			return nil, err
 		}
-		_, syntaxErr := discoveryCPPConditionsFromBytes(file, data)
+		syntaxErr := preCPPSourceSyntax(file, data)
 		var unsupported *discoveryUnsupportedCPPError
 		if !errors.As(syntaxErr, &unsupported) {
 			return nil, fmt.Errorf("previous CPP source rejection changed or lacks its exact first unknown control: %s", file)
@@ -315,6 +328,10 @@ func captureDiscoveryPreCPPRejections(ctx context.Context, plan *discoveryOrdina
 				ControlPrefix: prefix,
 				ProfileID:     key.ProfileID, Target: key.Target, DriverSHA256: profile.Observed.DriverSHA256,
 				AsmToolSHA256: profile.Observed.ToolBinarySHA256["asm"]}
+			if unsupported.FirstToken {
+				proof.Protocol = discoveryPreCPPFirstTokenProtocol
+				proof.FirstToken, proof.Directive = unsupported.Directive, ""
+			}
 			if key.Tags != "" {
 				proof.BuildTags = strings.Split(key.Tags, "\x00")
 			}

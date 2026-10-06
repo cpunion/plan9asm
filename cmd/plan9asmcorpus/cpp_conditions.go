@@ -35,9 +35,13 @@ const discoveryCPPDirectiveLimit = 1024
 type discoveryUnsupportedCPPError struct {
 	File, SHA256, Directive string
 	Line                    int
+	FirstToken              bool
 }
 
 func (err *discoveryUnsupportedCPPError) Error() string {
+	if err.FirstToken {
+		return fmt.Sprintf("assembly %s:%d: expected identifier, found %q (not N/A)", err.File, err.Line, err.Directive)
+	}
 	return fmt.Sprintf("CPP %s:%d: unsupported Go directive %s (not N/A)", err.File, err.Line, err.Directive)
 }
 
