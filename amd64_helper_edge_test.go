@@ -595,7 +595,11 @@ func TestAMD64ArithmeticCoverage(t *testing.T) {
 	mustLower("PUSHFQ", Instr{Raw: "PUSHFQ"})
 	mustLower("POPFQ", Instr{Raw: "POPFQ"})
 	mustLower("LFENCE", Instr{Raw: "LFENCE"})
-	mustLower("UNDEF", Instr{Raw: "UNDEF"})
+	trap, trapOutput := newAMD64CtxWithFuncForTest(t, fn, FuncSig{Ret: Void}, nil)
+	if known, terminated, err := trap.lowerArith("UNDEF", Instr{Raw: "UNDEF"}); !known || !terminated || err != nil ||
+		!strings.Contains(trapOutput.String(), "asm sideeffect \"ud2\"") {
+		t.Fatalf("UNDEF must terminate with its architectural fault: %t/%t/%v", known, terminated, err)
+	}
 	mustLower("RDTSC", Instr{Raw: "RDTSC"})
 	mustLower(OpCPUID, Instr{Raw: "CPUID"})
 	mustLower(OpXGETBV, Instr{Raw: "XGETBV"})

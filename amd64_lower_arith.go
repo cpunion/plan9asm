@@ -312,12 +312,7 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		// hardware x87 tag state to clear.
 		return true, false, nil
 	case "UNDEF":
-		if c.goarch == "386" {
-			c.emitX86Trap()
-			return true, true, nil
-		}
-		// Preserve the historical amd64 approximation.
-		return true, false, nil
+		return c.lowerX86UndefinedTrap(op, ins)
 	case "RDTSC", "RDTSCP":
 		return c.lowerX86Timestamp(op, ins)
 	case "RDPID":
