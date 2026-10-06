@@ -4484,12 +4484,21 @@ func TestTranslate386PackedSaturatingNarrowCompleteGoAssemblerForms(t *testing.T
 	var src strings.Builder
 	src.WriteString("TEXT packedsaturatingnarrowforms386(SB),NOSPLIT,$0-0\n")
 	for _, op := range []string{"PACKSSLW", "PACKSSWB", "PACKUSWB"} {
-		fmt.Fprintf(&src, "\t%s M1, M7\n", op)
-		fmt.Fprintf(&src, "\t%s (AX), M7\n", op)
 		fmt.Fprintf(&src, "\t%s X1, X7\n", op)
 		fmt.Fprintf(&src, "\t%s (AX), X7\n", op)
 	}
-	src.WriteString("\tPACKUSDW X1, X7\n\tPACKUSDW (AX), X7\n\tRET\n")
+	src.WriteString("\tPACKUSDW X1, X7\n\tPACKUSDW (AX), X7\n")
+	for _, op := range []string{"VPACKSSDW", "VPACKSSWB", "VPACKUSDW", "VPACKUSWB"} {
+		for _, bank := range []string{"X", "Y", "Z"} {
+			fmt.Fprintf(&src, "\t%s %s1,%s2,%s3\n", op, bank, bank, bank)
+			fmt.Fprintf(&src, "\t%s (AX),%s2,%s3\n", op, bank, bank)
+			if op == "VPACKSSDW" || op == "VPACKUSDW" {
+				fmt.Fprintf(&src, "\t%s.BCST (AX),%s2,%s3\n", op, bank, bank)
+			}
+		}
+	}
+	src.WriteString("\tRET\n")
+	goAssemblerOracleOutput(t, "386", src.String(), "", true)
 	file, err := Parse(ArchAMD64, src.String())
 	if err != nil {
 		t.Fatal(err)
@@ -4553,18 +4562,22 @@ func TestTranslateAMD64PackedSaturatingNarrowRejectsFormsOutsideGoAssemblerTable
 }
 
 func TestTranslate386PackedSaturatingNarrowRejectsVectorForms(t *testing.T) {
-	file, err := Parse(ArchAMD64, "TEXT invalidpackedsaturatingnarrow386(SB),NOSPLIT,$0-0\n\tVPACKSSDW X1, X2, X3\n\tRET\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := Translate(file, Options{
-		TargetTriple: "i386-unknown-linux-gnu",
-		Goarch:       "386",
-		Sigs: map[string]FuncSig{
-			"invalidpackedsaturatingnarrow386": {Name: "invalidpackedsaturatingnarrow386", Ret: Void},
-		},
-	}); err == nil {
-		t.Fatal("Translate accepted VPACKSSDW for GOARCH=386")
+	for _, op := range []string{"VPACKSSDW", "VPACKSSWB", "VPACKUSDW", "VPACKUSWB"} {
+		for _, row := range []string{op + " X1,X2,K1,X3", op + ".Z Z1,Z2,K1,Z3", op + " Z1,Z2,Z8"} {
+			t.Run(row, func(t *testing.T) {
+				source := "TEXT invalidpackedsaturatingnarrow386(SB),NOSPLIT,$0-0\n" + row + "\nRET\n"
+				goAssemblerOracleOutput(t, "386", source, "", false)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(file, Options{TargetTriple: "i386-unknown-linux-gnu", Goarch: "386",
+					Sigs: map[string]FuncSig{"invalidpackedsaturatingnarrow386": {Name: "invalidpackedsaturatingnarrow386", Ret: Void}},
+				}); err == nil {
+					t.Fatal("Go-rejected mode32 pack syntax acquired successful lowering")
+				}
+			})
+		}
 	}
 }
 

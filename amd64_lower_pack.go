@@ -12,225 +12,114 @@ const (
 	amd64PackedNarrowUnsigned
 )
 
-// lowerPackedSaturatingNarrow implements Go 1.27's complete saturating pack
-// family. The legacy dword-to-word spelling is PACKSSLW; its VEX/EVEX
-// counterpart follows Intel spelling and is VPACKSSDW.
-func (c *amd64Ctx) lowerPackedSaturatingNarrow(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	inputBits, outputBits, mode, vector, recognized := amd64PackedNarrowProperties(baseOp)
-	if !recognized {
+// All legacy/VEX/EVEX forms share one typed grammar. Packing effects remain
+// separate: clamp signed inputs, then concatenate each 128-bit source pair.
+func (c *amd64Ctx) lowerPackedSaturatingNarrow(op Op, ins Instr) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := x86PackedNarrowSpecs[Op(base)]; !known {
 		return false, false, nil
 	}
-	if !vector {
-		return c.lowerLegacyPackedSaturatingNarrow(baseOp, suffix, inputBits, outputBits, mode, ins)
+	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return true, false, fmt.Errorf("packed narrow dispatch/source opcode mismatch: %s/%s", op, ins.Op)
 	}
-	return c.lowerVectorPackedSaturatingNarrow(baseOp, suffix, inputBits, outputBits, mode, ins)
-}
-
-func amd64PackedNarrowProperties(op string) (inputBits, outputBits int, mode amd64PackedNarrowMode, vector, ok bool) {
-	switch op {
-	case "PACKSSLW":
-		return 32, 16, amd64PackedNarrowSigned, false, true
-	case "PACKSSWB":
-		return 16, 8, amd64PackedNarrowSigned, false, true
-	case "PACKUSDW":
-		return 32, 16, amd64PackedNarrowUnsigned, false, true
-	case "PACKUSWB":
-		return 16, 8, amd64PackedNarrowUnsigned, false, true
-	case "VPACKSSDW":
-		return 32, 16, amd64PackedNarrowSigned, true, true
-	case "VPACKSSWB":
-		return 16, 8, amd64PackedNarrowSigned, true, true
-	case "VPACKUSDW":
-		return 32, 16, amd64PackedNarrowUnsigned, true, true
-	case "VPACKUSWB":
-		return 16, 8, amd64PackedNarrowUnsigned, true, true
-	default:
-		return 0, 0, 0, false, false
+	ins.Op = op
+	form, known, err := x86PackedNarrowProperties(ins, c.goarch)
+	if err != nil || !known {
+		return known, false, err
 	}
-}
-
-func (c *amd64Ctx) lowerLegacyPackedSaturatingNarrow(baseOp, suffix string, inputBits, outputBits int, mode amd64PackedNarrowMode, ins Instr) (bool, bool, error) {
-	if suffix != "" {
-		return true, false, fmt.Errorf("amd64 %s has no instruction suffixes in Go 1.27's legacy optab: %q", baseOp, ins.Raw)
+	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
+	if form.mmx && first.Kind == OpReg && first.Reg != form.source.Reg {
+		return true, false, fmt.Errorf("%w: packed narrow GP spelling needs its physical MMX transport", ErrProbeNeedsContext)
 	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects packed source, packed destination: %q", baseOp, ins.Raw)
-	}
-	dst := ins.Args[1].Reg
-	if _, mmx := amd64ParseMReg(dst); mmx {
-		if baseOp == "PACKUSDW" {
-			return true, false, fmt.Errorf("amd64 PACKUSDW has no MMX form in Go 1.27's yxm_q4 table: %q", ins.Raw)
+	if form.legacy && !form.mmx && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
 		}
-		if ins.Args[0].Kind == OpReg {
-			if _, ok := amd64ParseMReg(ins.Args[0].Reg); !ok {
-				return true, false, fmt.Errorf("amd64 %s MMX form requires an MMX source: %q", baseOp, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("amd64 %s MMX form requires MMX or memory source: %q", baseOp, ins.Raw)
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy pack m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
 		}
-		firstBits, err := c.loadLegacyMMXPackedSource(ins.Args[0])
+	}
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateFPVectorSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
+	inputBits, outputBits := form.spec.inputBits, form.spec.outputBits
+	inputLanes := form.byteWidth * 8 / inputBits
+	if form.mmx {
+		var firstBits string
+		if form.memory >= 0 {
+			firstBits, err = c.loadPackedUnpackMMXSource(first, form.memoryBytes)
+		} else {
+			firstBits, err = c.loadReg(first.Reg)
+		}
 		if err != nil {
 			return true, false, err
 		}
-		secondBits, err := c.loadReg(dst)
+		secondBits, err := c.loadReg(second.Reg)
 		if err != nil {
 			return true, false, err
 		}
-		inputLanes := 64 / inputBits
-		first := c.bitcastI64ToIntegerLanes(inputLanes, inputBits, firstBits)
-		second := c.bitcastI64ToIntegerLanes(inputLanes, inputBits, secondBits)
-		result := c.emitPackedSaturatingNarrow(8, inputBits, outputBits, mode, first, second)
-		bits := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", bits, 64/outputBits, outputBits, result)
-		return true, false, c.storeReg(dst, "%"+bits)
+		value := c.emitPackedSaturatingNarrow(form.byteWidth, inputBits, outputBits, form.spec.mode,
+			c.bitcastI64ToIntegerLanes(inputLanes, inputBits, firstBits),
+			c.bitcastI64ToIntegerLanes(inputLanes, inputBits, secondBits))
+		out := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to i64\n", out, 64/outputBits, outputBits, value)
+		return true, false, c.storeReg(destination.Reg, "%"+out)
 	}
-
-	if !c.isGoLegacyXReg(dst) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's X-register class for %s: %q", baseOp, c.goarch, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoLegacyXReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("amd64 %s XMM form requires an X source valid for %s: %q", baseOp, c.goarch, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s XMM form requires X or memory source: %q", baseOp, ins.Raw)
-	}
-	firstBytes, err := c.loadPackedCompareBytes(ins.Args[0], 16)
+	secondValue, err := c.loadPackedCompareLanes(second, form.byteWidth, inputBits, false)
 	if err != nil {
 		return true, false, err
 	}
-	secondBytes, err := c.loadX(dst)
-	if err != nil {
-		return true, false, err
-	}
-	inputLanes := 128 / inputBits
-	first := c.bitcastVectorBytesToIntegerLanes(16, inputLanes, inputBits, firstBytes)
-	second := c.bitcastVectorBytesToIntegerLanes(16, inputLanes, inputBits, secondBytes)
-	result := c.emitPackedSaturatingNarrow(16, inputBits, outputBits, mode, first, second)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", out, 128/outputBits, outputBits, result)
-	return true, false, c.storeX(dst, "%"+out)
-}
-
-func (c *amd64Ctx) lowerVectorPackedSaturatingNarrow(baseOp, suffix string, inputBits, outputBits int, mode amd64PackedNarrowMode, ins Instr) (bool, bool, error) {
-	if c.goarch != "amd64" {
-		return true, false, fmt.Errorf("%s %s is absent from Go 1.27's 386 assembler forms: %q", c.goarch, baseOp, ins.Raw)
-	}
-	broadcast, zeroing := false, false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	case "BCST":
-		broadcast = true
-	case "BCST.Z":
-		broadcast, zeroing = true, true
-	default:
-		return true, false, fmt.Errorf("amd64 %s suffix is absent from its Go 1.27 VEX/EVEX table: %q", baseOp, ins.Raw)
-	}
-	if broadcast && inputBits != 32 {
-		return true, false, fmt.Errorf("amd64 %s does not enable EVEX broadcast: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("amd64 %s expects src1, src2, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	dstArg := ins.Args[len(ins.Args)-1]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s destination must be X, Y, or Z: %q", baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dstArg.Reg)
-	if byteWidth != 16 && byteWidth != 32 && byteWidth != 64 {
-		return true, false, fmt.Errorf("amd64 %s destination must be X, Y, or Z: %q", baseOp, ins.Raw)
-	}
-	if !amd64EVEXVectorRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s second source must match the destination width: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !amd64EVEXVectorRegister(ins.Args[0], byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s first source must match the destination width: %q", baseOp, ins.Raw)
+	outputLanes := form.byteWidth * 8 / outputBits
+	var value string
+	if form.legacy && form.memory >= 0 {
+		mnemonic := strings.ToLower(base)
+		if base == "PACKSSLW" {
+			mnemonic = "packssdw"
 		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s first source must be a vector register or memory: %q", baseOp, ins.Raw)
-	}
-	if broadcast && !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s.BCST requires a memory first source: %q", baseOp, ins.Raw)
-	}
-
-	masked := len(ins.Args) == 4
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s zeroing requires a K1-K7 mask: %q", baseOp, ins.Raw)
-	}
-	var mask string
-	if masked {
-		maskArg := ins.Args[2]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		index, ok := amd64ParseKReg(maskArg.Reg)
-		if !ok || index == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		var err error
-		mask, err = c.loadK(maskArg.Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-
-	evex := masked || suffix != "" || byteWidth == 64 || !amd64VEXVectorRegister(dstArg, byteWidth) || !amd64VEXVectorRegister(ins.Args[1], byteWidth)
-	if ins.Args[0].Kind == OpReg && !amd64VEXVectorRegister(ins.Args[0], byteWidth) {
-		evex = true
-	}
-	if !evex {
-		if byteWidth == 64 {
-			return true, false, fmt.Errorf("amd64 %s has no 512-bit VEX form: %q", baseOp, ins.Raw)
-		}
-	} else if !amd64EVEXVectorRegister(dstArg, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s EVEX destination is invalid: %q", baseOp, ins.Raw)
-	}
-
-	inputLanes := byteWidth * 8 / inputBits
-	var first string
-	var err error
-	if broadcast {
-		first, err = c.evalIntSized(ins.Args[0], amd64IntegerTypeForBits(inputBits))
+		// Preserve legacy native alignment/fault behavior. The native result
+		// is already packed: reinterpret it, do not narrow it a second time.
+		packed, loadErr := c.emitPackedBinaryNativeMemory(first, inputBits, secondValue, mnemonic)
+		err = loadErr
 		if err == nil {
-			first = amd64SplatInteger(c, inputLanes, inputBits, first)
+			out := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i%d>\n", out, inputLanes, inputBits, packed, outputLanes, outputBits)
+			value = "%" + out
 		}
 	} else {
-		var firstBytes string
-		firstBytes, err = c.loadPackedCompareBytes(ins.Args[0], byteWidth)
+		// Intel's E4NF/E4NF.nb pack reads the entire tuple even with a zero
+		// output mask or dead result. Never pass that mask to an E4 reader.
+		firstValue, loadErr := c.loadX86PackedShiftLanes(first, form.byteWidth, inputBits, form.broadcast, "")
+		err = loadErr
 		if err == nil {
-			first = c.bitcastVectorBytesToIntegerLanes(byteWidth, inputLanes, inputBits, firstBytes)
+			value = c.emitPackedSaturatingNarrow(form.byteWidth, inputBits, outputBits, form.spec.mode, firstValue, secondValue)
 		}
 	}
 	if err != nil {
 		return true, false, err
 	}
-	secondBytes, err := c.loadPackedCompareBytes(ins.Args[1], byteWidth)
-	if err != nil {
-		return true, false, err
-	}
-	second := c.bitcastVectorBytesToIntegerLanes(byteWidth, inputLanes, inputBits, secondBytes)
-	result := c.emitPackedSaturatingNarrow(byteWidth, inputBits, outputBits, mode, first, second)
-	outputLanes := byteWidth * 8 / outputBits
-	if masked {
-		oldBytes, err := c.loadPackedCompareBytes(dstArg, byteWidth)
+	if form.mask >= 0 {
+		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, outputLanes, outputBits, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, outputLanes, outputBits, result, old, mask, zeroing)
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, outputBits, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		value = amd64ApplyIntegerLaneMask(c, outputLanes, outputBits, value, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, outputLanes, outputBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(dstArg.Reg, byteWidth, "%"+out)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, outputLanes, outputBits, value, form.byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
+	}
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func (c *amd64Ctx) emitPackedSaturatingNarrow(byteWidth, inputBits, outputBits int, mode amd64PackedNarrowMode, first, second string) string {
