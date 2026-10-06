@@ -534,7 +534,7 @@ func emitX86RelocationAnchor(b *strings.Builder, fn Func, sig FuncSig, resolve f
 	return nil
 }
 
-func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, x87Mode X87Mode, annotateSource bool) error {
+func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, goarch, targetTriple string, x87Mode X87Mode, annotateSource bool, lockNamespaces ...string) error {
 	fmt.Fprintf(b, "define %s %s(", sig.Ret, llvmGlobal(sig.Name))
 	for i, t := range sig.Args {
 		if i > 0 {
@@ -549,6 +549,9 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	b.WriteString(" {\n")
 
 	c := newX86Ctx(b, fn, sig, resolve, sigs, goarch, targetTriple, annotateSource)
+	if len(lockNamespaces) == 1 {
+		c.lockScalarNS = lockNamespaces[0]
+	}
 	c.x87Mode = x87Mode
 	if err := c.emitEntryAllocas(); err != nil {
 		return err

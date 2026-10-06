@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func (c *amd64Ctx) lowerAtomic(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if known, terminated, err := c.lowerLockScalarRMW(op, ins); known {
+		return known, terminated, err
+	}
 	if spec, recognized := amd64ExchangeSpecs[Op(normalizeInstructionOpcode(op))]; recognized {
 		return c.lowerExchange(op, spec, ins)
 	}

@@ -17,6 +17,12 @@ func (c *amd64Ctx) namedLockPrefixBinding(block, instruction int, prefix Instr) 
 	}
 	body := c.blocks[block].instrs[instruction+1]
 	op := Op(strings.ToUpper(string(body.Op)))
+	if form, recognized, err := x86LockScalarRMWProperties(op, body, c.goarch); recognized {
+		if err != nil {
+			return err
+		}
+		return x86LockScalarNativeMemoryBound(form, body, c.goarch)
+	}
 	if form, recognized, err := x86CompareExchangeProperties(op, body, c.goarch); recognized {
 		if err != nil {
 			return err
@@ -28,9 +34,7 @@ func (c *amd64Ctx) namedLockPrefixBinding(block, instruction int, prefix Instr) 
 	}
 	spec, known := amd64ExchangeSpecs[op]
 	if !known {
-		// An atomic token alone does not close flags or physical alignment.
-		// AND/OR currently omit PF. A different RMW opcode may not inherit
-		// another lowerer's named-prefix equivalence witness.
+		// A different RMW opcode may not inherit another family's witness.
 		return context("the whole opcode effect is not independently closed")
 	}
 	form, err := parseAMD64ExchangeForm(c.goarch, op, spec, body)

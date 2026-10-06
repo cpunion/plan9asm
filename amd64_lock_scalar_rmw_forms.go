@@ -1,0 +1,161 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+// This is an operand/effect record, not an atomic, pointer or frame capability.
+// LOCK requires the independent complete source-adjacency consumer.
+type x86LockScalarRMWSpec struct {
+	stem         string
+	bits         int
+	unary        bool
+	bitString    bool
+	carryInput   bool
+	flagsDefined uint8
+	flagsKilled  uint8
+}
+
+type x86LockScalarRMWForm struct {
+	spec        x86LockScalarRMWSpec
+	source      Operand
+	destination Operand
+}
+
+var x86LockScalarRMWSpecs = func() map[Op]x86LockScalarRMWSpec {
+	result := make(map[Op]x86LockScalarRMWSpec)
+	for _, stem := range []string{"ADC", "ADD", "AND", "OR", "SBB", "SUB", "XOR", "INC", "DEC", "NEG", "NOT", "BTC", "BTR", "BTS"} {
+		for index, suffix := range "BWLQ" {
+			spec := x86LockScalarRMWSpec{stem: stem, bits: []int{8, 16, 32, 64}[index], flagsDefined: x86ByteFlagsAll}
+			switch stem {
+			case "ADC", "SBB":
+				spec.carryInput = true
+			case "AND", "OR", "XOR":
+				spec.flagsDefined &^= x86ByteFlagAF
+				spec.flagsKilled = x86ByteFlagAF
+			case "INC", "DEC":
+				spec.unary, spec.carryInput = true, true
+				spec.flagsDefined &^= x86ByteFlagCF
+			case "NEG":
+				spec.unary = true
+			case "NOT":
+				spec.unary, spec.flagsDefined = true, 0
+			case "BTC", "BTR", "BTS":
+				if suffix == 'B' {
+					continue
+				}
+				spec.bitString = true
+				spec.flagsDefined = x86ByteFlagCF
+				spec.flagsKilled = x86ByteFlagOF | x86ByteFlagSF | x86ByteFlagAF | x86ByteFlagPF
+			}
+			result[Op(stem+string(suffix))] = spec
+		}
+	}
+	return result
+}()
+
+func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMWForm, bool, error) {
+	name := strings.ToUpper(string(op))
+	base := strings.SplitN(name, ".", 2)[0]
+	spec, recognized := x86LockScalarRMWSpecs[Op(base)]
+	if !recognized {
+		return x86LockScalarRMWForm{}, false, nil
+	}
+	fail := func(reason string) (x86LockScalarRMWForm, bool, error) {
+		return x86LockScalarRMWForm{}, true, fmt.Errorf("%s %s %s: %q", arch, op, reason, ins.Raw)
+	}
+	if name != base || ins.Op != "" && !strings.EqualFold(string(ins.Op), name) ||
+		arch != "amd64" && arch != "386" || arch == "386" && spec.bits == 64 {
+		return fail("has an invalid suffix, dispatch identity or machine mode")
+	}
+	count := 2
+	if spec.unary {
+		count = 1
+	}
+	if len(ins.Args) != count {
+		return fail("has an incomplete operand list")
+	}
+	form := x86LockScalarRMWForm{spec: spec, destination: ins.Args[count-1]}
+	if !spec.unary {
+		form.source = ins.Args[0]
+	}
+	if spec.unary {
+		if form.destination.Kind == OpReg {
+			allowed := isX86YrlRegisterForArch(form.destination.Reg, arch)
+			if spec.stem == "NEG" || spec.stem == "NOT" || spec.bits == 8 {
+				allowed = isGoYmbRegisterForArch(form.destination.Reg, arch)
+			}
+			if !allowed {
+				return fail("destination is outside its complete Go register class")
+			}
+			if spec.stem == "NEG" || spec.stem == "NOT" {
+				form.destination.Reg = amd64YmbEffectiveRegister(form.destination.Reg, spec.bits)
+			}
+		} else if !isAMD64MemoryOperand(form.destination) {
+			return fail("destination is outside the Go memory class")
+		}
+	} else if spec.bitString {
+		if form.source.Kind == OpImm {
+			value := form.source.Imm
+			if arch == "386" {
+				value = int64(int32(value)) // Actual Go oclass truncates before Yi8.
+			}
+			if value < -128 || value > 127 {
+				return fail("bit immediate is outside Go's signed Yi8 class")
+			}
+			form.source.Imm = value
+		} else if form.source.Kind != OpReg || !isX86YrlRegisterForArch(form.source.Reg, arch) {
+			return fail("bit index is outside Go's Yi8/Yrl rows")
+		}
+		if form.destination.Kind == OpReg {
+			if !isX86YrlRegisterForArch(form.destination.Reg, arch) {
+				return fail("destination is outside Go's Yml class")
+			}
+		} else if !isAMD64MemoryOperand(form.destination) {
+			return fail("destination is outside Go's Yml class")
+		}
+	} else {
+		if err := validateAMD64ScalarAddSubOperands(arch, base, spec.bits, form.source, form.destination, ins); err != nil {
+			return x86LockScalarRMWForm{}, true, err
+		}
+		if form.source.Kind == OpImm {
+			form.source.Imm = amd64ScalarAddSubImmediateInt64(form.source.Imm, spec.bits)
+		}
+	}
+	for _, operand := range ins.Args {
+		if operand.Kind == OpImm && (operand.ImmRaw != "" || operand.ImmIsFloat) {
+			return fail("requires a resolved integer immediate")
+		}
+		if operand.Kind != OpMem {
+			continue
+		}
+		memory := operand.Mem
+		if err := x86SymbolIndexedMemoryError(memory, arch); err != nil {
+			return x86LockScalarRMWForm{}, true, err
+		}
+		if arch == "386" && strings.HasSuffix(memory.Sym, "(SB)") {
+			memory.Base = "" // Only the actual Go ignored annotation is discarded.
+		}
+		if !x86MemoryRegistersValidForArch(memory, arch) || memory.OffRaw != "" ||
+			memory.Index == SP || memory.Index != "" && memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8 ||
+			memory.Off != int64(int32(memory.Off)) && !(arch == "386" && memory.Off == int64(uint32(memory.Off))) {
+			return fail("has an unencodable or unresolved native memory operand")
+		}
+	}
+	return form, true, nil
+}
+
+func x86LockScalarNativeMemoryBound(form x86LockScalarRMWForm, ins Instr, arch string) error {
+	if form.destination.Kind != OpMem && form.destination.Kind != OpSym || ins.x86UnboundAddressOverride {
+		return fmt.Errorf("%w: %s LOCK RMW needs its bound native memory destination, not a virtual FP/AUTO span", ErrProbeNeedsContext, arch)
+	}
+	if arch == "386" && form.spec.bits == 8 && form.source.Kind == OpReg {
+		switch form.source.Reg {
+		case AX, BX, CX, DX, AL, AH, BL, BH, CL, CH, DL, DH:
+		default:
+			return fmt.Errorf("%w: 386 LOCK byte source requires Go's original scratch-register expansion", ErrProbeNeedsContext)
+		}
+	}
+	return nil
+}

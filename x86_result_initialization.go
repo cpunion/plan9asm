@@ -342,7 +342,7 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return err == nil && required != 0 && state.flags&required == required && x86ResultStore(form.destination, 1, state, owned, resultOffset, arch)
 	}
 	if effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); recognized {
-		if err != nil {
+		if err != nil || effect.dynamicMemory || state.flags&effect.flagsRead != effect.flagsRead {
 			return false
 		}
 		// Read all ordered inputs before any overwrite. A three-operand

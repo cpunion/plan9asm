@@ -17,9 +17,11 @@ type x86TypedByteOperand struct {
 }
 
 type x86TypedByteEffect struct {
-	operands     []x86TypedByteOperand
-	flagsDefined uint8
-	flagsKilled  uint8
+	operands      []x86TypedByteOperand
+	flagsRead     uint8
+	flagsDefined  uint8
+	flagsKilled   uint8
+	dynamicMemory bool // A register-indexed bit string has no fixed base span.
 }
 
 const (
@@ -101,6 +103,25 @@ func x86ExplicitIMULProperties(op Op, ins Instr, arch string) (x86ExplicitIMULFo
 func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bool, error) {
 	if arch != "amd64" && arch != "386" {
 		return x86TypedByteEffect{}, false, nil
+	}
+	if form, recognized, err := x86LockScalarRMWProperties(op, ins, arch); recognized {
+		if err != nil {
+			return x86TypedByteEffect{}, true, err
+		}
+		width := int64(form.spec.bits / 8)
+		destinationIndex := 1
+		effect := x86TypedByteEffect{flagsDefined: form.spec.flagsDefined, flagsKilled: form.spec.flagsKilled}
+		if form.spec.unary {
+			destinationIndex = 0
+		} else {
+			effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: form.source, width: width, read: true})
+		}
+		if form.spec.stem == "ADC" || form.spec.stem == "SBB" {
+			effect.flagsRead = x86ByteFlagCF
+		}
+		effect.dynamicMemory = form.spec.bitString && form.source.Kind == OpReg && isAMD64MemoryOperand(form.destination)
+		effect.operands = append(effect.operands, x86TypedByteOperand{index: destinationIndex, operand: form.destination, width: width, read: true, write: true})
+		return effect, true, nil
 	}
 	if form, recognized, err := x86ScalarExtensionProperties(op, ins, arch); recognized {
 		if err != nil {

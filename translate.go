@@ -283,6 +283,11 @@ func translateIRText(file *File, opt Options) (string, error) {
 	// Keep translate.go as the cross-platform pipeline entry.
 	// Architecture-specific declarations live in arch-specific files.
 	emitArchPrelude(&b, file, resolve, opt.Goarch, opt.WASMABI)
+	lockScalarNamespace := ""
+	if file.Arch == ArchAMD64 {
+		lockScalarNamespace = x86LockScalarNamespace(file, resolve, opt.Sigs)
+		emitX86LockScalarRMWHelpers(&b, file, opt.Goarch, lockScalarNamespace)
+	}
 
 	emitExternSBGlobals(&b, file, resolve, opt.Sigs)
 
@@ -371,7 +376,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 		// The old linear prototype could silently reinterpret wide FP-frame stores
 		// as numeric conversions and leave adjacent aggregate result slots unwritten.
 		if file.Arch == ArchAMD64 {
-			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource); err != nil {
+			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource, lockScalarNamespace); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")
