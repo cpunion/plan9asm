@@ -183,8 +183,10 @@ func TestX86PackedNarrowLegacyGoModeAndNativeStorageBoundaries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			sig := x86WordMaddFPType(t)
+			sig.Name = "pack"
 			if _, err := Translate(file, Options{Goarch: "amd64",
-				Sigs: map[string]FuncSig{"pack": x86WordMaddFPType(t)}}); !errors.Is(err, ErrProbeNeedsContext) {
+				Sigs: map[string]FuncSig{"pack": sig}}); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("virtual independent FP slots invented native legacy alignment", err)
 			}
 		})
