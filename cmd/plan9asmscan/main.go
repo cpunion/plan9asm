@@ -75,6 +75,10 @@ type report struct {
 	EncoderOpsObserved   int    `json:"encoder_opcodes_observed_in_corpus"`
 	CoverageFingerprint  string `json:"coverage_fingerprint"`
 	EncoderFingerprint   string `json:"encoder_fingerprint"`
+	// These fields count/fingerprint only retained encoding rules, currently
+	// x86 AVX. They do not certify all encoder tables or executed coverage.
+	EncoderRules           int    `json:"encoder_rules,omitempty"`
+	EncoderRuleFingerprint string `json:"encoder_rule_fingerprint,omitempty"`
 
 	OpsByFreq         []opReport            `json:"ops_by_freq"`
 	ClusterStats      []clusterReport       `json:"cluster_stats"`
@@ -979,6 +983,7 @@ func mapTypeKeyIdent(mapType *ast.MapType) (string, bool) {
 func attachEncoderCatalog(rep *report, ops map[string]*opStat, catalog []encoderFormReport) {
 	rep.EncoderCatalog = catalog
 	rep.EncoderForms = len(catalog)
+	rep.EncoderRules, rep.EncoderRuleFingerprint = fingerprintEncoderRules(catalog)
 	opcodes := map[string]struct{}{}
 	observed := map[string]struct{}{}
 	byOpcode := map[string]int{}

@@ -139,3 +139,33 @@ func TestX86EncoderCatalogRetainsZeroOffsetRuleOrderAcrossClassBuckets(t *testin
 		t.Fatal("catalog discarded rule ordering when every encoding offset stayed equal")
 	}
 }
+
+func TestX86EncoderRuleFingerprintCountsAndScopeAreIndependent(t *testing.T) {
+	catalog := loadX86EncoderAttributeFixture(t, x86EncoderAttributeFixture)
+	count, fingerprint := fingerprintEncoderRules(catalog)
+	if count != 3 || len(fingerprint) != 64 {
+		t.Fatalf("retained source rows have no complete fingerprint: %d/%q", count, fingerprint)
+	}
+	// Presentation order and observed corpus hits are not encoding changes.
+	catalog[0], catalog[2] = catalog[2], catalog[0]
+	catalog[0].Tables = []string{"presentation-only"}
+	rep := report{SupportedForms: 17, ContextForms: 4}
+	attachEncoderCatalog(&rep, map[string]*opStat{"VPMULLW": {}}, catalog)
+	if rep.EncoderRules != count || rep.EncoderRuleFingerprint != fingerprint ||
+		rep.SupportedForms != 17 || rep.ContextForms != 4 {
+		t.Fatal("encoding inventory depends on observation or changed tested coverage")
+	}
+	// Repeated rows must not be deduplicated away, and absent metadata is not
+	// a certificate of an empty or completely implemented official table.
+	catalog = append(catalog, catalog[0])
+	duplicateCount, duplicateFingerprint := fingerprintEncoderRules(catalog)
+	if duplicateCount <= count || duplicateFingerprint == fingerprint {
+		t.Fatal("duplicate source rows disappeared from the fingerprint")
+	}
+	for i := range catalog {
+		catalog[i].EncodingRules = nil
+	}
+	if count, fingerprint := fingerprintEncoderRules(catalog); count != 0 || fingerprint != "" {
+		t.Fatal("unretained tables fabricated a rule certificate")
+	}
+}

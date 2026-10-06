@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"go/ast"
 	"go/format"
@@ -81,6 +82,38 @@ func (s *encoderFormSet) list() []encoderFormReport {
 		return out[i].Form < out[j].Form
 	})
 	return out
+}
+
+// fingerprintEncoderRules complements, rather than changes, the historical
+// operand-class fingerprint. Canonical rows preserve opcode-specific encoding
+// attributes and source row positions even after class-bucket grouping. Keep
+// duplicates: a repeated matching rule is still part of the original table.
+func fingerprintEncoderRules(catalog []encoderFormReport) (int, string) {
+	var rows []string
+	for _, form := range catalog {
+		for _, rule := range form.EncodingRules {
+			var row strings.Builder
+			fmt.Fprintf(&row, "x86-avx %q %q %q %q %d %d %d",
+				rule.Opcode, rule.Ytab, rule.Prefix, rule.ZCase,
+				rule.RowIndex, rule.ZOffset, rule.EncodingOffset)
+			fmt.Fprintf(&row, " classes:%d", len(rule.Classes))
+			for _, class := range rule.Classes {
+				fmt.Fprintf(&row, " %q", class)
+			}
+			fmt.Fprintf(&row, " bytes:%d", len(rule.OpBytes))
+			for _, value := range rule.OpBytes {
+				fmt.Fprintf(&row, " %q", value)
+			}
+			rows = append(rows, row.String())
+		}
+	}
+	if len(rows) == 0 {
+		// No retained rule metadata means unknown, not an empty-table proof.
+		return 0, ""
+	}
+	sort.Strings(rows)
+	data := "go-encoding-rules-v1\n" + strings.Join(rows, "\n")
+	return len(rows), fmt.Sprintf("%x", sha256.Sum256([]byte(data)))
 }
 
 type parsedEncoderFile struct {

@@ -24,6 +24,7 @@ type X86AVXRule struct {
 	Ytab           string   `json:"ytab"`
 	Prefix         string   `json:"prefix"`
 	Classes        []string `json:"operand_classes"`
+	RowIndex       int      `json:"row_index"`
 	ZCase          string   `json:"zcase"`
 	ZOffset        int      `json:"zoffset"`
 	EncodingOffset int      `json:"encoding_offset"`
@@ -116,7 +117,8 @@ func X86AVXRules(file *ast.File) ([]X86AVXRule, error) {
 			}
 			rules = append(rules, X86AVXRule{
 				Opcode: strings.TrimPrefix(opcode, "A"), Ytab: ytab, Prefix: prefix,
-				Classes: classes, ZCase: zcase, ZOffset: int(advance), EncodingOffset: offset,
+				Classes: classes, RowIndex: operandIndex, ZCase: zcase,
+				ZOffset: int(advance), EncodingOffset: offset,
 				OpBytes: append([]string(nil), data...),
 			})
 			offset += int(advance)
