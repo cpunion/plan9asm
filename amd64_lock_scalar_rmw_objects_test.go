@@ -20,8 +20,7 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 	}
 	for _, target := range x86OrderingHintTargets {
 		var source, declarations strings.Builder
-		declarations.WriteString("package ordering
-")
+		declarations.WriteString("package ordering\n")
 		type expectedInstruction struct {
 			op      string
 			bits    int
@@ -37,13 +36,10 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 				body := strings.Replace(row.text, "1(SI)", memory, 1)
 				name := fmt.Sprintf("rmw%d_%s", index, strings.ToLower(segment))
 				original := strings.Replace(x86NamedLockOracleSource(target.arch,
-					"CMPL AX,AX
-	LOCK
-	"+body), "·locked", "·"+name, 1)
+					"CMPL AX,AX\n\tLOCK\n\t"+body), "·locked", "·"+name, 1)
 				x86LockScalarOriginalInstruction(t, target.arch, original)
 				source.WriteString(original)
-				fmt.Fprintf(&declarations, "func %s(p *[16]byte)
-", name)
+				fmt.Fprintf(&declarations, "func %s(p *[16]byte)\n", name)
 
 				bits := map[byte]int{'B': 8, 'W': 16, 'L': 32, 'Q': 64}[row.op[len(row.op)-1]]
 				stem := strings.ToLower(row.op[:len(row.op)-1])
@@ -83,8 +79,7 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 							"-mtriple="+target.triple, "-filetype=obj", input, "-o", object))
 						listing := x86FloatCompareCaptureCommand(t,
 							exec.Command(disassembler, "--disassemble", object))
-						sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <([^>]+)>:
-`).FindAllSubmatchIndex(listing, -1)
+						sections := regexp.MustCompile(`(?m)^[0-9a-f]+ <([^>]+)>:\n`).FindAllSubmatchIndex(listing, -1)
 						seen := make(map[string]bool)
 						for index, section := range sections {
 							name := string(listing[section[2]:section[3]])
@@ -103,8 +98,7 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 								end = sections[index+1][0]
 							}
 							var code []byte
-							for _, line := range strings.Split(string(listing[section[1]:end]), "
-") {
+							for _, line := range strings.Split(string(listing[section[1]:end]), "\n") {
 								fields := strings.Fields(line)
 								if len(fields) < 2 || !strings.HasSuffix(fields[0], ":") {
 									continue
@@ -170,8 +164,7 @@ func TestX86LockScalarRMWThreeAPIsFiveTargetsNativeObjects(t *testing.T) {
 							seen[name] = true
 						}
 						if len(seen) != len(want) {
-							t.Fatalf("emitted %d/%d complete native helpers
-%s", len(seen), len(want), listing)
+							t.Fatalf("emitted %d/%d complete native helpers\n%s", len(seen), len(want), listing)
 						}
 						t.Logf("actual %s object independently decoded %d whole native RMW helpers", target.triple, len(seen))
 					})
