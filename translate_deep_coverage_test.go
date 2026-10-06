@@ -1195,7 +1195,8 @@ func TestTranslateFuncLinearCastAndErrorCoverage(t *testing.T) {
 }
 
 func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
-	ctx := llvm.GlobalContext()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
 
 	t.Run("DirectSuccessAndFallbacks", func(t *testing.T) {
 		mod := ctx.NewModule("direct-edge-success")
@@ -1228,40 +1229,61 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("DirectCPUXGETBVAndMRS", func(t *testing.T) {
-		mod := ctx.NewModule("direct-edge-cpu-mrs")
-		defer mod.Dispose()
-
-		err := translateFuncLinearModule(mod, ArchARM64, Func{
-			Sym: "example.directcpumrs",
-			Instrs: []Instr{
-				{Op: OpTEXT},
-				{Op: OpMOVD, Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpReg, Reg: AX}}, Raw: "MOVD $7, AX"},
-				{Op: OpMOVD, Args: []Operand{{Kind: OpImm, Imm: 11}, {Kind: OpReg, Reg: CX}}, Raw: "MOVD $11, CX"},
+	for _, tc := range []struct {
+		name   string
+		arch   Arch
+		instrs []Instr
+		want   []string
+	}{
+		{
+			name: "DirectCPUXGETBV",
+			arch: ArchAMD64,
+			instrs: []Instr{
+				{Op: OpMOVQ, Args: []Operand{{Kind: OpImm, Imm: 7}, {Kind: OpReg, Reg: AX}}, Raw: "MOVQ $7, AX"},
+				{Op: OpMOVQ, Args: []Operand{{Kind: OpImm, Imm: 11}, {Kind: OpReg, Reg: CX}}, Raw: "MOVQ $11, CX"},
 				{Op: OpCPUID, Raw: "CPUID"},
 				{Op: OpXGETBV, Raw: "XGETBV"},
+			},
+			want: []string{
+				"call { i32, i32, i32, i32 } asm sideeffect \"cpuid\"",
+				"call { i32, i32 } asm sideeffect \"xgetbv\"",
+			},
+		},
+		{
+			name: "DirectMRS",
+			arch: ArchARM64,
+			instrs: []Instr{
 				{Op: OpMRS, Args: []Operand{{Kind: OpIdent, Ident: "MIDR_EL1"}, {Kind: OpReg, Reg: "R0"}}, Raw: "MRS MIDR_EL1, R0"},
 				{Op: OpMRS, Args: []Operand{{Kind: OpIdent, Ident: "TPIDR_EL0"}, {Kind: OpReg, Reg: "R1"}}, Raw: "MRS TPIDR_EL0, R1"},
-				{Op: OpRET},
 			},
-		}, FuncSig{Name: "example.directcpumrs", Ret: I64})
-		if err != nil {
-			t.Fatalf("translateFuncLinearModule(cpu+mrs) error = %v", err)
-		}
+			want: []string{
+				"call i64 asm sideeffect \"mrs $0, S3_3_C13_C0_2\"",
+				"call i64 asm sideeffect \"mrs $0, S3_0_C0_C0_0\"",
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mod := ctx.NewModule(tc.name)
+			defer mod.Dispose()
 
-		ir := mod.String()
-		for _, want := range []string{
-			"call { i32, i32, i32, i32 } asm sideeffect \"cpuid\"",
-			"call { i32, i32 } asm sideeffect \"xgetbv\"",
-			"call i64 asm sideeffect \"mrs $0, S3_3_C13_C0_2\"",
-			"call i64 asm sideeffect \"mrs $0, S3_0_C0_C0_0\"",
-			"ret i64 %",
-		} {
-			if !strings.Contains(ir, want) {
-				t.Fatalf("missing %q in module IR:\n%s", want, ir)
+			instrs := append([]Instr{{Op: OpTEXT}}, tc.instrs...)
+			instrs = append(instrs, Instr{Op: OpRET})
+			err := translateFuncLinearModule(mod, tc.arch, Func{
+				Sym:    "example.directnative",
+				Instrs: instrs,
+			}, FuncSig{Name: "example.directnative", Ret: I64})
+			if err != nil {
+				t.Fatalf("translateFuncLinearModule(%s) error = %v", tc.name, err)
 			}
-		}
-	})
+
+			ir := mod.String()
+			for _, want := range append(tc.want, "ret i64 %") {
+				if !strings.Contains(ir, want) {
+					t.Fatalf("missing %q in module IR:\n%s", want, ir)
+				}
+			}
+		})
+	}
 
 	t.Run("DirectErrors", func(t *testing.T) {
 		cases := []struct {
