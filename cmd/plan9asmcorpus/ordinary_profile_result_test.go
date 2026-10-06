@@ -57,12 +57,12 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cppSource, err := discoveryCPPConditionsFromBytes("vector_amd64.s", []byte("//go:build amd64.v3\n\nTEXT ·probe(SB),$0-0\nRET\n"))
+	cppSource, err := discoveryReplayCPPSource("vector_amd64.s", []byte("//go:build amd64.v3\n\nTEXT ·probe(SB),$0-0\nRET\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	plan.CPPInputs = &discoveryCPPInputs{
-		Protocol: discoveryCPPInputsProtocol, Module: plan.Module, Version: plan.Version,
+		Protocol: discoveryReplayCPPInputsProtocol, Module: plan.Module, Version: plan.Version,
 		ModuleSum: plan.ModuleSum, ZipSHA256: plan.ZipSHA256, Registration: registration,
 		Sources: map[string]discoveryCPPSource{"module/vector_amd64.s": cppSource},
 		Units:   []discoveryCPPUnit{{File: "vector_amd64.s"}},
@@ -100,6 +100,10 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cpp, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, plan.CPPInputs.Units[0], nil, macros.Defines)
+	if err != nil {
+		t.Fatal(err)
+	}
 	input := ordinaryProfileConsumerInput(plan, selected, candidate.Module, "", candidate.AsmFiles)
 	// Synthetic object hashes exercise offline accounting, not LLVM/runtime
 	// semantics; the separate actual compiler fixture covers real Go/LLVM objects.
@@ -111,7 +115,13 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 			SourceModule: candidate.Module, SourceVersion: candidate.Version, SourceRole: "module",
 			GoFiles: []string{"vector.go"}, CompiledGoFiles: []string{"vector.go"}, SFiles: candidate.AsmFiles, Macros: macros,
 			SourceSHA256: map[string]string{"vector.go": input.Sources["vector.go"], "vector_amd64.s": input.Sources["vector_amd64.s"]}}},
-		CPP:     []gotoolprofile.CPPProof{{File: "vector_amd64.s", Emission: "assembly", ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64), Inputs: map[string]string{"module/vector_amd64.s": input.Sources["vector_amd64.s"]}, Signatures: []gotoolprofile.SignatureSource{{Symbol: candidate.Module + ".probe", Role: "ordinary_decl", LayoutSHA256: strings.Repeat("5", 64)}}}},
+		CPP: []gotoolprofile.CPPProof{{
+			File: "vector_amd64.s", Emission: "assembly",
+			ExpandedSHA256: discoveryFeatureBytesSHA256([]byte(cpp.Output)), TypedExpandedSHA256: strings.Repeat("2", 64),
+			Inputs: consumed, Signatures: []gotoolprofile.SignatureSource{{
+				Symbol: candidate.Module + ".probe", Role: "ordinary_decl", LayoutSHA256: strings.Repeat("5", 64),
+			}},
+		}},
 		Outputs: []gotoolprofile.OutputProof{{File: "vector_amd64.s", Part: "vector_amd64.s.ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64)}},
 	}}
 	if err := validateOrdinaryProfileResult(result, plan.Targets, plan.GoVersion); err != nil {

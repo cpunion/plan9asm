@@ -39,6 +39,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 	}
 	plan := result.OrdinarySelectionPlan
 	plan.DocumentationSourceProtocol = discoveryDocumentationProtocol
+	plan.CPPSourceProtocol = discoveryReplayCPPInputsProtocol
 	var profiles []discoveryFeatureProfile
 	byTarget := make(map[string]discoveryFeatureProfile)
 	for _, target := range plan.Targets {
@@ -77,7 +78,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 		if !found {
 			t.Fatal("synthetic protocol fixture lost its original source directory")
 		}
-		inputs := &discoveryCPPInputs{Protocol: discoveryCPPInputsProtocol,
+		inputs := &discoveryCPPInputs{Protocol: discoveryReplayCPPInputsProtocol,
 			Module: plan.Module, Version: plan.Version, ModuleSum: plan.ModuleSum, ZipSHA256: plan.ZipSHA256,
 			Registration: fixture.CPP, Sources: make(map[string]discoveryCPPSource)}
 		for _, file := range files {
@@ -85,7 +86,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 			if err != nil {
 				t.Fatal(err)
 			}
-			source, err := discoveryCPPConditionsFromBytes(file, contents)
+			source, err := discoveryReplayCPPSource(file, contents)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -139,9 +140,22 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 				Role:   "asm_fallback", LayoutSHA256: strings.Repeat("5", 64),
 			}
 			byDirectory[path.Dir(file)] = append(byDirectory[path.Dir(file)], file)
+			var unit discoveryCPPUnit
+			for _, registered := range plan.CPPInputs.Units {
+				if registered.File == file {
+					unit = registered
+					break
+				}
+			}
+			observation, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, unit, nil,
+				fixture.Macros[profile.Observed.Target].Defines)
+			if err != nil {
+				t.Fatalf("replay original portable accounting CPP %s: %v", file, err)
+			}
 			proof.CPP = append(proof.CPP, gotoolprofile.CPPProof{File: file, Emission: "assembly",
-				ExpandedSHA256: strings.Repeat("1", 64), TypedExpandedSHA256: strings.Repeat("2", 64),
-				Inputs: map[string]string{"module/" + file: input.Sources[file]}, Signatures: []gotoolprofile.SignatureSource{signature}})
+				ExpandedSHA256:      discoveryFeatureBytesSHA256([]byte(observation.Output)),
+				TypedExpandedSHA256: strings.Repeat("2", 64),
+				Inputs:              consumed, Signatures: []gotoolprofile.SignatureSource{signature}})
 			proof.Outputs = append(proof.Outputs, gotoolprofile.OutputProof{
 				File: file, Part: path.Base(file) + ".ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64),
 			})
