@@ -100,11 +100,17 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 				// CPU proposal is retained when actual header presence is needed;
 				// its actual package/header/consumer must still close later.
 				if gotoolprofile.CPPOriginalNeedsGeneratedHeader(err, unit.File) {
-					if mode != nil || plan.HeaderPlanning == nil && plan.headerPlanningCapture == nil {
+					if mode != nil && mode.planningHeader == nil || mode == nil && plan.HeaderPlanning == nil && plan.headerPlanningCapture == nil {
 						deferredPresence = true
 						return false, nil
 					}
-					header, queryErr := discoveryPlanningHeader(plan, request, unit.File, request.customTags)
+					var header *gotoolprofile.GeneratedHeaderProof
+					var queryErr error
+					if mode != nil {
+						header, queryErr = mode.planningHeader(request, unit.File)
+					} else {
+						header, queryErr = discoveryPlanningHeader(plan, request, unit.File, request.customTags)
+					}
 					if queryErr != nil {
 						if _, unsupported := queryErr.(*discoveryHeaderPlanningUnsupported); unsupported {
 							deferredPresence = true
@@ -121,6 +127,12 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 			keys, err = discoveryCPPBranchCoverage(observation)
 			if err != nil {
 				return false, err
+			}
+			if mode != nil {
+				// Imported CPU-selected constants can change operands without
+				// changing any branch side. Only identical full same-mode CPP
+				// output may share this planning scope; a digest proves no object.
+				keys[discoveryCPPExpandedOutputCoverageKey(unit.File, observation.Output)] = true
 			}
 		} else {
 			states, err := replayDiscoveryCPPConditions(directives, defines)
@@ -185,6 +197,10 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 		}
 	}
 	return requests, nil
+}
+
+func discoveryCPPExpandedOutputCoverageKey(file, output string) string {
+	return "expanded/" + file + "\x00" + discoveryFeatureBytesSHA256([]byte(output))
 }
 
 func discoveryCPPDeferredPresenceMayAffectCPU(unit discoveryCPPUnit, directives []discoveryCPPDirective) bool {

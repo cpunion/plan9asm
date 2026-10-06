@@ -72,7 +72,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 		return 0, nil, err
 	}
 	if len(proof.Requirements) == 0 {
-		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
+		if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil || proof.HeaderPlanning != nil || result.InstrumentationTranslations != 0 || result.InstrumentationTargetExclusions != 0 {
 			return 0, nil, fmt.Errorf("empty instrumentation denominator carries unexplained mode evidence/counts")
 		}
 		return 0, nil, nil
@@ -183,7 +183,7 @@ func validateDiscoveryInstrumentationResult(result discoveryCorpusResult, profil
 				return 0, nil, fmt.Errorf("mode raw CPP has an unexplained selected root")
 			}
 		}
-		if proof.CPPRequirements != nil || !allowNonpass || objects != 0 {
+		if proof.CPPRequirements != nil || !allowNonpass || objects != 0 || proof.HeaderPlanning != nil {
 			if err := validateDiscoveryInstrumentationCPPUnion(plan, baselines, scope); err != nil {
 				return 0, nil, err
 			}

@@ -22,14 +22,16 @@ const discoveryInstrumentationSourceRejectedStatus = "original_source_rejected"
 // observations are shared by all scopes of the same original package/mode.
 // No requirement, marker, or early target rejection supplies a PASS.
 type discoveryInstrumentationPlan struct {
-	Protocol        string                                                           `json:"protocol"`
-	Requirements    []discoveryInstrumentationRequirement                            `json:"requirements"`
-	CPPRequirements []discoveryInstrumentationRequirement                            `json:"cpp_feature_requirements"`
-	Sources         map[string]*gotoolprofile.InstrumentationOriginalSourceInventory `json:"package_sources,omitempty"`
-	Observations    map[string]*gotoolprofile.InstrumentationExportObservation       `json:"actual_mode_observations,omitempty"`
-	Outcomes        []discoveryInstrumentationOutcome                                `json:"outcomes,omitempty"`
-	CPPInputs       *discoveryCPPInputs                                              `json:"cpp_inputs,omitempty"`
-	ModuleMetadata  string                                                           `json:"original_module_metadata,omitempty"`
+	Protocol              string                                                           `json:"protocol"`
+	Requirements          []discoveryInstrumentationRequirement                            `json:"requirements"`
+	CPPRequirements       []discoveryInstrumentationRequirement                            `json:"cpp_feature_requirements"`
+	Sources               map[string]*gotoolprofile.InstrumentationOriginalSourceInventory `json:"package_sources,omitempty"`
+	Observations          map[string]*gotoolprofile.InstrumentationExportObservation       `json:"actual_mode_observations,omitempty"`
+	Outcomes              []discoveryInstrumentationOutcome                                `json:"outcomes,omitempty"`
+	CPPInputs             *discoveryCPPInputs                                              `json:"cpp_inputs,omitempty"`
+	ModuleMetadata        string                                                           `json:"original_module_metadata,omitempty"`
+	HeaderPlanning        *discoveryInstrumentationHeaderPlanning                          `json:"native_header_planning,omitempty"`
+	headerPlanningCapture func(discoveryInstrumentationRequirement, string) (*gotoolprofile.GeneratedHeaderProof, error)
 }
 
 type discoveryInstrumentationOutcome struct {
@@ -61,8 +63,9 @@ type discoveryInstrumentationRequirement struct {
 }
 
 type discoveryInstrumentationSelectionModel struct {
-	Mode gotoolprofile.InstrumentationMode
-	CGO  bool
+	Mode           gotoolprofile.InstrumentationMode
+	CGO            bool
+	planningHeader func(discoveryFeatureProfileRequest, string) (*gotoolprofile.GeneratedHeaderProof, error)
 }
 
 func captureDiscoveryInstrumentationDenominator(plan *discoveryOrdinarySelectionPlan, files []string, baselines []*discoveryTargetFeatures) error {

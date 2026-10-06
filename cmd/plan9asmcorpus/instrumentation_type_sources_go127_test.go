@@ -48,7 +48,9 @@ func TestInstrumentationImportedTypesCorpusRetainsOriginalSourceInput(t *testing
 		t.Fatal(err)
 	}
 	if matrix.InstrumentationTranslations != 1 || matrix.Success != 1 || len(configs) != 0 {
-		t.Fatal("independent source query became ordinary completion or lost its actual mode object")
+		mode := matrix.OrdinarySelectionPlan.InstrumentationPlan
+		t.Fatalf("independent imported source requires one mode object: objects=%d instrumentation=%d ordinary_configs=%d base_requirements=%d cpp_requirements=%d outcomes=%d",
+			matrix.Success, matrix.InstrumentationTranslations, len(configs), len(mode.Requirements), len(mode.CPPRequirements), len(mode.Outcomes))
 	}
 	mode := matrix.OrdinarySelectionPlan.InstrumentationPlan
 	if len(mode.Outcomes) != 1 || mode.Outcomes[0].TypeSources == nil {
@@ -78,6 +80,7 @@ func TestInstrumentationImportedTypesCorpusRetainsOriginalSourceInput(t *testing
 		t.Fatal(err)
 	}
 	testInstrumentationCorpusTransport(t, roundtrip, inventory, target)
+	testInstrumentationNativeHeaderPlanningMutations(t, roundtrip, inventory, target)
 	for name, change := range map[string]func(*discoveryInstrumentationOutcome){
 		"original collection deleted": func(p *discoveryInstrumentationOutcome) { p.TypeSources = nil },
 		"source protocol downgraded":  func(p *discoveryInstrumentationOutcome) { p.TypeSources.Protocol = "unverified" },

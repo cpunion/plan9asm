@@ -46,6 +46,12 @@ func ReplayNativeGeneratedHeader(packagePath, target, language string, sources m
 	if err != nil || sizes.err != nil {
 		return nil, fmt.Errorf("native header original declaration typecheck failed: %v %v", err, sizes.err)
 	}
+	return nativeGeneratedHeaderDefinitions(pkg, sizes)
+}
+
+// Both ordinary and same-mode imported queries use this one native property
+// projection. It is not an ABI layout or an allocation permission.
+func nativeGeneratedHeaderDefinitions(pkg *types.Package, sizes *nativeHeaderGCSizes) (map[string]string, error) {
 	definitions := make(map[string]string)
 	add := func(name, value string) error {
 		if _, duplicate := definitions[name]; duplicate {

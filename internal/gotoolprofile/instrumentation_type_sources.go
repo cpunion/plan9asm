@@ -208,6 +208,10 @@ type instrumentationTypeReplay struct {
 	typed   map[string]*types.Package
 	active  map[string]bool
 	load    func(*InstrumentationTypeSourcePackage) error // Actual capture only; never restored from JSON.
+	// Only the separate query-only native-header role supplies these. Existing
+	// metadata/ABI replay retains its original SizesFor and SDK-language rules.
+	nativeSizes *nativeHeaderGCSizes
+	language    func(ImportExport) (string, error)
 }
 
 func newInstrumentationTypeReplay(input *InstrumentationConsumerInput, set *token.FileSet, root *instrumentationDeclarationReplay) (*instrumentationTypeReplay, error) {
@@ -351,6 +355,21 @@ func (importer instrumentationTypeImporter) Import(name string) (*types.Package,
 	defer delete(graph.active, target)
 	config := types.Config{Sizes: types.SizesFor("gc", arch), GoVersion: fmt.Sprintf("go1.%d", minor), IgnoreFuncBodies: true,
 		Importer: instrumentationTypeImporter{graph: graph, importMap: importMap}}
+	if graph.nativeSizes != nil {
+		config.Sizes = graph.nativeSizes
+		for _, dependency := range graph.proof.Dependencies {
+			if dependency.Dependency.Source.PackagePath == target {
+				config.GoVersion, err = graph.language(dependency.Dependency.Source)
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+		if err := boundNativeHeaderStrings(replay.selectedFiles()); err != nil {
+			return nil, err
+		}
+	}
 	typed, err := config.Check(target, graph.set, replay.selectedFiles(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("original imported type/constant closure is not independently closed: %w", err)

@@ -20,9 +20,18 @@ type nativeHeaderStringBudget struct {
 	memo        map[string]uint64
 	active      map[string]bool
 	unpublished []ast.Expr
+	selector    func(*ast.SelectorExpr) (uint64, error)
 }
 
 func boundNativeHeaderStrings(files []*ast.File) error {
+	budget, err := newNativeHeaderStringBudget(files)
+	if err != nil {
+		return err
+	}
+	return budget.check(files)
+}
+
+func newNativeHeaderStringBudget(files []*ast.File) (*nativeHeaderStringBudget, error) {
 	budget := &nativeHeaderStringBudget{
 		limit: generatedHeaderByteLimit, bindings: make(map[string]ast.Expr),
 		memo: make(map[string]uint64), active: make(map[string]bool),
@@ -48,7 +57,7 @@ func boundNativeHeaderStrings(files []*ast.File) error {
 						continue
 					}
 					if _, duplicate := budget.bindings[name.Name]; duplicate {
-						return fmt.Errorf("native header original constant declaration is duplicated")
+						return nil, fmt.Errorf("native header original constant declaration is duplicated")
 					}
 					budget.bindings[name.Name] = previous[index]
 				}
@@ -58,6 +67,10 @@ func boundNativeHeaderStrings(files []*ast.File) error {
 			}
 		}
 	}
+	return budget, nil
+}
+
+func (budget *nativeHeaderStringBudget) check(files []*ast.File) error {
 	var names []string
 	for name := range budget.bindings {
 		names = append(names, name)
@@ -122,6 +135,11 @@ func (budget *nativeHeaderStringBudget) expression(expression ast.Expr, depth in
 		return 0, &nativeHeaderUnsupportedDomain{"native header string expansion exceeds its bounded query work"}
 	}
 	switch expression := expression.(type) {
+	case *ast.SelectorExpr:
+		if budget.selector != nil {
+			return budget.selector(expression)
+		}
+		return 0, nil // The ordinary import-free domain has no selectors.
 	case *ast.BasicLit:
 		if expression.Kind != token.STRING {
 			return 0, nil

@@ -34,6 +34,13 @@ func CaptureInstrumentationTypeSources(ctx context.Context, binary, directory st
 func CaptureInstrumentationTypeSourcesWithModules(ctx context.Context, binary, directory string, env []string,
 	input *InstrumentationConsumerInput, modules []TestModuleSource, run Runner,
 ) (*InstrumentationTypeSourceProof, error) {
+	return captureInstrumentationTypeSources(ctx, binary, directory, env, input, modules, run, retainInstrumentationRequiredTypeSources)
+}
+
+func captureInstrumentationTypeSources(ctx context.Context, binary, directory string, env []string,
+	input *InstrumentationConsumerInput, modules []TestModuleSource, run Runner,
+	retain func(*InstrumentationConsumerInput, *InstrumentationTypeSourceProof, *instrumentationTypeGraph) error,
+) (*InstrumentationTypeSourceProof, error) {
 	env = replaceEnv(env, map[string]string{"GOENV": "off"})
 	if ctx == nil || ctx.Err() != nil || run == nil || !filepath.IsAbs(binary) || !filepath.IsAbs(directory) || input == nil || input.Plan == nil {
 		return nil, fmt.Errorf("original type source capture needs a live bounded actual Go invocation")
@@ -117,7 +124,7 @@ func CaptureInstrumentationTypeSourcesWithModules(ctx context.Context, binary, d
 		}
 	}
 	proof := after.proof
-	if err := retainInstrumentationRequiredTypeSources(input, proof, after); err != nil {
+	if err := retain(input, proof, after); err != nil {
 		return nil, err
 	}
 	for file, expected := range after.hashes {
@@ -154,13 +161,24 @@ type instrumentationTypeListPackage struct {
 }
 
 type instrumentationTypeGraph struct {
-	proof     *InstrumentationTypeSourceProof
-	selection map[string]string
-	hashes    map[string]string
-	paths     map[string]string
-	files     map[string]map[string]string
-	bytes     int
-	modules   *InstrumentationTypeModuleGuard
+	proof       *InstrumentationTypeSourceProof
+	selection   map[string]string
+	hashes      map[string]string
+	paths       map[string]string
+	files       map[string]map[string]string
+	moduleFiles map[string]string
+	bytes       int
+	modules     *InstrumentationTypeModuleGuard
+}
+
+// This is only an index of metadata already retained by the original/foreign
+// source guards. Private graph constructors used for those guards need not
+// initialize the separate native-header query index.
+func (graph *instrumentationTypeGraph) recordModuleMetadataPath(id, filename string) {
+	if graph.moduleFiles == nil {
+		graph.moduleFiles = make(map[string]string)
+	}
+	graph.moduleFiles[id] = filename
 }
 
 func captureInstrumentationTypeGraph(ctx context.Context, binary, directory string, env []string, input *InstrumentationConsumerInput, actual map[string]string, export bool, modules *InstrumentationTypeModuleGuard, run Runner) (*instrumentationTypeGraph, error) {
@@ -180,7 +198,7 @@ func captureInstrumentationTypeGraph(ctx context.Context, binary, directory stri
 	graph := &instrumentationTypeGraph{
 		proof:     &InstrumentationTypeSourceProof{Protocol: instrumentationTypeSourcesProtocol, InputSHA256: instrumentationTypeSourceInputSHA(input), Dependencies: []InstrumentationTypeSourcePackage{}, SourceModules: []TestModuleSource{}},
 		selection: make(map[string]string), hashes: make(map[string]string), paths: make(map[string]string), files: make(map[string]map[string]string),
-		modules: modules,
+		modules: modules, moduleFiles: make(map[string]string),
 	}
 	for _, binding := range modules.bindings {
 		graph.proof.SourceModules = append(graph.proof.SourceModules, binding.source)
@@ -315,6 +333,7 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 			if err := graph.retain(metadata); err != nil {
 				return entry, err
 			}
+			graph.recordModuleMetadataPath(foreign.source.ID(), metadata)
 		} else {
 			root = module.Dir
 			source := &entry.Dependency.Source
@@ -344,6 +363,7 @@ func captureInstrumentationTypePackage(input *InstrumentationConsumerInput, actu
 			if err := graph.retainModuleMetadata(input.Original, entry.Dependency.Source, metadata, resolved); err != nil {
 				return entry, err
 			}
+			graph.recordModuleMetadataPath("original", metadata)
 		}
 	}
 	root, err := filepath.EvalSymlinks(root)

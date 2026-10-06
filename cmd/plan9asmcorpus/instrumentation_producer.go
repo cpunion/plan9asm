@@ -25,7 +25,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 	if len(proof.Requirements) == 0 {
 		return 0, nil
 	}
-	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil {
+	if len(proof.Outcomes) != 0 || len(proof.Sources) != 0 || len(proof.Observations) != 0 || proof.CPPInputs != nil || proof.ModuleMetadata != "" || proof.CPPRequirements != nil || proof.HeaderPlanning != nil || proof.headerPlanningCapture != nil {
 		return 0, fmt.Errorf("mode execution requires a fresh owned result, not another run's proof")
 	}
 	proof.Sources = make(map[string]*gotoolprofile.InstrumentationOriginalSourceInventory)
@@ -180,6 +180,11 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			if err := verifyDiscoveryCPPModuleZIP(proof.CPPInputs, plan, download.Zip); err != nil {
 				return err
 			}
+			proof.headerPlanningCapture, err = captureDiscoveryInstrumentationHeaderPlanning(cfg, candidate, download, plan, profiles, modeRoot, binary, goRoot, env)
+			if err != nil {
+				return err
+			}
+			defer func() { proof.headerPlanningCapture = nil }()
 			proof.CPPRequirements, err = planDiscoveryInstrumentationCPPRequirements(plan, discoveryInstrumentationBaselines(profiles), candidate.AsmFiles)
 			return err
 		}); err != nil {

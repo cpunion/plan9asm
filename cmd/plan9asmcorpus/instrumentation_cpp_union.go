@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 // Original Go/ASM constraints define the base denominator. The separately
@@ -50,6 +52,9 @@ func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectio
 	}
 	cppPlan := *plan
 	cppPlan.CPPInputs = proof.CPPInputs
+	if proof.HeaderPlanning != nil {
+		proof.HeaderPlanning.used = make(map[string]bool)
+	}
 	byKey := make(map[string]*discoveryInstrumentationRequirement)
 	for _, requirement := range proof.Requirements {
 		baseline := byTarget[requirement.Target]
@@ -63,6 +68,14 @@ func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectio
 		ctx.OpenFile = index.open
 		model := &discoveryInstrumentationSelectionModel{
 			Mode: requirement.Mode, CGO: requirement.CGO == "1",
+		}
+		if proof.HeaderPlanning != nil || proof.headerPlanningCapture != nil {
+			model.planningHeader = func(request discoveryFeatureProfileRequest, assembly string) (*gotoolprofile.GeneratedHeaderProof, error) {
+				query := requirement
+				query.ID, query.Pairs = "", nil
+				query.Overrides, query.Expected, query.Tags = request.Overrides, request.Expected, request.customTags
+				return discoveryInstrumentationPlanningHeader(plan, query, assembly, baselines)
+			}
 		}
 		initial := discoveryFeatureProfileRequest{
 			Target: requirement.Target, Baseline: len(requirement.Overrides) == 0,
@@ -128,6 +141,9 @@ func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectio
 		}
 		requirement.ID = discoveryFeatureBytesSHA256(encoded)
 		result = append(result, requirement)
+	}
+	if err := validateDiscoveryInstrumentationHeaderPlanningConsumption(proof.HeaderPlanning); err != nil {
+		return nil, err
 	}
 	return result, nil
 }

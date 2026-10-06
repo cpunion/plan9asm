@@ -344,8 +344,15 @@ func recheckInstrumentationExportInputs(ctx context.Context, binary, directory s
 		return fmt.Errorf("actual instrumentation source changed during export")
 	}
 	tools, err := captureDiscoveryFeatureSubtools(ctx, binary, env, actual, run)
-	if err != nil || !equalDiscoveryFeatureToolStates(before, tools) {
-		return fmt.Errorf("actual mode compiler/assembler/nm/vet routing changed during export")
+	if err != nil {
+		return fmt.Errorf("actual mode compiler/assembler/nm/vet routing reobservation failed during export: %w", err)
+	}
+	if !equalDiscoveryFeatureToolStates(before, tools) {
+		difference, err := instrumentationExportToolDifference(before, tools)
+		if err != nil {
+			return fmt.Errorf("actual mode compiler/assembler/nm/vet routing changed during export; summarize bound states: %w", err)
+		}
+		return fmt.Errorf("actual mode compiler/assembler/nm/vet routing changed during export: %s", difference)
 	}
 	if hash, err := FileSHA256(binary); err != nil || hash != early.BaselineFeatures.DriverSHA256 {
 		return fmt.Errorf("actual driver changed during export")
