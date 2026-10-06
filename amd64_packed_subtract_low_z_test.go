@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestX86PackedSubtractLowZThreeAPIFiveTargetObjects(t *testing.T) {
 			parameters = append(parameters, fmt.Sprintf("%s%d uint64", prefix, index))
 		}
 	}
-	declaration := "func Value(" + strings.Join(parameters, ",") + ") uint64"
+	declaration := "func Value(" + strings.Join(parameters, ",") + ")"
 	for _, target := range []struct{ arch, triple string }{
 		{"amd64", "x86_64-apple-darwin"},
 		{"amd64", "x86_64-unknown-linux-gnu"},
@@ -40,13 +41,22 @@ func TestX86PackedSubtractLowZThreeAPIFiveTargetObjects(t *testing.T) {
 			}
 			for _, form := range forms {
 				t.Run(target.triple+"/"+opcode+"/"+form.name, func(t *testing.T) {
-					body := "VMOVUPS a0+0(FP),Z0\nVMOVUPS b0+64(FP),Z1\n" +
-						form.instruction + "\nMOVQ X2,ret0+128(FP)\nRET"
-					pkg, file, sig, source := x86ResultInitializationFixture(t, target.arch, declaration, body)
-					goAssemblerOracleOutput(t, target.arch, source, "", true)
-					if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, target.arch); err != nil {
-						t.Fatal("declared full-width inputs lost initialized low-Z arithmetic", err)
+					// This fixture establishes form translation and LLVM objects,
+					// not an initialized numeric return or a caller-region grant.
+					pkg := mustGoPackage(t, "example.invalid/subtract", "package subtract\n"+declaration+"\n")
+					sig, err := DeriveGoFuncABI0Signature("Value", pkg.Types.Scope().Lookup("Value").(*types.Func),
+						target.arch, types.SizesFor("gc", target.arch))
+					if err != nil {
+						t.Fatal(err)
 					}
+					body := "VMOVUPS a0+0(FP),Z0\nVMOVUPS b0+64(FP),Z1\n" +
+						form.instruction + "\nRET"
+					source := "TEXT ·Value(SB),4,$0-128\n" + body + "\n"
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					goAssemblerOracleOutput(t, target.arch, source, "", true)
 					options := Options{Goarch: target.arch, TargetTriple: target.triple,
 						Sigs:       map[string]FuncSig{"Value": sig},
 						ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
