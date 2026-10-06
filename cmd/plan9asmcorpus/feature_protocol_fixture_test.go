@@ -29,6 +29,11 @@ var ordinaryFixtureRoots sync.Map
 
 func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, inventory *discoveryFeatureInventory) {
 	t.Helper()
+	fixtureProfileEvidenceWithGeneratedHeaders(t, result, inventory, nil)
+}
+
+func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryCorpusResult, inventory *discoveryFeatureInventory, headers map[string]*gotoolprofile.GeneratedHeaderProof) {
+	t.Helper()
 	data, err := os.ReadFile("testdata/go127_feature_protocol_fixture.json")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +96,20 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 				t.Fatal(err)
 			}
 			inputs.Sources["module/"+file] = source
-			inputs.Units = append(inputs.Units, discoveryCPPUnit{File: file})
+			unit := discoveryCPPUnit{File: file}
+			if header := headers[file]; header != nil {
+				unit.DeferredIncludes = make(map[string]string)
+				for index, directive := range source.Directives {
+					if directive.Kind == "include" && directive.Include == "go_asm.h" {
+						key := fmt.Sprintf("module/%s#%d", file, index)
+						unit.DeferredIncludes[key] = "generated_go_asm"
+					}
+				}
+				if len(unit.DeferredIncludes) == 0 {
+					t.Fatalf("generated accounting header has no original include edge: %s", file)
+				}
+			}
+			inputs.Units = append(inputs.Units, unit)
 		}
 		plan.CPPInputs = inputs
 	}
@@ -147,7 +165,7 @@ func fixtureProfileEvidence(t *testing.T, result *discoveryCorpusResult, invento
 					break
 				}
 			}
-			observation, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, unit, nil,
+			observation, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, unit, headers[file],
 				fixture.Macros[profile.Observed.Target].Defines)
 			if err != nil {
 				t.Fatalf("replay original portable accounting CPP %s: %v", file, err)

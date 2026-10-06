@@ -129,12 +129,13 @@ func fixtureSemanticGeneratedProgress(t *testing.T) discoveryProgress {
 			Translations: len(progress.Targets), OrdinarySelectionPlan: plan,
 			BuildConfigurations: []discoveryBuildConfiguration{{AsmFiles: scanned.AsmFiles, Targets: progress.Targets}},
 		}
-		fixtureProfileEvidence(t, &result, progress.FeatureInventory)
-		plan.CPPInputs.Protocol = discoveryDeferredCPPInputsProtocol
-		plan.CPPInputs.Units[0].DeferredIncludes = map[string]string{"module/probe.s#0": "generated_go_asm"}
+		definitions := map[string]string{"const_Answer": "7"}
+		fixtureProfileEvidenceWithGeneratedHeaders(t, &result, progress.FeatureInventory,
+			map[string]*gotoolprofile.GeneratedHeaderProof{
+				"probe.s": {PackagePath: candidate.Module, Definitions: definitions},
+			})
 		for _, proof := range result.FeatureConsumption {
 			observed := progress.FeatureInventory.Observations[proof.ProfileID]
-			definitions := map[string]string{"const_Answer": "7"}
 			metadata := &gotoolprofile.MetadataProof{
 				Protocol: gotoolprofile.MetadataProtocol, ProfileID: proof.ProfileID, Packages: proof.Packages,
 				Headers: []gotoolprofile.GeneratedHeaderProof{{
@@ -154,7 +155,9 @@ func fixtureSemanticGeneratedProgress(t *testing.T) discoveryProgress {
 				t.Fatal(err)
 			}
 			proof.GeneratedHeaders = metadata
-			proof.CPP[0].Inputs["generated/"+candidate.Module+"/go_asm.h"] = discoveryFeatureBytesSHA256(canonical)
+			if proof.CPP[0].Inputs["generated/"+candidate.Module+"/go_asm.h"] != discoveryFeatureBytesSHA256(canonical) {
+				t.Fatal("generated accounting header differs from the original CPP replay")
+			}
 			// The producer and independent consumer do not share mutable maps.
 			data, _ := json.Marshal(metadata)
 			var original gotoolprofile.MetadataProof
