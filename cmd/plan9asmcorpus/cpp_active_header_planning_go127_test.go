@@ -40,6 +40,21 @@ func Probe()
 `)
 }
 
+func TestCPPGenericGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
+	testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t, `package header
+type Record struct { Value uint64 }
+type Generic[T any] struct {
+	Value T
+	Tail [0]byte
+}
+type Concrete = Generic[uint64]
+type Nested struct { Item Generic[string] }
+func Identity[T any](value T) T { return value }
+var InstantiatedFunction = Identity[int]
+func Probe()
+`)
+}
+
 func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
