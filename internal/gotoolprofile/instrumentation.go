@@ -78,6 +78,10 @@ func CaptureInstrumentationSourceRules(root, version string) (*InstrumentationSo
 // A portable replay has no physical root and cannot satisfy Recheck. Both
 // paths parse exactly the same complete registrations from original bytes.
 func replayInstrumentationRuleSources(root, version string, contents map[string][]byte) (*InstrumentationSourceRules, error) {
+	return instrumentationRulesMemo.replay(root, version, contents)
+}
+
+func parseInstrumentationRuleSources(root, version string, contents map[string][]byte) (*InstrumentationSourceRules, error) {
 	rules := &InstrumentationSourceRules{
 		root: root, version: version, sources: make(map[string]string),
 		registration: make(map[string]string), targets: make(map[InstrumentationMode]map[string]bool),
