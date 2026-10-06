@@ -23,18 +23,13 @@ func TestCrossLinuxRuntimeMatrixX86TimestampNative386(t *testing.T) {
 	if err != nil {
 		t.Fatal("required native IA32 C compiler:", err)
 	}
-	var declarations, assembly strings.Builder
-	declarations.WriteString("package main\n")
-	for _, op := range []Op{"RDTSC", "RDTSCP"} {
-		declaration, source := x86Timestamp386OriginalFixture(op)
-		declarations.WriteString(declaration)
-		assembly.WriteString(source)
-	}
-	goAssemblerOracleOutput(t, "386", assembly.String(), "", true)
+	declarations, assembly := x86TimestampRuntimeFixtures("386")
+	declarations = "package main\n" + declarations
+	goAssemblerOracleOutput(t, "386", assembly, "", true)
 	dir := t.TempDir()
 	for name, contents := range map[string]string{
 		"go.mod":  "module timestamp386\n\ngo 1.20\n",
-		"decl.go": declarations.String(), "timestamp_386.s": assembly.String(),
+		"decl.go": declarations, "timestamp_386.s": assembly,
 		"main.go": x86Timestamp386OriginalDriver,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
@@ -51,14 +46,14 @@ func TestCrossLinuxRuntimeMatrixX86TimestampNative386(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if output := x87IA32RunDirect(t, sealed, nil, os.Environ()); string(output) != "original IA32 timestamp observations 128\n" {
+	if output := x87IA32RunDirect(t, sealed, nil, os.Environ()); string(output) != "original IA32 timestamp observations 256\n" {
 		t.Fatalf("unchanged original Go IA32 timestamp execution: %q", output)
 	}
 
-	pkg := mustGoPackage(t, "timestamp386", declarations.String())
+	pkg := mustGoPackage(t, "timestamp386", declarations)
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	translated, err := translateGoModuleInContext(ctx, pkg, []byte(assembly.String()), GoModuleOptions{
+	translated, err := translateGoModuleInContext(ctx, pkg, []byte(assembly), GoModuleOptions{
 		GOARCH: "386", TargetTriple: "i386-unknown-linux-gnu",
 		ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") },
 	})
@@ -95,7 +90,7 @@ func TestCrossLinuxRuntimeMatrixX86TimestampNative386(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if output := x87IA32RunDirect(t, sealed, nil, os.Environ()); string(output) != "IA32 timestamp observations 128\n" {
+			if output := x87IA32RunDirect(t, sealed, nil, os.Environ()); string(output) != "IA32 timestamp observations 256\n" {
 				t.Fatalf("LLVM IA32 TSC/AUX/flags/MXCSR/canaries: %q", output)
 			}
 		})

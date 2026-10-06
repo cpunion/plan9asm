@@ -18,17 +18,11 @@ import (
 // execution result. It prevents a platform-only driver from going unchecked
 // on development hosts that cannot directly run IA32 executables.
 func TestX86Timestamp386OriginalNativeReferenceCompiles(t *testing.T) {
-	var source, declarations strings.Builder
-	declarations.WriteString("package main\n")
-	for _, op := range []Op{"RDTSC", "RDTSCP"} {
-		declaration, assembly := x86Timestamp386OriginalFixture(op)
-		declarations.WriteString(declaration)
-		source.WriteString(assembly)
-	}
+	declarations, source := x86TimestampRuntimeFixtures("386")
 	dir := t.TempDir()
 	for name, contents := range map[string]string{
-		"go.mod": "module timestamp386\n\ngo 1.20\n", "decl.go": declarations.String(),
-		"main.go": x86Timestamp386OriginalDriver, "timestamp_386.s": source.String(),
+		"go.mod": "module timestamp386\n\ngo 1.20\n", "decl.go": "package main\n" + declarations,
+		"main.go": x86Timestamp386OriginalDriver, "timestamp_386.s": source,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600); err != nil {
 			t.Fatal(err)
@@ -167,39 +161,26 @@ func TestX86TimestampNamedAndRawThreeAPIsFiveTargetObjects(t *testing.T) {
 		for _, raw := range []bool{false, true} {
 			var source strings.Builder
 			declarations := "package timestamp\n"
-			pointerMove, pointerSize := "MOVQ", 8
-			if target.arch == "386" {
-				pointerMove, pointerSize = "MOVL", 4
-			}
-			for _, op := range []Op{"RDTSC", "RDTSCP"} {
-				if target.arch == "386" {
-					declaration, original := x86Timestamp386OriginalFixture(op)
+			if !raw {
+				decl, body := x86TimestampRuntimeFixtures(target.arch)
+				declarations += decl
+				source.WriteString(body)
+			} else {
+				for _, op := range []Op{"RDTSC", "RDTSCP"} {
+					declaration, original := x86TimestampOriginalFixture(op)
+					if target.arch == "386" {
+						declaration, original = x86Timestamp386OriginalFixture(op)
+					}
 					declarations += declaration
-					if raw {
-						actual := assembleX87ControlBytes(t, "386",
-							"TEXT clock(SB),4,$0-0\n"+string(op)+"\nRET\n")
-						var literal strings.Builder
-						for _, value := range actual[:len(actual)-1] {
-							fmt.Fprintf(&literal, "BYTE $%d\n", value)
-						}
-						original = strings.Replace(original, "    "+string(op)+"\n", literal.String(), 1)
-					}
-					source.WriteString(original)
-					continue
-				}
-				name := strings.ToLower(string(op))
-				declarations += "func " + name + "(out *[4]uint32)\n"
-				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s out+0(FP),DI\nMOVL $0x7e6d5c4b,CX\n", name, pointerSize, pointerMove)
-				if raw {
-					bytes := assembleX87ControlBytes(t, target.arch,
+					actual := assembleX87ControlBytes(t, target.arch,
 						"TEXT clock(SB),4,$0-0\n"+string(op)+"\nRET\n")
-					for _, value := range bytes[:len(bytes)-1] {
-						fmt.Fprintf(&source, "BYTE $%d\n", value)
+					var literal strings.Builder
+					for _, value := range actual[:len(actual)-1] {
+						fmt.Fprintf(&literal, "BYTE $%d\n", value)
 					}
-				} else {
-					fmt.Fprintln(&source, op)
+					original = strings.Replace(original, "    "+string(op)+"\n", literal.String(), 1)
+					source.WriteString(original)
 				}
-				source.WriteString("MOVL AX,0(DI)\nMOVL DX,4(DI)\nMOVL CX,8(DI)\nRET\n")
 			}
 			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
 			pkg := mustGoPackage(t, "timestamp", declarations)
@@ -244,8 +225,12 @@ func TestX86TimestampNamedAndRawThreeAPIsFiveTargetObjects(t *testing.T) {
 							t.Fatal(err)
 						}
 					}
+					expectedPerOpcode := 2
+					if raw {
+						expectedPerOpcode = 1
+					}
 					for _, opcode := range []string{"rdtsc", "rdtscp"} {
-						if !strings.Contains(ir, "asm sideeffect \""+opcode+"\"") {
+						if strings.Count(ir, "asm sideeffect \""+opcode+"\"") != expectedPerOpcode {
 							t.Fatal("object consumer lost the actual architectural timestamp", opcode)
 						}
 					}

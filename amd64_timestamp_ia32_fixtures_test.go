@@ -10,14 +10,15 @@ import (
 func main() {
     runtime.LockOSThread()
     observations := 0
-    for index, sample := range []func(*[8]uint32){rdtsc, rdtscp} {
+    expectedFlags := []uint32{0x8c5, 0x10, 0x8c5, 0x10}
+    for index, sample := range []func(*[8]uint32){rdtsc, rdtsc_af, rdtscp, rdtscp_af} {
         for iteration := 0; iteration < 64; iteration++ {
             out := [8]uint32{0, 0, 0, 0, 0, 0, 0x23456789, 0x2468ace0}
             sample(&out)
             if uint64(out[0]) | uint64(out[1]) << 32 == 0 ||
-                    out[3] != 0x3a291807 || out[4] & 0x8c5 != 0x8c5 ||
+                    out[3] != 0x3a291807 || out[4] & 0x8d5 != expectedFlags[index] ||
                     out[6] != 0x23456789 || out[7] != 0x2468ace0 ||
-                    index == 0 && out[2] != 0x5f60718 {
+                    index < 2 && out[2] != 0x5f60718 {
                 panic(fmt.Sprintf("original IA32 timestamp %d: %x", index, out))
             }
             observations++
@@ -32,7 +33,9 @@ const x86Timestamp386IndependentC = `
 #include <stdio.h>
 
 extern void rdtsc(uint32_t *);
+extern void rdtsc_af(uint32_t *);
 extern void rdtscp(uint32_t *);
+extern void rdtscp_af(uint32_t *);
 
 static uint64_t read_counter(unsigned *aux) {
     unsigned low, high, native_aux;
@@ -42,9 +45,10 @@ static uint64_t read_counter(unsigned *aux) {
 }
 
 int main(void) {
-    void (*samples[])(uint32_t *) = { rdtsc, rdtscp };
+    void (*samples[])(uint32_t *) = { rdtsc, rdtsc_af, rdtscp, rdtscp_af };
+    const uint32_t expected_flags[] = { 0x8c5, 0x10, 0x8c5, 0x10 };
     unsigned observations = 0, stable_aux_observations = 0;
-    for (unsigned index = 0; index < 2; index++) {
+    for (unsigned index = 0; index < 4; index++) {
         for (unsigned iteration = 0; iteration < 64; iteration++) {
             unsigned before_csr, after_csr, before_aux, after_aux;
             uint32_t out[8] = {0, 0, 0, 0, 0, 0, 0x23456789, 0x2468ace0};
@@ -55,16 +59,16 @@ int main(void) {
             __asm__ volatile("stmxcsr %0" : "=m"(after_csr));
             uint64_t got = (uint64_t)out[0] | (uint64_t)out[1] << 32;
             if (!got || got < before || got > after ||
-                    out[3] != 0x3a291807 || (out[4] & 0x8c5) != 0x8c5 ||
+                    out[3] != 0x3a291807 || (out[4] & 0x8d5) != expected_flags[index] ||
                     out[5] != before_csr || after_csr != before_csr ||
                     out[6] != 0x23456789 || out[7] != 0x2468ace0 ||
-                    (!index && out[2] != 0x5f60718)) {
+                    (index < 2 && out[2] != 0x5f60718)) {
                 fprintf(stderr, "IA32 timestamp %u counter=%llx window=%llx..%llx flags=%x\n",
                     index, (unsigned long long)got, (unsigned long long)before,
                     (unsigned long long)after, out[4]);
                 return 1;
             }
-            if (index && before_aux == after_aux) {
+            if (index >= 2 && before_aux == after_aux) {
                 if (out[2] != before_aux) {
                     fprintf(stderr, "IA32 timestamp AUX=%x reference=%x\n", out[2], before_aux);
                     return 2;
