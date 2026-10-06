@@ -55,7 +55,6 @@ func TestX86LockScalarRMWCarryCFGAndStackSources(t *testing.T) {
 			{"initialized CMP", "CMPL AX,$0", true},
 			{"undefined CMC", "CMC", false},
 			{"undefined compare", "CMPL BP,$0", false},
-			{"empty POPF", "POPF" + suffix, false},
 			{"explicit stack seed", "PUSH" + suffix + " DX\nPOPF" + suffix, true},
 			{"unknown stack seed", "PUSH" + suffix + " BP\nPOPF" + suffix, false},
 			{"unseeded join", counter + " join\nCLC\njoin:", false},
@@ -105,6 +104,11 @@ func TestX86LockScalarRMWCarryBudgetAndInputsRemainUnchanged(t *testing.T) {
 		t.Fatal("oversized CF domain did not fail closed", err)
 	}
 	ctx.blocks = nil
+	// Synthetic empty/mismatched cells are consumer tripwires, not Go source
+	// acceptance evidence: stock Go rejects a bare POPF as an unbalanced pop.
+	if state := ctx.lockCarryTransfer(Instr{Op: "POPFQ"}, x86LockCarryState{carry: true}); state.carry {
+		t.Fatal("synthetic empty stack supplied carry")
+	}
 	state := x86LockCarryState{carry: true, stack: []x86LockCarryCell{{bits: 16, known: true}}}
 	if state = ctx.lockCarryTransfer(Instr{Op: "POPFQ"}, state); state.carry {
 		t.Fatal("synthetic mismatched-width stack cell supplied carry")
