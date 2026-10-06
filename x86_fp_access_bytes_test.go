@@ -1,11 +1,13 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -62,16 +64,18 @@ func TestX86FPAccessBytesUnknownDoesNotInferPermission(t *testing.T) {
 		"MOVQ a+0(FP),b+8(FP)", "MOVQ $1.0,a+0(FP)", "MOVQ $0x100000000,a+0(FP)",
 		"LEAQ a+0(FP),AX", "MOVQ a+0(FP)(SI*1),AX", "MOVQ $a+0(FP),AX",
 	} {
-		file, err := Parse(ArchAMD64, "TEXT ·probe(SB),4,$0-16\n"+instruction+"\nRET\n")
-		if err != nil {
-			t.Fatal(err)
-		}
-		ins := file.Funcs[0].Instrs[1]
-		for index := range ins.Args {
-			if width, _, known := X86FPAccessBytes(ins, index, "amd64"); known || width != 0 {
-				t.Fatalf("unknown/malformed/native-address %s inferred bytes: %d/%v", instruction, width, known)
+		t.Run(instruction, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, "TEXT ·probe(SB),4,$0-16\n"+instruction+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
+			ins := file.Funcs[0].Instrs[1]
+			for index := range ins.Args {
+				if width, _, known := X86FPAccessBytes(ins, index, "amd64"); known || width != 0 {
+					t.Fatalf("unknown/malformed/native-address %s inferred bytes: %d/%v", instruction, width, known)
+				}
+			}
+		})
 	}
 	for _, instruction := range []string{"MOVQ a+0(FP),AX", "MOVOU a+0(FP),X8", "MOVL a+0(FP),R8"} {
 		file, err := Parse(ArchAMD64, "TEXT ·probe(SB),4,$0-16\n"+instruction+"\nRET\n")
@@ -81,6 +85,75 @@ func TestX86FPAccessBytesUnknownDoesNotInferPermission(t *testing.T) {
 		if width, _, known := X86FPAccessBytes(file.Funcs[0].Instrs[1], 0, "386"); known || width != 0 {
 			t.Fatalf("unbound 386 physical bank/width %s: %d/%v", instruction, width, known)
 		}
+	}
+}
+
+func TestX86FPAccessBytesScalarRMWOrderedObservation(t *testing.T) {
+	// This independent syntax inventory is checked against the complete Go
+	// ordered tables by TestX86LockScalarRMWCompleteGoTables. Observation of
+	// an FP width is not admission of LOCK on virtual FP storage.
+	for _, arch := range []string{"amd64", "386"} {
+		forms := x86LockScalarOracleForms(arch)
+		for _, stem := range []string{"ADC", "ADD", "AND", "OR", "SBB", "SUB", "XOR"} {
+			widths := "BWL"
+			if arch == "amd64" {
+				widths += "Q"
+			}
+			for _, width := range widths {
+				register := "AX"
+				if width == 'B' {
+					register = "AL"
+				}
+				op := stem + string(width)
+				forms = append(forms, x86LockScalarOracleForm{op, op + " a+0(FP)," + register})
+			}
+		}
+		for _, form := range forms {
+			instruction := strings.Replace(form.text, "1(SI)", "a+0(FP)", 1)
+			t.Run(arch+"/"+instruction, func(t *testing.T) {
+				source := "TEXT ·probe(SB),4,$0-8\n" + instruction + "\nRET\n"
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				before := append([]Operand(nil), ins.Args...)
+				wantWidth := map[byte]int64{'B': 1, 'W': 2, 'L': 4, 'Q': 8}[form.op[len(form.op)-1]]
+				for index, operand := range ins.Args {
+					width, write, known := X86FPAccessBytes(ins, index, arch)
+					if operand.Kind != OpFP {
+						if known || width != 0 || write {
+							t.Fatal("non-FP operand acquired a frame observation", index, width, write, known)
+						}
+						continue
+					}
+					if !known || width != wantWidth || write != (index == len(ins.Args)-1) {
+						t.Fatalf("ordered native FP observation = %d/%t/%t, want %d/%t/true", width, write, known, wantWidth, index == len(ins.Args)-1)
+					}
+				}
+				if !reflect.DeepEqual(ins.Args, before) {
+					t.Fatal("observation changed the original operands")
+				}
+			})
+		}
+	}
+}
+
+func TestX86FPAccessBytesKnownReadDoesNotSupplyInitializedBytes(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		t.Run(arch, func(t *testing.T) {
+			body := "MOVL $0,AX\nADDL ret0+0(FP),AX\nMOVL AX,ret0+0(FP)\nRET"
+			_, file, sig, source := x86ResultInitializationFixture(t, arch, "func Value() uint32", body)
+			goAssemblerOracleOutput(t, arch, source, "", true)
+			width, write, known := X86FPAccessBytes(file.Funcs[0].Instrs[2], 0, arch)
+			if width != 4 || write || !known {
+				t.Fatal("registered ADDL read lost its native width", width, write, known)
+			}
+			if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("pure native-width observation granted uninitialized result bytes", err)
+			}
+		})
 	}
 }
 
