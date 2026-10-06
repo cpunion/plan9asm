@@ -307,6 +307,14 @@ func (c *amd64Ctx) scanUsedRegs() {
 					markReg(register)
 				}
 			}
+			if spec, known, err := x86CPUQueryProperties(Op(op), ins, c.goarch); known && err == nil {
+				for _, register := range spec.inputs {
+					markReg(register)
+				}
+				for _, register := range spec.outputs {
+					markReg(register)
+				}
+			}
 			if spec, ok := amd64RTMSpecs[Op(op)]; ok && spec.outputAX {
 				markReg(AX)
 			}

@@ -436,82 +436,46 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 				out = b.CreateXor(lhs.val, rhs.val, "")
 			}
 			reg[dst.Reg] = directValue{typ: I64, val: out}
-		case OpCPUID:
-			eax, ok := reg[AX]
-			if !ok {
-				var zerr error
-				eax, zerr = zero(I32)
-				if zerr != nil {
-					return zerr
-				}
-			} else {
-				var cerr error
-				eax, cerr = cast(eax, I32)
-				if cerr != nil {
-					return cerr
-				}
+		case OpCPUID, OpXGETBV:
+			if arch != ArchAMD64 {
+				return fmt.Errorf("CPU-query instruction requires an x86 architecture")
 			}
-			ecx, ok := reg[CX]
-			if !ok {
-				var zerr error
-				ecx, zerr = zero(I32)
-				if zerr != nil {
-					return zerr
-				}
-			} else {
-				var cerr error
-				ecx, cerr = cast(ecx, I32)
-				if cerr != nil {
-					return cerr
-				}
+			spec, _, err := x86CPUQueryProperties(ins.Op, ins, "amd64")
+			if err != nil {
+				return err
 			}
-			i32Ty, _ := llvmTypeFromLLVMType(ctx, I32)
-			retTy := ctx.StructType([]llvm.Type{i32Ty, i32Ty, i32Ty, i32Ty}, false)
-			asmTy := llvm.FunctionType(retTy, []llvm.Type{i32Ty, i32Ty}, false)
-			asmv := llvm.InlineAsm(
-				asmTy,
-				"cpuid",
-				"={ax},={bx},={cx},={dx},{ax},{cx},~{dirflag},~{fpsr},~{flags}",
-				true,
-				false,
-				llvm.InlineAsmDialectATT,
-				false,
-			)
-			callv := b.CreateCall(asmTy, asmv, []llvm.Value{eax.val, ecx.val}, "")
-			reg[AX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 0, "")}
-			reg[BX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 1, "")}
-			reg[CX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 2, "")}
-			reg[DX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 3, "")}
-		case OpXGETBV:
-			ecx, ok := reg[CX]
-			if !ok {
-				var zerr error
-				ecx, zerr = zero(I32)
-				if zerr != nil {
-					return zerr
+			inputs := make([]llvm.Value, len(spec.inputs))
+			for index, register := range spec.inputs {
+				value, exists := reg[register]
+				if !exists {
+					value, err = zero(I32)
+				} else {
+					value, err = cast(value, I32)
 				}
-			} else {
-				var cerr error
-				ecx, cerr = cast(ecx, I32)
-				if cerr != nil {
-					return cerr
+				if err != nil {
+					return err
 				}
+				inputs[index] = value.val
 			}
-			i32Ty, _ := llvmTypeFromLLVMType(ctx, I32)
-			retTy := ctx.StructType([]llvm.Type{i32Ty, i32Ty}, false)
-			asmTy := llvm.FunctionType(retTy, []llvm.Type{i32Ty}, false)
-			asmv := llvm.InlineAsm(
-				asmTy,
-				"xgetbv",
-				"={ax},={dx},{cx},~{dirflag},~{fpsr},~{flags}",
-				true,
-				false,
-				llvm.InlineAsmDialectATT,
-				false,
-			)
-			callv := b.CreateCall(asmTy, asmv, []llvm.Value{ecx.val}, "")
-			reg[AX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 0, "")}
-			reg[DX] = directValue{typ: I32, val: b.CreateExtractValue(callv, 1, "")}
+			i32Type, err := llvmTypeFromLLVMType(ctx, I32)
+			if err != nil {
+				return err
+			}
+			outputTypes := make([]llvm.Type, len(spec.outputs))
+			for index := range outputTypes {
+				outputTypes[index] = i32Type
+			}
+			inputTypes := make([]llvm.Type, len(spec.inputs))
+			for index := range inputTypes {
+				inputTypes[index] = i32Type
+			}
+			asmType := llvm.FunctionType(ctx.StructType(outputTypes, false), inputTypes, false)
+			assembly := llvm.InlineAsm(asmType, spec.native, spec.constraints(),
+				true, false, llvm.InlineAsmDialectATT, false)
+			call := b.CreateCall(asmType, assembly, inputs, "")
+			for index, register := range spec.outputs {
+				reg[register] = directValue{typ: I32, val: b.CreateExtractValue(call, index, "")}
+			}
 		case OpRET:
 			switch {
 			case retTyFn == Void:

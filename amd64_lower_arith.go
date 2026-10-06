@@ -194,6 +194,9 @@ func amd64YmbEffectiveRegister(r Reg, bits int) Reg {
 }
 
 func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if ok, terminated, err := c.lowerX86CPUQuery(op, ins); ok {
+		return ok, terminated, err
+	}
 	if ok, terminated, err := c.lowerStackWidth(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -325,64 +328,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		value := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.x86.rdpid()\n", value)
 		return true, false, c.storeRegSized(ins.Args[0].Reg, I32, "%"+value)
-	case OpCPUID:
-		eax64, err := c.loadReg(AX)
-		if err != nil {
-			return true, false, err
-		}
-		ecx64, err := c.loadReg(CX)
-		if err != nil {
-			return true, false, err
-		}
-		eax32 := c.newTmp()
-		ecx32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", eax32, eax64)
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", ecx32, ecx64)
-		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call { i32, i32, i32, i32 } asm sideeffect \"cpuid\", \"={ax},={bx},={cx},={dx},{ax},{cx},~{dirflag},~{fpsr},~{flags}\"(i32 %%%s, i32 %%%s)\n", call, eax32, ecx32)
-		storeOut := func(idx int, reg Reg) error {
-			part := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractvalue { i32, i32, i32, i32 } %%%s, %d\n", part, call, idx)
-			wide := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, part)
-			return c.storeReg(reg, "%"+wide)
-		}
-		if err := storeOut(0, AX); err != nil {
-			return true, false, err
-		}
-		if err := storeOut(1, BX); err != nil {
-			return true, false, err
-		}
-		if err := storeOut(2, CX); err != nil {
-			return true, false, err
-		}
-		if err := storeOut(3, DX); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
-	case OpXGETBV:
-		ecx64, err := c.loadReg(CX)
-		if err != nil {
-			return true, false, err
-		}
-		ecx32 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", ecx32, ecx64)
-		call := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call { i32, i32 } asm sideeffect \"xgetbv\", \"={ax},={dx},{cx},~{dirflag},~{fpsr},~{flags}\"(i32 %%%s)\n", call, ecx32)
-		storeOut := func(idx int, reg Reg) error {
-			part := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = extractvalue { i32, i32 } %%%s, %d\n", part, call, idx)
-			wide := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, part)
-			return c.storeReg(reg, "%"+wide)
-		}
-		if err := storeOut(0, AX); err != nil {
-			return true, false, err
-		}
-		if err := storeOut(1, DX); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
 	case "MOVSB":
 		si, err := c.loadReg(SI)
 		if err != nil {

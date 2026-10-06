@@ -1469,90 +1469,31 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 				continue
 			}
 
-		case OpCPUID:
-			// x86: CPUID reads EAX/ECX and writes EAX/EBX/ECX/EDX.
-			eax := reg[AX]
-			if eax.typ == "" {
-				z, _ := zero(I32)
-				eax = z
-			} else {
-				var err error
-				eax, err = emitCast(eax, I32)
+		case OpCPUID, OpXGETBV:
+			if arch != ArchAMD64 {
+				return fmt.Errorf("CPU-query instruction requires an x86 architecture")
+			}
+			spec, _, err := x86CPUQueryProperties(ins.Op, ins, "amd64")
+			if err != nil {
+				return err
+			}
+			inputs := make([]string, len(spec.inputs))
+			for index, register := range spec.inputs {
+				value := reg[register]
+				if value.typ == "" {
+					value, err = zero(I32)
+				} else {
+					value, err = emitCast(value, I32)
+				}
 				if err != nil {
 					return err
 				}
+				inputs[index] = value.val
 			}
-			ecx := reg[CX]
-			if ecx.typ == "" {
-				z, _ := zero(I32)
-				ecx = z
-			} else {
-				var err error
-				ecx, err = emitCast(ecx, I32)
-				if err != nil {
-					return err
-				}
+			outputs := emitX86CPUQuery(b, spec, inputs, newTmp)
+			for index, register := range spec.outputs {
+				reg[register] = ssaVal{typ: I32, val: outputs[index]}
 			}
-			if !isSSA(eax.val) {
-				if err := setReg(AX, eax); err != nil {
-					return err
-				}
-				eax = reg[AX]
-			}
-			if !isSSA(ecx.val) {
-				if err := setReg(CX, ecx); err != nil {
-					return err
-				}
-				ecx = reg[CX]
-			}
-			call := newTmp()
-			// Return 4x i32 in EAX/EBX/ECX/EDX.
-			fmt.Fprintf(b, "  %%%s = call { i32, i32, i32, i32 } asm sideeffect %q, %q(i32 %s, i32 %s)\n",
-				call,
-				"cpuid",
-				"={ax},={bx},={cx},={dx},{ax},{cx},~{dirflag},~{fpsr},~{flags}",
-				eax.val, ecx.val)
-			ext := func(i int) string {
-				n := newTmp()
-				fmt.Fprintf(b, "  %%%s = extractvalue { i32, i32, i32, i32 } %%%s, %d\n", n, call, i)
-				return "%" + n
-			}
-			reg[AX] = ssaVal{typ: I32, val: ext(0)}
-			reg[BX] = ssaVal{typ: I32, val: ext(1)}
-			reg[CX] = ssaVal{typ: I32, val: ext(2)}
-			reg[DX] = ssaVal{typ: I32, val: ext(3)}
-
-		case OpXGETBV:
-			// x86: XGETBV reads ECX and writes EAX/EDX.
-			ecx := reg[CX]
-			if ecx.typ == "" {
-				z, _ := zero(I32)
-				ecx = z
-			} else {
-				var err error
-				ecx, err = emitCast(ecx, I32)
-				if err != nil {
-					return err
-				}
-			}
-			if !isSSA(ecx.val) {
-				if err := setReg(CX, ecx); err != nil {
-					return err
-				}
-				ecx = reg[CX]
-			}
-			call := newTmp()
-			fmt.Fprintf(b, "  %%%s = call { i32, i32 } asm sideeffect %q, %q(i32 %s)\n",
-				call,
-				"xgetbv",
-				"={ax},={dx},{cx},~{dirflag},~{fpsr},~{flags}",
-				ecx.val)
-			eaxN := newTmp()
-			edxN := newTmp()
-			fmt.Fprintf(b, "  %%%s = extractvalue { i32, i32 } %%%s, 0\n", eaxN, call)
-			fmt.Fprintf(b, "  %%%s = extractvalue { i32, i32 } %%%s, 1\n", edxN, call)
-			reg[AX] = ssaVal{typ: I32, val: "%" + eaxN}
-			reg[DX] = ssaVal{typ: I32, val: "%" + edxN}
 
 		case OpRET:
 			// Return value comes either from explicit result slots (name+off(FP))
