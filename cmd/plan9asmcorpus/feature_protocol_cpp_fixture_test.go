@@ -62,3 +62,67 @@ func TestPortableAccountingFixtureRetainsCurrentOriginalCPP(t *testing.T) {
 		})
 	}
 }
+
+func TestPortableAccountingGeneratedHeaderRetainsCurrentOriginalCPP(t *testing.T) {
+	progress := fixtureSemanticGeneratedProgress(t)
+	for _, candidate := range progress.Candidates {
+		plan := candidate.OrdinarySelectionPlan
+		if plan == nil || len(plan.GeneratedHeaders) == 0 {
+			continue
+		}
+		if plan.CPPSourceProtocol != discoveryReplayCPPInputsProtocol ||
+			plan.CPPInputs.Protocol != discoveryReplayCPPInputsProtocol {
+			t.Fatal("generated-header fixture downgraded its original CPP graph")
+		}
+		for _, proof := range candidate.FeatureConsumption {
+			if proof.GeneratedHeaders == nil || len(proof.GeneratedHeaders.Headers) != 1 || len(proof.Packages) != 1 {
+				t.Fatal("generated-header fixture lost its independent package/header binding")
+			}
+			header := &proof.GeneratedHeaders.Headers[0]
+			for _, cpp := range proof.CPP {
+				var unit discoveryCPPUnit
+				for _, registered := range plan.CPPInputs.Units {
+					if registered.File == cpp.File {
+						unit = registered
+						break
+					}
+				}
+				if len(unit.DeferredIncludes) != 1 {
+					t.Fatal("generated-header fixture lost its exact original include edge")
+				}
+				if err := validateDiscoveryOriginalCPPConsumption(plan.CPPInputs, unit, header,
+					proof.Packages[0].Macros.Defines, cpp); err != nil {
+					t.Fatalf("generated header was not replayed with the complete original: %v", err)
+				}
+			}
+		}
+		for _, mutation := range []string{"downgrade", "delete_original", "delete_include"} {
+			t.Run(mutation, func(t *testing.T) {
+				changed := cloneSemanticProgress(t, progress)
+				for index := range changed.Candidates {
+					plan := changed.Candidates[index].OrdinarySelectionPlan
+					if plan == nil || len(plan.GeneratedHeaders) == 0 {
+						continue
+					}
+					switch mutation {
+					case "downgrade":
+						plan.CPPSourceProtocol = discoveryDeferredCPPInputsProtocol
+						plan.CPPInputs.Protocol = discoveryDeferredCPPInputsProtocol
+					case "delete_original":
+						source := plan.CPPInputs.Sources["module/probe.s"]
+						source.Original = nil
+						plan.CPPInputs.Sources["module/probe.s"] = source
+					case "delete_include":
+						plan.CPPInputs.Units[0].DeferredIncludes = nil
+					}
+					break
+				}
+				if err := requireVerifiedAssemblyLedger(changed); err == nil {
+					t.Fatal("generated-header accounting accepted incomplete original-source evidence")
+				}
+			})
+		}
+		return
+	}
+	t.Fatal("fixture contained no generated-header candidate")
+}
