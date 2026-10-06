@@ -14,7 +14,10 @@ func TestX86LockScalarRMWTypedRolesAgreeWithoutMemoryPermission(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ins := file.Funcs[0].Instrs[0]
+				if len(file.Funcs[0].Instrs) != 3 || file.Funcs[0].Instrs[0].Op != OpTEXT {
+					t.Fatal("complete fixture lost its TEXT/RMW/RET roles")
+				}
+				ins := file.Funcs[0].Instrs[1]
 				form, known, err := x86LockScalarRMWProperties(ins.Op, ins, arch)
 				if err != nil || !known {
 					t.Fatal("complete accepted grammar row lost its typed form", err)
