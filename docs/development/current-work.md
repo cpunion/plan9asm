@@ -19,7 +19,7 @@ The aggregate still requires all 64 fresh reports.
 
 ## Current integration
 
-Continue on `codex/pr40-source-closure-integration-20261007`.
+Continue on `codex/pr40-go-rule-final-validation-20261007`.
 Main owns integration and is the only assembly-ledger writer. Earlier separate
 agents are not active; inspect process ownership before taking over an artifact.
 
@@ -42,6 +42,11 @@ Main reviewed the complete ARM64 aggregate and retained original false-admission
 and false-rejection regressions. Integration preserves the parent's x86 source
 normalizer and all runtime-oracle lifecycle consumers.
 
+CPP consumption now lexes each complete original once per graph construction,
+using an invocation-local resource index across all units. No persistent cache,
+unit/resource exclusion or new source permission is introduced. Every new
+consumer still independently validates its complete original source hashes.
+
 ## Closed evidence and live work
 
 These results belong only to the named frozen snapshots, not this successor:
@@ -56,15 +61,20 @@ These results belong only to the named frozen snapshots, not this successor:
   external-library pass.
 - Original merged x86 domain/budget failures and old-SDK symabis failures remain
   under ignored artifacts in their own frozen leaves.
+- CPP `94c662b1` independently reproduced quadratic allocations on both SDKs.
+  Repair `2f4d82da` passed the two independent complexity/freshness tests on both.
+  Its 16-unit query-only benchmark reduced current-SDK time from 73.29 ms to
+  5.22 ms and allocations from about 1.05 million to 65,862. Historical SDK
+  time fell from 91.49 ms to 6.41 ms. These are microbenchmark observations,
+  not external-package, whole-job or ledger passes.
 - A separate frozen `e98a7342` four-candidate shard-5 replay is still running.
   Its controlling agent exited while its actual runner remained alive. Inspect
   PID/PGID, raw reports and closure evidence; a console PASS or missing owner
   receipt cannot be promoted into a ledger pass.
 
-Arrow's sampled runner stack repeatedly lexed the entire CPP source graph
-inside per-unit/profile replay. Reproduce and fix that rule-class complexity
-without dropping units, inactive resources, actual consumer validation or
-source/tool provenance. Do not mutate the running replay.
+Arrow's sampled older runner repeatedly lexed the entire CPP source graph inside
+per-unit/profile replay. Run a fresh complete-target candidate replay with the
+repair, preserving the older evidence. Do not mutate the running older replay.
 
 ## Required completion gates
 
