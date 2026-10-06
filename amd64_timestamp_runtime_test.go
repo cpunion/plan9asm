@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
