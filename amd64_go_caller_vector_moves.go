@@ -250,6 +250,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		return 1, true, err == nil && index == 0
 	}
+	if form, known, err := x86PackedNarrowProperties(ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && form.memory == index
+	}
 	if form, known, err := x86PackedSADProperties(ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && form.memory == index
 	}

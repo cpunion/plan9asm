@@ -54,7 +54,7 @@ func x86PackedNarrowProperties(ins Instr, goarch string) (x86PackedNarrowForm, b
 		}
 	}
 	grammarArch := goarch
-	if goarch == "386" && ins.x86Encoded {
+	if goarch == "386" && ins.x86Encoded && spec.encoding == x86PackedLogicalVEXOrEVEX {
 		// Validated physical bytes may have masks which Go's mode32 named
 		// frontend rejects. The private marker is not JSON-exportable.
 		grammarArch = "amd64"
@@ -63,9 +63,11 @@ func x86PackedNarrowProperties(ins Instr, goarch string) (x86PackedNarrowForm, b
 	if err == nil {
 		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
-	if err == nil && goarch == "386" && form.memory >= 0 && local.Args[form.memory].Kind == OpMem &&
-		!x86MemoryRegistersValidForArch(local.Args[form.memory].Mem, goarch) {
-		err = fmt.Errorf("386 %s memory registers are outside the physical mode32 bank", ins.Op)
+	if err == nil && grammarArch != goarch && form.memory >= 0 && !x86PackedShiftMemoryValid(local.Args[form.memory], goarch) {
+		err = fmt.Errorf("386 %s physical source has an unbound address", ins.Op)
+	}
+	if err == nil && form.memory >= 0 && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
+		err = fmt.Errorf("%w: packed narrow has no bound address-size override", ErrProbeNeedsContext)
 	}
 	result := x86PackedNarrowForm{x86PackedBinaryForm: form, spec: spec}
 	if err == nil {

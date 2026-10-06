@@ -7,10 +7,11 @@ import "fmt"
 var x86RawPackedNarrowOps = map[[2]int]struct {
 	op        Op
 	broadcast bool
+	evexW0    bool
 }{
-	{1, 0x6b}: {op: "VPACKSSDW", broadcast: true},
+	{1, 0x6b}: {op: "VPACKSSDW", broadcast: true, evexW0: true},
 	{1, 0x63}: {op: "VPACKSSWB"},
-	{2, 0x2b}: {op: "VPACKUSDW", broadcast: true},
+	{2, 0x2b}: {op: "VPACKUSDW", broadcast: true, evexW0: true},
 	{1, 0x67}: {op: "VPACKUSWB"},
 }
 
@@ -23,9 +24,10 @@ func decodedX86VectorPackedSaturatingNarrowInstruction(code []byte, mode int) (I
 	if !known {
 		return Instr{}, 0, false, nil
 	}
-	// Go emits W0 for these rows. Do not infer support for additional
-	// physical WIG encodings from the shared named-operand grammar.
-	if p.w {
+	// Intel's VEX pack rows ignore W. EVEX dword inputs require W0,
+	// while EVEX word inputs also ignore W. Go happens to emit W0 for all;
+	// that chosen encoding is not the complete legal physical grammar.
+	if p.evex && spec.evexW0 && p.w {
 		return Instr{}, 0, true, fmt.Errorf("packed saturating narrow: unsupported W bit")
 	}
 	bits := 16
