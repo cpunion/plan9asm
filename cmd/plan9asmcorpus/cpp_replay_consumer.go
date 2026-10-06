@@ -22,9 +22,9 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 			RequiredExpandedOperands: make(map[string][]gotoolprofile.CPPPackageSearchMiss),
 		},
 	}
-	// Lex each complete source once for this construction, not once per unit.
-	// This invocation-local index grants no authority and is never reused after
-	// source mutation; each consumer still owns new maps and validates all bytes.
+	// Register each source once per construction, not once per unit. Captured
+	// originals may reuse the parser's private immutable lexer index; every
+	// consumer still owns new maps and validates the complete original bytes.
 	resources := make(map[string][]discoveryCPPResource, len(inputs.Sources))
 	for id, source := range inputs.Sources {
 		if source.Original == nil {

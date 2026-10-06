@@ -21,6 +21,8 @@ type discoveryCPPSource struct {
 	SHA256     string                  `json:"sha256"`
 	Directives []discoveryCPPDirective `json:"directives"`
 	Original   *string                 `json:"original_source,omitempty"`
+
+	resourceIndex *discoveryCPPSourceResourceIndex
 }
 
 type discoveryCPPBranchState struct{ OuterActive, Then bool }

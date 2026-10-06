@@ -20,7 +20,31 @@ type discoveryCPPResource struct {
 	candidate bool
 }
 
-// Candidate roles are private and derived anew from complete originals, not
+// The parser owns this immutable index for the lifetime of one captured source.
+// It is neither serialized nor lazily populated by concurrent query readers.
+// Every public input is compared before reuse; changed or restored originals
+// use the ordinary lexer. The index grants no source or include authority.
+type discoveryCPPSourceResourceIndex struct {
+	file, sha256, original string
+	directives             []discoveryCPPDirective
+	candidates             []discoveryCPPDirective
+}
+
+func (index *discoveryCPPSourceResourceIndex) matches(source discoveryCPPSource) bool {
+	if index == nil || source.Original == nil || index.file != source.File ||
+		index.sha256 != source.SHA256 || index.original != *source.Original ||
+		len(index.directives) != len(source.Directives) {
+		return false
+	}
+	for position, directive := range source.Directives {
+		if index.directives[position] != directive {
+			return false
+		}
+	}
+	return true
+}
+
+// Candidate roles are private and derived only from complete originals, not
 // supplied by a public JSON marker. Physical literal keys retain their original
 // indices; candidate keys cannot masquerade as those source positions.
 func discoveryCPPRegisteredResources(inputs *discoveryCPPInputs, source discoveryCPPSource) ([]discoveryCPPResource, error) {
@@ -36,9 +60,15 @@ func discoveryCPPRegisteredResources(inputs *discoveryCPPInputs, source discover
 	if source.Original == nil {
 		return nil, fmt.Errorf("CPP resource query omitted complete original bytes")
 	}
-	candidates, err := discoveryCPPStringCandidates(*source.Original, source.File, source.Directives)
-	if err != nil {
-		return nil, err
+	var candidates []discoveryCPPDirective
+	if source.resourceIndex.matches(source) {
+		candidates = source.resourceIndex.candidates
+	} else {
+		var err error
+		candidates, err = discoveryCPPStringCandidates(*source.Original, source.File, source.Directives)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for index, directive := range candidates {
 		result = append(result, discoveryCPPResource{

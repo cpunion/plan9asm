@@ -78,7 +78,23 @@ func discoveryReplayCPPSource(file string, data []byte) (discoveryCPPSource, err
 			result.Directives = append(result.Directives, directive)
 		}
 	}
+	candidates, err := discoveryCPPStringCandidates(text, file, result.Directives)
+	if err != nil {
+		return result, err
+	}
+	result.resourceIndex = &discoveryCPPSourceResourceIndex{
+		file: file, sha256: result.SHA256, original: text,
+		directives: append([]discoveryCPPDirective(nil), result.Directives...),
+		candidates: candidates,
+	}
 	return result, nil
+}
+
+// Equality authenticates the complete public source projection. A private
+// lexer optimization is not transport data and is never admission evidence.
+func equalDiscoveryCPPSource(left, right discoveryCPPSource) bool {
+	left.resourceIndex, right.resourceIndex = nil, nil
+	return reflect.DeepEqual(left, right)
 }
 
 func captureDiscoveryReplayCPPInputs(plan *discoveryOrdinarySelectionPlan, moduleDir, goRoot string, files []string, deferred bool, contexts ...context.Context) (*discoveryCPPInputs, error) {
@@ -144,7 +160,7 @@ func captureDiscoveryReplayCPPInputs(plan *discoveryOrdinarySelectionPlan, modul
 				return err
 			}
 			if previous, found := inputs.Sources[id]; found {
-				if !reflect.DeepEqual(previous, source) {
+				if !equalDiscoveryCPPSource(previous, source) {
 					return fmt.Errorf("CPP original changed between units: %s", id)
 				}
 			} else {
@@ -231,7 +247,7 @@ func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discover
 		}
 		total += len(*source.Original)
 		actual, err := discoveryReplayCPPSource(file, []byte(*source.Original))
-		if err != nil || !reflect.DeepEqual(source, actual) {
+		if err != nil || !equalDiscoveryCPPSource(source, actual) {
 			return fmt.Errorf("CPP raw inventory/full SHA differs from original replay: %s: %v", id, err)
 		}
 	}

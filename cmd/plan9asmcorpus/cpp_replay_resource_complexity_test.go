@@ -91,6 +91,38 @@ func TestCPPParsedSourceResourcesRemainFreshAndOwned(t *testing.T) {
 	}
 }
 
+func TestCPPOriginalConsumerParsedResourcesConcurrent(t *testing.T) {
+	inputs := cppResourceComplexityFixture(t, 2)
+	want, err := discoveryCPPOriginalConsumerInput(inputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const workers = 8
+	results := make(chan error, workers)
+	for worker := 0; worker < workers; worker++ {
+		go func() {
+			for query := 0; query < 4; query++ {
+				got, err := discoveryCPPOriginalConsumerInput(inputs)
+				if err != nil || !reflect.DeepEqual(got, want) {
+					results <- fmt.Errorf("concurrent source query changed consumer: %v", err)
+					return
+				}
+				got.CPPOriginals.Sources["module/"+inputs.Units[0].File] = "private consumer mutation"
+			}
+			results <- nil
+		}()
+	}
+	for worker := 0; worker < workers; worker++ {
+		if err := <-results; err != nil {
+			t.Error(err)
+		}
+	}
+	again, err := discoveryCPPOriginalConsumerInput(inputs)
+	if err != nil || !reflect.DeepEqual(again, want) {
+		t.Fatalf("parallel query mutation escaped its consumer: %v", err)
+	}
+}
+
 // This fixture measures query-graph construction, not source authentication or
 // assembly coverage. Increasing independent units must not multiply the lexer
 // work for every other unit's complete original source.
