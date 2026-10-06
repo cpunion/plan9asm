@@ -108,10 +108,20 @@ func captureInstrumentationExportEnvironment(root, version string) (*Instrumenta
 }
 
 func instrumentationExportDeclaration(name string, data []byte, target string) (string, string, error) {
+	result, err := instrumentationExportDeclarations.replay(name, data, target)
+	return result.text, result.digest, err
+}
+
+type instrumentationExportDeclarationResult struct {
+	text, digest string
+	declarations int
+}
+
+func parseInstrumentationExportDeclaration(name string, data []byte, target string) (instrumentationExportDeclarationResult, error) {
 	set := token.NewFileSet()
 	file, err := parser.ParseFile(set, name, data, 0)
 	if err != nil {
-		return "", "", fmt.Errorf("parse marker environment source %s: %w", name, err)
+		return instrumentationExportDeclarationResult{}, fmt.Errorf("parse marker environment source %s: %w", name, err)
 	}
 	var found ast.Node
 	for _, declaration := range file.Decls {
@@ -128,26 +138,26 @@ func instrumentationExportDeclaration(name string, data []byte, target string) (
 		}
 		if candidate != nil {
 			if found != nil {
-				return "", "", fmt.Errorf("duplicate registered marker environment declaration: %s#%s", name, target)
+				return instrumentationExportDeclarationResult{}, fmt.Errorf("duplicate registered marker environment declaration: %s#%s", name, target)
 			}
 			found = candidate
 		}
 	}
 	if found == nil {
-		return "", "", fmt.Errorf("missing registered marker environment declaration: %s#%s", name, target)
+		return instrumentationExportDeclarationResult{}, fmt.Errorf("missing registered marker environment declaration: %s#%s", name, target)
 	}
 	digest, err := ASTSHA(set, found)
 	if err != nil {
-		return "", "", err
+		return instrumentationExportDeclarationResult{}, err
 	}
 	var out bytes.Buffer
 	if _, ok := found.(*ast.ValueSpec); ok {
 		out.WriteString("var ")
 	}
 	if err := format.Node(&out, set, found); err != nil {
-		return "", "", err
+		return instrumentationExportDeclarationResult{}, err
 	}
-	return out.String(), digest, nil
+	return instrumentationExportDeclarationResult{out.String(), digest, len(file.Decls)}, nil
 }
 
 func recheckInstrumentationExportEnvironmentSources(root, version string, before *InstrumentationExportEnvironment) error {
@@ -184,12 +194,11 @@ func validateInstrumentationExportEnvironment(proof *InstrumentationExportEnviro
 		if !present || len(text) == 0 || len(text) > instrumentationRegistrationByteLimit {
 			return fmt.Errorf("missing or over-bound marker environment declaration: %s", key)
 		}
-		projected, err := parser.ParseFile(token.NewFileSet(), name, "package replay\n"+text+"\n", 0)
-		if err != nil || len(projected.Decls) != 1 {
+		result, err := instrumentationExportDeclarations.replay(name, []byte("package replay\n"+text+"\n"), target)
+		if err != nil || result.declarations != 1 {
 			return fmt.Errorf("marker environment projection must contain exactly one complete declaration: %s", key)
 		}
-		_, digest, err := instrumentationExportDeclaration(name, []byte("package replay\n"+text+"\n"), target)
-		if err != nil || digest != registered {
+		if result.digest != registered {
 			return fmt.Errorf("changed complete marker environment declaration: %s", key)
 		}
 	}
