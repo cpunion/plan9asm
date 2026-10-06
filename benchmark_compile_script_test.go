@@ -70,8 +70,8 @@ if [[ "$goarch" == 386 ]]; then
     missing) exit 17 ;;
   esac
 fi
-printf '{"total_asm":%s,"success":%s,"failed":%s,"not_applicable":%s,"duration":"1ms"}\n' \
-  "$total" "$success" "$failed" "$na" > "$report"
+printf '{"goos":"%s","goarch":"%s","total_asm":%s,"success":%s,"failed":%s,"not_applicable":%s,"duration":"1ms"}\n' \
+  "$goos" "$goarch" "$total" "$success" "$failed" "$na" > "$report"
 exit "$code"
 `
 
