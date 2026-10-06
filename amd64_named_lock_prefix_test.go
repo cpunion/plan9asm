@@ -35,18 +35,24 @@ func x86NamedLockOracleForms(arch string) []x86NamedLockOracleForm {
 				atomic = "lock; xadd"
 			case "XCHG":
 				atomic = "asm sideeffect \"xchg"
+			default:
+				atomic = "lock; " + strings.ToLower(stem+string(width))
 			}
 			forms = append(forms, x86NamedLockOracleForm{fmt.Sprintf("%s%c %s,(SI)", stem, width, register), atomic})
 		}
 	}
 	for _, stem := range []string{"INC", "DEC", "NEG", "NOT"} {
 		for _, width := range widths {
-			forms = append(forms, x86NamedLockOracleForm{text: fmt.Sprintf("%s%c (SI)", stem, width)})
+			forms = append(forms, x86NamedLockOracleForm{
+				text: fmt.Sprintf("%s%c (SI)", stem, width), atomic: "lock; " + strings.ToLower(stem+string(width)),
+			})
 		}
 	}
 	for _, stem := range []string{"BTC", "BTR", "BTS"} {
 		for _, width := range strings.TrimPrefix(widths, "B") {
-			forms = append(forms, x86NamedLockOracleForm{text: fmt.Sprintf("%s%c CX,(SI)", stem, width)})
+			forms = append(forms, x86NamedLockOracleForm{
+				text: fmt.Sprintf("%s%c CX,(SI)", stem, width), atomic: "lock; " + strings.ToLower(stem+string(width)),
+			})
 		}
 	}
 	forms = append(forms, x86NamedLockOracleForm{text: "CMPXCHG8B (SI)", atomic: "asm sideeffect \"lock; cmpxchg8b"})
@@ -84,7 +90,7 @@ func TestX86NamedLockCompleteRMWRequiresWholeAtomicBinding(t *testing.T) {
 		}
 		for _, form := range forms {
 			t.Run(target.triple+"/"+form.text, func(t *testing.T) {
-				source := x86NamedLockOracleSource(target.arch, "LOCK\n\t"+form.text)
+				source := x86NamedLockOracleSource(target.arch, "CMPL AX,AX\n\tLOCK\n\t"+form.text)
 				actual := x86OrderingHintGoBytes(t, target.arch, source)
 				if !strings.Contains(string(actual), string([]byte{0xf0})) {
 					t.Fatalf("actual Go object lost named LOCK prefix: %x", actual)
@@ -115,7 +121,7 @@ func TestX86NamedLockDetachedAndSplitPrefixDoesNotBorrowAtomicBody(t *testing.T)
 			"LOCK",
 			"LOCK\n\tLOCK\n\tXADDL CX,(SI)",
 			"LOCK\nbody:\n\tXADDL CX,(SI)",
-			"LOCK\n\tADDL CX,(SI)",
+			"LOCK\n\tCMPL CX,(SI)",
 			"LOCK\n\tNOP\n\tXADDL CX,(SI)",
 		} {
 			t.Run(arch+"/"+body, func(t *testing.T) {

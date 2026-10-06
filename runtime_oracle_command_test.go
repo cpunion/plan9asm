@@ -150,6 +150,8 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_cmpxchg_actual_observation_test.go",
 		"amd64_cmpxchg_original_catalogue_test.go",
 		"amd64_ordering_hint_linux_amd64_test.go",
+		"amd64_lock_scalar_rmw_linux_amd64_test.go",
+		"amd64_lock_scalar_rmw_objects_test.go",
 		"amd64_packed_add_go_oracle_test.go",
 		"amd64_packed_average_original_go_test.go",
 		"amd64_packed_average_raw_test.go",

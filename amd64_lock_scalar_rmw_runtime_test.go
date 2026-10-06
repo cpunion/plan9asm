@@ -300,6 +300,16 @@ const x86LockScalarIndependentC = `
 #include <stdio.h>
 #include <string.h>
 
+#if defined(__i386__)
+// The largest IA32 operation is 32 bits; 64-bit intermediates close its carry
+// and signed-overflow bounds without relying on unsupported int128 on i386.
+typedef uint64_t wide_unsigned;
+typedef int64_t wide_signed;
+#else
+typedef __uint128_t wide_unsigned;
+typedef __int128 wide_signed;
+#endif
+
 @PROTOTYPES@
 typedef @WORD@ word;
 typedef void (*function)(uint8_t *, uint64_t *, word, word, word);
@@ -368,14 +378,14 @@ static uint64_t reference(const struct kernel *k, uint8_t *memory,
 		unsigned add = !strcmp(k->op, "ADD") || !strcmp(k->op, "ADC") || !strcmp(k->op, "INC");
 		if (!strcmp(k->op, "INC") || !strcmp(k->op, "DEC")) { b = 1; }
 		if (!strcmp(k->op, "NEG")) { b = a; a = 0; }
-		__uint128_t wide = add ? (__uint128_t)a + b + carry : (__uint128_t)a - b - carry;
+		wide_unsigned wide = add ? (wide_unsigned)a + b + carry : (wide_unsigned)a - b - carry;
 		result = wide & mask;
-		cf = add ? wide > mask : (__uint128_t)a < (__uint128_t)b + carry;
+		cf = add ? wide > mask : (wide_unsigned)a < (wide_unsigned)b + carry;
 		af = add ? (a & 15) + (b & 15) + carry > 15 : (a & 15) < (b & 15) + carry;
-		__int128 sign = (__int128)1 << (k->width - 1);
-		__int128 sa = (a & (uint64_t)sign) ? (__int128)a - 2 * sign : a;
-		__int128 sb = (b & (uint64_t)sign) ? (__int128)b - 2 * sign : b;
-		__int128 signed_wide = add ? sa + sb + carry : sa - sb - carry;
+		wide_signed sign = (wide_signed)1 << (k->width - 1);
+		wide_signed sa = (a & (uint64_t)sign) ? (wide_signed)a - 2 * sign : a;
+		wide_signed sb = (b & (uint64_t)sign) ? (wide_signed)b - 2 * sign : b;
+		wide_signed signed_wide = add ? sa + sb + carry : sa - sb - carry;
 		of = signed_wide < -sign || signed_wide >= sign;
 		if (!strcmp(k->op, "INC") || !strcmp(k->op, "DEC")) { cf = seed & 1; }
 	}
