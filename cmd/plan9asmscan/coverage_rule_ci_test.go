@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -137,5 +140,66 @@ func TestOfficialCoverageCIChecksCompleteEncodingRuleAttributes(t *testing.T) {
 				t.Fatalf("CI failure was not an encoding-rule diagnosis: %v\n%s", err, output)
 			}
 		})
+	}
+}
+
+type encodingRuleBaselineEntry struct {
+	EncoderForms           int    `json:"encoder_forms"`
+	EncoderFingerprint     string `json:"encoder_fingerprint"`
+	EncoderRules           int    `json:"encoder_rules"`
+	EncoderRuleFingerprint string `json:"encoder_rule_fingerprint"`
+}
+
+// The optional source roots let maintainers query several installed SDKs in
+// one process. This is table inventory, not an assembler/runtime certificate.
+func TestOfficialCoverageRuleBaselineMatchesSelectedGoTables(t *testing.T) {
+	roots := []string{runtime.GOROOT()}
+	if configured := os.Getenv("PLAN9ASM_ENCODER_RULE_SOURCE_ROOTS"); configured != "" {
+		if err := json.Unmarshal([]byte(configured), &roots); err != nil || len(roots) == 0 || len(roots) > 16 {
+			t.Fatal("invalid bounded SDK-source query", err)
+		}
+	}
+	data, err := os.ReadFile("../../testdata/coverage/go-asm-baseline.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baseline struct {
+		Versions map[string]map[string]encodingRuleBaselineEntry `json:"versions"`
+	}
+	if err := json.Unmarshal(data, &baseline); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range roots {
+		version := regexp.MustCompile(`^go[0-9]+\.[0-9]+`).FindString(goVersion(root))
+		if baseline.Versions[version] == nil {
+			t.Fatal("SDK has no versioned table baseline", version)
+		}
+		for _, arch := range []string{"386", "amd64"} {
+			t.Run(version+"/"+arch, func(t *testing.T) {
+				catalog, err := loadEncoderForms(root, arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var report report
+				attachEncoderCatalog(&report, nil, catalog)
+				want := baseline.Versions[version][arch]
+				// An attribute update may not bless a changed old class surface.
+				if report.EncoderForms != want.EncoderForms || report.EncoderFingerprint != want.EncoderFingerprint {
+					t.Fatalf("unreviewed historical class inventory change: forms=%d/%d fingerprint=%s/%s",
+						report.EncoderForms, want.EncoderForms, report.EncoderFingerprint, want.EncoderFingerprint)
+				}
+				source, err := os.ReadFile(filepath.Join(root, "src/cmd/internal/obj/x86/avx_optabs.go"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("ENCODER_RULE_TABLE_ONLY version=%s arch=%s rules=%d fingerprint=%s source_sha=%x",
+					version, arch, report.EncoderRules, report.EncoderRuleFingerprint, sha256.Sum256(source))
+				if report.EncoderRules <= 0 || report.EncoderRules != want.EncoderRules ||
+					report.EncoderRuleFingerprint != want.EncoderRuleFingerprint {
+					t.Fatalf("AVX source-rule inventory differs from baseline: rules=%d/%d fingerprint=%s/%s",
+						report.EncoderRules, want.EncoderRules, report.EncoderRuleFingerprint, want.EncoderRuleFingerprint)
+				}
+			})
+		}
 	}
 }
