@@ -40,7 +40,8 @@ var x86PackedUnpackSpecs = map[Op]x86PackedUnpackSpec{
 
 type x86PackedUnpackForm struct {
 	x86PackedBinaryForm
-	spec x86PackedUnpackSpec
+	spec   x86PackedUnpackSpec
+	source Operand
 }
 
 func x86PackedUnpackProperties(ins Instr, goarch string) (x86PackedUnpackForm, bool, error) {
@@ -49,7 +50,15 @@ func x86PackedUnpackProperties(ins Instr, goarch string) (x86PackedUnpackForm, b
 	if !recognized {
 		return x86PackedUnpackForm{}, false, nil
 	}
-	form, err := x86PackedBinaryProperties(ins, goarch, spec.grammar)
+	local := ins
+	if spec.grammar.encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(ins, goarch)
+		if err != nil {
+			return x86PackedUnpackForm{}, true, err
+		}
+	}
+	form, err := x86PackedBinaryProperties(local, goarch, spec.grammar)
 	// Intel's three MMX low-unpack rows are mm/m32, unlike the high
 	// rows' mm/m64. The unused high source half is not a memory access.
 	if err == nil && form.mmx && form.memory >= 0 && !spec.high {
@@ -58,5 +67,9 @@ func x86PackedUnpackProperties(ins Instr, goarch string) (x86PackedUnpackForm, b
 	if err == nil {
 		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
-	return x86PackedUnpackForm{x86PackedBinaryForm: form, spec: spec}, true, err
+	result := x86PackedUnpackForm{x86PackedBinaryForm: form, spec: spec}
+	if err == nil {
+		result.source = local.Args[form.first]
+	}
+	return result, true, err
 }

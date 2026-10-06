@@ -7,6 +7,11 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 	if !recognized || err != nil {
 		return recognized, false, err
 	}
+	local := ins
+	local.Op = op
+	if err := x86LegacyMMXReadEmitterContext(local, c.goarch); err != nil {
+		return true, false, err
+	}
 	if x86PackedShiftHasNativeCount(form) && ins.Args[form.count].Kind == OpFP {
 		return true, false, fmt.Errorf("legacy m128 count needs actual native FP backing: %w", ErrProbeNeedsContext)
 	}

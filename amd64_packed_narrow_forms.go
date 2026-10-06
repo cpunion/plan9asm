@@ -40,17 +40,11 @@ func x86PackedNarrowProperties(ins Instr, goarch string) (x86PackedNarrowForm, b
 	}
 	local := ins
 	local.Args = append([]Operand(nil), ins.Args...)
-	// Go's GP-to-Ymm compatibility encodes MMX ModRM bits, not a GP value.
-	// Retain that identity for syntax; the emitter still needs its transport.
-	if spec.encoding == x86PackedLogicalLegacyInteger && goarch == "amd64" && len(local.Args) == 2 {
-		if _, mmx := amd64ParseMReg(local.Args[1].Reg); local.Args[1].Kind == OpReg && mmx &&
-			local.Args[0].Kind == OpReg && isX86YrlRegisterForArch(local.Args[0].Reg, goarch) {
-			for index, register := range []Reg{AX, CX, DX, BX, SP, BP, SI, DI, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
-				if local.Args[0].Reg == register {
-					local.Args[0].Reg = Reg(fmt.Sprintf("M%d", index&7))
-					break
-				}
-			}
+	if spec.encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(local, goarch)
+		if err != nil {
+			return x86PackedNarrowForm{}, true, err
 		}
 	}
 	grammarArch := goarch

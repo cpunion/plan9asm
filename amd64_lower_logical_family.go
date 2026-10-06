@@ -18,6 +18,9 @@ func (c *amd64Ctx) lowerPackedLogicalFamily(op Op, ins Instr) (bool, bool, error
 	if err != nil || !recognized {
 		return recognized, false, err
 	}
+	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
+		return true, false, err
+	}
 	first, second, destination := ins.Args[form.first], ins.Args[form.second], ins.Args[form.destination]
 	if form.mmx {
 		a, err := c.evalIntSized(first, I64)

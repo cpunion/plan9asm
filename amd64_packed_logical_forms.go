@@ -63,7 +63,8 @@ var x86PackedLogicalSpecs = map[Op]x86PackedLogicalSpec{
 
 type x86PackedLogicalForm struct {
 	x86PackedBinaryForm
-	spec x86PackedLogicalSpec
+	spec   x86PackedLogicalSpec
+	source Operand
 }
 
 // These fields describe only an operand grammar. Arithmetic, interleave and
@@ -104,13 +105,25 @@ func x86PackedLogicalProperties(ins Instr, goarch string) (x86PackedLogicalForm,
 	if !recognized {
 		return x86PackedLogicalForm{}, false, nil
 	}
-	form, err := x86PackedBinaryProperties(ins, goarch, x86PackedBinarySpec{
+	local := ins
+	if spec.encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(ins, goarch)
+		if err != nil {
+			return x86PackedLogicalForm{}, true, err
+		}
+	}
+	form, err := x86PackedBinaryProperties(local, goarch, x86PackedBinarySpec{
 		encoding: spec.encoding, broadcastBytes: spec.broadcastBytes, zeroing: spec.zeroing,
 	})
 	if err == nil {
 		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}
-	return x86PackedLogicalForm{x86PackedBinaryForm: form, spec: spec}, true, err
+	result := x86PackedLogicalForm{x86PackedBinaryForm: form, spec: spec}
+	if err == nil {
+		result.source = local.Args[form.first]
+	}
+	return result, true, err
 }
 
 func x86PackedBinaryProperties(ins Instr, goarch string, spec x86PackedBinarySpec) (x86PackedBinaryForm, error) {

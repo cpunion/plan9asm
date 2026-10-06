@@ -29,18 +29,11 @@ func x86LegacyIntegerArithmeticProperties(op Op, ins Instr, arch string) (x86Leg
 	if add && spec.form == amd64PackedAddLegacyYMM {
 		encoding = x86PackedLogicalLegacyInteger
 	}
-	// Go's Yax/Ycx/Yrx/Yrl -> Ymm compatibility emits a physical MMX
-	// ModRM bank. It does not read the named GP value. Keep that identity in
-	// the pure descriptor; emitters without this transport remain Context.
-	if encoding == x86PackedLogicalLegacyInteger && arch == "amd64" && len(local.Args) == 2 {
-		if _, mmx := amd64ParseMReg(local.Args[1].Reg); local.Args[1].Kind == OpReg && mmx &&
-			local.Args[0].Kind == OpReg && isX86YrlRegisterForArch(local.Args[0].Reg, arch) {
-			for index, reg := range []Reg{AX, CX, DX, BX, SP, BP, SI, DI, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
-				if local.Args[0].Reg == reg {
-					local.Args[0].Reg = Reg(fmt.Sprintf("M%d", index&7))
-					break
-				}
-			}
+	if encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(local, arch)
+		if err != nil {
+			return x86LegacyIntegerArithmeticForm{}, true, err
 		}
 	}
 	form, err := x86PackedBinaryProperties(local, arch, x86PackedBinarySpec{encoding: encoding})

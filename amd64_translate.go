@@ -610,6 +610,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 	if ins.x86UnboundAddressOverride {
 		return false, fmt.Errorf("%w: %s physical address-size %d memory override has no bound ordinary consumer: %q", ErrProbeNeedsContext, c.goarch, ins.x86AddressBits, ins.Raw)
 	}
+	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
+		return false, err
+	}
 	if c.fixedLocal != nil {
 		for index, operand := range ins.Args {
 			if operand.Kind == OpMem && !c.fixedLocalMemoryCertified(ins, index) {

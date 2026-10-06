@@ -28,23 +28,6 @@ type x86PackedWordMultiplyForm struct {
 	source Operand // Actual encoded bank, not a new initialized input.
 }
 
-// Go's ymm source row covers Yax/Ycx/Yrx/Yrl. Its ModRM field names the
-// MMX bank even when the source spelling is a GP register. No GP value is
-// transported into that bank by the assembler.
-func x86WordMultiplyMMXSource(operand Operand) Operand {
-	if operand.Kind != OpReg {
-		return operand
-	}
-	for index, register := range [...]Reg{AX, CX, DX, BX, SP, BP, SI, DI,
-		"R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
-		if operand.Reg == register {
-			operand.Reg = Reg(fmt.Sprintf("M%d", index&7))
-			return operand
-		}
-	}
-	return operand
-}
-
 // This shared grammar records the real native read/modify/write shape only.
 // It grants neither input initialization nor native backing/caller authority.
 func x86PackedWordMultiplyProperties(op Op, ins Instr, arch string) (x86PackedWordMultiplyForm, bool, error) {
@@ -59,9 +42,11 @@ func x86PackedWordMultiplyProperties(op Op, ins Instr, arch string) (x86PackedWo
 	local := ins
 	local.Op = op
 	local.Args = append([]Operand(nil), ins.Args...)
-	if spec.encoding == x86PackedLogicalLegacyInteger && arch == "amd64" && len(local.Args) == 2 {
-		if _, mmx := amd64ParseMReg(local.Args[1].Reg); local.Args[1].Kind == OpReg && mmx {
-			local.Args[0] = x86WordMultiplyMMXSource(local.Args[0])
+	if spec.encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(local, arch)
+		if err != nil {
+			return x86PackedWordMultiplyForm{}, true, err
 		}
 	}
 	grammarArch := arch

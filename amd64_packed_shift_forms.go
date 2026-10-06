@@ -20,6 +20,7 @@ type x86PackedShiftForm struct {
 	memoryBytes                            int
 	left, legacy, mmx, broadcast, zeroing  bool
 	faultSuppressed                        bool
+	countOperand                           Operand
 }
 
 // Properties establish encoding and access shape only, never initialized
@@ -39,6 +40,15 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 	}
 	if goarch != "amd64" && goarch != "386" || ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
 		return fail()
+	}
+	local := ins
+	local.Op = op
+	if recognized && !uniform.vector {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(local, goarch)
+		if err != nil {
+			return f, true, err
+		}
 	}
 	f.countMode, f.laneBits, f.left, f.legacy = x86PackedShiftUniform, uniform.laneBits, uniform.left, !uniform.vector
 	if variable {
@@ -102,7 +112,8 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 	if !register(ins.Args[f.destination], f.byteWidth) {
 		return fail()
 	}
-	count, data := ins.Args[f.count], ins.Args[f.data]
+	count, data := local.Args[f.count], local.Args[f.data]
+	f.countOperand = count
 	if count.Kind == OpImm {
 		if variable || count.Imm < -128 || count.Imm > 255 || f.legacy && count.Imm > 127 {
 			return fail()

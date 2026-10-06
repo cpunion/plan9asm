@@ -48,9 +48,11 @@ func x86PackedMultiplyAddProperties(op Op, ins Instr, arch string) (x86PackedMul
 	local := ins
 	local.Op = op
 	local.Args = append([]Operand(nil), ins.Args...)
-	if spec.encoding == x86PackedLogicalLegacyInteger && arch == "amd64" && len(local.Args) == 2 {
-		if _, mmx := amd64ParseMReg(local.Args[1].Reg); local.Args[1].Kind == OpReg && mmx {
-			local.Args[0] = x86WordMultiplyMMXSource(local.Args[0])
+	if spec.encoding == x86PackedLogicalLegacyInteger {
+		var err error
+		local, err = x86LegacyMMXReadInstruction(local, arch)
+		if err != nil {
+			return x86PackedMultiplyAddForm{}, true, err
 		}
 	}
 	grammarArch := arch
