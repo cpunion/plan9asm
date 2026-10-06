@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gosym"
 )
 
 func (source *GoARM64ScratchSource) captureObjectSourceMetadata(root string) error {
@@ -126,6 +128,23 @@ func (source *GoARM64ScratchSource) captureBuiltinObjectVersions(root string) er
 func (source *GoARM64ScratchSource) originalObjectCallTarget(symbol string) string {
 	if canonical, captured := source.builtinVersions[symbol]; captured {
 		return canonical
+	}
+	for packagePath := range source.packages {
+		logical := arm64ScratchLogicalNativeSymbol(packagePath, symbol)
+		if logical != symbol {
+			return logical
+		}
+	}
+	return symbol
+}
+
+// Translate only the exact native prefix of an actually selected package.
+// Never percent-decode arbitrary function names, unknown packages or metadata.
+// Original source, ABI roles and complete native bodies are still independent.
+func arm64ScratchLogicalNativeSymbol(packagePath, symbol string) string {
+	prefix := gosym.PackagePrefix(packagePath) + "."
+	if strings.HasPrefix(symbol, prefix) {
+		return packagePath + "." + strings.TrimPrefix(symbol, prefix)
 	}
 	return symbol
 }

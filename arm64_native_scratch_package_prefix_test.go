@@ -33,3 +33,29 @@ func TestARM64NativeScratchActualPackageSymbolNamespaces(t *testing.T) {
 		})
 	}
 }
+
+func TestARM64NativeScratchPackagePrefixMetadataIsNotAdmission(t *testing.T) {
+	source := &GoARM64ScratchSource{
+		packages: map[string]arm64ScratchPackage{
+			"example.invalid/with.dot": {},
+		},
+	}
+	for _, test := range []struct{ native, logical string }{
+		{"example.invalid/with%2edot.Value", "example.invalid/with.dot.Value"},
+		{"example.invalid/with%2edot.Value%2eOther", "example.invalid/with.dot.Value%2eOther"},
+		{"example.invalid/with%2edot.Value<1>", "example.invalid/with.dot.Value<1>"},
+		{"example.invalid/with%2Edot.Value", "example.invalid/with%2Edot.Value"},
+		{"example.invalid/with%2edotish.Value", "example.invalid/with%2edotish.Value"},
+		{"unknown/pkg%2edot.Value", "unknown/pkg%2edot.Value"},
+		{`"".Value`, `"".Value`},
+	} {
+		t.Run(test.native, func(t *testing.T) {
+			if actual := source.originalObjectCallTarget(test.native); actual != test.logical {
+				t.Fatalf("native package projection = %q, want %q", actual, test.logical)
+			}
+			if len(source.closed) != 0 || len(source.abis) != 0 || len(source.native) != 0 || source.ready {
+				t.Fatal("symbol metadata alone acquired a source, ABI, body or callee fact")
+			}
+		})
+	}
+}

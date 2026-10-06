@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gosym"
 )
 
 const DataOnlyAssemblyProtocol = "actual_go_data_only_symbol_listing_v1"
@@ -141,20 +142,7 @@ func ValidateDataOnlySourceSymbols(file *plan9asm.File, packagePath string, symb
 // NativeGoPackagePrefix is cmd/asm's byte-level objabi.PathToPrefix spelling,
 // not the LLVM logical symbol namespace and not URL escaping.
 func NativeGoPackagePrefix(packagePath string) string {
-	lastSlash := strings.LastIndexByte(packagePath, '/')
-	const hex = "0123456789abcdef"
-	var prefix strings.Builder
-	for index := 0; index < len(packagePath); index++ {
-		value := packagePath[index]
-		if value <= ' ' || value == '.' && index > lastSlash || value == '%' || value == '"' || value >= 0x7f {
-			prefix.WriteByte('%')
-			prefix.WriteByte(hex[value>>4])
-			prefix.WriteByte(hex[value&0xf])
-		} else {
-			prefix.WriteByte(value)
-		}
-	}
-	return prefix.String()
+	return gosym.PackagePrefix(packagePath)
 }
 
 func ValidateDataOnlyAssembly(input *ConsumerInput, cpp CPPProof, pkg PackageProof) error {

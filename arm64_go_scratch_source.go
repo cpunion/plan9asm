@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gosym"
 )
 
 // GoARM64ScratchCaptureRequest describes actual stock-Go inputs. No field is
@@ -490,7 +491,7 @@ func (source *GoARM64ScratchSource) captureOriginalAssembly(ctx context.Context,
 			return arm64ScratchContext("unknown actual assembler ABI role")
 		}
 		if fields[0] == "def" {
-			symbol := fields[1]
+			symbol := arm64ScratchLogicalNativeSymbol(pkg.ImportPath, fields[1])
 			// Stock asm's older symabis frontend leaves a same-package name
 			// as "".Name. Its compiler canonicalizes that exact prefix using
 			// the actual selected package. Bind the result to this captured
@@ -522,6 +523,7 @@ func (source *GoARM64ScratchSource) captureOriginalAssembly(ctx context.Context,
 		return err
 	}
 	for symbol, body := range bodies {
+		symbol = arm64ScratchLogicalNativeSymbol(pkg.ImportPath, symbol)
 		source.native[symbol] = append(source.native[symbol], body)
 	}
 	source.assembly[filename] = true
@@ -546,7 +548,8 @@ func (source *GoARM64ScratchSource) captureNativePackage(ctx context.Context, pk
 	var names []string
 	for symbol := range source.functions {
 		if strings.HasPrefix(symbol, pkg.ImportPath+".") && !source.loaded[symbol] {
-			names = append(names, regexp.QuoteMeta(symbol))
+			native := gosym.PackagePrefix(pkg.ImportPath) + strings.TrimPrefix(symbol, pkg.ImportPath)
+			names = append(names, regexp.QuoteMeta(native))
 		}
 	}
 	if len(names) == 0 {
@@ -583,6 +586,7 @@ func (source *GoARM64ScratchSource) captureNativePackage(ctx context.Context, pk
 			return err
 		}
 		for name, body := range bodies {
+			name = arm64ScratchLogicalNativeSymbol(pkg.ImportPath, name)
 			source.native[name] = append(source.native[name], body)
 		}
 	}
