@@ -11,7 +11,9 @@ func TestCrossLinuxRuntimeMatrixARM64ABI0ByteRegionOriginal(t *testing.T) {
 	var runner []string
 	if runtime.GOARCH != "arm64" {
 		if runtime.GOARCH != "amd64" || os.Getenv("PLAN9ASM_CROSS_EXEC") != "1" {
-			t.Fatal("required ARM64 original-code execution needs native ARM64 or the Linux cross-runtime job")
+			// Ordinary Linux suites also discover this required counterpart.
+			// Only the explicit guest profile consumes its QEMU tool contract.
+			t.Skip("ARM64 original-code runtime scope needs native ARM64 or the required Linux/amd64 cross-runtime job")
 		}
 		qemu, err := exec.LookPath("qemu-aarch64")
 		if err != nil {
