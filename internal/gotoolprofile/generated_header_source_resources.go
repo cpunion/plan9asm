@@ -139,7 +139,10 @@ func (budget *nativeHeaderStringBudget) expression(expression ast.Expr, depth in
 		if budget.selector != nil {
 			return budget.selector(expression)
 		}
-		return 0, nil // The ordinary import-free domain has no selectors.
+		// Ordinary field receivers may contain original literals and calls.
+		// Observe those costs without evaluating the receiver or granting an
+		// imported string definition. A builtin package qualifier costs zero.
+		return budget.expression(expression.X, depth+1)
 	case *ast.BasicLit:
 		if expression.Kind != token.STRING {
 			return 0, nil
