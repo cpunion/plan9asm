@@ -66,6 +66,9 @@ func TestX86AddressImmediateMemoryOnlyFormsRejectAcrossAPIs(t *testing.T) {
 			for _, address := range []string{"$·cell(SB)", "$16(AX)"} {
 				instruction := fmt.Sprintf(row, address)
 				t.Run(arch+"/"+instruction, func(t *testing.T) {
+					memorySource := "TEXT ·Value(SB),4,$0-0\n" +
+						fmt.Sprintf(row, strings.TrimPrefix(address, "$")) + "\nRET\n"
+					goAssemblerOracleOutput(t, arch, memorySource, "", true)
 					source := "TEXT ·Value(SB),4,$0-0\n" + instruction + "\nRET\n"
 					goAssemblerOracleOutput(t, arch, source, "", false)
 					for _, target := range x86AddressMemoryTargets(arch) {
