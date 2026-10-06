@@ -1288,6 +1288,7 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 	t.Run("DirectErrors", func(t *testing.T) {
 		cases := []struct {
 			name string
+			arch Arch
 			fn   Func
 			sig  FuncSig
 		}{
@@ -1388,6 +1389,7 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 			},
 			{
 				name: "BadMRSArgs",
+				arch: ArchARM64,
 				fn: Func{
 					Sym:    "badmrs",
 					Instrs: []Instr{{Op: OpTEXT}, {Op: OpMRS, Args: []Operand{{Kind: OpImm, Imm: 1}}, Raw: "MRS $1"}, {Op: OpRET}},
@@ -1396,6 +1398,7 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 			},
 			{
 				name: "BadMRSKinds",
+				arch: ArchARM64,
 				fn: Func{
 					Sym:    "badmrskind",
 					Instrs: []Instr{{Op: OpTEXT}, {Op: OpMRS, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: AX}}, Raw: "MRS $1, AX"}, {Op: OpRET}},
@@ -1479,7 +1482,11 @@ func TestTranslateFuncLinearModuleEdgeCoverage(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				mod := ctx.NewModule("direct-" + tc.name)
 				defer mod.Dispose()
-				if err := translateFuncLinearModule(mod, ArchAMD64, tc.fn, tc.sig); !errors.Is(err, errDirectModuleUnsupported) {
+				arch := tc.arch
+				if arch == "" {
+					arch = ArchAMD64
+				}
+				if err := translateFuncLinearModule(mod, arch, tc.fn, tc.sig); !errors.Is(err, errDirectModuleUnsupported) {
 					t.Fatalf("translateFuncLinearModule(%s) error = %v", tc.name, err)
 				}
 			})
