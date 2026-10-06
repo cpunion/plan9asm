@@ -12,20 +12,59 @@ import (
 // caller must derive sig from the actual selected Go declaration and bind the
 // complete original CPP source independently. Unknown effects fail closed.
 func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error {
+	return checkX86ABI0ResultInitialization(fn, sig, goarch, x86ResultTransfer, false)
+}
+
+func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
+	transfer func(Instr, *x86ResultState, []bool, int64, string) bool, scalarViews bool) error {
 	fail := func(reason string) error {
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
+	privateVoid := scalarViews && sig.Ret == Void && len(sig.Frame.Results) == 0
 	if goarch != "amd64" && goarch != "386" || strings.Contains(fn.Sym, "<") ||
-		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" || len(sig.Frame.Results) != 1 {
+		len(sig.ArgRegs) != 0 || sig.ARMEntry != nil || sig.WASMContext != "" ||
+		len(sig.Frame.Results) == 0 && !privateVoid ||
+		!scalarViews && len(sig.Frame.Results) != 1 {
 		return fail("requires an ordinary x86 scalar ABI0 declaration")
 	}
-	result := sig.Frame.Results[0]
-	width := x86ResultScalarBytes(result.Type, goarch)
-	if width == 0 || result.Type != sig.Ret || result.Index != 0 || result.Field != -1 || len(result.Fields) != 0 ||
-		result.Offset < 0 || result.Offset > 4096-width {
-		return fail("result layout is not one bounded scalar")
+	resultOffset := int64(0)
+	resultTypes := []LLVMType{sig.Ret}
+	if !privateVoid {
+		resultOffset = sig.Frame.Results[0].Offset
 	}
-	frame := int(result.Offset + width)
+	if len(sig.Frame.Results) > 1 {
+		var valid bool
+		resultTypes, valid = parseLiteralStructFields(sig.Ret)
+		if !valid || len(resultTypes) != len(sig.Frame.Results) {
+			return fail("result fields disagree with the return type")
+		}
+	}
+	frame := 0
+	for index, slot := range sig.Frame.Results {
+		width := x86ResultScalarBytes(slot.Type, goarch)
+		if width == 0 || slot.Type != resultTypes[index] || slot.Index != index || slot.Field != -1 || len(slot.Fields) != 0 ||
+			slot.Offset < 0 || slot.Offset > 4096-width || slot.Offset < resultOffset {
+			return fail("result layout is not bounded scalar fields")
+		}
+		if end := int(slot.Offset + width); end > frame {
+			frame = end
+		}
+	}
+	if privateVoid {
+		// A private scalar-view query can check inputs and effects without a
+		// result. Its entire logical extent comes from the typed parameters;
+		// placing the write boundary at the end permits no incoming FP store.
+		for _, slot := range sig.Frame.Params {
+			width := x86FrameScalarBytes(slot.Type, goarch)
+			if width == 0 || slot.Offset < 0 || slot.Offset > 4096-width {
+				return fail("void parameter layout is not bounded scalar fields")
+			}
+			if end := int(slot.Offset + width); end > frame {
+				frame = end
+			}
+		}
+		resultOffset = int64(frame)
+	}
 	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
@@ -33,15 +72,20 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	}
 	initial.auto = make([]bool, autoExtent)
 	owned := make([]bool, frame)
-	for offset := int(result.Offset); offset < frame; offset++ {
-		owned[offset] = true
+	for _, slot := range sig.Frame.Results {
+		for offset := slot.Offset; offset < slot.Offset+x86ResultScalarBytes(slot.Type, goarch); offset++ {
+			if owned[offset] {
+				return fail("overlapping result fields")
+			}
+			owned[offset] = true
+		}
 	}
 	for _, slot := range sig.Frame.Params {
 		// Actual gc layout includes pointer storage even when no numeric
 		// instruction consumes it. Occupancy prevents overlap, but pointer
 		// bytes are deliberately not a numerical input or pointee witness.
 		bytes := x86FrameScalarBytes(slot.Type, goarch)
-		if bytes == 0 || slot.Offset < 0 || slot.Offset > int64(frame)-bytes || slot.Offset+bytes > result.Offset {
+		if bytes == 0 || slot.Offset < 0 || slot.Offset > int64(frame)-bytes || slot.Offset+bytes > resultOffset {
 			return fail("parameter bytes or result boundary are not closed")
 		}
 		for offset := int(slot.Offset); offset < int(slot.Offset+bytes); offset++ {
@@ -54,7 +98,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 			initial.pointerFP[slot.Offset] = true
 		}
 	}
-	if fn.ArgSize != 0 && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
+	if (fn.ArgSize != 0 || privateVoid) && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
 		return fail("TEXT argument extent disagrees with the typed result")
 	}
 	labels := make(map[string]int)
@@ -78,9 +122,11 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
-	// One bounded byte-work envelope includes both logical domains. AUTO
-	// states do not obtain a second independent frame or iteration budget.
-	byteState := len(initial.fp) + len(initial.auto) + 80
+	// One logical byte-work envelope includes FP/AUTO and every numerical
+	// GP/X/K/flags payload. It is not a bound on Go's heap/struct overhead.
+	// AUTO states do not obtain an independent frame or iteration budget.
+	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) +
+		2*len(initial.xmm) + len(initial.masks) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
@@ -92,13 +138,19 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	top := initial.clone()
 	top.shapeOnly = true
 	for offset := range top.fp {
-		top.fp[offset] = initial.fp[offset] || int64(offset) >= result.Offset
+		top.fp[offset] = initial.fp[offset] || owned[offset] && int64(offset) >= resultOffset
 	}
 	for offset := range top.auto {
 		top.auto[offset] = true
 	}
 	for index := range top.gp {
-		top.gp[index], top.xmm[index] = 0xff, 0xffff
+		top.gp[index] = 0xff
+	}
+	for index := range top.xmm {
+		top.xmm[index] = 0xffff
+	}
+	for index := range top.masks {
+		top.masks[index] = true
 	}
 	top.flags = x86ByteFlagsAll
 	edges := make([][]int, len(instructions))
@@ -110,7 +162,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 			continue
 		}
 		shape := top.clone()
-		if !x86ResultTransfer(ins, &shape, owned, result.Offset, goarch) {
+		if !transfer(ins, &shape, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
@@ -164,7 +216,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 			returned = true
 			continue // Check results after the complete fixed point, never early.
 		}
-		if !x86ResultTransfer(ins, &state, owned, result.Offset, goarch) {
+		if !transfer(ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
 		for _, target := range edges[pc] {
@@ -187,8 +239,8 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 		if instructions[pc].Op != OpRET {
 			continue
 		}
-		for offset := int(result.Offset); offset < frame; offset++ {
-			if !state.fp[offset] {
+		for offset := int(resultOffset); offset < frame; offset++ {
+			if owned[offset] && !state.fp[offset] {
 				return fail(fmt.Sprintf("result byte %d is not written on every path to RET %d", offset, pc))
 			}
 		}
@@ -207,7 +259,8 @@ type x86ResultState struct {
 	fp    []bool
 	auto  []bool
 	gp    [16]uint8
-	xmm   [16]uint16
+	xmm   [32]uint16 // high banks are consumed only by private, mode-bound forms
+	masks [8]bool    // used only by the private scalar bit-view transfer
 	flags uint8
 
 	// Incoming pointer identities are not numerical register bytes. This is
@@ -233,8 +286,13 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	for index := range merged.gp {
 		merged.gp[index] &= other.gp[index]
-		merged.xmm[index] &= other.xmm[index]
 		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
+	}
+	for index := range merged.xmm {
+		merged.xmm[index] &= other.xmm[index]
+	}
+	for index := range merged.masks {
+		merged.masks[index] = merged.masks[index] && other.masks[index]
 	}
 	merged.flags &= other.flags
 	return merged

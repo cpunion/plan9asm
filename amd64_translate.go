@@ -549,6 +549,9 @@ func translateFuncX86(b *strings.Builder, fn Func, sig FuncSig, resolve func(str
 	b.WriteString(" {\n")
 
 	c := newX86Ctx(b, fn, sig, resolve, sigs, goarch, targetTriple, annotateSource)
+	if err := c.validateScalarFPSourceViews(); err != nil {
+		return err
+	}
 	if len(lockNamespaces) == 1 {
 		c.lockScalarNS = lockNamespaces[0]
 	}

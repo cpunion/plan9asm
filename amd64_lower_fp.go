@@ -167,7 +167,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			}
 			return true, false, c.storeLegacyScalarMoveRegister(ins.Args[1].Reg, v, 32, ins.Args[0].Kind == OpReg)
 		case OpFP:
-			return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("float"), v)
+			return true, false, c.storeScalarFPFloat(ins.Args[1].FPOffset, 32, v)
 		case OpMem:
 			addr, err := c.addrFromMem(ins.Args[1].Mem)
 			if err != nil {
@@ -384,7 +384,7 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 			}
 			return true, false, c.storeLegacyScalarMoveRegister(ins.Args[1].Reg, v, 64, ins.Args[0].Kind == OpReg)
 		case OpFP:
-			return true, false, c.storeFPResult(ins.Args[1].FPOffset, LLVMType("double"), v)
+			return true, false, c.storeScalarFPFloat(ins.Args[1].FPOffset, 64, v)
 		case OpMem:
 			addr, err := c.addrFromMem(ins.Args[1].Mem)
 			if err != nil {
@@ -1236,25 +1236,13 @@ func (c *amd64Ctx) evalF32(op Operand) (string, error) {
 }
 
 func (c *amd64Ctx) evalFPToF32(off int64) (string, error) {
-	slot, ok := c.fpParam(off)
-	if !ok {
-		return "", fmt.Errorf("unsupported FP read slot for f32: +%d(FP)", off)
-	}
-	ty := slot.Type
-	arg, err := c.loadFPParamValue(slot)
+	bits, err := c.loadScalarFPBits(off, 32)
 	if err != nil {
-		return "", fmt.Errorf("FP read slot for f32 at +%d(FP): %w", off, err)
+		return "", err
 	}
-	switch ty {
-	case LLVMType("float"):
-		return arg, nil
-	case I32:
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to float\n", value, arg)
-		return "%" + value, nil
-	default:
-		return "", fmt.Errorf("FP read unsupported type %q for f32 at +%d(FP)", ty, off)
-	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to float\n", value, bits)
+	return "%" + value, nil
 }
 
 func (c *amd64Ctx) evalF64(op Operand) (string, error) {
@@ -1292,43 +1280,11 @@ func (c *amd64Ctx) evalF64(op Operand) (string, error) {
 }
 
 func (c *amd64Ctx) evalFPToF64(off int64) (string, error) {
-	slot, ok := c.fpParam(off)
-	if !ok {
-		return "", fmt.Errorf("unsupported FP read slot for f64: +%d(FP)", off)
-	}
-	ty := slot.Type
-	arg, err := c.loadFPParamValue(slot)
+	bits, err := c.loadScalarFPBits(off, 64)
 	if err != nil {
-		return "", fmt.Errorf("FP read slot for f64 at +%d(FP): %w", off, err)
+		return "", err
 	}
-	switch ty {
-	case LLVMType("double"):
-		return arg, nil
-	case LLVMType("float"):
-		next, ok := c.fpParam(off + 4)
-		if !ok || next.Type != LLVMType("float") {
-			return "", fmt.Errorf("FP read at +%d(FP) cannot form MOVSD's 64-bit memory operand", off)
-		}
-		low, err := c.evalFPToI64(off)
-		if err != nil {
-			return "", err
-		}
-		high, err := c.evalFPToI64(off + 4)
-		if err != nil {
-			return "", err
-		}
-		shifted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shl i64 %s, 32\n", shifted, high)
-		packed := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = or i64 %s, %%%s\n", packed, low, shifted)
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast i64 %%%s to double\n", value, packed)
-		return "%" + value, nil
-	case I64:
-		t := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to double\n", t, arg)
-		return "%" + t, nil
-	default:
-		return "", fmt.Errorf("FP read unsupported type %q for f64 at +%d(FP)", ty, off)
-	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to double\n", value, bits)
+	return "%" + value, nil
 }

@@ -77,7 +77,7 @@ func (c *amd64Ctx) lowerVectorScalarMoveTwoOperand(baseOp string, elemBits int, 
 		return true, false, c.storeVectorScalarMemory(dst, elemBits, value, "")
 	}
 	if isAMD64MemoryOperand(src) && amd64ScalarXOperand(dst) {
-		value, err := c.evalIntSized(src, amd64IntegerTypeForBits(elemBits))
+		value, err := c.loadScalarMoveMemory(src, elemBits)
 		if err != nil {
 			return true, false, err
 		}
@@ -123,9 +123,26 @@ func (c *amd64Ctx) loadVectorScalarMemory(src Operand, elemBits int, mask string
 }
 
 func (c *amd64Ctx) loadX86ScalarMemoryIf(src Operand, elemBits int, condition string) (string, error) {
+	if src.Kind == OpFP && elemBits != 16 {
+		if _, err := c.scalarFPSpan(src.FPOffset, elemBits); err != nil {
+			return "", err
+		}
+		// Parameter-only loads also need a source-defined mask and merge
+		// lane. Validate before creating either masked control-flow branch.
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return "", err
+		}
+	}
 	return c.loadX86ScalarIf(elemBits, condition, func() (string, error) {
-		return c.evalIntSized(src, amd64IntegerTypeForBits(elemBits))
+		return c.loadScalarMoveMemory(src, elemBits)
 	})
+}
+
+func (c *amd64Ctx) loadScalarMoveMemory(src Operand, bits int) (string, error) {
+	if src.Kind == OpFP && bits != 16 {
+		return c.loadScalarFPBits(src.FPOffset, bits)
+	}
+	return c.evalIntSized(src, amd64IntegerTypeForBits(bits))
 }
 
 func (c *amd64Ctx) loadX86ScalarIf(elemBits int, condition string, load func() (string, error)) (string, error) {
@@ -248,6 +265,17 @@ func (c *amd64Ctx) storeScalarMoveRegister(dst Reg, elemBits int, low, base, mas
 }
 
 func (c *amd64Ctx) storeVectorScalarMemory(dst Operand, elemBits int, value, mask string) error {
+	if dst.Kind == OpFP && elemBits != 16 {
+		result, err := c.scalarFPSpan(dst.FPOffset, elemBits)
+		if err != nil {
+			return err
+		}
+		if result && mask != "" {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return err
+			}
+		}
+	}
 	if mask != "" {
 		condition := amd64MaskBitI1(c, mask, 0)
 		storeLabel := c.newTmp() + "_scalar_store"
@@ -275,6 +303,9 @@ func (c *amd64Ctx) storeVectorScalarMemory(dst Operand, elemBits int, value, mas
 		fmt.Fprintf(c.b, "  store i%d %s, ptr %s, align 1\n", elemBits, value, ptr)
 		return nil
 	case OpFP:
+		if elemBits != 16 {
+			return c.storeScalarFPBits(dst.FPOffset, elemBits, value)
+		}
 		return c.storeFPResult(dst.FPOffset, amd64IntegerTypeForBits(elemBits), value)
 	default:
 		return fmt.Errorf("expected scalar memory destination, got %s", dst.String())

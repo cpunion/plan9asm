@@ -77,13 +77,16 @@ type amd64Ctx struct {
 	classicSize     int64
 	classicBias     int64
 
-	fpParams       map[int64]FrameSlot // off(FP) -> slot
-	fpParamAlloca  map[int64]string    // off(FP) -> mutable parameter shadow
-	fpResults      []FrameSlot
-	fpResAllocaOff map[int64]string // off(FP) -> alloca
-	fpResAllocaIdx map[int]string   // result index -> alloca
-	fpResWritten   map[int]bool     // result index -> whether written via +off(FP)
-	fpResAddrTaken map[int]bool     // result index -> address of fp_ret_* escaped
+	fpParams         map[int64]FrameSlot // off(FP) -> slot
+	fpParamAlloca    map[int64]string    // off(FP) -> mutable parameter shadow
+	fpResults        []FrameSlot
+	fpResAllocaOff   map[int64]string // off(FP) -> alloca
+	fpResAllocaIdx   map[int]string   // result index -> alloca
+	fpResWritten     map[int]bool     // result index -> whether written via +off(FP)
+	fpResAddrTaken   map[int]bool     // result index -> address of fp_ret_* escaped
+	fpScalarSource   Func             // source for all-path checks of new scalar result views
+	fpScalarChecked  bool
+	fpScalarCheckErr error
 }
 
 func newAMD64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *amd64Ctx {
@@ -120,6 +123,7 @@ func newX86Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) st
 		fpResAllocaIdx: map[int]string{},
 		fpResWritten:   map[int]bool{},
 		fpResAddrTaken: map[int]bool{},
+		fpScalarSource: fn,
 		blockByIdx:     map[int]int{},
 	}
 	for _, s := range sig.Frame.Params {
