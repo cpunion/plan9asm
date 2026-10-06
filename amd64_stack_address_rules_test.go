@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -185,7 +186,7 @@ func TestX86StackNamedAddressSourceClassDoesNotGrantMemory(t *testing.T) {
 		for _, arch := range []string{"386", "amd64", "arm64"} {
 			for _, bits := range []int{8, 16, 32, 64} {
 				want := arch == "386" && bits == 32
-				if x86StackAbsoluteRelocationSource(operand, arch, bits) != want || operand != before {
+				if x86StackAbsoluteRelocationSource(operand, arch, bits) != want || !reflect.DeepEqual(operand, before) {
 					t.Fatal("pure source classification changed operand identity or source mode")
 				}
 			}
