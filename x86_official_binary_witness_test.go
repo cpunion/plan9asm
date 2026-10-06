@@ -110,3 +110,49 @@ func TestX86OfficialWordMultiplyWitnessesReachActualLowerer(t *testing.T) {
 		}
 	}
 }
+
+func TestX86OfficialPackedBinaryWitnessesReachActualLowerer(t *testing.T) {
+	byOpcode := x86OfficialPackedBinaryWitnesses(t)
+	opcodes := make([]string, 0, len(byOpcode))
+	for opcode := range byOpcode {
+		opcodes = append(opcodes, opcode)
+	}
+	sort.Strings(opcodes)
+	if len(opcodes) < 60 {
+		t.Fatal("complete shared grammar has no independent opcode inventory")
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		// Bind the entire syntax matrix to an actual original Go object before
+		// asking our lowerers. This avoids deriving the test denominator from
+		// production specs or launching one assembler for every candidate.
+		var source strings.Builder
+		accepted := 0
+		for _, opcode := range opcodes {
+			for _, witness := range byOpcode[opcode] {
+				if arch == "386" && strings.Count(witness, ",") == 3 {
+					continue // Separate required actual frontend refusal test.
+				}
+				fmt.Fprintf(&source, "TEXT probe%d(SB),4,$0-0\n%s\nRET\n", accepted, witness)
+				accepted++
+			}
+		}
+		goAssemblerOracleOutput(t, arch, source.String(), "", true)
+		for _, opcode := range opcodes {
+			for _, witness := range byOpcode[opcode] {
+				if arch == "386" && strings.Count(witness, ",") == 3 {
+					continue
+				}
+				t.Run(arch+"/"+witness, func(t *testing.T) {
+					file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\n"+witness+"\nRET\n")
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[1]); err != nil {
+						t.Fatalf("independent official grammar witness failed actual lowerer: %v", err)
+					}
+				})
+			}
+		}
+		t.Logf("checked %d actual Go-accepted grammar witnesses/%d opcodes on %s; syntax lowering only, not LLVM objects or runtime", accepted, len(opcodes), arch)
+	}
+}
