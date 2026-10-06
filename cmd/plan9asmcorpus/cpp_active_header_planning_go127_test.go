@@ -14,6 +14,34 @@ import (
 )
 
 func TestCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
+	testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t,
+		"package header\ntype Record struct { Value uint64 }\nfunc Probe()\n")
+}
+
+func TestCPPBuiltinUnsafeGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
+	testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t, `package header
+import u "unsafe"
+type Record struct { Value uint64 }
+type Descriptors struct {
+	Prefix byte
+	Pointer u.Pointer
+	Bytes []byte
+	Text string
+	Map map[byte]byte
+	Channel chan byte
+	Function func()
+	Any interface{}
+	Tail [0]byte
+}
+const Width = u.Sizeof(Descriptors{})
+const Alignment = u.Alignof(Descriptors{})
+const BytesOffset = u.Offsetof(Descriptors{}.Bytes)
+func Probe()
+`)
+}
+
+func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	compilerEnv := os.Environ()
@@ -22,7 +50,7 @@ func TestCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
 	}
 	sources := map[string]string{
 		"go.mod":   "module example.invalid/active-header\n\ngo 1.20\n",
-		"probe.go": "package header\ntype Record struct { Value uint64 }\nfunc Probe()\n",
+		"probe.go": source,
 		"probe.s":  "#include \"go_asm.h\"\nTEXT ·Probe(SB),4,$0-0\nRET\nGLOBL ·recordMarker(SB),$Record__size\n",
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
