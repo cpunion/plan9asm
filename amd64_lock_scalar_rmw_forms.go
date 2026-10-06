@@ -143,12 +143,28 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 			return fail("has an unencodable or unresolved native memory operand")
 		}
 	}
+	if arch == "amd64" && spec.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
+		source: form.source, destination: form.destination,
+	}) {
+		// Go emits these original Ymb spellings with their raw ModRM number.
+		// A REX prefix selects SP/BP/SI/DI's low byte instead of AH/CH/DH/BH.
+		// Recording the physical view does not bind a source/native input.
+		for _, operand := range []*Operand{&form.source, &form.destination} {
+			if operand.Kind == OpReg && (operand.Reg == AH || operand.Reg == CH || operand.Reg == DH || operand.Reg == BH) {
+				operand.Reg = amd64YmbEffectiveRegister(operand.Reg, 16)
+			}
+		}
+	}
 	return form, true, nil
 }
 
 func x86LockScalarNativeMemoryBound(form x86LockScalarRMWForm, ins Instr, arch string) error {
 	if form.destination.Kind != OpMem && form.destination.Kind != OpSym || ins.x86UnboundAddressOverride {
 		return fmt.Errorf("%w: %s LOCK RMW needs its bound native memory destination, not a virtual FP/AUTO span", ErrProbeNeedsContext, arch)
+	}
+	if arch == "amd64" && form.spec.bits == 8 && form.source.Kind == OpReg &&
+		len(ins.Args) == 2 && form.source.Reg != ins.Args[0].Reg {
+		return fmt.Errorf("%w: amd64 LOCK byte source needs its original Go REX physical register view", ErrProbeNeedsContext)
 	}
 	if arch == "386" && form.spec.bits == 8 && form.source.Kind == OpReg {
 		switch form.source.Reg {
