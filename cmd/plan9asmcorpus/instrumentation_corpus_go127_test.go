@@ -185,11 +185,11 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 	} else if err != nil {
 		t.Fatalf("stock-Go-accepted original mode pair was not consumed by the corpus: %v", err)
 	}
-	if matrix.InstrumentationTranslations != 1 || matrix.Success != 1 || len(configs) != 0 ||
-		len(matrix.FeatureConsumption) != 0 || matrix.OrdinarySelectionPlan == nil ||
-		matrix.OrdinarySelectionPlan.InstrumentationPlan == nil || len(matrix.OrdinarySelectionPlan.InstrumentationPlan.Outcomes) != 1 {
+	if len(configs) != 0 || len(matrix.FeatureConsumption) != 0 || matrix.OrdinarySelectionPlan == nil ||
+		matrix.OrdinarySelectionPlan.InstrumentationPlan == nil {
 		t.Fatalf("mode whole-file consumer was lost or relabeled as ordinary evidence: %+v", matrix)
 	}
+	testInstrumentationOriginalObjectScopes(t, matrix, candidate, target, cgo)
 	inventory := newDiscoveryFeatureInventory()
 	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
 	if err != nil {
@@ -209,22 +209,22 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 		if mode.ModuleMetadata != sources["go.mod"] || mode.Sources["."].ModuleMetadata != sources["go.mod"] {
 			t.Fatal("mode lost complete original alias metadata")
 		}
-		outcome := mode.Outcomes[0]
-		if outcome.PackagePlan.PackagePath != "example.invalid/instrumented" || outcome.Objects.ObjectCount != 1 {
-			t.Fatal("mode namespace or object count changed")
-		}
-		for _, metadata := range []*gotoolprofile.InstrumentationMetadataProof{
-			outcome.Query.Metadata, outcome.Objects.Metadata, outcome.Objects.Consumption.Metadata,
-		} {
-			selected := metadata.Selection.Packages[0]
-			if selected.ModulePath != "example.invalid/instrumented" || selected.SourceModule != candidate.Module ||
-				selected.ModuleVersion != candidate.Version || selected.SourceVersion != candidate.Version || selected.SourceRole != "version_replace" {
-				t.Fatal("actual producer/consumer substituted a main/local or different version archive role")
+		for _, outcome := range mode.Outcomes {
+			if outcome.PackagePlan.PackagePath != "example.invalid/instrumented" || outcome.Objects.ObjectCount != 1 {
+				t.Fatal("mode namespace or object count changed")
+			}
+			for _, metadata := range []*gotoolprofile.InstrumentationMetadataProof{
+				outcome.Query.Metadata, outcome.Objects.Metadata, outcome.Objects.Consumption.Metadata,
+			} {
+				selected := metadata.Selection.Packages[0]
+				if selected.ModulePath != "example.invalid/instrumented" || selected.SourceModule != candidate.Module ||
+					selected.ModuleVersion != candidate.Version || selected.SourceVersion != candidate.Version || selected.SourceRole != "version_replace" {
+					t.Fatal("actual producer/consumer substituted a main/local or different version archive role")
+				}
 			}
 		}
 	}
 	if assembly != "" {
-		file := result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Files[0]
 		wanted := "symbol_free"
 		if strings.Contains(assembly, "GLOBL") {
 			wanted = "data_only"
@@ -232,8 +232,11 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 		if strings.Contains(assembly, "TEXT ·") {
 			wanted = "assembly"
 		}
-		if file.CPP.Emission != wanted || file.Output.Object == "" {
-			t.Fatalf("mode source role lost its actual object: %+v", file)
+		for _, outcome := range result.OrdinarySelectionPlan.InstrumentationPlan.Outcomes {
+			file := outcome.Objects.Consumption.Files[0]
+			if file.CPP.Emission != wanted || file.Output.Object == "" {
+				t.Fatalf("mode source role lost its actual object: %+v", file)
+			}
 		}
 	}
 	data, err := json.MarshalIndent(result, "", "  ")
@@ -293,6 +296,10 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 			p := r.OrdinarySelectionPlan.InstrumentationPlan
 			p.Outcomes = append(p.Outcomes, p.Outcomes[0])
 		}},
+		{"last CPU outcome deleted", func(r *discoveryCorpusResult) {
+			p := r.OrdinarySelectionPlan.InstrumentationPlan
+			p.Outcomes = p.Outcomes[:len(p.Outcomes)-1]
+		}},
 		{"original source inventory deleted", func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.InstrumentationPlan.Sources = nil }},
 		{"full original Go source changed", func(r *discoveryCorpusResult) {
 			r.OrdinarySelectionPlan.InstrumentationPlan.Sources["."].Contents["probe.go"] += "\n// changed original bytes\n"
@@ -317,6 +324,18 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 				d.Layout = []byte(strings.ReplaceAll(string(d.Layout), "i64", "i32"))
 			}
 		}},
+	}
+	if len(replayed.OrdinarySelectionPlan.InstrumentationPlan.CPPRequirements) != 0 {
+		tests = append(tests, struct {
+			name   string
+			mutate func(*discoveryCorpusResult)
+		}{"paired last CPU scope and object deleted", func(r *discoveryCorpusResult) {
+			p := r.OrdinarySelectionPlan.InstrumentationPlan
+			p.CPPRequirements = p.CPPRequirements[:len(p.CPPRequirements)-1]
+			p.Outcomes = p.Outcomes[:len(p.Outcomes)-1]
+			r.InstrumentationTranslations--
+			r.Translations--
+		}})
 	}
 	if len(archive) == 1 {
 		tests = append(tests, []struct {
@@ -390,6 +409,56 @@ func testInstrumentationCorpusOriginalSource(t *testing.T, root, translator, gua
 		if err := os.WriteFile(filepath.Join(output, "feature-inventory.json"), body, 0600); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func testInstrumentationOriginalObjectScopes(t *testing.T, matrix matrixReport, candidate discoveryCandidate, target, cgo string) {
+	t.Helper()
+	plan := matrix.OrdinarySelectionPlan
+	proof := plan.InstrumentationPlan
+	baselines := discoveryInstrumentationBaselines(matrix.FeatureProfiles)
+	base, err := planDiscoveryInstrumentationRequirements(plan, candidate.AsmFiles, baselines)
+	if err != nil || len(base) != 1 || !reflect.DeepEqual(base, proof.Requirements) {
+		t.Fatalf("mode fixture lost its independently replayed original source pair: %v", err)
+	}
+	additional, err := planDiscoveryInstrumentationCPPRequirements(plan, baselines, candidate.AsmFiles)
+	if err != nil || !reflect.DeepEqual(additional, proof.CPPRequirements) {
+		t.Fatalf("mode fixture lost source-required native-header CPU scopes: %v", err)
+	}
+	wanted := append(append([]discoveryInstrumentationRequirement(nil), base...), additional...)
+	if len(proof.Outcomes) != len(wanted) {
+		t.Fatal("mode fixture omitted or added a required original object scope")
+	}
+	byID := make(map[string]discoveryInstrumentationOutcome)
+	for _, outcome := range proof.Outcomes {
+		if _, duplicate := byID[outcome.RequirementID]; duplicate {
+			t.Fatal("mode fixture duplicated a source-required object scope")
+		}
+		byID[outcome.RequirementID] = outcome
+	}
+	objects := 0
+	for _, requirement := range wanted {
+		if requirement.Target != target || requirement.CGO != cgo || requirement.Mode != gotoolprofile.InstrumentationRace ||
+			requirement.Directory != "." || !reflect.DeepEqual(requirement.Pairs, [][2]string{{"probe_arm64.s", "probe.go"}}) {
+			t.Fatal("mode object borrowed another target, source pair or instrumentation role")
+		}
+		outcome, found := byID[requirement.ID]
+		if !found || outcome.Status != "llvm_objects_only" || outcome.Stage != "complete" || outcome.Error != "" ||
+			outcome.Query == nil || outcome.Objects == nil || outcome.Objects.Consumption == nil ||
+			outcome.PackagePlan == nil || !reflect.DeepEqual(outcome.PackagePlan.SFiles, candidate.AsmFiles) ||
+			outcome.Objects.ObjectCount != 1 || len(outcome.Objects.Consumption.Files) != 1 {
+			t.Fatalf("required mode scope lacks its actual complete original object: %s", requirement.ID)
+		}
+		file := outcome.Objects.Consumption.Files[0]
+		if file.CPP.File != candidate.AsmFiles[0] || !discoverySHA256Pattern.MatchString(file.Output.IR) ||
+			!discoverySHA256Pattern.MatchString(file.Output.Object) {
+			t.Fatal("required mode scope lost its independently observed LLVM artifacts")
+		}
+		objects++
+	}
+	if matrix.Success != objects || matrix.InstrumentationTranslations != objects ||
+		matrix.Failed != 0 || matrix.NotApplicable != 0 || matrix.InstrumentationTargetExclusions != 0 {
+		t.Fatal("mode counts do not match every independently reconstructed original object scope")
 	}
 }
 
