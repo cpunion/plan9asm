@@ -23,20 +23,22 @@ func (c *amd64Ctx) lowerScalarMultiplyDivide(op Op, ins Instr) (ok bool, termina
 		if len(ins.Args) != 3 {
 			return true, false, fmt.Errorf("%s %s expects immediate, source, destination register: %q", c.goarch, name, ins.Raw)
 		}
-		if err := validateX86ExplicitIMUL(c.goarch, name, bits, ins, true); err != nil {
+		form, _, err := x86ExplicitIMULProperties(Op(name), ins, c.goarch)
+		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.emitX86ExplicitIMUL(bits, ins.Args[0], ins.Args[1], ins.Args[2])
+		return true, false, c.emitX86ExplicitIMUL(bits, form.immediate, form.source, form.destination)
 	}
 
 	if stem == "IMUL" && bits != 8 && len(ins.Args) != 1 {
 		if len(ins.Args) != 2 {
 			return true, false, fmt.Errorf("%s %s expects one or two operands: %q", c.goarch, name, ins.Raw)
 		}
-		if err := validateX86ExplicitIMUL(c.goarch, name, bits, ins, false); err != nil {
+		form, _, err := x86ExplicitIMULProperties(Op(name), ins, c.goarch)
+		if err != nil {
 			return true, false, err
 		}
-		return true, false, c.emitX86ExplicitIMUL(bits, Operand{}, ins.Args[0], ins.Args[1])
+		return true, false, c.emitX86ExplicitIMUL(bits, Operand{}, form.source, form.destination)
 	}
 
 	if len(ins.Args) != 1 {
@@ -212,9 +214,15 @@ func (c *amd64Ctx) emitX86ImplicitMultiply(bits int, signed bool, source Operand
 func (c *amd64Ctx) emitX86ExplicitIMUL(bits int, immediate, source, destination Operand) error {
 	typ := amd64IntegerTypeForBits(bits)
 	wide := x86ScalarMultiplyDivideWideType(bits)
-	right, err := c.evalIntSized(source, typ)
-	if err != nil {
-		return err
+	right := ""
+	var err error
+	if source.Kind == OpImm {
+		right = x86IMULImmediateValue(source.Imm, bits)
+	} else {
+		right, err = c.evalIntSized(source, typ)
+		if err != nil {
+			return err
+		}
 	}
 	left := ""
 	if immediate.Kind == OpImm {
@@ -239,15 +247,19 @@ func (c *amd64Ctx) emitX86ExplicitIMUL(bits int, immediate, source, destination 
 }
 
 func x86IMULImmediateValue(value int64, bits int) string {
+	return fmt.Sprintf("%d", x86IMULEncodedImmediate(value, bits))
+}
+
+func x86IMULEncodedImmediate(value int64, bits int) int64 {
 	switch bits {
 	case 16:
-		return fmt.Sprintf("%d", uint16(value))
+		return int64(int16(value))
 	case 32:
-		return fmt.Sprintf("%d", uint32(value))
+		return int64(int32(value))
 	case 64:
 		// x86-64 IMUL encodes this table's immediate as imm32 and sign
 		// extends it to the qword operand width.
-		return fmt.Sprintf("%d", int64(int32(value)))
+		return int64(int32(value))
 	default:
 		panic("unsupported explicit IMUL width")
 	}

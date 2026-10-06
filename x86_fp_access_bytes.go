@@ -21,6 +21,17 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 	if op := Op(normalizeInstructionOpcode(ins.Op)); x86RawReturnScalarMoveBytes(op) != 0 && ins.Op != op {
 		return 0, false, false
 	}
+	if effect, recognized, err := x86TypedGPByteEffect(ins.Op, ins, arch); recognized {
+		if err != nil {
+			return 0, false, false
+		}
+		for _, operand := range effect.operands {
+			if operand.index == index {
+				return operand.width, operand.write, true
+			}
+		}
+		return 0, false, false
+	}
 	if ins.Op == "MOVB" || ins.Op == "MOVW" || ins.Op == "MOVL" || ins.Op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false

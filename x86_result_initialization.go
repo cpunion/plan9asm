@@ -96,7 +96,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	for index := range top.gp {
 		top.gp[index], top.xmm[index] = 0xff, 0xffff
 	}
-	top.flags = true
+	top.flags = x86ByteFlagsAll
 	edges := make([][]int, len(instructions))
 	for pc, ins := range instructions {
 		if ins.Op == OpRET {
@@ -204,7 +204,7 @@ type x86ResultState struct {
 	auto  []bool
 	gp    [16]uint8
 	xmm   [16]uint16
-	flags bool
+	flags uint8
 }
 
 func (state x86ResultState) clone() x86ResultState {
@@ -225,7 +225,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 		merged.gp[index] &= other.gp[index]
 		merged.xmm[index] &= other.xmm[index]
 	}
-	merged.flags = state.flags && other.flags
+	merged.flags &= other.flags
 	return merged
 }
 
@@ -319,13 +319,34 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		return true // The CFG checks its complete target independently.
 	}
 	if isAMD64ConditionalBranch(ins.Op) {
-		return !isAMD64CounterZeroBranch(ins.Op) && state.flags
+		required := x86ByteBranchFlags(ins.Op)
+		return required != 0 && state.flags&required == required
 	}
 	if ins.Op == "NOP" {
 		return len(ins.Args) == 0
 	}
 	if form, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
-		return err == nil && state.flags && x86ResultStore(form.destination, 1, state, owned, resultOffset, arch)
+		required := x86ByteConditionFlags(form.condition)
+		return err == nil && required != 0 && state.flags&required == required && x86ResultStore(form.destination, 1, state, owned, resultOffset, arch)
+	}
+	if effect, recognized, err := x86TypedGPByteEffect(ins.Op, ins, arch); recognized {
+		if err != nil {
+			return false
+		}
+		// Read all ordered inputs before any overwrite. A three-operand
+		// multiply does not read its old result, unlike two-operand IMUL.
+		for _, operand := range effect.operands {
+			if operand.read && !x86ResultRead(operand.operand, operand.width, state, owned, arch) {
+				return false
+			}
+		}
+		for _, operand := range effect.operands {
+			if operand.write && !x86ResultStore(operand.operand, operand.width, state, owned, resultOffset, arch) {
+				return false
+			}
+		}
+		state.flags = state.flags&^effect.flagsKilled | effect.flagsDefined
+		return true
 	}
 	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 {
 		return !(width == 8 && arch == "386") && len(ins.Args) == 2 && !(ins.Args[0].Kind == OpFP && ins.Args[1].Kind == OpFP) &&
@@ -375,7 +396,10 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if !zero && (!x86ResultRead(ins.Args[0], width, state, owned, arch) || !x86ResultRead(ins.Args[1], width, state, owned, arch)) {
 		return false
 	}
-	state.flags = true
+	state.flags = x86ByteFlagsAll
+	if base == "AND" || base == "OR" || base == "XOR" || base == "TEST" {
+		state.flags &^= x86ByteFlagAF // The architecture leaves AF undefined.
+	}
 	if base == "CMP" || base == "TEST" {
 		return true
 	}
