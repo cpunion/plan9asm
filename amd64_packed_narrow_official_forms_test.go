@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -38,6 +39,10 @@ func TestX86PackedNarrowOfficialRowsThreeAPIsFiveTargetObjects(t *testing.T) {
 		t.Fatal("LLVM 22 llc required")
 	}
 	for _, raw := range []bool{false, true} {
+		var rawRows []string
+		if raw {
+			rawRows = x86OfficialPackedNarrowRawRows(t)
+		}
 		for _, target := range []struct{ arch, triple string }{
 			{"amd64", "x86_64-apple-darwin"},
 			{"amd64", "x86_64-unknown-linux-gnu"},
@@ -53,17 +58,9 @@ func TestX86PackedNarrowOfficialRowsThreeAPIsFiveTargetObjects(t *testing.T) {
 					// Physical mode32 masks are legal even though its named Go
 					// frontend rejects them; bytes come from the actual amd64 Go
 					// encoder with low physical register/address banks throughout.
-					rows = x86OfficialPackedNarrowRows(t, "amd64")
+					rows = rawRows
 				}
 				for index, row := range rows {
-					if raw {
-						code := assembleX87ControlBytes(t, "amd64", "TEXT rawpack(SB),4,$0-0\n"+row+"\nRET\n")
-						var encoded strings.Builder
-						for _, value := range code[:len(code)-1] {
-							fmt.Fprintf(&encoded, "BYTE $%d\n", value)
-						}
-						row = encoded.String()
-					}
 					fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
 					fmt.Fprintf(&declarations, "func F%d()\n", index)
 				}
@@ -114,10 +111,81 @@ func TestX86PackedNarrowOfficialRowsThreeAPIsFiveTargetObjects(t *testing.T) {
 				if before != fmt.Sprintf("%#v %#v", file, sigs) {
 					t.Fatal("object coverage changed original source/signatures")
 				}
-				t.Logf("%d independent Go-accepted vector forms: three APIs and LLVM 22 objects, not runtime/caller coverage", len(rows))
+				t.Logf("%d named/physical vector forms: three APIs and LLVM 22 objects, not runtime/caller coverage", len(rows))
 			})
 		}
 	}
+}
+
+func x86OfficialPackedNarrowRawRows(t *testing.T) []string {
+	t.Helper()
+	mc := findLLVM22Tool("llvm-mc")
+	if mc == "" {
+		t.Fatal("LLVM 22 llvm-mc required")
+	}
+	var rows []string
+	var disassembly strings.Builder
+	var equivalentPairs [][2]int
+	for _, row := range x86OfficialPackedNarrowRows(t, "amd64") {
+		code := assembleX87ControlBytes(t, "amd64", "TEXT rawpack(SB),4,$0-0\n"+row+"\nRET\n")
+		code = code[:len(code)-1]
+		appendBytes := func(bytes []byte) {
+			var source strings.Builder
+			for _, value := range bytes {
+				fmt.Fprintf(&source, "BYTE $%d\n", value)
+				fmt.Fprintf(&disassembly, "0x%02x ", value)
+			}
+			disassembly.WriteByte('\n')
+			rows = append(rows, source.String())
+		}
+		original := len(rows)
+		appendBytes(code)
+		opcode, _, _ := strings.Cut(strings.Fields(row)[0], ".")
+		// WIG is physical grammar beyond Go's chosen W0 encoding. EVEX
+		// dword-to-word is W0-only; every VEX and EVEX word-to-byte row
+		// must have an independently disassembled equivalent W1 object.
+		if code[0] == 0x62 && opcode != "VPACKSSWB" && opcode != "VPACKUSWB" {
+			continue
+		}
+		wig := append([]byte(nil), code...)
+		if wig[0] == 0xc5 {
+			wig = append([]byte{0xc4, wig[1]&0x80 | 0x61, wig[1] & 0x7f}, wig[2:]...)
+		}
+		if (wig[0] != 0xc4 && wig[0] != 0x62) || wig[2]&0x80 != 0 {
+			t.Fatalf("unexpected original Go pack prefix: %s %x", row, code)
+		}
+		wig[2] |= 0x80
+		equivalentPairs = append(equivalentPairs, [2]int{original, len(rows)})
+		appendBytes(wig)
+	}
+	for _, triple := range []string{"x86_64", "i386"} {
+		ctx, cancel := runtimeOracleStageContext(t)
+		command := exec.CommandContext(ctx, mc, "--disassemble", "--triple="+triple,
+			"--mattr=+avx2,+avx512bw,+avx512vl")
+		command.Stdin = strings.NewReader(disassembly.String())
+		output, err := runtimeOracleCombinedOutput(ctx, command)
+		cancel()
+		if err != nil || strings.Contains(string(output), "warning:") {
+			t.Fatalf("independent pack physical grammar: %s %v\n%s", triple, err, output)
+		}
+		var instructions []string
+		for _, line := range strings.Split(string(output), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "vpack") {
+				instructions = append(instructions, line)
+			}
+		}
+		if len(instructions) != len(rows) {
+			t.Fatalf("physical pack disassembly lost forms: %s got %d, want %d", triple, len(instructions), len(rows))
+		}
+		for _, pair := range equivalentPairs {
+			if instructions[pair[0]] != instructions[pair[1]] {
+				t.Fatalf("WIG changed physical instruction: %s %q != %q", triple, instructions[pair[0]], instructions[pair[1]])
+			}
+		}
+	}
+	t.Logf("%d actual Go W0 rows plus %d independently equivalent W1 rows", len(rows)-len(equivalentPairs), len(equivalentPairs))
+	return rows
 }
 
 func TestX86PackedNarrowMode32ActualGoRawForms(t *testing.T) {
