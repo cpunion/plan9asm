@@ -101,6 +101,7 @@ func root(t *observer) `)
 	source.WriteString("\n\nfunc main() {\n")
 	for _, test := range cases {
 		fmt.Fprintf(&source, `
+	{
 	runtime.GOARCH=%q
 	cross=%q
 	available=%t
@@ -111,6 +112,7 @@ func root(t *observer) `)
 		root(t)
 	}()
 	fmt.Printf("%s=%%s/%%d\n",t.outcome,lookups)
+	}
 `, test.arch, test.cross, test.qemu, test.name)
 	}
 	source.WriteString("}\n")
