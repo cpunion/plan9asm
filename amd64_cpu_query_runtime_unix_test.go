@@ -169,12 +169,47 @@ func main() {
 
 const x86CPUQueryIndependentC = `
 #include <cpuid.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+// Observe the actual instruction, not an advertised CPUID capability. An
+// emulator may mask OSXSAVE while still implementing XGETBV successfully.
+static int native_state(unsigned *low, unsigned *high) {
+    int channel[2];
+    if (pipe(channel)) return -1;
+    pid_t child=fork();
+    if (child<0) {
+        close(channel[0]);
+        close(channel[1]);
+        return -1;
+    }
+    if (child==0) {
+        struct rlimit no_core = {0, 0};
+        if (setrlimit(RLIMIT_CORE, &no_core)) _exit(120);
+        if (close(channel[0])) _exit(121);
+        unsigned values[2];
+        __asm__ volatile("xgetbv" : "=a"(values[0]),"=d"(values[1]) : "c"(0));
+        if (write(channel[1],values,sizeof(values))!=sizeof(values) || close(channel[1])) _exit(122);
+        _exit(0);
+    }
+    if (close(channel[1])) return -1;
+    int status=0;
+    pid_t waited;
+    do { waited=waitpid(child,&status,0); } while (waited<0 && errno==EINTR);
+    unsigned values[2]={0,0};
+    ssize_t count=read(channel[0],values,sizeof(values));
+    if (close(channel[0]) || waited!=child) return -1;
+    if (WIFSIGNALED(status) && WTERMSIG(status)==SIGILL && count==0) return 0;
+    if (!WIFEXITED(status) || WEXITSTATUS(status)!=0 || count!=sizeof(values)) return -1;
+    *low=values[0];
+    *high=values[1];
+    return 1;
+}
 
 #if !REFERENCE_ONLY
 extern void query(uint64_t *);
@@ -190,10 +225,9 @@ static int check(uint64_t *out, uint64_t flags, unsigned csr) {
 
 int main(void) {
     unsigned a,b,c,d,low=0,high=0;
-    if (!__get_cpuid(1,&a,&b,&c,&d)) return 10;
-    unsigned available=(c>>27)&1;
+    int available=native_state(&low,&high);
+    if (available<0) return 10;
     if (!__get_cpuid(0,&a,&b,&c,&d)) return 11;
-    if (available) __asm__ volatile("xgetbv" : "=a"(low),"=d"(high) : "c"(0));
 #if !REFERENCE_ONLY
     void (*cpu[])(uint64_t *)={query,query_af};
     void (*state[])(uint64_t *)={fault,fault_af};
