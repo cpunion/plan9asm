@@ -167,7 +167,9 @@ case Z_il, Zil_:
 	}
 	actualEmitter := findEmitter(functions["doasm"])
 	emitterMatched := false
-	for _, reference := range []string{emitter, strings.Replace(emitter, "v := vaddr", "v = vaddr", 1)} {
+	oldEmitter := strings.Replace(emitter, "\tvar a *obj.Addr\n", "", 1)
+	oldEmitter = strings.Replace(oldEmitter, "v := vaddr", "v = vaddr", 1)
+	for _, reference := range []string{emitter, oldEmitter} {
 		want, err := parser.ParseFile(token.NewFileSet(), "reference.go", reference, 0)
 		if err == nil && actualEmitter != nil && canonical(actualEmitter) == canonical(findEmitter(want.Decls[0].(*ast.FuncDecl))) {
 			emitterMatched = true

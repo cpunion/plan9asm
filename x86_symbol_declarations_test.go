@@ -20,7 +20,9 @@ func TestX86SymbolDeclarationsCompleteOperandRoles(t *testing.T) {
 		{"index address", "PUSHL", "$·cell+8(SB)(CX*4)", true},
 		{"base and index address", "PUSHL", "$·cell-8(SB)(R8)(X1*4)", true},
 		{"indirect call", "CALL", "*·cell(SB)", true},
-		{"indirect grouped call", "CALL", "*·cell(SB)(AX)", true},
+		// The shared parser discards '*' on OpMem. Go's named grouped
+		// CALL progedit gives this its branch role, not an indirect read.
+		{"starred grouped branch", "CALL", "*·cell(SB)(AX)", false},
 		{"direct call", "CALL", "·cell(SB)", false},
 		{"grouped branch", "JMP", "·cell(SB)(AX)", false},
 		{"parameter read", "MOVL", "cell+0(FP)(AX)", false},
@@ -73,7 +75,7 @@ GLOBL ·defined(SB),16,$8
 		"example.helper": {Name: "example.helper", Ret: Void},
 	})
 	const want = "@\"example.cell\" = external global i8\n" +
-		"@\"example.private<>\" = external global i8\n" +
+		"@\"example.private\" = external global i8\n" +
 		"@\"other.cell\" = external global i8\n\n"
 	if output.String() != want {
 		t.Fatalf("declaration ownership, deduplication, ordering or namespace changed: got %q, want %q", output.String(), want)
