@@ -31,118 +31,45 @@ var amd64PackedIntegerCompareSpecs = map[Op]amd64PackedIntegerCompareSpec{
 // VEX forms write X/Y vectors. EVEX forms compare X/Y/Z lanes into a K
 // register, optionally gated by a non-K0 mask; D/Q memory operands can be
 // broadcast for the EVEX forms.
-func (c *amd64Ctx) lowerPackedIntegerCompare(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
+func (c *amd64Ctx) lowerPackedIntegerCompare(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86PackedIntegerCompareProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	laneBits := 0
-	legacy := false
-	legacyMMX := false
-	switch baseOp {
-	case "PCMPEQB":
-		laneBits, legacy, legacyMMX = 8, true, true
-	case "PCMPEQW":
-		laneBits, legacy, legacyMMX = 16, true, true
-	case "PCMPEQL":
-		laneBits, legacy, legacyMMX = 32, true, true
-	case "PCMPEQQ":
-		laneBits, legacy = 64, true
-	case "PCMPGTB":
-		laneBits, legacy, legacyMMX = 8, true, true
-	case "PCMPGTW":
-		laneBits, legacy, legacyMMX = 16, true, true
-	case "PCMPGTL":
-		laneBits, legacy, legacyMMX = 32, true, true
-	case "PCMPGTQ":
-		laneBits, legacy = 64, true
-	default:
-		spec, recognized := amd64PackedIntegerCompareSpecs[Op(baseOp)]
-		if !recognized {
-			return false, false, nil
-		}
-		laneBits = spec.laneBits
+	ins.Op = op
+	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
+		return true, false, err
 	}
-	if legacy {
-		if suffix != "" {
-			return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if form.legacy {
+		local := ins
+		local.Args = append([]Operand(nil), ins.Args...)
+		local.Args[form.first] = form.source
+		if form.memory >= 0 && !form.mmx {
+			virtual := form.source.Kind == OpFP
+			if form.source.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+				memory := form.source.Mem
+				virtual = memory.Base == SP || memory.Base == BP || memory.Index == SP || memory.Index == BP
+			}
+			if virtual {
+				return true, false, fmt.Errorf("%w: legacy packed integer compare m128 needs original native storage, not virtual FP/SP/BP alignment", ErrProbeNeedsContext)
+			}
 		}
-		return c.lowerLegacyPackedIntegerCompare(baseOp, laneBits, legacyMMX, ins)
+		return c.lowerLegacyPackedIntegerCompare(base, form.spec.laneBits, form.spec.mmx, local)
 	}
-	broadcast := suffix == "BCST"
-	if suffix != "" && !broadcast {
-		return true, false, fmt.Errorf("amd64 %s accepts only the .BCST suffix supported by its Go 1.27 optab: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("amd64 %s expects src1, src2, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[len(ins.Args)-1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects a vector or K destination: %q", baseOp, ins.Raw)
-	}
-
-	dst := ins.Args[len(ins.Args)-1].Reg
-	if isAMD64XReg(dst) || isAMD64YReg(dst) {
-		if len(ins.Args) != 3 || broadcast {
-			return true, false, fmt.Errorf("amd64 %s vector-result form has no mask or suffix: %q", baseOp, ins.Raw)
-		}
-		byteWidth := 16
-		if isAMD64YReg(dst) {
-			byteWidth = 32
-		}
-		// Go's named VEX classes accept X/Y8-15 even on 386. The raw
-		// decoder independently enforces physical 32-bit register limits.
-		if !(amd64VEXVectorRegister(ins.Args[0], byteWidth) || isAMD64MemoryOperand(ins.Args[0])) ||
-			!amd64VEXVectorRegister(ins.Args[1], byteWidth) ||
-			!amd64VEXVectorRegister(ins.Args[2], byteWidth) {
-			return true, false, fmt.Errorf("%s %s VEX form requires matching in-range X or Y operands: %q", c.goarch, baseOp, ins.Raw)
-		}
-		return true, false, c.emitPackedIntegerVectorCompare(baseOp, laneBits, byteWidth, ins.Args[0], ins.Args[1], dst)
-	}
-
-	if _, ok := amd64ParseKReg(dst); !ok {
-		return true, false, fmt.Errorf("amd64 %s EVEX form expects a K destination: %q", baseOp, ins.Raw)
-	}
-	byteWidth, ok := amd64PackedCompareWidth(ins.Args[1])
-	if !ok || !c.isGoPackedVectorMoveRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s EVEX form expects X/Y/Z as its second source: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if !c.isGoPackedVectorMoveRegister(ins.Args[0], byteWidth) {
-			return true, false, fmt.Errorf("%s %s EVEX source registers must match and be in range: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("%s %s EVEX first source must be a vector register or memory: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if broadcast {
-		if laneBits != 32 && laneBits != 64 {
-			return true, false, fmt.Errorf("amd64 %s does not enable EVEX broadcast: %q", baseOp, ins.Raw)
-		}
-		if !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("amd64 %s.BCST requires a memory first source: %q", baseOp, ins.Raw)
-		}
-	}
-
-	var writeMask string
-	if len(ins.Args) == 4 {
-		if c.goarch == "386" && !ins.x86Encoded {
-			return true, false, fmt.Errorf("386 %s write-mask forms exceed the Go assembler frontend's three-operand limit: %q", baseOp, ins.Raw)
-		}
-		mask := ins.Args[2]
-		if mask.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		index, ok := amd64ParseKReg(mask.Reg)
-		if !ok || index == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		writeMask, err = c.loadK(mask.Reg)
+	var mask string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
 	}
-	return true, false, c.emitPackedIntegerMaskCompare(baseOp, laneBits, byteWidth, ins.Args[0], ins.Args[1], dst, writeMask, broadcast)
+	if form.maskResult {
+		return true, false, c.emitPackedIntegerMaskCompare(base, form.spec.laneBits, form.byteWidth,
+			form.source, ins.Args[form.second], ins.Args[form.destination].Reg, mask, form.broadcast)
+	}
+	return true, false, c.emitPackedIntegerVectorCompare(base, form.spec.laneBits, form.byteWidth,
+		form.source, ins.Args[form.second], ins.Args[form.destination].Reg)
 }
 
 func (c *amd64Ctx) lowerLegacyPackedIntegerCompare(baseOp string, laneBits int, allowMMX bool, ins Instr) (bool, bool, error) {
@@ -187,21 +114,33 @@ func (c *amd64Ctx) lowerLegacyPackedIntegerCompare(baseOp string, laneBits int, 
 	if ins.Args[0].Kind != OpReg && !isAMD64MemoryOperand(ins.Args[0]) {
 		return true, false, fmt.Errorf("%s %s XMM form requires X or memory source: %q", c.goarch, baseOp, ins.Raw)
 	}
-	firstBytes, err := c.loadXVecOperand(ins.Args[0])
-	if err != nil {
-		return true, false, err
-	}
 	secondBytes, err := c.loadX(destination)
 	if err != nil {
 		return true, false, err
 	}
 	lanes := 128 / laneBits
-	first := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, firstBytes)
 	second := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, secondBytes)
-	result := c.emitLegacyPackedIntegerCompare(baseOp, lanes, laneBits, first, second)
+	var result string
+	if isAMD64MemoryOperand(ins.Args[0]) {
+		mnemonic := strings.ToLower(baseOp)
+		if laneBits == 32 {
+			mnemonic = strings.TrimSuffix(mnemonic, "l") + "d"
+		}
+		result, err = c.emitPackedBinaryNativeMemory(ins.Args[0], laneBits, second, mnemonic)
+	} else {
+		firstBytes, loadErr := c.loadXVecOperand(ins.Args[0])
+		if loadErr != nil {
+			return true, false, loadErr
+		}
+		first := c.bitcastVectorBytesToIntegerLanes(16, lanes, laneBits, firstBytes)
+		result = c.emitLegacyPackedIntegerCompare(baseOp, lanes, laneBits, first, second)
+	}
+	if err != nil {
+		return true, false, err
+	}
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <16 x i8>\n", out, lanes, laneBits, result)
-	return true, false, c.storeX(destination, "%"+out)
+	return true, false, c.storeLegacyPackedLogical(ins.Args[1], "%"+out)
 }
 
 func (c *amd64Ctx) emitLegacyPackedIntegerCompare(baseOp string, lanes, laneBits int, first, second string) string {
@@ -307,7 +246,19 @@ func (c *amd64Ctx) loadPackedCompareLanes(op Operand, byteWidth, laneBits int, b
 }
 
 func (c *amd64Ctx) comparePackedIntegerLanes(baseOp string, laneBits, byteWidth int, first, second Operand, broadcast bool, mask string) (string, error) {
-	firstValue, err := c.loadMaskedPackedCompareLanes(first, byteWidth, laneBits, broadcast, mask)
+	// E4/E4.nb permits only inactive native lanes to suppress their accesses.
+	// Keep active reads observable even when the compare result is dead.
+	// Independent virtual FP fields still require the full checked byte span.
+	if first.Kind == OpFP {
+		width := byteWidth
+		if broadcast {
+			width = laneBits / 8
+		}
+		if err := c.validateX86PackedShiftFPSpan(first.FPOffset, width); err != nil {
+			return "", err
+		}
+	}
+	firstValue, err := c.loadX86PackedShiftLanes(first, byteWidth, laneBits, broadcast, mask)
 	if err != nil {
 		return "", err
 	}

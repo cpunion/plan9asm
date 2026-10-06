@@ -273,6 +273,11 @@ func (c *amd64Ctx) scanUsedRegs() {
 
 	for _, blk := range c.blocks {
 		for _, ins := range blk.instrs {
+			if effect, known, err := x86TypedPackedIntegerCompareByteEffect(ins.Op, ins, c.goarch); known && err == nil {
+				for _, operand := range effect.operands {
+					markOp(operand.operand)
+				}
+			}
 			op := strings.ToUpper(string(ins.Op))
 			if dot := strings.IndexByte(op, '.'); dot >= 0 {
 				op = op[:dot]

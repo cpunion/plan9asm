@@ -68,6 +68,16 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		op := strings.ToUpper(string(ins.Op))
 		switch arch {
 		case ArchAMD64:
+			if form, known, err := x86PackedIntegerCompareProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && form.source.Kind != OpFP {
+				add("+sse2")
+				if form.spec.laneBits == 64 {
+					if form.spec.greater {
+						add("+sse4.2")
+					} else {
+						add("+sse4.1")
+					}
+				}
+			}
 			// Only the validated native compare form gets its private ISA.
 			// This grants no caller memory or physical register permission.
 			if form, known, err := x86FloatCompareProperties(ins, goarch); known && err == nil {
