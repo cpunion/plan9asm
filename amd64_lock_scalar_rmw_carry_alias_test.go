@@ -21,6 +21,7 @@ func TestX86LockScalarRMWCarryStackAliasesAndIdentityStayContext(t *testing.T) {
 				{"CSR stack store", push + "STMXCSR 0(SP)" + pop},
 				{"SP replacement before push", "MOV" + word + " $0,SP\n" + push + "POPF" + width},
 				{"POP SP before new push", "PUSH" + word + " BP\nPOP" + word + " SP\n" + push + "POPF" + width},
+				{"LEA SP before push", "LEA" + word + " 0(SP),SP\n" + push + "POPF" + width},
 				{"balanced SP adjustment", "SUB" + word + " $16,SP\n" + push + "POPF" + width + "\nADD" + word + " $16,SP"},
 			} {
 				t.Run(arch+"/"+width+"/"+control.name, func(t *testing.T) {
@@ -28,6 +29,17 @@ func TestX86LockScalarRMWCarryStackAliasesAndIdentityStayContext(t *testing.T) {
 					// They are never executed as numerical or caller evidence.
 					source := x86NamedLockOracleSource(arch, control.body+"\nLOCK\nADCL CX,(SI)")
 					x86LockScalarOriginalInstruction(t, arch, source)
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx, output := newAMD64CtxWithFuncForTest(t, file.Funcs[0], FuncSig{Ret: Void}, nil)
+					ctx.goarch = arch
+					before, temporary := output.String(), ctx.tmp
+					if err := ctx.verifyNamedLockCarry(); !errors.Is(err, ErrProbeNeedsContext) ||
+						output.String() != before || ctx.tmp != temporary {
+						t.Error("pure CF domain retained stale stack bits or regained replaced SP identity", err)
+					}
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
 							ir, err := x86OrderingHintTranslateAPI(t, api, source,
