@@ -65,7 +65,7 @@ func TestTranslateX86PackedStringCompareCompleteGoAssemblerForms(t *testing.T) {
 			source.WriteString("TEXT packedstringcompareforms(SB),$0-0\n")
 			for index, spec := range go127PackedStringCompareSpecs() {
 				last := 15
-				if target.goarch == "386" && !spec.vector {
+				if target.goarch == "386" {
 					last = 7
 				}
 				fmt.Fprintf(&source, "\t%s $0, X1, X%d\n", spec.op, last)

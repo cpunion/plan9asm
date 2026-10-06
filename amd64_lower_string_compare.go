@@ -27,43 +27,11 @@ var amd64PackedStringCompareSpecs = map[Op]amd64PackedStringCompareSpec{
 }
 
 func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	spec, recognized, err := amd64PackedStringCompareProperties(op, ins, c.goarch)
+	if !recognized || err != nil {
+		return recognized, false, err
 	}
-	spec, recognized := amd64PackedStringCompareSpecs[Op(baseOp)]
-	if !recognized {
-		return false, false, nil
-	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
-	}
-	minimumImmediate := int64(0)
-	if spec.vector {
-		// _yvaeskeygenassist has both Yu8 and Yi8 rows, while the legacy
-		// yxshuf table has only Yu8.
-		minimumImmediate = -128
-	}
-	if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < minimumImmediate || ins.Args[0].Imm > 255 {
-		return true, false, fmt.Errorf("%s %s immediate is outside its Go 1.27 byte domain, or operands are not imm8, X/m128, X: %q", c.goarch, baseOp, ins.Raw)
-	}
-
 	source, destination := ins.Args[1], ins.Args[2]
-	if destination.Kind != OpReg || !c.packedStringCompareRegister(spec, destination) {
-		return true, false, fmt.Errorf("%s %s destination is outside its Go 1.27 X register class: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if source.Kind == OpReg {
-		if !c.packedStringCompareRegister(spec, source) {
-			return true, false, fmt.Errorf("%s %s source is outside its Go 1.27 X register class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be X or m128: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if !spec.vector && source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, c.goarch) {
-		return true, false, fmt.Errorf("%s %s memory source uses a register outside the legacy address class: %q", c.goarch, baseOp, ins.Raw)
-	}
-
 	left, err := c.loadX(destination.Reg)
 	if err != nil {
 		return true, false, err
@@ -89,16 +57,23 @@ func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminat
 		stem = "pcmpe"
 	}
 
+	output, width, zeroUpper := spec.resultEffect()
 	if spec.maskResult {
 		result := c.emitPackedStringCompareIntrinsic(stem+"strm128", "<16 x i8>", left, right, lengthLeft, lengthRight, imm)
-		if err := c.storeX(Reg("X0"), result); err != nil {
+		if zeroUpper {
+			err = c.storePackedMoveOperand(Operand{Kind: OpReg, Reg: output}, width, result)
+		} else {
+			// The widest shared bank keeps legacy writes limited to low X0.
+			err = c.storeX(output, result)
+		}
+		if err != nil {
 			return true, false, err
 		}
 	} else {
 		result := c.emitPackedStringCompareIntrinsic(stem+"stri128", "i32", left, right, lengthLeft, lengthRight, imm)
 		extended := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", extended, result)
-		if err := c.storeReg(CX, "%"+extended); err != nil {
+		if err := c.storeReg(output, "%"+extended); err != nil {
 			return true, false, err
 		}
 	}
@@ -117,11 +92,70 @@ func (c *amd64Ctx) lowerPackedStringCompare(op Op, ins Instr) (ok bool, terminat
 	return true, false, nil
 }
 
-func (c *amd64Ctx) packedStringCompareRegister(spec amd64PackedStringCompareSpec, operand Operand) bool {
+// This descriptor is syntax and architectural effects, not caller definedness
+// or address permission. Unregistered source-stack consumers remain Context.
+func (spec amd64PackedStringCompareSpec) resultEffect() (Reg, int, bool) {
+	if spec.maskResult {
+		return "X0", 16, spec.vector
+	}
+	return CX, 4, false
+}
+
+func amd64PackedStringCompareProperties(op Op, ins Instr, goarch string) (amd64PackedStringCompareSpec, bool, error) {
+	rawOp := strings.ToUpper(string(op))
+	baseOp := rawOp
+	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
+		baseOp = rawOp[:dot]
+	}
+	spec, recognized := amd64PackedStringCompareSpecs[Op(baseOp)]
+	if !recognized {
+		return spec, false, nil
+	}
+	if rawOp != baseOp || goarch != "amd64" && goarch != "386" {
+		return spec, true, fmt.Errorf("%s %s has no suffixed or non-x86 form in Go: %q", goarch, baseOp, ins.Raw)
+	}
+	if ins.Op != "" && strings.ToUpper(string(ins.Op)) != rawOp {
+		return spec, true, fmt.Errorf("packed-string dispatch/source opcode mismatch: %s/%s", op, ins.Op)
+	}
+	minimumImmediate := int64(0)
+	if spec.vector {
+		// _yvaeskeygenassist has both Yu8 and Yi8 rows, while the legacy
+		// yxshuf table has only Yu8.
+		minimumImmediate = -128
+	}
+	if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmIsFloat || ins.Args[0].ImmRaw != "" ||
+		ins.Args[0].Imm < minimumImmediate || ins.Args[0].Imm > 255 {
+		return spec, true, fmt.Errorf("%s %s immediate is outside its Go byte domain, or operands are not imm8, X/m128, X: %q", goarch, baseOp, ins.Raw)
+	}
+
+	source, destination := ins.Args[1], ins.Args[2]
+	if destination.Kind != OpReg || !amd64PackedStringCompareRegister(spec, destination, goarch) {
+		return spec, true, fmt.Errorf("%s %s destination is outside its Go X register class: %q", goarch, baseOp, ins.Raw)
+	}
+	if source.Kind == OpReg {
+		if !amd64PackedStringCompareRegister(spec, source, goarch) {
+			return spec, true, fmt.Errorf("%s %s source is outside its Go X register class: %q", goarch, baseOp, ins.Raw)
+		}
+	} else if !isAMD64MemoryOperand(source) {
+		return spec, true, fmt.Errorf("%s %s source must be X or m128: %q", goarch, baseOp, ins.Raw)
+	}
+	if !spec.vector && source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, goarch) {
+		return spec, true, fmt.Errorf("%s %s memory source uses a register outside the legacy address class: %q", goarch, baseOp, ins.Raw)
+	}
+	ins.Op = op
+	return spec, true, x86Mode32VectorRegisterContext(ins, goarch)
+}
+
+func amd64PackedStringCompareRegister(spec amd64PackedStringCompareSpec, operand Operand, goarch string) bool {
 	if spec.vector {
 		return amd64VEXVectorRegister(operand, 16)
 	}
-	return operand.Kind == OpReg && c.isGoLegacyXReg(operand.Reg)
+	index, valid := amd64ParseXReg(operand.Reg)
+	limit := 16
+	if goarch == "386" {
+		limit = 8
+	}
+	return operand.Kind == OpReg && valid && index < limit
 }
 
 func (c *amd64Ctx) emitPackedStringCompareIntrinsic(name, resultType, left, right, lengthLeft, lengthRight string, imm uint8) string {

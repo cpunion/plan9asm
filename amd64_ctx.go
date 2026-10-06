@@ -316,6 +316,14 @@ func (c *amd64Ctx) scanUsedRegs() {
 					markReg(register)
 				}
 			}
+			if spec, known, err := amd64PackedStringCompareProperties(Op(op), ins, c.goarch); known && err == nil {
+				output, _, _ := spec.resultEffect()
+				markReg(output)
+				if spec.explicitLength {
+					markReg(AX)
+					markReg(DX)
+				}
+			}
 			if spec, ok := amd64RTMSpecs[Op(op)]; ok && spec.outputAX {
 				markReg(AX)
 			}
