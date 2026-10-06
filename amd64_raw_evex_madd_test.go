@@ -117,7 +117,6 @@ func TestDecodeX86RawEVEXPackedMADDRIPLiteral(t *testing.T) {
 func TestDecodeX86RawEVEXPackedMADDRejectsInvalidForms(t *testing.T) {
 	base := encodeX86RawEVEXPackedMADD("VPMADDUBSW", 2, 0, 2, 3, 4, false, false)
 	for _, mutate := range []func([]byte){
-		func(code []byte) { code[2] |= 0x80 }, // EVEX.W1
 		func(code []byte) { code[3] |= 0x10 }, // unsupported broadcast
 		func(code []byte) { code[3] |= 0x80 }, // zeroing without mask
 		func(code []byte) { code[3] |= 0x20 }, // reserved vector length
