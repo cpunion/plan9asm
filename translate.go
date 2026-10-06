@@ -83,6 +83,7 @@ type FuncSig struct {
 	arm64FPReadDeclaration   *arm64FPReadDeclaration
 	arm64ABI0Declaration     *arm64ABI0Declaration
 	arm64ABI0TailDeclaration *arm64ABI0TailDeclaration
+	arm64NativeScratch       *arm64ScratchBinding
 }
 
 // WASMABI selects the physical ABI used for WebAssembly Plan 9 assembly.
@@ -214,9 +215,21 @@ func Translate(file *File, opt Options) (string, error) {
 }
 
 // translateIRText builds textual LLVM IR prior to module parsing.
-func translateIRText(file *File, opt Options) (string, error) {
+func translateIRText(file *File, opt Options) (_ string, result error) {
 	if file == nil {
 		return "", fmt.Errorf("nil file")
+	}
+	arm64ScratchCalls, err := verifyARM64ScratchBindings(file, opt)
+	if err != nil {
+		return "", err
+	}
+	if len(arm64ScratchCalls) != 0 {
+		original := file
+		defer func() {
+			if _, err := verifyARM64ScratchBindings(original, opt); err != nil {
+				result = fmt.Errorf("%w: late native scratch closure guard: %v", ErrProbeNeedsContext, err)
+			}
+		}()
 	}
 	if file.Arch == ArchAMD64 && opt.Goarch == "" {
 		opt.Goarch = "amd64"
@@ -233,7 +246,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return "", err
 	}
-	file, err := normalizeX86RawFile(file, opt.Goarch, opt)
+	file, err = normalizeX86RawFile(file, opt.Goarch, opt)
 	if err != nil {
 		return "", err
 	}
@@ -258,6 +271,9 @@ func translateIRText(file *File, opt Options) (string, error) {
 		return "", err
 	}
 	arm64SourceCalls := captureARM64SourceNoopCalls(file, resolve, opt.Sigs)
+	for symbol, binding := range arm64ScratchCalls {
+		arm64SourceCalls[symbol] = arm64SourceNoopCall{native: binding}
+	}
 	if !opt.WASMABI.valid() {
 		return "", fmt.Errorf("invalid wasm ABI %d", opt.WASMABI)
 	}

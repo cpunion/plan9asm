@@ -203,6 +203,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_large_frame_runtime_test.go",
 		"arm64_control_gp_move_runtime_test.go",
 		"arm64_go_internal_aggregate_test.go",
+		"arm64_native_scratch_runtime_test.go",
 		"arm64_control_scalar_multiply_runtime_test.go",
 		"arm64_raw_zero_frame_runtime_test.go",
 		"arm64_raw_private_frame_runtime_test.go",

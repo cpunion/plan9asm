@@ -11,6 +11,7 @@ import (
 type arm64SourceNoopCall struct {
 	original Func
 	resolved string
+	native   *arm64ScratchBinding
 }
 
 func captureARM64SourceNoopCalls(file *File, resolve func(string) string, sigs map[string]FuncSig) map[string]arm64SourceNoopCall {
@@ -77,6 +78,12 @@ func arm64SourceNoopBody(fn Func) bool {
 }
 
 func (proof arm64SourceNoopCall) matchesNormalized(fn Func, sig FuncSig) bool {
+	if proof.native != nil {
+		// The native closure is checked on complete original input before the
+		// trusted normalizer. It is not a prepared-function or register-entry
+		// promise; ordinary typed/machine/CFG checks still run on this body.
+		return true
+	}
 	return sig.Name == proof.resolved && arm64SourceNoopSignature(sig) && arm64SourceNoopBody(proof.original) &&
 		arm64SourceNoopBody(fn) && reflect.DeepEqual(proof.original, fn)
 }
@@ -85,6 +92,9 @@ func (c *arm64Ctx) sourceCallDoesNotObserveScratch(symbol string) bool {
 	proof, present := c.sourceNoopCalls[symbol]
 	if !present {
 		return false
+	}
+	if proof.native != nil {
+		return proof.native.hasCall(symbol)
 	}
 	sig, present := c.sigs[c.resolve(symbol)]
 	return present && sig.Name == c.resolve(symbol) && proof.matchesNormalized(proof.original, sig)

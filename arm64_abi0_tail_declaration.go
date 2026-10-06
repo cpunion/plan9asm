@@ -23,6 +23,7 @@ type arm64ABI0Declaration struct {
 
 func arm64ABI0SignatureSnapshot(sig FuncSig) FuncSig {
 	sig.arm64ABI0Declaration, sig.arm64ABI0TailDeclaration = nil, nil
+	sig.arm64NativeScratch = nil
 	sig.Args = append([]LLVMType(nil), sig.Args...)
 	sig.Frame.Params = arm64CopyFPSlots(sig.Frame.Params)
 	sig.Frame.Results = arm64CopyFPSlots(sig.Frame.Results)

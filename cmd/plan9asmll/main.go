@@ -816,6 +816,16 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			}
 		}()
 	}
+	sigs, scratchSource, err := prepareARM64NativeScratchSource(pkg, file, t.AsmFile,
+		goos+"/"+goarch, triple, ccfg, resolve, sigs)
+	if err != nil {
+		return fmt.Errorf("prove actual native scratch closure: %w", err)
+	}
+	if scratchSource != nil {
+		defer func() {
+			compileErr = errors.Join(compileErr, scratchSource.Verify(ccfg.Context), scratchSource.Close())
+		}()
+	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {
 		maxFunctions = 128
@@ -830,7 +840,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	}
 	// A continuation and the initializer taking its block address must remain
 	// in one LLVM module, just as an oversized ordinary function stays intact.
-	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil &&
+	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil &&
 		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.
