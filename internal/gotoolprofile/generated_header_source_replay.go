@@ -194,8 +194,8 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 }
 
 // This native model deliberately does not use the framework's SizesFor: old
-// StdSizes omits gc struct tail padding and padded array strides. It is only
-// a closed basic/array/struct property model, not a native allocation contract.
+// StdSizes omits gc struct tail padding and padded array strides. This is a
+// native value-layout property model, not an allocation, pointee or ABI contract.
 type nativeHeaderLayout struct {
 	size, align int64
 	offsets     []int64
@@ -281,8 +281,10 @@ func (sizes *nativeHeaderGCSizes) layout(typ types.Type, depth int) (nativeHeade
 			layout.size, layout.align = 2, 2
 		case types.Int32, types.Uint32, types.Float32:
 			layout.size, layout.align = 4, 4
-		case types.Int, types.Uint, types.Uintptr:
+		case types.Int, types.Uint, types.Uintptr, types.UnsafePointer:
 			layout.size, layout.align = sizes.word, sizes.word
+		case types.String:
+			layout.size, layout.align = 2*sizes.word, sizes.word
 		case types.Int64, types.Uint64, types.Float64:
 			layout.size, layout.align = 8, sizes.word
 		case types.Complex64:
@@ -290,8 +292,16 @@ func (sizes *nativeHeaderGCSizes) layout(typ types.Type, depth int) (nativeHeade
 		case types.Complex128:
 			layout.size, layout.align = 16, sizes.word
 		default:
-			return nativeHeaderLayout{}, &nativeHeaderUnsupportedDomain{"native header layout has an unclosed basic/descriptor type"}
+			return nativeHeaderLayout{}, &nativeHeaderUnsupportedDomain{"native header layout has an unclosed basic type"}
 		}
+	case *types.Pointer, *types.Map, *types.Chan, *types.Signature:
+		// Descriptors have a fixed representation. Do not follow their
+		// pointees, elements, backing stores or callable machine state.
+		layout.size, layout.align = sizes.word, sizes.word
+	case *types.Slice:
+		layout.size, layout.align = 3*sizes.word, sizes.word
+	case *types.Interface:
+		layout.size, layout.align = 2*sizes.word, sizes.word
 	case *types.Array:
 		element, err := sizes.layout(value.Elem(), depth+1)
 		if err != nil || value.Len() < 0 || element.size != 0 && value.Len() > (sizes.limit()-1)/element.size {
@@ -324,7 +334,7 @@ func (sizes *nativeHeaderGCSizes) layout(typ types.Type, depth int) (nativeHeade
 			return nativeHeaderLayout{}, err
 		}
 	default:
-		return nativeHeaderLayout{}, &nativeHeaderUnsupportedDomain{"native header layout requires an unclosed pointer/descriptor/type-parameter model"}
+		return nativeHeaderLayout{}, &nativeHeaderUnsupportedDomain{"native header layout requires an unclosed type-parameter model"}
 	}
 	sizes.cache[typ] = layout
 	return layout, nil

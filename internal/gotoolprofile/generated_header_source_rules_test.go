@@ -140,7 +140,7 @@ func TestGeneratedHeaderNativeLayoutIsNotPublicTypeModelAuthority(t *testing.T) 
 	}
 }
 
-func TestGeneratedHeaderNativeUnclosedInputsRemainSeparateObservations(t *testing.T) {
+func TestGeneratedHeaderNativeImportQueriesRemainSeparateObservations(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		source string
@@ -152,12 +152,6 @@ func TestGeneratedHeaderNativeUnclosedInputsRemainSeparateObservations(t *testin
 			source: "package header\nimport \"unsafe\"\nconst Word = unsafe.Sizeof(uintptr(0))\n",
 			want64: map[string]string{"const_Word": "8"},
 			want32: map[string]string{"const_Word": "4"},
-		},
-		{
-			name:   "composite_descriptor_layout",
-			source: "package header\ntype Descriptors struct { Text string; Bytes []byte; Pointer *uint64; Map map[string]int; Fn func(); Any any }\n",
-			want64: map[string]string{"Descriptors__size": "80", "Descriptors_Text": "0", "Descriptors_Bytes": "16", "Descriptors_Pointer": "40", "Descriptors_Map": "48", "Descriptors_Fn": "56", "Descriptors_Any": "64"},
-			want32: map[string]string{"Descriptors__size": "40", "Descriptors_Text": "0", "Descriptors_Bytes": "8", "Descriptors_Pointer": "20", "Descriptors_Map": "24", "Descriptors_Fn": "28", "Descriptors_Any": "32"},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -171,7 +165,7 @@ func TestGeneratedHeaderNativeUnclosedInputsRemainSeparateObservations(t *testin
 					if !reflect.DeepEqual(actual, wanted) {
 						t.Fatalf("unclosed-source native observation changed: actual=%v wanted=%v", actual, wanted)
 					}
-					t.Log("UNSUPPORTED_PLANNING_AUTHORITY: actual header acceptance does not close imported or descriptor source replay")
+					t.Log("UNSUPPORTED_PLANNING_AUTHORITY: actual header acceptance does not close imported source replay")
 				})
 			}
 		})
