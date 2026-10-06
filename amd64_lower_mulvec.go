@@ -154,8 +154,13 @@ func (c *amd64Ctx) lowerPackedDwordMultiply(op Op, ins Instr) (ok bool, terminat
 
 func isAMD64MemoryOperand(op Operand) bool {
 	switch op.Kind {
-	case OpFP, OpMem, OpSym:
+	case OpFP, OpMem:
 		return true
+	case OpSym:
+		// Go TYPE_ADDR is a relocation/effective address, not TYPE_MEM.
+		// Keep this shared boundary even when a pointer helper can resolve
+		// the same symbol after removing its leading dollar.
+		return !strings.HasPrefix(strings.TrimSpace(op.Sym), "$")
 	default:
 		return false
 	}

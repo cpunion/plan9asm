@@ -2,6 +2,11 @@ package plan9asm
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -82,6 +87,148 @@ func TestX86AddressImmediateMemoryOnlyFormsRejectAcrossAPIs(t *testing.T) {
 						}
 					}
 				})
+			}
+		}
+	}
+}
+
+func TestX86AddressClassActualGoRulesExcludeMemory(t *testing.T) {
+	// Read the actual selected assembler's complete classification/coverage
+	// relation. This oracle does not use the translator's operand predicate.
+	file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(runtime.GOROOT(),
+		"src/cmd/internal/obj/x86/asm6.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	classes := make(map[string]bool)
+	foundAddress, foundConstant := false, false
+	edges := make(map[string][]string)
+	ast.Inspect(file, func(node ast.Node) bool {
+		switch node := node.(type) {
+		case *ast.FuncDecl:
+			if node.Name.Name != "oclass" {
+				return true
+			}
+			ast.Inspect(node.Body, func(child ast.Node) bool {
+				clause, ok := child.(*ast.CaseClause)
+				if !ok {
+					return true
+				}
+				for _, value := range clause.List {
+					name, ok := value.(*ast.SelectorExpr)
+					if !ok || name.Sel.Name != "TYPE_ADDR" && name.Sel.Name != "TYPE_CONST" {
+						continue
+					}
+					foundAddress = foundAddress || name.Sel.Name == "TYPE_ADDR"
+					foundConstant = foundConstant || name.Sel.Name == "TYPE_CONST"
+					for _, statement := range clause.Body {
+						ast.Inspect(statement, func(inside ast.Node) bool {
+							if result, ok := inside.(*ast.ReturnStmt); ok {
+								if len(result.Results) != 1 {
+									t.Fatal("unexpected Go operand classification return")
+								}
+								ident, ok := result.Results[0].(*ast.Ident)
+								if !ok || !strings.HasPrefix(ident.Name, "Y") {
+									t.Fatal("unregistered Go address/constant classifier")
+								}
+								classes[ident.Name] = true
+							}
+							return true
+						})
+					}
+				}
+				return true
+			})
+			return false
+		case *ast.AssignStmt:
+			for _, left := range node.Lhs {
+				index, ok := left.(*ast.IndexExpr)
+				if !ok {
+					continue
+				}
+				name, ok := index.X.(*ast.Ident)
+				if !ok || name.Name != "ycover" {
+					continue
+				}
+				sum, ok := index.Index.(*ast.BinaryExpr)
+				if !ok || sum.Op != token.ADD {
+					t.Fatal("unregistered Go class coverage index")
+				}
+				product, ok := sum.X.(*ast.BinaryExpr)
+				if !ok || product.Op != token.MUL {
+					t.Fatal("unregistered Go class coverage product")
+				}
+				from, fromOK := product.X.(*ast.Ident)
+				size, sizeOK := product.Y.(*ast.Ident)
+				to, toOK := sum.Y.(*ast.Ident)
+				if !fromOK || !sizeOK || !toOK || size.Name != "Ymax" {
+					t.Fatal("unregistered Go class coverage operands")
+				}
+				if from.Name == "i" && to.Name == "i" {
+					continue // The actual diagonal only relates a class to itself.
+				}
+				if !strings.HasPrefix(from.Name, "Y") || !strings.HasPrefix(to.Name, "Y") {
+					t.Fatal("unregistered computed Go class relation")
+				}
+				edges[from.Name] = append(edges[from.Name], to.Name)
+			}
+		}
+		return true
+	})
+	if !foundAddress || !foundConstant || !classes["Yiauto"] || !classes["Yi32"] || len(edges) == 0 {
+		t.Fatal("incomplete actual Go TYPE_ADDR/constant/coverage inventory")
+	}
+	for changed := true; changed; {
+		changed = false
+		for from := range classes {
+			for _, to := range edges[from] {
+				if !classes[to] {
+					classes[to], changed = true, true
+				}
+			}
+		}
+	}
+	for _, memory := range []string{"Ym", "Ymb", "Yml", "Ymm", "Yxm", "Yxvm", "Yyvm", "Yzvm"} {
+		if classes[memory] {
+			t.Fatalf("actual Go address immediate acquired memory-class reachability: %s", memory)
+		}
+	}
+}
+
+func TestX86AddressClassPreservesActualMemoryAndRelocationObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		move := "MOVQ"
+		if arch == "386" {
+			move = "MOVL"
+		}
+		for _, body := range []string{
+			move + " $·cell(SB),AX",
+			move + " $16(AX),BX",
+			"XADDL CX,·cell(SB)",
+			"XCHGL CX,16(AX)",
+			"INCL ·cell(SB)",
+			"NEGL 16(AX)",
+			"STMXCSR ·cell(SB)",
+			"LDMXCSR 16(AX)",
+			"PSHUFB ·cell(SB),X0",
+			"MOVNTPS X0,16(AX)",
+		} {
+			source := "TEXT ·Value(SB),4,$0-0\n" + body + "\nRET\n"
+			goAssemblerOracleOutput(t, arch, source, "", true)
+			for _, target := range x86AddressMemoryTargets(arch) {
+				for _, api := range []string{"text", "module", "go"} {
+					t.Run(arch+"/"+body+"/"+target+"/"+api, func(t *testing.T) {
+						ir, err := x86AddressMemoryAPI(t, api, source, arch, target)
+						if err != nil {
+							t.Fatal("legitimate memory/address operand lost:", err)
+						}
+						x86ResultInitializationObject(t, llc, target, ir, "address-class")
+					})
+				}
 			}
 		}
 	}
