@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -123,16 +124,7 @@ func TestX86FloatingCompareRequiredLinuxBuildSelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	jobs := strings.SplitN(string(contents), "\n  cross-runtime:\n", 2)
-	if len(jobs) != 2 {
-		t.Fatal("required Linux runtime job is absent")
-	}
-	job := strings.SplitN(jobs[1], "\n  test:\n", 2)[0]
-	command := regexp.MustCompile(`(?m)^        run: go test \. -run '([^']+)'`).FindStringSubmatch(job)
-	if len(command) != 2 || !strings.Contains(job, "ubuntu-latest") {
-		t.Fatal("required Linux native AMD64 runtime job/actual selector is absent")
-	}
-	selector, err := regexp.Compile(command[1])
+	selector, err := x86FloatCompareLinuxCISelector(string(contents))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +143,75 @@ func TestX86FloatingCompareRequiredLinuxBuildSelection(t *testing.T) {
 	}
 	if !selector.MatchString("TestCrossLinuxRuntimeMatrixAMD64PackedDoubleDwordNativeAVX512") {
 		t.Fatal("required Linux CI does not select complete named/raw original-Go/LLVM double/dword conversions")
+	}
+}
+
+func x86FloatCompareLinuxCISelector(workflow string) (*regexp.Regexp, error) {
+	job, found := ciWorkflowJob(workflow, "cross-runtime")
+	if !found || !strings.Contains(job, "ubuntu-latest") {
+		return nil, fmt.Errorf("required Linux native AMD64 runtime job is absent")
+	}
+	// CI now uses exhaustive owners, not the previous single go-test command.
+	// Match the actual runner invocation only inside this exact job; an
+	// aggregate's selector or a commented command cannot replace execution.
+	command := regexp.MustCompile(`(?m)^          go run \./cmd/plan9asmtest [^\r\n]+\\\r?\n[ \t]+-ci-selector '([^']+)'[ \t]+\\`)
+	matches := command.FindAllStringSubmatch(job, -1)
+	if len(matches) != 1 {
+		return nil, fmt.Errorf("required Linux runtime has %d actual partition selectors, want one", len(matches))
+	}
+	selector, err := regexp.Compile(matches[0][1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid actual Linux runtime selector: %w", err)
+	}
+	return selector, nil
+}
+
+func TestX86FloatingCompareLinuxCISelectorCannotBorrowAnotherJob(t *testing.T) {
+	contents, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := string(contents)
+	job, found := ciWorkflowJob(workflow, "cross-runtime")
+	if !found {
+		t.Fatal("original cross-runtime job is missing")
+	}
+	if _, err := x86FloatCompareLinuxCISelector(workflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []struct {
+		name string
+		edit func(string) string
+	}{
+		{"different_job", func(text string) string {
+			return strings.Replace(text, "\n  cross-runtime:\n", "\n  removed-runtime:\n", 1)
+		}},
+		{"aggregate_only_selector", func(text string) string {
+			changed := strings.Replace(job, "-ci-selector", "-removed-selector", 1)
+			return strings.Replace(text, job, changed, 1)
+		}},
+		{"commented_command", func(text string) string {
+			return strings.Replace(text, "          go run ./cmd/plan9asmtest -out _out/cross-runtime-owner",
+				"          # go run ./cmd/plan9asmtest -out _out/cross-runtime-owner", 1)
+		}},
+		{"non_linux_host", func(text string) string {
+			changed := strings.Replace(job, "ubuntu-latest", "windows-latest", 1)
+			return strings.Replace(text, job, changed, 1)
+		}},
+		{"invalid_expression", func(text string) string {
+			changed := regexp.MustCompile(`-ci-selector '[^']+'`).ReplaceAllString(job, "-ci-selector '['")
+			return strings.Replace(text, job, changed, 1)
+		}},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			changed := mutation.edit(workflow)
+			if changed == workflow {
+				t.Fatal("mutation did not change the actual workflow")
+			}
+			if _, err := x86FloatCompareLinuxCISelector(changed); err == nil {
+				t.Fatal("absent, foreign or invalid runtime execution was accepted")
+			}
+		})
 	}
 }
 
