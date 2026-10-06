@@ -907,7 +907,7 @@ TEXT frameAddress(SB),NOSPLIT,$0-12
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"cmpxchg ptr",
+		`asm sideeffect "lock; cmpxchg8b`,
 		"@__plan9asm_rep_stosl",
 		"@__plan9asm_rep_scasb",
 		"@__plan9asm_movsb",

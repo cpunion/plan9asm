@@ -1229,6 +1229,9 @@ func translateFuncLinear(b *strings.Builder, arch Arch, fn Func, sig FuncSig, an
 			continue
 		case OpMRS:
 			// ARM64: MRS <sysreg>, Rn
+			if arch != ArchARM64 {
+				return fmt.Errorf("MRS instruction requires an arm64 architecture")
+			}
 			if len(ins.Args) != 2 {
 				return fmt.Errorf("MRS expects 2 args: %q", ins.Raw)
 			}

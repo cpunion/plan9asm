@@ -327,6 +327,9 @@ func translateFuncLinearModule(mod llvm.Module, arch Arch, fn Func, sig FuncSig)
 		case OpBYTE, OpWORD:
 			continue
 		case OpMRS:
+			if arch != ArchARM64 {
+				return fmt.Errorf("MRS instruction requires an arm64 architecture")
+			}
 			if len(ins.Args) != 2 {
 				return directUnsupportedf("MRS expects 2 args")
 			}
