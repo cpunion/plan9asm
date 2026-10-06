@@ -109,11 +109,7 @@ func checkOrdinaryCPPFormalIncludes(t *testing.T, targetList string, generatedHe
 		t.Fatalf("ordinary scopes missing: objects=%d N/A=%d consumers=%d configs=%d",
 			matrix.Success, matrix.NotApplicable, len(matrix.FeatureConsumption), len(configs))
 	}
-	inventory := newDiscoveryFeatureInventory()
-	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
-	if err != nil {
-		t.Fatal(err)
-	}
+	inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
 	result := discoveryCorpusResult{
 		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
 		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: discoveryConfigurationAsmFiles(configs),
@@ -122,6 +118,9 @@ func checkOrdinaryCPPFormalIncludes(t *testing.T, targetList string, generatedHe
 	}
 	if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
 		t.Fatal(err)
+	}
+	if generatedHeader {
+		assertCPPHeaderPlanningQueryInventoryRequired(t, result, inventory, targets)
 	}
 	checkSelectedSiblingReportReaders(t, candidate, result, targets, inventory)
 	encoded, err := json.Marshal(result)

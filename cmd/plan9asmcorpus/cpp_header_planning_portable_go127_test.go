@@ -20,14 +20,7 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 		len(plan.HeaderPlanning.Sources) != 1 || len(plan.GeneratedHeaders) != len(targets) {
 		t.Fatalf("planning observations were lost or confused with executed scopes: %#v", plan.HeaderPlanning)
 	}
-	inventory := newDiscoveryFeatureInventory()
-	if err := mergeDiscoveryFeatureInventory(inventory, plan.headerPlanningInventory); err != nil {
-		t.Fatal(err)
-	}
-	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
-	if err != nil {
-		t.Fatal(err)
-	}
+	inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
 	result := discoveryCorpusResult{
 		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
 		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles, BuildConfigurations: configs,
@@ -48,6 +41,7 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 	if err := replay(encoded); err != nil {
 		t.Fatalf("full11 actual original/header/query/CPP/LLVM portable replay: %v", err)
 	}
+	assertCPPHeaderPlanningQueryInventoryRequired(t, result, inventory, targets)
 	mutations := map[string]func(*discoveryCorpusResult){
 		"paired role deletion":   func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning = nil },
 		"protocol downgrade":     func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning.Protocol = "legacy" },
@@ -158,6 +152,55 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 		t.Fatal(err)
 	}
 	t.Logf("NATIVE_HEADER_PLANNING_FULL11 queries=%d source_copies=%d role_bytes=%d executed_headers=%d LLVM_objects=%d", len(plan.HeaderPlanning.Queries), len(plan.HeaderPlanning.Sources), len(roleBytes), len(plan.GeneratedHeaders), matrix.Success)
+}
+
+func assertCPPHeaderPlanningQueryInventoryRequired(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {
+	t.Helper()
+	plan := result.OrdinarySelectionPlan
+	if plan == nil || plan.HeaderPlanning == nil {
+		t.Fatal("actual generated-header fixture lost its planning-only role")
+	}
+	executed := make(map[string]bool)
+	for _, reference := range result.FeatureProfiles {
+		executed[reference.ID] = true
+	}
+	queryOnly := make(map[string]bool)
+	for _, query := range plan.HeaderPlanning.Queries {
+		if !executed[query.Profile.ID] {
+			queryOnly[query.Profile.ID] = true
+		}
+	}
+	ids := sortedDiscoverySet(queryOnly)
+	if len(ids) == 0 {
+		t.Fatal("fixture has no independent query-only observation to remove")
+	}
+	t.Run("missing_query_only_inventory", func(t *testing.T) {
+		// Cross the JSON boundary so the producer's private inventory and
+		// capture callback cannot repair the deliberately missing record.
+		encoded, err := json.Marshal(struct {
+			Result    discoveryCorpusResult
+			Inventory *discoveryFeatureInventory
+		}{result, inventory})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var missing struct {
+			Result    discoveryCorpusResult
+			Inventory *discoveryFeatureInventory
+		}
+		if err := json.Unmarshal(encoded, &missing); err != nil {
+			t.Fatal(err)
+		}
+		delete(missing.Inventory.Observations, ids[0])
+		if _, err := resolveDiscoveryFeatureProfiles(missing.Inventory, missing.Result.FeatureProfiles); err != nil {
+			t.Fatalf("query-only deletion changed executed profile transport: %v", err)
+		}
+		missing.Result.featureInventory = missing.Inventory
+		err = validateOrdinaryProfileResult(missing.Result, targets, plan.GoVersion)
+		if err == nil || !strings.Contains(err.Error(), "unresolved or duplicate source-required feature reference "+ids[0]) {
+			t.Fatalf("missing query-only profile did not fail the independent ordinary reader: %v", err)
+		}
+	})
 }
 
 func assertCPPHeaderPlanningReportTransport(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {

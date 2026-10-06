@@ -142,3 +142,73 @@ func TestFeatureInventoryCPUOnlyProfileJSONRoundtrip(t *testing.T) {
 		t.Fatalf("actual CPU-only profile lost its proof through JSON roundtrip: %v", err)
 	}
 }
+
+// These are actual selected-SDK observations, not header or object receipts.
+// Query-only profiles must survive transport independently of executed scopes.
+func TestFeatureInventoryHeaderPlanningQueryTransport(t *testing.T) {
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	capture := func(overrides map[string]string) discoveryFeatureProfile {
+		observed, err := captureDiscoveryTargetFeatures(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), "linux/amd64", overrides)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Observed: observed,
+			Request: discoveryFeatureProfileRequest{Target: observed.Target, Baseline: len(overrides) == 0, Overrides: overrides}}
+	}
+	executed := capture(nil)
+	query := capture(map[string]string{"GOAMD64": "v2"})
+	if executed.ID == query.ID {
+		t.Fatal("actual query-only observation did not differ from the executed profile")
+	}
+	planning := newDiscoveryFeatureInventory()
+	queryRefs, err := registerDiscoveryFeatureProfiles(planning, []discoveryFeatureProfile{query})
+	if err != nil {
+		t.Fatal(err)
+	}
+	matrix := matrixReport{FeatureProfiles: []discoveryFeatureProfile{executed},
+		OrdinarySelectionPlan: &discoveryOrdinarySelectionPlan{
+			HeaderPlanning: &discoveryCPPHeaderPlanning{}, headerPlanningInventory: planning,
+		}}
+	inventory, executedRefs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
+	if _, err := resolveDiscoveryFeatureProfiles(inventory, queryRefs); err != nil {
+		t.Fatalf("fixture dropped a complete query-only observation: %v", err)
+	}
+	if len(executedRefs) != 1 || executedRefs[0].ID != executed.ID || len(inventory.Observations) != 2 {
+		t.Fatal("planning observations changed the executed profile denominator")
+	}
+	encoded, err := json.Marshal(inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missing discoveryFeatureInventory
+	if err := json.Unmarshal(encoded, &missing); err != nil {
+		t.Fatal(err)
+	}
+	delete(missing.Observations, query.ID)
+	if _, err := resolveDiscoveryFeatureProfiles(&missing, executedRefs); err != nil {
+		t.Fatalf("query deletion also removed an executed observation: %v", err)
+	}
+	if _, err := resolveDiscoveryFeatureProfiles(&missing, queryRefs); err == nil || !strings.Contains(err.Error(), query.ID) {
+		t.Fatalf("missing query-only observation did not remain a strict unresolved reference: %v", err)
+	}
+}
+
+func fixtureOrdinaryMatrixFeatureInventory(t *testing.T, matrix matrixReport) (*discoveryFeatureInventory, []discoveryFeatureProfileReference) {
+	t.Helper()
+	inventory := newDiscoveryFeatureInventory()
+	if plan := matrix.OrdinarySelectionPlan; plan != nil && plan.HeaderPlanning != nil {
+		if err := mergeDiscoveryFeatureInventory(inventory, plan.headerPlanningInventory); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return inventory, refs
+}
