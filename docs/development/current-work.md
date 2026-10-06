@@ -24,7 +24,7 @@ The run is complete; downstream jobs were skipped, not passed. Its assembly
 ledger was automatically reset to pending because old
 reports have different source provenance; the original reports remain evidence.
 
-Development branch: `codex/pr40-source-repairs-integration-20261005`, based on
+Development branch: `codex/pr40-auto-result-family-integration-20261006`, based on
 the reviewed source-budget, SDK Count, CPU/environment and numeric fixed-local
 integration. It also combines the LEA oracle repair, host-derived export-command
 rendering and independently authenticated foreign instrumentation type sources.
@@ -278,7 +278,19 @@ bounded. Entry bytes are undefined. Raw/indexed SP, address escapes, native
 backing and unknown calls remain Context. Original Go and LLVM scalar/canary
 oracles passed in an isolated leaf, but its fresh original gensimd replay still
 failed: do not infer a whole-library pass or update ledger status from these
-mechanism tests. Integrated-source and required Linux runtime gates remain due.
+mechanism tests. The combined result-family root gates passed with both current
+and historical SDKs; full integrated-source and required Linux runtime gates
+remain due.
+
+Fresh ordinary CPP profiles now require `exact_go_cpp_original_replay_v3`.
+They retain bounded, deduplicated full originals and replay the same token-stack
+executor as the CLI, including directive-generating macro bodies and ordered
+driver definitions. Exact ZIP/SDK sources, active inputs and expanded output
+are independently checked; deleting or downgrading the graph is a failure.
+The mechanism passed both SDKs before integration. Macro-generated
+outside-package and nonliteral include operands still need their independently
+bound search receipts; do not relabel these as accepted. A fresh full combined
+corpus gate is required before attributing success to this integration.
 
 Legitimate DATA/GLOBL-only files now have a distinct original-Go symbol-listing
 proof, complete native object/source identity and exact parsed symbol/size
