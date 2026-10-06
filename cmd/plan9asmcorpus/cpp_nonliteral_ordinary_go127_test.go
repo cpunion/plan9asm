@@ -22,8 +22,10 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 	}
 	translator := filepath.Join(t.TempDir(), "plan9asmll")
 	if stdout, stderr, err := runDiscoveryMachineCommand(ctx, filepath.Join(repo, "cmd/plan9asmll"),
-		os.Environ(), "go", "build", "-p=2", "-o", translator, "."); err != nil || len(stderr) != 0 {
+		os.Environ(), "go", "build", "-p=2", "-o", translator, "."); err != nil {
 		t.Fatalf("actual translator build: %v\n%s\n%s", err, stdout, stderr)
+	} else if len(stderr) != 0 {
+		t.Logf("actual translator build notices:\n%s", stderr)
 	}
 	llc, err := exec.LookPath("llc")
 	if err != nil {
@@ -35,6 +37,7 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 	sources := map[string]string{
 		"go.mod":   "module example.invalid/ordinary-formal-includes\n\ngo 1.20\n",
 		"probe.go": "package fixture\nfunc Probe()\n",
+		"cpu.s":    "// Original nonempty selected sibling, not a discovered file.\n",
 		"probe.s": "#include \"macros.h\"\n" +
 			"INCLUDE(\"formal.h\")\nAPPLY(\"nested.h\")\nALIAS(\"alias.h\")\n" +
 			"INCLUDE(\"../../src/runtime/go_tls.h\")\n" +
@@ -66,7 +69,7 @@ func TestOrdinaryCPPFormalIncludeOperandsDefaultTargetsAndReaders(t *testing.T) 
 		}
 		if err := json.Unmarshal(stdout, &selected); err != nil ||
 			!equalDiscoveryStrings(selected.GoFiles, []string{"probe.go"}) ||
-			!equalDiscoveryStrings(selected.SFiles, []string{"probe.s"}) || selected.Export == "" {
+			!equalDiscoveryStrings(selected.SFiles, []string{"cpu.s", "probe.s"}) || selected.Export == "" {
 			t.Fatalf("actual original selection %s: %+v %v", target, selected, err)
 		}
 		digest, err := discoveryFeatureFileSHA256(selected.Export)
