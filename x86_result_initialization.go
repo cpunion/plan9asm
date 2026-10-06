@@ -254,6 +254,10 @@ func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool
 	case OpImm:
 		return arg.ImmRaw == "" && !arg.ImmIsFloat
 	case OpReg:
+		if width == 16 {
+			index, valid := amd64ParseXReg(arg.Reg)
+			return valid && index < 16 && (arch != "386" || index < 8) && state.xmm[index] == 0xffff
+		}
 		index, mask, valid := x86ResultGP(arg.Reg, width, arch)
 		return valid && state.gp[index]&mask == mask
 	case OpFP:
@@ -293,6 +297,14 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 		return true
 	}
 	if arg.Kind == OpReg {
+		if width == 16 {
+			index, valid := amd64ParseXReg(arg.Reg)
+			if !valid || index >= 16 || arch == "386" && index >= 8 {
+				return false
+			}
+			state.xmm[index] = 0xffff
+			return true
+		}
 		index, mask, valid := x86ResultGP(arg.Reg, width, arch)
 		if valid {
 			state.gp[index] |= mask
@@ -329,7 +341,7 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 		required := x86ByteConditionFlags(form.condition)
 		return err == nil && required != 0 && state.flags&required == required && x86ResultStore(form.destination, 1, state, owned, resultOffset, arch)
 	}
-	if effect, recognized, err := x86TypedGPByteEffect(ins.Op, ins, arch); recognized {
+	if effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); recognized {
 		if err != nil {
 			return false
 		}

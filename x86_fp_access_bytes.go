@@ -21,7 +21,7 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 	if op := Op(normalizeInstructionOpcode(ins.Op)); x86RawReturnScalarMoveBytes(op) != 0 && ins.Op != op {
 		return 0, false, false
 	}
-	if effect, recognized, err := x86TypedGPByteEffect(ins.Op, ins, arch); recognized {
+	if effect, recognized, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); recognized {
 		if err != nil {
 			return 0, false, false
 		}
@@ -54,17 +54,6 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 			return 0, false, false
 		}
 		return width, index == 1, true
-	}
-	switch ins.Op {
-	case "MOVOU", "MOVOA", "MOVO", "MOVUPS", "MOVAPS", "MOVUPD", "MOVAPD":
-		if len(ins.Args) != 2 || ins.Args[1-index].Kind != OpReg {
-			return 0, false, false
-		}
-		bank, valid := amd64ParseXReg(ins.Args[1-index].Reg)
-		if !valid || bank >= 16 || arch == "386" && bank >= 8 {
-			return 0, false, false
-		}
-		return 16, index == 1, true // no native alignment or initialized vector permission
 	}
 	// The source-stack consumer shares these ordered typed forms. Its own
 	// numerical/pointer/mask authority is not exported by this observation.

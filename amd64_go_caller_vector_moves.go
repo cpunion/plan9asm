@@ -229,6 +229,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, recognized, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch); recognized {
+		return 16, form.memoryWrite, err == nil && x86Mode32VectorRegisterContext(ins, arch) == nil && form.memory == index
+	}
 	if index < 0 || index >= len(ins.Args) || !isAMD64MemoryOperand(ins.Args[index]) {
 		return 0, false, false
 	}

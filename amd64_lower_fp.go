@@ -8,6 +8,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if recognized, err := c.validateLegacyPackedMove(op, ins); recognized && err != nil {
+		return true, false, err
+	}
 	if ok, term, err := c.lowerSignedIntegerScalarFloat(op, ins); ok {
 		return ok, term, err
 	}

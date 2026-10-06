@@ -107,6 +107,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"x86_result_initialization_test.go",
 		"x86_result_auto_runtime_test.go",
 		"x86_result_typed_effects_runtime_test.go",
+		"amd64_legacy_packed_move_runtime_test.go",
 		"x86_explicit_imul_immediate_semantics_test.go",
 		"amd64_fixed_local_frame_test.go",
 		"amd64_go_caller_saved_g_runtime_test.go",

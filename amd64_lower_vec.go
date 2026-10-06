@@ -6,6 +6,9 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if recognized, err := c.validateLegacyPackedMove(op, ins); recognized && err != nil {
+		return true, false, err
+	}
 	if ok, term, err := c.lowerFloatMulDiv(op, ins); ok {
 		return ok, term, err
 	}
