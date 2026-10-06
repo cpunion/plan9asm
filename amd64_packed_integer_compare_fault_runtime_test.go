@@ -78,11 +78,17 @@ func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareNativeMemoryStatus(t *tes
 					masks = []uint64{0, 1, uint64(1) << uint(lanes-1), ^uint64(0)}
 				}
 				for _, mask := range masks {
-					fmt.Fprintf(&checks, "    for (int offset = 0; offset < 16; ++offset) {\n        if (compare(reference%d,%s,memory+offset,UINT64_C(%d),2)) return 1;\n    }\n", count-1, name, mask)
-					for _, offset := range []int{0, 1, bits / 8, 16, 32, 64} {
-						fmt.Fprintf(&checks, "    if (compare(reference%d,%s,boundary-%d,UINT64_C(%d),2)) return 1;\n", count-1, name, offset, mask)
+					expectedReadable := "0"
+					if opIndex < 8 {
+						expectedReadable = "offset == 0 ? 0 : 2"
 					}
-					fmt.Fprintf(&checks, "    if (compare(reference%d,%s,0,UINT64_C(%d),2)) return 1;\n", count-1, name, mask)
+					fmt.Fprintf(&checks, "    for (int offset = 0; offset < 16; ++offset) {\n        if (compare(reference%d,%s,memory+offset,UINT64_C(%d),%s)) return 1;\n    }\n", count-1, name, mask, expectedReadable)
+					for _, offset := range []int{0, 1, bits / 8, 16, 32, 64} {
+						expected := x86PackedIntegerCompareMemoryExpectation(opIndex < 8, width, bits/8, masked, broadcast, mask, offset, offset%16 == 0)
+						fmt.Fprintf(&checks, "    if (compare(reference%d,%s,boundary-%d,UINT64_C(%d),%d)) return 1;\n", count-1, name, offset, mask, expected)
+					}
+					expectedNull := x86PackedIntegerCompareMemoryExpectation(opIndex < 8, width, bits/8, masked, broadcast, mask, 0, true)
+					fmt.Fprintf(&checks, "    if (compare(reference%d,%s,0,UINT64_C(%d),%d)) return 1;\n", count-1, name, mask, expectedNull)
 				}
 			}
 		}
@@ -93,7 +99,9 @@ func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareNativeMemoryStatus(t *tes
 		t.Fatal(err)
 	}
 	program := `#include <stdint.h>
+#include <cpuid.h>
 #include <stdio.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -101,6 +109,17 @@ func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareNativeMemoryStatus(t *tes
 #include <unistd.h>
 ` + prototypes.String() + references.String() + x86PackedIntegerCompareFaultStatusOracle + `
 int main(void) {
+    struct rlimit noCore = {0,0};
+    if (setrlimit(RLIMIT_CORE,&noCore)) return 76;
+    unsigned a,b,c,d;
+    if (!__get_cpuid(1,&a,&b,&c,&d) || !(c&(1u<<19)) || !(c&(1u<<20))) {
+        fprintf(stderr,"packed compare fault root requires actual SSE4.1 and SSE4.2\n");
+        return 77;
+    }
+    __asm__ volatile("pxor %%xmm0,%%xmm0\n\t"
+                     "pcmpeqq %%xmm0,%%xmm0\n\t"
+                     "pcmpgtq %%xmm0,%%xmm0" : : : "xmm0");
+    printf("packed compare fault preflight: CPUID SSE4.1=1 SSE4.2=1; actual PCMPEQQ/PCMPGTQ executed\n");
     long page = sysconf(_SC_PAGESIZE);
     if (page <= 0 || page%64) return 1;
     uint8_t *memory = mmap(0,(size_t)page*2,PROT_READ|PROT_WRITE,
@@ -125,6 +144,39 @@ int main(void) {
 		})
 	}
 	t.Logf("%d dead-result programs at mod16/NULL/read-only guard pages, exact native legacy and independent E4 lane-read status at O0/O2; not native EVEX execution", count)
+}
+
+// Expected status comes from the independently constructed fixture accesses,
+// not a production descriptor. 0 requires normal exit0; 1 requires a memory
+// fault. Only readable, unaligned legacy sources use 2: preserve the original
+// machine's exact alignment behavior without guessing a vendor's fault policy.
+func x86PackedIntegerCompareMemoryExpectation(legacy bool, width, laneBytes int, masked, broadcast bool, mask uint64, available int, aligned bool) int {
+	if legacy {
+		if available < 16 {
+			return 1
+		}
+		if !aligned {
+			return 2
+		}
+		return 0
+	}
+	readEnd := 0
+	for lane := 0; lane < width/laneBytes; lane++ {
+		if masked && mask&(uint64(1)<<uint(lane)) == 0 {
+			continue
+		}
+		end := (lane + 1) * laneBytes
+		if broadcast {
+			end = laneBytes
+		}
+		if end > readEnd {
+			readEnd = end
+		}
+	}
+	if readEnd > available {
+		return 1
+	}
+	return 0
 }
 
 const x86PackedIntegerCompareFaultStatusOracle = `
@@ -158,7 +210,12 @@ static int compare(void (*original)(const uint8_t*,uint64_t),
                    const uint8_t *p,uint64_t mask,int expectation) {
     Status a,b;
     if (observe(original,p,mask,&a) || observe(translated,p,mask,&b)) return 1;
-    if (a.signal != b.signal || a.code != b.code) {
+    int allowedA = a.code == 0 && (a.signal == 0 || a.signal == SIGSEGV || a.signal == SIGBUS);
+    int allowedB = b.code == 0 && (b.signal == 0 || b.signal == SIGSEGV || b.signal == SIGBUS);
+    if (!allowedA || !allowedB || expectation < 0 || expectation > 2 ||
+        (expectation == 0 && (a.signal || b.signal)) ||
+        (expectation == 1 && (!a.signal || !b.signal)) ||
+        a.signal != b.signal || a.code != b.code) {
         fprintf(stderr,"mod16=%lu mask=%llx original=(%d,%d) translated=(%d,%d)\n",
                 (unsigned long)((uintptr_t)p%16),(unsigned long long)mask,
                 a.signal,a.code,b.signal,b.code);
@@ -228,9 +285,43 @@ int main(void) {
         fprintf(stderr,"symmetric memory fault replaced required successful control\n");
         return 1;
     }
+    if (compare(unexpectedMemoryFault,unexpectedMemoryFault,0,0,1)) return 2;
     return compare(complete,complete,0,0,0);
 }
 `
 	ir := "target triple = \"" + triple + "\"\ndefine void @readable_tripwire_object() { ret void }\n"
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-readable-tripwire", triple, ir, program, prefix)
+}
+
+func TestX86PackedIntegerCompareFaultExpectedAccessMatrix(t *testing.T) {
+	for _, test := range []struct {
+		name                      string
+		legacy, masked, broadcast bool
+		width, bytes, available   int
+		mask                      uint64
+		aligned                   bool
+		want                      int
+	}{
+		{"legacy-aligned-readable", true, false, false, 16, 8, 16, 0, true, 0},
+		{"legacy-unaligned-readable", true, false, false, 16, 8, 16, 0, false, 2},
+		{"legacy-guard-overlap", true, false, false, 16, 8, 15, 0, true, 1},
+		{"vex-full-readable-unaligned", false, false, false, 32, 4, 32, 0, false, 0},
+		{"vex-full-guard-overlap", false, false, false, 32, 4, 31, 0, false, 1},
+		{"evex-zero-mask-null", false, true, false, 64, 1, 0, 0, true, 0},
+		{"evex-low-lane-readable", false, true, false, 64, 1, 1, 1, false, 0},
+		{"evex-high-lane-guard", false, true, false, 64, 1, 63, uint64(1) << 63, false, 1},
+		{"evex-high-lane-readable", false, true, false, 64, 1, 64, uint64(1) << 63, false, 0},
+		{"broadcast-zero-mask-null", false, true, true, 64, 8, 0, 0, false, 0},
+		{"broadcast-readable", false, true, true, 64, 8, 8, 0xff, false, 0},
+		{"broadcast-guard-overlap", false, true, true, 64, 8, 7, 0xff, false, 1},
+		{"broadcast-irrelevant-mask-null", false, true, true, 16, 8, 0, 4, false, 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got := x86PackedIntegerCompareMemoryExpectation(test.legacy, test.width, test.bytes,
+				test.masked, test.broadcast, test.mask, test.available, test.aligned)
+			if got != test.want {
+				t.Fatalf("independent expected access status=%d, want=%d", got, test.want)
+			}
+		})
+	}
 }

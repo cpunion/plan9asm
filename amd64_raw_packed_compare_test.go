@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -264,31 +265,28 @@ func TestX86RawPackedCompareGoEncoderForms(t *testing.T) {
 }
 
 func TestX86PackedCompareGo386HighRegisters(t *testing.T) {
-	var source strings.Builder
-	source.WriteString("TEXT compare(SB),4,$0-0\n")
 	for _, op := range x86PackedCompareTestOps {
 		for _, width := range []string{"X", "Y"} {
 			for _, regs := range [][3]int{{8, 0, 1}, {0, 8, 1}, {0, 1, 8}, {15, 14, 13}} {
-				fmt.Fprintf(&source, "%s %s%d,%s%d,%s%d\n", op, width, regs[0], width, regs[1], width, regs[2])
+				operands := fmt.Sprintf("%s%d,%s%d,%s%d", width, regs[0], width, regs[1], width, regs[2])
+				for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+					t.Run(op+"/"+operands+"/"+triple, func(t *testing.T) {
+						source := "TEXT ·compare(SB),4,$0-0\n" + op + " " + operands + "\nRET\n"
+						// Preserve actual Go frontend acceptance, without treating
+						// those names as physical mode32 register identities.
+						x86LEAActualTargetGoObject(t, "386", triple, source)
+						for _, api := range []string{"text", "module", "Go"} {
+							t.Run(api, func(t *testing.T) {
+								ir, err := x86PackedIntegerCompareAPI(t, source, "func compare()\n", "386", triple, api)
+								if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+									t.Fatalf("frontend high bank borrowed physical permission: IR=%d err=%v", len(ir), err)
+								}
+							})
+						}
+					})
+				}
 			}
 		}
-	}
-	source.WriteString("RET\n")
-	assembleX87ControlBytes(t, "386", source.String())
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
-	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: triple, Sigs: map[string]FuncSig{"compare": {Name: "compare", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		compileLLVMToObject(t, llc, triple, "compare-compat.ll", "compare-compat.o", ir)
 	}
 }
 
@@ -495,7 +493,7 @@ func TestX86PackedCompareFrameSpanValidation(t *testing.T) {
 						sig.Frame.Params = append(sig.Frame.Params, FrameSlot{Offset: int64(i * 8), Type: I64, Index: i, Field: -1})
 					}
 					ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", Sigs: map[string]FuncSig{"frame": sig}})
-					if valid && err != nil || !valid && (err == nil || !strings.Contains(err.Error(), "undeclared FP vector slot")) {
+					if valid && err != nil || !valid && (!errors.Is(err, ErrProbeNeedsContext) || ir != "") {
 						t.Fatalf("%s %s masked=%v valid=%v: %v", op, width, masked, valid, err)
 					}
 					if valid && strings.Contains(ir, " = call <") && strings.Contains(ir, "@llvm.masked.load.") {
