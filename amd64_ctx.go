@@ -302,6 +302,11 @@ func (c *amd64Ctx) scanUsedRegs() {
 					markReg(DX)
 				}
 			}
+			if spec, known, err := x86TimestampProperties(Op(op), ins, c.goarch); known && err == nil {
+				for _, register := range x86TimestampRegisters(spec) {
+					markReg(register)
+				}
+			}
 			if spec, ok := amd64RTMSpecs[Op(op)]; ok && spec.outputAX {
 				markReg(AX)
 			}

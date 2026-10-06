@@ -88,3 +88,28 @@ func x86TimestampOriginalFixture(op Op) (declaration, assembly string) {
 `, name, op)
 	return
 }
+
+func x86Timestamp386OriginalFixture(op Op) (declaration, assembly string) {
+	name := strings.ToLower(string(op))
+	declaration = fmt.Sprintf("func %s(out *[8]uint32)\n", name)
+	assembly = fmt.Sprintf(`TEXT ·%s(SB),4,$0-4
+    MOVL out+0(FP),DI
+    MOVL $-1,AX
+    MOVL $-1,DX
+    MOVL $0x5f60718,CX
+    MOVL $0x3a291807,BX
+    PUSHL $0x8c7
+    POPFL
+    %s
+    MOVL AX,0(DI)
+    MOVL DX,4(DI)
+    MOVL CX,8(DI)
+    MOVL BX,12(DI)
+    PUSHFL
+    POPL SI
+    MOVL SI,16(DI)
+    STMXCSR 20(DI)
+    RET
+`, name, op)
+	return
+}

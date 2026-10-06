@@ -97,24 +97,25 @@ const x86TimestampIndependentC = `
 extern void rdtsc(uint64_t *);
 extern void rdtscp(uint64_t *);
 
-static uint64_t read_counter(void) {
-    unsigned low, high;
-    __asm__ volatile("lfence; rdtsc; lfence" : "=a"(low), "=d"(high) :: "memory");
+static uint64_t read_counter(unsigned *aux) {
+    unsigned low, high, native_aux;
+    __asm__ volatile("lfence; rdtscp; lfence" : "=a"(low), "=d"(high), "=c"(native_aux) :: "memory");
+    *aux = native_aux;
     return (uint64_t)low | (uint64_t)high << 32;
 }
 
 int main(void) {
     void (*samples[])(uint64_t *) = { rdtsc, rdtscp };
-    unsigned observations = 0;
+    unsigned observations = 0, stable_aux_observations = 0;
     for (unsigned index = 0; index < 2; index++) {
         for (unsigned iteration = 0; iteration < 64; iteration++) {
-            unsigned before_csr, after_csr;
+            unsigned before_csr, after_csr, before_aux, after_aux;
             uint64_t out[8] = { 0, 0, 0, 0, 0, 0,
                 UINT64_C(0xabcdef0123456789), UINT64_C(0x13579bdf2468ace0) };
             __asm__ volatile("stmxcsr %0" : "=m"(before_csr));
-            uint64_t before = read_counter();
+            uint64_t before = read_counter(&before_aux);
             samples[index](out);
-            uint64_t after = read_counter();
+            uint64_t after = read_counter(&after_aux);
             __asm__ volatile("stmxcsr %0" : "=m"(after_csr));
             uint64_t got = out[0] | out[1] << 32;
             if (!got || got < before || got > after || out[0] >> 32 || out[1] >> 32 ||
@@ -131,8 +132,22 @@ int main(void) {
                 fprintf(stderr, "timestamp CX %u=%llx\n", index, (unsigned long long)out[2]);
                 return 2;
             }
+            // A migrated CPU may have a different AUX. A stable independently
+            // observed window must nevertheless retain the real third output.
+            if (index && before_aux == after_aux) {
+                if (out[2] != before_aux) {
+                    fprintf(stderr, "timestamp AUX got=%llx reference=%x\n",
+                        (unsigned long long)out[2], before_aux);
+                    return 3;
+                }
+                stable_aux_observations++;
+            }
             observations++;
         }
+    }
+    if (!stable_aux_observations) {
+        fprintf(stderr, "no stable independent AUX window observed\n");
+        return 4;
     }
     printf("timestamp observations %u\n", observations);
     return 0;

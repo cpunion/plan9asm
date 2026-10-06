@@ -318,20 +318,8 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		}
 		// Preserve the historical amd64 approximation.
 		return true, false, nil
-	case "RDTSC":
-		if c.goarch == "386" {
-			if len(ins.Args) != 0 {
-				return true, false, fmt.Errorf("386 RDTSC takes no operands: %q", ins.Raw)
-			}
-			return true, false, c.lower386Timestamp(false)
-		}
-		if err := c.storeReg(AX, "0"); err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(DX, "0"); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
+	case "RDTSC", "RDTSCP":
+		return c.lowerX86Timestamp(op, ins)
 	case "RDPID":
 		if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 1 || ins.Args[0].Kind != OpReg || !isAMD64YrlRegister(ins.Args[0].Reg) {
 			return true, false, fmt.Errorf("%s RDPID expects one general register with no suffix: %q", c.goarch, ins.Raw)
@@ -397,23 +385,6 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 			return true, false, err
 		}
 		if err := storeOut(1, DX); err != nil {
-			return true, false, err
-		}
-		return true, false, nil
-	case "RDTSCP":
-		if c.goarch == "386" {
-			if len(ins.Args) != 0 {
-				return true, false, fmt.Errorf("386 RDTSCP takes no operands: %q", ins.Raw)
-			}
-			return true, false, c.lower386Timestamp(true)
-		}
-		if err := c.storeReg(AX, "0"); err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(DX, "0"); err != nil {
-			return true, false, err
-		}
-		if err := c.storeReg(CX, "0"); err != nil {
 			return true, false, err
 		}
 		return true, false, nil
@@ -2002,27 +1973,4 @@ func (c *amd64Ctx) lowerDoubleShift(op Op, ins Instr) error {
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s %s, %s %%%s\n", out, zero, ty, dst, ty, merged)
 	return storeDst("%" + out)
-}
-
-func (c *amd64Ctx) lower386Timestamp(serialized bool) error {
-	asm := "rdtsc"
-	resultType := "{ i32, i32 }"
-	constraints := "={ax},={dx},~{dirflag},~{fpsr},~{flags},~{memory}"
-	regs := []Reg{AX, DX}
-	if serialized {
-		asm = "rdtscp"
-		resultType = "{ i32, i32, i32 }"
-		constraints = "={ax},={dx},={cx},~{dirflag},~{fpsr},~{flags},~{memory}"
-		regs = append(regs, CX)
-	}
-	call := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q()\n", call, resultType, asm, constraints)
-	for i, reg := range regs {
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractvalue %s %%%s, %d\n", value, resultType, call, i)
-		if err := c.storeRegSized(reg, I32, "%"+value); err != nil {
-			return err
-		}
-	}
-	return nil
 }
