@@ -82,9 +82,9 @@ func x86LockScalarPointerType(form x86LockScalarRMWForm) string {
 	if form.destination.Kind == OpMem {
 		switch form.destination.Mem.Segment {
 		case FS:
-			return "ptr addrspace(256)"
-		case GS:
 			return "ptr addrspace(257)"
+		case GS:
+			return "ptr addrspace(256)"
 		}
 	}
 	return "ptr"
