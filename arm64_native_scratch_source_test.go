@@ -38,6 +38,10 @@ func arm64ScratchActualSourceFixture(t *testing.T, goos string) (GoPackage, GoAR
 }
 
 func arm64ScratchActualSourceFixtureWithAssembly(t *testing.T, goos, assembly string) (GoPackage, GoARM64ScratchCaptureRequest) {
+	return arm64ScratchActualSourceFixtureWithPackage(t, goos, assembly, "example.invalid/scratchfixture")
+}
+
+func arm64ScratchActualSourceFixtureWithPackage(t *testing.T, goos, assembly, packagePath string) (GoPackage, GoARM64ScratchCaptureRequest) {
 	t.Helper()
 	directory, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -45,7 +49,7 @@ func arm64ScratchActualSourceFixtureWithAssembly(t *testing.T, goos, assembly st
 	}
 	const declarations = "package scratchfixture\nfunc Scratch(n uint64) uint64\nfunc Value(n uint64) uint64\n"
 	for name, data := range map[string]string{
-		"go.mod":   "module example.invalid/scratchfixture\n\ngo 1.20\n",
+		"go.mod":   "module " + packagePath + "\n\ngo 1.20\n",
 		"value.go": declarations, "value_arm64.s": assembly,
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(data), 0600); err != nil {
@@ -58,7 +62,7 @@ func arm64ScratchActualSourceFixtureWithAssembly(t *testing.T, goos, assembly st
 		t.Fatal(err)
 	}
 	typed, err := (&types.Config{Sizes: types.SizesFor("gc", "arm64")}).Check(
-		"example.invalid/scratchfixture", fset, []*ast.File{syntax}, nil)
+		packagePath, fset, []*ast.File{syntax}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +95,12 @@ func arm64ScratchActualBoundSource(t *testing.T, goos, target string) (context.C
 }
 
 func arm64ScratchActualBoundSourceWithAssembly(t *testing.T, goos, target, assembly string) (context.Context, GoPackage, *File, Options, *GoARM64ScratchSource) {
+	return arm64ScratchActualBoundSourceWithPackage(t, goos, target, assembly, "example.invalid/scratchfixture")
+}
+
+func arm64ScratchActualBoundSourceWithPackage(t *testing.T, goos, target, assembly, packagePath string) (context.Context, GoPackage, *File, Options, *GoARM64ScratchSource) {
 	t.Helper()
-	pkg, request := arm64ScratchActualSourceFixtureWithAssembly(t, goos, assembly)
+	pkg, request := arm64ScratchActualSourceFixtureWithPackage(t, goos, assembly, packagePath)
 	ctx, cancel := runtimeOracleStageContext(t)
 	t.Cleanup(cancel)
 	source, err := CaptureGoARM64ScratchSource(ctx, pkg, request)
