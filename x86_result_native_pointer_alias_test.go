@@ -314,11 +314,7 @@ func TestX86ABI0ResultNativeAliasOriginalGoAndLLVMObjects(t *testing.T) {
 				options := Options{Goarch: target.arch, TargetTriple: target.triple, ResolveSym: resolve, Sigs: map[string]FuncSig{"Value": sig}}
 				text, err := Translate(file, options)
 				if err != nil {
-					if !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal(err)
-					}
-					t.Logf("EXISTING_TRANSLATION_CONTEXT: unchanged original callee remains blocked, not an object pass: %v", err)
-					return
+					t.Fatal(err)
 				}
 				x86ResultInitializationObject(t, llc, target.triple, text, "text")
 				ctx := llvm.NewContext()
