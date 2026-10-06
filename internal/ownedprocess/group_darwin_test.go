@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -32,17 +31,15 @@ func TestDarwinOwnedZombieGroup(t *testing.T) {
 	pid := command.Process.Pid
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		data, err := exec.CommandContext(ctx, "/bin/ps", "-p", strconv.Itoa(pid), "-o", "stat=").Output()
-		cancel()
+		members, err := observeProcessGroup(pid)
 		if err != nil {
 			t.Fatalf("observe exact owned zombie: %v", err)
 		}
-		if strings.HasPrefix(strings.TrimSpace(string(data)), "Z") {
+		if len(members) == 1 && members[0].PID == pid && members[0].State == "Z" {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("owned child did not become a zombie: %q", data)
+			t.Fatalf("owned child did not become a zombie: %v", members)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -116,17 +113,21 @@ func TestDarwinReapedParentZombieDescendant(t *testing.T) {
 		_ = child.Wait()
 	}()
 	for end := time.Now().Add(3 * time.Second); ; {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		data, err := exec.CommandContext(ctx, "/bin/ps", "-p", strconv.Itoa(child.Process.Pid), "-o", "stat=").Output()
-		cancel()
+		members, err := observeProcessGroup(pgid)
 		if err != nil {
 			t.Fatalf("owned descendant snapshot: %v", err)
 		}
-		if strings.HasPrefix(strings.TrimSpace(string(data)), "Z") {
+		exited := false
+		for _, member := range members {
+			if member.PID == child.Process.Pid && member.State == "Z" {
+				exited = true
+			}
+		}
+		if exited {
 			break
 		}
 		if time.Now().After(end) {
-			t.Fatalf("descendant did not exit: %q", data)
+			t.Fatalf("descendant did not exit: %v", members)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}

@@ -889,9 +889,12 @@ command owns a process group; cancellation and ordinary parent exit terminate
 remaining descendants before workspace removal. Output-pipe waits are bounded
 and failures remain infrastructure errors. Darwin can return `EPERM` for a
 zombie-only group: only after the owned parent is actually waited may a bounded,
-independent `/bin/ps` kernel snapshot prove that group absent or entirely zombie.
-Its fixed `unix2003 -x -g <owned-group> -p <Go-observer>` selection includes all
-group UIDs and no-TTY members and requires the live observer's PID witness.
+independent kernel snapshot prove that group absent or entirely zombie.
+Darwin reads `kern.proc.pgrp` directly, including all group UIDs and no-TTY
+members, with a live `kern.proc.pid` observer witness before and after the
+group query. Reads are single-attempt: process-table growth, truncated/oversized
+records, changed identities, unknown states or elapsed-budget errors fail.
+No shell, `ps` Mach task queries, unbounded retry or command fallback is used.
 Live, inaccessible, malformed or unknown owned membership still fails; a
 cancellation before Wait never suppresses a permission error.
 Directory-not-empty cleanup races
