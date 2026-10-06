@@ -2231,11 +2231,16 @@ func (c *amd64Ctx) ptrFromAddrI64(addrI64 string) string {
 }
 
 func (c *amd64Ctx) ptrFromSB(sym string) (ptr string, err error) {
+	// This entry point consumes memory, not Go's TYPE_ADDR immediate. Address
+	// evaluators must first select that role explicitly; silently removing '$'
+	// here lets direct OpSym load/store dispatch bypass the memory grammar.
+	if strings.HasPrefix(strings.TrimSpace(sym), "$") {
+		return "", fmt.Errorf("address immediate is not symbolic memory: %q", sym)
+	}
 	base, off, ok := parseSBRef(sym)
 	if !ok {
 		return "", fmt.Errorf("invalid (SB) sym ref: %q", sym)
 	}
-	base = strings.TrimPrefix(base, "$")
 	res := base
 	if strings.Contains(base, "·") || strings.Contains(base, "/") || strings.Contains(base, ".") {
 		res = c.resolve(base)
