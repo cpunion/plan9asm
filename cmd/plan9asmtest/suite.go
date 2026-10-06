@@ -25,6 +25,11 @@ type config struct {
 	CISelector, CIIsolate string
 	CIOwner               int
 	CIVerify              string
+	Module                bool
+	ModuleVerify          string
+	ModuleOwner           int
+	// Only the module orchestrator sets these from actual package metadata.
+	fullPackage, noTestFiles bool
 }
 
 type shardResult struct {
@@ -59,6 +64,9 @@ type suiteReport struct {
 	ChildMissing int           `json:"subtests_seeds_incomplete"`
 	Status       string        `json:"status"`
 	Error        string        `json:"error,omitempty"`
+	FullPackage  bool          `json:"full_package,omitempty"`
+	NoTestFiles  bool          `json:"no_test_files,omitempty"`
+	ArtifactDir  string        `json:"artifact_directory,omitempty"`
 }
 
 func runSuite(ctx context.Context, cfg config) error {
@@ -109,7 +117,10 @@ func runSuite(ctx context.Context, cfg config) error {
 	if err := os.Mkdir(cfg.Out, 0755); err != nil {
 		return fmt.Errorf("artifact directory must be new (parent must exist): %w", err)
 	}
-	report := suiteReport{Schema: 1, Go: cfg.Go, Flags: forwarded, Timeout: cfg.Timeout.String(), Workers: cfg.Workers, Status: "failed"}
+	report := suiteReport{Schema: 1, Go: cfg.Go, Flags: forwarded, Timeout: cfg.Timeout.String(), Workers: cfg.Workers, Status: "failed", FullPackage: cfg.fullPackage, NoTestFiles: cfg.noTestFiles}
+	if cfg.Module {
+		report.ArtifactDir = cfg.Out
+	}
 	publish := func() error {
 		report.RootMissing = len(report.Names) - report.RootPassed - report.RootSkipped - report.RootFailed
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -143,30 +154,43 @@ func runSuite(ctx context.Context, cfg config) error {
 	if err != nil {
 		return fail(err)
 	}
-	report.Package, report.Names, report.Benchmarks, err = parseList(string(listing))
+	report.Package, report.Names, report.Benchmarks, err = parseSuiteList(string(listing), cfg.Module || cfg.fullPackage, cfg.noTestFiles)
 	if err != nil {
 		return fail(err)
 	}
-	shards, err := partition(report.Names, cfg.Shards)
-	if err != nil {
-		return fail(err)
+	if cfg.Module && len(report.Names) == 0 {
+		// A benchmark-only package (including a root) still executes TestMain
+		// and ordinary go test without a filter. It cannot become an empty shard.
+		cfg.fullPackage, cfg.Shards, cfg.Workers = true, 1, 1
+		report.FullPackage, report.Workers = true, 1
+	}
+	shards := [][]string{report.Names}
+	if !cfg.fullPackage {
+		shards, err = partition(report.Names, cfg.Shards)
+		if err != nil {
+			return fail(err)
+		}
 	}
 	hash := sha256.Sum256([]byte(strings.Join(report.Names, "\n") + "\n"))
 	report.InventorySHA = hex.EncodeToString(hash[:])
 	for i, names := range shards {
 		result := shardResult{Index: i, Names: names, Status: "pending"}
-		if len(names) == 0 {
+		if len(names) == 0 && !cfg.fullPackage {
 			result.Status = "empty"
 		} else {
-			pattern, err := runPattern(names)
-			if err != nil {
-				return fail(err)
-			}
 			result.Command = append([]string{cfg.Go, "test"}, forwarded...)
 			if profile != "" {
 				result.Command = append(result.Command, "-coverprofile="+filepath.Join(cfg.Out, fmt.Sprintf("shard-%04d.cover", i)))
 			}
-			result.Command = append(result.Command, "-count=1", "-timeout="+cfg.Timeout.String(), "-json", "-run="+pattern, cfg.Package)
+			result.Command = append(result.Command, "-count=1", "-timeout="+cfg.Timeout.String(), "-json")
+			if !cfg.fullPackage {
+				pattern, err := runPattern(names)
+				if err != nil {
+					return fail(err)
+				}
+				result.Command = append(result.Command, "-run="+pattern)
+			}
+			result.Command = append(result.Command, cfg.Package)
 		}
 		report.Shards = append(report.Shards, result)
 	}
@@ -250,7 +274,7 @@ func executeShard(ctx context.Context, cfg config, pkg string, result shardResul
 	var validationErr error
 	file, openErr := os.Open(stem + ".stdout")
 	if openErr == nil {
-		result.Outcomes, validationErr = validateEvents(file, pkg, result.Names)
+		result.Outcomes, validationErr = validateSuiteEvents(file, pkg, result.Names, cfg.fullPackage, cfg.noTestFiles)
 		validationErr = errors.Join(validationErr, file.Close())
 	} else {
 		validationErr = openErr

@@ -18,6 +18,14 @@ type coverageBlock struct {
 var coverageLocation = regexp.MustCompile(`^.+:[1-9][0-9]*\.[1-9][0-9]*,[1-9][0-9]*\.[1-9][0-9]*$`)
 
 func mergeCoverage(inputs []string) ([]byte, error) {
+	return mergeCoverageInventory(inputs, true)
+}
+
+func mergeModuleCoverage(inputs []string) ([]byte, error) {
+	return mergeCoverageInventory(inputs, false)
+}
+
+func mergeCoverageInventory(inputs []string, identical bool) ([]byte, error) {
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("no coverage inputs")
 	}
@@ -37,11 +45,15 @@ func mergeCoverage(inputs []string) ([]byte, error) {
 			mode, total = currentMode, blocks
 			continue
 		}
-		if currentMode != mode || len(blocks) != len(total) {
+		if currentMode != mode || identical && len(blocks) != len(total) {
 			return nil, fmt.Errorf("coverage mode/block inventory changed in %s", path)
 		}
 		for key, block := range blocks {
 			old, exists := total[key]
+			if !exists && !identical {
+				total[key] = block
+				continue
+			}
 			if !exists || old.Statements != block.Statements || math.MaxUint64-old.Count < block.Count {
 				return nil, fmt.Errorf("coverage block changed/counter overflow: %s", key)
 			}

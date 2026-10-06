@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -79,10 +80,11 @@ func runModuleFixtureCLI(t *testing.T, failing bool) (string, string, error) {
 	binary := parallelFixtureCLI(t)
 	dir := moduleFixture(t, failing)
 	out := filepath.Join(t.TempDir(), "module")
+	profile := filepath.Join(filepath.Dir(out), "module.cover")
 	stem := filepath.Join(t.TempDir(), "cli")
 	_, err := captureCommand(context.Background(), 5*time.Minute, ".", binary,
 		[]string{"-module", "-dir", dir, "-out", out, "-shards=2", "-workers=2", "-timeout=2m", "--",
-			"-race", "-covermode=atomic", "-coverprofile=module.cover", "-p=2"}, stem)
+			"-race", "-covermode=atomic", "-coverprofile=" + profile, "-p=2"}, stem)
 	return dir, out, errorsWithActualOutput(err, stem)
 }
 
@@ -91,24 +93,11 @@ func errorsWithActualOutput(err error, stem string) error {
 		return nil
 	}
 	stderr, _ := os.ReadFile(stem + ".stderr")
-	return fmtActualModuleError(err, string(stderr))
+	return fmt.Errorf("%w\n%s", err, stderr)
 }
-
-// Keep the concrete command cause available to the failure-path assertion.
-func fmtActualModuleError(err error, output string) error {
-	return &moduleFixtureError{err, output}
-}
-
-type moduleFixtureError struct {
-	err    error
-	output string
-}
-
-func (err *moduleFixtureError) Error() string { return err.err.Error() + "\n" + err.output }
-func (err *moduleFixtureError) Unwrap() error { return err.err }
 
 func TestModuleCLIActualInventoryAndAllPackageCoverage(t *testing.T) {
-	dir, out, err := runModuleFixtureCLI(t, false)
+	_, out, err := runModuleFixtureCLI(t, false)
 	if err != nil {
 		t.Fatalf("actual exhaustive module CLI: %v", err)
 	}
@@ -132,7 +121,7 @@ func TestModuleCLIActualInventoryAndAllPackageCoverage(t *testing.T) {
 			t.Fatalf("package role or complete execution changed: %+v", pkg)
 		}
 	}
-	coverage, err := os.ReadFile(filepath.Join(dir, "module.cover"))
+	coverage, err := os.ReadFile(filepath.Join(filepath.Dir(out), "module.cover"))
 	if err != nil || !strings.HasPrefix(string(coverage), "mode: atomic\n") {
 		t.Fatalf("actual module-wide coverage absent: %v\n%s", err, coverage)
 	}
@@ -144,9 +133,21 @@ func TestModuleCLIActualInventoryAndAllPackageCoverage(t *testing.T) {
 }
 
 func TestModuleCLIFailureRetainsLaterCompletePackages(t *testing.T) {
-	dir, out, err := runModuleFixtureCLI(t, true)
-	if err == nil || !strings.Contains(err.Error(), "sticky original failure") {
+	_, out, err := runModuleFixtureCLI(t, true)
+	if err == nil || !strings.Contains(err.Error(), "package example.org/modulefixture:") {
 		t.Fatalf("actual source failure cause missing: %v", err)
+	}
+	files, globErr := filepath.Glob(filepath.Join(out, "package-0000", "shard-*.stdout"))
+	failureObserved := false
+	for _, path := range files {
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		failureObserved = failureObserved || strings.Contains(string(data), "sticky original failure")
+	}
+	if globErr != nil || !failureObserved {
+		t.Fatalf("actual original source diagnostic lost: %v", globErr)
 	}
 	data, readErr := os.ReadFile(filepath.Join(out, "module.json"))
 	var report struct {
@@ -164,7 +165,7 @@ func TestModuleCLIFailureRetainsLaterCompletePackages(t *testing.T) {
 			t.Errorf("sticky failure prevented another complete package: %+v", pkg)
 		}
 	}
-	if _, err := os.Lstat(filepath.Join(dir, "module.cover")); !os.IsNotExist(err) {
+	if _, err := os.Lstat(filepath.Join(filepath.Dir(out), "module.cover")); !os.IsNotExist(err) {
 		t.Fatalf("failed module published uploadable merged coverage: %v", err)
 	}
 }

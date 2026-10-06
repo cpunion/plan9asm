@@ -15,6 +15,10 @@ type testEvent struct {
 }
 
 func validateEvents(reader io.Reader, pkg string, names []string) (map[string]string, error) {
+	return validateSuiteEvents(reader, pkg, names, false, false)
+}
+
+func validateSuiteEvents(reader io.Reader, pkg string, names []string, allowEmpty, noTestFiles bool) (map[string]string, error) {
 	states := make(map[string]string)
 	planned := make(map[string]bool)
 	for _, name := range names {
@@ -23,7 +27,7 @@ func validateEvents(reader io.Reader, pkg string, names []string) (map[string]st
 		}
 		planned[name] = true
 	}
-	if len(planned) == 0 {
+	if len(planned) == 0 && !allowEmpty {
 		return states, fmt.Errorf("empty JSON plan")
 	}
 	started, finished, failed := false, false, false
@@ -57,6 +61,13 @@ func validateEvents(reader io.Reader, pkg string, names []string) (map[string]st
 				}
 				finished = true
 				failed = failed || event.Action == "fail"
+			case "skip":
+				// Go's package-level no-test-files terminal is not a skipped
+				// selected test. This is only allowed by actual go list metadata.
+				if !started || !noTestFiles || len(planned) != 0 {
+					return states, fmt.Errorf("unexpected package skip")
+				}
+				finished = true
 			default:
 				return states, fmt.Errorf("unexpected package action %q", event.Action)
 			}

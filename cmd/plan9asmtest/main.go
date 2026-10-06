@@ -1,4 +1,4 @@
-// plan9asmtest exhaustively partitions one package's actual Go test inventory.
+// plan9asmtest exhaustively runs actual Go package or main-module inventories.
 package main
 
 import (
@@ -23,6 +23,9 @@ func main() {
 	flag.IntVar(&cfg.CIOwner, "ci-owner", -1, "one selected-CI owner; every owned root runs separately")
 	flag.StringVar(&cfg.CIIsolate, "ci-isolate-root", "", "selected root exclusively assigned to owner zero")
 	flag.StringVar(&cfg.CIVerify, "verify-ci-partitions", "", "strictly verify all selected-CI owner artifacts against fresh actual inventory")
+	flag.BoolVar(&cfg.Module, "module", false, "exhaustive ./... main-module inventory; partition root and corpus only")
+	flag.IntVar(&cfg.ModuleOwner, "module-owner", -1, "optional module scheduling owner: 0=root, 1=corpus, 2=all remaining packages")
+	flag.StringVar(&cfg.ModuleVerify, "verify-module", "", "verify complete module artifacts against fresh source/tool/package observations")
 	flag.Parse()
 	cfg.Flags = flag.Args()
 	if cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards {
@@ -33,7 +36,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), cancellationSignals()...)
 	defer stop()
 	var err error
-	if cfg.CISelector != "" || cfg.CIIsolate != "" || cfg.CIOwner != -1 || cfg.CIVerify != "" {
+	if cfg.Module || cfg.ModuleVerify != "" || cfg.ModuleOwner != -1 {
+		err = runModule(ctx, cfg)
+	} else if cfg.CISelector != "" || cfg.CIIsolate != "" || cfg.CIOwner != -1 || cfg.CIVerify != "" {
 		err = runCI(ctx, cfg)
 	} else {
 		err = runSuite(ctx, cfg)

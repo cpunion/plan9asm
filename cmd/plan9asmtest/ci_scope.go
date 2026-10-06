@@ -87,34 +87,45 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 			return scope, fmt.Errorf("actual SDK tool %s route is not absolute", name)
 		}
 	}
-	// These are the tools installed by the required Linux cross-runtime job.
-	// Pure first-party orchestration fixtures do not claim that runtime scope.
-	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
-		if environment["GOHOSTOS"] != "linux" || environment["GOHOSTARCH"] != "amd64" {
-			return scope, fmt.Errorf("required native cross-runtime driver is Linux/amd64")
-		}
-		for _, name := range []string{"CC", "CXX", "AR", "PKG_CONFIG"} {
-			requested := environment[name]
-			// A wrapper/compound command would need its own delegated-tool
-			// closure. The existing CI uses single official compiler commands.
-			if requested == "" || strings.ContainsAny(requested, " \t'\"") {
-				return scope, fmt.Errorf("unregistered actual %s compiler/tool command", name)
+	// Whole-module gates bind the same LLVM 22 core used by their tests.
+	// Only the required Linux cross-runtime role demands cross linkers/QEMU.
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" || cfg.Module {
+		cross := os.Getenv("PLAN9ASM_CROSS_EXEC") == "1"
+		if cross {
+			if environment["GOHOSTOS"] != "linux" || environment["GOHOSTARCH"] != "amd64" {
+				return scope, fmt.Errorf("required native cross-runtime driver is Linux/amd64")
 			}
-			path, err := exec.LookPath(requested)
-			if err != nil {
-				return scope, fmt.Errorf("actual %s tool: %w", name, err)
-			}
-			origins["environment/"+name], err = filepath.Abs(path)
-			if err != nil {
-				return scope, err
+			for _, name := range []string{"CC", "CXX", "AR", "PKG_CONFIG"} {
+				requested := environment[name]
+				// A wrapper/compound command would need its own delegated-tool
+				// closure. The existing CI uses single official compiler commands.
+				if requested == "" || strings.ContainsAny(requested, " \t'\"") {
+					return scope, fmt.Errorf("unregistered actual %s compiler/tool command", name)
+				}
+				path, err := exec.LookPath(requested)
+				if err != nil {
+					return scope, fmt.Errorf("actual %s tool: %w", name, err)
+				}
+				origins["environment/"+name], err = filepath.Abs(path)
+				if err != nil {
+					return scope, err
+				}
 			}
 		}
 		bindir := ""
-		if os.Getenv("LLVM_CONFIG") != "" {
-			configPath, err := exec.LookPath(os.Getenv("LLVM_CONFIG"))
+		if os.Getenv("LLVM_CONFIG") != "" || cfg.Module {
+			requested := os.Getenv("LLVM_CONFIG")
+			if requested == "" {
+				requested = "llvm-config"
+				if versioned, err := exec.LookPath("llvm-config-22"); err == nil {
+					requested = versioned
+				}
+			}
+			configPath, err := exec.LookPath(requested)
 			if err != nil {
 				return scope, err
 			}
+			origins["llvm-config"] = configPath
 			for _, argument := range []string{"--version", "--bindir"} {
 				path := stem + "-llvm-config" + strings.TrimPrefix(argument, "--")
 				if _, err := captureCommand(ctx, cfg.Timeout, cfg.Dir, configPath, []string{argument}, path); err != nil {
@@ -136,7 +147,14 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 				}
 			}
 		}
-		for _, name := range []string{"llvm-config", "llc", "clang", "llvm-as", "opt", "llvm-dis", "llvm-objdump", "llvm-nm", "ld.lld", "i686-linux-gnu-gcc", "arm-linux-gnueabihf-gcc", "aarch64-linux-gnu-gcc", "qemu-i386", "qemu-arm", "qemu-aarch64"} {
+		names := []string{"llvm-config", "llc", "clang", "llvm-as", "opt", "llvm-dis", "llvm-objdump", "llvm-nm"}
+		if cross {
+			names = append(names, "ld.lld", "i686-linux-gnu-gcc", "arm-linux-gnueabihf-gcc", "aarch64-linux-gnu-gcc", "qemu-i386", "qemu-arm", "qemu-aarch64")
+		}
+		for _, name := range names {
+			if name == "llvm-config" && origins[name] != "" {
+				continue
+			}
 			requested := name
 			llvmTool := name == "clang" || name == "llc" || name == "opt" || name == "ld.lld" || strings.HasPrefix(name, "llvm-")
 			if llvmTool {
@@ -205,11 +223,15 @@ func verifyCIScopeArtifacts(directory string, report ciReport) error {
 			return fmt.Errorf("actual %s inventory observation differs: %v", name, err)
 		}
 	}
+	return verifyScopeArtifacts(directory, report.Go, report.Plan.Scope)
+}
+
+func verifyScopeArtifacts(directory, goBinary string, scope ciScope) error {
 	var beforeOrigins map[string]string
 	for _, phase := range []string{"before", "after"} {
 		stem := filepath.Join(directory, phase)
 		version, err := os.ReadFile(stem + "-version.stdout")
-		if err != nil || strings.TrimSpace(string(version)) != report.Plan.Scope.GoVersion {
+		if err != nil || strings.TrimSpace(string(version)) != scope.GoVersion {
 			return fmt.Errorf("actual SDK version observation differs: %v", err)
 		}
 		var environment map[string]string
@@ -221,17 +243,17 @@ func verifyCIScopeArtifacts(directory string, report ciReport) error {
 			return err
 		}
 		normalized, err := normalizeCIEnvironment(environment, observation)
-		if err != nil || !reflect.DeepEqual(normalized, report.Plan.Scope.Environment) {
+		if err != nil || !reflect.DeepEqual(normalized, scope.Environment) {
 			return fmt.Errorf("complete actual environment differs: %v", err)
 		}
 		var origins map[string]string
 		if err := ciReadJSON(stem+"-origins.json", &origins); err != nil {
 			return err
 		}
-		if origins["go"] != report.Go || len(origins) != len(report.Plan.Scope.Tools) {
+		if origins["go"] != goBinary || len(origins) != len(scope.Tools) {
 			return fmt.Errorf("actual SDK/tool origins differ")
 		}
-		for name := range report.Plan.Scope.Tools {
+		for name := range scope.Tools {
 			if !filepath.IsAbs(origins[name]) {
 				return fmt.Errorf("actual tool %s origin missing", name)
 			}

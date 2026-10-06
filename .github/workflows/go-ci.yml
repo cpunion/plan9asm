@@ -585,7 +585,7 @@ jobs:
 
   test:
     needs: discovered_library_priority
-    name: test (${{ matrix.os }}, ${{ matrix.go-version }}, ${{ matrix.nested_modules }})
+    name: test (${{ matrix.os }}, ${{ matrix.go-version }}, owner ${{ matrix.module-owner }})
     timeout-minutes: 60
     permissions:
       contents: read
@@ -595,16 +595,16 @@ jobs:
       # Keep both matrix variants visible even if one fails.
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
+        go-version: ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.x', '1.27.x']
+        module-owner: [0, 1, 2]
         include:
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.20.x', nested_modules: false}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.21.x', nested_modules: false}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.22.x', nested_modules: false}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.23.x', nested_modules: false}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.24.x', nested_modules: true}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.25.x', nested_modules: true}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.26.x', nested_modules: true}
-          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], go-version: '1.27.x', nested_modules: true}
-          - {os: windows-latest, go-version: '1.27.x', nested_modules: true}
+          - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], nested_modules: false}
+          - {go-version: '1.24.x', nested_modules: true}
+          - {go-version: '1.25.x', nested_modules: true}
+          - {go-version: '1.26.x', nested_modules: true}
+          - {go-version: '1.27.x', nested_modules: true}
+          - {os: windows-latest, go-version: '1.27.x', module-owner: 2, nested_modules: true}
 
     steps:
       - name: Checkout
@@ -646,15 +646,23 @@ jobs:
 
       - name: Go test (Ubuntu)
         if: runner.os != 'Windows'
-        run: go test -timeout=45m ./...
+        run: bash scripts/test-module-ci.sh test execute ${{ matrix.module-owner }}
+
+      - name: Retain complete module owner evidence (Ubuntu)
+        if: ${{ !cancelled() && runner.os != 'Windows' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: module-test-${{ matrix.go-version }}-${{ matrix.module-owner }}
+          path: _out/module-test/
+          if-no-files-found: error
 
       - name: Go test (cmd/plan9asm, Ubuntu)
-        if: runner.os != 'Windows' && matrix.nested_modules
+        if: ${{ !cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2 }}
         run: go test -timeout=30m ./...
         working-directory: cmd/plan9asm
 
       - name: Go test (cmd/plan9asmll, Ubuntu)
-        if: runner.os != 'Windows' && matrix.nested_modules
+        if: ${{ !cancelled() && runner.os != 'Windows' && matrix.nested_modules && matrix.module-owner == 2 }}
         run: go test -timeout=30m ./...
         working-directory: cmd/plan9asmll
 
@@ -761,6 +769,10 @@ jobs:
     needs: discovered_library_priority
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        module-owner: [0, 1, 2]
 
     steps:
       - name: Checkout
@@ -782,12 +794,24 @@ jobs:
           node-version: '22'
 
       - name: Go test (race)
-        run: go test -race -timeout=60m ./...
+        run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }}
+
+      - name: Retain complete module race owner evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: module-race-1.27.x-${{ matrix.module-owner }}
+          path: _out/module-race/
+          if-no-files-found: error
 
   coverage:
     needs: discovered_library_priority
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        module-owner: [0, 1, 2]
     permissions:
       contents: read
       id-token: write
@@ -812,23 +836,99 @@ jobs:
           node-version: '22'
 
       - name: Go test with coverage
-        run: |
-          go test -timeout=45m ./... -coverprofile=coverage-root.out
-          go tool cover -func=coverage-root.out | tail -n 1
+        run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }}
+
+      - name: Retain complete module coverage owner evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: module-coverage-1.27.x-${{ matrix.module-owner }}
+          path: _out/module-coverage/
+          if-no-files-found: error
 
       - name: Go test with coverage (cmd/plan9asm)
+        if: ${{ !cancelled() && matrix.module-owner == 2 }}
         run: |
           go test -timeout=30m ./... -coverprofile=coverage-plan9asm.out
           go tool cover -func=coverage-plan9asm.out | tail -n 1
         working-directory: cmd/plan9asm
 
       - name: Go test with coverage (cmd/plan9asmll)
+        if: ${{ !cancelled() && matrix.module-owner == 2 }}
         run: |
           go test -timeout=30m ./... -coverprofile=coverage-plan9asmll.out
           go tool cover -func=coverage-plan9asmll.out | tail -n 1
         working-directory: cmd/plan9asmll
 
+  module-completion:
+    needs: [test, race, coverage]
+    if: ${{ !cancelled() }}
+    runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {flavor: test, go-version: '1.20.x'}
+          - {flavor: test, go-version: '1.21.x'}
+          - {flavor: test, go-version: '1.22.x'}
+          - {flavor: test, go-version: '1.23.x'}
+          - {flavor: test, go-version: '1.24.x'}
+          - {flavor: test, go-version: '1.25.x'}
+          - {flavor: test, go-version: '1.26.x'}
+          - {flavor: test, go-version: '1.27.x'}
+          - {flavor: race, go-version: '1.27.x'}
+          - {flavor: coverage, go-version: '1.27.x'}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+      - name: Install LLVM 22
+        timeout-minutes: 14
+        run: bash scripts/install-ci-llvm22-ubuntu.sh
+      - name: Setup required wasm execution runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Download root owner
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-0
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000
+      - name: Download corpus owner
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-1
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0001
+      - name: Download remaining-package owner
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-2
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0002
+      - name: Check complete actual module inventory and coverage
+        if: ${{ !cancelled() }}
+        run: bash scripts/test-module-ci.sh ${{ matrix.flavor }} complete
+      - name: Retain independent aggregate evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: module-verified-${{ matrix.flavor }}-${{ matrix.go-version }}
+          path: _out/module-${{ matrix.flavor }}-verified/
+          if-no-files-found: error
+      - name: Show complete module coverage
+        if: matrix.flavor == 'coverage'
+        run: go tool cover -func=coverage-root.out | tail -n 1
       - name: Upload coverage to Codecov
+        if: matrix.flavor == 'coverage'
         uses: codecov/codecov-action@v7
         with:
           use_oidc: true

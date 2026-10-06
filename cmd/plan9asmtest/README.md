@@ -1,4 +1,4 @@
-# Exhaustive root-package test partitions
+# Exhaustive package and module test partitions
 
 `plan9asmtest` runs one exact Go package in fresh, owned child processes. It
 discovers the complete current `Test`, runnable `Example` and `Fuzz` inventory
@@ -24,6 +24,53 @@ inventory, hash assignment, build flags, per-child timeout or coverage checks.
 Only one collector publishes reports and counts. A failed shard remains failed
 while other shards run; a failed publication cancels and waits for active owners.
 Selected cross-runtime CI owners remain serial and reject `-workers` above one.
+
+## Complete main-module CI suites
+
+Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three owners
+share the complete actual `go list -json ./...` package inventory: owner zero
+runs the root, owner one runs `cmd/plan9asmcorpus`, and owner two runs every
+other package. Root and corpus use 32 partitions and two workers. Every other
+package runs complete ordinary `go test` without `-run`, including packages
+with no tests or only benchmarks/TestMain. Every package has its own actual
+`-list=.` receipt, including runnable examples/fuzz targets and separately
+recorded benchmarks. Nested CLI modules are not main-module packages; their
+existing independent workflow steps remain required. Windows keeps its full
+suites and does not use this scheduling mechanism.
+
+```sh
+# Each command is an independent CI owner, not three concurrent local jobs.
+bash scripts/test-module-ci.sh race execute 0
+bash scripts/test-module-ci.sh race execute 1
+bash scripts/test-module-ci.sh race execute 2
+# Download each owner's artifacts into owner-0000/1/2, then independently check:
+bash scripts/test-module-ci.sh race complete
+```
+
+The completion job uses fresh source/SDK/tool/full-environment and package
+observations, then rereads every package's original inventory, exact command,
+raw JSON root/child terminals and per-package coverage. Artifact directories
+may move; executable/tool/source identities and environment semantics may not.
+Unknown, duplicate, missing, partial or foreign results fail. Tests that skip
+remain explicit skip counters and `completed_with_skips`, never passed roots.
+Any package failure is sticky while all other packages continue. Cancellation
+retains pending/missing entries and owned subprocess cleanup.
+
+Coverage combines the checked profiles of **all** main-module packages, not
+just the root. Mode, statement counts, overlaps and counter overflow are
+validated. Owners never publish the uploadable module coverage file; only
+successful complete aggregation creates it. The original 45m test/coverage
+and 60m race per-command budgets are unchanged, as are race/coverage flags.
+Independent owners avoid sharing a single job's wall-clock budget. This is
+not evidence that any particular giant test completes within that budget.
+
+For a single local invocation use `-module` without `-module-owner`; it runs
+the same complete inventory serially across packages. Select explicit
+`GOENV=off GOWORK=off GOTOOLCHAIN=local GOFLAGS=` and the required LLVM 22 tools.
+Use a clean checkout, new artifact/coverage paths, and an artifact directory
+outside a nongit first-party fixture's source tree. Source-changing compiler
+flags (`-overlay`, `-modfile`, `-gcflags`, `-asmflags`, `-ldflags`) remain
+available in ordinary package mode but are not source-indexed by module mode.
 
 The large corpus-driver test package can use the same complete mechanism:
 

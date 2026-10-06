@@ -20,6 +20,13 @@ var listFooter = regexp.MustCompile(`^ok[ \t]+([^ \t]+)[ \t]+[0-9]+(?:\.[0-9]+)?
 // go test -list lists top-level tests/examples/fuzz targets, not dynamic
 // subtests or seeds. The execution validator also checks every emitted child.
 func parseList(data string) (string, []string, []string, error) {
+	return parseSuiteList(data, false, false)
+}
+
+var noTestsFooter = regexp.MustCompile(`^\?[ \t]+([^ \t]+)[ \t]+\[no test files\]$`)
+var noTestsCoverageFooter = regexp.MustCompile(`^\t([^ \t]+)\t\tcoverage: (?:[0-9]+(?:\.[0-9]+)?% of statements(?: in .+)?|\[no statements\])$`)
+
+func parseSuiteList(data string, allowEmpty, noTestFiles bool) (string, []string, []string, error) {
 	var pkg string
 	var names []string
 	var benchmarks []string
@@ -28,6 +35,16 @@ func parseList(data string) (string, []string, []string, error) {
 		line = strings.TrimSuffix(line, "\r")
 		if pkg != "" {
 			return "", nil, nil, fmt.Errorf("output after inventory footer: %q", line)
+		}
+		if allowEmpty && noTestFiles {
+			fields := noTestsFooter.FindStringSubmatch(line)
+			if fields == nil {
+				fields = noTestsCoverageFooter.FindStringSubmatch(line)
+			}
+			if fields != nil {
+				pkg = fields[1]
+				continue
+			}
 		}
 		if strings.HasPrefix(line, "ok\t") || strings.HasPrefix(line, "ok ") {
 			fields := listFooter.FindStringSubmatch(line)
@@ -48,7 +65,7 @@ func parseList(data string) (string, []string, []string, error) {
 			names = append(names, line)
 		}
 	}
-	if pkg == "" || len(names) == 0 {
+	if pkg == "" || len(names) == 0 && !allowEmpty || noTestFiles && len(names)+len(benchmarks) != 0 {
 		return "", nil, nil, fmt.Errorf("empty inventory or missing successful package footer")
 	}
 	sort.Strings(names)
