@@ -37,33 +37,40 @@ func TestParseLabelPrefixFamilyOriginalGoAndLLVMObjects(t *testing.T) {
 				t.Run(test.name, func(t *testing.T) {
 					source := test.prefix + "TEXT ·Probe(SB),4,$0-0\n" + test.body + "RET\n"
 					goAssemblerOracleOutput(t, target.goarch, source, "", true)
-					file, err := Parse(target.arch, source)
+					expanded, err := PreprocessAssemblySource(source, AssemblyPreprocessOptions{FileName: "labels.s"})
 					if err != nil {
 						t.Fatal(err)
 					}
-					var labels []string
-					var operations []Op
-					for _, instruction := range file.Funcs[0].Instrs {
-						if instruction.Op == OpLABEL {
-							if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpLabel {
-								t.Fatalf("untyped label: %+v", instruction)
-							}
-							labels = append(labels, instruction.Args[0].Sym)
-						} else {
-							operations = append(operations, instruction.Op)
+					goAssemblerOracleOutput(t, target.goarch, expanded, "", true)
+					for index, input := range []string{source, expanded} {
+						file, err := Parse(target.arch, input)
+						if err != nil {
+							t.Fatalf("label prefix path=%d: %v", index, err)
 						}
+						var labels []string
+						var operations []Op
+						for _, instruction := range file.Funcs[0].Instrs {
+							if instruction.Op == OpLABEL {
+								if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpLabel {
+									t.Fatalf("untyped label: %+v", instruction)
+								}
+								labels = append(labels, instruction.Args[0].Sym)
+							} else {
+								operations = append(operations, instruction.Op)
+							}
+						}
+						if !reflect.DeepEqual(labels, test.labels) || !reflect.DeepEqual(operations, []Op{OpTEXT, "NOP", OpRET}) {
+							t.Fatalf("Go-accepted label prefixes lost their identities: path=%d labels=%v operations=%v", index, labels, operations)
+						}
+						ir, err := Translate(file, Options{
+							Goarch: target.goarch, TargetTriple: target.triple,
+							Sigs: map[string]FuncSig{"·Probe": {Name: "Probe", Ret: Void}},
+						})
+						if err != nil {
+							t.Fatal(err)
+						}
+						compileLLVMToObject(t, llc, target.triple, "labels.ll", "labels.o", ir)
 					}
-					if !reflect.DeepEqual(labels, test.labels) || !reflect.DeepEqual(operations, []Op{OpTEXT, "NOP", OpRET}) {
-						t.Fatalf("Go-accepted label prefixes lost their identities: labels=%v operations=%v", labels, operations)
-					}
-					ir, err := Translate(file, Options{
-						Goarch: target.goarch, TargetTriple: target.triple,
-						Sigs: map[string]FuncSig{"Probe": {Name: "Probe", Ret: Void}},
-					})
-					if err != nil {
-						t.Fatal(err)
-					}
-					compileLLVMToObject(t, llc, target.triple, "labels.ll", "labels.o", ir)
 				})
 			}
 		})
