@@ -218,12 +218,16 @@ func TestAssemblyLedgerSemanticComparisonRetainsValidatedInputs(t *testing.T) {
 		mutate func(*discoveryProgress)
 	}{
 		{"actual CPU profile", func(p *discoveryProgress) { changeSemanticFixtureCPU(t, p) }},
-		{"source bytes", func(p *discoveryProgress) { changeSemanticFixtureSource(p) }},
+		{"source bytes", func(p *discoveryProgress) { changeSemanticFixtureSource(t, p) }},
 		{"CPP registered source", func(p *discoveryProgress) {
 			p.Candidates[0].OrdinarySelectionPlan.CPPInputs.Registration.ToolSourceSHA256["src/cmd/asm/internal/lex/input.go"] = strings.Repeat("9", 64)
 		}},
 		{"consumed CPP expansion", func(p *discoveryProgress) {
-			p.Candidates[0].FeatureConsumption[0].CPP[0].ExpandedSHA256 = strings.Repeat("9", 64)
+			before := p.Candidates[0].FeatureConsumption[0].CPP[0].ExpandedSHA256
+			changeSemanticFixtureSource(t, p)
+			if p.Candidates[0].FeatureConsumption[0].CPP[0].ExpandedSHA256 == before {
+				t.Fatal("valid changed original did not change the consumed CPP expansion")
+			}
 		}},
 		{"registered macro source", func(p *discoveryProgress) {
 			p.Candidates[0].FeatureConsumption[0].Packages[0].Macros.ToolSourceSHA256["src/cmd/go/internal/work/gc.go"] = strings.Repeat("9", 64)
@@ -274,9 +278,55 @@ func changeSemanticFixtureCPU(t *testing.T, progress *discoveryProgress) {
 	}
 }
 
-func changeSemanticFixtureSource(progress *discoveryProgress) {
+func changeSemanticFixtureSource(t *testing.T, progress *discoveryProgress) {
+	t.Helper()
 	candidate := &progress.Candidates[0]
-	file, digest := candidate.DiscoveredAsmFiles[0], strings.Repeat("9", 64)
+	file := candidate.DiscoveredAsmFiles[0]
+	plan := candidate.OrdinarySelectionPlan
+	source := plan.CPPInputs.Sources["module/"+file]
+	if source.Original == nil {
+		t.Fatal("portable semantic fixture lost its complete original")
+	}
+	changed := strings.Replace(*source.Original, "\nRET\n", "\nNOP\nRET\n", 1)
+	if changed == *source.Original {
+		t.Fatal("source mutation did not change the actual original")
+	}
+	source, err := discoveryReplayCPPSource(file, []byte(changed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.CPPInputs.Sources["module/"+file] = source
+	changeSemanticFixtureSourceDigest(progress, source.SHA256)
+
+	for _, proof := range candidate.FeatureConsumption {
+		for index := range proof.CPP {
+			cpp := &proof.CPP[index]
+			if cpp.File != file {
+				continue
+			}
+			for _, unit := range plan.CPPInputs.Units {
+				if unit.File != file {
+					continue
+				}
+				for _, pkg := range proof.Packages {
+					if !containsTargetFeature(pkg.SFiles, file) {
+						continue
+					}
+					observation, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, unit, nil, pkg.Macros.Defines)
+					if err != nil {
+						t.Fatal(err)
+					}
+					cpp.ExpandedSHA256 = discoveryFeatureBytesSHA256([]byte(observation.Output))
+					cpp.Inputs = consumed
+				}
+			}
+		}
+	}
+}
+
+func changeSemanticFixtureSourceDigest(progress *discoveryProgress, digest string) {
+	candidate := &progress.Candidates[0]
+	file := candidate.DiscoveredAsmFiles[0]
 	plan := candidate.OrdinarySelectionPlan
 	for index := range plan.Sources {
 		if plan.Sources[index].File == file {
@@ -300,6 +350,32 @@ func changeSemanticFixtureSource(progress *discoveryProgress) {
 		for _, cpp := range proof.CPP {
 			cpp.Inputs["module/"+file] = digest
 		}
+	}
+}
+
+func TestAssemblyLedgerSemanticComparisonRejectsUnreplayedCPPInputs(t *testing.T) {
+	stored := fixtureSemanticProgress(t)
+	for _, test := range []struct {
+		name   string
+		mutate func(*discoveryProgress)
+	}{
+		{"source_digest_without_original", func(p *discoveryProgress) {
+			changeSemanticFixtureSourceDigest(p, strings.Repeat("9", 64))
+		}},
+		{"consumed_output_without_source", func(p *discoveryProgress) {
+			p.Candidates[0].FeatureConsumption[0].CPP[0].ExpandedSHA256 = strings.Repeat("9", 64)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			current := cloneSemanticProgress(t, stored)
+			test.mutate(&current)
+			if err := requireVerifiedAssemblyLedger(current); err == nil {
+				t.Fatal("a digest-only mutation was accepted without full original CPP replay")
+			}
+			if err := compareAssemblyLedgerProgress(stored, current); err == nil {
+				t.Fatal("semantic comparison repaired invalid CPP evidence")
+			}
+		})
 	}
 }
 
