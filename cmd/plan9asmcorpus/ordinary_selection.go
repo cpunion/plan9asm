@@ -79,6 +79,7 @@ type discoveryOrdinarySelectionPlan struct {
 	headerPlanningCapture        func(discoveryFeatureProfileRequest, string, []string) (*gotoolprofile.GeneratedHeaderProof, error)
 	headerPlanningUsed           map[string]bool
 	headerPlanningRecheck        func() error
+	headerPlanningQueryStarts    int // Diagnostic count only; never serialized or validated as authority.
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The

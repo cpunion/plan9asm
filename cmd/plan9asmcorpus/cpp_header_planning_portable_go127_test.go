@@ -16,7 +16,7 @@ import (
 func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCandidate, matrix matrixReport, configs []discoveryBuildConfiguration, targets []string) {
 	t.Helper()
 	plan := matrix.OrdinarySelectionPlan
-	if plan == nil || plan.HeaderPlanning == nil || len(plan.HeaderPlanning.Queries) != 123 ||
+	if plan == nil || plan.HeaderPlanning == nil || plan.headerPlanningQueryStarts != 123 || len(plan.HeaderPlanning.Queries) != 123 ||
 		len(plan.HeaderPlanning.Sources) != 1 || len(plan.GeneratedHeaders) != len(targets) {
 		t.Fatalf("planning observations were lost or confused with executed scopes: %#v", plan.HeaderPlanning)
 	}

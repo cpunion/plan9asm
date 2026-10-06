@@ -52,6 +52,9 @@ func TestOrdinaryGeneratedHeaderProducerActualProfilesAndOfflineReplay(t *testin
 		t.Fatal(err)
 	}
 	plan := matrix.OrdinarySelectionPlan
+	if plan != nil && (plan.headerPlanningQueryStarts != 0 || plan.HeaderPlanning != nil) {
+		t.Fatalf("known imported planning domain still launched a query or acquired a verified role: starts=%d role=%v", plan.headerPlanningQueryStarts, plan.HeaderPlanning)
+	}
 	if matrix.Success != 4 || matrix.NotApplicable != 0 || len(matrix.FeatureConsumption) != 4 || len(configs) != 4 || plan == nil || len(plan.GeneratedHeaders) != 4 {
 		t.Fatalf("generated header queries must not count as translations or erase latent CPU scopes: %#v", matrix)
 	}

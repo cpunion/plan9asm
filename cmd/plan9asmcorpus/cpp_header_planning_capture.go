@@ -99,6 +99,12 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		if err != nil {
 			return nil, err
 		}
+		if err := preflightDiscoveryHeaderQuery(queryPlan, profile, download, assembly, tags); err != nil {
+			if gotoolprofile.NativeHeaderSourceDomainUnsupported(err) {
+				return nil, &discoveryHeaderPlanningUnsupported{err.Error()}
+			}
+			return nil, err
+		}
 		queryPlan.GeneratedHeaders = nil
 		queryPlan.GeneratedGoSources = nil
 		pattern := module
@@ -111,6 +117,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		if plan.HeaderPlanning != nil {
 			ordinal = len(plan.HeaderPlanning.Queries)
 		}
+		plan.headerPlanningQueryStarts++
 		metadata, err := captureDiscoveryGeneratedHeaderQuery(ctx, queryPlan, download, profile, tags, group, queryDir, queryEnv, translator, ordinal)
 		if err != nil {
 			return nil, fmt.Errorf("actual native header planning query: %w", err)

@@ -37,80 +37,9 @@ func NativeHeaderSourceDomainUnsupported(err error) bool {
 // independently match actual selected compiler sources and the stock SDK; it
 // grants neither source authentication nor ABI/native-memory permission.
 func ReplayNativeGeneratedHeader(packagePath, target, language string, sources map[string]string) (map[string]string, error) {
-	if packagePath == "sync/atomic" || packagePath == "internal/runtime/atomic" || packagePath == "simd/archsimd" {
-		return nil, &nativeHeaderUnsupportedDomain{"native header requires compiler-special package layout rules"}
-	}
-	languageMinor, languageError := goMinor(language)
-	if language == "go1" || languageError == nil && languageMinor < 20 {
-		return nil, &nativeHeaderUnsupportedDomain{"native property query does not register this historical module language"}
-	}
-	goos, arch, ok := strings.Cut(target, "/")
-	word := int64(8)
-	switch arch {
-	case "386", "arm":
-		word = 4
-	case "amd64", "arm64", "wasm":
-	default:
-		return nil, fmt.Errorf("native header source has an unregistered target")
-	}
-	if !ok || !CPPLocalSource(goos) || strings.Contains(goos, "/") ||
-		packagePath == "" || strings.ContainsAny(packagePath, "\\\r\n\t =") ||
-		len(sources) == 0 || len(sources) > 4096 ||
-		language != "go1.20" && language != "go1.21" && language != "go1.22" && language != "go1.23" &&
-			language != "go1.24" && language != "go1.25" && language != "go1.26" && language != "go1.27" {
-		return nil, fmt.Errorf("native header source has an unclosed package/language scope")
-	}
-	set := token.NewFileSet()
-	var names []string
-	for name := range sources {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	var files []*ast.File
-	total, nodes := 0, 0
-	for _, name := range names {
-		text := sources[name]
-		if !CPPLocalSource(name) || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
-			strings.HasPrefix(path.Base(name), ".") || strings.HasPrefix(path.Base(name), "_") ||
-			len(text) > 2<<20 || len(text) > 16<<20-total || strings.ContainsRune(text, '\x00') {
-			return nil, fmt.Errorf("native header source is absent, nonordinary or unbounded")
-		}
-		total += len(text)
-		file, err := parser.ParseFile(set, name, text, parser.ParseComments)
-		if err != nil {
-			return nil, fmt.Errorf("native header source is not closed import-free Go: %v", err)
-		}
-		if len(file.Imports) != 0 {
-			return nil, &nativeHeaderUnsupportedDomain{"native header source query has unclosed imports"}
-		}
-		closed := true
-		ast.Inspect(file, func(node ast.Node) bool {
-			if node == nil {
-				return false
-			}
-			nodes++
-			if spec, ok := node.(*ast.TypeSpec); ok && spec.TypeParams != nil {
-				closed = false
-			}
-			if function, ok := node.(*ast.FuncType); ok && function.TypeParams != nil {
-				closed = false
-			}
-			return nodes <= 100000
-		})
-		for _, group := range file.Comments {
-			for _, comment := range group.List {
-				if strings.HasPrefix(comment.Text, "//go:") && !strings.HasPrefix(comment.Text, "//go:build ") {
-					closed = false
-				}
-			}
-		}
-		if nodes > 100000 {
-			return nil, fmt.Errorf("native header source requires unregistered generated/generic/compiler rules")
-		}
-		if !closed {
-			return nil, &nativeHeaderUnsupportedDomain{"native header source requires generated/generic/compiler rules"}
-		}
-		files = append(files, file)
+	set, files, word, err := parseNativeHeaderSources(packagePath, target, language, sources)
+	if err != nil {
+		return nil, err
 	}
 	sizes := &nativeHeaderGCSizes{word: word, cache: make(map[types.Type]nativeHeaderLayout), active: make(map[types.Type]bool)}
 	pkg, err := (&types.Config{GoVersion: language, Sizes: sizes, IgnoreFuncBodies: true}).Check(packagePath, set, files, nil)
@@ -166,6 +95,96 @@ func ReplayNativeGeneratedHeader(packagePath, target, language string, sources m
 		return nil, err
 	}
 	return definitions, nil
+}
+
+// PreflightNativeGeneratedHeaderSource rejects already-unclosed query domains
+// before an expensive planning compiler query. A nil result is not a source,
+// compiler, header or object proof; all final consumers remain mandatory.
+func PreflightNativeGeneratedHeaderSource(packagePath, target, language string, sources map[string]string) error {
+	_, _, _, err := parseNativeHeaderSources(packagePath, target, language, sources)
+	return err
+}
+
+func parseNativeHeaderSources(packagePath, target, language string, sources map[string]string) (*token.FileSet, []*ast.File, int64, error) {
+	if packagePath == "sync/atomic" || packagePath == "internal/runtime/atomic" || packagePath == "simd/archsimd" {
+		return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header requires compiler-special package layout rules"}
+	}
+	languageMinor, languageError := goMinor(language)
+	if language == "go1" || languageError == nil && languageMinor < 20 {
+		return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native property query does not register this historical module language"}
+	}
+	goos, arch, ok := strings.Cut(target, "/")
+	word := int64(8)
+	switch arch {
+	case "386", "arm":
+		word = 4
+	case "amd64", "arm64", "wasm":
+	default:
+		return nil, nil, 0, fmt.Errorf("native header source has an unregistered target")
+	}
+	if !ok || !CPPLocalSource(goos) || strings.Contains(goos, "/") ||
+		packagePath == "" || strings.ContainsAny(packagePath, "\\\r\n\t =") ||
+		len(sources) == 0 || len(sources) > 4096 ||
+		language != "go1.20" && language != "go1.21" && language != "go1.22" && language != "go1.23" &&
+			language != "go1.24" && language != "go1.25" && language != "go1.26" && language != "go1.27" {
+		return nil, nil, 0, fmt.Errorf("native header source has an unclosed package/language scope")
+	}
+	set := token.NewFileSet()
+	var names []string
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var files []*ast.File
+	total, nodes := 0, 0
+	for _, name := range names {
+		text := sources[name]
+		if !CPPLocalSource(name) || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") ||
+			strings.HasPrefix(path.Base(name), ".") || strings.HasPrefix(path.Base(name), "_") ||
+			len(text) > 2<<20 || len(text) > 16<<20-total || strings.ContainsRune(text, '\x00') {
+			return nil, nil, 0, fmt.Errorf("native header source is absent, nonordinary or unbounded")
+		}
+		total += len(text)
+		file, err := parser.ParseFile(set, name, text, parser.ParseComments)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("native header source is not closed import-free Go: %v", err)
+		}
+		if len(file.Imports) != 0 {
+			return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source query has unclosed imports"}
+		}
+		closed := true
+		ast.Inspect(file, func(node ast.Node) bool {
+			if node == nil {
+				return false
+			}
+			nodes++
+			if spec, ok := node.(*ast.TypeSpec); ok && spec.TypeParams != nil {
+				closed = false
+			}
+			if function, ok := node.(*ast.FuncType); ok && function.TypeParams != nil {
+				closed = false
+			}
+			return nodes <= 100000
+		})
+		for _, group := range file.Comments {
+			for _, comment := range group.List {
+				if strings.HasPrefix(comment.Text, "//go:") && !strings.HasPrefix(comment.Text, "//go:build ") {
+					closed = false
+				}
+			}
+		}
+		if nodes > 100000 {
+			return nil, nil, 0, fmt.Errorf("native header source requires unregistered generated/generic/compiler rules")
+		}
+		if !closed {
+			return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source requires generated/generic/compiler rules"}
+		}
+		files = append(files, file)
+	}
+	if err := boundNativeHeaderStrings(files); err != nil {
+		return nil, nil, 0, err
+	}
+	return set, files, word, nil
 }
 
 // This native model deliberately does not use the framework's SizesFor: old
