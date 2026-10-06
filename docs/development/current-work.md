@@ -20,11 +20,17 @@ not success for local repairs. Preserve failure-first scheduling and all
 
 ## Current local integration
 
-Use branch `codex/pr40-reviewed-families-parallel-integration-20261006`.
+Use branch `codex/pr40-complete-family-review-integration-20261006`.
 Its reviewed parent `688267e8` integrates the earlier `82bccde5` mechanism
 repairs, complete query-only CPP fixture transport and packed unsigned averages.
 The branch additionally integrates the bounded exhaustive worker implementation
 and its separate true-RED regression. Main is the sole assembly-ledger writer.
+
+The full-root replay found the direct MRS arity fixture still used AMD64.
+Its test-only repair now binds every case to its explicit architecture and
+owns/disposes its LLVM context. The ARM64 result-tail audit is also integrated;
+it deliberately grants no padding or caller permission. Fresh combined gates
+are required for these later commits.
 
 The underlying repairs preserve exact original source, actual SDK/tool/config
 roles, native backing, ABI0 declarations, initialized bytes, code-address
