@@ -129,6 +129,9 @@ func root(t *observer) `)
 	ctx, cancel := runtimeOracleStageContext(t)
 	goTool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	executable := filepath.Join(dir, "scope")
+	if runtime.GOOS == "windows" {
+		executable += ".exe"
+	}
 	command := exec.CommandContext(ctx, goTool, "build", "-p=2", "-o", executable, "scope.go")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOOS="+runtime.GOOS, "GOARCH="+runtime.GOARCH,
@@ -146,7 +149,7 @@ func root(t *observer) `)
 	if err != nil {
 		t.Fatalf("actual source-role unit execution: %v\n%s", err, output)
 	}
-	arm64ABI0RegionRetain(t, dir, "synthetic-source-role", "actual-linux-source.txt", "scope.go", "scope")
+	arm64ABI0RegionRetain(t, dir, "synthetic-source-role", "actual-linux-source.txt", "scope.go", filepath.Base(executable))
 	var expected strings.Builder
 	for _, test := range cases {
 		fmt.Fprintf(&expected, "%s=%s/%d\n", test.name, test.want, test.lookups)
