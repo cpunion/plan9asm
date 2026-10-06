@@ -301,7 +301,7 @@ type MemRef struct {
 	OffRaw   string   // unresolved symbolic displacement, used by generated wasm go_asm.h offsets
 	Index    Reg      // optional; empty if not present
 	IndexExt ExtendOp // optional ARM64 index extension (UXTW, SXTW, UXTX, or SXTX)
-	Scale    int64    // optional; defaults to 1 when Index is present
+	Scale    int64    // source x86 preserves a missing multiplier as 0; consumers validate their role
 	Segment  Reg      // optional x86 segment override (FS or GS)
 }
 

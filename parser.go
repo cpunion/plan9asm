@@ -536,6 +536,22 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 	}
 	if arch == ArchAMD64 {
 		x86Operand := strings.TrimSpace(s)
+		if !strings.HasPrefix(x86Operand, "$") {
+			if pseudo := x86SymbolPseudoGroup.FindStringSubmatch(x86Operand); pseudo != nil && pseudo[1] != "SP" {
+				return parseOperand(s) // Keep unindexed SB/FP and PC branch roles.
+			}
+			if memory, matched, err := parseX86SourceRegisterMemory(x86Operand); matched {
+				if err != nil {
+					return Operand{}, err
+				}
+				if x86SourceMemoryHasSegment(memory) {
+					// Preserve the independent, existing segment/TLS operand
+					// model. A lexical group is not a native-address contract.
+					return parseOperand(s)
+				}
+				return Operand{Kind: OpMem, Mem: memory}, nil
+			}
+		}
 		reg := Reg(strings.ToUpper(x86Operand))
 		switch reg {
 		case ES, CS, SS, DS:

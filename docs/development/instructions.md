@@ -267,6 +267,14 @@ selects their meaning.
 Grouped SB CALL/JMP/RET operands have Go's TYPE_BRANCH role, not a native
 indexed read; they remain Context without a bound branch/entry contract.
 
+Unnamed x86 source register groups preserve a missing second-group scale as
+zero. This is distinct from an explicit invalid multiplier token. MOVL/Q
+address sources become LEAL/Q in Go's progedit before operand classification;
+those derived LEAs and ordinary physical memory must reject unencodable SIB
+indexes/scales. Audited TYPE_CONST rows instead ignore Reg/Index annotations.
+Do not apply the ordinary SIB guard to named, segment/TLS, branch or decoded
+physical roles, or let source normalization repair an original CFG certificate.
+
 The main implementation entry points are:
 
 - x86/386/amd64: `amd64_blocks.go`, `amd64_needed.go`, `amd64_translate.go`,

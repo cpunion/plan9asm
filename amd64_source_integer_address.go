@@ -15,10 +15,33 @@ func x86UnnamedSourceAddress(operand Operand) (memory MemRef, matched bool, err 
 		return MemRef{}, false, nil
 	}
 	body := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(operand.Sym), "$"))
+	memory, matched, err = parseX86SourceRegisterMemory(body)
+	if err != nil || !matched {
+		return memory, matched, err
+	}
+	if x86SourceMemoryHasSegment(memory) {
+		return MemRef{}, true, fmt.Errorf("%w: unnamed x86 address has an unbound segment/TLS producer: %q", ErrProbeNeedsContext, operand.Sym)
+	}
+	return memory, true, nil
+}
+
+// registerIndirect leaves a missing second-group multiplier at zero. This is
+// valid parser metadata, not an encodable SIB scale. TYPE_CONST may ignore it;
+// physical memory and MOVL/Q's derived LEA must validate it independently.
+func parseX86SourceRegisterMemory(body string) (memory MemRef, matched bool, err error) {
 	if group := x86SymbolPseudoGroup.FindStringSubmatchIndex(body); group != nil {
 		prefix := strings.TrimSpace(body[:group[0]])
 		if _, constant := parseImmExpr(prefix); prefix != "" && !constant {
-			return MemRef{}, false, nil // Complete named SB/AUTO/FP role, including indexes.
+			// SP in the second physical group is an Index, not an AUTO
+			// role. The prefix before the first pseudo spelling contains
+			// no pseudo group, so this check cannot recursively nest.
+			_, physical, prefixErr := parseX86SourceRegisterMemory(prefix)
+			if !physical {
+				return MemRef{}, false, nil // Complete named SB/AUTO/FP role, including indexes.
+			}
+			if prefixErr != nil {
+				return MemRef{}, true, prefixErr
+			}
 		}
 	}
 	for open := 0; open < len(body); open++ {
@@ -36,7 +59,7 @@ func x86UnnamedSourceAddress(operand Operand) (memory MemRef, matched bool, err 
 			// OffRaw, so never let MOVL's symbolic fallback turn it into zero.
 			// Named AUTO and SB/FP roles still belong to their own consumers.
 			if register, _, _, _, groupErr := parseX86SymbolRegisterGroup(body[open:]); groupErr == nil && register != SP {
-				return MemRef{}, true, fmt.Errorf("%w: unresolved x86 source address displacement: %q", ErrProbeNeedsContext, operand.Sym)
+				return MemRef{}, true, fmt.Errorf("%w: unresolved x86 source address displacement: %q", ErrProbeNeedsContext, body)
 			}
 			continue // An expression parenthesis or a named address, not NAME_NONE.
 		}
@@ -76,23 +99,40 @@ func x86UnnamedSourceAddress(operand Operand) (memory MemRef, matched bool, err 
 					return MemRef{}, true, parseErr
 				}
 				memory.Index, memory.Scale = register, scale
-				if memory.Scale == 0 {
-					memory.Scale = 1 // An unscaled second group still supplies Index.
-				}
 			}
 		}
 		if rest != "" {
-			return MemRef{}, true, fmt.Errorf("unnamed x86 address has extra register groups: %q", operand.Sym)
-		}
-		for _, register := range []Reg{memory.Base, memory.Index} {
-			switch register {
-			case CS, DS, ES, SS, FS, GS, "TLS":
-				return MemRef{}, true, fmt.Errorf("%w: unnamed x86 address has an unbound segment/TLS producer: %q", ErrProbeNeedsContext, operand.Sym)
-			}
+			return MemRef{}, true, fmt.Errorf("unnamed x86 address has extra register groups: %q", body)
 		}
 		return memory, true, nil
 	}
 	return MemRef{}, false, nil
+}
+
+func x86SourceMemoryHasSegment(memory MemRef) bool {
+	for _, register := range []Reg{memory.Base, memory.Index} {
+		switch register {
+		case CS, DS, ES, SS, FS, GS, "TLS":
+			return true
+		}
+	}
+	return false
+}
+
+func validateX86SourceMemoryScale(ins Instr) error {
+	if ins.x86Encoded || ins.x86SourceRaw != nil {
+		return nil // A decoded instruction retains its separate physical contract.
+	}
+	for _, operand := range ins.Args {
+		if operand.Kind != OpMem || operand.Mem.Sym != "" || operand.Mem.Segment != "" || x86SourceMemoryHasSegment(operand.Mem) {
+			continue // Not an ordinary NAME_NONE SIB memory operand.
+		}
+		memory := operand.Mem
+		if memory.Index != "" && (memory.Index == SP || memory.Scale != 1 && memory.Scale != 2 && memory.Scale != 4 && memory.Scale != 8) {
+			return fmt.Errorf("x86 source memory has an unencodable SIB index/scale: %q", ins.Raw)
+		}
+	}
+	return nil
 }
 
 func normalizeX86SourceIntegerAddress(ins Instr, arch string) (Instr, bool, error) {
@@ -251,6 +291,9 @@ func normalizeX86SourceIntegerAddresses(file *File, options Options) (*File, err
 			}
 		}
 		for index, ins := range source.Instrs {
+			if err := validateX86SourceMemoryScale(ins); err != nil {
+				return nil, fmt.Errorf("%s: %w", source.Sym, err)
+			}
 			derived, different, err := normalizeX86SourceIntegerAddress(ins, options.Goarch)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", source.Sym, err)

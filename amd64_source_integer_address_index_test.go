@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -56,7 +57,15 @@ func TestX86UnnamedAddressImmediateUnscaledSecondGroup(t *testing.T) {
 // base/index tuple to the selected SDK's independently inspected diagnostic.
 func x86UnnamedScale0OriginalGoRejection(t *testing.T, arch, source string) {
 	t.Helper()
-	match := regexp.MustCompile(`^TEXT addr\(SB\),4,\$0-0\n(MOVL|MOVQ|LEAW|LEAL|LEAQ) (\$?)(-?[0-9]+)\((AX|BP)\)\((AX|CX|DI)\),DX\nRET\n$`).FindStringSubmatch(source)
+	match := regexp.MustCompile(`^TEXT addr\(SB\),4,\$0-0\n(MOVB|MOVW|MOVL|MOVQ|LEAW|LEAL|LEAQ) (\$?)(-?[0-9]+)\((AX|BP)\)\((AX|CX|DI)\),DX\nRET\n$`).FindStringSubmatch(source)
+	if match == nil {
+		// The store controls have exactly the same one-instruction physical
+		// tuple, but bind it from To rather than claiming a From rewrite.
+		store := regexp.MustCompile(`^TEXT addr\(SB\),4,\$0-0\n(MOVB|MOVW|MOVL|MOVQ) DX,(-?[0-9]+)\((AX|BP)\)\((AX|CX|DI)\)\nRET\n$`).FindStringSubmatch(source)
+		if store != nil {
+			match = []string{store[0], store[1], "", store[2], store[3], store[4]}
+		}
+	}
 	if match == nil || arch != "386" && arch != "amd64" || arch == "386" && strings.HasSuffix(match[1], "Q") ||
 		strings.HasPrefix(match[1], "LEA") && match[2] != "" {
 		t.Fatalf("unbound Scale0 rejection fixture: %s / %q", arch, source)
@@ -78,7 +87,7 @@ func x86UnnamedScale0OriginalGoRejection(t *testing.T, arch, source string) {
 		t.Fatalf("exact Scale0 source rejection lost its tuple/exit/lifecycle: %v / %v\nwant %q\ngot %q", err, ctx.Err(), want, output)
 	}
 	for _, changed := range []string{
-		strings.Replace(want, "bad address 0/", "bad address 1/", 1),
+		strings.Replace(want, "bad address 0/", "bad address 3/", 1),
 		strings.Replace(want, "bad address", "foreign address", 1),
 		want + want, want + "unexpected diagnostic\n", "asm: assembly failed\n", "",
 	} {
@@ -370,9 +379,99 @@ func TestX86UnnamedAddressImmediateDirectLEAScale0(t *testing.T) {
 	}
 }
 
+func TestX86UnnamedAddressImmediatePhysicalMemoryThreeAPIs(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, suffix := range []string{"B", "W", "L", "Q"} {
+			if target.arch == "386" && suffix == "Q" {
+				continue
+			}
+			for _, store := range []bool{false, true} {
+				instruction := "MOV" + suffix + " 1(AX)(CX),DX"
+				if store {
+					instruction = "MOV" + suffix + " DX,1(AX)(CX)"
+				}
+				t.Run(target.triple+"/"+instruction, func(t *testing.T) {
+					x86UnnamedScale0OriginalGoRejection(t, target.arch, "TEXT addr(SB),4,$0-0\n"+instruction+"\nRET\n")
+					source := "TEXT ·addr(SB),4,$0-0\nMOVL $2,AX\nMOVL $3,CX\nMOVL $4,DX\n" + instruction + "\nRET\n"
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					pkg := x86AddSubLiteralPackage(t, target.arch, "func addr()\n")
+					resolve := func(symbol string) string { return strings.Replace(symbol, "·", "literal.", 1) }
+					sigs, err := goSigsForAsmFile(pkg, file, resolve, target.arch, nil, nil, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					options := Options{Goarch: target.arch, TargetTriple: target.triple, ResolveSym: resolve, Sigs: sigs}
+					for _, api := range []string{"text", "module", "GoModule"} {
+						t.Run(api, func(t *testing.T) {
+							context := llvm.NewContext()
+							defer context.Dispose()
+							var err error
+							switch api {
+							case "text":
+								_, err = Translate(file, options)
+							case "module":
+								var module llvm.Module
+								module, err = TranslateModuleInContext(context, file, options)
+								if !module.IsNil() {
+									module.Dispose()
+								}
+							case "GoModule":
+								var result *GoModuleTranslation
+								result, err = translateGoModuleInContext(context, pkg, []byte(source), GoModuleOptions{GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: resolve})
+								if result != nil && !result.Module.IsNil() {
+									result.Module.Dispose()
+								}
+							}
+							if err == nil {
+								t.Fatal("physical memory source with a missing SIB multiplier was accepted")
+							}
+						})
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86UnnamedAddressImmediatePhysicalSIBIndexSP(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, scale := range []string{"1", "2", "4", "8"} {
+			for _, op := range []string{"MOVL", "LEAL"} {
+				t.Run(arch+"/"+op+"/"+scale, func(t *testing.T) {
+					x86ScalarLiteralExpectedGoListing(t, arch, "TEXT addr(SB),4,$0-0\n"+op+" 1(AX)(SP*"+scale+"),DX\nRET\n", false)
+				})
+			}
+		}
+		for _, address := range []string{"1(AX)(SP)", "1(SP)(CX)"} {
+			t.Run(arch+"/constant/"+address, func(t *testing.T) {
+				// SP as an ignored annotation does not create a SIB or
+				// a private stack read. Only the original TYPE_CONST
+				// role is independently established by these bytes.
+				source := "TEXT addr(SB),4,$0-0\nADDL $" + address + ",DX\nRET\n"
+				original := x86PackedShiftActualGoBytes(t, arch, source)
+				plain := x86PackedShiftActualGoBytes(t, arch, strings.Replace(source, "$"+address, "$1", 1))
+				if !bytes.Equal(original, plain) {
+					t.Fatalf("constant-class source consumed an ignored SP/index: %x != %x", original, plain)
+				}
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				derived, changed, err := normalizeX86SourceIntegerAddress(file.Funcs[0].Instrs[1], arch)
+				if err != nil || !changed || derived.Args[0].Kind != OpImm || derived.Args[0].Imm != 1 {
+					t.Fatalf("constant-class SP annotation changed role: %+v / %v", derived, err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86UnnamedAddressImmediateCompleteGroupBoundaries(t *testing.T) {
 	valid := []string{
-		"1(AX)", "-16(BP)", "1(CX*1)", "1(CX*2)", "1(CX*4)", "1(CX*8)",
+		"1(AX)", "-16(BP)", "1(SP)", "1(CX*1)", "1(CX*2)", "1(CX*4)", "1(CX*8)",
 		"1(AX)(CX*1)", "1(AX)(CX*2)", "1(AX)(CX*4)", "1(AX)(CX*8)",
 		"1( AX ) ( CX * 2 )",
 	}
@@ -431,6 +530,62 @@ func TestX86UnnamedAddressImmediatePhysicalGroupState(t *testing.T) {
 		for _, op := range []string{"MOVL", "LEAL"} {
 			x86UnnamedScale0OriginalGoRejection(t, arch, "TEXT addr(SB),4,$0-0\n"+op+" 1(AX)(CX),DX\nRET\n")
 		}
+	}
+}
+
+func TestX86UnnamedAddressImmediatePhysicalRoleIsolation(t *testing.T) {
+	for _, source := range []string{
+		"table<>(SB)", "table<>(SB)(AX)(CX)", "a+8(FP)", "a+8(FP)(CX)",
+		"local+8(SP)", "local+8(SP)(AX)(CX)", "2(PC)",
+		"1(FS)", "1(GS)", "1(AX)(FS)", "1(AX)(GS)", "1(TLS)",
+	} {
+		t.Run(source, func(t *testing.T) {
+			// The x86 source adapter must not relabel named/prefix/branch
+			// operands into ordinary SIB permission. Their independent
+			// existing parser and storage/source contracts remain in charge.
+			var before Operand
+			var oldErr error
+			if memory, matched, err := parseX86SymbolIndexedMemory(source); matched {
+				before, oldErr = Operand{Kind: OpMem, Mem: memory}, err
+			} else {
+				before, oldErr = parseOperand(source)
+			}
+			after, err := parseOperandForArch(ArchAMD64, source)
+			if (err == nil) != (oldErr == nil) || err == nil && !reflect.DeepEqual(after, before) {
+				t.Fatalf("independent source role changed: %+v / %v != %+v / %v", after, err, before, oldErr)
+			}
+		})
+	}
+	for _, operand := range []Operand{
+		{Kind: OpSym, Sym: "$1(AX)(CX)"},
+		{Kind: OpMem, Mem: MemRef{Sym: "a+8(FP)", Base: AX, Index: CX}},
+		{Kind: OpMem, Mem: MemRef{Base: AX, Segment: FS, Index: CX}},
+		{Kind: OpMem, Mem: MemRef{Base: AX, Index: FS}},
+		{Kind: OpMem, Mem: MemRef{Base: AX}},
+		{Kind: OpMem, Mem: MemRef{Index: CX, Scale: 1}},
+	} {
+		if err := validateX86SourceMemoryScale(Instr{Args: []Operand{operand}}); err != nil {
+			t.Fatalf("non-SIB/valid missing-register role was rejected: %+v: %v", operand, err)
+		}
+	}
+	for _, scale := range []int64{0, -1, 3, 16} {
+		if err := validateX86SourceMemoryScale(Instr{Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: AX, Index: CX, Scale: scale}}}}); err == nil {
+			t.Fatalf("ordinary source SIB accepted scale %d", scale)
+		}
+	}
+	for _, marker := range []Instr{
+		{x86Encoded: true},
+		{x86SourceRaw: &x86SourceRawInstruction{}},
+	} {
+		marker.Args = []Operand{{Kind: OpMem, Mem: MemRef{Base: AX, Index: CX}}}
+		if err := validateX86SourceMemoryScale(marker); err != nil {
+			t.Fatal("source guard reclassified a decoded physical instruction")
+		}
+	}
+	// ARM64 keeps its independent unscaled-register memory convention.
+	operand, err := parseOperandForArch(ArchARM64, "(R0)(R1)")
+	if err != nil || operand.Mem.Index != "R1" || operand.Mem.Scale != 1 {
+		t.Fatalf("x86 source grammar changed ARM64: %+v / %v", operand, err)
 	}
 }
 
