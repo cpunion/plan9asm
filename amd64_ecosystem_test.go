@@ -4482,7 +4482,7 @@ func TestTranslateAMD64PackedSaturatingNarrowCompleteGoAssemblerForms(t *testing
 
 func TestTranslate386PackedSaturatingNarrowCompleteGoAssemblerForms(t *testing.T) {
 	var src strings.Builder
-	src.WriteString("#include \"textflag.h\"\nTEXT packedsaturatingnarrowforms386(SB),NOSPLIT,$0-0\n")
+	src.WriteString("TEXT packedsaturatingnarrowforms386(SB),4,$0-0\n")
 	for _, op := range []string{"PACKSSLW", "PACKSSWB", "PACKUSWB"} {
 		fmt.Fprintf(&src, "\t%s X1, X7\n", op)
 		fmt.Fprintf(&src, "\t%s (AX), X7\n", op)
@@ -4565,7 +4565,7 @@ func TestTranslate386PackedSaturatingNarrowRejectsVectorForms(t *testing.T) {
 	for _, op := range []string{"VPACKSSDW", "VPACKSSWB", "VPACKUSDW", "VPACKUSWB"} {
 		for _, row := range []string{op + " X1,X2,K1,X3", op + ".Z Z1,Z2,K1,Z3", op + " Z1,Z2,Z8"} {
 			t.Run(row, func(t *testing.T) {
-				source := "#include \"textflag.h\"\nTEXT invalidpackedsaturatingnarrow386(SB),NOSPLIT,$0-0\n" + row + "\nRET\n"
+				source := "TEXT invalidpackedsaturatingnarrow386(SB),4,$0-0\n" + row + "\nRET\n"
 				goAssemblerOracleOutput(t, "386", source, "", false)
 				file, err := Parse(ArchAMD64, source)
 				if err != nil {
