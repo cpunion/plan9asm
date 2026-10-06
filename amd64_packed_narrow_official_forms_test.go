@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 	"reflect"
@@ -154,5 +155,38 @@ func TestX86PackedNarrowE4NFMemoryRemainsObservable(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestX86PackedNarrowLegacyGoModeAndNativeStorageBoundaries(t *testing.T) {
+	for _, opcode := range []string{"PACKSSLW", "PACKSSWB", "PACKUSWB"} {
+		for _, source := range []string{"M0", "(AX)"} {
+			t.Run("386/"+opcode+"/"+source, func(t *testing.T) {
+				assembly := "TEXT pack(SB),4,$0-0\n" + opcode + " " + source + ",M1\nRET\n"
+				goAssemblerOracleOutput(t, "386", assembly, "", false)
+				file, err := Parse(ArchAMD64, assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := Translate(file, Options{Goarch: "386",
+					Sigs: map[string]FuncSig{"pack": {Name: "pack", Ret: Void}}}); err == nil {
+					t.Fatal("Go-rejected mode32 MMX row acquired successful lowering")
+				}
+			})
+		}
+	}
+	for _, opcode := range []string{"PACKSSLW", "PACKSSWB", "PACKUSDW", "PACKUSWB"} {
+		t.Run("virtual-memory/"+opcode, func(t *testing.T) {
+			assembly := "TEXT pack(SB),4,$64-64\n" + opcode + " value+0(FP),X0\nRET\n"
+			goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+			file, err := Parse(ArchAMD64, assembly)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Translate(file, Options{Goarch: "amd64",
+				Sigs: map[string]FuncSig{"pack": x86WordMaddFPType(t)}}); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("virtual independent FP slots invented native legacy alignment", err)
+			}
+		})
 	}
 }
