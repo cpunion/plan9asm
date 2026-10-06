@@ -30,7 +30,7 @@ func x86StackAddressEncoderCarrier(source []byte) error {
 	variables := make(map[string]*ast.CompositeLit)
 	functions := make(map[string]*ast.FuncDecl)
 	for _, declaration := range file.Decls {
-		if function, ok := declaration.(*ast.FuncDecl); ok && function.Recv == nil {
+		if function, ok := declaration.(*ast.FuncDecl); ok {
 			functions[function.Name.Name] = function
 		}
 		general, ok := declaration.(*ast.GenDecl)
@@ -140,6 +140,110 @@ case obj.TYPE_ADDR:
 	if actualAddress == nil || canonical(actualAddress) != canonical(findAddress(wantAddress.Decls[0].(*ast.FuncDecl))) {
 		return fmt.Errorf("complete named address classification changed")
 	}
+	const emitter = `package reference
+func doasm() { switch encoding {
+case Z_il, Zil_:
+	var a *obj.Addr
+	if yt.zcase == Zil_ { a = &p.From } else { a = &p.To }
+	ab.Put1(byte(op))
+	if o.prefix == Pe {
+		v := vaddr(ctxt, p, a, nil)
+		ab.PutInt16(int16(v))
+	} else { ab.relput4(ctxt, cursym, p, a) }
+} }`
+	findEmitter := func(function *ast.FuncDecl) *ast.CaseClause {
+		if function == nil {
+			return nil
+		}
+		var result *ast.CaseClause
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			clause, ok := node.(*ast.CaseClause)
+			if ok && len(clause.List) == 2 && canonical(clause.List[0]) == "Z_il" && canonical(clause.List[1]) == "Zil_" {
+				result = clause
+			}
+			return true
+		})
+		return result
+	}
+	actualEmitter := findEmitter(functions["doasm"])
+	emitterMatched := false
+	for _, reference := range []string{emitter, strings.Replace(emitter, "v := vaddr", "v = vaddr", 1)} {
+		want, err := parser.ParseFile(token.NewFileSet(), "reference.go", reference, 0)
+		if err == nil && actualEmitter != nil && canonical(actualEmitter) == canonical(findEmitter(want.Decls[0].(*ast.FuncDecl))) {
+			emitterMatched = true
+		}
+	}
+	if !emitterMatched {
+		return fmt.Errorf("complete PUSH relocation emitter changed")
+	}
+	const relocation = `package reference
+func (ab *AsmBuf) relput4(ctxt *obj.Link, cursym *obj.LSym, p *obj.Prog, a *obj.Addr) {
+	var rel obj.Reloc
+	v := vaddr(ctxt, p, a, &rel)
+	if rel.Siz != 0 {
+		if rel.Siz != 4 { ctxt.Diag("bad reloc") }
+		rel.Off = int32(p.Pc + int64(ab.Len()))
+		cursym.AddRel(ctxt, rel)
+	}
+	ab.PutInt32(int32(v))
+}`
+	oldRelocation := strings.Replace(relocation,
+		"rel.Off = int32(p.Pc + int64(ab.Len()))\n\t\tcursym.AddRel(ctxt, rel)",
+		"r := obj.Addrel(cursym)\n\t\t*r = rel\n\t\tr.Off = int32(p.Pc + int64(ab.Len()))", 1)
+	relocationMatched := false
+	for _, reference := range []string{relocation, oldRelocation} {
+		want, err := parser.ParseFile(token.NewFileSet(), "reference.go", reference, 0)
+		if err == nil && functions["relput4"] != nil && canonical(functions["relput4"]) == canonical(want.Decls[0]) {
+			relocationMatched = true
+		}
+	}
+	if !relocationMatched {
+		return fmt.Errorf("complete four-byte relocation sink changed")
+	}
+	const value = `package reference
+func vaddr(ctxt *obj.Link, p *obj.Prog, a *obj.Addr, r *obj.Reloc) int64 {
+	if r != nil { *r = obj.Reloc{} }
+	switch a.Name {
+	case obj.NAME_STATIC, obj.NAME_GOTREF, obj.NAME_EXTERN:
+		s := a.Sym
+		if r == nil {
+			ctxt.Diag("need reloc for %v", obj.Dconv(p, a))
+			log.Fatalf("reloc")
+		}
+		if a.Name == obj.NAME_GOTREF {
+			r.Siz = 4
+			r.Type = objabi.R_GOTPCREL
+		} else if useAbs(ctxt, s) {
+			r.Siz = 4
+			r.Type = objabi.R_ADDR
+		} else {
+			r.Siz = 4
+			r.Type = objabi.R_PCREL
+		}
+		r.Off = -1
+		r.Sym = s
+		r.Add = a.Offset
+		return 0
+	}
+	if (a.Type == obj.TYPE_MEM || a.Type == obj.TYPE_ADDR) && a.Reg == REG_TLS {
+		if r == nil {
+			ctxt.Diag("need reloc for %v", obj.Dconv(p, a))
+			log.Fatalf("reloc")
+		}
+		if !ctxt.Flag_shared || isAndroid || ctxt.Headtype == objabi.Hdarwin {
+			r.Type = objabi.R_TLS_LE
+			r.Siz = 4
+			r.Off = -1
+			r.Add = a.Offset
+		}
+		return 0
+	}
+	return a.Offset
+}`
+	wantValue, err := parser.ParseFile(token.NewFileSet(), "reference.go", value, 0)
+	if err != nil || functions["vaddr"] == nil || canonical(functions["vaddr"]) != canonical(wantValue.Decls[0]) {
+		return fmt.Errorf("complete relocation value calculation changed")
+	}
 	return nil
 }
 
@@ -160,6 +264,11 @@ func TestX86StackNamedAddressCompleteGoRuleCarrier(t *testing.T) {
 		{"bytes", "{APUSHL, ypushl, P32, opBytes{0x50,", "{APUSHL, ypushl, P32, opBytes{0x51,"},
 		{"shared", "return ctxt.Arch.Family == sys.I386 && !ctxt.Flag_shared", "return ctxt.Arch.Family == sys.I386"},
 		{"absolute", "if a.Sym != nil && useAbs(ctxt, a.Sym) {", "if a.Sym != nil {"},
+		{"emitter", "case Z_il, Zil_:", "case Z_il, Zil_rr:"},
+		{"operand direction", "if yt.zcase == Zil_ {", "if yt.zcase == Z_il {"},
+		{"relocation sink", "v := vaddr(ctxt, p, a, &rel)", "v := vaddr(ctxt, p, a, nil)"},
+		{"absolute relocation", "} else if useAbs(ctxt, s) {", "} else if s != nil {"},
+		{"missing sink", "log.Fatalf(\"reloc\")", "return 0"},
 	} {
 		t.Run(mutation.name, func(t *testing.T) {
 			if !strings.Contains(string(source), mutation.from) {
