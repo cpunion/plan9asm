@@ -286,6 +286,20 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			if err := sortSemanticRows(plan.GeneratedHeaders); err != nil {
 				return result, err
 			}
+			if role := plan.HeaderPlanning; role != nil {
+				for index := range role.Queries {
+					query := &role.Queries[index]
+					if err := replaceID(&query.Profile.ID); err != nil {
+						return result, err
+					}
+					if err := projectMetadata(query.Metadata); err != nil {
+						return result, err
+					}
+				}
+				if err := sortSemanticRows(role.Queries); err != nil {
+					return result, err
+				}
+			}
 			if metadata := plan.ProxyGoMod; metadata != nil {
 				// Each original inclusion/signature was verified first. Tree
 				// checkpoints may advance between hosts; exact authenticated

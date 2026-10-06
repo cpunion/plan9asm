@@ -1,0 +1,225 @@
+//go:build go1.27
+
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+)
+
+func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCandidate, matrix matrixReport, configs []discoveryBuildConfiguration, targets []string) {
+	t.Helper()
+	plan := matrix.OrdinarySelectionPlan
+	if plan == nil || plan.HeaderPlanning == nil || len(plan.HeaderPlanning.Queries) != 123 ||
+		len(plan.HeaderPlanning.Sources) != 1 || len(plan.GeneratedHeaders) != len(targets) {
+		t.Fatalf("planning observations were lost or confused with executed scopes: %#v", plan.HeaderPlanning)
+	}
+	inventory := newDiscoveryFeatureInventory()
+	if err := mergeDiscoveryFeatureInventory(inventory, plan.headerPlanningInventory); err != nil {
+		t.Fatal(err)
+	}
+	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := discoveryCorpusResult{
+		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
+		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles, BuildConfigurations: configs,
+		Translations: matrix.Success, OrdinarySelectionPlan: plan, FeatureProfiles: refs, FeatureConsumption: matrix.FeatureConsumption,
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay := func(data []byte) error {
+		var actual discoveryCorpusResult
+		if err := json.Unmarshal(data, &actual); err != nil {
+			return err
+		}
+		actual.featureInventory = inventory
+		return validateOrdinaryProfileResult(actual, targets, plan.GoVersion)
+	}
+	if err := replay(encoded); err != nil {
+		t.Fatalf("full11 actual original/header/query/CPP/LLVM portable replay: %v", err)
+	}
+	mutations := map[string]func(*discoveryCorpusResult){
+		"paired role deletion":   func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning = nil },
+		"protocol downgrade":     func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning.Protocol = "legacy" },
+		"paired source deletion": func(r *discoveryCorpusResult) { delete(r.OrdinarySelectionPlan.HeaderPlanning.Sources, "probe.go") },
+		"source bytes changed": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Sources["probe.go"] += "// late mutation\n"
+		},
+		"extra original source": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Sources["extra.go"] = "package header\n"
+		},
+		"query deletion": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries = r.OrdinarySelectionPlan.HeaderPlanning.Queries[1:]
+		},
+		"all queries deleted": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning.Queries = nil },
+		"duplicate query": func(r *discoveryCorpusResult) {
+			role := r.OrdinarySelectionPlan.HeaderPlanning
+			role.Queries = append(role.Queries, role.Queries[0])
+		},
+		"extra unconsumed query": func(r *discoveryCorpusResult) {
+			role := r.OrdinarySelectionPlan.HeaderPlanning
+			query := role.Queries[0]
+			query.Assembly = "extra.s"
+			role.Queries = append(role.Queries, query)
+		},
+		"query requested CPU": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Profile.Request.Overrides = map[string]string{"GOAMD64": "v4"}
+		},
+		"query selected tags": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].BuildTags = []string{"unobserved"}
+		},
+		"query actual profile": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Profile.ID = strings.Repeat("1", 64)
+		},
+		"query language": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].LanguageVersion = "go1.27"
+		},
+		"query selected source hash": func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].CompiledGoSHA256["probe.go"] = strings.Repeat("1", 64)
+		},
+		"paired complete header mutation": func(r *discoveryCorpusResult) {
+			header := &r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0]
+			header.Definitions["Record__size"] = "16"
+			header.DefinitionsSHA256 = gotoolprofile.HeaderDefinitionSHA256(header.Definitions)
+			canonical, err := gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
+			if err != nil {
+				t.Fatal(err)
+			}
+			header.HeaderSHA256 = discoveryFeatureBytesSHA256(canonical)
+		},
+		"SDK source rules deleted": func(r *discoveryCorpusResult) {
+			delete(r.OrdinarySelectionPlan.HeaderPlanning.Rules.SourceSHA256, "src/cmd/compile/internal/types/size.go")
+		},
+		"SDK rule paired substitution":           func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning.Rules.GoVersion = "go1.20.14" },
+		"planning is not execution":              func(r *discoveryCorpusResult) { r.FeatureConsumption = nil; r.Translations = 0 },
+		"planning cannot replace executed query": func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.GeneratedHeaders = nil },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			var changed discoveryCorpusResult
+			if err := json.Unmarshal(encoded, &changed); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&changed)
+			data, err := json.Marshal(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := replay(data); err == nil {
+				t.Fatal("erased/forged native planning authority passed full original portable replay")
+			}
+		})
+	}
+	// The same complete actual result crosses the report, progress and ledger
+	// readers. These first-party fixture headers are not external provenance.
+	assertCPPHeaderPlanningReportTransport(t, result, inventory, targets)
+	physical := discoveryProgress{Provenance: &discoveryCorpusProvenance{}, FeatureInventory: inventory,
+		Candidates: []discoveryCandidateProgress{{OrdinarySelectionPlan: plan, FeatureConsumption: result.FeatureConsumption}}}
+	view, err := semanticAssemblyLedgerProgress(physical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Sources, plan.HeaderPlanning.Sources) ||
+		!reflect.DeepEqual(view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Rules, plan.HeaderPlanning.Rules) {
+		t.Fatal("semantic projection lost complete original bytes or source rules")
+	}
+	for _, query := range view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Queries {
+		if query.Metadata.ProfileID != query.Profile.ID || query.Metadata.Headers[0].ObjectSHA256 != "" {
+			t.Fatal("query semantic identity kept physical objects or lost source-bound profiles")
+		}
+	}
+	if output := os.Getenv("PLAN9ASM_HEADER_PLANNING_ARTIFACTS"); output != "" {
+		if err := os.MkdirAll(output, 0700); err != nil {
+			t.Fatal(err)
+		}
+		for name, value := range map[string]any{"result.json": result, "inventory.json": inventory} {
+			body, err := json.MarshalIndent(value, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(output, name), body, 0600); err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("NATIVE_HEADER_PLANNING_SIZE artifact=%s bytes=%d sha256=%s", name, len(body), discoveryFeatureBytesSHA256(body))
+		}
+	}
+	roleBytes, err := json.Marshal(plan.HeaderPlanning)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("NATIVE_HEADER_PLANNING_FULL11 queries=%d source_copies=%d role_bytes=%d executed_headers=%d LLVM_objects=%d", len(plan.HeaderPlanning.Queries), len(plan.HeaderPlanning.Sources), len(roleBytes), len(plan.GeneratedHeaders), matrix.Success)
+}
+
+func assertCPPHeaderPlanningReportTransport(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {
+	t.Helper()
+	ledger := filepath.Join(t.TempDir(), "scan")
+	if err := os.MkdirAll(filepath.Join(ledger, "records"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	record := discoveryRecord{Kind: "matched", Module: result.Module, Version: result.Version,
+		Architectures: []string{"386", "amd64", "arm", "arm64", "wasm"}, AsmFiles: result.DiscoveredAsmFiles}
+	body, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(ledger, "records", "source.jsonl"), string(body)+"\n")
+	provenance := fixtureDiscoveryProvenance(t, ledger)
+	provenance.GoVersion = result.OrdinarySelectionPlan.GoVersion
+	report := discoveryCorpusReport{
+		SchemaVersion: discoveryReportSchema, Provenance: provenance, Targets: targets,
+		ShardCount: 1, CandidateTotal: 1, EligibleCandidates: 1, Selected: 1, Passed: 1,
+		Translations: result.Translations, FeatureInventory: inventory, Results: []discoveryCorpusResult{result},
+	}
+	if err := validateDiscoveryCorpusAccounting(report); err != nil {
+		t.Fatal(err)
+	}
+	reports := t.TempDir()
+	if err := writeDiscoveryCorpusReport(filepath.Join(reports, "shard-0.json"), report); err != nil {
+		t.Fatal(err)
+	}
+	progress, err := collectDiscoveryProgress(ledger, reports, targets, provenance.Source, 1)
+	if err != nil || !progress.Verified || progress.Translations != len(targets) || progress.ModeTranslations != 0 {
+		t.Fatalf("actual full11 report/progress completion: %v %#v", err, progress)
+	}
+	output := filepath.Join(t.TempDir(), "assembly-ledger")
+	semanticSource := strings.Repeat("a", 64)
+	if err := writeAssemblyLedger(output, progress, semanticSource); err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := readAssemblyLedger(output, progress.LedgerSHA256, semanticSource)
+	if err != nil || !replayed.Verified || replayed.Translations != progress.Translations ||
+		!reflect.DeepEqual(replayed.Candidates[0].OrdinarySelectionPlan.HeaderPlanning, progress.Candidates[0].OrdinarySelectionPlan.HeaderPlanning) {
+		t.Fatalf("actual full11 ledger source/query roundtrip: %v", err)
+	}
+	encoded, err := json.Marshal(replayed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*discoveryProgress){
+		"different target set":          func(p *discoveryProgress) { p.Targets = append(p.Targets, "freebsd/amd64") },
+		"ledger planning role deletion": func(p *discoveryProgress) { p.Candidates[0].OrdinarySelectionPlan.HeaderPlanning = nil },
+		"ledger query paired deletion":  func(p *discoveryProgress) { p.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Queries = nil },
+		"ledger source paired deletion": func(p *discoveryProgress) { p.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Sources = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var altered discoveryProgress
+			if err := json.Unmarshal(encoded, &altered); err != nil {
+				t.Fatal(err)
+			}
+			mutate(&altered)
+			if err := validateAssemblyLedgerProgress(altered); err == nil {
+				t.Fatal("ledger accepted a different complete scope or erased planning authority")
+			}
+		})
+	}
+}

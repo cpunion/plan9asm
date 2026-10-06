@@ -35,6 +35,13 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err != nil {
 		return err
 	}
+	if plan.HeaderPlanning != nil {
+		copy := *plan
+		copy.headerPlanningInventory = result.featureInventory
+		copy.headerPlanningCapture = nil
+		plan = &copy
+		result.OrdinarySelectionPlan = plan
+	}
 	scope, err := discoveryResultAssemblyScope(result)
 	if err != nil {
 		return err

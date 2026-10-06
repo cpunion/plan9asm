@@ -13,8 +13,9 @@ import (
 )
 
 type discoveryProfileCaptureOptions struct {
-	Markers string
-	Cache   *discoveryFeatureObservationCache
+	Markers    string
+	Cache      *discoveryFeatureObservationCache
+	Translator string
 }
 
 // First observe source-tag profiles, then capture CPP from their selected file
@@ -124,6 +125,11 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 			if err := verifyDiscoveryCPPModuleZIP(plan.CPPInputs, plan, download.Zip); err != nil {
 				return nil, nil, nil, nil, "", err
 			}
+			if len(options) == 1 {
+				if err := installDiscoveryHeaderPlanning(ctx, plan, candidate, download, dir, goRoot, binary, markers, options[0].Translator, env, cache); err != nil {
+					return nil, nil, nil, nil, "", err
+				}
+			}
 			profiles, err = captureDiscoveryFeatureProfiles(ctx, binary, markers, env, plan, scope, cache)
 			if err != nil {
 				return nil, nil, nil, nil, "", err
@@ -193,6 +199,14 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 	if err := verifyDiscoveryOrdinaryCPP(plan, download.Dir, goRoot, candidate); err != nil {
 		return nil, nil, nil, nil, "", err
 	}
+	if plan.headerPlanningRecheck != nil {
+		if err := plan.headerPlanningRecheck(); err != nil {
+			return nil, nil, nil, nil, "", err
+		}
+	}
+	// Returned plans replay their immutable query receipts, not this live
+	// producer context or its disposable workspace.
+	plan.headerPlanningCapture, plan.headerPlanningRecheck = nil, nil
 	return plan, profiles, configs, rejected, goRoot, nil
 }
 

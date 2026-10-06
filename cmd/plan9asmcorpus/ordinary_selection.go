@@ -64,6 +64,7 @@ type discoveryOrdinarySelectionPlan struct {
 	ProxyGoMod                   *gotoolprofile.ProxyGoModProof    `json:"proxy_go_mod,omitempty"`
 	GeneratedHeaders             []discoveryGeneratedHeaderQuery   `json:"generated_headers,omitempty"`
 	GeneratedGoSources           map[string]string                 `json:"generated_go_sources,omitempty"`
+	HeaderPlanning               *discoveryCPPHeaderPlanning       `json:"header_planning,omitempty"`
 	PreCPPRejections             []discoveryPreCPPRejection        `json:"pre_cpp_rejections,omitempty"`
 	FortranRejections            []discoveryFortranLoaderRejection `json:"fortran_loader_rejections,omitempty"`
 	MixedPackageRejections       []discoveryMixedPackageRejection  `json:"mixed_package_rejections,omitempty"`
@@ -74,6 +75,10 @@ type discoveryOrdinarySelectionPlan struct {
 	instrumentationGoRoot        string
 	testDependencyContext        context.Context
 	testDependencyModuleCaptures map[*gotoolprofile.TestDependencyProof]map[string]*discoveryTestModuleCapture
+	headerPlanningInventory      *discoveryFeatureInventory
+	headerPlanningCapture        func(discoveryFeatureProfileRequest, string, []string) (*gotoolprofile.GeneratedHeaderProof, error)
+	headerPlanningUsed           map[string]bool
+	headerPlanningRecheck        func() error
 }
 
 // Full sources remain in disposable caches or ignored audit artifacts. The

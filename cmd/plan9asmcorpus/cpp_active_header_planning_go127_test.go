@@ -90,4 +90,5 @@ func TestCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
 		t.Fatalf("complete actual full11 object denominator changed: objects=%d configs=%d consumers=%d NA=%d",
 			matrix.Success, len(configs), len(matrix.FeatureConsumption), matrix.NotApplicable)
 	}
+	assertCPPHeaderPlanningActualPortable(t, candidate, matrix, configs, targets)
 }

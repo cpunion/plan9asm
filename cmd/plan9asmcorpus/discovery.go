@@ -1873,6 +1873,11 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		report.ModeTranslations += matrix.InstrumentationTranslations
 		result.InstrumentationTargetExclusions = matrix.InstrumentationTargetExclusions
 		report.ModeTargetExclusions += matrix.InstrumentationTargetExclusions
+		if matrix.OrdinarySelectionPlan != nil && matrix.OrdinarySelectionPlan.HeaderPlanning != nil {
+			if err := mergeDiscoveryFeatureInventory(report.FeatureInventory, matrix.OrdinarySelectionPlan.headerPlanningInventory); err != nil {
+				return fmt.Errorf("register actual header planning observations: %w", err)
+			}
+		}
 		if len(matrix.FeatureProfiles) != 0 {
 			result.FeatureProfiles, err = registerDiscoveryFeatureProfiles(report.FeatureInventory, matrix.FeatureProfiles)
 			if err != nil {
@@ -2299,7 +2304,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	captureOrdinary := func() error {
 		return runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
 			var err error
-			ordinaryPlan, ordinaryProfiles, ordinaryConfigurations, ordinarySourceItems, cppGoRoot, err = captureDiscoveryOrdinaryProfiles(ctx, candidate, download, cfg.Targets, workDir, env, discoveryProfileCaptureOptions{Markers: profileMarkers, Cache: profileCache})
+			ordinaryPlan, ordinaryProfiles, ordinaryConfigurations, ordinarySourceItems, cppGoRoot, err = captureDiscoveryOrdinaryProfiles(ctx, candidate, download, cfg.Targets, workDir, env, discoveryProfileCaptureOptions{Markers: profileMarkers, Cache: profileCache, Translator: cfg.Translator})
 			return err
 		})
 	}

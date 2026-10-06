@@ -100,10 +100,23 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 				// CPU proposal is retained when actual header presence is needed;
 				// its actual package/header/consumer must still close later.
 				if gotoolprofile.CPPOriginalNeedsGeneratedHeader(err, unit.File) {
-					deferredPresence = true
-					return false, nil
+					if mode != nil || plan.HeaderPlanning == nil && plan.headerPlanningCapture == nil {
+						deferredPresence = true
+						return false, nil
+					}
+					header, queryErr := discoveryPlanningHeader(plan, request, unit.File, request.customTags)
+					if queryErr != nil {
+						if _, unsupported := queryErr.(*discoveryHeaderPlanningUnsupported); unsupported {
+							deferredPresence = true
+							return false, nil
+						}
+						return false, queryErr
+					}
+					observation, _, err = replayDiscoveryOriginalCPP(plan.CPPInputs, *unit, header, defines)
 				}
-				return false, fmt.Errorf("full original CPP planning replay: %w", err)
+				if err != nil {
+					return false, fmt.Errorf("full original CPP planning replay: %w", err)
+				}
 			}
 			keys, err = discoveryCPPBranchCoverage(observation)
 			if err != nil {

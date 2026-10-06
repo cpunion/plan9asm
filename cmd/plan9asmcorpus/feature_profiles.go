@@ -47,6 +47,7 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	if plan == nil || len(plan.Targets) != len(baselines) {
 		return nil, fmt.Errorf("incomplete feature profile baselines")
 	}
+	plan.headerPlanningUsed = make(map[string]bool)
 	if err := ordinarySelectionPackagePathError(plan.Module, "."); err != nil {
 		return nil, fmt.Errorf("feature profiles require a valid module import path: %w", err)
 	}
@@ -155,6 +156,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	sort.Slice(requests, func(i, j int) bool {
 		return discoveryFeatureRequestKey(requests[i]) < discoveryFeatureRequestKey(requests[j])
 	})
+	if err := validateDiscoveryPlanningConsumption(plan); err != nil {
+		return nil, err
+	}
 	return requests, nil
 }
 
