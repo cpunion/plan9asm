@@ -56,6 +56,16 @@ remain explicit skip counters and `completed_with_skips`, never passed roots.
 Any package failure is sticky while all other packages continue. Cancellation
 retains pending/missing entries and owned subprocess cleanup.
 
+Module scope also binds the actual Node interpreter, independently selected
+LLVM 22 wasm linker, selected SDK's complete wasm runtime directory, and
+`llvm-config --libfiles --link-shared` library files. When the actual selected
+package graph contains the native Go LLVM binding, its selected source files
+and an owned loader query bind the library actually providing
+`LLVMContextCreate`. These are dependency observations, not runtime-test passes.
+Missing dependencies fail. Nonempty `NODE_OPTIONS`, `NODE_PATH` and
+`NODE_ICU_DATA` remain unsupported because their delegated runtime inputs are
+not captured; their absent/empty values are recorded in the environment scope.
+
 Coverage combines the checked profiles of **all** main-module packages, not
 just the root. Mode, statement counts, overlaps and counter overflow are
 validated. Owners never publish the uploadable module coverage file; only

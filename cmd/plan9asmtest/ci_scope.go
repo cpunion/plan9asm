@@ -177,6 +177,11 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 			}
 		}
 	}
+	if cfg.Module {
+		if err := captureModuleDependencies(ctx, cfg, stem, environment, origins); err != nil {
+			return scope, err
+		}
+	}
 	for name, path := range origins {
 		hash, err := ciFileSHA(path)
 		if err != nil {
@@ -195,6 +200,22 @@ func captureCIScope(ctx context.Context, cfg config, stem string) (ciScope, erro
 		}
 		for _, file := range files {
 			sdkFiles = append(sdkFiles, filepath.Join(directory, file))
+		}
+	}
+	if cfg.Module {
+		// Include the complete actual selected wasm runtime directory, not only
+		// SDK/src (current SDKs keep these consumers under lib/wasm).
+		directory := filepath.Dir(origins["sdk-wasm/wasm_exec.js"])
+		files, err := ciDirectoryFiles(directory)
+		if err != nil {
+			return scope, err
+		}
+		relative, err := filepath.Rel(root, directory)
+		if err != nil {
+			return scope, err
+		}
+		for _, file := range files {
+			sdkFiles = append(sdkFiles, filepath.Join(relative, file))
 		}
 	}
 	for _, name := range []string{"VERSION", "go.env"} {

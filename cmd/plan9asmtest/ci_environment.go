@@ -26,6 +26,7 @@ var ciProcessControls = []string{
 	"MACOSX_DEPLOYMENT_TARGET", "SOURCE_DATE_EPOCH", "ASAN_OPTIONS", "MSAN_OPTIONS",
 	"TSAN_OPTIONS", "UBSAN_OPTIONS", "LC_ALL", "LANG", "TZ", "SELF_BL_SINK",
 	"TMPDIR", "TMP", "TEMP",
+	"NODE_OPTIONS", "NODE_PATH", "NODE_ICU_DATA",
 }
 
 func captureCIEnvironmentContext(directory string, environment map[string]string) (ciEnvironmentContext, error) {

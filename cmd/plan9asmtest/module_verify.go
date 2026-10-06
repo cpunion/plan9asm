@@ -80,6 +80,9 @@ func verifyModuleOwner(report moduleReport, directory string) error {
 	if err := verifyScopeArtifacts(directory, report.Go, report.Scope); err != nil {
 		return err
 	}
+	if err := verifyModuleDependencyArtifacts(directory, report); err != nil {
+		return err
+	}
 	for _, phase := range []string{"before", "after"} {
 		data, err := os.ReadFile(filepath.Join(directory, "packages-"+phase+".stdout"))
 		if err != nil {
