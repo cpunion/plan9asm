@@ -45,6 +45,20 @@ partition option, retaining actual per-root/subtest outcomes and merging
 checked root coverage profiles. It is Unix-only and does not replace the other
 root-module packages, nested CLIs, benchmarks or corpus gates.
 
+Ordinary suites may use bounded `-workers 2` parallelism. Each child keeps the
+same complete hash partition, flags and deadline; one collector owns all report
+and coverage updates. A failed child does not suppress later partitions.
+Selected cross-runtime CI owners remain serial. For the large corpus-driver
+test package, select that exact package rather than mistaking it for discovered
+external-library compilation:
+
+```sh
+GOFLAGS= go run ./cmd/plan9asmtest \
+  -package github.com/xgo-dev/plan9asm/cmd/plan9asmcorpus \
+  -out _out/corpus-driver-race -shards 32 -workers 2 -timeout 45m -- \
+  -race -p=2
+```
+
 ```sh
 go test ./... -count=1 -timeout=45m
 (cd cmd/plan9asm && go test ./... -count=1)
