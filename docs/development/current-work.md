@@ -37,9 +37,9 @@ Closed evidence at exact earlier snapshots:
 
 - `82bccde5`: current SDK 93 roots / 1,186 children; historical SDK 92 roots /
   1,186 children. No failures, skips or missing terminals.
-- `688267e8`: current SDK 133 roots / 1,903 children passed complete focused
-  race, module vet and build guards. Its historical SDK run must close and be
-  independently read before claiming the matching result.
+- `688267e8`: current SDK 133 roots / 1,903 children and historical SDK
+  132 roots / 1,903 children passed complete focused race, module vet and build
+  guards. Both closed runs were independently read twice.
 - Worker leaf `005018f6`: both current and official historical SDKs passed
   the complete runner package, 30 roots / 44 children each, with race, full
   module vet/build and closed process ownership. Actual CLI tests prove bounded
