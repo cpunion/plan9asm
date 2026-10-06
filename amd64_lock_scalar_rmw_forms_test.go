@@ -61,7 +61,7 @@ func TestX86LockScalarRMWCompleteGoTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rows := regexp.MustCompile(`\{A((?:ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]),\s*(\w+),`).FindAllStringSubmatch(string(data), -1)
+	rows := regexp.MustCompile(`(?m)^\s*\{A((?:ADC|ADD|AND|OR|SBB|SUB|XOR|INC|DEC|NEG|NOT|BTC|BTR|BTS)[BWLQ]),\s*(\w+),`).FindAllStringSubmatch(string(data), -1)
 	if len(rows) != 53 {
 		t.Fatalf("complete scalar LOCK opcode inventory changed: %d", len(rows))
 	}
@@ -135,7 +135,7 @@ func TestX86LockScalarRMWWholeSourceAdmission(t *testing.T) {
 		}
 		for _, form := range forms {
 			t.Run(arch+"/"+form.text, func(t *testing.T) {
-				source := x86NamedLockOracleSource(arch, "LOCK\n\t"+form.text)
+				source := x86NamedLockOracleSource(arch, "CMPL AX,AX\n\tLOCK\n\t"+form.text)
 				machine := x86LockScalarOriginalInstruction(t, arch, source)
 				t.Logf("actual original LOCK object bytes=%x", machine)
 				for _, api := range []string{"text", "module", "Go"} {
@@ -156,7 +156,7 @@ func TestX86LockScalarRMWRawWholeInstructionRetainsContext(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
 		for _, form := range x86LockScalarOracleForms(arch) {
 			t.Run(arch+"/"+form.text, func(t *testing.T) {
-				source := x86NamedLockOracleSource(arch, "LOCK\n\t"+form.text)
+				source := x86NamedLockOracleSource(arch, "CMPL AX,AX\n\tLOCK\n\t"+form.text)
 				machine := x86LockScalarOriginalInstruction(t, arch, source)
 				var body strings.Builder
 				for _, value := range machine {
@@ -165,7 +165,7 @@ func TestX86LockScalarRMWRawWholeInstructionRetainsContext(t *testing.T) {
 				for _, api := range []string{"text", "module", "Go"} {
 					t.Run(api, func(t *testing.T) {
 						ir, err := x86OrderingHintTranslateAPI(t, api,
-							x86NamedLockOracleSource(arch, body.String()),
+							x86NamedLockOracleSource(arch, "CMPL AX,AX\n\t"+body.String()),
 							"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
 						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatal("raw LOCK lost its unresolved whole physical-prefix contract", err)
