@@ -202,7 +202,7 @@ func TestX86FloatMulDivRejectsMalformedBeforeEmission(t *testing.T) {
 	} {
 		t.Run(row, func(t *testing.T) {
 			source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
-			oldReservedZeroing := row == "VMULPS.Z X0,X1,X2" && !goToolchainAtLeast(runtime.Version(), 1, 27)
+			oldReservedZeroing := row == "VMULPS.Z X0,X1,X2" && !goToolchainAtLeast(runtime.Version(), 1, 21)
 			goAssemblerOracleOutput(t, "amd64", source, "", oldReservedZeroing)
 			if oldReservedZeroing {
 				listing := x86InsertExtractGoListing(t, "amd64", source)
