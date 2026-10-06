@@ -19,10 +19,10 @@ func TestX86LockScalarRMWCarryStackAliasesAndIdentityStayContext(t *testing.T) {
 				{"derived stack store", push + "MOV" + word + " SP,BX\nMOV" + width + " BP,(BX)" + pop},
 				{"unknown vector store", push + "MOVOU X0,0(SP)" + pop},
 				{"CSR stack store", push + "STMXCSR 0(SP)" + pop},
-				{"SP replacement before push", "MOV" + word + " $0,SP\n" + push + "POPF" + width},
-				{"POP SP before new push", "PUSH" + word + " BP\nPOP" + word + " SP\n" + push + "POPF" + width},
-				{"LEA SP before push", "LEA" + word + " 0(SP),SP\n" + push + "POPF" + width},
-				{"balanced SP adjustment", "SUB" + word + " $16,SP\n" + push + "POPF" + width + "\nADD" + word + " $16,SP"},
+				{"SP replacement before push", "MOV" + word + " $0,SP\nMOVL $5,DX\n" + push + "POPF" + width},
+				{"POP SP before new push", "PUSH" + word + " BP\nPOP" + word + " SP\nMOVL $5,DX\n" + push + "POPF" + width},
+				{"LEA SP before push", "LEA" + word + " 0(SP),SP\nMOVL $5,DX\n" + push + "POPF" + width},
+				{"balanced SP adjustment", "SUB" + word + " $16,SP\nMOVL $5,DX\n" + push + "POPF" + width + "\nADD" + word + " $16,SP"},
 			} {
 				t.Run(arch+"/"+width+"/"+control.name, func(t *testing.T) {
 					// These accepted objects are unsafe/unknown-input tripwires.
