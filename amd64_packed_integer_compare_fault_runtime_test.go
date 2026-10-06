@@ -99,7 +99,35 @@ func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareNativeMemoryStatus(t *tes
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
-` + prototypes.String() + references.String() + `
+` + prototypes.String() + references.String() + x86PackedIntegerCompareFaultStatusOracle + `
+int main(void) {
+    long page = sysconf(_SC_PAGESIZE);
+    if (page <= 0 || page%64) return 1;
+    uint8_t *memory = mmap(0,(size_t)page*2,PROT_READ|PROT_WRITE,
+                           MAP_PRIVATE|MAP_ANON,-1,0);
+    if (memory == MAP_FAILED) return 1;
+    memset(memory,0x87,(size_t)page);
+    if (mprotect(memory,(size_t)page,PROT_READ) ||
+        mprotect(memory+page,(size_t)page,PROT_NONE)) return 1;
+    uint8_t *boundary = memory+page;
+` + checks.String() + `
+    if (munmap(memory,(size_t)page*2)) return 1;
+    return 0;
+}
+`
+	for _, optimized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
+			text := ir
+			if optimized {
+				text = x86MulDivRoundOptimize(t, text)
+			}
+			compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-fault", triple, text, program, prefix)
+		})
+	}
+	t.Logf("%d dead-result programs at mod16/NULL/read-only guard pages, exact native legacy and independent E4 lane-read status at O0/O2; not native EVEX execution", count)
+}
+
+const x86PackedIntegerCompareFaultStatusOracle = `
 typedef struct { int signal; int code; } Status;
 
 static int observe(void (*fn)(const uint8_t*,uint64_t),const uint8_t *p,
@@ -138,30 +166,42 @@ static int compare(void (*original)(const uint8_t*,uint64_t),
     }
     return 0;
 }
+`
+
+func TestX86PackedIntegerCompareFaultStatusRejectsSymmetricUnexpectedExit(t *testing.T) {
+	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	// The child observations are real, but these deliberately raised signals
+	// test the oracle's status domain, not a memory fault or native opcode.
+	program := `#include <stdint.h>
+#include <stdio.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+` + x86PackedIntegerCompareFaultStatusOracle + `
+static int selectedSignal;
+
+static void unexpected(const uint8_t *p,uint64_t mask) {
+    if (!selectedSignal) {
+        _exit(7);
+    }
+    raise(selectedSignal);
+}
+
+static void complete(const uint8_t *p,uint64_t mask) {}
 
 int main(void) {
-    long page = sysconf(_SC_PAGESIZE);
-    if (page <= 0 || page%64) return 1;
-    uint8_t *memory = mmap(0,(size_t)page*2,PROT_READ|PROT_WRITE,
-                           MAP_PRIVATE|MAP_ANON,-1,0);
-    if (memory == MAP_FAILED) return 1;
-    memset(memory,0x87,(size_t)page);
-    if (mprotect(memory,(size_t)page,PROT_READ) ||
-        mprotect(memory+page,(size_t)page,PROT_NONE)) return 1;
-    uint8_t *boundary = memory+page;
-` + checks.String() + `
-    if (munmap(memory,(size_t)page*2)) return 1;
-    return 0;
+    const int rejected[] = {SIGILL,SIGABRT,SIGFPE,SIGTRAP,0};
+    for (unsigned i = 0; i < sizeof(rejected)/sizeof(rejected[0]); ++i) {
+        selectedSignal = rejected[i];
+        if (!compare(unexpected,unexpected,0,0)) {
+            fprintf(stderr,"symmetric unexpected status accepted: signal=%d\n",selectedSignal);
+            return 1;
+        }
+    }
+    return compare(complete,complete,0,0);
 }
 `
-	for _, optimized := range []bool{false, true} {
-		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
-			text := ir
-			if optimized {
-				text = x86MulDivRoundOptimize(t, text)
-			}
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-fault", triple, text, program, prefix)
-		})
-	}
-	t.Logf("%d dead-result programs at mod16/NULL/read-only guard pages, exact native legacy and independent E4 lane-read status at O0/O2; not native EVEX execution", count)
+	ir := "target triple = \"" + triple + "\"\ndefine void @status_tripwire_object() { ret void }\n"
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-status-tripwire", triple, ir, program, prefix)
 }
