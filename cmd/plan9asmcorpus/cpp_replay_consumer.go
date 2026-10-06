@@ -22,6 +22,10 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 			RequiredExpandedOperands: make(map[string][]gotoolprofile.CPPPackageSearchMiss),
 		},
 	}
+	// Lex each complete source once for this construction, not once per unit.
+	// This invocation-local index grants no authority and is never reused after
+	// source mutation; each consumer still owns new maps and validates all bytes.
+	resources := make(map[string][]discoveryCPPResource, len(inputs.Sources))
 	for id, source := range inputs.Sources {
 		if source.Original == nil {
 			return nil, fmt.Errorf("CPP consumer omitted original source bytes")
@@ -30,6 +34,11 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 		if err != nil {
 			return nil, err
 		}
+		registered, err := discoveryCPPRegisteredResources(inputs, source)
+		if err != nil {
+			return nil, err
+		}
+		resources[id] = registered
 		input.CPPOriginals.Sources[id] = *source.Original
 		if origin == "tool" {
 			input.ToolSources[file] = source.SHA256
@@ -40,12 +49,8 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 	for _, unit := range inputs.Units {
 		input.AsmFiles = append(input.AsmFiles, unit.File)
 		registered := gotoolprofile.CPPOriginalUnit{Includes: make(map[string]string)}
-		for id, source := range inputs.Sources {
-			resources, err := discoveryCPPRegisteredResources(inputs, source)
-			if err != nil {
-				return nil, err
-			}
-			for _, resource := range resources {
+		for id, registeredResources := range resources {
+			for _, resource := range registeredResources {
 				directive, key := resource.directive, id+resource.key
 				if target := unit.Includes[key]; target != "" {
 					if previous := registered.Includes[directive.Include]; previous != "" && previous != target {
