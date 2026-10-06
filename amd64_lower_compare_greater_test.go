@@ -19,15 +19,19 @@ func TestTranslateX86PackedSignedGreaterThanCompleteGoAssemblerForms(t *testing.
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			legacyLast, zLast := 15, 22
+			legacyLast, vectorLeft, vectorRight, zLast := 15, 20, 21, 22
 			if target.goarch == "386" {
-				legacyLast, zLast = 7, 7
+				legacyLast, vectorLeft, vectorRight, zLast = 7, 6, 7, 7
 			}
 			var source strings.Builder
-			source.WriteString("TEXT packedsignedgreaterthanforms(SB),NOSPLIT,$0-0\n")
+			source.WriteString("TEXT packedsignedgreaterthanforms(SB),4,$0-0\n")
 			for _, op := range []string{"PCMPGTB", "PCMPGTW", "PCMPGTL"} {
-				fmt.Fprintf(&source, "\t%s M0, M1\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), M2\n", op)
+				// Py1's MMX encoder row is amd64-only. A frontend-accepted
+				// high vector spelling is likewise not a physical 386 bank.
+				if target.goarch == "amd64" {
+					fmt.Fprintf(&source, "\t%s M0, M1\n", op)
+					fmt.Fprintf(&source, "\t%s 8(AX), M2\n", op)
+				}
 				fmt.Fprintf(&source, "\t%s X0, X%d\n", op, legacyLast)
 				fmt.Fprintf(&source, "\t%s 8(AX), X%d\n", op, legacyLast)
 			}
@@ -37,7 +41,7 @@ func TestTranslateX86PackedSignedGreaterThanCompleteGoAssemblerForms(t *testing.
 				for _, width := range []string{"X", "Y"} {
 					fmt.Fprintf(&source, "\t%s %s0, %s1, %s2\n", op, width, width, width)
 					fmt.Fprintf(&source, "\t%s 8(AX), %s1, %s2\n", op, width, width)
-					fmt.Fprintf(&source, "\t%s %s20, %s21, K3\n", op, width, width)
+					fmt.Fprintf(&source, "\t%s %s%d, %s%d, K3\n", op, width, vectorLeft, width, vectorRight)
 					if target.goarch == "amd64" {
 						fmt.Fprintf(&source, "\t%s %s20, %s21, K1, K3\n", op, width, width)
 					}
@@ -51,15 +55,12 @@ func TestTranslateX86PackedSignedGreaterThanCompleteGoAssemblerForms(t *testing.
 				}
 				if strings.HasSuffix(op, "D") || strings.HasSuffix(op, "Q") {
 					for _, width := range []string{"X", "Y", "Z"} {
-						reg := "21"
-						if width == "Z" && target.goarch == "386" {
-							reg = "6"
-						}
-						fmt.Fprintf(&source, "\t%s.BCST 8(AX), %s%s, K3\n", op, width, reg)
+						fmt.Fprintf(&source, "\t%s.BCST 8(AX), %s%d, K3\n", op, width, vectorRight)
 					}
 				}
 			}
 			source.WriteString("\tRET\n")
+			x86LEAActualTargetGoObject(t, target.goarch, target.triple, source.String())
 
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
@@ -116,6 +117,13 @@ func TestTranslateX86PackedSignedGreaterThanRejectsFormsOutsideGoAssemblerTables
 		t.Run("386_"+strings.NewReplacer(" ", "_").Replace(instruction), func(t *testing.T) {
 			assertX86PackedSignedGreaterThanRejected(t, "386", "i386-unknown-linux-gnu", instruction)
 		})
+	}
+	for _, op := range []string{"PCMPGTB", "PCMPGTW", "PCMPGTL"} {
+		for _, operands := range []string{"M0, M1", "8(AX), M2"} {
+			instruction := op + " " + operands
+			goAssemblerOracleOutput(t, "386", "TEXT bad(SB),4,$0-0\n"+instruction+"\nRET\n", "", false)
+			assertX86PackedSignedGreaterThanRejected(t, "386", "i386-unknown-linux-gnu", instruction)
+		}
 	}
 }
 

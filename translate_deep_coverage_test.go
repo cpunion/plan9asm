@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1182,7 +1183,6 @@ func TestTranslateFuncLinearCastAndErrorCoverage(t *testing.T) {
 		}
 		out := b.String()
 		for _, want := range []string{
-			"add i32 0, 0",
 			"call { i32, i32, i32, i32 } asm sideeffect",
 			"call { i32, i32 } asm sideeffect",
 			"zext i32",
@@ -1190,6 +1190,21 @@ func TestTranslateFuncLinearCastAndErrorCoverage(t *testing.T) {
 			if !strings.Contains(out, want) {
 				t.Fatalf("missing %q in cpux output:\n%s", want, out)
 			}
+		}
+		// The prototype's initial AX/CX values are zero. CPUID replaces CX,
+		// so the following XGETBV must consume that result, not a fabricated
+		// zero or an incidental old temporary-materialization instruction.
+		cpuid := regexp.MustCompile(`(?m)^\s*(%[[:alnum:]_.]+) = call \{ i32, i32, i32, i32 \} asm sideeffect "cpuid", "[^"]*"\(i32 0, i32 0\)`).FindAllStringSubmatch(out, -1)
+		if len(cpuid) != 1 {
+			t.Fatalf("CPUID must consume both prototype zero inputs exactly once:\n%s", out)
+		}
+		cx := regexp.MustCompile(`(?m)^\s*(%[[:alnum:]_.]+) = extractvalue \{ i32, i32, i32, i32 \} `+regexp.QuoteMeta(cpuid[0][1])+`, 2$`).FindAllStringSubmatch(out, -1)
+		if len(cx) != 1 {
+			t.Fatalf("CPUID must retain its actual implicit CX result:\n%s", out)
+		}
+		xgetbv := regexp.MustCompile(`call \{ i32, i32 \} asm sideeffect "xgetbv", "[^"]*"\(i32 `+regexp.QuoteMeta(cx[0][1])+`\)`).FindAllString(out, -1)
+		if len(xgetbv) != 1 {
+			t.Fatalf("XGETBV must consume CPUID's actual CX result exactly once:\n%s", out)
 		}
 	})
 }
