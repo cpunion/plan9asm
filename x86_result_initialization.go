@@ -26,7 +26,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 		return fail("result layout is not one bounded scalar")
 	}
 	frame := int(result.Offset + width)
-	initial := x86ResultState{fp: make([]bool, frame)}
+	initial := x86ResultState{fp: make([]bool, frame), pointerFP: make(map[int64]bool)}
 	autoExtent, autoErr := x86ResultAUTOExtent(fn, goarch)
 	if autoErr != nil {
 		return autoErr
@@ -49,6 +49,9 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 				return fail("overlapping typed frame slots")
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
+		}
+		if slot.Type == Ptr {
+			initial.pointerFP[slot.Offset] = true
 		}
 	}
 	if fn.ArgSize != 0 && (fn.ArgSize < int64(frame) || fn.ArgSize > 4096) {
@@ -77,7 +80,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	}
 	// One bounded byte-work envelope includes both logical domains. AUTO
 	// states do not obtain a second independent frame or iteration budget.
-	byteState := len(initial.fp) + len(initial.auto) + 64
+	byteState := len(initial.fp) + len(initial.auto) + 80
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
@@ -87,6 +90,7 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 	// proved below only for reachable paths; dead instructions must not hide
 	// unknown effects, malformed branches or external entry requirements.
 	top := initial.clone()
+	top.shapeOnly = true
 	for offset := range top.fp {
 		top.fp[offset] = initial.fp[offset] || int64(offset) >= result.Offset
 	}
@@ -205,6 +209,12 @@ type x86ResultState struct {
 	gp    [16]uint8
 	xmm   [16]uint16
 	flags uint8
+
+	// Incoming pointer identities are not numerical register bytes. This is
+	// only an initialization observation, never a pointee/backing permission.
+	pointerFP map[int64]bool // immutable after deriving the actual ABI0 layout
+	pointerGP [16]bool
+	shapeOnly bool // source-wide effect validation, never a reaching state
 }
 
 func (state x86ResultState) clone() x86ResultState {
@@ -224,6 +234,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	for index := range merged.gp {
 		merged.gp[index] &= other.gp[index]
 		merged.xmm[index] &= other.xmm[index]
+		merged.pointerGP[index] = merged.pointerGP[index] && other.pointerGP[index]
 	}
 	merged.flags &= other.flags
 	return merged
@@ -273,7 +284,7 @@ func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool
 	case OpMem:
 		offset, valid := x86ResultAUTOOffset(arg, width, len(state.auto))
 		if !valid {
-			return false
+			return false // An initialized pointer does not initialize its pointee.
 		}
 		for index := offset; index < offset+int(width); index++ {
 			if !state.auto[index] {
@@ -307,6 +318,7 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 		}
 		index, mask, valid := x86ResultGP(arg.Reg, width, arch)
 		if valid {
+			state.pointerGP[index] = false
 			state.gp[index] |= mask
 			if width == 4 || width == 8 {
 				state.gp[index] = 0xff
@@ -327,6 +339,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {
+		return accepted
+	}
 	if ins.Op == OpJMP {
 		return true // The CFG checks its complete target independently.
 	}
