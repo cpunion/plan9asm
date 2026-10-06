@@ -1,9 +1,6 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 type x86PackedSubtractForm struct {
 	x86PackedBinaryForm
@@ -31,9 +28,6 @@ func x86PackedSubtractProperties(ins Instr, goarch string) (x86PackedSubtractFor
 		}
 	}
 	form, err := x86PackedBinaryProperties(ins, goarch, spec)
-	if err == nil && goarch == "386" && form.byteWidth == 64 {
-		err = fmt.Errorf("386 %s has no Z-width form in Go's assembler frontend: %q", ins.Op, ins.Raw)
-	}
 	if err == nil {
 		err = x86Mode32VectorRegisterContext(ins, goarch)
 	}

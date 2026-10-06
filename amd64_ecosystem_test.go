@@ -2988,12 +2988,14 @@ func TestTranslate386PackedIntegerSubtractCompleteGoAssemblerForms(t *testing.T)
 		for _, form := range []string{
 			"X1, X2, X7", "(AX), X2, X7",
 			"Y1, Y2, Y7", "(AX), Y2, Y7",
+			"Z1, Z2, Z7", "(AX), Z2, Z7",
 		} {
 			fmt.Fprintf(&src, "\t%s %s\n", op, form)
 		}
 		if op == "VPSUBD" || op == "VPSUBQ" {
 			fmt.Fprintf(&src, "\t%s.BCST (AX), X2, X7\n", op)
 			fmt.Fprintf(&src, "\t%s.BCST (AX), Y2, Y7\n", op)
+			fmt.Fprintf(&src, "\t%s.BCST (AX), Z2, Z7\n", op)
 		}
 	}
 	src.WriteString("\tRET\n")
@@ -3052,7 +3054,7 @@ func TestTranslateAMD64PackedIntegerSubtractRejectsFormsOutsideGoAssemblerTable(
 func TestTranslate386PackedIntegerSubtractRejectsArchitectureRestrictedForms(t *testing.T) {
 	for _, instruction := range []string{
 		"PSUBB X1, X8",
-		"VPSUBQ Z1, Z2, Z3",
+		"VPSUBQ Z8, Z2, Z3",
 		"VPSUBD X1, X2, K1, X3",
 		"VPSUBQ.Z X1, X2, K1, X3",
 		"VPSUBD.BCST.Z (AX), X2, K1, X3",

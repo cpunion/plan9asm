@@ -15,7 +15,8 @@ const (
 
 // lowerPackedIntegerSubtract implements the complete Go 1.27 packed-integer
 // subtract family: legacy yxm XMM forms and the shared _yvandnpd VEX/EVEX
-// forms, including the 386 frontend's narrower EVEX surface.
+// forms. Go's 386 frontend accepts low-bank X/Y/Z three-operand forms but
+// rejects explicit source masks; high banks retain their physical Context.
 func (c *amd64Ctx) lowerPackedIntegerSubtract(op Op, ins Instr) (ok bool, terminated bool, err error) {
 	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
 	if _, _, _, known := amd64PackedSubtractProperties(base); !known {
