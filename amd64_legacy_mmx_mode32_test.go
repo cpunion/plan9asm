@@ -1,8 +1,11 @@
 package plan9asm
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"testing"
+
+	"golang.org/x/arch/x86/x86asm"
 )
 
 func TestX86YMMMode32LegacyShiftActualGoRows(t *testing.T) {
@@ -25,6 +28,23 @@ func TestX86YMMMode32LegacyShiftActualGoRows(t *testing.T) {
 						text := "TEXT probe(SB),4,$0-0\n" + row + "\nRET\n"
 						want := arch == "amd64" || bank == "X"
 						goAssemblerOracleOutput(t, arch, text, "", want)
+						t.Logf("original source SHA256=%x accepted=%t", sha256.Sum256([]byte(text)), want)
+						if want {
+							code := x86PackedShiftActualGoBytes(t, arch, text)
+							mode := 64
+							if arch == "386" {
+								mode = 32
+							}
+							physical, err := x86asm.Decode(code, mode)
+							destination := x86asm.M1
+							if bank == "X" {
+								destination = x86asm.X1
+							}
+							if err != nil || physical.Args[0] != destination {
+								t.Fatal("original Go selected a different physical destination", row, code, physical, err)
+							}
+							t.Logf("original Go bytes=%x SHA256=%x physical=%v", code, sha256.Sum256(code), physical)
+						}
 
 						form, known, err := x86LegacyMMXReadProperties(x86YMMReadSource(t, row), arch)
 						if !known || (err == nil) != want {

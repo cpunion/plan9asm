@@ -26,9 +26,14 @@ func TestTranslateX86PackedArithmeticRightShiftCompleteGoAssemblerForms(t *testi
 			var source strings.Builder
 			source.WriteString("TEXT packedarithmeticrightshiftforms(SB),NOSPLIT,$0-0\n")
 			for _, op := range []string{"PSRAW", "PSRAL"} {
-				fmt.Fprintf(&source, "\t%s $3, M1\n", op)
-				fmt.Fprintf(&source, "\t%s M0, M1\n", op)
-				fmt.Fprintf(&source, "\t%s 8(AX), M1\n", op)
+				// Go's Py3 MMX rows are named-source mode64 only. Their
+				// complete mode32 rejection controls are independently
+				// exercised by TestX86YMMMode32LegacyShiftActualGoRows.
+				if target.goarch == "amd64" {
+					fmt.Fprintf(&source, "\t%s $3, M1\n", op)
+					fmt.Fprintf(&source, "\t%s M0, M1\n", op)
+					fmt.Fprintf(&source, "\t%s 8(AX), M1\n", op)
+				}
 				fmt.Fprintf(&source, "\t%s $-1, X%d\n", op, legacyLast)
 				fmt.Fprintf(&source, "\t%s X0, X%d\n", op, legacyLast)
 				fmt.Fprintf(&source, "\t%s 8(AX), X%d\n", op, legacyLast)
