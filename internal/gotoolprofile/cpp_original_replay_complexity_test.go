@@ -36,16 +36,27 @@ func cppOriginalValidationFixture(t testing.TB, units int) *ConsumerInput {
 func TestCPPOriginalValidationHashesEverySourceOnce(t *testing.T) {
 	const units = 16
 	input := cppOriginalValidationFixture(t, units)
-	allocations := testing.AllocsPerRun(1, func() {
-		if err := ValidateCPPOriginalInputs(input); err != nil {
-			t.Fatal(err)
-		}
-	})
-	t.Logf("complete source validation allocations: units=%d allocations=%g", units, allocations)
-	// Allow three allocations per complete digest and map/key headroom, but
-	// reject rehashing each already-validated original from the unit loop.
-	if allocations > 3*units+8 {
-		t.Fatalf("CPP units rehash independently validated originals: %g > %d", allocations, 3*units+8)
+	sparse := cppOriginalValidationFixture(t, units)
+	first := sparse.AsmFiles[0]
+	sparse.AsmFiles = []string{first}
+	sparse.CPPOriginals.Units = map[string]CPPOriginalUnit{first: sparse.CPPOriginals.Units[first]}
+	measure := func(in *ConsumerInput) int64 {
+		result := testing.Benchmark(func(b *testing.B) {
+			for index := 0; index < b.N; index++ {
+				if err := ValidateCPPOriginalInputs(in); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+		return result.AllocedBytesPerOp()
+	}
+	sparseBytes, fullBytes := measure(sparse), measure(input)
+	t.Logf("identical complete source graph: one unit=%d B/op; sixteen units=%d B/op", sparseBytes, fullBytes)
+	// Both controls validate every original, including the fifteen originals
+	// without a unit in the sparse graph. Extra units may allocate keys, but
+	// must not allocate another copy of the same complete source per digest.
+	if fullBytes-sparseBytes > units*1024 {
+		t.Fatalf("CPP units rehash independently validated originals: extra bytes=%d > %d", fullBytes-sparseBytes, units*1024)
 	}
 }
 
