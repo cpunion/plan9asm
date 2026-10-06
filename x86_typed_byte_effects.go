@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -109,18 +110,19 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 			return x86TypedByteEffect{}, true, err
 		}
 		width := int64(form.spec.bits / 8)
+		zero := x86ScalarXORZeroRegister(form, width)
 		destinationIndex := 1
 		effect := x86TypedByteEffect{flagsDefined: form.spec.flagsDefined, flagsKilled: form.spec.flagsKilled}
 		if form.spec.unary {
 			destinationIndex = 0
 		} else {
-			effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: form.source, width: width, read: true})
+			effect.operands = append(effect.operands, x86TypedByteOperand{index: 0, operand: form.source, width: width, read: !zero})
 		}
 		if form.spec.stem == "ADC" || form.spec.stem == "SBB" {
 			effect.flagsRead = x86ByteFlagCF
 		}
 		effect.dynamicMemory = form.spec.bitString && form.source.Kind == OpReg && isAMD64MemoryOperand(form.destination)
-		effect.operands = append(effect.operands, x86TypedByteOperand{index: destinationIndex, operand: form.destination, width: width, read: true, write: true})
+		effect.operands = append(effect.operands, x86TypedByteOperand{index: destinationIndex, operand: form.destination, width: width, read: !zero, write: true})
 		return effect, true, nil
 	}
 	if form, recognized, err := x86ScalarExtensionProperties(op, ins, arch); recognized {
@@ -149,6 +151,23 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 		effect.operands = append([]x86TypedByteOperand{{index: 0, operand: form.immediate, width: width, read: true}}, effect.operands...)
 	}
 	return effect, true, nil
+}
+
+// Only a validated XOR row selecting the same physical GP bytes is independent
+// of its incoming value. AL/AX byte aliases are equivalent; AH/AL are not.
+// The grammar has already applied Go's actual REX byte view. This supplies no
+// memory, stack, caller or backing authority and defines no unwritten bytes.
+func x86ScalarXORZeroRegister(form x86LockScalarRMWForm, width int64) bool {
+	if form.spec.stem != "XOR" ||
+		!reflect.DeepEqual(form.source, Operand{Kind: OpReg, Reg: form.source.Reg}) ||
+		!reflect.DeepEqual(form.destination, Operand{Kind: OpReg, Reg: form.destination.Reg}) {
+		return false
+	}
+	source, sourceValid := x86CallerGP(form.source.Reg)
+	destination, destinationValid := x86CallerGP(form.destination.Reg)
+	mask := x86CallerByteMask(form.source.Reg, width)
+	return sourceValid && destinationValid && source == destination && mask != 0 &&
+		mask == x86CallerByteMask(form.destination.Reg, width)
 }
 
 func x86ByteConditionFlags(condition string) uint8 {

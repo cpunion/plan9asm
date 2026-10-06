@@ -401,19 +401,17 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if width == 0 || width == 8 && arch == "386" || len(ins.Args) != 2 {
 		return false
 	}
-	if base != "CMP" && base != "TEST" && base != "ADD" && base != "SUB" && base != "AND" && base != "OR" && base != "XOR" {
+	// Registered scalar RMW instructions are handled by the typed effect above.
+	// Only the nonwriting comparison rows retain this independent fallback.
+	if base != "CMP" && base != "TEST" {
 		return false
 	}
-	zero := base == "XOR" && ins.Args[0].Kind == OpReg && reflect.DeepEqual(ins.Args[0], ins.Args[1])
-	if !zero && (!x86ResultRead(ins.Args[0], width, state, owned, arch) || !x86ResultRead(ins.Args[1], width, state, owned, arch)) {
+	if !x86ResultRead(ins.Args[0], width, state, owned, arch) || !x86ResultRead(ins.Args[1], width, state, owned, arch) {
 		return false
 	}
 	state.flags = x86ByteFlagsAll
-	if base == "AND" || base == "OR" || base == "XOR" || base == "TEST" {
+	if base == "TEST" {
 		state.flags &^= x86ByteFlagAF // The architecture leaves AF undefined.
 	}
-	if base == "CMP" || base == "TEST" {
-		return true
-	}
-	return ins.Args[1].Kind == OpReg && x86ResultStore(ins.Args[1], width, state, owned, resultOffset, arch)
+	return true
 }
