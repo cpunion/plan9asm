@@ -61,6 +61,10 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err != nil {
 		return llvm.Module{}, err
 	}
+	file, err = normalizeX86SourceIntegerAddresses(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
 	file, err = coalesceX86Continuations(file, opt)
 	if err != nil {
 		return llvm.Module{}, err

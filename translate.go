@@ -237,6 +237,10 @@ func translateIRText(file *File, opt Options) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	file, err = normalizeX86SourceIntegerAddresses(file, opt)
+	if err != nil {
+		return "", err
+	}
 	file, err = coalesceX86Continuations(file, opt)
 	if err != nil {
 		return "", err
