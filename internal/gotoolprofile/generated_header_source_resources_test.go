@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
@@ -123,6 +124,41 @@ func TestGeneratedHeaderSourceStringResourceCheckedBoundaries(t *testing.T) {
 	budget.work = 100000
 	if _, err := budget.expression(literal, 0); !NativeHeaderSourceDomainUnsupported(err) {
 		t.Fatal("exhausted precheck work acquired query authority")
+	}
+}
+
+func TestGeneratedHeaderSourceSelectorResourcesCoverOriginalReceivers(t *testing.T) {
+	for _, test := range []struct {
+		name, expression string
+		exceeds          bool
+	}{
+		{"field", `struct { Text string }{Text: "abcdef"}.Text`, true},
+		{"parenthesized", `(struct { Text string }{Text: "abcdef"}).Text`, true},
+		{"nested", `struct { Inner struct { Text string } }{Inner: struct { Text string }{Text: "abcdef"}}.Inner.Text`, true},
+		{"sizeof", `unsafe.Sizeof(struct { Text string }{Text: "abcdef"}.Text)`, true},
+		{"alignof", `unsafe.Alignof(struct { Text string }{Text: "abcdef"}.Text)`, true},
+		{"offsetof", `unsafe.Offsetof(struct { Text string }{Text: "abcdef"}.Text)`, true},
+		{"ordinary field", `struct { Value uint64 }{}.Value`, false},
+		{"builtin property", `unsafe.Sizeof(struct { Value uint64 }{}.Value)`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expression, err := parser.ParseExpr(test.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Exercise only the existing resource observer, never materialize a
+			// Go constant or execute the receiver. The original witness is tiny.
+			budget := &nativeHeaderStringBudget{limit: 32, bindings: make(map[string]ast.Expr),
+				memo: make(map[string]uint64), active: make(map[string]bool)}
+			width, err := budget.expression(expression, 0)
+			if test.exceeds {
+				if !NativeHeaderSourceDomainUnsupported(err) {
+					t.Fatalf("selector receiver bypassed its original string resource bound: width=%d error=%v", width, err)
+				}
+			} else if err != nil || width > budget.limit {
+				t.Fatalf("small original receiver lost its bounded query domain: width=%d error=%v", width, err)
+			}
+		})
 	}
 }
 
