@@ -78,11 +78,11 @@ func TestCrossLinuxRuntimeMatrixX86PackedIntegerCompareNativeMemoryStatus(t *tes
 					masks = []uint64{0, 1, uint64(1) << uint(lanes-1), ^uint64(0)}
 				}
 				for _, mask := range masks {
-					fmt.Fprintf(&checks, "    for (int offset = 0; offset < 16; ++offset) {\n        if (compare(reference%d,%s,memory+offset,UINT64_C(%d))) return 1;\n    }\n", count-1, name, mask)
+					fmt.Fprintf(&checks, "    for (int offset = 0; offset < 16; ++offset) {\n        if (compare(reference%d,%s,memory+offset,UINT64_C(%d),2)) return 1;\n    }\n", count-1, name, mask)
 					for _, offset := range []int{0, 1, bits / 8, 16, 32, 64} {
-						fmt.Fprintf(&checks, "    if (compare(reference%d,%s,boundary-%d,UINT64_C(%d))) return 1;\n", count-1, name, offset, mask)
+						fmt.Fprintf(&checks, "    if (compare(reference%d,%s,boundary-%d,UINT64_C(%d),2)) return 1;\n", count-1, name, offset, mask)
 					}
-					fmt.Fprintf(&checks, "    if (compare(reference%d,%s,0,UINT64_C(%d))) return 1;\n", count-1, name, mask)
+					fmt.Fprintf(&checks, "    if (compare(reference%d,%s,0,UINT64_C(%d),2)) return 1;\n", count-1, name, mask)
 				}
 			}
 		}
@@ -155,7 +155,7 @@ static int observe(void (*fn)(const uint8_t*,uint64_t),const uint8_t *p,
 
 static int compare(void (*original)(const uint8_t*,uint64_t),
                    void (*translated)(const uint8_t*,uint64_t),
-                   const uint8_t *p,uint64_t mask) {
+                   const uint8_t *p,uint64_t mask,int expectation) {
     Status a,b;
     if (observe(original,p,mask,&a) || observe(translated,p,mask,&b)) return 1;
     if (a.signal != b.signal || a.code != b.code) {
@@ -194,14 +194,43 @@ int main(void) {
     const int rejected[] = {SIGILL,SIGABRT,SIGFPE,SIGTRAP,0};
     for (unsigned i = 0; i < sizeof(rejected)/sizeof(rejected[0]); ++i) {
         selectedSignal = rejected[i];
-        if (!compare(unexpected,unexpected,0,0)) {
+        if (!compare(unexpected,unexpected,0,0,2)) {
             fprintf(stderr,"symmetric unexpected status accepted: signal=%d\n",selectedSignal);
             return 1;
         }
     }
-    return compare(complete,complete,0,0);
+    return compare(complete,complete,0,0,0);
 }
 `
 	ir := "target triple = \"" + triple + "\"\ndefine void @status_tripwire_object() { ret void }\n"
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-status-tripwire", triple, ir, program, prefix)
+}
+
+func TestX86PackedIntegerCompareFaultStatusRequiresSuccessfulReadableControl(t *testing.T) {
+	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	// Deliberately raised memory signals are classification tripwires. They do
+	// not replace the independently mapped native-width fixtures above.
+	program := `#include <stdint.h>
+#include <stdio.h>
+#include <signal.h>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+` + x86PackedIntegerCompareFaultStatusOracle + `
+static void unexpectedMemoryFault(const uint8_t *p,uint64_t mask) {
+    raise(SIGSEGV);
+}
+
+static void complete(const uint8_t *p,uint64_t mask) {}
+
+int main(void) {
+    if (!compare(unexpectedMemoryFault,unexpectedMemoryFault,0,0,0)) {
+        fprintf(stderr,"symmetric memory fault replaced required successful control\n");
+        return 1;
+    }
+    return compare(complete,complete,0,0,0);
+}
+`
+	ir := "target triple = \"" + triple + "\"\ndefine void @readable_tripwire_object() { ret void }\n"
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed-compare-readable-tripwire", triple, ir, program, prefix)
 }
