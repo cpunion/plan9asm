@@ -43,7 +43,10 @@ const discoveryFeatureProfileLimit = 64
 // Go driver, including defaults and experiment dependencies. One matching
 // profile per source pair preserves feature-only inputs without claiming an
 // exhaustive enumeration of all possible toolchain experiment combinations.
-func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, baselines []*discoveryTargetFeatures) ([]discoveryFeatureProfileRequest, error) {
+func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, baselines []*discoveryTargetFeatures, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
+	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+		return nil, err
+	}
 	if plan == nil || len(plan.Targets) != len(baselines) {
 		return nil, fmt.Errorf("incomplete feature profile baselines")
 	}
@@ -90,6 +93,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	}
 	seenTargets := make(map[string]bool)
 	for _, baseline := range baselines {
+		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return nil, err
+		}
 		if baseline == nil || baseline.GoVersion != plan.GoVersion || seenTargets[baseline.Target] || !containsTargetFeature(plan.Targets, baseline.Target) {
 			return nil, fmt.Errorf("missing or conflicting actual feature baseline")
 		}
@@ -109,6 +115,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			return io.NopCloser(bytes.NewReader(data)), nil
 		}
 		for _, asmFile := range asmFiles {
+			if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+				return nil, err
+			}
 			if _, exists := contents[asmFile]; !exists {
 				return nil, fmt.Errorf("missing profile assembly source %s", asmFile)
 			}
@@ -127,6 +136,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			}
 			sort.Strings(goFiles)
 			for _, goFile := range goFiles {
+				if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+					return nil, err
+				}
 				var selection *discoveryInstrumentationSelectionModel
 				if discoveryInstrumentationAssemblyRequired(plan, asmFile, baseline.Target) {
 					selection = &discoveryInstrumentationSelectionModel{}
@@ -140,7 +152,7 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 					if err := add(request); err != nil {
 						return nil, err
 					}
-					cppRequests, err := planDiscoveryCPPFeaturePair(plan, ctx, baseline, asmFile, goFile, request)
+					cppRequests, err := planDiscoveryCPPFeaturePair(plan, ctx, baseline, asmFile, goFile, request, contexts...)
 					if err != nil {
 						return nil, fmt.Errorf("CPP profiles for %s + %s on %s: %w", asmFile, goFile, baseline.Target, err)
 					}
@@ -421,7 +433,7 @@ func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir str
 	if err := captureDiscoveryInstrumentationDenominator(plan, asmFiles, baselines); err != nil {
 		return nil, err
 	}
-	requests, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines)
+	requests, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -448,19 +460,25 @@ func captureDiscoveryFeatureProfiles(ctx context.Context, goBinary, ownedDir str
 		profile := discoveryFeatureProfile{ID: discoveryFeatureProfileID(observed), Request: request, Observed: observed}
 		profiles = append(profiles, profile)
 	}
-	if err := validateDiscoveryFeatureProfiles(plan, asmFiles, profiles); err != nil {
+	if err := validateDiscoveryFeatureProfiles(plan, asmFiles, profiles, ctx); err != nil {
 		return nil, fmt.Errorf("actual source-required profiles: %w", err)
 	}
 	return profiles, nil
 }
 
-func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, profiles []discoveryFeatureProfile) error {
+func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles []string, profiles []discoveryFeatureProfile, contexts ...context.Context) error {
+	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+		return err
+	}
 	if plan == nil || len(profiles) == 0 || len(profiles) > discoveryFeatureProfileLimit || len(plan.Targets) == 0 {
 		return fmt.Errorf("missing or unbounded source-required actual feature profiles")
 	}
 	var baselines []*discoveryTargetFeatures
 	byRequest, byID := make(map[string]discoveryFeatureProfile), make(map[string]bool)
 	for _, profile := range profiles {
+		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return err
+		}
 		if err := validateDiscoveryTargetFeatures(profile.Observed); err != nil {
 			return err
 		}
@@ -488,7 +506,7 @@ func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmF
 			baselines = append(baselines, profile.Observed)
 		}
 	}
-	wanted, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines)
+	wanted, err := planDiscoveryFeatureProfiles(plan, asmFiles, baselines, contexts...)
 	if err != nil {
 		return err
 	}

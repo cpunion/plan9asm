@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -26,7 +27,10 @@ func instrumentationRequirementKey(requirement discoveryInstrumentationRequireme
 	return string(encoded), err
 }
 
-func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectionPlan, baselines []*discoveryTargetFeatures, files []string) ([]discoveryInstrumentationRequirement, error) {
+func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectionPlan, baselines []*discoveryTargetFeatures, files []string, contexts ...context.Context) ([]discoveryInstrumentationRequirement, error) {
+	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+		return nil, err
+	}
 	proof := plan.InstrumentationPlan
 	if proof == nil || proof.CPPInputs == nil {
 		return nil, fmt.Errorf("mode CPU planning lacks its original CPP registration")
@@ -58,6 +62,9 @@ func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectio
 	byKey := make(map[string]*discoveryInstrumentationRequirement)
 	for _, requirement := range proof.Requirements {
 		baseline := byTarget[requirement.Target]
+		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return nil, err
+		}
 		if baseline == nil || requirement.BaselineID != discoveryFeatureProfileID(baseline) {
 			return nil, fmt.Errorf("mode CPU request changed its independently observed baseline")
 		}
@@ -83,12 +90,15 @@ func planDiscoveryInstrumentationCPPRequirements(plan *discoveryOrdinarySelectio
 			Expected:  requirement.Expected, customTags: requirement.Tags,
 		}
 		for _, pair := range requirement.Pairs {
+			if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+				return nil, err
+			}
 			// An officially excluded target has no selected CPP roots. Such a
 			// requirement still keeps its independent early-rule witness.
 			if !instrumentationCPPUnitPresent(proof.CPPInputs, pair[0]) {
 				continue
 			}
-			requests, err := planDiscoveryCPPFeaturePairWithMode(&cppPlan, ctx, baseline, pair[0], pair[1], initial, model)
+			requests, err := planDiscoveryCPPFeaturePairWithMode(&cppPlan, ctx, baseline, pair[0], pair[1], initial, model, contexts...)
 			if err != nil {
 				return nil, fmt.Errorf("mode CPU pair %s + %s: %w", pair[0], pair[1], err)
 			}

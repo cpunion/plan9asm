@@ -185,7 +185,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 				return err
 			}
 			defer func() { proof.headerPlanningCapture = nil }()
-			proof.CPPRequirements, err = planDiscoveryInstrumentationCPPRequirements(plan, discoveryInstrumentationBaselines(profiles), candidate.AsmFiles)
+			proof.CPPRequirements, err = planDiscoveryInstrumentationCPPRequirements(plan, discoveryInstrumentationBaselines(profiles), candidate.AsmFiles, ctx)
 			return err
 		}); err != nil {
 			for index := range proof.Outcomes {

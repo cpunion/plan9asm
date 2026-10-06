@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"go/build"
 	"path"
@@ -15,11 +16,14 @@ import (
 // environments and replay local macro definedness before proposing profiles.
 // Only reachable branch sides require profiles; inactive outer conditions do
 // not create a claim of branch execution or full instruction-form coverage.
-func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest) ([]discoveryFeatureProfileRequest, error) {
-	return planDiscoveryCPPFeaturePairWithMode(plan, ctx, baseline, asmFile, goFile, initial, nil)
+func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
+	return planDiscoveryCPPFeaturePairWithMode(plan, ctx, baseline, asmFile, goFile, initial, nil, contexts...)
 }
 
-func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel) ([]discoveryFeatureProfileRequest, error) {
+func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
+	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+		return nil, err
+	}
 	if plan.DocumentationSourceProtocol == discoveryDocumentationProtocol && possibleDocumentationDirectory(plan, path.Dir(asmFile)) {
 		sources, directories, err := ordinarySelectionBytes(plan)
 		if err != nil {
@@ -84,6 +88,9 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	deferredPresence := !fullReplay && discoveryCPPDeferredPresenceMayAffectCPU(*unit, directives)
 	covered := make(map[string]bool)
 	cover := func(request discoveryFeatureProfileRequest) (bool, error) {
+		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return false, err
+		}
 		env := cloneDiscoveryCPPEnvironment(baseline.Environment)
 		for key, value := range request.Overrides {
 			env[key] = value
@@ -159,6 +166,9 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	}
 	var requests []discoveryFeatureProfileRequest
 	for _, value := range values {
+		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return nil, err
+		}
 		if err := validateDiscoveryCPUEnvironment(ctx.GOARCH, value, minor); err != nil {
 			continue
 		}
