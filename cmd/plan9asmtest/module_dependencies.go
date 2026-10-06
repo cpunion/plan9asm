@@ -164,6 +164,7 @@ type moduleLLVMPackage struct {
 type moduleLoadedLibrary struct {
 	Index int    `json:"configured_library_index"`
 	Path  string `json:"actual_loaded_path"`
+	SHA   string `json:"actual_loaded_sha256,omitempty"`
 }
 
 func moduleLLVMBinding(data []byte) (*moduleLLVMPackage, error) {
@@ -272,7 +273,12 @@ func captureModuleLLVMBinding(ctx context.Context, cfg config, stem string, libr
 	for index, library := range libraries {
 		candidate, err := os.Stat(library)
 		if err == nil && os.SameFile(info, candidate) {
-			return ciWriteJSON(stem+"-llvm-loaded-library.json", moduleLoadedLibrary{Index: index, Path: path})
+			hash, err := ciFileSHA(path)
+			if err != nil {
+				return err
+			}
+			origins["llvm-loaded"] = path
+			return ciWriteJSON(stem+"-llvm-loaded-library.json", moduleLoadedLibrary{Index: index, Path: path, SHA: hash})
 		}
 	}
 	return fmt.Errorf("actual Go LLVM binding loaded a different configured library")
@@ -384,6 +390,9 @@ func verifyModuleDependencyArtifacts(directory string, report moduleReport) erro
 			return fmt.Errorf("actual LLVM binding source denominator differs")
 		}
 		if binding == nil {
+			if origins["llvm-loaded"] != "" {
+				return fmt.Errorf("unconsumed Go LLVM loader origin")
+			}
 			continue
 		}
 		source, err := os.ReadFile(stem + "-llvm-loader.go")
@@ -398,10 +407,12 @@ func verifyModuleDependencyArtifacts(directory string, report moduleReport) erro
 		if err != nil || loaded.Index < 0 || loaded.Index >= len(libraries) || !filepath.IsAbs(loaded.Path) || string(data) != loaded.Path+"\n" {
 			return fmt.Errorf("actual Go LLVM loader observation differs: %v", err)
 		}
-		actual, err := os.Stat(loaded.Path)
-		configured, configErr := os.Stat(libraries[loaded.Index])
-		if err != nil || configErr != nil || !os.SameFile(actual, configured) {
-			return fmt.Errorf("actual Go LLVM loader file identity differs")
+		// Producer capture already proves SameFile on the actual loaded and
+		// configured files. These paths need not exist on an aggregate runner;
+		// retain its byte-bound observation and independently scoped tool hash.
+		configuredHash := report.Scope.Tools[fmt.Sprintf("llvm-shared/%d", loaded.Index)]
+		if len(loaded.SHA) != 64 || loaded.SHA != configuredHash || loaded.Path != origins["llvm-loaded"] || report.Scope.Tools["llvm-loaded"] != loaded.SHA {
+			return fmt.Errorf("actual Go LLVM loader byte identity differs")
 		}
 	}
 	return nil

@@ -101,6 +101,35 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err := verifyModuleDependencyArtifacts(relocated, report); err != nil {
 		t.Fatal("portable reader required a retired producer physical path", err)
 	}
+	path := filepath.Join(relocated, "before-llvm-loaded-library.json")
+	var loaded moduleLoadedLibrary
+	if err := ciReadJSON(path, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []string{"missing-byte-identity", "changed-byte-identity", "changed-configured-index", "changed-loaded-path"} {
+		t.Run(mutation, func(t *testing.T) {
+			changed := loaded
+			switch mutation {
+			case "missing-byte-identity":
+				changed.SHA = ""
+			case "changed-byte-identity":
+				changed.SHA = strings.Repeat("0", 64)
+			case "changed-configured-index":
+				changed.Index = len(libraries)
+			case "changed-loaded-path":
+				changed.Path = goBinary
+			}
+			if err := ciWriteJSON(path, changed); err != nil {
+				t.Fatal(err)
+			}
+			if err := verifyModuleDependencyArtifacts(relocated, report); err == nil {
+				t.Fatal("changed/missing loaded library identity accepted")
+			}
+			if err := ciWriteJSON(path, loaded); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 func moduleLLVMConsumerFixture(t *testing.T) string {
