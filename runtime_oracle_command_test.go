@@ -203,6 +203,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_fp_pair_observation_test.go",
 		"arm64_fp_padding_runtime_test.go",
 		"arm64_result_tail_native_runtime_test.go",
+		"arm64_result_tail_compiler_audit_test.go",
 		"amd64_mov_extension_caller_test.go",
 		"amd64_mov_extension_runtime_test.go",
 		"amd64_raw_movsxd_runtime_test.go",

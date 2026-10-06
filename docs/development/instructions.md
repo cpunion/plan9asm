@@ -375,6 +375,15 @@ Keep the missing-slot failure until a real caller/backing contract closes the
 complete native effect. Check the independent nine-width native observer and
 all three translation APIs when changing this boundary.
 
+`TestARM64ABI0ResultTailCompilerCallerObservation` independently compiles an
+ordinary Go caller and its ABI wrapper with the original eight-byte ASM store.
+Both SDKs allocate outgoing storage but read only the declared uint32 result.
+This observation is not proof that every caller ignores the tail: the separate
+nine-width ASM observer reads it, and the current SDK's atomic entry has public
+linkname and cross-package ASM tail-call roles. Run the current-source audit as
+well as the cross-SDK fixtures. ABI0's rounded allocation size is not a writable
+FrameSlot and must not erase the missing native caller/backing contract.
+
 The framed raw-leaf proof registers PC-relative WORD branches through the same
 exact source-boundary checker as translation. It independently checks both
 original and normalized CFGs, including dead components; named normalized
