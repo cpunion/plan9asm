@@ -87,6 +87,8 @@ fields = (
     "encoder_opcodes_observed_in_corpus",
     "coverage_fingerprint",
     "encoder_fingerprint",
+    "encoder_rules",
+    "encoder_rule_fingerprint",
 )
 
 for report_path in report_paths:
@@ -122,6 +124,23 @@ for report_path in report_paths:
             f"missing coverage baseline for {version}/{arch}; "
             "inspect the full JSON report and update the baseline intentionally"
         )
+    # AVX metadata is independently retained only for x86 so far. Missing
+    # metadata is unknown, never an empty-rule or implementation certificate.
+    # Other architectures retain their existing class/namespace coverage;
+    # do not fabricate full encoding-rule coverage for them.
+    if arch in {"386", "amd64"}:
+        for role, entry in (("report", report), ("baseline", expected)):
+            count = entry.get("encoder_rules")
+            fingerprint = entry.get("encoder_rule_fingerprint")
+            if (
+                type(count) is not int or count <= 0
+                or not isinstance(fingerprint, str)
+                or not re.fullmatch(r"[0-9a-f]{64}", fingerprint)
+            ):
+                raise SystemExit(
+                    f"{version}/{arch}: {role} is missing complete "
+                    "encoder_rules/encoder_rule_fingerprint metadata"
+                )
     changed = [
         field for field in fields
         if report.get(field) != expected.get(field)
