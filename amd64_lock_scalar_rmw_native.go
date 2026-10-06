@@ -7,37 +7,49 @@ import (
 )
 
 // A namespace is a compiler name allocation, never a source certificate.
-func x86LockScalarNamespace(file *File, resolve func(string) string, sigs map[string]FuncSig) string {
+func x86LockScalarNamespace(file *File, arch string, resolve func(string) string, sigs map[string]FuncSig) string {
+	if len(x86LockScalarRMWHelperForms(file, arch)) == 0 {
+		return ""
+	}
 	var names []string
 	reserve := func(symbol string) {
 		names = append(names, symbol)
-		if symbol != "" && resolve != nil {
-			names = append(names, resolve(symbol))
-		}
 	}
 	for name, sig := range sigs {
+		// Signature keys and names are already final LLVM symbols.
 		reserve(name)
 		reserve(sig.Name)
 	}
 	for _, fn := range file.Funcs {
-		reserve(fn.Sym)
+		name := resolve(fn.Sym)
+		reserve(funcSigSymbol(name, sigs[name]))
 		for _, ins := range fn.Instrs {
 			for _, operand := range ins.Args {
-				reserve(operand.Sym)
-				reserve(operand.Mem.Sym)
+				symbol := ""
+				if operand.Kind == OpSym {
+					symbol = strings.TrimSpace(strings.TrimPrefix(operand.Sym, "*"))
+				} else if operand.Kind == OpMem {
+					symbol = operand.Mem.Sym
+				}
+				if base, _, ok := parseSBRef(symbol); ok && base != "" {
+					// Only SB identities can become LLVM globals; local branch
+					// labels and FP/AUTO component names never reach ResolveSym.
+					base = strings.TrimPrefix(base, "$")
+					reserve(resolveDataAddressSymbol(file, base, resolve, sigs))
+				}
 			}
 		}
 	}
 	for _, data := range file.Data {
-		reserve(data.Sym)
+		reserve(resolveDataSymbol(data.Sym, resolve))
 		if data.Addr != "" {
 			if symbol, _, err := dataAddress(data); err == nil {
-				reserve(symbol)
+				reserve(resolveDataAddressSymbol(file, symbol, resolve, sigs))
 			}
 		}
 	}
 	for _, global := range file.Globl {
-		reserve(global.Sym)
+		reserve(resolveDataSymbol(global.Sym, resolve))
 	}
 	for number := 0; ; number++ {
 		prefix := fmt.Sprintf("__plan9asm_lock_rmw_%d_", number)
@@ -78,11 +90,11 @@ func x86LockScalarPointerType(form x86LockScalarRMWForm) string {
 	return "ptr"
 }
 
-func emitX86LockScalarRMWHelpers(b *strings.Builder, file *File, arch, namespace string) {
-	if file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" {
-		return
-	}
+func x86LockScalarRMWHelperForms(file *File, arch string) map[string]x86LockScalarRMWForm {
 	forms := make(map[string]x86LockScalarRMWForm)
+	if file == nil || file.Arch != ArchAMD64 || arch != "amd64" && arch != "386" {
+		return forms
+	}
 	for _, fn := range file.Funcs {
 		for _, block := range amd64SplitBlocks(fn) {
 			for index := 1; index < len(block.instrs); index++ {
@@ -94,17 +106,25 @@ func emitX86LockScalarRMWHelpers(b *strings.Builder, file *File, arch, namespace
 				if !recognized || err != nil || x86LockScalarNativeMemoryBound(form, body, arch) != nil {
 					continue // The ordinary final consumer retains the actual error.
 				}
-				forms[x86LockScalarHelperName(namespace, form, arch)] = form
+				forms[x86LockScalarHelperName("", form, arch)] = form
 			}
 		}
 	}
+	return forms
+}
+
+func emitX86LockScalarRMWHelpers(b *strings.Builder, file *File, arch, namespace string) {
+	if namespace == "" {
+		return
+	}
+	forms := x86LockScalarRMWHelperForms(file, arch)
 	names := make([]string, 0, len(forms))
 	for name := range forms {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		emitX86LockScalarRMWHelper(b, name, forms[name], arch)
+		emitX86LockScalarRMWHelper(b, namespace+name, forms[name], arch)
 	}
 }
 

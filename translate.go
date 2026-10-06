@@ -285,7 +285,7 @@ func translateIRText(file *File, opt Options) (string, error) {
 	emitArchPrelude(&b, file, resolve, opt.Goarch, opt.WASMABI)
 	lockScalarNamespace := ""
 	if file.Arch == ArchAMD64 {
-		lockScalarNamespace = x86LockScalarNamespace(file, resolve, opt.Sigs)
+		lockScalarNamespace = x86LockScalarNamespace(file, opt.Goarch, resolve, opt.Sigs)
 		emitX86LockScalarRMWHelpers(&b, file, opt.Goarch, lockScalarNamespace)
 	}
 

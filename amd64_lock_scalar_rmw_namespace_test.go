@@ -15,7 +15,7 @@ func TestX86LockScalarRMWNoCandidateDoesNotResolveLocals(t *testing.T) {
 			t.Fatal(err)
 		}
 		var calls []string
-		namespace := x86LockScalarNamespace(file, func(symbol string) string {
+		namespace := x86LockScalarNamespace(file, "amd64", func(symbol string) string {
 			calls = append(calls, symbol)
 			return strings.TrimPrefix(symbol, "·")
 		}, map[string]FuncSig{"f": {Name: "f", Ret: Void}})
@@ -56,7 +56,7 @@ GLOBL ·table(SB),8,$8
 		final["·f"]: {Name: final["·f"], Ret: Void},
 		"imported":  {Name: "__plan9asm_lock_rmw_2_amd64_add32_native", Ret: Void},
 	}
-	if namespace := x86LockScalarNamespace(file, resolve, sigs); namespace != "__plan9asm_lock_rmw_3_" || len(unknown) != 0 {
+	if namespace := x86LockScalarNamespace(file, "amd64", resolve, sigs); namespace != "__plan9asm_lock_rmw_3_" || len(unknown) != 0 {
 		t.Fatalf("helper namespace must bind final function/data/import names, not FP or local labels: namespace=%q unknown=%v", namespace, unknown)
 	}
 }
@@ -81,7 +81,7 @@ done:
 	sig := FuncSig{Name: "f", Args: []LLVMType{I64}, Ret: Void,
 		Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}}}}
 	ir, err := Translate(file, Options{Goarch: "amd64", ResolveSym: resolve, Sigs: map[string]FuncSig{"f": sig}})
-	if err != nil || len(unknown) != 0 || len(calls) != 3 || strings.Contains(ir, "__plan9asm_lock_rmw_") {
+	if err != nil || len(unknown) != 0 || len(calls) != 6 || strings.Contains(ir, "__plan9asm_lock_rmw_") {
 		t.Fatalf("a no-LOCK translation changed its existing resolver domain/count: error=%v calls=%v", err, calls)
 	}
 }
