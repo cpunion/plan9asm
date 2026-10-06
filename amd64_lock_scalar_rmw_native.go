@@ -30,7 +30,11 @@ func x86LockScalarNamespace(file *File, resolve func(string) string, sigs map[st
 	}
 	for _, data := range file.Data {
 		reserve(data.Sym)
-		reserve(data.Addr.Sym)
+		if data.Addr != "" {
+			if symbol, _, err := dataAddress(data); err == nil {
+				reserve(symbol)
+			}
+		}
 	}
 	for _, global := range file.Globl {
 		reserve(global.Sym)
