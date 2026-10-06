@@ -105,11 +105,17 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 		t.Fatal(err)
 	}
 	input := ordinaryProfileConsumerInput(plan, selected, candidate.Module, "", candidate.AsmFiles)
+	expandedOperands, err := gotoolprofile.CPPExpandedOperands(input, "vector_amd64.s", cpp)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Synthetic object hashes exercise offline accounting, not LLVM/runtime
 	// semantics; the separate actual compiler fixture covers real Go/LLVM objects.
 	result.FeatureConsumption = []*gotoolprofile.SelectionProof{{
 		SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
 		TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
+		CPPSourceProtocol:            input.CPPSourceProtocol,
+		CPPIncludeSearchMisses:       append([]gotoolprofile.CPPPackageSearchMiss(nil), input.CPPIncludeSearchMisses...),
 		Protocol:                     gotoolprofile.ConsumerProtocol, ProfileID: selected.ID,
 		Packages: []gotoolprofile.PackageProof{{PackagePath: candidate.Module, ModulePath: candidate.Module, ModuleVersion: candidate.Version,
 			SourceModule: candidate.Module, SourceVersion: candidate.Version, SourceRole: "module",
@@ -117,7 +123,8 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 			SourceSHA256: map[string]string{"vector.go": input.Sources["vector.go"], "vector_amd64.s": input.Sources["vector_amd64.s"]}}},
 		CPP: []gotoolprofile.CPPProof{{
 			File: "vector_amd64.s", Emission: "assembly",
-			ExpandedSHA256: discoveryFeatureBytesSHA256([]byte(cpp.Output)), TypedExpandedSHA256: strings.Repeat("2", 64),
+			ExpandedSearchMisses: expandedOperands,
+			ExpandedSHA256:       discoveryFeatureBytesSHA256([]byte(cpp.Output)), TypedExpandedSHA256: strings.Repeat("2", 64),
 			Inputs: consumed, Signatures: []gotoolprofile.SignatureSource{{
 				Symbol: candidate.Module + ".probe", Role: "ordinary_decl", LayoutSHA256: strings.Repeat("5", 64),
 			}},
@@ -135,17 +142,28 @@ func TestOrdinaryProfileResultRequiresAllFourScopeDimensions(t *testing.T) {
 		t.Fatal("schema 9 was allowed to relabel profile-aware compiler evidence")
 	}
 	for name, mutate := range map[string]func(*discoveryCorpusResult){
-		"missing source protocol":            func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.SignatureSourceProtocol = "" },
-		"missing consumer protocol":          func(result *discoveryCorpusResult) { result.FeatureConsumption[0].SignatureSourceProtocol = "" },
-		"missing dependency plan marker":     func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.TestDependencySourceProtocol = "" },
-		"missing dependency consumer marker": func(result *discoveryCorpusResult) { result.FeatureConsumption[0].TestDependencySourceProtocol = "" },
-		"missing consumed signatures":        func(result *discoveryCorpusResult) { result.FeatureConsumption[0].CPP[0].Signatures = nil },
-		"old relabel missing profiles":       func(result *discoveryCorpusResult) { result.FeatureProfiles = nil },
-		"missing shared inventory":           func(result *discoveryCorpusResult) { result.featureInventory = nil },
-		"omitted execution":                  func(result *discoveryCorpusResult) { result.BuildConfigurations = nil },
-		"wrong baseline ID":                  func(result *discoveryCorpusResult) { result.BuildConfigurations[0].ProfileID = profiles[0].ID },
-		"missing consumption":                func(result *discoveryCorpusResult) { result.FeatureConsumption = nil },
-		"wrong consumed ID":                  func(result *discoveryCorpusResult) { result.FeatureConsumption[0].ProfileID = profiles[0].ID },
+		"missing source protocol":              func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.SignatureSourceProtocol = "" },
+		"missing consumer protocol":            func(result *discoveryCorpusResult) { result.FeatureConsumption[0].SignatureSourceProtocol = "" },
+		"missing dependency plan marker":       func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.TestDependencySourceProtocol = "" },
+		"missing dependency consumer marker":   func(result *discoveryCorpusResult) { result.FeatureConsumption[0].TestDependencySourceProtocol = "" },
+		"missing original CPP consumer marker": func(result *discoveryCorpusResult) { result.FeatureConsumption[0].CPPSourceProtocol = "" },
+		"null expanded CPP operand set": func(result *discoveryCorpusResult) {
+			result.FeatureConsumption[0].CPP[0].ExpandedSearchMisses = nil
+		},
+		"extra unconsumed expanded CPP operand": func(result *discoveryCorpusResult) {
+			result.FeatureConsumption[0].CPP[0].ExpandedSearchMisses = []gotoolprofile.CPPPackageSearchMiss{{
+				Protocol: gotoolprofile.CPPExpandedPackageSearchMissProtocol,
+				Assembly: "vector_amd64.s", Include: "../../src/runtime/go_tls.h",
+				PackageCandidate: "../../src/runtime/go_tls.h", ToolSource: "src/runtime/go_tls.h",
+			}}
+		},
+		"missing consumed signatures":  func(result *discoveryCorpusResult) { result.FeatureConsumption[0].CPP[0].Signatures = nil },
+		"old relabel missing profiles": func(result *discoveryCorpusResult) { result.FeatureProfiles = nil },
+		"missing shared inventory":     func(result *discoveryCorpusResult) { result.featureInventory = nil },
+		"omitted execution":            func(result *discoveryCorpusResult) { result.BuildConfigurations = nil },
+		"wrong baseline ID":            func(result *discoveryCorpusResult) { result.BuildConfigurations[0].ProfileID = profiles[0].ID },
+		"missing consumption":          func(result *discoveryCorpusResult) { result.FeatureConsumption = nil },
+		"wrong consumed ID":            func(result *discoveryCorpusResult) { result.FeatureConsumption[0].ProfileID = profiles[0].ID },
 		"wrong macro role": func(result *discoveryCorpusResult) {
 			result.FeatureConsumption[0].Packages[0].Macros.PackageRole = "allow_asm_abi_path"
 		},

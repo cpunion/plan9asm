@@ -176,6 +176,8 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 		proof := &gotoolprofile.SelectionProof{
 			SignatureSourceProtocol:      gotoolprofile.SignatureSourceProtocol,
 			TestDependencySourceProtocol: gotoolprofile.TestDependencyProtocol,
+			CPPSourceProtocol:            input.CPPSourceProtocol,
+			CPPIncludeSearchMisses:       append([]gotoolprofile.CPPPackageSearchMiss(nil), input.CPPIncludeSearchMisses...),
 			Protocol:                     gotoolprofile.ConsumerProtocol, ProfileID: profile.ID, CustomTags: config.BuildTags,
 			RegisteredAsmFiles: append([]string(nil), input.RegisteredAsmFiles...),
 		}
@@ -203,10 +205,17 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 			if err != nil {
 				t.Fatalf("replay original portable accounting CPP %s: %v", file, err)
 			}
+			// Even an empty active set comes from complete original execution.
+			// A null set is incomplete evidence, not a source exclusion or pass.
+			expandedOperands, err := gotoolprofile.CPPExpandedOperands(input, file, observation)
+			if err != nil {
+				t.Fatalf("observe original portable accounting operands %s: %v", file, err)
+			}
 			proof.CPP = append(proof.CPP, gotoolprofile.CPPProof{File: file, Emission: "assembly",
-				ExpandedSHA256:      discoveryFeatureBytesSHA256([]byte(observation.Output)),
-				TypedExpandedSHA256: strings.Repeat("2", 64),
-				Inputs:              consumed, Signatures: []gotoolprofile.SignatureSource{signature}})
+				ExpandedSHA256:       discoveryFeatureBytesSHA256([]byte(observation.Output)),
+				TypedExpandedSHA256:  strings.Repeat("2", 64),
+				ExpandedSearchMisses: expandedOperands,
+				Inputs:               consumed, Signatures: []gotoolprofile.SignatureSource{signature}})
 			proof.Outputs = append(proof.Outputs, gotoolprofile.OutputProof{
 				File: file, Part: path.Base(file) + ".ll", IR: strings.Repeat("3", 64), Object: strings.Repeat("4", 64),
 			})
