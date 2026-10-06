@@ -585,13 +585,33 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 		for _, ins := range fn.Instrs {
 			opName := strings.ToUpper(string(ins.Op))
 			for _, arg := range ins.Args {
-				if arg.Kind != OpSym {
+				var s string
+				switch arg.Kind {
+				case OpSym:
+					s = strings.TrimSpace(arg.Sym)
+				case OpMem:
+					s = strings.TrimSpace(arg.Mem.Sym)
+				default:
 					continue
 				}
-				s := strings.TrimSpace(arg.Sym)
 				indirect := strings.HasPrefix(s, "*")
 				if indirect {
 					s = strings.TrimSpace(strings.TrimPrefix(s, "*"))
+				}
+				s = strings.TrimSpace(strings.TrimPrefix(s, "$"))
+				if file.Arch == ArchAMD64 {
+					if memory, matched, err := parseX86SymbolIndexedMemory(s); matched {
+						if err != nil {
+							continue // The operand grammar reports this before emission.
+						}
+						s = memory.Sym
+					}
+				}
+				// A grouped PARAM/AUTO reference is not a bare external symbol.
+				// Collect only its named SB base; declaration does not grant
+				// a memory, frame, source-register or control-flow permission.
+				if strings.ContainsAny(s, "()") && !strings.HasSuffix(s, "(SB)") {
+					continue
 				}
 				base, off, ok := parseSBRef(s)
 				if !ok || base == "" {
