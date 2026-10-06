@@ -3,6 +3,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -42,12 +43,20 @@ func runtimeOracleFaultC(t *testing.T, name string) string {
 	return found[0]
 }
 
-func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
+func runtimeOracleFaultCorePolicy(source string) error {
 	child := regexp.MustCompile(`if\s*\(\s*(?:child\s*==\s*0|!child)\s*\)\s*\{`)
 	policy := regexp.MustCompile(
 		`^\s*struct\s+rlimit\s+no_core\s*=\s*\{\s*0\s*,\s*0\s*\}\s*;` +
 			`\s*if\s*\(\s*setrlimit\s*\(\s*RLIMIT_CORE\s*,\s*&no_core\s*\)` +
 			`\s*\)\s*_exit\s*\(\s*120\s*\)\s*;`)
+	branch := child.FindStringIndex(source)
+	if branch == nil || !policy.MatchString(source[branch[1]:]) {
+		return fmt.Errorf("actual fault child must first set both core limits to zero and check failure before invoking its oracle")
+	}
+	return nil
+}
+
+func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 	for _, name := range []string{
 		"amd64_signed_integer_scalar_float_runtime_test.go",
 		"amd64_packed_shift_fault_test.go",
@@ -58,9 +67,47 @@ func TestRuntimeOracleFaultChildrenDisableCoreDumps(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := runtimeOracleFaultC(t, name)
-			branch := child.FindStringIndex(source)
-			if branch == nil || !policy.MatchString(source[branch[1]:]) {
-				t.Fatal("actual fault child must first set both core limits to zero and check failure before invoking its oracle")
+			if err := runtimeOracleFaultCorePolicy(source); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestRuntimeOracleFaultCorePolicyChecksEveryChild(t *testing.T) {
+	const valid = `struct rlimit no_core = {0, 0};
+if (setrlimit(RLIMIT_CORE, &no_core)) _exit(120);
+oracle();
+`
+	branch := func(condition, body string) string {
+		return "pid_t child = fork();\nif (" + condition + ") {\n" + body + "}\n"
+	}
+	first := branch("child == 0", valid)
+	cases := []struct {
+		name   string
+		source string
+		valid  bool
+	}{
+		{"no_child", "", false},
+		{"one_checked_child", first, true},
+		{"two_checked_children", first + branch("!child", valid), true},
+		{"three_checked_children", first + first + first, true},
+		{"first_missing_policy", branch("child == 0", "oracle();\n") + first, false},
+		{"second_missing_policy", first + branch("child == 0", "oracle();\n"), false},
+		{"third_missing_policy", first + first + branch("!child", "oracle();\n"), false},
+		{"second_unchecked_limit", first + branch("!child", "struct rlimit no_core = {0, 0};\nsetrlimit(RLIMIT_CORE, &no_core);\noracle();\n"), false},
+		{"second_nonzero_soft_limit", first + branch("!child", strings.Replace(valid, "{0, 0}", "{1, 0}", 1)), false},
+		{"second_nonzero_hard_limit", first + branch("!child", strings.Replace(valid, "{0, 0}", "{0, 1}", 1)), false},
+		{"second_wrong_resource", first + branch("!child", strings.Replace(valid, "RLIMIT_CORE", "RLIMIT_CPU", 1)), false},
+		{"second_wrong_failure_exit", first + branch("!child", strings.Replace(valid, "_exit(120)", "_exit(0)", 1)), false},
+		{"second_late_policy", first + branch("!child", "oracle();\n"+valid), false},
+		{"second_unregistered_branch", first + branch("child != 0", valid), false},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			err := runtimeOracleFaultCorePolicy(test.source)
+			if (err == nil) != test.valid {
+				t.Fatalf("fault-child resource policy: err=%v, want valid=%t", err, test.valid)
 			}
 		})
 	}
