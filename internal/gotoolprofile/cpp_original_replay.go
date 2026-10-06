@@ -54,9 +54,12 @@ func ValidateCPPOriginalInputs(input *ConsumerInput) error {
 		total += len(text)
 	}
 	for assembly, unit := range graph.Units {
+		// The complete source loop already authenticated every module/tool
+		// original against its exact hash. Retain the unit's source/edge checks
+		// without copying and hashing the same assembly bytes a second time.
 		_, original := graph.Sources["module/"+assembly]
 		if !CPPLocalSource(assembly) || input.Sources[assembly] == "" ||
-			!original || bytesSHA256([]byte(graph.Sources["module/"+assembly])) != input.Sources[assembly] || len(unit.Includes) > 100000 {
+			!original || len(unit.Includes) > 100000 {
 			return fmt.Errorf("CPP original unit has no complete assembly source")
 		}
 		for include, id := range unit.Includes {
