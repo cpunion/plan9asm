@@ -76,7 +76,22 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 			return nil, nil, err
 		}
 		asm := filepath.Join(consumer.Source.Dir, filepath.FromSlash(name))
-		expanded, inputs, err := consumer.Source.preprocessCPPWithHeader(asm, pkg.PkgPath, selected.Macros.Defines, func() ([]byte, error) {
+		cppSource := consumer.Source
+		var expandedOperands []gotoolprofile.CPPPackageSearchMiss
+		if consumer.Source.Input.CPPOriginals != nil {
+			header, err := gotoolprofile.CanonicalGeneratedHeader(consumer.Metadata.Headers[0].Header.Definitions)
+			if err != nil {
+				return nil, nil, err
+			}
+			actualInput, required, err := gotoolprofile.CPPOriginalExecutionInput(consumer.Source.Input, name, pkg.PkgPath, selected.Macros.Defines, header)
+			if err != nil {
+				return nil, nil, err
+			}
+			copy := *consumer.Source
+			copy.Input = actualInput
+			cppSource, expandedOperands = &copy, required
+		}
+		expanded, inputs, err := cppSource.preprocessCPPWithHeader(asm, pkg.PkgPath, selected.Macros.Defines, func() ([]byte, error) {
 			return gotoolprofile.CanonicalGeneratedHeader(consumer.Metadata.Headers[0].Header.Definitions)
 		})
 		if err != nil {
@@ -94,7 +109,8 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 		task := asmTask{AsmFile: asm, OutLL: ll}
 		fileCfg := cfg
 		cpp := gotoolprofile.CPPProof{File: name, Emission: "assembly", Inputs: inputs,
-			ExpandedSHA256: featureBytesSHA256(expanded), TypedExpandedSHA256: featureBytesSHA256(typed)}
+			ExpandedSearchMisses: expandedOperands,
+			ExpandedSHA256:       featureBytesSHA256(expanded), TypedExpandedSHA256: featureBytesSHA256(typed)}
 		file, err := plan9asm.ParseWithDefines(arch, string(typed), selected.Macros.Defines)
 		if err != nil {
 			if err.Error() != "no TEXT directive found" {
@@ -144,7 +160,7 @@ func consumeInstrumentationAssembly(ctx context.Context, input *gotoolprofile.In
 			Output:    gotoolprofile.OutputProof{File: name, Part: filepath.Base(ll), IR: irSHA, Object: objectSHA},
 			Artifacts: artifacts,
 		})
-		after, afterInputs, err := consumer.Source.preprocessCPPWithHeader(asm, pkg.PkgPath, selected.Macros.Defines, func() ([]byte, error) {
+		after, afterInputs, err := cppSource.preprocessCPPWithHeader(asm, pkg.PkgPath, selected.Macros.Defines, func() ([]byte, error) {
 			return gotoolprofile.CanonicalGeneratedHeader(consumer.Metadata.Headers[0].Header.Definitions)
 		})
 		if err != nil || string(after) != string(expanded) || !reflect.DeepEqual(afterInputs, inputs) {

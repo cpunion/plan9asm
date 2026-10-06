@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
@@ -146,14 +147,35 @@ func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string
 		return nil, nil, err
 	}
 	assembly := strings.TrimPrefix(file, "module/")
-	expanded, err := plan9asm.PreprocessAssemblySource(string(source), plan9asm.AssemblyPreprocessOptions{
+	var replay plan9asm.AssemblyCPPObservation
+	var replayInputs map[string]string
+	var required []gotoolprofile.CPPPackageSearchMiss
+	if consumer.Input.CPPOriginals != nil {
+		var header []byte
+		if len(consumer.Input.CPPOriginals.Units[assembly].GeneratedHeaders) != 0 && generatedHeader != nil {
+			header, err = generatedHeader()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		replay, replayInputs, required, err = gotoolprofile.ReplayCPPOriginal(consumer.Input, assembly, packagePath, defines, header)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := gotoolprofile.ValidateCPPExpandedOperands(consumer.Input, assembly, required); err != nil {
+			return nil, nil, err
+		}
+	}
+	options := plan9asm.AssemblyPreprocessOptions{
 		FileName: file, Defines: defines,
 		ReadInclude: func(parent, name string) (string, []byte, error) {
 			if name == "" || filepath.IsAbs(name) || strings.ContainsAny(name, "\\\x00") {
 				return "", nil, fmt.Errorf("unsafe active CPP include: %s", name)
 			}
-			if err := gotoolprofile.RequireCPPPackageSearchMiss(consumer.Input, assembly, parent, name); err != nil {
-				return "", nil, err
+			if consumer.Input.CPPOriginals == nil {
+				if err := gotoolprofile.RequireCPPPackageSearchMiss(consumer.Input, assembly, parent, name); err != nil {
+					return "", nil, err
+				}
 			}
 			candidate, err := gotoolprofile.CPPPreferredPackageInclude(consumer.Dir, assembly, name)
 			if err != nil {
@@ -169,9 +191,23 @@ func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string
 			}
 			return read(filepath.Join(consumer.Root, "pkg/include", filepath.FromSlash(name)), false)
 		},
-	})
+	}
+	var observation plan9asm.AssemblyCPPObservation
+	if consumer.Input.CPPOriginals == nil {
+		// Historical inputs do not acquire the new observation budgets.
+		observation.Output, err = plan9asm.PreprocessAssemblySource(string(source), options)
+	} else {
+		observation, err = plan9asm.ObserveAssemblyCPP(string(source), options)
+	}
 	if err != nil {
 		return nil, nil, err
+	}
+	expanded := observation.Output
+	if consumer.Input.CPPOriginals != nil {
+		actualOperands, err := gotoolprofile.CPPExpandedOperands(consumer.Input, assembly, observation)
+		if err != nil || !reflect.DeepEqual(actualOperands, required) || expanded != replay.Output || !reflect.DeepEqual(inputs, replayInputs) {
+			return nil, nil, fmt.Errorf("actual physical CPP execution differs from complete original replay: %v", err)
+		}
 	}
 	if len(expanded) > 64<<20 {
 		return nil, nil, fmt.Errorf("active CPP expansion exceeds its bound")

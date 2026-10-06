@@ -441,6 +441,11 @@ func discoveryCPPValidateSearchMisses(inputs *discoveryCPPInputs, unit discovery
 				Protocol: gotoolprofile.CPPPackageSearchMissProtocol, Assembly: unit.File,
 				Source: id, Include: directive.Include, PackageCandidate: module, ToolSource: tool,
 			}
+			if inputs.Protocol == discoveryReplayCPPInputsProtocol && directive.Generated {
+				miss := expected[key]
+				miss.Protocol, miss.Source = gotoolprofile.CPPExpandedPackageSearchMissProtocol, ""
+				expected[key] = miss
+			}
 		}
 	}
 	if len(expected) != len(unit.PackageSearchMisses) {

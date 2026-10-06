@@ -390,12 +390,24 @@ func discoveryInstrumentationBaselineInput(plan *discoveryOrdinarySelectionPlan,
 		}
 		for _, unit := range cpp.Units {
 			for _, miss := range unit.PackageSearchMisses {
+				if miss.Protocol != gotoolprofile.CPPPackageSearchMissProtocol {
+					continue
+				}
 				if !containsInstrumentationSearchMiss(input.CPPIncludeSearchMisses, miss) {
 					input.CPPIncludeSearchMisses = append(input.CPPIncludeSearchMisses, miss)
 				}
 			}
 		}
 		gotoolprofile.SortCPPIncludeSearch(input.CPPIncludeSearchMisses)
+		if cpp.Protocol == discoveryReplayCPPInputsProtocol {
+			graphInput, err := discoveryCPPOriginalConsumerInput(cpp)
+			input.CPPSourceProtocol = gotoolprofile.CPPOriginalReplayProtocol
+			input.CPPOriginals = nil
+			if err == nil {
+				input.CPPOriginals = graphInput.CPPOriginals
+				input.CPPIncludeSearchMisses = graphInput.CPPIncludeSearchMisses
+			}
+		}
 	}
 	return input
 }

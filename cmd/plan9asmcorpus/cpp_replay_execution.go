@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"path"
 	"reflect"
 	"strconv"
 
@@ -18,74 +17,20 @@ func replayDiscoveryOriginalCPP(inputs *discoveryCPPInputs, unit discoveryCPPUni
 	if inputs == nil || inputs.Protocol != discoveryReplayCPPInputsProtocol {
 		return plan9asm.AssemblyCPPObservation{}, nil, fmt.Errorf("missing full original CPP replay protocol")
 	}
-	read := func(id string) ([]byte, error) {
-		source, found := inputs.Sources[id]
-		if !found || source.Original == nil || discoveryFeatureBytesSHA256([]byte(*source.Original)) != source.SHA256 {
-			return nil, fmt.Errorf("CPP execution lacks its independently captured original: %s", id)
-		}
-		return []byte(*source.Original), nil
-	}
-	original := "module/" + unit.File
-	source, err := read(original)
+	input, err := discoveryCPPOriginalConsumerInput(inputs)
 	if err != nil {
 		return plan9asm.AssemblyCPPObservation{}, nil, err
 	}
-	used := map[string]string{original: inputs.Sources[original].SHA256}
-	observation, err := plan9asm.ObserveAssemblyCPP(string(source), plan9asm.AssemblyPreprocessOptions{
-		FileName: original, Defines: defines,
-		ReadInclude: func(parent, name string) (string, []byte, error) {
-			module, tool, err := gotoolprofile.CPPIncludeCandidates(unit.File, name)
-			if err != nil {
-				return "", nil, err
-			}
-			// Search is rooted at the original assembly package CWD, never
-			// the including header's directory or an expanded logical #line.
-			id := "tool/" + tool
-			if gotoolprofile.CPPLocalSource(module) {
-				if _, present := inputs.Sources["module/"+module]; present {
-					id = "module/" + module
-				}
-			} else {
-				if err := gotoolprofile.RequireCPPPackageSearchMiss(&gotoolprofile.ConsumerInput{
-					CPPIncludeSearchMisses: discoveryReplaySearchMisses(unit),
-				}, unit.File, parent, name); err != nil {
-					return "", nil, err
-				}
-			}
-			bound := false
-			// A macro token's runtime parent is its invocation reader, not
-			// necessarily its physical definition. The full executor binds
-			// that relationship; the raw graph only registers resources.
-			for origin, registered := range inputs.Sources {
-				for index, directive := range registered.Directives {
-					if directive.Kind != "include" || directive.Include != name {
-						continue
-					}
-					key := origin + "#" + strconv.Itoa(index)
-					if unit.Includes[key] == id {
-						bound = true
-					}
-					if unit.DeferredIncludes[key] == "generated_go_asm" && path.Clean(name) == "go_asm.h" && header != nil {
-						data, err := gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
-						if err != nil {
-							return "", nil, err
-						}
-						id = "generated/" + header.PackagePath + "/go_asm.h"
-						used[id] = discoveryFeatureBytesSHA256(data)
-						return id, data, nil
-					}
-				}
-			}
-			if !bound {
-				return "", nil, fmt.Errorf("active CPP operand has no complete original registration: %s from %s", name, parent)
-			}
-			data, err := read(id)
-			if err == nil {
-				used[id] = inputs.Sources[id].SHA256
-			}
-			return id, data, err
-		},
-	})
+	var data []byte
+	packagePath := ""
+	if header != nil {
+		packagePath = header.PackagePath
+		data, err = gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
+		if err != nil {
+			return plan9asm.AssemblyCPPObservation{}, nil, err
+		}
+	}
+	observation, used, _, err := gotoolprofile.ReplayCPPOriginal(input, unit.File, packagePath, defines, data)
 	if err != nil {
 		return plan9asm.AssemblyCPPObservation{}, nil, err
 	}

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 // Every profile first has its own original stock-Go export. The corpus must
@@ -49,6 +51,10 @@ func Probe(x uint64) uint64
 		"probe_amd64.s": `//go:build race && !cgo
 
 #include "go_asm.h"
+#define INCLUDE_TOOL \
+#include "../../src/runtime/go_tls.h" \
+
+INCLUDE_TOOL
 TEXT ·Probe(SB),$0-16
 MOVQ x+0(FP), AX
 #ifdef GOAMD64_v1
@@ -153,6 +159,28 @@ RET
 		t.Fatalf("mode CPU denominator is incomplete: %v", seen)
 	}
 	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"query reused as objects": func(p *discoveryCorpusResult) {
+			outcome := &p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0]
+			outcome.Objects = outcome.Query
+		},
+		"null expanded operand set": func(p *discoveryCorpusResult) {
+			p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Files[0].CPP.ExpandedSearchMisses = nil
+		},
+		"paired delete original and expanded operands": func(p *discoveryCorpusResult) {
+			plan := p.OrdinarySelectionPlan.InstrumentationPlan
+			plan.CPPInputs = nil
+			for index := range plan.Outcomes {
+				plan.Outcomes[index].Objects.Consumption.Files[0].CPP.ExpandedSearchMisses = nil
+			}
+		},
+		"downgrade expanded operand to physical": func(p *discoveryCorpusResult) {
+			miss := &p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Files[0].CPP.ExpandedSearchMisses[0]
+			miss.Protocol, miss.Source = gotoolprofile.CPPPackageSearchMissProtocol, "module/probe_amd64.s"
+		},
+		"extra unconsumed expanded operand": func(p *discoveryCorpusResult) {
+			cpp := &p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[0].Objects.Consumption.Files[0].CPP
+			cpp.ExpandedSearchMisses = append(cpp.ExpandedSearchMisses, cpp.ExpandedSearchMisses[0])
+		},
 		"baseline-only scopes": func(p *discoveryCorpusResult) {
 			p.OrdinarySelectionPlan.InstrumentationPlan.CPPRequirements = nil
 			p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes = p.OrdinarySelectionPlan.InstrumentationPlan.Outcomes[:1]

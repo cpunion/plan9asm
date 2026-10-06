@@ -230,6 +230,27 @@ func validateCPPConsumption(input *ConsumerInput, proof *SelectionProof, selecte
 			return nil, fmt.Errorf("missing, duplicate or unselected actual CPP consumption")
 		}
 		consumed[cpp.File] = true
+		if input.CPPOriginals != nil {
+			pkg := filePackages[cpp.File]
+			var header []byte
+			if proof.GeneratedHeaders != nil {
+				for _, actual := range proof.GeneratedHeaders.Headers {
+					if actual.PackagePath == pkg.PackagePath {
+						var err error
+						header, err = CanonicalGeneratedHeader(actual.Definitions)
+						if err != nil {
+							return nil, err
+						}
+					}
+				}
+			}
+			actual, used, required, err := ReplayCPPOriginal(input, cpp.File, pkg.PackagePath, pkg.Macros.Defines, header)
+			if err != nil || ValidateCPPExpandedOperands(input, cpp.File, required) != nil ||
+				cpp.ExpandedSearchMisses == nil || !reflect.DeepEqual(cpp.ExpandedSearchMisses, required) ||
+				cpp.ExpandedSHA256 != bytesSHA256([]byte(actual.Output)) || !reflect.DeepEqual(used, cpp.Inputs) {
+				return nil, fmt.Errorf("actual CPP differs from the independent original graph/expanded operands: %v", err)
+			}
+		}
 		for id, digest := range cpp.Inputs {
 			origin, file, present := strings.Cut(id, "/")
 			wanted := input.Sources[file]

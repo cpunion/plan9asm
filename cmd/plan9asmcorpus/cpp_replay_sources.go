@@ -170,12 +170,12 @@ func captureDiscoveryReplayCPPInputs(plan *discoveryOrdinarySelectionPlan, modul
 					return err
 				}
 				if !gotoolprofile.CPPLocalSource(module) {
-					if directive.Generated {
-						return fmt.Errorf("generated outside-package include needs independently replay-bound absence: %s", directive.Include)
-					}
 					miss := gotoolprofile.CPPPackageSearchMiss{
 						Protocol: gotoolprofile.CPPPackageSearchMissProtocol, Assembly: assembly,
 						Source: id, Include: directive.Include, PackageCandidate: module, ToolSource: tool,
+					}
+					if directive.Generated {
+						miss.Protocol, miss.Source = gotoolprofile.CPPExpandedPackageSearchMissProtocol, ""
 					}
 					if err := gotoolprofile.VerifyCPPPackageSearchMiss(miss, moduleDir, goRoot); err != nil {
 						return err

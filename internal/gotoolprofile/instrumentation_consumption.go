@@ -280,6 +280,18 @@ func replayInstrumentationCPP(input *InstrumentationConsumerInput, pkg PackagePr
 	if err != nil || string(source) != input.Sources.Contents[file.CPP.File] {
 		return fmt.Errorf("mode CPP original assembly bytes differ from the complete source inventory")
 	}
+	if input.Original.CPPOriginals != nil {
+		header, err := CanonicalGeneratedHeader(metadata.Headers[0].Header.Definitions)
+		if err != nil {
+			return err
+		}
+		observation, used, required, err := ReplayCPPOriginal(input.Original, file.CPP.File, pkg.PackagePath, pkg.Macros.Defines, header)
+		if err != nil || file.CPP.ExpandedSearchMisses == nil || !reflect.DeepEqual(required, file.CPP.ExpandedSearchMisses) ||
+			observation.Output != file.ExpandedSource || !reflect.DeepEqual(used, file.CPP.Inputs) {
+			return fmt.Errorf("mode CPP original replay/expanded operands differ from its actual mode header and defines: %v", err)
+		}
+		return nil
+	}
 	used := map[string]bool{original: true}
 	expanded, err := plan9asm.PreprocessAssemblySource(string(source), plan9asm.AssemblyPreprocessOptions{
 		FileName: original, Defines: pkg.Macros.Defines,

@@ -399,6 +399,9 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 		seenMisses := make(map[string]bool)
 		for _, unit := range plan.CPPInputs.Units {
 			for _, miss := range unit.PackageSearchMisses {
+				if miss.Protocol != gotoolprofile.CPPPackageSearchMissProtocol {
+					continue
+				}
 				key := miss.Assembly + "\x00" + miss.Source + "\x00" + miss.Include
 				if !seenMisses[key] {
 					seenMisses[key] = true
@@ -417,6 +420,9 @@ func ordinaryProfileConsumerInput(plan *discoveryOrdinarySelectionPlan, profile 
 					input.Sources[file] = source.SHA256
 				}
 			}
+		}
+		if plan.CPPInputs.Protocol == discoveryReplayCPPInputsProtocol {
+			bindDiscoveryCPPOriginalConsumer(input, plan.CPPInputs)
 		}
 	}
 	return input

@@ -14,6 +14,7 @@ import (
 )
 
 const CPPPackageSearchMissProtocol = "actual_go_fixed_include_search_miss_v1"
+const CPPExpandedPackageSearchMissProtocol = "actual_go_fixed_include_expanded_search_miss_v2"
 
 // CPPPackageSearchMiss records an unavailable package-directory candidate.
 // Only the independently bound canonical GOROOT fallback may replace it. The
@@ -50,8 +51,10 @@ func CPPIncludeCandidates(assembly, include string) (module, tool string, err er
 func ValidateCPPPackageSearchMiss(miss CPPPackageSearchMiss) error {
 	module, tool, err := CPPIncludeCandidates(miss.Assembly, miss.Include)
 	origin, source, present := strings.Cut(miss.Source, "/")
-	if err != nil || miss.Protocol != CPPPackageSearchMissProtocol || !present ||
-		(origin != "module" && origin != "tool") || !CPPLocalSource(source) ||
+	physical := miss.Protocol == CPPPackageSearchMissProtocol && present &&
+		(origin == "module" || origin == "tool") && CPPLocalSource(source)
+	expanded := miss.Protocol == CPPExpandedPackageSearchMissProtocol && miss.Source == ""
+	if err != nil || !physical && !expanded ||
 		CPPLocalSource(module) || !CPPLocalSource(tool) ||
 		miss.PackageCandidate != module || miss.ToolSource != tool {
 		return fmt.Errorf("missing exact outside-package search absence witness")
@@ -71,6 +74,11 @@ func VerifyCPPPackageSearchMiss(miss CPPPackageSearchMiss, moduleRoot, goRoot st
 		return fmt.Errorf("outside-module preferred CPP candidate exists")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("outside-module preferred CPP candidate has no ENOENT proof: %w", err)
+	}
+	if miss.Protocol == CPPExpandedPackageSearchMissProtocol {
+		// This verifies only physical ENOENT. The full original graph and
+		// actual execution must separately bind the v2 expanded operand.
+		return nil
 	}
 	origin, source, _ := strings.Cut(miss.Source, "/")
 	root := moduleRoot
@@ -134,6 +142,12 @@ func ValidateCPPIncludeSearch(input *ConsumerInput, proof *SelectionProof) error
 	if input == nil || proof != nil && !reflect.DeepEqual(input.CPPIncludeSearchMisses, proof.CPPIncludeSearchMisses) {
 		return fmt.Errorf("actual CPP package search absence differs from its original input")
 	}
+	if err := ValidateCPPOriginalInputs(input); err != nil {
+		return err
+	}
+	if proof != nil && proof.CPPSourceProtocol != input.CPPSourceProtocol {
+		return fmt.Errorf("CPP original source protocol was deleted or downgraded")
+	}
 	seen, tools := make(map[string]bool), make(map[string]bool)
 	last := ""
 	for _, miss := range input.CPPIncludeSearchMisses {
@@ -143,6 +157,12 @@ func ValidateCPPIncludeSearch(input *ConsumerInput, proof *SelectionProof) error
 		if origin == "tool" {
 			digest = input.ToolSources[source]
 		}
+		if miss.Protocol == CPPExpandedPackageSearchMissProtocol {
+			digest = input.Sources[miss.Assembly]
+			if input.CPPOriginals == nil || input.CPPSourceProtocol != CPPOriginalReplayProtocol || !containsString(input.AsmFiles, miss.Assembly) {
+				return fmt.Errorf("expanded CPP receipt lacks its independent full original inputs")
+			}
+		}
 		if err := ValidateCPPPackageSearchMiss(miss); err != nil || seen[key] || key <= last ||
 			input.Sources[miss.Assembly] == "" || digest == "" || input.ToolSources[miss.ToolSource] == "" {
 			return fmt.Errorf("CPP search absence is unbound, duplicated or noncanonical")
@@ -150,7 +170,7 @@ func ValidateCPPIncludeSearch(input *ConsumerInput, proof *SelectionProof) error
 		seen[key], tools[miss.ToolSource], last = true, true, key
 	}
 	for source := range input.ToolSources {
-		if !CPPLocalSource(source) || !strings.HasPrefix(source, "pkg/include/") && !tools[source] {
+		if !CPPLocalSource(source) || !strings.HasPrefix(source, "pkg/include/") && !tools[source] && !cppOriginalToolRegistered(input, source) {
 			return fmt.Errorf("tool CPP source lacks the exact fixed-search absence contract")
 		}
 	}

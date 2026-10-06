@@ -666,6 +666,9 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 				return err
 			}
 			cppProof = &featureCPPProof{File: name, Emission: "assembly", Inputs: inputs}
+			if original := ccfg.Feature.Input.CPPOriginals; original != nil {
+				cppProof.ExpandedSearchMisses = append([]gotoolprofile.CPPPackageSearchMiss{}, original.RequiredExpandedOperands[name]...)
+			}
 			expandedSource := append([]byte(nil), src...)
 			defer func() {
 				afterSource, after, err := ccfg.Feature.preprocessCPP(t.AsmFile, pkg.PkgPath, defines)

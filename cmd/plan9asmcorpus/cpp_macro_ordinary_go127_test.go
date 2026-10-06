@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+
 	"golang.org/x/mod/sumdb/dirhash"
 )
 
@@ -46,7 +48,7 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 		"cpu.s":    "// Original nonempty selected assembly sibling.\n",
 		"probe.s": "#include \"macros.h\"\n" +
 			"TEXT ·Probe(SB),4,$0-0\nRET\n" +
-			"OBJECT_ALIAS\nAPPLY(GOARCH_amd64)\nINCLUDE_CHOICE\n",
+			"OBJECT_ALIAS\nAPPLY(GOARCH_amd64)\nINCLUDE_CHOICE\nINCLUDE_TOOL\n",
 		"macros.h": "#define OBJECT \\\n" +
 			"#ifdef GOARCH_arm64 \\\n" +
 			"GLOBL ·armMarker(SB),$8 \\\n" +
@@ -58,7 +60,8 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 			"#endif \\\n\n" +
 			"#define APPLY(P) SELECT(P)\n" +
 			"#define INCLUDE_CHOICE \\\n" +
-			"#include \"choice.h\" \\\n\n",
+			"#include \"choice.h\" \\\n\n" +
+			"#define INCLUDE_TOOL \\\n#include \"../../src/runtime/go_tls.h\" \\\n\n",
 		"choice.h": "GLOBL ·includeMarker(SB),$8\n",
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
@@ -141,6 +144,33 @@ func TestOrdinaryCPPDirectiveMacrosOriginalDefaultTargetsAndReaders(t *testing.T
 	t.Logf("actual ordinary full11 objects=%d profiles=%d deduplicated_original_bytes=%d result_json_bytes=%d",
 		result.Translations, len(result.FeatureProfiles), originalBytes, len(encoded))
 	for name, mutate := range map[string]func(*discoveryCorpusResult){
+		"delete_consumer_original_protocol": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				proof.CPPSourceProtocol = ""
+			}
+		},
+		"paired_delete_active_absence": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				proof.CPPIncludeSearchMisses = nil
+				for index := range proof.CPP {
+					proof.CPP[index].ExpandedSearchMisses = nil
+				}
+			}
+		},
+		"paired_active_absence_downgrade": func(copy *discoveryCorpusResult) {
+			for _, proof := range copy.FeatureConsumption {
+				for index := range proof.CPPIncludeSearchMisses {
+					proof.CPPIncludeSearchMisses[index].Protocol = gotoolprofile.CPPPackageSearchMissProtocol
+					proof.CPPIncludeSearchMisses[index].Source = "module/macros.h"
+				}
+				for index := range proof.CPP {
+					for receipt := range proof.CPP[index].ExpandedSearchMisses {
+						proof.CPP[index].ExpandedSearchMisses[receipt].Protocol = gotoolprofile.CPPPackageSearchMissProtocol
+						proof.CPP[index].ExpandedSearchMisses[receipt].Source = "module/macros.h"
+					}
+				}
+			}
+		},
 		"delete_protocol_and_graph": func(copy *discoveryCorpusResult) {
 			copy.OrdinarySelectionPlan.CPPSourceProtocol = ""
 			copy.OrdinarySelectionPlan.CPPInputs = nil

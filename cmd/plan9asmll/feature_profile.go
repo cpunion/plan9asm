@@ -98,6 +98,7 @@ func loadFeatureConsumer(ctx context.Context, filename, output, target, module s
 			Protocol: featureInputProtocol, ProfileID: input.ID,
 			SignatureSourceProtocol:      input.SignatureSourceProtocol,
 			TestDependencySourceProtocol: input.TestDependencySourceProtocol,
+			CPPSourceProtocol:            input.CPPSourceProtocol,
 			CustomTags:                   append([]string(nil), tags...),
 			RegisteredAsmFiles:           append([]string(nil), input.RegisteredAsmFiles...),
 			CPPIncludeSearchMisses:       append([]gotoolprofile.CPPPackageSearchMiss(nil), input.CPPIncludeSearchMisses...),
