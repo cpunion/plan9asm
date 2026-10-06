@@ -45,3 +45,21 @@ func TestGeneratedHeaderGenericPropertiesMatchActualNativeObjects(t *testing.T) 
 		})
 	}
 }
+
+func TestGeneratedHeaderGenericPropertyQueryRejectsInvalidDeclarations(t *testing.T) {
+	for _, test := range []struct {
+		name, source string
+	}{
+		{"constraint", "package header\ntype G[T ~uint64] struct { Value T }\ntype Wrong = G[string]\n"},
+		{"uninstantiated use", "package header\ntype G[T any] struct { Value T }\ntype Wrong = G\n"},
+		{"recursive value", "package header\ntype G[T any] struct { Self G[T] }\ntype Wrong = G[uint64]\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definitions, err := ReplayNativeGeneratedHeader("example.invalid/header", "linux/amd64", "go1.20",
+				map[string]string{"header.go": test.source})
+			if definitions != nil || err == nil || NativeHeaderSourceDomainUnsupported(err) {
+				t.Fatalf("invalid generic declaration gained properties or was swallowed as unsupported: %v %v", definitions, err)
+			}
+		})
+	}
+}

@@ -121,6 +121,14 @@ func nativeGeneratedHeaderDefinitions(pkg *types.Package, sizes *nativeHeaderGCS
 				}
 			}
 		case *types.TypeName:
+			if generic, ok := object.Type().(interface {
+				TypeParams() *types.TypeParamList
+				TypeArgs() *types.TypeList
+			}); ok && generic.TypeParams().Len() != 0 && generic.TypeArgs().Len() == 0 {
+				// Native -asmhdr omits uninstantiated generic declarations.
+				// Concrete instances retain their full ordinary value layout.
+				continue
+			}
 			structure, ok := object.Type().Underlying().(*types.Struct)
 			if !ok {
 				continue
@@ -215,12 +223,6 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 				return false
 			}
 			nodes++
-			if spec, ok := node.(*ast.TypeSpec); ok && spec.TypeParams != nil {
-				closed = false
-			}
-			if function, ok := node.(*ast.FuncType); ok && function.TypeParams != nil {
-				closed = false
-			}
 			return nodes <= 100000
 		})
 		for _, group := range file.Comments {
@@ -231,10 +233,10 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 			}
 		}
 		if nodes > 100000 {
-			return nil, nil, 0, fmt.Errorf("native header source requires unregistered generated/generic/compiler rules")
+			return nil, nil, 0, fmt.Errorf("native header original source exceeds its bounded query work")
 		}
 		if !closed {
-			return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source requires generated/generic/compiler rules"}
+			return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source requires unregistered compiler-directive rules"}
 		}
 		files = append(files, file)
 	}

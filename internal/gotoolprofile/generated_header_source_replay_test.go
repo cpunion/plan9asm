@@ -88,9 +88,7 @@ func TestGeneratedHeaderSourceUnsupportedDomainCannotSwallowFailures(t *testing.
 }
 
 func TestGeneratedHeaderSourceReplayMatchesOriginalNativeObjects(t *testing.T) {
-	// Generic declarations are outside the initial closed source domain even
-	// though the compiler omits their header entries. Preserve that refusal.
-	source := strings.ReplaceAll(nativeHeaderRulesSource, "type Generic[T any] struct { Value T }\n", "")
+	source := nativeHeaderRulesSource
 	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
 		t.Run(target, func(t *testing.T) {
 			actual := compileNativeHeaderRules(t, target, source)
@@ -104,7 +102,6 @@ func TestGeneratedHeaderSourceReplayMatchesOriginalNativeObjects(t *testing.T) {
 
 func TestGeneratedHeaderSourceReplayRejectsUnclosedInputs(t *testing.T) {
 	for _, source := range []string{
-		"package header\ntype Record[T any] struct { Value T }\n",
 		"package header\ntype Record struct { Value [1<<62]uint64 }\n",
 		"package header\ntype Record struct { Self Record }\n",
 		"package header\ntype A struct { B__size byte }\ntype A_B struct {}\n",

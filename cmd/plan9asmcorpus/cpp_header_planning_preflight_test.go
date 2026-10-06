@@ -82,11 +82,11 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 			}
 			err = preflightDiscoveryHeaderQuery(plan, selected, download, "probe.s", nil)
 			unsupported := gotoolprofile.NativeHeaderSourceDomainUnsupported(err)
-			if axis == "closed" || axis == "builtin unsafe" {
+			if axis == "closed" || axis == "builtin unsafe" || axis == "generic" {
 				if err != nil || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("unmodified preflight must not create query authority: %v", err)
 				}
-			} else if axis == "imports" || axis == "generic" || axis == "directive" {
+			} else if axis == "imports" || axis == "directive" {
 				if !unsupported || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("exact unclosed domain must retain all candidates without query authority: %v", err)
 				}
