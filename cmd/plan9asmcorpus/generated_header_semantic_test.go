@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,10 +20,19 @@ func TestGeneratedHeaderSemanticComparisonRetainsCompleteOriginAndDefinitions(t 
 		}
 		for index := range candidate.OrdinarySelectionPlan.GeneratedHeaders {
 			query := &candidate.OrdinarySelectionPlan.GeneratedHeaders[index]
+			original := stored.FeatureInventory.Observations[query.ProfileID]
+			matches := 0
 			for _, reference := range candidate.FeatureProfiles {
-				if reference.Request.Target == query.Target {
+				observed := current.FeatureInventory.Observations[reference.ID]
+				if original != nil && observed != nil && original.Target == observed.Target &&
+					reflect.DeepEqual(original.Environment, observed.Environment) &&
+					reflect.DeepEqual(original.ToolTags, observed.ToolTags) {
 					query.ProfileID = reference.ID
+					matches++
 				}
+			}
+			if matches != 1 {
+				t.Fatal("generated query lost its exact original CPU profile during host rebinding")
 			}
 			rebindGeneratedSemanticFixture(query.Metadata, query.ProfileID, current.FeatureInventory)
 		}

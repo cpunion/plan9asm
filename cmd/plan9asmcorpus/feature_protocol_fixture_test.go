@@ -113,8 +113,37 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 		}
 		plan.CPPInputs = inputs
 	}
+	profileMacros := make(map[string]*gotoolprofile.AssemblerMacros)
+	for _, profile := range profiles {
+		profileMacros[profile.ID] = fixture.Macros[profile.Observed.Target]
+	}
+	if len(headers) != 0 {
+		// Deferred native headers preserve the full legal CPU denominator.
+		// Consume actual captured variants instead of modeling their evidence
+		// or supplying a fabricated header to narrow the planner's requests.
+		requests, err := planDiscoveryFeatureProfiles(plan, result.DiscoveredAsmFiles, baselines)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profiles, profileMacros = fixtureProfileCPUProposals(t, fixture, requests)
+		result.FeatureProfiles, err = registerDiscoveryFeatureProfiles(inventory, profiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decisions, eligible, err = replayOrdinarySelectionForProfiles(plan, result.DiscoveredAsmFiles, profiles)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan.ProfileDecisions = decisions
+		result.BuildConfigurations = ordinaryProfileConfigurations(eligible)
+		result.Translations = len(eligible)
+	}
 	var configs []discoveryBuildConfiguration
 	for _, config := range result.BuildConfigurations {
+		if len(headers) != 0 {
+			configs = append(configs, config)
+			continue
+		}
 		for _, target := range config.Targets {
 			configs = append(configs, discoveryBuildConfiguration{
 				ProfileID: byTarget[target].ID, BuildTags: config.BuildTags,
@@ -133,8 +162,12 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 	}
 	result.SourceNotApplicableItems = sourceItems
 	result.FeatureConsumption = nil
+	byProfile := make(map[string]discoveryFeatureProfile)
+	for _, profile := range profiles {
+		byProfile[profile.ID] = profile
+	}
 	for _, config := range configs {
-		profile := byTarget[config.Targets[0]]
+		profile := byProfile[config.ProfileID]
 		module, err := ordinaryProfileDeclaredModule(plan)
 		if err != nil {
 			t.Fatal(err)
@@ -166,7 +199,7 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 				}
 			}
 			observation, consumed, err := replayDiscoveryOriginalCPP(plan.CPPInputs, unit, headers[file],
-				fixture.Macros[profile.Observed.Target].Defines)
+				profileMacros[profile.ID].Defines)
 			if err != nil {
 				t.Fatalf("replay original portable accounting CPP %s: %v", file, err)
 			}
@@ -191,7 +224,7 @@ func fixtureProfileEvidenceWithGeneratedHeaders(t *testing.T, result *discoveryC
 			if dir != "." {
 				pkgPath += "/" + dir
 			}
-			macros := *fixture.Macros[profile.Observed.Target]
+			macros := *profileMacros[profile.ID]
 			macros.PackagePath = pkgPath
 			pkg := gotoolprofile.PackageProof{
 				PackagePath: pkgPath, ModulePath: module, ModuleVersion: plan.Version,
