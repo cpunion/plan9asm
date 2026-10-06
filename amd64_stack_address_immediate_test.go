@@ -13,7 +13,9 @@ func TestX86StackPushNamedAddressIsImmediateNotMemory(t *testing.T) {
 	}
 	for _, operand := range []string{
 		"$·cell(SB)", "$·cell+8(SB)", "$·cell-8(SB)",
-		"$other·cell(SB)", "$cell<>(SB)",
+		"$other·cell(SB)", "$cell<>(SB)", "$runtime·mainPC(SB)",
+		"$·cell+8(SB)(AX)", "$·cell-8(SB)(CX*4)",
+		"$·cell(SB)(R8)(X1*4)",
 	} {
 		t.Run(operand, func(t *testing.T) {
 			source := "TEXT ·Value(SB),4,$0-0\nPUSHL " + operand + "\nPOPL AX\nRET\n"
