@@ -94,7 +94,9 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
 		}
-		if slot.Type == Ptr {
+		if !scalarViews && slot.Type == Ptr {
+			// The private scalar-view query observes numerical bytes only.
+			// It must not inherit this public opaque-identity domain.
 			initial.pointerFP[slot.Offset] = true
 		}
 	}
@@ -122,11 +124,13 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
-	// One logical byte-work envelope includes FP/AUTO and every numerical
-	// GP/X/K/flags payload. It is not a bound on Go's heap/struct overhead.
+	// One logical byte-work envelope includes FP/AUTO, numerical GP/X/K/
+	// flags, opaque GP identities and the source-shape discriminator. It is
+	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
+	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) +
-		2*len(initial.xmm) + len(initial.masks) + 1
+		2*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
