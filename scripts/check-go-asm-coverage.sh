@@ -124,6 +124,8 @@ for report_path in report_paths:
             f"missing coverage baseline for {version}/{arch}; "
             "inspect the full JSON report and update the baseline intentionally"
         )
+    # This fingerprints retained AVX table expressions, not resolved constants,
+    # encoder helper implementations, or runtime/ABI correctness.
     # AVX metadata is independently retained only for x86 so far. Missing
     # metadata is unknown, never an empty-rule or implementation certificate.
     # Other architectures retain their existing class/namespace coverage;

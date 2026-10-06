@@ -42,7 +42,8 @@ func TestOfficialCoverageCIChecksCompleteEncodingRuleAttributes(t *testing.T) {
 	}
 	for _, mutation := range []string{
 		"unchanged", "changed-fingerprint", "changed-count", "missing-report",
-		"missing-baseline", "both-missing",
+		"missing-baseline", "both-missing", "386-fingerprint", "count-zero",
+		"count-bool", "count-string", "malformed-fingerprint", "missing-count", "missing-fingerprint",
 	} {
 		t.Run(mutation, func(t *testing.T) {
 			var baseline map[string]interface{}
@@ -95,6 +96,20 @@ func TestOfficialCoverageCIChecksCompleteEncodingRuleAttributes(t *testing.T) {
 				reports["amd64"]["encoder_rule_fingerprint"] = strings.Repeat("b", 64)
 			case "changed-count":
 				reports["amd64"]["encoder_rules"] = float64(4)
+			case "386-fingerprint":
+				reports["386"]["encoder_rule_fingerprint"] = strings.Repeat("b", 64)
+			case "count-zero":
+				reports["amd64"]["encoder_rules"] = 0
+			case "count-bool":
+				reports["amd64"]["encoder_rules"] = true
+			case "count-string":
+				reports["amd64"]["encoder_rules"] = "3"
+			case "malformed-fingerprint":
+				reports["amd64"]["encoder_rule_fingerprint"] = "not-a-rule-hash"
+			case "missing-count":
+				delete(reports["amd64"], "encoder_rules")
+			case "missing-fingerprint":
+				delete(reports["amd64"], "encoder_rule_fingerprint")
 			case "missing-report", "both-missing":
 				delete(reports["amd64"], "encoder_rules")
 				delete(reports["amd64"], "encoder_rule_fingerprint")

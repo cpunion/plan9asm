@@ -43,7 +43,9 @@
         "encoder_opcodes": 1601,
         "encoder_forms": 4996,
         "encoder_opcodes_observed_in_corpus": 19,
-        "encoder_fingerprint": "e369c64457f20a446a4e5c89736a5bb4a4b63d121710809d547cc171c571bcd1"
+        "encoder_fingerprint": "e369c64457f20a446a4e5c89736a5bb4a4b63d121710809d547cc171c571bcd1",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -58,7 +60,9 @@
         "encoder_opcodes": 1601,
         "encoder_forms": 4996,
         "encoder_opcodes_observed_in_corpus": 1449,
-        "encoder_fingerprint": "e369c64457f20a446a4e5c89736a5bb4a4b63d121710809d547cc171c571bcd1"
+        "encoder_fingerprint": "e369c64457f20a446a4e5c89736a5bb4a4b63d121710809d547cc171c571bcd1",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -120,7 +124,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -135,7 +141,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 1450,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -197,7 +205,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -212,7 +222,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 1450,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -274,7 +286,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -289,7 +303,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 1450,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -351,7 +367,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -366,7 +384,9 @@
         "encoder_opcodes": 1602,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 1450,
-        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5"
+        "encoder_fingerprint": "ed66f1e1863c5e77ffa40f546092a958697bb7dcc186d88bfa26c49b75cb40c5",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -428,7 +448,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4998,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c"
+        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -443,7 +465,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4998,
         "encoder_opcodes_observed_in_corpus": 1451,
-        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c"
+        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -505,7 +529,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4998,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c"
+        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -520,7 +546,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4998,
         "encoder_opcodes_observed_in_corpus": 1451,
-        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c"
+        "encoder_fingerprint": "b5e0b0e2b61b69a007f387082aaa2f7c38c7fdc890c8d16c3e5e00e919144d4c",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
@@ -582,7 +610,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 20,
-        "encoder_fingerprint": "4341ad3acc9a810857665d1941f5f6329b514aeeb62667ac292c46b79fcd1a81"
+        "encoder_fingerprint": "4341ad3acc9a810857665d1941f5f6329b514aeeb62667ac292c46b79fcd1a81",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "amd64": {
         "context_forms": 16,
@@ -597,7 +627,9 @@
         "encoder_opcodes": 1603,
         "encoder_forms": 4997,
         "encoder_opcodes_observed_in_corpus": 1451,
-        "encoder_fingerprint": "4341ad3acc9a810857665d1941f5f6329b514aeeb62667ac292c46b79fcd1a81"
+        "encoder_fingerprint": "4341ad3acc9a810857665d1941f5f6329b514aeeb62667ac292c46b79fcd1a81",
+        "encoder_rules": 3568,
+        "encoder_rule_fingerprint": "974e4bdce9e0cf8687008f4dfa8330537cb0f29bac3940cbdfc57b5e0115c36a"
       },
       "arm": {
         "context_forms": 44,
