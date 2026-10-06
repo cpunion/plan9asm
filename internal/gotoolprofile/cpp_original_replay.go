@@ -113,6 +113,9 @@ func ReplayCPPOriginal(input *ConsumerInput, assembly, packagePath string, defin
 			id := unit.Includes[name]
 			if id == "" {
 				for _, deferred := range unit.GeneratedHeaders {
+					if name == deferred && header == nil {
+						return "", nil, &cppGeneratedHeaderRequirement{assembly: assembly, operand: name}
+					}
 					if name == deferred && header != nil && packagePath != "" {
 						id = "generated/" + packagePath + "/go_asm.h"
 						used[id] = bytesSHA256(header)

@@ -2,6 +2,7 @@ package gotoolprofile
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -39,6 +40,10 @@ func TestCPPOriginalActiveGeneratedHeaderHasTypedRequirement(t *testing.T) {
 			if assembly != "probe.s" || operand != "go_asm.h" {
 				t.Fatalf("typed requirement lost actual assembly/operand: %q %q", assembly, operand)
 			}
+			if !CPPOriginalNeedsGeneratedHeader(err, "probe.s") || CPPOriginalNeedsGeneratedHeader(err, "other.s") ||
+				CPPOriginalNeedsGeneratedHeader(errors.Join(err, fmt.Errorf("independent source guard failure")), "probe.s") {
+				t.Fatal("generated-header suspension accepted a foreign or combined error")
+			}
 			_, _, _, err = ReplayCPPOriginal(input, "probe.s", "example.invalid/header", nil, []byte("#define Record__size 8\n"))
 			if err != nil {
 				t.Fatalf("actual supplied native-header control: %v", err)
@@ -60,6 +65,9 @@ func TestCPPOriginalUnregisteredOperandIsNotGeneratedHeaderRequirement(t *testin
 		}
 		if err == nil || errors.As(err, &requirement) {
 			t.Fatalf("unrelated original CPP error acquired header suspension: %v", err)
+		}
+		if CPPOriginalNeedsGeneratedHeader(err, "probe.s") {
+			t.Fatal("unregistered operand entered actual-header planning")
 		}
 	}
 }

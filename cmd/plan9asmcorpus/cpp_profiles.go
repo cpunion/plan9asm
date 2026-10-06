@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/xgo-dev/plan9asm"
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 // CPP has a separate feature namespace: for example GOAMD64_v3 is exclusive,
@@ -98,11 +99,9 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 				// No fabricated native header is a planning input. Every legal
 				// CPU proposal is retained when actual header presence is needed;
 				// its actual package/header/consumer must still close later.
-				for _, kind := range unit.DeferredIncludes {
-					if kind == "generated_go_asm" {
-						deferredPresence = true
-						return false, nil
-					}
+				if gotoolprofile.CPPOriginalNeedsGeneratedHeader(err, unit.File) {
+					deferredPresence = true
+					return false, nil
 				}
 				return false, fmt.Errorf("full original CPP planning replay: %w", err)
 			}
