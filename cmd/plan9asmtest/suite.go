@@ -19,6 +19,7 @@ import (
 type config struct {
 	Go, Dir, Package, Out string
 	Shards                int
+	Workers               int
 	Timeout               time.Duration
 	Flags                 []string
 	CISelector, CIIsolate string
@@ -43,6 +44,7 @@ type suiteReport struct {
 	Package      string        `json:"package"`
 	Flags        []string      `json:"go_flags"`
 	Timeout      string        `json:"command_timeout"`
+	Workers      int           `json:"workers"`
 	Names        []string      `json:"inventory"`
 	Benchmarks   []string      `json:"benchmarks_not_run_by_default_go_test,omitempty"`
 	InventorySHA string        `json:"inventory_sha256"`
@@ -65,6 +67,14 @@ func runSuite(ctx context.Context, cfg config) error {
 	}
 	if cfg.Timeout <= 0 || cfg.Package == "" || strings.ContainsAny(cfg.Package, " \t\r\n*?[") || strings.Contains(cfg.Package, "...") {
 		return fmt.Errorf("positive timeout and one exact package required")
+	}
+	// Existing programmatic callers use the zero-value config. The CLI has
+	// an explicit default of one and rejects an explicitly requested zero.
+	if cfg.Workers == 0 {
+		cfg.Workers = 1
+	}
+	if cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards {
+		return fmt.Errorf("workers must be 1..32 and no more than shards")
 	}
 	forwarded, profile, err := validateFlags(cfg.Flags)
 	if err != nil {
@@ -99,7 +109,7 @@ func runSuite(ctx context.Context, cfg config) error {
 	if err := os.Mkdir(cfg.Out, 0755); err != nil {
 		return fmt.Errorf("artifact directory must be new (parent must exist): %w", err)
 	}
-	report := suiteReport{Schema: 1, Go: cfg.Go, Flags: forwarded, Timeout: cfg.Timeout.String(), Status: "failed"}
+	report := suiteReport{Schema: 1, Go: cfg.Go, Flags: forwarded, Timeout: cfg.Timeout.String(), Workers: cfg.Workers, Status: "failed"}
 	publish := func() error {
 		report.RootMissing = len(report.Names) - report.RootPassed - report.RootSkipped - report.RootFailed
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -165,26 +175,15 @@ func runSuite(ctx context.Context, cfg config) error {
 	}
 	var failures []error
 	var profiles []string
-	for i := range report.Shards {
-		result := &report.Shards[i]
-		if result.Status == "empty" {
-			continue
-		}
-		stem := filepath.Join(cfg.Out, fmt.Sprintf("shard-%04d", i))
-		result.Seconds, err = captureCommand(ctx, cfg.Timeout, cfg.Dir, cfg.Go, result.Command[1:], stem)
-		var validationErr error
-		file, openErr := os.Open(stem + ".stdout")
-		if openErr == nil {
-			result.Outcomes, validationErr = validateEvents(file, report.Package, result.Names)
-			validationErr = errors.Join(validationErr, file.Close())
-		} else {
-			validationErr = openErr
-		}
-		if err = errors.Join(err, validationErr); err != nil {
-			result.Status, result.Error = "failed", err.Error()
-			failures = append(failures, fmt.Errorf("shard %d: %w", i, err))
-		} else {
-			result.Status = "passed"
+	// Workers receive immutable plan values. Only this collector updates the
+	// report, counters and coverage inventory; there are no concurrent writes.
+	plan := append([]shardResult(nil), report.Shards...)
+	err = runShardWorkers(ctx, cfg.Workers, plan, func(ctx context.Context, result shardResult) shardResult {
+		return executeShard(ctx, cfg, report.Package, result)
+	}, func(result shardResult) error {
+		report.Shards[result.Index] = result
+		if result.Status != "passed" {
+			failures = append(failures, fmt.Errorf("shard %d: %s", result.Index, result.Error))
 		}
 		for name, state := range result.Outcomes {
 			child := strings.Contains(name, "/")
@@ -214,12 +213,13 @@ func runSuite(ctx context.Context, cfg config) error {
 			}
 		}
 		if profile != "" {
-			profiles = append(profiles, stem+".cover")
+			profiles = append(profiles, filepath.Join(cfg.Out, fmt.Sprintf("shard-%04d.cover", result.Index)))
 		}
-		fmt.Printf("shard %d/%d: %s (%d roots, %.3fs)\n", i+1, len(shards), result.Status, len(result.Names), result.Seconds)
-		if err := publish(); err != nil {
-			return err
-		}
+		fmt.Printf("shard %d/%d: %s (%d roots, %.3fs)\n", result.Index+1, len(shards), result.Status, len(result.Names), result.Seconds)
+		return publish()
+	})
+	if err != nil {
+		return fail(errors.Join(errors.Join(failures...), err))
 	}
 	if len(failures) != 0 {
 		return fail(errors.Join(failures...))
@@ -241,6 +241,26 @@ func runSuite(ctx context.Context, cfg config) error {
 	report.Status = "passed"
 	fmt.Printf("complete root inventory: %d passed, %d skipped, %d failed; subtests/seeds: %d passed, %d skipped, %d failed\n", report.RootPassed, report.RootSkipped, report.RootFailed, report.ChildPassed, report.ChildSkipped, report.ChildFailed)
 	return publish()
+}
+
+func executeShard(ctx context.Context, cfg config, pkg string, result shardResult) shardResult {
+	stem := filepath.Join(cfg.Out, fmt.Sprintf("shard-%04d", result.Index))
+	seconds, executionErr := captureCommand(ctx, cfg.Timeout, cfg.Dir, cfg.Go, result.Command[1:], stem)
+	result.Seconds = seconds
+	var validationErr error
+	file, openErr := os.Open(stem + ".stdout")
+	if openErr == nil {
+		result.Outcomes, validationErr = validateEvents(file, pkg, result.Names)
+		validationErr = errors.Join(validationErr, file.Close())
+	} else {
+		validationErr = openErr
+	}
+	if err := errors.Join(executionErr, validationErr); err != nil {
+		result.Status, result.Error = "failed", err.Error()
+	} else {
+		result.Status = "passed"
+	}
+	return result
 }
 
 type boundedOutput struct {

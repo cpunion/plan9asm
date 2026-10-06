@@ -1,6 +1,6 @@
 # Exhaustive root-package test partitions
 
-`plan9asmtest` runs one exact Go package in fresh, serial child processes. It
+`plan9asmtest` runs one exact Go package in fresh, owned child processes. It
 discovers the complete current `Test`, runnable `Example` and `Fuzz` inventory
 with actual `go test -list=.`; no checked-in test list is used. Go's separately
 listed benchmarks are retained in the report but not run, matching ordinary
@@ -15,6 +15,25 @@ mkdir -p _out
 GOFLAGS= go run ./cmd/plan9asmtest \
   -out _out/root-partitions-current -shards 32 -timeout 45m
 ```
+
+Ordinary mode is serial by default. Add `-workers 2` for bounded parallel
+partitions; the allowed range is 1..32 and cannot exceed `-shards`. Start small
+because each process owns its own LLVM objects and compiler children. The
+report records the actual worker limit. Parallelism does not alter the actual
+inventory, hash assignment, build flags, per-child timeout or coverage checks.
+Only one collector publishes reports and counts. A failed shard remains failed
+while other shards run; a failed publication cancels and waits for active owners.
+Selected cross-runtime CI owners remain serial and reject `-workers` above one.
+
+The large corpus-driver test package can use the same complete mechanism:
+
+```sh
+GOFLAGS= go run ./cmd/plan9asmtest \
+  -package github.com/xgo-dev/plan9asm/cmd/plan9asmcorpus \
+  -out _out/corpus-test-partitions -shards 32 -workers 2 -timeout 45m -- -race -p=1
+```
+
+This runs the corpus driver's Go tests, not the discovered-library corpus.
 
 This covers **only the root package**, not root `./...`, the nested CLI
 modules, strict stdlib/object gates or cross-runtime jobs. Those still require

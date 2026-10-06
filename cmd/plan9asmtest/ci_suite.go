@@ -65,6 +65,9 @@ func ciReadJSON(path string, value any) error {
 }
 
 func ciPrepare(cfg config) (config, error) {
+	if cfg.Workers < 0 || cfg.Workers > 1 {
+		return cfg, fmt.Errorf("selected-CI owners remain serial; workers must be one")
+	}
 	if cfg.CISelector == "" || cfg.CIIsolate == "" || cfg.Timeout <= 0 || cfg.Shards < 2 || cfg.Shards > 1024 || cfg.Package == "" || strings.ContainsAny(cfg.Package, " \t\r\n*?[") || strings.Contains(cfg.Package, "...") || os.Getenv("GOFLAGS") != "" {
 		return cfg, fmt.Errorf("complete CI selector/isolate/owners, positive timeout, one exact package and empty GOFLAGS required")
 	}
