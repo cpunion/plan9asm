@@ -162,6 +162,14 @@ func x86LockScalarNativeMemoryBound(form x86LockScalarRMWForm, ins Instr, arch s
 	if form.destination.Kind != OpMem && form.destination.Kind != OpSym || ins.x86UnboundAddressOverride {
 		return fmt.Errorf("%w: %s LOCK RMW needs its bound native memory destination, not a virtual FP/AUTO span", ErrProbeNeedsContext, arch)
 	}
+	if form.destination.Kind == OpMem {
+		memory := form.destination.Mem
+		if memory.Base == SP || memory.Base == BP || memory.Index == SP || memory.Index == BP {
+			// Numeric source slots and LLVM's private SP allocation do not
+			// establish the original instruction's physical native address.
+			return fmt.Errorf("%w: %s LOCK RMW needs independent native SP/BP backing", ErrProbeNeedsContext, arch)
+		}
+	}
 	if arch == "amd64" && form.spec.bits == 8 && form.source.Kind == OpReg &&
 		len(ins.Args) == 2 && form.source.Reg != ins.Args[0].Reg {
 		return fmt.Errorf("%w: amd64 LOCK byte source needs its original Go REX physical register view", ErrProbeNeedsContext)
