@@ -21,8 +21,11 @@ func x86UndefinedTrapRequireOriginalSignal(t *testing.T, output []byte, err erro
 }
 
 func x86UndefinedTrapOriginalSignal(output []byte, err error) bool {
-	var exit *exec.ExitError
-	return errors.As(err, &exit) && exit.ProcessState != nil && exit.ProcessState.Exited() &&
+	// Like the Go-assembler oracle, accept only a directly completed process
+	// outcome. errors.As would hide cleanup, pipe or context failures joined
+	// to the otherwise expected exit status.
+	exit, completed := err.(*exec.ExitError)
+	return completed && exit.ProcessState != nil && exit.ProcessState.Exited() &&
 		exit.ExitCode() == 2 && strings.Contains(string(output), "SIGILL: illegal instruction") &&
 		strings.Contains(string(output), "main.fault")
 }
