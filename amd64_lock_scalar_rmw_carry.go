@@ -11,9 +11,10 @@ import (
 // GP byte facts prevent a default-zero alloca or an empty flags stack from
 // becoming an incoming carry. The ordinary consumers still check operands.
 type x86LockCarryState struct {
-	carry bool
-	gp    [16]uint8
-	stack []x86LockCarryCell
+	carry        bool
+	gp           [16]uint8
+	stack        []x86LockCarryCell
+	stackUnbound bool
 }
 
 type x86LockCarryCell struct {
@@ -30,20 +31,26 @@ func (state x86LockCarryState) clone() x86LockCarryState {
 func (state x86LockCarryState) intersect(other x86LockCarryState) x86LockCarryState {
 	state = state.clone()
 	state.carry = state.carry && other.carry
+	state.stackUnbound = state.stackUnbound || other.stackUnbound
 	for index := range state.gp {
 		state.gp[index] &= other.gp[index]
 	}
 	if len(state.stack) != len(other.stack) {
 		state.stack = nil
+		state.stackUnbound = true
 	} else {
 		for index := range state.stack {
 			if state.stack[index].bits != other.stack[index].bits {
 				state.stack = nil
+				state.stackUnbound = true
 				break
 			}
 			state.stack[index].valueKnown = state.stack[index].valueKnown && other.stack[index].valueKnown
 			state.stack[index].carryKnown = state.stack[index].carryKnown && other.stack[index].carryKnown
 		}
+	}
+	if state.stackUnbound {
+		state.stack = nil
 	}
 	return state
 }
@@ -69,8 +76,22 @@ func (c *amd64Ctx) lockCarryRead(operand Operand, width int64, state x86LockCarr
 }
 
 func (c *amd64Ctx) lockCarryWrite(operand Operand, width int64, known bool, state *x86LockCarryState) {
+	if operand.Kind == OpMem || operand.Kind == OpSym || operand.Kind == OpFP {
+		// No numerical/address fact here establishes nonaliasing with an
+		// outstanding source PUSH. Even an independently allowed native store
+		// cannot preserve a stack cell without a separate exact alias proof.
+		state.stack = nil
+		return
+	}
 	if operand.Kind != OpReg {
 		return
+	}
+	if base, valid := x86CallerGP(operand.Reg); valid && base == SP {
+		// Explicit SP replacement/adjustment is not an ordinary balanced
+		// PUSH/POP. This domain cannot recover its original physical identity,
+		// even if a later instruction defines the pushed GP value again.
+		state.stack = nil
+		state.stackUnbound = true
 	}
 	index, mask, valid := x86ResultGP(operand.Reg, width, c.goarch)
 	if !valid {
@@ -112,16 +133,19 @@ func (c *amd64Ctx) lockCarryTransfer(ins Instr, state x86LockCarryState) x86Lock
 			validCount = len(ins.Args) == 1
 		}
 		if !validMode || !validCount {
-			return x86LockCarryState{}
+			return x86LockCarryState{stackUnbound: true}
 		}
 		if spec.mode == amd64StackPushValue || spec.mode == amd64StackPushFlags {
 			if len(state.stack) >= 64 {
-				return x86LockCarryState{}
+				return x86LockCarryState{stackUnbound: true}
 			}
 			cell := x86LockCarryCell{bits: spec.bits, carryKnown: state.carry}
 			if spec.mode == amd64StackPushValue {
 				cell.valueKnown = c.lockCarryRead(ins.Args[0], int64(spec.bits/8), state)
 				cell.carryKnown = cell.valueKnown
+			}
+			if state.stackUnbound {
+				cell.valueKnown, cell.carryKnown = false, false
 			}
 			// PUSHF captures a flags word, but this domain proves only its CF.
 			// POP into GP must not promote unknown OF or other bits to numeric
@@ -146,7 +170,7 @@ func (c *amd64Ctx) lockCarryTransfer(ins Instr, state x86LockCarryState) x86Lock
 	}
 	if effect, recognized, err := x86TypedInstructionByteEffect(op, ins, c.goarch); recognized {
 		if err != nil {
-			return x86LockCarryState{}
+			return x86LockCarryState{stackUnbound: true}
 		}
 		known := effect.flagsRead&x86ByteFlagCF == 0 || state.carry
 		for _, operand := range effect.operands {
@@ -179,13 +203,16 @@ func (c *amd64Ctx) lockCarryTransfer(ins Instr, state x86LockCarryState) x86Lock
 			return state
 		}
 	}
-	if op == "STMXCSR" && len(ins.Args) == 1 && isAMD64MemoryOperand(ins.Args[0]) ||
-		op == "NOP" && len(ins.Args) == 0 {
+	if op == "STMXCSR" && len(ins.Args) == 1 && isAMD64MemoryOperand(ins.Args[0]) {
+		c.lockCarryWrite(ins.Args[0], 4, false, &state)
+		return state
+	}
+	if op == "NOP" && len(ins.Args) == 0 {
 		return state
 	}
 	// Calls, native/raw effects and unregistered forms have no incoming flags
 	// preservation contract. A later explicit definition may start a new fact.
-	return x86LockCarryState{}
+	return x86LockCarryState{stackUnbound: true}
 }
 
 func (c *amd64Ctx) verifyNamedLockCarry() error {

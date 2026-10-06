@@ -31,6 +31,15 @@ func TestX86LockScalarRMWAddressLiteralIsNotMemory(t *testing.T) {
 						t.Error("address literal became a locked memory object", api, err)
 					}
 				}
+				ordinary := strings.Replace(source, "$·cell(SB)", "·cell(SB)", 1)
+				x86LockScalarOriginalInstruction(t, arch, ordinary)
+				for _, api := range []string{"text", "module", "Go"} {
+					ir, err := x86OrderingHintTranslateAPI(t, api, ordinary,
+						"package ordering\nfunc locked(p *[16]byte)\n", arch, "")
+					if err != nil || !strings.Contains(ir, "lock; ") {
+						t.Error("ordinary bound SB memory lost its existing atomic effect", api, err)
+					}
+				}
 			})
 		}
 	}

@@ -77,6 +77,9 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 		return fail("has an incomplete operand list")
 	}
 	form := x86LockScalarRMWForm{spec: spec, destination: ins.Args[count-1]}
+	if form.destination.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(form.destination.Sym), "$") {
+		return fail("requires writable memory, not a symbol address literal")
+	}
 	if !spec.unary {
 		form.source = ins.Args[0]
 	}
@@ -159,6 +162,9 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 }
 
 func x86LockScalarNativeMemoryBound(form x86LockScalarRMWForm, ins Instr, arch string) error {
+	if form.destination.Kind == OpSym && strings.HasPrefix(strings.TrimSpace(form.destination.Sym), "$") {
+		return fmt.Errorf("%s LOCK RMW address literal is not writable native memory", arch)
+	}
 	if form.destination.Kind != OpMem && form.destination.Kind != OpSym || ins.x86UnboundAddressOverride {
 		return fmt.Errorf("%w: %s LOCK RMW needs its bound native memory destination, not a virtual FP/AUTO span", ErrProbeNeedsContext, arch)
 	}
