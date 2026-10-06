@@ -79,3 +79,34 @@ func TestX86OfficialPackedBinarySourceWitnessesCompileWithGo(t *testing.T) {
 		})
 	}
 }
+
+func TestX86OfficialWordMultiplyWitnessesReachActualLowerer(t *testing.T) {
+	byOpcode := x86OfficialPackedBinaryWitnesses(t)
+	// These names select a coherent semantic family. All operand formats below
+	// come from the independent Go table, not the lowerer's own spec or a
+	// discovering external library.
+	for _, arch := range []string{"amd64", "386"} {
+		for _, opcode := range []string{"VPMULLW", "VPMULHW", "VPMULHUW", "VPMULHRSW"} {
+			witnesses := byOpcode[opcode]
+			if len(witnesses) == 0 {
+				t.Fatalf("actual Go encoder family lacks %s", opcode)
+			}
+			for _, witness := range witnesses {
+				if arch == "386" && strings.Count(witness, ",") == 3 {
+					continue // Independently tested actual frontend refusal above.
+				}
+				t.Run(arch+"/"+witness, func(t *testing.T) {
+					source := "TEXT f(SB),4,$0-0\n" + witness + "\nRET\n"
+					goAssemblerOracleOutput(t, arch, source, "", true)
+					file, err := Parse(ArchAMD64, source)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[1]); err != nil {
+						t.Fatalf("actual Go-accepted table witness failed real lowering: %v", err)
+					}
+				})
+			}
+		}
+	}
+}
