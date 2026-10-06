@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go/build"
+	"io"
 	"path"
 	"strings"
 
@@ -23,6 +24,15 @@ func planDiscoveryCPPFeaturePair(plan *discoveryOrdinarySelectionPlan, ctx build
 func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, ctx build.Context, baseline *discoveryTargetFeatures, asmFile, goFile string, initial discoveryFeatureProfileRequest, mode *discoveryInstrumentationSelectionModel, contexts ...context.Context) ([]discoveryFeatureProfileRequest, error) {
 	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 		return nil, err
+	}
+	if len(contexts) == 1 && ctx.OpenFile != nil {
+		open := ctx.OpenFile
+		ctx.OpenFile = func(name string) (io.ReadCloser, error) {
+			if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+				return nil, err
+			}
+			return open(name)
+		}
 	}
 	if plan.DocumentationSourceProtocol == discoveryDocumentationProtocol && possibleDocumentationDirectory(plan, path.Dir(asmFile)) {
 		sources, directories, err := ordinarySelectionBytes(plan)

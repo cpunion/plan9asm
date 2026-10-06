@@ -108,6 +108,9 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			return nil, err
 		}
 		ctx.OpenFile = func(file string) (io.ReadCloser, error) {
+			if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+				return nil, err
+			}
 			data, exists := contents[filepath.ToSlash(file)]
 			if !exists {
 				return nil, fmt.Errorf("uncaptured profile source %s", file)
