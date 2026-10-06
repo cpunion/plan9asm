@@ -3,6 +3,7 @@
 package plan9asm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,11 +15,55 @@ import (
 
 func x86UndefinedTrapRequireOriginalSignal(t *testing.T, output []byte, err error) {
 	t.Helper()
-	var exit *exec.ExitError
-	if !errors.As(err, &exit) || exit.ExitCode() != 2 ||
-		!strings.Contains(string(output), "SIGILL: illegal instruction") ||
-		!strings.Contains(string(output), "main.fault") {
+	if !x86UndefinedTrapOriginalSignal(output, err) {
 		t.Fatalf("unchanged Go object did not raise the actual undefined-instruction fault: %v\n%s", err, output)
+	}
+}
+
+func x86UndefinedTrapOriginalSignal(output []byte, err error) bool {
+	var exit *exec.ExitError
+	return errors.As(err, &exit) && exit.ProcessState != nil && exit.ProcessState.Exited() &&
+		exit.ExitCode() == 2 && strings.Contains(string(output), "SIGILL: illegal instruction") &&
+		strings.Contains(string(output), "main.fault")
+}
+
+func TestX86UndefinedTrapExitStatusFixture(t *testing.T) {
+	if os.Getenv("PLAN9ASM_UNDEFINED_EXIT_FIXTURE") == "1" {
+		os.Exit(2)
+	}
+}
+
+func TestX86UndefinedTrapExpectedFaultRejectsUnknownLifecycle(t *testing.T) {
+	ctx, cancel := runtimeOracleStageContext(t)
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestX86UndefinedTrapExitStatusFixture$")
+	command.Env = append(os.Environ(), "PLAN9ASM_UNDEFINED_EXIT_FIXTURE=1")
+	_, err := runtimeOracleCombinedOutput(ctx, command)
+	cancel()
+	// This parser control obtains a real exit status, but its diagnostic is
+	// deliberately synthetic. It is not an original-Go signal observation.
+	output := []byte("SIGILL: illegal instruction\nmain.fault\n")
+	if !x86UndefinedTrapOriginalSignal(output, err) {
+		t.Fatalf("actual completed exit-2 parser control failed: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		err    error
+		output []byte
+	}{
+		{"cleanup", errors.Join(err, errors.New("unknown descendant cleanup")), output},
+		{"deadline", errors.Join(err, context.DeadlineExceeded), output},
+		{"cancellation", errors.Join(err, context.Canceled), output},
+		{"wrapped outcome", fmt.Errorf("unknown wrapper: %w", err), output},
+		{"uncompleted exit", &exec.ExitError{}, output},
+		{"wrong signal", err, []byte("SIGTRAP: trace trap\nmain.fault\n")},
+		{"wrong function", err, []byte("SIGILL: illegal instruction\nmain.other\n")},
+		{"unknown exit", errors.New("unbound process failure"), output},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if x86UndefinedTrapOriginalSignal(test.output, test.err) {
+				t.Fatal("expected-fault parser erased an unknown lifecycle or diagnostic")
+			}
+		})
 	}
 }
 
