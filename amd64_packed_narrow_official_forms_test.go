@@ -37,70 +37,86 @@ func TestX86PackedNarrowOfficialRowsThreeAPIsFiveTargetObjects(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM 22 llc required")
 	}
-	for _, target := range []struct{ arch, triple string }{
-		{"amd64", "x86_64-apple-darwin"},
-		{"amd64", "x86_64-unknown-linux-gnu"},
-		{"amd64", "x86_64-pc-windows-msvc"},
-		{"386", "i386-unknown-linux-gnu"},
-		{"386", "i686-pc-windows-msvc"},
-	} {
-		t.Run(target.triple, func(t *testing.T) {
-			var source, declarations strings.Builder
-			declarations.WriteString("package narrow\n")
-			rows := x86OfficialPackedNarrowRows(t, target.arch)
-			for index, row := range rows {
-				fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
-				fmt.Fprintf(&declarations, "func F%d()\n", index)
-			}
-			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
-			pkg := mustGoPackage(t, "example.invalid/narrow", declarations.String())
-			file, err := Parse(ArchAMD64, source.String())
-			if err != nil {
-				t.Fatal(err)
-			}
-			sigs := map[string]FuncSig{}
-			for index := range rows {
-				name := fmt.Sprintf("F%d", index)
-				sig, err := DeriveGoFuncABI0Signature(name, pkg.Types.Scope().Lookup(name).(*types.Func),
-					target.arch, types.SizesFor("gc", target.arch))
+	for _, raw := range []bool{false, true} {
+		for _, target := range []struct{ arch, triple string }{
+			{"amd64", "x86_64-apple-darwin"},
+			{"amd64", "x86_64-unknown-linux-gnu"},
+			{"amd64", "x86_64-pc-windows-msvc"},
+			{"386", "i386-unknown-linux-gnu"},
+			{"386", "i686-pc-windows-msvc"},
+		} {
+			t.Run(fmt.Sprintf("raw=%t/%s", raw, target.triple), func(t *testing.T) {
+				var source, declarations strings.Builder
+				declarations.WriteString("package narrow\n")
+				rows := x86OfficialPackedNarrowRows(t, target.arch)
+				if raw {
+					// Physical mode32 masks are legal even though its named Go
+					// frontend rejects them; bytes come from the actual amd64 Go
+					// encoder with low physical register/address banks throughout.
+					rows = x86OfficialPackedNarrowRows(t, "amd64")
+				}
+				for index, row := range rows {
+					if raw {
+						code := assembleX87ControlBytes(t, "amd64", "TEXT rawpack(SB),4,$0-0\n"+row+"\nRET\n")
+						var encoded strings.Builder
+						for _, value := range code[:len(code)-1] {
+							fmt.Fprintf(&encoded, "BYTE $%d\n", value)
+						}
+						row = encoded.String()
+					}
+					fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", index, row)
+					fmt.Fprintf(&declarations, "func F%d()\n", index)
+				}
+				goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
+				pkg := mustGoPackage(t, "example.invalid/narrow", declarations.String())
+				file, err := Parse(ArchAMD64, source.String())
 				if err != nil {
 					t.Fatal(err)
 				}
-				sigs[name] = sig
-			}
-			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs,
-				ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
-			before := fmt.Sprintf("%#v %#v", file, sigs)
-			ir, err := Translate(file, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "narrow-text.ll", "narrow-text.o", ir)
-			context := llvm.NewContext()
-			defer context.Dispose()
-			module, err := TranslateModuleInContext(context, file, options)
-			if !module.IsNil() {
-				defer module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "narrow-module.ll", "narrow-module.o", module.String())
-			translated, err := translateGoModuleInContext(context, pkg, []byte(source.String()), GoModuleOptions{
-				GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: options.ResolveSym,
+				sigs := map[string]FuncSig{}
+				for index := range rows {
+					name := fmt.Sprintf("F%d", index)
+					sig, err := DeriveGoFuncABI0Signature(name, pkg.Types.Scope().Lookup(name).(*types.Func),
+						target.arch, types.SizesFor("gc", target.arch))
+					if err != nil {
+						t.Fatal(err)
+					}
+					sigs[name] = sig
+				}
+				options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs,
+					ResolveSym: func(symbol string) string { return strings.TrimPrefix(symbol, "·") }}
+				before := fmt.Sprintf("%#v %#v", file, sigs)
+				ir, err := Translate(file, options)
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, target.triple, "narrow-text.ll", "narrow-text.o", ir)
+				context := llvm.NewContext()
+				defer context.Dispose()
+				module, err := TranslateModuleInContext(context, file, options)
+				if !module.IsNil() {
+					defer module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, target.triple, "narrow-module.ll", "narrow-module.o", module.String())
+				translated, err := translateGoModuleInContext(context, pkg, []byte(source.String()), GoModuleOptions{
+					GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: options.ResolveSym,
+				})
+				if translated != nil && !translated.Module.IsNil() {
+					defer translated.Module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, target.triple, "narrow-go.ll", "narrow-go.o", translated.Module.String())
+				if before != fmt.Sprintf("%#v %#v", file, sigs) {
+					t.Fatal("object coverage changed original source/signatures")
+				}
+				t.Logf("%d independent Go-accepted vector forms: three APIs and LLVM 22 objects, not runtime/caller coverage", len(rows))
 			})
-			if translated != nil && !translated.Module.IsNil() {
-				defer translated.Module.Dispose()
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			compileLLVMToObject(t, llc, target.triple, "narrow-go.ll", "narrow-go.o", translated.Module.String())
-			if before != fmt.Sprintf("%#v %#v", file, sigs) {
-				t.Fatal("object coverage changed original source/signatures")
-			}
-			t.Logf("%d independent Go-accepted vector forms: three APIs and LLVM 22 objects, not runtime/caller coverage", len(rows))
-		})
+		}
 	}
 }
 
