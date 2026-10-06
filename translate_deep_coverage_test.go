@@ -588,49 +588,59 @@ func TestTranslateModuleDirectErrorCoverage(t *testing.T) {
 		}
 	}
 
-	ctx := llvm.GlobalContext()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
 	for _, tc := range []struct {
 		name string
+		arch Arch
 		fn   Func
 		sig  FuncSig
 	}{
 		{
 			name: "mrs-arity",
+			arch: ArchARM64,
 			fn:   Func{Sym: "example.bad1", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMRS, Args: []Operand{{Kind: OpIdent, Ident: "MIDR_EL1"}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad1", Ret: I64},
 		},
 		{
 			name: "movd-bad-dst",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad2", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMOVD, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpIdent, Ident: "label"}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad2", Ret: I64},
 		},
 		{
 			name: "movl-bad-dst",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad3", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMOVL, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpIdent, Ident: "label"}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad3", Ret: I64},
 		},
 		{
 			name: "addq-bad-dst",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad4", Instrs: []Instr{{Op: OpTEXT}, {Op: OpADDQ, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpIdent, Ident: "label"}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad4", Ret: I64},
 		},
 		{
 			name: "invalid-op-kind",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad5", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMOVQ, Args: []Operand{{Kind: OpLabel, Sym: "x"}, {Kind: OpReg, Reg: AX}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad5", Ret: I64},
 		},
 		{
 			name: "bad-result-index",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad6", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMOVQ, Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpFP, FPOffset: 8}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad6", Ret: I64, Frame: FrameLayout{Results: []FrameSlot{{Offset: 8, Type: I64, Index: 3}}}},
 		},
 		{
 			name: "bad-fp-read",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad7", Instrs: []Instr{{Op: OpTEXT}, {Op: OpMOVQ, Args: []Operand{{Kind: OpFP, FPOffset: 8}, {Kind: OpReg, Reg: AX}}}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad7", Ret: I64, Frame: FrameLayout{Params: []FrameSlot{{Offset: 8, Type: I64, Index: 9}}}},
 		},
 		{
 			name: "unsupported-insn",
+			arch: ArchAMD64,
 			fn:   Func{Sym: "example.bad8", Instrs: []Instr{{Op: OpTEXT}, {Op: "UNDEF"}, {Op: OpRET}}},
 			sig:  FuncSig{Name: "example.bad8", Ret: I64},
 		},
@@ -638,7 +648,7 @@ func TestTranslateModuleDirectErrorCoverage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			mod := ctx.NewModule("direct-errors-" + tc.name)
 			defer mod.Dispose()
-			if err := translateFuncLinearModule(mod, ArchAMD64, tc.fn, tc.sig); !errors.Is(err, errDirectModuleUnsupported) {
+			if err := translateFuncLinearModule(mod, tc.arch, tc.fn, tc.sig); !errors.Is(err, errDirectModuleUnsupported) {
 				t.Fatalf("%s error = %v", tc.name, err)
 			}
 		})
