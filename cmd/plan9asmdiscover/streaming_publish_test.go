@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -146,7 +146,11 @@ func TestDiscoveryStreamingPublicationRejectsCorruptUnchangedTail(t *testing.T) 
 		t.Fatalf("failed publication changed authoritative manifest: %v", err)
 	}
 	data, err := os.ReadFile(last)
-	if err != nil || !json.Valid(data[:len(data)-len("{corrupt unselected tail}\n")-1]) && len(data) == 0 {
-		t.Fatalf("previous shard disappeared: %v", err)
+	if err != nil || !bytes.HasSuffix(data, []byte("{corrupt unselected tail}\n")) {
+		t.Fatalf("failed publication modified the unchanged shard: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(ledger))
+	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(ledger) {
+		t.Fatalf("failed publication leaked a lock/staging directory: entries=%v err=%v", entries, err)
 	}
 }
