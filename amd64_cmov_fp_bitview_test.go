@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -33,7 +34,7 @@ func TestX86CMOVFamilyFPBitViewsThreeAPIFiveTargets(t *testing.T) {
 						if err != nil {
 							t.Fatal("existing complete floating logical bit-view was lost", err)
 						}
-						if strings.Contains(ir, "fptosi") || strings.Contains(ir, "fptoui") {
+						if x86CMOVFPHasNumericConversion(ir) {
 							t.Fatal("raw FP bytes were numerically converted")
 						}
 						compileLLVMToObject(t, llc, target.triple, "cmov-fp-"+api+".ll", "cmov-fp-"+api+".o", ir)
@@ -73,11 +74,16 @@ func TestX86CMOVFamilyFPBitViewsExactPartialAndCrossSlotExtent(t *testing.T) {
 					if test.valid && err != nil || !test.valid && !errors.Is(err, ErrProbeNeedsContext) {
 						t.Fatal("complete bit span/holes/Ptr contract", err)
 					}
-					if test.valid && (strings.Contains(ir, "fptosi") || strings.Contains(ir, "fptoui")) {
+					if test.valid && x86CMOVFPHasNumericConversion(ir) {
 						t.Fatal("FP byte reconstruction became a numerical conversion")
 					}
 				})
 			}
 		}
 	}
+}
+
+// Common intrinsic declarations are not executed conversion instructions.
+func x86CMOVFPHasNumericConversion(ir string) bool {
+	return regexp.MustCompile(`(?m)^\s+%[^\n]+ = (fptosi|fptoui|call [^\n]*@llvm\.fpto(si|ui))`).MatchString(ir)
 }
