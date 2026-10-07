@@ -30,8 +30,12 @@ func discoveryFeatureFileSHA256(name string) (string, error) {
 }
 
 func discoveryFeatureReadCloserSHA256(input io.ReadCloser, buffers discoveryFeatureHashBuffers) (string, error) {
+	buffer := buffers.Get().(*discoveryFeatureHashBuffer)
+	defer buffers.Put(buffer)
 	h := sha256.New()
-	_, readErr := io.Copy(h, input)
+	// Hide WriterTo: os.File's fallback otherwise bypasses CopyBuffer and
+	// allocates its own small buffer. Every call still reads the complete file.
+	_, readErr := io.CopyBuffer(h, struct{ io.Reader }{input}, buffer[:])
 	closeErr := input.Close()
 	if readErr != nil {
 		return "", readErr

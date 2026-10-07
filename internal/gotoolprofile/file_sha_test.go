@@ -1,7 +1,6 @@
 package gotoolprofile
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -18,6 +17,8 @@ type fileSHAReader struct {
 	data                    []byte
 	position, calls, widest int
 	step                    int
+	failAfter               int
+	dataError, finalEOF     bool
 	readError, closeError   error
 	closed                  int
 }
@@ -26,6 +27,9 @@ func (reader *fileSHAReader) Read(output []byte) (int, error) {
 	reader.calls++
 	if len(output) > reader.widest {
 		reader.widest = len(output)
+	}
+	if reader.failAfter > 0 && reader.position == reader.failAfter {
+		return 0, reader.readError
 	}
 	if reader.position == len(reader.data) {
 		if reader.readError != nil {
@@ -36,8 +40,17 @@ func (reader *fileSHAReader) Read(output []byte) (int, error) {
 	if reader.step > 0 && len(output) > reader.step {
 		output = output[:reader.step]
 	}
+	if reader.failAfter > 0 && len(output) > reader.failAfter-reader.position {
+		output = output[:reader.failAfter-reader.position]
+	}
 	n := copy(output, reader.data[reader.position:])
 	reader.position += n
+	if reader.dataError && reader.position == reader.failAfter {
+		return n, reader.readError
+	}
+	if reader.finalEOF && reader.position == len(reader.data) {
+		return n, io.EOF
+	}
 	return n, nil
 }
 
@@ -143,25 +156,39 @@ func TestFileSHA256ShortReadsAndErrorsReturnBuffer(t *testing.T) {
 	for _, row := range []struct {
 		name                  string
 		size, step            int
+		failAfter             int
+		dataError, finalEOF   bool
 		readError, closeError error
 		wantError             error
 	}{
 		{name: "empty"},
 		{name: "partial final block", size: 263},
+		{name: "data with EOF", size: 263, finalEOF: true},
 		{name: "short reads", size: 1027, step: 7},
+		{name: "empty read error", readError: readError, wantError: readError},
 		{name: "read error", size: 263, step: 7, readError: readError, wantError: readError},
+		{name: "early read error", size: 263, failAfter: 7, readError: readError, wantError: readError},
+		{name: "partial data with read error", size: 263, failAfter: 7, dataError: true, readError: readError, wantError: readError},
 		{name: "close error", size: 263, closeError: closeError, wantError: closeError},
 		{name: "read error precedes close error", size: 263, readError: readError, closeError: closeError, wantError: readError},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			reader := &fileSHAReader{data: fileSHAData(row.size), step: row.step, readError: row.readError, closeError: row.closeError}
+			reader := &fileSHAReader{
+				data: fileSHAData(row.size), step: row.step, failAfter: row.failAfter,
+				dataError: row.dataError, finalEOF: row.finalEOF,
+				readError: row.readError, closeError: row.closeError,
+			}
 			buffers := &fileSHASpyBuffers{onPut: func() {
 				if reader.closed != 1 {
 					t.Error("buffer returned before the owned reader closed")
 				}
 			}}
 			digest, err := discoveryFeatureReadCloserSHA256(reader, buffers)
-			if !errors.Is(err, row.wantError) || reader.closed != 1 || reader.position != len(reader.data) {
+			wantConsumed := row.size
+			if row.failAfter > 0 {
+				wantConsumed = row.failAfter
+			}
+			if !errors.Is(err, row.wantError) || reader.closed != 1 || reader.position != wantConsumed {
 				t.Fatalf("full read/close/error precedence changed: position=%d closes=%d digest=%s err=%v", reader.position, reader.closed, digest, err)
 			}
 			if row.wantError != nil && digest != "" || row.wantError == nil && digest != fileSHAExpected(reader.data) {
@@ -217,7 +244,7 @@ func TestFileSHA256ConcurrentBufferReturn(t *testing.T) {
 	const count = 32
 	var workers sync.WaitGroup
 	buffers := new(fileSHASpyBuffers)
-	failures := make(chan error, count)
+	failures := make(chan error, 3*count)
 	for index := 0; index < count; index++ {
 		workers.Add(1)
 		go func(index int) {
@@ -304,5 +331,3 @@ func BenchmarkFileSHA256CompletePhysicalRead(b *testing.B) {
 		}
 	}
 }
-
-var _ = bytes.Equal
