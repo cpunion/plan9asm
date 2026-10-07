@@ -216,6 +216,47 @@ func TestARM64NativeScratchSourceThreeAPIActualObjects(t *testing.T) {
 	}
 }
 
+func TestARM64NativeScratchSourceLabelAliases(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, target := range []struct{ goos, triple string }{
+		{"linux", "aarch64-unknown-linux-gnu"},
+		{"darwin", "arm64-apple-darwin"},
+		{"windows", "aarch64-pc-windows-msvc"},
+	} {
+		t.Run(target.goos, func(t *testing.T) {
+			for _, test := range []struct{ name, labels string }{
+				{"inline", "first: next:"},
+				{"internal_names", "reg_R0: anon_1:"},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					assembly := strings.Replace(arm64ScratchSelectedSource,
+						"ADD $3,R1", test.labels+" ADD $3,R1", 1)
+					_, pkg, file, options, source := arm64ScratchActualBoundSourceWithAssembly(
+						t, target.goos, target.triple, assembly)
+					// The factory assembled the unchanged source and captured both
+					// its native object and package archive. Empty source aliases
+					// must preserve fallthrough, not invent inputs or a return.
+					if _, closed := source.closed[pkg.Path+".Value"]; !closed {
+						t.Fatal("Go-accepted source label aliases broke native scratch closure")
+					}
+					for _, api := range []string{"text", "module"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := arm64ScratchSourceAPI(t, pkg, file, options, api)
+							if err != nil {
+								t.Fatal(err)
+							}
+							compileLLVMToObject(t, llc, target.triple, "aliases.ll", "aliases.o", ir)
+						})
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestARM64NativeScratchCanonicalCPPSourceIdentity(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
