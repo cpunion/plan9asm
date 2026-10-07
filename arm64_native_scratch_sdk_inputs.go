@@ -106,6 +106,17 @@ func arm64ScratchSDKNativeEffect(instruction arm64asm.Inst) (arm64ScratchInputEf
 }
 
 func arm64ScratchNativeInputEffect(instruction arm64asm.Inst, sourceStack bool) (arm64ScratchInputEffect, bool) {
+	if form, valid := decodeARM64RawScalarRegister(instruction.Enc); valid {
+		reads, writes, stack := form.gpEffects()
+		if stack || (reads|writes)&(1<<30) != 0 {
+			return arm64ScratchInputEffect{}, false // No numerical SP/LR contract.
+		}
+		effect := arm64ScratchInputEffect{reads: uint64(reads), writes: uint64(writes)}
+		if form.flags {
+			effect.writes |= 15 << 31
+		}
+		return effect, true
+	}
 	if form, valid := decodeARM64RawBitfield(instruction.Enc); valid {
 		reads, writes := form.gpEffects()
 		if (reads|writes)&(1<<30) != 0 {

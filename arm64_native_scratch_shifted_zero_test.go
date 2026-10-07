@@ -126,6 +126,11 @@ func TestARM64NativeScratchShiftedZeroGoEncodingRows(t *testing.T) {
 			if !valid || scratch != (arm64ScratchEffect{}) {
 				t.Fatalf("shifted zero invented an incoming R27 effect: %+v valid=%v", scratch, valid)
 			}
+			gp, known := arm64RawPoolGPWrites(body.code[0])
+			if !known || gp != uint32(want.writes&0x7fffffff) ||
+				arm64RawPoolInstructionPreservesNZCV(instruction) != !row.flags {
+				t.Fatal("original scalar operand row disagrees with GP/NZCV consumers")
+			}
 			// Rm is field 20:16 in both Go encoding classes. Independently
 			// vary real GP, R27, LR and zero roles while retaining the actual
 			// source's operation/width/shift. This metadata control is not a
@@ -150,6 +155,10 @@ func TestARM64NativeScratchShiftedZeroGoEncodingRows(t *testing.T) {
 				}
 				if !valid || got != control {
 					t.Fatalf("shifted register %d effect=%+v valid=%v, want %+v", register, got, valid, control)
+				}
+				scratch, valid := arm64ScratchNativeEffect(changed)
+				if !valid || scratch != (arm64ScratchEffect{reads: register == 27}) {
+					t.Fatalf("shifted register %d R27 role differs: %+v valid=%v", register, scratch, valid)
 				}
 			}
 		})
