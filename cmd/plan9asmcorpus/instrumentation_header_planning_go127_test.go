@@ -47,11 +47,12 @@ func TestInstrumentationNativeHeaderImportedCPUConstantKeepsDistinctOutputScopes
 	configurePreCPPFixtureProxy(t, candidate, download, sources["go.mod"])
 	foreign := discoveryCandidate{Module: "example.invalid/cpu-layout", Version: "v1.0.0"}
 	metadata := "module example.invalid/cpu-layout\n\ngo 1.20\n"
-	dependency := fixtureProfileModuleDownload(t, foreign, map[string]string{
+	dependencySources := map[string]string{
 		"go.mod":        metadata,
 		"model/base.go": "//go:build !arm64.v8.1\n\npackage model\nconst Words = 1\n",
 		"model/wide.go": "//go:build arm64.v8.1\n\npackage model\nconst Words = 2\n",
-	})
+	}
+	dependency := fixtureProfileModuleDownload(t, foreign, dependencySources)
 	versions := filepath.Join(strings.TrimPrefix(os.Getenv("GOPROXY"), "file://"), foreign.Module, "@v")
 	if err := os.MkdirAll(versions, 0700); err != nil {
 		t.Fatal(err)
@@ -78,6 +79,9 @@ func TestInstrumentationNativeHeaderImportedCPUConstantKeepsDistinctOutputScopes
 		t.Fatal(err)
 	}
 	proof := matrix.OrdinarySelectionPlan.InstrumentationPlan
+	// Unlike the SDK transport fixture, this owns all 32 actual ARM64 CPU
+	// proposals, source-selected property differences and object consumers.
+	testInstrumentationARM64OriginalQueryScopes(t, proof, dependencySources)
 	values := make(map[string]bool)
 	for _, query := range proof.HeaderPlanning.Queries {
 		values[query.Metadata.Headers[0].Header.Definitions["const_Answer"]] = true
@@ -104,6 +108,7 @@ func TestInstrumentationNativeHeaderImportedCPUConstantKeepsDistinctOutputScopes
 	}
 	testInstrumentationCorpusTransport(t, result, inventory, "darwin/arm64")
 	testInstrumentationNativeHeaderPlanningMutations(t, result, inventory, "darwin/arm64")
+	testInstrumentationARM64QueryOmissions(t, result, inventory, "darwin/arm64")
 }
 
 func testInstrumentationNativeHeaderPlanningMutations(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, target string) {
