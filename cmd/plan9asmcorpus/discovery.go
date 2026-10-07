@@ -2824,6 +2824,10 @@ func runDiscoveryOperation(timeout time.Duration, run func(context.Context) erro
 	return err
 }
 
+func runDiscoveryOperationContext(parent context.Context, timeout time.Duration, run func(context.Context) error) error {
+	return runDiscoveryOperation(timeout, run)
+}
+
 func discoveryCommandEnvironment(base []string) []string {
 	// Direct GOPROXY fallback must not inherit a developer's URL rewrite to
 	// SSH or block waiting for credentials to public source repositories.
