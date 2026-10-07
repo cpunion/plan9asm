@@ -541,7 +541,7 @@ func TestAMD64Ignores386ControlInstructions(t *testing.T) {
 }
 
 func TestTranslate386DestinationForms(t *testing.T) {
-	file, err := Parse(ArchAMD64, `
+	const source = `
 TEXT vectorResult(SB),NOSPLIT,$0-4
 	MOVL $1, AX
 	MOVL AX, X0
@@ -575,7 +575,12 @@ TEXT x87IntegerMemory(SB),NOSPLIT,$0-0
 TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 	FMOVVP F0, integerSink(SB)
 	RET
-`)
+`
+	// The standalone assembler helper has no textflag.h include. Resolve only
+	// its standard NOSPLIT flag; every original instruction and operand stays
+	// unchanged in this independent Go-386 object check.
+	goAssemblerOracleOutput(t, "386", strings.ReplaceAll(source, ",NOSPLIT,", ",4,"), "", true)
+	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,21 +604,12 @@ TEXT x87IntegerSymbol(SB),NOSPLIT,$0-0
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		"store i32 %",
-		"vectorSink",
-		"store double",
-		"doubleSink",
-		"store i16",
-		"controlSink",
-		"store i64",
-		"integerSink",
-	} {
-		if !strings.Contains(ir, want) {
-			t.Fatalf("386 destination-form IR missing %q:\n%s", want, ir)
-		}
+	check386DestinationFormsIR(t, ir)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
 	}
-	compile386IR(t, ir, "destination_forms")
+	compileLLVMToObject(t, llc, "i386-unknown-linux-gnu", "destination_forms.ll", "destination_forms.o", ir)
 }
 
 func TestTranslate386ClassicAggregateFrame(t *testing.T) {
