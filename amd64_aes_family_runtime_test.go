@@ -172,3 +172,50 @@ static int nativecheck(Program p,const char *name,int op){
  }return 0;
 }
 `
+
+func TestCrossLinuxRuntimeMatrixX86AESFamilyLogicalFloatBitPayloads(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	var source, declarations, reference, checks strings.Builder
+	declarations.WriteString("package aesbits\n")
+	reference.WriteString(x86AESIndependentC)
+	count := 0
+	for op, name := range x86AESOracleNames {
+		for _, bits := range []int{32, 64} {
+			fn := fmt.Sprintf("FloatAES%d", count)
+			count++
+			row, destination := x86AESOracleRow(name, "a+0(FP)", "X")
+			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nVPXORD Z0,Z0,Z0\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\n%s\nMOVQ out+16(FP),AX\nVMOVUPS Z%d,(AX)\nRET\n", fn, row, destination)
+			if bits == 32 {
+				checks.WriteString("for(unsigned j=0;j<4;j++){uint32_t v=payloads32[(sample+j)%8];memcpy(key+j*4,&v,4);}\n")
+				fmt.Fprintf(&declarations, "func %s(a,b,c,d float32,out *[64]byte)\n", fn)
+				fmt.Fprintf(&reference, "extern void %s(float,float,float,float,uint8_t*);\n", fn)
+				fmt.Fprintf(&checks, "{float f[4];memcpy(f,key,16);%s(f[0],f[1],f[2],f[3],out.value);}\n", fn)
+			} else {
+				checks.WriteString("for(unsigned j=0;j<2;j++){uint64_t v=payloads64[(sample+j)%8];memcpy(key+j*8,&v,8);}\n")
+				fmt.Fprintf(&declarations, "func %s(a,b float64,out *[64]byte)\n", fn)
+				fmt.Fprintf(&reference, "extern void %s(double,double,uint8_t*);\n", fn)
+				fmt.Fprintf(&checks, "{double f[2];memcpy(f,key,16);%s(f[0],f[1],out.value);}\n", fn)
+			}
+			fmt.Fprintf(&checks, "aes(expected,(const uint8_t[16]){0},key,%d,27);if(memcmp(out.value,expected,64)||_mm_getcsr()!=csr)return 1;for(int j=0;j<64;j++)if(out.before[j]!=0xc3||out.after[j]!=0xc3)return 2;for(int j=64;j<80;j++)if(out.value[j]!=0xc3)return 3;memset(&out,0xc3,sizeof(out));\n", op%6)
+		}
+	}
+	reference.WriteString(`
+int main(void){
+ const uint32_t payloads32[]={0,0x80000000,0x7fc00013,0x7f800001,0xff800001,0x7f800000,0xff800000,1};
+ const uint64_t payloads64[]={0,UINT64_C(0x8000000000000000),UINT64_C(0x7ff8000000000013),UINT64_C(0x7ff0000000000001),UINT64_C(0xfff0000000000001),UINT64_C(0x7ff0000000000000),UINT64_C(0xfff0000000000000),1};
+ for(unsigned sample=0;sample<8;sample++){
+  uint8_t key[16],expected[64]={0};struct Aligned out;memset(&out,0xc3,sizeof(out));
+  unsigned csr=0x1f80|((sample%4)<<13)|(sample%64),saved=_mm_getcsr();_mm_setcsr(csr);
+` + checks.String() + `_mm_setcsr(saved);
+ }return 0;
+}
+`)
+	goAssemblerOracleOutput(t, "amd64", source.String(), "", true)
+	ir := x86NarrowOracleIR(t, source.String(), declarations.String(), execution.triple)
+	for _, axis := range []struct{ name, ir, backend string }{{"backend_O0", ir, "-O0"}, {"backend_O2", ir, "-O2"}, {"IR_O2/backend_O2", x86DwordProductIROptimize(t, ir), "-O2"}} {
+		t.Run(axis.name, func(t *testing.T) {
+			execution.compileAndRunLLVM(t, "aes-float-bits", axis.ir, reference.String(), axis.backend)
+		})
+	}
+	t.Logf("%d complete F32/F64 logical bit-view kernels ×8 NaN/zero/infinity/denormal payloads on three axes; full64 bytes/MXCSR/canaries, no numeric float conversion or native-FP certificate", count)
+}

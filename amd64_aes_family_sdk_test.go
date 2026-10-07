@@ -70,7 +70,7 @@ func TestX86AESFamilyOriginalSDKMemhash386GlobalBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			file, err := Parse(Arch386, processed)
+			file, err := Parse(ArchAMD64, processed) // shared x86 parser; the typed consumer is explicitly mode386
 			if err != nil || len(file.Funcs) != 1 {
 				t.Fatal("actual source/include parser", err)
 			}
