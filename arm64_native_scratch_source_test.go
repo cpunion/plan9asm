@@ -216,6 +216,67 @@ func TestARM64NativeScratchSourceThreeAPIActualObjects(t *testing.T) {
 	}
 }
 
+func TestARM64NativeScratchCanonicalCPPSourceIdentity(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, target := range []struct{ goos, triple string }{
+		{"linux", "aarch64-unknown-linux-gnu"},
+		{"darwin", "arm64-apple-darwin"},
+		{"windows", "aarch64-pc-windows-msvc"},
+	} {
+		t.Run(target.goos, func(t *testing.T) {
+			// The native producer and profile consumer must use the same CPP
+			// frontend. Keep exact source/file equality; do not erase Raw or
+			// relax the binding to compare only opcode/operand summaries.
+			original := strings.ReplaceAll(arm64ScratchSelectedSource, ",", ", ")
+			expanded, err := PreprocessAssemblySource(original, AssemblyPreprocessOptions{FileName: "value_arm64.s"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			pkg, request := arm64ScratchActualSourceFixtureWithAssembly(t, target.goos, original)
+			ctx, cancel := runtimeOracleStageContext(t)
+			t.Cleanup(cancel)
+			source, err := CaptureGoARM64ScratchSource(ctx, pkg, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := source.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			file, err := Parse(ArchARM64, expanded)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolve := func(symbol string) string {
+				return strings.TrimPrefix(strings.TrimSuffix(symbol, "(SB)"), "·")
+			}
+			sigs, err := goSigsForAsmFile(pkg, file, resolve, "arm64", nil, nil, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options, err := source.BindScratchClosure(ctx, file, Options{
+				Goarch: "arm64", TargetTriple: target.triple, ResolveSym: resolve, Sigs: sigs,
+			})
+			if err != nil {
+				t.Fatalf("unchanged original CPP selection: %v", err)
+			}
+			for _, api := range []string{"text", "module"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := arm64ScratchSourceAPI(t, pkg, file, options, api)
+					if err != nil {
+						t.Fatal(err)
+					}
+					compileLLVMToObject(t, llc, target.triple, "identity.ll", "identity.o", ir)
+				})
+			}
+		})
+	}
+}
+
 func TestARM64NativeScratchActualSDKBodyInputContract(t *testing.T) {
 	assembly := strings.Replace(arm64ScratchSelectedSource, "TEXT ·Value(SB),4,$0-16\nMOVD n+0(FP),R1\nADD $3,R1", `TEXT ·Value(SB),4,$40-16
 MOVD $0,R1
