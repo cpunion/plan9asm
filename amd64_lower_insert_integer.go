@@ -21,75 +21,43 @@ var amd64PackedIntegerInsertSpecs = map[string]amd64PackedIntegerInsertSpec{
 	"VPINSRQ": {laneBits: 64},
 }
 
-// lowerPackedIntegerInsert implements Go 1.27's yinsr/yinsrw and
-// _yvpinsrb tables. The legacy forms update their X destination in place;
-// the VEX/EVEX forms take a separate X base and destination.
 func (c *amd64Ctx) lowerPackedIntegerInsert(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	spec, handled := amd64PackedIntegerInsertSpecs[baseOp]
-	if !handled {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := amd64PackedIntegerInsertSpecs[base]; !known {
 		return false, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	ins, f, _, err := c.bindScalarLaneForm(op, ins)
+	if err != nil {
+		return true, false, err
 	}
-	if c.goarch == "386" && (!spec.legacy || spec.laneBits == 64) {
-		return true, false, fmt.Errorf("386 %s is absent from Go 1.27's assembler tables: %q", baseOp, ins.Raw)
-	}
-
-	wantArgs := 3
-	if !spec.legacy {
-		wantArgs = 4
-	}
-	if len(ins.Args) != wantArgs || ins.Args[0].Kind != OpImm || ins.Args[0].Imm < 0 || ins.Args[0].Imm > 255 {
-		return true, false, fmt.Errorf("%s %s expects unsigned imm8, GP/memory source, %s: %q", c.goarch, baseOp, map[bool]string{true: "X destination", false: "X base, X destination"}[spec.legacy], ins.Raw)
-	}
-
-	source := ins.Args[1]
-	base := ins.Args[2]
-	destination := ins.Args[2]
-	if !spec.legacy {
-		destination = ins.Args[3]
-	}
+	source := ins.Args[f.source]
 	if source.Kind == OpReg {
-		if !isAMD64YrlRegister(source.Reg) || c.goarch == "386" && amd64IsExtendedGPRegister(source.Reg) {
-			return true, false, fmt.Errorf("%s %s source must be an in-range general register or memory: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("%s %s source must be a general register or memory: %q", c.goarch, baseOp, ins.Raw)
+		source.Reg = f.transferReg
 	}
-	if base.Kind != OpReg || destination.Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s base and destination must be X registers: %q", c.goarch, baseOp, ins.Raw)
+	// Exact native m8/m16/m32/m64 reads remain volatile; FP uses the
+	// independent complete-byte-span helper, not the first scalar slot.
+	var scalar string
+	if source.Kind == OpFP {
+		scalar, err = c.loadScalarLaneFPBits(source.FPOffset, f.bits)
+	} else {
+		scalar, err = c.loadGPSIMDTransferSource(source, f.bits)
 	}
-	if spec.legacy {
-		if !c.isGoLegacyXReg(destination.Reg) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's legacy X register class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !amd64EVEXVectorRegister(base, 16) || !amd64EVEXVectorRegister(destination, 16) {
-		return true, false, fmt.Errorf("amd64 %s base/destination is outside Go 1.27's VEX/EVEX X register class: %q", baseOp, ins.Raw)
-	}
-
-	scalarType := amd64IntegerTypeForBits(spec.laneBits)
-	scalar, err := c.evalIntSized(source, scalarType)
 	if err != nil {
 		return true, false, err
 	}
-	baseBytes, err := c.loadX(base.Reg)
+	baseBytes, err := c.loadX(ins.Args[f.base].Reg)
 	if err != nil {
 		return true, false, err
 	}
-	lanes := 128 / spec.laneBits
-	baseLanes := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", baseLanes, baseBytes, lanes, spec.laneBits)
-	inserted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %%%s, i%d %s, i32 %d\n", inserted, lanes, spec.laneBits, baseLanes, spec.laneBits, scalar, int(ins.Args[0].Imm)%lanes)
-	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", out, lanes, spec.laneBits, inserted)
-	return true, false, c.storeX(destination.Reg, "%"+out)
+	lanes := 128 / f.bits
+	baseLanes, inserted, out := c.newTmp(), c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", baseLanes, baseBytes, lanes, f.bits)
+	fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> %%%s, i%d %s, i32 %d\n", inserted, lanes, f.bits, baseLanes, f.bits, scalar, f.offset/(f.bits/8))
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", out, lanes, f.bits, inserted)
+	if f.legacy {
+		return true, false, c.storeX(ins.Args[f.destination].Reg, "%"+out)
+	}
+	return true, false, c.storePackedMoveOperand(ins.Args[f.destination], 16, "%"+out)
 }
 
 func amd64IsExtendedGPRegister(reg Reg) bool {

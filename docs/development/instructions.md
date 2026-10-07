@@ -560,6 +560,31 @@ dead volatile memory reads, original-Go NULL/guard-page faults, all register/
 address axes, complete vector/GP canaries and the three-API five-target objects.
 Accepted operand shapes never grant pointer permission or initialized data.
 
+Scalar integer lane insert/extract shares `x86ScalarLaneProperties` across the
+original-source validator, lowerer, caller-region effects and ABI0 result-byte
+observer: all PINSRB/W/D/Q and PEXTRB/W/D/Q names, plus their V forms. A lane
+insertion defines only its selected bytes; untouched unknown X bytes stay
+unknown. Extraction needs exactly its selected bytes. Legacy preserves wider
+aliases, while VEX/EVEX clears the bytes above X128. Go's legacy Ymm spellings
+in these tables encode GP ModRM numbers, not physical MMX state. Bind complete
+Go tables and opcode attributes independently. Mode32 VPEXTRQ retains the
+original W1 encoding but uses the physical WIG dword lane and r32/m32 effect;
+its unbound high banks remain Context. Scalar INSERTPS/EXTRACTPS result effects
+reuse their existing typed source/target/zero selectors, not a new wider-vector
+or mask permission.
+
+Any integer-lane instruction with declared integer FP results consumes the
+whole original-function must-initialized byte proof before lowering, including
+later GP-to-FP stores and all RET paths. A final-opcode-only check is inadequate.
+Narrow byte/word FP views require unique actual numeric field bytes; pointer,
+padding, input stores, partial results and unknown effects remain Context.
+Native memory uses its exact volatile byte width and existing caller bounds;
+no new frame, pointer or native backing is inferred. Keep original Go objects,
+five-target three-API objects, selected/unknown lane mutations, full vector/GP
+alias canaries and flags/MXCSR observations. Portable LLVM execution and Darwin
+Rosetta observations do not establish native Linux or AVX512 execution. An
+unknown AES effect is still unknown even after PINSRD is registered.
+
 `CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
 permission. It independently selects and exports a flat main module's complete
 ordinary Go sources, retaining only bodyless integer, finite pointer and slice

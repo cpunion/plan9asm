@@ -12,10 +12,6 @@ type amd64PackedScalarExtractSpec struct {
 	allowMMX     bool
 }
 
-// amd64PackedScalarExtractSpecs models the complete Go 1.27 yextractps,
-// yextr/yextrw, and AVX _yvextractps family. Immediate domains, result widths,
-// encoding generation, and the legacy encoded-MMX quirk are data rather than
-// repeated opcode branches.
 var amd64PackedScalarExtractSpecs = map[Op]amd64PackedScalarExtractSpec{
 	"EXTRACTPS":  {bits: 32, maxImmediate: 3},
 	"VEXTRACTPS": {bits: 32, vector: true, maxImmediate: 255},
@@ -29,105 +25,56 @@ var amd64PackedScalarExtractSpecs = map[Op]amd64PackedScalarExtractSpec{
 	"VPEXTRQ":    {bits: 64, vector: true, maxImmediate: 255},
 }
 
-// lowerPackedScalarExtract implements every Go 1.27 operand form from the
-// legacy yextractps/yextr/yextrw tables and the AVX
-// _yvextractps/_yvpextrw tables.
 func (c *amd64Ctx) lowerPackedScalarExtract(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-
-	spec, recognized := amd64PackedScalarExtractSpecs[Op(baseOp)]
-	if !recognized {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := amd64PackedScalarExtractSpecs[Op(base)]; !known {
 		return false, false, nil
 	}
-	if baseOp == "VEXTRACTPS" || baseOp == "EXTRACTPS" {
-		var err error
-		ins, _, _, err = c.bindInsertExtractForm(op, ins)
-		if err != nil {
-			return true, false, err
+	var f x86ScalarLaneForm
+	if base == "EXTRACTPS" || base == "VEXTRACTPS" {
+		var ps x86InsertExtractForm
+		ins, ps, _, err = c.bindInsertExtractForm(op, ins)
+		f = x86ScalarLaneForm{bits: 32, gpBits: 32, source: ps.source, destination: ps.destination, offset: ps.offset, memory: ps.memory}
+		if len(ins.Args) == 3 && ins.Args[2].Kind == OpReg {
+			f.transferReg = ins.Args[2].Reg
 		}
+	} else {
+		ins, f, _, err = c.bindScalarLaneForm(op, ins)
 	}
-
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s has no instruction suffixes in Go 1.27's optab: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects $imm8, X source, GP-or-memory destination: %q", baseOp, ins.Raw)
-	}
-	if c.goarch == "386" && spec.bits == 64 && !spec.vector {
-		return true, false, fmt.Errorf("386 %s is absent from Go 1.27's 32-bit encoding tables: %q", baseOp, ins.Raw)
-	}
-
-	sourceIndex, sourceOK := amd64ParseXReg(ins.Args[1].Reg)
-	maxSourceIndex := 15
-	if spec.vector {
-		maxSourceIndex = 31
-	}
-	if c.goarch == "386" {
-		maxSourceIndex = 7
-	}
-	if !sourceOK || sourceIndex > maxSourceIndex {
-		return true, false, fmt.Errorf("amd64 %s source is outside its Go 1.27 X-register class: %q", baseOp, ins.Raw)
-	}
-
-	// The VEX entries cover both Yi8 and Yu8, while the EVEX entries (which
-	// are required for X16-X31) cover only Yu8. Legacy entries also use Yu8.
-	minimumImmediate := int64(0)
-	if spec.vector && sourceIndex <= 15 {
-		minimumImmediate = -128
-	}
-	if immediate := ins.Args[0].Imm; immediate < minimumImmediate || immediate > spec.maxImmediate {
-		return true, false, fmt.Errorf("amd64 %s immediate is outside its Go 1.27 encoding table: %q", baseOp, ins.Raw)
-	}
-
-	destination := ins.Args[2]
-	destinationReg := Reg("")
-	if destination.Kind == OpReg {
-		if isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-			destinationReg = destination.Reg
-		} else if mmxIndex, mmx := amd64ParseMReg(destination.Reg); mmx && spec.allowMMX {
-			// The legacy B/D/Q yextr table uses Ymm. Go therefore accepts M0-M7
-			// here and encodes their ModRM numbers as AX/CX/DX/BX/SP/BP/SI/DI.
-			destinationReg = amd64MMXEncodingGP(mmxIndex)
-		} else {
-			return true, false, fmt.Errorf("amd64 %s register destination is outside its Go 1.27 table: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("amd64 %s destination must be a GP register or memory: %q", baseOp, ins.Raw)
-	}
-	if destination.Kind == OpMem && !x86MemoryRegistersValidForArch(destination.Mem, c.goarch) {
-		return true, false, fmt.Errorf("%s %s memory destination uses an out-of-range address register: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	source, err := c.loadX(ins.Args[1].Reg)
 	if err != nil {
 		return true, false, err
 	}
-	lanes := 128 / spec.bits
-	laneVector := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", laneVector, source, lanes, spec.bits)
-	extracted := c.newTmp()
-	lane := int(uint64(ins.Args[0].Imm) & uint64(lanes-1))
-	fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %%%s, i32 %d\n", extracted, lanes, spec.bits, laneVector, lane)
-	value := "%" + extracted
-
-	if destination.Kind == OpReg {
-		if spec.bits < 32 {
-			widened := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = zext i%d %s to i32\n", widened, spec.bits, value)
-			return true, false, c.storeRegSized(destinationReg, I32, "%"+widened)
-		}
-		return true, false, c.storeRegSized(destinationReg, amd64IntegerTypeForBits(spec.bits), value)
+	source, err := c.loadX(ins.Args[f.source].Reg)
+	if err != nil {
+		return true, false, err
 	}
-	if (baseOp == "VEXTRACTPS" || baseOp == "EXTRACTPS") && destination.Kind == OpFP {
+	lanes := 128 / f.bits
+	laneVector, extracted := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <%d x i%d>\n", laneVector, source, lanes, f.bits)
+	fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i%d> %%%s, i32 %d\n", extracted, lanes, f.bits, laneVector, f.offset/(f.bits/8))
+	value := "%" + extracted
+	destination := ins.Args[f.destination]
+	if destination.Kind == OpReg {
+		destination.Reg = f.transferReg
+		if f.gpBits > f.bits {
+			widened := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = zext i%d %s to i%d\n", widened, f.bits, value, f.gpBits)
+			value = "%" + widened
+		} else if f.gpBits < f.bits {
+			truncated := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = trunc i%d %s to i%d\n", truncated, f.bits, value, f.gpBits)
+			value = "%" + truncated
+		}
+		return true, false, c.storeRegSized(destination.Reg, amd64IntegerTypeForBits(f.gpBits), value)
+	}
+	if (base == "EXTRACTPS" || base == "VEXTRACTPS") && destination.Kind == OpFP {
+		// Retain the old complete PS field-writer contract. The new integer
+		// lane observer does not retroactively grant or remove that contract.
 		bytes := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast i32 %s to <4 x i8>\n", bytes, value)
 		return true, false, c.storeFPVectorBytes(destination.FPOffset, 4, "%"+bytes, "")
 	}
-	return true, false, c.storePackedScalarExtractMemory(destination, amd64IntegerTypeForBits(spec.bits), value)
+	return true, false, c.storePackedScalarExtractMemory(destination, amd64IntegerTypeForBits(f.bits), value)
 }
 
 func amd64MMXEncodingGP(index int) Reg {
@@ -135,24 +82,9 @@ func amd64MMXEncodingGP(index int) Reg {
 }
 
 func (c *amd64Ctx) storePackedScalarExtractMemory(destination Operand, typ LLVMType, value string) error {
-	switch destination.Kind {
-	case OpMem:
-		pointer, pointerType, err := c.ptrFromMem(destination.Mem)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(c.b, "  store %s %s, %s %s, align 1\n", typ, value, pointerType, pointer)
-		return nil
-	case OpSym:
-		pointer, err := c.ptrFromSB(destination.Sym)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(c.b, "  store %s %s, ptr %s, align 1\n", typ, value, pointer)
-		return nil
-	case OpFP:
-		return c.storeFPResult(destination.FPOffset, typ, value)
-	default:
-		return fmt.Errorf("expected packed scalar extract memory destination, got %s", destination.String())
+	bits := map[LLVMType]int{I8: 8, I16: 16, I32: 32, I64: 64}[typ]
+	if destination.Kind == OpFP {
+		return c.storeScalarLaneFPBits(destination.FPOffset, bits, value)
 	}
+	return c.storeVMOVIntegerScalar(destination, bits, value)
 }

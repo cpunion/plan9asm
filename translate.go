@@ -249,6 +249,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err := validateX86GPSIMDTransferFile(file, opt.Goarch); err != nil {
 		return "", err
 	}
+	if err := validateX86ScalarLaneFile(file, opt.Goarch); err != nil {
+		return "", err
+	}
 	file, err = normalizeX86RawFile(file, opt.Goarch, opt)
 	if err != nil {
 		return "", err
