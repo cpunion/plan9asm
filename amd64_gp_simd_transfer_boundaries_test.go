@@ -11,7 +11,7 @@ func TestX86GPSIMDTransferRejectsCompleteSiblingInvalidFormats(t *testing.T) {
 	for _, op := range []string{"MOVL", "MOVQ", "MOVD", "VMOVD", "VMOVQ"} {
 		rows := []string{op + ".Z AX,X0", op + ".BCST (AX),X0", op + ".SAE X0,AX"}
 		for _, args := range []string{"Y0,X1", "Z0,X1", "K1,X1", "X0,Y1", "X0,Z1", "X0,K1", "$7,X1", "$1.25,X1",
-			"X32,X0", "X0,X32", "X0,K1,X1", "(AX)(SP*1),X1"} {
+			"X32,X0", "X0,X32", "X0,K1,X1", "X0,$1", "X0,$1.25", "(AX)(SP*1),X1"} {
 			rows = append(rows, op+" "+args)
 		}
 		if op == "MOVL" || op == "VMOVD" {

@@ -200,7 +200,7 @@ func TestTranslate386RejectsInvalidInstructionForms(t *testing.T) {
 		{name: "popfl on amd64", instruction: "POPFL", want: "requires GOARCH=386", goarch: "amd64", triple: "x86_64-unknown-linux-gnu"},
 		{name: "pushal on amd64", instruction: "PUSHAL", want: "requires GOARCH=386", goarch: "amd64", triple: "x86_64-unknown-linux-gnu"},
 		{name: "popal on amd64", instruction: "POPAL", want: "requires GOARCH=386", goarch: "amd64", triple: "x86_64-unknown-linux-gnu"},
-		{name: "vector low destination", instruction: "MOVL X0, $1", want: "MOVL from X reg unsupported dst"},
+		{name: "vector low destination", instruction: "MOVL X0, $1", want: "386 MOVL outside complete Go GP/X transfer grammar"},
 	}
 
 	for _, tt := range tests {
@@ -543,6 +543,8 @@ func TestAMD64Ignores386ControlInstructions(t *testing.T) {
 func TestTranslate386DestinationForms(t *testing.T) {
 	file, err := Parse(ArchAMD64, `
 TEXT vectorResult(SB),NOSPLIT,$0-4
+	MOVL $1, AX
+	MOVL AX, X0
 	MOVL X0, ret+0(FP)
 	RET
 
