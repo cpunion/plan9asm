@@ -10380,6 +10380,20 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 			return "", fmt.Errorf("raw %s has unsupported destination width %d", inst.Op, bits)
 		}
 		replaceOp(inst.Op.String() + width)
+	case x86asm.PSHUFW:
+		// Physical imm8 bits have no signedness, but Go's complete ymshuf
+		// source table requires Yi8. Render that signed representative in
+		// both modes; the 32-bit generic printer otherwise masks it unsigned.
+		selector, ok := inst.Args[2].(x86asm.Imm)
+		if !ok || selector < 0 || selector > 255 || inst.Args[3] != nil {
+			return "", fmt.Errorf("raw PSHUFW expected an 8-bit selector")
+		}
+		firstSpace := strings.IndexByte(syntax, ' ')
+		firstComma := strings.IndexByte(syntax, ',')
+		if firstSpace < 0 || firstComma < firstSpace {
+			return "", fmt.Errorf("raw PSHUFW has malformed operands")
+		}
+		syntax = syntax[:firstSpace+1] + fmt.Sprintf("$%d", int8(selector)) + syntax[firstComma:]
 	case x86asm.SHLD, x86asm.SHRD:
 		// Go encodes double shifts with the three-operand SHL/SHR form,
 		// whose immediate class is signed Yi8 (single shifts use Yu8).

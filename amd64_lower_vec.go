@@ -758,74 +758,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		}
 		return false, false, nil
 
-	case "VPSHUFD":
-		// VPSHUFD $imm, X|Y|Zsrc/mem, X|Y|Zdst. The immediate
-		// selects dwords independently in each 128-bit lane.
-		if (len(ins.Args) != 3 && len(ins.Args) != 4) || ins.Args[0].Kind != OpImm {
-			return true, false, fmt.Errorf("amd64 VPSHUFD expects $imm, src, dst or $imm, src, Kmask, dst: %q", ins.Raw)
-		}
-		dstIdx := len(ins.Args) - 1
-		if ins.Args[dstIdx].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 VPSHUFD expects vector destination: %q", ins.Raw)
-		}
-		imm := uint64(ins.Args[0].Imm) & 0xff
-		lanes := 0
-		byteWidth := 0
-		var src string
-		var err error
-		var loadDst func() (string, error)
-		store := func(string) error { return nil }
-		switch {
-		case isAMD64XReg(ins.Args[dstIdx].Reg):
-			lanes, byteWidth = 4, 16
-			src, err = c.loadXVecOperand(ins.Args[1])
-			loadDst = func() (string, error) { return c.loadX(ins.Args[dstIdx].Reg) }
-			store = func(v string) error { return c.storeX(ins.Args[dstIdx].Reg, v) }
-		case isAMD64YReg(ins.Args[dstIdx].Reg):
-			lanes, byteWidth = 8, 32
-			src, err = c.loadYVecOperand(ins.Args[1])
-			loadDst = func() (string, error) { return c.loadY(ins.Args[dstIdx].Reg) }
-			store = func(v string) error { return c.storeY(ins.Args[dstIdx].Reg, v) }
-		case isAMD64ZReg(ins.Args[dstIdx].Reg):
-			lanes, byteWidth = 16, 64
-			src, err = c.loadZVecOperand(ins.Args[1])
-			loadDst = func() (string, error) { return c.loadZ(ins.Args[dstIdx].Reg) }
-			store = func(v string) error { return c.storeZ(ins.Args[dstIdx].Reg, v) }
-		default:
-			return false, false, nil
-		}
-		if err != nil {
-			return true, false, err
-		}
-		bc := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i32>\n", bc, byteWidth, src, lanes)
-		mask := llvmVPSHUFDMask(lanes, imm)
-		sh := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i32> %%%s, <%d x i32> zeroinitializer, <%d x i32> %s\n", sh, lanes, bc, lanes, lanes, mask)
-		shuffled := "%" + sh
-		if len(ins.Args) == 4 {
-			if ins.Args[2].Kind != OpReg {
-				return true, false, fmt.Errorf("amd64 VPSHUFD masked form expects K mask: %q", ins.Raw)
-			}
-			if _, ok := amd64ParseKReg(ins.Args[2].Reg); !ok {
-				return false, false, nil
-			}
-			maskValue, err := c.loadK(ins.Args[2].Reg)
-			if err != nil {
-				return true, false, err
-			}
-			oldBytes, err := loadDst()
-			if err != nil {
-				return true, false, err
-			}
-			old := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i32>\n", old, byteWidth, oldBytes, lanes)
-			shuffled = amd64ApplyI32LaneMask(c, lanes, shuffled, "%"+old, maskValue, zeroMasking)
-		}
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i32> %s to <%d x i8>\n", out, lanes, shuffled, byteWidth)
-		return true, false, store("%" + out)
-
 	case "VPSLLD", "VPSLLQ", "VPSLLW", "VPSRAD", "VPSRAW", "VPSRLD", "VPSRLQ", "VPSRLW":
 		// Go's x86 assembler uses _yvpslld for this whole family:
 		//   $imm8, X|Y|Z src/mem, [Kmask,] X|Y|Z dst
@@ -1525,29 +1457,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 			return true, false, c.storeY(ins.Args[2].Reg, "%"+out)
 		}
 		return false, false, nil
-
-	case "PSHUFL", "PSHUFD":
-		// PSHUFL/PSHUFD $imm, Xsrc/mem, Xdst.
-		if len(ins.Args) != 3 || ins.Args[0].Kind != OpImm || ins.Args[2].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects $imm, Xsrc/mem, Xdst: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[2].Reg); !ok {
-			return false, false, nil
-		}
-		imm := uint64(ins.Args[0].Imm) & 0xff
-		idx := func(k uint) uint64 { return (imm >> (2 * k)) & 3 }
-		src, err := c.loadXVecOperand(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		bc1 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x i32>\n", bc1, src)
-		mask := fmt.Sprintf("<4 x i32> <i32 %d, i32 %d, i32 %d, i32 %d>", idx(0), idx(1), idx(2), idx(3))
-		sh := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i32> %%%s, <4 x i32> zeroinitializer, %s\n", sh, bc1, mask)
-		bc2 := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", bc2, sh)
-		return true, false, c.storeX(ins.Args[2].Reg, "%"+bc2)
 
 	case "SHUFPS":
 		// SHUFPS $imm, Xsrc, Xdst
@@ -2629,21 +2538,6 @@ func llvmRepeatI8Mask(chunk, width int) string {
 	}
 	sb.WriteByte('>')
 	return sb.String()
-}
-
-func llvmVPSHUFDMask(lanes int, imm uint64) string {
-	var b strings.Builder
-	b.WriteByte('<')
-	for lane := 0; lane < lanes; lane++ {
-		if lane != 0 {
-			b.WriteString(", ")
-		}
-		base := lane &^ 3
-		selected := base + int((imm>>uint(2*(lane&3)))&3)
-		fmt.Fprintf(&b, "i32 %d", selected)
-	}
-	b.WriteByte('>')
-	return b.String()
 }
 
 func llvmSplatInteger(lanes, bits int, value uint64) string {

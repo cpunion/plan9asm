@@ -256,5 +256,13 @@ int main(void) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "immediate-shuffle-complete-bytes", triple, ir, oracle, prefix)
+	for _, optimized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("IR_O2=%t", optimized), func(t *testing.T) {
+			text := ir
+			if optimized {
+				text = x86MulDivRoundOptimize(t, text)
+			}
+			compileAndRunRuntimeTestForTarget(t, llc, clang, "immediate-shuffle-complete-bytes", triple, text, oracle, prefix)
+		})
+	}
 }

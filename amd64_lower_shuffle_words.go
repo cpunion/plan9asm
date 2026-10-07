@@ -5,152 +5,95 @@ import (
 	"strings"
 )
 
-// lowerPackedWordShuffle implements the complete Go 1.27 PSHUFHW/PSHUFLW
-// and VPSHUFHW/VPSHUFLW tables. The selected four-word half is shuffled
-// independently in every 128-bit lane; the other half remains unchanged.
-func (c *amd64Ctx) lowerPackedWordShuffle(rawOp Op, ins Instr) (ok bool, terminated bool, err error) {
-	raw := strings.ToUpper(string(rawOp))
-	parts := strings.Split(raw, ".")
-	baseOp := Op(parts[0])
-	switch baseOp {
-	case "PSHUFW", "PSHUFHW", "PSHUFLW", "VPSHUFHW", "VPSHUFLW":
-		// handled below
-	default:
+// Preserve the helper entry point while all dword/word/MMX siblings use one
+// complete grammar. Dispatch identity cannot grant a contradictory spelling.
+func (c *amd64Ctx) lowerPackedWordShuffle(op Op, ins Instr) (bool, bool, error) {
+	base, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	if _, known := x86ImmediateShuffleSpecs[Op(base)]; !known {
 		return false, false, nil
 	}
-	if len(parts) > 2 || len(parts) == 2 && parts[1] != "Z" {
-		return true, false, fmt.Errorf("amd64 %s has a suffix outside Go 1.27's word-shuffle tables: %q", baseOp, ins.Raw)
+	if ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return true, false, fmt.Errorf("immediate-shuffle dispatch/source mismatch: %s/%s", op, ins.Op)
 	}
-	zeroing := len(parts) == 2
-	high := baseOp == "PSHUFHW" || baseOp == "VPSHUFHW"
-	if baseOp == "PSHUFW" {
-		if zeroing {
-			return true, false, fmt.Errorf("%s PSHUFW does not accept instruction suffixes: %q", c.goarch, ins.Raw)
-		}
-		if len(ins.Args) != 3 || !amd64SignedImmediate(ins.Args[0], 8) {
-			return true, false, fmt.Errorf("%s PSHUFW expects $signed-imm8, M/m64, M: %q", c.goarch, ins.Raw)
-		}
-		source, destination := ins.Args[1], ins.Args[2]
-		if destination.Kind != OpReg {
-			return true, false, fmt.Errorf("%s PSHUFW destination must be M0..M7: %q", c.goarch, ins.Raw)
-		}
-		if _, ok := amd64ParseMReg(destination.Reg); !ok {
-			return true, false, fmt.Errorf("%s PSHUFW destination must be M0..M7: %q", c.goarch, ins.Raw)
-		}
-		if source.Kind == OpReg {
-			if _, ok := amd64ParseMReg(source.Reg); !ok {
-				return true, false, fmt.Errorf("%s PSHUFW source must be M0..M7 or memory: %q", c.goarch, ins.Raw)
-			}
-		} else if !isAMD64MemoryOperand(source) {
-			return true, false, fmt.Errorf("%s PSHUFW source must be M0..M7 or memory: %q", c.goarch, ins.Raw)
-		}
-		if source.Kind == OpMem && !x86MemoryRegistersValidForArch(source.Mem, c.goarch) {
-			return true, false, fmt.Errorf("%s PSHUFW source address uses an out-of-range register: %q", c.goarch, ins.Raw)
-		}
-		value, err := c.evalIntSized(source, I64)
-		if err != nil {
-			return true, false, err
-		}
-		result := c.emitMMXWordShuffle(value, uint8(ins.Args[0].Imm))
-		return true, false, c.storeReg(destination.Reg, result)
+	ins.Op = op
+	form, known, err := x86ImmediateShuffleProperties(ins, c.goarch)
+	if err != nil || !known {
+		return known, false, err
 	}
-
-	if baseOp == "PSHUFHW" || baseOp == "PSHUFLW" {
-		if zeroing {
-			return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
+	if err := x86LegacyMMXReadEmitterContext(ins, c.goarch); err != nil {
+		return true, false, err
+	}
+	destination := ins.Args[form.destination]
+	if form.spec.legacy && !form.spec.mmx && form.memory >= 0 {
+		return true, false, c.lowerLegacyImmediateShuffleMemory(ins, form)
+	}
+	var source string
+	if form.spec.mmx {
+		source, err = c.loadPackedUnpackMMXSource(form.source, form.memoryBytes)
+		if err == nil {
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to <8 x i8>\n", value, source)
+			source = "%" + value
 		}
-		if len(ins.Args) != 3 || !amd64UnsignedImmediate(ins.Args[0], 8) {
-			return true, false, fmt.Errorf("amd64 %s expects $unsigned-imm8, X/m128, X: %q", baseOp, ins.Raw)
+	} else if form.broadcast {
+		bytes, loadErr := c.loadX86PackedShiftBytes(form.source, 4, true)
+		err = loadErr
+		if err == nil {
+			value := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = shufflevector <4 x i8> %s, <4 x i8> zeroinitializer, <%d x i32> %s\n",
+				value, bytes, form.byteWidth, llvmRepeatI8Mask(4, form.byteWidth))
+			source = "%" + value
 		}
-		source, destination := ins.Args[1], ins.Args[2]
-		if !c.isGoVEXVectorRegister(source, 16, true) || !c.isGoVEXVectorRegister(destination, 16, false) {
-			return true, false, fmt.Errorf("amd64 %s operands are outside Go 1.27's X/m128, X classes: %q", baseOp, ins.Raw)
-		}
-		value, err := c.loadPackedCompareBytes(source, 16)
-		if err != nil {
-			return true, false, err
-		}
-		result := c.emitPackedWordShuffle(16, value, uint8(ins.Args[0].Imm), high)
-		return true, false, c.storeX(destination.Reg, result)
+	} else {
+		// E4NF/E4NF.nb does not suppress memory faults, even at K=0 or when
+		// the immediate selects only one lane. Keep the full read observable.
+		source, err = c.loadX86PackedShiftBytes(form.source, form.byteWidth, true)
 	}
-
-	masked := len(ins.Args) == 4
-	if len(ins.Args) != 3 && !masked || !amd64VectorByteShiftImmediate(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s expects $imm8, X|Y|Z/mem, [K,] X|Y|Z: %q", baseOp, ins.Raw)
-	}
-	if c.goarch == "386" && masked {
-		return true, false, fmt.Errorf("386 %s mask forms exceed Go 1.27's assembler operand limit: %q", baseOp, ins.Raw)
-	}
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s.Z requires a writemask: %q", baseOp, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if destination.Kind != OpReg || byteWidth != 16 && byteWidth != 32 && byteWidth != 64 || !c.isGoEVEXVectorRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's X/Y/Z classes: %q", baseOp, ins.Raw)
-	}
-	source := ins.Args[1]
-	if source.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(source, byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s source must match its destination width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("amd64 %s source must be a vector register or memory: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Imm < 0 && amd64PackedWordShuffleRequiresEVEX(source, destination, byteWidth, masked) {
-		return true, false, fmt.Errorf("amd64 %s EVEX form requires an unsigned imm8: %q", baseOp, ins.Raw)
-	}
-
-	maskValue := ""
-	if masked {
-		mask := ins.Args[2]
-		maskIndex, validMask := amd64ParseKReg(mask.Reg)
-		if mask.Kind != OpReg || !validMask || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form requires K1..K7: %q", baseOp, ins.Raw)
-		}
-		maskValue, err = c.loadK(mask.Reg)
-		if err != nil {
-			return true, false, err
-		}
-	}
-	value, err := c.loadPackedCompareBytes(source, byteWidth)
 	if err != nil {
 		return true, false, err
 	}
-	result := c.emitPackedWordShuffle(byteWidth, value, uint8(ins.Args[0].Imm), high)
-	if masked {
-		old, err := c.loadPackedCompareBytes(destination, byteWidth)
+	indices := make([]string, form.byteWidth)
+	for index := range indices {
+		// A broadcast has already expanded the m32 to full logical lanes.
+		if form.broadcast {
+			indices[index] = fmt.Sprintf("i32 %d", index)
+		} else {
+			indices[index] = fmt.Sprintf("i32 %d", form.sourceByte(index))
+		}
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i8> %s, <%d x i8> zeroinitializer, <%d x i32> <%s>\n",
+		value, form.byteWidth, source, form.byteWidth, form.byteWidth, strings.Join(indices, ", "))
+	result := "%" + value
+	if form.spec.mmx {
+		bits := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i8> %s to i64\n", bits, result)
+		return true, false, c.storeReg(destination.Reg, "%"+bits)
+	}
+	if form.mask >= 0 {
+		mask, err := c.loadK(ins.Args[form.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
-		words := byteWidth / 2
-		computedWords := c.newTmp()
-		oldWords := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i16>\n", computedWords, byteWidth, result, words)
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i16>\n", oldWords, byteWidth, old, words)
-		maskedWords := amd64ApplyIntegerLaneMask(c, words, 16, "%"+computedWords, "%"+oldWords, maskValue, zeroing)
-		maskedBytes := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x i8>\n", maskedBytes, words, maskedWords, byteWidth)
-		result = "%" + maskedBytes
+		laneBits := form.spec.laneBytes * 8
+		lanes := form.byteWidth / form.spec.laneBytes
+		computed := c.bitcastVectorBytesToIntegerLanes(form.byteWidth, lanes, laneBits, result)
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, laneBits, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		masked := amd64ApplyIntegerLaneMask(c, lanes, laneBits, computed, old, mask, form.zeroing)
+		bytes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", bytes, lanes, laneBits, masked, form.byteWidth)
+		result = "%" + bytes
 	}
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, result)
-}
-
-func (c *amd64Ctx) emitMMXWordShuffle(source string, immediate uint8) string {
-	sourceWords := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to <4 x i16>\n", sourceWords, source)
-	result := "zeroinitializer"
-	for destinationWord := 0; destinationWord < 4; destinationWord++ {
-		sourceWord := int(immediate >> (2 * destinationWord) & 3)
-		extracted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <4 x i16> %%%s, i32 %d\n", extracted, sourceWords, sourceWord)
-		inserted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <4 x i16> %s, i16 %%%s, i32 %d\n", inserted, result, extracted, destinationWord)
-		result = "%" + inserted
+	if form.spec.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, result)
 	}
-	bits := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i16> %s to i64\n", bits, result)
-	return "%" + bits
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, result)
 }
 
 func amd64PackedWordShuffleRequiresEVEX(source, destination Operand, byteWidth int, masked bool) bool {
@@ -158,42 +101,45 @@ func amd64PackedWordShuffleRequiresEVEX(source, destination Operand, byteWidth i
 		return true
 	}
 	for _, operand := range []Operand{source, destination} {
-		if operand.Kind != OpReg {
-			continue
-		}
-		index, ok := amd64VectorRegisterIndex(operand.Reg, byteWidth)
-		if !ok || index >= 16 {
-			return true
+		if operand.Kind == OpReg {
+			index, ok := amd64VectorRegisterIndex(operand.Reg, byteWidth)
+			if !ok || index >= 16 {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-func (c *amd64Ctx) emitPackedWordShuffle(byteWidth int, source string, immediate uint8, high bool) string {
-	words := byteWidth / 2
-	sourceWords := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to <%d x i16>\n", sourceWords, byteWidth, source, words)
-	result := "zeroinitializer"
-	for destinationWord := 0; destinationWord < words; destinationWord++ {
-		laneWord := destinationWord % 8
-		sourceWord := destinationWord
-		shuffle := laneWord < 4 && !high || laneWord >= 4 && high
-		if shuffle {
-			selector := laneWord
-			halfBase := destinationWord - laneWord
-			if high {
-				selector -= 4
-				halfBase += 4
-			}
-			sourceWord = halfBase + int(immediate>>(2*selector)&3)
-		}
-		extracted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x i16> %%%s, i32 %d\n", extracted, words, sourceWords, sourceWord)
-		inserted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i16> %s, i16 %%%s, i32 %d\n", inserted, words, result, extracted, destinationWord)
-		result = "%" + inserted
+// Legacy m128 must retain the actual single SSE instruction's alignment and
+// fault behavior, not an align-1 LLVM read or a fabricated virtual FP buffer.
+func (c *amd64Ctx) lowerLegacyImmediateShuffleMemory(ins Instr, form x86ImmediateShuffleForm) error {
+	source := form.source
+	if source.Kind == OpFP || ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride ||
+		source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) {
+		return fmt.Errorf("%w: legacy immediate shuffle m128 needs original native backing/alignment", ErrProbeNeedsContext)
 	}
-	bytes := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i16> %s to <%d x i8>\n", bytes, words, result, byteWidth)
-	return "%" + bytes
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
+	if err != nil {
+		return err
+	}
+	segment := ""
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
+	}
+	mnemonic := "pshufd"
+	if form.spec.laneBytes == 2 {
+		mnemonic = "pshuflw"
+		if form.spec.high {
+			mnemonic = "pshufhw"
+		}
+	}
+	value, bytes := c.newTmp(), c.newTmp()
+	assembly := fmt.Sprintf("%s $$%d, %s($1), $0", mnemonic, form.immediate, segment)
+	fmt.Fprintf(c.b, "  %%%s = call <4 x float> asm sideeffect %q, %q(%s %s)\n",
+		value, assembly, "=x,r,~{memory}", pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x float> %%%s to <16 x i8>\n", bytes, value)
+	return c.storeLegacyPackedLogical(ins.Args[form.destination], "%"+bytes)
 }

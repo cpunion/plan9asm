@@ -163,7 +163,15 @@ func x86LegacyMMXReadProperties(ins Instr, arch string) (x86LegacyMMXReadForm, b
 	form.source = ins.Args[form.sourceIndex]
 	immediate := spec.table == x86LegacyMMXCount && form.source.Kind == OpImm
 	if spec.table == x86LegacyMMXShuffle || immediate {
-		if !amd64SignedImmediate(ins.Args[0], 8) {
+		operand := ins.Args[0]
+		if spec.table == x86LegacyMMXShuffle {
+			var integer bool
+			operand, integer = x86ImmediateShuffleConstant(operand, arch, ins.x86Encoded)
+			if !integer {
+				return fail()
+			}
+		}
+		if !amd64SignedImmediate(operand, 8) {
 			return fail()
 		}
 	}

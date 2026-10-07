@@ -36,7 +36,9 @@ func TestTranslateX86PackedWordShuffleCompleteGoAssemblerForms(t *testing.T) {
 				source.WriteString("\t" + op + " $127, 8(AX), X1\n")
 				source.WriteString("\t" + op + " $255, Y0, Y1\n")
 				source.WriteString("\t" + op + " $1, 16(AX), Y2\n")
-				source.WriteString("\t" + op + " $2, X16, X31\n")
+				if target.goarch == "amd64" {
+					source.WriteString("\t" + op + " $2, X16, X31\n")
+				}
 				fmt.Fprintf(&source, "\t%s $3, Z0, Z%d\n", op, zLast)
 				if target.goarch == "amd64" {
 					source.WriteString("\t" + op + " $4, X20, K1, X21\n")
@@ -45,6 +47,7 @@ func TestTranslateX86PackedWordShuffleCompleteGoAssemblerForms(t *testing.T) {
 				}
 			}
 			source.WriteString("\tRET\n")
+			goAssemblerOracleOutput(t, target.goarch, strings.ReplaceAll(source.String(), "NOSPLIT", "4"), "", true)
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
 				t.Fatal(err)

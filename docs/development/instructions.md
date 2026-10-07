@@ -115,6 +115,20 @@ encoding-aware packed writeback even for X destinations: legacy `storeX`
 preserves wider bytes. Independent whole-byte runtime checks must observe both
 directions separately rather than relying only on a round trip.
 
+The eight immediate shuffles share their integer-only source grammar and exact
+byte selectors with lowering, caller definedness and memory shapes. Bind the
+complete legacy and VEX/EVEX rows independently, including signed MMX Yi8,
+unsigned legacy X Yu8, mode32 int32 source classification and raw imm8 signed
+rendering. Float/unresolved operands fail before every consumer. Legacy X
+writes preserve upper aliases; VEX/EVEX clears them. E4NF reads retain the full
+tuple even with dead results or zero masks; dword broadcast reads m32.
+Legacy m128 retains the original observable SSE2 memory opcode, not an align-1
+replacement. Virtual FP/SP/BP and unbound address-size roles remain Context,
+as does caller alignment without a real witness. Execute independent original
+Go opcode bytes and LLVM live/dead boundary controls. Label IR-prepass axes
+separately from backend optimization; MMX objects and Rosetta diagnostics do
+not certify physical x87/MMX state or native AVX512 execution.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and

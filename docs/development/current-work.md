@@ -18,135 +18,100 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 
 ## Continue here
 
-The development branch is
-`codex/pr40-mask-vector-cpp-integration-20261007`.
-Read its actual HEAD and status before resuming. Main is the only ledger writer;
-earlier agents are inactive.
+Development branch:
+`codex/pr40-x86-immediate-shuffle-grammar-20261007`.
+Read its actual HEAD/status. Root alone writes ledger. An independent agent
+is developing bounded multiple-SCC composition in a separate worktree.
 
-Latest repairs:
+Latest whole-family repair covers PSHUFW, PSHUFL/PSHUFD, PSHUFHW/PSHUFLW and
+VPSHUFD/VPSHUFHW/VPSHUFLW:
 
-- ARM64 logical shifted, ADD/SUB shifted and ADD/SUB extended forms share one
-  physical GP/NZCV effect grammar, including WZR/XZR, shifts and SP boundaries.
-- CPP resource queries index exact original edges once instead of scanning all
-  resources per unit. Unknown edges fail; public replay still validates and
-  hashes the whole original graph, including unconsumed sources.
-- AMD64 frame observation typechecks complete ordinary Go bodies, values and
-  stock-SDK imports. Only bodyless ASM declarations enter its frame table.
-  SDK source/export graphs remain bound; foreign imports stay Context.
-- The CLI passes every actual selected Go source and retains actual-load
-  import type identities and source hashes. Failed verification revokes its
-  independent binding. Pointer/slice fixed-local transport, caller regions,
-  dynamic frames and native JIT/FFI contracts remain unproved.
-- ARM64 scalar and pair source-memory roles now canonicalize RSP identically.
-  Same-package calls recursively close unchanged source and matching original
-  assembler/archive bodies before admitting exact initialized result bytes.
-  Every outgoing parameter byte must be initialized; calls invalidate prior
-  locals, GP and NZCV. Partial/one-path results remain Context. The separate
-  SDK void tuple still requires its actual ABI0 wrapper and supplies no result
-  bytes. This is scratch/input observation, not native-frame or pointee permission.
-- CLI private/tail tests check injectively escaped LLVM block names, retaining
-  the single-caller CFG, chunk/object and native numerical assertions.
-- Actual AMD64 caller closure distinguishes requested CPP/object scopes from
-  selected companion ASM. Companions retain physical/full-original CPP replay,
-  SDK fallback absence checks and exposure/source guards, without acquiring
-  object receipts or mutating the final consumer input. Requested files still
-  require their complete operand set. The independent two-file RED reproduces
-  the external-library error; the changed CPP/caller/header diagnostic scope
-  passes 411 nodes with no Fail/Skip, including original Go and LLVM22 objects.
-- All eight mask/vector B/W/D/Q moves share their complete register-only
-  X/Y/Z/K0-K7 typed grammar between lowering and caller effects. Unknown inputs
-  remain rejected, reverse writes zero-extend K, and every forward EVEX width
-  uses alias-clearing writeback. Independent official-row/caller RED has 50
-  failed nodes; whole-byte execution then exposed stale X-write upper bytes.
-  Expanded diagnostics pass 314 nodes, including three APIs/five-target objects
-  and 48 independent LLVM byte programs. Original native AVX512 execution is
-  still a separate unverified axis, not a claim from Rosetta software lowering.
-- Selected CPP companions now have actual generated-header and preferred SDK
-  search lifetime tripwires. These test-only combinations were directly green;
-  they do not represent another production bug or extra corpus passes.
+- One complete Go-row grammar supplies selectors, native memory shapes and
+  caller byte availability. Legacy preserves upper aliases; VEX/EVEX clears
+  them. Partial input availability follows only selected bytes; unknown mask
+  or merge bytes never acquire values or pointer permission.
+- Full E4NF reads remain observable with dead outputs and zero masks; broadcast
+  reads m32. Legacy m128 retains its original native SSE2 opcode/alignment.
+  Virtual FP/SP/BP and unbound address-size roles remain Context; caller-region
+  identity does not supply legacy alignment.
+- Independent review found float/unresolved class confusion, mode32 constant
+  classification and raw PSHUFW signed-rendering gaps. Actual Go-backed RED
+  reproduced them. Every source consumer now excludes non-integer metadata;
+  mode32 classification does not mutate the original operand.
+- Initial caller/effect/runtime RED failed 55 nodes. Expanded diagnostics
+  finish with 922 passes, no Fail/Skip: shuffle 24 roots/483 children and
+  existing YMM/MMX 13 roots/402 children. Original Go covers all 4,096 named
+  imm8 witnesses, 512 physical MMX byte cases, complete encoding rows and
+  mode32 wrap/rejection controls. Three APIs compile five LLVM22 targets.
+- Forty portable whole-byte programs, 24 full-read programs and eight legacy
+  live/dead memory programs run without/with an IR O2 prepass. The legacy
+  reference executes original Go opcode bytes, with canaries and flags.
+  These are not backend O0/O2 axes or native AVX512/MMX-state certificates.
+  Rosetta alignment observations remain diagnostic.
+- RED/green logs are ignored diagnostic receipts, not current-head formal
+  corpus certificates. Freeze a clean integration successor, run its fresh
+  current/old formal scopes and official five-arch gate, then replay the exact
+  original Weaviate candidate. Do not publish old reports into the ledger.
 
-The actual framed-pair and transitive-call REDs each fail all three root APIs.
-New regressions cover the five pair mnemonics, local partial/branch holes,
-callee input/result holes and all four integer result widths. Diagnostics pass
-the changed CLI scope (9 roots/28 children) and root call scope (4 roots/180
-children), without Fail/Skip. Original Go and LLVM O0/O2 execute four operations
-with 1,024 observations each. A first expanded replay found a blocked SDK void
-call; preserve that failure and its now-passing regression.
+## Integrated ancestor and remaining source proofs
 
-Closed `fcc12a07` owners use `_out/caller-cpp-integration-green/run.cjs` in
-their original persistent checkout. Independent readers passed current full CLI
-(1,796 nodes), affected ARM64 (1,264) and CI policy (7), plus old ARM64 (1,264),
-with race, full source/tool guards, vet/build and genuine closure. The five-arch
-Go 1.27 classification/fingerprint gate also passed; it is not complete encoder
-or execution coverage. That head's original Weaviate replay now passes its first
-AMD64 file and no longer reports the companion CPP operand error, but ten files
-still fail cyclic joins or missing caller effects. Retain the raw failed report;
-one file is not a passing version or shard. The integrated successor needs fresh
-source-matching formal owners and the original external-library replay.
+Frozen `7f684cc5` integrates the earlier ARM64 scratch/input and transitive
+same-package call proofs, CPP companion/header consumer closure, full ordinary
+Go-body/SDK-type frame observation, compact original CPP resource index, and
+complete eight-name mask/vector B/W/D/Q caller and alias effects.
 
-## Closed ancestor evidence
+Its independently read current scopes pass 3,421 nodes (full CLI 1,804,
+ARM64 1,264, CI policy 7, mask family 346); old framework scopes pass 1,610.
+Race, complete source/tool/dependency/environment guards, vet/build, nested
+CLI checks and genuine producer/process-group closure passed. Its official
+five-architecture classification/fingerprint gate passed, not complete encoder
+or execution coverage. CPP resource microbenchmark passed, not the full stdlib
+benchmark.
 
-These scopes certify only their named frozen revision. Independent readers
-rehash full tracked source, SDK/tool/dependency inputs and environments and
-check genuine exits and PID/PGID closure.
+Original Weaviate replay still fails ten AMD64 files with cyclic joins or
+missing shuffle caller effects; companion CPP mismatch and mask/vector effect
+errors no longer appear. Partial file/object success is not a passing version.
+Retain failed reports and rederive every successor receipt from its own source.
 
-- `5395402a`: affected ARM64 native/scalar/raw-pool scope, 150 roots and
-  3,094 children per SDK; current Go 1.27.1 and official Go 1.20.14 passed
-  without Fail/Skip, with race, root-module vet/build and actual object controls.
-- `2209057f`: expanded current-SDK CPP corpus scope, 94 roots/418 children,
-  all 512 passed, including actual Go/header/LLVM consumer and mutation tests.
-- `c07c03ae`: compact CPP resource index, 15 focused passes per SDK.
-  Current 256-unit microbenchmark is about 21x faster than the retained RED,
-  not evidence that the complete CI benchmark passes.
-- `56717ae5`: full AMD64 frame/fixed-local root scope, 29 roots/115 children
-  per SDK, all 144 passed. Pointer observation still fails numeric-only binding.
-- `b2a75d68`: actual CLI RED has four failed children; original Go exported
-  every full source. Two lack syntax handoff and two hit blanket import rejection.
-- `b7b4a06d`: CLI scope passed 42 nodes; observer scope retained three failures
-  (two stale blanket-rejection assertions plus their parent). Keep raw failures.
-- `f920cab3`: focused current/old scopes passed 347/305 nodes. The complete CLI
-  has 212 roots/1,566 children, 1,752 passes, 26 failures and no skips: 23 stale
-  private/tail label assertions, plus two scratch callees and their parent.
-  Its independent failure reader closes all 12 stages and retains actual Go
-  source/object evidence; CI policy, vet/build and nested vet/build passed.
-- Original golang/snappy v1.0.0 replay on `c07c03ae` compiled 12 LLVM objects
-  across six applicable configurations with all 11 targets retained.
+The source-only cyclic audit authenticates a fresh exact Weaviate download and
+retains seven function/SCC projections. The older failed report lacks per-file
+hashes; a fresh download cannot invent them. Whole-function unique-backedge
+proof is too narrow for these functions. Compose only independently proved
+bounded SCCs first; dynamic indexed/cursor/sentinel loops still need their own
+machine-width relational and pointer-region proof. Never enable unbounded
+cycle hull merges, increase caps or discard original return/stack checks.
 
-## Running corpus and ledger
+## Running corpus, ledger and inventory
 
-Frozen `529019e1` owns the three replay directories
-`_out/priority-shard{5,29,36}-bitfield-replay`. Check actual owner/process handles
-and reports. Shard 5 closed after its explicit 96 candidates and remains partial;
-shard 29 closed after all 106 candidates. Both failed and their independent
-status readers passed; status-query success is not corpus success. Shard 36 is
-still running. Never use the utility's missing `owner.result.json` test to
-contradict these owners' actual `closure.json` and terminal process handles.
-Obtain terminal producer and independent-reader results before promotion;
-never infer whole-shard coverage from running counts.
+Frozen `529019e1` owns `_out/priority-shard{5,29,36}-bitfield-replay`.
+Shard 5 closed after 96 explicit candidates and remains partial; shard 29
+closed after all 106. Both failed. Shard 36 is still running at this checkpoint.
+Read actual owner/process handles and `closure.json`; the old status utility's
+missing `owner.result.json` check is not producer closure evidence.
+Obtain terminal producer and independent-reader results before promotion.
+Historical reports cannot certify later implementation or documentation heads.
 
-Committed assembly status remains three independently published Snappy passes,
+Committed assembly ledger remains three independently published Snappy passes,
 6,064 pending, no complete shard, `complete=false, verified=false`.
-Documentation and implementation successors need fresh source-matching reports.
-Only the automatic publisher may update matching ledger records; no hand edits.
+Only the automatic publisher may update exact matching ledger records.
 
 Inventory retains 215 continuous ranges from 2025-10-01 through
 2026-09-22T22:43:08Z and 6,067 assembly-bearing latest-per-path candidates.
-Standalone newer inventory is unsynchronized; cgo stays outside this repository.
-Scan and coverage funnel tables belong in the PR body, not this checkpoint.
+Newer standalone inventory is unsynchronized; cgo stays outside this repository.
+Scan/coverage funnel tables belong in the PR body, not this checkpoint.
 
-## Remaining completion gates
+## Completion gates still open
 
-Repair and replay original failing libraries, including actual native SP/caller
-backing, imported/generated headers, instrumentation and foreign-type closure,
-greater-than-64 profile planning, and native FFI/JIT entry contracts.
-Never raise budgets, remove proposals or relabel unknown errors as source N/A.
+Repair/replay original libraries: native SP/caller backing, imported/generated
+headers, instrumentation and foreign-type closure, greater-than-64 profile
+planning, native FFI/JIT entries and remaining dynamic loop effects.
+Unknown errors are not source N/A; proposed exclusions still need review.
 
-Latest strict stdlib benchmark `f8ff1d9f` remains failed: 184 attempted,
-172 passed and 12 failed; wasm passed 19/19. Dynamic reflect/caller frames,
-runtime continuations/TLS, ARM64 observable result padding and SDK body closure
-remain. Context classification is not successful lowering/object/runtime proof.
+Latest strict stdlib benchmark `f8ff1d9f` failed: 184 attempted, 172 passed,
+12 failed; wasm 19/19. Dynamic reflect/caller frames, runtime continuations/TLS,
+ARM64 result padding and SDK body closure remain.
 
-Full root/nested CLI tests, official gates, benchmark, all 64 discovery shards,
-cross-runtime jobs, reviewed exclusions and current-head CI are not complete.
-Preserve the old unowned orphan/caches; clean only exact owned caches after all
-consumers close. LLVM 22 only; no wasm blockaddress or required-tool Skip.
+Full root/nested CLI tests, official gates, strict benchmark, all 64 discovery
+shards, cross-runtime jobs, exclusions review and current-head CI are incomplete.
+Clean only exact owned caches after all consumers close; preserve unowned
+orphans/shared/live caches. LLVM22 only, no wasm blockaddress or tool Skip.
