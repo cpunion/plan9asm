@@ -500,8 +500,12 @@ does not itself grant caller memory bounds. Original legacy execution and
 portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.
 
 `CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
-permission. It independently selects and exports a flat, dependency-free main
-module with bodyless integer, finite pointer and slice declarations, then binds
+permission. It independently selects and exports a flat main module's complete
+ordinary Go sources, retaining only bodyless integer, finite pointer and slice
+assembly declarations. Stock-SDK imports bind the actual compiler-selected
+source/export graph; bodies, values and imports themselves grant no native
+permission. Foreign module dependencies still need their own source handoff.
+The observer then binds
 all selected ASM, headers,
 actual Go tool/source routes, original object bytes and complete source positions.
 The caller selects the trusted stock-Go installation and explicit private command

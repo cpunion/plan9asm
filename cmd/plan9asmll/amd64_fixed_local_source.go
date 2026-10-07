@@ -27,7 +27,12 @@ type amd64FixedLocalCLISource struct {
 	sources     map[string]string
 }
 
-func (source *amd64FixedLocalCLISource) verify(ctx context.Context) error {
+func (source *amd64FixedLocalCLISource) verify(ctx context.Context) (result error) {
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, source.close())
+		}
+	}()
 	if err := verifyAMD64FixedLocalSelection(source.packageData, source.selection, source.target); err != nil {
 		return err
 	}

@@ -292,9 +292,15 @@ func TestAMD64OriginalFixedLocalResolverMayCloseOwner(t *testing.T) {
 }
 
 func TestAMD64OriginalFixedLocalBroaderObservationRetainsFactoryContext(t *testing.T) {
-	for _, role := range []string{"nested", "bodyful", "import", "data", "sibling"} {
+	for _, role := range []string{"nested", "bodyful", "import", "data", "sibling", "pointer"} {
 		t.Run(role, func(t *testing.T) {
 			request := amd64OriginalObservationFixture(t, role)
+			if role == "pointer" {
+				if err := os.WriteFile(filepath.Join(request.Directory, "value.go"),
+					[]byte("package observation\nfunc Value(a *uint64) uint64\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			ctx, cancel := amd64OriginalObservationContext(t)
 			defer cancel()
 			observed, err := CaptureAMD64OriginalPackageObservation(ctx, request, RunBounded)
@@ -339,7 +345,22 @@ func TestAMD64OriginalFixedLocalBroaderObservationRetainsFactoryContext(t *testi
 			options := plan9asm.Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
 				ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) },
 				Sigs:       map[string]plan9asm.FuncSig{sig.Name: sig}}
-			if _, binding, err := observed.BindFixedLocal(ctx, pkg, file, "value_amd64.s", options); !errors.Is(err, plan9asm.ErrProbeNeedsContext) || binding != nil {
+			bound, binding, err := observed.BindFixedLocal(ctx, pkg, file, "value_amd64.s", options)
+			if role == "bodyful" || role == "import" {
+				// Complete ordinary declarations are independently compiled and
+				// rechecked. They add no native permission beyond this actual
+				// numeric frame and its existing full-source proof.
+				if err != nil || binding == nil {
+					t.Fatalf("original numeric source lost complete %s handoff: %v", role, err)
+				}
+				if err := binding.Verify(ctx); err != nil {
+					t.Fatal(err)
+				}
+				amd64OriginalFixedLocalAPIs(t, pkg, file, bound,
+					strings.Replace(string(data), "#include \"textflag.h\"", "#define NOSPLIT 4", 1), false)
+				return
+			}
+			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || binding != nil {
 				t.Fatalf("query-only %s role expanded numeric factory admission: %v", role, err)
 			}
 		})

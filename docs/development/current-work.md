@@ -2,131 +2,102 @@
 
 Read [validation](validation.md), [instruction families](instructions.md), and
 [discovery verification](discovery-verification.md). Locate persistent worktrees
-with Git. Never edit a running source, tool or ledger snapshot.
+with Git; never edit a live source, tool or ledger snapshot.
 
 ## Contribution and CI
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
 targeting `codex/expand-ecosystem-corpus-20260913`. Push only to `cpunion`.
-Do not promote the upstream-connected branch before current-head fork CI and
-review pass. Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft.
+Do not promote the upstream-connected branch until current-head fork CI and
+exclusions review pass. Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40)
+stays Draft.
 
-The published head remains `47ea649d`. Completed run `36942816488` failed all
-six priority discovery shards and the aggregate. Policy preflight passed;
-downstream skipped jobs did not pass. Shards 5, 29, 36, 38, 39 and 42 must all
-pass before remaining jobs run; the aggregate still needs all 64 fresh reports.
-This local repair batch has not been pushed.
+Published head `47ea649d` and completed run `36942816488` still fail the six
+priority discovery shards (5, 29, 36, 38, 39, 42) and aggregate. Policy passed;
+downstream skipped jobs did not pass. This local batch is not yet pushed.
 
-## Integration and ownership
+## Continue here
 
-Continue from `codex/pr40-verification-checkpoint-bitfield-20261007`.
-Its production ancestor is `529019e1`; ledger-only successors `70a2182d`
-and `50202ae5` share its non-derived semantic source. Reports certify their
-named source, never an edited documentation or implementation successor.
-Main is the only assembly-ledger writer. Earlier agents are inactive.
+The development branch is
+`codex/pr40-amd64-complete-source-handoff-green-20261007`.
+Read its actual HEAD and status before resuming. Main is the only ledger writer;
+earlier agents are inactive.
 
-Retained repairs include typed x86 source/memory roles, scalar FP bit views,
-32-register vector masks, bounded CFG payload, and exact Go package-prefix
-encoding. CPP graphs retain immutable parser-built indexes and hash every full
-original. Deadlines and cancellation are invocation-local. Source rejection
-requires original bytes and an actual selected Go assembler diagnostic;
-included fragments are not standalone roots.
+Latest repairs:
 
-The ordinary and native scratch producers now share token CPP and Go line
-grammar. Complete label prefixes, optional suffixes, pending labels and original
-aliases survive parsing. CFG synthetic roles are explicit and collision-free.
-Consecutive empty original-label blocks fall through without inventing an exit,
-register fact, frame or ABI permission. All text/module/GoModule tests consume
-the actual modified alias source, not an unchanged baseline.
+- ARM64 logical shifted, ADD/SUB shifted and ADD/SUB extended forms share one
+  physical GP/NZCV effect grammar, including WZR/XZR, shifts and SP boundaries.
+- CPP resource queries index exact original edges once instead of scanning all
+  resources per unit. Unknown edges fail; public replay still validates and
+  hashes the whole original graph, including unconsumed sources.
+- AMD64 frame observation typechecks complete ordinary Go bodies, values and
+  stock-SDK imports. Only bodyless ASM declarations enter its frame table.
+  SDK source/export graphs remain bound; foreign imports stay Context.
+- The CLI passes every actual selected Go source and retains actual-load
+  import type identities and source hashes. Failed verification revokes its
+  independent binding. Pointer/slice fixed-local transport, caller regions,
+  dynamic frames and native JIT/FFI contracts remain unproved.
 
-The latest fix closes the complete scalar ARM64 SBFM/BFM/UBFM encoding family:
+The old observer regression expecting blanket body/import rejection failed
+after the expanded observation domain. Its replacement tests accept those
+independently observed numeric frames while retaining nested, foreign-module,
+DATA and pointer rejection. Obtain genuine terminal results for this branch;
+a test edit or an ancestor pass is not current-head verification.
 
-- One typed decoder validates W/X width, reserved fields, rotate and mask ranges.
-- Its physical GP effects drive R27 scratch, native input and pool-write checks.
-  BFM reads its old destination; SBFM/UBFM overwrite it. Register 31 means zero,
-  never SP; native input closure still rejects LR effects.
-- NZCV preservation uses the same physical grammar, not an alias-name whitelist.
-- Go's scalar `MOVW R1,R4` becomes `SXTW X4,W1`. Lowering already supported
-  it, but a separate native-effect whitelist rejected it. This consumer drift,
-  not an absent opcode, explains why official lowering coverage missed the bug.
+## Closed ancestor evidence
 
-Native-header properties cover scalar/descriptor layouts, builtin unsafe,
-bounded receivers and concrete generic instances. Uninstantiated generic
-declarations emit no value layout. These facts grant neither imported queries,
-pointee access, instrumented authority nor native calling contracts.
+These scopes certify only their named frozen revision. Independent readers
+rehash full tracked source, SDK/tool/dependency inputs and environments and
+check genuine exits and PID/PGID closure.
 
-## Closed evidence
+- `5395402a`: affected ARM64 native/scalar/raw-pool scope, 150 roots and
+  3,094 children per SDK; current Go 1.27.1 and official Go 1.20.14 passed
+  without Fail/Skip, with race, root-module vet/build and actual object controls.
+- `2209057f`: expanded current-SDK CPP corpus scope, 94 roots/418 children,
+  all 512 passed, including actual Go/header/LLVM consumer and mutation tests.
+- `c07c03ae`: compact CPP resource index, 15 focused passes per SDK.
+  Current 256-unit microbenchmark is about 21x faster than the retained RED,
+  not evidence that the complete CI benchmark passes.
+- `56717ae5`: full AMD64 frame/fixed-local root scope, 29 roots/115 children
+  per SDK, all 144 passed. Pointer observation still fails numeric-only binding.
+- `b2a75d68`: actual CLI RED has four failed children; original Go exported
+  every full source. Two lack syntax handoff and two hit blanket import rejection.
+- `b7b4a06d`: CLI scope passed 42 nodes; observer scope retained three failures
+  (two stale blanket-rejection assertions plus their parent). Keep raw failures.
+- Original golang/snappy v1.0.0 replay on `c07c03ae` compiled 12 LLVM objects
+  across six applicable configurations with all 11 targets retained.
 
-Both SDK lanes use current Go 1.27.1 or official Go 1.20.14 with exact LLVM 22.
-All eight root/nested dependency directories, SDK tools/sources, LLVM headers
-and required runtime/linker inputs are guarded. Independent readers physically
-rehash inputs, verify full environments, genuine exits and PID/PGID closure.
+## Running corpus and ledger
 
-- Alias RED `6a2faacd`: actual Go objects accepted, 10 expected failed nodes
-  per SDK. Green `88d2fb85`: full native scratch, 23 roots/257 children.
-- Scalar native-input RED `37324b37`: four real source fixtures demonstrate
-  the same SXTW effect gap, without inventing pointee or runtime authority.
-- Bitfield RED `b394f8fb`: 40 actual Go encoding rows, 33 rejected and seven
-  controls passed per SDK. Complete base/alias/extension/shift formats are
-  derived independently from Go encoding cases.
-- Green `529019e1`: affected native scratch, bitfield and raw-pool scope,
-  146 roots/2,282 children per SDK, no Fail or Skip; race, root-module vet/build.
-  Includes affected Go/LLVM objects, host runtime oracles and 138,240 synthetic
-  physical encoding checks. Synthetic checks are not individual object proofs.
-  Reader SHA-256:
-  `04f4d4a6ce3abcf9f98caa60c4afa185b295cc4f4909eaf750f424289bd0f903`.
-- Current five-architecture classification on `529019e1`: 9,460 formats,
-  9,201 supported, 259 Context, zero Unsupported or parser errors. Context is
-  not ordinary lowering, object or runtime coverage. Historical Go 1.20 retains
-  its reviewed single AMD64 VADDPD.Z source-format baseline exception.
+Frozen `529019e1` owns the three replay directories
+`_out/priority-shard{5,29,36}-bitfield-replay`. Check actual owner/process handles
+and reports. Shard 5 uses explicit candidates and remains partial.
+Obtain terminal producer and independent-reader results before promotion;
+never infer whole-shard coverage from running counts.
 
-Three original Snappy versions passed all applicable source/profile/LLVM object
-scopes on `529019e1`: golang/snappy v1.0.0 and google/go-snappy v1.0.0 each
-compiled 12 objects across six targets; Beeketing/snappy v0.0.1 compiled six
-across three. The full 11-target denominator remains recorded. Each producer
-closed 11 stages and its independent reader passed; no third-party execution
-is implied. Provenance and physical translator/runner hashes match.
+Committed assembly status remains three independently published Snappy passes,
+6,064 pending, no complete shard, `complete=false, verified=false`.
+Documentation and implementation successors need fresh source-matching reports.
+Only the automatic publisher may update matching ledger records; no hand edits.
 
-The automatic publisher and separate readback closed eight stages and retained
-3 passes/6,064 pending, zero failed records, three partial shards (5/34/59).
-Independent reader SHA-256:
-`696d52740068d4a8b0967deb01fb1942ccf63ba6b3cb695e99597535a74b4008`.
-No complete shard or whole-corpus pass is claimed. Non-derived edits invalidate
-current-head freshness: rebuild/replay before publishing another ledger.
+Inventory retains 215 continuous ranges from 2025-10-01 through
+2026-09-22T22:43:08Z and 6,067 assembly-bearing latest-per-path candidates.
+Standalone newer inventory is unsynchronized; cgo stays outside this repository.
+Scan and coverage funnel tables belong in the PR body, not this checkpoint.
 
-## Next work and completion gates
+## Remaining completion gates
 
-Frozen `529019e1` is replaying all 96 candidates of priority shard 5 under
-`_out/priority-shard5-bitfield-replay`. Obtain the terminal owner and independently
-read the actual reports. Explicit candidate scopes remain partial reports; do
-not infer whole-shard/aggregate completion. Distinguish original asmdecl errors
-from translator errors; never convert unknown failures to source N/A.
+Repair and replay original failing libraries, including actual native SP/caller
+backing, imported/generated headers, instrumentation and foreign-type closure,
+greater-than-64 profile planning, and native FFI/JIT entry contracts.
+Never raise budgets, remove proposals or relabel unknown errors as source N/A.
 
-Remaining mechanism classes include ordinary imported-header query domains,
-instrumentation/foreign-type source closure, FFI/JIT state and calling contracts,
-Arrow's greater-than-64 CPU-profile planning domain and parquet FP/ABI obligations.
-Do not raise budgets, erase proposals, copy old passes or fake native authority.
+Latest strict stdlib benchmark `f8ff1d9f` remains failed: 184 attempted,
+172 passed and 12 failed; wasm passed 19/19. Dynamic reflect/caller frames,
+runtime continuations/TLS, ARM64 observable result padding and SDK body closure
+remain. Context classification is not successful lowering/object/runtime proof.
 
-The latest strict standard-library benchmark remains failed on `f8ff1d9f`:
-184 attempted, 172 passed, 12 failed, zero N/A or unattempted; wasm passed 19/19.
-Dynamic reflect/caller frames, runtime incoming/continuation state, observable
-ARM64 result padding and exact SDK body closure remain.
-
-Whole root/nested CLI suites, all five official gates, strict benchmark,
-64 discovery shards and required cross-runtime jobs have not all passed this
-integration. Preserve the old orphaned `e98a7342` runner and unowned caches;
-do not fabricate an original exit. Remove only owned caches after all consumers
-close. LLVM 22 is mandatory; wasm must never receive blockaddress.
-
-## Inventory and ledger
-
-Committed continuous Index coverage remains 2025-10-01T00:00:00Z through
-2026-09-22T22:43:08Z: 18,758,534 records, 965,347 unique paths, 952,900 inspected,
-16,390 retries and 6,067 assembly-bearing latest-per-path versions.
-This is the committed inventory, not a fresh server query. Newer standalone
-inventory is unsynchronized; cgo stays outside this repository.
-
-Only the automatic writer may publish matching fresh source/ledger/tool reports.
-Missing candidates/shards remain pending, failures remain failed, and reviewed
-skips retain reasons. Never import into a live ledger. Keep scan/coverage funnel
-tables in the PR body, not these guides.
+Full root/nested CLI tests, official gates, benchmark, all 64 discovery shards,
+cross-runtime jobs, reviewed exclusions and current-head CI are not complete.
+Preserve the old unowned orphan/caches; clean only exact owned caches after all
+consumers close. LLVM 22 only; no wasm blockaddress or required-tool Skip.

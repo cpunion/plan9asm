@@ -189,6 +189,9 @@ func TestAMD64FixedLocalCompleteSourceRetainsActualLoadIdentity(t *testing.T) {
 			if err := source.verify(config.Context); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
 				t.Fatalf("changed actual-load %s retained the full-source binding: %v", axis, err)
 			}
+			if err := source.binding.Verify(config.Context); err == nil {
+				t.Fatal("failed actual-load verification did not revoke its independent frame binding")
+			}
 		})
 	}
 }
