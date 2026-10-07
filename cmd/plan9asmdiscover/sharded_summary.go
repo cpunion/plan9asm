@@ -54,12 +54,16 @@ func scanShardedReport(reportPath string, visit func(shardedRecord) error) (shar
 	if manifest.ShardKey != "sha256(module)[0]" {
 		return shardedScan{}, fmt.Errorf("decode sharded report manifest %q: unsupported shard key %q", manifestPath, manifest.ShardKey)
 	}
+	if err := validateRetryAfter(manifest.RetryAfter, false); err != nil {
+		return shardedScan{}, fmt.Errorf("decode sharded report manifest %q: %w", manifestPath, err)
+	}
 	report := discoveryReport{
 		SchemaVersion: manifest.SchemaVersion, GeneratedAt: manifest.GeneratedAt,
 		Since: manifest.Since, NextSince: manifest.NextSince,
 		ScanDirection: manifest.ScanDirection, NextBefore: manifest.NextBefore,
 		IndexRanges: manifest.IndexRanges, IndexEntries: manifest.IndexEntries,
 		UniqueModules: manifest.UniqueModules, Skipped: manifest.Skipped,
+		RetryAfter: cloneRetryAfter(manifest.RetryAfter),
 	}
 	if len(report.IndexRanges) > 0 {
 		report, err = upgradeDiscoveryReport(report)

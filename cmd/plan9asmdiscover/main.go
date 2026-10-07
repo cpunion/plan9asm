@@ -121,17 +121,18 @@ type trafficReport struct {
 }
 
 type ledgerSummary struct {
-	SchemaVersion    int    `json:"schema_version"`
-	HistoryBefore    string `json:"history_before"`
-	IncrementalSince string `json:"incremental_since"`
-	HistoryComplete  bool   `json:"history_complete"`
-	IndexRanges      int    `json:"index_ranges"`
-	IndexEntries     int    `json:"index_entries"`
-	UniqueModules    int    `json:"unique_modules"`
-	ScannedRecords   int    `json:"scanned_records"`
-	MatchedRecords   int    `json:"matched_records"`
-	AssemblyFiles    int    `json:"assembly_files"`
-	FailureRecords   int    `json:"failure_records"`
+	SchemaVersion    int            `json:"schema_version"`
+	HistoryBefore    string         `json:"history_before"`
+	IncrementalSince string         `json:"incremental_since"`
+	HistoryComplete  bool           `json:"history_complete"`
+	IndexRanges      int            `json:"index_ranges"`
+	IndexEntries     int            `json:"index_entries"`
+	UniqueModules    int            `json:"unique_modules"`
+	ScannedRecords   int            `json:"scanned_records"`
+	MatchedRecords   int            `json:"matched_records"`
+	AssemblyFiles    int            `json:"assembly_files"`
+	FailureRecords   int            `json:"failure_records"`
+	RetryAfter       *moduleVersion `json:"retry_after,omitempty"`
 }
 
 type trafficCollector struct {
@@ -207,24 +208,26 @@ type discoveryReport struct {
 	Scanned       []moduleVersion `json:"scanned"`
 	Matched       []candidate     `json:"matched"`
 	Failures      []scanFailure   `json:"failures,omitempty"`
+	RetryAfter    *moduleVersion  `json:"retry_after,omitempty"`
 }
 
 type shardedManifest struct {
-	SchemaVersion int          `json:"schema_version"`
-	Format        string       `json:"format"`
-	GeneratedAt   time.Time    `json:"generated_at"`
-	Since         string       `json:"since,omitempty"`
-	NextSince     string       `json:"next_since,omitempty"`
-	ScanDirection string       `json:"scan_direction,omitempty"`
-	NextBefore    string       `json:"next_before,omitempty"`
-	IndexRanges   []indexRange `json:"index_ranges,omitempty"`
-	IndexEntries  int          `json:"index_entries"`
-	UniqueModules int          `json:"unique_modules"`
-	Skipped       int          `json:"skipped_previously_scanned,omitempty"`
-	Scanned       int          `json:"scanned_records"`
-	Matched       int          `json:"matched_records"`
-	Failures      int          `json:"failure_records"`
-	ShardKey      string       `json:"shard_key"`
+	SchemaVersion int            `json:"schema_version"`
+	Format        string         `json:"format"`
+	GeneratedAt   time.Time      `json:"generated_at"`
+	Since         string         `json:"since,omitempty"`
+	NextSince     string         `json:"next_since,omitempty"`
+	ScanDirection string         `json:"scan_direction,omitempty"`
+	NextBefore    string         `json:"next_before,omitempty"`
+	IndexRanges   []indexRange   `json:"index_ranges,omitempty"`
+	IndexEntries  int            `json:"index_entries"`
+	UniqueModules int            `json:"unique_modules"`
+	Skipped       int            `json:"skipped_previously_scanned,omitempty"`
+	Scanned       int            `json:"scanned_records"`
+	Matched       int            `json:"matched_records"`
+	Failures      int            `json:"failure_records"`
+	ShardKey      string         `json:"shard_key"`
+	RetryAfter    *moduleVersion `json:"retry_after,omitempty"`
 }
 
 type shardedRecord struct {
@@ -639,6 +642,7 @@ func summarizeLedger(report discoveryReport) ledgerSummary {
 		MatchedRecords:   len(report.Matched),
 		AssemblyFiles:    assemblyFiles,
 		FailureRecords:   len(report.Failures),
+		RetryAfter:       cloneRetryAfter(report.RetryAfter),
 	}
 }
 
@@ -1265,6 +1269,9 @@ func acquireLedgerLock(reportPath string) (func() error, error) {
 }
 
 func upgradeDiscoveryReport(report discoveryReport) (discoveryReport, error) {
+	if err := validateRetryAfter(report.RetryAfter, true); err != nil {
+		return discoveryReport{}, err
+	}
 	switch report.SchemaVersion {
 	case 0:
 		report.SchemaVersion = discoverySchema
@@ -1314,6 +1321,10 @@ func mergeDiscoveryReports(base, update discoveryReport) (discoveryReport, error
 		return discoveryReport{}, fmt.Errorf("upgrade update discovery report: %w", err)
 	}
 	merged := discoveryReport{SchemaVersion: discoverySchema}
+	merged.RetryAfter = cloneRetryAfter(base.RetryAfter)
+	if update.RetryAfter != nil {
+		merged.RetryAfter = cloneRetryAfter(update.RetryAfter)
+	}
 	merged.GeneratedAt = base.GeneratedAt
 	if update.GeneratedAt.After(merged.GeneratedAt) {
 		merged.GeneratedAt = update.GeneratedAt

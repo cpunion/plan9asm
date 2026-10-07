@@ -9,14 +9,8 @@ import (
 	"testing"
 )
 
-// The initial test-only adapter executes the existing full reader/retry path.
-// Replace it only after its real bounded/fairness counterexamples run RED.
 func discoveryRetryQueueUnderTest(root string, limit int) ([]moduleVersion, error) {
-	report, err := readShardedReport(root)
-	if err != nil {
-		return nil, err
-	}
-	return modulesForFailureRetry(report), nil
+	return loadFailureRetryQueue(root, limit)
 }
 
 func TestDiscoveryRetryQueueBoundedDefaultMajorAndRotation(t *testing.T) {
@@ -88,6 +82,58 @@ func TestDiscoveryRetryQueueDrainsUnselectedTailAndCounts(t *testing.T) {
 				t.Fatalf("bounded queue exposed provisional records before full validation: %+v %v", got, err)
 			}
 		})
+	}
+}
+
+func TestDiscoveryRetryQueueMatchesLegacyMajorSelectionWithBoundedBuffers(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "ledger")
+	var failures []scanFailure
+	for _, path := range []string{"example.invalid/a", "example.invalid/b", "example.invalid/c"} {
+		for _, version := range []string{"v0.1.0", "v0.9.0", "v1.9.0", "v1.10.0", "v2.0.0", "v10.0.0", "!old", "z-opaque", "@latest"} {
+			failures = append(failures, scanFailure{Module: path, Version: version, Error: "owned failure"})
+		}
+	}
+	base := discoveryReport{Failures: failures}
+	if err := writeShardedReport(root, base); err != nil {
+		t.Fatal(err)
+	}
+	all := modulesForFailureRetry(base)
+	for _, cursor := range []*moduleVersion{nil, &all[3], &all[len(all)-1], {Path: "example.invalid/ba", Version: "v1.0.0"}} {
+		discoveryRetrySetManifestCursor(t, root, cursor)
+		for _, limit := range []int{1, 2, 5, len(all) + 1} {
+			var want []moduleVersion
+			for _, item := range all {
+				if cursor == nil || compareRetryModules(item, *cursor) > 0 {
+					want = append(want, item)
+				}
+			}
+			if cursor != nil {
+				for _, item := range all {
+					if compareRetryModules(item, *cursor) <= 0 {
+						want = append(want, item)
+					}
+				}
+			}
+			if len(want) > limit {
+				want = want[:limit]
+			}
+			got, err := loadFailureRetryQueue(root, limit)
+			if err != nil || !reflect.DeepEqual(got, want) || cap(got) > limit {
+				t.Fatalf("cursor=%+v limit=%d queue=%+v cap=%d reference=%+v error=%v", cursor, limit, got, cap(got), want, err)
+			}
+		}
+	}
+	for _, limit := range []int{1, 2, 7} {
+		var queue []moduleVersion
+		for i := len(all) - 1; i >= 0; i-- {
+			queue = retainRetryModule(queue, all[i], limit)
+			if len(queue) > limit || cap(queue) > limit {
+				t.Fatalf("candidate buffer exceeded budget: len=%d cap=%d limit=%d", len(queue), cap(queue), limit)
+			}
+		}
+		if !reflect.DeepEqual(queue, all[:limit]) {
+			t.Fatalf("physical reverse-order candidates differ: %+v", queue)
+		}
 	}
 }
 
