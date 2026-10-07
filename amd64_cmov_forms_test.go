@@ -348,7 +348,7 @@ func TestX86CMOVFamilyBoundFrameNumericalExtent(t *testing.T) {
 				{"func Value(x uint64)", "x+1(FP)", width != "Q"},
 				{"func Value(x uint8,y uint8)", "x+0(FP)", width == "W"},
 				{"func Value(x uint8,y uint32)", "x+0(FP)", false},
-				{"func Value(x float64)", "x+0(FP)", false},
+				{"func Value(x float64)", "x+0(FP)", true},
 				{"func Value(x *uint64)", "x+0(FP)", false},
 				{"func Value()", "ret+0(FP)", false},
 			} {
@@ -366,7 +366,7 @@ func TestX86CMOVFamilyBoundFrameNumericalExtent(t *testing.T) {
 					source := fmt.Sprintf("TEXT ·Value(SB),4,$0-%d\nCMOV%sLE %s,AX\nRET\n", size, width, test.field)
 					_, err := x86OrderingHintTranslateAPI(t, api, source, "package ordering\n"+test.declaration+"\n", target.arch, target.triple)
 					if test.valid && err != nil || !test.valid && !errors.Is(err, ErrProbeNeedsContext) {
-						t.Fatal("integer FP byte extent/hole/type permission", target.triple, width, test.declaration, api, err)
+						t.Fatal("numerical FP bit extent/hole/type permission", target.triple, width, test.declaration, api, err)
 					}
 				}
 			}

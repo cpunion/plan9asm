@@ -52,8 +52,8 @@ func (c *amd64Ctx) loadConditionalMoveSource(form x86ConditionalMoveForm, ins In
 		result := false
 		for offset := source.FPOffset; offset < source.FPOffset+int64(form.bits/8); offset++ {
 			slot, output, _ := c.fpVectorSlot(offset)
-			if slot.Type != I8 && slot.Type != I16 && slot.Type != I32 && slot.Type != I64 {
-				return "", fmt.Errorf("%w: CMOV FP byte is not a declared integer", ErrProbeNeedsContext)
+			if slot.Type != I8 && slot.Type != I16 && slot.Type != I32 && slot.Type != I64 && slot.Type != LLVMType("float") && slot.Type != LLVMType("double") {
+				return "", fmt.Errorf("%w: CMOV FP byte is not declared numerical storage", ErrProbeNeedsContext)
 			}
 			result = result || output
 		}
@@ -63,6 +63,8 @@ func (c *amd64Ctx) loadConditionalMoveSource(form x86ConditionalMoveForm, ins In
 			}
 		}
 	}
+	// The shared FP loader bitcasts floating slots before extracting bytes;
+	// NaN payloads and signed zero are not floating-to-integer conversions.
 	// Intel CMOVcc reads the complete memory source unconditionally, even for
 	// a false predicate or dead result. Preserve the original width and fault.
 	bytes, err := c.loadX86PackedShiftBytes(source, form.bits/8, true)

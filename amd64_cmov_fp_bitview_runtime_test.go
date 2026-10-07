@@ -80,9 +80,9 @@ const x86CMOVFPWholeBytesC = `
 ` + x86CMOVConditionC + `
 %s
 %s
-typedef void(*F32)(uint8_t*,float,uint64_t,uint64_t);
-typedef void(*F64)(uint8_t*,double,uint64_t,uint64_t);
-typedef struct {F32 f32,o32;F64 f64,o64;unsigned width,condition,bits;} Kernel;
+typedef void(*Program32)(uint8_t*,float,uint64_t,uint64_t);
+typedef void(*Program64)(uint8_t*,double,uint64_t,uint64_t);
+typedef struct {Program32 f32,o32;Program64 f64,o64;unsigned width,condition,bits;} Kernel;
 static Kernel kernels[]={%s};
 int main(void) {
  const uint32_t bits32[]={0,0x80000000,0x7fc00001,0x7f800001,0xffc12345,0x7f800000,0xffffffff,0x00000001};
