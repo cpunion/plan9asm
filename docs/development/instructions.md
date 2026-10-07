@@ -168,6 +168,14 @@ private-stack escape, g-register use, unregistered vector/native effects and sta
 signature metadata remain Context. Rosetta fixture execution is diagnostic,
 not evidence that an external AVX/AVX512 library ran on native AMD64 hardware.
 
+The existing <=3, zero-based +1 residue-loop rule composes only across separately
+proved reducible SCCs: one entry, one exact adjacent comparison/latch, no early
+exit, and a DAG after removing that latch's backedge. Each feasible path retains
+its own complete source origins, initialized bytes and numerical versions across
+SCCs. The original shared finite replay budget and independent final replay stay
+unchanged; this does not prove dynamic affine, sentinel or nested loops and never
+uses an acyclic hull join to manufacture a cyclic invariant or allocation bounds.
+
 Signed packed dword-to-float conversion uses one validated whole native
 CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,
 masking and embedded rounding. Its caller effects require every potential

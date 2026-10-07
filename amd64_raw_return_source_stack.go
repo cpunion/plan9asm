@@ -334,7 +334,7 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 				return reject(0, "counted-loop final access/state replay changed: "+reason)
 			}
 			for _, visit := range second {
-				if visit.pc == finalPlan.header {
+				if _, header := finalPlan.headers[visit.pc]; header {
 					proof.countedIterations[visit.residue]++
 				}
 			}

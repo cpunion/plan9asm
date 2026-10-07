@@ -102,6 +102,7 @@ func TestOriginalInitializedCountedValues(t *testing.T) {
 		t.Fatalf("first-party original Go counted integer/canary oracle: %v\n%s", err, output)
 	}
 	t.Log("original Go scalar oracle: 1536 initialized calls; bound zero/one/two/three, u32 wrap, both shared/separate exits; noinline full-memory snapshots compare both data buffers and adjacent canaries, not a physical source-stack witness; Darwin/Rosetta is diagnostic, not Intel hardware evidence")
+	t.Run("serial SCC composition", runX86CallerCountedSCCOriginalValues)
 }
 
 func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t *testing.T) {
@@ -189,4 +190,5 @@ func TestCrossLinuxRuntimeMatrixX86GoCallerCountedLoopValuesAndMemoryCanaries(t 
 	}
 	compileAndRunRuntimeTestForTarget(t, llc, clang, "caller_counted_loop", triple, translation.Module.String(), oracle.String(), runner)
 	t.Log("1536 independent unsigned mathematical results; both input buffers and all output/adjacent guard bytes unchanged, length immutable; Rosetta is diagnostic only")
+	t.Run("serial SCC composition", runX86CallerCountedSCCLLVMValues)
 }

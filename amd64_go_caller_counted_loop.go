@@ -10,11 +10,16 @@ import (
 // This private plan partitions numerical low bits, not allocation bounds. It
 // never supplies a pointer, initial GP value, public option or serialized proof.
 type x86CallerCountedPlan struct {
-	edges                 [][]int
+	edges                [][]int
+	loops                []x86CallerCountedLoop
+	headers, latches     map[int]int
+	original, normalized [32]byte
+}
+
+type x86CallerCountedLoop struct {
 	body                  map[int]bool
 	header, latch, update int
 	counter, bound        Reg
-	original, normalized  [32]byte
 }
 
 func x86CallerCountedEdges(fn Func, instructions []int, labels map[string]int) ([][]int, bool) {
@@ -63,32 +68,13 @@ func x86CallerCountedEdges(fn Func, instructions []int, labels map[string]int) (
 	return edges, true
 }
 
-// Prove a unique natural backedge. All other reachable edges form a DAG;
-// removing the header must also remove every path to the latch. No side entry,
-// early body exit, nested loop or unknown target can borrow this finite replay.
-func deriveX86CallerCountedPlan(original, fn Func, instructions []int, labels map[string]int) *x86CallerCountedPlan {
-	edges, valid := x86CallerCountedEdges(fn, instructions, labels)
-	if !valid {
-		return nil
-	}
-	plan := &x86CallerCountedPlan{edges: edges, body: map[int]bool{}, header: -1, latch: -1, update: -1}
-	color := make([]uint8, len(edges))
-	backedges := 0
-	var visit func(int)
-	visit = func(pc int) {
-		color[pc] = 1
-		for _, next := range edges[pc] {
-			if color[next] == 1 {
-				backedges++
-				plan.latch, plan.header = pc, next
-			} else if color[next] == 0 {
-				visit(next)
-			}
-		}
-		color[pc] = 2
-	}
-	visit(0)
-	if backedges != 1 || plan.latch == 0 {
+// Each SCC must retain the original one-loop rule: one entry edge, one exact
+// adjacent comparison/latch, an immutable bound and one unavoidable +1 update.
+// Its remaining edges must be a DAG, not an inferred cyclic merge invariant.
+func deriveX86CallerCountedLoop(fn Func, instructions []int, edges [][]int, reachable []bool,
+	body map[int]bool, header, latchPC int) *x86CallerCountedLoop {
+	plan := &x86CallerCountedLoop{body: body, header: header, latch: latchPC, update: -1}
+	if plan.latch == 0 || !plan.body[plan.latch-1] {
 		return nil
 	}
 	latch := fn.Instrs[instructions[plan.latch]]
@@ -103,46 +89,9 @@ func deriveX86CallerCountedPlan(original, fn Func, instructions []int, labels ma
 	if !leftOK || !rightOK || left == right || left != compare.Args[0].Reg || right != compare.Args[1].Reg {
 		return nil
 	}
-	// Nodes that can reach the latch without the backedge are the natural body.
-	plan.body[plan.latch] = true
-	for changed := true; changed; {
-		changed = false
-		for pc, nexts := range edges {
-			if color[pc] == 0 || plan.body[pc] {
-				continue
-			}
-			for _, next := range nexts {
-				if pc != plan.latch && plan.body[next] {
-					plan.body[pc] = true
-					changed = true
-				}
-			}
-		}
-	}
-	// Intersect with reachability from the header, stopping at the latch.
-	fromHeader := map[int]bool{}
-	work := []int{plan.header}
-	for len(work) != 0 {
-		pc := work[0]
-		work = work[1:]
-		if fromHeader[pc] || pc == plan.latch {
-			fromHeader[pc] = true
-			continue
-		}
-		fromHeader[pc] = true
-		work = append(work, edges[pc]...)
-	}
-	for pc := range plan.body {
-		if !fromHeader[pc] {
-			delete(plan.body, pc)
-		}
-	}
-	if !plan.body[plan.header] {
-		return nil
-	}
 	entries, updates := 0, 0
 	for pc, nexts := range edges {
-		if color[pc] == 0 {
+		if !reachable[pc] {
 			continue
 		}
 		for _, next := range nexts {
@@ -194,7 +143,7 @@ func deriveX86CallerCountedPlan(original, fn Func, instructions []int, labels ma
 		}
 	}
 	seen := map[int]bool{}
-	work = []int{plan.header}
+	work := []int{plan.header}
 	for len(work) != 0 {
 		pc := work[0]
 		work = work[1:]
@@ -206,15 +155,6 @@ func deriveX86CallerCountedPlan(original, fn Func, instructions []int, labels ma
 		}
 		seen[pc] = true
 		work = append(work, edges[pc]...)
-	}
-	var err error
-	plan.original, err = x86CallerSourceFingerprint(original)
-	if err != nil {
-		return nil
-	}
-	plan.normalized, err = x86CallerSourceFingerprint(fn)
-	if err != nil {
-		return nil
 	}
 	return plan
 }
@@ -395,9 +335,9 @@ func (facts *x86CallerCountedNumbers) step(pc, residue int, ins Instr, before x8
 }
 
 type x86CallerCountedVisit struct {
-	pc, residue, iteration int
-	state                  x86SourceStackState
-	numbers                x86CallerCountedNumbers
+	pc, residue, iteration, loop int
+	state                        x86SourceStackState
+	numbers                      x86CallerCountedNumbers
 }
 
 type x86CallerCountedWork struct {
@@ -436,7 +376,7 @@ func replayX86CallerCountedPlan(plan *x86CallerCountedPlan, fn *Func, instructio
 	returned := 0
 	for residue := 0; residue <= 3; residue++ {
 		work := []x86CallerCountedWork{{x86CallerCountedVisit: x86CallerCountedVisit{
-			residue: residue, iteration: -1, state: x86CloneCallerState(initial),
+			residue: residue, iteration: -1, loop: -1, state: x86CloneCallerState(initial),
 			numbers: x86CallerCountedNumbers{regs: map[Reg]x86CallerCountedNumber{}, source: -1},
 		}}}
 		for len(work) != 0 {
@@ -446,10 +386,15 @@ func replayX86CallerCountedPlan(plan *x86CallerCountedPlan, fn *Func, instructio
 			item := work[0]
 			work = work[1:]
 			pc := item.pc
-			if pc == plan.header {
-				bound, bOK := item.numbers.regs[plan.bound]
-				counter, cOK := item.numbers.regs[plan.counter]
-				if item.iteration < 0 {
+			if loopIndex, header := plan.headers[pc]; header {
+				loop := plan.loops[loopIndex]
+				bound, bOK := item.numbers.regs[loop.bound]
+				counter, cOK := item.numbers.regs[loop.counter]
+				if item.loop != -1 && item.loop != loopIndex {
+					return nil, "counted-loop entry crosses an active SCC"
+				}
+				if item.loop == -1 {
+					item.loop = loopIndex
 					item.iteration, item.bound = 0, bound
 					item.entry = x86CloneCallerState(item.state)
 				}
@@ -468,19 +413,26 @@ func replayX86CallerCountedPlan(plan *x86CallerCountedPlan, fn *Func, instructio
 				return nil, fmt.Sprintf("normalized instruction %d: %s", instructions[pc], reason)
 			}
 			if isReturn {
+				if item.loop != -1 {
+					return nil, "counted-loop return bypasses its exact latch"
+				}
 				returned++
 				continue
 			}
 			numbers.step(pc, residue, *ins, item.state, proof)
 			nexts := plan.edges[pc]
-			if pc == plan.latch {
-				flags, counter, bound := numbers.flags, numbers.regs[plan.counter], numbers.regs[plan.bound]
+			if loopIndex, latch := plan.latches[pc]; latch {
+				loop := plan.loops[loopIndex]
+				flags, counter, bound := numbers.flags, numbers.regs[loop.counter], numbers.regs[loop.bound]
+				if item.loop != loopIndex {
+					return nil, "counted-loop latch lacks its original SCC entry"
+				}
 				if !flags.known || flags.pc != pc-1 || !counter.known || counter.value != uint64(item.iteration+1) ||
 					!reflect.DeepEqual(bound, item.bound) || !x86CallerCountedOrigins(item.entry, state, proof) {
 					return nil, "counted-loop latch lacks exact counter, bound and comparison versions"
 				}
 				for index, reg := range flags.regs {
-					if (reg != plan.counter && reg != plan.bound) || flags.versions[index] != numbers.regs[reg].version {
+					if (reg != loop.counter && reg != loop.bound) || flags.versions[index] != numbers.regs[reg].version {
 						return nil, "counted-loop comparison observes stale operand versions"
 					}
 				}
@@ -494,14 +446,26 @@ func replayX86CallerCountedPlan(plan *x86CallerCountedPlan, fn *Func, instructio
 				}
 			}
 			for _, next := range nexts {
-				iteration := item.iteration
-				if pc == plan.latch && next == plan.header {
-					iteration++
+				iteration, loopIndex := item.iteration, item.loop
+				bound, entry := item.bound, item.entry
+				if item.loop >= 0 {
+					loop := plan.loops[item.loop]
+					if pc == loop.latch && next == loop.header {
+						iteration++
+					} else if !loop.body[next] {
+						if pc != loop.latch {
+							return nil, "counted-loop exit bypasses its exact latch"
+						}
+						// Clear only this loop's control witness. All source origins,
+						// initialized bytes, numerical versions and flags survive.
+						iteration, loopIndex = -1, -1
+						bound, entry = x86CallerCountedNumber{}, x86SourceStackState{}
+					}
 				}
 				work = append(work, x86CallerCountedWork{x86CallerCountedVisit: x86CallerCountedVisit{
-					pc: next, residue: residue, iteration: iteration,
+					pc: next, residue: residue, iteration: iteration, loop: loopIndex,
 					state: x86CloneCallerState(state), numbers: numbers.clone(),
-				}, bound: item.bound, entry: x86CloneCallerState(item.entry)})
+				}, bound: bound, entry: x86CloneCallerState(entry)})
 			}
 		}
 	}
