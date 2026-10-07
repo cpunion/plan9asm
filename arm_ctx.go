@@ -398,7 +398,7 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	}
 	sort.Strings(regs)
 
-	c.b.WriteString(armLLVMBlockName("entry") + ":\n")
+	c.b.WriteString(armLLVMBlockName(c.blocks[0].name) + ":\n")
 	for _, rs := range regs {
 		r := Reg(rs)
 		slot := c.slotName(r)

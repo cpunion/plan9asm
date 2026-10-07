@@ -509,7 +509,7 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 	if _, ok := arm64BranchTarget(arm64RegOp("R0")); ok {
 		t.Fatalf("arm64BranchTarget(reg) unexpectedly succeeded")
 	}
-	if got := arm64LLVMBlockName("9.loop<>"); got != "bb_9_loop__" {
+	if got := arm64LLVMBlockName("9.loop<>"); got != "bb_n_9_2eloop_3c_3e" {
 		t.Fatalf("arm64LLVMBlockName() = %q", got)
 	}
 

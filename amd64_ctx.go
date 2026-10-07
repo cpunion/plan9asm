@@ -440,7 +440,7 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	}
 	sort.Strings(regs)
 
-	c.b.WriteString(amd64LLVMBlockName("entry") + ":\n")
+	c.b.WriteString(amd64LLVMBlockName(c.blocks[0].name) + ":\n")
 	if c.mmxConversionSlot != "" {
 		fmt.Fprintf(c.b, "  %s = alloca i64, align 8\n", c.mmxConversionSlot)
 	}
