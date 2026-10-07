@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 func TestDiscoveryAsmDeclFPAliasActual386Components(t *testing.T) {
@@ -256,7 +259,7 @@ func TestDiscoveryAsmDeclFPAliasRetainsUnprovedBytes(t *testing.T) {
 		"read result before definition":   {"func Value(x, y uint64) uint64", "MOVQ y+16(FP),AX\nMOVQ AX,ret+16(FP)\nRET", "24"},
 		"ret name hides unwritten result": {"func Value(x, y uint64) uint64", "MOVQ ret+0(FP),AX\nRET", "24"},
 		"parameter store":                 {"func Value(x, y uint64) uint64", "MOVQ $7,x+8(FP)\nMOVQ $9,ret+16(FP)\nRET", "24"},
-		"unregistered native row":         {"func Value(x, y uint64) uint64", "ADDQ x+8(FP),AX\nMOVQ AX,ret+16(FP)\nRET", "24"},
+		"uninitialized RMW result alias":  {"func Value(x, y uint64) uint64", "ADDQ x+8(FP),AX\nMOVQ AX,y+16(FP)\nRET", "24"},
 		"FP address":                      {"func Value(x, y uint64) uint64", "LEAQ x+8(FP),AX\nMOVQ AX,ret+16(FP)\nRET", "24"},
 		"unknown call effect":             {"func Value(x, y uint64) uint64\nfunc Other()", "MOVQ x+8(FP),AX\nMOVQ AX,y+16(FP)\nCALL ·Other(SB)\nRET\nTEXT ·Other(SB),4,$0-0\nRET", "24"},
 		"CPP instruction rewrite":         {"func Value(x, y uint64) uint64", "MOVQ x+8(FP),AX\nMOVQ AX,ret+16(FP)\nRET", "24"},
@@ -293,6 +296,78 @@ func TestDiscoveryAsmDeclFPAliasRetainsUnprovedBytes(t *testing.T) {
 	}
 }
 
+// Native access shape closes only the parameter-name diagnostic. A canonical
+// ret spelling does not ask that filter to prove ADDQ's old AX input; the
+// separate public result checker still must. A result alias does ask for that
+// whole proof, and cannot use the parameter's occupied bytes to initialize AX.
+func TestDiscoveryAsmDeclFPAliasTypedRMWLayoutIsNotResultAuthority(t *testing.T) {
+	for _, name := range []string{"x", "alias"} {
+		for _, result := range []string{"ret", "y"} {
+			for _, initialized := range []bool{false, true} {
+				t.Run(name+"/"+result+fmt.Sprintf("/initialized=%t", initialized), func(t *testing.T) {
+					body := ""
+					if initialized {
+						body = "MOVQ $0,AX\n"
+					}
+					body += "ADDQ " + name + "+8(FP),AX\nMOVQ AX," + result + "+16(FP)\nRET\n"
+					assembly := "TEXT ·Value(SB),4,$0-24\n" + body
+					root, env := discoveryAsmDeclResultAliasFixture(t, "func Value(x, y uint64) uint64", assembly)
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+					defer cancel()
+					plan, err := captureDiscoveryAsmDeclDirect(ctx, root, env, nil, []string{"."}, "")
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer func() {
+						if err := plan.close(); err != nil {
+							t.Error(err)
+						}
+					}()
+					if len(plan.Units) != 1 {
+						t.Fatalf("actual selected units: %d", len(plan.Units))
+					}
+					unit := plan.Units[0]
+					_, original := runCapturedCommandOutput(ctx, plan.Dir, plan.Env, plan.GoBinary, "tool", "vet", "-asmdecl", unit.Filename)
+					failure, observed := discoveryAsmDeclObservedFailure(original)
+					if !observed || !strings.Contains(failure.output, name+"+8") ||
+						strings.Contains(failure.output, "RET without writing") != (result == "y") {
+						t.Fatalf("actual original name/result obligations missing: %v", original)
+					}
+					declarations, err := plan.resultAliasDeclarations(unit)
+					if err != nil {
+						t.Fatal(err)
+					}
+					declaration, declared := declarations["Value"]
+					if !declared {
+						t.Fatal("actual typed declaration missing")
+					}
+					file, err := plan9asm.Parse(plan9asm.ArchAMD64, assembly)
+					if err != nil || len(file.Funcs) != 1 {
+						t.Fatalf("independent original source: %v", err)
+					}
+					proof := plan9asm.CheckX86ABI0ResultInitialization(file.Funcs[0], declaration.sig, "amd64")
+					if initialized && proof != nil || !initialized && !errors.Is(proof, plan9asm.ErrProbeNeedsContext) {
+						t.Fatalf("result proof confused registered FP width with old AX initialization: %v", proof)
+					}
+					filtered := plan.filterResultAliasWarnings(unit, original)
+					if result == "ret" || initialized {
+						if filtered != nil || len(plan.resultAliasRawFailures) == 0 || plan.resultAliasRawFailures[len(plan.resultAliasRawFailures)-1] != failure {
+							t.Fatalf("closed name/result diagnostic lost its original raw receipt: %v", filtered)
+						}
+						if err := runDiscoveryAsmDecl(ctx, root, env, "linux/amd64", nil, []string{"."}); err != nil {
+							t.Fatalf("separate layout/name consumer rejected its closed obligation: %v", err)
+						}
+					} else if !errors.Is(filtered, errDiscoveryAsmDeclSourceProof) || !errors.Is(filtered, original) ||
+						!strings.Contains(discoveryCommandDiagnostic(filtered), failure.output) {
+						t.Fatalf("result alias erased the uninitialized old AX obligation: %v", filtered)
+					}
+					t.Logf("ORIGINAL_TYPED_RMW_DIAGNOSTIC: %v; independent result initialization: %v", original, proof)
+				})
+			}
+		}
+	}
+}
+
 func TestDiscoveryAsmDeclFPAliasActualObjectNames(t *testing.T) {
 	declaration := "func Value(x, y uint64) uint64"
 	alias := "TEXT ·Value(SB),4,$0-24\nMOVQ x+8(FP),AX\nMOVQ AX,y+16(FP)\nRET\n"
@@ -326,10 +401,10 @@ func TestDiscoveryAsmDeclFPAliasActualObjectNames(t *testing.T) {
 
 func TestDiscoveryAsmDeclFPAliasUnclosedContext(t *testing.T) {
 	for name, body := range map[string]string{
-		"known component unregistered read": "ADDQ x+8(FP),AX\nMOVQ AX,ret+16(FP)",
+		"known component unknown RMW input": "ADDQ x+8(FP),AX\nMOVQ AX,y+16(FP)",
 		"dynamic FP index":                  "MOVQ x+8(FP)(SI*1),AX\nMOVQ AX,ret+16(FP)",
-		"unknown name unregistered read":    "ADDQ alias+8(FP),AX\nMOVQ AX,ret+16(FP)",
-		"mixed unknown diagnostic":          "ADDQ alias+8(FP),AX\nMOVQ alien+99(FP),BX\nMOVQ AX,ret+16(FP)",
+		"unknown name unknown RMW input":    "ADDQ alias+8(FP),AX\nMOVQ AX,y+16(FP)",
+		"mixed unknown diagnostic":          "ADDQ alias+8(FP),AX\nMOVQ alien+99(FP),BX\nMOVQ AX,y+16(FP)",
 		"unknown name wide read":            "MOVQ alias+4(FP),AX\nMOVQ AX,ret+16(FP)",
 		"result alias unknown definition":   "MOVQ BX,y+16(FP)",
 	} {
