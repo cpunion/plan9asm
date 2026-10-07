@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -248,5 +251,74 @@ func TestDiscoveryPublicationRestoresPreviousLedgerOnRenameFailure(t *testing.T)
 	data, err := os.ReadFile(filepath.Join(destination, "data"))
 	if err != nil || string(data) != "previous" {
 		t.Fatalf("publication lost previous authoritative ledger: %q, %v", data, err)
+	}
+}
+
+func publicationModuleInShard(t *testing.T, shard byte) moduleVersion {
+	t.Helper()
+	for i := 0; i < 16384; i++ {
+		module := fmt.Sprintf("example.com/shard-case/%02x/%04d", shard, i)
+		if sha256.Sum256([]byte(module))[0] == shard {
+			return moduleVersion{Path: module, Version: "v1.0.0"}
+		}
+	}
+	t.Fatalf("no fixture module found for shard %02x", shard)
+	return moduleVersion{}
+}
+
+func TestDiscoveryPublicationPreservesReadableUppercaseShardNames(t *testing.T) {
+	ledger := filepath.Join(t.TempDir(), "ledger")
+	if err := writeShardedReport(ledger, discoveryReport{
+		Scanned: []moduleVersion{publicationModuleInShard(t, 0xa0), publicationModuleInShard(t, 0xf0)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(ledger, "records", "f0.jsonl"), filepath.Join(ledger, "records", "F0.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	want, err := readShardedReport(ledger)
+	if err != nil {
+		t.Fatalf("public reader rejects the preexisting fixture: %v", err)
+	}
+	if err := writeShardedReport(ledger, discoveryReport{}); err != nil {
+		t.Fatalf("streaming publication rejects a readable unique uppercase shard: %v", err)
+	}
+	got, err := readShardedReport(ledger)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("uppercase shard publication changed records: %v", err)
+	}
+}
+
+func TestDiscoveryReaderRejectsDuplicateLogicalShardAliases(t *testing.T) {
+	ledger := filepath.Join(t.TempDir(), "ledger")
+	if err := writeShardedReport(ledger, discoveryReport{Scanned: []moduleVersion{publicationModuleInShard(t, 0xa0)}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(ledger, "records", "a0.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ledger, "records", "A0.jsonl"), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(ledger, "manifest.json")
+	data, err = os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest shardedManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Scanned = 2
+	writeSummaryFixtureJSON(t, manifestPath, manifest)
+	for _, read := range []func(string) error{
+		func(path string) error { _, err := readShardedSummary(path); return err },
+		func(path string) error { _, err := readShardedReport(path); return err },
+		func(path string) error { return writeShardedReport(path, discoveryReport{}) },
+	} {
+		if err := read(ledger); err == nil || !strings.Contains(err.Error(), "duplicate logical record shard") {
+			t.Errorf("duplicate logical shard aliases were not rejected explicitly: %v", err)
+		}
 	}
 }
