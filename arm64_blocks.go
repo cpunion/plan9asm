@@ -6,18 +6,20 @@ import (
 )
 
 type arm64Block struct {
-	name   string // source label (or "entry")
-	instrs []Instr
+	name      string
+	instrs    []Instr
+	synthetic bool
 }
 
 func arm64SplitBlocks(fn Func) []arm64Block {
-	blocks := []arm64Block{{name: "entry"}}
+	names := newAssemblyBlockNames(fn)
+	blocks := []arm64Block{{name: names.fresh("entry"), synthetic: true}}
 	cur := 0
 	anon := 0
 
 	startAnon := func() {
 		anon++
-		blocks = append(blocks, arm64Block{name: fmt.Sprintf("anon_%d", anon)})
+		blocks = append(blocks, arm64Block{name: names.fresh(fmt.Sprintf("anon_%d", anon)), synthetic: true})
 		cur = len(blocks) - 1
 	}
 
@@ -46,8 +48,9 @@ func arm64SplitBlocks(fn Func) []arm64Block {
 			lbl := ins.Args[0].Sym
 			// Labels start a new basic block. If we previously created an empty
 			// synthetic fallthrough block, reuse it by renaming.
-			if len(blocks[cur].instrs) == 0 && strings.HasPrefix(blocks[cur].name, "anon_") {
+			if cur != 0 && len(blocks[cur].instrs) == 0 && blocks[cur].synthetic {
 				blocks[cur].name = lbl
+				blocks[cur].synthetic = false
 				continue
 			}
 			blocks = append(blocks, arm64Block{name: lbl})
@@ -63,7 +66,7 @@ func arm64SplitBlocks(fn Func) []arm64Block {
 	}
 
 	// Drop trailing empty synthetic block if present.
-	if len(blocks) > 1 && len(blocks[len(blocks)-1].instrs) == 0 && strings.HasPrefix(blocks[len(blocks)-1].name, "anon_") {
+	if len(blocks) > 1 && len(blocks[len(blocks)-1].instrs) == 0 && blocks[len(blocks)-1].synthetic {
 		previous := blocks[len(blocks)-2]
 		lastOp := Op("")
 		if len(previous.instrs) != 0 {
@@ -98,30 +101,9 @@ func arm64IsLocalBranchLink(ins Instr) bool {
 }
 
 func arm64LLVMBlockName(src string) string {
-	if src == "" {
-		return "bb"
-	}
-	var out []byte
-	for i := 0; i < len(src); i++ {
-		ch := src[i]
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
-			out = append(out, ch)
-			continue
-		}
-		out = append(out, '_')
-	}
-	s := string(out)
-	if s == "" {
-		return "bb"
-	}
-	if s[0] >= '0' && s[0] <= '9' {
-		s = "bb_" + s
-	}
-	// Avoid collisions with "entry:" / "ret:" that some tools special-case.
-	if s == "entry" {
-		s = "bb_entry"
-	}
-	return s
+	// Encode every non-alphanumeric byte injectively, including underscores.
+	// The block namespace is disjoint from register and SSA temporary names.
+	return "bb_" + amd64LLVMSafeName(src)
 }
 
 func arm64BranchTarget(op Operand) (string, bool) {

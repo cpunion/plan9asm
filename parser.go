@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"text/scanner"
 )
 
 // File is a parsed Plan 9 asm source file (subset).
@@ -97,6 +98,25 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 	sc.Buffer(nil, len(pp)+1)
 	lineno := 0
 	var cur *Func
+	var pendingLabels []assemblyLabelPrefix
+	labels := make(map[string]bool)
+	flushLabels := func() error {
+		for _, label := range pendingLabels {
+			if labels[label.name] {
+				return fmt.Errorf("line %d: label %q multiply defined", lineno, label.name)
+			}
+			labels[label.name] = true
+			if cur == nil {
+				f.UnlinkedPrelude = append(f.UnlinkedPrelude, label.raw)
+				continue
+			}
+			cur.Instrs = append(cur.Instrs, Instr{
+				Op: OpLABEL, Args: []Operand{{Kind: OpLabel, Sym: label.name}}, Raw: label.raw,
+			})
+		}
+		pendingLabels = nil
+		return nil
+	}
 	for sc.Scan() {
 		lineno++
 		line := strings.TrimSpace(sc.Text())
@@ -107,36 +127,16 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 			if stmt == "" {
 				continue
 			}
-			if strings.HasSuffix(stmt, ":") {
-				if cur == nil {
-					return nil, fmt.Errorf("line %d: label outside TEXT: %q", lineno, stmt)
+			for {
+				label, found := statementLabelPrefix(arch, stmt)
+				if !found {
+					break
 				}
-				lbl := strings.TrimSpace(strings.TrimSuffix(stmt, ":"))
-				if lbl == "" {
-					return nil, fmt.Errorf("line %d: empty label: %q", lineno, stmt)
-				}
-				cur.Instrs = append(cur.Instrs, Instr{
-					Op:   OpLABEL,
-					Args: []Operand{{Kind: OpLabel, Sym: lbl}},
-					Raw:  stmt,
-				})
-				continue
+				pendingLabels = append(pendingLabels, label)
+				stmt = label.rest
 			}
-			// Support "label: INSTR ..." on one statement.
-			if c := strings.IndexByte(stmt, ':'); c >= 0 {
-				left := strings.TrimSpace(stmt[:c])
-				right := strings.TrimSpace(stmt[c+1:])
-				if left != "" && right != "" && !strings.ContainsAny(left, " \t") {
-					if cur == nil {
-						return nil, fmt.Errorf("line %d: label outside TEXT: %q", lineno, stmt)
-					}
-					cur.Instrs = append(cur.Instrs, Instr{
-						Op:   OpLABEL,
-						Args: []Operand{{Kind: OpLabel, Sym: left}},
-						Raw:  left + ":",
-					})
-					stmt = right
-				}
+			if stmt == "" {
+				continue
 			}
 
 			opStr, rest := splitOpcode(stmt)
@@ -150,6 +150,11 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 					op = "WASMCALL"
 				case "Return":
 					op = "WASMRETURN"
+				}
+			}
+			if op != OpTEXT && op != "DATA" && op != "GLOBL" {
+				if err := flushLabels(); err != nil {
+					return nil, err
 				}
 			}
 			if cur == nil && op != OpTEXT && op != "DATA" && op != "GLOBL" {
@@ -184,6 +189,10 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 				f.Funcs = append(f.Funcs, Func{Sym: sym, FrameSize: frameSize, ArgSize: argSize})
 				cur = &f.Funcs[len(f.Funcs)-1]
 				cur.Instrs = append(cur.Instrs, Instr{Op: OpTEXT, Raw: stmt})
+				labels = make(map[string]bool)
+				if err := flushLabels(); err != nil {
+					return nil, err
+				}
 				continue
 
 			case "DATA":
@@ -269,6 +278,42 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 		return nil, fmt.Errorf("no TEXT directive found")
 	}
 	return f, nil
+}
+
+// cmd/asm's line grammar admits zero or more pending identifier labels before
+// an instruction. Suffix tokens precede the colon on non-wasm architectures,
+// but do not change the label's original identifier. Operand/string colons
+// never enter this role. DATA/GLOBL and EOF do not consume pending labels.
+type assemblyLabelPrefix struct {
+	name, raw, rest string
+}
+
+func statementLabelPrefix(arch Arch, statement string) (assemblyLabelPrefix, bool) {
+	colon := strings.IndexByte(statement, ':')
+	if colon < 0 {
+		return assemblyLabelPrefix{}, false
+	}
+	reader := newPPGoReader("<label-prefix>", statement[:colon])
+	word, err := reader.next()
+	if err != nil || word.kind != scanner.Ident {
+		return assemblyLabelPrefix{}, false
+	}
+	for {
+		token, err := reader.next()
+		if err != nil {
+			return assemblyLabelPrefix{}, false
+		}
+		if token.kind == scanner.EOF {
+			return assemblyLabelPrefix{word.text, strings.TrimSpace(statement[:colon+1]), strings.TrimSpace(statement[colon+1:])}, true
+		}
+		if token.kind != '.' || arch != ArchAMD64 && arch != ArchARM && arch != ArchARM64 {
+			return assemblyLabelPrefix{}, false
+		}
+		suffix, err := reader.next()
+		if err != nil || suffix.kind != scanner.Ident {
+			return assemblyLabelPrefix{}, false
+		}
+	}
 }
 
 func parseTEXTFrame(parts []string) (frameSize, argSize int64, err error) {

@@ -6,8 +6,9 @@ import (
 )
 
 type amd64Block struct {
-	name   string
-	instrs []Instr
+	name      string
+	instrs    []Instr
+	synthetic bool
 }
 
 func isAMD64ConditionalBranch(op Op) bool {
@@ -35,7 +36,8 @@ func isAMD64CounterZeroBranch(op Op) bool {
 }
 
 func amd64SplitBlocks(fn Func) []amd64Block {
-	blocks := []amd64Block{{name: "entry"}}
+	names := newAssemblyBlockNames(fn)
+	blocks := []amd64Block{{name: names.fresh("entry"), synthetic: true}}
 	cur := 0
 	anon := 0
 
@@ -59,7 +61,7 @@ func amd64SplitBlocks(fn Func) []amd64Block {
 
 	startAnon := func() {
 		anon++
-		blocks = append(blocks, amd64Block{name: fmt.Sprintf("anon_%d", anon)})
+		blocks = append(blocks, amd64Block{name: names.fresh(fmt.Sprintf("anon_%d", anon)), synthetic: true})
 		cur = len(blocks) - 1
 	}
 
@@ -101,8 +103,9 @@ func amd64SplitBlocks(fn Func) []amd64Block {
 	for _, ins := range fn.Instrs {
 		if ins.Op == OpLABEL && len(ins.Args) == 1 && ins.Args[0].Kind == OpLabel {
 			lbl := ins.Args[0].Sym
-			if len(blocks[cur].instrs) == 0 && strings.HasPrefix(blocks[cur].name, "anon_") {
+			if cur != 0 && len(blocks[cur].instrs) == 0 && blocks[cur].synthetic {
 				blocks[cur].name = lbl
+				blocks[cur].synthetic = false
 				continue
 			}
 			blocks = append(blocks, amd64Block{name: lbl})
@@ -119,7 +122,7 @@ func amd64SplitBlocks(fn Func) []amd64Block {
 		}
 	}
 
-	if len(blocks) > 1 && len(blocks[len(blocks)-1].instrs) == 0 && strings.HasPrefix(blocks[len(blocks)-1].name, "anon_") {
+	if len(blocks) > 1 && len(blocks[len(blocks)-1].instrs) == 0 && blocks[len(blocks)-1].synthetic {
 		blocks = blocks[:len(blocks)-1]
 	}
 	return blocks
