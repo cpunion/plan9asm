@@ -1,13 +1,85 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 )
+
+func TestDiscoveryRetryInputBoundaryAndEmptyClear(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "ledger")
+	base := discoveryReport{Failures: []scanFailure{
+		{Module: "example.invalid/a", Version: "v1.0.0", Error: "owned failure"},
+		{Module: "example.invalid/b", Version: "v1.0.0", Error: "owned failure"},
+		{Module: "example.invalid/c", Version: "v1.0.0", Error: "owned failure"},
+	}}
+	if err := writeShardedReport(root, base); err != nil {
+		t.Fatal(err)
+	}
+	discoveryRetrySetManifestCursor(t, root, &moduleVersion{Path: "example.invalid/b", Version: "v1.0.0"})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "owned persistent failure", http.StatusNotFound)
+	}))
+	defer server.Close()
+	want := []moduleVersion{{Path: "example.invalid/c", Version: "v1.0.0"}, {Path: "example.invalid/a", Version: "v1.0.0"}}
+	loads := 0
+	cfg := config{limit: 2, workers: 1, maxZipSize: defaultMaxZipSize, proxyURL: server.URL,
+		loadState: func(modules []moduleVersion) (scanBatchState, error) {
+			loads++
+			if !reflect.DeepEqual(modules, want) {
+				t.Fatalf("loader received non-queue modules: %+v want %+v", modules, want)
+			}
+			return scanBatchState{}, nil
+		}}
+	report, err := retryFailuresStreaming(context.Background(), server.Client(), cfg, root)
+	if err != nil || loads != 1 || report.UniqueModules != 2 || !reflect.DeepEqual(report.RetryAfter, &want[1]) ||
+		len(report.IndexRanges) != 0 || report.IndexEntries != 0 || report.Since != "" || report.NextSince != "" || report.NextBefore != "" {
+		t.Fatalf("retry input-boundary/range contract failed: %+v loads=%d error=%v", report, loads, err)
+	}
+	if len(report.Failures) != 2 || report.Failures[0].Module != want[1].Path || report.Failures[1].Module != want[0].Path {
+		t.Fatalf("fixture did not independently reorder returned failures: %+v", report.Failures)
+	}
+	if err := writeShardedReportStreaming(root, report); err != nil {
+		t.Fatal(err)
+	}
+	scan, err := scanShardedReport(root, nil)
+	if err != nil || !reflect.DeepEqual(scan.metadata.RetryAfter, &want[1]) {
+		t.Fatalf("input boundary not published: %+v %v", scan.metadata.RetryAfter, err)
+	}
+	stop := errors.New("owned batch-state error")
+	cfg.loadState = func([]moduleVersion) (scanBatchState, error) { return scanBatchState{}, stop }
+	if _, err := retryFailuresStreaming(context.Background(), server.Client(), cfg, root); !errors.Is(err, stop) {
+		t.Fatalf("batch-state failure not retained: %v", err)
+	}
+	empty := filepath.Join(t.TempDir(), "ledger")
+	if err := writeShardedReport(empty, discoveryReport{RetryAfter: &want[0]}); err != nil {
+		t.Fatal(err)
+	}
+	cfg.loadState = func(modules []moduleVersion) (scanBatchState, error) {
+		if len(modules) != 0 {
+			t.Fatalf("empty retry ledger provided modules: %+v", modules)
+		}
+		return scanBatchState{}, nil
+	}
+	report, err = retryFailuresStreaming(context.Background(), server.Client(), cfg, empty)
+	if err != nil || report.RetryAfter == nil || *report.RetryAfter != (moduleVersion{}) {
+		t.Fatalf("empty retry did not request explicit clear: %+v %v", report, err)
+	}
+	if err := writeShardedReportStreaming(empty, report); err != nil {
+		t.Fatal(err)
+	}
+	scan, err = scanShardedReport(empty, nil)
+	if err != nil || scan.metadata.RetryAfter != nil {
+		t.Fatalf("empty retry persisted a nonnil/empty marker: %+v %v", scan.metadata.RetryAfter, err)
+	}
+}
 
 func discoveryRetryQueueUnderTest(root string, limit int) ([]moduleVersion, error) {
 	return loadFailureRetryQueue(root, limit)

@@ -475,7 +475,7 @@ func main() {
 	proxyURL := flag.String("proxy-url", defaultProxyURL, "Go module proxy endpoint")
 	scanMode := flag.String("scan-mode", scanModeHistory, "scan mode: history, incremental, or retry")
 	before := flag.String("before", "", "optional exclusive upper bound (RFC3339); normally omit so the ledger derives it")
-	limit := flag.Int("limit", defaultScanLimit, "approximate history records to inspect backwards; timestamp groups are never split; 0 scans history to 2019; ignored for incremental scans")
+	limit := flag.Int("limit", defaultScanLimit, "approximate history records or maximum retry modules; timestamp groups are never split; 0 scans history to 2019 or uses the default retry budget; ignored for incremental scans")
 	workers := flag.Int("workers", 8, "concurrent module ZIP inspections")
 	maxZipSize := flag.Int64("max-zip-bytes", defaultMaxZipSize, "maximum remote module ZIP size considered")
 	httpTimeout := flag.Duration("http-timeout", defaultHTTPTimeout, "timeout for each index or proxy request")
@@ -501,7 +501,7 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		if err := writeShardedReport(*outDir, report); err != nil {
+		if err := writeShardedReportStreaming(*outDir, report); err != nil {
 			fatal(err)
 		}
 		return
@@ -522,11 +522,11 @@ func main() {
 			if !info.IsDir() {
 				fatal(fmt.Errorf("-out-dir %q is not a directory", *outDir))
 			}
-			report, err := readShardedReport(*outDir)
+			scan, err := scanShardedReport(*outDir, nil)
 			if err != nil {
 				fatal(fmt.Errorf("read -out-dir %q: %w", *outDir, err))
 			}
-			existing = &report
+			existing = &scan.metadata
 			seenReports = append(seenReports, *outDir)
 		} else if !errors.Is(err, os.ErrNotExist) {
 			fatal(fmt.Errorf("read -out-dir %q: %w", *outDir, err))
@@ -544,15 +544,6 @@ func main() {
 			fatal(err)
 		}
 	}
-	seen, sourceSeen, err := loadSeenState(seenReports)
-	if err != nil {
-		fatal(err)
-	}
-	checkpoints, err := loadModuleCheckpoints(seenReports)
-	if err != nil {
-		fatal(err)
-	}
-
 	cfg := config{
 		indexURL:      *indexURL,
 		proxyURL:      strings.TrimRight(*proxyURL, "/"),
@@ -564,9 +555,9 @@ func main() {
 		workers:       *workers,
 		maxZipSize:    *maxZipSize,
 		httpTimeout:   *httpTimeout,
-		seen:          seen,
-		sourceSeen:    sourceSeen,
-		checkpoints:   checkpoints,
+		loadState: func(modules []moduleVersion) (scanBatchState, error) {
+			return loadBatchState(seenReports, modules)
+		},
 	}
 	if err := validateConfig(cfg); err != nil {
 		fatal(err)
@@ -580,8 +571,9 @@ func main() {
 	}
 	client := &http.Client{Timeout: cfg.httpTimeout}
 	var report discoveryReport
+	var err error
 	if cfg.scanMode == scanModeRetry {
-		report = retryFailures(ctx, client, cfg, *existing)
+		report, err = retryFailuresStreaming(ctx, client, cfg, *outDir)
 	} else {
 		report, err = discover(ctx, client, cfg)
 	}
@@ -594,7 +586,7 @@ func main() {
 		}
 	}
 	if *outDir != "" {
-		if err := writeShardedReport(*outDir, report); err != nil {
+		if err := writeShardedReportStreaming(*outDir, report); err != nil {
 			fatal(err)
 		}
 		persisted, err := readShardedSummary(*outDir)

@@ -188,6 +188,7 @@ func openPublicationBase(root string) (*publicationBase, error) {
 			ScanDirection: manifest.ScanDirection, NextBefore: manifest.NextBefore,
 			IndexRanges: manifest.IndexRanges, IndexEntries: manifest.IndexEntries,
 			UniqueModules: manifest.UniqueModules, Skipped: manifest.Skipped,
+			RetryAfter: cloneRetryAfter(manifest.RetryAfter),
 		},
 	}
 	base.root, err = os.Stat(root)
@@ -332,7 +333,8 @@ func writePublicationManifest(root string, metadata discoveryReport, summary led
 		IndexRanges: metadata.IndexRanges, IndexEntries: metadata.IndexEntries,
 		UniqueModules: summary.UniqueModules, Skipped: metadata.Skipped,
 		Scanned: summary.ScannedRecords, Matched: summary.MatchedRecords, Failures: summary.FailureRecords,
-		ShardKey: "sha256(module)[0]",
+		ShardKey:   "sha256(module)[0]",
+		RetryAfter: cloneRetryAfter(metadata.RetryAfter),
 	}
 	file, err := os.OpenFile(filepath.Join(root, "manifest.json"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {

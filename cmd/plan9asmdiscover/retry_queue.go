@@ -1,15 +1,42 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/mod/semver"
 )
+
+func retryFailuresStreaming(ctx context.Context, client *http.Client, cfg config, reportPath string) (discoveryReport, error) {
+	modules, err := loadFailureRetryQueue(reportPath, cfg.limit)
+	if err != nil {
+		return discoveryReport{}, err
+	}
+	cfg, err = prepareScanBatch(ctx, cfg, modules)
+	if err != nil {
+		return discoveryReport{}, err
+	}
+	matched, failures, scanned, skipped := inspectModules(ctx, client, cfg.proxyURL, modules, cfg.seen, cfg.sourceSeen,
+		cfg.workers, cfg.maxZipSize)
+	// Input queue order includes wraparound. Result slices are sorted by their
+	// own keys and must never determine the next fairness boundary.
+	cursor := &moduleVersion{}
+	if len(modules) > 0 {
+		*cursor = modules[len(modules)-1]
+	}
+	return discoveryReport{
+		SchemaVersion: discoverySchema, GeneratedAt: time.Now().UTC(),
+		UniqueModules: len(modules), Skipped: skipped,
+		Scanned: scanned, Matched: matched, Failures: failures, RetryAfter: cursor,
+	}, nil
+}
 
 // A nil update preserves the previous marker. An explicitly empty update
 // clears it; publishers must omit the cleared marker rather than persist {}.
