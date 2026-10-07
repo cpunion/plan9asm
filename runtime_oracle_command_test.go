@@ -200,6 +200,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_scalar_vector_literal_source_test.go",
 		"amd64_scalar_vector_literal_runtime_test.go",
 		"amd64_insert_extract_go_oracle_test.go",
+		"amd64_insert_extract_sdk_source_test.go",
 		"amd64_go_caller_vector_zero_test.go",
 		"arm64_local_register_branch_test.go",
 		"arm64_gp_data_runtime_test.go",
