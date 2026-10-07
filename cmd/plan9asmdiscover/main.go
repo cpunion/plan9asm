@@ -252,6 +252,7 @@ type config struct {
 	seen          map[string]seenResult
 	sourceSeen    map[string]seenResult
 	checkpoints   map[string]moduleCheckpoint
+	loadState     func([]moduleVersion) (scanBatchState, error)
 }
 
 type pathListFlag []string
@@ -826,6 +827,11 @@ func discover(ctx context.Context, client *http.Client, cfg config) (discoveryRe
 		return discoveryReport{}, err
 	}
 	if err := validateFetchedIndexWindow(entries, nextBefore, cfg.before, cfg.after); err != nil {
+		return discoveryReport{}, err
+	}
+	interest, _ := modulesNeedingInspection(entries, nil)
+	cfg, err = prepareScanBatch(ctx, cfg, interest)
+	if err != nil {
 		return discoveryReport{}, err
 	}
 	modules, skippedModules := modulesNeedingInspection(entries, cfg.checkpoints)
