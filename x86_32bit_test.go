@@ -416,10 +416,10 @@ func Test386LoweringErrorPaths(t *testing.T) {
 		return c.lowerAtomic("CMPXCHG8B", Instr{Raw: "CMPXCHG8B 0(BAD)", Args: []Operand{badMem}})
 	})
 	wantLowerError("vector memory destination", func() (bool, bool, error) {
-		return c.lowerVec("MOVL", Instr{Raw: "MOVL X0, 0(BAD)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badMem}})
+		return c.lowerVectorScalarIntegerMove("MOVL", Instr{Op: "MOVL", Raw: "MOVL X0, 0(BAD)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badMem}})
 	})
 	wantLowerError("vector symbol destination", func() (bool, bool, error) {
-		return c.lowerVec("MOVL", Instr{Raw: "MOVL X0, (SB)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badSym}})
+		return c.lowerVectorScalarIntegerMove("MOVL", Instr{Op: "MOVL", Raw: "MOVL X0, (SB)", Args: []Operand{{Kind: OpReg, Reg: "X0"}, badSym}})
 	})
 
 	for _, test := range []struct {

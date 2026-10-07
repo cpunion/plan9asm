@@ -899,11 +899,22 @@ func TestAMD64VectorCoverage(t *testing.T) {
 			t.Fatalf("lowerVec(%s) = (%v, %v, %v)", op, ok, term, err)
 		}
 	}
+	mustLowerTransfer := func(op Op, ins Instr) {
+		t.Helper()
+		ins.Op = op
+		if ok, term, err := c.lowerVectorScalarIntegerMove(op, ins); !ok || term || err != nil {
+			t.Fatalf("lowerVectorScalarIntegerMove(%s) = (%v, %v, %v)", op, ok, term, err)
+		}
+	}
 
-	mustLower("MOVL", Instr{Raw: "MOVL $1, X0", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X0")}}})
-	mustLower("MOVD", Instr{Raw: "MOVD AX, X1", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X1")}}})
-	mustLower("MOVQ", Instr{Raw: "MOVQ BX, X2", Args: []Operand{{Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: Reg("X2")}}})
-	mustLower("MOVQ", Instr{Raw: "MOVQ X2, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X2")}, {Kind: OpReg, Reg: AX}}})
+	goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-0\nMOVL $1,AX\nMOVL AX,X0\nMOVD AX,X1\nMOVQ BX,X2\nMOVQ X2,AX\nRET\n", "", true)
+	if err := c.storeReg(AX, "1"); err != nil {
+		t.Fatal(err)
+	}
+	mustLowerTransfer("MOVL", Instr{Raw: "MOVL AX, X0", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X0")}}})
+	mustLowerTransfer("MOVD", Instr{Raw: "MOVD AX, X1", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("X1")}}})
+	mustLowerTransfer("MOVQ", Instr{Raw: "MOVQ BX, X2", Args: []Operand{{Kind: OpReg, Reg: BX}, {Kind: OpReg, Reg: Reg("X2")}}})
+	mustLowerTransfer("MOVQ", Instr{Raw: "MOVQ X2, AX", Args: []Operand{{Kind: OpReg, Reg: Reg("X2")}, {Kind: OpReg, Reg: AX}}})
 	mustLower("KXORQ", Instr{Raw: "KXORQ K1, K2, K3", Args: []Operand{{Kind: OpReg, Reg: Reg("K1")}, {Kind: OpReg, Reg: Reg("K2")}, {Kind: OpReg, Reg: Reg("K3")}}})
 	mustLower("KMOVB", Instr{Raw: "KMOVB AX, K1", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("K1")}}})
 	mustLower("KMOVW", Instr{Raw: "KMOVW K1, 8(BX)", Args: []Operand{{Kind: OpReg, Reg: Reg("K1")}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}}})
@@ -1863,7 +1874,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 		Args: []LLVMType{I64},
 		Ret:  Void,
 		Frame: FrameLayout{
-			Params: []FrameSlot{{Offset: 0, Type: I64, Index: 0}},
+			Params: []FrameSlot{{Offset: 0, Type: I64, Index: 0, Field: -1}},
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, fn, sig, nil)
@@ -1895,6 +1906,13 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 			t.Fatalf("lowerVec(%s %q) = (%v, %v, %v)", op, ins.Raw, ok, term, err)
 		}
 	}
+	checkTransfer := func(op Op, ins Instr) {
+		t.Helper()
+		ins.Op = op
+		if ok, term, err := c.lowerVectorScalarIntegerMove(op, ins); !ok || term || err != nil {
+			t.Fatalf("lowerVectorScalarIntegerMove(%s %q) = (%v, %v, %v)", op, ins.Raw, ok, term, err)
+		}
+	}
 
 	check("VZEROUPPER", Instr{Raw: "VZEROUPPER"})
 	check("VZEROALL", Instr{Raw: "VZEROALL"})
@@ -1909,10 +1927,10 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 	check("MOVUPS", Instr{Raw: "MOVUPS 8(BX), X0", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}, {Kind: OpReg, Reg: Reg("X0")}}})
 	check("MOVAPS", Instr{Raw: "MOVAPS X0, 16(BX)", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 16}}}})
 	check("MOVO", Instr{Raw: "MOVO X0, X1", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpReg, Reg: Reg("X1")}}})
-	check("MOVQ", Instr{Raw: "MOVQ arg+0(FP), X0", Args: []Operand{{Kind: OpFP, FPOffset: 0}, {Kind: OpReg, Reg: Reg("X0")}}})
-	check("MOVQ", Instr{Raw: "MOVQ 24(BX), X1", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 24}}, {Kind: OpReg, Reg: Reg("X1")}}})
-	check("MOVQ", Instr{Raw: "MOVQ example.global(SB), X2", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: Reg("X2")}}})
-	check("MOVQ", Instr{Raw: "MOVQ X0, 32(BX)", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 32}}}})
+	checkTransfer("MOVQ", Instr{Raw: "MOVQ arg+0(FP), X0", Args: []Operand{{Kind: OpFP, FPOffset: 0}, {Kind: OpReg, Reg: Reg("X0")}}})
+	checkTransfer("MOVQ", Instr{Raw: "MOVQ 24(BX), X1", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 24}}, {Kind: OpReg, Reg: Reg("X1")}}})
+	checkTransfer("MOVQ", Instr{Raw: "MOVQ example.global(SB), X2", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: Reg("X2")}}})
+	checkTransfer("MOVQ", Instr{Raw: "MOVQ X0, 32(BX)", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpMem, Mem: MemRef{Base: BX, Off: 32}}}})
 	check("MOVOU", Instr{Raw: "MOVOU example.global(SB), X0", Args: []Operand{{Kind: OpSym, Sym: "example.global(SB)"}, {Kind: OpReg, Reg: Reg("X0")}}})
 	check("MOVOA", Instr{Raw: "MOVOA X0, example.out(SB)", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpSym, Sym: "example.out(SB)"}}})
 	check("KMOVB", Instr{Raw: "KMOVB 8(BX), K1", Args: []Operand{{Kind: OpMem, Mem: MemRef{Base: BX, Off: 8}}, {Kind: OpReg, Reg: Reg("K1")}}})
@@ -1925,13 +1943,13 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 	check("VMOVDQU", Instr{Raw: "VMOVDQU X0, example.xout(SB)", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpSym, Sym: "example.xout(SB)"}}})
 	check("PEXTRB", Instr{Raw: "PEXTRB $1, X1, example.byteout(SB)", Args: []Operand{{Kind: OpImm, Imm: 1}, {Kind: OpReg, Reg: Reg("X1")}, {Kind: OpSym, Sym: "example.byteout(SB)"}}})
 
-	if _, _, err := c.lowerVec("MOVL", Instr{Raw: "MOVL label, X0", Args: []Operand{{Kind: OpIdent, Ident: "label"}, {Kind: OpReg, Reg: Reg("X0")}}}); err == nil {
+	if _, _, err := c.lowerVectorScalarIntegerMove("MOVL", Instr{Op: "MOVL", Raw: "MOVL label, X0", Args: []Operand{{Kind: OpIdent, Ident: "label"}, {Kind: OpReg, Reg: Reg("X0")}}}); err == nil {
 		t.Fatalf("MOVL bad src unexpectedly succeeded")
 	}
-	if _, _, err := c.lowerVec("MOVQ", Instr{Raw: "MOVQ label, X0", Args: []Operand{{Kind: OpIdent, Ident: "label"}, {Kind: OpReg, Reg: Reg("X0")}}}); err == nil {
+	if _, _, err := c.lowerVectorScalarIntegerMove("MOVQ", Instr{Op: "MOVQ", Raw: "MOVQ label, X0", Args: []Operand{{Kind: OpIdent, Ident: "label"}, {Kind: OpReg, Reg: Reg("X0")}}}); err == nil {
 		t.Fatalf("MOVQ bad src unexpectedly succeeded")
 	}
-	if _, _, err := c.lowerVec("MOVQ", Instr{Raw: "MOVQ X0, label", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpIdent, Ident: "label"}}}); err == nil {
+	if _, _, err := c.lowerVectorScalarIntegerMove("MOVQ", Instr{Op: "MOVQ", Raw: "MOVQ X0, label", Args: []Operand{{Kind: OpReg, Reg: Reg("X0")}, {Kind: OpIdent, Ident: "label"}}}); err == nil {
 		t.Fatalf("MOVQ bad dst unexpectedly succeeded")
 	}
 	if ok, term, err := c.lowerVec("KXORQ", Instr{Raw: "KXORQ AX, K1, K2", Args: []Operand{{Kind: OpReg, Reg: AX}, {Kind: OpReg, Reg: Reg("K1")}, {Kind: OpReg, Reg: Reg("K2")}}}); !ok || term || err == nil {
@@ -2055,7 +2073,7 @@ func TestAMD64VectorAliasAndErrorCoverage(t *testing.T) {
 
 	out := b.String()
 	for _, want := range []string{
-		"load i64, ptr @\"example.global\"",
+		"load volatile i64, ptr @\"example.global\"",
 		"load i8, ptr",
 		"and i64",
 		"store i64",
