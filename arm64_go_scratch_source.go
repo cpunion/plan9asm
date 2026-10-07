@@ -379,9 +379,9 @@ func (source *GoARM64ScratchSource) preprocess(pkg arm64ScratchPackage, name str
 	if err != nil {
 		return "", err
 	}
-	// Retain the existing named frontend's source spelling (including ARM64
-	// opcode suffixes). The actual uncached assembler and archive bytes below
-	// independently bind this CPP inventory; this is not a new CPP permission.
+	// Match the ordinary profile consumer's token-based CPP frontend. Original
+	// files and native objects remain independently bound below; canonical
+	// serialization does not relax the exact selected File or its Raw fields.
 	options := AssemblyPreprocessOptions{
 		FileName: filename, Defines: GoAssemblerDefinesWithEnv(source.settings["GOOS"], "arm64", source.settings),
 		ReadInclude: func(parent, include string) (string, []byte, error) {
@@ -396,7 +396,7 @@ func (source *GoARM64ScratchSource) preprocess(pkg arm64ScratchPackage, name str
 			return name, value, err
 		},
 	}
-	return preprocessAssembly(string(data), options.Defines, &options)
+	return PreprocessAssemblySource(string(data), options)
 }
 
 func (source *GoARM64ScratchSource) captureAssembly(ctx context.Context, pkg arm64ScratchPackage) error {
