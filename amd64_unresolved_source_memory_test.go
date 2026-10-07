@@ -237,3 +237,59 @@ func TestX86UnresolvedSourceMemoryBareStackNamesRemainResolved(t *testing.T) {
 		}
 	}
 }
+
+func TestX86UnresolvedSourceMemoryStackNamesCannotResolveExpressions(t *testing.T) {
+	for _, row := range []struct {
+		name     string
+		memory   MemRef
+		resolved bool
+	}{
+		{"bare-auto", MemRef{Base: SP, OffRaw: "tmp"}, true},
+		{"bare-upper-auto", MemRef{Base: SP, OffRaw: "UNKNOWN"}, true},
+		{"named-constant", MemRef{Base: SP, OffRaw: "tmp+4", Off: 4}, true},
+		{"named-expression", MemRef{Base: SP, OffRaw: "tmp-(2*4)", Off: -8}, true},
+		{"missing-constant", MemRef{Base: SP, OffRaw: "tmp+UNKNOWN"}, false},
+		{"malformed-name", MemRef{Base: SP, OffRaw: "tmp-dig"}, false},
+		{"bare-nonzero", MemRef{Base: SP, OffRaw: "tmp", Off: 4}, false},
+		{"wrong-resolved-offset", MemRef{Base: SP, OffRaw: "tmp+4", Off: 0}, false},
+		{"ordinary-macro", MemRef{Base: AX, OffRaw: "tmp"}, false},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			err := unresolvedX86MemoryOffsetError(row.memory)
+			if row.resolved && err != nil || !row.resolved && !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("resolved=%v, got %v", row.resolved, err)
+			}
+		})
+	}
+}
+
+func TestX86UnresolvedSourceMemoryEveryDirectionRejectsBeforeRawDecoding(t *testing.T) {
+	for _, address := range []string{
+		"UNKNOWN(AX)", "(UNKNOWN+4)(AX)", "UNKNOWN(AX)(CX*2)", "UNKNOWN(AX)(FS)", "slot+UNKNOWN(SP)",
+	} {
+		for _, destination := range []bool{false, true} {
+			for _, target := range x86RawReturnTargets {
+				t.Run(address+"/destination="+strconv.FormatBool(destination)+"/"+target.triple, func(t *testing.T) {
+					operands := address + ",BX"
+					if destination {
+						operands = "BX," + address
+					}
+					// The displacement-resolved control proves the physical groups
+					// and direction independently; undefined constants are the only
+					// source rejection used by this test.
+					body := "TEXT ·view(SB),4,$16-0\nMOVL $7,BX\nMOVL " + operands + "\nBYTE $0xc3\n"
+					goAssemblerOracleOutput(t, target.arch, "#define UNKNOWN 24\n"+body, "", true)
+					goAssemblerOracleOutput(t, target.arch, body, "", false)
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, body, "func view()\n", target.arch, target.triple, api)
+							if ir != "" || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "UNKNOWN") {
+								t.Fatalf("%s granted an unresolved memory effect: %v", api, err)
+							}
+						})
+					}
+				})
+			}
+		}
+	}
+}
