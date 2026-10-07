@@ -18,20 +18,9 @@ func x86CallerPackedLogicalStep(ins *Instr, form x86PackedLogicalForm, state *x8
 		first = state.vectors[x86CallerVectorRoot(ins.Args[form.first].Reg)] & width
 	}
 	second := state.vectors[x86CallerVectorRoot(ins.Args[form.second].Reg)] & width
-	known := first & second
-	// Exact register identities, not equal addresses, masks, shadow initial
-	// values or constants, prove this mathematical zero without entry data.
-	if form.memory < 0 && ins.Args[form.first].Reg == ins.Args[form.second].Reg &&
-		(form.spec.mode == amd64PackedLogicalXor || form.spec.mode == amd64PackedLogicalAndNot) {
-		known = width
-	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
 	old := state.vectors[destination]
-	if form.mask >= 0 && !form.zeroing {
-		// An initialized mask is not an all-one mask. Unknown inactive lanes
-		// can retain old bytes, even for a register zero idiom.
-		known &= old
-	}
+	known := x86PackedLogicalDefinedBytes(*ins, form, first, second, old)
 	if form.legacy {
 		state.vectors[destination] = old&^width | known
 	} else {

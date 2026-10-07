@@ -67,6 +67,23 @@ type x86PackedLogicalForm struct {
 	source Operand
 }
 
+// This is a pure numerical-byte dependency, shared by independent consumers.
+// A validated form and initialized mask are prerequisites; the result grants
+// no memory, frame, source-selection or caller permission. Higher physical
+// bytes are updated separately according to the consumer's encoding model.
+func x86PackedLogicalDefinedBytes(ins Instr, form x86PackedLogicalForm, first, second, old uint64) uint64 {
+	width := x86CallerVectorByteMask(int64(form.byteWidth))
+	known := first & second & width
+	if form.memory < 0 && ins.Args[form.first].Reg == ins.Args[form.second].Reg &&
+		(form.spec.mode == amd64PackedLogicalXor || form.spec.mode == amd64PackedLogicalAndNot) {
+		known = width
+	}
+	if form.mask >= 0 && !form.zeroing {
+		known &= old // A defined mask is not necessarily all ones.
+	}
+	return known
+}
+
 // These fields describe only an operand grammar. Arithmetic, interleave and
 // bitwise effects remain in their own typed operation specs and consumers.
 type x86PackedBinarySpec struct {

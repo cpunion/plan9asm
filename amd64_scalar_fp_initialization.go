@@ -1,5 +1,7 @@
 package plan9asm
 
+import "strings"
+
 // This private transfer extends the existing must-initialized result analysis
 // only for logical scalar views. It does not expand the public asmdecl-filter
 // query, caller admission, frame backing, or pointer permissions.
@@ -8,6 +10,9 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if form, known, err := x86PackedLogicalProperties(ins, arch); known {
+		return err == nil && x86ScalarFPLogicalTransfer(ins, form, state, owned, arch)
+	}
 	if f, known, err := x86GPSIMDTransferProperties(ins, arch); known {
 		if err != nil || f.mmx || f.spec.rawOnly {
 			return false
@@ -29,6 +34,15 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 			}
 			state.xmm[index] = 0xffff // Every GP/X transfer zeroes the rest of X.
 			return true
+		}
+		if f.memoryWrite && ins.Args[1].Kind == OpSym {
+			// A numerical store to an ordinary static symbol cannot define
+			// FP result bytes. It remains an emitted native side effect; this
+			// initialization observer grants no address or extent certificate.
+			symbol := strings.TrimSpace(ins.Args[1].Sym)
+			base, _, valid := parseSBRef(symbol)
+			return valid && strings.HasSuffix(symbol, "(SB)") &&
+				strings.IndexAny(base, "$+(),[] \t") < 0
 		}
 		return x86ResultStore(ins.Args[1], width, state, owned, resultOffset, arch)
 	}
@@ -110,5 +124,47 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 		known = known&^lowMask | known&state.xmm[destination]&lowMask
 	}
 	state.xmm[destination] = known
+	return true
+}
+
+// The private scalar observer tracks only low X bytes. Wider and physical MMX
+// effects need their own state model; the ordinary lowerer/caller grammar still
+// supports its independently proved widths. No native pointer becomes FP data.
+func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86ResultState, owned []bool, arch string) bool {
+	if form.mmx || form.byteWidth != 16 {
+		return false
+	}
+	xreg := func(operand Operand) (int, bool) {
+		index, valid := amd64ParseXReg(operand.Reg)
+		return index, operand.Kind == OpReg && valid && index < len(state.xmm) && (arch != "386" || index < 8)
+	}
+	second, valid := xreg(ins.Args[form.second])
+	if !valid {
+		return false
+	}
+	destination, valid := xreg(ins.Args[form.destination])
+	if !valid {
+		return false
+	}
+	if form.mask >= 0 {
+		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
+		if !valid || !state.masks[index] {
+			return false
+		}
+	}
+	first := uint64(0xffff)
+	if form.memory >= 0 {
+		if !x86ResultRead(form.source, int64(form.memoryBytes), state, owned, arch) {
+			return false // Even a zero mask supplies no missing native envelope.
+		}
+	} else {
+		index, valid := xreg(ins.Args[form.first])
+		if !valid {
+			return false
+		}
+		first = uint64(state.xmm[index])
+	}
+	state.xmm[destination] = uint16(x86PackedLogicalDefinedBytes(ins, form, first,
+		uint64(state.xmm[second]), uint64(state.xmm[destination])))
 	return true
 }

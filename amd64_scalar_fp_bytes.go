@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 // These are logical ABI0 field views, not a pointer to a native incoming frame.
@@ -128,6 +129,19 @@ func (c *amd64Ctx) scalarFPViewNeedsInitialization(off int64, bits int, write bo
 
 func (c *amd64Ctx) validateScalarFPSourceViews() error {
 	for _, ins := range c.fpScalarSource.Instrs {
+		if form, known, err := x86GPSIMDTransferProperties(ins, c.goarch); known && err == nil &&
+			form.memoryWrite && x86ScalarFPStaticSymbolMemory(ins.Args[form.memory]) {
+			for _, slot := range c.fpResults {
+				if slot.Type == I8 || slot.Type == I16 || slot.Type == I32 || slot.Type == I64 {
+					// An unrelated static-symbol store is not an ABI0 result
+					// write and cannot borrow the legacy AX fallback at RET.
+					if err := c.scalarFPResultInitialized(); err != nil {
+						return err
+					}
+					break
+				}
+			}
+		}
 		form, recognized, err := amd64ScalarVectorMoveProperties(ins, c.goarch)
 		if !recognized || err != nil || form.spec.rawOnly || form.memory < 0 {
 			continue // The normal dispatcher retains malformed/raw-family errors.
@@ -147,6 +161,22 @@ func (c *amd64Ctx) validateScalarFPSourceViews() error {
 		}
 	}
 	return nil
+}
+
+// This is only a reason to require the complete result proof. A validated
+// ordinary SB role can have either parser representation; its grouped spelling
+// grants neither an address envelope nor an FP/result alias to that proof.
+func x86ScalarFPStaticSymbolMemory(operand Operand) bool {
+	var symbol string
+	switch operand.Kind {
+	case OpSym:
+		symbol = operand.Sym
+	case OpMem:
+		symbol = operand.Mem.Sym
+	default:
+		return false
+	}
+	return strings.HasSuffix(strings.TrimSpace(symbol), "(SB)")
 }
 
 func (c *amd64Ctx) loadScalarFPBits(off int64, bits int) (string, error) {

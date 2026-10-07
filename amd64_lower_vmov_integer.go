@@ -84,6 +84,23 @@ func isAMD64GoXRegister(operand Operand) bool {
 
 func (c *amd64Ctx) storeVMOVIntegerScalar(dst Operand, bits int, value string) error {
 	typ := amd64IntegerTypeForBits(bits)
+	if dst.Kind == OpMem || dst.Kind == OpSym {
+		var pointer, pointerType string
+		var err error
+		if dst.Kind == OpMem {
+			pointer, pointerType, err = c.ptrFromMem(dst.Mem)
+		} else {
+			pointer, err = c.ptrFromSB(dst.Sym)
+			pointerType = "ptr"
+		}
+		if err != nil {
+			return err
+		}
+		// Keep each original unmasked native store, including overwritten
+		// stores or private symbols whose value becomes otherwise dead.
+		fmt.Fprintf(c.b, "  store volatile %s %s, %s %s, align 1\n", typ, value, pointerType, pointer)
+		return nil
+	}
 	if dst.Kind != OpReg {
 		return c.storeScalarIntegerOperand(dst, typ, value)
 	}

@@ -18,6 +18,11 @@ var x86ScalarFPLogicalOpcodes = []string{
 	"VPANDD", "VPANDQ", "VPANDND", "VPANDNQ", "VPORD", "VPORQ", "VPXORD", "VPXORQ",
 }
 
+var x86ScalarFPLogicalEVEXOpcodes = []string{
+	"VANDPS", "VANDPD", "VANDNPS", "VANDNPD", "VORPS", "VORPD", "VXORPS", "VXORPD",
+	"VPANDD", "VPANDQ", "VPANDND", "VPANDNQ", "VPORD", "VPORQ", "VPXORD", "VPXORQ",
+}
+
 func x86ScalarFPLogicalRow(op string) (row string, destination int) {
 	if strings.HasPrefix(op, "V") {
 		return op + " X0,X1,X2", 2
@@ -33,20 +38,13 @@ func TestX86ScalarFPLogicalCompleteXFormsThreeAPIs(t *testing.T) {
 	if len(x86ScalarFPLogicalOpcodes) != 32 {
 		t.Fatal("independent Go logical family denominator changed")
 	}
-	var source, declarations strings.Builder
-	for index, op := range x86ScalarFPLogicalOpcodes {
-		row, destination := x86ScalarFPLogicalRow(op)
-		fmt.Fprintf(&source, "TEXT ·logical%d(SB),4,$0-8\n", index)
-		source.WriteString("MOVL $1,AX\nMOVL AX,X0\nMOVL $3,BX\nMOVL BX,X1\n")
-		fmt.Fprintf(&source, "%s\nMOVQ X%d,ret+0(FP)\nRET\n", row, destination)
-		fmt.Fprintf(&declarations, "func logical%d() uint64\n", index)
-	}
 	for _, target := range x86RawReturnTargets {
 		t.Run(target.triple, func(t *testing.T) {
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+			source, declarations := x86ScalarFPLogicalCompleteSource(t, target.arch)
+			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
 			for _, api := range []string{"text", "module", "Go"} {
 				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
+					ir, err := x86ScalarFPBitViewAPI(t, source, declarations, target.arch, target.triple, api)
 					if err != nil || ir == "" {
 						t.Fatalf("complete logical inputs lost result initialization: %v", err)
 					}
@@ -54,6 +52,123 @@ func TestX86ScalarFPLogicalCompleteXFormsThreeAPIs(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func x86ScalarFPLogicalCompleteSource(t *testing.T, arch string) (string, string) {
+	t.Helper()
+	var source, declarations strings.Builder
+	count := 0
+	add := func(body, params string, resultOffset int) {
+		fmt.Fprintf(&source, "TEXT ·logical%d(SB),4,$0-%d\n%s\nRET\n", count, resultOffset+8, body)
+		fmt.Fprintf(&declarations, "func logical%d(%s) uint64\n", count, params)
+		count++
+	}
+	const inputs = "MOVL $1,AX\nMOVL AX,X0\nMOVL $3,BX\nMOVL BX,X1\n"
+	for _, op := range x86ScalarFPLogicalOpcodes {
+		row, destination := x86ScalarFPLogicalRow(op)
+		add(inputs+row+fmt.Sprintf("\nMOVQ X%d,ret+0(FP)", destination), "", 0)
+		if !strings.HasPrefix(op, "V") {
+			// Complete numerical FP bytes are not a native m128 backing or
+			// alignment witness for legacy SSE. Its public Context/fault
+			// contract is tested independently of private byte definedness.
+			continue
+		}
+		memory := op + " a+0(FP),X1"
+		memory += ",X2"
+		add(inputs+memory+fmt.Sprintf("\nMOVQ X%d,ret+16(FP)", destination), "a,b uint64", 16)
+	}
+	for _, op := range x86ScalarFPLogicalEVEXOpcodes {
+		add(inputs+op+".BCST a+0(FP),X1,X2\nMOVQ X2,ret+8(FP)", "a uint64", 8)
+		if arch == "amd64" {
+			// Go's mode32 parser/grammar has no four-operand masked row.
+			// The unmasked and broadcast rows above still compile on both
+			// mode32 targets; mask variants are not host-selected skips.
+			for _, suffix := range []string{"", ".Z"} {
+				init := inputs + "KMOVW AX,K1\n"
+				if suffix == "" {
+					init += "MOVL AX,X2\n"
+				}
+				add(init+op+suffix+" X0,X1,K1,X2\nMOVQ X2,ret+0(FP)", "", 0)
+			}
+		}
+	}
+	want := 68
+	if arch == "amd64" {
+		want = 100
+	}
+	if count != want {
+		t.Fatalf("complete independent %s logical source denominator changed: %d want%d", arch, count, want)
+	}
+	return source.String(), declarations.String()
+}
+
+func TestX86ScalarFPLogicalMaskMergeZeroAndCompleteMemoryBytes(t *testing.T) {
+	for _, op := range x86ScalarFPLogicalEVEXOpcodes {
+		for _, suffix := range []string{"", ".Z"} {
+			t.Run(op+suffix, func(t *testing.T) {
+				ins := x86YMMReadSource(t, op+suffix+" X0,X1,K1,X2")
+				for input := 0; input < 3; input++ {
+					for missing := -1; missing < 16; missing++ {
+						state := x86ResultState{}
+						state.xmm[0], state.xmm[1], state.xmm[2] = 0xffff, 0xffff, 0xffff
+						state.masks[1] = true
+						if missing >= 0 {
+							state.xmm[input] &^= uint16(1) << uint(missing)
+						}
+						want := state.xmm[0] & state.xmm[1]
+						if suffix == "" {
+							want &= state.xmm[2]
+						}
+						if !x86ScalarFPResultTransfer(ins, &state, nil, 0, "amd64") || state.xmm[2] != want {
+							t.Fatalf("mask dependency input%d missing%d: got%04x want%04x", input, missing, state.xmm[2], want)
+						}
+						state.masks[1] = false
+						before := state.clone()
+						if x86ScalarFPResultTransfer(ins, &state, nil, 0, "amd64") || !reflect.DeepEqual(before, state) {
+							t.Fatal("unknown mask acquired a write or numerical proof")
+						}
+					}
+				}
+			})
+		}
+	}
+	for _, op := range x86ScalarFPLogicalOpcodes {
+		variants := []string{op}
+		for _, evex := range x86ScalarFPLogicalEVEXOpcodes {
+			if op == evex {
+				variants = append(variants, op+".BCST", op+".BCST.Z")
+			}
+		}
+		for _, name := range variants {
+			t.Run(name+"/FP-memory", func(t *testing.T) {
+				row := name + " a+0(FP),X1"
+				if strings.HasSuffix(name, ".Z") {
+					row += ",K1,X2"
+				} else if strings.HasPrefix(name, "V") {
+					row += ",X2"
+				}
+				ins := x86YMMReadSource(t, row)
+				width := 16
+				if strings.Contains(name, ".BCST") {
+					width = 4
+					if strings.HasSuffix(op, "PD") || strings.HasSuffix(op, "Q") {
+						width = 8
+					}
+				}
+				for missing := -1; missing < width; missing++ {
+					state := x86ResultState{fp: make([]bool, 16)}
+					owned := make([]bool, 16)
+					state.xmm[1], state.xmm[2], state.masks[1] = 0xffff, 0xffff, true
+					for i := range owned {
+						owned[i], state.fp[i] = true, i != missing
+					}
+					if got := x86ScalarFPResultTransfer(ins, &state, owned, 16, "amd64"); got != (missing == -1) {
+						t.Fatalf("potential FP read width%d missing%d: accepted%t", width, missing, got)
+					}
+				}
+			})
+		}
 	}
 }
 
