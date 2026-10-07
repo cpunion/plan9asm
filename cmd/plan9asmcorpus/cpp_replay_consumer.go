@@ -34,7 +34,9 @@ func discoveryCPPOriginalConsumerQuery(inputs *discoveryCPPInputs) (*gotoolprofi
 	// Register each source once per construction, not once per unit. Captured
 	// originals may reuse the parser's private immutable lexer index; every
 	// consumer still owns new maps and validates the complete original bytes.
-	resources := make(map[string]discoveryCPPResource)
+	// The query only needs the exact include spelling. Keep the full typed
+	// lexer resource in its source index, rather than copying it into this map.
+	resources := make(map[string]string)
 	for id, source := range inputs.Sources {
 		if source.Original == nil {
 			return nil, fmt.Errorf("CPP consumer omitted original source bytes")
@@ -48,7 +50,7 @@ func discoveryCPPOriginalConsumerQuery(inputs *discoveryCPPInputs) (*gotoolprofi
 			return nil, err
 		}
 		for _, resource := range registered {
-			resources[id+resource.key] = resource
+			resources[id+resource.key] = resource.directive.Include
 		}
 		input.CPPOriginals.Sources[id] = *source.Original
 		if origin == "tool" {
@@ -61,11 +63,10 @@ func discoveryCPPOriginalConsumerQuery(inputs *discoveryCPPInputs) (*gotoolprofi
 		input.AsmFiles = append(input.AsmFiles, unit.File)
 		registered := gotoolprofile.CPPOriginalUnit{Includes: make(map[string]string)}
 		for key, target := range unit.Includes {
-			resource, found := resources[key]
+			include, found := resources[key]
 			if !found || target == "" {
 				return nil, fmt.Errorf("CPP include has an unregistered or empty original resource edge: %s", key)
 			}
-			include := resource.directive.Include
 			if previous := registered.Includes[include]; previous != "" && previous != target {
 				return nil, fmt.Errorf("CPP fixed include origins conflict between raw controls")
 			}
