@@ -12,12 +12,6 @@ import (
 	"golang.org/x/arch/x86/x86asm"
 )
 
-// Compare source operands with independently assembled physical operands.
-// The initial strict comparison is retained in the test-first RED commit.
-func x86MinimumPositionOperandsMatchSource(decoded, source []Operand) bool {
-	return reflect.DeepEqual(decoded, source)
-}
-
 func x86MinimumPositionOriginalGoBytes(t *testing.T, arch, source string) []byte {
 	t.Helper()
 	listing, err := x86ScalarLiteralGoListing(t, arch, source)
@@ -56,54 +50,6 @@ func x86MinimumPositionOriginalGoBytes(t *testing.T, arch, source string) []byte
 	return code
 }
 
-func TestX86RawMinimumPositionSourceOperandComparison(t *testing.T) {
-	source := []Operand{{Kind: OpMem, Mem: MemRef{Base: SP, Off: 8192}}, {Kind: OpReg, Reg: "X0"}}
-	before := fmt.Sprintf("%#v", source)
-	for _, scale := range []int64{0, 1, 2, 4, 8} {
-		decoded := append([]Operand(nil), source...)
-		decoded[0].Mem.Scale = scale
-		if !x86MinimumPositionOperandsMatchSource(decoded, source) {
-			t.Errorf("inactive SIB scale %d changed address semantics: decoded=%#v source=%#v", scale, decoded, source)
-		}
-	}
-	mutations := []struct {
-		name string
-		edit func(*Operand)
-	}{
-		{"invalid scale", func(a *Operand) { a.Mem.Scale = 3 }},
-		{"base", func(a *Operand) { a.Mem.Base = BP }},
-		{"index", func(a *Operand) { a.Mem.Index = CX }},
-		{"offset", func(a *Operand) { a.Mem.Off++ }},
-		{"segment", func(a *Operand) { a.Mem.Segment = FS }},
-		{"symbol", func(a *Operand) { a.Mem.Sym = "slot" }},
-		{"unresolved offset", func(a *Operand) { a.Mem.OffRaw = "unknown" }},
-		{"index extension", func(a *Operand) { a.Mem.IndexExt = ExtendUXTW }},
-		{"operand role", func(a *Operand) { a.Kind = OpFP }},
-		{"unrelated field", func(a *Operand) { a.Imm = 1 }},
-	}
-	for _, mutation := range mutations {
-		t.Run(mutation.name, func(t *testing.T) {
-			decoded := append([]Operand(nil), source...)
-			mutation.edit(&decoded[0])
-			if x86MinimumPositionOperandsMatchSource(decoded, source) {
-				t.Fatalf("ignored a real operand difference: %#v", decoded)
-			}
-		})
-	}
-	indexed := append([]Operand(nil), source...)
-	indexed[0].Mem.Index, indexed[0].Mem.Scale = CX, 4
-	for _, scale := range []int64{0, 1, 2, 3, 8} {
-		decoded := append([]Operand(nil), indexed...)
-		decoded[0].Mem.Scale = scale
-		if x86MinimumPositionOperandsMatchSource(decoded, indexed) {
-			t.Fatalf("ignored active index scale %d", scale)
-		}
-	}
-	if !x86MinimumPositionOperandsMatchSource(indexed, indexed) || before != fmt.Sprintf("%#v", source) {
-		t.Fatal("comparison lost exact indexed equality or mutated its source")
-	}
-}
-
 func TestX86RawMinimumPositionInactiveSIBScalePhysicalWitness(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		mode := 64
@@ -114,6 +60,7 @@ func TestX86RawMinimumPositionInactiveSIBScalePhysicalWitness(t *testing.T) {
 			// Original legacy PHMINPOSUW 8192(SP),X0. SIB.index=4
 			// suppresses the index; all four scale bit patterns are ignored.
 			code := []byte{0x66, 0x0f, 0x38, 0x41, 0x84, 0x24 | shift<<6, 0, 0x20, 0, 0}
+			original := append([]byte(nil), code...)
 			x86HandoffOriginalBytes(t, arch, code)
 			physical, err := x86asm.Decode(code, mode)
 			memory, ok := physical.Args[1].(x86asm.Mem)
@@ -131,21 +78,59 @@ func TestX86RawMinimumPositionInactiveSIBScalePhysicalWitness(t *testing.T) {
 				!reflect.DeepEqual(decoded.Instrs[0].Args[0], want) {
 				t.Fatalf("decoder discarded its physical SIB metadata: %+v %v", decoded, err)
 			}
-			original := append([]byte(nil), code...)
-			// A synthetic register valuation independently confirms the
-			// address has no index term; this is not native stack permission.
-			for _, sp := range []uint64{0, 1, 0x7fffffff, 0x123456789abcdef0} {
-				actual := sp + uint64(memory.Disp)
-				wantAddress := sp + 8192
-				if mode == 32 {
-					actual, wantAddress = uint64(uint32(actual)), uint64(uint32(wantAddress))
-				}
-				if actual != wantAddress || !bytes.Equal(code, original) {
-					t.Fatal("inactive scale changed effective address or input bytes")
-				}
+			if !bytes.Equal(code, original) {
+				t.Fatal("physical witness modified its original instruction bytes")
 			}
 		}
 	}
+}
+
+func x86MinimumPositionAddressSources(arch, name, terminal string) (complete, bounded string, completeCount, boundedCount int) {
+	registers := []string{"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI"}
+	if arch == "amd64" {
+		for i := 8; i < 16; i++ {
+			registers = append(registers, fmt.Sprintf("R%d", i))
+		}
+	}
+	var addresses, objectAddresses []string
+	for _, base := range registers {
+		for _, offset := range []int64{0, -128, 127, -129, 128, 8192, -2147483648, 2147483647} {
+			addresses = append(addresses, fmt.Sprintf("%d(%s)", offset, base))
+		}
+		// Both extreme SP offsets belong to the Go encoding domain. Their
+		// combined synthetic allocation exceeds 4 GiB, separately observed
+		// below. Declare the finite LLVM object domain before translation;
+		// never infer it from llc success. Other GP disp32 extremes remain.
+		objectOffsets := []int64{0, -128, 127, -129, 128, 8192}
+		if base != "SP" {
+			objectOffsets = append(objectOffsets, -2147483648, 2147483647)
+		}
+		for _, offset := range objectOffsets {
+			objectAddresses = append(objectAddresses, fmt.Sprintf("%d(%s)", offset, base))
+		}
+	}
+	for _, index := range registers {
+		if index == "SP" {
+			continue // SIB.index=4 is the absent-index witness above.
+		}
+		for _, scale := range []int{1, 2, 4, 8} {
+			indexed := []string{fmt.Sprintf("-7(BP)(%s*%d)", index, scale), fmt.Sprintf("8192(%s*%d)", index, scale)}
+			addresses = append(addresses, indexed...)
+			objectAddresses = append(objectAddresses, indexed...)
+		}
+	}
+	build := func(addresses []string) string {
+		var source strings.Builder
+		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n", name)
+		for _, op := range []string{"PHMINPOSUW", "VPHMINPOSUW"} {
+			for _, address := range addresses {
+				fmt.Fprintf(&source, "%s %s,X0\n", op, address)
+			}
+		}
+		fmt.Fprintln(&source, terminal)
+		return source.String()
+	}
+	return build(addresses), build(objectAddresses), 2 * len(addresses), 2 * len(objectAddresses)
 }
 
 func TestX86RawMinimumPositionGoAddressFormsAllAPIs(t *testing.T) {
@@ -155,37 +140,9 @@ func TestX86RawMinimumPositionGoAddressFormsAllAPIs(t *testing.T) {
 	}
 	for _, arch := range []string{"386", "amd64"} {
 		t.Run(arch, func(t *testing.T) {
-			registers := []string{"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI"}
-			if arch == "amd64" {
-				for i := 8; i < 16; i++ {
-					registers = append(registers, fmt.Sprintf("R%d", i))
-				}
-			}
-			var addresses []string
-			for _, base := range registers {
-				for _, offset := range []int64{0, -128, 127, -129, 128, 8192, -2147483648, 2147483647} {
-					addresses = append(addresses, fmt.Sprintf("%d(%s)", offset, base))
-				}
-			}
-			for _, index := range registers {
-				if index == "SP" {
-					continue // SIB.index=4 is the absent-index witness above.
-				}
-				for _, scale := range []int{1, 2, 4, 8} {
-					addresses = append(addresses, fmt.Sprintf("-7(BP)(%s*%d)", index, scale),
-						fmt.Sprintf("8192(%s*%d)", index, scale))
-				}
-			}
-			var source strings.Builder
-			source.WriteString("TEXT addresses(SB),4,$0-0\n")
-			for _, op := range []string{"PHMINPOSUW", "VPHMINPOSUW"} {
-				for _, address := range addresses {
-					fmt.Fprintf(&source, "%s %s,X0\n", op, address)
-				}
-			}
-			source.WriteString("RET\n")
-			code := x86MinimumPositionOriginalGoBytes(t, arch, source.String())
-			parsed, err := Parse(ArchAMD64, source.String())
+			source, objectSource, completeCount, boundedCount := x86MinimumPositionAddressSources(arch, "addresses", "RET")
+			code := x86MinimumPositionOriginalGoBytes(t, arch, source)
+			parsed, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -195,11 +152,13 @@ func TestX86RawMinimumPositionGoAddressFormsAllAPIs(t *testing.T) {
 			}
 			for i, instruction := range decoded.Instrs {
 				want := parsed.Funcs[0].Instrs[i+1]
-				if instruction.Op != want.Op || !x86MinimumPositionOperandsMatchSource(instruction.Args, want.Args) {
+				if instruction.Op != want.Op || !x86RawOperandsMatchGoSource(instruction.Args, want.Args) {
 					t.Fatalf("original Go address %d %s: physical=%#v source=%#v", i, want.Raw, instruction.Args, want.Args)
 				}
 			}
-			file := x86RawStackObservingFormProbeFile(t, arch, "addresses", code)
+			objectCode := x86MinimumPositionOriginalGoBytes(t, arch, objectSource)
+			file := x86RawStackObservingFormProbeFile(t, arch, "addresses", objectCode)
+			before := fmt.Sprintf("%#v", file.Funcs)
 			for _, target := range x86RawReturnTargets {
 				if target.arch != arch {
 					continue
@@ -232,11 +191,14 @@ func TestX86RawMinimumPositionGoAddressFormsAllAPIs(t *testing.T) {
 						if err != nil {
 							t.Fatal(err)
 						}
+						if before != fmt.Sprintf("%#v", file.Funcs) {
+							t.Fatal("public translation changed its original raw source")
+						}
 						compileLLVMToObject(t, llc, target.triple, "addresses.ll", "addresses.o", ir)
 					})
 				}
 			}
-			t.Logf("actual Go address encodings=%d, compile-only faulting probes; no native stack/return permission", 2*len(addresses))
+			t.Logf("actual Go address encodings=%d; bounded LLVM probe encodings=%d; original SP extremes remain an allocator limitation, not N/A or native stack/return permission", completeCount, boundedCount)
 		})
 	}
 }

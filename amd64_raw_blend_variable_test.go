@@ -316,8 +316,8 @@ func TestX86RawVariableBlendGoEncoderForms(t *testing.T) {
 						t.Fatalf("decoded %d instructions, want %d", len(decoded.Instrs), len(want))
 					}
 					for i, got := range decoded.Instrs {
-						if got.Op != want[i].Op || !reflect.DeepEqual(got.Args, want[i].Args) {
-							t.Fatalf("instruction %d=%+v, want %+v", i, got, want[i])
+						if got.Op != want[i].Op || !x86RawOperandsMatchGoSource(got.Args, want[i].Args) {
+							t.Fatalf("instruction %d %s operands=%#v, want source %#v", i, got.Op, got.Args, want[i].Args)
 						}
 					}
 					file := x86RawStackObservingFormProbeFile(t, arch, "blend", code)

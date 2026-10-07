@@ -192,7 +192,7 @@ func TestX86RawMinimumPositionGoEncoderForms(t *testing.T) {
 				t.Fatalf("decoded %d instructions, want %d", len(decoded.Instrs), len(want))
 			}
 			for i, got := range decoded.Instrs {
-				if got.Op != want[i].Op || !x86MinimumPositionOperandsMatchSource(got.Args, want[i].Args) {
+				if got.Op != want[i].Op || !x86RawOperandsMatchGoSource(got.Args, want[i].Args) {
 					t.Fatalf("instruction %d %s operands=%#v, want source %#v", i, got.Op, got.Args, want[i].Args)
 				}
 			}

@@ -151,6 +151,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_undefined_trap_runtime_unix_test.go",
 		"amd64_undefined_trap_linux_amd64_test.go",
 		"amd64_ordering_hint_rule_consumers_test.go",
+		"amd64_raw_minpos_allocator_boundary_test.go",
 		"amd64_ordering_hint_runtime_test.go",
 		"amd64_stack_flags_id_transport_test.go",
 		"amd64_stack_flags_id_native_linux_test.go",
