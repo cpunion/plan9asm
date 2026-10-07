@@ -50,7 +50,7 @@ func TestX86SignedPackedIntegerFloatCallerCompleteInitializedForms(t *testing.T)
 func TestX86SignedPackedIntegerFloatCallerRetainsFailures(t *testing.T) {
 	for name, body := range map[string]string{
 		"unknown input":          "VCVTDQ2PS Y0,Y1\nVMOVSS X1,(DX)",
-		"partial dword":          "MOVQ AX,X0\nCVTPL2PS X0,X1\nVMOVSS X1,(DX)",
+		"partial dword":          "MOVSS (DI),X2\nMOVSS X2,X0\nCVTPL2PS X0,X1\nVMOVSS X1,(DX)",
 		"unknown merge":          "VMOVUPS (DI),Z0\nKMOVQ AX,K1\nVCVTDQ2PS Z0,K1,Z1\nVMOVSS X1,(DX)",
 		"unknown mask":           "VMOVUPS (DI),Z0\nVCVTDQ2PS.Z Z0,K1,Z1\nVMOVSS X1,(DX)",
 		"pointer mask":           "VMOVUPS (DI),Z0\nKMOVQ DI,K1\nVCVTDQ2PS.Z Z0,K1,Z1\nVMOVSS X1,(DX)",
@@ -73,6 +73,19 @@ func TestX86SignedPackedIntegerFloatCallerRetainsFailures(t *testing.T) {
 				t.Fatalf("unproved conversion got caller permission: %v", err)
 			}
 		})
+	}
+}
+
+func TestX86SignedPackedIntegerFloatGPTransferDefinesCompleteXInput(t *testing.T) {
+	// MOVQ GP -> X initializes the low qword and zeroes all remaining X
+	// bytes. In contrast, the register MOVSS negative above preserves the
+	// unknown upper twelve bytes of its destination.
+	body := "MOVQ AX,X0\nCVTPL2PS X0,X1\nVMOVSS X1,(DX)"
+	assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
+	goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+	pkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
+	if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
+		t.Fatal("complete GP/X input lost its caller-defined bytes", err)
 	}
 }
 
