@@ -60,21 +60,56 @@ func (consumer *featureConsumer) captureGeneratedMetadata(pkgs []*packages.Packa
 // registration remains a separate producer obligation.
 func (consumer *featureConsumer) preprocessCPP(asm, packagePath string, defines []string) ([]byte, map[string]string, error) {
 	return consumer.preprocessCPPWithHeader(asm, packagePath, defines, func() ([]byte, error) {
-		if consumer.Proof == nil || consumer.Proof.GeneratedHeaders == nil {
-			return nil, fmt.Errorf("active generated include lacks actual compiler metadata")
+		return consumer.generatedCPPHeader(packagePath)
+	})
+}
+
+func (consumer *featureConsumer) generatedCPPHeader(packagePath string) ([]byte, error) {
+	if consumer.Proof == nil || consumer.Proof.GeneratedHeaders == nil {
+		return nil, fmt.Errorf("active generated include lacks actual compiler metadata")
+	}
+	for _, header := range consumer.Proof.GeneratedHeaders.Headers {
+		if header.PackagePath == packagePath {
+			return gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
 		}
-		for _, header := range consumer.Proof.GeneratedHeaders.Headers {
-			if header.PackagePath == packagePath {
-				return gotoolprofile.CanonicalGeneratedHeader(header.Definitions)
+	}
+	return nil, fmt.Errorf("active generated include has no selected package origin")
+}
+
+// Only the actual selected caller inventory uses this source-only role. Its
+// companions need exact physical/original replay, not a final object receipt
+// for an assembly file outside this invocation's object request. Requested
+// files retain the ordinary strict object contract. No input/proof is mutated.
+func (consumer *featureConsumer) preprocessCallerCPP(asm, packagePath string, defines []string) ([]byte, map[string]string, error) {
+	assembly, err := consumer.moduleSourceName(asm)
+	if err != nil {
+		return nil, nil, err
+	}
+	sourceOnly := false
+	if consumer.Input.CPPOriginals != nil {
+		sourceOnly = true
+		for _, requested := range consumer.Input.AsmFiles {
+			if requested == assembly {
+				sourceOnly = false
+				break
 			}
 		}
-		return nil, fmt.Errorf("active generated include has no selected package origin")
-	})
+		if _, present := consumer.Input.CPPOriginals.Units[assembly]; !present {
+			return nil, nil, fmt.Errorf("caller companion lacks its complete original CPP unit")
+		}
+	}
+	return consumer.preprocessCPPSource(asm, packagePath, defines, func() ([]byte, error) {
+		return consumer.generatedCPPHeader(packagePath)
+	}, sourceOnly)
 }
 
 // A mode caller supplies a separately validated native header. This shared
 // source-order search/read path never assigns that header an ordinary role.
 func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error)) ([]byte, map[string]string, error) {
+	return consumer.preprocessCPPSource(asm, packagePath, defines, generatedHeader, false)
+}
+
+func (consumer *featureConsumer) preprocessCPPSource(asm, packagePath string, defines []string, generatedHeader func() ([]byte, error), sourceOnly bool) ([]byte, map[string]string, error) {
 	if err := gotoolprofile.ValidateCPPIncludeSearch(consumer.Input, nil); err != nil {
 		return nil, nil, err
 	}
@@ -162,8 +197,16 @@ func (consumer *featureConsumer) preprocessCPPWithHeader(asm, packagePath string
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := gotoolprofile.ValidateCPPExpandedOperands(consumer.Input, assembly, required); err != nil {
-			return nil, nil, err
+		if sourceOnly {
+			for _, miss := range required {
+				if err := gotoolprofile.VerifyCPPPackageSearchMiss(miss, consumer.Dir, consumer.Root); err != nil {
+					return nil, nil, err
+				}
+			}
+		} else {
+			if err := gotoolprofile.ValidateCPPExpandedOperands(consumer.Input, assembly, required); err != nil {
+				return nil, nil, err
+			}
 		}
 	}
 	options := plan9asm.AssemblyPreprocessOptions{

@@ -19,7 +19,7 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 ## Continue here
 
 The development branch is
-`codex/pr40-arm64-cli-integration-repair-20261007`.
+`codex/pr40-caller-cpp-scope-repair-20261007`.
 Read its actual HEAD and status before resuming. Main is the only ledger writer;
 earlier agents are inactive.
 
@@ -46,6 +46,13 @@ Latest repairs:
   bytes. This is scratch/input observation, not native-frame or pointee permission.
 - CLI private/tail tests check injectively escaped LLVM block names, retaining
   the single-caller CFG, chunk/object and native numerical assertions.
+- Actual AMD64 caller closure distinguishes requested CPP/object scopes from
+  selected companion ASM. Companions retain physical/full-original CPP replay,
+  SDK fallback absence checks and exposure/source guards, without acquiring
+  object receipts or mutating the final consumer input. Requested files still
+  require their complete operand set. The independent two-file RED reproduces
+  the external-library error; the changed CPP/caller/header diagnostic scope
+  passes 411 nodes with no Fail/Skip, including original Go and LLVM22 objects.
 
 The actual framed-pair and transitive-call REDs each fail all three root APIs.
 New regressions cover the five pair mnemonics, local partial/branch holes,
@@ -61,6 +68,11 @@ scope only. Both retain race, complete tool/source guards, vet/build and genuine
 closure. Current nested builds write directly under ignored output, without
 the ancestor's default-binary collector. Obtain terminal producer and independent
 reader results; diagnostic or ancestor passes are not current-head completion.
+These owners freeze ancestor `6b0a3bc9`, not the companion-CPP successor.
+Its full CLI stage has closed with all 1,778 nodes passing; the old owner and
+independent reader passed all 1,264 affected root nodes. Finish and independently
+read the current owner before claiming its combined pass. The successor needs
+fresh full CLI/current-head gates and the original external-library replay.
 
 ## Closed ancestor evidence
 

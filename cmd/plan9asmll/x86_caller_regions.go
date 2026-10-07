@@ -194,7 +194,7 @@ func x86CallerAssemblySource(pkg *packages.Package, asm string, defines []string
 	var source []byte
 	var err error
 	if feature != nil {
-		source, _, err = feature.preprocessCPP(asm, pkg.PkgPath, defines)
+		source, _, err = feature.preprocessCallerCPP(asm, pkg.PkgPath, defines)
 	} else {
 		source, err = readAsmSource(asm, asmSourceRoot(pkg, asm))
 	}
