@@ -1466,6 +1466,31 @@ func TestExtractSupportedOpsFindsCompleteFloatAddSubSpecTable(t *testing.T) {
 	}
 }
 
+func TestExtractSupportedOpsFindsCompleteHorizontalIntegerSpecTable(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("../..", "amd64_horizontal_integer_forms.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "amd64_horizontal_integer_forms.go"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "translate.go"), []byte("package plan9asm\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		supported, err := extractSupportedOps(dir, arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, opcode := range []string{"PHADDD", "PHADDSW", "PHADDW", "PHSUBD", "PHSUBSW", "PHSUBW", "VPHADDD", "VPHADDSW", "VPHADDW", "VPHSUBD", "VPHSUBSW", "VPHSUBW"} {
+			if _, ok := supported[opcode]; !ok {
+				t.Errorf("%s typed horizontal integer extraction omitted %s", arch, opcode)
+			}
+		}
+	}
+}
+
 func TestExtractSupportedOpsFindsCompleteHorizontalFloatSpecTable(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("../..", "amd64_lower_horizontal_float.go"))
 	if err != nil {

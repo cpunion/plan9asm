@@ -68,6 +68,13 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		op := strings.ToUpper(string(ins.Op))
 		switch arch {
 		case ArchAMD64:
+			if form, known, err := x86HorizontalIntegerProperties(ins, goarch); known && err == nil &&
+				!form.spec.vector && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				// The single original legacy m128 opcode needs its physical
+				// SSSE3 carrier on i386 as well. Portable register/VEX arithmetic
+				// does not acquire a native ISA or caller permission.
+				add("+sse2", "+ssse3")
+			}
 			if form, known, err := x86ImmediateShuffleProperties(ins, goarch); known && err == nil &&
 				form.spec.legacy && !form.spec.mmx && form.memory >= 0 && form.source.Kind != OpFP {
 				// Only this validated single native SSE2 memory instruction

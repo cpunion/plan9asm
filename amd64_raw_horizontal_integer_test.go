@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func TestX86RawHorizontalIntegerEncodingAxes(t *testing.T) {
@@ -120,16 +123,29 @@ func TestTranslateX86HorizontalIntegerGo386RegisterCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
-	}
 	for _, triple := range []string{"i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
-		ir, err := Translate(file, Options{Goarch: "386", TargetTriple: triple, Sigs: map[string]FuncSig{"compat": {Name: "compat", Ret: Void}}})
-		if err != nil {
-			t.Fatal(err)
-		}
-		compileLLVMToObject(t, llc, triple, "horizontal-compat.ll", "horizontal-compat.o", ir)
+		t.Run(triple, func(t *testing.T) {
+			options := Options{Goarch: "386", TargetTriple: triple, Sigs: map[string]FuncSig{"compat": {Name: "compat", Ret: Void}}}
+			if _, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("Go frontend acceptance invented high physical mode32 registers: %v", err)
+			}
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := TranslateModuleInContext(ctx, file, options)
+			if !module.IsNil() {
+				defer module.Dispose()
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("direct module invented mode32 high registers", err)
+			}
+			translated, err := translateGoModuleInContext(ctx, x86SADGoPackage(t, "386", "()"), []byte(strings.Replace(source.String(), "compat(SB)", "·sad(SB)", 1)), GoModuleOptions{GOARCH: "386", TargetTriple: triple})
+			if translated != nil && !translated.Module.IsNil() {
+				defer translated.Module.Dispose()
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("typed module invented mode32 high registers", err)
+			}
+		})
 	}
 }
 
