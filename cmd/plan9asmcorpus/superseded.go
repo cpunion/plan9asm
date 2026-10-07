@@ -55,7 +55,11 @@ func loadSupersededSkips(repoRoot, ledgerPath string) (map[string]discoverySuper
 	for _, candidate := range candidates {
 		matched[candidate.exactKey()] = true
 	}
-	scanned, err := scannedDiscoveryVersionKeys(ledgerPath)
+	replacements := make(map[string]bool, len(manifest.Skips))
+	for _, skip := range manifest.Skips {
+		replacements[skip.ReplacementModule+"@"+skip.ReplacementVersion] = true
+	}
+	scanned, err := scannedDiscoveryVersionKeysFor(ledgerPath, replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +98,13 @@ func loadSupersededSkips(repoRoot, ledgerPath string) (map[string]discoverySuper
 	return skips, nil
 }
 
-func scannedDiscoveryVersionKeysFor(ledgerPath string, requested map[string]bool) (map[string]bool, error) {
-	return scannedDiscoveryVersionKeys(ledgerPath)
+// The full-key helper remains available for reference checks. Normal exception
+// loading passes a nonnil set of exact replacement interests instead.
+func scannedDiscoveryVersionKeys(ledgerPath string) (map[string]bool, error) {
+	return scannedDiscoveryVersionKeysFor(ledgerPath, nil)
 }
 
-func scannedDiscoveryVersionKeys(ledgerPath string) (map[string]bool, error) {
+func scannedDiscoveryVersionKeysFor(ledgerPath string, requested map[string]bool) (map[string]bool, error) {
 	info, err := os.Stat(ledgerPath)
 	if err != nil {
 		return nil, err
@@ -128,7 +134,10 @@ func scannedDiscoveryVersionKeys(ledgerPath string) (map[string]bool, error) {
 				return nil, fmt.Errorf("decode discovery record %s: %w", filePath, err)
 			}
 			if record.Kind == "scanned" || record.Kind == "matched" {
-				keys[record.Module+"@"+record.Version] = true
+				key := record.Module + "@" + record.Version
+				if requested == nil || requested[key] {
+					keys[key] = true
+				}
 			}
 		}
 		if err := scanner.Err(); err != nil {
