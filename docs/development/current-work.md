@@ -17,7 +17,7 @@ not passes. Refresh the remote state before publishing the next batch.
 
 ## Continue here
 
-Development branch: codex/pr40-instruction-family-integration-20261007.
+Development branch: codex/pr40-memory-ci-integration-20261007.
 Latest upstream main is already an ancestor. Root alone writes ledger.
 This successor integrates these test-first rule-class repairs:
 
@@ -79,9 +79,21 @@ The CMOV successor's complete affected scopes pass on current and historical
 SDKs, including fixed-local and caller authority guards. Cancellation scopes
 likewise pass on both SDKs. Each certificate belongs to its own clean commit;
 overlapping focused scopes cannot be added into a full-suite coverage count.
-Scalar insert/extract byte effects and uncached full-file hash efficiency are
-being repaired independently. The mode32 VPEXTRQ native width requires its
-own original-encoder check; an object pass alone is not a numerical proof.
+Scalar insert/extract byte effects, uncached full-file hash efficiency and
+imported-type header planning have focused repairs. The encoder-table gate
+now executes its historical-SDK path instead of returning early. AES and
+scalar caller effects are integrated, including an independent Go-byte/FIPS
+runtime fixture and a missing-input negative control. Their current and
+historical SDK scopes pass; this is not a current-head full-suite certificate.
+The mode32 VPEXTRQ native width requires its own original-encoder check; an
+object pass alone is not a numerical proof.
+
+Discovery status and publication readback share a complete streaming reader.
+They retain manifest/range metadata and bounded record/shard state, not all
+record payloads. Superseded-version checks retain only the exact replacement
+keys they need, while still parsing every record. Legacy full-report import
+and manual scan/merge interfaces remain separate; do not claim those are
+streaming. Run the combined command-package gates before publishing this head.
 
 Obtain terminal family owners and independent physical readbacks. Freeze the
 clean combined successor and run the complete
@@ -118,10 +130,15 @@ The committed inventory has 215 continuous ranges through
 2026-09-22T22:43:08Z, with the 2025-10-01 history cutoff. Newer standalone
 inventory is unsynchronized; cgo stays outside this repository. A read-only
 remote status check found 304 continuous ranges through 2026-09-30T02:32:07Z
-and the requested history cutoff reached. No scanner owner was live; its
-previous head service was OOM-killed. Inspect memory bounds, ownership and the
-actual ledger before continuing incremental work; do not restart blindly or
-claim this queue has been imported/tested.
+and the requested history cutoff reached. The earlier head service was
+OOM-killed before publication. The standalone streaming inventory successor
+has since resumed one bounded, two-worker head controller; its completed
+windows extend that cursor without redoing historical ranges. Status, batch
+lookup, publication and transfer stream the standalone ledger. Inspect its
+current owner, manifest and journal for the actual cursor; never hot-replace
+its binary or start a second writer. These new records are still an
+unsynchronized, untested queue, not assembly passes. The cgo inventory remains
+outside this repository.
 
 Inspect remote owners and frozen inputs before replay. Recheck the original
 discovering samples and all 64 required shards after rule-class repairs.
