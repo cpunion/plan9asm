@@ -67,6 +67,10 @@ tests establish the relevant runtime semantics.
 - Freeze source, tools and ledger during corpus verification. A changed input
   invalidates the run. Do not rebase, rewrite or import records into that tree
   while tests are running; use a separate persistent worktree for development.
+- Run index scans and external corpus batches on the designated remote
+  executors, not as local background `plan9asmcorpus`/discovery processes.
+  Local first-party fixtures and corpus-driver unit tests remain allowed.
+  Never compile or execute external code on the inventory server.
 - Keep reports/binaries under ignored `_out/`. Never commit caches, ZIPs,
   compressed discovery results or obsolete per-run ledgers, even in history.
 - Ordinary profile coverage uses report schema 11, progress schema 3 and
