@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,6 +139,55 @@ func TestCompileOneAMD64FixedLocalCompleteOrdinaryGoSource(t *testing.T) {
 			}
 			if info, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
 				t.Fatalf("complete original-source LLVM22 object missing: %v", err)
+			}
+		})
+	}
+}
+
+func TestAMD64FixedLocalCompleteSourceRetainsActualLoadIdentity(t *testing.T) {
+	for _, axis := range []string{"dependency-types", "missing-dependency", "extra-captured-import", "target", "source-bytes"} {
+		t.Run(axis, func(t *testing.T) {
+			declaration := "package fixedlocal\nimport \"math/bits\"\n" +
+				"func Reference(a uint64) uint64 { return bits.RotateLeft64(a, 7) }\n" +
+				"func Value(a, b, c, d uint64) uint64\n"
+			pkg, input, config := amd64FixedLocalCLICompleteFixture(t, "PADDL 16(SP),X0", declaration)
+			file, err := plan9asm.Parse(plan9asm.ArchAMD64,
+				strings.Replace(amd64FixedLocalCLIAssembly("PADDL 16(SP),X0"), "#include \"textflag.h\"", "#define NOSPLIT 4", 1))
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolve := func(name string) string { return strings.Replace(name, "·", pkg.PkgPath+".", 1) }
+			sigs, _, err := sigsForAsmFile(pkg, file, resolve, "amd64")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, source, err := prepareAMD64FixedLocalSource(pkg, file, input, "linux/amd64",
+				"x86_64-unknown-linux-gnu", "amd64", config, resolve, sigs)
+			if err != nil || source == nil {
+				t.Fatalf("actual original full-source binding failed: %v", err)
+			}
+			defer func() {
+				if err := source.close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			switch axis {
+			case "dependency-types":
+				pkg.Imports["math/bits"].Types = types.NewPackage("math/bits", "bits")
+			case "missing-dependency":
+				pkg.Imports["math/bits"] = nil
+			case "extra-captured-import":
+				config.x86CallerSelections[pkg].imports["unselected"] = types.NewPackage("unselected", "unselected")
+			case "target":
+				config.x86CallerSelections[pkg].target = "darwin/amd64"
+			case "source-bytes":
+				if err := os.WriteFile(filepath.Join(filepath.Dir(input), "value.go"),
+					[]byte(strings.Replace(declaration, "a, 7", "a, 9", 1)), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := source.verify(config.Context); !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatalf("changed actual-load %s retained the full-source binding: %v", axis, err)
 			}
 		})
 	}

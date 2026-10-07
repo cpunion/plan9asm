@@ -14,8 +14,9 @@ import (
 // root factory and binder independently check every source/declaration/object
 // and all native initialization, address, CFG and relocation requirements.
 // This first handoff deliberately retains that factory's numeric, flat,
-// dependency-free owned-main scope. Observed imports/DATA/composite/external
-// roles cannot obtain a capability through this method.
+// owned-main scope. SDK imports are independently source/export-bound by that
+// factory; foreign imports, DATA, composite and external roles cannot obtain a
+// capability through this method.
 type AMD64OriginalFixedLocalBinding struct {
 	mu         sync.Mutex
 	owner      *AMD64OriginalPackageObservation
