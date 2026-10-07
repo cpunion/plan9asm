@@ -160,7 +160,7 @@ func TestX86CMOVFamilyFixedLocalEveryReadAndAuthorityNegatives(t *testing.T) {
 			"g target":               strings.Replace(base, "tmp(SP),BX", "tmp(SP),R14", 1),
 			"BP target":              strings.Replace(base, "tmp(SP),BX", "tmp(SP),BP", 1),
 			"AUTO saved BP":          strings.Replace(base, "ADDQ $-16,SP", "ADDQ $0,SP", 1),
-			"AUTO return":            strings.Replace(base, "tmp(SP)", "tmp+8(SP)", 1),
+			"AUTO return":            strings.Replace(base, "tmp(SP)", "tmp+24(SP)", 1),
 			"undefined expression":   strings.Replace(base, "tmp(SP)", "slot+UNKNOWN(SP)", 1),
 			"AUTO address input":     strings.Replace(base, op+" tmp(SP),BX", "MOVQ $tmp(SP),AX\n"+op+" AX,BX", 1),
 			"FP pointer permission":  strings.Replace(base, "tmp(SP)", "p+0(FP)", 1),
@@ -206,5 +206,36 @@ func TestX86CMOVFamilyFixedLocalEveryReadAndAuthorityNegatives(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestX86CMOVFamilyFixedLocalSharedAUTOExistingFalseCertificate(t *testing.T) {
+	// This is never executed: Go's named AUTO displacement is 160+16,
+	// while the old private proof mistakenly certified virtual offset 16.
+	pkg, _, file, options := fixedLocalFrameFixture(t, "PADDQ tmp+16(SP),X0")
+	goAssemblerOracleOutput(t, "amd64", fixedLocalVoidAssembly(file), "", true)
+	if _, err := proveX86FixedLocal(file.Funcs[0], options.Sigs[pkg.Path+".Value"]); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("named AUTO native out-of-frame bytes acquired an offset-zero virtual certificate", err)
+	}
+}
+
+func TestX86CMOVFamilyFixedLocalSharedAUTOGPAndSIMD(t *testing.T) {
+	for _, operation := range []string{"MOVQ tmp-8(SP),BX", "MOVQ AX,tmp-8(SP)\nMOVQ tmp-8(SP),BX", "MOVOU tmp-16(SP),X0\nMOVQ X0,BX"} {
+		t.Run(operation, func(t *testing.T) {
+			assembly := "TEXT ·Value(SB),4,$16-24\nMOVQ a+0(FP),AX\nMOVQ b+8(FP),BX\nMOVQ AX,0(SP)\nMOVQ BX,8(SP)\n" + operation + "\nMOVQ BX,ret+16(FP)\nRET\n"
+			pkg, request, file, options := x86CMOVFixedLocalFixture(t, assembly, "func Value(a,b uint64) uint64", "linux/amd64", "x86_64-unknown-linux-gnu")
+			observer := requireGoAMD64FrameCapture(t, pkg, request)
+			ctx, cancel := runtimeOracleStageContext(t)
+			defer cancel()
+			bound, err := observer.BindFixedLocal(ctx, pkg, file, options)
+			if err != nil {
+				t.Fatal("the shared original AUTO role needs its actual native displacement", err)
+			}
+			fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+				if err != nil || !strings.Contains(ir, "fixed_local_native") {
+					t.Fatal("shared scalar/SIMD native offset consumer", err)
+				}
+			})
+		})
 	}
 }
