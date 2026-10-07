@@ -188,6 +188,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if ins.Op == "ANDQ" || ins.Op == "ADDQ" || ins.Op == "CMPQ" {
 		return len(ins.Args) == 2
 	}
+	if _, known, err := x86TypedConditionalMoveByteEffect(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86PackedWrappingAddProperties(ins, "amd64"); known {
 		return err == nil && form.legacy && !form.mmx && form.byteWidth == 16
 	}
@@ -353,7 +356,10 @@ func fixedLocalMemory(ins *Instr, index int, state *x86FixedLocalState, proof *x
 	if index < 0 || index >= len(ins.Args) || ins.Args[index].Kind != OpMem || width <= 0 {
 		return 0, goAMD64FrameContext("fixed local access lacks native memory")
 	}
-	memory := ins.Args[index].Mem
+	memory, err := fixedLocalMemoryAddress(*ins, index, proof.frame)
+	if err != nil {
+		return 0, err
+	}
 	base, found := state.pointers[memory.Base]
 	if !found || memory.Sym != "" || memory.Segment != "" || memory.Index != "" ||
 		memory.Off > 0 && base > math.MaxInt64-memory.Off || memory.Off < 0 && base < math.MinInt64-memory.Off {
@@ -470,6 +476,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		state.flags = true
 		return nil
 	}
+	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
+		return err
+	}
 	return fixedLocalVectorStep(ins, state, proof, residue)
 }
 
@@ -527,9 +536,13 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return fail()
 		}
 	case OpMem:
-		base, found := state.pointers[source.Mem.Base]
-		if found && source.Mem.Off >= -proof.frame && source.Mem.Off <= proof.frame {
-			address, pointer = state.addresses[base+source.Mem.Off]
+		memory, err := fixedLocalMemoryAddress(*ins, 0, proof.frame)
+		if err != nil {
+			return err
+		}
+		base, found := state.pointers[memory.Base]
+		if found && memory.Off >= -proof.frame && memory.Off <= proof.frame {
+			address, pointer = state.addresses[base+memory.Off]
 		}
 		if pointer && width != 8 {
 			return fail()

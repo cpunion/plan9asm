@@ -72,8 +72,9 @@ type amd64Ctx struct {
 	localStackSlot  string // byte-addressable backing storage for x86 SP references
 	sourceStack     *x86SourceStackProof
 	fixedLocal      *x86FixedLocalProof
-	frameSize       int64  // local bytes below the Go assembler's implicit amd64 BP
-	classicFrame    string // contiguous classic Go ABI frame used by 386 FP addressing
+	fixedMemRoles   map[MemRef]MemRef // exact certified current-instruction native role projection
+	frameSize       int64             // local bytes below the Go assembler's implicit amd64 BP
+	classicFrame    string            // contiguous classic Go ABI frame used by 386 FP addressing
 	classicSize     int64
 	classicBias     int64
 
@@ -2168,6 +2169,9 @@ func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
 }
 
 func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
+	if physical, certified := c.fixedMemRoles[mem]; certified {
+		mem = physical
+	}
 	if err := x86SymbolIndexedMemoryError(mem, c.goarch); err != nil {
 		return "", err
 	}

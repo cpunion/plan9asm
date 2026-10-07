@@ -56,7 +56,7 @@ func x86ConditionalMoveProperties(op Op, ins Instr, arch string) (x86Conditional
 			return fail("register source is outside the Go Yml class")
 		}
 	} else if source.Kind == OpMem {
-		if source.Mem.OffRaw != "" || source.Mem.IndexExt != "" ||
+		if !x86ConditionalMoveOffsetKnown(source.Mem) || source.Mem.IndexExt != "" ||
 			source.Mem.Segment != "" && source.Mem.Segment != FS && source.Mem.Segment != GS {
 			return fail("has an unresolved or unencodable memory source")
 		}

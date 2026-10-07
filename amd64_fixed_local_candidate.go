@@ -19,6 +19,8 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.mmx && form.byteWidth == 16
 			} else if form, known, err := x86FloatCompareProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.scalar && form.byteWidth == 16
+			} else if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, goarch); known {
+				memory, eligible = 0, err == nil && form.source.Kind == OpMem
 			}
 			if eligible && memory >= 0 && memory < len(ins.Args) {
 				source := ins.Args[memory]

@@ -626,9 +626,21 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		return false, err
 	}
 	if c.fixedLocal != nil {
+		c.fixedMemRoles = make(map[MemRef]MemRef)
+		defer func() { c.fixedMemRoles = nil }()
 		for index, operand := range ins.Args {
 			if operand.Kind == OpMem && !c.fixedLocalMemoryCertified(ins, index) {
 				return false, goAMD64FrameContext("fixed local storage consumer lacks an exact native access certificate")
+			}
+			if operand.Kind == OpMem {
+				physical, err := fixedLocalMemoryAddress(ins, index, c.fixedLocal.frame)
+				if err != nil {
+					return false, err
+				}
+				if previous, found := c.fixedMemRoles[operand.Mem]; found && previous != physical {
+					return false, goAMD64FrameContext("fixed local equal parsed operands have conflicting native address roles")
+				}
+				c.fixedMemRoles[operand.Mem] = physical
 			}
 		}
 	}

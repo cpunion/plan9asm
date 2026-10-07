@@ -86,10 +86,25 @@ func TestX86CMOVFamilyAUTOGrammarThreeAPIFiveTargets(t *testing.T) {
 
 func x86CMOVFixedLocalAssembly(name, op, source string) string {
 	shift, restore := "", ""
-	if source != "AX" && source != "8(SP)" {
+	if source != "AX" && source != "8(SP)" && source != "tmp-8(SP)" && source != "tmp-(2*4)(SP)" {
 		shift, restore = "MOVQ SP,R11\nADDQ $-16,SP\n", "MOVQ R11,SP\n"
 	}
 	return fmt.Sprintf("TEXT ·%s(SB),4,$16-24\nMOVQ a+0(FP),AX\nMOVQ b+8(FP),BX\nMOVQ AX,0(SP)\nMOVQ AX,8(SP)\n%sCMPQ AX,BX\n%s %s,BX\n%sMOVQ BX,ret+16(FP)\nRET\n", name, shift, op, source, restore)
+}
+
+func TestX86CMOVFamilyFixedLocalSourceRoleQueryNotPermission(t *testing.T) {
+	for _, op := range x86CMOVOracleNames("amd64") {
+		for _, source := range []string{"tmp(SP)", "UNKNOWN(SP)", "tmp-8(SP)", "tmp-(2*4)(SP)", "8(SP)", "(BP)", "AX", "a+0(FP)", "slot+UNKNOWN(SP)"} {
+			file, err := Parse(ArchAMD64, "TEXT ·Value(SB),4,$16-24\n"+op+" "+source+",BX\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := source != "AX" && source != "a+0(FP)" && source != "slot+UNKNOWN(SP)"
+			if got := GoAMD64FixedLocalFrameBindingNeeded(file, "amd64"); got != want {
+				t.Errorf("typed source binding query %s %s got=%t want=%t", op, source, got, want)
+			}
+		}
+	}
 }
 
 func x86CMOVFixedLocalFixture(t *testing.T, assembly, declarations, target, triple string) (GoPackage, GoAMD64FrameCaptureRequest, *File, Options) {

@@ -46,6 +46,10 @@ func TestX86CMOVFamilyFPBitViewsThreeAPIFiveTargets(t *testing.T) {
 }
 
 func TestX86CMOVFamilyFPBitViewsExactPartialAndCrossSlotExtent(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 required")
+	}
 	for _, target := range x86OrderingHintTargets {
 		for _, test := range []struct {
 			declaration, width, source string
@@ -76,6 +80,9 @@ func TestX86CMOVFamilyFPBitViewsExactPartialAndCrossSlotExtent(t *testing.T) {
 					}
 					if test.valid && x86CMOVFPHasNumericConversion(ir) {
 						t.Fatal("FP byte reconstruction became a numerical conversion")
+					}
+					if test.valid {
+						compileLLVMToObject(t, llc, target.triple, "cmov-fp-span-"+api+".ll", "cmov-fp-span-"+api+".o", ir)
 					}
 				})
 			}
