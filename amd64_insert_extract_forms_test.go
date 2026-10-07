@@ -61,9 +61,6 @@ func TestX86InsertExtractEveryGoOpcodeAttribute(t *testing.T) {
 	if len(x86InsertExtractSpecs) != 24 {
 		t.Fatal("incomplete family")
 	}
-	if !goToolchainAtLeast(runtime.Version(), 1, 27) {
-		return
-	}
 	data, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/avx_optabs.go"))
 	if err != nil {
 		t.Fatal(err)

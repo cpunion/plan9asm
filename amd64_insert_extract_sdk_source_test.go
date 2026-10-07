@@ -60,6 +60,9 @@ func TestX86InsertExtractActualSDKTablesAreMandatory(t *testing.T) {
 			// and the exact missing table. Panics, cleanup errors, extra failures,
 			// unrelated diagnostics and a PASS from version-return are not evidence.
 			_, missingErr := os.ReadFile(missing)
+			if !os.IsNotExist(missingErr) {
+				t.Fatalf("missing-table fixture changed during the child: %v", missingErr)
+			}
 			pattern := fmt.Sprintf(`\A--- FAIL: %s \([0-9]+\.[0-9]+s\)\n    amd64_insert_extract_forms_test\.go:[0-9]+: %s\nFAIL\n\z`,
 				rootName, regexp.QuoteMeta(missingErr.Error()))
 			if !regexp.MustCompile(pattern).Match(output) {
