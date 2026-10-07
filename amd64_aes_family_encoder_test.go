@@ -101,6 +101,47 @@ func TestX86AESFamilyCompressedDisp8EntireTupleAxes(t *testing.T) {
 	}
 }
 
+func TestX86AESFamilyOriginalGoPhysicalRegisterExtensionAxes(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, name := range x86AESOracleNames[6:10] {
+			for _, width := range []int{16, 32, 64} {
+				bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+				for role := 0; role < 3; role++ {
+					for _, index := range []int{0, 7, 8, 15, 16, 31} {
+						args := []string{bank + "0", bank + "1", bank + "2"}
+						args[role] = fmt.Sprintf("%s%d", bank, index)
+						row := name + " " + strings.Join(args, ",")
+						t.Run(arch+"/"+row, func(t *testing.T) {
+							if arch == "386" && width == 64 && index >= 8 {
+								goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+								if _, known, err := x86AESProperties(Op(name), x86YMMReadSource(t, row), arch); !known || err == nil {
+									t.Fatal("actual Go rejected mode32 Z bank acquired a valid grammar row", row, err)
+								}
+								return
+							}
+							code := x86OrderingHintGoBytes(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+							mode := 64
+							if arch == "386" {
+								mode = 32
+								if index >= 8 {
+									if _, _, known, err := decodedX86AESInstruction(code, mode); !known || !errors.Is(err, ErrProbeNeedsContext) {
+										t.Fatal("actual Go high spelling acquired a different physical mode32 register", row, fmt.Sprintf("%x", code), err)
+									}
+									return
+								}
+							}
+							ins, length, known, err := decodedX86AESInstruction(code, mode)
+							if !known || err != nil || length != len(code)-1 || ins.Args[role].Reg != Reg(args[role]) {
+								t.Fatal("all original VEX/EVEX source/state/destination extension bits", row, fmt.Sprintf("%x", code), ins, err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestX86AESFamilyMode32NamedHighAndRawReservedBoundaries(t *testing.T) {
 	for _, name := range x86AESOracleNames[6:10] {
 		for _, bank := range []string{"X", "Y"} {
