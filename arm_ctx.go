@@ -85,7 +85,7 @@ func (c *armCtx) newTmp() string {
 }
 
 func (c *armCtx) slotName(r Reg) string {
-	return "%" + armLLVMBlockName("reg_"+string(r))
+	return "%reg_" + amd64LLVMSafeName(string(r))
 }
 
 func (c *armCtx) scanUsedRegs() {
@@ -413,7 +413,7 @@ func (c *armCtx) emitEntryAllocasAndArgInit() error {
 	sort.Strings(fregs)
 	for _, rs := range fregs {
 		r := Reg(rs)
-		slot := "%" + armLLVMBlockName("freg_"+string(r))
+		slot := "%freg_" + amd64LLVMSafeName(string(r))
 		c.fRegSlot[r] = slot
 		fmt.Fprintf(c.b, "  %s = alloca i64\n", slot)
 		fmt.Fprintf(c.b, "  store i64 0, ptr %s\n", slot)

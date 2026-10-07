@@ -130,8 +130,9 @@ func (c *arm64Ctx) newTmp() string {
 }
 
 func (c *arm64Ctx) slotName(r Reg) string {
-	// Make the name LLVM-label friendly to keep the IR readable.
-	return "%" + arm64LLVMBlockName("reg_"+string(r))
+	// Storage and source blocks share LLVM's local identifier namespace,
+	// but must have distinct generated roles even for a label named reg_R0.
+	return "%reg_" + amd64LLVMSafeName(string(r))
 }
 
 func (c *arm64Ctx) vSlotName(idx int) string {
