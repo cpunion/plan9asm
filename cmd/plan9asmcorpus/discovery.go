@@ -2815,17 +2815,23 @@ func removeDiscoveryTargetOutput(workDir string, index int) error {
 }
 
 func runDiscoveryOperation(timeout time.Duration, run func(context.Context) error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return runDiscoveryOperationContext(context.Background(), timeout, run)
+}
+
+func runDiscoveryOperationContext(parent context.Context, timeout time.Duration, run func(context.Context) error) error {
+	if parent == nil {
+		return fmt.Errorf("discovery operation requires its actual parent context")
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	err := run(ctx)
 	if contextErr := ctx.Err(); contextErr != nil {
 		return errors.Join(err, contextErr)
 	}
 	return err
-}
-
-func runDiscoveryOperationContext(parent context.Context, timeout time.Duration, run func(context.Context) error) error {
-	return runDiscoveryOperation(timeout, run)
 }
 
 func discoveryCommandEnvironment(base []string) []string {

@@ -11,9 +11,18 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-func captureDiscoveryInstrumentationHeaderPlanning(cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo,
+func captureDiscoveryInstrumentationHeaderPlanning(ctx context.Context, cfg discoveryCorpusConfig, candidate discoveryCandidate, download moduleDownloadInfo,
 	plan *discoveryOrdinarySelectionPlan, profiles []discoveryFeatureProfile, modeRoot, binary, goRoot string, env []string,
 ) (func(discoveryInstrumentationRequirement, string) (*gotoolprofile.GeneratedHeaderProof, error), error) {
+	if ctx == nil {
+		return nil, fmt.Errorf("same-mode header planning requires its actual parent context")
+	}
+	if _, bounded := ctx.Deadline(); !bounded {
+		return nil, fmt.Errorf("same-mode header planning requires a bounded parent context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var rules *gotoolprofile.NativeHeaderSourceRules
 	proof := plan.InstrumentationPlan
 	role := &discoveryInstrumentationHeaderPlanning{Protocol: discoveryInstrumentationHeaderPlanningProtocol, Rules: rules,
@@ -25,6 +34,9 @@ func captureDiscoveryInstrumentationHeaderPlanning(cfg discoveryCorpusConfig, ca
 	}
 	unsupported := false
 	return func(requirement discoveryInstrumentationRequirement, assembly string) (*gotoolprofile.GeneratedHeaderProof, error) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		// This registration is required only at an actual missing-header
 		// suspension, never by unrelated mode sources without a native query.
 		if rules == nil && !unsupported {
@@ -58,7 +70,7 @@ func captureDiscoveryInstrumentationHeaderPlanning(cfg discoveryCorpusConfig, ca
 			return nil, fmt.Errorf("same-mode native property queries exceed their explicit bound")
 		}
 		var query discoveryInstrumentationHeaderQuery
-		err = runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		err = runDiscoveryOperationContext(ctx, cfg.CandidateTimeout, func(ctx context.Context) error {
 			if err := gotoolprofile.RecheckNativeHeaderSourceRules(goRoot, rules); err != nil {
 				return err
 			}

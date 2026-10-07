@@ -180,7 +180,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 			if err := verifyDiscoveryCPPModuleZIP(proof.CPPInputs, plan, download.Zip); err != nil {
 				return err
 			}
-			proof.headerPlanningCapture, err = captureDiscoveryInstrumentationHeaderPlanning(cfg, candidate, download, plan, profiles, modeRoot, binary, goRoot, env)
+			proof.headerPlanningCapture, err = captureDiscoveryInstrumentationHeaderPlanning(ctx, cfg, candidate, download, plan, profiles, modeRoot, binary, goRoot, env)
 			if err != nil {
 				return err
 			}

@@ -92,4 +92,56 @@ func TestDiscoveryNestedOperationKeepsParentContext(t *testing.T) {
 			t.Fatalf("child timeout failed or cancelled its parent: error=%v parent=%v", err, parent.Err())
 		}
 	})
+
+	t.Run("already_expired_child_deadline", func(t *testing.T) {
+		called := false
+		err := runDiscoveryOperationContext(context.Background(), 0, func(context.Context) error {
+			called = true
+			return nil
+		})
+		if called || !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expired child launched an operation: called=%v error=%v", called, err)
+		}
+	})
+}
+
+func TestInstrumentationHeaderPlanningKeepsParentContext(t *testing.T) {
+	plan := &discoveryOrdinarySelectionPlan{
+		Module:              "example.invalid/header-context",
+		InstrumentationPlan: &discoveryInstrumentationPlan{},
+	}
+	for _, fixture := range []struct {
+		name   string
+		parent context.Context
+	}{
+		{"nil_parent", nil},
+		{"unbounded_parent", context.Background()},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			capture, err := captureDiscoveryInstrumentationHeaderPlanning(fixture.parent, discoveryCorpusConfig{},
+				discoveryCandidate{}, moduleDownloadInfo{}, plan, nil, "", "", "", nil)
+			if err == nil || capture != nil {
+				t.Fatalf("unowned planning producer accepted: capture=%v error=%v", capture != nil, err)
+			}
+		})
+	}
+
+	parent, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	capture, err := captureDiscoveryInstrumentationHeaderPlanning(parent, discoveryCorpusConfig{CandidateTimeout: time.Minute},
+		discoveryCandidate{}, moduleDownloadInfo{}, plan, nil, "", "", "", nil)
+	if err != nil || capture == nil {
+		t.Fatalf("bounded planning producer not created: %v", err)
+	}
+	cancel()
+	header, err := capture(discoveryInstrumentationRequirement{}, "probe_arm64.s")
+	if header != nil || !errors.Is(err, context.Canceled) || plan.InstrumentationPlan.HeaderPlanning != nil {
+		t.Fatalf("cancelled capture performed an unowned query: header=%v error=%v proof=%v", header != nil, err, plan.InstrumentationPlan.HeaderPlanning != nil)
+	}
+
+	capture, err = captureDiscoveryInstrumentationHeaderPlanning(parent, discoveryCorpusConfig{},
+		discoveryCandidate{}, moduleDownloadInfo{}, plan, nil, "", "", "", nil)
+	if capture != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("already cancelled planning producer created: capture=%v error=%v", capture != nil, err)
+	}
 }
