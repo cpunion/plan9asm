@@ -84,7 +84,13 @@ func TestX86ScalarLaneResultAPIMustInitializeOnlyObservedBytes(t *testing.T) {
 			{"uninitialized-result-read", "PINSRD $0,ret+8(FP),X0\nMOVL X0,ret+8(FP)\n", false},
 			{"input-store", "MOVL k+0(FP),X0\nPEXTRD $0,X0,k+0(FP)\nMOVL X0,ret+8(FP)\n", false},
 			{"partial-join", "MOVL k+0(FP),AX\nCMPL AX,$0\nJE skip\nPINSRD $0,AX,X0\nskip:\nMOVL X0,ret+8(FP)\n", false},
-			{"unknown-AES-effect", "MOVL k+0(FP),X0\nPINSRD $1,k+0(FP),X0\nAESENC X0,X0\nMOVL X0,ret+8(FP)\n", false},
+			// The memory-to-X MOVL defines all 16 bytes (zeroing bytes 4..15).
+			// Once AES has registered byte effects, this complete input is a
+			// positive control, not an unknown-instruction rejection.
+			{"registered-AES-complete-input", "MOVL k+0(FP),X0\nPINSRD $1,k+0(FP),X0\nAESENC X0,X0\nMOVL X0,ret+8(FP)\n", true},
+			// Inserting only lane 1 leaves bytes 0..3 and 8..15 undefined.
+			// Registering AES must not grant those potential result inputs.
+			{"registered-AES-missing-input-bytes", "PINSRD $1,k+0(FP),X0\nAESENC X0,X0\nMOVL X0,ret+8(FP)\n", false},
 		} {
 			t.Run(target.triple+"/"+tc.name, func(t *testing.T) {
 				source := "TEXT ·view(SB),4,$0-12\n" + tc.body + "RET\n"
