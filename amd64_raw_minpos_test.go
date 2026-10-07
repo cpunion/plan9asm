@@ -178,7 +178,7 @@ func TestX86RawMinimumPositionGoEncoderForms(t *testing.T) {
 				}
 			}
 			source.WriteString("RET\n")
-			code := assembleX87ControlBytes(t, arch, source.String())
+			code := x86MinimumPositionOriginalGoBytes(t, arch, source.String())
 			decoded, err := decodeX86RawDirectives(rawX86Function(code), arch)
 			if err != nil {
 				t.Fatal(err)
@@ -192,8 +192,8 @@ func TestX86RawMinimumPositionGoEncoderForms(t *testing.T) {
 				t.Fatalf("decoded %d instructions, want %d", len(decoded.Instrs), len(want))
 			}
 			for i, got := range decoded.Instrs {
-				if got.Op != want[i].Op || !reflect.DeepEqual(got.Args, want[i].Args) {
-					t.Fatalf("instruction %d=%+v, want %+v", i, got, want[i])
+				if got.Op != want[i].Op || !x86MinimumPositionOperandsMatchSource(got.Args, want[i].Args) {
+					t.Fatalf("instruction %d %s operands=%#v, want source %#v", i, got.Op, got.Args, want[i].Args)
 				}
 			}
 			file := x86RawStackObservingFormProbeFile(t, arch, "minpos", code)
