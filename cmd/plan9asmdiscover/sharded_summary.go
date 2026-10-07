@@ -119,14 +119,20 @@ func scanShardedReport(reportPath string, visit func(shardedRecord) error) (shar
 // Keep namespace validation independent of the host filesystem's case policy.
 func recordShardPaths(reportPath string, entries []os.DirEntry) ([]string, error) {
 	shards := make([]string, 0, len(entries))
+	var seen [256]bool
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || len(name) != len("00.jsonl") || !strings.HasSuffix(name, ".jsonl") {
 			return nil, fmt.Errorf("list sharded report records %q: unexpected entry %q", reportPath, name)
 		}
-		if _, err := strconv.ParseUint(name[:2], 16, 8); err != nil {
+		bucket, err := strconv.ParseUint(name[:2], 16, 8)
+		if err != nil {
 			return nil, fmt.Errorf("list sharded report records %q: invalid shard name %q", reportPath, name)
 		}
+		if seen[bucket] {
+			return nil, fmt.Errorf("list sharded report records %q: duplicate logical record shard %q", reportPath, name)
+		}
+		seen[bucket] = true
 		shards = append(shards, filepath.Join(reportPath, "records", name))
 	}
 	sort.Strings(shards)

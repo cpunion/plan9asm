@@ -65,7 +65,8 @@ func writeShardedReportStreaming(reportPath string, update discoveryReport) (ret
 	}
 	publisher := publicationShardWriter{root: temporary, summary: summarizeLedger(metadata)}
 	defer publisher.closeOnError()
-	var bucket, nextUpdate int
+	bucket, nextUpdate := -1, 0
+	var visited [256]bool
 	var oldModule string
 	var oldRecords discoveryReport
 	emit := func(old, change discoveryReport) error {
@@ -108,20 +109,24 @@ func writeShardedReportStreaming(reportPath string, update discoveryReport) (ret
 	if previous != nil {
 		_, err := scanShardedReport(reportPath, func(record shardedRecord) error {
 			shard := sha256.Sum256([]byte(record.Module))
-			if int(shard[0]) < bucket {
-				return fmt.Errorf("previous ledger has noncanonical shard traversal order")
-			}
-			if int(shard[0]) != bucket || record.Module != oldModule {
+			if int(shard[0]) != bucket {
 				if err := flushModule(); err != nil {
 					return err
 				}
-			}
-			for bucket < int(shard[0]) {
-				if err := finishBucket(); err != nil {
+				if bucket >= 0 {
+					if err := finishBucket(); err != nil {
+						return err
+					}
+					visited[bucket] = true
+				}
+				bucket, nextUpdate = int(shard[0]), 0
+				if visited[bucket] {
+					return fmt.Errorf("publication revisited logical shard %02x", bucket)
+				}
+			} else if record.Module != oldModule {
+				if err := flushModule(); err != nil {
 					return err
 				}
-				bucket++
-				nextUpdate = 0
 			}
 			oldModule = record.Module
 			return appendPublicationRecord(&oldRecords, record)
@@ -133,12 +138,22 @@ func writeShardedReportStreaming(reportPath string, update discoveryReport) (ret
 	if err := flushModule(); err != nil {
 		return err
 	}
-	for bucket < len(ordered) {
+	if bucket >= 0 {
 		if err := finishBucket(); err != nil {
 			return err
 		}
-		bucket++
-		nextUpdate = 0
+		visited[bucket] = true
+	}
+	// File creation order need not be numeric: unique uppercase shard names
+	// sort differently, but records within each logical bucket remain ordered.
+	for i := range ordered {
+		if visited[i] {
+			continue
+		}
+		bucket, nextUpdate = i, 0
+		if err := finishBucket(); err != nil {
+			return err
+		}
 	}
 	metadata.UniqueModules = publisher.summary.UniqueModules
 	if err := writePublicationManifest(temporary, metadata, publisher.summary); err != nil {
