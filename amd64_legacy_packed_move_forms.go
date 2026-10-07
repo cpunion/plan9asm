@@ -95,6 +95,9 @@ func x86TypedInstructionByteEffect(op Op, ins Instr, arch string) (x86TypedByteE
 	if effect, recognized, err := x86TypedPackedWordMultiplyByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}
+	if effect, recognized, err := x86TypedDwordProductByteEffect(op, ins, arch); recognized {
+		return effect, recognized, err
+	}
 	if effect, recognized, err := x86TypedPackedAverageByteEffect(op, ins, arch); recognized {
 		return effect, recognized, err
 	}

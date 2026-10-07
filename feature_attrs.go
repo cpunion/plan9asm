@@ -147,6 +147,12 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if form, known, err := x86PackedAverageProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 			}
+			if form, known, err := x86DwordProductProperties(ins.Op, ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				add("+sse2")
+				if form.spec.signed {
+					add("+sse4.1")
+				}
+			}
 			if form, known, err := x86PackedNarrowProperties(ins, goarch); known && err == nil && form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				add("+sse2")
 				if op == "PACKUSDW" {

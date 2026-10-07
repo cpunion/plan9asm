@@ -21,6 +21,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && !form.mmx
 	}
+	if form, known, err := x86DwordProductProperties(ins.Op, ins, "amd64"); known {
+		return err == nil && !form.mmx
+	}
 	if _, known, err := x86PackedSADProperties(ins, "amd64"); known {
 		return err == nil
 	}
@@ -130,6 +133,9 @@ func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86G
 	}
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerPackedLaneArithmeticStep(ins, form.x86PackedBinaryForm, 16, state, proof)
+	}
+	if form, known, err := x86DwordProductProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerDwordProductStep(ins, form, state, proof)
 	}
 	if form, known, err := x86PackedSADProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerSADStep(ins, form, state, proof)
@@ -284,6 +290,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 		return int64(form.memoryBytes), false, err == nil && !form.spec.legacy && form.memory == index
 	}
 	if form, known, err := x86PackedWordMultiplyProperties(ins.Op, ins, arch); known {
+		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
+	}
+	if form, known, err := x86DwordProductProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
 	}
 	if form, known, err := x86PackedAverageProperties(ins.Op, ins, arch); known {

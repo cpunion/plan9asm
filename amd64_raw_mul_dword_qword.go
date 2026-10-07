@@ -192,7 +192,7 @@ vex:
 	for index := range args {
 		rawArgs[index] = args[index].String()
 	}
-	return Instr{Op: Op(op), Args: args, Raw: op + " " + strings.Join(rawArgs, ", ")}, modRMIndex + consumed, true, nil
+	return Instr{Op: Op(op), Args: args, Raw: op + " " + strings.Join(rawArgs, ", "), x86Encoded: true}, modRMIndex + consumed, true, nil
 }
 
 func x86DwordToQwordMultiplyOpcode(mapSelect int, opcode byte) bool {

@@ -1,206 +1,121 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
-// lowerDwordToQwordMultiply implements PMULDQ, PMULULQ, VPMULDQ, and
-// VPMULUDQ across their complete Go 1.27 yxm_q4/ymm/_yvandnpd forms.
-func (c *amd64Ctx) lowerDwordToQwordMultiply(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+func (c *amd64Ctx) lowerDwordToQwordMultiply(op Op, ins Instr) (bool, bool, error) {
+	form, known, err := x86DwordProductProperties(op, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	signed := false
-	vector := false
-	switch baseOp {
-	case "PMULDQ":
-		signed = true
-	case "PMULULQ":
-	case "VPMULDQ":
-		signed, vector = true, true
-	case "VPMULUDQ":
-		vector = true
-	default:
-		return false, false, nil
+	first, second, destination := form.source, ins.Args[form.second], ins.Args[form.destination]
+	if form.legacy && !form.mmx && form.memory >= 0 {
+		virtual := first.Kind == OpFP
+		if first.Kind == OpMem && !x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			virtual = first.Mem.Base == SP || first.Mem.Base == BP || first.Mem.Index == SP || first.Mem.Index == BP
+		}
+		if virtual {
+			return true, false, fmt.Errorf("%w: legacy dword product m128 needs original native storage, not virtual FP/SP/BP", ErrProbeNeedsContext)
+		}
 	}
-
-	broadcast, zeroing := false, false
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		for i, suffix := range strings.Split(rawOp[dot+1:], ".") {
-			switch suffix {
-			case "BCST":
-				if !vector || broadcast || zeroing {
-					return true, false, fmt.Errorf("amd64 %s has invalid .BCST suffix: %q", baseOp, ins.Raw)
-				}
-				broadcast = true
-			case "Z":
-				if !vector || zeroing || i != len(strings.Split(rawOp[dot+1:], "."))-1 {
-					return true, false, fmt.Errorf("amd64 %s has invalid .Z suffix: %q", baseOp, ins.Raw)
-				}
-				zeroing = true
-			default:
-				return true, false, fmt.Errorf("amd64 %s has unsupported suffix .%s: %q", baseOp, suffix, ins.Raw)
+	if form.memory >= 0 && first.Kind == OpFP {
+		if err := c.validateX86PackedShiftFPSpan(first.FPOffset, form.memoryBytes); err != nil {
+			return true, false, err
+		}
+	}
+	if form.mmx {
+		if first.Kind == OpReg && first.Reg != ins.Args[form.first].Reg {
+			return true, false, fmt.Errorf("%w: Go GP-spelled dword product source names the MMX bank", ErrProbeNeedsContext)
+		}
+		var a string
+		if first.Kind == OpReg {
+			a, err = c.loadReg(first.Reg)
+		} else {
+			var bytes string
+			bytes, err = c.loadX86PackedShiftBytes(first, 8, true)
+			if err == nil {
+				value := c.newTmp()
+				fmt.Fprintf(c.b, "  %%%s = bitcast <8 x i8> %s to i64\n", value, bytes)
+				a = "%" + value
 			}
 		}
-	}
-	if !vector {
-		return c.lowerLegacyDwordToQwordMultiply(baseOp, signed, ins)
-	}
-	if len(ins.Args) != 3 && len(ins.Args) != 4 {
-		return true, false, fmt.Errorf("amd64 %s expects source, source, [K mask,] destination: %q", baseOp, ins.Raw)
-	}
-	masked := len(ins.Args) == 4
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z requires K1-K7: %q", baseOp, ins.Raw)
-	}
-	if broadcast && !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s .BCST requires a memory first source: %q", baseOp, ins.Raw)
-	}
-	dst := ins.Args[len(ins.Args)-1]
-	if dst.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects a vector destination: %q", baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dst.Reg)
-	if byteWidth == 0 {
-		return true, false, fmt.Errorf("amd64 %s expects an X, Y, or Z destination: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[1].Kind != OpReg || amd64VectorByteWidth(ins.Args[1].Reg) != byteWidth {
-		return true, false, fmt.Errorf("amd64 %s second source must match destination width: %q", baseOp, ins.Raw)
-	}
-	if !broadcast && ins.Args[0].Kind == OpReg && amd64VectorByteWidth(ins.Args[0].Reg) != byteWidth {
-		return true, false, fmt.Errorf("amd64 %s first source must match destination width: %q", baseOp, ins.Raw)
-	}
-	if !broadcast && ins.Args[0].Kind != OpReg && !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s first source must be vector or memory: %q", baseOp, ins.Raw)
-	}
-
-	lhs, err := c.loadDwordMultiplyEvenLanes(ins.Args[0], byteWidth, broadcast)
-	if err != nil {
-		return true, false, err
-	}
-	rhs, err := c.loadDwordMultiplyEvenLanes(ins.Args[1], byteWidth, false)
-	if err != nil {
-		return true, false, err
-	}
-	qwordLanes := byteWidth / 8
-	lhs = c.extendDwordMultiplyLanes(lhs, qwordLanes, signed)
-	rhs = c.extendDwordMultiplyLanes(rhs, qwordLanes, signed)
-	product := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = mul <%d x i64> %s, %s\n", product, qwordLanes, lhs, rhs)
-	result := "%" + product
-
-	if masked {
-		maskArg := ins.Args[2]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		maskIndex, ok := amd64ParseKReg(maskArg.Reg)
-		if !ok || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		mask, err := c.loadK(maskArg.Reg)
 		if err != nil {
 			return true, false, err
 		}
-		oldBytes, err := c.loadPackedCompareBytes(dst, byteWidth)
+		b, err := c.loadReg(second.Reg)
 		if err != nil {
 			return true, false, err
 		}
-		old := c.bitcastVectorBytesToIntegerLanes(byteWidth, qwordLanes, 64, oldBytes)
-		result = amd64ApplyIntegerLaneMask(c, qwordLanes, 64, result, old, mask, zeroing)
+		a = c.extendDwordScalar(c.lowDwordFromI64(a), false)
+		b = c.extendDwordScalar(c.lowDwordFromI64(b), false)
+		product := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = mul i64 %s, %s\n", product, a, b)
+		return true, false, c.storeReg(destination.Reg, "%"+product)
+	}
+	lanes := form.byteWidth / 8
+	var mask, result string
+	if form.mask >= 0 {
+		mask, err = c.loadK(ins.Args[form.mask].Reg)
+		if err != nil {
+			return true, false, err
+		}
+	}
+	if form.legacy && form.memory >= 0 {
+		b, err := c.loadPackedCompareLanes(second, 16, 64, false)
+		if err != nil {
+			return true, false, err
+		}
+		// Keep the original SSE opcode's complete m128 access and alignment
+		// behavior, including when the numerical result is dead.
+		result, err = c.emitPackedBinaryNativeMemory(first, 64, b, form.spec.nativeOpcode)
+	} else {
+		// EVEX E4 uses qword fault-suppression lanes, including m64bcst;
+		// only each qword's low dword participates in the multiplication.
+		var a, b string
+		a, err = c.loadDwordMultiplyEvenLanes(first, form.byteWidth, form.broadcast, mask)
+		if err == nil {
+			b, err = c.loadDwordMultiplyEvenLanes(second, form.byteWidth, false, "")
+		}
+		if err == nil {
+			a = c.extendDwordMultiplyLanes(a, lanes, form.spec.signed)
+			b = c.extendDwordMultiplyLanes(b, lanes, form.spec.signed)
+			product := c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = mul <%d x i64> %s, %s\n", product, lanes, a, b)
+			result = "%" + product
+		}
+	}
+	if err != nil {
+		return true, false, err
+	}
+	if form.mask >= 0 {
+		old := "zeroinitializer"
+		if !form.zeroing {
+			old, err = c.loadPackedCompareLanes(destination, form.byteWidth, 64, false)
+			if err != nil {
+				return true, false, err
+			}
+		}
+		result = amd64ApplyIntegerLaneMask(c, lanes, 64, result, old, mask, form.zeroing)
 	}
 	out := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", out, qwordLanes, result, byteWidth)
-	return true, false, c.storeVectorBytes(dst.Reg, byteWidth, "%"+out)
-}
-
-func (c *amd64Ctx) lowerLegacyDwordToQwordMultiply(op string, signed bool, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects source and X/MMX destination: %q", op, ins.Raw)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i64> %s to <%d x i8>\n", out, lanes, result, form.byteWidth)
+	if form.legacy {
+		return true, false, c.storeLegacyPackedLogical(destination, "%"+out)
 	}
-	dst := ins.Args[1]
-	if isAMD64XReg(dst.Reg) {
-		if ins.Args[0].Kind == OpReg && !isAMD64XReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("amd64 %s X form requires X-or-memory source: %q", op, ins.Raw)
-		}
-		if !isAMD64XRegOperand(ins.Args[0]) && !isAMD64MemoryOperand(ins.Args[0]) {
-			return true, false, fmt.Errorf("amd64 %s X form requires X-or-memory source: %q", op, ins.Raw)
-		}
-		lhs, err := c.loadDwordMultiplyEvenLanes(ins.Args[0], 16, false)
-		if err != nil {
-			return true, false, err
-		}
-		rhs, err := c.loadDwordMultiplyEvenLanes(dst, 16, false)
-		if err != nil {
-			return true, false, err
-		}
-		lhs = c.extendDwordMultiplyLanes(lhs, 2, signed)
-		rhs = c.extendDwordMultiplyLanes(rhs, 2, signed)
-		product := c.newTmp()
-		out := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = mul <2 x i64> %s, %s\n", product, lhs, rhs)
-		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", out, product)
-		return true, false, c.storeX(dst.Reg, "%"+out)
-	}
-	if _, ok := amd64ParseMReg(dst.Reg); !ok || op != "PMULULQ" {
-		return true, false, fmt.Errorf("amd64 %s destination is outside its Go 1.27 table: %q", op, ins.Raw)
-	}
-	if c.goarch == "386" {
-		return true, false, fmt.Errorf("386 PMULULQ MMX form is illegal in 32-bit mode: %q", ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if _, ok := amd64ParseMReg(ins.Args[0].Reg); !ok {
-			return true, false, fmt.Errorf("amd64 PMULULQ MMX form requires MMX-or-memory source: %q", ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 PMULULQ MMX form requires MMX-or-memory source: %q", ins.Raw)
-	}
-	source, err := c.evalIntSized(ins.Args[0], I64)
-	if err != nil {
-		return true, false, err
-	}
-	destination, err := c.evalIntSized(dst, I64)
-	if err != nil {
-		return true, false, err
-	}
-	sourceLow := c.lowDwordFromI64(source)
-	destinationLow := c.lowDwordFromI64(destination)
-	sourceWide := c.extendDwordScalar(sourceLow, false)
-	destinationWide := c.extendDwordScalar(destinationLow, false)
-	product := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = mul i64 %s, %s\n", product, sourceWide, destinationWide)
-	return true, false, c.storeReg(dst.Reg, "%"+product)
+	return true, false, c.storePackedMoveOperand(destination, form.byteWidth, "%"+out)
 }
 
 func isAMD64XRegOperand(op Operand) bool {
 	return op.Kind == OpReg && isAMD64XReg(op.Reg)
 }
 
-func (c *amd64Ctx) loadDwordMultiplyEvenLanes(op Operand, byteWidth int, broadcast bool) (string, error) {
-	qwordLanes := byteWidth / 8
-	if broadcast {
-		value, err := c.evalIntSized(op, I64)
-		if err != nil {
-			return "", err
-		}
-		low := c.lowDwordFromI64(value)
-		return amd64SplatInteger(c, qwordLanes, 32, low), nil
-	}
-	bytesValue, err := c.loadPackedCompareBytes(op, byteWidth)
+func (c *amd64Ctx) loadDwordMultiplyEvenLanes(op Operand, byteWidth int, broadcast bool, mask string) (string, error) {
+	lanes := byteWidth / 8
+	qwords, err := c.loadX86PackedShiftLanes(op, byteWidth, 64, broadcast, mask)
 	if err != nil {
 		return "", err
 	}
-	dwordLanes := byteWidth / 4
-	all := c.bitcastVectorBytesToIntegerLanes(byteWidth, dwordLanes, 32, bytesValue)
-	mask := make([]string, qwordLanes)
-	for i := range mask {
-		mask[i] = fmt.Sprintf("i32 %d", i*2)
-	}
 	even := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = shufflevector <%d x i32> %s, <%d x i32> zeroinitializer, <%d x i32> <%s>\n", even, dwordLanes, all, dwordLanes, qwordLanes, strings.Join(mask, ", "))
+	fmt.Fprintf(c.b, "  %%%s = trunc <%d x i64> %s to <%d x i32>\n", even, lanes, qwords, lanes)
 	return "%" + even, nil
 }
 
