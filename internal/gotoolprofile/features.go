@@ -11,7 +11,6 @@ import (
 	"go/parser"
 	"go/scanner"
 	"go/token"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -508,23 +507,6 @@ func containsTargetFeature(tags []string, wanted string) bool {
 		}
 	}
 	return false
-}
-
-func discoveryFeatureFileSHA256(name string) (string, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return "", err
-	}
-	h := sha256.New()
-	_, readErr := io.Copy(h, f)
-	closeErr := f.Close()
-	if readErr != nil {
-		return "", readErr
-	}
-	if closeErr != nil {
-		return "", closeErr
-	}
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 func discoveryFeatureMarkerSHA256(files map[string][]byte) string {
