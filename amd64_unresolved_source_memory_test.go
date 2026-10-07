@@ -199,3 +199,41 @@ func TestX86UnresolvedSourceMemoryCannotHideMalformedPhysicalGroups(t *testing.T
 		})
 	}
 }
+
+// NAME_AUTO's bare identifier is a descriptive stack name with offset zero,
+// not an undefined displacement constant. Keep this independent of the
+// unresolved-expression rejection, and bind it to Go's accepted objects.
+func TestX86UnresolvedSourceMemoryBareStackNamesRemainResolved(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	for _, name := range []string{"tmp", "UNKNOWN"} {
+		for _, target := range x86RawReturnTargets {
+			t.Run(name+"/"+target.triple, func(t *testing.T) {
+				source := "TEXT ·view(SB),4,$16-0\nMOVL $7," + name + "(SP)\nMOVL " + name + "(SP),AX\nRET\n"
+				goAssemblerOracleOutput(t, target.arch, source, "", true)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, ins := range file.Funcs[0].Instrs {
+					for _, arg := range ins.Args {
+						if arg.Kind == OpMem && (arg.Mem.Base != SP || arg.Mem.Off != 0 || arg.Mem.OffRaw != name) {
+							t.Fatalf("bare AUTO syntax lost its name or resolved zero offset: %#v", arg)
+						}
+					}
+				}
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func view()\n", target.arch, target.triple, api)
+						if err != nil || ir == "" {
+							t.Fatalf("resolved bare AUTO name lost its existing object path: %v", err)
+						}
+						compileLLVMToObject(t, llc, target.triple, "bare-auto.ll", "bare-auto.o", ir)
+					})
+				}
+			})
+		}
+	}
+}
