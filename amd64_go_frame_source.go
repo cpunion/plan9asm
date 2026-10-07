@@ -558,6 +558,9 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 	if len(pkg.Syntax) != len(syntax) {
 		return nil, goAMD64FrameContext("supplied syntax omitted complete ordinary source files")
 	}
+	if len(bodyless) == 0 {
+		return nil, goAMD64FrameContext("original source has no bodyless assembly declaration")
+	}
 	sort.Strings(compiled)
 	actual := append([]string(nil), source.selection.CompiledGoFiles...)
 	for i, name := range actual {

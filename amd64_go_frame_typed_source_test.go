@@ -194,7 +194,7 @@ func TestGoAMD64FrameTypedSourceUnsupportedRolesRemainContext(t *testing.T) {
 		"type Node struct { Next *Node }\nfunc Value(a *Node) uint64",
 		"type Node[T any] struct { Value T }\nfunc Value(a *Node[uint64]) uint64",
 		"func Value[T ~uint64](a T) uint64 { return uint64(a) }", "func Value(a ...uint64) uint64",
-		"func Value(a *uint64) uint64 { return *a }", "var P *uint64\nfunc Value(a *uint64) uint64",
+		"func Value(a *uint64) uint64 { return *a }",
 	} {
 		t.Run(declaration, func(t *testing.T) {
 			pkg, request := goAMD64FrameTypedFixture(t, declaration, "TEXT ·Value(SB),4,$160-16\nRET\n")
@@ -207,6 +207,23 @@ func TestGoAMD64FrameTypedSourceUnsupportedRolesRemainContext(t *testing.T) {
 				t.Fatalf("path rejection cannot prove an unsupported language role: %v", err)
 			}
 		})
+	}
+}
+
+func TestGoAMD64FrameTypedSourceOrdinaryPointerValueIsObservationOnly(t *testing.T) {
+	pkg, request := goAMD64FrameTypedFixture(t,
+		"var P *uint64\nfunc Value(a *uint64) uint64",
+		"TEXT ·Value(SB),4,$160-16\nRET\n")
+	source := requireGoAMD64FrameCapture(t, pkg, request)
+	if len(source.functions) != 1 || len(source.declarations) != 1 {
+		t.Fatal("ordinary pointer value created an additional frame capability")
+	}
+	function := source.functions[pkg.Path+".Value"]
+	if function.transport != goAMD64FrameCompositeTransport || function.args != 16 {
+		t.Fatalf("original pointer declaration lost its separate observation role: %+v", function)
+	}
+	if !errors.Is(source.numericDeclarations(pkg), ErrProbeNeedsContext) {
+		t.Fatal("ordinary pointer value or declaration entered numeric-only fixed-local admission")
 	}
 }
 
