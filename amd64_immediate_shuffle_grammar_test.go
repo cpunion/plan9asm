@@ -1,8 +1,10 @@
 package plan9asm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -65,7 +67,42 @@ func TestX86ImmediateShuffleRejectsSiblingInvalidFormats(t *testing.T) {
 	for _, row := range rows {
 		t.Run(row, func(t *testing.T) {
 			for _, arch := range []string{"amd64", "386"} {
-				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+				source := "TEXT f(SB),4,$0-0\n" + row + "\nRET\n"
+				masklessZero := row == "VPSHUFD.Z $0,X0,X1" || row == "VPSHUFHW.Z $0,X0,X1" || row == "VPSHUFLW.Z $0,X0,X1"
+				historicalReserved := masklessZero && !goToolchainAtLeast(runtime.Version(), 1, 21)
+				goAssemblerOracleOutput(t, arch, source, "", historicalReserved)
+				if masklessZero {
+					// Before Go 1.21 the encoder emitted reserved EVEX.z/aaa=0.
+					// Observe its exact original bytes; neither named nor raw
+					// translation may acquire semantics from that old acceptance.
+					pp := byte(1)
+					if strings.HasPrefix(row, "VPSHUFHW") {
+						pp = 2
+					} else if strings.HasPrefix(row, "VPSHUFLW") {
+						pp = 3
+					}
+					code := []byte{0x62, 0xf1, 0x7c | pp, 0x88, 0x70, 0xc8, 0}
+					if historicalReserved {
+						listing := x86InsertExtractGoListing(t, arch, source)
+						var observed []byte
+						for _, line := range strings.Split(string(listing), "\n") {
+							observed = append(observed, x86InsertExtractListedBytes(line)...)
+						}
+						if !bytes.Equal(observed, append(append([]byte(nil), code...), 0xc3)) {
+							t.Fatalf("historical reserved shuffle bytes changed: %x", observed)
+						}
+						t.Logf("%s/%s historical reserved z=1/aaa=0 observation; not a legal form", runtime.Version(), arch)
+					}
+					mode := 64
+					if arch == "386" {
+						mode = 32
+					}
+					if _, _, known, err := decodedX86PackedShuffleInstruction(code, mode); !known || err == nil {
+						t.Fatal("reserved raw zeroing acquired shuffle semantics", err)
+					}
+					x86RequireZeroMaskAPIOutcome(t, arch, source, false)
+					x86RequireZeroMaskAPIOutcome(t, arch, x86RawINSERTPSSource("f", code), false)
+				}
 				ins := x86YMMReadSource(t, row)
 				if _, known, err := x86ImmediateShuffleProperties(ins, arch); !known || err == nil || errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatal("Go-rejected syntax became a valid/context form", row, arch, err)
