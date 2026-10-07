@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -286,9 +287,9 @@ func validateX86SourceIntegerImmediateRow(ins Instr, arch string, index int) err
 }
 
 // This runs only after the original raw/caller/frame proofs. It supplies an
-// immutable lowering view, never a repaired certificate. A source LOCK/CF or
-// physical-frame proof must keep inspecting its original instructions; these
-// still need a separately reviewed semantic adapter and stay Context here.
+// immutable lowering view, never a repaired certificate. Only the separately
+// checked, stack-unobserving raw-RET leaf below permits MOVL/Q's numerical LEA
+// rewrite. LOCK/caller/physical-frame proofs retain their original source.
 func normalizeX86SourceIntegerAddresses(file *File, options Options) (*File, error) {
 	if file.Arch != ArchAMD64 {
 		return file, nil
@@ -314,14 +315,58 @@ func normalizeX86SourceIntegerAddresses(file *File, options Options) (*File, err
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", source.Sym, err)
 			}
-			if different && protected {
-				return nil, fmt.Errorf("%w: %s source address adapter cannot inherit a LOCK/raw/frame certificate", ErrProbeNeedsContext, source.Sym)
-			}
 			instructions[index], changed = derived, changed || different
 		}
 		if changed {
+			derived := source
+			derived.Instrs = instructions
+			if protected && !x86RawReturnNumericalAddressAdapter(source, derived, file, options) {
+				return nil, fmt.Errorf("%w: %s source address adapter cannot inherit a LOCK/raw/frame certificate", ErrProbeNeedsContext, source.Sym)
+			}
 			result.Funcs[function].Instrs = instructions
 		}
 	}
 	return &result, nil
+}
+
+// A decoded native-width near RET is a return constraint, not permission to
+// address native memory. Recheck both complete views without transferring any
+// stack, caller, frame or other decoded-instruction certificate. This adapter
+// handles only Go's MOVL/Q -> LEAL/Q progedit rule, never TYPE_CONST arithmetic.
+func x86RawReturnNumericalAddressAdapter(source, derived Func, file *File, options Options) bool {
+	if len(source.Instrs) != len(derived.Instrs) || source.FrameSize != 0 || source.x86SourceStack != nil || source.x86FixedLocal != nil ||
+		source.X86RawText != nil || len(source.x86ContinuationAddresses) != 0 || len(source.x86IndirectLabels) != 0 {
+		return false
+	}
+	name := source.Sym
+	if options.ResolveSym != nil {
+		name = options.ResolveSym(name)
+	}
+	sig := options.Sigs[name]
+	if sig.x86CallerRegions != nil || sig.x86FixedLocal != nil {
+		return false
+	}
+	hasReturn := false
+	for index, ins := range source.Instrs {
+		if strings.EqualFold(string(ins.Op), "LOCK") ||
+			ins.x86CallerMemory != nil || ins.x86SourceStackFP != nil || ins.x86FixedLocalMemory != nil {
+			return false
+		}
+		if ins.x86RawNearReturn != nil {
+			hasReturn = true
+		} else if ins.x86Encoded || ins.x86SourceRaw != nil {
+			return false // Another decoder's contract needs its own adapter.
+		}
+		if derived.Instrs[index].Op != ins.Op {
+			op := strings.ToUpper(string(ins.Op))
+			if (op != "MOVL" && op != "MOVQ") || string(derived.Instrs[index].Op) != "LEA"+op[3:] {
+				return false
+			}
+		} else if !reflect.DeepEqual(ins.Args, derived.Instrs[index].Args) {
+			return false // A TYPE_CONST rewrite is a different semantic rule.
+		}
+	}
+	return hasReturn && x86RawReturnLeafStackUnobserved(source) && x86RawReturnLeafStackUnobserved(derived) &&
+		validateX86RawNearReturns(source, file, options, true) == nil &&
+		validateX86RawNearReturns(derived, file, options, true) == nil
 }

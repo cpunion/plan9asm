@@ -311,6 +311,11 @@ Unnamed address-immediate register groups retain the source `g` spelling until
 the actual source mode is known. Go registers this alias only for amd64; 386
 still accepts explicit `R14` annotations that its TYPE_CONST rows ignore.
 Qualifying the alias grants neither a register input nor a native address.
+For a stack-unobserving raw near-RET leaf, MOVL/Q's numerical LEA adapter
+rechecks both complete source views and their return/memory constraints. It
+cannot inherit stack, caller, fixed-local, raw-text or another instruction's
+decoder certificates. TYPE_CONST arithmetic is a separate rule and remains
+Context in that protected domain. Neither adapter grants pointer provenance.
 
 The main implementation entry points are:
 
