@@ -8,9 +8,18 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-// The plan owns the original graph once. Private consumer inputs receive the
-// needed immutable bytes; this transport is never portable source authority.
 func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofile.ConsumerInput, error) {
+	input, err := discoveryCPPOriginalConsumerQuery(inputs)
+	if err != nil {
+		return nil, err
+	}
+	return input, gotoolprofile.ValidateCPPOriginalInputs(input)
+}
+
+// A query owns fresh transport maps, not source authority. Direct consumers
+// validate through the wrapper above; replay validates the complete graph in
+// ReplayCPPOriginal before execution. Never reuse a prior validation receipt.
+func discoveryCPPOriginalConsumerQuery(inputs *discoveryCPPInputs) (*gotoolprofile.ConsumerInput, error) {
 	if inputs == nil || inputs.Protocol != discoveryReplayCPPInputsProtocol {
 		return nil, fmt.Errorf("missing full original CPP graph")
 	}
@@ -25,7 +34,7 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 	// Register each source once per construction, not once per unit. Captured
 	// originals may reuse the parser's private immutable lexer index; every
 	// consumer still owns new maps and validates the complete original bytes.
-	resources := make(map[string][]discoveryCPPResource, len(inputs.Sources))
+	resources := make(map[string]discoveryCPPResource)
 	for id, source := range inputs.Sources {
 		if source.Original == nil {
 			return nil, fmt.Errorf("CPP consumer omitted original source bytes")
@@ -38,7 +47,9 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 		if err != nil {
 			return nil, err
 		}
-		resources[id] = registered
+		for _, resource := range registered {
+			resources[id+resource.key] = resource
+		}
 		input.CPPOriginals.Sources[id] = *source.Original
 		if origin == "tool" {
 			input.ToolSources[file] = source.SHA256
@@ -49,26 +60,37 @@ func discoveryCPPOriginalConsumerInput(inputs *discoveryCPPInputs) (*gotoolprofi
 	for _, unit := range inputs.Units {
 		input.AsmFiles = append(input.AsmFiles, unit.File)
 		registered := gotoolprofile.CPPOriginalUnit{Includes: make(map[string]string)}
-		for id, registeredResources := range resources {
-			for _, resource := range registeredResources {
-				directive, key := resource.directive, id+resource.key
-				if target := unit.Includes[key]; target != "" {
-					if previous := registered.Includes[directive.Include]; previous != "" && previous != target {
-						return nil, fmt.Errorf("CPP fixed include origins conflict between raw controls")
-					}
-					registered.Includes[directive.Include] = target
-				}
-				if unit.DeferredIncludes[key] == "generated_go_asm" {
-					if len(registered.GeneratedHeaders) == 0 {
-						registered.GeneratedHeaders = []string{"go_asm.h"}
-					}
-				}
+		for key, target := range unit.Includes {
+			resource, found := resources[key]
+			if !found || target == "" {
+				return nil, fmt.Errorf("CPP include has an unregistered or empty original resource edge: %s", key)
+			}
+			include := resource.directive.Include
+			if previous := registered.Includes[include]; previous != "" && previous != target {
+				return nil, fmt.Errorf("CPP fixed include origins conflict between raw controls")
+			}
+			registered.Includes[include] = target
+		}
+		for key, kind := range unit.DeferredIncludes {
+			if _, found := resources[key]; !found {
+				return nil, fmt.Errorf("CPP deferred include has an unregistered original resource edge: %s", key)
+			}
+			if _, bound := unit.Includes[key]; bound {
+				return nil, fmt.Errorf("CPP original resource has both bound and deferred roles: %s", key)
+			}
+			switch kind {
+			case "generated_go_asm":
+				registered.GeneratedHeaders = []string{"go_asm.h"}
+			case "unresolved_include", "unresolved_candidate":
+				// Registered candidates do not become active include grants.
+			default:
+				return nil, fmt.Errorf("CPP original resource has an unknown deferred role: %s", key)
 			}
 		}
 		input.CPPOriginals.Units[unit.File] = registered
 	}
 	input.CPPIncludeSearchMisses = discoveryCPPPhysicalSearchMisses(inputs)
-	return input, gotoolprofile.ValidateCPPOriginalInputs(input)
+	return input, nil
 }
 
 func bindDiscoveryCPPOriginalConsumer(input *gotoolprofile.ConsumerInput, inputs *discoveryCPPInputs) {

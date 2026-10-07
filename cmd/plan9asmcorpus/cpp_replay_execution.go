@@ -17,7 +17,9 @@ func replayDiscoveryOriginalCPP(inputs *discoveryCPPInputs, unit discoveryCPPUni
 	if inputs == nil || inputs.Protocol != discoveryReplayCPPInputsProtocol {
 		return plan9asm.AssemblyCPPObservation{}, nil, fmt.Errorf("missing full original CPP replay protocol")
 	}
-	input, err := discoveryCPPOriginalConsumerInput(inputs)
+	// The public replay executor performs mandatory whole-graph validation.
+	// Construct fresh inputs without hashing the same complete originals twice.
+	input, err := discoveryCPPOriginalConsumerQuery(inputs)
 	if err != nil {
 		return plan9asm.AssemblyCPPObservation{}, nil, err
 	}

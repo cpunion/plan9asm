@@ -25,6 +25,38 @@ func TestCPPOriginalConsumerRejectsUnregisteredResourceEdges(t *testing.T) {
 	}
 }
 
+func TestCPPOriginalReplayRevalidatesUnconsumedSource(t *testing.T) {
+	inputs := cppResourceComplexityFixture(t, 2)
+	root := inputs.Units[0]
+	if _, _, err := replayDiscoveryOriginalCPP(inputs, root, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Replay only the first unit, but require the second complete source to
+	// remain authenticated. A prior successful query cannot authorize edits.
+	id := "module/" + inputs.Units[1].File
+	source := inputs.Sources[id]
+	changed := *source.Original + "DATA ·changed(SB)/8,$1\n"
+	source.Original = &changed
+	inputs.Sources[id] = source
+	if _, _, err := replayDiscoveryOriginalCPP(inputs, root, nil, nil); err == nil {
+		t.Fatal("CPP replay reused validation or omitted an unconsumed complete source")
+	}
+	if _, err := discoveryCPPOriginalConsumerInput(inputs); err == nil {
+		t.Fatal("direct CPP consumer omitted complete-source validation")
+	}
+
+	// A freshly parsed replacement is valid, not a cached failure or grant.
+	replacement, err := discoveryReplayCPPSource(source.File, []byte(changed))
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs.Sources[id] = replacement
+	if _, _, err := replayDiscoveryOriginalCPP(inputs, root, nil, nil); err != nil {
+		t.Fatalf("CPP replay retained stale validation after a fresh replacement: %v", err)
+	}
+}
+
 // Sparse originals exercise edge-index work separately from lexer work.
 // These are source-query fixtures, never compiler acceptance or library passes.
 func cppSparseResourceGraphFixture(t testing.TB, units, resources int) *discoveryCPPInputs {
