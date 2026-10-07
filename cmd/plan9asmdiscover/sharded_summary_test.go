@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -215,5 +216,195 @@ func TestDiscoveryStatusAndPublishedReadbackUseSummaryOnly(t *testing.T) {
 	})
 	if publishedFullRead {
 		t.Error("actual publication readback retains complete record payloads instead of a validated summary")
+	}
+}
+
+func TestDiscoverySummaryValidatesEveryRecordAndRange(t *testing.T) {
+	base := shardedRecord{Kind: "scanned", Module: "example.com/a", Version: "v1.0.0"}
+	for _, test := range []struct {
+		name    string
+		records []shardedRecord
+		mutate  func(*shardedManifest)
+		append  string
+		want    string
+	}{
+		{name: "invalid final JSON", records: []shardedRecord{base}, append: "invalid tail\n", want: "decode record shard"},
+		{name: "blank final line", records: []shardedRecord{base}, append: "\n", want: "decode record shard"},
+		{name: "line budget", records: []shardedRecord{base}, append: strings.Repeat("x", 16<<20) + "\n", want: "token too long"},
+		{name: "missing module", records: []shardedRecord{{Kind: "scanned", Version: "v1.0.0"}}, want: "incomplete module version"},
+		{name: "missing version", records: []shardedRecord{{Kind: "scanned", Module: base.Module}}, want: "incomplete module version"},
+		{name: "unknown kind", records: []shardedRecord{{Kind: "cgo", Module: base.Module, Version: base.Version}}, want: "unknown record kind"},
+		{name: "invalid scanned version", records: []shardedRecord{{Kind: "scanned", Module: base.Module, Version: "@latest"}}, want: "invalid scanned module version"},
+		{name: "invalid matched version", records: []shardedRecord{{Kind: "matched", Module: base.Module, Version: "invalid"}}, want: "invalid matched module version"},
+		{name: "duplicate", records: []shardedRecord{base, base}, want: "duplicated or not in"},
+		{name: "semver order", records: []shardedRecord{{Kind: "scanned", Module: base.Module, Version: "v1.10.0"}, base}, want: "duplicated or not in"},
+		{name: "kind order", records: []shardedRecord{base, {Kind: "matched", Module: base.Module, Version: base.Version}}, want: "duplicated or not in"},
+		{name: "scanned count", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.Scanned++ }, want: "record counts"},
+		{name: "matched count", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.Matched++ }, want: "record counts"},
+		{name: "failure count", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.Failures++ }, want: "record counts"},
+		{name: "format", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.Format = "unknown" }, want: "unsupported format"},
+		{name: "schema", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.SchemaVersion++ }, want: "unsupported schema"},
+		{name: "shard key", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.ShardKey = "sha256(version)[0]" }, want: "unsupported shard key"},
+		{name: "range total", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.IndexEntries++ }, want: "index range count"},
+		{name: "range gap", records: []shardedRecord{base}, mutate: func(m *shardedManifest) {
+			m.IndexRanges = append(m.IndexRanges, indexRange{Since: "2026-10-02T00:00:00Z", Before: "2026-10-03T00:00:00Z", IndexEntries: 0})
+		}, want: "unverified gap"},
+		{name: "range overlap", records: []shardedRecord{base}, mutate: func(m *shardedManifest) {
+			m.IndexRanges = append(m.IndexRanges, indexRange{Since: "2026-09-01T00:00:00Z", Before: "2026-10-02T00:00:00Z", IndexEntries: 0})
+		}, want: "overlap"},
+		{name: "range negative", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.IndexRanges[0].IndexEntries = -1 }, want: "nonnegative"},
+		{name: "range invalid time", records: []shardedRecord{base}, mutate: func(m *shardedManifest) { m.IndexRanges[0].Since = "invalid" }, want: "invalid index range"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ledger, shard := writeRawSummaryFixture(t, test.records, test.mutate)
+			if test.append != "" {
+				file, err := os.OpenFile(shard, os.O_APPEND|os.O_WRONLY, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, writeErr := file.WriteString(test.append)
+				closeErr := file.Close()
+				if err := errors.Join(writeErr, closeErr); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, reader := range []struct {
+				name string
+				read func(string) error
+			}{
+				{"summary", func(name string) error { _, err := readShardedSummary(name); return err }},
+				{"full", func(name string) error { _, err := readShardedReport(name); return err }},
+			} {
+				t.Run(reader.name, func(t *testing.T) {
+					if err := reader.read(ledger); err == nil || !strings.Contains(err.Error(), test.want) {
+						t.Fatalf("%s reader error = %v, want %q", reader.name, err, test.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+func writeRawSummaryFixture(t *testing.T, records []shardedRecord, mutate func(*shardedManifest)) (string, string) {
+	t.Helper()
+	ledger := t.TempDir()
+	if err := os.Mkdir(filepath.Join(ledger, "records"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := shardedManifest{
+		SchemaVersion: discoverySchema, Format: shardedFormat, ShardKey: "sha256(module)[0]",
+		IndexRanges:  []indexRange{{Since: indexEpoch, Before: "2026-10-01T00:00:00Z", IndexEntries: 3}},
+		IndexEntries: 3,
+	}
+	var buffer strings.Builder
+	for _, record := range records {
+		if err := json.NewEncoder(&buffer).Encode(record); err != nil {
+			t.Fatal(err)
+		}
+		switch record.Kind {
+		case "scanned":
+			manifest.Scanned++
+		case "matched":
+			manifest.Matched++
+		case "failure":
+			manifest.Failures++
+		}
+	}
+	if mutate != nil {
+		mutate(&manifest)
+	}
+	writeSummaryFixtureJSON(t, filepath.Join(ledger, "manifest.json"), manifest)
+	shard := filepath.Join(ledger, "records", fmt.Sprintf("%02x.jsonl", sha256.Sum256([]byte(records[0].Module))[0]))
+	if err := os.WriteFile(shard, []byte(buffer.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return ledger, shard
+}
+
+func TestDiscoverySummaryRejectsShardAndGenerationChanges(t *testing.T) {
+	base := shardedRecord{Kind: "scanned", Module: "example.com/a", Version: "v1.0.0"}
+	for _, name := range []string{"wrong ownership", "directory", "invalid name", "missing records"} {
+		t.Run(name, func(t *testing.T) {
+			ledger, shard := writeRawSummaryFixture(t, []shardedRecord{base}, nil)
+			switch name {
+			case "wrong ownership":
+				if err := os.Rename(shard, filepath.Join(ledger, "records", "00.jsonl")); err != nil {
+					t.Fatal(err)
+				}
+			case "directory":
+				if err := os.Mkdir(filepath.Join(ledger, "records", "extra"), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			case "invalid name":
+				if err := os.WriteFile(filepath.Join(ledger, "records", "gg.jsonl"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			case "missing records":
+				if err := os.Remove(shard); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if summary, err := readShardedSummary(ledger); err == nil || summary != (ledgerSummary{}) {
+				t.Fatalf("invalid shard input returned summary %#v, error=%v", summary, err)
+			}
+		})
+	}
+	for _, name := range []string{"manifest", "add shard", "replace shard", "edit shard", "replace directory"} {
+		t.Run(name, func(t *testing.T) {
+			ledger, shard := writeRawSummaryFixture(t, []shardedRecord{base}, nil)
+			result, err := scanShardedReport(ledger, func(shardedRecord) error {
+				switch name {
+				case "manifest":
+					file := filepath.Join(ledger, "manifest.json")
+					data, err := os.ReadFile(file)
+					if err != nil {
+						return err
+					}
+					return os.WriteFile(file, append(data, '\n'), 0o600)
+				case "add shard":
+					return os.WriteFile(filepath.Join(ledger, "records", "ff.jsonl"), nil, 0o600)
+				case "replace shard":
+					data, err := os.ReadFile(shard)
+					if err != nil {
+						return err
+					}
+					if err := os.Rename(shard, shard+".saved"); err != nil {
+						return err
+					}
+					// Keep the saved original outside the record directory.
+					if err := os.Rename(shard+".saved", filepath.Join(ledger, "saved")); err != nil {
+						return err
+					}
+					return os.WriteFile(shard, data, 0o600)
+				case "edit shard":
+					stamp := time.Now().Add(time.Hour)
+					return os.Chtimes(shard, stamp, stamp)
+				case "replace directory":
+					manifest, err := os.ReadFile(filepath.Join(ledger, "manifest.json"))
+					if err != nil {
+						return err
+					}
+					data, err := os.ReadFile(shard)
+					if err != nil {
+						return err
+					}
+					if err := os.Rename(ledger, ledger+".saved"); err != nil {
+						return err
+					}
+					t.Cleanup(func() { _ = os.RemoveAll(ledger + ".saved") })
+					if err := os.MkdirAll(filepath.Join(ledger, "records"), 0o700); err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(ledger, "manifest.json"), manifest, 0o600); err != nil {
+						return err
+					}
+					return os.WriteFile(shard, data, 0o600)
+				}
+				return nil
+			})
+			if err == nil || !strings.Contains(err.Error(), "input changed during validation") || !reflect.DeepEqual(result, shardedScan{}) {
+				t.Fatalf("changed generation returned %#v, error=%v", result, err)
+			}
+		})
 	}
 }

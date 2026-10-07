@@ -192,6 +192,12 @@ go run ./cmd/plan9asmdiscover -status \
 
 The status read checks range continuity, the sum of range entry counts, all
 manifest/record counts, shard ownership, semantic ordering, and duplicates.
+It validates every shard through the same streaming scanner as the full import
+reader, but retains only manifest/range metadata, shard identities, counters
+and the current/previous record. Publication readback uses this summary path
+too. Manifest bytes and shard generation are rechecked before returning a
+summary; a concurrent replacement or ordinary input edit fails. The full
+record reader remains available for explicit imports and scan-state loading.
 
 After adding a new supported target, its external assembly corpus can be
 replayed directly from the saved exact versions without reading the module

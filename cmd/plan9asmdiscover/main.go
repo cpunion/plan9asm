@@ -503,6 +503,16 @@ func main() {
 		}
 		return
 	}
+	if *statusOnly {
+		summary, err := readShardedSummary(*outDir)
+		if err != nil {
+			fatal(fmt.Errorf("read -out-dir %q: %w", *outDir, err))
+		}
+		if err := writeLedgerSummary(os.Stdout, summary); err != nil {
+			fatal(err)
+		}
+		return
+	}
 	var existing *discoveryReport
 	if *outDir != "" {
 		if info, err := os.Stat(*outDir); err == nil {
@@ -518,15 +528,6 @@ func main() {
 		} else if !errors.Is(err, os.ErrNotExist) {
 			fatal(fmt.Errorf("read -out-dir %q: %w", *outDir, err))
 		}
-	}
-	if *statusOnly {
-		if existing == nil {
-			fatal(fmt.Errorf("-status requires existing -out-dir %q", *outDir))
-		}
-		if err := writeLedgerSummary(os.Stdout, summarizeLedger(*existing)); err != nil {
-			fatal(err)
-		}
-		return
 	}
 	var window scanWindow
 	if *scanMode == scanModeRetry {
@@ -593,11 +594,11 @@ func main() {
 		if err := writeShardedReport(*outDir, report); err != nil {
 			fatal(err)
 		}
-		persisted, err := readShardedReport(*outDir)
+		persisted, err := readShardedSummary(*outDir)
 		if err != nil {
 			fatal(fmt.Errorf("verify persisted discovery ledger: %w", err))
 		}
-		if err := writeLedgerSummary(os.Stdout, summarizeLedger(persisted)); err != nil {
+		if err := writeLedgerSummary(os.Stdout, persisted); err != nil {
 			fatal(err)
 		}
 		return
@@ -1626,139 +1627,29 @@ func laterTimestamp(current, candidate string) string {
 }
 
 func readShardedReport(reportPath string) (discoveryReport, error) {
-	manifestPath := filepath.Join(reportPath, "manifest.json")
-	data, err := os.ReadFile(manifestPath)
+	var payload discoveryReport
+	scan, err := scanShardedReport(reportPath, func(item shardedRecord) error {
+		switch item.Kind {
+		case "scanned":
+			payload.Scanned = append(payload.Scanned, moduleVersion{Path: item.Module, Version: item.Version})
+		case "matched":
+			payload.Matched = append(payload.Matched, candidate{
+				Module: item.Module, Version: item.Version,
+				Architectures: item.Architectures, AsmFiles: item.AsmFiles,
+			})
+		case "failure":
+			payload.Failures = append(payload.Failures, scanFailure{Module: item.Module, Version: item.Version, Error: item.Error})
+		}
+		return nil
+	})
 	if err != nil {
-		return discoveryReport{}, fmt.Errorf("read sharded report manifest %q: %w", manifestPath, err)
+		return discoveryReport{}, err
 	}
-	var manifest shardedManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: %w", manifestPath, err)
-	}
-	if manifest.Format != shardedFormat {
-		return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: unsupported format %q", manifestPath, manifest.Format)
-	}
-	if manifest.SchemaVersion != discoverySchema {
-		return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: unsupported schema %d", manifestPath, manifest.SchemaVersion)
-	}
-	if manifest.ShardKey != "sha256(module)[0]" {
-		return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: unsupported shard key %q", manifestPath, manifest.ShardKey)
-	}
-	report := discoveryReport{
-		SchemaVersion: manifest.SchemaVersion,
-		GeneratedAt:   manifest.GeneratedAt,
-		Since:         manifest.Since,
-		NextSince:     manifest.NextSince,
-		ScanDirection: manifest.ScanDirection,
-		NextBefore:    manifest.NextBefore,
-		IndexRanges:   manifest.IndexRanges,
-		IndexEntries:  manifest.IndexEntries,
-		UniqueModules: manifest.UniqueModules,
-		Skipped:       manifest.Skipped,
-	}
-	if len(report.IndexRanges) > 0 {
-		report, err = upgradeDiscoveryReport(report)
-		if err != nil {
-			return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: %w", manifestPath, err)
-		}
-		entries := 0
-		for _, item := range report.IndexRanges {
-			entries += item.IndexEntries
-		}
-		if entries != manifest.IndexEntries {
-			return discoveryReport{}, fmt.Errorf("decode sharded report manifest %q: index range count is %d, want index_entries %d", manifestPath, entries, manifest.IndexEntries)
-		}
-	}
-	recordsDir := filepath.Join(reportPath, "records")
-	entries, err := os.ReadDir(recordsDir)
-	if err != nil {
-		return discoveryReport{}, fmt.Errorf("list sharded report records %q: %w", reportPath, err)
-	}
-	shards := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || len(name) != len("00.jsonl") || !strings.HasSuffix(name, ".jsonl") {
-			return discoveryReport{}, fmt.Errorf("list sharded report records %q: unexpected entry %q", reportPath, name)
-		}
-		if _, err := strconv.ParseUint(name[:2], 16, 8); err != nil {
-			return discoveryReport{}, fmt.Errorf("list sharded report records %q: invalid shard name %q", reportPath, name)
-		}
-		shards = append(shards, filepath.Join(recordsDir, name))
-	}
-	sort.Strings(shards)
-	for _, shard := range shards {
-		shardNumber, _ := strconv.ParseUint(filepath.Base(shard)[:2], 16, 8)
-		file, err := os.Open(shard)
-		if err != nil {
-			return discoveryReport{}, fmt.Errorf("read record shard %q: %w", shard, err)
-		}
-		scanner := bufio.NewScanner(file)
-		scanner.Buffer(make([]byte, 64<<10), 16<<20)
-		line := 0
-		var previous shardedRecord
-		for scanner.Scan() {
-			line++
-			var item shardedRecord
-			if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
-				file.Close()
-				return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: %w", shard, line, err)
-			}
-			if item.Module == "" || item.Version == "" {
-				file.Close()
-				return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: incomplete module version", shard, line)
-			}
-			hash := sha256.Sum256([]byte(item.Module))
-			if hash[0] != byte(shardNumber) {
-				file.Close()
-				return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: module %q belongs in %02x.jsonl", shard, line, item.Module, hash[0])
-			}
-			if line > 1 && compareShardedRecords(previous, item) >= 0 {
-				file.Close()
-				return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: records are duplicated or not in module/semver/kind order", shard, line)
-			}
-			previous = item
-			switch item.Kind {
-			case "scanned":
-				if !semver.IsValid(item.Version) {
-					file.Close()
-					return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: invalid scanned module version %q", shard, line, item.Version)
-				}
-				report.Scanned = append(report.Scanned, moduleVersion{Path: item.Module, Version: item.Version})
-			case "matched":
-				if !semver.IsValid(item.Version) {
-					file.Close()
-					return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: invalid matched module version %q", shard, line, item.Version)
-				}
-				report.Matched = append(report.Matched, candidate{
-					Module: item.Module, Version: item.Version,
-					Architectures: item.Architectures, AsmFiles: item.AsmFiles,
-				})
-			case "failure":
-				report.Failures = append(report.Failures, scanFailure{Module: item.Module, Version: item.Version, Error: item.Error})
-			default:
-				file.Close()
-				return discoveryReport{}, fmt.Errorf("decode record shard %s:%d: unknown record kind %q", shard, line, item.Kind)
-			}
-		}
-		scanErr := scanner.Err()
-		closeErr := file.Close()
-		if scanErr != nil {
-			return discoveryReport{}, fmt.Errorf("read record shard %q: %w", shard, scanErr)
-		}
-		if closeErr != nil {
-			return discoveryReport{}, fmt.Errorf("close record shard %q: %w", shard, closeErr)
-		}
-	}
-	if len(report.Scanned) != manifest.Scanned || len(report.Matched) != manifest.Matched || len(report.Failures) != manifest.Failures {
-		return discoveryReport{}, fmt.Errorf(
-			"read sharded report %q: record counts are scanned=%d/%d matched=%d/%d failures=%d/%d",
-			reportPath, len(report.Scanned), manifest.Scanned, len(report.Matched), manifest.Matched, len(report.Failures), manifest.Failures,
-		)
-	}
+	report := scan.metadata
+	report.Scanned, report.Matched, report.Failures = payload.Scanned, payload.Matched, payload.Failures
 	sortDiscoveryReport(&report)
 	return report, nil
 }
-
 func sortDiscoveryReport(report *discoveryReport) {
 	sort.Slice(report.Scanned, func(i, j int) bool {
 		if report.Scanned[i].Path != report.Scanned[j].Path {
