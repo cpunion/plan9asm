@@ -244,7 +244,8 @@ func (facts *x86CallerCountedNumbers) step(pc, residue int, ins Instr, before x8
 		return
 	}
 	move := op == "MOVL" || op == "MOVQ"
-	if !move && x86LEAWidth(op, "amd64") == 0 && op != "PUSHQ" && op != "POPQ" &&
+	_, conditionalMove, conditionalMoveError := x86ConditionalMoveProperties(op, ins, "amd64")
+	if !move && !(conditionalMove && conditionalMoveError == nil) && x86LEAWidth(op, "amd64") == 0 && op != "PUSHQ" && op != "POPQ" &&
 		!strings.HasPrefix(string(op), "MOV") && !strings.HasPrefix(string(op), "VMOV") {
 		facts.flags = x86CallerCountedFlags{}
 	}

@@ -281,6 +281,9 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 	if recognized, valid := x86CallerConditionalSetStep(ins, state, proof); recognized {
 		return false, valid
 	}
+	if recognized, valid := x86CallerConditionalMoveStep(ins, state, proof); recognized {
+		return false, valid
+	}
 	width := x86RawReturnScalarMoveBytes(op)
 	if width != 0 {
 		if len(ins.Args) != 2 || !x86CallerMemoryStep(ins, state, proof, width) {

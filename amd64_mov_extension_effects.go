@@ -100,6 +100,12 @@ func x86ExtensionHighRegister(register Reg) bool {
 }
 
 func x86ScalarMoveMemoryBytes(ins Instr, operand int, arch string) int64 {
+	if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, arch); known {
+		if err == nil && operand == 0 && isAMD64MemoryOperand(form.source) {
+			return int64(form.bits / 8)
+		}
+		return 0
+	}
 	op := Op(normalizeInstructionOpcode(ins.Op))
 	if _, recognized, err := x86ConditionalSetProperties(ins.Op, ins, arch); recognized {
 		if err == nil && operand == 0 {

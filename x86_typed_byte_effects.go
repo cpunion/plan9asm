@@ -105,6 +105,9 @@ func x86TypedGPByteEffect(op Op, ins Instr, arch string) (x86TypedByteEffect, bo
 	if arch != "amd64" && arch != "386" {
 		return x86TypedByteEffect{}, false, nil
 	}
+	if effect, known, err := x86TypedConditionalMoveByteEffect(op, ins, arch); known {
+		return effect, known, err
+	}
 	if form, recognized, err := x86LockScalarRMWProperties(op, ins, arch); recognized {
 		if err != nil {
 			return x86TypedByteEffect{}, true, err

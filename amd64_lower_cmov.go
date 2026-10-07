@@ -1,73 +1,84 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // lowerConditionalMove implements the complete Go 1.27 yml_rl conditional
 // move table: every x86 condition code at W/L/Q width, with a register or
 // memory source and a GP-register destination.
 func (c *amd64Ctx) lowerConditionalMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
 	}
-	switch baseOp {
-	case "CMOVWCC", "CMOVWCS", "CMOVWEQ", "CMOVWGE", "CMOVWGT", "CMOVWHI", "CMOVWLE", "CMOVWLS",
-		"CMOVWLT", "CMOVWMI", "CMOVWNE", "CMOVWOC", "CMOVWOS", "CMOVWPC", "CMOVWPL", "CMOVWPS",
-		"CMOVLCC", "CMOVLCS", "CMOVLEQ", "CMOVLGE", "CMOVLGT", "CMOVLHI", "CMOVLLE", "CMOVLLS",
-		"CMOVLLT", "CMOVLMI", "CMOVLNE", "CMOVLOC", "CMOVLOS", "CMOVLPC", "CMOVLPL", "CMOVLPS",
-		"CMOVQCC", "CMOVQCS", "CMOVQEQ", "CMOVQGE", "CMOVQGT", "CMOVQHI", "CMOVQLE", "CMOVQLS",
-		"CMOVQLT", "CMOVQMI", "CMOVQNE", "CMOVQOC", "CMOVQOS", "CMOVQPC", "CMOVQPL", "CMOVQPS":
-		// handled below
-	default:
-		return false, false, nil
+	form, known, err := x86ConditionalMoveProperties(op, ins, arch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects register/memory source and register destination: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind != OpReg && !isAMD64MemoryOperand(ins.Args[0]) {
-		return true, false, fmt.Errorf("amd64 %s source must be a register or memory operand: %q", baseOp, ins.Raw)
-	}
-	if _, ok := amd64FullRegBase(ins.Args[1].Reg); !ok {
-		return true, false, fmt.Errorf("amd64 %s destination must be a GP register: %q", baseOp, ins.Raw)
-	}
-	if ins.Args[0].Kind == OpReg {
-		if _, ok := amd64FullRegBase(ins.Args[0].Reg); !ok {
-			return true, false, fmt.Errorf("amd64 %s register source must be a GP register: %q", baseOp, ins.Raw)
-		}
-	}
-
-	ty := I64
-	switch baseOp[4] {
-	case 'W':
-		ty = I16
-	case 'L':
-		ty = I32
-	case 'Q':
-	default:
-		panic("conditional move width precheck drift")
-	}
-	src, err := c.evalIntSized(ins.Args[0], ty)
+	ty := amd64IntegerTypeForBits(form.bits)
+	src, err := c.loadConditionalMoveSource(form, ins)
 	if err != nil {
 		return true, false, err
 	}
-	cur, err := c.evalIntSized(ins.Args[1], ty)
+	cur, err := c.evalIntSized(form.destination, ty)
 	if err != nil {
 		return true, false, err
 	}
-	condition, err := c.x86Condition(baseOp[5:])
+	condition, err := c.x86Condition(form.condition)
 	if err != nil {
 		return true, false, err
 	}
 	selected := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %s, %s %s, %s %s\n", selected, condition, ty, src, ty, cur)
-	return true, false, c.storeRegSized(ins.Args[1].Reg, ty, "%"+selected)
+	// Select only the operand width, then apply the architectural writeback.
+	// In particular a false L predicate still zeroes GP bits 63:32.
+	return true, false, c.storeRegSized(form.destination.Reg, ty, "%"+selected)
+}
+
+func (c *amd64Ctx) loadConditionalMoveSource(form x86ConditionalMoveForm, ins Instr) (string, error) {
+	source := form.source
+	if source.Kind == OpReg {
+		return c.evalIntSized(source, amd64IntegerTypeForBits(form.bits))
+	}
+	if source.Kind == OpMem && (source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) &&
+		!x86CallerMemoryCertified(ins, 0) && !c.fixedLocalMemoryCertified(ins, 0) {
+		return "", fmt.Errorf("%w: CMOV native stack source lacks its original storage certificate", ErrProbeNeedsContext)
+	}
+	if source.Kind == OpFP {
+		// Only existing declared numerical ABI0 fields supply logical bytes.
+		// Neither pointer fields, holes nor an unknown native frame are inputs.
+		if err := c.validateX86PackedShiftFPSpan(source.FPOffset, form.bits/8); err != nil {
+			return "", err
+		}
+		result := false
+		for offset := source.FPOffset; offset < source.FPOffset+int64(form.bits/8); offset++ {
+			slot, output, _ := c.fpVectorSlot(offset)
+			if slot.Type != I8 && slot.Type != I16 && slot.Type != I32 && slot.Type != I64 {
+				return "", fmt.Errorf("%w: CMOV FP byte is not a declared integer", ErrProbeNeedsContext)
+			}
+			result = result || output
+		}
+		if result {
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return "", err
+			}
+		}
+	}
+	// Intel CMOVcc reads the complete memory source unconditionally, even for
+	// a false predicate or dead result. Preserve the original width and fault.
+	bytes, err := c.loadX86PackedShiftBytes(source, form.bits/8, true)
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to i%d\n", value, form.bits/8, bytes, form.bits)
+	if source.Kind != OpFP || c.classicFrame != "" {
+		// LLVM22's x86 select expansion can sink even a volatile load into
+		// one branch. An unconditional register use keeps the actual source
+		// read before that expansion without emitting an instruction or
+		// granting a new memory/FP permission. A false CMOV must still fault.
+		fmt.Fprintf(c.b, "  call void asm sideeffect \"\", \"r\"(i%d %%%s)\n", form.bits, value)
+	}
+	return "%" + value, nil
 }
 
 func (c *amd64Ctx) x86Condition(code string) (string, error) {
