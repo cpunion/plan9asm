@@ -19,7 +19,7 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 ## Continue here
 
 The development branch is
-`codex/pr40-caller-cpp-scope-repair-20261007`.
+`codex/pr40-mask-vector-cpp-integration-20261007`.
 Read its actual HEAD and status before resuming. Main is the only ledger writer;
 earlier agents are inactive.
 
@@ -53,6 +53,17 @@ Latest repairs:
   require their complete operand set. The independent two-file RED reproduces
   the external-library error; the changed CPP/caller/header diagnostic scope
   passes 411 nodes with no Fail/Skip, including original Go and LLVM22 objects.
+- All eight mask/vector B/W/D/Q moves share their complete register-only
+  X/Y/Z/K0-K7 typed grammar between lowering and caller effects. Unknown inputs
+  remain rejected, reverse writes zero-extend K, and every forward EVEX width
+  uses alias-clearing writeback. Independent official-row/caller RED has 50
+  failed nodes; whole-byte execution then exposed stale X-write upper bytes.
+  Expanded diagnostics pass 314 nodes, including three APIs/five-target objects
+  and 48 independent LLVM byte programs. Original native AVX512 execution is
+  still a separate unverified axis, not a claim from Rosetta software lowering.
+- Selected CPP companions now have actual generated-header and preferred SDK
+  search lifetime tripwires. These test-only combinations were directly green;
+  they do not represent another production bug or extra corpus passes.
 
 The actual framed-pair and transitive-call REDs each fail all three root APIs.
 New regressions cover the five pair mnemonics, local partial/branch holes,
@@ -62,17 +73,16 @@ children), without Fail/Skip. Original Go and LLVM O0/O2 execute four operations
 with 1,024 observations each. A first expanded replay found a blocked SDK void
 call; preserve that failure and its now-passing regression.
 
-Formal current/old owners use `_out/arm64-integration-green/run.cjs`. Current
-runs the complete CLI before the full affected root scope; old runs that root
-scope only. Both retain race, complete tool/source guards, vet/build and genuine
-closure. Current nested builds write directly under ignored output, without
-the ancestor's default-binary collector. Obtain terminal producer and independent
-reader results; diagnostic or ancestor passes are not current-head completion.
-These owners freeze ancestor `6b0a3bc9`, not the companion-CPP successor.
-Its full CLI stage has closed with all 1,778 nodes passing; the old owner and
-independent reader passed all 1,264 affected root nodes. Finish and independently
-read the current owner before claiming its combined pass. The successor needs
-fresh full CLI/current-head gates and the original external-library replay.
+Closed `fcc12a07` owners use `_out/caller-cpp-integration-green/run.cjs` in
+their original persistent checkout. Independent readers passed current full CLI
+(1,796 nodes), affected ARM64 (1,264) and CI policy (7), plus old ARM64 (1,264),
+with race, full source/tool guards, vet/build and genuine closure. The five-arch
+Go 1.27 classification/fingerprint gate also passed; it is not complete encoder
+or execution coverage. That head's original Weaviate replay now passes its first
+AMD64 file and no longer reports the companion CPP operand error, but ten files
+still fail cyclic joins or missing caller effects. Retain the raw failed report;
+one file is not a passing version or shard. The integrated successor needs fresh
+source-matching formal owners and the original external-library replay.
 
 ## Closed ancestor evidence
 
@@ -106,7 +116,11 @@ check genuine exits and PID/PGID closure.
 
 Frozen `529019e1` owns the three replay directories
 `_out/priority-shard{5,29,36}-bitfield-replay`. Check actual owner/process handles
-and reports. Shard 5 uses explicit candidates and remains partial.
+and reports. Shard 5 closed after its explicit 96 candidates and remains partial;
+shard 29 closed after all 106 candidates. Both failed and their independent
+status readers passed; status-query success is not corpus success. Shard 36 is
+still running. Never use the utility's missing `owner.result.json` test to
+contradict these owners' actual `closure.json` and terminal process handles.
 Obtain terminal producer and independent-reader results before promotion;
 never infer whole-shard coverage from running counts.
 
