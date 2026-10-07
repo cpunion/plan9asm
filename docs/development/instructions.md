@@ -132,6 +132,16 @@ Go 1.20's maskless `.Z` acceptance is a historical encoder defect, not another
 legal format. Observe its exact reserved EVEX.z/aaa=0 bytes and still require
 both named and raw rejection through all APIs; current Go must reject source.
 
+The private x86 raw decoder hands off actual physical memory operands without
+reinterpreting formatter DS/ES/FS/GS or RIP spellings as public Go source
+register groups. Only actual `PrefixIgnored` metadata permits removing a
+printed segment prefix; an unused, nonignored physical prefix remains Context
+before IR. Environment-load aliases additionally bind the complete decoded
+encoding and 32-bit layout. Sixteen-bit environments remain unsupported.
+Environment and packed-BCD consumers preserve the pointer's address space
+through every load, store and GEP. These conversions confer no new caller,
+native-memory, extent, raw-return or source-syntax permissions.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and

@@ -837,16 +837,16 @@ func (c *amd64Ctx) x87MemoryPointer(op Operand) (string, string, error) {
 }
 
 func (c *amd64Ctx) loadX87Environment(src Operand) error {
-	ptr, _, err := c.x87MemoryPointer(src)
+	ptr, ptrType, err := c.x87MemoryPointer(src)
 	if err != nil {
 		return err
 	}
 	control := c.newTmp()
 	statusPtr := c.newTmp()
 	status := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s, align 1\n", control, ptr)
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 4\n", statusPtr, ptr)
-	fmt.Fprintf(c.b, "  %%%s = load i16, ptr %%%s, align 1\n", status, statusPtr)
+	fmt.Fprintf(c.b, "  %%%s = load i16, %s %s, align 1\n", control, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 4\n", statusPtr, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = load i16, %s %%%s, align 1\n", status, ptrType, statusPtr)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", control, c.x87ControlSlot)
 	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s\n", status, c.x87StatusSlot)
 	if c.useHardwareX87() {
@@ -856,7 +856,7 @@ func (c *amd64Ctx) loadX87Environment(src Operand) error {
 }
 
 func (c *amd64Ctx) storeX87Environment(dst Operand) error {
-	ptr, _, err := c.x87MemoryPointer(dst)
+	ptr, ptrType, err := c.x87MemoryPointer(dst)
 	if err != nil {
 		return err
 	}
@@ -868,9 +868,9 @@ func (c *amd64Ctx) storeX87Environment(dst Operand) error {
 	statusPtr := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s\n", control, c.x87ControlSlot)
 	fmt.Fprintf(c.b, "  %%%s = load i16, ptr %s\n", status, c.x87StatusSlot)
-	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %s, align 1\n", control, ptr)
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 4\n", statusPtr, ptr)
-	fmt.Fprintf(c.b, "  store i16 %%%s, ptr %%%s, align 1\n", status, statusPtr)
+	fmt.Fprintf(c.b, "  store i16 %%%s, %s %s, align 1\n", control, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 4\n", statusPtr, ptrType, ptr)
+	fmt.Fprintf(c.b, "  store i16 %%%s, %s %%%s, align 1\n", status, ptrType, statusPtr)
 	return nil
 }
 
@@ -898,7 +898,7 @@ func (c *amd64Ctx) storeX87Extended(dst Operand, value string) error {
 }
 
 func (c *amd64Ctx) loadX87PackedBCD(src Operand) (string, error) {
-	ptr, _, err := c.x87MemoryPointer(src)
+	ptr, ptrType, err := c.x87MemoryPointer(src)
 	if err != nil {
 		return "", err
 	}
@@ -915,8 +915,8 @@ func (c *amd64Ctx) loadX87PackedBCD(src Operand) (string, error) {
 		digits := c.newTmp()
 		scaled := c.newTmp()
 		next := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 %d\n", bytePtr, ptr, i)
-		fmt.Fprintf(c.b, "  %%%s = load i8, ptr %%%s, align 1\n", packed, bytePtr)
+		fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 %d\n", bytePtr, ptrType, ptr, i)
+		fmt.Fprintf(c.b, "  %%%s = load i8, %s %%%s, align 1\n", packed, ptrType, bytePtr)
 		fmt.Fprintf(c.b, "  %%%s = and i8 %%%s, 15\n", low, packed)
 		fmt.Fprintf(c.b, "  %%%s = lshr i8 %%%s, 4\n", highShifted, packed)
 		fmt.Fprintf(c.b, "  %%%s = and i8 %%%s, 15\n", high, highShifted)
@@ -935,8 +935,8 @@ func (c *amd64Ctx) loadX87PackedBCD(src Operand) (string, error) {
 	negative := c.newTmp()
 	signed := c.newTmp()
 	value := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 9\n", signPtr, ptr)
-	fmt.Fprintf(c.b, "  %%%s = load i8, ptr %%%s, align 1\n", signByte, signPtr)
+	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 9\n", signPtr, ptrType, ptr)
+	fmt.Fprintf(c.b, "  %%%s = load i8, %s %%%s, align 1\n", signByte, ptrType, signPtr)
 	fmt.Fprintf(c.b, "  %%%s = and i8 %%%s, -128\n", signBits, signByte)
 	fmt.Fprintf(c.b, "  %%%s = icmp ne i8 %%%s, 0\n", isNegative, signBits)
 	fmt.Fprintf(c.b, "  %%%s = sub i64 0, %s\n", negative, accumulator)
@@ -946,7 +946,7 @@ func (c *amd64Ctx) loadX87PackedBCD(src Operand) (string, error) {
 }
 
 func (c *amd64Ctx) storeX87PackedBCD(dst Operand, value string) error {
-	ptr, _, err := c.x87MemoryPointer(dst)
+	ptr, ptrType, err := c.x87MemoryPointer(dst)
 	if err != nil {
 		return err
 	}
@@ -977,16 +977,16 @@ func (c *amd64Ctx) storeX87PackedBCD(dst Operand, value string) error {
 		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i8\n", onesByte, ones)
 		fmt.Fprintf(c.b, "  %%%s = shl i8 %%%s, 4\n", shifted, tensByte)
 		fmt.Fprintf(c.b, "  %%%s = or i8 %%%s, %%%s\n", packed, shifted, onesByte)
-		fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 %d\n", bytePtr, ptr, i)
-		fmt.Fprintf(c.b, "  store i8 %%%s, ptr %%%s, align 1\n", packed, bytePtr)
+		fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 %d\n", bytePtr, ptrType, ptr, i)
+		fmt.Fprintf(c.b, "  store i8 %%%s, %s %%%s, align 1\n", packed, ptrType, bytePtr)
 		fmt.Fprintf(c.b, "  %%%s = udiv i64 %s, 100\n", next, remaining)
 		remaining = "%" + next
 	}
 	sign := c.newTmp()
 	signPtr := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i8 -128, i8 0\n", sign, isNegative)
-	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, ptr %s, i64 9\n", signPtr, ptr)
-	fmt.Fprintf(c.b, "  store i8 %%%s, ptr %%%s, align 1\n", sign, signPtr)
+	fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 9\n", signPtr, ptrType, ptr)
+	fmt.Fprintf(c.b, "  store i8 %%%s, %s %%%s, align 1\n", sign, ptrType, signPtr)
 	return nil
 }
 

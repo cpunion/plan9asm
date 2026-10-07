@@ -2607,7 +2607,7 @@ func decodeX86RawDirectiveGroupWithOpaque(
 						if target < 0 || target >= len(code) {
 							return nil, fmt.Errorf("raw x86 local address target byte %d at instruction %d is outside directive group: %q", target, start, rawGroup)
 						}
-						instrs, err := parseDecodedX86Instruction(syntax)
+						instrs, err := parseDecodedX86PhysicalInstruction(inst, syntax)
 						if err != nil || len(instrs) != 1 || len(instrs[0].Args) != 2 {
 							return nil, fmt.Errorf("parse decoded raw x86 local address %q at instruction %d byte %d: %v", syntax, start, offset, err)
 						}
@@ -2641,7 +2641,7 @@ func decodeX86RawDirectiveGroupWithOpaque(
 			if inst.Op == x86asm.JMP {
 				return nil, fmt.Errorf("raw x86 indirect jump at instruction %d byte %d cannot be mapped safely: %q", start, offset, rawGroup)
 			}
-			instrs, err := parseDecodedX86Instruction(syntax)
+			instrs, err := parseDecodedX86PhysicalInstruction(inst, syntax)
 			if err != nil {
 				return nil, fmt.Errorf("parse decoded raw x86 instruction %q at instruction %d byte %d: %w", syntax, start, offset, err)
 			}
@@ -10301,11 +10301,28 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 	}
 	syntax := x86asm.GoSyntax(inst, 0, nil)
 	replaceOp := func(op string) {
-		if space := strings.IndexByte(syntax, ' '); space >= 0 {
-			syntax = op + syntax[space:]
-		} else {
-			syntax = op
+		// A repeater is a separate pseudo-instruction; an actual segment
+		// prefix can precede the mnemonic. Never replace either prefix
+		// with an alias and move the real opcode into its operand list.
+		start := strings.LastIndexByte(syntax, ';') + 1
+		for start < len(syntax) && syntax[start] == ' ' {
+			start++
 		}
+		for _, prefix := range inst.Prefix {
+			switch prefix & 0xff {
+			case x86asm.PrefixES, x86asm.PrefixCS, x86asm.PrefixSS, x86asm.PrefixDS, x86asm.PrefixFS, x86asm.PrefixGS:
+				if strings.HasPrefix(syntax[start:], prefix.String()+" ") {
+					start += len(prefix.String()) + 1
+				}
+			}
+		}
+		end := strings.IndexByte(syntax[start:], ' ')
+		if end < 0 {
+			end = len(syntax)
+		} else {
+			end += start
+		}
+		syntax = syntax[:start] + op + syntax[end:]
 	}
 	if op, ok := decodedX86CacheLineWriteback(encoding); ok {
 		replaceOp(op)
@@ -10317,6 +10334,13 @@ func decodedX86GoSyntax(inst x86asm.Inst, encoding []byte) (string, error) {
 		// the memory footprint. Keep that unsupported format explicit.
 		if inst.DataSize == 16 && (inst.Op == x86asm.FNSAVE || inst.Op == x86asm.FNSTENV) {
 			return "", fmt.Errorf("raw %s uses a 16-bit environment layout not represented by Go %s", inst.Op, op)
+		}
+		replaceOp(string(op))
+		return syntax, nil
+	}
+	if op, recognized, err := decodedX86X87EnvironmentLoad(inst, encoding); recognized {
+		if err != nil {
+			return "", err
 		}
 		replaceOp(string(op))
 		return syntax, nil

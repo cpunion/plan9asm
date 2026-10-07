@@ -141,6 +141,21 @@ func TestX86RawAddressOverrideGenericMemoryAndImplicitStrings(t *testing.T) {
 				modeForms = append(modeForms, form)
 			}
 		}
+		arch := "amd64"
+		if mode == 32 {
+			arch = "386"
+		}
+		var complete []byte
+		for _, form := range modeForms {
+			for _, segment := range []byte{0, 0x64, 0x65} {
+				complete = append(complete, 0x67)
+				if segment != 0 {
+					complete = append(complete, segment)
+				}
+				complete = append(complete, form.code...)
+			}
+		}
+		x86HandoffOriginalBytes(t, arch, append(complete, 0xc3))
 		for _, form := range modeForms {
 			for _, segment := range []byte{0, 0x64, 0x65} {
 				t.Run(fmt.Sprintf("mode%d/%s/segment%02x", mode, form.name, segment), func(t *testing.T) {
@@ -154,18 +169,16 @@ func TestX86RawAddressOverrideGenericMemoryAndImplicitStrings(t *testing.T) {
 						t.Fatalf("actual decoder input: %+v, %v", physical, err)
 					}
 					instructions, err := x86AddressOverrideDecode(mode, code)
-					rejectedOperand := map[string]string{
-						"stosb": "STOSB AL", "stosl": "STOSD AX", "stosq": "STOSQ AX",
-						"insb": "INSB DX", "insl": "INSD DX",
-					}[form.name]
-					if rejectedOperand != "" && segment != 0 {
-						// These prefixes are already rejected by the generic
-						// parser. Preserve that closed boundary, not a fake
-						// positive marker receipt for an unparsed instruction.
-						if err == nil || !strings.Contains(err.Error(), "unsupported operand: \""+rejectedOperand+"\"") {
-							t.Fatalf("segmented implicit form changed its strict parser rejection: %v", err)
+					if strings.Contains(form.name, "stos") || strings.Contains(form.name, "scas") || strings.HasPrefix(form.name, "ins") {
+						if segment != 0 {
+							// The decoded destination remains ES, but x/arch
+							// leaves this unused FS/GS prefix unmarked. Require
+							// explicit Context, not a GoSyntax parser accident.
+							if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "unbound physical") || instructions != nil {
+								t.Fatalf("unbound segment did not retain Context: %v", err)
+							}
+							return
 						}
-						return
 					}
 					if err != nil {
 						t.Fatal(err)
