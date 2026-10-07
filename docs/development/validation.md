@@ -75,10 +75,6 @@ scripts/check-go-asm-coverage.sh
 scripts/check-arm64-plan9-corpus.sh
 scripts/check-stdlib-corpus.sh
 scripts/benchmark-compile.sh
-
-scripts/check-reported-library-corpus.sh all
-PLAN9ASM_DISCOVERY_PARALLELISM=4 \
-  scripts/check-discovered-library-corpus.sh all 64
 ```
 
 Run race tests for changed concurrent code and focused Go 1.20 compatibility
@@ -110,6 +106,25 @@ missing tools must fail. Use disposable containers/caches, not the remote
 inventory server, to compile or execute external code.
 When the container's temporary directory is tmpfs-backed, enable execution
 (for example `--tmpfs /tmp:rw,exec,size=2g`); Go test binaries must run there.
+
+## Remote external corpus execution
+
+Index inventory and external-library batch verification do not run as local
+background processes. Keep inventory on its designated remote scanner and
+compile/execute external libraries only on separate disposable validation
+executors. Local first-party instruction/runtime fixtures and corpus-driver
+unit tests are different workloads and remain part of the local gates.
+
+Before launching a remote batch, inspect its existing owner, lock, cursor and
+frozen provenance. Do not duplicate a live scan or verification. Retain terminal
+reports and clean only that executor's owned package/cache data after every
+consumer has closed. On a validation executor, the required corpus commands are:
+
+```sh
+scripts/check-reported-library-corpus.sh all
+PLAN9ASM_DISCOVERY_PARALLELISM=4 \
+  scripts/check-discovered-library-corpus.sh all 64
+```
 
 ## Official coverage and benchmark
 
