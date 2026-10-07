@@ -19,9 +19,9 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 ## Continue here
 
 Development branch:
-`codex/pr40-gp-simd-scc-integration-20261007`.
-Read its actual HEAD/status. Root alone writes ledger. Two independently
-developed repairs are integrated but do not yet have combined certificates:
+`codex/pr40-closed-ci-class-integration-20261007`.
+Read its actual HEAD/status. Root alone writes ledger. This batch integrates
+the independent repairs below; ancestor receipts do not certify this new head:
 
 - `cf3d5ef6` unifies MOVL/MOVQ/Go-MOVD/VMOVD/VMOVQ grammar, original-source
   validation, CFG routing, private FP result initialization, lowering and caller
@@ -36,18 +36,38 @@ developed repairs are integrated but do not yet have combined certificates:
   Independent current/old diagnostics each pass 62 roots and 958 children;
   these are ancestor evidence, not combined-head passes. Do not enable a
   general cyclic hull or extrapolate to real dynamic-stride/sentinel loops.
-- An independent agent is repairing private raw decoder/operand handoff from
-  frozen `ad570209`: physical FS/DS/ES and RIP operands must not be reparsed as
-  public source spellings. The original public parser and pre-IR Context
-  boundaries remain strict. Do not edit that agent's live source.
+- `ca9df057` reconciles escaped CFG labels and exact earlier diagnostics,
+  keeping stronger edge/store assertions. Ordinary Go/SDK object observation
+  still supplies no native-memory Binder. Dead or unused opaque pointer
+  transport is distinguished from unauthorized numerical result consumption.
+  Current/old diagnostics each pass 238 nodes. The empty final-label positive
+  actually compiles, links and calls its DATA-retained native function.
+- `3cd3bdc7` RED and `664eda94` repair cover source MOVL/Q -> LEAL/Q in an
+  unframed, stack-unobserving raw near-RET leaf. Both complete views recheck
+  return/memory constraints; no stack/caller/fixed-local/raw-text or sibling
+  decoder certificate is inherited. Current/old diagnostics each pass 5,412
+  nodes, including original Go bytes and LLVM numerical execution at both
+  backend optimization levels. The private custom ABI is numerical only.
+- `cefdce60` RED and `8f7dcb84` preserve the actual private raw FS/DS/ES/RIP
+  operands and carry x87 environment/BCD pointer address spaces through all
+  loads/stores/GEPs. The public parser, raw-return and extent guards stay
+  strict. Eighteen unused nonignored segment controls remain Context/zero IR;
+  named FLDENV's actual stock-Go backend defect is not source-N/A evidence.
+  The independent current formal scope passes 193 roots/5,018 children;
+  obtain the actual old terminal receipt and independent review/readback.
 
 The full frozen `ad570209` root suite completed all 32 partitions: 23 roots
 failed and 39 existing host-inapplicable roots skipped. It is a failure baseline,
-not a full CI pass. Label/diagnostic assertions and observation-boundary fixtures
-are being independently reconciled; actual production/permission gaps still
-need TDD repairs. Obtain real producer closure and independent readback.
-Freeze a clean combined successor, run fresh current/old formal scopes, the
-official five-arch gate and original-library replay. Never publish old reports.
+not a full CI pass. All 23 failures now have focused repairs, not a passing
+successor full-root certificate. Frozen `6c98f32e` passes independently read
+current/old GP/SIMD integration scopes: 7,377/5,566 nodes respectively, with
+0 Fail/Skip. Its separately widened SCC safety scope passes 1,020 nodes on
+each SDK. The narrower SCC sub-scope is 337 nodes, never relabel it as 1,020.
+Race, complete source/tool/dependency/environment guards, vet/build and real
+owner/PGID closure passed. These scopes overlap; do not sum them as unique
+tests or whole-corpus coverage. Microbenchmarks are not the strict stdlib gate.
+Freeze this successor, rerun the exhaustive root/nested suites, five-arch
+official gate, strict benchmark and original-library replay before publishing.
 
 ## Integrated ancestor and remaining source proofs
 
