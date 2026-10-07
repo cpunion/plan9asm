@@ -29,6 +29,10 @@ func TestARM64NativeScratchSamePackageInputsRemainContext(t *testing.T) {
 		{"one-path-local-stack-load", "CBZ R1,use\nMOVD R1,16(RSP)\nuse:\nMOVD 16(RSP),R1", "32", true},
 		{"ordinary-fp-param-control", "ADD $3,R1", "0", false},
 		{"initialized-local-control", "MOVD R1,16(RSP)\nMOVD 16(RSP),R1", "32", false},
+		{"initialized-local-alias-control", "MOVD R1,16(RSP)\nfirst: next: MOVD 16(RSP),R1", "32", false},
+		{"uninitialized-local-alias", "first: next: MOVD 16(RSP),R1", "32", true},
+		{"partial-local-alias", "MOVW R1,16(RSP)\nfirst: next: MOVD 16(RSP),R1", "32", true},
+		{"one-path-local-alias", "CBZ R1,first\nMOVD R1,16(RSP)\nfirst: next: MOVD 16(RSP),R1", "32", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			assembly := strings.Replace(arm64ScratchSelectedSource, "ADD $3,R1", test.body, 1)

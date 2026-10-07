@@ -164,6 +164,10 @@ func TestARM64NativeScratchTransitiveAndPostCallOriginRemainContext(t *testing.T
 }
 
 func arm64ScratchSourceAPI(t *testing.T, pkg GoPackage, file *File, options Options, api string) (string, error) {
+	return arm64ScratchSourceAPIWithAssembly(t, pkg, file, options, api, arm64ScratchSelectedSource)
+}
+
+func arm64ScratchSourceAPIWithAssembly(t *testing.T, pkg GoPackage, file *File, options Options, api, assembly string) (string, error) {
 	t.Helper()
 	if api == "text" {
 		return Translate(file, options)
@@ -175,7 +179,7 @@ func arm64ScratchSourceAPI(t *testing.T, pkg GoPackage, file *File, options Opti
 	if api == "module" {
 		module, err = TranslateModuleInContext(ctx, file, options)
 	} else {
-		translation, translateErr := translateGoModuleInContext(ctx, pkg, []byte(arm64ScratchSelectedSource), GoModuleOptions{
+		translation, translateErr := translateGoModuleInContext(ctx, pkg, []byte(assembly), GoModuleOptions{
 			GOARCH: options.Goarch, TargetTriple: options.TargetTriple, ResolveSym: options.ResolveSym,
 			ManualSig: func(name string) (FuncSig, bool) { signature, present := options.Sigs[name]; return signature, present },
 		})
@@ -242,9 +246,9 @@ func TestARM64NativeScratchSourceLabelAliases(t *testing.T) {
 					if _, closed := source.closed[pkg.Path+".Value"]; !closed {
 						t.Fatal("Go-accepted source label aliases broke native scratch closure")
 					}
-					for _, api := range []string{"text", "module"} {
+					for _, api := range []string{"text", "module", "GoModule"} {
 						t.Run(api, func(t *testing.T) {
-							ir, err := arm64ScratchSourceAPI(t, pkg, file, options, api)
+							ir, err := arm64ScratchSourceAPIWithAssembly(t, pkg, file, options, api, assembly)
 							if err != nil {
 								t.Fatal(err)
 							}

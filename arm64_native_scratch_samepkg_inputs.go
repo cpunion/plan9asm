@@ -253,6 +253,12 @@ func arm64ScratchSourceMemory(instruction Instr) (Operand, int64, bool, bool) {
 func arm64ScratchSourceSuccessors(blocks []arm64Block, labels map[string]int, at int) ([]int, bool) {
 	block := blocks[at]
 	if len(block.instrs) == 0 {
+		// Consecutive source labels retain separate CFG identities, but
+		// execute no effects. Preserve the incoming byte facts along their
+		// real fallthrough edge; a final empty block still has no exit proof.
+		if at+1 < len(blocks) {
+			return []int{at + 1}, true
+		}
 		return nil, false
 	}
 	last := arm64ControlDecode(block.instrs[len(block.instrs)-1])
