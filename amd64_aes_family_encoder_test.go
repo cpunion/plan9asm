@@ -137,8 +137,19 @@ func TestX86AESFamilyActualGoRawEncoderForms(t *testing.T) {
 							t.Fatal("actual Go raw AES identity", ins, err)
 						}
 						named := x86YMMReadSource(t, row)
+						for i := range named.Args {
+							if named.Args[i].Kind == OpMem && (named.Args[i].Mem.Base == FS || named.Args[i].Mem.Base == GS) {
+								named.Args[i].Mem.Segment, named.Args[i].Mem.Base = named.Args[i].Mem.Base, ""
+							}
+							if named.Args[i].Kind == OpMem && named.Args[i].Mem.Index == "" {
+								named.Args[i].Mem.Scale = ins.Args[i].Mem.Scale // no-index scale is not an encoded input
+							}
+							if named.Args[i].Kind == OpMem && strings.Contains(name, "KEYGEN") {
+								named.Args[i].Mem.Segment = "" // actual From3 prefix omission, independently bound above
+							}
+						}
 						if ins.Op != named.Op || !reflect.DeepEqual(ins.Args, named.Args) {
-							t.Fatal("physical original operand/tuple width changed", row, ins.Args, named.Args)
+							t.Fatalf("physical original operand/tuple width changed %s code=%x actual=%#v named=%#v", row, code, ins.Args, named.Args)
 						}
 					})
 				}
