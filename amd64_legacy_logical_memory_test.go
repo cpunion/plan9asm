@@ -4,6 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/build"
+	"go/parser"
+	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -36,6 +43,71 @@ func TestX86LegacyLogicalMemoryOriginalGoBytes(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		for _, name := range x86LegacyLogicalMemoryNames {
 			t.Run(arch+"/"+name, func(t *testing.T) { x86LegacyLogicalOriginalBytes(t, arch, name) })
+		}
+	}
+}
+
+func TestX86LegacyLogicalMemoryRequiredNativeSelection(t *testing.T) {
+	const file = "amd64_legacy_logical_memory_linux_amd64_test.go"
+	for _, target := range []struct{ os, arch string }{
+		{"linux", "amd64"}, {"linux", "arm64"}, {"linux", "386"},
+		{"darwin", "amd64"}, {"darwin", "arm64"}, {"windows", "amd64"},
+	} {
+		context := build.Default
+		context.GOOS, context.GOARCH = target.os, target.arch
+		selected, err := context.MatchFile(".", file)
+		if err != nil || selected != (target.os == "linux" && target.arch == "amd64") {
+			t.Fatalf("stock Go required native selection %s/%s: %t/%v", target.os, target.arch, selected, err)
+		}
+	}
+	syntax, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(syntax.Decls) != 2 {
+		t.Fatal("native wrapper must contain only its import and required root")
+	}
+	function, ok := syntax.Decls[1].(*ast.FuncDecl)
+	if !ok || function.Name.Name != "TestCrossLinuxRuntimeMatrixX86LegacyLogicalMemoryNativeFaults" || len(function.Body.List) != 1 {
+		t.Fatal("native root registration changed or became optional")
+	}
+	statement, ok := function.Body.List[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatal("native root bypassed its mandatory helper")
+	}
+	call, ok := statement.X.(*ast.CallExpr)
+	if !ok || len(call.Args) != 2 {
+		t.Fatal("native root must call the full fault helper")
+	}
+	callee, ok := call.Fun.(*ast.Ident)
+	if !ok || callee.Name != "x86LegacyLogicalMemoryRuntime" {
+		t.Fatal("native root changed helper")
+	}
+	argument, ok := call.Args[1].(*ast.Ident)
+	if !ok || argument.Name != "true" {
+		t.Fatal("native root omitted its alignment axis")
+	}
+	workflow, err := os.ReadFile(".github/workflows/go-ci.yml")
+	if err != nil || !strings.Contains(string(workflow), "-ci-selector '^(TestCrossLinuxRuntimeMatrix|") {
+		t.Fatalf("required cross-runtime prefix missing: %v", err)
+	}
+}
+
+func TestX86LegacyLogicalMemoryUnboundAddressSizeBeforeEmission(t *testing.T) {
+	for _, name := range x86LegacyLogicalMemoryNames {
+		file, err := Parse(ArchAMD64, "TEXT view(SB),4,$0-0\n"+name+" (AX),X0\nRET\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, bits := range []int{32, 64} {
+			ins := file.Funcs[0].Instrs[1]
+			ins.x86AddressBits = bits
+			var output strings.Builder
+			context := &amd64Ctx{goarch: "amd64", b: &output}
+			known, terminal, err := context.lowerPackedLogicalFamily(ins.Op, ins)
+			if !known || terminal || !errors.Is(err, ErrProbeNeedsContext) || output.Len() != 0 {
+				t.Fatalf("%s unbound address-size%d emitted IR: %t/%t/%v", name, bits, known, terminal, err)
+			}
 		}
 	}
 }
@@ -98,14 +170,18 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 	}
 	for _, target := range x86LegacyLogicalMemoryTargets {
 		var source, declaration strings.Builder
+		source.WriteString("GLOBL ·data(SB),8,$16\n")
+		declaration.WriteString("var data [16]byte\n")
 		for _, name := range x86LegacyLogicalMemoryNames {
 			move, size := "MOVQ", 8
 			if target.arch == "386" {
 				move, size = "MOVL", 4
 			}
-			fn := strings.ToLower(name)
-			fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\nPXOR X0,X0\n%s (AX),X0\nRET\n", fn, size, move, name)
-			fmt.Fprintf(&declaration, "func %s(p *byte)\n", fn)
+			for i, address := range []string{"(AX)", "16(AX)(CX*2)", "·data(SB)", "(FS)", "(GS)"} {
+				fn := fmt.Sprintf("%s%d", strings.ToLower(name), i)
+				fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-%d\n%s p+0(FP),AX\n%s index+%d(FP),CX\nPXOR X0,X0\n%s %s,X0\nRET\n", fn, size*2, move, move, size, name, address)
+				fmt.Fprintf(&declaration, "func %s(p *byte,index uintptr)\n", fn)
+			}
 		}
 		x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
 		for _, api := range []string{"text", "module", "Go"} {
@@ -119,9 +195,73 @@ func TestX86LegacyLogicalMemoryNativeOpcodeObjects(t *testing.T) {
 					if !strings.Contains(ir, want) {
 						t.Fatalf("dead result lost original single native %s memory effect", name)
 					}
+					for _, segment := range []string{"fs", "gs"} {
+						want := "asm sideeffect \"" + strings.ToLower(name) + " %" + segment + ":($2), $0\""
+						if !strings.Contains(ir, want) {
+							t.Fatalf("native %s/%s source prefix disappeared", name, segment)
+						}
+					}
 				}
 				compileLLVMToObject(t, llc, target.triple, "logical-native.ll", "logical-native.o", ir)
 			})
 		}
+	}
+}
+
+func TestX86LegacyLogicalMemoryPSRetainsSSE1Carrier(t *testing.T) {
+	llc, objdump := findLLVM22Tool("llc"), findLLVM22Tool("llvm-objdump")
+	if llc == "" || objdump == "" {
+		t.Fatal("LLVM22 llc and objdump required")
+	}
+	var source strings.Builder
+	for _, name := range []string{"ANDPS", "ANDNPS", "ORPS", "XORPS"} {
+		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\nMOVUPS (AX),X0\n%s (AX),X0\nMOVUPS X0,(BX)\nRET\n", strings.ToLower(name), name)
+	}
+	x86LEAActualTargetGoObject(t, "386", "i386-unknown-linux-gnu", source.String())
+	file, err := Parse(ArchAMD64, source.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigs := map[string]FuncSig{}
+	for _, name := range []string{"andps", "andnps", "orps", "xorps"} {
+		sigs[name] = FuncSig{Name: name, Ret: Void}
+	}
+	ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, "call <4 x float> asm sideeffect") || strings.Contains(ir, "+sse2") {
+		t.Fatal("PS native carrier silently requires SSE2")
+	}
+	for _, level := range []string{"-O0", "-O2"} {
+		t.Run(level, func(t *testing.T) {
+			directory := t.TempDir()
+			input, object := filepath.Join(directory, "sse1.ll"), filepath.Join(directory, "sse1.o")
+			if err := os.WriteFile(input, []byte(ir), 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := runtimeOracleStageContext(t)
+			output, err := runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, llc, level, "-filetype=obj", input, "-o", object))
+			cancel()
+			if err != nil {
+				t.Fatalf("SSE1 object: %v\n%s", err, output)
+			}
+			ctx, cancel = runtimeOracleStageContext(t)
+			output, err = runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, objdump, "-d", object))
+			cancel()
+			if err != nil {
+				t.Fatalf("SSE1 disassembly: %v\n%s", err, output)
+			}
+			for _, name := range []string{"andps", "andnps", "orps", "xorps"} {
+				if !strings.Contains(string(output), name) {
+					t.Fatalf("SSE1 object lost %s", name)
+				}
+			}
+			for _, forbidden := range []string{"movdqa", "movdqu", "pand", "pxor", "por", "movapsd", "movq\t%xmm"} {
+				if strings.Contains(string(output), forbidden) {
+					t.Fatalf("SSE1 source introduced %s:\n%s", forbidden, output)
+				}
+			}
+		})
 	}
 }

@@ -75,6 +75,15 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				// does not acquire a native ISA or caller permission.
 				add("+sse2", "+ssse3")
 			}
+			if form, known, err := x86PackedLogicalProperties(ins, goarch); known && err == nil &&
+				form.legacy && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				// Only the validated native opcode needs the private XMM carrier.
+				if form.spec.encoding == x86PackedLogicalLegacyFP && form.spec.laneBits == 32 {
+					add("+sse")
+				} else {
+					add("+sse2")
+				}
+			}
 			if form, known, err := x86ImmediateShuffleProperties(ins, goarch); known && err == nil &&
 				form.spec.legacy && !form.spec.mmx && form.memory >= 0 && form.source.Kind != OpFP {
 				// Only this validated single native SSE2 memory instruction

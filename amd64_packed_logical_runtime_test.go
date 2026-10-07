@@ -114,10 +114,17 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
 					if memory == "broadcast" {
 						index = fmt.Sprintf("i%%%d", spec.broadcastBytes)
 					}
+					aOffset := 1
+					if legacy && memory == "memory" {
+						// The original legacy m128 instruction requires 16-byte
+						// alignment. Keep other source forms deliberately unaligned;
+						// the independent native fault root checks legacy misalignment.
+						aOffset = 16
+					}
 					fmt.Fprintf(&checks, `
  for(int round=0;round<4;++round) for(int m=0;m<4;++m) {
-  uint64_t mask=masks[m]; uint8_t aStorage[66],bStorage[68],output[67]; uint8_t *a=aStorage+1,*b=bStorage+3;
-  memset(aStorage,0xa7,66); memset(bStorage,0xb9,68); memset(output,0xc3,67);
+  uint64_t mask=masks[m]; _Alignas(16) uint8_t aStorage[96]; uint8_t bStorage[68],output[67]; uint8_t *a=aStorage+%[9]d,*b=bStorage+3;
+  memset(aStorage,0xa7,96); memset(bStorage,0xb9,68); memset(output,0xc3,67);
   for(int i=0;i<64;++i) { a[i]=(uint8_t)(i*19+round*83+7); b[i]=(uint8_t)(i*31+round*59+13); }
   %[1]s(output+1,a,b,mask);
   if(output[0]!=0xc3 || output[66]!=0xc3 || output[65]!=1) return %[2]d;
@@ -125,9 +132,10 @@ func TestCrossLinuxRuntimeMatrixX86PackedLogicalCompleteSemantics(t *testing.T) 
    uint8_t aByte=a[%[3]s]; uint8_t want=i<%[4]d ? ((%[5]s) ? (%[6]s) : (%[7]s)) : (%[8]s);
    if(output[i+1]!=want || a[i]!=(uint8_t)(i*19+round*83+7) || b[i]!=(uint8_t)(i*31+round*59+13)) return %[2]d;
   }
-  if(aStorage[0]!=0xa7 || aStorage[65]!=0xa7 || bStorage[2]!=0xb9 || bStorage[67]!=0xb9) return %[2]d;
+  for(int i=0;i<96;++i) if((i<%[9]d || i>=%[9]d+64) && aStorage[i]!=0xa7) return %[2]d;
+  if(bStorage[2]!=0xb9 || bStorage[67]!=0xb9) return %[2]d;
  }
-`, name, count+10, index, width, maskExpression, operator, inactive, upper)
+`, name, count+10, index, width, maskExpression, operator, inactive, upper, aOffset)
 					if mode != "unmasked" && memory != "register" {
 						// A zero relevant mask suppresses every memory read,
 						// including broadcast. NULL is never dereferenced.
