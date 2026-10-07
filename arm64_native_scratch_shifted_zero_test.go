@@ -126,6 +126,32 @@ func TestARM64NativeScratchShiftedZeroGoEncodingRows(t *testing.T) {
 			if !valid || scratch != (arm64ScratchEffect{}) {
 				t.Fatalf("shifted zero invented an incoming R27 effect: %+v valid=%v", scratch, valid)
 			}
+			// Rm is field 20:16 in both Go encoding classes. Independently
+			// vary real GP, R27, LR and zero roles while retaining the actual
+			// source's operation/width/shift. This metadata control is not a
+			// new original-object or runtime certificate for the changed word.
+			for _, register := range []uint32{0, 1, 27, 30, 31} {
+				word := body.code[0]&^(31<<16) | register<<16
+				binary.LittleEndian.PutUint32(code[:], word)
+				changed, err := arm64asm.Decode(code[:])
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, valid := arm64ScratchNativeInputEffect(changed, false)
+				if register == 30 {
+					if valid {
+						t.Fatal("shifted native LR acquired an input contract")
+					}
+					continue
+				}
+				control := want
+				if register != 31 {
+					control.reads |= 1 << register
+				}
+				if !valid || got != control {
+					t.Fatalf("shifted register %d effect=%+v valid=%v, want %+v", register, got, valid, control)
+				}
+			}
 		})
 	}
 }
