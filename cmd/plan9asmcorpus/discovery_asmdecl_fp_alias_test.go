@@ -329,7 +329,11 @@ func TestDiscoveryAsmDeclFPAliasTypedRMWLayoutIsNotResultAuthority(t *testing.T)
 					unit := plan.Units[0]
 					_, original := runCapturedCommandOutput(ctx, plan.Dir, plan.Env, plan.GoBinary, "tool", "vet", "-asmdecl", unit.Filename)
 					failure, observed := discoveryAsmDeclObservedFailure(original)
-					if !observed || !strings.Contains(failure.output, name+"+8") ||
+					nameDiagnostic := "invalid offset x+8(FP)"
+					if name == "alias" {
+						nameDiagnostic = "unknown variable alias; offset 8 is y+8(FP)"
+					}
+					if !observed || !strings.Contains(failure.output, nameDiagnostic) ||
 						strings.Contains(failure.output, "RET without writing") != (result == "y") {
 						t.Fatalf("actual original name/result obligations missing: %v", original)
 					}
