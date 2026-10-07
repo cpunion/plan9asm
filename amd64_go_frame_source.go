@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
@@ -49,6 +50,7 @@ type GoAMD64FrameSource struct {
 	ownedInfo    os.FileInfo
 	functions    map[string]goAMD64FrameFunction
 	declarations map[string]goAMD64FrameDeclaration
+	imports      map[string]goAMD64FrameSelection
 	origins      map[string]int
 }
 
@@ -81,6 +83,8 @@ type goAMD64FrameSelection struct {
 	Dir, ImportPath, Name, Export, ForTest                                                 string
 	GoFiles, CompiledGoFiles, SFiles, HFiles, CgoFiles, Imports, EmbedFiles, EmbedPatterns []string
 	IgnoredGoFiles, IgnoredOtherFiles                                                      []string
+	Standard                                                                               bool
+	ImportMap                                                                              map[string]string
 	CFiles, CXXFiles, MFiles, FFiles, SwigFiles, SwigCXXFiles, SysoFiles                   []string
 	Module                                                                                 *struct {
 		Path, Version, Dir, GoMod string
@@ -163,11 +167,15 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	source.selection = selected
 	if selected.Dir != request.Directory || selected.ImportPath != pkg.Path || selected.ForTest != "" || selected.Module == nil ||
 		!selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != request.Directory || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
-		selected.nonordinaryRole() || len(selected.Imports) != 0 || len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 {
-		return nil, goAMD64FrameContext("initial capture needs complete dependency-free ordinary original module sources")
+		selected.nonordinaryRole() || len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 {
+		return nil, goAMD64FrameContext("capture needs complete ordinary original module sources")
 	}
 	if selected.Module.GoMod != filepath.Join(request.Directory, "go.mod") {
 		return nil, goAMD64FrameContext("actual module metadata is outside the original source directory")
+	}
+	source.imports, err = source.loadStandardDeclarationImports(ctx)
+	if err != nil {
+		return nil, err
 	}
 	source.declarations, err = source.typedDeclarations(pkg, false)
 	if err != nil {
@@ -288,6 +296,10 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	}
 	if !reflect.DeepEqual(source.selection, selected) {
 		return goAMD64FrameContext("actual complete package selection/export changed")
+	}
+	imports, err := source.loadStandardDeclarationImports(ctx)
+	if err != nil || !reflect.DeepEqual(source.imports, imports) {
+		return goAMD64FrameContext("actual complete declaration import graph changed: %v", err)
 	}
 	return source.verifyInputs()
 }
@@ -514,6 +526,7 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
+	bodyless := make(map[string]bool)
 	for _, name := range source.selection.GoFiles {
 		filename := filepath.Join(source.request.Directory, name)
 		data, err := source.read(filename)
@@ -527,18 +540,13 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 		for _, declaration := range file.Decls {
 			switch declaration := declaration.(type) {
 			case *ast.FuncDecl:
-				if declaration.Body != nil || declaration.Recv != nil {
-					return nil, goAMD64FrameContext("declaration must be an ordinary bodyless function")
+				if declaration.Body == nil && declaration.Recv == nil {
+					bodyless[declaration.Name.Name] = true
 				}
 			case *ast.GenDecl:
-				if declaration.Tok != token.TYPE {
-					return nil, goAMD64FrameContext("capture excludes imports, values and source bodies")
-				}
-				for _, spec := range declaration.Specs {
-					typ, ok := spec.(*ast.TypeSpec)
-					if !ok || typ.TypeParams != nil && len(typ.TypeParams.List) != 0 {
-						return nil, goAMD64FrameContext("generic or unknown local type declaration")
-					}
+				if declaration.Tok != token.TYPE && declaration.Tok != token.IMPORT &&
+					declaration.Tok != token.CONST && declaration.Tok != token.VAR {
+					return nil, goAMD64FrameContext("unknown original declaration role")
 				}
 			default:
 				return nil, goAMD64FrameContext("unknown original declaration role")
@@ -546,6 +554,9 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 		}
 		syntax = append(syntax, file)
 		compiled = append(compiled, filename)
+	}
+	if len(pkg.Syntax) != len(syntax) {
+		return nil, goAMD64FrameContext("supplied syntax omitted complete ordinary source files")
 	}
 	sort.Strings(compiled)
 	actual := append([]string(nil), source.selection.CompiledGoFiles...)
@@ -559,7 +570,21 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 		return nil, goAMD64FrameContext("effective/generated compiled source mapping is unbound")
 	}
 	sizes := types.SizesFor("gc", "amd64")
-	typed, err := (&types.Config{Sizes: sizes}).Check(pkg.Path, fset, syntax, nil)
+	actualImporter := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		if target, mapped := source.selection.ImportMap[path]; mapped {
+			path = target
+		}
+		dependency, present := source.imports[path]
+		if !present || dependency.Export == "" {
+			return nil, goAMD64FrameContext("missing captured actual compiler export: %s", path)
+		}
+		data, err := source.read(dependency.Export)
+		if err != nil {
+			return nil, err
+		}
+		return io.NopCloser(bytes.NewReader(data)), nil
+	})
+	typed, err := (&types.Config{Sizes: sizes, Importer: actualImporter}).Check(pkg.Path, fset, syntax, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -578,6 +603,11 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 			if !supplied || named.IsAlias() != previous.IsAlias() || err != nil || priorErr != nil || actual != prior {
 				return nil, goAMD64FrameContext("actual local type declaration differs: %s", name)
 			}
+			continue
+		}
+		// Bodies and values are independently typechecked, but only original
+		// bodyless assembly declarations enter the frame observation table.
+		if !bodyless[name] {
 			continue
 		}
 		fn, ok := typed.Scope().Lookup(name).(*types.Func)
