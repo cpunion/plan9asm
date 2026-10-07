@@ -15,6 +15,145 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmrules"
 )
 
+func TestX86AESFamilyNamedAndRawThreeAPIFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 required")
+	}
+	for _, target := range x86RawReturnTargets {
+		for _, raw := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/raw=%t", target.triple, raw), func(t *testing.T) {
+				var source, declarations strings.Builder
+				declarations.WriteString("package aesobjects\n")
+				count := 0
+				for _, name := range x86AESOracleNames {
+					widths := []int{16}
+					if strings.HasPrefix(name, "V") && !strings.Contains(name, "IMC") && !strings.Contains(name, "KEYGEN") {
+						widths = append(widths, 32, 64)
+					}
+					for _, width := range widths {
+						bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+						for _, operand := range []string{bank + "0", fmt.Sprintf("%d(AX)(CX*2)", width)} {
+							row, _ := x86AESOracleRow(name, operand, bank)
+							code := x86OrderingHintGoBytes(t, target.arch, "TEXT actual(SB),4,$0-0\n"+row+"\nRET\n")
+							if raw {
+								row = x86DwordProductDirectives(code[:len(code)-1])
+							}
+							fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", count, row)
+							fmt.Fprintf(&declarations, "func F%d()\n", count)
+							count++
+						}
+					}
+				}
+				x86LEAActualTargetGoObject(t, target.arch, target.triple, source.String())
+				for _, api := range []string{"text", "module", "Go"} {
+					t.Run(api, func(t *testing.T) {
+						ir, err := x86OrderingHintTranslateAPI(t, api, source.String(), declarations.String(), target.arch, target.triple)
+						if err != nil {
+							t.Fatal(err)
+						}
+						compileLLVMToObject(t, llc, target.triple, "aes-object-"+api+".ll", "aes-object-"+api+".o", ir)
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestX86AESFamilyCompressedDisp8EntireTupleAxes(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, name := range x86AESOracleNames[6:10] {
+			for _, width := range []int{16, 32, 64} {
+				bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+				for _, disp := range []int{-128, -1, 1, 127} {
+					for _, address := range []string{fmt.Sprintf("%d(AX)", disp*width), fmt.Sprintf("%d(AX)(CX*2)", disp*width), fmt.Sprintf("%d(BP)", disp*width)} {
+						// X16 forces Go's EVEX X/Y rows. Their original bytes are
+						// never patched into a different register contract. Go accepts
+						// that spelling in mode32, but physical high banks remain Context.
+						row := name + " " + address + "," + bank + "1," + bank + "16"
+						if width == 64 {
+							row = name + " " + address + ",Z1,Z2"
+						}
+						t.Run(arch+"/"+row, func(t *testing.T) {
+							code := x86OrderingHintGoBytes(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+							mode := 64
+							if arch == "386" {
+								if width != 64 {
+									if _, _, known, err := decodedX86AESInstruction(code, 32); !known || !errors.Is(err, ErrProbeNeedsContext) {
+										t.Fatal("actual mode32 high destination acquired a low-bank identity", row, fmt.Sprintf("%x", code), err)
+									}
+									// Inspect exactly the same original bytes in physical
+									// mode64 for their tuple address, not mode32 permission.
+								} else {
+									mode = 32
+								}
+							}
+							ins, length, known, err := decodedX86AESInstruction(code, mode)
+							if !known || err != nil || length != len(code)-1 || ins.Args[0].Mem.Off != int64(disp*width) {
+								t.Fatal("actual Go compressed full tuple did not retain exact native address", row, fmt.Sprintf("%x", code), ins, err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86AESFamilyMode32NamedHighAndRawReservedBoundaries(t *testing.T) {
+	for _, name := range x86AESOracleNames[6:10] {
+		for _, bank := range []string{"X", "Y"} {
+			row := name + " " + bank + "16," + bank + "1," + bank + "2"
+			goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", true)
+			if _, known, err := x86AESProperties(Op(name), x86YMMReadSource(t, row), "386"); !known || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("Go named high mode32 vector borrowed physical identity", row, err)
+			}
+		}
+	}
+	valid := x86OrderingHintGoBytes(t, "amd64", "TEXT f(SB),4,$0-0\nVAESENC 64(AX),Z1,Z2\nRET\n")
+	for _, mutation := range []func([]byte){func(b []byte) { b[2] |= 0x80 }, func(b []byte) { b[2] &^= 4 }, func(b []byte) { b[3] |= 1 }, func(b []byte) { b[3] |= 0x80 }, func(b []byte) { b[3] |= 0x10 }, func(b []byte) { b[3] |= 0x60 }} {
+		changed := append([]byte(nil), valid...)
+		mutation(changed)
+		if _, _, known, err := decodedX86AESInstruction(changed, 64); !known || err == nil {
+			t.Fatal("reserved AES bytes acquired an unrelated raw effect", fmt.Sprintf("%x", changed), err)
+		}
+	}
+}
+
+func TestX86AESFamilyAbsoluteDisp32AndImmediateClasses(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, name := range x86AESOracleNames {
+			for _, address := range []int64{-2147483649, -2147483648, 2147483647, 4294967295, 4294967296} {
+				accepted := address == int64(int32(address)) || arch == "386" && address == int64(uint32(address))
+				row, _ := x86AESOracleRow(name, fmt.Sprint(address), "X")
+				t.Run(arch+"/"+row, func(t *testing.T) {
+					goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", accepted)
+					_, known, err := x86AESProperties(Op(name), x86YMMReadSource(t, row), arch)
+					if !known || (err == nil) != accepted {
+						t.Fatal("physical Go disp32 extent differs from shared AES grammar", accepted, err)
+					}
+				})
+			}
+		}
+		for _, name := range []string{"AESKEYGENASSIST", "VAESKEYGENASSIST"} {
+			var all strings.Builder
+			for immediate := -129; immediate <= 256; immediate++ {
+				accepted := immediate >= 0 && immediate <= 255 || name == "VAESKEYGENASSIST" && immediate >= -128 && immediate < 0
+				row := fmt.Sprintf("%s $%d,X0,X2", name, immediate)
+				if accepted {
+					all.WriteString(row + "\n")
+				} else {
+					goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+				}
+				if _, known, err := x86AESProperties(Op(name), x86YMMReadSource(t, row), arch); !known || (err == nil) != accepted {
+					t.Fatal("complete Yu8/Yi8 immediate classes", arch, row, accepted, err)
+				}
+			}
+			goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+all.String()+"RET\n", "", true)
+		}
+	}
+}
+
 func TestX86AESFamilyCompleteIndependentEncoderRows(t *testing.T) {
 	root := filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86")
 	data, err := os.ReadFile(filepath.Join(root, "asm6.go"))

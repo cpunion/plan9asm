@@ -107,3 +107,68 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyWholeByteAliases(t *testing.T) {
 	})
 	t.Logf("%d AES-family kernels ×37 samples ×2 flag/MXCSR seeds on three explicit optimization axes; all64 vector bytes, aliases, exact native memory, inputs and output canaries; portable wide VAES is not original AVX512 execution", count)
 }
+
+// Execute genuine Go-assembler bytes, not bytes obtained from our grammar or
+// LLVM. The host's legacy AES X128 axis is distinct from portable wide VAES;
+// no original AVX512 execution or native-Linux claim is made here.
+func TestCrossLinuxRuntimeMatrixX86AESFamilyOriginalGoFullX128Bytes(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	var original, checks strings.Builder
+	count := 0
+	for op, name := range x86AESOracleNames[:6] {
+		for _, memory := range []bool{false, true} {
+			for alias := 0; alias < 3; alias++ {
+				if op < 4 && alias != 1 {
+					continue
+				}
+				input := "X0"
+				if memory {
+					input = "(SI)"
+				}
+				row, destination := x86AESOracleRow(name, input, "X")
+				if op >= 4 {
+					row = strings.TrimSuffix(row, "X2") + fmt.Sprintf("X%d", alias)
+					destination = alias
+				}
+				fn := fmt.Sprintf("NativeAES%d", count)
+				count++
+				// SysV DI/SI/DX/CX/R8/R9 provide out/a/b/old/flags/csr.
+				body := fmt.Sprintf("TEXT actual(SB),4,$0-0\nMOVOU (SI),X0\nMOVOU (DX),X1\nMOVOU (CX),X2\nMOVL R9,76(DI)\nLDMXCSR 76(DI)\nPUSHQ R8\nPOPFQ\n%s\nMOVOU X%d,(DI)\nPUSHFQ\nPOPQ AX\nMOVQ AX,64(DI)\nSTMXCSR 72(DI)\nRET\n", row, destination)
+				code := x86OrderingHintGoBytes(t, "amd64", body)
+				var encoded []string
+				for _, b := range code {
+					encoded = append(encoded, fmt.Sprintf("0x%02x", b))
+				}
+				symbol := fn
+				if strings.Contains(execution.triple, "apple") {
+					symbol = "_" + symbol
+				}
+				fmt.Fprintf(&original, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint32_t);\n__asm__(%q);\n", fn, ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(encoded, ",")+"\n")
+				fmt.Fprintf(&checks, "if(nativecheck(%s,%q,%d))return 1;\n", fn, row, op)
+			}
+		}
+	}
+	reference := x86AESIndependentC + original.String() + x86AESNativeCheckC + "int main(void){\n" + checks.String() + fmt.Sprintf("printf(\"original Go AES X128 kernels %d samples %d full-byte failures 0\\n\");return 0;}\n", count, count*37*2)
+	output := execution.compileAndRunLLVM(t, "aes-native-go-bytes", "target triple = \""+execution.triple+"\"\n", reference, "-O2")
+	want := fmt.Sprintf("original Go AES X128 kernels %d samples %d full-byte failures 0\n", count, count*37*2)
+	if string(output) != want {
+		t.Fatal("actual Go full-X128 source-byte oracle", string(output))
+	}
+	t.Log(strings.TrimSpace(string(output)))
+}
+
+const x86AESNativeCheckC = `
+static int nativecheck(Program p,const char *name,int op){
+ for(int sample=0;sample<37;sample++)for(int profile=0;profile<2;profile++){
+  struct Aligned a,b,old,out;memset(&a,0xa7,sizeof(a));memset(&b,0xb9,sizeof(b));memset(&old,0x6d,sizeof(old));memset(&out,0xc3,sizeof(out));
+  for(int i=0;i<64;i++){a.value[i]=(uint8_t)(sample*19+i*37);b.value[i]=(uint8_t)(sample*71+i*11);old.value[i]=(uint8_t)(sample*97+i*3);}
+  struct Aligned oa=a,ob=b,oo=old;uint64_t seed=profile?0x8d5:0;uint32_t csr=0x1f80|((sample%4)<<13)|(sample%64),saved=_mm_getcsr();_mm_setcsr(csr);
+  p(out.value,a.value,b.value,old.value,seed,csr);uint32_t after=_mm_getcsr();_mm_setcsr(saved);
+  uint64_t flags;uint32_t reported,scratch;memcpy(&flags,out.value+64,8);memcpy(&reported,out.value+72,4);memcpy(&scratch,out.value+76,4);
+  uint8_t expected[16];aes(expected,b.value,a.value,op,27);
+  if(memcmp(out.value,expected,16)||(flags&0x8d5)!=seed||reported!=csr||scratch!=csr||after!=csr||memcmp(&a,&oa,sizeof(a))||memcmp(&b,&ob,sizeof(b))||memcmp(&old,&oo,sizeof(old))){fprintf(stderr,"original %s sample%d full bytes/flags/CSR/input mismatch\n",name,sample);return 1;}
+  for(int i=16;i<64;i++)if(out.value[i]!=0xc3)return 2;
+  for(int i=0;i<64;i++)if(out.before[i]!=0xc3||out.after[i]!=0xc3)return 3;
+ }return 0;
+}
+`

@@ -13,7 +13,7 @@ func TestX86AESFamilyActualBoundFixedLocalConsumers(t *testing.T) {
 	}
 	var assembly, declarations strings.Builder
 	count := 0
-	for _, name := range x86AESOracleNames[:6] {
+	for _, name := range x86AESOracleNames {
 		for _, source := range []string{"16(SP)", "tmp-144(SP)"} {
 			row, _ := x86AESOracleRow(name, source, "X")
 			if strings.HasPrefix(name, "V") && !strings.Contains(name, "IMC") && !strings.Contains(name, "KEYGEN") {
