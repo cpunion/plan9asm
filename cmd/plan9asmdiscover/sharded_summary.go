@@ -20,7 +20,7 @@ type shardedScan struct {
 	summary  ledgerSummary
 }
 
-// readShardedSummary authenticates the complete input, not only the counts it
+// readShardedSummary validates the complete input, not only the counts it
 // displays. It retains manifest/range metadata, shard identities and at most
 // the current/previous record, never a ledger-sized record slice or map.
 func readShardedSummary(reportPath string) (ledgerSummary, error) {
