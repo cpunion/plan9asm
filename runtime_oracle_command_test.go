@@ -231,6 +231,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"preprocess_macro_controls_test.go",
 		"preprocess_semantic_oracle_test.go",
 		"parser_label_prefix_test.go",
+		"parser_opcode_suffix_test.go",
 		"x86_official_binary_witness_test.go",
 	} {
 		t.Run(name, func(t *testing.T) {

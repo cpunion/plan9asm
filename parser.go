@@ -139,7 +139,11 @@ func ParseWithDefines(arch Arch, src string, defines []string) (*File, error) {
 				continue
 			}
 
-			opStr, rest := splitOpcode(stmt)
+			head, err := parseAssemblyOpcode(arch, stmt)
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %v", lineno, err)
+			}
+			opStr, rest := head.name, head.rest
 			op := Op(strings.ToUpper(opStr))
 			if arch == ArchWASM {
 				// Go's wasm assembler distinguishes low-level WebAssembly Call
@@ -983,11 +987,56 @@ func splitLegacyColonOperand(s string) []string {
 }
 
 func splitOpcode(stmt string) (op, rest string) {
-	opEnd := strings.IndexAny(stmt, " \t")
-	if opEnd < 0 {
+	head, err := parseAssemblyOpcode(ArchAMD64, stmt)
+	if err != nil {
+		// Source inspectors cannot admit an invalid header by dropping tokens.
+		// Parse reports the lexical error through its architecture-aware path.
 		return stmt, ""
 	}
-	return strings.TrimSpace(stmt[:opEnd]), strings.TrimSpace(stmt[opEnd:])
+	return head.name, head.rest
+}
+
+type assemblyOpcodeHead struct {
+	name, rest string
+}
+
+// cmd/asm accepts Ident ('.' Ident)* on ARM and x86 before the first
+// operand. Spaces, comments and CPP origins do not delimit that grammar.
+// Keep original operand bytes; only the opcode/suffix tokens are canonicalized.
+func parseAssemblyOpcode(arch Arch, statement string) (assemblyOpcodeHead, error) {
+	reader := newPPGoReader("<opcode>", statement)
+	word, err := reader.next()
+	if err != nil {
+		return assemblyOpcodeHead{}, err
+	}
+	if word.kind != scanner.Ident {
+		return assemblyOpcodeHead{}, fmt.Errorf("instruction expected identifier, found %q", word.text)
+	}
+	head := assemblyOpcodeHead{name: word.text}
+	for {
+		token, err := reader.next()
+		if err != nil {
+			return assemblyOpcodeHead{}, err
+		}
+		if token.kind == scanner.EOF {
+			return head, nil
+		}
+		if token.kind != '.' {
+			head.rest = strings.TrimSpace(statement[reader.scanner.Position.Offset:])
+			return head, nil
+		}
+		if arch != ArchAMD64 && arch != ArchARM && arch != ArchARM64 {
+			return assemblyOpcodeHead{}, fmt.Errorf("instruction suffix is not supported on %s", arch)
+		}
+		suffix, err := reader.next()
+		if err != nil {
+			return assemblyOpcodeHead{}, err
+		}
+		if suffix.kind != scanner.Ident {
+			return assemblyOpcodeHead{}, fmt.Errorf("instruction suffix expected identifier, found %q", suffix.text)
+		}
+		head.name += "." + suffix.text
+	}
 }
 
 func splitSemicolons(line string) []string {
