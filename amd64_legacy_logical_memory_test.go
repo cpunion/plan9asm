@@ -1,11 +1,44 @@
 package plan9asm
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func x86LegacyLogicalOriginalBytes(t *testing.T, arch, name string) []byte {
+	t.Helper()
+	listing := x86InsertExtractGoListing(t, arch, "TEXT original(SB),4,$0-0\n"+name+" (AX),X0\nRET\n")
+	var code []byte
+	for _, line := range strings.Split(string(listing), "\n") {
+		code = append(code, x86InsertExtractListedBytes(line)...)
+	}
+	// Independent Intel encoding, not obtained from the translator's spec.
+	opcode := map[string]byte{
+		"ANDPS": 0x54, "ANDPD": 0x54, "ANDNPS": 0x55, "ANDNPD": 0x55,
+		"ORPS": 0x56, "ORPD": 0x56, "XORPS": 0x57, "XORPD": 0x57,
+		"PAND": 0xdb, "PANDN": 0xdf, "POR": 0xeb, "PXOR": 0xef,
+	}[name]
+	want := []byte{0x0f, opcode, 0x00, 0xc3}
+	if strings.HasSuffix(name, "PD") || strings.HasPrefix(name, "P") {
+		want = append([]byte{0x66}, want...)
+	}
+	if !bytes.Equal(code, want) {
+		t.Fatalf("%s/%s actual Go memory opcode=%x independent encoding=%x", arch, name, code, want)
+	}
+	t.Logf("%s/%s original complete opcode+RET=%x", arch, name, code)
+	return append([]byte(nil), code[:len(code)-1]...)
+}
+
+func TestX86LegacyLogicalMemoryOriginalGoBytes(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, name := range x86LegacyLogicalMemoryNames {
+			t.Run(arch+"/"+name, func(t *testing.T) { x86LegacyLogicalOriginalBytes(t, arch, name) })
+		}
+	}
+}
 
 // Independent legacy namespace: these twelve Go names all have an m128
 // source whose original SSE instruction requires aligned native storage.
