@@ -208,7 +208,7 @@ func TestX86DwordProductThreeAPIsFiveTargetObjects(t *testing.T) {
 					rows = nil
 					for _, name := range x86DwordProductOracleNames[2:] {
 						for _, row := range x86OfficialPackedBinaryWitnesses(t)[name] {
-							code := assembleX87ControlBytes(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+							code := x86OrderingHintGoBytes(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
 							var directives strings.Builder
 							for _, value := range code[:len(code)-1] {
 								fmt.Fprintf(&directives, "BYTE $%d\n", value)
@@ -414,7 +414,7 @@ func TestX86DwordProductMode32PhysicalMarkerAndMMXBank(t *testing.T) {
 				continue
 			}
 			goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
-			code := assembleX87ControlBytes(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+			code := x86OrderingHintGoBytes(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
 			ins, length, known, err := decodedX86DwordToQwordMultiplyInstruction(code[:len(code)-1], 32)
 			if !known || err != nil || length != len(code)-1 || !ins.x86Encoded {
 				t.Fatal("actual physical low-bank mode32 decode missing", row, ins, err)

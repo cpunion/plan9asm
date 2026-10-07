@@ -164,7 +164,14 @@ vex:
 	if !valid {
 		return Instr{}, 0, true, fmt.Errorf("invalid second-source vector register %d", secondNumber)
 	}
-	first, consumed, err := decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment)
+	disp8Scale := 1
+	if evex {
+		disp8Scale = width
+		if broadcast {
+			disp8Scale = 8
+		}
+	}
+	first, consumed, err := decodedX86VectorRMSource(code[modRMIndex:], mode, bExt, xExt, rmHigh, width, segment, disp8Scale)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
@@ -199,12 +206,12 @@ func x86DwordToQwordMultiplyOpcode(mapSelect int, opcode byte) bool {
 	return mapSelect == 1 && opcode == 0xf4 || mapSelect == 2 && opcode == 0x28
 }
 
-func decodedX86VectorRMSource(code []byte, mode, bExt, xExt, highExt, width int, segment Reg) (Operand, int, error) {
+func decodedX86VectorRMSource(code []byte, mode, bExt, xExt, highExt, width int, segment Reg, disp8Scale int) (Operand, int, error) {
 	if len(code) == 0 {
 		return Operand{}, 0, fmt.Errorf("missing ModRM byte")
 	}
 	if code[0]>>6 != 3 {
-		return decodedX86VEXRMSource(code, mode, bExt, xExt, segment)
+		return decodedX86RMSource(code, mode, bExt, xExt, segment, disp8Scale)
 	}
 	number := int(code[0]&7) + bExt*8 + highExt*16
 	if mode == 32 && number >= 8 {

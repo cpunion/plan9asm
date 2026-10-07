@@ -4,13 +4,35 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
+
+func x86DwordProductIROptimize(t *testing.T, ir string) string {
+	t.Helper()
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := parseIRModuleInContext(ctx, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	if err := module.RunPasses("default<O2>", llvm.TargetMachine{}, options); err != nil {
+		t.Fatalf("LLVM22 dword-product IR default<O2>: %v", err)
+	}
+	return module.String()
+}
 
 // This scalar reference is independent of the production lane model, typed
 // specifications and LLVM operations. All products fit widened 64-bit math.
 const x86DwordProductCReference = `
 #include <stdint.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 #include <xmmintrin.h>
 static uint32_t dword(const uint8_t *p) {
@@ -46,7 +68,10 @@ static int check(Program program,const char*name,int width,int sign,int source,i
   const uint8_t *retained=alias==0?a.value:alias==1?b.value:old.value;
   for(int i=0;i<64;i++) {
    int active=!masking||((masks[m]>>(i/8))&1);
-   uint64_t value=product(dword(a.value+(source==2?0:i/8*8)),dword(b.value+i/8*8),sign);
+   int broadcast=source==2||source>=5;
+   int displacement=source==3?width:source==4?-width:source==5?8:source==6?-8:0;
+   const uint8_t *sourceBytes=(const uint8_t *)&a+offsetof(struct Aligned,value);
+   uint64_t value=product(dword(sourceBytes+displacement+(broadcast?0:i/8*8)),dword(b.value+i/8*8),sign);
    uint8_t want=i<width?(active?(uint8_t)(value>>((i%8)*8)):(masking==2?0:retained[i])):(legacy?retained[i]:0);
    if(out.value[i]!=want) {fprintf(stderr,"%s sample%d mask%llx byte%d got%x want%x\n",name,sample,(unsigned long long)masks[m],i,out.value[i],want);return 2;}
   }
@@ -77,8 +102,8 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes(t *testing.
 		}
 		for _, width := range widths {
 			bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
-			for source := 0; source < 3; source++ {
-				if legacy != 0 && source == 2 {
+			for source := 0; source < 7; source++ {
+				if legacy != 0 && source >= 2 {
 					continue
 				}
 				for alias := 0; alias < 3; alias++ {
@@ -96,8 +121,21 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes(t *testing.
 						if source != 0 {
 							first = "(CX)"
 						}
-						if source == 2 {
+						if source == 2 || source >= 5 {
 							op += ".BCST"
+						}
+						if source == 3 || source == 4 {
+							displacement := width
+							if source == 4 {
+								displacement = -width
+							}
+							first = fmt.Sprintf("%d(CX)", displacement)
+						} else if source >= 5 {
+							displacement := 8
+							if source == 6 {
+								displacement = -8
+							}
+							first = fmt.Sprintf("%d(CX)", displacement)
 						}
 						if masking == 2 {
 							op += ".Z"
@@ -109,8 +147,13 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes(t *testing.
 							}
 							args += fmt.Sprintf(",%s%d", bank, alias)
 						}
+						instruction := op + " " + args
+						if source >= 3 {
+							actual := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+instruction+"\nRET\n")
+							instruction = x86DwordProductDirectives(actual[:len(actual)-1])
+						}
 						fmt.Fprintf(&declarations, "func %s(out *[80]byte,a,b,old *[64]byte,mask,flags uint64,csr uint32)\n", fn)
-						fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\nVMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\nLDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s %s\nVMOVUPS Z%d,(AX)\nPUSHFQ\nPOPQ R9\nMOVQ R9,64(AX)\nSTMXCSR 72(AX)\nRET\n", fn, op, args, alias)
+						fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-52\nMOVQ out+0(FP),AX\nMOVQ a+8(FP),CX\nMOVQ b+16(FP),DX\nMOVQ old+24(FP),R8\nMOVQ mask+32(FP),R9\nVMOVUPS (CX),Z0\nVMOVUPS (DX),Z1\nVMOVUPS (R8),Z2\nKMOVQ R9,K1\nLDMXCSR csr+48(FP)\nPUSHQ flags+40(FP)\nPOPFQ\n%s\nVMOVUPS Z%d,(AX)\nPUSHFQ\nPOPQ R9\nMOVQ R9,64(AX)\nSTMXCSR 72(AX)\nRET\n", fn, instruction, alias)
 						fmt.Fprintf(&reference, "extern void %s(uint8_t*,const uint8_t*,const uint8_t*,const uint8_t*,uint64_t,uint64_t,uint32_t);\n", fn)
 						fmt.Fprintf(&checks, "if(check(%s,%q,%d,%d,%d,%d,%d,%d))return 1;\n", fn, op+" "+args, width, sign, source, alias, masking, legacy)
 					}
@@ -126,7 +169,10 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductIndependentWholeBytes(t *testing.
 			execution.compileAndRunLLVM(t, "dword-product-full", ir, reference.String(), level)
 		})
 	}
-	t.Logf("%d LLVM kernels ×97 initialized samples ×2 six-flag seeds ×4 masks; all64 output bytes, both operand/destination aliases, m64bcst/odd dwords, full MXCSR/input/canaries. Portable LLVM execution does not execute original AVX512.", count)
+	t.Run("IR_O2/backend_O2", func(t *testing.T) {
+		execution.compileAndRunLLVM(t, "dword-product-ir-o2", x86DwordProductIROptimize(t, ir), reference.String(), "-O2")
+	})
+	t.Logf("%d LLVM kernels ×97 initialized samples ×2 six-flag seeds ×4 masks; all64 output bytes, both operand/destination aliases, actual-original-Go raw ±Full/±m64bcst offsets, odd dwords, full MXCSR/input/canaries; explicit IR default<O2> distinct from llc backend O0/O2. Portable LLVM execution does not execute original AVX512.", count)
 }
 
 func TestCrossLinuxRuntimeMatrixX86DwordProductOriginalGoSSE(t *testing.T) {

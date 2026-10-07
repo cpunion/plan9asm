@@ -33,40 +33,54 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductDeadResultFaultEnvelopes(t *testi
 					if legacy && masking != 0 {
 						continue
 					}
-					fn := fmt.Sprintf("F%d", count)
-					count++
-					bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
-					op, args := name, "(BX),"+bank+"1"
+					tuple := width
 					if broadcast != 0 {
-						op += ".BCST"
+						tuple = 8
 					}
-					if masking == 2 {
-						op += ".Z"
-					}
-					if !legacy {
-						if masking != 0 {
-							args += ",K1"
+					for _, displacement := range []int{0, tuple, -tuple} {
+						if legacy && displacement != 0 {
+							continue
 						}
-						args += "," + bank + "2"
-					}
-					fmt.Fprintf(&declarations, "func %s(p *[64]byte,mask uint64)\n", fn)
-					fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-16\nMOVQ p+0(FP),BX\nMOVQ mask+8(FP),AX\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\nKMOVQ AX,K1\n%s %s\nRET\n", fn, op, args)
-					fmt.Fprintf(&prototypes, "extern void %s(const uint8_t*,uint64_t);\n", fn)
-					original := "NULL"
-					if legacy {
-						original = "original_" + fn
-						actual := assembleX87ControlBytes(t, "amd64", "TEXT probe(SB),4,$0-0\nPXOR X1,X1\n"+name+" (DI),X1\nRET\n")
-						var bytes []string
-						for _, value := range actual {
-							bytes = append(bytes, fmt.Sprintf("0x%02x", value))
+						fn := fmt.Sprintf("F%d", count)
+						count++
+						bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+						op, args := name, fmt.Sprintf("%d(BX),%s1", displacement, bank)
+						if broadcast != 0 {
+							op += ".BCST"
 						}
-						symbol := original
-						if strings.Contains(execution.triple, "apple") {
-							symbol = "_" + symbol
+						if masking == 2 {
+							op += ".Z"
 						}
-						fmt.Fprintf(&originals, "extern void %s(const uint8_t*,uint64_t);\n__asm__(%q);\n", original, ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
+						if !legacy {
+							if masking != 0 {
+								args += ",K1"
+							}
+							args += "," + bank + "2"
+						}
+						instruction := op + " " + args
+						if displacement != 0 {
+							actual := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+instruction+"\nRET\n")
+							instruction = x86DwordProductDirectives(actual[:len(actual)-1])
+						}
+						fmt.Fprintf(&declarations, "func %s(p *[64]byte,mask uint64)\n", fn)
+						fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$0-16\nMOVQ p+0(FP),BX\nMOVQ mask+8(FP),AX\nVPXORD Z1,Z1,Z1\nVPXORD Z2,Z2,Z2\nKMOVQ AX,K1\n%s\nRET\n", fn, instruction)
+						fmt.Fprintf(&prototypes, "extern void %s(const uint8_t*,uint64_t);\n", fn)
+						original := "NULL"
+						if legacy {
+							original = "original_" + fn
+							actual := x86OrderingHintGoBytes(t, "amd64", "TEXT probe(SB),4,$0-0\nPXOR X1,X1\n"+name+" (DI),X1\nRET\n")
+							var bytes []string
+							for _, value := range actual {
+								bytes = append(bytes, fmt.Sprintf("0x%02x", value))
+							}
+							symbol := original
+							if strings.Contains(execution.triple, "apple") {
+								symbol = "_" + symbol
+							}
+							fmt.Fprintf(&originals, "extern void %s(const uint8_t*,uint64_t);\n__asm__(%q);\n", original, ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
+						}
+						fmt.Fprintf(&cases, "{%s,%s,%d,%d,%d,%t,%d},\n", fn, original, width, broadcast, masking, legacy, displacement)
 					}
-					fmt.Fprintf(&cases, "{%s,%s,%d,%d,%d,%t},\n", fn, original, width, broadcast, masking, legacy)
 				}
 			}
 		}
@@ -78,9 +92,12 @@ func TestCrossLinuxRuntimeMatrixX86DwordProductDeadResultFaultEnvelopes(t *testi
 		strict, deviations = 0, 8
 	}
 	reference := fmt.Sprintf(x86DwordProductFaultC, prototypes.String(), originals.String(), cases.String(), strict)
-	for _, level := range []string{"-O0", "-O2"} {
-		t.Run(level, func(t *testing.T) {
-			output := execution.compileAndRunLLVM(t, "dword-product-fault", ir, reference, level)
+	for _, pipeline := range []struct{ name, backend, ir string }{
+		{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir},
+		{"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
+	} {
+		t.Run(pipeline.name, func(t *testing.T) {
+			output := execution.compileAndRunLLVM(t, "dword-product-fault", pipeline.ir, reference, pipeline.backend)
 			want := fmt.Sprintf("dword-product fault outcomes %d original SSE outcomes 80 alignment deviations %d failures 0\n", count*10*4, deviations)
 			if string(output) != want {
 				t.Fatalf("native width/alignment, dead result or qword masked fault suppression: %s", output)
@@ -102,7 +119,7 @@ const x86DwordProductFaultC = `
 #include <stdbool.h>
 %s
 %s
-typedef struct {void(*translated)(const uint8_t*,uint64_t);void(*original)(const uint8_t*,uint64_t);unsigned width,broadcast,masking,legacy;} Kernel;
+typedef struct {void(*translated)(const uint8_t*,uint64_t);void(*original)(const uint8_t*,uint64_t);unsigned width,broadcast,masking,legacy;int displacement;} Kernel;
 static Kernel kernels[]={%s};
 static const uint64_t masks[]={0,1,0x80,UINT64_MAX};
 static unsigned need(Kernel k,uint64_t mask) {
@@ -117,8 +134,8 @@ static int observe(Kernel k,unsigned address,uint64_t mask,int original) {
  if(child==0) {
   struct rlimit no_core={0,0};
   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
-  _Alignas(64) uint8_t data[128];memset(data,0xa7,sizeof(data));
-  const uint8_t *p=data;
+  _Alignas(64) uint8_t data[256];memset(data,0xa7,sizeof(data));
+  const uint8_t *p=data+64;
   if(address==1) p++;
   if(address==2) p=NULL;
   if(address>=3) {
@@ -141,7 +158,7 @@ static int observe(Kernel k,unsigned address,uint64_t mask,int original) {
 static int expected(Kernel k,unsigned address,uint64_t mask) {
  unsigned bytes=need(k,mask),available[]={0,4,7,8,k.width-1,k.width,64};
  if(k.legacy&&(address==1||(address>=3&&(available[address-3]%%16)!=0))) return 1;
- return (address==2&&bytes)||(address>=3&&bytes>available[address-3]);
+ return (address==2&&bytes)||(address>=3&&bytes&&(int)bytes+k.displacement>(int)available[address-3]);
 }
 int main(void) {
  unsigned count=0,native=0,deviations=0,failures=0;const int strict=%d;

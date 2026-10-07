@@ -204,3 +204,67 @@ func TestX86GoCallerDwordProductUnprovedInputsAndGuardsRemainContext(t *testing.
 		})
 	}
 }
+
+func TestX86GoCallerDwordProductRawTuplesBindNativeReadWidths(t *testing.T) {
+	for _, name := range []string{"VPMULDQ", "VPMULUDQ"} {
+		for _, width := range []int{16, 32, 64} {
+			for _, broadcast := range []bool{false, true} {
+				op, tuple := name, width
+				if broadcast {
+					op, tuple = name+".BCST", 8
+				}
+				bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+				for _, offset := range []int{-tuple, 64 - tuple, 64} {
+					row := fmt.Sprintf("%s %d(DI),%s1,K1,%s2", op, offset, bank, bank)
+					t.Run(row, func(t *testing.T) {
+						original := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+row+"\nRET\n")
+						body := "VMOVUPS (SI),Z1\nVMOVUPS (SI),Z2\nMOVQ $1,AX\nKMOVQ AX,K1\n" + x86DwordProductDirectives(original[:len(original)-1]) + "VMOVSS X2,(DX)"
+						assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)
+						goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+						pkg, file := x86CallerCoreFixture(t, x86CallerFixtureSource, assembly)
+						if err := x86CallerCoreTranslate(t, pkg, assembly, "x86_64-unknown-linux-gnu"); err != nil {
+							t.Fatal("original raw tuple lost existing readonly slice role", row, err)
+						}
+						// The input is a dynamic slice role, not an observed fixed
+						// 64-byte allocation. Certify only the exact possible native
+						// instruction read, preserving native faulting addresses.
+						resolve := func(symbol string) string { return strings.Replace(symbol, "·", "caller.", 1) }
+						sigs, err := goSigsForAsmFile(pkg, file, resolve, "amd64", nil, nil, nil)
+						if err != nil {
+							t.Fatal(err)
+						}
+						normalized, err := normalizeX86RawFile(file, "amd64", Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs})
+						if err != nil {
+							t.Fatal(err)
+						}
+						found := false
+						for _, ins := range normalized.Funcs[0].Instrs {
+							form, known, err := x86DwordProductProperties(ins.Op, ins, "amd64")
+							if !known || err != nil {
+								continue
+							}
+							found = true
+							access, ok := ins.x86CallerMemory[0]
+							if !ins.x86Encoded || form.memory != 0 || ins.Args[0].Mem.Base != DI || ins.Args[0].Mem.Off != int64(offset) || !ok || access.width != int64(tuple) || access.write || !x86CallerMemoryCertified(ins, 0) {
+								t.Fatal("raw source tuple/address/native-width certificate drift", row, ins, access)
+							}
+						}
+						if !found {
+							t.Fatal("original raw source omitted from normalized proof", row)
+						}
+						// Conversely the fresh result is a real bounded four-byte
+						// region: no full-vector or m64bcst read fits this role.
+						boundedRow := strings.Replace(row, "(DI)", "(DX)", 1)
+						bounded := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+boundedRow+"\nRET\n")
+						boundedBody := strings.Replace(body, x86DwordProductDirectives(original[:len(original)-1]), x86DwordProductDirectives(bounded[:len(bounded)-1]), 1)
+						boundedAssembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", boundedBody, 1)
+						boundedPkg, _ := x86CallerCoreFixture(t, x86CallerFixtureSource, boundedAssembly)
+						if err := x86CallerCoreTranslate(t, boundedPkg, boundedAssembly, "x86_64-unknown-linux-gnu"); !errors.Is(err, ErrProbeNeedsContext) {
+							t.Fatal("actual raw tuple gained bounded result-object permission", boundedRow, err)
+						}
+					})
+				}
+			}
+		}
+	}
+}

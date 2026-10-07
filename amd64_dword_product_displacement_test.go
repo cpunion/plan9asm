@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 type x86DwordProductDisplacementOracle struct {
@@ -131,4 +133,173 @@ func x86DwordProductDirectives(code []byte) string {
 		fmt.Fprintf(&out, "BYTE $%d\n", value)
 	}
 	return out.String()
+}
+
+func TestX86DwordProductTupleOffsetsThreeAPIsFiveTargetObjects(t *testing.T) {
+	fixtures := x86DwordProductDisplacementOracles(t)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 required")
+	}
+	for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+		for _, raw := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/raw%t", triple, raw), func(t *testing.T) {
+				arch := "amd64"
+				if strings.HasPrefix(triple, "i") {
+					arch = "386"
+				}
+				var source, declarations strings.Builder
+				declarations.WriteString("package tuples\n")
+				count := 0
+				for _, fixture := range fixtures {
+					// SP/BP decoder identity is proved above, without using it
+					// to confer an unbound native frame in this object fixture.
+					if fixture.mem.Base == SP || fixture.mem.Base == BP || arch == "386" && (fixture.high || fixture.mem.Base == "R13" || !raw && fixture.mask) {
+						continue
+					}
+					row := fixture.row
+					if raw {
+						row = x86DwordProductDirectives(fixture.code)
+					}
+					fmt.Fprintf(&source, "TEXT ·F%d(SB),4,$0-0\n%s\nRET\n", count, row)
+					fmt.Fprintf(&declarations, "func F%d()\n", count)
+					count++
+				}
+				goAssemblerOracleOutput(t, arch, source.String(), "", true)
+				file, err := Parse(ArchAMD64, source.String())
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkg := mustGoPackage(t, "tuples", declarations.String())
+				sigs := map[string]FuncSig{}
+				for i := 0; i < count; i++ {
+					name := fmt.Sprintf("F%d", i)
+					sigs[name] = FuncSig{Name: name, Ret: Void}
+				}
+				resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
+				options := Options{Goarch: arch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs}
+				ir, err := Translate(file, options)
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, triple, "tuple-text.ll", "tuple-text.o", ir)
+				ctx := llvm.NewContext()
+				defer ctx.Dispose()
+				module, err := TranslateModuleInContext(ctx, file, options)
+				if !module.IsNil() {
+					defer module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, triple, "tuple-module.ll", "tuple-module.o", module.String())
+				goModule, err := translateGoModuleInContext(ctx, pkg, []byte(source.String()), GoModuleOptions{GOARCH: arch, TargetTriple: triple, ResolveSym: resolve})
+				if goModule != nil && !goModule.Module.IsNil() {
+					defer goModule.Module.Dispose()
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				compileLLVMToObject(t, llc, triple, "tuple-go.ll", "tuple-go.o", goModule.Module.String())
+				t.Logf("%d independently assembled tuple/disp32 boundary forms ×three APIs", count)
+			})
+		}
+	}
+}
+
+func TestX86DwordProductTupleRawRejectedPrefixesThreeAPIs(t *testing.T) {
+	for _, name := range []string{"VPMULDQ", "VPMULUDQ"} {
+		for _, width := range []int{16, 32, 64} {
+			for _, broadcast := range []bool{false, true} {
+				op, tuple := name, width
+				if broadcast {
+					op, tuple = name+".BCST", 8
+				}
+				bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+				row := fmt.Sprintf("%s %d(AX),%s1,K1,%s2", op, tuple, bank, bank)
+				code := x86OrderingHintGoBytes(t, "amd64", "TEXT probe(SB),4,$0-0\n"+row+"\nRET\n")
+				wrongW := append([]byte(nil), code[:len(code)-1]...)
+				wrongW[2] &^= 0x80
+				for _, bad := range [][]byte{append([]byte{0x67}, code[:len(code)-1]...), append([]byte{0x64, 0x67}, code[:len(code)-1]...), wrongW} {
+					for _, triple := range []string{"x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "i386-unknown-linux-gnu", "i686-pc-windows-msvc"} {
+						t.Run(fmt.Sprintf("%s/%x/%s", row, bad, triple), func(t *testing.T) {
+							arch := "amd64"
+							if strings.HasPrefix(triple, "i") {
+								arch = "386"
+							}
+							source := "TEXT ·F(SB),4,$0-0\n" + x86DwordProductDirectives(bad) + "RET\n"
+							file, err := Parse(ArchAMD64, source)
+							if err != nil {
+								t.Fatal(err)
+							}
+							options := Options{Goarch: arch, TargetTriple: triple, Sigs: map[string]FuncSig{"F": {Name: "F", Ret: Void}}, ResolveSym: func(name string) string { return strings.TrimPrefix(name, "·") }}
+							if ir, err := Translate(file, options); err == nil || ir != "" {
+								t.Fatal("reserved tuple/address text accepted", err)
+							}
+							ctx := llvm.NewContext()
+							defer ctx.Dispose()
+							module, err := TranslateModuleInContext(ctx, file, options)
+							if !module.IsNil() {
+								defer module.Dispose()
+							}
+							if err == nil || !module.IsNil() {
+								t.Fatal("reserved tuple/address module accepted", err)
+							}
+							pkg := mustGoPackage(t, "tuples", "package tuples\nfunc F()\n")
+							result, err := translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{GOARCH: arch, TargetTriple: triple, ResolveSym: options.ResolveSym})
+							if result != nil && !result.Module.IsNil() {
+								defer result.Module.Dispose()
+							}
+							if err == nil || result != nil {
+								t.Fatal("reserved tuple/address Go module accepted", err)
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86DwordProductVEXDisplacementsRemainUnscaled(t *testing.T) {
+	for _, name := range []string{"VPMULDQ", "VPMULUDQ"} {
+		for _, bank := range []string{"X", "Y"} {
+			for _, units := range []int{-129, -128, -1, 1, 127, 128} {
+				for _, memory := range []MemRef{{Base: AX}, {Base: BP}, {Base: AX, Index: CX, Scale: 4}, {Base: SP, Index: CX, Scale: 2}, {Base: "R13", Index: "R12", Scale: 8}} {
+					memory.Off = int64(units)
+					row := fmt.Sprintf("%s %s,%s1,%s2", name, (Operand{Kind: OpMem, Mem: memory}).String(), bank, bank)
+					original := x86OrderingHintGoBytes(t, "amd64", "TEXT original(SB),4,$0-0\n"+row+"\nRET\n")
+					if original[0] != 0xc4 && original[0] != 0xc5 {
+						t.Fatal("actual Go no longer emitted VEX", row, original)
+					}
+					for _, mode := range []int{32, 64} {
+						for _, segment := range []Reg{"", FS, GS} {
+							t.Run(fmt.Sprintf("%s/mode%d/segment%s", row, mode, segment), func(t *testing.T) {
+								code := append([]byte(nil), original[:len(original)-1]...)
+								if segment != "" {
+									prefix := byte(0x64)
+									if segment == GS {
+										prefix = 0x65
+									}
+									code = append([]byte{prefix}, code...)
+								}
+								ins, length, known, err := decodedX86DwordToQwordMultiplyInstruction(code, mode)
+								if mode == 32 && memory.Base == "R13" {
+									if !known || err == nil {
+										t.Fatal("VEX extended address acquired mode32 binding")
+									}
+									return
+								}
+								want := memory
+								want.Segment = segment
+								if !known || err != nil || length != len(code) || !ins.x86Encoded || ins.Args[0].Kind != OpMem || !reflect.DeepEqual(ins.Args[0].Mem, want) {
+									t.Fatal("VEX source displacement incorrectly scaled", row, ins, err, want)
+								}
+							})
+						}
+					}
+				}
+			}
+		}
+	}
 }
