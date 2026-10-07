@@ -183,6 +183,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_legacy_float_memory_test.go",
 		"amd64_horizontal_float_go_oracle_test.go",
 		"amd64_horizontal_integer_memory_runtime_test.go",
+		"amd64_horizontal_integer_full_alias_runtime_test.go",
 		"amd64_horizontal_integer_family_test.go",
 		"amd64_go_caller_horizontal_integer_test.go",
 		"amd64_packed_unpack_go_oracle_test.go",
