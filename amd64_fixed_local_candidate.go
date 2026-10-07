@@ -13,7 +13,9 @@ func GoAMD64FixedLocalFrameBindingNeeded(file *File, goarch string) bool {
 		}
 		for _, ins := range fn.Instrs {
 			memory, eligible := -1, false
-			if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known {
+			if form, known, err := x86AESProperties(ins.Op, ins, goarch); known {
+				memory, eligible = form.memory, err == nil && form.byteWidth == 16
+			} else if form, known, err := x86PackedWrappingAddProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.mmx && form.byteWidth == 16
 			} else if form, known, err := x86WordMultiplyAddProperties(ins, goarch); known {
 				memory, eligible = form.memory, err == nil && form.legacy && !form.mmx && form.byteWidth == 16

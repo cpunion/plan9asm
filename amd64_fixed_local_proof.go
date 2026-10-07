@@ -191,6 +191,9 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if _, known, err := x86TypedConditionalMoveByteEffect(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
+	if form, known, err := x86AESProperties(ins.Op, ins, "amd64"); known {
+		return err == nil && form.byteWidth == 16
+	}
 	if form, known, err := x86PackedWrappingAddProperties(ins, "amd64"); known {
 		return err == nil && form.legacy && !form.mmx && form.byteWidth == 16
 	}
@@ -477,6 +480,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return nil
 	}
 	if known, err := fixedLocalConditionalMoveStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
 		return err
 	}
 	return fixedLocalVectorStep(ins, state, proof, residue)

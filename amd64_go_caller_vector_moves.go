@@ -6,6 +6,9 @@ func x86CallerVectorMoveKnown(ins Instr) bool {
 	if _, known, err := x86ScalarLaneProperties(ins, "amd64"); known {
 		return err == nil
 	}
+	if _, known, err := x86AESProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if form, known, err := x86HorizontalIntegerProperties(ins, "amd64"); known {
 		return err == nil && !form.mmx
 	}
@@ -121,6 +124,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
 	if form, known, err := x86ScalarLaneProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerScalarLaneStep(ins, form, state, proof)
+	}
+	if form, known, err := x86AESProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerAESByteStep(ins, form, state, proof)
 	}
 	if form, known, err := x86HorizontalIntegerProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerHorizontalIntegerStep(ins, form, state, proof)
@@ -277,6 +283,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86AESProperties(ins.Op, ins, arch); known {
+		return int64(form.byteWidth), false, err == nil && form.memory >= 0 && form.memory == index
+	}
 	if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, arch); known {
 		return int64(form.bits / 8), false, err == nil && index == 0 && isAMD64MemoryOperand(form.source)
 	}

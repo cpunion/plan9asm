@@ -1023,9 +1023,21 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 	var instructions []x86asm.Inst
 	starts := make(map[int]bool)
 	for pc := 0; pc < len(fn.code); {
-		ins, err := x86asm.Decode(fn.code[pc:], 64)
-		if err != nil || ins.Len == 0 || ins.Op == 0 || ins.Op == x86asm.CALL || ins.Op == x86asm.LCALL {
-			return goAMD64FrameContext("unknown or calling original machine instruction")
+		var ins x86asm.Inst
+		if _, length, aes, err := decodedX86AESInstruction(fn.code[pc:], 64); aes {
+			if err != nil || length <= 0 {
+				return goAMD64FrameContext("unbound original AES machine instruction")
+			}
+			// This observer needs exact instruction boundaries, not an AES
+			// semantic substitute. The pinned generic decoder predates VAES.
+			// Op remains zero: it cannot masquerade as a BP/SP or RET opcode.
+			ins.Len = length
+		} else {
+			var err error
+			ins, err = x86asm.Decode(fn.code[pc:], 64)
+			if err != nil || ins.Len == 0 || ins.Op == 0 || ins.Op == x86asm.CALL || ins.Op == x86asm.LCALL {
+				return goAMD64FrameContext("unknown or calling original machine instruction")
+			}
 		}
 		if len(fn.positions[pc]) == 0 {
 			return goAMD64FrameContext("machine instruction lacks its original source position")

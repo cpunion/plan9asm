@@ -404,6 +404,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, recognized := x86ResultScalarLaneStep(ins, state, owned, resultOffset, arch); recognized {
 		return accepted
 	}
+	if accepted, known := x86ResultAESStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, recognized := x86ResultIncomingPointerTransfer(ins, state, owned, arch); recognized {
 		return accepted
 	}

@@ -16,130 +16,123 @@ var amd64AESRoundIntrinsics = map[Op]string{
 // instructions apply the corresponding 128-bit AES operation independently
 // to every lane.
 func (c *amd64Ctx) lowerAES(rawOp Op, ins Instr) (ok bool, terminated bool, err error) {
-	raw := strings.ToUpper(string(rawOp))
-	parts := strings.Split(raw, ".")
-	baseOp := Op(parts[0])
-	switch baseOp {
-	case "AESENC", "AESENCLAST", "AESDEC", "AESDECLAST", "AESIMC", "AESKEYGENASSIST",
-		"VAESENC", "VAESENCLAST", "VAESDEC", "VAESDECLAST", "VAESIMC", "VAESKEYGENASSIST":
-		// handled below; keep the literal family visible to supported-op extraction
-	default:
-		return false, false, nil
+	f, known, err := x86AESProperties(rawOp, ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	legacyOp := baseOp
-	vector := strings.HasPrefix(string(baseOp), "V")
-	if vector {
-		legacyOp = Op(strings.TrimPrefix(string(baseOp), "V"))
+	source, destination := f.sourceOperand, ins.Args[f.destination]
+	for _, slot := range c.fpResults {
+		if c.fixedLocal != nil {
+			break
+		} // its independent whole-source proof owns native local reads/results
+		if slot.Type == I8 || slot.Type == I16 || slot.Type == I32 || slot.Type == I64 || slot.Type == LLVMType("float") || slot.Type == LLVMType("double") {
+			// An intervening X→GP move, unrelated FP store or RET fallback
+			// cannot bypass the whole original-source must-initialized proof.
+			if err := c.scalarFPResultInitialized(); err != nil {
+				return true, false, err
+			}
+			break
+		}
 	}
-	_, round := amd64AESRoundIntrinsics[legacyOp]
-	if len(parts) != 1 {
-		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes in Go 1.27: %q", baseOp, ins.Raw)
+	if f.memory >= 0 {
+		// Native stack bytes need their independent exact backing certificate.
+		// AES Type4 has no alignment requirement. Complete numerical logical
+		// FP views retain their existing byte-read contract, not native backing.
+		if source.Kind == OpMem &&
+			(source.Mem.Base == SP || source.Mem.Base == BP || source.Mem.Index == SP || source.Mem.Index == BP) &&
+			!x86CallerMemoryCertified(ins, f.memory) && !c.fixedLocalMemoryCertified(ins, f.memory) {
+			return true, false, fmt.Errorf("%w: AES native stack source has no original storage certificate", ErrProbeNeedsContext)
+		}
+		if source.Kind == OpFP {
+			if err := c.validateX86PackedShiftFPSpan(source.FPOffset, f.byteWidth); err != nil {
+				return true, false, err
+			}
+			readResult := false
+			for offset := source.FPOffset; offset < source.FPOffset+int64(f.byteWidth); offset++ {
+				slot, result, _ := c.fpVectorSlot(offset)
+				if slot.Type != I8 && slot.Type != I16 && slot.Type != I32 && slot.Type != I64 && slot.Type != LLVMType("float") && slot.Type != LLVMType("double") {
+					return true, false, fmt.Errorf("%w: AES FP byte is not declared numerical storage", ErrProbeNeedsContext)
+				}
+				readResult = readResult || result
+			}
+			if readResult {
+				if err := c.scalarFPResultInitialized(); err != nil {
+					return true, false, err
+				}
+			}
+		}
 	}
-
-	if round {
-		return c.lowerAESRound(baseOp, legacyOp, vector, ins)
+	var value string
+	if f.memory >= 0 && !f.spec.vector && source.Kind != OpFP {
+		value, err = c.emitAESNativeMemory(ins, f)
+	} else {
+		// VAES has no fault-suppression rows. Even a dead key-assist result
+		// reads all m128 bytes, not only its numerical dwords 1 and 3.
+		var key string
+		key, err = c.loadX86PackedShiftBytes(source, f.byteWidth, true)
+		if err == nil && f.spec.operation < x86AESInverseMix {
+			var state string
+			state, err = c.loadPackedCompareBytes(ins.Args[f.state], f.byteWidth)
+			if err == nil {
+				legacyOp := Op(strings.TrimPrefix(strings.ToUpper(string(rawOp)), "V"))
+				value = c.emitAESRound(f.byteWidth, state, key, amd64AESRoundIntrinsics[legacyOp])
+			}
+		} else if err == nil {
+			carrier, call, bytes := c.newTmp(), c.newTmp(), c.newTmp()
+			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", carrier, key)
+			if f.spec.operation == x86AESInverseMix {
+				fmt.Fprintf(c.b, "  %%%s = call <2 x i64> @llvm.x86.aesni.aesimc(<2 x i64> %%%s)\n", call, carrier)
+			} else {
+				fmt.Fprintf(c.b, "  %%%s = call <2 x i64> @llvm.x86.aesni.aeskeygenassist(<2 x i64> %%%s, i8 %d)\n", call, carrier, uint8(ins.Args[0].Imm))
+			}
+			fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", bytes, call)
+			value = "%" + bytes
+		}
 	}
-	if legacyOp == "AESIMC" {
-		return c.lowerAESInverseMixColumns(baseOp, ins)
+	if err != nil {
+		return true, false, err
 	}
-	return c.lowerAESKeygenAssist(baseOp, vector, ins)
+	if !f.spec.vector {
+		return true, false, c.storeLegacyPackedLogical(destination, value)
+	}
+	return true, false, c.storePackedMoveOperand(destination, f.byteWidth, value)
 }
 
-func (c *amd64Ctx) lowerAESRound(baseOp, legacyOp Op, vector bool, ins Instr) (bool, bool, error) {
-	if !vector {
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 %s expects X/m128, X: %q", baseOp, ins.Raw)
-		}
-		key, destination := ins.Args[0], ins.Args[1]
-		if !c.isGoVEXVectorRegister(key, 16, true) || !c.isGoVEXVectorRegister(destination, 16, false) {
-			return true, false, fmt.Errorf("amd64 %s operands are outside Go 1.27's X/m128, X classes: %q", baseOp, ins.Raw)
-		}
-		keyBytes, err := c.loadPackedCompareBytes(key, 16)
+// Retain the original legacy opcode and its complete memory envelope even
+// when the result is dead. Type4 AES permits unaligned memory references.
+func (c *amd64Ctx) emitAESNativeMemory(ins Instr, f x86AESForm) (string, error) {
+	source := f.sourceOperand
+	if f.spec.operation < x86AESInverseMix {
+		data, err := c.loadPackedCompareLanes(ins.Args[f.state], 16, 64, false)
 		if err != nil {
-			return true, false, err
+			return "", err
 		}
-		stateBytes, err := c.loadX(destination.Reg)
+		result, err := c.emitPackedBinaryNativeMemory(source, 64, data, strings.ToLower(string(ins.Op)))
 		if err != nil {
-			return true, false, err
+			return "", err
 		}
-		result := c.emitAESRound(16, stateBytes, keyBytes, amd64AESRoundIntrinsics[legacyOp])
-		return true, false, c.storeX(destination.Reg, result)
+		value := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %s to <16 x i8>\n", value, result)
+		return "%" + value, nil
 	}
-
-	if len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("amd64 %s expects X|Y|Z/mem, X|Y|Z, X|Y|Z: %q", baseOp, ins.Raw)
-	}
-	key, state, destination := ins.Args[0], ins.Args[1], ins.Args[2]
-	byteWidth := amd64VectorByteWidth(destination.Reg)
-	if destination.Kind != OpReg || byteWidth != 16 && byteWidth != 32 && byteWidth != 64 || !c.isGoEVEXVectorRegister(destination, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s destination is outside Go 1.27's X/Y/Z classes: %q", baseOp, ins.Raw)
-	}
-	if !c.isGoEVEXVectorRegister(state, byteWidth) {
-		return true, false, fmt.Errorf("amd64 %s state source must match the destination width: %q", baseOp, ins.Raw)
-	}
-	if key.Kind == OpReg {
-		if !c.isGoEVEXVectorRegister(key, byteWidth) {
-			return true, false, fmt.Errorf("amd64 %s key source must match the destination width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(key) {
-		return true, false, fmt.Errorf("amd64 %s key source must be a vector register or memory: %q", baseOp, ins.Raw)
-	}
-	keyBytes, err := c.loadPackedCompareBytes(key, byteWidth)
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(source)
 	if err != nil {
-		return true, false, err
+		return "", err
 	}
-	stateBytes, err := c.loadPackedCompareBytes(state, byteWidth)
-	if err != nil {
-		return true, false, err
+	segment := ""
+	if pointerType == "ptr addrspace(256)" {
+		segment = "%gs:"
+	} else if pointerType == "ptr addrspace(257)" {
+		segment = "%fs:"
 	}
-	result := c.emitAESRound(byteWidth, stateBytes, keyBytes, amd64AESRoundIntrinsics[legacyOp])
-	return true, false, c.storeVectorBytes(destination.Reg, byteWidth, result)
-}
-
-func (c *amd64Ctx) lowerAESInverseMixColumns(baseOp Op, ins Instr) (bool, bool, error) {
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("amd64 %s expects X/m128, X: %q", baseOp, ins.Raw)
+	assembly := strings.ToLower(string(ins.Op)) + " " + segment + "($1), $0"
+	if f.spec.operation == x86AESKeyAssist {
+		assembly = fmt.Sprintf("aeskeygenassist $$%d, %s($1), $0", uint8(ins.Args[0].Imm), segment)
 	}
-	source, destination := ins.Args[0], ins.Args[1]
-	if !c.isGoVEXVectorRegister(source, 16, true) || !c.isGoVEXVectorRegister(destination, 16, false) {
-		return true, false, fmt.Errorf("amd64 %s operands are outside Go 1.27's VEX X/m128, X classes: %q", baseOp, ins.Raw)
-	}
-	sourceBytes, err := c.loadPackedCompareBytes(source, 16)
-	if err != nil {
-		return true, false, err
-	}
-	sourceI64 := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", sourceI64, sourceBytes)
-	call := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call <2 x i64> @llvm.x86.aesni.aesimc(<2 x i64> %%%s)\n", call, sourceI64)
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", result, call)
-	return true, false, c.storeX(destination.Reg, "%"+result)
-}
-
-func (c *amd64Ctx) lowerAESKeygenAssist(baseOp Op, vector bool, ins Instr) (bool, bool, error) {
-	validImmediate := len(ins.Args) == 3 && amd64UnsignedImmediate(ins.Args[0], 8)
-	if vector {
-		validImmediate = len(ins.Args) == 3 && amd64VectorByteShiftImmediate(ins.Args[0])
-	}
-	if !validImmediate {
-		return true, false, fmt.Errorf("amd64 %s expects $imm8, X/m128, X: %q", baseOp, ins.Raw)
-	}
-	source, destination := ins.Args[1], ins.Args[2]
-	if !c.isGoVEXVectorRegister(source, 16, true) || !c.isGoVEXVectorRegister(destination, 16, false) {
-		return true, false, fmt.Errorf("amd64 %s operands are outside Go 1.27's VEX X/m128, X classes: %q", baseOp, ins.Raw)
-	}
-	sourceBytes, err := c.loadPackedCompareBytes(source, 16)
-	if err != nil {
-		return true, false, err
-	}
-	sourceI64 := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <2 x i64>\n", sourceI64, sourceBytes)
-	call := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call <2 x i64> @llvm.x86.aesni.aeskeygenassist(<2 x i64> %%%s, i8 %d)\n", call, sourceI64, uint8(ins.Args[0].Imm))
-	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <2 x i64> %%%s to <16 x i8>\n", result, call)
-	return true, false, c.storeX(destination.Reg, "%"+result)
+	call, value := c.newTmp(), c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = call <4 x i32> asm sideeffect %q, \"=x,r,~{memory}\"(%s %s)\n", call, assembly, pointerType, pointer)
+	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", value, call)
+	return "%" + value, nil
 }
 
 func (c *amd64Ctx) emitAESRound(byteWidth int, stateBytes, keyBytes, intrinsic string) string {
