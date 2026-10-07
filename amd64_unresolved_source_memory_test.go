@@ -117,3 +117,85 @@ func TestX86UnresolvedSourceMemoryThreeAPIsRejectBeforeRawDecoding(t *testing.T)
 		}
 	}
 }
+
+func TestX86UnresolvedSourceMemoryResolvedMacrosThreeAPIsFiveTargets(t *testing.T) {
+	const source = `#define OFFSET (3*8)
+TEXT ·Value(SB),4,$0-0
+MOVL $32,AX
+MOVL OFFSET(AX),BX
+RET
+`
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc required")
+	}
+	for _, target := range x86RawReturnTargets {
+		t.Run(target.triple, func(t *testing.T) {
+			goAssemblerOracleOutput(t, target.arch, source, "", true)
+			file, err := Parse(ArchAMD64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, ins := range file.Funcs[0].Instrs {
+				for _, arg := range ins.Args {
+					if arg.Kind == OpMem && (arg.Mem.OffRaw != "" || arg.Mem.Off != 24) {
+						t.Fatalf("resolved macro lost its real displacement: %#v", arg)
+					}
+				}
+			}
+			resolve := func(name string) string { return strings.TrimPrefix(name, "·") }
+			options := Options{Goarch: target.arch, TargetTriple: target.triple, ResolveSym: resolve,
+				Sigs: map[string]FuncSig{"Value": {Name: "Value", Ret: Void}}}
+			pkg := mustGoPackage(t, "memory", "package memory\nfunc Value()\n")
+			for _, api := range []string{"text", "module", "GoModule"} {
+				t.Run(api, func(t *testing.T) {
+					ctx := llvm.NewContext()
+					defer ctx.Dispose()
+					var ir string
+					var err error
+					switch api {
+					case "text":
+						ir, err = Translate(file, options)
+					case "module":
+						var module llvm.Module
+						module, err = TranslateModuleInContext(ctx, file, options)
+						if !module.IsNil() {
+							defer module.Dispose()
+							ir = module.String()
+						}
+					case "GoModule":
+						var result *GoModuleTranslation
+						result, err = translateGoModuleInContext(ctx, pkg, []byte(source), GoModuleOptions{
+							GOARCH: target.arch, TargetTriple: target.triple, ResolveSym: resolve})
+						if result != nil && !result.Module.IsNil() {
+							defer result.Module.Dispose()
+							ir = result.Module.String()
+						}
+					}
+					if err != nil || ir == "" {
+						t.Fatalf("resolved macro lost its existing object path: %v", err)
+					}
+					compileLLVMToObject(t, llc, target.triple, "resolved-memory.ll", "resolved-memory.o", ir)
+				})
+			}
+		})
+	}
+}
+
+func TestX86UnresolvedSourceMemoryCannotHideMalformedPhysicalGroups(t *testing.T) {
+	for _, address := range []string{
+		"UNKNOWN(AX)(CX*3)", "UNKNOWN(AX)(CX*UNKNOWN)", "UNKNOWN(AX)(CX*1)(DX*1)",
+	} {
+		t.Run(address, func(t *testing.T) {
+			// Resolve the displacement for the independent Go syntax rejection:
+			// an undefined macro must not be the reason this negative control fails.
+			for _, arch := range []string{"386", "amd64"} {
+				resolved := "#define UNKNOWN 24\nTEXT one(SB),4,$0-0\nMOVL " + address + ",BX\nRET\n"
+				goAssemblerOracleOutput(t, arch, resolved, "", false)
+			}
+			if _, err := Parse(ArchAMD64, "TEXT one(SB),4,$0-0\nMOVL "+address+",BX\nRET\n"); err == nil {
+				t.Fatal("unresolved displacement hid a malformed physical register group")
+			}
+		})
+	}
+}
