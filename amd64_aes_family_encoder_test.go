@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -111,11 +112,97 @@ func TestX86AESFamilyMode32NamedHighAndRawReservedBoundaries(t *testing.T) {
 		}
 	}
 	valid := x86OrderingHintGoBytes(t, "amd64", "TEXT f(SB),4,$0-0\nVAESENC 64(AX),Z1,Z2\nRET\n")
-	for _, mutation := range []func([]byte){func(b []byte) { b[2] |= 0x80 }, func(b []byte) { b[2] &^= 4 }, func(b []byte) { b[3] |= 1 }, func(b []byte) { b[3] |= 0x80 }, func(b []byte) { b[3] |= 0x10 }, func(b []byte) { b[3] |= 0x60 }} {
+	for _, mutation := range []func([]byte){func(b []byte) { b[2] &^= 4 }, func(b []byte) { b[3] |= 1 }, func(b []byte) { b[3] |= 0x80 }, func(b []byte) { b[3] |= 0x10 }, func(b []byte) { b[3] |= 0x60 }} {
 		changed := append([]byte(nil), valid...)
 		mutation(changed)
 		if _, _, known, err := decodedX86AESInstruction(changed, 64); !known || err == nil {
 			t.Fatal("reserved AES bytes acquired an unrelated raw effect", fmt.Sprintf("%x", changed), err)
+		}
+	}
+}
+
+func TestX86AESFamilyPhysicalWIGIndependentLLVMDecoder(t *testing.T) {
+	mc := findLLVM22Tool("llvm-mc")
+	if mc == "" {
+		t.Fatal("LLVM22 required")
+	}
+	for _, name := range x86AESOracleNames[6:] {
+		forms := []struct {
+			width       int
+			destination int
+		}{{16, 2}}
+		if !strings.Contains(name, "IMC") && !strings.Contains(name, "KEYGEN") {
+			forms = append(forms, struct {
+				width       int
+				destination int
+			}{32, 2}, struct {
+				width       int
+				destination int
+			}{16, 16}, struct {
+				width       int
+				destination int
+			}{32, 16}, struct {
+				width       int
+				destination int
+			}{64, 2})
+		}
+		for _, form := range forms {
+			width := form.width
+			bank := map[int]string{16: "X", 32: "Y", 64: "Z"}[width]
+			row, _ := x86AESOracleRow(name, fmt.Sprintf("%d(AX)", width), bank)
+			row = strings.TrimSuffix(row, bank+"2") + fmt.Sprintf("%s%d", bank, form.destination)
+			code := x86OrderingHintGoBytes(t, "amd64", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+			// Intel's VEX and EVEX AES attributes are WIG. This is an
+			// explicit physical-attribute fixture, not a claimed Go named row.
+			for _, wide := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/W=%t", row, wide), func(t *testing.T) {
+					physical := append([]byte(nil), code[:len(code)-1]...)
+					if wide {
+						physical[2] |= 0x80
+					}
+					var input strings.Builder
+					for _, b := range physical {
+						fmt.Fprintf(&input, "0x%02x ", b)
+					}
+					ctx, cancel := runtimeOracleStageContext(t)
+					defer cancel()
+					command := exec.CommandContext(ctx, mc, "--disassemble", "--triple=x86_64-unknown-linux-gnu")
+					command.Stdin = strings.NewReader(input.String() + "\n")
+					output, err := runtimeOracleCombinedOutput(ctx, command)
+					if err != nil || !strings.Contains(strings.ToLower(string(output)), strings.ToLower(name)) || strings.Contains(string(output), "warning:") {
+						t.Fatal("independent LLVM22 physical WIG decoder", err, string(output))
+					}
+					ins, length, known, err := decodedX86AESInstruction(physical, 64)
+					if !known || err != nil || length != len(physical) || ins.Op != Op(name) {
+						t.Fatal("complete physical AES WIG attribute lost", fmt.Sprintf("%x", physical), ins, err)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestX86AESFamilyLogicalFPNumericalSpanContracts(t *testing.T) {
+	for _, target := range x86RawReturnTargets {
+		for _, name := range x86AESOracleNames {
+			row, _ := x86AESOracleRow(name, "a+0(FP)", "X")
+			for _, contract := range []struct {
+				parameters string
+				accepted   bool
+			}{{"a,b uint64", true}, {"a,b,c,d float32", true}, {"a,b float64", true}, {"a uint8,b uint64", false}, {"a,b *byte", false}} {
+				t.Run(target.triple+"/"+name+"/"+contract.parameters, func(t *testing.T) {
+					source := "TEXT ·F(SB),4,$0-16\n" + row + "\nRET\n"
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, source, "func F("+contract.parameters+")\n", target.arch, target.triple, api)
+							if (err == nil) != contract.accepted || !contract.accepted && ir != "" {
+								t.Fatal("complete numeric logical FP bytes must not acquire holes, pointer or native backing authority", contract.accepted, err)
+							}
+						})
+					}
+				})
+			}
 		}
 	}
 }
@@ -316,9 +403,6 @@ func TestX86AESFamilyThreeAPIsFiveTargetNumericResults(t *testing.T) {
 			count := 0
 			for _, name := range x86AESOracleNames {
 				for _, memory := range []bool{false, true} {
-					if memory && !strings.HasPrefix(name, "V") {
-						continue
-					}
 					first, params, offset := "X0", "", 0
 					if memory {
 						first, params, offset = "a+0(FP)", "a,b uint64", 16
@@ -345,15 +429,12 @@ func TestX86AESFamilyThreeAPIsFiveTargetNumericResults(t *testing.T) {
 
 func TestX86AESFamilyPermissionAndEncodingBoundaries(t *testing.T) {
 	for _, name := range x86AESOracleNames {
-		for _, source := range []string{"(SP)", "(BP)", "tmp(SP)", "a+0(FP)"} {
-			if source == "a+0(FP)" && strings.HasPrefix(name, "V") {
-				continue
-			}
+		for _, source := range []string{"(SP)", "(BP)", "tmp(SP)"} {
 			row, _ := x86AESOracleRow(name, source, "X")
 			goAssemblerOracleOutput(t, "amd64", "TEXT f(SB),4,$0-16\n"+row+"\nRET\n", "", true)
 			ir, err := x86ScalarFPBitViewAPI(t, "TEXT ·F(SB),4,$0-16\n"+row+"\nRET\n", "func F(a,b uint64)\n", "amd64", "x86_64-unknown-linux-gnu", "text")
 			if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
-				t.Fatal("AES grammar granted unbound native stack/legacy FP storage", row, err)
+				t.Fatal("AES grammar granted unbound native stack storage", row, err)
 			}
 		}
 	}

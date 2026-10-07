@@ -52,9 +52,9 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyLiveDeadFaultEnvelopes(t *testing.T)
 					}
 					fmt.Fprintf(&originals, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(encoded, ",")+"\n")
 					fmt.Fprintf(&prototypes, "extern void %s(const uint8_t*,uint8_t*);\n", original)
-					outcomes += 7
+					outcomes += 9
 				}
-				outcomes += 7
+				outcomes += 9
 				fmt.Fprintf(&rows, "{%s,%s,%d,%d},\n", fn, original, width, legacyInt)
 			}
 		}
@@ -65,7 +65,7 @@ func TestCrossLinuxRuntimeMatrixX86AESFamilyLiveDeadFaultEnvelopes(t *testing.T)
 	for _, pipeline := range []struct{ name, backend, ir string }{{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)}} {
 		t.Run(pipeline.name, func(t *testing.T) {
 			output := execution.compileAndRunLLVM(t, "aes-fault", pipeline.ir, reference, pipeline.backend)
-			want := fmt.Sprintf("aes live/dead kernels %d exact fault outcomes %d tripwires 3 failures 0\n", count, outcomes)
+			want := fmt.Sprintf("aes live/dead kernels %d exact fault outcomes %d tripwires 4 failures 0\n", count, outcomes)
 			if string(output) != want {
 				t.Fatal("AES original/native-width/dead-read faults", string(output))
 			}
@@ -97,8 +97,10 @@ static int observe(Program p,unsigned width,unsigned address){
   if(address==2)input=NULL;
   if(address>=3){long page=sysconf(_SC_PAGESIZE);if(page<=0)_exit(121);
    uint8_t *memory=mmap(NULL,2*(size_t)page,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);if(memory==MAP_FAILED)_exit(122);
-   memset(memory,0xa7,(size_t)page);if(mprotect(memory+page,(size_t)page,PROT_NONE))_exit(123);
-   unsigned available[]={0,width-1,width,width+1};input=memory+page-available[address-3];
+   memset(memory,0xa7,2*(size_t)page);
+   if(address<7){if(mprotect(memory+page,(size_t)page,PROT_NONE))_exit(123);
+    unsigned available[]={0,width-1,width,width+1};input=memory+page-available[address-3];
+   }else{if(mprotect(memory,(size_t)page,PROT_NONE))_exit(123);input=memory+page-(address==7?4:12);}
   }
   p(input,out);_exit(0);
  }
@@ -110,15 +112,18 @@ static int observe(Program p,unsigned width,unsigned address){
 static void missing(const uint8_t*p,uint8_t*out){(void)p;(void)out;}
 static void short_read(const uint8_t*p,uint8_t*out){out[0]=*(volatile const uint8_t*)p;}
 static void over_read(const uint8_t*p,uint8_t*out){out[0]=*((volatile const uint8_t*)p+63);}
+static void missing_prefix(const uint8_t*p,uint8_t*out){out[0]=*((volatile const uint8_t*)p+4)^*((volatile const uint8_t*)p+12);}
 int main(void){unsigned count=0;
- if(observe(missing,16,2)!=0||observe(short_read,64,4)!=0||observe(over_read,16,5)!=1)return 4;
- for(unsigned i=0;i<sizeof(kernels)/sizeof(kernels[0]);i++)for(unsigned a=0;a<7;a++){
-  Kernel k=kernels[i];int want=a==2||a==3||a==4||(k.legacy&&(a==1||a==6));
-  for(unsigned original=0;original<=1;original++){if(original&&!k.original)continue;
+ if(observe(missing,16,2)!=0||observe(short_read,64,4)!=0||observe(over_read,16,5)!=1||observe(missing_prefix,16,7)!=0)return 4;
+ for(unsigned i=0;i<sizeof(kernels)/sizeof(kernels[0]);i++)for(unsigned a=0;a<9;a++){
+  Kernel k=kernels[i];int want=a==2||a==3||a==4||a>=7;
+  // Independently check original Go bytes first. AES Type4 has no alignment
+  // requirement; unaligned full-width reads are positive, not fault oracles.
+  for(int original=1;original>=0;original--){if(original&&!k.original)continue;
    int got=observe(original?k.original:k.translated,k.width,a);count++;
-   if(got!=want){fprintf(stderr,"AES kernel%%u width%%u address%%u original%%u got%%d want%%d\n",i,k.width,a,original,got,want);return 1;}
+   if(got!=want){fprintf(stderr,"AES kernel%%u width%%u address%%u original%%d got%%d want%%d\n",i,k.width,a,original,got,want);return 1;}
   }
  }
- printf("aes live/dead kernels %%zu exact fault outcomes %%u tripwires 3 failures 0\n",sizeof(kernels)/sizeof(kernels[0]),count);return 0;
+ printf("aes live/dead kernels %%zu exact fault outcomes %%u tripwires 4 failures 0\n",sizeof(kernels)/sizeof(kernels[0]),count);return 0;
 }
 `
