@@ -39,10 +39,7 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 	if ok, term, err := c.lowerQwordBitLookup(op, ins); ok {
 		return ok, term, err
 	}
-	if ok, term, err := c.lowerMaskToVector(op, ins); ok {
-		return ok, term, err
-	}
-	if ok, term, err := c.lowerVectorToMask(op, ins); ok {
+	if ok, term, err := c.lowerMaskVectorMove(op, ins); ok {
 		return ok, term, err
 	}
 	rawOp := op

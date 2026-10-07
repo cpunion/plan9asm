@@ -107,6 +107,14 @@ Lane syntax shares Go's single decimal-token rule after CPP expansion: trim
 lexical whitespace, reject signs/expressions/nondecimal or unresolved tokens,
 and retain every instruction's independent physical width/index bound.
 
+The eight mask/vector B/W/D/Q moves share a register-only EVEX grammar with
+X/Y/Z widths and K0-K7 data operands, never writemasking or suffixes. Caller
+effects require initialized mask/vector inputs; forward writes clear every
+wider alias, while reverse writes zero-extend the mask remainder. Use the
+encoding-aware packed writeback even for X destinations: legacy `storeX`
+preserves wider bytes. Independent whole-byte runtime checks must observe both
+directions separately rather than relying only on a round trip.
+
 An x86 raw-return caller-region producer is a separate, bounded source proof,
 not a pointer-type or `noescape` nonalias promise. It requires the same actual
 selected Go/ASM inventory, typed syntax, actual numerical/pointer sizes and
