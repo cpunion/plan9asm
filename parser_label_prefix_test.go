@@ -33,6 +33,7 @@ func TestParseLabelPrefixFamilyOriginalGoAndLLVMObjects(t *testing.T) {
 				{"function_macro", "#define LABELS(a,b) a: b:\n", "LABELS(first,next) tail: NOP\n", []string{"first", "next", "tail"}},
 				{"opcode_names", "", "RET: NOP: tail: NOP\n", []string{"RET", "NOP", "tail"}},
 				{"unicode", "", "一: 二: 三: NOP\n", []string{"一", "二", "三"}},
+				{"internal_names", "", "reg_R0: reg_AX: flags_n: entry: anon_1: NOP\n", []string{"reg_R0", "reg_AX", "flags_n", "entry", "anon_1"}},
 			} {
 				t.Run(test.name, func(t *testing.T) {
 					source := test.prefix + "TEXT ·Probe(SB),4,$0-0\n" + test.body + "RET\n"
