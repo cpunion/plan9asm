@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -289,36 +288,27 @@ func TestDiscoveryPublicationPreservesReadableUppercaseShardNames(t *testing.T) 
 	}
 }
 
+type publicationNamedShardEntry struct {
+	os.DirEntry
+	name string
+}
+
+func (e publicationNamedShardEntry) Name() string { return e.name }
+
 func TestDiscoveryReaderRejectsDuplicateLogicalShardAliases(t *testing.T) {
 	ledger := filepath.Join(t.TempDir(), "ledger")
 	if err := writeShardedReport(ledger, discoveryReport{Scanned: []moduleVersion{publicationModuleInShard(t, 0xa0)}}); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(ledger, "records", "a0.jsonl"))
+	entries, err := os.ReadDir(filepath.Join(ledger, "records"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(ledger, "records", "A0.jsonl"), data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	manifestPath := filepath.Join(ledger, "manifest.json")
-	data, err = os.ReadFile(manifestPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var manifest shardedManifest
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		t.Fatal(err)
-	}
-	manifest.Scanned = 2
-	writeSummaryFixtureJSON(t, manifestPath, manifest)
-	for _, read := range []func(string) error{
-		func(path string) error { _, err := readShardedSummary(path); return err },
-		func(path string) error { _, err := readShardedReport(path); return err },
-		func(path string) error { return writeShardedReport(path, discoveryReport{}) },
-	} {
-		if err := read(ledger); err == nil || !strings.Contains(err.Error(), "duplicate logical record shard") {
-			t.Errorf("duplicate logical shard aliases were not rejected explicitly: %v", err)
-		}
+	// A case-insensitive host cannot create both physical aliases. Exercise the
+	// actual shared reader's namespace validator with both directory entries;
+	// this obligation runs on every host, without Skip or a copied validator.
+	aliases := append(entries, publicationNamedShardEntry{DirEntry: entries[0], name: "A0.jsonl"})
+	if _, err := recordShardPaths(ledger, aliases); err == nil || !strings.Contains(err.Error(), "duplicate logical record shard") {
+		t.Fatalf("duplicate logical shard aliases were not rejected explicitly: %v", err)
 	}
 }

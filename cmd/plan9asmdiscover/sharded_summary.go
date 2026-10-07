@@ -91,18 +91,10 @@ func scanShardedReport(reportPath string, visit func(shardedRecord) error) (shar
 	if err != nil {
 		return shardedScan{}, fmt.Errorf("list sharded report records %q: %w", reportPath, err)
 	}
-	shards := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || len(name) != len("00.jsonl") || !strings.HasSuffix(name, ".jsonl") {
-			return shardedScan{}, fmt.Errorf("list sharded report records %q: unexpected entry %q", reportPath, name)
-		}
-		if _, err := strconv.ParseUint(name[:2], 16, 8); err != nil {
-			return shardedScan{}, fmt.Errorf("list sharded report records %q: invalid shard name %q", reportPath, name)
-		}
-		shards = append(shards, filepath.Join(recordsDir, name))
+	shards, err := recordShardPaths(reportPath, entries)
+	if err != nil {
+		return shardedScan{}, err
 	}
-	sort.Strings(shards)
 	summary := summarizeLedger(report)
 	identities := make([]os.FileInfo, 0, len(shards))
 	for _, shard := range shards {
@@ -122,6 +114,23 @@ func scanShardedReport(reportPath string, visit func(shardedRecord) error) (shar
 		return shardedScan{}, err
 	}
 	return shardedScan{metadata: report, summary: summary}, nil
+}
+
+// Keep namespace validation independent of the host filesystem's case policy.
+func recordShardPaths(reportPath string, entries []os.DirEntry) ([]string, error) {
+	shards := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || len(name) != len("00.jsonl") || !strings.HasSuffix(name, ".jsonl") {
+			return nil, fmt.Errorf("list sharded report records %q: unexpected entry %q", reportPath, name)
+		}
+		if _, err := strconv.ParseUint(name[:2], 16, 8); err != nil {
+			return nil, fmt.Errorf("list sharded report records %q: invalid shard name %q", reportPath, name)
+		}
+		shards = append(shards, filepath.Join(reportPath, "records", name))
+	}
+	sort.Strings(shards)
+	return shards, nil
 }
 
 func scanRecordShard(shard string, summary *ledgerSummary, visit func(shardedRecord) error) (os.FileInfo, error) {
