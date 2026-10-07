@@ -51,6 +51,23 @@ func decodeARM64RawBitfield(word uint32) (arm64RawBitfield, bool) {
 	}, true
 }
 
+// Physical bitfield encodings share these effects regardless of the alias
+// chosen by a disassembler. BFM reads the retained destination bits; SBFM and
+// UBFM overwrite it. W writes also define the X register's zero-extended half.
+// Register 31 is the zero register in this grammar, never the stack pointer.
+func (form arm64RawBitfield) gpEffects() (reads, writes uint32) {
+	if form.source != 31 {
+		reads |= 1 << uint(form.source)
+	}
+	if form.destination != 31 {
+		writes |= 1 << uint(form.destination)
+		if form.op == "BFM" {
+			reads |= writes
+		}
+	}
+	return reads, writes
+}
+
 func (c *arm64Ctx) lowerRawBitfield(form arm64RawBitfield) error {
 	// Rd=31 is WZR/XZR for bitfield instructions, so the result is discarded.
 	if form.destination == 31 {

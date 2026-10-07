@@ -106,6 +106,13 @@ func arm64ScratchSDKNativeEffect(instruction arm64asm.Inst) (arm64ScratchInputEf
 }
 
 func arm64ScratchNativeInputEffect(instruction arm64asm.Inst, sourceStack bool) (arm64ScratchInputEffect, bool) {
+	if form, valid := decodeARM64RawBitfield(instruction.Enc); valid {
+		reads, writes := form.gpEffects()
+		if (reads|writes)&(1<<30) != 0 {
+			return arm64ScratchInputEffect{}, false // No native LR data contract.
+		}
+		return arm64ScratchInputEffect{reads: uint64(reads), writes: uint64(writes)}, true
+	}
 	if instruction.Op == arm64asm.RET {
 		return arm64ScratchInputEffect{}, instruction.Enc == 0xd65f03c0
 	}
@@ -175,7 +182,7 @@ func arm64ScratchNativeInputEffect(instruction arm64asm.Inst, sourceStack bool) 
 		effect.writes |= 15 << 31
 	case arm64asm.B, arm64asm.CBZ, arm64asm.CBNZ, arm64asm.TBZ, arm64asm.TBNZ, arm64asm.ADRP:
 	default:
-		if !arm64RawPoolPreservesNZCV(instruction.Op) {
+		if !arm64RawPoolInstructionPreservesNZCV(instruction) {
 			return arm64ScratchInputEffect{}, false
 		}
 	}

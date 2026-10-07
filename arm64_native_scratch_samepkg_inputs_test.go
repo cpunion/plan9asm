@@ -33,6 +33,11 @@ func TestARM64NativeScratchSamePackageInputsRemainContext(t *testing.T) {
 		{"uninitialized-local-alias", "first: next: MOVD 16(RSP),R1", "32", true},
 		{"partial-local-alias", "MOVW R1,16(RSP)\nfirst: next: MOVD 16(RSP),R1", "32", true},
 		{"one-path-local-alias", "CBZ R1,first\nMOVD R1,16(RSP)\nfirst: next: MOVD 16(RSP),R1", "32", true},
+		{"bitfield-unknown-source", "SXTB R6,R1", "0", true},
+		{"bitfield-undefined-merge", "BFI $3,R1,$7,R4\nMOVD R4,R1", "0", true},
+		{"bitfield-defined-merge", "MOVD $1,R4\nBFI $3,R1,$7,R4\nMOVD R4,R1", "0", false},
+		{"bitfield-flags-retained", "CMP $1,R1\nSXTB R1,R4\nCSEL EQ,R1,R4,R1", "0", false},
+		{"bitfield-no-incoming-flags", "SXTB R1,R4\nCSEL EQ,R1,R4,R1", "0", true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			assembly := strings.Replace(arm64ScratchSelectedSource, "ADD $3,R1", test.body, 1)

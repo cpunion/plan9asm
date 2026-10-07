@@ -63,7 +63,7 @@ func (flow *arm64RawPoolValues) affineFlagSourceBefore(at int) (uint32, uint32, 
 			return word, clobbered, at + 1, true
 		}
 		writes, known := flow.gpWrites(word)
-		if !known || !arm64RawPoolPreservesNZCV(ins.Op) {
+		if !known || !arm64RawPoolInstructionPreservesNZCV(ins) {
 			return 0, 0, 0, false
 		}
 		clobbered |= writes
@@ -114,6 +114,13 @@ func arm64RawPoolSVEPreservesNZCV(word uint32) bool {
 		return known && !spec.flags
 	}
 	return false
+}
+
+func arm64RawPoolInstructionPreservesNZCV(instruction arm64asm.Inst) bool {
+	if _, valid := decodeARM64RawBitfield(instruction.Enc); valid {
+		return true
+	}
+	return arm64RawPoolPreservesNZCV(instruction.Op)
 }
 
 // An explicit effect whitelist, not a guess from a mnemonic suffix. In
