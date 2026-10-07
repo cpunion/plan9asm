@@ -524,6 +524,19 @@ flags/MXCSR oracles: E5 inactive lanes suppress source reads, but a known mask
 does not itself grant caller memory bounds. Original legacy execution and
 portable LLVM VEX/EVEX semantics are separate from native AVX512 execution.
 
+GP/X scalar bit transfers share one typed grammar for MOVL, MOVQ, Go's MOVD
+alias (64-bit), VMOVD and VMOVQ. The grammar feeds original-source validation,
+CFG routing, lowering, private FP-result initialization and caller byte effects;
+the direct scalar module prototype cannot bypass it. Legacy writes preserve
+upper vector aliases, while VEX/EVEX writes clear them. Mode32 VEX GP transfers
+use 32 bits even for VMOVQ; its memory/X copies remain 64-bit. Raw-only VMOVW
+keeps its decoder-bound 16-bit role and does not authorize named instructions
+or caller state. Bind both complete current and historical legacy tables,
+including the historical signed-imm32 MOVQ row. Keep every-byte FP holes,
+dead volatile memory reads, original-Go NULL/guard-page faults, all register/
+address axes, complete vector/GP canaries and the three-API five-target objects.
+Accepted operand shapes never grant pointer permission or initialized data.
+
 `CaptureGoAMD64FrameSource` is an initial, sealed **observation**, not a frame
 permission. It independently selects and exports a flat main module's complete
 ordinary Go sources, retaining only bodyless integer, finite pointer and slice

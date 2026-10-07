@@ -149,6 +149,12 @@ func TestX86GPSIMDTransferActualSelectedCallerThreeAPIs(t *testing.T) {
 				}
 				if err != nil {
 					t.Error("module caller consumer", err)
+				} else {
+					llc := findLLVM22Tool("llc")
+					if llc == "" {
+						t.Fatal("LLVM22 required")
+					}
+					compileLLVMToObject(t, llc, options.TargetTriple, "transfer-module.ll", "transfer-module.o", module.String())
 				}
 				if err := x86CallerCoreTranslate(t, pkg, assembly, options.TargetTriple); err != nil {
 					t.Error("actual selected typed caller", err)

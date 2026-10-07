@@ -128,7 +128,7 @@ func TestRawVMOVWLLVM22Targets(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"load i16", "store i16", "zext i16", "+avx512fp16"} {
+			for _, want := range []string{"load volatile i16", "store i16", "zext i16", "+avx512fp16"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("missing %s", want)
 				}

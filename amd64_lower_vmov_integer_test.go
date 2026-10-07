@@ -20,7 +20,7 @@ func TestTranslateX86VMOVDVMOVQCompleteGoAssemblerForms(t *testing.T) {
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
-			source := `TEXT vmovintegerscalarforms(SB),NOSPLIT,$0-0
+			source := `TEXT vmovintegerscalarforms(SB),4,$0-0
 	VMOVD AX, X0
 	VMOVD X0, AX
 	VMOVD SP, X1
@@ -38,8 +38,14 @@ func TestTranslateX86VMOVDVMOVQCompleteGoAssemblerForms(t *testing.T) {
 `
 			if target.goarch == "amd64" {
 				source += "\tVMOVD R8, X31\n\tVMOVD X31, R9\n\tVMOVQ R10, X30\n\tVMOVQ X30, R11\n"
+			} else {
+				// Go accepts these high spellings but they lack a bound physical
+				// mode32 identity. Their independent Context cases live beside
+				// the shared grammar; ordinary object coverage uses X0-X7.
+				source = strings.NewReplacer("X20", "X4", "X30", "X5", "X31", "X6").Replace(source)
 			}
 			source += "\tRET\n"
+			goAssemblerOracleOutput(t, target.goarch, source, "", true)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)

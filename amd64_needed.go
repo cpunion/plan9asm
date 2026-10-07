@@ -7,6 +7,9 @@ import "strings"
 // architecture-aware x86 CFG lowerer.
 func funcNeedsAMD64CFG(fn Func) bool {
 	for _, ins := range fn.Instrs {
+		if _, known, _ := x86GPSIMDTransferProperties(ins, "amd64"); known {
+			return true // The scalar prototype has no X-bank or encoding state.
+		}
 		if ins.Op == OpLABEL {
 			return true
 		}

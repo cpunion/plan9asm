@@ -8,6 +8,30 @@ func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) err
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if f, known, err := x86GPSIMDTransferProperties(ins, arch); known {
+		if err != nil || f.mmx || f.spec.rawOnly {
+			return false
+		}
+		width := int64(f.bits / 8)
+		lowMask := uint16(1)<<uint(width) - 1
+		if f.sourceX {
+			index, valid := amd64ParseXReg(ins.Args[0].Reg)
+			if !valid || state.xmm[index]&lowMask != lowMask {
+				return false
+			}
+		} else if !x86ResultRead(ins.Args[0], width, state, owned, arch) {
+			return false
+		}
+		if f.destinationX {
+			index, valid := amd64ParseXReg(ins.Args[1].Reg)
+			if !valid {
+				return false
+			}
+			state.xmm[index] = 0xffff // Every GP/X transfer zeroes the rest of X.
+			return true
+		}
+		return x86ResultStore(ins.Args[1], width, state, owned, resultOffset, arch)
+	}
 	if form, recognized, err := x86FloatAddSubProperties(ins, arch); recognized {
 		return err == nil && x86ScalarFPFloatBinaryTransfer(ins, form.x86FloatBinaryForm, state, owned, arch)
 	}

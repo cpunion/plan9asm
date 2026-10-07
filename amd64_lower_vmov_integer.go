@@ -5,75 +5,73 @@ import (
 	"strings"
 )
 
-// lowerVectorScalarIntegerMove implements the complete Go 1.27 _yvmovd and
-// _yvmovq tables. Both instructions transfer between X registers and scalar
-// GP/memory operands; VMOVQ additionally permits X-to-X transfers.
-// Raw VMOVW shares this grammar with a 16-bit transfer and GP zero-extension.
+// Every named GP/X consumer shares exact width and encoding writeback rules.
+// Raw VMOVW retains its separate, decoder-bound 16-bit role.
 func (c *amd64Ctx) lowerVectorScalarIntegerMove(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	bits := 0
-	switch rawOp {
-	case "VMOVW":
-		if !ins.x86Encoded {
-			return true, false, fmt.Errorf("%s VMOVW is absent from Go's named assembler table: %q", c.goarch, ins.Raw)
-		}
-		bits = 16
-	case "VMOVD":
-		bits = 32
-	case "VMOVQ":
-		bits = 64
-	default:
-		if strings.HasPrefix(rawOp, "VMOVW.") || strings.HasPrefix(rawOp, "VMOVD.") || strings.HasPrefix(rawOp, "VMOVQ.") {
-			return true, false, fmt.Errorf("%s %s suffix is absent from Go 1.27's scalar integer move tables: %q", c.goarch, strings.SplitN(rawOp, ".", 2)[0], ins.Raw)
-		}
-		return false, false, nil
+	if !strings.EqualFold(string(ins.Op), string(op)) {
+		return true, false, fmt.Errorf("contradictory GP/X transfer dispatch %s/%s", op, ins.Op)
 	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects exactly two operands: %q", c.goarch, rawOp, ins.Raw)
+	f, known, err := x86GPSIMDTransferProperties(ins, c.goarch)
+	if !known || err != nil {
+		return known, false, err
 	}
-
 	src, dst := ins.Args[0], ins.Args[1]
-	srcX := isAMD64GoXRegister(src)
-	dstX := isAMD64GoXRegister(dst)
-	if srcX && dstX {
-		if rawOp != "VMOVQ" {
-			return true, false, fmt.Errorf("%s %s has no X-to-X form: %q", c.goarch, rawOp, ins.Raw)
-		}
-		low, err := c.loadXLowInteger(src.Reg, 64)
-		if err != nil {
+	if f.memory >= 0 && ins.Args[f.memory].Kind == OpFP {
+		if _, err := c.scalarFPSpan(ins.Args[f.memory].FPOffset, f.bits); err != nil {
 			return true, false, err
 		}
-		return true, false, c.storeVMOVIntegerX(dst.Reg, 64, low)
 	}
-	if srcX {
-		transferBits := bits
-		if c.goarch == "386" && dst.Kind == OpReg && transferBits > 32 {
-			transferBits = 32
-		}
-		if !c.isGoVMOVScalarOperand(dst) {
-			return true, false, fmt.Errorf("%s %s destination must be a GP register, memory, or X register: %q", c.goarch, rawOp, ins.Raw)
-		}
-		low, err := c.loadXLowInteger(src.Reg, transferBits)
-		if err != nil {
-			return true, false, err
-		}
-		return true, false, c.storeVMOVIntegerScalar(dst, transferBits, low)
+	var low string
+	if f.sourceX {
+		low, err = c.loadXLowInteger(src.Reg, f.bits)
+	} else {
+		low, err = c.loadGPSIMDTransferSource(src, f.bits)
 	}
-	if dstX {
-		transferBits := bits
-		if c.goarch == "386" && src.Kind == OpReg && transferBits > 32 {
-			transferBits = 32
-		}
-		if !c.isGoVMOVScalarOperand(src) && !(src.Kind == OpImm && ins.x86RIPLiteral) {
-			return true, false, fmt.Errorf("%s %s source must be a GP register, memory, or X register: %q", c.goarch, rawOp, ins.Raw)
-		}
-		low, err := c.evalIntSized(src, amd64IntegerTypeForBits(transferBits))
-		if err != nil {
-			return true, false, err
-		}
-		return true, false, c.storeVMOVIntegerX(dst.Reg, transferBits, low)
+	if err != nil {
+		return true, false, err
 	}
-	return true, false, fmt.Errorf("%s %s requires one X-register operand: %q", c.goarch, rawOp, ins.Raw)
+	if f.destinationX {
+		lanes := 128 / f.bits
+		inserted, bytes := c.newTmp(), c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> zeroinitializer, i%d %s, i32 0\n", inserted, lanes, f.bits, f.bits, low)
+		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", bytes, lanes, f.bits, inserted)
+		if f.spec.legacy {
+			return true, false, c.storeX(dst.Reg, "%"+bytes)
+		}
+		return true, false, c.storePackedMoveOperand(dst, 16, "%"+bytes)
+	}
+	if f.mmx {
+		return true, false, c.storeReg(dst.Reg, low)
+	}
+	if dst.Kind == OpFP {
+		return true, false, c.storeScalarFPBits(dst.FPOffset, f.bits, low)
+	}
+	return true, false, c.storeVMOVIntegerScalar(dst, f.bits, low)
+}
+
+func (c *amd64Ctx) loadGPSIMDTransferSource(source Operand, bits int) (string, error) {
+	if source.Kind == OpFP {
+		return c.loadScalarFPBits(source.FPOffset, bits)
+	}
+	var pointer, pointerType string
+	var err error
+	switch source.Kind {
+	case OpMem:
+		pointer, pointerType, err = c.ptrFromMem(source.Mem)
+	case OpSym:
+		pointer, err = c.ptrFromSB(source.Sym)
+		pointerType = "ptr"
+	default:
+		return c.evalIntSized(source, amd64IntegerTypeForBits(bits))
+	}
+	if err != nil {
+		return "", err
+	}
+	value := c.newTmp()
+	// Unmasked MOVD/Q reads are observable at their original width even
+	// when the destination is dead. They have no alignment or MXCSR effect.
+	fmt.Fprintf(c.b, "  %%%s = load volatile i%d, %s %s, align 1\n", value, bits, pointerType, pointer)
+	return "%" + value, nil
 }
 
 func isAMD64GoXRegister(operand Operand) bool {
@@ -82,22 +80,6 @@ func isAMD64GoXRegister(operand Operand) bool {
 	}
 	_, ok := amd64ParseXReg(operand.Reg)
 	return ok
-}
-
-func (c *amd64Ctx) isGoVMOVScalarOperand(operand Operand) bool {
-	if isAMD64MemoryOperand(operand) {
-		return true
-	}
-	return operand.Kind == OpReg && isX86YrlRegisterForArch(operand.Reg, c.goarch)
-}
-
-func (c *amd64Ctx) storeVMOVIntegerX(dst Reg, bits int, low string) error {
-	lanes := 128 / bits
-	inserted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i%d> zeroinitializer, i%d %s, i32 0\n", inserted, lanes, bits, bits, low)
-	bytes := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %%%s to <16 x i8>\n", bytes, lanes, bits, inserted)
-	return c.storePackedMoveOperand(Operand{Kind: OpReg, Reg: dst}, 16, "%"+bytes)
 }
 
 func (c *amd64Ctx) storeVMOVIntegerScalar(dst Operand, bits int, value string) error {

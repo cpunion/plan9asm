@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if form, known, err := x86GPSIMDTransferProperties(ins, "amd64"); known {
+		return err == nil && !form.mmx && !form.spec.rawOnly
+	}
 	if form, known, err := x86ImmediateShuffleProperties(ins, "amd64"); known {
 		return err == nil && !form.spec.mmx
 	}
@@ -107,6 +110,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86GPSIMDTransferProperties(*ins, "amd64"); known {
+		return err == nil && x86CallerGPSIMDTransferStep(ins, form, state, proof)
+	}
 	if form, known, err := x86ImmediateShuffleProperties(*ins, "amd64"); known {
 		return err == nil && x86CallerImmediateShuffleStep(ins, form, state, proof)
 	}
@@ -253,6 +259,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known {
+		return int64(form.bits / 8), form.memoryWrite, err == nil && !form.mmx && form.memory == index
+	}
 	if form, recognized, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch); recognized {
 		return 16, form.memoryWrite, err == nil && x86Mode32VectorRegisterContext(ins, arch) == nil && form.memory == index
 	}
