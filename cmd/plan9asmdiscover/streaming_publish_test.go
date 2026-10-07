@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -152,5 +154,99 @@ func TestDiscoveryStreamingPublicationRejectsCorruptUnchangedTail(t *testing.T) 
 	entries, err := os.ReadDir(filepath.Dir(ledger))
 	if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(ledger) {
 		t.Fatalf("failed publication leaked a lock/staging directory: entries=%v err=%v", entries, err)
+	}
+}
+
+func TestDiscoveryStreamingPublicationAcrossShardBoundaries(t *testing.T) {
+	base := discoveryReport{SchemaVersion: discoverySchema}
+	update := discoveryReport{SchemaVersion: discoverySchema}
+	for i := 0; i < 768; i++ {
+		module := fmt.Sprintf("example.com/sharded/%04d", i)
+		switch i % 4 {
+		case 0:
+			base.Scanned = append(base.Scanned, moduleVersion{Path: module, Version: "v1.9.0"})
+			update.Scanned = append(update.Scanned, moduleVersion{Path: module, Version: "v1.10.0"})
+		case 1:
+			base.Failures = append(base.Failures, scanFailure{Module: module, Version: "@latest", Error: "retry"})
+			update.Matched = append(update.Matched, candidate{Module: module, Version: "v1.2.0", AsmFiles: []string{"a_amd64.s"}})
+		case 2:
+			base.Matched = append(base.Matched, candidate{Module: module, Version: "v0.8.0", AsmFiles: []string{"a_arm64.s"}})
+			update.Failures = append(update.Failures, scanFailure{Module: module, Version: "v1.0.0", Error: "new major"})
+		case 3:
+			update.Scanned = append(update.Scanned, moduleVersion{Path: module, Version: "v1.0.0"})
+		}
+	}
+	ledger := filepath.Join(t.TempDir(), "ledger")
+	if err := writeShardedReport(ledger, base); err != nil {
+		t.Fatal(err)
+	}
+	want, err := mergeDiscoveryReports(base, update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No range is encoded when the reference merge's empty slice is omitted.
+	// Compare with the public reader's decoded representation, not slice identity.
+	if len(want.IndexRanges) == 0 {
+		want.IndexRanges = nil
+	}
+	if err := writeShardedReport(ledger, update); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readShardedReport(ledger)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("shard-boundary publication differs from reference: %v", err)
+	}
+}
+
+func TestDiscoveryPublicationBaseBindsInputGeneration(t *testing.T) {
+	ledger := writeSummaryPayloadFixture(t, 128)
+	base, err := openPublicationBase(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := base.verify(ledger); err != nil {
+		t.Fatal(err)
+	}
+	shard := base.shards[len(base.shards)-1]
+	file, err := os.OpenFile(shard, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, writeErr := file.WriteString("\n")
+	closeErr := file.Close()
+	if writeErr != nil || closeErr != nil {
+		t.Fatalf("write=%v close=%v", writeErr, closeErr)
+	}
+	if err := base.verify(ledger); err == nil {
+		t.Fatal("publication snapshot accepted an in-place generation change")
+	}
+}
+
+func TestDiscoveryPublicationRestoresPreviousLedgerOnRenameFailure(t *testing.T) {
+	root := t.TempDir()
+	staging, destination := filepath.Join(root, "staging"), filepath.Join(root, "ledger")
+	for name, data := range map[string]string{staging: "new", destination: "previous"} {
+		if err := os.Mkdir(name, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(name, "data"), []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	failure := errors.New("injected publication rename failure")
+	renamed := 0
+	err := replacePublicationDirectory(staging, destination, true, func(from, to string) error {
+		renamed++
+		if renamed == 2 {
+			return failure
+		}
+		return os.Rename(from, to)
+	})
+	if !errors.Is(err, failure) || renamed != 3 {
+		t.Fatalf("publication error=%v, rename calls=%d", err, renamed)
+	}
+	data, err := os.ReadFile(filepath.Join(destination, "data"))
+	if err != nil || string(data) != "previous" {
+		t.Fatalf("publication lost previous authoritative ledger: %q, %v", data, err)
 	}
 }
