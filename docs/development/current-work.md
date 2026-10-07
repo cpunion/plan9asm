@@ -19,58 +19,59 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 ## Continue here
 
 Development branch:
-`codex/pr40-x86-immediate-shuffle-grammar-20261007`.
-Read its actual HEAD/status. Root alone writes ledger. An independent agent
-is developing bounded multiple-SCC composition in a separate worktree.
+`codex/pr40-gp-simd-scc-integration-20261007`.
+Read its actual HEAD/status. Root alone writes ledger. Two independently
+developed repairs are integrated but do not yet have combined certificates:
 
-Latest whole-family repair covers PSHUFW, PSHUFL/PSHUFD, PSHUFHW/PSHUFLW and
-VPSHUFD/VPSHUFHW/VPSHUFLW:
+- `cf3d5ef6` unifies MOVL/MOVQ/Go-MOVD/VMOVD/VMOVQ grammar, original-source
+  validation, CFG routing, private FP result initialization, lowering and caller
+  byte effects. Actual Go-backed RED preceded implementation. Current and old
+  Go diagnostics each pass 63 roots and 2,634 children without Fail/Skip,
+  including the formerly failing FloatMulDiv/MXCSR root. Keep complete table
+  epochs, all register/address axes, FP holes, native dead-read faults and
+  whole-byte/flags/canary oracles. Portable VEX is not physical AVX512 proof.
+- Bounded multiple-SCC composition integrates the independent `5fe8133f` RED
+  and `f64afdb8` repair. Each reducible SCC keeps the existing exact induction,
+  immutable bound, unique entry/latch, no-early-exit and visit-budget contract.
+  Independent current/old diagnostics each pass 62 roots and 958 children;
+  these are ancestor evidence, not combined-head passes. Do not enable a
+  general cyclic hull or extrapolate to real dynamic-stride/sentinel loops.
+- An independent agent is repairing private raw decoder/operand handoff from
+  frozen `ad570209`: physical FS/DS/ES and RIP operands must not be reparsed as
+  public source spellings. The original public parser and pre-IR Context
+  boundaries remain strict. Do not edit that agent's live source.
 
-- One complete Go-row grammar supplies selectors, native memory shapes and
-  caller byte availability. Legacy preserves upper aliases; VEX/EVEX clears
-  them. Partial input availability follows only selected bytes; unknown mask
-  or merge bytes never acquire values or pointer permission.
-- Full E4NF reads remain observable with dead outputs and zero masks; broadcast
-  reads m32. Legacy m128 retains its original native SSE2 opcode/alignment.
-  Virtual FP/SP/BP and unbound address-size roles remain Context; caller-region
-  identity does not supply legacy alignment.
-- Independent review found float/unresolved class confusion, mode32 constant
-  classification and raw PSHUFW signed-rendering gaps. Actual Go-backed RED
-  reproduced them. Every source consumer now excludes non-integer metadata;
-  mode32 classification does not mutate the original operand.
-- Initial caller/effect/runtime RED failed 55 nodes. Expanded diagnostics
-  finish with 922 passes, no Fail/Skip: shuffle 24 roots/483 children and
-  existing YMM/MMX 13 roots/402 children. Original Go covers all 4,096 named
-  imm8 witnesses, 512 physical MMX byte cases, complete encoding rows and
-  mode32 wrap/rejection controls. Three APIs compile five LLVM22 targets.
-- Forty portable whole-byte programs, 24 full-read programs and eight legacy
-  live/dead memory programs run without/with an IR O2 prepass. The legacy
-  reference executes original Go opcode bytes, with canaries and flags.
-  These are not backend O0/O2 axes or native AVX512/MMX-state certificates.
-  Rosetta alignment observations remain diagnostic.
-- RED/green logs are ignored diagnostic receipts, not current-head formal
-  corpus certificates. Freeze a clean integration successor, run its fresh
-  current/old formal scopes and official five-arch gate, then replay the exact
-  original Weaviate candidate. Do not publish old reports into the ledger.
+The full frozen `ad570209` root suite completed all 32 partitions: 23 roots
+failed and 39 existing host-inapplicable roots skipped. It is a failure baseline,
+not a full CI pass. Label/diagnostic assertions and observation-boundary fixtures
+are being independently reconciled; actual production/permission gaps still
+need TDD repairs. Obtain real producer closure and independent readback.
+Freeze a clean combined successor, run fresh current/old formal scopes, the
+official five-arch gate and original-library replay. Never publish old reports.
 
 ## Integrated ancestor and remaining source proofs
 
-Frozen `7f684cc5` integrates the earlier ARM64 scratch/input and transitive
+Frozen `ad570209` integrates the earlier ARM64 scratch/input and transitive
 same-package call proofs, CPP companion/header consumer closure, full ordinary
 Go-body/SDK-type frame observation, compact original CPP resource index, and
-complete eight-name mask/vector B/W/D/Q caller and alias effects.
+complete eight-name mask/vector B/W/D/Q caller and alias effects, plus the
+complete immediate-shuffle grammar and caller effects.
 
-Its independently read current scopes pass 3,421 nodes (full CLI 1,804,
-ARM64 1,264, CI policy 7, mask family 346); old framework scopes pass 1,610.
+Its independently read current scopes pass 4,343 nodes (full CLI 1,804,
+ARM64 1,264, CI policy 7, mask family 346, shuffle 507, YMM/MMX 415).
+Its old formal scope failed on the Go 1.20 maskless-zeroing encoder epoch;
+`6108450a` fixes the independent fixture, preserving reserved-form rejection.
 Race, complete source/tool/dependency/environment guards, vet/build, nested
 CLI checks and genuine producer/process-group closure passed. Its official
 five-architecture classification/fingerprint gate passed, not complete encoder
 or execution coverage. CPP resource microbenchmark passed, not the full stdlib
 benchmark.
 
-Original Weaviate replay still fails ten AMD64 files with cyclic joins or
-missing shuffle caller effects; companion CPP mismatch and mask/vector effect
-errors no longer appear. Partial file/object success is not a passing version.
+Original Weaviate v1.39.6 replay at `ad570209` still fails ten AMD64 files:
+four first errors moved from VPSHUFD to VMOVD; six remain cyclic joins.
+The bucket/version still fails and admits no passing object certificate.
+Companion CPP mismatch and mask/vector errors no longer appear in that replay.
+Partial file/object success is not a passing version.
 Retain failed reports and rederive every successor receipt from its own source.
 
 The source-only cyclic audit authenticates a fresh exact Weaviate download and
