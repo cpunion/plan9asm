@@ -57,7 +57,7 @@ done:
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(ll, "blockaddress(@branchLinkForms, %resume)") ||
+			if !strings.Contains(ll, "blockaddress(@branchLinkForms, %bb_resume)") ||
 				!strings.Contains(ll, "store i64 %") || !strings.Contains(ll, "ptr %reg_R30") {
 				t.Fatalf("local BL did not materialize its continuation in R30:\n%s", ll)
 			}

@@ -210,7 +210,6 @@ func TestX86ABI0OccupiedPointerAndSetRetainUnavailableInputs(t *testing.T) {
 		"pointer bytes":         "MOVQ x+0(FP),AX\nMOVL AX,ret0+24(FP)\nRET",
 		"partial pointer bytes": "MOVB x+0(FP),AX\nMOVL AX,ret0+24(FP)\nRET",
 		"pointer dereference":   "MOVQ x+0(FP),AX\nMOVL (AX),BX\nMOVL BX,ret0+24(FP)\nRET",
-		"dead pointer bytes":    "MOVL $1,ret0+24(FP)\nJMP end\nMOVQ x+0(FP),AX\nend:\nRET",
 		"unknown flags":         "SETNE AX\nMOVB AX,ret0+24(FP)\nRET",
 		"unknown upper":         "MOVL $1,BX\nCMPL BX,$0\nSETNE AX\nMOVL AX,ret0+24(FP)\nRET",
 		"missing result bytes":  "MOVL $1,AX\nCMPL AX,$0\nSETNE ret0+24(FP)\nRET",
@@ -226,6 +225,33 @@ func TestX86ABI0OccupiedPointerAndSetRetainUnavailableInputs(t *testing.T) {
 			}
 			if !reflect.DeepEqual(before, fmt.Sprintf("%#v %#v", file, sig)) {
 				t.Fatal("observer mutated source/layout")
+			}
+		})
+	}
+	// Result initialization observes reachable execution, not unused source
+	// bytes. A complete result followed by an unconditional jump does not read
+	// the dead pointer input. Transporting an unused opaque pointer is also
+	// legal; consuming its bytes as a numeric result must still fail.
+	const dead = "MOVL $1,ret0+24(FP)\nJMP end\nMOVQ x+0(FP),AX\nend:\nRET"
+	for _, fixture := range []struct {
+		name, body string
+		context    bool
+	}{
+		{"dead pointer bytes", dead, false},
+		{"reachable opaque pointer unused", strings.Replace(dead, "JMP end", "JMP input\ninput:", 1), false},
+		{"reachable pointer result", strings.Replace(strings.Replace(dead, "JMP end", "JMP input\ninput:", 1),
+			"MOVQ x+0(FP),AX", "MOVQ x+0(FP),AX\nMOVL AX,ret0+24(FP)", 1), true},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x []uint32) uint32", fixture.body)
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			before := fmt.Sprintf("%#v %#v", file, sig)
+			err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, "amd64")
+			if fixture.context && !errors.Is(err, ErrProbeNeedsContext) || !fixture.context && err != nil {
+				t.Fatalf("reachable result/input boundary changed: %v", err)
+			}
+			if before != fmt.Sprintf("%#v %#v", file, sig) {
+				t.Fatal("result observer changed source or manufactured pointer layout")
 			}
 		})
 	}

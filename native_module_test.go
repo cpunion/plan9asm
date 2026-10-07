@@ -172,16 +172,60 @@ func TestNativeNakedLinkAndReachability(t *testing.T) {
 func TestNativeNakedModuleReject(t *testing.T) {
 	ctx := llvm.NewContext()
 	defer ctx.Dispose()
-	for _, src := range []string{"TEXT f<>(SB), NOSPLIT, $0\nBAD\n", "TEXT f<>(SB), NOSPLIT, $0\nMOVQ $1, AX\n", "TEXT f<>(SB), NOSPLIT, $0\nRET\nend:\n", "TEXT f<>(SB), NOSPLIT, $0\nJMP missing(SB)\n", "TEXT f<>(SB), NOSPLIT, $0\nRET\nGLOBL ·entry(SB), RODATA, $4\nDATA ·entry(SB)/8, $f<>(SB)\n"} {
+	for _, src := range []string{"TEXT f<>(SB), NOSPLIT, $0\nBAD\n", "TEXT f<>(SB), NOSPLIT, $0\nMOVQ $1, AX\n", "TEXT f<>(SB), NOSPLIT, $0\nRET\nend:\nMOVQ $1,AX\n", "TEXT f<>(SB), NOSPLIT, $0\nJMP missing(SB)\n", "TEXT f<>(SB), NOSPLIT, $0\nRET\nGLOBL ·entry(SB), RODATA, $4\nDATA ·entry(SB)/8, $f<>(SB)\n"} {
 		mod, err := TranslateNativeModule(ctx, []byte(src), NativeOptions{GOOS: "linux", GOARCH: "amd64", PackagePath: "probe"})
 		if err == nil {
 			mod.Dispose()
-			t.Fatal("accepted invalid source")
+			t.Fatalf("accepted invalid source: %q", src)
 		}
 		if mod != (llvm.Module{}) {
 			t.Fatal("returned partial module")
 		}
 	}
+}
+
+// An unreferenced empty final label emits no instruction and cannot create a
+// machine fallthrough. Keep its real acceptance separate from the incomplete
+// final instruction rejected above, and retain the function via a DATA address.
+func TestCrossLinuxRuntimeMatrixX86NativeNakedEmptyFinalLabel(t *testing.T) {
+	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
+	const source = `TEXT f<>(SB),NOSPLIT,$0
+RET
+end:
+GLOBL ·entry(SB),RODATA,$8
+DATA ·entry(SB)/8,$f<>(SB)
+`
+	goAssemblerOracleOutput(t, "amd64", strings.NewReplacer("NOSPLIT", "4", "RODATA", "8").Replace(source), "", true)
+	goos := "linux"
+	if strings.Contains(triple, "apple") {
+		goos = "darwin"
+	}
+	ctx := llvm.NewContext()
+	defer ctx.Dispose()
+	module, err := TranslateNativeModule(ctx, []byte(source), NativeOptions{GOOS: goos, GOARCH: "amd64", PackagePath: "probe"})
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if module.NamedGlobal("probe.entry").IsNil() {
+		t.Fatal("missing real function-address consumer")
+	}
+	const main = `#include <string.h>
+#if defined(__APPLE__)
+extern unsigned char entry[] __asm("_probe.entry");
+#else
+extern unsigned char entry[] __asm("probe.entry");
+#endif
+int main(void) {
+    void (*function)(void);
+    memcpy(&function, entry, sizeof(function));
+    function();
+    return 0;
+}
+`
+	compileAndRunRuntimeTestForTarget(t, llc, clang, "native-empty-final-label", triple, module.String(), main, prefix)
 }
 
 func TestNativeNakedDataAndIRReferences(t *testing.T) {

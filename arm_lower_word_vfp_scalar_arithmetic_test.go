@@ -108,7 +108,7 @@ func TestTranslateARMRawVFPScalarArithmeticAllOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"fadd float", "fsub double", "fmul float", "fdiv double", "fneg float", "cond_effect_taken", `"target-features"="+vfp2"`} {
+	for _, want := range []string{"fadd float", "fsub double", "fmul float", "fdiv double", "fneg float", "cond_5feffect_5ftaken", `"target-features"="+vfp2"`} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw VFP scalar arithmetic family omitted %q:\n%s", want, ir)
 		}

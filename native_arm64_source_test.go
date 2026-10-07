@@ -204,7 +204,7 @@ func TestNativeARM64RejectsUnsupportedSource(t *testing.T) {
 		{"empty", "", "no TEXT"},
 		{"data only", "GLOBL ·p(SB), RODATA, $8\n", "requires TEXT"},
 		{"invalid local name", "TEXT bad-name<>(SB), NOSPLIT, $0\nRET\n", "file-local"},
-		{"duplicate label", prefix + "here:\nRET\nhere:\nRET\n", "duplicate native label"},
+		{"duplicate label", prefix + "here:\nRET\nhere:\nRET\n", `label "here" multiply defined`},
 		{"invalid global name", prefix + "RET\nGLOBL p<>(SB), RODATA, $8\n", "package global"},
 		{"duplicate global", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nGLOBL ·p(SB), RODATA, $8\n", "duplicate native GLOBL"},
 		{"empty global", prefix + "RET\nGLOBL ·p(SB), RODATA, $0\n", "GLOBL size"},

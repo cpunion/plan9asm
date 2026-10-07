@@ -57,7 +57,7 @@ func TestARMIntegerMemoryWritebackAndConditionalEffects(t *testing.T) {
 	const source = "TEXT condmem(SB),$0-0\n\tCMP R0, R0\n\tMOVW.NE.P 8(R1), R2\n\tRET\n"
 	requireARMGoAssemblerResult(t, source, true)
 	ir := translateARMForTest(t, source, map[string]FuncSig{"example.condmem": {Name: "example.condmem", Ret: Void}})
-	if !strings.Contains(ir, "cond_effect_taken") {
+	if !strings.Contains(ir, "cond_5feffect_5ftaken") {
 		t.Fatal("conditional memory load/writeback executes unconditionally")
 	}
 }

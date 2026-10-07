@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -20,10 +21,23 @@ func TestTranslateARMRawVFPConditionalMoveGoDSPRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"lshr i64", "trunc i64", "cond_effect_taken", `"target-features"="+vfp2"`} {
+	for _, want := range []string{"lshr i64", "trunc i64", `"target-features"="+vfp2"`} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw conditional VFP move IR omitted %q:\n%s", want, ir)
 		}
+	}
+	// Inspect the real conditional edge and its store, not the private
+	// spelling of an injectively escaped block label.
+	edge := regexp.MustCompile(`br i1 (%[A-Za-z0-9_]+), label %([A-Za-z0-9_]+), label %([A-Za-z0-9_]+)`).FindStringSubmatch(ir)
+	if len(edge) != 4 || edge[2] == edge[3] {
+		t.Fatal("conditional VFP move lost its distinct taken/join edges")
+	}
+	taken := regexp.MustCompile(`(?ms)^` + regexp.QuoteMeta(edge[2]) + `:[^\n]*\n(.*?)(?:^[A-Za-z0-9_]+:|^\})`).FindStringSubmatch(ir)
+	if len(taken) != 2 || !strings.Contains(taken[1], "ptr %freg_F4") ||
+		!regexp.MustCompile(`store i64 %[A-Za-z0-9_]+, ptr %freg_F4`).MatchString(taken[1]) ||
+		!strings.Contains(taken[1], "br label %"+edge[3]) ||
+		len(regexp.MustCompile(`store i64 %[A-Za-z0-9_]+, ptr %freg_F4`).FindAllString(ir, -1)) != 1 {
+		t.Fatalf("conditional VFP store is not confined to the taken edge:\n%s", ir)
 	}
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -90,7 +104,7 @@ func TestTranslateARMRawVFPMoveCompleteFormats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"lshr i64", "shl i64", "cond_effect_taken", `"target-features"="+vfp2"`} {
+	for _, want := range []string{"lshr i64", "shl i64", "cond_5feffect_5ftaken", `"target-features"="+vfp2"`} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw VFP VMOV complete formats omitted %q:\n%s", want, ir)
 		}

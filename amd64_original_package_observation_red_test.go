@@ -12,15 +12,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/xgo-dev/llvm"
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 )
 
-// This is a test-only requirement checkpoint. The current frame factory is the
-// baseline under test, not the proposed observation API. Stage A must introduce
-// a different observation token; it must not make these inputs FrameSources or
-// grant a fixed-local, caller, native-memory, or return capability.
+// Ordinary bodies and SDK imports may accompany a sealed object observation,
+// but only bodyless assembly declarations enter its function/layout map.
+// Observation remains separate from fixed-local/caller/native-memory permission.
 type originalPackageObservationVariant struct {
 	name        string
 	directory   string
@@ -158,7 +159,7 @@ func originalPackageObservationFixture(t *testing.T, variant originalPackageObse
 	return GoPackage{Path: packagePath, Types: typed, Syntax: syntax}, request
 }
 
-func TestGoAMD64OriginalPackageObservationOldFactoryRetainsContext(t *testing.T) {
+func TestGoAMD64OriginalPackageObservationKeepsAuthorityBoundaries(t *testing.T) {
 	for _, variant := range originalPackageObservationVariants {
 		t.Run(variant.name, func(t *testing.T) {
 			pkg, request := originalPackageObservationFixture(t, variant)
@@ -172,8 +173,51 @@ func TestGoAMD64OriginalPackageObservationOldFactoryRetainsContext(t *testing.T)
 					}
 				}()
 			}
-			if !errors.Is(err, ErrProbeNeedsContext) || observed != nil {
-				t.Fatalf("observation-only input acquired a frame capability: %v", err)
+			if variant.name == "bodyful" || variant.name == "import" {
+				if err != nil || observed == nil {
+					t.Fatalf("ordinary original source lost its sealed observation: %v", err)
+				}
+				if len(observed.functions) != 1 || len(observed.declarations) != 1 ||
+					observed.functions[pkg.Path+".Value"].locals != 168 {
+					t.Fatal("ordinary Go declaration manufactured an assembly frame observation")
+				}
+				if err := observed.Verify(ctx); err != nil {
+					t.Fatal(err)
+				}
+				// Even a live real-object observation supplies no aligned native
+				// stack storage to any translator without its separate Binder.
+				const assembly = "TEXT ·Value(SB),4,$160-16\nPXOR X0,X0\nMOVOU X0,16(SP)\nPADDQ 16(SP),X0\nMOVQ $1,ret+8(FP)\nRET\n"
+				goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+				file, err := Parse(ArchAMD64, assembly)
+				if err != nil {
+					t.Fatal(err)
+				}
+				resolve := func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) }
+				sig := observed.functions[pkg.Path+".Value"].signature
+				opt := Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve,
+					Sigs: map[string]FuncSig{sig.Name: sig}}
+				if _, err := Translate(file, opt); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("ordinary observation granted native memory to text API: %v", err)
+				}
+				context := llvm.NewContext()
+				defer context.Dispose()
+				module, err := TranslateModuleInContext(context, file, opt)
+				if !module.IsNil() {
+					defer module.Dispose()
+				}
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("ordinary observation granted native memory to module API: %v", err)
+				}
+				translated, err := translateGoModuleInContext(context, pkg, []byte(assembly), GoModuleOptions{
+					GOOS: "linux", GOARCH: "amd64", TargetTriple: opt.TargetTriple, ResolveSym: resolve})
+				if translated != nil && !translated.Module.IsNil() {
+					defer translated.Module.Dispose()
+				}
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("ordinary observation granted native memory to typed Go API: %v", err)
+				}
+			} else if !errors.Is(err, ErrProbeNeedsContext) || observed != nil {
+				t.Fatalf("unsupported original source role acquired an observation: %v", err)
 			}
 		})
 	}

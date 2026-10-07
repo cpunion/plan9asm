@@ -167,8 +167,8 @@ done:
 		t.Fatalf("Translate() error = %v", err)
 	}
 	for _, want := range []string{
-		"blockaddress(@rawPCRelative, %target)",
-		"br label %done",
+		"blockaddress(@rawPCRelative, %bb_target)",
+		"br label %bb_done",
 	} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw PC-relative lowering omitted %q:\n%s", want, ir)
@@ -233,7 +233,7 @@ data:
 	}
 	for _, want := range []string{
 		`@rawEmbedded.data.raw_data = private constant [4 x i8] c"\01\02\03\04"`,
-		"blockaddress(@rawEmbedded, %code)",
+		"blockaddress(@rawEmbedded, %bb_code)",
 		"ptrtoint ptr @rawEmbedded.data.raw_data to i64",
 	} {
 		if !strings.Contains(ir, want) {

@@ -162,7 +162,7 @@ func TestARM64UnreachableCallerReturnsRetainCFGProof(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				start := strings.Index(ir, "\ndead:")
+				start := strings.Index(ir, "\nbb_dead:")
 				if start == -1 {
 					t.Fatal("dead source block was dropped instead of retaining its terminator")
 				}

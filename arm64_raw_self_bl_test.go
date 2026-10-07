@@ -68,7 +68,7 @@ func TestARM64RawSelfBLTerminalHasNoReturnCertificate(t *testing.T) {
 		}
 		// The source BL must still write its own continuation and branch to
 		// itself, not become a return, no-op, native call or unreachable block.
-		if !regexp.MustCompile(`(?s)\nspin:[^\n]*\n[^\n]*blockaddress\(@terminal, %anon_[^\n]*\n[^\n]*store i64[^\n]*\n\s+br label %spin`).MatchString(ir) {
+		if !regexp.MustCompile(`(?s)\nbb_spin:[^\n]*\n[^\n]*blockaddress\(@terminal, %bb_anon_5f[^\n]*\n[^\n]*store i64[^\n]*ptr %reg_R30[^\n]*\n\s+br label %bb_spin`).MatchString(ir) {
 			t.Fatalf("self-BL LR-write/control semantics lost:\n%s", ir)
 		}
 		compileLLVMToObject(t, llc, triple, "self-bl.ll", "self-bl.o", ir)
