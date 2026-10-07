@@ -46,13 +46,20 @@ func x86UnnamedSourceAddressInMode(operand Operand, arch string) (MemRef, bool, 
 // valid parser metadata, not an encodable SIB scale. TYPE_CONST may ignore it;
 // physical memory and MOVL/Q's derived LEA must validate it independently.
 func parseX86SourceRegisterMemory(body string) (memory MemRef, matched bool, err error) {
+	return parseX86SourceRegisterMemorySyntax(body, false)
+}
+
+// Inventories retain a valid unresolved displacement without inventing its
+// numerical value. TYPE_ADDR consumers still use the strict wrapper above;
+// every translation API separately rejects OffRaw before raw normalization.
+func parseX86SourceRegisterMemorySyntax(body string, retainUnresolved bool) (memory MemRef, matched bool, err error) {
 	if group := x86SymbolPseudoGroup.FindStringSubmatchIndex(body); group != nil {
 		prefix := strings.TrimSpace(body[:group[0]])
 		if _, constant := parseImmExpr(prefix); prefix != "" && !constant {
 			// SP in the second physical group is an Index, not an AUTO
 			// role. The prefix before the first pseudo spelling contains
 			// no pseudo group, so this check cannot recursively nest.
-			_, physical, prefixErr := parseX86SourceRegisterMemory(prefix)
+			_, physical, prefixErr := parseX86SourceRegisterMemorySyntax(prefix, retainUnresolved)
 			if !physical {
 				return MemRef{}, false, nil // Complete named SB/AUTO/FP role, including indexes.
 			}
@@ -71,14 +78,17 @@ func parseX86SourceRegisterMemory(body string) (memory MemRef, matched bool, err
 			constant = true
 		}
 		if !constant {
-			// A nonconstant displacement before a physical register is not
-			// NAME_NONE numeric evidence. The legacy parseMem fallback keeps
-			// OffRaw, so never let MOVL's symbolic fallback turn it into zero.
-			// Named AUTO and SB/FP roles still belong to their own consumers.
+			// Named AUTO and SB/FP roles belong to their own consumers. An
+			// ordinary unresolved displacement remains syntax only: validate
+			// every register group below and retain the original expression.
 			if register, _, _, _, groupErr := parseX86SymbolRegisterGroup(body[open:]); groupErr == nil && register != SP {
-				return MemRef{}, true, fmt.Errorf("%w: unresolved x86 source address displacement: %q", ErrProbeNeedsContext, body)
+				if !retainUnresolved || !x86SourceDisplacementNeedsContext(prefix) {
+					return MemRef{}, true, fmt.Errorf("%w: unresolved x86 source address displacement: %q", ErrProbeNeedsContext, body)
+				}
+				memory.OffRaw = prefix
+			} else {
+				continue // An expression parenthesis or a named address.
 			}
-			continue // An expression parenthesis or a named address, not NAME_NONE.
 		}
 		register, scale, scaled, rest, parseErr := parseX86SymbolRegisterGroup(body[open:])
 		if parseErr != nil {
@@ -98,7 +108,8 @@ func parseX86SourceRegisterMemory(body string) (memory MemRef, matched bool, err
 					}
 				}
 				if end > open {
-					if _, expression := parseImmExpr(body[open:end]); expression {
+					if _, expression := parseImmExpr(body[open:end]); expression ||
+						x86SourceDisplacementNeedsContext(body[open:end]) {
 						continue
 					}
 				}
@@ -124,6 +135,24 @@ func parseX86SourceRegisterMemory(body string) (memory MemRef, matched bool, err
 		return memory, true, nil
 	}
 	return MemRef{}, false, nil
+}
+
+func x86SourceDisplacementNeedsContext(displacement string) bool {
+	// go_tls.h's function-like g(r) macro has not been expanded in a raw
+	// source inventory. It is not the amd64 g register in this position.
+	return strings.TrimSpace(displacement) == "g" || memoryOffsetExpressionNeedsContext(displacement)
+}
+
+func unresolvedX86MemoryOffsetError(memory MemRef) error {
+	if memory.OffRaw == "" {
+		return nil
+	}
+	if memory.Base == SP {
+		if offset, named := parseNamedStackConstantOffset(memory.OffRaw); named && offset == memory.Off {
+			return nil // Resolved descriptive C_AUTO offset, not a missing constant.
+		}
+	}
+	return fmt.Errorf("%w: unresolved x86 memory offset %q", ErrProbeNeedsContext, memory.OffRaw)
 }
 
 func x86SourceMemoryHasSegment(memory MemRef) bool {

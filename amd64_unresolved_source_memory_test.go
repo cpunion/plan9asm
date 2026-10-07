@@ -33,18 +33,24 @@ func TestX86UnresolvedSourceMemoryPreservesSyntax(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			memory := file.Funcs[0].Instrs[0].Args[0]
+			var instructions []Instr
+			for _, instruction := range file.Funcs[0].Instrs {
+				if instruction.Op != OpTEXT && instruction.Op != OpLABEL {
+					instructions = append(instructions, instruction)
+				}
+			}
+			if len(instructions) != 3 || instructions[1].Op != "ADDL" {
+				t.Fatal("source inventory lost the instruction after the unresolved operand")
+			}
+			memory := instructions[0].Args[0]
 			if memory.Kind != OpMem || memory.Mem.OffRaw != row.raw || memory.Mem.Off != 0 ||
 				memory.Mem.Base != row.base || memory.Mem.Index != row.index || memory.Mem.Scale != row.scale {
 				t.Fatalf("lost unresolved syntax: %#v", memory)
 			}
 			for _, arch := range []string{"386", "amd64"} {
-				if err := ProbeInstruction(ArchAMD64, arch, file.Funcs[0].Instrs[0]); !errors.Is(err, ErrProbeNeedsContext) {
+				if err := ProbeInstruction(ArchAMD64, arch, instructions[0]); !errors.Is(err, ErrProbeNeedsContext) {
 					t.Fatalf("%s unresolved memory acquired a lowering witness: %v", arch, err)
 				}
-			}
-			if len(file.Funcs[0].Instrs) != 3 || file.Funcs[0].Instrs[1].Op != "ADDL" {
-				t.Fatal("source inventory lost the instruction after the unresolved operand")
 			}
 		})
 	}

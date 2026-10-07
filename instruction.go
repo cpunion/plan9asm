@@ -430,6 +430,11 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 		case OpFP, OpFPAddr:
 			return fmt.Errorf("%w: %s uses an FP frame slot", ErrProbeNeedsContext, ins.Raw)
 		case OpMem:
+			if arch == ArchAMD64 {
+				if err := unresolvedX86MemoryOffsetError(arg.Mem); err != nil {
+					return fmt.Errorf("%s: %w", ins.Raw, err)
+				}
+			}
 			if arg.Mem.Base == PC {
 				return fmt.Errorf("%w: %s uses a PC-relative target", ErrProbeNeedsContext, ins.Raw)
 			}

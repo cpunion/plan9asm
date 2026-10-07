@@ -435,6 +435,11 @@ func validateResolvedImmediates(arch Arch, fn Func) error {
 			if err := unresolvedSymbolicImmediateErrorForArch(arg, arch); err != nil {
 				return err
 			}
+			if arch == ArchAMD64 && arg.Kind == OpMem {
+				if err := unresolvedX86MemoryOffsetError(arg.Mem); err != nil {
+					return err
+				}
+			}
 			if arch == ArchWASM && arg.Kind == OpMem && arg.Mem.OffRaw != "" {
 				return fmt.Errorf("unresolved wasm memory offset %q", arg.Mem.OffRaw)
 			}

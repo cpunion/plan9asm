@@ -605,7 +605,7 @@ func parseOperandForArch(arch Arch, s string) (Operand, error) {
 			if pseudo := x86SymbolPseudoGroup.FindStringSubmatch(x86Operand); pseudo != nil && pseudo[1] != "SP" {
 				return parseOperand(s) // Keep unindexed SB/FP and PC branch roles.
 			}
-			if memory, matched, err := parseX86SourceRegisterMemory(x86Operand); matched {
+			if memory, matched, err := parseX86SourceRegisterMemorySyntax(x86Operand, true); matched {
 				if err != nil {
 					return Operand{}, err
 				}
