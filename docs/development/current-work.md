@@ -42,9 +42,11 @@ This successor integrates these test-first rule-class repairs:
   An independent test-first regression covers five moves, two native address
   representations, three APIs, five targets and real IR optimization.
 
-The legacy logical m128 native-memory repair is being developed independently:
-logical FP bytes are not native backing/alignment. Keep those public forms
-Context without the native contract; retain original opcode faults. Rosetta
+The legacy logical m128 repair is integrated: logical FP bytes are not native
+backing/alignment. Those public forms remain Context without the native
+contract; all twelve legacy operations retain their original opcode faults.
+PS keeps an SSE1 carrier, while PD/integer keeps SSE2. Scalar ANDNL/ANDNQ
+feature identities must not attach BMI to packed ANDNPS/ANDNPD. Rosetta
 cannot certify Intel alignment traps. A required Linux/amd64 fault axis stays
 separate from portable numerical/object observations.
 
@@ -56,8 +58,8 @@ repairs, not a passing successor full-root certificate. Current/old scalar
 diagnostics each pass 50 roots/3,790 nodes; their separate caller-logical scope
 passes five roots/823 nodes. These overlap and prove only their own snapshots.
 
-Obtain terminal family owners and independent physical readbacks. Integrate the
-remaining legacy logical repair, then freeze a clean successor. Run the complete
+Obtain terminal family owners and independent physical readbacks. Freeze the
+clean combined successor and run the complete
 root inventory in 32 partitions with bounded two-worker collection, other
 root-module packages, nested CLIs, focused historical compatibility, official
 five-arch classification and strict benchmark. Required native Linux/cross

@@ -292,7 +292,7 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 				add("+cx16")
 			case strings.HasPrefix(op, "BLS"):
 				add("+bmi")
-			case strings.HasPrefix(op, "ANDN"):
+			case op == "ANDNL" || op == "ANDNQ":
 				add("+bmi")
 			case strings.HasPrefix(op, "BEXTR"):
 				add("+bmi")
