@@ -5,6 +5,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 // Intel AVX512-FP16 section 5.61: EVEX.128.66.MAP5.WIG 6E/7E.
@@ -99,41 +101,201 @@ func TestRawVMOVWLLVM22Targets(t *testing.T) {
 	if llc == "" {
 		t.Fatal("LLVM 22 llc not found")
 	}
-	var source strings.Builder
-	source.WriteString("TEXT rawWordMove(SB),4,$0-0\n")
+	type form struct {
+		name         string
+		code         []byte
+		load, memory bool
+	}
+	var forms []form
+	var complete []byte
 	for _, load := range []bool{false, true} {
 		for _, wide := range []bool{false, true} {
 			for _, memory := range []bool{false, true} {
-				for _, b := range rawVMOVW(load, wide, 1, 0, memory) {
-					fmt.Fprintf(&source, "BYTE $0x%02x\n", b)
-				}
+				code := rawVMOVW(load, wide, 1, 0, memory)
+				forms = append(forms, form{fmt.Sprintf("rawWordForm%d", len(forms)), code, load, memory})
+				complete = append(complete, code...)
 			}
 		}
 	}
+	var source strings.Builder
+	// Retain the original eight-form, sequential function. Independent
+	// one-form functions prevent an unrelated transfer from satisfying a
+	// width, native-memory effect or GP-zero-extension assertion.
+	source.WriteString("TEXT rawWordMove(SB),4,$0-0\n")
+	source.WriteString(x86RawDisplacementDirectives(complete))
 	source.WriteString("RET\n")
+	sigs := map[string]FuncSig{"rawWordMove": {Name: "rawWordMove", Ret: Void}}
+	for _, f := range forms {
+		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-0\n", f.name)
+		source.WriteString(x86RawDisplacementDirectives(f.code))
+		source.WriteString("RET\n")
+		sigs[f.name] = FuncSig{Name: f.name, Ret: Void}
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		// BYTE acceptance alone is not an encoding oracle: require the exact
+		// contiguous stock-Go object text, including the original final RET.
+		x86HandoffOriginalBytes(t, arch, append(append([]byte(nil), complete...), 0xc3))
+	}
 	for _, target := range []struct{ arch, triple string }{
 		{"amd64", "x86_64-apple-darwin"}, {"amd64", "x86_64-unknown-linux-gnu"},
 		{"amd64", "x86_64-pc-windows-msvc"}, {"386", "i386-unknown-linux-gnu"},
 		{"386", "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.triple, func(t *testing.T) {
-			requireX86GoAssemblerResult(t, target.arch, source.String(), true)
+			goAssemblerOracleOutput(t, target.arch, source.String(), "", true)
 			file, err := Parse(ArchAMD64, source.String())
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple,
-				Sigs: map[string]FuncSig{"rawWordMove": {Name: "rawWordMove", Ret: Void}},
-			})
+			ir, err := Translate(file, Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: sigs})
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"load volatile i16", "store i16", "zext i16", "+avx512fp16"} {
-				if !strings.Contains(ir, want) {
-					t.Fatalf("missing %s", want)
-				}
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := parseIRModuleInContext(ctx, ir)
+			if !module.IsNil() {
+				defer module.Dispose()
 			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := rawVMOVWFunctionEffects(module, "rawWordMove", 2, 2, 2); err != nil {
+				t.Fatal(err)
+			}
+			mode := 64
+			if target.arch == "386" {
+				mode = 32
+			}
+			for _, f := range forms {
+				t.Run(f.name, func(t *testing.T) {
+					ins, size, known, err := decodedX86VMOVQInstruction(f.code, mode)
+					if err != nil || !known || size != len(f.code) || ins.Op != "VMOVW" || !ins.x86Encoded {
+						t.Fatalf("raw-only decoder receipt changed: %+v size=%d known=%t err=%v", ins, size, known, err)
+					}
+					properties, known, err := x86GPSIMDTransferProperties(ins, target.arch)
+					if err != nil || !known || properties.bits != 16 || !properties.spec.rawOnly || properties.mmx ||
+						properties.destinationX != f.load || properties.sourceX == f.load || (properties.memory >= 0) != f.memory ||
+						properties.memoryWrite != (f.memory && !f.load) {
+						t.Fatalf("16-bit raw-only transfer role changed: %+v known=%t err=%v", properties, known, err)
+					}
+					loads, stores, extensions := 0, 0, 0
+					if f.memory {
+						if f.load {
+							loads = 1
+						} else {
+							stores = 1
+						}
+					} else if !f.load {
+						extensions = 1
+					}
+					if err := rawVMOVWFunctionEffects(module, f.name, loads, stores, extensions); err != nil {
+						t.Fatal(err)
+					}
+				})
+			}
+			rawVMOVWStoreCheckerMutations(t, ctx, module)
 			compileLLVMToObject(t, llc, target.triple, "raw-vmovw.ll", "raw-vmovw.o", ir)
+		})
+	}
+}
+
+func rawVMOVWFunctionEffects(module llvm.Module, name string, wantLoads, wantStores, wantExtensions int) error {
+	function := module.NamedFunction(name)
+	if function.IsNil() {
+		return fmt.Errorf("missing raw VMOVW function %s", name)
+	}
+	feature := false
+	for _, attribute := range function.GetFunctionAttributes() {
+		if attribute.IsString() && attribute.GetStringKind() == "target-features" {
+			for _, item := range strings.Split(attribute.GetStringValue(), ",") {
+				feature = feature || item == "+avx512fp16"
+			}
+		}
+	}
+	if !feature {
+		return fmt.Errorf("%s lost its private raw VMOVW ISA attribute", name)
+	}
+	loads, stores, extensions := 0, 0, 0
+	for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+		for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
+			if !ins.IsAZExtInst().IsNil() && ins.Operand(0).Type().TypeKind() == llvm.IntegerTypeKind &&
+				ins.Operand(0).Type().IntTypeWidth() == 16 && ins.Type().IntTypeWidth() == 64 {
+				extensions++
+			}
+			var typ llvm.Type
+			var pointer llvm.Value
+			load := !ins.IsALoadInst().IsNil()
+			if load {
+				typ, pointer = ins.Type(), ins.Operand(0)
+			} else if !ins.IsAStoreInst().IsNil() {
+				typ, pointer = ins.Operand(0).Type(), ins.Operand(1)
+			} else {
+				continue
+			}
+			if x86GPSIMDStoreTargetsBackingAlloca(pointer) {
+				continue // Virtual register banks are not original native memory.
+			}
+			if typ.TypeKind() != llvm.IntegerTypeKind || typ.IntTypeWidth() != 16 || !ins.IsVolatile() ||
+				ins.Alignment() != 1 || pointer.IsAIntToPtrInst().IsNil() {
+				return fmt.Errorf("%s lost exact native m16 type/effect/address: %s", name, ins.String())
+			}
+			if load {
+				loads++
+			} else {
+				stores++
+			}
+		}
+	}
+	if loads != wantLoads || stores != wantStores || extensions != wantExtensions {
+		return fmt.Errorf("%s m16 loads/stores/GP zero-extensions=%d/%d/%d, want=%d/%d/%d",
+			name, loads, stores, extensions, wantLoads, wantStores, wantExtensions)
+	}
+	return nil
+}
+
+func rawVMOVWStoreCheckerMutations(t *testing.T, ctx llvm.Context, module llvm.Module) {
+	t.Helper()
+	function := module.NamedFunction("rawWordForm1") // X1 -> m16, W=0.
+	var store llvm.Value
+	for block := function.FirstBasicBlock(); !block.IsNil(); block = llvm.NextBasicBlock(block) {
+		for ins := block.FirstInstruction(); !ins.IsNil(); ins = llvm.NextInstruction(ins) {
+			if !ins.IsAStoreInst().IsNil() && !x86GPSIMDStoreTargetsBackingAlloca(ins.Operand(1)) {
+				if !store.IsNil() {
+					t.Fatal("mutation fixture has multiple native stores")
+				}
+				store = ins
+			}
+		}
+	}
+	if store.IsNil() {
+		t.Fatal("mutation fixture has no native store")
+	}
+	original := function.String()
+	for _, mutation := range []struct{ name, replacement string }{
+		{"volatility", strings.Replace(store.String(), "store volatile", "store", 1)},
+		{"width", "store volatile i32 1" + store.String()[strings.IndexByte(store.String(), ','):]},
+		{"alignment", strings.Replace(store.String(), "align 1", "align 2", 1)},
+		{"missing", "; removed original native m16 store"},
+	} {
+		t.Run("checker-"+mutation.name, func(t *testing.T) {
+			if strings.Count(original, store.String()) != 1 || strings.Count(module.String(), original) != 1 {
+				t.Fatal("mutation does not bind the exact one-form function/store")
+			}
+			changed := strings.Replace(module.String(), original, strings.Replace(original, store.String(), mutation.replacement, 1), 1)
+			candidate, err := parseIRModuleInContext(ctx, changed)
+			if !candidate.IsNil() {
+				defer candidate.Dispose()
+			}
+			if err != nil {
+				t.Fatal("mutation must remain valid LLVM IR", err)
+			}
+			if err := llvm.VerifyModule(candidate, llvm.ReturnStatusAction); err != nil {
+				t.Fatal("mutation must remain a valid LLVM module", err)
+			}
+			if err := rawVMOVWFunctionEffects(candidate, "rawWordForm1", 0, 1, 0); err == nil {
+				t.Fatal("native m16 mutation escaped the per-function checker")
+			}
 		})
 	}
 }
@@ -212,7 +374,12 @@ func TestRawVMOVWRIPLiteralAndNamedRejection(t *testing.T) {
 		t.Fatal("accepted truncated word pool")
 	}
 	const source = "TEXT namedWordMove(SB),4,$0-0\nVMOVW X0, AX\nRET\n"
-	requireX86GoAssemblerResult(t, "amd64", source, false)
+	for _, arch := range []string{"amd64", "386"} {
+		goAssemblerOracleOutput(t, arch, source, "", false)
+		t.Run(arch+"/named-three-APIs", func(t *testing.T) {
+			x86RequireZeroMaskAPIOutcome(t, arch, strings.Replace(source, "namedWordMove", "f", 1), false)
+		})
+	}
 	file, err := Parse(ArchAMD64, source)
 	if err != nil {
 		t.Fatal(err)
