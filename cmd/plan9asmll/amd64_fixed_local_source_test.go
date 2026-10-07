@@ -48,13 +48,19 @@ RET
 
 func amd64FixedLocalCLIFixture(t *testing.T, operation string) (*packages.Package, string, compileConfig) {
 	t.Helper()
+	return amd64FixedLocalCLICompleteFixture(t, operation,
+		"package fixedlocal\nfunc Value(a, b, c, d uint64) uint64\n")
+}
+
+func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration string) (*packages.Package, string, compileConfig) {
+	t.Helper()
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	for name, source := range map[string]string{
 		"go.mod":        "module example.invalid/fixedlocal\n\ngo 1.20\n",
-		"value.go":      "package fixedlocal\nfunc Value(a, b, c, d uint64) uint64\n",
+		"value.go":      declaration,
 		"value_amd64.s": amd64FixedLocalCLIAssembly(operation),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
@@ -105,6 +111,36 @@ func amd64FixedLocalCLIFixture(t *testing.T, operation string) (*packages.Packag
 	}
 	t.Logf("original source SHA=%x; actual Go export:\n%s", sha256.Sum256([]byte(amd64FixedLocalCLIAssembly(operation))), stdout)
 	return pkgs[0], input, config
+}
+
+func TestCompileOneAMD64FixedLocalCompleteOrdinaryGoSource(t *testing.T) {
+	for _, fixture := range []struct {
+		name   string
+		source string
+	}{
+		{"body", "func Reference(a uint64) uint64 { return a + 1 }\n"},
+		{"values", "const Bias uint64 = 7\nvar Counter uint64\n"},
+		{"sdk-import", "import \"math/bits\"\nfunc Reference(a uint64) uint64 { return bits.RotateLeft64(a, 7) }\n"},
+		{"combined", "import \"math/bits\"\nconst Bias uint64 = 7\nvar Counter uint64\n" +
+			"func Reference(a uint64) uint64 { return bits.RotateLeft64(a + Bias + Counter, 7) }\n"},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			declaration := "package fixedlocal\n" + fixture.source + "func Value(a, b, c, d uint64) uint64\n"
+			pkg, input, config := amd64FixedLocalCLICompleteFixture(t, "PADDL 16(SP),X0", declaration)
+			output := filepath.Join(t.TempDir(), "complete.ll")
+			if err := compileOne(pkg, plan9asm.ArchAMD64, "linux", "amd64", "x86_64-unknown-linux-gnu",
+				asmTask{PkgPath: pkg.PkgPath, AsmFile: input, OutLL: output}, false, config); err != nil {
+				t.Fatalf("actual original Go export succeeded but complete-source CLI failed: %v", err)
+			}
+			ir, err := os.ReadFile(output)
+			if err != nil || !strings.Contains(string(ir), "fixed_local_native") || !strings.Contains(string(ir), "asm sideeffect") {
+				t.Fatalf("complete original source lost sealed native storage: %v", err)
+			}
+			if info, err := os.Stat(strings.TrimSuffix(output, ".ll") + ".o"); err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+				t.Fatalf("complete original-source LLVM22 object missing: %v", err)
+			}
+		})
+	}
 }
 
 func TestCompileOneAMD64FixedLocalOriginalSource(t *testing.T) {
