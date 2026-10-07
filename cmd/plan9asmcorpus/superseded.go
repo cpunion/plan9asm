@@ -94,6 +94,10 @@ func loadSupersededSkips(repoRoot, ledgerPath string) (map[string]discoverySuper
 	return skips, nil
 }
 
+func scannedDiscoveryVersionKeysFor(ledgerPath string, requested map[string]bool) (map[string]bool, error) {
+	return scannedDiscoveryVersionKeys(ledgerPath)
+}
+
 func scannedDiscoveryVersionKeys(ledgerPath string) (map[string]bool, error) {
 	info, err := os.Stat(ledgerPath)
 	if err != nil {
