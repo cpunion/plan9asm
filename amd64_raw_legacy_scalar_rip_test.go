@@ -63,13 +63,13 @@ func TestX86RawMOVD32PreservesPhysicalWidth(t *testing.T) {
 		t.Fatalf("MOVD32 decoded as %#v", decoded)
 	}
 	var raw strings.Builder
-	raw.WriteString("TEXT rawMovd32(SB),4,$0-0\n")
+	raw.WriteString("TEXT ·rawMovd32(SB),4,$0-0\n")
 	for _, value := range code {
 		fmt.Fprintf(&raw, "\tBYTE $0x%02x\n", value)
 	}
-	file, err := Parse(ArchAMD64, raw.String())
-	if err != nil {
-		t.Fatal(err)
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
 	}
 	for _, triple := range []string{
 		"x86_64-apple-darwin",
@@ -77,21 +77,19 @@ func TestX86RawMOVD32PreservesPhysicalWidth(t *testing.T) {
 		"x86_64-pc-windows-msvc",
 	} {
 		t.Run(triple, func(t *testing.T) {
-			ir, err := Translate(file, Options{
-				Goarch: "amd64", TargetTriple: triple,
-				Sigs: map[string]FuncSig{"rawMovd32": {Name: "rawMovd32", Ret: Void}},
-			})
-			if err != nil {
-				t.Fatal(err)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, raw.String(), "func rawMovd32()\n", "amd64", triple, api)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !strings.Contains(ir, "load volatile i32, ptr") ||
+						strings.Contains(ir, "load volatile i64, ptr") {
+						t.Fatal("physical MOVD32 must retain exactly one fault-observable 32-bit load")
+					}
+					compileLLVMToObject(t, llc, triple, "raw-movd32-"+api+".ll", "raw-movd32-"+api+".o", ir)
+				})
 			}
-			if !strings.Contains(ir, "load i32, ptr") {
-				t.Fatal("physical MOVD32 did not load exactly 32 bits")
-			}
-			llc := findLLVM22Tool("llc")
-			if llc == "" {
-				t.Fatal("LLVM 22 llc not found")
-			}
-			compileLLVMToObject(t, llc, triple, "raw-movd32.ll", "raw-movd32.o", ir)
 		})
 	}
 }
