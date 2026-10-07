@@ -35,7 +35,9 @@ func TestTranslateX86AESCompleteGoAssemblerForms(t *testing.T) {
 				source.WriteString("\t" + vop + " 16(AX), X1, X2\n")
 				source.WriteString("\t" + vop + " Y0, Y1, Y2\n")
 				source.WriteString("\t" + vop + " 32(AX), Y1, Y2\n")
-				source.WriteString("\t" + vop + " X16, X30, X31\n")
+				if target.goarch == "amd64" {
+					source.WriteString("\t" + vop + " X16, X30, X31\n")
+				}
 				fmt.Fprintf(&source, "\t%s Z0, Z1, Z%d\n", vop, zLast)
 			}
 			fmt.Fprintf(&source, "\tAESIMC X0, X%d\n", legacyLast)
