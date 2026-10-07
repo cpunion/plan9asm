@@ -1,12 +1,19 @@
 package plan9asm
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/json"
+	"go/ast"
+	"go/importer"
+	"go/parser"
+	"go/token"
+	"go/types"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"golang.org/x/tools/go/packages"
 )
 
 // Original Go compilation is the acceptance oracle. Additional ordinary Go
@@ -33,25 +40,54 @@ func TestGoAMD64FrameSourceCompleteOrdinaryGoDeclarations(t *testing.T) {
 			env := append(append([]string(nil), request.Environment...),
 				"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOTOOLCHAIN=local",
 				"GOENV=off", "GOWORK=off", "GOFLAGS=", "GOPROXY=off")
-			selected, err := packages.Load(&packages.Config{
-				Context: ctx, Dir: request.Directory, Env: env,
-				Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-					packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedExportFile,
-			}, ".")
-			if err != nil || len(selected) != 1 {
-				t.Fatalf("original Go complete-source selection: %v; packages=%d", err, len(selected))
+			command := exec.CommandContext(ctx, request.GoBinary,
+				"list", "-deps", "-export", "-compiled", "-json", "-mod=readonly", ".")
+			command.Dir, command.Env = request.Directory, env
+			output, err := runtimeOracleCombinedOutput(ctx, command)
+			if err != nil {
+				t.Fatalf("original Go rejected complete ordinary source: %v\n%s", err, output)
 			}
-			actual := selected[0]
-			if len(actual.Errors) != 0 || actual.IllTyped || actual.Types == nil || len(actual.Syntax) != 1 || actual.ExportFile == "" {
-				t.Fatalf("original Go rejected complete ordinary source: %+v", actual.Errors)
+			var selected goAMD64FrameSelection
+			exports := make(map[string]string)
+			decoder := json.NewDecoder(bytes.NewReader(output))
+			for {
+				var member goAMD64FrameSelection
+				if err := decoder.Decode(&member); err == io.EOF {
+					break
+				} else if err != nil || member.ImportPath == "" || len(member.Error)+len(member.DepsErrors) != 0 {
+					t.Fatalf("original Go compiler graph is incomplete: %+v: %v", member, err)
+				}
+				exports[member.ImportPath] = member.Export
+				if member.Module != nil && member.Module.Main {
+					if selected.ImportPath != "" {
+						t.Fatal("original Go selected more than one owned package")
+					}
+					selected = member
+				}
 			}
-			export, err := os.ReadFile(actual.ExportFile)
+			if selected.ImportPath != "example.invalid/framefixture" || len(selected.CompiledGoFiles) != 1 || len(selected.SFiles) != 1 {
+				t.Fatalf("original Go omitted the complete Go/ASM source pair: %+v", selected)
+			}
+			export, err := os.ReadFile(selected.Export)
 			if err != nil || len(export) == 0 {
 				t.Fatalf("original Go omitted compiled package/assembly export: %v", err)
 			}
 			t.Logf("ORIGINAL_GO_COMPLETE_FRAME_SOURCE role=%s go_sha=%x export_sha=%x", fixture.name,
 				sha256.Sum256([]byte(text)), sha256.Sum256(export))
-			pkg := GoPackage{Path: actual.PkgPath, Types: actual.Types, Syntax: actual.Syntax}
+			set := token.NewFileSet()
+			syntax, err := parser.ParseFile(set, filepath.Join(request.Directory, "value.go"), text, parser.ParseComments)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actualImporter := importer.ForCompiler(set, "gc", func(path string) (io.ReadCloser, error) {
+				return os.Open(exports[path])
+			})
+			typed, err := (&types.Config{Importer: actualImporter, Sizes: types.SizesFor("gc", "amd64")}).Check(
+				selected.ImportPath, set, []*ast.File{syntax}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pkg := GoPackage{Path: typed.Path(), Types: typed, Syntax: []*ast.File{syntax}}
 			source, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
 			if err != nil {
 				t.Fatalf("Go-accepted ordinary declarations lost original frame observation: %v", err)
