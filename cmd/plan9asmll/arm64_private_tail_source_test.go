@@ -56,7 +56,7 @@ func TestCompileOneARM64PrivateTailSource(t *testing.T) {
 					}
 					for _, filename := range files {
 						ir, err := os.ReadFile(filename)
-						if err != nil || strings.Count(string(ir), "define ") != definitions || !strings.Contains(string(ir), "__arm64_tail_") {
+						if err != nil || strings.Count(string(ir), "define ") != definitions || !strings.Contains(string(ir), "\nbb__5f_5farm64_5ftail_5f") {
 							t.Fatalf("CLI %s lost the complete typed continuation: %v", mode, err)
 						}
 						object := strings.TrimSuffix(filename, ".ll") + ".o"

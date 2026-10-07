@@ -115,7 +115,7 @@ func TestCompileOneARM64PrivateRegisterSource(t *testing.T) {
 				t.Fatal(err)
 			}
 			if strings.Contains(string(ir), "@\""+pkg.PkgPath+".mix$local\"") ||
-				strings.Count(string(ir), "define ") != 1 || !strings.Contains(string(ir), "__arm64_private_") {
+				strings.Count(string(ir), "define ") != 1 || !strings.Contains(string(ir), "\nbb__5f_5farm64_5fprivate_5f") {
 				t.Fatalf("private helper was not kept in its source caller's CFG:\n%s", ir)
 			}
 			object := strings.TrimSuffix(output, ".ll") + ".o"
@@ -148,7 +148,7 @@ func TestCompileOneARM64PrivateSourceBeforeModuleSplit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Count(string(ir), "define ") != 1 || !strings.Contains(string(ir), "__arm64_private_") {
+		if strings.Count(string(ir), "define ") != 1 || !strings.Contains(string(ir), "\nbb__5f_5farm64_5fprivate_5f") {
 			t.Fatalf("chunk lost its closed private source: %s", filename)
 		}
 		if _, err := os.Stat(strings.TrimSuffix(filename, ".ll") + ".o"); !os.IsNotExist(err) {

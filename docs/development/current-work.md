@@ -19,7 +19,7 @@ downstream skipped jobs did not pass. This local batch is not yet pushed.
 ## Continue here
 
 The development branch is
-`codex/pr40-amd64-complete-source-handoff-green-20261007`.
+`codex/pr40-arm64-cli-integration-repair-20261007`.
 Read its actual HEAD and status before resuming. Main is the only ledger writer;
 earlier agents are inactive.
 
@@ -37,12 +37,30 @@ Latest repairs:
   import type identities and source hashes. Failed verification revokes its
   independent binding. Pointer/slice fixed-local transport, caller regions,
   dynamic frames and native JIT/FFI contracts remain unproved.
+- ARM64 scalar and pair source-memory roles now canonicalize RSP identically.
+  Same-package calls recursively close unchanged source and matching original
+  assembler/archive bodies before admitting exact initialized result bytes.
+  Every outgoing parameter byte must be initialized; calls invalidate prior
+  locals, GP and NZCV. Partial/one-path results remain Context. The separate
+  SDK void tuple still requires its actual ABI0 wrapper and supplies no result
+  bytes. This is scratch/input observation, not native-frame or pointee permission.
+- CLI private/tail tests check injectively escaped LLVM block names, retaining
+  the single-caller CFG, chunk/object and native numerical assertions.
 
-The old observer regression expecting blanket body/import rejection failed
-after the expanded observation domain. Its replacement tests accept those
-independently observed numeric frames while retaining nested, foreign-module,
-DATA and pointer rejection. Obtain genuine terminal results for this branch;
-a test edit or an ancestor pass is not current-head verification.
+The actual framed-pair and transitive-call REDs each fail all three root APIs.
+New regressions cover the five pair mnemonics, local partial/branch holes,
+callee input/result holes and all four integer result widths. Diagnostics pass
+the changed CLI scope (9 roots/28 children) and root call scope (4 roots/180
+children), without Fail/Skip. Original Go and LLVM O0/O2 execute four operations
+with 1,024 observations each. A first expanded replay found a blocked SDK void
+call; preserve that failure and its now-passing regression.
+
+Formal current/old owners use `_out/arm64-integration-green/run.cjs`. Current
+runs the complete CLI before the full affected root scope; old runs that root
+scope only. Both retain race, complete tool/source guards, vet/build and genuine
+closure. Current nested builds write directly under ignored output, without
+the ancestor's default-binary collector. Obtain terminal producer and independent
+reader results; diagnostic or ancestor passes are not current-head completion.
 
 ## Closed ancestor evidence
 
@@ -64,6 +82,11 @@ check genuine exits and PID/PGID closure.
   every full source. Two lack syntax handoff and two hit blanket import rejection.
 - `b7b4a06d`: CLI scope passed 42 nodes; observer scope retained three failures
   (two stale blanket-rejection assertions plus their parent). Keep raw failures.
+- `f920cab3`: focused current/old scopes passed 347/305 nodes. The complete CLI
+  has 212 roots/1,566 children, 1,752 passes, 26 failures and no skips: 23 stale
+  private/tail label assertions, plus two scratch callees and their parent.
+  Its independent failure reader closes all 12 stages and retains actual Go
+  source/object evidence; CI policy, vet/build and nested vet/build passed.
 - Original golang/snappy v1.0.0 replay on `c07c03ae` compiled 12 LLVM objects
   across six applicable configurations with all 11 targets retained.
 

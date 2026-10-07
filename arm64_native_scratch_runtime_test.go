@@ -16,15 +16,28 @@ func TestCrossLinuxRuntimeMatrixARM64NativeScratchClosedCall(t *testing.T) {
 	if len(runner) != 0 {
 		goos = "linux"
 	}
-	for _, operation := range []string{"add", "W27-full-overwrite"} {
+	for _, operation := range []string{"add", "W27-full-overwrite", "initialized-local-pair", "transitive-call-result"} {
 		t.Run(operation, func(t *testing.T) {
 			assembly := arm64ScratchSelectedSource
 			goExpected, cExpected := "n+3", "n+3"
-			if operation == "W27-full-overwrite" {
+			extraDeclarations := ""
+			switch operation {
+			case "W27-full-overwrite":
 				assembly = strings.Replace(assembly, "ADD $3,R1", "MOVD $-1,R27\nMOVWU R1,R27\nMOVD R27,R1", 1)
 				goExpected, cExpected = "uint64(uint32(n))", "(uint64_t)(uint32_t)n"
+			case "initialized-local-pair":
+				assembly = strings.Replace(assembly, "TEXT ·Value(SB),4,$0-16", "TEXT ·Value(SB),4,$32-16", 1)
+				assembly = strings.Replace(assembly, "ADD $3,R1",
+					"MOVD $7,R2\nSTP (R1,R2),16(RSP)\nLDP 16(RSP),(R3,R4)\nADD R4,R3\nMOVD R3,R1", 1)
+				goExpected, cExpected = "n+7", "n+7"
+			case "transitive-call-result":
+				assembly = strings.Replace(assembly, "TEXT ·Value(SB),4,$0-16", "TEXT ·Value(SB),4,$24-16", 1)
+				assembly = strings.Replace(assembly, "ADD $3,R1", "MOVD R1,8(RSP)\nCALL ·Leaf(SB)\nMOVD 16(RSP),R1", 1)
+				assembly += "TEXT ·Leaf(SB),4,$0-16\nMOVD n+0(FP),R1\nADD $3,R1\nMOVD R1,ret+8(FP)\nRET\n"
+				extraDeclarations = "func Leaf(n uint64) uint64\n"
 			}
-			_, _, file, options, source := arm64ScratchActualBoundSourceWithAssembly(t, goos, triple, assembly)
+			_, _, file, options, source := arm64ScratchActualBoundSourceWithPackage(t,
+				goos, triple, assembly, "example.invalid/scratchfixture", extraDeclarations)
 			// The actual selected ordinary package and unchanged ASM execute via
 			// their compiler-produced ABI0 wrappers. This is not a handwritten
 			// native entry or a replacement for a downloaded library function.

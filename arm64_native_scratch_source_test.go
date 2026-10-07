@@ -41,13 +41,13 @@ func arm64ScratchActualSourceFixtureWithAssembly(t *testing.T, goos, assembly st
 	return arm64ScratchActualSourceFixtureWithPackage(t, goos, assembly, "example.invalid/scratchfixture")
 }
 
-func arm64ScratchActualSourceFixtureWithPackage(t *testing.T, goos, assembly, packagePath string) (GoPackage, GoARM64ScratchCaptureRequest) {
+func arm64ScratchActualSourceFixtureWithPackage(t *testing.T, goos, assembly, packagePath string, extraDeclarations ...string) (GoPackage, GoARM64ScratchCaptureRequest) {
 	t.Helper()
 	directory, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	const declarations = "package scratchfixture\nfunc Scratch(n uint64) uint64\nfunc Value(n uint64) uint64\n"
+	declarations := "package scratchfixture\nfunc Scratch(n uint64) uint64\nfunc Value(n uint64) uint64\n" + strings.Join(extraDeclarations, "\n")
 	for name, data := range map[string]string{
 		"go.mod":   "module " + packagePath + "\n\ngo 1.20\n",
 		"value.go": declarations, "value_arm64.s": assembly,
@@ -98,9 +98,9 @@ func arm64ScratchActualBoundSourceWithAssembly(t *testing.T, goos, target, assem
 	return arm64ScratchActualBoundSourceWithPackage(t, goos, target, assembly, "example.invalid/scratchfixture")
 }
 
-func arm64ScratchActualBoundSourceWithPackage(t *testing.T, goos, target, assembly, packagePath string) (context.Context, GoPackage, *File, Options, *GoARM64ScratchSource) {
+func arm64ScratchActualBoundSourceWithPackage(t *testing.T, goos, target, assembly, packagePath string, extraDeclarations ...string) (context.Context, GoPackage, *File, Options, *GoARM64ScratchSource) {
 	t.Helper()
-	pkg, request := arm64ScratchActualSourceFixtureWithPackage(t, goos, assembly, packagePath)
+	pkg, request := arm64ScratchActualSourceFixtureWithPackage(t, goos, assembly, packagePath, extraDeclarations...)
 	ctx, cancel := runtimeOracleStageContext(t)
 	t.Cleanup(cancel)
 	source, err := CaptureGoARM64ScratchSource(ctx, pkg, request)

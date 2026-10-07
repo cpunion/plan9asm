@@ -11,7 +11,11 @@ import (
 // memory extent, caller frame, initialized pointee or physical SP certificate.
 // Architectural frame operations are kept separate from numerical GP facts.
 func arm64ScratchSamePackageInputs(function Func, signature FuncSig, body arm64ScratchNativeBody) bool {
-	if !arm64ScratchSourceLocalInputs(function, signature) {
+	return arm64ScratchSamePackageInputsWithCalls(function, signature, body, nil)
+}
+
+func arm64ScratchSamePackageInputsWithCalls(function Func, signature FuncSig, body arm64ScratchNativeBody, calls map[string]FuncSig) bool {
+	if !arm64ScratchSourceInputs(function, signature, calls, false) {
 		return false
 	}
 	instructions, edges, valid := arm64ScratchNativeGraph(body)
@@ -90,6 +94,10 @@ func arm64ScratchGeneratedLeafRestore(code []uint32, autosize int64) bool {
 
 type arm64ScratchLocalBytes [4]uint64
 
+type arm64ScratchSourceBytes struct {
+	local, results arm64ScratchLocalBytes
+}
+
 func (bytes *arm64ScratchLocalBytes) transfer(offset, width int64, write bool) bool {
 	if offset < 0 || width <= 0 || width > 16 || offset > 256-width {
 		return false
@@ -113,6 +121,13 @@ func arm64ScratchReservedInput(reg Reg) bool {
 // allocation: no slot is invented and no logical address becomes native. The
 // lowerer's existing frame/ABI/native-pointer guards must still accept it.
 func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
+	return arm64ScratchSourceInputs(function, signature, nil, false)
+}
+
+// Call contracts come only from the factory's recursively closed original
+// source and matching assembler/archive bodies. They supply exact initialized
+// result bytes, never GP/NZCV outputs or permission to retain other locals.
+func arm64ScratchSourceInputs(function Func, signature FuncSig, calls map[string]FuncSig, requireResults bool) bool {
 	if function.FrameSize < 0 || function.FrameSize > 224 || function.ArgSize < 0 || function.ArgSize > 256 ||
 		len(function.Instrs) == 0 || len(function.Instrs) > 65536 {
 		return false
@@ -125,7 +140,7 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 		}
 		indices[block.name] = index
 	}
-	before, seen := make([]arm64ScratchLocalBytes, len(blocks)), make([]bool, len(blocks))
+	before, seen := make([]arm64ScratchSourceBytes, len(blocks)), make([]bool, len(blocks))
 	steps := 0
 	for entry := range blocks {
 		if seen[entry] {
@@ -166,8 +181,29 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 					}
 				}
 				if op == "CALL" || op == "BL" {
-					state = arm64ScratchLocalBytes{}
+					if len(instruction.Args) != 1 || instruction.Args[0].Kind != OpSym ||
+						!strings.HasSuffix(instruction.Args[0].Sym, "(SB)") {
+						return false
+					}
+					target := strings.ReplaceAll(strings.TrimSuffix(instruction.Args[0].Sym, "(SB)"), "·", ".")
+					callee, closed := calls[target]
+					if !closed || !arm64ScratchCallLayout(callee) ||
+						!arm64ScratchCallSlots(&state.local, callee.Frame.Params, function.FrameSize, false) {
+						return false
+					}
+					state = arm64ScratchSourceBytes{}
+					if !arm64ScratchCallSlots(&state.local, callee.Frame.Results, function.FrameSize, true) {
+						return false
+					}
 					continue
+				}
+				if op == OpRET && requireResults {
+					for _, slot := range signature.Frame.Results {
+						width := int64((arm64MachineScalarWidth(slot.Type) + 7) / 8)
+						if !state.results.transfer(slot.Offset, width, false) {
+							return false
+						}
+					}
 				}
 				memory, width, store, registered := arm64ScratchSourceMemory(instruction)
 				for _, operand := range instruction.Args {
@@ -177,7 +213,7 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 						if !registered || memory.Kind != OpMem || memory.Mem != exact || function.FrameSize == 0 ||
 							operand.Mem.Index != "" || operand.Mem.Sym != "" || operand.Mem.OffRaw != "" ||
 							operand.Mem.Off < 8 || operand.Mem.Off > function.FrameSize+8-width ||
-							!state.transfer(operand.Mem.Off, width, store) {
+							!state.local.transfer(operand.Mem.Off, width, store) {
 							return false
 						}
 					}
@@ -185,9 +221,15 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 				if registered && memory.Kind == OpFP && !store && !arm64ScratchParameterRange(signature, memory.FPOffset, width) {
 					return false
 				}
+				if registered && memory.Kind == OpFP && store && requireResults {
+					if !arm64ScratchSlotRange(signature.Frame.Results, memory.FPOffset, width) ||
+						!state.results.transfer(memory.FPOffset, width, true) {
+						return false
+					}
+				}
 				if registered && store && memory.Kind != OpFP && !(memory.Kind == OpMem && arm64StackReg(memory.Mem.Base)) {
 					// A potentially aliased write cannot preserve local byte facts.
-					state = arm64ScratchLocalBytes{}
+					state = arm64ScratchSourceBytes{}
 				}
 			}
 			successors, valid := arm64ScratchSourceSuccessors(blocks, indices, at)
@@ -197,8 +239,9 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 			for _, next := range successors {
 				value := state
 				if seen[next] {
-					for word := range value {
-						value[word] &= before[next][word]
+					for word := range value.local {
+						value.local[word] &= before[next].local[word]
+						value.results[word] &= before[next].results[word]
 					}
 				}
 				if !seen[next] || value != before[next] {
@@ -212,12 +255,16 @@ func arm64ScratchSourceLocalInputs(function Func, signature FuncSig) bool {
 }
 
 func arm64ScratchParameterRange(signature FuncSig, offset, width int64) bool {
+	return arm64ScratchSlotRange(signature.Frame.Params, offset, width)
+}
+
+func arm64ScratchSlotRange(slots []FrameSlot, offset, width int64) bool {
 	if offset < 0 || width <= 0 || width > 16 || offset > 256-width {
 		return false
 	}
 	for at := offset; at < offset+width; at++ {
 		matches := 0
-		for _, slot := range signature.Frame.Params {
+		for _, slot := range slots {
 			bits := arm64MachineScalarWidth(slot.Type)
 			if bits != 0 && slot.Offset >= 0 && slot.Offset <= 256-int64((bits+7)/8) &&
 				at >= slot.Offset && at < slot.Offset+int64((bits+7)/8) {
@@ -225,6 +272,46 @@ func arm64ScratchParameterRange(signature FuncSig, offset, width int64) bool {
 			}
 		}
 		if matches != 1 {
+			return false
+		}
+	}
+	return true
+}
+
+func arm64ScratchNumericCallLayout(signature FuncSig) bool {
+	if !arm64ScratchCallLayout(signature) {
+		return false
+	}
+	for _, argument := range signature.Args {
+		if argument == Ptr {
+			return false
+		}
+	}
+	return true
+}
+
+func arm64ScratchCallLayout(signature FuncSig) bool {
+	integer := func(typ LLVMType) bool {
+		return typ == I1 || typ == I8 || typ == I16 || typ == I32 || typ == I64
+	}
+	if len(signature.Args) != len(signature.Frame.Params) || len(signature.ArgRegs) != 0 ||
+		signature.ARM64GoRegisterABI != nil || signature.ARM64ClosureABI != nil {
+		return false
+	}
+	for _, argument := range signature.Args {
+		if !integer(argument) && argument != Ptr {
+			return false
+		}
+	}
+	return signature.Ret == Void && len(signature.Frame.Results) == 0 ||
+		integer(signature.Ret) && len(signature.Frame.Results) == 1 && signature.Frame.Results[0].Type == signature.Ret
+}
+
+func arm64ScratchCallSlots(bytes *arm64ScratchLocalBytes, slots []FrameSlot, frame int64, write bool) bool {
+	for _, slot := range slots {
+		width := int64((arm64MachineScalarWidth(slot.Type) + 7) / 8)
+		if slot.Offset < 0 || width == 0 || slot.Offset > frame-width ||
+			!bytes.transfer(8+slot.Offset, width, write) {
 			return false
 		}
 	}
@@ -244,6 +331,11 @@ func arm64ScratchSourceMemory(instruction Instr) (Operand, int64, bool, bool) {
 		if registers.Kind == OpRegList && len(registers.RegList) == 2 &&
 			isARM64GeneralOrZeroReg(registers.RegList[0]) && isARM64GeneralOrZeroReg(registers.RegList[1]) &&
 			(!pair.load || registers.RegList[0] != registers.RegList[1]) {
+			if memory.Kind == OpMem && arm64StackReg(memory.Mem.Base) {
+				// Match the scalar grammar's address-bank canonicalization.
+				// This changes no offset, width, indexing or byte-definedness.
+				memory.Mem.Base = SP
+			}
 			return memory, int64(pair.elementBytes * 2), !pair.load, true
 		}
 	}

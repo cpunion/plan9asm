@@ -218,6 +218,10 @@ func arm64ScratchNOSPLIT(function Func) bool {
 }
 
 func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symbol string, visiting map[string]bool, depth int) (bool, error) {
+	return source.closedNativeCalleeWithResults(ctx, symbol, visiting, depth, make(map[string]FuncSig))
+}
+
+func (source *GoARM64ScratchSource) closedNativeCalleeWithResults(ctx context.Context, symbol string, visiting map[string]bool, depth int, results map[string]FuncSig) (bool, error) {
 	if depth >= 32 || len(visiting) >= 64 || visiting[symbol] {
 		return false, nil
 	}
@@ -275,6 +279,7 @@ func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symb
 		return false, nil
 	}
 	var sdkInputs uint64
+	var sdkLayout FuncSig
 	var samePackageLayout FuncSig
 	sdkBody := !strings.HasPrefix(symbol, source.actual.Path+".")
 	if sdkBody {
@@ -290,6 +295,7 @@ func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symb
 		if !valid || source.abis[symbol] != "ABIInternal" {
 			return false, nil
 		}
+		sdkLayout = layout
 	} else {
 		var err error
 		samePackageLayout, err = source.actualCalleeSignature(ctx, symbol, symbol)
@@ -306,6 +312,25 @@ func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symb
 	} // actual uncached assembler AND actual archive member
 	visiting[symbol] = true
 	defer delete(visiting, symbol)
+	calls := make(map[string]FuncSig)
+	for _, body := range bodies {
+		for _, target := range body.calls {
+			target = source.originalObjectCallTarget(target)
+			if target == symbol && source.originalObjectGenerated(body.source) {
+				continue // The exact wrapper's own source body is checked below.
+			}
+			closed, err := source.closedNativeCalleeWithResults(ctx, target, visiting, depth+1, results)
+			if err != nil || !closed {
+				return false, err
+			}
+			if layout, initialized := results[target]; initialized {
+				calls[target] = layout
+				if strings.HasPrefix(target, source.actual.Path+".") {
+					calls["."+strings.TrimPrefix(target, source.actual.Path+".")] = layout
+				}
+			}
+		}
+	}
 	actualAssembly, originalMatched := []uint32(nil), false
 	for _, body := range bodies {
 		if !arm64ScratchNativeDoesNotAccess(body) {
@@ -315,7 +340,7 @@ func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symb
 			if sdkBody && !arm64ScratchSDKBodyInputs(body, sdkInputs) {
 				return false, nil
 			}
-			if !sdkBody && !arm64ScratchSamePackageInputs(function, samePackageLayout, body) {
+			if !sdkBody && !arm64ScratchSamePackageInputsWithCalls(function, samePackageLayout, body, calls) {
 				return false, nil
 			}
 			if _, captured := source.originalObjectSource(body.source); !captured {
@@ -329,16 +354,15 @@ func (source *GoARM64ScratchSource) closedNativeCallee(ctx context.Context, symb
 				return false, nil
 			}
 		}
-		for _, target := range body.calls {
-			target = source.originalObjectCallTarget(target)
-			if target == symbol && source.originalObjectGenerated(body.source) {
-				continue
-			} // exact wrapper->other same-name body; all bodies are independently checked
-			closed, err := source.closedNativeCallee(ctx, target, visiting, depth+1)
-			if err != nil || !closed {
-				return false, err
-			}
-		}
+	}
+	if originalMatched && !sdkBody && arm64ScratchNumericCallLayout(samePackageLayout) &&
+		arm64ScratchSourceInputs(function, samePackageLayout, calls, true) {
+		results[symbol] = samePackageLayout
+	}
+	if originalMatched && sdkBody && source.actualABI0Wrapper(symbol, sdkLayout) {
+		// The independent SDK tuple contract accepts only a void result.
+		// Its real wrapper supplies inputs, never initialized result bytes.
+		results[symbol] = sdkLayout
 	}
 	return originalMatched, nil
 }
