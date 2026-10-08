@@ -168,6 +168,70 @@ func TestARM64FlagsUnmodeledNativeCalloutWithoutSyscall(t *testing.T) {
 	}
 }
 
+func TestARM64FlagsOnlyNativeObservationHasNoEntryOrDuplicateCFG(t *testing.T) {
+	for _, body := range []string{
+		"MOVD $3,R3\nMSR R3,NZCV",                 // Unobserved native flags remain object-only.
+		"CMP R2,R1\nMRS DCZID_EL0,R4\nCSET CS,R2", // Exact registered preservation.
+		"MSR R3,NZCV\nCMP R2,R1\nCSET CS,R2",      // A real later producer restores flags.
+	} {
+		t.Run(body, func(t *testing.T) {
+			source := arm64SyscallEffectSource(body)
+			requireARM64GoAssemblerResult(t, source, true)
+			for _, api := range []string{"text", "module", "Go"} {
+				if _, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu", source); err != nil {
+					t.Fatalf("light observation changed nonobserving/redefined %s source: %v", api, err)
+				}
+			}
+			file, err := Parse(ArchARM64, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output strings.Builder
+			c := newARM64CtxWithTarget(&output, file.Funcs[0], FuncSig{Ret: Void}, testResolveSym("example"), nil,
+				"aarch64-unknown-linux-gnu", false)
+			if err := c.prepareLocalControl(); err != nil {
+				t.Fatal(err)
+			}
+			flow := newARM64MachineAvailability(c)
+			if !flow.flagsOnly || flow.used || flow.entry != nil || len(flow.blocks) != 0 {
+				t.Fatal("ordered flag observation created an entry role or duplicate machine CFG")
+			}
+		})
+	}
+}
+
+func TestARM64FlagPredicateReadsOnlyItsRequiredBits(t *testing.T) {
+	for _, test := range []struct {
+		condition string
+		mask      arm64FlagMask
+	}{
+		{"EQ", arm64FlagZ}, {"NE", arm64FlagZ},
+		{"CS", arm64FlagC}, {"HS", arm64FlagC}, {"CC", arm64FlagC}, {"LO", arm64FlagC},
+		{"HI", arm64FlagC | arm64FlagZ}, {"LS", arm64FlagC | arm64FlagZ},
+		{"MI", arm64FlagN}, {"PL", arm64FlagN}, {"VS", arm64FlagV}, {"VC", arm64FlagV},
+		{"GE", arm64FlagN | arm64FlagV}, {"LT", arm64FlagN | arm64FlagV},
+		{"GT", arm64FlagN | arm64FlagV | arm64FlagZ}, {"LE", arm64FlagN | arm64FlagV | arm64FlagZ},
+		{"AL", 0}, {"NV", 0},
+	} {
+		t.Run(test.condition, func(t *testing.T) {
+			c, output := newARM64CtxWithFuncForTest(t, Func{}, FuncSig{Ret: Void}, nil)
+			// This is an isolated typed bit-flow unit, not an original entry or
+			// caller certificate. The source/API tests provide the latter roles.
+			c.flagsKnown = test.mask
+			start := output.Len()
+			if _, err := c.condValue(test.condition); err != nil {
+				t.Fatal(err)
+			}
+			for _, slot := range []string{c.flagsNSlot, c.flagsZSlot, c.flagsCSlot, c.flagsVSlot} {
+				read := strings.Contains(output.String()[start:], "load i1, ptr "+slot+"\n")
+				if read != (c.arm64FlagSlotMask(slot)&test.mask != 0) {
+					t.Fatalf("%s read an unrelated/unknown bit at %s", test.condition, slot)
+				}
+			}
+		})
+	}
+}
+
 func TestARM64FlagFlowOrderedBitEffects(t *testing.T) {
 	for _, bit := range []arm64FlagMask{arm64FlagN, arm64FlagZ, arm64FlagC, arm64FlagV} {
 		for _, test := range []struct {

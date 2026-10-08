@@ -16,6 +16,10 @@ import (
 )
 
 func TestARM64SyscallGoCompleteConstantClassOriginalBytes(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
 	// Go asm7's ASVC C_VCON and C_NONE rows encode Offset & 0xffff.
 	// This is an encoding observation, not entry/memory or Linux execution proof.
 	cases := []struct {
@@ -75,8 +79,18 @@ func TestARM64SyscallGoCompleteConstantClassOriginalBytes(t *testing.T) {
 					if !strings.Contains(fragment, "ptr %reg_R8") || strings.Contains(fragment, "ptr %flags_") {
 						t.Fatalf("encoded immediate selected a non-Linux ABI/effect: %s", fragment)
 					}
+					for _, optimization := range []int{0, 2} {
+						t.Run(fmt.Sprintf("O%d", optimization), func(t *testing.T) {
+							arm64LinuxSleepCompileObject(t, llc, ir, optimization)
+						})
+					}
 				})
 			}
+		})
+	}
+	for _, spelling := range []string{"SVC R0", "SVC (R0)", "SVC $0,$1", "SVC $1.5", "SVC.P $0", "SVC.W $0"} {
+		t.Run("Go-reject/"+spelling, func(t *testing.T) {
+			requireARM64GoAssemblerResult(t, "TEXT ·invalid(SB),516,$0-0\n"+spelling+"\nRET\n", false)
 		})
 	}
 }

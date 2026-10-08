@@ -93,7 +93,7 @@ func RawSyscallNoError(trap, a1, a2, a3 uintptr) (r1, r2 uintptr)
 					GOOS: "linux", GOARCH: "arm64", TargetTriple: triple,
 					ResolveSym: testResolveSym(pkg.Path),
 				})
-				if triple != "aarch64-unknown-linux-gnu" {
+				if triple != "aarch64-unknown-linux-gnu" && triple != "aarch64-unknown-linux-musl" {
 					if tr != nil && !tr.Module.IsNil() {
 						tr.Module.Dispose()
 					}
