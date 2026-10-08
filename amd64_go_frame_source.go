@@ -60,6 +60,16 @@ type GoAMD64FrameSource struct {
 	downloadedModule *gooriginalsrc.Module
 }
 
+// newGoOriginalInputGuard initializes only private input/cleanup ownership.
+// It has no ready object, declaration, source-origin or frame capability.
+func newGoOriginalInputGuard(request GoAMD64FrameCaptureRequest) *GoAMD64FrameSource {
+	request.Environment = append([]string(nil), request.Environment...)
+	source := &GoAMD64FrameSource{request: request,
+		inputs: make(map[string][32]byte), origins: make(map[string]int)}
+	source.identity = source
+	return source
+}
+
 // Transport is an observation role, never a memory or alias permission.
 type goAMD64FrameTransport uint8
 
@@ -133,13 +143,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err != nil {
 		return nil, err
 	}
-	source := &GoAMD64FrameSource{
-		request: request,
-		inputs:  make(map[string][32]byte),
-		origins: make(map[string]int),
-	}
-	source.identity = source
-	source.request.Environment = append([]string(nil), request.Environment...)
+	source := newGoOriginalInputGuard(request)
 	provided := make(map[string]string)
 	for _, value := range request.Environment {
 		key, setting, valid := strings.Cut(value, "=")

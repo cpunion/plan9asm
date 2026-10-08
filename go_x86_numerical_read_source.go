@@ -86,10 +86,8 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	}
 	source := &GoX86NumericalReadSource{request: request, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
 		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
-	source.guard = &GoAMD64FrameSource{request: GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
-		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment}, inputs: make(map[string][32]byte)}
-	// This private guard owns artifacts, but is not a ready frame observation.
-	source.guard.identity = source.guard
+	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
+		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment})
 	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
 		resolved, err := filepath.EvalSymlinks(directory)
 		info, statErr := os.Lstat(directory)
