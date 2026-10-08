@@ -166,6 +166,10 @@ func main() {
 `
 
 func officialReader(t *testing.T, binary string) string {
+	return officialReaderForSource(t, binary, officialReaderSource)
+}
+
+func officialReaderForSource(t *testing.T, binary, source string) string {
 	t.Helper()
 	dir := t.TempDir()
 	var err error
@@ -173,7 +177,7 @@ func officialReader(t *testing.T, binary string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, data := range map[string]string{"main.go": officialReaderSource} {
+	for name, data := range map[string]string{"main.go": source} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -223,12 +227,12 @@ func officialReader(t *testing.T, binary string) string {
 			Tools             map[string]string
 			SourceSHA256      string
 			Commands          [][]string
-		}{dir, binary, env, inputs, digest([]byte(officialReaderSource)), [][]string{
+		}{dir, binary, env, inputs, digest([]byte(source)), [][]string{
 			{"list", "-deps", "-export", "-f", "{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}", "cmd/internal/archive", "cmd/internal/goobj", "encoding/json", "fmt", "os"},
 			{"tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go"},
 			{"tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o"},
 		}}, "", "  ")
-		for name, data := range map[string][]byte{"sdk-reader-source.go": []byte(officialReaderSource), "sdk-reader-importcfg": config, "sdk-reader-input.json": metadata, "sdk-reader-env.json": goenv, "sdk-reader": readerBytes} {
+		for name, data := range map[string][]byte{"sdk-reader-source.go": []byte(source), "sdk-reader-importcfg": config, "sdk-reader-input.json": metadata, "sdk-reader-env.json": goenv, "sdk-reader": readerBytes} {
 			if err := os.WriteFile(filepath.Join(artifact, name), data, 0600); err != nil {
 				t.Fatal(err)
 			}
