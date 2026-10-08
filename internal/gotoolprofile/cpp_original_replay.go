@@ -76,6 +76,16 @@ func ValidateCPPOriginalInputs(input *ConsumerInput) error {
 			}
 		}
 	}
+	// Object scope can be narrower than actual Go selection. Both executed
+	// originals and registered source-only companions need their complete unit;
+	// deleting a companion must not bypass source closure via a smaller graph.
+	for _, files := range [][]string{input.AsmFiles, input.RegisteredAsmFiles} {
+		for _, assembly := range files {
+			if _, exists := graph.Units[assembly]; !exists {
+				return fmt.Errorf("CPP original graph omitted selected package assembly: %s", assembly)
+			}
+		}
+	}
 	for assembly, required := range graph.RequiredExpandedOperands {
 		if _, exists := graph.Units[assembly]; !exists || !containsString(input.AsmFiles, assembly) {
 			return fmt.Errorf("CPP expanded operands claim an unknown assembly")

@@ -100,6 +100,9 @@ func bindDiscoveryCPPOriginalConsumer(input *gotoolprofile.ConsumerInput, inputs
 	if err != nil {
 		return // The mandatory protocol without a graph is fail-closed.
 	}
+	if err := projectDiscoveryCPPOriginalPackage(input, graphInput.CPPOriginals); err != nil {
+		return
+	}
 	input.CPPOriginals = graphInput.CPPOriginals
 	defines, err := plan9asm.GoAssemblerDefinesForEnvironment(input.Observed.Environment["GOOS"], input.Observed.Environment["GOARCH"], input.Observed.Environment)
 	if err != nil {
@@ -126,6 +129,53 @@ func bindDiscoveryCPPOriginalConsumer(input *gotoolprofile.ConsumerInput, inputs
 		input.CPPIncludeSearchMisses = append(input.CPPIncludeSearchMisses, required...)
 	}
 	gotoolprofile.SortCPPIncludeSearch(input.CPPIncludeSearchMisses)
+}
+
+// Only original bodies are projected. The invocation still retains complete
+// module membership, source hashes, selection headers and physical search
+// witnesses. Registration includes selected source-only siblings; the actual
+// Go package consumer independently checks that full set before translation.
+func projectDiscoveryCPPOriginalPackage(input *gotoolprofile.ConsumerInput, graph *gotoolprofile.CPPOriginalReplayInput) error {
+	units := make(map[string]bool)
+	for _, files := range [][]string{input.AsmFiles, input.RegisteredAsmFiles} {
+		for _, file := range files {
+			units[file] = true
+		}
+	}
+	if len(units) == 0 {
+		return fmt.Errorf("CPP package projection lacks selected assembly")
+	}
+	sources := make(map[string]bool)
+	for file := range units {
+		unit, exists := graph.Units[file]
+		if !exists {
+			return fmt.Errorf("CPP package projection omitted selected original: %s", file)
+		}
+		sources["module/"+file] = true
+		// Includes registers all transitive raw edges, including inactive
+		// alternatives. Projection is not an active-branch pruning policy.
+		for _, source := range unit.Includes {
+			sources[source] = true
+		}
+	}
+	for source := range sources {
+		if _, exists := graph.Sources[source]; !exists {
+			return fmt.Errorf("CPP package projection omitted original include: %s", source)
+		}
+	}
+	// The query constructed these maps afresh. Never delete from the captured
+	// module graph, reuse a prior query or mutate its immutable original text.
+	for file := range graph.Units {
+		if !units[file] {
+			delete(graph.Units, file)
+		}
+	}
+	for source := range graph.Sources {
+		if !sources[source] {
+			delete(graph.Sources, source)
+		}
+	}
+	return nil
 }
 
 func discoveryCPPPhysicalSearchMisses(inputs *discoveryCPPInputs) []gotoolprofile.CPPPackageSearchMiss {
