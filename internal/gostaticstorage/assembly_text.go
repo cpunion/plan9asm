@@ -1,6 +1,7 @@
 package gostaticstorage
 
 import (
+	"encoding/binary"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -109,14 +110,15 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 		if err != nil {
 			return nil, err
 		}
-		records, err := readObjectRole(body, flags, sdk && index != 0)
+		records, err := assemblyArchiveDefinitions(body, flags, sdk, index != 0)
 		if err != nil {
 			return nil, err
 		}
-		for name, record := range records {
+		for _, record := range records {
+			name := record.Name
 			key := name + "\x00" + strconv.Itoa(int(record.ABI))
 			if definitions[key] || storage[name] || index != 0 && record.Kind != 1 {
-				return nil, contextError("duplicate same-ABI/storage or assembly DATA definition")
+				return nil, contextError("duplicate same-ABI/storage or assembly DATA definition: " + name)
 			}
 			definitions[key] = true
 			storage[name] = record.Kind != 1
@@ -128,6 +130,43 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 		result = append(result, TextMember{Name: member.name, Offset: member.offset, Size: int64(len(member.data)), Flags: flags, Texts: texts})
 	}
 	return result, nil
+}
+
+// The storage reader intentionally has a name-only view. SDK compiler TEXT
+// wrappers can share their assembly name with a different ABI, so this
+// observation enumerates each independently checked definition instead.
+// It returns no DATA bytes, initialization, storage or native entry proof.
+func assemblyArchiveDefinitions(data []byte, flags uint32, sdk, assembly bool) ([]dataRecord, error) {
+	if !sdk {
+		records, err := readObjectRole(data, flags, false)
+		if err != nil {
+			return nil, err
+		}
+		values := make([]dataRecord, 0, len(records))
+		for _, record := range records {
+			values = append(values, record)
+		}
+		return values, nil
+	}
+	object, err := checkedObject(data, flags, assembly)
+	if err != nil {
+		return nil, err
+	}
+	var records []dataRecord
+	for index := 3; index <= 6; index++ {
+		block := object.block(index)
+		for offset := 0; offset < len(block); offset += 21 {
+			symbol := block[offset : offset+21]
+			name, err := object.stringAt(symbol[:8])
+			if err != nil {
+				return nil, err
+			}
+			if name != "" {
+				records = append(records, dataRecord{Name: name, ABI: binary.LittleEndian.Uint16(symbol[8:]), Kind: symbol[10]})
+			}
+		}
+	}
+	return records, nil
 }
 
 // ObserveX86SDKAssemblyArchive observes an original SDK archive. This offline
