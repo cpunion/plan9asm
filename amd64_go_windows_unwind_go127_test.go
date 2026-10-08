@@ -64,7 +64,11 @@ func goAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
 			}
 			environment = append(environment, "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
 			request.Environment = environment
-			object := filepath.Join(t.TempDir(), "original-windows.o")
+			objectDirectory, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal("cannot resolve original Windows output directory", err)
+			}
+			object := filepath.Join(objectDirectory, "original-windows.o")
 			listing, err := goasmcmd.Run(ctx, request.Directory, environment, request.GoBinary,
 				"tool", "asm", "-S", "-p", pkg.Path, "-o", object, request.AssemblyFile)
 			if err != nil {
@@ -83,7 +87,7 @@ func goAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
 			t.Logf("ACTUAL_WINDOWS_ORIGINAL_OUTPUT_EXISTS bytes=%d sha256=%x hex=%x\nACTUAL_WINDOWS_ORIGINAL_LISTING\n%s",
 				len(original), sha256.Sum256(original), original, listing)
 			data, err := goAMD64FrameRead(object)
-			if err != nil || !bytes.Contains(listing, []byte("SSEHUNWINDINFO")) ||
+			if err != nil || !bytes.Equal(data, original) || !bytes.Contains(listing, []byte("SSEHUNWINDINFO")) ||
 				!bytes.Contains(data, []byte("go:sehuw.12.")) {
 				t.Fatal("actual original Windows object/listing lacks its unwind metadata", err)
 			}
