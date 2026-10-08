@@ -21,13 +21,23 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 		return arm64ByteCarrierEntryObservation{}, arm64ByteCarrierContext("complete actual numeric compiler entry/effects differ")
 	}
 	if text.Name != declaration.Name || text.ABI != 1 || text.Size != int64(len(text.Code)) || len(text.Code)%4 != 0 ||
-		len(text.Code) < 36 || len(text.Relocations) != 1 || len(declaration.Args) != 1 || declaration.Args[0] != I64 ||
-		len(declaration.Frame.Params) != 1 || len(declaration.Frame.Results) == 0 || len(declaration.Frame.Results) > 8 {
+		len(text.Code) < 36 || len(text.Relocations) != 1 || len(declaration.Args) < 1 || len(declaration.Args) > 2 ||
+		declaration.Args[0] != I64 || len(declaration.Frame.Params) != len(declaration.Args) ||
+		len(declaration.Frame.Results) == 0 || len(declaration.Frame.Results) > 8 {
 		return fail()
 	}
 	parameter := declaration.Frame.Params[0]
 	if parameter.Offset != 0 || parameter.Type != I64 || parameter.Index != 0 || len(frameSlotFields(parameter)) != 0 {
 		return fail()
+	}
+	parameterEnd := int64(8)
+	if len(declaration.Args) == 2 {
+		second := declaration.Frame.Params[1]
+		if declaration.Args[1] != I32 || second.Offset != 8 || second.Type != I32 || second.Index != 1 ||
+			len(frameSlotFields(second)) != 0 {
+			return fail()
+		}
+		parameterEnd = 12
 	}
 	fields, aggregate := parseLiteralStructFields(declaration.Ret)
 	if !aggregate {
@@ -53,16 +63,27 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 	if allocation <= 8 || allocation > 240 || allocation%16 != 0 {
 		return fail()
 	}
+	pc := int64(16)
+	observed.parameterStores = []arm64ByteCarrierMemory{{PC: 12, Offset: 8, Bytes: 8, Instruction: word(12)}}
+	if len(declaration.Args) == 2 {
+		// The original compiler writes only W1 to the declared four-byte
+		// parameter. The following alignment gap is not an initialized field.
+		if len(text.Code) < 40 || word(pc) != 0xb90013e1 {
+			return fail()
+		}
+		observed.parameterStores = append(observed.parameterStores,
+			arm64ByteCarrierMemory{PC: pc, Offset: 16, Bytes: 4, Instruction: word(pc)})
+		pc += 4
+	}
 	call := text.Relocations[0]
-	if call.Offset != 16 || call.Size != 4 || call.Type != 9 || call.Add != 0 || call.Target.Name != text.Name ||
-		!call.Target.ABIKnown || call.Target.ABI != 0 || word(16) != 0x94000000 {
+	if call.Offset != pc || call.Size != 4 || call.Type != 9 || call.Add != 0 || call.Target.Name != text.Name ||
+		!call.Target.ABIKnown || call.Target.ABI != 0 || word(pc) != 0x94000000 {
 		return fail()
 	}
 	observed.allocation, observed.dataStart, observed.dataBytes = allocation, 8, allocation-16
-	observed.callPC, observed.continuationPC = 16, 20
-	observed.parameterStores = []arm64ByteCarrierMemory{{PC: 12, Offset: 8, Bytes: 8, Instruction: word(12)}}
-	pc := int64(20)
-	previousEnd := int64(8)
+	observed.callPC, observed.continuationPC = pc, pc+4
+	pc += 4
+	previousEnd := parameterEnd
 	for index := 0; index < len(fields); {
 		field := declaration.Frame.Results[index]
 		if field.Index != index || field.Type != fields[index] || len(frameSlotFields(field)) != 0 ||

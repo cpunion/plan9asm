@@ -110,10 +110,20 @@ func (binding *arm64ByteCarrierBinding) emitTypedAdapter(output *strings.Builder
 	}
 	signature := function.signature
 	emitter := arm64ByteCarrierEmitter{output: output}
-	fmt.Fprintf(output, "define %s %s(i64 %%arg0) {\nentry:\n", signature.Ret, llvmGlobal(signature.Name))
+	fmt.Fprintf(output, "define %s %s(", signature.Ret, llvmGlobal(signature.Name))
+	for index, argument := range signature.Args {
+		if index != 0 {
+			output.WriteString(", ")
+		}
+		fmt.Fprintf(output, "%s %%arg%d", argument, index)
+	}
+	output.WriteString(") {\nentry:\n")
 	// Actual complete compiler wrapper allocation, not rounded ArgWidth.
 	fmt.Fprintf(output, "  %%carrier = alloca [%d x i8], align 1\n", function.entry.dataBytes)
-	emitter.store("%carrier", 0, 8, "%arg0")
+	for _, parameter := range signature.Frame.Params {
+		address := emitter.pointer("%carrier", parameter.Offset)
+		fmt.Fprintf(output, "  store volatile %s %%arg%d, ptr %s, align 1\n", parameter.Type, parameter.Index, address)
+	}
 	fmt.Fprintf(output, "  %%post_r0 = call i64 %s(ptr %%carrier)\n", llvmGlobal(function.privateName))
 	_, aggregate := parseLiteralStructFields(signature.Ret)
 	result := "poison"
