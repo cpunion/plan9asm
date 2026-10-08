@@ -28,7 +28,7 @@ type arm64LinuxSyscallEffectCase struct {
 }
 
 func arm64LinuxSyscallEffectHasOriginalMarker(output, name string) bool {
-	marker := "ORIGINAL_KERNEL_AXIS_PASS " + name
+	marker := "ORIGINAL_KERNEL_AXIS_PASS " + name + " values="
 	return strings.Count(output, marker) == 1
 }
 
