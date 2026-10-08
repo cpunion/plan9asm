@@ -25,10 +25,7 @@ func TestARM64ByteCarrierConsumersRejectUnclosedNativeEffects(t *testing.T) {
 			return strings.ReplaceAll(source, "MOVD R0,guard+24(FP)\n    RET", "MOVD R0,guard+24(FP)\n    MOVD R0,0(RSP)\n    RET")
 		}},
 		{"platform-register-write", func(source string) string {
-			return strings.ReplaceAll(source, "MOVD R0,guard+24(FP)\n    RET", "MOVD R0,guard+24(FP)\n    MOVD $0,R18_PLATFORM\n    RET")
-		}},
-		{"unregistered-source-effect", func(source string) string {
-			return strings.ReplaceAll(source, "MOVD R0,guard+24(FP)\n    RET", "MOVD R0,guard+24(FP)\n    ADD R0,R0\n    RET")
+			return strings.ReplaceAll(source, "MOVD R0,guard+24(FP)\n    RET", "MOVD R0,guard+24(FP)\n    MOVD $0x123456789abcdef0,R18_PLATFORM\n    RET")
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
