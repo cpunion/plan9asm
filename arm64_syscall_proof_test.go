@@ -182,7 +182,13 @@ func TestARM64FlagsOnlyNativeObservationHasNoEntryOrDuplicateCFG(t *testing.T) {
 					t.Fatalf("light observation changed nonobserving/redefined %s source: %v", api, err)
 				}
 			}
-			file, err := Parse(ArchARM64, source)
+			// The API controls above keep their real FP result. Its existing
+			// scalar-memory scratch observation legitimately requires the full
+			// machine CFG. Check flags-only storage with a separate original Go
+			// zero-result source, without borrowing that FP role.
+			observationSource := "TEXT ·trap(SB),516,$0-0\n" + arm64SyscallEffectSetup + body + "\nRET\n"
+			requireARM64GoAssemblerResult(t, observationSource, true)
+			file, err := Parse(ArchARM64, observationSource)
 			if err != nil {
 				t.Fatal(err)
 			}
