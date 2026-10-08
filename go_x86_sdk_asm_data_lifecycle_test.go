@@ -19,6 +19,7 @@ type sdkASMDataReentrantContext struct {
 	callback func()
 	method   string
 	lost     atomic.Bool
+	shift    atomic.Int64
 }
 
 func (ctx *sdkASMDataReentrantContext) Err() error {
@@ -31,7 +32,8 @@ func (ctx *sdkASMDataReentrantContext) Deadline() (time.Time, bool) {
 	if ctx.lost.Load() {
 		return time.Time{}, false
 	}
-	return ctx.Context.Deadline()
+	deadline, bounded := ctx.Context.Deadline()
+	return deadline.Add(time.Duration(ctx.shift.Load())), bounded
 }
 
 func (ctx *sdkASMDataReentrantContext) Done() <-chan struct{} {
@@ -154,6 +156,94 @@ func TestGoX86SDKASMDataLiveLostOriginalDeadline(t *testing.T) {
 	original.lost.Store(false)
 	if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
 		t.Fatal("restored original deadline revived the failed source")
+	}
+}
+
+func sdkASMDataInvoke(t *testing.T, api string, source *GoX86SDKASMDataSource, ctx context.Context, raw []byte) ([]byte, error) {
+	t.Helper()
+	switch api {
+	case "Verify":
+		return nil, source.Verify(ctx)
+	case "Readback":
+		return source.Readback(ctx)
+	case "CheckReadback":
+		return nil, source.CheckReadback(ctx, raw)
+	default:
+		t.Fatal("unknown observation API", api)
+		return nil, nil
+	}
+}
+
+func TestGoX86SDKASMDataLiveOriginalDeadlineCannotChange(t *testing.T) {
+	for _, change := range []struct {
+		name  string
+		shift time.Duration
+	}{
+		{"earlier", -time.Minute},
+		{"later", time.Minute},
+	} {
+		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
+			t.Run(change.name+"/"+api, func(t *testing.T) {
+				ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
+				original := &sdkASMDataReentrantContext{Context: ctx}
+				source, err := CaptureGoX86SDKASMDataSource(original, request)
+				if err != nil {
+					t.Fatal("actual bounded original source precondition", err)
+				}
+				defer source.Close()
+				raw, err := source.Readback(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				original.shift.Store(int64(change.shift))
+				returned, err := sdkASMDataInvoke(t, api, source, ctx, raw)
+				if !errors.Is(err, ErrProbeNeedsContext) || len(returned) != 0 {
+					t.Fatal("changed bounded original deadline kept its captured generation", err)
+				}
+				original.shift.Store(0)
+				if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+					t.Fatal("restoring the original deadline revived a revoked source")
+				}
+			})
+		}
+	}
+}
+
+func TestGoX86SDKASMDataLiveOriginalDeadlineCallbackCannotPublish(t *testing.T) {
+	for _, route := range []string{"original", "verification"} {
+		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
+			t.Run(route+"/"+api, func(t *testing.T) {
+				ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
+				original := &sdkASMDataReentrantContext{Context: ctx}
+				source, err := CaptureGoX86SDKASMDataSource(original, request)
+				if err != nil {
+					t.Fatal("actual bounded original source precondition", err)
+				}
+				defer source.Close()
+				raw, err := source.Readback(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				callback := &sdkASMDataReentrantContext{Context: ctx}
+				verification := context.Context(callback)
+				if route == "original" {
+					callback, verification = original, ctx
+				}
+				callback.method = "Done"
+				callback.callback = func() { original.shift.Store(int64(time.Minute)) }
+				callback.armed.Store(true)
+				returned, err := sdkASMDataInvoke(t, api, source, verification, raw)
+				if !errors.Is(err, ErrProbeNeedsContext) || len(returned) != 0 {
+					t.Fatal("context callback published a changed original generation", err)
+				}
+				original.shift.Store(0)
+				if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+					t.Fatal("restoring callback-mutated deadline revived the source")
+				}
+			})
+		}
 	}
 }
 
