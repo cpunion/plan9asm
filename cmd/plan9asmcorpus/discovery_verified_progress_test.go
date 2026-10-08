@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 			ledger, reports, _ := writeDiscoveryReportFixture(t)
 			targets := []string{"linux/amd64", "linux/arm64"}
 			for shard := 0; shard < 2; shard++ {
-				filename := filepath.Join(reports, "shard-"+string(rune('0'+shard))+".json")
+				filename := filepath.Join(reports, "shard-"+strconv.Itoa(shard)+".json")
 				report, err := readDiscoveryCorpusReport(filename)
 				if err != nil {
 					t.Fatal(err)
@@ -38,7 +39,21 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 				t.Fatal(err)
 			}
 			stored := filepath.Join(t.TempDir(), "assembly-ledger")
-			if err := writeAssemblyLedger(stored, progress, source.SHA256); err != nil {
+			storedProgress := progress
+			if name == "ledger mismatch" {
+				filename := filepath.Join(reports, "shard-1.json")
+				original, err := os.ReadFile(filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				failVerifiedProgressFixtureCandidate(t, filename)
+				storedProgress, err = collectDiscoveryProgress(ledger, reports, targets, source, 2, root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeTestFile(t, filename, string(original))
+			}
+			if err := writeAssemblyLedger(stored, storedProgress, source.SHA256); err != nil {
 				t.Fatal(err)
 			}
 			filename := filepath.Join(reports, "shard-1.json")
@@ -47,24 +62,8 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 				if err := os.Remove(filename); err != nil {
 					t.Fatal(err)
 				}
-			case "failed candidate", "ledger mismatch":
-				report, err := readDiscoveryCorpusReport(filename)
-				if err != nil || len(report.Results) == 0 {
-					t.Fatalf("candidate fixture: %v", err)
-				}
-				if name == "failed candidate" {
-					report.Results[0].Status = discoveryStatusFailed
-					report.Results[0].Error = "first-party translation failure"
-					report.Passed--
-					report.Failed++
-				} else {
-					// Keep the independently valid report complete, but make its
-					// outcome differ from the already stored valid snapshot.
-					report.Results[0].Error = "unused diagnostic"
-				}
-				if err := writeDiscoveryCorpusReport(filename, report); err != nil {
-					t.Fatal(err)
-				}
+			case "failed candidate":
+				failVerifiedProgressFixtureCandidate(t, filename)
 			case "trailing report data":
 				data, err := os.ReadFile(filename)
 				if err != nil {
@@ -118,6 +117,43 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 			}
 			if name == "failed candidate" && (observed.Verified || observed.Failed != 1) {
 				t.Fatalf("failure was promoted: %+v", observed)
+			}
+		})
+	}
+}
+
+func failVerifiedProgressFixtureCandidate(t *testing.T, filename string) {
+	t.Helper()
+	report, err := readDiscoveryCorpusReport(filename)
+	if err != nil || len(report.Results) == 0 {
+		t.Fatalf("candidate fixture: %v", err)
+	}
+	report.Results[0].Status = discoveryStatusFailed
+	report.Results[0].Error = "first-party translation failure"
+	report.Passed--
+	report.Failed++
+	if err := writeDiscoveryCorpusReport(filename, report); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoveryVerifiedProgressRejectsOtherModes(t *testing.T) {
+	for _, args := range [][]string{
+		{},
+		{"-list"},
+		{"-verify-discovery-reports=unused", "-list"},
+		{"-verify-discovery-reports=unused", "-suite=curated"},
+		{"-discovery-progress=unused"},
+		{"-assembly-ledger-status=unused"},
+		{"-discovery-ledger=unused", "-discovery-exact-candidate=example.com/a@v1.0.0"},
+		{"-verify-discovery-reports=unused", "-discovery-events=unused"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, t.TempDir(), append(args, "-emit-discovery-progress")...)
+			if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), "requires") {
+				t.Fatalf("other CLI mode accepted: %v stdout=%q stderr=%s", err, stdout, stderr)
 			}
 		})
 	}
