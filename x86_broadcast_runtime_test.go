@@ -149,6 +149,35 @@ func TestX86BroadcastLLVMNumericalViewsFlagsCanaries(t *testing.T) {
 	}
 }
 
+func TestX86BroadcastMaskDataPhysicalUpperAliasLLVM(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	var prototypes, rows strings.Builder
+	selected := 0
+	for index, test := range x86BroadcastNumericalCases(false) {
+		if test.maskData == 0 {
+			continue
+		}
+		selected++
+		fmt.Fprintf(&prototypes, "extern void broadcast%d(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);\n", index)
+		fmt.Fprintf(&rows, "{broadcast%d,%d,%d,%d,%d,%d,%d},\n", index, test.width, test.sourceBytes, test.laneBytes, test.masking, test.alias, test.maskData)
+	}
+	if selected != 6 {
+		t.Fatal("incomplete mask-data X/Y/Z numerical directory")
+	}
+	main := strings.ReplaceAll(x86BroadcastLLVMDriver, "PROTOTYPES", prototypes.String())
+	main = strings.ReplaceAll(main, "ROWS", rows.String())
+	main = strings.ReplaceAll(main, "38628", "1332")
+	declaration, source, _, _ := x86BroadcastNumericalSource(t, false, false)
+	ir, err := x86ScalarFPBitViewAPI(t, source, declaration, "amd64", execution.triple, "Go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := execution.compileAndRunLLVM(t, "mask-data-broadcast", ir, main, "-O0")
+	if !strings.Contains(string(output), "LLVM_BROADCAST_1332_CASES_PASS") {
+		t.Fatal(string(output))
+	}
+}
+
 const x86BroadcastOriginalGoDriver = `package wordmultiply
 import (
  "encoding/binary"
