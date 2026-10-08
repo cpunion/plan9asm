@@ -225,23 +225,35 @@ func TestARM64TypedNativeEffectsProofIsBoundToExactEmission(t *testing.T) {
 	flow := &arm64MachineAvailability{
 		blocks: []arm64MachineBlock{{name: "entry"}}, source: "PRFM (R0),PLDL1KEEP",
 	}
-	ctx := &arm64Ctx{b: &ir, machineAvailability: flow}
+	ctx := &arm64Ctx{
+		b: &ir, machineAvailability: flow, flagsKnown: arm64FlagAll, flagsWritten: true,
+		flagsNSlot: "flags_N", flagsZSlot: "flags_Z", flagsCSlot: "flags_C", flagsVSlot: "flags_V",
+	}
+	opaqueCount := func() int {
+		count := 0
+		for _, effect := range flow.blocks[0].effects {
+			if effect.opaque {
+				count++
+			}
+		}
+		return count
+	}
 	ctx.emitMachineNeutralNativeIR("  call void asm sideeffect %q, %q()\n", "nop", "")
 	ctx.recordMachineOpaqueIR(0, Instr{})
-	if len(flow.blocks[0].effects) != 0 {
+	if len(flow.blocks[0].effects) != 0 || ctx.flagsKnown != arm64FlagAll || !ctx.flagsWritten {
 		t.Fatal("exact validated native emission remained opaque")
 	}
 	start := ir.Len()
 	fmt.Fprint(&ir, "  call void asm sideeffect \"nop\", \"\"()\n")
 	ctx.recordMachineOpaqueIR(start, Instr{})
-	if len(flow.blocks[0].effects) != 1 || !flow.blocks[0].effects[0].opaque {
+	if opaqueCount() != 1 || ctx.flagsKnown != 0 || ctx.flagsWritten {
 		t.Fatal("identical unproven native IR borrowed a different emission's proof")
 	}
 	start = ir.Len()
 	ctx.emitMachineNeutralNativeIR("  call void asm sideeffect %q, %q()\n", "nop", "")
 	fmt.Fprint(&ir, "  call void @unknown()\n")
 	ctx.recordMachineOpaqueIR(start, Instr{})
-	if len(flow.blocks[0].effects) != 2 {
+	if opaqueCount() != 2 {
 		t.Fatal("one proven line excused a second unknown callout")
 	}
 }
