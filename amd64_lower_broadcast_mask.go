@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 type amd64MaskBroadcastSpec struct {
@@ -19,28 +18,15 @@ var amd64MaskBroadcastSpecs = map[Op]amd64MaskBroadcastSpec{
 }
 
 func (c *amd64Ctx) lowerMaskRegisterBroadcast(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	spec, recognized := amd64MaskBroadcastSpecs[Op(baseOp)]
-	if !recognized {
+	f, known, err := x86BroadcastProperties(op, ins, c.goarch)
+	if !known || f.kind != x86BroadcastMask {
 		return false, false, nil
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s has no suffixed form in Go 1.27: %q", c.goarch, baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("%s %s expects K source and X/Y/Z destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-	if _, validMask := amd64ParseKReg(ins.Args[0].Reg); !validMask {
-		return true, false, fmt.Errorf("%s %s source must be K0-K7: %q", c.goarch, baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(ins.Args[1].Reg)
-	if (byteWidth != 16 && byteWidth != 32 && byteWidth != 64) || !c.isGoPackedVectorMoveRegister(ins.Args[1], byteWidth) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go's EVEX X/Y/Z class: %q", c.goarch, baseOp, ins.Raw)
-	}
+	spec := amd64MaskBroadcastSpecs[op]
+	byteWidth := f.byteWidth
 	mask, err := c.loadK(ins.Args[0].Reg)
 	if err != nil {
 		return true, false, err

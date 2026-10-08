@@ -8,60 +8,20 @@ import (
 // lowerPackedScalarBroadcast implements the complete Go 1.27
 // _yvpbroadcastb operand table shared by VPBROADCASTB/W/D/Q.
 func (c *amd64Ctx) lowerPackedScalarBroadcast(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	suffix := ""
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp, suffix = rawOp[:dot], rawOp[dot+1:]
-	}
-	laneBits := 0
-	switch baseOp {
-	case "VPBROADCASTB":
-		laneBits = 8
-	case "VPBROADCASTW":
-		laneBits = 16
-	case "VPBROADCASTD":
-		laneBits = 32
-	case "VPBROADCASTQ":
-		laneBits = 64
-	default:
+	f, known, err := x86BroadcastProperties(op, ins, c.goarch)
+	if !known || f.kind != x86BroadcastInteger {
 		return false, false, nil
 	}
-	zeroing := false
-	switch suffix {
-	case "":
-	case "Z":
-		zeroing = true
-	default:
-		return true, false, fmt.Errorf("amd64 %s accepts only the .Z suffix enabled by its Go 1.27 optab: %q", baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("amd64 %s expects scalar source, [K mask,] vector destination: %q", baseOp, ins.Raw)
-	}
-	dstArg := ins.Args[len(ins.Args)-1]
-	if dstArg.Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects an X, Y, or Z destination: %q", baseOp, ins.Raw)
-	}
-	byteWidth := amd64VectorByteWidth(dstArg.Reg)
-	if byteWidth == 0 {
-		return true, false, fmt.Errorf("amd64 %s expects an X, Y, or Z destination: %q", baseOp, ins.Raw)
-	}
-
-	masked := len(ins.Args) == 3
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s zeroing requires a K1-K7 mask: %q", baseOp, ins.Raw)
-	}
+	baseOp, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	laneBits, byteWidth := f.laneBits, f.byteWidth
+	dstArg := ins.Args[f.destination]
+	masked, zeroing := f.mask >= 0, f.zeroing
 	var mask string
 	if masked {
-		maskArg := ins.Args[1]
-		if maskArg.Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		maskIndex, ok := amd64ParseKReg(maskArg.Reg)
-		if !ok || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		mask, err = c.loadK(maskArg.Reg)
+		mask, err = c.loadK(ins.Args[f.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}

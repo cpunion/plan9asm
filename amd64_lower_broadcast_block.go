@@ -32,67 +32,21 @@ var amd64PackedBlockBroadcastSpecs = map[string]amd64PackedBlockBroadcastSpec{
 // broadcast tables. The X2 forms copy the low 64 source bits; the X4 and X8
 // forms accept only 128- and 256-bit memory sources respectively.
 func (c *amd64Ctx) lowerPackedBlockBroadcast(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp, suffix := rawOp, ""
-	zeroing := false
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-		suffix = rawOp[dot+1:]
-		if suffix != "Z" {
-			if _, known := amd64PackedBlockBroadcastSpecs[baseOp]; known {
-				return true, false, fmt.Errorf("amd64 %s accepts only the .Z suffix: %q", baseOp, ins.Raw)
-			}
-			return false, false, nil
-		}
-		zeroing = true
-	}
-	spec, ok := amd64PackedBlockBroadcastSpecs[baseOp]
-	if !ok {
+	f, known, err := x86BroadcastProperties(op, ins, c.goarch)
+	if !known || f.kind != x86BroadcastBlock {
 		return false, false, nil
 	}
-	if spec.vexMemoryOnly {
-		if suffix != "" || len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("%s %s expects Go 1.27's unsuffixed m128, Y form: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("amd64 %s expects block source, [K mask,] vector destination: %q", baseOp, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-
-	destination := ins.Args[len(ins.Args)-1]
-	destinationBytes := 0
-	if destination.Kind == OpReg {
-		destinationBytes = amd64VectorByteWidth(destination.Reg)
-	}
-	validDestination := spec.allowDestinations[destinationBytes] && c.isGoPackedVectorMoveRegister(destination, destinationBytes)
-	if validDestination && spec.vexMemoryOnly {
-		index, isY := amd64ParseYReg(destination.Reg)
-		validDestination = isY && index < 16
-	}
-	if !validDestination {
-		return true, false, fmt.Errorf("amd64 %s destination is outside its Go 1.27 operand table: %q", baseOp, ins.Raw)
-	}
-
-	source := ins.Args[0]
-	if source.Kind == OpReg {
-		if spec.vexMemoryOnly || !spec.allowXSource || !amd64EVEXVectorRegister(source, 16) {
-			return true, false, fmt.Errorf("amd64 %s requires a memory source for this block width: %q", baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(source) {
-		return true, false, fmt.Errorf("amd64 %s expects a memory source%s: %q", baseOp, amd64PackedBlockXSourceHint(spec.allowXSource), ins.Raw)
-	}
-
-	masked := !spec.vexMemoryOnly && len(ins.Args) == 3
-	if zeroing && !masked {
-		return true, false, fmt.Errorf("amd64 %s .Z requires a K1-K7 mask: %q", baseOp, ins.Raw)
-	}
+	baseOp, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	spec := amd64PackedBlockBroadcastSpecs[baseOp]
+	source, destination := ins.Args[0], ins.Args[f.destination]
+	destinationBytes := f.byteWidth
+	masked, zeroing := f.mask >= 0, f.zeroing
 	mask := ""
 	if masked {
-		maskArg := ins.Args[1]
-		maskIndex, validMask := amd64ParseKReg(maskArg.Reg)
-		if maskArg.Kind != OpReg || !validMask || maskIndex == 0 {
-			return true, false, fmt.Errorf("amd64 %s masked form expects K1-K7: %q", baseOp, ins.Raw)
-		}
-		mask, err = c.loadK(maskArg.Reg)
+		mask, err = c.loadK(ins.Args[f.mask].Reg)
 		if err != nil {
 			return true, false, err
 		}
