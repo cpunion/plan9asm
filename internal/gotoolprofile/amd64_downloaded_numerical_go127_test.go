@@ -124,7 +124,7 @@ func (fixture amd64DownloadedLLVMFixture) llvmNumerical(t *testing.T, ctx contex
 		t.Fatal(err)
 	}
 	output, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, clang,
-		"-target", fixture.options.TargetTriple, object, source, "-O2", "-o", executable)
+		"-target", fixture.backendTriple(), object, source, "-O2", "-o", executable)
 	if err != nil || len(stderr) != 0 {
 		t.Fatalf("LLVM22 actual downloaded numerical link: %v; %s%s", err, output, stderr)
 	}

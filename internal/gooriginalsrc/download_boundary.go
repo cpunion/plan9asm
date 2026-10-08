@@ -34,7 +34,8 @@ type DownloadBoundary struct {
 // NewDownloadBoundary gives a download command an independent module boundary
 // so that it cannot mutate an ancestor module. All IO uses actual OS primitives.
 func NewDownloadBoundary(temporary, prefix, modulePath string) (_ *DownloadBoundary, result error) {
-	if prefix == "" || len(prefix) > 255 || strings.ContainsAny(prefix, "/\\\x00") ||
+	if temporary != "" && !filepath.IsAbs(temporary) ||
+		prefix == "" || len(prefix) > 255 || strings.ContainsAny(prefix, "/\\\x00") ||
 		module.CheckPath(modulePath) != nil || len(modulePath) > fileByteLimit-32 {
 		return nil, fmt.Errorf("invalid bounded download command boundary")
 	}
@@ -45,9 +46,9 @@ func NewDownloadBoundary(temporary, prefix, modulePath string) (_ *DownloadBound
 	boundary := &DownloadBoundary{directory: created, metadata: "module " + modulePath + "\ngo 1.20\n"}
 	boundary.identity = boundary
 	boundary.directoryInfo, err = os.Lstat(created)
-	if err != nil {
+	if err != nil || !boundary.directoryInfo.IsDir() {
 		// Without a stable directory identity there is no safe cleanup target.
-		return nil, err
+		return nil, errors.Join(ErrDownloadBoundaryChanged, err)
 	}
 	defer func() {
 		if result != nil {
@@ -59,6 +60,10 @@ func NewDownloadBoundary(temporary, prefix, modulePath string) (_ *DownloadBound
 		return nil, err
 	}
 	boundary.directory = physical
+	entries, info, err := ReadDirectory(physical, 0)
+	if err != nil || len(entries) != 0 || !os.SameFile(boundary.directoryInfo, info) {
+		return nil, errors.Join(ErrDownloadBoundaryChanged, err)
+	}
 	boundary.name = filepath.Join(physical, "go.mod")
 	boundary.file, err = os.OpenFile(boundary.name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {

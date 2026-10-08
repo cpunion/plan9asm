@@ -122,6 +122,12 @@ func amd64DownloadedLLVM22Tool(t *testing.T, ctx context.Context, fixture amd64D
 		var err error
 		config, err = exec.LookPath("llvm-config-22")
 		if err != nil {
+			// Some supported installations use unversioned binary names.
+			// The selected configuration must still prove LLVM 22 below;
+			// an incompatible tool never falls through to another release.
+			config, err = exec.LookPath("llvm-config")
+		}
+		if err != nil {
 			t.Fatal("required LLVM22 llvm-config missing", err)
 		}
 	}
@@ -149,7 +155,7 @@ func (fixture amd64DownloadedLLVMFixture) object(t *testing.T, ctx context.Conte
 		t.Fatal(err)
 	}
 	output, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, llc,
-		level, "-mtriple="+fixture.options.TargetTriple, "-filetype=obj", input, "-o", object)
+		level, "-mtriple="+fixture.backendTriple(), "-filetype=obj", input, "-o", object)
 	if err != nil || len(stderr) != 0 {
 		t.Fatalf("actual LLVM22 downloaded object failed: %v; %s%s", err, output, stderr)
 	}
@@ -157,9 +163,18 @@ func (fixture amd64DownloadedLLVMFixture) object(t *testing.T, ctx context.Conte
 	if err != nil || len(data) == 0 {
 		t.Fatal("actual downloaded object is empty or unavailable", err)
 	}
-	t.Logf("ACTUAL_DOWNLOADED_LLVM22_OBJECT target=%s level=%s bytes=%d sha256=%s",
-		fixture.request.Target, level, len(data), bytesSHA256(data))
+	t.Logf("ACTUAL_DOWNLOADED_LLVM22_OBJECT target=%s backend=%s level=%s bytes=%d sha256=%s",
+		fixture.request.Target, fixture.backendTriple(), level, len(data), bytesSHA256(data))
 	return object
+}
+
+// The proof's canonical target remains unchanged. A concrete macOS deployment
+// version tells both actual tools to emit the Mach-O platform load command.
+func (fixture amd64DownloadedLLVMFixture) backendTriple() string {
+	if fixture.options.TargetTriple == "x86_64-apple-darwin" {
+		return "x86_64-apple-macosx11.0.0"
+	}
+	return fixture.options.TargetTriple
 }
 
 // Every host must compile all three admitted AMD64 target formats. Numerical
