@@ -78,7 +78,8 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 		selected.Name != "bad" || selected.Module.Path != candidate.Module ||
 		strings.Join(selected.GoFiles, ",") != "constants_go125.go,constants_go126.go,probe.go" ||
 		strings.Join(selected.SFiles, ",") != filepath.Base(badAssembly) {
-		t.Fatalf("original compiler did not select the complete duplicate fixture: %v\n%s", err, stdout)
+		t.Fatalf("original compiler did not select the complete duplicate fixture: %v\nrequested directory=%q\nselected directory=%q\n%s",
+			err, original.Dir, selected.Dir, stdout)
 	}
 	wanted := "# " + candidate.Module + "/bad\n" +
 		"./constants_go126.go:4:7: answer redeclared in this block\n" +
