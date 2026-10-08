@@ -111,7 +111,7 @@ func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (re
 	defer func() {
 		actual, statErr := os.Lstat(owned)
 		physical, resolveErr := filepath.EvalSymlinks(owned)
-		entries, readErr := os.ReadDir(owned)
+		entries, _, readErr := ReadDirectory(owned, 1)
 		if statErr != nil || resolveErr != nil || readErr != nil || physical != owned ||
 			!actual.IsDir() || !os.SameFile(directoryInfo, actual) {
 			result = errors.Join(result, fmt.Errorf("owned ZIP validation directory identity changed"))
@@ -155,7 +155,7 @@ func (set *OriginSet) checkOriginalZIP(identity module.Version, data []byte) (re
 	expected := fmt.Sprintf("%x", sha256.Sum256(data))
 	verify := func() error {
 		actualDirectory, statErr := os.Lstat(owned)
-		entries, readErr := os.ReadDir(owned)
+		entries, _, readErr := ReadDirectory(owned, 1)
 		if statErr != nil || readErr != nil || !actualDirectory.IsDir() || !os.SameFile(directoryInfo, actualDirectory) ||
 			len(entries) != 1 || entries[0].Name() != "original.zip" {
 			return errors.Join(statErr, readErr, fmt.Errorf("owned ZIP validation directory/inventory changed"))

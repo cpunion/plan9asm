@@ -27,6 +27,7 @@ import (
 
 	"github.com/xgo-dev/plan9asm/internal/goabi"
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -39,19 +40,20 @@ type GoAMD64FrameCaptureRequest struct {
 // GoAMD64FrameSource is a sealed actual-object observation. It does not grant
 // a native backing, caller region, memory access or return certificate.
 type GoAMD64FrameSource struct {
-	mu           sync.Mutex
-	ready        bool
-	request      GoAMD64FrameCaptureRequest
-	selection    goAMD64FrameSelection
-	env          map[string]string
-	inputs       map[string][32]byte
-	entries      []string
-	owned        string
-	ownedInfo    os.FileInfo
-	functions    map[string]goAMD64FrameFunction
-	declarations map[string]goAMD64FrameDeclaration
-	imports      map[string]goAMD64FrameSelection
-	origins      map[string]int
+	mu            sync.Mutex
+	ready         bool
+	request       GoAMD64FrameCaptureRequest
+	selection     goAMD64FrameSelection
+	env           map[string]string
+	inputs        map[string][32]byte
+	entries       []string
+	directoryInfo os.FileInfo
+	owned         string
+	ownedInfo     os.FileInfo
+	functions     map[string]goAMD64FrameFunction
+	declarations  map[string]goAMD64FrameDeclaration
+	imports       map[string]goAMD64FrameSelection
+	origins       map[string]int
 }
 
 // Transport is an observation role, never a memory or alias permission.
@@ -308,9 +310,9 @@ func (source *GoAMD64FrameSource) verifyInputs() error {
 	if err := source.verifyOwned(); err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(source.request.Directory)
-	if err != nil {
-		return err
+	entries, directoryInfo, err := gooriginalsrc.ReadDirectory(source.request.Directory, 256)
+	if err != nil || source.directoryInfo == nil || !os.SameFile(source.directoryInfo, directoryInfo) {
+		return goAMD64FrameContext("original package directory inventory or identity changed: %v", err)
 	}
 	var names []string
 	for _, entry := range entries {
@@ -416,10 +418,11 @@ func (source *GoAMD64FrameSource) snapshotDirectory() error {
 	if err != nil || resolved != source.request.Directory {
 		return goAMD64FrameContext("requires canonical actual package directory")
 	}
-	entries, err := os.ReadDir(resolved)
+	entries, directoryInfo, err := gooriginalsrc.ReadDirectory(resolved, 256)
 	if err != nil || len(entries) == 0 || len(entries) > 256 {
 		return goAMD64FrameContext("package directory is unavailable or exceeds its bound")
 	}
+	source.directoryInfo = directoryInfo
 	var total int
 	for _, entry := range entries {
 		if entry.IsDir() {

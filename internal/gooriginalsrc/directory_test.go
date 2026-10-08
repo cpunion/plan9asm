@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -49,5 +50,43 @@ func TestSnapshotNonrecursiveGraphMemberBounds(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestOriginalDirectoryBoundedEOF(t *testing.T) {
+	for _, maximum := range []int{0, 1, 256} {
+		t.Run(fmt.Sprintf("bound-%d", maximum), func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := maximum - 1; i >= 0; i-- {
+				if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("member-%03d", i)), nil, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			entries, info, err := ReadDirectory(root, maximum)
+			if err != nil || info == nil || len(entries) != maximum {
+				t.Fatal("complete directory did not close its actual boundary EOF", err)
+			}
+			names := make([]string, len(entries))
+			for i, entry := range entries {
+				names[i] = entry.Name()
+			}
+			if !sort.StringsAreSorted(names) {
+				t.Fatal("bounded original inventory changed the stable sorted member rule")
+			}
+			if err := os.WriteFile(filepath.Join(root, "overflow"), nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if entries, _, err := ReadDirectory(root, maximum); err == nil || entries != nil {
+				t.Fatal("a truncated bounded directory prefix was accepted as complete")
+			}
+		})
+	}
+	for _, name := range []string{"", ".", "relative/directory"} {
+		if _, _, err := ReadDirectory(name, 1); err == nil {
+			t.Fatal("directory reader accepted a relative physical role")
+		}
 	}
 }

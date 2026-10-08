@@ -26,11 +26,13 @@ const (
 // Snapshot retains complete physical files and directory membership. It has no
 // serialized constructor, command callback, frame, signature or permission.
 type Snapshot struct {
-	hashes, paths map[string]string
-	entries       map[string][]string
-	directories   map[string]os.FileInfo
-	files         map[string]os.FileInfo
-	bytes         int64
+	hashes, paths  map[string]string
+	entries        map[string][]string
+	directories    map[string]os.FileInfo
+	files          map[string]os.FileInfo
+	fileRoles      map[string]bool
+	directoryRoles map[string]bool
+	bytes          int64
 }
 
 // SnapshotView is the existing producer's observation data. These maps expose
@@ -46,7 +48,8 @@ func NewSnapshot() *Snapshot {
 	return &Snapshot{
 		hashes: make(map[string]string), paths: make(map[string]string),
 		entries: make(map[string][]string), directories: make(map[string]os.FileInfo),
-		files: make(map[string]os.FileInfo),
+		files:     make(map[string]os.FileInfo),
+		fileRoles: make(map[string]bool), directoryRoles: make(map[string]bool),
 	}
 }
 
@@ -69,6 +72,9 @@ func (snapshot *Snapshot) Retain(name string) error {
 	if err != nil {
 		return err
 	}
+	if !snapshot.fileRoles[physical] && len(snapshot.fileRoles) >= fileLimit {
+		return fmt.Errorf("original file member inventory exceeds its shared count bound")
+	}
 	digest, err := originalFileSHA256(name, info)
 	if err != nil {
 		return err
@@ -84,6 +90,7 @@ func (snapshot *Snapshot) Retain(name string) error {
 		snapshot.bytes += info.Size()
 	}
 	snapshot.hashes[name], snapshot.paths[name], snapshot.files[name] = digest, physical, info
+	snapshot.fileRoles[physical] = true
 	return nil
 }
 
@@ -98,17 +105,39 @@ func (snapshot *Snapshot) Directory(name string, recursive bool) error {
 	if err != nil {
 		return err
 	}
-	info, err := os.Lstat(physical)
-	if err != nil || !info.IsDir() {
-		return fmt.Errorf("original source directory is missing, nonregular or over-bound")
+	entries, info, err := ReadDirectory(name, fileLimit+directoryLimit)
+	if err != nil {
+		return err
 	}
 	if prior, present := snapshot.directories[name]; present &&
 		(!os.SameFile(prior, info) || snapshot.paths[name] != physical) {
 		return fmt.Errorf("original source directory identity changed")
 	}
-	entries, err := os.ReadDir(physical)
-	if err != nil {
-		return err
+	newFiles, newDirectories := make(map[string]bool), make(map[string]bool)
+	if !snapshot.directoryRoles[physical] {
+		newDirectories[physical] = true
+	}
+	for _, entry := range entries {
+		child := filepath.Join(physical, entry.Name())
+		if entry.Type()&os.ModeSymlink != 0 || !entry.IsDir() && !entry.Type().IsRegular() {
+			return fmt.Errorf("original source directory contains an unbound nonregular entry")
+		}
+		if entry.IsDir() {
+			if !snapshot.directoryRoles[child] {
+				newDirectories[child] = true
+			}
+		} else if !snapshot.fileRoles[child] {
+			newFiles[child] = true
+		}
+	}
+	if len(snapshot.fileRoles)+len(newFiles) > fileLimit || len(snapshot.directoryRoles)+len(newDirectories) > directoryLimit {
+		return fmt.Errorf("complete original directory members exceed the shared graph count bound")
+	}
+	for child := range newFiles {
+		snapshot.fileRoles[child] = true
+	}
+	for child := range newDirectories {
+		snapshot.directoryRoles[child] = true
 	}
 	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -155,9 +184,8 @@ func (snapshot *Snapshot) Verify() error {
 	}
 	for name := range snapshot.directories {
 		physical, err := filepath.EvalSymlinks(name)
-		info, statErr := os.Lstat(physical)
-		entries, readErr := os.ReadDir(physical)
-		if err != nil || statErr != nil || readErr != nil || physical != snapshot.paths[name] ||
+		entries, info, readErr := ReadDirectory(name, fileLimit+directoryLimit)
+		if err != nil || readErr != nil || physical != snapshot.paths[name] ||
 			!os.SameFile(snapshot.directories[name], info) {
 			return fmt.Errorf("original source directory identity changed")
 		}
