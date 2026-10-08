@@ -88,36 +88,6 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	t.Cleanup(cancel)
-	var owners []*GoNumericalStorageOwner
-	exports := make(map[string]string)
-	for _, request := range []GoNumericalStorageCaptureRequest{
-		{GoBinary: profile.GoBinary, Directory: ownerDirectory, PackagePath: "example.invalid/numericalfixture", Target: profile.Target,
-			Environment: profile.Environment, Variables: []GoNumericalStorageReference{{PackagePath: "example.invalid/numericalfixture", Name: "Mutable"}}},
-		{GoBinary: profile.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(profile.GoBinary)), "src", "internal", "cpu"),
-			PackagePath: "internal/cpu", Target: profile.Target, Environment: profile.Environment, SDKCPU: true,
-			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}}},
-	} {
-		owner, err := CaptureGoNumericalStorageOwner(ctx, request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(owner.Close)
-		owners = append(owners, owner)
-		observation, err := owner.observation.Readback(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		decoder := json.NewDecoder(bytes.NewReader(observation.RawSelection))
-		for decoder.More() {
-			var selected goAMD64FrameSelection
-			if err := decoder.Decode(&selected); err != nil {
-				t.Fatal(err)
-			}
-			if selected.Export != "" {
-				exports[selected.ImportPath] = selected.Export
-			}
-		}
-	}
 	cases := numericalExecutionCases(arch)
 	move, word, seed := "MOVQ", "uint64", "0x8877665544332211"
 	if arch == "386" {
@@ -159,6 +129,38 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	}
 	if err := os.WriteFile(filepath.Join(profile.Directory, profile.AssemblyFile), []byte(assembly.String()), 0600); err != nil {
 		t.Fatal(err)
+	}
+	// All fixture bytes, including the consumer, exist before the owned module's
+	// complete-source inventory is captured. Later work is read-only.
+	var owners []*GoNumericalStorageOwner
+	exports := make(map[string]string)
+	for _, request := range []GoNumericalStorageCaptureRequest{
+		{GoBinary: profile.GoBinary, Directory: ownerDirectory, PackagePath: "example.invalid/numericalfixture", Target: profile.Target,
+			Environment: profile.Environment, Variables: []GoNumericalStorageReference{{PackagePath: "example.invalid/numericalfixture", Name: "Mutable"}}},
+		{GoBinary: profile.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(profile.GoBinary)), "src", "internal", "cpu"),
+			PackagePath: "internal/cpu", Target: profile.Target, Environment: profile.Environment, SDKCPU: true,
+			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}}},
+	} {
+		owner, err := CaptureGoNumericalStorageOwner(ctx, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(owner.Close)
+		owners = append(owners, owner)
+		observation, err := owner.observation.Readback(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(observation.RawSelection))
+		for decoder.More() {
+			var selected goAMD64FrameSelection
+			if err := decoder.Decode(&selected); err != nil {
+				t.Fatal(err)
+			}
+			if selected.Export != "" {
+				exports[selected.ImportPath] = selected.Export
+			}
+		}
 	}
 	importer := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		filename, found := exports[path]
