@@ -271,6 +271,17 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 			result = errors.Join(result, source.Close())
 		}
 	}()
+	// Request TMPDIR may be an alias. Bind only this newly created factory
+	// directory to its physical path; original/tool inputs remain strict.
+	canonicalOwned, err := filepath.EvalSymlinks(source.owned)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(canonicalOwned)
+	if err != nil || !info.IsDir() || !os.SameFile(info, source.ownedInfo) {
+		return nil, arm64ScratchContext("created object directory identity changed: %v", err)
+	}
+	source.owned = canonicalOwned
 	if err := source.captureAssembly(ctx, selected); err != nil {
 		return nil, err
 	}
