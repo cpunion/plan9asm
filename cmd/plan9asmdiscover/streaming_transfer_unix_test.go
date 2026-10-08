@@ -31,7 +31,7 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 		main()
 		os.Exit(0)
 	}
-	for _, name := range []string{"sharded", "legacy-json", "invalid-tail"} {
+	for _, name := range []string{"sharded", "sharded-alias", "legacy-json", "invalid-tail", "invalid-tail-alias"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			source, destination := filepath.Join(root, "source"), filepath.Join(root, "destination")
@@ -50,10 +50,21 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 			if name == "legacy-json" {
 				source = filepath.Join(root, "legacy.json")
 				writeSummaryFixtureJSON(t, source, change)
-			} else if name == "invalid-tail" {
+			} else if strings.HasPrefix(name, "invalid-tail") {
 				if err := os.WriteFile(filepath.Join(source, "records", "ff.jsonl"), []byte("invalid tail\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
+			}
+			canonicalSource, err := filepath.EvalSymlinks(source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasSuffix(name, "-alias") {
+				alias := filepath.Join(root, "source-alias")
+				if err := os.Symlink(source, alias); err != nil {
+					t.Fatal(err)
+				}
+				source = alias
 			}
 			before := readDirectoryFiles(t, destination)
 			encoded, err := json.Marshal([]string{"-convert-report", source, "-out-dir", destination,
@@ -72,10 +83,10 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 			if ctx.Err() != nil || errors.Is(err, ownedprocess.ErrCleanup) {
 				t.Fatalf("conversion child did not close: %v context=%v", err, ctx.Err())
 			}
-			if name == "invalid-tail" {
+			if strings.HasPrefix(name, "invalid-tail") {
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 1 || stdout.Len() != 0 ||
-					!strings.Contains(stderr.String(), "decode record shard "+filepath.Join(source, "records", "ff.jsonl")+":1") {
+					!strings.Contains(stderr.String(), "decode record shard "+filepath.Join(canonicalSource, "records", "ff.jsonl")+":1") {
 					t.Fatalf("invalid tail lacks plain bound failure: %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 				}
 				if !reflect.DeepEqual(before, readDirectoryFiles(t, destination)) {
