@@ -38,8 +38,9 @@ func arm64ByteCarrierRegister(register Reg) (uint32, bool) {
 		return 0, false
 	}
 	number, err := strconv.Atoi(strings.TrimPrefix(string(register), "R"))
-	// R28/g, FP, LR and SP require independent machine-state roles.
-	return uint32(number), err == nil && number >= 0 && number <= 27
+	// R18_PLATFORM, R28/g, FP, LR and SP require independent machine-state
+	// roles. An immediate overwrite does not make platform state disposable.
+	return uint32(number), err == nil && number >= 0 && number <= 27 && number != 18
 }
 
 func (binding *arm64ByteCarrierBinding) prepareNative() error {
