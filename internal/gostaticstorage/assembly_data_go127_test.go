@@ -133,6 +133,8 @@ func main() {
 }
 `
 
+const asmDataIndependentGlobals = 512
+
 func asmDataFixtureSource(arch string) string {
 	width := 8
 	if arch == "386" {
@@ -176,6 +178,10 @@ GLOBL shared(SB),2|8,$1
 	source += fmt.Sprintf("DATA addresses<>+%d(SB)/%d,$·Visible+(1+2)(SB)\n", width, width)
 	source += fmt.Sprintf("DATA addresses<>+%d(SB)/%d,$foreign∕pkg·Symbol+5(SB)\n", width*2, width)
 	source += fmt.Sprintf("GLOBL addresses<>(SB),$%d\n", width*3)
+	for index := 0; index < asmDataIndependentGlobals; index++ {
+		source += fmt.Sprintf("DATA independent_%d<>(SB)/1,$%d\nGLOBL independent_%d<>(SB),8,$1\n",
+			index, index&255, index)
+	}
 	return source
 }
 
@@ -281,7 +287,7 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			if !reflect.DeepEqual(observation.Members, original) {
 				t.Fatal("complete namespace/index/data/relocation/TEXT observation differs from actual SDK")
 			}
-			if len(observation.Sources[0].Layouts) != 16+len(asmDataGrammarCases) || len(observation.Sources[1].Layouts) != 2 {
+			if len(observation.Sources[0].Layouts) != 16+len(asmDataGrammarCases)+asmDataIndependentGlobals || len(observation.Sources[1].Layouts) != 2 {
 				t.Fatal("typed DATA/GLOBL grammar lost source declarations")
 			}
 			if _, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles); err == nil || !strings.Contains(err.Error(), "assembly DATA definition") {

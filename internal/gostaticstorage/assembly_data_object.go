@@ -78,35 +78,45 @@ func asmDataBaseKind(kind uint8) uint8 {
 }
 
 func validateASMDataArchiveNames(members []ASMDataMember) error {
-	type namedDefinition struct {
-		abi       uint16
-		kind      uint8
-		duplicate bool
-		member    int
+	type abiGroup struct {
+		members      map[int]bool
+		nonDuplicate bool
 	}
-	seen := make(map[string][]namedDefinition)
+	type namedGroup struct {
+		kind       uint8
+		storageABI uint16
+		abis       map[uint16]*abiGroup
+	}
+	seen := make(map[string]*namedGroup)
 	observe := func(name string, abi uint16, namespace TextSymbolNamespace, kind, flags uint8, member int) error {
 		if name == "" || abi == 65535 || namespace == TextSymbolHashed64 || namespace == TextSymbolHashed {
 			return nil
 		}
-		value := namedDefinition{abi: abi, kind: asmDataBaseKind(kind), duplicate: flags&1 != 0, member: member}
-		for _, previous := range seen[name] {
-			if previous.kind != value.kind {
-				return contextError("SDK ASM DATA named definition collides with a different TEXT/storage kind")
-			}
-			if previous.abi != value.abi {
-				if value.kind != 1 {
-					return contextError("SDK ASM DATA named storage has multiple ABI identities")
-				}
-				continue
-			}
-			if previous.member == member || !previous.duplicate && !value.duplicate {
-				return contextError("SDK ASM DATA named definition has an ambiguous non-DUPok body")
-			}
-			// DUPok is an observed linker input. Keep every exact member/index;
-			// this check neither chooses a winner nor grants storage authority.
+		kind = asmDataBaseKind(kind)
+		group := seen[name]
+		if group == nil {
+			group = &namedGroup{kind: kind, storageABI: abi, abis: make(map[uint16]*abiGroup)}
+			seen[name] = group
 		}
-		seen[name] = append(seen[name], value)
+		if group.kind != kind {
+			return contextError("SDK ASM DATA named definition collides with a different TEXT/storage kind")
+		}
+		if kind != 1 && group.storageABI != abi {
+			return contextError("SDK ASM DATA named storage has multiple ABI identities")
+		}
+		identities := group.abis[abi]
+		if identities == nil {
+			identities = &abiGroup{members: make(map[int]bool)}
+			group.abis[abi] = identities
+		}
+		duplicate := flags&1 != 0
+		if identities.members[member] || !duplicate && identities.nonDuplicate {
+			return contextError("SDK ASM DATA named definition has an ambiguous non-DUPok body")
+		}
+		identities.members[member] = true
+		identities.nonDuplicate = identities.nonDuplicate || !duplicate
+		// Only aggregate collision facts, never a winning body. All original
+		// member/namespace/index identities remain in the returned observation.
 		return nil
 	}
 	for ordinal, member := range members {
@@ -125,22 +135,26 @@ func validateASMDataArchiveNames(members []ASMDataMember) error {
 }
 
 func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]ASMGlobalLayout, error) {
+	type candidateKey struct {
+		name string
+		abi  uint16
+	}
+	candidates := make(map[candidateKey][]int, len(member.Definitions))
+	for index, definition := range member.Definitions {
+		key := candidateKey{definition.Name, definition.ABI}
+		candidates[key] = append(candidates[key], index)
+	}
 	used := make(map[uint32]bool)
 	lastRelative := make(map[TextSymbolNamespace]uint32)
-	var layouts []ASMGlobalLayout
+	layouts := make([]ASMGlobalLayout, 0, len(states))
 	for _, state := range states {
-		var candidates []ASMDataDefinition
-		for _, definition := range member.Definitions {
-			if definition.Name == state.layout.Name && definition.ABI == state.layout.ABI {
-				candidates = append(candidates, definition)
-			}
-		}
+		indices := candidates[candidateKey{state.layout.Name, state.layout.ABI}]
 		// The name/ABI identifies candidate membership only. An ambiguous object
 		// never selects a body by hash, bytes or a convenient storage namespace.
-		if len(candidates) != 1 || used[candidates[0].Index] {
+		if len(indices) != 1 || used[member.Definitions[indices[0]].Index] {
 			return nil, contextError("source GLOBL lacks one unique object-local DATA definition")
 		}
-		definition := candidates[0]
+		definition := member.Definitions[indices[0]]
 		if previous, present := lastRelative[definition.Namespace]; present && definition.Relative <= previous {
 			return nil, contextError("source GLOBL order differs from its actual object-local namespace order")
 		}

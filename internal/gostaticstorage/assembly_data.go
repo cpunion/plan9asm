@@ -123,7 +123,7 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 	if len(request.Sources) == 0 || len(request.Sources) > 62 {
 		return nil, contextError("SDK DATA source inventory violates the archive member bound")
 	}
-	total := int64(len(request.Archive))
+	total := int64(len(request.Archive)) + int64(len(request.BuiltinSource))
 	names := make([]string, len(request.Sources))
 	for index, source := range request.Sources {
 		if filepath.Base(source.Name) != source.Name || !strings.HasSuffix(source.Name, ".s") {
