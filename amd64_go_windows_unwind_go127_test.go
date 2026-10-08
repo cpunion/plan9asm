@@ -22,6 +22,12 @@ func TestGoAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
 // A temporary-directory alias is an ordinary host configuration, not permission
 // to relax the original object reader's canonical physical-path contract.
 func TestGoAMD64WindowsUnwindTemporaryParentAlias(t *testing.T) {
+	goAMD64WindowsUnwindTemporaryParentAlias(t)
+	goAMD64WindowsUnwindActualSourceFamily(t)
+}
+
+func goAMD64WindowsUnwindTemporaryParentAlias(t *testing.T) {
+	t.Helper()
 	parent, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +41,7 @@ func TestGoAMD64WindowsUnwindTemporaryParentAlias(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", alias)
-	goAMD64WindowsUnwindActualSourceFamily(t)
+	t.Setenv("GOTMPDIR", alias)
 }
 
 func goAMD64WindowsUnwindActualSourceFamily(t *testing.T) {

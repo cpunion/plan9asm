@@ -16,9 +16,21 @@ import (
 )
 
 func TestGoAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
+	goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t)
+}
+
+func TestGoAMD64WindowsUnwindCompleteJoinTemporaryParentAlias(t *testing.T) {
+	goAMD64WindowsUnwindTemporaryParentAlias(t)
+	goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t)
+}
+
+func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
+	t.Helper()
 	pkg, request := goAMD64FrameSourceFixture(t)
 	request.Target = "windows/amd64"
 	source := requireGoAMD64FrameCapture(t, pkg, request)
+	t.Logf("ACTUAL_WINDOWS_SOURCE_CAPTURE request=%q observed=%q functions=%d",
+		request.Directory, source.request.Directory, len(source.functions))
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
 	object, err := source.read(filepath.Join(source.owned, request.AssemblyFile+".o"))
