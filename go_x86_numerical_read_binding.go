@@ -9,6 +9,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -25,6 +26,8 @@ type GoX86NumericalReadBinding struct {
 	context         context.Context
 	originalContext context.Context
 	packageInput    GoPackage
+	originalTypes   *types.Package
+	originalImports map[string]*types.Package
 	file            [32]byte
 	options         Options
 	symbols         map[string]string
@@ -54,7 +57,7 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	if err := source.Verify(ctx); err != nil {
 		return Options{}, err
 	}
-	if file == nil || options.ResolveSym == nil || pkg.Types == nil || pkg.Path != source.request.PackagePath || pkg.Types.Path() != pkg.Path {
+	if file == nil || options.ResolveSym == nil || pkg.Types == nil || pkg.Path != source.request.PackagePath || pkg.Types.Path() != pkg.Path || pkg.SourceSelection != nil {
 		return Options{}, numericalSBContext("binding lacks complete original declarations/source/resolver")
 	}
 	arch := strings.TrimPrefix(source.request.Target, "linux/")
@@ -114,7 +117,8 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 		}
 	}
 	options.Sigs, options.ResolveSym = sigs, nil
-	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg, file: actual,
+	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
+		originalTypes: pkg.Types, originalImports: numericalImportIdentities(pkg.Imports), file: actual,
 		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), capabilities: numericalCapabilities(sigs)}
 	binding.seal, err = binding.digest()
 	if err != nil {
@@ -131,6 +135,29 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	bound.ResolveSym = binding.resolve
 	bound.NumericalReads = binding
 	return bound, nil
+}
+
+func numericalImportIdentities(imports map[string]*types.Package) map[string]*types.Package {
+	if imports == nil {
+		return nil
+	}
+	identities := make(map[string]*types.Package, len(imports))
+	for name, pkg := range imports {
+		identities[name] = pkg
+	}
+	return identities
+}
+
+func numericalSameImports(imports, expected map[string]*types.Package) bool {
+	if (imports == nil) != (expected == nil) || len(imports) != len(expected) {
+		return false
+	}
+	for name, pkg := range imports {
+		if original, found := expected[name]; !found || pkg != original {
+			return false
+		}
+	}
+	return true
 }
 
 func numericalSignatureShape(sig FuncSig) FuncSig {
@@ -222,6 +249,10 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 	if binding.context == nil || reflect.TypeOf(binding.context) != reflect.TypeOf(binding.originalContext) ||
 		!reflect.TypeOf(binding.context).Comparable() || binding.context != binding.originalContext {
 		return fail(numericalSBContext("binding live context identity changed"))
+	}
+	if binding.packageInput.Types == nil || binding.packageInput.Types != binding.originalTypes ||
+		binding.packageInput.SourceSelection != nil || !numericalSameImports(binding.packageInput.Imports, binding.originalImports) {
+		return fail(numericalSBContext("binding private declaration/import identity changed"))
 	}
 	if err := binding.source.Verify(binding.context); err != nil {
 		return err
@@ -431,12 +462,19 @@ func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPacka
 	if err := binding.verify(); err != nil {
 		return err
 	}
-	if pkg.Path != binding.packageInput.Path || pkg.Types != binding.packageInput.Types ||
+	if pkg.Path != binding.packageInput.Path || pkg.Types != binding.originalTypes || pkg.SourceSelection != nil ||
+		!numericalSameImports(pkg.Imports, binding.originalImports) ||
 		opt.GOOS != "linux" || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
 		opt.WASMABI != binding.options.WASMABI || opt.X87Mode != binding.options.X87Mode || opt.AnnotateSource != binding.options.AnnotateSource ||
-		opt.ResolveSym == nil || opt.KeepFunc != nil || len(opt.ARM64ClosureABIs) != 0 ||
+		opt.ResolveSym == nil || opt.KeepFunc != nil || opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 ||
 		filepath.Base(opt.FileName) != binding.source.request.AssemblyFile {
 		return numericalSBContext("Go wrapper declaration/profile/source role differs")
+	}
+	binding.source.mu.Lock()
+	err := numericalDeclarationSyntax(binding.source, pkg)
+	binding.source.mu.Unlock()
+	if err != nil {
+		return err
 	}
 	for symbol, expected := range binding.symbols {
 		if opt.ResolveSym(symbol) != expected {
