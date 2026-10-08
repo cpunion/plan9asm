@@ -11,13 +11,16 @@ targeting codex/expand-ecosystem-corpus-20260913. Push only to cpunion.
 Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft;
 do not promote its fork head until current-head fork CI and review pass.
 
-Published repair head 47ea649d, completed run 36942816488, still fails priority
-discovery shards 5, 29, 36, 38, 39, 42 and aggregate. Skipped downstream jobs are
-not passes. Refresh the remote state before publishing the next batch.
+Previous repair head 47ea649d failed priority discovery shards 5, 29, 36, 38,
+39, 42 and aggregate in completed run 36942816488. The batched successor
+c09eff1e is published in fork PR 4; run 37711752851 is still active. Let it
+finish once before pushing another batch. Skipped downstream jobs are not
+passes. Refresh the remote state before publishing the next batch.
 
 ## Continue here
 
-Development branch: codex/pr40-final-batch-20261008.
+Development branch: codex/pr40-next-batch-20261008.
+The published codex/pr40-final-batch-20261008 snapshot stays frozen.
 Latest upstream main is already an ancestor. Root alone writes ledger.
 This successor integrates these test-first rule-class repairs:
 
@@ -96,6 +99,15 @@ controls pass at their own frozen source. Original crc32 now passes its former
 MOVQ import check but still fails at a CPU-feature SB memory read; it is not a
 passing library.
 
+The next batch shares the typed GP/X numerical register effect between both
+result observers, covering MOVL/MOVQ/MOVD/VMOVD/VMOVQ. Its independent test-first
+RED had 18 passes and 686 failures; the frozen family successor 4ff45e56 has
+1,280 passes in each ordinary/race run, with no failed, skipped or incomplete
+tests. Public dispatch is register-only. Private memory roles, opaque pointer
+identity and native/caller authority remain unchanged. The original GP-to-X
+MOVL witness passes without substituting another instruction. These focused
+results do not certify an integrated full suite or original CRC32 library.
+
 Normal sharded-ledger operations now stream: startup/status, active-batch
 checkpoint lookup, bounded retries, publication and sharded report transfer.
 They still validate every record through EOF, counts, range continuity and
@@ -128,11 +140,15 @@ tools, extra diagnostics and missing evidence remain failures. This refusal is
 source N/A for its exact package/profile, not an instruction pass or whole-module
 skip. Its first one-target producer passed; the expanded five-target producer
 timed out during native linking and remains incomplete, not a passing scope.
-Obtain the final component's actual terminal status before reporting success.
+Its final binding successor 7045c5e7 closed with 48 passes, including exact
+refusal and valid-sibling LLVM objects on five targets. Preserve the earlier
+timeout and infrastructure failures; they are not successful scopes.
 
 The focused historical scalar list hit its 20-minute pre-test link limit, with
 zero attempted tests; plain tests never started. Keep its incomplete/failed
-receipt and unresolved owned-child state, not a compatibility pass. Do not
+receipt, not a compatibility pass. The later exact owner/PID-group readback
+confirmed all recorded processes absent; the initial cleanup failure remains.
+Do not
 borrow the current-SDK component's 352 passes or repeat unlimited local links.
 
 Obtain terminal family owners and independent physical readbacks. Freeze the
@@ -141,6 +157,12 @@ root inventory in 32 partitions with bounded two-worker collection, other
 root-module packages, nested CLIs, focused historical compatibility, official
 five-arch classification and strict benchmark. Required native Linux/cross
 counterparts run in fork CI. Missing tools, unknown errors and timeouts fail.
+
+The published c09eff1e affected gate closed all sixteen stages: Discovery 235,
+corpus-driver controls 219 and scalar/AES controls 403 passes in each ordinary
+and race run, plus vet, stamped builds, ledger readback, official five-arch
+classification and workflow policy. Its source before/after and process-owner
+readback agree. This is not the complete root/module suite or external corpus.
 
 The mode32 extreme-SP witness still observes an LLVM22 O0 allocator limitation:
 its multi-gigabyte virtual frame is not a successful object/runtime case.
