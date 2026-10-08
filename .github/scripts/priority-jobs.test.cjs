@@ -87,3 +87,23 @@ test('discovery matrices verify checksums against direct signed databases', () =
     assert.doesNotMatch(section, /^          GOSUMDB: ['"]?off/m, name);
   }
 });
+
+test('discovery matrices reuse the task-owned restored Go build cache', () => {
+  const setup = fs.readFileSync(
+    path.join(__dirname, '../actions/setup-go/action.yml'), 'utf8',
+  );
+  assert.match(setup, /GOCACHE=\$\{RUNNER_TEMP\}\/go-build-cache/);
+
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    const section = jobSection(name);
+    const start = section.indexOf('      - name: Translate and compile discovered assembly\n');
+    assert.notEqual(start, -1, `missing compilation step in ${name}`);
+    const next = section.indexOf('\n      - name:', start + 1);
+    const compile = section.slice(start, next < 0 ? section.length : next);
+    assert.match(compile,
+      /^          PLAN9ASM_DISCOVERY_BUILD_CACHE: \$\{\{ runner\.temp \}\}\/go-build-cache$/m,
+      `${name} bypasses the restored task-owned Go cache`);
+    assert.match(compile,
+      /^        run: scripts\/check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 64$/m);
+  }
+});
