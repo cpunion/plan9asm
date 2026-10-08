@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,12 +11,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xgo-dev/plan9asm"
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
+	"golang.org/x/tools/go/packages"
 )
 
 // The generated file-proxy module is an owned mechanism fixture, not an
 // authenticated external-library pass. Its original cache source stays intact.
-func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
+func amd64DownloadedFixedLocalCLIFixture(t *testing.T) (*featureInput, string, compileConfig) {
+	t.Helper()
 	_, assembly, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
 	ctx := config.Context
 	input := &featureInput{
@@ -88,7 +92,11 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 			t.Fatalf("original cache source changed before CLI: %s: %v", name, err)
 		}
 	}
+	return input, invocation, config
+}
 
+func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
+	input, invocation, config := amd64DownloadedFixedLocalCLIFixture(t)
 	t.Chdir(invocation)
 	config.FeaturePath = writeFeatureInput(t, input)
 	output := t.TempDir()
@@ -110,5 +118,95 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 		if err != nil || actual != expected {
 			t.Fatalf("CLI rewrote original cache source: %s: %v", name, err)
 		}
+	}
+}
+
+func TestAMD64DownloadedFixedLocalCLIRejectsUnboundAndChangedIdentity(t *testing.T) {
+	for _, role := range []string{
+		"no-explicit-request", "missing-version", "load-identity",
+		"version-in-resolver", "source-module-in-resolver", "source-root-in-resolver", "input-in-resolver",
+	} {
+		t.Run(role, func(t *testing.T) {
+			input, invocation, config := amd64DownloadedFixedLocalCLIFixture(t)
+			t.Chdir(invocation)
+			consumer, err := loadFeatureConsumer(config.Context, writeFeatureInput(t, input), t.TempDir(),
+				"linux/amd64", input.Module, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pkgs, err := packages.Load(&packages.Config{
+				Context: config.Context, Dir: invocation, Env: consumer.Env,
+				Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+					packages.NeedModule | packages.NeedDeps | packages.NeedImports |
+					packages.NeedTypes | packages.NeedTypesSizes,
+			}, input.Module)
+			if err != nil || len(pkgs) != 1 || len(pkgs[0].Errors) != 0 {
+				t.Fatalf("actual exact-cache CLI load: %v; %+v", err, pkgs)
+			}
+			pkg := pkgs[0]
+			if pkg.Module == nil || pkg.Module.Main || pkg.Module.Version != input.Version || pkg.Module.Replace != nil {
+				t.Fatal("fixture did not retain its actual exact imported module role")
+			}
+			if err := consumer.capturePackages(pkgs); err != nil {
+				t.Fatal(err)
+			}
+			config.Feature = consumer
+			config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", consumer)
+			assembly := filepath.Join(pkg.Dir, "value_amd64.s")
+			data, err := os.ReadFile(assembly)
+			if err != nil {
+				t.Fatal(err)
+			}
+			file, err := plan9asm.Parse(plan9asm.ArchAMD64,
+				strings.Replace(string(data), "#include \"textflag.h\"", "#define NOSPLIT 4", 1))
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			resolve := func(name string) string {
+				calls++
+				if calls == 1 {
+					switch role {
+					case "version-in-resolver":
+						consumer.Input.Version = "v1.0.1"
+					case "source-module-in-resolver":
+						consumer.Input.SourceModule = "example.invalid/other"
+					case "source-root-in-resolver":
+						consumer.Input.SourceRoot = invocation
+					case "input-in-resolver":
+						copied := *consumer.Input
+						consumer.Input = &copied
+					}
+				}
+				return strings.Replace(name, "·", pkg.PkgPath+".", 1)
+			}
+			// Signature inference must not trigger the mutating binding callback.
+			sigs, _, err := sigsForAsmFile(pkg, file,
+				func(name string) string { return strings.Replace(name, "·", pkg.PkgPath+".", 1) }, "amd64")
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch role {
+			case "no-explicit-request":
+				config.Feature = nil
+			case "missing-version":
+				consumer.Input.Version = ""
+			case "load-identity":
+				pkg.Module.Version = "v1.0.1"
+			}
+			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, assembly, "linux/amd64",
+				"x86_64-unknown-linux-gnu", "amd64", config, resolve, sigs)
+			if source != nil {
+				if closeErr := source.close(); closeErr != nil {
+					t.Error(closeErr)
+				}
+			}
+			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || source != nil || bound != nil {
+				t.Fatalf("unbound/changed %s retained downloaded frame authority: %v", role, err)
+			}
+			if strings.HasSuffix(role, "-in-resolver") && calls == 0 {
+				t.Fatal("identity control failed before its actual binding callback")
+			}
+		})
 	}
 }
