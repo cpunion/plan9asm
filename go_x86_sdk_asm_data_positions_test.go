@@ -124,8 +124,24 @@ GLOBL table<>(SB),RODATA,$4
 		GoBinary: profile.GoBinary, Directory: profile.Directory, PackagePath: pkg.Path,
 		Target: profile.Target, Environment: profile.Environment}, ObjectInputs: request,
 		CPP: []AssemblyCPPObservation{cpp}, Positions: []sdkCPPPositionObservation{positions},
-		Header: sdkASMDataHeaderObservation{Actual: read(header)}}}
+		Header: sdkASMDataHeaderObservation{Actual: read(header), CompilerObject: read(filepath.Join(profile.Directory, "header.o"))}}}
 	sdkASMDataDiagnosticRetain(t, scratch)
+	if folder := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); folder != "" {
+		// Actual first-party physical inputs outlive t.TempDir only as query
+		// evidence. They do not construct or impersonate a live SDK source.
+		inputs := map[string][]byte{filepath.Join(profile.Directory, "value.go"): goSource}
+		for _, source := range cpp.Sources {
+			inputs[source.File] = read(source.File)
+		}
+		raw, err := json.Marshal(inputs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := "sdk-data-first-party-inputs-" + strings.ReplaceAll(t.Name(), "/", "-") + ".json"
+		if err := os.WriteFile(filepath.Join(folder, name), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err := gostaticstorage.ObserveX86SDKCPPASMData(request); err != nil {
 		t.Fatal("complete first-party source/header/macro/lineage object join is not closed", err)
 	}
@@ -167,6 +183,11 @@ GLOBL table<>(SB),RODATA,$4
 			changed := request
 			changed.Sources = append([]gostaticstorage.SDKASMDataSource(nil), request.Sources...)
 			changed.Sources[0].ExpandedObject = read(object)
+			changedObservation := scratch.observation
+			changedObservation.ObjectInputs = changed
+			changedObservation.Positions = []sdkCPPPositionObservation{{Mapped: mapped}}
+			sdkASMDataDiagnosticRetainNamed(t, "-mutation-"+mutation,
+				&GoX86SDKASMDataSource{observation: changedObservation})
 			if _, err := gostaticstorage.ObserveX86SDKCPPASMData(changed); !errors.Is(err, gostaticstorage.ErrContext) {
 				t.Fatal("anonymous DATA/TEXT metadata mutation was normalized away", mutation, err)
 			}

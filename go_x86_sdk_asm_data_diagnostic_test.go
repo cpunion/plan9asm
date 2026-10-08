@@ -11,6 +11,10 @@ import (
 )
 
 func sdkASMDataDiagnosticRetain(t *testing.T, source *GoX86SDKASMDataSource) {
+	sdkASMDataDiagnosticRetainNamed(t, "", source)
+}
+
+func sdkASMDataDiagnosticRetainNamed(t *testing.T, suffix string, source *GoX86SDKASMDataSource) {
 	t.Helper()
 	folder := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR")
 	if folder == "" {
@@ -23,10 +27,12 @@ func sdkASMDataDiagnosticRetain(t *testing.T, source *GoX86SDKASMDataSource) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(folder, "sdk-data-live-diagnostic.json"), raw, 0600); err != nil {
-		t.Fatal(err)
+	if suffix == "" {
+		if err := os.WriteFile(filepath.Join(folder, "sdk-data-live-diagnostic.json"), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	name := "sdk-data-observation-inputs-" + strings.ReplaceAll(t.Name(), "/", "-") + ".json"
+	name := "sdk-data-observation-inputs-" + strings.ReplaceAll(t.Name(), "/", "-") + suffix + ".json"
 	if err := os.WriteFile(filepath.Join(folder, name), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
