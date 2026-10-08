@@ -25,20 +25,24 @@ func TestARM64ByteCarrierMOVDUint32SameCarrier(t *testing.T) {
 	packagePath := "example.invalid/nativecarrier"
 	width := arm64NativeResultTailCase{op: "MOVD", resultBits: 32, storeBits: 64}
 	callee := strings.ToLower(width.name())
-	goSource := "package main\n" + strings.ReplaceAll(width.declaration(), width.name(), callee) +
-		"func observe_" + callee + "(input uint64) (value,native,guard uint64)\n" +
-		`func main() {
+	goSource := "package nativecarrier\n" + strings.ReplaceAll(width.declaration(), width.name(), callee) +
+		"func observe_" + callee + "(input uint64) (value,native,guard uint64)\n"
+	originalTest := `package nativecarrier
+
+import "testing"
+
+func TestOriginalCarrier(t *testing.T) {
     value, native, guard := observe_movd_u32(0x123456789abcdef0)
     if value != 0x9abcdef0 || native != 0x123456789abcdef0 || guard != 0x7ac35ef012345678 {
-        panic(1)
+        t.Fatal("original native bytes or adjacent canary differ")
     }
-    println("BYTE_CARRIER_MOVD32", value, native, guard)
+    t.Log("BYTE_CARRIER_MOVD32", value, native, guard)
 }
 `
 	assembly := strings.ReplaceAll(width.source()+arm64NativeResultTailObserver(width), width.name(), callee)
 	for name, data := range map[string]string{
 		"go.mod":  "module " + packagePath + "\ngo 1.20\n",
-		"decl.go": goSource, "original_arm64.s": assembly,
+		"decl.go": goSource, "original_arm64.s": assembly, "original_test.go": originalTest,
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
@@ -53,14 +57,16 @@ func TestARM64ByteCarrierMOVDUint32SameCarrier(t *testing.T) {
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	defer cancel()
-	command := exec.CommandContext(ctx, request.GoBinary, "run", "-p=1", "-mod=readonly", ".")
+	// The runtime driver is created before Capture, but is not a selected
+	// library source. Its go test identity supplies no observation authority.
+	command := exec.CommandContext(ctx, request.GoBinary, "test", "-p=1", "-mod=readonly", "-run=^TestOriginalCarrier$", "-count=1", "-v", ".")
 	command.Dir, command.Env = request.Directory, request.Environment
 	output, err := runtimeOracleCombinedOutput(ctx, command)
 	want := fmt.Sprintf("BYTE_CARRIER_MOVD32 %d %d %d\n", uint64(0x9abcdef0), uint64(0x123456789abcdef0), uint64(0x7ac35ef012345678))
-	if err != nil || string(output) != want {
+	if err != nil || strings.Count(string(output), strings.TrimSpace(want)) != 1 || !strings.Contains(string(output), "--- PASS: TestOriginalCarrier") {
 		t.Fatalf("unchanged original Go whole-byte/canary witness: %v\n%s", err, output)
 	}
-	t.Logf("actual original Go same-carrier witness: %s", strings.TrimSpace(string(output)))
+	t.Logf("actual original Go same-carrier witness: %s", strings.TrimSpace(want))
 	source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
 	if err != nil {
 		t.Fatal(err)
