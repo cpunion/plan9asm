@@ -140,8 +140,12 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 
 func (c *arm64Ctx) recordMachineUnavailable(reg Reg) {
 	if flow := c.machineAvailability; flow != nil {
+		width := 64
+		if c.arm64FlagSlotMask(string(reg)) != 0 {
+			width = 1
+		}
 		flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects,
-			arm64MachineEffect{register: arm64MachineRegister(reg), unavailable: true, source: flow.source})
+			arm64MachineEffect{register: arm64MachineRegister(reg), width: width, unavailable: true, source: flow.source})
 	}
 }
 
@@ -430,21 +434,25 @@ func (flow *arm64MachineAvailability) validateSourceScratch() error {
 	for i, block := range flow.blocks {
 		indices[block.name] = i
 	}
-	before := make([]map[string]bool, len(flow.blocks))
-	before[0] = make(map[string]bool)
+	before := make([]map[string]int, len(flow.blocks))
+	before[0] = make(map[string]int)
 	queue, queued := []int{0}, make([]bool, len(flow.blocks))
 	queued[0] = true
 	for next := 0; next < len(queue); next++ {
 		at := queue[next]
 		queued[at] = false
-		missing := make(map[string]bool)
-		for reg := range before[at] {
-			missing[reg] = true
+		missing := make(map[string]int)
+		for reg, width := range before[at] {
+			missing[reg] = width
 		}
 		for _, effect := range flow.blocks[at].effects {
 			switch {
 			case effect.unavailable:
-				missing[effect.register] = true
+				width := effect.width
+				if width == 0 {
+					width = 64 // Historical unbound original Go GP scratch.
+				}
+				missing[effect.register] = width
 			case effect.call != nil:
 				// Arguments have already been read by the typed lowerer. The
 				// opaque callee does not make an unbound caller scratch known.
@@ -456,16 +464,16 @@ func (flow *arm64MachineAvailability) validateSourceScratch() error {
 					return arm64GoABIContext("native effects can observe an unbound original Go memory scratch at %q", effect.source)
 				}
 			case effect.copyFrom != "":
-				if missing[effect.copyFrom] {
-					missing[effect.register] = true
+				if missing[effect.copyFrom] != 0 {
+					missing[effect.register] = missing[effect.copyFrom]
 				} else {
 					delete(missing, effect.register)
 				}
 			case effect.write:
-				if effect.width >= 64 {
+				if effect.width >= missing[effect.register] {
 					delete(missing, effect.register)
 				}
-			case missing[effect.register]:
+			case missing[effect.register] != 0:
 				return arm64GoABIContext("%s consumes an unbound original Go memory scratch at %q", effect.register, effect.source)
 			}
 		}
@@ -476,11 +484,11 @@ func (flow *arm64MachineAvailability) validateSourceScratch() error {
 			}
 			changed := before[index] == nil
 			if changed {
-				before[index] = make(map[string]bool)
+				before[index] = make(map[string]int)
 			}
-			for reg := range missing {
-				if !before[index][reg] {
-					before[index][reg], changed = true, true
+			for reg, width := range missing {
+				if before[index][reg] < width {
+					before[index][reg], changed = width, true
 				}
 			}
 			if changed && !queued[index] {
