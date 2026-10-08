@@ -4,6 +4,7 @@ package plan9asm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -116,5 +117,62 @@ func TestGoX86NumericalSBReadFrameProducerExactObjectJoin(t *testing.T) {
 	defer frame.Close()
 	if err := frame.Verify(ctx); err != nil || len(frame.functions) != len(numerical.native.OriginalText) {
 		t.Fatal("complete joined actual frame observation failed verification", err)
+	}
+	retainNumericalRead(t, numerical, "frame-join")
+	retainNumericalFrame(t, frame)
+}
+
+func retainNumericalFrame(t *testing.T, frame *GoAMD64FrameSource) {
+	t.Helper()
+	artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR")
+	if artifact == "" {
+		return
+	}
+	frame.mu.Lock()
+	defer frame.mu.Unlock()
+	folder := filepath.Join(artifact, "linux-amd64", "numerical-read-frame-join")
+	if err := os.MkdirAll(folder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{".o", ".o.listing"} {
+		data, err := os.ReadFile(filepath.Join(frame.owned, frame.request.AssemblyFile+suffix))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(folder, "frame-original"+suffix), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	type function struct {
+		ObjectSymbol, ListingSymbol string
+		Locals, Args                int64
+		Code                        []byte
+		Positions                   map[int]string
+		Signature                   FuncSig
+		Transport                   goAMD64FrameTransport
+		LanguageType                string
+	}
+	functions := make(map[string]function, len(frame.functions))
+	for name, fn := range frame.functions {
+		functions[name] = function{fn.objectSymbol, fn.listingSymbol, fn.locals, fn.args, fn.code,
+			fn.positions, fn.signature, fn.transport, fn.languageType}
+	}
+	data, err := json.MarshalIndent(struct {
+		Directory, GoBinary, AssemblyFile, Target string
+		Environment                               []string
+		ActualEnvironment                         map[string]string
+		Selection                                 goAMD64FrameSelection
+		Inputs                                    map[string][32]byte
+		Functions                                 map[string]function
+		Commands                                  []numericalSBCommand
+		NumericalSeal                             [32]byte
+	}{frame.request.Directory, frame.request.GoBinary, frame.request.AssemblyFile, frame.request.Target,
+		frame.request.Environment, frame.env, frame.selection, frame.inputs, functions,
+		frame.numericalCommands, frame.numericalSeal}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(folder, "frame-observation.json"), data, 0600); err != nil {
+		t.Fatal(err)
 	}
 }

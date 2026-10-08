@@ -66,6 +66,7 @@ type GoAMD64FrameSource struct {
 	numericalSeal      [32]byte
 	numericalPackage   GoPackage
 	numericalCapturing bool
+	numericalCommands  []numericalSBCommand // Actual capture output only; never an authority.
 }
 
 // newGoOriginalInputGuard initializes only private input/cleanup ownership.
@@ -521,6 +522,10 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 	defer cancel()
 	output, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
 	if source.numericalCapturing {
+		source.numericalCommands = append(source.numericalCommands, numericalSBCommand{
+			Directory: source.request.Directory, Binary: source.request.GoBinary,
+			Arguments: append([]string(nil), args...), Stdout: append([]byte(nil), output...),
+		})
 		err = errors.Join(err, source.numericalBinding.verify())
 	}
 	// Preserve both independent origins and cancellation when commands race
