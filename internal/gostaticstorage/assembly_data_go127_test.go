@@ -281,6 +281,8 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			if _, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles); err == nil || !strings.Contains(err.Error(), "assembly DATA definition") {
 				t.Fatal("offline DATA observation widened the unchanged SDK TEXT permission", err)
 			}
+			t.Run("input-guards", func(t *testing.T) { checkASMDataInputGuards(t, request) })
+			t.Run("binary-guards", func(t *testing.T) { checkASMDataBinaryGuards(t, request) })
 		})
 	}
 }
