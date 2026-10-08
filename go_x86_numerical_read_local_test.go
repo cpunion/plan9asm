@@ -3,6 +3,8 @@
 package plan9asm
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +13,26 @@ import (
 )
 
 func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T) {
+	ctx, pkg, request, file, bound, _ := numericalLocalFactory(t)
+	request.NumericalReads = bound.NumericalReads
+	local, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal("independent actual Go framed object precondition failed", err)
+	}
+	defer local.Close()
+	bound, err = local.BindFixedLocal(ctx, pkg, file, bound)
+	if err != nil {
+		t.Fatal("certified numerical reads did not compose with complete actual local proof", err)
+	}
+	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		if err != nil || !strings.Contains(ir, "fixed_local_native") || strings.Count(ir, "load volatile") < 22 {
+			t.Fatal("complete frozen local/read consumer lost an independent owner or native read", err)
+		}
+	})
+}
+
+func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource) {
+	t.Helper()
 	pkg, request, initial, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
 	_, numericalProfile, _, _ := numericalSBFixture(t, "amd64")
 	request.GoBinary, request.Environment = numericalProfile.GoBinary, numericalProfile.Environment
@@ -37,7 +59,7 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 		t.Fatal(err)
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
-	defer cancel()
+	t.Cleanup(cancel)
 	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
 		GoBinary: request.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu"),
 		PackagePath: "internal/cpu", Target: request.Target, Environment: request.Environment, SDKCPU: true,
@@ -46,7 +68,7 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer owner.Close()
+	t.Cleanup(owner.Close)
 	numerical, err := CaptureGoX86NumericalReadSource(ctx, GoX86NumericalReadCaptureRequest{
 		GoBinary: request.GoBinary, Directory: request.Directory, PackagePath: pkg.Path,
 		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment,
@@ -55,7 +77,11 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer numerical.Close()
+	t.Cleanup(func() {
+		if err := numerical.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	if len(numerical.reads) != 22 {
 		t.Fatal("actual complete original family did not bind all numerical reads", len(numerical.reads))
 	}
@@ -63,18 +89,25 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	if err != nil {
 		t.Fatal("independent original numerical read precondition failed", err)
 	}
-	local, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
-	if err != nil {
-		t.Fatal("independent actual Go framed object precondition failed", err)
+	return ctx, pkg, request, file, bound, numerical
+}
+
+func TestGoX86NumericalSBReadFrameProducerExactObjectJoin(t *testing.T) {
+	ctx, pkg, request, _, bound, numerical := numericalLocalFactory(t)
+	unbound, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if unbound != nil {
+		unbound.Close()
 	}
-	defer local.Close()
-	bound, err = local.BindFixedLocal(ctx, pkg, file, bound)
-	if err != nil {
-		t.Fatal("certified numerical reads did not compose with complete actual local proof", err)
+	if unbound != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("default frame observation acquired numerical relocations", err)
 	}
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
-		if err != nil || !strings.Contains(ir, "fixed_local_native") || strings.Count(ir, "load volatile") < 22 {
-			t.Fatal("complete frozen local/read consumer lost an independent owner or native read", err)
-		}
-	})
+	request.NumericalReads = bound.NumericalReads
+	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal("independent complete original frame/numerical object join", err)
+	}
+	defer frame.Close()
+	if err := frame.Verify(ctx); err != nil || len(frame.functions) != len(numerical.native.OriginalText) {
+		t.Fatal("complete joined actual frame observation failed verification", err)
+	}
 }

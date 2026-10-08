@@ -36,28 +36,35 @@ import (
 type GoAMD64FrameCaptureRequest struct {
 	GoBinary, Directory, AssemblyFile, Target string
 	Environment                               []string
+	// NumericalReads joins one already authenticated original numerical-read
+	// source. It observes relocations; it grants no additional memory role.
+	NumericalReads *GoX86NumericalReadBinding
 }
 
 // GoAMD64FrameSource is a sealed actual-object observation. It does not grant
 // a native backing, caller region, memory access or return certificate.
 type GoAMD64FrameSource struct {
-	mu               sync.Mutex
-	identity         *GoAMD64FrameSource
-	ready            bool
-	request          GoAMD64FrameCaptureRequest
-	selection        goAMD64FrameSelection
-	env              map[string]string
-	inputs           map[string][32]byte
-	entries          []string
-	directoryInfo    os.FileInfo
-	owned            string
-	ownedInfo        os.FileInfo
-	functions        map[string]goAMD64FrameFunction
-	declarations     map[string]goAMD64FrameDeclaration
-	imports          map[string]goAMD64FrameSelection
-	origins          map[string]int
-	downloadedOrigin *gooriginalsrc.OriginSet
-	downloadedModule *gooriginalsrc.Module
+	mu                 sync.Mutex
+	identity           *GoAMD64FrameSource
+	ready              bool
+	request            GoAMD64FrameCaptureRequest
+	selection          goAMD64FrameSelection
+	env                map[string]string
+	inputs             map[string][32]byte
+	entries            []string
+	directoryInfo      os.FileInfo
+	owned              string
+	ownedInfo          os.FileInfo
+	functions          map[string]goAMD64FrameFunction
+	declarations       map[string]goAMD64FrameDeclaration
+	imports            map[string]goAMD64FrameSelection
+	origins            map[string]int
+	downloadedOrigin   *gooriginalsrc.OriginSet
+	downloadedModule   *gooriginalsrc.Module
+	numericalBinding   *GoX86NumericalReadBinding
+	numericalSeal      [32]byte
+	numericalPackage   GoPackage
+	numericalCapturing bool
 }
 
 // newGoOriginalInputGuard initializes only private input/cleanup ownership.
@@ -144,6 +151,15 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		return nil, err
 	}
 	source := newGoOriginalInputGuard(request)
+	if request.NumericalReads != nil {
+		if err := verifyGoAMD64FrameNumericalRequest(ctx, pkg, source.request); err != nil {
+			return nil, err
+		}
+		source.numericalBinding = request.NumericalReads
+		source.numericalSeal = request.NumericalReads.seal
+		source.numericalPackage = pkg
+		source.numericalCapturing = true
+	}
 	provided := make(map[string]string)
 	for _, value := range request.Environment {
 		key, setting, valid := strings.Cut(value, "=")
@@ -196,6 +212,9 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		return nil, err
 	}
 	source.selection = selected
+	if source.numericalBinding != nil && (len(selected.SFiles) != 1 || selected.SFiles[0] != request.AssemblyFile) {
+		return nil, goAMD64FrameContext("numerical frame join requires one complete original assembly selection")
+	}
 	if selected.Dir != request.Directory || selected.ImportPath != pkg.Path || selected.ForTest != "" || selected.Module == nil ||
 		!selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != request.Directory || len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" ||
 		selected.nonordinaryRole() || len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 {
@@ -257,7 +276,11 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			return nil, goAMD64FrameContext("full original assembly lacks complete TEXT: %v", err)
 		}
 		object := filepath.Join(source.owned, name+".o")
-		listing, err := source.run(ctx, "tool", "asm", "-S", "-p", pkg.Path, "-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include"), "-o", object, name)
+		assemblyInput := name
+		if source.numericalBinding != nil {
+			assemblyInput = filepath.Join(request.Directory, name)
+		}
+		listing, err := source.run(ctx, "tool", "asm", "-S", "-p", pkg.Path, "-I", request.Directory, "-I", filepath.Join(source.env["GOROOT"], "pkg", "include"), "-o", object, assemblyInput)
 		if err != nil {
 			return nil, err
 		}
@@ -273,9 +296,24 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if _, err := source.read(object + ".listing"); err != nil {
 			return nil, err
 		}
-		functions, err := goAMD64FrameListing(listing, file, pkg, source.origins)
+		var texts []gostaticstorage.TextRecord
+		if source.numericalBinding != nil {
+			texts, err = source.numericalFrameObject(object, file)
+			if err != nil {
+				return nil, err
+			}
+		}
+		functions, err := goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
 		if err != nil {
 			return nil, err
+		}
+		if source.numericalBinding != nil && !bytes.Equal(listing, source.numericalBinding.source.native.OriginalListing) {
+			return nil, goAMD64FrameContext("independent complete original numerical/frame listing differs")
+		}
+		for _, text := range texts {
+			if !bytes.Equal(functions[text.Name].code, text.Code) {
+				return nil, goAMD64FrameContext("independent complete object/listing code bytes differ")
+			}
 		}
 		if err := source.verifyObjectListing(ctx, object, functions); err != nil {
 			return nil, err
@@ -296,6 +334,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		return nil, goAMD64FrameContext("requested assembly is absent from actual complete selection")
 	}
 	source.ready = true
+	source.numericalCapturing = false
 	if err := source.Verify(ctx); err != nil {
 		return nil, err
 	}
@@ -306,6 +345,23 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 // bytes. Failure permanently revokes this observation; it grants no memory.
 func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) {
 	if source == nil || source.identity != source {
+		return goAMD64FrameContext("missing sealed actual-object observation")
+	}
+	if err := source.verifyNumericalFrameInputs(ctx); err != nil {
+		source.revokeNumericalFrame()
+		return err
+	}
+	defer func() {
+		if err := source.verifyNumericalFrameInputs(ctx); err != nil {
+			source.revokeNumericalFrame()
+			verifyErr = errors.Join(verifyErr, err)
+		}
+	}()
+	return source.verifyFrameOnly(ctx)
+}
+
+func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyErr error) {
+	if source == nil {
 		return goAMD64FrameContext("missing sealed actual-object observation")
 	}
 	source.mu.Lock()
@@ -435,12 +491,22 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 	if err := source.verifyDownloadedOrigin(); err != nil {
 		return nil, err
 	}
+	// Capture has not published the source and holds no Frame lock. Verify's
+	// existing locked command path is guarded outside the entire round instead.
+	if source.numericalCapturing {
+		if err := source.numericalBinding.verify(); err != nil {
+			return nil, err
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	data, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
-	// Cancellation may race the original-source read or command construction;
-	// preserve its cause even when the lower command rejects an expired context.
-	return data, errors.Join(err, ctx.Err(), source.verifyDownloadedOrigin())
+	output, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	if source.numericalCapturing {
+		err = errors.Join(err, source.numericalBinding.verify())
+	}
+	// Preserve both independent origins and cancellation when commands race
+	// revocation. Neither observation grants the other's source permission.
+	return output, errors.Join(err, ctx.Err(), source.verifyDownloadedOrigin())
 }
 
 func goAMD64FrameRead(name string) (_ []byte, readErr error) {
@@ -992,14 +1058,35 @@ var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) STEXT nosplit(?: asm)? size=
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
 func goAMD64FrameListing(listing []byte, file *File, pkg GoPackage, origins map[string]int) (map[string]goAMD64FrameFunction, error) {
+	return goAMD64FrameListingWithNumericalObject(listing, file, pkg, origins, nil)
+}
+
+func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord) (map[string]goAMD64FrameFunction, error) {
 	functions := make(map[string]goAMD64FrameFunction)
 	scanner := bufio.NewScanner(bytes.NewReader(listing))
 	scanner.Buffer(nil, 4<<20)
 	name := ""
 	var expected int64
+	textIndex, relocationIndex := -1, 0
+	finishRelocations := func() error {
+		if texts != nil && textIndex >= 0 && relocationIndex != len(texts[textIndex].Relocations) {
+			return goAMD64FrameContext("missing complete original object/listing relocations")
+		}
+		return nil
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
+			if err := finishRelocations(); err != nil {
+				return nil, err
+			}
+			if texts != nil {
+				textIndex++
+				relocationIndex = 0
+				if textIndex >= len(texts) || texts[textIndex].Name != header[1] {
+					return nil, goAMD64FrameContext("reordered or foreign complete object/listing TEXT")
+				}
+			}
 			if name != "" && int64(len(functions[name].code)) != expected {
 				return nil, goAMD64FrameContext("partial native symbol bytes")
 			}
@@ -1017,6 +1104,14 @@ func goAMD64FrameListing(listing []byte, file *File, pkg GoPackage, origins map[
 			return nil, goAMD64FrameContext("native listing contains unbound/unknown symbol")
 		}
 		fn := functions[name]
+		if strings.HasPrefix(strings.TrimSpace(line), "rel ") && texts != nil {
+			relocations := texts[textIndex].Relocations
+			if relocationIndex >= len(relocations) || strings.Join(strings.Fields(line), " ") != goAMD64FrameNumericalRelocationLine(relocations[relocationIndex]) {
+				return nil, goAMD64FrameContext("foreign, duplicate or reordered actual object/listing relocation")
+			}
+			relocationIndex++
+			continue
+		}
 		if row := goAMD64FrameRow.FindStringSubmatch(line); row != nil {
 			pc, err := strconv.ParseInt(row[1], 16, 32)
 			if err != nil || pc < 0 || pc >= expected {
@@ -1060,6 +1155,12 @@ func goAMD64FrameListing(listing []byte, file *File, pkg GoPackage, origins map[
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, err
+	}
+	if err := finishRelocations(); err != nil {
+		return nil, err
+	}
+	if texts != nil && textIndex+1 != len(texts) {
+		return nil, goAMD64FrameContext("missing complete original object/listing TEXT")
 	}
 	if name == "" || int64(len(functions[name].code)) != expected || len(functions) != len(file.Funcs) {
 		return nil, goAMD64FrameContext("missing/incomplete original TEXT inventory")
