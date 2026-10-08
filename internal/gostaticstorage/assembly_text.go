@@ -70,6 +70,10 @@ func observeX86AssemblyArchive(data, builtinSource []byte, target string, source
 }
 
 func observeAssemblyArchive(data, builtinSource []byte, target string, sources []string, sdk bool) ([]TextMember, error) {
+	return observeAssemblyArchiveReferences(data, builtinSource, target, sources, sdk, nil)
+}
+
+func observeAssemblyArchiveReferences(data, builtinSource []byte, target string, sources []string, sdk bool, referenced sdkReferencedSymbols) ([]TextMember, error) {
 	builtins, err := textBuiltins(builtinSource)
 	if err != nil {
 		return nil, err
@@ -139,7 +143,7 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 				}
 			}
 		}
-		texts, err := readTextObject(body, target, flags, sdk && index != 0, builtins)
+		texts, err := readTextObjectReferences(body, target, flags, sdk && index != 0, builtins, referenced)
 		if err != nil {
 			return nil, err
 		}
@@ -181,5 +185,12 @@ type SDKReferencedArchive struct {
 // ObserveX86SDKAssemblyArchiveReferences additionally observes indexed
 // references through separately retained actual dependency archives.
 func ObserveX86SDKAssemblyArchiveReferences(data, builtinSource []byte, target string, sources []string, referenced map[string]SDKReferencedArchive) ([]TextMember, error) {
-	return ObserveX86SDKAssemblyArchive(data, builtinSource, target, sources)
+	if target != "linux/386" && target != "linux/amd64" {
+		return nil, contextError("unobserved SDK indexed-reference target")
+	}
+	symbols, err := sdkReferencedArchiveSymbols(referenced, target)
+	if err != nil {
+		return nil, err
+	}
+	return observeAssemblyArchiveReferences(data, builtinSource, target, sources, true, symbols)
 }

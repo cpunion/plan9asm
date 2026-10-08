@@ -21,6 +21,8 @@ type TextReference struct {
 	Package, Name             string
 	ABI                       uint16
 	ABIKnown                  bool
+	Kind                      uint8
+	KindKnown                 bool
 }
 
 type TextRelocation struct {
@@ -169,6 +171,10 @@ func readTextArchive(data []byte, target string, sdkCPU bool, builtins []TextRef
 }
 
 func readTextObject(data []byte, target string, flags uint32, empty bool, builtins []TextReference) ([]TextRecord, error) {
+	return readTextObjectReferences(data, target, flags, empty, builtins, nil)
+}
+
+func readTextObjectReferences(data []byte, target string, flags uint32, empty bool, builtins []TextReference, referenced sdkReferencedSymbols) ([]TextRecord, error) {
 	object, err := checkedObject(data, flags, empty)
 	if err != nil {
 		return nil, err
@@ -231,8 +237,15 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 				return ref, contextError("TEXT package/index reference out of bounds")
 			}
 			ref.Package, err = object.stringAt(block(1)[int(ref.PackageIndex)*8 : (int(ref.PackageIndex)+1)*8])
-			ref.Name = refNames[[2]uint32{ref.PackageIndex, ref.SymbolIndex}]
-			if err != nil || ref.Package == "" || ref.Name == "" {
+			if err != nil || ref.Package == "" {
+				return ref, contextError("TEXT foreign reference lacks actual package record")
+			}
+			diagnostic, present := refNames[[2]uint32{ref.PackageIndex, ref.SymbolIndex}]
+			if referenced != nil {
+				return resolveSDKIndexedReference(ref, diagnostic, present, referenced)
+			}
+			ref.Name = diagnostic
+			if !present || ref.Name == "" {
 				return ref, contextError("TEXT foreign reference lacks actual package/name record")
 			}
 			return ref, nil
