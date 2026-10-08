@@ -183,9 +183,13 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 		}
 	}
 	env := fixtureEnv(t, runtime.GOOS+"/"+runtime.GOARCH)
-	config := run(t, binary, dir, env, "list", "-deps", "-export", "-f",
+	arguments := []string{"list", "-deps", "-export", "-f",
 		"{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}",
-		"cmd/internal/archive", "cmd/internal/goobj", "encoding/json", "fmt", "os")
+		"cmd/internal/archive", "cmd/internal/goobj", "encoding/json", "fmt", "os"}
+	if source == sdkTextReaderSource {
+		arguments = append(arguments, "cmd/internal/objfile")
+	}
+	config := run(t, binary, dir, env, arguments...)
 	if err := os.WriteFile(filepath.Join(dir, "importcfg"), config, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +197,9 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 	run(t, binary, dir, env, "tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go")
 	run(t, binary, dir, env, "tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o")
 	if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
-		if source != officialReaderSource {
+		if source == sdkTextReaderSource {
+			artifact = filepath.Join(artifact, "text-sdk-oracle")
+		} else if source != officialReaderSource {
 			artifact = filepath.Join(artifact, "cpu-sdk-oracle")
 		}
 		if err := os.MkdirAll(artifact, 0700); err != nil {
@@ -231,7 +237,7 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 			SourceSHA256      string
 			Commands          [][]string
 		}{dir, binary, env, inputs, digest([]byte(source)), [][]string{
-			{"list", "-deps", "-export", "-f", "{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}", "cmd/internal/archive", "cmd/internal/goobj", "encoding/json", "fmt", "os"},
+			arguments,
 			{"tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go"},
 			{"tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o"},
 		}}, "", "  ")
