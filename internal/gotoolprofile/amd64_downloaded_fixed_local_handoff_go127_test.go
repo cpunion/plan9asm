@@ -4,6 +4,7 @@ package gotoolprofile
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,19 @@ import (
 
 	"github.com/xgo-dev/plan9asm"
 )
+
+// The owned-only BindFixedLocal route must not gain downloaded authority.
+// This test-only interface lets the missing independent route fail at runtime
+// without adding a production stub or manufacturing a frame capability.
+type amd64DownloadedFixedLocalIndependentBinder interface {
+	BindDownloadedFixedLocal(
+		context.Context,
+		plan9asm.GoPackage,
+		*plan9asm.File,
+		string,
+		plan9asm.Options,
+	) (plan9asm.Options, *AMD64OriginalFixedLocalBinding, error)
+}
 
 // This generated file-proxy module is a first-party mechanism fixture, not a
 // signed external module or an external runtime. The original cache directory
@@ -134,7 +148,11 @@ func TestAMD64DownloadedFixedLocalIndependentObjectHandoff(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("ActualObjectHandoff", func(t *testing.T) {
-		bound, binding, err := observed.BindFixedLocal(ctx, pkg, file, "value_amd64.s", options)
+		handoff, exists := any(observed).(amd64DownloadedFixedLocalIndependentBinder)
+		if !exists {
+			t.Fatal("real original Go numeric frame compiled, but the separate BindDownloadedFixedLocal object handoff route is unimplemented")
+		}
+		bound, binding, err := handoff.BindDownloadedFixedLocal(ctx, pkg, file, "value_amd64.s", options)
 		if binding != nil {
 			defer func() {
 				if err := binding.Close(); err != nil {
