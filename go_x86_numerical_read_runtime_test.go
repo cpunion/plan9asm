@@ -28,8 +28,13 @@ func numericalRuntimeC(cases []numericalExecutionCase, arch string) string {
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
-_Alignas(4096) unsigned char mutable[4096] __asm__("example.invalid/numericalfixture.Mutable");
-_Alignas(4096) unsigned char cpu[4096] __asm__("internal/cpu.X86");
+#ifdef __APPLE__
+#define NATIVE_SYMBOL(name) "_" name
+#else
+#define NATIVE_SYMBOL(name) name
+#endif
+_Alignas(4096) unsigned char mutable[4096] __asm__(NATIVE_SYMBOL("example.invalid/numericalfixture.Mutable"));
+_Alignas(4096) unsigned char cpu[4096] __asm__(NATIVE_SYMBOL("internal/cpu.X86"));
 static uint64_t mask(unsigned n) {
  if(n==8) return UINT64_MAX;
  return (UINT64_C(1)<<(n*8))-1;
