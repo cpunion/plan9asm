@@ -124,14 +124,44 @@ func TestGoX86SDKASMDataLiveSealedInputs(t *testing.T) {
 		{"environment", func(s *GoX86SDKASMDataSource) { s.request.Environment = append(s.request.Environment, "GOFLAGS=-N") }},
 		{"source selection", func(s *GoX86SDKASMDataSource) { s.guard.selection.GoFiles = s.guard.selection.GoFiles[:1] }},
 		{"member ordinal", func(s *GoX86SDKASMDataSource) { s.observation.Objects.Members[2].Ordinal++ }},
-		{"object index", func(s *GoX86SDKASMDataSource) { s.observation.Objects.Members[2].Texts[0].Index++ }},
+		{"object index", func(s *GoX86SDKASMDataSource) {
+			members := s.observation.Objects.Members
+			members[len(members)-1].Texts[0].Index++
+		}},
 		{"original ASM", func(s *GoX86SDKASMDataSource) { s.observation.ObjectInputs.Sources[0].Original[0] ^= 1 }},
-		{"expanded ASM", func(s *GoX86SDKASMDataSource) { s.observation.ObjectInputs.Sources[0].Expanded[0] ^= 1 }},
+		{"expanded ASM", func(s *GoX86SDKASMDataSource) {
+			inputs := s.observation.ObjectInputs.Sources
+			inputs[len(inputs)-1].Expanded[0] ^= 1
+		}},
 		{"original object", func(s *GoX86SDKASMDataSource) { s.observation.ObjectInputs.Sources[0].OriginalObject[0] ^= 1 }},
 		{"expanded object", func(s *GoX86SDKASMDataSource) { s.observation.ObjectInputs.Sources[0].ExpandedObject[0] ^= 1 }},
 		{"header", func(s *GoX86SDKASMDataSource) { s.observation.Header.Actual[0] ^= 1 }},
 		{"unused definition", func(s *GoX86SDKASMDataSource) { s.observation.Header.Definitions["unused_foreign"] = "17" }},
-		{"CPP event", func(s *GoX86SDKASMDataSource) { s.observation.CPP[0].Events[0].Ordinal++ }},
+		{"CPP event", func(s *GoX86SDKASMDataSource) {
+			cpp := s.observation.CPP
+			cpp[len(cpp)-1].Events[0].Ordinal++
+		}},
+		{"position physical source", func(s *GoX86SDKASMDataSource) {
+			positions := s.observation.Positions
+			positions[len(positions)-1].Tokens[0].Position.File += ".foreign"
+		}},
+		{"position logical filename", func(s *GoX86SDKASMDataSource) {
+			positions := s.observation.Positions
+			positions[len(positions)-1].Tokens[0].Position.FinalBase.File += ".foreign"
+		}},
+		{"position raw line", func(s *GoX86SDKASMDataSource) {
+			positions := s.observation.Positions
+			positions[len(positions)-1].Tokens[0].Position.Line++
+		}},
+		{"position pragma line", func(s *GoX86SDKASMDataSource) {
+			positions := s.observation.Positions
+			positions[len(positions)-1].Tokens[0].Position.Base.Line++
+		}},
+		{"position lineage", func(s *GoX86SDKASMDataSource) {
+			positions := s.observation.Positions
+			positions[len(positions)-1].Tokens[0].Position.Include++
+		}},
+		{"mapped bytes", func(s *GoX86SDKASMDataSource) { s.observation.Positions[0].Mapped += "\n" }},
 		{"ImportMap", func(s *GoX86SDKASMDataSource) { s.guard.selection.ImportMap = map[string]string{"unsafe": "foreign"} }},
 		{"export", func(s *GoX86SDKASMDataSource) { s.guard.selection.Export += ".foreign" }},
 		{"archive", func(s *GoX86SDKASMDataSource) { s.observation.ObjectInputs.Archive[0] ^= 1 }},

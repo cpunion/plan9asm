@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,10 @@ func sdkASMDataDiagnosticRetain(t *testing.T, source *GoX86SDKASMDataSource) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(folder, "sdk-data-live-diagnostic.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	name := "sdk-data-observation-inputs-" + strings.ReplaceAll(t.Name(), "/", "-") + ".json"
+	if err := os.WriteFile(filepath.Join(folder, name), raw, 0600); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -60,6 +60,7 @@ func (observer *ppGoObservation) emitSDKPosition(token ppGoToken, final *sdkCPPP
 	}
 	position := *token.position
 	position.FinalBase = *final
+	position.base = nil // The retained tape never aliases mutable reader state.
 	if err := observer.chargeToken(len(token.text) + len(position.File) + len(position.Base.File) + len(final.File)); err != nil {
 		return err
 	}
