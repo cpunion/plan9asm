@@ -25,7 +25,16 @@ func numericalSBFixture(t *testing.T, arch string) (GoPackage, GoAMD64FrameCaptu
 		t.Fatal(err)
 	}
 	goSource := []byte("package numericalfixture\nfunc Feature() byte\n")
-	assembly := "#include \"textflag.h\"\nTEXT ·Feature(SB),NOSPLIT,$0-1\nCMPB internal∕cpu·X86+64(SB),$1\nSETEQ AL\nMOVB AL,ret+0(FP)\nRET\n"
+	assembly := `#include "textflag.h"
+TEXT ·Feature(SB),NOSPLIT,$0-1
+MOVL $0,AX
+CMPB internal∕cpu·X86+64(SB),$1
+SETEQ AL
+PINSRD $0,AX,X0
+PEXTRD $0,X0,AX
+MOVB AL,ret+0(FP)
+RET
+`
 	for name, data := range map[string][]byte{
 		"go.mod":               []byte("module example.invalid/numericalfixture\ngo 1.27\n"),
 		"value.go":             goSource,
