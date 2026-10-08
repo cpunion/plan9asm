@@ -115,7 +115,8 @@ func indexedForeignArchiveFixture(t *testing.T, arch string) ([]byte, []byte, ma
 	if err := os.Mkdir(consumer, 0700); err != nil {
 		t.Fatal(err)
 	}
-	goSource := "package auxfixture\nimport \"sync/atomic\"\nvar Flag atomic.Bool\nfunc Entry()\n"
+	goSource := "package auxfixture\nimport \"sync/atomic\"\nvar Flag atomic.Bool\n" +
+		"func Store(value bool) { Flag.Store(value) }\nfunc Entry()\n"
 	assembly := "#include \"textflag.h\"\nTEXT ·Entry(SB),NOSPLIT,$0-0\nRET\n"
 	for name, source := range map[string]string{"value.go": goSource, "entry.s": assembly} {
 		if err := os.WriteFile(filepath.Join(consumer, name), []byte(source), 0600); err != nil {
