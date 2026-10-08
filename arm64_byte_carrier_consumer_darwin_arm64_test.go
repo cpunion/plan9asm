@@ -75,6 +75,11 @@ func TestOriginalCarrier(t *testing.T) {
 	if len(source.report.Calls) != 1 || len(source.report.Calls[0].SPWrites) != 1 || source.report.Calls[0].SPWrites[0].Bytes != 8 {
 		t.Fatal("original native-width same-call observation is incomplete")
 	}
+	for _, member := range source.report.Archive[1:] {
+		for _, text := range member.Texts {
+			t.Logf("actual original entry/body %s ABI%d code=%x relocations=%+v", text.Name, text.ABI, text.Code, text.Relocations)
+		}
+	}
 	pkg := mustGoPackage(t, packagePath, goSource)
 	resolve := testResolveSym(pkg.Path)
 	triple := "aarch64-apple-darwin"

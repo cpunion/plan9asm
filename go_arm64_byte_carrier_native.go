@@ -13,6 +13,32 @@ import (
 
 func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environment map[string]string) error {
 	guard := source.guard
+	// This is an observation of the actual ordinary driver namespace, not a
+	// request-controlled alias or an entry capability. Both tools use pkgPath.
+	driver, err := guard.read(filepath.Join(guard.env["GOROOT"], "src/cmd/go/internal/work/gc.go"))
+	if err != nil {
+		return err
+	}
+	const ordinaryPackageRule = `func pkgPath(a *Action) string {
+	p := a.Package
+	ppath := p.ImportPath
+	if cfg.BuildBuildmode == "plugin" {
+		ppath = pluginPath(a)
+	} else if p.Name == "main" && !p.Internal.ForceLibrary {
+		ppath = "main"
+	}
+	return ppath
+}`
+	if !bytes.Contains(driver, []byte(ordinaryPackageRule)) ||
+		!bytes.Contains(driver, []byte("defaultGcFlags := []string{\"-p\", pkgpath}")) ||
+		!bytes.Contains(driver, []byte("base.Tool(\"asm\"), \"-p\", pkgpath")) {
+		return arm64ByteCarrierContext("ordinary compiler/assembler package namespace rule differs")
+	}
+	nativePackage := source.request.PackagePath
+	if guard.selection.Name == "main" {
+		nativePackage = "main"
+	}
+	source.report.NativePackagePath = nativePackage
 	builtins, err := guard.read(filepath.Join(guard.env["GOROOT"], "src/cmd/internal/goobj/builtinlist.go"))
 	if err != nil {
 		return err
@@ -27,7 +53,7 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 	}
 	goos, _, _ := strings.Cut(source.request.Target, "/")
 	output := filepath.Join(guard.owned, "original.o")
-	arguments := []string{"tool", "asm", "-S", "-p", source.request.PackagePath,
+	arguments := []string{"tool", "asm", "-S", "-p", nativePackage,
 		"-I", source.request.Directory, "-I", filepath.Join(guard.env["GOROOT"], "pkg/include")}
 	for _, define := range GoAssemblerDefinesWithEnv(goos, "arm64", environment) {
 		arguments = append(arguments, "-D", define)
@@ -54,7 +80,7 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 	functions := make(map[string]Func)
 	for ordinal, fn := range source.file.Funcs {
 		text, prior := source.report.Standalone[ordinal], archived[ordinal]
-		name := numericalNativeName(fn.Sym, source.request.PackagePath)
+		name := numericalNativeName(fn.Sym, nativePackage)
 		if text.Name != name || text.ABI != 0 || text.Name != prior.Name || text.ABI != prior.ABI ||
 			text.Size != prior.Size || !bytes.Equal(text.Code, prior.Code) || !numericalRelocationEqual(text.Relocations, prior.Relocations) ||
 			len(text.Code)%4 != 0 || len(text.Positions) == 0 || len(prior.Positions) == 0 {
@@ -72,12 +98,12 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 		}
 	}
 	for name := range source.report.Declarations {
-		if !entries[source.request.PackagePath+"."+name] {
+		if !entries[nativePackage+"."+name] {
 			return arm64ByteCarrierContext("original complete compiler entry is missing: %s", name)
 		}
 	}
 	for _, fn := range source.file.Funcs {
-		callerName := numericalNativeName(fn.Sym, source.request.PackagePath)
+		callerName := numericalNativeName(fn.Sym, nativePackage)
 		caller := texts[callerName]
 		var calls []struct {
 			ordinal int
@@ -92,7 +118,7 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 					return arm64ByteCarrierContext("indirect/native-address call lacks a closed source target")
 				}
 				base, offset, valid := parseSBRef(instruction.Args[0].Sym)
-				name := numericalNativeName(base, source.request.PackagePath)
+				name := numericalNativeName(base, nativePackage)
 				if !valid || offset != 0 || texts[name].Name == "" {
 					return arm64ByteCarrierContext("external/offset call lacks a same-file source target")
 				}
@@ -142,7 +168,7 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 			if err != nil {
 				return err
 			}
-			declaration := source.declarations[strings.TrimPrefix(callee.Name, source.request.PackagePath+".")]
+			declaration := source.declarations[strings.TrimPrefix(callee.Name, nativePackage+".")]
 			for _, read := range reads {
 				matched := false
 				for _, field := range declaration.Frame.Params {

@@ -185,6 +185,13 @@ func TestARM64ByteCarrierActualMainPackageIdentity(t *testing.T) {
 			if len(source.report.Calls) != len(cases) {
 				t.Fatal("main source omitted an actual call")
 			}
+			if source.report.NativePackagePath != "main" || source.request.PackagePath != packagePath {
+				t.Fatal("native observation changed the original module identity")
+			}
+			arguments := source.report.Commands[len(source.report.Commands)-1].Arguments
+			if len(arguments) < 5 || arguments[0] != "tool" || arguments[1] != "asm" || arguments[3] != "-p" || arguments[4] != "main" {
+				t.Fatal("standalone namespace is not the actual ordinary driver's identity")
+			}
 			for _, call := range source.report.Calls {
 				if !strings.HasPrefix(call.Caller, "main.") || !strings.HasPrefix(call.Callee, "main.") {
 					t.Fatal("source observation reconstructed main identity from the import path")
@@ -303,6 +310,11 @@ func TestARM64ByteCarrierSourceRevocation(t *testing.T) {
 		name   string
 		mutate func(*GoARM64ByteCarrierSource) func()
 	}{
+		{"native-package-namespace", func(source *GoARM64ByteCarrierSource) func() {
+			prior := source.report.NativePackagePath
+			source.report.NativePackagePath = "main"
+			return func() { source.report.NativePackagePath = prior }
+		}},
 		{"source-request", func(source *GoARM64ByteCarrierSource) func() {
 			prior := source.request.PackagePath
 			source.request.PackagePath += "/foreign"

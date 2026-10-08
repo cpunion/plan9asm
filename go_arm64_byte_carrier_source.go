@@ -48,6 +48,7 @@ type GoARM64ByteCarrierSource struct {
 
 type arm64ByteCarrierReport struct {
 	Protocol                     string
+	NativePackagePath            string
 	Request                      GoARM64ByteCarrierCaptureRequest
 	RawSelection, RawEnvironment []byte
 	Sources                      map[string][]byte
@@ -350,7 +351,7 @@ func (source *GoARM64ByteCarrierSource) bindDeclarations() error {
 	info := &types.Info{Uses: make(map[*ast.Ident]types.Object)}
 	sizes := types.SizesFor("gc", "arm64")
 	typed, err := (&types.Config{Sizes: sizes}).Check(source.request.PackagePath, fset, syntax, info)
-	if err != nil {
+	if err != nil || typed.Name() != source.guard.selection.Name {
 		return arm64ByteCarrierContext("complete original numeric typecheck: %v", err)
 	}
 	for _, name := range typed.Scope().Names() {
