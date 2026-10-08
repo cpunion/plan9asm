@@ -43,5 +43,5 @@ func (c *amd64Ctx) lowerMaskRegisterBroadcast(op Op, ins Instr) (ok bool, termin
 	result := amd64SplatInteger(c, lanes, spec.laneBits, scalar)
 	out := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", out, lanes, spec.laneBits, result, byteWidth)
-	return true, false, c.storeVectorBytes(ins.Args[1].Reg, byteWidth, "%"+out)
+	return true, false, c.storePackedMoveOperand(ins.Args[1], byteWidth, "%"+out)
 }

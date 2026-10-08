@@ -43,7 +43,7 @@ func TestTranslateX86MaskBroadcastCompleteFormsAcrossTargets(t *testing.T) {
 		t.Run(target.name, func(t *testing.T) {
 			xyLast, zLast := 31, 31
 			if target.goarch == "386" {
-				zLast = 7
+				xyLast, zLast = 7, 7
 			}
 			var source strings.Builder
 			source.WriteString("TEXT maskbroadcastforms(SB),$0-0\n")

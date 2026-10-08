@@ -74,7 +74,7 @@ func (c *amd64Ctx) lowerPackedBlockBroadcast(op Op, ins Instr) (ok bool, termina
 		fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i%d> %s to <%d x i8>\n", cast, lanes, spec.laneBits, maskedResult, destinationBytes)
 		result = "%" + cast
 	}
-	return true, false, c.storeVectorBytes(destination.Reg, destinationBytes, result)
+	return true, false, c.storePackedMoveOperand(destination, destinationBytes, result)
 }
 
 func amd64PackedBlockXSourceHint(allowed bool) string {
