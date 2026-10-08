@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T) {
@@ -25,11 +27,52 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	if err != nil {
 		t.Fatal("certified numerical reads did not compose with complete actual local proof", err)
 	}
-	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+	numericalLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
 		if err != nil || !strings.Contains(ir, "fixed_local_native") || strings.Count(ir, "load volatile") < 22 {
 			t.Fatal("complete frozen local/read consumer lost an independent owner or native read", err)
 		}
 	})
+}
+
+func numericalLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options, check func(*testing.T, string, error)) {
+	t.Helper()
+	for _, api := range []string{"text", "module", "context", "go-module"} {
+		t.Run(api, func(t *testing.T) {
+			if api == "text" {
+				ir, err := Translate(file, options)
+				check(t, ir, err)
+				return
+			}
+			context := llvm.NewContext()
+			defer context.Dispose()
+			var module llvm.Module
+			var err error
+			switch api {
+			case "module":
+				module, err = TranslateModule(file, options)
+			case "context":
+				module, err = TranslateModuleInContext(context, file, options)
+			case "go-module":
+				source := options.NumericalReads.source
+				data, readErr := os.ReadFile(filepath.Join(source.request.Directory, source.request.AssemblyFile))
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				result, translateErr := TranslateGoModule(pkg, string(data), GoModuleOptions{
+					Goarch: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
+					FileName: source.request.AssemblyFile, NumericalReads: options.NumericalReads,
+					ResolveSym: options.ResolveSym,
+				})
+				module, err = result.Module, translateErr
+			}
+			ir := ""
+			if !module.IsNil() {
+				ir = module.String()
+				module.Dispose()
+			}
+			check(t, ir, err)
+		})
+	}
 }
 
 func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource, context.CancelFunc) {

@@ -120,6 +120,17 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 			!reflect.DeepEqual(numericalSignatureShape(sig), declaration.signature) {
 			return Options{}, numericalSBContext("signature is not the actual source declaration: %s", name)
 		}
+		if local := sig.x86FixedLocal; local != nil {
+			original := local.numericalReads
+			if original == nil || original.source != source || original.context != ctx ||
+				original.originalTypes != pkg.Types || !numericalSameImports(pkg.Imports, original.originalImports) ||
+				local.file != actual || local.target != triple || local.context != ctx {
+				return Options{}, numericalSBContext("local capability has a foreign numerical source/declaration generation")
+			}
+			if err := local.verify(); err != nil {
+				return Options{}, err
+			}
+		}
 	}
 	options.Sigs, options.ResolveSym = sigs, nil
 	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
@@ -385,29 +396,47 @@ func freezeNumericalReadInputs(file *File, options Options) (*File, Options, err
 		return nil, Options{}, err
 	}
 	options.ResolveSym, options.NumericalReads = binding.resolve, binding
+	if err := joinNumericalReadCertificates(&frozen, options); err != nil {
+		return nil, Options{}, err
+	}
+	return &frozen, options, nil
+}
+
+// Join only an independently parsed complete sealed source. Reparse intentionally
+// drops all private certificates; neither a copied Instr nor its spelling can
+// supply the original source/ordinal/native-read identity.
+func joinNumericalReadCertificates(file *File, options Options) error {
+	binding := options.NumericalReads
+	if binding == nil {
+		return nil
+	}
+	fingerprint, err := x86CallerSourceFingerprint(file)
+	if err != nil || fingerprint != binding.file {
+		return numericalSBContext("numerical certificate join requires the whole sealed source")
+	}
 	for i, read := range binding.reads {
-		found := false
-		for f := range frozen.Funcs {
-			fn := &frozen.Funcs[f]
+		matches := 0
+		for f := range file.Funcs {
+			fn := &file.Funcs[f]
 			if binding.resolve(fn.Sym) != read.Function || read.Instruction < 0 || read.Instruction >= len(fn.Instrs) {
 				continue
 			}
 			ins := &fn.Instrs[read.Instruction]
 			if !reflect.DeepEqual(*ins, read.Original) || ins.x86NumericalRead != nil {
-				return nil, Options{}, numericalSBContext("original read ordinal/instruction differs")
+				return numericalSBContext("original read ordinal/instruction differs")
 			}
 			digest, err := fixedLocalInstructionDigest(*ins)
 			if err != nil {
-				return nil, Options{}, err
+				return err
 			}
 			ins.x86NumericalRead = &x86NumericalReadCertificate{binding, i, digest}
-			found = true
+			matches++
 		}
-		if !found {
-			return nil, Options{}, numericalSBContext("original read has no unique complete source function")
+		if matches != 1 {
+			return numericalSBContext("original read has no unique complete source function")
 		}
 	}
-	return &frozen, options, verifyNormalizedNumericalReads(&frozen, options)
+	return verifyNormalizedNumericalReads(file, options)
 }
 
 func numericalCertifiedRead(ins Instr, arch string) (numericalSBReadFact, x86NumericalSBReadForm, bool) {

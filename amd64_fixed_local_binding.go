@@ -13,15 +13,16 @@ import (
 // The public value transports only a private live observer binding. Neither
 // a declaration, a frame size nor a JSON round trip can construct this proof.
 type x86FixedLocalBinding struct {
-	source       *GoAMD64FrameSource
-	context      context.Context
-	file         [32]byte
-	assembly     string
-	target       string
-	inputs       map[string][32]byte
-	signatures   map[string]FuncSig
-	symbols      map[string]string
-	declarations map[string]goAMD64FrameDeclaration
+	source         *GoAMD64FrameSource
+	context        context.Context
+	file           [32]byte
+	assembly       string
+	target         string
+	inputs         map[string][32]byte
+	signatures     map[string]FuncSig
+	symbols        map[string]string
+	declarations   map[string]goAMD64FrameDeclaration
+	numericalReads *GoX86NumericalReadBinding
 }
 
 // BindFixedLocal binds a complete original numeric ABI0 file to its actual Go
@@ -37,6 +38,20 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 	if file == nil || options.ResolveSym == nil {
 		return Options{}, goAMD64FrameContext("fixed local binding needs complete source and symbol resolution")
 	}
+	originalOptions := options
+	numerical := options.NumericalReads
+	if numerical != nil {
+		if err := verifyNumericalReadInputs(file, options); err != nil {
+			return Options{}, err
+		}
+		source.mu.Lock()
+		joined := source.numericalBinding == numerical
+		source.mu.Unlock()
+		if !joined || ctx != numerical.context || pkg.Types != numerical.originalTypes ||
+			!numericalSameImports(pkg.Imports, numerical.originalImports) {
+			return Options{}, goAMD64FrameContext("fixed local source has a foreign numerical read owner")
+		}
+	}
 	// Never execute a caller callback while holding the observer lock. Freeze
 	// its answers before the locked full-source/declaration comparison; that
 	// comparison rejects any mutation made while resolving these names.
@@ -45,6 +60,11 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 		resolved[fn.Sym] = options.ResolveSym(fn.Sym)
 	}
 	options.ResolveSym = func(symbol string) string { return resolved[symbol] }
+	if numerical != nil {
+		// The caller has been checked; the locked observation consumes only
+		// sealed answers, without re-entering numerical/owner callbacks.
+		options.ResolveSym = numerical.resolve
+	}
 	source.mu.Lock()
 	bound, err := source.bindFixedLocalLocked(ctx, pkg, file, options)
 	source.mu.Unlock()
@@ -53,6 +73,15 @@ func (source *GoAMD64FrameSource) BindFixedLocal(ctx context.Context, pkg GoPack
 	}
 	if err := source.Verify(ctx); err != nil {
 		return Options{}, err
+	}
+	if numerical != nil {
+		if err := verifyNumericalReadInputs(file, originalOptions); err != nil {
+			return Options{}, err
+		}
+		// Bind a fresh numerical token to the independently established local
+		// capability. The frame keeps its original token; no token is mutated.
+		bound.NumericalReads = nil
+		return numerical.source.BindNumericalReads(ctx, pkg, file, bound)
 	}
 	return bound, nil
 }
@@ -100,15 +129,21 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		return Options{}, goAMD64FrameContext("fixed local binding needs actual package symbol resolution")
 	}
 	binding := &x86FixedLocalBinding{
-		source:       source,
-		context:      ctx,
-		file:         fingerprint,
-		assembly:     expanded,
-		target:       options.TargetTriple,
-		inputs:       make(map[string][32]byte, len(source.inputs)),
-		signatures:   make(map[string]FuncSig),
-		symbols:      make(map[string]string),
-		declarations: make(map[string]goAMD64FrameDeclaration),
+		source:         source,
+		context:        ctx,
+		file:           fingerprint,
+		assembly:       expanded,
+		target:         options.TargetTriple,
+		inputs:         make(map[string][32]byte, len(source.inputs)),
+		signatures:     make(map[string]FuncSig),
+		symbols:        make(map[string]string),
+		declarations:   make(map[string]goAMD64FrameDeclaration),
+		numericalReads: options.NumericalReads,
+	}
+	if options.NumericalReads != nil {
+		if err := joinNumericalReadCertificates(actual, options); err != nil {
+			return Options{}, err
+		}
 	}
 	for name, sum := range source.inputs {
 		binding.inputs[name] = sum
@@ -175,6 +210,9 @@ func freezeX86FixedLocalOptions(options Options, bindings []*x86FixedLocalBindin
 		if name, found := symbols[symbol]; found {
 			return name
 		}
+		if options.NumericalReads != nil {
+			return options.NumericalReads.resolve(symbol)
+		}
 		return symbol // No source contract admits external calls or addresses.
 	}
 	return options, nil
@@ -235,6 +273,11 @@ func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalB
 		}
 		if err := binding.verify(); err != nil {
 			return nil, err
+		}
+		if binding.numericalReads != nil && (options.NumericalReads == nil ||
+			options.NumericalReads.source != binding.numericalReads.source ||
+			options.NumericalReads.context != binding.context) {
+			return nil, goAMD64FrameContext("fixed local numerical consumer has a foreign source/context")
 		}
 		fingerprint, err := x86CallerSourceFingerprint(file)
 		if err != nil || fingerprint != binding.file || len(options.Sigs) != len(binding.signatures) {

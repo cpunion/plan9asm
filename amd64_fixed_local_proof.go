@@ -161,6 +161,10 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 }
 
 func fixedLocalInstructionShape(ins Instr) bool {
+	if ins.x86NumericalRead != nil {
+		_, valid := x86NumericalReadEffect(ins, "amd64")
+		return valid
+	}
 	for _, operand := range ins.Args {
 		if operand.Kind == OpReg && amd64VectorByteWidth(operand.Reg) != 0 {
 			index, valid := amd64VectorRegisterIndex(operand.Reg, 16)
@@ -421,6 +425,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	}
 	if ins.Op == OpJMP {
 		return nil
+	}
+	if known, err := fixedLocalNumericalReadStep(*ins, state); known {
+		return err
 	}
 	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
