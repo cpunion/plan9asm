@@ -123,8 +123,24 @@ func (fixture amd64DownloadedLLVMFixture) llvmNumerical(t *testing.T, ctx contex
 	if err := os.WriteFile(source, []byte(fmt.Sprintf(amd64DownloadedCNumericalDriver, symbol)), 0600); err != nil {
 		t.Fatal(err)
 	}
-	output, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, clang,
-		"-target", fixture.backendTriple(), object, source, "-O2", "-o", executable)
+	arguments := []string{"-target", fixture.backendTriple()}
+	if strings.HasPrefix(fixture.request.Target, "darwin/") {
+		// The real macOS SDK is a linker input, not downloaded source/frame
+		// authority. Missing tools or SDK metadata fail this required fixture.
+		sdk, stderr, err := RunBounded(ctx, directory, fixture.request.Environment,
+			"/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path")
+		root := strings.TrimSpace(string(sdk))
+		if err != nil || len(stderr) != 0 || !filepath.IsAbs(root) {
+			t.Fatalf("required actual macOS linker SDK: %v; %s%s", err, sdk, stderr)
+		}
+		info, err := os.Stat(root)
+		if err != nil || !info.IsDir() {
+			t.Fatal("required actual macOS SDK directory", err)
+		}
+		arguments = append(arguments, "-isysroot", root)
+	}
+	arguments = append(arguments, object, source, "-O2", "-o", executable)
+	output, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, clang, arguments...)
 	if err != nil || len(stderr) != 0 {
 		t.Fatalf("LLVM22 actual downloaded numerical link: %v; %s%s", err, output, stderr)
 	}
