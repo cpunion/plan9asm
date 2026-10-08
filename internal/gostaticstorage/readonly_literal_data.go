@@ -33,8 +33,18 @@ func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]Read
 	if err != nil {
 		return nil, err
 	}
-	var images []ReadonlyLiteralDataImage
 	var total int64
+	// Preflight the whole allocation, including unwritten zero tails, before
+	// creating any image. Sparse P bytes alone are not the initialized extent.
+	for _, source := range observation.Sources {
+		for _, layout := range source.ExpandedLayouts {
+			total += int64(layout.Definition.Size)
+			if layout.Definition.Size > archiveLimit || total > archiveLimit {
+				return nil, contextError("readonly literal DATA complete initializer bytes exceed the existing object bound")
+			}
+		}
+	}
+	var images []ReadonlyLiteralDataImage
 	for ordinal, source := range observation.Sources {
 		member := observation.Members[ordinal+2]
 		if member.Ordinal != ordinal+2 || member.Name != members[ordinal] || !bytes.Equal(member.NameBytes, []byte(member.Name)) ||
@@ -76,10 +86,6 @@ func ReadonlyLiteralDataInitializers(observation *SDKASMDataObservation) ([]Read
 			}
 			if layout.DeclaredSize < 0 || layout.DeclaredSize > archiveLimit || definition.Size > archiveLimit || len(definition.Data) > int(definition.Size) {
 				return nil, contextError("readonly literal DATA written bytes exceed its actual object extent")
-			}
-			total += int64(definition.Size)
-			if total > archiveLimit {
-				return nil, contextError("readonly literal DATA complete initializer bytes exceed the existing object bound")
 			}
 			initial := make([]byte, definition.Size)
 			end, previous, expectedSize := int64(0), -1, layout.DeclaredSize

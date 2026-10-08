@@ -22,9 +22,14 @@ import (
 // Complete source/header/CPP/object observation must close before the new
 // initializer factory is asked to establish its independent role.
 func TestGoX86SDKReadonlyLiteralDataActualSources(t *testing.T) {
-	for _, pkg := range []string{"hash/crc32", "internal/chacha8rand"} {
-		t.Run(pkg, func(t *testing.T) {
-			ctx, request := sdkASMDataRequest(t, "amd64", pkg)
+	for _, selected := range []struct{ arch, pkg string }{
+		{"amd64", "hash/crc32"},
+		{"amd64", "internal/chacha8rand"},
+		{"386", "internal/runtime/maps"},
+	} {
+		t.Run(selected.pkg+"/"+selected.arch, func(t *testing.T) {
+			pkg := selected.pkg
+			ctx, request := sdkASMDataRequest(t, selected.arch, pkg)
 			source, err := CaptureGoX86SDKASMDataSource(ctx, request)
 			if err != nil {
 				t.Fatal("actual complete SDK observation precondition", err)
@@ -194,11 +199,11 @@ func TestGoX86SDKReadonlyLiteralDataSourceAndOwnerMutations(t *testing.T) {
 }
 
 func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
+	ctx, source, _ := readonlyLiteralCapture(t)
 	for _, route := range []string{"original", "verification"} {
 		for _, method := range []string{"Err", "Deadline", "Done"} {
 			for _, api := range []string{"Verify", "Readback", "CheckReadback", "Close"} {
 				t.Run(route+"/"+method+"/"+api, func(t *testing.T) {
-					ctx, source, _ := readonlyLiteralCapture(t)
 					callback := &sdkASMDataReentrantContext{Context: ctx, method: method}
 					captureContext := ctx
 					if route == "original" {
@@ -246,10 +251,10 @@ func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
 }
 
 func TestGoX86SDKReadonlyLiteralDataOriginalDeadlineAndCancellation(t *testing.T) {
+	ctx, source, _ := readonlyLiteralCapture(t)
 	for _, change := range []string{"earlier", "later", "lost", "cancel", "expired"} {
 		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
 			t.Run(change+"/"+api, func(t *testing.T) {
-				ctx, source, _ := readonlyLiteralCapture(t)
 				original, cancel := context.WithCancel(ctx)
 				defer cancel()
 				mutable := &sdkASMDataReentrantContext{Context: original}

@@ -167,3 +167,36 @@ func TestReadonlyLiteralDataAggregateZeroTailBudget(t *testing.T) {
 		t.Fatal("per-global zero tails bypassed the aggregate initializer byte bound", err)
 	}
 }
+
+func TestReadonlyLiteralDataDefinitionRoleNegatives(t *testing.T) {
+	for name, mutate := range map[string]func(*ASMDataDefinition){
+		"named-link-visible":      func(d *ASMDataDefinition) { d.ABI = 0 },
+		"hashed64":                func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed64 },
+		"hashed":                  func(d *ASMDataDefinition) { d.Namespace = TextSymbolHashed },
+		"nonpkg-definition":       func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgDefinition },
+		"nonpkg-reference":        func(d *ASMDataDefinition) { d.Namespace = TextSymbolNonpkgReference },
+		"FIPS-not-literal-role":   func(d *ASMDataDefinition) { d.Kind = 4 },
+		"mutable-NOPTR":           func(d *ASMDataDefinition) { d.Kind = 5 },
+		"mutable-DATA":            func(d *ASMDataDefinition) { d.Kind = 7 },
+		"BSS":                     func(d *ASMDataDefinition) { d.Kind = 9 },
+		"TLSBSS":                  func(d *ASMDataDefinition) { d.Kind = 11 },
+		"DUPok":                   func(d *ASMDataDefinition) { d.Flags = 1 },
+		"unknown-flags":           func(d *ASMDataDefinition) { d.Flags = 128 },
+		"other-role-flags":        func(d *ASMDataDefinition) { d.Flags2 = 1 },
+		"hash-cannot-select-body": func(d *ASMDataDefinition) { d.Hash = []byte("samehash") },
+		"written-beyond-size":     func(d *ASMDataDefinition) { d.Size = 1 },
+		"size-beyond-budget":      func(d *ASMDataDefinition) { d.Size = archiveLimit + 1 },
+		"address-relocation":      func(d *ASMDataDefinition) { d.Relocations = []TextRelocation{{Offset: 0, Size: 1, Type: 1}} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			observation := readonlyLiteralClone(t, readonlyLiteralModel())
+			for _, member := range []*ASMDataMember{&observation.Members[2], &observation.Sources[0].Original, &observation.Sources[0].Expanded} {
+				mutate(&member.Definitions[0])
+			}
+			mutate(&observation.Sources[0].ExpandedLayouts[0].Definition)
+			if _, err := ReadonlyLiteralDataInitializers(observation); !errors.Is(err, ErrContext) {
+				t.Fatal("whole-object agreement borrowed a different DATA role", err)
+			}
+		})
+	}
+}
