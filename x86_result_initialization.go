@@ -94,9 +94,10 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 			}
 			owned[offset], initial.fp[offset] = true, slot.Type != Ptr
 		}
-		if !scalarViews && slot.Type == Ptr {
-			// The private scalar-view query observes numerical bytes only.
-			// It must not inherit this public opaque-identity domain.
+		if slot.Type == Ptr {
+			// Both observers may transport an incoming opaque identity while
+			// proving an independent numerical result. Neither marks these
+			// bytes numerical or infers initialized pointee/native storage.
 			initial.pointerFP[slot.Offset] = true
 		}
 	}
@@ -401,6 +402,12 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	// cmd/asm's MOVD alias has the complete MOVQ operand/effect grammar,
+	// including its mode32 GP restriction. Change only this local dispatch
+	// copy; the original source and any native certificates stay untouched.
+	if ins.Op == "MOVD" {
+		ins.Op = "MOVQ"
+	}
 	if accepted, recognized := x86ResultScalarLaneStep(ins, state, owned, resultOffset, arch); recognized {
 		return accepted
 	}

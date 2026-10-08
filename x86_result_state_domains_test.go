@@ -1,7 +1,6 @@
 package plan9asm
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 )
@@ -18,8 +17,8 @@ func TestX86ABI0ResultInitializationPrivateScalarPointerDomain(t *testing.T) {
 				if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, arch); err != nil {
 					t.Fatalf("public opaque identity observation: %v", err)
 				}
-				if err := checkX86ScalarFPResultInitialization(file.Funcs[0], sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatalf("private numerical views inherited pointer authority: %v", err)
+				if err := checkX86ScalarFPResultInitialization(file.Funcs[0], sig, arch); err != nil {
+					t.Fatalf("opaque transport does not consume numerical pointer bytes: %v", err)
 				}
 			})
 		}
