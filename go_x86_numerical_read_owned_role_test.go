@@ -1,0 +1,171 @@
+//go:build go1.27
+
+package plan9asm
+
+import (
+	"archive/zip"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// The proxy contains only generated first-party fixture code. Actual Go
+// download/extraction and go list, not invented selection JSON, select its role.
+func numericalCachedFixture(t *testing.T, assembly bool) GoX86NumericalReadCaptureRequest {
+	t.Helper()
+	pkg, template, _, _ := numericalSBFixture(t, "amd64")
+	proxy, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		// This exact cache was freshly allocated by this fixture. Go makes
+		// extracted module directories read-only; restore only our own tree.
+		if err := filepath.WalkDir(cache, func(name string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return os.Chmod(name, 0700)
+			}
+			return nil
+		}); err != nil {
+			t.Error(err)
+		}
+	})
+	version := "v1.0.0"
+	goSource := "package numericalfixture\nvar Mutable [32]byte\n"
+	files := map[string][]byte{
+		"go.mod": []byte("module " + pkg.Path + "\ngo 1.27\n"), "value.go": []byte(goSource),
+	}
+	if assembly {
+		version = "v1.0.1"
+		files["value.go"] = append(files["value.go"], []byte("func Feature() byte\n")...)
+		files[template.AssemblyFile], err = os.ReadFile(filepath.Join(template.Directory, template.AssemblyFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	for _, name := range []string{"go.mod", "value.go", template.AssemblyFile} {
+		data, exists := files[name]
+		if !exists {
+			continue
+		}
+		member, err := writer.Create(pkg.Path + "@" + version + "/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := member.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	versions := filepath.Join(proxy, filepath.FromSlash(pkg.Path), "@v")
+	if err := os.MkdirAll(versions, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for suffix, data := range map[string][]byte{
+		".mod": files["go.mod"], ".zip": archive.Bytes(),
+		".info": []byte(`{"Version":"` + version + `","Time":"2026-01-01T00:00:00Z"}`),
+	} {
+		if err := os.WriteFile(filepath.Join(versions, version+suffix), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var environment []string
+	for _, pair := range template.Environment {
+		key, _, _ := strings.Cut(pair, "=")
+		if key != "GOMODCACHE" && key != "GOSUMDB" {
+			environment = append(environment, pair)
+		}
+	}
+	environment = append(environment, "GOMODCACHE="+cache, "GOSUMDB=off")
+	downloadEnvironment := append([]string(nil), environment...)
+	for index, pair := range downloadEnvironment {
+		if strings.HasPrefix(pair, "GOPROXY=") {
+			downloadEnvironment[index] = "GOPROXY=" + (&url.URL{Scheme: "file", Path: filepath.ToSlash(proxy)}).String()
+		}
+	}
+	run := func(directory string, env []string, arguments ...string) []byte {
+		t.Helper()
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		command := exec.CommandContext(ctx, template.GoBinary, arguments...)
+		command.Dir, command.Env = directory, env
+		output, err := runtimeOracleCombinedOutput(ctx, command)
+		if err != nil {
+			t.Fatalf("actual first-party cache fixture command %q: %v\n%s", arguments, err, output)
+		}
+		t.Logf("ACTUAL_FIRST_PARTY_CACHE_COMMAND directory=%q binary=%q argv=%q stdout=%q", directory, template.GoBinary, arguments, output)
+		return output
+	}
+	data := run(template.Directory, downloadEnvironment, "mod", "download", "-json", pkg.Path+"@"+version)
+	var downloaded struct{ Path, Version, Dir, Error string }
+	if err := json.Unmarshal(data, &downloaded); err != nil || downloaded.Error != "" ||
+		downloaded.Path != pkg.Path || downloaded.Version != version || downloaded.Dir == "" {
+		t.Fatal("actual first-party Go download did not select exact original cache source", err)
+	}
+	selection := run(downloaded.Dir, environment, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	var selected goAMD64FrameSelection
+	if err := json.Unmarshal(selection, &selected); err != nil || selected.Dir != downloaded.Dir ||
+		selected.Module == nil || !selected.Module.Main || selected.Module.Version != "" || selected.Module.Dir != downloaded.Dir {
+		t.Fatal("real cached-CWD Main=true/empty-version precondition differs", err)
+	}
+	return GoX86NumericalReadCaptureRequest{GoBinary: template.GoBinary, Directory: downloaded.Dir, PackagePath: pkg.Path,
+		AssemblyFile: template.AssemblyFile, Target: template.Target, Environment: environment}
+}
+
+func TestGoX86NumericalSBReadCachedSourceCannotAcquireOwnedRole(t *testing.T) {
+	t.Run("ordinary data owner", func(t *testing.T) {
+		request := numericalCachedFixture(t, false)
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
+			GoBinary: request.GoBinary, Directory: request.Directory, PackagePath: request.PackagePath,
+			Target: request.Target, Environment: request.Environment,
+			Variables: []GoNumericalStorageReference{{PackagePath: request.PackagePath, Name: "Mutable"}},
+		})
+		if owner != nil {
+			owner.Close()
+		}
+		if owner != nil || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("downloaded cache acquired an ordinary owned storage role", err)
+		}
+	})
+	t.Run("numerical original source", func(t *testing.T) {
+		request := numericalCachedFixture(t, true)
+		ctx, cancel := runtimeOracleStageContext(t)
+		defer cancel()
+		owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
+			GoBinary: request.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu"),
+			PackagePath: "internal/cpu", Target: request.Target, Environment: request.Environment, SDKCPU: true,
+			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}},
+		})
+		if err != nil {
+			t.Fatal("separate actual SDK numerical owner precondition", err)
+		}
+		defer owner.Close()
+		request.Owners = []*GoNumericalStorageOwner{owner}
+		source, err := CaptureGoX86NumericalReadSource(ctx, request)
+		if source != nil {
+			source.Close()
+		}
+		if source != nil || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("downloaded cache acquired an owned numerical original source role", err)
+		}
+	})
+}
