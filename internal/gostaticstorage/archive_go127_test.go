@@ -205,6 +205,8 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 			artifact = filepath.Join(artifact, "aux-sdk-oracle")
 		} else if source == sdkIndexedCountsReaderSource {
 			artifact = filepath.Join(artifact, "indexed-counts-sdk-oracle")
+		} else if source == sdkASMDataReaderSource {
+			artifact = filepath.Join(artifact, "asm-data-sdk-oracle")
 		} else if source != officialReaderSource {
 			artifact = filepath.Join(artifact, "cpu-sdk-oracle")
 		}
