@@ -57,6 +57,15 @@ checks pass. Independent full source/tool/raw/owner readback agrees. These are
 affected scopes, not the complete suite or new external-library certificates.
 Diagnostic phase events are uploaded separately from corpus reports.
 
+The affected publication scope is repeated at frozen `00ff1d5f`: current Go
+ordinary/race each pass the same 373 nodes, and Go 1.20 passes all 70 roots and
+198 children in its actual inventory, with no failure, skip or incomplete node.
+The preceding Go 1.20 run retains a real long-TempDir-name fixture failure;
+bounded subtest labels repair the fixture without changing its CLI assertions.
+Independent full-source/tool/list/raw/owner readers close all three runs. A
+separate immutable `00ff1d5f` checkout now runs the exhaustive ordinary
+corpus-driver module owner; that live run is not yet a completion certificate.
+
 ## Integrated rule-class repairs
 
 The predecessor already integrates shared GP/SIMD, scalar-lane, AES, CMOV,
