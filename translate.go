@@ -166,6 +166,11 @@ func (m X87Mode) valid() bool {
 type Options struct {
 	TargetTriple string
 
+	// NumericalReads is an opaque live source/object/typed-storage binding.
+	// Only GoX86NumericalReadSource.BindNumericalReads can construct it. It
+	// authorizes its exact scalar reads, never SB addresses, writes or pointers.
+	NumericalReads *GoX86NumericalReadBinding
+
 	// X86TailGroups identifies closed, assembly-only continuation groups. Their
 	// helpers have no callable Go/native entry: the caller must establish that
 	// their addresses are used only for jumps within the group's root. The

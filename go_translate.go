@@ -50,6 +50,7 @@ type GoModuleOptions struct {
 	WASMABI        WASMABI
 	X87Mode        X87Mode
 	AnnotateSource bool
+	NumericalReads *GoX86NumericalReadBinding
 
 	ResolveSym func(sym string) string
 	KeepFunc   func(textSym, resolved string) bool

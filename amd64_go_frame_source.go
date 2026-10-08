@@ -611,6 +611,12 @@ func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
 // The numeric-only wrapper is retained for fixed-local consumers. Expanding
 // capture's observation domain must not expand that consumer's admission.
 func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly bool) (map[string]goAMD64FrameDeclaration, error) {
+	return source.typedDeclarationsForArch(pkg, numericOnly, "amd64")
+}
+
+// The numerical SB binding also observes 386 declarations. This helper only
+// rechecks language/ABI0 identity; it does not extend the AMD64 frame factory.
+func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numericOnly bool, arch string) (map[string]goAMD64FrameDeclaration, error) {
 	fset := token.NewFileSet()
 	var syntax []*ast.File
 	var compiled []string
@@ -660,7 +666,7 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 	if !reflect.DeepEqual(compiled, actual) {
 		return nil, goAMD64FrameContext("effective/generated compiled source mapping is unbound")
 	}
-	sizes := types.SizesFor("gc", "amd64")
+	sizes := types.SizesFor("gc", arch)
 	actualImporter := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
 		if target, mapped := source.selection.ImportMap[path]; mapped {
 			path = target
@@ -769,8 +775,8 @@ func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly b
 		if language.String() != priorLanguage.String() {
 			return nil, goAMD64FrameContext("actual language type/pointee/field identity mismatch: %s", name)
 		}
-		actual, err := DeriveGoFuncABI0Signature(pkg.Path+"."+name, fn, "amd64", sizes)
-		prior, priorErr := DeriveGoFuncABI0Signature(pkg.Path+"."+name, previous, "amd64", sizes)
+		actual, err := DeriveGoFuncABI0Signature(pkg.Path+"."+name, fn, arch, sizes)
+		prior, priorErr := DeriveGoFuncABI0Signature(pkg.Path+"."+name, previous, arch, sizes)
 		if err != nil || priorErr != nil || !reflect.DeepEqual(actual, prior) {
 			return nil, goAMD64FrameContext("actual typed declaration/layout mismatch: %s", name)
 		}
