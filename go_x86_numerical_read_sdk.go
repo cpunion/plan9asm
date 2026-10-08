@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -24,14 +25,16 @@ const (
 // This is input/object observation, not an instruction certificate. It cannot
 // create a numerical source by deserialization, Standard, or a matching hash.
 type numericalSBSDKObservation struct {
-	Graph          []byte
-	Archive        []byte
-	ArchiveMembers []gostaticstorage.TextMember
-	Imports        map[string]goAMD64FrameSelection
-	Inputs         map[string][32]byte
-	origin         *GoX86NumericalReadSource
-	seal           [32]byte
-	closed         bool
+	Graph           []byte
+	Archive         []byte
+	ArchiveMembers  []gostaticstorage.TextMember
+	Imports         map[string]goAMD64FrameSelection
+	Inputs          map[string][32]byte
+	origin          *GoX86NumericalReadSource
+	seal            [32]byte
+	closed          bool
+	context         context.Context
+	originalContext context.Context
 }
 
 // CaptureGoX86SDKNumericalReadSource is an explicit SDK source entry point.
@@ -124,7 +127,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 		inputs[name] = digest
 	}
 	source.sdk = &numericalSBSDKObservation{Graph: graph, Archive: archive, ArchiveMembers: members,
-		Imports: imports, Inputs: inputs, origin: source}
+		Imports: imports, Inputs: inputs, origin: source, context: ctx, originalContext: ctx}
 	source.sdk.seal, err = source.sdkDigest()
 	if err != nil {
 		return err
@@ -134,13 +137,14 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 
 func (source *GoX86NumericalReadSource) sdkDigest() ([32]byte, error) {
 	raw, err := json.Marshal(struct {
-		Request   GoX86NumericalReadCaptureRequest
-		Role      numericalSBSourceRole
-		Selection goAMD64FrameSelection
-		Env       map[string]string
-		Entries   []string
-		SDK       *numericalSBSDKObservation
-	}{source.request, source.role, source.guard.selection, source.guard.env, source.guard.entries, source.sdk})
+		Request      GoX86NumericalReadCaptureRequest
+		GuardRequest GoAMD64FrameCaptureRequest
+		Role         numericalSBSourceRole
+		Selection    goAMD64FrameSelection
+		Env          map[string]string
+		Entries      []string
+		SDK          *numericalSBSDKObservation
+	}{source.request, source.guard.request, source.role, source.guard.selection, source.guard.env, source.guard.entries, source.sdk})
 	return sha256.Sum256(raw), err
 }
 
@@ -148,6 +152,14 @@ func (source *GoX86NumericalReadSource) sdkDigest() ([32]byte, error) {
 // published this source. This method invokes no caller resolver or callback.
 func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context) (result error) {
 	defer func() {
+		if source != nil && source.identity == source && source.sdk != nil && !source.sdk.closed {
+			if err := source.verifySDKCaptureContext(); err != nil {
+				result = errors.Join(result, err)
+			}
+			if ctx != nil && ctx.Err() != nil {
+				result = errors.Join(result, fmt.Errorf("verify SDK source postcheck: %w", ctx.Err()))
+			}
+		}
 		if result != nil && source != nil && source.identity == source && source.sdk != nil {
 			source.sdk.closed = true
 		}
@@ -158,6 +170,12 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 	if ctx == nil || source == nil || source.identity != source || source.role != numericalSBSDKSource ||
 		source.sdk == nil || source.sdk.origin != source || source.sdk.closed {
 		return numericalSBContext("missing live independent SDK source observation")
+	}
+	if err := source.verifySDKCaptureContext(); err != nil {
+		return err
+	}
+	if source.guard == nil || source.guard.request.NumericalReads != nil {
+		return numericalSBContext("SDK source observer cannot borrow a frame/numerical token")
 	}
 	before, err := source.sdkDigest()
 	if err != nil || before != source.sdk.seal {
@@ -200,6 +218,18 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 	after, err := source.sdkDigest()
 	if err != nil || after != source.sdk.seal {
 		return numericalSBContext("SDK source/object identity changed during observation")
+	}
+	return nil
+}
+
+func (source *GoX86NumericalReadSource) verifySDKCaptureContext() error {
+	if source.sdk.context == nil || source.sdk.originalContext == nil ||
+		reflect.TypeOf(source.sdk.context) != reflect.TypeOf(source.sdk.originalContext) ||
+		!reflect.TypeOf(source.sdk.context).Comparable() || source.sdk.context != source.sdk.originalContext {
+		return numericalSBContext("SDK capture context identity changed")
+	}
+	if err := source.sdk.context.Err(); err != nil {
+		return fmt.Errorf("original SDK numerical capture context: %w", err)
 	}
 	return nil
 }
