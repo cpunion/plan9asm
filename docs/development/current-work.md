@@ -17,7 +17,7 @@ not passes. Refresh the remote state before publishing the next batch.
 
 ## Continue here
 
-Development branch: codex/pr40-streaming-cli-integration-20261008.
+Development branch: codex/pr40-final-batch-20261008.
 Latest upstream main is already an ancestor. Root alone writes ledger.
 This successor integrates these test-first rule-class repairs:
 
@@ -88,6 +88,14 @@ historical SDK scopes pass; this is not a current-head full-suite certificate.
 The mode32 VPEXTRQ native width requires its own original-encoder check; an
 object pass alone is not a numerical proof.
 
+Both x86 result observers now transport incoming opaque pointer identities
+without marking their bytes numerical or granting initialized pointee/native
+storage. MOVD consumes its existing MOVQ word-alias grammar through a local
+dispatch copy. The focused objects, numerical/canary runtime and strict negative
+controls pass at their own frozen source. Original crc32 now passes its former
+MOVQ import check but still fails at a CPU-feature SB memory read; it is not a
+passing library.
+
 Normal sharded-ledger operations now stream: startup/status, active-batch
 checkpoint lookup, bounded retries, publication and sharded report transfer.
 They still validate every record through EOF, counts, range continuity and
@@ -98,8 +106,34 @@ persists a fair queue marker independently of the two index cursors.
 Superseded-version checks likewise retain only requested replacement keys.
 Explicit monolithic legacy JSON/gzip imports and full-report reference helpers
 remain separate compatibility paths, not bounded streaming interfaces.
-Run the combined command-package gates on the clean integrated head before
-publishing; earlier component runs do not certify that successor.
+The frozen streaming integration f53ef7dd passes the complete Discovery package
+(235 root/subtests) and the affected superseded/progress controls (49), separately
+in ordinary and race runs, plus both packages' vet/build and committed-ledger
+readback. Its initial canonical-path oracle failure is retained; explicit
+successful/corrupt aliases now use the actual physical source path. These tests
+do not certify a later successor or advance assembly-ledger statuses.
+
+The official AES baseline now records its unbound SP/BP memory operands as
+Context on all eight SDKs. Independent before/after form reports isolate the
+same three changed shapes, while actual Go bytes and certified native-memory
+positive controls retain support. Encoder/grammar/runtime counts and historical
+exceptions are unchanged; this is a storage-proof correction, not an ISA or
+non-target-architecture exclusion.
+
+The next fork batch adds an exact original standard-prefix module versus
+stock-SDK namespace refusal path. Keep retained complete portable command output,
+independently recomputed hashes, exact module/source/profile/argv roles, and the
+valid sibling's five-target object obligations. Generic ambiguity, unknown
+tools, extra diagnostics and missing evidence remain failures. This refusal is
+source N/A for its exact package/profile, not an instruction pass or whole-module
+skip. Its first one-target producer passed; the expanded five-target producer
+timed out during native linking and remains incomplete, not a passing scope.
+Obtain the final component's actual terminal status before reporting success.
+
+The focused historical scalar list hit its 20-minute pre-test link limit, with
+zero attempted tests; plain tests never started. Keep its incomplete/failed
+receipt and unresolved owned-child state, not a compatibility pass. Do not
+borrow the current-SDK component's 352 passes or repeat unlimited local links.
 
 Obtain terminal family owners and independent physical readbacks. Freeze the
 clean combined successor and run the complete
