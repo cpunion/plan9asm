@@ -10,9 +10,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 )
 
 // This exact fixture is a required Linux/amd64 CI counterpart to numerical
@@ -124,27 +127,110 @@ func (fixture amd64DownloadedLLVMFixture) llvmNumerical(t *testing.T, ctx contex
 		t.Fatal(err)
 	}
 	arguments := []string{"-target", fixture.backendTriple()}
+	var macInputs *amd64DownloadedMacLinkInputs
 	if strings.HasPrefix(fixture.request.Target, "darwin/") {
-		// The real macOS SDK is a linker input, not downloaded source/frame
-		// authority. Missing tools or SDK metadata fail this required fixture.
-		sdk, stderr, err := RunBounded(ctx, directory, fixture.request.Environment,
-			"/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path")
-		root := strings.TrimSpace(string(sdk))
-		if err != nil || len(stderr) != 0 || !filepath.IsAbs(root) {
-			t.Fatalf("required actual macOS linker SDK: %v; %s%s", err, sdk, stderr)
-		}
-		info, err := os.Stat(root)
-		if err != nil || !info.IsDir() {
-			t.Fatal("required actual macOS SDK directory", err)
-		}
-		arguments = append(arguments, "-isysroot", root)
+		macInputs = fixture.macLinkInputs(t, ctx, directory)
+		// A version-specific clang default config can silently override the
+		// linker sysroot. Select every SDK input explicitly instead.
+		arguments = append(arguments, "--no-default-config", "-isysroot", macInputs.root,
+			"-nostdlib", macInputs.systemLibrary)
 	}
 	arguments = append(arguments, object, source, "-O2", "-o", executable)
+	t.Logf("ACTUAL_DOWNLOADED_LINK_ARGS binary=%q argv=%q", clang, arguments)
 	output, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, clang, arguments...)
+	if macInputs != nil {
+		macInputs.verify(t)
+	}
 	if err != nil || len(stderr) != 0 {
 		t.Fatalf("LLVM22 actual downloaded numerical link: %v; %s%s", err, output, stderr)
 	}
 	fixture.runNumerical(t, ctx, directory, executable, prefix)
+}
+
+// These retained IO observations prove only the numerical link's real inputs.
+// They never enter the downloaded factory, Source, signatures or Frame roles.
+type amd64DownloadedMacLinkInputs struct {
+	root, systemLibrary string
+	info                os.FileInfo
+	names               []string
+	files               map[string]string
+	snapshot            *gooriginalsrc.Snapshot
+}
+
+func (fixture amd64DownloadedLLVMFixture) macLinkInputs(t *testing.T, ctx context.Context, directory string) *amd64DownloadedMacLinkInputs {
+	t.Helper()
+	inputs := &amd64DownloadedMacLinkInputs{snapshot: gooriginalsrc.NewSnapshot(), files: make(map[string]string)}
+	inputs.retain(t, "/usr/bin/xcrun")
+	inputs.retain(t, "/usr/bin/ld")
+	arguments := []string{"--sdk", "macosx", "--show-sdk-path"}
+	data, stderr, err := RunBounded(ctx, directory, fixture.request.Environment, "/usr/bin/xcrun", arguments...)
+	if err != nil || len(stderr) != 0 || !bytes.HasSuffix(data, []byte("\n")) {
+		t.Fatalf("required actual macOS linker SDK: %v; %s%s", err, data, stderr)
+	}
+	requested := strings.TrimSuffix(string(data), "\n")
+	if !filepath.IsAbs(requested) || strings.ContainsAny(requested, "\r\n") {
+		t.Fatal("actual SDK path output is not one complete absolute path")
+	}
+	inputs.root, err = filepath.EvalSymlinks(requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, info, err := gooriginalsrc.ReadDirectory(inputs.root, 256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs.info = info
+	for _, entry := range entries {
+		inputs.names = append(inputs.names, entry.Name())
+	}
+	inputs.systemLibrary = inputs.retain(t, filepath.Join(inputs.root, "usr", "lib", "libSystem.tbd"))
+	for _, name := range []string{"SDKSettings.json", "SDKSettings.plist"} {
+		inputs.retain(t, filepath.Join(inputs.root, name))
+	}
+	t.Logf("ACTUAL_MAC_SDK_SELECTION argv=%q stdout_hex=%x stderr_hex=%x requested=%q physical=%q identity=%+v members=%q",
+		arguments, data, stderr, requested, inputs.root, info.Sys(), inputs.names)
+	inputs.verify(t)
+	return inputs
+}
+
+func (inputs *amd64DownloadedMacLinkInputs) retain(t *testing.T, name string) string {
+	t.Helper()
+	physical, err := filepath.EvalSymlinks(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inputs.snapshot.Retain(physical); err != nil {
+		t.Fatal(err)
+	}
+	data, err := inputs.snapshot.ReadRetained(physical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs.files[physical] = bytesSHA256(data)
+	t.Logf("ACTUAL_MAC_LINK_INPUT_BEFORE path=%q bytes=%d sha256=%s", physical, len(data), inputs.files[physical])
+	return physical
+}
+
+func (inputs *amd64DownloadedMacLinkInputs) verify(t *testing.T) {
+	t.Helper()
+	entries, info, err := gooriginalsrc.ReadDirectory(inputs.root, 256)
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if err != nil || !os.SameFile(inputs.info, info) || !reflect.DeepEqual(inputs.names, names) {
+		t.Fatal("actual macOS SDK identity or inventory changed", err)
+	}
+	if err := inputs.snapshot.Verify(); err != nil {
+		t.Fatal("actual macOS linker tool/SDK input changed", err)
+	}
+	for name, expected := range inputs.files {
+		data, err := inputs.snapshot.ReadRetained(name)
+		if err != nil || bytesSHA256(data) != expected {
+			t.Fatal("actual macOS linker input bytes changed", err)
+		}
+		t.Logf("ACTUAL_MAC_LINK_INPUT_AFTER path=%q bytes=%d sha256=%s", name, len(data), expected)
+	}
 }
 
 // Go and C independently compute two lane-wise uint32 additions. uint64 carry
