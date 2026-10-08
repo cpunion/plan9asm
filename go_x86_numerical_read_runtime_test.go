@@ -27,6 +27,36 @@ const numericalRuntimeStorageAliases = `
 #endif
 `
 
+// Consume expected hardware faults in the guest, rather than asking nested
+// emulators to core-dump or relay an unhandled signal through fork/waitpid.
+// The handler admits only a synchronous memory fault inside the exact protected
+// region. A normal return, user-raised signal or fault at another address fails.
+const numericalRuntimeFaultObservationC = `
+static uintptr_t numerical_fault_first, numerical_fault_last;
+static void numerical_fault_observe(int signal_number, siginfo_t *info, void *context) {
+    (void)context;
+    uintptr_t address = info ? (uintptr_t)info->si_addr : 0;
+    if (!info || info->si_signo != signal_number || info->si_code <= 0 ||
+        (signal_number != SIGSEGV && signal_number != SIGBUS) ||
+        address < numerical_fault_first || address >= numerical_fault_last) _exit(121);
+    _exit(123);
+}
+static void numerical_fault_begin(void *region, size_t bytes) {
+    numerical_fault_first = (uintptr_t)region;
+    numerical_fault_last = numerical_fault_first + bytes;
+    if (!bytes || numerical_fault_last < numerical_fault_first) _exit(122);
+    struct sigaction action;
+    memset(&action, 0, sizeof(action));
+    action.sa_sigaction = numerical_fault_observe;
+    action.sa_flags = SA_SIGINFO;
+    if (sigemptyset(&action.sa_mask) || sigaction(SIGSEGV, &action, 0) ||
+        sigaction(SIGBUS, &action, 0)) _exit(122);
+}
+static int numerical_fault_status(int status) {
+    return WIFEXITED(status) && WEXITSTATUS(status) == 123;
+}
+`
+
 // This carrier provides actual mutable linked numerical storage. It is not a
 // Go native-entry/ABI0 permission: the required Linux oracle separately executes
 // the original Go-linked declarations. A retargeted host run is diagnostic only.
@@ -41,10 +71,12 @@ func numericalRuntimeC(cases []numericalExecutionCase, arch string) string {
 #include <string.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 `)
 	c.WriteString(numericalRuntimeStorageAliases)
+	c.WriteString(numericalRuntimeFaultObservationC)
 	c.WriteString(`
 _Alignas(4096) unsigned char mutable[4096];
 _Alignas(4096) unsigned char cpu[4096];
@@ -116,7 +148,7 @@ static uint64_t load(unsigned n) {
 	// even when its result is overwritten. The source is inside the valid extent;
 	// PROT_NONE, not an out-of-bounds source, creates this independent fault axis.
 	if dead >= 0 {
-		fmt.Fprintf(&c, " pid_t child=fork();\n if(child<0) return 4;\n if(!child) {\n  if(mprotect(mutable,sizeof(mutable),PROT_NONE)) _exit(5);\n  (void)numerical%d(); _exit(6);\n }\n int status=0;\n if(waitpid(child,&status,0)!=child) return 7;\n if(!WIFSIGNALED(status)||(WTERMSIG(status)!=SIGSEGV&&WTERMSIG(status)!=SIGBUS)) return 8;\n", dead)
+		fmt.Fprintf(&c, " pid_t child=fork();\n if(child<0) return 4;\n if(!child) {\n  struct rlimit no_core={0,0};\n  if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);\n  numerical_fault_begin(mutable,sizeof(mutable));\n  if(mprotect(mutable,sizeof(mutable),PROT_NONE)) _exit(5);\n  (void)numerical%d(); _exit(6);\n }\n int status=0;\n if(waitpid(child,&status,0)!=child) return 7;\n if(!numerical_fault_status(status)) return 8;\n", dead)
 	}
 	c.WriteString(" return 0;\n}\n")
 	return c.String()
@@ -132,10 +164,12 @@ func numericalRuntimeWidthFaultC(cases []numericalExecutionCase, arch string) st
 #include <string.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
 `)
 	c.WriteString(numericalRuntimeStorageAliases)
+	c.WriteString(numericalRuntimeFaultObservationC)
 	c.WriteString(`
 _Alignas(4096) unsigned char carrier[8192];
 unsigned char cpu[164];
@@ -154,9 +188,9 @@ __asm__(".globl \"example.invalid/numericalfixture.Mutable\"\n"
 	c.WriteString("int main(void) {\n memset(carrier,0x83,sizeof(carrier));\n")
 	for index, test := range cases {
 		fault := test.source > 1 && !test.cpu
-		fmt.Fprintf(&c, " { pid_t child=fork();\n  if(child<0) return 1;\n  if(!child) {\n   if(mprotect(carrier+4096,4096,PROT_NONE)) _exit(2);\n   (void)numerical%d(); _exit(0);\n  }\n  int status=0;\n  if(waitpid(child,&status,0)!=child) return 3;\n", index)
+		fmt.Fprintf(&c, " { pid_t child=fork();\n  if(child<0) return 1;\n  if(!child) {\n   struct rlimit no_core={0,0};\n   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);\n   numerical_fault_begin(carrier+4096,4096);\n   if(mprotect(carrier+4096,4096,PROT_NONE)) _exit(2);\n   (void)numerical%d(); _exit(0);\n  }\n  int status=0;\n  if(waitpid(child,&status,0)!=child) return 3;\n", index)
 		if fault {
-			c.WriteString("  if(!WIFSIGNALED(status)||(WTERMSIG(status)!=SIGSEGV&&WTERMSIG(status)!=SIGBUS)) return 4;\n")
+			c.WriteString("  if(!numerical_fault_status(status)) return 4;\n")
 		} else {
 			c.WriteString("  if(!WIFEXITED(status)||WEXITSTATUS(status)) return 5;\n")
 		}

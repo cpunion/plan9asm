@@ -99,13 +99,16 @@ func numericalLocalRuntimeCommand(t *testing.T, command *exec.Cmd, sources ...st
 }
 
 func numericalLocalRuntimeC(snapshot uint64) string {
-	return numericalRuntimeStorageAliases + fmt.Sprintf(`#include <stdint.h>
+	return fmt.Sprintf(`#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
+%s
+%s
 _Alignas(4096) unsigned char cpu[4096];
 NUMERICAL_STORAGE_ALIAS("internal/cpu.X86", cpu);
 extern uint64_t numericalLocal(uint64_t,uint64_t,uint64_t,uint64_t);
@@ -138,16 +141,19 @@ int main(void) {
     pid_t child=fork();
     if(child<0) return 3;
     if(!child) {
+        struct rlimit no_core={0,0};
+        if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+        numerical_fault_begin(cpu,sizeof(cpu));
         if(mprotect(cpu,sizeof(cpu),PROT_NONE)) _exit(4);
         (void)numericalLocal(1,2,3,4);
         _exit(5);
     }
     int status=0;
     if(waitpid(child,&status,0)!=child) return 6;
-    if(!WIFSIGNALED(status)||(WTERMSIG(status)!=SIGSEGV&&WTERMSIG(status)!=SIGBUS)) return 7;
+    if(!numerical_fault_status(status)) return 7;
     return 0;
 }
-`, snapshot)
+`, numericalRuntimeStorageAliases, numericalRuntimeFaultObservationC, snapshot)
 }
 
 func numericalLocalOriginalGoRuntime(t *testing.T, pkg GoPackage, options Options, execution x86FloatCompareExecution) (uint64, []byte) {
