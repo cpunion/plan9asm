@@ -11,10 +11,8 @@ import (
 	"path/filepath"
 
 	"github.com/xgo-dev/plan9asm"
-	"golang.org/x/mod/modfile"
+	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
 	"golang.org/x/mod/module"
-	"golang.org/x/mod/sumdb/dirhash"
-	modzip "golang.org/x/mod/zip"
 )
 
 // AMD64DownloadedObservationRequest names an exact actual Go download, never
@@ -32,10 +30,9 @@ type amd64DownloadedModule struct {
 }
 
 type amd64DownloadedSources struct {
-	primary          *amd64DownloadedModule
-	modules          map[string]*amd64DownloadedModule
-	files            *amd64OriginalObservationFiles
-	cacheDirectories map[string]os.FileInfo
+	primary *amd64DownloadedModule
+	modules map[string]*amd64DownloadedModule
+	origins *gooriginalsrc.OriginSet
 }
 
 // CaptureAMD64DownloadedPackageObservation retains the original cache bytes.
@@ -90,15 +87,12 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 	if err := errors.Join(writeErr, boundary.Close()); err != nil {
 		return nil, err
 	}
-	sources := &amd64DownloadedSources{modules: make(map[string]*amd64DownloadedModule),
-		files: newAMD64OriginalObservationFiles(), cacheDirectories: make(map[string]os.FileInfo)}
-	if err := sources.retainCacheDirectory(cache); err != nil {
+	origins, err := gooriginalsrc.NewOriginSet(cache, original.GoBinary)
+	if err != nil {
 		return nil, err
 	}
-	if err := sources.files.retain(original.GoBinary); err != nil {
-		return nil, err
-	}
-	primary, err := sources.captureModule(ctx, original, request.SourceModule, request.SourceVersion, marker, cache, run)
+	sources := &amd64DownloadedSources{modules: make(map[string]*amd64DownloadedModule), origins: origins}
+	primary, err := sources.captureModule(ctx, original, request.SourceModule, request.SourceVersion, marker, run)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +136,7 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 		if pkg.Module.Replace != nil || pkg.Standard {
 			return nil, fmt.Errorf("%w: replaced/foreign dependency needs a separate exact source role", plan9asm.ErrProbeNeedsContext)
 		}
-		source, err := sources.captureModule(ctx, original, pkg.Module.Path, pkg.Module.Version, marker, cache, run)
+		source, err := sources.captureModule(ctx, original, pkg.Module.Path, pkg.Module.Version, marker, run)
 		if err != nil || !source.matches(pkg.Module, false) {
 			return nil, fmt.Errorf("downloaded dependency differs from its independently observed source: %v", err)
 		}
@@ -153,7 +147,7 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 	return sources, sources.verify()
 }
 
-func (sources *amd64DownloadedSources) captureModule(ctx context.Context, request AMD64OriginalObservationRequest, path, version, marker, cache string, run Runner) (*amd64DownloadedModule, error) {
+func (sources *amd64DownloadedSources) captureModule(ctx context.Context, request AMD64OriginalObservationRequest, path, version, marker string, run Runner) (*amd64DownloadedModule, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -162,7 +156,7 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 	}
 	key := path + "@" + version
 	if source := sources.modules[key]; source != nil {
-		return source, nil
+		return source, sources.verify()
 	}
 	if len(sources.modules) >= 64 {
 		return nil, fmt.Errorf("downloaded source module graph exceeds its explicit bound")
@@ -171,111 +165,34 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 		return nil, err
 	}
 	data, stderr, err := run(ctx, marker, request.Environment, request.GoBinary, "mod", "download", "-json", key)
-	if err != nil || len(stderr) != 0 || len(data) == 0 || len(data) > commandOutputLimit {
-		return nil, fmt.Errorf("actual exact module download failed: %v; %s", err, stderr)
+	if err != nil {
+		return nil, fmt.Errorf("actual exact module download failed: %w; %s", err, stderr)
 	}
-	var downloaded struct{ Path, Version, Dir, Zip, GoMod, Sum, GoModSum, Error string }
-	if err := json.Unmarshal(data, &downloaded); err != nil || downloaded.Error != "" || downloaded.Path != path || downloaded.Version != version {
-		return nil, fmt.Errorf("actual module download returned a different or incomplete exact identity")
+	if len(stderr) != 0 || len(data) == 0 || len(data) > commandOutputLimit {
+		return nil, fmt.Errorf("actual exact module download returned incomplete output: %s", stderr)
 	}
-	escapedPath, err := module.EscapePath(path)
+	var receipt gooriginalsrc.DownloadReceipt
+	if err := json.Unmarshal(data, &receipt); err != nil {
+		return nil, fmt.Errorf("actual module download returned malformed exact identity: %w", err)
+	}
+	original, err := sources.origins.Observe(ctx, path, version, receipt)
+	if errors.Is(err, gooriginalsrc.ErrUnclosedModuleDeclaration) {
+		return nil, fmt.Errorf("%w: %v", plan9asm.ErrProbeNeedsContext, err)
+	}
 	if err != nil {
 		return nil, err
 	}
-	escapedVersion, err := module.EscapeVersion(version)
-	if err != nil {
-		return nil, err
-	}
-	root := filepath.Join(cache, escapedPath+"@"+escapedVersion)
-	prefix := filepath.Join(cache, "cache", "download", escapedPath, "@v", escapedVersion)
-	roles := []struct{ actual, expected string }{
-		{downloaded.Dir, root}, {downloaded.Zip, prefix + ".zip"}, {downloaded.GoMod, prefix + ".mod"},
-	}
-	for _, role := range roles {
-		physical, err := filepath.EvalSymlinks(role.actual)
-		if err != nil || physical != role.expected {
-			return nil, fmt.Errorf("actual exact download escaped its canonical cache source role")
-		}
-		for directory := filepath.Dir(role.expected); ; directory = filepath.Dir(directory) {
-			if err := sources.retainCacheDirectory(directory); err != nil {
-				return nil, err
-			}
-			if directory == cache {
-				break
-			}
-			relative, err := filepath.Rel(cache, directory)
-			if err != nil || !filepath.IsLocal(relative) {
-				return nil, fmt.Errorf("downloaded cache directory role escaped its observed root")
-			}
-		}
-	}
-	if err := sources.files.directory(root, true); err != nil {
-		return nil, err
-	}
-	for _, name := range []string{prefix + ".zip", prefix + ".mod"} {
-		if err := sources.files.retain(name); err != nil {
-			return nil, err
-		}
-	}
-	if _, err := modzip.CheckZip(module.Version{Path: path, Version: version}, prefix+".zip"); err != nil {
-		return nil, fmt.Errorf("original module ZIP has an invalid complete member inventory: %w", err)
-	}
-	zipSum, err := dirhash.HashZip(prefix+".zip", dirhash.Hash1)
-	if err != nil || zipSum != downloaded.Sum {
-		return nil, fmt.Errorf("original ZIP bytes differ from actual Go download h1")
-	}
-	dirSum, err := dirhash.HashDir(root, key, dirhash.Hash1)
-	if err != nil || dirSum != zipSum {
-		return nil, fmt.Errorf("complete original cache directory differs from original ZIP h1")
-	}
-	goMod := filepath.Join(root, "go.mod")
-	if sources.files.hashes[goMod] == "" || sources.files.hashes[goMod] != sources.files.hashes[prefix+".mod"] {
-		return nil, fmt.Errorf("original ZIP go.mod differs from exact downloaded module metadata")
-	}
-	modData, err := os.ReadFile(goMod)
-	if err != nil {
-		return nil, err
-	}
-	modSum, err := dirhash.Hash1([]string{"go.mod"}, func(string) (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(modData)), nil
-	})
-	if err != nil || modSum != downloaded.GoModSum {
-		return nil, fmt.Errorf("original module metadata differs from actual Go download h1")
-	}
-	parsed, err := modfile.Parse(goMod, modData, nil)
-	if err != nil || parsed.Module == nil || parsed.Go == nil {
-		return nil, fmt.Errorf("%w: original downloaded module declaration/language is unclosed", plan9asm.ErrProbeNeedsContext)
-	}
-	source := &amd64DownloadedModule{sourceModule: path, sourceVersion: version, root: root,
-		goMod: prefix + ".mod", modulePath: parsed.Module.Mod.Path, goVersion: parsed.Go.Version}
+	source := &amd64DownloadedModule{sourceModule: original.SourceModule, sourceVersion: original.SourceVersion,
+		root: original.Root, goMod: original.GoMod, modulePath: original.ModulePath, goVersion: original.GoVersion}
 	sources.modules[key] = source
 	return source, sources.verify()
 }
 
-// Cache entries may be added by legitimate Go downloads. Keep directory
-// identities, not a global cache membership snapshot or a ledger in memory.
-func (sources *amd64DownloadedSources) retainCacheDirectory(name string) error {
-	physical, err := filepath.EvalSymlinks(name)
-	info, statErr := os.Lstat(name)
-	if err != nil || statErr != nil || physical != name || !info.IsDir() || len(sources.cacheDirectories) >= 4096 {
-		return fmt.Errorf("downloaded source cache directory is missing, redirected or over-bound")
-	}
-	if previous := sources.cacheDirectories[name]; previous != nil && !os.SameFile(previous, info) {
-		return fmt.Errorf("downloaded source cache directory identity changed during capture")
-	}
-	sources.cacheDirectories[name] = info
-	return nil
-}
-
 func (sources *amd64DownloadedSources) verify() error {
-	for name, expected := range sources.cacheDirectories {
-		physical, err := filepath.EvalSymlinks(name)
-		actual, statErr := os.Lstat(name)
-		if err != nil || statErr != nil || physical != name || !actual.IsDir() || !os.SameFile(expected, actual) {
-			return fmt.Errorf("downloaded source cache directory identity changed")
-		}
+	if sources == nil {
+		return fmt.Errorf("missing exact downloaded source observation")
 	}
-	return sources.files.verify()
+	return sources.origins.Verify()
 }
 
 func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, primary bool) bool {
