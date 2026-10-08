@@ -34,6 +34,95 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	})
 }
 
+func numericalLocalJoinedFactory(t *testing.T) (context.Context, GoPackage, *File, Options, *GoX86NumericalReadSource, *GoAMD64FrameSource) {
+	t.Helper()
+	ctx, pkg, request, file, bound, source, _ := numericalLocalFactory(t)
+	request.NumericalReads = bound.NumericalReads
+	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal("complete original frame/read producer precondition", err)
+	}
+	t.Cleanup(func() {
+		if err := frame.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	bound, err = frame.BindFixedLocal(ctx, pkg, file, bound)
+	if err != nil {
+		t.Fatal("complete independent local/read consumer precondition", err)
+	}
+	return ctx, pkg, file, bound, source, frame
+}
+
+func TestGoX86NumericalSBReadLocalCapabilityCannotBeCopiedAndRebound(t *testing.T) {
+	ctx, pkg, file, bound, source, _ := numericalLocalJoinedFactory(t)
+	var original *x86FixedLocalBinding
+	for _, sig := range bound.Sigs {
+		if sig.x86FixedLocal == nil || original != nil && original != sig.x86FixedLocal {
+			t.Fatal("fixture did not retain one complete actual local capability")
+		}
+		original = sig.x86FixedLocal
+	}
+	if original == nil {
+		t.Fatal("fixture has no actual local capability")
+	}
+	copied := *original
+	for name, sig := range bound.Sigs {
+		sig.x86FixedLocal = &copied
+		bound.Sigs[name] = sig
+	}
+	bound.NumericalReads = nil
+	changed, err := source.BindNumericalReads(ctx, pkg, file, bound)
+	if changed.NumericalReads != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("whole-value copied local capability issued a fresh numerical token", err)
+	}
+}
+
+func TestGoX86NumericalSBReadLocalCapabilityConsumerGuards(t *testing.T) {
+	for _, name := range []string{"wrong capability", "copied capability", "revoked frame", "missing local capability", "missing numerical token"} {
+		t.Run(name, func(t *testing.T) {
+			_, pkg, file, bound, _, frame := numericalLocalJoinedFactory(t)
+			switch name {
+			case "wrong capability", "copied capability", "missing local capability":
+				var replacement *x86FixedLocalBinding
+				if name == "wrong capability" {
+					replacement = &x86FixedLocalBinding{}
+				} else if name == "copied capability" {
+					for _, sig := range bound.Sigs {
+						copied := *sig.x86FixedLocal
+						replacement = &copied
+						break
+					}
+				}
+				for symbol, sig := range bound.Sigs {
+					sig.x86FixedLocal = replacement
+					bound.Sigs[symbol] = sig
+				}
+			case "revoked frame":
+				if err := frame.Close(); err != nil {
+					t.Fatal(err)
+				}
+			case "missing numerical token":
+				bound.NumericalReads = nil
+			}
+			numericalLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+				if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("changed independent capability published native local/read output", err)
+				}
+			})
+		})
+	}
+}
+
+func TestGoX86NumericalSBReadUnboundNativeLocalRemainsContext(t *testing.T) {
+	_, pkg, _, file, bound, _, _ := numericalLocalFactory(t)
+	numericalLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("numerical read token alone authorized native local frame memory", err)
+		}
+	})
+}
+
 func numericalLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options, check func(*testing.T, string, error)) {
 	t.Helper()
 	for _, api := range []string{"text", "module", "context", "go-module"} {
