@@ -36,11 +36,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	if err != nil {
 		return err
 	}
-	if source.role == numericalSBSDKSource {
-		proof.ArchiveMembers, err = gostaticstorage.ObserveX86SDKAssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
-	} else {
-		proof.ArchiveMembers, err = gostaticstorage.ObserveX86AssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
-	}
+	proof.ArchiveMembers, err = gostaticstorage.ObserveX86AssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
 	if err != nil {
 		return numericalSBContext("complete actual compiler/archive role: %v", err)
 	}
