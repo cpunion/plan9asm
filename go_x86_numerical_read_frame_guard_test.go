@@ -36,14 +36,18 @@ func numericalFrameCopies(t *testing.T, source *GoX86NumericalReadSource) ([]gos
 
 type numericalFrameReentryContext struct {
 	context.Context
+	mu         sync.Mutex
 	once       sync.Once
 	closeFrame func()
 }
 
 func (ctx *numericalFrameReentryContext) Err() error {
+	ctx.mu.Lock()
+	callback := ctx.closeFrame
+	ctx.mu.Unlock()
 	pc, _, _, valid := runtime.Caller(1)
-	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoX86NumericalReadSource).Verify") && ctx.closeFrame != nil {
-		ctx.once.Do(ctx.closeFrame)
+	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoX86NumericalReadSource).Verify") && callback != nil {
+		ctx.once.Do(callback)
 	}
 	return ctx.Context.Err()
 }
@@ -61,11 +65,13 @@ func TestGoX86NumericalSBReadFrameProducerReentryAndContextCauses(t *testing.T) 
 			t.Fatal(err)
 		}
 		defer frame.Close()
+		wrapped.mu.Lock()
 		wrapped.closeFrame = func() {
 			if err := frame.Close(); err != nil {
 				t.Error(err)
 			}
 		}
+		wrapped.mu.Unlock()
 		closed := make(chan error, 1)
 		go func() { closed <- frame.Verify(ctx) }()
 		select {

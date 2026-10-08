@@ -71,6 +71,9 @@ func reportPackages(report Report, root string) (map[string]Package, error) {
 	if report.Protocol == SDKCPUProtocol {
 		return sdkCPUPackages(report)
 	}
+	if err := ValidateOwnedSourceDirectory(root, report.Environment["GOROOT"], report.Environment["GOMODCACHE"]); err != nil {
+		return nil, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))
 	packages := make(map[string]Package)
 	for {
@@ -406,6 +409,7 @@ func ValidateReport(report Report) error {
 	}
 	if report.CommandEnvironment["GOOS"]+"/"+report.CommandEnvironment["GOARCH"] != report.Target ||
 		report.CommandEnvironment["GOCACHE"] != report.Environment["GOCACHE"] ||
+		report.CommandEnvironment["GOMODCACHE"] != report.Environment["GOMODCACHE"] ||
 		report.CommandEnvironment["GOROOT"] != "" && report.CommandEnvironment["GOROOT"] != report.Environment["GOROOT"] {
 		return contextError("actual effective command directory/target/cache role differs")
 	}

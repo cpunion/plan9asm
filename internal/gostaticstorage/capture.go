@@ -323,7 +323,7 @@ func (o *Observation) run(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 func (o *Observation) observe(ctx context.Context) error {
-	arguments := []string{"env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOCACHE", "GOOS", "GOARCH", "GOAMD64", "GOFLAGS", "GOEXPERIMENT", "CGO_ENABLED", "GOWORK"}
+	arguments := []string{"env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOCACHE", "GOMODCACHE", "GOOS", "GOARCH", "GOAMD64", "GOFLAGS", "GOEXPERIMENT", "CGO_ENABLED", "GOWORK"}
 	if o.report.Protocol == SDKCPUProtocol {
 		arguments = append(arguments, "GO386", "GOARM", "GOARM64", "GOWASM")
 	}
@@ -336,6 +336,14 @@ func (o *Observation) observe(ctx context.Context) error {
 		env["GOOS"]+"/"+env["GOARCH"] != o.request.Target || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
 		env["CGO_ENABLED"] != "0" || env["GOWORK"] != "off" || filepath.Join(env["GOROOT"], "bin", "go") != o.request.GoBinary {
 		return contextError("actual Go driver/profile/target differs")
+	}
+	if env["GOMODCACHE"] != o.report.CommandEnvironment["GOMODCACHE"] {
+		return contextError("actual Go module cache differs from the explicit command role")
+	}
+	if o.report.Protocol != SDKCPUProtocol {
+		if err := ValidateOwnedSourceDirectory(o.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {
+			return err
+		}
 	}
 	if o.report.Protocol == SDKCPUProtocol {
 		for key, expected := range sdkCPUProfile(o.request.Target) {

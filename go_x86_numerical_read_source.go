@@ -237,15 +237,19 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	if _, err := source.guard.read(source.request.GoBinary); err != nil {
 		return err
 	}
-	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE")
+	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE", "GOMODCACHE")
 	if err != nil {
 		return err
 	}
 	var env map[string]string
 	if json.Unmarshal(raw, &env) != nil || env["GOVERSION"] != "go1.27.1" || env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
 		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary || env["GOAMD64"] != "v1" ||
-		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" || env["GOCACHE"] != provided["GOCACHE"] {
+		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" ||
+		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
 		return numericalSBContext("actual SDK/tool/profile differs")
+	}
+	if err := gostaticstorage.ValidateOwnedSourceDirectory(source.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {
+		return numericalStorageFailure(ctx, "numerical original owned source role", err)
 	}
 	source.guard.env = env
 	source.rawEnvironment = append([]byte(nil), raw...)
