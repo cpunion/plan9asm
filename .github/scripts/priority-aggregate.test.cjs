@@ -46,6 +46,9 @@ if (args.includes('-discovery-progress-directory')) {
   if (process.env.FIXTURE_MODE === 'late scan') {
     fs.writeFileSync(process.env.FIXTURE_REPORTS + '/scan-status.json', '{"original":"scan"}\\n', {flag: 'wx'});
   }
+  if (process.env.FIXTURE_MODE === 'late scan directory') {
+    fs.mkdirSync(process.env.FIXTURE_REPORTS + '/scan-status.json');
+  }
   process.stdout.write('{"index_entries":12}\\n');
 } else if (args.includes('-discovery-progress-output')) {
   if (process.env.FIXTURE_MODE === 'late progress') {
@@ -84,6 +87,14 @@ for (const mode of ['late scan', 'late progress']) {
     assert.deepEqual(fs.readdirSync(reports).filter(name => name.startsWith('.status-')), []);
   });
 }
+
+test('aggregate refuses a late directory without linking inside it', (t) => {
+  const { result, invocations, reports } = verifyFixture(t, 'late scan directory');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(invocations.length, 2);
+  assert.deepEqual(fs.readdirSync(path.join(reports, 'scan-status.json')), []);
+  assert.deepEqual(fs.readdirSync(reports).filter(name => name.startsWith('.status-')), []);
+});
 
 for (const mode of ['pass', 'partial', 'invalid']) {
   test(`combined aggregate ${mode} preserves the strict exit and only audited progress`, (t) => {
