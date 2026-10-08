@@ -339,3 +339,126 @@ func TestGoX86SDKReadonlyLiteralDataNoJSONOrOtherRole(t *testing.T) {
 		t.Fatal("literal initialization replaced the original Go Variable role")
 	}
 }
+
+func TestGoX86SDKReadonlyLiteralDataExactSourceIdentity(t *testing.T) {
+	ctx, source, owner := readonlyLiteralCapture(t)
+	other, err := CaptureGoX86SDKASMDataSource(ctx, source.request)
+	if err != nil {
+		t.Fatal("second independent actual SDK source", err)
+	}
+	defer other.Close()
+	owner.source = other
+	if err := owner.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("another real same-package source replaced the exact original owner", err)
+	}
+	owner.source = source
+	if !errors.Is(owner.Verify(ctx), ErrProbeNeedsContext) || other.Verify(ctx) != nil || source.Verify(ctx) != nil {
+		t.Fatal("source restoration revived the initializer or affected the independent owners")
+	}
+	copy := reflect.New(reflect.TypeOf(source).Elem())
+	copy.Elem().Set(reflect.ValueOf(source).Elem())
+	copied := copy.Interface().(*GoX86SDKASMDataSource)
+	if owner, err := CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, copied); owner != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("whole copied real source minted a fresh initializer identity", err)
+	}
+	if err := source.Verify(ctx); err != nil {
+		t.Fatal("copied factory input revoked its original source", err)
+	}
+}
+
+func TestGoX86SDKReadonlyLiteralDataPhysicalHeaderTOCTOU(t *testing.T) {
+	ctx, source, owner := readonlyLiteralCapture(t)
+	file := filepath.Join(source.guard.owned, "go_asm.h")
+	original, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, append(original, []byte("#define initializer_foreign 7\n")...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("changed physical original compiler header preserved initialized bytes", err)
+	}
+	if err := os.WriteFile(file, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !errors.Is(owner.Verify(ctx), ErrProbeNeedsContext) {
+		t.Fatal("physical header restoration revived the initializer")
+	}
+}
+
+func TestGoX86SDKReadonlyLiteralDataCallbackCannotPublish(t *testing.T) {
+	ctx, source, _ := readonlyLiteralCapture(t)
+	for _, route := range []string{"original", "verification"} {
+		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
+			t.Run(route+"/"+api, func(t *testing.T) {
+				original := &sdkASMDataReentrantContext{Context: ctx}
+				owner, err := CaptureGoX86SDKReadonlyLiteralDataOwner(original, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer owner.Close()
+				raw, err := owner.Readback(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				callback := &sdkASMDataReentrantContext{Context: ctx, method: "Done"}
+				verification := context.Context(callback)
+				if route == "original" {
+					callback, verification = original, ctx
+					callback.method = "Done"
+				}
+				callback.callback = func() { original.shift.Store(int64(time.Minute)) }
+				callback.armed.Store(true)
+				returned, err := readonlyLiteralInvoke(t, api, owner, verification, raw)
+				if !errors.Is(err, ErrProbeNeedsContext) || len(returned) != 0 {
+					t.Fatal("caller callback published a changed original initializer generation", err)
+				}
+				original.shift.Store(0)
+				if !errors.Is(owner.Verify(ctx), ErrProbeNeedsContext) {
+					t.Fatal("callback deadline restoration revived the initializer")
+				}
+			})
+		}
+	}
+}
+
+func TestGoX86SDKReadonlyLiteralDataConcurrentSourceRevocation(t *testing.T) {
+	for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
+		t.Run(api, func(t *testing.T) {
+			ctx, source, owner := readonlyLiteralCapture(t)
+			raw, err := owner.Readback(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entered, resume := make(chan struct{}), make(chan struct{})
+			callback := &sdkASMDataReentrantContext{Context: ctx, method: "Done"}
+			callback.callback = func() { close(entered); <-resume }
+			callback.armed.Store(true)
+			finished := make(chan error, 1)
+			go func() {
+				returned, err := readonlyLiteralInvoke(t, api, owner, callback, raw)
+				if len(returned) != 0 {
+					err = errors.Join(err, errors.New("revoked source published an initializer report"))
+				}
+				finished <- err
+			}()
+			select {
+			case <-entered:
+			case <-time.After(3 * time.Second):
+				close(resume)
+				t.Fatal("source revocation control never entered caller callback")
+			}
+			closed := source.Close()
+			close(resume)
+			select {
+			case err := <-finished:
+				if closed != nil || !errors.Is(err, ErrProbeNeedsContext) || owner.ready {
+					t.Fatal("concurrent source Close published a stale initializer", err, closed)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("source Close and initializer callback synchronously deadlocked")
+			}
+		})
+	}
+}
