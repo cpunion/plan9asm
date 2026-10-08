@@ -122,6 +122,9 @@ func TestAMD64DownloadedObservationImmutableSourceAndRevocation(t *testing.T) {
 				name = prefix + ".mod"
 			case "module directory":
 				moved := request.Directory + "-moved"
+				if err := os.Chmod(filepath.Dir(request.Directory), 0700); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.Rename(request.Directory, moved); err != nil {
 					t.Fatal(err)
 				}
@@ -168,6 +171,63 @@ func TestAMD64DownloadedObservationImmutableSourceAndRevocation(t *testing.T) {
 				t.Fatal("restored bytes resurrected a revoked download observation")
 			}
 		})
+	}
+}
+
+func TestAMD64DownloadedObservationCacheRootContinuity(t *testing.T) {
+	request, path, version := amd64DownloadedObservationFixture(t, "data")
+	ctx, cancel := amd64OriginalObservationContext(t)
+	defer cancel()
+	observed, err := captureAMD64DownloadedForTest(ctx, request, path, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer observed.Close()
+	cache := originalObservationEnvironment(request.Environment, "GOMODCACHE")
+	moved, replacement := cache+"-original", cache+"-replacement"
+	if err := os.Mkdir(replacement, 0700); err != nil {
+		t.Fatal(err)
+	}
+	members, err := os.ReadDir(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Retain every module and metadata subtree inode, byte and path role. Only
+	// the actual cache root directory's identity changes at the same pathname.
+	for _, member := range members {
+		if err := os.Rename(filepath.Join(cache, member.Name()), filepath.Join(replacement, member.Name())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Rename(cache, moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, cache); err != nil {
+		t.Fatal(err)
+	}
+	// Restore the fixture-owned cache even if the current implementation fails
+	// this regression. Never remove a Go/caller-owned module subtree.
+	defer func() {
+		for _, member := range members {
+			if err := os.Rename(filepath.Join(cache, member.Name()), filepath.Join(moved, member.Name())); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+		if err := os.Remove(cache); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := os.Rename(moved, cache); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := observed.Verify(ctx); err == nil {
+			t.Error("restoring the original cache root resurrected a revoked observation")
+		}
+	}()
+	if err := observed.Verify(ctx); err == nil {
+		t.Fatal("replacement cache root preserved all module bytes/inodes but acquired the original cache role")
 	}
 }
 
