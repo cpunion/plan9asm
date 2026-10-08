@@ -441,6 +441,9 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 		return goAMD64FrameContext("actual complete declaration import graph changed: %v", err)
 	}
 	if err := ctx.Err(); err != nil {
+		if source.numericalOrigin != nil {
+			return fmt.Errorf("numerical frame verification context expired after actual commands: %w", err)
+		}
 		return errors.Join(goAMD64FrameContext("verification context expired after actual commands"), err)
 	}
 	return errors.Join(source.verifyInputs(), source.verifyDownloadedOrigin())
@@ -523,6 +526,9 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 		return nil, goAMD64FrameContext("actual command requires live context")
 	}
 	if err := ctx.Err(); err != nil {
+		if source.numericalOrigin != nil {
+			return nil, fmt.Errorf("numerical frame actual command context expired: %w", err)
+		}
 		return nil, errors.Join(goAMD64FrameContext("actual command context expired"), err)
 	}
 	if err := source.verifyDownloadedOrigin(); err != nil {
