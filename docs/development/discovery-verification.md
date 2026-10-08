@@ -825,8 +825,18 @@ shard fails. Reports are atomically published for concurrent status readers.
 CI uses `scripts/verify-discovered-library-corpus.sh --progress` on a fresh
 reports directory. One full audit produces progress, applies the strict
 completion gate, and compares the committed ledger; it does not audit the same
-reports again just to display progress. The optional CLI
+reports again just to display progress. Before any directory or file write,
+the script uses the exclusive, read-only `-discovery-progress-directory` mode
+to resolve physical aliases and reject either input ledger, its descendants
+or ancestors. Repository output must use ignored `_out/` storage; external
+output directories remain supported. The optional CLI
 `-discovery-progress-output` publishes a new `assembly-progress.json` atomically.
+It prepares and closes the complete temporary file first, then checks the
+source, scan fingerprint and committed-ledger physical inventory before linking.
+Physical record bytes stream through bounded extent-plus-one reads, not another
+semantic audit or an in-memory ledger. Changed inputs invalidate publication;
+cleanup never removes a foreign replacement. Status and progress publication
+both refuse a destination that appeared during verification, including a directory.
 Incomplete/failed candidates and ledger mismatches still exit nonzero. Malformed
 or stale reports produce no progress output. Existing outputs are not replaced;
 retain them and select a fresh report directory. A saved progress file cannot

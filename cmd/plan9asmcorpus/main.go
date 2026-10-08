@@ -143,7 +143,13 @@ func main() {
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
 	requireVerifiedAssembly := flag.Bool("require-verified-assembly-ledger", false, "require every assembly candidate to be passed or explicitly skipped by complete reports")
 	flag.Parse()
-	if *discoveryProgressDirectory != "" {
+	directoryPreflightSelected := false
+	flag.Visit(func(option *flag.Flag) {
+		if option.Name == "discovery-progress-directory" {
+			directoryPreflightSelected = true
+		}
+	})
+	if directoryPreflightSelected {
 		var modeErr error
 		flag.Visit(func(option *flag.Flag) {
 			switch option.Name {
@@ -153,8 +159,8 @@ func main() {
 			}
 		})
 		check(modeErr)
-		if *discoveryLedger == "" || *compareAssemblyLedgerPath == "" {
-			check(errors.New("-discovery-progress-directory requires both input ledger paths"))
+		if *discoveryProgressDirectory == "" || *discoveryLedger == "" || *compareAssemblyLedgerPath == "" {
+			check(errors.New("-discovery-progress-directory requires a nonempty directory and both input ledger paths"))
 		}
 		directory, err := validateDiscoveryProgressDirectory(*repoRoot, *discoveryLedger, *compareAssemblyLedgerPath, *discoveryProgressDirectory)
 		check(err)
