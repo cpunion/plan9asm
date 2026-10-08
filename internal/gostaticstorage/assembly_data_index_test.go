@@ -37,7 +37,7 @@ func TestASMDataIndexedCandidateIdentity(t *testing.T) {
 	for name, mutate := range map[string]func(*ASMDataMember){
 		"same-body-different-namespace": func(m *ASMDataMember) {
 			copy := m.Definitions[0]
-			copy.Namespace, copy.Index = TextSymbolDefinitions, uint32(len(m.Definitions))
+			copy.Namespace, copy.Index = TextSymbolSelf, uint32(len(m.Definitions))
 			m.Definitions = append(m.Definitions, copy)
 		},
 		"same-body-same-namespace": func(m *ASMDataMember) {
@@ -67,10 +67,10 @@ func TestASMDataIndexedCandidateIdentity(t *testing.T) {
 
 func TestASMDataNamedCollisionGroups(t *testing.T) {
 	definition := func(name string, abi uint16, kind, flags uint8) ASMDataDefinition {
-		return ASMDataDefinition{Name: name, ABI: abi, Namespace: TextSymbolDefinitions, Kind: kind, Flags: flags}
+		return ASMDataDefinition{Name: name, ABI: abi, Namespace: TextSymbolSelf, Kind: kind, Flags: flags}
 	}
 	text := func(abi uint16, flags uint8) TextRecord {
-		return TextRecord{Name: "entry", ABI: abi, Namespace: TextSymbolDefinitions, Kind: 1, Flags: flags}
+		return TextRecord{Name: "entry", ABI: abi, Namespace: TextSymbolSelf, Kind: 1, Flags: flags}
 	}
 	for _, test := range []struct {
 		name    string
@@ -138,7 +138,7 @@ func BenchmarkASMDataNamedDUPokGroups(b *testing.B) {
 			members := make([]ASMDataMember, count)
 			for index := range members {
 				members[index].Definitions = []ASMDataDefinition{{Name: "shared", Kind: 3, Flags: 1,
-					Namespace: TextSymbolDefinitions}}
+					Namespace: TextSymbolSelf}}
 			}
 			b.ReportAllocs()
 			b.ResetTimer()
