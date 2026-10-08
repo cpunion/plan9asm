@@ -283,3 +283,17 @@ func TestX86BroadcastOriginalPhysicalWIGWitness(t *testing.T) {
 		}
 	}
 }
+
+func TestX86BroadcastMode32GPQPhysicalLaneWidth(t *testing.T) {
+	file, err := Parse(ArchAMD64, "TEXT f(SB),4,$0-0\nMOVL $1,AX\nVPBROADCASTQ AX,X2\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ir, "insertelement <4 x i32>") || strings.Contains(ir, "insertelement <2 x i64>") {
+		t.Fatal("mode32 original W1 GP broadcast did not use physical WIG dword lanes")
+	}
+}
