@@ -272,6 +272,11 @@ func TestDiscoveryProgressDirectoryModeRejectsExplicitEmptyAndOtherReaders(t *te
 				"-compare-assembly-ledger=" + fixture.stored,
 				"-discovery-progress-directory=" + filepath.Join(t.TempDir(), "new"),
 			}
+			if extra[0] == "-discovery-progress-directory=" {
+				// Do not let the unrelated compare-requires-verify guard mask an
+				// empty directory mode falling through to a successful list reader.
+				args = []string{"-repo-root=" + fixture.root}
+			}
 			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root, append(args, extra...)...)
 			if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), "requires") {
 				t.Fatalf("directory mode fell through or accepted another mode: %v stdout=%q stderr=%s", err, stdout, stderr)
