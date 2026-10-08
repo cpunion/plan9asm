@@ -189,6 +189,34 @@ func TestARM64SyscallDarwinCarryRoleIsSeparate(t *testing.T) {
 	}
 }
 
+func TestARM64SyscallDarwinUnknownOutputsRemainContext(t *testing.T) {
+	for _, api := range []string{"text", "module", "Go"} {
+		for _, observation := range []string{
+			"CSET MI,R2", "CSET EQ,R2", "CSET VS,R2", "CSET HI,R2",
+			"MOVD R1,R0", "JMP observe\nobserve:\nCSET GT,R2",
+		} {
+			t.Run(api+"/"+observation, func(t *testing.T) {
+				_, err := arm64SyscallEffectAPI(t, api, "aarch64-apple-darwin",
+					arm64SyscallEffectSource("CMP R2,R1\nSVC $0x80\n"+observation))
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("Darwin carry-only bridge cannot invent secondary result or other NZCV: %v", err)
+				}
+			})
+		}
+		for _, body := range []string{
+			"SVC $0x80\nCMP R3,R2\nCSET HI,R2",
+			"SVC $0x80\nMOVD $37,R1\nMOVD R1,R0",
+			"SVC $0x80\nJMP redefine\nredefine:\nCMP R3,R2\nCSET GT,R2",
+		} {
+			t.Run(api+"/redefined/"+body, func(t *testing.T) {
+				if _, err := arm64SyscallEffectAPI(t, api, "aarch64-apple-darwin", arm64SyscallEffectSource(body)); err != nil {
+					t.Fatalf("complete fresh writes must restore only their actual defined outputs: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestARM64SyscallContinuationEffects(t *testing.T) {
 	for _, api := range []string{"text", "module", "Go"} {
 		for _, register := range []string{"R0", "R1", "R2", "R16"} {
