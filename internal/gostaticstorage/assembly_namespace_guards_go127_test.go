@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -75,7 +76,7 @@ func TestGoSDKAssemblyNamespaceBinaryBoundaries(t *testing.T) {
 				}
 			}
 			for block := 3; block <= 7; block++ {
-				t.Run("truncated-symbol-block-"+string(rune('0'+block)), func(t *testing.T) {
+				t.Run("truncated-symbol-block-"+strconv.Itoa(block), func(t *testing.T) {
 					changed := append([]byte(nil), original...)
 					binary.LittleEndian.PutUint32(changed[20+4*(block+1):], uint32(blockOffset(block+1)-1))
 					if _, err := readTextObject(changed, "linux/"+arch, 16, false, builtins); !errors.Is(err, ErrContext) {
@@ -84,7 +85,7 @@ func TestGoSDKAssemblyNamespaceBinaryBoundaries(t *testing.T) {
 				})
 			}
 			for block := 4; block <= 7; block++ {
-				t.Run("namespace-crossover-"+string(rune('0'+block)), func(t *testing.T) {
+				t.Run("namespace-crossover-"+strconv.Itoa(block), func(t *testing.T) {
 					changed := append([]byte(nil), original...)
 					binary.LittleEndian.PutUint32(changed[20+4*block:], uint32(blockOffset(block)+21))
 					if _, err := readTextObject(changed, "linux/"+arch, 16, false, builtins); !errors.Is(err, ErrContext) {
@@ -93,7 +94,7 @@ func TestGoSDKAssemblyNamespaceBinaryBoundaries(t *testing.T) {
 				})
 			}
 			for _, block := range []int{9, 10} {
-				t.Run("hash-inventory-"+string(rune('0'+block)), func(t *testing.T) {
+				t.Run("hash-inventory-"+strconv.Itoa(block), func(t *testing.T) {
 					changed := append([]byte(nil), original...)
 					width := 8
 					if block == 10 {
@@ -132,6 +133,113 @@ func TestGoSDKAssemblyNamespaceBinaryBoundaries(t *testing.T) {
 					}
 				})
 			}
+		})
+	}
+}
+
+func TestGoSDKAssemblyActualDUPokAndStaticRemainIndexed(t *testing.T) {
+	directory, compiler, _ := fixture(t)
+	oracle := officialReaderForSource(t, compiler, sdkTextReaderSource)
+	consumer := filepath.Join(directory, "namedfixture")
+	if err := os.Mkdir(consumer, 0700); err != nil {
+		t.Fatal(err)
+	}
+	goSource := "package namedfixture\nfunc Entry()\n"
+	assembly := "#include \"textflag.h\"\nTEXT sharedWitness(SB),DUPOK|NOSPLIT,$0-0\nRET\n" +
+		"TEXT private<>(SB),NOSPLIT,$0-0\nRET\n"
+	for name, source := range map[string]string{
+		"value.go": goSource, "first.s": assembly + "TEXT ·Entry(SB),NOSPLIT,$0-0\nRET\n", "second.s": assembly,
+	} {
+		if err := os.WriteFile(filepath.Join(consumer, name), []byte(source), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	builtin, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Dir(compiler)), "src", "cmd", "internal", "goobj", "builtinlist.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			target := "linux/" + arch
+			env := fixtureEnv(t, target)
+			raw := run(t, compiler, consumer, env, "list", "-json", "-compiled", "-export", "-mod=readonly",
+				"-gcflags=-std", "-asmflags=-std", ".")
+			var selected struct {
+				Export string
+				SFiles []string
+			}
+			if err := json.Unmarshal(raw, &selected); err != nil || len(selected.SFiles) != 2 {
+				t.Fatal("actual named/static archive source inventory differs", err)
+			}
+			archive, err := os.ReadFile(selected.Export)
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalRaw := run(t, oracle, consumer, env, selected.Export)
+			var original []TextMember
+			if err := json.Unmarshal(originalRaw, &original); err != nil {
+				t.Fatal(err)
+			}
+			observed, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles)
+			if err != nil || !reflect.DeepEqual(observed, original) {
+				t.Fatal("original DUPok/static bodies were rejected, lost or selected by name", err)
+			}
+			var duplicate, static []TextRecord
+			for _, member := range observed[2:] {
+				for _, text := range member.Texts {
+					if text.Name == "sharedWitness" {
+						duplicate = append(duplicate, text)
+					}
+					if text.Name == "private" {
+						static = append(static, text)
+					}
+				}
+			}
+			if len(duplicate) != 2 || len(static) != 2 {
+				t.Fatal("legal repeated named/static source bodies were not preserved", len(duplicate), len(static))
+			}
+			for _, text := range duplicate {
+				if text.Namespace != TextSymbolNonpkgDefinition || text.Flags&1 == 0 || text.ABI != 0 {
+					t.Fatal("actual DUPok namespace/ABI differs", text)
+				}
+			}
+			for _, text := range static {
+				if text.ABI != 65535 {
+					t.Fatal("actual static object-local ABI differs", text)
+				}
+			}
+			changed := append([]byte(nil), archive...)
+			members, err := archiveMembers(changed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, member := range members[2:] {
+				body, err := objectBody(member.data, target)
+				if err != nil {
+					t.Fatal(err)
+				}
+				view, err := checkedObject(body, 20, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				symbols, err := view.indexedSymbols()
+				if err != nil {
+					t.Fatal(err)
+				}
+				start := int(binary.LittleEndian.Uint32(body[20+4*3:]))
+				for _, symbol := range symbols {
+					if symbol.Name == "sharedWitness" {
+						body[start+int(symbol.Index)*21+11] &^= 1
+					}
+				}
+			}
+			if _, err := ObserveX86SDKAssemblyArchive(changed, builtin, target, selected.SFiles); !errors.Is(err, ErrContext) {
+				t.Fatal("unproved ordinary named duplicates acquired DUPok observation", err)
+			}
+			retainTextArtifact(t, target, "indexed-named-static", map[string][]byte{
+				"original.a": archive, "original-sdk.json": originalRaw, "selection.json": raw,
+				"source-value.go": []byte(goSource), "source-shared.s": []byte(assembly),
+			})
 		})
 	}
 }

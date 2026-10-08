@@ -199,6 +199,8 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 	if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
 		if source == sdkTextReaderSource {
 			artifact = filepath.Join(artifact, "text-sdk-oracle")
+		} else if source == sdkNamespaceReaderSource {
+			artifact = filepath.Join(artifact, "namespace-sdk-oracle")
 		} else if source != officialReaderSource {
 			artifact = filepath.Join(artifact, "cpu-sdk-oracle")
 		}
