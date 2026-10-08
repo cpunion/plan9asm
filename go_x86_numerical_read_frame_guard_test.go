@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -39,6 +40,62 @@ type numericalFrameReentryContext struct {
 	mu         sync.Mutex
 	once       sync.Once
 	closeFrame func()
+}
+
+type numericalFrameObserverCancelContext struct {
+	context.Context
+	cancel context.CancelFunc
+	once   sync.Once
+}
+
+func (ctx *numericalFrameObserverCancelContext) Err() error {
+	pc, _, _, valid := runtime.Caller(1)
+	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoAMD64FrameSource).verifyFrameOnly") {
+		ctx.once.Do(ctx.cancel)
+	}
+	return ctx.Context.Err()
+}
+
+func TestGoX86NumericalSBReadFrameProducerCopiedFrameCannotBorrowGeneration(t *testing.T) {
+	ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
+	request.NumericalReads = bound.NumericalReads
+	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer frame.Close()
+	copyFrame := new(GoAMD64FrameSource)
+	// This copies the whole opaque public value while its mutex is unlocked;
+	// neither serialization nor reconstruction of a certificate is involved.
+	reflect.ValueOf(copyFrame).Elem().Set(reflect.ValueOf(frame).Elem())
+	if err := copyFrame.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("a whole-value frame copy borrowed an independently owned generation", err)
+	}
+	if err := copyFrame.Close(); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("a foreign frame generation could remove original owned artifacts", err)
+	}
+	if err := frame.Verify(ctx); err != nil {
+		t.Fatal("rejecting a copied frame invalidated the original generation", err)
+	}
+}
+
+func TestGoX86NumericalSBReadFrameProducerObserverCancellationCause(t *testing.T) {
+	ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
+	request.NumericalReads = bound.NumericalReads
+	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer frame.Close()
+	inner, cancel := context.WithCancel(ctx)
+	defer cancel()
+	wrapped := &numericalFrameObserverCancelContext{Context: inner, cancel: cancel}
+	if err := frame.Verify(wrapped); !errors.Is(err, context.Canceled) || errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("joined observer cancellation was relabeled as a source exclusion", err)
+	}
+	if !errors.Is(frame.Verify(ctx), ErrProbeNeedsContext) {
+		t.Fatal("fresh context revived the cancelled frame generation")
+	}
 }
 
 func (ctx *numericalFrameReentryContext) Err() error {
