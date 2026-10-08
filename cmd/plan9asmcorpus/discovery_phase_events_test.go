@@ -37,6 +37,8 @@ func TestDiscoveryPhaseEventsActualCandidateJournal(t *testing.T) {
 	if err != nil || report.SchemaVersion != 11 || report.Failed != 1 || report.Passed != 0 || report.Results[0].Error != cause.Error() {
 		t.Fatalf("timing changed original report/failure: report=%+v error=%v", report, err)
 	}
+	t.Logf("actual callback calls=%d; original schema=%d passed=%d failed=%d; report EOF verified; error=%q",
+		calls, report.SchemaVersion, report.Passed, report.Failed, report.Results[0].Error)
 	file, err := os.Open(events)
 	if err != nil {
 		t.Fatalf("actual candidate ran, but requested phase journal is absent: %v", err)

@@ -123,6 +123,37 @@ func TestDiscoveryPhaseEventsOperationErrorsAndPanic(t *testing.T) {
 	}
 }
 
+func TestDiscoveryPhaseEventsHandledInnerFailureRetainsOuterOutcome(t *testing.T) {
+	writer := &phaseFixtureWriter{}
+	journal := newPhaseFixtureJournal(t, writer)
+	innerCause := errors.New("actual phase error handled by the original operation")
+	err := journal.run(phaseFixtureCandidate, "candidate", "", func() error {
+		innerErr := journal.run(phaseFixtureCandidate, "ordinary_target", "linux/amd64", func() error {
+			return innerCause
+		})
+		if !errors.Is(innerErr, innerCause) {
+			t.Fatalf("journal changed the original inner error: %v", innerErr)
+		}
+		// The existing caller, not timing, owns whether an operation error is
+		// handled. A completed outer operation does not erase the failed span.
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := journal.close(nil); err != nil {
+		t.Fatal(err)
+	}
+	summary, err := readDiscoveryPhaseEvents(bytes.NewReader(writer.Bytes()))
+	if err != nil || summary.Spans != 2 || summary.Failed != 1 || summary.Status != "complete" {
+		t.Fatalf("diagnostic timing changed handled operation semantics: summary=%+v error=%v", summary, err)
+	}
+	records := phaseFixtureRecords(t, writer.Bytes())
+	if records[3].Status != "failed" || records[3].Error != innerCause.Error() || records[4].Status != "complete" {
+		t.Fatalf("inner error was hidden or promoted to the outer result: %+v", records)
+	}
+}
+
 func TestDiscoveryPhaseEventsWritesCloseAndOriginalError(t *testing.T) {
 	for _, failure := range []string{"start-write", "end-write", "short-write", "close", "readback"} {
 		t.Run(failure, func(t *testing.T) {
