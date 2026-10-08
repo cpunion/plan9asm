@@ -82,27 +82,49 @@ Root independently reread the component source/tool/binary/raw inventories and
 terminal owners before integration. These are component certificates, not
 combined-head full-suite, whole SDK, external-library or CI completion.
 
+The successor `131df166` also integrates the complete SDK namespace and
+referenced-metadata repairs. Current-head ordinary storage and SDK/owned-reader
+scopes close 757 nodes; disjoint race scopes close the same 757 nodes, with
+independent frozen-input, stamped-binary, complete-EOF and owner replays. The
+earlier combined race selector really exhausted its six-minute budget and
+failed two nodes. Preserve that failure; the disjoint reruns keep the original
+budgets and do not establish full-suite or CI completion.
+
 ## Current failure classes and next work
 
-1. Fix the actual host-tool fixture mutation. Two complete other-main-package
+1. Finish host-tool fixture and nested CLI repairs. Two other-main-package
    ordinary runs at `2c943968` execute their owned tests successfully but fail
    the outer frozen-input check: the portable dependency fixture hard-links the
    actual LLVM shared library, then cleanup changes that host inode's ctime.
-   Add a real metadata/byte-identity RED and independently copy bounded full
-   bytes. Do not discard ctime checks or relabel either old overall failure.
-   Close ordinary/race, complete other-main-package and both nested CLI scopes.
-2. Review the frozen SDK namespace/referenced-metadata component. Hashed,
+   Frozen test-only `d5144e24` independently copies bounded complete bytes and
+   binds the actual relocated native loader; focused ordinary/race and the
+   complete other-main-package scope close. Preserve the original failures.
+   Complete `plan9asm` passes, while `plan9asmll` retains four failing roots:
+   shared x86 grammar extraction and CPP fixtures' actual-selection path
+   identity. Repair both classes on `codex/pr40-cli-grammar-selection-20261009`.
+   The actual Linux fixture additionally detects a missing relocated `ld.lld`
+   role; add its real required-tool regression and rerun with package CWD.
+   Do not discard physical checks or count setup failures as native passes.
+2. Complete offline ASM DATA observation after the integrated SDK repair. Hashed,
    static and DUPok definitions retain object-local identity; never choose a
    body by name+ABI. Foreign references use actual compiler SymbolDefs indices.
    Complete referenced structure is streamed without unused body/index arrays;
    default owned-reader bounds stay unchanged. Actual CRC32 now reaches ASM
-   DATA `r2r1`, which needs a separately reviewed source/effect role.
-3. Review private original ARM64 sleep observation and the independent Linux
-   GP/NZCV oracle. Observation is not byte, stack, syscall or SDK permission.
-   Original-kernel success must precede a real LLVM mismatch; a host compiler/
-   vet SIGSEGV remains a precondition failure. An explicitly recorded diagnostic
-   scheduler environment is not default-scheduler CI completion. Cover both
-   lowering and complete source/normalized GP/flag effects before permissions.
+   DATA `r2r1`. Phase A covers the complete two-x86 DATA/GLOBL grammar and
+   independent whole-object joins only: no live SDK/CPP/header origin seal,
+   mutable byte owner or native-vector permission is granted. Later source and
+   effect roles need separate design and review; CRC32 is not yet a pass.
+3. Complete unified ARM64 typed syscall effects and ordered four-bit flag flow
+   on `codex/pr40-arm64-syscall-typed-effects-20261009`. Frozen `07f0ee3a` closes
+   all ten actual original Linux kernel cases before observing 60 concrete LLVM
+   GP/NZCV mismatches across three APIs and two optimization levels. Root has
+   independently replayed those failures. Earlier host vet, marker and launcher
+   failures remain distinct, not kernel successes. Bind explicit target/OS,
+   preserve Linux non-result GP/NZCV, and retain Darwin unavailable results and
+   flag bits until an actual redefining instruction. Close copied/mutated proof,
+   CFG/loop and partial-flag negatives before full affected ordinary/race and
+   fresh Linux replay. Saved-frame/SVC defaults and sleep/SDK/native permissions
+   remain unchanged; source observation does not grant memory or stack access.
 4. Repair remaining SDK reads, dynamic reflect frames, native entry/TLS/
    continuations, result padding and complete body closure by rule class with
    independent first-party regressions, not library-name instruction exceptions.
