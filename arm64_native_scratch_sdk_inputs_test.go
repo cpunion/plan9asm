@@ -118,6 +118,9 @@ func TestARM64NativeScratchSDKHiddenEntryActualObject(t *testing.T) {
 				typed:     map[string]GoPackage{"runtime": {Path: "runtime", Types: typed, Syntax: []*ast.File{syntax}}},
 				abis:      map[string]string{"runtime.Value": "ABIInternal"},
 			}
+			if physical, valid := source.originalObjectSource(body.source); !valid || physical != input {
+				t.Fatal("unit machine-input test lacks its captured physical source identity")
+			}
 			got, err := source.closedNativeCallee(context.Background(), "runtime.Value", make(map[string]bool), 0)
 			if err != nil || got != fixture.closed {
 				t.Fatalf("SDK unit admission over actual Go body=%v, want %v: %v", got, fixture.closed, err)
