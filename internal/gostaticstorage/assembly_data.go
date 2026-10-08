@@ -257,6 +257,13 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if !sameASMDataObjects(original, observation.Members[index+2]) || !sameASMDataObjects(original, expanded) {
 			return nil, contextError("whole original/expanded/compiler ASM DATA or TEXT object identities differ")
 		}
+		if cpp && (!reflect.DeepEqual(original.Texts, expanded.Texts) ||
+			!reflect.DeepEqual(original.Texts, observation.Members[index+2].Texts)) {
+			// A live CPP producer maps the actual source positions before
+			// assembling. Unlike the older offline token-equal observation,
+			// this role requires complete PC/filename/line metadata parity.
+			return nil, contextError("complete CPP original/expanded/compiler TEXT positions differ")
+		}
 		// Ordinals and physical source lines stay in both retained source records;
 		// compare the directive grammar separately from those original positions.
 		normalize := func(values []ASMGlobalLayout) []ASMGlobalLayout {

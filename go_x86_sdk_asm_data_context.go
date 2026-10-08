@@ -18,12 +18,12 @@ func sdkASMDataPrivateContext(caller, original context.Context) (context.Context
 	}
 	callerDeadline, callerBounded := caller.Deadline()
 	deadline, bounded := original.Deadline()
-	callerDone, originalDone := caller.Done(), original.Done()
-	if callerBounded && (!bounded || callerDeadline.Before(deadline)) {
-		deadline, bounded = callerDeadline, true
-	}
 	if !bounded {
 		return nil, nil, sdkASMDataContext("original bounded context lost its deadline")
+	}
+	callerDone, originalDone := caller.Done(), original.Done()
+	if callerBounded && callerDeadline.Before(deadline) {
+		deadline = callerDeadline
 	}
 	if err := errors.Join(caller.Err(), original.Err()); err != nil {
 		return nil, nil, err
