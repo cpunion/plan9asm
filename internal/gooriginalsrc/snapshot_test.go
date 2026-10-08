@@ -1,12 +1,151 @@
 package gooriginalsrc
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+type retainedSourceReader interface {
+	ReadRetained(string) ([]byte, error)
+}
+
+func TestSnapshotReadRetainedFullEOF(t *testing.T) {
+	for _, role := range []string{"unchanged", "tail byte", "grown metadata", "replacement", "symlink"} {
+		t.Run(role, func(t *testing.T) {
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			name := filepath.Join(root, "go.mod")
+			original := bytes.Repeat([]byte("module example.invalid/source\n"), 3000)
+			if err := os.WriteFile(name, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			snapshot := NewSnapshot()
+			if err := snapshot.Retain(name); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch role {
+			case "tail byte":
+				changed := append([]byte(nil), original...)
+				changed[len(changed)-1] ^= 1
+				if err := os.WriteFile(name, changed, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "grown metadata":
+				if err := os.Truncate(name, fileByteLimit+1); err != nil {
+					t.Fatal(err)
+				}
+				after, err := os.Lstat(name)
+				if err != nil || !os.SameFile(before, after) || after.Size() <= fileByteLimit {
+					t.Fatal("first-party retained metadata did not actually grow past the original bound", err)
+				}
+			case "replacement", "symlink":
+				backup := filepath.Join(t.TempDir(), "original")
+				if err := os.Rename(name, backup); err != nil {
+					t.Fatal(err)
+				}
+				if role == "symlink" {
+					if err := os.Symlink(backup, name); err != nil {
+						t.Fatal(err)
+					}
+				} else if err := os.WriteFile(name, original, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			reader, ok := any(snapshot).(retainedSourceReader)
+			if !ok {
+				t.Fatal("retained metadata has no strict bounded physical read route")
+			}
+			actual, err := reader.ReadRetained(name)
+			if role == "unchanged" {
+				if err != nil || !bytes.Equal(actual, original) {
+					t.Fatal("original complete metadata tail was not read through EOF", err)
+				}
+			} else if err == nil || actual != nil {
+				t.Fatal("changed or over-bound retained metadata yielded bytes")
+			}
+		})
+	}
+}
+
+func TestSnapshotRepeatedAtCountBounds(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(root, "member")
+	if err := os.WriteFile(name, []byte{1}, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, role := range []string{"file", "directory", "cache directory"} {
+		t.Run(role, func(t *testing.T) {
+			snapshot := NewSnapshot()
+			var repeat, add func(string) error
+			switch role {
+			case "file":
+				if err := snapshot.Retain(name); err != nil {
+					t.Fatal(err)
+				}
+				for i := 1; i < fileLimit; i++ {
+					snapshot.hashes[fmt.Sprintf("count-only-%d", i)] = ""
+				}
+				repeat, add = snapshot.Retain, snapshot.Retain
+			case "directory":
+				if err := snapshot.Directory(root, false); err != nil {
+					t.Fatal(err)
+				}
+				for i := 1; i < directoryLimit; i++ {
+					snapshot.directories[fmt.Sprintf("count-only-%d", i)] = nil
+				}
+				repeat = func(name string) error { return snapshot.Directory(name, false) }
+				add = repeat
+			case "cache directory":
+				set := &OriginSet{directories: make(map[string]os.FileInfo)}
+				if err := set.retainCacheDirectory(root); err != nil {
+					t.Fatal(err)
+				}
+				for i := 1; i < directoryLimit; i++ {
+					set.directories[fmt.Sprintf("count-only-%d", i)] = nil
+				}
+				repeat, add = set.retainCacheDirectory, set.retainCacheDirectory
+			}
+			existing := root
+			if role == "file" {
+				existing = name
+			}
+			if err := repeat(existing); err != nil {
+				t.Fatal("re-observing an existing physical role consumed a new count slot", err)
+			}
+			extra := filepath.Join(root, "new-"+role)
+			if role == "file" {
+				if err := os.WriteFile(extra, []byte{2}, 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if err := os.Mkdir(extra, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := add(extra); err == nil {
+				t.Fatal("a new physical role escaped the original count bound")
+			}
+		})
+	}
+}
+
+func TestSnapshotRejectsRelativeDirectory(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := NewSnapshot().Directory(".", false); err == nil {
+		t.Fatal("relative directory acquired an original physical source role")
+	}
+}
 
 func TestSnapshotFullEOFAndPhysicalRoles(t *testing.T) {
 	for _, role := range []string{"unchanged", "tail byte", "same bytes replacement", "symlink", "added member"} {
