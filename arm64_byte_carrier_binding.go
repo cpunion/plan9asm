@@ -49,6 +49,9 @@ func (source *GoARM64ByteCarrierSource) liveCarrier() error {
 }
 
 func bindARM64ByteCarrier(file *File, options Options) (_ *arm64ByteCarrierBinding, failure error) {
+	if err := rejectMixedNativeAuthorities(options.NumericalReads, options.ARM64ByteCarrierSource); err != nil {
+		return nil, err
+	}
 	source := options.ARM64ByteCarrierSource
 	if source == nil {
 		return nil, arm64ByteCarrierContext("missing original source owner")
@@ -116,7 +119,7 @@ func (binding *arm64ByteCarrierBinding) verifyFileAndOptions(file *File, options
 		options.ARM64ByteCarrierSource != binding.source || options.TargetTriple != binding.options.TargetTriple ||
 		options.Goarch != binding.options.Goarch || options.WASMABI != binding.options.WASMABI ||
 		options.X87Mode != binding.options.X87Mode || options.AnnotateSource != binding.options.AnnotateSource ||
-		len(options.X86TailGroups) != 0 {
+		len(options.X86TailGroups) != 0 || options.NumericalReads != nil {
 		return arm64ByteCarrierContext("source/options changed during callbacks or lowering")
 	}
 	for name, prior := range binding.signatures {

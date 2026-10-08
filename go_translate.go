@@ -94,6 +94,9 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
+	if err := rejectMixedNativeAuthorities(opt.NumericalReads, opt.ARM64ByteCarrierSource); err != nil {
+		return nil, err
+	}
 	if source := opt.ARM64ByteCarrierSource; source != nil {
 		var callbackFailure error
 		if err := source.Verify(source.lease); err != nil {

@@ -55,6 +55,11 @@ func numericalCapabilities(sigs map[string]FuncSig) map[string]numericalSignatur
 // original source and actual native reads. It returns independent Options;
 // declarations alone, JSON, pointer types and a numerical owner cannot bind.
 func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, pkg GoPackage, file *File, options Options) (Options, error) {
+	if carrier := options.ARM64ByteCarrierSource; carrier != nil {
+		source.revokeNumericalSource()
+		carrier.revokeCarrier()
+		return Options{}, mixedNativeAuthorityContext()
+	}
 	if err := source.Verify(ctx); err != nil {
 		return Options{}, err
 	}
@@ -266,6 +271,9 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 	if binding.originalBinding != binding {
 		return fail(numericalSBContext("copied or foreign numerical binding is not the original factory token"))
 	}
+	if err := rejectMixedNativeAuthorities(binding, binding.options.ARM64ByteCarrierSource); err != nil {
+		return err
+	}
 	if binding.context == nil || reflect.TypeOf(binding.context) != reflect.TypeOf(binding.originalContext) ||
 		!reflect.TypeOf(binding.context).Comparable() || binding.context != binding.originalContext {
 		return fail(numericalSBContext("binding live context identity changed"))
@@ -334,6 +342,9 @@ type x86NumericalReadCertificate struct {
 }
 
 func verifyNumericalReadInputs(file *File, options Options) (result error) {
+	if err := rejectMixedNativeAuthorities(options.NumericalReads, options.ARM64ByteCarrierSource); err != nil {
+		return err
+	}
 	binding := options.NumericalReads
 	if binding == nil {
 		return nil
@@ -498,6 +509,9 @@ func finishNumericalReads(file *File, options Options) error {
 }
 
 func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPackage, opt GoModuleOptions) (result error) {
+	if err := rejectMixedNativeAuthorities(binding, opt.ARM64ByteCarrierSource); err != nil {
+		return err
+	}
 	defer func() {
 		if result != nil && binding != nil && binding.source != nil {
 			binding.source.mu.Lock()
