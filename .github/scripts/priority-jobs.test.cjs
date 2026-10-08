@@ -21,6 +21,13 @@ function shards(section) {
     ([, value]) => Number(value));
 }
 
+function stepSection(section, name) {
+  const start = section.indexOf(`      - name: ${name}\n`);
+  assert.notEqual(start, -1, `missing step ${name}`);
+  const next = section.indexOf('\n      - name:', start + 1);
+  return section.slice(start, next < 0 ? section.length : next);
+}
+
 test('priority and remaining matrices partition all 64 shards exactly once', () => {
   const priority = shards(jobSection('discovered_library_priority'));
   const remaining = shards(jobSection('discovered_library_corpus'));
@@ -134,7 +141,38 @@ test('discovery matrices retain optional phase timing separately from reports', 
     const section = jobSection(name);
     assert.match(section, /^          PLAN9ASM_DISCOVERY_EVENTS: '1'$/m, name);
     assert.match(section,
-      /^            _out\/discovered-library-corpus\/shard-\$\{\{ matrix\.shard \}\}\.events\.jsonl$/m,
+      /_out\/discovered-library-corpus\/shard-\$\{\{ matrix\.shard \}\}\.events\.jsonl/,
       `${name} drops the requested phase timing artifact`);
   }
+});
+
+test('discovery report uploads cannot succeed with only a phase journal', () => {
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    const section = jobSection(name);
+    const report = stepSection(section, 'Upload shard report');
+    assert.match(report,
+      /^          path: _out\/discovered-library-corpus\/shard-\$\{\{ matrix\.shard \}\}\.json$/m,
+      `${name} must require the report itself, not either report or journal`);
+    assert.match(report,
+      /^          name: discovered-corpus-shard-\$\{\{ matrix\.shard \}\}$/m);
+    assert.doesNotMatch(report, /\.events\.jsonl/);
+
+    const events = stepSection(section, 'Upload shard phase journal');
+    assert.match(events,
+      /^          path: _out\/discovered-library-corpus\/shard-\$\{\{ matrix\.shard \}\}\.events\.jsonl$/m);
+    assert.match(events,
+      /^          name: discovered-corpus-events-\$\{\{ matrix\.shard \}\}$/m);
+    assert.doesNotMatch(events, /name: discovered-corpus-shard-/);
+
+    for (const upload of [report, events]) {
+      assert.match(upload, /^        if: always\(\)$/m);
+      assert.match(upload, /^        timeout-minutes: 10$/m);
+      assert.match(upload, /^        uses: actions\/upload-artifact@v6$/m);
+      assert.match(upload, /^          if-no-files-found: error$/m);
+      assert.doesNotMatch(upload, /continue-on-error:/);
+    }
+  }
+
+  assert.match(jobSection('discovered_library_corpus_verify'),
+    /^          pattern: discovered-corpus-shard-\*$/m);
 });
