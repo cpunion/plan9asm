@@ -289,11 +289,29 @@ func TestX86BroadcastMode32GPQPhysicalLaneWidth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu"})
+	ir, err := Translate(file, Options{Goarch: "386", TargetTriple: "i386-unknown-linux-gnu", Sigs: map[string]FuncSig{
+		"f": {Name: "f", Ret: Void},
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(ir, "insertelement <4 x i32>") || strings.Contains(ir, "insertelement <2 x i64>") {
 		t.Fatal("mode32 original W1 GP broadcast did not use physical WIG dword lanes")
+	}
+}
+
+func TestX86BroadcastRawOriginalMode32GPQWIG(t *testing.T) {
+	code := assembleX87ControlBytes(t, "386", "TEXT f(SB),4,$0-0\nVPBROADCASTQ AX,X2\nRET\n")
+	want := []byte{0x62, 0xf2, 0xfd, 0x08, 0x7c, 0xd0, 0xc3}
+	if !bytes.Equal(code, want) {
+		t.Fatalf("actual Go W1 bytes%x", code)
+	}
+	ins, length, known, err := decodedX86VEXPackedBroadcastInstruction(code[:6], 32)
+	if err != nil || !known || length != 6 {
+		t.Fatalf("actual Go mode32 WIG decoder: known%t length%d err%v", known, length, err)
+	}
+	form, known, err := x86BroadcastProperties(ins.Op, ins, "386")
+	if err != nil || !known || form.sourceBytes != 4 || form.laneBits != 32 {
+		t.Fatalf("physical mode32 GP-Q effect %+v known%t err%v", form, known, err)
 	}
 }
