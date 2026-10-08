@@ -1318,6 +1318,20 @@ func decodeX86RawDirectiveGroupWithOpaque(
 				offset += length
 				continue
 			}
+			// F3/0F38/3A is K-data MW2D, not 66/0F38/3A VPMINUW.
+			// Match the complete prefix key before the older min/max matcher.
+			if instruction, length, ok, err := decodedX86EVEXMaskDataBroadcastInstruction(code[offset:], mode); ok {
+				if err != nil {
+					return nil, fmt.Errorf("decode raw x86 mask-data broadcast at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
+				}
+				if err := markInstruction(offset, length); err != nil {
+					return nil, err
+				}
+				instruction.Raw = fmt.Sprintf("%s /* decoded from %s */", instruction.Raw, rawGroup)
+				decodedByOffset[offset] = x86RawDecodedInstruction{length: length, instrs: []Instr{instruction}}
+				offset += length
+				continue
+			}
 			if instruction, length, literal, ok, err := decodeX86RawMinMaxRIPData(code, offset, mode); ok {
 				if err != nil {
 					return nil, fmt.Errorf("decode raw x86 packed integer min/max literal at instruction %d byte %d: %w: %q", start, offset, err, rawGroup)
@@ -3864,7 +3878,7 @@ func decodedX86EVEXPackedBroadcastInstruction(code []byte, i, mode int, segment 
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
 	if p0&0x0f == 2 && p1&3 == 2 && (opcode == 0x2a || opcode == 0x3a) {
-		return decodedX86EVEXMaskDataBroadcastInstruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXMaskDataBroadcastInstruction(code, mode)
 	}
 	if p0&0x0f != 2 || p1&3 != 1 {
 		return Instr{}, 0, false, nil
@@ -5771,46 +5785,50 @@ vex:
 
 // K is a data register here, not an optional writemask. Recognizing these
 // physical register shapes grants no initialized-mask or memory authority.
-func decodedX86EVEXMaskDataBroadcastInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (Instr, int, bool, error) {
-	p0, p1, p2, opcode := code[i+1], code[i+2], code[i+3], code[i+4]
+func decodedX86EVEXMaskDataBroadcastInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	p, matched := decodeX86RawVectorEncoding(code)
+	if !matched || !p.evex || p.mapNumber != 2 || p.pp != 2 || p.opcode != 0x2a && p.opcode != 0x3a {
+		return Instr{}, 0, false, nil
+	}
 	op := Op("VPBROADCASTMW2D")
-	width64 := false
-	if opcode == 0x2a {
-		op, width64 = "VPBROADCASTMB2Q", true
+	if p.opcode == 0x2a {
+		op = "VPBROADCASTMB2Q"
 	}
 	fail := func(reason string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("%s %s", op, reason)
 	}
-	if (p1&0x80 != 0) != width64 {
+	if mode != 32 && mode != 64 {
+		return fail("has an unsupported x86 mode")
+	}
+	if p.w != (p.opcode == 0x2a) {
 		return fail("has a reserved EVEX.W value")
 	}
-	if p1&0x7c != 0x7c || p2&8 == 0 {
+	if !p.fixed || p.upper != 0 {
 		return fail("requires reserved EVEX.vvvv and the fixed prefix bit")
 	}
-	if segment != "" || addressOverride {
+	if p.segment != "" || p.addressOverride {
 		return fail("does not admit segment or address-size overrides")
 	}
-	if p2&0x97 != 0 {
+	if p.mask != 0 || p.zero || p.broadcast {
 		return fail("does not admit writemasking, zeroing, or EVEX.b")
 	}
-	vectorBits := p2 >> 5 & 3
-	if vectorBits == 3 {
+	if p.vectorLength == 3 {
 		return fail("has a reserved EVEX vector length")
 	}
-	if len(code) <= i+5 {
+	if len(code) <= p.modRM {
 		return fail("is missing its ModRM byte")
 	}
-	modRM := code[i+5]
-	if modRM>>6 != 3 || p0&0x60 != 0x60 {
+	modRM := code[p.modRM]
+	if modRM>>6 != 3 || p.b != 0 || p.x != 0 {
 		return fail("requires an unextended K-register source")
 	}
-	destination := int(modRM>>3&7) + int(^p0>>7&1)*8 + int(^p0>>4&1)*16
+	destination := int(modRM>>3&7) + p.r*8
 	if mode == 32 && destination >= 8 {
 		return fail("has an extended vector register in 32-bit mode")
 	}
 	src := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("K%d", modRM&7))}
-	dst := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", [...]string{"X", "Y", "Z"}[vectorBits], destination))}
-	return Instr{Op: op, Args: []Operand{src, dst}, Raw: fmt.Sprintf("%s %s, %s", op, src.String(), dst.String())}, i + 6, true, nil
+	dst := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", [...]string{"X", "Y", "Z"}[p.vectorLength], destination))}
+	return Instr{Op: op, Args: []Operand{src, dst}, Raw: fmt.Sprintf("%s %s, %s", op, src.String(), dst.String())}, p.modRM + 1, true, nil
 }
 
 // decodedX86VEXPackedIntegerLogicalInstruction recognizes the complete
