@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -47,19 +46,13 @@ func loadSupersededSkips(repoRoot, ledgerPath string) (map[string]discoverySuper
 		return nil, fmt.Errorf("unsupported superseded-module manifest schema %d", manifest.SchemaVersion)
 	}
 
-	candidates, err := loadDiscoveryCandidates(ledgerPath)
-	if err != nil {
-		return nil, err
-	}
-	matched := make(map[string]bool, len(candidates))
-	for _, candidate := range candidates {
-		matched[candidate.exactKey()] = true
-	}
+	oldVersions := make(map[string]bool, len(manifest.Skips))
 	replacements := make(map[string]bool, len(manifest.Skips))
 	for _, skip := range manifest.Skips {
+		oldVersions[skip.Module+"@"+skip.Version] = true
 		replacements[skip.ReplacementModule+"@"+skip.ReplacementVersion] = true
 	}
-	scanned, err := scannedDiscoveryVersionKeysFor(ledgerPath, replacements)
+	matched, scanned, err := discoveryVersionKeysFor(ledgerPath, oldVersions, replacements)
 	if err != nil {
 		return nil, err
 	}
@@ -105,50 +98,31 @@ func scannedDiscoveryVersionKeys(ledgerPath string) (map[string]bool, error) {
 }
 
 func scannedDiscoveryVersionKeysFor(ledgerPath string, requested map[string]bool) (map[string]bool, error) {
-	info, err := os.Stat(ledgerPath)
+	_, scanned, err := discoveryVersionKeysFor(ledgerPath, nil, requested)
+	return scanned, err
+}
+
+// Only requested old matched keys are retained. Nil scanned interests preserve
+// the full reference helper; normal exception loading passes two nonnil sets.
+func discoveryVersionKeysFor(ledgerPath string, matchedRequested, scannedRequested map[string]bool) (map[string]bool, map[string]bool, error) {
+	matched, scanned := map[string]bool{}, map[string]bool{}
+	err := walkDiscoveryRecords(ledgerPath, func(record discoveryRecord) error {
+		if record.Kind != "scanned" && record.Kind != "matched" {
+			return nil
+		}
+		key := record.Module + "@" + record.Version
+		if record.Kind == "matched" && matchedRequested[key] {
+			matched[key] = true
+		}
+		if scannedRequested == nil || scannedRequested[key] {
+			scanned[key] = true
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	files := []string{ledgerPath}
-	if info.IsDir() {
-		files, err = filepath.Glob(filepath.Join(ledgerPath, "records", "*.jsonl"))
-		if err != nil {
-			return nil, err
-		}
-	}
-	keys := map[string]bool{}
-	for _, filePath := range files {
-		file, err := os.Open(filePath)
-		if err != nil {
-			return nil, err
-		}
-		scanner := bufio.NewScanner(file)
-		scanner.Buffer(make([]byte, 64<<10), 32<<20)
-		for scanner.Scan() {
-			if len(bytes.TrimSpace(scanner.Bytes())) == 0 {
-				continue
-			}
-			var record discoveryRecord
-			if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-				file.Close()
-				return nil, fmt.Errorf("decode discovery record %s: %w", filePath, err)
-			}
-			if record.Kind == "scanned" || record.Kind == "matched" {
-				key := record.Module + "@" + record.Version
-				if requested == nil || requested[key] {
-					keys[key] = true
-				}
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			file.Close()
-			return nil, err
-		}
-		if err := file.Close(); err != nil {
-			return nil, err
-		}
-	}
-	return keys, nil
+	return matched, scanned, nil
 }
 
 func supersededSkipMatchesResult(skip discoverySupersededSkip, result discoveryCorpusResult) bool {

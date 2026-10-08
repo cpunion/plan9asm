@@ -249,10 +249,12 @@ type discoveryCorpusReport struct {
 	FeatureInventory          *discoveryFeatureInventory `json:"feature_inventory,omitempty"`
 }
 
-func loadDiscoveryCandidates(root string) ([]discoveryCandidate, error) {
+// walkDiscoveryRecords validates the complete JSONL input, including every
+// matched payload, before handing each transient record to its consumer.
+func walkDiscoveryRecords(root string, visit func(discoveryRecord) error) error {
 	info, err := os.Stat(root)
 	if err != nil {
-		return nil, fmt.Errorf("stat discovery ledger: %w", err)
+		return fmt.Errorf("stat discovery ledger: %w", err)
 	}
 	var files []string
 	if !info.IsDir() {
@@ -260,23 +262,17 @@ func loadDiscoveryCandidates(root string) ([]discoveryCandidate, error) {
 	} else {
 		files, err = filepath.Glob(filepath.Join(root, "records", "*.jsonl"))
 		if err != nil {
-			return nil, fmt.Errorf("list discovery ledger records: %w", err)
+			return fmt.Errorf("list discovery ledger records: %w", err)
 		}
 	}
 	if len(files) == 0 {
-		return nil, fmt.Errorf("discovery ledger %q contains no JSONL records", root)
+		return fmt.Errorf("discovery ledger %q contains no JSONL records", root)
 	}
 	sort.Strings(files)
-	type candidateSets struct {
-		candidate discoveryCandidate
-		arches    map[string]bool
-		asmFiles  map[string]bool
-	}
-	merged := make(map[string]*candidateSets)
 	for _, filePath := range files {
 		file, err := os.Open(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("open discovery records %s: %w", filePath, err)
+			return fmt.Errorf("open discovery records %s: %w", filePath, err)
 		}
 		scanner := bufio.NewScanner(file)
 		scanner.Buffer(make([]byte, 64<<10), 32<<20)
@@ -289,39 +285,63 @@ func loadDiscoveryCandidates(root string) ([]discoveryCandidate, error) {
 			var record discoveryRecord
 			if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
 				file.Close()
-				return nil, fmt.Errorf("decode discovery record %s:%d: %w", filePath, line, err)
+				return fmt.Errorf("decode discovery record %s:%d: %w", filePath, line, err)
 			}
-			if record.Kind != "matched" {
-				continue
-			}
-			if err := validateDiscoveryRecord(record); err != nil {
-				file.Close()
-				return nil, fmt.Errorf("invalid discovery record %s:%d: %w", filePath, line, err)
-			}
-			key := record.Module + "@" + record.Version
-			item := merged[key]
-			if item == nil {
-				item = &candidateSets{
-					candidate: discoveryCandidate{Module: record.Module, Version: record.Version},
-					arches:    make(map[string]bool),
-					asmFiles:  make(map[string]bool),
+			if record.Kind == "matched" {
+				if err := validateDiscoveryRecord(record); err != nil {
+					file.Close()
+					return fmt.Errorf("invalid discovery record %s:%d: %w", filePath, line, err)
 				}
-				merged[key] = item
 			}
-			for _, arch := range record.Architectures {
-				item.arches[arch] = true
-			}
-			for _, asmFile := range record.AsmFiles {
-				item.asmFiles[asmFile] = true
+			if visit != nil {
+				if err := visit(record); err != nil {
+					file.Close()
+					return err
+				}
 			}
 		}
 		if err := scanner.Err(); err != nil {
 			file.Close()
-			return nil, fmt.Errorf("read discovery records %s: %w", filePath, err)
+			return fmt.Errorf("read discovery records %s: %w", filePath, err)
 		}
 		if err := file.Close(); err != nil {
-			return nil, fmt.Errorf("close discovery records %s: %w", filePath, err)
+			return fmt.Errorf("close discovery records %s: %w", filePath, err)
 		}
+	}
+	return nil
+}
+
+func loadDiscoveryCandidates(root string) ([]discoveryCandidate, error) {
+	type candidateSets struct {
+		candidate discoveryCandidate
+		arches    map[string]bool
+		asmFiles  map[string]bool
+	}
+	merged := make(map[string]*candidateSets)
+	err := walkDiscoveryRecords(root, func(record discoveryRecord) error {
+		if record.Kind != "matched" {
+			return nil
+		}
+		key := record.Module + "@" + record.Version
+		item := merged[key]
+		if item == nil {
+			item = &candidateSets{
+				candidate: discoveryCandidate{Module: record.Module, Version: record.Version},
+				arches:    make(map[string]bool),
+				asmFiles:  make(map[string]bool),
+			}
+			merged[key] = item
+		}
+		for _, arch := range record.Architectures {
+			item.arches[arch] = true
+		}
+		for _, asmFile := range record.AsmFiles {
+			item.asmFiles[asmFile] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	candidates := make([]discoveryCandidate, 0, len(merged))
 	for _, item := range merged {
