@@ -2,46 +2,23 @@ package plan9asm
 
 import (
 	"fmt"
-	"strings"
 )
 
 func (c *arm64Ctx) lowerARM64AddSubCarry(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "ADC", "ADCW", "ADCS", "ADCSW", "SBC", "SBCW", "SBCS", "SBCSW":
-	default:
+	form, handled, err := parseARM64CarryForm(op, ins)
+	if !handled || form.negate {
 		return false, false, nil
 	}
-	if strings.ToUpper(string(ins.Op)) != string(op) {
-		return true, false, fmt.Errorf("arm64 %s does not accept an instruction suffix: %q", op, ins.Raw)
+	if err != nil {
+		return true, false, err
 	}
-	if len(ins.Args) != 2 && len(ins.Args) != 3 {
-		return true, false, fmt.Errorf("arm64 %s expects 2 or 3 operands: %q", op, ins.Raw)
-	}
-	if !arm64AddSubCarryRegisterOrZero(ins.Args[0], true) {
-		return true, false, fmt.Errorf("arm64 %s first operand must be a general register or zero: %q", op, ins.Raw)
-	}
-	destination := ins.Args[len(ins.Args)-1]
-	if !arm64AddSubCarryRegisterOrZero(destination, false) {
-		return true, false, fmt.Errorf("arm64 %s destination must be a general register: %q", op, ins.Raw)
-	}
-	leftOperand := destination
-	if len(ins.Args) == 3 {
-		leftOperand = ins.Args[1]
-		if !arm64AddSubCarryRegisterOrZero(leftOperand, false) {
-			return true, false, fmt.Errorf("arm64 %s second operand must be a general register: %q", op, ins.Raw)
-		}
-	}
-
-	word := strings.HasSuffix(string(op), "W")
 	if err := c.requireARM64Flags(arm64FlagC, string(op)); err != nil {
 		return true, false, err
 	}
-	subtract := strings.HasPrefix(string(op), "SBC")
-	setFlags := op == "ADCS" || op == "ADCSW" || op == "SBCS" || op == "SBCSW"
-	if word {
-		return c.lowerARM64AddSubCarry32(op, ins, leftOperand, destination, subtract, setFlags)
+	if form.word {
+		return c.lowerARM64AddSubCarry32(op, ins, form.left, form.destination, form.subtract, form.setFlags)
 	}
-	return c.lowerARM64AddSubCarry64(op, ins, leftOperand, destination, subtract, setFlags)
+	return c.lowerARM64AddSubCarry64(op, ins, form.left, form.destination, form.subtract, form.setFlags)
 }
 
 func arm64AddSubCarryRegisterOrZero(operand Operand, allowImmediateZero bool) bool {

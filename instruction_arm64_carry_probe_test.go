@@ -231,3 +231,65 @@ func TestARM64AlwaysConditionProbeNeedsNoFlags(t *testing.T) {
 		})
 	}
 }
+
+func TestARM64AlwaysConditionProbeMatchesCompleteGoConditions(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/list7.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := regexp.MustCompile(`(?s)var strcond = \[16\]string\{(.*?)\n\}`).FindSubmatch(data)
+	if len(block) != 2 {
+		t.Fatal("complete Go ARM64 condition-name table changed")
+	}
+	var names []string
+	for _, match := range regexp.MustCompile(`"([A-Z]+)"`).FindAllSubmatch(block[1], -1) {
+		names = append(names, string(match[1]))
+	}
+	want := []string{"EQ", "NE", "HS", "LO", "MI", "PL", "VS", "VC", "HI", "LS", "GE", "LT", "GT", "LE", "AL", "NV"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("complete Go condition names changed: got %v want %v", names, want)
+	}
+	for _, condition := range names {
+		t.Run(condition, func(t *testing.T) {
+			spelling := "CSEL " + condition + ",R1,R2,R3"
+			requireARM64GoAssemblerResult(t, "TEXT condition(SB),516,$0-0\n"+spelling+"\nB (ZR)\n", true)
+			file := arm64CarryProbeFile(t, spelling)
+			err := ProbeInstruction(ArchARM64, "arm64", arm64CarryProbeBody(file)[0])
+			if condition == "AL" || condition == "NV" {
+				if mask, maskErr := arm64ConditionFlags(condition); maskErr != nil || mask != 0 || err != nil {
+					t.Fatalf("constant condition needs flags: mask=%#x maskErr=%v probe=%v", mask, maskErr, err)
+				}
+			} else if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("nonconstant %s lost its source-defined flags: %v", condition, err)
+			}
+		})
+	}
+}
+
+func TestARM64CarryProbeDoesNotInventSyscallContext(t *testing.T) {
+	for _, spelling := range []string{"SVC", "SVC $0", "SVC $7165"} {
+		t.Run(spelling, func(t *testing.T) {
+			file := arm64CarryProbeFile(t, spelling)
+			ins := arm64CarryProbeBody(file)[0]
+			before := ins
+			before.Args = append([]Operand(nil), ins.Args...)
+			if err := ProbeInstruction(ArchARM64, "arm64", ins); err != nil {
+				t.Fatalf("original Linux syscall probe acquired virtual flags as GP scratch: %v", err)
+			}
+			if err := ProbeInstructionSequence(ArchARM64, "arm64", []Instr{ins}); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(ins, before) {
+				t.Fatal("syscall probe acquired invented entry instructions")
+			}
+			if _, err := arm64CarryProbeTranslate(file); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Translate(file, Options{Goarch: "arm64", Sigs: map[string]FuncSig{
+				"carryProbe": {Name: "carryProbe", Ret: Void},
+			}}); !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "requires an explicit ARM64 target") {
+				t.Fatalf("missing original syscall target was invented: %v", err)
+			}
+		})
+	}
+}

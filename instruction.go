@@ -462,6 +462,23 @@ func ProbeInstruction(arch Arch, goarch string, ins Instr) error {
 			Raw: "CMP R0,R0 // explicit single-instruction probe flags fixture",
 		}}, instrs...)
 	}
+	if arch == ArchARM64 {
+		_, handled, err := parseARM64CarryForm(Op(normalizeInstructionOpcode(ins.Op)), ins)
+		if handled {
+			if err != nil {
+				return err
+			}
+			// This is only the single-form coverage fixture. A real CMP
+			// preserves GP inputs and supplies C for the complete typed
+			// carry grammar; no entry flag slot or caller source is changed.
+			// Sequence and full-source consumers still require their own
+			// reaching flag definition on every original CFG path.
+			instrs = append([]Instr{{
+				Op: "CMP", Args: []Operand{{Kind: OpReg, Reg: "R0"}, {Kind: OpReg, Reg: "R0"}},
+				Raw: "CMP R0,R0 // explicit single-instruction probe flags fixture",
+			}}, instrs...)
+		}
+	}
 	err := probeInstructionSequence(arch, goarch, instrs)
 	if arch == ArchARM && ins.Op == OpWORD && err != nil {
 		return fmt.Errorf("%w: %s requires surrounding instruction, register, and control-flow state: %v", ErrProbeNeedsContext, ins.Raw, err)

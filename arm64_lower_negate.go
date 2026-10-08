@@ -26,7 +26,7 @@ func (c *arm64Ctx) lowerNegate(op Op, ins Instr) (ok bool, terminated bool, err 
 	}
 
 	if withCarry {
-		return c.lowerNegateWithCarry(baseOp, word, setFlags, ins)
+		return c.lowerNegateWithCarry(baseOp, ins)
 	}
 	if len(ins.Args) != 1 && len(ins.Args) != 2 {
 		return true, false, fmt.Errorf("arm64 %s expects source[, destination]: %q", baseOp, ins.Raw)
@@ -119,22 +119,25 @@ func validateARM64NegateSource(source Operand, word bool) error {
 	}
 }
 
-func (c *arm64Ctx) lowerNegateWithCarry(op string, word, setFlags bool, ins Instr) (ok bool, terminated bool, err error) {
-	if len(ins.Args) != 2 || ins.Args[0].Kind != OpReg || ins.Args[1].Kind != OpReg ||
-		!isARM64GeneralOrZeroReg(ins.Args[0].Reg) || !isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
-		return true, false, fmt.Errorf("arm64 %s expects C_ZREG source and destination: %q", op, ins.Raw)
+func (c *arm64Ctx) lowerNegateWithCarry(op string, ins Instr) (ok bool, terminated bool, err error) {
+	form, handled, err := parseARM64CarryForm(Op(op), ins)
+	if !handled || !form.negate {
+		return false, false, nil
+	}
+	if err != nil {
+		return true, false, err
 	}
 	if err := c.requireARM64Flags(arm64FlagC, op); err != nil {
 		return true, false, err
 	}
 	typeName := LLVMType(I64)
 	wideType := LLVMType("i128")
-	if word {
+	if form.word {
 		typeName = I32
 		wideType = I64
 	}
 	var source string
-	if word {
+	if form.word {
 		source, err = c.eval32(ins.Args[0])
 	} else {
 		source, err = c.eval64(ins.Args[0], false)
@@ -158,16 +161,16 @@ func (c *arm64Ctx) lowerNegateWithCarry(op string, word, setFlags bool, ins Inst
 	fmt.Fprintf(c.b, "  %%%s = sub %s 0, %%%s\n", wideResult, wideType, subtrahend)
 	fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to %s\n", result, wideType, wideResult, typeName)
 	resultValue := "%" + result
-	if setFlags {
+	if form.setFlags {
 		c.setNegateWithCarryFlags(typeName, wideType, source, resultValue, "%"+subtrahend)
 	}
 	stored := resultValue
-	if word {
+	if form.word {
 		wide := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", wide, resultValue)
 		stored = "%" + wide
 	}
-	return true, false, c.storeReg(ins.Args[1].Reg, stored)
+	return true, false, c.storeReg(form.destination.Reg, stored)
 }
 
 func (c *arm64Ctx) setNegateWithCarryFlags(typeName, wideType LLVMType, source, result, wideSubtrahend string) {
