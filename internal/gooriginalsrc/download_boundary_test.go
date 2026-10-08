@@ -1,16 +1,17 @@
-package plan9asm
+package gooriginalsrc
 
 import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
-func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
+func TestOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 	for _, role := range []string{"closed FD", "same-inode bytes", "file replacement", "directory replacement", "foreign member"} {
 		t.Run(role, func(t *testing.T) {
-			boundary, err := newGoAMD64DownloadBoundary(t.TempDir())
+			boundary, err := NewDownloadBoundary(t.TempDir(), "original-download-", "example.invalid/command")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -23,7 +24,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err := boundary.file.Close(); err != nil {
 					t.Fatal(err)
 				}
-				err := boundary.prepare()
+				err := boundary.Prepare()
 				if !errors.Is(err, os.ErrClosed) {
 					t.Fatal("actual closed-descriptor write failure was not retained", err)
 				}
@@ -33,7 +34,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				}
 				return
 			}
-			if err := boundary.prepare(); err != nil {
+			if err := boundary.Prepare(); err != nil {
 				t.Fatal(err)
 			}
 			switch role {
@@ -47,7 +48,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err != nil || !os.SameFile(info, boundary.fileInfo) {
 					t.Fatal("byte mutation did not keep original inode", err)
 				}
-				if !errors.Is(boundary.Close(), ErrProbeNeedsContext) {
+				if !errors.Is(boundary.Close(), ErrDownloadBoundaryChanged) {
 					t.Fatal("changed same-inode metadata was removed")
 				}
 				if data, err := os.ReadFile(boundary.name); err != nil || string(data) != string(changed) {
@@ -64,7 +65,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err := os.WriteFile(boundary.name, boundary.written, 0600); err != nil {
 					t.Fatal(err)
 				}
-				if !errors.Is(boundary.Close(), ErrProbeNeedsContext) {
+				if !errors.Is(boundary.Close(), ErrDownloadBoundaryChanged) {
 					t.Fatal("same-byte replacement metadata was removed")
 				}
 				if _, err := os.Stat(boundary.name); err != nil {
@@ -84,7 +85,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err := os.Mkdir(boundary.directory, 0700); err != nil {
 					t.Fatal(err)
 				}
-				if !errors.Is(boundary.Close(), ErrProbeNeedsContext) {
+				if !errors.Is(boundary.Close(), ErrDownloadBoundaryChanged) {
 					t.Fatal("foreign replacement directory was removed")
 				}
 				if err := os.Remove(boundary.directory); err != nil {
@@ -98,7 +99,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err := os.WriteFile(foreign, []byte("foreign owner"), 0600); err != nil {
 					t.Fatal(err)
 				}
-				if !errors.Is(boundary.Close(), ErrProbeNeedsContext) {
+				if !errors.Is(boundary.Close(), ErrDownloadBoundaryChanged) {
 					t.Fatal("unexpected member did not invalidate cleanup")
 				}
 				if data, err := os.ReadFile(foreign); err != nil || string(data) != "foreign owner" {
@@ -107,6 +108,42 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if err := os.Remove(foreign); err != nil {
 					t.Fatal(err)
 				}
+			}
+		})
+	}
+}
+
+func TestOriginalDownloadBoundaryOwnerAndUnpreparedCleanup(t *testing.T) {
+	for _, prepared := range []bool{false, true} {
+		t.Run(map[bool]string{false: "empty original", true: "prepared original"}[prepared], func(t *testing.T) {
+			boundary, err := NewDownloadBoundary(t.TempDir(), "original-download-", "example.invalid/command")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := boundary.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			if prepared {
+				if err := boundary.Prepare(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			copied := new(DownloadBoundary)
+			reflect.ValueOf(copied).Elem().Set(reflect.ValueOf(boundary).Elem())
+			if copied.Directory() != "" || !errors.Is(copied.Verify(), ErrDownloadBoundaryChanged) ||
+				!errors.Is(copied.Prepare(), ErrDownloadBoundaryChanged) || !errors.Is(copied.Close(), ErrDownloadBoundaryChanged) {
+				t.Fatal("whole-value IO owner copy borrowed cleanup identity")
+			}
+			if _, err := os.Lstat(boundary.name); err != nil {
+				t.Fatal("copied IO owner removed original metadata", err)
+			}
+			if err := boundary.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Lstat(boundary.directory); !os.IsNotExist(err) {
+				t.Fatal("original empty/prepared boundary cleanup failed", err)
 			}
 		})
 	}

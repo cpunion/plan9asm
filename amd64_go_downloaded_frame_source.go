@@ -47,21 +47,21 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	if err != nil {
 		return err
 	}
-	boundary, err := newGoAMD64DownloadBoundary(temporary)
+	boundary, err := gooriginalsrc.NewDownloadBoundary(temporary, "plan9asm-frame-download-", "example.invalid/plan9asm-frame-download")
 	if err != nil {
-		return err
-	}
-	// This private command boundary is not a copied main/source module. Its
-	// sole purpose is to prevent stock Go mutating an ancestor go.mod/go.sum.
-	if err := boundary.prepare(); err != nil {
 		return err
 	}
 	defer func() {
 		result = errors.Join(result, boundary.Close())
 	}()
+	// This private command boundary is not a copied main/source module. Its
+	// sole purpose is to prevent stock Go mutating an ancestor go.mod/go.sum.
+	if err := boundary.Prepare(); err != nil {
+		return err
+	}
 	commandContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	data, err := goasmcmd.Run(commandContext, boundary.directory, source.request.Environment,
+	data, err := goasmcmd.Run(commandContext, boundary.Directory(), source.request.Environment,
 		source.request.GoBinary, "mod", "download", "-json", exact.module+"@"+exact.version)
 	err = errors.Join(err, commandContext.Err())
 	if err != nil {

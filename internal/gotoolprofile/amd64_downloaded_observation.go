@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/xgo-dev/plan9asm"
@@ -57,36 +56,20 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 	if err != nil {
 		return nil, err
 	}
-	created, err := os.MkdirTemp(originalObservationEnvironment(original.Environment, "GOTMPDIR"), "amd64-original-download-")
-	if err != nil {
-		return nil, err
-	}
-	owned, err := os.Lstat(created)
+	boundary, err := gooriginalsrc.NewDownloadBoundary(originalObservationEnvironment(original.Environment, "GOTMPDIR"),
+		"amd64-original-download-", "example.invalid/plan9asm-original-download")
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		info, err := os.Lstat(created)
-		if err != nil || !info.IsDir() || !os.SameFile(owned, info) {
-			result = errors.Join(result, fmt.Errorf("owned download marker directory identity changed"))
-		} else if err := os.RemoveAll(created); err != nil {
-			result = errors.Join(result, err)
-		}
+		result = errors.Join(result, boundary.Close())
 	}()
-	marker, err := filepath.EvalSymlinks(created)
-	if err != nil {
-		return nil, err
-	}
 	// An empty directory can still inherit an ancestor module. Give the
 	// download command its own module boundary, without changing source inputs.
-	boundary, err := os.OpenFile(filepath.Join(marker, "go.mod"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
+	if err := boundary.Prepare(); err != nil {
 		return nil, err
 	}
-	_, writeErr := boundary.WriteString("module example.invalid/plan9asm-original-download\ngo 1.20\n")
-	if err := errors.Join(writeErr, boundary.Close()); err != nil {
-		return nil, err
-	}
+	marker := boundary.Directory()
 	origins, err := gooriginalsrc.NewOriginSet(cache, original.GoBinary)
 	if err != nil {
 		return nil, err

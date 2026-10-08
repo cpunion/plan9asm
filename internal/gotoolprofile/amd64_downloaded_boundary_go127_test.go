@@ -3,6 +3,7 @@
 package gotoolprofile
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -16,6 +17,8 @@ func TestAMD64DownloadedObservationCommandBoundaryForeignGuards(t *testing.T) {
 			ctx, cancel := amd64OriginalObservationContext(t)
 			defer cancel()
 			var marker, canary string
+			var originalBytes []byte
+			var originalInfo os.FileInfo
 			changed := false
 			run := func(ctx context.Context, dir string, env []string, binary string, args ...string) ([]byte, []byte, error) {
 				data, diagnostic, err := RunBounded(ctx, dir, env, binary, args...)
@@ -25,6 +28,11 @@ func TestAMD64DownloadedObservationCommandBoundaryForeignGuards(t *testing.T) {
 				changed, marker = true, dir
 				name := filepath.Join(marker, "go.mod")
 				original, err := os.ReadFile(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalBytes = original
+				originalInfo, err = os.Lstat(name)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -94,6 +102,19 @@ func TestAMD64DownloadedObservationCommandBoundaryForeignGuards(t *testing.T) {
 				// that exact known fixture file and its now-empty replacement.
 				if err := os.Remove(canary); err != nil {
 					t.Fatal(err)
+				}
+				if role == "foreign member" {
+					// Remove only the test's unchanged original metadata, not an
+					// arbitrary member left behind by the refused production cleanup.
+					name := filepath.Join(marker, "go.mod")
+					info, statErr := os.Lstat(name)
+					data, readErr := os.ReadFile(name)
+					if statErr != nil || readErr != nil || !os.SameFile(info, originalInfo) || !bytes.Equal(data, originalBytes) {
+						t.Fatal("original fixture metadata changed", statErr, readErr)
+					}
+					if err := os.Remove(name); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if err := os.Remove(marker); err != nil {
 					t.Fatal(err)
