@@ -3,10 +3,17 @@ package gotoolprofile
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 func TestAMD64DownloadedObservationRejectsUnprovedInputs(t *testing.T) {
@@ -53,7 +60,7 @@ func TestAMD64DownloadedObservationRejectsUnprovedInputs(t *testing.T) {
 }
 
 func TestAMD64DownloadedObservationRejectsDownloadJSONForgery(t *testing.T) {
-	for _, field := range []string{"Path", "Version", "Dir", "Zip", "GoMod", "Sum", "GoModSum", "Error"} {
+	for _, field := range []string{"Path", "Version", "Dir", "Zip", "GoMod", "Sum", "GoModSum", "Error", "Dir as ZIP", "ZIP as metadata"} {
 		t.Run(field, func(t *testing.T) {
 			request, path, version := amd64DownloadedObservationFixture(t, "data")
 			ctx, cancel := amd64OriginalObservationContext(t)
@@ -68,9 +75,16 @@ func TestAMD64DownloadedObservationRejectsDownloadJSONForgery(t *testing.T) {
 				if err := json.Unmarshal(data, &object); err != nil {
 					return nil, nil, err
 				}
-				object[field], err = json.Marshal("unobserved")
-				if err != nil {
-					return nil, nil, err
+				switch field {
+				case "Dir as ZIP":
+					object["Dir"] = object["Zip"]
+				case "ZIP as metadata":
+					object["Zip"] = object["GoMod"]
+				default:
+					object[field], err = json.Marshal("unobserved")
+					if err != nil {
+						return nil, nil, err
+					}
 				}
 				changed = true
 				data, err = json.Marshal(object)
@@ -87,6 +101,93 @@ func TestAMD64DownloadedObservationRejectsDownloadJSONForgery(t *testing.T) {
 				t.Fatal("negative never reached its actual download seam")
 			}
 		})
+	}
+}
+
+func TestAMD64DownloadedObservationMarkerCannotInheritCallerModule(t *testing.T) {
+	request, path, version := amd64DownloadedObservationFixture(t, "data")
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	goMod := []byte("module example.invalid/caller-canary\ngo 1.20\nrequire " + path + " " + version + "\n")
+	if err := os.WriteFile(filepath.Join(parent, "go.mod"), goMod, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A caller-owned checksum file is a source input, not the factory's scratch.
+	goSum := []byte("\n")
+	if err := os.WriteFile(filepath.Join(parent, "go.sum"), goSum, 0600); err != nil {
+		t.Fatal(err)
+	}
+	tmp := filepath.Join(parent, "tmp")
+	if err := os.Mkdir(tmp, 0700); err != nil {
+		t.Fatal(err)
+	}
+	request.Environment = replaceEnv(request.Environment, map[string]string{"GOTMPDIR": tmp})
+	ctx, cancel := amd64OriginalObservationContext(t)
+	defer cancel()
+	observed, captureErr := captureAMD64DownloadedForTest(ctx, request, path, version)
+	if observed != nil {
+		defer observed.Close()
+	}
+	for name, expected := range map[string][]byte{"go.mod": goMod, "go.sum": goSum} {
+		actual, err := os.ReadFile(filepath.Join(parent, name))
+		if err != nil || string(actual) != string(expected) {
+			t.Errorf("factory download inherited and modified caller's %s: %v", name, err)
+		}
+	}
+	if captureErr != nil {
+		t.Fatal(captureErr)
+	}
+}
+
+func TestAMD64DownloadedObservationQueryOnlyCannotBindFixedLocal(t *testing.T) {
+	request, path, version := amd64DownloadedObservationFixture(t, "fixed-local")
+	ctx, cancel := amd64OriginalObservationContext(t)
+	defer cancel()
+	observed, err := captureAMD64DownloadedForTest(ctx, request, path, version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer observed.Close()
+	set := token.NewFileSet()
+	syntax, err := parser.ParseFile(set, filepath.Join(request.Directory, "value.go"), nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sizes := types.SizesFor("gc", "amd64")
+	typed, err := (&types.Config{Sizes: sizes}).Check(request.PackagePath, set, []*ast.File{syntax}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := plan9asm.DeriveGoFuncABI0Signature(request.PackagePath+".Value", typed.Scope().Lookup("Value").(*types.Func), "amd64", sizes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(request.Directory, "value_amd64.s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expanded := strings.Replace(string(data), "#include \"textflag.h\"", "#define NOSPLIT 4", 1)
+	expanded = strings.Replace(expanded, "#include \"local.h\"", "#define ADVANCE 32", 1)
+	file, err := plan9asm.Parse(plan9asm.ArchAMD64, expanded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := plan9asm.GoPackage{Path: typed.Path(), Types: typed, Syntax: []*ast.File{syntax}}
+	options := plan9asm.Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu",
+		ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", typed.Path()+".", 1) },
+		Sigs:       map[string]plan9asm.FuncSig{sig.Name: sig},
+	}
+	_, binding, err := observed.BindFixedLocal(ctx, pkg, file, "value_amd64.s", options)
+	if binding != nil {
+		defer binding.Close()
+	}
+	if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || binding != nil {
+		t.Fatalf("query-only downloaded observation silently exposed an owned-main frame/object consumer: %v", err)
+	}
+	if err := observed.Verify(ctx); err != nil {
+		t.Fatal("rejecting unimplemented consumer must not revoke an unchanged source observation", err)
 	}
 }
 

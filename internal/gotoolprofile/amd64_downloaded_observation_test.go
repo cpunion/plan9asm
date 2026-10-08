@@ -16,7 +16,13 @@ import (
 func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64OriginalObservationRequest, string, string) {
 	t.Helper()
 	request := amd64OriginalObservationFixture(t, variant)
+	if variant == "fixed-local" {
+		request, _, _, _, _ = amd64OriginalFixedLocalFixture(t)
+	}
 	modulePath, version := "example.invalid/observation", "v1.0.0"
+	if variant == "incompatible" {
+		version = "v1.0.0+incompatible"
+	}
 	if variant == "alias" {
 		modulePath = "example.invalid/archive-observation"
 	}
@@ -149,7 +155,7 @@ func captureAMD64DownloadedForTest(ctx context.Context, request AMD64OriginalObs
 }
 
 func TestAMD64DownloadedObservationActualOriginalCache(t *testing.T) {
-	for _, variant := range []string{"nested", "data", "sibling", "alias", "foreign"} {
+	for _, variant := range []string{"nested", "data", "sibling", "alias", "foreign", "incompatible"} {
 		t.Run(variant, func(t *testing.T) {
 			request, modulePath, version := amd64DownloadedObservationFixture(t, variant)
 			ctx, cancel := amd64OriginalObservationContext(t)
