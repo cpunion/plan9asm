@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-const TextProtocol = "actual_go_text_records_observation_v1"
+const TextProtocol = "actual_go_text_records_observation_v2"
 const builtinSourceRole = "src/cmd/internal/goobj/builtinlist.go"
 
 // These are binary observations, not decoded instruction/read, TEXT entry,
@@ -43,6 +43,9 @@ type TextPosition struct {
 
 type TextRecord struct {
 	Index          uint32
+	Namespace      TextSymbolNamespace
+	Relative       uint32
+	Hash           []byte
 	Name           string
 	ABI            uint16
 	Kind           uint8
@@ -171,6 +174,10 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 		return nil, err
 	}
 	block := object.block
+	definitions, err := object.indexedSymbols()
+	if err != nil {
+		return nil, err
+	}
 	counts := [5]int{}
 	var symbols []byte
 	for index := range counts {
@@ -280,7 +287,10 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 			continue
 		}
 		name, _ := object.stringAt(s[:8])
-		value := TextRecord{Index: uint32(index), Name: name, ABI: binary.LittleEndian.Uint16(s[8:]), Kind: s[10], Flags: s[11], Flags2: s[12], Size: int64(binary.LittleEndian.Uint32(s[13:]))}
+		definition := definitions[index]
+		value := TextRecord{Index: uint32(index), Namespace: definition.Namespace, Relative: definition.Relative,
+			Hash: append([]byte(nil), definition.Hash...), Name: name, ABI: binary.LittleEndian.Uint16(s[8:]),
+			Kind: s[10], Flags: s[11], Flags2: s[12], Size: int64(binary.LittleEndian.Uint32(s[13:]))}
 		start, end := object.indices[2][index], object.indices[2][index+1]
 		value.Code = append([]byte(nil), block(16)[start:end]...)
 		if value.Size > archiveLimit || arch != "wasm" && value.Size != int64(len(value.Code)) {

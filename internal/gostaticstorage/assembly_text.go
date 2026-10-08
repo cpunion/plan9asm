@@ -85,7 +85,7 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 	seenSources := make(map[string]bool)
 	definitions := make(map[string]bool)
 	storage := make(map[string]bool)
-	named := make(map[string]bool)
+	sdkDefinitions := make(sdkAssemblyNamedDefinitions)
 	// Go 1.27.1 work/init.go passes -shared for default PIE on Darwin.
 	// Windows default PIE does not pass it. This exact archive role is not
 	// inherited by direct tool asm objects or the Linux x86 observation APIs.
@@ -111,31 +111,34 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 		if err != nil {
 			return nil, err
 		}
-		records, err := assemblyArchiveDefinitions(body, flags, sdk, index != 0)
-		if err != nil {
-			return nil, err
-		}
-		for _, record := range records {
-			name := record.Name
-			key := name + "\x00" + strconv.Itoa(int(record.ABI))
-			if !sdk {
+		if !sdk {
+			records, err := assemblyArchiveDefinitions(body, flags, false, index != 0)
+			if err != nil {
+				return nil, err
+			}
+			for _, record := range records {
+				name := record.Name
+				key := name + "\x00" + strconv.Itoa(int(record.ABI))
 				if definitions[key] || storage[name] || index != 0 && record.Kind != 1 {
 					return nil, contextError("duplicate same-ABI/storage or assembly DATA definition")
 				}
-			} else {
-				if index != 0 && record.Kind != 1 {
-					return nil, contextError("assembly DATA definition needs an independent role: " + name)
-				}
-				if definitions[key] {
-					return nil, contextError("duplicate SDK same-ABI definition: " + name)
-				}
-				if storage[name] || named[name] && record.Kind != 1 {
-					return nil, contextError("SDK name collides with native storage: " + name)
+				definitions[key] = true
+				storage[name] = record.Kind != 1
+			}
+		} else {
+			object, err := checkedObject(body, flags, index != 0)
+			if err != nil {
+				return nil, err
+			}
+			symbols, err := object.indexedSymbols()
+			if err != nil {
+				return nil, err
+			}
+			for _, symbol := range symbols {
+				if err := sdkDefinitions.observe(symbol, index != 0); err != nil {
+					return nil, err
 				}
 			}
-			definitions[key] = true
-			storage[name] = record.Kind != 1
-			named[name] = true
 		}
 		texts, err := readTextObject(body, target, flags, sdk && index != 0, builtins)
 		if err != nil {

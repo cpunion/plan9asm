@@ -65,6 +65,9 @@ type Position struct {
 }
 type Text struct {
 	Index         uint32
+	Namespace     uint8
+	Relative      uint32
+	Hash          []byte
 	Name          string
 	ABI           uint16
 	Kind          uint8
@@ -173,6 +176,21 @@ func main() {
 					continue
 				}
 				v := Text{Index: uint32(i), Name: s.Name(r), ABI: s.ABI(), Kind: s.Type(), Flags: s.Flag(), Flags2: s.Flag2(), Size: int64(s.Siz()), Code: r.Data(uint32(i))}
+				start := 0
+				for namespace, count := range []int{r.NSym(), r.NHashed64def(), r.NHasheddef(), r.NNonpkgdef()} {
+					if i < start + count {
+						v.Namespace = uint8(namespace)
+						v.Relative = uint32(i - start)
+						break
+					}
+					start += count
+				}
+				if v.Namespace == 1 {
+					hash := r.Hash64(v.Relative)
+					v.Hash = make([]byte, 8)
+					for index := range v.Hash { v.Hash[index] = byte(hash >> (8 * index)) }
+				}
+				if v.Namespace == 2 { v.Hash = append([]byte(nil), r.Hash(v.Relative)[:]...) }
 				for j := 0; j < r.NReloc(uint32(i)); j++ {
 					q := r.Reloc(uint32(i), j)
 					v.Relocations = append(v.Relocations, Reloc{int64(q.Off()), int64(q.Siz()), q.Type(), q.Add(), resolve(q.Sym())})
