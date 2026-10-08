@@ -42,6 +42,19 @@ tests are not local external-library scans or corpus compilation.
 The published `c09eff1e` sixteen-stage affected gate passed, but did not certify
 the complete root/module suite or external corpus.
 
+Frozen `39109359` closed seven following-batch affected stages: corpus-driver
+ordinary/race each 555 nodes, root scopes each 223, and full storage-package
+scopes each 219 passed; full vet and stamped corpus-driver build passed.
+Independent complete source/tool/list/raw/owner readback agrees. These are
+first-party affected scopes, not current-head full suites or library passes.
+
+The later aggregate command now audits reports once and reuses that exact
+progress for strict verification and stored-ledger comparison. Its frozen
+`35b1df2e` ordinary/race affected checks each passed 179 nodes. Subsequent
+review exposed late-destination overwrite and final-input/publication gaps;
+the publication-hardening component is still under TDD, not a green combined
+head. Diagnostic phase events are uploaded separately from corpus reports.
+
 ## Integrated rule-class repairs
 
 The predecessor already integrates shared GP/SIMD, scalar-lane, AES, CMOV,
@@ -150,6 +163,26 @@ until their separate source roles are closed.
 Do not turn an OpSym spelling, DATA record, BSS extent or source/report JSON
 into initialized/native memory. Preserve wasm logical PC versus code-byte axes.
 
+Separate component worktrees currently own these limited consumers:
+
+- Numerical reads: seal complete declarations/options and join independent
+  original numerical/frame objects with exact TEXT, code, source-PC and ordered
+  relocations. Keep default no-relocation refusal. Rejoin instruction tokens
+  after fixed-local reparsing; never copy old certificates or enter numerical
+  owner callbacks while holding a frame lock.
+- Downloaded frames: share bounded exact-download physical source guards, then
+  use an explicit independent factory/binding route. Ordinary Go `Module.Main`
+  and an empty version do not prove an owned-main role: cache CWD has the same
+  fields. Default owned routes exclude SDK/cache roots; an exact-download route
+  must retain its own complete original archive/cache identity.
+- Aggregate publication: preflight canonical output/input separation, prepare
+  a closed diagnostic, recheck source and both ledgers, then publish without
+  overwrite. Stream physical hashes with observed extent/EOF and pathname
+  identity guards; a corrupt or replaced temporary is not a valid report.
+
+These components require complete ordinary/race and independent reader closure
+before integration. Their producer or focused passes do not promote the ledger.
+
 Current CI failure classes include FP/native/CPP/result binding, cached source/
 object roles, x86 caller/stack joins, ARM64 native ABI/frame state, profile
 planning and generated/instrumentation/resource scopes. Repair entire classes
@@ -171,12 +204,14 @@ SDK symbol reads, dynamic reflect frames, native entry/TLS/continuations,
 ARM64 result padding and whole SDK body closure. Preserve the earlier strict
 `55ecfe9d` failure; speed does not certify compilation.
 
-A later independent recheck at frozen `997e9315` again attempts all 184 files:
-167 pass, 17 fail, zero N/A/unattempted, build 18 seconds and target wall total
-29 seconds. Its official classification and Go-accepted ARM64 decoder gates
-pass; the standard target-matrix gate still fails. That snapshot predates the
-broadcast integration and proves neither the later combined head nor external
-library outcomes.
+A later independent recheck at frozen `1a0c2d71` again attempts all 184 files:
+167 pass, 17 fail, zero N/A/unattempted, build three seconds and target wall total
+27 seconds. Official five-arch classification and Go-accepted ARM64 decoder
+commands pass; the standard target-matrix gate still fails. Complete tracked
+source, SDK source/include inventory, actual tools, logs, reports and all five
+owner/groups were independently read back. The decoder dependency itself was
+not part of the initial SDK snapshot. This is a closed failing baseline, not
+the forthcoming consumer integration or an external-library certificate.
 
 Historical scalar compatibility hit a pre-test link limit with zero tests
 attempted. The mode32 extreme-SP witness has an LLVM22 O0 allocator failure,
