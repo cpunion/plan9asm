@@ -7,13 +7,23 @@ import (
 )
 
 type x86BroadcastNumericalCase struct {
-	row                                           string
-	width, sourceBytes, laneBytes, masking, alias int
+	row                                                     string
+	width, sourceBytes, laneBytes, masking, alias, maskData int
 }
 
 func x86BroadcastNumericalCases(original bool) []x86BroadcastNumericalCase {
 	var cases []x86BroadcastNumericalCase
 	for _, spec := range x86BroadcastTestDirectory {
+		if !original && spec.source == "K" {
+			for _, bank := range spec.destinations {
+				cases = append(cases, x86BroadcastNumericalCase{
+					row:         fmt.Sprintf("%s K3,%c2", spec.name, bank),
+					width:       map[rune]int{'X': 16, 'Y': 32, 'Z': 64}[bank],
+					sourceBytes: spec.bytes, laneBytes: spec.lane, maskData: 1,
+				})
+			}
+			continue
+		}
 		if spec.source != "X" && spec.source != "XG" {
 			continue
 		}
@@ -72,7 +82,7 @@ func x86BroadcastNumericalSource(t *testing.T, original, raw bool) (string, stri
 		fmt.Fprintf(&declarations, "func %s(out *[240]byte,src,old *[64]byte,mask uint64)\n", name)
 		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-32\nMOVQ out+0(FP),R10\nMOVQ src+8(FP),R11\nMOVQ old+16(FP),R12\nMOVQ mask+24(FP),CX\n", name)
 		fmt.Fprintf(&source, "VMOVUPS (R11),%s1\nVMOVUPS (R12),%s2\nMOVQ 0(R11),AX\nMOVQ 8(R11),BX\n", bank, bank)
-		if test.masking != 0 {
+		if test.masking != 0 || test.maskData != 0 {
 			source.WriteString("KMOVQ CX,K3\n")
 		}
 		source.WriteString("STMXCSR 232(R10)\nCMPQ AX,BX\n")
@@ -85,7 +95,7 @@ func x86BroadcastNumericalSource(t *testing.T, original, raw bool) (string, stri
 		fmt.Fprintf(&source, "VMOVUPS %s%d,112(R10)\nVMOVUPS Y%d,176(R10)\nVMOVUPS X%d,208(R10)\n", bank, src, src, src)
 		source.WriteString("SETCS 224(R10)\nSETEQ 225(R10)\nSETMI 226(R10)\nSETOS 227(R10)\nLAHF\nMOVB AH,DL\nMOVB DL,228(R10)\nSTMXCSR 236(R10)\nRET\n")
 		fmt.Fprintf(&names, "%s,", name)
-		fmt.Fprintf(&metadata, "{%d,%d,%d,%d,%d},\n", test.width, test.sourceBytes, test.laneBytes, test.masking, test.alias)
+		fmt.Fprintf(&metadata, "{%d,%d,%d,%d,%d,%d},\n", test.width, test.sourceBytes, test.laneBytes, test.masking, test.alias, test.maskData)
 	}
 	return declarations.String(), source.String(), names.String(), metadata.String()
 }
@@ -102,13 +112,13 @@ func TestX86BroadcastOriginalGoNumericalViewsFlagsCanaries(t *testing.T) {
 func TestX86BroadcastLLVMNumericalViewsFlagsCanaries(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
 	cases := x86BroadcastNumericalCases(false)
-	if len(cases) != 168 {
+	if len(cases) != 174 {
 		t.Fatalf("independent numerical directory%d", len(cases))
 	}
 	var prototypes, rows strings.Builder
 	for index, test := range cases {
 		fmt.Fprintf(&prototypes, "extern void broadcast%d(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);\n", index)
-		fmt.Fprintf(&rows, "{broadcast%d,%d,%d,%d,%d,%d},\n", index, test.width, test.sourceBytes, test.laneBytes, test.masking, test.alias)
+		fmt.Fprintf(&rows, "{broadcast%d,%d,%d,%d,%d,%d,%d},\n", index, test.width, test.sourceBytes, test.laneBytes, test.masking, test.alias, test.maskData)
 	}
 	main := strings.ReplaceAll(x86BroadcastLLVMDriver, "PROTOTYPES", prototypes.String())
 	main = strings.ReplaceAll(main, "ROWS", rows.String())
@@ -128,7 +138,7 @@ func TestX86BroadcastLLVMNumericalViewsFlagsCanaries(t *testing.T) {
 					for _, level := range []string{"-O0", "-O2"} {
 						t.Run("backend"+level, func(t *testing.T) {
 							output := execution.compileAndRunLLVM(t, "register-broadcast", text, main, level)
-							if !strings.Contains(string(output), "LLVM_BROADCAST_37296_CASES_PASS") {
+							if !strings.Contains(string(output), "LLVM_BROADCAST_38628_CASES_PASS") {
 								t.Fatal(string(output))
 							}
 						})
@@ -149,7 +159,7 @@ import (
 )
 func TestOriginal(t *testing.T) {
  programs := []func(*[240]byte,*[64]byte,*[64]byte,uint64){FUNCTIONS}
- rules := []struct {width,sourceBytes,laneBytes,masking,alias int}{METADATA}
+ rules := []struct {width,sourceBytes,laneBytes,masking,alias,maskData int}{METADATA}
  observations := 0
  for k,program := range programs {
   r := rules[k]
@@ -198,7 +208,7 @@ const x86BroadcastLLVMDriver = `#include <stdint.h>
 PROTOTYPES
 typedef struct {
  void (*program)(uint8_t*,const uint8_t*,const uint8_t*,uint64_t);
- unsigned width,sourceBytes,laneBytes,masking,alias;
+ unsigned width,sourceBytes,laneBytes,masking,alias,maskData;
 } rule;
 static const rule rules[]={ROWS};
 int main(void) {
@@ -216,7 +226,9 @@ int main(void) {
    const uint8_t *input=r.alias?old:src;
    for(unsigned i=0;i<64;i++) {
     unsigned active=!r.masking||((masks[m]>>(i/r.laneBytes))&1);
-    value[i]=i>=r.width?0:active?input[i%r.sourceBytes]:r.masking==2?0:old[i];
+    uint8_t computed=input[i%r.sourceBytes];
+    if(r.maskData) computed=i%r.laneBytes<r.sourceBytes?(uint8_t)(masks[m]>>(8*(i%r.laneBytes))):0;
+    value[i]=i>=r.width?0:active?computed:r.masking==2?0:old[i];
    }
    memcpy(want+16,value,64);memcpy(want+80,value,32);memcpy(want+112,value,16);
    const uint8_t *observed=r.alias?value:src;
@@ -241,8 +253,8 @@ int main(void) {
    observations++;
   }
  }
- if(observations!=37296) return 1;
- puts("LLVM_BROADCAST_37296_CASES_PASS");
+ if(observations!=38628) return 1;
+ puts("LLVM_BROADCAST_38628_CASES_PASS");
  return 0;
 }
 `
