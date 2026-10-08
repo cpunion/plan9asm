@@ -25,6 +25,15 @@ type amd64FixedLocalCLISource struct {
 	packageData *packages.Package
 	target      string
 	sources     map[string]string
+	downloaded  *amd64FixedLocalDownloadRequest
+}
+
+// This records only the explicit invocation identity. The independent download
+// observer and object factory, not these fields, establish the source role.
+type amd64FixedLocalDownloadRequest struct {
+	consumer                            *featureConsumer
+	input                               *featureInput
+	module, sourceModule, version, root string
 }
 
 func (source *amd64FixedLocalCLISource) verify(ctx context.Context) (result error) {
@@ -33,6 +42,17 @@ func (source *amd64FixedLocalCLISource) verify(ctx context.Context) (result erro
 			result = errors.Join(result, source.close())
 		}
 	}()
+	if request := source.downloaded; request != nil {
+		input := request.consumer.Input
+		if input != request.input || input.Module != request.module ||
+			input.SourceModule != request.sourceModule || input.Version != request.version ||
+			input.SourceRoot != request.root {
+			return fmt.Errorf("%w: fixed-local explicit download identity changed", plan9asm.ErrProbeNeedsContext)
+		}
+		if err := request.consumer.verifySources(); err != nil {
+			return err
+		}
+	}
 	if err := verifyAMD64FixedLocalSelection(source.packageData, source.selection, source.target); err != nil {
 		return err
 	}
@@ -151,10 +171,31 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 	if err != nil {
 		return nil, nil, err
 	}
-	observed, err := gotoolprofile.CaptureAMD64OriginalPackageObservation(ctx,
-		gotoolprofile.AMD64OriginalObservationRequest{
-			GoBinary: binary, Directory: dir, PackagePath: pkg.PkgPath, Target: target, Environment: env,
-		}, gotoolprofile.RunBounded)
+	original := gotoolprofile.AMD64OriginalObservationRequest{
+		GoBinary: binary, Directory: dir, PackagePath: pkg.PkgPath, Target: target, Environment: env,
+	}
+	var observed *gotoolprofile.AMD64OriginalPackageObservation
+	var downloaded *amd64FixedLocalDownloadRequest
+	if consumer := config.Feature; consumer != nil && consumer.Input != nil && consumer.Input.Version != "" {
+		if err := consumer.verifySources(); err != nil {
+			return nil, nil, err
+		}
+		input := consumer.Input
+		downloaded = &amd64FixedLocalDownloadRequest{consumer: consumer, input: input,
+			module: input.Module, sourceModule: input.SourceModule, version: input.Version, root: input.SourceRoot}
+		module := input.SourceModule
+		if module == "" {
+			module = input.Module
+		}
+		observed, err = gotoolprofile.CaptureAMD64DownloadedPackageObservation(ctx,
+			gotoolprofile.AMD64DownloadedObservationRequest{
+				Original: original, SourceModule: module, SourceVersion: input.Version,
+			}, gotoolprofile.RunBounded)
+	} else {
+		// In particular, Main=true and an empty version from a cache CWD do
+		// not create an owned-source role or infer an exact version.
+		observed, err = gotoolprofile.CaptureAMD64OriginalPackageObservation(ctx, original, gotoolprofile.RunBounded)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,7 +206,11 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 			}
 		}
 	}()
-	bound, binding, err := observed.BindFixedLocal(ctx,
+	bind := observed.BindFixedLocal
+	if downloaded != nil {
+		bind = observed.BindDownloadedFixedLocal
+	}
+	bound, binding, err := bind(ctx,
 		plan9asm.GoPackage{Path: pkg.PkgPath, Types: pkg.Types, Syntax: syntax}, file, filepath.Base(actualAsm),
 		plan9asm.Options{Goarch: goarch, TargetTriple: triple, ResolveSym: resolve, Sigs: sigs})
 	if err != nil {
@@ -173,7 +218,7 @@ func prepareAMD64FixedLocalSource(pkg *packages.Package, file *plan9asm.File, as
 	}
 	source := &amd64FixedLocalCLISource{
 		observation: observed, binding: binding, selection: selection, packageData: pkg,
-		target: target, sources: sources,
+		target: target, sources: sources, downloaded: downloaded,
 	}
 	if err := source.verify(ctx); err != nil {
 		return nil, nil, err
