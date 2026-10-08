@@ -73,17 +73,15 @@ func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, targe
 			if err != nil {
 				return nil, err
 			}
-			object, err := checkedObject(body, flags, index != 0)
+			object, err := checkedSDKIndexedMetadata(body, flags, index != 0)
 			if err != nil {
 				return nil, contextError("SDK referenced package=" + path + " member=" + member.name + ": " + err.Error())
 			}
-			symbols, err := object.indexedSymbols()
-			if err != nil {
-				return nil, err
-			}
 			if index == 0 {
-				count := len(object.block(3)) / 21
-				result[path] = append([]indexedObjectSymbol(nil), symbols[:count]...)
+				result[path], err = object.selfSymbols()
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
