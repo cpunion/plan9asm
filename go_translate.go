@@ -94,6 +94,29 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
+	if source := opt.ARM64ByteCarrierSource; source != nil {
+		if err := source.Verify(source.lease); err != nil {
+			return nil, err
+		}
+		original, err := arm64ByteCarrierGoView(source, pkg)
+		if err != nil {
+			source.revokeCarrier()
+			return nil, err
+		}
+		defer func() {
+			final := finishARM64ByteCarrierGoSource(source, pkg, original, result)
+			if resultErr != nil || final != nil {
+				source.revokeCarrier()
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				result, resultErr = nil, errors.Join(resultErr, final)
+			}
+		}()
+		if opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 {
+			return nil, arm64ByteCarrierContext("custom declaration/closure mapping is outside the closed source")
+		}
+	}
 	originalSource := src
 	originalSourceDigest := sha256.Sum256(src)
 	if binding := opt.NumericalReads; binding != nil {

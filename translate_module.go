@@ -19,6 +19,9 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
 func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
+	if opt.ARM64ByteCarrierSource != nil {
+		return translateARM64ByteCarrierModule(ctx, file, opt)
+	}
 	originalFile, originalOptions := file, opt
 	file, opt, err := freezeNumericalReadInputs(file, opt)
 	if err != nil {
