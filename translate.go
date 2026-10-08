@@ -171,6 +171,11 @@ type Options struct {
 	// authorizes its exact scalar reads, never SB addresses, writes or pointers.
 	NumericalReads *GoX86NumericalReadBinding
 
+	// ARM64ByteCarrierSource is an actual sealed original-source owner, not a
+	// FrameLayout or report-derived permission. The bounded private consumer
+	// must independently close native effects and the shared caller backing.
+	ARM64ByteCarrierSource *GoARM64ByteCarrierSource
+
 	// X86TailGroups identifies closed, assembly-only continuation groups. Their
 	// helpers have no callable Go/native entry: the caller must establish that
 	// their addresses are used only for jumps within the group's root. The

@@ -54,6 +54,10 @@ type GoModuleOptions struct {
 	AnnotateSource bool
 	NumericalReads *GoX86NumericalReadBinding
 
+	// ARM64ByteCarrierSource retains the original bounded capture lease.
+	// LLVM Context controls resources, not cancellation or native authority.
+	ARM64ByteCarrierSource *GoARM64ByteCarrierSource
+
 	ResolveSym func(sym string) string
 	KeepFunc   func(textSym, resolved string) bool
 	ManualSig  func(resolved string) (FuncSig, bool)
@@ -203,14 +207,15 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		return nil, err
 	}
 	mod, err := TranslateModuleInContext(ctx, file, Options{
-		TargetTriple:   opt.TargetTriple,
-		ResolveSym:     resolve,
-		Sigs:           sigs,
-		Goarch:         opt.GOARCH,
-		WASMABI:        opt.WASMABI,
-		X87Mode:        opt.X87Mode,
-		AnnotateSource: opt.AnnotateSource,
-		NumericalReads: opt.NumericalReads,
+		TargetTriple:           opt.TargetTriple,
+		ResolveSym:             resolve,
+		Sigs:                   sigs,
+		Goarch:                 opt.GOARCH,
+		WASMABI:                opt.WASMABI,
+		X87Mode:                opt.X87Mode,
+		AnnotateSource:         opt.AnnotateSource,
+		NumericalReads:         opt.NumericalReads,
+		ARM64ByteCarrierSource: opt.ARM64ByteCarrierSource,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: translate %s: %w", pkgPath, asmName, err)
