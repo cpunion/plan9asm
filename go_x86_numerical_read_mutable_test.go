@@ -67,7 +67,7 @@ func Feature() byte
 func TestGoX86NumericalSBReadActualMutableWidthsAndCPP(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
 		t.Run(arch, func(t *testing.T) {
-			forms := []string{"MOVB", "MOVW", "MOVL", "MOVBWSX", "MOVBWZX", "MOVBLSX", "MOVBLZX", "MOVWLSX", "MOVWLZX", "MOVLQZX"}
+			forms := []string{"MOVB", "MOVW", "MOVL", "MOVBWSX", "MOVBWZX", "MOVBLSX", "MOVBLZX", "MOVWLSX", "MOVWLZX", "MOVLQZX", "MOVSWW", "MOVZWW"}
 			if arch == "amd64" {
 				forms = append(forms, "MOVQ", "MOVBQSX", "MOVBQZX", "MOVWQSX", "MOVWQZX", "MOVLQSX")
 			}
