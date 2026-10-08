@@ -45,12 +45,22 @@ func arm64CarryProbeTranslate(file *File) (string, error) {
 	})
 }
 
-func TestARM64CarryProbeMatchesCompleteGoTable(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/asm7.go"))
+func arm64CarryProbeCheckCompleteGoTable(t *testing.T, goroot string) {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(goroot, "src/cmd/internal/obj/arm64/asm7.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
+	versionData, err := os.ReadFile(filepath.Join(goroot, "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := strings.SplitN(strings.TrimSpace(string(versionData)), "\n", 2)[0]
+	columns, err := arm64CarryProbeGoOptabColumns(source, version)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var aliases []string
 	for _, family := range []struct {
 		name string
@@ -65,6 +75,14 @@ func TestARM64CarryProbeMatchesCompleteGoTable(t *testing.T) {
 		rows := regexp.MustCompile(`(?m)^\s*\{`+family.name+`,[^\n]+`).FindAllString(source, -1)
 		for index, row := range rows {
 			rows[index] = strings.Join(strings.Fields(row), "")
+		}
+		if columns == 10 {
+			// The verified old schema lacks only the a5 destination column.
+			// Every other operand, encoder and effect field stays exact.
+			for index, row := range family.rows {
+				fields := strings.Split(row, ",")
+				family.rows[index] = strings.Join(append(fields[:5:5], fields[6:]...), ",")
+			}
 		}
 		if !reflect.DeepEqual(rows, family.rows) {
 			t.Fatalf("complete Go %s rows changed: got %v want %v", family.name, rows, family.rows)
@@ -89,7 +107,7 @@ func TestARM64CarryProbeMatchesCompleteGoTable(t *testing.T) {
 		t.Fatalf("complete Go carry alias family changed: got %v want %v", aliases, want)
 	}
 
-	data, err = os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/obj7.go"))
+	data, err = os.ReadFile(filepath.Join(goroot, "src/cmd/internal/obj/arm64/obj7.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +128,7 @@ func TestARM64CarryProbeMatchesCompleteGoTable(t *testing.T) {
 			t.Fatalf("Go %s immediate-zero alias changed: present=%v", op, present)
 		}
 	}
+	t.Logf("actual %s: complete %d-column Optab, all 12 carry aliases and exact zero-replace membership", version, columns)
 }
 
 func TestARM64CarryProbeSingleCompleteForms(t *testing.T) {
@@ -233,7 +252,7 @@ func TestARM64AlwaysConditionProbeNeedsNoFlags(t *testing.T) {
 }
 
 func TestARM64AlwaysConditionProbeMatchesCompleteGoConditions(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/list7.go"))
+	data, err := os.ReadFile(filepath.Join(goroot, "src/cmd/internal/obj/arm64/list7.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
