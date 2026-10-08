@@ -45,6 +45,14 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err != nil {
 		return llvm.Module{}, err
 	}
+	if len(bindings) != 0 {
+		// The actual fixed-local source is independently reparsed, so none of
+		// the earlier certificates survive. Rejoin the current sealed numerical
+		// token by the complete source and exact original instruction ordinal.
+		if err := joinNumericalReadCertificates(file, opt); err != nil {
+			return llvm.Module{}, err
+		}
+	}
 	defer func() {
 		if err := finishX86FixedLocalBindings(bindings); err != nil {
 			if !result.IsNil() {
