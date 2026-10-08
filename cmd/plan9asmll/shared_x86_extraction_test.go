@@ -50,8 +50,12 @@ func TestExtractSupportedOpsSharedX86DispatchDoesNotAdvertiseConditions(t *testi
 		"translate.go": "package sample\n",
 		"x86_shared.go": `package sample
 import "strings"
+var sharedTable = map[string]int{"VTABLEOP": 1}
+var unrelatedNames = map[string]int{"EQ": 1, "NE": 1}
 func dispatch(op Op, condition string) {
 	name, _, _ := strings.Cut(strings.ToUpper(string(op)), ".")
+	_ = sharedTable[name]
+	_ = unrelatedNames[condition]
 	switch name {
 	case "VSHAREDOP":
 	}
@@ -79,8 +83,10 @@ func testOnly(op Op) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, found := supported["VSHAREDOP"]; !found {
-				t.Error("shared opcode switch was not observed")
+			for _, name := range []string{"VSHAREDOP", "VTABLEOP"} {
+				if _, found := supported[name]; !found {
+					t.Errorf("shared opcode dispatch %s was not observed", name)
+				}
 			}
 			for _, name := range []string{"EQ", "NE", "VTESTONLY"} {
 				if _, found := supported[name]; found {
