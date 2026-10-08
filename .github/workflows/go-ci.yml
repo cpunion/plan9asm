@@ -97,9 +97,16 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
-          path: |
-            _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
-            _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
+          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+      - name: Upload shard phase journal
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v6
+        with:
+          name: discovered-corpus-events-${{ matrix.shard }}
+          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
           if-no-files-found: error
 
   fmt:
@@ -361,9 +368,16 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
-          path: |
-            _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
-            _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
+          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+      - name: Upload shard phase journal
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@v6
+        with:
+          name: discovered-corpus-events-${{ matrix.shard }}
+          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
           if-no-files-found: error
 
   discovered_library_corpus_verify:
