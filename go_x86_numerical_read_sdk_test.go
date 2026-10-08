@@ -167,6 +167,64 @@ func TestGoX86SDKNumericalReadOriginalInputObservationNoAuthority(t *testing.T) 
 	}
 }
 
+func TestGoX86SDKNumericalReadCompleteOriginalSelectedSource(t *testing.T) {
+	ctx, request, _ := numericalSDKCPURequest(t, "amd64")
+	source, err := captureGoX86NumericalReadSource(ctx, request, numericalSBSDKSource, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	for _, files := range [][]string{source.guard.selection.GoFiles, source.guard.selection.SFiles, source.guard.selection.HFiles} {
+		for _, name := range files {
+			file := filepath.Join(request.Directory, name)
+			if _, present := source.sdk.Inputs[file]; !present {
+				t.Errorf("SDK source role omitted complete selected original bytes: %s", name)
+			}
+		}
+	}
+}
+
+func TestGoX86SDKNumericalReadOriginalCaptureContextCannotRevive(t *testing.T) {
+	ctx, request, _ := numericalSDKCPURequest(t, "amd64")
+	captured, cancel := context.WithCancel(ctx)
+	source, err := captureGoX86NumericalReadSource(captured, request, numericalSBSDKSource, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	cancel()
+	if err := source.verifySDKObservation(ctx); !errors.Is(err, context.Canceled) || errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("fresh context revived the original cancelled SDK capture", err)
+	}
+	if err := source.verifySDKObservation(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("failed SDK source lease did not remain revoked", err)
+	}
+}
+
+func TestGoX86SDKNumericalReadOriginalCommandRequestSealed(t *testing.T) {
+	ctx, request, _ := numericalSDKCPURequest(t, "amd64")
+	for _, field := range []string{"target", "assembly"} {
+		t.Run(field, func(t *testing.T) {
+			source, err := captureGoX86NumericalReadSource(ctx, request, numericalSBSDKSource, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer source.Close()
+			original := source.guard.request
+			if field == "target" {
+				source.guard.request.Target = "linux/386"
+			} else {
+				source.guard.request.AssemblyFile = "foreign.s"
+			}
+			err = source.verifySDKObservation(ctx)
+			source.guard.request = original
+			if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(source.verifySDKObservation(ctx), ErrProbeNeedsContext) {
+				t.Fatal("mutated/restored actual SDK command request revived the source role", err)
+			}
+		})
+	}
+}
+
 func TestGoX86SDKNumericalReadDefaultOwnedRemainsContext(t *testing.T) {
 	ctx, request, owner := numericalSDKCRC32Request(t)
 	source, err := CaptureGoX86NumericalReadSource(ctx, request)
