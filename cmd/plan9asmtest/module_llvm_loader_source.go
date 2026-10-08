@@ -64,15 +64,30 @@ func prepareModuleLLVMProbeSource(ctx context.Context, stem string) (input modul
 		if err != nil {
 			return input, err
 		}
+		stagedInfo, statErr := staged.Stat()
+		if statErr != nil {
+			return input, errors.Join(statErr, staged.Close())
+		}
 		// Every creator owns only this unique staging file. Atomic hard-link
 		// publication exposes complete closed bytes, even to a losing creator.
-		defer func() { resultErr = errors.Join(resultErr, os.Remove(staged.Name())) }()
+		defer func() {
+			if err := verifyModuleLLVMProbeStagingRole(staged.Name(), directoryInfo, stagedInfo); err != nil {
+				// Never follow a replaced role to clean another owner's file.
+				// An unprovable moved temporary remains closed and quarantined.
+				resultErr = errors.Join(resultErr, err)
+				return
+			}
+			resultErr = errors.Join(resultErr, os.Remove(staged.Name()))
+		}()
 		n, writeErr := io.WriteString(staged, moduleLLVMLoaderProbe)
 		closeErr := staged.Close()
 		if writeErr == nil && n != len(moduleLLVMLoaderProbe) {
 			writeErr = io.ErrShortWrite
 		}
 		if err := errors.Join(writeErr, closeErr, ctx.Err()); err != nil {
+			return input, err
+		}
+		if err := verifyModuleLLVMProbeStagingRole(staged.Name(), directoryInfo, stagedInfo); err != nil {
 			return input, err
 		}
 		if err := os.Link(staged.Name(), input.source.Path); err != nil && !os.IsExist(err) {
@@ -89,6 +104,20 @@ func prepareModuleLLVMProbeSource(ctx context.Context, stem string) (input modul
 		return input, fmt.Errorf("LLVM probe parent/source directory identity changed during publication")
 	}
 	return input, ctx.Err()
+}
+
+func verifyModuleLLVMProbeStagingRole(name string, directory, staged os.FileInfo) error {
+	for index, role := range []struct {
+		path string
+		info os.FileInfo
+	}{{filepath.Dir(name), directory}, {name, staged}} {
+		actual, err := os.Lstat(role.path)
+		if err != nil || actual.Mode()&os.ModeSymlink != 0 || !os.SameFile(role.info, actual) ||
+			index == 0 && !actual.IsDir() || index == 1 && !actual.Mode().IsRegular() {
+			return fmt.Errorf("LLVM probe original staging role changed: %v", err)
+		}
+	}
+	return nil
 }
 
 func readModuleLLVMProbeSource(source moduleLLVMProbeSource) ([]os.FileInfo, string, error) {
