@@ -125,6 +125,7 @@ func TestSupersededMatchedPayloadLookupIsBounded(t *testing.T) {
 func TestSupersededMatchedMembershipPreservesExactOldAndReplacementKeys(t *testing.T) {
 	const extra = `{"kind":"matched","module":"example.com/old","version":"v0.9.0","asm_files":["old.s"]}` + "\n" +
 		`{"kind":"scanned","module":"example.com/old","version":"v1.1.0"}` + "\n" +
+		`{"kind":"failure","module":"example.com/failed-old","version":"v1.0.0"}` + "\n" +
 		`{"kind":"failure","module":"example.com/failed","version":"v1.5.0"}` + "\n"
 	for _, directory := range []bool{false, true} {
 		t.Run(fmt.Sprintf("directory=%t", directory), func(t *testing.T) {
@@ -139,7 +140,7 @@ func TestSupersededMatchedMembershipPreservesExactOldAndReplacementKeys(t *testi
 				{"missing old module", "example.com/unknown", "v1.2.0", "example.com/current", "v1.3.0", false},
 				{"wrong old exact version", "example.com/old", "v1.2.1", "example.com/current", "v1.3.0", false},
 				{"old scanned is not matched", "example.com/old", "v1.1.0", "example.com/current", "v1.3.0", false},
-				{"old failure is not matched", "example.com/failed", "v1.5.0", "example.com/assembly", "v1.6.0", false},
+				{"old failure is not matched", "example.com/failed-old", "v1.0.0", "example.com/current", "v1.3.0", false},
 				{"missing replacement", "example.com/old", "v1.2.0", "example.com/unknown", "v1.3.0", false},
 				{"wrong replacement exact version", "example.com/old", "v1.2.0", "example.com/current", "v1.3.1", false},
 				{"failed replacement is not scanned", "example.com/old", "v1.2.0", "example.com/failed", "v1.5.0", false},
@@ -190,8 +191,80 @@ func TestSupersededMatchedMembershipValidatesEveryUnselectedTail(t *testing.T) {
 						t.Fatalf("replacement reader hid invalid matched tail: %v, %v", result, err)
 					}
 				}
+				if err := walkDiscoveryRecords(ledger, nil); err == nil {
+					t.Fatal("nil visitor bypassed complete input validation")
+				}
 			})
 		}
+	}
+}
+
+func TestSupersededMatchedMembershipRetainsOnlyRequestedKeys(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		t.Run(fmt.Sprintf("directory=%t", directory), func(t *testing.T) {
+			ledger := writeSupersededMatchedPayloadLedger(t, directory, 128)
+			oldRequests := map[string]bool{
+				"example.com/old@v1.2.0":      true,
+				"example.com/absent@v1.0.0":   true,
+				"example.com/current@v1.3.0":  true, // Scanned is not old matched.
+				"example.com/assembly@v1.4.0": false,
+			}
+			newRequests := map[string]bool{
+				"example.com/current@v1.3.0": true,
+				"example.com/old@v1.2.0":     true, // Matched is a scanned success too.
+				"example.com/absent@v1.0.0":  true,
+			}
+			oldJSON, _ := json.Marshal(oldRequests)
+			newJSON, _ := json.Marshal(newRequests)
+			matched, scanned, err := discoveryVersionKeysFor(ledger, oldRequests, newRequests)
+			if err != nil || !reflect.DeepEqual(matched, map[string]bool{"example.com/old@v1.2.0": true}) ||
+				!reflect.DeepEqual(scanned, map[string]bool{"example.com/old@v1.2.0": true, "example.com/current@v1.3.0": true}) {
+				t.Fatalf("unrequested membership retained: %v, %v, %v", matched, scanned, err)
+			}
+			afterOld, _ := json.Marshal(oldRequests)
+			afterNew, _ := json.Marshal(newRequests)
+			if string(oldJSON) != string(afterOld) || string(newJSON) != string(afterNew) {
+				t.Fatal("membership reader modified caller interest sets")
+			}
+			all, err := scannedDiscoveryVersionKeys(ledger)
+			if err != nil || len(all) != 131 {
+				t.Fatalf("full reference membership: %d, %v", len(all), err)
+			}
+			for key := range newRequests {
+				if scanned[key] != all[key] {
+					t.Fatalf("requested key %s differs from full reference", key)
+				}
+			}
+		})
+	}
+}
+
+func TestSupersededMatchedMembershipSharedInputErrors(t *testing.T) {
+	for _, kind := range []string{"missing ledger", "empty records directory", "unreadable record object"} {
+		t.Run(kind, func(t *testing.T) {
+			ledger := filepath.Join(t.TempDir(), "ledger")
+			if kind != "missing ledger" {
+				records := filepath.Join(ledger, "records")
+				if err := os.MkdirAll(records, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if kind == "unreadable record object" {
+					if err := os.Mkdir(filepath.Join(records, "00.jsonl"), 0755); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			root := writeSupersededInterestManifest(t, nil)
+			if result, err := loadSupersededSkips(root, ledger); err == nil || result != nil {
+				t.Fatalf("empty exception interests hid input error: %v, %v", result, err)
+			}
+			if result, err := loadDiscoveryCandidates(ledger); err == nil || result != nil {
+				t.Fatalf("full candidate consumer hid input error: %v, %v", result, err)
+			}
+			if result, err := scannedDiscoveryVersionKeysFor(ledger, map[string]bool{}); err == nil || result != nil {
+				t.Fatalf("replacement consumer hid input error: %v, %v", result, err)
+			}
+		})
 	}
 }
 
