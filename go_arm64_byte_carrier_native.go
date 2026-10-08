@@ -103,8 +103,8 @@ func (source *GoARM64ByteCarrierSource) bindNative(ctx context.Context, environm
 				continue
 			}
 			if instruction.Op != "RET" {
-				if _, scalar := arm64ScalarMemoryBits(instruction.Op); !scalar {
-					return arm64ByteCarrierContext("first observation requires the complete scalar move/call source role")
+				if bits, _ := arm64ScalarMemoryBits(instruction.Op); bits == 0 {
+					return arm64ByteCarrierContext("first observation requires the complete scalar move/call source role: %s", instruction.Op)
 				}
 			}
 			for _, operand := range instruction.Args {
