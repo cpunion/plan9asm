@@ -31,6 +31,42 @@ func cloneASMDataRequest(t *testing.T, request SDKASMDataObservationRequest) SDK
 func checkASMDataInputGuards(t *testing.T, original SDKASMDataObservationRequest) {
 	t.Helper()
 	for name, mutate := range map[string]func(*SDKASMDataObservationRequest){
+		"non-DUPok-named-storage": func(r *SDKASMDataObservationRequest) {
+			clearFlag := func(data []byte) {
+				body, err := objectBody(data, r.Target)
+				if err != nil {
+					t.Fatal(err)
+				}
+				view, err := checkedObject(body, 20, true)
+				if err != nil {
+					t.Fatal(err)
+				}
+				symbols, err := view.indexedSymbols()
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, symbol := range symbols {
+					if symbol.Name == "shared" {
+						offset := int(binary.LittleEndian.Uint32(body[20+4*3:])) + int(symbol.Index)*21 + 11
+						body[offset] &^= 1
+					}
+				}
+			}
+			members, err := archiveMembers(r.Archive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, member := range members[2:] {
+				clearFlag(member.data)
+			}
+			for index := range r.Sources {
+				clearFlag(r.Sources[index].OriginalObject)
+				clearFlag(r.Sources[index].ExpandedObject)
+				for _, slot := range []*[]byte{&r.Sources[index].Original, &r.Sources[index].Expanded} {
+					*slot = bytes.ReplaceAll(*slot, []byte("2|8"), []byte("8"))
+				}
+			}
+		},
 		"missing-source":          func(r *SDKASMDataObservationRequest) { r.Sources = r.Sources[:1] },
 		"empty-sources":           func(r *SDKASMDataObservationRequest) { r.Sources = nil },
 		"extra-source":            func(r *SDKASMDataObservationRequest) { r.Sources = append(r.Sources, r.Sources[0]) },

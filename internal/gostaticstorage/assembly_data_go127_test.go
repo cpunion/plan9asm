@@ -35,6 +35,7 @@ type Reference struct {
 }
 type Relocation struct {
 	Offset, Size int64
+	ObjectOffset int64
 	Type uint16
 	Add int64
 	Target Reference
@@ -74,6 +75,7 @@ func main() {
 			panic("unexpected original archive member")
 		}
 		if entry.Type == archive.EntryGoObj {
+			member.ObjectOffset = entry.Obj.Offset
 			data := make([]byte, entry.Obj.Size)
 			n, err := f.ReadAt(data, entry.Obj.Offset)
 			if err != nil || n != len(data) { panic(fmt.Sprint(n, err)) }

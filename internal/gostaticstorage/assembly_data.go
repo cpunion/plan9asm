@@ -69,6 +69,7 @@ type ASMDataMember struct {
 	NameBytes    []byte
 	Ordinal      int
 	Offset, Size int64
+	ObjectOffset int64
 	Flags        uint32
 	Definitions  []ASMDataDefinition
 	Texts        []TextRecord
@@ -175,6 +176,7 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 				return nil, err
 			}
 			value.Name, value.NameBytes, value.Ordinal, value.Offset, value.Size = member.name, []byte(member.name), ordinal, member.offset, int64(len(member.data))
+			value.ObjectOffset += member.offset
 		}
 		observation.Members = append(observation.Members, value)
 	}

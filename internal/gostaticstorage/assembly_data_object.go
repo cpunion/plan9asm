@@ -16,6 +16,7 @@ func observeASMDataObject(data, builtin []byte, target string, flags uint32, ref
 	if err != nil {
 		return member, err
 	}
+	member.ObjectOffset = int64(len(data) - len(body))
 	object, err := checkedObject(body, flags, flags&4 != 0)
 	if err != nil {
 		return member, err
@@ -128,7 +129,7 @@ func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]AS
 // both observations; line-preserving inputs must otherwise agree exactly.
 func sameASMDataObjects(first, second ASMDataMember) bool {
 	filter := func(member ASMDataMember) ASMDataMember {
-		member.Name, member.NameBytes, member.Ordinal, member.Offset, member.Size = "", nil, 0, 0, 0
+		member.Name, member.NameBytes, member.Ordinal, member.Offset, member.Size, member.ObjectOffset = "", nil, 0, 0, 0, 0
 		definitions := make([]ASMDataDefinition, 0, len(member.Definitions))
 		for _, definition := range member.Definitions {
 			definition.DataOffset = 0
