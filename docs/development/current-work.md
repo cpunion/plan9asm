@@ -19,7 +19,7 @@ passes. Refresh the remote state before publishing the next batch.
 
 ## Continue here
 
-Development branch: codex/pr40-next-batch-20261008.
+Development branch: codex/pr40-post-root-20261008.
 The published codex/pr40-final-batch-20261008 snapshot stays frozen.
 Latest upstream main is already an ancestor. Root alone writes ledger.
 This successor integrates these test-first rule-class repairs:
@@ -106,7 +106,24 @@ RED had 18 passes and 686 failures; the frozen family successor 4ff45e56 has
 tests. Public dispatch is register-only. Private memory roles, opaque pointer
 identity and native/caller authority remain unchanged. The original GP-to-X
 MOVL witness passes without substituting another instruction. These focused
-results do not certify an integrated full suite or original CRC32 library.
+results do not certify an original CRC32 library.
+
+The integrated 40ff602f full root inventory has now closed all 32 partitions:
+5,002 roots passed, 17 failed and 39 host-inapplicable runtime roots skipped;
+87,031 children passed and 95 failed, with none incomplete. Independent raw
+JSONL/list/source/stamped-runner and recorded owner/group readback agrees.
+All 17 failed roots belong to the ARM64 scratch-source path class. Preserve
+that complete failed report; a later focused pass cannot replace it.
+
+The ARM64 factory canonicalizes only its freshly owned temporary directory,
+retaining the actual caller environment and checking the created SameFile
+identity before using the physical path. Caller source/tool redirects remain
+invalid. A separate fixture repair checks the actual input precondition before
+hidden-entry positives and negatives, preventing incidental path rejection
+from masquerading as a successful negative test. Its two test-first RED runs
+are retained. The clean eb4e9b12 focused ordinary scope has 1,270 passes and
+no failures/skips/incomplete tests; race readback is still required before
+integration and a fresh combined full root run.
 
 Normal sharded-ledger operations now stream: startup/status, active-batch
 checkpoint lookup, bounded retries, publication and sharded report transfer.
@@ -116,6 +133,13 @@ repository case aliases; publication and transfer retain current module groups,
 not ledger-wide payloads or version maps. Retry selection obeys its limit and
 persists a fair queue marker independently of the two index cursors.
 Superseded-version checks likewise retain only requested replacement keys.
+The next batch also removes an extra full matched-candidate payload copy from
+that lookup. The shared full-EOF visitor still validates unrelated records.
+The frozen f1e3d892 test-first successor passes all 168 nodes separately in
+ordinary and race runs, including exact requested memberships and unselected
+corrupt tails. Its 18,000-unrelated-matched fixture reduces sampled live heap
+from roughly 140 MB to 2.5 MB; this is a fixture result, not a whole-ledger
+constant-memory claim. The complete three-commit chain is integrated here.
 Explicit monolithic legacy JSON/gzip imports and full-report reference helpers
 remain separate compatibility paths, not bounded streaming interfaces.
 The frozen streaming integration f53ef7dd passes the complete Discovery package
