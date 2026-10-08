@@ -403,7 +403,7 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 		// function needs the same source-frame and reaching-definition proof;
 		// an opcode whitelist must not select an unchecked prototype.
 		if file.Arch == ArchARM64 {
-			if err := translateFuncARM64WithSourceCallsAndAttrs(&b, *fn, sourceSig, resolve, opt.Sigs, file.Data, opt.AnnotateSource, arm64SourceCalls, sig.Attrs); err != nil {
+			if err := translateFuncARM64WithSourceCallsAndAttrs(&b, *fn, sourceSig, resolve, opt.Sigs, opt.TargetTriple, file.Data, opt.AnnotateSource, arm64SourceCalls, sig.Attrs); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")

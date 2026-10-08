@@ -892,13 +892,13 @@ func translateFuncARM64(b *strings.Builder, fn Func, sig FuncSig, resolve func(s
 }
 
 func translateFuncARM64WithSourceCalls(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall) error {
-	return translateFuncARM64WithSourceCallsAndAttrs(b, fn, sig, resolve, sigs, data, annotateSource, sourceCalls, sig.Attrs)
+	return translateFuncARM64WithSourceCallsAndAttrs(b, fn, sig, resolve, sigs, "", data, annotateSource, sourceCalls, sig.Attrs)
 }
 
 // Inferred target-feature attribute groups are an emission projection, not a
 // mutation of a declaration-backed source signature. Validate its exact input
 // fields and emit the separately computed group without granting ABI rights.
-func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall, emissionAttrs string) error {
+func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, target string, data []DataStmt, annotateSource bool, sourceCalls map[string]arm64SourceNoopCall, emissionAttrs string) error {
 	if err := validateARM64PrivateCallSource(fn); err != nil {
 		return err
 	}
@@ -1005,7 +1005,7 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 	}
 	b.WriteString(" {\n")
 
-	c := newARM64Ctx(b, fn, sig, resolve, sigs, annotateSource)
+	c := newARM64CtxWithTarget(b, fn, sig, resolve, sigs, target, annotateSource)
 	c.fpPaddingReads = paddingReads
 	c.sourceGoFrame = sourceGoFrame
 	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
@@ -1072,6 +1072,7 @@ func (c *arm64Ctx) lowerBlocks() error {
 		blk := c.blocks[bi]
 		c.flagFlow.current = bi
 		c.flagsWritten = false
+		c.flagsKnown = 0
 		if flow := c.machineAvailability; flow != nil {
 			flow.current = bi
 		}
@@ -1098,8 +1099,6 @@ func (c *arm64Ctx) lowerBlocks() error {
 				break
 			}
 		}
-		c.flagFlow.blocks[bi].writes = c.flagsWritten
-
 		if terminated {
 			continue
 		}

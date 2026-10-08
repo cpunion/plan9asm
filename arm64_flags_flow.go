@@ -2,13 +2,27 @@ package plan9asm
 
 import "fmt"
 
+type arm64FlagMask uint8
+
+const (
+	arm64FlagV arm64FlagMask = 1 << iota
+	arm64FlagC
+	arm64FlagZ
+	arm64FlagN
+	arm64FlagAll = arm64FlagN | arm64FlagZ | arm64FlagC | arm64FlagV
+)
+
+type arm64FlagEffect struct {
+	read, write, invalidate arm64FlagMask
+	condition               string
+}
+
 // Record effects from lowering rather than duplicate the named/raw/SVE opcode
 // tables. An incoming flag value is needed only for a read before a local write.
 type arm64FlagFlowBlock struct {
 	name       string
 	successors []string
-	writes     bool
-	condition  string
+	effects    []arm64FlagEffect
 	indirect   bool
 	returns    bool
 }
@@ -55,27 +69,39 @@ func (flow *arm64FlagFlow) validate() error {
 	if len(flow.blocks) == 0 {
 		return nil
 	}
-	// Follow paths that have not written flags. A write stops propagation;
-	// reaching a read first is an actual missing-context path. This worklist
-	// handles joins, backedges and unreachable blocks in O(blocks + edges).
+	// Track each original flag independently. Partial writes cannot define the
+	// other bits, and an invalidation after a write cannot be hidden by a block
+	// summary. OR joins retain an unknown bit from any actual predecessor.
+	before := make([]arm64FlagMask, len(flow.blocks))
+	before[0] = arm64FlagAll
 	seen := make([]bool, len(flow.blocks))
 	seen[0] = true
 	queue := []int{0}
-	enqueue := func(i int) {
-		if !seen[i] {
+	queued := make([]bool, len(flow.blocks))
+	queued[0] = true
+	enqueue := func(i int, unknown arm64FlagMask) {
+		changed := !seen[i] || before[i]|unknown != before[i]
+		if changed {
 			seen[i] = true
-			queue = append(queue, i)
+			before[i] |= unknown
+			if !queued[i] {
+				queued[i] = true
+				queue = append(queue, i)
+			}
 		}
 	}
 	indirectExpanded, returnsExpanded := false, false
+	var indirectUnknown, returnsUnknown arm64FlagMask
 	for next := 0; next < len(queue); next++ {
-		block := flow.blocks[queue[next]]
-		if block.condition != "" {
-			return fmt.Errorf("%w: arm64 condition %s has no prior flags write on a path to block %s",
-				ErrProbeNeedsContext, block.condition, block.name)
-		}
-		if block.writes {
-			continue
+		index := queue[next]
+		queued[index] = false
+		block, unknown := flow.blocks[index], before[index]
+		for _, effect := range block.effects {
+			if effect.read&unknown != 0 {
+				return fmt.Errorf("%w: arm64 condition %s has unknown NZCV bits %#x on a path to block %s",
+					ErrProbeNeedsContext, effect.condition, effect.read&unknown, block.name)
+			}
+			unknown = (unknown &^ effect.write) | effect.invalidate
 		}
 		for _, name := range block.successors {
 			i, ok := flow.indices[name]
@@ -83,21 +109,23 @@ func (flow *arm64FlagFlow) validate() error {
 				// The ordinary IR verifier diagnoses undefined branch labels.
 				continue
 			}
-			enqueue(i)
+			enqueue(i, unknown)
 		}
-		if block.indirect && !indirectExpanded {
+		if block.indirect && (!indirectExpanded || indirectUnknown|unknown != indirectUnknown) {
 			// A computed branch can reach an address-taken source label. Do
 			// not misclassify its destination as unreachable. Expand once so
 			// multiple indirect branches cannot create quadratic work.
 			indirectExpanded = true
+			indirectUnknown |= unknown
 			for i := range flow.blocks {
-				enqueue(i)
+				enqueue(i, unknown)
 			}
 		}
-		if block.returns && !returnsExpanded {
+		if block.returns && (!returnsExpanded || returnsUnknown|unknown != returnsUnknown) {
 			returnsExpanded = true
+			returnsUnknown |= unknown
 			for _, i := range flow.continuations {
-				enqueue(i)
+				enqueue(i, unknown)
 			}
 		}
 	}

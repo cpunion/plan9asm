@@ -124,6 +124,9 @@ func (c *arm64Ctx) lowerNegateWithCarry(op string, word, setFlags bool, ins Inst
 		!isARM64GeneralOrZeroReg(ins.Args[0].Reg) || !isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
 		return true, false, fmt.Errorf("arm64 %s expects C_ZREG source and destination: %q", op, ins.Raw)
 	}
+	if err := c.requireARM64Flags(arm64FlagC, op); err != nil {
+		return true, false, err
+	}
 	typeName := LLVMType(I64)
 	wideType := LLVMType("i128")
 	if word {

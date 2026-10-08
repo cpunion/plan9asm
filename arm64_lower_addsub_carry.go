@@ -33,6 +33,9 @@ func (c *arm64Ctx) lowerARM64AddSubCarry(op Op, ins Instr) (ok bool, terminated 
 	}
 
 	word := strings.HasSuffix(string(op), "W")
+	if err := c.requireARM64Flags(arm64FlagC, string(op)); err != nil {
+		return true, false, err
+	}
 	subtract := strings.HasPrefix(string(op), "SBC")
 	setFlags := op == "ADCS" || op == "ADCSW" || op == "SBCS" || op == "SBCSW"
 	if word {

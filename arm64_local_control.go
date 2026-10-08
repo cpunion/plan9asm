@@ -13,6 +13,7 @@ import (
 // Values are immutable after publication. Clones share exact set roots;
 // transforms replace roots instead of mutating a reaching definition.
 type arm64ControlState struct {
+	targetTriple string // one exact translator target, never inferred from state
 	regs         map[Reg]arm64ControlValue
 	memory       map[string]arm64ControlValue
 	escaped      arm64ControlValue
@@ -87,10 +88,11 @@ func arm64ControlRead(values map[Reg]arm64ControlValue, reg Reg) arm64ControlVal
 
 func (state *arm64ControlState) clone() *arm64ControlState {
 	next := &arm64ControlState{
-		regs:        make(map[Reg]arm64ControlValue),
-		memory:      make(map[string]arm64ControlValue),
-		escaped:     state.escaped,
-		unexposedSP: state.unexposedSP,
+		targetTriple: state.targetTriple,
+		regs:         make(map[Reg]arm64ControlValue),
+		memory:       make(map[string]arm64ControlValue),
+		escaped:      state.escaped,
+		unexposedSP:  state.unexposedSP,
 	}
 	for reg, value := range state.regs {
 		next.regs[reg] = value
@@ -395,6 +397,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 		return nil
 	}
 	entry := &arm64ControlState{
+		targetTriple: c.targetTriple,
 		regs: map[Reg]arm64ControlValue{
 			SP:         arm64ControlFromMap(map[string]bool{"sp:0": true}),
 			Reg("R30"): arm64ControlFromMap(map[string]bool{"label:" + plan.outer: true}),
@@ -439,6 +442,9 @@ func (c *arm64Ctx) prepareLocalControl() error {
 			op := arm64ControlOp(ins)
 			post := strings.HasSuffix(string(ins.Op), ".P")
 			if op == "SVC" {
+				if _, err := parseARM64SyscallForm(c.targetTriple, ins); err != nil {
+					return err
+				}
 				if err := c.requireSyscallCallerFrameDisjoint(state, ins); err != nil {
 					return err
 				}
@@ -665,15 +671,22 @@ func (state *arm64ControlState) transfer(ins Instr, op Op, post bool, data map[s
 		return
 	}
 	if op == "SVC" {
-		// The existing typed syscall bridge writes R0 and R1, including for
-		// the zero-operand SVC spelling. Its results cannot retain a pure old
-		// caller/local continuation. Keep input PC taint conservatively, as
-		// for other native results, rather than inventing a known destination.
+		// Retain input PC taint for new results. Only the target's real
+		// outputs lose their old continuation; Linux does not write R1.
 		result := arm64ControlExternal()
 		for _, reg := range []Reg{"R0", "R1", "R2", "R3", "R4", "R5", "R8", "R16"} {
 			result = arm64ControlUnion(result, arm64ControlLabels(arm64ControlRead(state.regs, reg)))
 		}
-		state.regs[Reg("R0")], state.regs[Reg("R1")] = result, result
+		form, err := parseARM64SyscallForm(state.targetTriple, ins)
+		writes := uint32(3) // Unknown contexts cannot invent preservation.
+		if err == nil {
+			writes = form.gpWrites
+		}
+		for register := 0; register < 31; register++ {
+			if writes&(1<<uint(register)) != 0 {
+				state.regs[Reg(fmt.Sprintf("R%d", register))] = result
+			}
+		}
 		return
 	}
 	if len(ins.Args) == 0 {

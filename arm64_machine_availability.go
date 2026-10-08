@@ -45,8 +45,9 @@ type arm64MachineAvailability struct {
 }
 
 type arm64MachineNativeProof struct {
-	line  string
-	store bool
+	line    string
+	store   bool
+	syscall *arm64SyscallIRProof
 }
 
 // A validated lowerer can prove that one emitted native instruction has no
@@ -88,6 +89,11 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 				sourceScratch = true
 			}
 			op := arm64ControlOp(ins)
+			if op == "SVC" {
+				// Even an object-only entry must not read a secondary result or
+				// flags explicitly unavailable from this typed bridge.
+				sourceScratch = true
+			}
 			if (op != "CALL" && op != "BL") || len(ins.Args) != 1 || ins.Args[0].Kind != OpSym {
 				continue
 			}
@@ -501,6 +507,9 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 	for _, line := range strings.SplitAfter(c.b.String()[start:], "\n") {
 		proof := flow.nativeIR[offset]
 		proven := proof.line == line && line != ""
+		if proof.syscall != nil {
+			proven = proven && proof.syscall.matches(c, original, offset) && proof.store
+		}
 		offset += len(line)
 		if proven {
 			if proof.store {

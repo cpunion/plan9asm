@@ -6,8 +6,86 @@ import (
 )
 
 func (c *arm64Ctx) storeFlag(slot string, v string) {
+	mask := c.arm64FlagSlotMask(slot)
+	c.flagsKnown |= mask
+	if c.flagFlow != nil {
+		block := &c.flagFlow.blocks[c.flagFlow.current]
+		block.effects = append(block.effects, arm64FlagEffect{write: mask})
+	}
 	c.recordMachineRegister(Reg(slot), 1, true)
 	fmt.Fprintf(c.b, "  store i1 %s, ptr %s\n", v, slot)
+}
+
+func (c *arm64Ctx) arm64FlagSlotMask(slot string) arm64FlagMask {
+	switch slot {
+	case c.flagsNSlot:
+		return arm64FlagN
+	case c.flagsZSlot:
+		return arm64FlagZ
+	case c.flagsCSlot:
+		return arm64FlagC
+	case c.flagsVSlot:
+		return arm64FlagV
+	}
+	return 0
+}
+
+func (c *arm64Ctx) invalidateARM64Flags(mask arm64FlagMask) {
+	c.flagsKnown &^= mask
+	if mask != 0 {
+		c.flagsWritten = false
+	}
+	if c.flagFlow != nil {
+		block := &c.flagFlow.blocks[c.flagFlow.current]
+		block.effects = append(block.effects, arm64FlagEffect{invalidate: mask})
+	}
+	for _, slot := range []string{c.flagsNSlot, c.flagsZSlot, c.flagsCSlot, c.flagsVSlot} {
+		if c.arm64FlagSlotMask(slot)&mask != 0 {
+			c.recordMachineUnavailable(Reg(slot))
+		}
+	}
+}
+
+func (c *arm64Ctx) requireARM64Flags(mask arm64FlagMask, condition string) error {
+	if mask == 0 {
+		return nil
+	}
+	if c.flagFlow != nil {
+		block := &c.flagFlow.blocks[c.flagFlow.current]
+		block.effects = append(block.effects, arm64FlagEffect{read: mask, condition: condition})
+		return nil // A complete reaching write may appear later in source order.
+	}
+	known := c.flagsKnown
+	if c.flagsWritten {
+		known = arm64FlagAll
+	}
+	if mask&^known != 0 {
+		return fmt.Errorf("%w: arm64 condition %s has no prior flags write", ErrProbeNeedsContext, condition)
+	}
+	return nil
+}
+
+func arm64ConditionFlags(condition string) (arm64FlagMask, error) {
+	switch strings.ToUpper(condition) {
+	case "EQ", "NE":
+		return arm64FlagZ, nil
+	case "CS", "HS", "LO", "CC":
+		return arm64FlagC, nil
+	case "HI", "LS":
+		return arm64FlagC | arm64FlagZ, nil
+	case "LT", "GE":
+		return arm64FlagN | arm64FlagV, nil
+	case "GT", "LE":
+		return arm64FlagN | arm64FlagV | arm64FlagZ, nil
+	case "MI", "PL":
+		return arm64FlagN, nil
+	case "VS", "VC":
+		return arm64FlagV, nil
+	case "AL", "NV":
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("arm64: unsupported condition %q", condition)
+	}
 }
 
 func (c *arm64Ctx) setFlagsSub(dst, src, res string) {
@@ -241,30 +319,24 @@ func (c *arm64Ctx) setFlagsLogic32(res string) {
 }
 
 func (c *arm64Ctx) condValue(cond string) (string, error) {
-	for _, slot := range []string{c.flagsNSlot, c.flagsZSlot, c.flagsCSlot, c.flagsVSlot} {
-		c.recordMachineRegister(Reg(slot), 1, false)
+	mask, err := arm64ConditionFlags(cond)
+	if err != nil {
+		return "", err
 	}
-	if !c.flagsWritten {
-		if c.flagFlow == nil {
-			return "", fmt.Errorf("%w: arm64 condition %s has no prior flags write", ErrProbeNeedsContext, cond)
+	if err := c.requireARM64Flags(mask, cond); err != nil {
+		return "", err
+	}
+	load := func(slot string) string {
+		if c.arm64FlagSlotMask(slot)&mask == 0 {
+			return "" // Never load unknown bits which this predicate does not read.
 		}
-		// A predecessor may occur later in source order. Check every incoming
-		// path after lowering has recorded the actual flag writes and edges.
-		c.flagFlow.blocks[c.flagFlow.current].condition = cond
+		c.recordMachineRegister(Reg(slot), 1, false)
+		value := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", value, slot)
+		return "%" + value
 	}
-	ldN := c.newTmp()
-	ldZ := c.newTmp()
-	ldC := c.newTmp()
-	ldV := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", ldN, c.flagsNSlot)
-	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", ldZ, c.flagsZSlot)
-	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", ldC, c.flagsCSlot)
-	fmt.Fprintf(c.b, "  %%%s = load i1, ptr %s\n", ldV, c.flagsVSlot)
-
-	n := "%" + ldN
-	z := "%" + ldZ
-	carry := "%" + ldC
-	v := "%" + ldV
+	n, z := load(c.flagsNSlot), load(c.flagsZSlot)
+	carry, v := load(c.flagsCSlot), load(c.flagsVSlot)
 
 	not := func(x string) string {
 		t := c.newTmp()

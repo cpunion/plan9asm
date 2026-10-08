@@ -13,6 +13,7 @@ type arm64Ctx struct {
 	resolve         func(string) string
 	sigs            map[string]FuncSig
 	annotate        bool
+	targetTriple    string
 	goRegisterEntry bool
 
 	privateRegisterEntry bool
@@ -58,6 +59,7 @@ type arm64Ctx struct {
 	flagsCSlot   string
 	flagsVSlot   string
 	flagsWritten bool
+	flagsKnown   arm64FlagMask
 	flagFlow     *arm64FlagFlow
 
 	exclusiveValidSlot string
@@ -76,12 +78,17 @@ type arm64Ctx struct {
 }
 
 func newARM64Ctx(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, annotate bool) *arm64Ctx {
+	return newARM64CtxWithTarget(b, fn, sig, resolve, sigs, "", annotate)
+}
+
+func newARM64CtxWithTarget(b *strings.Builder, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, target string, annotate bool) *arm64Ctx {
 	c := &arm64Ctx{
 		b:                b,
 		sig:              sig,
 		resolve:          resolve,
 		sigs:             sigs,
 		annotate:         annotate,
+		targetTriple:     target,
 		frameSize:        fn.FrameSize,
 		sourceGoFrame:    arm64SourceGoFrame(fn),
 		blocks:           arm64SplitBlocks(fn),
