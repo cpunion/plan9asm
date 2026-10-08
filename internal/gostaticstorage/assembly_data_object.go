@@ -78,6 +78,7 @@ func asmDataBaseKind(kind uint8) uint8 {
 
 func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]ASMGlobalLayout, error) {
 	used := make(map[uint32]bool)
+	lastRelative := make(map[TextSymbolNamespace]uint32)
 	var layouts []ASMGlobalLayout
 	for _, state := range states {
 		var candidates []ASMDataDefinition
@@ -92,6 +93,10 @@ func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]AS
 			return nil, contextError("source GLOBL lacks one unique object-local DATA definition")
 		}
 		definition := candidates[0]
+		if previous, present := lastRelative[definition.Namespace]; present && definition.Relative <= previous {
+			return nil, contextError("source GLOBL order differs from its actual object-local namespace order")
+		}
+		lastRelative[definition.Namespace] = definition.Relative
 		used[definition.Index] = true
 		if asmDataBaseKind(definition.Kind) != state.kind || int64(definition.Size) != state.actualSize ||
 			!bytes.Equal(definition.Data, state.data) || (definition.Flags&1 != 0) != (state.layout.Flags&2 != 0) ||
