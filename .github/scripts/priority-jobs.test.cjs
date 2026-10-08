@@ -113,7 +113,7 @@ test('discovery compilation leaves time for failed partial report upload', () =>
     const section = jobSection(name);
     assert.match(section, /^    timeout-minutes: 360$/m, name);
     assert.match(section,
-      /- name: Translate and compile discovered assembly\n        timeout-minutes: 330\n/,
+      /- name: Translate and compile discovered assembly\n(?:        #.*\n)*        timeout-minutes: 330\n/,
       `${name} compilation can consume the whole job deadline`);
     assert.match(section,
       /- name: Upload shard report\n        if: always\(\)\n        timeout-minutes: 10\n/,

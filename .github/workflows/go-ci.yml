@@ -46,6 +46,7 @@ jobs:
   discovered_library_priority:
     name: discovered-corpus (shard ${{ matrix.shard }}/64)
     needs: ci_policy
+    timeout-minutes: 360
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
@@ -76,6 +77,8 @@ jobs:
           cache: true
 
       - name: Translate and compile discovered assembly
+        # Leave a separate budget for the latest atomic partial checkpoint.
+        timeout-minutes: 330
         env:
           # Reuse only compiled Go objects from this task's restored cache.
           # Source/tool observations and LLVM objects are still checked afresh.
@@ -89,6 +92,7 @@ jobs:
 
       - name: Upload shard report
         if: always()
+        timeout-minutes: 10
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
@@ -251,6 +255,7 @@ jobs:
 
   discovered_library_corpus:
     needs: discovered_library_priority
+    timeout-minutes: 360
     name: discovered-corpus (shard ${{ matrix.shard }}/64)
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     strategy:
@@ -333,6 +338,8 @@ jobs:
           cache: true
 
       - name: Translate and compile discovered assembly
+        # Leave a separate budget for the latest atomic partial checkpoint.
+        timeout-minutes: 330
         env:
           # Reuse only compiled Go objects from this task's restored cache.
           # Source/tool observations and LLVM objects are still checked afresh.
@@ -346,6 +353,7 @@ jobs:
 
       - name: Upload shard report
         if: always()
+        timeout-minutes: 10
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
