@@ -39,7 +39,12 @@ func requireGoAMD64FrameCapture(t *testing.T, pkg GoPackage, request GoAMD64Fram
 
 func goAMD64FrameSourceFixture(t *testing.T) (GoPackage, GoAMD64FrameCaptureRequest) {
 	t.Helper()
-	dir := t.TempDir()
+	// Keep AST positions, the caller's request and strict original-file reads
+	// bound to the same physical fixture, including aliased temporary roots.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal("cannot resolve original frame fixture directory", err)
+	}
 	source := []byte("package framefixture\nfunc Value(a uint64) uint64\n")
 	files := map[string][]byte{
 		"go.mod":        []byte("module example.invalid/framefixture\ngo 1.20\n"),
