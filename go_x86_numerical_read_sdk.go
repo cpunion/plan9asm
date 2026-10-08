@@ -29,6 +29,7 @@ type numericalSBSDKObservation struct {
 	Archive         []byte
 	ArchiveMembers  []gostaticstorage.TextMember
 	Imports         map[string]goAMD64FrameSelection
+	Referenced      map[string]gostaticstorage.SDKReferencedArchive
 	Inputs          map[string][32]byte
 	origin          *GoX86NumericalReadSource
 	seal            [32]byte
