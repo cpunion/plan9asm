@@ -244,3 +244,48 @@ func TestModuleLLVMProbeSourceRejectsForeignAndReplacedRoles(t *testing.T) {
 		t.Fatal("same-byte replacement changed the original compiled source identity")
 	}
 }
+
+type moduleLLVMProbeSwapContext struct {
+	context.Context
+	calls int
+	swap  func()
+}
+
+func (ctx *moduleLLVMProbeSwapContext) Err() error {
+	ctx.calls++
+	if ctx.calls == 2 {
+		ctx.swap()
+	}
+	return nil
+}
+
+func TestModuleLLVMProbeSourceCleanupRejectsReplacedDirectory(t *testing.T) {
+	parent := t.TempDir()
+	directory := filepath.Join(parent, ".llvm-loader-source")
+	var foreignStage string
+	canary := []byte("another owner's closed temporary file\n")
+	ctx := &moduleLLVMProbeSwapContext{Context: context.Background()}
+	ctx.swap = func() {
+		entries, err := os.ReadDir(directory)
+		if err != nil || len(entries) != 1 || !strings.HasPrefix(entries[0].Name(), ".pending-") {
+			t.Fatalf("expected the creator's complete staged file: %v %v", entries, err)
+		}
+		if err := os.Rename(directory, directory+"-original"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+		foreignStage = filepath.Join(directory, entries[0].Name())
+		if err := os.WriteFile(foreignStage, canary, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := prepareModuleLLVMProbeSource(ctx, filepath.Join(parent, "before")); err == nil {
+		t.Fatal("replaced source directory acquired the producer role")
+	}
+	actual, err := os.ReadFile(foreignStage)
+	if err != nil || !reflect.DeepEqual(actual, canary) {
+		t.Fatalf("cleanup deleted or changed another owner's same-named temporary: %q %v", actual, err)
+	}
+}
