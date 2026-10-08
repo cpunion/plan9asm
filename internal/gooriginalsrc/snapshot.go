@@ -54,8 +54,11 @@ func (snapshot *Snapshot) View() SnapshotView {
 }
 
 func (snapshot *Snapshot) Retain(name string) error {
-	if !filepath.IsAbs(name) || len(snapshot.hashes) >= fileLimit {
+	if snapshot == nil || snapshot.hashes == nil || !filepath.IsAbs(name) {
 		return fmt.Errorf("original file path is missing or over-bound")
+	}
+	if _, retained := snapshot.hashes[name]; !retained && len(snapshot.hashes) >= fileLimit {
+		return fmt.Errorf("original file inventory exceeds its count bound")
 	}
 	info, err := os.Lstat(name)
 	if err != nil || !info.Mode().IsRegular() || info.Size() > fileByteLimit {
@@ -74,22 +77,28 @@ func (snapshot *Snapshot) Retain(name string) error {
 			return fmt.Errorf("original source/export changed during capture")
 		}
 	} else {
-		snapshot.bytes += info.Size()
-		if snapshot.bytes > totalByteLimit {
+		if info.Size() > totalByteLimit-snapshot.bytes {
 			return fmt.Errorf("original source/export inventory exceeds its byte bound")
 		}
+		snapshot.bytes += info.Size()
 	}
 	snapshot.hashes[name], snapshot.paths[name], snapshot.files[name] = digest, physical, info
 	return nil
 }
 
 func (snapshot *Snapshot) Directory(name string, recursive bool) error {
+	if snapshot == nil || snapshot.directories == nil || !filepath.IsAbs(name) {
+		return fmt.Errorf("original source directory requires an absolute initialized role")
+	}
+	if _, retained := snapshot.directories[name]; !retained && len(snapshot.directories) >= directoryLimit {
+		return fmt.Errorf("original source directory inventory exceeds its count bound")
+	}
 	physical, err := filepath.EvalSymlinks(name)
 	if err != nil {
 		return err
 	}
 	info, err := os.Lstat(physical)
-	if err != nil || !info.IsDir() || len(snapshot.directories) >= directoryLimit {
+	if err != nil || !info.IsDir() {
 		return fmt.Errorf("original source directory is missing, nonregular or over-bound")
 	}
 	if prior, present := snapshot.directories[name]; present &&
@@ -125,7 +134,7 @@ func (snapshot *Snapshot) Directory(name string, recursive bool) error {
 }
 
 func (snapshot *Snapshot) Verify() error {
-	if snapshot == nil {
+	if snapshot == nil || snapshot.hashes == nil || snapshot.files == nil || snapshot.directories == nil {
 		return fmt.Errorf("missing original source/export inventory")
 	}
 	for name, digest := range snapshot.hashes {
@@ -162,20 +171,75 @@ func (snapshot *Snapshot) Verify() error {
 	return nil
 }
 
-func originalFileSHA256(name string, expected os.FileInfo) (_ string, result error) {
+// ReadRetained reads only an independently retained physical file. It consumes
+// the same 16 MiB bound and complete EOF guard as hashing; the returned bytes
+// are observations, not frame or source permissions.
+func (snapshot *Snapshot) ReadRetained(name string) ([]byte, error) {
+	if snapshot == nil || !filepath.IsAbs(name) {
+		return nil, fmt.Errorf("missing retained original file role")
+	}
+	expected := snapshot.files[name]
+	digest, retained := snapshot.hashes[name]
+	physical, err := filepath.EvalSymlinks(name)
+	if !retained || expected == nil || err != nil || physical != snapshot.paths[name] {
+		return nil, fmt.Errorf("original file was not retained at its physical role")
+	}
+	if expected.Size() < 0 || expected.Size() > fileByteLimit {
+		return nil, fmt.Errorf("retained original file exceeds its byte bound")
+	}
+	buffer := &originalFileBuffer{bytes: make([]byte, int(expected.Size()))}
+	actual, err := originalFileRead(name, expected, buffer)
+	if err != nil {
+		return nil, err
+	}
+	after, err := filepath.EvalSymlinks(name)
+	if err != nil || after != physical || actual != digest {
+		return nil, fmt.Errorf("retained original file bytes or physical role changed")
+	}
+	return buffer.bytes, nil
+}
+
+// A fixed extent prevents io.Copy from allocating extra storage if an original
+// metadata file grows after the observation. Overflow rejects, never truncates.
+type originalFileBuffer struct {
+	bytes  []byte
+	offset int
+}
+
+func (buffer *originalFileBuffer) Write(data []byte) (int, error) {
+	if len(data) > len(buffer.bytes)-buffer.offset {
+		return 0, fmt.Errorf("original source file grew beyond its retained extent")
+	}
+	count := copy(buffer.bytes[buffer.offset:], data)
+	buffer.offset += count
+	return count, nil
+}
+
+func originalFileSHA256(name string, expected os.FileInfo) (string, error) {
+	return originalFileRead(name, expected, nil)
+}
+
+func originalFileRead(name string, expected os.FileInfo, output io.Writer) (_ string, result error) {
+	if expected == nil || expected.Size() < 0 || expected.Size() > fileByteLimit {
+		return "", fmt.Errorf("original source file has no bounded physical extent")
+	}
 	file, err := os.Open(name)
 	if err != nil {
 		return "", err
 	}
 	defer func() { result = errors.Join(result, file.Close()) }()
 	opened, err := file.Stat()
-	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(expected, opened) {
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(expected, opened) || opened.Size() != expected.Size() {
 		return "", fmt.Errorf("original source file identity changed while opening")
 	}
 	hash := sha256.New()
+	var sink io.Writer = hash
+	if output != nil {
+		sink = io.MultiWriter(hash, output)
+	}
 	buffer := originalHashBuffers.Get().(*[64 << 10]byte)
 	defer originalHashBuffers.Put(buffer)
-	count, err := io.CopyBuffer(hash, io.LimitReader(file, fileByteLimit+1), buffer[:])
+	count, err := io.CopyBuffer(sink, io.LimitReader(file, fileByteLimit+1), buffer[:])
 	if err != nil {
 		return "", err
 	}

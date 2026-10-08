@@ -141,7 +141,7 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 	if set.files.hashes[goMod] == "" || set.files.hashes[goMod] != set.files.hashes[prefix+".mod"] {
 		return Module{}, fmt.Errorf("original ZIP go.mod differs from exact downloaded module metadata")
 	}
-	modData, err := os.ReadFile(goMod)
+	modData, err := set.files.ReadRetained(goMod)
 	if err != nil {
 		return Module{}, err
 	}
@@ -165,9 +165,15 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 }
 
 func (set *OriginSet) retainCacheDirectory(name string) error {
+	if !filepath.IsAbs(name) {
+		return fmt.Errorf("downloaded cache directory requires an absolute physical role")
+	}
+	if _, retained := set.directories[name]; !retained && len(set.directories) >= directoryLimit {
+		return fmt.Errorf("downloaded cache directory inventory exceeds its count bound")
+	}
 	physical, err := filepath.EvalSymlinks(name)
 	info, statErr := os.Lstat(name)
-	if err != nil || statErr != nil || physical != name || !info.IsDir() || len(set.directories) >= directoryLimit {
+	if err != nil || statErr != nil || physical != name || !info.IsDir() {
 		return fmt.Errorf("downloaded source cache directory is missing, redirected or over-bound")
 	}
 	if previous := set.directories[name]; previous != nil && !os.SameFile(previous, info) {
