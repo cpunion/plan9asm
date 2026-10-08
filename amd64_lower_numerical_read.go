@@ -11,8 +11,13 @@ func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
 	if !valid || c.sig.Name != read.Function || c.targetTriple != cert.binding.options.TargetTriple {
 		return true, numericalSBContext("emitted function/profile/read certificate changed")
 	}
-	if err := c.scalarFPResultInitialized(); err != nil {
-		return true, err
+	if c.fixedLocal == nil {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return true, err
+		}
+	} else if c.fixedLocal.binding == nil || c.fixedLocal.binding != c.sig.x86FixedLocal ||
+		c.fixedLocal.binding.numericalReads == nil || c.fixedLocal.binding.numericalReads.source != cert.binding.source {
+		return true, numericalSBContext("numerical read lost its independent complete fixed-local proof")
 	}
 	// No ptrFromSB call: only this exact typed read can consume the immutable
 	// native source offset. The global remains externally mutable, and every
