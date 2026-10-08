@@ -223,15 +223,24 @@ func TestGoStaticStorageTEXTWasmDistinctExtents(t *testing.T) {
 		if !physicalBeyondPC {
 			t.Fatal("actual wasm relocations did not witness physical offsets beyond virtual PCs")
 		}
+		encoded, err := json.Marshal(report)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retainTextArtifact(t, report.Target, "wasm-boundaries", map[string][]byte{
+			"text-report.json": encoded, "text-original.a": report.Archives[fixtureModule], "text-original.goobj": body,
+		})
 		// These direct parser mutations are structural controls only. Neither
 		// acquires a live source seal or a native/read permission.
-		changed := append([]byte(nil), body...)
 		symbol := int(binary.LittleEndian.Uint32(body[32:])) + int(text.Index)*21
-		binary.LittleEndian.PutUint32(changed[symbol+13:], uint32(text.Size+1))
-		if _, err := readTextObject(changed, report.Target, 0, false, builtins); !errors.Is(err, ErrContext) {
-			t.Fatal("wasm physical bytes masked incomplete virtual PC coverage", err)
+		for _, extent := range []int64{text.Size + 1, 0} {
+			changed := append([]byte(nil), body...)
+			binary.LittleEndian.PutUint32(changed[symbol+13:], uint32(extent))
+			if _, err := readTextObject(changed, report.Target, 0, false, builtins); !errors.Is(err, ErrContext) {
+				t.Error("wasm physical bytes masked invalid virtual PC coverage", extent, err)
+			}
 		}
-		changed = append([]byte(nil), body...)
+		changed := append([]byte(nil), body...)
 		relocation := int(binary.LittleEndian.Uint32(body[20+4*14:])) + int(view.indices[0][text.Index])*23
 		binary.LittleEndian.PutUint32(changed[relocation:], uint32(len(text.Code)+1))
 		if _, err := readTextObject(changed, report.Target, 0, false, builtins); !errors.Is(err, ErrContext) {
@@ -241,6 +250,22 @@ func TestGoStaticStorageTEXTWasmDistinctExtents(t *testing.T) {
 		return
 	}
 	t.Fatal("actual wasm Read TEXT was absent")
+}
+
+func TestGoStaticStorageTEXTZeroPCMetadataRole(t *testing.T) {
+	// No logical PCs means there is no pc-value interval. In the pinned format
+	// the canonical zero-interval table is empty; even a lone terminator is
+	// noncanonical because the first zero is a value delta, not termination.
+	for _, tables := range [][2][]byte{
+		{{0}, nil}, {nil, {0}}, {{0}, {0}}, {{2, 1, 0}, {2, 1, 0}},
+	} {
+		if _, err := textPositions(tables[0], tables[1], 0, 1, nil); !errors.Is(err, ErrContext) {
+			t.Error("nonempty PC AUX data was ignored at zero logical extent", tables, err)
+		}
+	}
+	if positions, err := textPositions(nil, nil, 0, 1, nil); err != nil || positions != nil {
+		t.Fatal("canonical no-PC metadata role was rejected", positions, err)
+	}
 }
 
 func TestGoStaticStorageTEXTReferenceAndKindIdentity(t *testing.T) {
