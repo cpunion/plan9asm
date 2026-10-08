@@ -125,6 +125,75 @@ func TestARM64ByteCarrierActualSourceTargetMatrix(t *testing.T) {
 	}
 }
 
+func TestARM64ByteCarrierActualMainPackageIdentity(t *testing.T) {
+	directory, packagePath, cases := arm64ByteCarrierFixture(t)
+	filename := filepath.Join(directory, "decl.go")
+	declarations, err := os.ReadFile(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declarations = bytes.Replace(declarations, []byte("package carrierfixture"), []byte("package main"), 1)
+	declarations = append(declarations, []byte("\nfunc main() {}\n")...)
+	if err := os.WriteFile(filename, declarations, 0600); err != nil {
+		t.Fatal(err)
+	}
+	base := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	for _, goos := range []string{"darwin", "linux", "windows", "freebsd", "openbsd"} {
+		t.Run(goos, func(t *testing.T) {
+			// The driver determines its native -p identity from the package role,
+			// not the module's import path. Inspect the actual archive independently.
+			raw := arm64ABI0RegionCommand(t, goos, directory, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+			var selected goAMD64FrameSelection
+			decoder := json.NewDecoder(bytes.NewReader(raw))
+			var extra any
+			if decoder.Decode(&selected) != nil || decoder.Decode(&extra) != io.EOF ||
+				selected.Name != "main" || selected.ImportPath != packagePath {
+				t.Fatalf("actual main package selection differs: %s", raw)
+			}
+			archive, err := os.ReadFile(selected.Export)
+			if err != nil {
+				t.Fatal(err)
+			}
+			builtins, err := os.ReadFile(filepath.Join(runtime.GOROOT(), "src/cmd/internal/goobj/builtinlist.go"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			members, err := gostaticstorage.ObserveARM64AssemblyArchive(archive, builtins, goos+"/arm64", []string{"original_arm64.s"})
+			if err != nil || len(members) != 3 {
+				t.Fatalf("actual complete main archive differs: %v", err)
+			}
+			for _, text := range members[2].Texts {
+				if !strings.HasPrefix(text.Name, "main.") || text.ABI != 0 {
+					t.Fatalf("original driver did not use the main ASM identity: %+v", text)
+				}
+			}
+			request := base
+			request.Target = goos + "/arm64"
+			request.Environment = append([]string(nil), base.Environment...)
+			for index, pair := range request.Environment {
+				if strings.HasPrefix(pair, "GOOS=") {
+					request.Environment[index] = "GOOS=" + goos
+				}
+			}
+			source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+			if err != nil {
+				t.Fatalf("actual main compiler/ASM identities fail their complete source join: %v", err)
+			}
+			defer source.Close()
+			if len(source.report.Calls) != len(cases) {
+				t.Fatal("main source omitted an actual call")
+			}
+			for _, call := range source.report.Calls {
+				if !strings.HasPrefix(call.Caller, "main.") || !strings.HasPrefix(call.Callee, "main.") {
+					t.Fatal("source observation reconstructed main identity from the import path")
+				}
+			}
+		})
+	}
+}
+
 func arm64ByteCarrierRequest(t *testing.T, directory, packagePath string) GoARM64ByteCarrierCaptureRequest {
 	t.Helper()
 	provided := make(map[string]string)
