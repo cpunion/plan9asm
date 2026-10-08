@@ -13,7 +13,6 @@ import (
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 	"golang.org/x/mod/sumdb/dirhash"
-	modzip "golang.org/x/mod/zip"
 )
 
 var ErrUnclosedModuleDeclaration = errors.New("original downloaded module declaration/language is unclosed")
@@ -126,15 +125,14 @@ func (set *OriginSet) Observe(ctx context.Context, path, version string, receipt
 			return Module{}, err
 		}
 	}
-	if _, err := modzip.CheckZip(module.Version{Path: path, Version: version}, prefix+".zip"); err != nil {
-		return Module{}, fmt.Errorf("original module ZIP has an invalid complete member inventory: %w", err)
+	zipSum, dirSum, err := set.moduleHashes(ctx, root, path, version, prefix+".zip")
+	if err != nil {
+		return Module{}, fmt.Errorf("original module ZIP/tree did not close: %w", err)
 	}
-	zipSum, err := dirhash.HashZip(prefix+".zip", dirhash.Hash1)
-	if err != nil || zipSum != receipt.Sum {
+	if zipSum != receipt.Sum {
 		return Module{}, fmt.Errorf("original ZIP bytes differ from actual Go download h1")
 	}
-	dirSum, err := dirhash.HashDir(root, key, dirhash.Hash1)
-	if err != nil || dirSum != zipSum {
+	if dirSum != zipSum {
 		return Module{}, fmt.Errorf("complete original cache directory differs from original ZIP h1")
 	}
 	goMod := filepath.Join(root, "go.mod")

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -175,6 +176,21 @@ func (snapshot *Snapshot) Verify() error {
 // the same 16 MiB bound and complete EOF guard as hashing; the returned bytes
 // are observations, not frame or source permissions.
 func (snapshot *Snapshot) ReadRetained(name string) ([]byte, error) {
+	reader, err := snapshot.OpenRetained(name)
+	if err != nil {
+		return nil, err
+	}
+	buffer := &originalFileBuffer{bytes: make([]byte, int(snapshot.files[name].Size()))}
+	err = copyOriginalFile(buffer, reader)
+	if err != nil {
+		return nil, err
+	}
+	return buffer.bytes, nil
+}
+
+// OpenRetained exposes only an observed member's strict physical stream. Its
+// complete EOF and close errors must be consumed; it does not mint permissions.
+func (snapshot *Snapshot) OpenRetained(name string) (io.ReadCloser, error) {
 	if snapshot == nil || !filepath.IsAbs(name) {
 		return nil, fmt.Errorf("missing retained original file role")
 	}
@@ -187,16 +203,7 @@ func (snapshot *Snapshot) ReadRetained(name string) ([]byte, error) {
 	if expected.Size() < 0 || expected.Size() > fileByteLimit {
 		return nil, fmt.Errorf("retained original file exceeds its byte bound")
 	}
-	buffer := &originalFileBuffer{bytes: make([]byte, int(expected.Size()))}
-	actual, err := originalFileRead(name, expected, buffer)
-	if err != nil {
-		return nil, err
-	}
-	after, err := filepath.EvalSymlinks(name)
-	if err != nil || after != physical || actual != digest {
-		return nil, fmt.Errorf("retained original file bytes or physical role changed")
-	}
-	return buffer.bytes, nil
+	return openOriginalFile(name, expected, physical, digest)
 }
 
 // A fixed extent prevents io.Copy from allocating extra storage if an original
@@ -216,37 +223,105 @@ func (buffer *originalFileBuffer) Write(data []byte) (int, error) {
 }
 
 func originalFileSHA256(name string, expected os.FileInfo) (string, error) {
-	return originalFileRead(name, expected, nil)
+	physical, err := filepath.EvalSymlinks(name)
+	if err != nil {
+		return "", err
+	}
+	reader, err := openOriginalFile(name, expected, physical, "")
+	if err != nil {
+		return "", err
+	}
+	if err := copyOriginalFile(io.Discard, reader); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", reader.hash.Sum(nil)), nil
 }
 
-func originalFileRead(name string, expected os.FileInfo, output io.Writer) (_ string, result error) {
+func copyOriginalFile(output io.Writer, reader io.ReadCloser) error {
+	buffer := originalHashBuffers.Get().(*[64 << 10]byte)
+	defer originalHashBuffers.Put(buffer)
+	_, err := io.CopyBuffer(output, reader, buffer[:])
+	return errors.Join(err, reader.Close())
+}
+
+type originalFileReader struct {
+	file     *os.File
+	name     string
+	physical string
+	expected os.FileInfo
+	digest   string
+	hash     hash.Hash
+	count    int64
+	complete bool
+	closed   bool
+	failure  error
+}
+
+func openOriginalFile(name string, expected os.FileInfo, physical, digest string) (*originalFileReader, error) {
 	if expected == nil || expected.Size() < 0 || expected.Size() > fileByteLimit {
-		return "", fmt.Errorf("original source file has no bounded physical extent")
+		return nil, fmt.Errorf("original source file has no bounded physical extent")
+	}
+	before, err := os.Lstat(name)
+	resolved, resolveErr := filepath.EvalSymlinks(name)
+	if err != nil || resolveErr != nil || resolved != physical || !before.Mode().IsRegular() ||
+		!os.SameFile(expected, before) || before.Size() != expected.Size() {
+		return nil, fmt.Errorf("original source file identity or extent changed before opening")
 	}
 	file, err := os.Open(name)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer func() { result = errors.Join(result, file.Close()) }()
 	opened, err := file.Stat()
 	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(expected, opened) || opened.Size() != expected.Size() {
-		return "", fmt.Errorf("original source file identity changed while opening")
+		return nil, errors.Join(fmt.Errorf("original source file identity changed while opening"), file.Close())
 	}
-	hash := sha256.New()
-	var sink io.Writer = hash
-	if output != nil {
-		sink = io.MultiWriter(hash, output)
+	return &originalFileReader{file: file, name: name, physical: physical,
+		expected: expected, digest: digest, hash: sha256.New()}, nil
+}
+
+func (reader *originalFileReader) Read(data []byte) (int, error) {
+	if reader.failure != nil {
+		return 0, reader.failure
 	}
-	buffer := originalHashBuffers.Get().(*[64 << 10]byte)
-	defer originalHashBuffers.Put(buffer)
-	count, err := io.CopyBuffer(sink, io.LimitReader(file, fileByteLimit+1), buffer[:])
-	if err != nil {
-		return "", err
+	if reader.closed {
+		return 0, os.ErrClosed
 	}
-	after, err := os.Lstat(name)
-	if err != nil || !after.Mode().IsRegular() || !os.SameFile(opened, after) ||
-		count != expected.Size() || count != after.Size() || count > fileByteLimit {
-		return "", fmt.Errorf("original source file identity or extent changed while reading")
+	if reader.complete {
+		return 0, io.EOF
 	}
-	return fmt.Sprintf("%x", hash.Sum(nil)), nil
+	if remaining := reader.expected.Size() - reader.count + 1; int64(len(data)) > remaining {
+		data = data[:int(remaining)]
+	}
+	count, err := reader.file.Read(data)
+	reader.count += int64(count)
+	_, _ = reader.hash.Write(data[:count])
+	if reader.count > reader.expected.Size() {
+		err = fmt.Errorf("original source file grew beyond its retained extent")
+	} else if err == io.EOF {
+		after, statErr := os.Lstat(reader.name)
+		physical, resolveErr := filepath.EvalSymlinks(reader.name)
+		if statErr != nil || resolveErr != nil || physical != reader.physical || !after.Mode().IsRegular() ||
+			!os.SameFile(reader.expected, after) || reader.count != reader.expected.Size() || reader.count != after.Size() ||
+			reader.digest != "" && fmt.Sprintf("%x", reader.hash.Sum(nil)) != reader.digest {
+			err = fmt.Errorf("original source file identity, bytes or extent changed while reading")
+		} else {
+			reader.complete = true
+		}
+	}
+	if err != nil && err != io.EOF {
+		reader.failure = err
+	}
+	return count, err
+}
+
+func (reader *originalFileReader) Close() error {
+	if reader.closed {
+		return reader.failure
+	}
+	reader.closed = true
+	if !reader.complete {
+		reader.failure = errors.Join(reader.failure, fmt.Errorf("original source member did not reach complete EOF"))
+	}
+	reader.failure = errors.Join(reader.failure, reader.file.Close())
+	return reader.failure
 }
