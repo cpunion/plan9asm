@@ -141,7 +141,6 @@ func TestSnapshotRepeatedAtCountBounds(t *testing.T) {
 }
 
 func TestSnapshotRejectsRelativeDirectory(t *testing.T) {
-	t.Chdir(t.TempDir())
 	if err := NewSnapshot().Directory(".", false); err == nil {
 		t.Fatal("relative directory acquired an original physical source role")
 	}
