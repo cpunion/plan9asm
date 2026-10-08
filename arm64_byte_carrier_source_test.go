@@ -1,7 +1,10 @@
+//go:build go1.27
+
 package plan9asm
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -159,6 +162,168 @@ func TestARM64ByteCarrierActualSourceObservation(t *testing.T) {
 	}
 	if err := source.Close(); err != nil || !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
 		t.Fatalf("closed source retained a live observation: %v", err)
+	}
+}
+
+func TestARM64ByteCarrierSourceRevocation(t *testing.T) {
+	directory, packagePath, _ := arm64ByteCarrierFixture(t)
+	request := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	for _, test := range []struct {
+		name   string
+		mutate func(*GoARM64ByteCarrierSource) func()
+	}{
+		{"source-request", func(source *GoARM64ByteCarrierSource) func() {
+			prior := source.request.PackagePath
+			source.request.PackagePath += "/foreign"
+			return func() { source.request.PackagePath = prior }
+		}},
+		{"call-continuation", func(source *GoARM64ByteCarrierSource) func() {
+			source.report.Calls[0].ContinuationPC += 4
+			return func() { source.report.Calls[0].ContinuationPC -= 4 }
+		}},
+		{"native-store-width", func(source *GoARM64ByteCarrierSource) func() {
+			source.report.Calls[0].SPWrites[0].Bytes++
+			return func() { source.report.Calls[0].SPWrites[0].Bytes-- }
+		}},
+		{"whole-callee-object", func(source *GoARM64ByteCarrierSource) func() {
+			source.report.Standalone[0].Code[0] ^= 1
+			return func() { source.report.Standalone[0].Code[0] ^= 1 }
+		}},
+		{"original-source-bytes", func(source *GoARM64ByteCarrierSource) func() {
+			name := filepath.Join(directory, "decl.go")
+			prior, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(name, append(append([]byte(nil), prior...), '\n'), 0600); err != nil {
+				t.Fatal(err)
+			}
+			return func() {
+				if err := os.WriteFile(name, prior, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}},
+		{"same-bytes-object-inode", func(source *GoARM64ByteCarrierSource) func() {
+			name := filepath.Join(source.guard.owned, "original.o")
+			backup := name + ".saved"
+			prior, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(name, backup); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(name, prior, 0600); err != nil {
+				t.Fatal(err)
+			}
+			return func() {
+				if err := os.Rename(backup, name); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer source.Close()
+			restore := test.mutate(source)
+			if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatal("changed actual source/caller identity remained live")
+			}
+			restore()
+			if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatal("restoring bytes revived a revoked source")
+			}
+		})
+	}
+	for _, kind := range []string{"nil", "cancelled"} {
+		t.Run(kind, func(t *testing.T) {
+			source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer source.Close()
+			var invalid context.Context
+			cause := errors.New("source owner explicitly revoked")
+			if kind == "cancelled" {
+				cancelled, stop := context.WithCancelCause(ctx)
+				stop(cause)
+				invalid = cancelled
+			}
+			err = source.Verify(invalid)
+			if !errors.Is(err, ErrProbeNeedsContext) || kind == "cancelled" && !errors.Is(err, cause) ||
+				!errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatalf("invalid context revived a source or lost its actual cause: %v", err)
+			}
+		})
+	}
+	// A copied pointer graph cannot acquire the producer's identity, and
+	// refusing the copy must not revoke or release the original source.
+	source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	copied := &GoARM64ByteCarrierSource{identity: source, ready: true, guard: source.guard}
+	if !errors.Is(copied.Verify(ctx), ErrProbeNeedsContext) || !errors.Is(copied.Close(), ErrProbeNeedsContext) || source.Verify(ctx) != nil {
+		t.Fatal("copied source borrowed identity or released the original observation")
+	}
+}
+
+func TestARM64ByteCarrierSourceRejectsOpenRoles(t *testing.T) {
+	base, packagePath, _ := arm64ByteCarrierFixture(t)
+	request := arm64ByteCarrierRequest(t, base, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	for _, test := range []struct {
+		name   string
+		file   string
+		change func(string) string
+	}{
+		{"exported-entry", "decl.go", func(text string) string { return text + "\nfunc Visible() {}\n" }},
+		{"function-address", "decl.go", func(text string) string { return text + "\nfunc escaped() { _ = movd_u32 }\n" }},
+		{"pointer-transport", "decl.go", func(text string) string {
+			return strings.Replace(text, "func movd_u32(input uint64)", "func movd_u32(input *uint64)", 1)
+		}},
+		{"linkname", "decl.go", func(text string) string { return text + "\n//go:linkname private foreign\n" }},
+		{"text-declaration-mismatch", "original_arm64.s", func(text string) string { return strings.Replace(text, "$0-12", "$0-16", 1) }},
+		{"native-code-address", "original_arm64.s", func(text string) string {
+			return strings.Replace(text, "MOVD input+0(FP),R0", "MOVD $·movd_u32(SB),R0", 1)
+		}},
+		{"unknown-memory", "original_arm64.s", func(text string) string { return strings.Replace(text, "MOVD R0,8(RSP)", "MOVD R0,(R1)", 1) }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"go.mod", "decl.go", "original_arm64.s"} {
+				data, err := os.ReadFile(filepath.Join(base, name))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if name == test.file {
+					data = []byte(test.change(string(data)))
+				}
+				if err := os.WriteFile(filepath.Join(directory, name), data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			changed := request
+			changed.Directory = directory
+			if source, err := CaptureGoARM64ByteCarrierSource(ctx, changed); source != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				if source != nil {
+					source.Close()
+				}
+				t.Fatalf("open/contradictory source role was admitted: %v", err)
+			}
+		})
 	}
 }
 
