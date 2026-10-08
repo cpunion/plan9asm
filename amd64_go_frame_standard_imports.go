@@ -19,6 +19,12 @@ func (source *GoAMD64FrameSource) loadStandardDeclarationImports(ctx context.Con
 	if err != nil {
 		return nil, err
 	}
+	return source.bindStandardDeclarationImports(output)
+}
+
+// A caller retaining the actual command bytes may share the same complete
+// graph decoder. This routine observes files/exports, not frame authority.
+func (source *GoAMD64FrameSource) bindStandardDeclarationImports(output []byte) (map[string]goAMD64FrameSelection, error) {
 	if len(output) > 16<<20 {
 		return nil, goAMD64FrameContext("declaration import graph exceeds its bound")
 	}

@@ -313,6 +313,11 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 	// ready generation, artifact owner, Frame token or private factory fields.
 	guard := &GoAMD64FrameSource{request: source.guard.request, selection: source.guard.selection,
 		env: source.guard.env, inputs: make(map[string][32]byte), imports: make(map[string]goAMD64FrameSelection)}
+	if source.role == numericalSBSDKSource {
+		for path, dependency := range source.guard.imports {
+			guard.imports[path] = dependency
+		}
+	}
 	for _, owner := range source.originalOwners {
 		report, err := owner.observation.Readback(ctx)
 		if err != nil {

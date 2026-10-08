@@ -25,8 +25,8 @@ type GoX86NumericalReadCaptureRequest struct {
 
 // GoX86NumericalReadSource is a sealed source/native-instruction/numerical-owner
 // join. Capture alone supplies no Options, LLVM load, caller or entry authority.
-// Initial source roles are ordinary owned-main sources on linux/386 and amd64;
-// Standard/external source roles and generated headers remain explicit Context.
+// Ordinary owned-main and explicit independently observed SDK sources retain
+// separate roles. External sources and generated headers remain Context.
 type GoX86NumericalReadSource struct {
 	mu                           sync.Mutex
 	identity                     *GoX86NumericalReadSource
@@ -45,6 +45,8 @@ type GoX86NumericalReadSource struct {
 	rawSelection, rawEnvironment []byte
 	originalOwners               []*GoNumericalStorageOwner
 	commands                     []numericalSBCommand
+	role                         numericalSBSourceRole
+	sdk                          *numericalSBSDKObservation
 }
 
 type numericalSBCommand struct {
@@ -53,11 +55,18 @@ type numericalSBCommand struct {
 	Stdout            []byte
 }
 
-func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86NumericalReadCaptureRequest) (_ *GoX86NumericalReadSource, result error) {
+func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86NumericalReadCaptureRequest) (*GoX86NumericalReadSource, error) {
+	return captureGoX86NumericalReadSource(ctx, request, numericalSBOwnedSource, false)
+}
+
+func captureGoX86NumericalReadSource(ctx context.Context, request GoX86NumericalReadCaptureRequest,
+	role numericalSBSourceRole, inputsOnly bool,
+) (_ *GoX86NumericalReadSource, result error) {
 	if ctx != nil && ctx.Err() != nil {
 		return nil, fmt.Errorf("capture numerical read source: %w", ctx.Err())
 	}
-	if ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+	if role != numericalSBOwnedSource && role != numericalSBSDKSource || inputsOnly && role != numericalSBSDKSource ||
+		ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
 		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) || request.PackagePath == "" ||
 		filepath.Base(request.AssemblyFile) != request.AssemblyFile || !strings.HasSuffix(request.AssemblyFile, ".s") ||
 		len(request.Owners) == 0 || len(request.Owners) > 8 {
@@ -89,7 +98,7 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if provided["GOPACKAGESDRIVER"] != "" && provided["GOPACKAGESDRIVER"] != "off" {
 		return nil, numericalSBContext("external package driver needs independent mapping")
 	}
-	source := &GoX86NumericalReadSource{request: request, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
+	source := &GoX86NumericalReadSource{request: request, role: role, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
 		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
 	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
@@ -136,22 +145,16 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	source.guard.selection = selected
 	source.rawSelection = append([]byte(nil), rawSelection...)
 	source.recordCommand(rawSelection, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
-	if selected.ImportPath != request.PackagePath || selected.Dir != request.Directory || selected.Standard || selected.ForTest != "" ||
-		selected.Module == nil || !selected.Module.Main || selected.Module.Version != "" || selected.Module.Path == "" ||
-		len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" || selected.nonordinaryRole() ||
+	if selected.ImportPath != request.PackagePath || selected.Dir != request.Directory || selected.ForTest != "" || selected.nonordinaryRole() ||
 		len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 || len(selected.SFiles) > 32 {
-		return nil, numericalSBContext("consumer needs complete original owned-main selection")
+		return nil, numericalSBContext("consumer needs complete original source selection")
 	}
-	if selected.Module.GoMod != filepath.Join(selected.Module.Dir, "go.mod") ||
-		!goAssemblyPathWithinRoot(selected.Module.Dir, request.Directory) {
-		return nil, numericalSBContext("consumer module/source role differs")
-	}
-	if _, err := source.guard.read(selected.Module.GoMod); err != nil {
+	if err := source.captureSourceRole(ctx); err != nil {
 		return nil, err
 	}
 	var reports []gostaticstorage.Report
 	variables := make(map[string]numericalSBRead)
-	mainRootBound := selected.Module.Dir == request.Directory
+	mainRootBound := role == numericalSBOwnedSource && selected.Module.Dir == request.Directory
 	for ordinal, owner := range request.Owners {
 		if err := owner.Verify(ctx); err != nil {
 			return nil, err
@@ -165,7 +168,7 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 			return nil, numericalSBContext("owner source/tool/profile differs")
 		}
 		if report.Protocol != gostaticstorage.SDKCPUProtocol {
-			if report.CommandDirectory != selected.Module.Dir || report.PackagePath != selected.Module.Path {
+			if role != numericalSBOwnedSource || report.CommandDirectory != selected.Module.Dir || report.PackagePath != selected.Module.Path {
 				return nil, numericalSBContext("numerical owner is not the actual same main module")
 			}
 			mainRootBound = true
@@ -180,13 +183,22 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		}
 		reports = append(reports, report)
 	}
-	if !mainRootBound {
+	if role == numericalSBOwnedSource && !mainRootBound {
 		return nil, numericalSBContext("nested consumer lacks complete original module inventory owner")
 	}
 	// Imports cannot borrow a CPU assembly reference as a Go graph certificate.
 	// Same-main dependencies must be present in an actual owner selection/export.
-	if err := source.bindImports(reports); err != nil {
+	if role == numericalSBOwnedSource {
+		if err := source.bindImports(reports); err != nil {
+			return nil, err
+		}
+	} else if err := source.verifySDKObservation(ctx); err != nil {
 		return nil, err
+	}
+	// This private observation stop has no public request flag and no ready
+	// numerical source, binding, instruction certificate or LLVM permission.
+	if inputsOnly {
+		return source, nil
 	}
 	if err := source.bindNative(ctx, variables, provided); err != nil {
 		return nil, err
@@ -202,7 +214,9 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		RawSelection, RawEnvironment []byte
 		Commands                     []numericalSBCommand
 		Reads                        []numericalSBReadFact
-	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts()})
+		Role                         numericalSBSourceRole
+		SDK                          *numericalSBSDKObservation
+	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts(), role, source.sdk})
 	if err != nil {
 		return nil, err
 	}
@@ -250,8 +264,12 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 		env["GOCACHE"] != provided["GOCACHE"] || env["GOMODCACHE"] != provided["GOMODCACHE"] {
 		return numericalSBContext("actual SDK/tool/profile differs")
 	}
-	if err := gostaticstorage.ValidateOwnedSourceDirectory(source.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {
-		return numericalStorageFailure(ctx, "numerical original owned source role", err)
+	if source.role == numericalSBOwnedSource {
+		if err := gostaticstorage.ValidateOwnedSourceDirectory(source.request.Directory, env["GOROOT"], env["GOMODCACHE"]); err != nil {
+			return numericalStorageFailure(ctx, "numerical original owned source role", err)
+		}
+	} else if err := source.verifySDKDirectory(env["GOROOT"]); err != nil {
+		return err
 	}
 	source.guard.env = env
 	source.rawEnvironment = append([]byte(nil), raw...)
@@ -414,6 +432,11 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 	if !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
 		return fail(numericalSBContext("actual consumer selection/export changed"))
 	}
+	if source.role == numericalSBSDKSource {
+		if err := source.verifySDKObservation(ctx); err != nil {
+			return fail(err)
+		}
+	}
 	if err := source.guard.verifyInputs(); err != nil {
 		return fail(err)
 	}
@@ -432,6 +455,9 @@ func (source *GoX86NumericalReadSource) Close() error {
 	}
 	if source.identity != source {
 		return numericalSBContext("copied numerical source cannot close the original artifact owner")
+	}
+	if source.sdk != nil {
+		source.sdk.closed = true
 	}
 	return source.guard.Close()
 }
@@ -494,7 +520,9 @@ func (source *GoX86NumericalReadSource) stateDigest() ([32]byte, error) {
 		Reads                        []numericalSBReadFact
 		RawSelection, RawEnvironment []byte
 		Commands                     []numericalSBCommand
-	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands})
+		Role                         numericalSBSourceRole
+		SDK                          *numericalSBSDKObservation
+	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands, source.role, source.sdk})
 	return sha256.Sum256(raw), err
 }
 
