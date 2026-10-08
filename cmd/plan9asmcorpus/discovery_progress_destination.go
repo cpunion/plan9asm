@@ -34,6 +34,7 @@ func canonicalDiscoveryProgressPath(name string) (string, error) {
 			resolved = filepath.Dir(resolved)
 			continue
 		}
+		parent := resolved
 		resolved = filepath.Join(resolved, part)
 		info, err := os.Lstat(resolved)
 		if os.IsNotExist(err) {
@@ -42,8 +43,17 @@ func canonicalDiscoveryProgressPath(name string) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		actualName, err := physicalDiscoveryProgressEntry(parent, part, info)
+		if err != nil {
+			return "", err
+		}
+		resolved = filepath.Join(parent, actualName)
 		if info.Mode()&os.ModeSymlink != 0 {
 			resolved, err = filepath.EvalSymlinks(resolved)
+			if err != nil {
+				return "", err
+			}
+			resolved, err = canonicalDiscoveryProgressPath(resolved)
 			if err != nil {
 				return "", err
 			}
@@ -57,6 +67,34 @@ func canonicalDiscoveryProgressPath(name string) (string, error) {
 		}
 	}
 	return resolved, nil
+}
+
+// A successful Stat may accept a different case, Unicode or short-name alias
+// on the current filesystem. Recover the actual existing entry by identity,
+// not by case folding: genuinely distinct names on a sensitive filesystem
+// must remain distinct. The exact spelling is the common fast path.
+func physicalDiscoveryProgressEntry(parent, requested string, observed os.FileInfo) (string, error) {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return "", err
+	}
+	for _, entry := range entries {
+		if entry.Name() != requested {
+			continue
+		}
+		actual, err := entry.Info()
+		if err != nil || !os.SameFile(observed, actual) {
+			return "", fmt.Errorf("discovery progress path changed during canonical preflight: %v", err)
+		}
+		return entry.Name(), nil
+	}
+	for _, entry := range entries {
+		actual, err := entry.Info()
+		if err == nil && os.SameFile(observed, actual) {
+			return entry.Name(), nil
+		}
+	}
+	return "", fmt.Errorf("discovery progress physical entry changed during canonical preflight")
 }
 
 func discoveryPathContains(parent, child string) bool {
