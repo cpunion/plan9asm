@@ -120,7 +120,12 @@ func TestInstrumentationArtifactPhysicalBoundsPrecedeStreaming(t *testing.T) {
 }
 
 func TestInstrumentationArtifactEqualByteReplacementLosesReservedIdentity(t *testing.T) {
-	root := t.TempDir()
+	// The private reservation helper requires a physical root; public capture
+	// resolves its caller's root before reserving any generated artifact.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	name := "instrumented-0000.ll"
 	path := filepath.Join(root, name)
 	bytes := []byte("artifact inode fixture; no compiler/source claim\n")

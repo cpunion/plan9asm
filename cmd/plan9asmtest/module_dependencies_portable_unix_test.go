@@ -23,7 +23,13 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	producer := filepath.Join(t.TempDir(), "producer")
+	// llvm-config reports its physical relocatable prefix. Keep the fixture's
+	// own installation in that same namespace, including Darwin's /var alias.
+	producerRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	producer := filepath.Join(producerRoot, "producer")
 	for _, directory := range []string{"bin", "lib"} {
 		if err := os.MkdirAll(filepath.Join(producer, directory), 0700); err != nil {
 			t.Fatal(err)
