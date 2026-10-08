@@ -285,6 +285,13 @@ func TestGoSDKStaticStorageTEXTAllOriginalMembers(t *testing.T) {
 			if !reflect.DeepEqual(original, report.TextArchives["internal/cpu"]) {
 				t.Fatal("complete original SDK member/TEXT/relocation/PC identity differs")
 			}
+			if target == "linux/386" || target == "linux/amd64" {
+				observed, err := ObserveX86SDKAssemblyArchive(report.Archives["internal/cpu"], report.TextBuiltinSource,
+					target, packages["internal/cpu"].SFiles)
+				if err != nil || !reflect.DeepEqual(observed, original) {
+					t.Fatal("SDK-only x86 archive observation differs from the independent complete SDK reader", err)
+				}
+			}
 			encoded, err := json.MarshalIndent(report, "", "  ")
 			if err != nil {
 				t.Fatal(err)
