@@ -3770,7 +3770,8 @@ evex:
 }
 
 // decodedX86VEXPackedBroadcastInstruction recognizes the complete VEX and EVEX
-// VPBROADCASTB/W/D/Q family represented by Go 1.27's _yvpbroadcastb table.
+// VPBROADCASTB/W/D/Q and K-data broadcast families represented by Go 1.27's
+// _yvpbroadcastb and _yvpbroadcastmb2q tables.
 // x/arch v0.14 can misclassify the VEX bytes as PC-relative branches, as
 // observed in github.com/vivint/infectious, and cannot decode the EVEX
 // general-register form used by github.com/JohanLindvall/haste.
@@ -3862,6 +3863,9 @@ func decodedX86EVEXPackedBroadcastInstruction(code []byte, i, mode int, segment 
 	}
 	p0, p1, p2 := code[i+1], code[i+2], code[i+3]
 	opcode := code[i+4]
+	if p0&0x0f == 2 && p1&3 == 2 && (opcode == 0x2a || opcode == 0x3a) {
+		return decodedX86EVEXMaskDataBroadcastInstruction(code, i, mode, segment, addressOverride)
+	}
 	if p0&0x0f != 2 || p1&3 != 1 {
 		return Instr{}, 0, false, nil
 	}
@@ -5763,6 +5767,50 @@ vex:
 		Raw:  fmt.Sprintf("%s %s, %s, %s", op, firstSource.String(), secondSource.String(), destination.String()),
 	}
 	return instruction, modRMIndex + consumed, true, nil
+}
+
+// K is a data register here, not an optional writemask. Recognizing these
+// physical register shapes grants no initialized-mask or memory authority.
+func decodedX86EVEXMaskDataBroadcastInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (Instr, int, bool, error) {
+	p0, p1, p2, opcode := code[i+1], code[i+2], code[i+3], code[i+4]
+	op := Op("VPBROADCASTMW2D")
+	width64 := false
+	if opcode == 0x2a {
+		op, width64 = "VPBROADCASTMB2Q", true
+	}
+	fail := func(reason string) (Instr, int, bool, error) {
+		return Instr{}, 0, true, fmt.Errorf("%s %s", op, reason)
+	}
+	if (p1&0x80 != 0) != width64 {
+		return fail("has a reserved EVEX.W value")
+	}
+	if p1&0x7c != 0x7c || p2&8 == 0 {
+		return fail("requires reserved EVEX.vvvv and the fixed prefix bit")
+	}
+	if segment != "" || addressOverride {
+		return fail("does not admit segment or address-size overrides")
+	}
+	if p2&0x97 != 0 {
+		return fail("does not admit writemasking, zeroing, or EVEX.b")
+	}
+	vectorBits := p2 >> 5 & 3
+	if vectorBits == 3 {
+		return fail("has a reserved EVEX vector length")
+	}
+	if len(code) <= i+5 {
+		return fail("is missing its ModRM byte")
+	}
+	modRM := code[i+5]
+	if modRM>>6 != 3 || p0&0x60 != 0x60 {
+		return fail("requires an unextended K-register source")
+	}
+	destination := int(modRM>>3&7) + int(^p0>>7&1)*8 + int(^p0>>4&1)*16
+	if mode == 32 && destination >= 8 {
+		return fail("has an extended vector register in 32-bit mode")
+	}
+	src := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("K%d", modRM&7))}
+	dst := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", [...]string{"X", "Y", "Z"}[vectorBits], destination))}
+	return Instr{Op: op, Args: []Operand{src, dst}, Raw: fmt.Sprintf("%s %s, %s", op, src.String(), dst.String())}, i + 6, true, nil
 }
 
 // decodedX86VEXPackedIntegerLogicalInstruction recognizes the complete
