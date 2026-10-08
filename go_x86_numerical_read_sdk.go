@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
