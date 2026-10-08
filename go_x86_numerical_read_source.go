@@ -29,6 +29,7 @@ type GoX86NumericalReadCaptureRequest struct {
 // Standard/external source roles and generated headers remain explicit Context.
 type GoX86NumericalReadSource struct {
 	mu                           sync.Mutex
+	identity                     *GoX86NumericalReadSource
 	ready                        bool
 	request                      GoX86NumericalReadCaptureRequest
 	guard                        *GoAMD64FrameSource // private reuse of file/command guards, NOT its factory or frame role
@@ -90,6 +91,7 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	}
 	source := &GoX86NumericalReadSource{request: request, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
 		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
+	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
 		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment})
 	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
@@ -352,7 +354,8 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
-	if !source.ready {
+	if !source.ready || source.identity != source {
+		source.ready = false
 		return numericalSBContext("read source is closed/revoked")
 	}
 	fail := func(err error) error { source.ready = false; return err }
@@ -426,6 +429,9 @@ func (source *GoX86NumericalReadSource) Close() error {
 	source.ready = false
 	if source.guard == nil {
 		return nil
+	}
+	if source.identity != source {
+		return numericalSBContext("copied numerical source cannot close the original artifact owner")
 	}
 	return source.guard.Close()
 }

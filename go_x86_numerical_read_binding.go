@@ -290,9 +290,10 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 // selections. A temporary typecheck guard cannot add new files to the original
 // source seal or treat the CPU's assembly namespace as a Go import certificate.
 func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Context, pkg GoPackage, arch string) (map[string]goAMD64FrameDeclaration, error) {
-	guard := *source.guard
-	guard.inputs = make(map[string][32]byte)
-	guard.imports = make(map[string]goAMD64FrameSelection)
+	// This is only an independent declaration query. Do not copy the mutex,
+	// ready generation, artifact owner, Frame token or private factory fields.
+	guard := &GoAMD64FrameSource{request: source.guard.request, selection: source.guard.selection,
+		env: source.guard.env, inputs: make(map[string][32]byte), imports: make(map[string]goAMD64FrameSelection)}
 	for _, owner := range source.originalOwners {
 		report, err := owner.observation.Readback(ctx)
 		if err != nil {
