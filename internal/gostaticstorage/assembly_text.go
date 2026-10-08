@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+// ObserveARM64AssemblyText is an offline original-object observation. It does
+// not construct a live source, caller carrier, entry adapter or frame slot.
+func ObserveARM64AssemblyText(data, builtinSource []byte, target string) ([]TextRecord, error) {
+	return nil, contextError("ARM64 assembly observation is not implemented")
+}
+
+// ObserveARM64AssemblyArchive retains original caller/callee records only.
+// Neither selected source names nor a successful decode grant LLVM authority.
+func ObserveARM64AssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
+	return nil, contextError("ARM64 assembly archive observation is not implemented")
+}
+
 // ObserveX86AssemblyText decodes complete original Go assembler object bytes.
 // It is an offline observation: neither these bytes nor its return value create
 // an Observation, a live source lease or a memory/entry permission.
