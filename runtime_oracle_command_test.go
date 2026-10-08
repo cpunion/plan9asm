@@ -129,6 +129,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"go_x86_numerical_read_owned_role_test.go",
 		"go_x86_numerical_read_family_test.go",
 		"go_x86_numerical_read_runtime_test.go",
+		"go_x86_numerical_read_local_runtime_test.go",
 		"amd64_go_caller_saved_g_runtime_test.go",
 		"amd64_go_caller_logical_runtime_test.go",
 		"amd64_float_add_sub_go_oracle_test.go",
@@ -263,7 +264,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 				}
 				if function, ok := call.Fun.(*ast.Ident); ok {
 					switch function.Name {
-					case "runtimeOracleCombinedOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand":
+					case "runtimeOracleCombinedOutput", "goAssemblerOracleOutput", "x86FloatCompareCaptureCommand", "numericalLocalRuntimeCommand":
 						consumers++
 						return true
 					}

@@ -11,6 +11,10 @@ func TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableAMD64(t *testing.T) {
 	numericalRuntimeExecute(t, "amd64", x86FloatCompareExecutionTools(t), true)
 }
 
+func TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutableLocalAMD64(t *testing.T) {
+	numericalLocalMutableRuntime(t, x86FloatCompareExecutionTools(t), true)
+}
+
 func TestCrossLinuxRuntimeMatrixX86NumericalSBReadMutable386(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	compiler, compilerErr := exec.LookPath("i686-linux-gnu-gcc")
