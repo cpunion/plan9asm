@@ -1,0 +1,370 @@
+package plan9asm
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+)
+
+// GoX86SDKASMDataCaptureRequest selects one physical package in the invoked
+// stock-Go SDK. It accepts no caller AST, Types, header, object or owner token.
+type GoX86SDKASMDataCaptureRequest struct {
+	GoBinary, Directory, PackagePath, Target string
+	Environment                              []string
+}
+
+// GoX86SDKASMDataSource authenticates source/header/CPP/object observations
+// only. It has no Bind, Options, initializer, numerical or native-body API.
+type GoX86SDKASMDataSource struct {
+	mu, operation   sync.Mutex
+	identity        *GoX86SDKASMDataSource
+	ready           bool
+	active          bool
+	closePending    bool
+	generation      uint64
+	request         GoX86SDKASMDataCaptureRequest
+	guard           *GoAMD64FrameSource
+	originalGuard   *GoAMD64FrameSource
+	context         context.Context
+	originalContext context.Context
+	directories     map[string]os.FileInfo
+	misses          map[string]bool
+	observation     sdkASMDataLiveObservation
+	report          []byte
+	seal            [32]byte
+	stateSeal       [32]byte
+}
+
+type sdkASMDataLiveObservation struct {
+	Protocol                     string
+	Request                      GoX86SDKASMDataCaptureRequest
+	RawEnvironment, RawSelection []byte
+	Graph                        []byte
+	Imports                      map[string]goAMD64FrameSelection
+	Inputs                       map[string][32]byte
+	Header                       sdkASMDataHeaderObservation
+	CPP                          []AssemblyCPPObservation
+	ObjectInputs                 gostaticstorage.SDKASMDataObservationRequest
+	Objects                      *gostaticstorage.SDKASMDataObservation
+	Commands                     []numericalSBCommand
+}
+
+func sdkASMDataContext(format string, args ...any) error {
+	return fmt.Errorf("%w: actual SDK ASM DATA observation: %s", ErrProbeNeedsContext, fmt.Sprintf(format, args...))
+}
+
+// CaptureGoX86SDKASMDataSource is an explicit live SDK observation producer.
+// Successful capture does not make DATA initialized storage or authorize any
+// instruction to read it. Existing owned and numerical factories stay strict.
+func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCaptureRequest) (_ *GoX86SDKASMDataSource, result error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, fmt.Errorf("capture SDK ASM DATA: %w", ctx.Err())
+	}
+	if ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) ||
+		!filepath.IsLocal(filepath.FromSlash(request.PackagePath)) ||
+		filepath.ToSlash(filepath.Clean(filepath.FromSlash(request.PackagePath))) != request.PackagePath {
+		return nil, sdkASMDataContext("requires exact SDK source/tool/target inputs")
+	}
+	if _, bounded := ctx.Deadline(); !bounded {
+		return nil, sdkASMDataContext("requires a bounded original capture context")
+	}
+	request.Environment = append([]string(nil), request.Environment...)
+	provided, err := sdkASMDataEnvironment(request)
+	if err != nil {
+		return nil, err
+	}
+	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx,
+		directories: make(map[string]os.FileInfo), misses: make(map[string]bool)}
+	source.identity = source
+	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary,
+		Directory: request.Directory, Target: request.Target, Environment: request.Environment})
+	source.originalGuard = source.guard
+	for _, directory := range []string{request.Directory, provided["GOCACHE"], provided["GOMODCACHE"],
+		provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]} {
+		if err := source.retainDirectory(directory); err != nil {
+			return nil, err
+		}
+	}
+	if err := source.guard.snapshotDirectory(); err != nil {
+		return nil, err
+	}
+	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-sdk-asm-data-")
+	if err != nil {
+		return nil, err
+	}
+	source.guard.owned = owned
+	source.guard.ownedInfo, err = os.Lstat(owned)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, source.Close())
+		}
+	}()
+	canonical, err := filepath.EvalSymlinks(owned)
+	info, statErr := os.Lstat(canonical)
+	if err != nil || statErr != nil || !info.IsDir() || !os.SameFile(info, source.guard.ownedInfo) ||
+		!goAssemblyPathWithinRoot(provided["TMPDIR"], canonical) {
+		return nil, sdkASMDataContext("factory artifact identity changed")
+	}
+	source.guard.owned = canonical
+	if err := source.capture(ctx, provided); err != nil {
+		return nil, err
+	}
+	source.observation.Inputs = cloneSDKASMDataInputs(source.guard.inputs)
+	source.report, err = json.Marshal(source.observation)
+	if err != nil {
+		return nil, err
+	}
+	source.seal = sha256.Sum256(source.report)
+	source.stateSeal, err = source.digest()
+	if err != nil {
+		return nil, err
+	}
+	source.ready, source.generation = true, 1
+	if err := source.Verify(ctx); err != nil {
+		return nil, err
+	}
+	return source, nil
+}
+
+func sdkASMDataEnvironment(request GoX86SDKASMDataCaptureRequest) (map[string]string, error) {
+	provided := make(map[string]string)
+	for _, pair := range request.Environment {
+		key, value, valid := strings.Cut(pair, "=")
+		if _, duplicate := provided[key]; !valid || key == "" || duplicate {
+			return nil, sdkASMDataContext("malformed or duplicate command environment")
+		}
+		provided[key] = value
+	}
+	_, arch, _ := strings.Cut(request.Target, "/")
+	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
+		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
+		if actual, present := provided[key]; !present || actual != value {
+			return nil, sdkASMDataContext("unbound command profile: %s", key)
+		}
+	}
+	if provided["GOPACKAGESDRIVER"] != "" && provided["GOPACKAGESDRIVER"] != "off" {
+		return nil, sdkASMDataContext("external package driver needs its own source role")
+	}
+	return provided, nil
+}
+
+func (source *GoX86SDKASMDataSource) retainDirectory(directory string) error {
+	resolved, err := filepath.EvalSymlinks(directory)
+	info, statErr := os.Lstat(directory)
+	if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
+		return sdkASMDataContext("missing or redirected source/command directory")
+	}
+	source.directories[directory] = info
+	return nil
+}
+
+func (source *GoX86SDKASMDataSource) verifyDirectories() error {
+	for directory, before := range source.directories {
+		resolved, err := filepath.EvalSymlinks(directory)
+		after, statErr := os.Lstat(directory)
+		if err != nil || resolved != directory || statErr != nil || !after.IsDir() || !os.SameFile(before, after) {
+			return sdkASMDataContext("source/command directory identity changed")
+		}
+	}
+	for name := range source.misses {
+		if _, err := os.Lstat(name); !os.IsNotExist(err) {
+			return sdkASMDataContext("CPP preferred search miss changed")
+		}
+	}
+	return nil
+}
+
+func (source *GoX86SDKASMDataSource) liveContext(ctx context.Context) error {
+	if ctx == nil || source.context == nil {
+		return sdkASMDataContext("missing original or verification context")
+	}
+	if source.originalContext == nil || reflect.TypeOf(source.context) != reflect.TypeOf(source.originalContext) ||
+		!reflect.TypeOf(source.context).Comparable() || source.context != source.originalContext {
+		return sdkASMDataContext("original capture context identity changed")
+	}
+	return errors.Join(ctx.Err(), source.context.Err())
+}
+
+func (source *GoX86SDKASMDataSource) run(ctx context.Context, arguments ...string) ([]byte, error) {
+	if err := source.liveContext(ctx); err != nil {
+		return nil, err
+	}
+	if err := source.verifyDirectories(); err != nil {
+		return nil, err
+	}
+	if err := source.guard.verifyInputs(); err != nil {
+		return nil, err
+	}
+	commandContext, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	stdout, err := goasmcmd.Run(commandContext, source.request.Directory, source.request.Environment, source.request.GoBinary, arguments...)
+	err = errors.Join(err, commandContext.Err(), source.liveContext(ctx), source.guard.verifyInputs(), source.verifyDirectories())
+	if err == nil {
+		source.observation.Commands = append(source.observation.Commands, numericalSBCommand{
+			Directory: source.request.Directory, Binary: source.request.GoBinary,
+			Arguments: append([]string(nil), arguments...), Stdout: append([]byte(nil), stdout...),
+		})
+	}
+	return stdout, err
+}
+
+func cloneSDKASMDataInputs(inputs map[string][32]byte) map[string][32]byte {
+	result := make(map[string][32]byte, len(inputs))
+	for name, digest := range inputs {
+		result[name] = digest
+	}
+	return result
+}
+
+func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
+	raw, err := json.Marshal(struct {
+		Request     GoX86SDKASMDataCaptureRequest
+		Guard       GoAMD64FrameCaptureRequest
+		Selection   goAMD64FrameSelection
+		Env         map[string]string
+		Imports     map[string]goAMD64FrameSelection
+		Inputs      map[string][32]byte
+		Entries     []string
+		Misses      map[string]bool
+		Observation sdkASMDataLiveObservation
+	}{source.request, source.guard.request, source.guard.selection, source.guard.env, source.guard.imports,
+		source.guard.inputs, source.guard.entries, source.misses, source.observation})
+	return sha256.Sum256(raw), err
+}
+
+// Verify never holds the lifetime mutex during a command or importer callback.
+// The operation lock protects private guard maps. Reentrant Close revokes
+// immediately; the active operation disposes artifacts after its postcheck.
+// Every postcheck must still match the original generation.
+func (source *GoX86SDKASMDataSource) Verify(ctx context.Context) (result error) {
+	if source == nil || source.identity != source {
+		return sdkASMDataContext("copied, missing or uninitialized source")
+	}
+	source.operation.Lock()
+	defer source.operation.Unlock()
+	source.mu.Lock()
+	generation, ready := source.generation, source.ready
+	source.active = ready
+	source.mu.Unlock()
+	defer func() {
+		result = errors.Join(result, source.liveContext(ctx))
+		source.mu.Lock()
+		if source.generation != generation || !source.ready {
+			result = errors.Join(result, sdkASMDataContext("source closed or revoked during verification"))
+		}
+		if result != nil {
+			source.ready = false
+			source.generation++
+		}
+		source.active = false
+		cleanup := source.closePending
+		source.mu.Unlock()
+		if cleanup {
+			result = errors.Join(result, source.guard.Close())
+		}
+	}()
+	if !ready {
+		return sdkASMDataContext("source is closed or revoked")
+	}
+	if source.guard != source.originalGuard || source.guard == nil || source.guard.identity != source.guard ||
+		source.guard.ready || source.guard.request.NumericalReads != nil || source.guard.numericalOrigin != nil || source.guard.downloadedOrigin != nil {
+		return sdkASMDataContext("source borrowed a foreign frame, origin or numerical capability")
+	}
+	if err := source.liveContext(ctx); err != nil {
+		return err
+	}
+	before, err := source.digest()
+	if err != nil || before != source.stateSeal || sha256.Sum256(source.report) != source.seal {
+		return sdkASMDataContext("sealed source/header/CPP/object state changed")
+	}
+	if err := source.verifySDKDirectory(); err != nil {
+		return err
+	}
+	// Verification commands are not new capture observations. Retain the exact
+	// original command inventory while checking current actual graph bytes.
+	commands := source.observation.Commands
+	defer func() { source.observation.Commands = commands }()
+	raw, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	if err != nil {
+		return err
+	}
+	imports, err := source.guard.bindStandardDeclarationImports(raw)
+	if err != nil || !reflect.DeepEqual(imports, source.observation.Imports) ||
+		!numericalSameRawSDKGraph(raw, source.observation.Graph) {
+		return sdkASMDataContext("complete SDK source/export/selection graph changed: %v", err)
+	}
+	source.observation.Commands = commands
+	if err := source.guard.verifyInputs(); err != nil {
+		return err
+	}
+	after, err := source.digest()
+	if err != nil || after != source.stateSeal {
+		return sdkASMDataContext("inputs or observation changed during verification")
+	}
+	return nil
+}
+
+// Close cannot dispose a copied source's shared artifacts. It never deletes
+// the SDK, original source, dependency exports or caller cache directories.
+func (source *GoX86SDKASMDataSource) Close() error {
+	if source == nil {
+		return nil
+	}
+	if source.identity != source {
+		return sdkASMDataContext("copied observation cannot close its original artifact owner")
+	}
+	source.mu.Lock()
+	source.ready = false
+	source.generation++
+	source.closePending = true
+	active := source.active
+	source.mu.Unlock()
+	if active {
+		return nil
+	}
+	source.operation.Lock()
+	defer source.operation.Unlock()
+	return source.guard.Close()
+}
+
+func (source *GoX86SDKASMDataSource) Readback(ctx context.Context) ([]byte, error) {
+	if err := source.Verify(ctx); err != nil {
+		return nil, err
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if !source.ready {
+		return nil, sdkASMDataContext("source closed after verification")
+	}
+	return append([]byte(nil), source.report...), nil
+}
+
+// CheckReadback compares actual retained whole bytes. It is not a constructor.
+func (source *GoX86SDKASMDataSource) CheckReadback(ctx context.Context, raw []byte) error {
+	if err := source.Verify(ctx); err != nil {
+		return err
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if !source.ready || sha256.Sum256(raw) != source.seal {
+		source.ready = false
+		source.generation++
+		return sdkASMDataContext("readback differs from retained original observations")
+	}
+	return nil
+}

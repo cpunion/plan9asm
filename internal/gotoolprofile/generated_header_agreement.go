@@ -3,34 +3,15 @@ package gotoolprofile
 import (
 	"fmt"
 	"reflect"
-	"sort"
-	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmheader"
 )
 
 // CanonicalGeneratedHeader is the effective assembly input. The original
 // compiler formatting/hash remains in GeneratedHeaderProof; every definition,
 // including unused names and presence, is retained in this deterministic text.
 func CanonicalGeneratedHeader(definitions map[string]string) ([]byte, error) {
-	size, err := generatedHeaderDefinitionsSize(definitions)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(definitions))
-	for name := range definitions {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	var text strings.Builder
-	text.Grow(size)
-	for _, name := range names {
-		fmt.Fprintf(&text, "#define %s %s\n", name, definitions[name])
-	}
-	data := []byte(text.String())
-	parsed, err := HeaderDefinitions(data)
-	if err != nil || !reflect.DeepEqual(parsed, definitions) {
-		return nil, fmt.Errorf("generated definitions cannot form an exact canonical header: %v", err)
-	}
-	return data, nil
+	return goasmheader.Canonical(definitions)
 }
 
 // ValidateGeneratedHeaderAgreement compares two independently produced actual

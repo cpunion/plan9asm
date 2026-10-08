@@ -11,6 +11,10 @@ import (
 // body certificate. Live SDK source provenance is a separate producer role.
 const ASMDataProtocol = "actual_go_asm_data_observation_v1"
 
+// ASMDataCPPProtocol does not certify the raw-to-expanded transformation. The
+// live SDK producer must independently bind that execution and all its inputs.
+const ASMDataCPPProtocol = "actual_go_sdk_cpp_asm_data_observation_v1"
+
 type ASMDataValueKind string
 
 const (
@@ -116,6 +120,18 @@ type SDKASMDataObservation struct {
 // ObserveX86SDKASMData is intentionally separate from the existing owned and
 // SDK CPU readers. Successful offline parsing cannot mint their permissions.
 func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObservation, error) {
+	return observeX86SDKASMData(request, false)
+}
+
+// ObserveX86SDKCPPASMData observes the complete expanded grammar and checks
+// both independently assembled objects against the original compiler archive.
+// Raw bytes are retained by digest, not interpreted as an expanded program.
+// This offline adapter authenticates no CPP, SDK, header or storage role.
+func ObserveX86SDKCPPASMData(request SDKASMDataObservationRequest) (*SDKASMDataObservation, error) {
+	return observeX86SDKASMData(request, true)
+}
+
+func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKASMDataObservation, error) {
 	if request.Target != "linux/386" && request.Target != "linux/amd64" || request.PackagePath == "" ||
 		strings.ContainsAny(request.PackagePath, "\x00\r\n") || len(request.PackagePath) > 4096 {
 		return nil, contextError("unobserved SDK DATA target or package identity")
@@ -160,6 +176,9 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 	}
 	observation := &SDKASMDataObservation{Protocol: ASMDataProtocol, PackagePath: request.PackagePath,
 		Target: request.Target, ArchiveSHA256: digest(request.Archive)}
+	if cpp {
+		observation.Protocol = ASMDataCPPProtocol
+	}
 	for ordinal, member := range members {
 		value := ASMDataMember{Name: member.name, NameBytes: []byte(member.name), Ordinal: ordinal,
 			Offset: member.offset, Size: int64(len(member.data))}
@@ -184,7 +203,11 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		return nil, err
 	}
 	for index, source := range request.Sources {
-		originalProgram, err := asmDataProgramFingerprint(source.Original)
+		originalGrammar := source.Original
+		if cpp {
+			originalGrammar = source.Expanded
+		}
+		originalProgram, err := asmDataProgramFingerprint(originalGrammar)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +215,7 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		if err != nil || originalProgram != expandedProgram {
 			return nil, contextError("whole original and expanded ASM token programs differ")
 		}
-		originalStates, err := parseASMDataSource(source.Original, request.PackagePath, request.Target)
+		originalStates, err := parseASMDataSource(originalGrammar, request.PackagePath, request.Target)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +231,7 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		if err != nil {
 			return nil, err
 		}
-		if err := joinASMSourceTexts(source.Original, request.PackagePath, original); err != nil {
+		if err := joinASMSourceTexts(originalGrammar, request.PackagePath, original); err != nil {
 			return nil, err
 		}
 		if err := joinASMSourceTexts(source.Expanded, request.PackagePath, expanded); err != nil {
@@ -241,6 +264,12 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		}
 		if !reflect.DeepEqual(normalize(layouts), normalize(expandedLayouts)) {
 			return nil, contextError("original and expanded DATA/GLOBL grammar differs")
+		}
+		if cpp {
+			// No raw-source grammar certificate is inferred from an expanded
+			// program or a matching machine object. CPP provenance is external
+			// to this observation-only adapter.
+			originalProgram, layouts = "", nil
 		}
 		observation.Sources = append(observation.Sources, ASMDataSourceObservation{Name: source.Name,
 			OriginalSHA256: digest(source.Original), ExpandedSHA256: digest(source.Expanded),
