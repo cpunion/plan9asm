@@ -70,14 +70,14 @@ func (source *GoAMD64FrameSource) verifyNumericalFrameInputs(ctx context.Context
 	if binding == nil && request.NumericalReads == nil {
 		return nil // Preserve every existing unbound/default role.
 	}
-	if !ready || binding == nil || request.NumericalReads != binding || binding.seal != seal {
-		return goAMD64FrameContext("numerical frame generation/token is closed, missing or changed")
-	}
 	if ctx == nil {
 		return goAMD64FrameContext("numerical frame verification requires a live context")
 	}
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("verify numerical frame context: %w", err)
+	}
+	if !ready || binding == nil || request.NumericalReads != binding || binding.seal != seal {
+		return goAMD64FrameContext("numerical frame generation/token is closed, missing or changed")
 	}
 	if err := verifyGoAMD64FrameNumericalRequest(binding.context, pkg, request); err != nil {
 		return err

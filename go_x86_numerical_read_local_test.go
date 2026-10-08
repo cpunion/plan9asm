@@ -32,6 +32,10 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 }
 
 func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource, context.CancelFunc) {
+	return numericalLocalFactoryWithContext(t, nil)
+}
+
+func numericalLocalFactoryWithContext(t *testing.T, wrap func(context.Context) context.Context) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource, context.CancelFunc) {
 	t.Helper()
 	pkg, request, initial, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
 	_, numericalProfile, _, _ := numericalSBFixture(t, "amd64")
@@ -60,6 +64,9 @@ func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64Fra
 	}
 	ctx, cancel := runtimeOracleStageContext(t)
 	t.Cleanup(cancel)
+	if wrap != nil {
+		ctx = wrap(ctx)
+	}
 	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
 		GoBinary: request.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(request.GoBinary)), "src", "internal", "cpu"),
 		PackagePath: "internal/cpu", Target: request.Target, Environment: request.Environment, SDKCPU: true,

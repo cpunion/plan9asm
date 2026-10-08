@@ -21,6 +21,7 @@ import (
 // Its capture context and every source/storage owner must remain live until
 // translation completes. Failure/Close revokes the originating source.
 type GoX86NumericalReadBinding struct {
+	originalBinding *GoX86NumericalReadBinding
 	source          *GoX86NumericalReadSource
 	originalSource  *GoX86NumericalReadSource
 	context         context.Context
@@ -124,6 +125,7 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg,
 		originalTypes: pkg.Types, originalImports: numericalImportIdentities(pkg.Imports), file: actual,
 		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), capabilities: numericalCapabilities(sigs)}
+	binding.originalBinding = binding
 	binding.seal, err = binding.digest()
 	if err != nil {
 		return Options{}, err
@@ -249,6 +251,9 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 		binding.source.ready = false
 		binding.source.mu.Unlock()
 		return err
+	}
+	if binding.originalBinding != binding {
+		return fail(numericalSBContext("copied or foreign numerical binding is not the original factory token"))
 	}
 	if binding.context == nil || reflect.TypeOf(binding.context) != reflect.TypeOf(binding.originalContext) ||
 		!reflect.TypeOf(binding.context).Comparable() || binding.context != binding.originalContext {

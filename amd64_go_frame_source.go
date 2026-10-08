@@ -354,7 +354,12 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	defer func() {
 		if err := source.verifyNumericalFrameInputs(ctx); err != nil {
 			source.revokeNumericalFrame()
-			verifyErr = errors.Join(verifyErr, err)
+			// The inner observer already revokes on failure. Its own closed
+			// generation must not relabel an actual command/cancellation
+			// failure as a source exclusion during the outer postcheck.
+			if verifyErr == nil || !errors.Is(err, ErrProbeNeedsContext) {
+				verifyErr = errors.Join(verifyErr, err)
+			}
 		}
 	}()
 	return source.verifyFrameOnly(ctx)

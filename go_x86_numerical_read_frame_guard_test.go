@@ -6,7 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +32,78 @@ func numericalFrameCopies(t *testing.T, source *GoX86NumericalReadSource) ([]gos
 	copyValue(source.native.OriginalText, &expected)
 	copyValue(source.readFacts(), &reads)
 	return observed, expected, reads
+}
+
+type numericalFrameReentryContext struct {
+	context.Context
+	once       sync.Once
+	closeFrame func()
+}
+
+func (ctx *numericalFrameReentryContext) Err() error {
+	pc, _, _, valid := runtime.Caller(1)
+	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoX86NumericalReadSource).Verify") && ctx.closeFrame != nil {
+		ctx.once.Do(ctx.closeFrame)
+	}
+	return ctx.Context.Err()
+}
+
+func TestGoX86NumericalSBReadFrameProducerReentryAndContextCauses(t *testing.T) {
+	t.Run("reentry", func(t *testing.T) {
+		var wrapped *numericalFrameReentryContext
+		ctx, pkg, request, _, bound, _, _ := numericalLocalFactoryWithContext(t, func(parent context.Context) context.Context {
+			wrapped = &numericalFrameReentryContext{Context: parent}
+			return wrapped
+		})
+		request.NumericalReads = bound.NumericalReads
+		frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer frame.Close()
+		wrapped.closeFrame = func() {
+			if err := frame.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+		closed := make(chan error, 1)
+		go func() { closed <- frame.Verify(ctx) }()
+		select {
+		case err := <-closed:
+			if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(frame.Verify(context.Background()), ErrProbeNeedsContext) {
+				t.Fatal("reentrant owner guard published or revived the frame", err)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatal("Frame lock survived an external numerical verification callback")
+		}
+	})
+	for _, cause := range []string{"cancelled", "deadline"} {
+		t.Run(cause, func(t *testing.T) {
+			ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
+			request.NumericalReads = bound.NumericalReads
+			frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer frame.Close()
+			invalid, stop := context.WithCancel(ctx)
+			want := context.Canceled
+			if cause == "deadline" {
+				stop()
+				invalid, stop = context.WithDeadline(ctx, time.Now().Add(-time.Second))
+				want = context.DeadlineExceeded
+			} else {
+				stop()
+			}
+			defer stop()
+			if err := frame.Verify(invalid); !errors.Is(err, want) || errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("public joined frame Verify lost actual context cause", err)
+			}
+			if !errors.Is(frame.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatal("fresh context revived a failed numerical frame generation")
+			}
+		})
+	}
 }
 
 func TestGoX86NumericalSBReadFrameProducerCompleteBijectionGuards(t *testing.T) {
