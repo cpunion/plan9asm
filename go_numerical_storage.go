@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
@@ -25,6 +26,9 @@ type GoNumericalStorageCaptureRequest struct {
 type GoNumericalStorageOwner struct{ observation *gostaticstorage.Observation }
 
 func CaptureGoNumericalStorageOwner(ctx context.Context, request GoNumericalStorageCaptureRequest) (*GoNumericalStorageOwner, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, fmt.Errorf("capture numerical storage owner: %w", ctx.Err())
+	}
 	actual := gostaticstorage.Request{GoBinary: request.GoBinary, Directory: request.Directory,
 		PackagePath: request.PackagePath, Target: request.Target, Environment: append([]string(nil), request.Environment...)}
 	for _, reference := range request.Variables {
@@ -38,7 +42,7 @@ func CaptureGoNumericalStorageOwner(ctx context.Context, request GoNumericalStor
 		observation, err = gostaticstorage.Capture(ctx, actual)
 	}
 	if err != nil {
-		return nil, numericalSBContext("actual numerical owner: %v", err)
+		return nil, numericalStorageFailure(ctx, "capture numerical storage owner", err)
 	}
 	return &GoNumericalStorageOwner{observation: observation}, nil
 }
@@ -48,9 +52,23 @@ func (owner *GoNumericalStorageOwner) Verify(ctx context.Context) error {
 		return numericalSBContext("missing live numerical storage owner")
 	}
 	if err := owner.observation.Verify(ctx); err != nil {
-		return numericalSBContext("numerical storage owner revoked: %v", err)
+		owner.Close()
+		return numericalStorageFailure(ctx, "verify numerical storage owner", err)
 	}
 	return nil
+}
+
+// Only the producer's explicit missing-proof classification becomes Context.
+// Command, I/O and cancellation failures retain their actual infrastructure
+// cause; in particular a canceled command is not source-exclusion evidence.
+func numericalStorageFailure(ctx context.Context, stage string, err error) error {
+	if ctx != nil && ctx.Err() != nil {
+		return fmt.Errorf("%s: %w", stage, errors.Join(ctx.Err(), err))
+	}
+	if errors.Is(err, gostaticstorage.ErrContext) {
+		return fmt.Errorf("%w: %s: %w", ErrProbeNeedsContext, stage, err)
+	}
+	return fmt.Errorf("%s: %w", stage, err)
 }
 
 func (owner *GoNumericalStorageOwner) Close() {
