@@ -119,7 +119,9 @@ func writeOriginalZIPFixture(t *testing.T, name, key string, files map[string][]
 type zeroOriginalZIPReader struct{}
 
 func (zeroOriginalZIPReader) Read(data []byte) (int, error) {
-	clear(data)
+	for i := range data {
+		data[i] = 0
+	}
 	return len(data), nil
 }
 
