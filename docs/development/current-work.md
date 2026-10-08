@@ -62,9 +62,20 @@ ordinary/race each pass the same 373 nodes, and Go 1.20 passes all 70 roots and
 198 children in its actual inventory, with no failure, skip or incomplete node.
 The preceding Go 1.20 run retains a real long-TempDir-name fixture failure;
 bounded subtest labels repair the fixture without changing its CLI assertions.
-Independent full-source/tool/list/raw/owner readers close all three runs. A
-separate immutable `00ff1d5f` checkout now runs the exhaustive ordinary
-corpus-driver module owner; that live run is not yet a completion certificate.
+Independent full-source/tool/list/raw/owner readers close all three runs.
+Its separate exhaustive ordinary corpus-driver owner naturally closed failed:
+31 partitions passed, one failed; 629 roots and 2,293 children passed. The
+single failure compared Darwin's temporary-directory alias spelling with Go's
+physical source selection. The test-only physical-directory repair preserves
+the complete original selection and source-rejection assertions.
+
+The fresh immutable `ea2fcb4c` corpus-driver owner passes all 32 partitions,
+630 roots and 2,301 children, with no failure, skip or incomplete node. The
+eight additional children are the now-reached source-rejection controls, not
+new external-library passes. Independent full source, 53 actual tool roles,
+12,051 SDK files, complete inventory/raw EOF and owner/group readback agrees.
+This certifies that exact ordinary first-party owner, not the later combined
+head, race suite, complete module or external corpus.
 
 ## Integrated rule-class repairs
 
@@ -164,6 +175,28 @@ The successor additionally integrates these independently frozen components:
   with independent SDK archive/source/read-width/addend checks. All 22 scalar
   MOV/CMP/extension shapes are observational only at this checkpoint. No
   Options, LLVM load, native address or caller authority is granted yet.
+- Independent downloaded frame factory: frozen `91a24297`, full affected
+  ordinary/race scopes each pass 5,519 nodes, with independent readers. Exact
+  module/version download, ZIP/source identity, original compiler and assembly
+  objects, complete declarations/CPP and numeric fixed-local binding remain
+  separate prerequisites. Shared concrete download-boundary lifecycle at
+  `671ddc92` additionally passes 96 ordinary/race nodes each; changed or foreign
+  files survive cleanup. Cache `Module.Main` fields grant no owned-source role.
+- Actual downloaded CLI consumption: `a3d613b9`, ordinary/race each pass all
+  ten selected roots and 41 children, including seven invocation/load/resolver
+  identity negatives and existing fixed-local CLI regressions. The preceding
+  actual original-Go-export RED proves the missing independent download route.
+  A later expanded fixture RED retains the leaked host CPU environment; only
+  explicit test-target setup is repaired. Production environment checks remain
+  strict. Independent full-source/tool/list/raw/owner readback closes both gates.
+- ARM64 original byte-region producer: frozen `cfd6c447`, integrated through
+  `4366ed95`. Ordinary/race each pass 18 roots and 500 children; full shared
+  storage scopes each pass 25 roots and 265 children. Go 1.20 framework scopes
+  each pass six roots and 429 children, retaining their exact Darwin linker
+  warning. Auxiliary vet/build/Node/shell checks and the unchanged actual SDK
+  census are independently closed. Five OS original objects, all nine wide
+  scalar result-store combinations, original lease cancellation, source/PC/
+  relocation and native bytes are observations only, not LLVM permission.
 
 Normal sharded ledger startup/status, active-batch lookup, bounded fair retry
 selection, publication and transfer stream. They still validate every row,
@@ -188,15 +221,22 @@ Separate component worktrees currently own these limited consumers:
   original numerical/frame objects with exact TEXT, code, source-PC and ordered
   relocations. Keep default no-relocation refusal. Rejoin instruction tokens
   after fixed-local reparsing; never copy old certificates or enter numerical
-  owner callbacks while holding a frame lock.
+  owner callbacks while holding a frame lock. The actual consumer, copied-local
+  owner guard and mutable/fault runtime scopes are still on the component leaf;
+  its focused passes do not certify the root combined head or native Linux CI.
 - Downloaded frames: share bounded exact-download physical source guards, then
   use an explicit independent factory/binding route. Ordinary Go `Module.Main`
   and an empty version do not prove an owned-main role: cache CWD has the same
   fields. Default owned routes exclude SDK/cache roots; an exact-download route
-  must retain its own complete original archive/cache identity.
-- ARM64 result transport: inspect complete original SDK object/caller evidence
-  for wide result writes. Logical result bytes and rounded frame allocation
-  alone do not grant a padding slot or an open native tail-call effect.
+  must retain its own complete original archive/cache identity. The factory and
+  CLI route above are integrated; expanded actual LLVM22 objects/runtime still
+  require Windows SEH metadata closure and the exact required Linux fixture.
+- ARM64 result transport: the original byte-region producer above is closed.
+  Next reproduce and consume the complete same-carrier native result effect,
+  initialized tail bytes and canary, not just a narrow typed return. The three
+  APIs use the original bounded source lease; LLVM Context controls resources,
+  not cancellation. Logical result bytes and rounded frame allocation alone
+  do not grant a padding slot or an open native tail-call effect.
 
 These components require complete ordinary/race and independent reader closure
 before integration. Their producer or focused passes do not promote the ledger.
