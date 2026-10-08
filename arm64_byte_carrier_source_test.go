@@ -5,6 +5,7 @@ package plan9asm
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -136,18 +137,37 @@ func TestARM64ByteCarrierActualSourceObservation(t *testing.T) {
 	var report struct {
 		Protocol string
 		Calls    []struct {
-			Caller, Callee         string
-			CallPC, ContinuationPC int64
+			Caller, Callee          string
+			CallPC, ContinuationPC  int64
+			CallerCode, CalleeCode  [32]byte
+			CalleeSPReads, SPWrites []arm64ByteCarrierMemory
 		}
 		Archive []gostaticstorage.TextMember
 	}
 	if err := json.Unmarshal(raw, &report); err != nil || report.Protocol != "actual_go_arm64_byte_carrier_observation_v1" ||
-		len(report.Calls) != len(cases) || len(report.Archive) != 3 || len(report.Archive[1].Texts) == 0 {
+		len(report.Calls) != len(cases) || len(report.Archive) != 3 || len(report.Archive[1].Texts) != 27 {
 		t.Fatalf("actual complete caller/entry source observation differs: %v", err)
 	}
 	for _, call := range report.Calls {
 		if call.Caller == "" || call.Callee == "" || call.CallPC < 0 || call.ContinuationPC != call.CallPC+4 {
 			t.Fatalf("original call/continuation physical identity differs: %+v", call)
+		}
+		var family *arm64NativeResultTailCase
+		for ordinal := range cases {
+			if call.Callee == packagePath+"."+strings.ToLower(cases[ordinal].name()) {
+				family = &cases[ordinal]
+			}
+		}
+		if family == nil || len(call.CalleeSPReads) != 1 || len(call.SPWrites) != 1 ||
+			call.CalleeSPReads[0].PC != 0 || call.CalleeSPReads[0].Offset != 8 || call.CalleeSPReads[0].Bytes != 8 ||
+			call.SPWrites[0].PC != 4 || call.SPWrites[0].Offset != 16 || call.SPWrites[0].Bytes != int64(family.storeBits/8) {
+			t.Fatalf("actual leaf byte-region mapping is not complete: %+v", call)
+		}
+		for _, text := range report.Archive[2].Texts {
+			if text.Name == call.Caller && sha256.Sum256(text.Code) != call.CallerCode ||
+				text.Name == call.Callee && sha256.Sum256(text.Code) != call.CalleeCode {
+				t.Fatal("call/continuation joined a foreign original native object")
+			}
 		}
 	}
 	for _, test := range cases {
@@ -296,6 +316,35 @@ func TestARM64ByteCarrierOriginalLeaseCannotBeRenewed(t *testing.T) {
 	}
 	if _, err := source.Readback(ctx); !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("revoked lease yielded a portable source observation")
+	}
+}
+
+func TestARM64ByteCarrierLeaseCancelsBoundedOperation(t *testing.T) {
+	directory, packagePath, _ := arm64ByteCarrierFixture(t)
+	request := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	lease, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	source, err := CaptureGoARM64ByteCarrierSource(lease, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	operation, release, err := source.executionContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	cause := errors.New("actual capture lease revoked during operation")
+	stop(cause)
+	select {
+	case <-operation.Done():
+		if !errors.Is(context.Cause(operation), cause) {
+			t.Fatal("bounded operation lost its original lease cause")
+		}
+	case <-ctx.Done():
+		t.Fatal("original lease did not cancel its live operation")
 	}
 }
 
