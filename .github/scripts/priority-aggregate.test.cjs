@@ -36,13 +36,19 @@ const fs = require('node:fs');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + '\\n');
 if (args.includes('./cmd/plan9asmdiscover')) {
+  if (process.env.FIXTURE_MODE === 'late scan') {
+    fs.writeFileSync(process.env.FIXTURE_REPORTS + '/scan-status.json', '{"original":"scan"}\\n', {flag: 'wx'});
+  }
   process.stdout.write('{"index_entries":12}\\n');
 } else if (args.includes('-discovery-progress-output')) {
+  if (process.env.FIXTURE_MODE === 'late progress') {
+    fs.writeFileSync(process.env.FIXTURE_REPORTS + '/assembly-progress.json', '{"original":"progress"}\\n', {flag: 'wx'});
+  }
   if (process.env.FIXTURE_MODE !== 'invalid') {
     const output = args[args.indexOf('-discovery-progress-output') + 1];
     fs.writeFileSync(output, JSON.stringify({complete: process.env.FIXTURE_MODE === 'pass', verified: process.env.FIXTURE_MODE === 'pass'}) + '\\n', {flag: 'wx'});
   }
-  if (process.env.FIXTURE_MODE !== 'pass') {
+  if (['partial', 'invalid'].includes(process.env.FIXTURE_MODE)) {
     process.stderr.write('strict reader remains failed\\n');
     process.exit(1);
   }
@@ -53,11 +59,23 @@ if (args.includes('./cmd/plan9asmdiscover')) {
 `, { mode: 0o755 });
   const result = spawnSync('bash', [path.join(scripts, 'verify-discovered-library-corpus.sh'), '--progress', reports], {
     encoding: 'utf8', timeout: 10000,
-    env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, FIXTURE_CALLS: calls, FIXTURE_MODE: mode },
+    env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, FIXTURE_CALLS: calls, FIXTURE_MODE: mode, FIXTURE_REPORTS: reports },
   });
   assert.ifError(result.error);
   const invocations = fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse) : [];
   return { result, invocations, reports };
+}
+
+for (const mode of ['late scan', 'late progress']) {
+  test(`aggregate refuses to overwrite a ${mode} destination`, (t) => {
+    const { result, invocations, reports } = verifyFixture(t, mode);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(invocations.length, mode === 'late scan' ? 1 : 2);
+    const filename = mode === 'late scan' ? 'scan-status.json' : 'assembly-progress.json';
+    const original = mode === 'late scan' ? 'scan' : 'progress';
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(reports, filename), 'utf8')), { original });
+    assert.deepEqual(fs.readdirSync(reports).filter(name => name.startsWith('.status-')), []);
+  });
 }
 
 for (const mode of ['pass', 'partial', 'invalid']) {

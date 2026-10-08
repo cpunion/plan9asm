@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -34,7 +33,17 @@ func TestDiscoveryProgressOutputPublishesFreshCompleteJSON(t *testing.T) {
 	if err := ensureJSONEOF(decoder); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(restored, progress) {
+	originalJSON, err := json.Marshal(progress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredJSON, err := json.Marshal(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Empty omitted slices decode as nil. Compare every retained wire field,
+	// rather than requiring an in-memory representation JSON cannot preserve.
+	if !bytes.Equal(originalJSON, restoredJSON) {
 		t.Fatal("publication changed the audited object")
 	}
 	if err := writeDiscoveryProgressOutput(filename, progress); err == nil {
