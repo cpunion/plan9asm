@@ -70,7 +70,7 @@ func captureDiscoveryInstrumentationHeaderPlanning(ctx context.Context, cfg disc
 			return nil, fmt.Errorf("same-mode native property queries exceed their explicit bound")
 		}
 		var query discoveryInstrumentationHeaderQuery
-		err = runDiscoveryOperationContext(ctx, cfg.CandidateTimeout, func(ctx context.Context) error {
+		err = cfg.runPhaseOperationContext(ctx, candidate, "instrumentation_header_query", key, func(ctx context.Context) error {
 			if err := gotoolprofile.RecheckNativeHeaderSourceRules(goRoot, rules); err != nil {
 				return err
 			}

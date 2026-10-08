@@ -13,7 +13,14 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
-func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinarySelectionPlan, candidate discoveryCandidate, download moduleDownloadInfo, dir, goRoot, goBinary, markers, translator string, env []string, cache *discoveryFeatureObservationCache) error {
+func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinarySelectionPlan, candidate discoveryCandidate, download moduleDownloadInfo, dir, goRoot, goBinary, markers, translator string, env []string, cache *discoveryFeatureObservationCache, events ...*discoveryPhaseJournal) error {
+	if len(events) > 1 {
+		return fmt.Errorf("native header planning accepts one optional timing journal")
+	}
+	var journal *discoveryPhaseJournal
+	if len(events) == 1 {
+		journal = events[0]
+	}
 	if translator == "" {
 		return nil // Historical callers retain the conservative all-CPU plan.
 	}
@@ -118,7 +125,12 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			ordinal = len(plan.HeaderPlanning.Queries)
 		}
 		plan.headerPlanningQueryStarts++
-		metadata, err := captureDiscoveryGeneratedHeaderQuery(ctx, queryPlan, download, profile, tags, group, queryDir, queryEnv, translator, ordinal)
+		var metadata *gotoolprofile.MetadataProof
+		err = journal.run(candidate.exactKey(), "ordinary_header_query", fmt.Sprintf("%s/%s/%d", request.Target, assembly, ordinal), func() error {
+			var err error
+			metadata, err = captureDiscoveryGeneratedHeaderQuery(ctx, queryPlan, download, profile, tags, group, queryDir, queryEnv, translator, ordinal)
+			return err
+		})
 		if err != nil {
 			return nil, fmt.Errorf("actual native header planning query: %w", err)
 		}

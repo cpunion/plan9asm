@@ -16,6 +16,7 @@ type discoveryProfileCaptureOptions struct {
 	Markers    string
 	Cache      *discoveryFeatureObservationCache
 	Translator string
+	Events     *discoveryPhaseJournal
 }
 
 // First observe source-tag profiles, then capture CPP from their selected file
@@ -126,7 +127,7 @@ func captureDiscoveryOrdinaryProfiles(ctx context.Context, candidate discoveryCa
 				return nil, nil, nil, nil, "", err
 			}
 			if len(options) == 1 {
-				if err := installDiscoveryHeaderPlanning(ctx, plan, candidate, download, dir, goRoot, binary, markers, options[0].Translator, env, cache); err != nil {
+				if err := installDiscoveryHeaderPlanning(ctx, plan, candidate, download, dir, goRoot, binary, markers, options[0].Translator, env, cache, options[0].Events); err != nil {
 					return nil, nil, nil, nil, "", err
 				}
 			}

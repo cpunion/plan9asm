@@ -73,7 +73,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 		outcome := &proof.Outcomes[index]
 		outcome.RequirementID, outcome.Status = requirement.ID, "failed"
 		outcome.Stage = "environment"
-		stageErr := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		stageErr := cfg.runPhaseOperation(candidate, "instrumentation_prepare", requirement.ID, func(ctx context.Context) error {
 			output, stderr, err := gotoolprofile.RunBounded(ctx, workDir, env, binary, "env", "GOROOT")
 			if err != nil || len(stderr) != 0 || !filepath.IsAbs(strings.TrimSpace(string(output))) {
 				return fmt.Errorf("actual mode GOROOT: %v; %s", err, stderr)
@@ -171,7 +171,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 		prepareRequirement(index, requirement)
 	}
 	if len(selected) != 0 {
-		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		if err := cfg.runPhaseOperation(candidate, "instrumentation_planning", "", func(ctx context.Context) error {
 			var err error
 			proof.CPPInputs, err = captureDiscoveryDeferredCPPInputs(plan, download.Dir, goRoot, sortedDiscoverySet(selected), ctx)
 			if err != nil {
@@ -212,7 +212,7 @@ func runDiscoveryInstrumentation(cfg discoveryCorpusConfig, candidate discoveryC
 		if outcome.Error != "" || outcome.Status == discoveryInstrumentationExcludedStatus {
 			continue
 		}
-		stageErr := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		stageErr := cfg.runPhaseOperation(candidate, "instrumentation_consume", requirement.ID, func(ctx context.Context) error {
 			observation := proof.Observations[outcome.ObservationID]
 			outcome.Stage = "original_selection"
 			input := discoveryInstrumentationOriginalInput(plan, observation, download.Dir, nil)

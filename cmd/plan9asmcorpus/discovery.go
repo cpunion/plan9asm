@@ -80,6 +80,8 @@ type discoveryCorpusConfig struct {
 	ExactCandidates  []string
 	CandidateTimeout time.Duration
 	ReportPath       string
+	EventsPath       string
+	phaseEvents      *discoveryPhaseJournal
 	// Defaults to a shard-owned cache. A caller may provide an existing shared
 	// directory, which runDiscoveryCorpus must never remove.
 	buildCache            string
@@ -1721,6 +1723,30 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("discovery provenance preflight: %w", err)
 	}
+	cfg.phaseEvents, err = openDiscoveryPhaseJournal(cfg.EventsPath, cfg, provenance)
+	if err != nil {
+		return err
+	}
+	var report discoveryCorpusReport
+	if cfg.phaseEvents != nil {
+		defer func() {
+			recovered := recover()
+			terminal := runErr
+			if recovered != nil {
+				terminal = fmt.Errorf("discovery operation panic: %v", recovered)
+			}
+			if err := cfg.phaseEvents.close(terminal); err != nil {
+				runErr = errors.Join(runErr, err)
+				if report.SchemaVersion != 0 {
+					report.Provenance.Invalidated = "requested phase journal failed"
+					runErr = errors.Join(runErr, writeDiscoveryCorpusReport(cfg.ReportPath, report))
+				}
+			}
+			if recovered != nil {
+				panic(recovered)
+			}
+		}()
+	}
 	if provenance.Source.Dirty {
 		fmt.Println("diagnostic-only discovery run: dirty source cannot satisfy aggregate verification")
 	}
@@ -1758,7 +1784,7 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		return err
 	}
 	cfg.embeddedAliases = embeddedAliases
-	report := discoveryCorpusReport{
+	report = discoveryCorpusReport{
 		SchemaVersion:      discoveryReportSchema,
 		Provenance:         provenance,
 		Targets:            append([]string(nil), cfg.Targets...),
@@ -1838,6 +1864,9 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		}
 		candidateDir := filepath.Join(tmpRoot, fmt.Sprintf("candidate-%04d", i))
 		if skip, ok := supersededSkips[candidate.exactKey()]; ok {
+			if err := cfg.phaseEvents.run(candidate.exactKey(), "candidate", "superseded_membership", func() error { return nil }); err != nil {
+				return err
+			}
 			result.Status = discoveryStatusSkippedSuperseded
 			result.Superseded = &skip
 			report.SkippedSuperseded++
@@ -1850,7 +1879,9 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			continue
 		}
 		if skip, ok := invalidSourceSkips[candidate.exactKey()]; ok {
-			err := verifyInvalidMachineCodeCandidate(cfg, candidate, candidateDir, skip)
+			err := cfg.phaseEvents.run(candidate.exactKey(), "candidate", "invalid_source_verification", func() error {
+				return verifyInvalidMachineCodeCandidate(cfg, candidate, candidateDir, skip)
+			})
 			if err == nil {
 				result.Status = discoveryStatusSkippedInvalidSource
 				result.InvalidSourceReason = skip.Reason
@@ -1870,7 +1901,14 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			}
 			continue
 		}
-		matrix, patterns, buildConfigurations, runErr := runCandidate(cfg, candidate, candidateDir)
+		var matrix matrixReport
+		var patterns []string
+		var buildConfigurations []discoveryBuildConfiguration
+		runErr := cfg.phaseEvents.run(candidate.exactKey(), "candidate", "", func() error {
+			var err error
+			matrix, patterns, buildConfigurations, err = runCandidate(cfg, candidate, candidateDir)
+			return err
+		})
 		applicableAsmFiles := discoveryConfigurationAsmFiles(buildConfigurations)
 		applicableAsmFiles = uniqueSortedDiscoveryStrings(append(applicableAsmFiles, discoveryInstrumentationExecutedFiles(matrix.OrdinarySelectionPlan)...))
 		result.Patterns = patterns
@@ -2267,7 +2305,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	}
 	var env []string
 	var download moduleDownloadInfo
-	err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+	err := cfg.runPhaseOperation(candidate, "download", "", func(ctx context.Context) error {
 		var err error
 		env, err = discoveryCandidateEnvironment(ctx, workDir, os.Environ())
 		if err != nil {
@@ -2319,9 +2357,9 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	}
 	var cppGoRoot string
 	captureOrdinary := func() error {
-		return runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		return cfg.runPhaseOperation(candidate, "ordinary_planning", "", func(ctx context.Context) error {
 			var err error
-			ordinaryPlan, ordinaryProfiles, ordinaryConfigurations, ordinarySourceItems, cppGoRoot, err = captureDiscoveryOrdinaryProfiles(ctx, candidate, download, cfg.Targets, workDir, env, discoveryProfileCaptureOptions{Markers: profileMarkers, Cache: profileCache, Translator: cfg.Translator})
+			ordinaryPlan, ordinaryProfiles, ordinaryConfigurations, ordinarySourceItems, cppGoRoot, err = captureDiscoveryOrdinaryProfiles(ctx, candidate, download, cfg.Targets, workDir, env, discoveryProfileCaptureOptions{Markers: profileMarkers, Cache: profileCache, Translator: cfg.Translator, Events: cfg.phaseEvents})
 			return err
 		})
 	}
@@ -2507,7 +2545,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		}
 		packageGroups := discoveryPackageGroupsForModule(applicableCandidate, plan.ModulePath)
 		for _, target := range buildConfiguration.Targets {
-			err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+			err := cfg.runPhaseOperation(candidate, "ordinary_target", fmt.Sprintf("%s/%s/%d", target, buildConfiguration.ProfileID, invocationIndex), func(ctx context.Context) error {
 				if ordinaryPlan != nil {
 					ordinaryPlan.testDependencyContext = ctx
 				}
@@ -3253,6 +3291,7 @@ func isDiscoveryInfrastructureFailure(err error) bool {
 		return true
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(err, errDiscoveryPhaseEvents) ||
 		errors.Is(err, errDiscoveryCommandOutputExceeded) ||
 		errors.Is(err, errDiscoveryAsmDeclSourceProof) ||
 		errors.Is(err, exec.ErrWaitDelay) ||

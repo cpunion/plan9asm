@@ -132,6 +132,7 @@ func main() {
 	flag.Var(&discoveryExactCandidates, "discovery-exact-candidate", "execute only this exact module@version in its full shard (repeatable; other candidates remain pending)")
 	discoveryTimeout := flag.Duration("candidate-timeout", defaultDiscoveryCandidateTimeout, "timeout for discovery setup and each target configuration")
 	discoveryReport := flag.String("discovery-report", "", "write the discovery shard result as JSON")
+	discoveryEvents := flag.String("discovery-events", "", "optional new JSONL phase timing file; diagnostic only, never completion evidence")
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
 	verifyDiscoveryReports := flag.String("verify-discovery-reports", "", "verify a complete directory of discovery shard reports against -discovery-ledger")
 	compareAssemblyLedgerPath := flag.String("compare-assembly-ledger", "", "compare verified shard results with the committed assembly ledger")
@@ -144,6 +145,10 @@ func main() {
 		*list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
 			*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" ||
 			*assemblyLedgerStatusPath != "" || *requireVerifiedAssembly))
+	if *discoveryEvents != "" && (*discoveryLedger == "" || *list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
+		*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" || *assemblyLedgerStatusPath != "" || *requireVerifiedAssembly) {
+		check(errors.New("-discovery-events requires discovery execution, not a reader or curated mode"))
+	}
 	if *verifyDiscoveryReports != "" && *discoveryProgressReports != "" {
 		check(errors.New("-verify-discovery-reports and -discovery-progress are mutually exclusive"))
 	}
@@ -261,6 +266,7 @@ func main() {
 			ExactCandidates:  discoveryExactCandidates,
 			CandidateTimeout: *discoveryTimeout,
 			ReportPath:       *discoveryReport,
+			EventsPath:       *discoveryEvents,
 			buildCache:       *discoveryBuildCache,
 		}))
 		return
