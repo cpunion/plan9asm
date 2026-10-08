@@ -121,9 +121,11 @@ identity before using the physical path. Caller source/tool redirects remain
 invalid. A separate fixture repair checks the actual input precondition before
 hidden-entry positives and negatives, preventing incidental path rejection
 from masquerading as a successful negative test. Its two test-first RED runs
-are retained. The clean eb4e9b12 focused ordinary scope has 1,270 passes and
-no failures/skips/incomplete tests; race readback is still required before
-integration and a fresh combined full root run.
+are retained. The clean eb4e9b12 focused ordinary and race scopes each have
+1,270 passes and no failures/skips/incomplete tests, with independent list,
+raw EOF/terminal, source/binary and recorded owner/group readback. The complete
+four-commit chain is integrated here; a fresh combined full root run remains
+required.
 
 Normal sharded-ledger operations now stream: startup/status, active-batch
 checkpoint lookup, bounded retries, publication and sharded report transfer.
@@ -142,6 +144,16 @@ from roughly 140 MB to 2.5 MB; this is a fixture result, not a whole-ledger
 constant-memory claim. The complete three-commit chain is integrated here.
 Explicit monolithic legacy JSON/gzip imports and full-report reference helpers
 remain separate compatibility paths, not bounded streaming interfaces.
+Directory collections without a root manifest no longer fall into that full
+reader. The complete c120c257 -> bd51d81d streaming collection repair is
+integrated here: source-order metadata cursors open one input at a time and
+retain current-module payload, with no member-count cap. Its complete Discovery
+package ordinary/race scopes each have 287 passes and zero failures/skips;
+vet/build and independent raw/source/tool/owner readback pass. Actual CLI heap
+in its retained fixture is 101.1 MB RED versus 3.85 MB GREEN. An independent
+80-member/FD64 test reproduces and closes eager fan-in exhaustion. Complete
+initial/final input scans, all-member generation and member-set guards, staging
+validation and atomic publication remain mandatory; cursors are provisional.
 The frozen streaming integration f53ef7dd passes the complete Discovery package
 (235 root/subtests) and the affected superseded/progress controls (49), separately
 in ordinary and race runs, plus both packages' vet/build and committed-ledger
@@ -200,6 +212,20 @@ continuations/TLS, ARM64 result padding and SDK body closure. Preserve this
 failed baseline and repair the shared rule classes; performance or official
 classification success cannot certify these files.
 
+The d2201c03 -> 720758a6 bounded static-storage producer is also integrated.
+It observes original compiler archive/goobj records and exact same-main-module
+typed numerical spans; an independent stock SDK binary reader verifies five
+targets and imported owners. Ordinary/race each have 77 passes, zero failures
+or skips, plus vet/build and physical readback. This prototype grants no
+translation, native memory, pointer, caller, result or constant-value authority.
+It accepts only bounded pure-Go same-main-module graphs and exact Go 1.27.1
+format rules; it is not a scalable external/SDK consumer path. Directory
+identities are pinned; individual canonical regular files use exact retained
+byte identity and open-time SameFile, not cross-observation inode continuity.
+The original SB-read consumer still returns Context. A separate SDK-owned
+CPU-feature producer needs exact Standard/GOROOT selection, actual archive
+members and one-argument self-linkname semantics before any consumer wiring.
+
 ## Corpus and ledger
 
 Local background corpus owners were terminated at the user's request. Do not
@@ -217,7 +243,9 @@ The committed inventory has 215 continuous ranges through
 2026-09-22T22:43:08Z, with the 2025-10-01 history cutoff. Newer standalone
 inventory is unsynchronized; cgo stays outside this repository. The requested
 history cutoff has been reached. The earlier head service was OOM-killed
-before publication. The standalone streaming inventory successor has since
+before publication. `history_complete` refers to the complete official index
+back to its epoch, not completion of the requested 2025-10-01 cutoff.
+The standalone streaming inventory successor has since
 resumed one bounded, two-worker head controller; its completed windows extend
 the head cursor without redoing historical ranges. Status, batch
 lookup, publication and transfer stream the standalone ledger. Inspect its
