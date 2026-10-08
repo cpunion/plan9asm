@@ -5,6 +5,7 @@ package plan9asm
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"io"
@@ -128,6 +129,21 @@ func TestGoX86SDKNumericalReadOriginalArchiveFlags(t *testing.T) {
 				request.Target, selected.SFiles); !errors.Is(err, gostaticstorage.ErrContext) {
 				t.Fatal("owned observer admitted SDK Std flags", err)
 			}
+			for _, member := range observed[1:] {
+				body := archive[member.Offset : member.Offset+member.Size]
+				header := bytes.Index(body, []byte("\x00go120ld"))
+				if header < 0 || header+20 > len(body) || binary.LittleEndian.Uint32(body[header+16:]) != member.Flags {
+					t.Fatal("actual SDK object flags have no complete member-bound header")
+				}
+				for _, flags := range []uint32{member.Flags ^ 16, member.Flags ^ 4, member.Flags | 1, member.Flags | 8} {
+					changed := append([]byte(nil), archive...)
+					binary.LittleEndian.PutUint32(changed[int(member.Offset)+header+16:], flags)
+					if _, err := gostaticstorage.ObserveX86SDKAssemblyArchive(changed, report.TextBuiltinSource,
+						request.Target, selected.SFiles); !errors.Is(err, gostaticstorage.ErrContext) {
+						t.Fatal("SDK decoder accepted changed Std/assembly/shared/unlinkable object flags", flags, err)
+					}
+				}
+			}
 		})
 	}
 }
@@ -165,16 +181,16 @@ func TestGoX86SDKNumericalReadDefaultOwnedRemainsContext(t *testing.T) {
 	}
 }
 
-func TestGoX86SDKNumericalReadOriginalCRC32KeepsHeaderContext(t *testing.T) {
+func TestGoX86SDKNumericalReadOriginalCRC32KeepsDataContext(t *testing.T) {
 	ctx, request, owner := numericalSDKCRC32Request(t)
 	source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
 	if source != nil {
 		source.Close()
 	}
-	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "generated/relative header") {
-		t.Fatal("explicit SDK source authentication did not reach the unchanged generated-header boundary", err)
+	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "assembly DATA definition") {
+		t.Fatal("explicit SDK source authentication did not reach the unchanged private-DATA boundary", err)
 	}
 	if err := owner.Verify(ctx); err != nil {
-		t.Fatal("later header Context revoked the independent SDK CPU data owner", err)
+		t.Fatal("later DATA Context revoked the independent SDK CPU data owner", err)
 	}
 }

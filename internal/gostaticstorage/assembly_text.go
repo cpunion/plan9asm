@@ -21,7 +21,7 @@ func ObserveARM64AssemblyArchive(data, builtinSource []byte, target string, sour
 	if !arm64AssemblyObservationTarget(target) {
 		return nil, contextError("unobserved ARM64 assembly archive target")
 	}
-	return observeAssemblyArchive(data, builtinSource, target, sources)
+	return observeAssemblyArchive(data, builtinSource, target, sources, false)
 }
 
 func arm64AssemblyObservationTarget(target string) bool {
@@ -59,13 +59,17 @@ func observeAssemblyText(data, builtinSource []byte, target string) ([]TextRecor
 // independently bind that actual selection, the SDK work/gc.go member route,
 // original source and standalone assembler output before using any record.
 func ObserveX86AssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
+	return observeX86AssemblyArchive(data, builtinSource, target, sources, false)
+}
+
+func observeX86AssemblyArchive(data, builtinSource []byte, target string, sources []string, sdk bool) ([]TextMember, error) {
 	if target != "linux/386" && target != "linux/amd64" {
 		return nil, contextError("unobserved x86 assembly archive target")
 	}
-	return observeAssemblyArchive(data, builtinSource, target, sources)
+	return observeAssemblyArchive(data, builtinSource, target, sources, sdk)
 }
 
-func observeAssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
+func observeAssemblyArchive(data, builtinSource []byte, target string, sources []string, sdk bool) ([]TextMember, error) {
 	builtins, err := textBuiltins(builtinSource)
 	if err != nil {
 		return nil, err
@@ -90,6 +94,9 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 	result := []TextMember{{Name: members[0].name, Offset: members[0].offset, Size: int64(len(members[0].data))}}
 	for index, member := range members[1:] {
 		flags := compilerFlags
+		if sdk {
+			flags |= 16 // ObjFlagStd in the independently pinned Go 1.27.1 format.
+		}
 		if index != 0 {
 			name := sources[index-1]
 			if filepath.Base(name) != name || !strings.HasSuffix(name, ".s") || seenSources[name] || member.name != strings.TrimSuffix(name, ".s")+".o" {
@@ -102,7 +109,7 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 		if err != nil {
 			return nil, err
 		}
-		records, err := readObjectRole(body, flags, false)
+		records, err := readObjectRole(body, flags, sdk && index != 0)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +121,7 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 			definitions[key] = true
 			storage[name] = record.Kind != 1
 		}
-		texts, err := readTextObject(body, target, flags, false, builtins)
+		texts, err := readTextObject(body, target, flags, sdk && index != 0, builtins)
 		if err != nil {
 			return nil, err
 		}
@@ -127,5 +134,5 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 // decoder does not establish SDK source provenance, storage or native entry
 // authority; its caller must independently authenticate those roles.
 func ObserveX86SDKAssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
-	return ObserveX86AssemblyArchive(data, builtinSource, target, sources)
+	return observeX86AssemblyArchive(data, builtinSource, target, sources, true)
 }

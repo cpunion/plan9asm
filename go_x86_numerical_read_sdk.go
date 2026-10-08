@@ -115,7 +115,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if err != nil {
 		return err
 	}
-	members, err := gostaticstorage.ObserveX86AssemblyArchive(archive, builtin, source.request.Target, selected.SFiles)
+	members, err := gostaticstorage.ObserveX86SDKAssemblyArchive(archive, builtin, source.request.Target, selected.SFiles)
 	if err != nil {
 		return numericalSBContext("SDK actual selected compiler/archive members differ: %v", err)
 	}
