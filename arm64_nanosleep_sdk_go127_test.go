@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -14,6 +15,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -92,31 +95,64 @@ func TestARM64NanosleepSDKOriginalObjectAndBody(t *testing.T) {
 		t.Fatal("actual original assembler member absent")
 	}
 	object := arm64ABI0RegionCommand(t, "linux", ".", "tool", "pack", "p", selected.Export, memberName)
-	texts, err := gostaticstorage.ObserveARM64AssemblyText(object, builtins, "linux/arm64")
-	if err != nil {
-		t.Fatal("complete original runtime ASM member observation", err)
+	if _, err := gostaticstorage.ObserveARM64AssemblyText(object, builtins, "linux/arm64"); !errors.Is(err, gostaticstorage.ErrContext) {
+		t.Fatal("an ordinary observer must not acquire SDK object authority", err)
 	}
+	objectPath := filepath.Join(t.TempDir(), "original.o")
+	if err := os.WriteFile(objectPath, object, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Stock Go, not an ordinary-role parser with erased flags, reads this SDK
+	// object. Keep its complete symbol inventory and every selected body byte.
+	symbols := arm64ABI0RegionCommand(t, "linux", ".", "tool", "nm", "-size", objectPath)
 	count = 0
-	for _, text := range texts {
-		if text.Name != "runtime.usleep" || text.ABI != 0 {
-			continue
+	for _, line := range strings.Split(strings.TrimSpace(string(symbols)), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 4 && fields[3] == "runtime.usleep" {
+			count++
+			if fields[1] != "96" || fields[2] != "T" {
+				t.Fatal("original ASM symbol extent/type differs")
+			}
 		}
-		count++
-		if len(text.Code) != 96 || len(text.Relocations) != 0 ||
-			binary.LittleEndian.Uint32(text.Code[32:]) != 0xf90007e3 ||
-			binary.LittleEndian.Uint32(text.Code[52:]) != 0xf9000be5 ||
-			binary.LittleEndian.Uint32(text.Code[56:]) != 0x910023e0 ||
-			binary.LittleEndian.Uint32(text.Code[60:]) != 0xaa1f03e1 ||
-			binary.LittleEndian.Uint32(text.Code[64:]) != 0xd2800ca8 ||
-			binary.LittleEndian.Uint32(text.Code[68:]) != 0xd4000001 {
-			t.Fatal("original private timespec/NULL/R8/SVC0 object evidence differs")
-		}
-		t.Logf("SDK_ORIGINAL_BODY sourceSHA256=%x archiveSHA256=%x member=%s codeSHA256=%x bytes=%d relocations=%d",
-			sha256.Sum256(data), sha256.Sum256(archive), memberName, sha256.Sum256(text.Code), len(text.Code), len(text.Relocations))
 	}
 	if count != 1 {
-		t.Fatal("ambiguous original ABI0 body; a compiler wrapper is not the ASM body")
+		t.Fatal("ambiguous original ASM membership; a compiler wrapper is not the body")
 	}
+	disassembly := arm64ABI0RegionCommand(t, "linux", ".", "tool", "objdump", "-s", "^runtime\\.usleep$", objectPath)
+	word := regexp.MustCompile(`^\s+\S+:\d+\s+(0x[0-9a-f]+)\s+([0-9a-f]{8})\s+.+$`)
+	var code []byte
+	var start uint64
+	header := false
+	for _, line := range strings.Split(strings.TrimSpace(string(disassembly)), "\n") {
+		if strings.HasPrefix(line, "TEXT runtime.usleep(SB) ") && !header {
+			header = true
+			continue
+		}
+		match := word.FindStringSubmatch(line)
+		if !header || match == nil || strings.Contains(line, "R_") {
+			t.Fatalf("unknown/relocated original Go body record %q", line)
+		}
+		pc, err := strconv.ParseUint(match[1][2:], 16, 64)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(code) == 0 {
+			start = pc
+		}
+		if pc != start+uint64(len(code)) || len(code) >= 96 {
+			t.Fatal("original body PCs have a hole, overlap or excess extent")
+		}
+		value, err := strconv.ParseUint(match[2], 16, 32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		code = binary.LittleEndian.AppendUint32(code, uint32(value))
+	}
+	if len(code) != 96 || sha256.Sum256(code) != [32]byte{0x36, 0x0f, 0x9c, 0x85, 0x94, 0x86, 0x51, 0xb3, 0x64, 0xc9, 0xe0, 0x30, 0xe3, 0x19, 0x82, 0x1d, 0xf2, 0x19, 0x6a, 0xa6, 0x3f, 0xe1, 0x18, 0xe5, 0x7a, 0x85, 0x6e, 0xe2, 0xfa, 0xa4, 0xd9, 0xed} {
+		t.Fatal("complete original Go private timespec/SVC0 body bytes differ")
+	}
+	t.Logf("SDK_ORIGINAL_BODY sourceSHA256=%x archiveSHA256=%x member=%s objectSHA256=%x codeSHA256=%x bytes=%d",
+		sha256.Sum256(data), sha256.Sum256(archive), memberName, sha256.Sum256(object), sha256.Sum256(code), len(code))
 	declarationPath := filepath.Join(selected.Dir, "stubs2.go")
 	declarationBytes, err := os.ReadFile(declarationPath)
 	if err != nil {
