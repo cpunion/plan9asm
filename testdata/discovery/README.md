@@ -178,9 +178,17 @@ Retry retained failures without rereading the module index:
 ```sh
 go run ./cmd/plan9asmdiscover \
   -scan-mode retry \
+  -limit 2000 \
   -workers 64 \
   -out-dir testdata/discovery/ledger
 ```
+
+Retry validates the complete ledger but retains only a limit-sized selection,
+not the whole failure queue. `-limit 0` uses the default 2,000-module retry
+batch; a negative limit fails. The optional `retry_after` manifest field records
+the last selected logical module/version key. The next batch advances after
+that key and wraps around, so repeated failures cannot starve later entries.
+This queue marker never advances or rewinds either index cursor.
 
 Validate the complete ledger and print both derived endpoints plus the funnel
 counts at any time without network access:
@@ -196,8 +204,29 @@ It validates every shard through the same streaming scanner as the full import
 reader, but retains only manifest/range metadata, shard identities, counters
 and the current/previous record. Publication readback uses this summary path
 too. Manifest bytes and shard generation are rechecked before returning a
-summary; a concurrent replacement or ordinary input edit fails. The full
-record reader remains available for explicit imports and scan-state loading.
+summary; a concurrent replacement or ordinary input edit fails.
+
+Normal scan startup retains only this metadata. Checkpoint lookup then streams
+the complete inputs and keeps records only for the active batch's module paths
+and repository case aliases. Unselected shards still receive full validation.
+Publication merges one complete module at a time with the current update
+batch, recomputes counts, validates the staged ledger, and atomically replaces
+the previous directory under its writer lock. Memory scales with the active
+batch and largest current module group, not total ledger payload.
+
+Import a sharded ledger without a ledger-wide decode:
+
+```sh
+go run ./cmd/plan9asmdiscover \
+  -convert-report _out/import-ledger \
+  -out-dir testdata/discovery/ledger
+```
+
+Sharded imports validate both complete ledgers and merge two module streams
+within each logical shard. They lock both inputs, reject overlapping physical
+paths, and recheck input generations before publication. The full record reader
+remains available for reference comparisons and explicit monolithic legacy
+JSON/gzip compatibility imports; those legacy imports are not memory-bounded.
 
 After adding a new supported target, its external assembly corpus can be
 replayed directly from the saved exact versions without reading the module

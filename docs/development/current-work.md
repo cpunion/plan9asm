@@ -17,7 +17,7 @@ not passes. Refresh the remote state before publishing the next batch.
 
 ## Continue here
 
-Development branch: codex/pr40-memory-ci-integration-20261007.
+Development branch: codex/pr40-streaming-cli-integration-20261008.
 Latest upstream main is already an ancestor. Root alone writes ledger.
 This successor integrates these test-first rule-class repairs:
 
@@ -88,12 +88,18 @@ historical SDK scopes pass; this is not a current-head full-suite certificate.
 The mode32 VPEXTRQ native width requires its own original-encoder check; an
 object pass alone is not a numerical proof.
 
-Discovery status and publication readback share a complete streaming reader.
-They retain manifest/range metadata and bounded record/shard state, not all
-record payloads. Superseded-version checks retain only the exact replacement
-keys they need, while still parsing every record. Legacy full-report import
-and manual scan/merge interfaces remain separate; do not claim those are
-streaming. Run the combined command-package gates before publishing this head.
+Normal sharded-ledger operations now stream: startup/status, active-batch
+checkpoint lookup, bounded retries, publication and sharded report transfer.
+They still validate every record through EOF, counts, range continuity and
+generation readback. Batch lookup retains only active paths and their exact
+repository case aliases; publication and transfer retain current module groups,
+not ledger-wide payloads or version maps. Retry selection obeys its limit and
+persists a fair queue marker independently of the two index cursors.
+Superseded-version checks likewise retain only requested replacement keys.
+Explicit monolithic legacy JSON/gzip imports and full-report reference helpers
+remain separate compatibility paths, not bounded streaming interfaces.
+Run the combined command-package gates on the clean integrated head before
+publishing; earlier component runs do not certify that successor.
 
 Obtain terminal family owners and independent physical readbacks. Freeze the
 clean combined successor and run the complete
@@ -106,12 +112,13 @@ The mode32 extreme-SP witness still observes an LLVM22 O0 allocator limitation:
 its multi-gigabyte virtual frame is not a successful object/runtime case.
 Preserve actual Go acceptance and the backend error, never source N/A.
 
-The latest strict stdlib baseline fails 14 of 184 attempted files. Unresolved
-source macros are now retained without parse loss, but PINSRD/AES private
-result effects still stop the actual 386 memhash object. Dynamic
-reflect/caller frames, native continuations/TLS, ARM64 result padding and SDK
-body closure remain separate contracts. A microbenchmark or official
-classification pass cannot certify these.
+The strict stdlib run on 55ecfe9d attempted all 184 files: 167 passed and 17
+failed, with no N/A or unattempted files. All five targets stayed within the
+normal 300/900-second budgets. The failures include private scalar result proofs
+with symbol/native memory inputs, dynamic reflect/caller frames, native
+continuations/TLS, ARM64 result padding and SDK body closure. Preserve this
+failed baseline and repair the shared rule classes; performance or official
+classification success cannot certify these files.
 
 ## Corpus and ledger
 
@@ -128,12 +135,11 @@ publisher may change records with exact matching frozen provenance. Focused
 instruction tests do not advance this ledger.
 The committed inventory has 215 continuous ranges through
 2026-09-22T22:43:08Z, with the 2025-10-01 history cutoff. Newer standalone
-inventory is unsynchronized; cgo stays outside this repository. A read-only
-remote status check found 304 continuous ranges through 2026-09-30T02:32:07Z
-and the requested history cutoff reached. The earlier head service was
-OOM-killed before publication. The standalone streaming inventory successor
-has since resumed one bounded, two-worker head controller; its completed
-windows extend that cursor without redoing historical ranges. Status, batch
+inventory is unsynchronized; cgo stays outside this repository. The requested
+history cutoff has been reached. The earlier head service was OOM-killed
+before publication. The standalone streaming inventory successor has since
+resumed one bounded, two-worker head controller; its completed windows extend
+the head cursor without redoing historical ranges. Status, batch
 lookup, publication and transfer stream the standalone ledger. Inspect its
 current owner, manifest and journal for the actual cursor; never hot-replace
 its binary or start a second writer. These new records are still an
