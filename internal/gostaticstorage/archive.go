@@ -189,10 +189,20 @@ func checkedObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObj
 	}
 	// Validate all string-bearing fixed records, not just requested definitions.
 	// Reference/auxiliary inventory cannot hide an overflowing string reference.
-	for _, spec := range []struct{ index, width, start int }{{0, 16, 0}, {1, 8, 0}, {2, 8, 0}, {7, 21, 0}, {17, 16, 8}} {
+	for _, spec := range []struct{ index, width, start int }{{0, 16, 0}, {1, 8, 0}, {2, 8, 0}, {3, 21, 0}, {4, 21, 0}, {5, 21, 0}, {6, 21, 0}, {7, 21, 0}, {17, 16, 8}} {
 		for pos := 0; pos < len(block(spec.index)); pos += spec.width {
 			if _, err := stringAt(block(spec.index)[pos+spec.start : pos+spec.start+8]); err != nil {
 				return nil, err
+			}
+		}
+	}
+	// The pinned objabi SymKind enum ends at SSEHUNWINDINFO (25).
+	// Sxxx (0) is only meaningful for an undefined nonpackage reference.
+	for index := 3; index <= 7; index++ {
+		for pos := 0; pos < len(block(index)); pos += 21 {
+			kind := block(index)[pos+10]
+			if kind > 25 || index != 7 && kind == 0 {
+				return nil, contextError("unknown or undefined Go symbol kind")
 			}
 		}
 	}
@@ -206,10 +216,10 @@ func readObjectRole(data []byte, flags uint32, emptyAssembly bool) (map[string]d
 	}
 	block, stringAt, indices, count := object.block, object.stringAt, object.indices, object.count
 	result := make(map[string]dataRecord, count)
+	symbols := data[binary.LittleEndian.Uint32(data[32:]):binary.LittleEndian.Uint32(data[48:])]
 	for i := 0; i < count; i++ {
 		// All five symbol blocks are adjacent, as checked above. Keep DATA's
 		// legacy named-definition view separate from indexed TEXT metadata.
-		symbols := data[binary.LittleEndian.Uint32(data[32:]):binary.LittleEndian.Uint32(data[48:])]
 		sym := symbols[21*i : 21*(i+1)]
 		name, err := stringAt(sym[:8])
 		if err != nil {

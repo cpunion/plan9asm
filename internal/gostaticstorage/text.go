@@ -20,6 +20,7 @@ type TextReference struct {
 	PackageIndex, SymbolIndex uint32
 	Package, Name             string
 	ABI                       uint16
+	ABIKnown                  bool
 }
 
 type TextRelocation struct {
@@ -44,6 +45,7 @@ type TextRecord struct {
 	Index         uint32
 	Name          string
 	ABI           uint16
+	Kind          uint8
 	Flags, Flags2 uint8
 	Size          int64
 	Code          []byte
@@ -97,7 +99,7 @@ func textBuiltins(source []byte) ([]TextReference, error) {
 				if textErr != nil || abiErr != nil || text == "" {
 					return nil, contextError("invalid builtin name/ABI")
 				}
-				result = append(result, TextReference{Name: text, ABI: uint16(number)})
+				result = append(result, TextReference{Name: text, ABI: uint16(number), ABIKnown: true})
 			}
 		}
 	}
@@ -214,7 +216,7 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 			if uint64(index) >= uint64(len(builtins)) {
 				return ref, contextError("TEXT builtin index out of bounds")
 			}
-			ref.Name, ref.ABI = builtins[index].Name, builtins[index].ABI
+			ref.Name, ref.ABI, ref.ABIKnown = builtins[index].Name, builtins[index].ABI, true
 			return ref, nil
 		default:
 			if ref.PackageIndex >= 2147483643 || uint64(ref.PackageIndex) >= uint64(len(block(1))/8) || index >= symbolLimit {
@@ -236,6 +238,7 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 		}
 		ref.Name, err = object.stringAt(s[:8])
 		ref.ABI = binary.LittleEndian.Uint16(s[8:])
+		ref.ABIKnown = true
 		return ref, err
 	}
 	// Validate unused reference/auxiliary records too: an overflowing reference
@@ -245,6 +248,20 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 			if _, err := resolve(block(spec.block)[pos+spec.start : pos+spec.start+8]); err != nil {
 				return nil, err
 			}
+		}
+	}
+	// All values come from the hash-bound Go1.27.1 objabi/goobj sources.
+	// Enumerating a relocation kind records its identity, not read/address
+	// permission or a decoded addend. Validate unused records as well.
+	for pos := 0; pos < len(block(14)); pos += 23 {
+		kind := binary.LittleEndian.Uint16(block(14)[pos+5:])
+		if !(kind >= 1 && kind <= 106 || kind == 0x8001 || kind == 0x8005) {
+			return nil, contextError("unknown original Go relocation kind")
+		}
+	}
+	for pos := 0; pos < len(block(15)); pos += 9 {
+		if block(15)[pos] > 14 {
+			return nil, contextError("unknown original Go auxiliary kind")
 		}
 	}
 	_, arch, _ := strings.Cut(target, "/")
@@ -258,11 +275,11 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 	var result []TextRecord
 	for index := 0; index < object.count; index++ {
 		s, _ := symbol(uint32(index))
-		if s[10] != 1 { // STEXT only, not an inference from the symbol name.
+		if s[10] != 1 && s[10] != 2 { // Go IsText, not an inference from the name.
 			continue
 		}
 		name, _ := object.stringAt(s[:8])
-		value := TextRecord{Index: uint32(index), Name: name, ABI: binary.LittleEndian.Uint16(s[8:]), Flags: s[11], Flags2: s[12], Size: int64(binary.LittleEndian.Uint32(s[13:]))}
+		value := TextRecord{Index: uint32(index), Name: name, ABI: binary.LittleEndian.Uint16(s[8:]), Kind: s[10], Flags: s[11], Flags2: s[12], Size: int64(binary.LittleEndian.Uint32(s[13:]))}
 		start, end := object.indices[2][index], object.indices[2][index+1]
 		value.Code = append([]byte(nil), block(16)[start:end]...)
 		if value.Size > archiveLimit || arch != "wasm" && value.Size != int64(len(value.Code)) {
@@ -314,6 +331,9 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 type pcValueSpan struct{ start, end, value int64 }
 
 func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
+	if extent <= 0 || extent > archiveLimit || minLC != 1 && minLC != 4 {
+		return nil, contextError("invalid bounded TEXT PC extent/quantum")
+	}
 	var result []pcValueSpan
 	pc, value := int64(0), int64(-1)
 	read := func() (uint32, error) {
@@ -326,18 +346,21 @@ func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
 			data = data[1:]
 			number |= uint32(b&127) << shift
 			if b&128 == 0 {
+				if shift != 0 && b == 0 {
+					return 0, contextError("noncanonical TEXT PC varint")
+				}
 				return number, nil
 			}
 		}
 		return 0, contextError("oversized TEXT PC varint")
 	}
-	for len(result) <= symbolLimit {
+	for len(result) < symbolLimit {
 		delta, err := read()
 		if err != nil {
 			return nil, err
 		}
 		if delta == 0 && len(result) != 0 {
-			if len(data) != 0 || pc < extent {
+			if len(data) != 0 || pc != extent {
 				return nil, contextError("TEXT PC table has a tail or incomplete extent")
 			}
 			return result, nil
@@ -352,7 +375,7 @@ func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
 			return nil, contextError("invalid TEXT PC/value delta")
 		}
 		end := pc + int64(distance)*minLC
-		if end <= pc || end > archiveLimit {
+		if end <= pc || end > extent {
 			return nil, contextError("overflowing or oversized TEXT PC interval")
 		}
 		result = append(result, pcValueSpan{pc, end, value})

@@ -57,7 +57,16 @@ func TestGoStaticStorageTEXTReportMutationGuards(t *testing.T) {
 		"size":          func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Size++ },
 		"text index":    func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Index++ },
 		"text ABI":      func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].ABI++ },
+		"text kind":     func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Kind++ },
 		"addend":        func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Add++ },
+		"relocation offset": func(r *Report) {
+			r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Offset++
+		},
+		"relocation width": func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Size++ },
+		"relocation kind":  func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Type++ },
+		"known ABI": func(r *Report) {
+			r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.ABIKnown = false
+		},
 		"symbol index":  func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.SymbolIndex++ },
 		"native symbol": func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.Name += "other" },
 		"package":       func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[2].Target.Package += "/other" },
@@ -126,13 +135,16 @@ func TestGoStaticStorageTEXTBinaryMutationGuards(t *testing.T) {
 			binary.LittleEndian.PutUint32(b[relocation+19:], uint32(len(builtins)))
 		},
 		"unknown symbol kind": func(b []byte) { b[symbol+10] = 255 },
-		"unknown TEXT aux":    func(b []byte) { b[auxiliary] = 255 },
-		"unknown unused aux":  func(b []byte) { b[unusedAux] = 255 },
-		"PC file index":       func(b []byte) { b[pcfile] = 126 },
-		"PC zero delta":       func(b []byte) { b[pcfile+1] = 0 },
-		"PC extent overflow":  func(b []byte) { b[pcfile+1]++ },
-		"PC varint overflow":  func(b []byte) { b[pcfile] = 128; b[pcfile+1] = 128; b[pcfile+2] = 128 },
-		"code extent":         func(b []byte) { binary.LittleEndian.PutUint32(b[symbol+13:], uint32(text.Size+1)) },
+		"defined symbol string": func(b []byte) {
+			binary.LittleEndian.PutUint32(b[symbol+4:], math.MaxUint32)
+		},
+		"unknown TEXT aux":   func(b []byte) { b[auxiliary] = 255 },
+		"unknown unused aux": func(b []byte) { b[unusedAux] = 255 },
+		"PC file index":      func(b []byte) { b[pcfile] = 126 },
+		"PC zero delta":      func(b []byte) { b[pcfile+1] = 0 },
+		"PC extent overflow": func(b []byte) { b[pcfile+1]++ },
+		"PC varint overflow": func(b []byte) { b[pcfile] = 128; b[pcfile+1] = 128; b[pcfile+2] = 128 },
+		"code extent":        func(b []byte) { binary.LittleEndian.PutUint32(b[symbol+13:], uint32(text.Size+1)) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := append([]byte(nil), original...)
@@ -156,7 +168,7 @@ func TestGoStaticStorageTEXTPCTableBounds(t *testing.T) {
 		"empty":          nil,
 		"truncated":      {128},
 		"overflow":       {128, 128, 128, 128, 16},
-		"noncanonical":   {130, 0, 1, 0},
+		"noncanonical":   {130, 0, 2, 0},
 		"zero distance":  {2, 0, 0},
 		"incomplete":     {2, 1, 0},
 		"tail":           {2, 2, 0, 0},
@@ -171,6 +183,64 @@ func TestGoStaticStorageTEXTPCTableBounds(t *testing.T) {
 	if spans, err := textPCTable([]byte{2, 2, 0}, 2, 1); err != nil || !reflect.DeepEqual(spans, []pcValueSpan{{0, 2, 0}}) {
 		t.Fatal("valid complete source-PC table was rejected", spans, err)
 	}
+	for _, input := range [][2]int64{{-1, 1}, {0, 1}, {archiveLimit + 1, 1}, {2, 0}, {2, math.MaxInt64}} {
+		if _, err := textPCTable([]byte{2, 2, 0}, input[0], input[1]); !errors.Is(err, ErrContext) {
+			t.Fatal("invalid logical extent/quantum was accepted", input, err)
+		}
+	}
+}
+
+func TestGoStaticStorageTEXTWasmDistinctExtents(t *testing.T) {
+	dir, driver, _ := fixture(t)
+	_, report := captured(t, request(t, dir, driver, "js/wasm"))
+	members, err := archiveMembers(report.Archives[fixtureModule])
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := objectBody(members[1].data, report.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := checkedObject(body, 0, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtins, err := textBuiltins(report.TextBuiltinSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range report.TextArchives[fixtureModule][1].Texts {
+		if text.Name != fixtureModule+".Read" {
+			continue
+		}
+		if text.Size <= 0 || text.Size >= int64(len(text.Code)) || len(text.Positions) == 0 || text.Positions[len(text.Positions)-1].End != text.Size {
+			t.Fatal("actual wasm object lacks distinct complete virtual-PC/physical-code axes", text)
+		}
+		physicalBeyondPC := false
+		for _, r := range text.Relocations {
+			physicalBeyondPC = physicalBeyondPC || r.Offset >= text.Size && r.Offset+r.Size <= int64(len(text.Code))
+		}
+		if !physicalBeyondPC {
+			t.Fatal("actual wasm relocations did not witness physical offsets beyond virtual PCs")
+		}
+		// These direct parser mutations are structural controls only. Neither
+		// acquires a live source seal or a native/read permission.
+		changed := append([]byte(nil), body...)
+		symbol := int(binary.LittleEndian.Uint32(body[32:])) + int(text.Index)*21
+		binary.LittleEndian.PutUint32(changed[symbol+13:], uint32(text.Size+1))
+		if _, err := readTextObject(changed, report.Target, 0, false, builtins); !errors.Is(err, ErrContext) {
+			t.Fatal("wasm physical bytes masked incomplete virtual PC coverage", err)
+		}
+		changed = append([]byte(nil), body...)
+		relocation := int(binary.LittleEndian.Uint32(body[20+4*14:])) + int(view.indices[0][text.Index])*23
+		binary.LittleEndian.PutUint32(changed[relocation:], uint32(len(text.Code)+1))
+		if _, err := readTextObject(changed, report.Target, 0, false, builtins); !errors.Is(err, ErrContext) {
+			t.Fatal("wasm logical PC size masked an out-of-code physical relocation", err)
+		}
+		t.Logf("actual wasm virtualPC=%d physicalCode=%d relocations=%d", text.Size, len(text.Code), len(text.Relocations))
+		return
+	}
+	t.Fatal("actual wasm Read TEXT was absent")
 }
 
 func TestGoStaticStorageTEXTReferenceAndKindIdentity(t *testing.T) {

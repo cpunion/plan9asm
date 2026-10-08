@@ -46,6 +46,7 @@ type Ref struct {
 	PackageIndex, SymbolIndex uint32
 	Package, Name             string
 	ABI                       uint16
+	ABIKnown                  bool
 }
 type Reloc struct {
 	Offset, Size int64
@@ -66,6 +67,7 @@ type Text struct {
 	Index         uint32
 	Name          string
 	ABI           uint16
+	Kind          uint8
 	Flags, Flags2 uint8
 	Size          int64
 	Code          []byte
@@ -142,6 +144,7 @@ func main() {
 					name, abi := goobj.BuiltinName(int(q.SymIdx))
 					v.Name = name
 					v.ABI = uint16(abi)
+					v.ABIKnown = true
 					return v
 				default:
 					v.Package = r.Pkg(int(q.PkgIdx))
@@ -151,6 +154,7 @@ func main() {
 				s := r.Sym(index)
 				v.Name = s.Name(r)
 				v.ABI = s.ABI()
+				v.ABIKnown = true
 				return v
 			}
 			entry := entries[e.Name]
@@ -164,10 +168,10 @@ func main() {
 			count := r.NSym() + r.NHashed64def() + r.NHasheddef() + r.NNonpkgdef()
 			for i := 0; i < count; i++ {
 				s := r.Sym(uint32(i))
-				if s.Type() != 1 {
+				if s.Type() != 1 && s.Type() != 2 {
 					continue
 				}
-				v := Text{Index: uint32(i), Name: s.Name(r), ABI: s.ABI(), Flags: s.Flag(), Flags2: s.Flag2(), Size: int64(s.Siz()), Code: r.Data(uint32(i))}
+				v := Text{Index: uint32(i), Name: s.Name(r), ABI: s.ABI(), Kind: s.Type(), Flags: s.Flag(), Flags2: s.Flag2(), Size: int64(s.Siz()), Code: r.Data(uint32(i))}
 				for j := 0; j < r.NReloc(uint32(i)); j++ {
 					q := r.Reloc(uint32(i), j)
 					v.Relocations = append(v.Relocations, Reloc{int64(q.Off()), int64(q.Siz()), q.Type(), q.Add(), resolve(q.Sym())})
