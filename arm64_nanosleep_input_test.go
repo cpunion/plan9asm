@@ -90,6 +90,34 @@ func TestARM64NanosleepInputCompleteSource(t *testing.T) {
 	}
 }
 
+func TestARM64NanosleepTypedInputCertificate(t *testing.T) {
+	file, err := Parse(ArchARM64, arm64NanosleepInputSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := mustGoPackage(t, "example.invalid/sleepinput", "package sleepinput\nfunc sleep(usec uint32)\n")
+	resolve := testResolveSym(pkg.Types.Path())
+	sigs, err := goSigsForAsmFile(pkg, file, resolve, "arm64", nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fn := file.Funcs[0]
+	sig := sigs[resolve(fn.Sym)]
+	collector := &arm64NanosleepInputProof{
+		source: arm64NanosleepCloneSource(fn), sig: arm64NanosleepCloneSignature(sig),
+		target: "aarch64-unknown-linux-gnu", inputs: make(map[[2]int]arm64NanosleepInput),
+	}
+	transport := &arm64PrivateFrameTransport{entry: sig, resolve: resolve, sigs: sigs, nanosleep: collector}
+	if _, err := arm64PrivateDataProofDetails(fn, transport); err != nil {
+		t.Fatal("complete original-source collector failed", err)
+	}
+	transport.nanosleep = nil
+	proof, required := arm64NanosleepInputForSource(fn, transport, collector.target)
+	if proof == nil || !required || !proof.matchesSource(fn, sig, collector.target) {
+		t.Fatal("complete CFG did not publish its exact input certificate")
+	}
+}
+
 func TestARM64NanosleepInputUnprovedMemoryRemainsContext(t *testing.T) {
 	for _, change := range []struct{ name, old, replacement string }{
 		{"unknown-number", "$101,R8", "$113,R8"},
