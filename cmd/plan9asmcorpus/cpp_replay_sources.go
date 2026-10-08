@@ -244,6 +244,12 @@ func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discover
 		len(inputs.Sources) == 0 || len(inputs.Sources) > 512 {
 		return fmt.Errorf("full CPP graph differs from original archive scope")
 	}
+	// JSON deliberately has no private lexer indexes. Reuse only the indexes
+	// derived below from this call's complete original-source parses. Keep
+	// them query-local: this is not a validation receipt or a shared cache,
+	// and every public source/edge check still runs on every invocation.
+	indexed := *inputs
+	indexed.Sources = make(map[string]discoveryCPPSource, len(inputs.Sources))
 	total := 0
 	for id, source := range inputs.Sources {
 		_, file, err := discoveryCPPSourceIdentity(id)
@@ -255,10 +261,12 @@ func validateDiscoveryReplayCPPInputs(inputs *discoveryCPPInputs, plan *discover
 		if err != nil || !equalDiscoveryCPPSource(source, actual) {
 			return fmt.Errorf("CPP raw inventory/full SHA differs from original replay: %s: %v", id, err)
 		}
+		source.resourceIndex = actual.resourceIndex
+		indexed.Sources[id] = source
 	}
 	// The same structural origin/edge checks retain physical source positions.
 	// New full replay never borrows the historical control executor.
-	return validateDiscoveryCPPInputStructure(inputs, plan, files)
+	return validateDiscoveryCPPInputStructure(&indexed, plan, files)
 }
 
 func verifyDiscoveryReplayCPPZIP(inputs *discoveryCPPInputs, plan *discoveryOrdinarySelectionPlan, archivePath string) error {
