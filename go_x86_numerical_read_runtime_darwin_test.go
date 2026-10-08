@@ -2,9 +2,15 @@
 
 package plan9asm
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestGoX86NumericalSBReadMutableHostDiagnostic(t *testing.T) {
+	if runtime.GOARCH == "arm64" && !rosettaAvailable() {
+		t.Fatal("required AMD64 host diagnostic needs Rosetta")
+	}
 	execution := x86FloatCompareExecutionTools(t)
 	t.Log("retargeted host numerical/volatile/canary/fault diagnostic, not Linux native Go ABI execution")
 	numericalRuntimeExecute(t, "amd64", execution, false)

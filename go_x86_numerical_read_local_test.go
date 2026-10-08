@@ -31,6 +31,38 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 		if err != nil || !strings.Contains(ir, "fixed_local_native") || strings.Count(ir, "load volatile") < 22 {
 			t.Fatal("complete frozen local/read consumer lost an independent owner or native read", err)
 		}
+		numericalLLVM22Axes(t, ir, bound.TargetTriple, nil)
+	})
+}
+
+func TestGoAMD64FixedLocalFrameCopiedCapabilityCannotBorrowGeneration(t *testing.T) {
+	pkg, request, file, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
+	frame := requireGoAMD64FrameCapture(t, pkg, request)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	bound, err := frame.BindFixedLocal(ctx, pkg, file, options)
+	if err != nil {
+		t.Fatal("default actual local binding precondition", err)
+	}
+	original := bound.Sigs[pkg.Path+".Value"].x86FixedLocal
+	if original == nil {
+		t.Fatal("default factory did not issue a private local capability")
+	}
+	copied := *original
+	if !errors.Is(copied.verify(), ErrProbeNeedsContext) {
+		t.Fatal("default whole-value copy borrowed original frame generation")
+	}
+	if err := original.verify(); err != nil {
+		t.Fatal("copy rejection revoked default original generation", err)
+	}
+	for name, sig := range bound.Sigs {
+		sig.x86FixedLocal = &copied
+		bound.Sigs[name] = sig
+	}
+	fixedLocalAPIs(t, pkg, file, bound, func(t *testing.T, ir string, err error) {
+		if ir != "" || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("default consumer accepted whole-value copied local capability", err)
+		}
 	})
 }
 

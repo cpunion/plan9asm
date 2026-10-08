@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -211,7 +212,7 @@ func numericalOriginalGoRuntime(t *testing.T, options Options, cases []numerical
 	main.WriteString("  cpuSet(old)\n  for _,value:=range values { fmt.Printf(\"%016x\\n\",value) }\n  if asm.Sentinel!=0x5a { panic(\"read changed source sentinel\") }\n }\n}\n")
 	assembly := "#include \"textflag.h\"\nTEXT ·cpuGet(SB),NOSPLIT,$0-1\nMOVB internal∕cpu·X86+64(SB),AL\nMOVB AL,ret+0(FP)\nRET\nTEXT ·cpuSet(SB),NOSPLIT,$0-1\nMOVB value+0(FP),AL\nMOVB AL,internal∕cpu·X86+64(SB)\nRET\n"
 	for name, data := range map[string]string{
-		"go.mod":  "module numericaloracle\ngo 1.27\nrequire example.invalid/numericalfixture v0.0.0\nreplace example.invalid/numericalfixture => " + filepath.ToSlash(root) + "\n",
+		"go.mod":  "module numericaloracle\ngo 1.27\nrequire example.invalid/numericalfixture v0.0.0\nreplace example.invalid/numericalfixture => " + strconv.Quote(filepath.ToSlash(root)) + "\n",
 		"main.go": main.String(), "cpu_" + options.Goarch + ".s": assembly,
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
@@ -223,5 +224,9 @@ func numericalOriginalGoRuntime(t *testing.T, options Options, cases []numerical
 	command := exec.Command(request.GoBinary, "build", "-p=1", "-mod=mod", "-o", executable, ".")
 	command.Dir, command.Env = dir, request.Environment
 	x86FloatCompareCaptureCommand(t, command)
-	return execution.run(t, executable)
+	output := execution.run(t, executable)
+	if err := options.NumericalReads.source.Verify(options.NumericalReads.context); err != nil {
+		t.Fatal("original Go execution changed a sealed source or owner", err)
+	}
+	return output
 }

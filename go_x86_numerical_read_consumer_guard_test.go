@@ -213,6 +213,9 @@ func TestGoX86NumericalSBReadGoWrapperHeaderTOCTOU(t *testing.T) {
 	if !mutated || result != nil || !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("changed actual owned header published a Go module", mutated, err)
 	}
+	if err := os.WriteFile(header, []byte("#define NOSPLIT 4\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if !errors.Is(source.Verify(options.NumericalReads.context), ErrProbeNeedsContext) {
 		t.Fatal("header restoration could revive a revoked source")
 	}
