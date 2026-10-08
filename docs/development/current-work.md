@@ -108,9 +108,9 @@ Root independently replayed each component before integration:
 - Offline DATA/GLOBL Phase A retains complete two-x86 forms, object-local
   static/hashed/DUPok identity, ordered relocations and original object joins.
   Indexed joins avoid repeated symbol scans. At `c60eceec`, disjoint ordinary
-  and race scopes each close 963 nodes. The live SDK/CPP observation successor
-  is separate and incomplete: no initializer, numerical read, mutable byte
-  owner or native-vector permission is granted. CRC32 is not yet a pass.
+  and race scopes each close 963 nodes. Its later live SDK/CPP observation
+  source is integrated through `4ee1cfc9`, but grants no initializer, numerical
+  read, mutable byte owner or native-vector permission. CRC32 is not a pass.
 - ARM64 syscall lowering, native effects and ordered four-bit CFG flow use one
   explicit target-bound grammar. Linux normal returns preserve defined non-R0
   GP/NZCV; Darwin secondary results and unavailable flag bits remain rejected.
@@ -188,6 +188,16 @@ close in both ordinary/race scopes without skip or incomplete execution. The
 16-unit fixture falls from 1,527,097 to 410,526 allocations per complete
 validation. These are component regressions, not peak-memory, aggregate-CI,
 external-module or later combined-head completion certificates.
+
+The `1abd1f60` live SDK component closes package-qualified disjoint unions of
+391 roots and 2,980 children in each ordinary/race lane, plus actual vet/build.
+Root independently rereads all 13 scopes, reruns 116 complete original/mapped/
+archive DATA/TEXT SDK oracle checks per lane and all 41 storage oracle checks
+per lane. Private CPP positions retain whole TEXT parity; caller callbacks run
+outside operation locks, the original deadline is sealed and changes revoke
+the source permanently. Historical reentry, deadline, harness and vet failures
+remain preserved. This completes observation only, not the unresolved SDK
+numerical/native classes or combined-head full-suite/CI gates.
 
 ## Inventory and ledger
 
