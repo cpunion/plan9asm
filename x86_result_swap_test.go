@@ -320,3 +320,74 @@ func TestX86ResultSwapREXAliasesKeepContext(t *testing.T) {
 		}
 	}
 }
+
+func TestX86ResultSwapOpaqueOriginalSourceAndResultBoundaries(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		move, swap, typ, word := "MOVQ", "XCHGQ", "uint64", 8
+		if arch == "386" {
+			move, swap, typ, word = "MOVL", "XCHGL", "uint32", 4
+		}
+		prefix := fmt.Sprintf("%s p+0(FP),AX\n%s x+%d(FP),BX\n%s AX,BX\n", move, move, word, swap)
+		for name, test := range map[string]struct {
+			body string
+			pass bool
+		}{
+			"numeric snapshot reaches result": {prefix + fmt.Sprintf("%s AX,ret0+%d(FP)\nRET", move, 2*word), true},
+			"opaque snapshot is not numeric":  {prefix + fmt.Sprintf("%s BX,ret0+%d(FP)\nRET", move, 2*word), false},
+			"opaque snapshot has no pointee":  {prefix + fmt.Sprintf("MOVL (BX),AX\n%s AX,ret0+%d(FP)\nRET", move, 2*word), false},
+			"unknown second required read":    {fmt.Sprintf("%s p+0(FP),AX\nMOVW $7,BX\n%s AX,BX\n%s $42,ret0+%d(FP)\nRET", move, swap, move, 2*word), false},
+			"opaque survives encoded NOP":     {fmt.Sprintf("%s p+0(FP),AX\nXCHGL AX,AX\n%s $42,ret0+%d(FP)\nRET", move, move, 2*word), true},
+			"opaque NOP defines no numbers":   {fmt.Sprintf("%s p+0(FP),AX\nXCHGL AX,AX\n%s AX,ret0+%d(FP)\nRET", move, move, 2*word), false},
+		} {
+			t.Run(arch+"/"+name, func(t *testing.T) {
+				_, file, sig, source := x86ResultInitializationFixture(t, arch, "func Value(p *[8]uint32,x "+typ+") "+typ, test.body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+					err := check(file.Funcs[0], sig, arch)
+					if test.pass && err != nil || !test.pass && !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("opaque identity/result separation pass=%t error=%v", test.pass, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestX86ResultSwapRejectsNonRegisterAuthorityAndMalformedGrammar(t *testing.T) {
+	for _, test := range []struct {
+		arch, row string
+	}{
+		{"amd64", "XCHGB SP,AX"}, {"amd64", "XCHGB BPB,AL"},
+		{"386", "XCHGB BP,DI"}, {"amd64", "XCHGQ SP,AX"},
+		{"amd64", "XCHGQ BP,AX"}, {"386", "XCHGQ AX,BX"},
+		{"386", "XCHGL R8,AX"}, {"386", "XCHGB R8B,AL"},
+		{"amd64", "XCHGW $1,AX"}, {"amd64", "XCHGL AX,X0"},
+		{"amd64", "XCHGL.Z AX,BX"}, {"arm64", "XCHGL AX,BX"},
+		{"amd64", "XCHGW AX"}, {"amd64", "XCHGL AX,BX,CX"},
+		{"amd64", "XCHGB AH,(R11)"}, {"amd64", "XCHGB (R11),AH"},
+		{"amd64", "XCHGQ AX,(BX)"}, {"amd64", "XCHGQ (BX),AX"},
+		{"amd64", "XCHGW AX,value+0(FP)"}, {"amd64", "XCHGW AX,tmp+0(SP)"},
+		{"amd64", "XCHGW AX,value(SB)"}, {"amd64", "XCHGW AX,$value(SB)"},
+	} {
+		t.Run(test.arch+"/"+test.row, func(t *testing.T) {
+			ins := x86YMMReadSource(t, test.row)
+			initial := x86ResultState{flags: x86ByteFlagsAll, fp: []bool{true, true}, auto: []bool{true, true}}
+			for index := range initial.gp {
+				initial.gp[index], initial.pointerGP[index] = 0xff, true
+			}
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := initial.clone()
+				if consumer.step(ins, &state, []bool{true, true}, 0, test.arch) || !reflect.DeepEqual(state, initial) {
+					t.Fatalf("%s widened register or memory authority: %#v", consumer.name, state)
+				}
+			}
+		})
+	}
+	ins := x86YMMReadSource(t, "XCHGL AX,BX")
+	if _, err := parseAMD64ExchangeForm("amd64", "XCHGL", amd64ExchangeSpec{amd64ExchangeSwap, 16}, ins); err == nil {
+		t.Fatal("typed exchange accepted a contradictory width")
+	}
+	if _, err := parseAMD64ExchangeForm("amd64", "XCHGW", amd64ExchangeSpecs["XCHGW"], ins); err == nil {
+		t.Fatal("typed exchange accepted a contradictory source opcode")
+	}
+}

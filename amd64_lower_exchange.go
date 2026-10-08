@@ -33,6 +33,7 @@ var amd64ExchangeSpecs = map[Op]amd64ExchangeSpec{
 type amd64ExchangeForm struct {
 	register Operand
 	other    Operand
+	nop      bool
 }
 
 func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins Instr) (amd64ExchangeForm, error) {
@@ -41,6 +42,13 @@ func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins In
 	}
 	if strings.Contains(string(op), ".") {
 		return invalid("does not accept instruction suffixes")
+	}
+	if registered, ok := amd64ExchangeSpecs[op]; !ok || registered != spec ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) {
+		return invalid("does not have its registered source identity and width")
+	}
+	if goarch != "amd64" && goarch != "386" {
+		return invalid("requires a registered x86 mode")
 	}
 	if goarch == "386" && spec.bits == 64 {
 		return invalid("is illegal in 32-bit mode")
@@ -70,13 +78,32 @@ func parseAMD64ExchangeForm(goarch string, op Op, spec amd64ExchangeSpec, ins In
 	} else if second.Kind == OpMem && !x86MemoryRegistersValidForArch(second.Mem, goarch) {
 		return invalid("uses an out-of-range address register")
 	}
-	return amd64ExchangeForm{register: first, other: second}, nil
+	form := amd64ExchangeForm{register: first, other: second}
+	if spec.kind == amd64ExchangeSwap {
+		if goarch == "amd64" && spec.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
+			source: first, destination: second,
+		}) {
+			for _, operand := range []Operand{first, second} {
+				if operand.Kind == OpReg && (operand.Reg == AH || operand.Reg == CH || operand.Reg == DH || operand.Reg == BH) {
+					return amd64ExchangeForm{}, fmt.Errorf("%w: %s %s Go's REX encoding changes a high-byte spelling to an unbound low-byte physical view: %q", ErrProbeNeedsContext, goarch, op, ins.Raw)
+				}
+			}
+		}
+		// Go's accumulator/accumulator W/L/Q rows emit opcode 90 (with
+		// their width prefix), a NOP. In particular, EAX/EAX does not clear
+		// the upper RAX bytes as a genuine ModRM r32 exchange would.
+		form.nop = spec.bits != 8 && first.Kind == OpReg && second.Kind == OpReg && first.Reg == AX && second.Reg == AX
+	}
+	return form, nil
 }
 
 func (c *amd64Ctx) lowerExchange(op Op, spec amd64ExchangeSpec, ins Instr) (bool, bool, error) {
 	form, err := parseAMD64ExchangeForm(c.goarch, op, spec, ins)
 	if err != nil {
 		return true, false, err
+	}
+	if form.nop {
+		return true, false, nil
 	}
 	typ := amd64IntegerTypeForBits(spec.bits)
 	value, err := c.evalIntSized(form.register, typ)

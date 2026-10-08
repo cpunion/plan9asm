@@ -402,6 +402,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultSwapStep(ins, state, arch); known {
+		return accepted
+	}
 	// cmd/asm's MOVD alias has the complete MOVQ operand/effect grammar,
 	// including its mode32 GP restriction. Change only this local dispatch
 	// copy; the original source and any native certificates stay untouched.
