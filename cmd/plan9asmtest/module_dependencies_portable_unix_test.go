@@ -74,7 +74,7 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"llc", "clang", "llvm-as", "opt", "llvm-dis", "llvm-objdump", "llvm-nm"} {
+	for _, name := range moduleFixtureRelocatedLLVMTools(os.Getenv("PLAN9ASM_CROSS_EXEC") == "1") {
 		if err := os.Symlink(filepath.Join(strings.TrimSpace(string(bindir)), name), filepath.Join(producer, "bin", name)); err != nil {
 			t.Fatal(err)
 		}
