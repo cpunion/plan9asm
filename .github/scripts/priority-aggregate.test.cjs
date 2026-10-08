@@ -37,9 +37,10 @@ const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + '\\n');
 if (args.includes('./cmd/plan9asmdiscover')) {
   process.stdout.write('{"index_entries":12}\\n');
-} else if (args.includes('-emit-discovery-progress')) {
+} else if (args.includes('-discovery-progress-output')) {
   if (process.env.FIXTURE_MODE !== 'invalid') {
-    process.stdout.write(JSON.stringify({complete: process.env.FIXTURE_MODE === 'pass', verified: process.env.FIXTURE_MODE === 'pass'}) + '\\n');
+    const output = args[args.indexOf('-discovery-progress-output') + 1];
+    fs.writeFileSync(output, JSON.stringify({complete: process.env.FIXTURE_MODE === 'pass', verified: process.env.FIXTURE_MODE === 'pass'}) + '\\n', {flag: 'wx'});
   }
   if (process.env.FIXTURE_MODE !== 'pass') {
     process.stderr.write('strict reader remains failed\\n');
@@ -64,7 +65,7 @@ for (const mode of ['pass', 'partial', 'invalid']) {
     const { result, invocations, reports } = verifyFixture(t, mode);
     assert.equal(result.status, mode === 'pass' ? 0 : 1, result.stderr);
     assert.equal(invocations.length, 2);
-    assert.ok(invocations[1].includes('-emit-discovery-progress'));
+    assert.ok(invocations[1].includes('-discovery-progress-output'));
     assert.ok(invocations[1].includes('-verify-discovery-reports'));
     assert.ok(invocations[1].includes('-compare-assembly-ledger'));
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(reports, 'scan-status.json'), 'utf8')), { index_entries: 12 });

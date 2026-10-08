@@ -83,10 +83,11 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 			writeTestFile(t, manifestPath, string(data))
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			progressPath := filepath.Join(t.TempDir(), "assembly-progress.json")
 			stdout, stderr, err := runVerifiedProgressCLI(ctx, root,
 				"-manifest="+manifestPath, "-repo-root="+root, "-discovery-ledger="+ledger,
 				"-verify-discovery-reports="+reports, "-compare-assembly-ledger="+stored,
-				"-emit-discovery-progress")
+				"-discovery-progress-output="+progressPath)
 			if name == "complete" {
 				if err != nil || !strings.Contains(string(stderr), "verified discovery corpus reports") {
 					t.Fatalf("complete gate: %v stderr=%s", err, stderr)
@@ -95,13 +96,18 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 				t.Fatalf("%s passed the strict gate", name)
 			}
 			if name == "trailing report data" {
-				if len(stdout) != 0 || !strings.Contains(string(stderr), "more than one JSON value") {
+				if _, statErr := os.Stat(progressPath); !os.IsNotExist(statErr) ||
+					!strings.Contains(string(stderr), "more than one JSON value") {
 					t.Fatalf("unaudited report emitted progress: %q %s", stdout, stderr)
 				}
 				return
 			}
+			data, err = os.ReadFile(progressPath)
+			if err != nil {
+				t.Fatalf("audited progress was lost: %v stdout=%q stderr=%s", err, stdout, stderr)
+			}
 			var observed discoveryProgress
-			decoder := json.NewDecoder(bytes.NewReader(stdout))
+			decoder := json.NewDecoder(bytes.NewReader(data))
 			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(&observed); err != nil {
 				t.Fatalf("audited progress was lost: %v stdout=%q stderr=%s", err, stdout, stderr)
@@ -151,7 +157,8 @@ func TestDiscoveryVerifiedProgressRejectsOtherModes(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			stdout, stderr, err := runVerifiedProgressCLI(ctx, t.TempDir(), append(args, "-emit-discovery-progress")...)
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, t.TempDir(),
+				append(args, "-discovery-progress-output="+filepath.Join(t.TempDir(), "assembly-progress.json"))...)
 			if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), "requires") {
 				t.Fatalf("other CLI mode accepted: %v stdout=%q stderr=%s", err, stdout, stderr)
 			}
