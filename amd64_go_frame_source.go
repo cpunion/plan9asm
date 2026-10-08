@@ -98,9 +98,15 @@ type goAMD64FrameFunction struct {
 	locals, args                int64
 	code                        []byte
 	positions                   map[int]string
+	sourcePositions             map[int][]goAMD64FrameSourcePosition
 	signature                   FuncSig
 	transport                   goAMD64FrameTransport
 	languageType                string
+}
+
+type goAMD64FrameSourcePosition struct {
+	file string
+	line int
 }
 
 // This is decoded only from the actual driver stdout, never from a proof file.
@@ -290,7 +296,8 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		if err != nil {
 			return nil, err
 		}
-		if data, err := source.read(object); err != nil || len(data) == 0 {
+		objectBytes, err := source.read(object)
+		if err != nil || len(objectBytes) == 0 {
 			if err == nil {
 				err = goAMD64FrameContext("actual assembler produced an empty object")
 			}
@@ -309,7 +316,17 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 				return nil, err
 			}
 		}
-		functions, err := goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
+		var functions map[string]goAMD64FrameFunction
+		if source.request.Target == "windows/amd64" && source.env["GOVERSION"] == "go1.27.1" {
+			unwind, readErr := source.observeWindowsUnwind(objectBytes)
+			if readErr != nil {
+				return nil, readErr
+			}
+			functions, err = goAMD64FrameWindowsUnwindListing(listing, file, pkg, source.origins,
+				source.request.Directory, unwind)
+		} else {
+			functions, err = goAMD64FrameListingWithNumericalObject(listing, file, pkg, source.origins, texts)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -1082,14 +1099,40 @@ var goAMD64FrameHeader = regexp.MustCompile(`^(\S+) STEXT nosplit(?: asm)? size=
 var goAMD64FrameRow = regexp.MustCompile(`^\s*0x([0-9a-f]+) [0-9]+ \((.+)\)\s+(.+)$`)
 
 func goAMD64FrameListing(listing []byte, file *File, pkg GoPackage, origins map[string]int) (map[string]goAMD64FrameFunction, error) {
-	return goAMD64FrameListingWithNumericalObject(listing, file, pkg, origins, nil)
+	return goAMD64FrameListingWithObservations(listing, file, pkg, origins, nil, nil)
 }
 
 func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord) (map[string]goAMD64FrameFunction, error) {
+	return goAMD64FrameListingWithObservations(listing, file, pkg, origins, texts, nil)
+}
+
+func goAMD64FrameListingWithWindowsUnwind(listing []byte, file *File, pkg GoPackage, origins map[string]int, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
+	return goAMD64FrameListingWithObservations(listing, file, pkg, origins, nil, unwind)
+}
+
+// These independent, target-specific observation routes retain the strict
+// default parser. A numerical relocation does not authorize Windows metadata,
+// and Windows unwind metadata does not authorize a numerical memory read.
+func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPackage, origins map[string]int, texts []gostaticstorage.TextRecord, unwind *gostaticstorage.WindowsAMD64AssemblyUnwind) (map[string]goAMD64FrameFunction, error) {
+	if texts != nil && unwind != nil {
+		return nil, goAMD64FrameContext("mixed target-specific object observation roles")
+	}
 	functions := make(map[string]goAMD64FrameFunction)
+	metadata := make(map[string][]byte)
+	seenMetadata := make(map[string]bool)
+	if unwind != nil {
+		for _, record := range unwind.Unwind {
+			if _, duplicate := metadata[record.Name]; duplicate {
+				return nil, goAMD64FrameContext("duplicate actual Windows metadata definition")
+			}
+			metadata[record.Name] = record.Data
+		}
+	}
 	scanner := bufio.NewScanner(bytes.NewReader(listing))
 	scanner.Buffer(nil, 4<<20)
 	name := ""
+	metadataName := ""
+	var metadataBytes []byte
 	var expected int64
 	textIndex, relocationIndex := -1, 0
 	finishRelocations := func() error {
@@ -1101,6 +1144,9 @@ func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPa
 	for scanner.Scan() {
 		line := scanner.Text()
 		if header := goAMD64FrameHeader.FindStringSubmatch(line); header != nil {
+			if metadataName != "" {
+				return nil, goAMD64FrameContext("Windows listing TEXT follows its metadata inventory")
+			}
 			if err := finishRelocations(); err != nil {
 				return nil, err
 			}
@@ -1121,7 +1167,25 @@ func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPa
 			expected, _ = strconv.ParseInt(header[2], 10, 64)
 			args, _ := strconv.ParseInt(header[3], 16, 64)
 			locals, _ := strconv.ParseInt(header[4], 16, 64)
-			functions[name] = goAMD64FrameFunction{locals: locals, args: args, positions: make(map[int]string)}
+			functions[name] = goAMD64FrameFunction{locals: locals, args: args, positions: make(map[int]string), sourcePositions: make(map[int][]goAMD64FrameSourcePosition)}
+			continue
+		}
+		if header := goAMD64WindowsUnwindHeader.FindStringSubmatch(line); header != nil {
+			if unwind == nil || seenMetadata[header[1]] || metadata[header[1]] == nil ||
+				name != "" && int64(len(functions[name].code)) != expected ||
+				metadataName != "" && !bytes.Equal(metadataBytes, metadata[metadataName]) {
+				return nil, goAMD64FrameContext("unbound, duplicate or incomplete Windows metadata listing")
+			}
+			metadataName, name, metadataBytes = header[1], "", nil
+			seenMetadata[metadataName] = true
+			continue
+		}
+		if metadataName != "" {
+			row, err := goAMD64WindowsUnwindByteRow(line, len(metadataBytes), metadata[metadataName])
+			if err != nil {
+				return nil, err
+			}
+			metadataBytes = append(metadataBytes, row...)
 			continue
 		}
 		if name == "" {
@@ -1150,6 +1214,8 @@ func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPa
 				return nil, goAMD64FrameContext("unbound original instruction/source line: %s", row[2])
 			}
 			fn.positions[int(pc)] += row[2] + "\t" + row[3] + "\n"
+			fn.sourcePositions[int(pc)] = append(fn.sourcePositions[int(pc)],
+				goAMD64FrameSourcePosition{row[2][:separator], line})
 		} else {
 			fields := strings.Fields(line)
 			if len(fields) < 2 || !strings.HasPrefix(fields[0], "0x") {
@@ -1186,7 +1252,10 @@ func goAMD64FrameListingWithNumericalObject(listing []byte, file *File, pkg GoPa
 	if texts != nil && textIndex+1 != len(texts) {
 		return nil, goAMD64FrameContext("missing complete original object/listing TEXT")
 	}
-	if name == "" || int64(len(functions[name].code)) != expected || len(functions) != len(file.Funcs) {
+	if len(functions) != len(file.Funcs) ||
+		metadataName == "" && (name == "" || int64(len(functions[name].code)) != expected) ||
+		metadataName != "" && !bytes.Equal(metadataBytes, metadata[metadataName]) ||
+		len(seenMetadata) != len(metadata) {
 		return nil, goAMD64FrameContext("missing/incomplete original TEXT inventory")
 	}
 	bound := make(map[string]goAMD64FrameFunction)
