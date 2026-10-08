@@ -33,6 +33,7 @@ type GoARM64ByteCarrierSource struct {
 	mu           sync.Mutex
 	identity     *GoARM64ByteCarrierSource
 	ready        bool
+	lease        context.Context // the original bounded capture lease, never supplied by a report or later Options
 	request      GoARM64ByteCarrierCaptureRequest
 	guard        *GoAMD64FrameSource // physical inputs/commands/cleanup only; no frame factory
 	dirs         map[string]os.FileInfo
@@ -130,7 +131,7 @@ func CaptureGoARM64ByteCarrierSource(ctx context.Context, request GoARM64ByteCar
 		return nil, arm64ByteCarrierContext("external package driver has no original-source mapping")
 	}
 	source := &GoARM64ByteCarrierSource{
-		request: request, dirs: make(map[string]os.FileInfo), files: make(map[string]os.FileInfo),
+		request: request, lease: ctx, dirs: make(map[string]os.FileInfo), files: make(map[string]os.FileInfo),
 		declarations: make(map[string]FuncSig),
 	}
 	source.identity = source
@@ -459,6 +460,10 @@ func (source *GoARM64ByteCarrierSource) Readback(ctx context.Context) ([]byte, e
 	if !source.ready || source.identity != source {
 		return nil, arm64ByteCarrierContext("source closed after verification")
 	}
+	if err := arm64ByteCarrierLive(source.lease); err != nil {
+		source.ready = false
+		return nil, err
+	}
 	return append([]byte(nil), source.raw...), nil
 }
 
@@ -474,6 +479,9 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 	defer func() {
 		if verifyErr != nil {
 			source.ready = false
+			if source.lease != nil && source.lease.Err() != nil {
+				verifyErr = errors.Join(verifyErr, source.lease.Err(), context.Cause(source.lease))
+			}
 			if ctx != nil && ctx.Err() != nil {
 				verifyErr = errors.Join(verifyErr, ctx.Err(), context.Cause(ctx))
 			}
@@ -482,9 +490,11 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 	if !source.ready {
 		return arm64ByteCarrierContext("closed or revoked source")
 	}
-	if err := arm64ByteCarrierLive(ctx); err != nil {
+	runContext, release, err := source.executionContext(ctx)
+	if err != nil {
 		return err
 	}
+	defer release()
 	state, err := source.stateBytes()
 	if err != nil || sha256.Sum256(state) != source.stateSeal || sha256.Sum256(source.raw) != source.seal {
 		return arm64ByteCarrierContext("sealed complete original observation changed")
@@ -503,13 +513,13 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 		return err
 	}
 	before := source.guard.env
-	if err := source.observe(ctx); err != nil {
+	if err := source.observe(runContext); err != nil {
 		return err
 	}
 	if !reflect.DeepEqual(before, source.guard.env) {
 		return arm64ByteCarrierContext("actual original tool/profile changed")
 	}
-	selected, raw, err := source.guard.loadWithRaw(ctx)
+	selected, raw, err := source.guard.loadWithRaw(runContext)
 	// Reuse the existing exact original-Go selection comparator. Only the
 	// pinned SDK's typed Stale/StaleReason display fields can change after the
 	// first -export builds its cache entry; every semantic field and both whole
@@ -517,7 +527,36 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 	if err != nil || !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(raw, source.report.RawSelection) {
 		return arm64ByteCarrierContext("actual complete compiler selection/export changed: %v", err)
 	}
-	return errors.Join(source.guard.verifyInputs(), source.verifyFileIdentities())
+	return errors.Join(source.guard.verifyInputs(), source.verifyFileIdentities(),
+		arm64ByteCarrierLive(source.lease), arm64ByteCarrierLive(ctx))
+}
+
+// executionContext obeys both the later operation context and the actual
+// original capture owner. It cannot renew the lease. The small watcher is
+// joined on release; this works on Go 1.20 without context.AfterFunc.
+func (source *GoARM64ByteCarrierSource) executionContext(ctx context.Context) (context.Context, func(), error) {
+	if err := errors.Join(arm64ByteCarrierLive(source.lease), arm64ByteCarrierLive(ctx)); err != nil {
+		return nil, nil, err
+	}
+	deadline, _ := source.lease.Deadline()
+	base, cancelCause := context.WithCancelCause(ctx)
+	bounded, cancelDeadline := context.WithDeadline(base, deadline)
+	closed := make(chan struct{})
+	lease := source.lease
+	go func() {
+		defer close(closed)
+		select {
+		case <-lease.Done():
+			cancelCause(context.Cause(lease))
+		case <-bounded.Done():
+		}
+	}()
+	release := func() {
+		cancelDeadline()
+		cancelCause(context.Canceled)
+		<-closed
+	}
+	return bounded, release, nil
 }
 
 func (source *GoARM64ByteCarrierSource) verifyFileIdentities() error {

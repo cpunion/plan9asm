@@ -314,7 +314,10 @@ func TestARM64ByteCarrierSourceRejectsOpenRoles(t *testing.T) {
 		{"pointer-transport", "decl.go", func(text string) string {
 			return strings.Replace(text, "func movd_u32(input uint64)", "func movd_u32(input *uint64)", 1)
 		}},
-		{"linkname", "decl.go", func(text string) string { return text + "\n//go:linkname private foreign\n" }},
+		{"linkname", "decl.go", func(text string) string {
+			return strings.Replace(text, "package carrierfixture", "package carrierfixture\nimport _ \"unsafe\"", 1) +
+				"\n//go:linkname movd_u32 foreign.movd_u32\n"
+		}},
 		{"text-declaration-mismatch", "original_arm64.s", func(text string) string { return strings.Replace(text, "$0-12", "$0-16", 1) }},
 		{"native-code-address", "original_arm64.s", func(text string) string {
 			return strings.Replace(text, "MOVD input+0(FP),R0", "MOVD $·movd_u32(SB),R0", 1)
@@ -340,6 +343,9 @@ func TestARM64ByteCarrierSourceRejectsOpenRoles(t *testing.T) {
 			}
 			changed := request
 			changed.Directory = directory
+			// These counterexamples are accepted by the original Go compiler
+			// and assembler. A factory role refusal is not a compiler-error pass.
+			arm64ByteCarrierOriginal(t, directory, packagePath)
 			if source, err := CaptureGoARM64ByteCarrierSource(ctx, changed); source != nil || !errors.Is(err, ErrProbeNeedsContext) {
 				if source != nil {
 					source.Close()
