@@ -121,9 +121,19 @@ func arm64PrivateFrameReadExactProof(fn Func, transport *arm64PrivateFrameTransp
 				return false
 			}
 			terminated := false
-			for _, original := range blocks[index].instrs {
+			for ii, original := range blocks[index].instrs {
 				ins := arm64StackInstruction(original)
 				op := arm64ControlOp(ins)
+				if op == "SVC" && transport != nil && transport.nanosleep != nil &&
+					transport.nanosleep.matchesSource(fn, transport.entry, transport.nanosleep.target) {
+					input, present := transport.nanosleep.inputs[[2]int{index, ii}]
+					address, frame := state.address("R0")
+					if !present || !frame || !address.exact || address.offset != input.span.low {
+						return false
+					}
+					state.assign("R0", arm64PrivateFrameAddress{}, false)
+					continue
+				}
 				if op == "CALL" || op == "BL" || op == OpRET {
 					if len(state) != 0 {
 						if transport == nil || !transport.consume(ins, state, strings.HasSuffix(fn.Sym, "<ABIInternal>")) {

@@ -910,6 +910,11 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 		return err
 	}
 	paddingSource := fn
+	originalNanosleep, originalNanosleepRequired := arm64NanosleepInputForSource(fn,
+		&arm64PrivateFrameTransport{entry: sig, resolve: resolve, sigs: sigs}, target)
+	if originalNanosleepRequired && originalNanosleep == nil {
+		return fmt.Errorf("%w: original Linux nanosleep private input is unproved", ErrProbeNeedsContext)
+	}
 	fn, err = normalizeARM64ScalarMemoryFrame(fn)
 	if err != nil {
 		return err
@@ -926,7 +931,7 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 	sourceGoFrame := arm64SourceGoFrame(fn)
 	structureFrameProofRequired := arm64RawStructureFrameProofRequired(fn)
 	r20FrameProofRequired := arm64SourceFrameR20Required(fn)
-	unexposedCallFrame := arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
+	unexposedCallFrame := arm64CallFrameUnexposedTypedTarget(fn, sig, resolve, sigs, target)
 	if r20FrameProofRequired && !unexposedCallFrame {
 		return fmt.Errorf("%w: ARM64 implicit R20 entry needs the complete typed source-frame/escape proof", ErrProbeNeedsContext)
 	}
@@ -1007,6 +1012,11 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 
 	c := newARM64CtxWithTarget(b, fn, sig, resolve, sigs, target, annotateSource)
 	c.fpPaddingReads = paddingReads
+	c.nanosleepOriginal = originalNanosleep
+	if originalNanosleep != nil {
+		originalNanosleep.owner = c
+		c.nanosleepOriginalSource = arm64NanosleepCloneSource(paddingSource)
+	}
 	c.sourceGoFrame = sourceGoFrame
 	c.unexposedCallFrame = unexposedCallFrame && c.unexposedCallFrame
 	if r20FrameProofRequired && !c.unexposedCallFrame {
@@ -1015,7 +1025,7 @@ func translateFuncARM64WithSourceCallsAndAttrs(b *strings.Builder, fn Func, sig 
 	// The producer and its complete frame proof remain separate from reaching
 	// software values, which borrow neither ownership nor a private SP root.
 	c.sourceFrameR20 = r20FrameProofRequired && arm64SourceFrameR20(fn) &&
-		arm64SourceFrameR20Transport(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+		arm64SourceFrameR20Transport(fn, &arm64PrivateFrameTransport{entry: sig, resolve: resolve, sigs: sigs})
 	c.checkedR20Entry = arm64SourceFrameR20Checked(fn, sig, resolve)
 	if structureFrameProofRequired && !c.unexposedCallFrame {
 		return fmt.Errorf("%w: ARM64 normalized framed structure source lost its complete physical-stack/source-escape proof", ErrProbeNeedsContext)

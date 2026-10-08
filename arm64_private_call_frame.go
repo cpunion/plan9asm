@@ -16,13 +16,23 @@ func arm64CallFrameUnexposed(fn Func) bool {
 }
 
 func arm64CallFrameUnexposedTyped(fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig) bool {
+	return arm64CallFrameUnexposedTypedTarget(fn, sig, resolve, sigs, "")
+}
+
+func arm64CallFrameUnexposedTypedTarget(fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, target string) bool {
 	if !arm64CallFrameFreshEntry(sig) || sig.ARM64ClosureABI != nil {
 		return false
 	}
 	if sig.ARM64GoRegisterABI != nil && arm64ValidateGoRegisterABI(sig) != nil {
 		return false
 	}
-	return arm64CallFrameUnexposedForTransport(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+	transport := &arm64PrivateFrameTransport{entry: sig, resolve: resolve, sigs: sigs}
+	proof, required := arm64NanosleepInputForSource(fn, transport, target)
+	if required && proof == nil {
+		return false
+	}
+	transport.nanosleep = proof
+	return arm64CallFrameUnexposedForTransport(fn, transport)
 }
 
 func arm64CallFrameUnexposedForTransport(fn Func, transport *arm64PrivateFrameTransport) bool {

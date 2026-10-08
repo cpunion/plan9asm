@@ -376,6 +376,9 @@ func arm64HardwareReturnAsBranch(ins Instr) Instr {
 }
 
 func (c *arm64Ctx) prepareLocalControl() error {
+	if c.nanosleepRequired && c.nanosleepInput == nil {
+		return fmt.Errorf("%w: Linux nanosleep needs a complete initialized private input", ErrProbeNeedsContext)
+	}
 	plan := &arm64LocalControlPlan{
 		before:      make(map[[2]int]arm64ControlValue),
 		stackBefore: make(map[[2]int]arm64ControlValue),
@@ -445,7 +448,7 @@ func (c *arm64Ctx) prepareLocalControl() error {
 				if _, err := parseARM64SyscallForm(c.targetTriple, ins); err != nil {
 					return err
 				}
-				if err := c.requireSyscallCallerFrameDisjoint(state, ins); err != nil {
+				if err := c.requireSyscallCallerFrameDisjointAt(state, ins, [2]int{bi, ii}); err != nil {
 					return err
 				}
 			}
@@ -571,8 +574,20 @@ func (c *arm64Ctx) prepareLocalControl() error {
 // disjointness guard, not a contract for arbitrary native exception effects or
 // an assertion that the syscall's result/NZCV mapping is complete.
 func (c *arm64Ctx) requireSyscallCallerFrameDisjoint(state *arm64ControlState, ins Instr) error {
+	return c.requireSyscallCallerFrameDisjointAt(state, ins, [2]int{c.currentBlock, c.currentInstruction})
+}
+
+func (c *arm64Ctx) requireSyscallCallerFrameDisjointAt(state *arm64ControlState, ins Instr, point [2]int) error {
 	if !c.sourceGoFrame.present {
 		return nil
+	}
+	if input, present := c.nanosleepInputAt(point); present {
+		address := arm64ControlRead(state.regs, "R0")
+		expected := arm64ControlFromMap(map[string]bool{fmt.Sprintf("sp:%d", input.span.low): true})
+		if c.unexposedCallFrame && state.unexposedSP && arm64ControlEscapedOnlyCode(state.escaped) &&
+			arm64ControlEqual(address, expected) {
+			return nil // exact read-only span; never an unknown-store exemption
+		}
 	}
 	exposed := state.escaped
 	for _, reg := range []Reg{"R0", "R1", "R2", "R3", "R4", "R5", "R8", "R16"} {

@@ -118,6 +118,11 @@ func (state *arm64PrivateDataState) memory(op Op, form arm64RawPrivateMemoryForm
 				if form.gp && form.elementBytes == 8 && address.interval.low == address.interval.high {
 					state.cells[int64(low)] = state.value(reg).interval
 				}
+				if state.initialized != nil && address.interval.low == address.interval.high {
+					for offset := int64(low); offset < int64(high); offset++ {
+						state.initialized[offset] = true
+					}
+				}
 			}
 		} else if form.gp {
 			value := arm64PoolUnknownInterval
@@ -159,6 +164,17 @@ func (state *arm64PrivateDataState) memory(op Op, form arm64RawPrivateMemoryForm
 
 func (state *arm64PrivateDataState) transfer(ins Instr, at int, frameSize int64) (*arm64PrivateDataSpan, bool) {
 	op := arm64ControlOp(ins)
+	if state.initialized != nil && op != OpTEXT {
+		if !arm64NanosleepNumericalInstruction(ins) {
+			return nil, false
+		}
+		for _, operand := range ins.Args {
+			if operand.Kind == OpFPAddr || operand.Kind == OpSym ||
+				operand.Kind == OpMem && !state.value(operand.Mem.Base).frame {
+				return nil, false // no external/native backing or pointer escape
+			}
+		}
+	}
 	if immediate, handled, err := parseARM64GPImmediateForm(op, ins); handled {
 		if err != nil {
 			return nil, false

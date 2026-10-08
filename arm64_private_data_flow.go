@@ -15,9 +15,10 @@ type arm64PrivateDataCompare struct {
 }
 
 type arm64PrivateDataState struct {
-	regs       map[Reg]arm64PrivateDataValue
-	cells      map[int64]arm64PoolInterval
-	comparison arm64PrivateDataCompare
+	regs        map[Reg]arm64PrivateDataValue
+	cells       map[int64]arm64PoolInterval
+	comparison  arm64PrivateDataCompare
+	initialized map[int64]bool // present only for the bounded syscall collector
 }
 
 func newARM64PrivateDataState() *arm64PrivateDataState {
@@ -33,6 +34,12 @@ func (state *arm64PrivateDataState) clone() *arm64PrivateDataState {
 		copy.cells[offset] = value
 	}
 	copy.comparison = state.comparison
+	if state.initialized != nil {
+		copy.initialized = make(map[int64]bool, len(state.initialized))
+		for offset := range state.initialized {
+			copy.initialized[offset] = true
+		}
+	}
 	return copy
 }
 
@@ -59,6 +66,11 @@ func (state *arm64PrivateDataState) merge(other *arm64PrivateDataState, widen bo
 	}
 	if state.comparison != other.comparison {
 		state.comparison = arm64PrivateDataCompare{}
+	}
+	for offset := range state.initialized {
+		if !other.initialized[offset] {
+			delete(state.initialized, offset)
+		}
 	}
 	return !reflect.DeepEqual(old, state)
 }
@@ -321,7 +333,11 @@ func arm64PrivateDataProofDetails(fn Func, transport *arm64PrivateFrameTransport
 			// unrelated unknown registers; nonempty dead source still runs.
 			continue
 		}
-		propagate(seed, newARM64PrivateDataState())
+		initial := newARM64PrivateDataState()
+		if transport.nanosleep != nil && transport.nanosleep.identity == nil {
+			initial.initialized = make(map[int64]bool)
+		}
+		propagate(seed, initial)
 		for len(queue) != 0 {
 			current := queue[0]
 			queue = queue[1:]
@@ -345,6 +361,17 @@ func arm64PrivateDataProofDetails(fn Func, transport *arm64PrivateFrameTransport
 			terminated := false
 			for ii, ins := range blocks[current.block].instrs {
 				op := arm64ControlOp(ins)
+				if op == "SVC" && transport.nanosleep != nil {
+					// No native result/flags observation is authorized. This first
+					// contract ends in the ordinary source RET in the same block.
+					if ii+2 != len(blocks[current.block].instrs) ||
+						arm64ControlOp(blocks[current.block].instrs[ii+1]) != OpRET ||
+						len(blocks[current.block].instrs[ii+1].Args) != 0 ||
+						!transport.nanosleep.consume(state, fn, [2]int{current.block, ii}, ins) {
+						return nil, fmt.Errorf("private nanosleep input/terminal contract is unproved at %q", ins.Raw)
+					}
+					continue
+				}
 				if op == "ADR" || op == "ADRP" || op == OpWORD || op == "DWORD" || op == arm64RawDataOp || op == "BLR" {
 					return nil, fmt.Errorf("private data proof rejects native/raw address effects at %q", ins.Raw)
 				}

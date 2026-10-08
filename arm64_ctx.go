@@ -16,9 +16,13 @@ type arm64Ctx struct {
 	targetTriple    string
 	goRegisterEntry bool
 
-	privateRegisterEntry bool
-	unexposedCallFrame   bool // source/normalized proof for this fresh SP object only
-	privateDataStores    map[[2]int]arm64PrivateDataSpan
+	privateRegisterEntry    bool
+	unexposedCallFrame      bool // source/normalized proof for this fresh SP object only
+	privateDataStores       map[[2]int]arm64PrivateDataSpan
+	nanosleepInput          *arm64NanosleepInputProof
+	nanosleepOriginal       *arm64NanosleepInputProof
+	nanosleepOriginalSource Func
+	nanosleepRequired       bool
 
 	tmp int
 
@@ -112,9 +116,19 @@ func newARM64CtxWithTarget(b *strings.Builder, fn Func, sig FuncSig, resolve fun
 	}
 	c.privateRegisterEntry = fn.arm64PrivateRegisterEntry
 	c.checkedABI0Tail = fn.arm64ABI0TailSource != nil
-	c.unexposedCallFrame = arm64CallFrameUnexposedTyped(fn, sig, resolve, sigs)
+	transport := &arm64PrivateFrameTransport{entry: sig, resolve: resolve, sigs: sigs}
+	c.nanosleepInput, c.nanosleepRequired = arm64NanosleepInputForSource(fn, transport, target)
+	if c.nanosleepInput != nil {
+		c.nanosleepInput.owner = c
+		c.nanosleepOriginal, c.nanosleepOriginalSource = c.nanosleepInput, arm64NanosleepCloneSource(fn)
+	}
+	transport.nanosleep = c.nanosleepInput
+	c.unexposedCallFrame = !(c.nanosleepRequired && c.nanosleepInput == nil) &&
+		arm64CallFrameFreshEntry(sig) && sig.ARM64ClosureABI == nil &&
+		(sig.ARM64GoRegisterABI == nil || arm64ValidateGoRegisterABI(sig) == nil) &&
+		arm64CallFrameUnexposedForTransport(fn, transport)
 	if c.unexposedCallFrame {
-		c.privateDataStores, _ = arm64PrivateDataProof(fn, &arm64PrivateFrameTransport{sig, resolve, sigs})
+		c.privateDataStores, _ = arm64PrivateDataProof(fn, transport)
 	}
 	for _, s := range sig.Frame.Params {
 		c.fpParams[s.Offset] = s

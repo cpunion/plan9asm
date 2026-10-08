@@ -8,9 +8,10 @@ import (
 // Absent by default. This is the same explicit typed transport consumed by
 // callSym/lowerRET, not a register preservation or pointer ownership promise.
 type arm64PrivateFrameTransport struct {
-	entry   FuncSig
-	resolve func(string) string
-	sigs    map[string]FuncSig
+	entry     FuncSig
+	resolve   func(string) string
+	sigs      map[string]FuncSig
+	nanosleep *arm64NanosleepInputProof
 }
 
 func (transport *arm64PrivateFrameTransport) consume(ins Instr, addresses arm64PrivateFrameAddresses, entryInternal bool) bool {

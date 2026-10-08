@@ -9,11 +9,18 @@ func (c *arm64Ctx) lowerSyscall(op Op, ins Instr) (ok bool, terminated bool, err
 		if err != nil {
 			return true, false, err
 		}
+		input, borrowed := c.nanosleepInputAt([2]int{c.currentBlock, c.currentInstruction})
+		if c.nanosleepInput != nil && (!borrowed || input.form != form) {
+			return true, false, fmt.Errorf("%w: changed Linux nanosleep input/emission", ErrProbeNeedsContext)
+		}
 		num, err := c.loadReg(form.number)
 		if err != nil {
 			return true, false, err
 		}
 		loadArg := func(r Reg) (string, error) {
+			if borrowed && r != "R0" && r != "R1" {
+				return "0", nil // these registers are not nanosleep operand roles
+			}
 			if _, ok := c.regSlot[r]; !ok {
 				return "0", nil
 			}

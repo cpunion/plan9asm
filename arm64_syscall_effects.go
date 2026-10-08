@@ -32,6 +32,7 @@ type arm64SyscallIRProof struct {
 	owner                      *arm64Ctx
 	control                    *arm64LocalControlPlan
 	form                       arm64SyscallForm
+	nanosleep                  *arm64NanosleepInputProof
 	source                     Instr
 	block, instruction, offset int
 }
@@ -48,7 +49,14 @@ func (proof *arm64SyscallIRProof) matches(c *arm64Ctx, original Instr, offset in
 		return false
 	}
 	form, err := parseARM64SyscallForm(c.targetTriple, arm64ControlDecode(original))
-	return err == nil && form == proof.form
+	if err != nil || form != proof.form || proof.nanosleep != c.nanosleepInput {
+		return false
+	}
+	if proof.nanosleep != nil {
+		input, valid := c.nanosleepInputAt([2]int{proof.block, proof.instruction})
+		return valid && input.form == form
+	}
+	return true
 }
 
 func parseARM64SyscallForm(target string, ins Instr) (arm64SyscallForm, error) {
@@ -135,7 +143,7 @@ func (c *arm64Ctx) emitARM64SyscallIR(form arm64SyscallForm, format string, args
 			source.Args[index].RegList = append([]Reg(nil), source.Args[index].RegList...)
 		}
 		proof := &arm64SyscallIRProof{owner: c, control: c.localControl, form: form, source: source,
-			block: c.currentBlock, instruction: c.currentInstruction, offset: start}
+			block: c.currentBlock, instruction: c.currentInstruction, offset: start, nanosleep: c.nanosleepInput}
 		proof.identity = proof
 		if flow.nativeIR == nil {
 			flow.nativeIR = make(map[int]arm64MachineNativeProof)
