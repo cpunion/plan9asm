@@ -180,6 +180,9 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		}
 		observation.Members = append(observation.Members, value)
 	}
+	if err := validateASMDataArchiveNames(observation.Members); err != nil {
+		return nil, err
+	}
 	for index, source := range request.Sources {
 		originalProgram, err := asmDataProgramFingerprint(source.Original)
 		if err != nil {

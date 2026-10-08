@@ -77,6 +77,53 @@ func asmDataBaseKind(kind uint8) uint8 {
 	return kind
 }
 
+func validateASMDataArchiveNames(members []ASMDataMember) error {
+	type namedDefinition struct {
+		abi       uint16
+		kind      uint8
+		duplicate bool
+		member    int
+	}
+	seen := make(map[string][]namedDefinition)
+	observe := func(name string, abi uint16, namespace TextSymbolNamespace, kind, flags uint8, member int) error {
+		if name == "" || abi == 65535 || namespace == TextSymbolHashed64 || namespace == TextSymbolHashed {
+			return nil
+		}
+		value := namedDefinition{abi: abi, kind: asmDataBaseKind(kind), duplicate: flags&1 != 0, member: member}
+		for _, previous := range seen[name] {
+			if previous.kind != value.kind {
+				return contextError("SDK ASM DATA named definition collides with a different TEXT/storage kind")
+			}
+			if previous.abi != value.abi {
+				if value.kind != 1 {
+					return contextError("SDK ASM DATA named storage has multiple ABI identities")
+				}
+				continue
+			}
+			if previous.member == member || !previous.duplicate && !value.duplicate {
+				return contextError("SDK ASM DATA named definition has an ambiguous non-DUPok body")
+			}
+			// DUPok is an observed linker input. Keep every exact member/index;
+			// this check neither chooses a winner nor grants storage authority.
+		}
+		seen[name] = append(seen[name], value)
+		return nil
+	}
+	for ordinal, member := range members {
+		for _, definition := range member.Definitions {
+			if err := observe(definition.Name, definition.ABI, definition.Namespace, definition.Kind, definition.Flags, ordinal); err != nil {
+				return err
+			}
+		}
+		for _, text := range member.Texts {
+			if err := observe(text.Name, text.ABI, text.Namespace, text.Kind, text.Flags, ordinal); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]ASMGlobalLayout, error) {
 	used := make(map[uint32]bool)
 	lastRelative := make(map[TextSymbolNamespace]uint32)
