@@ -19,6 +19,20 @@ func TranslateModule(file *File, opt Options) (llvm.Module, error) {
 // Dispose the returned module before disposing ctx. High-volume callers should
 // create a fresh context per file so LLVM can release context-owned caches.
 func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result llvm.Module, resultErr error) {
+	originalFile, originalOptions := file, opt
+	file, opt, err := freezeNumericalReadInputs(file, opt)
+	if err != nil {
+		return llvm.Module{}, err
+	}
+	defer func() {
+		if err := finishNumericalReads(originalFile, originalOptions); err != nil {
+			if !result.IsNil() {
+				result.Dispose()
+			}
+			result = llvm.Module{}
+			resultErr = errors.Join(resultErr, err)
+		}
+	}()
 	bindings, err := verifyX86FixedLocalBindings(file, opt)
 	if err != nil {
 		return llvm.Module{}, err
@@ -70,6 +84,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	}
 	file, err = coalesceX86Continuations(file, opt)
 	if err != nil {
+		return llvm.Module{}, err
+	}
+	if err := verifyNormalizedNumericalReads(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
 	mod, err := translateModuleDirectInContext(ctx, file, opt)

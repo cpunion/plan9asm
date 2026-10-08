@@ -5,28 +5,46 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"go/format"
 	"go/parser"
 	"go/token"
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 // GoX86NumericalReadBinding is a live factory token, not a serializable report.
 // Its capture context and every source/storage owner must remain live until
 // translation completes. Failure/Close revokes the originating source.
 type GoX86NumericalReadBinding struct {
-	source         *GoX86NumericalReadSource
-	originalSource *GoX86NumericalReadSource
-	context        context.Context
-	packageInput   GoPackage
-	file           [32]byte
-	options        Options
-	symbols        map[string]string
-	declarations   map[string]goAMD64FrameDeclaration
-	reads          []numericalSBReadFact
-	seal           [32]byte
+	source          *GoX86NumericalReadSource
+	originalSource  *GoX86NumericalReadSource
+	context         context.Context
+	originalContext context.Context
+	packageInput    GoPackage
+	file            [32]byte
+	options         Options
+	symbols         map[string]string
+	declarations    map[string]goAMD64FrameDeclaration
+	reads           []numericalSBReadFact
+	capabilities    map[string]numericalSignatureCapabilities
+	seal            [32]byte
+}
+
+type numericalSignatureCapabilities struct {
+	caller *x86GoCallerRegionProof
+	local  *x86FixedLocalBinding
+}
+
+func numericalCapabilities(sigs map[string]FuncSig) map[string]numericalSignatureCapabilities {
+	result := make(map[string]numericalSignatureCapabilities, len(sigs))
+	for name, sig := range sigs {
+		result[name] = numericalSignatureCapabilities{sig.x86CallerRegions, sig.x86FixedLocal}
+	}
+	return result
 }
 
 // BindNumericalReads joins complete caller declarations/options to the sealed
@@ -74,7 +92,7 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 		return Options{}, err
 	}
 	source.mu.Lock()
-	declarations, err := source.guard.typedDeclarationsForArch(pkg, false, arch)
+	declarations, err := source.numericalDeclarations(ctx, pkg, arch)
 	if err == nil {
 		err = numericalDeclarationSyntax(source, pkg)
 	}
@@ -89,13 +107,15 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	for _, fn := range file.Funcs {
 		name := symbols[fn.Sym]
 		declaration, found := declarations[name]
-		if !found || !reflect.DeepEqual(numericalSignatureShape(sigs[name]), declaration.signature) {
+		sig := sigs[name]
+		if !found || sig.arm64FPReadDeclaration != nil || sig.arm64ABI0Declaration != nil || sig.arm64ABI0TailDeclaration != nil || sig.arm64NativeScratch != nil ||
+			!reflect.DeepEqual(numericalSignatureShape(sig), declaration.signature) {
 			return Options{}, numericalSBContext("signature is not the actual source declaration: %s", name)
 		}
 	}
 	options.Sigs, options.ResolveSym = sigs, nil
-	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, packageInput: pkg, file: actual,
-		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts()}
+	binding := &GoX86NumericalReadBinding{source: source, originalSource: source, context: ctx, originalContext: ctx, packageInput: pkg, file: actual,
+		options: options, symbols: symbols, declarations: declarations, reads: source.readFacts(), capabilities: numericalCapabilities(sigs)}
 	binding.seal, err = binding.digest()
 	if err != nil {
 		return Options{}, err
@@ -138,19 +158,30 @@ func numericalDeclarationSyntax(source *GoX86NumericalReadSource, pkg GoPackage)
 	if len(pkg.Syntax) != len(source.guard.selection.GoFiles) {
 		return numericalSBContext("declaration syntax inventory differs")
 	}
-	for i, name := range source.guard.selection.GoFiles {
+	wanted := make(map[string]int)
+	for _, name := range source.guard.selection.GoFiles {
 		data, err := source.guard.read(filepath.Join(source.request.Directory, name))
 		if err != nil {
 			return err
 		}
 		actual, err := parser.ParseFile(token.NewFileSet(), name, data, parser.ParseComments)
-		if err != nil || pkg.Syntax[i] == nil {
+		if err != nil {
 			return numericalSBContext("declaration syntax is missing or unparseable")
 		}
-		var a, b bytes.Buffer
-		if format.Node(&a, token.NewFileSet(), actual) != nil || format.Node(&b, token.NewFileSet(), pkg.Syntax[i]) != nil || !bytes.Equal(a.Bytes(), b.Bytes()) {
+		var a bytes.Buffer
+		if format.Node(&a, token.NewFileSet(), actual) != nil {
+			return numericalSBContext("original declaration syntax cannot be formatted")
+		}
+		wanted[a.String()]++
+	}
+	// File order and absolute token.Pos bases are not declaration semantics.
+	// Compare the complete multiset, including comments/directives and bodies.
+	for _, supplied := range pkg.Syntax {
+		var b bytes.Buffer
+		if supplied == nil || format.Node(&b, token.NewFileSet(), supplied) != nil || wanted[b.String()] == 0 {
 			return numericalSBContext("supplied complete declaration syntax differs from original source")
 		}
+		wanted[b.String()]--
 	}
 	return nil
 }
@@ -170,10 +201,11 @@ func (binding *GoX86NumericalReadBinding) digest() ([32]byte, error) {
 		X87          X87Mode
 		Annotate     bool
 		Sigs         map[string]FuncSig
+		TailGroups   []X86TailGroup
 		Symbols      map[string]string
 		Reads        []numericalSBReadFact
 	}{binding.file, binding.options.TargetTriple, binding.options.Goarch, binding.options.WASMABI, binding.options.X87Mode,
-		binding.options.AnnotateSource, binding.options.Sigs, binding.symbols, binding.reads})
+		binding.options.AnnotateSource, binding.options.Sigs, binding.options.X86TailGroups, binding.symbols, binding.reads})
 	return sha256.Sum256(data), err
 }
 
@@ -187,15 +219,19 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 		binding.source.mu.Unlock()
 		return err
 	}
+	if binding.context == nil || reflect.TypeOf(binding.context) != reflect.TypeOf(binding.originalContext) ||
+		!reflect.TypeOf(binding.context).Comparable() || binding.context != binding.originalContext {
+		return fail(numericalSBContext("binding live context identity changed"))
+	}
 	if err := binding.source.Verify(binding.context); err != nil {
 		return err
 	}
 	sum, err := binding.digest()
-	if err != nil || sum != binding.seal {
+	if err != nil || sum != binding.seal || !numericalSameCapabilities(binding.options.Sigs, binding.capabilities) {
 		return fail(numericalSBContext("private binding shape changed"))
 	}
 	binding.source.mu.Lock()
-	declarations, err := binding.source.guard.typedDeclarationsForArch(binding.packageInput, false, binding.options.Goarch)
+	declarations, err := binding.source.numericalDeclarations(binding.context, binding.packageInput, binding.options.Goarch)
 	if err == nil {
 		err = numericalDeclarationSyntax(binding.source, binding.packageInput)
 	}
@@ -208,4 +244,204 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 		return fail(numericalSBContext("declaration/source/owner read join changed"))
 	}
 	return binding.source.Verify(binding.context)
+}
+
+// Imports are obtained only from the same live, already authenticated owner
+// selections. A temporary typecheck guard cannot add new files to the original
+// source seal or treat the CPU's assembly namespace as a Go import certificate.
+func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Context, pkg GoPackage, arch string) (map[string]goAMD64FrameDeclaration, error) {
+	guard := *source.guard
+	guard.inputs = make(map[string][32]byte)
+	guard.imports = make(map[string]goAMD64FrameSelection)
+	for _, owner := range source.originalOwners {
+		report, err := owner.observation.Readback(ctx)
+		if err != nil {
+			return nil, numericalStorageFailure(ctx, "declaration owner readback", err)
+		}
+		if report.Protocol == gostaticstorage.SDKCPUProtocol {
+			continue
+		}
+		decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))
+		for decoder.More() {
+			var dependency goAMD64FrameSelection
+			if err := decoder.Decode(&dependency); err != nil {
+				return nil, err
+			}
+			if dependency.Export != "" {
+				guard.imports[dependency.ImportPath] = dependency
+			}
+		}
+	}
+	return guard.typedDeclarationsForArch(pkg, false, arch)
+}
+
+type x86NumericalReadCertificate struct {
+	binding     *GoX86NumericalReadBinding
+	read        int
+	instruction [32]byte
+}
+
+func verifyNumericalReadInputs(file *File, options Options) (result error) {
+	binding := options.NumericalReads
+	if binding == nil {
+		return nil
+	}
+	defer func() {
+		if result != nil && binding.source != nil {
+			binding.source.mu.Lock()
+			binding.source.ready = false
+			binding.source.mu.Unlock()
+		}
+	}()
+	if err := binding.verify(); err != nil {
+		return err
+	}
+	check := func() error {
+		if file == nil || options.ResolveSym == nil {
+			return numericalSBContext("consumer lost complete source/resolver")
+		}
+		shape := options
+		shape.ResolveSym, shape.NumericalReads = nil, nil
+		fingerprint, err := x86CallerSourceFingerprint(file)
+		if err != nil || fingerprint != binding.file || !reflect.DeepEqual(shape, binding.options) || !numericalSameCapabilities(options.Sigs, binding.capabilities) {
+			return numericalSBContext("consumer original file/declarations/options changed")
+		}
+		return nil
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	for symbol, expected := range binding.symbols {
+		if options.ResolveSym(symbol) != expected {
+			return numericalSBContext("consumer resolver changed exact storage/function identity")
+		}
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	return binding.verify() // Resolver callbacks cannot mutate a live source/owner.
+}
+
+func freezeNumericalReadInputs(file *File, options Options) (*File, Options, error) {
+	if err := verifyNumericalReadInputs(file, options); err != nil {
+		return nil, Options{}, err
+	}
+	binding := options.NumericalReads
+	if binding == nil {
+		return file, options, nil
+	}
+	encoded, err := json.Marshal(file)
+	if err != nil {
+		return nil, Options{}, err
+	}
+	var frozen File
+	if err := json.Unmarshal(encoded, &frozen); err != nil {
+		return nil, Options{}, err
+	}
+	options = binding.options
+	options.Sigs, err = numericalCloneSignatures(binding.options.Sigs)
+	if err != nil {
+		return nil, Options{}, err
+	}
+	options.ResolveSym, options.NumericalReads = binding.resolve, binding
+	for i, read := range binding.reads {
+		found := false
+		for f := range frozen.Funcs {
+			fn := &frozen.Funcs[f]
+			if binding.resolve(fn.Sym) != read.Function || read.Instruction < 0 || read.Instruction >= len(fn.Instrs) {
+				continue
+			}
+			ins := &fn.Instrs[read.Instruction]
+			if !reflect.DeepEqual(*ins, read.Original) || ins.x86NumericalRead != nil {
+				return nil, Options{}, numericalSBContext("original read ordinal/instruction differs")
+			}
+			digest, err := fixedLocalInstructionDigest(*ins)
+			if err != nil {
+				return nil, Options{}, err
+			}
+			ins.x86NumericalRead = &x86NumericalReadCertificate{binding, i, digest}
+			found = true
+		}
+		if !found {
+			return nil, Options{}, numericalSBContext("original read has no unique complete source function")
+		}
+	}
+	return &frozen, options, verifyNormalizedNumericalReads(&frozen, options)
+}
+
+func numericalCertifiedRead(ins Instr, arch string) (numericalSBReadFact, x86NumericalSBReadForm, bool) {
+	cert := ins.x86NumericalRead
+	if cert == nil || cert.binding == nil || cert.binding.source == nil || cert.read < 0 || cert.read >= len(cert.binding.reads) || arch != cert.binding.options.Goarch {
+		return numericalSBReadFact{}, x86NumericalSBReadForm{}, false
+	}
+	read := cert.binding.reads[cert.read]
+	digest, err := fixedLocalInstructionDigest(ins)
+	form, valid := x86NumericalSBReadProperties(ins, arch)
+	if err != nil || digest != cert.instruction || !valid || form.operand != read.Operand || form.spec.sourceBytes != read.Width || !numericalOwnerContains(read.Variable, read.Offset, read.Width) {
+		return numericalSBReadFact{}, x86NumericalSBReadForm{}, false
+	}
+	return read, form, true
+}
+
+func verifyNormalizedNumericalReads(file *File, options Options) error {
+	if options.NumericalReads == nil {
+		return nil
+	}
+	seen := make(map[int]bool)
+	for _, fn := range file.Funcs {
+		for ordinal, ins := range fn.Instrs {
+			if ins.x86NumericalRead == nil {
+				continue
+			}
+			cert := ins.x86NumericalRead
+			read, _, valid := numericalCertifiedRead(ins, options.Goarch)
+			if !valid || cert.binding != options.NumericalReads || seen[cert.read] || options.ResolveSym(fn.Sym) != read.Function || ordinal != read.Instruction {
+				return numericalSBContext("normalized function/ordinal/operand/native read identity changed")
+			}
+			seen[cert.read] = true
+		}
+	}
+	if len(seen) != len(options.NumericalReads.reads) || len(file.Data)+len(file.Globl) != 0 {
+		return numericalSBContext("normalized read inventory changed or storage collides with local data")
+	}
+	return nil
+}
+
+func numericalSameCapabilities(sigs map[string]FuncSig, expected map[string]numericalSignatureCapabilities) bool {
+	if len(sigs) != len(expected) {
+		return false
+	}
+	for name, sig := range sigs {
+		cap, found := expected[name]
+		if !found || sig.x86CallerRegions != cap.caller || sig.x86FixedLocal != cap.local {
+			return false
+		}
+	}
+	return true
+}
+
+func finishNumericalReads(file *File, options Options) error {
+	if err := verifyNumericalReadInputs(file, options); err != nil {
+		return fmt.Errorf("numerical read post-consumption guard: %w", err)
+	}
+	return nil
+}
+
+func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPackage, opt GoModuleOptions) error {
+	if err := binding.verify(); err != nil {
+		return err
+	}
+	if pkg.Path != binding.packageInput.Path || pkg.Types != binding.packageInput.Types ||
+		opt.GOOS != "linux" || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
+		opt.WASMABI != binding.options.WASMABI || opt.X87Mode != binding.options.X87Mode || opt.AnnotateSource != binding.options.AnnotateSource ||
+		opt.ResolveSym == nil || opt.KeepFunc != nil || len(opt.ARM64ClosureABIs) != 0 ||
+		filepath.Base(opt.FileName) != binding.source.request.AssemblyFile {
+		return numericalSBContext("Go wrapper declaration/profile/source role differs")
+	}
+	for symbol, expected := range binding.symbols {
+		if opt.ResolveSym(symbol) != expected {
+			return numericalSBContext("Go wrapper resolver changed exact source/storage identity")
+		}
+	}
+	return binding.verify()
 }

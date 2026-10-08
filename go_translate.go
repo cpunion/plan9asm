@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/constant"
@@ -87,7 +88,21 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
-func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModuleTranslation, error) {
+func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
+	if binding := opt.NumericalReads; binding != nil {
+		if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
+				if result != nil && !result.Module.IsNil() {
+					result.Module.Dispose()
+				}
+				result = nil
+				resultErr = errors.Join(resultErr, err)
+			}
+		}()
+	}
 	pkgPath := pkg.Path
 	if pkgPath == "" && pkg.Types != nil {
 		pkgPath = pkg.Types.Path()
@@ -169,6 +184,7 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		WASMABI:        opt.WASMABI,
 		X87Mode:        opt.X87Mode,
 		AnnotateSource: opt.AnnotateSource,
+		NumericalReads: opt.NumericalReads,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: translate %s: %w", pkgPath, asmName, err)

@@ -273,6 +273,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err != nil {
 		return "", err
 	}
+	if err := verifyNormalizedNumericalReads(file, opt); err != nil {
+		return "", err
+	}
 
 	resolve := opt.ResolveSym
 	if resolve == nil {
@@ -588,6 +591,7 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 	// Collect base symbols of SB refs with numeric offsets. These are almost always
 	// global variables whose address is computed via GEP in the lowering.
 	need := map[string]bool{}
+	numericalExtents := map[string]int64{}
 	defined := map[string]bool{}
 
 	// Anything in DATA/GLOBL will be defined in this module.
@@ -619,6 +623,11 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
+			if cert := ins.x86NumericalRead; cert != nil {
+				if read, _, valid := numericalCertifiedRead(ins, cert.binding.options.Goarch); valid {
+					numericalExtents[read.Variable.NativeName] = read.Variable.Size
+				}
+			}
 			opName := strings.ToUpper(string(ins.Op))
 			for _, arg := range ins.Args {
 				var s string
@@ -686,7 +695,11 @@ func emitExternSBGlobals(b *strings.Builder, file *File, resolve func(string) st
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		fmt.Fprintf(b, "%s = external global i8\n", llvmGlobal(name))
+		if extent, found := numericalExtents[name]; found {
+			fmt.Fprintf(b, "%s = external global [%d x i8]\n", llvmGlobal(name), extent)
+		} else {
+			fmt.Fprintf(b, "%s = external global i8\n", llvmGlobal(name))
+		}
 	}
 	b.WriteString("\n")
 }

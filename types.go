@@ -995,6 +995,9 @@ type Instr struct {
 	// Recomputed only from a live actual-object binding and complete local CFG.
 	// JSON/source spelling and caller-region certificates cannot create it.
 	x86FixedLocalMemory map[int]x86FixedLocalAccess
+	// Factory-only exact scalar numerical read. Its immutable source/native
+	// join is rechecked before and after translation, never inferred from SB.
+	x86NumericalRead *x86NumericalReadCertificate
 	// A decoded near return is a physical C2/C3 instruction, not a Go RET
 	// pseudo-instruction with an automatically generated frame epilogue.
 	x86RawNearReturn *x86RawNearReturnForm
