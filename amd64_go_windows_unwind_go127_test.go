@@ -74,7 +74,14 @@ func goAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
 			if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
 				t.Fatal("actual original Windows object was not produced", err)
 			}
-			t.Logf("ACTUAL_WINDOWS_ORIGINAL_OUTPUT_EXISTS bytes=%d", info.Size())
+			original, err := os.ReadFile(object)
+			if err != nil || int64(len(original)) != info.Size() ||
+				!bytes.Contains(listing, []byte("SSEHUNWINDINFO")) ||
+				!bytes.Contains(original, []byte("go:sehuw.12.")) {
+				t.Fatal("independent original Windows object precondition failed", err)
+			}
+			t.Logf("ACTUAL_WINDOWS_ORIGINAL_OUTPUT_EXISTS bytes=%d sha256=%x hex=%x\nACTUAL_WINDOWS_ORIGINAL_LISTING\n%s",
+				len(original), sha256.Sum256(original), original, listing)
 			data, err := goAMD64FrameRead(object)
 			if err != nil || !bytes.Contains(listing, []byte("SSEHUNWINDINFO")) ||
 				!bytes.Contains(data, []byte("go:sehuw.12.")) {
