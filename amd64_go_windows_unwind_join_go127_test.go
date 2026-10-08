@@ -21,7 +21,9 @@ func TestGoAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
 
 func TestGoAMD64WindowsUnwindCompleteJoinTemporaryParentAlias(t *testing.T) {
 	goAMD64WindowsUnwindTemporaryParentAlias(t)
-	goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t)
+	// A new child owns a fresh testing.TempDir root under the explicit alias.
+	// The parent's root was already created while constructing that alias.
+	t.Run("AliasedTemporaryParent", goAMD64WindowsUnwindCompleteObjectListingJoinGuards)
 }
 
 func goAMD64WindowsUnwindCompleteObjectListingJoinGuards(t *testing.T) {
