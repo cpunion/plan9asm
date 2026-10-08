@@ -26,6 +26,9 @@ func (c *amd64Ctx) lowerBMI2VariableShift(op Op, ins Instr) (ok bool, terminated
 	if !supported {
 		return false, false, nil
 	}
+	if _, _, err := x86ScalarShiftProperties(op, ins, c.goarch); err != nil {
+		return true, false, err
+	}
 	bits := spec.bits
 	if c.goarch == "386" {
 		// Go accepts Q spellings, but VEX.W is ignored outside 64-bit mode.

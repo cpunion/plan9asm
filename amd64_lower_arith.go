@@ -1701,6 +1701,9 @@ func (c *amd64Ctx) lowerArith(op Op, ins Instr) (ok bool, terminated bool, err e
 		return true, false, c.storeReg(dst, "%"+z)
 
 	case "RORXL", "RORXQ":
+		if _, _, err := x86ScalarShiftProperties(op, ins, c.goarch); err != nil {
+			return true, false, err
+		}
 		// BMI2 rotate-right without flags. Go's Yml source class accepts a
 		// general register or every ModRM/SIB memory form; Yrl is the complete
 		// destination class. In 386 mode Go accepts the Q spelling too, but

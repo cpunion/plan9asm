@@ -18,6 +18,9 @@ func (c *amd64Ctx) lowerScalarShiftRotate(op Op, ins Instr) (ok bool, terminated
 	if !recognized {
 		return false, false, nil
 	}
+	if _, _, err := x86ScalarShiftProperties(op, ins, c.goarch); err != nil {
+		return true, false, err
+	}
 	if rawOp != baseOp {
 		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
 	}
@@ -51,6 +54,7 @@ func (c *amd64Ctx) lowerScalarShiftRotate(op Op, ins Instr) (ok bool, terminated
 		result = c.emitScalarCarryRotate(stem, bits, value, count)
 	} else {
 		result = c.emitScalarShiftRotate(stem, bits, value, count)
+		c.emitScalarShiftFlags(stem, bits, value, result, count, false)
 	}
 	if err := c.storeScalarIntegerOperand(dst, ty, result); err != nil {
 		return true, false, err
@@ -129,8 +133,9 @@ func (c *amd64Ctx) emitScalarCarryRotate(stem string, bits int, value, count64 s
 	fmt.Fprintf(c.b, "  %%%s = trunc %s %%%s to i1\n", newCF, wideType, cfShifted)
 	fmt.Fprintf(c.b, "  store i1 %%%s, ptr %s\n", newCF, c.flagsCFSlot)
 
-	// OF is defined only for a one-bit rotate. Preserve its prior value for
-	// the architecturally undefined cases, including an effective count of 0.
+	// OF uses the masked count, not the modulo-9/17 count: e.g. RCLB $10
+	// rotates once but has undefined OF. Keep an old representative for those
+	// undefined cases; the byte-effect consumer independently kills availability.
 	msbShifted := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = lshr %s %%%s, %d\n", msbShifted, amd64IntegerTypeForBits(bits), result, bits-1)
 	msb := c.newTmp()
@@ -146,7 +151,7 @@ func (c *amd64Ctx) emitScalarCarryRotate(stem string, bits int, value, count64 s
 		fmt.Fprintf(c.b, "  %%%s = xor i1 %%%s, %%%s\n", definedOF, msb, nextMSB)
 	}
 	isOne := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %%%s, 1\n", isOne, effective64)
+	fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 1\n", isOne, count64)
 	oldOF := c.loadFlag(c.flagsOFSlot)
 	newOF := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i1 %%%s, i1 %s\n", newOF, isOne, definedOF, oldOF)
@@ -161,6 +166,9 @@ func (c *amd64Ctx) scalarShiftCount(count Operand, bits int, doubleShift bool) (
 	}
 	switch count.Kind {
 	case OpImm:
+		if count.ImmRaw != "" || count.ImmIsFloat {
+			return "", fmt.Errorf("count must be a resolved integer immediate")
+		}
 		if doubleShift {
 			if count.Imm < -128 || count.Imm > 127 {
 				return "", fmt.Errorf("immediate is outside Go 1.27's signed-imm8 class")
@@ -276,7 +284,7 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 	}
 
 	// W double shifts mask the hardware count to five bits, leaving counts
-	// 16-31 architecturally undefined. Reduce that undefined region modulo the
+	// 17-31 architecturally undefined. Reduce that undefined region modulo the
 	// lane width so generated LLVM never shifts by the type width.
 	effective64 := count
 	if bits == 16 {
@@ -309,7 +317,16 @@ func (c *amd64Ctx) lowerScalarDoubleShift(baseOp string, left bool, bits int, in
 	fmt.Fprintf(c.b, "  %%%s = icmp eq %s %s, 0\n", zero, ty, effective)
 	result := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, %s %s, %s %%%s\n", result, zero, ty, destination, ty, merged)
-	if err := c.storeScalarIntegerOperand(ins.Args[2], ty, "%"+result); err != nil {
+	value := "%" + result
+	if bits == 16 {
+		full := c.newTmp()
+		corrected := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = icmp eq i64 %s, 16\n", full, count)
+		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i16 %s, i16 %s\n", corrected, full, source, value)
+		value = "%" + corrected
+	}
+	c.emitScalarShiftFlags(baseOp[:len(baseOp)-1], bits, destination, value, count, true)
+	if err := c.storeScalarIntegerOperand(ins.Args[2], ty, value); err != nil {
 		return true, false, err
 	}
 	return true, false, nil
