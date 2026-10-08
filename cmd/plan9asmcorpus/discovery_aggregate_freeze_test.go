@@ -255,16 +255,27 @@ func TestDiscoveryProgressDirectoryPreflightRealCLI(t *testing.T) {
 
 func TestDiscoveryProgressDirectoryModeRejectsExplicitEmptyAndOtherReaders(t *testing.T) {
 	fixture := newFrozenAggregateFixture(t)
-	for _, extra := range [][]string{
-		{"-discovery-progress-directory=", "-manifest=" + fixture.manifest, "-list"},
-		{"-list"}, {"-suite=all"}, {"-manifest=" + fixture.manifest},
-		{"-discovery-shard-count=1"}, {"-discovery-progress-output=unused"},
-		{"-verify-discovery-reports=unused"}, {"-discovery-progress=unused"},
-		{"-write-assembly-ledger=unused"}, {"-assembly-ledger-status=unused"},
-		{"-require-verified-assembly-ledger"}, {"-discovery-events=unused"},
-		{"-discovery-exact-candidate=example.com/a@v1.0.0"},
+	// Older Go uses the complete test name as a TempDir basename. Keep names
+	// bounded and independent of concrete filesystem paths in the arguments.
+	for _, test := range []struct {
+		name string
+		args []string
+	}{
+		{"empty directory with list", []string{"-discovery-progress-directory=", "-manifest=" + fixture.manifest, "-list"}},
+		{"list", []string{"-list"}},
+		{"explicit default suite", []string{"-suite=all"}},
+		{"manifest", []string{"-manifest=" + fixture.manifest}},
+		{"shard count", []string{"-discovery-shard-count=1"}},
+		{"progress output", []string{"-discovery-progress-output=unused"}},
+		{"verified reports", []string{"-verify-discovery-reports=unused"}},
+		{"progress reader", []string{"-discovery-progress=unused"}},
+		{"ledger writer", []string{"-write-assembly-ledger=unused"}},
+		{"ledger status", []string{"-assembly-ledger-status=unused"}},
+		{"require verified ledger", []string{"-require-verified-assembly-ledger"}},
+		{"events", []string{"-discovery-events=unused"}},
+		{"exact candidate", []string{"-discovery-exact-candidate=example.com/a@v1.0.0"}},
 	} {
-		t.Run(strings.Join(extra, " "), func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			args := []string{
@@ -272,12 +283,12 @@ func TestDiscoveryProgressDirectoryModeRejectsExplicitEmptyAndOtherReaders(t *te
 				"-compare-assembly-ledger=" + fixture.stored,
 				"-discovery-progress-directory=" + filepath.Join(t.TempDir(), "new"),
 			}
-			if extra[0] == "-discovery-progress-directory=" {
+			if test.args[0] == "-discovery-progress-directory=" {
 				// Do not let the unrelated compare-requires-verify guard mask an
 				// empty directory mode falling through to a successful list reader.
 				args = []string{"-repo-root=" + fixture.root}
 			}
-			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root, append(args, extra...)...)
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root, append(args, test.args...)...)
 			if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), "requires") {
 				t.Fatalf("directory mode fell through or accepted another mode: %v stdout=%q stderr=%s", err, stdout, stderr)
 			}
