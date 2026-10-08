@@ -76,6 +76,26 @@ func TestGoX86NumericalSBReadLocalCapabilityCannotBeCopiedAndRebound(t *testing.
 	if changed.NumericalReads != nil || !errors.Is(err, ErrProbeNeedsContext) {
 		t.Fatal("whole-value copied local capability issued a fresh numerical token", err)
 	}
+	if err := original.verify(); err != nil {
+		t.Fatal("copy rejection revoked the independent original local capability", err)
+	}
+}
+
+func TestGoX86NumericalSBReadLocalCapabilityDifferentActualOwner(t *testing.T) {
+	ctx, pkg, file, bound, source, frame := numericalLocalJoinedFactory(t)
+	foreign, err := CaptureGoAMD64FrameSource(ctx, pkg, frame.request)
+	if err != nil {
+		t.Fatal("different actual frame owner precondition", err)
+	}
+	defer foreign.Close()
+	for _, sig := range bound.Sigs {
+		sig.x86FixedLocal.source = foreign
+	}
+	bound.NumericalReads = nil
+	changed, err := source.BindNumericalReads(ctx, pkg, file, bound)
+	if changed.NumericalReads != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("different actual owner replaced the original local capability generation", err)
+	}
 }
 
 func TestGoX86NumericalSBReadLocalCapabilityConsumerGuards(t *testing.T) {

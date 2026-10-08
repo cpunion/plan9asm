@@ -13,6 +13,7 @@ import (
 // The public value transports only a private live observer binding. Neither
 // a declaration, a frame size nor a JSON round trip can construct this proof.
 type x86FixedLocalBinding struct {
+	identity       *x86FixedLocalBinding
 	source         *GoAMD64FrameSource
 	context        context.Context
 	file           [32]byte
@@ -140,6 +141,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		declarations:   make(map[string]goAMD64FrameDeclaration),
 		numericalReads: options.NumericalReads,
 	}
+	binding.identity = binding
 	if options.NumericalReads != nil {
 		if err := joinNumericalReadCertificates(actual, options); err != nil {
 			return Options{}, err
@@ -299,7 +301,7 @@ func verifyX86FixedLocalBindings(file *File, options Options) ([]*x86FixedLocalB
 }
 
 func (binding *x86FixedLocalBinding) verify() error {
-	if binding == nil || binding.source == nil {
+	if binding == nil || binding.identity != binding || binding.source == nil {
 		return goAMD64FrameContext("missing or expired fixed local observer binding")
 	}
 	if err := binding.source.Verify(binding.context); err != nil {
