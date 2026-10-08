@@ -153,6 +153,21 @@ func TestARM64SyscallUnmodeledFlagsCannotBorrowCMP(t *testing.T) {
 	}
 }
 
+func TestARM64FlagsUnmodeledNativeCalloutWithoutSyscall(t *testing.T) {
+	for _, api := range []string{"text", "module", "Go"} {
+		for _, observation := range []string{"CSET CS,R2", "JMP observe\nobserve:\nCSET EQ,R2", "ADC R2,R3"} {
+			t.Run(api+"/"+observation, func(t *testing.T) {
+				source := arm64SyscallEffectSource("CMP R2,R1\nMSR R3,NZCV\n" + observation)
+				requireARM64GoAssemblerResult(t, source, true)
+				_, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu", source)
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("non-SVC native effect cannot reuse the old virtual flag witness: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestARM64FlagFlowOrderedBitEffects(t *testing.T) {
 	for _, bit := range []arm64FlagMask{arm64FlagN, arm64FlagZ, arm64FlagC, arm64FlagV} {
 		for _, test := range []struct {
