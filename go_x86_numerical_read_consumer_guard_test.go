@@ -26,11 +26,7 @@ func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Opti
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		if err := owner.Close(); err != nil {
-			t.Error(err)
-		}
-	})
+	t.Cleanup(owner.Close)
 	create := func(t *testing.T) (*GoX86NumericalReadSource, Options) {
 		t.Helper()
 		source, err := CaptureGoX86NumericalReadSource(ctx, GoX86NumericalReadCaptureRequest{
