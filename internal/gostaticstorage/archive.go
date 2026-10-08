@@ -2,7 +2,14 @@
 // record is not a pointer, caller, frame, initialized result or read permission.
 package gostaticstorage
 
-import "errors"
+import (
+	"bytes"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 var ErrContext = errors.New("static storage needs actual source context")
 
@@ -22,9 +29,167 @@ type dataRecord struct {
 	Relocations   []relocation
 }
 
-// readArchive is intentionally a missing-proof boundary until the actual
-// binary object/source producer is implemented. This scaffold changes no
-// existing translation or declaration-only initialization consumer.
+const archiveLimit = 16 << 20
+const symbolLimit = 1 << 16
+
+func contextError(message string) error { return fmt.Errorf("%w: %s", ErrContext, message) }
+
+// readArchive consumes an ordinary compiler archive, not nm/listing text. The
+// capture boundary separately binds the Go version and complete format sources.
+// This prototype excludes native/assembly archive members rather than guessing
+// a missing object's ownership. Every offset/count is checked before indexing.
 func readArchive(data []byte, target string) (map[string]dataRecord, error) {
-	return nil, ErrContext
+	if len(data) < 8 || len(data) > archiveLimit || string(data[:8]) != "!<arch>\n" {
+		return nil, contextError("invalid compiler archive header or byte bound")
+	}
+	seen := make(map[string]bool)
+	var object []byte
+	for pos := 8; pos < len(data); {
+		if len(seen) >= 64 || len(data)-pos < 60 {
+			return nil, contextError("truncated or oversized archive member inventory")
+		}
+		header := data[pos : pos+60]
+		name := strings.TrimSpace(string(header[:16]))
+		if string(header[58:]) != "`\n" || seen[name] || name != "__.PKGDEF" && name != "_go_.o" {
+			return nil, contextError("duplicate, unknown or non-compiler archive member")
+		}
+		seen[name] = true
+		size, err := strconv.ParseUint(strings.TrimSpace(string(header[48:58])), 10, 32)
+		pos += 60
+		if err != nil || size == 0 || size > uint64(len(data)-pos) {
+			return nil, contextError("invalid archive member extent")
+		}
+		if name == "_go_.o" {
+			object = data[pos : pos+int(size)]
+		}
+		pos += int(size)
+		if size&1 != 0 {
+			if pos >= len(data) || data[pos] != '\n' && data[pos] != 0 {
+				return nil, contextError("invalid archive alignment byte")
+			}
+			pos++
+		}
+	}
+	if len(seen) != 2 || object == nil {
+		return nil, contextError("missing compiler package/object member")
+	}
+	end := bytes.Index(object, []byte("\n!\n"))
+	if end < 0 || end > 4096 {
+		return nil, contextError("invalid compiler object text header")
+	}
+	goos, goarch, valid := strings.Cut(target, "/")
+	line, _, _ := strings.Cut(string(object[:end+3]), "\n")
+	words := strings.Fields(line)
+	if !valid || len(words) < 5 || words[0] != "go" || words[1] != "object" ||
+		words[2] != goos || words[3] != goarch || words[4] != "go1.27.1" {
+		return nil, contextError("object target/version differs from selected compiler")
+	}
+	return readObject(object[end+3:])
+}
+
+// These byte roles are pinned to Go 1.27.1 cmd/internal/goobj/objfile.go, rather
+// than inferred from symbol spellings or the data-only assembler listing.
+func readObject(data []byte) (map[string]dataRecord, error) {
+	const headerSize = 8 + 8 + 4 + 19*4
+	if len(data) < headerSize || string(data[:8]) != "\x00go120ld" {
+		return nil, contextError("unknown or truncated binary goobj header")
+	}
+	// ObjFlagShared, FromAssembly and Unlinkable are outside this prototype.
+	if binary.LittleEndian.Uint32(data[16:20]) != 0 {
+		return nil, contextError("nonordinary compiler object flags")
+	}
+	var offsets [19]int
+	previous := headerSize
+	for i := range offsets {
+		value := uint64(binary.LittleEndian.Uint32(data[20+4*i:]))
+		if value < uint64(previous) || value > uint64(len(data)) {
+			return nil, contextError("overlapping, unordered or out-of-range object block")
+		}
+		offsets[i], previous = int(value), int(value)
+	}
+	if offsets[18] != len(data) {
+		return nil, contextError("object blocks do not cover exact EOF")
+	}
+	block := func(index int) []byte { return data[offsets[index]:offsets[index+1]] }
+	// Check every fixed-record block, including unused reference/aux records.
+	widths := map[int]int{0: 16, 1: 8, 2: 8, 3: 21, 4: 21, 5: 21, 6: 21, 7: 21,
+		8: 10, 9: 8, 10: 16, 11: 4, 12: 4, 13: 4, 14: 23, 15: 9, 17: 16}
+	for index, width := range widths {
+		if len(block(index))%width != 0 || len(block(index))/width > symbolLimit {
+			return nil, contextError("invalid or excessive binary block record count")
+		}
+	}
+	count := 0
+	for i := 3; i <= 6; i++ {
+		count += len(block(i)) / 21
+	}
+	if count == 0 || count > symbolLimit || len(block(9))/8 != len(block(4))/21 || len(block(10))/16 != len(block(5))/21 {
+		return nil, contextError("invalid symbol/hash inventory")
+	}
+	var indices [3][]uint32
+	for slot, spec := range []struct{ index, records, width int }{{11, 14, 23}, {12, 15, 9}, {13, 16, 1}} {
+		if len(block(spec.index)) != 4*(count+1) {
+			return nil, contextError("missing complete symbol index inventory")
+		}
+		values := make([]uint32, count+1)
+		for i := range values {
+			values[i] = binary.LittleEndian.Uint32(block(spec.index)[4*i:])
+			if i == 0 && values[i] != 0 || i > 0 && values[i] < values[i-1] || uint64(values[i]) > uint64(len(block(spec.records))/spec.width) {
+				return nil, contextError("unordered or overflowing object index")
+			}
+		}
+		if uint64(values[count]) != uint64(len(block(spec.records))/spec.width) {
+			return nil, contextError("unconsumed object index tail")
+		}
+		indices[slot] = values
+	}
+	stringAt := func(ref []byte) (string, error) {
+		length, off := uint64(binary.LittleEndian.Uint32(ref)), uint64(binary.LittleEndian.Uint32(ref[4:]))
+		if length > 4096 || off < headerSize || off > uint64(offsets[0]) || length > uint64(offsets[0])-off {
+			return "", contextError("object string outside complete string block")
+		}
+		name := string(data[int(off):int(off+length)])
+		if strings.ContainsAny(name, "\x00\r\n") {
+			return "", contextError("invalid binary symbol name")
+		}
+		return name, nil
+	}
+	// Validate all string-bearing fixed records, not just requested definitions.
+	// Reference/auxiliary inventory cannot hide an overflowing string reference.
+	for _, spec := range []struct{ index, width, start int }{{0, 16, 0}, {1, 8, 0}, {2, 8, 0}, {7, 21, 0}, {17, 16, 8}} {
+		for pos := 0; pos < len(block(spec.index)); pos += spec.width {
+			if _, err := stringAt(block(spec.index)[pos+spec.start : pos+spec.start+8]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	result := make(map[string]dataRecord, count)
+	for i := 0; i < count; i++ {
+		sym := data[offsets[3]+21*i : offsets[3]+21*(i+1)]
+		name, err := stringAt(sym[:8])
+		if err != nil {
+			return nil, err
+		}
+		// Content-addressed symbols can share an empty name; they never become
+		// requested typed globals. Named duplicate definitions fail closed.
+		if name != "" {
+			if _, duplicate := result[name]; duplicate {
+				return nil, contextError("duplicate native symbol definition")
+			}
+		}
+		r := dataRecord{Name: name, ABI: binary.LittleEndian.Uint16(sym[8:]), Kind: sym[10], Flags: sym[11], Flags2: sym[12],
+			Size: int64(binary.LittleEndian.Uint32(sym[13:])), Align: int64(binary.LittleEndian.Uint32(sym[17:]))}
+		start, end := int(indices[2][i]), int(indices[2][i+1])
+		if end > start {
+			r.Data = append([]byte(nil), block(16)[start:end]...)
+		}
+		for j := indices[0][i]; j < indices[0][i+1]; j++ {
+			q := block(14)[int(j)*23 : int(j+1)*23]
+			r.Relocations = append(r.Relocations, relocation{int64(int32(binary.LittleEndian.Uint32(q))), int64(q[4]), binary.LittleEndian.Uint16(q[5:])})
+		}
+		if name != "" {
+			result[name] = r
+		}
+	}
+	return result, nil
 }

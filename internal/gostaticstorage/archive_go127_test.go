@@ -3,8 +3,11 @@
 package gostaticstorage
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +25,11 @@ const fixtureModule = "example.invalid/staticstorage"
 func fixture(t *testing.T) (string, string, []string) {
 	t.Helper()
 	dir := t.TempDir()
+	var err error
+	dir, err = filepath.EvalSymlinks(dir) // This fixture owns the fresh directory.
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]string{
 		"go.mod": "module " + fixtureModule + "\n\ngo 1.27.1\n",
 		"storage.go": `package staticstorage
@@ -29,6 +37,16 @@ import "example.invalid/staticstorage/dep"
 var Keys [48]byte
 var Data = [4]byte{1, 2, 3, 4}
 var Mixed struct { Flag bool; Word uint32; Pointer *byte; Tail [3]byte }
+var Relocated = struct { Number uint32; Pointer *byte }{7, &Keys[0]}
+var TwiceRelocated = struct { Number uint32; First, Second *byte }{7, &Keys[0], &Keys[1]}
+var Address uintptr
+var PointerOnly *byte
+var StringOnly string
+var SliceOnly []byte
+var MapOnly map[byte]byte
+var ComplexOnly complex128
+var BlankOnly struct { _ [8]byte }
+var ZeroSize [0]byte
 func Read() byte { return Keys[0] + Data[0] + dep.Keys[0] }
 `,
 		"dep/dep.go": `package dep
@@ -66,8 +84,16 @@ func fixtureEnv(t *testing.T, target string) []string {
 		values[key] = value
 	}
 	for _, key := range []string{"GOCACHE", "GOPATH", "GOMODCACHE", "TMPDIR", "GOTMPDIR"} {
-		if !filepath.IsAbs(values[key]) {
+		canonical, err := filepath.EvalSymlinks(values[key])
+		if !filepath.IsAbs(values[key]) || err != nil || canonical != values[key] {
+			// Only a fresh factory-owned artifact may be canonicalized. Do
+			// not rewrite a redirected caller input into an accepted role.
 			values[key] = t.TempDir()
+			canonical, err = filepath.EvalSymlinks(values[key])
+			if err != nil {
+				t.Fatal(err)
+			}
+			values[key] = canonical
 		}
 	}
 	goos, goarch, _ := strings.Cut(target, "/")
@@ -142,6 +168,11 @@ func main() {
 func officialReader(t *testing.T, binary string) string {
 	t.Helper()
 	dir := t.TempDir()
+	var err error
+	dir, err = filepath.EvalSymlinks(dir) // Fresh fixture-owned output, not an input redirect.
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, data := range map[string]string{"main.go": officialReaderSource} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
 			t.Fatal(err)
@@ -157,6 +188,52 @@ func officialReader(t *testing.T, binary string) string {
 	tool := filepath.Join(dir, "official-reader")
 	run(t, binary, dir, env, "tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go")
 	run(t, binary, dir, env, "tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o")
+	if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
+		if err := os.MkdirAll(artifact, 0700); err != nil {
+			t.Fatal(err)
+		}
+		goenv := run(t, binary, dir, env, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH")
+		var actual map[string]string
+		if err := json.Unmarshal(goenv, &actual); err != nil {
+			t.Fatal(err)
+		}
+		inputs := map[string]string{}
+		for role, file := range map[string]string{"go": binary, "compile": filepath.Join(actual["GOTOOLDIR"], "compile"), "link": filepath.Join(actual["GOTOOLDIR"], "link")} {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			inputs[role] = digest(data)
+		}
+		for name := range formatSources {
+			data, err := os.ReadFile(filepath.Join(actual["GOROOT"], filepath.FromSlash(name)))
+			if err != nil || digest(data) != formatSources[name] {
+				t.Fatal("independent reader SDK format source changed", name, err)
+			}
+			inputs[name] = digest(data)
+		}
+		readerBytes, err := os.ReadFile(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inputs["reader"] = digest(readerBytes)
+		metadata, _ := json.MarshalIndent(struct {
+			Directory, Binary string
+			Environment       []string
+			Tools             map[string]string
+			SourceSHA256      string
+			Commands          [][]string
+		}{dir, binary, env, inputs, digest([]byte(officialReaderSource)), [][]string{
+			{"list", "-deps", "-export", "-f", "{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}", "cmd/internal/archive", "cmd/internal/goobj", "encoding/json", "fmt", "os"},
+			{"tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go"},
+			{"tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o"},
+		}}, "", "  ")
+		for name, data := range map[string][]byte{"sdk-reader-source.go": []byte(officialReaderSource), "sdk-reader-importcfg": config, "sdk-reader-input.json": metadata, "sdk-reader-env.json": goenv, "sdk-reader": readerBytes} {
+			if err := os.WriteFile(filepath.Join(artifact, name), data, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 	return tool
 }
 
@@ -165,20 +242,66 @@ func TestGoStaticStorageActualBinaryDataRecords(t *testing.T) {
 	oracle := officialReader(t, binary)
 	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
 		t.Run(target, func(t *testing.T) {
-			output := run(t, binary, dir, fixtureEnv(t, target), "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
-			var selected struct{ Export string }
-			if err := json.Unmarshal(output, &selected); err != nil || selected.Export == "" {
-				t.Fatalf("actual export: %v %s", err, output)
+			output := run(t, binary, dir, fixtureEnv(t, target), selectionArguments()...)
+			packages := make(map[string]Package)
+			decoder := json.NewDecoder(bytes.NewReader(output))
+			for {
+				var pkg Package
+				if err := decoder.Decode(&pkg); err == io.EOF {
+					break
+				} else if err != nil {
+					t.Fatal(err)
+				}
+				packages[pkg.ImportPath] = pkg
+			}
+			selected := packages[fixtureModule]
+			if selected.Export == "" || packages[fixtureModule+"/dep"].Export == "" {
+				t.Fatalf("actual owned/imported exports missing: %s", output)
 			}
 			data, err := os.ReadFile(selected.Export)
 			if err != nil {
 				t.Fatal(err)
 			}
 			var expected map[string]dataRecord
-			if err := json.Unmarshal(run(t, oracle, dir, fixtureEnv(t, target), selected.Export), &expected); err != nil {
+			oracleRaw := run(t, oracle, dir, fixtureEnv(t, target), selected.Export)
+			if err := json.Unmarshal(oracleRaw, &expected); err != nil {
 				t.Fatal(err)
 			}
-			for _, name := range []string{"Keys", "Data", "Mixed"} {
+			depData, err := os.ReadFile(packages[fixtureModule+"/dep"].Export)
+			if err != nil {
+				t.Fatal(err)
+			}
+			depRaw := run(t, oracle, dir, fixtureEnv(t, target), packages[fixtureModule+"/dep"].Export)
+			var depExpected map[string]dataRecord
+			if err := json.Unmarshal(depRaw, &depExpected); err != nil {
+				t.Fatal(err)
+			}
+			depActual, err := readArchive(depData, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"Flags", "Keys"} {
+				name = fixtureModule + "/dep." + name
+				if depExpected[name].Size == 0 || !reflect.DeepEqual(depActual[name], depExpected[name]) {
+					t.Fatal("independent imported data record differs", name)
+				}
+			}
+			if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
+				if !filepath.IsAbs(artifact) {
+					t.Fatal("artifact root must be explicit and absolute")
+				}
+				folder := filepath.Join(artifact, strings.ReplaceAll(target, "/", "-"))
+				if err := os.MkdirAll(folder, 0700); err != nil {
+					t.Fatal(err)
+				}
+				for name, contents := range map[string][]byte{"actual.a": data, "sdk-reader.json": oracleRaw, "selected.json": output, "dep.a": depData, "dep-sdk-reader.json": depRaw} {
+					if err := os.WriteFile(filepath.Join(folder, name), contents, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			t.Logf("ACTUAL_ARCHIVE_SHA256 %s %x SDK_READER_SHA256 %x", target, sha256.Sum256(data), sha256.Sum256(oracleRaw))
+			for _, name := range []string{"Keys", "Data", "Mixed", "Relocated"} {
 				if expected[fixtureModule+"."+name].Size == 0 {
 					t.Fatal("independent actual compiler object omitted", name)
 				}
@@ -189,7 +312,7 @@ func TestGoStaticStorageActualBinaryDataRecords(t *testing.T) {
 			if err != nil {
 				t.Fatalf("compiled initialized storage lacks binary producer: %v", err)
 			}
-			for _, name := range []string{"Keys", "Data", "Mixed"} {
+			for _, name := range []string{"Keys", "Data", "Mixed", "Relocated"} {
 				name = fixtureModule + "." + name
 				if !reflect.DeepEqual(actual[name], expected[name]) {
 					t.Fatalf("independent SDK binary record differs for %s: got %+v want %+v", name, actual[name], expected[name])
