@@ -285,6 +285,62 @@ func TestDiscoveryProgressDirectoryModeRejectsExplicitEmptyAndOtherReaders(t *te
 	}
 }
 
+func TestDiscoveryProgressDirectoryPhysicalCaseAliasesRealCLI(t *testing.T) {
+	for _, kind := range []string{"scan ledger", "assembly ledger", "repository"} {
+		t.Run(kind, func(t *testing.T) {
+			fixture := newFrozenAggregateFixture(t)
+			input, reason := fixture.ledger, "overlaps"
+			if kind == "assembly ledger" {
+				input = fixture.stored
+			} else if kind == "repository" {
+				renamed := filepath.Join(t.TempDir(), "repository")
+				if err := os.Rename(fixture.root, renamed); err != nil {
+					t.Fatal(err)
+				}
+				fixture.root, input, reason = renamed, renamed, "ignored _out"
+			}
+			alias := filepath.Join(filepath.Dir(input), strings.ToUpper(filepath.Base(input)))
+			if alias == input {
+				t.Fatal("fixture needs a genuinely different case spelling")
+			}
+			original, err := os.Stat(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed, err := os.Stat(alias)
+			if os.IsNotExist(err) {
+				// A case-sensitive filesystem gets a real independent directory.
+				// It must stay allowed: blanket case folding is not isolation.
+				if err := os.Mkdir(alias, 0700); err != nil {
+					t.Fatal(err)
+				}
+				observed, err = os.Stat(alias)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			samePhysical := os.SameFile(original, observed)
+			t.Logf("actual filesystem case alias: kind=%s samePhysical=%t", kind, samePhysical)
+			output := filepath.Join(alias, "new-reports")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root,
+				"-repo-root="+fixture.root, "-discovery-ledger="+fixture.ledger,
+				"-compare-assembly-ledger="+fixture.stored, "-discovery-progress-directory="+output)
+			if samePhysical {
+				if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), reason) {
+					t.Fatalf("physical case alias bypassed isolation: %v stdout=%q stderr=%s", err, stdout, stderr)
+				}
+			} else if err != nil || len(stdout) == 0 {
+				t.Fatalf("different case-sensitive directory was rejected: %v stdout=%q stderr=%s", err, stdout, stderr)
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatalf("case preflight wrote its output: %v", err)
+			}
+		})
+	}
+}
+
 func copyFrozenGitRelay(t *testing.T, destination string) {
 	t.Helper()
 	source, err := os.Open(os.Args[0])
