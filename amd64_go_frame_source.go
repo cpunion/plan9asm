@@ -346,6 +346,9 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	if err != nil || !reflect.DeepEqual(source.imports, imports) {
 		return goAMD64FrameContext("actual complete declaration import graph changed: %v", err)
 	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(goAMD64FrameContext("verification context expired after actual commands"), err)
+	}
 	return errors.Join(source.verifyInputs(), source.verifyDownloadedOrigin())
 }
 
