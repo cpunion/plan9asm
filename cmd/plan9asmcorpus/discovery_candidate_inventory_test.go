@@ -84,6 +84,9 @@ func TestDiscoveryCorpusRetainsOnlySelectedShardPayload(t *testing.T) {
 					return provenance, nil
 				},
 			}
+			// Real repository startup loads both manifests, even when their
+			// exceptions belong to another shard. Include those preflight paths.
+			writeDiscoveryInventoryExceptionManifests(t, cfg.RepoRoot, ledger, selected.exactKey())
 			calls := 0
 			cfg.runCandidate = func(_ discoveryCorpusConfig, candidate discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
 				calls++
@@ -117,6 +120,43 @@ func TestDiscoveryCorpusRetainsOnlySelectedShardPayload(t *testing.T) {
 				t.Errorf("corpus retains foreign shard payloads: sampled growth %d exceeds %d", growth, budget)
 			}
 		})
+	}
+}
+
+func writeDiscoveryInventoryExceptionManifests(t *testing.T, root, ledger, selected string) {
+	t.Helper()
+	var foreign discoveryRecord
+	if err := walkDiscoveryRecords(ledger, func(record discoveryRecord) error {
+		if foreign.Module == "" && record.Kind == "matched" && record.Module+"@"+record.Version != selected {
+			foreign = record
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if foreign.Module == "" {
+		t.Fatal("missing foreign exception fixture")
+	}
+	dir := filepath.Join(root, "testdata", "corpus")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	private := discoveryPrivateExtensionManifest{SchemaVersion: 1,
+		Skips: []discoveryPrivateExtensionSkip{{Module: foreign.Module, Version: foreign.Version,
+			AsmFile: foreign.AsmFiles[0], Target: "darwin/arm64", SourceSHA256: strings.Repeat("a", 64),
+			Opcode: "0x00201220", Reason: "first-party preflight fixture",
+			EvidenceURLs: []string{"https://example.com/private-fixture"}}}}
+	native := discoveryNativeLayoutManifest{SchemaVersion: 1,
+		Skips: []discoveryNativeLayoutSkip{{Module: foreign.Module, Version: foreign.Version,
+			AsmFile: foreign.AsmFiles[0], Targets: []string{"linux/amd64"}, SourceSHA256: strings.Repeat("a", 64),
+			Symbol: "fixture", ObjectHex: "90", Reason: "first-party preflight fixture",
+			EvidenceURLs: []string{"https://example.com/native-fixture"}}}}
+	for name, manifest := range map[string]any{"private-extensions.json": private, "native-layout.json": native} {
+		data, err := json.Marshal(manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, filepath.Join(dir, name), string(data))
 	}
 }
 
