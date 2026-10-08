@@ -63,32 +63,43 @@ func (proof *arm64NanosleepInputProof) matchesSource(fn Func, sig FuncSig, targe
 // disjunctive joins and convergence budget. The collector is not a certificate:
 // publication occurs only after every original component closes successfully.
 func arm64NanosleepInputForSource(fn Func, transport *arm64PrivateFrameTransport, target string) (*arm64NanosleepInputProof, bool) {
+	hasTrap, required := false, false
+	for _, original := range fn.Instrs {
+		ins := arm64ControlDecode(original)
+		hasTrap = hasTrap || arm64ControlOp(ins) == "SVC"
+		if form, known := parseARM64GPRegisterMove(ins); known &&
+			ins.Args[1].Reg == "R8" && form.source.Kind == OpImm && form.source.Imm == 101 {
+			// An exact literal declaration creates only a denial obligation.
+			// It cannot publish a certificate, restore undefined inputs or
+			// bypass the complete CFG, declaration and kernel target checks.
+			required = true
+		}
+	}
+	required = required && hasTrap
 	if transport == nil || !arm64SourceGoFrame(fn).present || fn.FrameSize < 0 ||
 		strings.HasSuffix(fn.Sym, "<ABIInternal>") || transport.entry.Ret != Void ||
 		transport.entry.ARM64GoRegisterABI != nil || transport.entry.ARM64ClosureABI != nil ||
 		len(transport.entry.ArgRegs) != 0 || len(transport.entry.Frame.Results) != 0 ||
 		fn.arm64PrivateSourceAdded != 0 || fn.arm64PrivateCallSource != nil {
-		return nil, false
+		return nil, required
 	}
 	for _, typ := range transport.entry.Args {
 		if typ != I1 && typ != I8 && typ != I16 && typ != I32 && typ != I64 {
-			return nil, false
+			return nil, required
 		}
 	}
-	hasTrap := false
 	for _, original := range fn.Instrs {
 		op := arm64ControlOp(arm64ControlDecode(original))
 		if op == "CALL" || op == "BL" || op == "BLR" {
-			return nil, false
+			return nil, required
 		}
-		hasTrap = hasTrap || op == "SVC"
 	}
 	if !hasTrap {
 		return nil, false
 	}
 	proof := &arm64NanosleepInputProof{source: arm64NanosleepCloneSource(fn),
 		sig: arm64NanosleepCloneSignature(transport.entry), target: target,
-		inputs: make(map[[2]int]arm64NanosleepInput)}
+		inputs: make(map[[2]int]arm64NanosleepInput), required: required}
 	query := *transport // value-only query; no caller/source or resource owner
 	query.nanosleep = proof
 	if _, err := arm64PrivateDataProofDetails(fn, &query); err != nil || len(proof.inputs) == 0 {
@@ -155,6 +166,9 @@ func arm64NanosleepNumericalInstruction(ins Instr) bool {
 		return true
 	}
 	if _, known := arm64PrivateDataMemory(ins); known {
+		return true
+	}
+	if _, known := parseARM64GPRegisterMove(ins); known {
 		return true
 	}
 	if _, handled, err := parseARM64GPDataForm(op, ins); handled {
