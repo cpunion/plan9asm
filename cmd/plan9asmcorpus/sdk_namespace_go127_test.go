@@ -120,10 +120,25 @@ func TestOrdinarySDKNamespaceCollisionProducerSourceNA(t *testing.T) {
 			p.SDKNamespaceRejections = append(p.SDKNamespaceRejections, p.SDKNamespaceRejections[0])
 		},
 		"metadata hash": func(r *discoveryCorpusResult) {
-			r.OrdinarySelectionPlan.SDKNamespaceRejections[0].ModuleMetadataSHA256 = strings.Repeat("a", 64)
+			r.OrdinarySelectionPlan.SDKNamespaceRejections[0].ModuleStdoutSHA256 = strings.Repeat("a", 64)
 		},
 		"diagnostic hash": func(r *discoveryCorpusResult) {
-			r.OrdinarySelectionPlan.SDKNamespaceRejections[0].OriginalDiagnosticSHA256 = strings.Repeat("a", 64)
+			r.OrdinarySelectionPlan.SDKNamespaceRejections[0].StderrSHA256 = strings.Repeat("a", 64)
+		},
+		"malformed retained module": func(r *discoveryCorpusResult) {
+			p := &r.OrdinarySelectionPlan.SDKNamespaceRejections[0]
+			p.ModuleStdout = "{invalid"
+			p.ModuleStdoutSHA256 = discoveryFeatureBytesSHA256([]byte(p.ModuleStdout))
+		},
+		"trailing retained module": func(r *discoveryCorpusResult) {
+			p := &r.OrdinarySelectionPlan.SDKNamespaceRejections[0]
+			p.ModuleStdout += "{}"
+			p.ModuleStdoutSHA256 = discoveryFeatureBytesSHA256([]byte(p.ModuleStdout))
+		},
+		"coherent foreign module version": func(r *discoveryCorpusResult) {
+			p := &r.OrdinarySelectionPlan.SDKNamespaceRejections[0]
+			p.ModuleStdout = strings.ReplaceAll(p.ModuleStdout, "v1.0.0", "v1.0.1")
+			p.ModuleStdoutSHA256 = discoveryFeatureBytesSHA256([]byte(p.ModuleStdout))
 		},
 		"trailing infrastructure": func(r *discoveryCorpusResult) {
 			r.OrdinarySelectionPlan.SDKNamespaceRejections[0].Stderr += "go: proxy.golang.org: connection refused\n"
