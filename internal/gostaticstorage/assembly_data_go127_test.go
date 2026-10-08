@@ -170,6 +170,10 @@ GLOBL shared(SB),2|8,$1
 	source += "DATA priority<>(SB)/1,$7\nGLOBL priority<>(SB),8|16|256,$1\n"
 	source += "DATA ignored<>(SB)/1,$7\nGLOBL ignored<>(SB),1|4|32|64|512|1024|2048|4096,$1\n"
 	source += "DATA ·Visible(SB)/1,$7\nGLOBL ·Visible(SB),8,$1\n"
+	source += fmt.Sprintf("DATA addresses<>+0(SB)/%d,$anchor<>-1(SB)\n", width)
+	source += fmt.Sprintf("DATA addresses<>+%d(SB)/%d,$·Visible+(1+2)(SB)\n", width, width)
+	source += fmt.Sprintf("DATA addresses<>+%d(SB)/%d,$foreign∕pkg·Symbol+5(SB)\n", width*2, width)
+	source += fmt.Sprintf("GLOBL addresses<>(SB),$%d\n", width*3)
 	return source
 }
 
@@ -185,7 +189,7 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 		t.Run(arch, func(t *testing.T) {
 			target := "linux/" + arch
 			env := fixtureEnv(t, target)
-			consumer := filepath.Join(directory, "datafixture"+arch)
+			consumer := filepath.Join(directory, "datafixture."+arch)
 			if err := os.Mkdir(consumer, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -275,7 +279,7 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			if !reflect.DeepEqual(observation.Members, original) {
 				t.Fatal("complete namespace/index/data/relocation/TEXT observation differs from actual SDK")
 			}
-			if len(observation.Sources[0].Layouts) != 15+len(asmDataGrammarCases) || len(observation.Sources[1].Layouts) != 2 {
+			if len(observation.Sources[0].Layouts) != 16+len(asmDataGrammarCases) || len(observation.Sources[1].Layouts) != 2 {
 				t.Fatal("typed DATA/GLOBL grammar lost source declarations")
 			}
 			if _, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles); err == nil || !strings.Contains(err.Error(), "assembly DATA definition") {

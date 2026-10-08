@@ -136,6 +136,9 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		}
 		names[index] = source.Name
 	}
+	for _, dependency := range request.Referenced {
+		total += int64(len(dependency.Archive))
+	}
 	if total > 64<<20 {
 		return nil, contextError("SDK DATA whole input graph exceeds its existing byte bound")
 	}

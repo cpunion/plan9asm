@@ -18,6 +18,8 @@ var asmDataGrammarCases = []struct {
 	{"byte-truncation", "-1", 1, ASMDataInteger, 255, ""},
 	{"word-truncation", "0x12345", 2, ASMDataInteger, 0x2345, ""},
 	{"uint64-wrap", "(~0)+2", 8, ASMDataInteger, 1, ""},
+	{"binary-radix", "0b1010_0110", 1, ASMDataInteger, 0xa6, ""},
+	{"octal-radix", "0o1234", 2, ASMDataInteger, 668, ""},
 	{"go-precedence", "1|2^3+4*5&7", 8, ASMDataInteger, 4, ""},
 	{"division-modulo", "29/4%3", 8, ASMDataInteger, 1, ""},
 	{"left-shift", "1<<65", 8, ASMDataInteger, 0, ""},
@@ -28,10 +30,14 @@ var asmDataGrammarCases = []struct {
 	{"float64", "-(3.5)", 8, ASMDataFloat, math.Float64bits(-3.5), ""},
 	{"negative-zero", "-0.0", 8, ASMDataFloat, uint64(1) << 63, ""},
 	{"hex-float", "0x1.8p+1", 4, ASMDataFloat, uint64(math.Float32bits(3)), ""},
+	{"float32-overflow", "1e40", 4, ASMDataFloat, uint64(0x7f800000), ""},
+	{"float64-subnormal", "5e-324", 8, ASMDataFloat, 1, ""},
 	// Official asm parses float64 first. Direct Go constant conversion to
 	// float32 would instead round this decimal to the next float32 value.
 	{"float32-rounding", "1.0000000596046448", 4, ASMDataFloat, uint64(math.Float32bits(1)), ""},
 	{"string-padding", `"A\x00B"`, 8, ASMDataString, 0, "A\x00B"},
+	{"arbitrary-string-width", `"abcde"`, 5, ASMDataString, 0, "abcde"},
+	{"string-utf8", `"世"`, 4, ASMDataString, 0, "世"},
 	{"string-lex-normalization", `"·∕"`, 4, ASMDataString, 0, "./"},
 	{"zero-string", `""`, 0, ASMDataString, 0, ""},
 }
