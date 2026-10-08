@@ -28,6 +28,7 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goabi"
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/gooriginalsrc"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 	"golang.org/x/arch/x86/x86asm"
 )
 
@@ -40,20 +41,23 @@ type GoAMD64FrameCaptureRequest struct {
 // GoAMD64FrameSource is a sealed actual-object observation. It does not grant
 // a native backing, caller region, memory access or return certificate.
 type GoAMD64FrameSource struct {
-	mu            sync.Mutex
-	ready         bool
-	request       GoAMD64FrameCaptureRequest
-	selection     goAMD64FrameSelection
-	env           map[string]string
-	inputs        map[string][32]byte
-	entries       []string
-	directoryInfo os.FileInfo
-	owned         string
-	ownedInfo     os.FileInfo
-	functions     map[string]goAMD64FrameFunction
-	declarations  map[string]goAMD64FrameDeclaration
-	imports       map[string]goAMD64FrameSelection
-	origins       map[string]int
+	mu               sync.Mutex
+	identity         *GoAMD64FrameSource
+	ready            bool
+	request          GoAMD64FrameCaptureRequest
+	selection        goAMD64FrameSelection
+	env              map[string]string
+	inputs           map[string][32]byte
+	entries          []string
+	directoryInfo    os.FileInfo
+	owned            string
+	ownedInfo        os.FileInfo
+	functions        map[string]goAMD64FrameFunction
+	declarations     map[string]goAMD64FrameDeclaration
+	imports          map[string]goAMD64FrameSelection
+	origins          map[string]int
+	downloadedOrigin *gooriginalsrc.OriginSet
+	downloadedModule *gooriginalsrc.Module
 }
 
 // Transport is an observation role, never a memory or alias permission.
@@ -89,9 +93,9 @@ type goAMD64FrameSelection struct {
 	ImportMap                                                                              map[string]string
 	CFiles, CXXFiles, MFiles, FFiles, SwigFiles, SwigCXXFiles, SysoFiles                   []string
 	Module                                                                                 *struct {
-		Path, Version, Dir, GoMod string
-		Main                      bool
-		Replace                   json.RawMessage
+		Path, Version, Dir, GoMod, GoVersion string
+		Main                                 bool
+		Replace                              json.RawMessage
 	}
 	Error      json.RawMessage
 	DepsErrors []json.RawMessage
@@ -107,8 +111,15 @@ func (selected goAMD64FrameSelection) nonordinaryRole() bool {
 	return false
 }
 
-func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (_ *GoAMD64FrameSource, captureErr error) {
-	if ctx == nil || ctx.Err() != nil || pkg.Types == nil || pkg.Path != pkg.Types.Path() ||
+func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest) (*GoAMD64FrameSource, error) {
+	return captureGoAMD64FrameSource(ctx, pkg, request, nil)
+}
+
+func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest, exact *goAMD64DownloadedIdentity) (_ *GoAMD64FrameSource, captureErr error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, errors.Join(goAMD64FrameContext("requires live capture context"), ctx.Err())
+	}
+	if ctx == nil || pkg.Types == nil || pkg.Path != pkg.Types.Path() ||
 		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) ||
 		filepath.Base(request.AssemblyFile) != request.AssemblyFile || filepath.Ext(request.AssemblyFile) != ".s" {
 		return nil, goAMD64FrameContext("requires live context, actual package and bounded absolute inputs")
@@ -127,6 +138,7 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 		inputs:  make(map[string][32]byte),
 		origins: make(map[string]int),
 	}
+	source.identity = source
 	source.request.Environment = append([]string(nil), request.Environment...)
 	provided := make(map[string]string)
 	for _, value := range request.Environment {
@@ -162,6 +174,19 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err := source.observe(ctx); err != nil {
 		return nil, err
 	}
+	if exact == nil {
+		if err := source.verifyOwnedSourceDirectory(); err != nil {
+			return nil, err
+		}
+	} else {
+		inside, err := gostaticstorage.SourceDirectoryWithinRoot(request.Directory, source.env["GOROOT"])
+		if err != nil || inside {
+			return nil, errors.Join(goAMD64FrameContext("SDK source cannot acquire an exact downloaded role"), err)
+		}
+		if err := source.captureDownloadedOrigin(ctx, *exact, provided["GOTMPDIR"]); err != nil {
+			return nil, err
+		}
+	}
 	selected, err := source.load(ctx)
 	if err != nil {
 		return nil, err
@@ -175,11 +200,18 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if selected.Module.GoMod != filepath.Join(request.Directory, "go.mod") {
 		return nil, goAMD64FrameContext("actual module metadata is outside the original source directory")
 	}
+	if source.downloadedModule != nil {
+		original := source.downloadedModule
+		if selected.Module.Path != original.ModulePath || selected.Module.GoVersion != original.GoVersion ||
+			selected.Dir != original.Root || len(selected.Imports) != 0 || len(selected.ImportMap) != 0 {
+			return nil, goAMD64FrameContext("initial exact downloaded capture requires its import-free primary module root")
+		}
+	}
 	source.imports, err = source.loadStandardDeclarationImports(ctx)
 	if err != nil {
 		return nil, err
 	}
-	source.declarations, err = source.typedDeclarations(pkg, false)
+	source.declarations, err = source.typedDeclarations(pkg, exact != nil)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +301,7 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 // Verify rechecks actual routing/selection and all original/tool/export/artifact
 // bytes. Failure permanently revokes this observation; it grants no memory.
 func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) {
-	if source == nil {
+	if source == nil || source.identity != source {
 		return goAMD64FrameContext("missing sealed actual-object observation")
 	}
 	source.mu.Lock()
@@ -279,8 +311,14 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 			source.ready = false
 		}
 	}()
-	if !source.ready || ctx == nil || ctx.Err() != nil {
+	if ctx != nil && ctx.Err() != nil {
+		return errors.Join(goAMD64FrameContext("expired actual-object observation"), ctx.Err())
+	}
+	if !source.ready || ctx == nil {
 		return goAMD64FrameContext("closed, uninitialized or expired actual-object observation")
+	}
+	if err := source.verifyDownloadedOrigin(); err != nil {
+		return err
 	}
 	before := source.env
 	if err := source.observe(ctx); err != nil {
@@ -288,6 +326,11 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	}
 	if !reflect.DeepEqual(before, source.env) {
 		return goAMD64FrameContext("actual Go environment changed")
+	}
+	if source.downloadedOrigin == nil {
+		if err := source.verifyOwnedSourceDirectory(); err != nil {
+			return err
+		}
 	}
 	if err := source.verifyInputs(); err != nil {
 		return err
@@ -303,7 +346,14 @@ func (source *GoAMD64FrameSource) Verify(ctx context.Context) (verifyErr error) 
 	if err != nil || !reflect.DeepEqual(source.imports, imports) {
 		return goAMD64FrameContext("actual complete declaration import graph changed: %v", err)
 	}
-	return source.verifyInputs()
+	return errors.Join(source.verifyInputs(), source.verifyDownloadedOrigin())
+}
+
+func (source *GoAMD64FrameSource) verifyOwnedSourceDirectory() error {
+	if err := gostaticstorage.ValidateOwnedSourceDirectory(source.request.Directory, source.env["GOROOT"], source.env["GOMODCACHE"]); err != nil {
+		return errors.Join(goAMD64FrameContext("owned source needs a distinct physical SDK/cache role"), err)
+	}
+	return nil
 }
 
 func (source *GoAMD64FrameSource) verifyInputs() error {
@@ -344,6 +394,9 @@ func (source *GoAMD64FrameSource) Close() error {
 	if source == nil {
 		return nil
 	}
+	if source.identity != source {
+		return goAMD64FrameContext("copied or uninitialized observation cannot dispose original artifacts")
+	}
 	source.mu.Lock()
 	defer source.mu.Unlock()
 	source.ready = false
@@ -366,9 +419,19 @@ func goAMD64FrameContext(format string, args ...any) error {
 }
 
 func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]byte, error) {
+	if ctx == nil {
+		return nil, goAMD64FrameContext("actual command requires live context")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(goAMD64FrameContext("actual command context expired"), err)
+	}
+	if err := source.verifyDownloadedOrigin(); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	return goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	data, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	return data, errors.Join(err, source.verifyDownloadedOrigin())
 }
 
 func goAMD64FrameRead(name string) (_ []byte, readErr error) {

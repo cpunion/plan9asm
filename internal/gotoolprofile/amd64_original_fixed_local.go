@@ -27,6 +27,20 @@ type AMD64OriginalFixedLocalBinding struct {
 
 func (observed *AMD64OriginalPackageObservation) BindFixedLocal(ctx context.Context, pkg plan9asm.GoPackage,
 	file *plan9asm.File, assembly string, options plan9asm.Options,
+) (plan9asm.Options, *AMD64OriginalFixedLocalBinding, error) {
+	return observed.bindFixedLocal(ctx, pkg, file, assembly, options, false)
+}
+
+// BindDownloadedFixedLocal uses a separate independent exact-source object
+// factory. Query observations and caller metadata cannot supply its frame role.
+func (observed *AMD64OriginalPackageObservation) BindDownloadedFixedLocal(ctx context.Context, pkg plan9asm.GoPackage,
+	file *plan9asm.File, assembly string, options plan9asm.Options,
+) (plan9asm.Options, *AMD64OriginalFixedLocalBinding, error) {
+	return observed.bindFixedLocal(ctx, pkg, file, assembly, options, true)
+}
+
+func (observed *AMD64OriginalPackageObservation) bindFixedLocal(ctx context.Context, pkg plan9asm.GoPackage,
+	file *plan9asm.File, assembly string, options plan9asm.Options, exact bool,
 ) (_ plan9asm.Options, _ *AMD64OriginalFixedLocalBinding, result error) {
 	if err := observed.Verify(ctx); err != nil {
 		return plan9asm.Options{}, nil, err
@@ -34,17 +48,34 @@ func (observed *AMD64OriginalPackageObservation) BindFixedLocal(ctx context.Cont
 	observed.mu.Lock()
 	request, generation, ready := observed.request, observed.generation, observed.ready
 	downloaded := observed.downloaded != nil
+	var sourceModule, sourceVersion string
+	if downloaded && observed.downloaded.primary != nil {
+		sourceModule = observed.downloaded.primary.sourceModule
+		sourceVersion = observed.downloaded.primary.sourceVersion
+	}
 	observed.mu.Unlock()
-	if downloaded {
+	if downloaded && !exact {
 		return plan9asm.Options{}, nil, fmt.Errorf("%w: downloaded source needs a separately reviewed actual frame/object handoff", plan9asm.ErrProbeNeedsContext)
+	}
+	if exact && (!downloaded || sourceModule == "" || sourceVersion == "") {
+		return plan9asm.Options{}, nil, fmt.Errorf("%w: exact downloaded binding requires its private original source identity", plan9asm.ErrProbeNeedsContext)
 	}
 	if !ready || pkg.Path != request.PackagePath {
 		return plan9asm.Options{}, nil, fmt.Errorf("original fixed-local package identity differs")
 	}
-	source, err := plan9asm.CaptureGoAMD64FrameSource(ctx, pkg, plan9asm.GoAMD64FrameCaptureRequest{
+	capture := plan9asm.GoAMD64FrameCaptureRequest{
 		GoBinary: request.GoBinary, Directory: request.Directory, AssemblyFile: assembly,
 		Target: request.Target, Environment: append([]string(nil), request.Environment...),
-	})
+	}
+	var source *plan9asm.GoAMD64FrameSource
+	var err error
+	if exact {
+		source, err = plan9asm.CaptureGoAMD64DownloadedFrameSource(ctx, pkg, plan9asm.GoAMD64DownloadedFrameCaptureRequest{
+			Original: capture, SourceModule: sourceModule, SourceVersion: sourceVersion,
+		})
+	} else {
+		source, err = plan9asm.CaptureGoAMD64FrameSource(ctx, pkg, capture)
+	}
 	if err != nil {
 		return plan9asm.Options{}, nil, err
 	}
