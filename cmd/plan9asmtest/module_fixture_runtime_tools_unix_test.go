@@ -15,7 +15,11 @@ import (
 )
 
 func moduleFixtureRelocatedLLVMTools(cross bool) []string {
-	return []string{"llc", "clang", "llvm-as", "opt", "llvm-dis", "llvm-objdump", "llvm-nm"}
+	names := []string{"llc", "clang", "llvm-as", "opt", "llvm-dis", "llvm-objdump", "llvm-nm"}
+	if cross {
+		names = append(names, "ld.lld")
+	}
+	return names
 }
 
 // This is a fixture maintenance tripwire, not a new tool-selection authority.

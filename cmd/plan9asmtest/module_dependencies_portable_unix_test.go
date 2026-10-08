@@ -85,6 +85,25 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	// completely by the ordinary module dependency producer and reader.
 	t.Setenv("LD_LIBRARY_PATH", filepath.Join(producer, "lib"))
 	t.Setenv("DYLD_LIBRARY_PATH", filepath.Join(producer, "lib"))
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") == "1" {
+		t.Run("reject-missing-required-llvm-tool", func(t *testing.T) {
+			tool := filepath.Join(producer, "bin", "ld.lld")
+			retired := tool + "-retired"
+			if err := os.Rename(tool, retired); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if err := os.Rename(retired, tool); err != nil {
+					t.Error("restore exact fixture tool", err)
+				}
+			}()
+			_, err := captureCIScope(context.Background(), cfg, filepath.Join(out, "missing-required-tool"))
+			if err == nil || !strings.Contains(err.Error(), "required runtime tool ld.lld:") {
+				t.Fatal("actual missing relocated LLVM tool did not retain its role rejection", err)
+			}
+			t.Logf("ACTUAL_MISSING_RELOCATED_LLVM_TOOL rejected=%q cause=%q", tool, err)
+		})
+	}
 	t.Run("reject-original-host-loader", func(t *testing.T) {
 		hostPath := strings.Join(hostLibraryDirectories, string(os.PathListSeparator))
 		t.Setenv("LD_LIBRARY_PATH", hostPath)
@@ -128,6 +147,7 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 		if err != nil || os.SameFile(loadedInfo, originalInfo) {
 			t.Fatal("actual Go LLVM native handle still refers to a host library inode", err)
 		}
+		t.Logf("ACTUAL_RELOCATED_LLVM_NATIVE_HANDLE copied=%q original=%q independent_inode=true", loaded.Path, original)
 	}
 	if err := os.Rename(producer, producer+"-closed"); err != nil {
 		t.Fatal(err)
