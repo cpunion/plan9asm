@@ -32,9 +32,73 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	if variant == "nested" {
 		root = filepath.Dir(filepath.Dir(root))
 	}
+	t.Cleanup(func() {
+		if err := filepath.WalkDir(cache, func(name string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() {
+				return os.Chmod(name, 0700)
+			}
+			return nil
+		}); err != nil {
+			t.Error(err)
+		}
+	})
+	request.Environment = replaceEnv(request.Environment, map[string]string{
+		"GOPROXY": "file://" + proxy, "GOMODCACHE": cache,
+	})
+	ctx, cancel := amd64OriginalObservationContext(t)
+	defer cancel()
+	if variant == "foreign" {
+		foreignRoot := t.TempDir()
+		foreignModule := "example.invalid/foreign-observation"
+		for name, data := range map[string]string{
+			"go.mod":   "module " + foreignModule + "\ngo 1.20\n",
+			"shape.go": "package shape\ntype Word uint64\n",
+		} {
+			if err := os.WriteFile(filepath.Join(foreignRoot, name), []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		writeAMD64ObservationModuleProxy(t, proxy, foreignModule, version, foreignRoot)
+		if err := os.WriteFile(filepath.Join(root, "go.mod"),
+			[]byte("module example.invalid/observation\ngo 1.20\nrequire "+foreignModule+" "+version+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "value.go"),
+			[]byte("package observation\nimport shape \""+foreignModule+"\"\nfunc Value(a shape.Word) uint64\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, stderr, err := RunBounded(ctx, root, request.Environment, request.GoBinary,
+			"mod", "download", "-json", foreignModule+"@"+version)
+		if err != nil || len(stderr) != 0 {
+			t.Fatalf("actual generated foreign module download: %v; %s", err, stderr)
+		}
+	}
+	writeAMD64ObservationModuleProxy(t, proxy, modulePath, version, root)
+	data, stderr, err := RunBounded(ctx, root, request.Environment, request.GoBinary,
+		"mod", "download", "-json", modulePath+"@"+version)
+	if err != nil || len(stderr) != 0 {
+		t.Fatalf("actual generated module download: %v; %s", err, stderr)
+	}
+	var downloaded struct{ Path, Version, Dir, Error string }
+	if err := json.Unmarshal(data, &downloaded); err != nil || downloaded.Error != "" ||
+		downloaded.Path != modulePath || downloaded.Version != version || downloaded.Dir == "" {
+		t.Fatalf("actual Go omitted its exact downloaded source identity: %v", err)
+	}
+	request.Directory = downloaded.Dir
+	if variant == "nested" {
+		request.Directory = filepath.Join(downloaded.Dir, "internal", "kernel")
+	}
+	return request, modulePath, version
+}
+
+func writeAMD64ObservationModuleProxy(t *testing.T, proxy, modulePath, version, root string) {
+	t.Helper()
 	var archive bytes.Buffer
 	w := zip.NewWriter(&archive)
-	err = filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(name string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
@@ -69,45 +133,12 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	}
 	for suffix, data := range map[string][]byte{
 		".zip": archive.Bytes(), ".mod": goMod,
-		".info": []byte(`{"Version":"v1.0.0","Time":"2026-10-01T00:00:00Z"}`),
+		".info": []byte(`{"Version":"` + version + `","Time":"2026-10-01T00:00:00Z"}`),
 	} {
 		if err := os.WriteFile(filepath.Join(dir, version+suffix), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	t.Cleanup(func() {
-		if err := filepath.WalkDir(cache, func(name string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() {
-				return os.Chmod(name, 0700)
-			}
-			return nil
-		}); err != nil {
-			t.Error(err)
-		}
-	})
-	request.Environment = replaceEnv(request.Environment, map[string]string{
-		"GOPROXY": "file://" + proxy, "GOMODCACHE": cache,
-	})
-	ctx, cancel := amd64OriginalObservationContext(t)
-	defer cancel()
-	data, stderr, err := RunBounded(ctx, root, request.Environment, request.GoBinary,
-		"mod", "download", "-json", modulePath+"@"+version)
-	if err != nil || len(stderr) != 0 {
-		t.Fatalf("actual generated module download: %v; %s", err, stderr)
-	}
-	var downloaded struct{ Path, Version, Dir, Error string }
-	if err := json.Unmarshal(data, &downloaded); err != nil || downloaded.Error != "" ||
-		downloaded.Path != modulePath || downloaded.Version != version || downloaded.Dir == "" {
-		t.Fatalf("actual Go omitted its exact downloaded source identity: %v", err)
-	}
-	request.Directory = downloaded.Dir
-	if variant == "nested" {
-		request.Directory = filepath.Join(downloaded.Dir, "internal", "kernel")
-	}
-	return request, modulePath, version
 }
 
 // Keep the source/download identity separate from Go's actual cached-CWD role.
@@ -118,7 +149,7 @@ func captureAMD64DownloadedForTest(ctx context.Context, request AMD64OriginalObs
 }
 
 func TestAMD64DownloadedObservationActualOriginalCache(t *testing.T) {
-	for _, variant := range []string{"nested", "data", "sibling", "alias"} {
+	for _, variant := range []string{"nested", "data", "sibling", "alias", "foreign"} {
 		t.Run(variant, func(t *testing.T) {
 			request, modulePath, version := amd64DownloadedObservationFixture(t, variant)
 			ctx, cancel := amd64OriginalObservationContext(t)
@@ -133,8 +164,14 @@ func TestAMD64DownloadedObservationActualOriginalCache(t *testing.T) {
 			}
 			defer observed.Close()
 			pkg := observed.state.packages[request.PackagePath]
-			if pkg.Module == nil || !pkg.Module.Main || pkg.Module.Version != "" ||
-				observed.state.declarations["Value"] != "func(a uint64) uint64" {
+			declaration := "func(a uint64) uint64"
+			if variant == "foreign" {
+				declaration = "func(a example.invalid/foreign-observation.Word) uint64"
+				if len(observed.downloaded.modules) != 2 || observed.state.packages["example.invalid/foreign-observation"].Export == "" {
+					t.Fatal("foreign source did not get its separate exact download/export handoff")
+				}
+			}
+			if pkg.Module == nil || !pkg.Module.Main || pkg.Module.Version != "" || observed.state.declarations["Value"] != declaration {
 				t.Fatal("actual original cache selection or complete checked declaration was lost")
 			}
 			if err := observed.Verify(ctx); err != nil {
