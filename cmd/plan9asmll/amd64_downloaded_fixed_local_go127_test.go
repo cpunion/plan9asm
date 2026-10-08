@@ -61,6 +61,15 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	root, stderr, err := gotoolprofile.RunBounded(ctx, invocation, env, binary, "env", "GOROOT")
+	if err != nil || len(stderr) != 0 {
+		t.Fatalf("actual exact-download Go source root: %v; %s", err, stderr)
+	}
+	textflag, err := gotoolprofile.FileSHA256(filepath.Join(strings.TrimSpace(string(root)), "pkg", "include", "textflag.h"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.ToolSources = map[string]string{"pkg/include/textflag.h": textflag}
 	input.Observed, err = gotoolprofile.Capture(ctx, binary, t.TempDir(), env,
 		"linux/amd64", nil, gotoolprofile.RunBounded)
 	if err != nil {
