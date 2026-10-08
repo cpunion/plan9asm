@@ -13,11 +13,12 @@ Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft; do no
 promote its fork head until current-head fork CI and review pass. Root alone
 publishes assembly-ledger updates.
 
-Published head `c09eff1e`, run `37711752851`, is still active. Let it finish
-once before another push; do not cancel it or borrow old-source artifacts.
-Four priority shards have failed and two are still running at this checkpoint.
-Skipped downstream work cannot pass the aggregate. Refresh actual remote state
-before publishing. Previous run `36942816488` on `47ea649d` also failed.
+Published head `c09eff1e`, run `37711752851`, finished failed without agent
+cancellation. Four priority shards failed; two reached the job deadline and
+uploaded partial checkpoints. Aggregate and completion checks failed; skipped
+downstream suites are not passes. Inspect the six original reports with their
+frozen tools, retaining the partial denominators and missing work. Previous
+run `36942816488` on `47ea649d` also failed. Batch the successor before pushing.
 
 ## Frozen validation
 
@@ -112,6 +113,25 @@ The successor additionally integrates these independently frozen components:
   axes. K-data numerical caller authority is still explicit Context. Physical
   WIG dword behavior and cleared wider aliases do not grant native memory,
   full-vector definedness or an unobserved AVX512 runtime capability.
+- Task-owned restored Go build-cache connection and separate checkpoint upload
+  budget: both discovery matrices preserve fresh source/tool/profile/object
+  checks. Configuration regressions and focused ordinary/race cache/checkpoint
+  controls pass. No measured corpus speedup is claimed; timed-out work fails.
+- FP alias rejection diagnostics: `513b3c4c`, current ordinary/race each 542
+  nodes pass; historical Go 1.20 directly affected lanes each 162 pass.
+  Actual warning anchors and CPP/native/result causes are retained without
+  changing permissions, command receipts or pass/source-exclusion decisions.
+- Optional streaming phase journal: `4ecd89ca`, focused ordinary/race each
+  111 nodes pass, plus vet/build and independent EOF/source/tool/owner readback.
+  Its bounded writer retains handled child errors separately from the original
+  top-level outcome. Requested I/O or corrupt-tail failures invalidate reports;
+  timing records never certify candidates. The initial wrong-CWD RED remains
+  invalid evidence; the separately frozen original-driver reproduction is RED.
+- Typed numerical SB source/object/storage joins: `fc56d73f`, full storage
+  ordinary/race each 219 pass and numerical/FrameSource lanes each 216 pass,
+  with independent SDK archive/source/read-width/addend checks. All 22 scalar
+  MOV/CMP/extension shapes are observational only at this checkpoint. No
+  Options, LLVM load, native address or caller authority is granted yet.
 
 Normal sharded ledger startup/status, active-batch lookup, bounded fair retry
 selection, publication and transfer stream. They still validate every row,
@@ -122,8 +142,11 @@ explicit full-report reference helpers are separate compatibility paths.
 
 Source-query proof is not an actual frame/object certificate. SDK numerical
 storage is not a per-instruction SB-read certificate. The independent original
-TEXT/relocation/source-PC producer above is closed; review its sealed typed
-source/object/storage joins before authorizing any instruction-local consumer.
+TEXT/relocation/source-PC and typed x86 read producers above are closed. The
+next bounded stage consumes only factory-bound instruction-local numerical
+reads through all three APIs, mutable volatile loads and original runtime
+witnesses. Standard/external source roles and generated headers remain Context
+until their separate source roles are closed.
 Do not turn an OpSym spelling, DATA record, BSS extent or source/report JSON
 into initialized/native memory. Preserve wasm logical PC versus code-byte axes.
 
