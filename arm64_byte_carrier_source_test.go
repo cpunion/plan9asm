@@ -33,7 +33,7 @@ func arm64ByteCarrierFixture(t *testing.T) (string, string, []arm64NativeResultT
 		assembly.WriteString(strings.ReplaceAll(arm64NativeResultTailObserver(test), test.name(), name))
 	}
 	for name, data := range map[string]string{
-		"go.mod": "module " + packagePath + "\ngo 1.20\n",
+		"go.mod":  "module " + packagePath + "\ngo 1.20\n",
 		"decl.go": declarations.String(), "original_arm64.s": assembly.String(),
 	} {
 		if err := os.WriteFile(filepath.Join(directory, name), []byte(data), 0600); err != nil {
@@ -133,9 +133,9 @@ func TestARM64ByteCarrierActualArchiveObservation(t *testing.T) {
 		})
 	}
 	for _, test := range []struct {
-		name string
-		data []byte
-		target string
+		name    string
+		data    []byte
+		target  string
 		sources []string
 	}{
 		{"truncated", archive[:len(archive)-1], "linux/arm64", []string{"original_arm64.s"}},

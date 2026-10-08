@@ -9,13 +9,27 @@ import (
 // ObserveARM64AssemblyText is an offline original-object observation. It does
 // not construct a live source, caller carrier, entry adapter or frame slot.
 func ObserveARM64AssemblyText(data, builtinSource []byte, target string) ([]TextRecord, error) {
-	return nil, contextError("ARM64 assembly observation is not implemented")
+	if !arm64AssemblyObservationTarget(target) {
+		return nil, contextError("unobserved ARM64 assembly target")
+	}
+	return observeAssemblyText(data, builtinSource, target)
 }
 
 // ObserveARM64AssemblyArchive retains original caller/callee records only.
 // Neither selected source names nor a successful decode grant LLVM authority.
 func ObserveARM64AssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
-	return nil, contextError("ARM64 assembly archive observation is not implemented")
+	if !arm64AssemblyObservationTarget(target) {
+		return nil, contextError("unobserved ARM64 assembly archive target")
+	}
+	return observeAssemblyArchive(data, builtinSource, target, sources)
+}
+
+func arm64AssemblyObservationTarget(target string) bool {
+	switch target {
+	case "darwin/arm64", "linux/arm64", "windows/arm64", "freebsd/arm64", "openbsd/arm64":
+		return true
+	}
+	return false
 }
 
 // ObserveX86AssemblyText decodes complete original Go assembler object bytes.
@@ -25,6 +39,10 @@ func ObserveX86AssemblyText(data, builtinSource []byte, target string) ([]TextRe
 	if target != "linux/386" && target != "linux/amd64" {
 		return nil, contextError("unobserved x86 assembly target")
 	}
+	return observeAssemblyText(data, builtinSource, target)
+}
+
+func observeAssemblyText(data, builtinSource []byte, target string) ([]TextRecord, error) {
 	builtins, err := textBuiltins(builtinSource)
 	if err != nil {
 		return nil, err
@@ -44,6 +62,10 @@ func ObserveX86AssemblyArchive(data, builtinSource []byte, target string, source
 	if target != "linux/386" && target != "linux/amd64" {
 		return nil, contextError("unobserved x86 assembly archive target")
 	}
+	return observeAssemblyArchive(data, builtinSource, target, sources)
+}
+
+func observeAssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
 	builtins, err := textBuiltins(builtinSource)
 	if err != nil {
 		return nil, err
