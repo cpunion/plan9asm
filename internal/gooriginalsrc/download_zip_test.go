@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -150,5 +151,22 @@ func TestOriginSetZIPCompleteBoundedMembers(t *testing.T) {
 				t.Fatal(fmt.Sprintf("failed %s ZIP observation did not permanently revoke", role))
 			}
 		})
+	}
+}
+
+type originalCloseFailureFixture struct {
+	*bytes.Reader
+	failure error
+}
+
+func (reader originalCloseFailureFixture) Close() error { return reader.failure }
+
+func TestOriginalMemberHashRequiresClose(t *testing.T) {
+	failure := errors.New("first-party member close failure")
+	_, err := hashOriginalMembers([]string{"module@v1.0.0/member"}, func(string) (io.ReadCloser, error) {
+		return originalCloseFailureFixture{Reader: bytes.NewReader([]byte("complete original bytes")), failure: failure}, nil
+	})
+	if !errors.Is(err, failure) {
+		t.Fatal("Go Hash1 discarded a member close failure", err)
 	}
 }
