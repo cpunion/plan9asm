@@ -272,6 +272,9 @@ func (source *GoARM64ByteCarrierSource) observe(ctx context.Context) error {
 		"src/cmd/compile/internal/abi/abiutils.go", "src/cmd/compile/internal/ssa/config.go",
 		"src/cmd/go/internal/load/pkg.go",
 		"src/cmd/go/internal/list/list.go",
+		"src/cmd/go/internal/work/init.go",
+		"src/cmd/go/internal/work/gc.go",
+		"src/internal/platform/supported.go",
 	} {
 		if _, err := source.guard.read(filepath.Join(source.guard.env["GOROOT"], filepath.FromSlash(name))); err != nil {
 			return err

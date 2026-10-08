@@ -80,16 +80,23 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 	seenSources := make(map[string]bool)
 	definitions := make(map[string]bool)
 	storage := make(map[string]bool)
+	// Go 1.27.1 work/init.go passes -shared for default PIE on Darwin.
+	// Windows default PIE does not pass it. This exact archive role is not
+	// inherited by direct tool asm objects or the Linux x86 observation APIs.
+	compilerFlags := uint32(0)
+	if target == "darwin/arm64" {
+		compilerFlags = 1
+	}
 	result := []TextMember{{Name: members[0].name, Offset: members[0].offset, Size: int64(len(members[0].data))}}
 	for index, member := range members[1:] {
-		flags := uint32(0)
+		flags := compilerFlags
 		if index != 0 {
 			name := sources[index-1]
 			if filepath.Base(name) != name || !strings.HasSuffix(name, ".s") || seenSources[name] || member.name != strings.TrimSuffix(name, ".s")+".o" {
 				return nil, contextError("assembly source/member route differs")
 			}
 			seenSources[name] = true
-			flags = 4
+			flags |= 4
 		}
 		body, err := objectBody(member.data, target)
 		if err != nil {
