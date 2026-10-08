@@ -438,7 +438,9 @@ func (source *GoAMD64FrameSource) run(ctx context.Context, args ...string) ([]by
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	data, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
-	return data, errors.Join(err, source.verifyDownloadedOrigin())
+	// Cancellation may race the original-source read or command construction;
+	// preserve its cause even when the lower command rejects an expired context.
+	return data, errors.Join(err, ctx.Err(), source.verifyDownloadedOrigin())
 }
 
 func goAMD64FrameRead(name string) (_ []byte, readErr error) {

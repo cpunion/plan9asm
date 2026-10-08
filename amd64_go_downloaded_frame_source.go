@@ -97,6 +97,7 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	defer cancel()
 	data, err := goasmcmd.Run(commandContext, marker, source.request.Environment,
 		source.request.GoBinary, "mod", "download", "-json", exact.module+"@"+exact.version)
+	err = errors.Join(err, commandContext.Err())
 	if err != nil {
 		return err
 	}
