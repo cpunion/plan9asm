@@ -52,9 +52,22 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
+	var hostLibraryDirectories []string
 	for _, library := range libraries {
 		if err := copyModuleFixtureTool(library, filepath.Join(producer, "lib", filepath.Base(library))); err != nil {
 			t.Fatal(err)
+		}
+		physical, err := filepath.EvalSymlinks(library)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hostLibraryDirectories = append(hostLibraryDirectories, filepath.Dir(physical))
+		// The selected spelling and the library's actual loader filename may
+		// differ. Keep that alias entirely within the fixture's copied tree.
+		if filepath.Base(physical) != filepath.Base(library) {
+			if err := os.Symlink(filepath.Base(library), filepath.Join(producer, "lib", filepath.Base(physical))); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 	bindir, err := moduleDependencyCommand(context.Background(), cfg, filepath.Join(out, "original-bindir"), configBinary, "--bindir")
@@ -67,6 +80,20 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 		}
 	}
 	t.Setenv("LLVM_CONFIG", localConfig)
+	// Actual ELF SONAME/Mach-O install-name resolution must consume the copied
+	// library, not a same-byte host inode. These controls are already recorded
+	// completely by the ordinary module dependency producer and reader.
+	t.Setenv("LD_LIBRARY_PATH", filepath.Join(producer, "lib"))
+	t.Setenv("DYLD_LIBRARY_PATH", filepath.Join(producer, "lib"))
+	t.Run("reject-original-host-loader", func(t *testing.T) {
+		hostPath := strings.Join(hostLibraryDirectories, string(os.PathListSeparator))
+		t.Setenv("LD_LIBRARY_PATH", hostPath)
+		t.Setenv("DYLD_LIBRARY_PATH", hostPath)
+		_, err := captureCIScope(context.Background(), cfg, filepath.Join(out, "host-loader"))
+		if err == nil || !strings.Contains(err.Error(), "actual Go LLVM binding loaded a different configured library") {
+			t.Fatal("real host loader did not retain its selected-inode rejection", err)
+		}
+	})
 	before, err := captureCIScope(context.Background(), cfg, filepath.Join(out, "before"))
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +115,20 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if !strings.HasPrefix(origins["llvm-shared/0"], producer+string(filepath.Separator)) {
 		t.Fatal("real llvm-config did not select the owned producer installation")
 	}
+	var loaded moduleLoadedLibrary
+	if err := ciReadJSON(filepath.Join(out, "before-llvm-loaded-library.json"), &loaded); err != nil {
+		t.Fatal(err)
+	}
+	loadedInfo, err := os.Stat(loaded.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, original := range libraries {
+		originalInfo, err := os.Stat(original)
+		if err != nil || os.SameFile(loadedInfo, originalInfo) {
+			t.Fatal("actual Go LLVM native handle still refers to a host library inode", err)
+		}
+	}
 	if err := os.Rename(producer, producer+"-closed"); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +143,6 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 		t.Fatal("portable reader required a retired producer physical path", err)
 	}
 	path := filepath.Join(relocated, "before-llvm-loaded-library.json")
-	var loaded moduleLoadedLibrary
 	if err := ciReadJSON(path, &loaded); err != nil {
 		t.Fatal(err)
 	}
