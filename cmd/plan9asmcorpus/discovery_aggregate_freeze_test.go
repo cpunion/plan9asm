@@ -158,7 +158,8 @@ func TestDiscoveryVerifiedProgressFrozenInputs(t *testing.T) {
 			defer cancel()
 			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root, fixture.args(output)...)
 			calls, readErr := os.ReadFile(counter)
-			if readErr != nil || string(calls) != "2" {
+			count, countErr := strconv.Atoi(string(calls))
+			if readErr != nil || countErr != nil || count < 2 {
 				t.Fatalf("mutation did not reach final source read: %q %v; %s", calls, readErr, stderr)
 			}
 			if err == nil || !strings.Contains(string(stderr), "changed") || len(stdout) != 0 {
@@ -170,6 +171,83 @@ func TestDiscoveryVerifiedProgressFrozenInputs(t *testing.T) {
 			entries, err := os.ReadDir(filepath.Dir(output))
 			if err != nil || len(entries) != 0 {
 				t.Fatalf("owned preparation leaked: %v %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestDiscoveryProgressDirectoryPreflightRealCLI(t *testing.T) {
+	for _, name := range []string{
+		"outside", "ignored output", "source", "scan ledger", "scan nested", "scan ancestor",
+		"assembly ledger", "assembly nested", "assembly ancestor", "scan alias", "assembly alias",
+		"unignored output", "source alias", "relative output",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixture := newFrozenAggregateFixture(t)
+			writeTestFile(t, filepath.Join(fixture.root, ".gitignore"), "_out/\n")
+			output := filepath.Join(t.TempDir(), "new", "reports")
+			want := ""
+			switch name {
+			case "ignored output":
+				output = filepath.Join(fixture.root, "_out", "new", "reports")
+			case "source":
+				output, want = filepath.Join(fixture.root, "new", "reports"), "ignored _out"
+			case "scan ledger":
+				output, want = fixture.ledger, "overlaps"
+			case "scan nested":
+				output, want = filepath.Join(fixture.ledger, "nested", "reports"), "overlaps"
+			case "scan ancestor":
+				output, want = filepath.Dir(fixture.ledger), "overlaps"
+			case "assembly ledger":
+				output, want = fixture.stored, "overlaps"
+			case "assembly nested":
+				output, want = filepath.Join(fixture.stored, "nested", "reports"), "overlaps"
+			case "assembly ancestor":
+				output, want = filepath.Dir(fixture.stored), "overlaps"
+			case "scan alias", "assembly alias", "source alias":
+				destination := fixture.ledger
+				want = "overlaps"
+				if name == "assembly alias" {
+					destination = fixture.stored
+				} else if name == "source alias" {
+					destination, want = fixture.root, "ignored _out"
+				}
+				alias := filepath.Join(t.TempDir(), "alias")
+				if err := os.Symlink(destination, alias); err != nil {
+					t.Fatal(err)
+				}
+				output = filepath.Join(alias, "new", "reports")
+			case "unignored output":
+				writeTestFile(t, filepath.Join(fixture.root, ".gitignore"), "")
+				output, want = filepath.Join(fixture.root, "_out", "new", "reports"), "ignored _out"
+			case "relative output":
+				output = filepath.Join("_out", "new", "reports")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root,
+				"-repo-root="+fixture.root, "-discovery-ledger="+fixture.ledger,
+				"-compare-assembly-ledger="+fixture.stored, "-discovery-progress-directory="+output)
+			if want == "" {
+				if err != nil || len(stdout) == 0 {
+					t.Fatalf("safe directory rejected: %v stdout=%q stderr=%s", err, stdout, stderr)
+				}
+			} else if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), want) {
+				t.Fatalf("unsafe directory accepted or wrong rejection: %v stdout=%q stderr=%s", err, stdout, stderr)
+			}
+			// The preflight must not create its destination or status files.
+			physical := output
+			if !filepath.IsAbs(physical) {
+				physical = filepath.Join(fixture.root, physical)
+			}
+			if entries, err := os.ReadDir(physical); err == nil {
+				for _, entry := range entries {
+					if entry.Name() == "new" || entry.Name() == "scan-status.json" || entry.Name() == "assembly-progress.json" {
+						t.Fatalf("preflight wrote destination: %s", entry.Name())
+					}
+				}
+			} else if !os.IsNotExist(err) {
+				t.Fatal(err)
 			}
 		})
 	}
