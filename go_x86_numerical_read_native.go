@@ -176,7 +176,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 			matches := 0
 			for pc, native := range decoded {
 				for _, row := range expandedRows[name][pc] {
-					if !numericalSameInstruction(ins, row.ins, source.request.PackagePath) {
+					if !numericalSameInstruction(ins, row.ins, source.request.PackagePath, arch) {
 						continue
 					}
 					// The expanded physical line must select this exact ordinal;
@@ -206,7 +206,7 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 					}
 					originalMatches := 0
 					for _, original := range originalRows[name][pc] {
-						if numericalSameInstruction(ins, original.ins, source.request.PackagePath) {
+						if numericalSameInstruction(ins, original.ins, source.request.PackagePath, arch) {
 							for _, position := range text.Positions {
 								path := original.position
 								colon := strings.LastIndexByte(path, ':')

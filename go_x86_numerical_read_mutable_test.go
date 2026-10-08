@@ -75,6 +75,10 @@ func TestGoX86NumericalSBReadActualMutableWidthsAndCPP(t *testing.T) {
 			for _, form := range forms {
 				fmt.Fprintf(&body, "%s DATA+(2*4)(SB),AX\n", form)
 			}
+			body.WriteString("MOVB DATA+1(SB),AH\nMOVB DATA+2(SB),AL\nCMPB AH,DATA+3(SB)\n")
+			if arch == "amd64" {
+				body.WriteString("MOVB DATA+1(SB),R8\nMOVW DATA+2(SB),R8\nMOVL DATA+4(SB),R8\nMOVQ DATA+8(SB),R8\n")
+			}
 			for _, width := range []string{"B", "W", "L"} {
 				fmt.Fprintf(&body, "CMP%s DATA+16(SB),$1\nCMP%s DATA+16(SB),AX\nCMP%s AX,DATA+16(SB)\n", width, width, width)
 			}
@@ -100,9 +104,9 @@ func TestGoX86NumericalSBReadActualMutableWidthsAndCPP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer source.Close()
-			expected := len(forms) + 9 + 3
+			expected := len(forms) + 9 + 6
 			if arch == "amd64" {
-				expected += 3
+				expected += 7
 			}
 			if len(source.reads) != expected {
 				t.Fatalf("full read shape count = %d, want %d", len(source.reads), expected)

@@ -13,41 +13,84 @@ import (
 	"golang.org/x/arch/x86/x86asm"
 )
 
-// This first instruction consumer domain is scalar integer MOV and CMP reads.
-// Other families, pointer/address/write forms and SIMD transport do not acquire
-// a read lease merely because they reference the same numerical variable.
-func x86NumericalSBReadShape(ins Instr, arch string) (int, int64, bool) {
-	if len(ins.Args) != 2 {
-		return 0, 0, false
+// These typed shapes observe scalar integer MOV/CMP source bytes only. They
+// create no load, pointer, frame, caller or entry permission. Extensions share
+// the established scalar grammar, including MOVSWW/MOVZWW and mode32 MOVLQZX.
+type x86NumericalSBReadSpec struct {
+	sourceBytes, gpBytes int64
+	compare, extension   bool
+	rejectedOn386        bool
+}
+
+type x86NumericalSBReadForm struct {
+	spec             x86NumericalSBReadSpec
+	operand, partner int
+}
+
+var x86NumericalSBReadSpecs = func() map[Op]x86NumericalSBReadSpec {
+	result := map[Op]x86NumericalSBReadSpec{
+		"MOVB": {sourceBytes: 1, gpBytes: 1},
+		"MOVW": {sourceBytes: 2, gpBytes: 2},
+		"MOVL": {sourceBytes: 4, gpBytes: 4},
+		"MOVQ": {sourceBytes: 8, gpBytes: 8, rejectedOn386: true},
+		"CMPB": {sourceBytes: 1, gpBytes: 1, compare: true},
+		"CMPW": {sourceBytes: 2, gpBytes: 2, compare: true},
+		"CMPL": {sourceBytes: 4, gpBytes: 4, compare: true},
+		"CMPQ": {sourceBytes: 8, gpBytes: 8, compare: true, rejectedOn386: true},
 	}
-	widths := map[Op]int64{
-		"MOVB": 1, "MOVW": 2, "MOVL": 4, "MOVQ": 8,
-		"MOVBWSX": 1, "MOVBWZX": 1, "MOVBLSX": 1, "MOVBLZX": 1,
-		"MOVBQSX": 1, "MOVBQZX": 1, "MOVWLSX": 2, "MOVWLZX": 2,
-		"MOVWQSX": 2, "MOVWQZX": 2, "MOVLQSX": 4, "MOVLQZX": 4,
-		"CMPB": 1, "CMPW": 2, "CMPL": 4, "CMPQ": 8,
+	for opcode, spec := range amd64ScalarExtensionMoveSpecs {
+		result[opcode] = x86NumericalSBReadSpec{sourceBytes: int64(spec.sourceBits / 8), gpBytes: int64(spec.destinationBits / 8),
+			extension: true, rejectedOn386: spec.rejectedOn386}
 	}
-	width, known := widths[ins.Op]
-	if !known {
-		return 0, 0, false
+	return result
+}()
+
+func x86NumericalSBReadProperties(ins Instr, arch string) (x86NumericalSBReadForm, bool) {
+	spec, known := x86NumericalSBReadSpecs[ins.Op]
+	if !known || len(ins.Args) != 2 || arch != "amd64" && arch != "386" || arch == "386" && spec.rejectedOn386 {
+		return x86NumericalSBReadForm{}, false
 	}
-	source := 0
-	if strings.HasPrefix(string(ins.Op), "MOV") {
-		_, gp := x86CallerGP(ins.Args[1].Reg)
-		if ins.Args[1].Kind != OpReg || !gp {
-			return 0, 0, false
+	form := x86NumericalSBReadForm{spec: spec, partner: 1}
+	if spec.extension {
+		extension, recognized, err := x86ScalarExtensionProperties(ins.Op, ins, arch)
+		if !recognized || err != nil {
+			return x86NumericalSBReadForm{}, false
 		}
+		form.spec.sourceBytes = int64(extension.spec.sourceBits / 8)
+		form.spec.gpBytes = int64(extension.spec.destinationBits / 8)
 	} else {
-		if ins.Args[1].Kind == OpSym && ins.Args[0].Kind == OpReg {
-			source = 1
-		} else if ins.Args[1].Kind != OpReg && ins.Args[1].Kind != OpImm {
-			return 0, 0, false
+		if spec.compare && ins.Args[1].Kind == OpSym && ins.Args[0].Kind == OpReg {
+			form.operand, form.partner = 1, 0
+		}
+		partner := ins.Args[form.partner]
+		switch partner.Kind {
+		case OpReg:
+			valid := isX86YrlRegisterForArch(partner.Reg, arch)
+			if spec.gpBytes == 1 {
+				valid = isGoYmbRegisterForArch(partner.Reg, arch)
+			}
+			if !valid {
+				return x86NumericalSBReadForm{}, false
+			}
+		case OpImm:
+			if !spec.compare || form.operand != 0 || partner.ImmRaw != "" || partner.ImmIsFloat ||
+				arch == "amd64" && (partner.Imm < -2147483648 || partner.Imm > 4294967295) {
+				return x86NumericalSBReadForm{}, false
+			}
+		default:
+			return x86NumericalSBReadForm{}, false
 		}
 	}
-	if ins.Args[source].Kind != OpSym || strings.HasPrefix(ins.Args[source].Sym, "$") {
-		return 0, 0, false
+	operand := ins.Args[form.operand]
+	if operand.Kind != OpSym || strings.HasPrefix(strings.TrimSpace(operand.Sym), "$") {
+		return x86NumericalSBReadForm{}, false
 	}
-	return source, width, true
+	return form, true
+}
+
+func x86NumericalSBReadShape(ins Instr, arch string) (int, int64, bool) {
+	form, valid := x86NumericalSBReadProperties(ins, arch)
+	return form.operand, form.spec.sourceBytes, valid
 }
 
 type numericalSBRead struct {
@@ -71,25 +114,19 @@ func numericalNativeName(name, pkg string) string {
 	return name
 }
 
-func numericalSameInstruction(a, b Instr, pkg string) bool {
+func numericalSameInstruction(a, b Instr, pkg, arch string) bool {
 	if a.Op != b.Op || len(a.Args) != len(b.Args) {
+		return false
+	}
+	form, valid := x86NumericalSBReadProperties(a, arch)
+	otherForm, otherValid := x86NumericalSBReadProperties(b, arch)
+	if !valid || !otherValid || form != otherForm {
 		return false
 	}
 	for i, operand := range a.Args {
 		other := b.Args[i]
 		if operand.Kind == OpReg && other.Kind == OpReg {
-			width := int64(4)
-			name := string(a.Op)
-			if strings.HasSuffix(name, "SX") || strings.HasSuffix(name, "ZX") {
-				name = name[:len(name)-2]
-			}
-			if strings.HasSuffix(name, "B") {
-				width = 1
-			} else if strings.HasSuffix(name, "W") {
-				width = 2
-			} else if strings.HasSuffix(name, "Q") {
-				width = 8
-			}
+			width := form.spec.gpBytes
 			root, valid := amd64FullRegBase(operand.Reg)
 			otherRoot, otherValid := amd64FullRegBase(other.Reg)
 			if !valid || !otherValid || root != otherRoot || x86CallerByteMask(operand.Reg, width) != x86CallerByteMask(other.Reg, width) {
