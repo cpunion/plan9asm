@@ -332,7 +332,7 @@ func compileAndRunRuntimeTestForTarget(t *testing.T, llc, clang, name, triple, l
 	compileAndRunRuntimeTestWithCompiler(t, llc, compiler, name, triple, ll, mainC, runPrefix)
 }
 
-func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []string, name, triple, ll, mainC string, runPrefix []string) {
+func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []string, name, triple, ll, mainC string, runPrefix []string, optimization ...int) {
 	t.Helper()
 	if len(compiler) == 0 {
 		t.Fatal("empty compiler command")
@@ -356,8 +356,16 @@ func compileAndRunRuntimeTestWithCompiler(t *testing.T, llc string, compiler []s
 		t.Fatal(err)
 	}
 
+	llcArgs := []string{"-mtriple=" + triple, "-filetype=obj"}
+	if len(optimization) > 1 || len(optimization) == 1 && optimization[0] != 0 && optimization[0] != 2 {
+		t.Fatal("runtime LLVM optimization must be exactly O0 or O2")
+	}
+	if len(optimization) == 1 {
+		llcArgs = append(llcArgs, fmt.Sprintf("-O=%d", optimization[0]))
+	}
+	llcArgs = append(llcArgs, llPath, "-o", objPath)
 	ctx, cancel := runtimeOracleStageContext(t)
-	llcCmd := exec.CommandContext(ctx, llc, "-mtriple="+triple, "-filetype=obj", llPath, "-o", objPath)
+	llcCmd := exec.CommandContext(ctx, llc, llcArgs...)
 	out, err := runtimeOracleCombinedOutput(ctx, llcCmd)
 	cancel()
 	if err != nil {
