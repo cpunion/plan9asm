@@ -335,6 +335,75 @@ func TestAMD64DownloadedObservationCacheRootContinuity(t *testing.T) {
 	}
 }
 
+func TestAMD64DownloadedObservationRejectsSameBytesFileReplacement(t *testing.T) {
+	for _, role := range []string{"source", "ZIP", "metadata"} {
+		t.Run(role, func(t *testing.T) {
+			request, modulePath, version := amd64DownloadedObservationFixture(t, "data")
+			ctx, cancel := amd64OriginalObservationContext(t)
+			defer cancel()
+			observed, err := captureAMD64DownloadedForTest(ctx, request, modulePath, version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer observed.Close()
+			prefix := filepath.Join(originalObservationEnvironment(request.Environment, "GOMODCACHE"),
+				"cache", "download", modulePath, "@v", version)
+			name := filepath.Join(request.Directory, "value.go")
+			if role == "ZIP" {
+				name = prefix + ".zip"
+			} else if role == "metadata" {
+				name = prefix + ".mod"
+			}
+			original, err := os.ReadFile(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(filepath.Dir(name), 0700); err != nil {
+				t.Fatal(err)
+			}
+			backup := filepath.Join(t.TempDir(), "original")
+			if err := os.Rename(name, backup); err != nil {
+				t.Fatal(err)
+			}
+			restored := false
+			defer func() {
+				if !restored {
+					if err := os.Remove(name); err != nil && !os.IsNotExist(err) {
+						t.Error(err)
+					}
+					if err := os.Rename(backup, name); err != nil {
+						t.Error(err)
+					}
+				}
+			}()
+			if err := os.WriteFile(name, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.Lstat(name)
+			if err != nil || os.SameFile(before, after) {
+				t.Fatal("negative did not change the original physical file identity", err)
+			}
+			if err := observed.Verify(ctx); err == nil {
+				t.Fatal("same source bytes at a replacement inode acquired the original source role")
+			}
+			if err := os.Remove(name); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Rename(backup, name); err != nil {
+				t.Fatal(err)
+			}
+			restored = true
+			if err := observed.Verify(ctx); err == nil {
+				t.Fatal("restoring the original file resurrected the revoked observation")
+			}
+		})
+	}
+}
+
 func mutateAMD64DownloadedFile(t *testing.T, name, suffix string) {
 	t.Helper()
 	if err := os.Chmod(name, 0600); err != nil {
