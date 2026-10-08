@@ -61,6 +61,9 @@ static uint64_t load(unsigned n) {
 			c.WriteString("   want=(want&~UINT64_C(255))|cpu[64];\n")
 		case test.compare:
 			partner := seed
+			if test.partnerHigh {
+				partner = "(" + seed + ">>8)"
+			}
 			if test.immediate {
 				partner = "UINT64_C(4294967295)"
 				if test.source == 8 {
@@ -104,6 +107,47 @@ static uint64_t load(unsigned n) {
 	return c.String()
 }
 
+func numericalRuntimeWidthFaultC(cases []numericalExecutionCase, arch string) string {
+	word := "uint64_t"
+	if arch == "386" {
+		word = "uint32_t"
+	}
+	var c strings.Builder
+	c.WriteString(`#include <stdint.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <unistd.h>
+_Alignas(4096) unsigned char carrier[8192];
+#ifdef __APPLE__
+__asm__(".globl \"_example.invalid/numericalfixture.Mutable\"\n"
+        "\"_example.invalid/numericalfixture.Mutable\" = _carrier + 4092\n");
+unsigned char cpu[164] __asm__("_internal/cpu.X86");
+#else
+__asm__(".globl \"example.invalid/numericalfixture.Mutable\"\n"
+        ".set \"example.invalid/numericalfixture.Mutable\", carrier + 4092\n");
+unsigned char cpu[164] __asm__("internal/cpu.X86");
+#endif
+`)
+	for index := range cases {
+		fmt.Fprintf(&c, "extern %s numerical%d(void);\n", word, index)
+	}
+	c.WriteString("int main(void) {\n memset(carrier,0x83,sizeof(carrier));\n")
+	for index, test := range cases {
+		fault := test.source > 1 && !test.cpu
+		fmt.Fprintf(&c, " { pid_t child=fork();\n  if(child<0) return 1;\n  if(!child) {\n   if(mprotect(carrier+4096,4096,PROT_NONE)) _exit(2);\n   (void)numerical%d(); _exit(0);\n  }\n  int status=0;\n  if(waitpid(child,&status,0)!=child) return 3;\n", index)
+		if fault {
+			c.WriteString("  if(!WIFSIGNALED(status)||(WTERMSIG(status)!=SIGSEGV&&WTERMSIG(status)!=SIGBUS)) return 4;\n")
+		} else {
+			c.WriteString("  if(!WIFEXITED(status)||WEXITSTATUS(status)) return 5;\n")
+		}
+		c.WriteString(" }\n")
+	}
+	c.WriteString(" return 0;\n}\n")
+	return c.String()
+}
+
 func numericalRuntimeIR(ir string, pkg GoPackage, cases []numericalExecutionCase, arch string) string {
 	word := "i64"
 	if arch == "386" {
@@ -140,6 +184,16 @@ func numericalRuntimeExecute(t *testing.T, arch string, execution x86FloatCompar
 		output := execution.run(t, executable)
 		if original && !bytes.Equal(output, expected) {
 			t.Fatalf("actual original Go/LLVM mutable results differ:\nGo=%s\nLLVM=%s", expected, output)
+		}
+		widthSource, widthExecutable := filepath.Join(dir, "width.c"), filepath.Join(dir, "width")
+		if err := os.WriteFile(widthSource, []byte(numericalRuntimeWidthFaultC(cases, arch)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		compiler = append([]string(nil), execution.compiler...)
+		compiler = append(compiler, "-O2", object, widthSource, "-o", widthExecutable)
+		x86FloatCompareCaptureCommand(t, exec.Command(compiler[0], compiler[1:]...))
+		if output := execution.run(t, widthExecutable); len(output) != 0 {
+			t.Fatal("unexpected width/fault oracle output", string(output))
 		}
 	})
 }

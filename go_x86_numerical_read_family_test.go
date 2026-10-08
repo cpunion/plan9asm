@@ -23,10 +23,12 @@ import (
 
 type numericalExecutionCase struct {
 	name, instruction, predicate string
+	register                     string
 	source, gp                   int64
 	signed, compare              bool
 	reversed, immediate          bool
 	high, cpu, dead              bool
+	partnerHigh                  bool
 }
 
 // Widths and formats come from the independent complete Go encoder inventory,
@@ -60,6 +62,14 @@ func numericalExecutionCases(arch string) []numericalExecutionCase {
 		signed := strings.HasSuffix(row.op, "SX") || row.op == "MOVSWW"
 		cases = append(cases, numericalExecutionCase{instruction: row.op + " ·Mutable+3(SB),AX",
 			source: row.source, gp: gp, signed: signed})
+		if arch == "amd64" {
+			cases = append(cases, numericalExecutionCase{instruction: row.op + " ·Mutable+3(SB),R8",
+				register: "R8", source: row.source, gp: gp, signed: signed})
+		}
+	}
+	for _, predicate := range []string{"LT", "CS", "EQ"} {
+		cases = append(cases, numericalExecutionCase{instruction: "CMPB AH,·Mutable+3(SB)",
+			predicate: predicate, source: 1, gp: 1, compare: true, reversed: true, partnerHigh: true})
 	}
 	cases = append(cases,
 		numericalExecutionCase{instruction: "MOVB ·Mutable+3(SB),AH", source: 1, gp: 1, high: true},
@@ -98,9 +108,16 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	assembly.WriteString("#include \"textflag.h\"\n")
 	for _, test := range cases {
 		instruction := strings.ReplaceAll(test.instruction, "·Mutable", "example·invalid∕numericalfixture·Mutable")
+		register := test.register
+		if register == "" {
+			register = "AX"
+		}
 		fmt.Fprintf(&declarations, "func %s() %s\n", test.name, word)
-		fmt.Fprintf(&assembly, "TEXT ·%s(SB),NOSPLIT,$0-%d\n%s $%s,AX\n%s\n",
-			test.name, goWordSize(arch), move, seed, instruction)
+		fmt.Fprintf(&assembly, "TEXT ·%s(SB),NOSPLIT,$0-%d\n%s $%s,%s\n%s\n",
+			test.name, goWordSize(arch), move, seed, register, instruction)
+		if register != "AX" {
+			fmt.Fprintf(&assembly, "%s %s,AX\n", move, register)
+		}
 		if test.compare {
 			fmt.Fprintf(&assembly, "SET%s CL\nMOVBLZX CL,AX\n", test.predicate)
 		}

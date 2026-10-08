@@ -134,6 +134,90 @@ func numericalWrapperOriginal(t *testing.T, source *GoX86NumericalReadSource) []
 	return data
 }
 
+func TestGoX86NumericalSBReadGoWrapperExactOriginalBytesAndLifetime(t *testing.T) {
+	pkg, _, _, create := numericalConsumerFactory(t, "amd64")
+	for _, name := range []string{"same parse different bytes", "raw rewrite", "copied token", "foreign source", "revoked source"} {
+		t.Run(name, func(t *testing.T) {
+			source, options := create(t)
+			input := numericalWrapperOriginal(t, source)
+			binding := options.NumericalReads
+			switch name {
+			case "same parse different bytes":
+				changed := append(append([]byte(nil), input...), []byte("// not selected original bytes\n")...)
+				a, aErr := Parse(ArchAMD64, string(input))
+				b, bErr := Parse(ArchAMD64, string(changed))
+				aHash, _ := x86CallerSourceFingerprint(a)
+				bHash, _ := x86CallerSourceFingerprint(b)
+				if aErr != nil || bErr != nil || aHash != bHash {
+					t.Fatal("different-bytes/same-parse fixture precondition failed", aErr, bErr)
+				}
+				input = changed
+			case "raw rewrite":
+				input = []byte(strings.Replace(string(input), "CMPB", "MOVB", 1))
+			case "copied token":
+				copied := *binding
+				binding = &copied
+			case "foreign source":
+				foreign, _ := create(t)
+				binding.source = foreign
+			case "revoked source":
+				if err := source.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			result, err := TranslateGoModule(pkg, input, GoModuleOptions{
+				FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
+				TargetTriple: options.TargetTriple, NumericalReads: binding, ResolveSym: options.ResolveSym,
+			})
+			if result != nil {
+				result.Module.Dispose()
+			}
+			if result != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("foreign/raw/lifetime input published a Go module", err)
+			}
+		})
+	}
+}
+
+func TestGoX86NumericalSBReadGoWrapperHeaderTOCTOU(t *testing.T) {
+	pkg, _, _, create := numericalConsumerFactory(t, "amd64")
+	first, _ := create(t)
+	dir := first.request.Directory
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	header := filepath.Join(dir, "textflag.h")
+	if err := os.WriteFile(header, []byte("#define NOSPLIT 4\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source, options := create(t)
+	resolve := options.ResolveSym
+	mutated := false
+	callback := func(symbol string) string {
+		pc, _, _, ok := runtime.Caller(1)
+		if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".addDeclaredFuncSigs") && !mutated {
+			if err := os.WriteFile(header, []byte("#define NOSPLIT 4\n// changed sealed header bytes\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			mutated = true
+		}
+		return resolve(symbol)
+	}
+	result, err := TranslateGoModule(pkg, numericalWrapperOriginal(t, source), GoModuleOptions{
+		FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
+		TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: callback,
+	})
+	if result != nil {
+		result.Module.Dispose()
+	}
+	if !mutated || result != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("changed actual owned header published a Go module", mutated, err)
+	}
+	if !errors.Is(source.Verify(options.NumericalReads.context), ErrProbeNeedsContext) {
+		t.Fatal("header restoration could revive a revoked source")
+	}
+}
+
 func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Options, func(*testing.T) (*GoX86NumericalReadSource, Options)) {
 	t.Helper()
 	pkg, request, file, options := numericalSBFixture(t, arch)
