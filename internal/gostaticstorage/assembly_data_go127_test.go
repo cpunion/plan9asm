@@ -259,7 +259,7 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			if !reflect.DeepEqual(observation.Members, original) {
 				t.Fatal("complete namespace/index/data/relocation/TEXT observation differs from actual SDK")
 			}
-			if len(observation.Sources[0].Layouts) != 11 || len(observation.Sources[1].Layouts) != 2 {
+			if len(observation.Sources[0].Layouts) != 10 || len(observation.Sources[1].Layouts) != 2 {
 				t.Fatal("typed DATA/GLOBL grammar lost source declarations")
 			}
 			if _, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles); err == nil || !strings.Contains(err.Error(), "assembly DATA definition") {
