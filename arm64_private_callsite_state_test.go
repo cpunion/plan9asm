@@ -219,7 +219,7 @@ func TestARM64PrivateRegisterCallsiteExpansionBudget(t *testing.T) {
 
 func TestARM64PrivateRegisterCallsiteDoesNotSupplyUndefinedBits(t *testing.T) {
 	pkg := mustGoPackage(t, "test/privatecalls", "package privatecalls\nfunc Run() uint64\n")
-	for _, test := range []struct{ name, source, witness string }{
+	tests := []struct{ name, source, witness string }{
 		{"first_call_reads_missing", strings.Replace(arm64PrivateDistinctCallsiteSource,
 			"ADD $1,R9,R9", "ADD R0,R9,R9", 1), "R0"},
 		{"caller_missing_before_second", strings.Replace(arm64PrivateDistinctCallsiteSource,
@@ -231,11 +231,29 @@ func TestARM64PrivateRegisterCallsiteDoesNotSupplyUndefinedBits(t *testing.T) {
 			"MOVD $2,R8\nagain:\nCALL bump<>(SB)\nMOVD $42,R0\nSUB $1,R8,R8\nCBNZ R8,again",
 			"ADD $1,R9,R9", "ADD R0,R9,R9",
 		).Replace(arm64PrivateDistinctCallsiteSource), "R0"},
-		{"first_call_missing_flags", strings.NewReplacer(
-			"MOVD $42,R0", "MOVD $42,R0\nADDS $1,R0,R0",
-			"ADD $1,R9,R9", "ADC $0,R9,R9",
-		).Replace(arm64PrivateDistinctCallsiteSource), "%flags_c read"},
+	}
+	for _, flag := range []struct {
+		name, instruction, condition string
+		missingMask                  uint8
+	}{
+		{"C", "ADC $0,R9,R9", "ADC", 0x2},
+		{"N", "CSEL MI,R9,R9,R9", "MI", 0x8},
+		{"Z", "CSEL EQ,R9,R9,R9", "EQ", 0x4},
+		{"V", "CSEL VS,R9,R9,R9", "VS", 0x1},
 	} {
+		// The second call has a real ADDS producer. Its flags cannot supply
+		// the first invocation of the same private helper on any CFG path.
+		source := strings.NewReplacer(
+			"MOVD $42,R0", "MOVD $42,R0\nADDS $1,R0,R0",
+			"ADD $1,R9,R9", flag.instruction,
+		).Replace(arm64PrivateDistinctCallsiteSource)
+		witness := fmt.Sprintf("arm64 condition %s has unknown NZCV bits %#x on a path to block ",
+			flag.condition, flag.missingMask)
+		tests = append(tests, struct{ name, source, witness string }{
+			"first_call_missing_flags_" + flag.name, source, witness,
+		})
+	}
+	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			goAssemblerOracleOutput(t, "arm64", test.source, "", true)
 			ctx := llvm.NewContext()

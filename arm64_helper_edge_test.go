@@ -519,6 +519,7 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{Op: "BL", Args: []Operand{arm64RegOp(ZR)}, Raw: "BL ZR"},
 		{Op: "CALL", Args: []Operand{arm64MemOp(ZR, 0)}, Raw: "CALL (ZR)"},
 		{Op: "BL", Args: []Operand{arm64SymOp("helper(SB)")}, Raw: "BL helper(SB)"},
+		{Op: "CALL", Args: []Operand{arm64SymOp("helper(SB)")}, Raw: "CALL helper(SB)"},
 		{Op: "B", Args: []Operand{arm64MemOp(ZR, 0)}, Raw: "B (ZR)"},
 		{Op: "JMP", Args: []Operand{arm64MemOp(ZR, 0)}, Raw: "JMP (ZR)"},
 		{Op: "B", Args: []Operand{arm64SymOp("sink(SB)")}, Raw: "B sink(SB)"},
@@ -546,7 +547,8 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		// Each row is an independent lowerer fixture. Calls in preceding
 		// rows correctly revoke flags and cannot supply this row's comparison.
 		c.setFlagsSub("10", "4", "6")
-		ok, _, err := c.lowerBranch(1, tc.Op, tc, emitBr, emitCondBr)
+		start := c.b.Len()
+		ok, terminated, err := c.lowerBranch(1, tc.Op, tc, emitBr, emitCondBr)
 		if tc.Op == "B" && len(tc.Args) == 1 && tc.Args[0].Kind == OpSym {
 			// This direct lowerer unit has no complete source CFG proof.
 			// A tail return must not receive fabricated SP/LR provenance.
@@ -557,6 +559,19 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		}
 		mustLowerARM64(t, "lowerBranch", tc, ok, err)
 		if tc.Op == "BL" || tc.Op == "CALL" {
+			if tc.Args[0].Kind != OpSym {
+				// The physical zero-address call faults and has no continuation
+				// whose flags could be observed. Keep that real terminal effect.
+				emitted := c.b.String()[start:]
+				if !terminated || !strings.Contains(emitted, "\"blr $0\"") ||
+					!strings.Contains(emitted, "\"r,~{memory}\"(i64 0)\n  unreachable\n") {
+					t.Fatalf("%s lost its physical zero-address terminal call: terminated=%v IR=%s", tc.Raw, terminated, emitted)
+				}
+				continue
+			}
+			if terminated {
+				t.Fatalf("%s lost its actual symbol-call continuation", tc.Raw)
+			}
 			for _, op := range []Op{"BEQ", "BCC", "BMI", "BVS"} {
 				branch := Instr{Op: op, Args: []Operand{arm64IdentOp("done")}, Raw: string(op) + " done"}
 				handled, _, err := c.lowerBranch(1, op, branch, emitBr, emitCondBr)

@@ -281,16 +281,56 @@ func TestARM64DCZVAStoreProofIsNotNeutralAndIsEmissionBound(t *testing.T) {
 	flow := &arm64MachineAvailability{
 		blocks: []arm64MachineBlock{{name: "entry"}}, source: "DC ZVA,ZR",
 	}
-	ctx := &arm64Ctx{b: &ir, machineAvailability: flow}
+	ctx := &arm64Ctx{
+		b: &ir, machineAvailability: flow, flagsKnown: arm64FlagAll, flagsWritten: true,
+		flagsNSlot: "flags_N", flagsZSlot: "flags_Z", flagsCSlot: "flags_C", flagsVSlot: "flags_V",
+	}
 	ctx.emitMachineStoreNativeIR("  call void asm sideeffect %q, %q()\n", "sys #3, c7, c4, #1, xzr", "~{memory}")
 	ctx.recordMachineOpaqueIR(0, Instr{})
-	if len(flow.blocks[0].effects) != 1 || !flow.blocks[0].effects[0].store || flow.blocks[0].effects[0].opaque {
+	if len(flow.blocks[0].effects) != 1 || !flow.blocks[0].effects[0].store || flow.blocks[0].effects[0].opaque ||
+		ctx.flagsKnown != arm64FlagAll || !ctx.flagsWritten {
 		t.Fatal("validated ZVA emission must retain an explicit data-store effect")
 	}
+
+	checkEffects := func(wantStores, wantOpaque, wantUnavailable int) {
+		t.Helper()
+		stores, opaque := 0, 0
+		unavailable := make(map[string]int)
+		for _, effect := range flow.blocks[0].effects {
+			switch {
+			case effect.store && !effect.opaque && !effect.unavailable:
+				stores++
+			case effect.opaque && !effect.store && !effect.unavailable:
+				opaque++
+			case effect.unavailable && !effect.store && !effect.opaque && effect.width == 1:
+				unavailable[effect.register]++
+			default:
+				t.Fatalf("unexpected native store effect: %+v", effect)
+			}
+		}
+		if stores != wantStores || opaque != wantOpaque || len(unavailable) != 4 ||
+			ctx.flagsKnown != 0 || ctx.flagsWritten {
+			t.Fatalf("native store effects: stores=%d opaque=%d unavailable=%v known=%#x written=%v",
+				stores, opaque, unavailable, ctx.flagsKnown, ctx.flagsWritten)
+		}
+		for _, slot := range []string{ctx.flagsNSlot, ctx.flagsZSlot, ctx.flagsCSlot, ctx.flagsVSlot} {
+			if unavailable[slot] != wantUnavailable {
+				t.Fatalf("native store revoked %s %d times, want %d", slot, unavailable[slot], wantUnavailable)
+			}
+		}
+	}
+
 	start := ir.Len()
 	fmt.Fprint(&ir, "  call void asm sideeffect \"sys #3, c7, c4, #1, xzr\", \"~{memory}\"()\n")
 	ctx.recordMachineOpaqueIR(start, Instr{})
-	if len(flow.blocks[0].effects) != 2 || !flow.blocks[0].effects[1].opaque {
+	if _, proven := flow.nativeIR[start]; proven {
 		t.Fatal("unproven identical native store borrowed an earlier exact-emission proof")
 	}
+	checkEffects(1, 1, 1)
+
+	start = ir.Len()
+	ctx.emitMachineStoreNativeIR("  call void asm sideeffect %q, %q()\n", "sys #3, c7, c4, #1, xzr", "~{memory}")
+	fmt.Fprint(&ir, "  call void @unknown()\n")
+	ctx.recordMachineOpaqueIR(start, Instr{})
+	checkEffects(2, 2, 2)
 }
