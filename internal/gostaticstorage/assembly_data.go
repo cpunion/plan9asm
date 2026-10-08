@@ -145,8 +145,11 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if filepath.Base(source.Name) != source.Name || !strings.HasSuffix(source.Name, ".s") {
 			return nil, contextError("SDK DATA source name differs from its exact selected route")
 		}
-		for _, input := range [][]byte{source.Original, source.Expanded, source.OriginalObject, source.ExpandedObject} {
-			if len(input) == 0 || len(input) > archiveLimit {
+		for ordinal, input := range [][]byte{source.Original, source.Expanded, source.OriginalObject, source.ExpandedObject} {
+			// A real CPP execution may expand a comments-only selected ASM
+			// to empty bytes. Only the CPP adapter admits that grammar; both
+			// complete objects and the matching archive member remain required.
+			if len(input) == 0 && !(cpp && ordinal == 1) || len(input) > archiveLimit {
 				return nil, contextError("SDK DATA source/object input violates its complete byte bound")
 			}
 			total += int64(len(input))
@@ -203,15 +206,21 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		return nil, err
 	}
 	for index, source := range request.Sources {
+		expandedGrammar := source.Expanded
+		if cpp && len(expandedGrammar) == 0 {
+			// The lexer uses a nonempty physical stream. A newline represents
+			// zero statements; it is not substituted into retained source bytes.
+			expandedGrammar = []byte("\n")
+		}
 		originalGrammar := source.Original
 		if cpp {
-			originalGrammar = source.Expanded
+			originalGrammar = expandedGrammar
 		}
 		originalProgram, err := asmDataProgramFingerprint(originalGrammar)
 		if err != nil {
 			return nil, err
 		}
-		expandedProgram, err := asmDataProgramFingerprint(source.Expanded)
+		expandedProgram, err := asmDataProgramFingerprint(expandedGrammar)
 		if err != nil || originalProgram != expandedProgram {
 			return nil, contextError("whole original and expanded ASM token programs differ")
 		}
@@ -219,7 +228,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if err != nil {
 			return nil, err
 		}
-		expandedStates, err := parseASMDataSource(source.Expanded, request.PackagePath, request.Target)
+		expandedStates, err := parseASMDataSource(expandedGrammar, request.PackagePath, request.Target)
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +243,7 @@ func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKA
 		if err := joinASMSourceTexts(originalGrammar, request.PackagePath, original); err != nil {
 			return nil, err
 		}
-		if err := joinASMSourceTexts(source.Expanded, request.PackagePath, expanded); err != nil {
+		if err := joinASMSourceTexts(expandedGrammar, request.PackagePath, expanded); err != nil {
 			return nil, err
 		}
 		layouts, err := joinASMDataLayouts(originalStates, original)

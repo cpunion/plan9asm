@@ -162,6 +162,7 @@ func (source *GoX86SDKASMDataSource) capture(ctx context.Context, provided map[s
 		objectInputs.Sources = append(objectInputs.Sources, observed)
 		source.observation.CPP = append(source.observation.CPP, cpp)
 	}
+	source.observation.ObjectInputs = objectInputs
 	objects, err := gostaticstorage.ObserveX86SDKCPPASMData(objectInputs)
 	if err != nil {
 		return sdkASMDataContext("complete original/expanded/compiler DATA/TEXT join differs: %v", err)

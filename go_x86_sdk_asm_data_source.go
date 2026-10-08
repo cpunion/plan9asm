@@ -328,6 +328,9 @@ func (source *GoX86SDKASMDataSource) Close() error {
 	if source.identity != source {
 		return sdkASMDataContext("copied observation cannot close its original artifact owner")
 	}
+	if source.guard == nil || source.guard != source.originalGuard || source.guard.identity != source.guard {
+		return sdkASMDataContext("foreign artifact guard cannot dispose its owner's directory")
+	}
 	source.mu.Lock()
 	source.ready = false
 	source.generation++
