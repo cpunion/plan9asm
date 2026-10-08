@@ -246,3 +246,23 @@ func TestARM64SyscallRejectsNonIntegerAndMalformedForms(t *testing.T) {
 		}
 	}
 }
+
+func TestARM64SyscallCarryReadersRequireActualDefinition(t *testing.T) {
+	for _, op := range []string{"ADC", "ADCW", "ADCS", "ADCSW", "SBC", "SBCW", "SBCS", "SBCSW", "NGC", "NGCW", "NGCS", "NGCSW"} {
+		instruction := op + " R2,R3"
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(api+"/missing/"+op, func(t *testing.T) {
+				_, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu", arm64SyscallEffectSource("SVC\n"+instruction))
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("carry read cannot consume alloca initialization or fabricated SVC carry: %v", err)
+				}
+			})
+			t.Run(api+"/defined/"+op, func(t *testing.T) {
+				body := "CMP R2,R1\nJMP trap\ntrap:\nSVC\nJMP observe\nobserve:\n" + instruction
+				if _, err := arm64SyscallEffectAPI(t, api, "aarch64-unknown-linux-gnu", arm64SyscallEffectSource(body)); err != nil {
+					t.Fatalf("actual reaching C must survive Linux SVC for %s: %v", op, err)
+				}
+			})
+		}
+	}
+}
