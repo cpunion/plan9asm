@@ -104,3 +104,64 @@ func TestFeatureProfilesBudgetStillBoundsOneTarget(t *testing.T) {
 		t.Fatalf("one target's 128-profile scope escaped its explicit bound: %v", err)
 	}
 }
+
+func TestFeatureProfilesBudgetTargetAndCountBoundaries(t *testing.T) {
+	for _, targets := range [][]string{nil, {"linux/amd64", "linux/amd64"}, {"linux/riscv64"}, make([]string, 65)} {
+		if _, err := newDiscoveryFeatureProfileBudget(targets); err == nil {
+			t.Fatalf("invalid or unbounded target matrix accepted: %v", targets)
+		}
+	}
+	budget, err := newDiscoveryFeatureProfileBudget([]string{"linux/amd64", "linux/386"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"linux/amd64", "linux/386"} {
+		for count := 0; count < 64; count++ {
+			if err := budget.add(target); err != nil {
+				t.Fatalf("target %s rejected its %dth bounded request: %v", target, count+1, err)
+			}
+		}
+		if err := budget.add(target); err == nil || !strings.Contains(err.Error(), target) {
+			t.Fatalf("target %s accepted its 65th request or lost the failure scope: %v", target, err)
+		}
+	}
+	if err := budget.add("windows/amd64"); err == nil {
+		t.Fatal("an uncaptured target borrowed another target's budget")
+	}
+}
+
+func TestFeatureProfilesBudgetActualDriverFiveArchitectures(t *testing.T) {
+	targets := []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"}
+	plan, assembly, _ := featureProfileTargetBudgetFixture(t, targets, 4)
+	goBinary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One minute per actual target, not a larger production command deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(len(targets))*time.Minute)
+	defer cancel()
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, goBinary, t.TempDir(), targetFeatureTestEnv(), plan, assembly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(profiles) != 80 {
+		t.Fatalf("actual five-target driver did not retain all 80 source-required profiles: %d", len(profiles))
+	}
+	if err := validateDiscoveryFeatureProfiles(plan, assembly, profiles, ctx); err != nil {
+		t.Fatalf("complete actual target scopes rejected by consumer validation: %v", err)
+	}
+	counts := make(map[string]int)
+	for _, profile := range profiles {
+		counts[profile.Observed.Target]++
+		for tag, expected := range profile.Request.Expected {
+			if observed, present := profile.Observed.MarkerSelection[tag]; !present || observed != expected {
+				t.Fatalf("actual %s driver contradicted source-required %s=%t", profile.Observed.Target, tag, expected)
+			}
+		}
+	}
+	for _, target := range targets {
+		if counts[target] != 16 {
+			t.Fatalf("actual target %s has %d profiles, want 16", target, counts[target])
+		}
+	}
+}
