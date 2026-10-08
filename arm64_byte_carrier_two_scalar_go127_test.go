@@ -3,11 +3,15 @@
 package plan9asm
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 // The second parameter is a real declared uint32, not permission to access its
@@ -58,6 +62,112 @@ TEXT ·observe_%s(SB),4,$48-40
 		}
 	}
 	return directory, packagePath
+}
+
+func TestARM64ByteCarrierTwoScalarActualEntryFootprint(t *testing.T) {
+	widths := arm64NativeResultTailCases()
+	directory, packagePath := arm64ByteCarrierTwoScalarFixture(t, widths)
+	lease, release := runtimeOracleStageContext(t)
+	defer release()
+	source, err := CaptureGoARM64ByteCarrierSource(lease, arm64ByteCarrierRequest(t, directory, packagePath))
+	if err != nil {
+		t.Fatalf("producer precondition: %v", err)
+	}
+	defer source.Close()
+	for _, width := range widths {
+		name := strings.ToLower(width.name())
+		found := false
+		for _, text := range source.report.Archive[1].Texts {
+			if text.Name != packagePath+"."+name || text.ABI != 1 {
+				continue
+			}
+			found = true
+			entry, err := arm64ByteCarrierTypedEntry(text, source.declarations[name])
+			if err != nil {
+				t.Fatalf("actual two-parameter entry is not closed: %v; code=%x", err, text.Code)
+			}
+			if entry.allocation != 48 || entry.dataStart != 8 || entry.dataBytes != 32 ||
+				entry.callPC != 20 || entry.continuationPC != 24 || len(entry.parameterStores) != 2 ||
+				entry.parameterStores[0].Offset != 8 || entry.parameterStores[0].Bytes != 8 ||
+				entry.parameterStores[1].Offset != 16 || entry.parameterStores[1].Bytes != 4 ||
+				len(entry.resultLoads) != 1 || entry.resultLoads[0].Offset != 24 ||
+				entry.resultLoads[0].Bytes != int64(width.resultBits/8) {
+				t.Fatalf("actual compiler allocation, exact fields or continuation differ: %+v", entry)
+			}
+			t.Logf("actual ABI1 entry %s code=%x allocation=%d callPC=%d continuationPC=%d", name,
+				text.Code, entry.allocation, entry.callPC, entry.continuationPC)
+		}
+		if !found {
+			t.Fatal("original compiler entry is missing")
+		}
+	}
+}
+
+func TestARM64ByteCarrierTwoScalarEntryRejectsFabricatedFields(t *testing.T) {
+	width := arm64NativeResultTailCase{op: "MOVD", resultBits: 32, storeBits: 64}
+	directory, packagePath := arm64ByteCarrierTwoScalarFixture(t, []arm64NativeResultTailCase{width})
+	lease, release := runtimeOracleStageContext(t)
+	defer release()
+	source, err := CaptureGoARM64ByteCarrierSource(lease, arm64ByteCarrierRequest(t, directory, packagePath))
+	if err != nil {
+		t.Fatalf("producer precondition: %v", err)
+	}
+	defer source.Close()
+	name := strings.ToLower(width.name())
+	var original gostaticstorage.TextRecord
+	for _, text := range source.report.Archive[1].Texts {
+		if text.Name == packagePath+"."+name && text.ABI == 1 {
+			original = text
+		}
+	}
+	if _, err := arm64ByteCarrierTypedEntry(original, source.declarations[name]); err != nil {
+		t.Fatalf("unchanged actual entry positive control failed: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*gostaticstorage.TextRecord, *FuncSig)
+	}{
+		{"second-store-missing", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code[16:], 0xd503201f)
+		}},
+		{"second-store-wrong-register", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code[16:], 0xb90013e0)
+		}},
+		{"second-store-authorizes-gap", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code[16:], 0xf9000be1)
+		}},
+		{"second-store-in-gap", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code[16:], 0xb90017e1)
+		}},
+		{"result-load-from-gap", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code[24:], 0xb94017e0)
+		}},
+		{"result-aliases-saved-FP", func(text *gostaticstorage.TextRecord, _ *FuncSig) {
+			binary.LittleEndian.PutUint32(text.Code, 0xf81e0ffe)
+		}},
+		{"call-at-old-continuation", func(text *gostaticstorage.TextRecord, _ *FuncSig) { text.Relocations[0].Offset = 16 }},
+		{"callee-ABI-not-zero", func(text *gostaticstorage.TextRecord, _ *FuncSig) { text.Relocations[0].Target.ABI = 1 }},
+		{"second-argument-is-pointer", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Args[1] = Ptr }},
+		{"second-argument-is-wide", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Args[1] = I64 }},
+		{"second-field-is-gap", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Frame.Params[1].Offset = 12 }},
+		{"second-field-wrong-index", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Frame.Params[1].Index = 0 }},
+		{"gap-is-result", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Frame.Results[0].Offset = 12 }},
+		{"native-tail-is-field", func(_ *gostaticstorage.TextRecord, signature *FuncSig) { signature.Frame.Results[0].Type = I64 }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			text := original
+			text.Code = append([]byte(nil), original.Code...)
+			text.Relocations = append([]gostaticstorage.TextRelocation(nil), original.Relocations...)
+			declaration := source.declarations[name]
+			declaration.Args = append([]LLVMType(nil), declaration.Args...)
+			declaration.Frame.Params = append([]FrameSlot(nil), declaration.Frame.Params...)
+			declaration.Frame.Results = append([]FrameSlot(nil), declaration.Frame.Results...)
+			test.mutate(&text, &declaration)
+			if _, err := arm64ByteCarrierTypedEntry(text, declaration); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("fabricated two-scalar carrier entry accepted: %v", err)
+			}
+		})
+	}
 }
 
 func TestARM64ByteCarrierTwoScalarActualSourceTargetMatrix(t *testing.T) {
@@ -140,5 +250,105 @@ func TestARM64ByteCarrierTwoScalarNativeWidthConsumers(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestARM64ByteCarrierTwoScalarConsumersRejectUndefinedBytes(t *testing.T) {
+	width := arm64NativeResultTailCase{op: "MOVH", resultBits: 8, storeBits: 16}
+	for _, test := range []struct {
+		name, before, after string
+	}{
+		{"parameter-gap-is-not-defined", "MOVD R1,16(RSP)", "MOVW R1,16(RSP)"},
+		{"native-result-tail-is-not-defined", "MOVD R1,24(RSP)", "MOVW R1,24(RSP)"},
+		{"outgoing-input-is-not-defined", "MOVD R0,8(RSP)", "MOVW R0,8(RSP)"},
+		{"saved-LR-is-not-data", "MOVD R0,paramgap+32(FP)", "MOVD R0,paramgap+32(FP)\n    MOVD R0,0(RSP)"},
+	} {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(test.name+"/"+api, func(t *testing.T) {
+				directory, packagePath := arm64ByteCarrierTwoScalarFixture(t, []arm64NativeResultTailCase{width})
+				filename := filepath.Join(directory, "original_arm64.s")
+				original, err := os.ReadFile(filename)
+				if err != nil {
+					t.Fatal(err)
+				}
+				assembly := strings.Replace(string(original), test.before, test.after, 1)
+				if assembly == string(original) {
+					t.Fatal("negative did not change the actual source")
+				}
+				if err := os.WriteFile(filename, []byte(assembly), 0600); err != nil {
+					t.Fatal(err)
+				}
+				lease, release := runtimeOracleStageContext(t)
+				defer release()
+				source, err := CaptureGoARM64ByteCarrierSource(lease, arm64ByteCarrierRequest(t, directory, packagePath))
+				if err != nil {
+					t.Fatalf("original producer precondition: %v", err)
+				}
+				defer source.Close()
+				declarations, err := os.ReadFile(filepath.Join(directory, "decl.go"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				pkg := mustGoPackage(t, packagePath, string(declarations))
+				ir, err := arm64ByteCarrierTranslateAPI(t, api, source, pkg, assembly, "aarch64-unknown-linux-gnu", nil)
+				if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+					t.Fatalf("undefined or protected bytes granted output: %v", err)
+				}
+				if !errors.Is(source.Verify(lease), ErrProbeNeedsContext) {
+					t.Fatal("failed byte proof did not revoke its original owner")
+				}
+			})
+		}
+	}
+}
+
+func TestARM64ByteCarrierTwoScalarFiveTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc is required")
+	}
+	widths := append(arm64NativeResultTailCases(), arm64NativeResultTailCase{op: "MOVW", resultBits: 32, storeBits: 32})
+	directory, packagePath := arm64ByteCarrierTwoScalarFixture(t, widths)
+	declarations, err := os.ReadFile(filepath.Join(directory, "decl.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assembly, err := os.ReadFile(filepath.Join(directory, "original_arm64.s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := mustGoPackage(t, packagePath, string(declarations))
+	base := arm64ByteCarrierRequest(t, directory, packagePath)
+	for _, target := range []struct{ goos, triple string }{
+		{"darwin", "aarch64-apple-darwin"}, {"linux", "aarch64-unknown-linux-gnu"},
+		{"windows", "aarch64-pc-windows-msvc"}, {"freebsd", "aarch64-unknown-freebsd"},
+		{"openbsd", "aarch64-unknown-openbsd"},
+	} {
+		t.Run(target.goos, func(t *testing.T) {
+			request := base
+			request.Target = target.goos + "/arm64"
+			request.Environment = append([]string(nil), base.Environment...)
+			for index, pair := range request.Environment {
+				if strings.HasPrefix(pair, "GOOS=") {
+					request.Environment[index] = "GOOS=" + target.goos
+				}
+			}
+			lease, release := runtimeOracleStageContext(t)
+			defer release()
+			source, err := CaptureGoARM64ByteCarrierSource(lease, request)
+			if err != nil {
+				t.Fatalf("original producer precondition: %v", err)
+			}
+			defer source.Close()
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := arm64ByteCarrierTranslateAPI(t, api, source, pkg, string(assembly), target.triple, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					compileLLVMToObject(t, llc, target.triple, "two-scalar.ll", "two-scalar.o", ir)
+				})
+			}
+		})
 	}
 }
