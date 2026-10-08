@@ -40,14 +40,16 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 	modeInput := &gotoolprofile.InstrumentationConsumerInput{Original: input}
 	invocation, env := instrumentationVersionedFixture(t, ctx, modeInput)
 	input = modeInput.Original
-	env = featureEnvironment(env, map[string]string{"GOOS": "linux", "GOARCH": "amd64"})
+	env = featureEnvironment(env, map[string]string{
+		"GOOS": "linux", "GOARCH": "amd64", "GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": "",
+	})
 	for _, value := range env {
 		key, value, valid := strings.Cut(value, "=")
 		if !valid {
 			t.Fatal("malformed exact-download fixture environment")
 		}
 		switch key {
-		case "GOPROXY", "GOSUMDB", "GOPATH", "GOMODCACHE", "GOOS", "GOARCH":
+		case "GOPROXY", "GOSUMDB", "GOPATH", "GOMODCACHE", "GOOS", "GOARCH", "GO386", "GOARM", "GOARM64", "GOWASM":
 			t.Setenv(key, value)
 		}
 	}
