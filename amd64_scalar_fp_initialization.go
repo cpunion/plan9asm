@@ -1,7 +1,5 @@
 package plan9asm
 
-import "strings"
-
 // This private transfer extends the existing must-initialized result analysis
 // only for logical scalar views. It does not expand the public asmdecl-filter
 // query, caller admission, frame backing, or pointer permissions.
@@ -14,37 +12,7 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 		return err == nil && x86ScalarFPLogicalTransfer(ins, form, state, owned, arch)
 	}
 	if f, known, err := x86GPSIMDTransferProperties(ins, arch); known {
-		if err != nil || f.mmx || f.spec.rawOnly {
-			return false
-		}
-		width := int64(f.bits / 8)
-		lowMask := uint16(1)<<uint(width) - 1
-		if f.sourceX {
-			index, valid := amd64ParseXReg(ins.Args[0].Reg)
-			if !valid || state.xmm[index]&lowMask != lowMask {
-				return false
-			}
-		} else if !x86ResultRead(ins.Args[0], width, state, owned, arch) {
-			return false
-		}
-		if f.destinationX {
-			index, valid := amd64ParseXReg(ins.Args[1].Reg)
-			if !valid {
-				return false
-			}
-			state.xmm[index] = 0xffff // Every GP/X transfer zeroes the rest of X.
-			return true
-		}
-		if f.memoryWrite && ins.Args[1].Kind == OpSym {
-			// A numerical store to an ordinary static symbol cannot define
-			// FP result bytes. It remains an emitted native side effect; this
-			// initialization observer grants no address or extent certificate.
-			symbol := strings.TrimSpace(ins.Args[1].Sym)
-			base, _, valid := parseSBRef(symbol)
-			return valid && strings.HasSuffix(symbol, "(SB)") &&
-				strings.IndexAny(base, "$+(),[] \t") < 0
-		}
-		return x86ResultStore(ins.Args[1], width, state, owned, resultOffset, arch)
+		return err == nil && x86ResultGPSIMDTransfer(ins, f, state, owned, resultOffset, arch)
 	}
 	if form, recognized, err := x86FloatAddSubProperties(ins, arch); recognized {
 		return err == nil && x86ScalarFPFloatBinaryTransfer(ins, form.x86FloatBinaryForm, state, owned, arch)

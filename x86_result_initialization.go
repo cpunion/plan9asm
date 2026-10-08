@@ -264,7 +264,7 @@ type x86ResultState struct {
 	fp    []bool
 	auto  []bool
 	gp    [16]uint8
-	xmm   [32]uint16 // high banks are consumed only by private, mode-bound forms
+	xmm   [32]uint16 // high banks are consumed only by validated mode-bound forms
 	masks [8]bool    // used only by the private scalar bit-view transfer
 	flags uint8
 
@@ -407,6 +407,12 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	// copy; the original source and any native certificates stay untouched.
 	if ins.Op == "MOVD" {
 		ins.Op = "MOVQ"
+	}
+	if form, known, err := x86GPSIMDTransferProperties(ins, arch); known &&
+		len(ins.Args) == 2 && ins.Args[0].Kind == OpReg && ins.Args[1].Kind == OpReg {
+		// Share numerical register effects, not the private observer's
+		// separate FP/AUTO/SB memory roles or any native/caller permission.
+		return err == nil && x86ResultGPSIMDTransfer(ins, form, state, owned, resultOffset, arch)
 	}
 	if accepted, recognized := x86ResultScalarLaneStep(ins, state, owned, resultOffset, arch); recognized {
 		return accepted
