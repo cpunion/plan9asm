@@ -73,7 +73,8 @@ func amd64OriginalObservationFixture(t *testing.T, variant string) AMD64Original
 		}
 	}
 	env = replaceEnv(env, map[string]string{"GOOS": "linux", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOFLAGS": "",
-		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off"})
+		"GOENV": "off", "GOWORK": "off", "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off",
+		"GOAMD64": "v1", "GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": "", "GOEXPERIMENT": ""})
 	return AMD64OriginalObservationRequest{GoBinary: binary, Directory: dir, PackagePath: path, Target: "linux/amd64", Environment: env}
 }
 
