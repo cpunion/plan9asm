@@ -58,12 +58,15 @@ func numericalLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options
 				if readErr != nil {
 					t.Fatal(readErr)
 				}
-				result, translateErr := TranslateGoModule(pkg, string(data), GoModuleOptions{
-					Goarch: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
+				result, translateErr := TranslateGoModule(pkg, data, GoModuleOptions{
+					GOARCH: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
 					FileName: source.request.AssemblyFile, NumericalReads: options.NumericalReads,
 					ResolveSym: options.ResolveSym,
 				})
-				module, err = result.Module, translateErr
+				err = translateErr
+				if result != nil {
+					module = result.Module
+				}
 			}
 			ir := ""
 			if !module.IsNil() {
