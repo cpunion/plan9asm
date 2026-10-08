@@ -71,6 +71,8 @@ func TestGoStaticStorageTEXTReportMutationGuards(t *testing.T) {
 			r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.ABIKnown = false
 		},
 		"symbol index":  func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.SymbolIndex++ },
+		"symbol kind":   func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.Kind++ },
+		"kind known":    func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.KindKnown = true },
 		"native symbol": func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Target.Name += "other" },
 		"package":       func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[2].Target.Package += "/other" },
 		"auxiliary":     func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Auxiliary[0].Type++ },

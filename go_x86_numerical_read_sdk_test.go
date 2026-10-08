@@ -245,8 +245,8 @@ func TestGoX86SDKNumericalReadOriginalCRC32KeepsUnadmittedArchiveContext(t *test
 	if source != nil {
 		source.Close()
 	}
-	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "duplicate SDK same-ABI definition: sync.OnceFunc.func1") {
-		t.Fatal("explicit SDK source authentication lost its exact unadmitted compiler-object boundary", err)
+	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "assembly DATA definition needs an independent role: r2r1") {
+		t.Fatal("explicit SDK source authentication lost its exact unadmitted private DATA boundary", err)
 	}
 	if err := owner.Verify(ctx); err != nil {
 		t.Fatal("unadmitted archive Context revoked the independent SDK CPU data owner", err)
