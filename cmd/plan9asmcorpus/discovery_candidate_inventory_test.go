@@ -311,3 +311,64 @@ func TestDiscoveryCandidateInventoryRetainsForeignAliasMembership(t *testing.T) 
 		}
 	}
 }
+
+func TestDiscoveryAssemblyFileMembershipRetainsOnlyExactInterests(t *testing.T) {
+	ledger, selected := writeDiscoveryForeignPayloadLedger(t, true, 2)
+	key := discoveryAssemblyFileKey{Module: selected.Module, Version: selected.Version, AsmFile: selected.AsmFiles[0]}
+	duplicate := discoveryRecord{Kind: "matched", Module: key.Module, Version: key.Version,
+		AsmFiles: []string{key.AsmFile, "second_arm64.s"}}
+	data, err := json.Marshal(duplicate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendDiscoveryInventoryRecords(t, ledger, string(data), string(data),
+		`{"kind":"scanned","module":"example.com/noasm","version":"v1.0.0"}`)
+	second := key
+	second.AsmFile = "second_arm64.s"
+	wrongVersion, wrongFile, ignored := key, key, key
+	wrongVersion.Version = "v1.0.1"
+	wrongFile.AsmFile = "missing.s"
+	ignored.Module = "example.com/noasm"
+	interests := map[discoveryAssemblyFileKey]bool{key: true, second: true,
+		wrongVersion: true, wrongFile: true, ignored: false}
+	before := make(map[discoveryAssemblyFileKey]bool, len(interests))
+	for key, value := range interests {
+		before[key] = value
+	}
+	got, err := discoveryAssemblyFileMembershipFor(ledger, interests)
+	if err != nil || !reflect.DeepEqual(got, map[discoveryAssemblyFileKey]bool{key: true, second: true}) ||
+		!reflect.DeepEqual(interests, before) {
+		t.Fatalf("exact membership changed: got=%v input=%v err=%v", got, interests, err)
+	}
+}
+
+func TestDiscoveryExceptionPreflightValidatesUnselectedTailAndEmptyInterests(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		for _, empty := range []bool{false, true} {
+			for _, tail := range []string{"{truncated JSON",
+				`{"kind":"matched","module":"example.com/foreign","version":"v1.0.0","asm_files":["../unsafe.s"]}`,
+				`{"kind":"matched","module":"example.com/foreign","version":"v1.0.0","asm_files":[]}`} {
+				t.Run(fmt.Sprintf("directory=%t/empty=%t/tail=%q", directory, empty, tail), func(t *testing.T) {
+					ledger, selected := writeDiscoveryForeignPayloadLedger(t, directory, 2)
+					root := t.TempDir()
+					writeDiscoveryInventoryExceptionManifests(t, root, ledger, selected.exactKey())
+					if empty {
+						for _, name := range []string{"private-extensions.json", "native-layout.json"} {
+							writeTestFile(t, filepath.Join(root, "testdata", "corpus", name), `{"schema_version":1,"skips":[]}`)
+						}
+					}
+					appendDiscoveryInventoryRecords(t, ledger, tail)
+					if got, err := discoveryAssemblyFileMembershipFor(ledger, nil); err == nil || got != nil {
+						t.Fatalf("empty interests hid invalid tail: %v, %v", got, err)
+					}
+					if got, err := loadPrivateExtensionSkips(root, ledger); err == nil || got != nil {
+						t.Fatalf("private manifest hid invalid tail: %v, %v", got, err)
+					}
+					if got, err := loadNativeLayoutSkips(root, ledger); err == nil || got != nil {
+						t.Fatalf("native manifest hid invalid tail: %v, %v", got, err)
+					}
+				})
+			}
+		}
+	}
+}

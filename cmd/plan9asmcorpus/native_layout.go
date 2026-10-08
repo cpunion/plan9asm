@@ -61,13 +61,13 @@ func loadNativeLayoutSkips(repoRoot, ledgerPath string) (map[string]discoveryNat
 	if manifest.SchemaVersion != 1 {
 		return nil, fmt.Errorf("unsupported native-layout manifest schema %d", manifest.SchemaVersion)
 	}
-	candidates, err := loadDiscoveryCandidates(ledgerPath)
+	interests := make(map[discoveryAssemblyFileKey]bool, len(manifest.Skips))
+	for _, skip := range manifest.Skips {
+		interests[discoveryAssemblyFileKey{Module: skip.Module, Version: skip.Version, AsmFile: skip.AsmFile}] = true
+	}
+	known, err := discoveryAssemblyFileMembershipFor(ledgerPath, interests)
 	if err != nil {
 		return nil, err
-	}
-	known := make(map[string]discoveryCandidate, len(candidates))
-	for _, candidate := range candidates {
-		known[candidate.exactKey()] = candidate
 	}
 	skips := make(map[string]discoveryNativeLayoutSkip, len(manifest.Skips))
 	for _, skip := range manifest.Skips {
@@ -75,8 +75,7 @@ func loadNativeLayoutSkips(repoRoot, ledgerPath string) (map[string]discoveryNat
 		if _, duplicate := skips[key]; duplicate {
 			return nil, fmt.Errorf("duplicate native-layout skip %s", key)
 		}
-		candidate, ok := known[key]
-		if !ok || !containsDiscoveryString(candidate.AsmFiles, skip.AsmFile) {
+		if !known[discoveryAssemblyFileKey{Module: skip.Module, Version: skip.Version, AsmFile: skip.AsmFile}] {
 			return nil, fmt.Errorf("%s: native-layout file %q is absent from scan ledger", key, skip.AsmFile)
 		}
 		if err := module.Check(skip.Module, skip.Version); err != nil {

@@ -14,6 +14,34 @@ type discoveryCandidateInventory struct {
 	FullShard  []discoveryCandidate
 }
 
+type discoveryAssemblyFileKey struct {
+	Module  string
+	Version string
+	AsmFile string
+}
+
+// Exception manifests need exact file membership, not the entire candidate's
+// source list. Even an empty interest set must validate the complete ledger.
+func discoveryAssemblyFileMembershipFor(root string, interests map[discoveryAssemblyFileKey]bool) (map[discoveryAssemblyFileKey]bool, error) {
+	found := make(map[discoveryAssemblyFileKey]bool)
+	err := walkDiscoveryRecords(root, func(record discoveryRecord) error {
+		if record.Kind != "matched" {
+			return nil
+		}
+		for _, file := range record.AsmFiles {
+			key := discoveryAssemblyFileKey{Module: record.Module, Version: record.Version, AsmFile: file}
+			if interests[key] {
+				found[key] = true
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return found, nil
+}
+
 // loadDiscoveryCandidateInventory validates every record while retaining full
 // assembly payloads only for the executing shard. Global membership and target
 // eligibility remain exact, including duplicate matched records across files.

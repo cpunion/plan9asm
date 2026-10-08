@@ -57,13 +57,13 @@ func loadPrivateExtensionSkips(repoRoot, ledgerPath string) (map[string]discover
 	if manifest.SchemaVersion != 1 {
 		return nil, fmt.Errorf("unsupported private-extension manifest schema %d", manifest.SchemaVersion)
 	}
-	candidates, err := loadDiscoveryCandidates(ledgerPath)
+	interests := make(map[discoveryAssemblyFileKey]bool, len(manifest.Skips))
+	for _, skip := range manifest.Skips {
+		interests[discoveryAssemblyFileKey{Module: skip.Module, Version: skip.Version, AsmFile: skip.AsmFile}] = true
+	}
+	known, err := discoveryAssemblyFileMembershipFor(ledgerPath, interests)
 	if err != nil {
 		return nil, err
-	}
-	known := make(map[string]discoveryCandidate, len(candidates))
-	for _, candidate := range candidates {
-		known[candidate.exactKey()] = candidate
 	}
 	skips := make(map[string]discoveryPrivateExtensionSkip, len(manifest.Skips))
 	for _, skip := range manifest.Skips {
@@ -71,8 +71,7 @@ func loadPrivateExtensionSkips(repoRoot, ledgerPath string) (map[string]discover
 		if _, duplicate := skips[key]; duplicate {
 			return nil, fmt.Errorf("duplicate private-extension skip %s", key)
 		}
-		candidate, ok := known[key]
-		if !ok || !containsDiscoveryString(candidate.AsmFiles, skip.AsmFile) {
+		if !known[discoveryAssemblyFileKey{Module: skip.Module, Version: skip.Version, AsmFile: skip.AsmFile}] {
 			return nil, fmt.Errorf("%s: private-extension file %q is absent from scan ledger", key, skip.AsmFile)
 		}
 		if err := module.Check(skip.Module, skip.Version); err != nil {
