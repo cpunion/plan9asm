@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
+	"strings"
 )
 
 type amd64MaskBroadcastSpec struct {
@@ -25,7 +26,7 @@ func (c *amd64Ctx) lowerMaskRegisterBroadcast(op Op, ins Instr) (ok bool, termin
 	if err != nil {
 		return true, false, err
 	}
-	spec := amd64MaskBroadcastSpecs[op]
+	spec := amd64MaskBroadcastSpecs[Op(strings.ToUpper(string(op)))]
 	byteWidth := f.byteWidth
 	mask, err := c.loadK(ins.Args[0].Reg)
 	if err != nil {
