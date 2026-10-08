@@ -135,3 +135,69 @@ func TestCPPTransportRequiresSourceOnlySelectedSibling(t *testing.T) {
 		}
 	}
 }
+
+func TestCPPTransportRetainsInactiveClosureAndIndependentQueries(t *testing.T) {
+	files := []string{"pkg/native_amd64.s", "pkg/native_arm64.s"}
+	plan, profiles, root := cppPackageTransportFixture(t, []string{"linux/amd64"}, files, map[string]string{
+		"pkg/decl.go": "package fixture\nfunc Probe()\n",
+		"pkg/native_amd64.s": "#include \"textflag.h\"\n#include \"sub/outer.h\"\n" +
+			"TEXT ·Probe(SB),NOSPLIT,$0-0\nRET\n",
+		"pkg/native_arm64.s": "TEXT ·Probe(SB),4,$0-0\nRET\n",
+		"pkg/sub/outer.h": "#ifdef GOAMD64_v3\n#include \"choice.h\"\n" +
+			"#else\n#include \"alternate.h\"\n#endif\n",
+		"pkg/alternate.h": "#define ALTERNATE 1\n",
+	})
+	profile := profiles[0]
+	selected := []string{"pkg/native_amd64.s"}
+	construct := func() *gotoolprofile.ConsumerInput {
+		return ordinaryProfileConsumerInput(plan, profile, plan.Module, root, selected)
+	}
+	input := construct()
+	for _, id := range []string{"module/pkg/native_amd64.s", "module/pkg/sub/outer.h",
+		"module/pkg/choice.h", "module/pkg/alternate.h", "tool/pkg/include/textflag.h"} {
+		if input.CPPOriginals.Sources[id] == "" {
+			t.Fatal("projection dropped an inactive/transitive or SDK source", id)
+		}
+	}
+	if _, present := input.CPPOriginals.Sources["module/pkg/native_arm64.s"]; present {
+		t.Fatal("unselected other-target body was transported")
+	}
+	if len(plan.CPPInputs.Units) != 2 || len(plan.CPPInputs.Sources) != 6 {
+		t.Fatal("per-invocation projection mutated the captured module graph")
+	}
+	for name, mutate := range map[string]func(*gotoolprofile.ConsumerInput){
+		"selected_unit": func(in *gotoolprofile.ConsumerInput) {
+			delete(in.CPPOriginals.Units, selected[0])
+		},
+		"inactive_include": func(in *gotoolprofile.ConsumerInput) {
+			delete(in.CPPOriginals.Sources, "module/pkg/alternate.h")
+		},
+		"tool_bytes": func(in *gotoolprofile.ConsumerInput) {
+			in.CPPOriginals.Sources["tool/pkg/include/textflag.h"] += "changed"
+		},
+		"original_hash": func(in *gotoolprofile.ConsumerInput) {
+			in.Sources["pkg/sub/outer.h"] = strings.Repeat("0", 64)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			changed := construct()
+			mutate(changed)
+			if err := gotoolprofile.ValidateCPPOriginalInputs(changed); err == nil {
+				t.Fatal("changed projected original closure was accepted")
+			}
+			fresh := construct()
+			if err := gotoolprofile.ValidateCPPOriginalInputs(fresh); err != nil {
+				t.Fatalf("one private query mutated another invocation or source graph: %v", err)
+			}
+		})
+	}
+	// Even an unselected original remains part of the independently validated
+	// module graph. Projection cannot rescue changed captured source bytes.
+	other := plan.CPPInputs.Sources["module/pkg/native_arm64.s"]
+	changed := *other.Original + "changed"
+	other.Original = &changed
+	plan.CPPInputs.Sources["module/pkg/native_arm64.s"] = other
+	if got := construct(); got.CPPSourceProtocol == "" || got.CPPOriginals != nil {
+		t.Fatal("projection skipped full-module validation before transport")
+	}
+}
