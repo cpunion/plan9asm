@@ -2,6 +2,7 @@ package gostaticstorage
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -17,6 +18,61 @@ type asmDataLayoutState struct {
 	actualSize int64
 	data       []byte
 	addresses  []ASMDataFragment
+}
+
+func asmDataProgramFingerprint(source []byte) (string, error) {
+	statements, err := asmDataStatements(source)
+	if err != nil {
+		return "", err
+	}
+	// Preserve complete statement/token order, not merely DATA values. Raw
+	// source hashes remain separate; whitespace/comments do not change grammar.
+	type token struct {
+		Kind rune
+		Text string
+	}
+	program := make([][]token, len(statements))
+	for ordinal, statement := range statements {
+		for _, value := range statement {
+			program[ordinal] = append(program[ordinal], token{value.kind, value.text})
+		}
+	}
+	encoded, err := json.Marshal(program)
+	if err != nil {
+		return "", err
+	}
+	return digest(encoded), nil
+}
+
+func joinASMSourceTexts(source []byte, packagePath string, member ASMDataMember) error {
+	statements, err := asmDataStatements(source)
+	if err != nil {
+		return err
+	}
+	var names []ASMDataAddressValue
+	for _, statement := range statements {
+		if statement[0].text != "TEXT" {
+			continue
+		}
+		operands := asmDataOperands(statement[1:])
+		if len(operands) != 2 && len(operands) != 3 {
+			return contextError("source TEXT declaration has an invalid operand inventory")
+		}
+		symbol, err := asmDataSymbol(operands[0], packagePath)
+		if err != nil || symbol.Addend != 0 {
+			return contextError("source TEXT declaration lacks its exact symbol/ABI")
+		}
+		names = append(names, symbol)
+	}
+	if len(names) != len(member.Texts) {
+		return contextError("source TEXT declaration inventory differs from the complete actual object")
+	}
+	for ordinal, symbol := range names {
+		if member.Texts[ordinal].Name != symbol.Name || member.Texts[ordinal].ABI != symbol.ABI {
+			return contextError("source TEXT symbol/ABI/ordinal differs from the exact original body")
+		}
+	}
+	return nil
 }
 
 func asmDataStatements(source []byte) ([][]asmDataToken, error) {

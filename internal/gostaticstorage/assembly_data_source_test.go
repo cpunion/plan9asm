@@ -8,32 +8,36 @@ import (
 	"testing"
 )
 
+var asmDataGrammarCases = []struct {
+	name, value string
+	width       int64
+	kind        ASMDataValueKind
+	bits        uint64
+	text        string
+}{
+	{"byte-truncation", "-1", 1, ASMDataInteger, 255, ""},
+	{"word-truncation", "0x12345", 2, ASMDataInteger, 0x2345, ""},
+	{"uint64-wrap", "(~0)+2", 8, ASMDataInteger, 1, ""},
+	{"go-precedence", "1|2^3+4*5&7", 8, ASMDataInteger, 4, ""},
+	{"division-modulo", "29/4%3", 8, ASMDataInteger, 1, ""},
+	{"left-shift", "1<<65", 8, ASMDataInteger, 0, ""},
+	{"right-associative-shift", "64>>4>>1", 8, ASMDataInteger, 16, ""},
+	{"char-truncation", "'世'", 1, ASMDataInteger, 0x16, ""},
+	{"char-lex-normalization", "'·'", 1, ASMDataInteger, '.', ""},
+	{"float32", "1.25", 4, ASMDataFloat, uint64(math.Float32bits(1.25)), ""},
+	{"float64", "-(3.5)", 8, ASMDataFloat, math.Float64bits(-3.5), ""},
+	{"negative-zero", "-0.0", 8, ASMDataFloat, uint64(1) << 63, ""},
+	{"hex-float", "0x1.8p+1", 4, ASMDataFloat, uint64(math.Float32bits(3)), ""},
+	// Official asm parses float64 first. Direct Go constant conversion to
+	// float32 would instead round this decimal to the next float32 value.
+	{"float32-rounding", "1.0000000596046448", 4, ASMDataFloat, uint64(math.Float32bits(1)), ""},
+	{"string-padding", `"A\x00B"`, 8, ASMDataString, 0, "A\x00B"},
+	{"string-lex-normalization", `"·∕"`, 4, ASMDataString, 0, "./"},
+	{"zero-string", `""`, 0, ASMDataString, 0, ""},
+}
+
 func TestASMDataTypedGrammar(t *testing.T) {
-	for _, test := range []struct {
-		name, value string
-		width       int64
-		kind        ASMDataValueKind
-		bits        uint64
-		text        string
-	}{
-		{"byte-truncation", "-1", 1, ASMDataInteger, 255, ""},
-		{"word-truncation", "0x12345", 2, ASMDataInteger, 0x2345, ""},
-		{"uint64-wrap", "(~0)+2", 8, ASMDataInteger, 1, ""},
-		{"go-precedence", "1|2^3+4*5&7", 8, ASMDataInteger, 5, ""},
-		{"division-modulo", "29/4%3", 8, ASMDataInteger, 1, ""},
-		{"left-shift", "1<<65", 8, ASMDataInteger, 0, ""},
-		{"right-associative-shift", "64>>4>>1", 8, ASMDataInteger, 16, ""},
-		{"char-truncation", "'世'", 1, ASMDataInteger, 0x16, ""},
-		{"char-lex-normalization", "'·'", 1, ASMDataInteger, '.', ""},
-		{"float32", "1.25", 4, ASMDataFloat, uint64(math.Float32bits(1.25)), ""},
-		{"float64", "-(3.5)", 8, ASMDataFloat, math.Float64bits(-3.5), ""},
-		{"negative-zero", "-0.0", 8, ASMDataFloat, uint64(1) << 63, ""},
-		{"hex-float", "0x1.8p+1", 4, ASMDataFloat, uint64(math.Float32bits(3)), ""},
-		{"float32-rounding", "1.0000000596046448", 4, ASMDataFloat, uint64(math.Float32bits(float32(1.0000000596046448))), ""},
-		{"string-padding", `"A\x00B"`, 8, ASMDataString, 0, "A\x00B"},
-		{"string-lex-normalization", `"·∕"`, 4, ASMDataString, 0, "./"},
-		{"zero-string", `""`, 0, ASMDataString, 0, ""},
-	} {
+	for _, test := range asmDataGrammarCases {
 		t.Run(test.name, func(t *testing.T) {
 			source := fmt.Sprintf("DATA value<>+0(SB)/%d,$%s\nGLOBL value<>(SB),8,$16\n", test.width, test.value)
 			states, err := parseASMDataSource([]byte(source), "example.invalid/fixture", "linux/amd64")

@@ -136,7 +136,7 @@ func asmDataFixtureSource(arch string) string {
 	if arch == "386" {
 		width = 4
 	}
-	return fmt.Sprintf(`TEXT ·Entry(SB),4,$0-0
+	source := fmt.Sprintf(`TEXT ·Entry(SB),4,$0-0
 RET
 DATA integers<>+0(SB)/1,$-1
 DATA integers<>+1(SB)/2,$0x12345
@@ -162,6 +162,15 @@ GLOBL shortened<>(SB),8,$1
 DATA shared+0(SB)/1,$7
 GLOBL shared(SB),2|8,$1
 `, width, width, width)
+	for index, test := range asmDataGrammarCases {
+		source += fmt.Sprintf("DATA complete_%d<>+0(SB)/%d,$%s\nGLOBL complete_%d<>(SB),8,$16\n", index, test.width, test.value, index)
+	}
+	source += "GLOBL before<>(SB),16,$1\nDATA before<>+2(SB)/4,$7\n"
+	source += "DATA noptr<>(SB)/1,$7\nGLOBL noptr<>(SB),16,$1\n"
+	source += "DATA priority<>(SB)/1,$7\nGLOBL priority<>(SB),8|16|256,$1\n"
+	source += "DATA ignored<>(SB)/1,$7\nGLOBL ignored<>(SB),1|4|32|64|512|1024|2048|4096,$1\n"
+	source += "DATA ·Visible(SB)/1,$7\nGLOBL ·Visible(SB),8,$1\n"
+	return source
 }
 
 func TestGoSDKASMDataFirstParty(t *testing.T) {
@@ -266,7 +275,7 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			if !reflect.DeepEqual(observation.Members, original) {
 				t.Fatal("complete namespace/index/data/relocation/TEXT observation differs from actual SDK")
 			}
-			if len(observation.Sources[0].Layouts) != 10 || len(observation.Sources[1].Layouts) != 2 {
+			if len(observation.Sources[0].Layouts) != 15+len(asmDataGrammarCases) || len(observation.Sources[1].Layouts) != 2 {
 				t.Fatal("typed DATA/GLOBL grammar lost source declarations")
 			}
 			if _, err := ObserveX86SDKAssemblyArchive(archive, builtin, target, selected.SFiles); err == nil || !strings.Contains(err.Error(), "assembly DATA definition") {

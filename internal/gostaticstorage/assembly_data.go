@@ -98,7 +98,10 @@ type ASMDataSourceObservation struct {
 	OriginalSHA256, ExpandedSHA256 string
 	OriginalObjectSHA256           string
 	ExpandedObjectSHA256           string
+	OriginalProgramSHA256          string
+	ExpandedProgramSHA256          string
 	Layouts                        []ASMGlobalLayout
+	ExpandedLayouts                []ASMGlobalLayout
 	Original, Expanded             ASMDataMember
 }
 
@@ -122,6 +125,14 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 	total := int64(len(request.Archive))
 	names := make([]string, len(request.Sources))
 	for index, source := range request.Sources {
+		originalProgram, err := asmDataProgramFingerprint(source.Original)
+		if err != nil {
+			return nil, err
+		}
+		expandedProgram, err := asmDataProgramFingerprint(source.Expanded)
+		if err != nil || originalProgram != expandedProgram {
+			return nil, contextError("whole original and expanded ASM token programs differ")
+		}
 		if filepath.Base(source.Name) != source.Name || !strings.HasSuffix(source.Name, ".s") {
 			return nil, contextError("SDK DATA source name differs from its exact selected route")
 		}
@@ -189,6 +200,12 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		if err != nil {
 			return nil, err
 		}
+		if err := joinASMSourceTexts(source.Original, request.PackagePath, original); err != nil {
+			return nil, err
+		}
+		if err := joinASMSourceTexts(source.Expanded, request.PackagePath, expanded); err != nil {
+			return nil, err
+		}
 		layouts, err := joinASMDataLayouts(originalStates, original)
 		if err != nil {
 			return nil, err
@@ -220,7 +237,8 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		observation.Sources = append(observation.Sources, ASMDataSourceObservation{Name: source.Name,
 			OriginalSHA256: digest(source.Original), ExpandedSHA256: digest(source.Expanded),
 			OriginalObjectSHA256: digest(source.OriginalObject), ExpandedObjectSHA256: digest(source.ExpandedObject),
-			Layouts: layouts, Original: original, Expanded: expanded})
+			OriginalProgramSHA256: originalProgram, ExpandedProgramSHA256: expandedProgram,
+			Layouts: layouts, ExpandedLayouts: expandedLayouts, Original: original, Expanded: expanded})
 	}
 	return observation, nil
 }
