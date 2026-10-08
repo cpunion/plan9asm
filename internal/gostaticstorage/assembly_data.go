@@ -125,14 +125,6 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 	total := int64(len(request.Archive))
 	names := make([]string, len(request.Sources))
 	for index, source := range request.Sources {
-		originalProgram, err := asmDataProgramFingerprint(source.Original)
-		if err != nil {
-			return nil, err
-		}
-		expandedProgram, err := asmDataProgramFingerprint(source.Expanded)
-		if err != nil || originalProgram != expandedProgram {
-			return nil, contextError("whole original and expanded ASM token programs differ")
-		}
 		if filepath.Base(source.Name) != source.Name || !strings.HasSuffix(source.Name, ".s") {
 			return nil, contextError("SDK DATA source name differs from its exact selected route")
 		}
@@ -184,6 +176,14 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 		observation.Members = append(observation.Members, value)
 	}
 	for index, source := range request.Sources {
+		originalProgram, err := asmDataProgramFingerprint(source.Original)
+		if err != nil {
+			return nil, err
+		}
+		expandedProgram, err := asmDataProgramFingerprint(source.Expanded)
+		if err != nil || originalProgram != expandedProgram {
+			return nil, contextError("whole original and expanded ASM token programs differ")
+		}
 		originalStates, err := parseASMDataSource(source.Original, request.PackagePath, request.Target)
 		if err != nil {
 			return nil, err
