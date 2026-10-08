@@ -101,7 +101,7 @@ func TestGoX86NumericalSBReadGoWrapperOriginalBytesPostGuard(t *testing.T) {
 	mutated := false
 	callback := func(symbol string) string {
 		pc, _, _, ok := runtime.Caller(1)
-		if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".goSigsForAsmFile") && !mutated {
+		if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".addDeclaredFuncSigs") && !mutated {
 			// Alter caller-owned bytes only after parsing, not the frozen
 			// object/source producer or the callback's returned symbol.
 			input[len(input)-1] ^= 1

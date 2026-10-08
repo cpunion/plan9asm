@@ -477,8 +477,9 @@ func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPacka
 		!numericalSameImports(pkg.Imports, binding.originalImports) ||
 		opt.GOOS != "linux" || opt.GOARCH != binding.options.Goarch || opt.TargetTriple != binding.options.TargetTriple ||
 		opt.WASMABI != binding.options.WASMABI || opt.X87Mode != binding.options.X87Mode || opt.AnnotateSource != binding.options.AnnotateSource ||
+		opt.Sizes != nil || opt.FrameSizes != nil ||
 		opt.ResolveSym == nil || opt.KeepFunc != nil || opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 ||
-		filepath.Base(opt.FileName) != binding.source.request.AssemblyFile {
+		opt.FileName != binding.source.request.AssemblyFile && opt.FileName != filepath.Join(binding.source.request.Directory, binding.source.request.AssemblyFile) {
 		return numericalSBContext("Go wrapper declaration/profile/source role differs")
 	}
 	binding.source.mu.Lock()
