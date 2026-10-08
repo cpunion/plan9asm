@@ -128,9 +128,6 @@ func sameASMDataObjects(first, second ASMDataMember) bool {
 		member.Name, member.NameBytes, member.Ordinal, member.Offset, member.Size = "", nil, 0, 0, 0
 		definitions := make([]ASMDataDefinition, 0, len(member.Definitions))
 		for _, definition := range member.Definitions {
-			if definition.Name == "" {
-				continue
-			}
 			definition.DataOffset = 0
 			definitions = append(definitions, definition)
 		}

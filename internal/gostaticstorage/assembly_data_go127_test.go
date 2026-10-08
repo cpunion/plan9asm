@@ -220,7 +220,9 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				expanded := []byte("// independent expanded source\n" + string(source))
+				// Keep actual physical source lines stable for the initial whole
+				// object join. Distinct raw spacing is still retained and hashed.
+				expanded := []byte(strings.ReplaceAll(string(source), ",", ", "))
 				expandedName := fmt.Sprintf("expanded-%d.asm", index)
 				if err := os.WriteFile(filepath.Join(consumer, expandedName), expanded, 0600); err != nil {
 					t.Fatal(err)
@@ -256,6 +258,11 @@ func TestGoSDKASMDataFirstParty(t *testing.T) {
 			for index := range original {
 				original[index].Texts = originalTexts[index].Texts
 			}
+			observedJSON, err := json.MarshalIndent(observation, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			retainTextArtifact(t, target, "asm-data-first-party", map[string][]byte{"observation.json": observedJSON})
 			if !reflect.DeepEqual(observation.Members, original) {
 				t.Fatal("complete namespace/index/data/relocation/TEXT observation differs from actual SDK")
 			}
