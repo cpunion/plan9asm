@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -17,13 +18,15 @@ func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
 	pkg, _, _, create := numericalConsumerFactory(t, "amd64")
 	source, options := create(t)
 	resolve := options.ResolveSym
-	functionCalls := 0
+	metadataCallback := false
 	stateful := func(symbol string) string {
 		if symbol == "·Feature" {
-			functionCalls++
-			// The original implementation's fifth function resolution is
-			// its metadata loop after the inner module has been frozen.
-			if functionCalls == 5 {
+			// A caller may change only one answer and restore all later
+			// answers. Select the direct wrapper metadata call, not the
+			// nested declaration or pre/post guard consumers.
+			pc, _, _, ok := runtime.Caller(1)
+			if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".translateGoModuleInContext") {
+				metadataCallback = true
 				return "foreign.Feature"
 			}
 		}
@@ -36,8 +39,8 @@ func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
 	if err != nil {
 		// A guard that rejects the changed callback is also valid; it must
 		// return no module or partially inconsistent metadata.
-		if result != nil || !errors.Is(err, ErrProbeNeedsContext) || functionCalls < 5 {
-			t.Fatal("wrapper failed outside the actual metadata TOCTOU", functionCalls, err)
+		if result != nil || !errors.Is(err, ErrProbeNeedsContext) || !metadataCallback {
+			t.Fatal("wrapper failed outside the actual metadata TOCTOU", metadataCallback, err)
 		}
 		return
 	}
@@ -48,7 +51,7 @@ func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
 	want := pkg.Path + ".Feature"
 	if len(result.Functions) != 1 || result.Functions[0].ResolvedSymbol != want ||
 		result.Module.NamedFunction(want).IsNil() || len(result.Signatures) != 1 || result.Signatures[want].Name != want {
-		t.Fatal("wrapper module, signatures and function metadata disagree", functionCalls, result.Functions, result.Signatures)
+		t.Fatal("wrapper module, signatures and function metadata disagree", metadataCallback, result.Functions, result.Signatures)
 	}
 }
 
@@ -223,6 +226,9 @@ func TestGoX86NumericalSBReadBindingDeclarationIdentityAndWrapperGuards(t *testi
 			}
 			if err := verifyGoNumericalReadInputs(binding, wrapperPkg, opt); !errors.Is(err, ErrProbeNeedsContext) {
 				t.Fatal("unbound Go wrapper declaration/source role survived the precondition", mutation, err)
+			}
+			if !errors.Is(binding.source.Verify(binding.context), ErrProbeNeedsContext) {
+				t.Fatal("failed wrapper guard did not permanently revoke its source")
 			}
 		})
 	}
