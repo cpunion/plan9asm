@@ -15,6 +15,17 @@ type preparedDiscoveryProgress struct {
 	parent      os.FileInfo
 }
 
+// A narrow first-party publication helper. Production verification uses the
+// preparation API so its final input checks precede publication.
+func writeDiscoveryProgressOutput(filename string, progress discoveryProgress) (result error) {
+	prepared, err := prepareDiscoveryProgressOutput(filename, progress)
+	if err != nil {
+		return err
+	}
+	defer func() { result = errors.Join(result, prepared.discard()) }()
+	return prepared.publish()
+}
+
 // Prepare and close the complete diagnostic before the final input checks.
 // Preparation is not publication and does not create the destination file.
 func prepareDiscoveryProgressOutput(filename string, progress discoveryProgress) (*preparedDiscoveryProgress, error) {

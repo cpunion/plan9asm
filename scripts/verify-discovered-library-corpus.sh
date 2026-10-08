@@ -15,6 +15,9 @@ if (( $# > 2 )) || ! [[ "$shard_count" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 if (( progress )); then
+  if [[ "$reports_dir" != /* ]]; then
+    reports_dir="$PWD/$reports_dir"
+  fi
   reports_dir=$(go run -C "$repo_root" ./cmd/plan9asmcorpus \
     -repo-root "$repo_root" \
     -discovery-ledger "$repo_root/testdata/discovery/ledger" \
@@ -40,10 +43,15 @@ if (( progress )); then
   pending_dir=$(mktemp -d "$reports_dir/.status-XXXXXX")
   exec 8<"$pending_dir"
   exec 9>"$pending_dir/scan-status.json"
+  status_identity() {
+    stat -c '%d:%i' -- "$1" 2>/dev/null || stat -f '%d:%i' -- "$1"
+  }
+  directory_identity=$(status_identity "$pending_dir")
+  file_identity=$(status_identity "$pending_dir/scan-status.json")
   cleanup_status() {
     local status=$?
-    if [[ "$pending_dir" -ef /dev/fd/8 &&
-          "$pending_dir/scan-status.json" -ef /dev/fd/9 ]]; then
+    if [[ "$(status_identity "$pending_dir")" == "$directory_identity" &&
+          "$(status_identity "$pending_dir/scan-status.json")" == "$file_identity" ]]; then
       rm -- "$pending_dir/scan-status.json" || status=1
       rmdir -- "$pending_dir" || status=1
     else
@@ -58,7 +66,8 @@ if (( progress )); then
   go run -C "$repo_root" ./cmd/plan9asmdiscover \
     -status -out-dir "$repo_root/testdata/discovery/ledger" \
     >&9
-  if ! [[ "$pending_dir" -ef /dev/fd/8 && "$pending_dir/scan-status.json" -ef /dev/fd/9 ]]; then
+  if ! [[ "$(status_identity "$pending_dir")" == "$directory_identity" &&
+          "$(status_identity "$pending_dir/scan-status.json")" == "$file_identity" ]]; then
     echo "owned status temporary directory or file changed" >&2
     exit 1
   fi
