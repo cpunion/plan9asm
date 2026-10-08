@@ -13,7 +13,7 @@ import (
 )
 
 func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T) {
-	ctx, pkg, request, file, bound, _ := numericalLocalFactory(t)
+	ctx, pkg, request, file, bound, _, _ := numericalLocalFactory(t)
 	request.NumericalReads = bound.NumericalReads
 	local, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
 	if err != nil {
@@ -31,7 +31,7 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	})
 }
 
-func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource) {
+func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64FrameCaptureRequest, *File, Options, *GoX86NumericalReadSource, context.CancelFunc) {
 	t.Helper()
 	pkg, request, initial, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
 	_, numericalProfile, _, _ := numericalSBFixture(t, "amd64")
@@ -89,11 +89,11 @@ func numericalLocalFactory(t *testing.T) (context.Context, GoPackage, GoAMD64Fra
 	if err != nil {
 		t.Fatal("independent original numerical read precondition failed", err)
 	}
-	return ctx, pkg, request, file, bound, numerical
+	return ctx, pkg, request, file, bound, numerical, cancel
 }
 
 func TestGoX86NumericalSBReadFrameProducerExactObjectJoin(t *testing.T) {
-	ctx, pkg, request, _, bound, numerical := numericalLocalFactory(t)
+	ctx, pkg, request, _, bound, numerical, _ := numericalLocalFactory(t)
 	unbound, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
 	if unbound != nil {
 		unbound.Close()

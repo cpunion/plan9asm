@@ -1,0 +1,193 @@
+//go:build go1.27
+
+package plan9asm
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+)
+
+func numericalFrameCopies(t *testing.T, source *GoX86NumericalReadSource) ([]gostaticstorage.TextRecord, []gostaticstorage.TextRecord, []numericalSBReadFact) {
+	t.Helper()
+	copyValue := func(value, result any) {
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, result); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var observed, expected []gostaticstorage.TextRecord
+	var reads []numericalSBReadFact
+	copyValue(source.native.OriginalText, &observed)
+	copyValue(source.native.OriginalText, &expected)
+	copyValue(source.readFacts(), &reads)
+	return observed, expected, reads
+}
+
+func TestGoX86NumericalSBReadFrameProducerCompleteBijectionGuards(t *testing.T) {
+	_, pkg, _, file, _, numerical, _ := numericalLocalFactory(t)
+	observed, expected, reads := numericalFrameCopies(t, numerical)
+	if err := goAMD64FrameNumericalObjectJoin(observed, expected, reads); err != nil {
+		t.Fatal("actual independent original-object guard precondition", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func([]gostaticstorage.TextRecord, []gostaticstorage.TextRecord, *[]numericalSBReadFact)
+	}{
+		{"whole code", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Code[0] ^= 1 }},
+		{"whole source PC", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Positions[0].Line++ }},
+		{"TEXT ABI", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].ABI = 1 }},
+		{"field PC", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Relocations[0].Offset++ }},
+		{"field width", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Relocations[0].Size = 8 }},
+		{"relocation type", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Relocations[0].Type = 1 }},
+		{"target symbol", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) {
+			o[0].Relocations[0].Target.Name += "foreign"
+		}},
+		{"target ABI", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Relocations[0].Target.ABI = 1 }},
+		{"addend", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { o[0].Relocations[0].Add++ }},
+		{"missing read", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { *r = (*r)[1:] }},
+		{"duplicate read", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { *r = append(*r, (*r)[0]) }},
+		{"reordered reads", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { (*r)[0], (*r)[1] = (*r)[1], (*r)[0] }},
+		{"read instruction PC", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { (*r)[0].PC++ }},
+		{"read code", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { (*r)[0].Code[0] ^= 1 }},
+		{"read owner", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) {
+			(*r)[0].Variable.NativeName += "foreign"
+		}},
+		{"read offset", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { (*r)[0].Offset++ }},
+		{"read width", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) { (*r)[0].Width++ }},
+		{"instruction order", func(o, e []gostaticstorage.TextRecord, r *[]numericalSBReadFact) {
+			(*r)[1].Instruction = (*r)[0].Instruction
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			o, e, r := numericalFrameCopies(t, numerical)
+			test.mutate(o, e, &r)
+			if !errors.Is(goAMD64FrameNumericalObjectJoin(o, e, r), ErrProbeNeedsContext) {
+				t.Fatal("changed complete original relocation/read bijection was accepted")
+			}
+		})
+	}
+	listing := string(numerical.native.OriginalListing)
+	relocation := goAMD64FrameNumericalRelocationLine(observed[0].Relocations[0])
+	for _, mutation := range []string{"missing", "duplicate", "foreign", "reordered"} {
+		t.Run("listing "+mutation, func(t *testing.T) {
+			changed := listing
+			switch mutation {
+			case "missing":
+				changed = strings.Replace(changed, relocation, "", 1)
+			case "duplicate":
+				changed = strings.Replace(changed, relocation, relocation+"\n\t"+relocation, 1)
+			case "foreign":
+				changed = strings.Replace(changed, relocation, relocation+"foreign", 1)
+			case "reordered":
+				second := goAMD64FrameNumericalRelocationLine(observed[0].Relocations[1])
+				changed = strings.Replace(changed, relocation, "RELOCATION_PLACEHOLDER", 1)
+				changed = strings.Replace(changed, second, relocation, 1)
+				changed = strings.Replace(changed, "RELOCATION_PLACEHOLDER", second, 1)
+			}
+			origins := make(map[string]int)
+			for _, source := range numerical.cpp.Sources {
+				data, exists := numerical.native.Sources[source.File]
+				if !exists {
+					t.Fatal("actual source bytes absent from original native proof", source.File)
+				}
+				origins[source.File] = len(strings.Split(string(data), "\n"))
+			}
+			if _, err := goAMD64FrameListingWithNumericalObject([]byte(changed), file, pkg, origins, observed); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("changed complete actual listing relocation was accepted", err)
+			}
+		})
+	}
+}
+
+func TestGoX86NumericalSBReadFrameProducerCopiedTokenIsNotFactoryIdentity(t *testing.T) {
+	ctx, pkg, request, _, bound, _, _ := numericalLocalFactory(t)
+	copyBinding := *bound.NumericalReads
+	request.NumericalReads = &copyBinding
+	frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+	if frame != nil {
+		frame.Close()
+	}
+	if frame != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("copied opaque numerical token replaced the exact live factory identity", err)
+	}
+}
+
+func numericalFrameDuringVerify(t *testing.T, frame *GoAMD64FrameSource, ctx context.Context, invalidate func()) error {
+	t.Helper()
+	finished := make(chan error, 1)
+	go func() { finished <- frame.Verify(ctx) }()
+	deadline := time.NewTimer(10 * time.Second)
+	defer deadline.Stop()
+	for {
+		select {
+		case err := <-finished:
+			t.Fatal("verification ended before the real observer round", err)
+		case <-deadline.C:
+			t.Fatal("no real locked independent frame observer round")
+		default:
+		}
+		if !frame.mu.TryLock() {
+			// The immutable metadata snapshot is brief. Require the real
+			// observer lock to remain held across a scheduling interval.
+			time.Sleep(5 * time.Millisecond)
+			if !frame.mu.TryLock() {
+				invalidate()
+				select {
+				case err := <-finished:
+					return err
+				case <-time.After(10 * time.Second):
+					t.Fatal("invalidated independent observer did not terminate")
+				}
+			}
+			frame.mu.Unlock()
+		} else {
+			frame.mu.Unlock()
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestGoX86NumericalSBReadFrameProducerConcurrentRevocation(t *testing.T) {
+	for _, role := range []string{"owner", "source", "frame", "capture context"} {
+		t.Run(role, func(t *testing.T) {
+			ctx, pkg, request, _, bound, numerical, cancel := numericalLocalFactory(t)
+			request.NumericalReads = bound.NumericalReads
+			frame, err := CaptureGoAMD64FrameSource(ctx, pkg, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer frame.Close()
+			err = numericalFrameDuringVerify(t, frame, ctx, func() {
+				switch role {
+				case "owner":
+					numerical.originalOwners[0].Close()
+				case "source":
+					if err := numerical.Close(); err != nil {
+						t.Error(err)
+					}
+				case "frame":
+					if err := frame.Close(); err != nil {
+						t.Error(err)
+					}
+				case "capture context":
+					cancel()
+				}
+			})
+			if role == "capture context" && (!errors.Is(err, context.Canceled) || errors.Is(err, ErrProbeNeedsContext)) {
+				t.Fatal("actual capture cancellation was classified as source exclusion", err)
+			}
+			if err == nil || !errors.Is(frame.Verify(context.Background()), ErrProbeNeedsContext) {
+				t.Fatal("concurrent source/owner/frame failure revived or published an observation", err)
+			}
+		})
+	}
+}
