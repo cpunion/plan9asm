@@ -34,6 +34,7 @@ type Definition struct {
 }
 type Member struct {
 	Name string
+	NameBytes []byte
 	Offset, Size int64
 	Flags uint32
 	Counts [5]int
@@ -48,7 +49,7 @@ func main() {
 	if err != nil { panic(err) }
 	var members []Member
 	for _, entry := range a.Entries {
-		member := Member{Name: entry.Name, Offset: entry.Offset, Size: entry.Size}
+		member := Member{Name: entry.Name, NameBytes: []byte(entry.Name), Offset: entry.Offset, Size: entry.Size}
 		if entry.Type != archive.EntryPkgDef && entry.Type != archive.EntryGoObj {
 			panic("unexpected original archive member")
 		}
@@ -95,6 +96,7 @@ type namespaceOracleDefinition struct {
 
 type namespaceOracleMember struct {
 	Name         string
+	NameBytes    []byte
 	Offset, Size int64
 	Flags        uint32
 	Counts       [5]int

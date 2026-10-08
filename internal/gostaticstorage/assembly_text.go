@@ -85,6 +85,13 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 	if len(sources) == 0 || len(members) != len(sources)+2 || members[0].name != "__.PKGDEF" || members[1].name != "_go_.o" {
 		return nil, contextError("assembly archive differs from selected member inventory")
 	}
+	var sdkNames []string
+	if sdk {
+		sdkNames, err = sdkAssemblyMemberNames(sources)
+		if err != nil {
+			return nil, err
+		}
+	}
 	seenSources := make(map[string]bool)
 	definitions := make(map[string]bool)
 	storage := make(map[string]bool)
@@ -104,7 +111,11 @@ func observeAssemblyArchiveReferences(data, builtinSource []byte, target string,
 		}
 		if index != 0 {
 			name := sources[index-1]
-			if filepath.Base(name) != name || !strings.HasSuffix(name, ".s") || seenSources[name] || member.name != strings.TrimSuffix(name, ".s")+".o" {
+			memberName := strings.TrimSuffix(name, ".s") + ".o"
+			if sdk {
+				memberName = sdkNames[index-1]
+			}
+			if filepath.Base(name) != name || !strings.HasSuffix(name, ".s") || seenSources[name] || member.name != memberName {
 				return nil, contextError("assembly source/member route differs")
 			}
 			seenSources[name] = true

@@ -37,7 +37,11 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		return err
 	}
 	if source.role == numericalSBSDKSource {
-		proof.ArchiveMembers, err = gostaticstorage.ObserveX86SDKAssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
+		if source.sdk == nil || source.sdk.origin != source || source.sdk.closed {
+			return numericalSBContext("native observation lacks the live exact SDK input graph")
+		}
+		proof.ArchiveMembers, err = gostaticstorage.ObserveX86SDKAssemblyArchiveReferences(proof.Archive, builtin, source.request.Target,
+			selected.SFiles, source.sdk.Referenced)
 	} else {
 		proof.ArchiveMembers, err = gostaticstorage.ObserveX86AssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
 	}

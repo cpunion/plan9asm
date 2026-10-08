@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
@@ -111,6 +112,24 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 		return err
 	}
 	source.guard.imports = imports
+	referenced := make(map[string]gostaticstorage.SDKReferencedArchive)
+	paths := make([]string, 0, len(imports))
+	for path := range imports {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		dependency := imports[path]
+		if path == "unsafe" {
+			continue // Builtin package; no compiler export or foreign SymbolDefs.
+		}
+		data, err := source.guard.read(dependency.Export)
+		if err != nil {
+			return err
+		}
+		referenced[path] = gostaticstorage.SDKReferencedArchive{PackagePath: path,
+			Sources: append([]string(nil), dependency.SFiles...), Archive: data}
+	}
 	archive, err := source.guard.read(selected.Export)
 	if err != nil {
 		return err
@@ -119,7 +138,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if err != nil {
 		return err
 	}
-	members, err := gostaticstorage.ObserveX86SDKAssemblyArchive(archive, builtin, source.request.Target, selected.SFiles)
+	members, err := gostaticstorage.ObserveX86SDKAssemblyArchiveReferences(archive, builtin, source.request.Target, selected.SFiles, referenced)
 	if err != nil {
 		return numericalSBContext("SDK actual selected compiler/archive members differ: %v", err)
 	}
@@ -128,7 +147,7 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 		inputs[name] = digest
 	}
 	source.sdk = &numericalSBSDKObservation{Graph: graph, Archive: archive, ArchiveMembers: members,
-		Imports: imports, Inputs: inputs, origin: source, context: ctx, originalContext: ctx}
+		Imports: imports, Referenced: referenced, Inputs: inputs, origin: source, context: ctx, originalContext: ctx}
 	source.sdk.seal, err = source.sdkDigest()
 	if err != nil {
 		return err

@@ -57,16 +57,16 @@ func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, targe
 		if len(members) != len(archive.Sources)+2 || members[0].name != "__.PKGDEF" || members[1].name != "_go_.o" {
 			return nil, contextError("SDK referenced archive differs from selected member inventory")
 		}
-		seen := make(map[string]bool)
+		names, err := sdkAssemblyMemberNames(archive.Sources)
+		if err != nil {
+			return nil, err
+		}
 		for index, member := range members[1:] {
 			flags := uint32(16)
 			if index != 0 {
-				name := archive.Sources[index-1]
-				if filepath.Base(name) != name || !strings.HasSuffix(name, ".s") || seen[name] ||
-					member.name != strings.TrimSuffix(name, ".s")+".o" {
+				if member.name != names[index-1] {
 					return nil, contextError("SDK referenced source/member route differs")
 				}
-				seen[name] = true
 				flags |= 4
 			}
 			body, err := objectBody(member.data, target)
@@ -86,6 +86,32 @@ func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, targe
 				result[path] = append([]indexedObjectSymbol(nil), symbols[:count]...)
 			}
 		}
+	}
+	return result, nil
+}
+
+// Go 1.27.1 work/gc.go packInternal truncates the compiler's object filename
+// to 16 bytes, including a possible partial UTF-8 rune. Match the complete
+// selected sources in original order before observing any body. Prefix matches
+// and truncated-name collisions never select a source or archive member.
+func sdkAssemblyMemberNames(sources []string) ([]string, error) {
+	seenSources := make(map[string]bool, len(sources))
+	seenMembers := map[string]bool{"__.PKGDEF": true, "_go_.o": true}
+	result := make([]string, 0, len(sources))
+	for _, source := range sources {
+		if filepath.Base(source) != source || !strings.HasSuffix(source, ".s") || seenSources[source] ||
+			strings.ContainsAny(source, "\\\x00\r\n") {
+			return nil, contextError("duplicate or noncanonical complete SDK assembly source")
+		}
+		name := strings.TrimSuffix(source, ".s") + ".o"
+		if len(name) > 16 {
+			name = name[:16]
+		}
+		if seenMembers[name] {
+			return nil, contextError("SDK assembly source names collide after archive byte truncation")
+		}
+		seenSources[source], seenMembers[name] = true, true
+		result = append(result, name)
 	}
 	return result, nil
 }
