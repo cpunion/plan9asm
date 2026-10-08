@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -48,54 +47,21 @@ func (source *GoAMD64FrameSource) captureDownloadedOrigin(ctx context.Context, e
 	if err != nil {
 		return err
 	}
-	created, err := os.MkdirTemp(temporary, "plan9asm-frame-download-")
-	if err != nil {
-		return err
-	}
-	owned, err := os.Lstat(created)
-	if err != nil {
-		return err
-	}
-	marker, err := filepath.EvalSymlinks(created)
+	boundary, err := newGoAMD64DownloadBoundary(temporary)
 	if err != nil {
 		return err
 	}
 	// This private command boundary is not a copied main/source module. Its
 	// sole purpose is to prevent stock Go mutating an ancestor go.mod/go.sum.
-	boundary := filepath.Join(marker, "go.mod")
-	file, err := os.OpenFile(boundary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return err
-	}
-	_, writeErr := file.WriteString("module example.invalid/plan9asm-frame-download\ngo 1.20\n")
-	if err := errors.Join(writeErr, file.Close()); err != nil {
-		return err
-	}
-	scratch := gooriginalsrc.NewSnapshot()
-	if err := scratch.Directory(marker, true); err != nil {
+	if err := boundary.prepare(); err != nil {
 		return err
 	}
 	defer func() {
-		info, err := os.Lstat(marker)
-		if err != nil || !info.IsDir() || !os.SameFile(owned, info) {
-			result = errors.Join(result, goAMD64FrameContext("download command boundary identity changed"), err)
-			return
-		}
-		// Full inventory and inode/byte checks precede cleanup. Never remove
-		// a replacement directory or unexpected member supplied by an owner.
-		if err := scratch.Verify(); err != nil {
-			result = errors.Join(result, err)
-			return
-		}
-		if err := os.Remove(boundary); err != nil {
-			result = errors.Join(result, err)
-			return
-		}
-		result = errors.Join(result, os.Remove(marker))
+		result = errors.Join(result, boundary.Close())
 	}()
 	commandContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
-	data, err := goasmcmd.Run(commandContext, marker, source.request.Environment,
+	data, err := goasmcmd.Run(commandContext, boundary.directory, source.request.Environment,
 		source.request.GoBinary, "mod", "download", "-json", exact.module+"@"+exact.version)
 	err = errors.Join(err, commandContext.Err())
 	if err != nil {
