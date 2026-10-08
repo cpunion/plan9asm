@@ -276,6 +276,29 @@ func TestARM64ByteCarrierSourceRevocation(t *testing.T) {
 	}
 }
 
+func TestARM64ByteCarrierOriginalLeaseCannotBeRenewed(t *testing.T) {
+	directory, packagePath, _ := arm64ByteCarrierFixture(t)
+	request := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	lease, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+	source, err := CaptureGoARM64ByteCarrierSource(lease, request)
+	if err != nil {
+		t.Fatalf("original bounded lease did not capture its complete source: %v", err)
+	}
+	defer source.Close()
+	cause := errors.New("original source lease ended")
+	stop(cause)
+	err = source.Verify(ctx)
+	if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(err, cause) {
+		t.Fatalf("fresh verification context renewed the original cancelled source lease: %v", err)
+	}
+	if _, err := source.Readback(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("revoked lease yielded a portable source observation")
+	}
+}
+
 func TestARM64ByteCarrierSourceRejectsOpenRoles(t *testing.T) {
 	base, packagePath, _ := arm64ByteCarrierFixture(t)
 	request := arm64ByteCarrierRequest(t, base, packagePath)

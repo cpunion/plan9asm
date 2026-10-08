@@ -270,6 +270,7 @@ func (source *GoARM64ByteCarrierSource) observe(ctx context.Context) error {
 		"src/cmd/internal/goobj/builtinlist.go", "src/cmd/internal/objabi/reloctype.go",
 		"src/cmd/compile/internal/abi/abiutils.go", "src/cmd/compile/internal/ssa/config.go",
 		"src/cmd/go/internal/load/pkg.go",
+		"src/cmd/go/internal/list/list.go",
 	} {
 		if _, err := source.guard.read(filepath.Join(source.guard.env["GOROOT"], filepath.FromSlash(name))); err != nil {
 			return err
@@ -509,7 +510,11 @@ func (source *GoARM64ByteCarrierSource) Verify(ctx context.Context) (verifyErr e
 		return arm64ByteCarrierContext("actual original tool/profile changed")
 	}
 	selected, raw, err := source.guard.loadWithRaw(ctx)
-	if err != nil || !reflect.DeepEqual(selected, source.guard.selection) || !bytes.Equal(raw, source.report.RawSelection) {
+	// Reuse the existing exact original-Go selection comparator. Only the
+	// pinned SDK's typed Stale/StaleReason display fields can change after the
+	// first -export builds its cache entry; every semantic field and both whole
+	// stdout records stay bound. A fresh cache is not a source change.
+	if err != nil || !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(raw, source.report.RawSelection) {
 		return arm64ByteCarrierContext("actual complete compiler selection/export changed: %v", err)
 	}
 	return errors.Join(source.guard.verifyInputs(), source.verifyFileIdentities())
