@@ -107,3 +107,18 @@ test('discovery matrices reuse the task-owned restored Go build cache', () => {
       /^        run: scripts\/check-discovered-library-corpus\.sh "\$\{\{ matrix\.shard \}\}" 64$/m);
   }
 });
+
+test('discovery compilation leaves time for failed partial report upload', () => {
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    const section = jobSection(name);
+    assert.match(section, /^    timeout-minutes: 360$/m, name);
+    assert.match(section,
+      /- name: Translate and compile discovered assembly\n        timeout-minutes: 330\n/,
+      `${name} compilation can consume the whole job deadline`);
+    assert.match(section,
+      /- name: Upload shard report\n        if: always\(\)\n        timeout-minutes: 10\n/,
+      `${name} must upload even a failed partial checkpoint`);
+    assert.match(section, /^          if-no-files-found: error$/m, name);
+    assert.doesNotMatch(section, /continue-on-error:\s*true/);
+  }
+});
