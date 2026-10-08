@@ -160,11 +160,24 @@ or the whole cross-runtime matrix.
 
 The later combined `6451d2d1` ordinary root owner reaches its unchanged 45m
 deadline: 4,785 roots pass, four fail, 38 explicitly skip and 393 remain
-incomplete. Preserve that failed run; it is not complete coverage. The three
+incomplete. Preserve that failed run; it is not complete coverage. Its three
 stale ARM64 flag fixtures and the DIT virtual-flag/physical-scratch bank failure
-are being repaired as one typed rule class, in separate frozen components.
-Official carry probes also require their own real single-form CMP fixture;
-sequence and full-source inputs must still supply their original reaching flags.
+are repaired through `fd552af1`: virtual NZCV effects retain ordered flag flow
+but cannot masquerade as physical GP scratch. The frozen component closes 226
+roots and 1,726 children in ordinary and exact disjoint race scopes. Root's
+fresh independent readers also close the actual Go-1.20 scope and auxiliary
+gates. Missing flags and copied physical scratch remain rejected.
+
+The complete ADC/SBC/NGC family is integrated through `f60007c6`. Only a typed
+single-form probe introduces its real CMP carry producer; sequences and full
+source still need reaching original flags. Independent replays close current
+ordinary/race scopes of 45 roots and 938 children and actual Go-1.20's nine
+roots and 343 children. Complete Go-1.20–1.27 Optab schemas are checked, not
+guessed from row length. Historical classifier comparison proves the baseline
+changes are only two AL forms per SDK; the decoder adds 15 unconditional AL
+forms. The original two scripts pass and execute 794 required decoder probes,
+703 accepted by native Go. Context and decoder-only rejection are not runtime,
+strict SDK, external-library, combined-head or CI passes.
 
 Scanner repairs `ba4b1212`/`2a402151` retain the original 4-MiB JSON event-line
 limit while reducing the initial buffer to 4 KiB. Portable CPP validation then
