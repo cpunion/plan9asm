@@ -144,6 +144,20 @@ func TestAMD64DownloadedFixedLocalIndependentObjectHandoff(t *testing.T) {
 	t.Run("UnboundAPIs", func(t *testing.T) {
 		amd64OriginalFixedLocalAPIs(t, pkg, file, options, expanded, true)
 	})
+	t.Run("OwnedFactoryRejectsDownloadedCWD", func(t *testing.T) {
+		source, err := plan9asm.CaptureGoAMD64FrameSource(ctx, pkg, plan9asm.GoAMD64FrameCaptureRequest{
+			GoBinary: request.GoBinary, Directory: request.Directory, AssemblyFile: "value_amd64.s",
+			Target: request.Target, Environment: request.Environment,
+		})
+		if source != nil {
+			if err := source.Close(); err != nil {
+				t.Error(err)
+			}
+		}
+		if !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+			t.Fatalf("actual downloaded CWD Main/empty-version was accepted by the owned public factory: %v", err)
+		}
+	})
 	if err := observed.Verify(ctx); err != nil {
 		t.Fatal(err)
 	}
