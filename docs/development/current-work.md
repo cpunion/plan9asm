@@ -90,45 +90,49 @@ earlier combined race selector really exhausted its six-minute budget and
 failed two nodes. Preserve that failure; the disjoint reruns keep the original
 budgets and do not establish full-suite or CI completion.
 
-## Current failure classes and next work
+## Current batch and next work
 
-1. Finish host-tool fixture and nested CLI repairs. Two other-main-package
-   ordinary runs at `2c943968` execute their owned tests successfully but fail
-   the outer frozen-input check: the portable dependency fixture hard-links the
-   actual LLVM shared library, then cleanup changes that host inode's ctime.
-   Frozen test-only `d5144e24` independently copies bounded complete bytes and
-   binds the actual relocated native loader; focused ordinary/race and the
-   complete other-main-package scope close. Preserve the original failures.
-   Complete `plan9asm` passes, while `plan9asmll` retains four failing roots:
-   shared x86 grammar extraction and CPP fixtures' actual-selection path
-   identity. Repair both classes on `codex/pr40-cli-grammar-selection-20261009`.
-   The actual Linux fixture additionally detects a missing relocated `ld.lld`
-   role; add its real required-tool regression and rerun with package CWD.
-   Do not discard physical checks or count setup failures as native passes.
-2. Complete offline ASM DATA observation after the integrated SDK repair. Hashed,
-   static and DUPok definitions retain object-local identity; never choose a
-   body by name+ABI. Foreign references use actual compiler SymbolDefs indices.
-   Complete referenced structure is streamed without unused body/index arrays;
-   default owned-reader bounds stay unchanged. Actual CRC32 now reaches ASM
-   DATA `r2r1`. Phase A covers the complete two-x86 DATA/GLOBL grammar and
-   independent whole-object joins only: no live SDK/CPP/header origin seal,
-   mutable byte owner or native-vector permission is granted. Later source and
-   effect roles need separate design and review; CRC32 is not yet a pass.
-3. Complete unified ARM64 typed syscall effects and ordered four-bit flag flow
-   on `codex/pr40-arm64-syscall-typed-effects-20261009`. Frozen `07f0ee3a` closes
-   all ten actual original Linux kernel cases before observing 60 concrete LLVM
-   GP/NZCV mismatches across three APIs and two optimization levels. Root has
-   independently replayed those failures. Earlier host vet, marker and launcher
-   failures remain distinct, not kernel successes. Bind explicit target/OS,
-   preserve Linux non-result GP/NZCV, and retain Darwin unavailable results and
-   flag bits until an actual redefining instruction. Close copied/mutated proof,
-   CFG/loop and partial-flag negatives before full affected ordinary/race and
-   fresh Linux replay. Saved-frame/SVC defaults and sleep/SDK/native permissions
-   remain unchanged; source observation does not grant memory or stack access.
-4. Repair remaining SDK reads, dynamic reflect frames, native entry/TLS/
+The successor now integrates fixture isolation, offline ASM DATA observation,
+typed CLI extraction and target-bound ARM64 syscall effects through `7ef9b796`.
+Root independently replayed each component before integration:
+
+- Tool fixtures copy complete bounded dependency bytes instead of hard-linking
+  the host LLVM inode, bind the actual relocated loader and require cross
+  `ld.lld`. At `f329c0f2`, all other main-module packages close 552 roots and
+  3,351 children without failure, skip or incomplete execution.
+- Canonical typed opcode/instruction bindings, scoped aliases, assignment
+  ordinals and opcode-indexed maps replace lexical CLI guesses. Frozen
+  `69818c09` ordinary/race each closes 51 roots and 168 children; nested builds
+  and vet also pass. Mutation, foreign members and arbitrary strings do not
+  acquire opcode authority.
+- Offline DATA/GLOBL Phase A retains complete two-x86 forms, object-local
+  static/hashed/DUPok identity, ordered relocations and original object joins.
+  Indexed joins avoid repeated symbol scans. At `c60eceec`, disjoint ordinary
+  and race scopes each close 963 nodes. The live SDK/CPP observation successor
+  is separate and incomplete: no initializer, numerical read, mutable byte
+  owner or native-vector permission is granted. CRC32 is not yet a pass.
+- ARM64 syscall lowering, native effects and ordered four-bit CFG flow use one
+  explicit target-bound grammar. Linux normal returns preserve defined non-R0
+  GP/NZCV; Darwin secondary results and unavailable flag bits remain rejected.
+  Original `01635e4d` Linux Go/kernel axes pass 10 cases and LLVM's three APIs
+  at O0/O2 pass 60 numerical leaves. The isolated integration `7ef9b796` omits
+  unfinished sleep observation; ordinary/race each closes 185 roots and 1,568
+  children, and 24 auxiliary stages pass. No Linux or historical-Go certificate
+  is transferred to this changed combined head.
+
+All original failures, including host-inode changes, typed CLI extraction,
+kernel GP/NZCV mismatches and the missing test-helper integration dependency,
+remain frozen. Component certificates are not a combined-head full-suite or
+external-module pass. Saved-frame SVC, sleep, SDK and native permissions remain
+unchanged. Next:
+
+1. Repair remaining SDK reads, dynamic reflect frames, native entry/TLS/
    continuations, result padding and complete body closure by rule class with
    independent first-party regressions, not library-name instruction exceptions.
-5. Freeze the combined head, then run affected ordinary/race, exhaustive root,
+2. Diagnose slow corpus aggregation using first-party fixtures. Preserve complete
+   report, missing-shard and consumer-proof checks; do not load the full scan
+   ledger or increase deadlines to conceal repeated work.
+3. Freeze the combined head, then run affected ordinary/race, exhaustive root,
    all other main-module packages, both nested CLIs, Go-1.20 framework,
    official encoder/decoder, strict stdlib/benchmark and required native CI.
    Full-root budgets stay 45m, race 60m; bounded disjoint partitions and one
