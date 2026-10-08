@@ -44,7 +44,7 @@ func TestARM64ByteCarrierActualTypedEntryFootprint(t *testing.T) {
 				if err != nil {
 					t.Fatalf("actual compiler entry footprint/effects are not closed: %v", err)
 				}
-				if observed.allocation != allocation || observed.dataStart != 8 || observed.dataBytes != allocation-8 ||
+				if observed.allocation != allocation || observed.dataStart != 8 || observed.dataBytes != allocation-16 ||
 					observed.callPC != 16 || observed.continuationPC != 20 || len(observed.parameterStores) != 1 ||
 					observed.parameterStores[0].Offset != 8 || observed.parameterStores[0].Bytes != 8 ||
 					len(observed.resultLoads) != len(declaration.Frame.Results) {
