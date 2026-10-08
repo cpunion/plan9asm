@@ -148,3 +148,23 @@ func TestOriginalDownloadBoundaryOwnerAndUnpreparedCleanup(t *testing.T) {
 		})
 	}
 }
+
+func TestOriginalDownloadBoundaryRejectsRelativeTemporary(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(cwd, t.TempDir())
+	if err != nil || filepath.IsAbs(relative) {
+		t.Fatal("relative first-party fixture was not established", err)
+	}
+	boundary, err := NewDownloadBoundary(relative, "original-download-", "example.invalid/command")
+	if boundary != nil {
+		// The actual erroneous owner still closes its descriptor. testing owns
+		// only this fixture's parent directory, not any external source inputs.
+		defer boundary.Close()
+	}
+	if err == nil || boundary != nil {
+		t.Fatal("relative temporary directory acquired a command boundary", err)
+	}
+}

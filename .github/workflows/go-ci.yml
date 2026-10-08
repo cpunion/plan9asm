@@ -678,6 +678,16 @@ jobs:
         if: runner.os != 'Windows'
         run: bash scripts/test-module-ci.sh test execute ${{ matrix.module-owner }}
 
+      - name: Required exact downloaded AMD64 numerical fixture
+        if: runner.os == 'Linux' && matrix.go-version == '1.27.x' && matrix.module-owner == 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = linux/amd64
+          scope='^TestAMD64DownloadedFixedLocalLLVM22Numerical$'
+          go test ./internal/gotoolprofile -list="$scope" | rg -x 'TestAMD64DownloadedFixedLocalLLVM22Numerical'
+          go test ./internal/gotoolprofile -run="$scope" -count=1 -timeout=10m
+
       - name: Retain complete module owner evidence (Ubuntu)
         if: ${{ !cancelled() && runner.os != 'Windows' }}
         uses: actions/upload-artifact@v6
