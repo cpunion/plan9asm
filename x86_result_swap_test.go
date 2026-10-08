@@ -277,7 +277,7 @@ func TestX86ResultSwapOriginalScalarLaneWitnessAndAllPaths(t *testing.T) {
 			"simultaneous AL AH":          {"MOVW x+0(FP),AX\nXCHGB AL,AH\n" + finish, true},
 			"partial unknown AH":          {"MOVB x+0(FP),AL\nXCHGB AH,AL\n" + finish, false},
 			"unknown AL":                  {"MOVB $7,AH\nXCHGB AH,AL\n" + finish, false},
-			"NOP is not L zero extension": {"MOVW x+0(FP),AX\nXCHGL AX,AX\nMOVL AX,X0\n" + fmt.Sprintf("PEXTRD $0,X0,BX\nMOVL BX,ret0+%d(FP)\nRET", word), false},
+			"NOP is not L zero extension": {"MOVW x+0(FP),AX\nXCHGL AX,AX\nMOVL AX,X0\n" + fmt.Sprintf("PEXTRD $0,X0,BX\n%s BX,ret0+%d(FP)\nRET", resultMove, word), false},
 			"flags survive every swap":    {"MOVW x+0(FP),AX\nCMPW AX,$0\nXCHGB AH,AL\nJE other\nXCHGW AX,AX\nJMP done\nother:\nXCHGB AH,AL\ndone:\n" + finish, true},
 			"one path unknown byte":       {"MOVB x+0(FP),AL\nCMPB AL,$0\nJE done\nMOVB $7,AH\ndone:\nXCHGB AH,AL\n" + finish, false},
 			"native memory not granted":   {"MOVW x+0(FP),AX\nXCHGW AX,(SI)\n" + finish, false},
@@ -310,8 +310,8 @@ func TestX86ResultSwapREXAliasesKeepContext(t *testing.T) {
 					goAssemblerOracleOutput(t, "amd64", source, "", true)
 					pkg := mustGoPackage(t, "example.invalid/resultinit", "package resultinit\nfunc Value() uint32\n")
 					for _, api := range []string{"text", "module", "Go"} {
-						_, err := x86ResultSwapTranslateAPI(t, api, source, pkg, "amd64", "x86_64-unknown-linux-gnu")
-						if !errors.Is(err, ErrProbeNeedsContext) {
+						ir, err := x86ResultSwapTranslateAPI(t, api, source, pkg, "amd64", "x86_64-unknown-linux-gnu")
+						if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
 							t.Fatalf("%s gave a high-byte spelling a different physical REX view: %v", api, err)
 						}
 					}

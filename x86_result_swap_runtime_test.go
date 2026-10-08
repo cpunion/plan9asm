@@ -41,7 +41,9 @@ func x86SwapNumericalSource() (declarations, assembly, names, metadata string) {
 		name := fmt.Sprint("swap", index)
 		fmt.Fprintf(&decl, "func %s(out *[64]byte,x,y uint64)\n", name)
 		fmt.Fprintf(&source, "TEXT ·%s(SB),4,$0-24\nMOVQ out+0(FP),R10\nMOVQ x+8(FP),AX\nMOVQ y+16(FP),BX\nSTMXCSR 24(R10)\nCMPQ AX,BX\n%s%s\n%s", name, test.setup, test.row, test.capture)
-		source.WriteString("MOVQ AX,0(R10)\nMOVQ BX,8(R10)\nSETCS 16(R10)\nSETEQ 17(R10)\nSETMI 18(R10)\nSETOS 19(R10)\nLAHF\nMOVB AH,20(R10)\nSTMXCSR 28(R10)\nRET\n")
+		// A memory address through R10 requires REX, which would turn an AH
+		// spelling into SPL. Capture the actual high byte before that store.
+		source.WriteString("MOVQ AX,0(R10)\nMOVQ BX,8(R10)\nSETCS 16(R10)\nSETEQ 17(R10)\nSETMI 18(R10)\nSETOS 19(R10)\nLAHF\nMOVB AH,CL\nMOVB CL,20(R10)\nSTMXCSR 28(R10)\nRET\n")
 		fmt.Fprintf(&functions, "%s,", name)
 		fmt.Fprintf(&rows, "{%d,%d,%d,%d,%d,%t},\n", test.width, test.first, test.last, test.a, test.b, test.nop)
 	}
@@ -56,6 +58,7 @@ func TestX86ResultSwapOriginalGoNumericalCanariesAndFlags(t *testing.T) {
 	driver := strings.ReplaceAll(x86SwapOriginalGoDriver, "FUNCTIONS", functions)
 	driver = strings.ReplaceAll(driver, "METADATA", metadata)
 	x86WordMultiplyRunOriginalGo(t, execution, "package wordmultiply\n"+declaration, source, driver)
+	t.Log("Original Go: 18 kernels ×49 inputs, complete output/input guards and flags/MXCSR. Rosetta is not native Linux.")
 }
 
 func TestX86ResultSwapLLVMNumericalCanariesAndFlags(t *testing.T) {
