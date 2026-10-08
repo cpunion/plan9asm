@@ -31,7 +31,7 @@ func TestX86ABI0ScalarImportOpaquePointerIndependentResult(t *testing.T) {
 func TestX86ABI0ScalarImportGoMOVDWordAlias(t *testing.T) {
 	for _, register := range []string{"AX", "CX", "DX", "BX", "SI", "DI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
 		t.Run(register, func(t *testing.T) {
-			body := fmt.Sprintf("MOVD x+0(FP),%s\nMOVD %s,SI\nMOVL $42,DX\nMOVL DX,X0\nPEXTRD $0,X0,BX\nMOVL BX,ret0+8(FP)\nRET", register, register)
+			body := fmt.Sprintf("MOVD x+0(FP),%s\nMOVD %s,SI\nMOVL $42,DX\nPINSRD $0,DX,X0\nPEXTRD $0,X0,BX\nMOVL BX,ret0+8(FP)\nRET", register, register)
 			_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x *byte) uint32", body)
 			// Stock cmd/asm aliases MOVD to AMOVQ. All supported GP imports
 			// must retain that exact word-width opaque role in both observers.
