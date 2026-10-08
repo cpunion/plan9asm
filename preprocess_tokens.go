@@ -21,6 +21,7 @@ type ppGoToken struct {
 	file                    string
 	line, endCol            int
 	expansion, includeEvent int
+	position                *sdkCPPTokenPosition
 }
 
 type ppGoReader struct {
@@ -32,6 +33,8 @@ type ppGoReader struct {
 	line                    int
 	include                 bool
 	expansion, includeEvent int
+	positionBase            *sdkCPPPositionBase
+	positionLine            uint
 }
 
 func newPPGoReader(file, source string) *ppGoReader {
@@ -63,11 +66,19 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 		// #define originally contained a space before its parenthesis.
 		token.file, token.line, token.endCol = reader.file, reader.line, reader.index
 		token.expansion, token.includeEvent = reader.expansion, reader.includeEvent
+		reader.positionToken(&token)
 		return token, nil
 	}
 	var kind rune
 	for {
 		kind = reader.scanner.Scan()
+		if reader.positionBase != nil {
+			if kind == '\n' {
+				reader.positionLine++
+			} else if kind == scanner.Comment {
+				reader.positionLine += uint(strings.Count(reader.scanner.TokenText(), "\n"))
+			}
+		}
 		if kind != scanner.Comment {
 			break
 		}
@@ -91,11 +102,13 @@ func (reader *ppGoReader) next() (ppGoToken, error) {
 			text += string(next)
 		}
 	}
-	return ppGoToken{
+	token := ppGoToken{
 		kind: kind, text: text, value: text, file: reader.file,
 		line: reader.scanner.Position.Line, endCol: reader.scanner.Pos().Column,
 		includeEvent: reader.includeEvent,
-	}, nil
+	}
+	reader.positionToken(&token)
+	return token, nil
 }
 
 // cmd/asm's lex.Make canonicalizes recorded replacement, argument and -D
@@ -302,10 +315,15 @@ func (input *ppGoInput) invoke(invocation ppGoToken, macro ppGoMacro) (bool, err
 			}
 		}
 	}
-	return true, input.push(&ppGoReader{
+	reader := &ppGoReader{
 		file: invocation.file, line: invocation.line, tokens: body,
 		expansion: index + 1, includeEvent: invocation.includeEvent,
-	})
+	}
+	if invocation.position != nil {
+		reader.positionBase = invocation.position.base
+		reader.positionLine = invocation.position.Line
+	}
+	return true, input.push(reader)
 }
 
 func (input *ppGoInput) arguments(name string, parameters []string) (map[string][]ppGoToken, error) {

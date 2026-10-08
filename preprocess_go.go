@@ -19,6 +19,10 @@ func preprocessGoAssemblyObserved(src string, options AssemblyPreprocessOptions,
 		options: options, readers: []*ppGoReader{newPPGoReader(file, src)},
 		macros: make(map[string]ppGoMacro), bol: true, observer: observer,
 	}
+	if observer != nil && observer.positions != nil {
+		input.readers[0].positionBase = newSDKCPPFileBase(file)
+		input.readers[0].positionLine = 1
+	}
 	if observer != nil {
 		if err := observer.source(file, src); err != nil {
 			return "", err
@@ -98,6 +102,11 @@ func preprocessGoAssemblyObserved(src string, options AssemblyPreprocessOptions,
 			continue
 		}
 		parserPositionInitialized = true
+		if observer != nil && observer.positions != nil {
+			if err := observer.emitSDKPosition(token, input.readers[len(input.readers)-1].positionBase); err != nil {
+				return "", err
+			}
+		}
 		if token.kind != '\n' {
 			input.sawCode = true
 		}

@@ -219,6 +219,10 @@ func (input *ppGoInput) include(origin ppGoToken) error {
 		}
 	}
 	reader := newPPGoReader(file, sourceText)
+	if input.observer != nil && input.observer.positions != nil {
+		reader.positionBase = newSDKCPPFileBase(name)
+		reader.positionLine = 1
+	}
 	reader.include = true
 	if event := input.observedEvent(); event != nil {
 		event.Included = file
@@ -254,5 +258,16 @@ func (input *ppGoInput) line() error {
 	}
 	// The API emits normalized machine source, not diagnostic line metadata.
 	// Keep physical origins for includes instead of trusting logical filenames.
-	return input.newline("line")
+	if err := input.newline("line"); err != nil {
+		return err
+	}
+	if input.observer != nil && input.observer.positions != nil {
+		reader := input.readers[len(input.readers)-1]
+		logical, _ := strconv.Unquote(file.value)
+		line, _ := strconv.Atoi(number.value)
+		reader.positionBase = &sdkCPPPositionBase{
+			File: logical, Anchor: sdkCPPClampLine(reader.positionLine + 1), Line: uint(line),
+		}
+	}
+	return nil
 }

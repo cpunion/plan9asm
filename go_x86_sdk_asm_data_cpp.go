@@ -20,7 +20,7 @@ func (source *GoX86SDKASMDataSource) captureAssembly(ctx context.Context, ordina
 	if err != nil {
 		return result, cpp, err
 	}
-	cpp, err = ObserveAssemblyCPP(string(raw), AssemblyPreprocessOptions{FileName: file,
+	cpp, positions, err := observeSDKAssemblyCPP(string(raw), AssemblyPreprocessOptions{FileName: file,
 		Defines: GoAssemblerDefinesWithEnv("linux", source.guard.env["GOARCH"], source.guard.env),
 		ReadInclude: func(parent, header string) (string, []byte, error) {
 			if filepath.Base(header) != header {
@@ -50,7 +50,8 @@ func (source *GoX86SDKASMDataSource) captureAssembly(ctx context.Context, ordina
 	if err != nil {
 		return result, cpp, err
 	}
-	expanded, err := source.artifact(fmt.Sprintf("expanded-%d.s", ordinal), []byte(cpp.Output))
+	source.observation.Positions = append(source.observation.Positions, positions)
+	expanded, err := source.artifact(fmt.Sprintf("expanded-%d.s", ordinal), []byte(positions.Mapped))
 	if err != nil {
 		return result, cpp, err
 	}

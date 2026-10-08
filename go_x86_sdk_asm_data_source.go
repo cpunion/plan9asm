@@ -55,6 +55,7 @@ type sdkASMDataLiveObservation struct {
 	Inputs                       map[string][32]byte
 	Header                       sdkASMDataHeaderObservation
 	CPP                          []AssemblyCPPObservation
+	Positions                    []sdkCPPPositionObservation
 	ObjectInputs                 gostaticstorage.SDKASMDataObservationRequest
 	Objects                      *gostaticstorage.SDKASMDataObservation
 	Commands                     []numericalSBCommand

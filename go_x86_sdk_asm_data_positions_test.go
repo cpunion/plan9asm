@@ -66,7 +66,7 @@ GLOBL table<>(SB),RODATA,$4
 				"-o", filepath.Join(profile.Directory, "header.o"), filepath.Join(profile.Directory, "value.go")); err != nil {
 				t.Fatal(err)
 			}
-			cpp, err := ObserveAssemblyCPP(string(raw), AssemblyPreprocessOptions{
+			cpp, positions, err := observeSDKAssemblyCPP(string(raw), AssemblyPreprocessOptions{
 				FileName: filepath.Join(profile.Directory, profile.AssemblyFile),
 				Defines:  GoAssemblerDefinesWithEnv("linux", arch, map[string]string{"GO386": "sse2", "GOAMD64": "v1"}),
 				ReadInclude: func(parent, name string) (string, []byte, error) {
@@ -80,7 +80,7 @@ GLOBL table<>(SB),RODATA,$4
 				t.Fatal(err)
 			}
 			expanded := filepath.Join(profile.Directory, "expanded.asm")
-			if err := os.WriteFile(expanded, []byte(cpp.Output), 0600); err != nil {
+			if err := os.WriteFile(expanded, []byte(positions.Mapped), 0600); err != nil {
 				t.Fatal(err)
 			}
 			input := gostaticstorage.SDKASMDataSource{Name: profile.AssemblyFile, Original: raw, Expanded: []byte(cpp.Output)}
@@ -106,7 +106,8 @@ GLOBL table<>(SB),RODATA,$4
 				Sources: []gostaticstorage.SDKASMDataSource{input}}
 			scratch := &GoX86SDKASMDataSource{observation: sdkASMDataLiveObservation{Request: GoX86SDKASMDataCaptureRequest{
 				GoBinary: profile.GoBinary, Directory: profile.Directory, PackagePath: pkg.Path,
-				Target: profile.Target, Environment: profile.Environment}, ObjectInputs: request, CPP: []AssemblyCPPObservation{cpp}}}
+				Target: profile.Target, Environment: profile.Environment}, ObjectInputs: request,
+				CPP: []AssemblyCPPObservation{cpp}, Positions: []sdkCPPPositionObservation{positions}}}
 			sdkASMDataDiagnosticRetain(t, scratch)
 			if _, err := gostaticstorage.ObserveX86SDKCPPASMData(request); err != nil {
 				t.Fatal("complete first-party source/header/macro/lineage object join is not closed", err)

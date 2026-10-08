@@ -87,6 +87,7 @@ type ppGoObservation struct {
 	sources                    map[string]AssemblyCPPObservedSource
 	active, tokens, tokenBytes int
 	eventLimit                 int
+	positions                  *sdkCPPPositionObservation
 }
 
 func newPPGoObservation() *ppGoObservation {
@@ -155,17 +156,23 @@ func (observer *ppGoObservation) capture(token ppGoToken) error {
 	if observer.active < 0 {
 		return nil
 	}
-	bytes := len(token.text) + len(token.value) + len(token.file)
-	if observer.tokens >= ppGoObservationTokens || bytes > ppGoObservationBytes-observer.tokenBytes {
-		return fmt.Errorf("CPP observation exceeds its explicit token/byte bound")
+	if err := observer.chargeToken(len(token.text) + len(token.value) + len(token.file)); err != nil {
+		return err
 	}
-	observer.tokens++
-	observer.tokenBytes += bytes
 	event := &observer.result.Events[observer.active]
 	event.Tokens = append(event.Tokens, AssemblyCPPObservedToken{
 		Kind: token.kind, Text: token.text, RecordedValue: token.value,
 		Position: AssemblyCPPObservedPosition{File: token.file, Line: token.line},
 	})
+	return nil
+}
+
+func (observer *ppGoObservation) chargeToken(bytes int) error {
+	if observer.tokens >= ppGoObservationTokens || bytes > ppGoObservationBytes-observer.tokenBytes {
+		return fmt.Errorf("CPP observation exceeds its explicit token/byte bound")
+	}
+	observer.tokens++
+	observer.tokenBytes += bytes
 	return nil
 }
 
