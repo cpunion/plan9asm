@@ -13,11 +13,9 @@ import (
 	"github.com/xgo-dev/llvm"
 )
 
-func arm64ByteCarrierRuntimeFamily(t *testing.T, goos, triple, llc string, compiler, runner []string) {
+func arm64ByteCarrierExactWidthControl(t *testing.T, directory string, widths []arm64NativeResultTailCase) []arm64NativeResultTailCase {
 	t.Helper()
-	directory, packagePath, widths := arm64ByteCarrierFixture(t)
 	control := arm64NativeResultTailCase{op: "MOVW", resultBits: 32, storeBits: 32}
-	widths = append(widths, control)
 	controlName := strings.ToLower(control.name())
 	for name, extra := range map[string]string{
 		"decl.go": strings.ReplaceAll(control.declaration(), control.name(), controlName) +
@@ -33,6 +31,13 @@ func arm64ByteCarrierRuntimeFamily(t *testing.T, goos, triple, llc string, compi
 			t.Fatal(err)
 		}
 	}
+	return append(widths, control)
+}
+
+func arm64ByteCarrierRuntimeFamily(t *testing.T, goos, triple, llc string, compiler, runner []string) {
+	t.Helper()
+	directory, packagePath, widths := arm64ByteCarrierFixture(t)
+	widths = arm64ByteCarrierExactWidthControl(t, directory, widths)
 	goSource, err := os.ReadFile(filepath.Join(directory, "decl.go"))
 	if err != nil {
 		t.Fatal(err)
