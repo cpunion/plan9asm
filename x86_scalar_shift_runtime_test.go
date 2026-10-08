@@ -85,6 +85,31 @@ func TestX86ScalarShiftOriginalGoNumericalFlagsCanaries(t *testing.T) {
 	t.Log("original Go physical legacy/BMI2 value, flags, full GP upper aliases, guards and MXCSR; undefined bits are not compared; Rosetta is not native Linux")
 }
 
+func TestX86ScalarShiftDoubleWordCount16LLVM(t *testing.T) {
+	execution := x86FloatCompareExecutionTools(t)
+	for _, op := range []string{"SHLW", "SHRW"} {
+		t.Run(op, func(t *testing.T) {
+			source := "TEXT ·Word(SB),4,$0-24\nMOVQ out+0(FP),R10\nMOVQ x+8(FP),AX\nMOVQ y+16(FP),BX\n" + op + " $16,BX,AX\nMOVQ AX,0(R10)\nRET\n"
+			ir, err := x86ScalarFPBitViewAPI(t, source, "func Word(out *[64]byte,x,y uint64)", "amd64", execution.triple, "Go")
+			if err != nil {
+				t.Fatal(err)
+			}
+			main := `#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+extern void Word(uint8_t*,uint64_t,uint64_t);
+int main(void) {
+ uint8_t out[64]={0};
+ Word(out,UINT64_C(0x1122334455661234),UINT64_C(0x887766554433abcd));
+ uint64_t got; memcpy(&got,out,8);
+ if(got!=UINT64_C(0x112233445566abcd)) {fprintf(stderr,"defined count16: got%llx want112233445566abcd\n",(unsigned long long)got);return 1;}
+ puts("DOUBLE_WORD_DEFINED_COUNT16_PASS");return 0;
+}`
+			execution.compileAndRunLLVM(t, "defined-double-word", ir, main, "-O0")
+		})
+	}
+}
+
 func TestX86ScalarShiftLLVMNumericalFlagsCanaries(t *testing.T) {
 	execution := x86FloatCompareExecutionTools(t)
 	for _, raw := range []bool{false, true} {
