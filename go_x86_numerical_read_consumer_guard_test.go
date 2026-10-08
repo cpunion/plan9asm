@@ -55,6 +55,75 @@ func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
 	}
 }
 
+func TestGoX86NumericalSBReadGoWrapperCompleteProfileGuards(t *testing.T) {
+	pkg, _, _, create := numericalConsumerFactory(t, "amd64")
+	for _, test := range []struct {
+		name   string
+		mutate func(*GoModuleOptions)
+	}{
+		{"GOOS", func(o *GoModuleOptions) { o.GOOS = "darwin" }},
+		{"GOARCH", func(o *GoModuleOptions) { o.GOARCH = "386" }},
+		{"target", func(o *GoModuleOptions) { o.TargetTriple = "x86_64-apple-darwin" }},
+		{"value sizes", func(o *GoModuleOptions) { o.Sizes = types.SizesFor("gc", "amd64") }},
+		{"frame sizes", func(o *GoModuleOptions) { o.FrameSizes = types.SizesFor("gc", "amd64") }},
+		{"foreign source path", func(o *GoModuleOptions) { o.FileName = filepath.Join(t.TempDir(), o.FileName) }},
+		{"WASM", func(o *GoModuleOptions) { o.WASMABI = WASMABIGo }},
+		{"x87", func(o *GoModuleOptions) { o.X87Mode = X87Software }},
+		{"annotation", func(o *GoModuleOptions) { o.AnnotateSource = true }},
+		{"resolver", func(o *GoModuleOptions) { o.ResolveSym = nil }},
+		{"filter", func(o *GoModuleOptions) { o.KeepFunc = func(string, string) bool { return true } }},
+		{"ARM64 carriers", func(o *GoModuleOptions) { o.ARM64ClosureABIs = map[string]ARM64ClosureABI{"foreign": {}} }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			source, options := create(t)
+			opt := GoModuleOptions{FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
+				TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: options.ResolveSym}
+			test.mutate(&opt)
+			result, err := TranslateGoModule(pkg, []byte(source.cpp.Output), opt)
+			if result != nil {
+				result.Module.Dispose()
+			}
+			if result != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("different wrapper profile/source role published translated output", err)
+			}
+			if !errors.Is(source.Verify(options.NumericalReads.context), ErrProbeNeedsContext) {
+				t.Fatal("wrapper profile failure did not permanently revoke the source")
+			}
+		})
+	}
+}
+
+func TestGoX86NumericalSBReadGoWrapperOriginalBytesPostGuard(t *testing.T) {
+	pkg, _, _, create := numericalConsumerFactory(t, "386")
+	source, options := create(t)
+	input := []byte(source.cpp.Output)
+	resolve := options.ResolveSym
+	mutated := false
+	callback := func(symbol string) string {
+		pc, _, _, ok := runtime.Caller(1)
+		if ok && strings.HasSuffix(runtime.FuncForPC(pc).Name(), ".goSigsForAsmFile") && !mutated {
+			// Alter caller-owned bytes only after parsing, not the frozen
+			// object/source producer or the callback's returned symbol.
+			input[len(input)-1] ^= 1
+			mutated = true
+		}
+		return resolve(symbol)
+	}
+	result, err := TranslateGoModule(pkg, input, GoModuleOptions{
+		FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "386",
+		TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: callback,
+	})
+	if result != nil {
+		result.Module.Dispose()
+	}
+	if !mutated || result != nil || !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("wrapper caller-owned source bytes escaped the final guard", mutated, err)
+	}
+	if !errors.Is(source.Verify(options.NumericalReads.context), ErrProbeNeedsContext) {
+		t.Fatal("wrapper byte mutation did not permanently revoke the source")
+	}
+}
+
 func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Options, func(*testing.T) (*GoX86NumericalReadSource, Options)) {
 	t.Helper()
 	pkg, request, file, options := numericalSBFixture(t, arch)
