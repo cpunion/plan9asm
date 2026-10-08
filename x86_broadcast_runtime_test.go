@@ -195,6 +195,8 @@ func TestOriginal(t *testing.T) {
   for sample := 0; sample < 37; sample++ {
    var src,old [64]byte
    for i := range src { src[i]=byte(17+i*7+sample*23); old[i]=byte(199-i*3+sample*31) }
+   edges:=[]uint64{0,0x8000000000000000,0x7ff8000012345678,0x7ff0000012345678,0x000000007fc01234,0x000000007f801234,0x7ff0000000000000,0xffffffffffffffff}
+   if sample<len(edges) { binary.LittleEndian.PutUint64(src[:8],edges[sample]);binary.LittleEndian.PutUint64(old[:8],edges[(sample+3)%len(edges)]) }
    originalSrc,originalOld := src,old
    var packet,want [272]byte
    for i := range packet { packet[i]=byte(i*37+91) }
@@ -249,6 +251,8 @@ int main(void) {
    uint8_t src[64],old[64],savedSrc[64],savedOld[64];
    uint8_t packet[272],want[272],value[64];
    for(unsigned i=0;i<64;i++) {src[i]=(uint8_t)(17+i*7+sample*23);old[i]=(uint8_t)(199-i*3+sample*31);}
+   const uint64_t edges[]={0,UINT64_C(0x8000000000000000),UINT64_C(0x7ff8000012345678),UINT64_C(0x7ff0000012345678),UINT64_C(0x000000007fc01234),UINT64_C(0x000000007f801234),UINT64_C(0x7ff0000000000000),UINT64_MAX};
+   if(sample<8) {memcpy(src,&edges[sample],8);memcpy(old,&edges[(sample+3)%8],8);}
    memcpy(savedSrc,src,64);memcpy(savedOld,old,64);
    for(unsigned i=0;i<272;i++) packet[i]=(uint8_t)(i*37+91);
    memcpy(want,packet,272);

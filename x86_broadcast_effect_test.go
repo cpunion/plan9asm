@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -49,6 +50,18 @@ func TestX86BroadcastCompleteIndependentGoRows(t *testing.T) {
 	}
 	compact := func(s string) string { return strings.Join(strings.Fields(s), "") }
 	text := compact(string(data))
+	var actualNames, expectedNames []string
+	for _, match := range regexp.MustCompile("as: A(VP?BROADCAST[A-Z0-9]+)").FindAllStringSubmatch(string(data), -1) {
+		actualNames = append(actualNames, match[1])
+	}
+	for _, spec := range x86BroadcastTestDirectory {
+		expectedNames = append(expectedNames, spec.name)
+	}
+	sort.Strings(actualNames)
+	sort.Strings(expectedNames)
+	if !reflect.DeepEqual(actualNames, expectedNames) {
+		t.Fatalf("whole Go broadcast directory changed: %v", actualNames)
+	}
 	rows := func(z, classes string, advance int) string {
 		return fmt.Sprintf("{zcase:%s,zoffset:%d,args:argList{%s}},", z, advance, classes)
 	}
@@ -431,6 +444,93 @@ func TestX86BroadcastAuthorityAndGrammarControls(t *testing.T) {
 		goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", true)
 		if _, known, err := x86BroadcastProperties(ins.Op, ins, "386"); !known || !errors.Is(err, ErrProbeNeedsContext) {
 			t.Fatal("Go object mistaken for physical high-bank binding")
+		}
+	}
+}
+
+func TestX86BroadcastCompleteRegisterBanks(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		limit := 32
+		gps := []Reg{AX, CX, DX, BX, SP, BP, SI, DI, "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"}
+		if arch == "386" {
+			limit, gps = 8, gps[:8]
+		}
+		for _, spec := range x86BroadcastTestDirectory {
+			if spec.source != "X" && spec.source != "XG" {
+				continue
+			}
+			var sources []Reg
+			for i := 0; i < limit; i++ {
+				sources = append(sources, Reg(fmt.Sprint("X", i)))
+			}
+			if spec.source == "XG" {
+				sources = append(sources, gps...)
+			}
+			for _, src := range sources {
+				for _, bank := range spec.destinations {
+					for dst := 0; dst < limit; dst++ {
+						for masking := 0; masking < 3; masking++ {
+							op, mask := spec.name, ""
+							if masking != 0 {
+								mask = "K7,"
+							}
+							if masking == 2 {
+								op += ".Z"
+							}
+							ins := x86YMMReadSource(t, fmt.Sprintf("%s %s,%s%c%d", op, src, mask, bank, dst))
+							for _, consumer := range x86ResultGPSIMDConsumers {
+								state := x86ResultState{flags: x86ByteFlagsAll, masks: [8]bool{7: true}}
+								for i := range state.gp {
+									state.gp[i] = 255
+								}
+								for i := range state.xmm {
+									state.xmm[i] = 65535
+								}
+								valid := src != SP && src != BP
+								if got := consumer.step(ins, &state, nil, 0, arch); got != valid || state.flags != x86ByteFlagsAll {
+									t.Fatalf("%s %s row%s accepted%t want%t", arch, consumer.name, ins.Raw, got, valid)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestX86BroadcastOriginalAllPathAndOpaqueControls(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word, move, typ, index := 8, "MOVQ", "uint64", 11
+		if arch == "386" {
+			word, move, typ, index = 4, "MOVL", "uint32", 3
+		}
+		initialize := fmt.Sprintf("PINSRD $0,AX,X%d\n", index)
+		for _, test := range []struct {
+			name, body, decl string
+			valid            bool
+		}{
+			{"both_paths", fmt.Sprintf("CMP%s AX,AX\nJE good\n%sJMP joined\ngood:\n%sjoined:\n", map[string]string{"amd64": "Q", "386": "L"}[arch], initialize, initialize), "", true},
+			{"one_unknown_path", fmt.Sprintf("CMP%s AX,AX\nJE good\nJMP joined\ngood:\n%sjoined:\n", map[string]string{"amd64": "Q", "386": "L"}[arch], initialize), "", false},
+			{"partial_word", fmt.Sprintf("PINSRB $0,AX,X%d\n", index), "", false},
+			{"opaque_pointer", fmt.Sprintf("VPBROADCASTW AX,X%d\n", index), "func Value(x *uint64) " + typ, false},
+		} {
+			t.Run(arch+"/"+test.name, func(t *testing.T) {
+				decl := test.decl
+				if decl == "" {
+					decl = "func Value(x " + typ + ") " + typ
+				}
+				body := fmt.Sprintf("%s x+0(FP),AX\n", move) + test.body
+				body += fmt.Sprintf("VPBROADCASTW X%d,X%d\nVPEXTRQ $0,X%d,BX\n%s BX,ret0+%d(FP)\nRET", index, index, index, move, word)
+				_, file, sig, source := x86ResultInitializationFixture(t, arch, decl, body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+					err := check(file.Funcs[0], sig, arch)
+					if test.valid && err != nil || !test.valid && !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("valid%t err%v", test.valid, err)
+					}
+				}
+			})
 		}
 	}
 }
