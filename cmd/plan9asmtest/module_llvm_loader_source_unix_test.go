@@ -4,11 +4,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -20,6 +22,10 @@ func TestModuleLLVMLoaderRepeatedBuildRetainsIndependentActualScopes(t *testing.
 		t.Fatal(err)
 	}
 	out := t.TempDir()
+	physicalParent, err := filepath.EvalSymlinks(out)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cfg := config{Go: goBinary, Dir: moduleLLVMConsumerFixture(t), Module: true,
 		Timeout: 2 * time.Minute, Flags: []string{"-p=2"}}
 	before := filepath.Join(out, "before")
@@ -61,7 +67,7 @@ func TestModuleLLVMLoaderRepeatedBuildRetainsIndependentActualScopes(t *testing.
 		if err := ciReadJSON(stem+"-origins.json", &origins); err != nil {
 			t.Fatal(err)
 		}
-		if origins["llvm-loader-source"] != filepath.Join(out, ".llvm-loader-source", "main.go") {
+		if origins["llvm-loader-source"] != filepath.Join(physicalParent, ".llvm-loader-source", "main.go") {
 			t.Errorf("actual Go build source not bound to this request: %q", origins["llvm-loader-source"])
 		}
 		var loaded moduleLoadedLibrary
@@ -73,5 +79,168 @@ func TestModuleLLVMLoaderRepeatedBuildRetainsIndependentActualScopes(t *testing.
 			t.Fatal("fresh actual loader result/byte identity missing", err)
 		}
 	}
+	metadata := before + "-llvm-loader-source.json"
+	original, err := os.ReadFile(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutation := range []string{"missing", "foreign-source", "foreign-artifact", "changed-bytes", "missing-tool-origin"} {
+		t.Run(mutation, func(t *testing.T) {
+			var changed moduleLLVMProbeSource
+			if err := ciReadJSON(metadata, &changed); err != nil {
+				t.Fatal(err)
+			}
+			switch mutation {
+			case "missing":
+				changed = moduleLLVMProbeSource{}
+			case "foreign-source":
+				changed.Path = filepath.Join(changed.Parent, "unconsumed.go")
+			case "foreign-artifact":
+				changed.Artifact = filepath.Join(changed.Parent, "after-llvm-loader.go")
+			case "changed-bytes":
+				changed.SHA = strings.Repeat("0", 64)
+			case "missing-tool-origin":
+				delete(first.Tools, "llvm-loader-source")
+			}
+			if err := ciWriteJSON(metadata, changed); err != nil {
+				t.Fatal(err)
+			}
+			if err := verifyModuleDependencyArtifacts(out, moduleReport{Scope: first}); err == nil {
+				t.Fatal("compiled source role omission/change accepted")
+			}
+			if err := os.WriteFile(metadata, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			first.Tools["llvm-loader-source"] = last.Tools["llvm-loader-source"]
+		})
+	}
 	t.Log("Two fresh actual Go builds and two loader executions; original 2m child budgets and complete source/tool/environment/library captures remain independent.")
+}
+
+func TestModuleLLVMProbeSourceAtomicCreationAndCancellation(t *testing.T) {
+	parent := t.TempDir()
+	physical, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workers sync.WaitGroup
+	results := make(chan moduleLLVMProbeInput, 16)
+	failures := make(chan error, 16)
+	for index := 0; index < 16; index++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			input, err := prepareModuleLLVMProbeSource(context.Background(), filepath.Join(parent, "scope"))
+			if err != nil {
+				failures <- err
+			} else {
+				results <- input
+			}
+		}()
+	}
+	workers.Wait()
+	close(results)
+	close(failures)
+	for err := range failures {
+		t.Error(err)
+	}
+	for input := range results {
+		if input.source.Path != filepath.Join(physical, ".llvm-loader-source", "main.go") || input.verify(context.Background()) != nil {
+			t.Fatal("parallel creator observed incomplete/foreign source", input.source)
+		}
+	}
+	files, err := os.ReadDir(filepath.Join(parent, ".llvm-loader-source"))
+	if err != nil || len(files) != 1 || files[0].Name() != "main.go" {
+		t.Fatalf("creator staging ownership did not close: %v %v", files, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := prepareModuleLLVMProbeSource(ctx, filepath.Join(parent, "cancelled")); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled producer acquired a role", err)
+	}
+	input, err := prepareModuleLLVMProbeSource(context.Background(), filepath.Join(parent, "existing"))
+	if err != nil || !errors.Is(input.verify(ctx), context.Canceled) || input.verify(context.Background()) != nil {
+		t.Fatal("cancellation deleted or changed another producer's source role", err)
+	}
+	empty := t.TempDir()
+	if _, err := prepareModuleLLVMProbeSource(ctx, filepath.Join(empty, "cancelled")); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	files, err = os.ReadDir(empty)
+	if err != nil || len(files) != 0 {
+		t.Fatal("cancelled first creator wrote artifacts", files, err)
+	}
+}
+
+func TestModuleLLVMProbeSourceRejectsForeignAndReplacedRoles(t *testing.T) {
+	for _, name := range []string{"parent-file", "parent-symlink", "directory-file", "directory-symlink", "source-directory", "source-symlink", "different-bytes", "oversized-prefix"} {
+		t.Run(name, func(t *testing.T) {
+			var err error
+			container := t.TempDir()
+			parent := filepath.Join(container, "parent")
+			foreign := t.TempDir()
+			if name == "parent-file" {
+				if err := os.WriteFile(parent, []byte("foreign parent"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else if name == "parent-symlink" {
+				if err := os.Symlink(foreign, parent); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.Mkdir(parent, 0700); err != nil {
+					t.Fatal(err)
+				}
+				directory := filepath.Join(parent, ".llvm-loader-source")
+				if name == "directory-file" {
+					if err := os.WriteFile(directory, []byte("foreign directory"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else if name == "directory-symlink" {
+					if err := os.Symlink(foreign, directory); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					if err := os.Mkdir(directory, 0700); err != nil {
+						t.Fatal(err)
+					}
+					source := filepath.Join(directory, "main.go")
+					switch name {
+					case "source-directory":
+						err = os.Mkdir(source, 0700)
+					case "source-symlink":
+						err = os.Symlink(filepath.Join(foreign, "main.go"), source)
+					case "different-bytes":
+						err = os.WriteFile(source, []byte("package foreign\n"), 0600)
+					case "oversized-prefix":
+						err = os.WriteFile(source, []byte(moduleLLVMLoaderProbe+"x"), 0600)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if _, err := prepareModuleLLVMProbeSource(context.Background(), filepath.Join(parent, "before")); err == nil {
+				t.Fatal("foreign source role acquired producer authority")
+			}
+			files, err := os.ReadDir(foreign)
+			if err != nil || len(files) != 0 {
+				t.Fatal("rejected alias mutated foreign directory", files, err)
+			}
+		})
+	}
+	parent := t.TempDir()
+	input, err := prepareModuleLLVMProbeSource(context.Background(), filepath.Join(parent, "before"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(input.source.Path, input.source.Path+".original"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(input.source.Path, []byte(moduleLLVMLoaderProbe), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if input.verify(context.Background()) == nil {
+		t.Fatal("same-byte replacement changed the original compiled source identity")
+	}
 }

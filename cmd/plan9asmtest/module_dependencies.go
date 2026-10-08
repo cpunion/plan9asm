@@ -252,10 +252,15 @@ func captureModuleLLVMBinding(ctx context.Context, cfg config, stem string, libr
 	for name, path := range files {
 		origins[name] = path
 	}
-	source, binary := stem+"-llvm-loader.go", stem+"-llvm-loader"
-	if err := os.WriteFile(source, []byte(moduleLLVMLoaderProbe), 0600); err != nil {
+	input, err := prepareModuleLLVMProbeSource(ctx, stem)
+	if err != nil {
 		return err
 	}
+	source, binary := input.source.Path, stem+"-llvm-loader"
+	if err := os.WriteFile(input.source.Artifact, []byte(moduleLLVMLoaderProbe), 0600); err != nil {
+		return err
+	}
+	origins["llvm-loader-source"] = source
 	args = append([]string{"build"}, moduleListFlags(flags)...)
 	args = append(args, "-o", binary, source)
 	if _, err := moduleDependencyCommand(ctx, cfg, stem+"-llvm-loader-build", cfg.Go, args...); err != nil {
@@ -264,6 +269,12 @@ func captureModuleLLVMBinding(ctx context.Context, cfg config, stem string, libr
 	loaded, err := moduleDependencyCommand(ctx, cfg, stem+"-llvm-loader-run", binary)
 	if err != nil {
 		return fmt.Errorf("actual Go LLVM loader query: %w", err)
+	}
+	if err := input.verify(ctx); err != nil {
+		return err
+	}
+	if err := ciWriteJSON(stem+"-llvm-loader-source.json", input.source); err != nil {
+		return err
 	}
 	path := strings.TrimSuffix(string(loaded), "\n")
 	info, err := os.Stat(path)
@@ -390,7 +401,7 @@ func verifyModuleDependencyArtifacts(directory string, report moduleReport) erro
 			return fmt.Errorf("actual LLVM binding source denominator differs")
 		}
 		if binding == nil {
-			if origins["llvm-loaded"] != "" {
+			if origins["llvm-loaded"] != "" || origins["llvm-loader-source"] != "" {
 				return fmt.Errorf("unconsumed Go LLVM loader origin")
 			}
 			continue
@@ -398,6 +409,17 @@ func verifyModuleDependencyArtifacts(directory string, report moduleReport) erro
 		source, err := os.ReadFile(stem + "-llvm-loader.go")
 		if err != nil || string(source) != moduleLLVMLoaderProbe {
 			return fmt.Errorf("actual LLVM loader query source differs: %v", err)
+		}
+		var compiled moduleLLVMProbeSource
+		if err := ciReadJSON(stem+"-llvm-loader-source.json", &compiled); err != nil {
+			return err
+		}
+		if !filepath.IsAbs(compiled.Parent) || filepath.Clean(compiled.Parent) != compiled.Parent ||
+			compiled.Path != filepath.Join(compiled.Parent, ".llvm-loader-source", "main.go") ||
+			compiled.Artifact != filepath.Join(compiled.Parent, phase+"-llvm-loader.go") ||
+			origins["llvm-loader-source"] != compiled.Path || compiled.SHA != moduleLLVMProbeSHA(source) ||
+			report.Scope.Tools["llvm-loader-source"] != compiled.SHA {
+			return fmt.Errorf("actual LLVM compiled source role/byte identity differs")
 		}
 		var loaded moduleLoadedLibrary
 		if err := ciReadJSON(stem+"-llvm-loaded-library.json", &loaded); err != nil {
