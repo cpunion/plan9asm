@@ -105,6 +105,13 @@ The successor additionally integrates these independently frozen components:
   same first-party operation is about 9 MB ordinary / 11 MB race after repair.
   Global module/version membership, duplicate unions, target filtering, exact
   subsets, foreign aliases and unselected/empty-interest EOF checks remain.
+- Complete broadcast grammar and numerical effects, including K-data forms:
+  `d3b2d06a` closes the earlier `1d55e698` family and case-normalization repair.
+  Final ordinary/race each 2,331 nodes pass, with 111 independently checked
+  Go encoding rows, three-API/five-target objects and original Go/LLVM runtime
+  axes. K-data numerical caller authority is still explicit Context. Physical
+  WIG dword behavior and cleared wider aliases do not grant native memory,
+  full-vector definedness or an unobserved AVX512 runtime capability.
 
 Normal sharded ledger startup/status, active-batch lookup, bounded fair retry
 selection, publication and transfer stream. They still validate every row,
@@ -114,8 +121,9 @@ explicit full-report reference helpers are separate compatibility paths.
 ## Remaining shared failures
 
 Source-query proof is not an actual frame/object certificate. SDK numerical
-storage is not a per-instruction SB-read certificate. First close independent
-actual TEXT/relocation/source-PC evidence, then review private typed consumers.
+storage is not a per-instruction SB-read certificate. The independent original
+TEXT/relocation/source-PC producer above is closed; review its sealed typed
+source/object/storage joins before authorizing any instruction-local consumer.
 Do not turn an OpSym spelling, DATA record, BSS extent or source/report JSON
 into initialized/native memory. Preserve wasm logical PC versus code-byte axes.
 
@@ -139,6 +147,13 @@ budgets. The standard target-matrix gate also fails. Remaining classes include
 SDK symbol reads, dynamic reflect frames, native entry/TLS/continuations,
 ARM64 result padding and whole SDK body closure. Preserve the earlier strict
 `55ecfe9d` failure; speed does not certify compilation.
+
+A later independent recheck at frozen `997e9315` again attempts all 184 files:
+167 pass, 17 fail, zero N/A/unattempted, build 18 seconds and target wall total
+29 seconds. Its official classification and Go-accepted ARM64 decoder gates
+pass; the standard target-matrix gate still fails. That snapshot predates the
+broadcast integration and proves neither the later combined head nor external
+library outcomes.
 
 Historical scalar compatibility hit a pre-test link limit with zero tests
 attempted. The mode32 extreme-SP witness has an LLVM22 O0 allocator failure,
