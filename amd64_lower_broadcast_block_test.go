@@ -39,7 +39,7 @@ func TestTranslateX86PackedBlockBroadcastCompleteGoAssemblerForms(t *testing.T) 
 			lastY := 15
 			lastZ := 21
 			if target.goarch == "386" {
-				lastZ = 7
+				lastY, lastZ = 7, 7
 			}
 			var src strings.Builder
 			src.WriteString("TEXT packedblockbroadcastforms(SB),$0-0\n")
@@ -67,9 +67,15 @@ func TestTranslateX86PackedBlockBroadcastCompleteGoAssemblerForms(t *testing.T) 
 				fmt.Fprintf(&src, "\t%s.Z 104(AX), K7, Z%d\n", op, lastZ)
 			}
 			src.WriteString("\tRET\n")
-			requireX86GoAssemblerResult(t, target.goarch, src.String(), true)
+			source := src.String()
+			if target.goarch == "386" {
+				// High Go spellings have no physical mode32 binding. The
+				// independent authority controls retain their Context cases.
+				source = strings.NewReplacer("X20", "X3", "X21", "X4", "Y20", "Y3", "Y21", "Y4").Replace(source)
+			}
+			requireX86GoAssemblerResult(t, target.goarch, source, true)
 
-			file, err := Parse(ArchAMD64, src.String())
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}

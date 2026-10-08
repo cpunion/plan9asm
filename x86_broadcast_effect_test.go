@@ -315,3 +315,122 @@ func TestX86BroadcastRawOriginalMode32GPQWIG(t *testing.T) {
 		t.Fatalf("physical mode32 GP-Q effect %+v known%t err%v", form, known, err)
 	}
 }
+
+func TestX86BroadcastTypedGrammarCompleteGoWitnesses(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		var source strings.Builder
+		source.WriteString("TEXT f(SB),4,$0-0\n")
+		for _, spec := range x86BroadcastTestDirectory {
+			inputs := []string{"32(AX)"}
+			for _, kind := range spec.source {
+				inputs = append(inputs, map[rune]string{'X': "X3", 'G': "AX", 'K': "K0"}[kind])
+			}
+			if spec.source == "K" {
+				inputs = inputs[1:]
+			}
+			for _, bank := range spec.destinations {
+				for _, input := range inputs {
+					for _, masking := range []int{0, 1, 2} {
+						if masking != 0 && (spec.source == "K" || strings.HasSuffix(spec.name, "128")) {
+							continue
+						}
+						op, mask := spec.name, ""
+						if masking != 0 {
+							mask = "K7,"
+						}
+						if masking == 2 {
+							op += ".Z"
+						}
+						row := fmt.Sprintf("%s %s,%s%c7", op, input, mask, bank)
+						source.WriteString(row + "\n")
+						t.Run(arch+"/"+row, func(t *testing.T) {
+							ins := x86YMMReadSource(t, row)
+							f, known, err := x86BroadcastProperties(ins.Op, ins, arch)
+							width, lane := spec.bytes, spec.lane*8
+							if arch == "386" && spec.name == "VPBROADCASTQ" && input == "AX" {
+								width, lane = 4, 32
+							}
+							if err != nil || !known || f.sourceBytes != width || f.laneBits != lane ||
+								f.byteWidth != map[rune]int{'X': 16, 'Y': 32, 'Z': 64}[bank] || (f.mask >= 0) != (masking != 0) || f.zeroing != (masking == 2) {
+								t.Fatalf("typed row %+v known%t err%v", f, known, err)
+							}
+						})
+					}
+				}
+			}
+		}
+		source.WriteString("RET\n")
+		goAssemblerOracleOutput(t, arch, source.String(), "", true)
+	}
+}
+
+func TestX86BroadcastAuthorityAndGrammarControls(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range []string{
+			"VPBROADCASTW $1,X0", "VPBROADCASTW Y0,X0", "VPBROADCASTW AL,X0",
+			"VBROADCASTSD AX,Y0", "VBROADCASTSD X0,X0", "VBROADCASTSS.BCST X0,Y0",
+			"VBROADCASTF128 X0,Y0", "VBROADCASTF32X4 X0,Y0", "VBROADCASTF32X2 X0,X0",
+			"VPBROADCASTMB2Q X0,X1", "VPBROADCASTMW2D.Z K1,X1",
+			"VPBROADCASTW.Z X0,X1", "VPBROADCASTW X0,K0,X1",
+		} {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+				ins := x86YMMReadSource(t, row)
+				if _, known, err := x86BroadcastProperties(ins.Op, ins, arch); !known || err == nil {
+					t.Fatal("Go-rejected form acquired typed effect")
+				}
+			})
+		}
+		for _, row := range []string{"VPBROADCASTW (AX),X2", "VPBROADCASTW x+0(FP),X2", "VBROADCASTF32X4 (AX),Y2", "VPBROADCASTMB2Q K0,X2", "VPBROADCASTW SP,X2", "VPBROADCASTQ BP,X2"} {
+			ins := x86YMMReadSource(t, row)
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{}
+				for index := range state.gp {
+					state.gp[index] = 0xff
+				}
+				for index := range state.xmm {
+					state.xmm[index] = 0xffff
+				}
+				for index := range state.masks {
+					state.masks[index] = true
+				}
+				if consumer.step(ins, &state, nil, 0, arch) {
+					t.Fatalf("%s borrowed native/mask/SP/BP permission: %s", consumer.name, row)
+				}
+			}
+		}
+		for _, row := range []string{"VPBROADCASTW AX,X2", "VPBROADCASTQ AX,Z2"} {
+			ins := x86YMMReadSource(t, row)
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{gp: [16]uint8{255}, pointerGP: [16]bool{true}}
+				before := state.clone()
+				if consumer.step(ins, &state, nil, 0, arch) || !reflect.DeepEqual(state, before) {
+					t.Fatal("opaque identity washed into numerical broadcast")
+				}
+			}
+		}
+		for _, row := range []string{"VPBROADCASTW X1,K3,X2", "VPBROADCASTW.Z X1,K3,X2"} {
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{xmm: [32]uint16{1: 65535, 2: 65535}}
+				if consumer.step(x86YMMReadSource(t, row), &state, nil, 0, arch) {
+					t.Fatal("undefined K mask accepted")
+				}
+			}
+		}
+		for missing := 0; missing < 16; missing++ {
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{xmm: [32]uint16{1: 65535, 2: 65535 &^ (1 << uint(missing))}, masks: [8]bool{3: true}}
+				if consumer.step(x86YMMReadSource(t, "VPBROADCASTW X1,K3,X2"), &state, nil, 0, arch) {
+					t.Fatal("unknown inactive merge destination byte accepted")
+				}
+			}
+		}
+	}
+	for _, row := range []string{"VPBROADCASTW X8,X0", "VPBROADCASTQ AX,Y15", "VBROADCASTF128 (AX),Y15", "VBROADCASTF32X2 X20,Y21"} {
+		ins := x86YMMReadSource(t, row)
+		goAssemblerOracleOutput(t, "386", "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", true)
+		if _, known, err := x86BroadcastProperties(ins.Op, ins, "386"); !known || !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatal("Go object mistaken for physical high-bank binding")
+		}
+	}
+}
