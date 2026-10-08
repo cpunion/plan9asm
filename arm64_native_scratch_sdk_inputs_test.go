@@ -59,7 +59,10 @@ func TestARM64NativeScratchSDKHiddenEntryActualObject(t *testing.T) {
 			// relocations. The SDK/package role below is a unit admission input,
 			// not an authenticated SDK, archive pair or factory-created token.
 			// ready stays false: this cannot bind or translate any program.
-			root := t.TempDir()
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
 			directory := filepath.Join(root, "src", "fixture")
 			if err := os.MkdirAll(directory, 0700); err != nil {
 				t.Fatal(err)
