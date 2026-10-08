@@ -135,11 +135,16 @@ func goAMD64WindowsUnwindSourcePCs(text gostaticstorage.TextRecord, fn goAMD64Fr
 		}
 		return filepath.Clean(name)
 	}
+	var previous int64
 	for _, span := range text.Positions {
 		if span.File == "" || span.Line <= 0 || int(span.Line) > origins[span.File] || span.Start < 0 ||
-			span.End <= span.Start || span.End > int64(len(fn.code)) {
+			span.Start != previous || span.End <= span.Start || span.End > int64(len(fn.code)) {
 			return goAMD64FrameContext("Windows object source-PC interval lacks its original file/line/extent")
 		}
+		previous = span.End
+	}
+	if previous != int64(len(fn.code)) {
+		return goAMD64FrameContext("Windows source-PC intervals do not cover the complete physical TEXT")
 	}
 	for pc, positions := range fn.sourcePositions {
 		matched := false

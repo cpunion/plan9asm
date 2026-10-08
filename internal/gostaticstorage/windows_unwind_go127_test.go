@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -46,6 +47,33 @@ func windowsUnwindObjectFixture(t *testing.T) ([]byte, []byte) {
 		t.Fatal("complete Windows TEXT metadata differs from independent SDK reader", err)
 	}
 	return data, builtin
+}
+
+func TestGoStaticStorageWindowsUnwindActualExceptionHandlerRefusal(t *testing.T) {
+	directory, driver, _ := fixture(t)
+	name, object := filepath.Join(directory, "handler.s"), filepath.Join(directory, "handler.o")
+	assembly := "TEXT ·asmcgocall_landingpad(SB),4,$160-0\nRET\n"
+	if err := os.WriteFile(name, []byte(assembly), 0600); err != nil {
+		t.Fatal(err)
+	}
+	listing := run(t, driver, directory, fixtureEnv(t, "windows/amd64"), "tool", "asm", "-S",
+		"-p", "runtime", "-o", object, name)
+	if !bytes.Contains(listing, []byte("R_PEIMAGEOFF runtime.sehtramp")) {
+		t.Fatal("actual original handler control lacks its real PE-image relocation")
+	}
+	data, err := readRegular(object, archiveLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	builtin, err := readRegular(filepath.Join(filepath.Dir(filepath.Dir(driver)), builtinSourceRole), archiveLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ObserveWindowsAMD64AssemblyUnwind(data, builtin); !errors.Is(err, ErrContext) ||
+		!strings.Contains(err.Error(), "exception-handler") {
+		t.Fatal("actual native handler metadata entered ordinary closed-local observation", err)
+	}
+	t.Logf("ACTUAL_WINDOWS_HANDLER_OBJECT bytes=%d sha256=%s hex=%x\n%s", len(data), digest(data), data, listing)
 }
 
 func TestGoStaticStorageWindowsUnwindCompleteSchemaAndGuards(t *testing.T) {

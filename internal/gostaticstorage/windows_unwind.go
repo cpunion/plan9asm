@@ -80,10 +80,8 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 		start, end := object.indices[2][index], object.indices[2][index+1]
 		if index < hashedStart || index >= hashedEnd || binary.LittleEndian.Uint16(symbol[8:]) != 0 ||
 			symbol[11] != 3 || symbol[12] != 0 || binary.LittleEndian.Uint32(symbol[13:]) != 12 ||
-			binary.LittleEndian.Uint32(symbol[17:]) != 4 || end-start != 12 ||
-			object.indices[0][index] != object.indices[0][index+1] ||
-			object.indices[1][index] != object.indices[1][index+1] {
-			return result, contextError("Windows unwind symbol/block/extent/auxiliary/relocation role differs")
+			binary.LittleEndian.Uint32(symbol[17:]) != 4 || end-start != 12 {
+			return result, contextError("Windows unwind symbol/block/extent role differs")
 		}
 		bytes := block(16)[start:end]
 		if name != "go:sehuw.12."+base64.StdEncoding.EncodeToString(bytes) {
@@ -91,6 +89,10 @@ func ObserveWindowsAMD64AssemblyUnwind(data, builtinSource []byte) (WindowsAMD64
 		}
 		if bytes[0] != 1 {
 			return result, contextError("Windows native exception-handler/version flags require a separate role")
+		}
+		if object.indices[0][index] != object.indices[0][index+1] ||
+			object.indices[1][index] != object.indices[1][index+1] {
+			return result, contextError("Windows unwind auxiliary/relocation requires a separate role")
 		}
 		if bytes[1] == 0 || bytes[2] != 2 || bytes[3] != 5 || bytes[4] != bytes[1] ||
 			bytes[5] != 3 || bytes[6] == 0 || bytes[6] >= bytes[4] || bytes[7] != 0x50 ||
