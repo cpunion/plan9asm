@@ -19,8 +19,9 @@ type arm64MachineEffect struct {
 	opaque            bool
 	store             bool
 	source            string
-	unavailable       bool // Original source encoding/layout did not supply these bits.
-	noScratchObserver bool // Complete original and normalized same-file RET-only call source.
+	unavailable       bool          // Original source encoding/layout did not supply these bits.
+	nzcv              arm64FlagMask // Virtual flag bank, not original Go GP scratch.
+	noScratchObserver bool          // Complete original and normalized same-file RET-only call source.
 }
 
 type arm64MachineBlock struct {
@@ -144,12 +145,13 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 
 func (c *arm64Ctx) recordMachineUnavailable(reg Reg) {
 	if flow := c.machineAvailability; flow != nil && !flow.flagsOnly {
+		nzcv := c.arm64FlagSlotMask(string(reg))
 		width := 64
-		if c.arm64FlagSlotMask(string(reg)) != 0 {
+		if nzcv != 0 {
 			width = 1
 		}
 		flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects,
-			arm64MachineEffect{register: arm64MachineRegister(reg), width: width, unavailable: true, source: flow.source})
+			arm64MachineEffect{register: arm64MachineRegister(reg), width: width, unavailable: true, nzcv: nzcv, source: flow.source})
 	}
 }
 
@@ -175,7 +177,7 @@ func (c *arm64Ctx) recordMachineRegister(reg Reg, width int, write bool) {
 		return
 	}
 	flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
-		register: arm64MachineRegister(reg), width: width, write: write, source: flow.source,
+		register: arm64MachineRegister(reg), width: width, write: write, nzcv: c.arm64FlagSlotMask(string(reg)), source: flow.source,
 	})
 }
 
@@ -453,6 +455,12 @@ func (flow *arm64MachineAvailability) validateSourceScratch() error {
 			missing[reg] = width
 		}
 		for _, effect := range flow.blocks[at].effects {
+			// These actual flag-slot effects remain inputs to ordered flag
+			// flow and must-defined analysis. They cannot create missing
+			// physical GP scratch for an unrelated native observation.
+			if effect.nzcv != 0 {
+				continue
+			}
 			switch {
 			case effect.unavailable:
 				width := effect.width

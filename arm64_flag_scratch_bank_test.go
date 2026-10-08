@@ -73,3 +73,31 @@ func TestARM64FlagScratchBankRetainsOrderedFlagRejection(t *testing.T) {
 		})
 	}
 }
+
+func TestARM64FlagScratchBankTagsActualReadWriteAndUnavailable(t *testing.T) {
+	ctx, flow := arm64FlagScratchBankFixture()
+	for _, flag := range []struct {
+		slot string
+		mask arm64FlagMask
+	}{
+		{ctx.flagsNSlot, arm64FlagN}, {ctx.flagsZSlot, arm64FlagZ},
+		{ctx.flagsCSlot, arm64FlagC}, {ctx.flagsVSlot, arm64FlagV},
+	} {
+		ctx.storeFlag(flag.slot, "true")
+		ctx.recordMachineRegister(Reg(flag.slot), 1, false)
+		ctx.recordMachineUnavailable(Reg(flag.slot))
+		for _, effect := range flow.blocks[0].effects[len(flow.blocks[0].effects)-3:] {
+			if effect.nzcv != flag.mask || effect.width != 1 || effect.register != flag.slot {
+				t.Fatalf("actual flag hook lost its typed bank: %+v", effect)
+			}
+		}
+	}
+	ctx.recordMachineUnavailable("R27")
+	ctx.recordMachineRegister("R1", 64, false)
+	ctx.recordMachineRegister("R1", 64, true)
+	for _, effect := range flow.blocks[0].effects[len(flow.blocks[0].effects)-3:] {
+		if effect.nzcv != 0 || effect.width != 64 {
+			t.Fatalf("physical GP effect acquired a virtual flag bank: %+v", effect)
+		}
+	}
+}
