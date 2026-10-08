@@ -13,7 +13,6 @@ import (
 	"github.com/xgo-dev/plan9asm"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
-	"golang.org/x/mod/semver"
 	"golang.org/x/mod/sumdb/dirhash"
 	modzip "golang.org/x/mod/zip"
 )
@@ -33,9 +32,10 @@ type amd64DownloadedModule struct {
 }
 
 type amd64DownloadedSources struct {
-	primary *amd64DownloadedModule
-	modules map[string]*amd64DownloadedModule
-	files   *amd64OriginalObservationFiles
+	primary          *amd64DownloadedModule
+	modules          map[string]*amd64DownloadedModule
+	files            *amd64OriginalObservationFiles
+	cacheDirectories map[string]os.FileInfo
 }
 
 // CaptureAMD64DownloadedPackageObservation retains the original cache bytes.
@@ -80,7 +80,21 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 	if err != nil {
 		return nil, err
 	}
-	sources := &amd64DownloadedSources{modules: make(map[string]*amd64DownloadedModule), files: newAMD64OriginalObservationFiles()}
+	// An empty directory can still inherit an ancestor module. Give the
+	// download command its own module boundary, without changing source inputs.
+	boundary, err := os.OpenFile(filepath.Join(marker, "go.mod"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return nil, err
+	}
+	_, writeErr := boundary.WriteString("module example.invalid/plan9asm-original-download\ngo 1.20\n")
+	if err := errors.Join(writeErr, boundary.Close()); err != nil {
+		return nil, err
+	}
+	sources := &amd64DownloadedSources{modules: make(map[string]*amd64DownloadedModule),
+		files: newAMD64OriginalObservationFiles(), cacheDirectories: make(map[string]os.FileInfo)}
+	if err := sources.retainCacheDirectory(cache); err != nil {
+		return nil, err
+	}
 	if err := sources.files.retain(original.GoBinary); err != nil {
 		return nil, err
 	}
@@ -136,14 +150,14 @@ func captureAMD64DownloadedSources(ctx context.Context, request AMD64DownloadedO
 	if !selected {
 		return nil, fmt.Errorf("downloaded graph omitted the requested original assembly package")
 	}
-	return sources, sources.files.verify()
+	return sources, sources.verify()
 }
 
 func (sources *amd64DownloadedSources) captureModule(ctx context.Context, request AMD64OriginalObservationRequest, path, version, marker, cache string, run Runner) (*amd64DownloadedModule, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if module.Check(path, version) != nil || semver.Canonical(version) != version {
+	if module.Check(path, version) != nil || module.CanonicalVersion(version) != version {
 		return nil, fmt.Errorf("downloaded source requires a canonical exact module version")
 	}
 	key := path + "@" + version
@@ -152,6 +166,9 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 	}
 	if len(sources.modules) >= 64 {
 		return nil, fmt.Errorf("downloaded source module graph exceeds its explicit bound")
+	}
+	if err := sources.verify(); err != nil {
+		return nil, err
 	}
 	data, stderr, err := run(ctx, marker, request.Environment, request.GoBinary, "mod", "download", "-json", key)
 	if err != nil || len(stderr) != 0 || len(data) == 0 || len(data) > commandOutputLimit {
@@ -171,10 +188,25 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 	}
 	root := filepath.Join(cache, escapedPath+"@"+escapedVersion)
 	prefix := filepath.Join(cache, "cache", "download", escapedPath, "@v", escapedVersion)
-	for actual, expected := range map[string]string{downloaded.Dir: root, downloaded.Zip: prefix + ".zip", downloaded.GoMod: prefix + ".mod"} {
-		physical, err := filepath.EvalSymlinks(actual)
-		if err != nil || physical != expected {
+	roles := []struct{ actual, expected string }{
+		{downloaded.Dir, root}, {downloaded.Zip, prefix + ".zip"}, {downloaded.GoMod, prefix + ".mod"},
+	}
+	for _, role := range roles {
+		physical, err := filepath.EvalSymlinks(role.actual)
+		if err != nil || physical != role.expected {
 			return nil, fmt.Errorf("actual exact download escaped its canonical cache source role")
+		}
+		for directory := filepath.Dir(role.expected); ; directory = filepath.Dir(directory) {
+			if err := sources.retainCacheDirectory(directory); err != nil {
+				return nil, err
+			}
+			if directory == cache {
+				break
+			}
+			relative, err := filepath.Rel(cache, directory)
+			if err != nil || !filepath.IsLocal(relative) {
+				return nil, fmt.Errorf("downloaded cache directory role escaped its observed root")
+			}
 		}
 	}
 	if err := sources.files.directory(root, true); err != nil {
@@ -217,7 +249,33 @@ func (sources *amd64DownloadedSources) captureModule(ctx context.Context, reques
 	source := &amd64DownloadedModule{sourceModule: path, sourceVersion: version, root: root,
 		goMod: prefix + ".mod", modulePath: parsed.Module.Mod.Path, goVersion: parsed.Go.Version}
 	sources.modules[key] = source
-	return source, sources.files.verify()
+	return source, sources.verify()
+}
+
+// Cache entries may be added by legitimate Go downloads. Keep directory
+// identities, not a global cache membership snapshot or a ledger in memory.
+func (sources *amd64DownloadedSources) retainCacheDirectory(name string) error {
+	physical, err := filepath.EvalSymlinks(name)
+	info, statErr := os.Lstat(name)
+	if err != nil || statErr != nil || physical != name || !info.IsDir() || len(sources.cacheDirectories) >= 4096 {
+		return fmt.Errorf("downloaded source cache directory is missing, redirected or over-bound")
+	}
+	if previous := sources.cacheDirectories[name]; previous != nil && !os.SameFile(previous, info) {
+		return fmt.Errorf("downloaded source cache directory identity changed during capture")
+	}
+	sources.cacheDirectories[name] = info
+	return nil
+}
+
+func (sources *amd64DownloadedSources) verify() error {
+	for name, expected := range sources.cacheDirectories {
+		physical, err := filepath.EvalSymlinks(name)
+		actual, statErr := os.Lstat(name)
+		if err != nil || statErr != nil || physical != name || !actual.IsDir() || !os.SameFile(expected, actual) {
+			return fmt.Errorf("downloaded source cache directory identity changed")
+		}
+	}
+	return sources.files.verify()
 }
 
 func (source *amd64DownloadedModule) matches(actual *amd64OriginalListModule, primary bool) bool {

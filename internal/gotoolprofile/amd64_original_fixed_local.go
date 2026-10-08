@@ -33,7 +33,11 @@ func (observed *AMD64OriginalPackageObservation) BindFixedLocal(ctx context.Cont
 	}
 	observed.mu.Lock()
 	request, generation, ready := observed.request, observed.generation, observed.ready
+	downloaded := observed.downloaded != nil
 	observed.mu.Unlock()
+	if downloaded {
+		return plan9asm.Options{}, nil, fmt.Errorf("%w: downloaded source needs a separately reviewed actual frame/object handoff", plan9asm.ErrProbeNeedsContext)
+	}
 	if !ready || pkg.Path != request.PackagePath {
 		return plan9asm.Options{}, nil, fmt.Errorf("original fixed-local package identity differs")
 	}

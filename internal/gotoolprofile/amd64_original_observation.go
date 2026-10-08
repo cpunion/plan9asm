@@ -163,7 +163,7 @@ func validateAMD64OriginalObservationRequest(ctx context.Context, request AMD64O
 
 func captureAMD64OriginalObservationState(ctx context.Context, request AMD64OriginalObservationRequest, downloaded *amd64DownloadedSources, run Runner) (_ *amd64OriginalObservationState, result error) {
 	if downloaded != nil {
-		if err := downloaded.files.verify(); err != nil {
+		if err := downloaded.verify(); err != nil {
 			return nil, err
 		}
 	}
@@ -235,7 +235,7 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 		return nil, fmt.Errorf("actual Go driver changed during capture")
 	}
 	if downloaded != nil {
-		if err := downloaded.files.verify(); err != nil {
+		if err := downloaded.verify(); err != nil {
 			return nil, err
 		}
 	}

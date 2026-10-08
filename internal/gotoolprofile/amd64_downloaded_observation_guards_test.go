@@ -223,6 +223,9 @@ func TestAMD64DownloadedObservationImmutableSourceAndRevocation(t *testing.T) {
 				name = prefix + ".mod"
 			case "module directory":
 				moved := request.Directory + "-moved"
+				if err := os.Chmod(request.Directory, 0700); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.Chmod(filepath.Dir(request.Directory), 0700); err != nil {
 					t.Fatal(err)
 				}
