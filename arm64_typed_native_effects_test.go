@@ -249,6 +249,24 @@ func TestARM64TypedNativeEffectsProofIsBoundToExactEmission(t *testing.T) {
 	if opaqueCount() != 1 || ctx.flagsKnown != 0 || ctx.flagsWritten {
 		t.Fatal("identical unproven native IR borrowed a different emission's proof")
 	}
+	unavailable := make(map[string]int)
+	for _, effect := range flow.blocks[0].effects {
+		if !effect.unavailable {
+			continue
+		}
+		if effect.width != 1 {
+			t.Fatalf("native flag invalidation widened %s to %d bits", effect.register, effect.width)
+		}
+		unavailable[effect.register]++
+	}
+	if len(unavailable) != 4 {
+		t.Fatalf("native callout did not separately revoke all four flags: %v", unavailable)
+	}
+	for _, slot := range []string{ctx.flagsNSlot, ctx.flagsZSlot, ctx.flagsCSlot, ctx.flagsVSlot} {
+		if unavailable[slot] != 1 {
+			t.Fatalf("native callout did not revoke %s exactly once: %v", slot, unavailable)
+		}
+	}
 	start = ir.Len()
 	ctx.emitMachineNeutralNativeIR("  call void asm sideeffect %q, %q()\n", "nop", "")
 	fmt.Fprint(&ir, "  call void @unknown()\n")
