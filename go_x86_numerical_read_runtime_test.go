@@ -148,7 +148,21 @@ static uint64_t load(unsigned n) {
 	// even when its result is overwritten. The source is inside the valid extent;
 	// PROT_NONE, not an out-of-bounds source, creates this independent fault axis.
 	if dead >= 0 {
-		fmt.Fprintf(&c, " pid_t child=fork();\n if(child<0) return 4;\n if(!child) {\n  struct rlimit no_core={0,0};\n  if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);\n  numerical_fault_begin(mutable,sizeof(mutable));\n  if(mprotect(mutable,sizeof(mutable),PROT_NONE)) _exit(5);\n  (void)numerical%d(); _exit(6);\n }\n int status=0;\n if(waitpid(child,&status,0)!=child) return 7;\n if(!numerical_fault_status(status)) return 8;\n", dead)
+		fmt.Fprintf(&c, `
+ pid_t child=fork();
+ if(child<0) return 4;
+ if(!child) {
+  struct rlimit no_core={0,0};
+  if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+  numerical_fault_begin(mutable,sizeof(mutable));
+  if(mprotect(mutable,sizeof(mutable),PROT_NONE)) _exit(5);
+  (void)numerical%d();
+  _exit(6);
+ }
+ int status=0;
+ if(waitpid(child,&status,0)!=child) return 7;
+ if(!numerical_fault_status(status)) return 8;
+`, dead)
 	}
 	c.WriteString(" return 0;\n}\n")
 	return c.String()
@@ -188,7 +202,20 @@ __asm__(".globl \"example.invalid/numericalfixture.Mutable\"\n"
 	c.WriteString("int main(void) {\n memset(carrier,0x83,sizeof(carrier));\n")
 	for index, test := range cases {
 		fault := test.source > 1 && !test.cpu
-		fmt.Fprintf(&c, " { pid_t child=fork();\n  if(child<0) return 1;\n  if(!child) {\n   struct rlimit no_core={0,0};\n   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);\n   numerical_fault_begin(carrier+4096,4096);\n   if(mprotect(carrier+4096,4096,PROT_NONE)) _exit(2);\n   (void)numerical%d(); _exit(0);\n  }\n  int status=0;\n  if(waitpid(child,&status,0)!=child) return 3;\n", index)
+		fmt.Fprintf(&c, `
+ { pid_t child=fork();
+  if(child<0) return 1;
+  if(!child) {
+   struct rlimit no_core={0,0};
+   if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
+   numerical_fault_begin(carrier+4096,4096);
+   if(mprotect(carrier+4096,4096,PROT_NONE)) _exit(2);
+   (void)numerical%d();
+   _exit(0);
+  }
+  int status=0;
+  if(waitpid(child,&status,0)!=child) return 3;
+`, index)
 		if fault {
 			c.WriteString("  if(!numerical_fault_status(status)) return 4;\n")
 		} else {
