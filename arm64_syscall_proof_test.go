@@ -107,6 +107,11 @@ func TestARM64SyscallBridgeProofExactIdentity(t *testing.T) {
 			return c
 		}},
 		{"missing-CFG", func(c *arm64Ctx, _ int, _ *Instr) *arm64Ctx { c.localControl = nil; return c }},
+		{"replaced-CFG", func(c *arm64Ctx, _ int, _ *Instr) *arm64Ctx {
+			copy := *c.localControl
+			c.localControl = &copy
+			return c
+		}},
 		{"same-callee-unregistered", func(c *arm64Ctx, _ int, _ *Instr) *arm64Ctx {
 			c.b.WriteString("  %foreign = call i64 @syscall(i64 0, i64 0, i64 0, i64 0, i64 0, i64 0, i64 0)\n")
 			return c

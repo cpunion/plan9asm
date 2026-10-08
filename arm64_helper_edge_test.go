@@ -1039,6 +1039,7 @@ func TestARM64TailCallReturnIntegerWidths(t *testing.T) {
 
 func TestARM64SyscallCoverage(t *testing.T) {
 	c, b := newARM64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.syscall", Ret: Void}, nil)
+	c.targetTriple = "aarch64-unknown-linux-gnu"
 	for _, tc := range []struct {
 		r Reg
 		v string
@@ -1057,11 +1058,12 @@ func TestARM64SyscallCoverage(t *testing.T) {
 		}
 	}
 
-	if ok, term, err := c.lowerSyscall("SVC", Instr{Raw: "SVC", Args: nil}); !ok || term || err != nil {
+	if ok, term, err := c.lowerSyscall("SVC", Instr{Op: "SVC", Raw: "SVC", Args: nil}); !ok || term || err != nil {
 		t.Fatalf("lowerSyscall(linux) = (%v, %v, %v)", ok, term, err)
 	}
 
 	darwin, db := newARM64CtxWithFuncForTest(t, Func{}, FuncSig{Name: "example.darwin", Ret: Void}, nil)
+	darwin.targetTriple = "aarch64-apple-darwin"
 	delete(darwin.regSlot, Reg("R8"))
 	for _, tc := range []struct {
 		r Reg
@@ -1079,7 +1081,7 @@ func TestARM64SyscallCoverage(t *testing.T) {
 			t.Fatalf("darwin storeReg(%s) error = %v", tc.r, err)
 		}
 	}
-	if ok, term, err := darwin.lowerSyscall("SVC", Instr{Raw: "SVC $0x80", Args: []Operand{{Kind: OpImm, Imm: 0x80}}}); !ok || term || err != nil {
+	if ok, term, err := darwin.lowerSyscall("SVC", Instr{Op: "SVC", Raw: "SVC $0x80", Args: []Operand{{Kind: OpImm, Imm: 0x80}}}); !ok || term || err != nil {
 		t.Fatalf("lowerSyscall(darwin) = (%v, %v, %v)", ok, term, err)
 	}
 	if _, _, err := c.lowerSyscall("SVC", Instr{Raw: "SVC R0", Args: []Operand{{Kind: OpReg, Reg: "R0"}}}); err == nil {
@@ -1095,7 +1097,7 @@ func TestARM64SyscallCoverage(t *testing.T) {
 		"@cliteErrno()",
 		"sub i64 0",
 		"store i1 %t",
-		"store i1 false, ptr %flags_v",
+		"ptr %flags_c",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in output:\n%s", want, out)

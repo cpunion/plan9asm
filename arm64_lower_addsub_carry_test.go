@@ -8,7 +8,7 @@ import (
 
 func arm64AddSubCarryCompleteForms() string {
 	var source strings.Builder
-	source.WriteString("TEXT addSubCarryComplete(SB),$0-0\n")
+	source.WriteString("TEXT addSubCarryComplete(SB),$0-0\n\tCMP R0, R0\n")
 	for _, op := range []string{"ADC", "ADCW", "ADCS", "ADCSW", "SBC", "SBCW", "SBCS", "SBCSW"} {
 		source.WriteString("\t" + op + " R1, R2\n")
 		source.WriteString("\t" + op + " R3, R4, R5\n")

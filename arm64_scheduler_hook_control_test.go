@@ -93,6 +93,15 @@ func RawSyscallNoError(trap, a1, a2, a3 uintptr) (r1, r2 uintptr)
 					GOOS: "linux", GOARCH: "arm64", TargetTriple: triple,
 					ResolveSym: testResolveSym(pkg.Path),
 				})
+				if triple != "aarch64-unknown-linux-gnu" {
+					if tr != nil && !tr.Module.IsNil() {
+						tr.Module.Dispose()
+					}
+					if !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("Linux bare-SVC source cannot acquire another target's syscall ABI: %v", err)
+					}
+					return
+				}
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -223,8 +232,11 @@ func RawSyscallNoError(trap, a1, a2, a3 uintptr) (r1, r2 uintptr)
 				if err == nil {
 					tr.Module.Dispose()
 				}
-				if !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatalf("syscall outputs are not the old caller continuation: %v", err)
+				if reg == "R0" && !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("new Linux R0 result is not the old caller continuation: %v", err)
+				}
+				if reg == "R1" && err != nil {
+					t.Fatalf("untouched Linux R1 lost its original saved caller continuation: %v", err)
 				}
 			})
 		}

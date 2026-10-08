@@ -30,6 +30,7 @@ type arm64SyscallForm struct {
 type arm64SyscallIRProof struct {
 	identity                   *arm64SyscallIRProof
 	owner                      *arm64Ctx
+	control                    *arm64LocalControlPlan
 	form                       arm64SyscallForm
 	source                     Instr
 	block, instruction, offset int
@@ -39,7 +40,7 @@ func (proof *arm64SyscallIRProof) matches(c *arm64Ctx, original Instr, offset in
 	if proof == nil || proof.identity != proof || proof.owner != c || proof.offset != offset ||
 		proof.block != c.currentBlock || proof.instruction != c.currentInstruction ||
 		proof.block < 0 || proof.block >= len(c.blocks) || proof.instruction < 0 ||
-		proof.instruction >= len(c.blocks[proof.block].instrs) || c.localControl == nil {
+		proof.instruction >= len(c.blocks[proof.block].instrs) || c.localControl == nil || proof.control != c.localControl {
 		return false
 	}
 	if !reflect.DeepEqual(proof.source, original) ||
@@ -133,7 +134,7 @@ func (c *arm64Ctx) emitARM64SyscallIR(form arm64SyscallForm, format string, args
 		for index := range source.Args {
 			source.Args[index].RegList = append([]Reg(nil), source.Args[index].RegList...)
 		}
-		proof := &arm64SyscallIRProof{owner: c, form: form, source: source,
+		proof := &arm64SyscallIRProof{owner: c, control: c.localControl, form: form, source: source,
 			block: c.currentBlock, instruction: c.currentInstruction, offset: start}
 		proof.identity = proof
 		if flow.nativeIR == nil {

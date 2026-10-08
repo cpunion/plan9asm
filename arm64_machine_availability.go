@@ -176,6 +176,9 @@ func (c *arm64Ctx) recordMachineRegister(reg Reg, width int, write bool) {
 }
 
 func (c *arm64Ctx) recordMachineCall(abi *ARM64GoRegisterABI, sourceSymbol string) {
+	// Neither an ordinary typed call result nor an unknown native call supplies
+	// caller NZCV. Scheduler no-op hooks never enter this call boundary.
+	c.invalidateARM64Flags(arm64FlagAll)
 	if flow := c.machineAvailability; flow != nil {
 		if abi == nil {
 			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
@@ -527,6 +530,7 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 			continue
 		}
 		if strings.Contains(line, " asm ") || (!symbolCall && strings.Contains(line, " call ") && !strings.Contains(line, "@llvm.")) {
+			c.invalidateARM64Flags(arm64FlagAll)
 			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{opaque: true, source: flow.source})
 			return
 		}
