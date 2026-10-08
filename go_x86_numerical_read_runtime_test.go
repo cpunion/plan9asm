@@ -13,6 +13,20 @@ import (
 	"testing"
 )
 
+// C compilers must only refer to ordinary C storage labels. GCC emits an
+// asm-label spelling verbatim, so a Go-qualified name containing '/' is not
+// portable as a C __asm__ name. Quoted assembler aliases bind the exact LLVM
+// names without changing the storage, read widths or fault/canary oracles.
+const numericalRuntimeStorageAliases = `
+#ifdef __APPLE__
+#define NUMERICAL_STORAGE_ALIAS(name, storage) \
+    __asm__(".globl \"_" name "\"\n\"_" name "\" = _" #storage "\n")
+#else
+#define NUMERICAL_STORAGE_ALIAS(name, storage) \
+    __asm__(".globl \"" name "\"\n.set \"" name "\", " #storage "\n")
+#endif
+`
+
 // This carrier provides actual mutable linked numerical storage. It is not a
 // Go native-entry/ABI0 permission: the required Linux oracle separately executes
 // the original Go-linked declarations. A retargeted host run is diagnostic only.
@@ -29,13 +43,13 @@ func numericalRuntimeC(cases []numericalExecutionCase, arch string) string {
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#ifdef __APPLE__
-#define NATIVE_SYMBOL(name) "_" name
-#else
-#define NATIVE_SYMBOL(name) name
-#endif
-_Alignas(4096) unsigned char mutable[4096] __asm__(NATIVE_SYMBOL("example.invalid/numericalfixture.Mutable"));
-_Alignas(4096) unsigned char cpu[4096] __asm__(NATIVE_SYMBOL("internal/cpu.X86"));
+`)
+	c.WriteString(numericalRuntimeStorageAliases)
+	c.WriteString(`
+_Alignas(4096) unsigned char mutable[4096];
+_Alignas(4096) unsigned char cpu[4096];
+NUMERICAL_STORAGE_ALIAS("example.invalid/numericalfixture.Mutable", mutable);
+NUMERICAL_STORAGE_ALIAS("internal/cpu.X86", cpu);
 static uint64_t mask(unsigned n) {
  if(n==8) return UINT64_MAX;
  return (UINT64_C(1)<<(n*8))-1;
@@ -120,15 +134,18 @@ func numericalRuntimeWidthFaultC(cases []numericalExecutionCase, arch string) st
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
+`)
+	c.WriteString(numericalRuntimeStorageAliases)
+	c.WriteString(`
 _Alignas(4096) unsigned char carrier[8192];
+unsigned char cpu[164];
+NUMERICAL_STORAGE_ALIAS("internal/cpu.X86", cpu);
 #ifdef __APPLE__
 __asm__(".globl \"_example.invalid/numericalfixture.Mutable\"\n"
         "\"_example.invalid/numericalfixture.Mutable\" = _carrier + 4092\n");
-unsigned char cpu[164] __asm__("_internal/cpu.X86");
 #else
 __asm__(".globl \"example.invalid/numericalfixture.Mutable\"\n"
         ".set \"example.invalid/numericalfixture.Mutable\", carrier + 4092\n");
-unsigned char cpu[164] __asm__("internal/cpu.X86");
 #endif
 `)
 	for index := range cases {

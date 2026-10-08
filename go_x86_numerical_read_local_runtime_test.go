@@ -99,19 +99,15 @@ func numericalLocalRuntimeCommand(t *testing.T, command *exec.Cmd, sources ...st
 }
 
 func numericalLocalRuntimeC(snapshot uint64) string {
-	return fmt.Sprintf(`#include <stdint.h>
+	return numericalRuntimeStorageAliases + fmt.Sprintf(`#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#ifdef __APPLE__
-#define NATIVE_SYMBOL(name) "_" name
-#else
-#define NATIVE_SYMBOL(name) name
-#endif
-_Alignas(4096) unsigned char cpu[4096] __asm__(NATIVE_SYMBOL("internal/cpu.X86"));
+_Alignas(4096) unsigned char cpu[4096];
+NUMERICAL_STORAGE_ALIAS("internal/cpu.X86", cpu);
 extern uint64_t numericalLocal(uint64_t,uint64_t,uint64_t,uint64_t);
 int main(void) {
     memset(cpu,0xa5,sizeof(cpu));
