@@ -56,7 +56,12 @@ func arm64ByteCarrierFixture(t *testing.T) (string, string, []arm64NativeResultT
 
 func arm64ByteCarrierOriginal(t *testing.T, directory, packagePath string) ([]byte, []byte, []byte) {
 	t.Helper()
-	selection := arm64ABI0RegionCommand(t, "linux", directory, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	return arm64ByteCarrierOriginalForOS(t, "linux", directory, packagePath)
+}
+
+func arm64ByteCarrierOriginalForOS(t *testing.T, goos, directory, packagePath string) ([]byte, []byte, []byte) {
+	t.Helper()
+	selection := arm64ABI0RegionCommand(t, goos, directory, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
 	var selected goAMD64FrameSelection
 	decoder := json.NewDecoder(bytes.NewReader(selection))
 	if err := decoder.Decode(&selected); err != nil {
@@ -72,7 +77,7 @@ func arm64ByteCarrierOriginal(t *testing.T, directory, packagePath string) ([]by
 		t.Fatal(err)
 	}
 	objectName := filepath.Join(t.TempDir(), "original.o")
-	arm64ABI0RegionCommand(t, "linux", directory, "tool", "asm", "-p", packagePath,
+	arm64ABI0RegionCommand(t, goos, directory, "tool", "asm", "-p", packagePath,
 		"-o", objectName, "original_arm64.s")
 	object, err := os.ReadFile(objectName)
 	if err != nil {
@@ -83,6 +88,41 @@ func arm64ByteCarrierOriginal(t *testing.T, directory, packagePath string) ([]by
 		t.Fatal(err)
 	}
 	return archive, object, builtins
+}
+
+func TestARM64ByteCarrierActualSourceTargetMatrix(t *testing.T) {
+	directory, packagePath, cases := arm64ByteCarrierFixture(t)
+	base := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	for _, goos := range []string{"darwin", "linux", "windows", "freebsd", "openbsd"} {
+		t.Run(goos, func(t *testing.T) {
+			archive, object, builtins := arm64ByteCarrierOriginalForOS(t, goos, directory, packagePath)
+			target := goos + "/arm64"
+			if records, err := gostaticstorage.ObserveARM64AssemblyText(object, builtins, target); err != nil || len(records) != 18 {
+				t.Fatalf("actual target standalone object differs: %v", err)
+			}
+			if members, err := gostaticstorage.ObserveARM64AssemblyArchive(archive, builtins, target, []string{"original_arm64.s"}); err != nil || len(members) != 3 {
+				t.Fatalf("actual target complete archive differs: %v", err)
+			}
+			request := base
+			request.Target = target
+			request.Environment = append([]string(nil), base.Environment...)
+			for index, pair := range request.Environment {
+				if strings.HasPrefix(pair, "GOOS=") {
+					request.Environment[index] = "GOOS=" + goos
+				}
+			}
+			source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer source.Close()
+			if len(source.report.Calls) != len(cases) || len(source.report.Archive[1].Texts) != 27 {
+				t.Fatal("target lost actual native caller or original typed compiler entry")
+			}
+		})
+	}
 }
 
 func arm64ByteCarrierRequest(t *testing.T, directory, packagePath string) GoARM64ByteCarrierCaptureRequest {
