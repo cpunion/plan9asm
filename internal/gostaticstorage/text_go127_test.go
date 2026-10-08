@@ -47,6 +47,10 @@ type Ref struct {
 	Package, Name             string
 	ABI                       uint16
 	ABIKnown                  bool
+	// This reader observes the existing default TEXT role, which does not
+	// admit referenced-archive kind metadata. Keep that provenance explicit.
+	Kind                      uint8
+	KindKnown                 bool
 }
 type Reloc struct {
 	Offset, Size int64
@@ -188,9 +192,13 @@ func main() {
 				if v.Namespace == 1 {
 					hash := r.Hash64(v.Relative)
 					v.Hash = make([]byte, 8)
-					for index := range v.Hash { v.Hash[index] = byte(hash >> (8 * index)) }
+					for index := range v.Hash {
+						v.Hash[index] = byte(hash >> (8 * index))
+					}
 				}
-				if v.Namespace == 2 { v.Hash = append([]byte(nil), r.Hash(v.Relative)[:]...) }
+				if v.Namespace == 2 {
+					v.Hash = append([]byte(nil), r.Hash(v.Relative)[:]...)
+				}
 				for j := 0; j < r.NReloc(uint32(i)); j++ {
 					q := r.Reloc(uint32(i), j)
 					v.Relocations = append(v.Relocations, Reloc{int64(q.Off()), int64(q.Siz()), q.Type(), q.Add(), resolve(q.Sym())})
