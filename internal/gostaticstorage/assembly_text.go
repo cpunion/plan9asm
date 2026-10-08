@@ -168,3 +168,18 @@ func assemblyArchiveDefinitions(data []byte, flags uint32) ([]dataRecord, error)
 func ObserveX86SDKAssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
 	return observeX86AssemblyArchive(data, builtinSource, target, sources, true)
 }
+
+// SDKReferencedArchive is offline metadata input, not SDK provenance or a
+// storage/entry certificate. A live producer separately seals its actual
+// selected dependency path, member inventory and complete original bytes.
+type SDKReferencedArchive struct {
+	PackagePath string
+	Sources     []string
+	Archive     []byte
+}
+
+// ObserveX86SDKAssemblyArchiveReferences additionally observes indexed
+// references through separately retained actual dependency archives.
+func ObserveX86SDKAssemblyArchiveReferences(data, builtinSource []byte, target string, sources []string, referenced map[string]SDKReferencedArchive) ([]TextMember, error) {
+	return ObserveX86SDKAssemblyArchive(data, builtinSource, target, sources)
+}
