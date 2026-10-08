@@ -32,19 +32,23 @@ const numericalRuntimeStorageAliases = `
 // The handler admits only a synchronous memory fault inside the exact protected
 // region. A normal return, user-raised signal or fault at another address fails.
 const numericalRuntimeFaultObservationC = `
-static uintptr_t numerical_fault_first, numerical_fault_last;
+#include <stdatomic.h>
+static _Atomic(uintptr_t) numerical_fault_first, numerical_fault_last;
 static void numerical_fault_observe(int signal_number, siginfo_t *info, void *context) {
     (void)context;
     uintptr_t address = info ? (uintptr_t)info->si_addr : 0;
     if (!info || info->si_signo != signal_number || info->si_code <= 0 ||
         (signal_number != SIGSEGV && signal_number != SIGBUS) ||
-        address < numerical_fault_first || address >= numerical_fault_last) _exit(121);
+        address < atomic_load_explicit(&numerical_fault_first,memory_order_relaxed) ||
+        address >= atomic_load_explicit(&numerical_fault_last,memory_order_relaxed)) _exit(121);
     _exit(123);
 }
 static void numerical_fault_begin(void *region, size_t bytes) {
-    numerical_fault_first = (uintptr_t)region;
-    numerical_fault_last = numerical_fault_first + bytes;
-    if (!bytes || numerical_fault_last < numerical_fault_first) _exit(122);
+    uintptr_t first=(uintptr_t)region, last=first+bytes;
+    if (!bytes || last<first || !atomic_is_lock_free(&numerical_fault_first) ||
+        !atomic_is_lock_free(&numerical_fault_last)) _exit(122);
+    atomic_store_explicit(&numerical_fault_first,first,memory_order_relaxed);
+    atomic_store_explicit(&numerical_fault_last,last,memory_order_relaxed);
     struct sigaction action;
     memset(&action, 0, sizeof(action));
     action.sa_sigaction = numerical_fault_observe;
