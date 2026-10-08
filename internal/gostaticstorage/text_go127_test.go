@@ -370,3 +370,56 @@ func TestGoStaticStorageTEXTX86ActualRelocationAddend(t *testing.T) {
 		})
 	}
 }
+
+func TestGoStaticStorageTEXTActualZeroPC(t *testing.T) {
+	_, binary, _ := fixture(t)
+	oracle := officialReaderForSource(t, binary, sdkTextReaderSource)
+	for _, target := range []string{"linux/386", "linux/amd64", "linux/arm", "linux/arm64", "js/wasm"} {
+		t.Run(target, func(t *testing.T) {
+			dir, err := filepath.EvalSymlinks(t.TempDir()) // Only this fresh owned output.
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := []byte("#include \"textflag.h\"\nTEXT ·Empty(SB),NOSPLIT,$0-0\n")
+			file, object := filepath.Join(dir, "empty.s"), filepath.Join(dir, "empty.o")
+			if err := os.WriteFile(file, source, 0600); err != nil {
+				t.Fatal(err)
+			}
+			env := fixtureEnv(t, target)
+			listing := run(t, binary, dir, env, "tool", "asm", "-S", "-p", fixtureModule,
+				"-I", filepath.Join(filepath.Dir(filepath.Dir(binary)), "pkg", "include"), "-o", object, file)
+			original, err := os.ReadFile(object)
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := run(t, oracle, dir, env, object)
+			var members []TextMember
+			if err := json.Unmarshal(raw, &members); err != nil || len(members) != 1 || len(members[0].Texts) != 1 {
+				t.Fatal("original zero-PC SDK reader differs", err)
+			}
+			body, err := objectBody(original, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			builtin, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Dir(binary)), builtinSourceRole))
+			if err != nil {
+				t.Fatal(err)
+			}
+			builtins, err := textBuiltins(builtin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			observed, err := readTextObject(body, target, 4, false, builtins)
+			if err != nil || !reflect.DeepEqual(observed, members[0].Texts) {
+				t.Fatal("actual zero-PC object/code/AUX role was rejected", err)
+			}
+			if observed[0].Size != 0 || observed[0].Positions != nil {
+				t.Fatal("original TEXT-only function did not supply a zero logical-PC role", observed[0])
+			}
+			retainTextArtifact(t, target, "zero-text", map[string][]byte{
+				"text-source.s": source, "text-original.o": original, "text-sdk.json": raw, "text-listing.txt": listing,
+			})
+			t.Logf("actual zero-PC %s logical=%d physical=%d", target, observed[0].Size, len(observed[0].Code))
+		})
+	}
+}

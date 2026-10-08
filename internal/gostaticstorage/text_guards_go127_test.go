@@ -253,9 +253,8 @@ func TestGoStaticStorageTEXTWasmDistinctExtents(t *testing.T) {
 }
 
 func TestGoStaticStorageTEXTZeroPCMetadataRole(t *testing.T) {
-	// No logical PCs means there is no pc-value interval. In the pinned format
-	// the canonical zero-interval table is empty; even a lone terminator is
-	// noncanonical because the first zero is a value delta, not termination.
+	// No logical PCs means there is no positive pc-value interval. A lone zero
+	// is truncated because the first zero is a value delta, not termination.
 	for _, tables := range [][2][]byte{
 		{{0}, nil}, {nil, {0}}, {{0}, {0}}, {{2, 1, 0}, {2, 1, 0}},
 	} {
