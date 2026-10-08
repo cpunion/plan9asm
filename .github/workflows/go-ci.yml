@@ -77,6 +77,9 @@ jobs:
 
       - name: Translate and compile discovered assembly
         env:
+          # Reuse only compiled Go objects from this task's restored cache.
+          # Source/tool observations and LLVM objects are still checked afresh.
+          PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
           # Retained exact versions can outlive their public origin and the
           # first proxy's cache. Verify against the signed database directly;
           # some module proxies return 404 for checksum tiles they advertise.
@@ -331,6 +334,9 @@ jobs:
 
       - name: Translate and compile discovered assembly
         env:
+          # Reuse only compiled Go objects from this task's restored cache.
+          # Source/tool observations and LLVM objects are still checked afresh.
+          PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
           # Retained exact versions can outlive their public origin and the
           # first proxy's cache. Verify against the signed database directly;
           # some module proxies return 404 for checksum tiles they advertise.
