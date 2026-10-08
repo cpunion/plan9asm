@@ -75,6 +75,12 @@ func amd64FixedLocalCLICompleteFixture(t *testing.T, operation, declaration stri
 	t.Setenv("GOFLAGS", "")
 	t.Setenv("GOEXPERIMENT", "")
 	t.Setenv("GOAMD64", "v1")
+	// test2json may export the host's CPU settings to the test binary.
+	// This fixture explicitly selects linux/amd64, so no inactive target's
+	// CPU setting belongs in its original compiler observation.
+	for _, key := range []string{"GO386", "GOARM", "GOARM64", "GOWASM"} {
+		t.Setenv(key, "")
+	}
 	t.Setenv("GOPACKAGESDRIVER", "off")
 	for _, key := range []string{"GOPATH", "GOMODCACHE", "GOCACHE", "TMPDIR", "GOTMPDIR"} {
 		if !filepath.IsAbs(os.Getenv(key)) {
