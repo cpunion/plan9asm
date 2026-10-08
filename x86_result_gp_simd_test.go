@@ -222,6 +222,44 @@ func TestX86ResultGPSIMDRegisterAllPathsAndAuthorityBoundaries(t *testing.T) {
 	}
 }
 
+// Retain the original failing public-consumer sequence, including the opaque
+// MOVD import, rather than substituting PINSRD for its GP-to-X MOVL effect.
+func TestX86ResultGPSIMDRegisterOriginalOpaqueAliasWitness(t *testing.T) {
+	for _, register := range []string{"AX", "CX", "DX", "BX", "SI", "DI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
+		t.Run(register, func(t *testing.T) {
+			body := fmt.Sprintf("MOVD x+0(FP),%s\nMOVD %s,SI\nMOVL $42,DX\nMOVL DX,X0\nPEXTRD $0,X0,BX\nMOVL BX,ret0+8(FP)\nRET", register, register)
+			_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x *byte) uint32", body)
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+				if err := check(file.Funcs[0], sig, "amd64"); err != nil {
+					t.Fatal("original GP/X witness still lacks complete numerical result effect", err)
+				}
+			}
+		})
+	}
+}
+
+func TestX86ResultGPSIMDRegisterDoesNotAdoptPrivateMemoryRoles(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		word := x86ResultPointerWord(arch)
+		for name, body := range map[string]string{
+			"logical FP load": fmt.Sprintf("MOVL x+0(FP),X0\nPEXTRD $0,X0,AX\nMOVL AX,ret0+%d(FP)\nRET", word),
+			"static SB store": fmt.Sprintf("MOVL x+0(FP),AX\nMOVL AX,X0\nMOVL X0,table(SB)\nMOVL AX,ret0+%d(FP)\nRET", word),
+		} {
+			t.Run(arch+"/"+name, func(t *testing.T) {
+				_, file, sig, source := x86ResultInitializationFixture(t, arch, "func Value(x uint32) uint32", body)
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				if err := CheckX86ABI0ResultInitialization(file.Funcs[0], sig, arch); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("public register consumer acquired a private memory role", err)
+				}
+				if err := checkX86ScalarFPResultInitialization(file.Funcs[0], sig, arch); err != nil {
+					t.Fatal("existing private memory effect changed", err)
+				}
+			})
+		}
+	}
+}
+
 func TestX86ResultGPSIMDRegisterThreeAPIFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
