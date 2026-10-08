@@ -56,7 +56,7 @@ func (source *GoAMD64FrameSource) revokeNumericalFrame() {
 // linearize during the independent frame round, but its final guard must fail.
 func (source *GoAMD64FrameSource) verifyNumericalFrameInputs(ctx context.Context) error {
 	source.mu.Lock()
-	request, binding, seal, pkg, ready := source.request, source.numericalBinding, source.numericalSeal, source.numericalPackage, source.ready
+	request, binding, seal, pkg, ready, origin := source.request, source.numericalBinding, source.numericalSeal, source.numericalPackage, source.ready, source.numericalOrigin
 	selection := source.selection
 	inputs := make(map[string][32]byte, len(source.inputs))
 	for name, sum := range source.inputs {
@@ -67,7 +67,7 @@ func (source *GoAMD64FrameSource) verifyNumericalFrameInputs(ctx context.Context
 		environment[name] = value
 	}
 	source.mu.Unlock()
-	if binding == nil && request.NumericalReads == nil {
+	if binding == nil && request.NumericalReads == nil && origin == nil {
 		return nil // Preserve every existing unbound/default role.
 	}
 	if ctx == nil {
@@ -76,7 +76,7 @@ func (source *GoAMD64FrameSource) verifyNumericalFrameInputs(ctx context.Context
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("verify numerical frame context: %w", err)
 	}
-	if !ready || binding == nil || request.NumericalReads != binding || binding.seal != seal {
+	if !ready || origin != source || binding == nil || request.NumericalReads != binding || binding.seal != seal {
 		return goAMD64FrameContext("numerical frame generation/token is closed, missing or changed")
 	}
 	if err := verifyGoAMD64FrameNumericalRequest(binding.context, pkg, request); err != nil {

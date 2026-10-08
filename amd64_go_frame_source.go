@@ -62,6 +62,7 @@ type GoAMD64FrameSource struct {
 	downloadedOrigin   *gooriginalsrc.OriginSet
 	downloadedModule   *gooriginalsrc.Module
 	numericalBinding   *GoX86NumericalReadBinding
+	numericalOrigin    *GoAMD64FrameSource
 	numericalSeal      [32]byte
 	numericalPackage   GoPackage
 	numericalCapturing bool
@@ -134,6 +135,9 @@ func CaptureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 
 func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD64FrameCaptureRequest, exact *goAMD64DownloadedIdentity) (_ *GoAMD64FrameSource, captureErr error) {
 	if ctx != nil && ctx.Err() != nil {
+		if request.NumericalReads != nil {
+			return nil, fmt.Errorf("capture numerical frame context: %w", ctx.Err())
+		}
 		return nil, errors.Join(goAMD64FrameContext("requires live capture context"), ctx.Err())
 	}
 	if ctx == nil || pkg.Types == nil || pkg.Path != pkg.Types.Path() ||
@@ -156,6 +160,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 			return nil, err
 		}
 		source.numericalBinding = request.NumericalReads
+		source.numericalOrigin = source
 		source.numericalSeal = request.NumericalReads.seal
 		source.numericalPackage = pkg
 		source.numericalCapturing = true
@@ -377,6 +382,9 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 		}
 	}()
 	if ctx != nil && ctx.Err() != nil {
+		if source.numericalOrigin != nil {
+			return fmt.Errorf("verify numerical frame observer context: %w", ctx.Err())
+		}
 		return errors.Join(goAMD64FrameContext("expired actual-object observation"), ctx.Err())
 	}
 	if !source.ready || ctx == nil {
@@ -408,6 +416,9 @@ func (source *GoAMD64FrameSource) verifyFrameOnly(ctx context.Context) (verifyEr
 		return goAMD64FrameContext("actual complete package selection/export changed")
 	}
 	imports, err := source.loadStandardDeclarationImports(ctx)
+	if err != nil && source.numericalOrigin != nil {
+		return err
+	}
 	if err != nil || !reflect.DeepEqual(source.imports, imports) {
 		return goAMD64FrameContext("actual complete declaration import graph changed: %v", err)
 	}
@@ -468,6 +479,9 @@ func (source *GoAMD64FrameSource) Close() error {
 	source.mu.Lock()
 	defer source.mu.Unlock()
 	source.ready = false
+	if source.numericalOrigin != nil && source.numericalOrigin != source {
+		return goAMD64FrameContext("copied numerical frame cannot close the original artifact owner")
+	}
 	if source.owned == "" {
 		return nil
 	}
