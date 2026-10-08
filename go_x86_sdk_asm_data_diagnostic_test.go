@@ -47,8 +47,13 @@ func TestGoX86SDKASMDataLiveCRC32ObjectDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	deadline, bounded := ctx.Deadline()
+	if !bounded {
+		t.Fatal("diagnostic lacks an original bounded context")
+	}
 	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx,
-		directories: make(map[string]os.FileInfo), misses: make(map[string]bool)}
+		originalDeadline: deadline,
+		directories:      make(map[string]os.FileInfo), misses: make(map[string]bool)}
 	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary,
 		Directory: request.Directory, Target: request.Target, Environment: request.Environment})

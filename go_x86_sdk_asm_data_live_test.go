@@ -205,7 +205,7 @@ func TestGoX86SDKASMDataLivePhysicalHeaderTOCTOU(t *testing.T) {
 
 func TestGoX86SDKASMDataLiveCopyCloseAndReadback(t *testing.T) {
 	ctx, source := sdkASMDataCapture(t)
-	copy := reflect.New(reflect.TypeOf(*source))
+	copy := reflect.New(reflect.TypeOf(source).Elem())
 	copy.Elem().Set(reflect.ValueOf(source).Elem())
 	copied := copy.Interface().(*GoX86SDKASMDataSource)
 	owned := source.guard.owned

@@ -247,6 +247,40 @@ func TestGoX86SDKASMDataLiveOriginalDeadlineCallbackCannotPublish(t *testing.T) 
 	}
 }
 
+func TestGoX86SDKASMDataLiveCallerDeadlineOnlyTightens(t *testing.T) {
+	ctx, source := sdkASMDataCapture(t)
+	for _, kind := range []string{"earlier", "same", "later", "unbounded"} {
+		t.Run(kind, func(t *testing.T) {
+			caller := context.Background()
+			wanted := source.originalDeadline
+			if kind != "unbounded" {
+				deadline := wanted
+				if kind == "earlier" {
+					deadline = deadline.Add(-time.Minute)
+					wanted = deadline
+				} else if kind == "later" {
+					deadline = deadline.Add(time.Minute)
+				}
+				bounded, cancel := context.WithDeadline(caller, deadline)
+				defer cancel()
+				caller = bounded
+			}
+			private, stop, err := sdkASMDataPrivateContext(caller, ctx, source.originalDeadline)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stop()
+			actual, bounded := private.Deadline()
+			if !bounded || !actual.Equal(wanted) {
+				t.Fatal("caller extended or replaced the captured deadline", actual, wanted)
+			}
+			if err := source.Verify(caller); err != nil {
+				t.Fatal("unchanged original generation rejected a caller deadline", err)
+			}
+		})
+	}
+}
+
 func TestGoX86SDKASMDataLiveCloseDuringContextCallback(t *testing.T) {
 	ctx, source := sdkASMDataCapture(t)
 	owned := source.guard.owned

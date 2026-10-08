@@ -27,23 +27,24 @@ type GoX86SDKASMDataCaptureRequest struct {
 // GoX86SDKASMDataSource authenticates source/header/CPP/object observations
 // only. It has no Bind, Options, initializer, numerical or native-body API.
 type GoX86SDKASMDataSource struct {
-	mu, operation   sync.Mutex
-	identity        *GoX86SDKASMDataSource
-	ready           bool
-	active          int
-	closePending    bool
-	generation      uint64
-	request         GoX86SDKASMDataCaptureRequest
-	guard           *GoAMD64FrameSource
-	originalGuard   *GoAMD64FrameSource
-	context         context.Context
-	originalContext context.Context
-	directories     map[string]os.FileInfo
-	misses          map[string]bool
-	observation     sdkASMDataLiveObservation
-	report          []byte
-	seal            [32]byte
-	stateSeal       [32]byte
+	mu, operation    sync.Mutex
+	identity         *GoX86SDKASMDataSource
+	ready            bool
+	active           int
+	closePending     bool
+	generation       uint64
+	request          GoX86SDKASMDataCaptureRequest
+	guard            *GoAMD64FrameSource
+	originalGuard    *GoAMD64FrameSource
+	context          context.Context
+	originalContext  context.Context
+	originalDeadline time.Time
+	directories      map[string]os.FileInfo
+	misses           map[string]bool
+	observation      sdkASMDataLiveObservation
+	report           []byte
+	seal             [32]byte
+	stateSeal        [32]byte
 }
 
 type sdkASMDataLiveObservation struct {
@@ -78,7 +79,8 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 		filepath.ToSlash(filepath.Clean(filepath.FromSlash(request.PackagePath))) != request.PackagePath {
 		return nil, sdkASMDataContext("requires exact SDK source/tool/target inputs")
 	}
-	if _, bounded := ctx.Deadline(); !bounded {
+	deadline, bounded := ctx.Deadline()
+	if !bounded {
 		return nil, sdkASMDataContext("requires a bounded original capture context")
 	}
 	request.Environment = append([]string(nil), request.Environment...)
@@ -87,7 +89,8 @@ func CaptureGoX86SDKASMDataSource(ctx context.Context, request GoX86SDKASMDataCa
 		return nil, err
 	}
 	source := &GoX86SDKASMDataSource{request: request, context: ctx, originalContext: ctx,
-		directories: make(map[string]os.FileInfo), misses: make(map[string]bool)}
+		originalDeadline: deadline,
+		directories:      make(map[string]os.FileInfo), misses: make(map[string]bool)}
 	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary,
 		Directory: request.Directory, Target: request.Target, Environment: request.Environment})
@@ -198,7 +201,17 @@ func (source *GoX86SDKASMDataSource) liveContext(ctx context.Context) error {
 		!reflect.TypeOf(source.context).Comparable() || source.context != source.originalContext {
 		return sdkASMDataContext("original capture context identity changed")
 	}
-	return errors.Join(ctx.Err(), source.context.Err())
+	if err := errors.Join(ctx.Err(), source.context.Err()); err != nil {
+		return err
+	}
+	deadline, bounded := source.context.Deadline()
+	if err := errors.Join(ctx.Err(), source.context.Err()); err != nil {
+		return err
+	}
+	if !bounded || !deadline.Equal(source.originalDeadline) {
+		return sdkASMDataContext("original capture context deadline changed")
+	}
+	return nil
 }
 
 func (source *GoX86SDKASMDataSource) run(ctx context.Context, arguments ...string) ([]byte, error) {
@@ -241,17 +254,18 @@ func cloneSDKASMDataInputs(inputs map[string][32]byte) map[string][32]byte {
 
 func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
 	raw, err := json.Marshal(struct {
-		Request     GoX86SDKASMDataCaptureRequest
-		Guard       GoAMD64FrameCaptureRequest
-		Selection   goAMD64FrameSelection
-		Env         map[string]string
-		Imports     map[string]goAMD64FrameSelection
-		Inputs      map[string][32]byte
-		Entries     []string
-		Misses      map[string]bool
-		Observation sdkASMDataLiveObservation
+		Request          GoX86SDKASMDataCaptureRequest
+		Guard            GoAMD64FrameCaptureRequest
+		Selection        goAMD64FrameSelection
+		Env              map[string]string
+		Imports          map[string]goAMD64FrameSelection
+		Inputs           map[string][32]byte
+		Entries          []string
+		Misses           map[string]bool
+		Observation      sdkASMDataLiveObservation
+		OriginalDeadline time.Time
 	}{source.request, source.guard.request, source.guard.selection, source.guard.env, source.guard.imports,
-		source.guard.inputs, source.guard.entries, source.misses, source.observation})
+		source.guard.inputs, source.guard.entries, source.misses, source.observation, source.originalDeadline})
 	return sha256.Sum256(raw), err
 }
 
@@ -294,7 +308,7 @@ func (source *GoX86SDKASMDataSource) Verify(ctx context.Context) (result error) 
 	if err := source.liveContext(ctx); err != nil {
 		return err
 	}
-	private, stop, err := sdkASMDataPrivateContext(ctx, source.context)
+	private, stop, err := sdkASMDataPrivateContext(ctx, source.context, source.originalDeadline)
 	if err != nil {
 		return err
 	}
