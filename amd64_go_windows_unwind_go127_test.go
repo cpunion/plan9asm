@@ -16,6 +16,30 @@ import (
 )
 
 func TestGoAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
+	goAMD64WindowsUnwindActualSourceFamily(t)
+}
+
+// A temporary-directory alias is an ordinary host configuration, not permission
+// to relax the original object reader's canonical physical-path contract.
+func TestGoAMD64WindowsUnwindTemporaryParentAlias(t *testing.T) {
+	parent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	physical := filepath.Join(parent, "physical")
+	alias := filepath.Join(parent, "alias")
+	if err := os.Mkdir(physical, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(physical, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", alias)
+	goAMD64WindowsUnwindActualSourceFamily(t)
+}
+
+func goAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
+	t.Helper()
 	for _, role := range []string{"numeric", "void", "shared numeric and void"} {
 		t.Run(role, func(t *testing.T) {
 			declaration := "func Value(a uint64) uint64"
@@ -46,6 +70,11 @@ func TestGoAMD64WindowsUnwindActualSourceFamily(t *testing.T) {
 			if err != nil {
 				t.Fatal("actual original Windows assembler control failed", err)
 			}
+			info, err := os.Stat(object)
+			if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
+				t.Fatal("actual original Windows object was not produced", err)
+			}
+			t.Logf("ACTUAL_WINDOWS_ORIGINAL_OUTPUT_EXISTS bytes=%d", info.Size())
 			data, err := goAMD64FrameRead(object)
 			if err != nil || !bytes.Contains(listing, []byte("SSEHUNWINDINFO")) ||
 				!bytes.Contains(data, []byte("go:sehuw.12.")) {
