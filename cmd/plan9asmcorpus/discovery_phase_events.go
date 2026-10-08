@@ -78,7 +78,9 @@ func openDiscoveryPhaseJournal(name string, cfg discoveryCorpusConfig, provenanc
 		return nil, phaseJournalError(fmt.Errorf("events parent is not a regular directory: %v", err))
 	}
 	// Never truncate an existing artifact, source file or symlink destination.
-	file, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	// Append prevents this descriptor's old offset from overwriting a foreign
+	// appended tail. The mandatory EOF readback must still reject that tail.
+	file, err := os.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, phaseJournalError(err)
 	}
@@ -319,9 +321,12 @@ func readDiscoveryPhaseEvents(reader io.Reader) (discoveryPhaseSummary, error) {
 				summary.Panicked++
 			}
 		case "run_end":
+			// This status is the original top-level outcome, not an aggregate
+			// assertion that every child succeeded. An existing caller may
+			// handle a failed child; its failed span and cause remain recorded.
 			if sequence == 1 || len(active) != 0 || event.Span != 0 || event.Candidate != "" || event.Phase != "" || event.Scope != "" || event.ElapsedNS != nil || event.Provenance != nil ||
 				event.ShardIndex != 0 || event.ShardCount != 0 || (event.Status != "complete" && event.Status != "failed") ||
-				(event.Status == "complete") != (event.Error == "") || summary.Failed != 0 && event.Status == "complete" {
+				(event.Status == "complete") != (event.Error == "") {
 				return discoveryPhaseSummary{}, fmt.Errorf("invalid phase run end")
 			}
 			ended, summary.Status = true, event.Status

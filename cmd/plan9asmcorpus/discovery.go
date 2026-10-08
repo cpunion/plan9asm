@@ -1738,7 +1738,10 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 			if err := cfg.phaseEvents.close(terminal); err != nil {
 				runErr = errors.Join(runErr, err)
 				if report.SchemaVersion != 0 {
-					report.Provenance.Invalidated = "requested phase journal failed"
+					if report.Provenance.Invalidated != "" {
+						report.Provenance.Invalidated += "; "
+					}
+					report.Provenance.Invalidated += "requested phase journal failed"
 					runErr = errors.Join(runErr, writeDiscoveryCorpusReport(cfg.ReportPath, report))
 				}
 			}

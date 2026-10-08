@@ -309,6 +309,25 @@ is not complete or verified coverage. Candidates sharing a shard must be
 requested together for one report, not combined by editing old JSON. The `all`
 scheduler is unchanged; never relabel old reports with another shard count.
 
+An optional `-discovery-events=path.jsonl` records diagnostic phase spans for
+download, planning, header queries and ordinary/instrumentation consumers.
+The parent directory must already exist and the destination must be new;
+existing files and symlinks are not overwritten. This single-writer JSONL
+journal retains only active spans and checks the complete stream through EOF
+after closing its owned descriptor. Requested write, close, role or readback
+failures fail the run and invalidate a produced report without hiding the
+original operation error. With the option absent, the schema-11 report and
+execution path are unchanged. Reader/list modes reject the option.
+
+Each span records its exact candidate, phase, scope, start/end and actual error.
+Elapsed nanoseconds use a monotonic clock; UTC timestamps are labels and must
+not be subtracted to estimate work if the wall clock moves. Nested spans overlap
+and must not be summed as serial time. A completed run means only that the
+original top-level operation returned normally: existing code can handle a
+failed child phase, whose failed span and cause remain visible. Timings never
+prove a source N/A, object, candidate pass, completed shard or ledger update;
+those obligations remain in the unchanged reports and verification paths.
+
 The `all` command replaces stale canonical reports; save evidence elsewhere
 under `_out/` first when needed. Download, applicability and each target
 translation/compile operation each have a 60-minute deadline. Diagnostic

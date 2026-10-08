@@ -59,6 +59,37 @@ func TestDiscoveryPhaseEventsRequestedFailureInvalidatesReport(t *testing.T) {
 	}
 }
 
+func TestDiscoveryPhaseEventsFailurePreservesExistingInvalidation(t *testing.T) {
+	cfg, candidates := exactDiscoveryFixtureCount(t, 1)
+	cfg.ExactCandidates = []string{candidates[0].exactKey()}
+	cfg.EventsPath = filepath.Join(t.TempDir(), "events.jsonl")
+	input := fixtureOrdinaryPassedResult(t, candidates[0], cfg.Targets)
+	cause := errors.New("actual journal close error alongside source invalidation")
+	originalCapture := cfg.captureProvenance
+	completed := false
+	cfg.captureProvenance = func(cfg discoveryCorpusConfig) (discoveryCorpusProvenance, error) {
+		provenance, err := originalCapture(cfg)
+		if completed {
+			provenance.Source.Revision = strings.Repeat("b", 40)
+		}
+		return provenance, err
+	}
+	cfg.runCandidate = func(cfg discoveryCorpusConfig, _ discoveryCandidate, _ string) (matrixReport, []string, []discoveryBuildConfiguration, error) {
+		completed = true
+		cfg.phaseEvents.writer = phaseFixtureCloser{cfg.phaseEvents.writer, cause}
+		return fixtureProfileMatrix(t, input), input.ApplicableAsmFiles, input.BuildConfigurations, nil
+	}
+	err := runDiscoveryCorpus(cfg)
+	if !errors.Is(err, cause) || !errors.Is(err, errDiscoveryPhaseEvents) || !strings.Contains(err.Error(), "provenance invalidated") {
+		t.Fatalf("an original failure was hidden: %v", err)
+	}
+	report, err := readDiscoveryCorpusReport(cfg.ReportPath)
+	if err != nil || !strings.Contains(report.Provenance.Invalidated, "source, ledger or tools changed") ||
+		!strings.Contains(report.Provenance.Invalidated, "phase journal failed") || report.Passed != 1 || report.Failed != 0 {
+		t.Fatalf("journal replaced the original invalidation or counters: report=%+v error=%v", report, err)
+	}
+}
+
 func TestDiscoveryPhaseEventsEmptyAndEarlyReturn(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(map[bool]string{false: "empty-selection", true: "preflight-error"}[failure], func(t *testing.T) {
