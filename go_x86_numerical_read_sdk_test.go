@@ -251,4 +251,23 @@ func TestGoX86SDKNumericalReadOriginalCRC32KeepsDataContext(t *testing.T) {
 	if err := owner.Verify(ctx); err != nil {
 		t.Fatal("later DATA Context revoked the independent SDK CPU data owner", err)
 	}
+	t.Logf("ACTUAL_SDK_CRC32_FIRST_BLOCK %v", err)
+}
+
+func TestGoX86SDKNumericalReadCompleteCPPAssemblerWithoutNumericalReadRemainsContext(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			ctx, request, owner := numericalSDKCPURequest(t, arch)
+			source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
+			if source != nil {
+				source.Close()
+			}
+			if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "no certified numerical SB reads") {
+				t.Fatal("complete actual SDK CPP/native program acquired an uncertified read", err)
+			}
+			if err := owner.Verify(ctx); err != nil {
+				t.Fatal("unrelated SDK source Context revoked the CPU numerical owner", err)
+			}
+		})
+	}
 }
