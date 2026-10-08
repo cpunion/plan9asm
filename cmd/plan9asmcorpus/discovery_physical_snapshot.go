@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 )
@@ -59,12 +60,33 @@ func collectDiscoveryPhysicalSnapshot(directory string) (discoveryPhysicalSnapsh
 	if err != nil {
 		return discoveryPhysicalSnapshot{}, err
 	}
+	finalRoot, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return discoveryPhysicalSnapshot{}, err
+	}
+	finalRoot, err = filepath.Abs(finalRoot)
+	if err != nil || finalRoot != root {
+		return discoveryPhysicalSnapshot{}, errors.Join(fmt.Errorf("physical ledger root changed while reading"), err)
+	}
+	for _, member := range snapshot.members {
+		final, err := os.Lstat(filepath.Join(root, member.name))
+		if err != nil || !sameDiscoveryPhysicalMember(member.info, final) {
+			return discoveryPhysicalSnapshot{}, errors.Join(fmt.Errorf("physical ledger inventory changed while reading"), err)
+		}
+	}
 	snapshot.digest = fmt.Sprintf("%x", digest.Sum(nil))
 	return snapshot, nil
 }
 
 func hashDiscoveryPhysicalFile(name string, expected os.FileInfo, digest io.Writer) error {
-	file, err := os.Open(name)
+	if expected.Size() < 0 || expected.Size() == math.MaxInt64 {
+		return fmt.Errorf("physical file requires a bounded observable extent")
+	}
+	physical, err := filepath.EvalSymlinks(name)
+	if err != nil {
+		return err
+	}
+	file, err := openDiscoveryReport(name)
 	if err != nil {
 		return err
 	}
@@ -72,7 +94,9 @@ func hashDiscoveryPhysicalFile(name string, expected os.FileInfo, digest io.Writ
 	if statErr != nil || !sameDiscoveryPhysicalMember(expected, opened) {
 		return errors.Join(fmt.Errorf("physical file changed while opening"), statErr, file.Close())
 	}
-	n, readErr := io.Copy(digest, file)
+	// The extra byte detects growth without consuming an arbitrarily growing
+	// input before eventually noticing the size or metadata mismatch.
+	n, readErr := io.Copy(digest, io.LimitReader(file, expected.Size()+1))
 	final, statErr := file.Stat()
 	closeErr := file.Close()
 	if err := errors.Join(readErr, statErr, closeErr); err != nil {
@@ -80,6 +104,14 @@ func hashDiscoveryPhysicalFile(name string, expected os.FileInfo, digest io.Writ
 	}
 	if n != expected.Size() || !sameDiscoveryPhysicalMember(expected, final) {
 		return fmt.Errorf("physical file changed while reading")
+	}
+	pathname, err := os.Lstat(name)
+	if err != nil || !sameDiscoveryPhysicalMember(expected, pathname) {
+		return errors.Join(fmt.Errorf("physical file pathname changed while reading"), err)
+	}
+	finalPhysical, err := filepath.EvalSymlinks(name)
+	if err != nil || finalPhysical != physical {
+		return errors.Join(fmt.Errorf("physical file path alias changed while reading"), err)
 	}
 	return nil
 }

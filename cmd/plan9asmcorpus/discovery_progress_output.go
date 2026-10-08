@@ -71,6 +71,10 @@ func prepareDiscoveryProgressOutput(filename string, progress discoveryProgress)
 // Link only after all frozen input checks succeed. Existing output is never
 // replaced, including a file that appeared after the initial preflight.
 func (prepared *preparedDiscoveryProgress) publish() error {
+	physicalParent, err := filepath.EvalSymlinks(filepath.Dir(prepared.destination))
+	if err != nil || physicalParent != filepath.Dir(prepared.destination) {
+		return errors.Join(fmt.Errorf("progress destination parent alias changed"), err)
+	}
 	parent, err := os.Stat(filepath.Dir(prepared.destination))
 	if err != nil || !os.SameFile(prepared.parent, parent) {
 		return errors.Join(fmt.Errorf("progress destination parent changed"), err)
