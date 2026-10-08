@@ -71,7 +71,9 @@ if (( progress )); then
     echo "owned status temporary directory or file changed" >&2
     exit 1
   fi
-  ln "$pending_dir/scan-status.json" "$reports_dir/scan-status.json"
+  # The directory form appends the fixed source basename exactly once. Passing
+  # the final leaf would let ln treat a late directory as another destination.
+  ln "$pending_dir/scan-status.json" "$reports_dir/"
 
   # The CLI atomically publishes only fully audited progress. It still exits
   # nonzero for incomplete/failed reports or a committed-ledger mismatch.
