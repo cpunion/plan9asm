@@ -34,8 +34,7 @@ func TestCrossLinuxRuntimeMatrixARM64LinuxSyscallGPNZCV(t *testing.T) {
 		t.Fatalf("ORIGINAL_KERNEL_PRECONDITION: %v\n%s", err, output)
 	}
 	for _, test := range arm64LinuxSyscallEffectCases() {
-		marker := "ORIGINAL_KERNEL_AXIS_PASS " + test.name
-		if strings.Count(string(output), marker) != 1 {
+		if !arm64LinuxSyscallEffectHasOriginalMarker(string(output), test.name) {
 			t.Fatalf("ORIGINAL_KERNEL_PRECONDITION: complete GP/NZCV axis absent: %s\n%s", test.name, output)
 		}
 	}

@@ -27,6 +27,53 @@ type arm64LinuxSyscallEffectCase struct {
 	flags       bool
 }
 
+func arm64LinuxSyscallEffectHasOriginalMarker(output, name string) bool {
+	marker := "ORIGINAL_KERNEL_AXIS_PASS " + name
+	return strings.Count(output, marker) == 1
+}
+
+func TestARM64LinuxSyscallEffectsOriginalMarkerBoundaries(t *testing.T) {
+	marker := func(name string) string {
+		return "original_test.go:40: ORIGINAL_KERNEL_AXIS_PASS " + name + " values=[7 1 0 0 0]\n"
+	}
+
+	var complete strings.Builder
+	for _, test := range arm64LinuxSyscallEffectCases() {
+		complete.WriteString(marker(test.name))
+	}
+	for _, test := range arm64LinuxSyscallEffectCases() {
+		t.Run("complete_"+test.name, func(t *testing.T) {
+			if !arm64LinuxSyscallEffectHasOriginalMarker(complete.String(), test.name) {
+				t.Fatalf("exact original marker lost among complete axes: %s", test.name)
+			}
+		})
+	}
+
+	for _, name := range []string{"nzcv_getpid_negative", "nzcv_close_invalid_negative"} {
+		t.Run("prefix_only_"+name, func(t *testing.T) {
+			if arm64LinuxSyscallEffectHasOriginalMarker(marker(name+"_overflow"), name) {
+				t.Fatalf("prefix-only marker impersonates exact original axis: %s", name)
+			}
+		})
+	}
+
+	const name = "nzcv_getpid_negative"
+	for _, test := range []struct {
+		name, output string
+	}{
+		{"wrong_name", marker("nzcv_close_invalid_negative")},
+		{"missing", "--- PASS: TestOriginalLinuxSyscallEffects\n"},
+		{"duplicate", marker(name) + marker(name)},
+		{"wrong_value_boundary", "ORIGINAL_KERNEL_AXIS_PASS " + name + " values_suffix=[7]\n"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if arm64LinuxSyscallEffectHasOriginalMarker(test.output, name) {
+				t.Fatalf("invalid original marker accepted: %s", test.name)
+			}
+		})
+	}
+}
+
 func arm64LinuxSyscallEffectCases() []arm64LinuxSyscallEffectCase {
 	var registers []int
 	for register := 1; register <= 27; register++ {
