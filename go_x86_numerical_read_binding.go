@@ -94,6 +94,10 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	if err := source.Verify(ctx); err != nil {
 		return Options{}, err
 	}
+	provided, err = x86CallerSourceFingerprint(file)
+	if err != nil || provided != actual {
+		return Options{}, numericalSBContext("binding resolver changed the complete original file")
+	}
 	source.mu.Lock()
 	declarations, err := source.numericalDeclarations(ctx, pkg, arch)
 	if err == nil {
@@ -458,7 +462,14 @@ func finishNumericalReads(file *File, options Options) error {
 	return nil
 }
 
-func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPackage, opt GoModuleOptions) error {
+func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPackage, opt GoModuleOptions) (result error) {
+	defer func() {
+		if result != nil && binding != nil && binding.source != nil {
+			binding.source.mu.Lock()
+			binding.source.ready = false
+			binding.source.mu.Unlock()
+		}
+	}()
 	if err := binding.verify(); err != nil {
 		return err
 	}
@@ -482,4 +493,19 @@ func verifyGoNumericalReadInputs(binding *GoX86NumericalReadBinding, pkg GoPacka
 		}
 	}
 	return binding.verify()
+}
+
+func numericalGoSignatures(binding *GoX86NumericalReadBinding, supplied map[string]FuncSig) (map[string]FuncSig, error) {
+	if len(supplied) != len(binding.options.Sigs) {
+		return nil, numericalSBContext("Go wrapper signature inventory differs from sealed declarations")
+	}
+	for name, signature := range supplied {
+		original, found := binding.options.Sigs[name]
+		if !found || !reflect.DeepEqual(numericalSignatureShape(signature), numericalSignatureShape(original)) {
+			return nil, numericalSBContext("Go wrapper signature differs from sealed original declaration")
+		}
+	}
+	// Only the opaque factory transports separately verified private contracts;
+	// a ManualSig callback or a new source selection cannot recreate them.
+	return numericalCloneSignatures(binding.options.Sigs)
 }

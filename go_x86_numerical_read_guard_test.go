@@ -85,7 +85,15 @@ func TestGoX86NumericalSBReadInvalidVerificationContextPermanentlyRevokes(t *tes
 				stop()
 				invalid = cancelled
 			}
-			if !errors.Is(source.Verify(invalid), ErrProbeNeedsContext) || !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+			first := source.Verify(invalid)
+			invalidCause := ErrProbeNeedsContext
+			if kind == "cancelled" {
+				invalidCause = context.Canceled
+				if errors.Is(first, ErrProbeNeedsContext) {
+					t.Fatal("cancelled verification was classified as a source exclusion")
+				}
+			}
+			if !errors.Is(first, invalidCause) || !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
 				t.Fatal("fresh context revived a failed live source verification")
 			}
 		})

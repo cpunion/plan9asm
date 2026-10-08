@@ -2,6 +2,7 @@ package plan9asm
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -89,12 +90,21 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 // Internal high-volume callers can own the context without changing the public
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
+	originalSource := src
+	originalSourceDigest := sha256.Sum256(src)
 	if binding := opt.NumericalReads; binding != nil {
 		if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
 			return nil, err
 		}
 		defer func() {
-			if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
+			err := verifyGoNumericalReadInputs(binding, pkg, opt)
+			if sha256.Sum256(originalSource) != originalSourceDigest {
+				err = errors.Join(err, numericalSBContext("Go wrapper source bytes changed during consumption"))
+				binding.source.mu.Lock()
+				binding.source.ready = false
+				binding.source.mu.Unlock()
+			}
+			if err != nil {
 				if result != nil && !result.Module.IsNil() {
 					result.Module.Dispose()
 				}
@@ -161,6 +171,12 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	if err != nil {
 		return nil, fmt.Errorf("%s: sigs %s: %w", pkgPath, asmName, err)
 	}
+	if binding := opt.NumericalReads; binding != nil {
+		sigs, err = numericalGoSignatures(binding, sigs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for name, sourceSig := range tailSigs {
 		if sourceSig.arm64ABI0TailDeclaration != nil {
 			sig, present := sigs[name]
@@ -191,8 +207,12 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 	}
 
 	funcs := make([]GoFunction, 0, len(file.Funcs))
+	metadataResolve := resolve
+	if opt.NumericalReads != nil {
+		metadataResolve = opt.NumericalReads.resolve
+	}
 	for _, fn := range file.Funcs {
-		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: resolve(goTextSymbolForResolution(fn.Sym))})
+		funcs = append(funcs, GoFunction{TextSymbol: fn.Sym, ResolvedSymbol: metadataResolve(goTextSymbolForResolution(fn.Sym))})
 	}
 
 	return &GoModuleTranslation{Module: mod, Signatures: sigs, Functions: funcs}, nil

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -52,7 +53,10 @@ type numericalSBCommand struct {
 }
 
 func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86NumericalReadCaptureRequest) (_ *GoX86NumericalReadSource, result error) {
-	if ctx == nil || ctx.Err() != nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+	if ctx != nil && ctx.Err() != nil {
+		return nil, fmt.Errorf("capture numerical read source: %w", ctx.Err())
+	}
+	if ctx == nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
 		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) || request.PackagePath == "" ||
 		filepath.Base(request.AssemblyFile) != request.AssemblyFile || !strings.HasSuffix(request.AssemblyFile, ".s") ||
 		len(request.Owners) == 0 || len(request.Owners) > 8 {
@@ -151,9 +155,12 @@ func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 			return nil, err
 		}
 		report, err := owner.observation.Readback(ctx)
-		if err != nil || report.Target != request.Target || report.Tools["go"] != source.toolHash(request.GoBinary) ||
+		if err != nil {
+			return nil, numericalStorageFailure(ctx, "capture numerical read owner readback", err)
+		}
+		if report.Target != request.Target || report.Tools["go"] != source.toolHash(request.GoBinary) ||
 			report.Tools["compile"] != source.toolHash(filepath.Join(source.guard.env["GOTOOLDIR"], "compile")) {
-			return nil, numericalSBContext("owner source/tool/profile differs: %v", err)
+			return nil, numericalSBContext("owner source/tool/profile differs")
 		}
 		if report.Protocol != gostaticstorage.SDKCPUProtocol {
 			if report.CommandDirectory != selected.Module.Dir || report.PackagePath != selected.Module.Path {
@@ -252,7 +259,10 @@ func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided ma
 	}
 	for _, tool := range []string{"asm", "compile"} {
 		route, err := source.run(ctx, "tool", "-n", tool)
-		if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], tool) {
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], tool) {
 			return numericalSBContext("unknown actual %s route", tool)
 		}
 		if _, err := source.guard.read(strings.TrimSpace(string(route))); err != nil {
@@ -344,7 +354,10 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 	fail := func(err error) error { source.ready = false; return err }
 	// Any failed live Verify permanently revokes this source, including an
 	// invalid caller context. A fresh context cannot revive a failed lease.
-	if ctx == nil || ctx.Err() != nil {
+	if ctx != nil && ctx.Err() != nil {
+		return fail(fmt.Errorf("verify numerical read source: %w", ctx.Err()))
+	}
+	if ctx == nil {
 		return fail(numericalSBContext("live verification requires an unexpired context"))
 	}
 	if len(source.request.Owners) != len(source.originalOwners) {
@@ -388,8 +401,11 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 		}
 	}
 	selected, raw, err := source.guard.loadWithRaw(ctx)
-	if err != nil || !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
-		return fail(numericalSBContext("actual consumer selection/export changed: %v", err))
+	if err != nil {
+		return fail(err)
+	}
+	if !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
+		return fail(numericalSBContext("actual consumer selection/export changed"))
 	}
 	if err := source.guard.verifyInputs(); err != nil {
 		return fail(err)
