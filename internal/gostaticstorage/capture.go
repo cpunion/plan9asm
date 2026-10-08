@@ -77,6 +77,9 @@ type Report struct {
 	CommandArguments              []string
 	CommandBinary                 string
 	CommandEnvironment            map[string]string
+	TextProtocol                  string
+	TextBuiltinSource             []byte
+	TextArchives                  map[string][]TextMember
 }
 
 // Observation can be created only by Capture's actual command/source boundary.
@@ -92,9 +95,13 @@ type Observation struct {
 }
 
 var formatSources = map[string]string{
-	"src/cmd/internal/goobj/objfile.go":   "caf835a17e23aa02cae9bda6e8723d8be359846fc4453bd53f3a3947744b938a",
-	"src/cmd/internal/archive/archive.go": "7e7a3af16eef5c6140145f245ae21147b42a462def4d6e043a74b54710a083a1",
-	"src/cmd/internal/objabi/symkind.go":  "de287864b7ff9a3614becc538cbabdccdecc030a848aad5d5bbef6ec7ec5c225",
+	"src/cmd/internal/goobj/objfile.go":    "caf835a17e23aa02cae9bda6e8723d8be359846fc4453bd53f3a3947744b938a",
+	"src/cmd/internal/archive/archive.go":  "7e7a3af16eef5c6140145f245ae21147b42a462def4d6e043a74b54710a083a1",
+	"src/cmd/internal/objabi/symkind.go":   "de287864b7ff9a3614becc538cbabdccdecc030a848aad5d5bbef6ec7ec5c225",
+	"src/cmd/internal/objfile/goobj.go":    "5411305140a7f5cd3f61f826d1b6fbbab155db6c94fd263a7ecf1a570e80dc04",
+	"src/cmd/internal/sys/arch.go":         "07ac549fe63e0df269822d5b10b704ca710489b2aa25e176df5d98f2a2c6b8f2",
+	"src/cmd/internal/objabi/reloctype.go": "49bebd30a27d05a24de77398ab524dfbeb0630c8b88c06646c1e4734e4f1fc9d",
+	builtinSourceRole:                      "8f38ef757cdebb27963ee9befe24dd8041b86d217937db30f13e4d3d91207311",
 }
 
 func digest(data []byte) string {
@@ -295,6 +302,11 @@ func capture(ctx context.Context, request Request, sdkCPU bool) (*Observation, e
 	if err != nil {
 		return nil, err
 	}
+	o.report.TextProtocol = TextProtocol
+	o.report.TextArchives, err = textArchives(o.report, packages)
+	if err != nil {
+		return nil, err
+	}
 	encoded, _ := json.Marshal(o.report)
 	o.seal, o.ready = sha256.Sum256(encoded), true
 	if err := o.Verify(ctx); err != nil {
@@ -362,6 +374,9 @@ func (o *Observation) observe(ctx context.Context) error {
 			return contextError("actual driver changed during observation")
 		}
 		o.report.Tools[role], o.inputs[name] = digest(data), digest(data)
+		if role == builtinSourceRole {
+			o.report.TextBuiltinSource = append([]byte(nil), data...)
+		}
 	}
 	return nil
 }

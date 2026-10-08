@@ -484,5 +484,9 @@ func ValidateReport(report Report) error {
 	if err != nil || !reflect.DeepEqual(actual, report.Variables) {
 		return contextError("reader reconstruction differs from recorded numerical/native storage")
 	}
+	texts, err := textArchives(report, packages)
+	if err != nil || report.TextProtocol != TextProtocol || !reflect.DeepEqual(texts, report.TextArchives) {
+		return contextError("reader reconstruction differs from actual TEXT records")
+	}
 	return nil
 }

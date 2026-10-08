@@ -54,8 +54,9 @@ func readArchive(data []byte, target string) (map[string]dataRecord, error) {
 }
 
 type archiveMember struct {
-	name string
-	data []byte
+	name   string
+	data   []byte
+	offset int64
 }
 
 func archiveMembers(data []byte) ([]archiveMember, error) {
@@ -79,7 +80,7 @@ func archiveMembers(data []byte) ([]archiveMember, error) {
 		if err != nil || size == 0 || size > uint64(len(data)-pos) {
 			return nil, contextError("invalid archive member extent")
 		}
-		members = append(members, archiveMember{name, data[pos : pos+int(size)]})
+		members = append(members, archiveMember{name, data[pos : pos+int(size)], int64(pos)})
 		pos += int(size)
 		if size&1 != 0 {
 			if pos >= len(data) || data[pos] != '\n' && data[pos] != 0 {
@@ -112,7 +113,16 @@ func readObject(data []byte) (map[string]dataRecord, error) {
 	return readObjectRole(data, 0, false)
 }
 
-func readObjectRole(data []byte, flags uint32, emptyAssembly bool) (map[string]dataRecord, error) {
+// checkedObject is shared structural validation, not an archive/source role.
+// DATA and TEXT readers still independently choose their allowed member roles.
+type checkedGoObject struct {
+	block    func(int) []byte
+	stringAt func([]byte) (string, error)
+	indices  [3][]uint32
+	count    int
+}
+
+func checkedObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObject, error) {
 	const headerSize = 8 + 8 + 4 + 19*4
 	if len(data) < headerSize || string(data[:8]) != "\x00go120ld" {
 		return nil, contextError("unknown or truncated binary goobj header")
@@ -186,9 +196,21 @@ func readObjectRole(data []byte, flags uint32, emptyAssembly bool) (map[string]d
 			}
 		}
 	}
+	return &checkedGoObject{block, stringAt, indices, count}, nil
+}
+
+func readObjectRole(data []byte, flags uint32, emptyAssembly bool) (map[string]dataRecord, error) {
+	object, err := checkedObject(data, flags, emptyAssembly)
+	if err != nil {
+		return nil, err
+	}
+	block, stringAt, indices, count := object.block, object.stringAt, object.indices, object.count
 	result := make(map[string]dataRecord, count)
 	for i := 0; i < count; i++ {
-		sym := data[offsets[3]+21*i : offsets[3]+21*(i+1)]
+		// All five symbol blocks are adjacent, as checked above. Keep DATA's
+		// legacy named-definition view separate from indexed TEXT metadata.
+		symbols := data[binary.LittleEndian.Uint32(data[32:]):binary.LittleEndian.Uint32(data[48:])]
+		sym := symbols[21*i : 21*(i+1)]
 		name, err := stringAt(sym[:8])
 		if err != nil {
 			return nil, err
