@@ -38,8 +38,8 @@ func TestCrossLinuxRuntimeMatrixARM64LinuxSyscallGPNZCV(t *testing.T) {
 		if strings.Count(string(output), marker) != 1 {
 			t.Fatalf("ORIGINAL_KERNEL_PRECONDITION: complete GP/NZCV axis absent: %s\n%s", test.name, output)
 		}
-		t.Log(marker)
 	}
+	t.Logf("ORIGINAL_KERNEL_OUTPUT_BEGIN\n%sORIGINAL_KERNEL_OUTPUT_END", output)
 	// Original processes have different PIDs. Each checks its own true PID;
 	// only numerical canaries and independently calculated flags are compared.
 	pkg := mustGoPackage(t, packagePath, declarations)

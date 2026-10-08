@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -166,7 +167,7 @@ func arm64LinuxSyscallEffectFixture(t *testing.T) (directory, packagePath, decla
 		for index, value := range test.numericalExpected() {
 			fmt.Fprintf(&original, "if got[%d] != 0x%x { t.Fatal(\"original GP/NZCV axis %d\",got[%d],uint64(0x%x)) }\n", index+1, value, index+1, index+1, value)
 		}
-		fmt.Fprintf(&original, "t.Log(%q)\n})\n", "ORIGINAL_KERNEL_AXIS_PASS "+test.name)
+		fmt.Fprintf(&original, "t.Logf(%q,got)\n})\n", "ORIGINAL_KERNEL_AXIS_PASS "+test.name+" values=%x")
 	}
 	original.WriteString("}\n")
 	for name, data := range map[string]string{
@@ -244,7 +245,7 @@ func TestARM64LinuxSyscallEffectsIndependentAxes(t *testing.T) {
 		}
 		for index, expected := range wanted {
 			actual := cases[group*5+index+1].numericalExpected()
-			if fmt.Sprint(actual) != fmt.Sprint(expected) {
+			if !reflect.DeepEqual(actual, expected) {
 				t.Fatalf("independent numerical CMP equation differs: got=%v want=%v", actual, expected)
 			}
 		}
