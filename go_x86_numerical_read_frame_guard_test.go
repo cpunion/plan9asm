@@ -48,6 +48,40 @@ type numericalFrameObserverCancelContext struct {
 	once   sync.Once
 }
 
+func TestGoX86NumericalSBReadSourceCopyCannotBorrowGeneration(t *testing.T) {
+	pkg, file, options, create := numericalConsumerFactory(t, "amd64")
+	for _, operation := range []string{"Verify", "Bind", "Close"} {
+		t.Run(operation, func(t *testing.T) {
+			source, bound := create(t)
+			ctx := bound.NumericalReads.context
+			if err := source.Verify(ctx); err != nil {
+				t.Fatal("original live source precondition", err)
+			}
+			copySource := new(GoX86NumericalReadSource)
+			reflect.ValueOf(copySource).Elem().Set(reflect.ValueOf(source).Elem())
+			var err error
+			switch operation {
+			case "Verify":
+				err = copySource.Verify(ctx)
+			case "Bind":
+				var copied Options
+				copied, err = copySource.BindNumericalReads(ctx, pkg, file, options)
+				if copied.NumericalReads != nil {
+					t.Error("copied source issued a new self-identifying numerical read token")
+				}
+			case "Close":
+				err = copySource.Close()
+			}
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Errorf("copied source borrowed the original generation for %s: %v", operation, err)
+			}
+			if err := source.Verify(ctx); err != nil {
+				t.Error("rejecting a copied source revoked or removed the original owner's artifacts", err)
+			}
+		})
+	}
+}
+
 func (ctx *numericalFrameObserverCancelContext) Err() error {
 	pc, _, _, valid := runtime.Caller(1)
 	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoAMD64FrameSource).verifyFrameOnly") {
