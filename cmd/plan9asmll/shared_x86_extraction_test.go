@@ -15,10 +15,15 @@ func TestExtractSupportedOpsFindsSharedX86TypedGrammar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	types, err := os.ReadFile(filepath.Join(repo, "types.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	isolated := t.TempDir()
 	for name, data := range map[string][]byte{
 		"x86_broadcast_forms.go": source,
 		"translate.go":           []byte("package plan9asm\n"),
+		"types.go":               types,
 	} {
 		if err := os.WriteFile(filepath.Join(isolated, name), data, 0600); err != nil {
 			t.Fatal(err)
@@ -48,6 +53,7 @@ func TestExtractSupportedOpsSharedX86DispatchDoesNotAdvertiseConditions(t *testi
 	dir := t.TempDir()
 	files := map[string]string{
 		"translate.go": "package sample\n",
+		"types.go":     sharedX86CanonicalTestTypes,
 		"x86_shared.go": `package sample
 import "strings"
 var sharedTable = map[string]int{"VTABLEOP": 1}
