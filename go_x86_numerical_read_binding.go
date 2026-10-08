@@ -545,3 +545,24 @@ func numericalGoSignatures(binding *GoX86NumericalReadBinding, supplied map[stri
 	// a ManualSig callback or a new source selection cannot recreate them.
 	return numericalCloneSignatures(binding.options.Sigs)
 }
+
+// Original caller bytes and sealed CPP are different roles. Only this exact
+// selected raw source may consume the already independently assembled CPP;
+// equal parsed instructions cannot substitute another source or header set.
+func numericalGoAssemblyInput(binding *GoX86NumericalReadBinding, input []byte) (string, error) {
+	if binding == nil || binding.source == nil || binding.originalBinding != binding {
+		return "", numericalSBContext("Go wrapper has no original numerical source token")
+	}
+	source := binding.source
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	name := filepath.Join(source.request.Directory, source.request.AssemblyFile)
+	original, retained := source.native.Sources[name]
+	expected, selected := source.guard.inputs[name]
+	if !source.ready || source.identity != source || !retained || !selected ||
+		sha256.Sum256(original) != expected || !bytes.Equal(input, original) {
+		source.ready = false
+		return "", numericalSBContext("Go wrapper original selected ASM bytes changed")
+	}
+	return source.cpp.Output, nil
+}

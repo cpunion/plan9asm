@@ -96,8 +96,16 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		if err := verifyGoNumericalReadInputs(binding, pkg, opt); err != nil {
 			return nil, err
 		}
+		expanded, err := numericalGoAssemblyInput(binding, src)
+		if err != nil {
+			return nil, err
+		}
+		src = []byte(expanded)
 		defer func() {
 			err := verifyGoNumericalReadInputs(binding, pkg, opt)
+			if _, sourceErr := numericalGoAssemblyInput(binding, originalSource); sourceErr != nil {
+				err = errors.Join(err, sourceErr)
+			}
 			if sha256.Sum256(originalSource) != originalSourceDigest {
 				err = errors.Join(err, numericalSBContext("Go wrapper source bytes changed during consumption"))
 				binding.source.mu.Lock()
@@ -140,7 +148,9 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		resolve = func(sym string) string { return goStripABISuffix(sym) }
 	}
 
-	src = ExpandGoAssemblySource(pkg, src, opt.GOARCH)
+	if opt.NumericalReads == nil {
+		src = ExpandGoAssemblySource(pkg, src, opt.GOARCH)
+	}
 
 	file, err := ParseWithDefines(arch, string(src), GoAssemblerDefines(opt.GOOS, opt.GOARCH))
 	if err != nil {

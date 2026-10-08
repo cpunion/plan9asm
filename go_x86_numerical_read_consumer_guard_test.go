@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"go/types"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -32,7 +33,7 @@ func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
 		}
 		return resolve(symbol)
 	}
-	result, err := TranslateGoModule(pkg, []byte(source.cpp.Output), GoModuleOptions{
+	result, err := TranslateGoModule(pkg, numericalWrapperOriginal(t, source), GoModuleOptions{
 		FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
 		TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: stateful,
 	})
@@ -79,7 +80,7 @@ func TestGoX86NumericalSBReadGoWrapperCompleteProfileGuards(t *testing.T) {
 			opt := GoModuleOptions{FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
 				TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: options.ResolveSym}
 			test.mutate(&opt)
-			result, err := TranslateGoModule(pkg, []byte(source.cpp.Output), opt)
+			result, err := TranslateGoModule(pkg, numericalWrapperOriginal(t, source), opt)
 			if result != nil {
 				result.Module.Dispose()
 			}
@@ -96,7 +97,7 @@ func TestGoX86NumericalSBReadGoWrapperCompleteProfileGuards(t *testing.T) {
 func TestGoX86NumericalSBReadGoWrapperOriginalBytesPostGuard(t *testing.T) {
 	pkg, _, _, create := numericalConsumerFactory(t, "386")
 	source, options := create(t)
-	input := []byte(source.cpp.Output)
+	input := numericalWrapperOriginal(t, source)
 	resolve := options.ResolveSym
 	mutated := false
 	callback := func(symbol string) string {
@@ -122,6 +123,15 @@ func TestGoX86NumericalSBReadGoWrapperOriginalBytesPostGuard(t *testing.T) {
 	if !errors.Is(source.Verify(options.NumericalReads.context), ErrProbeNeedsContext) {
 		t.Fatal("wrapper byte mutation did not permanently revoke the source")
 	}
+}
+
+func numericalWrapperOriginal(t *testing.T, source *GoX86NumericalReadSource) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(source.request.Directory, source.request.AssemblyFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }
 
 func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Options, func(*testing.T) (*GoX86NumericalReadSource, Options)) {
