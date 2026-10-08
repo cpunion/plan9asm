@@ -145,3 +145,62 @@ func TestX86BroadcastRawMaskDataReservedAndUnprovedForms(t *testing.T) {
 		}
 	}
 }
+
+func TestX86BroadcastRawMaskDataMandatoryPrefixCollision(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		mode := 64
+		if arch == "386" {
+			mode = 32
+		}
+		for _, row := range []string{"VPBROADCASTMB2Q K0,X0", "VPBROADCASTMW2D K7,Z3", "VPMINUW Z1,Z2,Z3"} {
+			code := assembleX87ControlBytes(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n")
+			if len(code) != 7 || code[0] != 0x62 || code[1]&15 != 2 {
+				t.Fatalf("%s original Go opcode-map witness %q: %x", arch, row, code)
+			}
+			want := Op(strings.Fields(row)[0])
+			prefix := byte(2)
+			if want == "VPMINUW" {
+				prefix = 1
+			}
+			if code[2]&3 != prefix || want != "VPBROADCASTMB2Q" && code[4] != 0x3a {
+				t.Fatalf("%s original mandatory-prefix/opcode witness %q: %x", arch, row, code)
+			}
+			var source strings.Builder
+			source.WriteString("TEXT f(SB),4,$0-0\n")
+			for _, value := range code[:6] {
+				fmt.Fprintf(&source, "BYTE $%#x\n", value)
+			}
+			source.WriteString("RET\n")
+			file, err := Parse(ArchAMD64, source.String())
+			if err != nil {
+				t.Fatal(err)
+			}
+			normalized, err := decodeX86RawDirectives(file.Funcs[0], arch)
+			if err != nil {
+				t.Fatalf("%s actual Go %q directive route: %v", arch, row, err)
+			}
+			ins := normalized.Instrs[1]
+			if ins.Op != want || ins.x86SourceRaw == nil || ins.x86SourceRaw.op != want {
+				t.Fatalf("%s %q lost original decoded source identity: %+v", arch, row, ins)
+			}
+			if want == "VPMINUW" {
+				if len(ins.Args) != 3 || ins.Args[0].String() != "Z1" || ins.Args[1].String() != "Z2" || ins.Args[2].String() != "Z3" {
+					t.Fatalf("legal min/max sibling changed: %+v", ins)
+				}
+				continue
+			}
+			for name, mutate := range map[string]func([]byte){
+				"reserved mandatory prefix": func(code []byte) { code[2] ^= 1 },
+				"reserved fixed bit":        func(code []byte) { code[2] &^= 4 },
+				"reserved W":                func(code []byte) { code[2] ^= 0x80 },
+				"unproved memory":           func(code []byte) { code[5] &^= 0xc0 },
+			} {
+				invalid := append([]byte(nil), code[:6]...)
+				mutate(invalid)
+				if _, err := decodeX86RawDirectiveGroup(invalid, mode, 0, name, map[string]bool{}); err == nil {
+					t.Fatalf("%s %q %s accepted through another decoder: %x", arch, row, name, invalid)
+				}
+			}
+		}
+	}
+}

@@ -34,8 +34,8 @@ func TestX86BroadcastThreeAPIFiveTargetObjects(t *testing.T) {
 						}
 					}
 					fmt.Fprintf(&body, "VPEXTRQ $0,X3,BX\n%s BX,ret0+%d(FP)\nRET", move, word)
-					pkg, file, sig, source := x86ResultInitializationFixture(t, target.arch, "func Value(x "+typ+") "+typ, body.String())
-					goAssemblerOracleOutput(t, target.arch, source, "", true)
+					declaration := "func Value(x " + typ + ") " + typ + "\nfunc Mask()\n"
+					_, file, sig, source := x86ResultInitializationFixture(t, target.arch, declaration, body.String())
 					if !raw {
 						for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
 							if err := check(file.Funcs[0], sig, target.arch); err != nil {
@@ -43,9 +43,18 @@ func TestX86BroadcastThreeAPIFiveTargetObjects(t *testing.T) {
 							}
 						}
 					}
+					var maskBody strings.Builder
+					maskBody.WriteString("TEXT ·Mask(SB),4,$0-0\nMOVL $42,AX\nKMOVD AX,K3\n")
+					for _, op := range []string{"VPBROADCASTMB2Q", "VPBROADCASTMW2D"} {
+						for _, bank := range []string{"X", "Y", "Z"} {
+							emitX86GoEncodedTestInstructionForArch(t, &maskBody, op+" K3,"+bank+"2", raw, target.arch)
+						}
+					}
+					source += maskBody.String() + "RET\n"
+					goAssemblerOracleOutput(t, target.arch, source, "", true)
 					for _, api := range []string{"text", "module", "Go"} {
 						t.Run(api, func(t *testing.T) {
-							ir, err := x86ResultSwapTranslateAPI(t, api, source, pkg, target.arch, target.triple)
+							ir, err := x86ScalarFPBitViewAPI(t, source, declaration, target.arch, target.triple, api)
 							if err != nil {
 								t.Fatal(err)
 							}
