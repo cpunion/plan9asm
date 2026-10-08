@@ -54,30 +54,34 @@ func collectDiscoveryPhysicalSnapshot(directory string) (discoveryPhysicalSnapsh
 		if info.IsDir() {
 			return nil
 		}
-		file, err := os.Open(name)
-		if err != nil {
-			return err
-		}
-		opened, statErr := file.Stat()
-		if statErr != nil || !os.SameFile(info, opened) {
-			return errors.Join(fmt.Errorf("physical ledger member changed while opening"), statErr, file.Close())
-		}
-		n, readErr := io.Copy(digest, file)
-		final, statErr := file.Stat()
-		closeErr := file.Close()
-		if err := errors.Join(readErr, statErr, closeErr); err != nil {
-			return err
-		}
-		if n != info.Size() || !sameDiscoveryPhysicalMember(info, final) {
-			return fmt.Errorf("physical ledger member changed while reading")
-		}
-		return nil
+		return hashDiscoveryPhysicalFile(name, info, digest)
 	})
 	if err != nil {
 		return discoveryPhysicalSnapshot{}, err
 	}
 	snapshot.digest = fmt.Sprintf("%x", digest.Sum(nil))
 	return snapshot, nil
+}
+
+func hashDiscoveryPhysicalFile(name string, expected os.FileInfo, digest io.Writer) error {
+	file, err := os.Open(name)
+	if err != nil {
+		return err
+	}
+	opened, statErr := file.Stat()
+	if statErr != nil || !sameDiscoveryPhysicalMember(expected, opened) {
+		return errors.Join(fmt.Errorf("physical file changed while opening"), statErr, file.Close())
+	}
+	n, readErr := io.Copy(digest, file)
+	final, statErr := file.Stat()
+	closeErr := file.Close()
+	if err := errors.Join(readErr, statErr, closeErr); err != nil {
+		return err
+	}
+	if n != expected.Size() || !sameDiscoveryPhysicalMember(expected, final) {
+		return fmt.Errorf("physical file changed while reading")
+	}
+	return nil
 }
 
 func sameDiscoveryPhysicalMember(before, after os.FileInfo) bool {

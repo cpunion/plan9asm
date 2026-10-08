@@ -89,22 +89,11 @@ func (prepared *preparedDiscoveryProgress) verifyBytes(filename string) error {
 	if err != nil || !sameDiscoveryPhysicalMember(prepared.owned, actual) {
 		return errors.Join(fmt.Errorf("owned progress file changed"), err)
 	}
-	file, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-	opened, statErr := file.Stat()
-	if statErr != nil || !sameDiscoveryPhysicalMember(prepared.owned, opened) {
-		return errors.Join(fmt.Errorf("owned progress file changed while opening"), statErr, file.Close())
-	}
 	digest := sha256.New()
-	n, readErr := io.Copy(digest, file)
-	final, statErr := file.Stat()
-	if err := errors.Join(readErr, statErr, file.Close()); err != nil {
+	if err := hashDiscoveryPhysicalFile(filename, prepared.owned, digest); err != nil {
 		return err
 	}
-	if n != prepared.owned.Size() || !sameDiscoveryPhysicalMember(prepared.owned, final) ||
-		fmt.Sprintf("%x", digest.Sum(nil)) != prepared.digest {
+	if fmt.Sprintf("%x", digest.Sum(nil)) != prepared.digest {
 		return fmt.Errorf("owned progress file changed while reading")
 	}
 	return nil
