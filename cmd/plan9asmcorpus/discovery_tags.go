@@ -345,7 +345,7 @@ func discoveryFileBuildExpression(filePath string, openers ...func(string) (io.R
 	var legacyLines []string
 	legacyEnd := 0
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64<<10), 4<<20)
+	scanner.Buffer(make([]byte, 4<<10), 4<<20)
 	inBlockComment := false
 	ended := false
 	firstLine := true
