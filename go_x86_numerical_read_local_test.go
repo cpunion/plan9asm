@@ -12,6 +12,13 @@ import (
 
 func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T) {
 	pkg, request, initial, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
+	_, numericalProfile, _, _ := numericalSBFixture(t, "amd64")
+	request.GoBinary, request.Environment = numericalProfile.GoBinary, numericalProfile.Environment
+	var err error
+	request.Directory, err = filepath.EvalSymlinks(request.Directory)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var reads strings.Builder
 	for _, row := range numericalSBOracleRows {
 		partner := "AX"
