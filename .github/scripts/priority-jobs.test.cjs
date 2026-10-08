@@ -122,3 +122,19 @@ test('discovery compilation leaves time for failed partial report upload', () =>
     assert.doesNotMatch(section, /continue-on-error:\s*true/);
   }
 });
+
+test('discovery matrices retain optional phase timing separately from reports', () => {
+  const script = fs.readFileSync(
+    path.join(__dirname, '../../scripts/check-discovered-library-corpus.sh'), 'utf8',
+  );
+  assert.match(script, /PLAN9ASM_DISCOVERY_EVENTS/);
+  assert.match(script, /runner_args\+=\("-discovery-events=\$\{report_path%\.json\}\.events\.jsonl"\)/);
+
+  for (const name of ['discovered_library_priority', 'discovered_library_corpus']) {
+    const section = jobSection(name);
+    assert.match(section, /^          PLAN9ASM_DISCOVERY_EVENTS: '1'$/m, name);
+    assert.match(section,
+      /^            _out\/discovered-library-corpus\/shard-\$\{\{ matrix\.shard \}\}\.events\.jsonl$/m,
+      `${name} drops the requested phase timing artifact`);
+  }
+});
