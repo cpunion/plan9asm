@@ -224,8 +224,8 @@ func TestARM64AlwaysConditionProbeNeedsNoFlags(t *testing.T) {
 	for _, spelling := range []string{
 		"CCMNW AL,R26,$20,$11", "CCMNW AL,R19,R24,$7", "CSELW AL,R24,R16,R10",
 		"FCCMPD AL,F0,F9,$0", "FCCMPED AL,F0,F14,$11", "FCCMPES AL,F7,F14,$1", "FCCMPS AL,F31,F5,$5",
-		"CSINC AL,R17,R26,R26", "CSINCW AL,R11,R25,R21", "CSINV AL,R30,R6,R21",
-		"CSINV AL,ZR,ZR,ZR", "CSINVW AL,R23,R21,R5", "CSINVW AL,ZR,ZR,R5",
+		"CSINC AL,R17,R26,R26", "CSINCW AL,R11,R25,R21", "CSINV AL,R30,R6,R21", "CSINV AL,R26,R12,R30",
+		"CSINV AL,ZR,ZR,ZR", "CSINVW AL,R23,R21,R5", "CSINVW AL,R27,R21,R5", "CSINVW AL,ZR,ZR,R5",
 		"CSNEG AL,R26,R19,R21", "CSNEGW AL,R4,R5,R0",
 	} {
 		t.Run(spelling, func(t *testing.T) {
@@ -252,7 +252,7 @@ func TestARM64AlwaysConditionProbeNeedsNoFlags(t *testing.T) {
 }
 
 func TestARM64AlwaysConditionProbeMatchesCompleteGoConditions(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join(goroot, "src/cmd/internal/obj/arm64/list7.go"))
+	data, err := os.ReadFile(filepath.Join(testGOROOT(t), "src/cmd/internal/obj/arm64/list7.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
