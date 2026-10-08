@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -13,6 +15,7 @@ type preparedDiscoveryProgress struct {
 	temporary   string
 	owned       os.FileInfo
 	parent      os.FileInfo
+	digest      string
 }
 
 // A narrow first-party publication helper. Production verification uses the
@@ -52,12 +55,16 @@ func prepareDiscoveryProgressOutput(filename string, progress discoveryProgress)
 		destination: filepath.Join(parent, filepath.Base(filename)), temporary: file.Name(),
 		owned: owned, parent: parentInfo,
 	}
-	encoder := json.NewEncoder(file)
+	digest := sha256.New()
+	encoder := json.NewEncoder(io.MultiWriter(file, digest))
 	encoder.SetIndent("", "  ")
 	writeErr := encoder.Encode(progress)
-	if err := errors.Join(writeErr, file.Close()); err != nil {
+	written, statErr := file.Stat()
+	if err := errors.Join(writeErr, statErr, file.Close()); err != nil {
 		return nil, errors.Join(err, prepared.discard())
 	}
+	prepared.owned = written
+	prepared.digest = fmt.Sprintf("%x", digest.Sum(nil))
 	return prepared, nil
 }
 
@@ -68,11 +75,39 @@ func (prepared *preparedDiscoveryProgress) publish() error {
 	if err != nil || !os.SameFile(prepared.parent, parent) {
 		return errors.Join(fmt.Errorf("progress destination parent changed"), err)
 	}
-	actual, err := os.Lstat(prepared.temporary)
-	if err != nil || !os.SameFile(prepared.owned, actual) {
-		return errors.Join(fmt.Errorf("owned progress temporary file changed"), err)
+	if err := prepared.verifyBytes(prepared.temporary); err != nil {
+		return err
 	}
-	return os.Link(prepared.temporary, prepared.destination)
+	if err := os.Link(prepared.temporary, prepared.destination); err != nil {
+		return err
+	}
+	return prepared.verifyBytes(prepared.destination)
+}
+
+func (prepared *preparedDiscoveryProgress) verifyBytes(filename string) error {
+	actual, err := os.Lstat(filename)
+	if err != nil || !sameDiscoveryPhysicalMember(prepared.owned, actual) {
+		return errors.Join(fmt.Errorf("owned progress file changed"), err)
+	}
+	file, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	opened, statErr := file.Stat()
+	if statErr != nil || !sameDiscoveryPhysicalMember(prepared.owned, opened) {
+		return errors.Join(fmt.Errorf("owned progress file changed while opening"), statErr, file.Close())
+	}
+	digest := sha256.New()
+	n, readErr := io.Copy(digest, file)
+	final, statErr := file.Stat()
+	if err := errors.Join(readErr, statErr, file.Close()); err != nil {
+		return err
+	}
+	if n != prepared.owned.Size() || !sameDiscoveryPhysicalMember(prepared.owned, final) ||
+		fmt.Sprintf("%x", digest.Sum(nil)) != prepared.digest {
+		return fmt.Errorf("owned progress file changed while reading")
+	}
+	return nil
 }
 
 // Never remove a replacement supplied by another operation. This method runs
