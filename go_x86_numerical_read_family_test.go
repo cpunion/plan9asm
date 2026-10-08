@@ -3,11 +3,15 @@
 package plan9asm
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/ast"
+	"go/importer"
 	"go/parser"
 	"go/token"
 	"go/types"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,18 +75,62 @@ func numericalExecutionCases(arch string) []numericalExecutionCase {
 func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Options, []numericalExecutionCase) {
 	t.Helper()
 	_, profile, _, _ := numericalSBFixture(t, arch)
+	ownerDirectory := profile.Directory
+	if err := os.Remove(filepath.Join(ownerDirectory, profile.AssemblyFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ownerDirectory, "value.go"), []byte("package numericalfixture\nvar Mutable [32]byte\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	profile.Directory = filepath.Join(ownerDirectory, "consumer")
+	if err := os.Mkdir(profile.Directory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := runtimeOracleStageContext(t)
+	t.Cleanup(cancel)
+	var owners []*GoNumericalStorageOwner
+	exports := make(map[string]string)
+	for _, request := range []GoNumericalStorageCaptureRequest{
+		{GoBinary: profile.GoBinary, Directory: ownerDirectory, PackagePath: "example.invalid/numericalfixture", Target: profile.Target,
+			Environment: profile.Environment, Variables: []GoNumericalStorageReference{{PackagePath: "example.invalid/numericalfixture", Name: "Mutable"}}},
+		{GoBinary: profile.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(profile.GoBinary)), "src", "internal", "cpu"),
+			PackagePath: "internal/cpu", Target: profile.Target, Environment: profile.Environment, SDKCPU: true,
+			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}}},
+	} {
+		owner, err := CaptureGoNumericalStorageOwner(ctx, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(owner.Close)
+		owners = append(owners, owner)
+		observation, err := owner.observation.Readback(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoder := json.NewDecoder(bytes.NewReader(observation.RawSelection))
+		for decoder.More() {
+			var selected goAMD64FrameSelection
+			if err := decoder.Decode(&selected); err != nil {
+				t.Fatal(err)
+			}
+			if selected.Export != "" {
+				exports[selected.ImportPath] = selected.Export
+			}
+		}
+	}
 	cases := numericalExecutionCases(arch)
 	move, word, seed := "MOVQ", "uint64", "0x8877665544332211"
 	if arch == "386" {
 		move, word, seed = "MOVL", "uint32", "0x44332211"
 	}
 	var declarations, assembly strings.Builder
-	declarations.WriteString("package numericalfixture\nvar Mutable [32]byte\n")
+	declarations.WriteString("package consumer\nimport owner \"example.invalid/numericalfixture\"\nvar _ = owner.Mutable\n")
 	assembly.WriteString("#include \"textflag.h\"\n")
 	for _, test := range cases {
+		instruction := strings.ReplaceAll(test.instruction, "·Mutable", "example·invalid∕numericalfixture·Mutable")
 		fmt.Fprintf(&declarations, "func %s() %s\n", test.name, word)
 		fmt.Fprintf(&assembly, "TEXT ·%s(SB),NOSPLIT,$0-%d\n%s $%s,AX\n%s\n",
-			test.name, goWordSize(arch), move, seed, test.instruction)
+			test.name, goWordSize(arch), move, seed, instruction)
 		if test.compare {
 			fmt.Fprintf(&assembly, "SET%s CL\nMOVBLZX CL,AX\n", test.predicate)
 		}
@@ -93,7 +141,7 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	}
 	goSources := map[string]string{
 		"value.go": declarations.String(),
-		"other.go": "package numericalfixture\nvar Sentinel = byte(0x5a)\n",
+		"other.go": "package consumer\nvar Sentinel = byte(0x5a)\n",
 	}
 	fset := token.NewFileSet()
 	var syntax []*ast.File
@@ -112,11 +160,21 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 	if err := os.WriteFile(filepath.Join(profile.Directory, profile.AssemblyFile), []byte(assembly.String()), 0600); err != nil {
 		t.Fatal(err)
 	}
-	typed, err := (&types.Config{Sizes: types.SizesFor("gc", arch)}).Check("example.invalid/numericalfixture", fset, syntax, nil)
+	importer := importer.ForCompiler(fset, "gc", func(path string) (io.ReadCloser, error) {
+		filename, found := exports[path]
+		if !found {
+			return nil, fmt.Errorf("actual selected owner export missing for %s", path)
+		}
+		return os.Open(filename)
+	})
+	typed, err := (&types.Config{Sizes: types.SizesFor("gc", arch), Importer: importer}).Check("example.invalid/numericalfixture/consumer", fset, syntax, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pkg := GoPackage{Path: typed.Path(), Types: typed, Syntax: syntax}
+	pkg := GoPackage{Path: typed.Path(), Types: typed, Syntax: syntax, Imports: make(map[string]*types.Package)}
+	for _, dependency := range typed.Imports() {
+		pkg.Imports[dependency.Path()] = dependency
+	}
 	file, err := Parse(ArchAMD64, strings.Replace(assembly.String(), "#include \"textflag.h\"", "#define NOSPLIT 4", 1))
 	if err != nil {
 		t.Fatal(err)
@@ -133,23 +191,6 @@ func numericalExecutionFixture(t *testing.T, arch string) (GoPackage, *File, Opt
 			t.Fatal(err)
 		}
 		options.Sigs[name] = sig
-	}
-	ctx, cancel := runtimeOracleStageContext(t)
-	t.Cleanup(cancel)
-	var owners []*GoNumericalStorageOwner
-	for _, request := range []GoNumericalStorageCaptureRequest{
-		{GoBinary: profile.GoBinary, Directory: profile.Directory, PackagePath: pkg.Path, Target: profile.Target,
-			Environment: profile.Environment, Variables: []GoNumericalStorageReference{{PackagePath: pkg.Path, Name: "Mutable"}}},
-		{GoBinary: profile.GoBinary, Directory: filepath.Join(filepath.Dir(filepath.Dir(profile.GoBinary)), "src", "internal", "cpu"),
-			PackagePath: "internal/cpu", Target: profile.Target, Environment: profile.Environment, SDKCPU: true,
-			Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}}},
-	} {
-		owner, err := CaptureGoNumericalStorageOwner(ctx, request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(owner.Close)
-		owners = append(owners, owner)
 	}
 	source, err := CaptureGoX86NumericalReadSource(ctx, GoX86NumericalReadCaptureRequest{
 		GoBinary: profile.GoBinary, Directory: profile.Directory, PackagePath: pkg.Path, AssemblyFile: profile.AssemblyFile,
