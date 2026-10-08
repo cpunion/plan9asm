@@ -23,6 +23,7 @@ func TestX86CallerCLIFixtureCapturesCanonicalSelectionBeforeWrites(t *testing.T)
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", alias)
+	t.Setenv("GOTMPDIR", alias)
 	t.Run("actual selection", func(t *testing.T) {
 		pkg, file, config := x86CallerCLILoad(t, map[string]string{
 			"other_amd64.s": "TEXT ·other(SB),4,$0-0\nRET\n",
