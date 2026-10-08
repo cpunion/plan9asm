@@ -28,6 +28,9 @@ func x86ScalarShiftTestRows(arch string) []string {
 			destinations := regs
 			if width == "B" {
 				destinations = []string{"AX", "AL", "AH", "BX", "BL", "BH", "CX", "CL", "CH", "DX", "DL", "DH"}
+				if arch == "386" {
+					destinations = append(destinations, "SI", "DI") // Go's bounded BX swap expansion.
+				}
 				if arch == "amd64" {
 					destinations = append(destinations, "SI", "SIB", "DI", "DIB", "R8", "R8B", "R15", "R15B")
 				}
@@ -62,6 +65,139 @@ func x86ScalarShiftTestRows(arch string) []string {
 		}
 	}
 	return rows
+}
+
+func TestX86ScalarShiftDefinedFlagAvailability(t *testing.T) {
+	cf, pf, af, zf, sf, of := x86ByteFlagCF, x86ByteFlagPF, x86ByteFlagAF, x86ByteFlagZF, x86ByteFlagSF, x86ByteFlagOF
+	for _, test := range []struct {
+		row                   string
+		read, defined, killed uint8
+	}{
+		{"SHRL $0,AX", 0, 0, 0}, {"SHRQ $64,AX", 0, 0, 0},
+		{"SHLB $1,AH", 0, cf | pf | zf | sf | of, x86ByteFlagsAll},
+		{"SHRW $16,AX", 0, pf | zf | sf, x86ByteFlagsAll},
+		{"SARB $31,AL", 0, cf | pf | zf | sf, x86ByteFlagsAll},
+		{"SHLQ CL,AX", 0, 0, af | of}, {"SHLW CX,AX", 0, 0, cf | af | of},
+		{"SARW CL,AX", 0, 0, af | of},
+		{"RORB $8,AL", 0, cf, of}, {"ROLW $1,AX", 0, cf | of, of},
+		{"RCLB $0,AL", 0, 0, 0}, {"RCLB $9,AL", 0, 0, of},
+		{"RCRW $17,AX", 0, 0, of}, {"RCLB $10,AL", cf, cf, of},
+		{"RCRQ $1,AX", cf, cf | of, of}, {"RCLL CX,AX", cf, 0, of},
+		{"SHLW $16,BX,AX", 0, cf | pf | zf | sf, x86ByteFlagsAll},
+		{"SHRL CX,BX,AX", 0, 0, af | of},
+		{"SHLXQ CX,BX,AX", 0, 0, 0}, {"RORXQ $255,BX,AX", 0, 0, 0},
+	} {
+		t.Run(test.row, func(t *testing.T) {
+			ins := x86YMMReadSource(t, test.row)
+			effect, known, err := x86TypedInstructionByteEffect(ins.Op, ins, "amd64")
+			if !known || err != nil || effect.flagsRead != test.read || effect.flagsDefined != test.defined || effect.flagsKilled != test.killed {
+				t.Fatalf("read/defined/killed=%x/%x/%x want%x/%x/%x known=%t err=%v", effect.flagsRead, effect.flagsDefined, effect.flagsKilled, test.read, test.defined, test.killed, known, err)
+			}
+			for _, initial := range []uint8{0, cf, pf | zf | sf, x86ByteFlagsAll} {
+				for _, consumer := range x86ResultGPSIMDConsumers {
+					state := x86ResultState{flags: initial}
+					for index := range state.gp {
+						state.gp[index] = 0xff
+					}
+					before := state.clone()
+					valid := initial&test.read == test.read
+					if got := consumer.step(ins, &state, nil, 0, "amd64"); got != valid {
+						t.Fatalf("%s admitted unavailable input flags: %x", consumer.name, initial)
+					}
+					if valid && state.flags != initial&^test.killed|test.defined || !valid && !reflect.DeepEqual(state, before) {
+						t.Fatalf("%s changed defined/undefined flags or failed state", consumer.name)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestX86ScalarShiftIndependentPhysicalInputGuards(t *testing.T) {
+	for _, test := range []struct {
+		row    string
+		reads  [16]uint8
+		result int
+		width  uint8
+	}{
+		{row: "SHLB $0,AH", reads: [16]uint8{2}, width: 2},
+		{row: "SHLW CL,AX", reads: [16]uint8{3, 1}, width: 3},
+		{row: "SHRL CX,AX", reads: [16]uint8{15, 1}, width: 255},
+		{row: "SHRQ CL,R8", reads: [16]uint8{1: 1, 8: 255}, result: 8, width: 255},
+		{row: "SHLL $0,BX,AX", reads: [16]uint8{15}, width: 255},
+		{row: "SHLW $16,BX,AX", reads: [16]uint8{0: 3, 3: 3}, width: 3},
+		{row: "SHLXQ AX,BX,AX", reads: [16]uint8{0: 1, 3: 255}, width: 255},
+		{row: "RORXL $0,BX,AX", reads: [16]uint8{3: 15}, width: 255},
+	} {
+		t.Run(test.row, func(t *testing.T) {
+			ins := x86YMMReadSource(t, test.row)
+			for register := 0; register < 16; register++ {
+				for missing := 0; missing < 8; missing++ {
+					for _, consumer := range x86ResultGPSIMDConsumers {
+						state := x86ResultState{flags: x86ByteFlagsAll}
+						state.gp = test.reads
+						state.gp[register] &^= 1 << uint(missing)
+						before := state.clone()
+						valid := test.reads[register]&(1<<uint(missing)) == 0
+						if got := consumer.step(ins, &state, nil, 0, "amd64"); got != valid {
+							t.Fatalf("%s register%d missing%d accepted%t want%t", consumer.name, register, missing, got, valid)
+						}
+						if valid && state.gp[test.result]&test.width != test.width || !valid && !reflect.DeepEqual(state, before) {
+							t.Fatal("missing byte or alias extent was manufactured")
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestX86ScalarShiftGrammarAndMemoryAuthorityControls(t *testing.T) {
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range []string{
+			"SHLB $-1,AX", "SHRW $256,AX", "SHLL AX,BX", "RCLQ $1,X0", "RORB $1,SPB",
+			"SHLW $128,AX,BX", "SHRW $-129,AX,BX", "SHLB $1,AX,BX", "SALW $1,AX,BX",
+			"RORXQ $256,AX,BX", "RORXL $-129,AX,BX", "SHLXQ $1,AX,BX", "SHRXL CL,AX,BX",
+			"SARXL AX,X0,BX", "SHLL.Z $1,AX",
+		} {
+			t.Run(arch+"/"+row, func(t *testing.T) {
+				goAssemblerOracleOutput(t, arch, "TEXT f(SB),4,$0-0\n"+row+"\nRET\n", "", false)
+				ins := x86YMMReadSource(t, row)
+				if _, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); !known || err == nil {
+					t.Fatal("typed grammar acquired Go-rejected form")
+				}
+			})
+		}
+		for _, row := range []string{"SHLL $1,AX", "SHLW CL,AX", "RORXL $1,AX,BX"} {
+			ins := x86YMMReadSource(t, row)
+			if ins.Args[0].Kind == OpImm {
+				for _, raw := range []bool{false, true} {
+					changed := ins
+					changed.Args = append([]Operand(nil), ins.Args...)
+					changed.Args[0].ImmRaw = "UNKNOWN"
+					if raw {
+						changed.Args[0].ImmRaw = ""
+						changed.Args[0].ImmIsFloat = true
+					}
+					if _, known, err := x86TypedInstructionByteEffect(changed.Op, changed, arch); !known || err == nil {
+						t.Fatal("unresolved or floating count promoted to integer")
+					}
+				}
+			}
+			for _, consumer := range x86ResultGPSIMDConsumers {
+				state := x86ResultState{flags: x86ByteFlagsAll, pointerGP: [16]bool{true}}
+				if consumer.step(ins, &state, nil, 0, arch) {
+					t.Fatal("opaque pointer bytes promoted to numerical shift data")
+				}
+			}
+		}
+		for _, row := range []string{"SHLL $1,(AX)", "SHRL CL,tmp-4(SP)", "ROLW $1,data(SB)", "SHRXL AX,(BX),CX"} {
+			ins := x86YMMReadSource(t, row)
+			if _, known, err := x86TypedInstructionByteEffect(ins.Op, ins, arch); known || err != nil {
+				t.Fatal("register family acquired a memory effect certificate")
+			}
+		}
+	}
 }
 
 func TestX86ScalarShiftIndependentCompleteGoEncoderRows(t *testing.T) {
