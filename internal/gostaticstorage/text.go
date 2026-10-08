@@ -42,16 +42,17 @@ type TextPosition struct {
 }
 
 type TextRecord struct {
-	Index         uint32
-	Name          string
-	ABI           uint16
-	Kind          uint8
-	Flags, Flags2 uint8
-	Size          int64
-	Code          []byte
-	Relocations   []TextRelocation
-	Auxiliary     []TextAuxiliary
-	Positions     []TextPosition
+	Index          uint32
+	Name           string
+	ABI            uint16
+	Kind           uint8
+	Flags, Flags2  uint8
+	Size           int64
+	Code           []byte
+	Relocations    []TextRelocation
+	Auxiliary      []TextAuxiliary
+	PCFile, PCLine []byte
+	Positions      []TextPosition
 }
 
 type TextMember struct {
@@ -323,6 +324,7 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 			return nil, err
 		}
 		value.Positions = positions
+		value.PCFile, value.PCLine = append([]byte(nil), pcfile...), append([]byte(nil), pcline...)
 		result = append(result, value)
 	}
 	return result, nil
@@ -331,7 +333,7 @@ func readTextObject(data []byte, target string, flags uint32, empty bool, builti
 type pcValueSpan struct{ start, end, value int64 }
 
 func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
-	if extent <= 0 || extent > archiveLimit || minLC != 1 && minLC != 4 {
+	if extent < 0 || extent > archiveLimit || minLC != 1 && minLC != 4 {
 		return nil, contextError("invalid bounded TEXT PC extent/quantum")
 	}
 	var result []pcValueSpan
@@ -371,11 +373,15 @@ func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
 		}
 		value += change
 		distance, err := read()
-		if err != nil || distance == 0 || value < math.MinInt32 || value > math.MaxInt32 {
+		// The pinned funcpctab writer can emit one (value, zero-distance)
+		// pair for a TEXT-only function. Its logical PC domain is empty;
+		// physical wasm bytes are deliberately not constrained by this role.
+		zeroPC := extent == 0 && len(result) == 0 && distance == 0
+		if err != nil || distance == 0 && !zeroPC || value < math.MinInt32 || value > math.MaxInt32 {
 			return nil, contextError("invalid TEXT PC/value delta")
 		}
 		end := pc + int64(distance)*minLC
-		if end <= pc || end > extent {
+		if end <= pc && !zeroPC || end > extent {
 			return nil, contextError("overflowing or oversized TEXT PC interval")
 		}
 		result = append(result, pcValueSpan{pc, end, value})
@@ -385,10 +391,10 @@ func textPCTable(data []byte, extent, minLC int64) ([]pcValueSpan, error) {
 }
 
 func textPositions(files, lines []byte, extent, minLC int64, object *checkedGoObject) ([]TextPosition, error) {
-	if extent == 0 {
-		return nil, nil
-	}
 	if len(files) == 0 && len(lines) == 0 {
+		if extent == 0 {
+			return nil, nil
+		}
 		return []TextPosition{{0, extent, "", 0}}, nil
 	}
 	fileSpans, err := textPCTable(files, extent, minLC)

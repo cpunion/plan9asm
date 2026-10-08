@@ -74,6 +74,8 @@ func TestGoStaticStorageTEXTReportMutationGuards(t *testing.T) {
 		"PC interval":   func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Positions[0].End++ },
 		"source file":   func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Positions[0].File += ".other" },
 		"source line":   func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Positions[0].Line++ },
+		"pcfile bytes":  func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].PCFile[0] ^= 1 },
+		"pcline bytes":  func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].PCLine[0] ^= 1 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := cloneReport(t, report)
@@ -264,6 +266,9 @@ func TestGoStaticStorageTEXTZeroPCMetadataRole(t *testing.T) {
 	}
 	if positions, err := textPositions(nil, nil, 0, 1, nil); err != nil || positions != nil {
 		t.Fatal("canonical no-PC metadata role was rejected", positions, err)
+	}
+	if spans, err := textPCTable([]byte{2, 0, 0}, 0, 1); err != nil || !reflect.DeepEqual(spans, []pcValueSpan{{0, 0, 0}}) {
+		t.Fatal("actual Go's zero-PC value/distance/terminator role was rejected", spans, err)
 	}
 }
 

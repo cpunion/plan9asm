@@ -73,6 +73,7 @@ type Text struct {
 	Code          []byte
 	Relocations   []Reloc
 	Auxiliary     []Aux
+	PCFile, PCLine []byte
 	Positions     []Position
 }
 type Member struct {
@@ -179,6 +180,18 @@ func main() {
 				for j := 0; j < r.NAux(uint32(i)); j++ {
 					q := r.Aux(uint32(i), j)
 					v.Auxiliary = append(v.Auxiliary, Aux{q.Type(), resolve(q.Sym())})
+					if q.Type() == goobj.AuxPcfile || q.Type() == goobj.AuxPcline {
+						ref := q.Sym()
+						if ref.PkgIdx != goobj.PkgIdxHashed {
+							panic("unexpected original PC data role")
+						}
+						data := r.Data(ref.SymIdx + uint32(r.NSym()+r.NHashed64def()))
+						if q.Type() == goobj.AuxPcfile {
+							v.PCFile = data
+						} else {
+							v.PCLine = data
+						}
+					}
 				}
 				for pc := int64(0); pc < int64(s.Siz()); pc++ {
 					file, line, _ := liner.PCToLine(uint64(r.DataOff(uint32(i))) + uint64(pc))
@@ -413,12 +426,16 @@ func TestGoStaticStorageTEXTActualZeroPC(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(observed, members[0].Texts) {
 				t.Fatal("actual zero-PC object/code/AUX role was rejected", err)
 			}
-			if observed[0].Size != 0 || observed[0].Positions != nil {
-				t.Fatal("original TEXT-only function did not supply a zero logical-PC role", observed[0])
-			}
 			retainTextArtifact(t, target, "zero-text", map[string][]byte{
 				"text-source.s": source, "text-original.o": original, "text-sdk.json": raw, "text-listing.txt": listing,
 			})
+			if target == "js/wasm" {
+				if observed[0].Size != 1 || len(observed[0].Code) <= 1 {
+					t.Fatal("actual wasm TEXT-only virtual/physical axes differ", observed[0])
+				}
+			} else if observed[0].Size != 0 || observed[0].Positions != nil || !bytes.Equal(observed[0].PCFile, []byte{2, 0, 0}) || !bytes.Equal(observed[0].PCLine, []byte{6, 0, 0}) {
+				t.Fatal("actual TEXT-only zero-PC value/distance/terminator role differs", observed[0])
+			}
 			t.Logf("actual zero-PC %s logical=%d physical=%d", target, observed[0].Size, len(observed[0].Code))
 		})
 	}

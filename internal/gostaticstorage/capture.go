@@ -101,6 +101,7 @@ var formatSources = map[string]string{
 	"src/cmd/internal/objfile/goobj.go":    "5411305140a7f5cd3f61f826d1b6fbbab155db6c94fd263a7ecf1a570e80dc04",
 	"src/cmd/internal/sys/arch.go":         "07ac549fe63e0df269822d5b10b704ca710489b2aa25e176df5d98f2a2c6b8f2",
 	"src/cmd/internal/objabi/reloctype.go": "49bebd30a27d05a24de77398ab524dfbeb0630c8b88c06646c1e4734e4f1fc9d",
+	"src/cmd/internal/obj/pcln.go":         "c165134b74c7e6f908d852551280b45ca58b580226ec27aa345bb869b554448f",
 	builtinSourceRole:                      "8f38ef757cdebb27963ee9befe24dd8041b86d217937db30f13e4d3d91207311",
 }
 
