@@ -160,6 +160,37 @@ func Read() byte
 			if err := json.Unmarshal(textRaw, &originalTexts); err != nil || len(originalTexts) != len(original) {
 				t.Fatal("actual whole TEXT oracle inventory differs", err)
 			}
+			members, err := archiveMembers(archive)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for memberIndex, member := range members[1:] {
+				body, err := objectBody(member.data, target)
+				if err != nil {
+					t.Fatal(err)
+				}
+				object, err := checkedObject(body, original[memberIndex+1].Flags, memberIndex != 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				symbols, err := object.indexedSymbols()
+				if err != nil {
+					t.Fatal(err)
+				}
+				encoded, err := json.Marshal(symbols)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var observed []namespaceOracleDefinition
+				if err := json.Unmarshal(encoded, &observed); err != nil || !reflect.DeepEqual(observed, original[memberIndex+1].Definitions) {
+					t.Fatal("all original namespace/index/hash/flag records differ from the independent SDK", err)
+				}
+			}
+			for namespace, count := range original[1].Counts {
+				if count == 0 {
+					t.Fatal("first-party original lacks a required namespace boundary", namespace)
+				}
+			}
 			groups := make(map[string][]namespaceOracleDefinition)
 			for _, definition := range original[1].Definitions {
 				if definition.Namespace == 2 && definition.Kind == 1 && strings.HasPrefix(definition.Name, "sync.OnceFunc.func1") {

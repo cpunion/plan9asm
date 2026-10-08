@@ -1,7 +1,6 @@
 package gostaticstorage
 
 import (
-	"encoding/binary"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -112,7 +111,7 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 			return nil, err
 		}
 		if !sdk {
-			records, err := assemblyArchiveDefinitions(body, flags, false, index != 0)
+			records, err := assemblyArchiveDefinitions(body, flags)
 			if err != nil {
 				return nil, err
 			}
@@ -149,41 +148,18 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 	return result, nil
 }
 
-// The storage reader intentionally has a name-only view. SDK compiler TEXT
-// wrappers can share their assembly name with a different ABI, so this
-// observation enumerates each independently checked definition instead.
-// It returns no DATA bytes, initialization, storage or native entry proof.
-func assemblyArchiveDefinitions(data []byte, flags uint32, sdk, assembly bool) ([]dataRecord, error) {
-	if !sdk {
-		records, err := readObjectRole(data, flags, false)
-		if err != nil {
-			return nil, err
-		}
-		values := make([]dataRecord, 0, len(records))
-		for _, record := range records {
-			values = append(values, record)
-		}
-		return values, nil
-	}
-	object, err := checkedObject(data, flags, assembly)
+// The legacy owned/DATA reader intentionally retains its strict named view.
+// SDK indexed observation uses a separate path, never widening this one.
+func assemblyArchiveDefinitions(data []byte, flags uint32) ([]dataRecord, error) {
+	records, err := readObjectRole(data, flags, false)
 	if err != nil {
 		return nil, err
 	}
-	var records []dataRecord
-	for index := 3; index <= 6; index++ {
-		block := object.block(index)
-		for offset := 0; offset < len(block); offset += 21 {
-			symbol := block[offset : offset+21]
-			name, err := object.stringAt(symbol[:8])
-			if err != nil {
-				return nil, err
-			}
-			if name != "" {
-				records = append(records, dataRecord{Name: name, ABI: binary.LittleEndian.Uint16(symbol[8:]), Kind: symbol[10]})
-			}
-		}
+	values := make([]dataRecord, 0, len(records))
+	for _, record := range records {
+		values = append(values, record)
 	}
-	return records, nil
+	return values, nil
 }
 
 // ObserveX86SDKAssemblyArchive observes an original SDK archive. This offline

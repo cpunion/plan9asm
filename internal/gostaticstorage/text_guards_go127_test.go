@@ -51,14 +51,17 @@ func TestGoStaticStorageTEXTReportMutationGuards(t *testing.T) {
 			m := r.TextArchives[fixtureModule]
 			m[0], m[1] = m[1], m[0]
 		},
-		"member offset": func(r *Report) { r.TextArchives[fixtureModule][1].Offset++ },
-		"member flags":  func(r *Report) { r.TextArchives[fixtureModule][1].Flags |= 4 },
-		"code":          func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Code[0] ^= 1 },
-		"size":          func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Size++ },
-		"text index":    func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Index++ },
-		"text ABI":      func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].ABI++ },
-		"text kind":     func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Kind++ },
-		"addend":        func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Add++ },
+		"member offset":  func(r *Report) { r.TextArchives[fixtureModule][1].Offset++ },
+		"member flags":   func(r *Report) { r.TextArchives[fixtureModule][1].Flags |= 4 },
+		"code":           func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Code[0] ^= 1 },
+		"size":           func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Size++ },
+		"text index":     func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Index++ },
+		"text namespace": func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Namespace = TextSymbolHashed },
+		"relative index": func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relative++ },
+		"content hash":   func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Hash = []byte{1, 2, 3} },
+		"text ABI":       func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].ABI++ },
+		"text kind":      func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Kind++ },
+		"addend":         func(r *Report) { r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Add++ },
 		"relocation offset": func(r *Report) {
 			r.TextArchives[fixtureModule][1].Texts[1].Relocations[0].Offset++
 		},
