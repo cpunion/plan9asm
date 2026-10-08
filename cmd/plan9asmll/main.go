@@ -2252,6 +2252,8 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		files = append(files, shared...)
 	}
 	sort.Strings(files)
+	var sharedFiles []*ast.File
+	var extractionFiles []*ast.File
 
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {
@@ -2265,8 +2267,9 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s for supported instructions: %w", f, err)
 		}
+		extractionFiles = append(extractionFiles, parsed)
 		if strings.HasPrefix(filepath.Base(f), "x86_") {
-			collectSharedX86OpcodeDispatch(supported, parsed)
+			sharedFiles = append(sharedFiles, parsed)
 			continue
 		}
 		// Package-level opcode specification maps are dispatch tables even when
@@ -2392,6 +2395,15 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 			}
 			return true
 		})
+	}
+	if len(sharedFiles) != 0 {
+		types, err := loadSharedX86OpcodeTypes(repoRoot, extractionFiles)
+		if err != nil {
+			return nil, err
+		}
+		for _, file := range sharedFiles {
+			collectSharedX86OpcodeDispatch(supported, file, types)
+		}
 	}
 	return supported, nil
 }
