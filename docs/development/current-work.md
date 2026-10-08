@@ -48,12 +48,14 @@ scopes each 219 passed; full vet and stamped corpus-driver build passed.
 Independent complete source/tool/list/raw/owner readback agrees. These are
 first-party affected scopes, not current-head full suites or library passes.
 
-The later aggregate command now audits reports once and reuses that exact
-progress for strict verification and stored-ledger comparison. Its frozen
-`35b1df2e` ordinary/race affected checks each passed 179 nodes. Subsequent
-review exposed late-destination overwrite and final-input/publication gaps;
-the publication-hardening component is still under TDD, not a green combined
-head. Diagnostic phase events are uploaded separately from corpus reports.
+The aggregate command now audits reports once and reuses that exact progress
+for strict verification and stored-ledger comparison. Subsequent publication
+hardening is integrated at frozen `9c786dae`: ordinary/race affected checks each
+pass 71 roots and 302 children, with no failure, skip or incomplete test.
+Full vet, stamped CLI build, 29 CI-policy tests, actionlint and shell syntax
+checks pass. Independent full source/tool/raw/owner readback agrees. These are
+affected scopes, not the complete suite or new external-library certificates.
+Diagnostic phase events are uploaded separately from corpus reports.
 
 ## Integrated rule-class repairs
 
@@ -140,6 +142,14 @@ The successor additionally integrates these independently frozen components:
   top-level outcome. Requested I/O or corrupt-tail failures invalidate reports;
   timing records never certify candidates. The initial wrong-CWD RED remains
   invalid evidence; the separately frozen original-driver reproduction is RED.
+- Frozen aggregate publication: `9c786dae` closes the real late-input,
+  occupied-output, changed preparation, growing-file and replaced-inode REDs.
+  Read-only preflight resolves actual filesystem aliases, including case
+  aliases without excluding case-sensitive filesystems. Preparation closes
+  complete bytes before final source/scan/stored-ledger guards and publishes
+  without overwrite. Physical ledger checks stream bounded reads, not another
+  semantic audit; cleanup preserves foreign replacements. Five actual CLI
+  fixtures retain strict failure exits and reject unauditable trailing data.
 - Typed numerical SB source/object/storage joins: `fc56d73f`, full storage
   ordinary/race each 219 pass and numerical/FrameSource lanes each 216 pass,
   with independent SDK archive/source/read-width/addend checks. All 22 scalar
@@ -175,10 +185,9 @@ Separate component worktrees currently own these limited consumers:
   and an empty version do not prove an owned-main role: cache CWD has the same
   fields. Default owned routes exclude SDK/cache roots; an exact-download route
   must retain its own complete original archive/cache identity.
-- Aggregate publication: preflight canonical output/input separation, prepare
-  a closed diagnostic, recheck source and both ledgers, then publish without
-  overwrite. Stream physical hashes with observed extent/EOF and pathname
-  identity guards; a corrupt or replaced temporary is not a valid report.
+- ARM64 result transport: inspect complete original SDK object/caller evidence
+  for wide result writes. Logical result bytes and rounded frame allocation
+  alone do not grant a padding slot or an open native tail-call effect.
 
 These components require complete ordinary/race and independent reader closure
 before integration. Their producer or focused passes do not promote the ledger.
