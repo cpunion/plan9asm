@@ -253,6 +253,33 @@ func TestDiscoveryProgressDirectoryPreflightRealCLI(t *testing.T) {
 	}
 }
 
+func TestDiscoveryProgressDirectoryModeRejectsExplicitEmptyAndOtherReaders(t *testing.T) {
+	fixture := newFrozenAggregateFixture(t)
+	for _, extra := range [][]string{
+		{"-discovery-progress-directory=", "-manifest=" + fixture.manifest, "-list"},
+		{"-list"}, {"-suite=all"}, {"-manifest=" + fixture.manifest},
+		{"-discovery-shard-count=1"}, {"-discovery-progress-output=unused"},
+		{"-verify-discovery-reports=unused"}, {"-discovery-progress=unused"},
+		{"-write-assembly-ledger=unused"}, {"-assembly-ledger-status=unused"},
+		{"-require-verified-assembly-ledger"}, {"-discovery-events=unused"},
+		{"-discovery-exact-candidate=example.com/a@v1.0.0"},
+	} {
+		t.Run(strings.Join(extra, " "), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			args := []string{
+				"-repo-root=" + fixture.root, "-discovery-ledger=" + fixture.ledger,
+				"-compare-assembly-ledger=" + fixture.stored,
+				"-discovery-progress-directory=" + filepath.Join(t.TempDir(), "new"),
+			}
+			stdout, stderr, err := runVerifiedProgressCLI(ctx, fixture.root, append(args, extra...)...)
+			if err == nil || len(stdout) != 0 || !strings.Contains(string(stderr), "requires") {
+				t.Fatalf("directory mode fell through or accepted another mode: %v stdout=%q stderr=%s", err, stdout, stderr)
+			}
+		})
+	}
+}
+
 func copyFrozenGitRelay(t *testing.T, destination string) {
 	t.Helper()
 	source, err := os.Open(os.Args[0])
