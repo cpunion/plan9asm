@@ -5,6 +5,11 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 shard_index=${1:-}
 shard_count=${2:-}
 report_path=${3:-}
+phase_events=${PLAN9ASM_DISCOVERY_EVENTS:-0}
+if [[ "$phase_events" != 0 && "$phase_events" != 1 ]]; then
+  echo "invalid PLAN9ASM_DISCOVERY_EVENTS: expected 0 or 1" >&2
+  exit 2
+fi
 if [[ "$shard_index" == "all" ]]; then
   if (( $# > 2 )); then
     echo "usage: $0 all [shard-count]" >&2
@@ -144,5 +149,11 @@ if [[ -n "${PLAN9ASM_DISCOVERY_TARGETS:-}" ]]; then
 fi
 if [[ -n "${PLAN9ASM_DISCOVERY_BUILD_CACHE:-}" ]]; then
   runner_args+=("-discovery-build-cache=$PLAN9ASM_DISCOVERY_BUILD_CACHE")
+fi
+if [[ "$phase_events" == 1 ]]; then
+  # New diagnostic files are exclusive: never overwrite a previous journal.
+  # The report reader, not phase timing, certifies candidate completion.
+  mkdir -p "$(dirname "$report_path")"
+  runner_args+=("-discovery-events=${report_path%.json}.events.jsonl")
 fi
 "$runner" "${runner_args[@]}"

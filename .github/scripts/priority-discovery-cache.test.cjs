@@ -10,7 +10,7 @@ const source = fs.readFileSync(
   'utf8',
 );
 
-function runCorpusFixture(t, failedShard = '', priorityShards = '') {
+function runCorpusFixture(t, failedShard = '', priorityShards = '', phaseEvents = '0') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plan9asm-cache-test-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const scripts = path.join(root, 'scripts');
@@ -48,6 +48,7 @@ printf 'verified\n' >> "$FIXTURE_VERIFIED"
       TMPDIR: caches,
       PLAN9ASM_DISCOVERY_PARALLELISM: '2',
       PLAN9ASM_DISCOVERY_PRIORITY_SHARDS: priorityShards,
+      PLAN9ASM_DISCOVERY_EVENTS: phaseEvents,
       FIXTURE_CALLS: calls,
       FIXTURE_VERIFIED: verified,
       FIXTURE_FAILED_SHARD: failedShard,
@@ -96,6 +97,17 @@ test('invalid priority lists fail before starting corpus work', (t) => {
     '18446744073709551616']) {
     const { result, records, caches, verified } = runCorpusFixture(t, '', priority);
     assert.notEqual(result.status, 0, `accepted invalid priority ${priority}`);
+    assert.deepEqual(records, []);
+    assert.deepEqual(fs.readdirSync(caches), []);
+    assert.equal(fs.existsSync(verified), false);
+  }
+});
+
+test('invalid phase timing options fail before starting corpus work', (t) => {
+  for (const value of ['true', '2', '-1', '1 x']) {
+    const { result, records, caches, verified } = runCorpusFixture(t, '', '', value);
+    assert.equal(result.status, 2, `accepted invalid timing option ${value}`);
+    assert.match(result.stderr, /invalid PLAN9ASM_DISCOVERY_EVENTS/);
     assert.deepEqual(records, []);
     assert.deepEqual(fs.readdirSync(caches), []);
     assert.equal(fs.existsSync(verified), false);

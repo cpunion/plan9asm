@@ -319,6 +319,13 @@ failures fail the run and invalidate a produced report without hiding the
 original operation error. With the option absent, the schema-11 report and
 execution path are unchanged. Reader/list modes reject the option.
 
+The single-shard script enables this with `PLAN9ASM_DISCOVERY_EVENTS=1`,
+creating a new `shard-N.events.jsonl` beside its report. Both CI matrices enable
+and upload it separately from the compilation report, including failed runs.
+Use a fresh report path when repeating an opted-in run; existing timing files
+are never overwritten. A timeout may leave an incomplete diagnostic journal;
+neither its spans nor a partial compilation checkpoint satisfy completion.
+
 Each span records its exact candidate, phase, scope, start/end and actual error.
 Elapsed nanoseconds use a monotonic clock; UTC timestamps are labels and must
 not be subtracted to estimate work if the wall clock moves. Nested spans overlap

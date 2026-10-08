@@ -83,6 +83,7 @@ jobs:
           # Reuse only compiled Go objects from this task's restored cache.
           # Source/tool observations and LLVM objects are still checked afresh.
           PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
+          PLAN9ASM_DISCOVERY_EVENTS: '1'
           # Retained exact versions can outlive their public origin and the
           # first proxy's cache. Verify against the signed database directly;
           # some module proxies return 404 for checksum tiles they advertise.
@@ -96,7 +97,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+          path: |
+            _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+            _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
           if-no-files-found: error
 
   fmt:
@@ -344,6 +347,7 @@ jobs:
           # Reuse only compiled Go objects from this task's restored cache.
           # Source/tool observations and LLVM objects are still checked afresh.
           PLAN9ASM_DISCOVERY_BUILD_CACHE: ${{ runner.temp }}/go-build-cache
+          PLAN9ASM_DISCOVERY_EVENTS: '1'
           # Retained exact versions can outlive their public origin and the
           # first proxy's cache. Verify against the signed database directly;
           # some module proxies return 404 for checksum tiles they advertise.
@@ -357,7 +361,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: discovered-corpus-shard-${{ matrix.shard }}
-          path: _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+          path: |
+            _out/discovered-library-corpus/shard-${{ matrix.shard }}.json
+            _out/discovered-library-corpus/shard-${{ matrix.shard }}.events.jsonl
           if-no-files-found: error
 
   discovered_library_corpus_verify:
