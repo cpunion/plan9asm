@@ -71,29 +71,48 @@ func TestARM64NanosleepSDKOriginalObjectAndBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	members, err := gostaticstorage.ObserveARM64AssemblyArchive(archive, builtins, "linux/arm64", selected.SFiles)
+	// Runtime's compiler member is not an ordinary user-package observer role.
+	// Do not broaden that observer: let the actual Go archive tool enumerate
+	// every member and extract only this original assembler object. The bytes
+	// still supply observation only, not a source capability or an ABI grant.
+	inventory := arm64ABI0RegionCommand(t, "linux", ".", "tool", "pack", "t", selected.Export)
+	memberName := strings.TrimSuffix(sourceName, ".s") + ".o"
+	if len(memberName) > 16 {
+		memberName = memberName[:16] // Go's actual ar member-name field.
+	}
+	members := strings.Fields(string(inventory))
+	seen := make(map[string]bool)
+	for _, name := range members {
+		if seen[name] {
+			t.Fatal("ambiguous actual Go archive member inventory")
+		}
+		seen[name] = true
+	}
+	if len(members) < 3 || !seen[memberName] {
+		t.Fatal("actual original assembler member absent")
+	}
+	object := arm64ABI0RegionCommand(t, "linux", ".", "tool", "pack", "p", selected.Export, memberName)
+	texts, err := gostaticstorage.ObserveARM64AssemblyText(object, builtins, "linux/arm64")
 	if err != nil {
-		t.Fatal("complete original runtime compiler/ASM object observation", err)
+		t.Fatal("complete original runtime ASM member observation", err)
 	}
 	count = 0
-	for _, member := range members {
-		for _, text := range member.Texts {
-			if text.Name != "runtime.usleep" || text.ABI != 0 {
-				continue
-			}
-			count++
-			if len(text.Code) != 96 || len(text.Relocations) != 0 ||
-				binary.LittleEndian.Uint32(text.Code[32:]) != 0xf90007e3 ||
-				binary.LittleEndian.Uint32(text.Code[52:]) != 0xf9000be5 ||
-				binary.LittleEndian.Uint32(text.Code[56:]) != 0x910023e0 ||
-				binary.LittleEndian.Uint32(text.Code[60:]) != 0xaa1f03e1 ||
-				binary.LittleEndian.Uint32(text.Code[64:]) != 0xd2800ca8 ||
-				binary.LittleEndian.Uint32(text.Code[68:]) != 0xd4000001 {
-				t.Fatal("original private timespec/NULL/R8/SVC0 object evidence differs")
-			}
-			t.Logf("SDK_ORIGINAL_BODY sourceSHA256=%x archiveSHA256=%x member=%s codeSHA256=%x bytes=%d relocations=%d",
-				sha256.Sum256(data), sha256.Sum256(archive), member.Name, sha256.Sum256(text.Code), len(text.Code), len(text.Relocations))
+	for _, text := range texts {
+		if text.Name != "runtime.usleep" || text.ABI != 0 {
+			continue
 		}
+		count++
+		if len(text.Code) != 96 || len(text.Relocations) != 0 ||
+			binary.LittleEndian.Uint32(text.Code[32:]) != 0xf90007e3 ||
+			binary.LittleEndian.Uint32(text.Code[52:]) != 0xf9000be5 ||
+			binary.LittleEndian.Uint32(text.Code[56:]) != 0x910023e0 ||
+			binary.LittleEndian.Uint32(text.Code[60:]) != 0xaa1f03e1 ||
+			binary.LittleEndian.Uint32(text.Code[64:]) != 0xd2800ca8 ||
+			binary.LittleEndian.Uint32(text.Code[68:]) != 0xd4000001 {
+			t.Fatal("original private timespec/NULL/R8/SVC0 object evidence differs")
+		}
+		t.Logf("SDK_ORIGINAL_BODY sourceSHA256=%x archiveSHA256=%x member=%s codeSHA256=%x bytes=%d relocations=%d",
+			sha256.Sum256(data), sha256.Sum256(archive), memberName, sha256.Sum256(text.Code), len(text.Code), len(text.Relocations))
 	}
 	if count != 1 {
 		t.Fatal("ambiguous original ABI0 body; a compiler wrapper is not the ASM body")
