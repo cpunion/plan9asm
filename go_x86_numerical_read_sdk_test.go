@@ -239,17 +239,17 @@ func TestGoX86SDKNumericalReadDefaultOwnedRemainsContext(t *testing.T) {
 	}
 }
 
-func TestGoX86SDKNumericalReadOriginalCRC32KeepsDataContext(t *testing.T) {
+func TestGoX86SDKNumericalReadOriginalCRC32KeepsUnadmittedArchiveContext(t *testing.T) {
 	ctx, request, owner := numericalSDKCRC32Request(t)
 	source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
 	if source != nil {
 		source.Close()
 	}
-	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "assembly DATA definition") {
-		t.Fatal("explicit SDK source authentication did not reach the unchanged private-DATA boundary", err)
+	if source != nil || !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "duplicate SDK same-ABI definition: sync.OnceFunc.func1") {
+		t.Fatal("explicit SDK source authentication lost its exact unadmitted compiler-object boundary", err)
 	}
 	if err := owner.Verify(ctx); err != nil {
-		t.Fatal("later DATA Context revoked the independent SDK CPU data owner", err)
+		t.Fatal("unadmitted archive Context revoked the independent SDK CPU data owner", err)
 	}
 	t.Logf("ACTUAL_SDK_CRC32_FIRST_BLOCK %v", err)
 }
