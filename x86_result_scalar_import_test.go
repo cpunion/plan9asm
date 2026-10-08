@@ -28,6 +28,23 @@ func TestX86ABI0ScalarImportOpaquePointerIndependentResult(t *testing.T) {
 	}
 }
 
+func TestX86ABI0ScalarImportGoMOVDWordAlias(t *testing.T) {
+	for _, register := range []string{"AX", "CX", "DX", "BX", "SI", "DI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"} {
+		t.Run(register, func(t *testing.T) {
+			body := fmt.Sprintf("MOVD x+0(FP),%s\nMOVD %s,SI\nMOVL $42,DX\nMOVL DX,X0\nPEXTRD $0,X0,BX\nMOVL BX,ret0+8(FP)\nRET", register, register)
+			_, file, sig, source := x86ResultInitializationFixture(t, "amd64", "func Value(x *byte) uint32", body)
+			// Stock cmd/asm aliases MOVD to AMOVQ. All supported GP imports
+			// must retain that exact word-width opaque role in both observers.
+			goAssemblerOracleOutput(t, "amd64", source, "", true)
+			for _, check := range []func(Func, FuncSig, string) error{CheckX86ABI0ResultInitialization, checkX86ScalarFPResultInitialization} {
+				if err := check(file.Funcs[0], sig, "amd64"); err != nil {
+					t.Fatalf("Go MOVD word alias lost complete opaque transfer: %v", err)
+				}
+			}
+		})
+	}
+}
+
 func TestX86ABI0ScalarImportSliceThreeAPIFiveTargetObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
@@ -42,17 +59,25 @@ func TestX86ABI0ScalarImportSliceThreeAPIFiveTargetObjects(t *testing.T) {
 			// This independently derived gc declaration has the crc32 shape:
 			// an integer followed by slice data/len/cap and one scalar result.
 			// The pointer is transported, never dereferenced or used as bits.
-			source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\nMOVL crc+0(FP),X0\n%s p+%d(FP),SI\n%s p_len+%d(FP),CX\n%s SI,DI\nPEXTRD $0,X0,AX\nMOVL AX,ret+%d(FP)\nRET\n",
-				4*word+4, move, word, move, 2*word, move, 4*word)
-			x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
-			for _, api := range []string{"text", "module", "Go"} {
-				t.Run(api, func(t *testing.T) {
-					ir, err := x86ScalarFPBitViewAPI(t, source,
-						"func view(crc uint32,p []byte) uint32\n", target.arch, target.triple, api)
-					if err != nil || ir == "" {
-						t.Fatalf("declared scalar import with independent extracted result: %v", err)
+			moves := []string{move}
+			if target.arch == "amd64" {
+				moves = append(moves, "MOVD")
+			}
+			for _, pointerMove := range moves {
+				t.Run(pointerMove, func(t *testing.T) {
+					source := fmt.Sprintf("TEXT ·view(SB),4,$0-%d\nMOVL crc+0(FP),X0\n%s p+%d(FP),SI\n%s p_len+%d(FP),CX\n%s SI,DI\nPEXTRD $0,X0,AX\nMOVL AX,ret+%d(FP)\nRET\n",
+						4*word+4, pointerMove, word, move, 2*word, pointerMove, 4*word)
+					x86LEAActualTargetGoObject(t, target.arch, target.triple, source)
+					for _, api := range []string{"text", "module", "Go"} {
+						t.Run(api, func(t *testing.T) {
+							ir, err := x86ScalarFPBitViewAPI(t, source,
+								"func view(crc uint32,p []byte) uint32\n", target.arch, target.triple, api)
+							if err != nil || ir == "" {
+								t.Fatalf("declared scalar import with independent extracted result: %v", err)
+							}
+							compileLLVMToObject(t, llc, target.triple, "scalar-import.ll", "scalar-import.o", ir)
+						})
 					}
-					compileLLVMToObject(t, llc, target.triple, "scalar-import.ll", "scalar-import.o", ir)
 				})
 			}
 		})
@@ -71,7 +96,7 @@ func TestX86ABI0ScalarImportDoesNotGrantNumericOrMemoryPermission(t *testing.T) 
 		for name, body := range map[string]string{
 			"pointee":             load + "MOVL (AX),BX\n",
 			"pointee vector":      load + "MOVOU (AX),X0\n",
-			"pointer GP bits":     load + "MOVL AX,CX\n",
+			"pointer GP bits":     load + "MOVW AX,CX\n",
 			"pointer X bits":      load + move + " AX,X0\n",
 			"pointer FP bits":     "MOVL x+0(FP),X0\n",
 			"pointer lane":        load + "PINSRD $0,AX,X0\n",
