@@ -29,6 +29,25 @@ func (source *GoARM64ByteCarrierSource) revokeCarrier() {
 	}
 }
 
+// This checks the existing observation's identity/lifetime only. It neither
+// creates a binding nor substitutes for the complete physical Verify checks.
+func (source *GoARM64ByteCarrierSource) liveCarrier() error {
+	if source == nil {
+		return arm64ByteCarrierContext("missing original source owner")
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if source.identity != source {
+		return arm64ByteCarrierContext("copied or uninitialized original source")
+	}
+	err := arm64ByteCarrierLive(source.lease)
+	if !source.ready || err != nil {
+		source.ready = false
+		return errors.Join(arm64ByteCarrierContext("original owner closed or expired"), err)
+	}
+	return nil
+}
+
 func bindARM64ByteCarrier(file *File, options Options) (_ *arm64ByteCarrierBinding, failure error) {
 	source := options.ARM64ByteCarrierSource
 	if source == nil {
@@ -63,13 +82,13 @@ func bindARM64ByteCarrier(file *File, options Options) (_ *arm64ByteCarrierBindi
 		binding.signatures[name] = append([]byte(nil), arm64ScratchPublicSignature(signature)...)
 	}
 	for _, function := range binding.file.Funcs {
-		if err := arm64ByteCarrierLive(source.lease); err != nil {
+		if err := source.liveCarrier(); err != nil {
 			return nil, err
 		}
 		name := strings.TrimPrefix(function.Sym, "·")
 		expected, present := source.declarations[name]
 		resolved := options.ResolveSym(function.Sym)
-		if err := arm64ByteCarrierLive(source.lease); err != nil {
+		if err := source.liveCarrier(); err != nil {
 			return nil, err
 		}
 		if !present || resolved != expected.Name || !bytes.Equal(binding.signatures[resolved], arm64ScratchPublicSignature(expected)) ||
@@ -114,11 +133,11 @@ func (binding *arm64ByteCarrierBinding) verify() error {
 		return err
 	}
 	for _, function := range binding.file.Funcs {
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return err
 		}
 		name := binding.options.ResolveSym(function.Sym)
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return err
 		}
 		if name != binding.symbols[function.Sym] {

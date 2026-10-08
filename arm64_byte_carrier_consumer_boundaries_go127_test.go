@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"go/ast"
 	"os"
 	"path/filepath"
 	"testing"
@@ -169,7 +168,3 @@ func TestARM64ByteCarrierCallbacksStopAfterSourceClose(t *testing.T) {
 		})
 	}
 }
-
-// Keep ast imported as a compile-time check that canonical source fixtures
-// remain concrete syntax rather than a report-only declaration inventory.
-var _ *ast.File

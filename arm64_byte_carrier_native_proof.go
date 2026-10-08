@@ -44,7 +44,7 @@ func arm64ByteCarrierRegister(register Reg) (uint32, bool) {
 
 func (binding *arm64ByteCarrierBinding) prepareNative() error {
 	for ordinal, function := range binding.file.Funcs {
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return err
 		}
 		name := binding.symbols[function.Sym]
@@ -120,7 +120,7 @@ func (binding *arm64ByteCarrierBinding) prepareNativeFunction(plan *arm64ByteCar
 	}
 	returned, calls := false, 0
 	for index, instruction := range normalized.Instrs {
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return err
 		}
 		if instruction.Op == OpTEXT && index == 0 {
@@ -266,7 +266,7 @@ func (binding *arm64ByteCarrierBinding) proveDefinedBytes(plan *arm64ByteCarrier
 		}
 	}
 	for _, operation := range plan.operations {
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return err
 		}
 		switch operation.kind {

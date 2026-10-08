@@ -49,7 +49,7 @@ func (binding *arm64ByteCarrierBinding) emitIR() (string, error) {
 	var output strings.Builder
 	fmt.Fprintf(&output, "target triple = %q\n\n", binding.options.TargetTriple)
 	for _, source := range binding.file.Funcs {
-		if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+		if err := binding.source.liveCarrier(); err != nil {
 			return "", err
 		}
 		function := binding.functions[binding.symbols[source.Sym]]
@@ -63,7 +63,7 @@ func (binding *arm64ByteCarrierBinding) emitIR() (string, error) {
 		}
 		registers := map[Reg]string{ZR: "0"}
 		for _, operation := range function.operations {
-			if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+			if err := binding.source.liveCarrier(); err != nil {
 				return "", err
 			}
 			root := "%outgoing"
@@ -105,7 +105,7 @@ func (binding *arm64ByteCarrierBinding) emitIR() (string, error) {
 }
 
 func (binding *arm64ByteCarrierBinding) emitTypedAdapter(output *strings.Builder, function *arm64ByteCarrierFunction) error {
-	if err := arm64ByteCarrierLive(binding.source.lease); err != nil {
+	if err := binding.source.liveCarrier(); err != nil {
 		return err
 	}
 	signature := function.signature

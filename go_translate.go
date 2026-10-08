@@ -114,15 +114,16 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 				result, resultErr = nil, errors.Join(resultErr, callbackFailure, final)
 			}
 		}()
-		if opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 {
-			return nil, arm64ByteCarrierContext("custom declaration/closure mapping is outside the closed source")
+		goos, _, _ := strings.Cut(source.request.Target, "/")
+		if opt.GOOS != goos || opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 {
+			return nil, arm64ByteCarrierContext("Go profile/custom declaration/closure mapping differs from the closed source")
 		}
 		// Go binding calls user resolvers before reaching the LLVM consumer.
 		// Retain the original capture owner through every such callback; a
 		// failed callback must not be followed by another invocation or output.
 		live := func() bool {
 			if callbackFailure == nil {
-				callbackFailure = arm64ByteCarrierLive(source.lease)
+				callbackFailure = source.liveCarrier()
 			}
 			return callbackFailure == nil
 		}
