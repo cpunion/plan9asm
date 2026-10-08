@@ -65,6 +65,14 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 	}
 	// go list emits its selected package before the export compiler fails.
 	// Keep that real selection witness instead of requiring an empty stream.
+	// The first-party TempDir may have a filesystem alias (such as /var on
+	// Darwin); Go reports its physical working directory. Compare this actual
+	// directory, not the spelling supplied to exec, while retaining exact
+	// package, module and complete source-file selection checks below.
+	physicalDirectory, err := filepath.EvalSymlinks(original.Dir)
+	if err != nil {
+		t.Fatal("resolve original fixture directory: ", err)
+	}
 	var selected struct {
 		Dir        string
 		ImportPath string
@@ -74,7 +82,7 @@ func TestInstrumentationSourceRejectionPreservesEligibleSiblingObject(t *testing
 		Module     struct{ Path string }
 	}
 	if err := json.Unmarshal(stdout, &selected); err != nil ||
-		selected.Dir != original.Dir || selected.ImportPath != candidate.Module+"/bad" ||
+		selected.Dir != physicalDirectory || selected.ImportPath != candidate.Module+"/bad" ||
 		selected.Name != "bad" || selected.Module.Path != candidate.Module ||
 		strings.Join(selected.GoFiles, ",") != "constants_go125.go,constants_go126.go,probe.go" ||
 		strings.Join(selected.SFiles, ",") != filepath.Base(badAssembly) {
