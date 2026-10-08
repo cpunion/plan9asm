@@ -142,14 +142,29 @@ func numericalLocalAPIs(t *testing.T, pkg GoPackage, file *File, options Options
 			case "context":
 				module, err = TranslateModuleInContext(context, file, options)
 			case "go-module":
-				source := options.NumericalReads.source
-				data, readErr := os.ReadFile(filepath.Join(source.request.Directory, source.request.AssemblyFile))
+				var directory, assemblyFile string
+				if options.NumericalReads != nil {
+					source := options.NumericalReads.source
+					directory, assemblyFile = source.request.Directory, source.request.AssemblyFile
+				} else {
+					for _, sig := range options.Sigs {
+						if sig.x86FixedLocal != nil && sig.x86FixedLocal.source != nil {
+							source := sig.x86FixedLocal.source
+							directory, assemblyFile = source.request.Directory, source.request.AssemblyFile
+							break
+						}
+					}
+				}
+				if directory == "" || assemblyFile == "" {
+					t.Fatal("wrapper fixture lost its original input path")
+				}
+				data, readErr := os.ReadFile(filepath.Join(directory, assemblyFile))
 				if readErr != nil {
 					t.Fatal(readErr)
 				}
 				result, translateErr := TranslateGoModule(pkg, data, GoModuleOptions{
 					GOARCH: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
-					FileName: source.request.AssemblyFile, NumericalReads: options.NumericalReads,
+					FileName: assemblyFile, NumericalReads: options.NumericalReads,
 					ResolveSym: options.ResolveSym,
 				})
 				err = translateErr
