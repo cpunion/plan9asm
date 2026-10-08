@@ -408,9 +408,9 @@ jobs:
           path: _out/discovered-library-corpus
           merge-multiple: true
 
-      - name: Report scan and assembly progress
+      - name: Verify complete coverage and report progress
         if: ${{ !cancelled() }}
-        run: bash scripts/discovery-status.sh
+        run: scripts/verify-discovered-library-corpus.sh --progress
 
       - name: Upload discovery progress
         if: ${{ !cancelled() }}
@@ -421,10 +421,6 @@ jobs:
             _out/discovered-library-corpus/scan-status.json
             _out/discovered-library-corpus/assembly-progress.json
           if-no-files-found: error
-
-      - name: Verify complete ledger coverage
-        if: ${{ !cancelled() }}
-        run: scripts/verify-discovered-library-corpus.sh
 
   stdlib-corpus:
     needs: discovered_library_priority

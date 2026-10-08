@@ -410,6 +410,12 @@ func verifyDiscoveryCorpusReports(ledgerPath, reportsPath string, expectedTarget
 	if err != nil {
 		return err
 	}
+	return requireCompleteDiscoveryProgress(progress, reportsPath)
+}
+
+// Only pass the result of the full current audit here. This helper is not a
+// public proof reader or a shortcut for validating a persisted progress file.
+func requireCompleteDiscoveryProgress(progress discoveryProgress, reportsPath string) error {
 	if progress.ReportedShards == 0 {
 		return fmt.Errorf("no discovery shard reports found in %q", reportsPath)
 	}

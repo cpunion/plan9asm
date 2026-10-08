@@ -89,7 +89,7 @@ func TestDiscoveryVerifiedProgressRealCLI(t *testing.T) {
 				"-verify-discovery-reports="+reports, "-compare-assembly-ledger="+stored,
 				"-discovery-progress-output="+progressPath)
 			if name == "complete" {
-				if err != nil || !strings.Contains(string(stderr), "verified discovery corpus reports") {
+				if err != nil || !strings.Contains(string(stdout), "verified discovery corpus reports") {
 					t.Fatalf("complete gate: %v stderr=%s", err, stderr)
 				}
 			} else if err == nil {

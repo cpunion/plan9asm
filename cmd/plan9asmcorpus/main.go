@@ -135,6 +135,7 @@ func main() {
 	discoveryEvents := flag.String("discovery-events", "", "optional new JSONL phase timing file; diagnostic only, never completion evidence")
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
 	verifyDiscoveryReports := flag.String("verify-discovery-reports", "", "verify a complete directory of discovery shard reports against -discovery-ledger")
+	discoveryProgressOutput := flag.String("discovery-progress-output", "", "publish audited progress to a new assembly-progress.json while verifying reports; failures still exit nonzero")
 	compareAssemblyLedgerPath := flag.String("compare-assembly-ledger", "", "compare verified shard results with the committed assembly ledger")
 	discoveryProgressReports := flag.String("discovery-progress", "", "report pending/passed/N/A/failed candidates from a possibly incomplete directory of frozen shard reports")
 	writeAssemblyLedgerPath := flag.String("write-assembly-ledger", "", "persist audited discovery progress in a separate module-hashed assembly ledger")
@@ -144,7 +145,10 @@ func main() {
 	check(validateDiscoveryExactCandidateMode(discoveryExactCandidates, *discoveryLedger, *discoveryTargets != "",
 		*list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
 			*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" ||
-			*assemblyLedgerStatusPath != "" || *requireVerifiedAssembly))
+			*assemblyLedgerStatusPath != "" || *requireVerifiedAssembly || *discoveryProgressOutput != ""))
+	if *discoveryProgressOutput != "" && (*verifyDiscoveryReports == "" || *list || *suite != "all") {
+		check(errors.New("-discovery-progress-output requires -verify-discovery-reports, not a curated or list mode"))
+	}
 	if *discoveryEvents != "" && (*discoveryLedger == "" || *list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
 		*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" || *assemblyLedgerStatusPath != "" || *requireVerifiedAssembly) {
 		check(errors.New("-discovery-events requires discovery execution, not a reader or curated mode"))
@@ -181,20 +185,48 @@ func main() {
 		}
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
-		check(verifyDiscoveryCorpusReports(*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, *repoRoot))
-		if *compareAssemblyLedgerPath != "" {
-			current, err := collectDiscoveryProgress(
-				*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, 0, *repoRoot,
-			)
-			check(err)
+		shardCount := 0 // Preserve inference for the existing verifier command.
+		flag.Visit(func(option *flag.Flag) {
+			if option.Name == "discovery-shard-count" {
+				shardCount = *discoveryShardCount
+			}
+		})
+		current, err := collectDiscoveryProgress(
+			*discoveryLedger, *verifyDiscoveryReports, manifest.Targets, source, shardCount, *repoRoot,
+		)
+		check(err)
+		verificationErr := requireCompleteDiscoveryProgress(current, *verifyDiscoveryReports)
+		if verificationErr == nil && *compareAssemblyLedgerPath != "" {
 			semanticSourceSHA, err := collectDiscoverySemanticSourceSHA(*repoRoot)
 			check(err)
 			stored, err := readAssemblyLedger(
 				*compareAssemblyLedgerPath, current.LedgerSHA256, semanticSourceSHA,
 			)
-			check(err)
-			check(compareAssemblyLedgerProgress(stored, current))
+			if err != nil {
+				verificationErr = err
+			} else {
+				verificationErr = compareAssemblyLedgerProgress(stored, current)
+			}
 		}
+		finalSource, err := collectDiscoverySource(*repoRoot)
+		check(err)
+		if finalSource != source {
+			check(errors.New("discovery source changed while verifying reports"))
+		}
+		if *discoveryProgressOutput != "" {
+			check(writeDiscoveryProgressOutput(*discoveryProgressOutput, current))
+			finalSource, err = collectDiscoverySource(*repoRoot)
+			check(err)
+			if finalSource != source {
+				check(errors.New("discovery source changed while publishing progress"))
+			}
+		}
+		finalLedgerSHA, err := discoveryLedgerFingerprint(*discoveryLedger)
+		check(err)
+		if finalLedgerSHA != current.LedgerSHA256 {
+			check(errors.New("discovery ledger changed while verifying reports"))
+		}
+		check(verificationErr)
 		fmt.Printf("verified discovery corpus reports against %s\n", *discoveryLedger)
 		return
 	}

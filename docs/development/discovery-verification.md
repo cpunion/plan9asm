@@ -822,6 +822,16 @@ Status-query success is not test success: the final verifier still exits
 nonzero for failures or missing reports. CI publishes this view even when a
 shard fails. Reports are atomically published for concurrent status readers.
 
+CI uses `scripts/verify-discovered-library-corpus.sh --progress` on a fresh
+reports directory. One full audit produces progress, applies the strict
+completion gate, and compares the committed ledger; it does not audit the same
+reports again just to display progress. The optional CLI
+`-discovery-progress-output` publishes a new `assembly-progress.json` atomically.
+Incomplete/failed candidates and ledger mismatches still exit nonzero. Malformed
+or stale reports produce no progress output. Existing outputs are not replaced;
+retain them and select a fresh report directory. A saved progress file cannot
+replace a future audit or make a missing shard pass.
+
 Final assembly coverage has only two accepted outcomes: tested `passed`, or
 an explained skip. `not_applicable` is a source/target skip, not a pass; the
 other `skipped_*` statuses retain their specific reviewed reason and witnesses.
