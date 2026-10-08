@@ -149,7 +149,8 @@ func checkedObject(data []byte, flags uint32, emptyAssembly bool) (*checkedGoObj
 		8: 10, 9: 8, 10: 16, 11: 4, 12: 4, 13: 4, 14: 23, 15: 9, 17: 16}
 	for index, width := range widths {
 		if len(block(index))%width != 0 || len(block(index))/width > symbolLimit {
-			return nil, contextError("invalid or excessive binary block record count")
+			return nil, contextError(fmt.Sprintf("invalid or excessive binary block record count: block=%d bytes=%d width=%d records=%d limit=%d",
+				index, len(block(index)), width, len(block(index))/width, symbolLimit))
 		}
 	}
 	count := 0

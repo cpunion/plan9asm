@@ -75,7 +75,7 @@ func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, targe
 			}
 			object, err := checkedObject(body, flags, index != 0)
 			if err != nil {
-				return nil, err
+				return nil, contextError("SDK referenced package=" + path + " member=" + member.name + ": " + err.Error())
 			}
 			symbols, err := object.indexedSymbols()
 			if err != nil {
