@@ -158,6 +158,24 @@ Native ARM64 QEMU-i386 avoids nested-emulation deadlines while Go 1.27.1,
 LLVM 22.1.8 and budgets stay pinned. This is not physical native x86 execution
 or the whole cross-runtime matrix.
 
+The later combined `6451d2d1` ordinary root owner reaches its unchanged 45m
+deadline: 4,785 roots pass, four fail, 38 explicitly skip and 393 remain
+incomplete. Preserve that failed run; it is not complete coverage. The three
+stale ARM64 flag fixtures and the DIT virtual-flag/physical-scratch bank failure
+are being repaired as one typed rule class, in separate frozen components.
+Official carry probes also require their own real single-form CMP fixture;
+sequence and full-source inputs must still supply their original reaching flags.
+
+Scanner repairs `ba4b1212`/`2a402151` retain the original 4-MiB JSON event-line
+limit while reducing the initial buffer to 4 KiB. Portable CPP validation then
+reproduces repeated per-unit lexing at `886e12a3`. The `3268951e` repair keeps
+fresh full-original lexer indexes local to each validation call, never mutating
+the caller or caching a passed receipt. Fourteen affected roots and 13 children
+close in both ordinary/race scopes without skip or incomplete execution. The
+16-unit fixture falls from 1,527,097 to 410,526 allocations per complete
+validation. These are component regressions, not peak-memory, aggregate-CI,
+external-module or later combined-head completion certificates.
+
 ## Inventory and ledger
 
 The committed assembly ledger still has three historical Snappy passes and
