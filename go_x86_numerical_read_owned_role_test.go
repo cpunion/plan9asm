@@ -18,6 +18,10 @@ import (
 // The proxy contains only generated first-party fixture code. Actual Go
 // download/extraction and go list, not invented selection JSON, select its role.
 func numericalCachedFixture(t *testing.T, assembly bool) GoX86NumericalReadCaptureRequest {
+	return numericalCachedFixtureWithAlias(t, assembly, false)
+}
+
+func numericalCachedFixtureWithAlias(t *testing.T, assembly, alias bool) GoX86NumericalReadCaptureRequest {
 	t.Helper()
 	pkg, template, _, _ := numericalSBFixture(t, "amd64")
 	proxy, err := filepath.EvalSymlinks(t.TempDir())
@@ -119,6 +123,27 @@ func numericalCachedFixture(t *testing.T, assembly bool) GoX86NumericalReadCaptu
 		downloaded.Path != pkg.Path || downloaded.Version != version || downloaded.Dir == "" {
 		t.Fatal("actual first-party Go download did not select exact original cache source", err)
 	}
+	if alias {
+		alternate := strings.ToUpper(cache)
+		original, err := os.Stat(cache)
+		if err != nil {
+			t.Fatal(err)
+		}
+		other, err := os.Stat(alternate)
+		if err != nil || !os.SameFile(original, other) {
+			t.Log("physical cache has no case alias on this filesystem; distinct-case directory control covers it")
+			return GoX86NumericalReadCaptureRequest{}
+		}
+		if alternate == cache {
+			t.Fatal("case-alias fixture has no spelling difference")
+		}
+		for index, pair := range environment {
+			if strings.HasPrefix(pair, "GOMODCACHE=") {
+				environment[index] = "GOMODCACHE=" + alternate
+			}
+		}
+		t.Logf("ACTUAL_FIRST_PARTY_CACHE_ALIAS source=%q cache=%q alias=%q same_file=true", downloaded.Dir, cache, alternate)
+	}
 	selection := run(downloaded.Dir, environment, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
 	var selected goAMD64FrameSelection
 	if err := json.Unmarshal(selection, &selected); err != nil || selected.Dir != downloaded.Dir ||
@@ -130,8 +155,19 @@ func numericalCachedFixture(t *testing.T, assembly bool) GoX86NumericalReadCaptu
 }
 
 func TestGoX86NumericalSBReadCachedSourceCannotAcquireOwnedRole(t *testing.T) {
+	testNumericalCachedSourceCannotAcquireOwnedRole(t, false)
+}
+
+func TestGoX86NumericalSBReadCachedSourceCaseAliasCannotAcquireOwnedRole(t *testing.T) {
+	testNumericalCachedSourceCannotAcquireOwnedRole(t, true)
+}
+
+func testNumericalCachedSourceCannotAcquireOwnedRole(t *testing.T, alias bool) {
 	t.Run("ordinary data owner", func(t *testing.T) {
-		request := numericalCachedFixture(t, false)
+		request := numericalCachedFixtureWithAlias(t, false, alias)
+		if request.GoBinary == "" {
+			return
+		}
 		ctx, cancel := runtimeOracleStageContext(t)
 		defer cancel()
 		owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
@@ -147,7 +183,10 @@ func TestGoX86NumericalSBReadCachedSourceCannotAcquireOwnedRole(t *testing.T) {
 		}
 	})
 	t.Run("numerical original source", func(t *testing.T) {
-		request := numericalCachedFixture(t, true)
+		request := numericalCachedFixtureWithAlias(t, true, alias)
+		if request.GoBinary == "" {
+			return
+		}
 		ctx, cancel := runtimeOracleStageContext(t)
 		defer cancel()
 		owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
