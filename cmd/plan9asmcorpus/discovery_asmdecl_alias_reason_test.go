@@ -109,6 +109,21 @@ func TestDiscoveryAsmDeclFPAliasRetainsUnderlyingProofReason(t *testing.T) {
 					t.Errorf("missing actual underlying proof reason %q: %s", required, diagnostic)
 				}
 			}
+			for _, line := range strings.Split(filtered.Error(), "\n") {
+				if !strings.HasPrefix(line, "FP alias proof stage=") {
+					continue
+				}
+				bound := false
+				for _, raw := range strings.Split(failure.output, "\n") {
+					position := discoveryAsmDeclWarningPosition.FindStringSubmatch(strings.TrimSpace(raw))
+					if position != nil && strings.Contains(line, "file=decl_amd64.s:"+position[2]+" arch="+position[4]+" symbol="+position[5]+":") {
+						bound = true
+					}
+				}
+				if !bound {
+					t.Fatalf("proof reason invented a warning source position: %s", line)
+				}
+			}
 
 			// Cancellation, infrastructure and foreign/unbound command receipts
 			// do not gain a fabricated proof stage or source location.
@@ -125,6 +140,35 @@ func TestDiscoveryAsmDeclFPAliasRetainsUnderlyingProofReason(t *testing.T) {
 				t.Fatalf("unbound receipt acquired a source/proof stage: %v", got)
 			}
 		})
+	}
+}
+
+func TestDiscoveryAsmDeclFPAliasProofReasonKeepsPlainRETIdentity(t *testing.T) {
+	root, env := discoveryAsmDeclResultAliasFixture(t, "func Value() uint64", "TEXT ·Value(SB),4,$0-8\nRET\n")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	plan, err := captureDiscoveryAsmDeclDirect(ctx, root, env, nil, []string{"."}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := plan.close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	if len(plan.Units) != 1 {
+		t.Fatalf("actual unit denominator: got %d, want 1", len(plan.Units))
+	}
+	unit := plan.Units[0]
+	_, original := runCapturedCommandOutput(ctx, plan.Dir, plan.Env, plan.GoBinary, "tool", "vet", "-asmdecl", unit.Filename)
+	failure, observed := discoveryAsmDeclObservedFailure(original)
+	if !observed || !discoveryAsmDeclHasCompletedABIObligation(original) {
+		t.Fatalf("missing actual original RET obligation: %v", original)
+	}
+	before := *failure
+	if got := plan.filterResultAliasWarnings(unit, original); got != original ||
+		!reflect.DeepEqual(before, *failure) || !discoveryAsmDeclHasCompletedABIObligation(got) {
+		t.Fatalf("plain RET-only failure/category changed: %v", got)
 	}
 }
 

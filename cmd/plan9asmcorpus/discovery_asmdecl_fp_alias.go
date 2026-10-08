@@ -177,14 +177,14 @@ func asmDeclFPComponents(declaration resultAliasDeclaration) (map[string]*asmDec
 // CPP output. Exact whole-function replay prevents a macro-redefined opcode,
 // register, label or FP token from borrowing the literal's native-width proof.
 // Directive/macro-bearing bodies remain unclosed, not guessed or excluded.
-func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) bool {
+func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) error {
 	lines := discoveryAsmDeclUncommentedLines(source)
 	start, end := -1, len(lines)
 	for i, line := range lines {
 		if text := discoveryAsmDeclLiteralText.FindStringSubmatch(line); text != nil {
 			if text[1] == strings.TrimPrefix(expanded.Sym, "·") {
 				if start != -1 {
-					return false
+					return fmt.Errorf("literal function is ambiguous")
 				}
 				start = i
 			} else if start != -1 && end == len(lines) {
@@ -193,42 +193,45 @@ func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) bool {
 		}
 	}
 	if start < 0 || end <= start {
-		return false
+		return fmt.Errorf("literal function is missing")
 	}
 	for _, line := range lines[start:end] {
 		if strings.HasPrefix(strings.TrimSpace(line), "#") {
-			return false
+			return fmt.Errorf("literal function contains an unclosed CPP directive")
 		}
 	}
 	literal, err := plan9asm.Parse(plan9asm.ArchAMD64, strings.Join(lines[start:end], "\n")+"\n")
-	if err != nil || len(literal.Funcs) != 1 {
-		return false
+	if err != nil {
+		return fmt.Errorf("literal function parse: %w", err)
+	}
+	if len(literal.Funcs) != 1 {
+		return fmt.Errorf("literal function count is not one")
 	}
 	left := literal.Funcs[0]
 	if left.Sym != expanded.Sym || left.FrameSize != expanded.FrameSize || left.ArgSize != expanded.ArgSize || len(left.Instrs) != len(expanded.Instrs) {
-		return false
+		return fmt.Errorf("literal/expanded function shape differs")
 	}
 	for i, ins := range left.Instrs {
 		if ins.Op != expanded.Instrs[i].Op || !reflect.DeepEqual(ins.Args, expanded.Instrs[i].Args) {
-			return false
+			return fmt.Errorf("literal/expanded instruction %d differs (%s / %s)", i, ins.Op, expanded.Instrs[i].Op)
 		}
 	}
-	return true
+	return nil
 }
 
 // Parameter aliases require only a full native read of an actual declaration
 // component. Result reads/writes and lexical ret names require the separate
 // full CFG result proof; an alias must not hide the analyzer's RET obligation.
-func resultAliasOriginalFP(source []byte, reported, function, warning, arch string, components map[string]*asmDeclFPComponent) (matched, requiresResultProof, boundComponent bool) {
+func resultAliasOriginalFP(source []byte, reported, function, warning, arch string, components map[string]*asmDeclFPComponent) (matched, requiresResultProof, boundComponent bool, reason error) {
 	match := discoveryAsmDeclNamedOffset.FindStringSubmatch(warning)
 	if components == nil {
-		return false, false, false
+		return false, false, false, fmt.Errorf("declaration components are unclosed")
 	}
 	var name, displacement string
 	if match != nil && discoveryAsmDeclOffsetWarning.MatchString(warning) {
 		component := components[match[1]]
 		if component == nil {
-			return false, false, false
+			return false, false, false, fmt.Errorf("reported name has no declaration component")
 		}
 		expected := component.name + "+" + strconv.FormatInt(component.offset, 10) + "(FP)"
 		for i, innerName := range component.inner {
@@ -243,16 +246,16 @@ func resultAliasOriginalFP(source []byte, reported, function, warning, arch stri
 			expected += inner.name + "+" + strconv.FormatInt(inner.offset, 10) + "(FP)"
 		}
 		if match[3] != expected {
-			return false, false, false
+			return false, false, false, fmt.Errorf("reported expected component differs from the declaration")
 		}
 		name, displacement = match[1], match[2]
 	} else if unknown := discoveryAsmDeclUnknownFPName.FindStringSubmatch(warning); unknown != nil {
 		if components[unknown[1]] != nil || unknown[2] != unknown[4] {
-			return false, false, false
+			return false, false, false, fmt.Errorf("reported unknown name/offset does not match the declaration")
 		}
 		offset, err := strconv.ParseInt(unknown[2], 10, 64)
 		if err != nil {
-			return false, false, false
+			return false, false, false, fmt.Errorf("reported offset: %w", err)
 		}
 		// Stock asmdecl overwrites varByOffset with each ordered component.
 		// Reconstruct that exact name, rather than trusting an invented alias.
@@ -264,25 +267,28 @@ func resultAliasOriginalFP(source []byte, reported, function, warning, arch stri
 			}
 		}
 		if last == nil || last.name != unknown[3] || last.offset != offset {
-			return false, false, false
+			return false, false, false, fmt.Errorf("reported offset has no exact ordered declaration component")
 		}
 		name, displacement = unknown[1], unknown[2]
 	} else {
-		return false, false, false
+		return false, false, false, fmt.Errorf("reported diagnostic has no FP-name obligation")
 	}
 	line, err := strconv.Atoi(reported)
 	lines := discoveryAsmDeclUncommentedLines(source)
 	if err != nil || line < 1 || line > len(lines) || !resultAliasOriginalFunction(lines, line, function) {
-		return false, false, false
+		return false, false, false, fmt.Errorf("reported line is not in the literal function")
 	}
 	parsed, err := plan9asm.Parse(plan9asm.ArchAMD64, "TEXT ·probe(SB),4,$0-0\n"+lines[line-1]+"\nRET\n")
-	if err != nil || len(parsed.Funcs) != 1 || len(parsed.Funcs[0].Instrs) != 3 {
-		return false, false, false
+	if err != nil {
+		return false, false, false, fmt.Errorf("literal FP instruction parse: %w", err)
+	}
+	if len(parsed.Funcs) != 1 || len(parsed.Funcs[0].Instrs) != 3 {
+		return false, false, false, fmt.Errorf("literal FP instruction shape is not closed")
 	}
 	ins := parsed.Funcs[0].Instrs[1]
 	offset, err := strconv.ParseInt(displacement, 10, 64)
 	if err != nil {
-		return false, false, false
+		return false, false, false, fmt.Errorf("literal displacement: %w", err)
 	}
 	for index, operand := range ins.Args {
 		literalAddress := operand.FPName == name && operand.FPOffset == offset &&
@@ -300,19 +306,19 @@ func resultAliasOriginalFP(source []byte, reported, function, warning, arch stri
 		}
 		width, write, known := plan9asm.X86FPAccessBytes(ins, index, arch)
 		if !known || width <= 0 {
-			return false, false, boundComponent
+			return false, false, boundComponent, fmt.Errorf("native FP access width/direction is not closed for %s operand %d", ins.Op, index)
 		}
 		for _, addressed := range components {
 			if addressed.offset != offset || addressed.size != width || !asmDeclFPComponentCovered(addressed, components) {
 				continue
 			}
 			if write && !addressed.result {
-				return false, false, boundComponent
+				return false, false, boundComponent, fmt.Errorf("native FP access writes an incoming parameter")
 			}
-			return true, addressed.result || write || name == "ret" || strings.HasPrefix(name, "ret_"), boundComponent
+			return true, addressed.result || write || name == "ret" || strings.HasPrefix(name, "ret_"), boundComponent, nil
 		}
 	}
-	return false, false, boundComponent
+	return false, false, boundComponent, fmt.Errorf("native FP span does not match an occupied declaration component")
 }
 
 func asmDeclFPComponentCovered(component *asmDeclFPComponent, components map[string]*asmDeclFPComponent) bool {

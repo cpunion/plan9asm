@@ -120,12 +120,24 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 	if err != nil {
 		return original
 	}
-	proved := make(map[string]bool)
-	literalMatches := make(map[string]bool)
+	proofErrors := make(map[string]error)
+	literalErrors := make(map[string]error)
 	parsedSources := make(map[string]*plan9asm.File)
+	parseErrors := make(map[string]error)
 	componentMaps := make(map[string]map[string]*asmDeclFPComponent)
 	componentCount := 0
 	unclosedAlias := false
+	var obligations []error
+	// This only describes a source position already bound by the original
+	// receipt, selected file, declaration and literal FP component. It is not
+	// a new observed command, exclusion category or initialization permission.
+	retainReason := func(stage, file string, position []string, reason error) {
+		if relative, err := filepath.Rel(plan.Dir, file); err == nil {
+			file = filepath.ToSlash(relative)
+		}
+		obligations = append(obligations, fmt.Errorf("FP alias proof stage=%s file=%s:%s arch=%s symbol=%s: %w",
+			stage, file, position[2], position[4], position[5], reason))
+	}
 	unwrittenFunctions := make(map[string]bool)
 	for _, line := range lines {
 		if position := discoveryAsmDeclPosition(strings.TrimSpace(line)); position != nil &&
@@ -154,7 +166,7 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 		}
 		parsed, parsedBefore := parsedSources[file]
 		if !parsedBefore {
-			parsed, _ = plan.resultAliasCPP(unit, file, source, defines)
+			parsed, parseErrors[file] = plan.resultAliasCPP(unit, file, source, defines)
 			parsedSources[file] = parsed
 		}
 		var function *plan9asm.Func
@@ -193,20 +205,32 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 				continue
 			}
 		} else {
-			matched, required, boundComponent := resultAliasOriginalFP(source, position[2], position[5], position[6], plan.SDK["GOARCH"], components)
+			matched, required, boundComponent, nativeErr := resultAliasOriginalFP(source, position[2], position[5], position[6], plan.SDK["GOARCH"], components)
 			// An existing real RET obligation already prevents source exclusion
 			// and testless retry. Keep that original failure's identity when an
 			// unknown-result name cannot close its byte proof. A name-only
 			// warning must instead carry explicit failure-only Context.
 			needsContext := discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]]
 			key := file + "\x00" + position[5]
-			literalMatch, checked := literalMatches[key]
+			literalErr, checked := literalErrors[key]
 			if !checked && function != nil {
-				literalMatch = resultAliasLiteralCPPFunction(source, *function)
-				literalMatches[key] = literalMatch
+				literalErr = resultAliasLiteralCPPFunction(source, *function)
+				literalErrors[key] = literalErr
 			}
-			if !matched || function == nil || !literalMatch {
+			if !matched || function == nil || literalErr != nil {
 				unclosedAlias = unclosedAlias || boundComponent && needsContext
+				if boundComponent && needsContext {
+					switch {
+					case parseErrors[file] != nil:
+						retainReason("cpp-replay", file, position, parseErrors[file])
+					case !matched:
+						retainReason("native-access", file, position, nativeErr)
+					case function == nil:
+						retainReason("cpp-function", file, position, fmt.Errorf("expanded function is missing or ambiguous"))
+					default:
+						retainReason("literal-cpp", file, position, literalErr)
+					}
+				}
 				retained = append(retained, line)
 				continue
 			}
@@ -216,11 +240,15 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 			continue
 		}
 		key := file + "\x00" + position[5]
-		if _, checked := proved[key]; !checked {
-			proved[key] = plan9asm.CheckX86ABI0ResultInitialization(*function, sig, plan.SDK["GOARCH"]) == nil
+		if _, checked := proofErrors[key]; !checked {
+			proofErrors[key] = plan9asm.CheckX86ABI0ResultInitialization(*function, sig, plan.SDK["GOARCH"])
 		}
-		if !proved[key] {
-			unclosedAlias = unclosedAlias || warning == nil && (discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]])
+		if proofErrors[key] != nil {
+			needsContext := warning == nil && (discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]])
+			unclosedAlias = unclosedAlias || needsContext
+			if needsContext {
+				retainReason("result-bytes", file, position, proofErrors[key])
+			}
 			retained = append(retained, line)
 		}
 	}
@@ -229,7 +257,8 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 		// cannot certify this access/CPP/result obligation. Keep the entire
 		// original receipt (including mixed diagnostics) as failure, not source
 		// exclusion or a warning eligible for testless retry.
-		return errors.Join(original, fmt.Errorf("%w: %w: original FP alias has an unclosed native byte/CPP/result obligation", errDiscoveryAsmDeclSourceProof, plan9asm.ErrProbeNeedsContext))
+		return errors.Join(original, fmt.Errorf("%w: %w: original FP alias has an unclosed native byte/CPP/result obligation",
+			errDiscoveryAsmDeclSourceProof, plan9asm.ErrProbeNeedsContext), errors.Join(obligations...))
 	}
 	if len(retained) == len(lines) {
 		return original
@@ -390,8 +419,11 @@ func (plan *directAsmDeclPlan) resultAliasCPP(unit directAsmDeclUnit, file strin
 			return name, data, nil
 		},
 	})
-	if err != nil || len(expanded) > 64<<20 {
-		return nil, fmt.Errorf("result-proof CPP is unclosed: %v", err)
+	if err != nil {
+		return nil, fmt.Errorf("result-proof CPP is unclosed: %w", err)
+	}
+	if len(expanded) > 64<<20 {
+		return nil, fmt.Errorf("result-proof CPP expanded byte budget exhausted")
 	}
 	return plan9asm.Parse(plan9asm.ArchAMD64, expanded)
 }
