@@ -2244,6 +2244,13 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		return nil, err
 	}
 	files = append(files, filepath.Join(repoRoot, "translate.go"))
+	if goarch == "386" || goarch == "amd64" {
+		shared, err := filepath.Glob(filepath.Join(repoRoot, "x86_*.go"))
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, shared...)
+	}
 	sort.Strings(files)
 
 	for _, f := range files {
@@ -2257,6 +2264,10 @@ func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 		parsed, err := parser.ParseFile(token.NewFileSet(), f, src, 0)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s for supported instructions: %w", f, err)
+		}
+		if strings.HasPrefix(filepath.Base(f), "x86_") {
+			collectSharedX86OpcodeDispatch(supported, parsed)
+			continue
 		}
 		// Package-level opcode specification maps are dispatch tables even when
 		// their variable name does not contain "op" (for example a complete

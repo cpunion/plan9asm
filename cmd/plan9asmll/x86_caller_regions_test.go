@@ -54,7 +54,10 @@ BYTE $0xc3
 
 func x86CallerCLIFixture(t *testing.T) string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	for name, source := range map[string]string{
 		"go.mod":    "module example.com/caller\n\ngo 1.20\n",
 		"caller.go": x86CallerCLISource, "kernel_amd64.s": x86CallerCLIAssembly,

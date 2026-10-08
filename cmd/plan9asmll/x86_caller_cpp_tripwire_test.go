@@ -26,6 +26,10 @@ func callerCPPDeepFixture(t *testing.T, companion string, generated bool) x86Cal
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
+	dir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]string{
 		"go.mod":         "module example.com/caller\n\ngo 1.20\n",
 		"caller.go":      x86CallerCLISource,
