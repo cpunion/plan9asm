@@ -276,7 +276,9 @@ func (binding *arm64ByteCarrierBinding) proveDefinedBytes(plan *arm64ByteCarrier
 			}
 			registers[operation.register], plan.registers[operation.register] = true, true
 		case "load", "store":
-			defined, capacity := local, plan.allocation-8
+			// The original caller's saved FP occupies the frame top even
+			// though this function also saves its own FP below the new SP.
+			defined, capacity := local, plan.allocation-16
 			if operation.incoming {
 				defined, capacity = incoming, plan.entry.dataBytes
 			}
@@ -318,12 +320,12 @@ func (binding *arm64ByteCarrierBinding) proveDefinedBytes(plan *arm64ByteCarrier
 				}
 			}
 			for byte := range callee.reads {
-				if byte < 0 || byte >= plan.allocation-8 || !local[byte] {
+				if byte < 0 || byte >= plan.allocation-16 || !local[byte] {
 					return arm64ByteCarrierContext("call did not initialize the exact incoming native bytes")
 				}
 			}
 			for byte := range callee.writes {
-				if byte < 0 || byte >= plan.allocation-8 {
+				if byte < 0 || byte >= plan.allocation-16 {
 					return arm64ByteCarrierContext("callee native write aliases protected/outside caller storage")
 				}
 				local[byte] = true

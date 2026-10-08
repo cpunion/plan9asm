@@ -59,7 +59,7 @@ func (binding *arm64ByteCarrierBinding) emitIR() (string, error) {
 		emitter := arm64ByteCarrierEmitter{output: &output}
 		fmt.Fprintf(&output, "define internal i64 %s(ptr %%incoming) {\nentry:\n", llvmGlobal(function.privateName))
 		if function.allocation != 0 {
-			fmt.Fprintf(&output, "  %%outgoing = alloca [%d x i8], align 1\n", function.allocation-8)
+			fmt.Fprintf(&output, "  %%outgoing = alloca [%d x i8], align 1\n", function.allocation-16)
 		}
 		registers := map[Reg]string{ZR: "0"}
 		for _, operation := range function.operations {

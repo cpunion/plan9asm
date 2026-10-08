@@ -37,9 +37,10 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 		return fail()
 	}
 	word := func(pc int64) uint32 { return binary.LittleEndian.Uint32(text.Code[pc:]) }
-	// The entire observed wrapper is straight-line. Saved FP/LR are not part
-	// of its data carrier. Neither a SUB alone nor a rounded signature size
-	// can produce this observation.
+	// The entire observed wrapper is straight-line. The new saved LR at SP+0,
+	// saved FP below SP, and previous caller's live saved FP at SP+allocation-8
+	// are not data. Neither a SUB alone nor a rounded signature size can
+	// produce this observation.
 	first := word(0)
 	if first&^uint32(511<<12) != 0xf8000ffe || word(4) != 0xf81f83fd || word(8) != 0xd10023fd || word(12) != 0xf90007e0 {
 		return fail()
@@ -57,7 +58,7 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 		!call.Target.ABIKnown || call.Target.ABI != 0 || word(16) != 0x94000000 {
 		return fail()
 	}
-	observed.allocation, observed.dataStart, observed.dataBytes = allocation, 8, allocation-8
+	observed.allocation, observed.dataStart, observed.dataBytes = allocation, 8, allocation-16
 	observed.callPC, observed.continuationPC = 16, 20
 	observed.parameterStores = []arm64ByteCarrierMemory{{PC: 12, Offset: 8, Bytes: 8, Instruction: word(12)}}
 	pc := int64(20)
@@ -66,7 +67,7 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 		field := declaration.Frame.Results[index]
 		if field.Index != index || field.Type != fields[index] || len(frameSlotFields(field)) != 0 ||
 			field.Type != I8 && field.Type != I16 && field.Type != I32 && field.Type != I64 ||
-			field.Offset < previousEnd || field.Offset+8+frameTypeSize(field.Type, 8) > allocation || pc+16 > int64(len(text.Code)) {
+			field.Offset < previousEnd || field.Offset+8+frameTypeSize(field.Type, 8) > allocation-8 || pc+16 > int64(len(text.Code)) {
 			return fail()
 		}
 		instruction := word(pc)
@@ -77,7 +78,7 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 				declaration.Frame.Results[index+1].Type != I64 || declaration.Frame.Results[index+1].Index != index+1 ||
 				declaration.Frame.Results[index+1].Offset != field.Offset+8 ||
 				len(frameSlotFields(declaration.Frame.Results[index+1])) != 0 || instruction&31 != uint32(index) ||
-				instruction>>10&31 != uint32(index+1) || field.Offset+24 > allocation {
+				instruction>>10&31 != uint32(index+1) || field.Offset+24 > allocation-8 {
 				return fail()
 			}
 			offset := int64(instruction >> 15 & 127)

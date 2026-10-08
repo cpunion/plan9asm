@@ -95,6 +95,7 @@ func TranslateGoModule(pkg GoPackage, src []byte, opt GoModuleOptions) (*GoModul
 // binding contract. Dispose the returned module before disposing ctx.
 func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt GoModuleOptions) (result *GoModuleTranslation, resultErr error) {
 	if source := opt.ARM64ByteCarrierSource; source != nil {
+		var callbackFailure error
 		if err := source.Verify(source.lease); err != nil {
 			return nil, err
 		}
@@ -105,16 +106,48 @@ func translateGoModuleInContext(ctx llvm.Context, pkg GoPackage, src []byte, opt
 		}
 		defer func() {
 			final := finishARM64ByteCarrierGoSource(source, pkg, original, result)
-			if resultErr != nil || final != nil {
+			if resultErr != nil || callbackFailure != nil || final != nil {
 				source.revokeCarrier()
 				if result != nil && !result.Module.IsNil() {
 					result.Module.Dispose()
 				}
-				result, resultErr = nil, errors.Join(resultErr, final)
+				result, resultErr = nil, errors.Join(resultErr, callbackFailure, final)
 			}
 		}()
 		if opt.ManualSig != nil || len(opt.ARM64ClosureABIs) != 0 {
 			return nil, arm64ByteCarrierContext("custom declaration/closure mapping is outside the closed source")
+		}
+		// Go binding calls user resolvers before reaching the LLVM consumer.
+		// Retain the original capture owner through every such callback; a
+		// failed callback must not be followed by another invocation or output.
+		live := func() bool {
+			if callbackFailure == nil {
+				callbackFailure = arm64ByteCarrierLive(source.lease)
+			}
+			return callbackFailure == nil
+		}
+		resolve := opt.ResolveSym
+		if resolve == nil {
+			resolve = goStripABISuffix
+		}
+		opt.ResolveSym = func(symbol string) string {
+			if !live() {
+				return ""
+			}
+			resolved := resolve(symbol)
+			if !live() {
+				return ""
+			}
+			return resolved
+		}
+		if keep := opt.KeepFunc; keep != nil {
+			opt.KeepFunc = func(symbol, resolved string) bool {
+				if !live() {
+					return false
+				}
+				retained := keep(symbol, resolved)
+				return live() && retained
+			}
 		}
 	}
 	originalSource := src
