@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -316,10 +317,36 @@ func TestARM64LinuxSyscallEffectsDefaultTargetObjects(t *testing.T) {
 			}
 			for _, optimization := range []int{0, 2} {
 				t.Run(fmt.Sprintf("O%d", optimization), func(t *testing.T) {
-					arm64LinuxSleepCompileObject(t, llc, ir, optimization)
+					arm64LinuxSyscallEffectCompileObject(t, llc, ir, optimization)
 				})
 			}
 		})
+	}
+}
+
+// This object-only oracle is owned by the independent syscall class. It does
+// not depend on, observe, or authorize a framed sleep source/consumer role.
+func arm64LinuxSyscallEffectCompileObject(t *testing.T, llc, ir string, optimization int) {
+	t.Helper()
+	if optimization != 0 && optimization != 2 {
+		t.Fatal("syscall object optimization must be exactly LLVM22 O0 or O2")
+	}
+	directory := t.TempDir()
+	input, output := filepath.Join(directory, "kernel_effects.ll"), filepath.Join(directory, "kernel_effects.o")
+	if err := os.WriteFile(input, []byte(ir), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, release := runtimeOracleStageContext(t)
+	defer release()
+	command := exec.CommandContext(ctx, llc, fmt.Sprintf("-O=%d", optimization),
+		"-mtriple=aarch64-unknown-linux-gnu", "-filetype=obj", input, "-o", output)
+	raw, err := runtimeOracleCombinedOutput(ctx, command)
+	if err != nil {
+		t.Fatalf("required LLVM22 Linux syscall object: %v\n%s", err, raw)
+	}
+	info, err := os.Stat(output)
+	if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+		t.Fatalf("LLVM22 produced no actual syscall object: %v", err)
 	}
 }
 

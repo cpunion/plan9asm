@@ -81,7 +81,7 @@ func TestARM64SyscallGoCompleteConstantClassOriginalBytes(t *testing.T) {
 					}
 					for _, optimization := range []int{0, 2} {
 						t.Run(fmt.Sprintf("O%d", optimization), func(t *testing.T) {
-							arm64LinuxSleepCompileObject(t, llc, ir, optimization)
+							arm64LinuxSyscallEffectCompileObject(t, llc, ir, optimization)
 						})
 					}
 				})
