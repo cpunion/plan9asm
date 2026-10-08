@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -20,6 +22,11 @@ import (
 func arm64ByteCarrierFixture(t *testing.T) (string, string, []arm64NativeResultTailCase) {
 	t.Helper()
 	directory := t.TempDir()
+	var err error
+	directory, err = filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
 	packagePath := "example.invalid/carrierfixture"
 	cases := arm64NativeResultTailCases()
 	var declarations, assembly strings.Builder
@@ -60,9 +67,10 @@ func arm64ByteCarrierOriginal(t *testing.T, directory, packagePath string) ([]by
 	if err != nil {
 		t.Fatal(err)
 	}
+	objectName := filepath.Join(t.TempDir(), "original.o")
 	arm64ABI0RegionCommand(t, "linux", directory, "tool", "asm", "-p", packagePath,
-		"-o", "original.o", "original_arm64.s")
-	object, err := os.ReadFile(filepath.Join(directory, "original.o"))
+		"-o", objectName, "original_arm64.s")
+	object, err := os.ReadFile(objectName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,6 +79,87 @@ func arm64ByteCarrierOriginal(t *testing.T, directory, packagePath string) ([]by
 		t.Fatal(err)
 	}
 	return archive, object, builtins
+}
+
+func arm64ByteCarrierRequest(t *testing.T, directory, packagePath string) GoARM64ByteCarrierCaptureRequest {
+	t.Helper()
+	provided := make(map[string]string)
+	for _, pair := range os.Environ() {
+		key, value, _ := strings.Cut(pair, "=")
+		provided[key] = value
+	}
+	for _, key := range []string{"GOCACHE", "GOMODCACHE", "GOPATH", "TMPDIR", "GOTMPDIR"} {
+		root, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		provided[key] = root
+	}
+	for key, value := range map[string]string{
+		"GOOS": "linux", "GOARCH": "arm64", "GOARM64": "v8.0", "GOAMD64": "v1",
+		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off",
+		"GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off", "GOPACKAGESDRIVER": "off",
+	} {
+		provided[key] = value
+	}
+	var environment []string
+	for key, value := range provided {
+		environment = append(environment, key+"="+value)
+	}
+	sort.Strings(environment)
+	return GoARM64ByteCarrierCaptureRequest{
+		GoBinary: filepath.Join(runtime.GOROOT(), "bin", "go"), Directory: directory,
+		PackagePath: packagePath, AssemblyFile: "original_arm64.s", Target: "linux/arm64", Environment: environment,
+	}
+}
+
+func TestARM64ByteCarrierActualSourceObservation(t *testing.T) {
+	directory, packagePath, cases := arm64ByteCarrierFixture(t)
+	// Original compiler success is established independently of the proposed
+	// live source. The factory must then join all original entry/call records.
+	arm64ByteCarrierOriginal(t, directory, packagePath)
+	request := arm64ByteCarrierRequest(t, directory, packagePath)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	source, err := CaptureGoARM64ByteCarrierSource(ctx, request)
+	if err != nil {
+		t.Fatalf("actual complete numeric caller/entry source is not observed: %v", err)
+	}
+	defer source.Close()
+	raw, err := source.Readback(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var report struct {
+		Protocol string
+		Calls    []struct {
+			Caller, Callee         string
+			CallPC, ContinuationPC int64
+		}
+		Archive []gostaticstorage.TextMember
+	}
+	if err := json.Unmarshal(raw, &report); err != nil || report.Protocol != "actual_go_arm64_byte_carrier_observation_v1" ||
+		len(report.Calls) != len(cases) || len(report.Archive) != 3 || len(report.Archive[1].Texts) == 0 {
+		t.Fatalf("actual complete caller/entry source observation differs: %v", err)
+	}
+	for _, call := range report.Calls {
+		if call.Caller == "" || call.Callee == "" || call.CallPC < 0 || call.ContinuationPC != call.CallPC+4 {
+			t.Fatalf("original call/continuation physical identity differs: %+v", call)
+		}
+	}
+	for _, test := range cases {
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(test.name()+"/no-consumer/"+api, func(t *testing.T) {
+				_, err := arm64ResultTailAuditTranslate(t, api, "aarch64-unknown-linux-gnu", test.declaration(), test.source())
+				if err == nil || !strings.Contains(err.Error(), "FP") {
+					t.Fatalf("source observation fabricated writable FP tail: %v", err)
+				}
+			})
+		}
+	}
+	if err := source.Close(); err != nil || !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+		t.Fatalf("closed source retained a live observation: %v", err)
+	}
 }
 
 func TestARM64ByteCarrierActualArchiveObservation(t *testing.T) {
