@@ -85,6 +85,8 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	if err := ciReadJSON(filepath.Join(out, "before-origins.json"), &origins); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("actual relocated llvm-config library origin=%q requested producer=%q",
+		origins["llvm-shared/0"], producer)
 	if !strings.HasPrefix(origins["llvm-shared/0"], producer+string(filepath.Separator)) {
 		t.Fatal("real llvm-config did not select the owned producer installation")
 	}

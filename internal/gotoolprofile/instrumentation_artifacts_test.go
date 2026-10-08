@@ -111,8 +111,9 @@ func TestInstrumentationArtifactPhysicalBoundsPrecedeStreaming(t *testing.T) {
 			}
 			// Sparse invalid size fixtures establish pre-read refusal only;
 			// they are not valid LLVM or source/compiler certificates.
-			if _, err := CaptureInstrumentationLLVMArtifacts(root, 0, &InstrumentationLLVMArtifactBudget{}); err == nil {
-				t.Fatal("unbounded/empty artifact read")
+			if _, err := CaptureInstrumentationLLVMArtifacts(root, 0, &InstrumentationLLVMArtifactBudget{}); err == nil ||
+				!strings.Contains(err.Error(), "must be a nonempty bounded regular artifact") {
+				t.Fatalf("unbounded/empty artifact did not reach its physical byte-bound rejection: %v", err)
 			}
 		})
 	}
@@ -128,7 +129,7 @@ func TestInstrumentationArtifactEqualByteReplacementLosesReservedIdentity(t *tes
 	}
 	reserved, err := instrumentationLLVMArtifactInfo(root, name, "llvm_ir", InstrumentationIRByteLimit)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("regular artifact reservation at original root %q: %v", root, err)
 	}
 	if err := os.Rename(path, path+".retained"); err != nil {
 		t.Fatal(err)
