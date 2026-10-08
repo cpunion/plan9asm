@@ -513,7 +513,6 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		t.Fatalf("arm64LLVMBlockName() = %q", got)
 	}
 
-	c.setFlagsSub("10", "4", "6")
 	emitBr := arm64TestEmitBr(c)
 	emitCondBr := arm64TestEmitCondBr(c)
 	for _, tc := range []Instr{
@@ -544,6 +543,9 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 		{Op: "CBZW", Args: []Operand{arm64RegOp("R6"), arm64IdentOp("done")}, Raw: "CBZW R6, done"},
 		{Op: "CBNZW", Args: []Operand{arm64RegOp("R7"), arm64IdentOp("done")}, Raw: "CBNZW R7, done"},
 	} {
+		// Each row is an independent lowerer fixture. Calls in preceding
+		// rows correctly revoke flags and cannot supply this row's comparison.
+		c.setFlagsSub("10", "4", "6")
 		ok, _, err := c.lowerBranch(1, tc.Op, tc, emitBr, emitCondBr)
 		if tc.Op == "B" && len(tc.Args) == 1 && tc.Args[0].Kind == OpSym {
 			// This direct lowerer unit has no complete source CFG proof.
@@ -554,6 +556,15 @@ func TestARM64DataVectorAndBranchCoverage(t *testing.T) {
 			continue
 		}
 		mustLowerARM64(t, "lowerBranch", tc, ok, err)
+		if tc.Op == "BL" || tc.Op == "CALL" {
+			for _, op := range []Op{"BEQ", "BCC", "BMI", "BVS"} {
+				branch := Instr{Op: op, Args: []Operand{arm64IdentOp("done")}, Raw: string(op) + " done"}
+				handled, _, err := c.lowerBranch(1, op, branch, emitBr, emitCondBr)
+				if !handled || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("%s retained an unknown %s call's flags: handled=%v error=%v", op, tc.Raw, handled, err)
+				}
+			}
+		}
 	}
 
 	if tgt, ok := c.resolveBranchTarget(1, arm64MemOp(PC, -4)); ok {
