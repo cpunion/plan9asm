@@ -13,6 +13,45 @@ import (
 	"testing"
 )
 
+func TestGoX86NumericalSBReadGoWrapperSealedFunctionMetadata(t *testing.T) {
+	pkg, _, _, create := numericalConsumerFactory(t, "amd64")
+	source, options := create(t)
+	resolve := options.ResolveSym
+	functionCalls := 0
+	stateful := func(symbol string) string {
+		if symbol == "·Feature" {
+			functionCalls++
+			// The original implementation's fifth function resolution is
+			// its metadata loop after the inner module has been frozen.
+			if functionCalls == 5 {
+				return "foreign.Feature"
+			}
+		}
+		return resolve(symbol)
+	}
+	result, err := TranslateGoModule(pkg, []byte(source.cpp.Output), GoModuleOptions{
+		FileName: source.request.AssemblyFile, GOOS: "linux", GOARCH: "amd64",
+		TargetTriple: options.TargetTriple, NumericalReads: options.NumericalReads, ResolveSym: stateful,
+	})
+	if err != nil {
+		// A guard that rejects the changed callback is also valid; it must
+		// return no module or partially inconsistent metadata.
+		if result != nil || !errors.Is(err, ErrProbeNeedsContext) || functionCalls < 5 {
+			t.Fatal("wrapper failed outside the actual metadata TOCTOU", functionCalls, err)
+		}
+		return
+	}
+	if result == nil || result.Module.IsNil() {
+		t.Fatal("successful wrapper lost its real translated module")
+	}
+	defer result.Module.Dispose()
+	want := pkg.Path + ".Feature"
+	if len(result.Functions) != 1 || result.Functions[0].ResolvedSymbol != want ||
+		result.Module.NamedFunction(want).IsNil() || len(result.Signatures) != 1 || result.Signatures[want].Name != want {
+		t.Fatal("wrapper module, signatures and function metadata disagree", functionCalls, result.Functions, result.Signatures)
+	}
+}
+
 func numericalConsumerFactory(t *testing.T, arch string) (GoPackage, *File, Options, func(*testing.T) (*GoX86NumericalReadSource, Options)) {
 	t.Helper()
 	pkg, request, file, options := numericalSBFixture(t, arch)
