@@ -245,6 +245,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"amd64_raw_insertps_mode32_test.go",
 		"arm64_scalar_writeback_test.go",
 		"arm64_barrier_encoding_go127_test.go",
+		"arm64_syscall_forms_go127_test.go",
 		"arm64_ret_source_width_test.go",
 		"arm64_opaque_preservation_observation_test.go",
 		"arm64_private_sp_helper_test.go",
