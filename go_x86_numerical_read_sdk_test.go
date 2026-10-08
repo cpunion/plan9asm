@@ -8,10 +8,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 func numericalSDKCRC32Request(t *testing.T) (context.Context, GoX86NumericalReadCaptureRequest, *GoNumericalStorageOwner) {
@@ -64,6 +66,69 @@ func numericalSDKCRC32Request(t *testing.T) (context.Context, GoX86NumericalRead
 		}
 	}
 	return ctx, request, owner
+}
+
+func numericalSDKCPURequest(t *testing.T, arch string) (context.Context, GoX86NumericalReadCaptureRequest, *GoNumericalStorageOwner) {
+	t.Helper()
+	_, profile, _, _ := numericalSBFixture(t, arch)
+	ctx, cancel := runtimeOracleStageContext(t)
+	t.Cleanup(cancel)
+	root := filepath.Dir(filepath.Dir(profile.GoBinary))
+	directory := filepath.Join(root, "src", "internal", "cpu")
+	owner, err := CaptureGoNumericalStorageOwner(ctx, GoNumericalStorageCaptureRequest{
+		GoBinary: profile.GoBinary, Directory: directory, PackagePath: "internal/cpu",
+		Target: profile.Target, Environment: profile.Environment, SDKCPU: true,
+		Variables: []GoNumericalStorageReference{{PackagePath: "internal/cpu", Name: "X86"}},
+	})
+	if err != nil {
+		t.Fatal("actual independent SDK CPU owner precondition", err)
+	}
+	t.Cleanup(owner.Close)
+	return ctx, GoX86NumericalReadCaptureRequest{GoBinary: profile.GoBinary, Directory: directory,
+		PackagePath: "internal/cpu", AssemblyFile: "cpu_x86.s", Target: profile.Target,
+		Environment: profile.Environment, Owners: []*GoNumericalStorageOwner{owner}}, owner
+}
+
+func TestGoX86SDKNumericalReadOriginalArchiveFlags(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			ctx, request, owner := numericalSDKCPURequest(t, arch)
+			report, err := owner.observation.Readback(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			selected := report.Packages[request.PackagePath]
+			archive := report.Archives[request.PackagePath]
+			observed, err := gostaticstorage.ObserveX86SDKAssemblyArchive(archive, report.TextBuiltinSource,
+				request.Target, selected.SFiles)
+			if err != nil || !reflect.DeepEqual(observed, report.TextArchives[request.PackagePath]) {
+				t.Fatal("explicit SDK observation differs from complete original SDK owner metadata", err)
+			}
+			if _, err := gostaticstorage.ObserveX86AssemblyArchive(archive, report.TextBuiltinSource,
+				request.Target, selected.SFiles); !errors.Is(err, gostaticstorage.ErrContext) {
+				t.Fatal("owned observer admitted SDK Std flags", err)
+			}
+		})
+	}
+}
+
+func TestGoX86SDKNumericalReadOriginalInputObservationNoAuthority(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		t.Run(arch, func(t *testing.T) {
+			ctx, request, _ := numericalSDKCPURequest(t, arch)
+			source, err := captureGoX86NumericalReadSource(ctx, request, numericalSBSDKSource, true)
+			if err != nil {
+				t.Fatal("complete actual SDK input observation is absent", err)
+			}
+			t.Cleanup(func() { source.Close() })
+			if source.ready || source.file != nil || len(source.reads) != 0 || source.sdk == nil {
+				t.Fatal("SDK input-only observation created numerical permission")
+			}
+			if err := source.verifySDKObservation(ctx); err != nil {
+				t.Fatal("actual independent SDK observation does not verify", err)
+			}
+		})
+	}
 }
 
 func TestGoX86SDKNumericalReadDefaultOwnedRemainsContext(t *testing.T) {

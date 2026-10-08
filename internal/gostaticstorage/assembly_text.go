@@ -122,3 +122,10 @@ func observeAssemblyArchive(data, builtinSource []byte, target string, sources [
 	}
 	return result, nil
 }
+
+// ObserveX86SDKAssemblyArchive observes an original SDK archive. This offline
+// decoder does not establish SDK source provenance, storage or native entry
+// authority; its caller must independently authenticate those roles.
+func ObserveX86SDKAssemblyArchive(data, builtinSource []byte, target string, sources []string) ([]TextMember, error) {
+	return ObserveX86AssemblyArchive(data, builtinSource, target, sources)
+}
