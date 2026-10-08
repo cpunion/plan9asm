@@ -77,6 +77,29 @@ new external-library passes. Independent full source, 53 actual tool roles,
 This certifies that exact ordinary first-party owner, not the later combined
 head, race suite, complete module or external corpus.
 
+Frozen combined `9944a97b` repeats the ARM64 source scope at 18 roots and 500
+children, and the full storage scope at 25 roots and 265 children, passing in
+ordinary and race lanes. Its exhaustive other-package owner attempts all 15
+packages: 13 pass, two fail, with 515 roots and 2,806 children passing. The
+two actual failures compare Darwin's temporary-directory alias with a physical
+LLVM producer origin or private artifact reservation. Independent complete
+inventory/raw EOF, source, 53 actual tool roles, SDK and closed-owner readers
+retain both failures. Neither is an instruction failure or a library pass.
+
+The test-only physical-root repair at `1ab9a38d` closes both exact REDs. Its
+ordinary/race producer scope each passes one root and four children, and the
+artifact scope each passes four roots and 18 children. The producer scope now
+also reaches the retired-origin portable-report check and metadata mutation
+controls. Production redirect, inode and byte-bound guards remain strict.
+The successor exhaustive other-package owner is a separate immutable snapshot;
+focused passes do not certify that entire owner or later combined head.
+
+The combined official classification and ARM64 decoder gates pass. Strict
+standard-library object verification at `9944a97b` retains 167 passing and 17
+failing files out of 184, without skip/N/A or unattempted files. Its benchmark
+therefore still fails. No classification count or previous runtime diagnostic
+may upgrade those object failures.
+
 ## Integrated rule-class repairs
 
 The predecessor already integrates shared GP/SIMD, scalar-lane, AES, CMOV,
