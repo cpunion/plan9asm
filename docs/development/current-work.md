@@ -32,10 +32,12 @@ Independent raw JSONL/list, full source/tool/stamped-runner and recorded
 owner/group readback agrees. This is not the later combined head. Preserve the
 prior `40ff602f` full-root report with its 17 ARM64 scratch-path root failures.
 
-Its other-package/nested-CLI/first-party corpus-driver gate remains running.
-It retained a real two-minute LLVM loader build failure. Remaining corpus-driver
-ordinary/race partitions and complete post-source/tool/owner readback must close.
-These unit tests are not local external-library scans or corpus compilation.
+Its other-package/nested-CLI/first-party corpus-driver gate naturally closed
+failed: 2,011 roots passed, one retained two-minute LLVM loader root failed,
+8,625 children passed, zero skip/incomplete. Both corpus-driver lanes completed
+all 32 partitions. Independent full-source/tool/raw/list/owner readback agrees;
+the later loader repair does not upgrade this historical failure. These unit
+tests are not local external-library scans or corpus compilation.
 The published `c09eff1e` sixteen-stage affected gate passed, but did not certify
 the complete root/module suite or external corpus.
 
@@ -79,6 +81,30 @@ The successor additionally integrates these independently frozen components:
   cancellation and foreign temporary cleanup/publication guards pass.
   A fresh empty-cache unchanged-budget check passes; historical two-minute F
   remains failed evidence, not a relabeled success.
+- Per-target ordinary profile budgets: `2c46bdb3`, ordinary/race each 46 pass.
+  Each actual target is bounded by 64 unique validated profiles, not one
+  module-global limit. The full 123-profile generated-header projection fixture
+  is separately corrected in `c0570fa1`; its ordinary/race each 50 pass preserve
+  all eleven target scopes and independent original-Go/header consumers.
+- Original Go TEXT/code/relocation/source-PC observation: `aae04cd8`, full
+  storage-package ordinary/race each 206 pass, plus actual SDK archive readers.
+  Wasm logical PC remains separate from physical bytes. This sealed producer
+  observation does not itself grant frame, SB-read or native permissions.
+- Complete scalar-shift grammar and numerical effects: `471d95f7`,
+  ordinary/race each 8,128 pass, all 148 independently enumerated Go encoding
+  rows and actual Go/LLVM optimization axes. Defined flags, undefined-count
+  behavior, physical modes and register-only numerical permission stay distinct.
+- Complete selected-source CPP transport closure: `d5fe3277`, focused
+  ordinary/race each seven pass, retaining actual 32 MiB RED and source-only,
+  inactive/transitive include and query-isolation controls. The expanded old
+  leaf retains the generated-profile assertion failure and interrupted race
+  stage; it is not a completed expanded-suite certificate.
+- Selected-shard-only candidate payloads and exact exception-file interests:
+  `08a04af9`, focused ordinary/race each 157 pass, plus vet/stamped build/readback.
+  Real foreign private/native manifests exposed 115–147 MB startup RED; the
+  same first-party operation is about 9 MB ordinary / 11 MB race after repair.
+  Global module/version membership, duplicate unions, target filtering, exact
+  subsets, foreign aliases and unselected/empty-interest EOF checks remain.
 
 Normal sharded ledger startup/status, active-batch lookup, bounded fair retry
 selection, publication and transfer stream. They still validate every row,
@@ -97,9 +123,10 @@ Current CI failure classes include FP/native/CPP/result binding, cached source/
 object roles, x86 caller/stack joins, ARM64 native ABI/frame state, profile
 planning and generated/instrumentation/resource scopes. Repair entire classes
 with independent first-party regressions, not library allowlists. The module-
-global 64-profile limit is under test-first review for independent target
-budgets. Oversized consumer CPP payloads need complete selected-source/include
-closure or deduplicated transport, never silently dropped required inputs.
+global profile limit and selected-package CPP duplication have source-level
+repairs above; discovering external versions still require fresh matching-head
+remote reports. Never drop required inputs, raise bounds to hide an error, or
+turn observation-only storage/TEXT data into native authority.
 
 Frozen `026f8cfc` official five-arch classification and Go-accepted ARM64
 decoder gates pass, with zero official unsupported forms/parse errors.
