@@ -3,9 +3,11 @@
 package plan9asm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -97,7 +99,25 @@ func TestGoX86SDKNumericalReadOriginalArchiveFlags(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			selected := report.Packages[request.PackagePath]
+			var selected gostaticstorage.Package
+			decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))
+			for {
+				var candidate gostaticstorage.Package
+				if err := decoder.Decode(&candidate); err == io.EOF {
+					break
+				} else if err != nil {
+					t.Fatal(err)
+				}
+				if candidate.ImportPath == request.PackagePath {
+					if selected.ImportPath != "" {
+						t.Fatal("duplicate selected SDK CPU package")
+					}
+					selected = candidate
+				}
+			}
+			if selected.ImportPath != request.PackagePath || len(selected.SFiles) == 0 {
+				t.Fatal("complete actual SDK CPU source selection is absent")
+			}
 			archive := report.Archives[request.PackagePath]
 			observed, err := gostaticstorage.ObserveX86SDKAssemblyArchive(archive, report.TextBuiltinSource,
 				request.Target, selected.SFiles)
