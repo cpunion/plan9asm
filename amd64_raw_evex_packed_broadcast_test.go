@@ -159,7 +159,6 @@ func TestDecodedX86RawEVEXPackedBroadcastMemoryAndInvalidForms(t *testing.T) {
 	for name, invalid := range map[string][]byte{
 		"extended destination on 386": encodeX86RawEVEXPackedBroadcast("VPBROADCASTD", 0, 0, false, false, 0, 8),
 		"extended source on 386":      encodeX86RawEVEXPackedBroadcast("VPBROADCASTD", 0, 0, false, true, 8, 0),
-		"qword GP source on 386":      encodeX86RawEVEXPackedBroadcast("VPBROADCASTQ", 0, 0, false, false, 0, 0),
 	} {
 		if _, _, matched, decodeErr := decodedX86VEXPackedBroadcastInstruction(invalid, 32); !matched || decodeErr == nil {
 			t.Fatalf("%s encoding %x returned ok=%v err=%v", name, invalid, matched, decodeErr)

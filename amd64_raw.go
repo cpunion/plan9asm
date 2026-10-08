@@ -3947,8 +3947,11 @@ func decodedX86EVEXPackedBroadcastInstruction(code []byte, i, mode int, segment 
 		if xExt != 0 {
 			return Instr{}, 0, true, fmt.Errorf("EVEX.X cannot extend a general register")
 		}
-		if mode == 32 && laneBytes == 8 {
-			return Instr{}, 0, true, fmt.Errorf("64-bit general register is unavailable in 32-bit mode")
+		if mode == 32 && opcode == 0x7c && width64 {
+			// GP-only opcode 7C ignores EVEX.W in non-64-bit mode.
+			// Retain the original Q/W1 identity, but decode its physical
+			// r32 input; the shared broadcast grammar uses dword lanes.
+			laneBytes = 4
 		}
 		source, consumed, err = decodedX86RMSource(code[modRMIndex:], mode, bExt, 0, segment, laneBytes)
 	}
