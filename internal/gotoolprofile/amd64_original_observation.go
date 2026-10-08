@@ -33,6 +33,7 @@ type AMD64OriginalPackageObservation struct {
 	request    AMD64OriginalObservationRequest
 	run        Runner
 	state      *amd64OriginalObservationState
+	downloaded *amd64DownloadedSources
 	fixedLocal []*AMD64OriginalFixedLocalBinding
 }
 
@@ -48,15 +49,19 @@ type amd64OriginalObservationState struct {
 // package initialization or any third-party program. Runner is the existing
 // trusted bounded actual-command seam, not a user-supplied verification token.
 func CaptureAMD64OriginalPackageObservation(ctx context.Context, request AMD64OriginalObservationRequest, run Runner) (*AMD64OriginalPackageObservation, error) {
+	return captureAMD64OriginalPackageObservation(ctx, request, nil, run)
+}
+
+func captureAMD64OriginalPackageObservation(ctx context.Context, request AMD64OriginalObservationRequest, downloaded *amd64DownloadedSources, run Runner) (*AMD64OriginalPackageObservation, error) {
 	if err := validateAMD64OriginalObservationRequest(ctx, request, run); err != nil {
 		return nil, err
 	}
 	request.Environment = append([]string(nil), request.Environment...)
-	state, err := captureAMD64OriginalObservationState(ctx, request, run)
+	state, err := captureAMD64OriginalObservationState(ctx, request, downloaded, run)
 	if err != nil {
 		return nil, err
 	}
-	observed := &AMD64OriginalPackageObservation{ready: true, generation: 1, request: request, run: run, state: state}
+	observed := &AMD64OriginalPackageObservation{ready: true, generation: 1, request: request, run: run, state: state, downloaded: downloaded}
 	if err := observed.Verify(ctx); err != nil {
 		return nil, err
 	}
@@ -73,6 +78,7 @@ func (observed *AMD64OriginalPackageObservation) Verify(ctx context.Context) err
 	observed.mu.Lock()
 	ready, generation := observed.ready, observed.generation
 	request, run, expected := observed.request, observed.run, observed.state
+	downloaded := observed.downloaded
 	observed.mu.Unlock()
 	if !ready || expected == nil {
 		return fmt.Errorf("original package observation is closed or revoked")
@@ -83,7 +89,7 @@ func (observed *AMD64OriginalPackageObservation) Verify(ctx context.Context) err
 	}
 	var actual *amd64OriginalObservationState
 	if err == nil {
-		actual, err = captureAMD64OriginalObservationState(ctx, request, run)
+		actual, err = captureAMD64OriginalObservationState(ctx, request, downloaded, run)
 	}
 	if err == nil && !equalAMD64OriginalObservationStates(expected, actual) {
 		err = fmt.Errorf("original package source/selection/export/profile changed")
@@ -155,7 +161,12 @@ func validateAMD64OriginalObservationRequest(ctx context.Context, request AMD64O
 	return nil
 }
 
-func captureAMD64OriginalObservationState(ctx context.Context, request AMD64OriginalObservationRequest, run Runner) (_ *amd64OriginalObservationState, result error) {
+func captureAMD64OriginalObservationState(ctx context.Context, request AMD64OriginalObservationRequest, downloaded *amd64DownloadedSources, run Runner) (_ *amd64OriginalObservationState, result error) {
+	if downloaded != nil {
+		if err := downloaded.files.verify(); err != nil {
+			return nil, err
+		}
+	}
 	actual, commandContext, err := instrumentationObserverEnvironment(ctx, request.GoBinary, request.Directory, request.Environment, run)
 	if err != nil {
 		return nil, err
@@ -193,11 +204,11 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 		return nil, err
 	}
 	state := &amd64OriginalObservationState{profile: profile, environment: actual, context: commandContext, files: newAMD64OriginalObservationFiles()}
-	before, err := captureAMD64OriginalGraph(ctx, request, actual, profile, state.files, false, run)
+	before, err := captureAMD64OriginalGraph(ctx, request, actual, profile, state.files, downloaded, false, run)
 	if err != nil {
 		return nil, err
 	}
-	after, err := captureAMD64OriginalGraph(ctx, request, actual, profile, state.files, true, run)
+	after, err := captureAMD64OriginalGraph(ctx, request, actual, profile, state.files, downloaded, true, run)
 	if err != nil || !equalAMD64OriginalSelections(before, after) {
 		return nil, fmt.Errorf("original package selection changed during export: %v", err)
 	}
@@ -222,6 +233,11 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 	}
 	if err := state.files.retain(request.GoBinary); err != nil || state.files.hashes[request.GoBinary] != profile.DriverSHA256 {
 		return nil, fmt.Errorf("actual Go driver changed during capture")
+	}
+	if downloaded != nil {
+		if err := downloaded.files.verify(); err != nil {
+			return nil, err
+		}
 	}
 	return state, state.files.verify()
 }

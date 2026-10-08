@@ -33,7 +33,7 @@ type amd64OriginalListPackage struct {
 	Module   *amd64OriginalListModule
 }
 
-func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObservationRequest, actual map[string]string, profile *Observation, files *amd64OriginalObservationFiles, export bool, run Runner) (map[string]amd64OriginalListPackage, error) {
+func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObservationRequest, actual map[string]string, profile *Observation, files *amd64OriginalObservationFiles, downloaded *amd64DownloadedSources, export bool, run Runner) (map[string]amd64OriginalListPackage, error) {
 	args := []string{"list", "-deps", "-compiled", "-json", "-mod=readonly"}
 	if export {
 		args = append(args, "-export")
@@ -78,8 +78,14 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 			return nil, err
 		}
 		if relative, err := filepath.Rel(physical, root); err == nil && filepath.IsLocal(relative) {
+			if downloaded != nil && forbidden != actual["GOROOT"] && downloaded.primary.matches(module, true) {
+				continue
+			}
 			return nil, fmt.Errorf("%w: cached external or SDK source cannot acquire an owned-main role", plan9asm.ErrProbeNeedsContext)
 		}
+	}
+	if downloaded != nil && !downloaded.primary.matches(module, true) {
+		return nil, fmt.Errorf("actual primary source differs from the exact original download handoff")
 	}
 	goMod, err := filepath.EvalSymlinks(module.GoMod)
 	if err != nil || goMod != filepath.Join(root, "go.mod") {
@@ -110,12 +116,21 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 	for path, pkg := range packages {
 		base, relative := filepath.Join(actual["GOROOT"], "src"), path
 		if pkg.Module != nil {
-			if pkg.Standard || !reflect.DeepEqual(pkg.Module, module) {
-				return nil, fmt.Errorf("%w: foreign/replaced module source needs authenticated handoff", plan9asm.ErrProbeNeedsContext)
+			if pkg.Standard {
+				return nil, fmt.Errorf("SDK package acquired a module source role")
 			}
 			base = root
-			relative = strings.TrimPrefix(path, module.Path+"/")
-			if path == module.Path {
+			if downloaded != nil {
+				source, err := downloaded.module(pkg.Module)
+				if err != nil {
+					return nil, err
+				}
+				base = source.root
+			} else if !reflect.DeepEqual(pkg.Module, module) {
+				return nil, fmt.Errorf("%w: foreign/replaced module source needs authenticated handoff", plan9asm.ErrProbeNeedsContext)
+			}
+			relative = strings.TrimPrefix(path, pkg.Module.Path+"/")
+			if path == pkg.Module.Path {
 				relative = "."
 			} else if relative == path {
 				return nil, fmt.Errorf("main package path does not match its actual module directory")

@@ -110,10 +110,11 @@ func amd64DownloadedObservationFixture(t *testing.T, variant string) (AMD64Origi
 	return request, modulePath, version
 }
 
-// The RED revision uses the existing owned-main factory. GREEN will call the
-// separate authenticated-download factory, not weaken the owned-main boundary.
+// Keep the source/download identity separate from Go's actual cached-CWD role.
 func captureAMD64DownloadedForTest(ctx context.Context, request AMD64OriginalObservationRequest, modulePath, version string) (*AMD64OriginalPackageObservation, error) {
-	return CaptureAMD64OriginalPackageObservation(ctx, request, RunBounded)
+	return CaptureAMD64DownloadedPackageObservation(ctx, AMD64DownloadedObservationRequest{
+		Original: request, SourceModule: modulePath, SourceVersion: version,
+	}, RunBounded)
 }
 
 func TestAMD64DownloadedObservationActualOriginalCache(t *testing.T) {
