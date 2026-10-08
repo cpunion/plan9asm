@@ -222,6 +222,7 @@ func parseASMDataSource(source []byte, packagePath, target string) ([]asmDataLay
 	}
 	states := make(map[string]*asmDataLayoutState)
 	lastEnd := make(map[string]int64)
+	totalWritten := int64(0)
 	var ordered []*asmDataLayoutState
 	for ordinal, statement := range statements {
 		if statement[0].text != "DATA" && statement[0].text != "GLOBL" {
@@ -314,6 +315,10 @@ func parseASMDataSource(source []byte, packagePath, target string) ([]asmDataLay
 		}
 		end := fragment.Offset + fragment.Width
 		if end > int64(len(state.data)) {
+			totalWritten += end - int64(len(state.data))
+			if totalWritten > archiveLimit {
+				return nil, contextError("DATA complete written layout inventory exceeds its object byte bound")
+			}
 			state.data = append(state.data, make([]byte, end-int64(len(state.data)))...)
 		}
 		if end > state.actualSize {

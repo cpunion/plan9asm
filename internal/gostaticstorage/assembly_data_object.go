@@ -41,9 +41,7 @@ func observeASMDataObject(data, builtin []byte, target string, flags uint32, ref
 		}
 		index := int(symbol.Index)
 		start, end := object.indices[2][index], object.indices[2][index+1]
-		// Preserve a nonnil zero-length slice like the independent Go reader.
-		dataBytes := make([]byte, int(end-start))
-		copy(dataBytes, object.block(16)[start:end])
+		dataBytes := append([]byte(nil), object.block(16)[start:end]...)
 		value := ASMDataDefinition{Namespace: symbol.Namespace, Relative: symbol.Relative, Index: symbol.Index,
 			Name: symbol.Name, ABI: symbol.ABI, Kind: symbol.Kind, Flags: symbol.Flags, Flags2: symbol.Flags2,
 			Size: symbol.Size, Align: symbol.Align, Hash: append([]byte(nil), symbol.Hash...),
@@ -120,9 +118,9 @@ func joinASMDataLayouts(states []asmDataLayoutState, member ASMDataMember) ([]AS
 	return layouts, nil
 }
 
-// Source positions and anonymous line-table bytes necessarily differ between
-// original and expanded physical files. Every DATA identity, body, ordered
-// relocation and complete TEXT body/Auxiliary identity must otherwise agree.
+// Whole anonymous definitions are compared too: they cannot hide unconsumed
+// DATA bytes or relocations. Physical source-file positions are retained in
+// both observations; line-preserving inputs must otherwise agree exactly.
 func sameASMDataObjects(first, second ASMDataMember) bool {
 	filter := func(member ASMDataMember) ASMDataMember {
 		member.Name, member.NameBytes, member.Ordinal, member.Offset, member.Size = "", nil, 0, 0, 0
