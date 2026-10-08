@@ -14,6 +14,7 @@ func TestGoX86NumericalSBReadComposesOnlyWithActualFixedLocalOwner(t *testing.T)
 	pkg, request, initial, options := fixedLocalFrameFixture(t, "PADDQ 16(SP),X0")
 	_, numericalProfile, _, _ := numericalSBFixture(t, "amd64")
 	request.GoBinary, request.Environment = numericalProfile.GoBinary, numericalProfile.Environment
+	options.ResolveSym = func(symbol string) string { return numericalNativeName(symbol, pkg.Path) }
 	var err error
 	request.Directory, err = filepath.EvalSymlinks(request.Directory)
 	if err != nil {
