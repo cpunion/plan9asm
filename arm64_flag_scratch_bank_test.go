@@ -100,4 +100,30 @@ func TestARM64FlagScratchBankTagsActualReadWriteAndUnavailable(t *testing.T) {
 			t.Fatalf("physical GP effect acquired a virtual flag bank: %+v", effect)
 		}
 	}
+	ctx.regSlot = map[Reg]string{"R27": "%r27", "R1": "%r1"}
+	if err := ctx.lowerMachineRegisterCopy("R27", "R1"); err != nil {
+		t.Fatal(err)
+	}
+	copy := flow.blocks[0].effects[len(flow.blocks[0].effects)-1]
+	if copy.nzcv != 0 || copy.copyFrom != "R27" || copy.register != "R1" || copy.width != 64 {
+		t.Fatalf("validated physical GP copy acquired a virtual flag bank: %+v", copy)
+	}
+}
+
+func TestARM64FlagScratchBankRetainsMachineDefinedness(t *testing.T) {
+	for _, slot := range []string{"%nzcv_N", "%nzcv_Z", "%nzcv_C", "%nzcv_V"} {
+		t.Run(slot, func(t *testing.T) {
+			ctx, flow := arm64FlagScratchBankFixture()
+			flow.used, flow.entry = true, &ARM64GoRegisterABI{}
+			ctx.invalidateARM64Flags(arm64FlagAll)
+			ctx.recordMachineRegister(Reg(slot), 1, false)
+			if err := flow.validateSourceScratch(); err != nil {
+				t.Fatalf("virtual flag entered physical GP scratch analysis: %v", err)
+			}
+			witness := slot + " read (1 bits) is not supplied"
+			if err := flow.validate(); !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), witness) {
+				t.Fatalf("virtual flag bank bypassed machine must-defined analysis: %v", err)
+			}
+		})
+	}
 }
