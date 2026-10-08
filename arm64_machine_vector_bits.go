@@ -81,7 +81,7 @@ func (state *arm64MachineState) applyVectorSpan(effect arm64MachineEffect) error
 // a semantic read of those bytes; later actual consumers still require them.
 func (c *arm64Ctx) recordMachineVectorTransfer(form arm64VectorTransferForm) func() {
 	flow := c.machineAvailability
-	if flow == nil || flow.suspended != 0 {
+	if flow == nil || flow.flagsOnly || flow.suspended != 0 {
 		return func() {}
 	}
 	if form.sourceGP {

@@ -30,6 +30,7 @@ type arm64MachineBlock struct {
 }
 
 type arm64MachineAvailability struct {
+	flagsOnly     bool // no machine-entry grant, GP effects or duplicate CFG
 	blocks        []arm64MachineBlock
 	current       int
 	suspended     int
@@ -104,7 +105,10 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 		}
 	}
 	if !needed && !sourceScratch {
-		return nil
+		// The existing ordered flag CFG still needs exact known/unknown native
+		// callout observations. Do not build a second CFG or record unused GP
+		// and vector effects for these ordinary object-only functions.
+		return &arm64MachineAvailability{flagsOnly: true}
 	}
 	flow := &arm64MachineAvailability{blocks: make([]arm64MachineBlock, len(c.blocks)+1)}
 	flow.sourceScratch = sourceScratch
@@ -139,7 +143,7 @@ func newARM64MachineAvailability(c *arm64Ctx) *arm64MachineAvailability {
 }
 
 func (c *arm64Ctx) recordMachineUnavailable(reg Reg) {
-	if flow := c.machineAvailability; flow != nil {
+	if flow := c.machineAvailability; flow != nil && !flow.flagsOnly {
 		width := 64
 		if c.arm64FlagSlotMask(string(reg)) != 0 {
 			width = 1
@@ -167,7 +171,7 @@ func arm64MachineRegister(reg Reg) string {
 
 func (c *arm64Ctx) recordMachineRegister(reg Reg, width int, write bool) {
 	flow := c.machineAvailability
-	if flow == nil || flow.suspended != 0 || reg == ZR || (!write && flow.skipReads) {
+	if flow == nil || flow.flagsOnly || flow.suspended != 0 || reg == ZR || (!write && flow.skipReads) {
 		return
 	}
 	flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
@@ -179,7 +183,7 @@ func (c *arm64Ctx) recordMachineCall(abi *ARM64GoRegisterABI, sourceSymbol strin
 	// Neither an ordinary typed call result nor an unknown native call supplies
 	// caller NZCV. Scheduler no-op hooks never enter this call boundary.
 	c.invalidateARM64Flags(arm64FlagAll)
-	if flow := c.machineAvailability; flow != nil {
+	if flow := c.machineAvailability; flow != nil && !flow.flagsOnly {
 		if abi == nil {
 			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
 				opaque: true, source: flow.source,
@@ -229,7 +233,7 @@ func arm64MachineScalarWidth(typ LLVMType) int {
 // available to a typed caller. Its reaching low-bit guarantee is unchanged.
 // This hook is used only after the scalar move lowerer validates both operands.
 func (c *arm64Ctx) lowerMachineRegisterCopy(src, dst Reg) error {
-	if flow := c.machineAvailability; flow != nil {
+	if flow := c.machineAvailability; flow != nil && !flow.flagsOnly {
 		flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{
 			register: arm64MachineRegister(dst), copyFrom: arm64MachineRegister(src),
 			width: 64, source: flow.source,
@@ -523,7 +527,7 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 		}
 		offset += len(line)
 		if proven {
-			if proof.store {
+			if proof.store && !flow.flagsOnly {
 				flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects,
 					arm64MachineEffect{store: true, source: flow.source})
 			}
@@ -531,7 +535,9 @@ func (c *arm64Ctx) recordMachineOpaqueIR(start int, original Instr) {
 		}
 		if strings.Contains(line, " asm ") || (!symbolCall && strings.Contains(line, " call ") && !strings.Contains(line, "@llvm.")) {
 			c.invalidateARM64Flags(arm64FlagAll)
-			flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{opaque: true, source: flow.source})
+			if !flow.flagsOnly {
+				flow.blocks[flow.current].effects = append(flow.blocks[flow.current].effects, arm64MachineEffect{opaque: true, source: flow.source})
+			}
 			return
 		}
 	}
