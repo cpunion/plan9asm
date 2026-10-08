@@ -18,6 +18,7 @@ import (
 // duplicate before compiler selection, with a positionless loader error.
 // The source refusal is not an assembly object or instruction pass.
 func TestOrdinarySDKNamespaceCollisionProducerSourceNA(t *testing.T) {
+	compilerEnv := os.Environ()
 	candidate := discoveryCandidate{
 		Module: "example.invalid/sdk-namespace", Version: "v1.0.0",
 		AsmFiles: []string{"compile/internal/ssa/probe_amd64.s"},
@@ -51,7 +52,7 @@ func TestOrdinarySDKNamespaceCollisionProducerSourceNA(t *testing.T) {
 	t.Logf("actual stock Go namespace collision (not a concrete file:line compiler diagnostic):\n%s", stderr)
 	translator := filepath.Join(t.TempDir(), "plan9asmll")
 	command := exec.CommandContext(ctx, "go", "build", "-p=1", "-o", translator, ".")
-	command.Dir, command.Env = filepath.Join(root, "cmd", "plan9asmll"), os.Environ()
+	command.Dir, command.Env = filepath.Join(root, "cmd", "plan9asmll"), compilerEnv
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("build actual translator: %v\n%s", err, output)
 	}
