@@ -37,18 +37,14 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 	}
 	// Copy only the real llvm-config bytes. Its actual relocatable-prefix
 	// query determines the library origins; no script impersonates a tool.
-	data, err := os.ReadFile(configBinary)
-	if err != nil {
-		t.Fatal(err)
-	}
 	localConfig := filepath.Join(producer, "bin", "llvm-config")
-	if err := os.WriteFile(localConfig, data, 0700); err != nil {
+	if err := copyModuleFixtureTool(configBinary, localConfig); err != nil {
 		t.Fatal(err)
 	}
 	cfg := config{Go: goBinary, Module: true, Timeout: 2 * time.Minute}
 	cfg.Dir = moduleLLVMConsumerFixture(t)
 	out := t.TempDir()
-	data, err = moduleDependencyCommand(context.Background(), cfg, filepath.Join(out, "original-libraries"), configBinary, "--libfiles", "--link-shared")
+	data, err := moduleDependencyCommand(context.Background(), cfg, filepath.Join(out, "original-libraries"), configBinary, "--libfiles", "--link-shared")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,11 +53,7 @@ func TestModuleActualDependencyArtifactsSurviveProducerOriginRemoval(t *testing.
 		t.Fatal(err)
 	}
 	for _, library := range libraries {
-		physical, err := filepath.EvalSymlinks(library)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Link(physical, filepath.Join(producer, "lib", filepath.Base(library))); err != nil {
+		if err := copyModuleFixtureTool(library, filepath.Join(producer, "lib", filepath.Base(library))); err != nil {
 			t.Fatal(err)
 		}
 	}
