@@ -36,7 +36,41 @@ type discoveryFeatureProfile struct {
 	Observed *discoveryTargetFeatures       `json:"observed"`
 }
 
+// Profiles of different actual targets cannot share a driver observation.
+// Bound each target independently; a module-wide count incorrectly excludes
+// ordinary multi-platform inputs even when every target stays within its bound.
 const discoveryFeatureProfileLimit = 64
+
+type discoveryFeatureProfileBudget map[string]int
+
+func newDiscoveryFeatureProfileBudget(targets []string) (discoveryFeatureProfileBudget, error) {
+	if len(targets) == 0 || len(targets) > discoveryFeatureProfileLimit {
+		return nil, fmt.Errorf("missing or unbounded feature target matrix")
+	}
+	budget := make(discoveryFeatureProfileBudget, len(targets))
+	for _, target := range targets {
+		if err := validateTarget(target); err != nil {
+			return nil, err
+		}
+		if _, duplicate := budget[target]; duplicate {
+			return nil, fmt.Errorf("duplicate feature profile target %s", target)
+		}
+		budget[target] = 0
+	}
+	return budget, nil
+}
+
+func (budget discoveryFeatureProfileBudget) add(target string) error {
+	count, present := budget[target]
+	if !present {
+		return fmt.Errorf("feature profile target %s is outside the complete target matrix", target)
+	}
+	if count >= discoveryFeatureProfileLimit {
+		return fmt.Errorf("source-required target %s feature profiles exceed the explicit %d-profile bound", target, discoveryFeatureProfileLimit)
+	}
+	budget[target] = count + 1
+	return nil
+}
 
 // The planning model proposes legal environment settings; it is never an
 // execution proof. Every proposal must subsequently be observed by the real
@@ -49,6 +83,10 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 	}
 	if plan == nil || len(plan.Targets) != len(baselines) {
 		return nil, fmt.Errorf("incomplete feature profile baselines")
+	}
+	budget, err := newDiscoveryFeatureProfileBudget(plan.Targets)
+	if err != nil {
+		return nil, err
 	}
 	plan.headerPlanningUsed = make(map[string]bool)
 	if err := ordinarySelectionPackagePathError(plan.Module, "."); err != nil {
@@ -84,8 +122,8 @@ func planDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmFiles
 			previous.pairs = append(previous.pairs, request.pairs...)
 			return nil
 		}
-		if len(requests) >= discoveryFeatureProfileLimit {
-			return fmt.Errorf("source-required target feature profiles exceed the explicit %d-profile bound", discoveryFeatureProfileLimit)
+		if err := budget.add(request.Target); err != nil {
+			return err
 		}
 		byKey[key] = len(requests)
 		requests = append(requests, request)
@@ -473,13 +511,23 @@ func validateDiscoveryFeatureProfiles(plan *discoveryOrdinarySelectionPlan, asmF
 	if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 		return err
 	}
-	if plan == nil || len(profiles) == 0 || len(profiles) > discoveryFeatureProfileLimit || len(plan.Targets) == 0 {
+	if plan == nil || len(profiles) == 0 || len(plan.Targets) == 0 {
 		return fmt.Errorf("missing or unbounded source-required actual feature profiles")
+	}
+	budget, err := newDiscoveryFeatureProfileBudget(plan.Targets)
+	if err != nil {
+		return err
+	}
+	if len(profiles) > len(budget)*discoveryFeatureProfileLimit {
+		return fmt.Errorf("actual feature profiles exceed the complete target matrix bound")
 	}
 	var baselines []*discoveryTargetFeatures
 	byRequest, byID := make(map[string]discoveryFeatureProfile), make(map[string]bool)
 	for _, profile := range profiles {
 		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
+			return err
+		}
+		if err := budget.add(profile.Request.Target); err != nil {
 			return err
 		}
 		if err := validateDiscoveryTargetFeatures(profile.Observed); err != nil {
