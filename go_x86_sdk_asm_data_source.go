@@ -30,7 +30,7 @@ type GoX86SDKASMDataSource struct {
 	mu, operation   sync.Mutex
 	identity        *GoX86SDKASMDataSource
 	ready           bool
-	active          bool
+	active          int
 	closePending    bool
 	generation      uint64
 	request         GoX86SDKASMDataCaptureRequest
@@ -205,6 +205,13 @@ func (source *GoX86SDKASMDataSource) run(ctx context.Context, arguments ...strin
 	if err := source.liveContext(ctx); err != nil {
 		return nil, err
 	}
+	stdout, err := source.runCommand(ctx, arguments...)
+	return stdout, errors.Join(err, source.liveContext(ctx))
+}
+
+// Verification supplies only a private standard context here. Never invoke a
+// caller context while the operation lock protects private input maps.
+func (source *GoX86SDKASMDataSource) runCommand(ctx context.Context, arguments ...string) ([]byte, error) {
 	if err := source.verifyDirectories(); err != nil {
 		return nil, err
 	}
@@ -214,7 +221,7 @@ func (source *GoX86SDKASMDataSource) run(ctx context.Context, arguments ...strin
 	commandContext, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	stdout, err := goasmcmd.Run(commandContext, source.request.Directory, source.request.Environment, source.request.GoBinary, arguments...)
-	err = errors.Join(err, commandContext.Err(), source.liveContext(ctx), source.guard.verifyInputs(), source.verifyDirectories())
+	err = errors.Join(err, commandContext.Err(), source.guard.verifyInputs(), source.verifyDirectories())
 	if err == nil {
 		source.observation.Commands = append(source.observation.Commands, numericalSBCommand{
 			Directory: source.request.Directory, Binary: source.request.GoBinary,
@@ -248,20 +255,23 @@ func (source *GoX86SDKASMDataSource) digest() ([32]byte, error) {
 	return sha256.Sum256(raw), err
 }
 
-// Verify never holds the lifetime mutex during a command or importer callback.
-// The operation lock protects private guard maps. Reentrant Close revokes
-// immediately; the active operation disposes artifacts after its postcheck.
-// Every postcheck must still match the original generation.
+// Verify samples every caller context outside both locks. A lifetime lease
+// protects artifacts during reentrant Verify/Readback/Close callbacks; only a
+// private standard context enters the serialized command/guard operation.
+// Every postcheck must still match the exact original generation.
 func (source *GoX86SDKASMDataSource) Verify(ctx context.Context) (result error) {
 	if source == nil || source.identity != source {
 		return sdkASMDataContext("copied, missing or uninitialized source")
 	}
-	source.operation.Lock()
-	defer source.operation.Unlock()
 	source.mu.Lock()
 	generation, ready := source.generation, source.ready
-	source.active = ready
+	if ready {
+		source.active++
+	}
 	source.mu.Unlock()
+	if !ready {
+		return sdkASMDataContext("source is closed or revoked")
+	}
 	defer func() {
 		result = errors.Join(result, source.liveContext(ctx))
 		source.mu.Lock()
@@ -272,21 +282,40 @@ func (source *GoX86SDKASMDataSource) Verify(ctx context.Context) (result error) 
 			source.ready = false
 			source.generation++
 		}
-		source.active = false
-		cleanup := source.closePending
+		source.active--
+		cleanup := source.closePending && source.active == 0
 		source.mu.Unlock()
 		if cleanup {
+			source.operation.Lock()
 			result = errors.Join(result, source.guard.Close())
+			source.operation.Unlock()
 		}
 	}()
-	if !ready {
-		return sdkASMDataContext("source is closed or revoked")
+	if err := source.liveContext(ctx); err != nil {
+		return err
 	}
+	private, stop, err := sdkASMDataPrivateContext(ctx, source.context)
+	if err != nil {
+		return err
+	}
+	defer stop()
+	source.operation.Lock()
+	defer source.operation.Unlock()
+	source.mu.Lock()
+	current := source.ready && source.generation == generation
+	source.mu.Unlock()
+	if !current {
+		return sdkASMDataContext("source closed or revoked during context callbacks")
+	}
+	return errors.Join(source.verifyState(private), private.Err())
+}
+
+func (source *GoX86SDKASMDataSource) verifyState(ctx context.Context) error {
 	if source.guard != source.originalGuard || source.guard == nil || source.guard.identity != source.guard ||
 		source.guard.ready || source.guard.request.NumericalReads != nil || source.guard.numericalOrigin != nil || source.guard.downloadedOrigin != nil {
 		return sdkASMDataContext("source borrowed a foreign frame, origin or numerical capability")
 	}
-	if err := source.liveContext(ctx); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 	before, err := source.digest()
@@ -300,7 +329,7 @@ func (source *GoX86SDKASMDataSource) Verify(ctx context.Context) (result error) 
 	// original command inventory while checking current actual graph bytes.
 	commands := source.observation.Commands
 	defer func() { source.observation.Commands = commands }()
-	raw, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
+	raw, err := source.runCommand(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
 	if err != nil {
 		return err
 	}
@@ -338,7 +367,7 @@ func (source *GoX86SDKASMDataSource) Close() error {
 	source.closePending = true
 	active := source.active
 	source.mu.Unlock()
-	if active {
+	if active != 0 {
 		return nil
 	}
 	source.operation.Lock()
