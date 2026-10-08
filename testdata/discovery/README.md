@@ -228,6 +228,17 @@ paths, and recheck input generations before publication. The full record reader
 remains available for reference comparisons and explicit monolithic legacy
 JSON/gzip compatibility imports; those legacy imports are not memory-bounded.
 
+Former per-run collections (a directory with child manifests, but no root
+manifest) use the same streaming converter. It preserves sorted manifest order,
+folds source contributions before merging with the destination, and verifies the
+complete member set before publishing. Cursor metadata scales with the number of
+members; record payload scales with the current module groups, not the complete
+collection. Only one cursor file is open at a time. Byte offsets permit direct
+seeks: the boundary record is read twice, not earlier module groups. Every source
+still receives complete initial/final EOF, ordering, count and generation checks.
+Child directory symlinks remain unfollowed. Explicit monolithic JSON/gzip remains
+a separate compatibility path.
+
 After adding a new supported target, its external assembly corpus can be
 replayed directly from the saved exact versions without reading the module
 index or revisiting no-assembly modules:

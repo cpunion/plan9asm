@@ -327,83 +327,26 @@ func TestDiscoveryTransferSnapshotDetectsLateInputChange(t *testing.T) {
 }
 
 func TestDiscoveryTransferNeverCallsWholePayloadReaders(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "streaming_transfer.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ast.Inspect(file, func(node ast.Node) bool {
-		if call, ok := node.(*ast.CallExpr); ok {
-			if name, ok := call.Fun.(*ast.Ident); ok {
-				for _, forbidden := range []string{"readSeenReport", "readShardedReport", "readShardedReports", "loadSeenState", "loadModuleCheckpoints"} {
-					if name.Name == forbidden {
-						t.Errorf("transfer uses full payload reader %s", name.Name)
-					}
-				}
-			}
+	for _, filename := range []string{"streaming_transfer.go", "streaming_collection.go", "streaming_transfer_cursor.go"} {
+		file, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
+		if err != nil {
+			t.Fatal(err)
 		}
-		return true
-	})
-}
-
-func TestDiscoveryTransferShardedCLIRouteReturnsBeforeLegacyRead(t *testing.T) {
-	file, err := parser.ParseFile(token.NewFileSet(), "main.go", nil, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var branches []*ast.IfStmt
-	ast.Inspect(file, func(node ast.Node) bool {
-		if branch, ok := node.(*ast.IfStmt); ok {
-			branches = append(branches, branch)
-		}
-		return true
-	})
-	registered := 0
-	for _, branch := range branches {
-		isDir := false
-		ast.Inspect(branch.Cond, func(node ast.Node) bool {
+		ast.Inspect(file, func(node ast.Node) bool {
 			if call, ok := node.(*ast.CallExpr); ok {
-				if method, ok := call.Fun.(*ast.SelectorExpr); ok && method.Sel.Name == "IsDir" {
-					isDir = true
+				if name, ok := call.Fun.(*ast.Ident); ok {
+					for _, forbidden := range []string{"readSeenReport", "readShardedReport", "readShardedReports", "loadSeenState", "loadModuleCheckpoints"} {
+						if name.Name == forbidden {
+							t.Errorf("transfer uses full payload reader %s in %s", name.Name, filename)
+						}
+					}
 				}
 			}
 			return true
 		})
-		if !isDir {
-			continue
-		}
-		for _, stmt := range branch.Body.List {
-			manifest, ok := stmt.(*ast.IfStmt)
-			if !ok {
-				continue
-			}
-			boundManifest, streamCalls, fullCalls := false, 0, 0
-			ast.Inspect(manifest.Init, func(node ast.Node) bool {
-				if text, ok := node.(*ast.BasicLit); ok && text.Kind == token.STRING && text.Value == `"manifest.json"` {
-					boundManifest = true
-				}
-				return true
-			})
-			ast.Inspect(manifest.Body, func(node ast.Node) bool {
-				if call, ok := node.(*ast.CallExpr); ok {
-					if name, ok := call.Fun.(*ast.Ident); ok {
-						if name.Name == "mergeLedgerStreaming" {
-							streamCalls++
-						} else if name.Name == "readSeenReport" {
-							fullCalls++
-						}
-					}
-				}
-				return true
-			})
-			if boundManifest && streamCalls == 1 && fullCalls == 0 {
-				if _, ok := manifest.Body.List[len(manifest.Body.List)-1].(*ast.ReturnStmt); !ok {
-					t.Fatal("sharded CLI falls through to legacy full-payload reader")
-				}
-				registered++
-			}
-		}
 	}
-	if registered != 1 {
-		t.Fatalf("actual CLI has %d mandatory manifest-bound streaming routes, want one", registered)
-	}
+}
+
+func TestDiscoveryTransferShardedCLIRouteReturnsBeforeLegacyRead(t *testing.T) {
+	assertDiscoveryDirectoryTransferRoute(t)
 }

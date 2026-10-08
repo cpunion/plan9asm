@@ -498,14 +498,10 @@ func main() {
 			fatal(errors.New("-convert-report requires -out-dir"))
 		}
 		if info, err := os.Stat(*convertReport); err == nil && info.IsDir() {
-			if _, err := os.Stat(filepath.Join(*convertReport, "manifest.json")); err == nil {
-				if err := mergeLedgerStreaming(*outDir, *convertReport); err != nil {
-					fatal(err)
-				}
-				return
-			} else if !errors.Is(err, os.ErrNotExist) {
+			if err := mergeLedgerStreaming(*outDir, *convertReport); err != nil {
 				fatal(err)
 			}
+			return
 		}
 		report, err := readSeenReport(*convertReport)
 		if err != nil {

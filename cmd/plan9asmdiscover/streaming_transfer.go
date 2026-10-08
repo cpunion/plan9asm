@@ -12,25 +12,45 @@ import (
 	"strings"
 )
 
-// mergeLedgerStreaming validates both complete inputs, then retains only their
-// current module groups. Metadata is merged once, not once per shard/module.
+// mergeLedgerStreaming accepts one sharded ledger or a former per-run
+// collection. Every input is validated completely; only metadata and current
+// module groups are retained. Metadata is merged once per input, not per module.
 func mergeLedgerStreaming(destination, source string) (returnErr error) {
 	source, destination, err := streamingTransferPaths(source, destination)
 	if err != nil {
 		return err
 	}
-	locks := []string{source, destination}
+	sources, err := captureTransferSources(source)
+	if err != nil {
+		return err
+	}
+	locks := append([]string{source, destination}, sources.roots...)
 	sort.Strings(locks)
-	for _, name := range locks {
+	for i, name := range locks {
+		if i > 0 && name == locks[i-1] {
+			continue
+		}
 		release, err := acquireLedgerLock(name)
 		if err != nil {
 			return err
 		}
 		defer func() { returnErr = errors.Join(returnErr, release()) }()
 	}
-	input, err := openTransferInput(source)
-	if err != nil {
+	if err := sources.verify(); err != nil {
 		return err
+	}
+	inputs := make([]*publicationBase, 0, len(sources.roots))
+	var sourceMetadata discoveryReport
+	for _, root := range sources.roots {
+		input, err := openTransferInput(root)
+		if err != nil {
+			return err
+		}
+		inputs = append(inputs, input)
+		sourceMetadata, err = mergeDiscoveryReports(sourceMetadata, input.metadata)
+		if err != nil {
+			return fmt.Errorf("merge collection metadata: %w", err)
+		}
 	}
 	var previous *publicationBase
 	var oldMetadata discoveryReport
@@ -46,11 +66,15 @@ func mergeLedgerStreaming(destination, source string) (returnErr error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	metadata, err := mergeDiscoveryReports(oldMetadata, input.metadata)
+	metadata, err := mergeDiscoveryReports(oldMetadata, sourceMetadata)
 	if err != nil {
 		return fmt.Errorf("merge transfer metadata: %w", err)
 	}
-	oldShards, newShards := transferShardBuckets(previous), transferShardBuckets(input)
+	oldShards := transferShardBuckets(previous)
+	newShards := make([][256]string, len(inputs))
+	for i, input := range inputs {
+		newShards[i] = transferShardBuckets(input)
+	}
 	temporary, err := os.MkdirTemp(filepath.Dir(destination), ".plan9asmdiscover-transfer-*")
 	if err != nil {
 		return err
@@ -66,7 +90,11 @@ func mergeLedgerStreaming(destination, source string) (returnErr error) {
 	publisher := publicationShardWriter{root: temporary, summary: summarizeLedger(metadata)}
 	defer publisher.closeOnError()
 	for bucket := 0; bucket < 256; bucket++ {
-		if err := transferRecordBucket(&publisher, oldShards[bucket], newShards[bucket]); err != nil {
+		paths := make([]string, len(inputs))
+		for i := range inputs {
+			paths[i] = newShards[i][bucket]
+		}
+		if err := transferCollectionBucket(&publisher, oldShards[bucket], paths); err != nil {
 			return err
 		}
 	}
@@ -83,21 +111,30 @@ func mergeLedgerStreaming(destination, source string) (returnErr error) {
 	}
 	// Extra complete reads are linear, not per-module rescans. They preserve
 	// all EOF/count/range checks and bind final bytes to the initial snapshots.
-	for _, item := range []struct {
-		root string
-		base *publicationBase
-	}{{source, input}, {destination, previous}} {
-		if item.base == nil {
-			continue
-		}
-		if _, err := scanShardedReport(item.root, nil); err != nil {
+	if err := verifyTransferGeneration(sources, inputs, destination, previous); err != nil {
+		return err
+	}
+	return replacePublicationDirectory(temporary, destination, previous != nil, os.Rename)
+}
+
+func verifyTransferGeneration(sources *transferSources, inputs []*publicationBase, destination string, previous *publicationBase) error {
+	for i, root := range sources.roots {
+		if _, err := scanShardedReport(root, nil); err != nil {
 			return err
 		}
-		if err := item.base.verify(item.root); err != nil {
+		if err := inputs[i].verify(root); err != nil {
 			return err
 		}
 	}
-	return replacePublicationDirectory(temporary, destination, previous != nil, os.Rename)
+	if previous != nil {
+		if _, err := scanShardedReport(destination, nil); err != nil {
+			return err
+		}
+		if err := previous.verify(destination); err != nil {
+			return err
+		}
+	}
+	return sources.verify()
 }
 
 func openTransferInput(root string) (*publicationBase, error) {

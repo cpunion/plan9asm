@@ -31,7 +31,7 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 		main()
 		os.Exit(0)
 	}
-	for _, name := range []string{"sharded", "sharded-alias", "legacy-json", "invalid-tail", "invalid-tail-alias"} {
+	for _, name := range []string{"sharded", "sharded-alias", "collection", "collection-alias", "legacy-json", "invalid-tail", "invalid-tail-alias", "invalid-tail-collection", "invalid-tail-collection-alias"} {
 		t.Run(name, func(t *testing.T) {
 			root := t.TempDir()
 			source, destination := filepath.Join(root, "source"), filepath.Join(root, "destination")
@@ -42,6 +42,23 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 			if err := writeShardedReport(source, change); err != nil {
 				t.Fatal(err)
 			}
+			tailRoot := source
+			if strings.Contains(name, "collection") {
+				collection := filepath.Join(root, "collection")
+				if err := os.Mkdir(collection, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				tailRoot = filepath.Join(collection, "z-last")
+				if err := os.Rename(source, tailRoot); err != nil {
+					t.Fatal(err)
+				}
+				if err := writeShardedReport(filepath.Join(collection, "a-first"), discoveryReport{
+					Scanned: []moduleVersion{{Path: "example.invalid/convert", Version: "v1.0.0"}},
+				}); err != nil {
+					t.Fatal(err)
+				}
+				source = collection
+			}
 			if err := writeShardedReport(destination, discoveryReport{
 				Scanned: []moduleVersion{{Path: "example.invalid/convert", Version: "v1.0.0"}},
 			}); err != nil {
@@ -51,7 +68,7 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 				source = filepath.Join(root, "legacy.json")
 				writeSummaryFixtureJSON(t, source, change)
 			} else if strings.HasPrefix(name, "invalid-tail") {
-				if err := os.WriteFile(filepath.Join(source, "records", "ff.jsonl"), []byte("invalid tail\n"), 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(tailRoot, "records", "ff.jsonl"), []byte("invalid tail\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -84,6 +101,9 @@ func TestDiscoveryTransferActualCLI(t *testing.T) {
 				t.Fatalf("conversion child did not close: %v context=%v", err, ctx.Err())
 			}
 			if strings.HasPrefix(name, "invalid-tail") {
+				if strings.Contains(name, "collection") {
+					canonicalSource = filepath.Join(canonicalSource, "z-last")
+				}
 				var exit *exec.ExitError
 				if !errors.As(err, &exit) || exit.ExitCode() != 1 || stdout.Len() != 0 ||
 					!strings.Contains(stderr.String(), "decode record shard "+filepath.Join(canonicalSource, "records", "ff.jsonl")+":1") {

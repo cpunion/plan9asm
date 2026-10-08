@@ -156,37 +156,11 @@ func scanRecordShard(shard string, summary *ledgerSummary, visit func(shardedRec
 	var previous shardedRecord
 	for scanner.Scan() {
 		line++
-		var item shardedRecord
-		if err := json.Unmarshal(scanner.Bytes(), &item); err != nil {
-			return nil, fmt.Errorf("decode record shard %s:%d: %w", shard, line, err)
-		}
-		if item.Module == "" || item.Version == "" {
-			return nil, fmt.Errorf("decode record shard %s:%d: incomplete module version", shard, line)
-		}
-		hash := sha256.Sum256([]byte(item.Module))
-		if hash[0] != byte(shardNumber) {
-			return nil, fmt.Errorf("decode record shard %s:%d: module %q belongs in %02x.jsonl", shard, line, item.Module, hash[0])
-		}
-		if line > 1 && compareShardedRecords(previous, item) >= 0 {
-			return nil, fmt.Errorf("decode record shard %s:%d: records are duplicated or not in module/semver/kind order", shard, line)
+		item, err := decodeRecordShardLine(shard, byte(shardNumber), line, previous, scanner.Bytes(), summary)
+		if err != nil {
+			return nil, err
 		}
 		previous = item
-		switch item.Kind {
-		case "scanned", "matched":
-			if !semver.IsValid(item.Version) {
-				return nil, fmt.Errorf("decode record shard %s:%d: invalid %s module version %q", shard, line, item.Kind, item.Version)
-			}
-			if item.Kind == "scanned" {
-				summary.ScannedRecords++
-			} else {
-				summary.MatchedRecords++
-				summary.AssemblyFiles += len(item.AsmFiles)
-			}
-		case "failure":
-			summary.FailureRecords++
-		default:
-			return nil, fmt.Errorf("decode record shard %s:%d: unknown record kind %q", shard, line, item.Kind)
-		}
 		if visit != nil {
 			if err := visit(item); err != nil {
 				return nil, err
@@ -200,6 +174,42 @@ func scanRecordShard(shard string, summary *ledgerSummary, visit func(shardedRec
 		return nil, fmt.Errorf("close record shard %q: %w", shard, err)
 	}
 	return identity, nil
+}
+
+// Full scans and transfer cursors share the exact line grammar. Cursor counts
+// are provisional; only the complete initial/final scans authorize publication.
+func decodeRecordShardLine(shard string, bucket byte, line int, previous shardedRecord, data []byte, summary *ledgerSummary) (shardedRecord, error) {
+	var item shardedRecord
+	if err := json.Unmarshal(data, &item); err != nil {
+		return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: %w", shard, line, err)
+	}
+	if item.Module == "" || item.Version == "" {
+		return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: incomplete module version", shard, line)
+	}
+	hash := sha256.Sum256([]byte(item.Module))
+	if hash[0] != bucket {
+		return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: module %q belongs in %02x.jsonl", shard, line, item.Module, hash[0])
+	}
+	if line > 1 && compareShardedRecords(previous, item) >= 0 {
+		return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: records are duplicated or not in module/semver/kind order", shard, line)
+	}
+	switch item.Kind {
+	case "scanned", "matched":
+		if !semver.IsValid(item.Version) {
+			return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: invalid %s module version %q", shard, line, item.Kind, item.Version)
+		}
+		if item.Kind == "scanned" {
+			summary.ScannedRecords++
+		} else {
+			summary.MatchedRecords++
+			summary.AssemblyFiles += len(item.AsmFiles)
+		}
+	case "failure":
+		summary.FailureRecords++
+	default:
+		return shardedRecord{}, fmt.Errorf("decode record shard %s:%d: unknown record kind %q", shard, line, item.Kind)
+	}
+	return item, nil
 }
 
 // Publication replaces the ledger directory. Do not return a summary assembled
