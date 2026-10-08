@@ -1,0 +1,511 @@
+package plan9asm
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"sync"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
+)
+
+type GoX86NumericalReadCaptureRequest struct {
+	GoBinary, Directory, PackagePath, AssemblyFile, Target string
+	Environment                                            []string
+	Owners                                                 []*GoNumericalStorageOwner
+}
+
+// GoX86NumericalReadSource is a sealed source/native-instruction/numerical-owner
+// join. Capture alone supplies no Options, LLVM load, caller or entry authority.
+// Initial source roles are ordinary owned-main sources on linux/386 and amd64;
+// Standard/external source roles and generated headers remain explicit Context.
+type GoX86NumericalReadSource struct {
+	mu                           sync.Mutex
+	ready                        bool
+	request                      GoX86NumericalReadCaptureRequest
+	guard                        *GoAMD64FrameSource // private reuse of file/command guards, NOT its factory or frame role
+	dirs                         map[string]os.FileInfo
+	misses                       map[string]bool
+	file                         *File
+	cpp                          AssemblyCPPObservation
+	reads                        []numericalSBRead
+	native                       numericalSBNativeProof
+	report                       []byte
+	seal                         [32]byte
+	stateSeal                    [32]byte
+	rawSelection, rawEnvironment []byte
+	originalOwners               []*GoNumericalStorageOwner
+	commands                     []numericalSBCommand
+}
+
+type numericalSBCommand struct {
+	Directory, Binary string
+	Arguments         []string
+	Stdout            []byte
+}
+
+func CaptureGoX86NumericalReadSource(ctx context.Context, request GoX86NumericalReadCaptureRequest) (_ *GoX86NumericalReadSource, result error) {
+	if ctx == nil || ctx.Err() != nil || request.Target != "linux/386" && request.Target != "linux/amd64" ||
+		!filepath.IsAbs(request.GoBinary) || !filepath.IsAbs(request.Directory) || request.PackagePath == "" ||
+		filepath.Base(request.AssemblyFile) != request.AssemblyFile || !strings.HasSuffix(request.AssemblyFile, ".s") ||
+		len(request.Owners) == 0 || len(request.Owners) > 8 {
+		return nil, numericalSBContext("needs bounded actual x86 source/tool/owner inputs")
+	}
+	if _, bounded := ctx.Deadline(); !bounded {
+		return nil, numericalSBContext("requires bounded live context")
+	}
+	request.Environment = append([]string(nil), request.Environment...)
+	request.Owners = append([]*GoNumericalStorageOwner(nil), request.Owners...)
+	provided := make(map[string]string)
+	for _, pair := range request.Environment {
+		key, value, valid := strings.Cut(pair, "=")
+		if !valid || key == "" {
+			return nil, numericalSBContext("malformed actual command environment")
+		}
+		if _, duplicate := provided[key]; duplicate {
+			return nil, numericalSBContext("duplicate actual command environment")
+		}
+		provided[key] = value
+	}
+	_, arch, _ := strings.Cut(request.Target, "/")
+	for key, value := range map[string]string{"GOOS": "linux", "GOARCH": arch, "GOAMD64": "v1", "GO386": "sse2",
+		"CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOENV": "off", "GOWORK": "off", "GOFLAGS": "", "GOEXPERIMENT": "", "GOPROXY": "off"} {
+		if provided[key] != value {
+			return nil, numericalSBContext("unbound actual command profile: %s", key)
+		}
+	}
+	if provided["GOPACKAGESDRIVER"] != "" && provided["GOPACKAGESDRIVER"] != "off" {
+		return nil, numericalSBContext("external package driver needs independent mapping")
+	}
+	source := &GoX86NumericalReadSource{request: request, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
+		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
+	source.guard = &GoAMD64FrameSource{request: GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
+		AssemblyFile: request.AssemblyFile, Target: request.Target, Environment: request.Environment}, inputs: make(map[string][32]byte)}
+	for _, directory := range append([]string{request.Directory}, provided["GOCACHE"], provided["GOMODCACHE"], provided["GOPATH"], provided["TMPDIR"], provided["GOTMPDIR"]) {
+		resolved, err := filepath.EvalSymlinks(directory)
+		info, statErr := os.Lstat(directory)
+		if !filepath.IsAbs(directory) || err != nil || resolved != directory || statErr != nil || !info.IsDir() {
+			return nil, numericalSBContext("redirected or missing command/source root")
+		}
+		source.dirs[directory] = info
+	}
+	if err := source.guard.snapshotDirectory(); err != nil {
+		return nil, err
+	}
+	owned, err := os.MkdirTemp(provided["TMPDIR"], "plan9asm-numerical-read-")
+	if err != nil {
+		return nil, err
+	}
+	source.guard.ownedInfo, err = os.Lstat(owned)
+	if err != nil {
+		return nil, err
+	}
+	source.guard.owned = owned
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, source.Close())
+		}
+	}()
+	// Canonicalize only the freshly factory-created directory, never caller inputs.
+	canonicalOwned, err := filepath.EvalSymlinks(owned)
+	info, statErr := os.Lstat(canonicalOwned)
+	if err != nil || statErr != nil || !info.IsDir() || !os.SameFile(source.guard.ownedInfo, info) || !goAssemblyPathWithinRoot(provided["TMPDIR"], canonicalOwned) {
+		return nil, numericalSBContext("new factory artifact role changed during canonicalization")
+	}
+	source.guard.owned = canonicalOwned
+	if err := source.observe(ctx, provided); err != nil {
+		return nil, err
+	}
+	selected, rawSelection, err := source.guard.loadWithRaw(ctx)
+	if err != nil {
+		return nil, err
+	}
+	source.guard.selection = selected
+	source.rawSelection = append([]byte(nil), rawSelection...)
+	source.recordCommand(rawSelection, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
+	if selected.ImportPath != request.PackagePath || selected.Dir != request.Directory || selected.Standard || selected.ForTest != "" ||
+		selected.Module == nil || !selected.Module.Main || selected.Module.Version != "" || selected.Module.Path == "" ||
+		len(selected.Module.Replace) != 0 && string(selected.Module.Replace) != "null" || selected.nonordinaryRole() ||
+		len(selected.GoFiles) == 0 || len(selected.SFiles) == 0 || len(selected.SFiles) > 32 {
+		return nil, numericalSBContext("consumer needs complete original owned-main selection")
+	}
+	if selected.Module.GoMod != filepath.Join(selected.Module.Dir, "go.mod") ||
+		!goAssemblyPathWithinRoot(selected.Module.Dir, request.Directory) {
+		return nil, numericalSBContext("consumer module/source role differs")
+	}
+	if _, err := source.guard.read(selected.Module.GoMod); err != nil {
+		return nil, err
+	}
+	var reports []gostaticstorage.Report
+	variables := make(map[string]numericalSBRead)
+	mainRootBound := selected.Module.Dir == request.Directory
+	for ordinal, owner := range request.Owners {
+		if err := owner.Verify(ctx); err != nil {
+			return nil, err
+		}
+		report, err := owner.observation.Readback(ctx)
+		if err != nil || report.Target != request.Target || report.Tools["go"] != source.toolHash(request.GoBinary) ||
+			report.Tools["compile"] != source.toolHash(filepath.Join(source.guard.env["GOTOOLDIR"], "compile")) {
+			return nil, numericalSBContext("owner source/tool/profile differs: %v", err)
+		}
+		if report.Protocol != gostaticstorage.SDKCPUProtocol {
+			if report.CommandDirectory != selected.Module.Dir || report.PackagePath != selected.Module.Path {
+				return nil, numericalSBContext("numerical owner is not the actual same main module")
+			}
+			mainRootBound = true
+		} else if report.CommandDirectory != filepath.Join(source.guard.env["GOROOT"], "src", "internal", "cpu") {
+			return nil, numericalSBContext("SDK numerical owner is not this selected original installation")
+		}
+		for _, variable := range report.Variables {
+			if _, duplicate := variables[variable.NativeName]; duplicate {
+				return nil, numericalSBContext("duplicate numerical owner identity")
+			}
+			variables[variable.NativeName] = numericalSBRead{variable: variable, owner: owner, ownerOrdinal: ordinal}
+		}
+		reports = append(reports, report)
+	}
+	if !mainRootBound {
+		return nil, numericalSBContext("nested consumer lacks complete original module inventory owner")
+	}
+	// Imports cannot borrow a CPU assembly reference as a Go graph certificate.
+	// Same-main dependencies must be present in an actual owner selection/export.
+	if err := source.bindImports(reports); err != nil {
+		return nil, err
+	}
+	if err := source.bindNative(ctx, variables, provided); err != nil {
+		return nil, err
+	}
+	source.report, err = json.Marshal(struct {
+		Request                      GoX86NumericalReadCaptureRequest
+		CPP                          AssemblyCPPObservation
+		File                         *File
+		Selection                    goAMD64FrameSelection
+		Inputs                       map[string][32]byte
+		Owners                       []gostaticstorage.Report
+		Native                       numericalSBNativeProof
+		RawSelection, RawEnvironment []byte
+		Commands                     []numericalSBCommand
+		Reads                        []numericalSBReadFact
+	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts()})
+	if err != nil {
+		return nil, err
+	}
+	source.seal, source.ready = sha256.Sum256(source.report), true
+	source.stateSeal, err = source.stateDigest()
+	if err != nil {
+		return nil, err
+	}
+	if err := source.Verify(ctx); err != nil {
+		return nil, err
+	}
+	return source, nil
+}
+
+func (source *GoX86NumericalReadSource) recordCommand(stdout []byte, arguments ...string) {
+	source.commands = append(source.commands, numericalSBCommand{source.request.Directory, source.request.GoBinary,
+		append([]string(nil), arguments...), append([]byte(nil), stdout...)})
+}
+
+func (source *GoX86NumericalReadSource) run(ctx context.Context, arguments ...string) ([]byte, error) {
+	stdout, err := source.guard.run(ctx, arguments...)
+	if err == nil {
+		source.recordCommand(stdout, arguments...)
+	}
+	return stdout, err
+}
+
+func (source *GoX86NumericalReadSource) toolHash(file string) string {
+	digest := source.guard.inputs[file]
+	return hex.EncodeToString(digest[:])
+}
+
+func (source *GoX86NumericalReadSource) observe(ctx context.Context, provided map[string]string) error {
+	if _, err := source.guard.read(source.request.GoBinary); err != nil {
+		return err
+	}
+	raw, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "GOAMD64", "GO386", "GOFLAGS", "GOEXPERIMENT", "GOCACHE")
+	if err != nil {
+		return err
+	}
+	var env map[string]string
+	if json.Unmarshal(raw, &env) != nil || env["GOVERSION"] != "go1.27.1" || env["GOOS"]+"/"+env["GOARCH"] != source.request.Target ||
+		filepath.Join(env["GOROOT"], "bin", "go") != source.request.GoBinary || env["GOAMD64"] != "v1" ||
+		env["GOARCH"] == "386" && env["GO386"] != "sse2" || env["GOFLAGS"] != "" || env["GOEXPERIMENT"] != "" || env["GOCACHE"] != provided["GOCACHE"] {
+		return numericalSBContext("actual SDK/tool/profile differs")
+	}
+	source.guard.env = env
+	source.rawEnvironment = append([]byte(nil), raw...)
+	for _, directory := range []string{env["GOROOT"], env["GOTOOLDIR"], filepath.Join(env["GOROOT"], "pkg", "include")} {
+		resolved, err := filepath.EvalSymlinks(directory)
+		info, statErr := os.Lstat(directory)
+		if err != nil || resolved != directory || statErr != nil || !info.IsDir() {
+			return numericalSBContext("SDK directory role is missing or redirected")
+		}
+		source.dirs[directory] = info
+	}
+	for _, tool := range []string{"asm", "compile"} {
+		route, err := source.run(ctx, "tool", "-n", tool)
+		if err != nil || strings.TrimSpace(string(route)) != filepath.Join(env["GOTOOLDIR"], tool) {
+			return numericalSBContext("unknown actual %s route", tool)
+		}
+		if _, err := source.guard.read(strings.TrimSpace(string(route))); err != nil {
+			return err
+		}
+	}
+	for _, role := range []string{"VERSION", "src/cmd/internal/goobj/builtinlist.go", "src/cmd/internal/obj/x86/asm6.go", "src/cmd/internal/obj/x86/obj6.go",
+		"src/cmd/go/internal/work/gc.go", "src/cmd/go/internal/load/pkg.go", "src/cmd/asm/main.go", "src/cmd/asm/internal/lex/input.go", "src/cmd/asm/internal/lex/stack.go", "src/cmd/asm/internal/lex/tokenizer.go"} {
+		if _, err := source.guard.read(filepath.Join(env["GOROOT"], filepath.FromSlash(role))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (source *GoX86NumericalReadSource) bindImports(reports []gostaticstorage.Report) error {
+	selected := source.guard.selection
+	for _, path := range selected.Imports {
+		if path == "unsafe" {
+			continue
+		}
+		mapped := path
+		if selected.ImportMap[path] != "" {
+			mapped = selected.ImportMap[path]
+		}
+		found := false
+		for _, report := range reports {
+			if report.Protocol == gostaticstorage.SDKCPUProtocol {
+				continue
+			}
+			decoder := json.NewDecoder(bytes.NewReader(report.RawSelection))
+			for decoder.More() {
+				var pkg gostaticstorage.Package
+				if decoder.Decode(&pkg) != nil {
+					return numericalSBContext("invalid live owner selection")
+				}
+				found = found || pkg.ImportPath == mapped && pkg.Module != nil && pkg.Module.Main && pkg.Module.Dir == selected.Module.Dir
+			}
+		}
+		if !found || mapped != path {
+			return numericalSBContext("unbound consumer import/namespace role")
+		}
+	}
+	return nil
+}
+
+func (source *GoX86NumericalReadSource) preprocess() error {
+	guard := source.guard
+	original, err := guard.read(filepath.Join(source.request.Directory, source.request.AssemblyFile))
+	if err != nil {
+		return err
+	}
+	source.cpp, err = ObserveAssemblyCPP(string(original), AssemblyPreprocessOptions{FileName: filepath.Join(source.request.Directory, source.request.AssemblyFile),
+		Defines: GoAssemblerDefinesWithEnv("linux", guard.env["GOARCH"], guard.env),
+		ReadInclude: func(parent, name string) (string, []byte, error) {
+			if filepath.Base(name) != name || name == "go_asm.h" {
+				return "", nil, numericalSBContext("generated/relative header needs separate actual compiler agreement")
+			}
+			candidate := filepath.Join(source.request.Directory, name)
+			_, statErr := os.Lstat(candidate)
+			if os.IsNotExist(statErr) {
+				source.misses[candidate] = true
+				candidate = filepath.Join(guard.env["GOROOT"], "pkg", "include", name)
+			} else if statErr != nil {
+				return "", nil, statErr
+			}
+			data, err := guard.read(candidate)
+			return candidate, data, err
+		}})
+	if err != nil {
+		return err
+	}
+	source.file, err = Parse(ArchAMD64, source.cpp.Output)
+	if err != nil || len(source.file.Funcs) == 0 || len(source.file.Data) != 0 || len(source.file.Globl) != 0 || len(source.file.UnlinkedPrelude) != 0 {
+		return numericalSBContext("source is not a bounded TEXT-only program: %v", err)
+	}
+	return nil
+}
+
+func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
+	if source == nil {
+		return numericalSBContext("missing live read source")
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if !source.ready {
+		return numericalSBContext("read source is closed/revoked")
+	}
+	fail := func(err error) error { source.ready = false; return err }
+	// Any failed live Verify permanently revokes this source, including an
+	// invalid caller context. A fresh context cannot revive a failed lease.
+	if ctx == nil || ctx.Err() != nil {
+		return fail(numericalSBContext("live verification requires an unexpired context"))
+	}
+	if len(source.request.Owners) != len(source.originalOwners) {
+		return fail(numericalSBContext("sealed owner identity/order changed"))
+	}
+	for ordinal, owner := range source.request.Owners {
+		if owner != source.originalOwners[ordinal] {
+			return fail(numericalSBContext("sealed owner identity/order changed"))
+		}
+	}
+	if sha256.Sum256(source.report) != source.seal {
+		return fail(numericalSBContext("sealed read report changed"))
+	}
+	state, err := source.stateDigest()
+	if err != nil || state != source.stateSeal {
+		return fail(numericalSBContext("sealed source/native/read join changed"))
+	}
+	for directory, before := range source.dirs {
+		resolved, err := filepath.EvalSymlinks(directory)
+		now, statErr := os.Lstat(directory)
+		if err != nil || resolved != directory || statErr != nil || !now.IsDir() || !os.SameFile(before, now) {
+			return fail(numericalSBContext("source/cache/temp directory role changed"))
+		}
+	}
+	for name := range source.misses {
+		if _, err := os.Lstat(name); !os.IsNotExist(err) {
+			return fail(numericalSBContext("CPP preferred-search miss changed"))
+		}
+	}
+	if err := source.guard.verifyInputs(); err != nil {
+		return fail(err)
+	}
+	for _, owner := range source.request.Owners {
+		if err := owner.Verify(ctx); err != nil {
+			return fail(err)
+		}
+	}
+	for _, read := range source.reads {
+		if read.ownerOrdinal < 0 || read.ownerOrdinal >= len(source.originalOwners) || read.owner != source.originalOwners[read.ownerOrdinal] {
+			return fail(numericalSBContext("joined read owner identity changed"))
+		}
+	}
+	selected, raw, err := source.guard.loadWithRaw(ctx)
+	if err != nil || !reflect.DeepEqual(selected, source.guard.selection) || !numericalSameRawSelection(source.rawSelection, raw) {
+		return fail(numericalSBContext("actual consumer selection/export changed: %v", err))
+	}
+	if err := source.guard.verifyInputs(); err != nil {
+		return fail(err)
+	}
+	return nil
+}
+
+func (source *GoX86NumericalReadSource) Close() error {
+	if source == nil {
+		return nil
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	source.ready = false
+	if source.guard == nil {
+		return nil
+	}
+	return source.guard.Close()
+}
+
+// Readback returns retained portable whole bytes for inspection only. Neither
+// this JSON nor any edited/copy report can reconstruct a source or Options.
+func (source *GoX86NumericalReadSource) Readback(ctx context.Context) ([]byte, error) {
+	if err := source.Verify(ctx); err != nil {
+		return nil, err
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if !source.ready {
+		return nil, numericalSBContext("read source closed after verification")
+	}
+	return append([]byte(nil), source.report...), nil
+}
+
+// CheckReadback compares complete retained bytes with the live factory seal.
+// This is not a constructor or a permission derived from self-consistent JSON.
+func (source *GoX86NumericalReadSource) CheckReadback(ctx context.Context, raw []byte) error {
+	if err := source.Verify(ctx); err != nil {
+		return err
+	}
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if !source.ready || sha256.Sum256(raw) != source.seal {
+		return numericalSBContext("readback differs from actual sealed source/object/owner outputs")
+	}
+	return nil
+}
+
+type numericalSBReadFact struct {
+	Function             string
+	Instruction, Operand int
+	Owner                int // portable ordinal; private exact identity/order is checked separately
+	Original             Instr
+	PC, Offset, Width    int64
+	Code                 []byte
+	Relocation           gostaticstorage.TextRelocation
+	Variable             gostaticstorage.Variable
+}
+
+func (source *GoX86NumericalReadSource) readFacts() []numericalSBReadFact {
+	facts := make([]numericalSBReadFact, 0, len(source.reads))
+	for _, read := range source.reads {
+		facts = append(facts, numericalSBReadFact{read.function, read.instruction, read.operand, read.ownerOrdinal, read.original, read.pc, read.offset, read.width, read.code, read.relocation, read.variable})
+	}
+	return facts
+}
+
+func (source *GoX86NumericalReadSource) stateDigest() ([32]byte, error) {
+	raw, err := json.Marshal(struct {
+		Request                      GoX86NumericalReadCaptureRequest
+		CPP                          AssemblyCPPObservation
+		File                         *File
+		Native                       numericalSBNativeProof
+		Selection                    goAMD64FrameSelection
+		Inputs                       map[string][32]byte
+		Reads                        []numericalSBReadFact
+		RawSelection, RawEnvironment []byte
+		Commands                     []numericalSBCommand
+	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands})
+	return sha256.Sum256(raw), err
+}
+
+// As in the numerical owner's selection reader, SDK load/pkg.go reports
+// Stale/StaleReason before list -export builds the archive. The sealed factory
+// retains that SDK source and both whole stdout roles; only these official
+// bool/string display fields may differ on a repeated actual command.
+func numericalSameRawSelection(first, second []byte) bool {
+	decode := func(raw []byte) (map[string]json.RawMessage, bool) {
+		var value map[string]json.RawMessage
+		if len(raw) > 4<<20 || json.Unmarshal(raw, &value) != nil || value == nil {
+			return nil, false
+		}
+		for key, data := range value {
+			if key == "Stale" {
+				var display bool
+				if string(data) == "null" || json.Unmarshal(data, &display) != nil {
+					return nil, false
+				}
+				delete(value, key)
+			} else if key == "StaleReason" {
+				var display string
+				if string(data) == "null" || json.Unmarshal(data, &display) != nil {
+					return nil, false
+				}
+				delete(value, key)
+			} else {
+				var compact bytes.Buffer
+				if json.Compact(&compact, data) != nil {
+					return nil, false
+				}
+				value[key] = compact.Bytes()
+			}
+		}
+		return value, true
+	}
+	a, validA := decode(first)
+	b, validB := decode(second)
+	return validA && validB && reflect.DeepEqual(a, b)
+}

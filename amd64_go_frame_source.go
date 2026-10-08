@@ -374,18 +374,26 @@ func goAMD64FrameRead(name string) (_ []byte, readErr error) {
 	if err != nil || resolved != name {
 		return nil, goAMD64FrameContext("input path is redirected or inaccessible: %s", filepath.Base(name))
 	}
+	before, err := os.Lstat(name)
+	if err != nil || !before.Mode().IsRegular() {
+		return nil, goAMD64FrameContext("input role changed before opening")
+	}
 	file, err := os.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { readErr = errors.Join(readErr, file.Close()) }()
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > 64<<20 {
+	if err != nil || !info.Mode().IsRegular() || !os.SameFile(before, info) || info.Size() > 64<<20 {
 		return nil, goAMD64FrameContext("input is not a bounded regular file")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, 64<<20+1))
 	if err != nil || len(data) > 64<<20 {
 		return nil, goAMD64FrameContext("input byte bound/read failure: %v", err)
+	}
+	after, err := os.Lstat(name)
+	if err != nil || !os.SameFile(info, after) || !after.Mode().IsRegular() || int64(len(data)) != info.Size() {
+		return nil, goAMD64FrameContext("input role/extent changed while reading")
 	}
 	return data, nil
 }
@@ -485,34 +493,39 @@ func (source *GoAMD64FrameSource) observe(ctx context.Context) error {
 }
 
 func (source *GoAMD64FrameSource) load(ctx context.Context) (goAMD64FrameSelection, error) {
+	selected, _, err := source.loadWithRaw(ctx)
+	return selected, err
+}
+
+func (source *GoAMD64FrameSource) loadWithRaw(ctx context.Context) (goAMD64FrameSelection, []byte, error) {
 	var selected goAMD64FrameSelection
 	data, err := source.run(ctx, "list", "-json", "-compiled", "-export", "-mod=readonly", ".")
 	if err != nil {
-		return selected, err
+		return selected, data, err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&selected); err != nil {
-		return selected, err
+		return selected, data, err
 	}
 	var extra any
 	if decoder.Decode(&extra) != io.EOF || len(selected.Error) != 0 || len(selected.DepsErrors) != 0 {
-		return selected, goAMD64FrameContext("incomplete or ambiguous actual package export")
+		return selected, data, goAMD64FrameContext("incomplete or ambiguous actual package export")
 	}
 	if selected.Export == "" {
-		return selected, goAMD64FrameContext("actual package has no compiled export")
+		return selected, data, goAMD64FrameContext("actual package has no compiled export")
 	}
 	selected.Export, err = filepath.EvalSymlinks(selected.Export)
 	cache, cacheErr := filepath.EvalSymlinks(source.env["GOCACHE"])
 	if err != nil || cacheErr != nil || !goAssemblyPathWithinRoot(cache, selected.Export) {
-		return selected, goAMD64FrameContext("compiled export is outside the actual build cache")
+		return selected, data, goAMD64FrameContext("compiled export is outside the actual build cache")
 	}
-	if data, err := source.read(selected.Export); err != nil || len(data) == 0 {
+	if export, err := source.read(selected.Export); err != nil || len(export) == 0 {
 		if err == nil {
 			err = goAMD64FrameContext("actual package export is empty")
 		}
-		return selected, err
+		return selected, data, err
 	}
-	return selected, nil
+	return selected, data, nil
 }
 
 func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
