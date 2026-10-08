@@ -119,3 +119,155 @@ func TestDiscoveryCorpusRetainsOnlySelectedShardPayload(t *testing.T) {
 		})
 	}
 }
+
+func appendDiscoveryInventoryRecords(t *testing.T, ledger string, records ...string) {
+	t.Helper()
+	info, err := os.Stat(ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.IsDir() {
+		ledger = filepath.Join(ledger, "records", "01.jsonl")
+	}
+	file, err := os.OpenFile(ledger, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, record := range records {
+		if _, err := fmt.Fprintln(file, record); err != nil {
+			file.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoveryCandidateInventoryMatchesCompleteReference(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		t.Run(fmt.Sprintf("directory=%t", directory), func(t *testing.T) {
+			ledger, selected := writeDiscoveryForeignPayloadLedger(t, directory, 4)
+			duplicate := discoveryRecord{Kind: "matched", Module: selected.Module, Version: selected.Version,
+				Architectures: []string{"amd64", "arm64", "unknown"},
+				AsmFiles:      []string{"selected_amd64.s", "operation_linux_arm64.s", "operation_amd64x.s", "future_riscv64.s"}}
+			encoded, err := json.Marshal(duplicate)
+			if err != nil {
+				t.Fatal(err)
+			}
+			appendDiscoveryInventoryRecords(t, ledger, string(encoded), string(encoded),
+				`{"kind":"scanned","module":"example.com/noasm","version":"v1.0.0"}`,
+				`{"kind":"failure","module":"example.com/retry","version":"@latest"}`)
+			all, err := loadDiscoveryCandidates(ledger)
+			if err != nil || len(all) != 5 {
+				t.Fatalf("reference inventory: %v, %v", all, err)
+			}
+			identities := make([]discoveryCandidate, len(all))
+			for index, candidate := range all {
+				identities[index] = discoveryCandidate{Module: candidate.Module, Version: candidate.Version}
+			}
+			for _, targets := range [][]string{nil, {"linux/amd64"}, {"linux/riscv64"}, {"js/wasm", "windows/arm64"}} {
+				t.Run(fmt.Sprintf("targets=%v", targets), func(t *testing.T) {
+					eligible := all
+					if targets != nil {
+						eligible, err = filterDiscoveryCandidatesForTargets(all, targets)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+					seen := make(map[string]int)
+					for shard := 0; shard < 8; shard++ {
+						cfg := discoveryCorpusConfig{ShardIndex: shard, ShardCount: 8,
+							FilterTargets: targets != nil, Targets: targets}
+						got, err := loadDiscoveryCandidateInventory(ledger, cfg)
+						if err != nil {
+							t.Fatal(err)
+						}
+						want := selectDiscoveryShard(eligible, shard, 8)
+						if !reflect.DeepEqual(got.Identities, identities) || got.Eligible != len(eligible) ||
+							!reflect.DeepEqual(got.FullShard, want) {
+							t.Fatalf("shard=%d inventory=%+v, want identities=%+v eligible=%d shard=%+v",
+								shard, got, identities, len(eligible), want)
+						}
+						for _, candidate := range got.FullShard {
+							seen[candidate.exactKey()]++
+						}
+					}
+					for _, candidate := range eligible {
+						if seen[candidate.exactKey()] != 1 {
+							t.Fatalf("eligible candidate %s appears %d times", candidate.exactKey(), seen[candidate.exactKey()])
+						}
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestDiscoveryCandidateInventoryValidatesUnselectedTail(t *testing.T) {
+	for _, directory := range []bool{false, true} {
+		for _, tail := range []string{
+			"{truncated JSON",
+			`{"kind":"matched","module":"example.com/foreign","version":"v1.0.0","asm_files":["../unsafe.s"]}`,
+			`{"kind":"matched","module":"example.com/foreign","version":"v1.0.0","asm_files":[]}`,
+			`{"kind":"matched","module":"bad module","version":"v1.0.0","asm_files":["safe_amd64.s"]}`,
+			`{"kind":"matched","module":"example.com/foreign","version":"bad version","asm_files":["safe_amd64.s"]}`,
+		} {
+			t.Run(fmt.Sprintf("directory=%t/tail=%q", directory, tail), func(t *testing.T) {
+				ledger, _ := writeDiscoveryForeignPayloadLedger(t, directory, 2)
+				appendDiscoveryInventoryRecords(t, ledger, tail)
+				for _, filtered := range []bool{false, true} {
+					cfg := discoveryCorpusConfig{ShardIndex: 36, ShardCount: 64,
+						FilterTargets: filtered, Targets: []string{"js/wasm"}}
+					got, err := loadDiscoveryCandidateInventory(ledger, cfg)
+					if err == nil || !reflect.DeepEqual(got, discoveryCandidateInventory{}) {
+						t.Fatalf("filtered=%t concealed unselected invalid tail: %+v, %v", filtered, got, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestDiscoveryCandidateInventoryRetainsForeignAliasMembership(t *testing.T) {
+	ledger, _ := writeDiscoveryForeignPayloadLedger(t, true, 1)
+	inventory, err := loadDiscoveryCandidateInventory(ledger, discoveryCorpusConfig{ShardIndex: 36, ShardCount: 64})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var foreign discoveryCandidate
+	for _, identity := range inventory.Identities {
+		if discoveryCandidateShard(identity, 64) != 36 {
+			foreign = identity
+		}
+	}
+	if foreign.Module == "" || len(foreign.AsmFiles) != 0 || len(foreign.Architectures) != 0 {
+		t.Fatalf("foreign identity carries no valid lightweight membership: %+v", foreign)
+	}
+	alias := discoveryEmbeddedModuleAlias{Module: foreign.Module, Version: foreign.Version,
+		ModuleSum: "h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", SourceDir: "nested",
+		ImportModule: "example.com/original", EvidenceURL: "https://example.com/source"}
+	root := t.TempDir()
+	manifest := filepath.Join(root, "testdata", "corpus", "embedded-modules.json")
+	if err := os.MkdirAll(filepath.Dir(manifest), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, valid := range []bool{true, false} {
+		if !valid {
+			alias.Version = "v1.0.1"
+		}
+		data, err := json.Marshal(discoveryEmbeddedModuleManifest{SchemaVersion: 1, Aliases: []discoveryEmbeddedModuleAlias{alias}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, manifest, string(data))
+		aliases, err := loadDiscoveryEmbeddedModuleAliases(root, inventory.Identities)
+		if valid {
+			if err != nil || aliases[foreign.exactKey()] != alias {
+				t.Fatalf("foreign ledger membership lost: %v, %v", aliases, err)
+			}
+		} else if err == nil || aliases != nil {
+			t.Fatalf("unknown exact alias version accepted: %v, %v", aliases, err)
+		}
+	}
+}

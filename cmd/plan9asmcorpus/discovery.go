@@ -1724,14 +1724,14 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 	if provenance.Source.Dirty {
 		fmt.Println("diagnostic-only discovery run: dirty source cannot satisfy aggregate verification")
 	}
-	allCandidates, err := loadDiscoveryCandidates(cfg.LedgerPath)
+	inventory, err := loadDiscoveryCandidateInventory(cfg.LedgerPath, cfg)
 	if err != nil {
 		return err
 	}
 	// Bind requests before workspace setup, without reducing the ledger or
 	// complete shard that readers independently reconstruct.
-	fullShard := selectDiscoveryShard(allCandidates, cfg.ShardIndex, cfg.ShardCount)
-	selected, err := selectDiscoveryExactCandidates(cfg, allCandidates, fullShard)
+	fullShard := inventory.FullShard
+	selected, err := selectDiscoveryExactCandidates(cfg, inventory.Identities, fullShard)
 	if err != nil {
 		return err
 	}
@@ -1753,20 +1753,11 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		return err
 	}
 	cfg.nativeLayoutSkips = nativeLayoutSkips
-	embeddedAliases, err := loadDiscoveryEmbeddedModuleAliases(cfg.RepoRoot, allCandidates)
+	embeddedAliases, err := loadDiscoveryEmbeddedModuleAliases(cfg.RepoRoot, inventory.Identities)
 	if err != nil {
 		return err
 	}
 	cfg.embeddedAliases = embeddedAliases
-	candidates := allCandidates
-	if cfg.FilterTargets {
-		candidates, err = filterDiscoveryCandidatesForTargets(allCandidates, cfg.Targets)
-		if err != nil {
-			return err
-		}
-		fullShard = selectDiscoveryShard(candidates, cfg.ShardIndex, cfg.ShardCount)
-		selected = fullShard
-	}
 	report := discoveryCorpusReport{
 		SchemaVersion:      discoveryReportSchema,
 		Provenance:         provenance,
@@ -1774,8 +1765,8 @@ func runDiscoveryCorpus(cfg discoveryCorpusConfig) (runErr error) {
 		TargetFiltered:     cfg.FilterTargets,
 		ShardIndex:         cfg.ShardIndex,
 		ShardCount:         cfg.ShardCount,
-		CandidateTotal:     len(allCandidates),
-		EligibleCandidates: len(candidates),
+		CandidateTotal:     len(inventory.Identities),
+		EligibleCandidates: inventory.Eligible,
 		Partial:            len(fullShard) > 0,
 		Results:            make([]discoveryCorpusResult, 0, len(selected)),
 		FeatureInventory:   newDiscoveryFeatureInventory(),
