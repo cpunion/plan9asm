@@ -29,8 +29,8 @@ func resolveSDKIndexedReference(ref TextReference, diagnostic string, present bo
 }
 
 func sdkReferencedArchiveSymbols(archives map[string]SDKReferencedArchive, target string) (sdkReferencedSymbols, error) {
-	if len(archives) == 0 || len(archives) > 4096 {
-		return nil, contextError("missing or excessive SDK referenced archive inventory")
+	if len(archives) > 4096 {
+		return nil, contextError("excessive SDK referenced archive inventory")
 	}
 	paths := make([]string, 0, len(archives))
 	for path := range archives {
