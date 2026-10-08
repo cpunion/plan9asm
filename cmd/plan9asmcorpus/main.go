@@ -136,12 +136,31 @@ func main() {
 	discoveryBuildCache := flag.String("discovery-build-cache", "", "existing absolute Go build-cache directory shared by discovery shards; never removed by the runner")
 	verifyDiscoveryReports := flag.String("verify-discovery-reports", "", "verify a complete directory of discovery shard reports against -discovery-ledger")
 	discoveryProgressOutput := flag.String("discovery-progress-output", "", "publish audited progress to a new assembly-progress.json while verifying reports; failures still exit nonzero")
+	discoveryProgressDirectory := flag.String("discovery-progress-directory", "", "read-only canonical output directory preflight; mutually exclusive with execution and other reader modes")
 	compareAssemblyLedgerPath := flag.String("compare-assembly-ledger", "", "compare verified shard results with the committed assembly ledger")
 	discoveryProgressReports := flag.String("discovery-progress", "", "report pending/passed/N/A/failed candidates from a possibly incomplete directory of frozen shard reports")
 	writeAssemblyLedgerPath := flag.String("write-assembly-ledger", "", "persist audited discovery progress in a separate module-hashed assembly ledger")
 	assemblyLedgerStatusPath := flag.String("assembly-ledger-status", "", "read and validate persisted assembly results against the current scan and source")
 	requireVerifiedAssembly := flag.Bool("require-verified-assembly-ledger", false, "require every assembly candidate to be passed or explicitly skipped by complete reports")
 	flag.Parse()
+	if *discoveryProgressDirectory != "" {
+		var modeErr error
+		flag.Visit(func(option *flag.Flag) {
+			switch option.Name {
+			case "repo-root", "discovery-ledger", "compare-assembly-ledger", "discovery-progress-directory":
+			default:
+				modeErr = errors.New("-discovery-progress-directory requires an exclusive directory-preflight mode")
+			}
+		})
+		check(modeErr)
+		if *discoveryLedger == "" || *compareAssemblyLedgerPath == "" {
+			check(errors.New("-discovery-progress-directory requires both input ledger paths"))
+		}
+		directory, err := validateDiscoveryProgressDirectory(*repoRoot, *discoveryLedger, *compareAssemblyLedgerPath, *discoveryProgressDirectory)
+		check(err)
+		fmt.Println(directory)
+		return
+	}
 	check(validateDiscoveryExactCandidateMode(discoveryExactCandidates, *discoveryLedger, *discoveryTargets != "",
 		*list || *suite != "all" || *verifyDiscoveryReports != "" || *discoveryProgressReports != "" ||
 			*compareAssemblyLedgerPath != "" || *writeAssemblyLedgerPath != "" ||
@@ -183,8 +202,20 @@ func main() {
 		if *discoveryLedger == "" {
 			check(errors.New("-verify-discovery-reports requires -discovery-ledger"))
 		}
+		if *discoveryProgressOutput != "" {
+			if !filepath.IsAbs(*discoveryProgressOutput) || filepath.Base(*discoveryProgressOutput) != "assembly-progress.json" {
+				check(errors.New("discovery progress output requires an absolute new assembly-progress.json path"))
+			}
+			_, err := validateDiscoveryProgressDirectory(*repoRoot, *discoveryLedger, *compareAssemblyLedgerPath, filepath.Dir(*discoveryProgressOutput))
+			check(err)
+		}
 		source, err := collectDiscoverySource(*repoRoot)
 		check(err)
+		var storedSnapshot discoveryPhysicalSnapshot
+		if *compareAssemblyLedgerPath != "" {
+			storedSnapshot, err = collectDiscoveryPhysicalSnapshot(*compareAssemblyLedgerPath)
+			check(err)
+		}
 		shardCount := 0 // Preserve inference for the existing verifier command.
 		flag.Visit(func(option *flag.Flag) {
 			if option.Name == "discovery-shard-count" {
@@ -208,24 +239,20 @@ func main() {
 				verificationErr = compareAssemblyLedgerProgress(stored, current)
 			}
 		}
-		finalSource, err := collectDiscoverySource(*repoRoot)
-		check(err)
-		if finalSource != source {
-			check(errors.New("discovery source changed while verifying reports"))
-		}
+		var prepared *preparedDiscoveryProgress
 		if *discoveryProgressOutput != "" {
-			check(writeDiscoveryProgressOutput(*discoveryProgressOutput, current))
-			finalSource, err = collectDiscoverySource(*repoRoot)
+			prepared, err = prepareDiscoveryProgressOutput(*discoveryProgressOutput, current)
 			check(err)
-			if finalSource != source {
-				check(errors.New("discovery source changed while publishing progress"))
+		}
+		finalErr := verifyDiscoveryAggregateInputs(*repoRoot, *discoveryLedger, *compareAssemblyLedgerPath,
+			source, current.LedgerSHA256, storedSnapshot)
+		if prepared != nil {
+			if finalErr == nil {
+				finalErr = prepared.publish()
 			}
+			finalErr = errors.Join(finalErr, prepared.discard())
 		}
-		finalLedgerSHA, err := discoveryLedgerFingerprint(*discoveryLedger)
-		check(err)
-		if finalLedgerSHA != current.LedgerSHA256 {
-			check(errors.New("discovery ledger changed while verifying reports"))
-		}
+		check(finalErr)
 		check(verificationErr)
 		fmt.Printf("verified discovery corpus reports against %s\n", *discoveryLedger)
 		return

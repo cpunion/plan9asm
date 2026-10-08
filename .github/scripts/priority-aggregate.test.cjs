@@ -33,9 +33,16 @@ function verifyFixture(t, mode) {
   fs.writeFileSync(path.join(scripts, 'verify-discovered-library-corpus.sh'), source, { mode: 0o755 });
   fs.writeFileSync(path.join(bin, 'go'), `#!${process.execPath}
 const fs = require('node:fs');
+const path = require('node:path');
 const args = process.argv.slice(2);
 fs.appendFileSync(process.env.FIXTURE_CALLS, JSON.stringify(args) + '\\n');
-if (args.includes('./cmd/plan9asmdiscover')) {
+if (args.includes('-discovery-progress-directory')) {
+  if (process.env.FIXTURE_MODE === 'preflight failure') {
+    process.stderr.write('unsafe output directory\\n');
+    process.exit(1);
+  }
+  process.stdout.write(path.resolve(args[args.indexOf('-discovery-progress-directory') + 1]) + '\\n');
+} else if (args.includes('./cmd/plan9asmdiscover')) {
   if (process.env.FIXTURE_MODE === 'late scan') {
     fs.writeFileSync(process.env.FIXTURE_REPORTS + '/scan-status.json', '{"original":"scan"}\\n', {flag: 'wx'});
   }
@@ -70,7 +77,7 @@ for (const mode of ['late scan', 'late progress']) {
   test(`aggregate refuses to overwrite a ${mode} destination`, (t) => {
     const { result, invocations, reports } = verifyFixture(t, mode);
     assert.equal(result.status, 1, result.stderr);
-    assert.equal(invocations.length, mode === 'late scan' ? 1 : 2);
+    assert.equal(invocations.length, mode === 'late scan' ? 2 : 3);
     const filename = mode === 'late scan' ? 'scan-status.json' : 'assembly-progress.json';
     const original = mode === 'late scan' ? 'scan' : 'progress';
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(reports, filename), 'utf8')), { original });
@@ -82,10 +89,11 @@ for (const mode of ['pass', 'partial', 'invalid']) {
   test(`combined aggregate ${mode} preserves the strict exit and only audited progress`, (t) => {
     const { result, invocations, reports } = verifyFixture(t, mode);
     assert.equal(result.status, mode === 'pass' ? 0 : 1, result.stderr);
-    assert.equal(invocations.length, 2);
-    assert.ok(invocations[1].includes('-discovery-progress-output'));
-    assert.ok(invocations[1].includes('-verify-discovery-reports'));
-    assert.ok(invocations[1].includes('-compare-assembly-ledger'));
+    assert.equal(invocations.length, 3);
+    assert.ok(invocations[0].includes('-discovery-progress-directory'));
+    assert.ok(invocations[2].includes('-discovery-progress-output'));
+    assert.ok(invocations[2].includes('-verify-discovery-reports'));
+    assert.ok(invocations[2].includes('-compare-assembly-ledger'));
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(reports, 'scan-status.json'), 'utf8')), { index_entries: 12 });
     const progress = path.join(reports, 'assembly-progress.json');
     if (mode === 'invalid') {
@@ -96,3 +104,11 @@ for (const mode of ['pass', 'partial', 'invalid']) {
     assert.deepEqual(fs.readdirSync(reports).filter(name => name.startsWith('.status-')), []);
   });
 }
+
+test('aggregate rejects unsafe output before mkdir or status collection', (t) => {
+  const { result, invocations, reports } = verifyFixture(t, 'preflight failure');
+  assert.equal(result.status, 1);
+  assert.equal(invocations.length, 1);
+  assert.ok(invocations[0].includes('-discovery-progress-directory'));
+  assert.equal(fs.existsSync(reports), false);
+});

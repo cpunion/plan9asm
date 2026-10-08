@@ -15,8 +15,13 @@ if (( $# > 2 )) || ! [[ "$shard_count" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 if (( progress )); then
+  reports_dir=$(go run -C "$repo_root" ./cmd/plan9asmcorpus \
+    -repo-root "$repo_root" \
+    -discovery-ledger "$repo_root/testdata/discovery/ledger" \
+    -compare-assembly-ledger "$repo_root/testdata/discovery/assembly-ledger" \
+    -discovery-progress-directory "$reports_dir")
   mkdir -p "$reports_dir"
-  reports_dir=$(cd "$reports_dir" && pwd)
+  reports_dir=$(cd "$reports_dir" && pwd -P)
 fi
 corpus_args=(
   -manifest "$repo_root/testdata/corpus/reported-libraries.json"
@@ -33,20 +38,38 @@ if (( progress )); then
     exit 1
   fi
   pending_dir=$(mktemp -d "$reports_dir/.status-XXXXXX")
-  trap 'rm -rf "$pending_dir"' EXIT
+  exec 8<"$pending_dir"
+  exec 9>"$pending_dir/scan-status.json"
+  cleanup_status() {
+    local status=$?
+    if [[ "$pending_dir" -ef /dev/fd/8 &&
+          "$pending_dir/scan-status.json" -ef /dev/fd/9 ]]; then
+      rm -- "$pending_dir/scan-status.json" || status=1
+      rmdir -- "$pending_dir" || status=1
+    else
+      echo "owned status temporary directory or file changed; preserve replacement" >&2
+      status=1
+    fi
+    exec 9>&-
+    exec 8<&-
+    exit "$status"
+  }
+  trap cleanup_status EXIT
   go run -C "$repo_root" ./cmd/plan9asmdiscover \
     -status -out-dir "$repo_root/testdata/discovery/ledger" \
-    > "$pending_dir/scan-status.json"
-  mv "$pending_dir/scan-status.json" "$reports_dir/scan-status.json"
+    >&9
+  if ! [[ "$pending_dir" -ef /dev/fd/8 && "$pending_dir/scan-status.json" -ef /dev/fd/9 ]]; then
+    echo "owned status temporary directory or file changed" >&2
+    exit 1
+  fi
+  ln "$pending_dir/scan-status.json" "$reports_dir/scan-status.json"
 
   # The CLI atomically publishes only fully audited progress. It still exits
   # nonzero for incomplete/failed reports or a committed-ledger mismatch.
-  corpus_args+=(-discovery-progress-output "$pending_dir/assembly-progress.json")
+  corpus_args+=(-discovery-progress-output "$reports_dir/assembly-progress.json")
   status=0
   go run -C "$repo_root" ./cmd/plan9asmcorpus "${corpus_args[@]}" || status=$?
-  if [[ -f "$pending_dir/assembly-progress.json" ]]; then
-    mv "$pending_dir/assembly-progress.json" "$reports_dir/assembly-progress.json"
-  elif (( status == 0 )); then
+  if (( status == 0 )) && ! [[ -f "$reports_dir/assembly-progress.json" ]]; then
     echo "strict reader returned success without its requested progress output" >&2
     exit 1
   fi
