@@ -193,6 +193,9 @@ func officialReaderForSource(t *testing.T, binary, source string) string {
 	run(t, binary, dir, env, "tool", "compile", "-p", "main", "-importcfg", "importcfg", "-o", "main.o", "main.go")
 	run(t, binary, dir, env, "tool", "link", "-importcfg", "importcfg", "-o", tool, "main.o")
 	if artifact := os.Getenv("PLAN9ASM_STATIC_STORAGE_ARTIFACT_DIR"); artifact != "" {
+		if source != officialReaderSource {
+			artifact = filepath.Join(artifact, "cpu-sdk-oracle")
+		}
 		if err := os.MkdirAll(artifact, 0700); err != nil {
 			t.Fatal(err)
 		}

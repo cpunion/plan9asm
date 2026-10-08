@@ -145,7 +145,7 @@ func TestGoSDKStaticStorageOriginalCPUArchiveMembers(t *testing.T) {
 			for _, member := range members {
 				t.Logf("SDK_ORIGINAL_MEMBER %s %s type=%d flags=%#x definitions=%d", target, member.Name, member.Type, member.ObjectFlags, len(member.Definitions))
 			}
-			data, err := readArchive(archive, target)
+			data, err := readSDKCPUArchive(archive, target, actual.SFiles)
 			if err != nil {
 				t.Fatalf("original SDK initialized numerical storage lacks binary producer: %v", err)
 			}

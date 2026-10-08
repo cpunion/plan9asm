@@ -39,18 +39,38 @@ func contextError(message string) error { return fmt.Errorf("%w: %s", ErrContext
 // This prototype excludes native/assembly archive members rather than guessing
 // a missing object's ownership. Every offset/count is checked before indexing.
 func readArchive(data []byte, target string) (map[string]dataRecord, error) {
+	members, err := archiveMembers(data)
+	if err != nil {
+		return nil, err
+	}
+	if len(members) != 2 || members[0].name != "__.PKGDEF" || members[1].name != "_go_.o" {
+		return nil, contextError("missing or nonordinary compiler package/object members")
+	}
+	object, err := objectBody(members[1].data, target)
+	if err != nil {
+		return nil, err
+	}
+	return readObject(object)
+}
+
+type archiveMember struct {
+	name string
+	data []byte
+}
+
+func archiveMembers(data []byte) ([]archiveMember, error) {
 	if len(data) < 8 || len(data) > archiveLimit || string(data[:8]) != "!<arch>\n" {
 		return nil, contextError("invalid compiler archive header or byte bound")
 	}
 	seen := make(map[string]bool)
-	var object []byte
+	var members []archiveMember
 	for pos := 8; pos < len(data); {
 		if len(seen) >= 64 || len(data)-pos < 60 {
 			return nil, contextError("truncated or oversized archive member inventory")
 		}
 		header := data[pos : pos+60]
 		name := strings.TrimSpace(string(header[:16]))
-		if string(header[58:]) != "`\n" || seen[name] || name != "__.PKGDEF" && name != "_go_.o" {
+		if string(header[58:]) != "`\n" || seen[name] || name == "" || strings.ContainsAny(name, "/\\\x00\r\n") {
 			return nil, contextError("duplicate, unknown or non-compiler archive member")
 		}
 		seen[name] = true
@@ -59,9 +79,7 @@ func readArchive(data []byte, target string) (map[string]dataRecord, error) {
 		if err != nil || size == 0 || size > uint64(len(data)-pos) {
 			return nil, contextError("invalid archive member extent")
 		}
-		if name == "_go_.o" {
-			object = data[pos : pos+int(size)]
-		}
+		members = append(members, archiveMember{name, data[pos : pos+int(size)]})
 		pos += int(size)
 		if size&1 != 0 {
 			if pos >= len(data) || data[pos] != '\n' && data[pos] != 0 {
@@ -70,9 +88,10 @@ func readArchive(data []byte, target string) (map[string]dataRecord, error) {
 			pos++
 		}
 	}
-	if len(seen) != 2 || object == nil {
-		return nil, contextError("missing compiler package/object member")
-	}
+	return members, nil
+}
+
+func objectBody(object []byte, target string) ([]byte, error) {
 	end := bytes.Index(object, []byte("\n!\n"))
 	if end < 0 || end > 4096 {
 		return nil, contextError("invalid compiler object text header")
@@ -84,18 +103,22 @@ func readArchive(data []byte, target string) (map[string]dataRecord, error) {
 		words[2] != goos || words[3] != goarch || words[4] != "go1.27.1" {
 		return nil, contextError("object target/version differs from selected compiler")
 	}
-	return readObject(object[end+3:])
+	return object[end+3:], nil
 }
 
 // These byte roles are pinned to Go 1.27.1 cmd/internal/goobj/objfile.go, rather
 // than inferred from symbol spellings or the data-only assembler listing.
 func readObject(data []byte) (map[string]dataRecord, error) {
+	return readObjectRole(data, 0, false)
+}
+
+func readObjectRole(data []byte, flags uint32, emptyAssembly bool) (map[string]dataRecord, error) {
 	const headerSize = 8 + 8 + 4 + 19*4
 	if len(data) < headerSize || string(data[:8]) != "\x00go120ld" {
 		return nil, contextError("unknown or truncated binary goobj header")
 	}
 	// ObjFlagShared, FromAssembly and Unlinkable are outside this prototype.
-	if binary.LittleEndian.Uint32(data[16:20]) != 0 {
+	if binary.LittleEndian.Uint32(data[16:20]) != flags {
 		return nil, contextError("nonordinary compiler object flags")
 	}
 	var offsets [19]int
@@ -123,7 +146,7 @@ func readObject(data []byte) (map[string]dataRecord, error) {
 	for i := 3; i <= 6; i++ {
 		count += len(block(i)) / 21
 	}
-	if count == 0 || count > symbolLimit || len(block(9))/8 != len(block(4))/21 || len(block(10))/16 != len(block(5))/21 {
+	if count == 0 && !emptyAssembly || count > symbolLimit || len(block(9))/8 != len(block(4))/21 || len(block(10))/16 != len(block(5))/21 {
 		return nil, contextError("invalid symbol/hash inventory")
 	}
 	var indices [3][]uint32
