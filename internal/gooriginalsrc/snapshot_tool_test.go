@@ -2,6 +2,7 @@ package gooriginalsrc
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -295,5 +296,151 @@ func TestOriginSetTypedTool(t *testing.T) {
 	}
 	if data, err := set.files.ReadRetained(tool); err == nil || data != nil {
 		t.Fatal("original download tool escaped through a source byte route")
+	}
+}
+
+func TestSnapshotTypedToolStreamPhysicalClosure(t *testing.T) {
+	for _, role := range []string{"unchanged", "same inode growth", "same inode shrink", "tail byte", "replacement", "symlink", "incomplete close", "close error"} {
+		t.Run(role, func(t *testing.T) {
+			root := originalToolFixtureRoot(t)
+			name := makeOriginalToolExtent(t, root, "go", 17<<20)
+			snapshot := NewSnapshot()
+			if err := snapshot.RetainTool(name); err != nil {
+				t.Fatal(err)
+			}
+			before := snapshot.files[name]
+			reader, err := openOriginalRoleFile(name, before, snapshot.paths[name], snapshot.hashes[name], originalToolFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer reader.Close()
+			var prefix [1]byte
+			if _, err := io.ReadFull(reader, prefix[:]); err != nil || prefix[0] != 0x52 {
+				t.Fatal("actual tool member was not open before mutation", err)
+			}
+			switch role {
+			case "same inode growth", "same inode shrink":
+				extent := int64(toolByteLimit + 1)
+				if role == "same inode shrink" {
+					extent = before.Size() - 1
+				}
+				if err := os.Truncate(name, extent); err != nil {
+					t.Fatal(err)
+				}
+				after, err := os.Lstat(name)
+				if err != nil || !os.SameFile(before, after) || after.Size() != extent {
+					t.Fatal("open tool extent control did not use the original inode", err)
+				}
+			case "tail byte":
+				file, err := os.OpenFile(name, os.O_WRONLY, 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, writeErr := file.WriteAt([]byte{0xa6}, before.Size()-1)
+				closeErr := file.Close()
+				if writeErr != nil || closeErr != nil {
+					t.Fatal(writeErr, closeErr)
+				}
+			case "replacement", "symlink":
+				backup := filepath.Join(originalToolFixtureRoot(t), "original")
+				if err := os.Rename(name, backup); err != nil {
+					t.Fatal(err)
+				}
+				if role == "replacement" {
+					makeOriginalToolExtent(t, root, "go", before.Size())
+				} else if err := os.Symlink(backup, name); err != nil {
+					t.Fatal(err)
+				}
+			case "incomplete close":
+				if err := reader.Close(); err == nil {
+					t.Fatal("an incomplete original tool stream impersonated EOF")
+				}
+				return
+			}
+			count, readErr := io.Copy(io.Discard, reader)
+			if role == "close error" {
+				if readErr != nil || count != before.Size()-1 {
+					t.Fatal("close-error control did not first consume full tool EOF", readErr)
+				}
+				if err := reader.file.Close(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			closeErr := reader.Close()
+			if role == "unchanged" {
+				if readErr != nil || closeErr != nil || count != before.Size()-1 {
+					t.Fatal("complete tool stream was not closed through original EOF", readErr, closeErr)
+				}
+			} else if role == "close error" {
+				if !errors.Is(closeErr, os.ErrClosed) {
+					t.Fatal("actual closed tool FD error was lost", closeErr)
+				}
+			} else if readErr == nil && closeErr == nil {
+				t.Fatal("a changed tool stream was accepted through EOF")
+			}
+		})
+	}
+}
+
+func TestSnapshotTypedToolInvalidRolesAndCounts(t *testing.T) {
+	root := originalToolFixtureRoot(t)
+	tool := makeOriginalToolExtent(t, root, "go", 1)
+	for _, role := range []string{"nil", "relative", "missing", "directory", "symlink", "unknown role"} {
+		t.Run(role, func(t *testing.T) {
+			snapshot := NewSnapshot()
+			name := tool
+			switch role {
+			case "nil":
+				snapshot = nil
+			case "relative":
+				name = "go"
+			case "missing":
+				name = filepath.Join(root, "missing")
+			case "directory":
+				name = root
+			case "symlink":
+				name = filepath.Join(root, "symlink")
+				if err := os.Symlink(tool, name); err != nil {
+					t.Fatal(err)
+				}
+			case "unknown role":
+				if err := snapshot.RetainTool(tool); err != nil {
+					t.Fatal(err)
+				}
+				snapshot.retainedRoles[tool] = originalFileRole(255)
+				if err := snapshot.Verify(); err == nil {
+					t.Fatal("unknown private file role acquired a byte bound")
+				}
+				return
+			}
+			if err := snapshot.RetainTool(name); err == nil {
+				t.Fatal("invalid original tool role was retained")
+			}
+		})
+	}
+	for _, role := range []string{"retained files", "complete members"} {
+		t.Run(role, func(t *testing.T) {
+			snapshot := NewSnapshot()
+			if err := snapshot.RetainTool(tool); err != nil {
+				t.Fatal(err)
+			}
+			// Counter-only slots exercise the shared limit. They are not
+			// actual source observations and do not claim a valid inventory.
+			for index := 1; index < fileLimit; index++ {
+				name := fmt.Sprintf("count-only-%d", index)
+				if role == "retained files" {
+					snapshot.hashes[name] = ""
+				} else {
+					snapshot.fileRoles[name] = true
+				}
+			}
+			if err := snapshot.RetainTool(tool); err != nil || snapshot.bytes != 1 {
+				t.Fatal("repeat tool used another count/byte slot", err)
+			}
+			extra := makeOriginalToolExtent(t, originalToolFixtureRoot(t), "extra", 1)
+			if err := snapshot.RetainTool(extra); err == nil {
+				t.Fatal("new tool escaped the original shared file/member bound")
+			}
+		})
 	}
 }

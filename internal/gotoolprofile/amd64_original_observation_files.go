@@ -33,6 +33,10 @@ func (files *amd64OriginalObservationFiles) retain(name string) error {
 	return files.snapshot.Retain(name)
 }
 
+func (files *amd64OriginalObservationFiles) retainTool(name string) error {
+	return files.snapshot.RetainTool(name)
+}
+
 func (files *amd64OriginalObservationFiles) directory(name string, recursive bool) error {
 	return files.snapshot.Directory(name, recursive)
 }

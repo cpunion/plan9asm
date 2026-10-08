@@ -231,7 +231,7 @@ func captureAMD64OriginalObservationState(ctx context.Context, request AMD64Orig
 			return nil, fmt.Errorf("registered SDK source changed: %s", file)
 		}
 	}
-	if err := state.files.retain(request.GoBinary); err != nil || state.files.hashes[request.GoBinary] != profile.DriverSHA256 {
+	if err := state.files.retainTool(request.GoBinary); err != nil || state.files.hashes[request.GoBinary] != profile.DriverSHA256 {
 		return nil, fmt.Errorf("actual Go driver changed during capture")
 	}
 	if downloaded != nil {

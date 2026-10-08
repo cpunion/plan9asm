@@ -51,7 +51,7 @@ func NewOriginSet(cache, goBinary string) (*OriginSet, error) {
 	if err := set.retainCacheDirectory(cache); err != nil {
 		return nil, err
 	}
-	if err := set.files.Retain(goBinary); err != nil {
+	if err := set.files.RetainTool(goBinary); err != nil {
 		return nil, err
 	}
 	return set, nil

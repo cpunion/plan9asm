@@ -20,8 +20,29 @@ const (
 	fileLimit      = 65536
 	directoryLimit = 4096
 	fileByteLimit  = 16 << 20
+	toolByteLimit  = 64 << 20
 	totalByteLimit = 64 << 20
 )
+
+type originalFileRole uint8
+
+const (
+	originalSourceFile originalFileRole = iota + 1
+	originalToolFile
+)
+
+func (role originalFileRole) byteLimit() int64 {
+	switch role {
+	case originalSourceFile:
+		return fileByteLimit
+	case originalToolFile:
+		// This is the existing Go frame driver/subtool physical-read limit.
+		// Sources, exports and ZIP members do not acquire the tool role.
+		return toolByteLimit
+	default:
+		return -1
+	}
+}
 
 // Snapshot retains complete physical files and directory membership. It has no
 // serialized constructor, command callback, frame, signature or permission.
@@ -30,6 +51,8 @@ type Snapshot struct {
 	entries        map[string][]string
 	directories    map[string]os.FileInfo
 	files          map[string]os.FileInfo
+	retainedRoles  map[string]originalFileRole
+	tools          map[string]os.FileInfo
 	fileRoles      map[string]bool
 	directoryRoles map[string]bool
 	bytes          int64
@@ -48,7 +71,8 @@ func NewSnapshot() *Snapshot {
 	return &Snapshot{
 		hashes: make(map[string]string), paths: make(map[string]string),
 		entries: make(map[string][]string), directories: make(map[string]os.FileInfo),
-		files:     make(map[string]os.FileInfo),
+		files:         make(map[string]os.FileInfo),
+		retainedRoles: make(map[string]originalFileRole), tools: make(map[string]os.FileInfo),
 		fileRoles: make(map[string]bool), directoryRoles: make(map[string]bool),
 	}
 }
@@ -58,15 +82,46 @@ func (snapshot *Snapshot) View() SnapshotView {
 }
 
 func (snapshot *Snapshot) Retain(name string) error {
-	if snapshot == nil || snapshot.hashes == nil || !filepath.IsAbs(name) {
+	return snapshot.retain(name, originalSourceFile)
+}
+
+// RetainTool observes an explicitly selected original driver/subtool, using
+// the existing 64 MiB tool contract. It shares the original graph budget and
+// cannot be read as source bytes or mint source/frame/ASM permissions.
+func (snapshot *Snapshot) RetainTool(name string) error {
+	return snapshot.retain(name, originalToolFile)
+}
+
+func (snapshot *Snapshot) retain(name string, role originalFileRole) error {
+	if snapshot == nil || snapshot.hashes == nil || snapshot.retainedRoles == nil ||
+		!filepath.IsAbs(name) || role.byteLimit() < 0 {
 		return fmt.Errorf("original file path is missing or over-bound")
 	}
 	if _, retained := snapshot.hashes[name]; !retained && len(snapshot.hashes) >= fileLimit {
 		return fmt.Errorf("original file inventory exceeds its count bound")
 	}
 	info, err := os.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > fileByteLimit {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > role.byteLimit() {
 		return fmt.Errorf("original source/export is missing, nonregular or over-bound: %s", filepath.Base(name))
+	}
+	if prior, exists := snapshot.retainedRoles[name]; exists && prior != role {
+		return fmt.Errorf("original physical file cannot be relabeled between source and tool")
+	}
+	// Tools are a small explicitly selected inventory. Check their original
+	// inode as well as the path so hard links and case/parent aliases cannot
+	// turn the same physical file into the other observation role.
+	if role == originalSourceFile {
+		for _, tool := range snapshot.tools {
+			if os.SameFile(tool, info) {
+				return fmt.Errorf("original tool inode cannot be relabeled as source")
+			}
+		}
+	} else {
+		for prior, file := range snapshot.files {
+			if snapshot.retainedRoles[prior] == originalSourceFile && os.SameFile(file, info) {
+				return fmt.Errorf("original source inode cannot be relabeled as tool")
+			}
+		}
 	}
 	physical, err := filepath.EvalSymlinks(name)
 	if err != nil {
@@ -75,7 +130,7 @@ func (snapshot *Snapshot) Retain(name string) error {
 	if !snapshot.fileRoles[physical] && len(snapshot.fileRoles) >= fileLimit {
 		return fmt.Errorf("original file member inventory exceeds its shared count bound")
 	}
-	digest, err := originalFileSHA256(name, info)
+	digest, err := originalRoleFileSHA256(name, info, role)
 	if err != nil {
 		return err
 	}
@@ -90,6 +145,10 @@ func (snapshot *Snapshot) Retain(name string) error {
 		snapshot.bytes += info.Size()
 	}
 	snapshot.hashes[name], snapshot.paths[name], snapshot.files[name] = digest, physical, info
+	snapshot.retainedRoles[name] = role
+	if role == originalToolFile {
+		snapshot.tools[name] = info
+	}
 	snapshot.fileRoles[physical] = true
 	return nil
 }
@@ -164,7 +223,8 @@ func (snapshot *Snapshot) Directory(name string, recursive bool) error {
 }
 
 func (snapshot *Snapshot) Verify() error {
-	if snapshot == nil || snapshot.hashes == nil || snapshot.files == nil || snapshot.directories == nil {
+	if snapshot == nil || snapshot.hashes == nil || snapshot.files == nil ||
+		snapshot.retainedRoles == nil || snapshot.directories == nil {
 		return fmt.Errorf("missing original source/export inventory")
 	}
 	for name, digest := range snapshot.hashes {
@@ -174,7 +234,7 @@ func (snapshot *Snapshot) Verify() error {
 			physical != snapshot.paths[name] || !os.SameFile(snapshot.files[name], info) {
 			return fmt.Errorf("original source/export physical identity changed")
 		}
-		actual, err := originalFileSHA256(name, info)
+		actual, err := originalRoleFileSHA256(name, snapshot.files[name], snapshot.retainedRoles[name])
 		if err != nil {
 			return fmt.Errorf("original source/export bytes changed: %w", err)
 		}
@@ -225,7 +285,8 @@ func (snapshot *Snapshot) OpenRetained(name string) (io.ReadCloser, error) {
 	expected := snapshot.files[name]
 	digest, retained := snapshot.hashes[name]
 	physical, err := filepath.EvalSymlinks(name)
-	if !retained || expected == nil || err != nil || physical != snapshot.paths[name] {
+	if !retained || expected == nil || err != nil || physical != snapshot.paths[name] ||
+		snapshot.retainedRoles[name] != originalSourceFile {
 		return nil, fmt.Errorf("original file was not retained at its physical role")
 	}
 	if expected.Size() < 0 || expected.Size() > fileByteLimit {
@@ -251,11 +312,15 @@ func (buffer *originalFileBuffer) Write(data []byte) (int, error) {
 }
 
 func originalFileSHA256(name string, expected os.FileInfo) (string, error) {
+	return originalRoleFileSHA256(name, expected, originalSourceFile)
+}
+
+func originalRoleFileSHA256(name string, expected os.FileInfo, role originalFileRole) (string, error) {
 	physical, err := filepath.EvalSymlinks(name)
 	if err != nil {
 		return "", err
 	}
-	reader, err := openOriginalFile(name, expected, physical, "")
+	reader, err := openOriginalRoleFile(name, expected, physical, "", role)
 	if err != nil {
 		return "", err
 	}
@@ -286,7 +351,11 @@ type originalFileReader struct {
 }
 
 func openOriginalFile(name string, expected os.FileInfo, physical, digest string) (*originalFileReader, error) {
-	if expected == nil || expected.Size() < 0 || expected.Size() > fileByteLimit {
+	return openOriginalRoleFile(name, expected, physical, digest, originalSourceFile)
+}
+
+func openOriginalRoleFile(name string, expected os.FileInfo, physical, digest string, role originalFileRole) (*originalFileReader, error) {
+	if expected == nil || role.byteLimit() < 0 || expected.Size() < 0 || expected.Size() > role.byteLimit() {
 		return nil, fmt.Errorf("original source file has no bounded physical extent")
 	}
 	before, err := os.Lstat(name)
