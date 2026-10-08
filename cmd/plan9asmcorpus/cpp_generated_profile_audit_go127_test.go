@@ -226,13 +226,30 @@ func TestCPPGeneratedHeaderFullDefaultProfileProjection(t *testing.T) {
 			requests, err := planDiscoveryFeatureProfiles(plan, candidate.AsmFiles, baselines)
 			if role == "active_header" {
 				// This independently measured header equality is not a portable
-				// planning authority. Until a source-bound actual-header producer
-				// is integrated, retain the original full11 failure unchanged.
-				if len(unique) != 123 || len(requests) != 0 || err == nil ||
-					err.Error() != "source-required target feature profiles exceed the explicit 64-profile bound" {
+				// planning authority. Preserve every proposal within each actual
+				// target's budget, without header-dependent pruning. These are
+				// requests, not driver observations or compiled-object evidence.
+				if err != nil || len(unique) != 123 || len(requests) != len(unique) {
 					t.Fatalf("unbound active header acquired a fabricated reduced scope: proposals=%d requests=%d err=%v", len(unique), len(requests), err)
 				}
-				t.Logf("GENERATED_PROFILE_UNRESOLVED_ACTIVE_HEADER %v", err)
+
+				seen := make(map[string]bool)
+				counts := make(map[string]int)
+				for _, request := range requests {
+					key := discoveryFeatureRequestKey(request)
+					if !unique[key] || seen[key] {
+						t.Fatalf("missing, invented or duplicate original proposal %s", key)
+					}
+					seen[key] = true
+					counts[request.Target]++
+				}
+				for _, target := range targets {
+					if counts[target] != len(projection[target]) || counts[target] == 0 || counts[target] > 64 {
+						t.Fatalf("incomplete or unbounded actual target %s: got %d, original proposals %d",
+							target, counts[target], len(projection[target]))
+					}
+				}
+				t.Logf("GENERATED_PROFILE_UNRESOLVED_ACTIVE_HEADER proposals=%d targets=%d", len(requests), len(counts))
 				return
 			}
 			if err != nil || len(requests) != len(targets) {
