@@ -2,261 +2,148 @@
 
 Read [validation](validation.md), [instruction families](instructions.md), and
 [discovery verification](discovery-verification.md). Inspect actual HEAD/status
-and terminal owners before continuing; never edit a live frozen snapshot.
+and terminal owners; never edit a live frozen snapshot. This is a checkpoint,
+not a current-head completion certificate. Older evidence remains in history.
 
 ## Contribution boundary
 
 Stage repairs in fork Draft [PR 4](https://github.com/cpunion/plan9asm/pull/4),
-targeting codex/expand-ecosystem-corpus-20260913. Push only to cpunion.
-Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft;
-do not promote its fork head until current-head fork CI and review pass.
+targeting `codex/expand-ecosystem-corpus-20260913`. Push only to cpunion.
+Upstream [PR 40](https://github.com/xgo-dev/plan9asm/pull/40) stays Draft; do not
+promote its fork head until current-head fork CI and review pass. Root alone
+publishes assembly-ledger updates.
 
-Previous repair head 47ea649d failed priority discovery shards 5, 29, 36, 38,
-39, 42 and aggregate in completed run 36942816488. The batched successor
-c09eff1e is published in fork PR 4; run 37711752851 is still active. Let it
-finish once before pushing another batch. Skipped downstream jobs are not
-passes. Refresh the remote state before publishing the next batch.
+Published head `c09eff1e`, run `37711752851`, is still active. Let it finish
+once before another push; do not cancel it or borrow old-source artifacts.
+Four priority shards have failed and two are still running at this checkpoint.
+Skipped downstream work cannot pass the aggregate. Refresh actual remote state
+before publishing. Previous run `36942816488` on `47ea649d` also failed.
 
-## Continue here
+## Frozen validation
 
-Development branch: codex/pr40-post-root-20261008.
-The published codex/pr40-final-batch-20261008 snapshot stays frozen.
-Latest upstream main is already an ancestor. Root alone writes ledger.
-This successor integrates these test-first rule-class repairs:
+Continue on `codex/pr40-following-batch-20261008`. Running component gates stay
+frozen in separate persistent worktrees. Overlapping focused passes cannot be
+added into a full-suite count.
 
-- GP/SIMD transfer grammar, all-path result initialization, bounded independent
-  SCC composition, escaped CFG labels, raw near-RET numerical LEA adaptation,
-  and physical raw segment/x87 handoff.
-- Stale fixtures now invoke the typed dispatcher, distinguish complete GP/X
-  writes from partial MOVSS, and assert exact volatile read width.
-- Inactive SIB scale is compared on copies only; active physical operands and
-  segment metadata remain strict. No production decoder permission changed.
-- Twelve horizontal integer operations share grammar, caller effects, native
-  legacy m128 access and complete 64-byte alias/flag/canary tests.
-- Four dword-product operations share grammar, byte effects and native access.
-  The first implementation had a real compressed-disp8 defect; its successor
-  binds full tuples 16/32/64 and broadcast 8 to actual Go bytes. Backend O0/O2
-  and IR default<O2> are explicitly separate axes.
-- Scalar FP results consume shared logical-byte dependencies. Masks, every
-  input byte and every return remain checked; no caller/memory permission is
-  created. Bare and grouped SB stores require the complete result proof and
-  cannot substitute AX fallback for unwritten results.
-- GP/X native stores retain their exact volatile width even when overwritten.
-  An independent test-first regression covers five moves, two native address
-  representations, three APIs, five targets and real IR optimization.
-- Unresolved x86 memory displacements remain in the parsed inventory, but
-  complete translation rejects them before raw decoding. Descriptive bare
-  AUTO names retain Go's zero-offset syntax, not a native memory permission.
-- The complete CMOV condition/width family shares typed grammar and byte
-  effects. Numerical FP bit views preserve NaN payloads and signed zero.
-  Every potential memory source is read even when the predicate is false.
-  Fixed-local AUTO certificates and emission consume Go's actual frame-biased
-  address role, including shared GP/SIMD consumers; they cannot certify a
-  positive named offset that is physically outside the frame.
-- Corpus alias fixtures now distinguish registered ADDQ read effects, public
-  all-path result initialization, and Go's actual unknown-name diagnostic.
-- Instrumentation header queries inherit their actual planning context.
-  Cancelled parents cannot launch another query or hide cancellation behind
-  an independent source error. This does not increase the candidate budget.
+Frozen `026f8cfc` completed all 32 root partitions: 5,021 roots and 87,348
+children passed, no failure/incomplete node. Another 39 host-inapplicable
+Linux runtime roots were skipped and still require their native/cross CI axes.
+Independent raw JSONL/list, full source/tool/stamped-runner and recorded
+owner/group readback agrees. This is not the later combined head. Preserve the
+prior `40ff602f` full-root report with its 17 ARM64 scratch-path root failures.
 
-The legacy logical m128 repair is integrated: logical FP bytes are not native
-backing/alignment. Those public forms remain Context without the native
-contract; all twelve legacy operations retain their original opcode faults.
-PS keeps an SSE1 carrier, while PD/integer keeps SSE2. Scalar ANDNL/ANDNQ
-feature identities must not attach BMI to packed ANDNPS/ANDNPD. Rosetta
-cannot certify Intel alignment traps. A required Linux/amd64 fault axis stays
-separate from portable numerical/object observations.
+Its other-package/nested-CLI/first-party corpus-driver gate remains running.
+It retained a real two-minute LLVM loader build failure. Remaining corpus-driver
+ordinary/race partitions and complete post-source/tool/owner readback must close.
+These unit tests are not local external-library scans or corpus compilation.
+The published `c09eff1e` sixteen-stage affected gate passed, but did not certify
+the complete root/module suite or external corpus.
 
-## Verification next
+## Integrated rule-class repairs
 
-Frozen 190fa86a completed all 32 root partitions: 4,922 passed, two failed,
-39 host-inapplicable roots skipped, none incomplete. Both stale destination
-fixtures now have focused repairs, not a passing integrated full-root
-certificate. Its separate corpus-driver inventory completed all 32 partitions:
-562 of 565 roots passed and three failed. Two alias failures are repaired;
-the imported-types header-planning timeout remains independently reproduced.
-Other root-module packages, both nested CLIs, workflow policy, vet and build
-passed on that frozen source. Do not relabel those reports as current-head.
+The predecessor already integrates shared GP/SIMD, scalar-lane, AES, CMOV,
+horizontal integer and dword-product grammars/effects; source CFG/result
+requirements; exact native widths; raw segment/x87 and Go-frame address roles;
+and planning cancellation propagation. Preserve independent Go-byte, numerical,
+fault, canary and optimization axes. Logical FP bytes do not grant native
+backing/alignment. Rosetta cannot certify Intel alignment faults.
 
-The CMOV successor's complete affected scopes pass on current and historical
-SDKs, including fixed-local and caller authority guards. Cancellation scopes
-likewise pass on both SDKs. Each certificate belongs to its own clean commit;
-overlapping focused scopes cannot be added into a full-suite coverage count.
-Scalar insert/extract byte effects, uncached full-file hash efficiency and
-imported-type header planning have focused repairs. The encoder-table gate
-now executes its historical-SDK path instead of returning early. AES and
-scalar caller effects are integrated, including an independent Go-byte/FIPS
-runtime fixture and a missing-input negative control. Their current and
-historical SDK scopes pass; this is not a current-head full-suite certificate.
-The mode32 VPEXTRQ native width requires its own original-encoder check; an
-object pass alone is not a numerical proof.
+The successor additionally integrates these independently frozen components:
 
-Both x86 result observers now transport incoming opaque pointer identities
-without marking their bytes numerical or granting initialized pointee/native
-storage. MOVD consumes its existing MOVQ word-alias grammar through a local
-dispatch copy. The focused objects, numerical/canary runtime and strict negative
-controls pass at their own frozen source. Original crc32 now passes its former
-MOVQ import check but still fails at a CPU-feature SB memory read; it is not a
-passing library.
+- ARM64 scratch-owned directory canonicalization and fixture preconditions:
+  `eb4e9b12`, ordinary/race each 1,270 nodes pass. Source/tool redirects remain
+  invalid; no caller path is canonicalized into a new authority role.
+- Requested-key-only superseded lookup, including matched replacement payload:
+  `f1e3d892`, ordinary/race each 168 pass. The fixture sampled about 140 MB RED
+  versus 2.5 MB GREEN, not a whole-ledger constant-memory guarantee.
+- Ordered streaming directory-collection fan-in: `bd51d81d`, full Discovery
+  ordinary/race each 287 pass plus vet/build/readback. Its CLI fixture measured
+  101.1 MB RED versus 3.85 MB GREEN, and the 80-member/FD64 regression passes.
+  Initial/final EOF, source-order folds, counts/ranges, generation/member guards
+  and atomic publication remain mandatory.
+- Complete register XCHG effects and AX-self NOP versus ModRM semantics:
+  `84798f6f`, ordinary/race each 2,301 pass. Partial/high-byte/REX writes,
+  simultaneous reads, opaque identities and original runtime axes stay distinct.
+- Actual SDK internal/cpu typed numerical storage observation: `8879d43a`,
+  ordinary/race each 120 pass plus independent five-target archive/type readers.
+  Storage extent is not a CPU constant, initialization or global-read permission.
+- Exact downloaded original source-query observation: `317a3cd7`,
+  ordinary/race each 199 pass, historical REDs and independent full-source/raw/
+  binary/Go-driver readback, vet and stamped build retained. Each foreign module
+  has its own actual exact download/ZIP/member/source guard. No copied synthetic
+  owned-main role. Hash agreement is not an independent SumDB signature.
+  Downloaded BindFixedLocal still returns explicit Context and no binding.
+- Request-owned stable LLVM loader source: `39556bfb`, ordinary/race each
+  31 pass. Every scope still builds and executes its own binary and captures
+  actual tools/environment/library; no proof/result cache. Parallel creation,
+  cancellation and foreign temporary cleanup/publication guards pass.
+  A fresh empty-cache unchanged-budget check passes; historical two-minute F
+  remains failed evidence, not a relabeled success.
 
-The next batch shares the typed GP/X numerical register effect between both
-result observers, covering MOVL/MOVQ/MOVD/VMOVD/VMOVQ. Its independent test-first
-RED had 18 passes and 686 failures; the frozen family successor 4ff45e56 has
-1,280 passes in each ordinary/race run, with no failed, skipped or incomplete
-tests. Public dispatch is register-only. Private memory roles, opaque pointer
-identity and native/caller authority remain unchanged. The original GP-to-X
-MOVL witness passes without substituting another instruction. These focused
-results do not certify an original CRC32 library.
+Normal sharded ledger startup/status, active-batch lookup, bounded fair retry
+selection, publication and transfer stream. They still validate every row,
+counts, continuity and generation. Legacy monolithic JSON/gzip imports and
+explicit full-report reference helpers are separate compatibility paths.
 
-The integrated 40ff602f full root inventory has now closed all 32 partitions:
-5,002 roots passed, 17 failed and 39 host-inapplicable runtime roots skipped;
-87,031 children passed and 95 failed, with none incomplete. Independent raw
-JSONL/list/source/stamped-runner and recorded owner/group readback agrees.
-All 17 failed roots belong to the ARM64 scratch-source path class. Preserve
-that complete failed report; a later focused pass cannot replace it.
+## Remaining shared failures
 
-The ARM64 factory canonicalizes only its freshly owned temporary directory,
-retaining the actual caller environment and checking the created SameFile
-identity before using the physical path. Caller source/tool redirects remain
-invalid. A separate fixture repair checks the actual input precondition before
-hidden-entry positives and negatives, preventing incidental path rejection
-from masquerading as a successful negative test. Its two test-first RED runs
-are retained. The clean eb4e9b12 focused ordinary and race scopes each have
-1,270 passes and no failures/skips/incomplete tests, with independent list,
-raw EOF/terminal, source/binary and recorded owner/group readback. The complete
-four-commit chain is integrated here; a fresh combined full root run remains
-required.
+Source-query proof is not an actual frame/object certificate. SDK numerical
+storage is not a per-instruction SB-read certificate. First close independent
+actual TEXT/relocation/source-PC evidence, then review private typed consumers.
+Do not turn an OpSym spelling, DATA record, BSS extent or source/report JSON
+into initialized/native memory. Preserve wasm logical PC versus code-byte axes.
 
-Normal sharded-ledger operations now stream: startup/status, active-batch
-checkpoint lookup, bounded retries, publication and sharded report transfer.
-They still validate every record through EOF, counts, range continuity and
-generation readback. Batch lookup retains only active paths and their exact
-repository case aliases; publication and transfer retain current module groups,
-not ledger-wide payloads or version maps. Retry selection obeys its limit and
-persists a fair queue marker independently of the two index cursors.
-Superseded-version checks likewise retain only requested replacement keys.
-The next batch also removes an extra full matched-candidate payload copy from
-that lookup. The shared full-EOF visitor still validates unrelated records.
-The frozen f1e3d892 test-first successor passes all 168 nodes separately in
-ordinary and race runs, including exact requested memberships and unselected
-corrupt tails. Its 18,000-unrelated-matched fixture reduces sampled live heap
-from roughly 140 MB to 2.5 MB; this is a fixture result, not a whole-ledger
-constant-memory claim. The complete three-commit chain is integrated here.
-Explicit monolithic legacy JSON/gzip imports and full-report reference helpers
-remain separate compatibility paths, not bounded streaming interfaces.
-Directory collections without a root manifest no longer fall into that full
-reader. The complete c120c257 -> bd51d81d streaming collection repair is
-integrated here: source-order metadata cursors open one input at a time and
-retain current-module payload, with no member-count cap. Its complete Discovery
-package ordinary/race scopes each have 287 passes and zero failures/skips;
-vet/build and independent raw/source/tool/owner readback pass. Actual CLI heap
-in its retained fixture is 101.1 MB RED versus 3.85 MB GREEN. An independent
-80-member/FD64 test reproduces and closes eager fan-in exhaustion. Complete
-initial/final input scans, all-member generation and member-set guards, staging
-validation and atomic publication remain mandatory; cursors are provisional.
-The frozen streaming integration f53ef7dd passes the complete Discovery package
-(235 root/subtests) and the affected superseded/progress controls (49), separately
-in ordinary and race runs, plus both packages' vet/build and committed-ledger
-readback. Its initial canonical-path oracle failure is retained; explicit
-successful/corrupt aliases now use the actual physical source path. These tests
-do not certify a later successor or advance assembly-ledger statuses.
+Current CI failure classes include FP/native/CPP/result binding, cached source/
+object roles, x86 caller/stack joins, ARM64 native ABI/frame state, profile
+planning and generated/instrumentation/resource scopes. Repair entire classes
+with independent first-party regressions, not library allowlists. The module-
+global 64-profile limit is under test-first review for independent target
+budgets. Oversized consumer CPP payloads need complete selected-source/include
+closure or deduplicated transport, never silently dropped required inputs.
 
-The official AES baseline now records its unbound SP/BP memory operands as
-Context on all eight SDKs. Independent before/after form reports isolate the
-same three changed shapes, while actual Go bytes and certified native-memory
-positive controls retain support. Encoder/grammar/runtime counts and historical
-exceptions are unchanged; this is a storage-proof correction, not an ISA or
-non-target-architecture exclusion.
+Frozen `026f8cfc` official five-arch classification and Go-accepted ARM64
+decoder gates pass, with zero official unsupported forms/parse errors.
+Context classifications, encoder tables and runtime proofs remain distinct
+measures, not 100% object/runtime coverage. Never bless a changed fingerprint.
 
-The next fork batch adds an exact original standard-prefix module versus
-stock-SDK namespace refusal path. Keep retained complete portable command output,
-independently recomputed hashes, exact module/source/profile/argv roles, and the
-valid sibling's five-target object obligations. Generic ambiguity, unknown
-tools, extra diagnostics and missing evidence remain failures. This refusal is
-source N/A for its exact package/profile, not an instruction pass or whole-module
-skip. Its first one-target producer passed; the expanded five-target producer
-timed out during native linking and remains incomplete, not a passing scope.
-Its final binding successor 7045c5e7 closed with 48 passes, including exact
-refusal and valid-sibling LLVM objects on five targets. Preserve the earlier
-timeout and infrastructure failures; they are not successful scopes.
+Its strict five-target benchmark attempted all 184 files: 167 pass, 17 fail,
+zero N/A/unattempted; target wall total 28 seconds under unchanged 300/900-second
+budgets. The standard target-matrix gate also fails. Remaining classes include
+SDK symbol reads, dynamic reflect frames, native entry/TLS/continuations,
+ARM64 result padding and whole SDK body closure. Preserve the earlier strict
+`55ecfe9d` failure; speed does not certify compilation.
 
-The focused historical scalar list hit its 20-minute pre-test link limit, with
-zero attempted tests; plain tests never started. Keep its incomplete/failed
-receipt, not a compatibility pass. The later exact owner/PID-group readback
-confirmed all recorded processes absent; the initial cleanup failure remains.
-Do not
-borrow the current-SDK component's 352 passes or repeat unlimited local links.
+Historical scalar compatibility hit a pre-test link limit with zero tests
+attempted. The mode32 extreme-SP witness has an LLVM22 O0 allocator failure,
+not source N/A. Exact official SDK namespace refusal and valid sibling objects
+have their own frozen five-target proof; earlier timeout evidence stays failed.
 
-Obtain terminal family owners and independent physical readbacks. Freeze the
-clean combined successor and run the complete
-root inventory in 32 partitions with bounded two-worker collection, other
-root-module packages, nested CLIs, focused historical compatibility, official
-five-arch classification and strict benchmark. Required native Linux/cross
-counterparts run in fork CI. Missing tools, unknown errors and timeouts fail.
+After components close, freeze the combined source and run affected/full root
+and other packages, both nested CLIs, historical framework compatibility,
+official tables, strict stdlib/benchmark and required fork/native CI axes.
+Missing tools, unknown errors and timeouts fail. Dispose LLVM modules before
+contexts; clean only exact owned caches after every consumer closes.
 
-The published c09eff1e affected gate closed all sixteen stages: Discovery 235,
-corpus-driver controls 219 and scalar/AES controls 403 passes in each ordinary
-and race run, plus vet, stamped builds, ledger readback, official five-arch
-classification and workflow policy. Its source before/after and process-owner
-readback agree. This is not the complete root/module suite or external corpus.
+## Corpus, ledger and inventory
 
-The mode32 extreme-SP witness still observes an LLVM22 O0 allocator limitation:
-its multi-gigabyte virtual frame is not a successful object/runtime case.
-Preserve actual Go acceptance and the backend error, never source N/A.
+No local background external inventory/corpus. Inventory belongs on its
+designated source-only server; compile/execute external code only on separate
+disposable validation executors. Local first-party fixtures remain allowed.
 
-The strict stdlib run on 55ecfe9d attempted all 184 files: 167 passed and 17
-failed, with no N/A or unattempted files. All five targets stayed within the
-normal 300/900-second budgets. The failures include private scalar result proofs
-with symbol/native memory inputs, dynamic reflect/caller frames, native
-continuations/TLS, ARM64 result padding and SDK body closure. Preserve this
-failed baseline and repair the shared rule classes; performance or official
-classification success cannot certify these files.
+The committed assembly ledger still has three historical Snappy passes and
+6,064 pending, no complete shard, complete=false and verified=false. Focused
+instruction tests never advance it. Only the automatic publisher may update
+records from complete reports with matching frozen provenance.
 
-The d2201c03 -> 720758a6 bounded static-storage producer is also integrated.
-It observes original compiler archive/goobj records and exact same-main-module
-typed numerical spans; an independent stock SDK binary reader verifies five
-targets and imported owners. Ordinary/race each have 77 passes, zero failures
-or skips, plus vet/build and physical readback. This prototype grants no
-translation, native memory, pointer, caller, result or constant-value authority.
-It accepts only bounded pure-Go same-main-module graphs and exact Go 1.27.1
-format rules; it is not a scalable external/SDK consumer path. Directory
-identities are pinned; individual canonical regular files use exact retained
-byte identity and open-time SameFile, not cross-observation inode continuity.
-The original SB-read consumer still returns Context. A separate SDK-owned
-CPU-feature producer needs exact Standard/GOROOT selection, actual archive
-members and one-argument self-linkname semantics before any consumer wiring.
+Committed inventory retains 215 continuous ranges, the 2025-10-01 history
+cutoff and head 2026-09-22T22:43:08Z. The requested cutoff is reached;
+history_complete instead means the entire official index back to its epoch.
+The bounded two-worker standalone incremental service has newer unsynchronized
+records. Inspect its actual owner/manifest/journal; never hot-replace its binary,
+start a second writer or merge an unvalidated live snapshot. cgo stays outside
+this repository. Cursors advance only after complete contiguous publication.
 
-## Corpus and ledger
-
-Local background corpus owners were terminated at the user's request. Do not
-replace them with local inventory scans or external corpus batches. Historical
-partial/failed reports remain evidence, never promoted to passes.
-Inventory belongs on its remote scanner; external compilation/execution belongs
-on separate disposable validation executors, not that scanner. Local first-party
-fixtures and corpus-driver unit tests remain allowed.
-
-The committed ledger still has three published Snappy passes, 6,064 pending,
-no complete shard, complete=false and verified=false. Only the automatic
-publisher may change records with exact matching frozen provenance. Focused
-instruction tests do not advance this ledger.
-The committed inventory has 215 continuous ranges through
-2026-09-22T22:43:08Z, with the 2025-10-01 history cutoff. Newer standalone
-inventory is unsynchronized; cgo stays outside this repository. The requested
-history cutoff has been reached. The earlier head service was OOM-killed
-before publication. `history_complete` refers to the complete official index
-back to its epoch, not completion of the requested 2025-10-01 cutoff.
-The standalone streaming inventory successor has since
-resumed one bounded, two-worker head controller; its completed windows extend
-the head cursor without redoing historical ranges. Status, batch
-lookup, publication and transfer stream the standalone ledger. Inspect its
-current owner, manifest and journal for the actual cursor; never hot-replace
-its binary or start a second writer. These new records are still an
-unsynchronized, untested queue, not assembly passes. The cgo inventory remains
-outside this repository.
-
-Inspect remote owners and frozen inputs before replay. Recheck the original
-discovering samples and all 64 required shards after rule-class repairs.
-Partial files, Context and provisional exclusions are not passing versions.
-Funnel tables belong in the PR body, derived from validated reports.
-Clean only exact owned caches after all consumers close. Never hand-upgrade
-reports or claim CI/review/coverage completion early.
+Recheck discovering samples and all 64 shards after systematic repairs.
+Partial reports, Context and provisional exclusions are not passes. Funnel
+tables belong in the PR body. Never hand-upgrade records or claim CI/review/
+coverage completion before every required gate closes.
