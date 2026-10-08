@@ -237,6 +237,22 @@ func numericalFamilyTranslate(t *testing.T, api string, pkg GoPackage, file *Fil
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
+		parsed, parseErr := ParseWithDefines(ArchAMD64, string(ExpandGoAssemblySource(pkg, data, options.Goarch)), GoAssemblerDefines("linux", options.Goarch))
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		want, _ := x86CallerSourceFingerprint(file)
+		got, _ := x86CallerSourceFingerprint(parsed)
+		if want != got {
+			for index := range file.Funcs {
+				actual, _ := json.Marshal(parsed.Funcs[index])
+				expected, _ := json.Marshal(file.Funcs[index])
+				if !bytes.Equal(actual, expected) {
+					t.Logf("original/wrapper first differing function: expected=%s actual=%s", expected, actual)
+					break
+				}
+			}
+		}
 		result, translateErr := translateGoModuleInContext(context, pkg, data, GoModuleOptions{
 			GOARCH: options.Goarch, GOOS: "linux", TargetTriple: options.TargetTriple,
 			FileName: source.request.AssemblyFile, NumericalReads: options.NumericalReads, ResolveSym: options.ResolveSym,
