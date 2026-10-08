@@ -226,6 +226,55 @@ func TestARM64LinuxSyscallEffectsOriginalObjects(t *testing.T) {
 	arm64LinuxSyscallEffectOriginalObjects(t, directory, packagePath)
 }
 
+func TestARM64LinuxSyscallEffectsIndependentAxes(t *testing.T) {
+	cases := arm64LinuxSyscallEffectCases()
+	if len(cases) != 10 {
+		t.Fatal("kernel oracle lost a GP or NZCV axis")
+	}
+	wanted := [][]uint64{{0, 1, 1, 0}, {1, 0, 0, 0}, {0, 0, 1, 1}, {1, 0, 0, 1}}
+	for group := 0; group < 2; group++ {
+		gp := cases[group*5]
+		if gp.flags || len(gp.registers) != 26 || gp.registers[25] != 27 {
+			t.Fatal("GP oracle omitted a numerical register, including R27 scratch")
+		}
+		for _, register := range gp.registers {
+			if register < 1 || register > 27 || register == 18 {
+				t.Fatal("GP oracle changed a reserved platform/Go frame identity")
+			}
+		}
+		for index, expected := range wanted {
+			actual := cases[group*5+index+1].numericalExpected()
+			if fmt.Sprint(actual) != fmt.Sprint(expected) {
+				t.Fatalf("independent numerical CMP equation differs: got=%v want=%v", actual, expected)
+			}
+		}
+	}
+}
+
+// Cross-object success is separate from the required actual Linux kernel run.
+func TestARM64LinuxSyscallEffectsDefaultTargetObjects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	directory, packagePath, declarations, assembly := arm64LinuxSyscallEffectFixture(t)
+	arm64LinuxSyscallEffectOriginalObjects(t, directory, packagePath)
+	pkg := mustGoPackage(t, packagePath, declarations)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := arm64LinuxSyscallEffectTranslate(t, api, pkg, assembly)
+			if err != nil {
+				t.Fatal("default syscall target-object consumer", err)
+			}
+			for _, optimization := range []int{0, 2} {
+				t.Run(fmt.Sprintf("O%d", optimization), func(t *testing.T) {
+					arm64LinuxSleepCompileObject(t, llc, ir, optimization)
+				})
+			}
+		})
+	}
+}
+
 func arm64LinuxSyscallEffectTranslate(t *testing.T, api string, pkg GoPackage, assembly string) (string, error) {
 	t.Helper()
 	context := llvm.NewContext()
