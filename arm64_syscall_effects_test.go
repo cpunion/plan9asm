@@ -64,17 +64,37 @@ func arm64SyscallEffectAPI(t *testing.T, api, triple, source string) (string, er
 
 func arm64SyscallEffectIR(t *testing.T, ir, spelling string) string {
 	t.Helper()
-	marker := "; s: " + spelling + "\n"
-	start := strings.Index(ir, marker)
-	if start < 0 || strings.Count(ir, marker) != 1 {
-		t.Fatalf("exact syscall source marker absent or ambiguous: %s\n%s", spelling, ir)
+	// LLVM's parser removes source comments. Observe the sole actual call and
+	// its contiguous number/argument loads, through the later result read.
+	lines := strings.Split(ir, "\n")
+	call, start, end := -1, -1, -1
+	for index, line := range lines {
+		if strings.Contains(line, "call i64 @syscall(") {
+			if call >= 0 {
+				t.Fatalf("ambiguous actual syscall call for %s", spelling)
+			}
+			call = index
+		}
 	}
-	fragment := ir[start+len(marker):]
-	end := strings.Index(fragment, "; s:")
-	if end < 0 {
-		t.Fatal("syscall fragment has no following source boundary")
+	if call >= 0 {
+		for index := call - 1; index >= 0; index-- {
+			line := lines[index]
+			if strings.Contains(line, "load i64, ptr %reg_R8,") || strings.Contains(line, "load i64, ptr %reg_R16,") {
+				start = index
+				break
+			}
+		}
+		for index := call + 1; index < len(lines); index++ {
+			if strings.Contains(lines[index], "load i64, ptr %reg_R0,") {
+				end = index
+				break
+			}
+		}
 	}
-	return fragment[:end]
+	if start < 0 || end <= call {
+		t.Fatalf("actual number/call/result sequence absent for %s", spelling)
+	}
+	return strings.Join(lines[start:end], "\n")
 }
 
 func TestARM64SyscallLinuxNormalReturnEffects(t *testing.T) {
