@@ -35,7 +35,6 @@ type Reference struct {
 }
 type Relocation struct {
 	Offset, Size int64
-	ObjectOffset int64
 	Type uint16
 	Add int64
 	Target Reference
@@ -57,6 +56,7 @@ type Member struct {
 	NameBytes []byte
 	Ordinal int
 	Offset, Size int64
+	ObjectOffset int64
 	Flags uint32
 	Definitions []Definition
 }
