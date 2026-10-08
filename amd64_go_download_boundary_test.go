@@ -27,6 +27,7 @@ func TestGoOriginalDownloadBoundaryFailureAndForeignGuards(t *testing.T) {
 				if !errors.Is(err, os.ErrClosed) {
 					t.Fatal("actual closed-descriptor write failure was not retained", err)
 				}
+				t.Log("ACTUAL_CLOSED_FD_WRITE", err)
 				if _, err := os.Lstat(boundary.directory); !os.IsNotExist(err) {
 					t.Fatal("actual early write failure left its owned command boundary", err)
 				}
