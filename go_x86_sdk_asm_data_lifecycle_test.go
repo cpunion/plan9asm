@@ -18,6 +18,7 @@ type sdkASMDataReentrantContext struct {
 	armed    atomic.Bool
 	callback func()
 	method   string
+	lost     atomic.Bool
 }
 
 func (ctx *sdkASMDataReentrantContext) Err() error {
@@ -27,6 +28,9 @@ func (ctx *sdkASMDataReentrantContext) Err() error {
 
 func (ctx *sdkASMDataReentrantContext) Deadline() (time.Time, bool) {
 	ctx.call("Deadline")
+	if ctx.lost.Load() {
+		return time.Time{}, false
+	}
 	return ctx.Context.Deadline()
 }
 
@@ -93,31 +97,63 @@ func TestGoX86SDKASMDataLiveValidationAPIReentry(t *testing.T) {
 }
 
 func TestGoX86SDKASMDataLiveContextMethodReentry(t *testing.T) {
-	for _, method := range []string{"Deadline", "Done"} {
-		for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
-			t.Run(method+"/"+api, func(t *testing.T) {
-				ctx, source := sdkASMDataCapture(t)
-				raw, err := source.Readback(ctx)
-				if err != nil {
-					t.Fatal(err)
-				}
-				var nested error
-				reentrant := &sdkASMDataReentrantContext{Context: ctx, method: method, callback: func() {
-					switch api {
-					case "Verify":
-						nested = source.Verify(ctx)
-					case "Readback":
-						_, nested = source.Readback(ctx)
-					case "CheckReadback":
-						nested = source.CheckReadback(ctx, raw)
+	for _, route := range []string{"verification", "original"} {
+		for _, method := range []string{"Deadline", "Done"} {
+			for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
+				t.Run(route+"/"+method+"/"+api, func(t *testing.T) {
+					ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
+					reentrant := &sdkASMDataReentrantContext{Context: ctx, method: method}
+					captureContext := ctx
+					if route == "original" {
+						captureContext = reentrant
 					}
-				}}
-				reentrant.armed.Store(true)
-				if err := errors.Join(source.Verify(reentrant), nested); err != nil {
-					t.Fatal("caller method reentry failed", err)
-				}
-			})
+					source, err := CaptureGoX86SDKASMDataSource(captureContext, request)
+					if err != nil {
+						t.Fatal("actual SDK source precondition", err)
+					}
+					t.Cleanup(func() { source.Close() })
+					raw, err := source.Readback(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var nested error
+					reentrant.callback = func() {
+						switch api {
+						case "Verify":
+							nested = source.Verify(ctx)
+						case "Readback":
+							_, nested = source.Readback(ctx)
+						case "CheckReadback":
+							nested = source.CheckReadback(ctx, raw)
+						}
+					}
+					reentrant.armed.Store(true)
+					if err := errors.Join(source.Verify(reentrant), nested); err != nil {
+						t.Fatal("caller method reentry failed", err)
+					}
+				})
+			}
 		}
+	}
+}
+
+func TestGoX86SDKASMDataLiveLostOriginalDeadline(t *testing.T) {
+	ctx, request := sdkASMDataRequest(t, "amd64", "internal/cpu")
+	original := &sdkASMDataReentrantContext{Context: ctx}
+	source, err := CaptureGoX86SDKASMDataSource(original, request)
+	if err != nil {
+		t.Fatal("actual bounded original source precondition", err)
+	}
+	defer source.Close()
+	original.lost.Store(true)
+	// A fresh caller with a deadline must not restore the original capture
+	// context's lost bounded lifecycle or turn it into a new generation.
+	if err := source.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatal("fresh bounded caller restored a lost original deadline", err)
+	}
+	original.lost.Store(false)
+	if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+		t.Fatal("restored original deadline revived the failed source")
 	}
 }
 
