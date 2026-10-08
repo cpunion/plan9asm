@@ -73,6 +73,18 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	if err != nil {
 		return err
 	}
+	sdkNamespaceRejected, err := validateDiscoverySDKNamespaceRejections(plan, profiles, remaining)
+	if err != nil {
+		return err
+	}
+	for key := range sdkNamespaceRejected {
+		if _, duplicate := fortranRejected[key]; duplicate {
+			return fmt.Errorf("conflicting SDK/Fortran loader exclusions")
+		}
+		if _, duplicate := mixedPackageRejected[key]; duplicate {
+			return fmt.Errorf("conflicting SDK/mixed-package loader exclusions")
+		}
+	}
 	for key := range mixedPackageRejected {
 		if _, duplicate := fortranRejected[key]; duplicate {
 			return fmt.Errorf("source/profile scope has conflicting typed loader exclusions")
@@ -173,6 +185,15 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 				} else if item.Kind == discoverySourceNotApplicableMixedPackage {
 					return fmt.Errorf("mixed-package source exclusion lacks its exact package/profile proof")
 				}
+				if proof, found := sdkNamespaceRejected[key]; found {
+					if item.Kind != discoverySourceNotApplicableSDKNamespace ||
+						!result.sourceDiagnosticsCompacted && item.Reason != proof.Stderr ||
+						result.sourceDiagnosticsCompacted && item.Reason != discoverySourceSkipReason(item.Kind) {
+						return fmt.Errorf("SDK namespace scope was relabeled or lost its exact typed diagnostic")
+					}
+				} else if item.Kind == discoverySourceNotApplicableSDKNamespace {
+					return fmt.Errorf("SDK namespace exclusion lacks its exact scope proof")
+				}
 				rejected[key] = true
 			}
 		}
@@ -185,6 +206,11 @@ func validateOrdinaryProfileResult(result discoveryCorpusResult, targets []strin
 	for key := range mixedPackageRejected {
 		if !rejected[key] || executed[key] {
 			return fmt.Errorf("mixed-package proof omitted its exact unexecuted source exclusion")
+		}
+	}
+	for key := range sdkNamespaceRejected {
+		if !rejected[key] || executed[key] {
+			return fmt.Errorf("SDK namespace proof omitted its exact unexecuted source exclusion")
 		}
 	}
 	for key := range eligible {

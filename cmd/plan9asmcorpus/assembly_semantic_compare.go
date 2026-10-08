@@ -249,6 +249,20 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 			if err := sortSemanticRows(plan.MixedPackageRejections); err != nil {
 				return result, err
 			}
+			for index := range plan.SDKNamespaceRejections {
+				proof := &plan.SDKNamespaceRejections[index]
+				if err := replaceID(&proof.ProfileID); err != nil {
+					return result, err
+				}
+				if err := replaceID(&proof.Macros.FeatureID); err != nil {
+					return result, err
+				}
+				// Both inputs first validate their complete physical receipts.
+				proof.DriverSHA256, proof.OriginalDiagnosticSHA256, proof.ModuleMetadataSHA256 = "", "", ""
+			}
+			if err := sortSemanticRows(plan.SDKNamespaceRejections); err != nil {
+				return result, err
+			}
 			for index := range plan.PreCPPRejections {
 				proof := &plan.PreCPPRejections[index]
 				if err := replaceID(&proof.ProfileID); err != nil {

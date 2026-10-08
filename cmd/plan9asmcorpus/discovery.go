@@ -2177,6 +2177,7 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 		discoverySourceNotApplicableNoSymbols:     true,
 		discoverySourceNotApplicableFortranLoader: true,
 		discoverySourceNotApplicableMixedPackage:  true,
+		discoverySourceNotApplicableSDKNamespace:  true,
 		nativeLayoutGoAssemblerTarget:             true,
 	}
 	for _, item := range result.SourceNotApplicableItems {
@@ -2205,6 +2206,11 @@ func validateDiscoverySourceNotApplicableEvidence(result discoveryCorpusResult) 
 			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
 				len(result.OrdinarySelectionPlan.MixedPackageRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
 			return fmt.Errorf("mixed-package source exclusion lacks its independent typed original-source proof")
+		}
+		if item.Kind == discoverySourceNotApplicableSDKNamespace &&
+			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.Protocol != ordinarySelectionScopeProtocol ||
+				len(result.OrdinarySelectionPlan.SDKNamespaceRejections) == 0 || len(result.FeatureProfiles) == 0 || item.Diagnostic != nil) {
+			return fmt.Errorf("SDK namespace source exclusion lacks its independent typed original-source proof")
 		}
 		if item.Kind == discoveryDocumentationKind &&
 			(result.OrdinarySelectionPlan == nil || result.OrdinarySelectionPlan.DocumentationSourceProtocol != discoveryDocumentationProtocol ||
@@ -2511,6 +2517,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var eligibleGroups []discoveryPackageGroup
 				fortranProofs := make(map[string]discoveryFortranLoaderRejection)
 				mixedPackageProofs := make(map[string]discoveryMixedPackageRejection)
+				sdkNamespaceProofs := make(map[string]discoverySDKNamespaceRejection)
 				buildErrors, err := runDiscoveryPackageChecksWithProof(packageGroups, func(patterns []string) error {
 					return guard(func() error {
 						return runDiscoveryGoBuild(ctx, workDir, operationEnv, target, buildConfiguration.BuildTags, patterns...)
@@ -2518,6 +2525,21 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				}, func(group discoveryPackageGroup, failure error) (bool, error) {
 					if activeProfile == nil {
 						return false, nil
+					}
+					if isPotentialSDKNamespaceFailure(failure) {
+						var proof discoverySDKNamespaceRejection
+						err := guard(func() error {
+							var err error
+							proof, err = captureSDKNamespaceRejection(ctx, ordinaryPlan, *activeProfile, download.Dir, workDir,
+								cppGoRoot, operationEnv, group, buildConfiguration.BuildTags, failure)
+							return err
+						})
+						if err != nil {
+							return false, err
+						}
+						ordinaryPlan.SDKNamespaceRejections = append(ordinaryPlan.SDKNamespaceRejections, proof)
+						sdkNamespaceProofs[group.Pattern] = proof
+						return true, nil
 					}
 					if isPotentialMixedPackageFailure(failure) {
 						var proof discoveryMixedPackageRejection
@@ -2558,6 +2580,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 				var buildableGroups []discoveryPackageGroup
 				for index, group := range packageGroups {
 					if err := buildErrors[index]; err != nil {
+						if proof, found := sdkNamespaceProofs[group.Pattern]; found {
+							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
+								ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: proof.AsmFiles,
+								Targets: []string{proof.Target}, Kind: discoverySourceNotApplicableSDKNamespace, Reason: proof.Stderr,
+							})
+							continue
+						}
 						if proof, found := mixedPackageProofs[group.Pattern]; found {
 							aggregate.SourceNotApplicableItems = append(aggregate.SourceNotApplicableItems, discoverySourceNotApplicableItem{
 								ProfileID: proof.ProfileID, BuildTags: proof.BuildTags, AsmFiles: proof.AsmFiles,

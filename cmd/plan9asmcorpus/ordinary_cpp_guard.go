@@ -137,6 +137,9 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 	if err := verifyDiscoveryMixedPackageSources(plan, goRoot); err != nil {
 		return &discoverySourceProofError{err}
 	}
+	if err := verifyDiscoverySDKNamespaceSources(plan, goRoot); err != nil {
+		return &discoverySourceProofError{err}
+	}
 	if err := verifyDiscoveryDocumentationSources(plan, goRoot); err != nil {
 		return &discoverySourceProofError{err}
 	}
