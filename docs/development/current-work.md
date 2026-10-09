@@ -17,8 +17,8 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `cde997f3`. The live SDK literal/numerical join, actual CLI consumer,
-ordinary imported-header property closure and typed Go directives are integrated.
+through `5348b5a8`. The SDK literal/numerical join, signed ARM64 carrier reads,
+TLS fail-closed grammar, x86 BT family and ARM VFP register effects are integrated.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -62,6 +62,29 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
 - SDK lifecycle race fixtures keep all callback/API axes but give each original
   role its own existing five-minute stage budget. The old whole-fixture timeout
   remains preserved; all six finite race roots now pass without extending it.
+- Signed ARM64 wrapper loads share the bounded byte-carrier contract. Original
+  Go and three LLVM APIs at O0/O2 passed Darwin and Linux/QEMU checks over 64
+  signed/unsigned cases, including native-tail and neighboring-byte canaries.
+- Actual Go TLS CMP/TEST and MOV roles no longer turn an unbound TLS register
+  into zero. They fail with context before lowering, including dead paths.
+  This closes false passes; it does not implement a native TLS bridge.
+- Complete BT/BTC/BTR/BTS W/L/Q grammar supplies ordinary and LOCK effects.
+  Every imm8, Go optab row, signed memory index, byte boundary and dead native
+  read/write has an independent witness. Dynamic virtual FP remains context.
+  The finite gate passed 95 current-Go roots and Go 1.20 compatibility; native
+  Linux execution remains a required counterpart to the host/Rosetta gate.
+- ARM conversion rows 84–87 now model implicit F15 scratch and named single
+  writes preserve the other physical D-register half. Linux/QEMU passed 255
+  original-Go cases and all four IR/backend optimization combinations. This
+  proves the checked register effects, not FPSCR, NaN/overflow or rounding modes.
+- Native header planning admits six ordinary function directives and omits
+  uninstantiated generic property roots, matching actual compiler headers.
+  Concrete instances and foreign dependencies still require their complete
+  properties. The generic regression drops 32 unnecessary CPU proposals to
+  zero; eleven actual object consumers and evidence-mutation checks pass.
+- The downloaded fixed-local CLI accepts its Darwin macOS triple, still bound
+  to the exact source/target identity. This does not grant arbitrary local
+  frames or prove that the three external crypto examples now pass.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -80,12 +103,29 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
 ## Frozen verification
 
 - `codex/pr40-family-matrix-verify-20261010`, `71e509f1`:
-  `_out/family-matrix-module/` runs the complete main-module inventory with
-  two root-partition workers and an independently owned cache. Inspect terminal
-  reports; it was still running at this checkpoint. Four observed failures are
+  `_out/family-matrix-module/` completed the twenty-package inventory: nineteen
+  packages passed. Root has 5,460 passed, four failed and 39 host-inapplicable
+  runtime roots. Those four historical failures are
   fixed in the integration tree: needless DATA resolver calls, native-aligned
   conformance axis/alignment, obsolete dead-wide-vector rejection, and the old
-  ARM64 DATA diagnostic. Preserve the failed report. Nested CLIs remain separate.
+  ARM64 DATA diagnostic. Six focused roots passed on a newer frozen revision;
+  preserve the failed full report rather than relabeling it. Its owned cache
+  is closed and reclaimed. Nested CLIs remain separate.
+- `codex/pr40-bt-vfp-integration-verify-20261010`, `5348b5a8`:
+  `_out/bt-vfp-integration/` is running the merged BT/TLS/VFP/carrier roots,
+  header/scanner gates, official five-architecture check and vet. Do not edit
+  this tree or accept partial logs as final success.
+- `codex/pr40-source-tls-verify-20261010`, `600b08c7`:
+  `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
+  163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
+  initialized TLS, not a new valid implementation regression. Timing budgets
+  pass; correctness does not. Reviewed Go 1.20–1.27 before/after reports isolate
+  one MOV TLS form per x86 architecture; `a43d9cc2` updates only those baselines.
+  The five-architecture classification gate passed after that review.
+- `codex/pr40-sdk-numerical-cli-20261010`, `a5d9396b`:
+  the complete nested CLI gate passed all 239 roots, without skips. The later
+  downloaded Darwin/mirror change passed its four actual object consumers and
+  identity-rejection controls independently; no combined current-head claim.
 - `codex/pr40-sdk-directive-verify-20261010`, `7ecf2dde`:
   `_out/sdk-directive-verification/` retains passing five-architecture official
   classification and the six-root failed-case/guard recheck. The strict SDK
@@ -124,27 +164,40 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   The candidate timeout currently bounds each phase, not total candidate time.
   Inspect its final owner/report; a retained resource-interruption note
   disqualifies clean timing comparisons.
+- `codex/pr40-wide-sample-verify-20261010`, `961968b1`:
+  `_out/wide-sample/selection.json` fixes fifty new stratified exact versions
+  and three published-CI examples, before outcomes, across 37 shards. The
+  isolated bounded batch remains active. Three crypto terminal failures share
+  native local-frame/alignment requirements; libc exposes an ARM64 indirect
+  callee ABI. No ledger credit or whole-shard completion follows from live logs.
+- `codex/pr40-pragma-performance-verify-20261010`, `10e83020`:
+  the coroutine repeat remains active after 775-second planning. Read-only
+  diagnosis found an independent generic-root fallback, fixed later by
+  `d3b0d076`; this running snapshot does not contain that fix. Never change its
+  source or retroactively credit it with the improved planning behavior.
 
-The official five-arch classification gate passed again at `7ecf2dde` with zero
+The official five-arch classification gate passed again at `a43d9cc2` with zero
 unsupported/parse errors. Actual Go 1.20–1.27 before/after source comparisons
 isolate exactly eight formerly false-supported aligned SP/BP move forms now
-requiring original-frame context. Context is not semantic/ABI/runtime success.
+requiring original-frame context, plus the two TLS roles described above.
+Encoder inventories/fingerprints are not exhaustive instantiated semantic
+matrices. Context is not semantic/ABI/runtime success.
 Remaining strict SDK failures involve original frames/entry state, ABIInternal
 transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 ## Next steps
 
-1. Close typed signed ARM64 byte-carrier wrapper reads against actual Go
-   objects. The initial signed int8/int16/int32 counterexamples fail while their
-   unsigned controls pass. Do not expand the bounded source/caller role merely
-   to admit SDK atomic or arbitrary external pointer entries.
-2. Classify actual Go TLS CMP/TEST forms with their source-encoder/native ABI
-   requirements. A virtual TLS register initialized to zero is not valid TLS
-   semantics and must not restore a false benchmark pass.
-3. Expand a fixed independent external sample and recheck published CI failure
-   examples using one new frozen source. Collect the complete main-module and
-   nested CLI results; rerun integrated compatibility/race/SDK/native gates
-   before publishing the fork batch. Do not combine revisions into a ledger.
+1. Close the merged finite verification gate. Preserve RED/GREEN and actual
+   native counterparts; do not equate table names with semantics.
+2. Investigate the shared packed local-frame/alignment failure with a first-
+   party fixture and exact original frame/caller contracts. Separately audit
+   the remaining ARM conversion status/exception/rounding semantics.
+3. Reduce repeated full CPP parsing inside one immutable planning operation,
+   using measured first-party performance regressions. Retain all source,
+   projection, graph, mutation and cancellation checks; no cross-run trust cache.
+4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
+   and rerun integrated compatibility/race/SDK/native gates before publishing
+   the fork batch. Do not combine revisions into a ledger.
 
 ## Inventory, ledger and resources
 
