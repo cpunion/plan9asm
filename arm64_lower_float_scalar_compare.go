@@ -94,10 +94,14 @@ func (c *arm64Ctx) emitARM64ScalarFloatCompare(bits int, signaling bool, left, r
 	// Assembly already contains an LLVM newline escape rather than a literal
 	// newline: do not quote it through %q a second time.
 	c.emitMachineNeutralNativeIR("  %%%s = call i64 asm sideeffect \"%s\", %q(%s)\n", nzcv, assembly, constraints, arguments)
+	c.storeARM64NativeCompareFlags("%" + nzcv)
+}
+
+func (c *arm64Ctx) storeARM64NativeCompareFlags(nzcv string) {
 	c.flagsWritten = true
 	for index, slot := range []string{c.flagsVSlot, c.flagsCSlot, c.flagsZSlot, c.flagsNSlot} {
 		shifted, flag := c.newTmp(), c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = lshr i64 %%%s, %d\n", shifted, nzcv, 28+index)
+		fmt.Fprintf(c.b, "  %%%s = lshr i64 %s, %d\n", shifted, nzcv, 28+index)
 		fmt.Fprintf(c.b, "  %%%s = trunc i64 %%%s to i1\n", flag, shifted)
 		c.storeFlag(slot, "%"+flag)
 	}

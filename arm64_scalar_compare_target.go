@@ -18,6 +18,11 @@ func validateARM64ScalarCompareTarget(file *File, options Options) error {
 				return err
 			}
 			needsNative = needsNative || matched
+			_, matched, err = parseARM64ConditionalCompare(op, instruction)
+			if err != nil {
+				return err
+			}
+			needsNative = needsNative || matched
 			if instruction.Op != OpWORD {
 				continue
 			}
@@ -29,6 +34,13 @@ func validateARM64ScalarCompareTarget(file *File, options Options) error {
 				continue
 			}
 			word := uint32(instruction.Args[0].Imm)
+			if word&0xff200c00 == 0x1e200400 {
+				if _, valid := decodeARM64RawConditionalCompare(word); !valid {
+					return fmt.Errorf("unsupported ARM64 conditional compare WORD encoding %#08x: %q", word, instruction.Raw)
+				}
+				needsNative = true
+				continue
+			}
 			if word&0xff20fc00 != 0x1e202000 {
 				continue
 			}
@@ -43,10 +55,14 @@ func validateARM64ScalarCompareTarget(file *File, options Options) error {
 	if !needsNative {
 		return nil
 	}
-	arch := strings.SplitN(options.TargetTriple, "-", 2)[0]
-	if (arch != "aarch64" && arch != "arm64") || options.Goarch != "" && options.Goarch != "arm64" {
+	return requireARM64ScalarCompareTarget(options.Goarch, options.TargetTriple)
+}
+
+func requireARM64ScalarCompareTarget(goarch, target string) error {
+	arch := strings.SplitN(target, "-", 2)[0]
+	if (arch != "aarch64" && arch != "arm64") || goarch != "" && goarch != "arm64" {
 		return fmt.Errorf("%w: ARM64 scalar compare requires an explicit native little-endian AArch64 FPCR/FPSR target, got %q/%q",
-			ErrProbeNeedsContext, options.Goarch, options.TargetTriple)
+			ErrProbeNeedsContext, goarch, target)
 	}
 	return nil
 }

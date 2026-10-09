@@ -41,7 +41,7 @@ func TestTranslateARM64FloatConditionalCompareCompleteGo127Forms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"fcmp oeq float", "fcmp uno float", "fcmp oeq double", "fcmp uno double", "select i1"} {
+			for _, want := range []string{"fccmp ${1:s}", "fccmpe ${1:s}", "fccmp ${1:d}", "fccmpe ${1:d}", "asm sideeffect"} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("floating conditional compare lowering omitted %q:\n%s", want, ir)
 				}

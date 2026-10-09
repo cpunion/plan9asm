@@ -825,6 +825,10 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.second)))
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
+				if form, ok := decodeARM64RawConditionalCompare(word); ok {
+					markReg(form.left)
+					markReg(form.right)
+				}
 				if form, ok := decodeARM64RawScalarFloatImmediate(word); ok {
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
