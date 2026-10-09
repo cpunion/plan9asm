@@ -166,3 +166,66 @@ func TestARM64ScalarConversionStatusRetainsNativeEffects(t *testing.T) {
 		}
 	}
 }
+
+func arm64ScalarConversionBankFixtures() []arm64ScalarConversionFixture {
+	var fixtures []arm64ScalarConversionFixture
+	for _, fixture := range arm64ScalarConversionFixtures() {
+		if fixture.simd {
+			for source := 0; source < 32; source++ {
+				for _, destination := range []int{source, 31 - source} {
+					alias := fixture
+					alias.word = alias.word&^uint32(31<<5|31) | uint32(source)<<5 | uint32(destination)
+					fixtures = append(fixtures, alias)
+				}
+			}
+		} else {
+			fixture.zero = true
+			fixtures = append(fixtures, fixture)
+		}
+	}
+	return fixtures
+}
+
+func arm64ScalarConversionBankPartitions() [][]arm64ScalarConversionFixture {
+	fixtures := arm64ScalarConversionBankFixtures()
+	var partitions [][]arm64ScalarConversionFixture
+	for start := 0; start < len(fixtures); start += 128 {
+		end := start + 128
+		if end > len(fixtures) {
+			end = len(fixtures)
+		}
+		partitions = append(partitions, fixtures[start:end])
+	}
+	return partitions
+}
+
+func requireARM64ScalarConversionBankPartition(t *testing.T) {
+	t.Helper()
+	complete := arm64ScalarConversionBankFixtures()
+	partitions := arm64ScalarConversionBankPartitions()
+	if len(complete) != 856 || len(partitions) != 7 {
+		t.Fatalf("bank matrix changed: %d functions, %d partitions", len(complete), len(partitions))
+	}
+	seen := make(map[string]bool)
+	position := 0
+	for _, partition := range partitions {
+		if len(partition) == 0 || len(partition) > 128 {
+			t.Fatalf("unbounded/empty native bank partition: %d", len(partition))
+		}
+		for _, fixture := range partition {
+			instruction := arm64ScalarConversionInstruction(fixture)
+			if seen[instruction] || position >= len(complete) || fixture != complete[position] {
+				t.Fatalf("duplicated, reordered or foreign function at %d: %s", position, instruction)
+			}
+			seen[instruction] = true
+			position++
+		}
+	}
+	if position != len(complete) || len(seen)*2 != 1712 {
+		t.Fatalf("native bank partition omitted functions/rows: %d functions, %d unique rows", position, len(seen)*2)
+	}
+}
+
+func TestARM64ScalarConversionBankPartitionIsExact(t *testing.T) {
+	requireARM64ScalarConversionBankPartition(t)
+}

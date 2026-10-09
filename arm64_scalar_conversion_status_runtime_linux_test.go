@@ -248,26 +248,23 @@ func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) 
 }
 
 func TestCrossLinuxRuntimeMatrixARM64ScalarConversionBanksAliasesAndZR(t *testing.T) {
-	var fixtures []arm64ScalarConversionFixture
-	for _, fixture := range arm64ScalarConversionFixtures() {
-		if fixture.simd {
-			for source := 0; source < 32; source++ {
-				for _, destination := range []int{source, 31 - source} {
-					alias := fixture
-					alias.word = alias.word&^uint32(31<<5|31) | uint32(source)<<5 | uint32(destination)
-					fixtures = append(fixtures, alias)
+	requireARM64ScalarConversionBankPartition(t)
+	totalRows := 0
+	for batch, fixtures := range arm64ScalarConversionBankPartitions() {
+		t.Run(fmt.Sprintf("batch_%d", batch), func(t *testing.T) {
+			var rows []arm64ScalarConversionObservation
+			for index, fixture := range fixtures {
+				for _, control := range []uint64{0, 0x03400000} {
+					rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
 				}
 			}
-		} else {
-			fixture.zero = true
-			fixtures = append(fixtures, fixture)
-		}
+			totalRows += len(rows)
+			// Each child closes its temporary Go/LLVM/native files before the
+			// next batch. The IR optimizer already disposes module then context.
+			runARM64ScalarConversionObservations(t, fixtures, rows)
+		})
 	}
-	var rows []arm64ScalarConversionObservation
-	for index, fixture := range fixtures {
-		for _, control := range []uint64{0, 0x03400000} {
-			rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
-		}
+	if totalRows != 1712 {
+		t.Fatalf("bank runtime omitted rows: %d, want 1712", totalRows)
 	}
-	runARM64ScalarConversionObservations(t, fixtures, rows)
 }
