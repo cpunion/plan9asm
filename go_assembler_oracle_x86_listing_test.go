@@ -27,7 +27,43 @@ func goAssemblerOracleX86SourceDiagnostic(source, arch, output string) bool {
 	if arch != "amd64" && arch != "386" {
 		return false
 	}
-	return goasmoracle.SourceDiagnosticLineWithListing(source, output, 0, goAssemblerOracleX86Listing)
+	// asmins appends two operand-class numbers after the complete Prog.
+	// Consume that metadata only in its exact backend/mode diagnostic, never
+	// as an arbitrary instruction suffix or an amd64 instruction permission.
+	const mode32 = "asm: asmins: illegal in mode 32: "
+	var ordinary []string
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, mode32) {
+			if arch == "386" && goasmoracle.SourceDiagnosticLineWithListing(source, line, 0,
+				goAssemblerOracleX86Mode32Listing) {
+				return true
+			}
+			continue
+		}
+		ordinary = append(ordinary, line)
+	}
+	return goasmoracle.SourceDiagnosticLineWithListing(source, strings.Join(ordinary, "\n"), 0,
+		goAssemblerOracleX86Listing)
+}
+
+func goAssemblerOracleX86Mode32Listing(original, listing []string) bool {
+	if len(listing) < 5 {
+		return false
+	}
+	tail := listing[len(listing)-4:]
+	if tail[0] != "(" || tail[3] != ")" {
+		return false
+	}
+	for _, token := range tail[1:3] {
+		class, err := strconv.Atoi(token)
+		// Go's complete Yxxx..Yindir directory is [0,Ymax), not an ISA
+		// acceptance table. The current SDK test checks every directory entry.
+		if err != nil || class < 0 || class >= 90 || strconv.Itoa(class) != token {
+			return false
+		}
+	}
+	instruction := listing[:len(listing)-4]
+	return reflect.DeepEqual(original, instruction) || goAssemblerOracleX86Listing(original, instruction)
 }
 
 func goAssemblerOracleX86Statement(tokens []string) (opcode, suffix string, args [][]string, ok bool) {

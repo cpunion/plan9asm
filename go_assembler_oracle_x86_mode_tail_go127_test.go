@@ -5,8 +5,12 @@ package plan9asm
 import (
 	"context"
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +18,42 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/goasmcmd"
 	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 )
+
+func TestGoAssemblerOracleX86Mode32CompleteActualClassDirectory(t *testing.T) {
+	path := filepath.Join(runtime.GOROOT(), "src/cmd/internal/obj/x86/asm6.go")
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, declaration := range file.Decls {
+		group, ok := declaration.(*ast.GenDecl)
+		if !ok || group.Tok != token.CONST || len(group.Specs) == 0 {
+			continue
+		}
+		first := group.Specs[0].(*ast.ValueSpec)
+		if len(first.Names) != 1 || first.Names[0].Name != "Yxxx" {
+			continue
+		}
+		if len(first.Values) != 1 {
+			t.Fatal("original operand-class initializer changed")
+		}
+		initial, ok := first.Values[0].(*ast.Ident)
+		if !ok || initial.Name != "iota" {
+			t.Fatal("original operand-class ordinal rule changed")
+		}
+		for index, raw := range group.Specs {
+			entry := raw.(*ast.ValueSpec)
+			if len(entry.Names) != 1 || index > 0 && len(entry.Values) != 0 {
+				t.Fatal("original operand-class ordinal overridden")
+			}
+			names = append(names, entry.Names[0].Name)
+		}
+	}
+	if len(names) != 91 || names[len(names)-1] != "Ymax" || names[len(names)-2] != "Yindir" {
+		t.Fatalf("complete actual operand-class directory changed: %v", names)
+	}
+}
 
 func TestGoAssemblerOracleActualX86Mode32ClassTails(t *testing.T) {
 	for _, test := range []struct{ name, instruction string }{
