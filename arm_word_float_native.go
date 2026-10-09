@@ -25,13 +25,20 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 		return nil
 	}
 	needsNative := false
+	var rawError error
 	for _, function := range file.Funcs {
 		for _, source := range function.Instrs {
 			instruction := source
 			if instruction.Op == OpWORD {
+				if armWordFloatPreflightSpecializedRaw(instruction) {
+					continue
+				}
 				decoded, err := decodeARMRawWordInstruction(instruction)
 				if err != nil {
-					continue // The ordinary raw validator retains its exact diagnostic.
+					if rawError == nil {
+						rawError = err
+					}
+					continue
 				}
 				instruction = decoded
 			}
@@ -43,10 +50,39 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 			needsNative = needsNative || matched
 		}
 	}
+	// Check the complete original source, including dead instructions, before
+	// reclassifying a conversion as missing target context. Keep non-conversion
+	// functions on their existing ordinary validation path.
+	if needsNative && rawError != nil {
+		return rawError
+	}
 	if needsNative && (!armWordFloatNativeTarget(options.TargetTriple) || options.Goarch != "" && options.Goarch != "arm") {
 		return fmt.Errorf("%w: ARM word/float conversion requires an explicit native 32-bit little-endian ARM/Thumb FPSCR target, got %q/%q", ErrProbeNeedsContext, options.Goarch, options.TargetTriple)
 	}
 	return nil
+}
+
+func armWordFloatPreflightSpecializedRaw(ins Instr) bool {
+	// These typed paths precede the generic x/arch decoder in lowerInstr.
+	// A generic decoder failure must not reject a registered NEON/VFP family.
+	if _, ok := decodeARMRawDataForm(ins); ok {
+		return true
+	}
+	if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+		return false
+	}
+	word := uint32(ins.Args[0].Imm)
+	if _, ok := decodeARMRawVFPStatusTransfer(word); ok {
+		return true
+	}
+	if word == 0xe320f001 { // YIELD, the remaining operand-free raw hint.
+		return true
+	}
+	if _, ok := decodeARMRawVFPCompare(word); ok {
+		return true
+	}
+	_, _, ok := decodeARMRawTST(word, ins.Raw)
+	return ok
 }
 
 // emitARMWordFloatNativeConversion preserves the complete VCVT effect, including
