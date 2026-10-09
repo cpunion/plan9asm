@@ -115,7 +115,13 @@ func arm64ByteCarrierTypedEntry(text gostaticstorage.TextRecord, declaration Fun
 			previousEnd = field.Offset + 16
 			index += 2
 		} else {
-			if instruction&0x3fc003e0 != 0x394003e0 || instruction&31 != uint32(index) ||
+			// Actual gc wrappers use LDRSB/LDRSH/LDRSW into X registers for
+			// signed narrow Go results, and unsigned LDR for unsigned ones.
+			// Both read exactly the declared bytes. The typed adapter returns
+			// that same narrow bit pattern; it never narrows the source body
+			// store or an assembly caller's shared-carrier observation.
+			load := instruction & 0x3fc003e0
+			if load != 0x394003e0 && (load != 0x398003e0 || width == 8) || instruction&31 != uint32(index) ||
 				int64(1)<<(instruction>>30) != width || int64(instruction>>10&4095)*width != field.Offset+8 {
 				return fail()
 			}

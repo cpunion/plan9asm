@@ -243,6 +243,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_byte_carrier_consumer_darwin_arm64_test.go",
 		"arm64_byte_carrier_runtime_go127_test.go",
 		"arm64_byte_carrier_two_scalar_runtime_go127_test.go",
+		"arm64_byte_carrier_signed_runtime_go127_test.go",
 		"arm64_result_tail_compiler_audit_test.go",
 		"amd64_mov_extension_caller_test.go",
 		"amd64_mov_extension_runtime_test.go",
