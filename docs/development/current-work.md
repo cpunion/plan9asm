@@ -81,7 +81,7 @@ native-vector permission. Initializer observation is not SDK numerical
 consumption or CRC32 success. Earlier callback-timer, Go20 metadata and exact
 Darwin linker-warning harness failures remain separately retained.
 
-ARM64 nanosleep awaits complete handoff before integration:
+ARM64 nanosleep is integrated from the 13-commit chain ending at `19b60584`:
 
 - Private input: `170c90a8`, based on `ab5302a1`.
   Exact Linux SVC0/R8=101/R1=NULL consumes a fully initialized private
@@ -90,8 +90,11 @@ ARM64 nanosleep awaits complete handoff before integration:
   nine roots/279 children. Actual Linux original-Go kernel axes pass, but the
   six LLVM runtime children initially fail compiling the C driver's unquoted
   ELF package/path label. The test-only `19b60584` quotes that unchanged symbol;
-  its complete Linux rerun and the 13-file runtime SDK counterpart remain
-  independently pending. The real initial Linux failure is not a runtime pass.
+  its actual Linux rerun and root's independent reader close one root and nine
+  children without fail/skip/incomplete. Each LLVM lane checks the intercepted
+  input equation, three short real sleeps and a real EINTR with NULL rem.
+  The initial Linux failure remains retained. The complete 13-file runtime SDK
+  counterpart and every changed combined-head gate remain separate.
 
 ## Required next gates and remaining rule classes
 
