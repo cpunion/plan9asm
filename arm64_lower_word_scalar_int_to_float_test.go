@@ -51,6 +51,54 @@ func TestARM64RawScalarIntToFloatDecoderCompleteGPRRegisterFamily(t *testing.T) 
 	}
 }
 
+func TestARM64RawScalarIntToFloatCompleteSIMDRegisterFamily(t *testing.T) {
+	var lines []string
+	var wants []arm64RawScalarIntToFloat
+	for _, unsigned := range []bool{false, true} {
+		name := "scvtf"
+		if unsigned {
+			name = "ucvtf"
+		}
+		for _, width := range []struct {
+			bits int
+			name string
+		}{{16, "h"}, {32, "s"}, {64, "d"}} {
+			for source := 0; source < 32; source++ {
+				for destination := 0; destination < 32; destination++ {
+					lines = append(lines, fmt.Sprintf("%s %s%d, %s%d", name, width.name, destination, width.name, source))
+					wants = append(wants, arm64RawScalarIntToFloat{
+						floatBits: width.bits, integerBits: width.bits, unsigned: unsigned,
+						source: source, destination: destination,
+					})
+				}
+			}
+		}
+	}
+	words := assembleARM64LLVMWords(t, lines, "+fullfp16")
+	var source strings.Builder
+	source.WriteString("TEXT scalarSIMDWords(SB),4,$0-0\n")
+	for _, word := range words {
+		fmt.Fprintf(&source, "WORD $%#08x\n", word)
+	}
+	source.WriteString("RET\n")
+	requireARM64GoAssemblerResult(t, source.String(), true)
+	for index, word := range words {
+		got, ok := decodeARM64RawScalarIntToFloat(word)
+		want := wants[index]
+		if !ok || got.floatBits != want.floatBits || got.integerBits != want.integerBits ||
+			got.unsigned != want.unsigned || got.source != want.source || got.destination != want.destination {
+			t.Fatalf("LLVM/Go %s (%#08x): decoded %+v, accepted=%v, want %+v", lines[index], word, got, ok, want)
+		}
+		_, effects, registered := decodeARM64RawFloatFamily(word)
+		if !registered || effects.gpReads != 0 || effects.gpWrites != 0 {
+			t.Fatalf("SIMD operand became a GP role for %s: %+v, registered=%v", lines[index], effects, registered)
+		}
+	}
+	if len(words) != 6144 {
+		t.Fatalf("checked %d SIMD scalar words, want 6144", len(words))
+	}
+}
+
 func TestTranslateARM64RawScalarIntToFloatCompleteGPRRegisterFamily(t *testing.T) {
 	floatWidths := []struct {
 		name     string

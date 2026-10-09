@@ -88,6 +88,9 @@ func arm64ScalarConversionReference(fixture arm64ScalarConversionFixture, value,
 		flush = control&(1<<19) != 0 // FZ16 is separate from FZ.
 	}
 	if exponent == 0 && mantissa != 0 && flush {
+		if fixture.floatBits == 16 {
+			return 0, 0 // Arm FPCR.FZ16 never generates Input Denormal.
+		}
 		return 0, 0x80
 	}
 	var number float64

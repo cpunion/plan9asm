@@ -73,19 +73,14 @@ func arm64ScalarConversionFixtures() []arm64ScalarConversionFixture {
 				word: base | 6<<5 | 23, floatBits: width.bits, integerBits: width.bits,
 				unsigned: unsigned, simd: true, rounding: 4,
 			})
-			if width.bits != 16 {
-				base = 0x5e21d800
-				if width.bits == 64 {
-					base |= 1 << 22
-				}
-				if unsigned {
-					base |= 1 << 29
-				}
-				fixtures = append(fixtures, arm64ScalarConversionFixture{
-					word: base | 6<<5 | 23, floatBits: width.bits, integerBits: width.bits,
-					unsigned: unsigned, simd: true, toFloat: true,
-				})
+			base = map[int]uint32{16: 0x5e79d800, 32: 0x5e21d800, 64: 0x5e61d800}[width.bits]
+			if unsigned {
+				base |= 1 << 29
 			}
+			fixtures = append(fixtures, arm64ScalarConversionFixture{
+				word: base | 6<<5 | 23, floatBits: width.bits, integerBits: width.bits,
+				unsigned: unsigned, simd: true, toFloat: true,
+			})
 		}
 	}
 	// Named forms are separate witnesses, not decoder-generated spellings.
@@ -143,7 +138,7 @@ func arm64ScalarConversionSource(fixtures []arm64ScalarConversionFixture) (strin
 
 func TestARM64ScalarConversionStatusRetainsNativeEffects(t *testing.T) {
 	fixtures := arm64ScalarConversionFixtures()
-	if len(fixtures) != 98 {
+	if len(fixtures) != 100 {
 		t.Fatalf("independent family changed: %d", len(fixtures))
 	}
 	for i := range fixtures {
