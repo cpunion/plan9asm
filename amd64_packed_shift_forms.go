@@ -113,8 +113,12 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 		return fail()
 	}
 	count, data := local.Args[f.count], local.Args[f.data]
-	f.countOperand = count
 	if count.Kind == OpImm {
+		var valid bool
+		count, valid = x86ImmediateShuffleConstant(count, goarch, ins.x86Encoded)
+		if !valid {
+			return fail()
+		}
 		if variable || count.Imm < -128 || count.Imm > 255 || f.legacy && count.Imm > 127 {
 			return fail()
 		}
@@ -150,8 +154,18 @@ func x86PackedShiftProperties(op Op, ins Instr, goarch string) (x86PackedShiftFo
 		}
 		f.faultSuppressed = variable
 	}
+	f.countOperand = count
 	if f.memory >= 0 && !x86PackedShiftMemoryValid(ins.Args[f.memory], goarch) {
 		return fail()
+	}
+	if f.memory >= 0 && ins.Args[f.memory].Kind == OpMem {
+		memory := ins.Args[f.memory].Mem
+		if err := x86SymbolIndexedMemoryError(memory, goarch); err != nil {
+			return f, true, err
+		}
+		if memory.OffRaw != "" || memory.IndexExt != "" {
+			return fail()
+		}
 	}
 	if goarch == "386" {
 		for _, operand := range ins.Args {

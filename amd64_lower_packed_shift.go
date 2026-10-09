@@ -58,7 +58,7 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 	lanes := form.byteWidth * 8 / form.laneBits
 	var result string
 	if form.countMode == x86PackedShiftBytes {
-		result = c.emitPackedByteShift(form.byteWidth, data, uint8(ins.Args[form.count].Imm), form.left)
+		result = c.emitPackedByteShift(form.byteWidth, data, uint8(form.countOperand.Imm), form.left)
 	} else {
 		if form.countMode == x86PackedShiftPerLane {
 			counts, err := c.loadX86PackedShiftLanes(ins.Args[form.count], form.byteWidth, form.laneBits, form.broadcast, mask)
@@ -76,7 +76,7 @@ func (c *amd64Ctx) lowerX86PackedShift(op Op, ins Instr) (bool, bool, error) {
 				return true, false, err
 			}
 		} else {
-			count, err := c.loadPackedUniformLogicalShiftCount(ins.Args[form.count], form.mmx)
+			count, err := c.loadPackedUniformLogicalShiftCount(form.countOperand, form.mmx)
 			if err != nil {
 				return true, false, err
 			}

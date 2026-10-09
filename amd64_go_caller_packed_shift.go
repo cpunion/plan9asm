@@ -22,24 +22,23 @@ func x86CallerPackedShiftStep(ins *Instr, form x86PackedShiftForm, state *x86Sou
 	if data != width {
 		return false
 	}
+	counts := ^uint64(0)
 	if ins.Args[form.count].Kind != OpImm && form.count != form.memory {
 		countWidth := int64(form.byteWidth)
 		if form.countMode == x86PackedShiftUniform {
 			countWidth = 8 // The native register's upper count qword is ignored.
 		}
 		needed := x86CallerVectorByteMask(countWidth)
-		if state.vectors[x86CallerVectorRoot(ins.Args[form.count].Reg)]&needed != needed {
+		counts = state.vectors[x86CallerVectorRoot(ins.Args[form.count].Reg)]
+		if counts&needed != needed {
 			return false
 		}
 	}
-	// Counts can move any source bit across bytes. An independently bound
-	// count value would be needed to accept only partially defined data.
-	known := width
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
 	old := state.vectors[destination]
-	if form.mask >= 0 && !form.zeroing {
-		known &= old
-	}
+	// The caller-entry contract deliberately retains its complete input
+	// requirements above. Sharing numerical dependencies does not relax them.
+	known := x86PackedShiftDefinedBytes(form, data, counts, old)
 	if form.legacy {
 		state.vectors[destination] = old&^width | known
 	} else {
