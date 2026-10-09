@@ -127,6 +127,14 @@ normalizes only the actual direct-child uint32 nonce and preserves raw input.
 These commits are integrated into the successor; complete legacy runner,
 race/Go-1.20 and changed combined-head gates remain required.
 
+At exact combined head `8f095690`, the complete runner package now closes
+ordinary and race with 59 roots/155 children each, zero failure/skip/incomplete,
+and actual Go-1.20 framework with ten roots/six children. Root's fresh independent
+readback verifies the complete actual inventories, raw EOF and closed owners.
+The 35 Node policy tests, actionlint, shell checks and runner build/vet also
+close. This is the runner package, not the complete root/module, native CI,
+SDK benchmark or an external-library pass. The original timeout remains failed.
+
 The GNU C-label component retains its actual Linux compiler RED at `f6e7ea58`.
 The test-only `ebfce45f` keeps the exact LLVM symbol while distinguishing
 Clang's raw symbol from GNU's assembler quoting layer. Root's independent Linux
@@ -142,6 +150,24 @@ scope (13 roots/202 children each, no skip/failure/incomplete). The original
 506-form matrix, four LLVM targets, three APIs and actual host Go/LLVM runtime
 checks remain intact. This lifecycle repair grants no new instruction or ABI
 permission, and does not replace the required Linux runtime counterpart.
+
+Unintegrated development branches retain two further counterexamples:
+
+- `codex/pr40-arm64-decoder-oracle-boundary-red-20261009` at `431452b9`
+  reproduces the decoder script's false source-rejection/object-acceptance
+  decisions: two actual-Go positive controls pass and twenty regressions fail.
+  The shared strict process/source oracle and retained per-case producer are
+  under development. Do not accept any nonzero exit as source rejection;
+  a stale, empty or non-object artifact is not assembly success. The complete
+  794-case gate must run again after the repair; no baseline change is implied.
+- SDK literal-read models are query-only. Their independently closed identity,
+  native scalar geometry, semantic and owner-sum components do not close the
+  whole original CRC32 consumer. The statement/listing grammar work retains
+  its original fixture failure, corrected genuine RED, actual Go logical and
+  physical position observations, and separate canonical-number RED. Review
+  complete object/Aux identity before connecting these models to a live reader.
+  Inspect the `codex/pr40-sdk-literal-*` branches; do not integrate the retained
+  failing consumer until its actual whole-source runtime gate succeeds.
 
 ## Required next gates and remaining rule classes
 
