@@ -23,7 +23,7 @@ func TestTranslateARMRawSingleRegisterConversionCompleteFamily(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"sitofp i32", "uitofp i32", "fptosi float", "fptoui float", `"target-features"="+vfp2"`} {
+	for _, want := range []string{"vcvt.f32.s32", "vcvt.f32.u32", "vcvt.s32.f32", "vcvt.u32.f32", `"target-features"="+vfp2"`} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw VCVT family IR omitted %q:\n%s", want, ir)
 		}

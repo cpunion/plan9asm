@@ -11,6 +11,15 @@ import (
 
 func runARMConversionGoOracle(t *testing.T, source, main, marker string) {
 	t.Helper()
+	output := armConversionGoObservations(t, source, main)
+	if string(output) != marker+"\n" {
+		t.Fatalf("original Go conversion observations:\n%s", output)
+	}
+	t.Log(marker)
+}
+
+func armConversionGoObservations(t *testing.T, source, main string) []byte {
+	t.Helper()
 	directory := t.TempDir()
 	for name, content := range map[string]string{
 		"go.mod": "module armconversionoracle\n\ngo 1.20\n", "main.go": main,
@@ -34,10 +43,10 @@ func runARMConversionGoOracle(t *testing.T, source, main, marker string) {
 	ctx, cancel = runtimeOracleStageContext(t)
 	output, err = runtimeOracleCombinedOutput(ctx, exec.CommandContext(ctx, args[0], args[1:]...))
 	cancel()
-	if err != nil || string(output) != marker+"\n" {
+	if err != nil {
 		t.Fatalf("original Go conversion observations: %v\n%s", err, output)
 	}
-	t.Log(marker)
+	return output
 }
 
 func TestCrossLinuxRuntimeMatrixARMWordFloatNativeStatusConstants(t *testing.T) {

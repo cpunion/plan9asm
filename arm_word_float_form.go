@@ -57,7 +57,7 @@ func parseARMWordFloatConversion(op string, ins Instr) (armWordFloatConversionFo
 	form.unsigned = unsigned
 	// Only decoder-produced raw VCVT spellings can name S0..S31. Go source
 	// still requires F0..F15; sharing physical storage grants no source form.
-	rawSingles := strings.Contains(ins.Raw, "decoded from WORD") && form.floatBits == 32
+	rawSingles := strings.Contains(ins.Raw, "decoded from WORD")
 	register := func(operand Operand) armConversionRegister {
 		if operand.Kind == OpReg {
 			if isARMFReg(operand.Reg) {
@@ -74,13 +74,16 @@ func parseARMWordFloatConversion(op string, ins Instr) (armWordFloatConversionFo
 	}
 	form.source, form.destination = register(ins.Args[0]), register(ins.Args[1])
 	floatRegister := func(operand armConversionRegister) bool {
-		return operand.kind == armConversionFloat || operand.kind == armConversionSingle
+		return operand.kind == armConversionFloat || form.floatBits == 32 && operand.kind == armConversionSingle
+	}
+	wordRegister := func(operand armConversionRegister) bool {
+		return operand.kind == armConversionFloat || operand.kind == armConversionSingle || operand.kind == armConversionCore
 	}
 	if form.wordToFloat {
-		if (!floatRegister(form.source) && form.source.kind != armConversionCore) || !floatRegister(form.destination) {
+		if !wordRegister(form.source) || !floatRegister(form.destination) {
 			return form, true, fmt.Errorf("arm %s expects R/F word source and F destination: %q", op, ins.Raw)
 		}
-	} else if !floatRegister(form.source) || (!floatRegister(form.destination) && form.destination.kind != armConversionCore) {
+	} else if !floatRegister(form.source) || !wordRegister(form.destination) {
 		return form, true, fmt.Errorf("arm %s expects F source and R/F word destination: %q", op, ins.Raw)
 	}
 	return form, true, nil

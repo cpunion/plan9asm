@@ -392,10 +392,6 @@ func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok boo
 		return true, false, err
 	}
 
-	floatType := "float"
-	if form.floatBits == 64 {
-		floatType = "double"
-	}
 	if form.wordToFloat {
 		var integer string
 		switch form.source.kind {
@@ -420,18 +416,13 @@ func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok boo
 				return true, false, err
 			}
 		}
-		converted := c.newTmp()
-		conversion := "sitofp"
-		if form.unsigned {
-			conversion = "uitofp"
-		}
-		fmt.Fprintf(c.b, "  %%%s = %s i32 %s to %s\n", converted, conversion, integer, floatType)
+		converted := c.emitARMWordFloatNativeConversion(form, integer)
 		if form.destination.kind == armConversionSingle {
 			bits := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast float %%%s to i32\n", bits, converted)
+			fmt.Fprintf(c.b, "  %%%s = bitcast float %s to i32\n", bits, converted)
 			return true, false, c.storeARMRawSingleBits(form.destination.single, "%"+bits, "")
 		}
-		return true, false, c.storeARMFloatRegValue(form.destination.reg, "", form.floatBits, "%"+converted)
+		return true, false, c.storeARMFloatRegValue(form.destination.reg, "", form.floatBits, converted)
 	}
 
 	var floating string
@@ -443,13 +434,7 @@ func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok boo
 	if err != nil {
 		return true, false, err
 	}
-	converted := c.newTmp()
-	conversion := "fptosi"
-	if form.unsigned {
-		conversion = "fptoui"
-	}
-	fmt.Fprintf(c.b, "  %%%s = %s %s %s to i32\n", converted, conversion, floatType, floating)
-	integer := "%" + converted
+	integer := c.emitARMWordFloatNativeConversion(form, floating)
 	if form.usesScratch() {
 		if err := c.storeARMFloatBits("F15", "", 32, integer); err != nil {
 			return true, false, err

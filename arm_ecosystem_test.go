@@ -240,7 +240,7 @@ TEXT wordfloatconversions(SB),0,$0-0
 	MOVDW.NE F7, F8
 	RET
 `, map[string]FuncSig{"wordfloatconversions": {Name: "wordfloatconversions", Ret: Void}})
-	for _, want := range []string{"sitofp i32", "uitofp i32", "fptosi float", "fptoui float", "fptosi double", "br i1"} {
+	for _, want := range []string{"vcvt.f32.s32", "vcvt.f32.u32", "vcvt.f64.s32", "vcvt.f64.u32", "vcvt.s32.f32", "vcvt.u32.f32", "vcvt.s32.f64", "vcvt.u32.f64", "br i1"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("ARM word/float conversion family IR missing %q:\n%s", want, ll)
 		}

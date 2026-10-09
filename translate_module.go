@@ -71,6 +71,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err := validateARMMachineEntryArchitecture(file, opt); err != nil {
 		return llvm.Module{}, err
 	}
+	if err := validateARMWordFloatNativeTarget(file, opt); err != nil {
+		return llvm.Module{}, err
+	}
 	resolve := opt.ResolveSym
 	if resolve == nil {
 		resolve = func(symbol string) string { return symbol }
