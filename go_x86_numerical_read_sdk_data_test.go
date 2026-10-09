@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
@@ -336,71 +337,80 @@ func TestGoX86SDKNumericalReadLiteralOwnerLifetime(t *testing.T) {
 }
 
 func TestGoX86SDKNumericalReadLiteralOriginalContextAndReentry(t *testing.T) {
-	ctx, request, observed := numericalSDKLiteralFixture(t)
-	for _, invalid := range []string{"nil", "canceled"} {
-		t.Run("invalid verification context/"+invalid, func(t *testing.T) {
-			source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
-			if err != nil {
-				t.Fatal("actual joined SDK source precondition", err)
-			}
-			defer closeNumericalConsumerSource(t, source)
-			var verification context.Context
-			if invalid == "canceled" {
-				canceled, cancel := context.WithCancel(ctx)
-				cancel()
-				verification = canceled
-			}
-			if err := source.Verify(verification); err == nil {
-				t.Fatal("invalid verification context retained the numerical source")
-			}
-			if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
-				t.Fatal("fresh context revived the revoked numerical source")
-			}
-			if err := request.ReadonlyLiterals.Verify(ctx); err != nil {
-				t.Fatal("invalid consumer context revoked the independent initializer", err)
-			}
-		})
-	}
-	for _, route := range []string{"original", "verification"} {
-		for _, method := range []string{"Err", "Deadline", "Done"} {
-			t.Run(route+"/"+method, func(t *testing.T) {
-				callback := &sdkASMDataReentrantContext{Context: ctx, method: method}
-				captureContext, verifyContext := ctx, ctx
-				if route == "original" {
-					captureContext = callback
-				} else {
-					verifyContext = callback
-				}
-				source, err := CaptureGoX86SDKNumericalReadSource(captureContext, request)
+	// Each bounded fixture belongs to one lifecycle role. Reusing a single
+	// five-minute producer across every race-instrumented recapture couples
+	// independent tests to accumulated work, not the contract under test.
+	t.Run("invalid verification context", func(t *testing.T) {
+		ctx, request, _ := numericalSDKLiteralFixture(t)
+		for _, invalid := range []string{"nil", "canceled"} {
+			t.Run(invalid, func(t *testing.T) {
+				source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
 				if err != nil {
 					t.Fatal("actual joined SDK source precondition", err)
 				}
 				defer closeNumericalConsumerSource(t, source)
-				called, underLock := false, false
-				var nested error
-				callback.callback = func() {
-					called = true
-					// Detect the forbidden callback-under-lock without allowing
-					// a broken implementation to strand a deadlocked test worker.
-					if !source.mu.TryLock() {
-						underLock = true
-						return
-					}
-					source.mu.Unlock()
-					nested = source.Close()
+				var verification context.Context
+				if invalid == "canceled" {
+					canceled, cancel := context.WithCancel(ctx)
+					cancel()
+					verification = canceled
 				}
-				callback.armed.Store(true)
-				err = source.Verify(verifyContext)
-				if !called || underLock || nested != nil || !errors.Is(err, ErrProbeNeedsContext) {
-					t.Fatal("joined numerical lifecycle borrowed a callback lock or published after Close", called, underLock, nested, err)
+				if err := source.Verify(verification); err == nil {
+					t.Fatal("invalid verification context retained the numerical source")
 				}
-				if err := observed.Verify(ctx); err != nil {
-					t.Fatal("closing the numerical consumer disposed its independent SDK source", err)
+				if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+					t.Fatal("fresh context revived the revoked numerical source")
+				}
+				if err := request.ReadonlyLiterals.Verify(ctx); err != nil {
+					t.Fatal("invalid consumer context revoked the independent initializer", err)
 				}
 			})
 		}
+	})
+	for _, route := range []string{"original", "verification"} {
+		t.Run(route, func(t *testing.T) {
+			ctx, request, observed := numericalSDKLiteralFixture(t)
+			for _, method := range []string{"Err", "Deadline", "Done"} {
+				t.Run(method, func(t *testing.T) {
+					callback := &sdkASMDataReentrantContext{Context: ctx, method: method}
+					captureContext, verifyContext := ctx, ctx
+					if route == "original" {
+						captureContext = callback
+					} else {
+						verifyContext = callback
+					}
+					source, err := CaptureGoX86SDKNumericalReadSource(captureContext, request)
+					if err != nil {
+						t.Fatal("actual joined SDK source precondition", err)
+					}
+					defer closeNumericalConsumerSource(t, source)
+					called, underLock := false, false
+					var nested error
+					callback.callback = func() {
+						called = true
+						// Detect the forbidden callback-under-lock without allowing
+						// a broken implementation to strand a deadlocked test worker.
+						if !source.mu.TryLock() {
+							underLock = true
+							return
+						}
+						source.mu.Unlock()
+						nested = source.Close()
+					}
+					callback.armed.Store(true)
+					err = source.Verify(verifyContext)
+					if !called || underLock || nested != nil || !errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatal("joined numerical lifecycle borrowed a callback lock or published after Close", called, underLock, nested, err)
+					}
+					if err := observed.Verify(ctx); err != nil {
+						t.Fatal("closing the numerical consumer disposed its independent SDK source", err)
+					}
+				})
+			}
+		})
 	}
 	t.Run("original numerical cancellation", func(t *testing.T) {
+		ctx, request, _ := numericalSDKLiteralFixture(t)
 		original, cancel := context.WithCancel(ctx)
 		defer cancel()
 		source, err := CaptureGoX86SDKNumericalReadSource(original, request)
@@ -416,6 +426,60 @@ func TestGoX86SDKNumericalReadLiteralOriginalContextAndReentry(t *testing.T) {
 			t.Fatal("numerical context cancellation revoked the independent initializer", err)
 		}
 	})
+}
+
+func TestGoX86SDKNumericalReadLiteralConcurrentClose(t *testing.T) {
+	ctx, request, observed := numericalSDKLiteralFixture(t)
+	for _, role := range []string{"numerical source", "literal owner"} {
+		t.Run(role, func(t *testing.T) {
+			owner, err := CaptureGoX86SDKReadonlyLiteralDataOwner(ctx, observed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer owner.Close()
+			local := request
+			local.ReadonlyLiterals = owner
+			source, err := CaptureGoX86SDKNumericalReadSource(ctx, local)
+			if err != nil {
+				t.Fatal("actual joined SDK source precondition", err)
+			}
+			defer closeNumericalConsumerSource(t, source)
+			start := make(chan struct{})
+			var workers sync.WaitGroup
+			for worker := 0; worker < 4; worker++ {
+				workers.Add(1)
+				go func() {
+					defer workers.Done()
+					<-start
+					if err := source.Verify(ctx); err != nil && !errors.Is(err, ErrProbeNeedsContext) {
+						t.Error("concurrent joined verification returned an unclassified error", err)
+					}
+				}()
+			}
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				<-start
+				var err error
+				if role == "numerical source" {
+					err = source.Close()
+				} else {
+					err = owner.Close()
+				}
+				if err != nil {
+					t.Error("close joined lifecycle role", err)
+				}
+			}()
+			close(start)
+			workers.Wait()
+			if raw, err := source.Readback(ctx); raw != nil || !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("concurrent close retained or revived a joined source", err)
+			}
+			if err := observed.Verify(ctx); err != nil {
+				t.Fatal("consumer close revoked the independent SDK source", err)
+			}
+		})
+	}
 }
 
 // Exercise the initializer/shape checks directly, without allowing the outer

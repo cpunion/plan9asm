@@ -26,13 +26,16 @@ type GoX86NumericalReadCaptureRequest struct {
 	// independent private literal initializer role. Nil retains the TEXT-only
 	// boundary. Ordinary owned-main capture cannot consume this SDK role.
 	// This is not a numerical variable, pointer, caller or native-entry owner.
+	// The borrowed owner and its original SDK source must remain live through
+	// binding and translation; closing this numerical source never closes them.
 	ReadonlyLiterals *GoX86SDKReadonlyLiteralDataOwner
 }
 
 // GoX86NumericalReadSource is a sealed source/native-instruction/numerical-owner
 // join. Capture alone supplies no Options, LLVM load, caller or entry authority.
 // Ordinary owned-main and explicit independently observed SDK sources retain
-// separate roles. External sources and generated headers remain Context.
+// separate roles. External sources and generated headers without an explicit
+// independent SDK source observation remain Context.
 type GoX86NumericalReadSource struct {
 	mu                           sync.Mutex
 	identity                     *GoX86NumericalReadSource
