@@ -49,17 +49,27 @@ func frontendDiagnostic(data []byte, line, column int, message string) (known, b
 		if !ok {
 			return true, false
 		}
-		// Go permits any number of identifier label prefixes before the next
-		// statement. Only the first token of that next statement is diagnosed.
-		for len(tokens) >= 2 && tokens[0].kind == scanner.Ident && tokens[1].kind == ':' {
-			tokens = tokens[2:]
+		for len(tokens) > 0 {
+			if tokens[0].kind == ';' || tokens[0].kind == '\n' {
+				tokens = tokens[1:]
+				continue
+			}
+			if tokens[0].kind != scanner.Ident {
+				// Go stops at the first invalid statement-start token. A
+				// later invalid token, or one in an operand, cannot bind it.
+				token := tokens[0]
+				return true, message == expected+strconv.Quote(token.text) &&
+					(column == 0 || column == token.column)
+			}
+			if len(tokens) >= 2 && tokens[1].kind == ':' {
+				tokens = tokens[2:]
+				continue
+			}
+			for len(tokens) > 0 && tokens[0].kind != ';' && tokens[0].kind != '\n' {
+				tokens = tokens[1:]
+			}
 		}
-		if len(tokens) == 0 || tokens[0].kind == scanner.Ident || tokens[0].kind == '\n' || tokens[0].kind == ';' {
-			return true, false
-		}
-		token := tokens[0]
-		return true, message == expected+strconv.Quote(token.text) &&
-			(column == 0 || column == token.column)
+		return true, false
 	}
 	if strings.HasPrefix(message, "label ") {
 		if column != 0 {
@@ -125,8 +135,10 @@ func duplicateLabelAt(data []byte, line int, name string) bool {
 			}
 			defined[label] = true
 		}
-		if position == line {
-			return duplicate == name && duplicate != ""
+		if position == line && duplicate != "" {
+			// Several attachment statements may share a physical line.
+			// errorf reports only its first error, not a later duplicate.
+			return duplicate == name
 		}
 		if duplicate == "" {
 			pending = nil

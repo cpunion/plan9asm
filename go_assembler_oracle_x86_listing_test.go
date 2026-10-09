@@ -42,6 +42,9 @@ func goAssemblerOracleX86Statement(tokens []string) (opcode, suffix string, args
 		suffix += "." + tokens[next+1]
 		next += 2
 	}
+	if next == len(tokens) {
+		return opcode, suffix, nil, true
+	}
 	var delimiters []string
 	start := next
 	for i := next; i < len(tokens); i++ {

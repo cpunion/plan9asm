@@ -34,7 +34,11 @@ func TestDiagnosticFrontendActualOriginalSources(t *testing.T) {
 			if err := os.WriteFile(source, []byte(data), 0600); err != nil {
 				t.Fatal(err)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			deadline := time.Now().Add(5 * time.Second)
+			if enclosing, ok := t.Deadline(); ok && enclosing.Before(deadline) {
+				deadline = enclosing
+			}
+			ctx, cancel := context.WithDeadline(context.Background(), deadline)
 			defer cancel()
 			observed, err := goasmcmd.Observe(ctx, filepath.Dir(source),
 				append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=arm64"),
