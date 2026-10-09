@@ -30,7 +30,7 @@ func TestUnsupportedDiagnosticsUseActualCompilationInput(t *testing.T) {
 		},
 		{
 			name:    "inactive-target-instruction",
-			source:  "TEXT ·F(SB),NOSPLIT,$0-0\n#ifdef GOOS_windows\nHIDDENOP R0,R1\n#else\nSVC\n#endif\nRET\n",
+			source:  "TEXT ·F(SB),NOSPLIT,$0-0\n#ifdef GOOS_windows\nHIDDENOP R0,R1\n#else\nMOVD $101,R8\nSVC\n#endif\nRET\n",
 			failure: "instruction probe needs function context",
 		},
 		{
