@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -203,6 +204,11 @@ func TestGeneratedHeaderNativeDefinitionsFollowOriginalSourceChanges(t *testing.
 
 func compileNativeHeaderRules(t *testing.T, target, source string) map[string]string {
 	t.Helper()
+	return compileNativeHeaderRulesWithImports(t, target, source, nil)
+}
+
+func compileNativeHeaderRulesWithImports(t *testing.T, target, source string, dependencies map[string]string) map[string]string {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	goBinary, err := exec.LookPath("go")
@@ -257,6 +263,42 @@ func compileNativeHeaderRules(t *testing.T, target, source string) map[string]st
 		t.Fatal(err)
 	}
 	args := []string{"tool", "compile", "-p", "example.invalid/header", "-lang", "go1.20", "-asmhdr", header, "-o", object, goFile}
+	if len(dependencies) != 0 {
+		var names []string
+		for name := range dependencies {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		var importConfig strings.Builder
+		for index, name := range names {
+			original := []byte(dependencies[name])
+			file := filepath.Join(directory, fmt.Sprintf("dependency-%d.go", index))
+			export := filepath.Join(directory, fmt.Sprintf("dependency-%d.a", index))
+			if err := os.WriteFile(file, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			stdout, stderr, err := RunBounded(ctx, directory, env, goBinary,
+				"tool", "compile", "-p", name, "-lang", "go1.20", "-o", export, file)
+			if err != nil || len(stdout) != 0 || len(stderr) != 0 {
+				t.Fatalf("actual original dependency compiler %s: %v\n%s\n%s", target, err, stdout, stderr)
+			}
+			bytes, err := os.ReadFile(export)
+			if err != nil || len(bytes) == 0 {
+				t.Fatalf("actual original dependency emitted no export: %v", err)
+			}
+			digests[file], digests[export] = sha256.Sum256(original), sha256.Sum256(bytes)
+			inputs = append(inputs, file, export)
+			fmt.Fprintf(&importConfig, "packagefile %s=%s\n", name, export)
+		}
+		config := filepath.Join(directory, "importcfg")
+		bytes := []byte(importConfig.String())
+		if err := os.WriteFile(config, bytes, 0600); err != nil {
+			t.Fatal(err)
+		}
+		digests[config] = sha256.Sum256(bytes)
+		inputs = append(inputs, config)
+		args = append(args[:len(args)-1], "-importcfg", config, goFile)
+	}
 	stdout, stderr, err = RunBounded(ctx, directory, env, goBinary, args...)
 	if err != nil || len(stdout) != 0 || len(stderr) != 0 {
 		t.Fatalf("actual native compiler %s: %v\n%s\n%s", target, err, stdout, stderr)

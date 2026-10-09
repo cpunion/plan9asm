@@ -119,9 +119,6 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 	if err != nil || header.LanguageVersion != language {
 		return nil, fmt.Errorf("planning query language differs from original module metadata: %v", err)
 	}
-	if len(header.Imports) != 0 {
-		return nil, fmt.Errorf("native header source replay has an unclosed dependency-export domain")
-	}
 	wantedPackage := module
 	if directory := path.Dir(assembly); directory != "." {
 		wantedPackage += "/" + directory

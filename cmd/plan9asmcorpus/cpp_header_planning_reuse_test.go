@@ -33,7 +33,7 @@ func newHeaderPreflightReuseFixture(t *testing.T, goRoot string) *headerPrefligh
 	candidate := discoveryCandidate{Module: "example.invalid/header", Version: "v1.0.0", AsmFiles: []string{"probe.s", "sibling.s"}}
 	sources := map[string]string{
 		"go.mod":    "module example.invalid/header\ngo 1.20\n",
-		"header.go": "package header\nimport \"fmt\"\nvar _ = fmt.Sprintf\nfunc probe() uint64\n",
+		"header.go": "package header\nimport \"fmt\"\ntype Property fmt.Stringer\nfunc probe() uint64\n",
 		"probe.s":   "TEXT ·probe(SB),4,$0-8\nMOVQ $7,ret+0(FP)\nRET\n",
 		"sibling.s": "TEXT ·sibling(SB),4,$0-0\nRET\n",
 	}
@@ -62,7 +62,7 @@ func newHeaderPreflightReuseFixture(t *testing.T, goRoot string) *headerPrefligh
 		fixture.inspections++
 		return inspectDiscoveryFeatureDriver(ctx, binary, env, target, overrides)
 	}}
-	// This path must never execute a query producer: preflight rejects imports.
+	// No producer runs: a header property depends on an unclosed imported type.
 	err = installDiscoveryHeaderPlanning(ctx, plan, candidate, download, fixture.directory, goRoot, goBinary,
 		t.TempDir(), filepath.Join(t.TempDir(), "unused-translator"), targetFeatureTestEnv(), fixture.cache)
 	if err != nil {

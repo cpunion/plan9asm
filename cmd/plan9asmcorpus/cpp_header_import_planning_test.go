@@ -10,8 +10,7 @@ import (
 // library pass. Its captured namespace and complete CPP inputs come from the
 // existing query-only fixture. The callback follows the production preflight
 // boundary so an unclosed import cannot silently supply a generated header.
-func TestCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t *testing.T) {
-	const source = `package fixture
+const cppImportedHeaderIndependentSource = `package fixture
 
 import "errors"
 
@@ -24,8 +23,10 @@ const Text = "#ifdef GOAMD64_v3"
 
 func Probe()
 `
+
+func TestCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t *testing.T) {
 	fixture := newConditionFreePlanningFixture(t, "linux/arm64", "", map[string]string{
-		"pkg/decl.go": source,
+		"pkg/decl.go": cppImportedHeaderIndependentSource,
 	})
 	requestsSeen := make(map[string]bool)
 	fixture.plan.headerPlanningCapture = func(request discoveryFeatureProfileRequest,
@@ -59,5 +60,34 @@ func Probe()
 	if len(requests) != 0 || len(requestsSeen) != 1 {
 		t.Fatalf("condition-free imported source expanded into %d extra CPU proposals and %d header requests; want one necessary baseline and no extra CPU proposals",
 			len(requests), len(requestsSeen))
+	}
+}
+
+func TestCPPImportedHeaderPlanningRetainsCPUSensitiveOriginalScopes(t *testing.T) {
+	for _, axis := range []string{"CPP branch", "Go partner"} {
+		t.Run(axis, func(t *testing.T) {
+			extra := map[string]string{"pkg/decl.go": cppImportedHeaderIndependentSource}
+			body := "#ifdef GOAMD64_v3\nGLOBL ·featureMarker(SB),$8\n#endif\n"
+			if axis == "Go partner" {
+				body = ""
+				extra["pkg/feature.go"] = "//go:build amd64.v3 && goexperiment.fieldtrack\n\npackage fixture\ntype FeatureOnly struct { Value uint32 }\n"
+			}
+			fixture := newConditionFreePlanningFixture(t, "linux/amd64", body, extra)
+			fixture.plan.headerPlanningCapture = func(request discoveryFeatureProfileRequest, assembly string, _ []string) (*gotoolprofile.GeneratedHeaderProof, error) {
+				return fixture.header(t, request, assembly)
+			}
+			requests, err := planDiscoveryFeatureProfiles(fixture.plan, []string{fixture.assembly}, []*discoveryTargetFeatures{fixture.baseline})
+			if err != nil || len(requests) < 2 {
+				t.Fatalf("import-independent properties erased required original %s scopes: %+v %v", axis, requests, err)
+			}
+			var feature bool
+			for _, request := range requests {
+				feature = feature || request.Overrides["GOAMD64"] == "v3" &&
+					(axis == "CPP branch" || request.Expected["goexperiment.fieldtrack"])
+			}
+			if !feature || len(fixture.queries) < 2 {
+				t.Fatalf("original CPU/experiment distinction disappeared: requests=%+v queries=%d", requests, len(fixture.queries))
+			}
+		})
 	}
 }

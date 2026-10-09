@@ -64,7 +64,7 @@ func TestGeneratedHeaderSourceRuleRegistrationBindsActualSDKAndCompleteSourceSet
 }
 
 func TestGeneratedHeaderSourceUnsupportedDomainCannotSwallowFailures(t *testing.T) {
-	_, unsupported := ReplayNativeGeneratedHeader("example.invalid/header", "linux/amd64", "go1.20", map[string]string{"header.go": "package header\nimport \"fmt\"\n"})
+	_, unsupported := ReplayNativeGeneratedHeader("example.invalid/header", "linux/amd64", "go1.20", map[string]string{"header.go": "package header\nimport \"time\"\nconst Value = time.Second\n"})
 	if !NativeHeaderSourceDomainUnsupported(unsupported) || !NativeHeaderSourceDomainUnsupported(fmt.Errorf("property query: %w", unsupported)) {
 		t.Fatal("unclosed imported property model lacks its precise typed domain")
 	}

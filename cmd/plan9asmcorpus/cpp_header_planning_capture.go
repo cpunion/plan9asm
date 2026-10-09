@@ -174,9 +174,6 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		if len(metadata.Headers) != 1 {
 			return nil, fmt.Errorf("native header planning lacks its unique actual query")
 		}
-		if len(metadata.Headers[0].Imports) != 0 {
-			return nil, &discoveryHeaderPlanningUnsupported{"actual native header query requires an unclosed imported source model"}
-		}
 		// Do not publish an unclosed query into the portable role. Independently
 		// replay a private candidate first; rejected domains retain all CPUs.
 		role := &discoveryCPPHeaderPlanning{Protocol: discoveryCPPHeaderPlanningProtocol, Rules: rules, Sources: make(map[string]string)}

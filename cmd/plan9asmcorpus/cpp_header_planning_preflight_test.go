@@ -28,14 +28,16 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 	profile := discoveryFeatureProfile{Observed: fixture.Observed["linux/amd64"],
 		Request: discoveryFeatureProfileRequest{Target: "linux/amd64", Baseline: true}}
 	profile.ID = discoveryFeatureProfileID(profile.Observed)
-	for _, axis := range []string{"closed", "builtin unsafe", "imports", "generic", "directive", "source", "archive", "selection", "language", "profile"} {
+	for _, axis := range []string{"closed", "builtin unsafe", "irrelevant imports", "imports", "generic", "directive", "source", "archive", "selection", "language", "profile"} {
 		t.Run(axis, func(t *testing.T) {
 			source := "package header\nconst Value = 7\nfunc probe() uint64\n"
 			switch axis {
 			case "builtin unsafe":
 				source = "package header\nimport \"unsafe\"\nconst Value = unsafe.Sizeof(uintptr(0))\nfunc probe() uint64\n"
-			case "imports":
+			case "irrelevant imports":
 				source = "package header\nimport \"fmt\"\nvar _ = fmt.Sprintf\nfunc probe() uint64\n"
+			case "imports":
+				source = "package header\nimport \"fmt\"\ntype Property fmt.Stringer\nfunc probe() uint64\n"
 			case "generic":
 				source += "type Record[T any] struct { Value T }\n"
 			case "directive":
@@ -82,7 +84,7 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 			}
 			err = preflightDiscoveryHeaderQuery(plan, selected, download, "probe.s", nil)
 			unsupported := gotoolprofile.NativeHeaderSourceDomainUnsupported(err)
-			if axis == "closed" || axis == "builtin unsafe" || axis == "generic" {
+			if axis == "closed" || axis == "builtin unsafe" || axis == "irrelevant imports" || axis == "generic" {
 				if err != nil || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 					t.Fatalf("unmodified preflight must not create query authority: %v", err)
 				}
@@ -98,10 +100,23 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 }
 
 func TestCPPHeaderPlanningUnsupportedStillRequiresActualCompiler(t *testing.T) {
+	testCPPHeaderPlanningStillRequiresActualCompiler(t, false)
+}
+
+func TestCPPHeaderPlanningIndependentImportsStillRequireActualCompiler(t *testing.T) {
+	testCPPHeaderPlanningStillRequiresActualCompiler(t, true)
+}
+
+func testCPPHeaderPlanningStillRequiresActualCompiler(t *testing.T, independent bool) {
+	t.Helper()
 	candidate := discoveryCandidate{Module: "example.invalid/header", Version: "v1.0.0", AsmFiles: []string{"probe.s"}}
+	property := "type Property fmt.Stringer"
+	if independent {
+		property = "var _ = fmt.Sprintf"
+	}
 	sources := map[string]string{
 		"go.mod": "module example.invalid/header\ngo 1.20\n",
-		"header.go": "package header\nimport \"fmt\"\nvar _ = fmt.Sprintf\n" +
+		"header.go": "package header\nimport \"fmt\"\n" + property + "\n" +
 			"func probe() uint64\nfunc Invalid() { _ = MissingOriginalValue }\n",
 		"probe.s": "TEXT ·probe(SB),4,$0-8\nMOVQ $7,ret+0(FP)\nRET\n",
 	}
@@ -124,7 +139,9 @@ func TestCPPHeaderPlanningUnsupportedStillRequiresActualCompiler(t *testing.T) {
 	}
 	profile := discoveryFeatureProfile{Observed: fixture.Observed["linux/amd64"],
 		Request: discoveryFeatureProfileRequest{Target: "linux/amd64", Baseline: true}}
-	if err := preflightDiscoveryHeaderQuery(plan, profile, download, "probe.s", nil); !gotoolprofile.NativeHeaderSourceDomainUnsupported(err) || plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
+	err = preflightDiscoveryHeaderQuery(plan, profile, download, "probe.s", nil)
+	if independent && err != nil || !independent && !gotoolprofile.NativeHeaderSourceDomainUnsupported(err) ||
+		plan.HeaderPlanning != nil || plan.headerPlanningQueryStarts != 0 {
 		t.Fatalf("imported source acquired planning authority: %v", err)
 	}
 

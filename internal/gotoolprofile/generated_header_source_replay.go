@@ -41,9 +41,10 @@ func ReplayNativeGeneratedHeader(packagePath, target, language string, sources m
 }
 
 // ReplayNativeGeneratedHeaderWithImportMap also requires the actual compiler's
-// complete import map to match the original source imports. The only imported
-// property domain registered here is the builtin unsafe package, which has no
-// dependency export. This remains a property query, not compiler acceptance.
+// complete import map to match the original source imports. Foreign imports
+// may only occur outside the complete constant/type property closure; their
+// actual export/source provenance is still required by the metadata consumer.
+// This remains a property query, not compiler acceptance.
 func ReplayNativeGeneratedHeaderWithImportMap(packagePath, target, language string, sources map[string]string,
 	importMap map[string]string) (map[string]string, error) {
 	return replayNativeGeneratedHeader(packagePath, target, language, sources, importMap, true)
@@ -63,17 +64,23 @@ func replayNativeGeneratedHeader(packagePath, target, language string, sources m
 				if err != nil {
 					return nil, fmt.Errorf("native header original import path is invalid: %w", err)
 				}
-				imports[spelling] = spelling // Parsing registered only builtin unsafe.
+				imports[spelling] = spelling
 			}
 		}
 		if importMap == nil || len(importMap) != len(imports) {
 			return nil, fmt.Errorf("native header actual import map differs from complete original source imports")
 		}
-		for spelling, target := range imports {
-			if importMap[spelling] != target {
-				return nil, fmt.Errorf("native header actual import map changes a builtin source import")
+		for spelling := range imports {
+			actual := importMap[spelling]
+			if actual == "" || strings.ContainsAny(actual, "\\\r\n\t =") ||
+				spelling == "unsafe" && actual != "unsafe" {
+				return nil, fmt.Errorf("native header actual import map changes or omits an original source import")
 			}
 		}
+	}
+	files, err = nativeHeaderIndependentFiles(files)
+	if err != nil {
+		return nil, err
 	}
 
 	sizes := &nativeHeaderGCSizes{word: word, cache: make(map[types.Type]nativeHeaderLayout), active: make(map[types.Type]bool)}
@@ -160,7 +167,10 @@ func nativeGeneratedHeaderDefinitions(pkg *types.Package, sizes *nativeHeaderGCS
 // before an expensive planning compiler query. A nil result is not a source,
 // compiler, header or object proof; all final consumers remain mandatory.
 func PreflightNativeGeneratedHeaderSource(packagePath, target, language string, sources map[string]string) error {
-	_, _, _, err := parseNativeHeaderSources(packagePath, target, language, sources)
+	_, files, _, err := parseNativeHeaderSources(packagePath, target, language, sources)
+	if err == nil {
+		_, err = nativeHeaderIndependentFiles(files)
+	}
 	return err
 }
 
@@ -213,8 +223,8 @@ func parseNativeHeaderSources(packagePath, target, language string, sources map[
 			if err != nil {
 				return nil, nil, 0, fmt.Errorf("native header original import path is invalid: %w", err)
 			}
-			if spelling != "unsafe" {
-				return nil, nil, 0, &nativeHeaderUnsupportedDomain{"native header source query has unclosed imports"}
+			if spelling == "" || strings.ContainsAny(spelling, "\\\r\n\t =") {
+				return nil, nil, 0, fmt.Errorf("native header original import path is not canonical")
 			}
 		}
 		closed := true

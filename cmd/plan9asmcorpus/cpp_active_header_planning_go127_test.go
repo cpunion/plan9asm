@@ -55,7 +55,20 @@ func Probe()
 `)
 }
 
-func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source string) {
+func TestCPPIndependentImportGeneratedHeaderFullDefaultOriginalObjects(t *testing.T) {
+	testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t, `package header
+import dep "example.invalid/active-header/dependency"
+type Record struct { Value uint64 }
+const Value = 7
+var UnusedByHeader = dep.New("initializer")
+func Holder() { _ = dep.New("function body") }
+func Probe()
+`, map[string]string{
+		"dependency/value.go": "package dependency\nfunc New(value string) string { return value }\n",
+	})
+}
+
+func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source string, extras ...map[string]string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
@@ -67,6 +80,14 @@ func testCPPActiveGeneratedHeaderFullDefaultOriginalObjects(t *testing.T, source
 		"go.mod":   "module example.invalid/active-header\n\ngo 1.20\n",
 		"probe.go": source,
 		"probe.s":  "#include \"go_asm.h\"\nTEXT ·Probe(SB),4,$0-0\nRET\nGLOBL ·recordMarker(SB),$Record__size\n",
+	}
+	for _, extra := range extras {
+		for name, text := range extra {
+			if _, duplicate := sources[name]; duplicate {
+				t.Fatalf("duplicate original fixture source: %s", name)
+			}
+			sources[name] = text
+		}
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
 	installGeneratedFixtureProxy(t, candidate, download, sources["go.mod"])

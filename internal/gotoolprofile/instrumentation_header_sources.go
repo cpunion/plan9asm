@@ -151,15 +151,8 @@ func instrumentationNativeHeaderReplay(input *InstrumentationConsumerInput, proo
 	// Header properties include every original constant and named struct, not
 	// merely names reachable from a bodyless assembly signature. Their imported
 	// closure is selected by the same existing declaration graph.
-	for name := range root.constants {
-		if err := root.requireName(name); err != nil {
-			return nil, nil, nil, "", err
-		}
-	}
-	for name := range root.types {
-		if err := root.requireName(name); err != nil {
-			return nil, nil, nil, "", err
-		}
+	if err := requireNativeHeaderRoots(root); err != nil {
+		return nil, nil, nil, "", err
 	}
 	if err := boundInstrumentationHeaderStrings(graph); err != nil {
 		return nil, nil, nil, "", err

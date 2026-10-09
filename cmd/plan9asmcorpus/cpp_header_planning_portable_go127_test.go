@@ -113,6 +113,23 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].ImportMap["fmt"] = "fmt"
 		}
 	}
+	if len(plan.HeaderPlanning.Queries[0].Metadata.Headers[0].Imports) != 0 {
+		mutations["independent import paired deletion"] = func(r *discoveryCorpusResult) {
+			header := &r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0]
+			delete(header.ImportMap, header.Imports[0].ImportPath)
+			header.Imports = header.Imports[1:]
+		}
+		mutations["independent import source role deletion"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].Imports[0].GoSHA256 = nil
+		}
+		mutations["independent import export deletion"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].Imports[0].ExportSHA256 = ""
+		}
+		mutations["independent import unobserved map edge"] = func(r *discoveryCorpusResult) {
+			header := &r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0]
+			header.ImportMap[header.Imports[0].ImportPath] = "example.invalid/unobserved"
+		}
+	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
 			var changed discoveryCorpusResult
