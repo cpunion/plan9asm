@@ -111,8 +111,14 @@ func preprocessGoAssemblyObserved(src string, options AssemblyPreprocessOptions,
 			input.sawCode = true
 		}
 		if token.kind == '\n' {
+			start := output.Len()
 			if statementTokens != 0 {
 				output.WriteByte('\n')
+			}
+			if observer != nil {
+				if err := observer.emitOutput(token, start, output.Len()); err != nil {
+					return "", err
+				}
 			}
 			previous, statementTokens = ppGoToken{}, 0
 			continue
@@ -121,7 +127,13 @@ func preprocessGoAssemblyObserved(src string, options AssemblyPreprocessOptions,
 			statementTokens == 1 && previous.kind == scanner.Ident && token.kind != ':') {
 			output.WriteByte(' ')
 		}
+		start := output.Len()
 		output.WriteString(token.text)
+		if observer != nil {
+			if err := observer.emitOutput(token, start, output.Len()); err != nil {
+				return "", err
+			}
+		}
 		previous = token
 		statementTokens++
 		if token.kind == ';' || token.kind == ':' {

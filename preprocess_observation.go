@@ -35,6 +35,17 @@ type AssemblyCPPObservedToken struct {
 	Position            AssemblyCPPObservedPosition
 }
 
+// AssemblyCPPOutputToken is an emitted token's physical reader/expansion
+// origin. It is not a logical #line position or an assembler acceptance proof.
+// Expansion and Include reference the accompanying observation's events.
+type AssemblyCPPOutputToken struct {
+	Kind               rune
+	Text               string
+	Start, End         int // Byte span in the exact emitted Output, excluding spacing.
+	Position           AssemblyCPPObservedPosition
+	Expansion, Include int
+}
+
 // Events are ordered by execution, not physical source traversal. Expansion is
 // the invocation event which supplied a generated token; zero denotes physical
 // source. Definition refers to the actual macro-definition event, including -D.
@@ -60,17 +71,31 @@ type AssemblyCPPEvent struct {
 // active includes, inactive invocations and control transitions, not an inferred
 // all-profile branch denominator or acceptance of isolated header fragments.
 func ObserveAssemblyCPP(src string, opt AssemblyPreprocessOptions) (AssemblyCPPObservation, error) {
+	observation, _, err := observeAssemblyCPP(src, opt, false)
+	return observation, err
+}
+
+// ObserveAssemblyCPPOutput additionally retains the complete emitted token
+// tape. This opt-in query leaves ordinary CPP observations and their memory
+// costs unchanged. Consumers must authenticate sources and close operand/ABI
+// obligations themselves; an expansion position supplies no machine effect.
+func ObserveAssemblyCPPOutput(src string, opt AssemblyPreprocessOptions) (AssemblyCPPObservation, []AssemblyCPPOutputToken, error) {
+	return observeAssemblyCPP(src, opt, true)
+}
+
+func observeAssemblyCPP(src string, opt AssemblyPreprocessOptions, retainOutput bool) (AssemblyCPPObservation, []AssemblyCPPOutputToken, error) {
 	// Capture the actual -D inputs before a resolver can mutate its caller's
 	// slice. The same immutable copy supplies the execution and its record.
 	opt.Defines = append([]string(nil), opt.Defines...)
 	observer := newPPGoObservation()
+	observer.retainOutput = retainOutput
 	output, err := preprocessGoAssemblyObserved(src, opt, observer)
 	if err != nil {
-		return AssemblyCPPObservation{}, err
+		return AssemblyCPPObservation{}, nil, err
 	}
 	observer.result.Output = output
 	observer.result.Defines = opt.Defines
-	return observer.result, nil
+	return observer.result, observer.outputTokens, nil
 }
 
 // These observation bounds do not enlarge any existing source, include,
@@ -88,6 +113,23 @@ type ppGoObservation struct {
 	active, tokens, tokenBytes int
 	eventLimit                 int
 	positions                  *sdkCPPPositionObservation
+	retainOutput               bool
+	outputTokens               []AssemblyCPPOutputToken
+}
+
+func (observer *ppGoObservation) emitOutput(token ppGoToken, start, end int) error {
+	if !observer.retainOutput {
+		return nil
+	}
+	if err := observer.chargeToken(len(token.text) + len(token.file)); err != nil {
+		return err
+	}
+	observer.outputTokens = append(observer.outputTokens, AssemblyCPPOutputToken{
+		Kind: token.kind, Text: token.text, Start: start, End: end,
+		Position:  AssemblyCPPObservedPosition{File: token.file, Line: token.line},
+		Expansion: token.expansion, Include: token.includeEvent,
+	})
+	return nil
 }
 
 func newPPGoObservation() *ppGoObservation {

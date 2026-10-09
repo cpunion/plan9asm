@@ -48,13 +48,13 @@ func TestDiscoveryAsmDeclFPAliasRetainsUnderlyingProofReason(t *testing.T) {
 		{
 			name: "register macro", declaration: "func Value(x, y uint64) uint64",
 			prefix: "#define AX BX\n", body: "MOVQ x+8(FP),AX\nMOVQ AX,ret+16(FP)",
-			stage: "literal-cpp", reason: "literal/expanded instruction 1 differs",
+			stage: "native-access", reason: "CPP FP operand 1 is not an exact register alias",
 		},
 		{
 			name: "included register macro", declaration: "func Value(x, y uint64) uint64",
 			prefix: "#include \"register.h\"\n", header: "#define AX BX\n",
 			body:  "MOVQ x+8(FP),AX\nMOVQ AX,ret+16(FP)",
-			stage: "literal-cpp", reason: "literal/expanded instruction 1 differs",
+			stage: "native-access", reason: "CPP FP operand 1 is not an exact register alias",
 		},
 		{
 			name: "generated include", declaration: "const ValueBits = 7\nfunc Value(x, y uint64) uint64",

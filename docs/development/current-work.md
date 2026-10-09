@@ -169,6 +169,26 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    types on both architectures, including integers, floats, named types,
    arrays, structs and complex64. Native width alone does not initialize any
    bank, authorize parameter writes or prove translation/runtime success.
+   The frozen `2d44fe89` validator also passes the two Linux transfer/runtime
+   roots (complete bytes and original dead-read faults, each at IR O0/O2) and
+   the five-arch official classification gate. Complete external reports pass
+   websocket, but retain xxhash's CPP-register alias failure and crc32's native
+   vector-read/result proof failure. Quick curated object success was not a
+   complete xxhash asmdecl success. Preserve those failed reports.
+   The next persistent branch is `codex/pr40-cpp-register-matrix-20261009`.
+   Its independent RED covers GP/X/MMX/Y parameter reads on amd64/386 with
+   direct, transitive and original-header aliases. The replacement consumes an
+   opt-in physical emitted-token tape from the shared strict CPP engine, binds
+   exactly one original opcode/FP instruction and permits only a bare symbol
+   to become a register. It does not reconstruct macro state from a line or
+   authenticate logical #line filenames. Parameter-name filtering does not
+   require unrelated macro bodies to remain literal. Result-name filtering
+   still requires the whole-function literal/CPP identity and full result CFG.
+   Opcode/FP/pseudo-base/actual-register rewrites, inserted statements, padding,
+   partial reads, incoming writes, unknown RMW and changed headers remain
+   failures. Two existing failure-reason assertions now expect the earlier
+   exact operand rejection; their original exit-1 receipts stay unchanged.
+   Rerun complete reports on the clean successor before publishing its ledger.
    Another actual library failure is the normalized raw-byte/AUTO replay join:
    reparsing decoded instruction text loses private decoder identity and comments.
    Test-only `82d046c0` adds an independent raw-times-AUTO regression. Its first

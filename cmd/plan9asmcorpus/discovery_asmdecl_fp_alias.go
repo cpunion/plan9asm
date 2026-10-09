@@ -222,7 +222,7 @@ func resultAliasLiteralCPPFunction(source []byte, expanded plan9asm.Func) error 
 // Parameter aliases require only a full native read of an actual declaration
 // component. Result reads/writes and lexical ret names require the separate
 // full CFG result proof; an alias must not hide the analyzer's RET obligation.
-func resultAliasOriginalFP(source []byte, reported, function, warning, arch string, components map[string]*asmDeclFPComponent) (matched, requiresResultProof, boundComponent bool, reason error) {
+func resultAliasOriginalFP(source []byte, reported, function, warning, arch string, components map[string]*asmDeclFPComponent, file string, replay *resultAliasCPPReplay) (matched, requiresResultProof, boundComponent bool, reason error) {
 	match := discoveryAsmDeclNamedOffset.FindStringSubmatch(warning)
 	if components == nil {
 		return false, false, false, fmt.Errorf("declaration components are unclosed")
@@ -304,7 +304,11 @@ func resultAliasOriginalFP(source []byte, reported, function, warning, arch stri
 				boundComponent = true
 			}
 		}
-		width, write, known := plan9asm.X86FPAccessBytes(ins, index, arch)
+		expanded, expansionErr := resultAliasCPPRegisterInstruction(replay, file, line, function, ins)
+		if expansionErr != nil {
+			return false, false, boundComponent, expansionErr
+		}
+		width, write, known := plan9asm.X86FPAccessBytes(expanded, index, arch)
 		if !known || width <= 0 {
 			return false, false, boundComponent, fmt.Errorf("native FP access width/direction is not closed for %s operand %d", ins.Op, index)
 		}

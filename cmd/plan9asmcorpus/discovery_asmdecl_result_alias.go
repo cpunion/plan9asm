@@ -122,7 +122,7 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 	}
 	proofErrors := make(map[string]error)
 	literalErrors := make(map[string]error)
-	parsedSources := make(map[string]*plan9asm.File)
+	parsedSources := make(map[string]*resultAliasCPPReplay)
 	parseErrors := make(map[string]error)
 	componentMaps := make(map[string]map[string]*asmDeclFPComponent)
 	componentCount := 0
@@ -164,20 +164,20 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 			retained = append(retained, line)
 			continue
 		}
-		parsed, parsedBefore := parsedSources[file]
+		replay, parsedBefore := parsedSources[file]
 		if !parsedBefore {
-			parsed, parseErrors[file] = plan.resultAliasCPP(unit, file, source, defines)
-			parsedSources[file] = parsed
+			replay, parseErrors[file] = plan.resultAliasCPP(unit, file, source, defines)
+			parsedSources[file] = replay
 		}
 		var function *plan9asm.Func
-		if parsed != nil {
-			for index := range parsed.Funcs {
-				if parsed.Funcs[index].Sym == "·"+position[5] {
+		if replay != nil {
+			for index := range replay.parsed.Funcs {
+				if replay.parsed.Funcs[index].Sym == "·"+position[5] {
 					if function != nil {
 						function = nil
 						break
 					}
-					function = &parsed.Funcs[index]
+					function = &replay.parsed.Funcs[index]
 				}
 			}
 		}
@@ -205,7 +205,7 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 				continue
 			}
 		} else {
-			matched, required, boundComponent, nativeErr := resultAliasOriginalFP(source, position[2], position[5], position[6], plan.SDK["GOARCH"], components)
+			matched, required, boundComponent, nativeErr := resultAliasOriginalFP(source, position[2], position[5], position[6], plan.SDK["GOARCH"], components, file, replay)
 			// An existing real RET obligation already prevents source exclusion
 			// and testless retry. Keep that original failure's identity when an
 			// unknown-result name cannot close its byte proof. A name-only
@@ -213,11 +213,14 @@ func (plan *directAsmDeclPlan) filterResultAliasWarnings(unit directAsmDeclUnit,
 			needsContext := discoveryAsmDeclNamedOffset.MatchString(position[6]) || !unwrittenFunctions[position[5]]
 			key := file + "\x00" + position[5]
 			literalErr, checked := literalErrors[key]
-			if !checked && function != nil {
+			// A closed parameter read needs its exact emitted instruction, not
+			// unrelated literal macro bodies. Result authority still requires
+			// the stricter whole-function literal/CPP and CFG proofs.
+			if required && !checked && function != nil {
 				literalErr = resultAliasLiteralCPPFunction(source, *function)
 				literalErrors[key] = literalErr
 			}
-			if !matched || function == nil || literalErr != nil {
+			if !matched || function == nil || required && literalErr != nil {
 				unclosedAlias = unclosedAlias || boundComponent && needsContext
 				if boundComponent && needsContext {
 					switch {
@@ -394,9 +397,15 @@ func resultAliasOriginalRET(source []byte, reported, function string) bool {
 	return name == function
 }
 
-func (plan *directAsmDeclPlan) resultAliasCPP(unit directAsmDeclUnit, file string, source []byte, defines []string) (*plan9asm.File, error) {
+type resultAliasCPPReplay struct {
+	parsed      *plan9asm.File
+	observation plan9asm.AssemblyCPPObservation
+	tokens      []plan9asm.AssemblyCPPOutputToken
+}
+
+func (plan *directAsmDeclPlan) resultAliasCPP(unit directAsmDeclUnit, file string, source []byte, defines []string) (*resultAliasCPPReplay, error) {
 	total := len(source)
-	expanded, err := plan9asm.PreprocessAssemblySource(string(source), plan9asm.AssemblyPreprocessOptions{
+	observation, tokens, err := plan9asm.ObserveAssemblyCPPOutput(string(source), plan9asm.AssemblyPreprocessOptions{
 		FileName: file, Defines: defines,
 		ReadInclude: func(_ string, include string) (string, []byte, error) {
 			// cmd/asm uses the fixed actual package CWD, not the containing
@@ -422,8 +431,12 @@ func (plan *directAsmDeclPlan) resultAliasCPP(unit directAsmDeclUnit, file strin
 	if err != nil {
 		return nil, fmt.Errorf("result-proof CPP is unclosed: %w", err)
 	}
-	if len(expanded) > 64<<20 {
+	if len(observation.Output) > 64<<20 {
 		return nil, fmt.Errorf("result-proof CPP expanded byte budget exhausted")
 	}
-	return plan9asm.Parse(plan9asm.ArchAMD64, expanded)
+	parsed, err := plan9asm.Parse(plan9asm.ArchAMD64, observation.Output)
+	if err != nil {
+		return nil, err
+	}
+	return &resultAliasCPPReplay{parsed: parsed, observation: observation, tokens: tokens}, nil
 }
