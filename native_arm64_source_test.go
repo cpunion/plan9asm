@@ -209,7 +209,8 @@ func TestNativeARM64RejectsUnsupportedSource(t *testing.T) {
 		{"duplicate global", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nGLOBL ·p(SB), RODATA, $8\n", "duplicate native GLOBL"},
 		{"empty global", prefix + "RET\nGLOBL ·p(SB), RODATA, $0\n", "GLOBL size"},
 		{"huge global", prefix + "RET\nGLOBL ·p(SB), RODATA, $67108865\n", "GLOBL size"},
-		{"data width", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nDATA ·p(SB)/3, $1\n", "DATA width"},
+		// The shared DATA grammar rejects this before native lowering.
+		{"data width", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nDATA ·p(SB)/3, $1\n", "DATA integer requires width 1, 2, 4 or 8"},
 		{"data string", prefix + "RET\nGLOBL ·p(SB), RODATA, $8\nDATA ·p(SB)/3, $\"abc\"\n", "source syntax"},
 		{"block comment", prefix + "/* ignored */ RET\n", "source syntax"},
 		{"FP to FP integer move", prefix + "MOVD F0, R0\n", "unsupported native register"},
