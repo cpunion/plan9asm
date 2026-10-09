@@ -68,6 +68,9 @@ func moduleRootPartitionFixture(t *testing.T) string {
 	seen := make([]bool, 32)
 	remaining := len(seen)
 	for candidate := 0; remaining != 0; candidate++ {
+		if candidate >= 4096 {
+			t.Fatal("bounded first-party witnesses did not fill the complete 32-shard plan")
+		}
 		name := fmt.Sprintf("TestRootShardWitness%d", candidate)
 		hash := sha256.Sum256([]byte(name))
 		index := binary.BigEndian.Uint64(hash[:8]) % uint64(len(seen))
