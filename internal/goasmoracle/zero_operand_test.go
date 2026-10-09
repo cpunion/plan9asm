@@ -47,7 +47,13 @@ func TestDiagnosticZeroOperandModeListings(t *testing.T) {
 		for _, opcode := range []string{"LEAVEW", "LEAVEL", "LEAVEQ", "PUSHAW", "PUSHAL", "POPAW", "POPAL", "PUSHFW", "PUSHFL", "PUSHFQ", "POPFW", "POPFL", "POPFQ"} {
 			t.Run(arch+"_"+opcode, func(t *testing.T) {
 				source, object := oracleFixture(t)
-				text := "TEXT probe(SB),$0-0\n\t" + opcode + "\n\tRET\n"
+				text := "TEXT probe(SB),$0-0\n\t" + opcode + "\n"
+				if strings.HasPrefix(opcode, "PUSHF") {
+					text += "\tPOPF" + strings.TrimPrefix(opcode, "PUSHF") + "\n"
+				} else if strings.HasPrefix(opcode, "POPF") {
+					text += "\tPUSHF" + strings.TrimPrefix(opcode, "POPF") + "\n"
+				}
+				text += "\tRET\n"
 				if err := os.WriteFile(source, []byte(text), 0600); err != nil {
 					t.Fatal(err)
 				}
