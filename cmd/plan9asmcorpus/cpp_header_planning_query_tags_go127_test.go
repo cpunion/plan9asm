@@ -55,7 +55,9 @@ func TestCPPHeaderPlanningQueryGoOnlyTagsActualEmbed(t *testing.T) {
 		t.Fatalf("Go-only tag planning must bind actual original dependency embeds and registration: %v", err)
 	}
 	plan := matrix.OrdinarySelectionPlan
-	if matrix.Success != 2*len(targets) || plan == nil || plan.HeaderPlanning == nil {
+	// The Go-only alternate scope needs its own final original Go/LLVM
+	// object, not just a successful planning query for a baseline object.
+	if matrix.Success != 3*len(targets) || plan == nil || plan.HeaderPlanning == nil {
 		t.Fatal("actual metadata planning and final LLVM consumer evidence are both required")
 	}
 	seen := make(map[string]bool)

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -242,5 +243,20 @@ func TestProfileSelectionGoOnlyTagsCloseExactPackageScopes(t *testing.T) {
 	writeTestFile(t, filepath.Join(root, "durable.go"), sources["durable.go"]+"// changed\n")
 	if err := verifyOrdinarySelectionUnchanged(plan, root, candidate); err == nil {
 		t.Fatal("source reread accepted a changed tag-scope witness")
+	}
+}
+
+func TestProfileSelectionPackageTagScopeBoundFailsClosed(t *testing.T) {
+	scopes := make(map[ordinaryPackageTagScope]bool)
+	for index := 0; index < ordinaryPackageTagScopeLimit; index++ {
+		if err := addOrdinaryPackageTagScope(scopes, ordinaryPackageTagScope{Dir: "pkg", Tags: fmt.Sprint(index)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := addOrdinaryPackageTagScope(scopes, ordinaryPackageTagScope{Dir: "pkg", Tags: "0"}); err != nil {
+		t.Fatalf("duplicate scope consumed another budget entry: %v", err)
+	}
+	if err := addOrdinaryPackageTagScope(scopes, ordinaryPackageTagScope{Dir: "pkg", Tags: "new"}); err == nil || len(scopes) != ordinaryPackageTagScopeLimit {
+		t.Fatalf("scope exhaustion was truncated or silently accepted: size=%d error=%v", len(scopes), err)
 	}
 }

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 // A tag-selected Go body can be invalid on one architecture even though its
@@ -205,9 +207,72 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 			t.Fatalf("independent final Go/source/CPP/LLVM scope replay: %v", err)
 		}
 		t.Logf("COMPLETE_ORIGINAL_SOURCE_REJECTION objects=%d rejected_scopes=%d configurations=%+v", matrix.Success, len(matrix.SourceNotApplicableItems), configs)
-		result.SourceNotApplicableItems = nil
-		if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
-			t.Fatal("reader accepted deletion of the failed target/tag scope")
+		for index := range result.SourceNotApplicableItems {
+			changed := result
+			changed.SourceNotApplicableItems = append(append([]discoverySourceNotApplicableItem(nil), result.SourceNotApplicableItems[:index]...), result.SourceNotApplicableItems[index+1:]...)
+			if err := validateOrdinaryProfileResult(changed, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatalf("reader accepted deletion of source rejection %d", index)
+			}
+		}
+		for index := range result.FeatureConsumption {
+			changed := result
+			changed.FeatureConsumption = append(append([]*gotoolprofile.SelectionProof(nil), result.FeatureConsumption[:index]...), result.FeatureConsumption[index+1:]...)
+			changed.Translations--
+			if err := validateOrdinaryProfileResult(changed, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+				t.Fatalf("reader accepted deletion of executed object %d", index)
+			}
+		}
+		var baselines []*discoveryTargetFeatures
+		for _, profile := range matrix.FeatureProfiles {
+			if profile.Request.Baseline {
+				baselines = append(baselines, profile.Observed)
+			}
+		}
+		original, err := planDiscoveryFeatureProfiles(matrix.OrdinarySelectionPlan, candidate.AsmFiles, baselines)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(matrix.OrdinarySelectionPlan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var changed discoveryOrdinarySelectionPlan
+		if err := json.Unmarshal(encoded, &changed); err != nil {
+			t.Fatal(err)
+		}
+		changed.headerPlanningInventory = inventory
+		for index, query := range changed.HeaderPlanning.Queries {
+			if query.Profile.Request.Target != "linux/amd64" {
+				continue
+			}
+			changed.HeaderPlanning.Queries = append(changed.HeaderPlanning.Queries[:index:index], changed.HeaderPlanning.Queries[index+1:]...)
+			break
+		}
+		conservative, err := planDiscoveryFeatureProfiles(&changed, candidate.AsmFiles, baselines)
+		if err != nil {
+			t.Fatalf("missing planning query did not retain conservative proposals: %v", err)
+		}
+		keys := make(map[string]bool)
+		for _, proposal := range conservative {
+			keys[discoveryFeatureRequestKey(proposal)] = true
+		}
+		for _, proposal := range original {
+			if !keys[discoveryFeatureRequestKey(proposal)] {
+				t.Fatal("deleting a planning receipt shrank the required profile denominator")
+			}
+		}
+		if len(conservative) <= len(original) {
+			t.Fatal("missing amd64 header failed to retain the full legal CPU proposals")
+		}
+		missing := result
+		missing.OrdinarySelectionPlan = &changed
+		if err := validateOrdinaryProfileResult(missing, targets, changed.GoVersion); err == nil {
+			t.Fatal("missing planning query borrowed unexecuted expanded CPU objects")
+		}
+		query := &changed.HeaderPlanning.Queries[0]
+		query.Metadata = nil
+		if _, err := discoveryPlanningHeader(&changed, query.Profile.Request, query.Assembly, query.BuildTags); err == nil || errors.As(err, &unsupported) {
+			t.Fatalf("corrupt existing query became a missing-query fallback: %v", err)
 		}
 	})
 

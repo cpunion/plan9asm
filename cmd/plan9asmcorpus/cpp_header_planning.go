@@ -90,7 +90,11 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 		}
 	}
 	if found == nil {
-		return nil, fmt.Errorf("native header planning query omits its exact request/source/tag scope")
+		// No query is no planning evidence. Retain every legal CPU proposal
+		// and require each final package/tag scope's independent source or
+		// object proof. Existing malformed receipts still fail below; an
+		// omitted receipt can expand, never shrink, the final denominator.
+		return nil, &discoveryHeaderPlanningUnsupported{reason: "native header planning query omits its exact request/source/tag scope"}
 	}
 	profiles, err := resolveDiscoveryFeatureProfiles(plan.headerPlanningInventory, []discoveryFeatureProfileReference{found.Profile})
 	if err != nil {

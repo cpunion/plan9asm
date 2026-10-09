@@ -77,6 +77,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 	plan.headerPlanningInventory = newDiscoveryFeatureInventory()
 	plan.headerPlanningRecheck = check
 	var unsupported discoveryHeaderPreflightReuse
+	var viability discoveryHeaderViabilityCache
 	plan.headerPlanningCapture = func(request discoveryFeatureProfileRequest, assembly string, tags []string) (header *gotoolprofile.GeneratedHeaderProof, result error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -169,6 +170,35 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		}
 		group := discoveryPackageGroup{Pattern: pattern, AsmFiles: []string{assembly}}
 		queryEnv := ordinaryProfileEnvironment(env, observed)
+		viabilityKey := discoveryHeaderViabilityKey(profile.ID, pattern, tags)
+		err = viability.check(viabilityKey, func() error {
+			if err := check(); err != nil {
+				return err
+			}
+			return verifyDiscoveryOrdinaryCPP(plan, download.Dir, goRoot, candidate)
+		}, func() error {
+			args := []string{"list", "-export", "-mod=mod"}
+			if len(tags) != 0 {
+				args = append(args, "-tags="+strings.Join(tags, ","))
+			}
+			args = append(args, pattern)
+			return journal.run(candidate.exactKey(), "ordinary_header_viability", profile.ID+"/"+pattern+"/"+strings.Join(tags, ","), func() error {
+				_, _, err := runDiscoveryMachineCommand(ctx, queryDir, queryEnv, goBinary, args...)
+				return err
+			})
+		}, func() error {
+			after, err := cache.observe(ctx, goBinary, markers, env, request.Target, request.Overrides)
+			if err != nil {
+				return err
+			}
+			if discoveryFeatureProfileID(after) != profile.ID {
+				return fmt.Errorf("actual package viability tool/profile changed during original Go compilation")
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
 		ordinal := 0
 		if plan.HeaderPlanning != nil {
 			ordinal = len(plan.HeaderPlanning.Queries)
