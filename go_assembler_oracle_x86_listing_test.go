@@ -131,7 +131,7 @@ func goAssemblerOracleX86Listing(original, listing []string) bool {
 	}
 	if canonical, alias := goAssemblerOracleX86Aliases[sourceOp]; alias && canonical == listedOp {
 		for i := range args {
-			if !reflect.DeepEqual(args[i], listedArgs[i]) {
+			if !goAssemblerOracleX86OperandListing(args[i], listedArgs[i]) {
 				return false
 			}
 		}
