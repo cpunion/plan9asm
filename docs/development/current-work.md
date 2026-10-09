@@ -84,31 +84,54 @@ combined gate at `07a1d672` passes all original 54 roots plus seven new roots:
 independent fresh readback closes full raw EOF, source/tools/binary and all
 144 logged actual-Go children. This is a finite scope, not full-module or CI.
 
-Generated-header planning has a separate query-only TDD at `bf8ae5b2`:
-126 nodes, 113 pass and 13 fail (11 query-count failures and two propagated
-parents), with zero setup/other failure. The condition-free case repeats CPU
-header queries without adding branch requests. Keep actual source/header
-guards, Go-only partner selection and instrumentation expanded-output scopes;
-only redundant ordinary planning queries are candidates for removal. This
-does not itself resolve a distinct-profile limit failure or prove a consumer.
+Generated-header planning now has a conservative condition-free fast path.
+Its query-only RED at `bf8ae5b2` retains 113 passes and 13 failures; the
+successor passes all 126 nodes. Full source/include/header guards, CPU-token
+fallback, Go-only partners and instrumentation expanded-output scopes remain.
+The actual consumer at `1d9f6b99` passes 27 Builtin nodes across eleven targets;
+seven separate query-only controls pass on Linux/amd64. Planning queries fall from
+123 to 11; all eleven final headers and LLVM objects remain required. Main's
+fresh readback confirms the complete reports and frozen inputs. Initial full
+Go-list exports and physical temporary LLVM objects were not retained: do not
+claim a fresh physical-object audit or external-library success. The earlier
+canonical-target helper failure remains preserved. The five reviewed commits
+are integrated through `83d0274b`, not yet whole-module verified.
+The actual Go-1.20 query-model check at `1d9f6b99` also passes all 126 nodes,
+including Main's fresh readback. Its earlier wrapper setup failure remains
+preserved with all tests unattempted; it was not a CPP failure. The corrected
+reader binds complete command-package build metadata and Go-1.20's actual
+worktree/VCS rules, rather than granting a generic missing-VCS exception.
+
+Successful numerical-consumer fixtures now report actual source Close errors
+instead of discarding them. The source-bound RED at `6f22c04a` exposes the
+directory-identity error; `772d2504` passes ordinary and race, twelve nodes each,
+including the preserved replacement-directory canary. Main independently
+rechecks both complete inventories. These test-only commits are integrated as
+`c308c511` and `e4e22527`; they confer no source/ABI permissions or ledger pass.
+
+ARM64 MOV memory-row coverage now compares the selected Go table's complete
+attributes and physical order, exact unsigned aliases and independent typed
+shapes. Its same-count mutation RED has one pass and seven expected failures.
+The test-only successor at `4328896d` passes 306 ordinary and 306 race nodes;
+actual Go-1.20 passes 261 nodes using its ten-field/twenty-row schema, not skips.
+Main independently rechecks all three complete inventories and frozen inputs.
+The ordered commits are integrated as `84e923a6` and `a14f9f33`. This projection
+does not prove overlapping encoder-row selection, LLVM objects or ABI/runtime
+behavior; the inner Go-env command has no independent command-receipt proof.
 
 ## Next work, in order
 
-1. Let each active finite gate finish, including failures. Recheck actual
-   source/tools/binaries, full raw EOF, all listed root/subtest outcomes and
-   owned processes independently. Incomplete or killed tests remain failures.
-2. Finish the conservative condition-free generated-header planning family.
-   Preserve actual source/profile guards; optimize repeated work by rule class
-   and then recheck the actual Builtin consumer. A full-module rerun retains its
-   original budget, never hides the finite-scope timeout or skips the fixture.
-3. Finish affected ordinary/race and actual Go-1.20 component matrices. Integrate
-   only their reviewed ordered commits, preserving the original RED evidence.
-   Replace this checkpoint once the next integration is ready to freeze.
-4. Freeze the combined source and rerun all original failed roots, complete
+1. Freeze the integrated source after inspecting its actual clean HEAD.
+   Component passes never transfer to the new combined HEAD. Preserve every
+   original failure and keep the component source, tools and reports frozen.
+2. Run all original failed roots, complete
    affected families, the exhaustive original two-worker module plan, nested
    CLIs, vet/build, official encoder/decoder, strict SDK/benchmark and required
-   native CI. Component passes never transfer to a new combined HEAD.
-5. Continue the SDK numerical source/object seam, dynamic reflect frames,
+   native CI. Let all owners finish, including failures; recheck complete raw
+   EOF, inventories, source/tools/binaries and owned processes independently.
+3. Repair remaining failures in separate persistent successors. Do not rewrite
+   a running snapshot or turn incomplete/killed scopes into success.
+4. Continue the SDK numerical source/object seam, dynamic reflect frames,
    native entry/TLS/continuations and full result/body contracts by typed rule
    class. The old go-fuse LoadUint16 failure remains a real ARM64 result-tail
    backing gap: parameter-padding and tail-call proofs do not authorize its
