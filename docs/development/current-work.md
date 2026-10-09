@@ -17,9 +17,10 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `814e46d2`. Complete x86 scalar float-to-integer native semantics and
-ordinary dependency source ownership join the preceding repairs. The latter
-still has exact-tag and canonical-path regressions under active TDD repair.
+through `19fc9198`. Complete x86 scalar float-to-integer and ARM64 scalar
+conversion semantics, composite private-frame transport, and exact ordinary
+dependency ownership join the preceding repairs. Packed x86 conversions and
+floating comparisons have separate active TDD owners.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -105,9 +106,33 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   source proof: exact actual-Go imports, explicit embed selection, source
   inventories and versioned module/ZIP/go.mod ownership. Test-role permissions
   are not borrowed. Independent readers and final-object guards remain strict.
-  Integration `c0fc9e1e` exposed two follow-ups in full/default-environment
-  verification: ancestor-alias normalization and custom Go-only tag replay.
-  Neither is a reason to drop the source or complete-registration guards.
+  Exact Go-only tag queries retain complete same-package ASM registration;
+  planning-only queries retain private source guards through cached replay and
+  later phases. Producer and consumer ancestor aliases remain bound to their
+  actual live origins without weakening source-internal symlink rejection.
+  The default-environment merged corpus gate at `8481dae4` passes all 57 roots;
+  its complete nested CLI and fresh external repeat remain running.
+- All sixteen Go-named ARM64 scalar integer conversions and 84 registered raw
+  forms share native FPCR/FPSR effects, W zeroing and precise scalar definedness.
+  The complete family includes six SIMD integer-to-float widths, including H/H.
+  Current and historical Go each pass 124 affected roots; original Go/QEMU and
+  four LLVM optimization axes agree over 87,040 exceptional, 3,200 status and
+  1,712 bank/ZR observations. Another 352 rows independently prove actual NEP
+  merge behavior, not merely a writable control bit. The bank oracle now uses
+  seven exact partitions: the longest LLVM stage drops from 189.04 to 30.78
+  seconds, with all rows retained. Whole-container peak includes compilation
+  (2.992 GiB); runtime sampling peaks at 1.055 GiB and no OOM occurs. This does
+  not certify arranged/fixed-point conversions, all AFP behavior or trap handlers.
+- Sealed private frames transport opaque pointer/slice components and canonical
+  zero/one bool bytes independently of numerical definedness. Complete SETcc,
+  both CMOV alternatives, overlap revocation, byte-alias and eight-residue
+  checks remain mandatory. Original ABI0 byte/canary observers and LLVM i1-to-i32
+  callers pass; no C bool ABI, pointee extent, caller-buffer, loop or DATA grant
+  follows. The merged transport gate at `f3044806` passes all eight roots.
+- Partial discovery reports retain the eight-candidate cadence and also publish
+  after a completed candidate when a minute has elapsed. In-progress candidates
+  never gain credit. Full provenance checks and atomic writes remain mandatory;
+  36 focused current-Go, race and historical-Go roots pass.
 - Numerical frame reentry tests now assert that their callback actually fires
   and follow the public Verify route through role-specific helpers. The RED
   showed that the old immediate-caller fixture missed the callback; `814e46d2`
@@ -177,6 +202,9 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   own cache. After it closed, the tree advanced to `4f8cd6bc`; the full module,
   five-architecture classification and vet sequence is now running separately
   under `_out/typed-native-module-4f8cd6bc/`. Never advance this active snapshot.
+  Its root partitions are terminal: 5,544 pass, one historical reentry-fixture
+  failure and 39 host-inapplicable runtime roots. `814e46d2` fixes that fixture
+  independently; the other module packages are still running, not a full pass.
 - `codex/pr40-source-tls-verify-20261010`:
   `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
   163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
@@ -191,6 +219,11 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   share `source inventory directory escapes its bound root` under default
   temporary-path aliases; the independent repair reproduces that environment.
   Its one-GB owned build cache is reclaimed; failed reports remain unchanged.
+  The later `f3044806` merged gate passes transport and all thirteen CLI-owner
+  roots but exposes the standalone producer's ancestor alias. `aa23a36d` closes
+  that remaining role. Only after termination was this tree advanced to
+  `8481dae4`; `_out/merged-owners-8481dae4/` retains the passing 57-root corpus
+  gate and the still-running full nested CLI, using default temporary paths.
 - `codex/pr40-sdk-numerical-cli-20261010`, `a5d9396b`:
   the complete nested CLI gate passed all 239 roots, without skips. The later
   downloaded Darwin/mirror change passed its four actual object consumers and
@@ -242,10 +275,11 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   this pre-optimization revision. Its failed journal is retained while later
   shards continue. No ledger credit or whole-shard completion follows from logs.
 - `codex/pr40-pragma-performance-verify-20261010`, `10e83020`:
-  the coroutine repeat remains active after 775-second planning. Read-only
-  diagnosis found an independent generic-root fallback, fixed later by
-  `d3b0d076`; this running snapshot does not contain that fix. Never change its
-  source or retroactively credit it with the improved planning behavior.
+  the coroutine repeat is terminal: all 112 eligible profile/object scopes
+  pass, with no N/A/skip, after 775-second planning and 8,701 seconds total.
+  A separate network-free frozen reader reproduces the progress bytes exactly.
+  The generic-root optimization is absent from this historical snapshot;
+  its success cannot certify a newer source-owner protocol or faster planning.
 - `codex/pr40-coroutine-performance-verify-20261010`, `dfa0d559`:
   the independent repeat failed after 95.885-second planning with zero objects.
   Generic preflight now reaches a real `durable` metadata consumer whose
@@ -258,6 +292,9 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   metadata failure, `noncanonical complete package assembly registration`.
   It has zero objects, not a performance pass. A network-free frozen reader
   independently reproduced the progress bytes. Its container/cache are closed.
+  The fresh `8481dae4` retry runs separately under
+  `_out/ordinary-closure-8481dae4/`, with the same exact version, 2 CPU/3 GiB
+  executor and sixty-minute phase bounds. It is not yet a pass.
 - `codex/pr40-arm-vfp-conversion-status-audit-20261010`, `8d12b43c`:
   `_out/arm-fp-status/handoff.md` indexes original-Go REDs and the final seven
   Linux/QEMU roots, 80 current-Go roots and the same 80 Go 1.20 roots, all with
@@ -289,22 +326,19 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Finish exact assembly-plus-Go-tag query replay, canonical ancestor-path
-   binding and planning-only dependency guard lifetime in the ordinary source
-   owner. Recheck the five full-CLI failures with default temporary paths and
-   repeat the unchanged coroutine version in a new frozen output directory.
-3. Finish the ARM64 scalar conversion family, including the two half-precision
-   SIMD integer-to-float forms, native FPCR/FPSR and inactive-lane definedness.
-   Keep original-Go witnesses separate from corrected reference-model bugs.
-   Audit packed x86 conversions next: original-Go live/dead status fixtures
-   live in `codex/pr40-packed-conversion-status-20261010`; an unclosed RED is
-   not an integrated repair or successful instruction coverage.
+2. Finish the merged default-environment full CLI and unchanged coroutine retry;
+   source ownership repairs are integrated, but component success is not an
+   external or current-head CI certificate.
+3. Finish the complete packed x86 conversion family and independent floating
+   comparison audits. Preserve original Go NaN/status/dead-effect witnesses,
+   full typed formats and required native hardware counterparts. Recheck merged
+   ARM64 scalar conversions; the component's full gates are already terminal.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
-5. Actual slice/bool transport, DATA/caller joins, loops, split prologues and
-   private helpers remain distinct requirements for unchanged crypto sources;
-   do not infer them from the newly completed numeric private-frame class.
+5. DATA/caller joins, loops, split prologues and private helpers remain distinct
+   requirements for unchanged crypto sources; opaque slice/bool transport does
+   not grant them or establish an external crypto pass.
 
 ## Inventory, ledger and resources
 
