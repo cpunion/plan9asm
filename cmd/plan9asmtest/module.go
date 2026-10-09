@@ -163,6 +163,20 @@ func modulePackageConfig(cfg config, pkg modulePackage, index int) config {
 }
 
 func runModule(ctx context.Context, cfg config) error {
+	// Preserve existing internal zero-value callers; the CLI has explicit
+	// defaults and checks its requested values before dispatch.
+	if cfg.ModuleRootPartitions == 0 && cfg.ModuleRootPartition == 0 {
+		cfg.ModuleRootPartitions, cfg.ModuleRootPartition = 1, -1
+	}
+	if err := validateModuleRootScheduling(cfg); err != nil {
+		return err
+	}
+	if cfg.ModuleRootPartitions != 1 {
+		// Fail closed until the distinct partial producer and exhaustive
+		// aggregate are connected. Never execute a full suite under a partial
+		// scheduling identity.
+		return fmt.Errorf("root partition scheduling execution is not implemented")
+	}
 	if !cfg.Module || cfg.Package != "." || cfg.CISelector != "" || cfg.CIIsolate != "" || cfg.CIVerify != "" || cfg.CIOwner != -1 ||
 		cfg.Timeout <= 0 || cfg.Shards < 1 || cfg.Shards > 1024 || cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards ||
 		cfg.ModuleOwner < -1 || cfg.ModuleOwner >= moduleOwners || os.Getenv("GOFLAGS") != "" {

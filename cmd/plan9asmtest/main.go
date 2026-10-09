@@ -26,8 +26,14 @@ func main() {
 	flag.BoolVar(&cfg.Module, "module", false, "exhaustive ./... main-module inventory; partition root and corpus only")
 	flag.IntVar(&cfg.ModuleOwner, "module-owner", -1, "optional module scheduling owner: 0=root, 1=corpus, 2=all remaining packages")
 	flag.StringVar(&cfg.ModuleVerify, "verify-module", "", "verify complete module artifacts against fresh source/tool/package observations")
+	flag.IntVar(&cfg.ModuleRootPartitions, "module-root-partitions", 1, "exhaustive root shard scheduling parts; module owners only")
+	flag.IntVar(&cfg.ModuleRootPartition, "module-root-partition", -1, "one root-only scheduling part; partial execution is not complete module success")
 	flag.Parse()
 	cfg.Flags = flag.Args()
+	if err := validateModuleRootScheduling(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "plan9asmtest:", err)
+		os.Exit(1)
+	}
 	if cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards {
 		fmt.Fprintln(os.Stderr, "plan9asmtest: workers must be 1..32 and no more than shards")
 		os.Exit(1)

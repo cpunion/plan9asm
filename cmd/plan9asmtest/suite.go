@@ -28,6 +28,8 @@ type config struct {
 	Module                bool
 	ModuleVerify          string
 	ModuleOwner           int
+	ModuleRootPartitions  int
+	ModuleRootPartition   int
 	// Only the module orchestrator sets these from actual package metadata.
 	fullPackage, noTestFiles bool
 }
