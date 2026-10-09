@@ -807,7 +807,7 @@ func emitDataGlobalsWithSigs(b *strings.Builder, file *File, resolve func(string
 			}
 			copy(buf[off:], p)
 		}
-		align := bestAlign(int64(len(buf)))
+		align := goAssemblyDataAlignment(file.Arch, int64(len(buf)))
 		kind := "global"
 		if sd.readOnly {
 			kind = "constant"

@@ -638,7 +638,7 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 		if sd.local {
 			g.SetLinkage(llvm.InternalLinkage)
 		}
-		g.SetAlignment(int(bestAlign(int64(len(buf)))))
+		g.SetAlignment(int(goAssemblyDataAlignment(file.Arch, int64(len(buf)))))
 	}
 	return nil
 }

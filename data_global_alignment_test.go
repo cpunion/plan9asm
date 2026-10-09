@@ -91,13 +91,61 @@ func TestDataGlobalAlignmentBothEmitters(t *testing.T) {
 					for _, role := range []string{"rw", "ro", "local"} {
 						name := fmt.Sprintf("asm_align_%s_n%d", role, row.size)
 						global := module.NamedGlobal(name)
-						if global.IsNil() || global.Alignment() != want {
+						if global.IsNil() {
+							t.Fatal("missing source global", name)
+						}
+						if global.Alignment() != want {
 							t.Errorf("%s: LLVM definition alignment=%d, Go linker requires %d", name, global.Alignment(), want)
 						}
 					}
 				}
 			})
 		}
+	}
+}
+
+func TestDataGlobalAlignmentDoesNotChangeOtherStorageDomains(t *testing.T) {
+	// Private ARM64 literal pools retain their existing separate heuristic.
+	if bestAlign(17) != 1 || bestAlign(24) != 8 || bestAlign(32) != 16 {
+		t.Fatal("assembly definitions changed private literal-pool alignment")
+	}
+	for _, target := range dataGlobalAlignmentTargets {
+		for _, size := range []int64{1 << 20, 1<<20 + 1, 1<<40 + 17, 1<<63 - 1} {
+			if got := goAssemblyDataAlignment(target.arch, size); got != int64(target.maximum) {
+				t.Errorf("%s large size%d alignment=%d, want %d", target.goarch, size, got, target.maximum)
+			}
+		}
+		width := 8
+		if target.goarch == "386" || target.goarch == "arm" {
+			width = 4
+		}
+		source := fmt.Sprintf("DATA holder<>(SB)/%d,$external(SB)\nGLOBL holder<>(SB),16,$17\nGLOBL empty<>(SB),16,$0\n", width)
+		file, err := Parse(target.arch, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ir, err := Translate(file, Options{Goarch: target.goarch, TargetTriple: target.triple, ResolveSym: dataGlobalAlignmentResolve})
+		if err != nil {
+			t.Fatal(err)
+		}
+		func() {
+			ctx := llvm.NewContext()
+			defer ctx.Dispose()
+			module, err := parseIRModuleInContext(ctx, ir)
+			if !module.IsNil() {
+				defer module.Dispose()
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			external := module.NamedGlobal("external")
+			if external.IsNil() || !external.IsDeclaration() || external.Alignment() != 0 {
+				t.Fatal("undefined external acquired source-owned alignment")
+			}
+			if !module.NamedGlobal("empty").IsNil() {
+				t.Fatal("empty definition acquired backing")
+			}
+		}()
 	}
 }
 
