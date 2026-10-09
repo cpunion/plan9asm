@@ -151,6 +151,7 @@ func addOrdinaryGoPartnerTagScopes(ctx build.Context, sources map[string][]byte,
 	// erase a tag that only changes another selected Go file. This is not a
 	// power set of unrelated package tags and does not invent CPU profiles.
 	goFiles := make(map[string][]string)
+	malformed := make(map[string]bool)
 	tagsByFile := make(map[string][]string)
 	for file, data := range sources {
 		if !packageDirs[path.Dir(file)] || strings.HasPrefix(path.Base(file), ".") ||
@@ -159,7 +160,7 @@ func addOrdinaryGoPartnerTagScopes(ctx build.Context, sources map[string][]byte,
 		}
 		if strings.HasSuffix(file, ".go") {
 			if _, err := parser.ParseFile(token.NewFileSet(), file, data, parser.PackageClauseOnly); err != nil {
-				continue
+				malformed[file] = true
 			}
 			goFiles[path.Dir(file)] = append(goFiles[path.Dir(file)], path.Base(file))
 		} else if !containsTargetFeature(asmFiles, file) {
@@ -182,7 +183,18 @@ func addOrdinaryGoPartnerTagScopes(ctx build.Context, sources map[string][]byte,
 		for _, partner := range partners {
 			allTags := append(append([]string(nil), tagsByFile[filepath.FromSlash(assembly)]...), tagsByFile[filepath.Join(filepath.FromSlash(dir), partner)]...)
 			custom := discoveryCustomTagsWithoutFeatures(allTags, []build.Context{ctx})
-			tags, selected, err := findDiscoveryBuildTags(ctx, filepath.FromSlash(dir), path.Base(assembly), []string{partner}, custom, tagsByFile)
+			matchGo := discoveryGoFileMatches
+			if malformed[path.Join(dir, partner)] {
+				// A syntax rejection cannot erase the tag that exposes it.
+				// Match only the original filename/build constraints here;
+				// this does not establish an importable Go or cgo partner.
+				// The already eligible package still requires actual Go
+				// rejection or full object evidence for this added scope.
+				matchGo = func(ctx build.Context, dir, file string) (bool, error) {
+					return ctx.MatchFile(dir, file)
+				}
+			}
+			tags, selected, err := findDiscoveryBuildTagsWithGoMatcher(ctx, filepath.FromSlash(dir), path.Base(assembly), []string{partner}, custom, tagsByFile, matchGo)
 			if err != nil {
 				return err
 			}

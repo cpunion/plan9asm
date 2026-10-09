@@ -99,6 +99,12 @@ func discoveryGoSelectionHeader(file string, data []byte) (string, error) {
 }
 
 func discoveryTagSetMatches(ctx build.Context, dir, asmFile, goFile string, tags []string) (bool, error) {
+	return discoveryTagSetMatchesWithGoMatcher(ctx, dir, asmFile, goFile, tags, discoveryGoFileMatches)
+}
+
+type discoveryGoFileMatcher func(build.Context, string, string) (bool, error)
+
+func discoveryTagSetMatchesWithGoMatcher(ctx build.Context, dir, asmFile, goFile string, tags []string, matchGo discoveryGoFileMatcher) (bool, error) {
 	ctx.BuildTags = tags
 	asmMatches, err := ctx.MatchFile(dir, asmFile)
 	if err != nil {
@@ -107,7 +113,7 @@ func discoveryTagSetMatches(ctx build.Context, dir, asmFile, goFile string, tags
 	if !asmMatches {
 		return false, nil
 	}
-	goMatches, err := discoveryGoFileMatches(ctx, dir, goFile)
+	goMatches, err := matchGo(ctx, dir, goFile)
 	if err != nil {
 		return false, fmt.Errorf("match Go file %s for %s/%s with tags %v: %w", goFile, ctx.GOOS, ctx.GOARCH, tags, err)
 	}
@@ -145,6 +151,13 @@ func findDiscoveryBuildTags(
 	ctx build.Context, dir, asmFile string, goFiles, customTags []string,
 	constraintTagsByFile map[string][]string,
 ) ([]string, bool, error) {
+	return findDiscoveryBuildTagsWithGoMatcher(ctx, dir, asmFile, goFiles, customTags, constraintTagsByFile, discoveryGoFileMatches)
+}
+
+func findDiscoveryBuildTagsWithGoMatcher(
+	ctx build.Context, dir, asmFile string, goFiles, customTags []string,
+	constraintTagsByFile map[string][]string, matchGo discoveryGoFileMatcher,
+) ([]string, bool, error) {
 	ctx.BuildTags = nil
 	asmMatches, err := ctx.MatchFile(dir, asmFile)
 	if err != nil {
@@ -167,7 +180,7 @@ func findDiscoveryBuildTags(
 	goFiles = possibleGoFiles
 	if asmMatches {
 		for _, goFile := range goFiles {
-			matches, err := discoveryGoFileMatches(ctx, dir, goFile)
+			matches, err := matchGo(ctx, dir, goFile)
 			if err != nil {
 				return nil, false, fmt.Errorf("match Go file %s for %s/%s without custom tags: %w", goFile, ctx.GOOS, ctx.GOARCH, err)
 			}
@@ -190,7 +203,7 @@ func findDiscoveryBuildTags(
 			maxCount = len(best)
 		}
 		candidate, ok, err := solveDiscoveryPairTagsAfterAssemblyMatch(
-			ctx, dir, asmFile, goFile, pairTags, maxCount,
+			ctx, dir, asmFile, goFile, pairTags, maxCount, matchGo,
 		)
 		if err != nil {
 			return nil, false, err
@@ -216,12 +229,12 @@ func solveDiscoveryPairTags(
 	if _, err := ctx.MatchFile(dir, asmFile); err != nil {
 		return nil, false, fmt.Errorf("match assembly for %s/%s without custom tags: %w", ctx.GOOS, ctx.GOARCH, err)
 	}
-	return solveDiscoveryPairTagsAfterAssemblyMatch(ctx, dir, asmFile, goFile, tags, maxCount)
+	return solveDiscoveryPairTagsAfterAssemblyMatch(ctx, dir, asmFile, goFile, tags, maxCount, discoveryGoFileMatches)
 }
 
 func solveDiscoveryPairTagsAfterAssemblyMatch(
 	ctx build.Context, dir, asmFile, goFile string,
-	tags []string, maxCount int,
+	tags []string, maxCount int, matchGo discoveryGoFileMatcher,
 ) ([]string, bool, error) {
 	var asmExpr, goExpr constraint.Expr
 	if len(tags) > 16 {
@@ -265,7 +278,7 @@ func solveDiscoveryPairTagsAfterAssemblyMatch(
 			if remaining != 0 {
 				return false, nil
 			}
-			return discoveryTagSetMatches(ctx, dir, asmFile, goFile, selected)
+			return discoveryTagSetMatchesWithGoMatcher(ctx, dir, asmFile, goFile, selected, matchGo)
 		}
 
 		tag := tags[index]

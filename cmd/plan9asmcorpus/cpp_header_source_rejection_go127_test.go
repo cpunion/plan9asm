@@ -309,8 +309,10 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 	})
 }
 
-// A malformed package clause is still selected by Go's filename/build-tag
-// rules. It cannot erase the only tag that exposes its actual source failure.
+// A malformed package clause cannot erase its filename/build-tag scope. Go's
+// package loader may reject it even before tag selection, so both default and
+// tagged scopes retain their actual diagnostics; a separate healthy package
+// still needs its own LLVM object.
 func TestCPPHeaderPlanningMalformedPartnerFinalSourceRejection(t *testing.T) {
 	compilerEnv := os.Environ()
 	root, err := filepath.Abs("../..")
@@ -373,7 +375,7 @@ func TestCPPHeaderPlanningMalformedPartnerFinalSourceRejection(t *testing.T) {
 			inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
 			result := discoveryCorpusResult{
 				Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
-				DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles,
+				DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: []string{"healthy/probe_amd64.s"},
 				BuildConfigurations: configs, Translations: matrix.Success,
 				OrdinarySelectionPlan: matrix.OrdinarySelectionPlan, SourceNotApplicableItems: matrix.SourceNotApplicableItems,
 				FeatureProfiles: refs, FeatureConsumption: matrix.FeatureConsumption, featureInventory: inventory,

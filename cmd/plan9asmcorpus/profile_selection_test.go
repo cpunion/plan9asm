@@ -306,6 +306,16 @@ func TestProfileSelectionMalformedGoPartnerRetainsTagScopes(t *testing.T) {
 	if len(profiles) != 1 || !reflect.DeepEqual(uniqueSortedDiscoveryStrings(got), want) {
 		t.Fatalf("malformed Go partners disappeared or acquired unrelated roles: profiles=%d scopes=%v, want %v", len(profiles), got, want)
 	}
+	changed := *plan
+	changed.Sources = append([]ordinarySelectionSource(nil), plan.Sources...)
+	for index := range changed.Sources {
+		if changed.Sources[index].File == "bad.go" {
+			changed.Sources[index].PackageDiagnostic = ""
+		}
+	}
+	if _, _, err := replayOrdinarySelectionForProfiles(&changed, candidate.AsmFiles, profiles); err == nil {
+		t.Fatal("malformed original source became a valid Go partner by deleting its diagnostic")
+	}
 	writeTestFile(t, filepath.Join(root, "bad.go"), sources["bad.go"]+"// changed\n")
 	if err := verifyOrdinarySelectionUnchanged(plan, root, candidate); err == nil {
 		t.Fatal("changed malformed original source retained its scope witness")
