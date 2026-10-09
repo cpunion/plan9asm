@@ -54,6 +54,17 @@ func (form amd64PackedVectorMoveForm) undefinedOpcode() bool {
 	return form.zeroing && form.memoryWrite
 }
 
+// Only the written vector bytes are described here. Callers independently
+// supply numerical source/merge bytes and validate every mask and native
+// memory role. VEX/EVEX upper-zeroing is applied by the state consumer.
+func (form amd64PackedVectorMoveForm) definedActiveBytes(source, previous uint64) uint64 {
+	known := source & x86CallerVectorByteMask(int64(form.byteWidth))
+	if form.mask >= 0 && !form.zeroing {
+		known &= previous
+	}
+	return known
+}
+
 // Both the lowerer and caller-effect proof consume this grammar. It supplies
 // no memory bounds, alignment, initialized bytes, mask value or continuation.
 func amd64PackedVectorMoveProperties(ins Instr, goarch string) (amd64PackedVectorMoveForm, bool, error) {

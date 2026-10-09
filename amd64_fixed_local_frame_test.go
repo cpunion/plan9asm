@@ -575,7 +575,7 @@ func TestGoAMD64FixedLocalFrameAllPathInitializationAndResourceBounds(t *testing
 			continue
 		}
 		access := ins.x86FixedLocalMemory[0]
-		if access.offset != [4]int64{48, 40, 32, 24} {
+		if access.offset != [8]int64{48, 40, 32, 24, 48, 40, 32, 24} {
 			t.Fatalf("missing all original SP residue accesses: %v", access.offset)
 		}
 	}

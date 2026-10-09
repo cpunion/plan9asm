@@ -48,9 +48,7 @@ func x86ResultPackedVectorMoveTransfer(ins Instr, form amd64PackedVectorMoveForm
 	if !valid {
 		return false
 	}
-	if form.mask >= 0 && !form.zeroing {
-		known &= state.vectorBytes(destination)
-	}
+	known = form.definedActiveBytes(known, state.vectorBytes(destination))
 	state.writeVector(destination, form.byteWidth, known, false)
 	return true
 }

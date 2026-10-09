@@ -21,7 +21,7 @@ type x86FixedLocalAccess struct {
 	shape   [32]byte
 	width   int64
 	write   bool
-	offset  [4]int64
+	offset  [8]int64
 	ordinal int
 }
 
@@ -30,6 +30,7 @@ type x86FixedLocalState struct {
 	constants map[Reg]int64
 	known     map[Reg]uint8
 	vectors   map[Reg]uint64
+	masks     map[Reg]bool
 	bytes     []bool
 	addresses map[int64]int64
 	results   map[int]bool
@@ -55,7 +56,7 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 		clone.results[key] = value
 	}
 	clone.known = x86CloneCallerKnown(input.known)
-	clone.vectors, _ = x86CloneCallerVectorState(input.vectors, nil)
+	clone.vectors, clone.masks = x86CloneCallerVectorState(input.vectors, input.masks)
 	clone.bytes = append([]bool(nil), input.bytes...)
 	return clone
 }
@@ -83,7 +84,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 			return fn, goAMD64FrameContext("fixed local complete source has an unregistered instruction shape: %s", ins.Op)
 		}
 	}
-	for residue := 0; residue < 4; residue++ {
+	for residue := 0; residue < 8; residue++ {
 		if err := replayX86FixedLocal(&copyFn, sig, proof, residue); err != nil {
 			return fn, err
 		}
@@ -95,7 +96,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	for index := range final.Instrs {
 		final.Instrs[index].x86FixedLocalMemory = nil
 	}
-	for residue := 0; residue < 4; residue++ {
+	for residue := 0; residue < 8; residue++ {
 		if err := replayX86FixedLocal(&final, sig, proof, residue); err != nil {
 			return fn, err
 		}
@@ -129,7 +130,7 @@ func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 // distinct. Different distances between permanently disjoint accesses are
 // unobservable because the source cannot expose numeric addresses or flags.
 func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) error {
-	var forward, reverse [4]map[int64]int64
+	var forward, reverse [8]map[int64]int64
 	for residue := range forward {
 		forward[residue] = make(map[int64]int64)
 		reverse[residue] = make(map[int64]int64)
@@ -164,6 +165,15 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if ins.x86NumericalRead != nil {
 		_, valid := x86NumericalReadEffect(ins, "amd64")
 		return valid
+	}
+	if _, known, err := amd64PackedVectorMoveProperties(ins, "amd64"); known {
+		return err == nil
+	}
+	if _, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
+	if _, known := amd64MaskMoveSpecs[ins.Op]; known {
+		return amd64MaskMoveOperandsValid(ins, "amd64")
 	}
 	for _, operand := range ins.Args {
 		if operand.Kind == OpReg && amd64VectorByteWidth(operand.Reg) != 0 {
@@ -207,7 +217,7 @@ func fixedLocalInstructionShape(ins Instr) bool {
 	if form, known, err := x86FloatCompareProperties(ins, "amd64"); known {
 		return err == nil && form.legacy && !form.scalar && form.byteWidth == 16
 	}
-	return (ins.Op == "MOVOU" || ins.Op == "MOVO") && len(ins.Args) == 2
+	return false
 }
 
 func fixedLocalBranchLabel(ins Instr) (string, bool) {
@@ -278,7 +288,8 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	}
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
-		vectors: make(map[Reg]uint64), bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
+		vectors: make(map[Reg]uint64), masks: make(map[Reg]bool),
+		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
 	}
 	states := map[int]x86FixedLocalState{0: state}
 	// Wait for every reachable predecessor before transferring a block. This
@@ -336,6 +347,9 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 				}
 				for reg, bits := range merged.vectors {
 					merged.vectors[reg] = bits & current.vectors[reg]
+				}
+				for reg, known := range merged.masks {
+					merged.masks[reg] = known && current.masks[reg]
 				}
 				for index := range merged.bytes {
 					merged.bytes[index] = merged.bytes[index] && current.bytes[index]
@@ -458,7 +472,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			if ins.Op == "ANDQ" {
 				// Only an exact power-of-two residue projection preserves the
 				// same private address origin. No pointer bit becomes numeric.
-				if value != -8 && value != -16 && value != -32 {
+				if value != -8 && value != -16 && value != -32 && value != -64 {
 					return fail()
 				}
 				offset = (offset+int64(residue*8))&value - int64(residue*8)
@@ -468,7 +482,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 				}
 				offset += value
 			}
-			if offset < -32 || offset > proof.frame {
+			if offset < -64 || offset > proof.frame {
 				return fail()
 			}
 			state.pointers[reg] = offset
@@ -490,6 +504,12 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		return err
 	}
 	if known, err := fixedLocalAESByteStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalPackedMoveStep(ins, state, proof, residue); known {
+		return err
+	}
+	if known, err := fixedLocalMaskMoveStep(ins, state, proof, residue); known {
 		return err
 	}
 	return fixedLocalVectorStep(ins, state, proof, residue)
@@ -569,7 +589,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	switch destination.Kind {
 	case OpReg:
 		root, valid := x86CallerGP(destination.Reg)
-		if !valid || root == BP || x86SourceGRegister(root) || pointer && (width != 8 || destination.Reg != root) {
+		if !valid || root == BP && !pointer || x86SourceGRegister(root) || pointer && (width != 8 || destination.Reg != root) {
 			return fail()
 		}
 		if root == SP && !pointer {
@@ -654,47 +674,6 @@ func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86Fixed
 			return goAMD64FrameContext("fixed local compare shape is not closed")
 		}
 		first, second, destination, memory = form.first, form.second, form.destination, form.memory
-	} else if ins.Op == "MOVOU" || ins.Op == "MOVO" {
-		if len(ins.Args) != 2 {
-			return goAMD64FrameContext("fixed local vector copy shape is not closed")
-		}
-		alignment := int64(1)
-		if ins.Op == "MOVO" {
-			alignment = 16
-		}
-		if ins.Args[0].Kind == OpMem {
-			if amd64VectorByteWidth(ins.Args[1].Reg) != 16 || ins.Args[1].Kind != OpReg {
-				return goAMD64FrameContext("fixed local vector destination is not X")
-			}
-			if _, err := fixedLocalMemory(ins, 0, state, proof, residue, 16, alignment, false, false); err != nil {
-				return err
-			}
-			state.vectors[x86CallerVectorRoot(ins.Args[1].Reg)] |= width
-			return nil
-		}
-		if ins.Args[0].Kind != OpReg || amd64VectorByteWidth(ins.Args[0].Reg) != 16 || state.vectors[x86CallerVectorRoot(ins.Args[0].Reg)]&width != width {
-			return goAMD64FrameContext("fixed local vector copy source is incomplete")
-		}
-		if ins.Args[1].Kind == OpMem {
-			offset, err := fixedLocalMemory(ins, 1, state, proof, residue, 16, alignment, true, false)
-			if err != nil {
-				return err
-			}
-			for start := range state.addresses {
-				if offset < start+8 && start < offset+16 {
-					delete(state.addresses, start)
-				}
-			}
-			for index := offset; index < offset+16; index++ {
-				state.bytes[index] = true
-			}
-			return nil
-		}
-		if ins.Args[1].Kind != OpReg || amd64VectorByteWidth(ins.Args[1].Reg) != 16 {
-			return goAMD64FrameContext("fixed local vector copy destination is not X")
-		}
-		state.vectors[x86CallerVectorRoot(ins.Args[1].Reg)] |= width
-		return nil
 	} else {
 		return goAMD64FrameContext("fixed local source has an unregistered typed vector effect: %s", ins.Op)
 	}

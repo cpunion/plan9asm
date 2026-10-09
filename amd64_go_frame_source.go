@@ -1326,6 +1326,19 @@ func goAMD64FrameMachineShape(fn goAMD64FrameFunction, frame int64) error {
 			// semantic substitute. The pinned generic decoder predates VAES.
 			// Op remains zero: it cannot masquerade as a BP/SP or RET opcode.
 			ins.Len = length
+		} else if _, length, mask, err := decodedX86MaskMoveInstruction(fn.code[pc:], 64); mask {
+			if err != nil || length <= 0 {
+				return goAMD64FrameContext("unbound original mask-move machine instruction")
+			}
+			ins.Len = length
+		} else if x86NumericalVectorPrefix(fn.code[pc:], 64) {
+			length, err := x86NumericalVectorBoundary(fn.code[pc:], 64)
+			if err != nil || length <= 0 {
+				return goAMD64FrameContext("unbound original vector machine instruction: %v", err)
+			}
+			// Exact boundaries only: these cannot impersonate the scalar
+			// automatic prologue, epilogue, native CALL or return below.
+			ins.Len = length
 		} else {
 			var err error
 			ins, err = x86asm.Decode(fn.code[pc:], 64)

@@ -438,11 +438,8 @@ func x86CallerPackedVectorMoveStep(ins *Instr, form amd64PackedVectorMoveForm, s
 		known = state.vectors[x86CallerVectorRoot(ins.Args[0].Reg)] & widthMask
 	}
 	destination := x86CallerVectorRoot(ins.Args[form.destination].Reg)
-	if form.mask >= 0 && !form.zeroing {
-		// No initialized mask is assumed all-one. Each byte must be numeric
-		// in both the incoming and retained old lanes for an unknown mask.
-		known &= state.vectors[destination]
-	}
+	// No initialized mask is assumed all-one. Both potential inputs matter.
+	known = form.definedActiveBytes(known, state.vectors[destination])
 	state.vectors[destination] = ^widthMask | known
 	return true
 }
