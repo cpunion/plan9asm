@@ -102,6 +102,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"stdlib_arm64_test_helpers_test.go",
 		"llvm_object_lifecycle_unix_test.go",
 		"runtime_exec_test.go",
+		"runtime_c_asm_label_linux_test.go",
 		"runtime_oracle_fault_core_unix_test.go",
 		"amd64_go_caller_lea_test.go",
 		"amd64_raw_operand_handoff_test.go",
