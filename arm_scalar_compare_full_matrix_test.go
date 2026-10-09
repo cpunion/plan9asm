@@ -262,3 +262,31 @@ func TestARMScalarCompareFullMatrixClosedRawFlagsBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestARMScalarCompareFullMatrixRawPredicateRequiresAllPaths(t *testing.T) {
+	for name, prefix := range map[string]string{
+		"bypassed_writer":   "B compare\nMOVW $0,R0\nCMP R0,R0\ncompare:\n",
+		"call_kills_writer": "MOVW $0,R0\nCMP R0,R0\nCALL helper(SB)\n",
+		"one_path_calls":    "MOVW $0,R0\nCMP R0,R0\nBEQ compare\nCALL helper(SB)\ncompare:\n",
+	} {
+		for _, word := range []uint32{0x0eb50a40, 0x1eb50ac0, 0x0eb50b40, 0x1eb50bc0} {
+			t.Run(fmt.Sprintf("%s/%08x", name, word), func(t *testing.T) {
+				// No following modeled condition/CPSR read can accidentally
+				// trigger the status proof on behalf of this raw predicate.
+				source := "TEXT helper(SB),4,$0-0\nRET\nTEXT boundary(SB),4,$0-0\n" + prefix + fmt.Sprintf("WORD $%#x\nRET\n", word)
+				requireARMGoAssemblerResult(t, source, true)
+				file, err := Parse(ArchARM, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				sigs := map[string]FuncSig{"boundary": {Name: "boundary", Ret: Void}, "helper": {Name: "helper", Ret: Void}}
+				for _, api := range []string{"Translate", "TranslateModule", "TranslateModuleInContext"} {
+					ir, err := armCompareMatrixTranslate(t, file, Options{Goarch: "arm", TargetTriple: "armv7-unknown-linux-gnueabihf", Sigs: sigs}, api)
+					if err == nil || ir != "" {
+						t.Errorf("%s admitted raw predicate without all-path status authority: %v", api, err)
+					}
+				}
+			})
+		}
+	}
+}
