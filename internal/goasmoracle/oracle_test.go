@@ -81,13 +81,17 @@ func TestDiagnosticAssemblerIdentifierRoles(t *testing.T) {
 		{"無效指令", true, 1},
 		{"NOT·AN", true, 1},
 		{"NOT∕AN", true, 1},
+		{"·NOT", true, 1},
+		{"∕NOT", true, 1},
 		{"NOT１２", true, 1},
-		{"NOT_AN_INSTRUCTION:", false, 0},
+		{"LABEL:", false, 0},
+		{"LABEL: NOT_AN_INSTRUCTION", false, 1},
 		{"// NOT_AN_INSTRUCTION", false, 0},
 		{"/* NOT_AN_INSTRUCTION */", false, 0},
 		{"1NOT_AN_INSTRUCTION", false, 1},
 		{"/NOT_AN_INSTRUCTION", false, 1},
 		{".NOT_AN_INSTRUCTION", false, 1},
+		{"MOVD R0,R1 /*", false, 1},
 	} {
 		t.Run(test.opcode, func(t *testing.T) {
 			source, object := oracleFixture(t)
@@ -108,6 +112,9 @@ func TestDiagnosticAssemblerIdentifierRoles(t *testing.T) {
 			if test.bound {
 				if !strings.Contains(string(observed.Stderr), source+":2: unrecognized instruction \""+test.opcode+"\"") {
 					t.Fatalf("Go did not observe this exact identifier token: %+v", observed)
+				}
+				if got := statementOpcode("\t" + test.opcode); got != test.opcode {
+					t.Fatalf("original identifier token=%q, want %q", got, test.opcode)
 				}
 				if failure := CheckOutcome(source, object, observed.Stdout, observed.Stderr, err,
 					ctx.Err(), false, 2, nil); failure != nil {
