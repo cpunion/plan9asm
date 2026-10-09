@@ -33,7 +33,7 @@ func TestARM64RawScalarVectorCVTFCompleteForms(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"sitofp i64", "uitofp i64", "sitofp i32", "uitofp i32"} {
+			for _, want := range []string{"scvtf ${0:d}, ${1:d}", "ucvtf ${0:d}, ${1:d}", "scvtf ${0:s}, ${1:s}", "ucvtf ${0:s}, ${1:s}"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("missing %q in %s:\n%s", want, triple, ll)
 				}

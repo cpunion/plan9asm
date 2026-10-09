@@ -76,10 +76,10 @@ func TestTranslateARM64RawScalarFCVTToIntCompleteFamily(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, want := range []string{
-				"@llvm.roundeven.f32", "@llvm.round.f16", "@llvm.ceil.f32", "@llvm.ceil.f64",
-				"@llvm.floor.f32", "@llvm.floor.f64", "@llvm.fptosi.sat.i32.f16",
-				"@llvm.fptosi.sat.i32.f32", "@llvm.fptosi.sat.i64.f32",
-				"@llvm.fptoui.sat.i32.f32", "@llvm.fptoui.sat.i64.f64",
+				"fcvtns ${0:w}, ${1:s}", "fcvtau ${0:x}, ${1:h}",
+				"fcvtps ${0:x}, ${1:s}", "fcvtpu ${0:w}, ${1:d}",
+				"fcvtms ${0:x}, ${1:d}", "fcvtmu ${0:w}, ${1:s}",
+				"fcvtzs ${0:w}, ${1:h}", "fcvtzu ${0:x}, ${1:d}",
 				`"target-features"="+fullfp16"`,
 			} {
 				if !strings.Contains(ll, want) {

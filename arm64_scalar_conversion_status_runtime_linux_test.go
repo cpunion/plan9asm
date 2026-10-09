@@ -82,31 +82,57 @@ func arm64ScalarConversionPrograms(fixtures []arm64ScalarConversionFixture, rows
 		fmt.Fprintf(&original, "scalarStatus%d,\n", index)
 		fmt.Fprintf(&driver, "scalarStatus%d,\n", index)
 	}
-	original.WriteString("}\nvar rows = []struct { function int; input [68]uint64; want [70]uint64 }{\n")
-	driver.WriteString("};\nstatic const struct { unsigned function; uint64_t input[68], want[70]; } rows[]={\n")
+	original.WriteString("}\ntype change struct { index int; value uint64 }\nvar rows = []struct { function int; input,want [4]change }{\n")
+	driver.WriteString("};\nstruct change { int index; uint64_t value; };\nstatic const struct { unsigned function; struct change input[4],want[4]; } rows[]={\n")
 	for _, row := range rows {
-		fmt.Fprintf(&original, "{%d,[68]uint64{", row.function)
-		fmt.Fprintf(&driver, "{%d,{", row.function)
-		for _, value := range row.input {
-			fmt.Fprintf(&original, "%#x,", value)
-			fmt.Fprintf(&driver, "%#xULL,", value)
+		// Lossless sparse encoding keeps generated compiler inputs bounded;
+		// every runtime still compares all 70 words, never just the changes.
+		var baseline [68]uint64
+		for index := 0; index < 66; index++ {
+			baseline[index] = 0x9876543200000000 + uint64(index)*0x01010101
 		}
-		original.WriteString("},[70]uint64{")
-		driver.WriteString("},{")
-		for _, value := range row.want {
-			fmt.Fprintf(&original, "%#x,", value)
-			fmt.Fprintf(&driver, "%#xULL,", value)
+		var expected [70]uint64
+		copy(expected[:68], row.input[:])
+		expected[68], expected[69] = 0x123456789abcdef0, 0xfedcba9876543210
+		fmt.Fprintf(&original, "{%d,", row.function)
+		fmt.Fprintf(&driver, "{%d,", row.function)
+		for _, pair := range []struct{ base, actual []uint64 }{{baseline[:], row.input[:]}, {expected[:], row.want[:]}} {
+			original.WriteString("[4]change{")
+			driver.WriteString("{")
+			count := 0
+			for index, value := range pair.actual {
+				if value != pair.base[index] {
+					fmt.Fprintf(&original, "{%d,%#x},", index, value)
+					fmt.Fprintf(&driver, "{%d,%#xULL},", index, value)
+					count++
+				}
+			}
+			if count > 4 {
+				panic("scalar conversion fixture exceeds its lossless sparse row encoding")
+			}
+			for ; count < 4; count++ {
+				original.WriteString("{-1,0},")
+				driver.WriteString("{-1,0},")
+			}
+			original.WriteString("},")
+			driver.WriteString("},")
 		}
-		original.WriteString("}},\n")
-		driver.WriteString("}},\n")
+		original.WriteString("},\n")
+		driver.WriteString("},\n")
 	}
 	original.WriteString(`}
 func main() {
     for index, row := range rows {
-        var out [70]uint64
+        var input [68]uint64
+        for word:=0;word<66;word++ { input[word]=0x9876543200000000+uint64(word)*0x01010101 }
+        for _,change:=range row.input { if change.index>=0 { input[change.index]=change.value } }
+        var out,want [70]uint64
+        copy(want[:68],input[:])
         out[68],out[69] = 0x123456789abcdef0,0xfedcba9876543210
-        functions[row.function](&row.input,&out)
-        if out != row.want { panic(fmt.Sprintf("original row %d function %d got %x want %x",index,row.function,out,row.want)) }
+        want[68],want[69] = out[68],out[69]
+        for _,change:=range row.want { if change.index>=0 { want[change.index]=change.value } }
+        functions[row.function](&input,&out)
+        if out != want { panic(fmt.Sprintf("original row %d function %d got %x want %x",index,row.function,out,want)) }
     }
     fmt.Printf("ORIGINAL_ARM64_SCALAR_STATUS %d\n",len(rows))
 }
@@ -115,14 +141,24 @@ func main() {
 int main(void) {
     unsigned failures=0;
     for(unsigned row=0;row<sizeof(rows)/sizeof(rows[0]);row++) {
-        uint64_t input[68],out[70]={0};
-        for(unsigned word=0;word<68;word++) input[word]=rows[row].input[word];
-        out[68]=0x123456789abcdef0ULL; out[69]=0xfedcba9876543210ULL;
+        uint64_t input[68]={0},out[70]={0},want[70]={0};
+        for(unsigned word=0;word<66;word++) input[word]=0x9876543200000000ULL+(uint64_t)word*0x01010101;
+        for(unsigned i=0;i<4;i++) {
+            struct change change=rows[row].input[i];
+            if(change.index>=0) input[change.index]=change.value;
+        }
+        for(unsigned word=0;word<68;word++) want[word]=input[word];
+        out[68]=want[68]=0x123456789abcdef0ULL;
+        out[69]=want[69]=0xfedcba9876543210ULL;
+        for(unsigned i=0;i<4;i++) {
+            struct change change=rows[row].want[i];
+            if(change.index>=0) want[change.index]=change.value;
+        }
         functions[rows[row].function](input,out);
         for(unsigned word=0;word<70;word++) {
-            if(out[word]!=rows[row].want[word]) {
+            if(out[word]!=want[word]) {
                 if(failures<16) fprintf(stderr,"row %u function %u word %u got %016llx want %016llx\n",
-                    row,rows[row].function,word,(unsigned long long)out[word],(unsigned long long)rows[row].want[word]);
+                    row,rows[row].function,word,(unsigned long long)out[word],(unsigned long long)want[word]);
                 failures++;
             }
         }

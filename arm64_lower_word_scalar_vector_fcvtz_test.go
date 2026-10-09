@@ -13,12 +13,12 @@ func TestARM64RawScalarVectorFCVTZCompleteFamily(t *testing.T) {
 		encoding   uint32
 		irFragment string
 	}{
-		{"FCVTZS H", 0x5ef9b800, "@llvm.fptosi.sat.i16.f16"},
-		{"FCVTZS S", 0x5ea1b800, "@llvm.fptosi.sat.i32.f32"},
-		{"FCVTZS D", 0x5ee1b800, "@llvm.fptosi.sat.i64.f64"},
-		{"FCVTZU H", 0x7ef9b800, "@llvm.fptoui.sat.i16.f16"},
-		{"FCVTZU S", 0x7ea1b800, "@llvm.fptoui.sat.i32.f32"},
-		{"FCVTZU D", 0x7ee1b800, "@llvm.fptoui.sat.i64.f64"},
+		{"FCVTZS H", 0x5ef9b800, "fcvtzs ${0:h}, ${1:h}"},
+		{"FCVTZS S", 0x5ea1b800, "fcvtzs ${0:s}, ${1:s}"},
+		{"FCVTZS D", 0x5ee1b800, "fcvtzs ${0:d}, ${1:d}"},
+		{"FCVTZU H", 0x7ef9b800, "fcvtzu ${0:h}, ${1:h}"},
+		{"FCVTZU S", 0x7ea1b800, "fcvtzu ${0:s}, ${1:s}"},
+		{"FCVTZU D", 0x7ee1b800, "fcvtzu ${0:d}, ${1:d}"},
 	}
 	for _, form := range forms {
 		for sourceReg := 0; sourceReg < 32; sourceReg++ {

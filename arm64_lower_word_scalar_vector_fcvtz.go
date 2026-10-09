@@ -38,29 +38,11 @@ func decodeARM64RawScalarVectorFCVTZ(word uint32) (arm64RawScalarVectorFCVTZ, bo
 }
 
 func (c *arm64Ctx) lowerRawScalarVectorFCVTZ(form arm64RawScalarVectorFCVTZ) error {
-	sourceReg := Reg(fmt.Sprintf("F%d", form.source))
-	destinationReg := Reg(fmt.Sprintf("F%d", form.destination))
-	source, err := c.loadARM64ScalarFloatReg(sourceReg, form.bits)
-	if err != nil {
-		return err
-	}
-	floatType, floatSuffix, ok := arm64ScalarFloatType(form.bits)
-	if !ok {
-		return fmt.Errorf("arm64 unsupported scalar conversion width %d", form.bits)
-	}
-	conversion := "fptosi.sat"
-	if form.unsigned {
-		conversion = "fptoui.sat"
-	}
-	integerType := fmt.Sprintf("i%d", form.bits)
-	converted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s.%s(%s %s)\n",
-		converted, integerType, conversion, integerType, floatSuffix, floatType, source)
-	value := "%" + converted
-	if form.bits < 64 {
-		wide := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext %s %s to i64\n", wide, integerType, value)
-		value = "%" + wide
-	}
-	return c.storeReg(destinationReg, value)
+	return c.lowerARM64ScalarConversion(arm64ScalarConversionForm{
+		arm64ScalarConversionSpec: arm64ScalarConversionSpec{
+			floatBits: form.bits, integerBits: form.bits, unsigned: form.unsigned, simdInteger: true,
+		},
+		source: Reg(fmt.Sprintf("F%d", form.source)), destination: Reg(fmt.Sprintf("F%d", form.destination)),
+		rounding: arm64FloatRoundZero,
+	})
 }

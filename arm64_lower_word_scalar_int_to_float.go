@@ -49,36 +49,14 @@ func decodeARM64RawScalarIntToFloat(word uint32) (arm64RawScalarIntToFloat, bool
 }
 
 func (c *arm64Ctx) lowerRawScalarIntToFloat(form arm64RawScalarIntToFloat) error {
-	sourceReg := ZR
+	source := ZR
 	if form.source != 31 {
-		sourceReg = Reg(fmt.Sprintf("R%d", form.source))
+		source = Reg(fmt.Sprintf("R%d", form.source))
 	}
-	source, err := c.loadReg(sourceReg)
-	if err != nil {
-		return err
-	}
-	integerType := "i64"
-	if form.integerBits == 32 {
-		narrow := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", narrow, source)
-		source = "%" + narrow
-		integerType = "i32"
-	} else if form.integerBits != 64 {
-		return fmt.Errorf("arm64 unsupported integer source width %d", form.integerBits)
-	}
-	floatType, _, ok := arm64ScalarFloatType(form.floatBits)
-	if !ok {
-		return fmt.Errorf("arm64 unsupported scalar float width %d", form.floatBits)
-	}
-	conversion := "sitofp"
-	if form.unsigned {
-		conversion = "uitofp"
-	}
-	converted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = %s %s %s to %s\n", converted, conversion, integerType, source, floatType)
-	return c.storeARM64ScalarFloatReg(
-		Reg(fmt.Sprintf("F%d", form.destination)),
-		form.floatBits,
-		"%"+converted,
-	)
+	return c.lowerARM64ScalarConversion(arm64ScalarConversionForm{
+		arm64ScalarConversionSpec: arm64ScalarConversionSpec{
+			floatBits: form.floatBits, integerBits: form.integerBits, toFloat: true, unsigned: form.unsigned,
+		},
+		source: source, destination: Reg(fmt.Sprintf("F%d", form.destination)),
+	})
 }

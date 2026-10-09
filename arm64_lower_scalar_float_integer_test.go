@@ -42,10 +42,10 @@ func TestTranslateARM64ScalarFloatToIntegerCompleteGoAssemblerForms(t *testing.T
 				t.Fatal(err)
 			}
 			for _, want := range []string{
-				"@llvm.fptosi.sat.i64.f64", "@llvm.fptosi.sat.i32.f64",
-				"@llvm.fptosi.sat.i64.f32", "@llvm.fptosi.sat.i32.f32",
-				"@llvm.fptoui.sat.i64.f64", "@llvm.fptoui.sat.i32.f64",
-				"@llvm.fptoui.sat.i64.f32", "@llvm.fptoui.sat.i32.f32",
+				"fcvtzs ${0:x}, ${1:d}", "fcvtzs ${0:w}, ${1:d}",
+				"fcvtzs ${0:x}, ${1:s}", "fcvtzs ${0:w}, ${1:s}",
+				"fcvtzu ${0:x}, ${1:d}", "fcvtzu ${0:w}, ${1:d}",
+				"fcvtzu ${0:x}, ${1:s}", "fcvtzu ${0:w}, ${1:s}",
 			} {
 				if !strings.Contains(ir, want) {
 					t.Fatalf("scalar float-to-integer lowering for %s omitted %s:\n%s", triple, want, ir)

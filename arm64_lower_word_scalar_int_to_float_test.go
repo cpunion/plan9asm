@@ -110,8 +110,8 @@ func TestTranslateARM64RawScalarIntToFloatCompleteGPRRegisterFamily(t *testing.T
 				t.Fatal(err)
 			}
 			for _, want := range []string{
-				"sitofp i32", "sitofp i64", "uitofp i32", "uitofp i64",
-				"to half", "to float", "to double",
+				"scvtf ${0:h}, ${1:w}", "scvtf ${0:s}, ${1:x}",
+				"ucvtf ${0:d}, ${1:w}", "ucvtf ${0:h}, ${1:x}",
 				`"target-features"="+fullfp16"`,
 			} {
 				if !strings.Contains(ir, want) {

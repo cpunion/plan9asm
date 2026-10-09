@@ -171,7 +171,7 @@ TEXT integerfloatforms(SB),NOSPLIT,$0-0
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"sitofp i64", "sitofp i32", "uitofp i64", "uitofp i32", "to float", "to double"} {
+	for _, want := range []string{"scvtf ${0:d}, ${1:x}", "scvtf ${0:s}, ${1:w}", "ucvtf ${0:d}, ${1:x}", "ucvtf ${0:s}, ${1:w}", "asm sideeffect"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("ARM64 integer-to-float family IR omitted %q:\n%s", want, ll)
 		}

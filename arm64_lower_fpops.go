@@ -51,6 +51,12 @@ func (c *arm64Ctx) lowerARM64ScalarFloatUnary(op Op, ins Instr) (ok bool, termin
 }
 
 func (c *arm64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if form, matched, err := parseARM64ScalarConversion(op, ins); matched {
+		if err != nil {
+			return true, false, err
+		}
+		return true, false, c.lowerARM64ScalarConversion(form)
+	}
 	if ok, terminated, err := c.lowerARM64ScalarFloatCompare(op, ins); ok {
 		return ok, terminated, err
 	}
@@ -135,84 +141,6 @@ func (c *arm64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 	case "FMADDS", "FMADDD", "FMSUBS", "FMSUBD",
 		"FNMADDS", "FNMADDD", "FNMSUBS", "FNMSUBD":
 		return c.lowerFusedMultiplyAdd(op, ins)
-
-	case "FCVTZSD", "FCVTZSDW", "FCVTZSS", "FCVTZSSW",
-		"FCVTZUD", "FCVTZUDW", "FCVTZUS", "FCVTZUSW":
-		// Go 1.27 exposes the complete scalar FCVT-to-integer family through
-		// AFCVTZSD's single C_FREG -> C_ZREG optab row. The final W selects a
-		// 32-bit integer result; S/D before it selects the floating input width.
-		if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 2 ||
-			ins.Args[0].Kind != OpReg || !isARM64FReg(ins.Args[0].Reg) ||
-			ins.Args[1].Kind != OpReg || !isARM64GeneralOrZeroReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("arm64 %s expects Fsrc, Rdst/ZR and no suffix: %q", op, ins.Raw)
-		}
-		sourceBits := 64
-		sourceMnemonic := strings.TrimSuffix(string(op), "W")
-		if strings.HasSuffix(sourceMnemonic, "S") {
-			sourceBits = 32
-		}
-		destinationBits := 64
-		if strings.HasSuffix(string(op), "W") {
-			destinationBits = 32
-		}
-		err := c.lowerARM64ScalarFloatToInteger(
-			ins.Args[0].Reg,
-			sourceBits,
-			ins.Args[1].Reg,
-			destinationBits,
-			strings.HasPrefix(string(op), "FCVTZU"),
-			arm64FloatRoundZero,
-		)
-		return true, false, err
-
-	case "SCVTFD", "SCVTFS", "SCVTFWD", "SCVTFWS", "SCVTFDD", "SCVTFSS",
-		"UCVTFD", "UCVTFS", "UCVTFWD", "UCVTFWS", "UCVTFDD", "UCVTFSS":
-		// The DD/SS forms take integer bits from an F register; the other
-		// forms take an R/ZR register. x/arch prints all twelve scalar
-		// encodings with these distinct Plan 9 names.
-		vectorSource := strings.HasSuffix(string(op), "DD") || strings.HasSuffix(string(op), "SS")
-		if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 2 ||
-			ins.Args[0].Kind != OpReg ||
-			ins.Args[1].Kind != OpReg || !isARM64FReg(ins.Args[1].Reg) {
-			return true, false, fmt.Errorf("arm64 %s expects an integer source, one F destination, and no suffix: %q", op, ins.Raw)
-		}
-		if vectorSource && !isARM64FReg(ins.Args[0].Reg) ||
-			!vectorSource && !isARM64GeneralOrZeroReg(ins.Args[0].Reg) {
-			return true, false, fmt.Errorf("arm64 %s has the wrong source register class: %q", op, ins.Raw)
-		}
-		src, err := c.loadReg(ins.Args[0].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		integerType := "i64"
-		if strings.Contains(string(op), "W") || strings.HasSuffix(string(op), "SS") {
-			narrow := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", narrow, src)
-			src = "%" + narrow
-			integerType = "i32"
-		}
-		floatType := "double"
-		bits := 64
-		if strings.HasSuffix(string(op), "S") {
-			floatType = "float"
-			bits = 32
-		}
-		conversion := "sitofp"
-		if strings.HasPrefix(string(op), "U") {
-			conversion = "uitofp"
-		}
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = %s %s %s to %s\n", converted, conversion, integerType, src, floatType)
-		if bits == 64 {
-			encoded := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast double %%%s to i64\n", encoded, converted)
-			return true, false, c.storeReg(ins.Args[1].Reg, "%"+encoded)
-		}
-		encoded := c.newTmp()
-		wide := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast float %%%s to i32\n", encoded, converted)
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", wide, encoded)
-		return true, false, c.storeReg(ins.Args[1].Reg, "%"+wide)
 	}
 	return false, false, nil
 }

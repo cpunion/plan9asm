@@ -85,53 +85,10 @@ func (c *arm64Ctx) lowerARM64ScalarFloatToInteger(
 	unsigned bool,
 	rounding arm64FloatToIntegerRounding,
 ) error {
-	floatType, floatSuffix, ok := arm64ScalarFloatType(sourceBits)
-	if !ok {
-		return fmt.Errorf("arm64 unsupported scalar float width %d", sourceBits)
-	}
-	sourceValue, err := c.loadARM64ScalarFloatReg(source, sourceBits)
-	if err != nil {
-		return err
-	}
-
-	roundingIntrinsic := ""
-	switch rounding {
-	case arm64FloatRoundNearestEven:
-		roundingIntrinsic = "roundeven"
-	case arm64FloatRoundTiesAway:
-		roundingIntrinsic = "round"
-	case arm64FloatRoundPlusInf:
-		roundingIntrinsic = "ceil"
-	case arm64FloatRoundMinusInf:
-		roundingIntrinsic = "floor"
-	case arm64FloatRoundZero:
-	default:
-		return fmt.Errorf("arm64 unsupported scalar float rounding mode %d", rounding)
-	}
-	if roundingIntrinsic != "" {
-		rounded := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s(%s %s)\n",
-			rounded, floatType, roundingIntrinsic, floatSuffix, floatType, sourceValue)
-		sourceValue = "%" + rounded
-	}
-
-	integerType := fmt.Sprintf("i%d", destinationBits)
-	conversion := "fptosi.sat"
-	if unsigned {
-		conversion = "fptoui.sat"
-	}
-	converted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call %s @llvm.%s.%s.%s(%s %s)\n",
-		converted, integerType, conversion, integerType, floatSuffix, floatType, sourceValue)
-	value := "%" + converted
-	if destinationBits == 32 {
-		wide := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", wide, value)
-		value = "%" + wide
-	} else if destinationBits != 64 {
-		return fmt.Errorf("arm64 unsupported integer destination width %d", destinationBits)
-	}
-	return c.storeReg(destination, value)
+	return c.lowerARM64ScalarConversion(arm64ScalarConversionForm{
+		arm64ScalarConversionSpec: arm64ScalarConversionSpec{floatBits: sourceBits, integerBits: destinationBits, unsigned: unsigned},
+		source:                    source, destination: destination, rounding: rounding,
+	})
 }
 
 func (c *arm64Ctx) lowerRawScalarFCVTToInt(form arm64RawScalarFCVTToInt) error {
