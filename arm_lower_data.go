@@ -46,7 +46,7 @@ func (c *armCtx) lowerData(op, cond string, postInc bool, ins Instr) (ok bool, t
 				if loadErr != nil {
 					return true, false, loadErr
 				}
-				return true, false, c.selectFRegWrite(dst.Reg, "", c.normalizeARMFloatBits(value, 32))
+				return true, false, c.storeARMFloatBits(dst.Reg, "", 32, value)
 			}
 			value, loadErr := c.loadFReg(src.Reg)
 			if loadErr != nil {

@@ -135,13 +135,18 @@ func (c *armCtx) selectFRegWrite(dst Reg, cond, value string) error {
 	return c.storeFReg(dst, "%"+selected)
 }
 
-func (c *armCtx) normalizeARMFloatBits(value string, bits int) string {
+func (c *armCtx) storeARMFloatBits(reg Reg, condition string, bits int, value string) error {
 	if bits == 64 {
-		return value
+		return c.selectFRegWrite(reg, condition, value)
 	}
-	wide := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = zext i32 %s to i64\n", wide, value)
-	return "%" + wide
+	if bits != 32 || !isARMFReg(reg) {
+		return fmt.Errorf("arm floating write requires a named F register and 32/64-bit width: %s/%d", reg, bits)
+	}
+	// Go Fn names Dn for double operations and S(2*n) for single operations.
+	// A single write preserves S(2*n+1); share the raw decoder's physical
+	// half-register writer instead of zero-extending over the whole D register.
+	number, _ := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(string(reg))), "F"))
+	return c.storeARMRawSingleBits(2*number, value, condition)
 }
 
 func (c *armCtx) loadARMFloatMemoryBits(op Operand, bits int, postIndex, writeback bool) (string, error) {
@@ -257,7 +262,7 @@ func (c *armCtx) lowerARMFloatMove(op, cond string, ins Instr) (ok bool, termina
 		return true, false, err
 	}
 	if dstF {
-		return true, false, c.selectFRegWrite(dst.Reg, "", c.normalizeARMFloatBits(value, bits))
+		return true, false, c.storeARMFloatBits(dst.Reg, "", bits, value)
 	}
 	return true, false, c.storeARMFloatMemoryBits(dst, bits, postIndex, writeback, value)
 }
@@ -290,11 +295,7 @@ func (c *armCtx) storeARMFloatRegValue(reg Reg, cond string, bits int, value str
 	}
 	encoded := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to %s\n", encoded, floatType, value, integerType)
-	bitsValue := "%" + encoded
-	if bits == 32 {
-		bitsValue = c.normalizeARMFloatBits(bitsValue, bits)
-	}
-	return c.selectFRegWrite(reg, cond, bitsValue)
+	return c.storeARMFloatBits(reg, cond, bits, "%"+encoded)
 }
 
 func (c *armCtx) setARMFloatCompareFlags(lhs, rhs, floatType, cond string) error {
@@ -379,44 +380,9 @@ func armWordFloatConversionUnsigned(ins Instr) (bool, error) {
 }
 
 func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "MOVWF", "MOVWD", "MOVFW", "MOVDW":
-	default:
-		return false, false, nil
-	}
-	unsigned, err := armWordFloatConversionUnsigned(ins)
-	if err != nil {
-		return true, false, err
-	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("arm %s expects exactly 2 operands: %q", op, ins.Raw)
-	}
-	wordToFloat := strings.HasPrefix(op, "MOVW")
-	floatBits := 32
-	if strings.Contains(op, "D") {
-		floatBits = 64
-	}
-	src, dst := ins.Args[0], ins.Args[1]
-	srcF := src.Kind == OpReg && isARMFReg(src.Reg)
-	dstF := dst.Kind == OpReg && isARMFReg(dst.Reg)
-	srcSNumber, srcS := armSingleOperandNumber(src)
-	dstSNumber, dstS := armSingleOperandNumber(dst)
-	// S-register spellings are produced by the architectural decoder for raw
-	// VCVT encodings. They are not part of the source-level Go optab, whose
-	// floating register class is F0..F15.
-	rawSingleRegisters := strings.Contains(ins.Raw, "decoded from WORD") && floatBits == 32
-	if !rawSingleRegisters {
-		srcS = false
-		dstS = false
-	}
-	srcR := src.Kind == OpReg && isARMGeneralReg(src.Reg) && !isARMFReg(src.Reg)
-	dstR := dst.Kind == OpReg && isARMGeneralReg(dst.Reg) && !isARMFReg(dst.Reg)
-	if wordToFloat {
-		if (!srcF && !srcS && !srcR) || (!dstF && !dstS) {
-			return true, false, fmt.Errorf("arm %s expects R/F word source and F destination: %q", op, ins.Raw)
-		}
-	} else if (!srcF && !srcS) || (!dstF && !dstS && !dstR) {
-		return true, false, fmt.Errorf("arm %s expects F source and R/F word destination: %q", op, ins.Raw)
+	form, handled, err := parseARMWordFloatConversion(op, ins)
+	if !handled || err != nil {
+		return handled, false, err
 	}
 	if cond != "" && !strings.EqualFold(cond, "AL") {
 		err := c.emitConditionalEffect(cond, func() error {
@@ -427,19 +393,19 @@ func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok boo
 	}
 
 	floatType := "float"
-	if floatBits == 64 {
+	if form.floatBits == 64 {
 		floatType = "double"
 	}
-	if wordToFloat {
+	if form.wordToFloat {
 		var integer string
-		switch {
-		case srcR:
-			integer, err = c.loadReg(src.Reg)
-		case srcS:
-			integer, err = c.loadARMRawSingleBits(srcSNumber)
+		switch form.source.kind {
+		case armConversionCore:
+			integer, err = c.loadReg(form.source.reg)
+		case armConversionSingle:
+			integer, err = c.loadARMRawSingleBits(form.source.single)
 		default:
 			var wide string
-			wide, err = c.loadFReg(src.Reg)
+			wide, err = c.loadFReg(form.source.reg)
 			if err == nil {
 				narrow := c.newTmp()
 				fmt.Fprintf(c.b, "  %%%s = trunc i64 %s to i32\n", narrow, wide)
@@ -449,43 +415,54 @@ func (c *armCtx) lowerARMWordFloatConversion(op, cond string, ins Instr) (ok boo
 		if err != nil {
 			return true, false, err
 		}
+		if form.usesScratch() {
+			if err := c.storeARMFloatBits("F15", "", 32, integer); err != nil {
+				return true, false, err
+			}
+		}
 		converted := c.newTmp()
 		conversion := "sitofp"
-		if unsigned {
+		if form.unsigned {
 			conversion = "uitofp"
 		}
 		fmt.Fprintf(c.b, "  %%%s = %s i32 %s to %s\n", converted, conversion, integer, floatType)
-		if dstS {
+		if form.destination.kind == armConversionSingle {
 			bits := c.newTmp()
 			fmt.Fprintf(c.b, "  %%%s = bitcast float %%%s to i32\n", bits, converted)
-			return true, false, c.storeARMRawSingleBits(dstSNumber, "%"+bits, "")
+			return true, false, c.storeARMRawSingleBits(form.destination.single, "%"+bits, "")
 		}
-		return true, false, c.storeARMFloatRegValue(dst.Reg, "", floatBits, "%"+converted)
+		return true, false, c.storeARMFloatRegValue(form.destination.reg, "", form.floatBits, "%"+converted)
 	}
 
 	var floating string
-	if srcS {
-		floating, err = c.loadARMRawVFPRegValue(srcSNumber, 32)
+	if form.source.kind == armConversionSingle {
+		floating, err = c.loadARMRawVFPRegValue(form.source.single, 32)
 	} else {
-		floating, err = c.loadARMFloatRegValue(src.Reg, floatBits)
+		floating, err = c.loadARMFloatRegValue(form.source.reg, form.floatBits)
 	}
 	if err != nil {
 		return true, false, err
 	}
 	converted := c.newTmp()
 	conversion := "fptosi"
-	if unsigned {
+	if form.unsigned {
 		conversion = "fptoui"
 	}
 	fmt.Fprintf(c.b, "  %%%s = %s %s %s to i32\n", converted, conversion, floatType, floating)
 	integer := "%" + converted
-	if dstR {
-		return true, false, c.storeReg(dst.Reg, integer)
+	if form.usesScratch() {
+		if err := c.storeARMFloatBits("F15", "", 32, integer); err != nil {
+			return true, false, err
+		}
 	}
-	if dstS {
-		return true, false, c.storeARMRawSingleBits(dstSNumber, integer, "")
+	switch form.destination.kind {
+	case armConversionCore:
+		return true, false, c.storeReg(form.destination.reg, integer)
+	case armConversionSingle:
+		return true, false, c.storeARMRawSingleBits(form.destination.single, integer, "")
+	default:
+		return true, false, c.storeARMFloatBits(form.destination.reg, "", 32, integer)
 	}
-	return true, false, c.selectFRegWrite(dst.Reg, "", c.normalizeARMFloatBits(integer, 32))
 }
 
 func armScalarFloatArithmeticKind(op string) (kind string, bits int, accumulating bool, ok bool) {

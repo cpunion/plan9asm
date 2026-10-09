@@ -162,11 +162,14 @@ if (failures<16) fprintf(stderr,"case %d %s word %%u: got %%llx want %%llx\n",j,
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, level := range []int{0, 2} {
-		t.Run(fmt.Sprintf("O%d", level), func(t *testing.T) {
-			compileAndRunRuntimeTestWithCompiler(t, llc, []string{"arm-linux-gnueabihf-gcc", "-no-pie"},
-				"arm_float_effects", "armv7-unknown-linux-gnueabihf", ir, driver.String(),
-				[]string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}, level)
-		})
+	for _, variant := range []struct{ name, ir string }{{"unoptimized", ir}, {"optimized", armFloatEffectOptimizedIR(t, ir)}} {
+		for _, level := range []int{0, 2} {
+			t.Run(fmt.Sprintf("%s/O%d", variant.name, level), func(t *testing.T) {
+				compileAndRunRuntimeTestWithCompiler(t, llc, []string{"arm-linux-gnueabihf-gcc", "-no-pie"},
+					"arm_float_effects", "armv7-unknown-linux-gnueabihf", variant.ir, driver.String(),
+					[]string{"qemu-arm", "-L", "/usr/arm-linux-gnueabihf"}, level)
+				t.Logf("LLVM22 %s O%d: %d full-register fixtures", variant.name, level, len(cases))
+			})
+		}
 	}
 }

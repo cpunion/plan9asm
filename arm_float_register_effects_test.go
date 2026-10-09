@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/llvm"
 )
 
 // Each fixture initializes and observes whole D registers. In particular the
@@ -189,5 +191,40 @@ func TestARMFloatRegisterEffectMatrixCoverage(t *testing.T) {
 		t.Fatalf("incomplete effect matrix: conversions=%d writers=%d", len(conversions), len(writers))
 	}
 	source, sigs := armFloatEffectSource(append(conversions, writers...))
-	translateARMCompleteForms(t, source, sigs)
+	file, err := Parse(ArchARM, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc not found")
+	}
+	for _, triple := range []string{"armv5te-unknown-linux-gnueabi", "armv6-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf", "thumbv7-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{Goarch: "arm", TargetTriple: triple, Sigs: sigs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "arm-float-effects.ll", "arm-float-effects.o", ir)
+		})
+	}
+}
+
+func armFloatEffectOptimizedIR(t *testing.T, ir string) string {
+	t.Helper()
+	context := llvm.NewContext()
+	defer context.Dispose()
+	module, err := parseIRModuleInContext(context, ir)
+	if !module.IsNil() {
+		defer module.Dispose()
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := llvm.NewPassBuilderOptions()
+	defer options.Dispose()
+	if err := module.RunPasses("default<O2>", llvm.TargetMachine{}, options); err != nil {
+		t.Fatal(err)
+	}
+	return module.String()
 }
