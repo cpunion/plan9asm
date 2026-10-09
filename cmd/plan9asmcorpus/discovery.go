@@ -92,6 +92,8 @@ type discoveryCorpusConfig struct {
 	// collectDiscoveryProvenance and cannot supply a claimed identity.
 	captureProvenance func(discoveryCorpusConfig) (discoveryCorpusProvenance, error)
 	runCandidate      func(discoveryCorpusConfig, discoveryCandidate, string) (matrixReport, []string, []discoveryBuildConfiguration, error)
+	// A private test clock; command-line callers always use time.Now.
+	checkpointNow func() time.Time
 }
 
 type discoveryExecutionPlan struct {
