@@ -76,7 +76,7 @@ const arm64NanosleepRuntimeDriver = `#define _GNU_SOURCE
 #include <time.h>
 #include <unistd.h>
 
-extern void translated_sleep(uint32_t) __asm__("example.invalid/sleepinput.sleep");
+extern void translated_sleep(uint32_t) __asm__("\"example.invalid/sleepinput.sleep\"");
 struct request { int64_t seconds, nanoseconds; };
 _Static_assert(sizeof(struct request)==16,"actual A64 kernel timespec width");
 static uint32_t expected;
