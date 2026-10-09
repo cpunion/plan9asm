@@ -22,6 +22,13 @@ The frozen preceding integration head is `ab5302a1`, on
 `codex/pr40-carrier-literal-sleep-integration-20261009`. Preserve the preceding
 integration and component worktrees; do not mutate a checkout with live consumers.
 
+The original two-worker combined root run at `ae0eee75` closes failed at its
+45-minute outer deadline: 31/32 shards pass, the last remains incomplete.
+The original owners are gone; strict independent readback rejects the timed-out
+owner instead of granting a complete pass. Retain that failure. Continue the
+root-part/parsed-grammar batch on `codex/pr40-root-parts-grammar-integration-20261009`;
+this successor still needs its own complete gates.
+
 No local background index/discovery/external corpus. Inventory stays on the
 designated source-only scanner; external compilation/execution belongs on a
 separate disposable validator, never the inventory server. Local first-party
@@ -111,11 +118,13 @@ passes separately. These are not complete-module or external-ledger passes.
 
 The CI root-parts executor component retains its original RED fixtures. Its
 `f0177658` checkpoint adds eight root jobs, once-only corpus/rest jobs, fresh
-aggregate inventories and strict raw/coverage union checks. Tiny complete,
-sparse and empty-package consumers pass, but the first full wrapper closes
-failed on a Go temporary-prefix-map nonce difference. Preserve that failure;
-review exact nonce normalization and rerun before integration. Complete root
-ordinary is still running on frozen `ae0eee75`; do not edit that checkout.
+aggregate inventories and strict raw/coverage union checks. Its bounded rerun
+and root's independent reader close six roots/38 children, the existing CI
+policy root, Node policy, actionlint and shell checks. Earlier setup and exact
+Go temporary-prefix-map nonce wrapper failures remain retained; the new wrapper
+normalizes only the actual direct-child uint32 nonce and preserves raw input.
+These commits are integrated into the successor; complete legacy runner,
+race/Go-1.20 and changed combined-head gates remain required.
 
 ## Required next gates and remaining rule classes
 
