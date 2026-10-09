@@ -1040,10 +1040,30 @@ func parseAssemblyOpcode(arch Arch, statement string) (assemblyOpcodeHead, error
 }
 
 func splitSemicolons(line string) []string {
-	parts := strings.Split(line, ";")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		out = append(out, strings.TrimSpace(p))
+	// cmd/asm scans complete string and character tokens. A separator inside
+	// either token is payload, including after an escaped quote/backslash.
+	// Do not repair a malformed quoted token by splitting its remainder.
+	var out []string
+	var quote byte
+	start := 0
+	for index := 0; index < len(line); index++ {
+		value := line[index]
+		if quote != 0 {
+			if value == '\\' && index+1 < len(line) {
+				index++
+			} else if value == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch value {
+		case '"', '\'':
+			quote = value
+		case ';':
+			out = append(out, strings.TrimSpace(line[start:index]))
+			start = index + 1
+		}
 	}
+	out = append(out, strings.TrimSpace(line[start:]))
 	return out
 }
