@@ -20,6 +20,10 @@ func goAssemblerOracleListingBindsSource(source, position, pc, instruction strin
 // accept the prefix alone: bind its exact values to an independently invalid
 // operand/frame in this regular, bounded fixture. Unknown errors stay fatal.
 func goAssemblerOraclePositionlessDiagnostic(source, arch, output string) bool {
+	if arch == "arm64" && goasmoracle.SourceDiagnosticLineWithTrailingListing(source, output, 0,
+		goAssemblerOracleARM64TextListing) {
+		return true
+	}
 	data, ok := goAssemblerOracleFixture(source)
 	if !ok {
 		return false
