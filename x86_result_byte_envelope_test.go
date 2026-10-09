@@ -8,12 +8,18 @@ import (
 )
 
 func TestX86ABI0ResultInitializationCompleteStateByteEnvelope(t *testing.T) {
-	// 1944 FP bytes + 16 AUTO bytes + (16 GP + 64 X + 8 K + 1 flags +
-	// 16 pointer identities + 1 shape discriminator) is 2066 logical payload
-	// bytes. A linear CFG pays its source scan and
+	// 1944 FP bytes + 16 AUTO bytes + (16 GP + 256 Z + 8 K + 1 flags +
+	// 16 pointer identities + 1 shape discriminator) is 2258 logical payload
+	// bytes. Every vector bank now tracks all 64 byte-definedness bits; the
+	// redundant representation of its low-X bits is not another logical value.
+	// A linear CFG pays its source scan and
 	// eight conservative copy/join units for each visited instruction. This
 	// tests the logical work envelope, not Go's actual heap allocation size.
-	for _, count := range []int{3609, 3610, 3639, 3640, 3684} {
+	const payloadBytes = 1944 + 16 + 16 + 256 + 8 + 1 + 16 + 1
+	const workLimit = 64 << 20
+	const lastLinear = workLimit / (9 * payloadBytes)
+	const lastSource = workLimit / (8 * payloadBytes)
+	for _, count := range []int{lastLinear, lastLinear + 1, 3609, lastSource, lastSource + 1} {
 		for _, target := range x86RawReturnTargets {
 			t.Run(fmt.Sprintf("%d/%s", count, target.triple), func(t *testing.T) {
 				body := "MOVL $1,AX\nMOVL AX,spill-4(SP)\n" +
@@ -38,12 +44,18 @@ func TestX86ABI0ResultInitializationCompleteStateByteEnvelope(t *testing.T) {
 					{"private-scalar-views", checkX86ScalarFPResultInitialization},
 				} {
 					err := query.run(file.Funcs[0], sig, target.arch)
-					if count == 3609 {
+					if count == lastLinear {
 						if err != nil {
 							t.Errorf("%s rejected a bounded complete payload: %v", query.name, err)
 						}
-					} else if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "byte budget exhausted") {
-						t.Errorf("%s undercounted the complete numerical/pointer state: %v", query.name, err)
+					} else {
+						phase := "must-defined"
+						if count > lastSource {
+							phase = "source-CFG"
+						}
+						if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), phase+" byte budget exhausted") {
+							t.Errorf("%s undercounted the complete numerical/pointer state at %s: %v", query.name, phase, err)
+						}
 					}
 				}
 			})
