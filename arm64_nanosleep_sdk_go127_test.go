@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -148,7 +149,8 @@ func TestARM64NanosleepSDKOriginalObjectAndBody(t *testing.T) {
 		}
 		code = binary.LittleEndian.AppendUint32(code, uint32(value))
 	}
-	if len(code) != 96 || sha256.Sum256(code) != [32]byte{0x36, 0x0f, 0x9c, 0x85, 0x94, 0x86, 0x51, 0xb3, 0x64, 0xc9, 0xe0, 0x30, 0xe3, 0x19, 0x82, 0x1d, 0xf2, 0x19, 0x6a, 0xa6, 0x3f, 0xe1, 0x18, 0xe5, 0x7a, 0x85, 0x6e, 0xe2, 0xfa, 0xa4, 0xd9, 0xed} {
+	const originalCodeSHA = "360f9c85948651b364c9e030e319821df2196aa63fe118e57a856ee2faa4d9ed"
+	if len(code) != 96 || fmt.Sprintf("%x", sha256.Sum256(code)) != originalCodeSHA {
 		t.Fatal("complete original Go private timespec/SVC0 body bytes differ")
 	}
 	t.Logf("SDK_ORIGINAL_BODY sourceSHA256=%x archiveSHA256=%x member=%s objectSHA256=%x codeSHA256=%x bytes=%d",
