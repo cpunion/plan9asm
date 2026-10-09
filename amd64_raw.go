@@ -8356,7 +8356,11 @@ vectorPrefix:
 // complete Go 1.27 _yvalignd table. x/arch v0.14 rejects the EVEX encodings
 // used by github.com/minio/sha256-simd.
 func decodedX86TernaryLogicInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	return decodedX86EVEXImmediateThreeVectorInstruction(code, mode, 0x25, "VPTERNLOGD", "VPTERNLOGQ", "VPTERNLOG")
+	instruction, length, ok, err = decodedX86EVEXImmediateThreeVectorInstruction(code, mode, 0x25, "VPTERNLOGD", "VPTERNLOGQ", "VPTERNLOG")
+	if ok && err == nil {
+		_, _, err = x86TernaryLogicProperties(instruction.Op, instruction, "amd64")
+	}
+	return instruction, length, ok, err
 }
 
 // decodedX86VectorAlignInstruction recognizes VALIGND/Q across the complete
