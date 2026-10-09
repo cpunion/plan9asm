@@ -76,9 +76,14 @@ func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, ar
 	}
 	if form.memory >= 0 {
 		// Even a saturating count or zero mask cannot create memory authority.
-		// Legacy m128 counts additionally need original native backing, which
-		// this numerical observer cannot provide for logical FP/AUTO storage.
-		if form.legacy || !x86ResultRead(ins.Args[form.memory], int64(form.memoryBytes), state, owned, arch) {
+		// Legacy m128 counts additionally need original native backing. Only
+		// lowering's ephemeral same-file DATA directory can provide an SB
+		// input here; logical FP/AUTO storage still cannot stand in for it.
+		memory := ins.Args[form.memory]
+		if form.legacy && memory.Kind != OpSym {
+			return false, true
+		}
+		if !x86ResultRead(memory, int64(form.memoryBytes), state, owned, arch) {
 			return false, true
 		}
 	}

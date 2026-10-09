@@ -26,6 +26,13 @@ func x86ScalarResultDataReadBodies(arch string) map[string]string {
 	for _, name := range []string{"MOVOU", "MOVOA", "MOVO", "MOVUPS", "MOVAPS", "MOVUPD", "MOVAPD"} {
 		bodies[name] = name + " table<>+16(SB),X1\n"
 	}
+	for _, pair := range [][2]string{
+		{"PSRLW", "VPSRLW"}, {"PSRLL", "VPSRLD"}, {"PSRLQ", "VPSRLQ"},
+		{"PSLLW", "VPSLLW"}, {"PSLLL", "VPSLLD"}, {"PSLLQ", "VPSLLQ"},
+	} {
+		bodies[pair[0]] = "PXOR X1,X1\n" + pair[0] + " table<>+16(SB),X1\n"
+		bodies[pair[1]] = "PXOR X0,X0\n" + pair[1] + " table<>+16(SB),X0,X1\n"
+	}
 	if arch == "amd64" {
 		bodies["VPCLMULQDQ"] = "PXOR X0,X0\nVPCLMULQDQ $17,table<>+16(SB),X0,X1\n"
 	}
@@ -89,11 +96,13 @@ func TestX86LoweredScalarResultSameFileDataBoundaries(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/extent-%d", arch, size), func(t *testing.T) {
 				// An initialized allocation includes zero-filled holes. Width is
 				// still the complete native read, not the selected result lane.
-				source := fmt.Sprintf("GLOBL table<>(SB),8,$%d\nTEXT ·view(SB),4,$0-4\nMOVOU table<>(SB),X1\nPEXTRD $0,X1,AX\nMOVL AX,ret+0(FP)\nRET\n", size)
-				for _, api := range []string{"text", "module", "Go"} {
-					_, err := x86ScalarFPBitViewAPI(t, source, "func view() uint32\n", arch, triple, api)
-					if size < 16 && !errors.Is(err, ErrProbeNeedsContext) || size == 16 && err != nil {
-						t.Fatalf("%s size=%d: %v", api, size, err)
+				for _, op := range []string{"MOVOU", "PSRLQ", "PSLLW"} {
+					source := fmt.Sprintf("GLOBL table<>(SB),8,$%d\nTEXT ·view(SB),4,$0-4\nPXOR X1,X1\n%s table<>(SB),X1\nPEXTRD $0,X1,AX\nMOVL AX,ret+0(FP)\nRET\n", size, op)
+					for _, api := range []string{"text", "module", "Go"} {
+						_, err := x86ScalarFPBitViewAPI(t, source, "func view() uint32\n", arch, triple, api)
+						if size < 16 && !errors.Is(err, ErrProbeNeedsContext) || size == 16 && err != nil {
+							t.Fatalf("%s/%s size=%d: %v", op, api, size, err)
+						}
 					}
 				}
 			})
