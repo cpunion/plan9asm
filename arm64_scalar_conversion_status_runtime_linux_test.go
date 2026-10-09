@@ -1,0 +1,210 @@
+package plan9asm
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+)
+
+type arm64ScalarConversionObservation struct {
+	function int
+	input    [68]uint64
+	want     [70]uint64
+}
+
+func arm64ScalarConversionKnownObservation(index int, fixture arm64ScalarConversionFixture, control uint64) arm64ScalarConversionObservation {
+	row := arm64ScalarConversionObservation{function: index}
+	for i := 0; i < 66; i++ {
+		row.input[i] = 0x9876543200000000 + uint64(i)*0x01010101
+	}
+	value, result, flags := uint64(0x3ff8000000000000), uint64(1), uint64(0x10)
+	if fixture.floatBits == 32 {
+		value = 0x3fc00000
+	} else if fixture.floatBits == 16 {
+		value = 0x3e00
+	}
+	if fixture.rounding < 3 {
+		result = 2 // N/A/P of positive 1.5; M/Z produce 1.
+	}
+	if fixture.toFloat {
+		value, result = 1<<24|1, 0x4b800000
+		if fixture.floatBits == 16 {
+			value, result = 2049, 0x6800
+		} else if fixture.floatBits == 64 {
+			if fixture.integerBits == 64 {
+				value, result = 1<<53|1, 0x4340000000000000
+			} else {
+				value, result, flags = 1<<24|1, 0x4170000010000000, 0
+			}
+		}
+		if control>>22&3 == 1 && flags != 0 {
+			result++ // Round toward positive infinity; other modes round down here.
+		}
+		if fixture.simd {
+			row.input[12] = value
+		} else {
+			row.input[64] = value
+		}
+	} else {
+		row.input[12] = value
+	}
+	copy(row.want[:66], row.input[:66])
+	if !fixture.dead {
+		if fixture.toFloat || fixture.simd {
+			row.want[46], row.want[47] = result, 0
+		} else {
+			row.want[65] = result
+		}
+	}
+	row.input[66], row.input[67] = control, 0x08000002
+	row.want[66], row.want[67] = control, row.input[67]|flags
+	row.want[68], row.want[69] = 0x123456789abcdef0, 0xfedcba9876543210
+	return row
+}
+
+func arm64ScalarConversionPrograms(fixtures []arm64ScalarConversionFixture, rows []arm64ScalarConversionObservation) (string, string) {
+	var original, driver strings.Builder
+	original.WriteString("package main\nimport \"fmt\"\n")
+	driver.WriteString("#include <stdint.h>\n#include <stdio.h>\n")
+	for index := range fixtures {
+		fmt.Fprintf(&original, "func scalarStatus%d(*[68]uint64,*[70]uint64)\n", index)
+		fmt.Fprintf(&driver, "extern void scalarStatus%d(uint64_t*,uint64_t*);\n", index)
+	}
+	original.WriteString("var functions = [...]func(*[68]uint64,*[70]uint64){\n")
+	driver.WriteString("static void (*functions[])(uint64_t*,uint64_t*)={\n")
+	for index := range fixtures {
+		fmt.Fprintf(&original, "scalarStatus%d,\n", index)
+		fmt.Fprintf(&driver, "scalarStatus%d,\n", index)
+	}
+	original.WriteString("}\nvar rows = []struct { function int; input [68]uint64; want [70]uint64 }{\n")
+	driver.WriteString("};\nstatic const struct { unsigned function; uint64_t input[68], want[70]; } rows[]={\n")
+	for _, row := range rows {
+		fmt.Fprintf(&original, "{%d,[68]uint64{", row.function)
+		fmt.Fprintf(&driver, "{%d,{", row.function)
+		for _, value := range row.input {
+			fmt.Fprintf(&original, "%#x,", value)
+			fmt.Fprintf(&driver, "%#xULL,", value)
+		}
+		original.WriteString("},[70]uint64{")
+		driver.WriteString("},{")
+		for _, value := range row.want {
+			fmt.Fprintf(&original, "%#x,", value)
+			fmt.Fprintf(&driver, "%#xULL,", value)
+		}
+		original.WriteString("}},\n")
+		driver.WriteString("}},\n")
+	}
+	original.WriteString(`}
+func main() {
+    for index, row := range rows {
+        var out [70]uint64
+        out[68],out[69] = 0x123456789abcdef0,0xfedcba9876543210
+        functions[row.function](&row.input,&out)
+        if out != row.want { panic(fmt.Sprintf("original row %d function %d got %x want %x",index,row.function,out,row.want)) }
+    }
+    fmt.Printf("ORIGINAL_ARM64_SCALAR_STATUS %d\n",len(rows))
+}
+`)
+	driver.WriteString(`};
+int main(void) {
+    unsigned failures=0;
+    for(unsigned row=0;row<sizeof(rows)/sizeof(rows[0]);row++) {
+        uint64_t input[68],out[70]={0};
+        for(unsigned word=0;word<68;word++) input[word]=rows[row].input[word];
+        out[68]=0x123456789abcdef0ULL; out[69]=0xfedcba9876543210ULL;
+        functions[rows[row].function](input,out);
+        for(unsigned word=0;word<70;word++) {
+            if(out[word]!=rows[row].want[word]) {
+                if(failures<16) fprintf(stderr,"row %u function %u word %u got %016llx want %016llx\n",
+                    row,rows[row].function,word,(unsigned long long)out[word],(unsigned long long)rows[row].want[word]);
+                failures++;
+            }
+        }
+    }
+    printf("ARM64_SCALAR_STATUS failures=%u\n",failures);
+    return failures!=0;
+}
+`)
+	return original.String(), driver.String()
+}
+
+func TestCrossLinuxRuntimeMatrixARM64ScalarConversionNativeStatus(t *testing.T) {
+	if os.Getenv("PLAN9ASM_CROSS_EXEC") != "1" {
+		t.Skip("native FPCR/FPSR execution belongs to the required Linux/QEMU matrix")
+	}
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Fatal("ARM64 conversion runtime requires the Linux/amd64 cross executor")
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc not found")
+	}
+	for _, tool := range []string{"qemu-aarch64", "aarch64-linux-gnu-gcc"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("QEMU_CPU", "max")
+	fixtures := arm64ScalarConversionFixtures()
+	for _, fixture := range append([]arm64ScalarConversionFixture(nil), fixtures...) {
+		fixture.dead = true
+		fixtures = append(fixtures, fixture)
+	}
+	var rows []arm64ScalarConversionObservation
+	for index, fixture := range fixtures {
+		for rounding := 0; rounding < 4; rounding++ {
+			for flush := 0; flush < 2; flush++ {
+				for defaultNaN := 0; defaultNaN < 2; defaultNaN++ {
+					control := uint64(rounding)<<22 | uint64(flush)<<24 | uint64(defaultNaN)<<25
+					rows = append(rows, arm64ScalarConversionKnownObservation(index, fixture, control))
+				}
+			}
+		}
+	}
+	source, sigs := arm64ScalarConversionSource(fixtures)
+	original, driver := arm64ScalarConversionPrograms(fixtures, rows)
+	dir := t.TempDir()
+	for name, body := range map[string]string{
+		"go.mod": "module scalarstatusoracle\n\ngo 1.20\n", "main.go": original,
+		"oracle_arm64.s": strings.ReplaceAll(source, "TEXT scalarStatus", "TEXT ·scalarStatus"),
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, "go", "run", "-p=1", "-exec=qemu-aarch64", ".")
+	command.Dir = dir
+	command.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local")
+	output, err := runtimeOracleCombinedOutput(ctx, command)
+	if err != nil || !strings.Contains(string(output), fmt.Sprintf("ORIGINAL_ARM64_SCALAR_STATUS %d", len(rows))) {
+		t.Fatalf("actual Go object / independent values and flags: %v\n%s", err, output)
+	}
+	t.Log(strings.TrimSpace(string(output)))
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const triple = "aarch64-unknown-linux-gnu"
+	ir, err := Translate(file, Options{Goarch: "arm64", TargetTriple: triple, Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, variant := range []struct{ name, ir string }{{"none", ir}, {"O2", armFloatEffectOptimizedIR(t, ir)}} {
+		for _, level := range []int{0, 2} {
+			t.Run(fmt.Sprintf("IR_%s/backend_O%d", variant.name, level), func(t *testing.T) {
+				compileAndRunRuntimeTestWithCompiler(t, llc, []string{"aarch64-linux-gnu-gcc", "-no-pie"},
+					"arm64_scalar_status", triple, variant.ir, driver,
+					[]string{"qemu-aarch64", "-cpu", "max", "-L", "/usr/aarch64-linux-gnu"}, level)
+				t.Logf("matched original Go: %d whole-vector/GP/FPCR/FPSR/canary observations", len(rows))
+			})
+		}
+	}
+}
