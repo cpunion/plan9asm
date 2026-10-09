@@ -29,6 +29,13 @@ type wasmControlFrame struct {
 // instead recreates the official compiler's linear-memory stack, register
 // globals, resumable calls, and unwind return protocol.
 func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, resolve func(string) string, sigs map[string]FuncSig, wasmABI WASMABI, annotateSource bool) (err error) {
+	// Validate source format before dead-block removal. Pure dead operators may
+	// disappear, but malformed source must not acquire an apparent pass.
+	for _, ins := range fn.Instrs {
+		if _, _, err := parseWASMFloatBinary(ins); err != nil {
+			return err
+		}
+	}
 	// LLVM's WebAssembly backend cannot lower blockaddress. Keep this as a
 	// lowering invariant so future control-flow or code-pointer work fails here
 	// instead of producing IR that only breaks later in llc.
@@ -1095,6 +1102,52 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 			}
 			continue
 		}
+		if spec, ok := wasmFloatBinaryOps[op]; ok {
+			rhs, err := pop(op)
+			if err != nil {
+				return err
+			}
+			lhs, err := pop(op)
+			if err != nil {
+				return err
+			}
+			if lhs.typ != spec.typ || rhs.typ != spec.typ || lhs.stackAddr || rhs.stackAddr {
+				return fmt.Errorf("%s expects two %s stack values, got %s and %s", ins.Op, spec.typ, lhs.typ, rhs.typ)
+			}
+			name := newTmp()
+			if spec.predicate != "" {
+				fmt.Fprintf(b, "  %%%s = fcmp %s %s %s, %s\n", name, spec.predicate, spec.typ, lhs.val, rhs.val)
+				result := newTmp()
+				fmt.Fprintf(b, "  %%%s = zext i1 %%%s to i32\n", result, name)
+				name = result
+			} else {
+				bits := 32
+				if spec.typ == "double" {
+					bits = 64
+				}
+				// Unlike minnum/maxnum or ordered select, minimum/maximum
+				// propagate NaNs and order -0 before +0, as Wasm requires.
+				fmt.Fprintf(b, "  %%%s = call %s @llvm.%s.f%d(%s %s, %s %s)\n", name, spec.typ, spec.intrinsic, bits, spec.typ, lhs.val, spec.typ, rhs.val)
+				// LLVM may fold minimum(x,x) to x, including a signaling NaN.
+				// Wasm requires an arithmetic (quiet) NaN; choosing canonical
+				// NaN is valid for every permitted input payload. Express the
+				// final representation as integer bits so optimization cannot
+				// discard quieting as a redundant floating-point operation.
+				signless, infinity, canonical := uint64(0x7fffffff), uint64(0x7f800000), uint64(0x7fc00000)
+				if bits == 64 {
+					signless, infinity, canonical = 0x7fffffffffffffff, 0x7ff0000000000000, 0x7ff8000000000000
+				}
+				raw, magnitude, isNaN, selected, normalized := newTmp(), newTmp(), newTmp(), newTmp(), newTmp()
+				fmt.Fprintf(b, "  %%%s = bitcast %s %%%s to i%d\n", raw, spec.typ, name, bits)
+				fmt.Fprintf(b, "  %%%s = and i%d %%%s, %d\n", magnitude, bits, raw, signless)
+				fmt.Fprintf(b, "  %%%s = icmp ugt i%d %%%s, %d\n", isNaN, bits, magnitude, infinity)
+				fmt.Fprintf(b, "  %%%s = select i1 %%%s, i%d %d, i%d %%%s\n", selected, isNaN, bits, canonical, bits, raw)
+				fmt.Fprintf(b, "  %%%s = bitcast i%d %%%s to %s\n", normalized, bits, selected, spec.typ)
+				name = normalized
+			}
+			push(wasmValue{typ: spec.resultType(), val: "%" + name})
+			continue
+		}
 		if spec, ok := wasmFloatUnaryOps[op]; ok {
 			if len(ins.Args) != 0 {
 				return fmt.Errorf("%s is a zero-operand WebAssembly stack instruction", ins.Op)
@@ -1361,24 +1414,6 @@ func translateFuncWASM(b *strings.Builder, file *File, fn Func, sig FuncSig, res
 				return fmt.Errorf("F64Const expects one floating immediate")
 			}
 			push(wasmValue{typ: LLVMType("double"), val: fmt.Sprintf("0x%016X", uint64(ins.Args[0].Imm))})
-		case "F64NE", "F64GT", "F64LT":
-			rhs, err := pop(op)
-			if err != nil {
-				return err
-			}
-			lhs, err := pop(op)
-			if err != nil {
-				return err
-			}
-			if lhs.typ != LLVMType("double") || rhs.typ != LLVMType("double") {
-				return fmt.Errorf("%s expects two f64 values", ins.Op)
-			}
-			pred := map[string]string{"F64NE": "une", "F64GT": "ogt", "F64LT": "olt"}[op]
-			cmp := newTmp()
-			fmt.Fprintf(b, "  %%%s = fcmp %s double %s, %s\n", cmp, pred, lhs.val, rhs.val)
-			out := newTmp()
-			fmt.Fprintf(b, "  %%%s = zext i1 %%%s to i32\n", out, cmp)
-			push(wasmValue{typ: I32, val: "%" + out})
 		case "I64TRUNCF64S", "I64TRUNCF64U":
 			v, err := pop(op)
 			if err != nil {

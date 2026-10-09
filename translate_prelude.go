@@ -47,11 +47,15 @@ func emitWASMPrelude(b *strings.Builder, file *File, resolve func(string) string
 	}
 	want := make(map[string]bool)
 	wantFloatUnary := make(map[string]bool)
+	wantFloatBinary := make(map[string]bool)
 	for _, fn := range file.Funcs {
 		for _, ins := range fn.Instrs {
 			op := normalizeInstructionOpcode(ins.Op)
 			if spec, ok := wasmFloatUnaryOps[op]; ok && spec.intrinsic != "" {
 				wantFloatUnary[string(spec.typ)+"|"+spec.intrinsic] = true
+			}
+			if spec, ok := wasmFloatBinaryOps[op]; ok && spec.intrinsic != "" {
+				wantFloatBinary[string(spec.typ)+"|"+spec.intrinsic] = true
 			}
 			switch op {
 			case "MEMORYCOPY":
@@ -87,8 +91,13 @@ func emitWASMPrelude(b *strings.Builder, file *File, resolve func(string) string
 				fmt.Fprintf(b, "declare %s @llvm.%s.f%s(%s)\n", typ, name, bits, typ)
 			}
 		}
+		for _, name := range []string{"minimum", "maximum"} {
+			if wantFloatBinary[string(typ)+"|"+name] {
+				fmt.Fprintf(b, "declare %s @llvm.%s.f%s(%s, %s)\n", typ, name, bits, typ, typ)
+			}
+		}
 	}
-	if len(want) != 0 || len(wantFloatUnary) != 0 {
+	if len(want) != 0 || len(wantFloatUnary) != 0 || len(wantFloatBinary) != 0 {
 		b.WriteString("\n")
 	}
 }
