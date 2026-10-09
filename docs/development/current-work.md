@@ -17,8 +17,8 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `4f8cd6bc`. Native ARM conversion status, packed private-frame proofs
-and the refillable external-shard queue join the preceding typed-family fixes.
+through `1b09e349`. Native scalar/NEON ARM conversion status, packed private-
+frame proofs and the refillable external-shard queue join the preceding fixes.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -83,6 +83,14 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   forms and 15,680 dynamic status rows with original Go over four optimization
   axes, alongside the earlier 255 register-effect cases. Trap-enabled handlers
   and other floating arithmetic are not certified by this finite gate.
+- All eight classic ARM NEON integer/float32 conversions retain one native D/Q
+  opcode. Their fixed standard controls differ from scalar VFP, while cumulative
+  exceptions remain observable even with dead outputs. Original Go/QEMU and
+  four LLVM optimization combinations agree over 5,504 full-register/status/
+  canary rows, including every D/Q bank and alias, exceptional inputs and
+  ambient rounding/FZ/DN changes. Current-Go and Go 1.20 each pass 87 affected
+  roots with unchanged official ARM classification fingerprints. This does not
+  certify ARM64, fixed-point, FP16 or unrelated floating operators.
 - Native header planning admits six ordinary function directives and omits
   uninstantiated generic property roots, matching actual compiler headers.
   Concrete instances and foreign dependencies still require their complete
@@ -225,6 +233,13 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   1.20 gates, three-OS/three-API 195-function objects, numerical/canary checks,
   byte-alias negatives and native-execution boundaries. Its owned cache is
   reclaimed; this does not close the external crypto composite frame.
+- `codex/pr40-arm-neon-conversion-status-20261010`, `e7c66a60`:
+  `_out/arm-neon-status/handoff.md` retains the original-Go RED and complete
+  Linux ten-root, current-Go 87-root and historical 87-root GREEN gates. The
+  original optimized lowering lost dead exceptions and status; the native
+  whole-vector repair passes all four optimization combinations. Its owned
+  cache and stopped containers are closed. Integration `1b09e349` separately
+  passed `_out/neon-merged-1b09e349/test.log` in 7.887 seconds.
 
 The official five-arch classification gate passed again at `a43d9cc2` with zero
 unsupported/parse errors. Actual Go 1.20–1.27 before/after source comparisons
@@ -242,9 +257,11 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 2. Close the ordinary transitive dependency/embed source role with its own
    complete source/ZIP/selection owner, producer and independent consumer.
    Do not borrow test-package permissions or remove the failing embed guard.
-3. Extend the conversion audit to complete ARM NEON D/Q and x86 scalar
-   float-to-integer families. NEON has different fixed rounding/control rules.
-   An independent x86 original-Go audit under `_out/scalar-float-audit/` already
+3. Finish the x86 scalar float-to-integer family and extend the same systematic
+   audit to ARM64 scalar conversion formats and native status. The ARM NEON
+   finite family above is complete; do not substitute its standard controls
+   for ARM64 FPCR rules. The independent x86 original-Go audit in
+   `_out/scalar-float-audit/` already
    finds 32/192 row differences without IR optimization and 184/192 with O2:
    precision flags disappear and poison erases result stores. Preserve this
    RED; object/table coverage alone did not detect it. Exact scope is 48 legacy
