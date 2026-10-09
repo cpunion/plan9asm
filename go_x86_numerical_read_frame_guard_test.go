@@ -136,9 +136,23 @@ func (ctx *numericalFrameReentryContext) Err() error {
 	ctx.mu.Lock()
 	callback := ctx.closeFrame
 	ctx.mu.Unlock()
-	pc, _, _, valid := runtime.Caller(1)
-	if valid && strings.HasSuffix(runtime.FuncForPC(pc).Name(), "(*GoX86NumericalReadSource).Verify") && callback != nil {
-		ctx.once.Do(callback)
+	if callback != nil {
+		// Verify dispatches to source-role-specific helpers. Observe the
+		// public owner's complete call route (including inlined frames), not
+		// the incidental helper that currently checks the context directly.
+		var callers [32]uintptr
+		count := runtime.Callers(2, callers[:])
+		frames := runtime.CallersFrames(callers[:count])
+		for {
+			frame, more := frames.Next()
+			if strings.HasSuffix(frame.Function, "(*GoX86NumericalReadSource).Verify") {
+				ctx.once.Do(callback)
+				break
+			}
+			if !more {
+				break
+			}
+		}
 	}
 	return ctx.Context.Err()
 }
