@@ -148,14 +148,32 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    inventory and retains actual Go-object/listing and complete combined lint
    output. Its first launch fails in the input worker's Go-template escaping,
    before compilation or test execution: this is setup failure, not a TDD RED.
-   Preserve that run and use a separate helper successor. Establish a real RED
-   before changing the filter. Synthetic pointer components, incoming writes,
-   padding, partial results and unknown effects remain unproved.
+   The separate helper successor establishes a real RED: 48 filter failures,
+   four failed parents and twelve passing controls, with no setup/unknown
+   failures. Production successor `9530e21` binds the exact original diagnostic
+   and readonly native width to a declared integer parent. The original scope
+   now passes all 64 nodes; the expanded uintptr/386-half scope passes all 119
+   nodes. The complete expanded race scope also passes 119 nodes. All three
+   scopes are independently rechecked. The actual Go-1.20 run fails with 19
+   passes and 100 failures: every actual-object fixture stops at its shared
+   header/listing guard, before observing the filter. Preserve that failure and
+   establish the exact historical object/listing identity; LLVM semantic gates
+   also remain pending. Synthetic pointer components, incoming writes, padding,
+   partial results and unknown effects remain unproved. The current width
+   observer is conservative for MOVL to
+   MMX/XMM; its complete Go bank forms need a separate regression.
    Another actual library failure is the normalized raw-byte/AUTO replay join:
    reparsing decoded instruction text loses private decoder identity and comments.
-   Add an independent raw-times-AUTO regression and repair a private complete
-   original-byte/order/boundary join, not a broad DeepEqual bypass or new native
-   permission. Neither rule class is fixed or library-verified yet.
+   Test-only `82d046c0` adds an independent raw-times-AUTO regression. Its first
+   run passes the four-node Go byte directory but fails its named-input
+   prerequisite before the mutation inventory runs. The next fixture reaches
+   the eleven target failures but incorrectly expects raw RET to reach the
+   observer instead of its normalization rejection. Preserve both failures.
+   Corrected `6dda63fa` establishes the complete 45-node RED: 32 passing controls
+   and 13 failures (eleven target children and two aggregation parents), with
+   independent complete readback. Repair the private complete original-byte/
+   order/boundary join, not a broad DeepEqual bypass or new native permission.
+   Neither rule class is library-verified yet.
 4. Continue the SDK numerical source/object seam, dynamic reflect frames,
    native entry/TLS/continuations and full result/body contracts by typed rule
    class. The old go-fuse LoadUint16 failure remains a real ARM64 result-tail
@@ -189,9 +207,13 @@ check finds no active scanner/controller or held writer lock; the historical
 service exited successfully at the cutoff. Newer incremental records have been
 synchronized into the independent inventory, not this contribution. Its manifest
 ranges are contiguous and extend the committed prefix, but only the cutoff and
-latest traffic journal endpoints have been independently checked. Raw historical
-versions and normalized latest-per-path candidates differ. Inspect those exact
-inputs before importing; never duplicate a writer or replace its live binary.
+latest traffic journal endpoints have been independently checked. Independent
+local sync still uses an old path-only deduplication binary, whereas current code
+preserves the latest version for each path-plus-major line. Do not import that
+normalized output as canonical: rebuild the reviewed sync tool and remerge the
+existing records, preserving the contiguous prefix without rescanning. Historical
+local union records also need explicit provenance. Inspect those exact inputs
+before importing; never duplicate a writer or replace its live binary.
 Status, lookup and publication stream sharded records rather than loading the
 ledger payload. cgo records remain outside this repository.
 
