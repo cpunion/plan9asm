@@ -142,7 +142,6 @@ func TestX86GoCallerExplicitIMULRetainsContext(t *testing.T) {
 		{"pointer-old-destination", "MOVQ DI,BX\nIMULQ $7,BX"},
 		{"pointer-survives-word-result", "MOVQ DI,BX\nMOVQ $7,AX\nIMUL3W $7,AX,BX"},
 		{"unknown-memory", "MOVQ $7,BX\nIMULQ (R11),BX"},
-		{"unread-result-memory", "MOVQ $7,BX\nIMULQ (DX),BX"},
 		{"wide-length-read", "MOVQ $7,BX\nIMULQ 1(CX),BX"},
 		{"native-return-pc", "MOVQ $7,BX\nIMULQ 8(BP),BX"},
 		{"FP-pointer-input", "MOVQ $7,BX\nIMULQ a+0(FP),BX"},
@@ -182,6 +181,16 @@ func TestX86GoCallerExplicitIMULRetainsContext(t *testing.T) {
 				t.Fatalf("Go API accepted unproved IMUL: %v", err)
 			}
 		})
+	}
+}
+
+func TestX86GoCallerExplicitIMULActualInitializedLocalRead(t *testing.T) {
+	// The retained actual caller declares `var res uint64`: Go initializes
+	// those complete numerical bytes before the call. This is not an unknown
+	// native entry region, nor permission to read an arbitrary result pointer.
+	_, file, _, options := x86CallerExplicitIMULFixture(t, "MOVQ $7,BX\nIMULQ (DX),BX")
+	if _, err := Translate(file, options); err != nil {
+		t.Fatal(err)
 	}
 }
 
