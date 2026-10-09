@@ -38,7 +38,8 @@ func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, want
 func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string) error {
 	return goasmoracle.CheckOutcome(source, object, output, nil, commandErr, contextErr,
 		wantSuccess, 0, func(source, diagnostic string) bool {
-			return goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
+			return goAssemblerOracleX86SourceDiagnostic(source, arch, diagnostic) ||
+				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
 		})
 }
 

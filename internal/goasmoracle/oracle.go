@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
-	"unicode"
 )
 
 func CheckOutcome(source, object string, stdout, stderr []byte, commandErr, contextErr error, wantSuccess bool, focus int, additional func(string, string) bool) error {
@@ -94,41 +93,23 @@ func statementOpcode(statement string) string {
 }
 
 func statementRole(statement string) (string, bool) {
-	var tokens scanner.Scanner
-	tokens.Init(strings.NewReader(statement))
-	tokens.Mode = scanner.ScanIdents | scanner.ScanComments | scanner.SkipComments
-	// Match cmd/asm/internal/lex's identifier role, not a known-opcode list.
-	// Go must be able to diagnose an unknown lowercase/Unicode identifier too.
-	tokens.IsIdentRune = func(ch rune, index int) bool {
-		return unicode.IsLetter(ch) || ch == '_' || ch == '·' || ch == '∕' ||
-			index > 0 && unicode.IsDigit(ch)
-	}
-	tokens.Error = func(_ *scanner.Scanner, _ string) {}
-	if tokens.Scan() != scanner.Ident {
+	tokens, ok := diagnosticTokens(statement)
+	if !ok || len(tokens) == 0 || tokens[0].kind != scanner.Ident {
 		return "", false
 	}
-	opcode := tokens.TokenText()
-	next := tokens.Scan()
-	for next == '.' {
-		if tokens.Scan() != scanner.Ident {
+	opcode, next := tokens[0].text, 1
+	for next < len(tokens) && tokens[next].kind == '.' {
+		if next+1 >= len(tokens) || tokens[next+1].kind != scanner.Ident {
 			return "", false
 		}
-		opcode += "." + tokens.TokenText()
-		next = tokens.Scan()
+		opcode += "." + tokens[next+1].text
+		next += 2
 	}
-	if next == ':' {
+	if next < len(tokens) && tokens[next].kind == ':' {
 		// A label or label prefix is not this isolated statement's opcode.
 		return "", false
 	}
-	zeroOperands := next == scanner.EOF
-	// Consume the complete line. A malformed comment later in an operand is
-	// still a scanner failure, never an emitted stderr diagnostic or a match.
-	for tokens.Scan() != scanner.EOF {
-	}
-	if tokens.ErrorCount != 0 {
-		return "", false
-	}
-	return opcode, zeroOperands
+	return opcode, next == len(tokens)
 }
 
 func positivePosition(text string) (int, bool) {
@@ -166,6 +147,14 @@ func SourceDiagnostic(source, output string) bool {
 // A nonzero focus is the script's actual isolated instruction, not its CPP
 // header, TEXT setup, RET footer, another source, or an unobserved #line route.
 func SourceDiagnosticLine(source, output string, focus int) bool {
+	return SourceDiagnosticLineWithListing(source, output, focus, nil)
+}
+
+// SourceDiagnosticLineWithListing permits an explicitly selected backend to
+// join a complete rewritten listing. The matcher runs only after the same
+// physical-source/path/line/focus/canonical-PC checks as the strict default.
+// Its lexical inputs are diagnostic observations, not instruction authority.
+func SourceDiagnosticLineWithListing(source, output string, focus int, match func(original, listing []string) bool) bool {
 	data, ok := ReadSource(source)
 	if !ok || focus < 0 {
 		return false
@@ -215,14 +204,21 @@ func SourceDiagnosticLine(source, output string, focus int) bool {
 			continue
 		}
 		number, valid := positivePosition(position[:end])
-		if !valid || number > len(lines) || (focus > 0 && number != focus) ||
-			statementOpcode(lines[number-1]) == "" {
+		if !valid || number > len(lines) || (focus > 0 && number != focus) {
 			continue
 		}
 		message := strings.TrimSpace(position[end+1:])
 		if position[end] == ')' {
 			if !direct && ListingBindsSource(source, position[:end], pc, message) {
 				return true
+			}
+			if !direct && match != nil && statementOpcode(lines[number-1]) != "" {
+				original, sourceOK := diagnosticTokens(lines[number-1])
+				listing, listingOK := diagnosticTokens(message)
+				if sourceOK && listingOK && len(listing) > 0 && listing[0].kind == scanner.Ident &&
+					match(tokenTexts(original), tokenTexts(listing)) {
+					return true
+				}
 			}
 			continue
 		}
@@ -232,11 +228,21 @@ func SourceDiagnosticLine(source, output string, focus int) bool {
 		if column, detail, found := strings.Cut(message, ":"); found &&
 			(column == "" || strings.ContainsRune("+-0123456789", rune(column[0]))) {
 			if value, valid := positivePosition(column); valid && value <= len([]rune(lines[number-1])) && strings.TrimSpace(detail) != "" {
-				return true
+				if known, bound := frontendDiagnostic(data, number, value, strings.TrimSpace(detail)); known {
+					if bound {
+						return true
+					}
+				} else if statementOpcode(lines[number-1]) != "" {
+					return true
+				}
 			}
 			continue
 		}
-		if message != "" {
+		if known, bound := frontendDiagnostic(data, number, 0, message); known {
+			if bound {
+				return true
+			}
+		} else if message != "" && statementOpcode(lines[number-1]) != "" {
 			return true
 		}
 	}
