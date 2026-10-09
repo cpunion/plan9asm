@@ -100,6 +100,23 @@ ARM64 nanosleep is integrated from the 13-commit chain ending at `19b60584`:
   context failure; asm_arm64.s, preempt_arm64.s and tls_arm64.s also fail.
   This partial result and every changed combined-head gate remain separate.
 
+The parsed-op diagnostics component, `codex/pr40-parsed-op-diagnostics-20261009`,
+retains actual RED macro/target-report cases and 30 Go-accepted quoted-DATA
+parser failures. Its `01d44f6f` source checkpoint derives hints from the complete
+actual parsed input, clears them per file, and preserves whole quoted tokens
+when splitting semicolon statements. Focused ordinary/race and Go-1.20 parser
+gates pass; 30 DATA fixtures retain exact padded bytes through three APIs and
+LLVM 22 object compilation on all five targets. Nested diagnostic ordinary/race
+passes separately. These are not complete-module or external-ledger passes.
+
+The CI root-parts executor component retains its original RED fixtures. Its
+`f0177658` checkpoint adds eight root jobs, once-only corpus/rest jobs, fresh
+aggregate inventories and strict raw/coverage union checks. Tiny complete,
+sparse and empty-package consumers pass, but the first full wrapper closes
+failed on a Go temporary-prefix-map nonce difference. Preserve that failure;
+review exact nonce normalization and rerun before integration. Complete root
+ordinary is still running on frozen `ae0eee75`; do not edit that checkout.
+
 ## Required next gates and remaining rule classes
 
 1. Complete and independently read each component handoff; cherry-pick only
