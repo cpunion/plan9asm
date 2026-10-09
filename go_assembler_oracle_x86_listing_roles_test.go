@@ -53,6 +53,35 @@ func TestGoAssemblerOracleX86CompleteAliasListingRoles(t *testing.T) {
 	}
 }
 
+func TestGoAssemblerOracleX86CompleteAliasOperandCardinality(t *testing.T) {
+	for alias, canonical := range goAssemblerOracleX86Aliases {
+		t.Run(alias, func(t *testing.T) {
+			for _, suffix := range []string{"", ".Z", ".BCST.Z"} {
+				for _, operands := range []string{"", "AX", "M0,X1", "X0,K1,X1", "X0,X1,K1,X2"} {
+					source := x86DiagnosticFixture(t, strings.TrimSpace(alias+suffix+" "+operands))
+					listing := x86DiagnosticListing(source, strings.TrimSpace(canonical+suffix+" "+operands))
+					for _, arch := range []string{"amd64", "386"} {
+						if !goAssemblerOracleX86SourceDiagnostic(source, arch, listing) {
+							t.Fatalf("complete %s alias lost at operand cardinality %q: %s", arch, operands, alias+suffix)
+						}
+						if operands != "" && goAssemblerOracleX86SourceDiagnostic(source, arch,
+							x86DiagnosticListing(source, canonical+suffix)) {
+							t.Fatal("operand-bearing original borrowed a zero-operand listing")
+						}
+						if operands == "" && goAssemblerOracleX86SourceDiagnostic(source, arch,
+							x86DiagnosticListing(source, canonical+suffix+" AX")) {
+							t.Fatal("zero-operand original borrowed an invented operand")
+						}
+					}
+					if goasmoracle.SourceDiagnosticLine(source, listing, 2) {
+						t.Fatal("zero/rest-operand alias escaped into the strict default")
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestGoAssemblerOracleX86ScalarZeroCompleteListingRoles(t *testing.T) {
 	for _, opcode := range []string{"MOVSS", "MOVSD", "VMOVSS", "VMOVSD"} {
 		t.Run(opcode, func(t *testing.T) {
