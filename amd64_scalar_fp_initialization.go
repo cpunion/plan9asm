@@ -99,19 +99,18 @@ func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, r
 	if form.mask >= 0 && !form.zeroing {
 		known = known&^lowMask | known&state.xmm[destination]&lowMask
 	}
-	state.xmm[destination] = known
+	state.writeVector(destination, 16, uint64(known), false)
 	return true
 }
 
-// The private scalar observer tracks only low X bytes. Wider and physical MMX
-// effects need their own state model; the ordinary lowerer/caller grammar still
-// supports its independently proved widths. No native pointer becomes FP data.
+// Every typed X/Y/Z form consumes the same physical-bank byte domain. Physical
+// MMX remains separate; no vector effect turns a native pointer into FP data.
 func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86ResultState, owned []bool, arch string) bool {
-	if form.mmx || form.byteWidth != 16 {
+	if form.mmx {
 		return false
 	}
 	xreg := func(operand Operand) (int, bool) {
-		index, valid := amd64ParseXReg(operand.Reg)
+		index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
 		return index, operand.Kind == OpReg && valid && index < len(state.xmm) && (arch != "386" || index < 8)
 	}
 	second, valid := xreg(ins.Args[form.second])
@@ -128,7 +127,7 @@ func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86
 			return false
 		}
 	}
-	first := uint64(0xffff)
+	first := x86CallerVectorByteMask(int64(form.byteWidth))
 	if form.memory >= 0 {
 		if !x86ResultRead(form.source, int64(form.memoryBytes), state, owned, arch) {
 			return false // Even a zero mask supplies no missing native envelope.
@@ -138,9 +137,10 @@ func x86ScalarFPLogicalTransfer(ins Instr, form x86PackedLogicalForm, state *x86
 		if !valid {
 			return false
 		}
-		first = uint64(state.xmm[index])
+		first = state.vectorBytes(index)
 	}
-	state.xmm[destination] = uint16(x86PackedLogicalDefinedBytes(ins, form, first,
-		uint64(state.xmm[second]), uint64(state.xmm[destination])))
+	known := x86PackedLogicalDefinedBytes(ins, form, first,
+		state.vectorBytes(second), state.vectorBytes(destination))
+	state.writeVector(destination, form.byteWidth, known, form.legacy)
 	return true
 }

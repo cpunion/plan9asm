@@ -162,8 +162,14 @@ func TestX86ResultGPSIMDRegisterEveryInputByteAndOverwrite(t *testing.T) {
 							switch direction {
 							case "gp-to-x", "x-to-x":
 								want.xmm[1] = 0xffff
+								if strings.HasPrefix(op, "V") {
+									want.vectorUpper[1] = ^uint64(0xffff)
+								}
 							case "self":
 								want.xmm[0] = 0xffff
+								if strings.HasPrefix(op, "V") {
+									want.vectorUpper[0] = ^uint64(0xffff)
+								}
 							case "x-to-gp":
 								want.gp[3], want.pointerGP[3] = 0xff, false
 							}

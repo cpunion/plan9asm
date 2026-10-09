@@ -108,9 +108,8 @@ func x86BroadcastProperties(op Op, ins Instr, arch string) (x86BroadcastForm, bo
 	return f, true, x86Mode32VectorRegisterContext(ins, arch)
 }
 
-// The common result state records only low X bytes. A Y/Z broadcast can
-// define those bytes because it reads only its scalar/X2 source, not a wider
-// unknown vector. This is not a full-bank, caller or native-memory proof.
+// A broadcast reads its exact scalar/block source and defines the complete
+// destination width. A low-X source cannot stand in for a wider block input.
 func x86ResultBroadcastStep(ins Instr, state *x86ResultState, arch string) (bool, bool) {
 	f, known, err := x86BroadcastProperties(ins.Op, ins, arch)
 	if !known {
@@ -129,10 +128,10 @@ func x86ResultBroadcastStep(ins Instr, state *x86ResultState, arch string) (bool
 			return false, true
 		}
 	}
-	required := uint16(1)<<uint(f.sourceBytes) - 1
+	required := x86CallerVectorByteMask(int64(f.sourceBytes))
 	src := ins.Args[0]
-	if index, valid := amd64ParseXReg(src.Reg); valid {
-		if index >= len(state.xmm) || state.xmm[index]&required != required {
+	if index, valid := amd64VectorRegisterIndex(src.Reg, amd64VectorByteWidth(src.Reg)); valid {
+		if index >= len(state.xmm) || state.vectorBytes(index)&required != required {
 			return false, true
 		}
 	} else {
@@ -140,11 +139,15 @@ func x86ResultBroadcastStep(ins Instr, state *x86ResultState, arch string) (bool
 		// alias spelling (e.g. SI in mode32). SP/BP and opaque values still
 		// lack numerical input permission in x86ResultGP.
 		index, _, valid := x86ResultGP(src.Reg, 4, arch)
-		if !valid || state.pointerGP[index] || uint16(state.gp[index])&required != required {
+		if !valid || state.pointerGP[index] || uint64(state.gp[index])&required != required {
 			return false, true
 		}
 	}
 	// All reads, including an aliased source and masked merge, precede writes.
-	state.xmm[dst] = 0xffff
+	defined := ^uint64(0)
+	if f.mask >= 0 && !f.zeroing {
+		defined &= state.vectorBytes(dst)
+	}
+	state.writeVector(dst, f.byteWidth, defined, false)
 	return true, true
 }

@@ -5,7 +5,7 @@ import "strings"
 // Both result observers consume the same typed numerical transfer. The public
 // observer enters only for register/register operands; the private observer
 // retains its existing logical-memory roles. Neither acquires native backing,
-// caller permission, numerical pointer bytes, or a wider vector state domain.
+// caller permission or numerical pointer bytes.
 func x86ResultGPSIMDTransfer(ins Instr, form x86GPSIMDTransferForm, state *x86ResultState,
 	owned []bool, resultOffset int64, arch string) bool {
 	if form.mmx || form.spec.rawOnly {
@@ -27,9 +27,9 @@ func x86ResultGPSIMDTransfer(ins Instr, form x86GPSIMDTransferForm, state *x86Re
 			return false
 		}
 		// Each valid GP/X move writes its low 32/64 bits and clears the
-		// remainder of X. Legacy versus VEX/EVEX wider aliases stay in the
-		// lowerer/caller models; this observer tracks only sixteen X bytes.
-		state.xmm[index] = 0xffff
+		// remainder of X. The encoding chooses preservation or clearing of
+		// the wider physical aliases, independently of their previous state.
+		state.writeVector(index, 16, 0xffff, form.spec.legacy)
 		return true
 	}
 	if form.memoryWrite && ins.Args[1].Kind == OpSym {

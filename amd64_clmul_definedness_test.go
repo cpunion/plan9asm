@@ -83,19 +83,19 @@ func TestX86CLMULMissingByteAndAliasEffects(t *testing.T) {
 						if state.vectors[destination] != want {
 							t.Fatalf("%s missing %d operand %d got %016x want %016x", row, missing, source, state.vectors[destination], want)
 						}
-						if bank == "X" {
-							result := x86ResultState{}
-							result.xmm[0], result.xmm[1] = uint16(inputs[0]), uint16(inputs[1])
-							if !x86ResultTransfer(ins, &result, nil, 0, "amd64") {
-								t.Fatal("partial known bytes lost the effect registration")
-							}
-							index := 2
-							if legacy {
-								index = 1
-							}
-							if result.xmm[index] != uint16(want) {
-								t.Fatal("caller/result numerical byte selectors differ", row)
-							}
+						result := x86ResultState{}
+						result.writeVector(0, 64, inputs[0], false)
+						result.writeVector(1, 64, inputs[1], false)
+						result.writeVector(2, 64, 1<<60, false)
+						if !x86ResultTransfer(ins, &result, nil, 0, "amd64") {
+							t.Fatal("partial known bytes lost the effect registration")
+						}
+						index := 2
+						if legacy {
+							index = 1
+						}
+						if result.vectorBytes(index) != want {
+							t.Fatal("caller/result complete numerical byte selectors differ", row)
 						}
 					}
 				}

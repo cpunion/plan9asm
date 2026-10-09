@@ -188,9 +188,7 @@ func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 	if !known {
 		return false, false
 	}
-	// The existing scalar result state observes low X bytes only. Do not pretend
-	// that a known low X view initializes all bytes of a wider AES lane.
-	if err != nil || f.byteWidth != 16 {
+	if err != nil {
 		return false, true
 	}
 	read := func(index int) (uint64, bool) {
@@ -199,13 +197,13 @@ func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 			a = f.sourceOperand
 		}
 		if a.Kind == OpReg {
-			i, valid := amd64ParseXReg(a.Reg)
+			i, valid := amd64VectorRegisterIndex(a.Reg, f.byteWidth)
 			if !valid || i >= len(state.xmm) {
 				return 0, false
 			}
-			return uint64(state.xmm[i]), true
+			return state.vectorBytes(i), true
 		}
-		return 0xffff, x86ResultRead(a, 16, state, owned, arch)
+		return x86CallerVectorByteMask(int64(f.byteWidth)), x86ResultRead(a, int64(f.byteWidth), state, owned, arch)
 	}
 	source, valid := read(f.source)
 	if !valid {
@@ -218,10 +216,10 @@ func x86ResultAESStep(ins Instr, state *x86ResultState, owned []bool, arch strin
 			return false, true
 		}
 	}
-	destination, _ := amd64ParseXReg(ins.Args[f.destination].Reg)
+	destination, _ := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
 	if destination >= len(state.xmm) {
 		return false, true
 	}
-	state.xmm[destination] = uint16(x86AESDefinedBytes(f, source, input))
+	state.writeVector(destination, f.byteWidth, x86AESDefinedBytes(f, source, input), !f.spec.vector)
 	return true, true
 }

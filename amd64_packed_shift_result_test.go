@@ -82,7 +82,7 @@ func TestX86PackedShiftResultMemoryAndMaskBoundaries(t *testing.T) {
 		"PSRLQ (AX),X1", "PSRLQ a+0(FP),X1", "PSRLQ local-16(SP),X1",
 		"VPSRLQ $255,(AX),X2", "VPSRLDQ $16,·data(SB),X2",
 		"VPSRLVQ (AX),X1,X2", "VPSRLQ.BCST $64,(AX),X2",
-		"VPSRLQ $7,Y1,Y2", "PSRLQ $7,M1",
+		"PSRLQ $7,M1",
 	} {
 		ins := x86ScalarLaneInstruction(t, row)
 		state := x86ResultState{fp: make([]bool, 16), auto: make([]bool, 16)}
@@ -97,7 +97,7 @@ func TestX86PackedShiftResultMemoryAndMaskBoundaries(t *testing.T) {
 			owned[i] = true
 		}
 		if x86ResultTransfer(ins, &state, owned, 16, "amd64") || len(ins.x86CallerMemory) != 0 {
-			t.Fatal("numerical effect borrowed native/wider/MMX permission", row)
+			t.Fatal("numerical effect borrowed native/MMX permission", row)
 		}
 	}
 	for _, row := range []string{"VPSRLQ $7,X1,K3,X2", "VPSRLQ.Z $7,X1,K3,X2"} {

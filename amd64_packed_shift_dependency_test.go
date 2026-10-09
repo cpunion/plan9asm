@@ -104,12 +104,12 @@ func TestX86PackedShiftResultEveryByteDependency(t *testing.T) {
 								if got := x86PackedShiftDefinedBytes(form, inputs[0], inputs[1], 0); got != expected {
 									t.Fatal(row, missing, operand, got, expected)
 								}
-								if bank.width == 16 {
-									state := x86ResultState{flags: x86ByteFlagsAll}
-									state.xmm[0], state.xmm[1] = uint16(inputs[1]), uint16(inputs[0])
-									if !x86ResultTransfer(ins, &state, nil, 0, "amd64") || state.xmm[2] != uint16(expected) || state.flags != x86ByteFlagsAll {
-										t.Fatal("result byte state differs", row, missing, operand)
-									}
+								state := x86ResultState{flags: x86ByteFlagsAll}
+								state.writeVector(0, 64, inputs[1], false)
+								state.writeVector(1, 64, inputs[0], false)
+								physical := expected | ^x86CallerVectorByteMask(int64(bank.width))
+								if !x86ResultTransfer(ins, &state, nil, 0, "amd64") || state.vectorBytes(2) != physical || state.flags != x86ByteFlagsAll {
+									t.Fatal("complete result byte state differs", row, missing, operand)
 								}
 							}
 						}

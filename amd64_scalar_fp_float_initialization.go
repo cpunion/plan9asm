@@ -2,19 +2,19 @@ package plan9asm
 
 // This transfer consumes existing typed arithmetic syntax solely for numeric
 // byte definedness. Native reads, caller certificates, ISA, exceptions and
-// MXCSR remain the lowerer's independent contracts. It deliberately represents
-// only X bytes; a complete Y/Z effect cannot be inferred from a low-X mask.
+// MXCSR remain the lowerer's independent contracts. X/Y/Z views share complete
+// physical-bank byte state, including legacy preservation and vector clearing.
 func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x86ResultState, owned []bool, arch string) bool {
-	if form.byteWidth != 16 || form.bits != 32 && form.bits != 64 {
+	if form.bits != 32 && form.bits != 64 {
 		return false
 	}
 	width := int64(form.byteWidth)
 	if form.scalar {
 		width = int64(form.bits / 8)
 	}
-	required := uint16(1)<<uint(width) - 1
+	required := x86CallerVectorByteMask(width)
 	xreg := func(operand Operand) (int, bool) {
-		index, valid := amd64ParseXReg(operand.Reg)
+		index, valid := amd64VectorRegisterIndex(operand.Reg, form.byteWidth)
 		return index, operand.Kind == OpReg && valid && index < len(state.xmm) &&
 			(arch != "386" || index < 8) && (!form.legacy || index < 16)
 	}
@@ -37,7 +37,7 @@ func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x
 			continue
 		}
 		index, valid := xreg(ins.Args[input])
-		if !valid || state.xmm[index]&required != required {
+		if !valid || state.vectorBytes(index)&required != required {
 			return false
 		}
 	}
@@ -45,11 +45,11 @@ func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x
 	if !valid {
 		return false
 	}
-	old := state.xmm[destination]
+	old := state.vectorBytes(destination)
 	if form.mask >= 0 && !form.zeroing && old&required != required {
 		return false
 	}
-	known := uint16(0xffff)
+	known := x86CallerVectorByteMask(int64(form.byteWidth))
 	if form.legacy {
 		known = old | required
 	} else if form.scalar {
@@ -57,8 +57,8 @@ func x86ScalarFPFloatBinaryTransfer(ins Instr, form x86FloatBinaryForm, state *x
 		if !valid {
 			return false
 		}
-		known = required | state.xmm[second]&^required
+		known = required | state.vectorBytes(second)&^required
 	}
-	state.xmm[destination] = known
+	state.writeVector(destination, form.byteWidth, known, form.legacy)
 	return true
 }

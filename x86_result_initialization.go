@@ -137,13 +137,13 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
 	}
-	// One logical byte-work envelope includes FP/AUTO, numerical GP/X/K/
+	// One logical byte-work envelope includes FP/AUTO, numerical GP/Z/K/
 	// flags, opaque GP identities and the source-shape discriminator. It is
 	// not a bound on Go's heap/struct overhead. pointerFP is immutable shared
 	// layout metadata, not a state payload copied at each CFG successor.
 	// AUTO states do not obtain an independent frame or iteration budget.
 	byteState := len(initial.fp) + len(initial.auto) + len(initial.gp) +
-		2*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
+		8*len(initial.xmm) + len(initial.masks) + 1 + len(initial.pointerGP) + 1
 	const byteWorkLimit = 64 << 20
 	byteWork := len(instructions) * byteState
 	if autoExtent != 0 && byteWork > byteWorkLimit/8 {
@@ -165,6 +165,7 @@ func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch strin
 	}
 	for index := range top.xmm {
 		top.xmm[index] = 0xffff
+		top.vectorUpper[index] = ^uint64(0xffff)
 	}
 	for index := range top.masks {
 		top.masks[index] = true
@@ -273,12 +274,16 @@ func x86ResultScalarBytes(typ LLVMType, arch string) int64 {
 }
 
 type x86ResultState struct {
-	fp    []bool
-	auto  []bool
-	gp    [16]uint8
-	xmm   [32]uint16 // high banks are consumed only by validated mode-bound forms
-	masks [8]bool    // used only by the private scalar bit-view transfer
-	flags uint8
+	fp   []bool
+	auto []bool
+	gp   [16]uint8
+	xmm  [32]uint16 // high banks are consumed only by validated mode-bound forms
+	// The disjoint upper 48 byte bits share the same physical X/Y/Z bank.
+	// Existing low-X effects preserve these bits unless their typed encoding
+	// explicitly clears the upper aliases.
+	vectorUpper [32]uint64
+	masks       [8]bool // used only by the private scalar bit-view transfer
+	flags       uint8
 
 	// Incoming pointer identities are not numerical register bytes. This is
 	// only an initialization observation, never a pointee/backing permission.
@@ -313,6 +318,7 @@ func (state x86ResultState) intersect(other x86ResultState) x86ResultState {
 	}
 	for index := range merged.xmm {
 		merged.xmm[index] &= other.xmm[index]
+		merged.vectorUpper[index] &= other.vectorUpper[index]
 	}
 	for index := range merged.masks {
 		merged.masks[index] = merged.masks[index] && other.masks[index]
@@ -422,6 +428,19 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultVectorCompareStep(ins, state, owned, arch); known {
+		return accepted
+	}
+	if form, known, err := x86VectorZeroProperties(ins, arch); known {
+		if err != nil {
+			return false
+		}
+		zeroed := ^x86CallerVectorByteMask(int64(form.spec.firstByte))
+		for register := 0; register < form.registers; register++ {
+			state.writeVector(register, 64, state.vectorBytes(register)|zeroed, false)
+		}
+		return true
+	}
 	if accepted, known := x86ResultPackedShiftStep(ins, state, owned, arch); known {
 		return accepted
 	}

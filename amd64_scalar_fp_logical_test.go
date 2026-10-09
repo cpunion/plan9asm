@@ -195,6 +195,9 @@ func TestX86ScalarFPLogicalEveryByteAndExactZeroIdiom(t *testing.T) {
 							t.Fatalf("%s input%d missing%d: initialized bytes=%04x, want %04x", row, input, missing, state.xmm[destination], want)
 						}
 						before.xmm[destination] = want
+						if strings.HasPrefix(op, "V") {
+							before.vectorUpper[destination] = ^uint64(0xffff)
+						}
 						if !reflect.DeepEqual(before, state) {
 							t.Fatal("logical definedness changed unrelated GP/FP/flags/mask/pointer state")
 						}
@@ -229,7 +232,7 @@ func TestX86ScalarFPLogicalKeepsUnknownResultAndNativeMemoryBoundaries(t *testin
 		"unknown global data": "MOVQ X0,output(SB)\nMOVQ X0,ret+0(FP)",
 		"unknown merge":       "PXOR X0,X0\nMOVL $1,AX\nKMOVW AX,K1\nVPXORD X0,X0,K1,X2\nMOVQ X2,ret+0(FP)",
 		"unknown mask":        "PXOR X0,X0\nVPXORD.Z X0,X0,K1,X2\nMOVQ X2,ret+0(FP)",
-		"wider bank":          "VPXOR Y0,Y0,Y1\nMOVQ X1,ret+0(FP)",
+		"unknown wider bank":  "VPXOR Y0,Y2,Y1\nMOVQ X1,ret+0(FP)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			source := "TEXT ·view(SB),4,$0-8\n" + body + "\nRET\n"

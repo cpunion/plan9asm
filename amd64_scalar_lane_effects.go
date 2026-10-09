@@ -69,7 +69,8 @@ func x86ResultScalarLaneStep(ins Instr, state *x86ResultState, owned []bool, res
 		}
 		base, _ := amd64ParseXReg(ins.Args[f.base].Reg)
 		destination, _ := amd64ParseXReg(ins.Args[f.destination].Reg)
-		state.xmm[destination] = uint16(x86ScalarLaneInsertKnown(f, uint64(state.xmm[base]), low, uint64(state.xmm[destination])))
+		state.writeVector(destination, 16,
+			x86ScalarLaneInsertKnown(f, state.vectorBytes(base), low, state.vectorBytes(destination)), f.legacy)
 		return true, true
 	}
 	source, _ := amd64ParseXReg(ins.Args[f.source].Reg)
@@ -114,6 +115,6 @@ func x86ResultScalarPSLaneStep(ins Instr, f x86InsertExtractForm, state *x86Resu
 			known |= uint16(0xf) << uint(index*4)
 		}
 	}
-	state.xmm[destination] = known
+	state.writeVector(destination, 16, uint64(known), f.spec.legacy)
 	return true
 }

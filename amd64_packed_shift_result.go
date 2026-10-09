@@ -65,8 +65,8 @@ func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, ar
 	if !known {
 		return false, false
 	}
-	if err != nil || form.mmx || form.byteWidth != 16 {
-		return false, true // Low X state does not stand in for physical MMX/Y/Z.
+	if err != nil || form.mmx {
+		return false, true // Physical MMX remains a separate register domain.
 	}
 	if form.mask >= 0 {
 		index, valid := amd64ParseKReg(ins.Args[form.mask].Reg)
@@ -89,16 +89,18 @@ func x86ResultPackedShiftStep(ins Instr, state *x86ResultState, owned []bool, ar
 	}
 	bytes := func(index int) uint64 {
 		if index == form.memory {
-			return 0xffff // Full checked extent; includes replicated broadcasts.
+			return x86CallerVectorByteMask(int64(form.byteWidth))
 		}
-		register, _ := amd64ParseXReg(ins.Args[index].Reg)
-		return uint64(state.xmm[register])
+		operand := ins.Args[index]
+		register, _ := amd64VectorRegisterIndex(operand.Reg, amd64VectorByteWidth(operand.Reg))
+		return state.vectorBytes(register)
 	}
-	data, counts := bytes(form.data), uint64(0xffff)
+	data, counts := bytes(form.data), ^uint64(0)
 	if form.countOperand.Kind != OpImm {
 		counts = bytes(form.count)
 	}
-	destination, _ := amd64ParseXReg(ins.Args[form.destination].Reg)
-	state.xmm[destination] = uint16(x86PackedShiftDefinedBytes(form, data, counts, uint64(state.xmm[destination])))
+	destination, _ := amd64VectorRegisterIndex(ins.Args[form.destination].Reg, form.byteWidth)
+	state.writeVector(destination, form.byteWidth,
+		x86PackedShiftDefinedBytes(form, data, counts, state.vectorBytes(destination)), form.legacy)
 	return true, true
 }

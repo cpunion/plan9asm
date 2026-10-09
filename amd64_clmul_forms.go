@@ -95,21 +95,21 @@ func x86ResultCLMULStep(ins Instr, state *x86ResultState, owned []bool, arch str
 	if !known {
 		return false, false
 	}
-	if err != nil || f.byteWidth != 16 {
-		return false, true // This observer stores only low X, never wider state.
+	if err != nil {
+		return false, true
 	}
-	source := uint64(65535)
+	source := x86CallerVectorByteMask(int64(f.byteWidth))
 	if f.memory >= 0 {
-		if !x86ResultRead(ins.Args[f.memory], 16, state, owned, arch) {
+		if !x86ResultRead(ins.Args[f.memory], int64(f.byteWidth), state, owned, arch) {
 			return false, true
 		}
 	} else {
-		index, _ := amd64ParseXReg(ins.Args[f.source].Reg)
-		source = uint64(state.xmm[index])
+		index, _ := amd64VectorRegisterIndex(ins.Args[f.source].Reg, f.byteWidth)
+		source = state.vectorBytes(index)
 	}
-	second, _ := amd64ParseXReg(ins.Args[f.second].Reg)
-	destination, _ := amd64ParseXReg(ins.Args[f.destination].Reg)
-	state.xmm[destination] = uint16(x86CLMULDefinedBytes(f, source, uint64(state.xmm[second])))
+	second, _ := amd64VectorRegisterIndex(ins.Args[f.second].Reg, f.byteWidth)
+	destination, _ := amd64VectorRegisterIndex(ins.Args[f.destination].Reg, f.byteWidth)
+	state.writeVector(destination, f.byteWidth, x86CLMULDefinedBytes(f, source, state.vectorBytes(second)), f.legacy)
 	return true, true
 }
 
