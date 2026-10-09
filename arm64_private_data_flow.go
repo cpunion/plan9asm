@@ -284,6 +284,12 @@ func arm64PrivateDataProofDetails(fn Func, transport *arm64PrivateFrameTransport
 	if transport == nil || fn.FrameSize < 0 || fn.FrameSize > arm64MaxLocalStackSpan || arm64HasRawFrameCode(fn) {
 		return nil, fmt.Errorf("private data proof needs a bounded named source and explicit transport")
 	}
+	if proof := transport.nanosleep; proof != nil {
+		if !reflect.DeepEqual(proof.source, fn) || !reflect.DeepEqual(proof.sig, transport.entry) ||
+			proof.identity != nil && !proof.matchesSource(fn, transport.entry, proof.target) {
+			return nil, fmt.Errorf("private nanosleep replay has a changed source, declaration or certificate")
+		}
+	}
 	blocks := arm64SplitBlocks(fn)
 	indices := make(map[string]int, len(blocks))
 	for index, block := range blocks {
