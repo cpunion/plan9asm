@@ -49,7 +49,7 @@ func x86BitTestProperties(op Op, ins Instr, arch string) (x86BitTestForm, bool, 
 			return fail("destination is outside Go's Yml register class")
 		}
 	} else if !x86ScalarCompareMemoryValid(form.destination, arch) {
-		if x86ScalarCompareTLSMemory(form.destination, arch) {
+		if x86SourceTLSMemoryRole(form.destination, arch) {
 			return form, true, fmt.Errorf("%w: bit string needs its actual Go TLS address contract", ErrProbeNeedsContext)
 		}
 		return fail("destination is outside Go's encodable Yml memory class")
