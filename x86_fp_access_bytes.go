@@ -32,16 +32,20 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 		}
 		return 0, false, false
 	}
-	// MOVL/MOVQ/MOVD and their VEX forms have complete Go GP/X memory rows
-	// in the same typed transfer grammar as register copies. Keep the FP
-	// observer on that row table instead of falling through to the GP-only
-	// scalar shortcut; otherwise MOVL X0,value(FP) and its load direction are
-	// silently reported as unknown despite being official formats.
-	if form, recognized, err := x86GPSIMDTransferProperties(ins, arch); recognized {
-		if err != nil || form.memory < 0 || form.memory != index {
-			return 0, false, false
+	// MOVL/MOVD and the VEX forms have complete Go GP/X memory rows in the
+	// same typed transfer grammar as register copies. Keep the FP observer on
+	// those rows instead of falling through to the GP-only scalar shortcut;
+	// otherwise MOVL X0,value(FP) and its load direction are silently reported
+	// as unknown despite being official formats. MOVQ stays out of this
+	// observer: its scalar/vector alias is intentionally not an FP-width proof,
+	// even though the caller grammar models its complete register/address rows.
+	if ins.Op != "MOVQ" {
+		if form, recognized, err := x86GPSIMDTransferProperties(ins, arch); recognized {
+			if err != nil || form.memory < 0 || form.memory != index {
+				return 0, false, false
+			}
+			return int64(form.bits / 8), form.memoryWrite, true
 		}
-		return int64(form.bits / 8), form.memoryWrite, true
 	}
 	// The remaining ymovl rows are the legacy MMX MOVD forms. They are
 	// deliberately separate from the X-register transfer table because the

@@ -40,7 +40,7 @@ func TestX86FPAccessBytesCompleteSourceIdentity(t *testing.T) {
 
 func TestX86FPAccessBytesCompleteGPSIMDMemoryRows(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		for _, op := range []string{"MOVL", "MOVQ", "MOVD", "VMOVD", "VMOVQ"} {
+		for _, op := range []string{"MOVL", "MOVD", "VMOVD", "VMOVQ"} {
 			for _, row := range []struct {
 				name, source string
 				index        int
