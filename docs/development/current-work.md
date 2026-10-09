@@ -64,24 +64,42 @@ establish only their exact component revisions:
   boundaries remain unchanged. Only its six reviewed production/fixture
   commits are integrated here; shared oracle prerequisites were already present.
 - `69253f0e`: complete x86 alias operand joins retain Go's TYPE_FCONST value,
-  canonical seventeen-digit printing and signed zero. Four focused roots pass
-  ordinarily with 96 actual source-bound Go rejections; race/Go-1.20 remain
-  separate gates. No instruction, source N/A or ABI permission is added.
+  canonical seventeen-digit printing and signed zero. The complete shared
+  16-root scope passes ordinary/race (498 nodes each); actual Go-1.20 selects
+  11 roots and passes 450 nodes. Its five build-tag exclusions are not skips.
+  Actual logged Go commands number 151/151/108, all independently closed.
+  No instruction, source N/A or ABI permission is added.
+- `fd1b9dc9`: a literal NOSPLIT TEXT and complete straight-line deltasp join
+  binds I386 PARAM += delta+4 and AUTO += delta to the original operands,
+  aliases and full backend class tails. Ordinary/race pass 134 nodes each;
+  actual Go-1.20 selects three portable roots and passes 84 nodes. Unknown
+  flow, CPP, SP writes, symbolic frames and overflow remain rejected. Its
+  ordered test/fix commits are integrated as `4fd28774` and `07a1d672`.
 
 The combined rerun at `cddbc85e` naturally ends with 52 of the original 54
 failed roots passing. Two roots still fail on four diagnostic-join children:
-alias FLOAT formatting and mode32 FP rebasing. The FLOAT family above repairs
-the first; a separate TEXT/deltasp-bound frame family is still in TDD. Do not
-replace the original combined failure with component passes.
+alias FLOAT formatting and mode32 FP rebasing. Retain that failure. A new
+combined gate at `07a1d672` passes all original 54 roots plus seven new roots:
+61 roots and 2,401 children, 2,462 pass with zero fail/skip/incomplete. Main's
+independent fresh readback closes full raw EOF, source/tools/binary and all
+144 logged actual-Go children. This is a finite scope, not full-module or CI.
+
+Generated-header planning has a separate query-only TDD at `bf8ae5b2`:
+126 nodes, 113 pass and 13 fail (11 query-count failures and two propagated
+parents), with zero setup/other failure. The condition-free case repeats CPU
+header queries without adding branch requests. Keep actual source/header
+guards, Go-only partner selection and instrumentation expanded-output scopes;
+only redundant ordinary planning queries are candidates for removal. This
+does not itself resolve a distinct-profile limit failure or prove a consumer.
 
 ## Next work, in order
 
 1. Let each active finite gate finish, including failures. Recheck actual
    source/tools/binaries, full raw EOF, all listed root/subtest outcomes and
    owned processes independently. Incomplete or killed tests remain failures.
-2. Finish the mode32 frame diagnostic family and inspect why generated-header
-   planning proposes many CPU scopes. Preserve actual source/profile guards;
-   optimize repeated work by rule class. A full-module rerun retains its
+2. Finish the conservative condition-free generated-header planning family.
+   Preserve actual source/profile guards; optimize repeated work by rule class
+   and then recheck the actual Builtin consumer. A full-module rerun retains its
    original budget, never hides the finite-scope timeout or skips the fixture.
 3. Finish affected ordinary/race and actual Go-1.20 component matrices. Integrate
    only their reviewed ordered commits, preserving the original RED evidence.
@@ -92,7 +110,10 @@ replace the original combined failure with component passes.
    native CI. Component passes never transfer to a new combined HEAD.
 5. Continue the SDK numerical source/object seam, dynamic reflect frames,
    native entry/TLS/continuations and full result/body contracts by typed rule
-   class. Then run discovering libraries and all 64 external shards on the
+   class. The old go-fuse LoadUint16 failure remains a real ARM64 result-tail
+   backing gap: parameter-padding and tail-call proofs do not authorize its
+   wider result store. Never clip the store or invent a padding slot. Then
+   run discovering libraries and all 64 external shards on the
    designated validators and publish only matching complete schema-11 reports.
 
 The strict five-target SDK baseline still attempts all 184 files: 167 pass and
