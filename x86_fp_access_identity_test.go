@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -40,7 +41,7 @@ func TestX86FPAccessBytesCompleteSourceIdentity(t *testing.T) {
 
 func TestX86FPAccessBytesCompleteGPSIMDMemoryRows(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		for _, op := range []string{"MOVL", "MOVD", "VMOVD", "VMOVQ"} {
+		for _, op := range []string{"MOVL", "MOVQ", "MOVD", "VMOVD", "VMOVQ"} {
 			for _, row := range []struct {
 				name, source string
 				index        int
@@ -65,32 +66,54 @@ func TestX86FPAccessBytesCompleteGPSIMDMemoryRows(t *testing.T) {
 					if !known || write != row.write || width != int64(form.bits/8) {
 						t.Fatalf("FP access differs from GP/X row: width=%d write=%t known=%t form=%+v", width, write, known, form)
 					}
+					wantWidth := int64(8)
+					if op == "MOVL" || op == "VMOVD" {
+						wantWidth = 4
+					}
+					if width != wantWidth {
+						t.Fatalf("native width=%d, want independently selected %d", width, wantWidth)
+					}
 				})
 			}
 		}
 	}
+}
+
+func TestX86FPAccessBytesCompleteMMXMemoryRows(t *testing.T) {
 	for _, arch := range []string{"amd64", "386"} {
-		for _, row := range []struct {
-			name, source string
-			index        int
-			write        bool
-		}{
-			{"mmx-load", "MOVL M0,value+0(FP)", 1, true},
-			{"mmx-store", "MOVL value+0(FP),M0", 0, false},
-		} {
-			t.Run(arch+"/"+row.name, func(t *testing.T) {
-				source := "TEXT ·Value(SB),4,$0-64\n" + row.source + "\nRET\n"
-				goAssemblerOracleOutput(t, arch, source, "", true)
-				file, err := Parse(ArchAMD64, source)
-				if err != nil {
-					t.Fatal(err)
+		for _, op := range []string{"MOVL", "MOVQ", "MOVD"} {
+			wantWidth := int64(8)
+			if op == "MOVL" {
+				wantWidth = 4
+			}
+			for register := 0; register < 8; register++ {
+				bank := fmt.Sprintf("M%d", register)
+				for _, row := range []struct {
+					name, source string
+					index        int
+					write        bool
+				}{
+					{"load", op + " value+0(FP)," + bank, 0, false},
+					{"store", op + " " + bank + ",value+0(FP)", 1, true},
+				} {
+					t.Run(arch+"/"+op+"/"+bank+"/"+row.name, func(t *testing.T) {
+						source := "TEXT ·Value(SB),4,$0-64\n" + row.source + "\nRET\n"
+						goAssemblerOracleOutput(t, arch, source, "", true)
+						file, err := Parse(ArchAMD64, source)
+						if err != nil {
+							t.Fatal(err)
+						}
+						ins := file.Funcs[0].Instrs[1]
+						width, write, known := X86FPAccessBytes(ins, row.index, arch)
+						if !known || write != row.write || width != wantWidth {
+							t.Fatalf("official MMX memory row is not observed: width=%d write=%t known=%t", width, write, known)
+						}
+						if width, write, known := X86FPAccessBytes(ins, 1-row.index, arch); known || width != 0 || write {
+							t.Fatal("register acquired an FP access", width, write, known)
+						}
+					})
 				}
-				ins := file.Funcs[0].Instrs[1]
-				width, write, known := X86FPAccessBytes(ins, row.index, arch)
-				if !known || write != row.write || width != 4 {
-					t.Fatalf("official ymovl MMX row is not observed: width=%d write=%t known=%t", width, write, known)
-				}
-			})
+			}
 		}
 	}
 }

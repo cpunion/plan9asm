@@ -61,7 +61,9 @@ func TestX86FPAccessBytesOrderedForms(t *testing.T) {
 func TestX86FPAccessBytesUnknownDoesNotInferPermission(t *testing.T) {
 	for _, instruction := range []string{
 		"ADDQ a+0(FP),BAD", "ADDQ.Z a+0(FP),AX", "ADDQ a+0(FP),b+8(FP)",
-		"MOVQ a+0(FP),BAD", "MOVQ a+0(FP),X0", "MOVOU a+0(FP),Y0",
+		"MOVQ a+0(FP),BAD", "MOVQ a+0(FP),Y0", "MOVOU a+0(FP),Y0",
+		"MOVL a+0(FP),M8", "MOVQ a+0(FP),M8", "MOVD a+0(FP),M8",
+		"VMOVD a+0(FP),M0", "VMOVQ M0,a+0(FP)", "MOVL a+0(FP),M0,M1",
 		"MOVQ a+0(FP),b+8(FP)", "MOVQ $1.0,a+0(FP)", "MOVQ $0x100000000,a+0(FP)",
 		"LEAQ a+0(FP),AX", "MOVQ a+0(FP)(SI*1),AX", "MOVQ $a+0(FP),AX",
 	} {

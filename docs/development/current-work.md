@@ -160,10 +160,15 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    establish the exact historical object/listing identity; LLVM semantic gates
    also remain pending. Synthetic pointer components, incoming writes, padding,
    partial results and unknown effects remain unproved. The width observer now
-   covers the official MOVL MMX memory rows as a separate legacy-bank case,
-   alongside the GP/X transfer rows. The complete 386/amd64 load/store
-   regression is green; MMX state initialization remains intentionally outside
-   that observer proof.
+   covers the official MOVL/MOVQ/MOVD/VMOVD/VMOVQ GP/X memory rows and the
+   separate MOVL/MOVQ/MOVD MMX memory rows. Actual Go accepts MOVQ FP/X on
+   both x86 architectures; its old unknown-form assertion was incorrect.
+   Independent RED gates reproduce four omitted GP/X rows and 64 omitted MMX
+   rows. The complete 20-row GP/X and 96-row M0-M7 load/store matrices pass.
+   An actual Go package additionally checks thirteen occupied declaration
+   types on both architectures, including integers, floats, named types,
+   arrays, structs and complex64. Native width alone does not initialize any
+   bank, authorize parameter writes or prove translation/runtime success.
    Another actual library failure is the normalized raw-byte/AUTO replay join:
    reparsing decoded instruction text loses private decoder identity and comments.
    Test-only `82d046c0` adds an independent raw-times-AUTO regression. Its first
