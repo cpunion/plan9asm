@@ -68,8 +68,8 @@ go_path=$(printf '%s\n' "$readarray_inputs" | sed -n '1p')
 goroot=$(printf '%s\n' "$readarray_inputs" | sed -n '2p')
 source_cases=$(printf '%s\n' "$readarray_inputs" | sed -n '3p')
 family_file=$(printf '%s\n' "$readarray_inputs" | sed -n '4p')
-"$go_path" run "$repo_root/cmd/plan9asmgooracle" \\
-  -cases="$source_cases" -families="$family_file" \\
+"$go_path" run "$repo_root/cmd/plan9asmgooracle" \
+  -cases="$source_cases" -families="$family_file" \
   -go="$go_path" -goroot="$goroot" -out="$oracle_parent/go-oracle"
 accepted_cases="$oracle_parent/go-oracle/accepted.txt"
 

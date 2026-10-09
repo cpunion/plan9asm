@@ -37,6 +37,7 @@ func probe(ctx context.Context, dir string, inputs *inputTransaction, index int,
 	if err != nil || !directory.IsDir() {
 		return fail(fmt.Errorf("owned case directory is missing: %v", err))
 	}
+	item.directory = directory
 	item.Source, item.Object = filepath.Join(dir, "probe.s"), filepath.Join(dir, "probe.o")
 	source := []byte(fmt.Sprintf("#include \"textflag.h\"\nTEXT ·probe%d(SB),NOSPLIT,$0-0\n\t%s\n\tRET\n", index, asm))
 	if err := writeNew(item.Source, source); err != nil {

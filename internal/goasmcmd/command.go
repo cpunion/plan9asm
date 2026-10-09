@@ -43,8 +43,11 @@ type Observation struct {
 // Unix implementations additionally terminate the fresh child's process group.
 func Observe(ctx context.Context, dir string, env []string, name string, args ...string) (Observation, error) {
 	observed := Observation{ExitCode: -1}
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil {
 		return observed, fmt.Errorf("Go object command requires a live context")
+	}
+	if cause := ctx.Err(); cause != nil {
+		return observed, errors.Join(fmt.Errorf("Go object command requires a live context"), cause)
 	}
 	command := exec.CommandContext(ctx, name, args...)
 	command.Dir, command.Env, command.WaitDelay = dir, env, 2*time.Second

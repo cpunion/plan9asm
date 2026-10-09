@@ -38,6 +38,7 @@ type result struct {
 	TimedOut                                bool
 	Stdout, Stderr, Failure                 string
 	guard                                   *gooriginalsrc.Snapshot
+	directory                               os.FileInfo
 }
 
 type report struct {
@@ -135,8 +136,20 @@ func finalize(value *report, inputStable bool, deadline error) {
 }
 
 func retainResult(value *report, caseDir string, item result) error {
-	item.Reported = true
-	err := writeJSON(filepath.Join(caseDir, "result.json"), item)
+	var err error
+	if item.directory == nil {
+		err = fmt.Errorf("case directory never acquired an owned identity")
+	} else {
+		current, statErr := os.Lstat(caseDir)
+		physical, pathErr := filepath.EvalSymlinks(caseDir)
+		if statErr != nil || pathErr != nil || !current.IsDir() || !os.SameFile(item.directory, current) || physical != caseDir {
+			err = fmt.Errorf("case directory identity changed before report")
+		}
+	}
+	if err == nil {
+		item.Reported = true
+		err = writeJSON(filepath.Join(caseDir, "result.json"), item)
+	}
 	if err != nil {
 		item.Reported = false
 		value.ReportFailures++

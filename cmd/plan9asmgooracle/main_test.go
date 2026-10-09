@@ -252,6 +252,7 @@ func TestReportCompletenessIsNotCounting(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := report{Selected: 1}
+	item.directory, _ = os.Lstat(dir)
 	if retainResult(&r, dir, item) == nil {
 		t.Fatal("actual case report write did not fail")
 	}
