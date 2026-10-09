@@ -340,6 +340,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	emitExternFuncDecls(&b, file, resolve, opt.Sigs, opt.WASMABI)
 
 	attrRegistry := newFeatureAttrRegistry()
+	// Build the immutable emitted-storage directory once per file. Repeating
+	// the global/signature scan for each TEXT would be quadratic in a corpus.
+	scalarData := x86LoweredScalarDataReads(file, resolve, opt.Sigs)
 	for i := range file.Funcs {
 		fn := &file.Funcs[i]
 		name := resolve(fn.Sym)
@@ -415,7 +418,8 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 		// The old linear prototype could silently reinterpret wide FP-frame stores
 		// as numeric conversions and leave adjacent aggregate result slots unwritten.
 		if file.Arch == ArchAMD64 {
-			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource, lockScalarNamespace); err != nil {
+			if err := translateFuncX86(&b, *fn, sig, resolve, opt.Sigs, opt.Goarch, opt.TargetTriple, opt.X87Mode, opt.AnnotateSource,
+				x86FunctionSource{scalarData: scalarData, lockNamespace: lockScalarNamespace}); err != nil {
 				return "", fmt.Errorf("%s: %w", name, err)
 			}
 			b.WriteString("\n")
@@ -726,12 +730,7 @@ func emitDataGlobalsWithSigs(b *strings.Builder, file *File, resolve func(string
 	syms := map[string]*symData{}
 
 	resolveData := func(sym string) string {
-		// Heuristic: unqualified plain names in a stdlib .s are package-local.
-		// Reuse ResolveSym's local-name behavior by prefixing a Plan9 middle dot.
-		if strings.Contains(sym, "·") || strings.Contains(sym, "/") || strings.Contains(sym, ".") {
-			return resolve(sym)
-		}
-		return resolve("·" + sym)
+		return resolveAssemblyDataSymbol(sym, resolve)
 	}
 
 	for _, g := range file.Globl {

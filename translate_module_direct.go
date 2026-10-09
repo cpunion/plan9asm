@@ -562,10 +562,7 @@ func emitDataGlobalsModule(mod llvm.Module, file *File, resolve func(string) str
 	}
 	syms := map[string]*symData{}
 	resolveData := func(sym string) string {
-		if strings.Contains(sym, "·") || strings.Contains(sym, "/") || strings.Contains(sym, ".") {
-			return resolve(sym)
-		}
-		return resolve("·" + sym)
+		return resolveAssemblyDataSymbol(sym, resolve)
 	}
 	for _, g := range file.Globl {
 		readOnly, err := globlReadOnly(g.Flags)

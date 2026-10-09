@@ -27,6 +27,8 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 	}
 	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch,
 		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			state.loweredStaticReads = c.fpScalarData
+			defer func() { state.loweredStaticReads = nil }()
 			form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, arch)
 			if known && err == nil && form.memory == 0 && form.source.Kind == OpMem &&
 				x86LegacyPackedMoveOrdinaryNativeMemory(form.source) {

@@ -86,6 +86,7 @@ type amd64Ctx struct {
 	fpResWritten     map[int]bool     // result index -> whether written via +off(FP)
 	fpResAddrTaken   map[int]bool     // result index -> address of fp_ret_* escaped
 	fpScalarSource   Func             // source for all-path checks of new scalar result views
+	fpScalarData     map[string]int64 // exact SB spelling -> available emitted numerical bytes
 	fpScalarChecked  bool
 	fpScalarCheckErr error
 }
@@ -2255,12 +2256,7 @@ func (c *amd64Ctx) ptrFromSB(sym string) (ptr string, err error) {
 	if !ok {
 		return "", fmt.Errorf("invalid (SB) sym ref: %q", sym)
 	}
-	res := base
-	if strings.Contains(base, "·") || strings.Contains(base, "/") || strings.Contains(base, ".") {
-		res = c.resolve(base)
-	} else {
-		res = c.resolve("·" + base)
-	}
+	res := resolveAssemblyDataSymbol(base, c.resolve)
 	p := llvmGlobal(res)
 	if continuation, ok := c.continuations[res]; ok {
 		if off != 0 {

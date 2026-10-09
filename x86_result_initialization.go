@@ -285,11 +285,17 @@ type x86ResultState struct {
 	pointerFP map[int64]bool // immutable after deriving the actual ABI0 layout
 	pointerGP [16]bool
 	shapeOnly bool // source-wide effect validation, never a reaching state
+
+	// Installed only for one lowering transfer over the actual emitted DATA.
+	// It is cleared before a CFG state can escape and never supplies a native
+	// caller, raw-return, pointer or declaration-only query permission.
+	loweredStaticReads map[string]int64
 }
 
 func (state x86ResultState) clone() x86ResultState {
 	state.fp = append([]bool(nil), state.fp...)
 	state.auto = append([]bool(nil), state.auto...)
+	state.loweredStaticReads = nil
 	return state
 }
 
@@ -337,6 +343,8 @@ func x86ResultGP(reg Reg, width int64, arch string) (int, uint8, bool) {
 
 func x86ResultRead(arg Operand, width int64, state *x86ResultState, owned []bool, arch string) bool {
 	switch arg.Kind {
+	case OpSym:
+		return width > 0 && state.loweredStaticReads[arg.Sym] >= width
 	case OpImm:
 		return arg.ImmRaw == "" && !arg.ImmIsFloat
 	case OpReg:
