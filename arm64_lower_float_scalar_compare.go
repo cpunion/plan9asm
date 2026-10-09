@@ -5,34 +5,52 @@ import (
 	"strings"
 )
 
-func (c *arm64Ctx) lowerARM64ScalarFloatCompare(op Op, ins Instr) (ok bool, terminated bool, err error) {
+type arm64ScalarCompareForm struct {
+	bits        int
+	signaling   bool
+	left, right Reg // Empty right means the architecture's immediate zero.
+}
+
+func parseARM64ScalarCompare(op Op, ins Instr) (arm64ScalarCompareForm, bool, error) {
 	switch op {
 	case "FCMPS", "FCMPD", "FCMPES", "FCMPED":
 	default:
-		return false, false, nil
+		return arm64ScalarCompareForm{}, false, nil
 	}
 	if strings.ToUpper(string(ins.Op)) != string(op) || len(ins.Args) != 2 ||
 		ins.Args[1].Kind != OpReg || !isARM64FReg(ins.Args[1].Reg) ||
 		!arm64ScalarFloatCompareSource(ins.Args[0]) {
-		return true, false, fmt.Errorf("arm64 %s expects Fsrc or $(0.0), Fdst and no suffix: %q", op, ins.Raw)
+		return arm64ScalarCompareForm{}, true, fmt.Errorf("arm64 %s expects Fsrc or $(0.0), Fdst and no suffix: %q", op, ins.Raw)
 	}
 
 	bits := 64
 	if op == "FCMPS" || op == "FCMPES" {
 		bits = 32
 	}
-	right := ""
+	form := arm64ScalarCompareForm{bits: bits, signaling: op == "FCMPES" || op == "FCMPED", left: ins.Args[1].Reg}
 	if ins.Args[0].Kind == OpReg {
-		right, err = c.loadARM64ScalarFloatReg(ins.Args[0].Reg, bits)
+		form.right = ins.Args[0].Reg
+	}
+	return form, true, nil
+}
+
+func (c *arm64Ctx) lowerARM64ScalarFloatCompare(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	form, matched, err := parseARM64ScalarCompare(op, ins)
+	if !matched || err != nil {
+		return matched, false, err
+	}
+	right := ""
+	if form.right != "" {
+		right, err = c.loadARM64ScalarFloatReg(form.right, form.bits)
 		if err != nil {
 			return true, false, err
 		}
 	}
-	left, err := c.loadARM64ScalarFloatReg(ins.Args[1].Reg, bits)
+	left, err := c.loadARM64ScalarFloatReg(form.left, form.bits)
 	if err != nil {
 		return true, false, err
 	}
-	c.emitARM64ScalarFloatCompare(bits, op == "FCMPES" || op == "FCMPED", left, right)
+	c.emitARM64ScalarFloatCompare(form.bits, form.signaling, left, right)
 	return true, false, nil
 }
 

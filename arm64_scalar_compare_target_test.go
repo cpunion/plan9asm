@@ -94,3 +94,56 @@ func TestARM64ScalarCompareTargetKeepsMalformedSourcePriority(t *testing.T) {
 		}
 	}
 }
+
+func TestARM64ScalarCompareTargetKeepsNativeAndOrdinaryForms(t *testing.T) {
+	const source = "TEXT comparison(SB),4,$0-0\nFCMPS F0,F1\nFCMPED $(-1.25),F31\nWORD $0x1ee02000\nRET\n"
+	for _, api := range []string{"text", "module", "Go"} {
+		for _, triple := range []string{"aarch64-unknown-linux-gnu", "aarch64-apple-darwin", "arm64-apple-darwin", "aarch64-pc-windows-msvc"} {
+			present, err := arm64CompareTargetAPI(t, api, source, triple)
+			if !present || err != nil {
+				t.Fatalf("%s explicit native %s rejected: %v", api, triple, err)
+			}
+		}
+		for _, triple := range []string{"", "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"} {
+			present, err := arm64CompareTargetAPI(t, api, "TEXT comparison(SB),4,$0-0\nRET\n", triple)
+			if !present || err != nil {
+				t.Fatalf("%s non-family portability changed: %v", api, err)
+			}
+		}
+	}
+	file, err := Parse(ArchARM64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, goarch := range []string{"amd64", "386", "arm", "wasm"} {
+		if err := validateARM64ScalarCompareTarget(file, Options{Goarch: goarch, TargetTriple: "aarch64-unknown-linux-gnu"}); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Fatalf("native target accepted conflicting GOARCH=%s: %v", goarch, err)
+		}
+	}
+}
+
+func TestARM64ScalarCompareTargetLeavesUnidentifiedWordsToGenericValidation(t *testing.T) {
+	for _, operands := range [][]Operand{
+		nil,
+		{{Kind: OpImm, Imm: 1}, {Kind: OpImm, Imm: 2}},
+		{{Kind: OpReg, Reg: "R0"}},
+		{{Kind: OpImm, ImmRaw: "$(COMPARE_OPCODE)"}},
+		{{Kind: OpImm, ImmRaw: "$(COMPARE_BASE | (31 << 5))"}},
+		{{Kind: OpImm, ImmIsFloat: true}},
+		{{Kind: OpImm, Imm: 0xd503201f}}, // NOP, outside the compare class.
+	} {
+		file, err := Parse(ArchARM64, "TEXT comparison(SB),4,$0-0\nWORD $0\nRET\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if file.Funcs[0].Instrs[1].Op != OpWORD {
+			t.Fatal("fixture no longer selects the WORD instruction")
+		}
+		file.Funcs[0].Instrs[1].Args = operands
+		for _, triple := range []string{"", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"} {
+			if err := validateARM64ScalarCompareTarget(file, Options{TargetTriple: triple}); err != nil {
+				t.Fatalf("compare preflight claimed unrelated WORD operands %+v: %v", operands, err)
+			}
+		}
+	}
+}
