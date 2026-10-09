@@ -19,17 +19,29 @@ checks are not passes. Batch verified repairs before another push.
 
 ## Frozen evidence and development branch
 
-The complete ordinary module run at `2ae09eb7` naturally closed **failed**.
-All eight root parts, corpus/rest owners and aggregate finished; no timeout or
-cleanup failure obscures its source/SDK/tool-stable result. Its 54 failed root
-tests, 34 failed corpus-driver roots and four failed gotoolprofile roots remain
-regressions. Do not overwrite this checkout or its original reports.
+The complete ordinary module run at `7842042a` naturally closed **failed**.
+All eight root parts, corpus/rest owners and aggregate finished without timeout
+or cleanup failure. The complete root inventory is 5,353, not the raw listing's
+line count: 5,313 pass, 39 explicit cross-runtime skips and one failure.
+The corpus-driver passes 652 roots and 2,524 children; all eighteen remaining
+packages pass 589 roots and 3,687 children. The aggregate correctly rejects the
+failed root part. Independent root raw/inventory and terminal input/owner audits
+retain the failure; they are not a passing full-module certificate.
 
-The next integration branch is `codex/pr40-ci-family-successor-20261009`, based
-on `cddbc85e`. Latest upstream main `e2164ac0` is already its ancestor. This is
-still development integration, not a verified combined head. Keep component
-worktrees frozen; inspect actual commits before starting gates. Earlier passes
-establish only their exact component revisions:
+The sole failed root is
+`TestGoAssemblerOracleARM64BranchListingRejectsUnboundMetadata`: its old negative
+fixture rejects the historical four-class format, which the matcher intentionally
+supports. Test-only `d97a6c41` replaces that negative with a three-class record and
+adds explicit four-/five-class positives. Its complete four-root scope passes
+128 ordinary, 128 race and 126 actual Go-1.20 nodes, all independently rechecked.
+This does not transfer a full-module pass to a changed HEAD.
+
+The next integration branch is `codex/pr40-ci-integration-20261009`, based on
+`d97a6c41`. Preserve frozen `7842042a`, its original reports, and all component
+worktrees. Latest upstream main `e2164ac0` is already an ancestor. This is still
+development integration, not a verified combined head. The earlier `2ae09eb7`
+full failure also remains preserved. Earlier passes establish only their exact
+component revisions:
 
 - `4617d12d`: complete explicit IMUL source/caller family, zero-operand
   diagnostics, actual ARM64 lazy-tool routes and backend physical-source prefix.
@@ -131,6 +143,19 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    EOF, inventories, source/tools/binaries and owned processes independently.
 3. Repair remaining failures in separate persistent successors. Do not rewrite
    a running snapshot or turn incomplete/killed scopes into success.
+   The next corpus-driver rule class is a known integer input's occupied narrow
+   MOVB/W/L read on 386/amd64. Test-only `39a92596` fixes its three-root, 64-node
+   inventory and retains actual Go-object/listing and complete combined lint
+   output. Its first launch fails in the input worker's Go-template escaping,
+   before compilation or test execution: this is setup failure, not a TDD RED.
+   Preserve that run and use a separate helper successor. Establish a real RED
+   before changing the filter. Synthetic pointer components, incoming writes,
+   padding, partial results and unknown effects remain unproved.
+   Another actual library failure is the normalized raw-byte/AUTO replay join:
+   reparsing decoded instruction text loses private decoder identity and comments.
+   Add an independent raw-times-AUTO regression and repair a private complete
+   original-byte/order/boundary join, not a broad DeepEqual bypass or new native
+   permission. Neither rule class is fixed or library-verified yet.
 4. Continue the SDK numerical source/object seam, dynamic reflect frames,
    native entry/TLS/continuations and full result/body contracts by typed rule
    class. The old go-fuse LoadUint16 failure remains a real ARM64 result-tail
@@ -159,10 +184,16 @@ entries until every consumer and independent reader closes. A prior cache size
 or manifest does not authenticate its current bytes. Dispose LLVM modules before
 Contexts and serialize heavy full-suite/container gates when resources are tight.
 
-The committed inventory reaches the requested cutoff, but newer remote records
-are not synchronized. Inspect its actual writer, manifest and journal before
-importing; never duplicate a writer or replace its live binary. Status, lookup
-and publication stream sharded records rather than loading the ledger payload.
+The committed inventory reaches the requested cutoff. A fresh read-only remote
+check finds no active scanner/controller or held writer lock; the historical
+service exited successfully at the cutoff. Newer incremental records have been
+synchronized into the independent inventory, not this contribution. Its manifest
+ranges are contiguous and extend the committed prefix, but only the cutoff and
+latest traffic journal endpoints have been independently checked. Raw historical
+versions and normalized latest-per-path candidates differ. Inspect those exact
+inputs before importing; never duplicate a writer or replace its live binary.
+Status, lookup and publication stream sharded records rather than loading the
+ledger payload. cgo records remain outside this repository.
 
 The assembly ledger is incomplete and unverified. Only automatic publication
 of complete, matching source/scan/tool/file/target/profile/consumer proofs may
