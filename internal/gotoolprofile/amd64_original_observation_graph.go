@@ -160,8 +160,14 @@ func captureAMD64OriginalGraph(ctx context.Context, request AMD64OriginalObserva
 		if err := replayAMD64OriginalSelection(pkg, dir, profile); err != nil {
 			return nil, err
 		}
-		if err := captureAMD64OriginalCPP(pkg, base, actual["GOROOT"], profile, files); err != nil {
-			return nil, err
+		if pkg.Standard {
+			if err := captureAMD64OriginalSDKDependency(pkg, actual["GOROOT"], profile, files); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := captureAMD64OriginalCPP(pkg, base, actual["GOROOT"], profile, files); err != nil {
+				return nil, err
+			}
 		}
 		if export && path != "unsafe" {
 			cache, cacheErr := filepath.EvalSymlinks(actual["GOCACHE"])

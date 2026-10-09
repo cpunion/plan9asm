@@ -34,6 +34,9 @@ func amd64OriginalObservationFixture(t *testing.T, variant string) AMD64Original
 		source += "func Reference(a uint64) uint64 { return a + 1 }\n"
 	} else if variant == "import" {
 		source = "package observation\nimport _ \"math/bits\"\nfunc Value(a uint64) uint64\n"
+	} else if variant == "sdk-import" {
+		source = "package observation\nimport \"errors\"\nfunc Value(a uint64) uint64\n" +
+			"func Error() error { return errors.New(\"first-party witness\") }\n"
 	}
 	files := map[string]string{
 		filepath.Join(root, "go.mod"):  "module example.invalid/observation\ngo 1.20\n",
@@ -111,9 +114,14 @@ func TestAMD64OriginalObservationActualFourRoles(t *testing.T) {
 }
 
 func TestAMD64OriginalObservationActualSelectionNegatives(t *testing.T) {
-	for _, name := range []string{"roundtrip control", "paired ASM deletion", "paired Go deletion", "module version", "module language", "module replacement", "foreign dependency", "nonstandard dependency", "wrong physical root", "missing export", "unknown ImportMap", "Cgo", "test", "embed", "unknown diagnostic"} {
+	for _, name := range []string{"roundtrip control", "paired ASM deletion", "paired Go deletion", "module version", "module language", "module replacement", "foreign dependency", "nonstandard dependency", "wrong physical root", "missing export", "unknown ImportMap", "Cgo", "test", "embed", "unknown diagnostic",
+		"SDK roundtrip control", "SDK nonstandard", "SDK module", "SDK physical root", "SDK Go deletion", "SDK ASM deletion", "SDK missing export"} {
 		t.Run(name, func(t *testing.T) {
-			request := amd64OriginalObservationFixture(t, "data")
+			variant := "data"
+			if strings.HasPrefix(name, "SDK ") {
+				variant = "sdk-import"
+			}
+			request := amd64OriginalObservationFixture(t, variant)
 			ctx, cancel := amd64OriginalObservationContext(t)
 			defer cancel()
 			changed := false
@@ -143,7 +151,11 @@ func TestAMD64OriginalObservationActualSelectionNegatives(t *testing.T) {
 					if err != nil {
 						return nil, nil, err
 					}
-					if pkg.ImportPath == request.PackagePath {
+					target := request.PackagePath
+					if strings.HasPrefix(name, "SDK ") {
+						target = "runtime"
+					}
+					if pkg.ImportPath == target {
 						changed = true
 						switch name {
 						case "paired ASM deletion":
@@ -174,6 +186,18 @@ func TestAMD64OriginalObservationActualSelectionNegatives(t *testing.T) {
 							pkg.EmbedFiles = []string{"value.go"}
 						case "unknown diagnostic":
 							stderr = []byte("unregistered successful diagnostic\n")
+						case "SDK nonstandard":
+							pkg.Standard = false
+						case "SDK module":
+							pkg.Module = &amd64OriginalListModule{Path: "runtime", Dir: pkg.Dir, Main: true}
+						case "SDK physical root":
+							pkg.Dir = request.Directory
+						case "SDK Go deletion":
+							pkg.GoFiles, pkg.CompiledGoFiles = nil, nil
+						case "SDK ASM deletion":
+							pkg.SFiles = nil
+						case "SDK missing export":
+							pkg.Export = ""
 						}
 					}
 					// Preserve the actual Go fields/omissions. Encoding the modeled
@@ -205,7 +229,7 @@ func TestAMD64OriginalObservationActualSelectionNegatives(t *testing.T) {
 			if observed != nil {
 				defer observed.Close()
 			}
-			if name == "roundtrip control" {
+			if name == "roundtrip control" || name == "SDK roundtrip control" {
 				if err != nil || observed == nil || !changed {
 					t.Fatalf("actual Go JSON no-change replay failed: %v", err)
 				}

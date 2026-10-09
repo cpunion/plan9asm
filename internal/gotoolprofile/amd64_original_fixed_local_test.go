@@ -292,7 +292,7 @@ func TestAMD64OriginalFixedLocalResolverMayCloseOwner(t *testing.T) {
 }
 
 func TestAMD64OriginalFixedLocalBroaderObservationRetainsFactoryContext(t *testing.T) {
-	for _, role := range []string{"nested", "bodyful", "import", "data", "sibling", "pointer"} {
+	for _, role := range []string{"nested", "bodyful", "import", "sdk-import", "data", "sibling", "pointer"} {
 		t.Run(role, func(t *testing.T) {
 			request := amd64OriginalObservationFixture(t, role)
 			if role == "pointer" {
@@ -346,7 +346,7 @@ func TestAMD64OriginalFixedLocalBroaderObservationRetainsFactoryContext(t *testi
 				ResolveSym: func(symbol string) string { return strings.Replace(symbol, "·", pkg.Path+".", 1) },
 				Sigs:       map[string]plan9asm.FuncSig{sig.Name: sig}}
 			bound, binding, err := observed.BindFixedLocal(ctx, pkg, file, "value_amd64.s", options)
-			if role == "bodyful" || role == "import" {
+			if role == "bodyful" || role == "import" || role == "sdk-import" {
 				// Complete ordinary declarations are independently compiled and
 				// rechecked. They add no native permission beyond this actual
 				// numeric frame and its existing full-source proof.
