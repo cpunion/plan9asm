@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -21,14 +22,17 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		{"coverage", "coverage) timeout=45m; flags=(-coverprofile=coverage-root.out)"},
 	} {
 		job, found := ciWorkflowJob(string(data), item.job)
-		command := "bash scripts/test-module-ci.sh " + item.job + " execute ${{ matrix.module-owner }}"
+		command := "bash scripts/test-module-ci.sh " + item.job + " execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}"
 		if !found || !strings.Contains(job, command) || !strings.Contains(string(script), item.flags) {
 			t.Errorf("%s must keep the complete actual module inventory/flags using bounded partition ownership", item.job)
 		}
-		for _, required := range []string{"module-owner: [0, 1, 2]", "fail-fast: false", "actions/upload-artifact@v6"} {
+		for _, required := range []string{"module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]", "fail-fast: false", "actions/upload-artifact@v6"} {
 			if !strings.Contains(job, required) {
 				t.Errorf("%s missing exhaustive scheduling/artifact requirement %q", item.job, required)
 			}
+		}
+		if strings.Contains(job, "module-owner: [") || strings.Contains(job, "max-parallel:") || strings.Contains(job, "continue-on-error:") {
+			t.Errorf("%s repeats package owners or masks/limits scheduling", item.job)
 		}
 	}
 	aggregate, found := ciWorkflowJob(string(data), "module-completion")
@@ -36,7 +40,13 @@ func TestCIModuleSuitesKeepExhaustiveUnixAndWindowsRoles(t *testing.T) {
 		!strings.Contains(aggregate, "owner-0000") || !strings.Contains(aggregate, "owner-0001") || !strings.Contains(aggregate, "owner-0002") {
 		t.Error("missing mandatory complete cross-owner readback")
 	}
-	for _, required := range []string{"-module -out=", "-shards=32 -workers=2", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
+	for part := 0; part < 8; part++ {
+		if !strings.Contains(aggregate, fmt.Sprintf("Download root part %d", part)) ||
+			!strings.Contains(aggregate, fmt.Sprintf("-owners/owner-0000/part-%04d", part)) {
+			t.Errorf("missing exact root part %d download", part)
+		}
+	}
+	for _, required := range []string{"-module -out=", "-shards=32 -workers=2", "root_partitions=8", "-module-root-partitions=$root_partitions", "-verify-module=_out/module-$flavor-owners", "go run ./cmd/plan9asmtest"} {
 		if !strings.Contains(string(script), required) {
 			t.Errorf("module driver changed complete inventory/scheduling: %s", required)
 		}

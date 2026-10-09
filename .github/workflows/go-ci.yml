@@ -615,7 +615,7 @@ jobs:
 
   test:
     needs: discovered_library_priority
-    name: test (${{ matrix.os }}, ${{ matrix.go-version }}, owner ${{ matrix.module-owner }})
+    name: test (${{ matrix.os }}, ${{ matrix.go-version }}, ${{ matrix.module-role }})
     timeout-minutes: 60
     permissions:
       contents: read
@@ -627,14 +627,24 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         go-version: ['1.20.x', '1.21.x', '1.22.x', '1.23.x', '1.24.x', '1.25.x', '1.26.x', '1.27.x']
-        module-owner: [0, 1, 2]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
         include:
+          - {module-role: root-0, module-owner: 0, root-partition: 0}
+          - {module-role: root-1, module-owner: 0, root-partition: 1}
+          - {module-role: root-2, module-owner: 0, root-partition: 2}
+          - {module-role: root-3, module-owner: 0, root-partition: 3}
+          - {module-role: root-4, module-owner: 0, root-partition: 4}
+          - {module-role: root-5, module-owner: 0, root-partition: 5}
+          - {module-role: root-6, module-owner: 0, root-partition: 6}
+          - {module-role: root-7, module-owner: 0, root-partition: 7}
+          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: other, module-owner: 2, root-partition: -1}
           - {os: ubuntu-latest, runner: [qiniu, ubuntu-24.04-large], nested_modules: false}
           - {go-version: '1.24.x', nested_modules: true}
           - {go-version: '1.25.x', nested_modules: true}
           - {go-version: '1.26.x', nested_modules: true}
           - {go-version: '1.27.x', nested_modules: true}
-          - {os: windows-latest, go-version: '1.27.x', module-owner: 2, nested_modules: true}
+          - {os: windows-latest, go-version: '1.27.x', module-role: other, module-owner: 2, root-partition: -1, nested_modules: true}
 
     steps:
       - name: Checkout
@@ -676,7 +686,7 @@ jobs:
 
       - name: Go test (Ubuntu)
         if: runner.os != 'Windows'
-        run: bash scripts/test-module-ci.sh test execute ${{ matrix.module-owner }}
+        run: bash scripts/test-module-ci.sh test execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
 
       - name: Required exact downloaded AMD64 numerical fixture
         if: runner.os == 'Linux' && matrix.go-version == '1.27.x' && matrix.module-owner == 2
@@ -692,7 +702,7 @@ jobs:
         if: ${{ !cancelled() && runner.os != 'Windows' }}
         uses: actions/upload-artifact@v6
         with:
-          name: module-test-${{ matrix.go-version }}-${{ matrix.module-owner }}
+          name: module-test-${{ matrix.go-version }}-${{ matrix.module-role }}
           path: _out/module-test/
           if-no-files-found: error
 
@@ -807,12 +817,24 @@ jobs:
 
   race:
     needs: discovered_library_priority
+    name: race (${{ matrix.module-role }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        module-owner: [0, 1, 2]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
+        include:
+          - {module-role: root-0, module-owner: 0, root-partition: 0}
+          - {module-role: root-1, module-owner: 0, root-partition: 1}
+          - {module-role: root-2, module-owner: 0, root-partition: 2}
+          - {module-role: root-3, module-owner: 0, root-partition: 3}
+          - {module-role: root-4, module-owner: 0, root-partition: 4}
+          - {module-role: root-5, module-owner: 0, root-partition: 5}
+          - {module-role: root-6, module-owner: 0, root-partition: 6}
+          - {module-role: root-7, module-owner: 0, root-partition: 7}
+          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: other, module-owner: 2, root-partition: -1}
 
     steps:
       - name: Checkout
@@ -834,24 +856,36 @@ jobs:
           node-version: '22'
 
       - name: Go test (race)
-        run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }}
+        run: bash scripts/test-module-ci.sh race execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
 
       - name: Retain complete module race owner evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
-          name: module-race-1.27.x-${{ matrix.module-owner }}
+          name: module-race-1.27.x-${{ matrix.module-role }}
           path: _out/module-race/
           if-no-files-found: error
 
   coverage:
     needs: discovered_library_priority
+    name: coverage (${{ matrix.module-role }})
     runs-on: ${{ github.repository_owner == 'xgo-dev' && fromJSON('["qiniu", "ubuntu-24.04-large"]') || 'ubuntu-latest' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        module-owner: [0, 1, 2]
+        module-role: [root-0, root-1, root-2, root-3, root-4, root-5, root-6, root-7, corpus, other]
+        include:
+          - {module-role: root-0, module-owner: 0, root-partition: 0}
+          - {module-role: root-1, module-owner: 0, root-partition: 1}
+          - {module-role: root-2, module-owner: 0, root-partition: 2}
+          - {module-role: root-3, module-owner: 0, root-partition: 3}
+          - {module-role: root-4, module-owner: 0, root-partition: 4}
+          - {module-role: root-5, module-owner: 0, root-partition: 5}
+          - {module-role: root-6, module-owner: 0, root-partition: 6}
+          - {module-role: root-7, module-owner: 0, root-partition: 7}
+          - {module-role: corpus, module-owner: 1, root-partition: -1}
+          - {module-role: other, module-owner: 2, root-partition: -1}
     permissions:
       contents: read
       id-token: write
@@ -876,13 +910,13 @@ jobs:
           node-version: '22'
 
       - name: Go test with coverage
-        run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }}
+        run: bash scripts/test-module-ci.sh coverage execute ${{ matrix.module-owner }} ${{ matrix.root-partition }}
 
       - name: Retain complete module coverage owner evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
         with:
-          name: module-coverage-1.27.x-${{ matrix.module-owner }}
+          name: module-coverage-1.27.x-${{ matrix.module-role }}
           path: _out/module-coverage/
           if-no-files-found: error
 
@@ -937,22 +971,64 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - name: Download root owner
+      - name: Download root part 0
         uses: actions/download-artifact@v8
         with:
-          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-0
-          path: _out/module-${{ matrix.flavor }}-owners/owner-0000
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-0
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0000
+      - name: Download root part 1
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-1
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0001
+      - name: Download root part 2
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-2
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0002
+      - name: Download root part 3
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-3
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0003
+      - name: Download root part 4
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-4
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0004
+      - name: Download root part 5
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-5
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0005
+      - name: Download root part 6
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-6
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0006
+      - name: Download root part 7
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@v8
+        with:
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-root-7
+          path: _out/module-${{ matrix.flavor }}-owners/owner-0000/part-0007
       - name: Download corpus owner
         if: ${{ !cancelled() }}
         uses: actions/download-artifact@v8
         with:
-          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-1
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-corpus
           path: _out/module-${{ matrix.flavor }}-owners/owner-0001
       - name: Download remaining-package owner
         if: ${{ !cancelled() }}
         uses: actions/download-artifact@v8
         with:
-          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-2
+          name: module-${{ matrix.flavor }}-${{ matrix.go-version }}-other
           path: _out/module-${{ matrix.flavor }}-owners/owner-0002
       - name: Check complete actual module inventory and coverage
         if: ${{ !cancelled() }}

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One actual main-module inventory, three exhaustive scheduling owners. Nested
-# CLI modules keep their independent workflow steps; Windows does not use this.
+# One actual main-module inventory: eight root parts, corpus and rest once.
+# Nested CLI modules keep their independent steps; Windows does not use this.
 flavor=${1:?test, race or coverage required}
 phase=${2:?execute or complete required}
 flags=()
+root_partitions=8
 case "$flavor" in
   test) timeout=45m ;;
   race) timeout=60m; flags=(-race) ;;
@@ -18,14 +19,19 @@ if [[ -n "${GOFLAGS:-}" ]]; then
 fi
 export GOFLAGS= GOENV=off GOWORK=off GOTOOLCHAIN=local GOMAXPROCS=2
 mkdir -p _out
-args=(-module -out="_out/module-$flavor" -shards=32 -workers=2 "-timeout=$timeout")
+args=(-module -out="_out/module-$flavor" -shards=32 -workers=2
+  "-timeout=$timeout" "-module-root-partitions=$root_partitions")
 case "$phase" in
   execute)
-    if [[ $# != 3 || ! $3 =~ ^[012]$ ]]; then
-      echo "execute requires exactly one owner 0, 1 or 2" >&2
+    if [[ $# != 4 || ! $3 =~ ^[012]$ ]]; then
+      echo "execute requires one owner and its root part (or -1)" >&2
       exit 1
     fi
-    args+=("-module-owner=$3")
+    if [[ $3 == 0 && ! $4 =~ ^[0-7]$ ]] || [[ $3 != 0 && $4 != -1 ]]; then
+      echo "root owner requires part 0..7; corpus/rest require -1" >&2
+      exit 1
+    fi
+    args+=("-module-owner=$3" "-module-root-partition=$4")
     ;;
   complete)
     if [[ $# != 2 ]]; then
@@ -33,7 +39,8 @@ case "$phase" in
       exit 1
     fi
     args=(-module -out="_out/module-$flavor-verified" -shards=32 -workers=2
-      "-timeout=$timeout" "-verify-module=_out/module-$flavor-owners")
+      "-timeout=$timeout" "-module-root-partitions=$root_partitions"
+      "-verify-module=_out/module-$flavor-owners")
     ;;
   *) echo "unknown module suite phase" >&2; exit 1 ;;
 esac

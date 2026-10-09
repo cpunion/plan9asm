@@ -27,10 +27,13 @@ Selected cross-runtime CI owners remain serial and reject `-workers` above one.
 
 ## Complete main-module CI suites
 
-Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three owners
-share the complete actual `go list -json ./...` package inventory: owner zero
-runs the root, owner one runs `cmd/plan9asmcorpus`, and owner two runs every
-other package. Root and corpus use 32 partitions and two workers. Every other
+Unix test/race/coverage CI uses `scripts/test-module-ci.sh`. Its three package
+owners share the complete actual `go list -json ./...` package inventory:
+owner zero runs the root, owner one runs `cmd/plan9asmcorpus`, and owner two
+runs every other package. CI splits only owner zero into eight jobs. Part `p`
+owns global shard indices `i` where `i % 8 == p`, retaining the original
+32-shard plan and two-worker limit. Corpus and other packages execute once;
+they are not repeated for each root part. Every other
 package runs complete ordinary `go test` without `-run`, including packages
 with no tests or only benchmarks/TestMain. Every package has its own actual
 `-list=.` receipt, including runnable examples/fuzz targets and separately
@@ -39,22 +42,40 @@ existing independent workflow steps remain required. Windows keeps its full
 suites and does not use this scheduling mechanism.
 
 ```sh
-# Each command is an independent CI owner, not three concurrent local jobs.
-bash scripts/test-module-ci.sh race execute 0
-bash scripts/test-module-ci.sh race execute 1
-bash scripts/test-module-ci.sh race execute 2
-# Download each owner's artifacts into owner-0000/1/2, then independently check:
+# Each command is a separate CI job, not concurrent local invocations.
+bash scripts/test-module-ci.sh race execute 0 0
+# Run root parts 1..7 as separate jobs with owner 0 and their exact part number.
+bash scripts/test-module-ci.sh race execute 1 -1
+bash scripts/test-module-ci.sh race execute 2 -1
+# Download root-p artifacts into owner-0000/part-000p, and corpus/rest into
+# owner-0001 and owner-0002. All ten roles are required for completion.
 bash scripts/test-module-ci.sh race complete
 ```
 
-The completion job uses fresh source/SDK/tool/full-environment and package
-observations, then rereads every package's original inventory, exact command,
-raw JSON root/child terminals and per-package coverage. Artifact directories
+Root fragments use schema 2 `partition.json` and the distinct
+`actual_go_complete_module_root_parts_v2` module protocol. They retain the
+complete root list and all 32 global shard entries. Unassigned shards are
+`not_owned`, with no command, terminal or coverage artifact. A fragment is
+`completed_owned` or `completed_empty`, never a complete package pass. Empty
+assigned shards likewise do not receive executing-test credit.
+
+The completion job uses fresh source/SDK/tool/full-environment, package and
+complete root `-list=.` observations, then rereads every package's original
+inventory, exact command, raw JSON root/child terminals and coverage. It
+recomputes global ownership and requires the complete disjoint 32-shard union;
+paired report/log deletions cannot shrink the fresh denominator. Artifact directories
 may move; executable/tool/source identities and environment semantics may not.
 Unknown, duplicate, missing, partial or foreign results fail. Tests that skip
 remain explicit skip counters and `completed_with_skips`, never passed roots.
 Any package failure is sticky while all other packages continue. Cancellation
 retains pending/missing entries and owned subprocess cleanup.
+
+A root with no tests or only benchmarks has one actual unfiltered execution,
+owned only by part zero; other parts retain their actual listing observations
+but execute no shard. These package executions do not invent named test passes.
+Go's listing command itself enters package initialization and `TestMain` when
+present, so this is not a claim that `TestMain` runs only once across jobs.
+Benchmarks remain listed but are never executed without `-bench`.
 
 Module scope also binds the actual Node interpreter, independently selected
 LLVM 22 wasm linker, selected SDK's complete wasm runtime directory, and
@@ -68,8 +89,10 @@ not captured; their absent/empty values are recorded in the environment scope.
 
 Coverage combines the checked profiles of **all** main-module packages, not
 just the root. Mode, statement counts, overlaps and counter overflow are
-validated. Owners never publish the uploadable module coverage file; only
-successful complete aggregation creates it. The original 45m test/coverage
+validated. Owners never publish the uploadable module coverage file. Each root
+fragment checks its own raw profiles into `partition.cover`; only successful
+complete aggregation checks the full root profile union, combines all packages
+and creates the uploadable module file. The original 45m test/coverage
 and 60m race per-command budgets are unchanged, as are race/coverage flags.
 Independent owners avoid sharing a single job's wall-clock budget. This is
 not evidence that any particular giant test completes within that budget.
