@@ -510,10 +510,15 @@ func amd64ConformanceLLVMRuntime(t *testing.T, execution x86FloatCompareExecutio
 	if strings.Contains(ll, `asm sideeffect "ud2"`) {
 		t.Fatal("numeric conformance fixture contains an architectural trap; preserve it in the separate expected-fault oracle")
 	}
-	// All original assembly still reaches the LLVM object. Only execution of
-	// the native Z conversion is split; its full original assertions are run
-	// by the required native AVX512 counterpart, alongside original Go.
-	mainC := fmt.Sprintf("#define PLAN9ASM_CONFORMANCE_NATIVE_WIDE %d\n", x86FloatAddSubBoolInt(nativeWide)) + `
+	// Every source function reaches the LLVM object on both execution axes.
+	// Only native aligned moves and wide conversions require AVX512 execution;
+	// their complete assertions also run against the original Go object there.
+	execution.compileAndRunLLVM(t, "amd64_conformance", ll, amd64ConformanceRuntimeC(nativeWide), "-O2")
+	t.Logf("complete original assembly object; native-wide runtime=%v, actual transport=%v", nativeWide, execution.prefix)
+}
+
+func amd64ConformanceRuntimeC(nativeWide bool) string {
+	return fmt.Sprintf("#define PLAN9ASM_CONFORMANCE_NATIVE_WIDE %d\n", x86FloatAddSubBoolInt(nativeWide)) + `
 #include <stdint.h>
 extern void byteMemory(uint8_t *p, uint8_t value);
 extern void byteFlags(uint8_t *p, uint8_t *flags);
@@ -1172,7 +1177,8 @@ int main(void) {
 		for (int lane = 0; lane < 4; lane++)
 			if (variable_permute_out[4*block+lane] != permute_variable[lane]) return 372 + block;
 	}
-	uint8_t move_src[64], move_old[64], move_vex_out[128] = {0}, move_mask_out[688] = {0};
+	_Alignas(64) uint8_t move_src[64], move_old[64];
+	uint8_t move_vex_out[128] = {0};
 	for (int i = 0; i < 64; i++) {
 		move_src[i] = (uint8_t)(3 + 17*i);
 		move_old[i] = (uint8_t)(0xf0 - 3*i);
@@ -1181,7 +1187,17 @@ int main(void) {
 	for (int block = 0; block < 4; block++)
 		for (int i = 0; i < 32; i++)
 			if (move_vex_out[32*block+i] != move_src[i]) return 374 + block;
+#if PLAN9ASM_CONFORMANCE_NATIVE_WIDE
+	// X stores need 16-byte alignment. Z stores at offsets 432 and 624
+	// need a base congruent to 16 modulo 64, not a 64-aligned base itself.
+	_Alignas(64) uint8_t move_mask_storage[768];
+	for (int i = 0; i < 768; i++) move_mask_storage[i] = 0xa7;
+	uint8_t *move_mask_out = move_mask_storage + 16;
 	packedFloatMoveMaskSemantics(move_mask_out, move_src, move_old);
+	for (int i = 0; i < 16; i++)
+		if (move_mask_storage[i] != 0xa7) return 950;
+	for (int i = 704; i < 768; i++)
+		if (move_mask_storage[i] != 0xa7) return 951;
 	const int move_offsets[14] = {0,16,32,48,64,80,96,112,144,176,208,240,272,304};
 	const int move_widths[14] = {16,16,16,16,16,16,16,32,32,32,32,32,32,64};
 	const int move_lane_bytes[14] = {4,4,4,4,8,8,8,4,4,4,8,8,8,4};
@@ -1203,6 +1219,7 @@ int main(void) {
 			if (move_mask_out[move_z_offsets[block]+i] != want) return 392 + block;
 		}
 	}
+#endif
 	uint8_t extend_src[32] = {
 		0x00,0x01,0x7f,0x80,0xff,0x55,0xaa,0x40,
 		0xc0,0x11,0xee,0x33,0xcc,0x66,0x99,0x22,
@@ -1615,8 +1632,6 @@ int main(void) {
 	return 0;
 }
 `
-	execution.compileAndRunLLVM(t, "amd64_conformance", ll, mainC, "-O2")
-	t.Logf("complete original assembly object; native-wide runtime=%v, actual transport=%v", nativeWide, execution.prefix)
 }
 
 func rosettaAvailable() bool {

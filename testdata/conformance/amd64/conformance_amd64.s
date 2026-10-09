@@ -938,8 +938,9 @@ TEXT ·packedFloatMoveVEXSemantics(SB), NOSPLIT, $0-16
 
 // packedFloatMoveMaskSemantics validates PS dword masks, PD qword masks,
 // merge/zero loads, register moves, and masked memory stores at X/Y/Z widths.
-// It is assembled by the native oracle but executed only after LLVM lowering,
-// because the original mask forms require AVX-512.
+// Original Go and LLVM objects execute on the required native AVX-512 axis.
+// src/old are 64-byte aligned; out is congruent to 16 modulo 64 so aligned X
+// stores and Z stores at offsets 432/624 all satisfy their physical alignment.
 // Memory stores use merging masks: EVEX.z=1 stores raise #UD and are checked
 // separately by the complete expected-fault Go/LLVM runtime oracle.
 TEXT ·packedFloatMoveMaskSemantics(SB), NOSPLIT, $0-24

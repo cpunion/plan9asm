@@ -17,7 +17,7 @@ func amd64ConformanceOriginalWideGo(t *testing.T, execution x86FloatCompareExecu
 		t.Fatal("original wide conformance requires its actual native Linux AMD64 counterpart")
 	}
 	dir := amd64ConformanceOriginalWidePackage(t)
-	command := exec.Command("go", "test", "-p=2", "-count=1", "-run", "^TestOriginalSameWidthPackedConversion$", "-v", ".")
+	command := exec.Command("go", "test", "-p=2", "-count=1", "-run", "^TestOriginal(SameWidthPackedConversion|PackedFloatMoveMasks)$", "-v", ".")
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOENV=off", "GOARCH=amd64", "GOOS=linux")
 	t.Logf("actual original Go full-source wide conformance: %s", x86FloatCompareCaptureCommand(t, command))
@@ -61,7 +61,55 @@ import (
     "encoding/binary"
     "math"
     "testing"
+    "unsafe"
 )
+
+func TestOriginalPackedFloatMoveMasks(t *testing.T) {
+    aligned := func(size, phase int) ([]byte, []byte, int) {
+        storage := make([]byte, size+128)
+        for i := range storage {
+            storage[i] = 0xa7
+        }
+        base := uintptr(unsafe.Pointer(&storage[0]))
+        offset := int((64-base%64)%64) + phase
+        return storage, storage[offset:offset+size], offset
+    }
+    _, src, _ := aligned(64, 0)
+    _, old, _ := aligned(64, 0)
+    storage, out, offset := aligned(688, 16)
+    for i := range src {
+        src[i] = byte(3 + 17*i)
+        old[i] = byte(0xf0 - 3*i)
+    }
+    packedFloatMoveMaskSemantics((*[688]byte)(out), (*[64]byte)(src), (*[64]byte)(old))
+
+    forms := []struct { offset, width, lane int; zero bool }{
+        {0,16,4,false}, {16,16,4,true}, {32,16,4,false}, {48,16,4,false},
+        {64,16,8,false}, {80,16,8,true}, {96,16,8,false},
+        {112,32,4,false}, {144,32,4,true}, {176,32,4,false},
+        {208,32,8,false}, {240,32,8,true}, {272,32,8,false},
+        {304,64,4,false}, {368,64,4,true}, {432,64,4,false},
+        {496,64,8,false}, {560,64,8,true}, {624,64,8,false},
+    }
+    for _, form := range forms {
+        for i := 0; i < form.width; i++ {
+            want := old[i]
+            if (0xa55a >> (i / form.lane)) & 1 != 0 {
+                want = src[i]
+            } else if form.zero {
+                want = 0
+            }
+            if got := out[form.offset+i]; got != want {
+                t.Fatalf("original move offset=%d byte=%d: got=%02x want=%02x", form.offset, i, got, want)
+            }
+        }
+    }
+    for i, value := range storage {
+        if (i < offset || i >= offset+len(out)) && value != 0xa7 {
+            t.Fatalf("original move output canary changed at %d", i)
+        }
+    }
+}
 
 func TestOriginalSameWidthPackedConversion(t *testing.T) {
     var ints [16]int32
