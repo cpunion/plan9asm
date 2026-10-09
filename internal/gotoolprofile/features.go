@@ -28,24 +28,13 @@ var discoveryFeatureEnvKeys = []string{
 }
 
 func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir string, baseEnv []string, target string, overrides map[string]string, run Runner) (*discoveryTargetFeatures, error) {
+	env, err := FeatureCommandEnvironment(baseEnv, target, overrides)
+	if err != nil {
+		return nil, err
+	}
 	parts := strings.Split(target, "/")
-	if len(parts) != 2 || parts[0] == "" {
-		return nil, fmt.Errorf("invalid feature target %q", target)
-	}
 	cpuKeys := map[string]string{"386": "GO386", "amd64": "GOAMD64", "arm": "GOARM", "arm64": "GOARM64", "wasm": "GOWASM"}
-	cpuKey, ok := cpuKeys[parts[1]]
-	if !ok {
-		return nil, fmt.Errorf("unsupported feature target %q", target)
-	}
-	replacements := map[string]string{
-		"GOOS": parts[0], "GOARCH": parts[1], "CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOWORK": "off", "GOFLAGS": "",
-	}
-	for key, value := range overrides {
-		if key != cpuKey && key != "GOEXPERIMENT" {
-			return nil, fmt.Errorf("feature profile cannot override %s for %s", key, target)
-		}
-		replacements[key] = value
-	}
+	cpuKey := cpuKeys[parts[1]]
 	if !filepath.IsAbs(goBinary) || !filepath.IsAbs(markerDir) {
 		return nil, fmt.Errorf("feature driver and owned marker directory must be absolute")
 	}
@@ -64,7 +53,6 @@ func captureDiscoveryTargetFeatures(ctx context.Context, goBinary, markerDir str
 	if err != nil {
 		return nil, fmt.Errorf("feature driver: %w", err)
 	}
-	env := replaceEnv(baseEnv, replacements)
 	args := append([]string{"env", "-json"}, discoveryFeatureEnvKeys...)
 	output, envStderr, err := run(ctx, resolvedDir, env, goBinary, args...)
 	if err != nil {

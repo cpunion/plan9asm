@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
 type discoveryFeatureDriverState struct {
@@ -116,19 +118,16 @@ func inspectDiscoveryFeatureDriver(ctx context.Context, binary string, env []str
 	if cpuKey == "" {
 		return nil, fmt.Errorf("unsupported actual feature target %s", target)
 	}
-	replacements := map[string]string{"GOOS": parts[0], "GOARCH": parts[1], "CGO_ENABLED": "0", "GOTOOLCHAIN": "local", "GOWORK": "off", "GOFLAGS": ""}
-	for key, value := range overrides {
-		if key != cpuKey && key != "GOEXPERIMENT" {
-			return nil, fmt.Errorf("feature profile cannot override %s for %s", key, target)
-		}
-		replacements[key] = value
+	env, err := gotoolprofile.FeatureCommandEnvironment(env, target, overrides)
+	if err != nil {
+		return nil, err
 	}
 	driverHash, err := discoveryFeatureFileSHA256(binary)
 	if err != nil {
 		return nil, err
 	}
 	args := append([]string{"env", "-json"}, discoveryFeatureEnvKeys...)
-	output, _, err := runDiscoveryMachineCommand(ctx, "", replaceEnv(env, replacements), binary, args...)
+	output, _, err := runDiscoveryMachineCommand(ctx, "", env, binary, args...)
 	if err != nil {
 		return nil, fmt.Errorf("inspect actual feature environment: %w", err)
 	}
