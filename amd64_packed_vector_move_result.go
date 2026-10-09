@@ -2,7 +2,7 @@ package plan9asm
 
 // Memory availability is separate from the register's defined-byte transfer.
 // conditionalRead is only supplied by the lowering-only, source-wide observer
-// paired with the exact unaligned volatile read implementation. It is never a
+// paired with an exact native aligned or unaligned volatile read. It is never a
 // public observer, initialized-pointee, extent, alignment or write permission.
 func x86ResultPackedVectorMoveTransfer(ins Instr, form amd64PackedVectorMoveForm, state *x86ResultState, owned []bool, resultOffset int64, arch string, conditionalRead bool) bool {
 	if form.undefinedOpcode() {
@@ -17,10 +17,10 @@ func x86ResultPackedVectorMoveTransfer(ins Instr, form amd64PackedVectorMoveForm
 	width := int64(form.byteWidth)
 	widthMask := x86CallerVectorByteMask(width)
 	known := widthMask
-	if form.memory >= 0 && form.spec.aligned {
-		// Neither initialized DATA nor virtual FP/AUTO storage establishes
-		// the native aligned opcode's fault/continuation contract. This class
-		// stays pending its separately tested native alignment implementation.
+	if form.memory >= 0 && form.spec.aligned && !form.ordinaryMemory(ins, arch) {
+		// Virtual FP/AUTO storage is not the original aligned memory. Ordinary
+		// memory instead retains its actual opcode: continuation defines its
+		// active bytes without assuming that its native address was aligned.
 		return false
 	}
 	if form.memory == 0 {

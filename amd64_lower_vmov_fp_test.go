@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"testing"
@@ -65,6 +66,12 @@ func TestX86VEXPackedMoveAggregateFPForms(t *testing.T) {
 								Frame: FrameLayout{Params: slots},
 							}},
 						})
+						if op == "VMOVDQA" {
+							if !errors.Is(err, ErrProbeNeedsContext) {
+								t.Fatalf("virtual aggregate acquired native alignment: %v", err)
+							}
+							return
+						}
 						if err != nil {
 							t.Fatal(err)
 						}

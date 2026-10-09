@@ -72,6 +72,17 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := amd64PackedVectorMoveProperties(ins, moveArch); known && err == nil &&
+				form.spec.aligned && form.memory >= 0 && !form.undefinedOpcode() {
+				if form.nativeEVEX(ins) {
+					add("+avx512f")
+					if form.byteWidth < 64 {
+						add("+avx512vl")
+					}
+				} else {
+					add("+avx")
+				}
+			}
 			if form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, moveArch); known && err == nil &&
 				form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				// Exact native whole128 opcodes need XMM registers on i386.

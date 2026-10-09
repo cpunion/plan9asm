@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"runtime"
 	"strings"
@@ -35,16 +36,26 @@ func TestX86PackedMoveFrameSlotsRuntime(t *testing.T) {
 	}
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
-	for index, spec := range []struct {
-		op   string
-		bits int
-	}{
-		{"VMOVAPS", 32}, {"VMOVAPD", 64}, {"VMOVUPS", 32}, {"VMOVUPD", 64},
-		{"VMOVDQA32", 32}, {"VMOVDQA64", 64}, {"VMOVDQU8", 8}, {"VMOVDQU16", 16}, {"VMOVDQU32", 32}, {"VMOVDQU64", 64},
-	} {
+	for index, spec := range x86PackedMoveRuntimeRows {
 		name := fmt.Sprintf("packedframe%d", index)
-		fmt.Fprintf(&source, "TEXT %s(SB),4,$0-32\nMOVQ out+0(FP),DI\nMOVQ mask+24(FP),BX\nKMOVQ BX,K7\nVMOVUPS (DI),X0\n%s a+8(FP),K7,X0\nVMOVUPS X0,(DI)\nVMOVUPS 16(DI),X1\n%s X1,K7,a+8(FP)\nMOVQ a+8(FP),AX\nMOVQ AX,16(DI)\nMOVQ b+16(FP),AX\nMOVQ AX,24(DI)\nRET\n", name, spec.op, spec.op)
-		sigs[name] = FuncSig{Name: name, Args: []LLVMType{Ptr, I64, I64, I64}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: I64, Index: 1, Field: -1}, {Offset: 16, Type: I64, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1}}}}
+		body := fmt.Sprintf("TEXT %s(SB),4,$0-32\nMOVQ out+0(FP),DI\nMOVQ mask+24(FP),BX\nKMOVQ BX,K7\nVMOVUPS (DI),X0\n%s a+8(FP),K7,X0\nVMOVUPS X0,(DI)\nVMOVUPS 16(DI),X1\n%s X1,K7,a+8(FP)\nMOVQ a+8(FP),AX\nMOVQ AX,16(DI)\nMOVQ b+16(FP),AX\nMOVQ AX,24(DI)\nRET\n", name, spec.op, spec.op)
+		sig := FuncSig{Name: name, Args: []LLVMType{Ptr, I64, I64, I64}, Ret: Void, Frame: FrameLayout{Params: []FrameSlot{{Offset: 0, Type: Ptr, Index: 0, Field: -1}, {Offset: 8, Type: I64, Index: 1, Field: -1}, {Offset: 16, Type: I64, Index: 2, Field: -1}, {Offset: 24, Type: I64, Index: 3, Field: -1}}}}
+		if x86PackedMoveRuntimeNativeRow(spec.op, true) {
+			// Preserve each old fixture as an explicit original-Go accepted
+			// Context boundary, not an invented aligned LLVM aggregate.
+			goAssemblerOracleOutput(t, "amd64", body, "", true)
+			file, err := Parse(ArchAMD64, body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = Translate(file, Options{Goarch: "amd64", Sigs: map[string]FuncSig{name: sig}})
+			if !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatalf("virtual aligned FP fixture %s: %v", spec.op, err)
+			}
+			continue
+		}
+		source.WriteString(body)
+		sigs[name] = sig
 		fmt.Fprintf(&declarations, "extern void %s(void *,uint64_t,uint64_t,uint64_t);\n", name)
 		fmt.Fprintf(&checks, "if(check(%s,%d)) return %d;\n", name, spec.bits/8, index+1)
 	}

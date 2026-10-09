@@ -13,16 +13,38 @@ func TestCrossLinuxRuntimeMatrixX86PackedMoveUnalignedPortableFaults(t *testing.
 }
 
 func x86PackedMoveUnalignedRuntime(t *testing.T, native bool) {
+	x86PackedMoveObservableRuntime(t, native, false)
+}
+
+func x86PackedMoveObservableRuntime(t *testing.T, native, aligned bool) {
 	t.Helper()
 	execution := x86FloatCompareExecutionTools(t)
 	if native {
 		execution = x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	}
+	ir, main, count := x86PackedMoveObservableFixture(t, native, aligned, execution.triple)
+	for _, optimized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("IR_O2=%t", optimized), func(t *testing.T) {
+			text := ir
+			if optimized {
+				text = x86MulDivRoundOptimize(t, text)
+			}
+			execution.compileAndRunLLVM(t, "packed-move-observable", text, main, "-O2")
+		})
+	}
+	t.Logf("%d independent move cases; original native Go execution=%t; aligned native semantics=%t", count, native, aligned)
+}
+
+func x86PackedMoveObservableFixture(t *testing.T, native, aligned bool, triple string) (string, string, int) {
+	t.Helper()
+	if aligned && !native {
+		t.Fatal("aligned fault semantics require the original native counterpart")
+	}
 	var source, declarations, originals, pairs strings.Builder
 	sigs := make(map[string]FuncSig)
 	count := 0
 	for _, row := range x86PackedMoveResultOracle {
-		if row.aligned {
+		if row.aligned != aligned {
 			continue
 		}
 		for axis, bank := range []string{"X", "Y", "Z"} {
@@ -94,11 +116,15 @@ static void %s(uint8_t *p,uint8_t *out,uint64_t mask) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
-	main := x86PackedMoveObservableRuntimeC + declarations.String() + originals.String() + "static const struct pair pairs[]={\n" + pairs.String() + `};
+	alignment := "0"
+	if aligned {
+		alignment = "1"
+	}
+	main := "#define ALIGNED " + alignment + "\n" + x86PackedMoveObservableRuntimeC + declarations.String() + originals.String() + "static const struct pair pairs[]={\n" + pairs.String() + `};
 int main(void) {
     if (pairs[0].original) {
         unsigned a,b,c,d;
@@ -111,9 +137,23 @@ int main(void) {
     for(unsigned op=0;op<sizeof(pairs)/sizeof(*pairs);++op) {
         struct pair pair=pairs[op];
         if(check_values(pair)) { fprintf(stderr,"bytes op=%u\n",op); return 3; }
+        if(ALIGNED) {
+            /* Fully mapped addresses separate alignment from page faults.
+               In particular zero masking is not assumed to suppress #GP. */
+            uint64_t masks[]={0,1,UINT64_C(0x8000000000000000),UINT64_MAX};
+            for(int offset=1;offset<pair.width;offset++) for(unsigned m=0;m<4;m++) {
+                int want=outcome(pair,region+offset,masks[m],1);
+                int got=outcome(pair,region+offset,masks[m],0);
+                if((want!=0 && want!=SIGSEGV && want!=SIGBUS) || got!=want) {
+                    fprintf(stderr,"alignment op=%u offset=%d mask=%llx original=%d llvm=%d\n",op,offset,(unsigned long long)masks[m],want,got);
+                    return 8;
+                }
+                if((!pair.masked || masks[m]==UINT64_MAX) && want==0) return 9;
+            }
+        }
         /* Live/merge values are covered above; dead loads and stores isolate
            exceptions from incidental uses of a result. */
-        if(!pair.dead && !pair.store) continue;
+        if(!ALIGNED && !pair.dead && !pair.store) continue;
         uint64_t masks[]={0,1,UINT64_C(0x8000000000000000),UINT64_MAX};
         int extents[]={0,pair.lane-1,pair.lane,pair.width-1,pair.width};
         for(unsigned m=0;m<sizeof(masks)/sizeof(*masks);m++) {
@@ -121,11 +161,16 @@ int main(void) {
                 uint8_t *p=region+page-extents[e];
                 int expected=expected_fault(pair,masks[m],extents[e]);
                 int result=outcome(pair,p,masks[m],0);
+                int original=pair.original?outcome(pair,p,masks[m],1):result;
+                if(ALIGNED) {
+                    if((original!=0 && original!=SIGSEGV && original!=SIGBUS) || original!=result) return 10;
+                    continue;
+                }
                 if((expected ? result!=SIGSEGV && result!=SIGBUS : result!=0)) {
                     fprintf(stderr,"fault op=%u extent=%d mask=%llx got=%d expected=%d\n",op,extents[e],(unsigned long long)masks[m],result,expected);
                     return 4;
                 }
-                if(pair.original && result!=outcome(pair,p,masks[m],1)) return 5;
+                if(pair.original && result!=original) return 5;
             }
             int result=outcome(pair,0,masks[m],0);
             int expected=expected_fault(pair,masks[m],0);
@@ -136,16 +181,7 @@ int main(void) {
     return munmap(region,2*page)!=0;
 }
 `
-	for _, optimized := range []bool{false, true} {
-		t.Run(fmt.Sprintf("IR_O2=%t", optimized), func(t *testing.T) {
-			text := ir
-			if optimized {
-				text = x86MulDivRoundOptimize(t, text)
-			}
-			execution.compileAndRunLLVM(t, "packed-move-observable", text, main, "-O2")
-		})
-	}
-	t.Logf("%d independent unaligned move cases; original native Go execution=%t; portable values and full/guarded NULL/guard-page dead-load faults are separate from aligned native semantics", count, native)
+	return ir, main, count
 }
 
 const x86PackedMoveObservableRuntimeC = `
@@ -174,7 +210,7 @@ static int outcome(struct pair pair,uint8_t *p,uint64_t mask,int original) {
     if(!child) {
         struct rlimit no_core={0,0};
         if(setrlimit(RLIMIT_CORE,&no_core)) _exit(120);
-        uint8_t out[65]; memset(out,0x53,sizeof(out));
+        _Alignas(64) uint8_t out[128]; memset(out,0x53,sizeof(out));
         (original?pair.original:pair.translated)(p,out,mask); _exit(0);
     }
     int status;
@@ -185,27 +221,28 @@ static int outcome(struct pair pair,uint8_t *p,uint64_t mask,int original) {
 static int check_values(struct pair pair) {
     const uint64_t masks[]={0,1,UINT64_C(0xaaaaaaaaaaaaaaaa),UINT64_C(0x8000000000000000),UINT64_MAX};
     for(int sample=0;sample<33;sample++) for(unsigned m=0;m<sizeof(masks)/sizeof(*masks);m++) {
-        uint8_t a[128],b[128],x[128],y[128],want_a[128],want_x[128];
-        for(int i=0;i<128;i++) {
+        _Alignas(64) uint8_t a[256],b[256],x[256],y[256],want_a[256],want_x[256];
+        int in=ALIGNED?64:1,out=ALIGNED?64:3;
+        for(int i=0;i<256;i++) {
             a[i]=b[i]=want_a[i]=(uint8_t)(sample*71+i*19);
             x[i]=y[i]=want_x[i]=(uint8_t)(sample*31-i*59);
         }
         for(int i=0;i<64;i++) {
             if(pair.store) {
-                if(i<pair.width && active(pair,masks[m],i)) want_a[1+i]=x[3+i];
+                if(i<pair.width && active(pair,masks[m],i)) want_a[in+i]=x[out+i];
             } else if(!pair.dead) {
-                want_x[3+i]=i>=pair.width?0:active(pair,masks[m],i)?a[1+i]:pair.zero?0:x[3+i];
+                want_x[out+i]=i>=pair.width?0:active(pair,masks[m],i)?a[in+i]:pair.zero?0:x[out+i];
             }
         }
-        want_x[67]=1;
+        want_x[out+64]=1;
         unsigned saved=_mm_getcsr(),csr=0x1f80|((sample&3)<<13)|(sample&63);
-        _mm_setcsr(csr); pair.translated(a+1,x+3,masks[m]); unsigned after=_mm_getcsr();
+        _mm_setcsr(csr); pair.translated(a+in,x+out,masks[m]); unsigned after=_mm_getcsr();
         _mm_setcsr(saved);
-        if(after!=csr || memcmp(a,want_a,128) || memcmp(x,want_x,128)) return 1;
+        if(after!=csr || memcmp(a,want_a,256) || memcmp(x,want_x,256)) return 1;
         if(pair.original) {
-            _mm_setcsr(csr); pair.original(b+1,y+3,masks[m]); after=_mm_getcsr();
+            _mm_setcsr(csr); pair.original(b+in,y+out,masks[m]); after=_mm_getcsr();
             _mm_setcsr(saved);
-            if(after!=csr || memcmp(a,b,128) || memcmp(x,y,128)) return 2;
+            if(after!=csr || memcmp(a,b,256) || memcmp(x,y,256)) return 2;
         }
     }
     return 0;

@@ -125,9 +125,6 @@ func TestX86PackedMoveResultFiveTargetsThreeAPIs(t *testing.T) {
 						continue
 					}
 					for _, memory := range []bool{false, true} {
-						if memory && row.aligned {
-							continue // Separate pending native-alignment contract.
-						}
 						for _, mode := range []string{"plain", "merge", "zero"} {
 							if row.vexOnly && mode != "plain" {
 								continue
@@ -261,8 +258,8 @@ func TestX86PackedMoveResultStoreAndStaticExtentBoundaries(t *testing.T) {
 			ins := x86ScalarLaneInstruction(t, fmt.Sprintf("%s table<>+16(SB),%s1", row.name, bank))
 			for _, available := range []int64{int64(width - 1), int64(width)} {
 				state := x86ResultState{loweredStaticReads: map[x86StaticSBAddress]int64{{symbol: "table<>", offset: 16}: available}}
-				if got := x86ScalarFPResultTransfer(ins, &state, nil, 0, "amd64"); got != (!row.aligned && available == int64(width)) {
-					t.Fatal("static read ignored complete extent or alignment boundary", row.name, bank, available, got)
+				if got := x86ScalarFPResultTransfer(ins, &state, nil, 0, "amd64"); got != (available == int64(width)) {
+					t.Fatal("static read ignored complete extent", row.name, bank, available, got)
 				}
 			}
 		}
@@ -287,9 +284,6 @@ func TestX86PackedMoveResultSourceBoundaries(t *testing.T) {
 				"native store":   load + read + row.name + " X1,(AX)\n",
 				"unknown static": row.name + " ·foreign(SB),X1\n",
 				"unknown path":   load + "MOVL $1,CX\nCMPL CX,$0\nJE done\n" + read + "done:\n",
-			}
-			if row.aligned {
-				bodies["aligned pointer is not a contract"] = load + read
 			}
 			if !row.vexOnly {
 				bodies["undefined mask"] = load + row.name + ".Z (AX),K1,X1\n"
@@ -347,9 +341,6 @@ func TestX86PackedMoveResultStaticSourceThreeAPIs(t *testing.T) {
 		source.WriteString("DATA table<>+0(SB)/8,$0x76543210abcdef01\nGLOBL table<>(SB),8,$64\n")
 		count := 0
 		for _, row := range x86PackedMoveResultOracle {
-			if row.aligned {
-				continue
-			}
 			for _, bank := range []string{"X", "Y", "Z"} {
 				if row.vexOnly && bank == "Z" {
 					continue
@@ -371,7 +362,7 @@ func TestX86PackedMoveResultStaticSourceThreeAPIs(t *testing.T) {
 		for _, api := range []string{"text", "module", "Go"} {
 			ir, err := x86ScalarFPBitViewAPI(t, source.String(), declarations.String(), target.arch, target.triple, api)
 			if err != nil {
-				t.Fatal("complete DATA directory did not compose with unaligned physical reads", target, api, err)
+				t.Fatal("complete DATA directory did not compose with physical reads", target, api, err)
 			}
 			compileLLVMToObject(t, llc, target.triple, "packed-data.ll", "packed-data.o", ir)
 		}

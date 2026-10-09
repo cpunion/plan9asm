@@ -2,30 +2,27 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestX86PackedMoveMaskedMemoryRuntime(t *testing.T) {
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("execution requires amd64 or Rosetta; separate five-target object tests remain required")
+	x86PackedMoveMaskedMemoryRuntime(t, false)
+}
+
+func x86PackedMoveMaskedMemoryRuntime(t *testing.T, native bool) {
+	t.Helper()
+	execution := x86FloatCompareExecutionTools(t)
+	if native {
+		execution = x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	}
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
 	index := 0
-	for _, spec := range []struct {
-		op   string
-		bits int
-	}{
-		{"VMOVAPS", 32}, {"VMOVAPD", 64}, {"VMOVUPS", 32}, {"VMOVUPD", 64},
-		{"VMOVDQA32", 32}, {"VMOVDQA64", 64}, {"VMOVDQU8", 8}, {"VMOVDQU16", 16}, {"VMOVDQU32", 32}, {"VMOVDQU64", 64},
-	} {
+	for _, spec := range x86PackedMoveRuntimeRows {
+		if x86PackedMoveRuntimeNativeRow(spec.op, true) != native {
+			continue
+		}
 		for width, reg := range []string{"X0", "Y0", "Z0"} {
 			bytes := 16 << width
 			name := fmt.Sprintf("packedmemory%d", index)
@@ -42,13 +39,7 @@ func TestX86PackedMoveMaskedMemoryRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var prefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		prefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,30 +66,28 @@ static int check(void (*fn)(const void *,void *,void *,uint64_t),int bytes,int l
 
 int main(void) {
 ` + checks.String() + "return 0;\n}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_move_masked_memory", triple, ir, mainC, prefix)
+	execution.compileAndRunLLVM(t, "packed-move-masked-memory", ir, mainC, "-O2")
 }
 
 func TestX86PackedMoveRegisterViewsRuntime(t *testing.T) {
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("execution requires amd64 or Rosetta; separate five-target object tests remain required")
+	x86PackedMoveRegisterViewsRuntime(t, false)
+}
+
+func x86PackedMoveRegisterViewsRuntime(t *testing.T, native bool) {
+	t.Helper()
+	execution := x86FloatCompareExecutionTools(t)
+	if native {
+		execution = x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	}
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
 	index := 0
-	for _, spec := range []struct {
-		op   string
-		bits int
-	}{
-		{"VMOVAPS", 32}, {"VMOVAPD", 64}, {"VMOVUPS", 32}, {"VMOVUPD", 64},
-		{"VMOVDQA32", 32}, {"VMOVDQA64", 64}, {"VMOVDQU8", 8}, {"VMOVDQU16", 16}, {"VMOVDQU32", 32}, {"VMOVDQU64", 64},
-	} {
+	for _, spec := range x86PackedMoveRuntimeRows {
 		for width, prefix := range []string{"X", "Y", "Z"} {
 			for form := 0; form < 6; form++ {
+				if x86PackedMoveRuntimeNativeRow(spec.op, form < 3) != native {
+					continue
+				}
 				name := fmt.Sprintf("packedviews%d", index)
 				index++
 				fmt.Fprintf(&source, "TEXT %s(SB),4,$0-32\nMOVQ in+0(FP),BX\nMOVQ old+8(FP),AX\nMOVQ out+16(FP),DI\nMOVQ mask+24(FP),CX\nKMOVQ CX,K7\n", name)
@@ -127,13 +116,7 @@ func TestX86PackedMoveRegisterViewsRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,5 +140,5 @@ static int check(void (*fn)(const void *,const void *,void *,uint64_t),int bytes
 }
 int main(void) {
 ` + checks.String() + "return 0;\n}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_move_views", triple, ir, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "packed-move-views", ir, mainC, "-O2")
 }

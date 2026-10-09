@@ -31,6 +31,16 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 	}
 	src, dst := ins.Args[0], ins.Args[form.destination]
 	byteWidth, elemBits := form.byteWidth, form.spec.elementBits
+	if form.spec.aligned && form.memory >= 0 {
+		if !form.ordinaryMemory(ins, c.goarch) &&
+			!x86CallerMemoryCertified(ins, form.memory) && !c.fixedLocalMemoryCertified(ins, form.memory) {
+			return true, false, fmt.Errorf("%w: %s requires original native memory backing and alignment effects", ErrProbeNeedsContext, op)
+		}
+		if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+			return true, false, fmt.Errorf("%w: aligned packed move needs its original native address size", ErrProbeNeedsContext)
+		}
+		return true, false, c.lowerAlignedPackedMoveMemory(ins, form)
+	}
 	for _, operand := range []Operand{src, dst} {
 		if operand.Kind != OpFP {
 			continue
