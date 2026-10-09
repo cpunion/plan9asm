@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm"
 )
 
 // Exercise the real report path. Its hints must describe the same expanded,
@@ -76,5 +78,57 @@ func TestUnsupportedDiagnosticsUseActualCompilationInput(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInstructionDiagnosticsCollectCompleteParsedFiveArchInputs(t *testing.T) {
+	for _, row := range []struct {
+		name string
+		arch plan9asm.Arch
+	}{
+		{"386", plan9asm.ArchAMD64},
+		{"amd64", plan9asm.ArchAMD64},
+		{"arm", plan9asm.ArchARM},
+		{"arm64", plan9asm.ArchARM64},
+		{"wasm", plan9asm.ArchWasm},
+	} {
+		t.Run(row.name, func(t *testing.T) {
+			source := "DATA text<>+0(SB)/8,$\"a;BOGUS\"\n" +
+				"TEXT first(SB),$0-0\nNOTIMPLEMENTED\nRET\n" +
+				"TEXT second(SB),$0-0\nNOTIMPLEMENTED\nRET\n"
+			file, err := plan9asm.ParseWithDefines(row.arch, source, plan9asm.GoAssemblerDefines("linux", row.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			diagnostics := instructionDiagnostics{supported: map[string]struct{}{"RET": {}}}
+			diagnostics.collect(file)
+			if !reflect.DeepEqual(diagnostics.ops, []string{"NOTIMPLEMENTED"}) || len(diagnostics.hits) != 2 {
+				t.Fatalf("lost complete parsed instruction inventory: %+v", diagnostics)
+			}
+			for index, hit := range diagnostics.hits {
+				if hit.Function != file.Funcs[index].Sym || hit.Instruction <= 0 || hit.Line != 0 ||
+					hit.Source != "NOTIMPLEMENTED" || hit.Op != "NOTIMPLEMENTED" {
+					t.Fatalf("hint invented an original line or lost its parsed function: %+v", hit)
+				}
+			}
+			diagnostics.collect(nil)
+			if diagnostics.ops != nil || diagnostics.hits != nil {
+				t.Fatal("absent input retained another file's hints")
+			}
+		})
+	}
+}
+
+func TestInstructionDiagnosticsResetBeforeFailedSourceRead(t *testing.T) {
+	diagnostics := instructionDiagnostics{
+		supported: map[string]struct{}{"RET": {}},
+		ops:       []string{"STALE"},
+		hits:      []unsupportedHit{{Op: "STALE"}},
+	}
+	err := compileOne(nil, plan9asm.ArchARM64, "linux", "arm64", "aarch64-unknown-linux-gnu",
+		asmTask{AsmFile: filepath.Join(t.TempDir(), "absent_arm64.s")}, false,
+		compileConfig{diagnostics: &diagnostics})
+	if err == nil || !strings.Contains(err.Error(), "read asm:") || diagnostics.ops != nil || diagnostics.hits != nil {
+		t.Fatalf("failed read reused another compilation's hints: %v %+v", err, diagnostics)
 	}
 }
