@@ -44,5 +44,8 @@ func captureAMD64OriginalSDKDependency(pkg amd64OriginalListPackage, goRoot stri
 	// Also bind the actual shared SDK header directory. Generated go_asm.h is
 	// an input to the independently executed original export, not a fabricated
 	// header/CPP or frame grant to the ordinary module being translated.
-	return files.directory(filepath.Join(goRoot, "pkg", "include"), true)
+	if err := files.directory(filepath.Join(goRoot, "pkg", "include"), true); err != nil {
+		return err
+	}
+	return captureAMD64SDKIncludeSources(pkg, goRoot, files)
 }
