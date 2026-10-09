@@ -43,6 +43,15 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 		}
 		return int64(form.bits / 8), form.memoryWrite, true
 	}
+	// The remaining ymovl rows are the legacy MMX MOVD forms. They are
+	// deliberately separate from the X-register transfer table because the
+	// physical MMX bank has distinct state and is not a SIMD caller proof.
+	if ins.Op == "MOVL" && len(ins.Args) == 2 {
+		other := ins.Args[1-index]
+		if other.Kind == OpReg && isAMD64MOVDMRegister(other) {
+			return 4, index == 1, true
+		}
+	}
 	if ins.Op == "MOVB" || ins.Op == "MOVW" || ins.Op == "MOVL" || ins.Op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false

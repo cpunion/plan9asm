@@ -69,4 +69,28 @@ func TestX86FPAccessBytesCompleteGPSIMDMemoryRows(t *testing.T) {
 			}
 		}
 	}
+	for _, arch := range []string{"amd64", "386"} {
+		for _, row := range []struct {
+			name, source string
+			index        int
+			write        bool
+		}{
+			{"mmx-load", "MOVL M0,value+0(FP)", 1, true},
+			{"mmx-store", "MOVL value+0(FP),M0", 0, false},
+		} {
+			t.Run(arch+"/"+row.name, func(t *testing.T) {
+				source := "TEXT ·Value(SB),4,$0-64\n" + row.source + "\nRET\n"
+				goAssemblerOracleOutput(t, arch, source, "", true)
+				file, err := Parse(ArchAMD64, source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ins := file.Funcs[0].Instrs[1]
+				width, write, known := X86FPAccessBytes(ins, row.index, arch)
+				if !known || write != row.write || width != 4 {
+					t.Fatalf("official ymovl MMX row is not observed: width=%d write=%t known=%t", width, write, known)
+				}
+			})
+		}
+	}
 }
