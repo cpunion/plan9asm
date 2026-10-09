@@ -23,6 +23,7 @@ type featureInput = gotoolprofile.ConsumerInput
 // A consumer is populated only after reobserving the actual driver and its
 // finite marker package. Supplying JSON alone does not create this proof.
 type featureConsumer struct {
+	OrdinaryDependencies      *ordinaryDependencyOwner
 	ID                        string
 	Observed                  *gotoolprofile.Observation
 	Root                      string
@@ -268,6 +269,9 @@ func (consumer *featureConsumer) verifySources() error {
 		if err != nil || actual != expected {
 			return fmt.Errorf("generated-header dependency/export changed before final object proof")
 		}
+	}
+	if err := consumer.verifyOrdinaryOwner(consumer.OrdinaryDependencies); err != nil {
+		return err
 	}
 	return consumer.verifyTestModuleSources()
 }

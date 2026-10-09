@@ -74,7 +74,7 @@ func TestDiscoveryChecksumReadonlyProxyAvoidsRepeatMetadataRequests(t *testing.T
 		t.Fatal(err)
 	}
 	writeTestFile(t, lookupFile, string(lookup))
-	actualLookup, err := reader.read(lookupName, 16<<10)
+	actualLookup, err := reader.Read(lookupName, 16<<10)
 	if err != nil || !bytes.Equal(actualLookup, lookup) || transport.requests != 0 {
 		t.Fatalf("readonly lookup caused a repeat request: requests=%d, error=%v", transport.requests, err)
 	}
@@ -202,7 +202,7 @@ func TestDiscoveryChecksumReadonlyProxyRejectsUnboundedOrNonlocalLocations(t *te
 	shared := t.TempDir()
 	proxy := (&url.URL{Scheme: "file", Path: filepath.ToSlash(shared)}).String()
 	reader, err := newDiscoverySumDBReader(context.Background(), t.TempDir(), proxy+"|"+proxy+",https://proxy.golang.org,direct")
-	if err != nil || len(reader.readonlyCaches) != 1 {
+	if err != nil || len(reader.ReadonlyCaches) != 1 {
 		t.Fatalf("exact duplicate cache roots were not normalized: %v", err)
 	}
 	var proxies string

@@ -336,18 +336,11 @@ func TestFeatureCPPRegisteredHeaderOutsidePackageDirectory(t *testing.T) {
 
 func TestGeneratedHeaderConsumerRetainsDependencyGuardUntilFinalObject(t *testing.T) {
 	input, dir := generatedHeaderFixture(t, "linux/amd64")
-	dep := t.TempDir()
+	dep := ordinaryFixtureDependency(t, input, "example.invalid/external", map[string]string{
+		"layout.go": "package external\ntype Layout struct { Word uintptr }\nfunc Body() int { return 1 }\n",
+	})
 	dependency := filepath.Join(dep, "layout.go")
 	for name, source := range map[string]string{
-		"go.mod":    "module example.invalid/external\n\ngo 1.24\n",
-		"layout.go": "package external\ntype Layout struct { Word uintptr }\nfunc Body() int { return 1 }\n",
-	} {
-		if err := os.WriteFile(filepath.Join(dep, name), []byte(source), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for name, source := range map[string]string{
-		"go.mod":    "module example.invalid/header\n\ngo 1.24\nrequire example.invalid/external v1.0.0\nreplace example.invalid/external => " + filepath.ToSlash(dep) + "\n",
 		"layout.go": "package header\nimport \"example.invalid/external\"\ntype Layout struct { Value external.Layout }\nfunc Probe()\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
@@ -379,6 +372,9 @@ func TestGeneratedHeaderConsumerRetainsDependencyGuardUntilFinalObject(t *testin
 	}
 	// The -asmhdr oracle has completed, but LLVM objects have not. An
 	// external dependency is outside the root module's source hash map.
+	if err := os.Chmod(dependency, 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(dependency, []byte("package external\ntype Layout struct { Word uintptr }\nfunc Body() int { return 2 }\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

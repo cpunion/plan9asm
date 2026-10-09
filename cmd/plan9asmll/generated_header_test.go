@@ -86,18 +86,11 @@ func TestGeneratedHeaderMetadataCLIUsesActualImportExports(t *testing.T) {
 
 func TestGeneratedHeaderMetadataRejectsDependencyMutationDuringActualLoad(t *testing.T) {
 	input, dir := generatedHeaderFixture(t, "linux/amd64")
-	dep := t.TempDir()
+	dep := ordinaryFixtureDependency(t, input, "example.invalid/external", map[string]string{
+		"layout.go": "package external\ntype Mixed struct { Word uintptr }\nfunc Body() int { return 1 }\n",
+	})
 	goFile := filepath.Join(dep, "layout.go")
 	for name, source := range map[string]string{
-		"go.mod":    "module example.invalid/external\n\ngo 1.24\n",
-		"layout.go": "package external\ntype Mixed struct { Word uintptr }\nfunc Body() int { return 1 }\n",
-	} {
-		if err := os.WriteFile(filepath.Join(dep, name), []byte(source), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for name, source := range map[string]string{
-		"go.mod":    "module example.invalid/header\n\ngo 1.24\nrequire example.invalid/external v1.0.0\nreplace example.invalid/external => " + filepath.ToSlash(dep) + "\n",
 		"layout.go": "package header\nimport \"example.invalid/external\"\ntype Layout struct { Value external.Mixed }\nfunc Probe()\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(source), 0600); err != nil {
@@ -117,6 +110,9 @@ func TestGeneratedHeaderMetadataRejectsDependencyMutationDuringActualLoad(t *tes
 			// Mutate only this test's external dependency, after source
 			// selection but before actual Go exports/type checking. Root
 			// pre-load hashes cannot cover a different dependency module.
+			if err := os.Chmod(goFile, 0600); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(goFile, []byte("package external\ntype Mixed struct { Word uintptr }\nfunc Body() int { return 2 }\n"), 0600); err != nil {
 				t.Fatal(err)
 			}

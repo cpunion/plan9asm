@@ -238,8 +238,10 @@ bind the compact `go:embed` directives; stock Go parses their patterns, and
 complete original directory membership replays the exact selected asset hashes.
 The consumer independently captures the actual same-profile patterns/files
 before and after typechecking and guards assets through final objects. Only the
-qualified test-dependency closure may supply this role: ordinary generated-header
-loads still reject unbound embeds. Unsupported generated, cgo, symlink or
+qualified test-dependency closure may supply this test role. Ordinary metadata
+uses its own complete dependency-source owner and embed witnesses, described
+below; it never borrows test-role authority. Unbound embeds remain errors in
+either role. Unsupported generated, cgo, symlink or
 unregistered asset roles remain failures, never source N/A or extra LLVM objects.
 Offline replay checks frozen producer/consumer witnesses, not standalone proof
 that an arbitrary compact directive is authenticated by its recorded full SHA.
@@ -665,7 +667,7 @@ Special/test-only roles, unproved generated headers, incompatible include
 binding, no-TEXT profile variants without actual empty-object evidence, and
 legacy modules lacking authenticated declared-module metadata remain failures.
 The private `plan9asmll -metadata-only -feature-profile ... -report ...` query
-uses a separate `actual_go_cpu_profile_metadata_v1` result: it performs no
+uses a separate `actual_go_cpu_profile_metadata_v2` result: it performs no
 assembly translation and cannot satisfy a translation PASS or add to counts.
 It loads selected Go source and same-profile actual dependency exports, then
 invokes the observed Go compiler with `-asmhdr`. Every definition name, value
@@ -676,6 +678,24 @@ and export hashes, actual header/object hashes and canonical full definitions.
 Offline replay relies on frozen producer provenance; production compares
 the actual compiler bytes and full definitions independently. Metadata queries
 alone never discharge a translation scope.
+
+Metadata v2 requires an `actual_go_ordinary_dependency_sources_v1` owner for the
+complete ordinary dependency import closure. Every selected package carries an
+explicit empty or populated embed witness. Actual source selection, directives,
+directory membership and asset hashes must agree before and after typechecking;
+the independent consumer repeats these observations before final LLVM objects.
+Candidate sources bind to the original ZIP; foreign versioned modules bind to
+their exact Module/Replace identity, ZIP and original or authenticated proxy
+`go.mod`; standard-library sources bind to the observed GOROOT. Pure source and
+embed-selection algorithms are shared with test dependencies, not their role
+permissions. Root-package embeds and instrumentation do not gain new authority.
+The producer independently verifies original bytes and retains live guards
+through final objects. Identical complete snapshots and physical root/ZIP/mod
+paths may share one retained guard, but every capture and phase still verifies
+the original inputs. Missing owners, incomplete closures and metadata v1 are
+rejected by current readers; historical reports require their frozen tools.
+Source-only evidence adds no translation PASS or object count.
+
 Generated-header planning privately retains cost-only negative source preflights
 for one candidate operation, keyed by the complete requested profile, assembly
 file and custom tags. Retention is bounded to 4,096 entries and 16 MiB of keys

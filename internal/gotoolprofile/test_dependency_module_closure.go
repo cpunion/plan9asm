@@ -8,16 +8,20 @@ import (
 )
 
 func testDependencySourceModules(input *ConsumerInput, dependency *TestDependencyProof) (map[string]TestModuleSource, error) {
-	if len(dependency.SourceModules) > 4096 {
+	return sourceModuleSnapshots(input, dependency.SourceModules)
+}
+
+func sourceModuleSnapshots(input *ConsumerInput, sources []ModuleSourceSnapshot) (map[string]ModuleSourceSnapshot, error) {
+	if len(sources) > 4096 {
 		return nil, fmt.Errorf("test dependency source modules exceed their bounded scope")
 	}
 	modules := make(map[string]TestModuleSource)
-	for index, source := range dependency.SourceModules {
+	for index, source := range sources {
 		if err := ValidateTestModuleSource(source); err != nil {
 			return nil, err
 		}
 		id := source.ID()
-		if index > 0 && id <= dependency.SourceModules[index-1].ID() || source.SourceModule == "" && source.GoVersion != input.Observed.GoVersion {
+		if index > 0 && id <= sources[index-1].ID() || source.SourceModule == "" && source.GoVersion != input.Observed.GoVersion {
 			return nil, fmt.Errorf("test dependency source roots have noncanonical identities/tool versions")
 		}
 		modules[id] = source

@@ -30,9 +30,14 @@ func queryGeneratedHeaders(spec targetSpec, patterns, tags, asmFiles []string, m
 	if err := consumer.capturePackages(pkgs); err != nil {
 		return nil, err
 	}
+	dependencies, err := consumer.ordinaryDependencyProof()
+	if err != nil {
+		return nil, err
+	}
 	proof := &gotoolprofile.MetadataProof{
 		Protocol: gotoolprofile.MetadataProtocol, ProfileID: consumer.ID,
 		CustomTags: append([]string(nil), tags...), Packages: consumer.Proof.Packages,
+		Dependencies: dependencies,
 	}
 	for index, pkg := range pkgs {
 		header, err := captureGeneratedHeader(consumer, pkg, proof.Packages[index], output)
@@ -76,13 +81,17 @@ func loadGeneratedHeaderPackagesWithLoader(consumer *featureConsumer, patterns, 
 	if len(tags) != 0 {
 		config.BuildFlags = append(config.BuildFlags, "-tags="+strings.Join(tags, ","))
 	}
-	return loadGeneratedHeaderPackagesConfigured(consumer, config, patterns, load)
+	return loadGeneratedHeaderPackagesForRole(consumer, config, patterns, load, true)
 }
 
 // Config is private, constructed only by the ordinary entry above or an
 // independently validated actual instrumentation source context. Both paths
 // retain identical pre/post source/type/export guards and concrete errors.
 func loadGeneratedHeaderPackagesConfigured(consumer *featureConsumer, config *packages.Config, patterns []string, load func(*packages.Config, ...string) ([]*packages.Package, error)) ([]*packages.Package, error) {
+	return loadGeneratedHeaderPackagesForRole(consumer, config, patterns, load, false)
+}
+
+func loadGeneratedHeaderPackagesForRole(consumer *featureConsumer, config *packages.Config, patterns []string, load func(*packages.Config, ...string) ([]*packages.Package, error), ordinary bool) ([]*packages.Package, error) {
 	// Discover the actual dependency source set without compiling exports,
 	// then pin it before the source/type/export load. Root hashes alone do
 	// not guard stdlib or other dependency modules during that load.
@@ -92,7 +101,18 @@ func loadGeneratedHeaderPackagesConfigured(consumer *featureConsumer, config *pa
 	if err != nil {
 		return nil, err
 	}
-	guard, err := captureGeneratedHeaderLoadGuard(consumer.Context, before)
+	captureGuard := func(pkgs []*packages.Package) (*generatedHeaderLoadGuard, error) {
+		if ordinary {
+			return captureTypedSourceLoadGuardWithEmbeds(consumer.Context, pkgs, nil, consumer.verifyOrdinaryEmbedPackage)
+		}
+		return captureGeneratedHeaderLoadGuard(consumer.Context, pkgs)
+	}
+	if ordinary {
+		if err := consumer.captureOrdinaryDependencies(before); err != nil {
+			return nil, err
+		}
+	}
+	guard, err := captureGuard(before)
 	if err != nil {
 		return nil, err
 	}
@@ -116,12 +136,17 @@ func loadGeneratedHeaderPackagesConfigured(consumer *featureConsumer, config *pa
 		sort.Strings(diagnostics)
 		return nil, fmt.Errorf("actual generated-header Go package compilation:\n%s", strings.Join(diagnostics, "\n"))
 	}
-	after, err := captureGeneratedHeaderLoadGuard(consumer.Context, pkgs)
+	after, err := captureGuard(pkgs)
 	if err != nil {
 		return nil, err
 	}
 	if !reflect.DeepEqual(guard, after) {
 		return nil, fmt.Errorf("generated-header dependency/source selection changed during actual Go export/type load")
+	}
+	if ordinary {
+		if err := consumer.finishOrdinaryDependencies(pkgs); err != nil {
+			return nil, err
+		}
 	}
 	if err := consumer.retainGeneratedGuard(guard.Sources); err != nil {
 		return nil, err
@@ -305,10 +330,11 @@ func generatedHeaderImportsForRole(consumer *featureConsumer, pkg *packages.Pack
 			return nil, nil, "", nil, fmt.Errorf("generated header requires actual ordinary same-profile dependency exports")
 		}
 		if len(dep.EmbedFiles) != 0 || len(dep.EmbedPatterns) != 0 {
-			if !boundTestEmbeds {
-				return nil, nil, "", nil, fmt.Errorf("generated header requires a bound embed source role")
+			verify := consumer.verifyOrdinaryEmbedPackage
+			if boundTestEmbeds {
+				verify = consumer.verifyTestEmbedPackage
 			}
-			if err := consumer.verifyTestEmbedPackage(dep); err != nil {
+			if err := verify(dep); err != nil {
 				return nil, nil, "", nil, err
 			}
 			for _, file := range dep.EmbedFiles {

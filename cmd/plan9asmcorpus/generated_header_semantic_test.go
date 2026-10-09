@@ -160,6 +160,7 @@ func fixtureSemanticGeneratedProgress(t *testing.T) discoveryProgress {
 					}},
 				}},
 			}
+			metadata.Dependencies = fixtureSemanticGeneratedDependencies(plan, proof.Packages[0], observed.GoVersion)
 			canonical, err := gotoolprofile.CanonicalGeneratedHeader(definitions)
 			if err != nil {
 				t.Fatal(err)
@@ -210,6 +211,9 @@ func rebindGeneratedSemanticFixture(metadata *gotoolprofile.MetadataProof, id st
 			header.Imports[index].ExportSHA256 = strings.Repeat("a", 64)
 		}
 	}
+	for index := range metadata.Dependencies.ExternalPackages {
+		metadata.Dependencies.ExternalPackages[index].ExportSHA256 = strings.Repeat("a", 64)
+	}
 }
 
 func mutateGeneratedSemanticMeaning(metadata *gotoolprofile.MetadataProof, field string) {
@@ -222,13 +226,64 @@ func mutateGeneratedSemanticMeaning(metadata *gotoolprofile.MetadataProof, field
 			header.Definitions["const_Additional"] = "1"
 		case "import source":
 			header.Imports[0].GoSHA256["fmt/print.go"] = strings.Repeat("1", 64)
+			metadata.Dependencies.ExternalPackages[0].Package.SourceSHA256["fmt/print.go"] = strings.Repeat("1", 64)
+			metadata.Dependencies.SourceModules[0].Sources["fmt/print.go"] = strings.Repeat("1", 64)
+			metadata.Dependencies.SourceModules[0].Directories["fmt"][0].SHA256 = strings.Repeat("1", 64)
 		case "language":
 			header.LanguageVersion = "go1.21"
 		case "import mapping":
 			header.ImportMap = map[string]string{"errors": "errors"}
 			header.Imports[0].ImportPath, header.Imports[0].PackagePath = "errors", "errors"
 			header.Imports[0].GoSHA256 = map[string]string{"errors/errors.go": strings.Repeat("d", 64)}
+			// Preserve a complete internally valid alternate import/source graph;
+			// cross-snapshot comparison must still reject its changed meaning.
+			closure := metadata.Dependencies
+			closure.Packages[0].ImportMap = header.ImportMap
+			closure.Candidate.Headers["decl.go"] = strings.Replace(closure.Candidate.Headers["decl.go"], `"fmt"`, `"errors"`, 1)
+			dep := &closure.ExternalPackages[0]
+			dep.VariantID, dep.Package.PackagePath = "errors", "errors"
+			dep.Package.GoFiles, dep.Package.CompiledGoFiles = []string{"errors/errors.go"}, []string{"errors/errors.go"}
+			dep.Package.SourceSHA256 = header.Imports[0].GoSHA256
+			dep.Embed.Directives = map[string]string{"errors/errors.go": ""}
+			module := &closure.SourceModules[0]
+			module.Sources = dep.Package.SourceSHA256
+			module.Headers = map[string]string{"errors/errors.go": "package errors\n"}
+			module.Directories = map[string][]gotoolprofile.TestSourceEntry{
+				".": {{Name: "errors", Kind: "directory"}}, "errors": {{Name: "errors.go", Kind: "file", SHA256: strings.Repeat("d", 64)}},
+			}
 		}
 		header.DefinitionsSHA256 = gotoolprofile.HeaderDefinitionSHA256(header.Definitions)
 	}
+}
+
+func fixtureSemanticGeneratedDependencies(plan *discoveryOrdinarySelectionPlan, pkg gotoolprofile.PackageProof, goVersion string) *gotoolprofile.OrdinaryDependencyProof {
+	inventory := gotoolprofile.SourceInventory{Sources: make(map[string]string), Headers: make(map[string]string), Directories: make(map[string][]gotoolprofile.TestSourceEntry)}
+	for _, directory := range plan.Directories {
+		inventory.Directories[directory.Directory] = []gotoolprofile.TestSourceEntry{}
+		for _, entry := range directory.Entries {
+			inventory.Directories[directory.Directory] = append(inventory.Directories[directory.Directory], gotoolprofile.TestSourceEntry{Name: entry.Name, Kind: entry.Kind, SHA256: entry.SHA256})
+			if entry.Kind == "file" {
+				inventory.Sources[strings.TrimPrefix(directory.Directory+"/"+entry.Name, "./")] = entry.SHA256
+			}
+		}
+	}
+	for _, source := range plan.Sources {
+		if strings.HasSuffix(source.File, ".go") || strings.HasSuffix(source.File, ".s") {
+			inventory.Headers[source.File] = source.Header
+		}
+	}
+	pkg.Macros = nil
+	root := gotoolprofile.SourcePackageProof{Package: pkg, VariantID: pkg.PackagePath, ImportMap: map[string]string{"fmt": "fmt"},
+		Embed: &gotoolprofile.EmbedSelection{Protocol: gotoolprofile.TestEmbedProtocol, Directives: map[string]string{"decl.go": ""}, Files: map[string]string{}},
+	}
+	module := gotoolprofile.ModuleSourceSnapshot{Protocol: gotoolprofile.TestDependencyModuleProtocol, GoVersion: goVersion,
+		Sources: map[string]string{"fmt/print.go": strings.Repeat("d", 64)}, Headers: map[string]string{"fmt/print.go": "package fmt\n"},
+		Directories: map[string][]gotoolprofile.TestSourceEntry{".": {{Name: "fmt", Kind: "directory"}}, "fmt": {{Name: "print.go", Kind: "file", SHA256: strings.Repeat("d", 64)}}},
+	}
+	dep := gotoolprofile.SourcePackageProof{Package: gotoolprofile.PackageProof{PackagePath: "fmt", SourceRole: "stdlib", GoFiles: []string{"fmt/print.go"}, CompiledGoFiles: []string{"fmt/print.go"}, SourceSHA256: module.Sources},
+		VariantID: "fmt", ImportMap: map[string]string{}, SourceRootID: module.ID(), ExportSHA256: strings.Repeat("c", 64),
+		Embed: &gotoolprofile.EmbedSelection{Protocol: gotoolprofile.TestEmbedProtocol, Directives: map[string]string{"fmt/print.go": ""}, Files: map[string]string{}},
+	}
+	return &gotoolprofile.OrdinaryDependencyProof{Protocol: gotoolprofile.OrdinaryDependencyProtocol, Candidate: inventory,
+		Packages: []gotoolprofile.SourcePackageProof{root}, ExternalPackages: []gotoolprofile.SourcePackageProof{dep}, SourceModules: []gotoolprofile.ModuleSourceSnapshot{module}}
 }

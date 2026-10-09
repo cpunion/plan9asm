@@ -30,7 +30,7 @@ const TestModuleOriginalGoModOrigin = "original_zip_go_mod"
 // the consumer derives its own actual Module/Replace directory and ZIP and
 // compares their bytes. Offline replay relies on that frozen-run provenance.
 // Neither an export nor an external assembly file is a candidate LLVM output.
-type TestModuleSource struct {
+type ModuleSourceSnapshot struct {
 	Protocol      string                       `json:"protocol"`
 	SourceModule  string                       `json:"source_module"`
 	SourceVersion string                       `json:"source_version"`
@@ -46,13 +46,17 @@ type TestModuleSource struct {
 	Directories   map[string][]TestSourceEntry `json:"directories"`
 }
 
+// This is a source artifact, not a test-package authorization. Existing test
+// and instrumentation protocols continue to bind it through their own owners.
+type TestModuleSource = ModuleSourceSnapshot
+
 type TestSourceEntry struct {
 	Name   string `json:"name"`
 	Kind   string `json:"kind"`
 	SHA256 string `json:"sha256,omitempty"`
 }
 
-func (source TestModuleSource) ID() string {
+func (source ModuleSourceSnapshot) ID() string {
 	if source.SourceModule == "" {
 		return "stdlib@" + source.GoVersion
 	}
@@ -85,6 +89,20 @@ func ValidateTestModuleSource(source TestModuleSource) error {
 	}
 	if err := validateTestModuleGoModOrigin(source); err != nil {
 		return err
+	}
+	return ValidateSourceInventory(source.Inventory())
+}
+
+// Inventory is pure file membership evidence, not a test, ordinary or compiler
+// permission. Each consuming role separately authenticates its root and graph.
+func (source ModuleSourceSnapshot) Inventory() SourceInventory {
+	return SourceInventory{Sources: source.Sources, Headers: source.Headers, Directories: source.Directories}
+}
+
+func ValidateSourceInventory(source SourceInventory) error {
+	if len(source.Directories) == 0 || len(source.Directories) > 4096 || len(source.Sources) == 0 ||
+		len(source.Sources) > 65536 || len(source.Headers) > 32768 {
+		return fmt.Errorf("missing bounded source-root inventory")
 	}
 	if source.Directories["."] == nil {
 		return fmt.Errorf("test dependency omits its actual source-root directory")
@@ -223,6 +241,25 @@ func VerifyTestModuleSource(ctx context.Context, source TestModuleSource, root, 
 	if err := ValidateTestModuleSource(source); err != nil {
 		return err
 	}
+	if err := VerifySourceInventory(ctx, source.Inventory(), root); err != nil {
+		return err
+	}
+	if source.SourceModule == "" {
+		if archive != "" {
+			return fmt.Errorf("stdlib source cannot acquire a module ZIP role")
+		}
+		return nil
+	}
+	return verifyTestModuleZIP(ctx, source, archive)
+}
+
+func VerifySourceInventory(ctx context.Context, source SourceInventory, root string) error {
+	if ctx == nil || ctx.Err() != nil {
+		return fmt.Errorf("source verification requires a live context")
+	}
+	if err := ValidateSourceInventory(source); err != nil {
+		return err
+	}
 	resolved, err := filepath.EvalSymlinks(root)
 	if err != nil || !filepath.IsAbs(root) || resolved != root {
 		return fmt.Errorf("test dependency source root is missing or redirected")
@@ -261,13 +298,7 @@ func VerifyTestModuleSource(ctx context.Context, source TestModuleSource, root, 
 			}
 		}
 	}
-	if source.SourceModule == "" {
-		if archive != "" {
-			return fmt.Errorf("stdlib source cannot acquire a module ZIP role")
-		}
-		return nil
-	}
-	return verifyTestModuleZIP(ctx, source, archive)
+	return nil
 }
 
 func readTestDependencySource(name string) ([]byte, error) {

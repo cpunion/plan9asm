@@ -169,6 +169,9 @@ func verifyDiscoveryOrdinaryCPP(plan *discoveryOrdinarySelectionPlan, moduleDir,
 	if err := verifyDiscoveryTestDependencySnapshot(plan, moduleDir); err != nil {
 		return &discoverySourceProofError{err}
 	}
+	if err := verifyDiscoveryOrdinaryDependencySnapshots(plan); err != nil {
+		return &discoverySourceProofError{err}
+	}
 	return nil
 }
 

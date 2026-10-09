@@ -20,12 +20,13 @@ func TestOrdinaryGeneratedHeaderProducerActualProfilesAndOfflineReplay(t *testin
 	compilerEnv := os.Environ()
 	candidate := discoveryCandidate{Module: "example.invalid/generated", Version: "v1.0.0", AsmFiles: []string{"probe_amd64.s"}}
 	sources := map[string]string{
-		"go.mod":                   "module example.invalid/generated\n\ngo 1.20\n",
-		"probe.go":                 "package generated\nimport (\"fmt\"; \"example.invalid/generated/internal/layout\")\nvar _ = fmt.Sprintf\nconst Answer = layout.Answer\ntype Layout struct { Byte byte; Word uint64 }\nfunc probe() uint64\n",
-		"values_v3.go":             "//go:build amd64.v3\n\npackage generated\nconst Optional = 3\n",
-		"values_v1.go":             "//go:build !amd64.v3\n\npackage generated\nconst Fallback = 1\n",
-		"internal/layout/value.go": "package layout\nconst Answer = 7\n",
-		"probe_amd64.s":            "#include \"go_asm.h\"\n#include \"textflag.h\"\n#ifdef const_Never\n#include \"inactive-missing.h\"\n#endif\nTEXT ·probe(SB),NOSPLIT,$0-8\n#ifdef const_Optional\n#ifdef GOAMD64_v3\nMOVQ $const_Optional,ret+0(FP)\n#else\nMOVQ $const_Answer,ret+0(FP)\n#endif\n#else\nMOVQ $const_Fallback,ret+0(FP)\n#endif\nRET\n",
+		"go.mod":                    "module example.invalid/generated\n\ngo 1.20\n",
+		"probe.go":                  "package generated\nimport (\"fmt\"; \"example.invalid/generated/internal/layout\")\nvar _ = fmt.Sprintf\nconst Answer = layout.Answer\ntype Layout struct { Byte byte; Word uint64 }\nfunc probe() uint64\n",
+		"values_v3.go":              "//go:build amd64.v3\n\npackage generated\nconst Optional = 3\n",
+		"values_v1.go":              "//go:build !amd64.v3\n\npackage generated\nconst Fallback = 1\n",
+		"internal/layout/value.go":  "package layout\nimport _ \"embed\"\nconst Answer = 7\n//go:embed asset.bin\nvar Asset []byte\n",
+		"internal/layout/asset.bin": "original ordinary dependency asset\n",
+		"probe_amd64.s":             "#include \"go_asm.h\"\n#include \"textflag.h\"\n#ifdef const_Never\n#include \"inactive-missing.h\"\n#endif\nTEXT ·probe(SB),NOSPLIT,$0-8\n#ifdef const_Optional\n#ifdef GOAMD64_v3\nMOVQ $const_Optional,ret+0(FP)\n#else\nMOVQ $const_Answer,ret+0(FP)\n#endif\n#else\nMOVQ $const_Fallback,ret+0(FP)\n#endif\nRET\n",
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
 	installGeneratedFixtureProxy(t, candidate, download, sources["go.mod"])
@@ -65,6 +66,10 @@ func TestOrdinaryGeneratedHeaderProducerActualProfilesAndOfflineReplay(t *testin
 		if proof.GeneratedHeaders == nil || len(proof.CPP) != 1 || len(proof.CPP[0].Inputs) != 3 {
 			t.Fatalf("missing actual full header or inactive include incorrectly consumed: %#v", proof)
 		}
+		closure := proof.GeneratedHeaders.Dependencies
+		if closure == nil || closure.Candidate.Sources["internal/layout/asset.bin"] != discoveryFeatureBytesSHA256([]byte(sources["internal/layout/asset.bin"])) {
+			t.Fatal("ordinary dependency asset lacks its original ZIP source closure")
+		}
 	}
 	inventory := newDiscoveryFeatureInventory()
 	refs, err := registerDiscoveryFeatureProfiles(inventory, matrix.FeatureProfiles)
@@ -89,6 +94,20 @@ func TestOrdinaryGeneratedHeaderProducerActualProfilesAndOfflineReplay(t *testin
 		t.Fatalf("full generated/header/profile producer-consumer JSON replay: %v", err)
 	}
 	mutations := map[string]func(*discoveryCorpusResult){
+		"paired dependency role deletion": func(result *discoveryCorpusResult) {
+			for index := range result.OrdinarySelectionPlan.GeneratedHeaders {
+				result.OrdinarySelectionPlan.GeneratedHeaders[index].Metadata.Dependencies = nil
+			}
+			for _, proof := range result.FeatureConsumption {
+				proof.GeneratedHeaders.Dependencies = nil
+			}
+		},
+		"dependency empty witness deletion": func(result *discoveryCorpusResult) {
+			result.OrdinarySelectionPlan.GeneratedHeaders[0].Metadata.Dependencies.Packages[0].Embed = nil
+		},
+		"transitive ordinary dependency deletion": func(result *discoveryCorpusResult) {
+			result.OrdinarySelectionPlan.GeneratedHeaders[0].Metadata.Dependencies.ExternalPackages = nil
+		},
 		"missing producer query": func(result *discoveryCorpusResult) { result.OrdinarySelectionPlan.GeneratedHeaders = nil },
 		"metadata only is not translation": func(result *discoveryCorpusResult) {
 			result.FeatureConsumption = nil

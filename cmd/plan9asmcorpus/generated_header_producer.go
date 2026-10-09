@@ -221,6 +221,9 @@ func captureDiscoveryGeneratedHeaderQuery(ctx context.Context, plan *discoveryOr
 	if err := gotoolprofile.ValidateMetadata(input, &proof, tags); err != nil {
 		return nil, err
 	}
+	if err := verifyDiscoveryOrdinaryDependencies(ctx, plan, download, proof.Dependencies, dir, env); err != nil {
+		return nil, err
+	}
 	if err := verifyDiscoveryGeneratedGoSources(plan, download.Dir, download.Zip); err != nil {
 		return nil, err
 	}

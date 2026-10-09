@@ -33,7 +33,7 @@ type SignatureRequest struct {
 
 // Source-only packages never enter the ordinary Go/ASM package inventory.
 // ImportMap retains all edges, including those leaving this exact module.
-type TestSourcePackage struct {
+type SourcePackageProof struct {
 	Package   PackageProof      `json:"package"`
 	VariantID string            `json:"variant_id"`
 	ImportMap map[string]string `json:"import_map"`
@@ -44,6 +44,10 @@ type TestSourcePackage struct {
 	Builtin      string              `json:"builtin,omitempty"`
 	Embed        *TestEmbedSelection `json:"embed_selection"`
 }
+
+// Historical test callers retain their name; this record alone grants no
+// test-variant, embed or compiler permission. The enclosing role validates it.
+type TestSourcePackage = SourcePackageProof
 
 type TestDependencyProof struct {
 	Protocol         string               `json:"protocol"`
@@ -244,6 +248,16 @@ func testSourceOnlyZeroAssembly(view *ConsumerInput, pkg PackageProof, dir strin
 }
 
 func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyProof, roots map[string]bool, tags []string) error {
+	modules, err := testDependencySourceModules(input, dependency)
+	if err != nil {
+		return err
+	}
+	return validatePackageSourceClosure(input, dependency.Packages, dependency.ExternalPackages, modules, roots, tags, true)
+}
+
+// The bool is private and fixed by two distinct role validators. Shared source
+// selection does not move permission from the test role to the ordinary role.
+func validatePackageSourceClosure(input *ConsumerInput, local, external []SourcePackageProof, modules map[string]TestModuleSource, roots map[string]bool, tags []string, testVariants bool) error {
 	minor, err := goMinor(input.Observed.GoVersion)
 	if err != nil {
 		return err
@@ -254,11 +268,7 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 	for version := 1; version <= minor; version++ {
 		ctx.ReleaseTags = append(ctx.ReleaseTags, fmt.Sprintf("go1.%d", version))
 	}
-	modules, err := testDependencySourceModules(input, dependency)
-	if err != nil {
-		return err
-	}
-	packages := append(append([]TestSourcePackage(nil), dependency.Packages...), dependency.ExternalPackages...)
+	packages := append(append([]SourcePackageProof(nil), local...), external...)
 	if len(packages) > 4096 {
 		return fmt.Errorf("test dependency package closure exceeds its bounded scope")
 	}
@@ -266,7 +276,7 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 	usedModules := make(map[string]map[string]bool)
 	for index, source := range packages {
 		pkg := source.Package
-		if (index < len(dependency.Packages)) != (source.SourceRootID == "") {
+		if (index < len(local)) != (source.SourceRootID == "") {
 			return fmt.Errorf("test dependency changed original versus external package source roles")
 		}
 		view, err := testDependencyPackageInput(input, source, modules)
@@ -281,8 +291,8 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 			return io.NopCloser(strings.NewReader(header)), nil
 		}
 		start := 0
-		if index >= len(dependency.Packages) {
-			start = len(dependency.Packages)
+		if index >= len(local) {
+			start = len(local)
 		}
 		builtin := source.Builtin == "go_typechecker_unsafe_v1"
 		if index > start && pkg.PackagePath <= packages[index-1].Package.PackagePath || byPath[pkg.PackagePath].VariantID != "" ||
@@ -291,7 +301,7 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 			return fmt.Errorf("noncanonical actual test source-only package")
 		}
 		wantedID := pkg.PackagePath
-		if roots[pkg.PackagePath] {
+		if testVariants && roots[pkg.PackagePath] {
 			wantedID += " [" + pkg.PackagePath + ".test]"
 		}
 		if source.VariantID != wantedID {
@@ -301,7 +311,7 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 		if dir == "" {
 			dir = "."
 		}
-		if source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 &&
+		if testVariants && source.SourceRootID == "" && !roots[pkg.PackagePath] && len(pkg.SFiles) != 0 &&
 			!containsString(input.OrdinaryAsmPackages, dir) && !testSourceOnlyZeroAssembly(view, pkg, dir) {
 			return fmt.Errorf("source-only test dependency cannot replace another assembly translation scope: "+
 				"package=%s module=%s@%s source_root=%q directory=%s selected_asm=%q ordinary_asm_packages=%q target=%s profile=%s tags=%q",
@@ -337,7 +347,7 @@ func validateTestSourceClosure(input *ConsumerInput, dependency *TestDependencyP
 		imports := make(map[string]bool)
 		for _, name := range view.Directories[dir] {
 			file := path.Join(dir, name)
-			if path.Ext(name) != ".go" && path.Ext(name) != ".s" || strings.HasSuffix(name, "_test.go") && !roots[pkg.PackagePath] {
+			if path.Ext(name) != ".go" && path.Ext(name) != ".s" || strings.HasSuffix(name, "_test.go") && (!testVariants || !roots[pkg.PackagePath]) {
 				continue
 			}
 			selected, err := ctx.MatchFile(dir, name)

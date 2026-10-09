@@ -2386,6 +2386,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 		if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
 			if ordinaryPlan != nil {
 				ordinaryPlan.testDependencyContext = ctx
+				ordinaryPlan.ordinaryDependencyContext = ctx
 			}
 			return verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate)
 		}); err != nil {
@@ -2408,7 +2409,13 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 	if err != nil {
 		return matrixReport{}, nil, nil, fmt.Errorf("classify discovered assembly: %w", err)
 	}
-	if err := verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate); err != nil {
+	if err := runDiscoveryOperation(cfg.CandidateTimeout, func(ctx context.Context) error {
+		if ordinaryPlan != nil {
+			ordinaryPlan.ordinaryDependencyContext = ctx
+			ordinaryPlan.testDependencyContext = ctx
+		}
+		return verifyDiscoveryOrdinaryCPP(ordinaryPlan, download.Dir, cppGoRoot, candidate)
+	}); err != nil {
 		return matrixReport{}, nil, nil, err
 	}
 	var privateExtension *discoveryPrivateExtensionSkip
@@ -2557,6 +2564,7 @@ func runDiscoveryCandidate(cfg discoveryCorpusConfig, candidate discoveryCandida
 			err := cfg.runPhaseOperation(candidate, "ordinary_target", fmt.Sprintf("%s/%s/%d", target, buildConfiguration.ProfileID, invocationIndex), func(ctx context.Context) error {
 				if ordinaryPlan != nil {
 					ordinaryPlan.testDependencyContext = ctx
+					ordinaryPlan.ordinaryDependencyContext = ctx
 				}
 				guard := func(run func() error) (operationErr error) {
 					if activeProfile != nil {

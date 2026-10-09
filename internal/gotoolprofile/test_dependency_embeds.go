@@ -26,12 +26,14 @@ const TestEmbedProtocol = "actual_go_test_dependency_embed_selection_v1"
 // directives. These are source inputs, never assembly/object completion.
 // The producer and consumer compare Directives with actual original bytes;
 // offline replay relies on their authenticated frozen-source provenance.
-type TestEmbedSelection struct {
+type EmbedSelection struct {
 	Protocol   string            `json:"protocol"`
 	Directives map[string]string `json:"directives"`
 	Patterns   []string          `json:"patterns"`
 	Files      map[string]string `json:"files"`
 }
+
+type TestEmbedSelection = EmbedSelection
 
 // Preserve only genuine line-comment directives, not lookalikes in strings
 // or block comments. Pattern syntax is subsequently parsed by stock go/build.

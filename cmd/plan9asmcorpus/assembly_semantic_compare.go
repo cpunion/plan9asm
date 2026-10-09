@@ -103,6 +103,16 @@ func semanticAssemblyLedgerProgress(original discoveryProgress) (discoveryProgre
 				header.Imports[index].ExportSHA256 = ""
 			}
 		}
+		if metadata.Dependencies != nil {
+			for index := range metadata.Dependencies.ExternalPackages {
+				metadata.Dependencies.ExternalPackages[index].ExportSHA256 = ""
+			}
+			for index := range metadata.Dependencies.SourceModules {
+				if origin := metadata.Dependencies.SourceModules[index].ProxyGoMod; origin != nil {
+					origin.SignedTree, origin.Inclusion = "", nil
+				}
+			}
+		}
 		return nil
 	}
 	projectNativeAssembly := func(cpp *gotoolprofile.CPPProof) error {

@@ -27,7 +27,8 @@ func ValidateGeneratedHeaderAgreement(input *ConsumerInput, expected, actual *Me
 			return err
 		}
 	}
-	if !reflect.DeepEqual(expected.Packages, actual.Packages) || !equalDiscoveryStrings(expected.CustomTags, actual.CustomTags) {
+	if !reflect.DeepEqual(expected.Packages, actual.Packages) || !equalDiscoveryStrings(expected.CustomTags, actual.CustomTags) ||
+		!reflect.DeepEqual(expected.Dependencies, actual.Dependencies) {
 		return fmt.Errorf("generated-header compiler queries selected different package/source/tag roles")
 	}
 	byPackage := make(map[string]GeneratedHeaderProof, len(expected.Headers))

@@ -10,7 +10,7 @@ import (
 )
 
 const GeneratedHeaderProtocol = "actual_go_asmhdr_full_definitions_v1"
-const MetadataProtocol = "actual_go_cpu_profile_metadata_v1"
+const MetadataProtocol = "actual_go_cpu_profile_metadata_v2"
 
 // A compiler package can legitimately emit more than 4096 definitions. Bound
 // its full textual input and canonical output by bytes, not declaration count.
@@ -19,11 +19,12 @@ const generatedHeaderByteLimit = goasmheader.ByteLimit
 // MetadataProof is deliberately not a SelectionProof. It proves generated
 // layout inputs, not successful assembly translation or LLVM object emission.
 type MetadataProof struct {
-	Protocol   string                 `json:"protocol"`
-	ProfileID  string                 `json:"profile_id"`
-	CustomTags []string               `json:"custom_tags,omitempty"`
-	Packages   []PackageProof         `json:"packages"`
-	Headers    []GeneratedHeaderProof `json:"headers"`
+	Protocol     string                   `json:"protocol"`
+	ProfileID    string                   `json:"profile_id"`
+	CustomTags   []string                 `json:"custom_tags,omitempty"`
+	Packages     []PackageProof           `json:"packages"`
+	Headers      []GeneratedHeaderProof   `json:"headers"`
+	Dependencies *OrdinaryDependencyProof `json:"ordinary_dependencies"`
 }
 
 type GeneratedHeaderProof struct {
@@ -118,7 +119,7 @@ func ValidateMetadata(input *ConsumerInput, proof *MetadataProof, tags []string)
 			return err
 		}
 	}
-	return nil
+	return ValidateOrdinaryDependencies(input, proof, tags)
 }
 
 func ValidateGeneratedHeader(input *ConsumerInput, proof GeneratedHeaderProof, pkg PackageProof) error {

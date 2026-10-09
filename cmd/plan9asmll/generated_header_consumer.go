@@ -33,9 +33,14 @@ func (consumer *featureConsumer) retainGeneratedGuard(files map[string]string) e
 }
 
 func (consumer *featureConsumer) captureGeneratedMetadata(pkgs []*packages.Package, tags []string, output string) error {
+	dependencies, err := consumer.ordinaryDependencyProof()
+	if err != nil {
+		return err
+	}
 	actual := &gotoolprofile.MetadataProof{
 		Protocol: gotoolprofile.MetadataProtocol, ProfileID: consumer.ID,
 		CustomTags: append([]string(nil), tags...), Packages: consumer.Proof.Packages,
+		Dependencies: dependencies,
 	}
 	for index, pkg := range pkgs {
 		header, err := captureGeneratedHeader(consumer, pkg, actual.Packages[index], output)
