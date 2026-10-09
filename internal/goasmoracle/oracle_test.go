@@ -66,6 +66,41 @@ func TestDiagnosticScannerErrorsDoNotMatch(t *testing.T) {
 	}
 }
 
+func TestDiagnosticAssemblerIdentifierUnderscores(t *testing.T) {
+	// These are real assembler identifiers, not supported instruction names.
+	// Their current source-bound Go refusals must retain the diagnostic role.
+	for _, opcode := range []string{"NOT_AN_INSTRUCTION", "_NOT_AN_INSTRUCTION", "NOT_AN_INSTRUCTION_2"} {
+		t.Run(opcode, func(t *testing.T) {
+			source, object := oracleFixture(t)
+			data := "TEXT probe(SB),$0-0\n\t" + opcode + "\n\tRET\n"
+			if err := os.WriteFile(source, []byte(data), 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			observed, err := goasmcmd.Observe(ctx, filepath.Dir(source),
+				append(os.Environ(), "GOTOOLCHAIN=local", "GOOS=linux", "GOARCH=arm64"),
+				"go", "tool", "asm", "-o", object, source)
+			encoded, _ := json.Marshal(observed)
+			t.Logf("ORACLE_CHILD %s", encoded)
+			if observed.ExitCode != 1 || !observed.Waited ||
+				!strings.Contains(string(observed.Stderr), source+":2: unrecognized instruction") {
+				t.Fatalf("actual original Go diagnostic differs: %+v %v", observed, err)
+			}
+			if failure := CheckOutcome(source, object, observed.Stdout, observed.Stderr, err,
+				ctx.Err(), false, 2, nil); failure != nil {
+				t.Fatalf("real underscore identifier diagnostic lost: %v", failure)
+			}
+			for _, output := range []string{"foreign" + source + ":2: unrecognized instruction\n",
+				source + ":4: unrecognized instruction\n", "asm: assembly failed\n"} {
+				if SourceDiagnosticLine(source, output, 2) {
+					t.Fatalf("unbound underscore diagnostic matched: %q", output)
+				}
+			}
+		})
+	}
+}
+
 func TestOutcomeSeparateStreamsAndActualExit(t *testing.T) {
 	source, object := oracleFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
