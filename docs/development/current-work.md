@@ -17,10 +17,10 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `19fc9198`. Complete x86 scalar float-to-integer and ARM64 scalar
-conversion semantics, composite private-frame transport, and exact ordinary
-dependency ownership join the preceding repairs. Packed x86 conversions and
-floating comparisons have separate active TDD owners.
+through `7b41b192`. Complete packed x86 conversions, x86/ARM64 scalar
+comparisons and Wasm float comparisons/minmax join the preceding repairs.
+ARM32 scalar comparison and ordinary package/header coverage remain active
+TDD work. The latest official classification gate is not green; see below.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -111,7 +111,8 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   later phases. Producer and consumer ancestor aliases remain bound to their
   actual live origins without weakening source-internal symlink rejection.
   The default-environment merged corpus gate at `8481dae4` passes all 57 roots;
-  its complete nested CLI and fresh external repeat remain running.
+  its complete nested CLI also passes all 251 roots in 983.672 seconds, with
+  default temporary paths and vet. The fresh external repeat fails separately.
 - All sixteen Go-named ARM64 scalar integer conversions and 84 registered raw
   forms share native FPCR/FPSR effects, W zeroing and precise scalar definedness.
   The complete family includes six SIMD integer-to-float widths, including H/H.
@@ -163,6 +164,32 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   neighbors. Each shard closes its own cache. Failures remain sticky and the
   final aggregate receives the actual shard count, not an implicit 64. Actual
   shell-entry tests passed current-Go repeated/race, Go 1.20 and Linux gates.
+- The remaining 38 packed conversion names plus four existing names share one
+  native typed emitter, checked against 148 independent Go encoder rows. The
+  legacy runtime matrix retains 32,256 original-Go observations, three LLVM
+  APIs and four optimization axes. Five-target objects and bounded native
+  fixture compilation are not AVX512 execution. The production rewrite removes
+  284 net lines instead of adding per-spelling fallback implementations.
+- Eight x86 COMI/UCOMI names and twelve Go encoder rows now retain native MXCSR
+  effects and exactly two read-only scalar operands. Independent review fixes
+  Context-before-malformed-source ordering and the direct helper target guard.
+  Raw VEX.L=1 has no portable physical semantics and cannot be canonicalized
+  to L=0. All four native Linux owners have their actual fixture programs
+  compiled, but host/Rosetta does not certify their AVX512/trap execution.
+- ARM64 scalar comparisons retain native FPCR/FPSR/NZCV, including signaling,
+  zero/register operands and raw H/S/D widths. The original-Go runtime matrix
+  covers 165,888 observations; target preflight retains malformed/dead errors.
+- All sixteen Wasm F32/F64 comparisons and min/max use a typed stack grammar.
+  Comparisons produce i32. Min/max quiet NaNs through an integer-bit result
+  check because LLVM22 O2 can fold minimum(x,x) to a signaling input unchanged.
+  Original Go and 24 real Wasm object/runtime axes each pass 25,600 rows; the
+  complete 68-root Wasm gate passes without skips. No blockaddress is emitted.
+
+The merged `2ddd94da` instruction gate passes 146 roots on both current Go
+(170.817 seconds) and Go 1.20 (161.545 seconds), plus CLI table extraction and
+vet. Its official check rejects an AMD64 baseline drift: twenty forms move
+from supported to Context. Review exact source/form evidence before touching
+that baseline; the combined gate is not a pass.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -200,11 +227,12 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   also passed. Historical directories keep their exact source revision.
   The later `2eaaeb5c` Linux queue gate passed six roots and cleaned only its
   own cache. After it closed, the tree advanced to `4f8cd6bc`; the full module,
-  five-architecture classification and vet sequence is now running separately
-  under `_out/typed-native-module-4f8cd6bc/`. Never advance this active snapshot.
+  five-architecture classification and vet sequence is terminal separately
+  under `_out/typed-native-module-4f8cd6bc/`.
   Its root partitions are terminal: 5,544 pass, one historical reentry-fixture
   failure and 39 host-inapplicable runtime roots. `814e46d2` fixes that fixture
-  independently; the other module packages are still running, not a full pass.
+  independently; the other nineteen module packages pass. The historical
+  whole run remains failed. Its closed 3.2-GB cache is reclaimed, not reports.
 - `codex/pr40-source-tls-verify-20261010`:
   `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
   163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
@@ -223,7 +251,8 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   roots but exposes the standalone producer's ancestor alias. `aa23a36d` closes
   that remaining role. Only after termination was this tree advanced to
   `8481dae4`; `_out/merged-owners-8481dae4/` retains the passing 57-root corpus
-  gate and the still-running full nested CLI, using default temporary paths.
+  gate and all 251 nested CLI roots, using default temporary paths. Vet and
+  clean/source guards pass; its closed one-GB cache is reclaimed.
 - `codex/pr40-sdk-numerical-cli-20261010`, `a5d9396b`:
   the complete nested CLI gate passed all 239 roots, without skips. The later
   downloaded Darwin/mirror change passed its four actual object consumers and
@@ -280,6 +309,12 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   A separate network-free frozen reader reproduces the progress bytes exactly.
   The generic-root optimization is absent from this historical snapshot;
   its success cannot certify a newer source-owner protocol or faster planning.
+  Only after all consumers closed was the tree advanced to `b024aec6` for
+  `_out/priority-crypto-b024aec6/`: all three fixed CI crypto candidates fail
+  the same original-observation SDK macro-role check. No candidate passes.
+  A network-free independent reader reproduces progress bytes; its stopped
+  container/cache are closed. A first-party three-OS role RED now reproduces
+  this without external source execution.
 - `codex/pr40-coroutine-performance-verify-20261010`, `dfa0d559`:
   the independent repeat failed after 95.885-second planning with zero objects.
   Generic preflight now reaches a real `durable` metadata consumer whose
@@ -292,9 +327,13 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   metadata failure, `noncanonical complete package assembly registration`.
   It has zero objects, not a performance pass. A network-free frozen reader
   independently reproduced the progress bytes. Its container/cache are closed.
-  The fresh `8481dae4` retry runs separately under
+  The fresh `8481dae4` retry is terminal under
   `_out/ordinary-closure-8481dae4/`, with the same exact version, 2 CPU/3 GiB
-  executor and sixty-minute phase bounds. It is not yet a pass.
+  executor and sixty-minute phase bounds: actual Go rejects linux/386 durable
+  source with undefined sizeOfG. Header planning aborts with zero objects.
+  Independent replay passes; its container/cache are closed. The first-party
+  repair must preserve every final tag scope and actual source rejection,
+  including tags present only on Go partners; neither is assembly success.
 - `codex/pr40-arm-vfp-conversion-status-audit-20261010`, `8d12b43c`:
   `_out/arm-fp-status/handoff.md` indexes original-Go REDs and the final seven
   Linux/QEMU roots, 80 current-Go roots and the same 80 Go 1.20 roots, all with
@@ -326,13 +365,12 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Finish the merged default-environment full CLI and unchanged coroutine retry;
-   source ownership repairs are integrated, but component success is not an
-   external or current-head CI certificate.
-3. Finish the complete packed x86 conversion family and independent floating
-   comparison audits. Preserve original Go NaN/status/dead-effect witnesses,
-   full typed formats and required native hardware counterparts. Recheck merged
-   ARM64 scalar conversions; the component's full gates are already terminal.
+2. Close ordinary header-planning source rejections and the complete Go-only
+   tag denominator, then the original observer's SDK dependency macro roles.
+   Recheck the fixed external failures on a fresh frozen revision.
+3. Finish ARM32 scalar comparison FPSCR/APSR semantics and the independent
+   complete format/status matrix. Resolve the twenty-form official drift
+   without treating Context as a pass, then rerun merged family gates.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
