@@ -136,6 +136,14 @@ The 35 Node policy tests, actionlint, shell checks and runner build/vet also
 close. This is the runner package, not the complete root/module, native CI,
 SDK benchmark or an external-library pass. The original timeout remains failed.
 
+The actual eight-part module run at that head remains failed: part zero closes
+with 648 roots passing and seven named host skips, but part one is interrupted
+by its owner's one-second process-query timeout. The remaining six parts,
+corpus/rest owners and aggregate were not attempted. Read-only process and
+source checks close the observed failed generation, not the module certificate.
+Repair the bounded observer and rerun the complete plan on the next frozen
+integration head; never reuse this partial pass or enlarge test deadlines.
+
 At the same frozen head, the original five-architecture official inventory
 script closes naturally, and root independently replays its unchanged Python
 checker against all five retained complete reports. Source, SDK, selected tools
@@ -168,14 +176,16 @@ Unintegrated development branches retain two further counterexamples:
   under development. Do not accept any nonzero exit as source rejection;
   a stale, empty or non-object artifact is not assembly success. The complete
   794-case gate must run again after the repair; no baseline change is implied.
-- SDK literal-read models are query-only. Their independently closed identity,
-  native scalar geometry, semantic and owner-sum components do not close the
-  whole original CRC32 consumer. The statement/listing grammar work retains
-  its original fixture failure, corrected genuine RED, actual Go logical and
-  physical position observations, and separate canonical-number RED. Review
-  complete object/Aux identity before connecting these models to a live reader.
-  Inspect the `codex/pr40-sdk-literal-*` branches; do not integrate the retained
-  failing consumer until its actual whole-source runtime gate succeeds.
+- SDK literal-read models remain query-only. At `85d36df1`, the complete
+  statement/listing grammar scope closes ordinary and race with 20 roots and
+  346 children each; the actual Go-1.20 framework closes 18 roots/238 children.
+  Original fixture and canonical-number failures remain retained. The real
+  whole-source join at `136336a2` still fails after its complete original CRC
+  source, initializer and same-SDK CPU prerequisites pass. Root independently
+  checks all six original/mapped/archive DATA/TEXT readers. Public numerical
+  capture remains Context and borrowed owners/commands are unchanged. Connect
+  this actual source/tape/listing/object seam before numerical consumption;
+  do not integrate the retained failing consumer or claim CRC runtime success.
 
 ## Required next gates and remaining rule classes
 
