@@ -204,8 +204,10 @@ func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
 		for _, method := range []string{"Err", "Deadline", "Done"} {
 			for _, api := range []string{"Verify", "Readback", "CheckReadback", "Close"} {
 				t.Run(route+"/"+method+"/"+api, func(t *testing.T) {
-					callback := &sdkASMDataReentrantContext{Context: ctx, method: method}
-					captureContext := ctx
+					verification, cancel := context.WithCancel(ctx)
+					defer cancel()
+					callback := &sdkASMDataReentrantContext{Context: verification, method: method}
+					captureContext := verification
 					if route == "original" {
 						captureContext = callback
 					}
@@ -223,7 +225,7 @@ func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
 						if api == "Close" {
 							nested = owner.Close()
 						} else {
-							_, nested = readonlyLiteralInvoke(t, api, owner, ctx, raw)
+							_, nested = readonlyLiteralInvoke(t, api, owner, verification, raw)
 						}
 					}
 					callback.armed.Store(true)
@@ -238,8 +240,13 @@ func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
 						} else if err != nil {
 							t.Fatal("initializer validation callback deadlocked or rejected its actual owner", err)
 						}
-					case <-time.After(3 * time.Second):
-						t.Fatal("initializer API synchronously deadlocked during context callback")
+					case <-ctx.Done():
+						// Actual SDK validation can take longer under the race
+						// detector. Use the existing producer/test deadline,
+						// cancel and join this worker before ending the case.
+						cancel()
+						err := <-finished
+						t.Fatal("initializer callback exceeded its existing bounded context", ctx.Err(), err)
 					}
 					if err := source.Verify(ctx); err != nil {
 						t.Fatal("initializer callback disposed its source", err)
@@ -427,12 +434,14 @@ func TestGoX86SDKReadonlyLiteralDataConcurrentSourceRevocation(t *testing.T) {
 	for _, api := range []string{"Verify", "Readback", "CheckReadback"} {
 		t.Run(api, func(t *testing.T) {
 			ctx, source, owner := readonlyLiteralCapture(t)
+			verification, cancel := context.WithCancel(ctx)
+			defer cancel()
 			raw, err := owner.Readback(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
 			entered, resume := make(chan struct{}), make(chan struct{})
-			callback := &sdkASMDataReentrantContext{Context: ctx, method: "Done"}
+			callback := &sdkASMDataReentrantContext{Context: verification, method: "Done"}
 			callback.callback = func() { close(entered); <-resume }
 			callback.armed.Store(true)
 			finished := make(chan error, 1)
@@ -445,9 +454,11 @@ func TestGoX86SDKReadonlyLiteralDataConcurrentSourceRevocation(t *testing.T) {
 			}()
 			select {
 			case <-entered:
-			case <-time.After(3 * time.Second):
+			case <-ctx.Done():
+				cancel()
 				close(resume)
-				t.Fatal("source revocation control never entered caller callback")
+				err := <-finished
+				t.Fatal("source revocation control exceeded its existing context before caller callback", ctx.Err(), err)
 			}
 			closed := source.Close()
 			close(resume)
@@ -456,8 +467,10 @@ func TestGoX86SDKReadonlyLiteralDataConcurrentSourceRevocation(t *testing.T) {
 				if closed != nil || !errors.Is(err, ErrProbeNeedsContext) || owner.ready {
 					t.Fatal("concurrent source Close published a stale initializer", err, closed)
 				}
-			case <-time.After(3 * time.Second):
-				t.Fatal("source Close and initializer callback synchronously deadlocked")
+			case <-ctx.Done():
+				cancel()
+				err := <-finished
+				t.Fatal("source Close and initializer callback exceeded their existing context", ctx.Err(), err)
 			}
 		})
 	}
