@@ -32,6 +32,17 @@ func X86FPAccessBytes(ins Instr, index int, arch string) (width int64, write, kn
 		}
 		return 0, false, false
 	}
+	// MOVL/MOVQ/MOVD and their VEX forms have complete Go GP/X memory rows
+	// in the same typed transfer grammar as register copies. Keep the FP
+	// observer on that row table instead of falling through to the GP-only
+	// scalar shortcut; otherwise MOVL X0,value(FP) and its load direction are
+	// silently reported as unknown despite being official formats.
+	if form, recognized, err := x86GPSIMDTransferProperties(ins, arch); recognized {
+		if err != nil || form.memory < 0 || form.memory != index {
+			return 0, false, false
+		}
+		return int64(form.bits / 8), form.memoryWrite, true
+	}
 	if ins.Op == "MOVB" || ins.Op == "MOVW" || ins.Op == "MOVL" || ins.Op == "MOVQ" {
 		if len(ins.Args) != 2 {
 			return 0, false, false
