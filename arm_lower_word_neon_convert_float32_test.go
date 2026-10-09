@@ -36,7 +36,7 @@ func TestTranslateARMRawNEONVCVTFloat32GoDSPRegression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"sitofp <4 x i32>", `"target-features"="+neon"`} {
+	for _, want := range []string{`call <4 x float> asm sideeffect "vcvt.f32.s32`, `"target-features"="+neon"`} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw NEON VCVT IR omitted %q:\n%s", want, ir)
 		}
@@ -97,7 +97,12 @@ func TestTranslateARMRawNEONVCVTFloat32AllOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"sitofp <2 x i32>", "uitofp <4 x i32>", "fptosi <2 x float>", "fptoui <4 x float>"} {
+	for _, want := range []string{
+		`call <2 x float> asm sideeffect "vcvt.f32.s32`,
+		`call <4 x float> asm sideeffect "vcvt.f32.u32`,
+		`call <2 x i32> asm sideeffect "vcvt.s32.f32`,
+		`call <4 x i32> asm sideeffect "vcvt.u32.f32`,
+	} {
 		if !strings.Contains(ir, want) {
 			t.Fatalf("raw NEON VCVT all operations omitted %q:\n%s", want, ir)
 		}

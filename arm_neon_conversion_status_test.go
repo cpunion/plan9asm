@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,6 +40,33 @@ func armNEONConversionStatusFixtures() []armNEONConversionFixture {
 						word:   armNEONConversionFixtureWord(toFloat, unsigned, quad, 0, 2),
 						source: 0, target: 2, quad: quad, toFloat: toFloat, unsigned: unsigned, dead: dead,
 					})
+				}
+			}
+		}
+	}
+	return fixtures
+}
+
+func armNEONConversionEndpointFixtures() []armNEONConversionFixture {
+	var fixtures []armNEONConversionFixture
+	for _, toFloat := range []bool{false, true} {
+		for _, unsigned := range []bool{false, true} {
+			for _, quad := range []bool{false, true} {
+				step := 1
+				if quad {
+					step = 2
+				}
+				for source := 0; source < 32; source += step {
+					for _, alias := range []bool{false, true} {
+						target := source
+						if !alias {
+							target = (source + 7*step) % 32
+						}
+						fixtures = append(fixtures, armNEONConversionFixture{
+							word:   armNEONConversionFixtureWord(toFloat, unsigned, quad, source, target),
+							source: source, target: target, quad: quad, toFloat: toFloat, unsigned: unsigned,
+						})
+					}
 				}
 			}
 		}
@@ -102,6 +130,62 @@ func TestARMNEONConversionStatusRetainsNativeSideEffects(t *testing.T) {
 		for _, cast := range []string{" = fptosi ", " = fptoui ", " = sitofp ", " = uitofp "} {
 			if strings.Contains(variant.ir, cast) {
 				t.Errorf("%s replaces Advanced SIMD status with a pure conversion: %s", variant.name, cast)
+			}
+		}
+	}
+}
+
+func TestARMNEONConversionAllBankAndAliasObjects(t *testing.T) {
+	fixtures := armNEONConversionEndpointFixtures()
+	if len(fixtures) != 384 {
+		t.Fatalf("incomplete full D/Q bank and alias matrix: %d", len(fixtures))
+	}
+	source, sigs := armNEONConversionFixtureSource(fixtures)
+	file, err := Parse(ArchARM, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM22 llc not found")
+	}
+	for _, triple := range []string{"armv5te-unknown-linux-gnueabi", "armv6-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf", "thumbv7-pc-windows-msvc"} {
+		t.Run(triple, func(t *testing.T) {
+			ir, err := Translate(file, Options{Goarch: "arm", TargetTriple: triple, Sigs: sigs})
+			if err != nil {
+				t.Fatal(err)
+			}
+			compileLLVMToObject(t, llc, triple, "arm-neon-conversion-banks.ll", "arm-neon-conversion-banks.o", ir)
+		})
+	}
+}
+
+func TestARMNEONConversionNativeTargetAndInvalidSourceBoundary(t *testing.T) {
+	for _, fixture := range armNEONConversionStatusFixtures() {
+		if fixture.dead {
+			continue
+		}
+		for _, api := range []string{"text", "module", "Go"} {
+			for _, triple := range []string{"armv5te-unknown-linux-gnueabi", "armv6-unknown-linux-gnueabihf", "armv7-unknown-linux-gnueabihf", "thumbv7-pc-windows-msvc"} {
+				source := fmt.Sprintf("TEXT conversion(SB),4,$0-0\nWORD $%#x\nRET\n", fixture.word)
+				if err := armWordFloatBoundaryAPI(t, api, source, triple); err != nil {
+					t.Fatalf("%s %s %#x rejects explicit native target: %v", api, triple, fixture.word, err)
+				}
+			}
+			for _, triple := range []string{"", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "arm64-apple-darwin", "armeb-unknown-linux-gnueabi", "thumbeb-unknown-linux-gnu"} {
+				source := fmt.Sprintf("TEXT conversion(SB),4,$0-0\nWORD $%#x\nRET\n", fixture.word)
+				if err := armWordFloatBoundaryAPI(t, api, source, triple); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("%s %s %#x did not require native state: %v", api, triple, fixture.word, err)
+				}
+				for _, body := range []string{
+					fmt.Sprintf("WORD $%#x\nWORD $0xffffffff", fixture.word),
+					fmt.Sprintf("RET\nWORD $0xffffffff\nWORD $%#x", fixture.word),
+				} {
+					source := "TEXT conversion(SB),4,$0-0\n" + body + "\nRET\n"
+					if err := armWordFloatBoundaryAPI(t, api, source, triple); err == nil || errors.Is(err, ErrProbeNeedsContext) {
+						t.Fatalf("%s %s malformed raw input became target context: %v", api, triple, err)
+					}
+				}
 			}
 		}
 	}

@@ -30,6 +30,12 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 		for _, source := range function.Instrs {
 			instruction := source
 			if instruction.Op == OpWORD {
+				if len(instruction.Args) == 1 && instruction.Args[0].Kind == OpImm && instruction.Args[0].ImmRaw == "" {
+					if _, ok := decodeARMRawNEONConvertFloat32(uint32(instruction.Args[0].Imm)); ok {
+						needsNative = true
+						continue
+					}
+				}
 				if armWordFloatPreflightSpecializedRaw(instruction) {
 					continue
 				}

@@ -53,6 +53,81 @@ func armNEONConversionKnownObservation(index int, fixture armNEONConversionFixtu
 	return row
 }
 
+// This bounded independent oracle follows A2.7 FPToFixed/FixedToFP with the
+// Advanced SIMD standard controls: nearest int->float, truncating float->int,
+// flushed input denormals, saturating invalid results, and cumulative flags.
+// It is test-only; production must execute native VCVT, not synthesize FPSCR.
+func armNEONConversionReference(fixture armNEONConversionFixture, bits uint32) (uint32, uint32) {
+	if fixture.toFloat {
+		integer := float64(int32(bits))
+		if fixture.unsigned {
+			integer = float64(bits)
+		}
+		value := float32(integer)
+		flags := uint32(0)
+		if float64(value) != integer {
+			flags = 0x10
+		}
+		return math.Float32bits(value), flags
+	}
+	if bits&0x7f800000 == 0 && bits&0x007fffff != 0 {
+		return 0, 0x80
+	}
+	value := float64(math.Float32frombits(bits))
+	if math.IsNaN(value) {
+		return 0, 1
+	}
+	minimum, maximum := -2147483648.0, 2147483647.0
+	if fixture.unsigned {
+		minimum, maximum = 0, 4294967295.0
+	}
+	truncated := math.Trunc(value)
+	if truncated < minimum {
+		if fixture.unsigned {
+			return 0, 1
+		}
+		return 0x80000000, 1
+	}
+	if truncated > maximum {
+		if fixture.unsigned {
+			return 0xffffffff, 1
+		}
+		return 0x7fffffff, 1
+	}
+	flags := uint32(0)
+	if truncated != value {
+		flags = 0x10
+	}
+	if fixture.unsigned {
+		return uint32(truncated), flags
+	}
+	return uint32(int32(truncated)), flags
+}
+
+func armNEONConversionDynamicObservation(index int, fixture armNEONConversionFixture, values [4]uint32, control uint32) armNEONConversionObservation {
+	row := armNEONConversionObservation{function: index}
+	for word := 0; word < 64; word++ {
+		row.input[word] = 0x87650000 + uint32(word)*0x0101
+	}
+	lanes := 2
+	if fixture.quad {
+		lanes = 4
+	}
+	copy(row.input[fixture.source*2:], values[:lanes])
+	copy(row.want[:64], row.input[:64])
+	flags := uint32(0)
+	for lane := 0; lane < lanes; lane++ {
+		result, exceptions := armNEONConversionReference(fixture, values[lane])
+		flags |= exceptions
+		if !fixture.dead {
+			row.want[fixture.target*2+lane] = result
+		}
+	}
+	row.input[64], row.want[64] = control, control|flags
+	row.want[65], row.want[66], row.want[67] = 0x12345678, 0x87654321, 0xfedcba98
+	return row
+}
+
 func armNEONConversionOraclePrograms(fixtures []armNEONConversionFixture, rows []armNEONConversionObservation) (string, string) {
 	var original, driver strings.Builder
 	original.WriteString("package main\nimport \"fmt\"\n")
@@ -122,7 +197,6 @@ int main(void) {
 }
 
 func TestCrossLinuxRuntimeMatrixARMNEONConversionNativeStatus(t *testing.T) {
-	llc := requireARMScalarRuntime(t)
 	fixtures := armNEONConversionStatusFixtures()
 	var rows []armNEONConversionObservation
 	for index, fixture := range fixtures {
@@ -135,6 +209,12 @@ func TestCrossLinuxRuntimeMatrixARMNEONConversionNativeStatus(t *testing.T) {
 			}
 		}
 	}
+	runARMNEONConversionObservations(t, fixtures, rows)
+}
+
+func runARMNEONConversionObservations(t *testing.T, fixtures []armNEONConversionFixture, rows []armNEONConversionObservation) {
+	t.Helper()
+	llc := requireARMScalarRuntime(t)
 	source, sigs := armNEONConversionFixtureSource(fixtures)
 	original, driver := armNEONConversionOraclePrograms(fixtures, rows)
 	runARMConversionGoOracle(t, source, original, fmt.Sprintf("ORIGINAL_NEON_CONVERSION_STATUS %d", len(rows)))
@@ -156,4 +236,40 @@ func TestCrossLinuxRuntimeMatrixARMNEONConversionNativeStatus(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestCrossLinuxRuntimeMatrixARMNEONConversionFullBanks(t *testing.T) {
+	fixtures := armNEONConversionEndpointFixtures()
+	var rows []armNEONConversionObservation
+	for index, fixture := range fixtures {
+		for _, control := range []uint32{0xa0000002, 0xabc00002} {
+			rows = append(rows, armNEONConversionKnownObservation(index, fixture, control))
+		}
+	}
+	runARMNEONConversionObservations(t, fixtures, rows)
+}
+
+func TestCrossLinuxRuntimeMatrixARMNEONConversionExceptionalInputs(t *testing.T) {
+	fixtures := armNEONConversionStatusFixtures()
+	var rows []armNEONConversionObservation
+	for index, fixture := range fixtures {
+		inputs := armConversionStatusMatrixValues(armConversionMatrixForm{toFloat: fixture.toFloat})
+		// Each important input appears in every D/Q lane at least once. Pair
+		// different exception classes rather than hiding them in splats.
+		for first := range inputs {
+			var values [4]uint32
+			for lane := range values {
+				values[lane] = uint32(inputs[(first+lane)%len(inputs)])
+			}
+			for rounding := 0; rounding < 4; rounding++ {
+				for flush := 0; flush < 2; flush++ {
+					for defaultNaN := 0; defaultNaN < 2; defaultNaN++ {
+						control := uint32(rounding)<<22 | uint32(flush)<<24 | uint32(defaultNaN)<<25 | 0xa8000002
+						rows = append(rows, armNEONConversionDynamicObservation(index, fixture, values, control))
+					}
+				}
+			}
+		}
+	}
+	runARMNEONConversionObservations(t, fixtures, rows)
 }

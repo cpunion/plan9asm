@@ -40,24 +40,28 @@ func decodeARMRawNEONConvertFloat32(word uint32) (armRawNEONConvertFloat32, bool
 func (c *armCtx) lowerRawNEONConvertFloat32(form armRawNEONConvertFloat32) error {
 	sourceType := "i32"
 	destinationType := "float"
-	operation := "sitofp"
-	if form.toFloat {
-		if form.unsigned {
-			operation = "uitofp"
-		}
-	} else {
+	wordKind := "s32"
+	if form.unsigned {
+		wordKind = "u32"
+	}
+	sourceKind, destinationKind := wordKind, "f32"
+	if !form.toFloat {
 		sourceType = "float"
 		destinationType = "i32"
-		operation = "fptosi"
-		if form.unsigned {
-			operation = "fptoui"
-		}
+		sourceKind, destinationKind = "f32", wordKind
 	}
 	source, lanes, err := c.loadARMRawNEONVector(form.source, 32, form.quad, sourceType)
 	if err != nil {
 		return err
 	}
 	result := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = %s <%d x %s> %s to <%d x %s>\n", result, operation, lanes, sourceType, source, lanes, destinationType)
+	// Advanced SIMD VCVT uses standard rounding/denormal controls, not the
+	// scalar VFP operation's ambient FPSCR mode. Its cumulative exceptions
+	// still update native FPSCR, even for dead outputs. Keep the whole D/Q
+	// operation and order it with the existing VMRS/VMSR memory barriers.
+	// LLVM22's w constraint selects D0..31 / Q0..15 for these vector widths.
+	operation := "vcvt." + destinationKind + "." + sourceKind + " $0, $1"
+	fmt.Fprintf(c.b, "  %%%s = call <%d x %s> asm sideeffect %q, %q(<%d x %s> %s)\n",
+		result, lanes, destinationType, operation, "=w,w,~{memory}", lanes, sourceType, source)
 	return c.storeARMRawNEONVector(form.destination, 32, form.quad, destinationType, "%"+result)
 }
