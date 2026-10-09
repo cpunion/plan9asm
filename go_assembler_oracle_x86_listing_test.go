@@ -35,7 +35,10 @@ func goAssemblerOracleX86SourceDiagnostic(source, arch, output string) bool {
 	for _, line := range strings.Split(output, "\n") {
 		if strings.HasPrefix(line, mode32) {
 			if arch == "386" && goasmoracle.SourceDiagnosticLineWithListing(source, line, 0,
-				goAssemblerOracleX86Mode32Listing) {
+				func(original, listing []string) bool {
+					return goAssemblerOracleX86Mode32Listing(original, listing) ||
+						goAssemblerOracleX86Mode32FrameListing(source, line, original, listing)
+				}) {
 				return true
 			}
 			continue
