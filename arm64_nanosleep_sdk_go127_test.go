@@ -183,3 +183,29 @@ func TestARM64NanosleepSDKOriginalObjectAndBody(t *testing.T) {
 		})
 	}
 }
+
+func TestARM64NanosleepInputLLVM22Objects(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	for _, spelling := range []string{"SVC", "SVC $0"} {
+		source := strings.Replace(arm64NanosleepInputSource, "\tSVC\n", "\t"+spelling+"\n", 1)
+		requireARM64GoAssemblerResult(t, source, true)
+		for _, api := range []string{"text", "module", "Go"} {
+			t.Run(api+"/"+spelling, func(t *testing.T) {
+				ir, err := arm64NanosleepInputAPI(t, api, "aarch64-unknown-linux-gnu", source)
+				if err != nil {
+					t.Fatal("source-bound Linux input object", err)
+				}
+				for _, optimization := range []int{0, 2} {
+					t.Run(fmt.Sprintf("O%d", optimization), func(t *testing.T) {
+						// This shared helper only executes LLVM22 and checks the
+						// resulting ELF. It cannot mint a source/kernel proof.
+						arm64LinuxSyscallEffectCompileObject(t, llc, ir, optimization)
+					})
+				}
+			})
+		}
+	}
+}

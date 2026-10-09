@@ -169,6 +169,16 @@ func (state *arm64PrivateDataState) transfer(ins Instr, at int, frameSize int64)
 			return nil, false
 		}
 		for _, operand := range ins.Args {
+			for _, reg := range []Reg{operand.Reg, operand.ShiftReg, operand.Mem.Base, operand.Mem.Index} {
+				if reg == "R29" || reg == "R30" {
+					return nil, false // native FP/LR is not a numerical initializer
+				}
+			}
+			for _, reg := range operand.RegList {
+				if reg == "R29" || reg == "R30" {
+					return nil, false
+				}
+			}
 			if operand.Kind == OpFPAddr || operand.Kind == OpSym ||
 				operand.Kind == OpMem && !state.value(operand.Mem.Base).frame {
 				return nil, false // no external/native backing or pointer escape
