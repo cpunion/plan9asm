@@ -308,3 +308,87 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 		}
 	})
 }
+
+// A malformed package clause is still selected by Go's filename/build-tag
+// rules. It cannot erase the only tag that exposes its actual source failure.
+func TestCPPHeaderPlanningMalformedPartnerFinalSourceRejection(t *testing.T) {
+	compilerEnv := os.Environ()
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	translator := filepath.Join(t.TempDir(), "plan9asmll")
+	command := exec.CommandContext(ctx, "go", "build", "-p=1", "-o", translator, ".")
+	command.Dir, command.Env = filepath.Join(root, "cmd/plan9asmll"), compilerEnv
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build first-party consumer: %v\n%s", err, output)
+	}
+	llc, err := resolveDiscoveryExecutable("llc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []struct {
+		name, body, diagnostic string
+	}{
+		{"keyword", "packag witness\n", "expected 'package'"},
+		{"identifier", "package 123\n", "expected 'IDENT'"},
+	} {
+		t.Run(source.name, func(t *testing.T) {
+			candidate := discoveryCandidate{Module: "example.invalid/malformed-" + source.name, Version: "v1.0.0",
+				AsmFiles: []string{"healthy/probe_amd64.s", "probe_amd64.s"}}
+			sources := map[string]string{
+				"go.mod":                "module " + candidate.Module + "\ngo 1.20\n",
+				"probe.go":              "package witness\nfunc Probe()\n",
+				"poison.go":             "//go:build broken\n\n" + source.body,
+				"probe_amd64.s":         "TEXT ·Probe(SB),4,$0-0\nRET\n",
+				"healthy/probe.go":      "package healthy\nfunc Probe()\n",
+				"healthy/probe_amd64.s": "TEXT ·Probe(SB),4,$0-0\nRET\n",
+			}
+			seed := fixtureProfileModuleDownload(t, candidate, sources)
+			installGeneratedFixtureProxy(t, candidate, seed, sources["go.mod"])
+			targets := []string{"linux/amd64"}
+			matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
+				RepoRoot: root, Translator: translator, LLC: llc, Targets: targets, CandidateTimeout: 3 * time.Minute,
+			}, candidate, filepath.Join(t.TempDir(), "candidate"))
+			if err != nil || matrix.Success != 1 {
+				t.Fatalf("healthy assembly must compile independently of malformed tagged partner: objects=%d error=%v configurations=%+v source=%+v", matrix.Success, err, configs, matrix.SourceNotApplicableItems)
+			}
+			if len(matrix.SourceNotApplicableItems) != 2 {
+				t.Fatalf("malformed partner vanished from final coverage: rejections=%+v", matrix.SourceNotApplicableItems)
+			}
+			foundTagged := false
+			for _, item := range matrix.SourceNotApplicableItems {
+				if item.Kind != discoverySourceNotApplicableGoBuild ||
+					!equalDiscoveryStrings(item.AsmFiles, []string{"probe_amd64.s"}) ||
+					!strings.Contains(item.Reason, source.diagnostic) {
+					t.Fatalf("malformed partner lacks exact actual-Go source rejection: %+v", item)
+				}
+				foundTagged = foundTagged || equalDiscoveryStrings(item.BuildTags, []string{"broken"})
+			}
+			if !foundTagged {
+				t.Fatal("malformed partner's exact tagged scope disappeared")
+			}
+			inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
+			result := discoveryCorpusResult{
+				Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
+				DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles,
+				BuildConfigurations: configs, Translations: matrix.Success,
+				OrdinarySelectionPlan: matrix.OrdinarySelectionPlan, SourceNotApplicableItems: matrix.SourceNotApplicableItems,
+				FeatureProfiles: refs, FeatureConsumption: matrix.FeatureConsumption, featureInventory: inventory,
+			}
+			if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
+				t.Fatalf("independent exact source/object reader: %v", err)
+			}
+			for index := range result.SourceNotApplicableItems {
+				changed := result
+				changed.SourceNotApplicableItems = append(append([]discoverySourceNotApplicableItem(nil), result.SourceNotApplicableItems[:index]...), result.SourceNotApplicableItems[index+1:]...)
+				if err := validateOrdinaryProfileResult(changed, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+					t.Fatalf("reader accepted deletion of malformed partner's actual Go rejection %d", index)
+				}
+			}
+			t.Log("MALFORMED_PARTNER actual_llvm_objects=1 actual_go_rejections=2")
+		})
+	}
+}

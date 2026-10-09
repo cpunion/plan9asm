@@ -260,3 +260,54 @@ func TestProfileSelectionPackageTagScopeBoundFailsClosed(t *testing.T) {
 		t.Fatalf("scope exhaustion was truncated or silently accepted: size=%d error=%v", len(scopes), err)
 	}
 }
+
+func TestProfileSelectionMalformedGoPartnerRetainsTagScopes(t *testing.T) {
+	root := t.TempDir()
+	sources := map[string]string{
+		"go.mod":          "module example.invalid/malformed-partners\ngo 1.20\n",
+		"decl.go":         "package fixture\nfunc A()\n",
+		"a_amd64.s":       "TEXT ·A(SB),4,$0-0\nRET\n",
+		"bad.go":          "//go:build broken && !alternate\n\npackag fixture\n",
+		"duplicate.go":    "//go:build broken && !alternate\n\npackage 123\n",
+		"alternate.go":    "// +build alternate,!broken\n\npackage\n",
+		"cgo.go":          "//go:build cgopartner\n\npackage fixture\nimport \"C\"\n",
+		"bad_cgo.go":      "//go:build cgo && badcgo\n\npackag fixture\n",
+		"bad_arm64.go":    "//go:build otherarch\n\npackag fixture\n",
+		"ignored_test.go": "//go:build testonly\n\npackag fixture\n",
+	}
+	for file, source := range sources {
+		writeTestFile(t, filepath.Join(root, file), source)
+	}
+	candidate := discoveryCandidate{Module: "example.invalid/malformed-partners", Version: "v1.0.0",
+		AsmFiles: []string{"a_amd64.s"}}
+	plan, err := captureOrdinarySelectionInputs(candidate, root, []string{"linux/amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, binary, t.TempDir(), targetFeatureTestEnv(), plan, candidate.AsmFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, scopes, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for scope := range scopes {
+		got = append(got, scope.File+"#"+scope.Tags)
+	}
+	want := []string{"a_amd64.s#", "a_amd64.s#alternate", "a_amd64.s#broken"}
+	if len(profiles) != 1 || !reflect.DeepEqual(uniqueSortedDiscoveryStrings(got), want) {
+		t.Fatalf("malformed Go partners disappeared or acquired unrelated roles: profiles=%d scopes=%v, want %v", len(profiles), got, want)
+	}
+	writeTestFile(t, filepath.Join(root, "bad.go"), sources["bad.go"]+"// changed\n")
+	if err := verifyOrdinarySelectionUnchanged(plan, root, candidate); err == nil {
+		t.Fatal("changed malformed original source retained its scope witness")
+	}
+}
