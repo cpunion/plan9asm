@@ -17,7 +17,7 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `5348b5a8`. The SDK literal/numerical join, signed ARM64 carrier reads,
+through `dfa0d559`. The SDK literal/numerical join, signed ARM64 carrier reads,
 TLS fail-closed grammar, x86 BT family and ARM VFP register effects are integrated.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
@@ -85,6 +85,11 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
 - The downloaded fixed-local CLI accepts its Darwin macOS triple, still bound
   to the exact source/target identity. This does not grant arbitrary local
   frames or prove that the three external crypto examples now pass.
+- CPP planning reuses only complete filename/text parses within one invocation.
+  Public projections and complete graph relations are rechecked on every use.
+  An independent 8-ASM/4-Go/32-CPU model improves from 1.214 to 0.235 seconds
+  and 2.234 to 0.476 GB allocated. Independent plan shells can share immutable
+  source graphs; a whole shared mutable plan is not a concurrent API.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -111,10 +116,15 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   ARM64 DATA diagnostic. Six focused roots passed on a newer frozen revision;
   preserve the failed full report rather than relabeling it. Its owned cache
   is closed and reclaimed. Nested CLIs remain separate.
-- `codex/pr40-bt-vfp-integration-verify-20261010`, `5348b5a8`:
-  `_out/bt-vfp-integration/` is running the merged BT/TLS/VFP/carrier roots,
-  header/scanner gates, official five-architecture check and vet. Do not edit
-  this tree or accept partial logs as final success.
+- `codex/pr40-bt-vfp-integration-verify-20261010`:
+  the initial `5348b5a8` build failed because BT referenced the renamed TLS
+  helper. Preserve `_out/bt-vfp-integration/build.log`; `6f5e7902` fixes that
+  one reference. Its separate `_out/bt-vfp-integration-6f5e7902/` gate completed:
+  35 instruction roots and 48 header/scanner roots passed without skips,
+  official five-architecture classification and vet passed. Only after that
+  run ended was the tree advanced to `dfa0d559`: separate
+  `_out/planning-index-dfa0d559/` focused, actual-consumer, race and vet gates
+  also passed. Historical directories keep their exact source revision.
 - `codex/pr40-source-tls-verify-20261010`, `600b08c7`:
   `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
   163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
@@ -175,6 +185,11 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   diagnosis found an independent generic-root fallback, fixed later by
   `d3b0d076`; this running snapshot does not contain that fix. Never change its
   source or retroactively credit it with the improved planning behavior.
+- `codex/pr40-coroutine-performance-verify-20261010`, `dfa0d559`:
+  an independent isolated exact-version repeat is running with both the
+  generic-root repair and bounded pure-parse index. Keep its source, tools,
+  journals and owned cache separate from the still-running old repeat. No
+  current-revision success or external speedup claim until its reports close.
 
 The official five-arch classification gate passed again at `a43d9cc2` with zero
 unsupported/parse errors. Actual Go 1.20–1.27 before/after source comparisons
@@ -187,14 +202,15 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 ## Next steps
 
-1. Close the merged finite verification gate. Preserve RED/GREEN and actual
+1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Investigate the shared packed local-frame/alignment failure with a first-
-   party fixture and exact original frame/caller contracts. Separately audit
-   the remaining ARM conversion status/exception/rounding semantics.
-3. Reduce repeated full CPP parsing inside one immutable planning operation,
-   using measured first-party performance regressions. Retain all source,
-   projection, graph, mutation and cancellation checks; no cross-run trust cache.
+2. Close pure numeric/call-free packed local frames first: BP private aliases,
+   complete typed vector effects and eight mod64 residues. Actual slice/bool
+   transport, DATA/caller joins, loops, split prologues and private helpers are
+   separate remaining requirements for the unchanged crypto sources.
+3. Close ARM conversion native FPSCR/exception/rounding semantics. Actual Go
+   versus LLVM optimized runs already expose dead exception effects and
+   out-of-range poison; saturating values alone do not establish status flags.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
