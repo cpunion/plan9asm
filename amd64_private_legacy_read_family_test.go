@@ -301,10 +301,14 @@ func TestX86PrivateLegacyReadObserverKeepsIndependentDomains(t *testing.T) {
 			}
 		})
 	}
-	t.Run("wider-private-state-remains-context", func(t *testing.T) {
+	t.Run("dead-wider-transport-preserves-unknown-state", func(t *testing.T) {
 		fn, sig := x86PrivateLegacyReadProved(t, "MOVOU (DI),X0\nVMOVUPS Y0,Y1", 16)
-		if err := checkX86ScalarFPResultInitialization(fn, sig, "amd64"); !errors.Is(err, ErrProbeNeedsContext) {
-			t.Fatalf("low128 seam widened the private observer to Y/Z state: %v", err)
+		// The complete vector domain propagates unknown upper bytes; merely
+		// copying them to an unused register does not assert initialization.
+		// The separate live upper-byte consumer regression must still reject
+		// the same low-X source through all three translation APIs.
+		if err := checkX86ScalarFPResultInitialization(fn, sig, "amd64"); err != nil {
+			t.Fatalf("dead register transport lost its exact low128 read proof: %v", err)
 		}
 	})
 	for _, body := range []string{"MOVOU (BX),X0", "MOVOU ·data(SB),X0"} {

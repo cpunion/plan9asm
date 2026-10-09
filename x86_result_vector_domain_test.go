@@ -209,6 +209,55 @@ func TestX86ResultVectorDomainDoesNotPromoteLowXToWide(t *testing.T) {
 	}
 }
 
+func TestX86ResultVectorTransportNeverInitializesMissingUpperBytes(t *testing.T) {
+	llc := findLLVM22Tool("llc")
+	if llc == "" {
+		t.Fatal("LLVM 22 llc is required")
+	}
+	for _, arch := range []string{"amd64", "386"} {
+		resultOffset, triple := 8, "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			resultOffset, triple = 4, "i386-unknown-linux-gnu"
+		}
+		for _, form := range []struct{ move, extract string }{
+			{"VMOVUPS Y0,Y1", "VEXTRACTF128 $1,Y1,X2"},
+			{"VMOVUPS Z0,Z1", "VEXTRACTF32X4 $1,Z1,X2"},
+		} {
+			for _, initialized := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/upper-initialized-%v", arch, form.move, initialized), func(t *testing.T) {
+					upper := "NOP"
+					if initialized {
+						upper = "VZEROUPPER"
+					}
+					source := fmt.Sprintf(`TEXT ·view(SB),4,$0-%d
+MOVL a+0(FP),AX
+MOVL AX,X0
+%s
+%s
+%s
+PEXTRD $0,X2,AX
+MOVL AX,ret+%d(FP)
+RET
+`, resultOffset+4, upper, form.move, form.extract, resultOffset)
+					goAssemblerOracleOutput(t, arch, source, "", true)
+					for _, api := range []string{"text", "module", "Go"} {
+						ir, err := x86ScalarFPBitViewAPI(t, source, "func view(a uint32) uint32\n", arch, triple, api)
+						if initialized && err != nil {
+							t.Errorf("%s lost independently initialized upper bytes: %v", api, err)
+						}
+						if !initialized && !errors.Is(err, ErrProbeNeedsContext) {
+							t.Errorf("%s promoted unknown upper bytes through register transport: %v", api, err)
+						}
+						if initialized && err == nil {
+							compileLLVMToObject(t, llc, triple, "known-upper.ll", "known-upper.o", ir)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestX86ResultVectorDomainFiveTargetThreeAPIObjects(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {
