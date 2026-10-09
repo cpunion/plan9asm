@@ -66,13 +66,32 @@ func TestDiagnosticScannerErrorsDoNotMatch(t *testing.T) {
 	}
 }
 
-func TestDiagnosticAssemblerIdentifierUnderscores(t *testing.T) {
+func TestDiagnosticAssemblerIdentifierRoles(t *testing.T) {
 	// These are real assembler identifiers, not supported instruction names.
 	// Their current source-bound Go refusals must retain the diagnostic role.
-	for _, opcode := range []string{"NOT_AN_INSTRUCTION", "_NOT_AN_INSTRUCTION", "NOT_AN_INSTRUCTION_2"} {
-		t.Run(opcode, func(t *testing.T) {
+	for _, test := range []struct {
+		opcode string
+		bound  bool
+		exit   int
+	}{
+		{"NOT_AN_INSTRUCTION", true, 1},
+		{"_NOT_AN_INSTRUCTION", true, 1},
+		{"NOT_AN_INSTRUCTION_2", true, 1},
+		{"not_an_instruction", true, 1},
+		{"無效指令", true, 1},
+		{"NOT·AN", true, 1},
+		{"NOT∕AN", true, 1},
+		{"NOT１２", true, 1},
+		{"NOT_AN_INSTRUCTION:", false, 0},
+		{"// NOT_AN_INSTRUCTION", false, 0},
+		{"/* NOT_AN_INSTRUCTION */", false, 0},
+		{"1NOT_AN_INSTRUCTION", false, 1},
+		{"/NOT_AN_INSTRUCTION", false, 1},
+		{".NOT_AN_INSTRUCTION", false, 1},
+	} {
+		t.Run(test.opcode, func(t *testing.T) {
 			source, object := oracleFixture(t)
-			data := "TEXT probe(SB),$0-0\n\t" + opcode + "\n\tRET\n"
+			data := "TEXT probe(SB),$0-0\n\t" + test.opcode + "\n\tRET\n"
 			if err := os.WriteFile(source, []byte(data), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -83,19 +102,29 @@ func TestDiagnosticAssemblerIdentifierUnderscores(t *testing.T) {
 				"go", "tool", "asm", "-o", object, source)
 			encoded, _ := json.Marshal(observed)
 			t.Logf("ORACLE_CHILD %s", encoded)
-			if observed.ExitCode != 1 || !observed.Waited ||
-				!strings.Contains(string(observed.Stderr), source+":2: unrecognized instruction") {
+			if observed.ExitCode != test.exit || !observed.Waited {
 				t.Fatalf("actual original Go diagnostic differs: %+v %v", observed, err)
 			}
-			if failure := CheckOutcome(source, object, observed.Stdout, observed.Stderr, err,
-				ctx.Err(), false, 2, nil); failure != nil {
-				t.Fatalf("real underscore identifier diagnostic lost: %v", failure)
+			if test.bound {
+				if !strings.Contains(string(observed.Stderr), source+":2: unrecognized instruction \""+test.opcode+"\"") {
+					t.Fatalf("Go did not observe this exact identifier token: %+v", observed)
+				}
+				if failure := CheckOutcome(source, object, observed.Stdout, observed.Stderr, err,
+					ctx.Err(), false, 2, nil); failure != nil {
+					t.Fatalf("real identifier diagnostic lost: %v", failure)
+				}
+			}
+			if got := SourceDiagnosticLine(source, source+":2: bad operand\n", 2); got != test.bound {
+				t.Fatalf("statement role=%t, want %t", got, test.bound)
 			}
 			for _, output := range []string{"foreign" + source + ":2: unrecognized instruction\n",
 				source + ":4: unrecognized instruction\n", "asm: assembly failed\n"} {
 				if SourceDiagnosticLine(source, output, 2) {
-					t.Fatalf("unbound underscore diagnostic matched: %q", output)
+					t.Fatalf("unbound identifier diagnostic matched: %q", output)
 				}
+			}
+			if SourceDiagnosticLine(source, "asm: illegal combination: 00000 ("+source+":2) FOREIGN R0,R1\n", 2) {
+				t.Fatal("different listing token matched the original statement")
 			}
 		})
 	}
