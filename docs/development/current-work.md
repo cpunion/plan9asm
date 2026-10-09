@@ -17,8 +17,8 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `741ccef4`. Independent owners have complete scalar CMP/TEST and SDK
-literal/numerical joins in progress. Root alone publishes the assembly ledger.
+through `71e509f1`. SDK literal/numerical joins, their CLI consumer and ordinary
+header-property closure are in progress. Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
 ## Integrated systematic repairs
@@ -42,6 +42,13 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   contracts remain separate.
 - Bounded negative header-preflight reuse with repeated source/tool guards,
   mutation invalidation and cancellation. Cached queries are not test credit.
+- Complete scalar CMP/TEST grammar, native-width/sign-extension rules and
+  observable dead reads; source, conditional effects and lowering agree.
+- DATA floating leaves retain unary signs/parentheses and encode their actual
+  four/eight-byte Go width. Invalid numeric syntax cannot become zero/address.
+- Complete native vector byte boundaries reuse typed family decoders, including
+  non-temporal moves. Physical RIP observation is not a source/memory grant;
+  unknown/truncated encodings and calls discard the whole observation.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -50,8 +57,19 @@ and Go 1.20 gates before integration. Logs stay in each owner's ignored
 `_out/`. These are finite scopes: portable/Rosetta tests and compiled native
 oracles do not replace required Linux/amd64 native AVX512 runtime roots.
 
+At `0ada7f5d`, the combined instruction gate passed 80 roots/627 nodes without
+skips. DATA/parser/budget/source-binding tests passed 65 roots/607 nodes.
+Go 1.20 independently passed 17 roots/223 nodes for CMP/TEST, DATA and the full
+vector byte-work boundary. The boundary component passed 85 current-Go roots
+and eight Go 1.20 roots, including 2,544 original Go forms, 64 non-temporal
+forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
+
 ## Frozen verification
 
+- `codex/pr40-family-matrix-verify-20261010`, `71e509f1`:
+  `_out/family-matrix-module/` runs the complete main-module inventory with
+  two root-partition workers and an independently owned cache. Inspect terminal
+  reports; it was still running at this checkpoint. Nested CLIs remain separate.
 - `codex/pr40-result-effects-verify-20261010`, `0529fa9c`:
   `_out/result-effects-module/reports/module.json` completed: 19/20 packages
   passed, root 31/32 partitions passed. The sole root failure was the obsolete
@@ -75,22 +93,29 @@ oracles do not replace required Linux/amd64 native AVX512 runtime roots.
   `_out/planning-performance-validation-20261010/` reruns the two planning
   failures with unchanged sixty-minute candidate bounds. Purego completed
   planning but failed actual ARM64 call/native-scratch ABI contracts.
-  Inspect coroutine's final owner/report; a retained resource-interruption
-  note disqualifies clean timing comparisons.
+  Coroutine was still executing real target/profile objects, not only planning.
+  The candidate timeout currently bounds each phase, not total candidate time.
+  Inspect its final owner/report; a retained resource-interruption note
+  disqualifies clean timing comparisons.
 
-The official five-arch classification gate passed at `6d356caa` with zero
-unsupported/parse errors. Context forms are not semantic/ABI/runtime passes.
+The official five-arch classification gate passed at `f8d1149d` with zero
+unsupported/parse errors. Actual Go 1.20–1.27 before/after source comparisons
+isolate exactly eight formerly false-supported aligned SP/BP move forms now
+requiring original-frame context. Context is not semantic/ABI/runtime success.
 Remaining strict SDK failures involve original frames/entry state, ABIInternal
 transport, numerical globals and alignment; unbound storage is not a fix.
 
 ## Next steps
 
-1. Finish/review complete CMP/TEST formats, physical byte views, immediate
-   semantics and dead-read tests. Correct the independent byte-budget fixture
-   for the wider vector domain without increasing production limits.
-2. Join existing live SDK read-only DATA initializer ownership to exact
+1. Join existing live SDK read-only DATA initializer ownership to exact
    source/CPP/native numerical reads. Original SDK CRC needs DATA/header/
    namespace and EVEX-boundary closure; bypassing guards cannot provide it.
+   Connect the actual CLI consumer after the API gate, retaining live guards
+   through object emission. An API fixture alone does not fix the benchmark.
+2. Close ordinary header property roots without dropping original imported
+   sources. The independent 32-to-one planning regression and actual five-arch
+   Go headers pass; the eleven-target fixture exposed a missing portable
+   dependency-source role and remains a real failure until fixed and rerun.
 3. Collect frozen results, resume unfinished fixed samples on a clean bounded
    executor, and rerun integrated, nested CLI, compatibility, race, SDK and
    native/cross-runtime gates before publishing the fork batch.
@@ -112,7 +137,8 @@ remerge. This is not imported translation coverage; the committed denominator
 remains 6,067. Do not rescan old ranges with obsolete path-only deduplication.
 Keep funnel tables in the PR body.
 
-Disk exhaustion interrupted the broad sample. Preserve all reports, selections
-and tool/source hashes. Clean only exact owned derived caches after every
-consumer closes, never shared/live caches. Compile one test binary for grouped
-gates and avoid concurrent large cold builds.
+Disk exhaustion interrupted the broad sample. Two historical, closed fixture
+caches were reclaimed; their reports, binaries and sources remain intact. The
+fixed Beeketing sample has resumed in a separate disposable executor. Clean
+only exact owned derived caches after every consumer closes, never shared/live
+caches. Compile one test binary for grouped gates and bound cold builds.
