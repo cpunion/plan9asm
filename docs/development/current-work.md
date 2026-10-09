@@ -193,6 +193,14 @@ zero unsupported/parse errors but includes Context forms; classification is
 not complete LLVM, ABI or runtime success. SDK numerical capture remains
 query-only: its genuine CRC consumer failure is not integrated or promoted.
 
+The non-sharded local `go test ./... -count=1` at `7bf1132e` is not a green
+full-suite result. The root package and `cmd/plan9asmcorpus` each hit their
+10-minute package timeout while their Go-oracle/LLVM subprocess contexts were
+being cancelled; `cmd/plan9asmtest` also recorded three tests with an empty
+executable path. These are retained infrastructure/resource failures, not
+assembly-ledger passes or skips. The raw AUTO 45-node gate and the complete
+GPSIMD transfer-family tests were run separately and passed.
+
 ## Resource and ledger rules
 
 No local background index/discovery/external corpus. Inventory stays on the
