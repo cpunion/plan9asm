@@ -45,6 +45,33 @@ DATA table<>+24(SB)/8,$0x1020304050607080
 GLOBL table<>(SB),8,$32
 `
 
+func TestX86LoweredScalarDataWithoutLocalStorageDoesNotResolve(t *testing.T) {
+	for _, arch := range []string{"386", "amd64"} {
+		for _, body := range []string{
+			"MOVL value+0(FP),AX\nRET\n",
+			"MOVOU external(SB),X1\nRET\n",
+			"CALL ·callee(SB)\nRET\n",
+		} {
+			t.Run(arch+"/"+strings.Fields(body)[0], func(t *testing.T) {
+				file, err := Parse(ArchAMD64, "TEXT ·view(SB),4,$0-8\n"+body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var calls []string
+				resolve := func(symbol string) string {
+					calls = append(calls, symbol)
+					return strings.TrimPrefix(symbol, "·")
+				}
+				sigs := map[string]FuncSig{"view": {Name: "view", Ret: Void}, "callee": {Name: "callee", Ret: Void}}
+				reads := x86LoweredScalarDataReads(file, resolve, sigs, arch)
+				if reads != nil || len(calls) != 0 {
+					t.Fatalf("without emitted storage there is no DATA directory or resolver work: reads=%v calls=%v", reads, calls)
+				}
+			})
+		}
+	}
+}
+
 func TestX86LoweredScalarResultSameFileDataMatrix(t *testing.T) {
 	llc := findLLVM22Tool("llc")
 	if llc == "" {

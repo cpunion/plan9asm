@@ -7,6 +7,11 @@ func x86LoweredScalarDataReads(file *File, resolve func(string) string, sigs map
 	if file == nil || file.Arch != ArchAMD64 || resolve == nil {
 		return nil
 	}
+	// No local object can supply a read extent. Avoid allocating a directory
+	// or observing unrelated function/external symbols through a user resolver.
+	if len(file.Data) == 0 && len(file.Globl) == 0 {
+		return nil
+	}
 	type object struct {
 		size    int64
 		invalid bool
