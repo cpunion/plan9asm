@@ -174,3 +174,30 @@ func TestARM64NanosleepInputProofExactIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestARM64NanosleepSealedReplayRequiresOriginalDeclaration(t *testing.T) {
+	for _, change := range []struct {
+		name  string
+		apply func(*FuncSig)
+	}{
+		{"original", func(*FuncSig) {}},
+		{"wider-input", func(sig *FuncSig) { sig.Args[0] = I64 }},
+		{"changed-frame-input", func(sig *FuncSig) { sig.Frame.Params[0].Offset = 8 }},
+		{"new-result", func(sig *FuncSig) { sig.Ret = I64 }},
+		{"different-declaration", func(sig *FuncSig) { sig.Name += ".other" }},
+		{"register-entry", func(sig *FuncSig) { sig.ArgRegs = []Reg{"R3"} }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			c := arm64NanosleepProofContext(t)
+			sig := arm64NanosleepCloneSignature(c.sig)
+			change.apply(&sig)
+			transport := &arm64PrivateFrameTransport{
+				entry: sig, resolve: c.resolve, sigs: c.sigs, nanosleep: c.nanosleepInput,
+			}
+			_, err := arm64PrivateDataProofDetails(c.normalizedSource, transport)
+			if (err == nil) != (change.name == "original") {
+				t.Fatalf("a sealed memory input was replayed with another declaration: %v", err)
+			}
+		})
+	}
+}
