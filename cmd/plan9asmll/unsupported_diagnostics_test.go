@@ -90,13 +90,17 @@ func TestInstructionDiagnosticsCollectCompleteParsedFiveArchInputs(t *testing.T)
 		{"amd64", plan9asm.ArchAMD64},
 		{"arm", plan9asm.ArchARM},
 		{"arm64", plan9asm.ArchARM64},
-		{"wasm", plan9asm.ArchWasm},
+		{"wasm", plan9asm.ArchWASM},
 	} {
 		t.Run(row.name, func(t *testing.T) {
 			source := "DATA text<>+0(SB)/8,$\"a;BOGUS\"\n" +
 				"TEXT first(SB),$0-0\nNOTIMPLEMENTED\nRET\n" +
 				"TEXT second(SB),$0-0\nNOTIMPLEMENTED\nRET\n"
-			file, err := plan9asm.ParseWithDefines(row.arch, source, plan9asm.GoAssemblerDefines("linux", row.name))
+			goos := "linux"
+			if row.name == "wasm" {
+				goos = "js"
+			}
+			file, err := plan9asm.ParseWithDefines(row.arch, source, plan9asm.GoAssemblerDefines(goos, row.name))
 			if err != nil {
 				t.Fatal(err)
 			}
