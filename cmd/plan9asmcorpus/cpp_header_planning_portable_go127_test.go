@@ -130,6 +130,39 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 			header.ImportMap[header.Imports[0].ImportPath] = "example.invalid/unobserved"
 		}
 	}
+	if len(plan.HeaderPlanning.ImportedSources) != 0 {
+		mutations["planning imported role deletion"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.ImportedSources = nil
+		}
+		mutations["planning imported paired role deletion"] = func(r *discoveryCorpusResult) {
+			role := r.OrdinarySelectionPlan.HeaderPlanning
+			role.ImportedSources = nil
+			for index := range role.Queries {
+				role.Queries[index].ImportedGoSHA256 = nil
+			}
+		}
+		mutations["planning imported query reassignment"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].ImportedGoSHA256 = map[string]string{
+				"probe.go": discoveryFeatureBytesSHA256([]byte(r.OrdinarySelectionPlan.HeaderPlanning.Sources["probe.go"])),
+			}
+		}
+		mutations["planning imported unconsumed source"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.ImportedSources["extra/value.go"] = "package extra\n"
+		}
+		mutations["planning imported source mutation"] = func(r *discoveryCorpusResult) {
+			for file := range r.OrdinarySelectionPlan.HeaderPlanning.ImportedSources {
+				r.OrdinarySelectionPlan.HeaderPlanning.ImportedSources[file] += "// changed\n"
+			}
+		}
+		mutations["planning imported version mutation"] = func(r *discoveryCorpusResult) {
+			r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].Metadata.Headers[0].Imports[0].Version = "v9.0.0"
+		}
+		mutations["planning imported source-map mutation"] = func(r *discoveryCorpusResult) {
+			for file := range r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].ImportedGoSHA256 {
+				r.OrdinarySelectionPlan.HeaderPlanning.Queries[0].ImportedGoSHA256[file] = strings.Repeat("1", 64)
+			}
+		}
+	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
 			var changed discoveryCorpusResult
@@ -156,6 +189,7 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Sources, plan.HeaderPlanning.Sources) ||
+		!reflect.DeepEqual(view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.ImportedSources, plan.HeaderPlanning.ImportedSources) ||
 		!reflect.DeepEqual(view.Candidates[0].OrdinarySelectionPlan.HeaderPlanning.Rules, plan.HeaderPlanning.Rules) {
 		t.Fatal("semantic projection lost complete original bytes or source rules")
 	}

@@ -14,17 +14,19 @@ import (
 // Planning queries observe real compiler inputs but are never executed LLVM
 // scopes. Complete original Go bytes are shared once across these queries.
 type discoveryCPPHeaderPlanning struct {
-	Protocol string                                 `json:"protocol"`
-	Rules    *gotoolprofile.NativeHeaderSourceRules `json:"rules"`
-	Sources  map[string]string                      `json:"sources"`
-	Queries  []discoveryCPPHeaderPlanningQuery      `json:"queries"`
+	Protocol        string                                 `json:"protocol"`
+	Rules           *gotoolprofile.NativeHeaderSourceRules `json:"rules"`
+	Sources         map[string]string                      `json:"sources"`
+	ImportedSources map[string]string                      `json:"imported_sources,omitempty"`
+	Queries         []discoveryCPPHeaderPlanningQuery      `json:"queries"`
 }
 
 type discoveryCPPHeaderPlanningQuery struct {
-	Assembly  string                           `json:"assembly"`
-	Profile   discoveryFeatureProfileReference `json:"profile"`
-	BuildTags []string                         `json:"build_tags,omitempty"`
-	Metadata  *gotoolprofile.MetadataProof     `json:"metadata"`
+	Assembly         string                           `json:"assembly"`
+	Profile          discoveryFeatureProfileReference `json:"profile"`
+	BuildTags        []string                         `json:"build_tags,omitempty"`
+	Metadata         *gotoolprofile.MetadataProof     `json:"metadata"`
+	ImportedGoSHA256 map[string]string                `json:"imported_go_sha256,omitempty"`
 }
 
 const discoveryCPPHeaderPlanningProtocol = "original_native_header_planning_query_v1"
@@ -34,16 +36,18 @@ type discoveryHeaderPlanningUnsupported struct{ reason string }
 func (err *discoveryHeaderPlanningUnsupported) Error() string { return err.reason }
 
 func validateDiscoveryPlanningSources(role *discoveryCPPHeaderPlanning) error {
-	if role == nil || len(role.Sources) == 0 || len(role.Sources) > 4096 {
+	if role == nil || len(role.Sources) == 0 || len(role.Sources)+len(role.ImportedSources) > 4096 {
 		return fmt.Errorf("native planning source collection is absent or unbounded")
 	}
 	total := 0
-	for name, text := range role.Sources {
-		if !ordinarySelectionLocalPath(name) || !strings.HasSuffix(name, ".go") ||
-			strings.HasSuffix(name, "_test.go") || len(text) > 2<<20 || len(text) > 16<<20-total || strings.ContainsRune(text, '\x00') {
-			return fmt.Errorf("native planning source role or total byte bound is unclosed")
+	for _, sources := range []map[string]string{role.Sources, role.ImportedSources} {
+		for name, text := range sources {
+			if !ordinarySelectionLocalPath(name) || !strings.HasSuffix(name, ".go") ||
+				strings.HasSuffix(name, "_test.go") || len(text) > 2<<20 || len(text) > 16<<20-total || strings.ContainsRune(text, '\x00') {
+				return fmt.Errorf("native planning source role or total byte bound is unclosed")
+			}
+			total += len(text)
 		}
-		total += len(text)
 	}
 	return nil
 }
@@ -103,6 +107,10 @@ func discoveryPlanningHeader(plan *discoveryOrdinarySelectionPlan, request disco
 		return nil, err
 	}
 	queryPlan, err := discoveryHeaderQuerySourcePlan(plan, profile)
+	if err != nil {
+		return nil, err
+	}
+	queryPlan.GeneratedGoSources, err = replayDiscoveryPlanningImports(role, found, module)
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +222,7 @@ func validateDiscoveryPlanningConsumption(plan *discoveryOrdinarySelectionPlan) 
 	}
 	role := plan.HeaderPlanning
 	usedSources := make(map[string]bool)
+	usedImports := make(map[string]bool)
 	seen := make(map[string]bool)
 	for _, query := range role.Queries {
 		key := discoveryHeaderPlanningKey(query.Profile.Request, query.Assembly, query.BuildTags)
@@ -224,8 +233,11 @@ func validateDiscoveryPlanningConsumption(plan *discoveryOrdinarySelectionPlan) 
 		for name := range query.Metadata.Headers[0].CompiledGoSHA256 {
 			usedSources[name] = true
 		}
+		for name := range query.ImportedGoSHA256 {
+			usedImports[name] = true
+		}
 	}
-	if len(seen) == 0 || len(usedSources) != len(role.Sources) {
+	if len(seen) == 0 || len(usedSources) != len(role.Sources) || len(usedImports) != len(role.ImportedSources) {
 		return fmt.Errorf("native header planning has an empty query or unconsumed original source")
 	}
 	return nil

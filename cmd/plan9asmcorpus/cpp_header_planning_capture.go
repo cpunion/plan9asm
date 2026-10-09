@@ -58,7 +58,16 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			return err
 		}
 		if rules != nil {
-			return gotoolprofile.RecheckNativeHeaderSourceRules(goRoot, rules)
+			if err := gotoolprofile.RecheckNativeHeaderSourceRules(goRoot, rules); err != nil {
+				return err
+			}
+		}
+		if role := plan.HeaderPlanning; role != nil && len(role.ImportedSources) != 0 {
+			hashes := make(map[string]string, len(role.ImportedSources))
+			for file, text := range role.ImportedSources {
+				hashes[file] = discoveryFeatureBytesSHA256([]byte(text))
+			}
+			return verifyDiscoveryOriginalSourceMap(plan, download.Dir, download.Zip, hashes)
 		}
 		return nil
 	}
@@ -176,11 +185,15 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		}
 		// Do not publish an unclosed query into the portable role. Independently
 		// replay a private candidate first; rejected domains retain all CPUs.
-		role := &discoveryCPPHeaderPlanning{Protocol: discoveryCPPHeaderPlanningProtocol, Rules: rules, Sources: make(map[string]string)}
+		role := &discoveryCPPHeaderPlanning{Protocol: discoveryCPPHeaderPlanningProtocol, Rules: rules,
+			Sources: make(map[string]string), ImportedSources: make(map[string]string)}
 		if plan.HeaderPlanning != nil {
 			role.Queries = append(role.Queries, plan.HeaderPlanning.Queries...)
 			for name, text := range plan.HeaderPlanning.Sources {
 				role.Sources[name] = text
+			}
+			for name, text := range plan.HeaderPlanning.ImportedSources {
+				role.ImportedSources[name] = text
 			}
 		}
 		for name, digest := range metadata.Headers[0].CompiledGoSHA256 {
@@ -200,6 +213,10 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 			}
 			role.Sources[name] = string(text)
 		}
+		imports, err := captureDiscoveryPlanningImports(role, queryPlan, metadata.Headers[0], module, download.Dir)
+		if err != nil {
+			return nil, err
+		}
 		if err := validateDiscoveryPlanningSources(role); err != nil {
 			return nil, err
 		}
@@ -213,6 +230,7 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		}
 		role.Queries = append(role.Queries, discoveryCPPHeaderPlanningQuery{
 			Assembly: assembly, Profile: references[0], BuildTags: append([]string(nil), tags...), Metadata: metadata,
+			ImportedGoSHA256: imports,
 		})
 		copy := *plan
 		copy.HeaderPlanning, copy.headerPlanningInventory = role, inventory
