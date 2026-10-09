@@ -97,6 +97,11 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 			return Options{}, numericalSBContext("typed data symbol collides with a function")
 		}
 	}
+	if source.literals != nil {
+		if err := source.bindSDKLiteralSymbols(file, options, symbols); err != nil {
+			return Options{}, err
+		}
+	}
 	if err := source.Verify(ctx); err != nil {
 		return Options{}, err
 	}
@@ -104,8 +109,13 @@ func (source *GoX86NumericalReadSource) BindNumericalReads(ctx context.Context, 
 	if err != nil || provided != actual {
 		return Options{}, numericalSBContext("binding resolver changed the complete original file")
 	}
+	declarationContext, stop, err := source.numericalDeclarationContext(ctx)
+	if err != nil {
+		return Options{}, err
+	}
+	defer stop()
 	source.mu.Lock()
-	declarations, err := source.numericalDeclarations(ctx, pkg, arch)
+	declarations, err := source.numericalDeclarations(declarationContext, pkg, arch)
 	if err == nil {
 		err = numericalDeclarationSyntax(source, pkg)
 	}
@@ -289,8 +299,13 @@ func (binding *GoX86NumericalReadBinding) verify() error {
 	if err != nil || sum != binding.seal || !numericalSameCapabilities(binding.options.Sigs, binding.capabilities) {
 		return fail(numericalSBContext("private binding shape changed"))
 	}
+	declarationContext, stop, err := binding.source.numericalDeclarationContext(binding.context)
+	if err != nil {
+		return fail(err)
+	}
+	defer stop()
 	binding.source.mu.Lock()
-	declarations, err := binding.source.numericalDeclarations(binding.context, binding.packageInput, binding.options.Goarch)
+	declarations, err := binding.source.numericalDeclarations(declarationContext, binding.packageInput, binding.options.Goarch)
 	if err == nil {
 		err = numericalDeclarationSyntax(binding.source, binding.packageInput)
 	}
@@ -319,6 +334,12 @@ func (source *GoX86NumericalReadSource) numericalDeclarations(ctx context.Contex
 		}
 	}
 	for _, owner := range source.originalOwners {
+		if source.literals != nil {
+			// Joined SDK capture accepts only independent SDK CPU owners.
+			// Its complete declaration graph is the separately sealed SDK graph;
+			// owner callbacks run before/after, never under source.mu here.
+			continue
+		}
 		report, err := owner.observation.Readback(ctx)
 		if err != nil {
 			return nil, numericalStorageFailure(ctx, "declaration owner readback", err)
@@ -487,7 +508,13 @@ func verifyNormalizedNumericalReads(file *File, options Options) error {
 			seen[cert.read] = true
 		}
 	}
-	if len(seen) != len(options.NumericalReads.reads) || len(file.Data)+len(file.Globl) != 0 {
+	if len(seen) != len(options.NumericalReads.reads) {
+		return numericalSBContext("normalized read inventory changed or storage collides with local data")
+	}
+	if source := options.NumericalReads.source; source.literals != nil {
+		return source.literals.verifyFile(file, source.request.PackagePath)
+	}
+	if len(file.Data)+len(file.Globl) != 0 {
 		return numericalSBContext("normalized read inventory changed or storage collides with local data")
 	}
 	return nil

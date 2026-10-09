@@ -3,6 +3,7 @@
 package plan9asm
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/xgo-dev/plan9asm/internal/gostaticstorage"
 )
 
 // The source, generated header, assembly, object, CPU variable and initializer
@@ -329,5 +332,216 @@ func TestGoX86SDKNumericalReadLiteralOwnerLifetime(t *testing.T) {
 				t.Fatal("derived-token failure revoked the independent original SDK observation", err)
 			}
 		})
+	}
+}
+
+func TestGoX86SDKNumericalReadLiteralOriginalContextAndReentry(t *testing.T) {
+	ctx, request, observed := numericalSDKLiteralFixture(t)
+	for _, invalid := range []string{"nil", "canceled"} {
+		t.Run("invalid verification context/"+invalid, func(t *testing.T) {
+			source, err := CaptureGoX86SDKNumericalReadSource(ctx, request)
+			if err != nil {
+				t.Fatal("actual joined SDK source precondition", err)
+			}
+			defer closeNumericalConsumerSource(t, source)
+			var verification context.Context
+			if invalid == "canceled" {
+				canceled, cancel := context.WithCancel(ctx)
+				cancel()
+				verification = canceled
+			}
+			if err := source.Verify(verification); err == nil {
+				t.Fatal("invalid verification context retained the numerical source")
+			}
+			if !errors.Is(source.Verify(ctx), ErrProbeNeedsContext) {
+				t.Fatal("fresh context revived the revoked numerical source")
+			}
+			if err := request.ReadonlyLiterals.Verify(ctx); err != nil {
+				t.Fatal("invalid consumer context revoked the independent initializer", err)
+			}
+		})
+	}
+	for _, route := range []string{"original", "verification"} {
+		for _, method := range []string{"Err", "Deadline", "Done"} {
+			t.Run(route+"/"+method, func(t *testing.T) {
+				callback := &sdkASMDataReentrantContext{Context: ctx, method: method}
+				captureContext, verifyContext := ctx, ctx
+				if route == "original" {
+					captureContext = callback
+				} else {
+					verifyContext = callback
+				}
+				source, err := CaptureGoX86SDKNumericalReadSource(captureContext, request)
+				if err != nil {
+					t.Fatal("actual joined SDK source precondition", err)
+				}
+				defer closeNumericalConsumerSource(t, source)
+				called, underLock := false, false
+				var nested error
+				callback.callback = func() {
+					called = true
+					// Detect the forbidden callback-under-lock without allowing
+					// a broken implementation to strand a deadlocked test worker.
+					if !source.mu.TryLock() {
+						underLock = true
+						return
+					}
+					source.mu.Unlock()
+					nested = source.Close()
+				}
+				callback.armed.Store(true)
+				err = source.Verify(verifyContext)
+				if !called || underLock || nested != nil || !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatal("joined numerical lifecycle borrowed a callback lock or published after Close", called, underLock, nested, err)
+				}
+				if err := observed.Verify(ctx); err != nil {
+					t.Fatal("closing the numerical consumer disposed its independent SDK source", err)
+				}
+			})
+		}
+	}
+	t.Run("original numerical cancellation", func(t *testing.T) {
+		original, cancel := context.WithCancel(ctx)
+		defer cancel()
+		source, err := CaptureGoX86SDKNumericalReadSource(original, request)
+		if err != nil {
+			t.Fatal("actual joined SDK source precondition", err)
+		}
+		defer closeNumericalConsumerSource(t, source)
+		cancel()
+		if err := source.Verify(ctx); !errors.Is(err, context.Canceled) {
+			t.Fatal("fresh verification context revived the canceled original numerical capture", err)
+		}
+		if err := request.ReadonlyLiterals.Verify(ctx); err != nil {
+			t.Fatal("numerical context cancellation revoked the independent initializer", err)
+		}
+	})
+}
+
+// Exercise the initializer/shape checks directly, without allowing the outer
+// full-file fingerprint to be the only reason a changed initializer fails.
+func TestGoX86SDKNumericalReadLiteralInitializerAndReadBoundaries(t *testing.T) {
+	ctx, request, observed := numericalSDKLiteralFixture(t)
+	joined, err := captureNumericalSDKLiteralJoin(ctx, request, numericalSBSDKSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, original, _ := numericalSDKLiteralPackage(t, observed, request.AssemblyFile)
+	if err := joined.verifyFile(original, request.PackagePath); err != nil {
+		t.Fatal("original complete initializer precondition", err)
+	}
+	for _, test := range []struct {
+		name   string
+		change func(*File)
+	}{
+		{"missing initializer", func(f *File) { f.Data = f.Data[1:] }},
+		{"duplicate initializer", func(f *File) { f.Data = append(f.Data, f.Data[0]) }},
+		{"changed payload", func(f *File) { f.Data[0].Value ^= 1 }},
+		{"payload takes precedence", func(f *File) { f.Data[0].Payload = []byte{0xff} }},
+		{"initializer relocation", func(f *File) { f.Data[0].Addr = "internal∕cpu·X86(SB)" }},
+		{"fragment reordering", func(f *File) { f.Data[0], f.Data[1] = f.Data[1], f.Data[0] }},
+		{"fragment width", func(f *File) { f.Data[0].Width++ }},
+		{"fragment offset", func(f *File) { f.Data[0].Off++ }},
+		{"missing extent", func(f *File) { f.Globl = f.Globl[1:] }},
+		{"duplicate extent", func(f *File) { f.Globl = append(f.Globl, f.Globl[0]) }},
+		{"unresolved extent", func(f *File) { f.Globl[0].SizeRaw = "unknown" }},
+		{"extent shrink", func(f *File) { f.Globl[0].Size-- }},
+		{"readonly extra flag", func(f *File) { f.Globl[0].Flags = "10" }},
+		{"global private identity", func(f *File) { f.Globl[0].Sym = strings.TrimSuffix(f.Globl[0].Sym, "<>") }},
+		{"fragment private identity", func(f *File) { f.Data[0].Sym = strings.TrimSuffix(f.Data[0].Sym, "<>") }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			file := *original
+			file.Data = append([]DataStmt(nil), original.Data...)
+			file.Globl = append([]GloblStmt(nil), original.Globl...)
+			test.change(&file)
+			if err := joined.verifyFile(&file, request.PackagePath); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("unbound initializer image was accepted", err)
+			}
+		})
+	}
+	source := &GoX86NumericalReadSource{request: request, literals: joined}
+	for _, test := range []struct {
+		instruction string
+		operand     int
+		admitted    bool
+	}{
+		{"MOVOU r2r1<>(SB), X0", 0, true},
+		{"MOVOU r2r1<>+48(SB), X0", 0, true},
+		{"VMOVDQU64 r2r1<>(SB), Z0", 0, true},
+		{"PCLMULQDQ $1, r2r1<>(SB), X0", 1, true},
+		{"PSRLQ r2r1<>(SB), X0", 0, true},
+		{"MOVOU r2r1<>+49(SB), X0", 0, false},
+		{"VMOVDQU64 r2r1<>+1(SB), Z0", 0, false},
+		{"MOVOU r2r1<>-1(SB), X0", 0, false},
+		{"VMOVDQU64 r4r3<>(SB), Z0", 0, false},
+		{"MOVOU X0, r2r1<>(SB)", 1, false},
+		{"LEAQ r2r1<>(SB), AX", 0, false},
+		{"CALL r2r1<>(SB)", 0, false},
+	} {
+		t.Run(test.instruction, func(t *testing.T) {
+			file, err := Parse(ArchAMD64, "TEXT ·fixture(SB),4,$0-0\n"+test.instruction+"\nRET\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			local, err := source.sdkLiteralRead(file.Funcs[0].Instrs[1], test.operand, "amd64")
+			if !local || test.admitted && err != nil || !test.admitted && !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("private initializer read shape/direction/whole extent differs", local, err)
+			}
+		})
+	}
+}
+
+func TestGoX86SDKNumericalReadLiteralListingObjectBoundaries(t *testing.T) {
+	ctx, request, _ := numericalSDKLiteralFixture(t)
+	joined, err := captureNumericalSDKLiteralJoin(ctx, request, numericalSBSDKSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputs := joined.Observation.ObjectInputs
+	selected := inputs.Sources[joined.SourceOrdinal]
+	for _, route := range []string{"original", "expanded"} {
+		for _, mutation := range []string{"valid", "truncated", "private namespace", "text code", "DATA bytes"} {
+			t.Run(route+"/"+mutation, func(t *testing.T) {
+				original := append([]byte(nil), selected.OriginalObject...)
+				expanded := append([]byte(nil), selected.ExpandedObject...)
+				object := &original
+				if route == "expanded" {
+					object = &expanded
+				}
+				switch mutation {
+				case "truncated":
+					*object = (*object)[:len(*object)-1]
+				case "private namespace":
+					index := bytes.Index(*object, []byte("r2r1"))
+					if index < 0 {
+						t.Fatal("actual object lacks its original private namespace")
+					}
+					(*object)[index+3] = '2'
+				case "text code":
+					code := joined.Observation.Objects.Sources[joined.SourceOrdinal].Original.Texts[0].Code
+					index := bytes.Index(*object, code)
+					if index < 0 || len(code) == 0 {
+						t.Fatal("actual object lacks its complete original text")
+					}
+					(*object)[index] ^= 1
+				case "DATA bytes":
+					image := joined.Initializers.Initializers[0].Initial
+					index := bytes.Index(*object, image)
+					if index < 0 || len(image) == 0 {
+						t.Fatal("actual object lacks its complete literal payload")
+					}
+					(*object)[index] ^= 1
+				}
+				first, second, err := gostaticstorage.ObserveX86SDKASMDataListingObjects(inputs, joined.SourceOrdinal, original, expanded)
+				if mutation == "valid" {
+					if err != nil || len(first) != 3 || len(second) != 3 {
+						t.Fatal("actual complete listing object join", err)
+					}
+				} else if first != nil || second != nil || err == nil {
+					t.Fatal("changed whole listing object was accepted", err)
+				}
+			})
+		}
 	}
 }

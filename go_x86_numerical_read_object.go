@@ -154,14 +154,13 @@ func numericalSameInstruction(a, b Instr, pkg, arch string) bool {
 // line associates a unique original expanded instruction with a native PC;
 // original listing and binary PC tables retain its original CPP source role.
 // No line-only mapping or relocation name can independently create a read.
-func numericalListingRows(raw []byte) (map[string]map[int64][]struct {
+type numericalListingRow struct {
 	position string
 	ins      Instr
-}, error) {
-	rows := make(map[string]map[int64][]struct {
-		position string
-		ins      Instr
-	})
+}
+
+func numericalListingRows(raw []byte) (map[string]map[int64][]numericalListingRow, error) {
+	rows := make(map[string]map[int64][]numericalListingRow)
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(nil, 4<<20)
 	name := ""
@@ -172,10 +171,7 @@ func numericalListingRows(raw []byte) (map[string]map[int64][]struct {
 			if rows[name] != nil {
 				return nil, numericalSBContext("duplicate listing TEXT")
 			}
-			rows[name] = make(map[int64][]struct {
-				position string
-				ins      Instr
-			})
+			rows[name] = make(map[int64][]numericalListingRow)
 			continue
 		}
 		match := goAMD64FrameRow.FindStringSubmatch(line)
@@ -190,10 +186,7 @@ func numericalListingRows(raw []byte) (map[string]map[int64][]struct {
 		if err != nil || len(parsed.Funcs) != 1 || len(parsed.Funcs[0].Instrs) != 2 || parsed.Funcs[0].Instrs[1].Op == OpTEXT {
 			continue // TEXT/FUNCDATA/PCDATA are not a machine read.
 		}
-		rows[name][pc] = append(rows[name][pc], struct {
-			position string
-			ins      Instr
-		}{match[2], parsed.Funcs[0].Instrs[1]})
+		rows[name][pc] = append(rows[name][pc], numericalListingRow{match[2], parsed.Funcs[0].Instrs[1]})
 	}
 	return rows, scanner.Err()
 }

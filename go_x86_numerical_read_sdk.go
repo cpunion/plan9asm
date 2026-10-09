@@ -103,6 +103,9 @@ func (source *GoX86NumericalReadSource) captureSourceRole(ctx context.Context) e
 	if matched != 1 {
 		return numericalSBContext("SDK assembly is not uniquely selected by the actual target")
 	}
+	if source.literals != nil {
+		return source.captureSDKLiteralSourceRole(ctx)
+	}
 	graph, err := source.run(ctx, "list", "-deps", "-compiled", "-export", "-json", "-mod=readonly", ".")
 	if err != nil {
 		return err
@@ -208,8 +211,10 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 		if owner != source.request.Owners[ordinal] {
 			return numericalSBContext("SDK source owner identity/order changed")
 		}
-		if err := owner.Verify(ctx); err != nil {
-			return err
+		if source.literals == nil {
+			if err := owner.Verify(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	for name, input := range source.sdk.Inputs {
@@ -228,9 +233,14 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 		return err
 	}
 	imports, err := source.guard.bindStandardDeclarationImports(graph)
-	if err != nil || !reflect.DeepEqual(imports, source.sdk.Imports) || !reflect.DeepEqual(imports, source.guard.imports) ||
-		!numericalSameRawSDKGraph(source.sdk.Graph, graph) {
-		return numericalSBContext("complete SDK source/export/selection graph changed: %v", err)
+	if err != nil {
+		return numericalSBContext("complete SDK source/export graph cannot be rebound: %v", err)
+	}
+	if !reflect.DeepEqual(imports, source.sdk.Imports) || !reflect.DeepEqual(imports, source.guard.imports) {
+		return numericalSBContext("complete SDK declaration import bindings changed")
+	}
+	if !numericalSameRawSDKGraph(source.sdk.Graph, graph) {
+		return numericalSBContext("complete SDK source/export/selection graph changed")
 	}
 	if err := source.guard.verifyInputs(); err != nil {
 		return err
@@ -243,6 +253,14 @@ func (source *GoX86NumericalReadSource) verifySDKObservation(ctx context.Context
 }
 
 func (source *GoX86NumericalReadSource) verifySDKCaptureContext() error {
+	if source.literals != nil {
+		// The joined route samples both original contexts outside source.mu.
+		// The serialized portion can only consume the already sampled lease.
+		if source.sdk.context != source.literals.context || source.sdk.originalContext != source.literals.context {
+			return numericalSBContext("joined SDK capture context identity changed")
+		}
+		return source.literals.verifyIdentity(source.request)
+	}
 	if source.sdk.context == nil || source.sdk.originalContext == nil ||
 		reflect.TypeOf(source.sdk.context) != reflect.TypeOf(source.sdk.originalContext) ||
 		!reflect.TypeOf(source.sdk.context).Comparable() || source.sdk.context != source.sdk.originalContext {

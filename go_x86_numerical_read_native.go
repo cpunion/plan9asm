@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -40,8 +41,15 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		if source.sdk == nil || source.sdk.origin != source || source.sdk.closed {
 			return numericalSBContext("native observation lacks the live exact SDK input graph")
 		}
-		proof.ArchiveMembers, err = gostaticstorage.ObserveX86SDKAssemblyArchiveReferences(proof.Archive, builtin, source.request.Target,
-			selected.SFiles, source.sdk.Referenced)
+		if source.literals != nil {
+			if !bytes.Equal(proof.Archive, source.literals.Observation.ObjectInputs.Archive) {
+				return numericalSBContext("literal native archive changed")
+			}
+			proof.ArchiveMembers = source.sdk.ArchiveMembers
+		} else {
+			proof.ArchiveMembers, err = gostaticstorage.ObserveX86SDKAssemblyArchiveReferences(proof.Archive, builtin, source.request.Target,
+				selected.SFiles, source.sdk.Referenced)
+		}
 	} else {
 		proof.ArchiveMembers, err = gostaticstorage.ObserveX86AssemblyArchive(proof.Archive, builtin, source.request.Target, selected.SFiles)
 	}
@@ -56,7 +64,17 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		return numericalSBContext("assembly is not actually selected")
 	}
 	expanded := filepath.Join(guard.owned, "expanded.s")
-	if err := os.WriteFile(expanded, []byte(source.cpp.Output), 0600); err != nil {
+	expandedProgram := source.cpp.Output
+	var sourcePositions [][]string
+	if source.literals != nil {
+		positioned := source.literals.Observation.Positions[source.literals.SourceOrdinal]
+		expandedProgram = positioned.Mapped
+		sourcePositions, err = numericalSDKLiteralSourcePositions(source.file, source.cpp.Output, positioned)
+		if err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(expanded, []byte(expandedProgram), 0600); err != nil {
 		return err
 	}
 	if _, err := guard.read(expanded); err != nil {
@@ -64,6 +82,12 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	}
 	assemble := func(input, output string) ([]byte, []byte, error) {
 		arguments := []string{"tool", "asm", "-S", "-p", source.request.PackagePath, "-I", source.request.Directory, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
+		if source.literals != nil {
+			// Match the independent SDK header producer's complete source and
+			// generated-header route; no user header or substituted constant.
+			arguments = []string{"tool", "asm", "-S", "-p", source.request.PackagePath, "-std",
+				"-I", source.literals.source.guard.owned, "-I", filepath.Join(guard.env["GOROOT"], "pkg", "include")}
+		}
 		for _, define := range GoAssemblerDefinesWithEnv("linux", arch, environment) {
 			arguments = append(arguments, "-D", define)
 		}
@@ -83,11 +107,15 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 	if err != nil {
 		return err
 	}
-	proof.OriginalText, err = gostaticstorage.ObserveX86AssemblyText(proof.OriginalObject, builtin, source.request.Target)
-	if err != nil {
-		return err
+	if source.literals != nil {
+		proof.OriginalText, proof.ExpandedText, err = gostaticstorage.ObserveX86SDKASMDataListingObjects(
+			source.literals.Observation.ObjectInputs, source.literals.SourceOrdinal, proof.OriginalObject, proof.ExpandedObject)
+	} else {
+		proof.OriginalText, err = gostaticstorage.ObserveX86AssemblyText(proof.OriginalObject, builtin, source.request.Target)
+		if err == nil {
+			proof.ExpandedText, err = gostaticstorage.ObserveX86AssemblyText(proof.ExpandedObject, builtin, source.request.Target)
+		}
 	}
-	proof.ExpandedText, err = gostaticstorage.ObserveX86AssemblyText(proof.ExpandedObject, builtin, source.request.Target)
 	if err != nil || len(proof.OriginalText) != len(proof.ExpandedText) || len(proof.OriginalText) != len(source.file.Funcs) {
 		return numericalSBContext("original/expanded complete TEXT differs: %v", err)
 	}
@@ -149,19 +177,21 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 		if arch == "386" {
 			mode = 32
 		}
-		decoded := make(map[int64]x86asm.Inst)
-		for pc := int64(0); pc < int64(len(text.Code)); {
-			native, err := x86asm.Decode(text.Code[pc:], mode)
-			if err != nil || native.Op == 0 || native.Len <= 0 || native.Op == x86asm.CALL || native.Op == x86asm.LCALL {
-				return numericalSBContext("unknown/calling whole native instruction boundary")
-			}
-			decoded[pc] = native
-			pc += int64(native.Len)
+		// The full native stream must have trusted instruction boundaries,
+		// including vector instructions and unreachable bytes. Only the
+		// independent scalar decoder map can supply a numerical read below.
+		_, decoded, err := x86NumericalNativeBoundaries(text.Code, mode)
+		if err != nil {
+			return err
 		}
 		for ordinal, ins := range fn.Instrs {
 			containsSymbol := false
-			for _, operand := range ins.Args {
-				containsSymbol = containsSymbol || operand.Kind == OpSym
+			for operandIndex, operand := range ins.Args {
+				local, err := source.sdkLiteralRead(ins, operandIndex, arch)
+				if err != nil {
+					return err
+				}
+				containsSymbol = containsSymbol || operand.Kind == OpSym && !local
 				if operand.Kind == OpMem && operand.Mem.Sym != "" {
 					return numericalSBContext("indexed/alternate SB memory role needs separate binding")
 				}
@@ -187,41 +217,60 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 					if !numericalSameInstruction(ins, row.ins, source.request.PackagePath, arch) {
 						continue
 					}
-					// The expanded physical line must select this exact ordinal;
-					// repeated identical instructions cannot borrow another row.
-					separator := strings.LastIndexByte(row.position, ':')
-					if separator < 0 || row.position[:separator] != expanded {
-						return numericalSBContext("expanded listing source role differs")
-					}
-					line, err := strconv.Atoi(row.position[separator+1:])
-					if err != nil || line <= textLine || line >= textEnd || strings.TrimSpace(lines[line-1]) != ins.Raw {
-						return numericalSBContext("expanded source ordinal/physical line differs")
-					}
-					priorCount := 0
-					for _, prior := range fn.Instrs[:ordinal] {
-						if prior.Raw == ins.Raw {
-							priorCount++
+					if source.literals != nil {
+						if !numericalSDKLiteralReadOrdinal(fn, ordinal, sourcePositions[index], pc, row,
+							expandedRows[name], source.request.PackagePath, arch) {
+							continue
 						}
-					}
-					physicalCount := 0
-					for _, physical := range lines[textLine : line-1] {
-						if strings.TrimSpace(physical) == ins.Raw {
-							physicalCount++
+					} else {
+						// The expanded physical line must select this exact ordinal;
+						// repeated identical instructions cannot borrow another row.
+						separator := strings.LastIndexByte(row.position, ':')
+						if separator < 0 || row.position[:separator] != expanded {
+							return numericalSBContext("expanded listing source role differs")
 						}
-					}
-					if priorCount != physicalCount {
-						continue
+						line, err := strconv.Atoi(row.position[separator+1:])
+						if err != nil || line <= textLine || line >= textEnd || strings.TrimSpace(lines[line-1]) != ins.Raw {
+							return numericalSBContext("expanded source ordinal/physical line differs")
+						}
+						priorCount := 0
+						for _, prior := range fn.Instrs[:ordinal] {
+							if prior.Raw == ins.Raw {
+								priorCount++
+							}
+						}
+						physicalCount := 0
+						for _, physical := range lines[textLine : line-1] {
+							if strings.TrimSpace(physical) == ins.Raw {
+								physicalCount++
+							}
+						}
+						if priorCount != physicalCount {
+							continue
+						}
 					}
 					originalMatches := 0
 					for _, original := range originalRows[name][pc] {
 						if numericalSameInstruction(ins, original.ins, source.request.PackagePath, arch) {
 							for _, position := range text.Positions {
 								path := original.position
+								objectFile := position.File
+								if source.literals != nil {
+									var valid bool
+									path, valid = numericalSDKListingLogicalPosition(path)
+									if !valid {
+										return numericalSBContext("unknown SDK original source-position display")
+									}
+									objectFile, valid = source.sdkLiteralObjectSource(objectFile)
+									if !valid {
+										continue
+									}
+								}
 								colon := strings.LastIndexByte(path, ':')
 								line, err := strconv.Atoi(path[colon+1:])
-								if colon >= 0 && err == nil && position.Start <= pc && pc < position.End && position.File == path[:colon] && int32(line) == position.Line {
+								if colon >= 0 && err == nil && position.Start <= pc && pc < position.End && objectFile == path[:colon] && int32(line) == position.Line {
 									for _, input := range source.cpp.Sources {
-										if input.File == position.File {
+										if input.File == objectFile {
 											originalMatches++
 										}
 									}
@@ -230,7 +279,13 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 						}
 					}
 					if originalMatches != 1 || native.MemBytes != int(width) || native.AddrSize != mode {
-						return numericalSBContext("native read width/source-PC role differs")
+						var locations []string
+						for _, position := range text.Positions {
+							if position.Start <= pc && pc < position.End {
+								locations = append(locations, fmt.Sprintf("%s:%d", position.File, position.Line))
+							}
+						}
+						return numericalSBContext("native read width/source-PC role differs: source matches=%d width=%d/%d address=%d/%d listing=%s binary=%v", originalMatches, native.MemBytes, width, native.AddrSize, mode, row.position, locations)
 					}
 					for _, prefix := range native.Prefix {
 						value := uint8(prefix)
@@ -262,6 +317,17 @@ func (source *GoX86NumericalReadSource) bindNative(ctx context.Context, variable
 				}
 			}
 			if matches != 1 {
+				if source.literals != nil {
+					var positions []string
+					for pc, rows := range expandedRows[name] {
+						for _, row := range rows {
+							if numericalSameInstruction(ins, row.ins, source.request.PackagePath, arch) {
+								positions = append(positions, fmt.Sprintf("%d@%s", pc, row.position))
+							}
+						}
+					}
+					return numericalSBContext("missing/ambiguous mapped source/native read: %s; expected %s, observed %v", ins.Raw, sourcePositions[index][ordinal], positions)
+				}
 				return numericalSBContext("missing/ambiguous whole source instruction/native read join: %s", ins.Raw)
 			}
 		}

@@ -1,6 +1,7 @@
 package gostaticstorage
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -129,6 +130,51 @@ func ObserveX86SDKASMData(request SDKASMDataObservationRequest) (*SDKASMDataObse
 // This offline adapter authenticates no CPP, SDK, header or storage role.
 func ObserveX86SDKCPPASMData(request SDKASMDataObservationRequest) (*SDKASMDataObservation, error) {
 	return observeX86SDKASMData(request, true)
+}
+
+// ObserveX86SDKASMDataListingObjects checks separately assembled listing
+// objects against an existing complete source/header-mapped object request.
+// Both use the authenticated position-mapped input. Every code byte,
+// relocation, DATA definition, object-local identity and complete debug
+// position must agree with that source's independently assembled object. This is
+// a pure observation, not source, initializer, instruction or read authority.
+func ObserveX86SDKASMDataListingObjects(request SDKASMDataObservationRequest, ordinal int, originalBytes, expandedBytes []byte) ([]TextRecord, []TextRecord, error) {
+	if ordinal < 0 || ordinal >= len(request.Sources) || len(originalBytes) == 0 || len(expandedBytes) == 0 ||
+		len(originalBytes) > archiveLimit || len(expandedBytes) > archiveLimit {
+		return nil, nil, contextError("listing objects lack a bounded selected source identity")
+	}
+	observation, err := ObserveX86SDKCPPASMData(request)
+	if err != nil {
+		return nil, nil, err
+	}
+	referenced, err := sdkReferencedArchiveSymbols(request.Referenced, request.Target)
+	if err != nil {
+		return nil, nil, err
+	}
+	original, err := observeASMDataObject(originalBytes, request.BuiltinSource, request.Target, 20, referenced)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !reflect.DeepEqual(original, observation.Sources[ordinal].Original) {
+		return nil, nil, contextError("original listing object differs from complete authenticated source metadata")
+	}
+	expanded, err := observeASMDataObject(expandedBytes, request.BuiltinSource, request.Target, 20, referenced)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !reflect.DeepEqual(expanded, observation.Sources[ordinal].Expanded) {
+		if len(original.Definitions) == len(expanded.Definitions) {
+			for index, first := range original.Definitions {
+				second := expanded.Definitions[index]
+				first.DataOffset, second.DataOffset = 0, 0
+				if !reflect.DeepEqual(first, second) {
+					return nil, nil, contextError(fmt.Sprintf("expanded listing definition %d differs: namespace=%d name=%q kind=%d sizes=%d/%d", index, first.Namespace, first.Name, first.Kind, first.Size, second.Size))
+				}
+			}
+		}
+		return nil, nil, contextError("expanded listing object changed code/DATA/relocation/namespace")
+	}
+	return original.Texts, expanded.Texts, nil
 }
 
 func observeX86SDKASMData(request SDKASMDataObservationRequest, cpp bool) (*SDKASMDataObservation, error) {

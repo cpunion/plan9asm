@@ -53,6 +53,7 @@ type GoX86NumericalReadSource struct {
 	commands                     []numericalSBCommand
 	role                         numericalSBSourceRole
 	sdk                          *numericalSBSDKObservation
+	literals                     *numericalSDKLiteralJoin
 }
 
 type numericalSBCommand struct {
@@ -83,6 +84,10 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	}
 	request.Environment = append([]string(nil), request.Environment...)
 	request.Owners = append([]*GoNumericalStorageOwner(nil), request.Owners...)
+	literals, err := captureNumericalSDKLiteralJoin(ctx, request, role)
+	if err != nil {
+		return nil, err
+	}
 	provided := make(map[string]string)
 	for _, pair := range request.Environment {
 		key, value, valid := strings.Cut(pair, "=")
@@ -104,7 +109,7 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 	if provided["GOPACKAGESDRIVER"] != "" && provided["GOPACKAGESDRIVER"] != "off" {
 		return nil, numericalSBContext("external package driver needs independent mapping")
 	}
-	source := &GoX86NumericalReadSource{request: request, role: role, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
+	source := &GoX86NumericalReadSource{request: request, role: role, literals: literals, dirs: make(map[string]os.FileInfo), misses: make(map[string]bool),
 		originalOwners: append([]*GoNumericalStorageOwner(nil), request.Owners...)}
 	source.identity = source
 	source.guard = newGoOriginalInputGuard(GoAMD64FrameCaptureRequest{GoBinary: request.GoBinary, Directory: request.Directory,
@@ -222,7 +227,8 @@ func captureGoX86NumericalReadSource(ctx context.Context, request GoX86Numerical
 		Reads                        []numericalSBReadFact
 		Role                         numericalSBSourceRole
 		SDK                          *numericalSBSDKObservation
-	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts(), role, source.sdk})
+		Literals                     *numericalSDKLiteralJoin
+	}{request, source.cpp, source.file, selected, source.guard.inputs, reports, source.native, source.rawSelection, source.rawEnvironment, source.commands, source.readFacts(), role, source.sdk, source.literals})
 	if err != nil {
 		return nil, err
 	}
@@ -340,6 +346,9 @@ func (source *GoX86NumericalReadSource) bindImports(reports []gostaticstorage.Re
 }
 
 func (source *GoX86NumericalReadSource) preprocess() error {
+	if source.literals != nil {
+		return source.preprocessSDKLiterals()
+	}
 	guard := source.guard
 	original, err := guard.read(filepath.Join(source.request.Directory, source.request.AssemblyFile))
 	if err != nil {
@@ -373,6 +382,13 @@ func (source *GoX86NumericalReadSource) preprocess() error {
 }
 
 func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
+	if source != nil && source.literals != nil {
+		return source.verifySDKLiteralNumericalSource(ctx)
+	}
+	return source.verifyNumericalSource(ctx)
+}
+
+func (source *GoX86NumericalReadSource) verifyNumericalSource(ctx context.Context) error {
 	if source == nil {
 		return numericalSBContext("missing live read source")
 	}
@@ -421,9 +437,11 @@ func (source *GoX86NumericalReadSource) Verify(ctx context.Context) error {
 	if err := source.guard.verifyInputs(); err != nil {
 		return fail(err)
 	}
-	for _, owner := range source.request.Owners {
-		if err := owner.Verify(ctx); err != nil {
-			return fail(err)
+	if source.literals == nil {
+		for _, owner := range source.request.Owners {
+			if err := owner.Verify(ctx); err != nil {
+				return fail(err)
+			}
 		}
 	}
 	for _, read := range source.reads {
@@ -528,7 +546,8 @@ func (source *GoX86NumericalReadSource) stateDigest() ([32]byte, error) {
 		Commands                     []numericalSBCommand
 		Role                         numericalSBSourceRole
 		SDK                          *numericalSBSDKObservation
-	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands, source.role, source.sdk})
+		Literals                     *numericalSDKLiteralJoin
+	}{source.request, source.cpp, source.file, source.native, source.guard.selection, source.guard.inputs, source.readFacts(), source.rawSelection, source.rawEnvironment, source.commands, source.role, source.sdk, source.literals})
 	return sha256.Sum256(raw), err
 }
 
