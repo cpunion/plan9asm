@@ -16,11 +16,12 @@ import (
 func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCandidate, matrix matrixReport, configs []discoveryBuildConfiguration, targets []string) {
 	t.Helper()
 	plan := matrix.OrdinarySelectionPlan
-	if plan == nil || plan.HeaderPlanning == nil || plan.headerPlanningQueryStarts != 123 || len(plan.HeaderPlanning.Queries) != 123 ||
+	if plan == nil || plan.HeaderPlanning == nil || plan.headerPlanningQueryStarts != len(plan.HeaderPlanning.Queries) ||
 		len(plan.HeaderPlanning.Sources) != 1 || len(plan.GeneratedHeaders) != len(targets) {
 		t.Fatalf("planning observations were lost or confused with executed scopes: %#v", plan.HeaderPlanning)
 	}
 	inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
+	assertCPPHeaderPlanningActualBaselineScopes(t, candidate, matrix, configs, targets, refs)
 	result := discoveryCorpusResult{
 		Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
 		DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles, BuildConfigurations: configs,
@@ -41,7 +42,10 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 	if err := replay(encoded); err != nil {
 		t.Fatalf("full11 actual original/header/query/CPP/LLVM portable replay: %v", err)
 	}
-	assertCPPHeaderPlanningQueryInventoryRequired(t, result, inventory, targets)
+	// This condition-free fixture has the same actual baseline observations
+	// in planning and execution. The independent formal/generated-include
+	// fixture retains assertCPPHeaderPlanningQueryInventoryRequired and its
+	// real query-only inventory deletion control; none is invented here.
 	mutations := map[string]func(*discoveryCorpusResult){
 		"paired role deletion":   func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning = nil },
 		"protocol downgrade":     func(r *discoveryCorpusResult) { r.OrdinarySelectionPlan.HeaderPlanning.Protocol = "legacy" },
@@ -163,6 +167,58 @@ func assertCPPHeaderPlanningActualPortable(t *testing.T, candidate discoveryCand
 		t.Fatal(err)
 	}
 	t.Logf("NATIVE_HEADER_PLANNING_FULL11 queries=%d source_copies=%d role_bytes=%d executed_headers=%d LLVM_objects=%d", len(plan.HeaderPlanning.Queries), len(plan.HeaderPlanning.Sources), len(roleBytes), len(plan.GeneratedHeaders), matrix.Success)
+}
+
+func assertCPPHeaderPlanningActualBaselineScopes(t *testing.T, candidate discoveryCandidate, matrix matrixReport,
+	configs []discoveryBuildConfiguration, targets []string, refs []discoveryFeatureProfileReference) {
+	t.Helper()
+	plan := matrix.OrdinarySelectionPlan
+	if len(refs) != len(targets) || len(configs) != len(targets) ||
+		len(plan.HeaderPlanning.Queries) != len(refs) || !equalDiscoveryStrings(plan.Targets, targets) {
+		t.Fatal("condition-free planning/execution differs from the complete requested target inventory")
+	}
+	expected := make(map[string]discoveryFeatureProfileReference, len(targets))
+	for _, ref := range refs {
+		if _, duplicate := expected[ref.Request.Target]; duplicate || !containsTargetFeature(targets, ref.Request.Target) ||
+			!ref.Request.Baseline || len(ref.Request.Overrides) != 0 || len(ref.Request.Expected) != 0 {
+			t.Fatalf("fixture acquired a duplicate, foreign or nonbaseline actual request: %+v", ref)
+		}
+		expected[ref.Request.Target] = ref
+	}
+	seen := make(map[string]bool, len(targets))
+	for _, query := range plan.HeaderPlanning.Queries {
+		ref, present := expected[query.Profile.Request.Target]
+		if !present || seen[ref.Request.Target] || !reflect.DeepEqual(query.Profile, ref) ||
+			query.Assembly != candidate.AsmFiles[0] || len(query.BuildTags) != 0 || query.Metadata == nil ||
+			query.Metadata.ProfileID != ref.ID || len(query.Metadata.Headers) != 1 ||
+			query.Metadata.Headers[0].Target != ref.Request.Target {
+			t.Fatalf("planning query lost its unique real baseline/source/profile binding: %+v", query)
+		}
+		seen[ref.Request.Target] = true
+	}
+	seen = make(map[string]bool, len(targets))
+	for _, config := range configs {
+		if len(config.Targets) != 1 {
+			t.Fatalf("actual configuration lost its exact individual target: %+v", config)
+		}
+		ref, present := expected[config.Targets[0]]
+		if !present || seen[ref.Request.Target] || config.ProfileID != ref.ID || len(config.BuildTags) != 0 ||
+			!equalDiscoveryStrings(config.AsmFiles, candidate.AsmFiles) {
+			t.Fatalf("actual configuration differs from its planning baseline/source: %+v", config)
+		}
+		seen[ref.Request.Target] = true
+	}
+	seen = make(map[string]bool, len(targets))
+	for _, query := range plan.GeneratedHeaders {
+		ref, present := expected[query.Target]
+		if !present || seen[ref.Request.Target] || query.ProfileID != ref.ID || len(query.BuildTags) != 0 ||
+			!equalDiscoveryStrings(query.AsmFiles, candidate.AsmFiles) || query.Metadata == nil ||
+			query.Metadata.ProfileID != ref.ID || len(query.Metadata.Headers) != 1 ||
+			query.Metadata.Headers[0].Target != ref.Request.Target {
+			t.Fatalf("executed metadata differs from the unique actual target/profile/source: %+v", query)
+		}
+		seen[ref.Request.Target] = true
+	}
 }
 
 func assertCPPHeaderPlanningQueryInventoryRequired(t *testing.T, result discoveryCorpusResult, inventory *discoveryFeatureInventory, targets []string) {
