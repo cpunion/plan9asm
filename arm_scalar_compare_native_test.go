@@ -49,3 +49,40 @@ func TestARMScalarCompareNativeTargetBoundary(t *testing.T) {
 		}
 	}
 }
+
+func TestARMScalarCompareRawDefersAPSRUntilVMRS(t *testing.T) {
+	file, err := Parse(ArchARM, "TEXT conversion(SB),4,$0-0\nWORD $0xeeb50ac0\nWORD $0xeef1fa10\nRET\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, output := newARMCtxWithFuncForTest(t, file.Funcs[0], FuncSig{Name: "conversion", Ret: Void}, nil)
+	output.Reset()
+	compare := Instr{Op: OpWORD, Args: []Operand{{Kind: OpImm, Imm: 0xeeb50ac0}}}
+	if matched, err := ctx.lowerRawWord(compare); !matched || err != nil {
+		t.Fatalf("raw compare: matched=%t err=%v", matched, err)
+	}
+	if ctx.flagsWritten || strings.Contains(output.String(), "store i1") || strings.Contains(output.String(), "vmrs") {
+		t.Fatalf("VCMPE changes FPSCR, not APSR: %s", output.String())
+	}
+	form, ok := decodeARMRawVFPStatusTransfer(0xeef1fa10)
+	if !ok {
+		t.Fatal("VMRS APSR encoding not decoded")
+	}
+	if err := ctx.lowerRawVFPStatusTransfer(form); err != nil {
+		t.Fatal(err)
+	}
+	if !ctx.flagsWritten || strings.Count(output.String(), "store i1") != 4 || !strings.Contains(output.String(), "vmrs $0, fpscr") {
+		t.Fatalf("VMRS must copy all four native flags: %s", output.String())
+	}
+}
+
+func TestARMScalarCompareRawPredicateDoesNotInventEntryAPSR(t *testing.T) {
+	for _, api := range []string{"text", "module", "Go"} {
+		for _, body := range []string{"WORD $0x0eb50a40", "WORD $0x1eb50ac0", "WORD $0x0eb50b40", "WORD $0x1eb50bc0"} {
+			source := "TEXT conversion(SB),4,$0-0\n" + body + "\nRET\n"
+			if err := armWordFloatBoundaryAPI(t, api, source, "armv7-unknown-linux-gnueabihf"); err == nil {
+				t.Errorf("%s raw predicate must not use synthetic entry flags: %s", api, body)
+			}
+		}
+	}
+}

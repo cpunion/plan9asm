@@ -5,13 +5,7 @@ import (
 	"math/bits"
 )
 
-type armRawVFPCompare struct {
-	lhs       int
-	rhs       int
-	zeroRHS   bool
-	bits      int
-	condition string
-}
+type armRawVFPCompare = armScalarCompareForm
 
 func decodeARMRawVFPCompare(word uint32) (armRawVFPCompare, bool) {
 	// VCMP/VCMPE.{F32,F64} Vd,Vm and Vd,#0 share this encoding shape.
@@ -48,6 +42,7 @@ func decodeARMRawVFPCompare(word uint32) (armRawVFPCompare, bool) {
 		lhs:       lhs,
 		rhs:       rhs,
 		zeroRHS:   zero,
+		signaling: word&(1<<7) != 0,
 		bits:      bits,
 		condition: condition,
 	}, true
@@ -103,22 +98,7 @@ func (c *armCtx) lowerRawWord(ins Instr) (bool, error) {
 		return true, c.lowerRawVFPImmediate(immediate)
 	}
 	if compare, ok := decodeARMRawVFPCompare(word); ok {
-		lhs, err := c.loadARMRawVFPRegValue(compare.lhs, compare.bits)
-		if err != nil {
-			return true, err
-		}
-		rhs := "0.000000e+00"
-		if !compare.zeroRHS {
-			rhs, err = c.loadARMRawVFPRegValue(compare.rhs, compare.bits)
-			if err != nil {
-				return true, err
-			}
-		}
-		floatType := "float"
-		if compare.bits == 64 {
-			floatType = "double"
-		}
-		return true, c.setARMFloatCompareFlags(lhs, rhs, floatType, compare.condition)
+		return true, c.lowerARMScalarCompare(compare)
 	}
 	decoded, carry, ok := decodeARMRawTST(word, ins.Raw)
 	if !ok {

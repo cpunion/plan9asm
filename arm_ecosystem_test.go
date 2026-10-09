@@ -337,7 +337,7 @@ compare3:
 done:
 	RET
 `, map[string]FuncSig{"floatcompareforms": {Name: "floatcompareforms", Ret: Void}})
-	for _, want := range []string{"fcmp oeq float", "fcmp olt float", "fcmp uge float", "fcmp uno float", "fcmp oeq double"} {
+	for _, want := range []string{"vcmpe.f32", "vcmpe.f64", "vmrs $0, fpscr", "lshr i32"} {
 		if !strings.Contains(ll, want) {
 			t.Fatalf("ARM scalar float-compare family IR missing %q:\n%s", want, ll)
 		}
@@ -371,7 +371,7 @@ rawgreater:
 done:
 	RET
 `, map[string]FuncSig{"rawvfpcompare": {Name: "rawvfpcompare", Ret: Void}})
-	if !strings.Contains(ll, "fcmp") || !strings.Contains(ll, "br i1") {
+	if !strings.Contains(ll, "vcmpe.f32") || !strings.Contains(ll, "vmrs $0, fpscr") || !strings.Contains(ll, "br i1") {
 		t.Fatalf("raw ARM VFP compare/VMRS sequence was not modeled:\n%s", ll)
 	}
 }

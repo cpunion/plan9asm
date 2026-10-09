@@ -48,9 +48,12 @@ func (c *armCtx) lowerRawVFPStatusTransfer(form armRawVFPStatusTransfer) error {
 		})
 	}
 	if form.toFlags {
-		if !c.flagsWritten {
+		if !c.flagsWritten && !c.vfpCompareWritten {
 			return fmt.Errorf("%w: raw VMRS has no preceding modeled VFP flag write", ErrProbeNeedsContext)
 		}
+		status := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = call i32 asm sideeffect %q, %q()\n", status, "vmrs $0, fpscr", "=r,~{memory}")
+		c.storeFlagsFromStatus("%" + status)
 		return nil
 	}
 	core := Reg(fmt.Sprintf("R%d", form.core))

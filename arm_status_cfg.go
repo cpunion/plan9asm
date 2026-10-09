@@ -19,9 +19,9 @@ func proveARMStatusReads(fn Func, sig FuncSig) error {
 	if !armFunctionUsesModeledFlags(fn) {
 		return nil
 	}
-	// The existing raw VFP lowerer models its flags in the NZCV slots.
-	// This requires a closed unconditional compare/VMRS pair transferring
-	// FPSCR before any source condition observes the premature modeled write.
+	// A raw VFP compare changes FPSCR only. Keep the source proof limited to
+	// a closed unconditional compare/VMRS pair before any condition observes
+	// its APSR result; the emitter copies native FPSCR at the VMRS itself.
 	// Other sequences remain ordinary hard gaps, never native-entry N/A.
 	fn.Instrs = append([]Instr(nil), fn.Instrs...)
 	for i, ins := range fn.Instrs {

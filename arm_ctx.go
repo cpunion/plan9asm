@@ -27,6 +27,9 @@ type armCtx struct {
 	flagsCSlot   string
 	flagsVSlot   string
 	flagsWritten bool
+	// Emission traversal only, never a source/CFG authority. Raw compare does
+	// not write virtual APSR; its closed VMRS continuation performs that copy.
+	vfpCompareWritten bool
 
 	// Only a validated physical entry shim supplies this private body input.
 	// It never changes the source entry's caller-visible arguments.

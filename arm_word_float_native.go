@@ -31,6 +31,10 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 			instruction := source
 			if instruction.Op == OpWORD {
 				if len(instruction.Args) == 1 && instruction.Args[0].Kind == OpImm && instruction.Args[0].ImmRaw == "" {
+					if _, ok := decodeARMRawVFPCompare(uint32(instruction.Args[0].Imm)); ok {
+						needsNative = true
+						continue
+					}
 					if _, ok := decodeARMRawNEONConvertFloat32(uint32(instruction.Args[0].Imm)); ok {
 						needsNative = true
 						continue
@@ -49,6 +53,12 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 				instruction = decoded
 			}
 			op, _, _, _ := armDecodeOp(string(instruction.Op))
+			if _, matched, err := parseARMScalarCompare(op, instruction); err != nil {
+				return err
+			} else if matched {
+				needsNative = true
+				continue
+			}
 			_, matched, err := parseARMWordFloatConversion(op, instruction)
 			if err != nil {
 				return err // Invalid source is never reclassified as target context.
@@ -63,7 +73,7 @@ func validateARMWordFloatNativeTarget(file *File, options Options) error {
 		return rawError
 	}
 	if needsNative && (!armWordFloatNativeTarget(options.TargetTriple) || options.Goarch != "" && options.Goarch != "arm") {
-		return fmt.Errorf("%w: ARM word/float conversion requires an explicit native 32-bit little-endian ARM/Thumb FPSCR target, got %q/%q", ErrProbeNeedsContext, options.Goarch, options.TargetTriple)
+		return fmt.Errorf("%w: ARM scalar VFP operation requires an explicit native 32-bit little-endian ARM/Thumb FPSCR target, got %q/%q", ErrProbeNeedsContext, options.Goarch, options.TargetTriple)
 	}
 	return nil
 }

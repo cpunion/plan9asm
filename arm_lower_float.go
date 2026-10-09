@@ -298,71 +298,13 @@ func (c *armCtx) storeARMFloatRegValue(reg Reg, cond string, bits int, value str
 	return c.storeARMFloatBits(reg, cond, bits, "%"+encoded)
 }
 
-func (c *armCtx) setARMFloatCompareFlags(lhs, rhs, floatType, cond string) error {
-	if cond != "" && !strings.EqualFold(cond, "AL") {
-		return c.emitConditionalEffect(cond, func() error {
-			return c.setARMFloatCompareFlags(lhs, rhs, floatType, "")
-		})
-	}
-	comparisons := []struct {
-		predicate string
-		slot      string
-	}{
-		{"olt", c.flagsNSlot},
-		{"oeq", c.flagsZSlot},
-		// ARM VFP compare sets C for greater, equal, and unordered.
-		{"uge", c.flagsCSlot},
-		{"uno", c.flagsVSlot},
-	}
-	for _, comparison := range comparisons {
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fcmp %s %s %s, %s\n", value, comparison.predicate, floatType, lhs, rhs)
-		c.storeFlag(comparison.slot, "%"+value)
-	}
-	c.flagsWritten = true
-	return nil
-}
-
 func (c *armCtx) lowerARMFloatCompare(op, cond string, ins Instr) (ok bool, terminated bool, err error) {
-	switch op {
-	case "CMPF", "CMPD":
-	default:
-		return false, false, nil
+	form, matched, err := parseARMScalarCompare(op, ins)
+	if !matched || err != nil {
+		return matched, false, err
 	}
-	if err := armRequireConditionOnlySuffix(ins); err != nil {
-		return true, false, err
-	}
-	if len(ins.Args) < 1 || len(ins.Args) > 2 {
-		return true, false, fmt.Errorf("arm %s expects Fsrc or Fsrc1,Fsrc2: %q", op, ins.Raw)
-	}
-	for _, arg := range ins.Args {
-		if arg.Kind != OpReg || !isARMFReg(arg.Reg) {
-			return true, false, fmt.Errorf("arm %s accepts only floating registers: %q", op, ins.Raw)
-		}
-	}
-	bits := 32
-	floatType := "float"
-	if op == "CMPD" {
-		bits = 64
-		floatType = "double"
-	}
-	// obj/arm encodes p.From as Vm and p.Reg as Vd. With one operand Vd is
-	// compared against zero; with two, Plan 9 order is Vm,Vd.
-	rhs := "0.000000e+00"
-	lhsIndex := 0
-	if len(ins.Args) == 2 {
-		lhsIndex = 1
-		var loadErr error
-		rhs, loadErr = c.loadARMFloatRegValue(ins.Args[0].Reg, bits)
-		if loadErr != nil {
-			return true, false, loadErr
-		}
-	}
-	lhs, err := c.loadARMFloatRegValue(ins.Args[lhsIndex].Reg, bits)
-	if err != nil {
-		return true, false, err
-	}
-	return true, false, c.setARMFloatCompareFlags(lhs, rhs, floatType, cond)
+	form.condition = cond
+	return true, false, c.lowerARMScalarCompare(form)
 }
 
 func armWordFloatConversionUnsigned(ins Instr) (bool, error) {
