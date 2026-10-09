@@ -96,7 +96,7 @@ func x86TypedConditionalMoveByteEffect(op Op, ins Instr, arch string) (x86TypedB
 
 func x86CallerConditionalMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) (bool, bool) {
 	form, known, err := x86ConditionalMoveProperties(ins.Op, *ins, "amd64")
-	if !known || err != nil || !state.numericFlags {
+	if !known || err != nil || !x86SourceStackNumericFlagsRead(state, x86ByteConditionFlags(form.condition)) {
 		return known, false
 	}
 	width := int64(form.bits / 8)

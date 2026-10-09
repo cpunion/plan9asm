@@ -66,7 +66,7 @@ func x86ConditionalSetProperties(op Op, ins Instr, arch string) (x86ConditionalS
 
 func x86CallerConditionalSetStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) (bool, bool) {
 	form, recognized, err := x86ConditionalSetProperties(ins.Op, *ins, "amd64")
-	if !recognized || err != nil || !state.numericFlags {
+	if !recognized || err != nil || !x86SourceStackNumericFlagsRead(state, x86ByteConditionFlags(form.condition)) {
 		return recognized, false
 	}
 	if form.destination.Kind == OpReg {

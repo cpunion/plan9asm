@@ -273,6 +273,9 @@ func x86CallerScalarStep(ins *Instr, state *x86SourceStackState, proof *x86GoCal
 	if _, stack := amd64StackWidthSpecs[op]; stack {
 		return false, true // Exact saved values/flags are tracked by the stack step.
 	}
+	if recognized, valid := x86CallerExplicitIMULStep(ins, state, proof); recognized {
+		return false, valid
+	}
 	for _, operand := range ins.Args {
 		if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
 			return false, true // Only the preceding exact address step admits this.

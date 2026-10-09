@@ -34,26 +34,28 @@ type x86SourceStackAddress struct {
 }
 
 type x86SourceStackCell struct {
-	offset       int64
-	width        int64
-	bp           *x86SourceStackAddress
-	flags        bool
-	numericFlags bool
-	caller       *x86CallerPointerValue
-	known        uint8
-	gOriginal    bool
+	offset              int64
+	width               int64
+	bp                  *x86SourceStackAddress
+	flags               bool
+	numericFlags        bool
+	partialNumericFlags uint8
+	caller              *x86CallerPointerValue
+	known               uint8
+	gOriginal           bool
 }
 
 type x86SourceStackState struct {
-	sp           int64
-	bp           x86SourceStackAddress
-	cells        []x86SourceStackCell
-	numericFlags bool
-	callers      map[Reg]x86CallerPointerValue
-	known        map[Reg]uint8
-	vectors      map[Reg]uint64
-	masks        map[Reg]bool
-	gOriginal    bool
+	sp                  int64
+	bp                  x86SourceStackAddress
+	cells               []x86SourceStackCell
+	numericFlags        bool
+	partialNumericFlags uint8
+	callers             map[Reg]x86CallerPointerValue
+	known               map[Reg]uint8
+	vectors             map[Reg]uint64
+	masks               map[Reg]bool
+	gOriginal           bool
 }
 
 const x86SourceStackLimit = int64(1 << 20)
@@ -98,6 +100,9 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 	caller := bindFrame && hasSig && x86CallerRegionSourceMatches(sig, input, opt.Goarch)
 	if !caller {
 		for index, instruction := range fn.Instrs {
+			if _, known, _ := x86ExplicitIMULProperties(instruction.Op, instruction, opt.Goarch); known {
+				return reject(index, "explicit multiply needs a complete typed caller input proof")
+			}
 			if _, known, _ := x86ConditionalMoveProperties(instruction.Op, instruction, opt.Goarch); known {
 				return reject(index, "conditional move needs a complete typed caller input and flags proof")
 			}
@@ -305,11 +310,11 @@ func normalizeX86RawReturnSourceStack(fn Func, opt Options, bindFrame bool, orig
 			}
 			x86CallerGDefinition(*ins, state)
 		}
-		if !x86SourceStackFlagsStep(*ins, state) {
+		if !x86SourceStackFlagsStepForArch(*ins, state, opt.Goarch) {
 			return false, "unproved source-stack or ABI0 continuation effect"
 		}
 		if pointerFlags {
-			state.numericFlags = false
+			x86SourceStackSetNumericFlags(state, 0)
 		}
 
 		return false, ""
@@ -494,6 +499,9 @@ func x86SourceStackScalarType(typ LLVMType) bool {
 }
 
 func x86SourceStackInstructionKnown(ins Instr, nativeMove Op, suffix, arch string) bool {
+	if _, known, err := x86ExplicitIMULProperties(ins.Op, ins, arch); known {
+		return err == nil
+	}
 	if _, known, err := x86ConditionalMoveProperties(ins.Op, ins, arch); known {
 		return err == nil
 	}
@@ -536,7 +544,7 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 	if flags && len(ins.Args) != 0 || !flags && len(ins.Args) != 1 {
 		return false
 	}
-	cell := x86SourceStackCell{width: width, flags: flags, numericFlags: state.numericFlags}
+	cell := x86SourceStackCell{width: width, flags: flags, numericFlags: state.numericFlags, partialNumericFlags: state.partialNumericFlags}
 	if !flags {
 		operand := ins.Args[0]
 		if operand.Kind != OpReg && (!push || operand.Kind != OpImm) {
@@ -605,6 +613,7 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 	}
 	if flags {
 		state.numericFlags = saved.numericFlags
+		state.partialNumericFlags = saved.partialNumericFlags
 	}
 	if saved.bp != nil {
 		if flags || ins.Args[0].Reg != BP {
@@ -658,15 +667,35 @@ func x86SourceStackStep(spec amd64StackWidthSpec, ins *Instr, state *x86SourceSt
 // proof permits numerical redefinitions and matching FLAGS save/restore, but
 // never exposes incomplete FLAGS as scalar data or invents incoming flags.
 func x86SourceStackFlagsStep(ins Instr, state *x86SourceStackState) bool {
-	if _, known, err := x86ConditionalMoveProperties(ins.Op, ins, "amd64"); known {
-		return err == nil && state.numericFlags
+	return x86SourceStackFlagsStepForArch(ins, state, "amd64")
+}
+
+func x86SourceStackFlagsStepForArch(ins Instr, state *x86SourceStackState, arch string) bool {
+	if form, known, err := x86ConditionalMoveProperties(ins.Op, ins, arch); known {
+		return err == nil && x86SourceStackNumericFlagsRead(state, x86ByteConditionFlags(form.condition))
 	}
 	op := Op(normalizeInstructionOpcode(ins.Op))
-	if _, conditionalSet := x86ConditionalSetConditions[op]; conditionalSet {
-		return state.numericFlags // SETcc consumes but does not change flags.
+	if condition, conditionalSet := x86ConditionalSetConditions[op]; conditionalSet {
+		return x86SourceStackNumericFlagsRead(state, x86ByteConditionFlags(condition)) // SETcc preserves flags.
 	}
 	if isAMD64ConditionalBranch(op) {
-		return isAMD64CounterZeroBranch(op) || state.numericFlags
+		return isAMD64CounterZeroBranch(op) || x86SourceStackNumericFlagsRead(state, x86ByteBranchFlags(op))
+	}
+	if state.callers != nil {
+		if effect, known, err := x86TypedGPByteEffect(ins.Op, ins, arch); known {
+			mask := x86SourceStackNumericFlagMask(state)
+			if err != nil || mask&effect.flagsRead != effect.flagsRead {
+				return false
+			}
+			for _, operand := range ins.Args {
+				if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
+					x86SourceStackSetNumericFlags(state, 0)
+					return true // Source address arithmetic never defines numerical flags.
+				}
+			}
+			x86SourceStackSetNumericFlags(state, mask&^effect.flagsKilled|effect.flagsDefined)
+			return true
+		}
 	}
 	name := string(op)
 	if len(name) < 2 {
@@ -677,16 +706,16 @@ func x86SourceStackFlagsStep(ins Instr, state *x86SourceStackState) bool {
 	case "ADC", "SBB":
 		return state.numericFlags
 	case "ADD", "SUB", "AND", "OR", "XOR", "CMP", "TEST", "NEG":
-		state.numericFlags = true
+		x86SourceStackSetNumericFlags(state, x86ByteFlagsAll)
 		for _, operand := range ins.Args {
 			if operand.Kind == OpReg && x86RawReturnStackRegister(operand.Reg) {
-				state.numericFlags = false
+				x86SourceStackSetNumericFlags(state, 0)
 			}
 		}
 	case "SHL", "SHR", "SAR":
 		// Masked zero counts preserve prior flags; OF is undefined for larger
 		// counts. They need a per-bit contract before serving as a new witness.
-		state.numericFlags = false
+		x86SourceStackSetNumericFlags(state, 0)
 	}
 	return true
 }

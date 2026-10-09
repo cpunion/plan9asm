@@ -283,6 +283,13 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86ExplicitIMULProperties(ins.Op, ins, arch); known {
+		sourceIndex := 0
+		if form.three {
+			sourceIndex = 1
+		}
+		return int64(form.bits / 8), false, err == nil && index == sourceIndex && isAMD64MemoryOperand(form.source)
+	}
 	if form, known, err := x86AESProperties(ins.Op, ins, arch); known {
 		return int64(form.byteWidth), false, err == nil && form.memory >= 0 && form.memory == index
 	}

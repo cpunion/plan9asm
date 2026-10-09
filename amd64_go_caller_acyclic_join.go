@@ -53,7 +53,7 @@ func x86CloneCallerState(state x86SourceStackState) x86SourceStackState {
 // this domain. Return a fresh deep clone, never edit either predecessor.
 func x86CallerAcyclicMerge(left, right x86SourceStackState, proof *x86GoCallerRegionProof) (x86SourceStackState, bool) {
 	if proof == nil || left.sp != right.sp || left.bp != right.bp ||
-		left.numericFlags != right.numericFlags || left.gOriginal != right.gOriginal ||
+		left.numericFlags != right.numericFlags || left.partialNumericFlags != right.partialNumericFlags || left.gOriginal != right.gOriginal ||
 		!reflect.DeepEqual(left.cells, right.cells) || len(left.callers) != len(right.callers) {
 		return x86SourceStackState{}, false
 	}
