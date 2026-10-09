@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -382,7 +383,32 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 
 	sym, off := splitSymPlusOff(symPart)
 
-	val, ok := parseImm(rhs)
+	// DATA's width applies to the value's type, not to a generic immediate
+	// bit pattern. cmd/asm converts a FLOAT leaf to float32 before writing
+	// four bytes; truncating the low bits of float64 would silently corrupt it.
+	expression := strings.TrimSpace(strings.TrimPrefix(rhs, "$"))
+	val, integerError := strconv.ParseUint(expression, 0, 64)
+	ok = integerError == nil
+	if !ok {
+		val, ok = parseImmExpr(expression)
+	}
+	ok = ok && strings.HasPrefix(rhs, "$")
+	if ok && width != 1 && width != 2 && width != 4 && width != 8 {
+		return DataStmt{}, fmt.Errorf("DATA integer requires width 1, 2, 4 or 8: %q", rest)
+	}
+	if !ok && strings.HasPrefix(rhs, "$") {
+		if value, floating := parseGoFloatLiteral(expression); floating {
+			switch width {
+			case 4:
+				val = uint64(math.Float32bits(float32(value)))
+			case 8:
+				val = math.Float64bits(value)
+			default:
+				return DataStmt{}, fmt.Errorf("DATA float requires width 4 or 8: %q", rest)
+			}
+			ok = true
+		}
+	}
 	var payload []byte
 	var addr string
 	if !ok {
@@ -398,7 +424,7 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	if !ok {
 		// Preserve symbol-address initializers for relocation-aware lowering.
 		// Value is not a byte payload for an address initializer.
-		if strings.HasPrefix(strings.TrimSpace(rhs), "$") {
+		if strings.HasPrefix(rhs, "$") && strings.HasSuffix(rhs, "(SB)") {
 			if sym, symOK := parseSym(strings.TrimPrefix(strings.TrimSpace(rhs), "$")); symOK {
 				addr = sym
 				val = 0
@@ -409,7 +435,7 @@ func parseDATAStmt(arch Arch, rest string) (DataStmt, error) {
 	if !ok {
 		return DataStmt{}, fmt.Errorf("DATA invalid immediate %q: %q", rhs, "DATA "+rest)
 	}
-	return DataStmt{Sym: sym, Off: off, Width: width, Value: uint64(val), Payload: payload, Addr: addr}, nil
+	return DataStmt{Sym: sym, Off: off, Width: width, Value: val, Payload: payload, Addr: addr}, nil
 }
 
 func parseWidth(arch Arch, s string) (int64, error) {

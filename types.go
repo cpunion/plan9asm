@@ -1035,9 +1035,10 @@ type Instr struct {
 //
 //	DATA sym+off(SB)/width, $value
 //
-// Width is in bytes. Integer values are encoded little-endian into the
-// global. String payloads are copied byte-for-byte and zero-padded to Width,
-// matching cmd/asm's DATA string semantics.
+// Width is in bytes. Value holds an integer or an already width-converted
+// IEEE float bit pattern, encoded little-endian into the global. String
+// payloads are copied byte-for-byte and zero-padded to Width, matching
+// cmd/asm's DATA string semantics.
 type DataStmt struct {
 	// Addr retains a symbol-address initializer, including its (SB) suffix.
 	Addr    string
