@@ -14,6 +14,10 @@ func decodedX86RawCLMULInstruction(code []byte, mode int) (Instr, int, bool, err
 }
 
 func decodedX86RawVectorCLMULInstruction(code []byte, mode int, p x86RawVectorEncoding) (Instr, int, bool, error) {
+	return decodedX86RawVectorCLMULInstructionWithMemory(code, mode, p, x86RawMemoryDecoder{})
+}
+
+func decodedX86RawVectorCLMULInstructionWithMemory(code []byte, mode int, p x86RawVectorEncoding, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("VPCLMULQDQ: %s", message)
 	}
@@ -33,11 +37,11 @@ func decodedX86RawVectorCLMULInstruction(code []byte, mode int, p x86RawVectorEn
 	var consumed int
 	var err error
 	if p.evex {
-		source, consumed, err = decodedX86EVEXRMOperand(
+		source, consumed, err = memory.evex(
 			code[p.modRM:], mode, p.b, p.x, p.segment, width, 16<<p.vectorLength,
 		)
 	} else {
-		source, consumed, err = decodedX86VEXVectorRMOperand(
+		source, consumed, err = memory.vex(
 			code[p.modRM:], mode, p.b, p.x, p.segment, width,
 		)
 	}

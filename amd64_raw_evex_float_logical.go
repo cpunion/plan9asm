@@ -8,6 +8,10 @@ import (
 // decodedX86RawEVEXFloatLogicalInstruction covers Go 1.27's EVEX
 // VAND/ANDN/OR/XOR PS/PD rows across X/Y/Z, masks, and scalar broadcast.
 func decodedX86RawEVEXFloatLogicalInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86RawEVEXFloatLogicalInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86RawEVEXFloatLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || !p.evex || p.mapNumber != 1 || p.opcode < 0x54 || p.opcode > 0x57 {
 		return Instr{}, 0, false, nil
@@ -41,7 +45,7 @@ func decodedX86RawEVEXFloatLogicalInstruction(code []byte, mode int) (Instr, int
 			scale = 8
 		}
 	}
-	source, consumed, err := decodedX86EVEXRMOperand(
+	source, consumed, err := memory.evex(
 		code[p.modRM:], mode, p.b, p.x, p.segment, width, scale,
 	)
 	if err != nil {

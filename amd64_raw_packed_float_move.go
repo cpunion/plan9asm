@@ -9,6 +9,10 @@ import (
 // generic decoder can misread VEX moves as legacy instructions or lose their
 // vector width, so decode the complete float and VEX integer families here.
 func decodedX86PackedMoveInstruction(code []byte, mode int) (Instr, int, bool, error) {
+	return decodedX86PackedMoveInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86PackedMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (Instr, int, bool, error) {
 	p, ok := decodeX86RawVectorEncoding(code)
 	if !ok || p.mapNumber != 1 {
 		return Instr{}, 0, false, nil
@@ -72,9 +76,9 @@ func decodedX86PackedMoveInstruction(code []byte, mode int) (Instr, int, bool, e
 	var consumed int
 	var err error
 	if p.evex {
-		rm, consumed, err = decodedX86EVEXRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width, 16<<p.vectorLength)
+		rm, consumed, err = memory.evex(code[p.modRM:], mode, p.b, p.x, p.segment, width, 16<<p.vectorLength)
 	} else {
-		rm, consumed, err = decodedX86VEXVectorRMOperand(code[p.modRM:], mode, p.b, p.x, p.segment, width)
+		rm, consumed, err = memory.vex(code[p.modRM:], mode, p.b, p.x, p.segment, width)
 	}
 	if err != nil {
 		return Instr{}, 0, true, err

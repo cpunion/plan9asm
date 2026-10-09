@@ -3077,7 +3077,11 @@ vex:
 // github.com/minio/sha256-simd. Decode all six opcodes and all twelve table
 // rows before consulting the generic decoder.
 func decodedX86EVEXPackedIntegerMoveInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
-	return decodedX86EVEXPackedMoveInstruction(code, mode, "packed integer move", func(pp byte, width64 bool, opcode byte) (Op, bool, bool) {
+	return decodedX86EVEXPackedIntegerMoveInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXPackedIntegerMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXPackedMoveInstruction(code, mode, memory, "packed integer move", func(pp byte, width64 bool, opcode byte) (Op, bool, bool) {
 		store := opcode == 0x7f
 		if opcode != 0x6f && !store {
 			return "", false, false
@@ -3103,7 +3107,7 @@ func decodedX86EVEXPackedIntegerMoveInstruction(code []byte, mode int) (instruct
 
 type decodedX86EVEXMoveMatcher func(pp byte, width64 bool, opcode byte) (op Op, store bool, ok bool)
 
-func decodedX86EVEXPackedMoveInstruction(code []byte, mode int, family string, match decodedX86EVEXMoveMatcher) (instruction Instr, length int, ok bool, err error) {
+func decodedX86EVEXPackedMoveInstruction(code []byte, mode int, memory x86RawMemoryDecoder, family string, match decodedX86EVEXMoveMatcher) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -3171,7 +3175,7 @@ evex:
 	modRM := code[modRMIndex]
 	regNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
 	reg := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, regNumber))}
-	rm, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
+	rm, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -3477,6 +3481,10 @@ func decodedX86VEXRMOperand(code []byte, mode, bExt, xExt int, segment Reg, vect
 // decode VMOVNTPD/VMOVNTPS as legacy integer subtraction. EVEX forms are not
 // handled here because the generic decoder preserves their X/Y/Z widths.
 func decodedX86VEXNonTemporalMoveInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXNonTemporalMoveInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXNonTemporalMoveInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -3574,13 +3582,13 @@ vex:
 		vectorPrefix = "Y"
 	}
 	vector := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("%s%d", vectorPrefix, vectorNumber))}
-	memory, consumed, decodeErr := decodedX86VEXRMSource(code[modRMIndex:], mode, bExt, xExt, segment)
+	operand, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
-	args := []Operand{vector, memory}
+	args := []Operand{vector, operand}
 	if load {
-		args[0], args[1] = memory, vector
+		args[0], args[1] = operand, vector
 	}
 	instruction = Instr{
 		Op:   op,
@@ -3594,6 +3602,10 @@ vex:
 // VINSERTF128/VINSERTI128 family. x/arch v0.14 can misclassify the bytes that
 // follow these instructions as PC-relative control flow.
 func decodedX86VINSERT128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VINSERT128InstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VINSERT128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -3648,7 +3660,7 @@ vex:
 	modRM := code[modRMIndex]
 	secondSourceNumber := int(^vexBits>>3) & 15
 	destinationNumber := int(modRM>>3&7) + rExt*8
-	firstSource, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, "X")
+	firstSource, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, "X")
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -3673,6 +3685,10 @@ vex:
 // 32- or 64-bit lane names. This includes Y/Z output widths, register and
 // memory insert sources, and optional merge/zero masks.
 func decodedX86EVEXPackedInsertInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXPackedInsertInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXPackedInsertInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -3763,7 +3779,7 @@ evex:
 	bExt := int(^p0>>5) & 1
 	secondNumber := (int(^p1>>3) & 15) + (int(^p2>>3)&1)*16
 	destinationNumber := int(modRM>>3&7) + rExt*8 + rHighExt*16
-	first, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, sourceName, insertBytes)
+	first, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, sourceName, insertBytes)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -5696,6 +5712,10 @@ encoding:
 // VXORPS emitted by Weaviate, so recover every register and ModRM/SIB memory
 // form before the generic decoder. VEX.W is ignored by these opcode rows.
 func decodedX86VEXPackedFloatLogicalInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXPackedFloatLogicalInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXPackedFloatLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -5774,7 +5794,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	firstSource, consumed, err := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	firstSource, consumed, err := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
@@ -5843,6 +5863,10 @@ func decodedX86EVEXMaskDataBroadcastInstruction(code []byte, mode int) (Instr, i
 // every register and ModRM/SIB memory form before the generic decoder, which
 // can split or reject raw encodings emitted by ecosystem assembly.
 func decodedX86VEXPackedIntegerLogicalInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXPackedIntegerLogicalInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXPackedIntegerLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -5915,7 +5939,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || secondSourceNumber >= 8 || destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	firstSource, consumed, err := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
+	firstSource, consumed, err := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, vectorPrefix)
 	if err != nil {
 		return Instr{}, 0, true, err
 	}
@@ -5933,6 +5957,10 @@ vex:
 // memory, broadcast, merge-mask, and zero-mask row shared by Go 1.27's
 // VPANDD/Q, VPANDND/Q, VPORD/Q, and VPXORD/Q _yvblendmpd table.
 func decodedX86EVEXPackedLogicalInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXPackedLogicalInstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXPackedLogicalInstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if mode != 32 && mode != 64 {
 		return Instr{}, 0, false, nil
 	}
@@ -6023,7 +6051,7 @@ evex:
 			return Instr{}, 0, true, fmt.Errorf("high Z register is unavailable in 32-bit mode")
 		}
 	}
-	first, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
+	first, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -7101,6 +7129,10 @@ func decodedX86EVEXFMA3Instruction(code []byte, i, mode int, segment Reg, addres
 // 128/256-bit block forms. x/arch v0.14 can misdecode these raw bytes as
 // PC-relative control flow or reject the EVEX encodings outright.
 func decodedX86VEXTRACT128Instruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86VEXTRACT128InstructionWithMemory(code, mode, x86RawMemoryDecoder{})
+}
+
+func decodedX86VEXTRACT128InstructionWithMemory(code []byte, mode int, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -7125,7 +7157,7 @@ vex:
 		return Instr{}, 0, false, nil
 	}
 	if len(code) > i && code[i] == 0x62 {
-		return decodedX86EVEXTRACTInstruction(code, i, mode, segment, addressOverride)
+		return decodedX86EVEXTRACTInstructionWithMemory(code, i, mode, segment, addressOverride, memory)
 	}
 	if len(code) < i+6 || code[i] != 0xc4 || code[i+1]&0x1f != 3 {
 		return Instr{}, 0, false, nil
@@ -7161,7 +7193,7 @@ vex:
 	if mode == 32 && (rExt != 0 || xExt != 0 || bExt != 0 || sourceNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended register in 32-bit mode")
 	}
-	destination, consumed, decodeErr := decodedX86VEXVectorRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, "X")
+	destination, consumed, decodeErr := memory.vex(code[modRMIndex:], mode, bExt, xExt, segment, "X")
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -7180,6 +7212,10 @@ vex:
 }
 
 func decodedX86EVEXTRACTInstruction(code []byte, i, mode int, segment Reg, addressOverride bool) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXTRACTInstructionWithMemory(code, i, mode, segment, addressOverride, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXTRACTInstructionWithMemory(code []byte, i, mode int, segment Reg, addressOverride bool, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	if len(code) < i+5 {
 		return Instr{}, 0, false, nil
 	}
@@ -7264,7 +7300,7 @@ func decodedX86EVEXTRACTInstruction(code []byte, i, mode int, segment Reg, addre
 	if mode == 32 && (sourceNumber >= 8 || modRM>>6 == 3 && destinationNumber >= 8) {
 		return Instr{}, 0, true, fmt.Errorf("extended vector register in 32-bit mode")
 	}
-	destination, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, destinationName, outputBytes)
+	destination, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, destinationName, outputBytes)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -8526,6 +8562,10 @@ evex:
 // decodedX86EVEXImmediateThreeVectorInstruction implements the EVEX immediate,
 // r/m, vvvv, destination shape shared by Go 1.27's _yvalignd families.
 func decodedX86EVEXImmediateThreeVectorInstruction(code []byte, mode int, opcode byte, dwordOp, qwordOp Op, family string) (instruction Instr, length int, ok bool, err error) {
+	return decodedX86EVEXImmediateThreeVectorInstructionWithMemory(code, mode, opcode, dwordOp, qwordOp, family, x86RawMemoryDecoder{})
+}
+
+func decodedX86EVEXImmediateThreeVectorInstructionWithMemory(code []byte, mode int, opcode byte, dwordOp, qwordOp Op, family string, memory x86RawMemoryDecoder) (instruction Instr, length int, ok bool, err error) {
 	i := 0
 	segment := Reg("")
 	addressOverride := false
@@ -8592,7 +8632,7 @@ evex:
 	if broadcast {
 		disp8Scale = laneBytes
 	}
-	firstSource, consumed, decodeErr := decodedX86EVEXRMOperand(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
+	firstSource, consumed, decodeErr := memory.evex(code[modRMIndex:], mode, bExt, xExt, segment, vectorName, disp8Scale)
 	if decodeErr != nil {
 		return Instr{}, 0, true, decodeErr
 	}
@@ -10223,6 +10263,10 @@ func decodedX86VEXRMSource(code []byte, mode, bExt, xExt int, segment Reg) (Oper
 }
 
 func decodedX86RMSource(code []byte, mode, bExt, xExt int, segment Reg, disp8Scale int) (Operand, int, error) {
+	return decodedX86RMSourceWithPC(code, mode, bExt, xExt, segment, disp8Scale, false)
+}
+
+func decodedX86RMSourceWithPC(code []byte, mode, bExt, xExt int, segment Reg, disp8Scale int, physicalPC bool) (Operand, int, error) {
 	if len(code) == 0 {
 		return Operand{}, 0, fmt.Errorf("missing ModRM byte")
 	}
@@ -10289,7 +10333,10 @@ func decodedX86RMSource(code []byte, mode, bExt, xExt int, segment Reg, disp8Sca
 		}
 	} else if mod == 0 && rm == 5 {
 		if mode == 64 {
-			return Operand{}, 0, fmt.Errorf("RIP-relative source is not source-layout safe")
+			if !physicalPC {
+				return Operand{}, 0, fmt.Errorf("RIP-relative source is not source-layout safe")
+			}
+			mem.Base = "RIP"
 		}
 		if err := readDisp32(); err != nil {
 			return Operand{}, 0, err
