@@ -74,9 +74,11 @@ type opCount struct {
 }
 
 type unsupportedHit struct {
-	Op     string `json:"op"`
-	Line   int    `json:"line"`
-	Source string `json:"source"`
+	Op          string `json:"op"`
+	Line        int    `json:"line,omitempty"`
+	Source      string `json:"source"`
+	Function    string `json:"function,omitempty"`
+	Instruction int    `json:"instruction,omitempty"`
 }
 
 type runReport struct {
@@ -136,6 +138,7 @@ type compileConfig struct {
 	nativeListingMode   *instrumentationMetadataConsumer
 	SignatureQuery      *gotoolprofile.SignatureQueryProof
 	x86CallerSelections map[*packages.Package]*x86CallerPackageSelection
+	diagnostics         *instructionDiagnostics
 }
 
 func main() {
@@ -556,7 +559,10 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 			}
 			continue
 		}
-		err := compileOne(pkg, arch, spec.Goos, spec.Goarch, triple, t, annotate, ccfg)
+		diagnostics := instructionDiagnostics{supported: supportedOps}
+		fileConfig := ccfg
+		fileConfig.diagnostics = &diagnostics
+		err := compileOne(pkg, arch, spec.Goos, spec.Goarch, triple, t, annotate, fileConfig)
 		if err != nil {
 			var abiMismatch *asmABINotApplicableError
 			if errors.As(err, &abiMismatch) {
@@ -576,7 +582,7 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 			}
 			fmt.Fprintf(os.Stderr, "[%d/%d] FAIL %s\n", idx, len(tasks), t.AsmFile)
 			printFailureReason(err.Error())
-			unsupported, hits := unsupportedInAsmFile(t.AsmFile, asmSourceRoot(pkg, t.AsmFile), arch, supportedOps)
+			unsupported, hits := diagnostics.ops, diagnostics.hits
 			if len(unsupported) > 0 {
 				fmt.Fprintf(os.Stderr, "  unsupported: %s\n", strings.Join(unsupported, ", "))
 				for _, op := range unsupported {
@@ -640,6 +646,9 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 }
 
 func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
+	if ccfg.diagnostics != nil {
+		ccfg.diagnostics.ops, ccfg.diagnostics.hits = nil, nil
+	}
 	defines := plan9asm.GoAssemblerDefines(goos, goarch)
 	var cppProof *featureCPPProof
 	var src []byte
@@ -723,6 +732,10 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		} else {
 			return fmt.Errorf("parse asm: %w", err)
 		}
+	}
+
+	if ccfg.diagnostics != nil {
+		ccfg.diagnostics.collect(file)
 	}
 
 	// Use the Go-module frontend's complete-file continuation proof before
@@ -2457,47 +2470,6 @@ func mapTypeKeyIdent(mapType *ast.MapType) (string, bool) {
 	return ident.Name, true
 }
 
-func unsupportedInAsmFile(path, sourceRoot string, arch plan9asm.Arch, supported map[string]struct{}) ([]string, []unsupportedHit) {
-	if len(supported) == 0 {
-		return nil, nil
-	}
-	src, err := readAsmSource(path, sourceRoot)
-	if err != nil {
-		return nil, nil
-	}
-	hits := scanUnsupportedHits(src, supported)
-	file, err := plan9asm.Parse(arch, string(src))
-	if err != nil {
-		if len(hits) == 0 {
-			return nil, nil
-		}
-		return uniqueUnsupportedOpsFromHits(hits), hits
-	}
-	seen := map[string]struct{}{}
-	for _, fn := range file.Funcs {
-		for _, ins := range fn.Instrs {
-			nop := normalizeOp(string(ins.Op))
-			if nop == "" || nop == "LABEL" || isDirective(nop) {
-				continue
-			}
-			if _, ok := supported[nop]; !ok {
-				seen[nop] = struct{}{}
-			}
-		}
-	}
-	if len(seen) == 0 {
-		return nil, hits
-	}
-	out := make([]string, 0, len(seen))
-	for op := range seen {
-		out = append(out, op)
-	}
-	sort.Strings(out)
-	// If parser-based set and line-based scan differ, prefer parser result for
-	// op list but still keep line hits from source scanning.
-	return out, hits
-}
-
 func flattenUnsupportedAgg(agg map[string]int) []opCount {
 	if len(agg) == 0 {
 		return nil
@@ -2515,87 +2487,8 @@ func flattenUnsupportedAgg(agg map[string]int) []opCount {
 	return out
 }
 
-func uniqueUnsupportedOpsFromHits(hits []unsupportedHit) []string {
-	seen := map[string]struct{}{}
-	for _, h := range hits {
-		seen[h.Op] = struct{}{}
-	}
-	out := make([]string, 0, len(seen))
-	for op := range seen {
-		out = append(out, op)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func scanUnsupportedHits(src []byte, supported map[string]struct{}) []unsupportedHit {
-	lines := strings.Split(string(src), "\n")
-	out := make([]unsupportedHit, 0)
-	for i, line := range lines {
-		lineno := i + 1
-		raw := stripLineComment(line)
-		raw = strings.TrimSpace(raw)
-		if raw == "" || strings.HasPrefix(raw, "#") {
-			continue
-		}
-		stmts := strings.Split(raw, ";")
-		for _, stmt := range stmts {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			// Skip labels.
-			if strings.HasSuffix(stmt, ":") {
-				continue
-			}
-			// Handle "label: INSTR ..." on one line.
-			if c := strings.IndexByte(stmt, ':'); c >= 0 {
-				left := strings.TrimSpace(stmt[:c])
-				right := strings.TrimSpace(stmt[c+1:])
-				if left != "" && right != "" && !strings.Contains(left, " ") && !strings.Contains(left, "\t") {
-					stmt = right
-				}
-			}
-			fields := strings.Fields(stmt)
-			if len(fields) == 0 {
-				continue
-			}
-			op := normalizeOp(fields[0])
-			if op == "" || op == "LABEL" || isDirective(op) {
-				continue
-			}
-			if _, ok := supported[op]; ok {
-				continue
-			}
-			out = append(out, unsupportedHit{
-				Op:     op,
-				Line:   lineno,
-				Source: stmt,
-			})
-		}
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Line != out[j].Line {
-			return out[i].Line < out[j].Line
-		}
-		if out[i].Op != out[j].Op {
-			return out[i].Op < out[j].Op
-		}
-		return out[i].Source < out[j].Source
-	})
-	return out
-}
-
-func stripLineComment(s string) string {
-	// Plan9 asm comments typically start with //.
-	if i := strings.Index(s, "//"); i >= 0 {
-		return s[:i]
-	}
-	return s
-}
-
 func printUnsupportedHits(hits []unsupportedHit) {
 	for _, h := range hits {
-		fmt.Fprintf(os.Stderr, "    L%-5d %-12s %s\n", h.Line, h.Op, h.Source)
+		fmt.Fprintf(os.Stderr, "    %s instruction %d: %-12s %s\n", h.Function, h.Instruction, h.Op, h.Source)
 	}
 }
