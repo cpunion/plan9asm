@@ -40,6 +40,7 @@ func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, 
 		wantSuccess, 0, func(source, diagnostic string) bool {
 			return arch == "wasm" && goasmoracle.WasmSourceDiagnosticLine(source, diagnostic, 0) ||
 				goAssemblerOracleX86SourceDiagnostic(source, arch, diagnostic) ||
+				goAssemblerOracleARM64SourceDiagnostic(source, arch, diagnostic) ||
 				goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
 		})
 }
