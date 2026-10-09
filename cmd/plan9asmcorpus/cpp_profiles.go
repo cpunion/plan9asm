@@ -97,6 +97,7 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	// active generated input when every concrete replay succeeds without it.
 	deferredPresence := !fullReplay && discoveryCPPDeferredPresenceMayAffectCPU(*unit, directives)
 	covered := make(map[string]bool)
+	var observedHeader *gotoolprofile.GeneratedHeaderProof
 	cover := func(request discoveryFeatureProfileRequest) (bool, error) {
 		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
 			return false, err
@@ -135,6 +136,7 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 						}
 						return false, queryErr
 					}
+					observedHeader = header
 					observation, _, err = replayDiscoveryOriginalCPP(plan.CPPInputs, *unit, header, defines)
 				}
 				if err != nil {
@@ -174,6 +176,13 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 	if _, err := cover(initial); err != nil {
 		return nil, err
 	}
+	conditionFree := false
+	if mode == nil && fullReplay && !deferredPresence && len(covered) == 0 {
+		conditionFree, err = discoveryCPPConditionFree(plan, *unit, observedHeader, contexts...)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var requests []discoveryFeatureProfileRequest
 	for _, value := range values {
 		if err := checkDiscoveryProfilePlanningContext(contexts); err != nil {
@@ -194,6 +203,15 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 		if err != nil {
 			return nil, err
 		}
+		if conditionFree {
+			// MatchFile above still models every original Go pair/CPU proposal.
+			// Recheck the full graph after caller-controlled OpenFile callbacks,
+			// even for a nonmatching pair. An earlier empty set is not a proof.
+			conditionFree, err = discoveryCPPConditionFree(plan, *unit, observedHeader, contexts...)
+			if err != nil {
+				return nil, err
+			}
+		}
 		if !found {
 			continue
 		}
@@ -208,6 +226,9 @@ func planDiscoveryCPPFeaturePairWithMode(plan *discoveryOrdinarySelectionPlan, c
 		}
 		request.Baseline = len(request.Overrides) == 0
 		request.pairs = [][2]string{{asmFile, goFile}}
+		if conditionFree {
+			continue
+		}
 		added, err := cover(request)
 		if err != nil {
 			return nil, err
