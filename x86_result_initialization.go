@@ -414,6 +414,9 @@ func x86ResultStore(arg Operand, width int64, state *x86ResultState, owned []boo
 }
 
 func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+	if accepted, known := x86ResultCLMULStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, recognized := x86ResultNumericalReadStep(ins, state, owned, resultOffset, arch); recognized {
 		return accepted
 	}

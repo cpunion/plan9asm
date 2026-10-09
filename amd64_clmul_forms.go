@@ -1,0 +1,131 @@
+package plan9asm
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Go's yxshuf and _yvpclmulqdq rows select one qword from each 128-bit
+// lane. The complete memory tuple is distinct from those numerical inputs.
+type x86CLMULForm struct {
+	legacy                    bool
+	byteWidth, source, second int
+	destination, memory       int
+	immediate                 uint8
+}
+
+func x86CLMULProperties(op Op, ins Instr, arch string) (x86CLMULForm, bool, error) {
+	name, _, dotted := strings.Cut(strings.ToUpper(string(op)), ".")
+	if name != "PCLMULQDQ" && name != "VPCLMULQDQ" {
+		return x86CLMULForm{}, false, nil
+	}
+	f := x86CLMULForm{legacy: name == "PCLMULQDQ", source: 1, second: 2, destination: 3, memory: -1}
+	if f.legacy {
+		f.destination = 2
+	}
+	fail := func() (x86CLMULForm, bool, error) {
+		return f, true, fmt.Errorf("%s %s outside complete Go carryless-multiply grammar: %q", arch, op, ins.Raw)
+	}
+	if arch != "amd64" && arch != "386" || dotted ||
+		ins.Op != "" && !strings.EqualFold(string(ins.Op), string(op)) ||
+		len(ins.Args) != f.destination+1 || arch == "386" && !f.legacy {
+		return fail()
+	}
+	constant, valid := x86ImmediateShuffleConstant(ins.Args[0], arch, ins.x86Encoded)
+	if !valid || !amd64UnsignedImmediate(constant, 8) {
+		return fail()
+	}
+	f.immediate = uint8(constant.Imm)
+	f.byteWidth = amd64VectorByteWidth(ins.Args[f.destination].Reg)
+	if f.legacy && f.byteWidth != 16 || f.byteWidth != 16 && f.byteWidth != 32 && f.byteWidth != 64 {
+		return fail()
+	}
+	register := func(operand Operand) bool {
+		index, valid := amd64VectorRegisterIndex(operand.Reg, f.byteWidth)
+		limit := 32
+		if f.legacy {
+			limit = 16
+			if arch == "386" {
+				limit = 8
+			}
+		}
+		return operand.Kind == OpReg && valid && index < limit
+	}
+	if !register(ins.Args[f.second]) || !register(ins.Args[f.destination]) {
+		return fail()
+	}
+	source := ins.Args[f.source]
+	if register(source) {
+		return f, true, nil
+	}
+	if !isAMD64MemoryOperand(source) || !x86PackedShiftMemoryValid(source, arch) {
+		return fail()
+	}
+	if source.Kind == OpMem {
+		if err := x86SymbolIndexedMemoryError(source.Mem, arch); err != nil {
+			return f, true, err
+		}
+		if source.Mem.OffRaw != "" || source.Mem.IndexExt != "" {
+			return fail()
+		}
+	}
+	if ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride {
+		return f, true, fmt.Errorf("%w: carryless multiply has no bound native address-size override", ErrProbeNeedsContext)
+	}
+	f.memory = f.source
+	return f, true, nil
+}
+
+// Each product requires all bytes of exactly two selected qwords. No mask,
+// unselected qword, destination alias or numerical zero supplies a missing input.
+func x86CLMULDefinedBytes(f x86CLMULForm, source, second uint64) uint64 {
+	var known uint64
+	for lane := 0; lane < f.byteWidth; lane += 16 {
+		sourceMask := uint64(255) << uint(lane+int(f.immediate>>4&1)*8)
+		secondMask := uint64(255) << uint(lane+int(f.immediate&1)*8)
+		if source&sourceMask == sourceMask && second&secondMask == secondMask {
+			known |= uint64(65535) << uint(lane)
+		}
+	}
+	return known
+}
+
+func x86ResultCLMULStep(ins Instr, state *x86ResultState, owned []bool, arch string) (bool, bool) {
+	f, known, err := x86CLMULProperties(ins.Op, ins, arch)
+	if !known {
+		return false, false
+	}
+	if err != nil || f.byteWidth != 16 {
+		return false, true // This observer stores only low X, never wider state.
+	}
+	source := uint64(65535)
+	if f.memory >= 0 {
+		if !x86ResultRead(ins.Args[f.memory], 16, state, owned, arch) {
+			return false, true
+		}
+	} else {
+		index, _ := amd64ParseXReg(ins.Args[f.source].Reg)
+		source = uint64(state.xmm[index])
+	}
+	second, _ := amd64ParseXReg(ins.Args[f.second].Reg)
+	destination, _ := amd64ParseXReg(ins.Args[f.destination].Reg)
+	state.xmm[destination] = uint16(x86CLMULDefinedBytes(f, source, uint64(state.xmm[second])))
+	return true, true
+}
+
+func x86CallerCLMULStep(ins Instr, f x86CLMULForm, state *x86SourceStackState) bool {
+	if f.memory >= 0 {
+		return false // A registered byte effect grants no new native read proof.
+	}
+	source := state.vectors[x86CallerVectorRoot(ins.Args[f.source].Reg)]
+	second := state.vectors[x86CallerVectorRoot(ins.Args[f.second].Reg)]
+	destination := x86CallerVectorRoot(ins.Args[f.destination].Reg)
+	width := x86CallerVectorByteMask(int64(f.byteWidth))
+	known := x86CLMULDefinedBytes(f, source, second)
+	if f.legacy {
+		state.vectors[destination] = state.vectors[destination]&^width | known
+	} else {
+		state.vectors[destination] = ^width | known
+	}
+	return true
+}

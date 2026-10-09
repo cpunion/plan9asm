@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if form, known, err := x86CLMULProperties(ins.Op, ins, "amd64"); known {
+		return err == nil && form.memory < 0
+	}
 	if _, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, "amd64"); known {
 		return err == nil
 	}
@@ -125,6 +128,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86CLMULProperties(ins.Op, *ins, "amd64"); known {
+		return err == nil && x86CallerCLMULStep(*ins, form, state)
+	}
 	if form, known, err := x86LegacyPackedMoveProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerLegacyPackedMoveStep(ins, form, state, proof)
 	}
@@ -289,6 +295,9 @@ func x86CallerMoveMemoryShape(ins Instr, index int) (width int64, write, valid b
 }
 
 func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, write, valid bool) {
+	if form, known, err := x86CLMULProperties(ins.Op, ins, arch); known {
+		return int64(form.byteWidth), false, err == nil && form.memory >= 0 && index == form.memory
+	}
 	if form, known, err := x86ExplicitIMULProperties(ins.Op, ins, arch); known {
 		sourceIndex := 0
 		if form.three {
