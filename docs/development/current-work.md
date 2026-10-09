@@ -17,8 +17,9 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `1b09e349`. Native scalar/NEON ARM conversion status, packed private-
-frame proofs and the refillable external-shard queue join the preceding fixes.
+through `814e46d2`. Complete x86 scalar float-to-integer native semantics and
+ordinary dependency source ownership join the preceding repairs. The latter
+still has exact-tag and canonical-path regressions under active TDD repair.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -91,6 +92,28 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   ambient rounding/FZ/DN changes. Current-Go and Go 1.20 each pass 87 affected
   roots with unchanged official ARM classification fingerprints. This does not
   certify ARM64, fixed-point, FP16 or unrelated floating operators.
+- All 24 x86 scalar float-to-integer names share one grammar for the 32
+  independent Go encoder rows, native status/effects and physical 386 WIG
+  widths. Native indefinite values, exceptions, rounding/SAE and dead memory
+  effects replace pure casts. Original Go and three LLVM APIs agree over 192
+  constant and 3,584 dynamic legacy rows with four optimization combinations.
+  Five-target objects cover the AVX/EVEX forms, but native AVX512, 386 runtime
+  and unmasked traps still require their explicit Linux owners. Rosetta is not
+  that hardware gate. The component's 26 family roots, 62 neighboring roots,
+  Go 1.20 and vet passed before integration as `afab61cb`.
+- Ordinary metadata protocol v2 now requires its own transitive dependency
+  source proof: exact actual-Go imports, explicit embed selection, source
+  inventories and versioned module/ZIP/go.mod ownership. Test-role permissions
+  are not borrowed. Independent readers and final-object guards remain strict.
+  Integration `c0fc9e1e` exposed two follow-ups in full/default-environment
+  verification: ancestor-alias normalization and custom Go-only tag replay.
+  Neither is a reason to drop the source or complete-registration guards.
+- Numerical frame reentry tests now assert that their callback actually fires
+  and follow the public Verify route through role-specific helpers. The RED
+  showed that the old immediate-caller fixture missed the callback; `814e46d2`
+  changes only the fixture, not source-lifetime permissions. Focused ordinary
+  tests passed in 87.311 seconds; all three lifecycle roots passed race in
+  294.570 seconds, including cancellation and copied-owner rejection.
 - Native header planning admits six ordinary function directives and omits
   uninstantiated generic property roots, matching actual compiler headers.
   Concrete instances and foreign dependencies still require their complete
@@ -154,13 +177,20 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   own cache. After it closed, the tree advanced to `4f8cd6bc`; the full module,
   five-architecture classification and vet sequence is now running separately
   under `_out/typed-native-module-4f8cd6bc/`. Never advance this active snapshot.
-- `codex/pr40-source-tls-verify-20261010`, `600b08c7`:
+- `codex/pr40-source-tls-verify-20261010`:
   `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
   163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
   initialized TLS, not a new valid implementation regression. Timing budgets
   pass; correctness does not. Reviewed Go 1.20–1.27 before/after reports isolate
   one MOV TLS form per x86 architecture; `a43d9cc2` updates only those baselines.
   The five-architecture classification gate passed after that review.
+  After every old consumer closed, the tree advanced to `afab61cb`.
+  `_out/native-closure-afab61cb/` is terminal: selected conversion families
+  passed in 21.373 seconds, official five-arch classification and root vet
+  passed, but the complete nested CLI failed in 889.685 seconds. Five roots
+  share `source inventory directory escapes its bound root` under default
+  temporary-path aliases; the independent repair reproduces that environment.
+  Its one-GB owned build cache is reclaimed; failed reports remain unchanged.
 - `codex/pr40-sdk-numerical-cli-20261010`, `a5d9396b`:
   the complete nested CLI gate passed all 239 roots, without skips. The later
   downloaded Darwin/mirror change passed its four actual object consumers and
@@ -223,6 +253,11 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   does not yet close that role. This early failure is not a speedup. A second
   read-only container reproduced the exact progress bytes; reports remain under
   `_out/coroutine-performance/`, and its closed owned cache was reclaimed.
+  A later clean `c0fc9e1e` repeat is separately terminal under
+  `_out/ordinary-closure-c0fc9e1e/`: 141.896-second planning then a `durable`
+  metadata failure, `noncanonical complete package assembly registration`.
+  It has zero objects, not a performance pass. A network-free frozen reader
+  independently reproduced the progress bytes. Its container/cache are closed.
 - `codex/pr40-arm-vfp-conversion-status-audit-20261010`, `8d12b43c`:
   `_out/arm-fp-status/handoff.md` indexes original-Go REDs and the final seven
   Linux/QEMU roots, 80 current-Go roots and the same 80 Go 1.20 roots, all with
@@ -254,18 +289,16 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Close the ordinary transitive dependency/embed source role with its own
-   complete source/ZIP/selection owner, producer and independent consumer.
-   Do not borrow test-package permissions or remove the failing embed guard.
-3. Finish the x86 scalar float-to-integer family and extend the same systematic
-   audit to ARM64 scalar conversion formats and native status. The ARM NEON
-   finite family above is complete; do not substitute its standard controls
-   for ARM64 FPCR rules. The independent x86 original-Go audit in
-   `_out/scalar-float-audit/` already
-   finds 32/192 row differences without IR optimization and 184/192 with O2:
-   precision flags disappear and poison erases result stores. Preserve this
-   RED; object/table coverage alone did not detect it. Exact scope is 48 legacy
-   functions, four MXCSR modes and four optimization combinations on Rosetta.
+2. Finish exact assembly-plus-Go-tag query replay, canonical ancestor-path
+   binding and planning-only dependency guard lifetime in the ordinary source
+   owner. Recheck the five full-CLI failures with default temporary paths and
+   repeat the unchanged coroutine version in a new frozen output directory.
+3. Finish the ARM64 scalar conversion family, including the two half-precision
+   SIMD integer-to-float forms, native FPCR/FPSR and inactive-lane definedness.
+   Keep original-Go witnesses separate from corrected reference-model bugs.
+   Audit packed x86 conversions next: original-Go live/dead status fixtures
+   live in `codex/pr40-packed-conversion-status-20261010`; an unclosed RED is
+   not an integrated repair or successful instruction coverage.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
