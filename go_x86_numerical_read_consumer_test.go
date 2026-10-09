@@ -73,7 +73,11 @@ func TestGoX86NumericalSBReadBoundConsumer(t *testing.T) {
 }
 
 func closeNumericalConsumerSource(reporter interface{ Error(...any) }, source *GoX86NumericalReadSource) error {
-	return source.Close()
+	err := source.Close()
+	if err != nil {
+		reporter.Error(err)
+	}
+	return err
 }
 
 type numericalConsumerCleanupRecorder struct {
