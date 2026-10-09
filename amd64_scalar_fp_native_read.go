@@ -40,7 +40,12 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 				return x86ResultIncomingPointerAddressIdentity(form.source, state, arch) &&
 					x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
 			}
-			return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+			next := state.clone()
+			if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
+				*state = next
+				return true
+			}
+			return x86LoweredPureGPUnknownTransfer(ins, state, arch)
 		}, true)
 }
 
