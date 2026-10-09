@@ -27,7 +27,8 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 				count++
 				assembly.WriteString(x86CMOVFixedLocalAssembly(fn, "CMOV"+width+row.name, source))
 				fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", fn)
-				fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(\"%sexample.invalid/framefixture.%s\");\n", fn, prefix, fn)
+				symbol := prefix + "example.invalid/framefixture." + fn
+				fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(%s);\n", fn, runtimeCAsmLabel(symbol))
 				fmt.Fprintf(&rows, "{%s,%d,%d,0},\n", fn, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
 				fmt.Fprintf(&goRows, "{%s,%d,%d,0},\n", fn, map[string]int{"W": 2, "L": 4, "Q": 8}[width], condition)
 			}
@@ -38,7 +39,8 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 		count++
 		fmt.Fprintf(&assembly, "TEXT ·%s(SB),4,$16-24\nMOVQ a+0(FP),AX\nMOVQ b+8(FP),BX\nMOVQ AX,0(SP)\nMOVQ BX,8(SP)\n%s\nMOVQ BX,ret+16(FP)\nRET\n", fn, operation)
 		fmt.Fprintf(&declarations, "func %s(a,b uint64) uint64\n", fn)
-		fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(\"%sexample.invalid/framefixture.%s\");\n", fn, prefix, fn)
+		symbol := prefix + "example.invalid/framefixture." + fn
+		fmt.Fprintf(&prototypes, "extern uint64_t %s(uint64_t,uint64_t) __asm__(%s);\n", fn, runtimeCAsmLabel(symbol))
 		fmt.Fprintf(&rows, "{%s,8,0,%d},\n", fn, mode+1)
 		fmt.Fprintf(&goRows, "{%s,8,0,%d},\n", fn, mode+1)
 	}
@@ -54,7 +56,7 @@ func TestCrossLinuxRuntimeMatrixX86CMOVFixedLocalAUTOWholeBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reference := fmt.Sprintf(x86CMOVFixedLocalWholeBytesC, prototypes.String(), rows.String())
+	reference := runtimeCAsmLabelPreamble + fmt.Sprintf(x86CMOVFixedLocalWholeBytesC, prototypes.String(), rows.String())
 	for _, pipeline := range []struct{ name, backend, ir string }{
 		{"backend_O0", "-O0", ir}, {"backend_O2", "-O2", ir}, {"IR_O2/backend_O2", "-O2", x86DwordProductIROptimize(t, ir)},
 	} {
