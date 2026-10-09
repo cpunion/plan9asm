@@ -17,8 +17,8 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `dfa0d559`. The SDK literal/numerical join, signed ARM64 carrier reads,
-TLS fail-closed grammar, x86 BT family and ARM VFP register effects are integrated.
+through `4f8cd6bc`. Native ARM conversion status, packed private-frame proofs
+and the refillable external-shard queue join the preceding typed-family fixes.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -74,9 +74,15 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   The finite gate passed 95 current-Go roots and Go 1.20 compatibility; native
   Linux execution remains a required counterpart to the host/Rosetta gate.
 - ARM conversion rows 84–87 now model implicit F15 scratch and named single
-  writes preserve the other physical D-register half. Linux/QEMU passed 255
-  original-Go cases and all four IR/backend optimization combinations. This
-  proves the checked register effects, not FPSCR, NaN/overflow or rounding modes.
+  writes preserve the other physical D-register half. Native VCVT preserves
+  FPSCR rounding and cumulative exceptions, including dead results and invalid
+  conversions that pure LLVM casts made poison. Separate word/float endpoint
+  types admit raw S-word/F64 combinations without admitting named S source.
+  Explicit native ARM/Thumb targets are required; invalid mixed/dead raw source
+  remains an error before target context. Linux/QEMU compares 512 physical
+  forms and 15,680 dynamic status rows with original Go over four optimization
+  axes, alongside the earlier 255 register-effect cases. Trap-enabled handlers
+  and other floating arithmetic are not certified by this finite gate.
 - Native header planning admits six ordinary function directives and omits
   uninstantiated generic property roots, matching actual compiler headers.
   Concrete instances and foreign dependencies still require their complete
@@ -90,6 +96,17 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   An independent 8-ASM/4-Go/32-CPU model improves from 1.214 to 0.235 seconds
   and 2.234 to 0.476 GB allocated. Independent plan shells can share immutable
   source graphs; a whole shared mutable plan is not a concurrent API.
+- Private numeric/call-free frames reuse all twelve packed and seven legacy
+  move grammars, KMOV definedness, BP private aliases and eight mod64 residues.
+  Independent byte-alias replay prevents relocation from changing overlaps.
+  Masked stores revoke overlapping pointer spills without initializing unknown
+  retained bytes. No DATA, caller, slice/bool, loop, helper or split-prologue
+  permission follows. All 120 related roots passed; native AVX512 execution
+  remains separate from the 340-case compile-only oracle and Rosetta SSE gate.
+- External `all` scheduling refills vacant workers instead of waiting for batch
+  neighbors. Each shard closes its own cache. Failures remain sticky and the
+  final aggregate receives the actual shard count, not an implicit 64. Actual
+  shell-entry tests passed current-Go repeated/race, Go 1.20 and Linux gates.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -125,6 +142,10 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   run ended was the tree advanced to `dfa0d559`: separate
   `_out/planning-index-dfa0d559/` focused, actual-consumer, race and vet gates
   also passed. Historical directories keep their exact source revision.
+  The later `2eaaeb5c` Linux queue gate passed six roots and cleaned only its
+  own cache. After it closed, the tree advanced to `4f8cd6bc`; the full module,
+  five-architecture classification and vet sequence is now running separately
+  under `_out/typed-native-module-4f8cd6bc/`. Never advance this active snapshot.
 - `codex/pr40-source-tls-verify-20261010`, `600b08c7`:
   `_out/source-tls-verification/` retains the strict SDK result: 184 attempted,
   163 pass, 21 fail, no skip/N/A/unattempted. Four former passes exposed zero-
@@ -179,17 +200,31 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
   and three published-CI examples, before outcomes, across 37 shards. The
   isolated bounded batch remains active. Three crypto terminal failures share
   native local-frame/alignment requirements; libc exposes an ARM64 indirect
-  callee ABI. No ledger credit or whole-shard completion follows from live logs.
+  callee ABI. Gnark reached its unchanged sixty-minute planning deadline on
+  this pre-optimization revision. Its failed journal is retained while later
+  shards continue. No ledger credit or whole-shard completion follows from logs.
 - `codex/pr40-pragma-performance-verify-20261010`, `10e83020`:
   the coroutine repeat remains active after 775-second planning. Read-only
   diagnosis found an independent generic-root fallback, fixed later by
   `d3b0d076`; this running snapshot does not contain that fix. Never change its
   source or retroactively credit it with the improved planning behavior.
 - `codex/pr40-coroutine-performance-verify-20261010`, `dfa0d559`:
-  an independent isolated exact-version repeat is running with both the
-  generic-root repair and bounded pure-parse index. Keep its source, tools,
-  journals and owned cache separate from the still-running old repeat. No
-  current-revision success or external speedup claim until its reports close.
+  the independent repeat failed after 95.885-second planning with zero objects.
+  Generic preflight now reaches a real `durable` metadata consumer whose
+  transitive protobuf dependency uses embed; the ordinary source-owner proof
+  does not yet close that role. This early failure is not a speedup. A second
+  read-only container reproduced the exact progress bytes; reports remain under
+  `_out/coroutine-performance/`, and its closed owned cache was reclaimed.
+- `codex/pr40-arm-vfp-conversion-status-audit-20261010`, `8d12b43c`:
+  `_out/arm-fp-status/handoff.md` indexes original-Go REDs and the final seven
+  Linux/QEMU roots, 80 current-Go roots and the same 80 Go 1.20 roots, all with
+  no failures/skips. Both actual SDK ARM classification fingerprints remain
+  unchanged. Its owned stopped containers/cache are closed and reclaimed.
+- `codex/pr40-packed-native-frame-20261010`, `579e2b24`:
+  `_out/packed-native-frame/handoff.txt` retains 120-root and eleven-root Go
+  1.20 gates, three-OS/three-API 195-function objects, numerical/canary checks,
+  byte-alias negatives and native-execution boundaries. Its owned cache is
+  reclaimed; this does not close the external crypto composite frame.
 
 The official five-arch classification gate passed again at `a43d9cc2` with zero
 unsupported/parse errors. Actual Go 1.20–1.27 before/after source comparisons
@@ -204,16 +239,22 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 
 1. Finish the next isolated TDD batches and their merged gates. Preserve actual
    native counterparts; do not equate table names with semantics.
-2. Close pure numeric/call-free packed local frames first: BP private aliases,
-   complete typed vector effects and eight mod64 residues. Actual slice/bool
-   transport, DATA/caller joins, loops, split prologues and private helpers are
-   separate remaining requirements for the unchanged crypto sources.
-3. Close ARM conversion native FPSCR/exception/rounding semantics. Actual Go
-   versus LLVM optimized runs already expose dead exception effects and
-   out-of-range poison; saturating values alone do not establish status flags.
+2. Close the ordinary transitive dependency/embed source role with its own
+   complete source/ZIP/selection owner, producer and independent consumer.
+   Do not borrow test-package permissions or remove the failing embed guard.
+3. Extend the conversion audit to complete ARM NEON D/Q and x86 scalar
+   float-to-integer families. NEON has different fixed rounding/control rules.
+   An independent x86 original-Go audit under `_out/scalar-float-audit/` already
+   finds 32/192 row differences without IR optimization and 184/192 with O2:
+   precision flags disappear and poison erases result stores. Preserve this
+   RED; object/table coverage alone did not detect it. Exact scope is 48 legacy
+   functions, four MXCSR modes and four optimization combinations on Rosetta.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
+5. Actual slice/bool transport, DATA/caller joins, loops, split prologues and
+   private helpers remain distinct requirements for unchanged crypto sources;
+   do not infer them from the newly completed numeric private-frame class.
 
 ## Inventory, ledger and resources
 
