@@ -3,6 +3,8 @@
 package main
 
 import (
+	"debug/elf"
+	"debug/macho"
 	"errors"
 	"os"
 	"os/exec"
@@ -18,7 +20,7 @@ import (
 
 // The generated file-proxy module is an owned mechanism fixture, not an
 // authenticated external-library pass. Its original cache source stays intact.
-func amd64DownloadedFixedLocalCLIFixture(t *testing.T) (*featureInput, string, compileConfig) {
+func amd64DownloadedFixedLocalTargetFixture(t *testing.T, goos string, mirror bool) (*featureInput, string, compileConfig) {
 	t.Helper()
 	_, assembly, config := amd64FixedLocalCLIFixture(t, "PADDL 16(SP),X0")
 	ctx := config.Context
@@ -41,11 +43,28 @@ func amd64DownloadedFixedLocalCLIFixture(t *testing.T) (*featureInput, string, c
 		}
 	}
 	sort.Strings(input.Directories["."])
-	modeInput := &gotoolprofile.InstrumentationConsumerInput{Original: input}
+	// The archive request can differ from the module declaration inside its
+	// unchanged go.mod. Download the exact archive before selecting its package.
+	archiveInput := *input
+	if mirror {
+		archiveInput.Module = "example.invalid/archive-fixedlocal"
+	}
+	modeInput := &gotoolprofile.InstrumentationConsumerInput{Original: &archiveInput}
 	invocation, env := instrumentationVersionedFixture(t, ctx, modeInput)
 	input = modeInput.Original
+	input.Module = "example.invalid/fixedlocal"
+	if mirror {
+		// Match the corpus's independent invocation module and real versioned
+		// replacement. The downstream source observer separately loads the cache
+		// CWD as Main=true/Version=""; neither view is relabeled as the other.
+		caller := "module example.invalid/invocation\n\ngo 1.24\n\nrequire " + input.Module + " " + input.Version + "\n" +
+			"replace " + input.Module + " " + input.Version + " => " + input.SourceModule + " " + input.Version + "\n"
+		if err := os.WriteFile(filepath.Join(invocation, "go.mod"), []byte(caller), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	env = featureEnvironment(env, map[string]string{
-		"GOOS": "linux", "GOARCH": "amd64", "GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": "",
+		"GOOS": goos, "GOARCH": "amd64", "GO386": "", "GOARM": "", "GOARM64": "", "GOWASM": "",
 	})
 	for _, value := range env {
 		key, value, valid := strings.Cut(value, "=")
@@ -75,7 +94,7 @@ func amd64DownloadedFixedLocalCLIFixture(t *testing.T) (*featureInput, string, c
 	}
 	input.ToolSources = map[string]string{"pkg/include/textflag.h": textflag}
 	input.Observed, err = gotoolprofile.Capture(ctx, binary, t.TempDir(), env,
-		"linux/amd64", nil, gotoolprofile.RunBounded)
+		goos+"/amd64", nil, gotoolprofile.RunBounded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +115,29 @@ func amd64DownloadedFixedLocalCLIFixture(t *testing.T) (*featureInput, string, c
 }
 
 func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
-	input, invocation, config := amd64DownloadedFixedLocalCLIFixture(t)
+	for _, goos := range []string{"linux", "darwin"} {
+		for _, mirror := range []bool{false, true} {
+			role := "declared"
+			if mirror {
+				role = "mirror"
+			}
+			t.Run(goos+"/"+role, func(t *testing.T) {
+				testAMD64DownloadedFixedLocalActualProfileCLI(t, goos, mirror)
+			})
+		}
+	}
+}
+
+func testAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T, goos string, mirror bool) {
+	t.Helper()
+	input, invocation, config := amd64DownloadedFixedLocalTargetFixture(t, goos, mirror)
 	t.Chdir(invocation)
 	config.FeaturePath = writeFeatureInput(t, input)
 	output := t.TempDir()
-	report, _, err := runOneTarget(targetSpec{Goos: "linux", Goarch: "amd64"},
+	report, _, err := runOneTarget(targetSpec{Goos: goos, Goarch: "amd64"},
 		[]string{input.Module}, nil, input.AsmFiles, input.Module, output,
 		false, 0, true, false, true, "", config)
-	if err != nil || report.Success != 1 || report.Failed != 0 {
+	if err != nil || report.Success != 1 || report.Failed != 0 || report.NotApplicable != 0 || report.TotalAsm != 1 {
 		t.Fatalf("actual original Go object compiled, but exact downloaded profile CLI has no fixed-local consumer: %v; %#v", err, report)
 	}
 	if err := gotoolprofile.ValidateSelection(input, report.FeatureSelection, nil, true); err != nil {
@@ -113,6 +147,45 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 		report.FeatureSelection.Outputs[0].IR == "" || report.FeatureSelection.Outputs[0].Object == "" {
 		t.Fatal("exact downloaded CLI omitted its actual CPP/LLVM object consumption")
 	}
+	if len(report.FeatureSelection.Packages) != 1 {
+		t.Fatal("exact downloaded CLI lost its actual package identity")
+	}
+	selected := report.FeatureSelection.Packages[0]
+	role := "module"
+	if mirror {
+		role = "version_replace"
+	}
+	if selected.SourceRole != role || selected.ModulePath != input.Module ||
+		selected.SourceModule != input.SourceModule || selected.ModuleVersion != input.Version ||
+		selected.SourceVersion != input.Version {
+		t.Fatalf("CLI merged archive and declaration identities: %#v", selected)
+	}
+	object := filepath.Join(output, filepath.FromSlash(input.Module), "value_amd64.s.o")
+	data, err := os.ReadFile(object)
+	if err != nil || len(data) == 0 || featureBytesSHA256(data) != report.FeatureSelection.Outputs[0].Object {
+		t.Fatalf("actual LLVM object differs from the consumer proof: %v", err)
+	}
+	if goos == "darwin" {
+		file, err := macho.Open(object)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		if file.Cpu != macho.CpuAmd64 || file.Type != macho.TypeObj || file.Section("__text") == nil || file.Section("__text").Size == 0 {
+			t.Fatal("LLVM object omitted AMD64 Mach-O text")
+		}
+	} else {
+		file, err := elf.Open(object)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer file.Close()
+		if file.Machine != elf.EM_X86_64 || file.Type != elf.ET_REL || file.Section(".text") == nil || file.Section(".text").Size == 0 {
+			t.Fatal("LLVM object omitted AMD64 ELF text")
+		}
+	}
+	t.Logf("ACTUAL_DOWNLOADED_FIXED_LOCAL_CLI target=%s/amd64 module=%s source=%s@%s object=%s bytes=%d",
+		goos, input.Module, input.SourceModule, input.Version, report.FeatureSelection.Outputs[0].Object, len(data))
 	for name, expected := range input.Sources {
 		actual, err := gotoolprofile.FileSHA256(filepath.Join(input.SourceRoot, name))
 		if err != nil || actual != expected {
@@ -122,15 +195,31 @@ func TestAMD64DownloadedFixedLocalActualProfileCLI(t *testing.T) {
 }
 
 func TestAMD64DownloadedFixedLocalCLIRejectsUnboundAndChangedIdentity(t *testing.T) {
-	for _, role := range []string{
+	testAMD64DownloadedFixedLocalIdentityControls(t, "linux", false)
+}
+
+func TestAMD64DownloadedFixedLocalMirrorCLIRejectsUnboundAndChangedIdentity(t *testing.T) {
+	testAMD64DownloadedFixedLocalIdentityControls(t, "darwin", true)
+}
+
+func testAMD64DownloadedFixedLocalIdentityControls(t *testing.T, goos string, mirror bool) {
+	t.Helper()
+	roles := []string{
 		"no-explicit-request", "missing-version", "load-identity",
 		"version-in-resolver", "source-module-in-resolver", "source-root-in-resolver", "input-in-resolver",
-	} {
+	}
+	if mirror {
+		roles = append(roles, "missing-source-module", "false-source-module", "declaration-in-resolver",
+			"replacement-path-in-resolver", "replacement-version-in-resolver", "replacement-role-in-resolver",
+			"source-bytes-in-resolver", "archive-bytes-in-resolver")
+	}
+	target, triple := goos+"/amd64", targetTriple(goos, "amd64")
+	for _, role := range roles {
 		t.Run(role, func(t *testing.T) {
-			input, invocation, config := amd64DownloadedFixedLocalCLIFixture(t)
+			input, invocation, config := amd64DownloadedFixedLocalTargetFixture(t, goos, mirror)
 			t.Chdir(invocation)
 			consumer, err := loadFeatureConsumer(config.Context, writeFeatureInput(t, input), t.TempDir(),
-				"linux/amd64", input.Module, nil)
+				target, input.Module, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -144,14 +233,15 @@ func TestAMD64DownloadedFixedLocalCLIRejectsUnboundAndChangedIdentity(t *testing
 				t.Fatalf("actual exact-cache CLI load: %v; %+v", err, pkgs)
 			}
 			pkg := pkgs[0]
-			if pkg.Module == nil || pkg.Module.Main || pkg.Module.Version != input.Version || pkg.Module.Replace != nil {
+			if pkg.Module == nil || pkg.Module.Main || pkg.Module.Version != input.Version ||
+				(pkg.Module.Replace != nil) != mirror {
 				t.Fatal("fixture did not retain its actual exact imported module role")
 			}
 			if err := consumer.capturePackages(pkgs); err != nil {
 				t.Fatal(err)
 			}
 			config.Feature = consumer
-			config.x86CallerSelections = captureX86CallerSelections(pkgs, "linux/amd64", consumer)
+			config.x86CallerSelections = captureX86CallerSelections(pkgs, target, consumer)
 			assembly := filepath.Join(pkg.Dir, "value_amd64.s")
 			data, err := os.ReadFile(assembly)
 			if err != nil {
@@ -176,6 +266,19 @@ func TestAMD64DownloadedFixedLocalCLIRejectsUnboundAndChangedIdentity(t *testing
 					case "input-in-resolver":
 						copied := *consumer.Input
 						consumer.Input = &copied
+					case "declaration-in-resolver":
+						consumer.Input.Module = input.SourceModule
+					case "replacement-path-in-resolver":
+						pkg.Module.Replace.Path = "example.invalid/other"
+					case "replacement-version-in-resolver":
+						pkg.Module.Replace.Version = "v1.0.1"
+					case "replacement-role-in-resolver":
+						pkg.Module.Replace = nil
+					case "source-bytes-in-resolver":
+						amd64DownloadedFixtureAppend(t, filepath.Join(input.SourceRoot, "value.go"))
+					case "archive-bytes-in-resolver":
+						archive := filepath.Join(os.Getenv("GOMODCACHE"), "cache", "download", input.SourceModule, "@v", input.Version+".zip")
+						amd64DownloadedFixtureAppend(t, archive)
 					}
 				}
 				return strings.Replace(name, "·", pkg.PkgPath+".", 1)
@@ -193,20 +296,56 @@ func TestAMD64DownloadedFixedLocalCLIRejectsUnboundAndChangedIdentity(t *testing
 				consumer.Input.Version = ""
 			case "load-identity":
 				pkg.Module.Version = "v1.0.1"
+			case "missing-source-module":
+				consumer.Input.SourceModule = ""
+			case "false-source-module":
+				consumer.Input.SourceModule = "example.invalid/other"
 			}
-			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, assembly, "linux/amd64",
-				"x86_64-unknown-linux-gnu", "amd64", config, resolve, sigs)
+			bound, source, err := prepareAMD64FixedLocalSource(pkg, file, assembly, target,
+				triple, "amd64", config, resolve, sigs)
 			if source != nil {
 				if closeErr := source.close(); closeErr != nil {
 					t.Error(closeErr)
 				}
 			}
-			if !errors.Is(err, plan9asm.ErrProbeNeedsContext) || source != nil || bound != nil {
+			if err == nil || source != nil || bound != nil {
 				t.Fatalf("unbound/changed %s retained downloaded frame authority: %v", role, err)
+			}
+			t.Logf("EXACT_SOURCE_IDENTITY_REJECTION %s: %v", role, err)
+			want := "fixed-local explicit download identity changed"
+			switch role {
+			case "no-explicit-request", "missing-version":
+				want = "cached external or SDK source cannot acquire an owned-main role"
+			case "load-identity", "replacement-path-in-resolver", "replacement-version-in-resolver", "replacement-role-in-resolver":
+				want = "fixed-local actual-load identity changed"
+			case "missing-source-module", "false-source-module":
+				want = "actual exact module download failed"
+			case "source-bytes-in-resolver", "archive-bytes-in-resolver":
+				want = "changed"
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("identity control failed for an unrelated reason, want %q: %v", want, err)
+			}
+			if !mirror && !errors.Is(err, plan9asm.ErrProbeNeedsContext) {
+				t.Fatalf("ordinary missing identity did not retain Context: %v", err)
 			}
 			if strings.HasSuffix(role, "-in-resolver") && calls == 0 {
 				t.Fatal("identity control failed before its actual binding callback")
 			}
 		})
+	}
+}
+
+func amd64DownloadedFixtureAppend(t *testing.T, name string) {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(name, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, append(data, []byte("\n// changed owned fixture\n")...), 0600); err != nil {
+		t.Fatal(err)
 	}
 }
