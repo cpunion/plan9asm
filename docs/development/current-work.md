@@ -71,19 +71,27 @@ not the following gap. SDK, pointers, R2/R3 and Or32/And32 are not granted.
 Original producer-P/consumer-RED, reused-PID reader failure and Docker setup
 failure remain retained; new independently closed readers do not rewrite them.
 
-Two components are still awaiting complete handoff before integration:
+SDK readonly literal initializers are integrated from the seven-commit chain
+ending at `b574efa3`. Root independently replays the exact ordinary/race union:
+123 roots and 1,088 children pass per lane, plus Go-1.20's five roots/65 children
+and actual Go27/Go20 vet/build. Every required original/mapped/archive DATA/TEXT,
+Go object and linked ELF initializer reader closes. Private integer/float/string
+and zero-tail bytes do not grant pointers, mutation, DUPok, relocation or
+native-vector permission. Initializer observation is not SDK numerical
+consumption or CRC32 success. Earlier callback-timer, Go20 metadata and exact
+Darwin linker-warning harness failures remain separately retained.
 
-- SDK readonly literal initializers: `df06fc81` plus test-lifecycle successor
-  `b574efa3`. Actual original/mapped/archive DATA, original Go objects and ELF
-  bytes are checked. Private integer/float/string and zero-tail bytes do not
-  grant pointers, mutation, DUPok, relocation or native-vector permissions.
-  Initializer observation alone is not SDK numerical consumption or CRC32 success.
-- ARM64 nanosleep private input: `170c90a8`, based on `ab5302a1`.
+ARM64 nanosleep awaits complete handoff before integration:
+
+- Private input: `170c90a8`, based on `ab5302a1`.
   Exact Linux SVC0/R8=101/R1=NULL consumes a fully initialized private
   16-byte timespec, without native-frame or result/NZCV permission.
   Ordinary/race each close 81 roots/1,253 children and actual Go-1.20 closes
-  nine roots/279 children. Actual Linux kernel/LLVM execution and the complete
-  13-file runtime SDK counterpart remain independently pending.
+  nine roots/279 children. Actual Linux original-Go kernel axes pass, but the
+  six LLVM runtime children initially fail compiling the C driver's unquoted
+  ELF package/path label. The test-only `19b60584` quotes that unchanged symbol;
+  its complete Linux rerun and the 13-file runtime SDK counterpart remain
+  independently pending. The real initial Linux failure is not a runtime pass.
 
 ## Required next gates and remaining rule classes
 
