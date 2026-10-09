@@ -11,6 +11,15 @@ func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
 	if !valid || c.sig.Name != read.Function || c.targetTriple != cert.binding.options.TargetTriple {
 		return true, numericalSBContext("emitted function/profile/read certificate changed")
 	}
+	var comparison x86ScalarCompareForm
+	if form.spec.compare {
+		var known bool
+		var err error
+		comparison, known, err = x86ScalarCompareProperties(ins.Op, ins, c.goarch)
+		if !known || err != nil {
+			return true, numericalSBContext("certified comparison lost its complete operand form: %v", err)
+		}
+	}
 	if c.fixedLocal == nil {
 		if err := c.scalarFPResultInitialized(); err != nil {
 			return true, err
@@ -35,7 +44,6 @@ func (c *amd64Ctx) lowerNumericalRead(ins Instr) (bool, error) {
 	if form.spec.compare {
 		// Certification already checked this shared complete operand grammar.
 		// Preserve Go's immediate truncation/sign extension and byte views.
-		comparison, _, _ := x86ScalarCompareProperties(ins.Op, ins, c.goarch)
 		partner := comparison.args[form.partner]
 		other, err := c.evalIntSized(partner, sourceType)
 		if err != nil {
