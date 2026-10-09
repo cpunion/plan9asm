@@ -18,16 +18,17 @@ priority shards failed and two reached the deadline. Aggregate/completion checks
 failed; skipped downstream suites are not passes. Batch repairs before pushing.
 
 The frozen preceding integration head is `ab5302a1`, on
-`codex/pr40-next-batch-20261009`. Continue the new combined batch on
-`codex/pr40-carrier-literal-sleep-integration-20261009`. Preserve the preceding
-integration and component worktrees; do not mutate a checkout with live consumers.
+`codex/pr40-next-batch-20261009`. Preserve preceding integration and component
+worktrees; do not mutate a checkout with live consumers.
 
 The original two-worker combined root run at `ae0eee75` closes failed at its
 45-minute outer deadline: 31/32 shards pass, the last remains incomplete.
 The original owners are gone; strict independent readback rejects the timed-out
-owner instead of granting a complete pass. Retain that failure. Continue the
-root-part/parsed-grammar batch on `codex/pr40-root-parts-grammar-integration-20261009`;
-this successor still needs its own complete gates.
+owner instead of granting a complete pass. Retain that failure. The preceding
+root-part/parsed-grammar batch and its focused gates remain frozen at `eb8a8779`.
+The current successor is `codex/pr40-root-parts-runtime-integration-20261009`,
+which also includes the GNU label and VMOV lifecycle repairs below. Freeze it
+before its own complete gates; component passes do not transfer to this head.
 
 No local background index/discovery/external corpus. Inventory stays on the
 designated source-only scanner; external compilation/execution belongs on a
@@ -125,6 +126,22 @@ Go temporary-prefix-map nonce wrapper failures remain retained; the new wrapper
 normalizes only the actual direct-child uint32 nonce and preserves raw input.
 These commits are integrated into the successor; complete legacy runner,
 race/Go-1.20 and changed combined-head gates remain required.
+
+The GNU C-label component retains its actual Linux compiler RED at `f6e7ea58`.
+The test-only `ebfce45f` keeps the exact LLVM symbol while distinguishing
+Clang's raw symbol from GNU's assembler quoting layer. Root's independent Linux
+readback closes one root/14 children: ordinary, slash-qualified and nested-path
+symbols compile, link and execute with both actual compilers; old GNU rejection
+controls remain. The discovering CMOV Linux/ARM64 GCC path is still a separate
+required runtime gate, not certified by these tiny AMD64 fixtures.
+
+VMOV's original Go runtime command now uses the shared deadline and owned
+process-group lifecycle. `54a7918c` first fails its newly added AST regression;
+`bdea351d` closes affected ordinary tests and the complete focused race/Go-1.20
+scope (13 roots/202 children each, no skip/failure/incomplete). The original
+506-form matrix, four LLVM targets, three APIs and actual host Go/LLVM runtime
+checks remain intact. This lifecycle repair grants no new instruction or ABI
+permission, and does not replace the required Linux runtime counterpart.
 
 ## Required next gates and remaining rule classes
 
