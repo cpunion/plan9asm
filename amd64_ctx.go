@@ -1226,6 +1226,9 @@ func amd64ByteRegBase(r Reg) (base Reg, shift uint, ok bool) {
 }
 
 func (c *amd64Ctx) loadReg(r Reg) (string, error) {
+	if r == TLS {
+		return "", fmt.Errorf("%w: TLS pseudo-register needs its native Go TLS source contract", ErrProbeNeedsContext)
+	}
 	// Model byte aliases used by stdlib asm. Reads return the selected byte as a
 	// zero-extended i64.
 	if base, shift, ok := amd64ByteAlias(r); ok {
@@ -2177,6 +2180,9 @@ func (c *amd64Ctx) addrFromMem(mem MemRef) (addrI64 string, err error) {
 }
 
 func (c *amd64Ctx) addrFromPlainMem(mem MemRef) (addrI64 string, err error) {
+	if mem.Base == TLS || mem.Index == TLS {
+		return "", fmt.Errorf("%w: TLS memory needs its native Go progedit, relocation and TLS address contract", ErrProbeNeedsContext)
+	}
 	if physical, certified := c.fixedMemRoles[mem]; certified {
 		mem = physical
 	}

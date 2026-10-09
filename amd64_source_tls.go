@@ -7,7 +7,7 @@ import "strings"
 // asm6.prefixof/vaddr may instead supply a segment and TLS relocation. Selection
 // depends on GOOS, GOARCH and -shared, not just the spelling or target triple.
 // Callers must return Context for this role until those native facts are bound.
-func x86ScalarCompareTLSMemory(operand Operand, arch string) bool {
+func x86SourceTLSMemoryRole(operand Operand, arch string) bool {
 	if operand.Kind != OpMem {
 		return false
 	}
@@ -28,7 +28,7 @@ func x86ScalarCompareTLSMemory(operand Operand, arch string) bool {
 		return false
 	}
 	if memory.Sym != "" {
-		return x86ScalarCompareNamedTLSMemory(memory, arch)
+		return x86SourceNamedTLSMemoryRole(memory, arch)
 	}
 	if memory.Base == TLS {
 		return memory.Segment == "" && (memory.Index == "" || memory.Index == TLS)
@@ -44,7 +44,7 @@ func x86ScalarCompareTLSMemory(operand Operand, arch string) bool {
 	}
 }
 
-func x86ScalarCompareNamedTLSMemory(memory MemRef, arch string) bool {
+func x86SourceNamedTLSMemoryRole(memory MemRef, arch string) bool {
 	if memory.Segment != "" {
 		return false
 	}

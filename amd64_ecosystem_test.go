@@ -2052,18 +2052,20 @@ TEXT arithmeticdisplacement(SB),NOSPLIT,$32-0
 }
 
 func TestTranslateAMD64GoTLSPseudoRegisterForms(t *testing.T) {
-	ll := translateAMD64EcosystemCase(t, `
-TEXT tlsforms(SB),NOSPLIT,$0-0
+	const source = `
+TEXT ·tlsforms(SB),4,$0-0
 	MOVQ TLS, CX
 	MOVQ 0(CX)(TLS*1), BX
 	MOVQ 8(TLS), DX
 	RET
-`, "tlsforms")
-	llc := findLLVM22Tool("llc")
-	if llc == "" {
-		t.Fatal("LLVM 22 llc not found")
+	`
+	x86ScalarCompareTLSGoObject(t, source, "amd64", "linux", false)
+	for _, api := range []string{"text", "module", "Go"} {
+		ir, err := x86ScalarFPBitViewAPI(t, source, "func tlsforms()", "amd64", "x86_64-unknown-linux-gnu", api)
+		if !errors.Is(err, ErrProbeNeedsContext) || ir != "" {
+			t.Fatalf("%s: TLS source without native contract returned error=%v, IR=%s", api, err, ir)
+		}
 	}
-	compileLLVMToObject(t, llc, "x86_64-unknown-linux-gnu", "tls-forms.ll", "tls-forms.o", ll)
 }
 
 func TestTranslateAMD64LegacyIntegerToFloatConversionFamilyCompleteGo127Forms(t *testing.T) {

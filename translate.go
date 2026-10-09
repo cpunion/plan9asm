@@ -256,6 +256,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return "", err
 	}
+	if err := validateX86TLSMoveFile(file, opt.Goarch); err != nil {
+		return "", err
+	}
 	if err := validateX86GPSIMDTransferFile(file, opt.Goarch); err != nil {
 		return "", err
 	}

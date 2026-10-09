@@ -82,7 +82,7 @@ func x86ScalarCompareProperties(op Op, ins Instr, arch string) (x86ScalarCompare
 				immediates++
 				continue
 			}
-			tls := x86ScalarCompareTLSMemory(operand, arch)
+			tls := x86SourceTLSMemoryRole(operand, arch)
 			if form.memory >= 0 || !tls && !x86ScalarCompareMemoryValid(operand, arch) {
 				return fail("requires at most one encodable Ymb/Yml memory operand")
 			}

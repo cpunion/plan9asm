@@ -81,6 +81,9 @@ func TranslateModuleInContext(ctx llvm.Context, file *File, opt Options) (result
 	if err := validateFileResolvedImmediates(file); err != nil {
 		return llvm.Module{}, err
 	}
+	if err := validateX86TLSMoveFile(file, opt.Goarch); err != nil {
+		return llvm.Module{}, err
+	}
 	if err := validateX86GPSIMDTransferFile(file, opt.Goarch); err != nil {
 		return llvm.Module{}, err
 	}
