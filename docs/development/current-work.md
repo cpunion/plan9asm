@@ -93,8 +93,12 @@ ARM64 nanosleep is integrated from the 13-commit chain ending at `19b60584`:
   its actual Linux rerun and root's independent reader close one root and nine
   children without fail/skip/incomplete. Each LLVM lane checks the intercepted
   input equation, three short real sleeps and a real EINTR with NULL rem.
-  The initial Linux failure remains retained. The complete 13-file runtime SDK
-  counterpart and every changed combined-head gate remain separate.
+  The initial Linux failure remains retained. The complete actual runtime SDK
+  counterpart selects 11 assembly files (13 archive members include the two
+  compiler members): seven compile and four fail, with zero N/A. Whole-file
+  sys_linux_arm64.s now advances past usleep to walltime's native saved-frame
+  context failure; asm_arm64.s, preempt_arm64.s and tls_arm64.s also fail.
+  This partial result and every changed combined-head gate remain separate.
 
 ## Required next gates and remaining rule classes
 
