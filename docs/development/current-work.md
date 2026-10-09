@@ -159,9 +159,11 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    header/listing guard, before observing the filter. Preserve that failure and
    establish the exact historical object/listing identity; LLVM semantic gates
    also remain pending. Synthetic pointer components, incoming writes, padding,
-   partial results and unknown effects remain unproved. The current width
-   observer is conservative for MOVL to
-   MMX/XMM; its complete Go bank forms need a separate regression.
+   partial results and unknown effects remain unproved. The width observer now
+   covers the official MOVL MMX memory rows as a separate legacy-bank case,
+   alongside the GP/X transfer rows. The complete 386/amd64 load/store
+   regression is green; MMX state initialization remains intentionally outside
+   that observer proof.
    Another actual library failure is the normalized raw-byte/AUTO replay join:
    reparsing decoded instruction text loses private decoder identity and comments.
    Test-only `82d046c0` adds an independent raw-times-AUTO regression. Its first
