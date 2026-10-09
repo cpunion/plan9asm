@@ -33,7 +33,7 @@ func (d *instructionDiagnostics) collect(file *plan9asm.File) {
 			seen[op] = struct{}{}
 			d.hits = append(d.hits, unsupportedHit{
 				Op: op, Source: instruction.Raw,
-				Function: function.Name, Instruction: ordinal + 1,
+				Function: function.Sym, Instruction: ordinal + 1,
 			})
 		}
 	}
