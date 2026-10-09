@@ -602,22 +602,35 @@ roles remain Context, including current Windows auxiliary SEH records. Every
 Verify rechecks bytes, complete inventory and actual export/selection before and
 after commands; failure or Close revokes the token. The observer alone has no
 allocator, caller certificate, native-memory grant or compiler adapter.
-Pointer/slice observations retain the independent language type/model and
+Pointer/slice/bool observations retain the independent language type/model and
 object-bound ABI0 data/len/cap slots, including pointee, element, named/alias RHS
 and field identity. A go/types pointee model is not an observed native extent:
 Go1.20 StdSizes omits compiler tail padding/zero-tail storage in some structs.
-These observations grant no input extent, alias or GC contract. The numeric-only
-fixed-local consumer still rejects composite transport. Its separate Binder
-re-typechecks the complete original numeric declaration and retains that
+These observations grant no input extent, alias or GC contract. The bounded
+fixed-local consumer separately proves scalar/component transport. Its Binder
+re-typechecks the complete original typed declaration and retains that
 language identity; each consumer checks it against the live factory declaration
 and object role/signature before and after translation. By-value aggregates,
-recursive/generic types, noninteger elements and nonordinary roles remain Context.
-That fixed-local contract accepts either one initialized numeric result or a
-typed void return with no result slots. Void does not exempt any original or
+recursive/generic types, noninteger/nonboolean elements and nonordinary roles remain Context.
+Opaque incoming pointers may only be copied through full-width GP/private cells
+and pointer results. They never become numerical bytes, private-SP addresses,
+pointee extents or caller memory permission. Every overlapping store revokes
+their cell identity, including an unknown or zero mask. Slice data/len/cap and
+multiple results require every exact ABI0 component to be initialized. A bool
+occupies one physical byte but returns LLVM i1: only proved zero/one bytes,
+including complete SETcc and canonical CMOV alternatives, may enter that slot.
+The eight mod64 residues, independent byte-alias replay and complete DAG remain
+mandatory. DATA, loops, helpers, stack splitting and input-buffer access do not
+gain any new permission from this transport contract.
+The runtime oracle independently snapshots original Go ABI0 bool bytes and
+adjacent canaries. Its LLVM caller uses an explicit i1-to-i32 shim: these tests
+do not certify C `_Bool` return attributes or a new foreign-call ABI.
+The fixed-local contract also accepts a typed void return with no result slots.
+Void does not exempt any original or
 normalized DAG, local-byte initialization, native alignment, SP restoration,
 BP/g, escape or source-lifetime check, and cannot authorize an FP input store.
 Compile-only void object tests establish no numerical return or external-library
-runtime coverage; pointer/slice observations still have no local-memory permission.
+runtime coverage; observations alone still have no local-memory permission.
 Factory artifacts use the request's effective explicit TMPDIR, not the parent's
 temporary environment. Verify and Close check the created directory identity;
 replaced or redirected directories are never recursively cleaned. The package

@@ -186,8 +186,8 @@ func TestGoAMD64FrameTypedSourceLanguageIdentityMutations(t *testing.T) {
 
 func TestGoAMD64FrameTypedSourceUnsupportedRolesRemainContext(t *testing.T) {
 	for _, declaration := range []string{
-		"func Value(a bool) uint64", "func Value(a float32) uint64", "func Value(a complex128) uint64",
-		"func Value(a string) uint64", "func Value(a *float64) uint64", "func Value(a []bool) uint64",
+		"func Value(a float32) uint64", "func Value(a complex128) uint64",
+		"func Value(a string) uint64", "func Value(a *float64) uint64",
 		"func Value(a map[uint64]uint64) uint64", "func Value(a chan uint64) uint64",
 		"func Value(a func(uint64) uint64) uint64", "func Value(a interface{}) uint64",
 		"func Value(a [2]uint64) uint64", "func Value(a struct { X uint64 }) uint64",

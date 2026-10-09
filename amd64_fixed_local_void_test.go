@@ -196,7 +196,7 @@ func TestGoAMD64FixedLocalVoidActualDAGInitialization(t *testing.T) {
 	}
 }
 
-func TestGoAMD64FixedLocalVoidCompositeObservationsRemainContext(t *testing.T) {
+func TestGoAMD64FixedLocalVoidCompositeNeedsCompleteBinding(t *testing.T) {
 	for _, test := range []struct {
 		name, declaration string
 		args, n           int64
@@ -206,7 +206,8 @@ func TestGoAMD64FixedLocalVoidCompositeObservationsRemainContext(t *testing.T) {
 		{"array pointer", "func Value(a *[16]byte, n uint64)", 16, 8},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			assembly := fmt.Sprintf("TEXT ·Value(SB),4,$160-%d\nMOVQ n+%d(FP),AX\nMOVQ AX,16(SP)\nMOVQ 16(SP),AX\nRET\n", test.args, test.n)
+			assembly := fixedLocalTransportAssembly("Value", int(test.args), "")
+			assembly = strings.Replace(assembly, "n+40(FP)", fmt.Sprintf("n+%d(FP)", test.n), 1)
 			pkg, request := goAMD64FrameTypedFixture(t, test.declaration, assembly)
 			source := requireGoAMD64FrameCapture(t, pkg, request)
 			observed := source.functions[pkg.Path+".Value"]
@@ -224,8 +225,9 @@ func TestGoAMD64FixedLocalVoidCompositeObservationsRemainContext(t *testing.T) {
 			}
 			ctx, cancel := runtimeOracleStageContext(t)
 			defer cancel()
-			if bound, err := source.BindFixedLocal(ctx, pkg, file, options); !errors.Is(err, ErrProbeNeedsContext) || len(bound.Sigs) != 0 {
-				t.Fatalf("void composite acquired numeric-only backing: %v", err)
+			fixedLocalAPIs(t, pkg, file, options, fixedLocalRequireContext)
+			if bound, err := source.BindFixedLocal(ctx, pkg, file, options); err != nil || len(bound.Sigs) != 1 {
+				t.Fatalf("complete void composite transport lacks its independent frame proof: %v", err)
 			}
 		})
 	}

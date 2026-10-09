@@ -30,8 +30,8 @@ var goAMD64WindowsUnwindSources = map[string]string{
 func (source *GoAMD64FrameSource) observeWindowsUnwind(object []byte) (gostaticstorage.WindowsAMD64AssemblyUnwind, error) {
 	var empty gostaticstorage.WindowsAMD64AssemblyUnwind
 	for _, declaration := range source.declarations {
-		if declaration.transport != goAMD64FrameNumericTransport {
-			return empty, goAMD64FrameContext("Windows unwind join requires the existing numeric/void ABI0 scope")
+		if !fixedLocalTransportRole(declaration.transport) {
+			return empty, goAMD64FrameContext("Windows unwind join requires the closed typed ABI0 transport scope")
 		}
 	}
 	var builtin []byte

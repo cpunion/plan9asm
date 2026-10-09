@@ -26,25 +26,39 @@ type x86FixedLocalAccess struct {
 }
 
 type x86FixedLocalState struct {
-	pointers  map[Reg]int64
-	constants map[Reg]int64
-	known     map[Reg]uint8
-	vectors   map[Reg]uint64
-	masks     map[Reg]bool
-	bytes     []bool
-	addresses map[int64]int64
-	results   map[int]bool
-	flags     bool
+	pointers     map[Reg]int64
+	opaque       map[Reg]int64
+	opaqueCells  map[int64]int64
+	booleans     map[Reg]uint8
+	booleanBytes []bool
+	constants    map[Reg]int64
+	known        map[Reg]uint8
+	vectors      map[Reg]uint64
+	masks        map[Reg]bool
+	bytes        []bool
+	addresses    map[int64]int64
+	results      map[int]bool
+	flags        bool
 }
 
 func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 	clone := input
 	clone.pointers = make(map[Reg]int64, len(input.pointers))
+	clone.opaque = make(map[Reg]int64, len(input.opaque))
+	clone.opaqueCells = make(map[int64]int64, len(input.opaqueCells))
+	clone.booleans = x86CloneCallerKnown(input.booleans)
+	clone.booleanBytes = append([]bool(nil), input.booleanBytes...)
 	clone.constants = make(map[Reg]int64, len(input.constants))
 	clone.addresses = make(map[int64]int64, len(input.addresses))
 	clone.results = make(map[int]bool, len(input.results))
 	for key, value := range input.pointers {
 		clone.pointers[key] = value
+	}
+	for key, value := range input.opaque {
+		clone.opaque[key] = value
+	}
+	for key, value := range input.opaqueCells {
+		clone.opaqueCells[key] = value
 	}
 	for key, value := range input.constants {
 		clone.constants[key] = value
@@ -63,7 +77,7 @@ func cloneFixedLocalState(input x86FixedLocalState) x86FixedLocalState {
 
 func proveX86FixedLocal(fn Func, sig FuncSig) (Func, error) {
 	voidReturn := sig.Ret == Void && len(sig.Frame.Results) == 0
-	valueReturn := sig.Ret != "" && sig.Ret != Void && len(sig.Frame.Results) == 1
+	valueReturn := sig.Ret != "" && sig.Ret != Void && len(sig.Frame.Results) > 0 && len(sig.Frame.Results) <= 4096
 	if fn.FrameSize <= 0 || fn.FrameSize > 64<<10 || fn.FrameSize%8 != 0 ||
 		len(fn.Instrs) == 0 || len(fn.Instrs) > 8192 || fn.FrameSize > (1<<20)/int64(len(fn.Instrs)) ||
 		len(fn.X86RawText) != 0 || len(sig.ArgRegs) != 0 || sig.ARMEntry != nil ||
@@ -162,6 +176,9 @@ func fixedLocalRelocationAliases(accesses map[int]map[int]x86FixedLocalAccess) e
 }
 
 func fixedLocalInstructionShape(ins Instr) bool {
+	if _, known, err := x86ConditionalSetProperties(ins.Op, ins, "amd64"); known {
+		return err == nil
+	}
 	if ins.x86NumericalRead != nil {
 		_, valid := x86NumericalReadEffect(ins, "amd64")
 		return valid
@@ -288,7 +305,9 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 	}
 	state := x86FixedLocalState{
 		pointers: map[Reg]int64{SP: 0}, constants: make(map[Reg]int64), known: make(map[Reg]uint8),
-		vectors: make(map[Reg]uint64), masks: make(map[Reg]bool),
+		opaque: make(map[Reg]int64), opaqueCells: make(map[int64]int64), booleans: make(map[Reg]uint8),
+		booleanBytes: make([]bool, proof.frame),
+		vectors:      make(map[Reg]uint64), masks: make(map[Reg]bool),
 		bytes: make([]bool, proof.frame), addresses: make(map[int64]int64), results: make(map[int]bool),
 	}
 	states := map[int]x86FixedLocalState{0: state}
@@ -338,12 +357,16 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 				// Acyclic replay permits only all-path initialization to decrease.
 				// Address identity and saved private pointer cells remain exact.
 				if !reflect.DeepEqual(previous.pointers, current.pointers) || !reflect.DeepEqual(previous.addresses, current.addresses) ||
+					!reflect.DeepEqual(previous.opaque, current.opaque) || !reflect.DeepEqual(previous.opaqueCells, current.opaqueCells) ||
 					!reflect.DeepEqual(previous.constants, current.constants) || previous.flags != current.flags {
 					return goAMD64FrameContext("fixed local CFG address/constant/flags identity disagrees")
 				}
 				merged := cloneFixedLocalState(previous)
 				for reg, bits := range merged.known {
 					merged.known[reg] = bits & current.known[reg]
+				}
+				for reg, bits := range merged.booleans {
+					merged.booleans[reg] = bits & current.booleans[reg]
 				}
 				for reg, bits := range merged.vectors {
 					merged.vectors[reg] = bits & current.vectors[reg]
@@ -353,6 +376,7 @@ func replayX86FixedLocal(fn *Func, sig FuncSig, proof *x86FixedLocalProof, resid
 				}
 				for index := range merged.bytes {
 					merged.bytes[index] = merged.bytes[index] && current.bytes[index]
+					merged.booleanBytes[index] = merged.booleanBytes[index] && current.booleanBytes[index]
 				}
 				for index, written := range merged.results {
 					merged.results[index] = written && current.results[index]
@@ -426,8 +450,13 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	}
 	if ins.Op == OpRET {
 		sp, found := state.pointers[SP]
-		if len(ins.Args) != 0 || !found || sp != 0 || sig.Ret != Void && !state.results[0] {
+		if len(ins.Args) != 0 || !found || sp != 0 {
 			return fail()
+		}
+		for index := range sig.Frame.Results {
+			if !state.results[index] {
+				return fail()
+			}
 		}
 		return nil
 	}
@@ -446,6 +475,9 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	if width := x86RawReturnScalarMoveBytes(ins.Op); width != 0 {
 		return fixedLocalMove(ins, state, sig, proof, residue, width)
 	}
+	if known, err := fixedLocalConditionalSetStep(ins, state, sig, proof, residue); known {
+		return err
+	}
 	if ins.Op == "NOTQ" && len(ins.Args) == 1 && ins.Args[0].Kind == OpReg {
 		reg := ins.Args[0].Reg
 		if _, pointer := state.pointers[reg]; pointer {
@@ -456,6 +488,7 @@ func fixedLocalStep(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return fail()
 		}
 		state.constants[reg] = ^value
+		fixedLocalWriteBooleans(state, reg, 8, fixedLocalConstantBooleans(^value, 8))
 		return nil
 	}
 	if (ins.Op == "ADDQ" || ins.Op == "ANDQ") && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
@@ -524,8 +557,9 @@ func fixedLocalNumericRead(operand Operand, width int64, state *x86FixedLocalSta
 	}
 	root, valid := x86CallerGP(operand.Reg)
 	_, pointer := state.pointers[root]
+	_, opaque := state.opaque[root]
 	mask := x86CallerByteMask(operand.Reg, width)
-	return valid && root != SP && root != BP && !pointer && mask != 0 && state.known[root]&mask == mask
+	return valid && root != SP && root != BP && !pointer && !opaque && mask != 0 && state.known[root]&mask == mask
 }
 
 func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x86FixedLocalProof, residue int, width int64) error {
@@ -536,12 +570,16 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	source, destination := ins.Args[0], ins.Args[1]
 	var address int64
 	var pointer bool
+	var opaque bool
+	var identity int64
+	var booleans uint8
 	var constant int64
 	var constantKnown bool
 	switch source.Kind {
 	case OpReg:
 		address, pointer = state.pointers[source.Reg]
-		if pointer {
+		identity, opaque = state.opaque[source.Reg]
+		if pointer || opaque {
 			if width != 8 {
 				return fail()
 			}
@@ -557,16 +595,24 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			// Narrow moves truncate or preserve a destination's old upper
 			// bytes. They cannot transport a complete 64-bit address mask.
 			constantKnown = constantKnown && width == 8
+			booleans = fixedLocalBooleanRead(source, width, state)
 		}
 	case OpImm:
 		if !fixedLocalNumericRead(source, width, state) {
 			return fail()
 		}
 		constant, constantKnown = source.Imm, width == 8
+		booleans = fixedLocalBooleanRead(source, width, state)
 	case OpFP:
 		sp, original := state.pointers[SP]
-		if !original || sp != 0 || !fixedLocalFPBound(source.FPOffset, width, sig.Frame.Params) {
+		slot, _, found := fixedLocalTransportSlot(source.FPOffset, width, sig.Frame.Params)
+		if !original || sp != 0 || !found {
 			return fail()
+		}
+		if slot.Type == Ptr {
+			opaque, identity = true, slot.Offset
+		} else if slot.Type == I1 {
+			booleans = 1
 		}
 	case OpMem:
 		memory, err := fixedLocalMemoryAddress(*ins, 0, proof.frame)
@@ -576,12 +622,17 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		base, found := state.pointers[memory.Base]
 		if found && memory.Off >= -proof.frame && memory.Off <= proof.frame {
 			address, pointer = state.addresses[base+memory.Off]
+			identity, opaque = state.opaqueCells[base+memory.Off]
 		}
-		if pointer && width != 8 {
+		if (pointer || opaque) && width != 8 {
 			return fail()
 		}
-		if _, err := fixedLocalMemory(ins, 0, state, proof, residue, width, 1, false, pointer); err != nil {
+		offset, err := fixedLocalMemory(ins, 0, state, proof, residue, width, 1, false, pointer || opaque)
+		if err != nil {
 			return err
+		}
+		if !pointer && !opaque {
+			booleans = fixedLocalMemoryBooleans(state, offset, width)
 		}
 	default:
 		return fail()
@@ -589,7 +640,7 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 	switch destination.Kind {
 	case OpReg:
 		root, valid := x86CallerGP(destination.Reg)
-		if !valid || root == BP && !pointer || x86SourceGRegister(root) || pointer && (width != 8 || destination.Reg != root) {
+		if !valid || root == BP && !pointer || x86SourceGRegister(root) || (pointer || opaque) && (width != 8 || destination.Reg != root) {
 			return fail()
 		}
 		if root == SP && !pointer {
@@ -599,9 +650,14 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 			return fail()
 		}
 		delete(state.pointers, root)
+		delete(state.opaque, root)
 		delete(state.constants, root)
+		fixedLocalWriteBooleans(state, destination.Reg, width, booleans)
 		if pointer {
 			state.pointers[root] = address
+			state.known[root] = 0
+		} else if opaque {
+			state.opaque[root] = identity
 			state.known[root] = 0
 		} else {
 			mask := x86CallerByteMask(destination.Reg, width)
@@ -624,36 +680,29 @@ func fixedLocalMove(ins *Instr, state *x86FixedLocalState, sig FuncSig, proof *x
 		if err != nil {
 			return err
 		}
-		for start := range state.addresses {
-			if offset < start+8 && start < offset+width {
-				delete(state.addresses, start)
-			}
-		}
+		fixedLocalRevokeSpillRoles(state, offset, width)
 		for index := offset; index < offset+width; index++ {
-			state.bytes[index] = !pointer
+			state.bytes[index] = !pointer && !opaque
+			state.booleanBytes[index] = booleans&(1<<uint(index-offset)) != 0
 		}
 		if pointer {
 			state.addresses[offset] = address
 		}
+		if opaque {
+			state.opaqueCells[offset] = identity
+		}
 	case OpFP:
 		sp, original := state.pointers[SP]
-		if !original || sp != 0 || pointer || !fixedLocalFPBound(destination.FPOffset, width, sig.Frame.Results) || source.Kind != OpReg {
+		slot, index, found := fixedLocalTransportSlot(destination.FPOffset, width, sig.Frame.Results)
+		if !original || sp != 0 || pointer || !found || source.Kind != OpReg && source.Kind != OpImm ||
+			opaque != (slot.Type == Ptr) || slot.Type == I1 && booleans&1 == 0 {
 			return fail()
 		}
-		state.results[0] = true
+		state.results[index] = true
 	default:
 		return fail()
 	}
 	return nil
-}
-
-func fixedLocalFPBound(offset, width int64, slots []FrameSlot) bool {
-	for _, slot := range slots {
-		if len(frameSlotFields(slot)) == 0 && slot.Offset == offset && frameTypeSize(slot.Type, 8) == width {
-			return true
-		}
-	}
-	return false
 }
 
 func fixedLocalVectorStep(ins *Instr, state *x86FixedLocalState, proof *x86FixedLocalProof, residue int) error {

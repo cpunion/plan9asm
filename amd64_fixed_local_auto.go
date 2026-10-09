@@ -102,6 +102,16 @@ func fixedLocalConditionalMoveStep(ins *Instr, state *x86FixedLocalState, proof 
 		return fail() // FP/caller slots and private pointer bits are not imports.
 	}
 	root, _ := x86CallerGP(destination.operand.Reg)
+	booleans := fixedLocalBooleanRead(destination.operand, destination.width, state)
+	if source.operand.Kind == OpReg {
+		booleans &= fixedLocalBooleanRead(source.operand, source.width, state)
+	} else {
+		// The source read was proved above; its actual private offset is
+		// retained in this same residue's instruction-bound certificate.
+		access := ins.x86FixedLocalMemory[source.index]
+		booleans &= fixedLocalMemoryBooleans(state, access.offset[residue], source.width)
+	}
+	fixedLocalWriteBooleans(state, destination.operand.Reg, destination.width, booleans)
 	mask := x86CallerByteMask(destination.operand.Reg, destination.width)
 	if destination.width == 4 {
 		mask = 255 // False CMOVL still zero-defines the upper half.

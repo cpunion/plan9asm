@@ -123,7 +123,7 @@ func TestGoAMD64FixedLocalPackedMaskedStoreRevokesPrivatePointerSpills(t *testin
 	}
 	// This domain proves mask definedness, not constant mask values. Even a
 	// zero mask must conservatively revoke the overlapping pointer certificate.
-	state := x86FixedLocalState{bytes: make([]bool, 96), addresses: map[int64]int64{32: 8, 80: 16}}
+	state := x86FixedLocalState{bytes: make([]bool, 96), booleanBytes: make([]bool, 96), addresses: map[int64]int64{32: 8, 80: 16}}
 	fixedLocalNumericalStore(&state, 36, 16, false)
 	if _, found := state.addresses[32]; found || state.addresses[80] != 16 {
 		t.Fatal("partial overlap did not revoke exactly the overlapping pointer spill")

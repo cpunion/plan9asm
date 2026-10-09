@@ -27,7 +27,9 @@ func fixedLocalNumericalReadStep(ins Instr, state *x86FixedLocalState) (bool, er
 			mask = 255 // Architectural dword writes zero the upper GP bytes.
 		}
 		delete(state.pointers, root)
+		delete(state.opaque, root)
 		delete(state.constants, root)
+		fixedLocalWriteBooleans(state, operand.operand.Reg, operand.width, 0)
 		state.known[root] |= mask
 	}
 	if effect.flagsDefined != 0 {

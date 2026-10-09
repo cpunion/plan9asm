@@ -26,8 +26,8 @@ type x86FixedLocalBinding struct {
 	numericalReads *GoX86NumericalReadBinding
 }
 
-// BindFixedLocal binds a complete original numeric ABI0 file to its actual Go
-// object observation. It does not support dynamic incoming frames, pointers,
+// BindFixedLocal binds a complete original typed ABI0 file to its actual Go
+// object observation. It does not support dynamic incoming frames, pointees,
 // imported declarations, native entries or arbitrary local-memory effects.
 // The returned Options are independent copies; their private signatures may
 // also be transported by GoModuleOptions.ManualSig. The capture context must
@@ -102,7 +102,7 @@ func (source *GoAMD64FrameSource) bindFixedLocalLocked(ctx context.Context, pkg 
 		len(file.Data)+len(file.Globl)+len(file.UnlinkedPrelude)+len(options.X86TailGroups) != 0 {
 		return Options{}, goAMD64FrameContext("fixed local binding target or complete source roles disagree")
 	}
-	declarations, err := source.typedDeclarations(pkg, true)
+	declarations, err := source.typedDeclarations(pkg, false)
 	if err != nil {
 		return Options{}, err
 	}
@@ -314,13 +314,13 @@ func (binding *x86FixedLocalBinding) verify() error {
 		return goAMD64FrameContext("fixed local observer identity changed or was revoked")
 	}
 	if len(binding.declarations) != len(binding.signatures) {
-		return goAMD64FrameContext("fixed local numeric language witnesses are incomplete")
+		return goAMD64FrameContext("fixed local typed language witnesses are incomplete")
 	}
 	for name, signature := range binding.signatures {
 		declaration, found := binding.declarations[name]
 		if !found || !reflect.DeepEqual(signature, declaration.signature) ||
 			!binding.source.matchesFixedLocalDeclaration(name, declaration) {
-			return goAMD64FrameContext("fixed local numeric language/object identity changed: %s", name)
+			return goAMD64FrameContext("fixed local typed language/object identity changed: %s", name)
 		}
 	}
 	return nil
@@ -332,7 +332,7 @@ func (binding *x86FixedLocalBinding) verify() error {
 func (source *GoAMD64FrameSource) matchesFixedLocalDeclaration(name string, expected goAMD64FrameDeclaration) bool {
 	observed, found := source.functions[name]
 	original, declared := source.declarations[name]
-	return found && declared && expected.transport == goAMD64FrameNumericTransport &&
+	return found && declared && fixedLocalTransportRole(expected.transport) &&
 		observed.transport == expected.transport && original.transport == expected.transport &&
 		expected.languageType != "" && observed.languageType == expected.languageType &&
 		original.languageType == expected.languageType &&

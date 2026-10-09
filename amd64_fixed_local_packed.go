@@ -66,11 +66,7 @@ func fixedLocalPackedMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86F
 }
 
 func fixedLocalNumericalStore(state *x86FixedLocalState, offset, width int64, complete bool) {
-	for start := range state.addresses {
-		if offset < start+8 && start < offset+width {
-			delete(state.addresses, start)
-		}
-	}
+	fixedLocalRevokeSpillRoles(state, offset, width)
 	if complete {
 		for index := offset; index < offset+width; index++ {
 			state.bytes[index] = true
@@ -123,7 +119,9 @@ func fixedLocalMaskMoveStep(ins *Instr, state *x86FixedLocalState, proof *x86Fix
 	}
 	// Every KMOV GP destination zero-extends to the full architectural word.
 	delete(state.pointers, root)
+	delete(state.opaque, root)
 	delete(state.constants, root)
+	fixedLocalWriteBooleans(state, destination.Reg, 8, 0)
 	state.known[root] = 255
 	return true, nil
 }

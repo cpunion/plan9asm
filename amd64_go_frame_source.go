@@ -246,7 +246,7 @@ func captureGoAMD64FrameSource(ctx context.Context, pkg GoPackage, request GoAMD
 	if err != nil {
 		return nil, err
 	}
-	source.declarations, err = source.typedDeclarations(pkg, exact != nil)
+	source.declarations, err = source.typedDeclarations(pkg, false)
 	if err != nil {
 		return nil, err
 	}
@@ -721,8 +721,9 @@ func (source *GoAMD64FrameSource) numericDeclarations(pkg GoPackage) error {
 	return err
 }
 
-// The numeric-only wrapper is retained for fixed-local consumers. Expanding
-// capture's observation domain must not expand that consumer's admission.
+// The numeric-only query remains strict. The fixed-local binder separately
+// checks the closed transport role and replays each actual typed component;
+// observation itself never supplies local or incoming memory permission.
 func (source *GoAMD64FrameSource) typedDeclarations(pkg GoPackage, numericOnly bool) (map[string]goAMD64FrameDeclaration, error) {
 	return source.typedDeclarationsForArch(pkg, numericOnly, "amd64")
 }
@@ -842,7 +843,9 @@ func (source *GoAMD64FrameSource) typedDeclarationsForArch(pkg GoPackage, numeri
 				typ := tuple.At(i).Type()
 				switch underlying := typ.Underlying().(type) {
 				case *types.Basic:
-					if underlying.Info()&types.IsInteger == 0 {
+					if underlying.Kind() == types.Bool {
+						role = goAMD64FrameCompositeTransport
+					} else if underlying.Info()&types.IsInteger == 0 {
 						return nil, goAMD64FrameContext("observation excludes noninteger scalar transport")
 					}
 				case *types.Pointer, *types.Slice:
@@ -922,7 +925,7 @@ func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error)
 		// for type parameters. An unknown or generic role is not a layout.
 		switch concrete := typ.(type) {
 		case *types.Basic:
-			if concrete.Info()&types.IsInteger == 0 || concrete.Info()&types.IsUntyped != 0 {
+			if concrete.Info()&(types.IsInteger|types.IsBoolean) == 0 || concrete.Info()&types.IsUntyped != 0 {
 				return goAMD64FrameContext("unsupported noninteger or untyped language type")
 			}
 		case *types.Named:
@@ -955,10 +958,13 @@ func goAMD64FrameLanguageType(typ types.Type, sizes types.Sizes) (string, error)
 		fmt.Fprintf(&output, "(%q:", spelling)
 		switch typ := typ.(type) {
 		case *types.Basic:
-			if typ.Info()&types.IsInteger == 0 {
+			if typ.Kind() == types.Bool {
+				output.WriteString("bool")
+			} else if typ.Info()&types.IsInteger != 0 {
+				fmt.Fprintf(&output, "integer%d", typ.Kind())
+			} else {
 				return goAMD64FrameContext("unsupported noninteger pointee/element")
 			}
-			fmt.Fprintf(&output, "integer%d", typ.Kind())
 		case *types.Named:
 			if typ.TypeParams().Len() != 0 {
 				return goAMD64FrameContext("generic language type")

@@ -34,7 +34,7 @@ func TestGoAMD64FixedLocalTypedRoleNumericActualWitness(t *testing.T) {
 	})
 }
 
-func TestGoAMD64FixedLocalTypedRoleCompositeObservationsRemainContext(t *testing.T) {
+func TestGoAMD64FixedLocalTypedRoleCompositeObservationsNeedCompleteBinding(t *testing.T) {
 	for _, test := range []struct {
 		name, declaration string
 		args, n, result   int64
@@ -68,10 +68,10 @@ func TestGoAMD64FixedLocalTypedRoleCompositeObservationsRemainContext(t *testing
 			ctx, cancel := runtimeOracleStageContext(t)
 			defer cancel()
 			bound, err := source.BindFixedLocal(ctx, pkg, file, options)
-			if !errors.Is(err, ErrProbeNeedsContext) || len(bound.Sigs) != 0 {
-				t.Fatalf("actual composite observation acquired fixed-local backing: %v", err)
+			if err != nil || len(bound.Sigs) != 1 {
+				t.Fatalf("complete original composite source lacked its independent local proof: %v", err)
 			}
-			t.Logf("actual object retained Context: transport=%d args=%d locals=%d code_bytes=%d", observed.transport, observed.args, observed.locals, len(observed.code))
+			t.Logf("complete binding retained opaque transport: transport=%d args=%d locals=%d code_bytes=%d", observed.transport, observed.args, observed.locals, len(observed.code))
 			// A stale private role must not overrule the independent complete
 			// original language typecheck, even if both role records agree.
 			declaration := source.declarations[sig.Name]
