@@ -54,7 +54,7 @@ func (c *amd64Ctx) scalarFPSpan(off int64, bits int) (bool, error) {
 func (c *amd64Ctx) scalarFPResultInitialized() error {
 	if !c.fpScalarChecked {
 		c.fpScalarChecked = true
-		c.fpScalarCheckErr = checkX86ScalarFPResultInitialization(c.fpScalarSource, c.sig, c.goarch)
+		c.fpScalarCheckErr = c.checkLoweredScalarFPResultInitialization()
 	}
 	return c.fpScalarCheckErr
 }

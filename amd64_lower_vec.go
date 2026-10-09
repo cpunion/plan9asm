@@ -6,8 +6,8 @@ import (
 )
 
 func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	if recognized, err := c.validateLegacyPackedMove(op, ins); recognized && err != nil {
-		return true, false, err
+	if known, term, err := c.lowerLegacyPackedMove(op, ins); known {
+		return known, term, err
 	}
 	if ok, term, err := c.lowerFloatMulDiv(op, ins); ok {
 		return ok, term, err
@@ -201,10 +201,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 				op = "VMOVDQU"
 			}
 		}
-	}
-	// MOVUPS/MOVAPS/MOVO are aliases for unaligned/aligned 128-bit xmm moves.
-	if op == "MOVUPS" || op == "MOVAPS" || op == "MOVO" {
-		op = "MOVOU"
 	}
 
 	switch op {
@@ -1724,37 +1720,6 @@ func (c *amd64Ctx) lowerVec(op Op, ins Instr) (ok bool, terminated bool, err err
 		z := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = zext i32 %%%s to i64\n", z, or)
 		return true, false, c.storeReg(ins.Args[1].Reg, "%"+z)
-
-	case "MOVOU", "MOVOA":
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
-		}
-		if ins.Args[1].Kind == OpReg {
-			if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-				return false, false, nil
-			}
-			dst := ins.Args[1].Reg
-			value, err := c.loadXVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, fmt.Errorf("amd64 %s unsupported src %s: %w", op, ins.Args[0].String(), err)
-			}
-			return true, false, c.storeX(dst, value)
-		}
-
-		if ins.Args[0].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s expects Xsrc for store form: %q", op, ins.Raw)
-		}
-		if _, ok := amd64ParseXReg(ins.Args[0].Reg); !ok {
-			return false, false, nil
-		}
-		srcv, err := c.loadX(ins.Args[0].Reg)
-		if err != nil {
-			return true, false, err
-		}
-		if err := c.storeXVecOperand(ins.Args[1], srcv); err != nil {
-			return true, false, fmt.Errorf("amd64 %s unsupported dst %s: %w", op, ins.Args[1].String(), err)
-		}
-		return true, false, nil
 
 	case "PADDB", "PADDL", "PADDD", "PADDQ", "PSUBB", "PSUBL", "PMULLW":
 		// Two-operand packed arithmetic: dst = dst (+|-) src.

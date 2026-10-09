@@ -8,8 +8,8 @@ import (
 )
 
 func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	if recognized, err := c.validateLegacyPackedMove(op, ins); recognized && err != nil {
-		return true, false, err
+	if known, term, err := c.lowerLegacyPackedMove(op, ins); known {
+		return known, term, err
 	}
 	if ok, term, err := c.lowerSignedIntegerScalarFloat(op, ins); ok {
 		return ok, term, err
@@ -125,32 +125,6 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 
 	case "VCVTSD2SS":
 		return c.lowerVEXScalarFloatConvert(op, ins)
-
-	case "MOVAPD", "MOVUPD":
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
-		}
-		if ins.Args[1].Kind == OpReg {
-			if _, ok := amd64ParseXReg(ins.Args[1].Reg); !ok {
-				return false, false, nil
-			}
-			srcv, err := c.loadXVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			return true, false, c.storeX(ins.Args[1].Reg, srcv)
-		}
-		if ins.Args[0].Kind != OpReg {
-			return true, false, fmt.Errorf("amd64 %s store expects X source: %q", op, ins.Raw)
-		}
-		srcv, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		if err := c.storeXVecOperand(ins.Args[1], srcv); err != nil {
-			return true, false, fmt.Errorf("amd64 %s unsupported destination %s: %w", op, ins.Args[1].String(), err)
-		}
-		return true, false, nil
 
 	case "MOVSS":
 		if len(ins.Args) != 2 {

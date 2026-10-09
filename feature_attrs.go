@@ -68,6 +68,21 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 		op := strings.ToUpper(string(ins.Op))
 		switch arch {
 		case ArchAMD64:
+			moveArch := goarch
+			if moveArch == "" {
+				moveArch = "amd64"
+			}
+			if form, known, err := x86LegacyPackedMoveProperties(ins.Op, ins, moveArch); known && err == nil &&
+				form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
+				// Exact native whole128 opcodes need XMM registers on i386.
+				// PS moves are SSE1; a sibling MOVOU must not be needed to
+				// accidentally supply the register class to an isolated move.
+				if op == "MOVUPS" || op == "MOVAPS" {
+					add("+sse")
+				} else {
+					add("+sse2")
+				}
+			}
 			if form, known, err := x86HorizontalIntegerProperties(ins, goarch); known && err == nil &&
 				!form.spec.vector && !form.mmx && form.memory >= 0 && ins.Args[form.memory].Kind != OpFP {
 				// The single original legacy m128 opcode needs its physical
