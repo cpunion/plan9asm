@@ -100,7 +100,8 @@ class ARM64Plan9OracleTests(unittest.TestCase):
                     group_absent = True
                 self.assertTrue(group_absent, "actual first-party child group not closed")
                 self.records.append({
-                    "test": self.id(), "kind": "actual-stock-Go" if program is None else "controlled-infrastructure-tool",
+                    "test": self.id(),
+                    "kind": "actual-stock-Go" if program is None or (first_go and len(requested) == 1) else "controlled-infrastructure-tool",
                     "argv": command, "pid": child.pid, "pgid": pgid,
                     "child_waited": True, "group_absent": group_absent,
                     "exit": child.returncode, "duration_seconds": time.monotonic() - start,
