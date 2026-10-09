@@ -204,6 +204,30 @@ The assembler-oracle component and SDK development retain these distinct scopes:
 
 ## Required next gates and remaining rule classes
 
+The next local batch is `codex/pr40-verified-grammar-batch-20261009`, based
+on frozen `2ae09eb7`. Its preceding complete module run is still running and
+has real diagnostic/tool-route failures; do not edit that live checkout or
+transfer its partial results. This successor integrates three reviewed classes:
+
+- Complete zero-operand source/listing joins from `ef503ae4`. Component race
+  and actual Go-1.20 oracle scopes pass; six original discovering root tests
+  pass on each SDK. One later ordinary reader rejects a reused child PID:
+  its original assembly command closed before the unrelated process started.
+  Preserve that reader failure; never kill the unrelated process or pretend
+  the PID is absent.
+- Explicit IMUL source/caller effects from `f55f450a`: 35 affected roots and
+  1,602 children pass in both ordinary and race, independently read back.
+  This does not supply unknown pointee bytes or a native/result ABI contract.
+- Actual ARM64 lazy tool/export cache routing from `efddfd9b`: the new two
+  roots/16 children and four original failing roots/54 children close normally.
+  Physical source paths and asm/compile SDK roles remain strict; only actual
+  Go-selected cache routes are canonicalized and their sealed bytes rechecked.
+  This is path/byte identity, not cross-observation inode continuity.
+
+These are component certificates only. Freeze and test the combined head;
+alias/scalar-rewrite/frontend diagnostic successors and SDK numerical reads
+remain separate work. Ledger promotion and current-head CI remain pending.
+
 1. Complete and independently read each component handoff; cherry-pick only
    its ordered commits into the persistent successor. Freeze the combined head
    before testing. Do not relabel earlier certificates.
