@@ -127,6 +127,7 @@ func TestSemicolonStringDataThreeAPIsFiveLLVMTargets(t *testing.T) {
 						})
 					}
 				})
+			}
 		})
 	}
 }
