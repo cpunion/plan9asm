@@ -62,7 +62,7 @@ func TestGoAssemblerOracleX86CompleteAliasOperandCardinality(t *testing.T) {
 					listing := x86DiagnosticListing(source, strings.TrimSpace(canonical+suffix+" "+operands))
 					for _, arch := range []string{"amd64", "386"} {
 						if !goAssemblerOracleX86SourceDiagnostic(source, arch, listing) {
-							t.Fatalf("complete %s alias lost at operand cardinality %q: %s", arch, operands, alias+suffix)
+							t.Errorf("complete %s alias lost at operand cardinality %q: %s", arch, operands, alias+suffix)
 						}
 						if operands != "" && goAssemblerOracleX86SourceDiagnostic(source, arch,
 							x86DiagnosticListing(source, canonical+suffix)) {
