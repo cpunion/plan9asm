@@ -173,7 +173,12 @@ behavior; the inner Go-env command has no independent command-receipt proof.
    and 13 failures (eleven target children and two aggregation parents), with
    independent complete readback. Repair the private complete original-byte/
    order/boundary join, not a broad DeepEqual bypass or new native permission.
-   Neither rule class is library-verified yet.
+   The replay seam is now implemented privately in `Func`: it retains the
+   original raw source, decoder checkpoint, and final normalized instruction
+   snapshot, then reparses/decodes and compares all three before AUTO proof.
+   The independent 45-node GREEN gate on `0ccbc807` completed naturally with
+   45/45 nodes passing, including all eleven former targets; the race run also
+   passed. The original RED artifacts remain retained.
 4. Continue the SDK numerical source/object seam, dynamic reflect frames,
    native entry/TLS/continuations and full result/body contracts by typed rule
    class. The old go-fuse LoadUint16 failure remains a real ARM64 result-tail
