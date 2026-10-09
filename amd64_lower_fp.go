@@ -425,35 +425,8 @@ func (c *amd64Ctx) lowerFP(op Op, ins Instr) (ok bool, terminated bool, err erro
 		fmt.Fprintf(c.b, "  %%%s = call double @llvm.sqrt.f64(double %s)\n", t, src)
 		return true, false, c.storeXLowF64(ins.Args[1].Reg, "%"+t)
 
-	case "COMISS", "UCOMISS":
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 %s expects src, dst: %q", op, ins.Raw)
-		}
-		src, err := c.evalF32(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.evalF32(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		c.setScalarFloatCompareFlags(LLVMType("float"), dst, src)
-		return true, false, nil
-
-	case "COMISD", "UCOMISD":
-		if len(ins.Args) != 2 {
-			return true, false, fmt.Errorf("amd64 COMISD expects src, dst: %q", ins.Raw)
-		}
-		src, err := c.evalF64(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		dst, err := c.evalF64(ins.Args[1])
-		if err != nil {
-			return true, false, err
-		}
-		c.setScalarFloatCompareFlags(LLVMType("double"), dst, src)
-		return true, false, nil
+	case "COMISS", "UCOMISS", "COMISD", "UCOMISD":
+		return c.lowerVectorScalarFlagCompare(op, ins)
 
 	case "CMPSD":
 		if len(ins.Args) != 3 || ins.Args[1].Kind != OpReg {

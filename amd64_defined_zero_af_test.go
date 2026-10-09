@@ -74,7 +74,11 @@ func TestX86DefinedZeroAFWritersClearAfterOperation(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{Goarch: arch,
+				triple := "x86_64-unknown-linux-gnu"
+				if arch == "386" {
+					triple = "i386-unknown-linux-gnu"
+				}
+				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
 					Sigs: map[string]FuncSig{"status": {Name: "status", Ret: Void}},
 				})
 				if err != nil {
@@ -92,6 +96,10 @@ func TestX86DefinedZeroAFWritersClearAfterOperation(t *testing.T) {
 
 func TestX86DefinedZeroAFExistingCompareWriterControls(t *testing.T) {
 	for _, arch := range []string{"386", "amd64"} {
+		triple := "x86_64-unknown-linux-gnu"
+		if arch == "386" {
+			triple = "i386-unknown-linux-gnu"
+		}
 		for _, op := range []string{"COMISS", "COMISD", "UCOMISS", "UCOMISD", "VCOMISS", "VCOMISD", "VUCOMISS", "VUCOMISD"} {
 			t.Run(arch+"/"+op, func(t *testing.T) {
 				source := x86DefinedZeroAFSource(arch, "status", op+" X0,X1")
@@ -100,7 +108,7 @@ func TestX86DefinedZeroAFExistingCompareWriterControls(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				ir, err := Translate(file, Options{Goarch: arch,
+				ir, err := Translate(file, Options{Goarch: arch, TargetTriple: triple,
 					Sigs: map[string]FuncSig{"status": {Name: "status", Ret: Void}},
 				})
 				if err != nil || strings.Count(ir, "store i1 false, ptr %flags_af") != 2 {

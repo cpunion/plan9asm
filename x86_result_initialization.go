@@ -432,6 +432,9 @@ func x86ResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOff
 	if accepted, known := x86ResultPackedConversionStep(ins, state, owned, arch); known {
 		return accepted
 	}
+	if accepted, known := x86ResultCOMIStep(ins, state, owned, arch); known {
+		return accepted
+	}
 	if accepted, known := x86ResultScalarFloatIntegerStep(ins, state, owned, resultOffset, arch); known {
 		return accepted
 	}

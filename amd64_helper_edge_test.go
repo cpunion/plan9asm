@@ -1311,7 +1311,7 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"call double @llvm.experimental.constrained.fmul.f64",
 		"call double @llvm.experimental.constrained.fdiv.f64",
 		"fneg double",
-		"fcmp ueq double",
+		`call { i8, i8, i8 } asm sideeffect "comisd $3, $4; setb $0; sete $1; setp $2"`,
 		"fcmp ord double",
 		"call double @llvm.sqrt.f64",
 		`call i32 asm sideeffect "cvtsd2sil $1, $0"`,

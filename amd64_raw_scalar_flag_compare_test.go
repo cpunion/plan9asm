@@ -2,11 +2,7 @@ package plan9asm
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -196,16 +192,7 @@ func TestX86ScalarFlagCompareGoRejectedForms(t *testing.T) {
 			for _, args := range []string{" Y0,X1", " X0,Y1", " Z0,X1", " (AX),(BX)", " X0,K1,X1", ".Z X0,X1", ".BCST (AX),X1", ".SAE (AX),X1", ".RN_SAE X0,X1"} {
 				line := op + args
 				source := "TEXT rejected(SB),4,$0-0\n" + line + "\nRET\n"
-				dir := t.TempDir()
-				path := filepath.Join(dir, "rejected.s")
-				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-					t.Fatal(err)
-				}
-				cmd := exec.Command("go", "tool", "asm", "-o", filepath.Join(dir, "rejected.o"), path)
-				cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+arch)
-				if output, err := cmd.CombinedOutput(); err == nil {
-					t.Fatalf("Go %s accepted %s: %s", arch, line, output)
-				}
+				goAssemblerOracleOutput(t, arch, source, "", false)
 				file, err := Parse(ArchAMD64, source)
 				if err != nil {
 					t.Fatal(err)
@@ -222,15 +209,9 @@ func TestX86ScalarFlagCompareGoRejectedForms(t *testing.T) {
 	}
 }
 
-func TestX86ScalarFlagCompareRuntime(t *testing.T) {
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("execution requires amd64 or Rosetta; separate five-target object tests are required")
-	}
+func x86COMIRawNativeCompare(t *testing.T) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
 	index := 0
@@ -267,13 +248,7 @@ func TestX86ScalarFlagCompareRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var commandPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		commandPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: triple, Sigs: sigs})
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,5 +281,17 @@ static int check(void (*fn)(const void *,const void *,void *),int isDouble) {
 }
 int main(void) {
 ` + checks.String() + "return 0;\n}\n"
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "scalar_flag_compare", triple, ir, mainC, commandPrefix)
+	for _, optimized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("IR_O2=%v", optimized), func(t *testing.T) {
+			input := ir
+			if optimized {
+				input = x86MulDivRoundOptimize(t, input)
+			}
+			for _, backend := range []string{"-O0", "-O2"} {
+				t.Run("backend"+backend, func(t *testing.T) {
+					execution.compileAndRunLLVM(t, "raw-comi", input, mainC, backend)
+				})
+			}
+		})
+	}
 }

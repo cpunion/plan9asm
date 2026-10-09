@@ -10,9 +10,9 @@ import (
 	"testing"
 )
 
-// No MXCSR/NaN-exception or SAE-trap permission is inferred from this test.
-// The first-party source executes legacy SSE for the native original oracle;
-// VEX/EVEX are independently assembled, and their translated status is tested.
+// Every ISA partition executes the original Go opcode and LLVM lowering on
+// its required execution owner. This checks integer flags and whole inputs;
+// separate COMI status/fault oracles check MXCSR and exceptional effects.
 const x86ScalarCompareAFGoReference = `package scalarstatus
 
 import (
@@ -66,13 +66,30 @@ func TestOriginalScalarCompareStatus(t *testing.T) {
 `
 
 func TestCrossLinuxRuntimeMatrixX86ScalarCompareAFOriginalGo(t *testing.T) {
-	x86FloatAddSubRuntimeTools(t)
+	x86ScalarCompareAFOriginalGo(t, x86FloatCompareSSE)
+}
+
+func x86ScalarCompareAFRuntimeCases(axis x86FloatCompareRuntimeISA) []x86ScalarCompareAFCase {
 	var cases []x86ScalarCompareAFCase
-	for _, row := range x86ScalarCompareAFCases("amd64", false) {
-		if !strings.HasPrefix(row.op, "V") {
+	for _, row := range x86ScalarCompareAFCases("amd64", true) {
+		owner := x86FloatCompareSSE
+		if strings.HasPrefix(row.op, "V") {
+			owner = x86FloatCompareVEX
+			if row.dst >= 16 || row.src >= 16 || strings.HasSuffix(row.op, ".SAE") {
+				owner = x86FloatCompareEVEX
+			}
+		}
+		if owner == axis {
 			cases = append(cases, row)
 		}
 	}
+	return cases
+}
+
+func x86ScalarCompareAFOriginalGo(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	x86FloatCompareRuntimeTools(t, axis)
+	cases := x86ScalarCompareAFRuntimeCases(axis)
 	var declarations, kernels strings.Builder
 	kernels.WriteString("var kernels=[]kernel{\n")
 	for _, row := range cases {
@@ -106,9 +123,9 @@ func TestCrossLinuxRuntimeMatrixX86ScalarCompareAFOriginalGo(t *testing.T) {
 	command.Dir = dir
 	command.Env = append(os.Environ(), "GOENV=off", "GOWORK=off", "GOTOOLCHAIN=local", "GOARCH=amd64", "CGO_ENABLED=0", "GOMAXPROCS=2")
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
-		t.Fatalf("actual original Go SSE status: %v\n%s", err, output)
+		t.Fatalf("actual original Go ISA%d status: %v\n%s", axis, err, output)
 	}
-	t.Logf("%d original SSE kernels ×81 pairs ×2 AF seeds, all six status bits/LAHF/SETcc and full input/output canaries", len(cases))
+	t.Logf("%d original ISA%d kernels ×81 pairs ×2 AF seeds, all six status bits/LAHF/SETcc and full input/output canaries", len(cases), axis)
 }
 
 const x86ScalarCompareAFCReference = `
@@ -175,8 +192,13 @@ static int check(kernel fn, unsigned width, unsigned n, unsigned alias,
 `
 
 func TestCrossLinuxRuntimeMatrixX86ScalarCompareAFLLVM(t *testing.T) {
-	llc, clang, triple, prefix := x86FloatAddSubRuntimeTools(t)
-	cases := x86ScalarCompareAFCases("amd64", true)
+	x86ScalarCompareAFLLVM(t, x86FloatCompareSSE)
+}
+
+func x86ScalarCompareAFLLVM(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, axis)
+	cases := x86ScalarCompareAFRuntimeCases(axis)
 	file, err := Parse(ArchAMD64, x86ScalarCompareAFAssembly("amd64", cases))
 	if err != nil {
 		t.Fatal(err)
@@ -201,15 +223,19 @@ int main(void) {
 ` + checks.String() + "   }\n  }\n }\n return 0;\n}\n"
 	for _, optimized := range []bool{false, true} {
 		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
-			ir, err := Translate(file, x86ScalarCompareAFOptions("amd64", triple, cases))
+			ir, err := Translate(file, x86ScalarCompareAFOptions("amd64", execution.triple, cases))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if optimized {
 				ir = x86MulDivRoundOptimize(t, ir)
 			}
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "scalar-compare-af", triple, ir, main, prefix)
-			t.Logf("%d translated eight-op/SAE kernels ×81 pairs ×2 AF seeds; status semantics only, not native EVEX/exception proof", len(cases))
+			for _, backend := range []string{"-O0", "-O2"} {
+				t.Run("backend"+backend, func(t *testing.T) {
+					execution.compileAndRunLLVM(t, "scalar-compare-af", ir, main, backend)
+				})
+			}
+			t.Logf("%d translated ISA%d kernels ×81 pairs ×2 AF seeds; integer flags and complete input/output canaries", len(cases), axis)
 		})
 	}
 }

@@ -8,31 +8,46 @@ import (
 	"testing"
 )
 
-func x86COMIConstantOracle() (assembly, declarations, original, driver string) {
+func x86COMIConstantOracle(axis x86FloatCompareRuntimeISA) (assembly, declarations, original, driver string, functions int) {
 	var asm, decl, goCalls, cDecl, cCalls strings.Builder
 	index := 0
 	for _, name := range []string{"COMISS", "UCOMISS", "COMISD", "UCOMISD"} {
+		if axis != x86FloatCompareSSE {
+			name = "V" + name
+		}
 		values, one := []uint64{0x7fc12345, 0x7f812345, 1}, uint64(0x3f800000)
 		if strings.HasSuffix(name, "D") {
 			values, one = []uint64{0x7ff8123456789abc, 0x7ff0123456789abc, 1}, 0x3ff0000000000000
 		}
-		for _, bits := range values {
-			for _, dead := range []bool{false, true} {
-				function := fmt.Sprintf("comi%d", index)
-				fmt.Fprintf(&asm, "TEXT ·%s(SB),4,$8-12\nSTMXCSR saved-4(SP)\nMOVQ out+0(FP),DI\n", function)
-				fmt.Fprintf(&asm, "MOVQ $%#x,AX\nMOVQ AX,X0\nMOVQ $%#x,AX\nMOVQ AX,X1\n", bits, one)
-				fmt.Fprintf(&asm, "LDMXCSR csr+8(FP)\n%s X0,X1\n", name)
-				if dead {
-					asm.WriteString("MOVQ $0x77,BX\n")
-				} else {
-					asm.WriteString("PUSHFQ\nPOPQ BX\nANDQ $0x8d5,BX\n")
+		forms := []struct{ suffix, source, destination string }{{"", "X0", "X1"}}
+		if axis == x86FloatCompareEVEX {
+			forms = []struct{ suffix, source, destination string }{
+				{"", "X16", "X17"}, {"", "X30", "X31"},
+				{".SAE", "X0", "X1"}, {".SAE", "X16", "X17"},
+			}
+		}
+		for _, form := range forms {
+			for _, bits := range values {
+				for _, dead := range []bool{false, true} {
+					function := fmt.Sprintf("comi%d", index)
+					fmt.Fprintf(&asm, "TEXT ·%s(SB),4,$8-12\nSTMXCSR saved-4(SP)\nMOVQ out+0(FP),DI\n", function)
+					fmt.Fprintf(&asm, "MOVQ $%#x,AX\nMOVQ AX,X0\nMOVQ $%#x,AX\nMOVQ AX,X1\n", bits, one)
+					if form.source != "X0" {
+						fmt.Fprintf(&asm, "VMOVAPS X0,%s\nVMOVAPS X1,%s\n", form.source, form.destination)
+					}
+					fmt.Fprintf(&asm, "LDMXCSR csr+8(FP)\n%s%s %s,%s\n", name, form.suffix, form.source, form.destination)
+					if dead {
+						asm.WriteString("MOVQ $0x77,BX\n")
+					} else {
+						asm.WriteString("PUSHFQ\nPOPQ BX\nANDQ $0x8d5,BX\n")
+					}
+					asm.WriteString("MOVQ BX,(DI)\nSTMXCSR 8(DI)\nLDMXCSR saved-4(SP)\nRET\n")
+					fmt.Fprintf(&decl, "func %s(out *[4]uint64, csr uint32)\n", function)
+					fmt.Fprintf(&goCalls, "check(%d,%s)\n", index, function)
+					fmt.Fprintf(&cDecl, "extern void %s(uint64_t*,uint32_t);\n", function)
+					fmt.Fprintf(&cCalls, "check(%d,%s);\n", index, function)
+					index++
 				}
-				asm.WriteString("MOVQ BX,(DI)\nSTMXCSR 8(DI)\nLDMXCSR saved-4(SP)\nRET\n")
-				fmt.Fprintf(&decl, "func %s(out *[4]uint64, csr uint32)\n", function)
-				fmt.Fprintf(&goCalls, "check(%d,%s)\n", index, function)
-				fmt.Fprintf(&cDecl, "extern void %s(uint64_t*,uint32_t);\n", function)
-				fmt.Fprintf(&cCalls, "check(%d,%s);\n", index, function)
-				index++
 			}
 		}
 	}
@@ -58,16 +73,39 @@ static void check(int index,void (*fn)(uint64_t*,uint32_t)) {
     }
 }
 ` + cDecl.String() + "int main(void){\n" + cCalls.String() + "return 0;}\n"
-	return asm.String(), decl.String(), original, driver
+	return asm.String(), decl.String(), original, driver, index
 }
 
 func TestCrossLinuxRuntimeMatrixX86COMIOriginalConstantsAndMXCSR(t *testing.T) {
-	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareSSE)
-	assembly, declarations, main, driver := x86COMIConstantOracle()
+	x86COMIOriginalConstantsAndMXCSR(t, x86FloatCompareSSE)
+}
+
+func TestX86COMICompleteStatusOriginalInventory(t *testing.T) {
+	for _, axis := range []x86FloatCompareRuntimeISA{x86FloatCompareSSE, x86FloatCompareVEX, x86FloatCompareEVEX} {
+		assembly, _, _, _, functions := x86COMIConstantOracle(axis)
+		goAssemblerOracleOutput(t, "amd64", assembly, "", true)
+		want := 24
+		if axis == x86FloatCompareEVEX {
+			want = 96
+		}
+		if functions != want {
+			t.Fatal("changed constant status denominator", axis, functions)
+		}
+	}
+}
+
+func x86COMIOriginalConstantsAndMXCSR(t *testing.T, axis x86FloatCompareRuntimeISA) {
+	t.Helper()
+	execution := x86FloatCompareRuntimeTools(t, axis)
+	assembly, declarations, main, driver, count := x86COMIConstantOracle(axis)
 	original := x86ScalarFloatIntegerOriginalOutput(t, execution, assembly, main)
 	want := strings.Split(strings.TrimSpace(string(original)), "\n")
-	if len(want) != 192 {
-		t.Fatalf("original Go produced %d rows, want 24 functions x 8 MXCSR controls", len(want))
+	expected := 24
+	if axis == x86FloatCompareEVEX {
+		expected = 96
+	}
+	if count != expected || len(want) != expected*8 {
+		t.Fatalf("original Go produced %d functions/%d rows, want %d functions x 8 MXCSR controls", count, len(want), expected)
 	}
 	for _, api := range []string{"text", "module", "Go"} {
 		t.Run(api, func(t *testing.T) {

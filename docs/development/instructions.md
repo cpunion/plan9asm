@@ -219,6 +219,17 @@ through a synchronous subtest. Primary references are
 [LLVM 22 LangRef](https://releases.llvm.org/22.1.0/docs/LangRef.html)
 (`fptosi` poison and inline-assembly constraints), not software-value parity alone.
 
+All eight scalar COMI/UCOMI names share Go's twelve complete encoder rows,
+read-only scalar input widths and native MXCSR/FLAGS effects. A pure LLVM
+relation loses signaling-NaN distinctions and dead exceptions. Preserve the
+actual EVEX generation, including low-register raw encodings, and register-only
+SAE; no masks, broadcast or vector writes follow. Source-accepted mode32 high
+registers lack a physical binding and remain Context. A matching explicit x86
+target is required, even for dead source. SSE original-Go/state/guard-page
+oracles do not stand in for required Linux AMD64 native VEX/EVEX, wide-register
+preservation and unmasked IE/DE/SAE execution. Object and runtime reports retain
+those different scopes; typed byte effects grant no new memory ownership.
+
 The CLI captures a private inventory at its actual package-load boundary and
 rechecks complete compiled Go sources with that load's dependency types and
 target sizes only for raw-return candidates. All selected assembly and CPP

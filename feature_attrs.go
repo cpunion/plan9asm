@@ -72,6 +72,17 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 			if moveArch == "" {
 				moveArch = "amd64"
 			}
+			if form, known, err := x86COMIProperties(ins, moveArch); known && err == nil {
+				if form.evex {
+					add("+avx512f")
+				} else if form.spec.vector {
+					add("+avx")
+				} else if form.spec.bits == 64 {
+					add("+sse2")
+				} else {
+					add("+sse")
+				}
+			}
 			if form, known, err := amd64PackedVectorMoveProperties(ins, moveArch); known && err == nil &&
 				form.spec.aligned && form.memory >= 0 && !form.undefinedOpcode() {
 				if form.nativeEVEX(ins) {

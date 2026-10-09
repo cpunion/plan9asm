@@ -5055,6 +5055,14 @@ func TestTranslateX86VectorScalarFlagCompareCompleteGoAssemblerForms(t *testing.
 					"vectorscalarflagcompareforms": {Name: "vectorscalarflagcompareforms", Ret: Void},
 				},
 			})
+			if target.goarch == "386" {
+				if !errors.Is(err, ErrProbeNeedsContext) || !strings.Contains(err.Error(), "physical mode32 high-X") {
+					t.Fatalf("source-accepted high banks lack a physical 386 register binding: %v", err)
+				}
+				// The separate complete AF object matrix retains all legal
+				// physical X0-X7 formats on both 386 target platforms.
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

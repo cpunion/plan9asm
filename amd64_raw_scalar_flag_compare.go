@@ -60,5 +60,7 @@ func decodedX86ScalarFlagCompareInstruction(code []byte, mode int) (Instr, int, 
 		return Instr{}, 0, true, err
 	}
 	dst := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", int(code[p.modRM]>>3&7)+p.r*8))}
-	return Instr{Op: op, Args: []Operand{source, dst}, Raw: fmt.Sprintf("%s %s, %s", op, source.String(), dst.String())}, p.modRM + size, true, nil
+	return Instr{Op: op, Args: []Operand{source, dst}, Raw: fmt.Sprintf("%s %s, %s", op, source.String(), dst.String()),
+		x86ScalarFlagCompareEVEX: p.evex,
+	}, p.modRM + size, true, nil
 }

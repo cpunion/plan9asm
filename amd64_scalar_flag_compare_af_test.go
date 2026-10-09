@@ -118,21 +118,25 @@ func TestX86ScalarCompareAFCompleteObjects(t *testing.T) {
 			if receipt == nil {
 				t.Fatal("missing actual source/object receipt")
 			}
-			file, err := Parse(ArchAMD64, source)
-			if err != nil {
-				t.Fatal(err)
+			var declarations strings.Builder
+			for _, row := range cases {
+				fmt.Fprintf(&declarations, "func %s(*[96]byte,*[16]byte,*[16]byte,uintptr)\n", row.name)
 			}
-			ir, err := Translate(file, x86ScalarCompareAFOptions(target.arch, target.triple, cases))
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, optimized := range []bool{false, true} {
-				t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
-					objectIR := ir
-					if optimized {
-						objectIR = x86MulDivRoundOptimize(t, objectIR)
+			for _, api := range []string{"text", "module", "Go"} {
+				t.Run(api, func(t *testing.T) {
+					ir, err := x86ScalarFPBitViewAPI(t, source, declarations.String(), target.arch, target.triple, api)
+					if err != nil {
+						t.Fatal(err)
 					}
-					compileLLVMToObject(t, llc, target.triple, "scalar-status.ll", "scalar-status.o", objectIR)
+					for _, optimized := range []bool{false, true} {
+						t.Run(fmt.Sprintf("IR_O2=%t", optimized), func(t *testing.T) {
+							objectIR := ir
+							if optimized {
+								objectIR = x86MulDivRoundOptimize(t, objectIR)
+							}
+							compileLLVMToObject(t, llc, target.triple, "scalar-status.ll", "scalar-status.o", objectIR)
+						})
+					}
 				})
 			}
 			t.Logf("%d eight-op register/memory/SAE kernels; physical mode32 bank stays X0-X7", len(cases))
