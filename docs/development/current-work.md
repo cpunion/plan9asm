@@ -125,7 +125,8 @@ policy root, Node policy, actionlint and shell checks. Earlier setup and exact
 Go temporary-prefix-map nonce wrapper failures remain retained; the new wrapper
 normalizes only the actual direct-child uint32 nonce and preserves raw input.
 These commits are integrated into the successor; complete legacy runner,
-race/Go-1.20 and changed combined-head gates remain required.
+race/Go-1.20 results are recorded below; other changed combined-head gates
+remain required.
 
 At exact combined head `8f095690`, the complete runner package now closes
 ordinary and race with 59 roots/155 children each, zero failure/skip/incomplete,
@@ -134,6 +135,13 @@ readback verifies the complete actual inventories, raw EOF and closed owners.
 The 35 Node policy tests, actionlint, shell checks and runner build/vet also
 close. This is the runner package, not the complete root/module, native CI,
 SDK benchmark or an external-library pass. The original timeout remains failed.
+
+At the same frozen head, the original five-architecture official inventory
+script closes naturally, and root independently replays its unchanged Python
+checker against all five retained complete reports. Source, SDK, selected tools
+and report generations remain stable. All original fingerprints match and
+unsupported/parse-error counts are zero, but 260 forms still require context.
+This inventory check is not complete LLVM object, ABI or runtime coverage.
 
 The GNU C-label component retains its actual Linux compiler RED at `f6e7ea58`.
 The test-only `ebfce45f` keeps the exact LLVM symbol while distinguishing
