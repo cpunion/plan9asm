@@ -62,6 +62,10 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 	if !recognized {
 		return x86LockScalarRMWForm{}, false, nil
 	}
+	if spec.bitString {
+		form, _, err := x86BitTestProperties(op, ins, arch)
+		return x86LockScalarRMWForm{spec: spec, source: form.index, destination: form.destination}, true, err
+	}
 	fail := func(reason string) (x86LockScalarRMWForm, bool, error) {
 		return x86LockScalarRMWForm{}, true, fmt.Errorf("%s %s %s: %q", arch, op, reason, ins.Raw)
 	}
@@ -97,26 +101,6 @@ func x86LockScalarRMWProperties(op Op, ins Instr, arch string) (x86LockScalarRMW
 			}
 		} else if !isAMD64MemoryOperand(form.destination) {
 			return fail("destination is outside the Go memory class")
-		}
-	} else if spec.bitString {
-		if form.source.Kind == OpImm {
-			value := form.source.Imm
-			if arch == "386" {
-				value = int64(int32(value)) // Actual Go oclass truncates before Yi8.
-			}
-			if value < -128 || value > 127 {
-				return fail("bit immediate is outside Go's signed Yi8 class")
-			}
-			form.source.Imm = value
-		} else if form.source.Kind != OpReg || !isX86YrlRegisterForArch(form.source.Reg, arch) {
-			return fail("bit index is outside Go's Yi8/Yrl rows")
-		}
-		if form.destination.Kind == OpReg {
-			if !isX86YrlRegisterForArch(form.destination.Reg, arch) {
-				return fail("destination is outside Go's Yml class")
-			}
-		} else if !isAMD64MemoryOperand(form.destination) {
-			return fail("destination is outside Go's Yml class")
 		}
 	} else {
 		if err := validateAMD64ScalarAddSubOperands(arch, base, spec.bits, form.source, form.destination, ins); err != nil {

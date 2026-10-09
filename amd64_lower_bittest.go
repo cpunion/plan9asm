@@ -1,56 +1,29 @@
 package plan9asm
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // lowerBitTestFamily implements the complete Go 1.27 ybtl table. BTW/L/Q,
 // BTCW/L/Q, BTRW/L/Q, and BTSW/L/Q all accept exactly either a signed imm8 or
 // a Yrl register bit index followed by a Yml register/memory destination.
 func (c *amd64Ctx) lowerBitTestFamily(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
+	arch := c.goarch
+	if arch == "" {
+		arch = "amd64"
 	}
-	stem, bits, recognized := amd64BitTestProperties(baseOp)
-	if !recognized {
-		return false, false, nil
+	form, known, err := x86BitTestProperties(op, ins, arch)
+	if !known || err != nil {
+		return known, false, err
 	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("%s %s does not accept instruction suffixes: %q", c.goarch, baseOp, ins.Raw)
+	if form.destination.Kind != OpReg && (ins.x86AddressBits != 0 || ins.x86UnboundAddressOverride) {
+		return true, false, fmt.Errorf("%w: bit string needs its original native address size", ErrProbeNeedsContext)
 	}
-	if c.goarch == "386" && bits == 64 {
-		return true, false, fmt.Errorf("386 %s is illegal in 32-bit mode: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 2 {
-		return true, false, fmt.Errorf("%s %s expects bit index and destination: %q", c.goarch, baseOp, ins.Raw)
-	}
-
-	indexOperand := ins.Args[0]
-	if indexOperand.Kind == OpImm {
-		if indexOperand.Imm < -128 || indexOperand.Imm > 127 {
-			return true, false, fmt.Errorf("%s %s index is outside Go 1.27's signed-imm8 class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if indexOperand.Kind != OpReg || !isX86YrlRegisterForArch(indexOperand.Reg, c.goarch) {
-		return true, false, fmt.Errorf("%s %s index is outside Go 1.27's Yi8/Yrl classes: %q", c.goarch, baseOp, ins.Raw)
-	}
-	destination := ins.Args[1]
-	if destination.Kind == OpReg {
-		if !isX86YrlRegisterForArch(destination.Reg, c.goarch) {
-			return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yml class: %q", c.goarch, baseOp, ins.Raw)
-		}
-	} else if !isAMD64MemoryOperand(destination) {
-		return true, false, fmt.Errorf("%s %s destination is outside Go 1.27's Yml class: %q", c.goarch, baseOp, ins.Raw)
-	}
-
+	stem, bits := form.stem, form.bits
 	typ := amd64IntegerTypeForBits(bits)
-	bitIndex, memoryWordOffset, registerIndex, err := c.bitTestIndex(indexOperand, bits, typ)
+	bitIndex, memoryWordOffset, registerIndex, err := c.bitTestIndex(form.index, bits, typ)
 	if err != nil {
 		return true, false, err
 	}
-	value, store, err := c.loadBitTestDestination(destination, typ, memoryWordOffset, registerIndex)
+	value, store, err := c.loadBitTestDestination(form.destination, typ, memoryWordOffset, registerIndex)
 	if err != nil {
 		return true, false, err
 	}
@@ -115,6 +88,10 @@ func amd64BitTestProperties(op string) (stem string, bits int, ok bool) {
 // bitTestIndex returns the within-word index and, for a register index, the
 // signed byte offset used when a memory destination is treated as an unbounded
 // bit string. The index register has the same width as the instruction.
+// Intel SDM Vol.2A, Bit(BitBase, BitOffset) and BT/BTC/BTR/BTS:
+// https://cdrdv2-public.intel.com/812383/253666-sdm-vol-2a.pdf
+// Immediate high bits are ignored by the CPU; unlike some assemblers, actual
+// Go does not fold them into a new displacement (tested for every imm8).
 func (c *amd64Ctx) bitTestIndex(index Operand, bits int, typ LLVMType) (bitIndex, memoryWordOffset string, registerIndex bool, err error) {
 	if index.Kind == OpImm {
 		return fmt.Sprintf("%d", index.Imm&int64(bits-1)), "", false, nil
@@ -152,51 +129,65 @@ func bitTestLog2(bits int) int {
 }
 
 func (c *amd64Ctx) loadBitTestDestination(destination Operand, typ LLVMType, memoryWordOffset string, registerIndex bool) (string, func(string) error, error) {
-	if !registerIndex || destination.Kind == OpReg || destination.Kind == OpFP {
+	if destination.Kind == OpReg {
 		return c.loadIntDestination(destination, typ)
 	}
-
-	var address string
-	var addressSpace int
-	switch destination.Kind {
-	case OpMem:
-		var err error
-		address, err = c.addrFromPlainMem(destination.Mem)
-		if err != nil {
-			return "", nil, err
+	if destination.Kind == OpFP {
+		if registerIndex {
+			return "", nil, fmt.Errorf("%w: a register-indexed FP bit string has no fixed logical byte span", ErrProbeNeedsContext)
 		}
-		switch destination.Mem.Segment {
-		case "":
-		case GS:
-			addressSpace = 256
-		case FS:
-			addressSpace = 257
-		default:
-			return "", nil, fmt.Errorf("unsupported x86 segment register %s", destination.Mem.Segment)
-		}
-	case OpSym:
-		pointer, err := c.ptrFromSB(destination.Sym)
-		if err != nil {
-			return "", nil, err
-		}
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = ptrtoint ptr %s to i64\n", converted, pointer)
-		address = "%" + converted
-	default:
-		return "", nil, fmt.Errorf("expected register or memory destination, got %s", destination.String())
+		return c.loadBitTestFPDestination(destination, typ)
 	}
-	adjusted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = add i64 %s, %s\n", adjusted, address, memoryWordOffset)
-	pointer := c.newTmp()
-	pointerType := "ptr"
-	if addressSpace != 0 {
-		pointerType = fmt.Sprintf("ptr addrspace(%d)", addressSpace)
+	pointer, pointerType, _, err := c.packedVectorMemoryPointer(destination)
+	if err != nil {
+		return "", nil, err
 	}
-	fmt.Fprintf(c.b, "  %%%s = inttoptr i64 %%%s to %s\n", pointer, adjusted, pointerType)
+	if registerIndex {
+		adjusted := c.newTmp()
+		// Signed floor division selects the complete containing word. Keep
+		// the original pointer address space and its target-width wrapping.
+		fmt.Fprintf(c.b, "  %%%s = getelementptr i8, %s %s, i64 %s\n", adjusted, pointerType, pointer, memoryWordOffset)
+		pointer = "%" + adjusted
+	}
 	loaded := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = load %s, %s %%%s, align 1\n", loaded, typ, pointerType, pointer)
+	// Intel SDM Vol.2A BT/BTC/BTR/BTS: even a dead CF retains the complete
+	// native read/fault; modifying forms also retain their write, including
+	// when the selected bit already has the requested value. This is not LOCK.
+	fmt.Fprintf(c.b, "  %%%s = load volatile %s, %s %s, align 1\n", loaded, typ, pointerType, pointer)
 	return "%" + loaded, func(value string) error {
-		fmt.Fprintf(c.b, "  store %s %s, %s %%%s, align 1\n", typ, value, pointerType, pointer)
+		fmt.Fprintf(c.b, "  store volatile %s %s, %s %s, align 1\n", typ, value, pointerType, pointer)
 		return nil
+	}, nil
+}
+
+func (c *amd64Ctx) loadBitTestFPDestination(destination Operand, typ LLVMType) (string, func(string) error, error) {
+	bits, _ := amd64IntegerTypeBits(typ)
+	width := bits / 8
+	if err := c.validateX86PackedShiftFPSpan(destination.FPOffset, width); err != nil {
+		return "", nil, err
+	}
+	result := false
+	for offset := destination.FPOffset; offset < destination.FPOffset+int64(width); offset++ {
+		slot, output, _ := c.fpVectorSlot(offset)
+		if slot.Type == Ptr || slot.Type == I1 {
+			return "", nil, fmt.Errorf("%w: FP bit string needs declared numerical bytes", ErrProbeNeedsContext)
+		}
+		result = result || output
+	}
+	if result {
+		if err := c.scalarFPResultInitialized(); err != nil {
+			return "", nil, err
+		}
+	}
+	bytes, err := c.loadX86PackedShiftBytes(destination, width, true)
+	if err != nil {
+		return "", nil, err
+	}
+	value := c.newTmp()
+	fmt.Fprintf(c.b, "  %%%s = bitcast <%d x i8> %s to %s\n", value, width, bytes, typ)
+	return "%" + value, func(value string) error {
+		bytes := c.newTmp()
+		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to <%d x i8>\n", bytes, typ, value, width)
+		return c.storeFPVectorBytes(destination.FPOffset, width, "%"+bytes, "")
 	}, nil
 }
