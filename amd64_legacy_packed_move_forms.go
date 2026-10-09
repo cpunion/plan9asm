@@ -16,6 +16,7 @@ type x86LegacyPackedMoveForm struct {
 	source, destination Operand
 	memory              int // -1 for a register copy
 	memoryWrite         bool
+	aligned             bool // Native m128 requires a separate actual-address proof.
 }
 
 // This is Go operand shape only. In particular, accepting a memory operand
@@ -28,6 +29,10 @@ func x86LegacyPackedMoveProperties(op Op, ins Instr, arch string) (x86LegacyPack
 		return x86LegacyPackedMoveForm{}, false, nil
 	}
 	form := x86LegacyPackedMoveForm{memory: -1}
+	switch Op(name) {
+	case "MOVOA", "MOVO", "MOVAPS", "MOVAPD":
+		form.aligned = true
+	}
 	fail := func() (x86LegacyPackedMoveForm, bool, error) {
 		return form, true, fmt.Errorf("%s %s outside Go whole-128 legacy move grammar: %q", arch, op, ins.Raw)
 	}

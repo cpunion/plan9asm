@@ -47,10 +47,11 @@ func TestX86LegacyPackedMoveGrammarEffectAndMemoryShapeAgree(t *testing.T) {
 								t.Fatal("FP observer has a different native width", width, write, known)
 							}
 						}
-						// Shape observation must not register a caller/source-stack
-						// transport which this batch has not independently proved.
-						if x86CallerVectorMoveKnown(ins) || x86SourceStackInstructionKnown(ins, "MOVQ", "Q", arch) {
-							t.Fatal("byte descriptor granted an unrelated source-stack admission")
+						// Typed caller recognition is not a standalone source-stack
+						// or memory permission; the complete actual caller remains
+						// mandatory before the private transfer can be consumed.
+						if !x86CallerVectorMoveKnown(ins) || x86SourceStackInstructionKnown(ins, "MOVQ", "Q", arch) {
+							t.Fatal("legacy move lost typed caller registration or granted a non-caller source stack")
 						}
 					}
 					if before != fmt.Sprintf("%#v", ins) {
