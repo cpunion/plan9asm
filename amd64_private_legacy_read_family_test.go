@@ -52,12 +52,14 @@ func x86PrivateLegacyReadProved(t *testing.T, body string, width int64) (Func, F
 	fn := normalized.Funcs[0]
 	found := 0
 	for ordinal, ins := range fn.Instrs {
-		access, present := ins.x86CallerMemory[0]
-		if !present {
+		// Native pointer imports have their own exact FP/physical-stack
+		// certificate. Select the actual DI-to-X numerical source role first.
+		if len(ins.Args) != 2 || ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != DI ||
+			ins.Args[1].Kind != OpReg || !isAMD64XReg(ins.Args[1].Reg) {
 			continue
 		}
-		if access.write || access.width != width || !x86CallerMemoryCertified(ins, 0) ||
-			ins.Args[0].Kind != OpMem || ins.Args[0].Mem.Base != DI {
+		access, present := ins.x86CallerMemory[0]
+		if !present || access.write || access.width != width || !x86CallerMemoryCertified(ins, 0) {
 			t.Fatalf("instruction %d lacks its exact numerical-source read%d certificate", ordinal, width)
 		}
 		found++
