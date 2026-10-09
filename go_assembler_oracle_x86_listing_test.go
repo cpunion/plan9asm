@@ -43,7 +43,10 @@ func goAssemblerOracleX86SourceDiagnostic(source, arch, output string) bool {
 		ordinary = append(ordinary, line)
 	}
 	return goasmoracle.SourceDiagnosticLineWithListing(source, strings.Join(ordinary, "\n"), 0,
-		goAssemblerOracleX86Listing)
+		func(original, listing []string) bool {
+			return goAssemblerOracleX86Listing(original, listing) ||
+				goAssemblerOracleX86AddressListing(original, listing, arch)
+		})
 }
 
 func goAssemblerOracleX86Mode32Listing(original, listing []string) bool {
@@ -63,7 +66,8 @@ func goAssemblerOracleX86Mode32Listing(original, listing []string) bool {
 		}
 	}
 	instruction := listing[:len(listing)-4]
-	return reflect.DeepEqual(original, instruction) || goAssemblerOracleX86Listing(original, instruction)
+	return reflect.DeepEqual(original, instruction) || goAssemblerOracleX86Listing(original, instruction) ||
+		goAssemblerOracleX86AddressListing(original, instruction, "386")
 }
 
 func goAssemblerOracleX86Statement(tokens []string) (opcode, suffix string, args [][]string, ok bool) {
