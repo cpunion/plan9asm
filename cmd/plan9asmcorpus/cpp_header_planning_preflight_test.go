@@ -102,24 +102,34 @@ func TestCPPHeaderPlanningSourcePreflightRetainsOriginalBindings(t *testing.T) {
 }
 
 func TestCPPHeaderPlanningUnsupportedStillRequiresActualCompiler(t *testing.T) {
-	testCPPHeaderPlanningStillRequiresActualCompiler(t, false)
+	testCPPHeaderPlanningStillRequiresActualCompiler(t, false, false)
 }
 
 func TestCPPHeaderPlanningIndependentImportsStillRequireActualCompiler(t *testing.T) {
-	testCPPHeaderPlanningStillRequiresActualCompiler(t, true)
+	testCPPHeaderPlanningStillRequiresActualCompiler(t, true, false)
 }
 
-func testCPPHeaderPlanningStillRequiresActualCompiler(t *testing.T, independent bool) {
+func TestCPPHeaderPlanningUninstantiatedGenericStillRequiresActualCompiler(t *testing.T) {
+	testCPPHeaderPlanningStillRequiresActualCompiler(t, true, true)
+}
+
+func testCPPHeaderPlanningStillRequiresActualCompiler(t *testing.T, independent, generic bool) {
 	t.Helper()
 	candidate := discoveryCandidate{Module: "example.invalid/header", Version: "v1.0.0", AsmFiles: []string{"probe.s"}}
 	property := "type Property fmt.Stringer"
 	if independent {
 		property = "var _ = fmt.Sprintf"
 	}
+	invalid := "func Invalid() { _ = MissingOriginalValue }"
+	diagnostic := "undefined: MissingOriginalValue"
+	if generic {
+		invalid = "type Broken[T any] struct { Value MissingGenericType }"
+		diagnostic = "undefined: MissingGenericType"
+	}
 	sources := map[string]string{
 		"go.mod": "module example.invalid/header\ngo 1.20\n",
 		"header.go": "package header\nimport \"fmt\"\n" + property + "\n" +
-			"func probe() uint64\nfunc Invalid() { _ = MissingOriginalValue }\n",
+			"func probe() uint64\n" + invalid + "\n",
 		"probe.s": "TEXT ·probe(SB),4,$0-8\nMOVQ $7,ret+0(FP)\nRET\n",
 	}
 	download := fixtureProfileModuleDownload(t, candidate, sources)
@@ -169,7 +179,7 @@ func testCPPHeaderPlanningStillRequiresActualCompiler(t *testing.T, independent 
 		"list", "-p=2", "-mod=readonly", "-export", "-compiled", "-json", ".")
 	var exit *exec.ExitError
 	if !errors.As(err, &exit) || exit.ExitCode() != 1 ||
-		!strings.Contains(string(stderr), "header.go:5:") || !strings.Contains(string(stderr), "undefined: MissingOriginalValue") {
+		!strings.Contains(string(stderr), "header.go:5:") || !strings.Contains(string(stderr), diagnostic) {
 		t.Fatalf("unsupported planning domain hid an actual final compiler failure: %v\n%s\n%s", err, stdout, stderr)
 	}
 	if after, err := discoveryFeatureFileSHA256(goBinary); err != nil || after != driverSHA {

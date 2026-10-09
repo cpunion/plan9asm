@@ -7,16 +7,24 @@ import (
 )
 
 // Native header queries and same-mode declaration queries share the original
-// AST closure machinery, not their consumer capabilities. Every constant/type
-// root is retained; variable initializers and function bodies cannot add native
-// header definitions. Actual compiler acceptance remains independently required.
+// AST closure machinery, not their consumer capabilities. Every constant and
+// nongeneric type root is retained. An uninstantiated generic declaration has
+// no native header definitions, just like variable initializers and function
+// bodies. Actual compiler acceptance remains independently required.
 func requireNativeHeaderRoots(root *instrumentationDeclarationReplay) error {
 	for name := range root.constants {
 		if err := root.requireName(name); err != nil {
 			return err
 		}
 	}
-	for name := range root.types {
+	for name, declaration := range root.types {
+		if declaration.TypeParams != nil && len(declaration.TypeParams.List) != 0 {
+			// Go omits these from AsmHdrDecls. This only removes a top-level
+			// property root: a concrete alias, field or constant referring to
+			// the declaration must still close through requireName/requireType.
+			// Do not broaden the shared instrumentation type/ABI contract.
+			continue
+		}
 		if err := root.requireName(name); err != nil {
 			return err
 		}

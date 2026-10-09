@@ -25,8 +25,18 @@ func Probe()
 `
 
 func TestCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t *testing.T) {
+	testCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t, cppImportedHeaderIndependentSource)
+}
+
+func TestCPPUninstantiatedGenericImportedHeaderPlanningKeepsNecessaryCPUProfiles(t *testing.T) {
+	source := cppImportedHeaderIndependentSource + "\ntype Frame[T any] struct { Value T; Next *Frame[T] }\n"
+	testCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t, source)
+}
+
+func testCPPImportedHeaderPlanningKeepsNecessaryCPUProfiles(t *testing.T, source string) {
+	t.Helper()
 	fixture := newConditionFreePlanningFixture(t, "linux/arm64", "", map[string]string{
-		"pkg/decl.go": cppImportedHeaderIndependentSource,
+		"pkg/decl.go": source,
 	})
 	requestsSeen := make(map[string]bool)
 	fixture.plan.headerPlanningCapture = func(request discoveryFeatureProfileRequest,

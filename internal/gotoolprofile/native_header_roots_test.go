@@ -78,12 +78,12 @@ func TestNativeHeaderPropertyRootsMatchActualImportedCompilerHeaders(t *testing.
 
 func TestNativeHeaderPropertyRootsKeepDependentImportsConservative(t *testing.T) {
 	for name, suffix := range map[string]string{
-		"constant":       "const Imported = dep.Value\n",
-		"array length":   "type Imported struct { Values [dep.Count]byte }\n",
-		"named type":     "type Imported dep.Record\n",
-		"struct field":   "type Imported struct { Value dep.Record }\n",
-		"local variable": "const Imported = word.Sizeof(unusedByHeader)\n",
-		"generic type":   "type Imported[T any] struct { Value T }\n",
+		"constant":         "const Imported = dep.Value\n",
+		"array length":     "type Imported struct { Values [dep.Count]byte }\n",
+		"named type":       "type Imported dep.Record\n",
+		"struct field":     "type Imported struct { Value dep.Record }\n",
+		"local variable":   "const Imported = word.Sizeof(unusedByHeader)\n",
+		"concrete generic": "type Generic[T any] struct { Value T }\ntype Concrete = Generic[uint64]\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			sources := map[string]string{"header.go": nativeHeaderIndependentImportSource + suffix}
