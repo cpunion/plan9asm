@@ -86,6 +86,7 @@ func TestGoAssemblerOracleARM64BareFromSymbolRoles(t *testing.T) {
 					strings.Replace(output, "ZOREG", "SBRA", 1),
 					strings.Replace(output, ", 3 7", ", 1 7", 1),
 					strings.Replace(output, ", 3 7", ", 8 7", 1),
+					strings.Replace(output, ", 3 7", ", 3 3", 1),
 					strings.Replace(output, source+":2", source+":3", 1),
 					strings.Replace(output, source+":2", "foreign"+source+":2", 1),
 					strings.Replace(output, "00000", "0", 1),

@@ -34,6 +34,18 @@ var goAssemblerOracleARM64Classes = func() map[string]bool {
 	return result
 }()
 
+var goAssemblerOracleARM64HistoricalClasses = func() map[string]bool {
+	result := make(map[string]bool, len(goAssemblerOracleARM64Classes))
+	for name := range goAssemblerOracleARM64Classes {
+		result[name] = true
+	}
+	delete(result, "LAUTOPOOL")
+	delete(result, "LOREGPOOL")
+	delete(result, "UAUTO32K_16")
+	result["UAUTO32K_8"] = true
+	return result
+}()
+
 func goAssemblerOracleARM64SourceDiagnostic(source, arch, output string) bool {
 	if arch != "arm64" {
 		return false
@@ -73,38 +85,67 @@ func goAssemblerOracleARM64Suffix(suffix string) (string, bool) {
 }
 
 func goAssemblerOracleARM64Listing(original, listing []string) bool {
-	if len(listing) < 9 {
+	for _, slots := range []int{5, 4} {
+		if goAssemblerOracleARM64ListingSchema(original, listing, slots) {
+			return true
+		}
+	}
+	return false
+}
+
+func goAssemblerOracleARM64ListingSchema(original, listing []string, slots int) bool {
+	tailSize := slots + 3 // Complete class directory, comma, From.Type, To.Type.
+	if len(listing) <= tailSize {
 		return false
 	}
-	tail := listing[len(listing)-8:]
-	for _, class := range tail[:5] {
-		if !goAssemblerOracleARM64Classes[class] {
+	tail := listing[len(listing)-tailSize:]
+	classes := goAssemblerOracleARM64Classes
+	if slots == 4 {
+		classes = goAssemblerOracleARM64HistoricalClasses
+	}
+	for _, class := range tail[:slots] {
+		if !classes[class] {
 			return false
 		}
 	}
-	if tail[5] != "," {
+	if tail[slots] != "," {
 		return false
 	}
-	for _, text := range tail[6:] {
+	for _, text := range tail[slots+1:] {
 		kind, err := strconv.Atoi(text)
 		if err != nil || kind < 0 || kind > 14 || strconv.Itoa(kind) != text {
 			return false
 		}
 	}
 	sourceOp, sourceSuffix, args, sourceOK := goAssemblerOracleX86Statement(original)
-	listedOp, listedSuffix, listedArgs, listedOK := goAssemblerOracleX86Statement(listing[:len(listing)-8])
-	if !sourceOK || !listedOK || !reflect.DeepEqual(args, listedArgs) {
+	listedOp, listedSuffix, listedArgs, listedOK := goAssemblerOracleX86Statement(listing[:len(listing)-tailSize])
+	if !sourceOK || !listedOK {
 		return false
 	}
 	canonical, valid := goAssemblerOracleARM64Suffix(sourceSuffix)
 	if !valid || listedSuffix != canonical {
 		return false
 	}
+	alias := ""
 	switch sourceOp {
 	case "B":
-		return listedOp == "JMP"
+		alias = "JMP"
 	case "BL":
-		return listedOp == "CALL"
+		alias = "CALL"
 	}
-	return false
+	if alias == "" || listedOp != alias {
+		return false
+	}
+	if reflect.DeepEqual(args, listedArgs) {
+		return true
+	}
+	// asmJump's two-operand form puts the first operand in From. A bare
+	// symbol is TYPE_MEM/NAME_NONE with zero offset, not a To TYPE_BRANCH
+	// label. Dconv prints only that offset; no label-PC rewrite is allowed.
+	return len(args) == 2 && len(listedArgs) == 2 && len(args[0]) == 1 &&
+		goAssemblerOracleARM64BareSymbol(args[0][0]) &&
+		len(args[1]) == 1 && goAssemblerOracleARM64Register(args[1][0]) &&
+		reflect.DeepEqual(listedArgs[0], []string{"0"}) &&
+		reflect.DeepEqual(args[1], listedArgs[1]) &&
+		tail[0] == "ZOREG" && tail[slots+1] == "3" && tail[slots+2] == "7"
 }
