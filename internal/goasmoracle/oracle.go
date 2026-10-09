@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"text/scanner"
+	"unicode"
 )
 
 func CheckOutcome(source, object string, stdout, stderr []byte, commandErr, contextErr error, wantSuccess bool, focus int, additional func(string, string) bool) error {
@@ -91,25 +92,32 @@ func statementOpcode(statement string) string {
 	var tokens scanner.Scanner
 	tokens.Init(strings.NewReader(statement))
 	tokens.Mode = scanner.ScanIdents | scanner.ScanComments | scanner.SkipComments
+	// Match cmd/asm/internal/lex's identifier role, not a known-opcode list.
+	// Go must be able to diagnose an unknown lowercase/Unicode identifier too.
+	tokens.IsIdentRune = func(ch rune, index int) bool {
+		return unicode.IsLetter(ch) || ch == '_' || ch == '·' || ch == '∕' ||
+			index > 0 && unicode.IsDigit(ch)
+	}
 	tokens.Error = func(_ *scanner.Scanner, _ string) {}
 	if tokens.Scan() != scanner.Ident {
 		return ""
 	}
 	opcode := tokens.TokenText()
-	for tokens.Scan() == '.' {
+	next := tokens.Scan()
+	for next == '.' {
 		if tokens.Scan() != scanner.Ident {
 			return ""
 		}
 		opcode += "." + tokens.TokenText()
+		next = tokens.Scan()
+	}
+	if next == ':' {
+		// A label or label prefix is not this isolated statement's opcode.
+		return ""
 	}
 	// Consume the complete line. A malformed comment later in an operand is
 	// still a scanner failure, never an emitted stderr diagnostic or a match.
 	for tokens.Scan() != scanner.EOF {
-	}
-	for _, digit := range opcode {
-		if digit != '.' && (digit < 'A' || digit > 'Z') && (digit < '0' || digit > '9') {
-			return ""
-		}
 	}
 	if tokens.ErrorCount != 0 {
 		return ""
@@ -136,7 +144,7 @@ func ListingBindsSource(source, position, pc, instruction string) bool {
 	}
 	fields := strings.Fields(instruction)
 	opcode := statementOpcode(lines[line-1])
-	return len(fields) > 1 && opcode != "" && strings.EqualFold(opcode, fields[0])
+	return len(fields) > 1 && opcode != "" && opcode == fields[0]
 }
 
 func SourceDiagnostic(source, output string) bool {
