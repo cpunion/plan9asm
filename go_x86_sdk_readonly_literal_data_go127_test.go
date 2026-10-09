@@ -199,60 +199,64 @@ func TestGoX86SDKReadonlyLiteralDataSourceAndOwnerMutations(t *testing.T) {
 }
 
 func TestGoX86SDKReadonlyLiteralDataContextReentry(t *testing.T) {
-	ctx, source, _ := readonlyLiteralCapture(t)
 	for _, route := range []string{"original", "verification"} {
 		for _, method := range []string{"Err", "Deadline", "Done"} {
-			for _, api := range []string{"Verify", "Readback", "CheckReadback", "Close"} {
-				t.Run(route+"/"+method+"/"+api, func(t *testing.T) {
-					verification, cancel := context.WithCancel(ctx)
-					defer cancel()
-					callback := &sdkASMDataReentrantContext{Context: verification, method: method}
-					captureContext := verification
-					if route == "original" {
-						captureContext = callback
-					}
-					owner, err := CaptureGoX86SDKReadonlyLiteralDataOwner(captureContext, source)
-					if err != nil {
-						t.Fatal(err)
-					}
-					defer owner.Close()
-					raw, err := owner.Readback(ctx)
-					if err != nil {
-						t.Fatal(err)
-					}
-					var nested error
-					callback.callback = func() {
-						if api == "Close" {
-							nested = owner.Close()
-						} else {
-							_, nested = readonlyLiteralInvoke(t, api, owner, verification, raw)
+			t.Run(route+"/"+method, func(t *testing.T) {
+				// Bound one independent callback role, not the cumulative
+				// race-instrumented work of all 24 owner/API combinations.
+				ctx, source, _ := readonlyLiteralCapture(t)
+				for _, api := range []string{"Verify", "Readback", "CheckReadback", "Close"} {
+					t.Run(api, func(t *testing.T) {
+						verification, cancel := context.WithCancel(ctx)
+						defer cancel()
+						callback := &sdkASMDataReentrantContext{Context: verification, method: method}
+						captureContext := verification
+						if route == "original" {
+							captureContext = callback
 						}
-					}
-					callback.armed.Store(true)
-					finished := make(chan error, 1)
-					go func() { finished <- errors.Join(owner.Verify(callback), nested) }()
-					select {
-					case err := <-finished:
-						if api == "Close" {
-							if !errors.Is(err, ErrProbeNeedsContext) || owner.ready {
-								t.Fatal("reentrant Close published a revoked initializer", err)
+						owner, err := CaptureGoX86SDKReadonlyLiteralDataOwner(captureContext, source)
+						if err != nil {
+							t.Fatal(err)
+						}
+						defer owner.Close()
+						raw, err := owner.Readback(ctx)
+						if err != nil {
+							t.Fatal(err)
+						}
+						var nested error
+						callback.callback = func() {
+							if api == "Close" {
+								nested = owner.Close()
+							} else {
+								_, nested = readonlyLiteralInvoke(t, api, owner, verification, raw)
 							}
-						} else if err != nil {
-							t.Fatal("initializer validation callback deadlocked or rejected its actual owner", err)
 						}
-					case <-ctx.Done():
-						// Actual SDK validation can take longer under the race
-						// detector. Use the existing producer/test deadline,
-						// cancel and join this worker before ending the case.
-						cancel()
-						err := <-finished
-						t.Fatal("initializer callback exceeded its existing bounded context", ctx.Err(), err)
-					}
-					if err := source.Verify(ctx); err != nil {
-						t.Fatal("initializer callback disposed its source", err)
-					}
-				})
-			}
+						callback.armed.Store(true)
+						finished := make(chan error, 1)
+						go func() { finished <- errors.Join(owner.Verify(callback), nested) }()
+						select {
+						case err := <-finished:
+							if api == "Close" {
+								if !errors.Is(err, ErrProbeNeedsContext) || owner.ready {
+									t.Fatal("reentrant Close published a revoked initializer", err)
+								}
+							} else if err != nil {
+								t.Fatal("initializer validation callback deadlocked or rejected its actual owner", err)
+							}
+						case <-ctx.Done():
+							// Actual SDK validation can take longer under the race
+							// detector. Use the existing producer/test deadline,
+							// cancel and join this worker before ending the case.
+							cancel()
+							err := <-finished
+							t.Fatal("initializer callback exceeded its existing bounded context", ctx.Err(), err)
+						}
+						if err := source.Verify(ctx); err != nil {
+							t.Fatal("initializer callback disposed its source", err)
+						}
+					})
+				}
+			})
 		}
 	}
 }
