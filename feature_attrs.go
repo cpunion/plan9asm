@@ -155,6 +155,22 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					add("+avx")
 				}
 			}
+			if f, known, err := x86PackedConversionProperties(ins, goarch); known && err == nil {
+				if f.evex {
+					add("+avx512f")
+					if f.spec.sourceBits == 64 && f.spec.sourceKind != amd64PackedNumericFloat ||
+						f.spec.destinationBits == 64 && f.spec.destinationKind != amd64PackedNumericFloat {
+						add("+avx512dq")
+					}
+					if f.shape.sourceBytes < 64 && f.shape.destinationBytes < 64 {
+						add("+avx512vl")
+					}
+				} else if f.spec.legacy {
+					add("+sse2")
+				} else {
+					add("+avx")
+				}
+			}
 			if f, known, err := x86SignedPackedFloatProperties(ins, goarch); known && err == nil {
 				if f.spec.legacy {
 					if f.mmx {

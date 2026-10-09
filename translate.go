@@ -278,6 +278,9 @@ func translateIRText(file *File, opt Options) (_ string, result error) {
 	if err := validateX86ScalarFloatIntegerFile(file, opt); err != nil {
 		return "", err
 	}
+	if err := validateX86PackedConversionFile(file, opt); err != nil {
+		return "", err
+	}
 	file, err = normalizeX86SourceIntegerAddresses(file, opt)
 	if err != nil {
 		return "", err

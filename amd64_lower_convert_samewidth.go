@@ -34,6 +34,9 @@ var amd64SameWidthConversionSpecs = map[Op]amd64SameWidthConversionSpec{
 // 1.27's _yvcvtdq2ps table. Although the table is shared, VCVTTPS2DQ enables
 // SAE while the other four opcodes enable explicit rounding on Z forms.
 func (c *amd64Ctx) lowerSameWidthPackedConversion(op Op, ins Instr) (ok bool, terminated bool, err error) {
+	if handled, terminated, err := c.lowerPackedNumericConversion(op, ins); handled {
+		return handled, terminated, err
+	}
 	if _, known, _ := x86SignedPackedFloatProperties(ins, c.goarch); known {
 		return c.lowerSignedPackedIntegerFloat(op, ins)
 	}
@@ -131,12 +134,6 @@ func (c *amd64Ctx) emitSameWidthPackedConversion(spec amd64SameWidthConversionSp
 	integerType := fmt.Sprintf("<%d x i%d>", lanes, spec.laneBits)
 	floatType := amd64FMA3LLVMType(lanes, spec.laneBits)
 	switch spec.mode {
-	case amd64SameWidthFloatToInt, amd64SameWidthFloatToIntTruncate:
-		floating := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to %s\n", floating, integerType, sourceBits, floatType)
-		truncate := spec.mode == amd64SameWidthFloatToIntTruncate
-		return c.emitPackedFloatToDword("%"+floating, lanes, truncate, properties.rounding)
-
 	case amd64SameWidthSqrt:
 		floating := c.newTmp()
 		fmt.Fprintf(c.b, "  %%%s = bitcast %s %s to %s\n", floating, integerType, sourceBits, floatType)
@@ -153,65 +150,4 @@ func (c *amd64Ctx) emitSameWidthPackedConversion(spec amd64SameWidthConversionSp
 		return "%" + bits
 	}
 	panic("unreachable same-width packed conversion mode")
-}
-
-func (c *amd64Ctx) emitPackedFloatToDword(floating string, lanes int, truncate bool, rounding string) string {
-	// LLVM 22 cannot legalize the chain-bearing AVX conversion intrinsics when
-	// a generic target has no AVX feature attribute. Scalarizing also avoids
-	// its LOOP_DEPENDENCE_MASK crash for constrained vector rounding on i386.
-	result := "poison"
-	for lane := 0; lane < lanes; lane++ {
-		value := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = extractelement <%d x float> %s, i32 %d\n", value, lanes, floating, lane)
-		rounded := c.newTmp()
-		switch {
-		case truncate:
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.trunc.f32(float %%%s)\n", rounded, value)
-		case rounding == "RN_SAE":
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.floor.f32(float %%%s)\n", rounded, value)
-			fraction := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fsub float %%%s, %%%s\n", fraction, value, rounded)
-			aboveHalf := c.newTmp()
-			equalHalf := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fcmp ogt float %%%s, 5.000000e-01\n", aboveHalf, fraction)
-			fmt.Fprintf(c.b, "  %%%s = fcmp oeq float %%%s, 5.000000e-01\n", equalHalf, fraction)
-			floorInt := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.fptosi.sat.i32.f32(float %%%s)\n", floorInt, rounded)
-			floorLowBit := c.newTmp()
-			floorOdd := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = and i32 %%%s, 1\n", floorLowBit, floorInt)
-			fmt.Fprintf(c.b, "  %%%s = icmp ne i32 %%%s, 0\n", floorOdd, floorLowBit)
-			tieRoundsUp := c.newTmp()
-			roundUp := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = and i1 %%%s, %%%s\n", tieRoundsUp, equalHalf, floorOdd)
-			fmt.Fprintf(c.b, "  %%%s = or i1 %%%s, %%%s\n", roundUp, aboveHalf, tieRoundsUp)
-			ceiling := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = fadd float %%%s, 1.000000e+00\n", ceiling, rounded)
-			roundEven := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, float %%%s, float %%%s\n", roundEven, roundUp, ceiling, rounded)
-			rounded = roundEven
-		case rounding == "RD_SAE":
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.floor.f32(float %%%s)\n", rounded, value)
-		case rounding == "RU_SAE":
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.ceil.f32(float %%%s)\n", rounded, value)
-		case rounding == "RZ_SAE":
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.trunc.f32(float %%%s)\n", rounded, value)
-		default:
-			fmt.Fprintf(c.b, "  %%%s = call float @llvm.rint.f32(float %%%s)\n", rounded, value)
-		}
-		converted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = call i32 @llvm.fptosi.sat.i32.f32(float %%%s)\n", converted, rounded)
-		lower := c.newTmp()
-		upper := c.newTmp()
-		valid := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = fcmp oge float %%%s, -2.147483648000000e+09\n", lower, rounded)
-		fmt.Fprintf(c.b, "  %%%s = fcmp olt float %%%s, 2.147483648000000e+09\n", upper, rounded)
-		fmt.Fprintf(c.b, "  %%%s = and i1 %%%s, %%%s\n", valid, lower, upper)
-		selected := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = select i1 %%%s, i32 %%%s, i32 -2147483648\n", selected, valid, converted)
-		inserted := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = insertelement <%d x i32> %s, i32 %%%s, i32 %d\n", inserted, lanes, result, selected, lane)
-		result = "%" + inserted
-	}
-	return result
 }

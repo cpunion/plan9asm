@@ -28,6 +28,10 @@ func decodedX86SameWidthConversionOpcode(opcode, pp byte) (decodedX86SameWidthCo
 // memory, masking, zeroing, broadcasts, embedded rounding, SAE, and compressed
 // displacements before the generic decoder can consume an incorrect length.
 func decodedX86SameWidthConversionInstruction(code []byte, mode int) (instruction Instr, length int, ok bool, err error) {
+	if p, valid := decodeX86RawVectorEncoding(code); valid && p.mapNumber == 1 && p.opcode == 0x5b &&
+		(p.pp == 1 || p.pp == 2) && (!p.evex || !p.w) {
+		return decodedX86PackedNumericConversionInstruction(code, mode)
+	}
 	i := 0
 	segment := Reg("")
 	addressOverride := false

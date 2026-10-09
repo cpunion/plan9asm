@@ -43,16 +43,15 @@ type amd64Ctx struct {
 	usedZRegs map[int]bool
 	zRegSlot  map[int]string // zmm reg index -> alloca name (<64 x i8>)
 
-	usedKRegs         map[int]bool
-	kRegSlot          map[int]string // avx512 mask reg index -> alloca name (i64)
-	usedX87           bool
-	usesX87Convert    bool
-	x87Slot           [8]string // x87 stack registers, represented as f64 values
-	x87ControlSlot    string
-	x87StatusSlot     string // condition-code status populated by FTST for FSTSW
-	x87IntegerSlot    string // hardware FISTP result for explicit 386 x87 lowering
-	mmxConversionSlot string // shared scratch for legacy SSE-to-MMX conversions
-	x87Mode           X87Mode
+	usedKRegs      map[int]bool
+	kRegSlot       map[int]string // avx512 mask reg index -> alloca name (i64)
+	usedX87        bool
+	usesX87Convert bool
+	x87Slot        [8]string // x87 stack registers, represented as f64 values
+	x87ControlSlot string
+	x87StatusSlot  string // condition-code status populated by FTST for FSTSW
+	x87IntegerSlot string // hardware FISTP result for explicit 386 x87 lowering
+	x87Mode        X87Mode
 
 	flagsZSlot      string
 	flagsSltSlot    string // architectural SF; signed conditions combine it with OF
@@ -293,11 +292,6 @@ func (c *amd64Ctx) scanUsedRegs() {
 			if dot := strings.IndexByte(op, '.'); dot >= 0 {
 				op = op[:dot]
 			}
-			if (op == "CVTPS2PL" || op == "CVTTPS2PL") && len(ins.Args) == 2 && ins.Args[1].Kind == OpReg {
-				if _, mmx := amd64ParseMReg(ins.Args[1].Reg); mmx {
-					c.mmxConversionSlot = "%mmx_conversion_result"
-				}
-			}
 			if isX87Op(Op(op)) {
 				c.usedX87 = true
 				if op == "FMOVVP" {
@@ -447,9 +441,6 @@ func (c *amd64Ctx) emitEntryAllocas() error {
 	sort.Strings(regs)
 
 	c.b.WriteString(amd64LLVMBlockName(c.blocks[0].name) + ":\n")
-	if c.mmxConversionSlot != "" {
-		fmt.Fprintf(c.b, "  %s = alloca i64, align 8\n", c.mmxConversionSlot)
-	}
 	for _, rs := range regs {
 		r := Reg(rs)
 		name := c.slotName(r)

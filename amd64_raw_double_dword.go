@@ -14,6 +14,9 @@ func decodedX86PackedDoubleDwordInstruction(code []byte, mode int) (Instr, int, 
 	if !matched || p.mapNumber != 1 || p.opcode != 0xe6 || (p.pp != 1 && p.pp != 2 && p.pp != 3) {
 		return Instr{}, 0, false, nil
 	}
+	if p.pp != 2 && (!p.evex || p.w) {
+		return decodedX86PackedNumericConversionInstruction(code, mode)
+	}
 	fail := func(message string) (Instr, int, bool, error) {
 		return Instr{}, 0, true, fmt.Errorf("packed double/dword conversion: %s", message)
 	}

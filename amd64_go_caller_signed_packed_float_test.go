@@ -63,7 +63,7 @@ func TestX86SignedPackedIntegerFloatCallerRetainsFailures(t *testing.T) {
 		"join":                   "CMPQ AX,$0\nJE joined\nVMOVUPS (DI),Y0\njoined:\nVCVTDQ2PS Y0,Y1\nVMOVSS X1,(DX)",
 		"unknown upper alias":    "VMOVUPS (DI),X0\nCVTPL2PS X0,X1\nVCVTDQ2PS Y1,Y2\nVMOVSS X2,(DX)",
 		"MMX transport":          "MOVQ (DI),M0\nCVTPL2PS M0,X1\nVMOVSS X1,(DX)",
-		"unsigned not inherited": "VMOVUPS (DI),Y0\nVCVTUDQ2PS Y0,Y1\nVMOVSS X1,(DX)",
+		"unsigned unknown upper": "MOVOU (DI),X0\nVCVTUDQ2PS Y0,Y1\nVMOVSS X1,(DX)",
 	} {
 		t.Run(name, func(t *testing.T) {
 			assembly := strings.Replace(x86CallerFixtureAssembly, "MOVL AX,(DX)", body, 1)

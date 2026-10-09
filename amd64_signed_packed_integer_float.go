@@ -179,10 +179,34 @@ func (c *amd64Ctx) lowerSignedPackedIntegerFloat(op Op, ins Instr) (bool, bool, 
 // active-lane memory fault suppression and ER+SAE. Do not scalarize or emit
 // plain sitofp: O2 may fold it and lose both dynamic rounding and precision.
 func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloatForm) error {
+	mnemonic := strings.ToLower(strings.Split(string(ins.Op), ".")[0])
+	if f.spec.legacy {
+		mnemonic = "cvtdq2ps"
+		if f.spec.bits == 64 {
+			mnemonic = "cvtdq2pd"
+		}
+	}
+	return c.emitNativePackedConversion(ins, x86NativePackedConversion{
+		byteWidth: f.byteWidth, sourceBytes: f.sourceBytes, memoryBytes: f.memoryBytes,
+		outputBits: f.spec.bits, destination: f.destination, mask: f.mask,
+		lanes: f.byteWidth * 8 / f.spec.bits,
+		mmx:   f.mmx, legacy: f.spec.legacy, evex: f.evex, broadcast: f.broadcast,
+		zeroing: f.zeroing, rounding: f.rounding, mnemonic: mnemonic,
+	})
+}
+
+type x86NativePackedConversion struct {
+	byteWidth, sourceBytes, memoryBytes, outputBits int
+	destination, mask, lanes                        int
+	mmx, legacy, evex, broadcast, zeroing, sae      bool
+	rounding, mnemonic                              string
+}
+
+func (c *amd64Ctx) emitNativePackedConversion(ins Instr, f x86NativePackedConversion) error {
 	if f.mmx {
 		return fmt.Errorf("%w: no physical MMX/x87 caller contract", ErrProbeNeedsContext)
 	}
-	typ := amd64FloatingVectorType(f.byteWidth*8/f.spec.bits, f.spec.bits)
+	typ := amd64FloatingVectorType(f.byteWidth*8/f.outputBits, f.outputBits)
 	old := "zeroinitializer"
 	if f.mask >= 0 && !f.zeroing {
 		value, err := c.loadPackedCompareBytes(ins.Args[f.destination], f.byteWidth)
@@ -200,7 +224,7 @@ func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloa
 	var input string
 	var err error
 	source := ins.Args[0]
-	mnemonic := strings.ToLower(strings.Split(string(ins.Op), ".")[0])
+	mnemonic := f.mnemonic
 	prefix := ""
 	if source.Kind == OpReg {
 		bytes, loadErr := c.loadPackedCompareBytes(source, f.sourceBytes)
@@ -216,15 +240,14 @@ func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloa
 			return err
 		}
 		inputType, inputConstraint = fmt.Sprintf("%s elementtype([%d x i8])", pointerType, f.memoryBytes), "*m"
-		if source.Kind == OpMem && source.Mem.Segment != "" {
-			inputTemplate = "%" + strings.ToLower(string(source.Mem.Segment)) + ":" + inputTemplate
+		if pointerType == "ptr addrspace(256)" {
+			inputTemplate = "%gs:" + inputTemplate
+		} else if pointerType == "ptr addrspace(257)" {
+			inputTemplate = "%fs:" + inputTemplate
 		}
 	}
-	if f.spec.legacy {
-		mnemonic = "cvtdq2ps"
-		if f.spec.bits == 64 {
-			mnemonic = "cvtdq2pd"
-		}
+	if f.evex {
+		mnemonic = "{evex} " + mnemonic
 	}
 	args := fmt.Sprintf("%s %s, %s %s", typ, old, inputType, input)
 	constraints := "=" + constraint + ",0," + inputConstraint
@@ -241,8 +264,11 @@ func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloa
 	if f.rounding != "" {
 		assembly += "{" + strings.ToLower(strings.TrimSuffix(f.rounding, "_SAE")) + "-sae}, "
 	}
+	if f.sae {
+		assembly += "{sae}, "
+	}
 	if f.broadcast {
-		inputTemplate += fmt.Sprintf(" {1to%d}", f.byteWidth*8/f.spec.bits)
+		inputTemplate += fmt.Sprintf(" {1to%d}", f.lanes)
 	}
 	assembly += inputTemplate + ", $0"
 	if f.mask >= 0 {
@@ -255,7 +281,7 @@ func (c *amd64Ctx) emitSignedPackedIntegerFloat(ins Instr, f x86SignedPackedFloa
 	fmt.Fprintf(c.b, "  %%%s = call %s asm sideeffect %q, %q(%s)\n", result, typ, assembly, constraints+",~{memory},~{fpsr}", args)
 	bytes := c.newTmp()
 	fmt.Fprintf(c.b, "  %%%s = bitcast %s %%%s to <%d x i8>\n", bytes, typ, result, f.byteWidth)
-	if f.spec.legacy {
+	if f.legacy {
 		return c.storeLegacyXViews(ins.Args[f.destination].Reg, "%"+bytes)
 	}
 	return c.storePackedMoveOperand(ins.Args[f.destination], f.byteWidth, "%"+bytes)

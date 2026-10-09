@@ -3,6 +3,9 @@ package plan9asm
 import "fmt"
 
 func x86CallerVectorMoveKnown(ins Instr) bool {
+	if form, known, err := x86PackedConversionProperties(ins, "amd64"); known {
+		return err == nil && !form.mmx
+	}
 	if form, known, err := x86CLMULProperties(ins.Op, ins, "amd64"); known {
 		return err == nil && form.memory < 0
 	}
@@ -128,6 +131,9 @@ func x86CallerVectorByteMask(width int64) uint64 {
 }
 
 func x86CallerVectorMoveStep(ins *Instr, state *x86SourceStackState, proof *x86GoCallerRegionProof) bool {
+	if form, known, err := x86PackedConversionProperties(*ins, "amd64"); known {
+		return err == nil && x86CallerPackedConversionStep(ins, form, state, proof)
+	}
 	if form, known, err := x86CLMULProperties(ins.Op, *ins, "amd64"); known {
 		return err == nil && x86CallerCLMULStep(*ins, form, state)
 	}
@@ -361,6 +367,9 @@ func x86InstructionMemoryShape(ins Instr, index int, arch string) (width int64, 
 	}
 	if form, known, err := x86PackedMultiplyAddProperties(ins.Op, ins, arch); known {
 		return int64(form.memoryBytes), false, err == nil && !form.mmx && form.memory == index
+	}
+	if f, known, err := x86PackedConversionProperties(ins, arch); known {
+		return int64(f.memoryBytes), false, err == nil && !f.mmx && f.memory == index
 	}
 	if f, known, err := x86SignedPackedFloatProperties(ins, arch); known {
 		return int64(f.memoryBytes), false, err == nil && !f.mmx && f.memory == index

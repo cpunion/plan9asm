@@ -5448,15 +5448,9 @@ TEXT packedfloattodwordforms(SB),NOSPLIT,$0-0
 	CVTPS2PL X1, X2
 	CVTPS2PL (AX), X2
 	CVTPS2PL source(SB), X2
-	CVTPS2PL X1, M2
-	CVTPS2PL (AX), M2
-	CVTPS2PL source(SB), M2
 	CVTTPS2PL X1, X2
 	CVTTPS2PL (AX), X2
 	CVTTPS2PL source(SB), X2
-	CVTTPS2PL X1, M2
-	CVTTPS2PL (AX), M2
-	CVTTPS2PL source(SB), M2
 	RET
 `
 	file, err := Parse(ArchAMD64, src)
@@ -5473,7 +5467,7 @@ TEXT packedfloattodwordforms(SB),NOSPLIT,$0-0
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, intrinsic := range []string{"@llvm.x86.sse2.cvtps2dq", "@llvm.x86.sse2.cvttps2dq"} {
+	for _, intrinsic := range []string{"asm sideeffect \"cvtps2dq", "asm sideeffect \"cvttps2dq"} {
 		if !strings.Contains(ll, intrinsic) {
 			t.Fatalf("packed float-to-dword lowering omitted %s", intrinsic)
 		}

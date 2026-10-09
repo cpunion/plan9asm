@@ -18,88 +18,9 @@ func amd64ParseMReg(r Reg) (idx int, ok bool) {
 	return n, true
 }
 
-// lowerPackedFloatToDword implements both entries in Go's yxcvm1 table for
-// CVTPS2PL and CVTTPS2PL: X/m -> X and X/m64 -> M.
-func (c *amd64Ctx) lowerPackedFloatToDword(op Op, ins Instr) (ok bool, terminated bool, err error) {
-	rawOp := strings.ToUpper(string(op))
-	baseOp := rawOp
-	if dot := strings.IndexByte(rawOp, '.'); dot >= 0 {
-		baseOp = rawOp[:dot]
-	}
-	switch baseOp {
-	case "CVTPS2PL", "CVTTPS2PL":
-		// handled below
-	default:
-		return false, false, nil
-	}
-	if rawOp != baseOp {
-		return true, false, fmt.Errorf("amd64 %s does not accept instruction suffixes: %q", baseOp, ins.Raw)
-	}
-	if len(ins.Args) != 2 || ins.Args[1].Kind != OpReg {
-		return true, false, fmt.Errorf("amd64 %s expects X/m source and X or M destination: %q", baseOp, ins.Raw)
-	}
-
-	dst := ins.Args[1].Reg
-	var source string
-	if isAMD64XReg(dst) {
-		bytesValue, err := c.loadXVecOperand(ins.Args[0])
-		if err != nil {
-			return true, false, err
-		}
-		cast := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x float>\n", cast, bytesValue)
-		source = "%" + cast
-	} else if _, ok := amd64ParseMReg(dst); ok {
-		if ins.Args[0].Kind == OpReg {
-			bytesValue, err := c.loadXVecOperand(ins.Args[0])
-			if err != nil {
-				return true, false, err
-			}
-			all := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast <16 x i8> %s to <4 x float>\n", all, bytesValue)
-			source = "%" + all
-		} else {
-			bits, err := c.evalIntSized(ins.Args[0], I64)
-			if err != nil {
-				return true, false, err
-			}
-			low := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = bitcast i64 %s to <2 x float>\n", low, bits)
-			wide := c.newTmp()
-			fmt.Fprintf(c.b, "  %%%s = shufflevector <2 x float> %%%s, <2 x float> zeroinitializer, <4 x i32> <i32 0, i32 1, i32 2, i32 3>\n", wide, low)
-			source = "%" + wide
-		}
-	} else {
-		return true, false, fmt.Errorf("amd64 %s expects X or M destination: %q", baseOp, ins.Raw)
-	}
-	if _, mmx := amd64ParseMReg(dst); mmx {
-		if c.mmxConversionSlot == "" {
-			return true, false, fmt.Errorf("amd64 %s has no MMX conversion scratch slot", baseOp)
-		}
-		// LLVM 22's SSE2 vector intrinsic requires +sse2 even for Go's
-		// original SSE1/MMX encoding. Emit that encoding into one entry-block
-		// scratch slot, then load the two result lanes as an ordinary i64.
-		mnemonic := "cvtps2pi"
-		if baseOp == "CVTTPS2PL" {
-			mnemonic = "cvttps2pi"
-		}
-		assembly := mnemonic + " $1, %mm0; movq %mm0, ($0)"
-		fmt.Fprintf(c.b, "  call void asm sideeffect %q, %q(ptr %s, <4 x float> %s)\n",
-			assembly, "r,x,~{mm0},~{memory}", c.mmxConversionSlot, source)
-		result := c.newTmp()
-		fmt.Fprintf(c.b, "  %%%s = load i64, ptr %s, align 8\n", result, c.mmxConversionSlot)
-		return true, false, c.storeReg(dst, "%"+result)
-	}
-
-	intrinsic := "llvm.x86.sse2.cvtps2dq"
-	if baseOp == "CVTTPS2PL" {
-		intrinsic = "llvm.x86.sse2.cvttps2dq"
-	}
-	converted := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = call <4 x i32> @%s(<4 x float> %s)\n", converted, intrinsic, source)
-	bytesValue := c.newTmp()
-	fmt.Fprintf(c.b, "  %%%s = bitcast <4 x i32> %%%s to <16 x i8>\n", bytesValue, converted)
-	return true, false, c.storeX(dst, "%"+bytesValue)
+// Legacy named entries use the complete shared typed/native family.
+func (c *amd64Ctx) lowerPackedFloatToDword(op Op, ins Instr) (bool, bool, error) {
+	return c.lowerPackedNumericConversion(op, ins)
 }
 
 // lowerPackedSingleToDouble implements every operand shape in Go 1.27's

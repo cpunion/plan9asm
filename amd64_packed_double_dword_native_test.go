@@ -70,7 +70,7 @@ int main(void) { return !mask64_required_state(1) || mask64_required_state(0); }
 
 func TestX86PackedDoubleDwordRuntimeRequiresNativeUnion(t *testing.T) {
 	full, local := x86PackedDoubleDwordOriginalAssembly(), x86PackedDoubleDwordSSEAssembly(t)
-	for _, opcode := range []string{"VCVTDQ2PD (CX), K1, Z1", "VCVTTPD2DQY (BX), X2", "VCVTPD2DQ.RD_SAE.Z Z0, K1, Y3", "CVTPD2PL X4, M0"} {
+	for _, opcode := range []string{"VCVTDQ2PD (CX), K1, Z1", "VCVTTPD2DQY (BX), X2", "VCVTPD2DQ.RD_SAE.Z Z0, K1, Y3", "CVTPD2PL X4, X0"} {
 		if strings.Count(full, opcode) != 1 {
 			t.Fatal("lost or repeated original conversion", opcode)
 		}
@@ -84,7 +84,7 @@ func TestX86PackedDoubleDwordRuntimeRequiresNativeUnion(t *testing.T) {
 			t.Fatal("portable SSE counterpart borrowed a wide opcode", instruction.Op)
 		}
 	}
-	if strings.Count(local, "CVTPD2PL X4, M0") != 1 {
+	if strings.Count(local, "CVTPD2PL X4, X0") != 1 {
 		t.Fatal("portable SSE counterpart borrowed a wide ISA or lost its original legacy conversion")
 	}
 	file, err := parser.ParseFile(token.NewFileSet(), "amd64_packed_double_dword_native_linux_amd64_test.go", nil, 0)

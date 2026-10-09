@@ -23,15 +23,14 @@ func TestTranslateX86PackedDoubleDwordCompleteGoAssemblerForms(t *testing.T) {
 			conversionHigh, conversionBroadcast := 20, 9
 			zBroadcast, zRound, zRoundMask := 8, 9, 11
 			if target.goarch == "386" {
+				high = 4
 				zBroadcast, zRound, zRoundMask = 0, 1, 3
 				conversionHigh, conversionBroadcast = 4, 6
 			}
 			source := fmt.Sprintf(`
 TEXT packeddoubledwordforms(SB),$0-0
 	CVTPD2PL X0, X1
-	CVTPD2PL 0(AX), M0
 	CVTTPD2PL 16(AX), X2
-	CVTTPD2PL X3, M1
 	VCVTDQ2PD X0, X1
 	VCVTDQ2PD 32(AX), Y2
 	VCVTDQ2PD Y3, Z4
@@ -85,6 +84,11 @@ TEXT packeddoubledwordforms(SB),$0-0
 `, conversionHigh, conversionHigh+1, zBroadcast, conversionBroadcast,
 				high, high+1, high, high+1, zRound, zRoundMask, zRound, zRoundMask,
 				high, high+1, high, high+1, zRound, zRoundMask)
+			if target.goarch == "386" {
+				for n := 8; n <= 14; n++ {
+					source = strings.ReplaceAll(source, fmt.Sprintf("Y%d", n), fmt.Sprintf("Y%d", n%8))
+				}
+			}
 			requireX86GoAssemblerResult(t, target.goarch, source, true)
 			file, err := Parse(ArchAMD64, source)
 			if err != nil {
@@ -100,7 +104,7 @@ TEXT packeddoubledwordforms(SB),$0-0
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, want := range []string{"asm sideeffect \"vcvtdq2pd", "fptosi.sat.i32.f64", "select i1"} {
+			for _, want := range []string{"vcvtdq2pd", "cvtpd2dq", "vcvttpd2dq"} {
 				if !strings.Contains(ll, want) {
 					t.Fatalf("packed double/dword IR is missing %q:\n%s", want, ll)
 				}
@@ -181,8 +185,8 @@ TEXT packeddoubledword(SB),NOSPLIT,$0-40
 	VMOVDQU Y3, 80(AX)
 
 	MOVOU (BX), X4
-	CVTPD2PL X4, M0
-	MOVQ M0, 112(AX)
+	CVTPD2PL X4, X0
+	MOVQ X0, 112(AX)
 	VZEROUPPER
 	RET
 `
@@ -194,7 +198,7 @@ func x86PackedDoubleDwordRawAssembly(source string) string {
 		"VCVTDQ2PD (CX), K1, Z1", "BYTE $0x62; BYTE $0xf1; BYTE $0x7e; BYTE $0x49; BYTE $0xe6; BYTE $0x09",
 		"VCVTTPD2DQY (BX), X2", "BYTE $0xc5; BYTE $0xfd; BYTE $0xe6; BYTE $0x13",
 		"VCVTPD2DQ.RD_SAE.Z Z0, K1, Y3", "BYTE $0x62; BYTE $0xf1; BYTE $0xff; BYTE $0xb9; BYTE $0xe6; BYTE $0xd8",
-		"CVTPD2PL X4, M0", "BYTE $0x66; BYTE $0x0f; BYTE $0x2d; BYTE $0xc4",
+		"CVTPD2PL X4, X0", "BYTE $0xf2; BYTE $0x0f; BYTE $0xe6; BYTE $0xc4",
 	).Replace(source)
 }
 

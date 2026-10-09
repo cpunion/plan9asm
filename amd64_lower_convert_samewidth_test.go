@@ -31,7 +31,7 @@ func TestTranslateX86SameWidthPackedConversionCompleteGoAssemblerForms(t *testin
 			src.WriteString("TEXT samewidthpackedconversionforms(SB),NOSPLIT,$0-0\n")
 			for _, op := range []string{"VCVTDQ2PS", "VCVTPS2DQ", "VCVTTPS2DQ", "VSQRTPD", "VSQRTPS"} {
 				high := 20
-				if op == "VCVTDQ2PS" && target.goarch == "386" {
+				if strings.HasPrefix(op, "VCVT") && target.goarch == "386" {
 					// The exact native conversion cannot borrow the wider
 					// software bank used by the other conversion families.
 					high = 4

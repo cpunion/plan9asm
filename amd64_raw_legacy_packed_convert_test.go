@@ -3,7 +3,6 @@ package plan9asm
 import (
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -66,7 +65,7 @@ func TestX86RawLegacyPackedConversionCompilesEveryForm(t *testing.T) {
 					fmt.Fprintf(&one, "\tBYTE $%d\n", value)
 				}
 				one.WriteString("\tRET\n")
-				if form.name == "dword-to-single-M" || form.name == "dword-to-double-M" {
+				if strings.HasSuffix(form.name, "-M") {
 					// Decode and actual Go objects remain covered. A raw MMX
 					// transport does not certify the physical x87/MMX state.
 					goAssemblerOracleOutput(t, target.goarch, one.String(), "", true)
@@ -100,97 +99,32 @@ func TestX86RawLegacyPackedConversionCompilesEveryForm(t *testing.T) {
 	}
 }
 
-func TestX86RawLegacyPackedConversionRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test only runs on amd64 host")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
-	const namedSource = `
-TEXT legacyconvert(SB),4,$0-16
-	MOVQ out+0(FP), AX
-	MOVQ input+8(FP), BX
-	MOVOU (BX), X1
-	CVTPS2PL X1, X0
-	MOVOU X0, (AX)
-	CVTTPS2PL X1, X0
-	MOVOU X0, 16(AX)
-	CVTPS2PL X1, M0
-	MOVQ M0, 32(AX)
-	CVTTPS2PL X1, M0
-	MOVQ M0, 40(AX)
-	EMMS
-	RET
-`
-	rawSource := strings.NewReplacer(
-		"CVTPS2PL X1, X0", "BYTE $0x66; BYTE $0x0f; BYTE $0x5b; BYTE $0xc1",
-		"CVTTPS2PL X1, X0", "BYTE $0xf3; BYTE $0x0f; BYTE $0x5b; BYTE $0xc1",
-		"CVTPS2PL X1, M0", "BYTE $0x0f; BYTE $0x2d; BYTE $0xc1",
-		"CVTTPS2PL X1, M0", "BYTE $0x0f; BYTE $0x2c; BYTE $0xc1",
-	).Replace(namedSource)
-	requireX86GoAssemblerResult(t, "amd64", namedSource, true)
-	requireX86GoAssemblerResult(t, "amd64", rawSource, true)
-
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
-	options := Options{
-		TargetTriple: triple,
-		Goarch:       "amd64",
-		Sigs: map[string]FuncSig{
-			"legacyconvert": {
-				Name: "legacyconvert", Args: []LLVMType{Ptr, Ptr}, Ret: Void,
-				Frame: FrameLayout{Params: []FrameSlot{
-					{Offset: 0, Type: Ptr, Index: 0, Field: -1},
-					{Offset: 8, Type: Ptr, Index: 1, Field: -1},
-				}},
-			},
-		},
-	}
-	const mainC = `
-#include <stdint.h>
-#include <string.h>
-extern void legacyconvert(uint8_t *, const float *);
-int main(void) {
-  const float input[4] = {1.5f, -2.5f, 3.5f, -4.5f};
-  const int32_t nearest[4] = {2, -2, 4, -4};
-  const int32_t truncated[4] = {1, -2, 3, -4};
-  uint8_t out[48];
-  int32_t values[12];
-  memset(out, 0xcc, sizeof(out));
-  legacyconvert(out, input);
-  memcpy(values, out, sizeof(values));
-  for (int i = 0; i < 4; i++) {
-    if (values[i] != nearest[i]) return 10 + i;
-    if (values[4+i] != truncated[i]) return 20 + i;
-  }
-  for (int i = 0; i < 2; i++) {
-    if (values[8+i] != nearest[i]) return 30 + i;
-    if (values[10+i] != truncated[i]) return 40 + i;
-  }
-  return 0;
-}
-`
-	for _, tc := range []struct{ name, source string }{
-		{"named", namedSource},
-		{"raw", rawSource},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			file, err := Parse(ArchAMD64, tc.source)
+func TestX86RawLegacyPackedConversionMMXStateContext(t *testing.T) {
+	for _, name := range []string{"CVTPS2PL", "CVTTPS2PL", "CVTPD2PL", "CVTTPD2PL"} {
+		for _, target := range x86RawReturnTargets {
+			source := "TEXT probe(SB),4,$0-0\n" + name + " X1,M0\nEMMS\nRET\n"
+			code := x86PackedShiftActualGoBytes(t, target.arch, source)
+			file, err := Parse(ArchAMD64, source)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ir, err := Translate(file, options)
+			options := Options{Goarch: target.arch, TargetTriple: target.triple, Sigs: map[string]FuncSig{"probe": {Ret: Void}}}
+			if _, err := Translate(file, options); !errors.Is(err, ErrProbeNeedsContext) {
+				t.Fatal("EMMS is not a complete entry/caller physical MMX contract", name, err)
+			}
+			var raw strings.Builder
+			raw.WriteString("TEXT probe(SB),4,$0-0\n")
+			for _, value := range code {
+				fmt.Fprintf(&raw, "BYTE $%d\n", value)
+			}
+			rawFile, err := Parse(ArchAMD64, raw.String())
 			if err != nil {
 				t.Fatal(err)
 			}
-			compileAndRunRuntimeTestForTarget(t, llc, clang, "legacy_conversion_"+tc.name, triple, ir, mainC, runPrefix)
-		})
+			if _, err := Translate(rawFile, options); !errors.Is(err, ErrProbeNeedsContext) ||
+				!strings.Contains(err.Error(), "MMX/x87 caller contract") {
+				t.Fatal(name, err)
+			}
+		}
 	}
 }

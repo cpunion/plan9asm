@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -170,15 +169,8 @@ func TestTranslateX86PackedNumericConversionRejectsFormsOutsideGoAssemblerTables
 	}
 }
 
-func TestAMD64PackedNumericConversionRuntimeSemantics(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution test requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+func amd64PackedNumericConversionNativeRuntimeSemantics(t *testing.T) {
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	const source = `TEXT packednumericconversionsemantics(SB),$0-64
 	MOVQ out+0(FP), AX
 	MOVQ f64+8(FP), BX
@@ -243,12 +235,7 @@ func TestAMD64PackedNumericConversionRuntimeSemantics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
+	triple := execution.triple
 	ir, err := Translate(file, Options{
 		Goarch: "amd64", TargetTriple: triple,
 		Sigs: map[string]FuncSig{"packednumericconversionsemantics": {
@@ -308,5 +295,5 @@ int main(void){
  _mm_setcsr(original);fesetround(FE_TONEAREST);return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "packed_numeric_conversion_semantics", triple, ir, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "packed_numeric_conversion_semantics", ir, mainC, "-O2")
 }

@@ -188,16 +188,36 @@ uses an acyclic hull join to manufacture a cyclic invariant or allocation bounds
 
 Signed packed dword-to-float conversion uses one validated whole native
 CVTDQ2PS/PD opcode, retaining ambient MXCSR rounding, precision, trapping,
-masking and embedded rounding. Its caller effects require every potential
+masking and embedded rounding. The same native emitter serves the complete
+38-name FP32/FP64-to-signed/unsigned I32/I64 and remaining integer-to-float
+family. Shared typed shapes distinguish physical vector width, active lane
+count, memory tuple and architectural zero padding. Named, raw, result and
+caller effects consume that grammar; narrowing broadcast counts active lanes,
+not destination carrier lanes. VEX.WIG remains ignored in both x86 modes.
+Pure `fptosi`/rounding IR is not equivalent: it loses MXCSR exceptions and
+out-of-range inputs become poison. Keep each whole conversion `sideeffect`
+even when its numerical result is dead. Its caller effects require every potential
 input byte and merge byte; masks do not authorize a missing memory envelope.
 Packed FP fields and virtual SP/BP lack original native backing and remain
 Context. Mode32 high banks likewise cannot borrow a software register view.
-Go's MMX-to-X forms (including GP spellings admitted to Ymm) remain Context:
+Go's MMX-to-X forms (including GP spellings admitted to Ymm) and X-to-MMX
+destinations remain Context:
 no current producer closes physical MMX identity, x87 Tag/TOS, pending
 exceptions and observations by the caller after RET. They are Go-object and
 format coverage, not successful LLVM objects. The native Linux AMD64 fault
 oracle is a required cross-runtime root; SSE numerical Rosetta observations
 and five-target AVX512 object compilation do not replace it or AVX512 execution.
+Keep independent complete Go table/attribute witnesses and byte-exact raw
+parity. Runtime axes include clean and preset status, NaN/overflow, RC,
+DAZ/FTZ, masks, alias canaries, integer FLAGS, dead memory and unmasked native
+traps. Partition full-family objects and executable fixtures into disjoint
+batches of at most 96 functions; check the union and release each LLVM module
+and context before the next batch. Each batch owns its temporary artifacts
+through a synchronous subtest. Primary references are
+[Intel SDM Vol. 2A](https://cdrdv2-public.intel.com/812383/253666-sdm-vol-2a.pdf)
+(conversion instruction pages and exception classes) and the
+[LLVM 22 LangRef](https://releases.llvm.org/22.1.0/docs/LangRef.html)
+(`fptosi` poison and inline-assembly constraints), not software-value parity alone.
 
 The CLI captures a private inventory at its actual package-load boundary and
 rechecks complete compiled Go sources with that load's dependency types and

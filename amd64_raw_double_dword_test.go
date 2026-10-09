@@ -134,16 +134,10 @@ func TestX86RawPackedDoubleDwordEncodingAxes(t *testing.T) {
 		{0x62, 0xa1, 0xff, 0x28, 0xe6, 0xc1}, // Y17 -> X16.
 	} {
 		got, _, recognized, err := decodedX86PackedDoubleDwordInstruction(code, 32)
-		if code[2] == 0x7e {
-			// Go accepts the spelling, but its mode32 high bank does not
-			// provide the original physical input for our native bridge.
-			if !recognized || err == nil {
-				t.Fatal("mode32 native conversion fabricated a high physical bank", got, err)
-			}
-			continue
-		}
-		if !recognized || err != nil || len(got.Args) != 2 {
-			t.Fatalf("386 EVEX high X/Y register %#x = %+v, %v, %v", code, got, recognized, err)
+		// Both directions now preserve native state. Go accepts these
+		// spellings, but neither can invent physical high mode32 banks.
+		if !recognized || err == nil {
+			t.Fatal("mode32 native conversion fabricated a high physical bank", got, err)
 		}
 	}
 	requireX86GoAssemblerResult(t, "386", "TEXT high(SB),4,$0-0\n\tVCVTDQ2PD X17, K1, X16\n\tVCVTPD2DQY Y17, K1, X16\n\tRET\n", true)
