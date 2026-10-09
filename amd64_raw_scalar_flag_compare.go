@@ -4,8 +4,10 @@ import "fmt"
 
 // Go's four _yvcomisd entries share X/m,X and EVEX register-only SAE.
 // Prefix fields stay typed: EVEX.b means SAE here, never memory broadcast;
-// disp8 scales by the scalar width. VEX W/L and EVEX LL are ignored by
-// this scalar family (Intel XED datafiles/avx/avx-isa.txt and AVX512 tables).
+// disp8 scales by the scalar width. VEX W and EVEX LL are ignored. Intel
+// SDM COMISS/UCOMISS explicitly warns that VEX.L=1 can behave unpredictably
+// across processor generations; decoder acceptance is not a portable opcode
+// contract and cannot authorize changing those original bytes to VEX.L=0.
 func decodedX86ScalarFlagCompareInstruction(code []byte, mode int) (Instr, int, bool, error) {
 	p, matched := decodeX86RawVectorEncoding(code)
 	if !matched || p.mapNumber != 1 || (p.opcode != 0x2e && p.opcode != 0x2f) {
@@ -58,6 +60,9 @@ func decodedX86ScalarFlagCompareInstruction(code []byte, mode int) (Instr, int, 
 	}
 	if err != nil {
 		return Instr{}, 0, true, err
+	}
+	if !p.evex && p.vectorLength != 0 {
+		return Instr{}, 0, true, fmt.Errorf("%w: scalar flag comparison VEX.L=1 lacks a portable physical opcode contract", ErrProbeNeedsContext)
 	}
 	dst := Operand{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", int(code[p.modRM]>>3&7)+p.r*8))}
 	return Instr{Op: op, Args: []Operand{source, dst}, Raw: fmt.Sprintf("%s %s, %s", op, source.String(), dst.String()),

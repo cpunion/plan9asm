@@ -229,6 +229,10 @@ target is required, even for dead source. SSE original-Go/state/guard-page
 oracles do not stand in for required Linux AMD64 native VEX/EVEX, wide-register
 preservation and unmasked IE/DE/SAE execution. Object and runtime reports retain
 those different scopes; typed byte effects grant no new memory ownership.
+VEX WIG and EVEX LLIG do not imply portable VEX.L=1 behavior: Intel's SDM
+warns of generation-dependent behavior for that encoding. Keep literal L1
+Context rather than silently emitting L0. Validate all operand/file syntax
+before returning a deferred physical-mode or memory-role Context.
 
 The CLI captures a private inventory at its actual package-load boundary and
 rechecks complete compiled Go sources with that load's dependency types and

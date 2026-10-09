@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -69,9 +70,9 @@ func TestX86RawScalarFlagCompareGoEncoderForms(t *testing.T) {
 }
 
 func TestX86RawScalarFlagCompareEncodingAxes(t *testing.T) {
-	count := 0
+	count, contexts := 0, 0
 	for _, evex := range []bool{false, true} {
-		limit, variants := 16, 4 // VEX.W/L are ignored.
+		limit, variants := 16, 4 // WIG; L1 is an explicit source-context boundary.
 		if evex {
 			limit, variants = 32, 8 // EVEX.LL ignored, SAE on/off.
 		}
@@ -103,6 +104,14 @@ func TestX86RawScalarFlagCompareEncodingAxes(t *testing.T) {
 								code[2] |= byte(variant&1)<<2 | byte(variant>>1)<<7
 							}
 							got, size, matched, err := decodedX86ScalarFlagCompareInstruction(code, 64)
+							if !evex && variant&1 != 0 {
+								if !matched || !errors.Is(err, ErrProbeNeedsContext) {
+									t.Fatalf("VEX.L1 lost physical opcode boundary: %x %v", code, err)
+								}
+								count++
+								contexts++
+								continue
+							}
 							want := []Operand{{Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", src))}, {Kind: OpReg, Reg: Reg(fmt.Sprintf("X%d", dst))}}
 							if err != nil || !matched || size != len(code) || got.Op != wantOp || !reflect.DeepEqual(got.Args, want) {
 								t.Fatalf("decode %x=%+v size=%d matched=%v err=%v; want %s %+v", code, got, size, matched, err, wantOp, want)
@@ -118,8 +127,8 @@ func TestX86RawScalarFlagCompareEncodingAxes(t *testing.T) {
 			}
 		}
 	}
-	if count != 36864 {
-		t.Fatalf("tested %d encodings, want 36864", count)
+	if count != 36864 || contexts != 2048 {
+		t.Fatalf("tested %d encodings with %d VEX.L1 contexts, want 36864/2048", count, contexts)
 	}
 }
 
@@ -212,6 +221,32 @@ func TestX86ScalarFlagCompareGoRejectedForms(t *testing.T) {
 func x86COMIRawNativeCompare(t *testing.T) {
 	t.Helper()
 	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
+	source, sigs, mainC, _ := x86COMIRawNativeFixture(t)
+	file, err := Parse(ArchAMD64, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, optimized := range []bool{false, true} {
+		t.Run(fmt.Sprintf("IR_O2=%v", optimized), func(t *testing.T) {
+			input := ir
+			if optimized {
+				input = x86MulDivRoundOptimize(t, input)
+			}
+			for _, backend := range []string{"-O0", "-O2"} {
+				t.Run("backend"+backend, func(t *testing.T) {
+					execution.compileAndRunLLVM(t, "raw-comi", input, mainC, backend)
+				})
+			}
+		})
+	}
+}
+
+func x86COMIRawNativeFixture(t *testing.T) (string, map[string]FuncSig, string, int) {
+	t.Helper()
 	var source, declarations, checks strings.Builder
 	sigs := make(map[string]FuncSig)
 	index := 0
@@ -244,14 +279,6 @@ func x86COMIRawNativeCompare(t *testing.T) {
 			}
 		}
 	}
-	file, err := Parse(ArchAMD64, source.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	ir, err := Translate(file, Options{Goarch: "amd64", TargetTriple: execution.triple, Sigs: sigs})
-	if err != nil {
-		t.Fatal(err)
-	}
 	// Compare EFLAGS with native UCOMIS{S,D}. This oracle checks comparison,
 	// NaN, signed-zero and register-preservation semantics, not MXCSR exception
 	// delivery or SAE suppression, which require a separate floating-state audit.
@@ -281,17 +308,5 @@ static int check(void (*fn)(const void *,const void *,void *),int isDouble) {
 }
 int main(void) {
 ` + checks.String() + "return 0;\n}\n"
-	for _, optimized := range []bool{false, true} {
-		t.Run(fmt.Sprintf("IR_O2=%v", optimized), func(t *testing.T) {
-			input := ir
-			if optimized {
-				input = x86MulDivRoundOptimize(t, input)
-			}
-			for _, backend := range []string{"-O0", "-O2"} {
-				t.Run("backend"+backend, func(t *testing.T) {
-					execution.compileAndRunLLVM(t, "raw-comi", input, mainC, backend)
-				})
-			}
-		})
-	}
+	return source.String(), sigs, mainC, index
 }

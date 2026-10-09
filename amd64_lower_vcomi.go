@@ -17,6 +17,9 @@ func (c *amd64Ctx) lowerVectorScalarFlagCompare(op Op, ins Instr) (ok bool, term
 	if !known || err != nil {
 		return known, false, err
 	}
+	if !x86ScalarFloatIntegerNativeTarget(c.goarch, c.targetTriple) {
+		return true, false, fmt.Errorf("%w: scalar flag comparison requires its native x86 MXCSR target", ErrProbeNeedsContext)
+	}
 	if ins.x86AddressBits != 0 {
 		return true, false, fmt.Errorf("%w: scalar flag comparison needs original address-size binding", ErrProbeNeedsContext)
 	}

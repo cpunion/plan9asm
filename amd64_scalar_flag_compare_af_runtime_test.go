@@ -89,21 +89,8 @@ func x86ScalarCompareAFRuntimeCases(axis x86FloatCompareRuntimeISA) []x86ScalarC
 func x86ScalarCompareAFOriginalGo(t *testing.T, axis x86FloatCompareRuntimeISA) {
 	t.Helper()
 	x86FloatCompareRuntimeTools(t, axis)
-	cases := x86ScalarCompareAFRuntimeCases(axis)
-	var declarations, kernels strings.Builder
-	kernels.WriteString("var kernels=[]kernel{\n")
-	for _, row := range cases {
-		fmt.Fprintf(&declarations, "func %s(*[96]byte,*[16]byte,*[16]byte,uint64)\n", row.name)
-		fmt.Fprintf(&kernels, "{%s,%d,%t},\n", row.name, row.bits, row.dst == row.src)
-	}
-	kernels.WriteString("}\n")
 	dir := t.TempDir()
-	for name, contents := range map[string]string{
-		"go.mod":         "module scalarstatus\n\ngo 1.20\n",
-		"status.go":      "package scalarstatus\n" + declarations.String(),
-		"status_amd64.s": x86ScalarCompareAFAssembly("amd64", cases),
-		"status_test.go": x86ScalarCompareAFGoReference + kernels.String(),
-	} {
+	for name, contents := range x86ScalarCompareAFOriginalFiles(axis) {
 		data := []byte(contents)
 		if strings.HasSuffix(name, ".go") {
 			var err error
@@ -125,7 +112,24 @@ func x86ScalarCompareAFOriginalGo(t *testing.T, axis x86FloatCompareRuntimeISA) 
 	if output, err := runtimeOracleCombinedOutput(ctx, command); err != nil {
 		t.Fatalf("actual original Go ISA%d status: %v\n%s", axis, err, output)
 	}
-	t.Logf("%d original ISA%d kernels ×81 pairs ×2 AF seeds, all six status bits/LAHF/SETcc and full input/output canaries", len(cases), axis)
+	t.Logf("%d original ISA%d kernels ×81 pairs ×2 AF seeds, all six status bits/LAHF/SETcc and full input/output canaries", len(x86ScalarCompareAFRuntimeCases(axis)), axis)
+}
+
+func x86ScalarCompareAFOriginalFiles(axis x86FloatCompareRuntimeISA) map[string]string {
+	cases := x86ScalarCompareAFRuntimeCases(axis)
+	var declarations, kernels strings.Builder
+	kernels.WriteString("var kernels=[]kernel{\n")
+	for _, row := range cases {
+		fmt.Fprintf(&declarations, "func %s(*[96]byte,*[16]byte,*[16]byte,uint64)\n", row.name)
+		fmt.Fprintf(&kernels, "{%s,%d,%t},\n", row.name, row.bits, row.dst == row.src)
+	}
+	kernels.WriteString("}\n")
+	return map[string]string{
+		"go.mod":         "module scalarstatus\n\ngo 1.20\n",
+		"status.go":      "package scalarstatus\n" + declarations.String(),
+		"status_amd64.s": x86ScalarCompareAFAssembly("amd64", cases),
+		"status_test.go": x86ScalarCompareAFGoReference + kernels.String(),
+	}
 }
 
 const x86ScalarCompareAFCReference = `
@@ -203,24 +207,7 @@ func x86ScalarCompareAFLLVM(t *testing.T, axis x86FloatCompareRuntimeISA) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var declarations, checks strings.Builder
-	for i, row := range cases {
-		fmt.Fprintf(&declarations, "extern void %s(uint8_t*,uint8_t*,uint8_t*,uint64_t);\n", row.name)
-		alias := 0
-		if row.dst == row.src {
-			alias = 1
-		}
-		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,a,b,seed)) {\n return 1;\n}\n", row.name, row.bits, i, alias)
-	}
-	main := x86ScalarCompareAFCReference + declarations.String() + `
-int main(void) {
- const double values[] = {-INFINITY, -2, -1, -0.0, 0, 1, 2, INFINITY, NAN};
- for(unsigned i=0; i<9; i++) {
-  for(unsigned j=0; j<9; j++) {
-   for(unsigned s=0; s<2; s++) {
-    double a=values[i], b=values[j];
-    uint64_t seed = s ? 0x8d5 : 0;
-` + checks.String() + "   }\n  }\n }\n return 0;\n}\n"
+	main := x86ScalarCompareAFRuntimeC(cases)
 	for _, optimized := range []bool{false, true} {
 		t.Run(fmt.Sprintf("O2=%t", optimized), func(t *testing.T) {
 			ir, err := Translate(file, x86ScalarCompareAFOptions("amd64", execution.triple, cases))
@@ -238,4 +225,25 @@ int main(void) {
 			t.Logf("%d translated ISA%d kernels ×81 pairs ×2 AF seeds; integer flags and complete input/output canaries", len(cases), axis)
 		})
 	}
+}
+
+func x86ScalarCompareAFRuntimeC(cases []x86ScalarCompareAFCase) string {
+	var declarations, checks strings.Builder
+	for i, row := range cases {
+		fmt.Fprintf(&declarations, "extern void %s(uint8_t*,uint8_t*,uint8_t*,uint64_t);\n", row.name)
+		alias := 0
+		if row.dst == row.src {
+			alias = 1
+		}
+		fmt.Fprintf(&checks, "if(check(%s,%d,%d,%d,a,b,seed)) {\n return 1;\n}\n", row.name, row.bits, i, alias)
+	}
+	return x86ScalarCompareAFCReference + declarations.String() + `
+int main(void) {
+ const double values[] = {-INFINITY, -2, -1, -0.0, 0, 1, 2, INFINITY, NAN};
+ for(unsigned i=0; i<9; i++) {
+  for(unsigned j=0; j<9; j++) {
+   for(unsigned s=0; s<2; s++) {
+    double a=values[i], b=values[j];
+    uint64_t seed = s ? 0x8d5 : 0;
+` + checks.String() + "   }\n  }\n }\n return 0;\n}\n"
 }

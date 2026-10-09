@@ -1,6 +1,7 @@
 package plan9asm
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -39,6 +40,7 @@ func x86COMIProperties(ins Instr, arch string) (x86COMIForm, bool, error) {
 		dotted && (!spec.vector || suffix != "SAE" || ins.Args[0].Kind != OpReg) {
 		return fail()
 	}
+	var contextErr error
 	for index, operand := range ins.Args {
 		if operand.Kind == OpReg {
 			register, valid := amd64ParseXReg(operand.Reg)
@@ -46,7 +48,7 @@ func x86COMIProperties(ins Instr, arch string) (x86COMIForm, bool, error) {
 				return fail()
 			}
 			if arch == "386" && register >= 8 {
-				return form, true, fmt.Errorf("%w: %s lacks physical mode32 high-X identity", ErrProbeNeedsContext, ins.Op)
+				contextErr = fmt.Errorf("%w: %s lacks physical mode32 high-X identity", ErrProbeNeedsContext, ins.Op)
 			}
 			form.evex = form.evex || register >= 16
 			continue
@@ -55,11 +57,15 @@ func x86COMIProperties(ins Instr, arch string) (x86COMIForm, bool, error) {
 			return fail()
 		}
 		if operand.Kind == OpMem {
-			if err := x86SymbolIndexedMemoryError(operand.Mem, arch); err != nil {
-				return form, true, err
-			}
 			if operand.Mem.OffRaw != "" || operand.Mem.IndexExt != "" {
 				return fail()
+			}
+			if err := x86SymbolIndexedMemoryError(operand.Mem, arch); err != nil {
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					return form, true, err
+				}
+				contextErr = err
+				continue
 			}
 			if arch == "386" && strings.HasSuffix(operand.Mem.Sym, "(SB)") {
 				operand.Mem.Base = ""
@@ -69,7 +75,7 @@ func x86COMIProperties(ins Instr, arch string) (x86COMIForm, bool, error) {
 			return fail()
 		}
 	}
-	return form, true, nil
+	return form, true, contextErr
 }
 
 func validateX86COMIFile(file *File, options Options) error {
@@ -77,14 +83,23 @@ func validateX86COMIFile(file *File, options Options) error {
 		return nil
 	}
 	needed := false
+	var contextErr error
 	for _, function := range file.Funcs {
 		for _, instruction := range function.Instrs {
 			_, known, err := x86COMIProperties(instruction, options.Goarch)
 			if known && err != nil {
-				return fmt.Errorf("%s: %w", function.Sym, err)
+				if !errors.Is(err, ErrProbeNeedsContext) {
+					return fmt.Errorf("%s: %w", function.Sym, err)
+				}
+				if contextErr == nil {
+					contextErr = fmt.Errorf("%s: %w", function.Sym, err)
+				}
 			}
 			needed = needed || known
 		}
+	}
+	if contextErr != nil {
+		return contextErr
 	}
 	if needed && !x86ScalarFloatIntegerNativeTarget(options.Goarch, options.TargetTriple) {
 		return fmt.Errorf("%w: scalar flag comparison requires its native x86 MXCSR target", ErrProbeNeedsContext)

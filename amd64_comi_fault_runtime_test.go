@@ -23,6 +23,30 @@ func x86COMIDeadFaults(t *testing.T, native bool) {
 	if native && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || len(execution.prefix) != 0) {
 		t.Fatal("COMI exception delivery requires actual native Linux AMD64")
 	}
+	assembly, declarations, driver, _, trapChecks := x86COMIDeadFaultFixture(t, native, execution.triple)
+	for _, api := range []string{"text", "module", "Go"} {
+		t.Run(api, func(t *testing.T) {
+			ir, err := x86ScalarFPBitViewAPI(t, assembly, declarations, "amd64", execution.triple, api)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, pipeline := range []struct{ name, ir, level string }{
+				{"backend_O0", ir, "-O0"}, {"IR_O2/backend_O2", x86MulDivRoundOptimize(t, ir), "-O2"},
+			} {
+				t.Run(pipeline.name, func(t *testing.T) {
+					output := execution.compileAndRunLLVM(t, "comi-fault", pipeline.ir, driver, pipeline.level)
+					want := fmt.Sprintf("COMI original Go/LLVM dead reads matched; native IE/DE/SAE checks=%d\n", trapChecks)
+					if string(output) != want {
+						t.Fatal("missing complete fault receipt", string(output))
+					}
+				})
+			}
+		})
+	}
+}
+
+func x86COMIDeadFaultFixture(t *testing.T, native bool, triple string) (string, string, string, int, int) {
+	t.Helper()
 	var assembly, declarations, original, prototypes, pairs strings.Builder
 	count := 0
 	for _, name := range x86COMIOracleNames() {
@@ -52,7 +76,7 @@ func x86COMIDeadFaults(t *testing.T, native bool) {
 				bytes[index] = fmt.Sprintf("0x%02x", value)
 			}
 			symbol := nativeFunction
-			if strings.Contains(execution.triple, "apple") {
+			if strings.Contains(triple, "apple") {
 				symbol = "_" + symbol
 			}
 			fmt.Fprintf(&original, "__asm__(%q);\n", ".text\n.globl "+symbol+"\n"+symbol+":\n.byte "+strings.Join(bytes, ",")+"\n")
@@ -141,23 +165,5 @@ int main(void) {
     return 0;
 }
 `
-	for _, api := range []string{"text", "module", "Go"} {
-		t.Run(api, func(t *testing.T) {
-			ir, err := x86ScalarFPBitViewAPI(t, assembly.String(), declarations.String(), "amd64", execution.triple, api)
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, pipeline := range []struct{ name, ir, level string }{
-				{"backend_O0", ir, "-O0"}, {"IR_O2/backend_O2", x86MulDivRoundOptimize(t, ir), "-O2"},
-			} {
-				t.Run(pipeline.name, func(t *testing.T) {
-					output := execution.compileAndRunLLVM(t, "comi-fault", pipeline.ir, driver, pipeline.level)
-					want := fmt.Sprintf("COMI original Go/LLVM dead reads matched; native IE/DE/SAE checks=%d\n", trapChecks)
-					if string(output) != want {
-						t.Fatal("missing complete fault receipt", string(output))
-					}
-				})
-			}
-		})
-	}
+	return assembly.String(), declarations.String(), driver, count, trapChecks
 }
