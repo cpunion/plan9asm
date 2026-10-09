@@ -4,6 +4,10 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +42,7 @@ func TestModuleRootPartitionCLIRejectsInvalidRolesBeforeIO(t *testing.T) {
 			args = append(args, "-dir", dir, "-out", out, "-shards=32", "-workers=2", "-timeout=2m")
 			_, err := captureCommand(context.Background(), 30*time.Second, ".", binary, args, stem)
 			stderr, readErr := os.ReadFile(stem + ".stderr")
-			if err == nil || readErr != nil || !strings.Contains(string(stderr), "root partition scheduling") {
+			if err == nil || err.Error() != "exit status 1" || readErr != nil || !strings.Contains(string(stderr), "root partition scheduling") {
 				t.Fatalf("actual invalid role did not reach explicit split validation: %v, read=%v\n%s", err, readErr, stderr)
 			}
 			if strings.Contains(string(stderr), "flag provided but not defined") {
@@ -48,5 +52,85 @@ func TestModuleRootPartitionCLIRejectsInvalidRolesBeforeIO(t *testing.T) {
 				t.Fatalf("invalid scheduling role performed output IO: %v", err)
 			}
 		})
+	}
+}
+
+// One independent first-party Test root per ordinary hash shard. The selector
+// denominator comes from real Go -list output, not a checked-in library list.
+func moduleRootPartitionFixture(t *testing.T) string {
+	t.Helper()
+	dir := moduleFixture(t, false)
+	path := filepath.Join(dir, "value_test.go")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := make([]bool, 32)
+	remaining := len(seen)
+	for candidate := 0; remaining != 0; candidate++ {
+		name := fmt.Sprintf("TestRootShardWitness%d", candidate)
+		hash := sha256.Sum256([]byte(name))
+		index := binary.BigEndian.Uint64(hash[:8]) % uint64(len(seen))
+		if seen[index] {
+			continue
+		}
+		seen[index] = true
+		remaining--
+		source = append(source, []byte(fmt.Sprintf(
+			"\nfunc %s(t *testing.T) { t.Run(\"child\", func(t *testing.T) { if Value() != 7 { t.Fatal(\"value\") } }) }\n", name))...)
+	}
+	if err := os.WriteFile(path, source, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestModuleRootPartitionCLIActualOwnedSubset(t *testing.T) {
+	moduleFixtureEnvironment(t)
+	binary := parallelFixtureCLI(t)
+	dir := moduleRootPartitionFixture(t)
+	out := filepath.Join(t.TempDir(), "fragment")
+	stem := filepath.Join(t.TempDir(), "cli")
+	_, err := captureCommand(context.Background(), 3*time.Minute, ".", binary,
+		[]string{"-module", "-module-owner=0", "-module-root-partitions=8", "-module-root-partition=0",
+			"-dir", dir, "-out", out, "-shards=32", "-workers=2", "-timeout=2m", "--", "-p=1"}, stem)
+	if err != nil {
+		t.Fatal(errorsWithActualOutput(err, stem))
+	}
+	var report struct {
+		Schema int    `json:"schema"`
+		Status string `json:"status"`
+		Part   struct {
+			Protocol string `json:"protocol"`
+			Index    int    `json:"index"`
+			Count    int    `json:"count"`
+		} `json:"root_partition"`
+		Names  []string      `json:"inventory"`
+		Shards []shardResult `json:"shards"`
+	}
+	data, err := os.ReadFile(filepath.Join(out, "package-0000", "partition.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The partial receipt cannot be accepted as an ordinary complete pass.
+	if err := json.Unmarshal(data, &report); err != nil || report.Schema != 2 || report.Status != "completed_owned" ||
+		report.Part.Protocol != "actual_go_root_shard_fragment_v1" || report.Part.Index != 0 || report.Part.Count != 8 ||
+		len(report.Names) != 36 || len(report.Shards) != 32 {
+		t.Fatalf("partial plan lost full inventory/identity: %s (%v)", data, err)
+	}
+	for index, shard := range report.Shards {
+		if shard.Index != index {
+			t.Fatalf("global shard index was renumbered: %+v", shard)
+		}
+		if index%8 == 0 {
+			if shard.Status != "passed" || len(shard.Outcomes) == 0 || len(shard.Command) == 0 {
+				t.Fatalf("assigned shard was not executed: %+v", shard)
+			}
+		} else if shard.Status != "not_owned" || len(shard.Outcomes) != 0 || len(shard.Command) != 0 {
+			t.Fatalf("foreign shard gained execution or pass: %+v", shard)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(out, "package-0000", "report.json")); !os.IsNotExist(err) {
+		t.Fatalf("partial execution masquerades as schema-1 complete suite: %v", err)
 	}
 }
