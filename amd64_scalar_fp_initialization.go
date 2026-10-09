@@ -1,10 +1,18 @@
 package plan9asm
 
 // This private transfer extends the existing must-initialized result analysis
-// only for logical scalar views. It does not expand the public asmdecl-filter
-// query, caller admission, frame backing, or pointer permissions.
+// for logical scalar views and existing exact same-Void-source whole128 caller
+// reads. It does not expand the public asmdecl-filter query, caller admission,
+// frame backing, or pointer permissions.
 func checkX86ScalarFPResultInitialization(fn Func, sig FuncSig, arch string) error {
-	return checkX86ABI0ResultInitialization(fn, sig, arch, x86ScalarFPResultTransfer, true)
+	reads := x86ScalarFPCallerReads(fn, sig, arch)
+	return checkX86ABI0ResultInitializationAtSource(fn, sig, arch,
+		func(ordinal int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			if read, present := reads[ordinal]; present {
+				return read.transfer(ins, state, owned, resultOffset, arch)
+			}
+			return x86ScalarFPResultTransfer(ins, state, owned, resultOffset, arch)
+		}, true)
 }
 
 func x86ScalarFPResultTransfer(ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {

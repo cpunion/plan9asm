@@ -17,6 +17,16 @@ func CheckX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string) error
 
 func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 	transfer func(Instr, *x86ResultState, []bool, int64, string) bool, scalarViews bool) error {
+	return checkX86ABI0ResultInitializationAtSource(fn, sig, goarch,
+		func(_ int, ins Instr, state *x86ResultState, owned []bool, resultOffset int64, arch string) bool {
+			return transfer(ins, state, owned, resultOffset, arch)
+		}, scalarViews)
+}
+
+// The source ordinal is retained across TEXT/label removal. It does not itself
+// authorize an effect; a private observer may join it to an exact source fact.
+func checkX86ABI0ResultInitializationAtSource(fn Func, sig FuncSig, goarch string,
+	transfer func(int, Instr, *x86ResultState, []bool, int64, string) bool, scalarViews bool) error {
 	fail := func(reason string) error {
 		return fmt.Errorf("%w: result initialization: %s", ErrProbeNeedsContext, reason)
 	}
@@ -106,7 +116,8 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 	}
 	labels := make(map[string]int)
 	var instructions []Instr
-	for _, ins := range fn.Instrs {
+	var ordinals []int
+	for ordinal, ins := range fn.Instrs {
 		if ins.Op == OpTEXT {
 			continue
 		}
@@ -121,6 +132,7 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 			continue
 		}
 		instructions = append(instructions, ins)
+		ordinals = append(ordinals, ordinal)
 	}
 	if len(instructions) == 0 || len(instructions) > 4096 {
 		return fail("missing or oversized source CFG")
@@ -167,7 +179,7 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 			continue
 		}
 		shape := top.clone()
-		if !transfer(ins, &shape, owned, resultOffset, goarch) {
+		if !transfer(ordinals[pc], ins, &shape, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unclosed source effect at instruction %d: %s", pc, ins.Raw))
 		}
 		next := []int{pc + 1}
@@ -221,7 +233,7 @@ func checkX86ABI0ResultInitialization(fn Func, sig FuncSig, goarch string,
 			returned = true
 			continue // Check results after the complete fixed point, never early.
 		}
-		if !transfer(ins, &state, owned, resultOffset, goarch) {
+		if !transfer(ordinals[pc], ins, &state, owned, resultOffset, goarch) {
 			return fail(fmt.Sprintf("unknown effect or undefined input at instruction %d: %s", pc, ins.Raw))
 		}
 		for _, target := range edges[pc] {
