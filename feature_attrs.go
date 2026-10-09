@@ -126,6 +126,17 @@ func inferFuncTargetFeaturesForGOARCH(arch Arch, goarch string, fn Func) string 
 					}
 				}
 			}
+			if form, known, err := x86ScalarFloatIntegerProperties(ins, goarch); known && err == nil {
+				if form.evex {
+					add("+avx512f")
+				} else if form.spec.vector {
+					add("+avx")
+				} else if form.spec.inputBits == 32 {
+					add("+sse")
+				} else {
+					add("+sse2")
+				}
+			}
 			// Only the validated native compare form gets its private ISA.
 			// This grants no caller memory or physical register permission.
 			if form, known, err := x86FloatCompareProperties(ins, goarch); known && err == nil {

@@ -293,7 +293,7 @@ func TestTranslateX86RawScalarFloatIntegerReportedEncoding(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !strings.Contains(ir, "fptosi double") || !strings.Contains(ir, " to i64") {
+			if !strings.Contains(ir, `call i64 asm sideeffect "cvttsd2siq $1, $0"`) || strings.Contains(ir, "fptosi double") {
 				t.Fatalf("raw CVTTSD2SQ semantics missing:\n%s", ir)
 			}
 			llc := findLLVM22Tool("llc")

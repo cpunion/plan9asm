@@ -986,6 +986,9 @@ type Instr struct {
 	// and changes physical x87/MMX state. This is a restriction, not an
 	// authorization to use native MMX scratch registers.
 	x86MMXSourceConversion bool
+	// Decoder-only EVEX scalar conversion encoding. Keep its native ISA
+	// requirement even when its low-X operands also have a VEX spelling.
+	x86ScalarFloatIntegerEVEX bool
 	// Recomputed per-operand source-SP to typed ABI0 slot certificate. Keep
 	// original physical operands intact across repeated normalization.
 	x86SourceStackFP map[int]int64

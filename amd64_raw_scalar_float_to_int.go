@@ -34,8 +34,8 @@ func decodedX86ScalarFloatToIntegerInstruction(code []byte, mode int) (Instr, in
 	if len(code) <= p.modRM {
 		return fail("missing ModRM byte")
 	}
-	if mode == 32 && (p.w || p.r != 0 || p.b != 0 || p.x != 0) {
-		return fail("64-bit or extended register encoding in 32-bit mode")
+	if mode == 32 && (p.r != 0 || p.b != 0 || p.x != 0) {
+		return fail("extended register encoding in 32-bit mode")
 	}
 	if p.evex {
 		if !p.fixed || p.mask != 0 || p.zero || p.r >= 2 {
@@ -44,9 +44,8 @@ func decodedX86ScalarFloatToIntegerInstruction(code []byte, mode int) (Instr, in
 		if p.broadcast && code[p.modRM]>>6 != 3 {
 			return fail("SAE or embedded rounding requires register source")
 		}
-		if !p.broadcast && p.vectorLength != 0 {
-			return fail("scalar conversion without rounding requires EVEX.128")
-		}
+		// EVEX.L'L is ignored without embedded rounding (and for CVTT SAE).
+		// Unlike VEX.L=1, Intel defines these as LLIG encodings.
 	} else if p.vectorLength != 0 {
 		return fail("scalar conversion requires VEX.128")
 	}
@@ -94,9 +93,16 @@ func decodedX86ScalarFloatToIntegerInstruction(code []byte, mode int) (Instr, in
 		return fail("invalid GP destination")
 	}
 	destination := Operand{Kind: OpReg, Reg: destinationReg}
-	return Instr{
-		Op:   op,
-		Args: []Operand{source, destination},
-		Raw:  fmt.Sprintf("%s %s, %s", op, source.String(), destination.String()),
-	}, p.modRM + consumed, true, nil
+	instruction := Instr{
+		Op:                        op,
+		Args:                      []Operand{source, destination},
+		Raw:                       fmt.Sprintf("%s %s, %s", op, source.String(), destination.String()),
+		x86ScalarFloatIntegerEVEX: p.evex,
+	}
+	arch := "amd64"
+	if mode == 32 {
+		arch = "386"
+	}
+	_, _, err = x86ScalarFloatIntegerProperties(instruction, arch)
+	return instruction, p.modRM + consumed, true, err
 }

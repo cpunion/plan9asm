@@ -971,6 +971,9 @@ func models386SPWrite(ins Instr) bool {
 	if _, ok := amd64BMI2ShiftSpecs[op]; ok {
 		return true
 	}
+	if _, known, err := x86ScalarFloatIntegerProperties(ins, "386"); known {
+		return err == nil
+	}
 	switch op {
 	case "MOVL", "ADDW", "SUBW", "ADCW", "SBBW", "ADDL", "SUBL", "ADCL", "SBBL", "ADCXL", "ADOXL", "LEAW", "LEAL", "POPW", "POPL",
 		"CRC32B", "CRC32W", "CRC32L",
@@ -979,10 +982,7 @@ func models386SPWrite(ins Instr) bool {
 		"BEXTRL", "BEXTRQ", "BZHIL", "BZHIQ", "BLSIL", "BLSIQ", "BLSMSKL", "BLSMSKQ", "BLSRL", "BLSRQ",
 		"ANDNL", "ANDNQ",
 		"RORXL", "RORXQ",
-		"PDEPL", "PDEPQ", "PEXTL", "PEXTQ",
-		"CVTSS2SL", "CVTSD2SL", "CVTTSS2SL", "CVTTSD2SL",
-		"VCVTSS2SI", "VCVTSD2SI", "VCVTTSS2SI", "VCVTTSD2SI",
-		"VCVTSS2USIL", "VCVTSD2USIL", "VCVTTSS2USIL", "VCVTTSD2USIL":
+		"PDEPL", "PDEPQ", "PEXTL", "PEXTQ":
 		// These are the direct SP forms used by the official 386 corpus. MOVL
 		// and non-SP LEAL rebase to an explicitly supplied stack context;
 		// arithmetic and SP-relative LEAL retain the current stack model.

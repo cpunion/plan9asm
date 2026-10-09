@@ -19,6 +19,10 @@ func TestTranslateX86ScalarFloatToIntegerCompleteGoAssemblerForms(t *testing.T) 
 		{name: "windows-386", goarch: "386", triple: "i686-pc-windows-msvc"},
 	} {
 		t.Run(target.name, func(t *testing.T) {
+			xreg := "X16"
+			if target.goarch == "386" {
+				xreg = "X7" // A high named bank has no physical mode32 identity.
+			}
 			var source strings.Builder
 			source.WriteString("TEXT scalarfloattointforms(SB),NOSPLIT,$0-0\n")
 			for _, precision := range []string{"SS", "SD"} {
@@ -41,10 +45,10 @@ func TestTranslateX86ScalarFloatToIntegerCompleteGoAssemblerForms(t *testing.T) 
 						fmt.Fprintf(&source, "\t%s X0, AX\n", vop)
 						fmt.Fprintf(&source, "\t%s 16(BX), DI\n", vop)
 						if truncating {
-							fmt.Fprintf(&source, "\t%s.SAE X16, AX\n", vop)
+							fmt.Fprintf(&source, "\t%s.SAE %s, AX\n", vop, xreg)
 						} else {
 							for _, rounding := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
-								fmt.Fprintf(&source, "\t%s.%s X16, AX\n", vop, rounding)
+								fmt.Fprintf(&source, "\t%s.%s %s, AX\n", vop, rounding, xreg)
 							}
 						}
 					}
@@ -59,13 +63,13 @@ func TestTranslateX86ScalarFloatToIntegerCompleteGoAssemblerForms(t *testing.T) 
 							continue
 						}
 						op := prefix + precision + "2USI" + width
-						fmt.Fprintf(&source, "\t%s X16, AX\n", op)
+						fmt.Fprintf(&source, "\t%s %s, AX\n", op, xreg)
 						fmt.Fprintf(&source, "\t%s 24(BX), DI\n", op)
 						if truncating {
-							fmt.Fprintf(&source, "\t%s.SAE X16, AX\n", op)
+							fmt.Fprintf(&source, "\t%s.SAE %s, AX\n", op, xreg)
 						} else {
 							for _, rounding := range []string{"RN_SAE", "RD_SAE", "RU_SAE", "RZ_SAE"} {
-								fmt.Fprintf(&source, "\t%s.%s X16, AX\n", op, rounding)
+								fmt.Fprintf(&source, "\t%s.%s %s, AX\n", op, rounding, xreg)
 							}
 						}
 					}
@@ -115,7 +119,6 @@ func TestTranslateX86ScalarFloatToIntegerRejectsFormsOutsideGoAssemblerTables(t 
 	for _, instruction := range []string{
 		"CVTSS2SQ X0, AX",
 		"CVTTSD2SQ 8(BX), AX",
-		"VCVTSS2SIQ X0, AX",
 		"VCVTTSD2SIQ.SAE X16, AX",
 		"VCVTSS2USIQ X16, AX",
 		"VCVTTSD2USIQ.SAE X16, AX",

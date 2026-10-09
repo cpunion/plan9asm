@@ -2,7 +2,6 @@ package plan9asm
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -150,11 +149,9 @@ func TestX86RawScalarFloatToIntegerRejectsReservedEncodings(t *testing.T) {
 	}{
 		{"VEX-vector-length", []byte{0xc5, 0xff, 0x2c, 0xc1}, 64},
 		{"VEX-vvvv", []byte{0xc5, 0xeb, 0x2c, 0xc1}, 64},
-		{"VEX-Q-in-386", []byte{0xc4, 0xe1, 0xfb, 0x2c, 0xc1}, 32},
 		{"EVEX-mask", []byte{0x62, 0xf1, 0x7f, 0x09, 0x2c, 0xc1}, 64},
 		{"EVEX-zero", []byte{0x62, 0xf1, 0x7f, 0x88, 0x2c, 0xc1}, 64},
 		{"EVEX-vvvv", []byte{0x62, 0xf1, 0x6f, 0x08, 0x2c, 0xc1}, 64},
-		{"EVEX-LL-without-rounding", []byte{0x62, 0xf1, 0x7f, 0x28, 0x2d, 0xc1}, 64},
 		{"EVEX-SAE-memory", []byte{0x62, 0xf1, 0x7f, 0x18, 0x2c, 0x00}, 64},
 		{"address-override", []byte{0x67, 0xc5, 0xfb, 0x2c, 0xc1}, 64},
 		{"missing-ModRM", []byte{0xc5, 0xfb, 0x2c}, 64},
@@ -185,7 +182,7 @@ func TestX86RawScalarFloatToIntegerCompilesEveryGoForm(t *testing.T) {
 			var source strings.Builder
 			source.WriteString("TEXT rawscalarconvert(SB),4,$0-0\n")
 			for _, spec := range amd64ScalarFloatToIntSpecs {
-				if !spec.vector || target.goarch == "386" && spec.outputBits == 64 {
+				if !spec.vector {
 					continue
 				}
 				for _, evex := range []bool{false, true} {
@@ -218,15 +215,8 @@ func TestX86RawScalarFloatToIntegerCompilesEveryGoForm(t *testing.T) {
 	}
 }
 
-func TestX86RawScalarFloatToIntegerRuntime(t *testing.T) {
-	crossRosetta := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && rosettaAvailable()
-	if runtime.GOARCH != "amd64" && !crossRosetta {
-		t.Skip("runtime execution requires amd64 or Rosetta")
-	}
-	llc, clang, ok := findLlcAndClang(t)
-	if !ok {
-		t.Fatal("LLVM 22 llc/clang not found")
-	}
+func x86RawScalarFloatToIntegerNativeRuntime(t *testing.T) {
+	execution := x86FloatCompareRuntimeTools(t, x86FloatCompareEVEX)
 	const source = `TEXT rawfloattointsemantics(SB),4,$0-16
 	MOVQ input+0(FP), BX
 	MOVQ out+8(FP), DI
@@ -245,14 +235,8 @@ func TestX86RawScalarFloatToIntegerRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	triple := testTargetTriple(runtime.GOOS, runtime.GOARCH)
-	var runPrefix []string
-	if crossRosetta {
-		triple = "x86_64-apple-macosx"
-		runPrefix = []string{"/usr/bin/arch", "-x86_64"}
-	}
 	ir, err := Translate(file, Options{
-		Goarch: "amd64", TargetTriple: triple,
+		Goarch: "amd64", TargetTriple: execution.triple,
 		Sigs: map[string]FuncSig{"rawfloattointsemantics": {
 			Name: "rawfloattointsemantics", Args: []LLVMType{Ptr, Ptr}, Ret: Void,
 			Frame: FrameLayout{Params: []FrameSlot{
@@ -278,5 +262,5 @@ int main(void) {
   return 0;
 }
 `
-	compileAndRunRuntimeTestForTarget(t, llc, clang, "raw_float_to_integer", triple, ir, mainC, runPrefix)
+	execution.compileAndRunLLVM(t, "raw-float-to-integer", ir, mainC, "-O2")
 }

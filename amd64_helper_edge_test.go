@@ -1171,6 +1171,7 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		},
 	}
 	c, b := newAMD64CtxWithFuncForTest(t, fn, sig, nil)
+	c.goarch, c.targetTriple = "amd64", "x86_64-unknown-linux-gnu"
 	check := func(kind string, ins Instr, ok bool, err error) {
 		t.Helper()
 		if err != nil {
@@ -1313,10 +1314,10 @@ func TestAMD64FPMovCoverage(t *testing.T) {
 		"fcmp ueq double",
 		"fcmp ord double",
 		"call double @llvm.sqrt.f64",
-		"call double @llvm.rint.f64",
+		`call i32 asm sideeffect "cvtsd2sil $1, $0"`,
 		"@llvm.experimental.constrained.sitofp.f64.i64",
 		"@llvm.experimental.constrained.sitofp.f64.i32",
-		"fptosi double",
+		`call i64 asm sideeffect "cvttsd2siq $1, $0"`,
 		"select i1",
 		"bitcast i64",
 		"bitcast double",
