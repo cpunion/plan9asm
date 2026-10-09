@@ -15,9 +15,14 @@ type discoveryOrdinaryDependencyGuard struct {
 	Context          context.Context
 	Source           gotoolprofile.ModuleSourceSnapshot
 	Root, ZIP, GoMod string
+	ObservedRoot     string
 }
 
 func (guard discoveryOrdinaryDependencyGuard) verify() error {
+	root, err := discoveryOrdinaryDependencyRoot(guard.ObservedRoot)
+	if err != nil || root != guard.Root {
+		return fmt.Errorf("ordinary dependency observed source root changed")
+	}
 	if err := gotoolprofile.VerifyTestModuleSource(guard.Context, guard.Source, guard.Root, guard.ZIP); err != nil {
 		return err
 	}
@@ -27,9 +32,23 @@ func (guard discoveryOrdinaryDependencyGuard) verify() error {
 	return nil
 }
 
+// Canonicalization is not permission to follow a source-internal alias. The
+// strict inventory verifier still checks every member under this exact root;
+// the live guard additionally retains the original driver/download spelling.
+func discoveryOrdinaryDependencyRoot(observed string) (string, error) {
+	if !filepath.IsAbs(observed) || filepath.Clean(observed) != observed {
+		return "", fmt.Errorf("ordinary dependency lacks an absolute original source root")
+	}
+	return filepath.EvalSymlinks(observed)
+}
+
 func retainDiscoveryOrdinaryDependencyGuard(plan *discoveryOrdinarySelectionPlan, guard discoveryOrdinaryDependencyGuard) error {
+	if guard.ObservedRoot == "" {
+		guard.ObservedRoot = guard.Root
+	}
 	for _, previous := range plan.ordinaryDependencyGuards {
-		if previous.Root == guard.Root && previous.ZIP == guard.ZIP && previous.GoMod == guard.GoMod && reflect.DeepEqual(previous.Source, guard.Source) {
+		if previous.Root == guard.Root && previous.ObservedRoot == guard.ObservedRoot &&
+			previous.ZIP == guard.ZIP && previous.GoMod == guard.GoMod && reflect.DeepEqual(previous.Source, guard.Source) {
 			// Profiles can have identical original source inventories. Retain
 			// one immutable witness, but still verify the current live bytes.
 			return guard.verify()
@@ -70,7 +89,11 @@ func verifyDiscoveryOrdinaryDependencies(ctx context.Context, plan *discoveryOrd
 	if proof == nil || proof.Protocol != gotoolprofile.OrdinaryDependencyProtocol {
 		return fmt.Errorf("ordinary metadata query lacks dependency source evidence")
 	}
-	if err := gotoolprofile.VerifySourceInventory(ctx, proof.Candidate, download.Dir); err != nil {
+	root, err := discoveryOrdinaryDependencyRoot(download.Dir)
+	if err != nil {
+		return err
+	}
+	if err := gotoolprofile.VerifySourceInventory(ctx, proof.Candidate, root); err != nil {
 		return err
 	}
 	if err := verifyDiscoveryOriginalSourceMap(plan, download.Dir, download.Zip, proof.Candidate.Sources); err != nil {
@@ -85,7 +108,6 @@ func verifyDiscoveryOrdinaryDependencies(ctx context.Context, plan *discoveryOrd
 		Sources: proof.Candidate.Sources, Headers: proof.Candidate.Headers, Directories: proof.Candidate.Directories,
 		GoModOrigin: gotoolprofile.TestModuleOriginalGoModOrigin,
 	}
-	var err error
 	candidate.GoModSHA256, err = gotoolprofile.FileSHA256(download.GoMod)
 	if err != nil {
 		return err
@@ -93,7 +115,9 @@ func verifyDiscoveryOrdinaryDependencies(ctx context.Context, plan *discoveryOrd
 	if plan.ProxyGoMod != nil {
 		candidate.GoModOrigin, candidate.ProxyGoMod = gotoolprofile.ProxyGoModProtocol, plan.ProxyGoMod
 	}
-	if err := retainDiscoveryOrdinaryDependencyGuard(plan, discoveryOrdinaryDependencyGuard{Context: ctx, Source: candidate, Root: download.Dir, ZIP: download.Zip, GoMod: download.GoMod}); err != nil {
+	if err := retainDiscoveryOrdinaryDependencyGuard(plan, discoveryOrdinaryDependencyGuard{
+		Context: ctx, Source: candidate, Root: root, ObservedRoot: download.Dir, ZIP: download.Zip, GoMod: download.GoMod,
+	}); err != nil {
 		return err
 	}
 	for _, source := range proof.SourceModules {
@@ -120,11 +144,14 @@ func verifyDiscoveryOrdinaryDependencies(ctx context.Context, plan *discoveryOrd
 				return err
 			}
 		}
-		root, err = filepath.EvalSymlinks(root)
+		observedRoot := root
+		root, err = discoveryOrdinaryDependencyRoot(observedRoot)
 		if err != nil {
 			return err
 		}
-		if err := retainDiscoveryOrdinaryDependencyGuard(plan, discoveryOrdinaryDependencyGuard{Context: ctx, Source: source, Root: root, ZIP: archive, GoMod: goMod}); err != nil {
+		if err := retainDiscoveryOrdinaryDependencyGuard(plan, discoveryOrdinaryDependencyGuard{
+			Context: ctx, Source: source, Root: root, ObservedRoot: observedRoot, ZIP: archive, GoMod: goMod,
+		}); err != nil {
 			return err
 		}
 	}

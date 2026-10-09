@@ -702,6 +702,12 @@ scope. Cached header replay and later execution phases recheck these inputs;
 neither a temporary query-plan copy nor mutable report projections may replace
 the original dependency owner.
 
+Actual Go/download roots may use ancestor aliases (for example a system
+temporary-directory spelling). Both producer and consumer retain the observed
+root-to-canonical-root identity through their live guards. Inventories still
+verify canonical roots and reject source-internal redirects; replacing an
+observed alias with a different directory is not accepted even for equal bytes.
+
 Generated-header planning privately retains cost-only negative source preflights
 for one candidate operation, keyed by the complete requested profile, assembly
 file and custom tags. Retention is bounded to 4,096 entries and 16 MiB of keys
