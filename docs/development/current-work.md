@@ -25,10 +25,11 @@ cleanup failure obscures its source/SDK/tool-stable result. Its 54 failed root
 tests, 34 failed corpus-driver roots and four failed gotoolprofile roots remain
 regressions. Do not overwrite this checkout or its original reports.
 
-The next integration branch is `codex/pr40-ci-family-batch-20261009`, based on
-`e50f590a`. It is still a development integration, not a verified combined head.
-Keep component worktrees frozen; inspect this branch's actual commits before
-starting gates. Earlier passes establish only their exact component revisions:
+The next integration branch is `codex/pr40-ci-family-successor-20261009`, based
+on `cddbc85e`. Latest upstream main `e2164ac0` is already its ancestor. This is
+still development integration, not a verified combined head. Keep component
+worktrees frozen; inspect actual commits before starting gates. Earlier passes
+establish only their exact component revisions:
 
 - `4617d12d`: complete explicit IMUL source/caller family, zero-operand
   diagnostics, actual ARM64 lazy-tool routes and backend physical-source prefix.
@@ -44,34 +45,44 @@ starting gates. Earlier passes establish only their exact component revisions:
 - `e34c78c6`: shared target CPU command-environment construction fixes foreign
   inherited CPU keys without sanitizing output or weakening profile validation.
   Seven focused roots and the original four instrumentation roots pass.
-  The complete original 34-root corpus-driver rerun is a separate pending gate;
-  it has exposed a real generated-header fixture deadline failure.
+  The separate 34-root finite rerun ends with 33 passes and one incomplete
+  generated-header root. Its six-minute per-root deadline is not the original
+  fixture's fifteen-minute or full module's forty-five-minute budget. Preserve
+  that failed scope without calling it a semantic failure or a full-suite pass.
 - `8061bd59`: explicit wasm unknown-word lexical roles preserve complete
   original statement/suffix binding. Component ordinary/race/Go-1.20 oracle
   scopes pass; this is not wasm runtime or LLVM object coverage.
-
-Two further components have independent TDD evidence but must complete their
-own matrices before integration and current-head reruns:
-
-- ARM64 branch diagnostics at `348e27b9`: B/BL aliases, canonical P/W suffixes,
+- `348e27b9`: ARM64 B/BL aliases, canonical P/W suffixes,
   complete historical four-class/current five-class directories, and actual
   selected-SDK bare From versus register/special-operand lexical roles. A bare
   From symbol prints zero offset; it is not a resolved label-PC permission.
-- Private x86 whole128 observer at `7d931314`: exact same-Void-source/private
-  caller/normalized-ordinal read16 joins. Its 402-node new family passes, but
-  the larger original gate fails on missing old MOVOA diagnostic aliases.
-  Successor `dc2e4918` integrates the complete previously verified oracle chain
-  and is rerunning the full affected scope. Public/direct/nonVoid, aligned,
-  scalar/half, native-store and unknown-extent boundaries remain unchanged.
+  Complete ordinary/race/actual Go-1.20 component scopes pass.
+- `dc2e4918`: private x86 whole128 observer joins exact same-Void-source/private
+  caller/normalized-ordinal read16 evidence. Its complete 26-root scope passes
+  ordinary/race/actual Go-1.20, and shared aliases pass ordinary/race separately.
+  Public/direct/nonVoid, aligned, scalar/half, native-store and unknown-extent
+  boundaries remain unchanged. Only its six reviewed production/fixture
+  commits are integrated here; shared oracle prerequisites were already present.
+- `69253f0e`: complete x86 alias operand joins retain Go's TYPE_FCONST value,
+  canonical seventeen-digit printing and signed zero. Four focused roots pass
+  ordinarily with 96 actual source-bound Go rejections; race/Go-1.20 remain
+  separate gates. No instruction, source N/A or ABI permission is added.
+
+The combined rerun at `cddbc85e` naturally ends with 52 of the original 54
+failed roots passing. Two roots still fail on four diagnostic-join children:
+alias FLOAT formatting and mode32 FP rebasing. The FLOAT family above repairs
+the first; a separate TEXT/deltasp-bound frame family is still in TDD. Do not
+replace the original combined failure with component passes.
 
 ## Next work, in order
 
 1. Let each active finite gate finish, including failures. Recheck actual
    source/tools/binaries, full raw EOF, all listed root/subtest outcomes and
    owned processes independently. Incomplete or killed tests remain failures.
-2. Diagnose the generated-header fixture's last actual command, repeated build
-   work and owned resource lifetime. Reproduce with the original finite budget;
-   optimize the cause, never conceal it by enlarging deadlines or skipping.
+2. Finish the mode32 frame diagnostic family and inspect why generated-header
+   planning proposes many CPU scopes. Preserve actual source/profile guards;
+   optimize repeated work by rule class. A full-module rerun retains its
+   original budget, never hides the finite-scope timeout or skips the fixture.
 3. Finish affected ordinary/race and actual Go-1.20 component matrices. Integrate
    only their reviewed ordered commits, preserving the original RED evidence.
    Replace this checkpoint once the next integration is ready to freeze.
