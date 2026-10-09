@@ -89,6 +89,11 @@ func sameInput(before, after os.FileInfo) bool {
 // The token role is only a diagnostic join. It is not an instruction grammar,
 // lowering rule, or permission to execute a source statement.
 func statementOpcode(statement string) string {
+	opcode, _ := statementRole(statement)
+	return opcode
+}
+
+func statementRole(statement string) (string, bool) {
 	var tokens scanner.Scanner
 	tokens.Init(strings.NewReader(statement))
 	tokens.Mode = scanner.ScanIdents | scanner.ScanComments | scanner.SkipComments
@@ -100,29 +105,30 @@ func statementOpcode(statement string) string {
 	}
 	tokens.Error = func(_ *scanner.Scanner, _ string) {}
 	if tokens.Scan() != scanner.Ident {
-		return ""
+		return "", false
 	}
 	opcode := tokens.TokenText()
 	next := tokens.Scan()
 	for next == '.' {
 		if tokens.Scan() != scanner.Ident {
-			return ""
+			return "", false
 		}
 		opcode += "." + tokens.TokenText()
 		next = tokens.Scan()
 	}
 	if next == ':' {
 		// A label or label prefix is not this isolated statement's opcode.
-		return ""
+		return "", false
 	}
+	zeroOperands := next == scanner.EOF
 	// Consume the complete line. A malformed comment later in an operand is
 	// still a scanner failure, never an emitted stderr diagnostic or a match.
 	for tokens.Scan() != scanner.EOF {
 	}
 	if tokens.ErrorCount != 0 {
-		return ""
+		return "", false
 	}
-	return opcode
+	return opcode, zeroOperands
 }
 
 func positivePosition(text string) (int, bool) {
@@ -143,8 +149,13 @@ func ListingBindsSource(source, position, pc, instruction string) bool {
 		return false
 	}
 	fields := strings.Fields(instruction)
-	opcode := statementOpcode(lines[line-1])
-	return len(fields) > 1 && opcode != "" && opcode == fields[0]
+	opcode, zeroOperands := statementRole(lines[line-1])
+	if len(fields) == 0 || opcode == "" || opcode != fields[0] {
+		return false
+	}
+	// A single listing token is complete only for an original statement with
+	// no operand tokens. Truncated operand-bearing listings remain unbound.
+	return len(fields) > 1 || zeroOperands
 }
 
 func SourceDiagnostic(source, output string) bool {
