@@ -37,6 +37,9 @@ func parseARM64ScalarConversion(op Op, instruction Instr) (arm64ScalarConversion
 	if !matched {
 		return arm64ScalarConversionForm{}, false, nil
 	}
+	if spec.simdInteger && !instruction.arm64Encoded {
+		return arm64ScalarConversionForm{}, true, fmt.Errorf("arm64 %s is a decoder-only scalar conversion, not a Go source opcode: %q", op, instruction.Raw)
+	}
 	if strings.ToUpper(string(instruction.Op)) != string(op) || len(instruction.Args) != 2 ||
 		instruction.Args[0].Kind != OpReg || instruction.Args[1].Kind != OpReg {
 		return arm64ScalarConversionForm{}, true, fmt.Errorf("arm64 %s expects two scalar registers and no suffix: %q", op, instruction.Raw)
