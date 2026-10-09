@@ -17,10 +17,11 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `7b41b192`. Complete packed x86 conversions, x86/ARM64 scalar
-comparisons and Wasm float comparisons/minmax join the preceding repairs.
-ARM32 scalar comparison and ordinary package/header coverage remain active
-TDD work. The latest official classification gate is not green; see below.
+through `b48cab9c`. Packed x86 conversions, x86/ARM scalar comparisons,
+Wasm float comparisons/minmax and complete ordinary Go-partner tag scopes
+join the preceding repairs. ARM32's expanded runtime matrix and the original
+observer's SDK macro roles remain active; ARM64 conditional compares have an
+independent TDD owner. Current official classification passes; see below.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -184,12 +185,34 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   check because LLVM22 O2 can fold minimum(x,x) to a signaling input unchanged.
   Original Go and 24 real Wasm object/runtime axes each pass 25,600 rows; the
   complete 68-root Wasm gate passes without skips. No blockaddress is emitted.
+- Go's ARM32 CMPF/CMPD and registered raw VCMP/VCMPE retain native FPSCR
+  signaling and cumulative exceptions. Named operations capture status into
+  modeled APSR; raw comparisons do not update APSR before VMRS. The original
+  24-case Go oracle and four LLVM optimization axes pass on Linux/QEMU with
+  no OOM. An independent all-path RED caught raw predicates bypassing the CFG
+  proof after skipped writers/calls; the shared predicate-input registry now
+  closes that gap without expanding the existing raw closed-pair contract.
+  The merged 23-root gate passes. Full-bank/state/condition runtime is still
+  running; its planned row count is not yet a result.
+- Ordinary header planning defers only exact actual-Go source rejections,
+  never metadata/tool/owner failures. Final scope closure includes Go-only
+  tags and even syntax-invalid Go partners, whose actual original compiler
+  refusals must be retained. Independent readers reject deleted refusals or
+  objects. The complete component passes 64 current-Go roots, 59 Go 1.20
+  roots and 17 race roots twice. The embed fixture now requires nine actual
+  LLVM objects, not the former six; no historical report is relabeled.
 
 The merged `2ddd94da` instruction gate passes 146 roots on both current Go
 (170.817 seconds) and Go 1.20 (161.545 seconds), plus CLI table extraction and
-vet. Its official check rejects an AMD64 baseline drift: twenty forms move
-from supported to Context. Review exact source/form evidence before touching
-that baseline; the combined gate is not a pass.
+vet. Its official check rejected an AMD64 baseline drift: twenty forms move
+from synthetic-stack support to Context. Eight-SDK/five-arch before/after
+reports isolate exactly those SP/BP address roles. Independent Go accepts all
+38 conversion names with six SP/BP base/index shapes; the three APIs now reject
+unbound physical addresses with empty IR. Ordinary GP controls compile all
+fifteen five-target/API objects. The reviewed baseline changes only these exact
+fields. At `b745f9a1`, current Go and actual Go 1.20 five-arch classification,
+nested CLI complete-family extraction and root vet all pass. Context is not
+translation/runtime success.
 
 At `6d356caa`, combined family tests passed in 83.066 seconds. Block-native
 reads at `b1dbf01d` passed their 13.465-second complete gate and Go 1.20 gate.
@@ -207,6 +230,12 @@ forms, all 1,280 selected immediate witnesses and every instruction-byte cut.
 
 ## Frozen verification
 
+- `codex/pr40-full-family-verify-20261010`, `044bb668`:
+  `_out/full-family/` is running the twenty-package full module on a separate
+  frozen tree. An obsolete ARM64 helper assertion still expects pure fcmp;
+  `47db8b1b` fixes that fixture after reproducing the failure, and its scalar
+  compare/helper gate passes in 77.128 seconds. Do not edit the running tree
+  or relabel this already failed historical full report.
 - `codex/pr40-family-matrix-verify-20261010`, `71e509f1`:
   `_out/family-matrix-module/` completed the twenty-package inventory: nineteen
   packages passed. Root has 5,460 passed, four failed and 39 host-inapplicable
@@ -368,9 +397,10 @@ transport, numerical globals, TLS and alignment; unbound storage is not a fix.
 2. Close ordinary header-planning source rejections and the complete Go-only
    tag denominator, then the original observer's SDK dependency macro roles.
    Recheck the fixed external failures on a fresh frozen revision.
-3. Finish ARM32 scalar comparison FPSCR/APSR semantics and the independent
-   complete format/status matrix. Resolve the twenty-form official drift
-   without treating Context as a pass, then rerun merged family gates.
+3. Finish the independent ARM32 complete format/status runtime matrix and
+   ARM64 conditional compare audit, retaining native NaN/status effects.
+   The twenty-form official drift is reviewed and its classification gate
+   passes; it did not create twenty missing instruction implementations.
 4. Finish the fixed broad sample, recheck repaired classes on a fresh snapshot,
    and rerun integrated compatibility/race/SDK/native gates before publishing
    the fork batch. Do not combine revisions into a ledger.
