@@ -119,6 +119,14 @@ func armInstructionFlagInputs(ins Instr) armKernelState {
 	if form, ok := decodeARMRawDataForm(ins); ok {
 		return armKernelConditionBits(form.condition)
 	}
+	if ins.Op == OpWORD && len(ins.Args) == 1 && ins.Args[0].Kind == OpImm && ins.Args[0].ImmRaw == "" {
+		if form, ok := decodeARMRawVFPCompare(uint32(ins.Args[0].Imm)); ok {
+			// A raw predicate consumes source APSR even when no subsequent
+			// named instruction reads flags. Enter the all-path proof; the
+			// existing closed-pair rule does not authorize conditional VCMP.
+			return armKernelConditionBits(form.condition)
+		}
+	}
 	if form, matched, err := parseARMStatusMove(ins); matched && err == nil {
 		return armKernelConditionBits(form.condition)
 	}

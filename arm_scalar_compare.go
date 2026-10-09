@@ -39,7 +39,7 @@ func parseARMScalarCompare(op string, ins Instr) (armScalarCompareForm, bool, er
 	}
 	_, form.condition, _, _ = armDecodeOp(string(ins.Op))
 	number := func(arg Operand) int {
-		value, _ := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(string(arg.Reg)), "F"))
+		value, _ := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(string(arg.Reg))), "F"))
 		if form.bits == 32 {
 			value *= 2 // A Go F register's low S half.
 		}
