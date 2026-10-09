@@ -17,11 +17,11 @@ shards failed and two reached deadlines. Downstream skips and failed completion
 aggregates are not passes. Batch verified repairs before pushing.
 
 Development is on `codex/pr40-result-effects-followup-20261010`, integrated
-through `b48cab9c`. Packed x86 conversions, x86/ARM scalar comparisons,
+through `e262afce`. Packed x86 conversions, x86/ARM scalar comparisons,
 Wasm float comparisons/minmax and complete ordinary Go-partner tag scopes
-join the preceding repairs. ARM32's expanded runtime matrix and the original
-observer's SDK macro roles remain active; ARM64 conditional compares have an
-independent TDD owner. Current official classification passes; see below.
+join the preceding repairs. ARM32's expanded runtime matrix passes. The original
+observer's SDK macro/include roles and ARM64 conditional compares remain active
+with independent TDD owners. Current official classification passes; see below.
 Root alone publishes the assembly ledger.
 Never edit, rebase or import into running snapshots.
 
@@ -192,8 +192,17 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   no OOM. An independent all-path RED caught raw predicates bypassing the CFG
   proof after skipped writers/calls; the shared predicate-input registry now
   closes that gap without expanding the existing raw closed-pair contract.
-  The merged 23-root gate passes. Full-bank/state/condition runtime is still
-  running; its planned row count is not yet a result.
+  The merged 23-root gate passes. The expanded Linux/QEMU oracle now passes
+  13,952 original-Go full-bank/state/condition observations and 167,424 LLVM
+  comparisons across 240 linked/executed objects: three LLVM APIs, two IR
+  prepasses and two backend optimization levels. Its twenty batches release
+  each module/context before continuing. Trap-handler delivery is not tested.
+  Typed-Go's separate 548-form, four-target object gate passes; it is not a
+  fourth executed API. The required Linux runtime owner has source-selection
+  and CI-dispatch regressions. All nine merged consumer roots pass in 8.393
+  seconds; the component also passes current Go, Go 1.20 and vet. The closed
+  validator had no OOM; its 3.198-GB peak includes cold compilation, not just
+  the approximately 186-MB sampled runtime. Owned caches are reclaimed.
 - Ordinary header planning defers only exact actual-Go source rejections,
   never metadata/tool/owner failures. Final scope closure includes Go-only
   tags and even syntax-invalid Go partners, whose actual original compiler
@@ -201,6 +210,8 @@ packed shifts, bounded numerical DATA reads and pure-GP scratch propagation:
   objects. The complete component passes 64 current-Go roots, 59 Go 1.20
   roots and 17 race roots twice. The embed fixture now requires nine actual
   LLVM objects, not the former six; no historical report is relabeled.
+  The merged `dd55f82f` gate independently passes all 64 roots in 411.441
+  seconds, vet and unchanged-source guards.
 
 The merged `2ddd94da` instruction gate passes 146 roots on both current Go
 (170.817 seconds) and Go 1.20 (161.545 seconds), plus CLI table extraction and
