@@ -45,6 +45,7 @@ func x86ScalarCompareProperties(op Op, ins Instr, arch string) (x86ScalarCompare
 		immediatePosition = 0
 	}
 	registers, immediates := 0, 0
+	needsTLS := false
 	for index, operand := range form.args {
 		switch operand.Kind {
 		case OpImm:
@@ -81,14 +82,21 @@ func x86ScalarCompareProperties(op Op, ins Instr, arch string) (x86ScalarCompare
 				immediates++
 				continue
 			}
-			if form.memory >= 0 || !x86ScalarCompareMemoryValid(operand, arch) {
+			tls := x86ScalarCompareTLSMemory(operand, arch)
+			if form.memory >= 0 || !tls && !x86ScalarCompareMemoryValid(operand, arch) {
 				return fail("requires at most one encodable Ymb/Yml memory operand")
 			}
 			form.memory = index
+			needsTLS = needsTLS || tls
 		}
 	}
 	if registers == 0 && (form.memory < 0 || immediates != 1) {
 		return fail("does not match any complete Go compare/test row")
+	}
+	if needsTLS {
+		// Check the complete row first: a TLS annotation cannot make a bad
+		// register, immediate direction, or second memory operand valid.
+		return form, true, fmt.Errorf("%w: %s %s TLS memory needs its actual Go OS/arch/shared progedit, relocation and native TLS address contract: %q", ErrProbeNeedsContext, arch, op, ins.Raw)
 	}
 	if arch == "amd64" && form.bits == 8 && x86CompareExchangeHasREXByteView(x86CompareExchangeForm{
 		source: form.args[0], destination: form.args[1],
