@@ -2,6 +2,80 @@ package main
 
 import "fmt"
 
+const moduleRootFragmentProtocol = "actual_go_root_shard_fragment_v1"
+
+func validateModuleReportScheduling(report moduleReport) error {
+	if report.Protocol == moduleProtocol {
+		if report.RootPartitions != 0 || report.RootPartition != nil || report.RootInventory != nil {
+			return fmt.Errorf("legacy module report contains partial scheduling")
+		}
+		return nil
+	}
+	if report.Protocol != moduleRootPartsProtocol || report.RootPartitions < 2 {
+		return fmt.Errorf("unknown module scheduling protocol")
+	}
+	if report.Owner != -1 && report.RootInventory != nil {
+		return fmt.Errorf("producer report cannot supply the aggregate's fresh inventory")
+	}
+	cfg := config{Module: true, Package: ".", CIOwner: -1, ModuleOwner: report.Owner,
+		Shards: report.Shards, ModuleRootPartitions: report.RootPartitions, ModuleRootPartition: -1}
+	if report.RootPartition != nil {
+		cfg.ModuleRootPartition = *report.RootPartition
+	}
+	if report.Owner == -1 {
+		cfg.ModuleVerify = "aggregate-observation"
+	}
+	return validateModuleRootScheduling(cfg)
+}
+
+// This is scheduling metadata, not executable proof or native authority.
+type moduleRootPart struct {
+	Protocol string `json:"protocol"`
+	Index    int    `json:"index"`
+	Count    int    `json:"count"`
+}
+
+func (part moduleRootPart) owns(index int, fullPackage bool) bool {
+	if fullPackage {
+		// Actual benchmark-only/TestMain and no-test package roles execute
+		// once without a filter, regardless of the requested shard count.
+		return index == 0 && part.Index == 0
+	}
+	return index%part.Count == part.Index
+}
+
+func suiteReportName(cfg config) string {
+	if cfg.rootPart != nil {
+		return "partition.json"
+	}
+	return "report.json"
+}
+
+func suiteExpectedRoots(report suiteReport) int {
+	if report.RootPart == nil {
+		return len(report.Names)
+	}
+	count := 0
+	for _, shard := range report.Shards {
+		if report.RootPart.owns(shard.Index, report.FullPackage) {
+			count += len(shard.Names)
+		}
+	}
+	return count
+}
+
+func suiteCompletionStatus(report suiteReport) string {
+	if report.RootPart == nil {
+		return "passed"
+	}
+	for _, shard := range report.Shards {
+		if len(shard.Command) != 0 {
+			return "completed_owned"
+		}
+	}
+	return "completed_empty"
+}
+
 // A subordinate scheduling role, never a test selector or a package admission.
 // The complete module owner numbers and selected-native protocol stay intact.
 func validateModuleRootScheduling(cfg config) error {

@@ -32,6 +32,7 @@ type config struct {
 	ModuleRootPartition   int
 	// Only the module orchestrator sets these from actual package metadata.
 	fullPackage, noTestFiles bool
+	rootPart                 *moduleRootPart
 }
 
 type shardResult struct {
@@ -45,33 +46,39 @@ type shardResult struct {
 }
 
 type suiteReport struct {
-	Schema       int           `json:"schema"`
-	Go           string        `json:"go_executable"`
-	GoVersion    string        `json:"go_version"`
-	Package      string        `json:"package"`
-	Flags        []string      `json:"go_flags"`
-	Timeout      string        `json:"command_timeout"`
-	Workers      int           `json:"workers"`
-	Names        []string      `json:"inventory"`
-	Benchmarks   []string      `json:"benchmarks_not_run_by_default_go_test,omitempty"`
-	InventorySHA string        `json:"inventory_sha256"`
-	Shards       []shardResult `json:"shards"`
-	RootPassed   int           `json:"root_passed"`
-	RootSkipped  int           `json:"root_skipped"`
-	RootFailed   int           `json:"root_failed"`
-	RootMissing  int           `json:"root_incomplete"`
-	ChildPassed  int           `json:"subtests_seeds_passed"`
-	ChildSkipped int           `json:"subtests_seeds_skipped"`
-	ChildFailed  int           `json:"subtests_seeds_failed"`
-	ChildMissing int           `json:"subtests_seeds_incomplete"`
-	Status       string        `json:"status"`
-	Error        string        `json:"error,omitempty"`
-	FullPackage  bool          `json:"full_package,omitempty"`
-	NoTestFiles  bool          `json:"no_test_files,omitempty"`
-	ArtifactDir  string        `json:"artifact_directory,omitempty"`
+	Schema       int             `json:"schema"`
+	Go           string          `json:"go_executable"`
+	GoVersion    string          `json:"go_version"`
+	Package      string          `json:"package"`
+	Flags        []string        `json:"go_flags"`
+	Timeout      string          `json:"command_timeout"`
+	Workers      int             `json:"workers"`
+	Names        []string        `json:"inventory"`
+	Benchmarks   []string        `json:"benchmarks_not_run_by_default_go_test,omitempty"`
+	InventorySHA string          `json:"inventory_sha256"`
+	Shards       []shardResult   `json:"shards"`
+	RootPassed   int             `json:"root_passed"`
+	RootSkipped  int             `json:"root_skipped"`
+	RootFailed   int             `json:"root_failed"`
+	RootMissing  int             `json:"root_incomplete"`
+	ChildPassed  int             `json:"subtests_seeds_passed"`
+	ChildSkipped int             `json:"subtests_seeds_skipped"`
+	ChildFailed  int             `json:"subtests_seeds_failed"`
+	ChildMissing int             `json:"subtests_seeds_incomplete"`
+	Status       string          `json:"status"`
+	Error        string          `json:"error,omitempty"`
+	FullPackage  bool            `json:"full_package,omitempty"`
+	NoTestFiles  bool            `json:"no_test_files,omitempty"`
+	ArtifactDir  string          `json:"artifact_directory,omitempty"`
+	RootPart     *moduleRootPart `json:"root_partition,omitempty"`
 }
 
 func runSuite(ctx context.Context, cfg config) error {
+	if cfg.rootPart != nil && (!cfg.Module || cfg.rootPart.Protocol != moduleRootFragmentProtocol ||
+		cfg.rootPart.Count < 2 || cfg.rootPart.Count > 1024 || cfg.rootPart.Index < 0 || cfg.rootPart.Index >= cfg.rootPart.Count ||
+		cfg.rootPart.Count != cfg.ModuleRootPartitions || cfg.rootPart.Index != cfg.ModuleRootPartition) {
+		return fmt.Errorf("root partition scheduling requires its exact module role")
+	}
 	if os.Getenv("GOFLAGS") != "" {
 		return fmt.Errorf("GOFLAGS must be empty; pass supported build/instrumentation flags explicitly after --")
 	}
@@ -120,16 +127,20 @@ func runSuite(ctx context.Context, cfg config) error {
 		return fmt.Errorf("artifact directory must be new (parent must exist): %w", err)
 	}
 	report := suiteReport{Schema: 1, Go: cfg.Go, Flags: forwarded, Timeout: cfg.Timeout.String(), Workers: cfg.Workers, Status: "failed", FullPackage: cfg.fullPackage, NoTestFiles: cfg.noTestFiles}
+	if cfg.rootPart != nil {
+		part := *cfg.rootPart
+		report.Schema, report.RootPart = 2, &part
+	}
 	if cfg.Module {
 		report.ArtifactDir = cfg.Out
 	}
 	publish := func() error {
-		report.RootMissing = len(report.Names) - report.RootPassed - report.RootSkipped - report.RootFailed
+		report.RootMissing = suiteExpectedRoots(report) - report.RootPassed - report.RootSkipped - report.RootFailed
 		data, err := json.MarshalIndent(report, "", "  ")
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(cfg.Out, "report.json"), append(data, '\n'), 0600)
+		return os.WriteFile(filepath.Join(cfg.Out, suiteReportName(cfg)), append(data, '\n'), 0600)
 	}
 	fail := func(err error) error {
 		report.Error = err.Error()
@@ -177,7 +188,9 @@ func runSuite(ctx context.Context, cfg config) error {
 	report.InventorySHA = hex.EncodeToString(hash[:])
 	for i, names := range shards {
 		result := shardResult{Index: i, Names: names, Status: "pending"}
-		if len(names) == 0 && !cfg.fullPackage {
+		if cfg.rootPart != nil && !cfg.rootPart.owns(i, cfg.fullPackage) {
+			result.Status = "not_owned"
+		} else if len(names) == 0 && !cfg.fullPackage {
 			result.Status = "empty"
 		} else {
 			result.Command = append([]string{cfg.Go, "test"}, forwarded...)
@@ -204,6 +217,14 @@ func runSuite(ctx context.Context, cfg config) error {
 	// Workers receive immutable plan values. Only this collector updates the
 	// report, counters and coverage inventory; there are no concurrent writes.
 	plan := append([]shardResult(nil), report.Shards...)
+	if cfg.rootPart != nil {
+		plan = nil
+		for _, shard := range report.Shards {
+			if cfg.rootPart.owns(shard.Index, cfg.fullPackage) {
+				plan = append(plan, shard)
+			}
+		}
+	}
 	err = runShardWorkers(ctx, cfg.Workers, plan, func(ctx context.Context, result shardResult) shardResult {
 		return executeShard(ctx, cfg, report.Package, result)
 	}, func(result shardResult) error {
@@ -250,7 +271,7 @@ func runSuite(ctx context.Context, cfg config) error {
 	if len(failures) != 0 {
 		return fail(errors.Join(failures...))
 	}
-	if profile != "" {
+	if profile != "" && (cfg.rootPart == nil || len(profiles) != 0) {
 		merged, err := mergeCoverage(profiles)
 		if err != nil {
 			return fail(err)
@@ -264,8 +285,12 @@ func runSuite(ctx context.Context, cfg config) error {
 			return fail(err)
 		}
 	}
-	report.Status = "passed"
-	fmt.Printf("complete root inventory: %d passed, %d skipped, %d failed; subtests/seeds: %d passed, %d skipped, %d failed\n", report.RootPassed, report.RootSkipped, report.RootFailed, report.ChildPassed, report.ChildSkipped, report.ChildFailed)
+	report.Status = suiteCompletionStatus(report)
+	label := "complete root inventory"
+	if cfg.rootPart != nil {
+		label = "complete owned root assignment (partial package)"
+	}
+	fmt.Printf("%s: %d passed, %d skipped, %d failed; subtests/seeds: %d passed, %d skipped, %d failed\n", label, report.RootPassed, report.RootSkipped, report.RootFailed, report.ChildPassed, report.ChildSkipped, report.ChildFailed)
 	return publish()
 }
 

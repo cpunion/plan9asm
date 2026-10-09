@@ -14,7 +14,8 @@ import (
 func sameModulePlan(actual, expected moduleReport) bool {
 	// Paths are artifact origins, not cross-machine identities. The complete
 	// selected SDK/source/tool byte hashes and normalized environment must match.
-	return actual.Protocol == moduleProtocol && actual.Owner == expected.Owner &&
+	return actual.Protocol == expected.Protocol && actual.Owner == expected.Owner &&
+		actual.RootPartitions == expected.RootPartitions && reflect.DeepEqual(actual.RootPartition, expected.RootPartition) &&
 		reflect.DeepEqual(actual.Flags, expected.Flags) && actual.Coverage == expected.Coverage &&
 		actual.Timeout == expected.Timeout && actual.Shards == expected.Shards && actual.Workers == expected.Workers &&
 		reflect.DeepEqual(actual.Scope, expected.Scope) && reflect.DeepEqual(actual.Inventory, expected.Inventory)
@@ -26,6 +27,12 @@ func verifyModuleArtifacts(expected moduleReport, directory string) error {
 }
 
 func checkedModuleArtifacts(expected moduleReport, directory string) ([]moduleResult, error) {
+	if err := validateModuleReportScheduling(expected); err != nil {
+		return nil, err
+	}
+	if expected.RootPartitions > 1 {
+		return checkedSplitModuleArtifacts(expected, directory)
+	}
 	if _, err := os.Lstat(filepath.Join(directory, "module.json")); err == nil {
 		var actual moduleReport
 		if err := ciReadJSON(filepath.Join(directory, "module.json"), &actual); err != nil {
@@ -74,7 +81,10 @@ func checkedModuleArtifacts(expected moduleReport, directory string) ([]moduleRe
 }
 
 func verifyModuleOwner(report moduleReport, directory string) error {
-	if report.Protocol != moduleProtocol || report.Owner < -1 || report.Owner >= moduleOwners {
+	if err := validateModuleReportScheduling(report); err != nil {
+		return err
+	}
+	if report.Owner < -1 || report.Owner >= moduleOwners {
 		return fmt.Errorf("unknown module protocol/owner")
 	}
 	if err := verifyScopeArtifacts(directory, report.Go, report.Scope); err != nil {
@@ -115,7 +125,11 @@ func verifyModuleOwner(report moduleReport, directory string) error {
 		result := report.Packages[position]
 		position++
 		cfg := config{Go: report.Go, Dir: report.Directory, Out: directory, Flags: append([]string(nil), report.Flags...),
-			Shards: report.Shards, Workers: report.Workers, Module: true}
+			Shards: report.Shards, Workers: report.Workers, Module: true, ModuleOwner: report.Owner,
+			ModuleRootPartitions: report.RootPartitions, ModuleRootPartition: -1}
+		if report.RootPartition != nil {
+			cfg.ModuleRootPartition = *report.RootPartition
+		}
 		cfg.Timeout, _ = time.ParseDuration(report.Timeout)
 		if report.Coverage != "" {
 			cfg.Flags = append(cfg.Flags, "-coverprofile="+report.Coverage)
@@ -128,14 +142,19 @@ func verifyModuleOwner(report moduleReport, directory string) error {
 				child.fullPackage, child.Shards, child.Workers = true, 1, 1
 			}
 		}
-		if result.Package != pkg.Package || result.Shards != child.Shards || result.Workers != child.Workers || result.Status != "passed" || result.Error != "" {
+		statusMatches := result.Status == "passed"
+		if child.rootPart != nil {
+			statusMatches = result.Status == "completed_owned" || result.Status == "completed_empty"
+		}
+		if result.Package != pkg.Package || result.Shards != child.Shards || result.Workers != child.Workers || !statusMatches || result.Error != "" {
 			failures = append(failures, fmt.Errorf("package %s incomplete/failed: %s", pkg.Package, result.Error))
 		}
 		if err := verifyModulePackage(child, pkg, report.Coverage != ""); err != nil {
 			failures = append(failures, fmt.Errorf("package %s: %w", pkg.Package, err))
 		}
 		var suite suiteReport
-		if err := ciReadJSON(filepath.Join(child.Out, "report.json"), &suite); err != nil || suite.GoVersion != report.Scope.GoVersion ||
+		if err := ciReadJSON(filepath.Join(child.Out, suiteReportName(child)), &suite); err != nil || suite.GoVersion != report.Scope.GoVersion ||
+			suite.Status != result.Status ||
 			suite.RootSkipped != result.RootSkipped || suite.ChildSkipped != result.ChildSkipped {
 			failures = append(failures, fmt.Errorf("package version/explicit skip counters differ: %v", err))
 		}
@@ -145,14 +164,19 @@ func verifyModuleOwner(report moduleReport, directory string) error {
 
 func verifyModulePackage(cfg config, pkg modulePackage, covered bool) error {
 	var report suiteReport
-	if err := ciReadJSON(filepath.Join(cfg.Out, "report.json"), &report); err != nil {
+	if err := ciReadJSON(filepath.Join(cfg.Out, suiteReportName(cfg)), &report); err != nil {
 		return err
 	}
 	flags, _, err := validateFlags(cfg.Flags)
 	if covered {
 		flags = append(flags, "-cover")
 	}
-	if err != nil || report.Schema != 1 || report.Status != "passed" || report.Error != "" || report.Go != cfg.Go ||
+	schema := 1
+	if cfg.rootPart != nil {
+		schema = 2
+	}
+	if err != nil || report.Schema != schema || !reflect.DeepEqual(report.RootPart, cfg.rootPart) ||
+		report.Status != suiteCompletionStatus(report) || report.Error != "" || report.Go != cfg.Go ||
 		report.Package != pkg.Package || report.Timeout != cfg.Timeout.String() || report.Workers != cfg.Workers ||
 		report.FullPackage != cfg.fullPackage || report.NoTestFiles != cfg.noTestFiles || !filepath.IsAbs(report.ArtifactDir) ||
 		!reflect.DeepEqual(report.Flags, flags) {
@@ -184,9 +208,23 @@ func verifyModulePackage(cfg config, pkg modulePackage, covered bool) error {
 		if shard.Index != index || !reflect.DeepEqual(shard.Names, names) {
 			return fmt.Errorf("duplicate/foreign shard assignment")
 		}
+		if cfg.rootPart != nil && !cfg.rootPart.owns(index, cfg.fullPackage) {
+			if shard.Status != "not_owned" || len(shard.Command) != 0 || len(shard.Outcomes) != 0 || shard.Error != "" || shard.Seconds != 0 {
+				return fmt.Errorf("unassigned shard gained execution or completion")
+			}
+			if err := verifyUnexecutedShardFiles(cfg.Out, index); err != nil {
+				return err
+			}
+			continue
+		}
 		if !cfg.fullPackage && len(names) == 0 {
 			if shard.Status != "empty" || len(shard.Command) != 0 || len(shard.Outcomes) != 0 || shard.Error != "" {
 				return fmt.Errorf("empty shard gained execution")
+			}
+			if cfg.rootPart != nil {
+				if err := verifyUnexecutedShardFiles(cfg.Out, index); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -238,10 +276,30 @@ func verifyModulePackage(cfg config, pkg modulePackage, covered bool) error {
 		return fmt.Errorf("root/child completion counters differ")
 	}
 	if covered {
+		profile := "package.cover"
+		if cfg.rootPart != nil {
+			profile = "partition.cover"
+		}
+		if len(profiles) == 0 && cfg.rootPart != nil {
+			if _, err := os.Lstat(filepath.Join(cfg.Out, profile)); !os.IsNotExist(err) {
+				return fmt.Errorf("empty root fragment gained coverage: %v", err)
+			}
+			return nil
+		}
 		merged, err := mergeCoverage(profiles)
-		actual, readErr := os.ReadFile(filepath.Join(cfg.Out, "package.cover"))
+		actual, readErr := os.ReadFile(filepath.Join(cfg.Out, profile))
 		if err != nil || readErr != nil || !bytes.Equal(merged, actual) {
 			return fmt.Errorf("package coverage is not the complete checked shard merge: %v %v", err, readErr)
+		}
+	}
+	return nil
+}
+
+func verifyUnexecutedShardFiles(directory string, index int) error {
+	for _, suffix := range []string{".stdout", ".stderr", ".cover"} {
+		path := filepath.Join(directory, fmt.Sprintf("shard-%04d%s", index, suffix))
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			return fmt.Errorf("unexecuted root shard has an artifact: %v", err)
 		}
 	}
 	return nil
@@ -257,7 +315,10 @@ func writeModuleCoverage(report moduleReport, directory, destination string) err
 	return writeCoverageUnion(paths, destination)
 }
 
-func writeVerifiedModuleCoverage(report moduleReport, directory, destination string) error {
+func writeVerifiedModuleCoverage(report moduleReport, directory, outputDirectory, destination string) error {
+	if report.RootPartitions > 1 {
+		return writeSplitModuleCoverage(report, directory, outputDirectory, destination)
+	}
 	if _, err := os.Lstat(filepath.Join(directory, "module.json")); err == nil {
 		return writeModuleCoverage(report, directory, destination)
 	}
@@ -273,6 +334,10 @@ func writeCoverageUnion(paths []string, destination string) error {
 	if err != nil {
 		return err
 	}
+	return writeNewCoverage(data, destination)
+}
+
+func writeNewCoverage(data []byte, destination string) error {
 	file, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@ import (
 )
 
 const moduleProtocol = "actual_go_complete_module_v1"
+const moduleRootPartsProtocol = "actual_go_complete_module_root_parts_v2"
 const moduleOwners = 3
 
 type modulePackage struct {
@@ -32,23 +33,29 @@ type moduleResult struct {
 	Error        string `json:"error,omitempty"`
 	RootSkipped  int    `json:"root_skipped"`
 	ChildSkipped int    `json:"subtests_seeds_skipped"`
+	// Only populated by this invocation's complete raw-artifact verifier.
+	// Serialized summaries cannot supply coverage inputs to a later reader.
+	rootCoverage []string
 }
 
 type moduleReport struct {
-	Protocol  string          `json:"protocol"`
-	Go        string          `json:"go_executable"`
-	Directory string          `json:"request_directory"`
-	Flags     []string        `json:"go_flags"`
-	Coverage  string          `json:"coverage_destination"`
-	Timeout   string          `json:"command_timeout"`
-	Shards    int             `json:"partition_count"`
-	Workers   int             `json:"workers"`
-	Owner     int             `json:"owner"`
-	Scope     ciScope         `json:"scope"`
-	Inventory []modulePackage `json:"full_package_inventory"`
-	Packages  []moduleResult  `json:"packages"`
-	Status    string          `json:"status"`
-	Error     string          `json:"error,omitempty"`
+	Protocol       string               `json:"protocol"`
+	Go             string               `json:"go_executable"`
+	Directory      string               `json:"request_directory"`
+	Flags          []string             `json:"go_flags"`
+	Coverage       string               `json:"coverage_destination"`
+	Timeout        string               `json:"command_timeout"`
+	Shards         int                  `json:"partition_count"`
+	Workers        int                  `json:"workers"`
+	Owner          int                  `json:"owner"`
+	RootPartitions int                  `json:"root_partition_count,omitempty"`
+	RootPartition  *int                 `json:"root_partition_index,omitempty"`
+	RootInventory  *moduleRootInventory `json:"fresh_root_inventory,omitempty"`
+	Scope          ciScope              `json:"scope"`
+	Inventory      []modulePackage      `json:"full_package_inventory"`
+	Packages       []moduleResult       `json:"packages"`
+	Status         string               `json:"status"`
+	Error          string               `json:"error,omitempty"`
 }
 
 // Build-selection flags are identical to test. Coverage is test instrumentation,
@@ -151,13 +158,20 @@ func modulePackageConfig(cfg config, pkg modulePackage, index int) config {
 	child.Out = filepath.Join(cfg.Out, fmt.Sprintf("package-%04d", index))
 	child.fullPackage = moduleOwner(pkg) == 2 || pkg.NoTestFiles
 	child.noTestFiles = pkg.NoTestFiles
+	if pkg.Directory == "." && cfg.ModuleRootPartitions > 1 && cfg.ModuleOwner == 0 {
+		child.rootPart = &moduleRootPart{moduleRootFragmentProtocol, cfg.ModuleRootPartition, cfg.ModuleRootPartitions}
+	}
 	if child.fullPackage {
 		child.Shards, child.Workers = 1, 1
 	}
 	flags, profile, _ := validateFlags(cfg.Flags)
 	child.Flags = flags
 	if profile != "" {
-		child.Flags = append(child.Flags, "-coverprofile="+filepath.Join(child.Out, "package.cover"))
+		name := "package.cover"
+		if child.rootPart != nil {
+			name = "partition.cover"
+		}
+		child.Flags = append(child.Flags, "-coverprofile="+filepath.Join(child.Out, name))
 	}
 	return child
 }
@@ -170,12 +184,6 @@ func runModule(ctx context.Context, cfg config) error {
 	}
 	if err := validateModuleRootScheduling(cfg); err != nil {
 		return err
-	}
-	if cfg.ModuleRootPartitions != 1 {
-		// Fail closed until the distinct partial producer and exhaustive
-		// aggregate are connected. Never execute a full suite under a partial
-		// scheduling identity.
-		return fmt.Errorf("root partition scheduling execution is not implemented")
 	}
 	if !cfg.Module || cfg.Package != "." || cfg.CISelector != "" || cfg.CIIsolate != "" || cfg.CIVerify != "" || cfg.CIOwner != -1 ||
 		cfg.Timeout <= 0 || cfg.Shards < 1 || cfg.Shards > 1024 || cfg.Workers < 1 || cfg.Workers > 32 || cfg.Workers > cfg.Shards ||
@@ -227,6 +235,13 @@ func runModule(ctx context.Context, cfg config) error {
 	}
 	report := moduleReport{Protocol: moduleProtocol, Go: cfg.Go, Directory: cfg.Dir, Flags: flags, Coverage: coverage,
 		Timeout: cfg.Timeout.String(), Shards: cfg.Shards, Workers: cfg.Workers, Owner: cfg.ModuleOwner, Status: "failed"}
+	if cfg.ModuleRootPartitions > 1 {
+		report.Protocol, report.RootPartitions = moduleRootPartsProtocol, cfg.ModuleRootPartitions
+		if cfg.ModuleOwner == 0 {
+			part := cfg.ModuleRootPartition
+			report.RootPartition = &part
+		}
+	}
 	finish := func(cause error) error {
 		if cause != nil {
 			report.Error = cause.Error()
@@ -242,8 +257,14 @@ func runModule(ctx context.Context, cfg config) error {
 		return finish(err)
 	}
 	if cfg.ModuleVerify != "" {
+		if report.RootPartitions > 1 {
+			report.RootInventory, err = observeModuleRootInventory(ctx, cfg, report.Inventory)
+			if err != nil {
+				return finish(err)
+			}
+		}
 		report.Packages, err = checkedModuleArtifacts(report, cfg.ModuleVerify)
-		if err != nil {
+		if err != nil && report.RootPartitions == 0 {
 			return finish(err)
 		}
 	} else {
@@ -259,12 +280,15 @@ func runModule(ctx context.Context, cfg config) error {
 				failures = append(failures, fmt.Errorf("package %s: %w", pkg.Package, err))
 			}
 			var suite suiteReport
-			if err := ciReadJSON(filepath.Join(child.Out, "report.json"), &suite); err != nil {
+			if err := ciReadJSON(filepath.Join(child.Out, suiteReportName(child)), &suite); err != nil {
 				result.Status, result.Error = "failed", errors.Join(errors.New(result.Error), err).Error()
 				failures = append(failures, err)
 			} else {
 				result.RootSkipped, result.ChildSkipped = suite.RootSkipped, suite.ChildSkipped
 				result.Shards, result.Workers = len(suite.Shards), suite.Workers
+				if result.Status == "passed" && child.rootPart != nil {
+					result.Status = suiteCompletionStatus(suite)
+				}
 			}
 			report.Packages = append(report.Packages, result)
 			if err := ciWriteJSON(filepath.Join(cfg.Out, "module.json"), report); err != nil {
@@ -287,10 +311,10 @@ func runModule(ctx context.Context, cfg config) error {
 		return finish(err)
 	}
 	if cfg.ModuleVerify != "" && coverage != "" {
-		if err := writeVerifiedModuleCoverage(report, cfg.ModuleVerify, moduleCoverageDestination(cfg, coverage)); err != nil {
+		if err := writeVerifiedModuleCoverage(report, cfg.ModuleVerify, cfg.Out, moduleCoverageDestination(cfg, coverage)); err != nil {
 			return finish(err)
 		}
-	} else if coverage != "" && len(report.Packages) != 0 {
+	} else if coverage != "" && len(report.Packages) != 0 && report.RootPartition == nil {
 		profile := filepath.Join(cfg.Out, "owner.cover")
 		if cfg.ModuleOwner == -1 {
 			profile = moduleCoverageDestination(cfg, coverage)
@@ -304,12 +328,22 @@ func runModule(ctx context.Context, cfg config) error {
 }
 
 func moduleCompletionStatus(report moduleReport) string {
+	status := "passed"
+	if report.RootPartition != nil {
+		status = "completed_owned"
+		if len(report.Packages) == 1 && report.Packages[0].Status == "completed_empty" {
+			status = "completed_empty"
+		}
+	}
 	for _, pkg := range report.Packages {
 		if pkg.RootSkipped != 0 || pkg.ChildSkipped != 0 {
+			if report.RootPartition != nil {
+				return status + "_with_skips"
+			}
 			return "completed_with_skips"
 		}
 	}
-	return "passed"
+	return status
 }
 
 func moduleCoverageDestination(cfg config, coverage string) string {
