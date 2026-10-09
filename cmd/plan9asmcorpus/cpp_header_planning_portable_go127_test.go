@@ -173,9 +173,12 @@ func assertCPPHeaderPlanningActualBaselineScopes(t *testing.T, candidate discove
 	configs []discoveryBuildConfiguration, targets []string, refs []discoveryFeatureProfileReference) {
 	t.Helper()
 	plan := matrix.OrdinarySelectionPlan
-	if len(refs) != len(targets) || len(configs) != len(targets) ||
-		len(plan.HeaderPlanning.Queries) != len(refs) || !equalDiscoveryStrings(plan.Targets, targets) {
-		t.Fatal("condition-free planning/execution differs from the complete requested target inventory")
+	wantedTargets := uniqueSortedDiscoveryStrings(targets)
+	if len(wantedTargets) != len(targets) || len(refs) != len(targets) || len(configs) != len(targets) ||
+		len(plan.HeaderPlanning.Queries) != len(refs) || !equalDiscoveryStrings(plan.Targets, wantedTargets) {
+		t.Fatalf("condition-free planning/execution differs from the complete requested target inventory: "+
+			"refs=%d configurations=%d queries=%d starts=%d requested=%q canonical=%q",
+			len(refs), len(configs), len(plan.HeaderPlanning.Queries), plan.headerPlanningQueryStarts, targets, plan.Targets)
 	}
 	expected := make(map[string]discoveryFeatureProfileReference, len(targets))
 	for _, ref := range refs {
