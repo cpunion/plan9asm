@@ -175,6 +175,11 @@ func SourceDiagnosticLine(source, output string, focus int) bool {
 	for _, line := range strings.Split(output, "\n") {
 		direct := strings.HasPrefix(line, source+":")
 		start, pc := 0, ""
+		// cmd/asm's obj.Link diagnostics add this exact backend prefix to
+		// source positions. It does not authorize embedded or foreign paths.
+		if !direct && strings.HasPrefix(line, "asm: "+source+":") {
+			direct, start = true, len("asm: ")
+		}
 		if !direct {
 			marker := strings.Index(line, "("+source+":")
 			if marker < 0 {
