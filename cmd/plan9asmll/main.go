@@ -138,6 +138,8 @@ type compileConfig struct {
 	nativeListingMode   *instrumentationMetadataConsumer
 	SignatureQuery      *gotoolprofile.SignatureQueryProof
 	x86CallerSelections map[*packages.Package]*x86CallerPackageSelection
+	numericalOptions    *plan9asm.Options
+	acquireSDKNumerical bool
 	diagnostics         *instructionDiagnostics
 }
 
@@ -645,7 +647,20 @@ func runOneTarget(spec targetSpec, pats, buildTags, exactAsmFiles []string, modu
 	return rep, nil, nil
 }
 
-func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
+func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) error {
+	err := compileOneAttempt(pkg, arch, goos, goarch, triple, t, annotate, ccfg)
+	retry, retryable := x86SDKNumericalRetryCause(err)
+	if !retryable {
+		return err
+	}
+	ccfg.acquireSDKNumerical = true
+	if err := compileOneAttempt(pkg, arch, goos, goarch, triple, t, annotate, ccfg); err != nil {
+		return errors.Join(retry, err)
+	}
+	return nil
+}
+
+func compileOneAttempt(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple string, t asmTask, annotate bool, ccfg compileConfig) (compileErr error) {
 	if ccfg.diagnostics != nil {
 		ccfg.diagnostics.ops, ccfg.diagnostics.hits = nil, nil
 	}
@@ -734,6 +749,18 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		}
 	}
 
+	file, numericalSource, err := captureX86SDKNumericalSource(pkg, file, t.AsmFile, goos+"/"+goarch, ccfg)
+	if err != nil {
+		return fmt.Errorf("capture actual SDK numerical source: %w", err)
+	}
+	if numericalSource != nil {
+		defer func() {
+			compileErr = errors.Join(compileErr, numericalSource.verify(ccfg.Context), numericalSource.close())
+		}()
+		pkg = numericalSource.pkg
+		ccfg.x86CallerSelections = map[*packages.Package]*x86CallerPackageSelection{pkg: numericalSource.selected}
+	}
+
 	if ccfg.diagnostics != nil {
 		ccfg.diagnostics.collect(file)
 	}
@@ -741,6 +768,9 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	// Use the Go-module frontend's complete-file continuation proof before
 	// signature queries or bounded modules can discard a helper or its uses.
 	resolve := resolveSymFunc(pkg.PkgPath)
+	if numericalSource != nil {
+		resolve = numericalSource.resolve
+	}
 	file, tailSource, tailSigs, err := prepareARM64ABI0TailSource(pkg, file, t.AsmFile, src,
 		goos+"/"+goarch, defines, ccfg, resolve)
 	if err != nil {
@@ -839,6 +869,14 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 			compileErr = errors.Join(compileErr, scratchSource.Verify(ccfg.Context), scratchSource.Close())
 		}()
 	}
+	if numericalSource != nil {
+		options, err := numericalSource.numerical.BindNumericalReads(ccfg.Context, numericalSource.goPackage, file,
+			compileTranslationOptions(triple, goarch, annotate, ccfg, resolve, sigs))
+		if err != nil {
+			return fmt.Errorf("bind actual SDK numerical source: %w", err)
+		}
+		ccfg.numericalOptions = &options
+	}
 	maxFunctions := ccfg.MaxFunctions
 	if maxFunctions <= 0 {
 		maxFunctions = 128
@@ -853,7 +891,7 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 	}
 	// A continuation and the initializer taking its block address must remain
 	// in one LLVM module, just as an oversized ordinary function stays intact.
-	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil &&
+	if ccfg.Enabled && !ccfg.KeepObj && len(ccfg.X86TailGroups) == 0 && fixedLocalSource == nil && scratchSource == nil && numericalSource == nil &&
 		(len(file.Funcs) > maxFunctions || instructionCount > maxInstructions) {
 		// A complete pass is necessary before splitting: an x86 function may
 		// take the byte-exact address of raw TEXT in a different chunk.
@@ -888,7 +926,23 @@ func compileOne(pkg *packages.Package, arch plan9asm.Arch, goos, goarch, triple 
 		return nil
 	}
 	err = translateAndCompileModule(file, triple, goarch, t, annotate, ccfg, resolve, sigs)
+	// Only a complete-file translation rejected before writing IR/object may
+	// request an independent SDK observation. A partially published chunked
+	// compilation never reaches this seam, and non-context errors stay errors.
+	if !ccfg.acquireSDKNumerical && ccfg.Feature == nil && errors.Is(err, plan9asm.ErrProbeNeedsContext) &&
+		x86SDKCPUOwnerRequested(pkg, file, goos+"/"+goarch) {
+		return &x86SDKNumericalRetryError{cause: err}
+	}
 	return annotateUnboundCallerFrame(file, resolve, sigs, declaredArgSizes, err)
+}
+
+func compileTranslationOptions(triple, goarch string, annotate bool, ccfg compileConfig,
+	resolve func(string) string, sigs map[string]plan9asm.FuncSig,
+) plan9asm.Options {
+	return plan9asm.Options{
+		TargetTriple: triple, ResolveSym: resolve, Sigs: sigs, Goarch: goarch,
+		WASMABI: wasmABIForGoPackageTarget(goarch), AnnotateSource: annotate, X86TailGroups: ccfg.X86TailGroups,
+	}
 }
 
 func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asmTask, annotate bool,
@@ -908,15 +962,18 @@ func translateAndCompileModule(file *plan9asm.File, triple, goarch string, t asm
 		mod = ctx.NewModule("plan9asm-empty-assembly")
 		mod.SetTarget(triple)
 	} else {
-		mod, err = plan9asm.TranslateModuleInContext(ctx, file, plan9asm.Options{
-			TargetTriple:   triple,
-			ResolveSym:     resolve,
-			Sigs:           sigs,
-			Goarch:         goarch,
-			WASMABI:        wasmABIForGoPackageTarget(goarch),
-			AnnotateSource: annotate,
-			X86TailGroups:  ccfg.X86TailGroups,
-		})
+		options := compileTranslationOptions(triple, goarch, annotate, ccfg, resolve, sigs)
+		if ccfg.numericalOptions != nil {
+			requested, bound := options, *ccfg.numericalOptions
+			requested.ResolveSym, bound.ResolveSym = nil, nil
+			bound.NumericalReads = nil
+			if !reflect.DeepEqual(requested, bound) {
+				ctx.Dispose()
+				return fmt.Errorf("%w: SDK numerical translation options changed after binding", plan9asm.ErrProbeNeedsContext)
+			}
+			options = *ccfg.numericalOptions
+		}
+		mod, err = plan9asm.TranslateModuleInContext(ctx, file, options)
 	}
 	if err != nil {
 		ctx.Dispose()
@@ -2225,7 +2282,7 @@ func normalizeOp(op string) string {
 
 func isDirective(op string) bool {
 	switch op {
-	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "FUNCDATA", "PCDATA":
+	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "PCALIGNMAX", "FUNCDATA", "PCDATA":
 		return true
 	default:
 		return false
@@ -2234,17 +2291,18 @@ func isDirective(op string) bool {
 
 func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 	supported := map[string]struct{}{
-		"RET":      {},
-		"TEXT":     {},
-		"GLOBL":    {},
-		"DATA":     {},
-		"BYTE":     {},
-		"WORD":     {},
-		"LONG":     {},
-		"QUAD":     {},
-		"PCALIGN":  {},
-		"FUNCDATA": {},
-		"PCDATA":   {},
+		"RET":        {},
+		"TEXT":       {},
+		"GLOBL":      {},
+		"DATA":       {},
+		"BYTE":       {},
+		"WORD":       {},
+		"LONG":       {},
+		"QUAD":       {},
+		"PCALIGN":    {},
+		"PCALIGNMAX": {},
+		"FUNCDATA":   {},
+		"PCDATA":     {},
 	}
 
 	backendArch := goarch
