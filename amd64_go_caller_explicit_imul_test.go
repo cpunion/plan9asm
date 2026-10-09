@@ -40,6 +40,9 @@ func x86CallerExplicitIMULFixture(t *testing.T, body string) (GoPackage, *File, 
 	if err != nil || sigs["caller.kernel"].x86CallerRegions == nil {
 		t.Fatalf("actual complete typed caller precondition failed: %v", err)
 	}
+	if !x86CallerRegionSourceMatches(sigs["caller.kernel"], file.Funcs[0], "amd64") {
+		t.Fatal("actual complete typed caller does not match its original source/signature")
+	}
 	return pkg, file, assembly, Options{Goarch: "amd64", TargetTriple: "x86_64-unknown-linux-gnu", ResolveSym: resolve, Sigs: sigs}
 }
 
