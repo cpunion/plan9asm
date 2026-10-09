@@ -186,11 +186,14 @@ func installDiscoveryHeaderPlanning(ctx context.Context, plan *discoveryOrdinary
 		// Do not publish an unclosed query into the portable role. Independently
 		// replay a private candidate first; rejected domains retain all CPUs.
 		role := &discoveryCPPHeaderPlanning{Protocol: discoveryCPPHeaderPlanningProtocol, Rules: rules,
-			Sources: make(map[string]string), ImportedSources: make(map[string]string)}
+			Sources: make(map[string]string)}
 		if plan.HeaderPlanning != nil {
 			role.Queries = append(role.Queries, plan.HeaderPlanning.Queries...)
 			for name, text := range plan.HeaderPlanning.Sources {
 				role.Sources[name] = text
+			}
+			if len(plan.HeaderPlanning.ImportedSources) != 0 {
+				role.ImportedSources = make(map[string]string, len(plan.HeaderPlanning.ImportedSources))
 			}
 			for name, text := range plan.HeaderPlanning.ImportedSources {
 				role.ImportedSources[name] = text

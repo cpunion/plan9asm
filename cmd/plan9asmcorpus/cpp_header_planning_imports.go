@@ -40,6 +40,12 @@ func captureDiscoveryPlanningImports(role *discoveryCPPHeaderPlanning, queryPlan
 	if err != nil {
 		return nil, err
 	}
+	if len(wanted) == 0 {
+		return nil, nil // Preserve canonical omission through JSON projections.
+	}
+	if role.ImportedSources == nil {
+		role.ImportedSources = make(map[string]string)
+	}
 	for file, digest := range wanted {
 		if queryPlan.GeneratedGoSources[file] != digest {
 			return nil, fmt.Errorf("planning imported source lacks actual original ZIP-bound query input")

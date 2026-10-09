@@ -8,6 +8,15 @@ import (
 	"github.com/xgo-dev/plan9asm/internal/gotoolprofile"
 )
 
+func TestCPPHeaderPlanningImportsKeepEmptyRoleCanonical(t *testing.T) {
+	role := &discoveryCPPHeaderPlanning{}
+	imports, err := captureDiscoveryPlanningImports(role, &discoveryOrdinarySelectionPlan{},
+		gotoolprofile.GeneratedHeaderProof{}, "example.invalid/header", t.TempDir())
+	if err != nil || imports != nil || role.ImportedSources != nil {
+		t.Fatalf("empty optional planning sources changed across JSON omission: %v %v %v", imports, role.ImportedSources, err)
+	}
+}
+
 // This tests the property role boundary, not physical archive authentication or
 // compiler acceptance. The full11 producer fixture supplies those separate gates.
 func TestCPPHeaderPlanningImportsOwnCompleteQuerySources(t *testing.T) {
