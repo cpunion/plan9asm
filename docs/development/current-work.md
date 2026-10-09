@@ -217,6 +217,17 @@ before importing; never duplicate a writer or replace its live binary.
 Status, lookup and publication stream sharded records rather than loading the
 ledger payload. cgo records remain outside this repository.
 
+The read-only remerge was subsequently completed with the rebuilt streaming
+tool and the path-plus-major rule. Its staging result is 21,257,856 contiguous
+index entries, 1,051,454 unique paths, 6,700 matched exact versions, and 84,225
+assembly files. It restored 126 remote-only independent-major records and kept
+one historical local-only record; no same-major local record was superseded.
+This is discovery staging only: it did not download or compile external modules,
+and it did not promote any assembly result into the committed ledger. The
+committed assembly ledger remains 6,067 entries (3 passed, 6,064 pending).
+The larger 6,700 denominator is a corrected merge of newer remote discovery and
+major-line retention, not a downgrade of previously verified passes.
+
 The assembly ledger is incomplete and unverified. Only automatic publication
 of complete, matching source/scan/tool/file/target/profile/consumer proofs may
 promote entries. First-party passes, Context and provisional exclusions are not
