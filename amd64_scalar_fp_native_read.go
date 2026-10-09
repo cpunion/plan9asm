@@ -41,6 +41,9 @@ func (c *amd64Ctx) checkLoweredScalarFPResultInitialization() error {
 					x86ResultStore(form.destination, 16, state, owned, resultOffset, arch)
 			}
 			next := state.clone()
+			// A reaching-state clone deliberately drops temporary readers.
+			// This isolated attempt is still inside the same lowering transfer.
+			next.loweredStaticReads = state.loweredStaticReads
 			if x86ScalarFPResultTransfer(ins, &next, owned, resultOffset, arch) {
 				*state = next
 				return true
