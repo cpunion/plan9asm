@@ -23,6 +23,9 @@ func TestGoAssemblerOracleActualARM64BranchAliasListings(t *testing.T) {
 		{"call-vector", "BL V0"},
 		{"call-immediate", "BL $1"},
 		{"call-suffix", "BL.P R1"},
+		{"call-writeback-suffix", "BL.W R1"},
+		{"call-mixed-suffix", "BL.W.P R1"},
+		{"call-repeated-suffix", "BL.P.P R1"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := x86DiagnosticFixture(t, test.instruction)

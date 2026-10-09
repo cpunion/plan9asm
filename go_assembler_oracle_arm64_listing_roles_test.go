@@ -37,13 +37,15 @@ func TestGoAssemblerOracleARM64CompleteBranchListingRoles(t *testing.T) {
 					}
 				}
 			}
-			for _, suffix := range []string{"", ".P", ".W", ".P.W", ".W.P", ".P.P", ".W.P.W"} {
-				canonical, _ := goAssemblerOracleARM64Suffix(suffix)
+			for _, suffix := range []struct{ source, listing string }{
+				{"", ""}, {".P", ".P"}, {".W", ".W"}, {".P.W", ".P.W"},
+				{".W.P", ".P.W"}, {".P.P", ".P"}, {".W.P.W", ".P.W"},
+			} {
 				for _, args := range []string{"", "R0", "(V0)", "$1", "8(R1)", "R0,R1", "R0,R1,R2", "R0,R1,R2,R3"} {
-					fixture := x86DiagnosticFixture(t, strings.TrimSpace(alias.source+suffix+" "+args))
+					fixture := x86DiagnosticFixture(t, strings.TrimSpace(alias.source+suffix.source+" "+args))
 					if !goAssemblerOracleARM64SourceDiagnostic(fixture, "arm64", arm64BranchDiagnostic(fixture,
-						strings.TrimSpace(alias.listing+canonical+" "+args), "NONE NONE NONE REG NONE, 0 7")) {
-						t.Fatalf("complete alias suffix/cardinality lost: %s %s", suffix, args)
+						strings.TrimSpace(alias.listing+suffix.listing+" "+args), "NONE NONE NONE REG NONE, 0 7")) {
+						t.Fatalf("complete alias suffix/cardinality lost: %s %s", suffix.source, args)
 					}
 				}
 			}
