@@ -22,7 +22,9 @@ PLAN9ASM_DISCOVERY_PRIORITY_SHARDS=25,26,39 \
 ```
 
 The priority indices must be unique and in range. Every remaining shard runs
-exactly once, with the same bounded-batch cache and final aggregate check.
+exactly once. A bounded worker queue starts the next shard as soon as one ends,
+without waiting for slow neighbors. Each shard owns its cache; the final strict
+aggregate receives the same shard count as the queue.
 
 The standalone inventory runs outside this repository and also collects direct
 cgo imports. Keep its program, cgo records, deployment settings and traffic
@@ -339,15 +341,16 @@ The `all` command replaces stale canonical reports; save evidence elsewhere
 under `_out/` first when needed. Download, applicability and each target
 translation/compile operation each have a 60-minute deadline. Diagnostic
 override: `PLAN9ASM_DISCOVERY_CANDIDATE_TIMEOUT`. A timeout fails.
-The `all` command gives each bounded parallel batch one temporary Go build
-cache and removes it after every writer in that batch exits. It then starts
-the next batch with a fresh cache, preventing one full ecosystem run from
-retaining tens of GiB of unrelated build objects. Failed batches retain their
-reports and a failing exit status; all remaining batches and the final strict
-aggregate still run. Independently invoked shards keep their
-own build caches unless `PLAN9ASM_DISCOVERY_BUILD_CACHE` names an existing
-absolute directory; an independently supplied cache is never deleted by the
-runner.
+The `all` command uses a bounded refillable queue. Each corpus process creates
+its own temporary shard build cache and removes it only after its consumers
+close. A finished shard immediately releases its cache and worker slot; one
+slow shard cannot hold up the other slots or retain their old caches. Ordinary
+shard failures retain a failing exit status while the remaining queue and final
+strict aggregate still run. Independently invoked shards also own temporary
+build caches unless `PLAN9ASM_DISCOVERY_BUILD_CACHE` names an existing absolute
+directory. That override applies only to a single-shard invocation and is never
+deleted by the runner; `all` ignores it rather than sharing it across the entire
+ecosystem run.
 
 The aggregate checks exact ledger ownership/inventory and these identities:
 
@@ -929,9 +932,9 @@ Larger EOCD scans are fallbacks. Change thresholds only with measured evidence.
 
 The corpus uses the shared Go download cache as a read-only file proxy. New
 downloads, extracted sources and LLVM outputs live in a private candidate cache
-removed on success or failure. Build caches last one shard or one bounded
-parallel batch within a coordinated `all` run, as described above. Keep
-diagnostics, not full packages. Replaying
+removed on success or failure. Owned build caches last one shard, including
+within the bounded `all` worker queue described above. Keep diagnostics, not
+full packages. Replaying
 an uncached exact version can download
 it again; that is distinct from repeated inventory work.
 Each buildable Go package is translated in its own child process. This keeps

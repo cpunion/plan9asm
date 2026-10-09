@@ -62,6 +62,21 @@ func TestDiscoveryAllQueueKeepsPriorityAndAggregateFailures(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAllQueueSuccessfulDrain(t *testing.T) {
+	root, env := discoveryQueueScriptFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, "bash", filepath.Join(root, "scripts", "check-discovered-library-corpus.sh"), "all", "4")
+	command.Env = append(env, "PLAN9ASM_DISCOVERY_PARALLELISM=2")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("complete successful queue failed: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(filepath.Join(root, "events", "aggregate-4")); err != nil {
+		t.Fatalf("success omitted the strict aggregate: %v", err)
+	}
+}
+
 func discoveryQueueScriptFixture(t *testing.T) (string, []string) {
 	t.Helper()
 	root := t.TempDir()

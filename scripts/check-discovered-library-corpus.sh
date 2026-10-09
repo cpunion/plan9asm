@@ -46,33 +46,18 @@ if [[ "$shard_index" == "all" ]]; then
   done
   report_dir="$repo_root/_out/discovered-library-corpus"
   mkdir -p "$report_dir"
-  shared_build_cache=
-  cleanup_build_cache() {
-    if [[ -n "$shared_build_cache" ]]; then
-      rm -r -- "$shared_build_cache"
-      shared_build_cache=
-    fi
-  }
-  trap cleanup_build_cache EXIT
   find "$report_dir" -maxdepth 1 -type f -name 'shard-*.json' -delete
   status=0
-  # The complete ecosystem can populate tens of GiB of package build objects.
-  # Share only within a bounded parallel batch; never remove a live writer's
-  # cache. Preserve reports and sticky failures across every batch.
-  for (( first=0; first<shard_count; first+=parallelism )); do
-    last=$((first + parallelism - 1))
-    if (( last >= shard_count )); then
-      last=$((shard_count - 1))
-    fi
-    shared_build_cache=$(mktemp -d)
-    export PLAN9ASM_DISCOVERY_BUILD_CACHE="$shared_build_cache"
-    if ! printf '%s\n' "${shard_order[@]:first:last-first+1}" |
-      xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"; then
-      status=1
-    fi
-    cleanup_build_cache
-  done
-  if ! "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir"; then
+  # Refill a vacant worker immediately instead of waiting for a slow batch
+  # neighbor. Each corpus process owns its default shard cache and closes it
+  # before returning; the queue never deletes another live writer's cache.
+  # An explicitly supplied cache belongs only to a single-shard invocation.
+  unset PLAN9ASM_DISCOVERY_BUILD_CACHE
+  if ! printf '%s\n' "${shard_order[@]}" |
+    xargs -P "$parallelism" -I '{}' "$0" '{}' "$shard_count" "$report_dir/shard-{}.json"; then
+    status=1
+  fi
+  if ! "$repo_root/scripts/verify-discovered-library-corpus.sh" "$report_dir" "$shard_count"; then
     status=1
   fi
   exit "$status"
