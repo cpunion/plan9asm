@@ -676,6 +676,12 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 		// Macro-expanded helper from go_tls.h. Keep current simplified model.
 		return false, nil
 	}
+	if _, known, err := x86DirectiveProperties(ins); known {
+		// Native layout and frame permissions are checked independently before
+		// emission. Ordinary semantic IR does not preserve machine PCs or GC
+		// metadata, but the directives do not change its numerical state.
+		return false, err
+	}
 	switch Op(op) {
 	case "LOCK":
 		return false, c.namedLockPrefixBinding(bi, ii, ins)
@@ -712,9 +718,9 @@ func (c *amd64Ctx) lowerInstr(bi int, ii int, ins Instr, emitBr amd64EmitBr, emi
 			return false, fmt.Errorf("%s %s operand is outside Go 1.27's Yml class: %q", c.goarch, op, ins.Raw)
 		}
 		return false, nil
-	case "PCALIGN", "NO_LOCAL_POINTERS", "PCDATA", "FUNCDATA", "NOP",
+	case "NO_LOCAL_POINTERS", "NOP",
 		"PUSH_REGS_HOST_TO_ABI0()", "POP_REGS_HOST_TO_ABI0()":
-		// Alignment directive emitted by stdlib asm; no semantic effect in our IR.
+		// Existing macro handling is separate from the directive grammar.
 		return false, nil
 	case "LAHF":
 		if len(ins.Args) != 0 {

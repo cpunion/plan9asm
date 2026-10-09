@@ -15,6 +15,9 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 	if file == nil || file.Arch != ArchAMD64 {
 		return file, nil
 	}
+	if err := validateX86DirectiveFile(file); err != nil {
+		return nil, err
+	}
 	opt := Options{Goarch: goarch}
 	if len(translationOptions) != 0 {
 		opt = translationOptions[0]
@@ -254,18 +257,13 @@ func preserveAddressSensitiveX86RawText(file *File) error {
 			if ins.Op == OpTEXT {
 				continue
 			}
-			if ins.Op == "PCALIGN" && !hasRaw {
-				if len(ins.Args) != 1 || ins.Args[0].Kind != OpImm || ins.Args[0].ImmRaw != "" {
+			if form, known, err := x86DirectiveProperties(ins); known && form.effect == x86DirectiveLayout && !hasRaw {
+				if err != nil {
 					rawOnly = false
 					break
 				}
-				value := ins.Args[0].Imm
-				if value < 8 || value > 2048 || value&(value-1) != 0 {
-					rawOnly = false
-					break
-				}
-				if value > alignment {
-					alignment = value
+				if form.alignment > alignment {
+					alignment = form.alignment
 				}
 				continue
 			}

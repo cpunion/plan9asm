@@ -35,6 +35,8 @@ func TestInstructionFamiliesAreArchitectureAware(t *testing.T) {
 		{ArchAMD64, "POPCNTQ", "bit-shift"},
 		{ArchAMD64, "PREFETCHT0", "cache-memory"},
 		{ArchAMD64, "VGF2P8AFFINEQB", "crypto-carryless"},
+		{ArchAMD64, "PCALIGN", "directive"},
+		{ArchAMD64, "PCALIGNMAX", "directive"},
 		{ArchARM64, "VLD1", "neon"},
 		{ArchARM64, "ZADD", "sve"},
 		{ArchARM64, "CASAL", "atomic-memory"},

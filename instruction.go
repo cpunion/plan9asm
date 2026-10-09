@@ -233,7 +233,7 @@ func isARMBranchOpcode(op string) bool {
 
 func isInstructionDirective(op string) bool {
 	switch op {
-	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "FUNCDATA", "PCDATA":
+	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "PCALIGNMAX", "FUNCDATA", "PCDATA":
 		return true
 	default:
 		return false

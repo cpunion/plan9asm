@@ -1296,7 +1296,7 @@ func goAMD64FrameListingWithObservations(listing []byte, file *File, pkg GoPacka
 		}
 		for _, ins := range original.Instrs {
 			switch ins.Op {
-			case "BYTE", "WORD", "LONG", "QUAD", OpCALL, "JMP", "PCALIGN":
+			case "BYTE", "WORD", "LONG", "QUAD", OpCALL, "JMP", "PCALIGN", "PCALIGNMAX":
 				return nil, goAMD64FrameContext("raw, calling or address-sensitive original frame requires a later source contract")
 			case OpRET:
 				if len(ins.Args) != 0 {

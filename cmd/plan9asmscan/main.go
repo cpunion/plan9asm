@@ -802,17 +802,18 @@ func normalizeOp(op string) string {
 
 func extractSupportedOps(repoRoot, goarch string) (map[string]struct{}, error) {
 	supported := map[string]struct{}{
-		"RET":      {},
-		"TEXT":     {},
-		"GLOBL":    {},
-		"DATA":     {},
-		"BYTE":     {},
-		"WORD":     {},
-		"LONG":     {},
-		"QUAD":     {},
-		"PCALIGN":  {},
-		"FUNCDATA": {},
-		"PCDATA":   {},
+		"RET":        {},
+		"TEXT":       {},
+		"GLOBL":      {},
+		"DATA":       {},
+		"BYTE":       {},
+		"WORD":       {},
+		"LONG":       {},
+		"QUAD":       {},
+		"PCALIGN":    {},
+		"PCALIGNMAX": {},
+		"FUNCDATA":   {},
+		"PCDATA":     {},
 	}
 
 	loweringArch := goarch
@@ -1447,7 +1448,7 @@ func familyOf(goarch, op string) string {
 
 func isDirective(op string) bool {
 	switch op {
-	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "FUNCDATA", "PCDATA":
+	case "TEXT", "DATA", "GLOBL", "BYTE", "WORD", "LONG", "QUAD", "PCALIGN", "PCALIGNMAX", "FUNCDATA", "PCDATA":
 		return true
 	default:
 		return false

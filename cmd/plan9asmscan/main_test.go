@@ -83,7 +83,7 @@ func TestNormalizeOpAndDirectiveHelpers(t *testing.T) {
 		}
 	}
 
-	if !isDirective("TEXT") || !isDirective("DATA") {
+	if !isDirective("TEXT") || !isDirective("DATA") || !isDirective("PCALIGN") || !isDirective("PCALIGNMAX") {
 		t.Fatalf("expected directive recognition")
 	}
 	if isDirective("MOVD") {
@@ -164,7 +164,7 @@ func lowerOp(op any) {
 	if err != nil {
 		t.Fatalf("extractSupportedOps: %v", err)
 	}
-	want := []string{"VPXORQ", "VMOVDQU64", "AESENC", "MOVQ", "RET"}
+	want := []string{"VPXORQ", "VMOVDQU64", "AESENC", "MOVQ", "RET", "PCALIGN", "PCALIGNMAX", "PCDATA", "FUNCDATA"}
 	got := make([]string, 0, len(want))
 	for _, op := range want {
 		if _, ok := supported[op]; ok {
