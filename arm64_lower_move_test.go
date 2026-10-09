@@ -278,10 +278,12 @@ func main() {
 		}
 		args = []string{"run", "-exec=qemu-aarch64", "."}
 	}
-	cmd := exec.Command("go", args...)
+	ctx, cancel := runtimeOracleStageContext(t)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOARCH=arm64", "CGO_ENABLED=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runtimeOracleCombinedOutput(ctx, cmd); err != nil {
 		t.Fatalf("original Go VMOV runtime: %v\n%s", err, out)
 	}
 }
