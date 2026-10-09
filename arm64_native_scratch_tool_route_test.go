@@ -3,6 +3,7 @@ package plan9asm
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,5 +69,75 @@ func TestARM64NativeScratchActualAliasedBuiltinToolCache(t *testing.T) {
 	}
 	if err := source.Verify(ctx); err != nil {
 		t.Fatal(err)
+	}
+	// A later alias redirection must invalidate the observation, even though
+	// the previously sealed physical binaries and exports are still present.
+	if err := os.Remove(alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), alias); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Verify(ctx); !errors.Is(err, ErrProbeNeedsContext) || source.ready {
+		t.Fatalf("redirected generated-input cache retained a native observation: %v", err)
+	}
+}
+
+func TestARM64NativeScratchToolRoutesRetainSourceBoundaries(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, toolDir := filepath.Join(root, "cache"), filepath.Join(root, "sdk", "pkg", "tool", "host")
+	for _, directory := range []string{cache, toolDir, filepath.Join(root, "foreign")} {
+		if err := os.MkdirAll(directory, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, extension := range []string{"", ".exe"} {
+		for _, tool := range []string{"asm", "compile", "objdump", "pack"} {
+			name := tool + extension
+			for _, directory := range []string{toolDir, cache} {
+				if err := os.WriteFile(filepath.Join(directory, name), []byte("role control, not executable evidence"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			newSource := func() *GoARM64ScratchSource {
+				return &GoARM64ScratchSource{
+					request:  GoARM64ScratchCaptureRequest{GoBinary: filepath.Join(root, "sdk", "bin", "go"+extension)},
+					settings: map[string]string{"GOCACHE": cache, "GOTOOLDIR": toolDir},
+					inputs:   make(map[string][32]byte),
+				}
+			}
+			t.Run(name+"/SDK", func(t *testing.T) {
+				if err := newSource().readObservedTool(tool, filepath.Join(toolDir, name)); err != nil {
+					t.Fatal(err)
+				}
+			})
+			t.Run(name+"/cache", func(t *testing.T) {
+				err := newSource().readObservedTool(tool, filepath.Join(cache, name))
+				lazy := tool == "objdump" || tool == "pack"
+				if lazy && err != nil || !lazy && !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("registered lazy-tool role=%t: %v", lazy, err)
+				}
+			})
+			for _, path := range []string{filepath.Join(root, "foreign", name), filepath.Join(cache, name+"-foreign"), name} {
+				if err := newSource().readObservedTool(tool, path); !errors.Is(err, ErrProbeNeedsContext) {
+					t.Fatalf("foreign tool route acquired an input role: %q %v", path, err)
+				}
+			}
+		}
+	}
+	foreign := filepath.Join(root, "foreign", "export")
+	if err := os.WriteFile(foreign, []byte("not an observed cache export"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	escape := filepath.Join(cache, "escaped-export")
+	if err := os.Symlink(foreign, escape); err != nil {
+		t.Fatal(err)
+	}
+	source := &GoARM64ScratchSource{settings: map[string]string{"GOCACHE": cache}, inputs: make(map[string][32]byte)}
+	if _, err := source.readObservedExport(arm64ScratchPackage{Export: escape}); !errors.Is(err, ErrProbeNeedsContext) {
+		t.Fatalf("escaping cache export acquired a source role: %v", err)
 	}
 }

@@ -43,6 +43,7 @@ type GoARM64ScratchSource struct {
 	request          GoARM64ScratchCaptureRequest
 	settings         map[string]string
 	inputs           map[string][32]byte
+	generatedPaths   map[string]string
 	bytes            int64
 	owned            string
 	ownedInfo        os.FileInfo
@@ -96,7 +97,11 @@ func arm64ScratchContext(format string, args ...any) error {
 }
 
 func (source *GoARM64ScratchSource) run(ctx context.Context, args ...string) ([]byte, error) {
-	return goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	if err := source.verifyGeneratedPaths(); err != nil {
+		return nil, err
+	}
+	output, err := goasmcmd.Run(ctx, source.request.Directory, source.request.Environment, source.request.GoBinary, args...)
+	return output, errors.Join(err, source.verifyGeneratedPaths())
 }
 
 func (source *GoARM64ScratchSource) read(name string) ([]byte, error) {
@@ -139,7 +144,8 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 	}
 	request.Environment = append([]string(nil), request.Environment...)
 	source := &GoARM64ScratchSource{request: request, settings: make(map[string]string),
-		inputs: make(map[string][32]byte), packages: make(map[string]arm64ScratchPackage), native: make(map[string][]arm64ScratchNativeBody),
+		inputs: make(map[string][32]byte), generatedPaths: make(map[string]string),
+		packages: make(map[string]arm64ScratchPackage), native: make(map[string][]arm64ScratchNativeBody),
 		functions: make(map[string]Func), loaded: make(map[string]bool), typed: make(map[string]GoPackage),
 		closed: make(map[string]FuncSig), assembly: make(map[string]bool), abis: make(map[string]string)}
 	for _, item := range request.Environment {
@@ -160,7 +166,7 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 	if _, err := source.read(request.GoBinary); err != nil {
 		return nil, err
 	}
-	observed, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOEXPERIMENT")
+	observed, err := source.run(ctx, "env", "-json", "GOROOT", "GOTOOLDIR", "GOCACHE", "GOVERSION", "GOOS", "GOARCH", "CGO_ENABLED", "GOFLAGS", "GOEXPERIMENT")
 	if err != nil {
 		return nil, err
 	}
@@ -191,11 +197,7 @@ func CaptureGoARM64ScratchSource(ctx context.Context, pkg GoPackage, request GoA
 		if err != nil {
 			return nil, err
 		}
-		filename := strings.TrimSpace(string(name))
-		if !filepath.IsAbs(filename) || strings.ContainsAny(filename, "\n\r") {
-			return nil, arm64ScratchContext("unknown actual %s tool identity", tool)
-		}
-		if _, err := source.read(filename); err != nil {
+		if err := source.readObservedTool(tool, strings.TrimSpace(string(name))); err != nil {
 			return nil, err
 		}
 	}
@@ -350,7 +352,7 @@ func (source *GoARM64ScratchSource) typecheck(_ context.Context, supplied GoPack
 		if !present || pkg.Export == "" {
 			return nil, arm64ScratchContext("missing actual imported export for %s", path)
 		}
-		data, err := source.read(pkg.Export)
+		data, err := source.readObservedExport(pkg)
 		if err != nil {
 			return nil, err
 		}
@@ -548,7 +550,7 @@ func (source *GoARM64ScratchSource) captureNativePackage(ctx context.Context, pk
 	if len(pkg.CgoFiles)+len(pkg.CFiles)+len(pkg.CXXFiles)+len(pkg.MFiles)+len(pkg.FFiles)+len(pkg.SwigFiles)+len(pkg.SwigCXXFiles)+len(pkg.SysoFiles) != 0 {
 		return arm64ScratchContext("native foreign/object roles are not selected assembly")
 	}
-	archive, err := source.read(pkg.Export)
+	archive, err := source.readObservedExport(pkg)
 	if err != nil {
 		return err
 	}
@@ -842,6 +844,9 @@ func (source *GoARM64ScratchSource) Verify(ctx context.Context) (result error) {
 }
 
 func (source *GoARM64ScratchSource) verifyInputBytes() error {
+	if err := source.verifyGeneratedPaths(); err != nil {
+		return err
+	}
 	for filename, digest := range source.inputs {
 		data, err := goAMD64FrameRead(filename)
 		if err != nil || sha256.Sum256(data) != digest {
