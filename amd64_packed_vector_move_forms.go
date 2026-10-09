@@ -112,7 +112,28 @@ func amd64PackedVectorMoveProperties(ins Instr, goarch string) (amd64PackedVecto
 	default:
 		return fail()
 	}
+	if form.memory >= 0 {
+		memory := ins.Args[form.memory]
+		if !x86PackedShiftMemoryValid(memory, goarch) {
+			return fail()
+		}
+		if memory.Kind == OpMem {
+			if err := x86SymbolIndexedMemoryError(memory.Mem, goarch); err != nil {
+				return form, true, err
+			}
+			if memory.Mem.OffRaw != "" || memory.Mem.IndexExt != "" {
+				return fail()
+			}
+		}
+	}
 	return form, true, x86Mode32VectorRegisterContext(ins, goarch)
+}
+
+// This selects actual ordinary memory, not an extent or a continuation proof.
+// The lowerer and private conditional result reader must select the same path.
+func (form amd64PackedVectorMoveForm) unalignedOrdinaryMemory(ins Instr, arch string) bool {
+	return !form.spec.aligned && form.memory >= 0 &&
+		x86OrdinaryNativeMemoryOperand(ins.Args[form.memory], arch)
 }
 
 func amd64GoPackedVectorMoveRegister(operand Operand, width int, goarch string) bool {

@@ -39,6 +39,10 @@ func (c *amd64Ctx) lowerPackedVectorMove(op Op, ins Instr) (ok bool, terminated 
 			return true, false, fmt.Errorf("%s %s: %w: %q", c.goarch, op, err, ins.Raw)
 		}
 	}
+	if !form.spec.aligned && form.memory >= 0 &&
+		(form.unalignedOrdinaryMemory(ins, c.goarch) || x86CallerMemoryCertified(ins, form.memory) || c.fixedLocalMemoryCertified(ins, form.memory)) {
+		return true, false, c.lowerUnalignedPackedMoveMemory(ins, form)
+	}
 
 	if form.mask < 0 {
 		value, err := c.loadPackedCompareBytes(src, byteWidth)
