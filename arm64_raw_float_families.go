@@ -18,6 +18,9 @@ var arm64RawFloatFamilies = [...]arm64RawFamily{
 	arm64RawNoGPOrMemoryForm(decodeARM64RawScalarFloatImmediate, (*arm64Ctx).lowerRawScalarFloatImmediate),
 	arm64RawForm(decodeARM64RawScalarIntToFloat, (*arm64Ctx).lowerRawScalarIntToFloat,
 		func(form arm64RawScalarIntToFloat) arm64RawContinuationEffects {
+			if form.simdInteger {
+				return arm64RawContinuationEffects{}
+			}
 			return arm64RawContinuationEffects{gpReads: arm64RawGPBit(form.source)}
 		}),
 	arm64RawForm(decodeARM64RawFixedIntToFloat, (*arm64Ctx).lowerRawFixedIntToFloat,

@@ -37,7 +37,7 @@ func TestARM64RawScalarIntToFloatDecoderCompleteGPRRegisterFamily(t *testing.T) 
 							t.Fatalf("decoder rejected %#08x", word)
 						}
 						if form.floatBits != floatWidth.bits || form.integerBits != integerBits ||
-							form.unsigned != unsigned || form.source != source || form.destination != destination {
+							form.unsigned != unsigned || form.simdInteger || form.source != source || form.destination != destination {
 							t.Fatalf("decode %#08x = %+v", word, form)
 						}
 						count++
@@ -85,7 +85,7 @@ func TestARM64RawScalarIntToFloatCompleteSIMDRegisterFamily(t *testing.T) {
 	for index, word := range words {
 		got, ok := decodeARM64RawScalarIntToFloat(word)
 		want := wants[index]
-		if !ok || got.floatBits != want.floatBits || got.integerBits != want.integerBits ||
+		if !ok || !got.simdInteger || got.floatBits != want.floatBits || got.integerBits != want.integerBits ||
 			got.unsigned != want.unsigned || got.source != want.source || got.destination != want.destination {
 			t.Fatalf("LLVM/Go %s (%#08x): decoded %+v, accepted=%v, want %+v", lines[index], word, got, ok, want)
 		}

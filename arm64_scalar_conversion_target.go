@@ -20,12 +20,6 @@ func arm64RawScalarConversion(word uint32) bool {
 	if _, ok := decodeARM64RawScalarVectorFCVTZ(word); ok {
 		return true
 	}
-	// The four pre-existing scalar SIMD SCVTF/UCVTF formats reach lowerFP
-	// through the architecture decoder, not the arranged-vector registry.
-	switch word &^ uint32(31<<5|31) {
-	case 0x5e21d800, 0x5e61d800, 0x7e21d800, 0x7e61d800:
-		return true
-	}
 	return false
 }
 
@@ -53,7 +47,7 @@ func validateARM64ScalarConversionNativeTarget(file *File, options Options) erro
 				if _, valid := arm64RawContinuationEffectsForWord(word); valid {
 					continue
 				}
-				if _, _, valid := decodeARM64RawSVEFamily(word); valid {
+				if _, valid := arm64RawSVEEffects(word); valid {
 					continue
 				}
 				// A syntax-only placeholder lets the decoder check actual PC

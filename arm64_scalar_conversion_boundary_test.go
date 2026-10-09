@@ -143,3 +143,28 @@ func TestARM64ScalarConversionDecoderSpellingsAreNotGoSource(t *testing.T) {
 		}
 	}
 }
+
+func TestARM64ScalarConversionTargetPreflightPreservesRegisteredRawFamilies(t *testing.T) {
+	lines := []string{
+		"mul z0.b, z1.b, z2.b", "tbl z0.b, {z1.b}, z2.b",
+		"umullb z0.h, z1.b, z2.b", "umlalb z0.h, z1.b, z2.b",
+		"fmaxnmv h0, p0, z1.h",
+	}
+	for index, word := range assembleARM64LLVMWords(t, lines, "+sve2,+fullfp16") {
+		if _, registered := arm64RawSVEEffects(word); !registered {
+			t.Fatalf("fixture %s has no existing registered grammar", lines[index])
+		}
+		source := fmt.Sprintf("TEXT conversion(SB),4,$0-0\nSCVTFD R0,F0\nWORD $%#08x\nRET\n", word)
+		requireARM64GoAssemblerResult(t, source, true)
+		file, err := Parse(ArchARM64, source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateARM64ScalarConversionNativeTarget(file, Options{TargetTriple: "aarch64-unknown-linux-gnu"}); err != nil {
+			t.Errorf("native scalar preflight rejected existing %s: %v", lines[index], err)
+		}
+		if err := validateARM64ScalarConversionNativeTarget(file, Options{}); !errors.Is(err, ErrProbeNeedsContext) {
+			t.Errorf("existing %s obscured missing native target: %v", lines[index], err)
+		}
+	}
+}

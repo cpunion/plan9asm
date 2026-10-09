@@ -829,7 +829,9 @@ func (c *arm64Ctx) scanUsedRegs() {
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
 				}
 				if form, ok := decodeARM64RawScalarIntToFloat(word); ok {
-					if form.source != 31 {
+					if form.simdInteger {
+						markReg(Reg(fmt.Sprintf("V%d", form.source)))
+					} else if form.source != 31 {
 						markReg(Reg(fmt.Sprintf("R%d", form.source)))
 					}
 					markReg(Reg(fmt.Sprintf("V%d", form.destination)))
