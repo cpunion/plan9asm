@@ -214,6 +214,7 @@ func TestRuntimeOracleCommandConsumersRetainOwnedExecution(t *testing.T) {
 		"arm64_gp_data_runtime_test.go",
 		"arm64_gp_immediate_encoding_test.go",
 		"arm64_lower_permute_test.go",
+		"arm64_lower_move_test.go",
 		"amd64_go_assembler_test.go",
 		"go_assembler_oracle_test.go",
 		"go_assembler_oracle_listing_test.go",
