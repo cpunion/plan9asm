@@ -188,3 +188,59 @@ func TestProfileSelectionCustomTagsIncludeSharedPackageAssembly(t *testing.T) {
 		t.Fatalf("source decisions do not preserve expanded four-part scopes: %v != %v", selected, scopes)
 	}
 }
+
+func TestProfileSelectionGoOnlyTagsCloseExactPackageScopes(t *testing.T) {
+	root := t.TempDir()
+	sources := map[string]string{
+		"go.mod":               "module example.invalid/go-only-tags\ngo 1.20\n",
+		"decl.go":              "package fixture\n",
+		"durable.go":           "//go:build durable && !alternate\n\npackage fixture\n",
+		"duplicate.go":         "//go:build durable && !alternate\n\npackage fixture\n",
+		"alternate.go":         "//go:build alternate && !durable\n\npackage fixture\n",
+		"ignored_test.go":      "//go:build testonly\n\npackage fixture\n",
+		"other/decl.go":        "package other\n",
+		"a_amd64.s":            "TEXT ·A(SB),4,$0-0\nRET\n",
+		"b_amd64.s":            "TEXT ·B(SB),4,$0-0\nRET\n",
+		"other/shared_amd64.s": "TEXT ·Shared(SB),4,$0-0\nRET\n",
+	}
+	for file, source := range sources {
+		name := filepath.Join(root, filepath.FromSlash(file))
+		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, name, source)
+	}
+	candidate := discoveryCandidate{Module: "example.invalid/go-only-tags", Version: "v1.0.0",
+		AsmFiles: []string{"a_amd64.s", "b_amd64.s", "other/shared_amd64.s"}}
+	plan, err := captureOrdinarySelectionInputs(candidate, root, []string{"linux/amd64"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	binary, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	profiles, err := captureDiscoveryFeatureProfiles(ctx, binary, t.TempDir(), targetFeatureTestEnv(), plan, candidate.AsmFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, scopes, err := replayOrdinarySelectionForProfiles(plan, candidate.AsmFiles, profiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for scope := range scopes {
+		got = append(got, scope.File+"#"+scope.Tags)
+	}
+	want := []string{"a_amd64.s#", "a_amd64.s#alternate", "a_amd64.s#durable",
+		"b_amd64.s#", "b_amd64.s#alternate", "b_amd64.s#durable", "other/shared_amd64.s#"}
+	if len(profiles) != 1 || !reflect.DeepEqual(uniqueSortedDiscoveryStrings(got), want) {
+		t.Fatalf("Go-only partners disappeared, duplicated or spread tags across packages: profiles=%d scopes=%v", len(profiles), got)
+	}
+	writeTestFile(t, filepath.Join(root, "durable.go"), sources["durable.go"]+"// changed\n")
+	if err := verifyOrdinarySelectionUnchanged(plan, root, candidate); err == nil {
+		t.Fatal("source reread accepted a changed tag-scope witness")
+	}
+}

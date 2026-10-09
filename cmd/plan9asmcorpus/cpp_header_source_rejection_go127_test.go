@@ -82,8 +82,15 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var events phaseFixtureWriter
+	journal := newPhaseFixtureJournal(t, &events)
+	t.Cleanup(func() {
+		if err := journal.close(nil); err != nil {
+			t.Error(err)
+		}
+	})
 	if err := installDiscoveryHeaderPlanning(ctx, plan, candidate, download, dir, runtime.GOROOT(), goBinary,
-		t.TempDir(), translator, os.Environ(), &discoveryFeatureObservationCache{}); err != nil {
+		t.TempDir(), translator, os.Environ(), &discoveryFeatureObservationCache{}, journal); err != nil {
 		t.Fatal(err)
 	}
 	badRequest := discoveryFeatureProfileRequest{Target: "linux/386", Baseline: true}
@@ -94,6 +101,11 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 	}
 	if plan.HeaderPlanning != nil || len(plan.headerPlanningInventory.Observations) != 0 {
 		t.Fatal("failed planning query manufactured a successful header/profile witness")
+	}
+	for repeat := 0; repeat < 3; repeat++ {
+		if _, err := plan.headerPlanningCapture(badRequest, "probe_386.s", []string{"durable"}); !errors.As(err, &unsupported) {
+			t.Fatalf("repeated exact planning rejection %d changed: %v", repeat, err)
+		}
 	}
 	for _, scope := range []struct {
 		target, assembly string
@@ -142,4 +154,92 @@ func TestCPPHeaderPlanningDefersExactOriginalGoSourceRejection(t *testing.T) {
 	if plan.HeaderPlanning == nil || len(plan.HeaderPlanning.Queries) != 2 {
 		t.Fatal("only the two independently compiled healthy scopes may publish planning headers")
 	}
+	checks := 0
+	for _, event := range phaseFixtureRecords(t, events.Bytes()) {
+		if event.Kind == "span_start" && event.Phase == "ordinary_header_viability" {
+			checks++
+		}
+	}
+	if checks != 3 {
+		t.Fatalf("four repeated failed queries and two healthy scopes performed %d package compiles, want 3 exact scopes", checks)
+	}
+	t.Log("ACTUAL_HEADER_VIABILITY queries=6 compiles=3 final_checks=3 network=local_fixture_proxy_only")
+
+	t.Run("complete scoped producer and independent reader", func(t *testing.T) {
+		llc, err := resolveDiscoveryExecutable("llc")
+		if err != nil {
+			t.Fatal(err)
+		}
+		targets := []string{"linux/386", "linux/amd64"}
+		matrix, _, configs, err := runDiscoveryCandidate(discoveryCorpusConfig{
+			RepoRoot: root, Translator: translator, LLC: llc, Targets: targets, CandidateTimeout: 3 * time.Minute,
+		}, candidate, filepath.Join(t.TempDir(), "candidate"))
+		if err != nil || matrix.Success < 2 {
+			t.Fatalf("healthy scopes on both architectures must survive a target/tag source failure: objects=%d error=%v", matrix.Success, err)
+		}
+		found := false
+		for _, item := range matrix.SourceNotApplicableItems {
+			if item.Kind != discoverySourceNotApplicableGoBuild {
+				continue
+			}
+			if !equalDiscoveryStrings(item.Targets, []string{"linux/386"}) ||
+				!equalDiscoveryStrings(item.BuildTags, []string{"durable"}) ||
+				!strings.Contains(item.Reason, "undefined: missingArchitectureValue") {
+				t.Fatalf("scoped original-Go refusal was broadened or lost its diagnostic: %+v", item)
+			}
+			found = true
+		}
+		if !found {
+			t.Fatal("invalid target/tag vanished from the final coverage denominator")
+		}
+		inventory, refs := fixtureOrdinaryMatrixFeatureInventory(t, matrix)
+		result := discoveryCorpusResult{
+			Module: candidate.Module, Version: candidate.Version, Status: discoveryStatusPassed,
+			DiscoveredAsmFiles: candidate.AsmFiles, ApplicableAsmFiles: candidate.AsmFiles,
+			BuildConfigurations: configs, Translations: matrix.Success,
+			OrdinarySelectionPlan:    matrix.OrdinarySelectionPlan,
+			SourceNotApplicableItems: matrix.SourceNotApplicableItems,
+			FeatureProfiles:          refs, FeatureConsumption: matrix.FeatureConsumption, featureInventory: inventory,
+		}
+		if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err != nil {
+			t.Fatalf("independent final Go/source/CPP/LLVM scope replay: %v", err)
+		}
+		t.Logf("COMPLETE_ORIGINAL_SOURCE_REJECTION objects=%d rejected_scopes=%d configurations=%+v", matrix.Success, len(matrix.SourceNotApplicableItems), configs)
+		result.SourceNotApplicableItems = nil
+		if err := validateOrdinaryProfileResult(result, targets, matrix.OrdinarySelectionPlan.GoVersion); err == nil {
+			t.Fatal("reader accepted deletion of the failed target/tag scope")
+		}
+	})
+
+	t.Run("cached rejection cannot hide changed source", func(t *testing.T) {
+		file := filepath.Join(download.Dir, "poison.go")
+		if err := os.Chmod(file, 0600); err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, file, sources["poison.go"]+"// changed after original check\n")
+		t.Cleanup(func() { writeTestFile(t, file, sources["poison.go"]) })
+		if _, err := plan.headerPlanningCapture(badRequest, "probe_386.s", []string{"durable"}); err == nil || errors.As(err, &unsupported) {
+			t.Fatalf("changed original source was hidden by cached rejection: %v", err)
+		}
+	})
+	t.Run("metadata diagnostics cannot impersonate original Go", func(t *testing.T) {
+		broken := filepath.Join(t.TempDir(), "broken-query")
+		writeTestFile(t, broken, "#!/bin/sh\nprintf '%s\\n' 'probe.go:1:1: metadata owner failure' >&2\nexit 1\n")
+		if err := os.Chmod(broken, 0700); err != nil {
+			t.Fatal(err)
+		}
+		fresh, err := captureOrdinarySelectionInputs(candidate, download.Dir, []string{"linux/386", "linux/amd64"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fresh.ModuleSum, fresh.ZipSHA256 = plan.ModuleSum, plan.ZipSHA256
+		if err := installDiscoveryHeaderPlanning(ctx, fresh, candidate, download, t.TempDir(), runtime.GOROOT(), goBinary,
+			t.TempDir(), broken, os.Environ(), &discoveryFeatureObservationCache{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := fresh.headerPlanningCapture(badRequest, "probe_386.s", nil); err == nil || errors.As(err, &unsupported) ||
+			!strings.Contains(err.Error(), "metadata owner failure") {
+			t.Fatalf("non-Go metadata diagnostic was hidden or reclassified: %v", err)
+		}
+	})
 }
