@@ -3,14 +3,14 @@ package plan9asm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 )
 
 func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, wantSuccess bool) {
@@ -36,89 +36,14 @@ func goAssemblerOracleOutput(t *testing.T, arch, source, experiment string, want
 }
 
 func goAssemblerOracleOutcome(source, object string, output []byte, commandErr, contextErr error, wantSuccess bool, arch string) error {
-	if contextErr != nil {
-		return fmt.Errorf("Go assembler oracle infrastructure failure: deadline/cancellation: %w", contextErr)
-	}
-	if commandErr == nil {
-		if !wantSuccess {
-			return fmt.Errorf("Go assembler accepted a form expected outside the optab")
-		}
-		info, err := os.Lstat(object)
-		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
-			return fmt.Errorf("Go assembler oracle infrastructure failure: missing/nonregular/empty object: %v", err)
-		}
-		return nil
-	}
-	// Cleanup/pipe errors joined to a source exit are still infrastructure
-	// failures. A signal, launch error or unknown positive exit is not evidence.
-	exit, ok := commandErr.(*exec.ExitError)
-	if !ok || exit.ProcessState == nil || !exit.ProcessState.Exited() || exit.ExitCode() != 1 {
-		return fmt.Errorf("Go assembler oracle infrastructure failure: unknown process outcome: %w", commandErr)
-	}
-	text := string(output)
-	for _, marker := range []string{"panic:", "fatal error:", "runtime: failed to", "runtime: out of memory", "signal:", "executable file not found"} {
-		if strings.Contains(text, marker) {
-			return fmt.Errorf("Go assembler oracle infrastructure failure: %s: %w", marker, commandErr)
-		}
-	}
-	// Go prints source positions either directly or in its illegal-combination
-	// listing. A footer alone, or a line for another source, cannot reject this
-	// exact fixture. Keep positive canonical line/column positions.
-	if !goAssemblerOracleSourceDiagnostic(source, text) && !goAssemblerOraclePositionlessDiagnostic(source, arch, text) {
-		return fmt.Errorf("Go assembler oracle infrastructure failure: no concrete fixture diagnostic: %w", commandErr)
-	}
-	if wantSuccess {
-		return fmt.Errorf("Go assembler rejected accepted forms: %w", commandErr)
-	}
-	return nil
+	return goasmoracle.CheckOutcome(source, object, output, nil, commandErr, contextErr,
+		wantSuccess, 0, func(source, diagnostic string) bool {
+			return goAssemblerOraclePositionlessDiagnostic(source, arch, diagnostic)
+		})
 }
 
 func goAssemblerOracleSourceDiagnostic(source, output string) bool {
-	positivePosition := func(text string) bool {
-		value, err := strconv.Atoi(text)
-		return err == nil && value > 0 && strconv.Itoa(value) == text
-	}
-	backendDiagnostic := false
-	for _, line := range strings.Split(output, "\n") {
-		start := strings.Index(line, source+":")
-		if start < 0 {
-			if strings.TrimSpace(line) != "" {
-				backendDiagnostic = strings.HasPrefix(line, "asm: ") && line != "asm: assembly failed"
-			}
-			continue
-		}
-		position := line[start+len(source)+1:]
-		end := strings.IndexAny(position, ":)")
-		if end < 0 || !positivePosition(position[:end]) {
-			continue
-		}
-		message := strings.TrimSpace(position[end+1:])
-		if position[end] == ')' {
-			// An illegal-combination listing retains its parenthesized source
-			// position and the rejected instruction, not just a tool footer.
-			if start > 0 && line[start-1] == '(' && strings.HasPrefix(line, "asm:") && message != "" {
-				return true
-			}
-			if backendDiagnostic && start > 0 && line[start-1] == '(' &&
-				goAssemblerOracleListingBindsSource(source, position[:end], line[:start-1], message) {
-				return true
-			}
-			continue
-		}
-		if column, detail, found := strings.Cut(message, ":"); found &&
-			(column == "" || strings.ContainsRune("+-0123456789", rune(column[0]))) {
-			// Do not backtrack an explicit invalid column into a line-only
-			// diagnostic. Missing columns are different from zero/overflow.
-			if positivePosition(column) && strings.TrimSpace(detail) != "" {
-				return true
-			}
-			continue
-		}
-		if message != "" {
-			return true
-		}
-	}
-	return false
+	return goasmoracle.SourceDiagnostic(source, output)
 }
 
 func TestGoAssemblerOracleActualCommonForms(t *testing.T) {

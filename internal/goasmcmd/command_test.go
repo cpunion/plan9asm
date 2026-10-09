@@ -3,8 +3,10 @@ package goasmcmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +45,44 @@ func TestActualGoCommandBoundsAndMachineStdout(t *testing.T) {
 	}
 }
 
+func TestActualObservationRetainsExitAndSeparateStreams(t *testing.T) {
+	for _, mode := range []string{"json", "stderr", "exit", "cancel"} {
+		t.Run(mode, func(t *testing.T) {
+			budget := 5 * time.Second
+			if mode == "cancel" {
+				budget = 100 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), budget)
+			defer cancel()
+			value, err := Observe(ctx, t.TempDir(), append(os.Environ(), "GOASM_COMMAND_FIXTURE="+mode),
+				os.Args[0], "-test.run=^TestActualGoCommandFixture$")
+			encoded, _ := json.Marshal(value)
+			t.Logf("ORACLE_CHILD %s", encoded)
+			if !value.Waited || value.PID <= 1 {
+				t.Fatalf("actual child not waited: %+v", value)
+			}
+			if mode == "cancel" {
+				if !errors.Is(err, context.DeadlineExceeded) || value.ExitCode != -1 {
+					t.Fatalf("deadline/signal lost: %+v %v", value, err)
+				}
+				return
+			}
+			if mode == "exit" {
+				if err == nil || value.ExitCode != 7 {
+					t.Fatalf("actual exit lost: %+v %v", value, err)
+				}
+				return
+			}
+			if err != nil || value.ExitCode != 0 || string(value.Stdout) != `{"actual":true}` {
+				t.Fatalf("stdout changed: %+v %v", value, err)
+			}
+			if mode == "stderr" && string(value.Stderr) != "download diagnostic" {
+				t.Fatalf("stderr not separate: %+v", value)
+			}
+		})
+	}
+}
+
 func TestActualGoCommandFixture(t *testing.T) {
 	switch os.Getenv("GOASM_COMMAND_FIXTURE") {
 	case "json":
@@ -56,12 +96,36 @@ func TestActualGoCommandFixture(t *testing.T) {
 		_, _ = os.Stderr.Write(bytes.Repeat([]byte("x"), 4<<20+1))
 	case "exit":
 		os.Exit(7)
+	case "signal":
+		self, err := os.FindProcess(os.Getpid())
+		if err != nil {
+			os.Exit(2)
+		}
+		if err := self.Kill(); err != nil {
+			os.Exit(2)
+		}
 	case "cancel":
 		time.Sleep(time.Minute)
 	default:
 		return
 	}
 	os.Exit(0)
+}
+
+func TestActualObservationSignalAndMissingToolFail(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	observed, err := Observe(ctx, t.TempDir(), append(os.Environ(), "GOASM_COMMAND_FIXTURE=signal"),
+		os.Args[0], "-test.run=^TestActualGoCommandFixture$")
+	encoded, _ := json.Marshal(observed)
+	t.Logf("ORACLE_CHILD %s", encoded)
+	if err == nil || !observed.Waited || observed.PID <= 1 || observed.ExitCode == 0 {
+		t.Fatalf("real killed child falsely succeeded: %+v %v", observed, err)
+	}
+	missing, err := Observe(ctx, t.TempDir(), nil, filepath.Join(t.TempDir(), "missing-go"))
+	if err == nil || missing.Waited || missing.PID != 0 || missing.ExitCode != -1 {
+		t.Fatalf("missing tool falsely succeeded: %+v %v", missing, err)
+	}
 }
 
 func TestActualGoCommandRequiresLiveContext(t *testing.T) {

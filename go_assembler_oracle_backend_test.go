@@ -1,48 +1,19 @@
 package plan9asm
 
 import (
-	"fmt"
 	"math"
-	"os"
 	"strconv"
 	"strings"
+
+	"github.com/xgo-dev/plan9asm/internal/goasmoracle"
 )
 
 func goAssemblerOracleFixture(source string) ([]byte, bool) {
-	info, err := os.Lstat(source)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > 8<<20 {
-		return nil, false
-	}
-	data, err := os.ReadFile(source)
-	return data, err == nil && len(data) <= 8<<20
+	return goasmoracle.ReadSource(source)
 }
 
 func goAssemblerOracleListingBindsSource(source, position, pc, instruction string) bool {
-	pc = strings.TrimSpace(pc)
-	if len(pc) < 5 {
-		return false
-	}
-	for _, digit := range pc {
-		if digit < '0' || digit > '9' {
-			return false
-		}
-	}
-	address, err := strconv.ParseUint(pc, 10, 64)
-	if err != nil || fmt.Sprintf("%05d", address) != pc {
-		return false
-	}
-	data, ok := goAssemblerOracleFixture(source)
-	line, err := strconv.Atoi(position)
-	if !ok || err != nil || line <= 0 {
-		return false
-	}
-	lines := strings.Split(string(data), "\n")
-	if line > len(lines) {
-		return false
-	}
-	op, _ := splitOpcode(strings.TrimSpace(lines[line-1]))
-	fields := strings.Fields(instruction)
-	return len(fields) > 1 && op != "" && strings.EqualFold(op, fields[0])
+	return goasmoracle.ListingBindsSource(source, position, pc, instruction)
 }
 
 // Go's backends also have a few positionless source diagnostics. Do not
