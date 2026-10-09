@@ -156,17 +156,25 @@ func TestGoX86NumericalSBReadFrameProducerReentryAndContextCauses(t *testing.T) 
 			t.Fatal(err)
 		}
 		defer frame.Close()
+		callbackReached := make(chan struct{}, 1)
 		wrapped.mu.Lock()
 		wrapped.closeFrame = func() {
+			callbackReached <- struct{}{}
 			if err := frame.Close(); err != nil {
 				t.Error(err)
 			}
 		}
 		wrapped.mu.Unlock()
+		if err := wrapped.Err(); err != nil || len(callbackReached) != 0 {
+			t.Fatal("ordinary context observation invoked the reentry callback", err)
+		}
 		closed := make(chan error, 1)
 		go func() { closed <- frame.Verify(ctx) }()
 		select {
 		case err := <-closed:
+			if len(callbackReached) != 1 {
+				t.Fatal("reentry fixture never reached the numerical owner callback", err)
+			}
 			if !errors.Is(err, ErrProbeNeedsContext) || !errors.Is(frame.Verify(context.Background()), ErrProbeNeedsContext) {
 				t.Fatal("reentrant owner guard published or revived the frame", err)
 			}
