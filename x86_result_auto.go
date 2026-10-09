@@ -25,25 +25,32 @@ func x86ResultAUTOExtent(fn Func, arch string) (int, error) {
 	fail := func(reason string) (int, error) {
 		return 0, fmt.Errorf("%w: result initialization AUTO: %s", ErrProbeNeedsContext, reason)
 	}
+	if fn.x86RawReplay != nil {
+		if err := fn.x86RawReplay.validate(fn, arch); err != nil {
+			return 0, err
+		}
+	}
 	if fn.FrameSize <= 0 || fn.FrameSize > 4096 || len(fn.Instrs) == 0 || len(fn.Instrs) > 8192 || fn.Instrs[0].Op != OpTEXT {
 		return fail("requires complete bounded positive original TEXT")
 	}
-	var source strings.Builder
-	for _, ins := range fn.Instrs {
-		if ins.Raw == "" || len(ins.Raw) > (1<<20)-source.Len()-1 {
-			return fail("missing or oversized original literal")
+	if fn.x86RawReplay == nil {
+		var source strings.Builder
+		for _, ins := range fn.Instrs {
+			if ins.Raw == "" || len(ins.Raw) > (1<<20)-source.Len()-1 {
+				return fail("missing or oversized original literal")
+			}
+			source.WriteString(ins.Raw)
+			source.WriteByte('\n')
 		}
-		source.WriteString(ins.Raw)
-		source.WriteByte('\n')
-	}
-	parsed, err := Parse(ArchAMD64, source.String())
-	if err != nil || len(parsed.Funcs) != 1 || len(parsed.UnlinkedPrelude) != 0 || len(parsed.Data) != 0 || len(parsed.Globl) != 0 {
-		return fail("original source cannot be replayed as one unchanged function")
-	}
-	original := parsed.Funcs[0]
-	if original.Sym != fn.Sym || original.FrameSize != fn.FrameSize || original.ArgSize != fn.ArgSize ||
-		!reflect.DeepEqual(original.Instrs, fn.Instrs) {
-		return fail("TEXT, operands or source roles changed after parsing")
+		parsed, err := Parse(ArchAMD64, source.String())
+		if err != nil || len(parsed.Funcs) != 1 || len(parsed.UnlinkedPrelude) != 0 || len(parsed.Data) != 0 || len(parsed.Globl) != 0 {
+			return fail("original source cannot be replayed as one unchanged function")
+		}
+		original := parsed.Funcs[0]
+		if original.Sym != fn.Sym || original.FrameSize != fn.FrameSize || original.ArgSize != fn.ArgSize ||
+			!reflect.DeepEqual(original.Instrs, fn.Instrs) {
+			return fail("TEXT, operands or source roles changed after parsing")
+		}
 	}
 	for _, ins := range fn.Instrs {
 		for index, arg := range ins.Args {

@@ -36,6 +36,7 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 		return nil, err
 	}
 	for i := range normalized.Funcs {
+		originalFn := normalized.Funcs[i]
 		if normalized.Funcs[i].X86RawText != nil {
 			if err := validateX86AddressSensitiveRawText(normalized.Funcs[i], goarch); err != nil {
 				return nil, fmt.Errorf("%s: %w", normalized.Funcs[i].Sym, err)
@@ -132,6 +133,10 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 			}
 			ins.Raw = strings.Replace(ins.Raw, "·__plan9asm_raw_literal_pending(SB)", ins.Args[literalArg].Sym, 1)
 		}
+		replay := fn.x86RawReplay
+		if replay == nil {
+			replay = newX86RawReplaySource(originalFn, fn, goarch)
+		}
 		fn = normalizeX86RawReturnSourceStack(fn, opt, len(translationOptions) != 0, normalized.Funcs[i])
 		if opt.ResolveSym != nil {
 			sig := opt.Sigs[opt.ResolveSym(fn.Sym)]
@@ -143,6 +148,7 @@ func normalizeX86RawFile(file *File, goarch string, translationOptions ...Option
 				fn.x86FixedLocal.binding = sig.x86FixedLocal
 			}
 		}
+		fn.x86RawReplay = replay.withNormalized(fn)
 		normalized.Funcs[i] = fn
 		// A folded read needs the actual allocated DATA object, not the
 		// pending placeholder or only the source instruction's mnemonic.

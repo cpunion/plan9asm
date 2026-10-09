@@ -64,7 +64,8 @@ type Func struct {
 	arm64PrivateTailSource     *arm64PrivateTailSource // complete, immutable zero-frame continuation source
 	arm64PrivateCallSource     *arm64PrivateCallSource // sealed original CALL bodies and exact prepared CFG
 	arm64ABI0TailSource        *arm64ABI0TailSource
-	arm64PrivateSourceAdded    int // resource accounting only, never a machine-state permission
+	arm64PrivateSourceAdded    int                 // resource accounting only, never a machine-state permission
+	x86RawReplay               *x86RawReplaySource // immutable raw source/replay identity, never a capability
 }
 
 // Parse parses a subset of Go/Plan 9 assembly syntax.
